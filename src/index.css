@@ -1,0 +1,186 @@
+@import 'tailwindcss';
+
+/* ============================================================
+   TRAINING LAB — Design tokens (híbrido: base actual, elevada)
+   ============================================================ */
+@theme {
+  /* Surfaces */
+  --color-bg: #f4f5f8;
+  --color-surface: #ffffff;
+  --color-surface-2: #edeff3;
+  --color-surface-3: #e2e6ee;
+
+  /* Borders */
+  --color-line: #e5e7eb;
+  --color-line-hi: #d1d5db;
+
+  /* Ink */
+  --color-ink: #111318;
+  --color-ink-2: #6b7280;
+  --color-ink-3: #9ca3af;
+  --color-ink-4: #c2c7d0;
+
+  /* Brand */
+  --color-accent: #1e40e0;
+  --color-accent-dk: #1733b8;
+  --color-accent-soft: #e8ecfd;
+  --color-mint: #00a372;
+  --color-warning: #e07b00;
+  --color-danger: #dc2626;
+  --color-violet: #7c5cff;
+
+  /* Phase palette (del plan — intactos) */
+  --color-f1: #3dd9a0;
+  --color-f2: #a0e055;
+  --color-f3: #a480ff;
+  --color-f4: #5da0ff;
+  --color-f5: #ffa047;
+  --color-f6: #ff7a52;
+  --color-f7: #6c7a8a;
+  --color-f8: #ff80b8;
+  --color-deload: #7a7a88;
+
+  /* Category palette */
+  --color-cat-hipertrofia: #1e40e0;
+  --color-cat-atletico: #00a372;
+  --color-cat-potencia: #ff7a52;
+  --color-cat-pliometria: #a480ff;
+
+  /* Typography */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui,
+    sans-serif;
+
+  /* Radii */
+  --radius-xs: 8px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  /* Kinetic Precision shadows: planas y muy suaves */
+  --shadow-xs: 0 1px 2px rgba(17, 19, 24, 0.04);
+  --shadow-sm: 0 2px 10px rgba(17, 19, 24, 0.04);
+  --shadow-md: 0 4px 20px rgba(17, 19, 24, 0.05);
+  --shadow-lg: 0 16px 44px rgba(17, 19, 24, 0.13);
+  --shadow-accent: 0 8px 22px rgba(30, 64, 224, 0.24);
+}
+
+/* ============================================================
+   Base
+   ============================================================ */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--color-bg);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+/* Tabular numbers para pesos, %, series */
+.tnum {
+  font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Scrollbar sutil */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-line-hi);
+  border-radius: 8px;
+  border: 2px solid var(--color-bg);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Animaciones reutilizables */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-in {
+  animation: fade-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Entrada escalonada de listas/tarjetas (Kinetic) */
+@keyframes kp-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.kp-rise {
+  animation: kp-rise 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Feedback táctil al presionar tarjetas/botones */
+.kp-press {
+  transition:
+    transform 0.12s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.18s ease;
+}
+.kp-press:active {
+  transform: scale(0.975);
+}
+
+/* Skeleton shimmer para estados de carga (mejor que un spinner largo) */
+@keyframes kp-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+.kp-skeleton {
+  background: linear-gradient(
+    90deg,
+    #edeff3 25%,
+    #f6f7fa 37%,
+    #edeff3 63%
+  );
+  background-size: 200% 100%;
+  animation: kp-shimmer 1.4s ease-in-out infinite;
+  border-radius: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .kp-press:active {
+    transform: none;
+  }
+}
