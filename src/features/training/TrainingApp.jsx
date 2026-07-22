@@ -1964,8 +1964,8 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, 
 
   return (
     <div style={{ paddingBottom: 100, background: LT.bg, minHeight: '100vh', fontFamily: FONT }}>
-      {/* Header de perfil */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '24px 18px 14px' }}>
+      {/* Header de perfil — paddingRight reserva espacio para el botón de cuenta fijo */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '24px 68px 14px 18px' }}>
         <div style={{
           width: 56, height: 56, borderRadius: '50%', overflow: 'hidden',
           background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`,
@@ -1979,7 +1979,7 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, 
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={eyebrow(KP.blue)}>{greetText}</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: LT.text, lineHeight: 1.1, letterSpacing: -0.4, marginTop: 6 }}>{displayName}</div>
+          <div style={{ fontSize: 'clamp(20px, 5.6vw, 24px)', fontWeight: 800, color: LT.text, lineHeight: 1.12, letterSpacing: -0.4, marginTop: 6, overflowWrap: 'anywhere' }}>{displayName}</div>
           {next && (
             <div style={{ fontSize: 12.5, color: LT.text2, fontWeight: 600, marginTop: 5 }}>
               Fase {next.phase.num} · {next.phase.mode === 'microcycle' ? 'Microciclo' : `Semana ${next.week.num} de ${next.phase.weeks}`}
