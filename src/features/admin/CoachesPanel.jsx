@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Loader2, Plus, X, Shield, Users, AtSign, IdCard, Mail, Lock, Check, UserPlus,
+  Loader2, Plus, X, Shield, Users, AtSign, IdCard, Mail, Lock, Check, UserPlus, Eye, EyeOff,
 } from 'lucide-react';
 import { listCoaches, listAthletes, createCoachAccount } from '@/lib/api';
 import { T, FONT, KP } from '@/lib/theme';
@@ -31,6 +31,7 @@ function CreateCoachModal({ onClose, onCreated }) {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
@@ -75,7 +76,14 @@ function CreateCoachModal({ onClose, onCreated }) {
           {field(<IdCard size={17} color={T.text3} />, 'Nombre completo', <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Nombre del coach" style={bare} />)}
           {field(<AtSign size={17} color={T.text3} />, 'Usuario', <input value={username} onChange={(e) => setUsername(e.target.value.replace(/\s/g, ''))} placeholder="usuario_del_coach" autoCapitalize="none" style={bare} />)}
           {field(<Mail size={17} color={T.text3} />, 'Correo (opcional)', <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="coach@correo.com" type="email" style={bare} />)}
-          {field(<Lock size={17} color={T.text3} />, 'Contraseña', <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" type="password" style={bare} />)}
+          {field(<Lock size={17} color={T.text3} />, 'Contraseña', (
+            <>
+              <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" type={showPw ? 'text' : 'password'} style={bare} />
+              <button type="button" onClick={() => setShowPw((v) => !v)} aria-label={showPw ? 'Ocultar' : 'Ver'} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.text3, padding: 4, display: 'grid', placeItems: 'center' }}>
+                {showPw ? <EyeOff size={17} /> : <Eye size={17} />}
+              </button>
+            </>
+          ))}
           <div style={{ fontSize: 12, color: T.text3, lineHeight: 1.5 }}>
             Comparte estos datos con tu coach. Podrá entrar, ver tu repertorio base y crear el suyo.
           </div>

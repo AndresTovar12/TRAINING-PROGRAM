@@ -187,7 +187,7 @@ function MediaUpload({ label, icon: Icon, value, onChange, accept, kind, hint })
 
 const empty = {
   name: '', category_id: '', equipment: '', description: '',
-  muscle_primary: '', muscle_secondary: '', cover_image_url: '', video_url: '', video_link: '',
+  muscle_primary: '', cover_image_url: '', video_url: '', video_link: '',
 };
 
 function ExerciseEditor({ exercise, categories, onClose, onSaved, onDeleted, readOnly, onDuplicate }) {
@@ -201,7 +201,6 @@ function ExerciseEditor({ exercise, categories, onClose, onSaved, onDeleted, rea
           equipment: exercise.equipment || '',
           description: exercise.description || '',
           muscle_primary: (exercise.muscle_primary || []).join(', '),
-          muscle_secondary: (exercise.muscle_secondary || []).join(', '),
           cover_image_url: exercise.cover_image_url || '',
           video_url: exercise.video_url || '',
           video_link: exercise.video_link || '',
@@ -224,7 +223,6 @@ function ExerciseEditor({ exercise, categories, onClose, onSaved, onDeleted, rea
       equipment: form.equipment.trim() || null,
       description: form.description.trim() || null,
       muscle_primary: toArr(form.muscle_primary),
-      muscle_secondary: toArr(form.muscle_secondary),
       cover_image_url: form.cover_image_url || null,
       video_url: form.video_url || null,
       video_link: form.video_link.trim() || null,
@@ -314,10 +312,8 @@ function ExerciseEditor({ exercise, categories, onClose, onSaved, onDeleted, rea
 
           <Input label="Equipo" value={form.equipment} onChange={(e) => set('equipment', e.target.value)} placeholder="Barra, Mancuerna, Peso corporal…" />
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Input label="Músculos primarios" value={form.muscle_primary} onChange={(e) => set('muscle_primary', e.target.value)} placeholder="Cuádriceps, Glúteo" />
-            <Input label="Músculos secundarios" value={form.muscle_secondary} onChange={(e) => set('muscle_secondary', e.target.value)} placeholder="Core" />
-          </div>
+          <Input label="Grupo muscular" value={form.muscle_primary} onChange={(e) => set('muscle_primary', e.target.value)} placeholder="Ej. Cuádriceps, Glúteo" />
+
 
           <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Notas / descripción</span>
@@ -449,7 +445,7 @@ export default function ExercisesPanel() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [filter, setFilter] = useState('all');
-  const [origin, setOrigin] = useState('all'); // all | mine | base (solo coaches)
+  const [muscle, setMuscle] = useState('all');
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState(null); // { exercise, readOnly } | { new: true } | null
 
@@ -478,16 +474,21 @@ export default function ExercisesPanel() {
     return tagged.filter((e) => e.isBase || e.isMine);
   }, [exercises, masterId, user?.id, isMaster]);
 
+  const muscles = useMemo(() => {
+    const s = new Set();
+    visible.forEach((e) => (e.muscle_primary || []).forEach((m) => m && s.add(m)));
+    return [...s].sort((a, b) => a.localeCompare(b));
+  }, [visible]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return visible.filter((e) => {
       if (filter !== 'all' && e.category?.slug !== filter) return false;
-      if (!isMaster && origin === 'mine' && !e.isMine) return false;
-      if (!isMaster && origin === 'base' && !e.isBase) return false;
+      if (muscle !== 'all' && !(e.muscle_primary || []).some((m) => m.toLowerCase() === muscle.toLowerCase())) return false;
       if (q && !e.name.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [visible, filter, origin, search, isMaster]);
+  }, [visible, filter, muscle, search]);
 
   const counts = useMemo(() => {
     const m = { all: visible.length };
@@ -497,11 +498,6 @@ export default function ExercisesPanel() {
     }
     return m;
   }, [visible]);
-
-  const originCounts = useMemo(() => ({
-    mine: visible.filter((e) => e.isMine).length,
-    base: visible.filter((e) => e.isBase).length,
-  }), [visible]);
 
   function handleDuplicate(copy) {
     setExercises((prev) => [...prev, copy]);
@@ -568,56 +564,34 @@ export default function ExercisesPanel() {
         </button>
       </div>
 
-      {/* Origen (solo coaches): Míos / Base */}
-      {!isMaster && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-          {[
-            { k: 'all', label: 'Todos', n: visible.length },
-            { k: 'mine', label: 'Míos', n: originCounts.mine },
-            { k: 'base', label: 'Base', n: originCounts.base },
-          ].map((o) => {
-            const active = origin === o.k;
-            return (
-              <button
-                key={o.k} type="button" onClick={() => setOrigin(o.k)}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 15px', borderRadius: 20,
-                  border: active ? 'none' : `1.5px solid ${T.border}`, cursor: 'pointer', fontFamily: FONT,
-                  fontSize: 13.5, fontWeight: 700,
-                  background: active ? `linear-gradient(135deg, ${T.accent}, ${T.accentDk})` : T.bg2,
-                  color: active ? '#fff' : T.text2, boxShadow: active ? KP.shBtn : 'none',
-                }}
-              >
-                {o.k === 'base' && <Lock size={12} />} {o.label}
-                <span style={{ fontSize: 11.5, opacity: 0.85, fontWeight: 700 }}>{o.n}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Category filter */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 22, flexWrap: 'wrap' }}>
-        {[{ slug: 'all', name: 'Todos' }, ...categories].map((c) => {
-          const active = filter === c.slug;
-          const color = c.slug === 'all' ? T.accent : catColor(c);
-          return (
-            <button
-              key={c.slug}
-              type="button"
-              onClick={() => setFilter(c.slug)}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 10,
-                border: `1.5px solid ${active ? color : T.border}`, cursor: 'pointer', fontFamily: FONT,
-                fontSize: 13.5, fontWeight: 700, color: active ? '#fff' : T.text2,
-                background: active ? color : T.bg2, transition: 'all .15s',
-              }}
-            >
-              {c.name}
-              <span style={{ fontSize: 11.5, opacity: 0.85, fontWeight: 700 }}>{counts[c.slug] ?? 0}</span>
-            </button>
-          );
-        })}
+      {/* Filtros: categoría y grupo muscular (listas desplegables) */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 22, flexWrap: 'wrap' }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 200px', minWidth: 0 }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Categoría</span>
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            style={{ border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '11px 13px', fontFamily: FONT, fontSize: 14, fontWeight: 600, color: T.text, background: T.bg2, outline: 'none', cursor: 'pointer' }}
+          >
+            <option value="all">Todas las categorías ({counts.all ?? 0})</option>
+            {categories.map((c) => (
+              <option key={c.slug} value={c.slug}>{c.name} ({counts[c.slug] ?? 0})</option>
+            ))}
+          </select>
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 200px', minWidth: 0 }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Grupo muscular</span>
+          <select
+            value={muscle}
+            onChange={(e) => setMuscle(e.target.value)}
+            style={{ border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '11px 13px', fontFamily: FONT, fontSize: 14, fontWeight: 600, color: T.text, background: T.bg2, outline: 'none', cursor: 'pointer' }}
+          >
+            <option value="all">Todos los grupos</option>
+            {muscles.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {err && (

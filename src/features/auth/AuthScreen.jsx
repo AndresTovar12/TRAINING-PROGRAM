@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Dumbbell, User, Lock, Mail, AtSign, Loader2, ArrowRight, UserCheck } from 'lucide-react';
+import { Dumbbell, User, Lock, Mail, AtSign, Loader2, ArrowRight, UserCheck, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { FONT, KP } from '@/lib/theme';
 
@@ -7,6 +7,9 @@ const USERNAME_RE = /^[a-zA-Z0-9_.]{3,30}$/;
 
 function Field({ icon: Icon, label, hint, ...props }) {
   const [focus, setFocus] = useState(false);
+  const [show, setShow] = useState(false);
+  const isPassword = props.type === 'password';
+  const inputType = isPassword && show ? 'text' : props.type;
   return (
     <label style={{ display: 'block' }}>
       <div
@@ -39,6 +42,7 @@ function Field({ icon: Icon, label, hint, ...props }) {
         <Icon size={18} color={focus ? KP.blue : KP.ink3} style={{ flexShrink: 0 }} />
         <input
           {...props}
+          type={inputType}
           onFocus={(e) => { setFocus(true); props.onFocus?.(e); }}
           onBlur={(e) => { setFocus(false); props.onBlur?.(e); }}
           style={{
@@ -47,6 +51,16 @@ function Field({ icon: Icon, label, hint, ...props }) {
             padding: '13px 0', minWidth: 0,
           }}
         />
+        {isPassword && (
+          <button
+            type="button"
+            onClick={() => setShow((v) => !v)}
+            aria-label={show ? 'Ocultar contraseña' : 'Ver contraseña'}
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: KP.ink3, padding: 4, display: 'grid', placeItems: 'center', flexShrink: 0 }}
+          >
+            {show ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
+        )}
       </div>
     </label>
   );

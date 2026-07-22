@@ -50,7 +50,7 @@ function Avatar({ name, size = 40, url }) {
 }
 
 /* ----------------------------- Detalle de atleta ----------------------------- */
-function AthleteDetail({ athlete, onClose, isMaster, coaches = [], onReassigned }) {
+function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile, onReassigned }) {
   const [plan, setPlan] = useState(null);
   const [state, setState] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -127,6 +127,9 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], onReassigned 
             style={{ flex: 1, minWidth: 140, border: `1.5px solid ${T.border}`, borderRadius: 10, padding: '8px 10px', fontFamily: FONT, fontSize: 13.5, fontWeight: 600, color: T.text, background: T.bg2, outline: 'none' }}
           >
             <option value="">Sin coach (libre)</option>
+            {masterProfile && (
+              <option value={masterProfile.id}>Yo — {masterProfile.full_name || masterProfile.username} (master)</option>
+            )}
             {coaches.map((c) => (
               <option key={c.id} value={c.id}>{c.full_name || c.username} (@{c.username})</option>
             ))}
@@ -349,6 +352,7 @@ export default function AthletesPanel() {
           athlete={selected}
           isMaster={isMaster}
           coaches={coaches}
+          masterProfile={profile}
           onReassigned={(row) => {
             setAthletes((prev) => prev.map((a) => (a.id === row.id ? { ...a, coach_id: row.coach_id } : a)));
             setSelected((s) => (s && s.id === row.id ? { ...s, coach_id: row.coach_id } : s));
