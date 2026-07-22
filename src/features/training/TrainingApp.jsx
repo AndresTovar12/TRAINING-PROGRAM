@@ -616,9 +616,9 @@ const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, oneRMs, sessionsData
   return (
     <div style={{
       background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 14,
-      padding: '12px 13px', marginBottom: 8,
+      padding: '11px 12px', marginBottom: 8,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         {/* Miniatura del repertorio (media viva) o número en el set */}
         {repertoire?.cover_image_url ? (
           <button
@@ -653,9 +653,9 @@ const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, oneRMs, sessionsData
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             onClick={hasMedia ? () => setMediaOpen(true) : undefined}
-            style={{ fontSize: 15, fontWeight: 700, color: LT.text, lineHeight: 1.2, cursor: hasMedia ? 'pointer' : 'default' }}
+            style={{ fontSize: 14.5, fontWeight: 700, color: LT.text, lineHeight: 1.25, cursor: hasMedia ? 'pointer' : 'default', overflowWrap: 'anywhere' }}
           >{ex.name}</div>
-          {spec && <div style={{ fontSize: 12, color: LT.text2, marginTop: 3 }}>{spec}</div>}
+          {spec && <div style={{ fontSize: 12, color: LT.text2, marginTop: 3, ...NUM_STYLE }}>{spec}</div>}
           {showWeightInput && previous && (
             <div style={{ fontSize: 11, color: LT.text3, marginTop: 2, ...NUM_STYLE }}>Anterior: {previous.weight} kg</div>
           )}
@@ -665,7 +665,7 @@ const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, oneRMs, sessionsData
         {showWeightInput ? (
           <div style={{
             border: `1px solid ${exData.weight ? LT.mint : LT.border}`, borderRadius: 10,
-            padding: '6px 8px', textAlign: 'center', minWidth: 62, flexShrink: 0,
+            padding: '5px 7px', textAlign: 'center', width: 54, flexShrink: 0,
             background: exData.weight ? LT.mint + '0D' : LT.surface,
           }}>
             <input type="number" inputMode="decimal" value={exData.weight || ''}
@@ -673,7 +673,7 @@ const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, oneRMs, sessionsData
               placeholder="—"
               style={{
                 width: '100%', border: 'none', background: 'transparent', textAlign: 'center',
-                fontSize: 17, fontWeight: 700, color: exData.weight ? LT.mint : LT.text3,
+                fontSize: 16, fontWeight: 700, color: exData.weight ? LT.mint : LT.text3,
                 outline: 'none', fontFamily: FONT, padding: 0, ...NUM_STYLE,
               }} />
             <div style={{ fontSize: 8, color: LT.text3, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 1 }}>kg</div>
@@ -849,7 +849,7 @@ const SessionDetail = ({ phase, week, dayIdx, onBack, sessionsData, updateSessio
           {day.dual && <span style={{ fontSize: 12, color: LT.warning, fontWeight: 600 }}>· Doble</span>}
         </div>
 
-        <h1 style={{ fontSize: 30, fontWeight: 800, color: LT.text, margin: 0, lineHeight: 1.05, letterSpacing: -0.8 }}>{dayName}</h1>
+        <h1 style={{ fontSize: 'clamp(23px, 7.5vw, 30px)', fontWeight: 800, color: LT.text, margin: 0, lineHeight: 1.08, letterSpacing: -0.8, overflowWrap: 'anywhere' }}>{dayName}</h1>
 
         {completed && (
           <div style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', background: LT.mint + '14', borderRadius: 20, color: LT.mint, fontSize: 12, fontWeight: 700 }}>
@@ -1544,7 +1544,7 @@ const PhaseDetail = ({ phase, onBack, onSelectWeek, sessionsData, activeWeekKey 
       </button>
 
       <Caption color={phase.color} style={{ marginBottom: 10 }}>Fase {phase.num} · {phase.duration}</Caption>
-      <h1 style={{ fontSize: 34, fontWeight: 800, color: T.text, margin: 0, lineHeight: 1.02, letterSpacing: -1 }}>{phase.fullName}</h1>
+      <h1 style={{ fontSize: 'clamp(25px, 8vw, 34px)', fontWeight: 800, color: T.text, margin: 0, lineHeight: 1.08, letterSpacing: -1, overflowWrap: 'anywhere' }}>{phase.fullName}</h1>
 
       <div style={{ fontSize: 14.5, color: T.text2, lineHeight: 1.55, marginTop: 20, marginBottom: 24 }}>{phase.objective}</div>
 
