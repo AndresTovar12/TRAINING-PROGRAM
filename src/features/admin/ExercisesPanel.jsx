@@ -190,7 +190,42 @@ const empty = {
   muscle_primary: '', cover_image_url: '', video_url: '', video_link: '',
 };
 
-function ExerciseEditor({ exercise, categories, onClose, onSaved, onDeleted, readOnly, onDuplicate }) {
+// Lista desplegable de grupo muscular: opciones = los que ya existen en el
+// repertorio + el valor actual; "➕ Otro…" abre un campo para escribir uno nuevo.
+function MuscleSelect({ value, onChange, options }) {
+  const opts = useMemo(() => {
+    const s = new Set((options || []).filter(Boolean));
+    if (value && value.trim()) s.add(value.trim());
+    return [...s].sort((a, b) => a.localeCompare(b));
+  }, [options, value]);
+  const [other, setOther] = useState(false);
+  const selectStyle = {
+    border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '11px 13px',
+    fontFamily: FONT, fontSize: 14, fontWeight: 600, color: T.text, background: T.bg2, outline: 'none', cursor: 'pointer',
+  };
+  return (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Grupo muscular</span>
+      <select
+        value={other ? '__other__' : (value || '')}
+        onChange={(e) => {
+          if (e.target.value === '__other__') { setOther(true); onChange(''); }
+          else { setOther(false); onChange(e.target.value); }
+        }}
+        style={selectStyle}
+      >
+        <option value="">Selecciona…</option>
+        {opts.map((m) => <option key={m} value={m}>{m}</option>)}
+        <option value="__other__">➕ Otro…</option>
+      </select>
+      {other && (
+        <Input label="" value={value} onChange={(e) => onChange(e.target.value)} placeholder="Escribe el grupo muscular" autoFocus />
+      )}
+    </label>
+  );
+}
+
+function ExerciseEditor({ exercise, categories, muscleOptions = [], onClose, onSaved, onDeleted, readOnly, onDuplicate }) {
   const { user } = useAuth();
   const [dupBusy, setDupBusy] = useState(false);
   const [form, setForm] = useState(() =>
@@ -312,7 +347,7 @@ function ExerciseEditor({ exercise, categories, onClose, onSaved, onDeleted, rea
 
           <Input label="Equipo" value={form.equipment} onChange={(e) => set('equipment', e.target.value)} placeholder="Barra, Mancuerna, Peso corporal…" />
 
-          <Input label="Grupo muscular" value={form.muscle_primary} onChange={(e) => set('muscle_primary', e.target.value)} placeholder="Ej. Cuádriceps, Glúteo" />
+          <MuscleSelect value={form.muscle_primary} onChange={(v) => set('muscle_primary', v)} options={muscleOptions} />
 
 
           <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -622,6 +657,7 @@ export default function ExercisesPanel() {
         <ExerciseEditor
           exercise={editing.exercise || null}
           categories={categories}
+          muscleOptions={muscles}
           readOnly={!!editing.readOnly}
           onClose={() => setEditing(null)}
           onSaved={handleSaved}
