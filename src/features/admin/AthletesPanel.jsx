@@ -3,8 +3,9 @@ import {
   Loader2, Search, Plus, Trash2, X, ChevronRight, Pencil,
   CalendarClock, User as UserIcon, Shield, Layers, ClipboardList,
 } from 'lucide-react';
-import { getActivePlan, deletePlan, getAthleteState, listAthletes } from '@/lib/api';
+import { getActivePlan, deletePlan, getAthleteState, listAthletes, listCoaches, setAthleteCoach } from '@/lib/api';
 import PlanBuilder from '@/features/admin/PlanBuilder';
+import { useAuth } from '@/contexts/AuthContext';
 import { T, FONT, KP } from '@/lib/theme';
 
 function useIsNarrow(breakpoint = 880) {
@@ -49,11 +50,21 @@ function Avatar({ name, size = 40, url }) {
 }
 
 /* ----------------------------- Detalle de atleta ----------------------------- */
-function AthleteDetail({ athlete, onClose }) {
+function AthleteDetail({ athlete, onClose, isMaster, coaches = [], onReassigned }) {
   const [plan, setPlan] = useState(null);
   const [state, setState] = useState(null);
   const [loading, setLoading] = useState(true);
   const [building, setBuilding] = useState(false);
+  const [savingCoach, setSavingCoach] = useState(false);
+
+  async function onChangeCoach(coachId) {
+    setSavingCoach(true);
+    try {
+      const row = await setAthleteCoach(athlete.id, coachId || null);
+      onReassigned?.(row);
+    } catch { /* noop */ }
+    finally { setSavingCoach(false); }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -103,6 +114,26 @@ function AthleteDetail({ athlete, onClose }) {
           <X size={20} />
         </button>
       </div>
+
+      {/* Coach asignado (solo master) */}
+      {isMaster && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18, background: T.bg, borderRadius: 12, padding: '11px 14px', flexWrap: 'wrap' }}>
+          <Shield size={16} color={T.accent} />
+          <span style={{ fontSize: 13, fontWeight: 700, color: T.text2 }}>Coach:</span>
+          <select
+            value={athlete.coach_id || ''}
+            onChange={(e) => onChangeCoach(e.target.value)}
+            disabled={savingCoach}
+            style={{ flex: 1, minWidth: 140, border: `1.5px solid ${T.border}`, borderRadius: 10, padding: '8px 10px', fontFamily: FONT, fontSize: 13.5, fontWeight: 600, color: T.text, background: T.bg2, outline: 'none' }}
+          >
+            <option value="">Sin coach (libre)</option>
+            {coaches.map((c) => (
+              <option key={c.id} value={c.id}>{c.full_name || c.username} (@{c.username})</option>
+            ))}
+          </select>
+          {savingCoach && <Loader2 size={15} className="spin" color={T.text3} />}
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 140px', background: T.bg, borderRadius: 12, padding: '12px 14px' }}>
@@ -206,8 +237,11 @@ function AthleteDetail({ athlete, onClose }) {
 
 /* ------------------------------ Panel raíz ------------------------------ */
 export default function AthletesPanel() {
+  const { profile } = useAuth();
+  const isMaster = !!profile?.is_owner;
   const narrow = useIsNarrow(880);
   const [athletes, setAthletes] = useState([]);
+  const [coaches, setCoaches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [search, setSearch] = useState('');
@@ -219,6 +253,10 @@ export default function AthletesPanel() {
       try {
         const a = await listAthletes();
         if (!cancelled) setAthletes(a);
+        if (isMaster) {
+          const c = await listCoaches();
+          if (!cancelled) setCoaches(c);
+        }
       } catch (e2) {
         if (!cancelled) setErr(e2.message || 'Error al cargar');
       } finally {
@@ -226,12 +264,14 @@ export default function AthletesPanel() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [isMaster]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return athletes;
-    return athletes.filter(
+    // Solo atletas (oculta cuentas de coach/master de la lista de clientes)
+    const base = athletes.filter((a) => a.role !== 'admin');
+    if (!q) return base;
+    return base.filter(
       (a) => (a.full_name || '').toLowerCase().includes(q) || (a.username || '').toLowerCase().includes(q),
     );
   }, [athletes, search]);
@@ -307,6 +347,12 @@ export default function AthletesPanel() {
         <AthleteDetail
           key={selected.id}
           athlete={selected}
+          isMaster={isMaster}
+          coaches={coaches}
+          onReassigned={(row) => {
+            setAthletes((prev) => prev.map((a) => (a.id === row.id ? { ...a, coach_id: row.coach_id } : a)));
+            setSelected((s) => (s && s.id === row.id ? { ...s, coach_id: row.coach_id } : s));
+          }}
           onClose={() => setSelected(null)}
         />
       )}

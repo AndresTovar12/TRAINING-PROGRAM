@@ -7,6 +7,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import {
   listExercises, createPlan, updatePlan, listTemplates, saveTemplate, deleteTemplate,
+  getMasterId, tagRepertoire,
 } from '@/lib/api';
 import { T, FONT, KP, CAT_COLORS } from '@/lib/theme';
 import RepertoirePicker from '@/features/admin/RepertoirePicker';
@@ -545,7 +546,8 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
 /* ------------------------------------------------------------------ */
 
 export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const isMaster = !!profile?.is_owner;
   const isNew = !planRow;
   const [title, setTitle] = useState(planRow?.title || 'Plan de entrenamiento');
   const [phases, setPhases] = useState(() => (planRow?.data?.phases ? clone(planRow.data.phases) : []));
@@ -568,7 +570,16 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
   const [wizWeeks, setWizWeeks] = useState(4);
   const [wizDays, setWizDays] = useState(['Lun', 'Mié', 'Vie']);
 
-  useEffect(() => { listExercises().then(setRepertoire).catch(() => {}); }, []);
+  // Repertorio para el picker: cada coach ve la base del master + los suyos
+  // (no los de otros coaches). El master ve todo.
+  useEffect(() => {
+    Promise.all([listExercises(), getMasterId()])
+      .then(([exs, mId]) => {
+        const tagged = tagRepertoire(exs, mId, user?.id);
+        setRepertoire(isMaster ? tagged : tagged.filter((e) => e.isBase || e.isMine));
+      })
+      .catch(() => {});
+  }, [user?.id, isMaster]);
 
   // Al entrar al editor de una fase, arrancar en su primera semana / primer día con sesión
   const openPhase = (pi, wi = 0) => {

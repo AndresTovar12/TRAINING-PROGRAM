@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import {
   Plus, Search, X, Trash2, Upload, Loader2, Image as ImageIcon, Video, Link2, Dumbbell,
+  Copy, Lock,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   listCategories, listExercises, createExercise, updateExercise, deleteExercise,
-  uploadExerciseMedia,
+  uploadExerciseMedia, getMasterId, tagRepertoire, duplicateExercise,
 } from '@/lib/api';
 import { T, FONT, KP } from '@/lib/theme';
 
@@ -35,7 +36,7 @@ function detectVideoKind(url) {
   return 'Enlace';
 }
 
-function ExerciseCard({ ex, onClick }) {
+function ExerciseCard({ ex, onClick, base }) {
   const color = catColor(ex.category);
   const hasVideo = ex.video_url || ex.video_link;
   return (
@@ -58,6 +59,17 @@ function ExerciseCard({ ex, onClick }) {
         }}
       >
         {!ex.cover_image_url && <Dumbbell size={30} color={`${color}88`} />}
+        {base && (
+          <span
+            style={{
+              position: 'absolute', top: 8, left: 8, background: 'rgba(17,19,24,0.72)', color: '#fff',
+              borderRadius: 7, padding: '3px 8px', fontSize: 10.5, fontWeight: 800, letterSpacing: 0.3,
+              display: 'inline-flex', alignItems: 'center', gap: 4, backdropFilter: 'blur(4px)',
+            }}
+          >
+            <Lock size={10} /> BASE
+          </span>
+        )}
         {hasVideo && (
           <span
             style={{
@@ -178,8 +190,9 @@ const empty = {
   muscle_primary: '', muscle_secondary: '', cover_image_url: '', video_url: '', video_link: '',
 };
 
-function ExerciseEditor({ exercise, categories, onClose, onSaved, onDeleted }) {
+function ExerciseEditor({ exercise, categories, onClose, onSaved, onDeleted, readOnly, onDuplicate }) {
   const { user } = useAuth();
+  const [dupBusy, setDupBusy] = useState(false);
   const [form, setForm] = useState(() =>
     exercise
       ? {
@@ -263,8 +276,8 @@ function ExerciseEditor({ exercise, categories, onClose, onSaved, onDeleted }) {
             padding: '18px 22px', background: T.bg2, borderBottom: `1px solid ${T.border}`,
           }}
         >
-          <div style={{ fontSize: 17, fontWeight: 800, color: T.text }}>
-            {exercise ? 'Editar ejercicio' : 'Nuevo ejercicio'}
+          <div style={{ fontSize: 17, fontWeight: 800, color: T.text, display: 'flex', alignItems: 'center', gap: 8 }}>
+            {readOnly ? <><Lock size={16} color={T.text2} /> Ejercicio base</> : exercise ? 'Editar ejercicio' : 'Nuevo ejercicio'}
           </div>
           <button
             type="button"
@@ -275,7 +288,12 @@ function ExerciseEditor({ exercise, categories, onClose, onSaved, onDeleted }) {
           </button>
         </div>
 
-        <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16, pointerEvents: readOnly ? 'none' : 'auto', opacity: readOnly ? 0.75 : 1 }}>
+          {readOnly && (
+            <div style={{ background: T.accentBg, color: T.accent, borderRadius: 11, padding: '11px 14px', fontSize: 13, fontWeight: 600, lineHeight: 1.5 }}>
+              Este es un ejercicio base (del sistema). No puedes editarlo, pero puedes duplicarlo a tu repertorio para personalizar foto, video y datos a tu manera.
+            </div>
+          )}
           <Input label="Nombre" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Ej. Back Squat" />
 
           <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -358,34 +376,64 @@ function ExerciseEditor({ exercise, categories, onClose, onSaved, onDeleted }) {
             padding: '16px 22px', background: T.bg2, borderTop: `1px solid ${T.border}`,
           }}
         >
-          {exercise ? (
-            <button
-              type="button"
-              onClick={onDelete}
-              disabled={busy}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 7, padding: '11px 16px', borderRadius: 12,
-                border: 'none', background: 'rgba(220,38,38,0.08)', color: T.danger, cursor: 'pointer',
-                fontFamily: FONT, fontSize: 14, fontWeight: 700,
-              }}
-            >
-              <Trash2 size={16} /> Eliminar
-            </button>
-          ) : <span />}
-          <button
-            type="button"
-            onClick={onSave}
-            disabled={busy}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 22px', borderRadius: 12,
-              border: 'none', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1,
-              background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff',
-              fontFamily: FONT, fontSize: 14.5, fontWeight: 700, boxShadow: KP.shBtn,
-            }}
-          >
-            {busy && <Loader2 size={16} className="spin" />}
-            {exercise ? 'Guardar cambios' : 'Crear ejercicio'}
-          </button>
+          {readOnly ? (
+            <>
+              <button
+                type="button" onClick={onClose}
+                style={{ padding: '11px 16px', borderRadius: 12, border: `1.5px solid ${T.border}`, background: T.bg2, cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text2 }}
+              >
+                Cerrar
+              </button>
+              <button
+                type="button"
+                disabled={dupBusy}
+                onClick={async () => {
+                  setDupBusy(true);
+                  try { const copy = await duplicateExercise(exercise); onDuplicate(copy); }
+                  catch (e) { setErr(e.message || 'Error al duplicar'); setDupBusy(false); }
+                }}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 22px', borderRadius: 12,
+                  border: 'none', cursor: dupBusy ? 'default' : 'pointer', opacity: dupBusy ? 0.7 : 1,
+                  background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff',
+                  fontFamily: FONT, fontSize: 14.5, fontWeight: 700, boxShadow: KP.shBtn,
+                }}
+              >
+                {dupBusy ? <Loader2 size={16} className="spin" /> : <Copy size={16} />} Duplicar a mi repertorio
+              </button>
+            </>
+          ) : (
+            <>
+              {exercise ? (
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  disabled={busy}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 7, padding: '11px 16px', borderRadius: 12,
+                    border: 'none', background: 'rgba(220,38,38,0.08)', color: T.danger, cursor: 'pointer',
+                    fontFamily: FONT, fontSize: 14, fontWeight: 700,
+                  }}
+                >
+                  <Trash2 size={16} /> Eliminar
+                </button>
+              ) : <span />}
+              <button
+                type="button"
+                onClick={onSave}
+                disabled={busy}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 22px', borderRadius: 12,
+                  border: 'none', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1,
+                  background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff',
+                  fontFamily: FONT, fontSize: 14.5, fontWeight: 700, boxShadow: KP.shBtn,
+                }}
+              >
+                {busy && <Loader2 size={16} className="spin" />}
+                {exercise ? 'Guardar cambios' : 'Crear ejercicio'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -393,22 +441,27 @@ function ExerciseEditor({ exercise, categories, onClose, onSaved, onDeleted }) {
 }
 
 export default function ExercisesPanel() {
+  const { user, profile } = useAuth();
+  const isMaster = !!profile?.is_owner;
   const [categories, setCategories] = useState([]);
-  const [exercises, setExercises] = useState([]);
+  const [exercises, setExercises] = useState([]); // crudo (todos los visibles)
+  const [masterId, setMasterId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [filter, setFilter] = useState('all');
+  const [origin, setOrigin] = useState('all'); // all | mine | base (solo coaches)
   const [search, setSearch] = useState('');
-  const [editing, setEditing] = useState(null); // { exercise } | { new: true } | null
+  const [editing, setEditing] = useState(null); // { exercise, readOnly } | { new: true } | null
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [cats, exs] = await Promise.all([listCategories(), listExercises()]);
+        const [cats, exs, mId] = await Promise.all([listCategories(), listExercises(), getMasterId()]);
         if (cancelled) return;
         setCategories(cats);
         setExercises(exs);
+        setMasterId(mId);
       } catch (e) {
         if (!cancelled) setErr(e.message || 'Error al cargar');
       } finally {
@@ -418,23 +471,47 @@ export default function ExercisesPanel() {
     return () => { cancelled = true; };
   }, []);
 
+  // Etiqueta base/propio y, para coaches, oculta el repertorio de otros coaches.
+  const visible = useMemo(() => {
+    const tagged = tagRepertoire(exercises, masterId, user?.id);
+    if (isMaster) return tagged; // el master ve todo
+    return tagged.filter((e) => e.isBase || e.isMine);
+  }, [exercises, masterId, user?.id, isMaster]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return exercises.filter((e) => {
+    return visible.filter((e) => {
       if (filter !== 'all' && e.category?.slug !== filter) return false;
+      if (!isMaster && origin === 'mine' && !e.isMine) return false;
+      if (!isMaster && origin === 'base' && !e.isBase) return false;
       if (q && !e.name.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [exercises, filter, search]);
+  }, [visible, filter, origin, search, isMaster]);
 
   const counts = useMemo(() => {
-    const m = { all: exercises.length };
-    for (const e of exercises) {
+    const m = { all: visible.length };
+    for (const e of visible) {
       const s = e.category?.slug;
       if (s) m[s] = (m[s] || 0) + 1;
     }
     return m;
-  }, [exercises]);
+  }, [visible]);
+
+  const originCounts = useMemo(() => ({
+    mine: visible.filter((e) => e.isMine).length,
+    base: visible.filter((e) => e.isBase).length,
+  }), [visible]);
+
+  function handleDuplicate(copy) {
+    setExercises((prev) => [...prev, copy]);
+    setEditing({ exercise: copy, readOnly: false }); // abre la copia para personalizar
+  }
+
+  function openExercise(ex) {
+    const ro = !isMaster && ex.isBase; // coach no puede editar el base
+    setEditing({ exercise: ex, readOnly: ro });
+  }
 
   function handleSaved(saved) {
     setExercises((prev) => {
@@ -491,6 +568,34 @@ export default function ExercisesPanel() {
         </button>
       </div>
 
+      {/* Origen (solo coaches): Míos / Base */}
+      {!isMaster && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+          {[
+            { k: 'all', label: 'Todos', n: visible.length },
+            { k: 'mine', label: 'Míos', n: originCounts.mine },
+            { k: 'base', label: 'Base', n: originCounts.base },
+          ].map((o) => {
+            const active = origin === o.k;
+            return (
+              <button
+                key={o.k} type="button" onClick={() => setOrigin(o.k)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 15px', borderRadius: 20,
+                  border: active ? 'none' : `1.5px solid ${T.border}`, cursor: 'pointer', fontFamily: FONT,
+                  fontSize: 13.5, fontWeight: 700,
+                  background: active ? `linear-gradient(135deg, ${T.accent}, ${T.accentDk})` : T.bg2,
+                  color: active ? '#fff' : T.text2, boxShadow: active ? KP.shBtn : 'none',
+                }}
+              >
+                {o.k === 'base' && <Lock size={12} />} {o.label}
+                <span style={{ fontSize: 11.5, opacity: 0.85, fontWeight: 700 }}>{o.n}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Category filter */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 22, flexWrap: 'wrap' }}>
         {[{ slug: 'all', name: 'Todos' }, ...categories].map((c) => {
@@ -534,7 +639,7 @@ export default function ExercisesPanel() {
           }}
         >
           {filtered.map((ex) => (
-            <ExerciseCard key={ex.id} ex={ex} onClick={() => setEditing({ exercise: ex })} />
+            <ExerciseCard key={ex.id} ex={ex} base={!isMaster && ex.isBase} onClick={() => openExercise(ex)} />
           ))}
         </div>
       )}
@@ -543,9 +648,11 @@ export default function ExercisesPanel() {
         <ExerciseEditor
           exercise={editing.exercise || null}
           categories={categories}
+          readOnly={!!editing.readOnly}
           onClose={() => setEditing(null)}
           onSaved={handleSaved}
           onDeleted={handleDeleted}
+          onDuplicate={handleDuplicate}
         />
       )}
 

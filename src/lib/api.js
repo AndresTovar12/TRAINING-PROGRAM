@@ -68,7 +68,55 @@ export async function listExercises() {
   return data ?? [];
 }
 
+// Id del master (dueño de los ejercicios base). Cacheado en memoria.
+let _masterId; // undefined = sin cargar
+export async function getMasterId() {
+  if (_masterId !== undefined) return _masterId;
+  const { data, error } = await supabase.rpc('master_id');
+  _masterId = error ? null : (data ?? null);
+  return _masterId;
+}
+
+// Etiqueta cada ejercicio con su origen relativo al usuario actual.
+// { ...ex, isBase: creado por el master, isMine: creado por mí }
+export function tagRepertoire(exercises, masterId, myId) {
+  return (exercises ?? []).map((e) => ({
+    ...e,
+    isBase: !!masterId && e.created_by === masterId,
+    isMine: !!myId && e.created_by === myId,
+  }));
+}
+
 export async function createExercise(payload) {
+  // El dueño es quien lo crea (aislamiento entre coaches por created_by + RLS).
+  const { data: auth } = await supabase.auth.getUser();
+  const created_by = payload.created_by ?? auth?.user?.id ?? null;
+  const { data, error } = await supabase
+    .from('exercises')
+    .insert({ ...payload, created_by })
+    .select('*, category:exercise_categories(id,slug,name,color)')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// Duplica un ejercicio (p. ej. uno base) al repertorio propio del coach para
+// personalizarlo sin tocar el original.
+export async function duplicateExercise(ex) {
+  const { data: auth } = await supabase.auth.getUser();
+  const created_by = auth?.user?.id ?? null;
+  const payload = {
+    name: ex.name,
+    category_id: ex.category_id ?? ex.category?.id ?? null,
+    description: ex.description ?? null,
+    cover_image_url: ex.cover_image_url ?? null,
+    video_url: ex.video_url ?? null,
+    video_link: ex.video_link ?? null,
+    muscle_primary: ex.muscle_primary ?? null,
+    muscle_secondary: ex.muscle_secondary ?? null,
+    equipment: ex.equipment ?? null,
+    created_by,
+  };
   const { data, error } = await supabase
     .from('exercises')
     .insert(payload)
@@ -116,6 +164,60 @@ export async function listAthletes() {
     .order('created_at');
   if (error) throw error;
   return data ?? [];
+}
+
+// Reasigna un atleta a un coach (o lo deja libre con coachId = null). Master.
+export async function setAthleteCoach(athleteId, coachId) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({ coach_id: coachId })
+    .eq('id', athleteId)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/* ------------------------------- Coaches ------------------------------ */
+export async function listCoaches() {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('role', 'admin')
+    .eq('is_owner', false)
+    .order('full_name');
+  if (error) throw error;
+  return data ?? [];
+}
+
+// El master crea una cuenta de coach vía la Edge Function (service role). NO
+// cambia la sesión actual del master (a diferencia del signUp del registro).
+export async function createCoachAccount({ username, fullName, email, password }) {
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/signup`;
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      username, full_name: fullName || undefined, email: email || undefined,
+      password, account_type: 'coach',
+    }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body?.error || 'No se pudo crear el coach');
+  return body;
+}
+
+// Promueve un atleta existente a coach (y lo desasigna de su coach previo). Master.
+export async function promoteToCoach(userId) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({ role: 'admin', coach_id: null })
+    .eq('id', userId)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
 }
 
 export async function getAthleteState(userId) {

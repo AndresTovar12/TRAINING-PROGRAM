@@ -45,7 +45,10 @@ Deno.serve(async (req) => {
     return json({ error: 'Método no permitido' }, 405, origin)
   }
 
-  let payload: { username?: string; email?: string; password?: string; full_name?: string }
+  let payload: {
+    username?: string; email?: string; password?: string; full_name?: string
+    account_type?: string; coach_username?: string
+  }
   try {
     payload = await req.json()
   } catch {
@@ -56,6 +59,8 @@ Deno.serve(async (req) => {
   const fullName = (payload.full_name ?? '').trim()
   const password = payload.password ?? ''
   let email = (payload.email ?? '').trim().toLowerCase()
+  const accountType = (payload.account_type ?? 'athlete').trim().toLowerCase()
+  const coachUsername = (payload.coach_username ?? '').trim()
 
   if (!USERNAME_RE.test(username)) {
     return json(
@@ -71,6 +76,9 @@ Deno.serve(async (req) => {
     return json({ error: 'Correo inválido' }, 400, origin)
   }
   if (!email) email = `${username.toLowerCase()}@traininglab.app`
+
+  const isCoach = accountType === 'coach'
+  const role = isCoach ? 'admin' : 'athlete'
 
   const admin = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -88,12 +96,26 @@ Deno.serve(async (req) => {
     return json({ error: 'Ese nombre de usuario ya está en uso' }, 409, origin)
   }
 
+  // Si el atleta indicó un coach, resolverlo. Debe existir y ser una cuenta de coach.
+  let coachId: string | null = null
+  if (!isCoach && coachUsername) {
+    const { data: coach } = await admin
+      .from('profiles')
+      .select('id, role')
+      .ilike('username', coachUsername)
+      .maybeSingle()
+    if (!coach || coach.role !== 'admin') {
+      return json({ error: `No encontramos un coach con el usuario "${coachUsername}"` }, 400, origin)
+    }
+    coachId = coach.id
+  }
+
   // Crear usuario confirmado (sin email de verificación)
   const { data, error } = await admin.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
-    user_metadata: { username, full_name: fullName, role: 'user' },
+    user_metadata: { username, full_name: fullName, role },
   })
 
   if (error) {
@@ -103,5 +125,16 @@ Deno.serve(async (req) => {
     return json({ error: msg }, 400, origin)
   }
 
-  return json({ ok: true, user_id: data.user?.id, email }, 200, origin)
+  const userId = data.user?.id
+
+  // El trigger handle_new_user ya creó el profile con el role del metadata.
+  // Reafirmamos role + coach_id (y is_owner=false; el master se marca a mano en DB).
+  if (userId) {
+    await admin
+      .from('profiles')
+      .update({ role, coach_id: coachId, is_owner: false })
+      .eq('id', userId)
+  }
+
+  return json({ ok: true, user_id: userId, email, role, coach_id: coachId }, 200, origin)
 })

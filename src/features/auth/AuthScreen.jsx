@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Dumbbell, User, Lock, Mail, AtSign, Loader2, ArrowRight } from 'lucide-react';
+import { Dumbbell, User, Lock, Mail, AtSign, Loader2, ArrowRight, UserCheck } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { FONT, KP } from '@/lib/theme';
 
@@ -60,6 +60,8 @@ export default function AuthScreen() {
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
+  const [accountType, setAccountType] = useState('athlete'); // 'athlete' | 'coach'
+  const [coachUsername, setCoachUsername] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -96,7 +98,11 @@ export default function AuthScreen() {
       return;
     }
     setBusy(true);
-    const { error: err } = await signUp({ username, email, password, fullName });
+    const { error: err } = await signUp({
+      username, email, password, fullName,
+      accountType,
+      coachUsername: accountType === 'athlete' ? coachUsername.trim() : '',
+    });
     setBusy(false);
     if (err) setError(err.message);
   }
@@ -179,6 +185,39 @@ export default function AuthScreen() {
             />
           ) : (
             <>
+              {/* Tipo de cuenta */}
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', color: KP.ink3, marginBottom: 8 }}>
+                  ¿Cómo vas a usar la app?
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {[
+                    { v: 'athlete', label: 'Soy atleta', sub: 'Sigo mi plan' },
+                    { v: 'coach', label: 'Soy coach', sub: 'Entreno clientes' },
+                  ].map((o) => {
+                    const active = accountType === o.v;
+                    return (
+                      <button
+                        key={o.v}
+                        type="button"
+                        onClick={() => setAccountType(o.v)}
+                        className="kp-press"
+                        style={{
+                          flex: 1, textAlign: 'left', padding: '11px 13px', borderRadius: 13, cursor: 'pointer',
+                          border: `1.5px solid ${active ? KP.blue : KP.line}`,
+                          background: active ? KP.blueSoft : KP.bg,
+                          boxShadow: active ? '0 0 0 4px rgba(30,64,224,0.08)' : 'none',
+                          transition: 'all .15s', fontFamily: FONT,
+                        }}
+                      >
+                        <div style={{ fontSize: 14, fontWeight: 800, color: active ? KP.blue : KP.ink }}>{o.label}</div>
+                        <div style={{ fontSize: 11.5, fontWeight: 600, color: KP.ink3, marginTop: 2 }}>{o.sub}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <Field
                 icon={AtSign}
                 label="Usuario"
@@ -206,6 +245,17 @@ export default function AuthScreen() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
+              {accountType === 'athlete' && (
+                <Field
+                  icon={UserCheck}
+                  label="Usuario de tu coach"
+                  hint="Opcional"
+                  placeholder="usuario_del_coach"
+                  autoComplete="off"
+                  value={coachUsername}
+                  onChange={(e) => setCoachUsername(e.target.value.replace(/\s/g, ''))}
+                />
+              )}
             </>
           )}
           <Field

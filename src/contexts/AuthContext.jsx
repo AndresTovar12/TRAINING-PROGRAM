@@ -76,7 +76,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   // Register via Edge Function (creates a confirmed user), then auto sign-in
-  const signUp = useCallback(async ({ username, email, password, fullName }) => {
+  const signUp = useCallback(async ({ username, email, password, fullName, accountType, coachUsername }) => {
     let res;
     try {
       res = await fetch(SIGNUP_URL, {
@@ -91,6 +91,8 @@ export function AuthProvider({ children }) {
           email: email || undefined,
           password,
           full_name: fullName || undefined,
+          account_type: accountType || 'athlete',
+          coach_username: coachUsername || undefined,
         }),
       });
     } catch {

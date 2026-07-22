@@ -1,17 +1,19 @@
 import { useState } from 'react';
-import { Dumbbell, Users, Library } from 'lucide-react';
+import { Dumbbell, Users, Library, Shield } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { T, FONT, KP } from '@/lib/theme';
 import AthletesPanel from '@/features/admin/AthletesPanel';
 import ExercisesPanel from '@/features/admin/ExercisesPanel';
-
-const TABS = [
-  { id: 'athletes', label: 'Atletas', icon: Users },
-  { id: 'exercises', label: 'Ejercicios', icon: Library },
-];
+import CoachesPanel from '@/features/admin/CoachesPanel';
 
 export default function AdminApp() {
   const { profile } = useAuth();
+  const isMaster = !!profile?.is_owner;
+  const TABS = [
+    { id: 'athletes', label: isMaster ? 'Atletas' : 'Mis atletas', icon: Users },
+    { id: 'exercises', label: 'Ejercicios', icon: Library },
+    ...(isMaster ? [{ id: 'coaches', label: 'Coaches', icon: Shield }] : []),
+  ];
   const [tab, setTab] = useState('athletes');
 
   return (
@@ -40,10 +42,10 @@ export default function AdminApp() {
           </div>
           <div>
             <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: -0.3, color: T.text }}>
-              Training Lab · Admin
+              Training Lab · {isMaster ? 'Master' : 'Coach'}
             </div>
             <div style={{ fontSize: 12.5, fontWeight: 500, color: T.text2 }}>
-              {profile?.full_name || 'Administrador'}
+              {profile?.full_name || (isMaster ? 'Administrador' : 'Entrenador')}
             </div>
           </div>
         </div>
@@ -78,6 +80,7 @@ export default function AdminApp() {
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 20px 80px' }}>
         {tab === 'athletes' && <AthletesPanel />}
         {tab === 'exercises' && <ExercisesPanel />}
+        {tab === 'coaches' && isMaster && <CoachesPanel />}
       </main>
     </div>
   );
