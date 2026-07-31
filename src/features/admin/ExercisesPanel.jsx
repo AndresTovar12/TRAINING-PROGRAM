@@ -8,6 +8,7 @@ import {
   listCategories, listExercises, createExercise, updateExercise, deleteExercise,
   uploadExerciseMedia, getMasterId, tagRepertoire, duplicateExercise,
 } from '@/lib/api';
+import { MUSCLE_GROUPS, FINE_MUSCLES, exerciseMatchesGroup } from '@/lib/muscles';
 import { T, FONT, KP } from '@/lib/theme';
 
 const CAT_FALLBACK = {
@@ -191,14 +192,16 @@ const empty = {
   muscle_primary: '', cover_image_url: '', video_url: '', video_link: '',
 };
 
-// Lista desplegable de grupo muscular: opciones = los que ya existen en el
-// repertorio + el valor actual; "➕ Otro…" abre un campo para escribir uno nuevo.
+// Lista desplegable de grupo muscular: primero los grupos (recomendado), luego
+// el detalle fino ya usado en el repertorio; "➕ Otro…" permite escribir uno nuevo.
 function MuscleSelect({ value, onChange, options }) {
-  const opts = useMemo(() => {
-    const s = new Set((options || []).filter(Boolean));
+  const groupLabels = useMemo(() => MUSCLE_GROUPS.map((g) => g.label), []);
+  const fineOpts = useMemo(() => {
+    const s = new Set([...(options || []), ...FINE_MUSCLES].filter(Boolean));
     if (value && value.trim()) s.add(value.trim());
+    groupLabels.forEach((l) => s.delete(l)); // los grupos van en su propio bloque
     return [...s].sort((a, b) => a.localeCompare(b));
-  }, [options, value]);
+  }, [options, value, groupLabels]);
   const [other, setOther] = useState(false);
   const selectStyle = {
     border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '11px 13px',
@@ -216,7 +219,14 @@ function MuscleSelect({ value, onChange, options }) {
         style={selectStyle}
       >
         <option value="">Selecciona…</option>
-        {opts.map((m) => <option key={m} value={m}>{m}</option>)}
+        <optgroup label="Grupos">
+          {MUSCLE_GROUPS.map((g) => <option key={g.id} value={g.label}>{g.label}</option>)}
+        </optgroup>
+        {fineOpts.length > 0 && (
+          <optgroup label="Detalle">
+            {fineOpts.map((m) => <option key={m} value={m}>{m}</option>)}
+          </optgroup>
+        )}
         <option value="__other__">➕ Otro…</option>
       </select>
       {other && (
@@ -510,17 +520,27 @@ export default function ExercisesPanel() {
     return tagged.filter((e) => e.isBase || e.isMine);
   }, [exercises, masterId, user?.id, isMaster]);
 
+  // Músculos finos presentes en el repertorio (para el detalle del editor)
   const muscles = useMemo(() => {
     const s = new Set();
     visible.forEach((e) => (e.muscle_primary || []).forEach((m) => m && s.add(m)));
     return [...s].sort((a, b) => a.localeCompare(b));
   }, [visible]);
 
+  // Conteo por grupo muscular para el desplegable de filtro
+  const groupCounts = useMemo(() => {
+    const m = {};
+    MUSCLE_GROUPS.forEach((g) => {
+      m[g.id] = visible.filter((e) => exerciseMatchesGroup(e, g.id)).length;
+    });
+    return m;
+  }, [visible]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return visible.filter((e) => {
       if (filter !== 'all' && e.category?.slug !== filter) return false;
-      if (muscle !== 'all' && !(e.muscle_primary || []).some((m) => m.toLowerCase() === muscle.toLowerCase())) return false;
+      if (muscle !== 'all' && !exerciseMatchesGroup(e, muscle)) return false;
       if (q && !e.name.toLowerCase().includes(q)) return false;
       return true;
     });
@@ -623,8 +643,8 @@ export default function ExercisesPanel() {
             style={{ border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '11px 13px', fontFamily: FONT, fontSize: 14, fontWeight: 600, color: T.text, background: T.bg2, outline: 'none', cursor: 'pointer' }}
           >
             <option value="all">Todos los grupos</option>
-            {muscles.map((m) => (
-              <option key={m} value={m}>{m}</option>
+            {MUSCLE_GROUPS.filter((g) => groupCounts[g.id] > 0).map((g) => (
+              <option key={g.id} value={g.id}>{g.label} ({groupCounts[g.id]})</option>
             ))}
           </select>
         </label>

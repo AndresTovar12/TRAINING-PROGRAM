@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Search, X, Check, Dumbbell, Trash2 } from 'lucide-react';
 import { T, FONT, KP } from '@/lib/theme';
+import { MUSCLE_GROUPS, exerciseMatchesGroup } from '@/lib/muscles';
 
 /**
  * Selector del repertorio completo (estilo Avena): filtros por categoría,
@@ -20,10 +21,13 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
     return [...m.values()];
   }, [exercises]);
 
-  const muscles = useMemo(() => {
-    const s = new Set();
-    exercises.forEach((e) => (e.muscle_primary ?? []).forEach((mm) => s.add(mm)));
-    return [...s].sort();
+  // Conteo por grupo muscular (solo se ofrecen los grupos con ejercicios)
+  const groupCounts = useMemo(() => {
+    const m = {};
+    MUSCLE_GROUPS.forEach((g) => {
+      m[g.id] = exercises.filter((e) => exerciseMatchesGroup(e, g.id)).length;
+    });
+    return m;
   }, [exercises]);
 
   const equipment = useMemo(() => {
@@ -36,7 +40,7 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
     const q = query.trim().toLowerCase();
     return exercises.filter((e) =>
       (!catId || e.category?.id === catId)
-      && (!muscle || (e.muscle_primary ?? []).includes(muscle))
+      && (!muscle || exerciseMatchesGroup(e, muscle))
       && (!equip || e.equipment === equip)
       && (!q || e.name.toLowerCase().includes(q) || (e.equipment || '').toLowerCase().includes(q)));
   }, [exercises, query, catId, muscle, equip]);
@@ -95,37 +99,46 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
             )}
           </div>
 
-          {/* Filtros: chips de categoría (scrolleables) */}
-          <div style={{ display: 'flex', gap: 7, overflowX: 'auto', paddingBottom: 8, alignItems: 'center' }}>
-            <button type="button" onClick={() => { setCatId(null); setMuscle(null); setEquip(null); }} style={selStyle(!catId && !muscle && !equip)}>
-              Todos
-            </button>
-            {categories.map((c) => (
-              <button key={c.id} type="button" onClick={() => setCatId(catId === c.id ? null : c.id)}
-                style={{ ...selStyle(catId === c.id), display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 7, height: 7, borderRadius: '50%', background: c.color || T.accent }} />
-                {c.name}
-              </button>
-            ))}
-          </div>
-          {/* Filtros: selects siempre visibles (fila propia, no se esconden en móvil) */}
-          <div style={{ display: 'flex', gap: 8, paddingBottom: 12 }}>
+          {/* Filtros: tres listas desplegables + limpiar */}
+          <div style={{ display: 'flex', gap: 8, paddingBottom: 12, flexWrap: 'wrap' }}>
+            <select
+              value={catId || ''}
+              onChange={(e) => setCatId(e.target.value || null)}
+              style={{ ...selStyle(!!catId), padding: '8px 10px', outline: 'none', flex: '1 1 150px', minWidth: 0 }}
+            >
+              <option value="">Todas las categorías</option>
+              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
             <select
               value={muscle || ''}
               onChange={(e) => setMuscle(e.target.value || null)}
-              style={{ ...selStyle(!!muscle), padding: '7px 9px', outline: 'none', flex: 1, minWidth: 0 }}
+              style={{ ...selStyle(!!muscle), padding: '8px 10px', outline: 'none', flex: '1 1 150px', minWidth: 0 }}
             >
               <option value="">Parte del cuerpo</option>
-              {muscles.map((m) => <option key={m} value={m}>{m}</option>)}
+              {MUSCLE_GROUPS.filter((g) => groupCounts[g.id] > 0).map((g) => (
+                <option key={g.id} value={g.id}>{g.label} ({groupCounts[g.id]})</option>
+              ))}
             </select>
             <select
               value={equip || ''}
               onChange={(e) => setEquip(e.target.value || null)}
-              style={{ ...selStyle(!!equip), padding: '7px 9px', outline: 'none', flex: 1, minWidth: 0 }}
+              style={{ ...selStyle(!!equip), padding: '8px 10px', outline: 'none', flex: '1 1 150px', minWidth: 0 }}
             >
               <option value="">Equipo</option>
               {equipment.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
+            {(catId || muscle || equip) && (
+              <button
+                type="button"
+                onClick={() => { setCatId(null); setMuscle(null); setEquip(null); }}
+                style={{
+                  border: 'none', background: 'transparent', cursor: 'pointer', color: T.accent,
+                  fontFamily: FONT, fontSize: 12.5, fontWeight: 700, padding: '8px 4px', flexShrink: 0,
+                }}
+              >
+                Limpiar filtros
+              </button>
+            )}
           </div>
         </div>
 
