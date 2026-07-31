@@ -310,7 +310,7 @@ function ExerciseCard({ ex, repertoire, onPatch, onRemove, onMove, canLeft, canR
   const rep = ex.exercise_id ? repertoire.find((r) => r.id === ex.exercise_id) : null;
   return (
     <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden', minWidth: 0 }}>
-      <div style={{ position: 'relative', height: 110, background: '#0E1015' }}>
+      <div style={{ position: 'relative', height: 110, width: '100%', background: '#0E1015' }}>
         {rep?.cover_image_url ? (
           <img src={rep.cover_image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', opacity: 0.95 }} />
         ) : (

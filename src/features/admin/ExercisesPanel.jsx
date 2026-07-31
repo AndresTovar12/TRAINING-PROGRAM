@@ -47,14 +47,15 @@ function ExerciseCard({ ex, onClick, base }) {
         textAlign: 'left', border: `1px solid ${T.border}`, background: T.bg2, borderRadius: 20,
         overflow: 'hidden', cursor: 'pointer', fontFamily: FONT, padding: 0,
         boxShadow: KP.shCard, transition: 'box-shadow .18s, transform .12s cubic-bezier(0.22,1,0.36,1)',
-        display: 'flex', flexDirection: 'column',
+        display: 'flex', flexDirection: 'column', alignItems: 'stretch', width: '100%',
       }}
       onMouseEnter={(e) => { e.currentTarget.style.boxShadow = KP.shRaise; e.currentTarget.style.transform = 'translateY(-2px)'; }}
       onMouseLeave={(e) => { e.currentTarget.style.boxShadow = KP.shCard; e.currentTarget.style.transform = 'none'; }}
     >
       <div
         style={{
-          height: 116, background: ex.cover_image_url ? `center/cover no-repeat url(${ex.cover_image_url})` : `${color}12`,
+          height: 116, width: '100%', alignSelf: 'stretch',
+          background: ex.cover_image_url ? `center/cover no-repeat url(${ex.cover_image_url})` : `${color}12`,
           display: 'grid', placeItems: 'center', position: 'relative',
         }}
       >

@@ -95,8 +95,8 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
             )}
           </div>
 
-          {/* Filtros */}
-          <div style={{ display: 'flex', gap: 7, overflowX: 'auto', paddingBottom: 12, alignItems: 'center' }}>
+          {/* Filtros: chips de categoría (scrolleables) */}
+          <div style={{ display: 'flex', gap: 7, overflowX: 'auto', paddingBottom: 8, alignItems: 'center' }}>
             <button type="button" onClick={() => { setCatId(null); setMuscle(null); setEquip(null); }} style={selStyle(!catId && !muscle && !equip)}>
               Todos
             </button>
@@ -107,11 +107,13 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
                 {c.name}
               </button>
             ))}
-            <span style={{ width: 1, alignSelf: 'stretch', background: T.border, flexShrink: 0 }} />
+          </div>
+          {/* Filtros: selects siempre visibles (fila propia, no se esconden en móvil) */}
+          <div style={{ display: 'flex', gap: 8, paddingBottom: 12 }}>
             <select
               value={muscle || ''}
               onChange={(e) => setMuscle(e.target.value || null)}
-              style={{ ...selStyle(!!muscle), padding: '7px 9px', outline: 'none' }}
+              style={{ ...selStyle(!!muscle), padding: '7px 9px', outline: 'none', flex: 1, minWidth: 0 }}
             >
               <option value="">Parte del cuerpo</option>
               {muscles.map((m) => <option key={m} value={m}>{m}</option>)}
@@ -119,7 +121,7 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
             <select
               value={equip || ''}
               onChange={(e) => setEquip(e.target.value || null)}
-              style={{ ...selStyle(!!equip), padding: '7px 9px', outline: 'none' }}
+              style={{ ...selStyle(!!equip), padding: '7px 9px', outline: 'none', flex: 1, minWidth: 0 }}
             >
               <option value="">Equipo</option>
               {equipment.map((m) => <option key={m} value={m}>{m}</option>)}
@@ -148,9 +150,10 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
                         textAlign: 'left', border: `2px solid ${sel ? T.accent : T.border}`, cursor: 'pointer',
                         background: T.bg2, borderRadius: 14, padding: 0, overflow: 'hidden', fontFamily: FONT,
                         boxShadow: sel ? KP.shRaise : KP.shCard, transition: 'border-color .12s, box-shadow .12s',
+                        display: 'flex', flexDirection: 'column', alignItems: 'stretch', width: '100%',
                       }}
                     >
-                      <div style={{ position: 'relative', height: 96, background: '#0E1015' }}>
+                      <div style={{ position: 'relative', height: 96, width: '100%', alignSelf: 'stretch', background: '#0E1015' }}>
                         {ex.cover_image_url ? (
                           <img src={ex.cover_image_url} alt="" loading="lazy"
                             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', opacity: 0.95 }} />
