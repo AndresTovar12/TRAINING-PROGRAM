@@ -505,30 +505,24 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
         <Field label="Nombre de la sesión" grow>
           <input value={day.name || ''} onChange={(e) => onPatch({ name: e.target.value })} placeholder="Ej. Tren inferior — fuerza" style={inputStyle} />
         </Field>
+        <div style={{ flex: '0 1 180px', minWidth: 140 }}>
+          <Field label="Tipo de sesión">
+            <select
+              value={day.cat || 'gym'}
+              onChange={(e) => onPatch({ cat: e.target.value })}
+              style={{ ...inputStyle, fontWeight: 600, cursor: 'pointer' }}
+            >
+              {DAY_CATS.map((c) => (
+                <option key={c.slug} value={c.slug}>{c.label}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
         {nSets != null && (
           <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text3, paddingBottom: 12 }}>
             {nSets} set{nSets !== 1 ? 's' : ''}
           </span>
         )}
-      </div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-        {DAY_CATS.map((c) => {
-          const active = day.cat === c.slug;
-          return (
-            <button
-              key={c.slug} type="button" onClick={() => onPatch({ cat: c.slug })}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 11px', borderRadius: 10,
-                border: `1.5px solid ${active ? c.color : T.border}`, cursor: 'pointer',
-                background: active ? `${c.color}14` : T.bg2, color: active ? c.color : T.text2,
-                fontFamily: FONT, fontSize: 11.5, fontWeight: 700,
-              }}
-            >
-              <span style={{ width: 7, height: 7, borderRadius: '50%', background: c.color }} />
-              {c.label}
-            </button>
-          );
-        })}
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.border}` }}>
         {!dual && <Pill icon={FolderOpen} onClick={onApplyCatalog}>Desde catálogo</Pill>}
