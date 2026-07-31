@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { Dumbbell, Loader2, LogOut, Shield, User as UserIcon, UserCog } from 'lucide-react';
+import { Dumbbell, Loader2, LogOut, Shield, User as UserIcon, UserCog, RefreshCw } from 'lucide-react';
+import { useNewVersion } from '@/lib/useNewVersion';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppStateProvider } from '@/contexts/AppStateContext';
 import { PlanProvider } from '@/contexts/PlanContext';
@@ -147,11 +148,49 @@ function AccountMenu() {
   );
 }
 
+/** Aviso de versión nueva: aparece al detectar un deploy más reciente. */
+function UpdateBanner() {
+  const stale = useNewVersion();
+  if (!stale) return null;
+  return (
+    <div
+      className="animate-fade-in"
+      style={{
+        position: 'fixed', left: 12, right: 12, bottom: 'calc(12px + env(safe-area-inset-bottom))',
+        zIndex: 4000, display: 'flex', alignItems: 'center', gap: 12,
+        background: KP.surface, border: `1px solid ${KP.line}`, borderRadius: 16,
+        padding: '12px 14px', boxShadow: KP.shPop, fontFamily: FONT,
+        maxWidth: 520, marginInline: 'auto',
+      }}
+    >
+      <span style={{ width: 34, height: 34, borderRadius: 11, flexShrink: 0, background: KP.blueSoft, color: KP.blue, display: 'grid', placeItems: 'center' }}>
+        <RefreshCw size={17} />
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 800, color: KP.ink, lineHeight: 1.2 }}>Hay una versión nueva</div>
+        <div style={{ fontSize: 12.5, color: KP.ink2, marginTop: 2 }}>Actualiza para verla.</div>
+      </div>
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        className="kp-press"
+        style={{
+          flexShrink: 0, border: 'none', cursor: 'pointer', borderRadius: 12, padding: '11px 16px',
+          background: `linear-gradient(135deg, ${KP.blue}, ${KP.blueDk})`, color: '#fff',
+          fontFamily: FONT, fontSize: 14, fontWeight: 800, boxShadow: KP.shBtn,
+        }}
+      >
+        Actualizar
+      </button>
+    </div>
+  );
+}
+
 export default function App() {
   const { loading, user, profile } = useAuth();
 
   if (loading) return <Splash />;
-  if (!user) return <AuthScreen />;
+  if (!user) return <><AuthScreen /><UpdateBanner /></>;
   if (!profile) return <Splash label="Cargando tu perfil…" />;
 
   if (profile.role === 'admin') {
@@ -159,6 +198,7 @@ export default function App() {
       <>
         <AdminApp />
         <AccountMenu />
+        <UpdateBanner />
       </>
     );
   }
@@ -170,6 +210,7 @@ export default function App() {
       <PlanProvider>
         <TrainingApp />
         <AccountMenu />
+        <UpdateBanner />
       </PlanProvider>
     </AppStateProvider>
   );
