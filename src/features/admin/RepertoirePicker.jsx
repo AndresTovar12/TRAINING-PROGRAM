@@ -5,14 +5,13 @@ import { MUSCLE_GROUPS, exerciseMatchesGroup } from '@/lib/muscles';
 
 /**
  * Selector del repertorio completo (estilo Avena): filtros por categoría,
- * parte del cuerpo y equipo; selección múltiple con lista de elegidos y un
+ * parte del cuerpo; selección múltiple con lista de elegidos y un
  * solo botón "Agregar N". `onConfirm(exercises[])` recibe los elegidos en orden.
  */
 export default function RepertoirePicker({ exercises, onConfirm, onClose, title = 'Agregar ejercicios' }) {
   const [query, setQuery] = useState('');
   const [catId, setCatId] = useState(null);
   const [muscle, setMuscle] = useState(null);
-  const [equip, setEquip] = useState(null);
   const [picked, setPicked] = useState([]); // filas del repertorio, en orden de selección
 
   const categories = useMemo(() => {
@@ -30,20 +29,13 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
     return m;
   }, [exercises]);
 
-  const equipment = useMemo(() => {
-    const s = new Set();
-    exercises.forEach((e) => { if (e.equipment) s.add(e.equipment); });
-    return [...s].sort();
-  }, [exercises]);
-
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     return exercises.filter((e) =>
       (!catId || e.category?.id === catId)
       && (!muscle || exerciseMatchesGroup(e, muscle))
-      && (!equip || e.equipment === equip)
       && (!q || e.name.toLowerCase().includes(q) || (e.equipment || '').toLowerCase().includes(q)));
-  }, [exercises, query, catId, muscle, equip]);
+  }, [exercises, query, catId, muscle]);
 
   const pickedIds = useMemo(() => new Set(picked.map((p) => p.id)), [picked]);
   const toggle = (ex) => {
@@ -119,18 +111,10 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
                 <option key={g.id} value={g.id}>{g.label} ({groupCounts[g.id]})</option>
               ))}
             </select>
-            <select
-              value={equip || ''}
-              onChange={(e) => setEquip(e.target.value || null)}
-              style={{ ...selStyle(!!equip), padding: '8px 10px', outline: 'none', flex: '1 1 150px', minWidth: 0 }}
-            >
-              <option value="">Equipo</option>
-              {equipment.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
-            {(catId || muscle || equip) && (
+            {(catId || muscle) && (
               <button
                 type="button"
-                onClick={() => { setCatId(null); setMuscle(null); setEquip(null); }}
+                onClick={() => { setCatId(null); setMuscle(null); }}
                 style={{
                   border: 'none', background: 'transparent', cursor: 'pointer', color: T.accent,
                   fontFamily: FONT, fontSize: 12.5, fontWeight: 700, padding: '8px 4px', flexShrink: 0,
