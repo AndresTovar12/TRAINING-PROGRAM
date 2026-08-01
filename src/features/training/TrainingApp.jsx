@@ -13,8 +13,9 @@ import { usePlan } from '@/contexts/PlanContext';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   sessionId, calc1RM, today, greeting, isLoadedExercise,
-  resolveCursor, advanceCursor, defaultCursor, isValidCursor, findPreviousWeight,
-  totalProgress, getWeekLoad, formatIntensity, inferRest, getPattern, getMuscles
+  resolveCursor, defaultCursor, isValidCursor, findPreviousWeight,
+  getWeekLoad, formatIntensity, inferRest, getPattern, getMuscles,
+  sessionForToday, weekOverview, weekdayToday, weekdayLabel
 } from '@/lib/training-utils';
 import { useStorage } from '@/contexts/AppStateContext';
 import ExerciseMediaModal from '@/features/training/ExerciseMediaModal';
@@ -1147,10 +1148,12 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
   const phaseColor = phase.color || LT.blue;
   const completedCount = week.days.filter((_, idx) => sessionsData[sessionId(phase.id, week.num, idx)]?.completed).length;
 
+  // Abre en el día de hoy; si hoy no entrena, en el primero de la semana.
   const initialIdx = useMemo(() => {
-    const idx = week.days.findIndex((_, i) => !sessionsData[sessionId(phase.id, week.num, i)]?.completed);
+    const wd = weekdayToday();
+    const idx = week.days.findIndex((d) => d.day === wd);
     return idx === -1 ? 0 : idx;
-  }, [week, phase.id, sessionsData]);
+  }, [week]);
   const [selectedIdx, setSelectedIdx] = useState(initialIdx);
   const [openBlocks, setOpenBlocks] = useState({ 0: true });
   useEffect(() => { setOpenBlocks({ 0: true }); }, [selectedIdx]);
@@ -1835,28 +1838,18 @@ const initialsFrom = (name) => {
 };
 
 const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, onGoWeek, cursor, onChangeCursor }) => {
-  const { phases: PLAN, planMeta } = usePlan();
+  const { phases: PLAN, planMeta, kind } = usePlan();
   const { profile } = useAuth();
   const displayName = profile?.full_name || profile?.username || 'Atleta';
-  const next = useMemo(() => resolveCursor(PLAN, cursor), [PLAN, cursor]);
+  // Lo que toca HOY según el calendario del dispositivo (no según lo marcado).
+  const next = useMemo(() => sessionForToday(PLAN, kind, cursor), [PLAN, kind, cursor]);
+  const week = useMemo(() => weekOverview(PLAN, kind, cursor), [PLAN, kind, cursor]);
   const cursorCompleted = next ? !!sessionsData[next.id]?.completed : false;
-  const total = useMemo(() => totalProgress(PLAN, sessionsData), [PLAN, sessionsData]);
   const todayScore = useMemo(() => {
     const d = wellness[today()];
     if (!d || !d.sleep || d.fatigue == null || d.soreness == null || !d.motivation) return null;
     return Math.round((d.sleep + (10 - d.fatigue) + (10 - d.soreness) + d.motivation) / 4 * 10) / 10;
   }, [wellness]);
-
-  // Progreso de la semana actual: completadas / total
-  const weekProgress = useMemo(() => {
-    if (!next) return { done: 0, total: 0 };
-    let done = 0;
-    next.week.days.forEach((_, i) => {
-      const id = sessionId(next.phase.id, next.week.num, i);
-      if (sessionsData[id]?.completed) done++;
-    });
-    return { done, total: next.week.days.length };
-  }, [next, sessionsData]);
 
   // Días estimados hasta el próximo deload
   const daysToDeload = useMemo(() => {
@@ -1980,7 +1973,7 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={eyebrow(KP.blue)}>{greetText}</div>
           <div style={{ fontSize: 'clamp(20px, 5.6vw, 24px)', fontWeight: 800, color: LT.text, lineHeight: 1.12, letterSpacing: -0.4, marginTop: 6, overflowWrap: 'anywhere' }}>{displayName}</div>
-          {next && (
+          {next && kind !== 'weekly' && (
             <div style={{ fontSize: 12.5, color: LT.text2, fontWeight: 600, marginTop: 5 }}>
               Fase {next.phase.num} · {next.phase.mode === 'microcycle' ? 'Microciclo' : `Semana ${next.week.num} de ${next.phase.weeks}`}
             </div>
@@ -2003,13 +1996,13 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, 
               }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)' }}>
-                  {cursorCompleted ? 'Completada' : 'Tu siguiente'}
+                  {cursorCompleted ? 'Completada' : 'Hoy te toca'}
                 </div>
                 <div style={{ fontSize: 24, fontWeight: 700, color: '#fff', lineHeight: 1.05, marginTop: 3, letterSpacing: -0.5 }}>
                   {sessionTitle}
                 </div>
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.82)', marginTop: 8, lineHeight: 1.4 }}>
-                  {next.phase.name}<br />
+                  {kind === 'weekly' ? weekdayLabel(next.day.day) : next.phase.name}<br />
                   {sessionMeta.exercises ? `${sessionMeta.exercises} ejercicios · ` : ''}{sessionMeta.duration}
                   {sessionMeta.dual ? ' · 2 sesiones' : ''}
                 </div>
@@ -2042,14 +2035,16 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, 
               )}
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.05) 35%, rgba(0,0,0,0.78) 100%)' }} />
               <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', padding: '16px 16px 0' }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Fase {next.phase.num}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>
+                  {kind === 'weekly' ? 'Tu rutina' : `Fase ${next.phase.num}`}
+                </span>
               </div>
               <div style={{ position: 'relative', padding: '0 16px 16px' }}>
                 <div style={{ fontSize: 22, fontWeight: 700, color: '#fff', lineHeight: 1.05, marginBottom: 12 }}>
-                  {next.phase.name}
+                  {kind === 'weekly' ? (planMeta?.title || 'Rutina semanal') : next.phase.name}
                 </div>
                 <div style={{ background: '#fff', borderRadius: 14, padding: '12px', fontSize: 13, fontWeight: 600, color: '#111', textAlign: 'center' }}>
-                  Ver fase
+                  {kind === 'weekly' ? 'Ver la semana' : 'Ver fase'}
                 </div>
               </div>
             </div>
@@ -2075,22 +2070,33 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, 
               </div>
             </div>
 
-            {/* Mi progreso */}
+            {/* Tu semana: qué días entrenas, cuál es hoy y qué sigue */}
             <div style={{ flex: 1, background: LT.surface, borderRadius: 22, padding: 20, minWidth: 0 }}>
-              <div style={{ fontSize: 14, color: LT.text2 }}>Mi progreso</div>
+              <div style={{ fontSize: 14, color: LT.text2 }}>Tu semana</div>
               <div style={{ fontSize: 13, color: LT.text, marginTop: 6 }}>
-                Semana {weekProgress.done}/{weekProgress.total} de la fase
+                {week.trainingDays} {week.trainingDays === 1 ? 'día' : 'días'} de entrenamiento
               </div>
-              <div style={{ display: 'flex', gap: 5, marginTop: 14, alignItems: 'flex-end', height: 40 }}>
-                {Array.from({ length: Math.max(weekProgress.total, 1) }).map((_, i) => (
-                  <div key={i} style={{
-                    width: 8, height: i < weekProgress.done ? '100%' : '45%',
-                    background: i < weekProgress.done ? LT.blue : LT.blueSoft, borderRadius: 3,
-                  }} />
+              <div style={{ display: 'flex', gap: 4, marginTop: 14, flexWrap: 'wrap' }}>
+                {week.days.map((d) => (
+                  <div
+                    key={d.key}
+                    title={d.name || 'Descanso'}
+                    style={{
+                      flex: '1 1 0', minWidth: 26, textAlign: 'center', borderRadius: 8,
+                      padding: '7px 2px', fontSize: 10.5, fontWeight: 800,
+                      background: d.isToday ? LT.blue : d.hasSession ? LT.blueSoft : LT.surface2,
+                      color: d.isToday ? '#fff' : d.hasSession ? LT.blue : LT.text3,
+                      border: d.isToday ? 'none' : `1px solid ${d.hasSession ? 'transparent' : LT.border}`,
+                    }}
+                  >
+                    {d.key[0]}
+                  </div>
                 ))}
               </div>
-              <div style={{ fontSize: 11, color: LT.text3, marginTop: 10 }}>
-                {Math.round(total.pct)}% del plan anual
+              <div style={{ fontSize: 11, color: LT.text3, marginTop: 10, lineHeight: 1.4 }}>
+                {week.next
+                  ? `Siguiente: ${weekdayLabel(week.next.key)}${week.next.name ? ` · ${week.next.name}` : ''}`
+                  : 'Sin entrenamientos esta semana'}
               </div>
             </div>
           </div>
@@ -2107,10 +2113,9 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, 
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 17, fontWeight: 700, color: LT.text }}>{planMeta?.title || 'Mi plan'}</div>
                 <div style={{ fontSize: 12, color: LT.text2, marginTop: 1 }}>
-                  {PLAN.length} {PLAN.length === 1 ? 'fase' : 'fases'} · {PLAN.reduce((s, p) => s + (p.weekData?.length || 0), 0)} semanas
-                </div>
-                <div style={{ fontSize: 12, color: LT.blue, fontWeight: 600, marginTop: 4 }}>
-                  {total.completed} de {total.total} sesiones completadas
+                  {kind === 'weekly'
+                    ? `Rutina semanal · ${week.trainingDays} ${week.trainingDays === 1 ? 'día' : 'días'}`
+                    : `${PLAN.length} ${PLAN.length === 1 ? 'fase' : 'fases'} · ${PLAN.reduce((s, p) => s + (p.weekData?.length || 0), 0)} semanas`}
                 </div>
               </div>
               <ChevronRight size={18} style={{ color: LT.text3, flexShrink: 0 }} />
@@ -2120,8 +2125,44 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, 
       ) : (
         <div style={{ padding: '0 18px' }}>
           <div style={{ background: LT.surface, borderRadius: 22, padding: 24 }}>
-            <div style={{ fontSize: 24, fontWeight: 700, color: LT.text }}>Plan completado</div>
-            <div style={{ marginTop: 8, fontSize: 14, color: LT.text2 }}>Todas las sesiones marcadas. Buen trabajo.</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: LT.text, lineHeight: 1.2 }}>
+              No tienes rutina asignada para este día
+            </div>
+            <div style={{ marginTop: 8, fontSize: 14, color: LT.text2, lineHeight: 1.5 }}>
+              {week.next
+                ? `Tu siguiente entrenamiento es el ${weekdayLabel(week.next.key)}${week.next.name ? ` · ${week.next.name}` : ''}.`
+                : 'Aún no hay entrenamientos en tu semana.'}
+            </div>
+
+            {/* Vista de la semana, para ubicarse */}
+            <div style={{ display: 'flex', gap: 4, marginTop: 18, flexWrap: 'wrap' }}>
+              {week.days.map((d) => (
+                <div
+                  key={d.key}
+                  title={d.name || 'Descanso'}
+                  style={{
+                    flex: '1 1 0', minWidth: 30, textAlign: 'center', borderRadius: 8,
+                    padding: '9px 2px', fontSize: 11, fontWeight: 800,
+                    background: d.isToday ? LT.blue : d.hasSession ? LT.blueSoft : LT.surface2,
+                    color: d.isToday ? '#fff' : d.hasSession ? LT.blue : LT.text3,
+                    border: d.isToday ? 'none' : `1px solid ${d.hasSession ? 'transparent' : LT.border}`,
+                  }}
+                >
+                  {d.key}
+                </div>
+              ))}
+            </div>
+
+            <div
+              onClick={() => onGoTab('plan')}
+              className="kp-press"
+              style={{
+                background: LT.blue, borderRadius: 14, padding: '13px', marginTop: 18,
+                fontSize: 14, fontWeight: 600, color: '#fff', textAlign: 'center', cursor: 'pointer',
+              }}
+            >
+              Ver mi plan
+            </div>
           </div>
         </div>
       )}
@@ -2568,18 +2609,15 @@ export default function TrainingApp() {
   const activeWeekKey = cursorSession ? `${cursorSession.phase.id}-w${cursorSession.week.num}` : null;
   const activePhaseId = cursorSession?.phase.id;
 
+  // El marcado es opcional y NO mueve el puntero: qué se muestra lo decide el
+  // calendario. (Antes, reabrir una sesión completada y editar un peso saltaba
+  // de día, porque esta misma función se usa para guardar pesos.)
   const updateSession = useCallback((id, updater) => {
-    setSessionsData(prev => {
-      const newSd = { ...prev, [id]: typeof updater === 'function' ? updater(prev[id] || {}) : updater };
-      // Si la sesión completada es la del cursor, avanzar cursor al siguiente no completado
-      const updated = newSd[id];
-      if (updated?.completed && id === activeSessionId) {
-        const nextCursor = advanceCursor(PLAN, cursor, newSd);
-        if (nextCursor) setCursor(nextCursor);
-      }
-      return newSd;
-    });
-  }, [setSessionsData, PLAN, cursor, setCursor, activeSessionId]);
+    setSessionsData(prev => ({
+      ...prev,
+      [id]: typeof updater === 'function' ? updater(prev[id] || {}) : updater,
+    }));
+  }, [setSessionsData]);
 
   // Cambiar cursor manualmente desde el selector
   const handleSelectCursor = useCallback((phaseId, weekNum, dayIdx) => {

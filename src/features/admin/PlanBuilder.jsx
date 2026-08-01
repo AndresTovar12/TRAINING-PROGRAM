@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft, X, Plus, Trash2, Copy, ChevronRight, ChevronUp, ChevronDown,
   ChevronLeft, Loader2, Check, Layers, Dumbbell, StickyNote, Zap, AlertCircle,
-  Save, FolderOpen, Clipboard, Eraser, CalendarDays, Settings2, Pencil,
+  Save, FolderOpen, Clipboard, Eraser, CalendarDays, Settings2, Pencil, Repeat,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -545,6 +545,9 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
   const isNew = !planRow;
   const [title, setTitle] = useState(planRow?.title || 'Plan de entrenamiento');
   const [phases, setPhases] = useState(() => (planRow?.data?.phases ? clone(planRow.data.phases) : []));
+  // 'weekly' = rutina que se repite (sin fases ni semanas) | 'periodized' = fases
+  const [kind, setKind] = useState(() => (planRow?.data?.kind === 'weekly' ? 'weekly' : 'periodized'));
+  const isWeekly = kind === 'weekly';
   // Plan existente de una sola fase → directo al editor (sin pantalla de fases)
   const [nav, setNav] = useState(() => {
     if (isNew) return { level: 'start' };
@@ -610,8 +613,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
     try {
       const data = normalize(phases);
       const row = planRow
-        ? await updatePlan(planRow.id, { title: title.trim(), phases: data })
-        : await createPlan({ userId: athlete.id, title: title.trim(), phases: data, createdBy: user?.id });
+        ? await updatePlan(planRow.id, { title: title.trim(), phases: data, kind })
+        : await createPlan({ userId: athlete.id, title: title.trim(), phases: data, kind, createdBy: user?.id });
       setDirty(false);
       onSaved(row);
     } catch (e) {
@@ -624,6 +627,19 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
   function handleClose() {
     if (dirty && !window.confirm('Tienes cambios sin guardar. ¿Salir de todas formas?')) return;
     onClose();
+  }
+
+  // Rutina semanal: una sola "semana" que se repite; el coach agrega los días
+  // que entrena desde los tabs Lun–Dom.
+  function startWeeklyPlan() {
+    const base = newPhase(1);
+    base.name = 'Rutina semanal';
+    base.weekData = [newWeek(1)];
+    touch(() => [base]);
+    setWeekIdx(0);
+    setActiveWeekday('Lun');
+    setDetailsOpen(false);
+    setNav({ level: 'phase', pi: 0 });
   }
 
   function generateQuickPlan() {
@@ -641,16 +657,17 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
   const crumb = useMemo(() => {
     if (nav.level === 'phase') {
       const p = phases[nav.pi];
-      const w = p?.weekData[weekIdx];
-      return `${p?.name || 'Fase'} · ${weekName(w, weekIdx + 1)}`;
+      if (isWeekly) return 'Rutina semanal';
+      const wi = Math.min(weekIdx, Math.max(0, (p?.weekData?.length ?? 1) - 1));
+      return `${p?.name || 'Fase'} · ${weekName(p?.weekData?.[wi], wi + 1)}`;
     }
     return 'Estructura del plan';
-  }, [nav, phases, weekIdx]);
+  }, [nav, phases, weekIdx, isWeekly]);
 
   const goBack = () => {
     if (nav.level === 'phase') {
-      // Con una sola fase el nivel "fases" no aporta: cerrar directo
-      if (phases.length <= 1 && !isNew) { handleClose(); return; }
+      // Con una sola fase (o una rutina semanal) el nivel "fases" no aporta
+      if (isWeekly || (phases.length <= 1 && !isNew)) { handleClose(); return; }
       setNav({ level: 'phases' });
     } else handleClose();
   };
@@ -665,8 +682,24 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
           ¿Cómo quieres armar el plan de <b style={{ color: T.text }}>{athlete.full_name || athlete.username}</b>?
         </div>
         {[
-          { icon: Zap, title: 'Semana tipo (rápido)', desc: 'Eliges los días de entrenamiento, armas una semana y se repite N semanas. Ideal para empezar.', onClick: () => setNav({ level: 'wizard' }) },
-          { icon: Layers, title: 'Programa por fases (completo)', desc: 'Fases → semanas → días, con periodización — la misma estructura del plan original.', onClick: () => { touch(() => [newPhase(1)]); openPhase(0); } },
+          {
+            icon: Repeat,
+            title: 'Una rutina que se repite',
+            desc: 'Misma rutina cada semana, sin fin. Lo más común.',
+            onClick: () => { setKind('weekly'); startWeeklyPlan(); },
+          },
+          {
+            icon: Zap,
+            title: 'Varias semanas que avanzan',
+            desc: 'Arrancas con la misma base y vas subiendo cargas semana a semana.',
+            onClick: () => { setKind('periodized'); setNav({ level: 'wizard' }); },
+          },
+          {
+            icon: Layers,
+            title: 'Programa por fases',
+            desc: 'Bloques con objetivos distintos, como un plan de temporada.',
+            onClick: () => { setKind('periodized'); touch(() => [newPhase(1)]); openPhase(0); },
+          },
         ].map((opt) => (
           <button
             key={opt.title} type="button" onClick={opt.onClick}
@@ -789,7 +822,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
 
     body = (
       <div style={{ maxWidth: 980, margin: '0 auto' }}>
-        {/* Detalles de la fase (colapsados) */}
+        {/* Detalles de la fase (colapsados) — no aplican a una rutina semanal */}
+        {!isWeekly && (
         <div style={{ marginBottom: 14 }}>
           <button
             type="button"
@@ -832,8 +866,10 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
             </div>
           )}
         </div>
+        )}
 
-        {/* Selector de semanas */}
+        {/* Selector de semanas — en una rutina semanal solo hay una */}
+        {!isWeekly && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginBottom: 10 }}>
           <span style={{ fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6, marginRight: 3 }}>
             Semana
@@ -865,14 +901,25 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
           <Pill icon={FolderOpen} onClick={() => setModal({ type: 'tpl-week' })}>Usar plantilla</Pill>
           <Pill icon={Save} onClick={() => setModal({ type: 'name-week' })}>Guardar como plantilla</Pill>
         </div>
+        )}
 
         {/* Nombre + carga de la semana (un tap abre ajustes) */}
-        <button
-          type="button" onClick={() => setModal({ type: 'week-meta' })}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, color: T.text, padding: '0 0 10px 2px' }}
-        >
-          {weekName(w, wIdx + 1)}{w?.load ? ` · ${w.load}` : ''} <Pencil size={12} color={T.text3} />
-        </button>
+        {isWeekly ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+            <Repeat size={15} color={T.accent} />
+            <span style={{ fontSize: 13.5, fontWeight: 800, color: T.text }}>Esta rutina se repite todas las semanas</span>
+            <span style={{ flex: 1 }} />
+            <Pill icon={FolderOpen} onClick={() => setModal({ type: 'tpl-week' })}>Usar plantilla</Pill>
+            <Pill icon={Save} onClick={() => setModal({ type: 'name-week' })}>Guardar como plantilla</Pill>
+          </div>
+        ) : (
+          <button
+            type="button" onClick={() => setModal({ type: 'week-meta' })}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, color: T.text, padding: '0 0 10px 2px' }}
+          >
+            {weekName(w, wIdx + 1)}{w?.load ? ` · ${w.load}` : ''} <Pencil size={12} color={T.text3} />
+          </button>
+        )}
 
         {/* Tabs de días */}
         <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 16 }}>

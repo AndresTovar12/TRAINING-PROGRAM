@@ -77,6 +77,102 @@ const advanceCursor = (plan, cursor, sessionsData) => {
   return null; // plan terminado
 };
 
+/* ------------------------- Calendario (día real) -------------------------
+   La app muestra lo que toca HOY según la fecha del dispositivo del atleta,
+   no según lo que haya marcado como completado. Así nadie queda desubicado
+   por faltar un día.
+------------------------------------------------------------------------- */
+
+const WEEKDAY_KEYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+const WEEKDAY_LABELS = {
+  Lun: 'lunes', Mar: 'martes', Mié: 'miércoles', Jue: 'jueves',
+  Vie: 'viernes', Sáb: 'sábado', Dom: 'domingo',
+};
+
+// 'Lun' … 'Dom' según la fecha local del dispositivo
+const weekdayToday = (date = new Date()) => WEEKDAY_KEYS[date.getDay()];
+
+// Nombre largo en minúsculas ('miércoles') para textos tipo "Siguiente: …"
+const weekdayLabel = (key) => WEEKDAY_LABELS[key] ?? key;
+
+// Semana ISO del calendario: '2026-W31'. Da identidad temporal a las rutinas
+// que se repiten (marcar el lunes de esta semana no marca el de la próxima).
+const isoWeekKey = (date = new Date()) => {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7)); // jueves de esa semana
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+};
+
+// Id de sesión para planes 'weekly': incluye la semana del calendario.
+const weeklySessionId = (dayIdx, date = new Date()) => `wk-${isoWeekKey(date)}-d${dayIdx}`;
+
+// Id correcto según el tipo de plan (los periodizados conservan el de siempre).
+const sessionIdFor = (kind, phaseId, weekNum, dayIdx, date = new Date()) => (
+  kind === 'weekly' ? weeklySessionId(dayIdx, date) : sessionId(phaseId, weekNum, dayIdx)
+);
+
+// Todos los días de la semana en curso, con su índice real dentro de week.days
+const daysOfCurrentWeek = (plan, kind, cursor) => {
+  const phases = plan ?? [];
+  if (phases.length === 0) return { phase: null, week: null, items: [] };
+  let phase = phases[0];
+  let week = phase?.weekData?.[0] ?? null;
+  if (kind !== 'weekly' && cursor) {
+    const p = phases.find((x) => x.id === cursor.phaseId);
+    const w = p?.weekData?.find((x) => x.num === cursor.weekNum);
+    if (p && w) { phase = p; week = w; }
+  }
+  const items = (week?.days ?? []).map((day, dayIdx) => ({ day, dayIdx }));
+  return { phase, week, items };
+};
+
+// La sesión que toca hoy. null = "No tienes rutina asignada para este día".
+const sessionForToday = (plan, kind, cursor, date = new Date()) => {
+  const wd = weekdayToday(date);
+  const { phase, week, items } = daysOfCurrentWeek(plan, kind, cursor);
+  if (!phase || !week) return null;
+  const hit = items.find(({ day }) => day.day === wd);
+  if (!hit) return null;
+  return {
+    phase,
+    week,
+    dayIdx: hit.dayIdx,
+    day: hit.day,
+    id: sessionIdFor(kind, phase.id, week.num, hit.dayIdx, date),
+  };
+};
+
+// Resumen de la semana para la tarjeta "Tu semana": qué días entrenan, cuál es
+// hoy y cuál es el siguiente. No depende de sesiones completadas.
+const weekOverview = (plan, kind, cursor, date = new Date()) => {
+  const todayKey = weekdayToday(date);
+  const { items } = daysOfCurrentWeek(plan, kind, cursor);
+  const byWeekday = new Map();
+  items.forEach(({ day, dayIdx }) => {
+    if (!byWeekday.has(day.day)) byWeekday.set(day.day, { day, dayIdx });
+  });
+  const order = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+  const days = order.map((key) => {
+    const hit = byWeekday.get(key);
+    return {
+      key,
+      isToday: key === todayKey,
+      hasSession: !!hit,
+      name: hit?.day?.name ?? null,
+      dayIdx: hit?.dayIdx ?? null,
+    };
+  });
+  const todayPos = order.indexOf(todayKey);
+  const next = days
+    .map((d, i) => ({ ...d, pos: i }))
+    .filter((d) => d.hasSession && d.pos > todayPos)[0]
+    ?? days.map((d, i) => ({ ...d, pos: i })).filter((d) => d.hasSession)[0]
+    ?? null;
+  return { days, next, trainingDays: days.filter((d) => d.hasSession).length };
+};
+
 // Cursor por defecto: primer día del plan
 const defaultCursor = (plan) => {
   const phase = plan?.[0];
@@ -270,4 +366,6 @@ export {
   sessionId, calc1RM, today, greeting, isLoadedExercise, isValidCursor,
   resolveCursor, advanceCursor, defaultCursor, findPreviousWeight,
   totalProgress, getWeekLoad, formatIntensity, inferRest, getPattern, getMuscles,
+  weekdayToday, weekdayLabel, isoWeekKey, weeklySessionId, sessionIdFor,
+  sessionForToday, weekOverview,
 };

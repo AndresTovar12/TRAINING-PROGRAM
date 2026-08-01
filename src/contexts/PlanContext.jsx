@@ -102,6 +102,10 @@ export function PlanProvider({ children }) {
     [planRow],
   );
 
+  // 'weekly' = rutina que se repite | 'periodized' = fases que avanzan.
+  // Los planes creados antes de existir este campo son periodizados.
+  const kind = planRow?.data?.kind === 'weekly' ? 'weekly' : 'periodized';
+
   const exercisesById = useMemo(() => {
     const m = new Map();
     exercises.forEach((e) => m.set(e.id, e));
@@ -129,13 +133,14 @@ export function PlanProvider({ children }) {
   const value = useMemo(
     () => ({
       phases: phases ?? [],
+      kind,
       hasPlan: !!phases && phases.length > 0,
       planMeta: planRow ? { id: planRow.id, title: planRow.title } : null,
       planLoading,
       exercises,
       resolveExercise,
     }),
-    [phases, planRow, planLoading, exercises, resolveExercise],
+    [phases, kind, planRow, planLoading, exercises, resolveExercise],
   );
 
   return <PlanContext.Provider value={value}>{children}</PlanContext.Provider>;
