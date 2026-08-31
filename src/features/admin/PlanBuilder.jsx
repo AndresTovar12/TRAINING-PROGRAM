@@ -607,11 +607,57 @@ function SessionEditor({ day, repertoire, onPatch, onDelete, onCopy, onSaveToCat
         })}
       </div>
 
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
-        <Pill icon={Plus} primary onClick={() => setPickerCtx({ mode: 'new-set' })}>Agregar set</Pill>
-        <Pill icon={StickyNote} onClick={() => writeBlocks((bs) => [...bs, { type: 'note', ex: { isNote: true, text: '' } }])}>Nota</Pill>
-        <Pill icon={Dumbbell} onClick={() => writeBlocks((bs) => [...bs, { type: 'set', members: [newExercise(null)], rounds: '3' }])}>Ejercicio personalizado</Pill>
-      </div>
+      {/* Agregar contenido. En la compu los tres caben en una fila y da igual.
+          En el telefono NO da igual: "Agregar set" es a lo que vienes, y los
+          otros dos son casos sueltos. Si los tres pesan lo mismo, cada vez hay
+          que leer los tres para encontrar el de siempre. Aqui el principal
+          ocupa todo el ancho —imposible de fallar con el pulgar— y los otros
+          dos van abajo, mas chicos, repartidos a la mitad. */}
+      {esCompu ? (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
+          <Pill icon={Plus} primary onClick={() => setPickerCtx({ mode: 'new-set' })}>Agregar set</Pill>
+          <Pill icon={StickyNote} onClick={() => writeBlocks((bs) => [...bs, { type: 'note', ex: { isNote: true, text: '' } }])}>Nota</Pill>
+          <Pill icon={Dumbbell} onClick={() => writeBlocks((bs) => [...bs, { type: 'set', members: [newExercise(null)], rounds: '3' }])}>Ejercicio personalizado</Pill>
+        </div>
+      ) : (
+        <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <button
+            type="button" onClick={() => setPickerCtx({ mode: 'new-set' })}
+            style={{
+              width: '100%', minHeight: 52, display: 'flex', alignItems: 'center',
+              justifyContent: 'center', gap: 9, borderRadius: 16, border: 'none', cursor: 'pointer',
+              background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff',
+              fontFamily: FONT, fontSize: 16, fontWeight: 800, boxShadow: KP.shBtn,
+            }}
+          >
+            <Plus size={20} /> Agregar set
+          </button>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => writeBlocks((bs) => [...bs, { type: 'note', ex: { isNote: true, text: '' } }])}
+              style={{
+                minHeight: 46, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                borderRadius: 14, border: `1.5px solid ${T.border}`, background: T.bg2, cursor: 'pointer',
+                fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text2,
+              }}
+            >
+              <StickyNote size={16} /> Nota
+            </button>
+            <button
+              type="button"
+              onClick={() => writeBlocks((bs) => [...bs, { type: 'set', members: [newExercise(null)], rounds: '3' }])}
+              style={{
+                minHeight: 46, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                borderRadius: 14, border: `1.5px solid ${T.border}`, background: T.bg2, cursor: 'pointer',
+                fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text2,
+              }}
+            >
+              <Dumbbell size={16} /> Personalizado
+            </button>
+          </div>
+        </div>
+      )}
 
       {pickerCtx && (
         <RepertoirePicker
@@ -632,7 +678,76 @@ function SessionEditor({ day, repertoire, onPatch, onDelete, onCopy, onSaveToCat
   );
 }
 
+/**
+ * Hoja de acciones para telefono.
+ *
+ * En la compu las acciones de la sesion caben en una fila y se leen de un
+ * vistazo. En el telefono no caben: se acomodan en filas desiguales y las
+ * ocho terminan pesando lo mismo, asi que "Agregar set" —que es a lo que
+ * vienes— compite con "Eliminar sesion", que tocas una vez al mes.
+ *
+ * Aqui se guardan las que casi nunca usas. Cada una ocupa una fila completa
+ * de 52px, que es lo que necesita un dedo para no equivocarse, y la de
+ * borrar va hasta abajo y separada del resto.
+ */
+function HojaAcciones({ acciones, onClose }) {
+  return (
+    <div
+      onMouseDown={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 2700, background: 'rgba(17,19,24,0.45)',
+        display: 'flex', alignItems: 'flex-end',
+      }}
+    >
+      <div
+        onMouseDown={(e) => e.stopPropagation()}
+        className="animate-sheet"
+        style={{
+          width: '100%', background: T.bg, borderRadius: '22px 22px 0 0',
+          padding: '10px 10px calc(14px + env(safe-area-inset-bottom))',
+          fontFamily: FONT, boxShadow: KP.shPop,
+        }}
+      >
+        <div style={{
+          width: 38, height: 4, borderRadius: 999, background: T.borderHi,
+          margin: '4px auto 10px',
+        }} />
+        {acciones.map((a, i) => (
+          <button
+            key={a.texto}
+            type="button"
+            onClick={() => { onClose(); a.onClick(); }}
+            style={{
+              width: '100%', minHeight: 52, display: 'flex', alignItems: 'center', gap: 13,
+              padding: '0 14px', borderRadius: 14, border: 'none', cursor: 'pointer',
+              background: 'transparent', fontFamily: FONT, fontSize: 15.5, fontWeight: 700,
+              color: a.peligro ? T.danger : T.text, textAlign: 'left',
+              marginTop: a.peligro && i > 0 ? 6 : 0,
+              borderTop: a.peligro && i > 0 ? `1px solid ${T.border}` : 'none',
+            }}
+          >
+            <a.icon size={19} color={a.peligro ? T.danger : T.text3} />
+            {a.texto}
+          </button>
+        ))}
+        <button
+          type="button" onClick={onClose}
+          style={{
+            width: '100%', minHeight: 50, marginTop: 8, borderRadius: 14,
+            border: `1.5px solid ${T.border}`, background: T.bg2, cursor: 'pointer',
+            fontFamily: FONT, fontSize: 15, fontWeight: 700, color: T.text2,
+          }}
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, nSets, dual }) {
+  const esCompu = useIsDesktop();
+  const [menu, setMenu] = useState(false);
   return (
     <>
       <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
@@ -658,13 +773,42 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
           </span>
         )}
       </div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.border}` }}>
-        {!dual && <Pill icon={FolderOpen} onClick={onApplyCatalog}>Desde catálogo</Pill>}
-        {!dual && <Pill icon={Save} onClick={onSaveToCatalog}>Guardar en catálogo</Pill>}
-        <Pill icon={Copy} onClick={onCopy}>Copiar</Pill>
-        {!dual && <Pill icon={Eraser} onClick={onClear}>Limpiar</Pill>}
-        <Pill icon={Trash2} danger onClick={onDelete}>Eliminar sesión</Pill>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.border}`, alignItems: 'center' }}>
+        {esCompu ? (
+          <>
+            {!dual && <Pill icon={FolderOpen} onClick={onApplyCatalog}>Desde catálogo</Pill>}
+            {!dual && <Pill icon={Save} onClick={onSaveToCatalog}>Guardar en catálogo</Pill>}
+            <Pill icon={Copy} onClick={onCopy}>Copiar</Pill>
+            {!dual && <Pill icon={Eraser} onClick={onClear}>Limpiar</Pill>}
+            <Pill icon={Trash2} danger onClick={onDelete}>Eliminar sesión</Pill>
+          </>
+        ) : (
+          <button
+            type="button" onClick={() => setMenu(true)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8, minHeight: 44,
+              padding: '0 16px', borderRadius: 999, border: `1.5px solid ${T.border}`,
+              background: T.bg2, cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 700,
+              color: T.text2,
+            }}
+          >
+            <Settings2 size={16} /> Opciones de la sesión
+          </button>
+        )}
       </div>
+
+      {menu && (
+        <HojaAcciones
+          onClose={() => setMenu(false)}
+          acciones={[
+            ...(dual ? [] : [{ icon: FolderOpen, texto: 'Desde catálogo', onClick: onApplyCatalog }]),
+            ...(dual ? [] : [{ icon: Save, texto: 'Guardar en catálogo', onClick: onSaveToCatalog }]),
+            { icon: Copy, texto: 'Copiar sesión', onClick: onCopy },
+            ...(dual ? [] : [{ icon: Eraser, texto: 'Limpiar sesión', onClick: onClear }]),
+            { icon: Trash2, texto: 'Eliminar sesión', onClick: onDelete, peligro: true },
+          ]}
+        />
+      )}
     </>
   );
 }

@@ -203,6 +203,7 @@ function AthletesTable({ rows, coaches, isMaster, selectedId, onPick }) {
 
 /* ----------------------------- Detalle de atleta ----------------------------- */
 function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile, onReassigned }) {
+  const esCompu = useIsDesktop();
   const [plan, setPlan] = useState(null);
   const [state, setState] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -259,8 +260,26 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
         <Avatar name={athlete.full_name || athlete.username} url={athlete.avatar_url} size={52} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 18, fontWeight: 800, color: T.text }}>{athlete.full_name || athlete.username}</div>
-          <div style={{ fontSize: 13.5, color: T.text2, fontWeight: 500 }}>@{athlete.username}{athlete.email ? ` · ${athlete.email}` : ''}</div>
+          {/* Los tres cortes son necesarios: un correo como
+              "juanescutia@traininglab.app" es una sola palabra sin espacios,
+              asi que no puede partirse en dos renglones. Sin cortarlo empuja
+              la pagina a lo ancho, y el telefono encoge TODO para que quepa
+              — que es lo que se siente como "la app abre con zoom". */}
+          <div style={{
+            fontSize: 18, fontWeight: 800, color: T.text,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {athlete.full_name || athlete.username}
+          </div>
+          <div
+            title={`@${athlete.username}${athlete.email ? ` · ${athlete.email}` : ''}`}
+            style={{
+              fontSize: 13.5, color: T.text2, fontWeight: 500,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}
+          >
+            @{athlete.username}{athlete.email ? ` · ${athlete.email}` : ''}
+          </div>
         </div>
         <button type="button" onClick={onClose} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.text2, padding: 4 }}>
           <X size={20} />
@@ -305,16 +324,33 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 800, color: T.text, fontSize: 15 }}>
-          <ClipboardList size={18} color={T.accent} /> Plan de entrenamiento
+      {/* El titulo cede espacio y los botones no. Antes esta fila se dibujaba
+          a 470px —mas ancha que el telefono— y por eso "Editar plan" cabia en
+          un renglon: cabia porque se salia de la pantalla. Ahora que la fila
+          mide lo que mide el telefono, el titulo se recorta si hace falta y
+          los botones se quedan enteros, que es el orden correcto: el titulo
+          se entiende cortado, un boton partido en dos renglones no. */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, minWidth: 0,
+          fontWeight: 800, color: T.text, fontSize: 15,
+        }}>
+          {/* En telefono no cabe "Plan de entrenamiento" junto a los botones:
+              sale cortado con puntos suspensivos, que se lee peor que una
+              palabra corta y completa. Aqui ya estas dentro de la ficha del
+              atleta y la tarjeta del plan va justo debajo, asi que "Plan"
+              no se presta a confusion. En compu sobra ancho y va completo. */}
+          {esCompu && <ClipboardList size={18} color={T.accent} style={{ flexShrink: 0 }} />}
+          <span style={{ whiteSpace: 'nowrap' }}>
+            {esCompu ? 'Plan de entrenamiento' : 'Plan'}
+          </span>
         </div>
         {plan && (
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
             <button
               type="button"
               onClick={() => setBuilding(true)}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 14px', borderRadius: 11, border: 'none', cursor: 'pointer', background: T.accentBg, color: T.accent, fontFamily: FONT, fontSize: 13.5, fontWeight: 700 }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 14px', borderRadius: 11, border: 'none', cursor: 'pointer', background: T.accentBg, color: T.accent, fontFamily: FONT, fontSize: 13.5, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}
             >
               <Pencil size={14} /> Editar plan
             </button>
@@ -322,7 +358,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
               type="button"
               onClick={onDeletePlan}
               title="Eliminar plan"
-              style={{ display: 'grid', placeItems: 'center', width: 36, borderRadius: 11, border: `1px solid ${T.border}`, cursor: 'pointer', background: T.bg2, color: T.danger }}
+              style={{ display: 'grid', placeItems: 'center', width: 36, flexShrink: 0, borderRadius: 11, border: `1px solid ${T.border}`, cursor: 'pointer', background: T.bg2, color: T.danger }}
             >
               <Trash2 size={15} />
             </button>
@@ -475,7 +511,7 @@ export default function AthletesPanel() {
   const hasta = Math.min(paginaActual * POR_PAGINA, filtered.length);
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: twoCol ? 'minmax(280px, 1fr) 1.4fr' : '1fr', gap: 20, alignItems: 'start' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: twoCol ? 'minmax(280px, 1fr) minmax(0, 1.4fr)' : 'minmax(0, 1fr)', gap: 20, alignItems: 'start' }}>
       {showList && (
       <div>
         {modoTabla && (

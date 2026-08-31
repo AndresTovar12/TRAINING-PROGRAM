@@ -184,3 +184,13 @@ body {
     transform: none;
   }
 }
+
+/* Hoja de acciones del editor de sesión en teléfono: entra deslizando desde
+   abajo, que es de donde el dedo la invocó. Sin movimiento parece que la
+   pantalla saltó a otro lado en vez de abrirse algo encima. */
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+.animate-sheet { animation: sheet-up 0.22s cubic-bezier(0.22, 1, 0.36, 1); }
+@media (prefers-reduced-motion: reduce) { .animate-sheet { animation: none; } }
