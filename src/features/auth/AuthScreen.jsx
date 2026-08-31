@@ -47,7 +47,13 @@ function Field({ icon: Icon, label, hint, ...props }) {
           onBlur={(e) => { setFocus(false); props.onBlur?.(e); }}
           style={{
             flex: 1, border: 'none', outline: 'none', background: 'transparent',
-            fontFamily: FONT, fontSize: 15, fontWeight: 500, color: KP.ink,
+            // 16px NO es capricho de diseño: es el minimo que pide iOS para no
+            // hacer zoom solo al enfocar un campo. Con 15px, Safari acercaba la
+            // pantalla mientras escribias la contraseña y NO lo deshacia al
+            // entrar, asi que la app se abria zoomeada. Aqui cabe de sobra
+            // porque es una tarjeta centrada y espaciosa; en los formularios de
+            // adentro no se toca, ahi la densidad importa mas.
+            fontFamily: FONT, fontSize: 16, fontWeight: 500, color: KP.ink,
             padding: '13px 0', minWidth: 0,
           }}
         />
