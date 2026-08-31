@@ -222,6 +222,15 @@ async function recorre(browser, cuenta, tamaño) {
   try {
     await page.goto(BASE, { waitUntil: 'networkidle', timeout: 30000 });
 
+    // En computadora la app abre en la pagina de presentacion, no en el
+    // formulario: hay que entrar por "Iniciar sesion". En telefono ese boton
+    // no existe, porque la presentacion no se muestra ahi.
+    if (await page.locator('input[placeholder="tu_usuario"]').count() === 0) {
+      await page.getByRole('button', { name: 'Iniciar sesión' }).first().click().catch(() => {});
+      await page.waitForSelector('input[placeholder="tu_usuario"]', { timeout: 10000 })
+        .catch(() => anota(ctxBase, 'no se pudo llegar al formulario desde la presentación'));
+    }
+
     // entrar
     await page.fill('input[placeholder="tu_usuario"]', cuenta.user);
     await page.fill('input[type="password"]', cuenta.password || PASSWORD);

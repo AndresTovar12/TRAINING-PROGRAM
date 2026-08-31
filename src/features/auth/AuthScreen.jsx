@@ -66,9 +66,9 @@ function Field({ icon: Icon, label, hint, ...props }) {
   );
 }
 
-export default function AuthScreen() {
+export default function AuthScreen({ modoInicial = 'login', onVolver }) {
   const { signIn, signUp } = useAuth();
-  const [mode, setMode] = useState('login'); // 'login' | 'register'
+  const [mode, setMode] = useState(modoInicial); // 'login' | 'register'
   const [identifier, setIdentifier] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -132,10 +132,23 @@ export default function AuthScreen() {
           'radial-gradient(1100px 620px at 50% -8%, #e7ecfe 0%, rgba(244,245,248,0) 60%), #f4f5f8',
       }}
     >
+      <div style={{ width: '100%', maxWidth: 412 }}>
+      {onVolver && (
+        <button
+          type="button" onClick={onVolver}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 14,
+            border: 'none', background: 'transparent', cursor: 'pointer',
+            fontFamily: FONT, fontSize: 14, fontWeight: 700, color: KP.ink2, padding: '6px 4px',
+          }}
+        >
+          ← Volver
+        </button>
+      )}
       <div
         className="animate-fade-in"
         style={{
-          width: '100%', maxWidth: 412, background: KP.surface, borderRadius: 28,
+          width: '100%', background: KP.surface, borderRadius: 28,
           padding: '36px 30px 30px',
           border: `1px solid ${KP.line}`,
           boxShadow: '0 24px 60px rgba(17,19,24,0.10), 0 4px 14px rgba(17,19,24,0.05)',
@@ -318,6 +331,7 @@ export default function AuthScreen() {
             )}
           </button>
         </form>
+      </div>
       </div>
 
       <style>{`

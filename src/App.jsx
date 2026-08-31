@@ -2,9 +2,11 @@ import { useState, useRef, useEffect } from 'react';
 import { Dumbbell, Loader2, LogOut, Shield, User as UserIcon, UserCog, RefreshCw } from 'lucide-react';
 import { useNewVersion } from '@/lib/useNewVersion';
 import { useAuth } from '@/contexts/AuthContext';
+import { useIsDesktop } from '@/lib/useViewport';
 import { AppStateProvider } from '@/contexts/AppStateContext';
 import { PlanProvider } from '@/contexts/PlanContext';
 import AuthScreen from '@/features/auth/AuthScreen';
+import LandingPage from '@/features/landing/LandingPage';
 import TrainingApp from '@/features/training/TrainingApp';
 import AdminApp from '@/features/admin/AdminApp';
 import ProfileScreen from '@/features/profile/ProfileScreen';
@@ -186,11 +188,40 @@ function UpdateBanner() {
   );
 }
 
+/**
+ * Puerta de entrada para quien NO tiene sesion.
+ *
+ * En computadora se muestra primero la pagina de presentacion, porque ahi
+ * suele llegar gente que todavia no conoce la app y una pantalla de
+ * contraseña sola no le dice nada. En telefono NO: ahi entran los atletas,
+ * que ya tienen cuenta y solo quieren su rutina del dia, asi que la pagina
+ * de presentacion seria un estorbo entre ellos y su entrenamiento.
+ */
+function Entrada() {
+  const esCompu = useIsDesktop();
+  const [pantalla, setPantalla] = useState(null); // null | 'login' | 'register'
+
+  if (esCompu && pantalla === null) {
+    return (
+      <LandingPage
+        onEntrar={() => setPantalla('login')}
+        onRegistrarse={() => setPantalla('register')}
+      />
+    );
+  }
+  return (
+    <AuthScreen
+      modoInicial={pantalla || 'login'}
+      onVolver={esCompu ? () => setPantalla(null) : undefined}
+    />
+  );
+}
+
 export default function App() {
   const { loading, user, profile } = useAuth();
 
   if (loading) return <Splash />;
-  if (!user) return <><AuthScreen /><UpdateBanner /></>;
+  if (!user) return <><Entrada /><UpdateBanner /></>;
   if (!profile) return <Splash label="Cargando tu perfil…" />;
 
   if (profile.role === 'admin') {
