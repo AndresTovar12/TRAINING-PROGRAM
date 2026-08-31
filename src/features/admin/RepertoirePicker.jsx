@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Search, X, Check, Dumbbell, Trash2 } from 'lucide-react';
+import { useMedia } from '@/lib/useViewport';
 import { T, FONT, KP } from '@/lib/theme';
 import { MUSCLE_GROUPS, exerciseMatchesGroup } from '@/lib/muscles';
 
@@ -9,6 +10,9 @@ import { MUSCLE_GROUPS, exerciseMatchesGroup } from '@/lib/muscles';
  * solo botón "Agregar N". `onConfirm(exercises[])` recibe los elegidos en orden.
  */
 export default function RepertoirePicker({ exercises, onConfirm, onClose, title = 'Agregar ejercicios' }) {
+  // Reactivo de verdad: leer window.innerWidth suelto se queda con el ancho de
+  // la primera pintada y no se entera si giras el telefono o mueves la ventana.
+  const esCompu = useMedia('(min-width: 720px)');
   const [query, setQuery] = useState('');
   const [catId, setCatId] = useState(null);
   const [muscle, setMuscle] = useState(null);
@@ -135,7 +139,14 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
                 <div style={{ marginTop: 10, fontWeight: 600, color: T.text2, fontSize: 14 }}>Sin resultados.</div>
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(172px, 1fr))', gap: 10 }}>
+              <div style={esCompu
+                // En compu: una fila por ejercicio. Se recorre el catalogo
+                // entero de arriba abajo leyendo solo los nombres, que es como
+                // se busca un ejercicio cuando ya sabes cual quieres.
+                ? { display: 'flex', flexDirection: 'column', gap: 6 }
+                // En telefono: cuadricula de tarjetas, que la foto manda cuando
+                // el nombre solo no basta y hay poco ancho.
+                : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(172px, 1fr))', gap: 10 }}>
                 {results.map((ex) => {
                   const sel = pickedIds.has(ex.id);
                   return (
@@ -143,13 +154,45 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
                       key={ex.id}
                       type="button"
                       onClick={() => toggle(ex)}
-                      style={{
+                      style={esCompu ? {
+                        textAlign: 'left', border: `1.5px solid ${sel ? T.accent : T.border}`, cursor: 'pointer',
+                        background: sel ? T.accentBg : T.bg2, borderRadius: 11, padding: '7px 11px 7px 7px',
+                        fontFamily: FONT, width: '100%', display: 'flex', alignItems: 'center', gap: 11,
+                        transition: 'border-color .12s, background .12s',
+                      } : {
                         textAlign: 'left', border: `2px solid ${sel ? T.accent : T.border}`, cursor: 'pointer',
                         background: T.bg2, borderRadius: 14, padding: 0, overflow: 'hidden', fontFamily: FONT,
                         boxShadow: sel ? KP.shRaise : KP.shCard, transition: 'border-color .12s, box-shadow .12s',
                         display: 'flex', flexDirection: 'column', alignItems: 'stretch', width: '100%',
                       }}
                     >
+                      {esCompu ? (
+                        <>
+                          <span style={{ width: 42, height: 42, borderRadius: 9, flexShrink: 0, overflow: 'hidden', background: '#0E1015', display: 'grid', placeItems: 'center' }}>
+                            {ex.cover_image_url
+                              ? <img src={ex.cover_image_url} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                              : <Dumbbell size={17} color="#3A3F4C" />}
+                          </span>
+                          <span style={{ flex: 1, minWidth: 0 }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              {ex.category && (
+                                <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, background: ex.category.color || T.accent }} />
+                              )}
+                              <span style={{ fontSize: 13.5, fontWeight: 700, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ex.name}</span>
+                            </span>
+                            {ex.equipment && (
+                              <span style={{ display: 'block', fontSize: 11.5, color: T.text3, marginTop: 2, fontWeight: 600 }}>{ex.equipment}</span>
+                            )}
+                          </span>
+                          <span style={{
+                            width: 22, height: 22, borderRadius: 7, flexShrink: 0, display: 'grid', placeItems: 'center',
+                            border: sel ? 'none' : `1.5px solid ${T.borderHi}`, background: sel ? T.accent : 'transparent', color: '#fff',
+                          }}>
+                            {sel && <Check size={13} />}
+                          </span>
+                        </>
+                      ) : (
+                        <>
                       <div style={{ position: 'relative', height: 96, width: '100%', alignSelf: 'stretch', background: '#0E1015' }}>
                         {ex.cover_image_url ? (
                           <img src={ex.cover_image_url} alt="" loading="lazy"
@@ -181,6 +224,8 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
                           <div style={{ fontSize: 11, color: T.text3, marginTop: 3, fontWeight: 600 }}>{ex.equipment}</div>
                         )}
                       </div>
+                        </>
+                      )}
                     </button>
                   );
                 })}
@@ -193,7 +238,7 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
             <div
               style={{
                 width: 250, flexShrink: 0, borderLeft: `1px solid ${T.border}`, background: T.bg2,
-                display: window.innerWidth < 720 ? 'none' : 'flex', flexDirection: 'column',
+                display: esCompu ? 'flex' : 'none', flexDirection: 'column',
               }}
             >
               <div style={{ padding: '14px 14px 8px', fontSize: 12, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>

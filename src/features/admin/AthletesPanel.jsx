@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Loader2, Search, Plus, Trash2, X, ChevronRight, Pencil,
-  CalendarClock, User as UserIcon, Shield, Layers, ClipboardList,
+  Loader2, Search, Plus, Trash2, X, ChevronRight, ChevronLeft, Pencil,
+  CalendarClock, User as UserIcon, Shield, Layers, ClipboardList, Users,
 } from 'lucide-react';
-import { getActivePlan, deletePlan, getAthleteState, listAthletes, listCoaches, setAthleteCoach } from '@/lib/api';
+import { getActivePlan, deletePlan, getAthleteState, listAthletesOverview, listCoaches, setAthleteCoach } from '@/lib/api';
 import PlanBuilder from '@/features/admin/PlanBuilder';
 import { useAuth } from '@/contexts/AuthContext';
+import { useIsDesktop } from '@/lib/useViewport';
 import { T, FONT, KP } from '@/lib/theme';
 
 function useIsNarrow(breakpoint = 880) {
@@ -45,6 +46,157 @@ function Avatar({ name, size = 40, url }) {
       }}
     >
       {url ? <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initial}
+    </div>
+  );
+}
+
+/* ------------------------- Vista de tabla (solo compu) -------------------------
+ * En el telefono cada atleta es una tarjeta: cabe uno a la vez y se toca con el
+ * dedo. En la compu hay ancho de sobra, y lo que un coach necesita ahi es
+ * COMPARAR: quien no tiene plan, quien lleva semanas sin entrar. Eso es una
+ * tabla, no una lista de tarjetas. Misma informacion, distinta forma de leerla.
+ * ---------------------------------------------------------------------------- */
+
+// Cuantos atletas por pagina en la tabla. 15 llena una pantalla de laptop
+// sin obligar a desplazarse para llegar a los controles de abajo.
+const POR_PAGINA = 15;
+
+const TH = {
+  textAlign: 'left', padding: '10px 14px', fontSize: 11, fontWeight: 800,
+  color: T.text3, textTransform: 'uppercase', letterSpacing: 0.7,
+  borderBottom: `1px solid ${T.border}`, whiteSpace: 'nowrap',
+};
+const TD = {
+  padding: '11px 14px', borderBottom: `1px solid ${T.border}`,
+  fontSize: 14, color: T.text, verticalAlign: 'middle',
+};
+
+function StatCard({ icon, label, value, tono }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 11, background: T.bg2,
+      border: `1px solid ${T.border}`, borderRadius: 14, padding: '13px 15px',
+      boxShadow: KP.shCard, minWidth: 0,
+    }}>
+      <span style={{
+        width: 34, height: 34, borderRadius: 11, flexShrink: 0, display: 'grid', placeItems: 'center',
+        background: tono === 'alerta' ? 'rgba(220,38,38,0.09)' : T.accentBg,
+        color: tono === 'alerta' ? T.danger : T.accent,
+      }}>{icon}</span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 19, fontWeight: 800, color: T.text, lineHeight: 1.1 }}>{value}</div>
+        <div style={{ fontSize: 12, color: T.text2, fontWeight: 600, marginTop: 1 }}>{label}</div>
+      </div>
+    </div>
+  );
+}
+
+/** Celda del plan: titulo + de que tipo es + cuanto mide. */
+function PlanCell({ plan }) {
+  if (!plan) return <span style={{ fontSize: 13.5, color: T.text3, fontWeight: 600 }}>Sin plan</span>;
+  const etiqueta = plan.kind === 'weekly' ? 'Semanal' : 'Por fases';
+  const detalle = plan.kind === 'weekly'
+    ? `${plan.weeks} semana${plan.weeks === 1 ? '' : 's'}`
+    : `${plan.phases} fase${plan.phases === 1 ? '' : 's'} · ${plan.weeks} sem`;
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontWeight: 700, fontSize: 13.5, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {plan.title || 'Plan sin título'}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
+        <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, color: T.accent, background: T.accentBg, borderRadius: 6, padding: '2px 6px' }}>{etiqueta}</span>
+        <span style={{ fontSize: 12, color: T.text2, fontWeight: 500 }}>{detalle}</span>
+      </div>
+    </div>
+  );
+}
+
+function BotonPagina({ icon: Icon, etiqueta, onClick, disabled, derecha }) {
+  return (
+    <button
+      type="button" onClick={onClick} disabled={disabled}
+      className={disabled ? undefined : 'kp-pag'}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5, padding: '8px 14px', borderRadius: 999,
+        border: 'none', background: 'transparent', color: T.text2, cursor: disabled ? 'default' : 'pointer',
+        fontFamily: FONT, fontSize: 13, fontWeight: 700, opacity: disabled ? 0.35 : 1,
+      }}
+    >
+      {!derecha && <Icon size={15} />}{etiqueta}{derecha && <Icon size={15} />}
+    </button>
+  );
+}
+
+function AthletesTable({ rows, coaches, isMaster, selectedId, onPick }) {
+  const nombreCoach = (id) => {
+    if (!id) return null;
+    const c = coaches.find((x) => x.id === id);
+    return c ? (c.full_name || c.username) : null;
+  };
+  // La columna "Coach" solo tiene sentido en la cuenta master: un coach viendo
+  // a sus propios atletas leeria su nombre repetido en cada fila.
+  const cols = isMaster ? 5 : 4;
+
+  return (
+    <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 16, boxShadow: KP.shCard, overflow: 'hidden' }}>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: FONT }}>
+          <thead>
+            <tr style={{ background: T.bg }}>
+              <th style={TH}>Atleta</th>
+              <th style={TH}>Plan</th>
+              <th style={TH}>Última actividad</th>
+              {isMaster && <th style={TH}>Coach</th>}
+              <th style={{ ...TH, width: 44 }} aria-label="Abrir" />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((a) => {
+              const activo = selectedId === a.id;
+              const visto = timeAgo(a.lastSeen);
+              const coach = nombreCoach(a.coach_id);
+              return (
+                <tr
+                  key={a.id}
+                  className="fila-atleta"
+                  onClick={() => onPick(a)}
+                  style={{ cursor: 'pointer', background: activo ? T.accentBg : 'transparent' }}
+                >
+                  <td style={TD}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
+                      <Avatar name={a.full_name || a.username} url={a.avatar_url} size={34} />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {a.full_name || a.username}
+                        </div>
+                        <div style={{ fontSize: 12.5, color: T.text2, fontWeight: 500 }}>@{a.username}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td style={TD}><PlanCell plan={a.plan} /></td>
+                  <td style={{ ...TD, fontSize: 13.5, color: visto ? T.text2 : T.text3, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    {visto || 'Nunca ha entrado'}
+                  </td>
+                  {isMaster && (
+                    <td style={{ ...TD, fontSize: 13.5, fontWeight: 600, color: coach ? T.text2 : T.text3, whiteSpace: 'nowrap' }}>
+                      {coach || 'Sin asignar'}
+                    </td>
+                  )}
+                  <td style={{ ...TD, textAlign: 'right' }}><ChevronRight size={17} color={T.text3} /></td>
+                </tr>
+              );
+            })}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={cols} style={{ ...TD, borderBottom: 'none', textAlign: 'center', padding: '44px 16px', color: T.text3 }}>
+                  <UserIcon size={32} style={{ opacity: 0.4 }} />
+                  <div style={{ marginTop: 10, fontWeight: 600, color: T.text2 }}>Sin atletas.</div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -243,19 +395,24 @@ export default function AthletesPanel() {
   const { profile } = useAuth();
   const isMaster = !!profile?.is_owner;
   const narrow = useIsNarrow(880);
+  const isDesktop = useIsDesktop();
   const [athletes, setAthletes] = useState([]);
   const [coaches, setCoaches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [search, setSearch] = useState('');
+  const [pagina, setPagina] = useState(1);
   const [selected, setSelected] = useState(null);
+  // Momento en que llegaron los datos. Sirve de "ahora" para las metricas:
+  // leer el reloj dentro del useMemo lo dejaria congelado en la primera vuelta.
+  const [cargadoEn, setCargadoEn] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const a = await listAthletes();
-        if (!cancelled) setAthletes(a);
+        const a = await listAthletesOverview();
+        if (!cancelled) { setAthletes(a); setCargadoEn(Date.now()); }
         if (isMaster) {
           const c = await listCoaches();
           if (!cancelled) setCoaches(c);
@@ -279,6 +436,17 @@ export default function AthletesPanel() {
     );
   }, [athletes, search]);
 
+  // Las tres preguntas que un coach se hace al abrir la lista.
+  const metricas = useMemo(() => {
+    const base = athletes.filter((a) => a.role !== 'admin');
+    const hace7dias = cargadoEn - 7 * 86400000;
+    return {
+      total: base.length,
+      sinPlan: base.filter((a) => !a.plan).length,
+      activos: base.filter((a) => a.lastSeen && new Date(a.lastSeen).getTime() >= hace7dias).length,
+    };
+  }, [athletes, cargadoEn]);
+
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: T.text2, fontWeight: 600, padding: 40 }}>
@@ -289,16 +457,39 @@ export default function AthletesPanel() {
 
   const twoCol = selected && !narrow;
   const showList = !(narrow && selected);
+  // Tabla solo cuando hay ancho de verdad y nadie esta abierto. Con el detalle
+  // abierto la lista se encoge a ~280px, y ahi una tabla no se puede leer:
+  // vuelven las tarjetas.
+  const modoTabla = isDesktop && !selected;
+
+  // Paginado solo en la tabla. En el telefono la lista se desliza completa,
+  // que es como funciona cualquier lista de contactos: ahi paginar estorba.
+  // La pagina se recorta aqui en vez de con un efecto: si filtras y quedan
+  // menos paginas que la que estabas viendo, se ajusta sola sin renders extra.
+  const totalPaginas = Math.max(1, Math.ceil(filtered.length / POR_PAGINA));
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const visibles = modoTabla
+    ? filtered.slice((paginaActual - 1) * POR_PAGINA, paginaActual * POR_PAGINA)
+    : filtered;
+  const desde = filtered.length === 0 ? 0 : (paginaActual - 1) * POR_PAGINA + 1;
+  const hasta = Math.min(paginaActual * POR_PAGINA, filtered.length);
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: twoCol ? 'minmax(280px, 1fr) 1.4fr' : '1fr', gap: 20, alignItems: 'start' }}>
       {showList && (
       <div>
+        {modoTabla && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginBottom: 16 }}>
+            <StatCard icon={<Users size={17} />} label="Atletas" value={metricas.total} />
+            <StatCard icon={<ClipboardList size={17} />} label="Sin plan" value={metricas.sinPlan} tono={metricas.sinPlan > 0 ? 'alerta' : undefined} />
+            <StatCard icon={<CalendarClock size={17} />} label="Activos (7 días)" value={metricas.activos} />
+          </div>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 12, padding: '0 14px', marginBottom: 16 }}>
           <Search size={17} color={T.text3} />
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPagina(1); }}
             placeholder="Buscar atleta…"
             style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 14.5, fontWeight: 500, color: T.text, padding: '12px 0' }}
           />
@@ -308,6 +499,42 @@ export default function AthletesPanel() {
           <div style={{ background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 12, padding: '12px 16px', fontWeight: 600, marginBottom: 16 }}>{err}</div>
         )}
 
+        {modoTabla ? (
+          <>
+            <AthletesTable
+              rows={visibles}
+              coaches={coaches}
+              isMaster={isMaster}
+              selectedId={selected?.id}
+              onPick={setSelected}
+            />
+            {totalPaginas > 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 14 }}>
+                <div style={{ fontSize: 13, color: T.text2, fontWeight: 600 }}>
+                  Mostrando {desde}–{hasta} de {filtered.length}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <BotonPagina
+                    icon={ChevronLeft}
+                    etiqueta="Anterior"
+                    disabled={paginaActual === 1}
+                    onClick={() => setPagina(paginaActual - 1)}
+                  />
+                  <span style={{ fontSize: 13, color: T.text2, fontWeight: 700, minWidth: 72, textAlign: 'center' }}>
+                    {paginaActual} de {totalPaginas}
+                  </span>
+                  <BotonPagina
+                    icon={ChevronRight}
+                    etiqueta="Siguiente"
+                    derecha
+                    disabled={paginaActual === totalPaginas}
+                    onClick={() => setPagina(paginaActual + 1)}
+                  />
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {filtered.map((a) => {
             const active = selected?.id === a.id;
@@ -343,6 +570,7 @@ export default function AthletesPanel() {
             </div>
           )}
         </div>
+        )}
       </div>
       )}
 
@@ -361,7 +589,14 @@ export default function AthletesPanel() {
         />
       )}
 
-      <style>{`.spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <style>{`
+        .spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+        .fila-atleta{transition:background .12s}
+        .fila-atleta:hover{background:${T.bg3} !important}
+        .fila-atleta:last-child td{border-bottom:none}
+        .kp-pag{transition:background .12s}
+        .kp-pag:hover{background:${T.bg3} !important}
+      `}</style>
     </div>
   );
 }

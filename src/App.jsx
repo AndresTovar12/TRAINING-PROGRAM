@@ -8,7 +8,7 @@ import AuthScreen from '@/features/auth/AuthScreen';
 import TrainingApp from '@/features/training/TrainingApp';
 import AdminApp from '@/features/admin/AdminApp';
 import ProfileScreen from '@/features/profile/ProfileScreen';
-import { T, FONT, KP } from '@/lib/theme';
+import { FONT, KP } from '@/lib/theme';
 
 function Splash({ label = 'Cargando…' }) {
   return (

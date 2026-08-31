@@ -166,6 +166,40 @@ export async function listAthletes() {
   return data ?? [];
 }
 
+// Lista para la tabla del panel: cada atleta con su plan activo y su última
+// actividad. Tres consultas en lote (no una por atleta) que RLS ya acota a lo
+// que el coach puede ver.
+export async function listAthletesOverview() {
+  const [profilesRes, plansRes, stateRes] = await Promise.all([
+    supabase.from('profiles').select('*').order('created_at'),
+    supabase.from('plans').select('user_id, title, data, updated_at').eq('status', 'active'),
+    supabase.from('user_app_state').select('user_id, updated_at'),
+  ]);
+  if (profilesRes.error) throw profilesRes.error;
+
+  const planByUser = new Map();
+  (plansRes.data ?? []).forEach((p) => planByUser.set(p.user_id, p));
+  const seenByUser = new Map();
+  (stateRes.data ?? []).forEach((s) => seenByUser.set(s.user_id, s.updated_at));
+
+  return (profilesRes.data ?? []).map((p) => {
+    const plan = planByUser.get(p.id) ?? null;
+    const phases = plan?.data?.phases ?? [];
+    return {
+      ...p,
+      plan: plan
+        ? {
+            title: plan.title,
+            kind: plan.data?.kind === 'weekly' ? 'weekly' : 'periodized',
+            phases: phases.length,
+            weeks: phases.reduce((s, ph) => s + (ph.weekData?.length || 0), 0),
+          }
+        : null,
+      lastSeen: seenByUser.get(p.id) ?? null,
+    };
+  });
+}
+
 // Reasigna un atleta a un coach (o lo deja libre con coachId = null). Master.
 export async function setAthleteCoach(athleteId, coachId) {
   const { data, error } = await supabase

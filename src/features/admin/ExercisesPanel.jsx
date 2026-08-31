@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import {
-  Plus, Search, X, Trash2, Upload, Loader2, Image as ImageIcon, Video, Link2, Dumbbell,
+  Plus, Search, X, Trash2, Upload, Loader2, Image as ImageIcon, Video, Dumbbell,
   Copy, Lock,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';

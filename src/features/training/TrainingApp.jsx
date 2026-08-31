@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  ChevronRight, ChevronDown, ChevronUp, ArrowLeft, Calendar,
-  Check, X, Calculator, BookOpen, AlertCircle, TrendingUp, Edit3, Target,
+  ChevronRight, ChevronDown, ChevronUp, Calendar,
+  Check, X, Calculator, BookOpen, TrendingUp, Edit3, Target,
   Zap, Trophy, Clock, FileText, Sparkles, Info, Dumbbell, Heart, Play,
-  CheckCircle2, ChevronLeft, Activity, Sunrise, Sun, Moon, Home as HomeIcon,
-  Repeat, Eye, Layers, List, Scale
+  ChevronLeft, Activity, Home as HomeIcon,
+  Repeat, Eye, Layers, List, Scale, AlertCircle, Moon
 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine, PieChart, Pie, Cell } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
+import { useIsDesktop } from '@/lib/useViewport';
 import { T, FONT, NUM_STYLE, LT, CAT_COLORS, KP, eyebrow } from '@/lib/theme';
 import { PHASE_IMG } from '@/data/training-data';
 import { usePlan } from '@/contexts/PlanContext';
@@ -14,19 +15,22 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   sessionId, calc1RM, today, greeting, isLoadedExercise,
   resolveCursor, defaultCursor, isValidCursor, findPreviousWeight,
-  getWeekLoad, formatIntensity, inferRest, getPattern, getMuscles,
+  formatIntensity, inferRest, getMuscles,
   sessionForToday, weekOverview, weekdayToday, weekdayLabel
 } from '@/lib/training-utils';
 import { useStorage } from '@/contexts/AppStateContext';
 import ExerciseMediaModal from '@/features/training/ExerciseMediaModal';
 
+// Nombres completos SOLO para mostrar en compu. Lo que guarda el plan sigue
+// siendo 'Lun', 'Mar'… igual que en el editor del entrenador.
+const NOMBRE_DIA = {
+  Lun: 'Lunes', Mar: 'Martes', Mié: 'Miércoles', Jue: 'Jueves',
+  Vie: 'Viernes', Sáb: 'Sábado', Dom: 'Domingo',
+};
+
 const Caption = ({ children, color = T.text3, style }) => (
   <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.4, color, ...style }}>{children}</div>
 );
-const CatDot = ({ cat, size = 6 }) => {
-  const c = CAT_COLORS[cat] || CAT_COLORS.gym;
-  return <span style={{ display: 'inline-block', width: size, height: size, borderRadius: '50%', background: c.c, flexShrink: 0 }} />;
-};
 const Card = ({ children, style, onClick, active }) => {
   const [hover, setHover] = useState(false);
   return (
@@ -66,31 +70,6 @@ const Collapsible = ({ title, icon: Icon, children, defaultOpen = false, subtle 
     </div>
   );
 };
-const Button = ({ children, onClick, variant = 'primary', size = 'md', icon: Icon, disabled, style }) => {
-  const sizes = {
-    sm: { fontSize: 12, padding: '7px 12px' },
-    md: { fontSize: 14, padding: '11px 18px' },
-    lg: { fontSize: 15, padding: '15px 22px' },
-  };
-  const variants = {
-    primary: { background: T.accent, color: '#FFFFFF', border: 'none', boxShadow: disabled ? 'none' : KP.shBtn },
-    secondary: { background: T.bg3, color: T.text, border: `1px solid ${KP.line}` },
-    ghost: { background: 'transparent', color: T.text2, border: 'none' },
-  };
-  return (
-    <button onClick={disabled ? undefined : onClick} disabled={disabled}
-      className={disabled ? undefined : 'kp-press'}
-      style={{
-        borderRadius: KP.rBtn, cursor: disabled ? 'not-allowed' : 'pointer',
-        fontFamily: FONT, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-        transition: 'opacity 0.15s, box-shadow 0.18s', opacity: disabled ? 0.4 : 1,
-        ...sizes[size], ...variants[variant], ...style,
-      }}>
-      {Icon && <Icon size={size === 'sm' ? 12 : size === 'lg' ? 18 : 16} strokeWidth={2.5} />}
-      {children}
-    </button>
-  );
-};
 const Input = ({ value, onChange, placeholder, type = 'text', style, suffix }) => (
   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
     <input type={type} value={value ?? ''} onChange={e => onChange(e.target.value)} placeholder={placeholder}
@@ -104,15 +83,6 @@ const Input = ({ value, onChange, placeholder, type = 'text', style, suffix }) =
       onBlur={e => { e.target.style.borderColor = KP.line; e.target.style.boxShadow = 'none'; }}
     />
     {suffix && <span style={{ position: 'absolute', right: 14, color: T.text3, fontSize: 12, fontWeight: 600, pointerEvents: 'none' }}>{suffix}</span>}
-  </div>
-);
-const StickyCTA = ({ children }) => (
-  <div style={{
-    position: 'fixed', bottom: 'calc(72px + env(safe-area-inset-bottom, 0px))', left: 0, right: 0,
-    padding: '12px 16px', background: `linear-gradient(180deg, transparent 0%, ${T.bg} 35%)`,
-    zIndex: 50, pointerEvents: 'none',
-  }}>
-    <div style={{ pointerEvents: 'auto' }}>{children}</div>
   </div>
 );
 
@@ -180,275 +150,8 @@ const PhaseTimeline = ({ activePhaseId, sessionsData, onJumpToPhase }) => {
   );
 };
 
-const WeekScience = ({ science }) => {
-  if (!science) return null;
-  if (typeof science === 'string') {
-    return <div style={{ fontSize: 13, color: T.text2, lineHeight: 1.7 }}>{science}</div>;
-  }
-  const blocks = [
-    { key: 'changes', label: 'Cambios', icon: Repeat, color: T.violet, content: science.changes },
-    { key: 'why', label: 'Por qué', icon: Sparkles, color: T.accent, content: science.why },
-    { key: 'observe', label: 'Qué observar', icon: Eye, color: T.warning, content: science.observe },
-  ].filter(b => b.content);
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      {blocks.map((b, bIdx) => {
-        const Icon = b.icon;
-        const isArray = Array.isArray(b.content);
-        return (
-          <div key={b.key} style={{
-            paddingTop: bIdx > 0 ? 16 : 0,
-            borderTop: bIdx > 0 ? `1px solid ${T.border}` : 'none',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <div style={{
-                width: 24, height: 24, borderRadius: 6,
-                background: `${b.color}20`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Icon size={13} style={{ color: b.color }} strokeWidth={2.5} />
-              </div>
-              <Caption color={b.color}>{b.label}</Caption>
-            </div>
-            {isArray ? (
-              <ul style={{ margin: 0, paddingLeft: 0, listStyle: 'none' }}>
-                {b.content.map((item, i) => (
-                  <li key={i} style={{
-                    display: 'flex', gap: 10,
-                    padding: '5px 0',
-                    fontSize: 13.5, color: T.text2, lineHeight: 1.6,
-                  }}>
-                    <span style={{ color: b.color, fontWeight: 700, flexShrink: 0 }}>·</span>
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div style={{ fontSize: 13.5, color: T.text2, lineHeight: 1.65 }}>{b.content}</div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-};
 
-// Icono SVG estilizado por patrón de movimiento
-const MovementIcon = ({ pattern, size = 22, color = T.text2 }) => {
-  const stroke = { stroke: color, strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', fill: 'none' };
-  const v = `0 0 24 24`;
-  switch (pattern) {
-    case 'squat':
-      return (
-        <svg viewBox={v} width={size} height={size}>
-          <circle cx="12" cy="4" r="1.8" {...stroke} />
-          <path d="M12 6 V11 L9 16 V20 M12 11 L15 16 V20" {...stroke} />
-          <path d="M7 9 H17" {...stroke} />
-        </svg>
-      );
-    case 'squat_uni':
-      return (
-        <svg viewBox={v} width={size} height={size}>
-          <circle cx="11" cy="4" r="1.8" {...stroke} />
-          <path d="M11 6 V11 L8 16 V20 M11 11 L17 17 L19 21" {...stroke} />
-        </svg>
-      );
-    case 'hinge':
-      return (
-        <svg viewBox={v} width={size} height={size}>
-          <circle cx="5" cy="6" r="1.8" {...stroke} />
-          <path d="M7 7 L18 11 M18 11 V20 M14 11 V17" {...stroke} />
-        </svg>
-      );
-    case 'push_h':
-      return (
-        <svg viewBox={v} width={size} height={size}>
-          <circle cx="7" cy="8" r="1.8" {...stroke} />
-          <path d="M7 10 V20 M9 10 H20" {...stroke} />
-          <rect x="19" y="8" width="3" height="4" {...stroke} />
-        </svg>
-      );
-    case 'push_v':
-      return (
-        <svg viewBox={v} width={size} height={size}>
-          <circle cx="12" cy="11" r="1.8" {...stroke} />
-          <path d="M12 13 V22 M11 11 L7 4 M13 11 L17 4" {...stroke} />
-          <path d="M5 3 H9 M15 3 H19" {...stroke} />
-        </svg>
-      );
-    case 'pull_h':
-      return (
-        <svg viewBox={v} width={size} height={size}>
-          <circle cx="17" cy="8" r="1.8" {...stroke} />
-          <path d="M17 10 V20 M15 10 H4" {...stroke} />
-          <rect x="2" y="8" width="3" height="4" {...stroke} />
-        </svg>
-      );
-    case 'pull_v':
-      return (
-        <svg viewBox={v} width={size} height={size}>
-          <path d="M5 4 H19" {...stroke} />
-          <circle cx="12" cy="10" r="1.8" {...stroke} />
-          <path d="M12 12 V22 M10 4 L12 10 M14 4 L12 10" {...stroke} />
-        </svg>
-      );
-    case 'olympic':
-      return (
-        <svg viewBox={v} width={size} height={size}>
-          <circle cx="12" cy="5" r="1.8" {...stroke} />
-          <path d="M12 7 V13 L9 18 V21 M12 13 L15 18 V21" {...stroke} />
-          <path d="M9 11 H15" {...stroke} />
-          <path d="M5 11 H9 M15 11 H19" {...stroke} />
-        </svg>
-      );
-    case 'jump':
-      return (
-        <svg viewBox={v} width={size} height={size}>
-          <circle cx="12" cy="6" r="1.8" {...stroke} />
-          <path d="M12 8 V14 L9 18 M12 14 L15 18 M14 10 L19 6 M10 10 L5 6" {...stroke} />
-          <path d="M6 22 H18" strokeDasharray="2 2" {...stroke} />
-        </svg>
-      );
-    case 'sprint':
-      return (
-        <svg viewBox={v} width={size} height={size}>
-          <circle cx="8" cy="5" r="1.8" {...stroke} />
-          <path d="M9 7 L17 12 M17 12 L19 21 M11 11 L5 16 M13 8 L21 5 M13 10 L7 12" {...stroke} />
-        </svg>
-      );
-    case 'cod':
-      return (
-        <svg viewBox={v} width={size} height={size}>
-          <path d="M4 12 L10 7 L10 10 L18 10 L18 7 L22 12 L18 17 L18 14 L10 14 L10 17 Z" {...stroke} />
-        </svg>
-      );
-    case 'core':
-      return (
-        <svg viewBox={v} width={size} height={size}>
-          <rect x="6" y="6" width="12" height="12" rx="2" {...stroke} />
-          <path d="M6 12 H18 M12 6 V18" {...stroke} />
-        </svg>
-      );
-    case 'rotation':
-      return (
-        <svg viewBox={v} width={size} height={size}>
-          <circle cx="12" cy="12" r="6" {...stroke} />
-          <path d="M12 6 L15 9 M18 12 L15 15 M12 18 L9 15" {...stroke} />
-        </svg>
-      );
-    case 'calf':
-      return (
-        <svg viewBox={v} width={size} height={size}>
-          <path d="M10 4 V14 M14 4 V14" {...stroke} />
-          <path d="M9 14 L11 20 L13 20 L15 14" {...stroke} />
-        </svg>
-      );
-    case 'isolation':
-      return (
-        <svg viewBox={v} width={size} height={size}>
-          <path d="M8 4 V12 L6 18 M16 4 V12 L18 18" {...stroke} />
-          <circle cx="12" cy="14" r="3" {...stroke} />
-        </svg>
-      );
-    case 'mobility':
-      return (
-        <svg viewBox={v} width={size} height={size}>
-          <path d="M4 12 Q8 6 12 12 T20 12" {...stroke} />
-          <circle cx="4" cy="12" r="1" fill={color} stroke="none" />
-          <circle cx="20" cy="12" r="1" fill={color} stroke="none" />
-        </svg>
-      );
-    case 'balance':
-      return (
-        <svg viewBox={v} width={size} height={size}>
-          <circle cx="12" cy="4" r="1.8" {...stroke} />
-          <path d="M12 6 V16 L9 20 V22" {...stroke} />
-          <path d="M5 22 H19" {...stroke} />
-        </svg>
-      );
-    default:
-      return (
-        <svg viewBox={v} width={size} height={size}>
-          <circle cx="12" cy="12" r="6" {...stroke} />
-        </svg>
-      );
-  }
-};
 
-// Silueta humana frontal + posterior con regiones musculares coloreables
-const MuscleSilhouette = ({ primary = [], secondary = [], width = 64, accent = T.accent }) => {
-  const fillFor = (m) => {
-    if (primary.includes(m)) return accent;
-    if (secondary.includes(m)) return `${accent}55`;
-    return T.bg3;
-  };
-  const baseStroke = T.border;
-  return (
-    <svg viewBox="0 0 110 100" width={width} height={width * 100 / 110} style={{ flexShrink: 0 }}>
-      <g stroke={baseStroke} strokeWidth="0.4">
-        {/* === VISTA FRONTAL === */}
-        {/* Cabeza */}
-        <circle cx="24" cy="9" r="5" fill={T.bg3} />
-        {/* Cuello */}
-        <rect x="22" y="14" width="4" height="3" fill={T.bg3} />
-        {/* Hombros frontales (deltoides anterior) */}
-        <ellipse cx="14" cy="20" rx="4" ry="3.5" fill={fillFor('hombros_f')} />
-        <ellipse cx="34" cy="20" rx="4" ry="3.5" fill={fillFor('hombros_f')} />
-        {/* Pecho (pectoral) */}
-        <path d="M16 19 Q24 17 32 19 L32 30 Q24 32 16 30 Z" fill={fillFor('pecho')} />
-        {/* Bíceps */}
-        <rect x="10" y="22" width="3.5" height="11" rx="1.5" fill={fillFor('biceps')} />
-        <rect x="34.5" y="22" width="3.5" height="11" rx="1.5" fill={fillFor('biceps')} />
-        {/* Antebrazos */}
-        <rect x="10" y="33" width="3.5" height="10" rx="1.5" fill={T.bg3} />
-        <rect x="34.5" y="33" width="3.5" height="10" rx="1.5" fill={T.bg3} />
-        {/* Abs (core frontal) */}
-        <rect x="18" y="30" width="12" height="13" rx="1.5" fill={fillFor('core')} />
-        {/* Cintura */}
-        <rect x="18" y="43" width="12" height="3" fill={T.bg3} />
-        {/* Cuádriceps */}
-        <path d="M17 46 L23 46 L22 68 L17 68 Z" fill={fillFor('cuadriceps')} />
-        <path d="M25 46 L31 46 L31 68 L26 68 Z" fill={fillFor('cuadriceps')} />
-        {/* Rodillas */}
-        <rect x="17" y="68" width="5" height="3" fill={T.bg3} />
-        <rect x="26" y="68" width="5" height="3" fill={T.bg3} />
-        {/* Tibial (gemelo frontal) */}
-        <rect x="17" y="71" width="5" height="18" rx="1.5" fill={T.bg3} />
-        <rect x="26" y="71" width="5" height="18" rx="1.5" fill={T.bg3} />
-
-        {/* === VISTA POSTERIOR === */}
-        {/* Cabeza */}
-        <circle cx="80" cy="9" r="5" fill={T.bg3} />
-        {/* Cuello */}
-        <rect x="78" y="14" width="4" height="3" fill={T.bg3} />
-        {/* Trapecio */}
-        <path d="M70 17 L80 15 L90 17 L90 26 L70 26 Z" fill={fillFor('trapecio')} />
-        {/* Hombros posteriores (deltoides posterior) */}
-        <ellipse cx="68" cy="22" rx="4" ry="3.5" fill={fillFor('hombros_b')} />
-        <ellipse cx="92" cy="22" rx="4" ry="3.5" fill={fillFor('hombros_b')} />
-        {/* Tríceps */}
-        <rect x="64" y="22" width="3.5" height="11" rx="1.5" fill={fillFor('triceps')} />
-        <rect x="92.5" y="22" width="3.5" height="11" rx="1.5" fill={fillFor('triceps')} />
-        {/* Antebrazos */}
-        <rect x="64" y="33" width="3.5" height="10" rx="1.5" fill={T.bg3} />
-        <rect x="92.5" y="33" width="3.5" height="10" rx="1.5" fill={T.bg3} />
-        {/* Dorsal */}
-        <path d="M70 26 L90 26 L88 40 L72 40 Z" fill={fillFor('dorsal')} />
-        {/* Espalda baja (lumbares) */}
-        <rect x="72" y="40" width="16" height="6" rx="1.5" fill={fillFor('espalda_baja')} />
-        {/* Glúteos */}
-        <ellipse cx="76" cy="50" rx="6" ry="4" fill={fillFor('gluteos')} />
-        <ellipse cx="84" cy="50" rx="6" ry="4" fill={fillFor('gluteos')} />
-        {/* Isquiotibiales */}
-        <path d="M71 54 L77 54 L76 70 L72 70 Z" fill={fillFor('isquios')} />
-        <path d="M83 54 L89 54 L88 70 L84 70 Z" fill={fillFor('isquios')} />
-        {/* Pantorrillas posteriores */}
-        <path d="M71 70 L77 70 L77 88 L72 88 Z" fill={fillFor('pantorrillas')} />
-        <path d="M83 70 L89 70 L88 88 L84 88 Z" fill={fillFor('pantorrillas')} />
-      </g>
-    </svg>
-  );
-};
 
 // Etiquetas legibles de músculos en español
 const MUSCLE_LABELS = {
@@ -467,99 +170,9 @@ const MUSCLE_LABELS = {
   pantorrillas: 'Gemelos',
 };
 
-// Card colapsable con título destacado (estilo prominente, no sutil)
-const ScienceSection = ({ title, icon: Icon, accentColor = T.accent, defaultOpen = false, children }) => {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <Card style={{ padding: 0, marginBottom: 14 }}>
-      <button onClick={() => setOpen(!open)} style={{
-        width: '100%', background: 'transparent', border: 'none', cursor: 'pointer',
-        padding: '16px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        fontFamily: FONT, textAlign: 'left',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {Icon && <Icon size={14} style={{ color: accentColor }} />}
-          <Caption color={accentColor}>{title}</Caption>
-        </div>
-        {open
-          ? <ChevronUp size={16} style={{ color: T.text3 }} />
-          : <ChevronDown size={16} style={{ color: T.text3 }} />}
-      </button>
-      {open && <div style={{ padding: '4px 18px 18px' }}>{children}</div>}
-    </Card>
-  );
-};
 
-// Por qué este workout: estructura pedagógica con secciones
-const WorkoutScience = ({ science }) => {
-  if (!science) return null;
-  const sections = [
-    { key: 'estructura', label: 'Estructura', icon: Layers, color: T.violet },
-    { key: 'seleccion', label: 'Selección de ejercicios', icon: Target, color: T.info },
-    { key: 'orden', label: 'Orden del workout', icon: List, color: T.accent },
-    { key: 'frecuencia', label: 'Frecuencia y recuperación', icon: Clock, color: T.warning },
-    { key: 'tradeoffs', label: 'Trade-offs considerados', icon: Scale, color: T.accentDk },
-  ].filter(s => science[s.key]);
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {sections.map(s => {
-        const Icon = s.icon;
-        const content = science[s.key];
-        const items = Array.isArray(content) ? content : [content];
-        return (
-          <div key={s.key}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <Icon size={13} style={{ color: s.color }} />
-              <Caption color={s.color}>{s.label}</Caption>
-            </div>
-            <ul style={{ margin: 0, paddingLeft: 0, listStyle: 'none' }}>
-              {items.map((item, i) => (
-                <li key={i} style={{
-                  fontSize: 13, color: T.text2, lineHeight: 1.6,
-                  padding: '5px 0 5px 18px', position: 'relative',
-                }}>
-                  <span style={{
-                    position: 'absolute', left: 0, top: 13,
-                    width: 5, height: 5, borderRadius: '50%',
-                    background: s.color, opacity: 0.7,
-                  }} />
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </div>
-        );
-      })}
-    </div>
-  );
-};
 
-const ExerciseStat = ({ label, value, color }) => (
-  <div style={{ flex: 1, minWidth: 0 }}>
-    <div style={{
-      fontSize: 9, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase',
-      color: T.text3, marginBottom: 3,
-    }}>{label}</div>
-    <div style={{
-      fontSize: 14, fontWeight: 700, color: color || T.text,
-      lineHeight: 1.2, wordBreak: 'break-word',
-      ...NUM_STYLE,
-    }}>{value || '—'}</div>
-  </div>
-);
-
-// Combina icono de patrón + silueta para un ejercicio
-const ExerciseVisuals = ({ exName, accent = T.accent, iconSize = 22, silhouetteWidth = 56, focus }) => {
-  const pattern = useMemo(() => getPattern(exName), [exName]);
-  const muscles = useMemo(() => getMuscles(exName, focus), [exName, focus]);
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-      <MovementIcon pattern={pattern} size={iconSize} color={accent} />
-      <MuscleSilhouette primary={muscles.primary} secondary={muscles.secondary} width={silhouetteWidth} accent={accent} />
-    </div>
-  );
-};
 
 const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, oneRMs, sessionsData, phaseId, phaseColor }) => {
   const { phases: PLAN, resolveExercise } = usePlan();
@@ -812,180 +425,6 @@ const SetGroup = ({ group, setNum, phaseColor, sessionData, onUpdate, oneRMs, se
   );
 };
 
-const SessionDetail = ({ phase, week, dayIdx, onBack, sessionsData, updateSession, oneRMs }) => {
-  const day = week.days[dayIdx];
-  const id = sessionId(phase.id, week.num, dayIdx);
-  const sessionData = sessionsData[id] || {};
-  const completed = sessionData.completed || false;
-  const phaseColor = phase.color || LT.blue;
-
-  const setExerciseData = (blockIdx, exIdx, data) => {
-    updateSession(id, prev => {
-      const ex = prev?.exercises || {};
-      const key = blockIdx !== null ? `${blockIdx}-${exIdx}` : `${exIdx}`;
-      return { ...prev, exercises: { ...ex, [key]: data } };
-    });
-  };
-  const updateNotes = (notes) => updateSession(id, prev => ({ ...prev, notes }));
-  const toggleComplete = () => updateSession(id, prev => ({ ...prev, completed: !prev?.completed, completedAt: !prev?.completed ? new Date().toISOString() : null }));
-
-  const dayName = day.name || (day.blocks ? day.blocks.map(b => b.tag.replace(/^Sesi[óo]n \d+ \([AP]M\): /, '')).join(' + ') : day.day);
-
-  // sessionData filtrado para day.exercises (keys sin guion)
-  const flatSessionData = { exercises: sessionData.exercises ? Object.fromEntries(Object.entries(sessionData.exercises).filter(([k]) => !k.includes('-')).map(([k, v]) => [parseInt(k), v])) : {} };
-
-  return (
-    <div style={{ paddingBottom: 140, background: LT.bg, minHeight: '100vh', fontFamily: FONT }}>
-      <div style={{ padding: '16px 18px 20px' }}>
-        <button onClick={onBack} style={{
-          background: 'transparent', border: 'none', color: LT.text2, cursor: 'pointer',
-          display: 'flex', alignItems: 'center', gap: 4, marginBottom: 16, fontFamily: FONT, fontSize: 13, padding: 0,
-        }}>
-          <ChevronLeft size={16} /> Semana {week.num}
-        </button>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: phaseColor }} />
-          <span style={{ fontSize: 12, color: LT.text2, fontWeight: 600 }}>{day.day} · {CAT_COLORS[day.cat]?.label}</span>
-          {day.dual && <span style={{ fontSize: 12, color: LT.warning, fontWeight: 600 }}>· Doble</span>}
-        </div>
-
-        <h1 style={{ fontSize: 'clamp(23px, 7.5vw, 30px)', fontWeight: 800, color: LT.text, margin: 0, lineHeight: 1.08, letterSpacing: -0.8, overflowWrap: 'anywhere' }}>{dayName}</h1>
-
-        {completed && (
-          <div style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', background: LT.mint + '14', borderRadius: 20, color: LT.mint, fontSize: 12, fontWeight: 700 }}>
-            <CheckCircle2 size={12} /> Completada
-          </div>
-        )}
-      </div>
-
-      <div style={{ padding: '0 18px' }}>
-        {day.exercises && (
-          <div style={{ marginBottom: 6 }}>
-            {(() => {
-              const groups = groupIntoSets(day.exercises);
-              let setNum = 0;
-              return groups.map((g, gi) => {
-                if (!g.isNote) setNum += 1;
-                return (
-                  <SetGroup key={gi} group={g} setNum={setNum} phaseColor={phaseColor} phaseId={phase.id}
-                    sessionData={flatSessionData}
-                    onUpdate={(idx, data) => setExerciseData(null, idx, data)}
-                    oneRMs={oneRMs} sessionsData={sessionsData} />
-                );
-              });
-            })()}
-          </div>
-        )}
-
-        {day.blocks && day.blocks.map((blk, bi) => {
-          const blkSessionData = { exercises: sessionData.exercises ? Object.fromEntries(Object.entries(sessionData.exercises).filter(([k]) => k.startsWith(`${bi}-`)).map(([k, v]) => [parseInt(k.split('-')[1]), v])) : {} };
-          return (
-            <div key={bi} style={{ marginBottom: 18 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: phaseColor }} />
-                <span style={{ fontSize: 13, fontWeight: 700, color: LT.text }}>{blk.tag}</span>
-              </div>
-              {blk.type === 'lift' && (() => {
-                const groups = groupIntoSets(blk.exercises);
-                let setNum = 0;
-                return groups.map((g, gi) => {
-                  if (!g.isNote) setNum += 1;
-                  return (
-                    <SetGroup key={gi} group={g} setNum={setNum} phaseColor={phaseColor} phaseId={phase.id}
-                      sessionData={blkSessionData}
-                      onUpdate={(idx, data) => setExerciseData(bi, idx, data)}
-                      oneRMs={oneRMs} sessionsData={sessionsData} />
-                  );
-                });
-              })()}
-              {blk.type === 'speed' && (
-                <ul style={{ margin: '4px 0 0', paddingLeft: 16, color: LT.text2, fontSize: 14, lineHeight: 1.7 }}>
-                  {blk.bullets.map((b, i) => (
-                    <li key={i} style={typeof b === 'object' && b.bold ? { color: LT.text, fontWeight: 600 } : {}}>
-                      {typeof b === 'object' ? b.text : b}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {blk.type === 'note' && (
-                <div style={{ padding: 12, background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 10, fontSize: 13, color: LT.text2, lineHeight: 1.6 }}>
-                  {blk.text}
-                </div>
-              )}
-            </div>
-          );
-        })}
-
-        {day.notes && !day.exercises && !day.blocks && (
-          <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
-            <ul style={{ margin: 0, paddingLeft: 18, color: LT.text2, fontSize: 14, lineHeight: 1.7 }}>
-              {day.notes.map((n, i) => <li key={i}>{n}</li>)}
-            </ul>
-          </div>
-        )}
-
-        {day.notes && (day.exercises || day.blocks) && (
-          <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
-            <div style={{ fontSize: 11, color: LT.text3, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>Notas del día</div>
-            <ul style={{ margin: 0, paddingLeft: 18, color: LT.text2, fontSize: 13, lineHeight: 1.7 }}>
-              {day.notes.map((n, i) => <li key={i}>{n}</li>)}
-            </ul>
-          </div>
-        )}
-
-        <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <Edit3 size={12} style={{ color: LT.text3 }} />
-            <span style={{ fontSize: 11, color: LT.text3, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>Tus notas</span>
-          </div>
-          <textarea
-            value={sessionData.notes || ''}
-            onChange={e => updateNotes(e.target.value)}
-            placeholder="Cómo te sentiste, ajustes, observaciones..."
-            rows={3}
-            style={{
-              width: '100%', background: LT.bg, border: `1px solid ${LT.border}`,
-              borderRadius: 10, padding: 12, color: LT.text, fontFamily: FONT, fontSize: 13,
-              outline: 'none', resize: 'vertical', boxSizing: 'border-box',
-            }}
-            onFocus={e => e.target.style.borderColor = LT.blue}
-            onBlur={e => e.target.style.borderColor = LT.border}
-          />
-        </div>
-
-        {day.dayScience && (
-          <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <Info size={13} style={{ color: LT.blue }} />
-              <span style={{ fontSize: 13, fontWeight: 700, color: LT.text }}>Por qué este día</span>
-            </div>
-            <div style={{ fontSize: 13.5, color: LT.text2, lineHeight: 1.7 }}>{day.dayScience}</div>
-          </div>
-        )}
-      </div>
-
-      {/* CTA fijo abajo */}
-      <div style={{
-        position: 'fixed', bottom: 0, left: 0, right: 0, padding: '12px 18px 22px',
-        background: `linear-gradient(180deg, transparent, ${LT.bg} 30%)`, maxWidth: 600, margin: '0 auto',
-      }}>
-        <button onClick={toggleComplete}
-          style={{
-            width: '100%', padding: '15px', borderRadius: 16, border: 'none', cursor: 'pointer',
-            fontFamily: FONT, fontSize: 15, fontWeight: 700,
-            background: completed ? LT.surface : LT.blue,
-            color: completed ? LT.text2 : '#fff',
-            boxShadow: completed ? 'none' : '0 8px 24px rgba(30,64,224,0.32)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          }}>
-          {completed ? <X size={18} /> : <Check size={18} />}
-          {completed ? 'Marcar como pendiente' : 'Marcar completada'}
-        </button>
-      </div>
-    </div>
-  );
-};
 
 // Helper: get summary info for a day (count of exercises, intensity, etc.)
 const getDaySummary = (day) => {
@@ -1014,65 +453,6 @@ const getDaySummary = (day) => {
   return { exCount, mainIntensity, previews };
 };
 
-const DayChip = ({ day, isSelected, isCompleted, isActive, isSkipped, onClick }) => {
-  const cat = CAT_COLORS[day.cat] || CAT_COLORS.gym;
-  const borderColor = isSelected ? T.accent : isCompleted ? 'rgba(0, 163, 114, 0.4)' : isSkipped ? T.border : T.border;
-  const bgColor = isSelected ? T.bg3 : T.bg2;
-  return (
-    <button onClick={onClick}
-      style={{
-        flex: 1, minWidth: 0,
-        padding: '12px 4px',
-        background: bgColor,
-        border: `1.5px solid ${borderColor}`,
-        borderRadius: 14,
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8,
-        cursor: 'pointer', fontFamily: FONT,
-        position: 'relative',
-        opacity: isSkipped && !isSelected ? 0.5 : 1,
-        transition: 'border-color 0.15s, background 0.15s, opacity 0.15s',
-      }}>
-      <span style={{
-        fontSize: 11, fontWeight: 800, letterSpacing: 0.8,
-        color: isSelected ? T.text : isCompleted ? T.accent : isSkipped ? T.text3 : T.text2,
-        textDecoration: isSkipped ? 'line-through' : 'none',
-      }}>
-        {day.day.toUpperCase()}
-      </span>
-      {isCompleted ? (
-        <div style={{
-          width: 18, height: 18, borderRadius: '50%', background: T.accentBg,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <Check size={11} style={{ color: T.accent }} strokeWidth={3.5} />
-        </div>
-      ) : isSkipped ? (
-        <div style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <X size={12} style={{ color: T.text3 }} strokeWidth={2.5} />
-        </div>
-      ) : (
-        <div style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: cat.c, display: 'inline-block' }} />
-        </div>
-      )}
-      {day.dual && !isSkipped && (
-        <span style={{
-          position: 'absolute', top: 6, right: 6,
-          fontSize: 8, fontWeight: 800, letterSpacing: 0.4,
-          color: T.warning, background: 'rgba(255, 160, 71, 0.15)',
-          padding: '1px 4px', borderRadius: 4,
-        }}>2X</span>
-      )}
-      {isActive && !isCompleted && !isSkipped && (
-        <span style={{
-          position: 'absolute', top: -1, left: '50%', transform: 'translateX(-50%)',
-          width: 6, height: 6, borderRadius: '50%', background: T.accent,
-          boxShadow: `0 0 8px ${T.accent}`,
-        }} />
-      )}
-    </button>
-  );
-};
 
 // Colapsable claro
 const LightCollapsible = ({ title, icon: Icon, color, children, defaultOpen = false }) => {
@@ -1145,6 +525,7 @@ const LightWeekScience = ({ science }) => {
 };
 
 const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, activeSessionId }) => {
+  const esCompu = useIsDesktop();
   const phaseColor = phase.color || LT.blue;
   const completedCount = week.days.filter((_, idx) => sessionsData[sessionId(phase.id, week.num, idx)]?.completed).length;
 
@@ -1214,8 +595,19 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
         <span style={{ fontSize: 12, color: LT.text2, fontWeight: 600, ...NUM_STYLE }}>{completedCount}/{week.days.length}</span>
       </div>
 
-      {/* Calendario horizontal claro */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
+      {/* Días de la semana: pestañas planas con subrayado, mismo lenguaje que
+          la app del entrenador. Antes cada día era una caja con borde y, al
+          elegirlo, se pintaba entera de color.
+
+          El problema no era feo, era de lectura: cada pestaña carga CUATRO
+          señales a la vez (qué día ves, si ya lo hiciste, de qué tipo es, y
+          cuál sigue). Metidas todas en una caja de color, compiten entre
+          ellas. Sin caja, el subrayado dice "estás aquí" y las demás señales
+          quedan abajo, en voz baja, sin pelearse por el mismo espacio. */}
+      <div style={{
+        display: 'flex', gap: 2, marginBottom: 18, overflowX: 'auto',
+        borderBottom: `1px solid ${LT.border}`,
+      }}>
         {week.days.map((day, idx) => {
           const id = sessionId(phase.id, week.num, idx);
           const sd = sessionsData[id];
@@ -1226,16 +618,26 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
           return (
             <button key={idx} onClick={() => setSelectedIdx(idx)}
               style={{
-                flex: 1, minWidth: 0, padding: '12px 4px', borderRadius: 12, cursor: 'pointer', fontFamily: FONT,
-                background: isSelected ? phaseColor : LT.surface,
-                border: `1.5px solid ${isSelected ? phaseColor : isCompleted ? LT.mint + '60' : LT.border}`,
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+                padding: esCompu ? '11px 17px 12px' : '11px 12px 12px',
+                border: 'none', background: 'transparent', cursor: 'pointer',
+                fontFamily: FONT, fontSize: 14.5, fontWeight: isSelected ? 800 : 600,
+                color: isSelected ? phaseColor : LT.text2, whiteSpace: 'nowrap', flexShrink: 0,
+                borderBottom: `2.5px solid ${isSelected ? phaseColor : 'transparent'}`,
+                marginBottom: -1, transition: 'color .12s, border-color .12s',
               }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: isSelected ? '#fff' : LT.text2 }}>{day.day}</span>
+              {esCompu ? (NOMBRE_DIA[day.day] || day.day) : day.day}
               {isCompleted
-                ? <Check size={14} style={{ color: isSelected ? '#fff' : LT.mint }} strokeWidth={3} />
-                : <span style={{ width: 7, height: 7, borderRadius: '50%', background: isSelected ? '#fff' : dcat.c }} />}
-              {isActive && !isCompleted && <span style={{ width: 4, height: 4, borderRadius: '50%', background: isSelected ? '#fff' : phaseColor }} />}
+                ? <Check size={12} strokeWidth={3} style={{ color: LT.mint, marginLeft: 6, verticalAlign: 'middle' }} />
+                : <span style={{
+                    display: 'inline-block', width: 5, height: 5, borderRadius: '50%',
+                    background: dcat.c, marginLeft: 6, verticalAlign: 'middle',
+                  }} />}
+              {isActive && !isCompleted && (
+                <span style={{
+                  display: 'inline-block', width: 4, height: 4, borderRadius: '50%',
+                  background: phaseColor, marginLeft: 3, verticalAlign: 'middle',
+                }} />
+              )}
             </button>
           );
         })}

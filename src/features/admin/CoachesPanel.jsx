@@ -7,11 +7,6 @@ import { T, FONT, KP } from '@/lib/theme';
 
 const USERNAME_RE = /^[a-zA-Z0-9_.]{3,30}$/;
 
-const inputStyle = {
-  border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '11px 13px', width: '100%',
-  fontFamily: FONT, fontSize: 14, fontWeight: 500, color: T.text, outline: 'none', background: T.bg2,
-  boxSizing: 'border-box',
-};
 
 function Avatar({ name, url, size = 44 }) {
   const initial = (name?.[0] || 'C').toUpperCase();

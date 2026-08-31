@@ -5,6 +5,7 @@ import {
   Save, FolderOpen, Clipboard, Eraser, CalendarDays, Settings2, Pencil, Repeat,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useIsDesktop } from '@/lib/useViewport';
 import {
   listExercises, createPlan, updatePlan, listTemplates, saveTemplate, deleteTemplate,
   getMasterId, tagRepertoire,
@@ -17,6 +18,12 @@ import RepertoirePicker from '@/features/admin/RepertoirePicker';
 /* ------------------------------------------------------------------ */
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+// Solo para mostrar. Lo que se GUARDA en el plan sigue siendo 'Lun', 'Mar'…
+// Cambiar esos valores rompería los planes que ya existen.
+const NOMBRE_DIA = {
+  Lun: 'Lunes', Mar: 'Martes', Mié: 'Miércoles', Jue: 'Jueves',
+  Vie: 'Viernes', Sáb: 'Sábado', Dom: 'Domingo',
+};
 const PALETTE = ['#1E40E0', '#3DD9A0', '#FFA047', '#FF7A52', '#A480FF', '#5DA0FF', '#E052A0', '#9090A0'];
 const DAY_CATS = Object.entries(CAT_COLORS).map(([slug, v]) => ({ slug, color: v.c, label: v.label }));
 
@@ -110,30 +117,60 @@ function Field({ label, children, grow }) {
   );
 }
 
-function IconBtn({ icon: Icon, onClick, danger, disabled, title }) {
+/**
+ * Boton de icono. Por defecto va SIN caja: ni borde ni fondo.
+ *
+ * Antes cada icono venia en su cuadrito gris. Con cinco juntos, la fila se
+ * convierte en cinco cajas identicas y ninguna dice "yo soy la importante".
+ * Sin caja, lo que se ve es el icono; el fondo aparece al pasar el mouse,
+ * que es cuando hace falta saber que si se puede tocar.
+ *
+ * `sobreFoto` recupera la caja clara: encima de la imagen oscura de un
+ * ejercicio, un icono transparente no se veria.
+ */
+function IconBtn({ icon: Icon, onClick, danger, disabled, title, sobreFoto }) {
   return (
     <button
       type="button" onClick={onClick} disabled={disabled} title={title}
+      className={sobreFoto ? undefined : 'kp-ico'}
       style={{
-        width: 30, height: 30, borderRadius: 9, border: `1px solid ${T.border}`, cursor: disabled ? 'default' : 'pointer',
-        background: T.bg2, color: danger ? T.danger : T.text2, display: 'grid', placeItems: 'center',
-        opacity: disabled ? 0.35 : 1, flexShrink: 0,
+        width: 30, height: 30, borderRadius: 999, cursor: disabled ? 'default' : 'pointer',
+        border: sobreFoto ? `1px solid ${T.border}` : 'none',
+        background: sobreFoto ? T.bg2 : 'transparent',
+        color: danger ? T.danger : T.text3, display: 'grid', placeItems: 'center',
+        opacity: disabled ? 0.3 : 1, flexShrink: 0,
       }}
     >
-      <Icon size={14} />
+      <Icon size={15} />
     </button>
   );
 }
 
-function Pill({ icon: Icon, children, onClick, primary, disabled }) {
+/**
+ * Pastilla de accion, con TRES pesos. El peso es la jerarquia: dice de un
+ * vistazo cual es la accion principal y cuales son de apoyo.
+ *
+ *   solido   → la accion principal de la pantalla. Azul lleno. Una sola.
+ *   primary  → accion destacada de apoyo. Azul suave, sin borde.
+ *   (nada)   → fantasma: sin fondo ni borde. Todo lo demas.
+ *   danger   → fantasma en rojo, para lo que borra.
+ *
+ * Antes todo lo que no era `primary` era la misma caja blanca con borde
+ * gris. Cinco de esas en fila pesan igual, asi que el ojo tiene que leerlas
+ * una por una en vez de saltar directo a la que importa.
+ */
+function Pill({ icon: Icon, children, onClick, primary, solido, danger, disabled }) {
+  const fondo = solido ? T.accent : primary ? T.accentBg : 'transparent';
+  const tinta = solido ? '#fff' : danger ? T.danger : primary ? T.accent : T.text2;
   return (
     <button
       type="button" onClick={onClick} disabled={disabled}
+      className={solido || primary ? undefined : 'kp-pill'}
       style={{
-        display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 14px', borderRadius: 20,
-        border: primary ? 'none' : `1.5px solid ${T.border}`, cursor: disabled ? 'default' : 'pointer',
-        background: primary ? T.accentBg : T.bg2, color: primary ? T.accent : T.text2,
-        fontFamily: FONT, fontSize: 13, fontWeight: 700, opacity: disabled ? 0.45 : 1, flexShrink: 0,
+        display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 15px', borderRadius: 999,
+        border: 'none', cursor: disabled ? 'default' : 'pointer',
+        background: fondo, color: tinta,
+        fontFamily: FONT, fontSize: 13, fontWeight: 700, opacity: disabled ? 0.4 : 1, flexShrink: 0,
       }}
     >
       {Icon && <Icon size={14} />} {children}
@@ -230,7 +267,7 @@ function WeekMetaModal({ week, canDelete, onPatch, onDuplicate, onCopyToRest, on
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
             <Pill icon={Copy} onClick={onDuplicate}>Duplicar semana</Pill>
             <Pill icon={Copy} onClick={onCopyToRest}>Copiar esta semana a las demás</Pill>
-            <Pill icon={Trash2} onClick={onDelete} disabled={!canDelete}>Eliminar semana</Pill>
+            <Pill icon={Trash2} danger onClick={onDelete} disabled={!canDelete}>Eliminar semana</Pill>
           </div>
         </div>
       </div>
@@ -319,9 +356,9 @@ function ExerciseCard({ ex, repertoire, onPatch, onRemove, onMove, canLeft, canR
           </div>
         )}
         <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 6 }}>
-          <IconBtn icon={ChevronLeft} onClick={() => onMove(-1)} disabled={!canLeft} title="Mover a la izquierda" />
-          <IconBtn icon={ChevronRight} onClick={() => onMove(1)} disabled={!canRight} title="Mover a la derecha" />
-          <IconBtn icon={Trash2} danger onClick={onRemove} title="Quitar del set" />
+          <IconBtn sobreFoto icon={ChevronLeft} onClick={() => onMove(-1)} disabled={!canLeft} title="Mover a la izquierda" />
+          <IconBtn sobreFoto icon={ChevronRight} onClick={() => onMove(1)} disabled={!canRight} title="Mover a la derecha" />
+          <IconBtn sobreFoto icon={Trash2} danger onClick={onRemove} title="Quitar del set" />
         </div>
       </div>
       <div style={{ padding: 12 }}>
@@ -360,10 +397,77 @@ function ExerciseCard({ ex, repertoire, onPatch, onRemove, onMove, canLeft, canR
 }
 
 /* ------------------------------------------------------------------ */
+/* Ejercicio como FILA de tabla (solo compu)                            */
+/*                                                                      */
+/* La tarjeta y la fila muestran lo mismo. Cambia como se lee:          */
+/* la tarjeta apila los campos con su etiqueta encima, y en el telefono */
+/* eso esta bien porque solo cabe una a la vez. En la compu, apilar     */
+/* obliga a rastrear cada tarjeta para comparar las reps de un set.     */
+/* En la tabla los encabezados salen una sola vez y cada campo queda    */
+/* alineado con el de arriba: se compara de un vistazo, en columna.     */
+/* ------------------------------------------------------------------ */
+
+const celda = { padding: '7px 8px', borderBottom: `1px solid ${T.border}`, verticalAlign: 'middle' };
+const encabezado = {
+  textAlign: 'left', padding: '8px', fontSize: 10.5, fontWeight: 800, color: T.text3,
+  textTransform: 'uppercase', letterSpacing: 0.6, borderBottom: `1px solid ${T.border}`, whiteSpace: 'nowrap',
+};
+const inputFila = {
+  ...inputStyle, padding: '7px 9px', fontSize: 13, borderRadius: 9, background: T.bg,
+};
+
+function ExerciseRow({ ex, repertoire, onPatch, onRemove, onMove, canUp, canDown }) {
+  const rep = ex.exercise_id ? repertoire.find((r) => r.id === ex.exercise_id) : null;
+  return (
+    <tr>
+      <td style={celda}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 9, flexShrink: 0, overflow: 'hidden', background: '#0E1015', display: 'grid', placeItems: 'center' }}>
+            {rep?.cover_image_url
+              ? <img src={rep.cover_image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+              : <Dumbbell size={16} color="#3A3F4C" />}
+          </div>
+          {ex.exercise_id ? (
+            <span style={{ fontWeight: 700, fontSize: 13.5, color: T.text, minWidth: 0 }}>{ex.name}</span>
+          ) : (
+            <input value={ex.name} onChange={(e) => onPatch({ name: e.target.value })}
+              placeholder="Nombre del ejercicio…" style={{ ...inputFila, fontWeight: 700 }} />
+          )}
+        </div>
+      </td>
+      <td style={{ ...celda, width: 92 }}>
+        <input value={ex.reps || ''} onChange={(e) => onPatch({ reps: e.target.value })}
+          placeholder="10" style={inputFila} />
+      </td>
+      <td style={{ ...celda, width: 118 }}>
+        <input value={ex.intensity || ''} onChange={(e) => onPatch({ intensity: e.target.value })}
+          placeholder="70% / RPE 8" style={inputFila} />
+      </td>
+      <td style={celda}>
+        <input value={ex.notes || ''} onChange={(e) => onPatch({ notes: e.target.value })}
+          placeholder="Ej. 8 cada pierna…" style={inputFila} />
+      </td>
+      <td style={celda}>
+        <input value={ex.cue || ''} onChange={(e) => onPatch({ cue: e.target.value })}
+          placeholder="Opcional…" style={{ ...inputFila, color: T.text2 }} />
+      </td>
+      <td style={{ ...celda, width: 96 }}>
+        <div style={{ display: 'flex', gap: 5, justifyContent: 'flex-end' }}>
+          <IconBtn icon={ChevronUp} onClick={() => onMove(-1)} disabled={!canUp} title="Subir" />
+          <IconBtn icon={ChevronDown} onClick={() => onMove(1)} disabled={!canDown} title="Bajar" />
+          <IconBtn icon={Trash2} danger onClick={onRemove} title="Quitar del set" />
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Editor de sesión (un día) por sets                                   */
 /* ------------------------------------------------------------------ */
 
 function SessionEditor({ day, repertoire, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear }) {
+  const esCompu = useIsDesktop();
   const [pickerCtx, setPickerCtx] = useState(null);
   const blocks = useMemo(() => parseBlocks(day.exercises), [day.exercises]);
 
@@ -443,31 +547,61 @@ function SessionEditor({ day, repertoire, onPatch, onDelete, onCopy, onSaveToCat
                   if (window.confirm(`¿Eliminar el Set ${setIdx} completo?`)) writeBlocks((bs) => bs.filter((_, k) => k !== bi));
                 }} />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 10 }}>
-                {b.members.map((m, mi) => (
-                  <ExerciseCard
-                    key={mi}
-                    ex={m}
-                    repertoire={repertoire}
-                    canLeft={mi > 0}
-                    canRight={mi < b.members.length - 1}
-                    onPatch={(patch) => writeBlocks((bs) => bs.map((x, k) => (k === bi
-                      ? { ...x, members: x.members.map((mm, kk) => (kk === mi ? { ...mm, ...patch } : mm)) }
-                      : x)))}
-                    onMove={(dir) => writeBlocks((bs) => bs.map((x, k) => {
-                      if (k !== bi) return x;
-                      const j = mi + dir;
-                      if (j < 0 || j >= x.members.length) return x;
-                      const members = [...x.members];
-                      [members[mi], members[j]] = [members[j], members[mi]];
-                      return { ...x, members };
-                    }))}
-                    onRemove={() => writeBlocks((bs) => bs
-                      .map((x, k) => (k === bi ? { ...x, members: x.members.filter((_, kk) => kk !== mi) } : x))
-                      .filter((x) => x.type !== 'set' || x.members.length > 0))}
-                  />
-                ))}
-              </div>
+              {(() => {
+                // Un solo juego de handlers. La tarjeta y la fila reciben
+                // exactamente lo mismo; lo unico que cambia es como se dibuja.
+                const props = (m, mi) => ({
+                  ex: m,
+                  repertoire,
+                  onPatch: (patch) => writeBlocks((bs) => bs.map((x, k) => (k === bi
+                    ? { ...x, members: x.members.map((mm, kk) => (kk === mi ? { ...mm, ...patch } : mm)) }
+                    : x))),
+                  onMove: (dir) => writeBlocks((bs) => bs.map((x, k) => {
+                    if (k !== bi) return x;
+                    const j = mi + dir;
+                    if (j < 0 || j >= x.members.length) return x;
+                    const members = [...x.members];
+                    [members[mi], members[j]] = [members[j], members[mi]];
+                    return { ...x, members };
+                  })),
+                  onRemove: () => writeBlocks((bs) => bs
+                    .map((x, k) => (k === bi ? { ...x, members: x.members.filter((_, kk) => kk !== mi) } : x))
+                    .filter((x) => x.type !== 'set' || x.members.length > 0)),
+                });
+
+                if (!esCompu) {
+                  return (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 10 }}>
+                      {b.members.map((m, mi) => (
+                        <ExerciseCard key={mi} {...props(m, mi)}
+                          canLeft={mi > 0} canRight={mi < b.members.length - 1} />
+                      ))}
+                    </div>
+                  );
+                }
+                return (
+                  <div style={{ border: `1px solid ${T.border}`, borderRadius: 12, background: T.bg2, overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: FONT, minWidth: 720 }}>
+                      <thead>
+                        <tr style={{ background: T.bg }}>
+                          <th style={encabezado}>Ejercicio</th>
+                          <th style={encabezado}>Reps</th>
+                          <th style={encabezado}>Carga / Int.</th>
+                          <th style={encabezado}>Descripción</th>
+                          <th style={encabezado}>Cue técnico</th>
+                          <th style={{ ...encabezado, textAlign: 'right' }}>Orden</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {b.members.map((m, mi) => (
+                          <ExerciseRow key={mi} {...props(m, mi)}
+                            canUp={mi > 0} canDown={mi < b.members.length - 1} />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
             </div>
           );
         })}
@@ -529,7 +663,7 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
         {!dual && <Pill icon={Save} onClick={onSaveToCatalog}>Guardar en catálogo</Pill>}
         <Pill icon={Copy} onClick={onCopy}>Copiar</Pill>
         {!dual && <Pill icon={Eraser} onClick={onClear}>Limpiar</Pill>}
-        <Pill icon={Trash2} onClick={onDelete}>Eliminar sesión</Pill>
+        <Pill icon={Trash2} danger onClick={onDelete}>Eliminar sesión</Pill>
       </div>
     </>
   );
@@ -540,6 +674,7 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
 /* ------------------------------------------------------------------ */
 
 export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
+  const esCompu = useIsDesktop();
   const { user, profile } = useAuth();
   const isMaster = !!profile?.is_owner;
   const isNew = !planRow;
@@ -747,12 +882,12 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
                 <button key={d} type="button"
                   onClick={() => setWizDays((prev) => (active ? prev.filter((x) => x !== d) : [...prev, d]))}
                   style={{
-                    width: 52, padding: '11px 0', borderRadius: 11, cursor: 'pointer',
+                    minWidth: 52, padding: esCompu ? '11px 15px' : '11px 12px', borderRadius: 11, cursor: 'pointer',
                     border: `1.5px solid ${active ? T.accent : T.border}`,
                     background: active ? T.accentBg : T.bg2, color: active ? T.accent : T.text2,
                     fontFamily: FONT, fontSize: 13, fontWeight: 800,
                   }}>
-                  {d}
+                  {esCompu ? NOMBRE_DIA[d] : d}
                 </button>
               );
             })}
@@ -921,8 +1056,15 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
           </button>
         )}
 
-        {/* Tabs de días */}
-        <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 16 }}>
+        {/* Tabs de días: pestañas planas con subrayado, no pastillas.
+            El punto azul marca los días que YA tienen sesión. Las pastillas
+            de antes daban ese dato pintando el fondo entero; aquí se dice lo
+            mismo con menos tinta, para que el subrayado sea lo unico que
+            compita por la atencion. */}
+        <div style={{
+          display: 'flex', gap: 2, marginBottom: 18, overflowX: 'auto',
+          borderBottom: `1px solid ${T.border}`,
+        }}>
           {WEEKDAYS.map((wd) => {
             const active = activeWeekday === wd;
             const has = sessionCount(wd) > 0;
@@ -930,14 +1072,21 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
               <button
                 key={wd} type="button" onClick={() => setActiveWeekday(wd)}
                 style={{
-                  padding: '10px 18px', borderRadius: 22, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800,
-                  border: active ? 'none' : `1.5px solid ${has ? T.accent + '55' : T.border}`,
-                  background: active ? `linear-gradient(135deg, ${T.accent}, ${T.accentDk})` : has ? T.accentBg : T.bg2,
-                  color: active ? '#fff' : has ? T.accent : T.text2,
-                  boxShadow: active ? KP.shBtn : 'none',
+                  padding: esCompu ? '11px 17px 12px' : '11px 12px 12px',
+                  border: 'none', background: 'transparent', cursor: 'pointer',
+                  fontFamily: FONT, fontSize: 14.5, fontWeight: active ? 800 : 600,
+                  color: active ? T.accent : T.text2, whiteSpace: 'nowrap', flexShrink: 0,
+                  borderBottom: `2.5px solid ${active ? T.accent : 'transparent'}`,
+                  marginBottom: -1, transition: 'color .12s, border-color .12s',
                 }}
               >
-                {wd}
+                {esCompu ? NOMBRE_DIA[wd] : wd}
+                {has && (
+                  <span style={{
+                    display: 'inline-block', width: 5, height: 5, borderRadius: '50%',
+                    background: active ? T.accent : T.accent + '99', marginLeft: 6, verticalAlign: 'middle',
+                  }} />
+                )}
               </button>
             );
           })}
@@ -1128,7 +1277,14 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
         />
       )}
 
-      <style>{`.spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <style>{`
+        .spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+        /* !important porque los estilos van en linea y esos le ganan al CSS.
+           Solo se toca el fondo: cambiar tambien el color le quitaria el rojo
+           a los botones de borrar justo cuando el mouse esta encima. */
+        .kp-pill,.kp-ico{transition:background .12s}
+        .kp-pill:hover:not(:disabled),.kp-ico:hover:not(:disabled){background:${T.bg3} !important}
+      `}</style>
     </div>
   );
 }
