@@ -121,16 +121,21 @@ function Input({ label, ...props }) {
 function MediaUpload({ label, icon: Icon, value, onChange, accept, kind, hint }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [avance, setAvance] = useState(0);
+  const [archivo, setArchivo] = useState(null); // { nombre, mb }
   const inputRef = useRef(null);
 
   async function onPick(e) {
     const file = e.target.files?.[0];
     if (!file) return;
     setErr('');
+    setAvance(0);
+    setArchivo({ nombre: file.name, mb: Math.round((file.size / 1048576) * 10) / 10 });
     setBusy(true);
     try {
-      const url = await uploadExerciseMedia(file, kind);
+      const url = await uploadExerciseMedia(file, kind, setAvance);
       onChange(url);
+      setArchivo(null);
     } catch (e2) {
       setErr(e2.message || 'Error al subir');
     } finally {
@@ -154,7 +159,7 @@ function MediaUpload({ label, icon: Icon, value, onChange, accept, kind, hint })
           }}
         >
           {busy ? <Loader2 size={15} className="spin" /> : <Upload size={15} />}
-          Subir archivo
+          {busy ? 'Subiendo…' : 'Subir archivo'}
         </button>
         {value && (
           <button
@@ -172,7 +177,34 @@ function MediaUpload({ label, icon: Icon, value, onChange, accept, kind, hint })
       </div>
       <input ref={inputRef} type="file" accept={accept} onChange={onPick} style={{ display: 'none' }} />
       {hint && <div style={{ fontSize: 11.5, color: T.text3 }}>{hint}</div>}
-      {err && <div style={{ fontSize: 12, color: T.danger, fontWeight: 600 }}>{err}</div>}
+
+      {/* Mientras sube: nombre, peso y avance real. Antes solo giraba una
+          ruedita de 15px dentro del boton, y un video de 80 MB por datos
+          moviles se veia igual que si la app no hubiera hecho nada. */}
+      {busy && archivo && (
+        <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 11, padding: '10px 12px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 12.5, fontWeight: 700, color: T.text }}>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{archivo.nombre}</span>
+            <span style={{ flexShrink: 0, color: T.accent }}>{avance}%</span>
+          </div>
+          <div style={{ height: 6, borderRadius: 999, background: T.bg3, marginTop: 8, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${avance}%`, background: T.accent, borderRadius: 999, transition: 'width .2s' }} />
+          </div>
+          <div style={{ fontSize: 11.5, color: T.text3, marginTop: 6, fontWeight: 600 }}>
+            {archivo.mb} MB · no cierres esta pantalla
+          </div>
+        </div>
+      )}
+
+      {/* El error va en caja roja, no en una linea de 12px que se pierde. */}
+      {err && (
+        <div style={{
+          background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 11,
+          padding: '10px 12px', fontSize: 12.5, fontWeight: 600, lineHeight: 1.45,
+        }}>
+          {err}
+        </div>
+      )}
       {value && (
         <div
           style={{

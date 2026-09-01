@@ -143,15 +143,66 @@ export async function deleteExercise(id) {
 }
 
 /* ------------------------------- Media -------------------------------- */
-// Uploads a File to the public exercise-media bucket and returns its public URL.
-export async function uploadExerciseMedia(file, kind = 'media') {
+/** Tope real del bucket `exercise-media` en Supabase. Si se cambia alla, hay
+ *  que cambiarlo aqui: sirve para avisar ANTES de subir en vez de dejar que la
+ *  persona espere minutos y truene al final. */
+export const LIMITE_MEDIA_MB = 100;
+
+const mb = (bytes) => Math.round((bytes / 1048576) * 10) / 10;
+
+/**
+ * Sube un archivo al repertorio y devuelve su URL publica.
+ *
+ * Usa XMLHttpRequest en vez del cliente de Supabase por una sola razon: el
+ * cliente no informa el avance de la subida, y sin avance un video de 80 MB
+ * por datos moviles se ve identico a que la app no hizo nada. Esa fue
+ * exactamente la queja: "selecciono el video, le doy a la palomita y no
+ * sucede nada". Con XHR se puede escuchar `upload.onprogress`.
+ *
+ * `onAvance` recibe un numero de 0 a 100.
+ */
+export async function uploadExerciseMedia(file, kind = 'media', onAvance) {
+  // 1. Revisar el peso ANTES de gastar datos. Los videos de iPhone son enormes:
+  //    en 4K, medio minuto ya pasa de 100 MB.
+  if (file.size > LIMITE_MEDIA_MB * 1048576) {
+    throw new Error(
+      `Este archivo pesa ${mb(file.size)} MB y el máximo son ${LIMITE_MEDIA_MB} MB. ` +
+      'Graba un clip más corto, o baja la calidad en Ajustes → Cámara → Grabar video.',
+    );
+  }
+
+  const { data: sesion } = await supabase.auth.getSession();
+  const token = sesion?.session?.access_token;
+  if (!token) throw new Error('Tu sesión expiró. Vuelve a entrar e inténtalo otra vez.');
+
   const safeExt = (file.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '');
   const id = (crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const path = `${kind}/${id}.${safeExt}`;
-  const { error } = await supabase.storage
-    .from(MEDIA_BUCKET)
-    .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type || undefined });
-  if (error) throw error;
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/${MEDIA_BUCKET}/${path}`;
+
+  await new Promise((listo, falla) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.setRequestHeader('x-upsert', 'false');
+    if (file.type) xhr.setRequestHeader('Content-Type', file.type);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onAvance) onAvance(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) return listo();
+      // El servidor contesta JSON con el motivo; si no, se usa el codigo.
+      let motivo = `Error ${xhr.status}`;
+      try { motivo = JSON.parse(xhr.responseText)?.message || motivo; } catch { /* respuesta no-JSON */ }
+      if (xhr.status === 413) motivo = `El archivo pesa demasiado (máximo ${LIMITE_MEDIA_MB} MB).`;
+      falla(new Error(motivo));
+    };
+    xhr.onerror = () => falla(new Error('Se cortó la conexión durante la subida. Inténtalo de nuevo.'));
+    xhr.ontimeout = () => falla(new Error('La subida tardó demasiado. Prueba con wifi o con un clip más corto.'));
+    xhr.send(file);
+  });
+
   const { data } = supabase.storage.from(MEDIA_BUCKET).getPublicUrl(path);
   return data.publicUrl;
 }
