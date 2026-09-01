@@ -185,6 +185,11 @@ export async function uploadExerciseMedia(file, kind = 'media', onAvance) {
     xhr.open('POST', url, true);
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     xhr.setRequestHeader('x-upsert', 'false');
+    // Sin esto el archivo se sirve como "no-cache" y el telefono del atleta lo
+    // vuelve a pedir cada vez que abre el ejercicio. Una hora de cache basta:
+    // el nombre del archivo lleva un id unico, asi que un video nuevo nunca
+    // reusa la copia guardada de otro.
+    xhr.setRequestHeader('Cache-Control', 'max-age=3600');
     if (file.type) xhr.setRequestHeader('Content-Type', file.type);
 
     xhr.upload.onprogress = (e) => {
