@@ -86,7 +86,7 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Buscar por nombre o equipo…"
-              style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 14.5, fontWeight: 500, color: T.text, padding: '12px 0' }}
+              style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 16, fontWeight: 500, color: T.text, padding: '12px 0' }}
             />
             {query && (
               <button type="button" onClick={() => setQuery('')} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.text3, padding: 2 }}>

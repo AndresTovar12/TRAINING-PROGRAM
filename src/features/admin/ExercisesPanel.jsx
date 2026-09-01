@@ -604,7 +604,7 @@ export default function ExercisesPanel() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar ejercicio…"
-            style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 14.5, fontWeight: 500, color: T.text, padding: '12px 0' }}
+            style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 16, fontWeight: 500, color: T.text, padding: '12px 0' }}
           />
         </div>
         <button

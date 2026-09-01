@@ -527,7 +527,7 @@ export default function AthletesPanel() {
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPagina(1); }}
             placeholder="Buscar atleta…"
-            style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 14.5, fontWeight: 500, color: T.text, padding: '12px 0' }}
+            style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 16, fontWeight: 500, color: T.text, padding: '12px 0' }}
           />
         </div>
 
