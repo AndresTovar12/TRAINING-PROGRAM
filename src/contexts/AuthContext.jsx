@@ -101,7 +101,14 @@ export function AuthProvider({ children }) {
 
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      return { error: { message: body?.error || 'Error al registrar' } };
+      // Red de seguridad: si el servidor manda un error vacio o un objeto, no
+      // se le enseña "{}" a la persona (paso de verdad). Se prefiere un texto
+      // que al menos diga que hacer.
+      const crudo = body?.error;
+      const texto = typeof crudo === 'string' && crudo.trim() && crudo.trim() !== '{}'
+        ? crudo
+        : `No se pudo crear la cuenta (error ${res.status}). Inténtalo de nuevo, y si sigue igual avísale al administrador.`;
+      return { error: { message: texto } };
     }
 
     const loginEmail = body?.email || email;

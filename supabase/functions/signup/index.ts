@@ -33,6 +33,29 @@ function json(body: unknown, status: number, origin: string | null) {
   })
 }
 
+/**
+ * Convierte cualquier error en texto legible.
+ *
+ * Existe por un bug real: al registrarse salia literalmente "{}" en pantalla.
+ * Causa: JSON.stringify() sobre un Error de JavaScript SIEMPRE devuelve "{}",
+ * porque las propiedades de Error no son enumerables. El mensaje verdadero se
+ * perdia y la persona no tenia forma de saber que hacer.
+ */
+function textoDeError(e: unknown): string {
+  if (!e) return 'Error desconocido'
+  if (typeof e === 'string') return e
+  const any = e as Record<string, unknown>
+  for (const campo of ['message', 'msg', 'error_description', 'error', 'details', 'hint']) {
+    const v = any[campo]
+    if (typeof v === 'string' && v.trim() && v.trim() !== '{}') return v
+  }
+  try {
+    const s = JSON.stringify(e)
+    if (s && s !== '{}') return s
+  } catch { /* no serializable */ }
+  return String(e)
+}
+
 const USERNAME_RE = /^[a-zA-Z0-9_.]{3,30}$/
 
 Deno.serve(async (req) => {
@@ -78,7 +101,14 @@ Deno.serve(async (req) => {
   if (!email) email = `${username.toLowerCase()}@traininglab.app`
 
   const isCoach = accountType === 'coach'
-  const role = isCoach ? 'admin' : 'athlete'
+
+  // OJO: el rol que guarda la base es 'admin' o 'user'. NO 'athlete'.
+  // La tabla profiles tiene CHECK (role IN ('admin','user')), asi que mandar
+  // 'athlete' hacia fallar TODO registro de atleta con un error 500 de
+  // Postgres que ademas llegaba en blanco al usuario. "athlete" es como se
+  // llama el tipo de cuenta en la interfaz; 'user' es como se llama el rol en
+  // la base. Son dos vocabularios distintos y hay que traducir aqui.
+  const role = isCoach ? 'admin' : 'user'
 
   const admin = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -119,9 +149,18 @@ Deno.serve(async (req) => {
   })
 
   if (error) {
-    const msg = /already been registered|exists/i.test(error.message)
-      ? 'Ese correo ya está registrado'
-      : error.message
+    const crudo = textoDeError(error)
+    // Queda en los registros del servidor para poder diagnosticar despues.
+    console.error('createUser falló:', crudo, JSON.stringify({ username, email, role }))
+
+    let msg = crudo
+    if (/already been registered|exists|duplicate/i.test(crudo)) {
+      msg = 'Ese correo ya está registrado. Intenta entrar, o usa otro correo.'
+    } else if (/profiles_role_check|check constraint/i.test(crudo)) {
+      msg = 'Error de configuración de la cuenta. Avísale al administrador.'
+    } else if (/unexpected_failure|500/i.test(crudo)) {
+      msg = `No se pudo crear la cuenta (${crudo}). Inténtalo de nuevo en un minuto.`
+    }
     return json({ error: msg }, 400, origin)
   }
 
@@ -130,10 +169,14 @@ Deno.serve(async (req) => {
   // El trigger handle_new_user ya creó el profile con el role del metadata.
   // Reafirmamos role + coach_id (y is_owner=false; el master se marca a mano en DB).
   if (userId) {
-    await admin
+    const { error: errPerfil } = await admin
       .from('profiles')
       .update({ role, coach_id: coachId, is_owner: false })
       .eq('id', userId)
+    if (errPerfil) {
+      console.error('update profiles falló:', textoDeError(errPerfil))
+      return json({ error: `Se creó la cuenta pero falló su perfil: ${textoDeError(errPerfil)}` }, 400, origin)
+    }
   }
 
   return json({ ok: true, user_id: userId, email, role, coach_id: coachId }, 200, origin)
