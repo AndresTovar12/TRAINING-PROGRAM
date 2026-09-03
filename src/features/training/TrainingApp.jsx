@@ -563,7 +563,7 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
   const flatSessionData = { exercises: sessionData.exercises ? Object.fromEntries(Object.entries(sessionData.exercises).filter(([k]) => !k.includes('-')).map(([k, v]) => [parseInt(k), v])) : {} };
 
   return (
-    <div style={{ padding: '14px 18px 110px', background: LT.bg, minHeight: '100vh', fontFamily: FONT }}>
+    <div style={{ padding: '14px 18px 110px', background: LT.bg, minHeight: '100svh', fontFamily: FONT }}>
       <button onClick={onBack} style={{
         background: 'transparent', border: 'none', color: LT.text2, cursor: 'pointer',
         display: 'flex', alignItems: 'center', gap: 4, marginBottom: 14, fontFamily: FONT, fontSize: 13, padding: 0,
@@ -1358,7 +1358,7 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, 
   const sessionTitle = next ? (next.day.name || (next.day.blocks ? next.day.blocks.map(b => b.tag.replace(/^Sesi[óo]n \d+ \([AP]M\): /, '')).join(' + ') : next.day.day)) : '';
 
   return (
-    <div style={{ paddingBottom: 100, background: LT.bg, minHeight: '100vh', fontFamily: FONT }}>
+    <div style={{ paddingBottom: 100, background: LT.bg, minHeight: '100svh', fontFamily: FONT }}>
       {/* Header de perfil — paddingRight reserva espacio para el botón de cuenta fijo */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '24px 68px 14px 18px' }}>
         <div style={{
@@ -2077,7 +2077,7 @@ export default function TrainingApp() {
 
   return (
     <div style={{
-      minHeight: '100vh', background: T.bg, color: T.text,
+      minHeight: '100svh', background: T.bg, color: T.text,
       fontFamily: FONT,
       WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
     }}>
