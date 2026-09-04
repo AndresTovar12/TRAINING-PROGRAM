@@ -143,10 +143,22 @@ export async function deleteExercise(id) {
 }
 
 /* ------------------------------- Media -------------------------------- */
-/** Tope real del bucket `exercise-media` en Supabase. Si se cambia alla, hay
- *  que cambiarlo aqui: sirve para avisar ANTES de subir en vez de dejar que la
- *  persona espere minutos y truene al final. */
-export const LIMITE_MEDIA_MB = 100;
+/**
+ * Tope real de subida. Verificado el 3 sep 2026 contra el proyecto:
+ *
+ * Manda el limite GLOBAL del proyecto (Settings -> Storage -> Global file size
+ * limit), no el del bucket. En el plan gratis de Supabase ese global esta
+ * FIJO en 50 MB y no se puede cambiar; el bucket puede decir 500 MB y da igual,
+ * el servidor responde 413 de todas formas.
+ *
+ * Se descubrio de la peor manera: una prueba de 120 MB subio completa —75
+ * segundos— y el servidor la rechazo al final. Por eso este numero tiene que
+ * coincidir con el limite REAL, para avisar antes y no despues.
+ *
+ * Si algun dia se pasa al plan Pro, el limite sube a 500 GB configurable y hay
+ * que cambiar este numero Y el del bucket.
+ */
+export const LIMITE_MEDIA_MB = 50;
 
 const mb = (bytes) => Math.round((bytes / 1048576) * 10) / 10;
 
