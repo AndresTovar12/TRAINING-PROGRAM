@@ -31,3 +31,6 @@ dist-ssr
 # Local tooling / scratch
 .claude/
 .trash/
+
+# Datos temporales de configuración de R2 (borrar al terminar)
+DATOS-R2.txt

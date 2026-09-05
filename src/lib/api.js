@@ -144,42 +144,43 @@ export async function deleteExercise(id) {
 
 /* ------------------------------- Media -------------------------------- */
 /**
- * Tope real de subida. Verificado el 3 sep 2026 contra el proyecto:
+ * Tope de subida. Con Cloudflare R2 no hay un limite practico: un solo archivo
+ * puede llegar a 5 GB. Se deja un tope alto solo para atajar equivocaciones
+ * (arrastrar una carpeta entera, un archivo corrupto de 4 GB).
  *
- * Manda el limite GLOBAL del proyecto (Settings -> Storage -> Global file size
- * limit), no el del bucket. En el plan gratis de Supabase ese global esta
- * FIJO en 50 MB y no se puede cambiar; el bucket puede decir 500 MB y da igual,
- * el servidor responde 413 de todas formas.
- *
- * Se descubrio de la peor manera: una prueba de 120 MB subio completa —75
- * segundos— y el servidor la rechazo al final. Por eso este numero tiene que
- * coincidir con el limite REAL, para avisar antes y no despues.
- *
- * Si algun dia se pasa al plan Pro, el limite sube a 500 GB configurable y hay
- * que cambiar este numero Y el del bucket.
+ * Historia, para que no se repita: antes esto valia 100, luego 50, y ninguno
+ * era correcto. El limite real lo imponia el plan gratis de Supabase Storage
+ * —50 MB fijos, imposibles de subir sin pagar— y se descubrio de la peor
+ * forma: un archivo de 120 MB se transfirio COMPLETO durante 75 segundos y el
+ * servidor lo rechazo al final. Por eso se migro a R2.
  */
-export const LIMITE_MEDIA_MB = 50;
+export const LIMITE_MEDIA_MB = 2048;
 
 const mb = (bytes) => Math.round((bytes / 1048576) * 10) / 10;
 
 /**
  * Sube un archivo al repertorio y devuelve su URL publica.
  *
- * Usa XMLHttpRequest en vez del cliente de Supabase por una sola razon: el
- * cliente no informa el avance de la subida, y sin avance un video de 80 MB
- * por datos moviles se ve identico a que la app no hizo nada. Esa fue
- * exactamente la queja: "selecciono el video, le doy a la palomita y no
- * sucede nada". Con XHR se puede escuchar `upload.onprogress`.
+ * COMO FUNCIONA, en tres pasos:
+ *   1. Se le pide permiso al servidor (funcion `r2-upload`). El servidor
+ *      verifica que quien pide sea coach o master, y devuelve una direccion
+ *      firmada que sirve unos minutos.
+ *   2. El navegador manda el archivo DIRECTO a Cloudflare. No pasa por
+ *      Supabase, asi que ningun limite suyo aplica.
+ *   3. Se devuelve la direccion publica, que es la que se guarda en la base.
+ *
+ * Se usa XMLHttpRequest y no fetch por una sola razon: fetch no informa el
+ * avance de subida, y sin avance un video de 80 MB por datos moviles se ve
+ * identico a que la app no hizo nada. Esa fue la queja original: "selecciono
+ * el video, le doy a la palomita y no sucede nada".
  *
  * `onAvance` recibe un numero de 0 a 100.
  */
 export async function uploadExerciseMedia(file, kind = 'media', onAvance) {
-  // 1. Revisar el peso ANTES de gastar datos. Los videos de iPhone son enormes:
-  //    en 4K, medio minuto ya pasa de 100 MB.
   if (file.size > LIMITE_MEDIA_MB * 1048576) {
     throw new Error(
-      `Este archivo pesa ${mb(file.size)} MB y el máximo son ${LIMITE_MEDIA_MB} MB. ` +
-      'Graba un clip más corto, o baja la calidad en Ajustes → Cámara → Grabar video.',
+      `Este archivo pesa ${mb(file.size)} MB, demasiado incluso para un video largo. ` +
+      'Revisa que sea el archivo correcto.',
     );
   }
 
@@ -187,41 +188,43 @@ export async function uploadExerciseMedia(file, kind = 'media', onAvance) {
   const token = sesion?.session?.access_token;
   if (!token) throw new Error('Tu sesión expiró. Vuelve a entrar e inténtalo otra vez.');
 
-  const safeExt = (file.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const id = (crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  const path = `${kind}/${id}.${safeExt}`;
-  const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/${MEDIA_BUCKET}/${path}`;
+  const extension = (file.name.split('.').pop() || 'bin');
+  const carpeta = kind === 'covers' || kind === 'videos' ? kind : 'media';
 
+  // Paso 1: pedir permiso
+  const permiso = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/r2-upload`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ tipo: file.type, extension, carpeta }),
+  }).then((r) => r.json().then((b) => ({ ok: r.ok, b })))
+    .catch(() => ({ ok: false, b: { error: 'No se pudo contactar al servidor.' } }));
+
+  if (!permiso.ok) throw new Error(permiso.b?.error || 'No se pudo autorizar la subida.');
+
+  // Paso 2: mandar el archivo directo a Cloudflare
   await new Promise((listo, falla) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', url, true);
-    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-    xhr.setRequestHeader('x-upsert', 'false');
-    // Sin esto el archivo se sirve como "no-cache" y el telefono del atleta lo
-    // vuelve a pedir cada vez que abre el ejercicio. Una hora de cache basta:
-    // el nombre del archivo lleva un id unico, asi que un video nuevo nunca
-    // reusa la copia guardada de otro.
-    xhr.setRequestHeader('Cache-Control', 'max-age=3600');
-    if (file.type) xhr.setRequestHeader('Content-Type', file.type);
+    xhr.open('PUT', permiso.b.subir_a, true);
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
 
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onAvance) onAvance(Math.round((e.loaded / e.total) * 100));
     };
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) return listo();
-      // El servidor contesta JSON con el motivo; si no, se usa el codigo.
-      let motivo = `Error ${xhr.status}`;
-      try { motivo = JSON.parse(xhr.responseText)?.message || motivo; } catch { /* respuesta no-JSON */ }
-      if (xhr.status === 413) motivo = `El archivo pesa demasiado (máximo ${LIMITE_MEDIA_MB} MB).`;
-      falla(new Error(motivo));
+      falla(new Error(`El almacenamiento rechazó el archivo (error ${xhr.status}).`));
     };
     xhr.onerror = () => falla(new Error('Se cortó la conexión durante la subida. Inténtalo de nuevo.'));
-    xhr.ontimeout = () => falla(new Error('La subida tardó demasiado. Prueba con wifi o con un clip más corto.'));
+    xhr.ontimeout = () => falla(new Error('La subida tardó demasiado. Prueba con wifi.'));
     xhr.send(file);
   });
 
-  const { data } = supabase.storage.from(MEDIA_BUCKET).getPublicUrl(path);
-  return data.publicUrl;
+  // Paso 3: la direccion que se guarda en la base
+  return permiso.b.url_publica;
 }
 
 /* ------------------------------ Athletes ------------------------------ */
