@@ -22,7 +22,7 @@ import {
 import { aKilos, desdeKilos, pesoTexto, etiquetaUnidad } from '@/lib/unidades';
 import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
 import { useStorage } from '@/contexts/AppStateContext';
-import ExerciseMediaModal from '@/features/training/ExerciseMediaModal';
+import FichaEjercicio from '@/features/training/FichaEjercicio';
 
 // Nombres completos SOLO para mostrar en compu. Lo que guarda el plan sigue
 // siendo 'Lun', 'Mar'… igual que en el editor del entrenador.
@@ -359,12 +359,11 @@ function Chip({ children, fuerte }) {
   );
 }
 
-const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, oneRMs, sessionsData, phaseColor }) => {
+const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, sessionsData, phaseColor, onAbrirFicha }) => {
   const { phases: PLAN, resolveExercise, medias } = usePlan();
   const { profile } = useAuth();
   const unidad = profile?.unidad_peso || 'kg';
   const u = etiquetaUnidad(unidad);
-  const [mediaOpen, setMediaOpen] = useState(false);
   const [progresoAbierto, setProgresoAbierto] = useState(false);
   const exData = sessionData?.exercises?.[idx] || {};
   const pc = phaseColor || LT.blue;
@@ -375,25 +374,6 @@ const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, oneRMs, sessionsData
   const portada = portadaParaAtleta(repertoire, medias, profile);
   const misVideos = videosParaAtleta(repertoire, medias, profile);
 
-  const recommended = useMemo(() => {
-    if (ex.isNote || !ex.intensity) return null;
-    const m = ex.intensity.match(/(\d+)%/);
-    if (!m) return null;
-    const pct = parseInt(m[1]);
-    const exName = (ex.name || '').toLowerCase();
-    let key = null;
-    if (exName.includes('squat') && exName.includes('front')) key = 'front_squat';
-    else if (exName.includes('squat')) key = 'back_squat';
-    else if (exName.includes('bench') && exName.includes('incline')) key = 'incline_bench';
-    else if (exName.includes('bench')) key = 'bench_press';
-    else if (exName.includes('trap bar')) key = 'trap_bar_dl';
-    else if (exName.includes('deadlift') || exName.includes('rdl') || exName.includes('romanian')) key = 'deadlift';
-    else if (exName.includes('overhead') || (exName.includes('press') && !exName.includes('bench'))) key = 'overhead_press';
-    else if (exName.includes('row')) key = 'row';
-    else if (exName.includes('clean')) key = 'hang_clean';
-    if (!key || !oneRMs[key]) return null;
-    return Math.round(oneRMs[key] * pct / 100 * 2) / 2;
-  }, [ex.intensity, ex.name, ex.isNote, oneRMs]);
 
   const previous = useMemo(() => {
     if (ex.isNote || !ex.name) return null;
@@ -463,7 +443,7 @@ const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, oneRMs, sessionsData
         {/* La miniatura y el nombre abren la ficha con el video en grande. */}
         <button
           type="button"
-          onClick={() => setMediaOpen(true)}
+          onClick={onAbrirFicha}
           style={{
             flex: 1, minWidth: 0, display: 'flex', alignItems: 'flex-start', gap: 11,
             background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
@@ -553,34 +533,6 @@ const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, oneRMs, sessionsData
         />
       )}
 
-      {mediaOpen && (
-        <ExerciseMediaModal
-          exercise={repertoire || { name: ex.name }}
-          planEx={ex}
-          medias={medias}
-          perfil={profile}
-          onClose={() => setMediaOpen(false)}
-          registro={{
-            notas: ex.notes || null,
-            cue: ex.cue || null,
-            descanso: rest,
-            conPeso: showWeightInput,
-            unidad: u,
-            anterior: pesoAnterior,
-            recomendado: recommended !== null ? `${desdeKilos(recommended, unidad)} ${u}` : null,
-            control: (
-              <PasoNumero
-                valor={pesoEscrito}
-                paso={pasoPeso}
-                onCambio={(v) => {
-                  setPesoEscrito(v);
-                  onUpdate(idx, { ...exData, weight: v === '' ? '' : String(aKilos(v, unidad)) });
-                }}
-              />
-            ),
-          }}
-        />
-      )}
     </div>
   );
 };
@@ -607,6 +559,12 @@ const groupIntoSets = (exercises) => {
 };
 
 const SetGroup = ({ group, setNum, phaseColor, sessionData, onUpdate, oneRMs, sessionsData }) => {
+  /* La ficha del ejercicio vive AQUI y no en cada fila, porque para decir
+     "Guardar y siguiente" hay que saber cual es el siguiente — y una fila solo
+     se conoce a si misma. La serie si conoce a todos sus miembros. */
+  const [fichaEn, setFichaEn] = useState(null);
+  const { phases: planCompleto, resolveExercise, medias } = usePlan();
+  const { profile } = useAuth();
   if (group.isNote) {
     return (
       <div style={{
@@ -661,11 +619,36 @@ const SetGroup = ({ group, setNum, phaseColor, sessionData, onUpdate, oneRMs, se
           <div key={idx} style={{ borderTop: i > 0 ? `1px solid ${LT.border}` : 'none' }}>
             <ExerciseRow
               ex={ex} idx={idx} num={i + 1} phaseColor={phaseColor}
-              sessionData={sessionData} onUpdate={onUpdate} oneRMs={oneRMs} sessionsData={sessionsData}
+              sessionData={sessionData} onUpdate={onUpdate} sessionsData={sessionsData}
+              onAbrirFicha={() => setFichaEn(i)}
             />
           </div>
         ))}
       </div>
+
+      {fichaEn !== null && group.exercises[fichaEn] && (() => {
+        const { ex, idx } = group.exercises[fichaEn];
+        const rep = resolveExercise(ex);
+        return (
+          <FichaEjercicio
+            ex={ex}
+            exData={sessionData?.exercises?.[idx] || {}}
+            onUpdate={(d) => onUpdate(idx, d)}
+            sessionsData={sessionsData}
+            oneRMs={oneRMs}
+            plan={planCompleto}
+            repertoire={rep || { name: ex.name }}
+            medias={medias}
+            perfil={profile}
+            serie={setNum}
+            posicion={fichaEn + 1}
+            total={group.exercises.length}
+            onCerrar={() => setFichaEn(null)}
+            onSiguiente={() => setFichaEn(fichaEn + 1)}
+            onOmitir={() => setFichaEn(fichaEn + 1)}
+          />
+        );
+      })()}
     </div>
   );
 };

@@ -20,7 +20,7 @@ import { T, FONT, KP } from '@/lib/theme';
  * no con `#t=inicio,fin` en la dirección porque Safari ignora el final, que
  * es justamente la mitad que importa.
  */
-function VideoRecortado({ video }) {
+export function VideoRecortado({ video, estilo }) {
   const ref = useRef(null);
   const { url, inicio, fin } = video;
   return (
@@ -42,7 +42,7 @@ function VideoRecortado({ video }) {
         // lo de antes es material que el coach decidió no enseñarle.
         if (inicio != null && v.currentTime < inicio - 0.4) v.currentTime = inicio;
       }}
-      style={{ width: '100%', borderRadius: 14, marginTop: 12, background: '#000' }}
+      style={estilo ?? { width: '100%', borderRadius: 14, marginTop: 12, background: '#000' }}
     />
   );
 }
