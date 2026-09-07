@@ -1512,7 +1512,7 @@ const initialsFrom = (name) => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
-const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, cursor, onChangeCursor }) => {
+const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, onVerPrograma, cursor, onChangeCursor }) => {
   const { phases: PLAN, planMeta, kind } = usePlan();
   const { profile } = useAuth();
   const displayName = profile?.full_name || profile?.username || 'Atleta';
@@ -1691,7 +1691,13 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, 
 
           {/* Info del plan */}
           <div style={{ padding: '0 18px 20px' }}>
-            <div onClick={() => onGoTab('plan')}
+            {/* Esta tarjeta es la puerta al programa completo, y tiene que
+                fijar el nivel a mano. Antes solo cambiaba de pestaña, así que
+                te dejaba en la última pantalla que hubieras visto de "Plan" —
+                normalmente tu propio workout, que es justo lo contrario de lo
+                que promete. Con la pestaña "Plan" apuntando ahora a tu semana,
+                esta es la única forma de ver las fases sin pasar por ahí. */}
+            <div onClick={onVerPrograma}
               style={{ background: LT.surface, borderRadius: 22, padding: 18, display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer' }}>
               <div style={{
                 width: 52, height: 52, borderRadius: '50%', background: LT.blueSoft,
@@ -2303,6 +2309,7 @@ export default function TrainingApp() {
       onStartSession={startSession}
       onGoTab={t => setTab(t)}
       onGoPhase={goToPhase}
+      onVerPrograma={verTodasLasFases}
       cursor={cursor}
       onChangeCursor={() => setCursorPickerOpen(true)} />;
   } else if (tab === 'plan') {
