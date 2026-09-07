@@ -17,7 +17,8 @@ import {
   sessionId, calc1RM, today, greeting, isLoadedExercise,
   resolveCursor, defaultCursor, isValidCursor, findPreviousWeight, historialDePeso,
   formatIntensity,
-  sessionForToday, weekOverview, weekdayToday, weekdayLabel
+  sessionForToday, weekOverview, weekdayToday, weekdayLabel,
+  cursorAlDia, isoWeekKey,
 } from '@/lib/training-utils';
 import { aKilos, desdeKilos, pesoTexto, etiquetaUnidad } from '@/lib/unidades';
 import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
@@ -799,29 +800,44 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
         <ChevronLeft size={16} /> {phase.fullName}
       </button>
 
-      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', color: phaseColor, marginBottom: 6 }}>
-        <span style={{ color: LT.text3 }}>{phase.fullName} · </span>
-        {phase.mode === 'microcycle' ? 'Microciclo' : `Semana ${week.num} de ${phase.weeks}`}
+      {/* La cabecera, podada.
+          Medido antes: 363 px hasta el primer ejercicio, contra 185 de Avena.
+          Y casi todo era repetición:
+            · "Hipertrofia" salía DOS veces (el botón de volver y este bloque)
+            · el 72% salía TRES veces (aquí, en la línea del día, y en el chip
+              de cada ejercicio)
+            · la barra "0/5" cuenta días de la SEMANA, en una pantalla que
+              enseña UNA sesión: se leía como el avance de la sesión abierta
+          Lo que sobrevive es lo único que el ejercicio de abajo no dice ya:
+          en qué semana del plan vas. */}
+      <div style={{
+        display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginBottom: 14,
+      }}>
+        <span style={{
+          fontSize: 11, fontWeight: 800, letterSpacing: 0.7, textTransform: 'uppercase',
+          color: phaseColor, flexShrink: 0,
+        }}>
+          {phase.mode === 'microcycle' ? 'Microciclo' : `Semana ${week.num} de ${phase.weeks}`}
+        </span>
+        {week.label && (
+          <span style={{ fontSize: 15, fontWeight: 700, color: LT.text, minWidth: 0 }}>
+            {week.label}
+          </span>
+        )}
+        <span style={{ fontSize: 12.5, color: LT.text3, fontWeight: 600, ...NUM_STYLE }}>
+          {completedCount}/{week.days.length} días
+        </span>
       </div>
 
-      <h1 style={{ fontSize: 27, fontWeight: 800, color: LT.text, margin: 0, marginBottom: 8, lineHeight: 1.05, letterSpacing: -0.6 }}>
-        {week.label}
-      </h1>
-
-      <div style={{ fontSize: 13.5, color: LT.text2, marginBottom: 4, lineHeight: 1.55 }}>{week.load}</div>
-
       {week.emph && (
-        <div style={{ marginTop: 10, borderLeft: `3px solid ${LT.warning}`, paddingLeft: 14, fontSize: 13, color: LT.text, lineHeight: 1.6, fontStyle: 'italic', padding: '8px 14px', background: LT.warning + '0D', borderRadius: '0 8px 8px 0' }}>
+        <div style={{
+          marginBottom: 14, borderLeft: `3px solid ${LT.warning}`, fontSize: 13,
+          color: LT.text, lineHeight: 1.6, padding: '8px 14px',
+          background: LT.warning + '0D', borderRadius: '0 8px 8px 0',
+        }}>
           {week.emph}
         </div>
       )}
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16, marginBottom: 18 }}>
-        <div style={{ flex: 1, height: 5, background: LT.surface2, borderRadius: 3, overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${(completedCount / week.days.length) * 100}%`, background: phaseColor, transition: 'width 0.3s' }} />
-        </div>
-        <span style={{ fontSize: 12, color: LT.text2, fontWeight: 600, ...NUM_STYLE }}>{completedCount}/{week.days.length}</span>
-      </div>
 
       {/* Días de la semana: pestañas planas con subrayado, mismo lenguaje que
           la app del entrenador. Antes cada día era una caja con borde y, al
@@ -2195,11 +2211,31 @@ export default function TrainingApp() {
   const [storedCursor, setCursor] = useStorage('wr:cursor', null);
   const [cursorPickerOpen, setCursorPickerOpen] = useState(false);
 
-  // Cursor efectivo: el guardado si sigue siendo válido para este plan; si no, el primer día
-  const cursor = useMemo(
+  /* Cursor efectivo: el guardado si sigue siendo válido para este plan; si no,
+     el primer día. Y encima, puesto al día con el calendario.
+
+     `cursorAlDia` es lo que arregla el bicho más viejo de la app: el puntero se
+     escribía una vez y no lo movía NADIE. `advanceCursor` existía pero no se
+     llamaba desde ningún sitio, así que Andrés llevaba semanas viendo "Semana 6
+     de 8" y creía que era por no marcar las sesiones. Marcar tampoco lo movía.
+
+     Ahora avanza una semana del plan por cada semana de calendario que pasa. */
+  const cursorBase = useMemo(
     () => (isValidCursor(PLAN, storedCursor) ? storedCursor : defaultCursor(PLAN)),
     [PLAN, storedCursor],
   );
+  const cursor = useMemo(() => cursorAlDia(PLAN, cursorBase), [PLAN, cursorBase]);
+
+  /* Lo que el calendario adelanta se guarda, para que la próxima vez se cuente
+     desde aquí y no desde el sello viejo. Va en un efecto y no en el useMemo
+     porque un useMemo que escribe estado se ejecuta dos veces en desarrollo. */
+  useEffect(() => {
+    if (!cursor) return;
+    const a = storedCursor;
+    const cambio = !a || a.phaseId !== cursor.phaseId || a.weekNum !== cursor.weekNum
+      || a.dayIdx !== cursor.dayIdx || a.fijadoEn !== cursor.fijadoEn;
+    if (cambio) setCursor(cursor);
+  }, [cursor, storedCursor, setCursor]);
 
   const cursorSession = useMemo(() => resolveCursor(PLAN, cursor), [PLAN, cursor]);
   const activeSessionId = cursorSession?.id;
@@ -2217,8 +2253,12 @@ export default function TrainingApp() {
   }, [setSessionsData]);
 
   // Cambiar cursor manualmente desde el selector
+  /* Elegir día a mano vuelve a sellar el puntero con la semana de hoy.
+     Decisión de Andrés: "avanza con el calendario pero si quieres regrésalo,
+     puedes". Sin volver a sellar, el calendario le pisaría la elección al
+     instante y parecería que el selector no hace nada. */
   const handleSelectCursor = useCallback((phaseId, weekNum, dayIdx) => {
-    setCursor({ phaseId, weekNum, dayIdx });
+    setCursor({ phaseId, weekNum, dayIdx, fijadoEn: isoWeekKey() });
     setCursorPickerOpen(false);
   }, [setCursor]);
 

@@ -126,6 +126,77 @@ const isoWeekKey = (date = new Date()) => {
   return `${d.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
 };
 
+/**
+ * El puntero, ya puesto al día con el calendario.
+ *
+ * EL PROBLEMA QUE RESUELVE. El puntero (`wr:cursor`) guarda en qué fase, qué
+ * semana y qué día va el atleta. Se escribía una vez y no lo movía NADIE:
+ * `advanceCursor` existía pero no se llamaba desde ningún sitio. Andrés llevaba
+ * semanas viendo "Semana 6 de 8" y creía que era por no marcar las sesiones
+ * como hechas. No era eso: marcar tampoco lo movía. Nada lo movía.
+ *
+ * CÓMO FUNCIONA AHORA. Junto al puntero se guarda la semana del calendario en
+ * que se fijó (`fijadoEn`, tipo '2026-W37'). Cada semana real que pasa, el plan
+ * avanza una semana. Sin marcar nada y sin fecha de inicio del plan, que no
+ * existe.
+ *
+ * SE PUEDE REGRESAR. Decisión de Andrés: "avanza con el calendario pero si
+ * quieres regrésalo, puedes". Cuando el atleta elige otra semana a mano, se
+ * vuelve a sellar `fijadoEn` con la semana de hoy: se queda donde la puso, y a
+ * partir de ahí vuelve a avanzar sola.
+ *
+ * Si el puntero guardado es viejo y no trae `fijadoEn`, se le pone la semana de
+ * hoy en vez de avanzar de golpe: nadie debe abrir la app y encontrarse diez
+ * semanas más adelante por un dato que faltaba.
+ */
+const cursorAlDia = (plan, cursor, hoy = new Date()) => {
+  if (!isValidCursor(plan, cursor)) return cursor;
+  const semanaHoy = isoWeekKey(hoy);
+  if (!cursor.fijadoEn) return { ...cursor, fijadoEn: semanaHoy };
+  if (cursor.fijadoEn === semanaHoy) return cursor;
+
+  const pasadas = semanasEntre(cursor.fijadoEn, semanaHoy);
+  if (pasadas <= 0) return cursor; // el reloj fue hacia atrás: no se toca
+
+  // Se avanza semana a semana por el plan, saltando de fase cuando toca.
+  let fase = plan.findIndex((f) => f.id === cursor.phaseId);
+  let semana = plan[fase].weekData.findIndex((w) => w.num === cursor.weekNum);
+  for (let i = 0; i < pasadas; i += 1) {
+    semana += 1;
+    if (semana >= plan[fase].weekData.length) {
+      if (fase + 1 >= plan.length) {   // se acabó el plan: se queda al final
+        fase = plan.length - 1;
+        semana = plan[fase].weekData.length - 1;
+        break;
+      }
+      fase += 1;
+      semana = 0;
+    }
+  }
+
+  const destino = plan[fase].weekData[semana];
+  const dia = Math.min(cursor.dayIdx, Math.max(0, (destino.days?.length ?? 1) - 1));
+  return { phaseId: plan[fase].id, weekNum: destino.num, dayIdx: dia, fijadoEn: semanaHoy };
+};
+
+/** Cuántas semanas de calendario van de una clave ISO a otra. */
+const semanasEntre = (desde, hasta) => {
+  const aLunes = (clave) => {
+    const [anio, sem] = String(clave).split('-W').map(Number);
+    if (!anio || !sem) return null;
+    // El 4 de enero siempre cae en la semana ISO 1.
+    const cuatroEne = new Date(Date.UTC(anio, 0, 4));
+    const lunesUno = new Date(cuatroEne);
+    lunesUno.setUTCDate(cuatroEne.getUTCDate() - ((cuatroEne.getUTCDay() || 7) - 1));
+    lunesUno.setUTCDate(lunesUno.getUTCDate() + (sem - 1) * 7);
+    return lunesUno;
+  };
+  const a = aLunes(desde);
+  const b = aLunes(hasta);
+  if (!a || !b) return 0;
+  return Math.round((b - a) / (7 * 86400000));
+};
+
 // Id de sesión para planes 'weekly': incluye la semana del calendario.
 const weeklySessionId = (dayIdx, date = new Date()) => `wk-${isoWeekKey(date)}-d${dayIdx}`;
 
@@ -429,7 +500,7 @@ const getMuscles = (name, focus) => {
 
 export {
   sessionId, calc1RM, today, greeting, isLoadedExercise, isValidCursor,
-  resolveCursor, advanceCursor, defaultCursor, findPreviousWeight, historialDePeso,
+  resolveCursor, advanceCursor, defaultCursor, cursorAlDia, semanasEntre, findPreviousWeight, historialDePeso,
   adivinaSiLlevaCarga,
   totalProgress, getWeekLoad, formatIntensity, inferRest, getPattern, getMuscles,
   weekdayToday, weekdayLabel, isoWeekKey, weeklySessionId, sessionIdFor,
