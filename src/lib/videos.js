@@ -61,5 +61,41 @@ export function videoPrincipal(ejercicio, medias, perfil) {
   return videosParaAtleta(ejercicio, medias, perfil)[0]?.url ?? null;
 }
 
+/**
+ * La foto de portada que le toca a este atleta.
+ *
+ * Mismo orden que los videos, y por la misma razón: el coach a veces quiere
+ * que UNA persona vea otra imagen —su propia posición, una variante que solo
+ * ella hace— sin cambiarle la portada a todos los demás.
+ *
+ *   1. Foto puesta solo para ese atleta.
+ *   2. Foto de su género.
+ *   3. Foto para todos.
+ *   4. La `cover_image_url` de siempre, que es lo que ya tienen los ejercicios.
+ *
+ * Devuelve una dirección o null.
+ */
+export function portadaParaAtleta(ejercicio, medias, perfil) {
+  if (!ejercicio) return null;
+  const id = ejercicio.exercise_id || ejercicio.id;
+  if (!id) return ejercicio.cover_image_url ?? null;
+
+  const genero = perfil?.genero || null;
+  const fotos = (medias ?? []).filter((m) => m.exercise_id === id && m.tipo === 'foto');
+
+  const paraMí = fotos.find((m) => m.para_atleta && m.para_atleta === perfil?.id);
+  if (paraMí) return paraMí.url;
+
+  if (genero) {
+    const deMiGénero = fotos.find((m) => !m.para_atleta && m.genero === genero);
+    if (deMiGénero) return deMiGénero.url;
+  }
+
+  const paraTodos = fotos.find((m) => !m.para_atleta && !m.genero);
+  if (paraTodos) return paraTodos.url;
+
+  return ejercicio.cover_image_url ?? null;
+}
+
 /** Etiquetas sugeridas al subir un ángulo. Se puede escribir cualquier otra. */
 export const ANGULOS_SUGERIDOS = ['Frontal', 'Lateral', 'Desde atrás', 'Cámara lenta', 'Detalle'];

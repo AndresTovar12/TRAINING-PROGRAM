@@ -141,6 +141,100 @@ export async function deleteExercise(id) {
   if (error) throw error;
 }
 
+/* ---------------------- Mi versión de un ejercicio --------------------- *
+ * Un coach puede editar a su gusto los ejercicios base (los del master) sin
+ * tocar el original y sin afectar a los demás coaches. Su versión se guarda
+ * aparte y la app la pone encima al leer.
+ *
+ * Lo importante: el id del ejercicio NO cambia. Por eso los planes que ya
+ * estaban asignados recogen la versión del coach solos, sin reescribir nada.
+ *
+ * "Restaurar original" es borrar esa fila. El ejercicio del master nunca se
+ * modificó, así que siempre está intacto esperando.
+ * ----------------------------------------------------------------------- */
+
+// Los campos que un coach puede hacer suyos. Deliberadamente NO incluye `id`,
+// `created_by` ni las fechas: eso identifica al ejercicio, no lo describe.
+export const CAMPOS_EDITABLES = [
+  'name', 'description', 'category_id', 'cover_image_url',
+  'video_url', 'video_link', 'recorte_inicio', 'recorte_fin',
+  'muscle_primary', 'muscle_secondary', 'equipment',
+];
+
+// Las versiones propias del coach indicado. Un atleta pide las de SU coach:
+// así ve exactamente lo que su entrenador preparó, no lo que puso el master.
+export async function listExerciseOverrides(coachId) {
+  if (!coachId) return [];
+  const { data, error } = await supabase
+    .from('exercise_overrides')
+    .select('exercise_id, data')
+    .eq('coach_id', coachId);
+  if (error) return []; // best-effort: sin esto la app sigue con el original
+  return data ?? [];
+}
+
+// Guarda mi versión de un ejercicio ajeno. Se manda la ficha COMPLETA, no solo
+// lo que cambió: así una mejora posterior del master no se cuela encima de lo
+// que el coach ya había dejado listo.
+export async function saveExerciseOverride(exerciseId, ficha) {
+  const { data: auth } = await supabase.auth.getUser();
+  const coachId = auth?.user?.id;
+  if (!coachId) throw new Error('Tu sesión expiró. Vuelve a entrar.');
+
+  const limpia = {};
+  CAMPOS_EDITABLES.forEach((k) => { if (ficha[k] !== undefined) limpia[k] = ficha[k]; });
+
+  const { data, error } = await supabase
+    .from('exercise_overrides')
+    .upsert(
+      { coach_id: coachId, exercise_id: exerciseId, data: limpia, updated_at: new Date().toISOString() },
+      { onConflict: 'coach_id,exercise_id' },
+    )
+    .select('exercise_id, data')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// Volver al original: se borra mi versión y reaparece la del master.
+export async function deleteExerciseOverride(exerciseId) {
+  const { data: auth } = await supabase.auth.getUser();
+  const coachId = auth?.user?.id;
+  if (!coachId) throw new Error('Tu sesión expiró. Vuelve a entrar.');
+  const { error } = await supabase
+    .from('exercise_overrides')
+    .delete()
+    .eq('coach_id', coachId)
+    .eq('exercise_id', exerciseId);
+  if (error) throw error;
+}
+
+/**
+ * Pone las versiones del coach encima del repertorio.
+ *
+ * Marca cada ejercicio tocado con `esMiVersion: true`, que es lo que la
+ * pantalla usa para mostrar el aviso y el botón de restaurar.
+ *
+ * `categorias` es opcional y sirve para un detalle fino: si el coach le cambió
+ * la categoría, el objeto `category` que venía pegado del servidor quedó viejo
+ * y pintaría el color equivocado. Con la lista a mano se vuelve a resolver.
+ */
+export function aplicarOverrides(exercises, overrides, categorias) {
+  if (!overrides?.length) return exercises ?? [];
+  const porId = new Map(overrides.map((o) => [o.exercise_id, o.data ?? {}]));
+  const catPorId = new Map((categorias ?? []).map((c) => [c.id, c]));
+
+  return (exercises ?? []).map((e) => {
+    const mia = porId.get(e.id);
+    if (!mia) return e;
+    const fusionado = { ...e, ...mia, esMiVersion: true };
+    if (mia.category_id !== undefined && mia.category_id !== e.category_id) {
+      fusionado.category = catPorId.get(mia.category_id) ?? null;
+    }
+    return fusionado;
+  });
+}
+
 /* ------------------------------- Media -------------------------------- */
 /**
  * Tope de subida. Con Cloudflare R2 no hay un limite practico: un solo archivo

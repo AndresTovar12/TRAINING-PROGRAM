@@ -2,7 +2,10 @@ import {
   createContext, useContext, useEffect, useState, useMemo, useCallback,
 } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getActivePlan, listExercises, listExerciseMedia } from '@/lib/api';
+import {
+  getActivePlan, listExercises, listExerciseMedia, getMasterId,
+  listExerciseOverrides, aplicarOverrides,
+} from '@/lib/api';
 
 /**
  * Carga el plan activo del usuario autenticado (tabla `plans`, jsonb con la
@@ -68,11 +71,17 @@ function normalizePlan(phases) {
 }
 
 export function PlanProvider({ children }) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [planRow, setPlanRow] = useState(null);
   const [planLoading, setPlanLoading] = useState(true);
-  const [exercises, setExercises] = useState([]);
-  const [medias, setMedias] = useState([]);
+  const [exercisesBase, setExercisesBase] = useState([]);
+  const [overrides, setOverrides] = useState([]);
+  const [mediasTodas, setMediasTodas] = useState([]);
+  const [masterId, setMasterId] = useState(null);
+
+  // De quién son las versiones que hay que aplicar. Un atleta ve las de SU
+  // coach; un coach que abre su propia app de entrenamiento ve las suyas.
+  const coachDeLaVista = profile?.role === 'admin' ? (profile?.id ?? null) : (profile?.coach_id ?? null);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,22 +102,67 @@ export function PlanProvider({ children }) {
   useEffect(() => {
     let cancelled = false;
     listExercises()
-      .then((rows) => { if (!cancelled) setExercises(rows ?? []); })
+      .then((rows) => { if (!cancelled) setExercisesBase(rows ?? []); })
       .catch(() => {});
     return () => { cancelled = true; };
   }, []);
+
+  // Las versiones que el coach de esta persona hizo suyas. Se aplican encima
+  // del repertorio, así que el atleta ve el video y la foto que SU entrenador
+  // preparó, no los del master.
+  useEffect(() => {
+    let cancelled = false;
+    if (!coachDeLaVista) { setOverrides([]); return undefined; }
+    listExerciseOverrides(coachDeLaVista)
+      .then((rows) => { if (!cancelled) setOverrides(rows ?? []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [coachDeLaVista]);
+
+  const exercises = useMemo(
+    () => aplicarOverrides(exercisesBase, overrides),
+    [exercisesBase, overrides],
+  );
 
   // Videos extra: ángulos, versiones por género y videos puestos a mano para
   // un atleta. Se piden todos de una vez porque son pocas filas y así el
   // reproductor no tiene que ir a la red cada vez que se abre un ejercicio.
   useEffect(() => {
     let cancelled = false;
-    if (exercises.length === 0) return undefined;
-    listExerciseMedia(exercises.map((e) => e.id))
-      .then((rows) => { if (!cancelled) setMedias(rows ?? []); })
+    if (exercisesBase.length === 0) return undefined;
+    // Se depende del repertorio SIN versiones aplicadas a propósito: los ids
+    // son los mismos con o sin ellas, y colgarse de la lista ya fusionada haría
+    // que cada carga de versiones dispare otra consulta de medios sin motivo.
+    listExerciseMedia(exercisesBase.map((e) => e.id))
+      .then((rows) => { if (!cancelled) setMediasTodas(rows ?? []); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [exercises]);
+  }, [exercisesBase]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getMasterId().then((id) => { if (!cancelled) setMasterId(id); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  /**
+   * Los medios que de verdad le tocan a esta persona.
+   *
+   * POR QUE HAY QUE FILTRAR: la tabla de medios se puede leer entera, y un
+   * ejercicio base es compartido por todos los coaches. Sin este filtro, un
+   * ángulo o una versión por género que subió el coach A sobre "Sentadilla"
+   * aparecería también a los atletas del coach B. Nadie vería un error: la app
+   * simplemente enseñaría el video equivocado, grabado por otro entrenador.
+   *
+   * Vale un medio si: me lo pusieron a mí, lo subió mi coach, o lo subió el
+   * master (esos son los de fábrica y sirven para todos).
+   */
+  const medias = useMemo(() => {
+    return (mediasTodas ?? []).filter((m) => {
+      if (m.para_atleta) return m.para_atleta === user?.id;
+      return m.created_by === coachDeLaVista || m.created_by === masterId;
+    });
+  }, [mediasTodas, coachDeLaVista, masterId, user?.id]);
 
   const phases = useMemo(
     () => normalizePlan(planRow?.data?.phases),

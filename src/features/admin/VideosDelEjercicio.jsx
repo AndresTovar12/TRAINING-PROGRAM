@@ -18,7 +18,8 @@
  */
 import { useEffect, useState } from 'react';
 import { Video, Trash2, Plus, Loader2, X } from 'lucide-react';
-import { listExerciseMedia, addExerciseMedia, deleteExerciseMedia } from '@/lib/api';
+import { listExerciseMedia, addExerciseMedia, deleteExerciseMedia, getMasterId } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 import { ANGULOS_SUGERIDOS } from '@/lib/videos';
 import MediaUpload from '@/features/admin/MediaUpload';
 import RecortarVideo from '@/features/admin/RecortarVideo';
@@ -36,7 +37,8 @@ function etiquetaGenero(g) {
   return 'Para todos';
 }
 
-export default function VideosDelEjercicio({ exerciseId, readOnly }) {
+export default function VideosDelEjercicio({ exerciseId }) {
+  const { user } = useAuth();
   const [lista, setLista] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [agregando, setAgregando] = useState(false);
@@ -50,12 +52,20 @@ export default function VideosDelEjercicio({ exerciseId, readOnly }) {
   useEffect(() => {
     let vivo = true;
     if (!exerciseId) { setCargando(false); return undefined; }
-    listExerciseMedia([exerciseId])
-      .then((r) => { if (vivo) setLista(r.filter((m) => !m.para_atleta)); })
+    // Se muestran solo los MIOS y los del master. Un ejercicio base lo comparten
+    // todos los coaches: sin este filtro, aquí aparecerían los ángulos que subió
+    // otro entrenador —que además no se pueden borrar, así que el botón daría
+    // error sin explicación.
+    Promise.all([listExerciseMedia([exerciseId]), getMasterId()])
+      .then(([r, mId]) => {
+        if (!vivo) return;
+        setLista(r.filter((m) => !m.para_atleta
+          && (m.created_by === user?.id || m.created_by === mId)));
+      })
       .catch(() => {})
       .finally(() => { if (vivo) setCargando(false); });
     return () => { vivo = false; };
-  }, [exerciseId]);
+  }, [exerciseId, user?.id]);
 
   async function guardar() {
     if (!url) { setErr('Primero sube el video.'); return; }
@@ -126,7 +136,7 @@ export default function VideosDelEjercicio({ exerciseId, readOnly }) {
                 </div>
                 <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 600 }}>{etiquetaGenero(m.genero)}</div>
               </div>
-              {!readOnly && (
+              {(
                 <button
                   type="button" onClick={() => quitar(m.id)} title="Quitar este video"
                   style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.danger, padding: 4, flexShrink: 0 }}
@@ -139,7 +149,7 @@ export default function VideosDelEjercicio({ exerciseId, readOnly }) {
         </div>
       )}
 
-      {!readOnly && !agregando && (
+      {!agregando && (
         <button
           type="button" onClick={() => setAgregando(true)}
           style={{

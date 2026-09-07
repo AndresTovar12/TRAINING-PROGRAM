@@ -3,6 +3,7 @@ import {
   ArrowLeft, X, Plus, Trash2, Copy, ChevronRight, ChevronUp, ChevronDown,
   ChevronLeft, Loader2, Check, Layers, Dumbbell, StickyNote, Zap, AlertCircle,
   Save, FolderOpen, Clipboard, Eraser, CalendarDays, Settings2, Pencil, Repeat, Scale, Video,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsDesktop } from '@/lib/useViewport';
@@ -10,6 +11,7 @@ import {
   listExercises, createPlan, updatePlan, listTemplates, saveTemplate, deleteTemplate,
   getMasterId, tagRepertoire, createExercise, listCategories,
   listExerciseMedia, addExerciseMedia, deleteExerciseMedia,
+  listExerciseOverrides, aplicarOverrides,
 } from '@/lib/api';
 import { isLoadedExercise } from '@/lib/training-utils';
 import { T, FONT, KP, CAT_COLORS } from '@/lib/theme';
@@ -704,21 +706,25 @@ function CrearEjercicioRapido({ categorias, onCancelar, onCreado }) {
 }
 
 /**
- * Un video grabado SOLO para este atleta.
+ * Foto y video puestos SOLO para este atleta.
  *
- * Para qué sirve: el ejercicio del repertorio tiene su video general, pero a
- * veces hay que enseñarle a UNA persona una corrección suya —su rodilla, su
- * agarre, su ritmo— sin cambiar el ejercicio para todos los demás.
+ * Para qué sirve: el ejercicio del repertorio tiene su foto y su video
+ * generales, pero a veces hay que enseñarle a UNA persona una corrección suya
+ * —su rodilla, su agarre, su ritmo— o una variante que solo ella hace, sin
+ * cambiarle el ejercicio a todos los demás.
  *
- * Este video le gana a todo lo demás: si existe, es el que ve. Se guarda
- * enlazado al ejercicio y a esa persona, así que se puede quitar después sin
- * tocar nada del repertorio.
+ * Lo que se pone aquí le gana a todo lo demás: si existe, es lo que ve. Se
+ * guarda enlazado al ejercicio y a esa persona, así que se puede quitar
+ * después sin tocar nada del repertorio.
+ *
+ * Aplica en TODO el plan de esa persona, no solo en la sesión desde la que se
+ * abrió: si el ejercicio sale en doce sesiones, en las doce ve lo mismo.
  */
-function VideoParaEsteAtleta({ ejercicio, atleta, onCerrar }) {
-  const [existente, setExistente] = useState(null);
+function MediaParaEsteAtleta({ ejercicio, atleta, onCerrar }) {
+  const [existentes, setExistentes] = useState({ video: null, foto: null });
   const [cargando, setCargando] = useState(true);
-  const [url, setUrl] = useState('');
-  const [guardando, setGuardando] = useState(false);
+  const [nuevo, setNuevo] = useState({ video: '', foto: '' });
+  const [guardando, setGuardando] = useState('');
   const [err, setErr] = useState('');
   const nombreAtleta = atleta?.full_name || atleta?.username || 'este atleta';
 
@@ -727,50 +733,57 @@ function VideoParaEsteAtleta({ ejercicio, atleta, onCerrar }) {
     listExerciseMedia([ejercicio.exercise_id])
       .then((r) => {
         if (!vivo) return;
-        setExistente(r.find((m) => m.para_atleta === atleta?.id) ?? null);
+        const mios = r.filter((m) => m.para_atleta === atleta?.id);
+        setExistentes({
+          video: mios.find((m) => m.tipo === 'video') ?? null,
+          foto: mios.find((m) => m.tipo === 'foto') ?? null,
+        });
       })
       .catch(() => {})
       .finally(() => { if (vivo) setCargando(false); });
     return () => { vivo = false; };
   }, [ejercicio.exercise_id, atleta?.id]);
 
-  async function guardar() {
+  async function guardar(tipo) {
+    const url = nuevo[tipo];
     if (!url) return;
-    setGuardando(true); setErr('');
+    setGuardando(tipo); setErr('');
     try {
-      // Solo puede haber uno por atleta: el nuevo reemplaza al anterior.
-      if (existente) await deleteExerciseMedia(existente.id);
+      // Solo puede haber uno de cada tipo por atleta: el nuevo reemplaza al anterior.
+      if (existentes[tipo]) await deleteExerciseMedia(existentes[tipo].id);
       const fila = await addExerciseMedia({
         exerciseId: ejercicio.exercise_id,
-        url, tipo: 'video',
+        url, tipo,
         etiqueta: `Para ${nombreAtleta}`,
         paraAtleta: atleta.id,
       });
-      setExistente(fila);
-      setUrl('');
+      setExistentes((e) => ({ ...e, [tipo]: fila }));
+      setNuevo((n) => ({ ...n, [tipo]: '' }));
     } catch (e) {
       setErr(e.message || 'No se pudo guardar.');
     } finally {
-      setGuardando(false);
+      setGuardando('');
     }
   }
 
-  async function quitar() {
-    if (!existente) return;
-    setGuardando(true);
+  async function quitar(tipo) {
+    if (!existentes[tipo]) return;
+    setGuardando(tipo); setErr('');
     try {
-      await deleteExerciseMedia(existente.id);
-      setExistente(null);
+      await deleteExerciseMedia(existentes[tipo].id);
+      setExistentes((e) => ({ ...e, [tipo]: null }));
     } catch (e) {
       setErr(e.message || 'No se pudo quitar.');
     } finally {
-      setGuardando(false);
+      setGuardando('');
     }
   }
 
+  const ocupado = !!guardando;
+
   return (
     <div
-      onClick={(e) => { if (e.target === e.currentTarget && !guardando) onCerrar(); }}
+      onClick={(e) => { if (e.target === e.currentTarget && !ocupado) onCerrar(); }}
       style={{
         position: 'fixed', inset: 0, zIndex: 5300, background: 'rgba(9,11,16,.55)',
         display: 'grid', placeItems: 'center', padding: 16, fontFamily: FONT,
@@ -784,13 +797,13 @@ function VideoParaEsteAtleta({ ejercicio, atleta, onCerrar }) {
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11, marginBottom: 15 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 16.5, fontWeight: 800, color: T.text, lineHeight: 1.2 }}>
-              Video solo para {nombreAtleta}
+              Solo para {nombreAtleta}
             </div>
             <div style={{ fontSize: 12.5, color: T.text3, fontWeight: 600, marginTop: 3 }}>
               {ejercicio.name}
             </div>
           </div>
-          <button type="button" onClick={onCerrar} disabled={guardando}
+          <button type="button" onClick={onCerrar} disabled={ocupado}
             style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.text3, padding: 4, flexShrink: 0 }}>
             <X size={19} />
           </button>
@@ -800,52 +813,110 @@ function VideoParaEsteAtleta({ ejercicio, atleta, onCerrar }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: T.text3, fontSize: 13, fontWeight: 600 }}>
             <Loader2 size={14} className="spin" /> Cargando…
           </div>
-        ) : existente ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <video src={existente.url} controls playsInline preload="metadata"
-              style={{ width: '100%', borderRadius: 13, background: '#000' }} />
-            <div style={{ fontSize: 12.5, color: T.text2, fontWeight: 600, lineHeight: 1.5 }}>
-              Ya tiene un video propio para este ejercicio. Es el que ve él, en lugar del general.
-            </div>
-            <button type="button" onClick={quitar} disabled={guardando}
-              style={{
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                padding: '12px 16px', borderRadius: 12, border: 'none',
-                background: 'rgba(220,38,38,0.08)', color: T.danger, cursor: 'pointer',
-                fontFamily: FONT, fontSize: 14, fontWeight: 800,
-              }}>
-              {guardando ? <Loader2 size={15} className="spin" /> : <Trash2 size={15} />} Quitar y volver al general
-            </button>
-          </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
-            <div style={{ fontSize: 13, color: T.text2, fontWeight: 600, lineHeight: 1.5 }}>
-              Hoy ve el video general del ejercicio. Sube uno aquí y solo él verá ese.
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <div style={{ fontSize: 12.5, color: T.text2, fontWeight: 600, lineHeight: 1.5 }}>
+              Lo que pongas aquí lo ve <b>solo {nombreAtleta}</b>, en todas las sesiones
+              donde aparezca este ejercicio. El repertorio no se toca.
             </div>
-            <MediaUpload
-              label="Video" icon={Dumbbell} value={url} onChange={setUrl}
-              accept="video/*" kind="videos"
+
+            <RanuraMedia
+              titulo="Video" tipo="video" icono={Video}
+              existente={existentes.video}
+              valor={nuevo.video}
+              onValor={(v) => setNuevo((n) => ({ ...n, video: v }))}
+              onGuardar={() => guardar('video')}
+              onQuitar={() => quitar('video')}
+              ocupado={guardando === 'video'}
+              deshabilitado={ocupado}
+              vacio="Hoy ve el video general del ejercicio."
               hint="Puedes grabarlo desde el teléfono."
             />
+
+            <RanuraMedia
+              titulo="Foto de portada" tipo="foto" icono={ImageIcon}
+              existente={existentes.foto}
+              valor={nuevo.foto}
+              onValor={(v) => setNuevo((n) => ({ ...n, foto: v }))}
+              onGuardar={() => guardar('foto')}
+              onQuitar={() => quitar('foto')}
+              ocupado={guardando === 'foto'}
+              deshabilitado={ocupado}
+              vacio="Hoy ve la foto general del ejercicio."
+              hint="Se ve en la lista y al abrir el ejercicio."
+            />
+
             {err && (
               <div style={{ background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 11, padding: '10px 12px', fontSize: 12.5, fontWeight: 700 }}>
                 {err}
               </div>
             )}
-            <button type="button" onClick={guardar} disabled={!url || guardando}
-              style={{
-                padding: '12px 16px', borderRadius: 12, border: 'none',
-                background: url && !guardando ? T.accent : T.bg3,
-                color: url && !guardando ? '#fff' : T.text3,
-                cursor: url && !guardando ? 'pointer' : 'default',
-                fontFamily: FONT, fontSize: 14, fontWeight: 800,
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-              }}>
-              {guardando ? <><Loader2 size={15} className="spin" /> Guardando…</> : 'Guardar para él'}
-            </button>
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Una de las dos ranuras (video o foto) del cuadro de arriba. */
+function RanuraMedia({
+  titulo, tipo, icono, existente, valor, onValor,
+  onGuardar, onQuitar, ocupado, deshabilitado, vacio, hint,
+}) {
+  const puedeGuardar = !!valor && !deshabilitado;
+  return (
+    <div>
+      <div style={{
+        fontSize: 11, fontWeight: 800, color: T.text3, letterSpacing: 0.6,
+        textTransform: 'uppercase', marginBottom: 9,
+      }}>
+        {titulo}
+      </div>
+
+      {existente ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {tipo === 'video' ? (
+            <video src={existente.url} controls playsInline preload="metadata"
+              style={{ width: '100%', borderRadius: 13, background: '#000' }} />
+          ) : (
+            <img src={existente.url} alt=""
+              style={{ width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: 13, background: '#000', display: 'block' }} />
+          )}
+          <button type="button" onClick={onQuitar} disabled={deshabilitado}
+            style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+              padding: '11px 16px', borderRadius: 12, border: 'none',
+              background: 'rgba(220,38,38,0.08)', color: T.danger,
+              cursor: deshabilitado ? 'default' : 'pointer',
+              fontFamily: FONT, fontSize: 13.5, fontWeight: 800,
+            }}>
+            {ocupado ? <Loader2 size={15} className="spin" /> : <Trash2 size={15} />} Quitar y volver al general
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+          <div style={{ fontSize: 12.5, color: T.text3, fontWeight: 600, lineHeight: 1.5 }}>
+            {vacio}
+          </div>
+          <MediaUpload
+            label={titulo} icon={icono} value={valor} onChange={onValor}
+            accept={tipo === 'video' ? 'video/*' : 'image/*'}
+            kind={tipo === 'video' ? 'videos' : 'covers'}
+            hint={hint}
+          />
+          <button type="button" onClick={onGuardar} disabled={!puedeGuardar}
+            style={{
+              padding: '11px 16px', borderRadius: 12, border: 'none',
+              background: puedeGuardar ? T.accent : T.bg3,
+              color: puedeGuardar ? '#fff' : T.text3,
+              cursor: puedeGuardar ? 'pointer' : 'default',
+              fontFamily: FONT, fontSize: 13.5, fontWeight: 800,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+            }}>
+            {ocupado ? <><Loader2 size={15} className="spin" /> Guardando…</> : 'Guardar solo para él'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -856,7 +927,7 @@ function VideoParaEsteAtleta({ ejercicio, atleta, onCerrar }) {
 
 function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCreado, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear }) {
   const [creandoEjercicio, setCreandoEjercicio] = useState(false);
-  const [videoDe, setVideoDe] = useState(null);
+  const [mediaDe, setMediaDe] = useState(null);
   const esCompu = useIsDesktop();
   const [pickerCtx, setPickerCtx] = useState(null);
   const blocks = useMemo(() => parseBlocks(day.exercises), [day.exercises]);
@@ -944,7 +1015,7 @@ function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCr
                   ex: m,
                   repertoire,
                   atleta,
-                  onVideoAtleta: setVideoDe,
+                  onVideoAtleta: setMediaDe,
                   onPatch: (patch) => writeBlocks((bs) => bs.map((x, k) => (k === bi
                     ? { ...x, members: x.members.map((mm, kk) => (kk === mi ? { ...mm, ...patch } : mm)) }
                     : x))),
@@ -1053,11 +1124,11 @@ function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCr
         </div>
       )}
 
-      {videoDe && (
-        <VideoParaEsteAtleta
-          ejercicio={videoDe}
+      {mediaDe && (
+        <MediaParaEsteAtleta
+          ejercicio={mediaDe}
           atleta={atleta}
-          onCerrar={() => setVideoDe(null)}
+          onCerrar={() => setMediaDe(null)}
         />
       )}
 
@@ -1266,10 +1337,14 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
 
   // Repertorio para el picker: cada coach ve la base del master + los suyos
   // (no los de otros coaches). El master ve todo.
+  //
+  // Encima se aplican SUS versiones de los ejercicios base: si personalizó el
+  // video de la sentadilla, al armar el plan tiene que ver el suyo, no el del
+  // master. Si no, estaría asignando a ciegas.
   useEffect(() => {
-    Promise.all([listExercises(), getMasterId(), listCategories()])
-      .then(([exs, mId, cats]) => {
-        const tagged = tagRepertoire(exs, mId, user?.id);
+    Promise.all([listExercises(), getMasterId(), listCategories(), listExerciseOverrides(user?.id)])
+      .then(([exs, mId, cats, mias]) => {
+        const tagged = tagRepertoire(aplicarOverrides(exs, mias, cats), mId, user?.id);
         setRepertoire(isMaster ? tagged : tagged.filter((e) => e.isBase || e.isMine));
         setCategorias(cats);
       })

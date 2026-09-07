@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { X, ExternalLink, Dumbbell } from 'lucide-react';
-import { videosParaAtleta } from '@/lib/videos';
+import { videosParaAtleta, portadaParaAtleta } from '@/lib/videos';
 import { T, FONT, KP } from '@/lib/theme';
 
 /**
@@ -49,6 +49,8 @@ function VideoRecortado({ video }) {
 
 export default function ExerciseMediaModal({ exercise, planEx, medias = [], perfil, onClose }) {
   const videos = videosParaAtleta(exercise, medias, perfil);
+  // La portada también puede estar personalizada para esta persona.
+  const portada = portadaParaAtleta(exercise, medias, perfil);
   const [activo, setActivo] = useState(0);
   if (!exercise) return null;
   const muscles = [...(exercise.muscle_primary ?? []), ...(exercise.muscle_secondary ?? [])];
@@ -74,9 +76,9 @@ export default function ExerciseMediaModal({ exercise, planEx, medias = [], perf
       >
         {/* Portada */}
         <div style={{ position: 'relative', background: '#0E1015' }}>
-          {exercise.cover_image_url ? (
+          {portada ? (
             <img
-              src={exercise.cover_image_url}
+              src={portada}
               alt={exercise.name}
               style={{ width: '100%', height: 230, objectFit: 'cover', display: 'block' }}
             />

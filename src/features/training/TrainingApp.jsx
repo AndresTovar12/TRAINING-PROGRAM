@@ -19,6 +19,7 @@ import {
   sessionForToday, weekOverview, weekdayToday, weekdayLabel
 } from '@/lib/training-utils';
 import { aKilos, desdeKilos, pesoTexto, etiquetaUnidad } from '@/lib/unidades';
+import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
 import { useStorage } from '@/contexts/AppStateContext';
 import ExerciseMediaModal from '@/features/training/ExerciseMediaModal';
 
@@ -318,7 +319,12 @@ const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, oneRMs, sessionsData
   const exData = sessionData?.exercises?.[idx] || {};
   const pc = phaseColor || LT.blue;
   const repertoire = resolveExercise(ex);
-  const hasMedia = !!(repertoire && (repertoire.cover_image_url || repertoire.video_url || repertoire.video_link));
+  // La foto y el video que le tocan a ESTA persona: puede haber una puesta solo
+  // para ella, una de su género, o la general. Nunca se lee el campo del
+  // ejercicio a pelo, porque entonces el trabajo del coach no se vería.
+  const portada = portadaParaAtleta(repertoire, medias, profile);
+  const misVideos = videosParaAtleta(repertoire, medias, profile);
+  const hasMedia = !!(portada || misVideos.length);
 
   const recommended = useMemo(() => {
     if (ex.isNote || !ex.intensity) return null;
@@ -392,7 +398,7 @@ const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, oneRMs, sessionsData
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         {/* Miniatura del repertorio (media viva) o número en el set */}
-        {repertoire?.cover_image_url ? (
+        {portada ? (
           <button
             type="button"
             onClick={() => setMediaOpen(true)}
@@ -402,9 +408,9 @@ const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, oneRMs, sessionsData
               cursor: 'pointer', overflow: 'hidden', flexShrink: 0, position: 'relative', background: '#0E1015',
             }}
           >
-            <img src={repertoire.cover_image_url} alt=""
+            <img src={portada} alt=""
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-            {(repertoire.video_url || repertoire.video_link) && (
+            {misVideos.length > 0 && (
               <span style={{
                 position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
                 background: 'rgba(0,0,0,0.22)', color: '#fff',

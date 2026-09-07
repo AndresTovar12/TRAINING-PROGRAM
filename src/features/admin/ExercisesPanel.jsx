@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Plus, Search, X, Trash2, Loader2, Image as ImageIcon, Video, Dumbbell,
-  Copy, Lock,
+  Copy, RotateCcw, Pencil,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   listCategories, listExercises, createExercise, updateExercise, deleteExercise,
   getMasterId, tagRepertoire, duplicateExercise,
+  listExerciseOverrides, saveExerciseOverride, deleteExerciseOverride, aplicarOverrides,
 } from '@/lib/api';
 import MediaUpload from '@/features/admin/MediaUpload';
 import VideosDelEjercicio from '@/features/admin/VideosDelEjercicio';
@@ -64,15 +65,19 @@ function ExerciseCard({ ex, onClick, base }) {
         }}
       >
         {!ex.cover_image_url && <Dumbbell size={30} color={`${color}88`} />}
-        {base && (
+        {/* Ya no dice "cerrado con llave": el coach SÍ puede editarlo. Lo que
+            importa ahora es distinguir el que él ya hizo suyo del que sigue
+            como vino de fábrica. */}
+        {(ex.esMiVersion || base) && (
           <span
             style={{
-              position: 'absolute', top: 8, left: 8, background: 'rgba(17,19,24,0.72)', color: '#fff',
+              position: 'absolute', top: 8, left: 8,
+              background: ex.esMiVersion ? T.accent : 'rgba(17,19,24,0.72)', color: '#fff',
               borderRadius: 7, padding: '3px 8px', fontSize: 10.5, fontWeight: 800, letterSpacing: 0.3,
               display: 'inline-flex', alignItems: 'center', gap: 4, backdropFilter: 'blur(4px)',
             }}
           >
-            <Lock size={10} /> BASE
+            {ex.esMiVersion ? <><Pencil size={10} /> MI VERSIÓN</> : 'BASE'}
           </span>
         )}
         {hasVideo && (
@@ -173,9 +178,18 @@ function MuscleSelect({ value, onChange, options }) {
   );
 }
 
-function ExerciseEditor({ exercise, categories, muscleOptions = [], onClose, onSaved, onDeleted, readOnly, onDuplicate }) {
+/**
+ * `esAjeno` = este ejercicio no es mío (es de la base del master) y yo no soy
+ * el master. Entonces guardar NO modifica el original: crea mi versión, que
+ * solo ven mis atletas. El original queda intacto y siempre se puede volver.
+ */
+function ExerciseEditor({
+  exercise, categories, muscleOptions = [], onClose, onSaved, onDeleted,
+  esAjeno, onDuplicate, onGuardadaMiVersion, onRestaurada,
+}) {
   const { user } = useAuth();
   const [dupBusy, setDupBusy] = useState(false);
+  const [restaurando, setRestaurando] = useState(false);
   const [form, setForm] = useState(() =>
     exercise
       ? {
@@ -215,6 +229,13 @@ function ExerciseEditor({ exercise, categories, muscleOptions = [], onClose, onS
       recorte_fin: form.video_url ? form.recorte_fin : null,
     };
     try {
+      // Ejercicio de otro (la base del master): se guarda MI versión aparte.
+      // El id no cambia, así que los planes que ya lo usan la recogen solos.
+      if (exercise && esAjeno) {
+        await saveExerciseOverride(exercise.id, payload);
+        onGuardadaMiVersion(exercise.id, payload);
+        return;
+      }
       const saved = exercise
         ? await updateExercise(exercise.id, payload)
         : await createExercise({ ...payload, created_by: user?.id ?? null });
@@ -262,7 +283,9 @@ function ExerciseEditor({ exercise, categories, muscleOptions = [], onClose, onS
           }}
         >
           <div style={{ fontSize: 17, fontWeight: 800, color: T.text, display: 'flex', alignItems: 'center', gap: 8 }}>
-            {readOnly ? <><Lock size={16} color={T.text2} /> Ejercicio base</> : exercise ? 'Editar ejercicio' : 'Nuevo ejercicio'}
+            {!exercise ? 'Nuevo ejercicio'
+              : esAjeno ? <><Pencil size={16} color={T.accent} /> Mi versión</>
+              : 'Editar ejercicio'}
           </div>
           <button
             type="button"
@@ -273,10 +296,12 @@ function ExerciseEditor({ exercise, categories, muscleOptions = [], onClose, onS
           </button>
         </div>
 
-        <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16, pointerEvents: readOnly ? 'none' : 'auto', opacity: readOnly ? 0.75 : 1 }}>
-          {readOnly && (
+        <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {esAjeno && (
             <div style={{ background: T.accentBg, color: T.accent, borderRadius: 11, padding: '11px 14px', fontSize: 13, fontWeight: 600, lineHeight: 1.5 }}>
-              Este es un ejercicio base (del sistema). No puedes editarlo, pero puedes duplicarlo a tu repertorio para personalizar foto, video y datos a tu manera.
+              {exercise?.esMiVersion
+                ? 'Esta es TU versión de un ejercicio base. Tus atletas ven esta. El original del sistema sigue guardado y puedes volver a él cuando quieras.'
+                : 'Es un ejercicio base del sistema. Al guardar no lo cambias: creas TU versión, que solo ven tus atletas. El original queda intacto y puedes volver a él cuando quieras.'}
             </div>
           )}
           <Input label="Nombre" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Ej. Back Squat" />
@@ -359,7 +384,7 @@ function ExerciseEditor({ exercise, categories, muscleOptions = [], onClose, onS
 
           <div style={{ height: 1, background: T.border }} />
 
-          <VideosDelEjercicio exerciseId={exercise?.id} readOnly={readOnly} />
+          <VideosDelEjercicio exerciseId={exercise?.id} />
 
           {err && (
             <div style={{ background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 11, padding: '11px 14px', fontSize: 13.5, fontWeight: 600 }}>
@@ -374,30 +399,63 @@ function ExerciseEditor({ exercise, categories, muscleOptions = [], onClose, onS
             padding: '16px 22px', background: T.bg2, borderTop: `1px solid ${T.border}`,
           }}
         >
-          {readOnly ? (
+          {esAjeno ? (
+            /* Ejercicio de la base: a la izquierda se vuelve al original (solo
+               si ya hay una versión propia que deshacer), a la derecha se
+               guarda la mía. Duplicar sigue existiendo para quien quiera DOS
+               variantes del mismo ejercicio en vez de reemplazar una. */
             <>
-              <button
-                type="button" onClick={onClose}
-                style={{ padding: '11px 16px', borderRadius: 12, border: `1.5px solid ${T.border}`, background: T.bg2, cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text2 }}
-              >
-                Cerrar
-              </button>
+              {exercise?.esMiVersion ? (
+                <button
+                  type="button"
+                  disabled={restaurando || busy}
+                  onClick={async () => {
+                    if (!window.confirm(`¿Volver al original de "${exercise.name}"? Se pierden los cambios que hiciste sobre él.`)) return;
+                    setRestaurando(true);
+                    try { await deleteExerciseOverride(exercise.id); onRestaurada(exercise.id); }
+                    catch (e) { setErr(e.message || 'No se pudo restaurar'); setRestaurando(false); }
+                  }}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 7, padding: '11px 16px', borderRadius: 12,
+                    border: `1.5px solid ${T.border}`, background: T.bg2, color: T.text2,
+                    cursor: restaurando ? 'default' : 'pointer',
+                    fontFamily: FONT, fontSize: 14, fontWeight: 700,
+                  }}
+                >
+                  {restaurando ? <Loader2 size={16} className="spin" /> : <RotateCcw size={16} />} Restaurar original
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={dupBusy}
+                  onClick={async () => {
+                    setDupBusy(true);
+                    try { const copy = await duplicateExercise(exercise); onDuplicate(copy); }
+                    catch (e) { setErr(e.message || 'Error al duplicar'); setDupBusy(false); }
+                  }}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 7, padding: '11px 16px', borderRadius: 12,
+                    border: `1.5px solid ${T.border}`, background: T.bg2, color: T.text2,
+                    cursor: dupBusy ? 'default' : 'pointer',
+                    fontFamily: FONT, fontSize: 14, fontWeight: 700,
+                  }}
+                >
+                  {dupBusy ? <Loader2 size={16} className="spin" /> : <Copy size={16} />} Duplicar aparte
+                </button>
+              )}
               <button
                 type="button"
-                disabled={dupBusy}
-                onClick={async () => {
-                  setDupBusy(true);
-                  try { const copy = await duplicateExercise(exercise); onDuplicate(copy); }
-                  catch (e) { setErr(e.message || 'Error al duplicar'); setDupBusy(false); }
-                }}
+                onClick={onSave}
+                disabled={busy}
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 22px', borderRadius: 12,
-                  border: 'none', cursor: dupBusy ? 'default' : 'pointer', opacity: dupBusy ? 0.7 : 1,
+                  border: 'none', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1,
                   background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff',
                   fontFamily: FONT, fontSize: 14.5, fontWeight: 700, boxShadow: KP.shBtn,
                 }}
               >
-                {dupBusy ? <Loader2 size={16} className="spin" /> : <Copy size={16} />} Duplicar a mi repertorio
+                {busy && <Loader2 size={16} className="spin" />}
+                Guardar mi versión
               </button>
             </>
           ) : (
@@ -449,17 +507,22 @@ export default function ExercisesPanel() {
   const [filter, setFilter] = useState('all');
   const [muscle, setMuscle] = useState('all');
   const [search, setSearch] = useState('');
-  const [editing, setEditing] = useState(null); // { exercise, readOnly } | { new: true } | null
+  const [editing, setEditing] = useState(null); // { exercise, esAjeno } | { new: true } | null
+  // Mis versiones de los ejercicios base. Se aplican encima del repertorio.
+  const [overrides, setOverrides] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [cats, exs, mId] = await Promise.all([listCategories(), listExercises(), getMasterId()]);
+        const [cats, exs, mId, mias] = await Promise.all([
+          listCategories(), listExercises(), getMasterId(), listExerciseOverrides(user?.id),
+        ]);
         if (cancelled) return;
         setCategories(cats);
         setExercises(exs);
         setMasterId(mId);
+        setOverrides(mias);
       } catch (e) {
         if (!cancelled) setErr(e.message || 'Error al cargar');
       } finally {
@@ -467,14 +530,21 @@ export default function ExercisesPanel() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+    // Depende del usuario: mis versiones se piden POR coach, y en el primer
+    // render la sesión todavía puede no estar lista. Sin esta dependencia el
+    // repertorio cargaría sin mis versiones y nadie vería un error: se
+    // mostrarían los ejercicios del master como si nunca los hubiera editado.
+  }, [user?.id]);
 
   // Etiqueta base/propio y, para coaches, oculta el repertorio de otros coaches.
+  // Encima van MIS versiones: si personalicé un ejercicio base, en mi lista
+  // aparece como yo lo dejé, no como lo tiene el master.
   const visible = useMemo(() => {
-    const tagged = tagRepertoire(exercises, masterId, user?.id);
+    const conMisVersiones = aplicarOverrides(exercises, overrides, categories);
+    const tagged = tagRepertoire(conMisVersiones, masterId, user?.id);
     if (isMaster) return tagged; // el master ve todo
     return tagged.filter((e) => e.isBase || e.isMine);
-  }, [exercises, masterId, user?.id, isMaster]);
+  }, [exercises, overrides, categories, masterId, user?.id, isMaster]);
 
   // Músculos finos presentes en el repertorio (para el detalle del editor)
   const muscles = useMemo(() => {
@@ -513,12 +583,29 @@ export default function ExercisesPanel() {
 
   function handleDuplicate(copy) {
     setExercises((prev) => [...prev, copy]);
-    setEditing({ exercise: copy, readOnly: false }); // abre la copia para personalizar
+    setEditing({ exercise: copy, esAjeno: false }); // abre la copia para personalizar
   }
 
   function openExercise(ex) {
-    const ro = !isMaster && ex.isBase; // coach no puede editar el base
-    setEditing({ exercise: ex, readOnly: ro });
+    // Un coach SÍ puede editar los ejercicios base, pero editarlos no cambia el
+    // original: crea su propia versión. `esAjeno` es lo que dispara ese camino.
+    setEditing({ exercise: ex, esAjeno: !isMaster && ex.isBase });
+  }
+
+  // Guardé mi versión de un ejercicio base: entra al mapa de versiones y la
+  // lista se recalcula sola. El ejercicio original no se tocó.
+  function handleMiVersion(exerciseId, data) {
+    setOverrides((prev) => [
+      ...prev.filter((o) => o.exercise_id !== exerciseId),
+      { exercise_id: exerciseId, data },
+    ]);
+    setEditing(null);
+  }
+
+  // Volví al original: se quita mi versión y reaparece la del master.
+  function handleRestaurada(exerciseId) {
+    setOverrides((prev) => prev.filter((o) => o.exercise_id !== exerciseId));
+    setEditing(null);
   }
 
   function handleSaved(saved) {
@@ -632,14 +719,21 @@ export default function ExercisesPanel() {
 
       {editing && (
         <ExerciseEditor
+          /* `key` obliga a rearmar el formulario al cambiar de ejercicio. Sin
+             esto, el estado inicial se calcula una sola vez y el formulario se
+             quedaría con los datos del ejercicio anterior: se guardarían los
+             campos de uno encima de otro sin que nada avisara. */
+          key={editing.exercise?.id ?? 'nuevo'}
           exercise={editing.exercise || null}
           categories={categories}
           muscleOptions={muscles}
-          readOnly={!!editing.readOnly}
+          esAjeno={!!editing.esAjeno}
           onClose={() => setEditing(null)}
           onSaved={handleSaved}
           onDeleted={handleDeleted}
           onDuplicate={handleDuplicate}
+          onGuardadaMiVersion={handleMiVersion}
+          onRestaurada={handleRestaurada}
         />
       )}
 
