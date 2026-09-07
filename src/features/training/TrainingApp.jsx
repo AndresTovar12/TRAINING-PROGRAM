@@ -887,54 +887,40 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
         })}
       </div>
 
-      {/* Card del día seleccionado claro */}
-      <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 18, padding: 18, marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-          <button onClick={toggleComplete} style={{
-            width: 28, height: 28, borderRadius: '50%',
-            border: `2px solid ${selectedCompleted ? LT.mint : LT.borderHi}`,
-            background: selectedCompleted ? LT.mint : 'transparent',
-            cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: 0, marginTop: 2,
+      {/* Qué sesión es. Una línea, no una tarjeta.
+          Antes esto era un bloque de ~150 px con el nombre, un círculo para
+          marcarla terminada, y dos cifras (ejercicios e intensidad) que ya
+          están abajo, ejercicio por ejercicio. Ocupaba media pantalla para
+          repetir lo que venía después. */}
+      <div style={{
+        display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: '2px 8px',
+        padding: '0 3px', marginBottom: 14,
+      }}>
+        <span style={{
+          fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', color: cat.c,
+        }}>
+          {selectedDay.day} · {cat.label}
+        </span>
+        <span style={{ fontSize: 15, fontWeight: 800, color: selectedCompleted ? LT.text2 : LT.text }}>
+          {selectedDay.dual ? 'Doble sesión' : selectedDayName}
+        </span>
+        <span style={{ fontSize: 13, color: LT.text3, fontWeight: 600, ...NUM_STYLE }}>
+          {[
+            summary.exCount > 0 && `${summary.exCount} ejercicios`,
+            summary.mainIntensity,
+          ].filter(Boolean).join(' · ')}
+        </span>
+        {selectedDay.dual && (
+          <span style={{ fontSize: 11, color: LT.warning, fontWeight: 800 }}>AM y PM abajo</span>
+        )}
+        {selectedCompleted && (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            fontSize: 11.5, color: LT.mint, fontWeight: 800,
           }}>
-            {selectedCompleted && <Check size={14} style={{ color: '#fff' }} strokeWidth={3.5} />}
-          </button>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: cat.c }}>{selectedDay.day} · {cat.label}</span>
-              {selectedDay.dual && <span style={{ fontSize: 10, color: LT.warning, fontWeight: 700 }}>· DOBLE</span>}
-              {activeSessionId === selectedId && !selectedCompleted && <span style={{ fontSize: 10, color: LT.blue, fontWeight: 700 }}>· SIGUIENTE</span>}
-            </div>
-            {selectedDay.dual ? (
-              <div style={{ fontSize: 22, fontWeight: 800, color: selectedCompleted ? LT.text2 : LT.text, marginBottom: 4, lineHeight: 1.15, letterSpacing: -0.5 }}>
-                Doble sesión
-                <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: LT.text3, marginTop: 4, letterSpacing: 0 }}>AM y PM separadas, abre cada una abajo</span>
-              </div>
-            ) : (
-              <>
-                <div style={{ fontSize: 22, fontWeight: 800, color: selectedCompleted ? LT.text2 : LT.text, marginBottom: 14, lineHeight: 1.15, letterSpacing: -0.5 }}>
-                  {selectedDayName}
-                </div>
-                {(summary.exCount > 0 || summary.mainIntensity) && (
-                  <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
-                    {summary.exCount > 0 && (
-                      <div>
-                        <div style={{ fontSize: 10, color: LT.text3, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 2 }}>Ejercicios</div>
-                        <div style={{ fontSize: 17, fontWeight: 800, color: LT.text, ...NUM_STYLE }}>{summary.exCount}</div>
-                      </div>
-                    )}
-                    {summary.mainIntensity && (
-                      <div>
-                        <div style={{ fontSize: 10, color: LT.text3, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 2 }}>Intensidad</div>
-                        <div style={{ fontSize: 17, fontWeight: 800, color: LT.text, ...NUM_STYLE }}>{summary.mainIntensity}</div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
+            <Check size={13} strokeWidth={3} /> Terminada
+          </span>
+        )}
       </div>
 
       {/* Ejercicios agrupados en sets */}
@@ -1043,6 +1029,33 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
           onBlur={e => e.target.style.borderColor = LT.border}
         />
       </div>
+
+      {/* Cerrar la sesión.
+          Va al FINAL porque es donde estás cuando terminaste de verdad: antes
+          había que subir hasta arriba del todo para marcarla.
+
+          Y va discreto a propósito, decisión de Andrés: "mi plan es que ese
+          botón no sea indispensable, para nada". No es el objetivo de la
+          pantalla —entrenar lo es—, así que no compite con nada. Quien lo
+          ignore no pierde nada; quien quiera cerrarla, lo tiene donde acaba. */}
+      {(selectedDay.exercises || selectedDay.blocks) && (
+        <button
+          type="button"
+          onClick={toggleComplete}
+          style={{
+            width: '100%', minHeight: 48, marginBottom: 14, borderRadius: 14,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 700,
+            border: `1.5px solid ${selectedCompleted ? LT.mint : LT.border}`,
+            background: selectedCompleted ? `${LT.mint}12` : LT.surface,
+            color: selectedCompleted ? LT.mint : LT.text2,
+          }}
+        >
+          {selectedCompleted
+            ? <><Check size={16} strokeWidth={3} /> Sesión terminada · deshacer</>
+            : 'Marcar sesión como terminada'}
+        </button>
+      )}
 
       {selectedDay.dayScience && (
         <LightCollapsible title="Por qué este día" icon={Info} color={LT.blue}>
