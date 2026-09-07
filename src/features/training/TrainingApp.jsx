@@ -819,18 +819,34 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
                 marginBottom: -1, transition: 'color .12s, border-color .12s',
               }}>
               {esCompu ? (NOMBRE_DIA[day.day] || day.day) : day.day}
-              {isCompleted
-                ? <Check size={12} strokeWidth={3} style={{ color: LT.mint, marginLeft: 6, verticalAlign: 'middle' }} />
-                : <span style={{
-                    display: 'inline-block', width: 5, height: 5, borderRadius: '50%',
-                    background: dcat.c, marginLeft: 6, verticalAlign: 'middle',
-                  }} />}
-              {isActive && !isCompleted && (
-                <span style={{
-                  display: 'inline-block', width: 4, height: 4, borderRadius: '50%',
-                  background: phaseColor, marginLeft: 3, verticalAlign: 'middle',
-                }} />
-              )}
+
+              {/* Una sola marca por dia, siempre del mismo ancho.
+                  Antes eran DOS puntos pegados en el dia que estaba a medias:
+                  uno de la categoria y otro de "en curso". Se veia como un
+                  error de dibujo —lo era, en la practica— porque nadie deduce
+                  que el segundo punto significa "esta empezada".
+
+                  Ahora el estado va en la FORMA, no en la cantidad:
+                    hecha     -> palomita verde
+                    a medias  -> el punto con un anillo alrededor
+                    pendiente -> el punto solo
+                  El color sigue siendo el de la categoria del dia. */}
+              <span style={{
+                display: 'inline-grid', placeItems: 'center', verticalAlign: 'middle',
+                width: 13, height: 13, marginLeft: 6,
+              }}>
+                {isCompleted ? (
+                  <Check size={12} strokeWidth={3} style={{ color: LT.mint }} />
+                ) : (
+                  <span
+                    title={isActive ? 'La dejaste empezada' : undefined}
+                    style={{
+                      width: 5, height: 5, borderRadius: '50%', background: dcat.c,
+                      boxShadow: isActive ? `0 0 0 2.5px ${phaseColor}55` : 'none',
+                    }}
+                  />
+                )}
+              </span>
             </button>
           );
         })}
