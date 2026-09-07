@@ -7,19 +7,32 @@
  * avance— solo llegaba a una de las dos.
  */
 import { useRef, useState } from 'react';
-import { Upload, Loader2, X } from 'lucide-react';
+import { Upload, Loader2, X, Video, Camera, Images } from 'lucide-react';
 import { uploadExerciseMedia } from '@/lib/api';
 import { optimizaImagen, pesoTexto as pesoLegible } from '@/lib/imagen';
+import { useCoarsePointer } from '@/lib/useViewport';
 import { T, FONT } from '@/lib/theme';
 
 export default function MediaUpload({ label, icon: Icon, value, onChange, accept, kind, hint }) {
+  // En el telefono se ofrecen DOS acciones distintas, y grabar va primero.
+  //
+  // Por que: un solo boton que dice "Subir archivo" con una flecha hacia arriba
+  // se lee como "busca un archivo que ya tienes". El coach esta parado en el
+  // gimnasio con el atleta enfrente; lo que quiere es grabar ahi mismo. El
+  // atributo `capture` abre la camara directo, sin pasar por el carrete.
+  //
+  // En computadora no se muestra: `capture` no hace nada y un boton "Grabar"
+  // que no graba es peor que no tenerlo.
+  const enTelefono = useCoarsePointer();
+  const esVideo = (accept || '').startsWith('video');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [avance, setAvance] = useState(0);
   const [archivo, setArchivo] = useState(null); // { nombre, mb }
   const [aviso, setAviso] = useState(null);     // { texto, detalle }
   const [ahorro, setAhorro] = useState(null);   // { antes, despues }
-  const inputRef = useRef(null);
+  const inputRef = useRef(null);      // elegir de la galeria
+  const camaraRef = useRef(null);     // grabar / tomar en el momento
 
   async function onPick(e) {
     const elegido = e.target.files?.[0];
@@ -45,27 +58,64 @@ export default function MediaUpload({ label, icon: Icon, value, onChange, accept
       setErr(e2.message || 'Error al subir');
     } finally {
       setBusy(false);
+      // Se limpian los dos: si no, elegir el MISMO archivo otra vez no
+      // dispara el evento y parece que la app se quedo colgada.
       if (inputRef.current) inputRef.current.value = '';
+      if (camaraRef.current) camaraRef.current.value = '';
     }
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>{label}</span>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={busy}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 7, padding: '10px 14px',
-            borderRadius: 11, border: `1.5px solid ${T.border}`, background: T.bg2, cursor: 'pointer',
-            fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: T.text, whiteSpace: 'nowrap',
-          }}
-        >
-          {busy ? <Loader2 size={15} className="spin" /> : <Upload size={15} />}
-          {busy ? 'Subiendo…' : 'Subir archivo'}
-        </button>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        {enTelefono ? (
+          <>
+            <button
+              type="button"
+              onClick={() => camaraRef.current?.click()}
+              disabled={busy}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 44,
+                padding: '0 16px', borderRadius: 11, border: 'none',
+                background: busy ? T.bg3 : T.accent, color: busy ? T.text3 : '#fff',
+                cursor: busy ? 'default' : 'pointer',
+                fontFamily: FONT, fontSize: 13.5, fontWeight: 800, whiteSpace: 'nowrap',
+              }}
+            >
+              {busy ? <Loader2 size={15} className="spin" />
+                : esVideo ? <Video size={16} /> : <Camera size={16} />}
+              {busy ? 'Subiendo…' : esVideo ? 'Grabar ahora' : 'Tomar foto'}
+            </button>
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              disabled={busy}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 44,
+                padding: '0 14px', borderRadius: 11, border: `1.5px solid ${T.border}`,
+                background: T.bg2, cursor: busy ? 'default' : 'pointer',
+                fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: T.text2, whiteSpace: 'nowrap',
+              }}
+            >
+              <Images size={15} /> {esVideo ? 'Del carrete' : 'De mis fotos'}
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={busy}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 7, padding: '10px 14px',
+              borderRadius: 11, border: `1.5px solid ${T.border}`, background: T.bg2, cursor: 'pointer',
+              fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: T.text, whiteSpace: 'nowrap',
+            }}
+          >
+            {busy ? <Loader2 size={15} className="spin" /> : <Upload size={15} />}
+            {busy ? 'Subiendo…' : 'Subir archivo'}
+          </button>
+        )}
         {value && (
           <button
             type="button"
@@ -81,6 +131,10 @@ export default function MediaUpload({ label, icon: Icon, value, onChange, accept
         )}
       </div>
       <input ref={inputRef} type="file" accept={accept} onChange={onPick} style={{ display: 'none' }} />
+      {/* `capture` es lo que hace que el telefono abra la camara en vez del
+          carrete. Va en un input APARTE y no como atributo condicional del de
+          arriba: cambiarlo por estado no alcanzaria a aplicarse antes del clic. */}
+      <input ref={camaraRef} type="file" accept={accept} capture="environment" onChange={onPick} style={{ display: 'none' }} />
       {hint && <div style={{ fontSize: 11.5, color: T.text3 }}>{hint}</div>}
 
       {/* Mientras sube: nombre, peso y avance real. Antes solo giraba una

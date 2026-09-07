@@ -176,7 +176,7 @@ export default function VideosDelEjercicio({ exerciseId }) {
           <MediaUpload
             label="Archivo" icon={Video} value={url} onChange={setUrl}
             accept="video/*" kind="videos"
-            hint="Desde el teléfono puedes grabarlo aquí mismo."
+            hint="Después de subirlo puedes recortarlo y quedarte solo con la parte buena."
           />
 
           {url && (
@@ -187,6 +187,39 @@ export default function VideosDelEjercicio({ exerciseId }) {
               onCambio={setRecorte}
             />
           )}
+
+          {/* Esta pregunta sube por delante del angulo a proposito. Andres la
+              vio "hasta al final y no muy visible", y tenia razon en el efecto:
+              es la que decide QUIEN va a ver este video, mientras que el angulo
+              solo le pone nombre. Enterrada abajo, nadie la usaba.
+
+              Debajo va una linea que dice lo que hace de verdad, porque
+              "Hombres" a secas no explica que el video deja de verse para el
+              resto. */}
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text2, marginBottom: 6 }}>¿Quién debe ver este video?</div>
+            <div style={{ display: 'flex', gap: 7 }}>
+              {GENEROS.map((g) => (
+                <button
+                  key={g.valor} type="button" onClick={() => setGenero(g.valor)}
+                  style={{
+                    flex: 1, minHeight: 44, padding: '10px 8px', borderRadius: 11, cursor: 'pointer',
+                    border: `1.5px solid ${genero === g.valor ? T.accent : T.border}`,
+                    background: genero === g.valor ? T.accentBg : T.bg2,
+                    color: genero === g.valor ? T.accent : T.text2,
+                    fontFamily: FONT, fontSize: 12.5, fontWeight: 700,
+                  }}
+                >
+                  {g.texto}
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize: 11.5, color: T.text3, marginTop: 7, fontWeight: 600, lineHeight: 1.45 }}>
+              {genero
+                ? 'Solo lo verán los atletas que pusieron eso en su perfil. Los demás siguen viendo el video general.'
+                : 'Lo verán todos tus atletas. Elige Hombres o Mujeres si grabaste una versión para cada uno.'}
+            </div>
+          </div>
 
           <label style={{ display: 'block' }}>
             <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text2, marginBottom: 6 }}>¿Desde dónde está grabado?</div>
@@ -205,26 +238,6 @@ export default function VideosDelEjercicio({ exerciseId }) {
               {ANGULOS_SUGERIDOS.map((a) => <option key={a} value={a} />)}
             </datalist>
           </label>
-
-          <div>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text2, marginBottom: 6 }}>¿Para quién es?</div>
-            <div style={{ display: 'flex', gap: 7 }}>
-              {GENEROS.map((g) => (
-                <button
-                  key={g.valor} type="button" onClick={() => setGenero(g.valor)}
-                  style={{
-                    flex: 1, padding: '10px 8px', borderRadius: 11, cursor: 'pointer',
-                    border: `1.5px solid ${genero === g.valor ? T.accent : T.border}`,
-                    background: genero === g.valor ? T.accentBg : T.bg2,
-                    color: genero === g.valor ? T.accent : T.text2,
-                    fontFamily: FONT, fontSize: 12.5, fontWeight: 700,
-                  }}
-                >
-                  {g.texto}
-                </button>
-              ))}
-            </div>
-          </div>
 
           {err && (
             <div style={{ background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 11, padding: '10px 12px', fontSize: 12.5, fontWeight: 700 }}>

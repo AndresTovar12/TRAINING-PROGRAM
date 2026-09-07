@@ -82,6 +82,7 @@ export default function AuthScreen({ modoInicial = 'login', onVolver }) {
   const [password, setPassword] = useState('');
   const [accountType, setAccountType] = useState('athlete'); // 'athlete' | 'coach'
   const [coachUsername, setCoachUsername] = useState('');
+  const [genero, setGenero] = useState(''); // '' | 'h' | 'm'
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -122,6 +123,7 @@ export default function AuthScreen({ modoInicial = 'login', onVolver }) {
       username, email, password, fullName,
       accountType,
       coachUsername: accountType === 'athlete' ? coachUsername.trim() : '',
+      genero,
     });
     setBusy(false);
     if (err) setError(err.message);
@@ -289,6 +291,55 @@ export default function AuthScreen({ modoInicial = 'login', onVolver }) {
                   onChange={(e) => setCoachUsername(e.target.value.replace(/\s/g, ''))}
                 />
               )}
+
+              {/* Se pregunta AQUI, y no solo en "Mi perfil", por un dato medido:
+                  estando escondido en el perfil, 11 de 11 personas lo tenian
+                  vacio. Un coach podia grabar la version de hombre y la de
+                  mujer de un ejercicio y no se las iba a ver nadie, porque la
+                  app no sabia a quien le tocaba cual.
+
+                  Es opcional de verdad: "Prefiero no decir" es una opcion real,
+                  no un descuido. Quien no conteste ve el video general. */}
+              <div>
+                <div style={{
+                  fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase',
+                  color: KP.ink3, marginBottom: 8,
+                }}>
+                  Videos de técnica
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {[
+                    { v: 'h', label: 'Hombre' },
+                    { v: 'm', label: 'Mujer' },
+                    { v: '', label: 'Prefiero no decir' },
+                  ].map((o) => {
+                    const active = genero === o.v;
+                    return (
+                      <button
+                        key={o.v || 'sin'}
+                        type="button"
+                        onClick={() => setGenero(o.v)}
+                        className="kp-press"
+                        style={{
+                          flex: 1, minHeight: 44, padding: '10px 8px', borderRadius: 13, cursor: 'pointer',
+                          border: `1.5px solid ${active ? KP.blue : KP.line}`,
+                          background: active ? KP.blueSoft : KP.bg,
+                          color: active ? KP.blue : KP.ink2,
+                          boxShadow: active ? '0 0 0 4px rgba(30,64,224,0.08)' : 'none',
+                          transition: 'all .15s', fontFamily: FONT,
+                          fontSize: 13, fontWeight: 700, lineHeight: 1.2,
+                        }}
+                      >
+                        {o.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize: 11.5, fontWeight: 600, color: KP.ink3, marginTop: 7, lineHeight: 1.45 }}>
+                  Opcional. Si un ejercicio está grabado en dos versiones, te muestra la tuya.
+                  Puedes cambiarlo después en tu perfil.
+                </div>
+              </div>
             </>
           )}
           <Field

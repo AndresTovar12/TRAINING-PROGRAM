@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
 
   let payload: {
     username?: string; email?: string; password?: string; full_name?: string
-    account_type?: string; coach_username?: string
+    account_type?: string; coach_username?: string; genero?: string
   }
   try {
     payload = await req.json()
@@ -84,6 +84,16 @@ Deno.serve(async (req) => {
   let email = (payload.email ?? '').trim().toLowerCase()
   const accountType = (payload.account_type ?? 'athlete').trim().toLowerCase()
   const coachUsername = (payload.coach_username ?? '').trim()
+
+  // Genero: 'h', 'm', o nada. Se pregunta al darse de alta porque ahi es donde
+  // la gente si contesta. Estaba solo en "Mi perfil", escondido, y el resultado
+  // fue que 11 de 11 personas lo tenian vacio — asi que los videos por genero
+  // que grabaran los coaches no se los iba a ver nadie.
+  //
+  // Es opcional a proposito. Si no contesta, se le muestra el video general:
+  // adivinarle el genero y enseñarle el equivocado es peor que no saberlo.
+  const generoCrudo = (payload.genero ?? '').trim().toLowerCase()
+  const genero = generoCrudo === 'h' || generoCrudo === 'm' ? generoCrudo : null
 
   if (!USERNAME_RE.test(username)) {
     return json(
@@ -171,7 +181,7 @@ Deno.serve(async (req) => {
   if (userId) {
     const { error: errPerfil } = await admin
       .from('profiles')
-      .update({ role, coach_id: coachId, is_owner: false })
+      .update({ role, coach_id: coachId, is_owner: false, genero })
       .eq('id', userId)
     if (errPerfil) {
       console.error('update profiles falló:', textoDeError(errPerfil))

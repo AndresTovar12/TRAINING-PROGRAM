@@ -830,7 +830,7 @@ function MediaParaEsteAtleta({ ejercicio, atleta, onCerrar }) {
               ocupado={guardando === 'video'}
               deshabilitado={ocupado}
               vacio="Hoy ve el video general del ejercicio."
-              hint="Puedes grabarlo desde el teléfono."
+              hint="Grábalo con el atleta enfrente: es la corrección que solo le sirve a él."
             />
 
             <RanuraMedia
