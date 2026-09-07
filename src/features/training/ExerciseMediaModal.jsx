@@ -1,14 +1,23 @@
+import { useState } from 'react';
 import { X, ExternalLink, Dumbbell } from 'lucide-react';
+import { videosParaAtleta } from '@/lib/videos';
 import { T, FONT, KP } from '@/lib/theme';
 
 /**
  * Ficha de un ejercicio del repertorio: foto de portada, video (archivo o
  * link externo), músculos y equipo. `exercise` es la fila de `exercises`;
  * `planEx` (opcional) es el ejercicio del plan para mostrar la dosis.
+ *
+ * Un ejercicio puede tener VARIOS videos —de frente, de lado, la versión de su
+ * género, o uno grabado solo para él— y aquí se eligen y se cambian. Cuál sale
+ * primero lo decide `videosParaAtleta`; esta pantalla solo los pinta.
  */
-export default function ExerciseMediaModal({ exercise, planEx, onClose }) {
+export default function ExerciseMediaModal({ exercise, planEx, medias = [], perfil, onClose }) {
+  const videos = videosParaAtleta(exercise, medias, perfil);
+  const [activo, setActivo] = useState(0);
   if (!exercise) return null;
   const muscles = [...(exercise.muscle_primary ?? []), ...(exercise.muscle_secondary ?? [])];
+  const video = videos[activo] ?? videos[0] ?? null;
 
   return (
     <div
@@ -98,19 +107,42 @@ export default function ExerciseMediaModal({ exercise, planEx, onClose }) {
             </div>
           )}
 
-          {/* Video subido */}
-          {exercise.video_url && (
-            <video
-              src={exercise.video_url}
-              controls
-              playsInline
-              preload="metadata"
-              style={{ width: '100%', borderRadius: 14, marginTop: 16, background: '#000' }}
-            />
+          {/* Video. Si hay más de uno, arriba salen los ángulos disponibles. */}
+          {video && (
+            <>
+              {videos.length > 1 && (
+                <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 16 }}>
+                  {videos.map((v, i) => (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => setActivo(i)}
+                      style={{
+                        padding: '7px 13px', borderRadius: 999, cursor: 'pointer',
+                        border: `1.5px solid ${i === activo ? T.accent : T.border}`,
+                        background: i === activo ? T.accentBg : T.bg2,
+                        color: i === activo ? T.accent : T.text2,
+                        fontFamily: FONT, fontSize: 12.5, fontWeight: 700,
+                      }}
+                    >
+                      {v.etiqueta}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <video
+                key={video.url}
+                src={video.url}
+                controls
+                playsInline
+                preload="metadata"
+                style={{ width: '100%', borderRadius: 14, marginTop: 12, background: '#000' }}
+              />
+            </>
           )}
 
           {/* Link externo (YouTube, etc.) */}
-          {exercise.video_link && (
+          {exercise.video_link && video?.url !== exercise.video_link && (
             <a
               href={exercise.video_link}
               target="_blank"

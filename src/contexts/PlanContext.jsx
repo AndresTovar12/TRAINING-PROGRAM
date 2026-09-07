@@ -2,7 +2,7 @@ import {
   createContext, useContext, useEffect, useState, useMemo, useCallback,
 } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getActivePlan, listExercises } from '@/lib/api';
+import { getActivePlan, listExercises, listExerciseMedia } from '@/lib/api';
 
 /**
  * Carga el plan activo del usuario autenticado (tabla `plans`, jsonb con la
@@ -72,6 +72,7 @@ export function PlanProvider({ children }) {
   const [planRow, setPlanRow] = useState(null);
   const [planLoading, setPlanLoading] = useState(true);
   const [exercises, setExercises] = useState([]);
+  const [medias, setMedias] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,6 +97,18 @@ export function PlanProvider({ children }) {
       .catch(() => {});
     return () => { cancelled = true; };
   }, []);
+
+  // Videos extra: ángulos, versiones por género y videos puestos a mano para
+  // un atleta. Se piden todos de una vez porque son pocas filas y así el
+  // reproductor no tiene que ir a la red cada vez que se abre un ejercicio.
+  useEffect(() => {
+    let cancelled = false;
+    if (exercises.length === 0) return undefined;
+    listExerciseMedia(exercises.map((e) => e.id))
+      .then((rows) => { if (!cancelled) setMedias(rows ?? []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [exercises]);
 
   const phases = useMemo(
     () => normalizePlan(planRow?.data?.phases),
@@ -138,9 +151,10 @@ export function PlanProvider({ children }) {
       planMeta: planRow ? { id: planRow.id, title: planRow.title } : null,
       planLoading,
       exercises,
+      medias,
       resolveExercise,
     }),
-    [phases, kind, planRow, planLoading, exercises, resolveExercise],
+    [phases, kind, planRow, planLoading, exercises, medias, resolveExercise],
   );
 
   return <PlanContext.Provider value={value}>{children}</PlanContext.Provider>;

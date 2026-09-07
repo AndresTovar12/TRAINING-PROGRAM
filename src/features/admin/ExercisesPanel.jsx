@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  Plus, Search, X, Trash2, Upload, Loader2, Image as ImageIcon, Video, Dumbbell,
+  Plus, Search, X, Trash2, Loader2, Image as ImageIcon, Video, Dumbbell,
   Copy, Lock,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   listCategories, listExercises, createExercise, updateExercise, deleteExercise,
-  uploadExerciseMedia, getMasterId, tagRepertoire, duplicateExercise,
+  getMasterId, tagRepertoire, duplicateExercise,
 } from '@/lib/api';
+import MediaUpload from '@/features/admin/MediaUpload';
+import VideosDelEjercicio from '@/features/admin/VideosDelEjercicio';
 import { MUSCLE_GROUPS, FINE_MUSCLES, exerciseMatchesGroup } from '@/lib/muscles';
 import { T, FONT, KP } from '@/lib/theme';
 
@@ -118,106 +120,6 @@ function Input({ label, ...props }) {
   );
 }
 
-function MediaUpload({ label, icon: Icon, value, onChange, accept, kind, hint }) {
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
-  const [avance, setAvance] = useState(0);
-  const [archivo, setArchivo] = useState(null); // { nombre, mb }
-  const inputRef = useRef(null);
-
-  async function onPick(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setErr('');
-    setAvance(0);
-    setArchivo({ nombre: file.name, mb: Math.round((file.size / 1048576) * 10) / 10 });
-    setBusy(true);
-    try {
-      const url = await uploadExerciseMedia(file, kind, setAvance);
-      onChange(url);
-      setArchivo(null);
-    } catch (e2) {
-      setErr(e2.message || 'Error al subir');
-    } finally {
-      setBusy(false);
-      if (inputRef.current) inputRef.current.value = '';
-    }
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>{label}</span>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={busy}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 7, padding: '10px 14px',
-            borderRadius: 11, border: `1.5px solid ${T.border}`, background: T.bg2, cursor: 'pointer',
-            fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: T.text, whiteSpace: 'nowrap',
-          }}
-        >
-          {busy ? <Loader2 size={15} className="spin" /> : <Upload size={15} />}
-          {busy ? 'Subiendo…' : 'Subir archivo'}
-        </button>
-        {value && (
-          <button
-            type="button"
-            onClick={() => onChange('')}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5, padding: '10px 12px',
-              borderRadius: 11, border: 'none', background: 'rgba(220,38,38,0.08)', cursor: 'pointer',
-              fontFamily: FONT, fontSize: 13, fontWeight: 700, color: T.danger,
-            }}
-          >
-            <X size={14} /> Quitar
-          </button>
-        )}
-      </div>
-      <input ref={inputRef} type="file" accept={accept} onChange={onPick} style={{ display: 'none' }} />
-      {hint && <div style={{ fontSize: 11.5, color: T.text3 }}>{hint}</div>}
-
-      {/* Mientras sube: nombre, peso y avance real. Antes solo giraba una
-          ruedita de 15px dentro del boton, y un video de 80 MB por datos
-          moviles se veia igual que si la app no hubiera hecho nada. */}
-      {busy && archivo && (
-        <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 11, padding: '10px 12px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 12.5, fontWeight: 700, color: T.text }}>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{archivo.nombre}</span>
-            <span style={{ flexShrink: 0, color: T.accent }}>{avance}%</span>
-          </div>
-          <div style={{ height: 6, borderRadius: 999, background: T.bg3, marginTop: 8, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${avance}%`, background: T.accent, borderRadius: 999, transition: 'width .2s' }} />
-          </div>
-          <div style={{ fontSize: 11.5, color: T.text3, marginTop: 6, fontWeight: 600 }}>
-            {archivo.mb} MB · no cierres esta pantalla
-          </div>
-        </div>
-      )}
-
-      {/* El error va en caja roja, no en una linea de 12px que se pierde. */}
-      {err && (
-        <div style={{
-          background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 11,
-          padding: '10px 12px', fontSize: 12.5, fontWeight: 600, lineHeight: 1.45,
-        }}>
-          {err}
-        </div>
-      )}
-      {value && (
-        <div
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: T.text2,
-            background: T.bg, borderRadius: 9, padding: '8px 10px', wordBreak: 'break-all',
-          }}
-        >
-          <Icon size={14} style={{ flexShrink: 0 }} /> {value}
-        </div>
-      )}
-    </div>
-  );
-}
 
 const empty = {
   name: '', category_id: '', equipment: '', description: '',
@@ -436,6 +338,10 @@ function ExerciseEditor({ exercise, categories, muscleOptions = [], onClose, onS
             onChange={(e) => set('video_link', e.target.value)}
             placeholder="https://…"
           />
+
+          <div style={{ height: 1, background: T.border }} />
+
+          <VideosDelEjercicio exerciseId={exercise?.id} readOnly={readOnly} />
 
           {err && (
             <div style={{ background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 11, padding: '11px 14px', fontSize: 13.5, fontWeight: 600 }}>

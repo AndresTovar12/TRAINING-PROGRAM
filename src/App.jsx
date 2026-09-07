@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Dumbbell, Loader2, LogOut, Shield, User as UserIcon, UserCog, RefreshCw } from 'lucide-react';
+import { Dumbbell, Loader2, Lock, LogOut, Shield, User as UserIcon, UserCog, RefreshCw } from 'lucide-react';
 import { useNewVersion } from '@/lib/useNewVersion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsDesktop } from '@/lib/useViewport';
@@ -189,6 +189,60 @@ function UpdateBanner() {
 }
 
 /**
+ * Pantalla para una cuenta desactivada.
+ *
+ * No es un error ni una expulsion: los datos siguen ahi y el master puede
+ * reactivarla con un clic. Por eso el texto dice a quien acudir en vez de
+ * limitarse a negar el paso.
+ */
+function CuentaDesactivada() {
+  const { signOut, profile } = useAuth();
+  const nombre = profile?.full_name?.split(' ')[0] || profile?.username || '';
+  return (
+    <div
+      style={{
+        minHeight: '100svh', display: 'flex', flexDirection: 'column', gap: 18,
+        alignItems: 'center', justifyContent: 'center', fontFamily: FONT, padding: 24,
+        textAlign: 'center',
+        background:
+          'radial-gradient(1100px 620px at 50% -8%, #e7ecfe 0%, rgba(244,245,248,0) 60%), #f4f5f8',
+      }}
+    >
+      <div
+        style={{
+          width: 60, height: 60, borderRadius: 18, display: 'grid', placeItems: 'center',
+          background: KP.dangerSoft, color: KP.danger,
+        }}
+      >
+        <Lock size={26} strokeWidth={2.2} />
+      </div>
+      <div style={{ maxWidth: 380 }}>
+        <h1 style={{ fontSize: 21, fontWeight: 800, color: KP.ink, margin: '0 0 8px', letterSpacing: -0.4 }}>
+          {nombre ? `${nombre}, tu cuenta está pausada` : 'Tu cuenta está pausada'}
+        </h1>
+        <p style={{ fontSize: 15, color: KP.ink2, lineHeight: 1.55, margin: 0, fontWeight: 500 }}>
+          No se borró nada: tu plan y todo tu historial siguen guardados.
+          Habla con tu entrenador para que la vuelva a activar.
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={signOut}
+        className="kp-press"
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 4,
+          padding: '13px 22px', borderRadius: 999, border: `1.5px solid ${KP.line}`,
+          background: KP.surface, color: KP.ink, cursor: 'pointer',
+          fontFamily: FONT, fontSize: 15, fontWeight: 700,
+        }}
+      >
+        <LogOut size={16} /> Cerrar sesión
+      </button>
+    </div>
+  );
+}
+
+/**
  * Puerta de entrada para quien NO tiene sesion.
  *
  * En computadora se muestra primero la pagina de presentacion, porque ahi
@@ -223,6 +277,10 @@ export default function App() {
   if (loading) return <Splash />;
   if (!user) return <><Entrada /><UpdateBanner /></>;
   if (!profile) return <Splash label="Cargando tu perfil…" />;
+
+  // Cuenta pausada por el administrador. Va ANTES de elegir app: si no, el
+  // atleta entraria a su rutina y solo fallarian las consultas, una por una.
+  if (profile.is_active === false) return <CuentaDesactivada />;
 
   if (profile.role === 'admin') {
     return (

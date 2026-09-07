@@ -19,7 +19,28 @@ const greeting = () => {
   if (h < 19) return { text: 'Buenas tardes', icon: Sun };
   return { text: 'Buenas noches', icon: Moon };
 };
+/**
+ * ¿Este ejercicio lleva peso, o sea: hay que mostrarle al atleta el campo para
+ * anotar con cuánto lo hizo?
+ *
+ * Manda el coach. Si marcó `carga` al armar la sesión, esa decisión gana y no
+ * se discute. Solo cuando NO la marcó se recurre a adivinar por el nombre.
+ *
+ * Por qué el orden es ese: adivinar por el nombre choca de frente con que la
+ * app sirva para cualquier actividad física. Un drill nuevo con un nombre que
+ * la lista no contempla se quedaba sin campo de peso —o lo mostraba cuando no
+ * tocaba— y el coach no tenía forma de corregirlo. Ahora la lista de palabras
+ * es solo una sugerencia inicial.
+ */
 const isLoadedExercise = (ex) => {
+  if (!ex || ex.isNote) return false;
+  if (ex.carga === true || ex.carga === 'si') return true;
+  if (ex.carga === false || ex.carga === 'no') return false;
+  return adivinaSiLlevaCarga(ex);
+};
+
+/** La vieja lista de palabras. Ya no decide: solo propone un valor por defecto. */
+const adivinaSiLlevaCarga = (ex) => {
   if (!ex || ex.isNote) return false;
   const name = (ex.name || '').toLowerCase();
   const intensity = (ex.intensity || '').toLowerCase();
@@ -200,6 +221,50 @@ const findPreviousWeight = (plan, sessionsData, exName) => {
   }
   return latest;
 };
+/**
+ * Todo lo que el atleta ha levantado en un ejercicio, en orden.
+ *
+ * `findPreviousWeight` (arriba) devuelve solo el último dato, que sirve para no
+ * olvidar cuánto pusiste la vez pasada. Esto es lo otro que pidió Andrés:
+ * "saber su progreso", que es una historia, no un dato suelto.
+ *
+ * Devuelve [{ kilos, cuando, donde }] de lo más viejo a lo más nuevo. `cuando`
+ * puede venir vacío: las sesiones sin terminar no tienen fecha de cierre, y aun
+ * así el peso anotado cuenta.
+ */
+const historialDePeso = (plan, sessionsData, exName) => {
+  const objetivo = (exName || '').toLowerCase().trim();
+  if (!objetivo) return [];
+  const salida = [];
+  for (const phase of (plan ?? [])) {
+    for (const week of (phase.weekData ?? [])) {
+      for (let di = 0; di < (week.days?.length ?? 0); di++) {
+        const sd = sessionsData[sessionId(phase.id, week.num, di)];
+        if (!sd?.exercises) continue;
+        const day = week.days[di];
+        const todos = [];
+        if (day.exercises) day.exercises.forEach((e, i) => todos.push({ ex: e, key: `${i}` }));
+        if (day.blocks) day.blocks.forEach((blk, bi) => {
+          if (blk.type === 'lift') blk.exercises.forEach((e, i) => todos.push({ ex: e, key: `${bi}-${i}` }));
+        });
+        for (const { ex, key } of todos) {
+          if (!ex.name || ex.isNote) continue;
+          if (ex.name.toLowerCase().trim() !== objetivo) continue;
+          const dato = sd.exercises[key];
+          const kilos = parseFloat(dato?.weight);
+          if (!dato?.weight || Number.isNaN(kilos)) continue;
+          salida.push({
+            kilos,
+            cuando: sd.completedAt || null,
+            donde: `${phase.name || phase.id} · sem ${week.num}`,
+          });
+        }
+      }
+    }
+  }
+  return salida;
+};
+
 const totalProgress = (plan, sessionsData) => {
   let total = 0, completed = 0;
   (plan ?? []).forEach(p => p.weekData.forEach(w => w.days.forEach((_, i) => {
@@ -364,7 +429,8 @@ const getMuscles = (name, focus) => {
 
 export {
   sessionId, calc1RM, today, greeting, isLoadedExercise, isValidCursor,
-  resolveCursor, advanceCursor, defaultCursor, findPreviousWeight,
+  resolveCursor, advanceCursor, defaultCursor, findPreviousWeight, historialDePeso,
+  adivinaSiLlevaCarga,
   totalProgress, getWeekLoad, formatIntensity, inferRest, getPattern, getMuscles,
   weekdayToday, weekdayLabel, isoWeekKey, weeklySessionId, sessionIdFor,
   sessionForToday, weekOverview,

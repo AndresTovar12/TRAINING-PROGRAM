@@ -227,6 +227,61 @@ export async function uploadExerciseMedia(file, kind = 'media', onAvance) {
   return permiso.b.url_publica;
 }
 
+/* --------------------- Videos por ángulo / género / atleta -------------- *
+ * Un ejercicio puede tener varios videos. Cada uno lleva etiquetas que dicen
+ * cuándo toca usarlo: el ángulo desde el que se grabó, para qué género es, y
+ * si es un video puesto solo para un atleta concreto.
+ *
+ * El `video_url` de siempre NO desaparece: sigue siendo el video por defecto.
+ * Esto se consulta encima, así que los ejercicios que ya existen no cambian.
+ * ----------------------------------------------------------------------- */
+
+// Todos los videos extra de un conjunto de ejercicios, en una sola consulta.
+// Se pide en lote y no uno por ejercicio: una sesión tiene 8-12 ejercicios y
+// doce viajes de ida y vuelta en el gimnasio, con datos móviles, se sienten.
+export async function listExerciseMedia(exerciseIds) {
+  const ids = (exerciseIds ?? []).filter(Boolean);
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase
+    .from('exercise_media')
+    .select('*')
+    .in('exercise_id', ids)
+    .order('orden');
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function addExerciseMedia({ exerciseId, url, tipo = 'video', etiqueta, genero, paraAtleta }) {
+  const { data: auth } = await supabase.auth.getUser();
+  const { data, error } = await supabase
+    .from('exercise_media')
+    .insert({
+      exercise_id: exerciseId,
+      url,
+      tipo,
+      etiqueta: etiqueta || null,
+      genero: genero || null,
+      para_atleta: paraAtleta || null,
+      created_by: auth?.user?.id ?? null,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateExerciseMedia(id, patch) {
+  const { data, error } = await supabase
+    .from('exercise_media').update(patch).eq('id', id).select('*').single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteExerciseMedia(id) {
+  const { error } = await supabase.from('exercise_media').delete().eq('id', id);
+  if (error) throw error;
+}
+
 /* ------------------------------ Athletes ------------------------------ */
 export async function listAthletes() {
   const { data, error } = await supabase
@@ -281,6 +336,75 @@ export async function setAthleteCoach(athleteId, coachId) {
     .single();
   if (error) throw error;
   return data;
+}
+
+/* --------------------- Quitar / desactivar / eliminar ------------------- *
+ * Son TRES cosas distintas a propósito, de menor a mayor daño. Un solo botón
+ * de "borrar" sería un error: los admins se equivocan de clic, la gente
+ * regresa, y el historial es en parte del atleta — si entrenó dos años, esos
+ * registros son suyos también, no solo de la lista del coach.
+ * ----------------------------------------------------------------------- */
+
+// 1. QUITAR DE MI LISTA. La usa el coach. Solo rompe la relación: la persona,
+//    su plan y su historial quedan intactos, y el master la sigue viendo.
+//    Un coach NO puede borrar cuentas: ese atleta puede ser también del master
+//    o pasar mañana con otro coach, y un clic suyo destruiría trabajo ajeno.
+export async function quitarAtletaDeMiLista(athleteId) {
+  return setAthleteCoach(athleteId, null);
+}
+
+// 2. DESACTIVAR / REACTIVAR. Solo el master. No puede entrar y desaparece de
+//    las listas, pero conserva todo. Es el botón normal del día a día.
+//    El candado real está en la base (trigger `guardar_campos_de_poder`): sin
+//    él, cualquiera podía reactivarse solo editando su propio perfil.
+export async function setAtletaActivo(athleteId, activo) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({ is_active: activo })
+    .eq('id', athleteId)
+    .select('*')
+    .single();
+  if (error) {
+    if (/administrador/i.test(error.message)) {
+      throw new Error('Solo el administrador puede activar o desactivar cuentas.');
+    }
+    throw error;
+  }
+  return data;
+}
+
+// Cuenta lo que se perdería si se borrara a alguien, para poder enseñárselo
+// antes de preguntar. Un "¿seguro?" sin números no informa nada.
+export async function resumenDatosAtleta(athleteId) {
+  const { data, error } = await supabase.rpc('resumen_datos_atleta', { atleta: athleteId });
+  if (error) throw error;
+  return data ?? null;
+}
+
+// 3. ELIMINAR DEFINITIVO. Solo el master, y sin vuelta atrás.
+//    Va por una función de servidor porque hay que borrar también la cuenta de
+//    acceso (`auth.users`), y esa llave nunca puede estar en el navegador.
+//    Ese borrado arrastra en cascada el perfil, el plan, las sesiones marcadas,
+//    los pesos y el bienestar. NO borra los ejercicios que haya creado.
+export async function eliminarAtletaDefinitivo(athleteId) {
+  const { data: sesion } = await supabase.auth.getSession();
+  const token = sesion?.session?.access_token;
+  if (!token) throw new Error('Tu sesión expiró. Vuelve a entrar e inténtalo otra vez.');
+
+  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-delete-user`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ id: athleteId }),
+  }).catch(() => null);
+
+  if (!res) throw new Error('No se pudo contactar al servidor. Revisa tu conexión.');
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body?.error || 'No se pudo eliminar la cuenta.');
+  return body;
 }
 
 /* ------------------------------- Coaches ------------------------------ */

@@ -2,8 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Loader2, Search, Plus, Trash2, X, ChevronRight, ChevronLeft, Pencil,
   CalendarClock, User as UserIcon, Shield, Layers, ClipboardList, Users,
+  UserMinus, Power, AlertTriangle,
 } from 'lucide-react';
-import { getActivePlan, deletePlan, getAthleteState, listAthletesOverview, listCoaches, setAthleteCoach } from '@/lib/api';
+import {
+  getActivePlan, deletePlan, getAthleteState, listAthletesOverview, listCoaches, setAthleteCoach,
+  quitarAtletaDeMiLista, setAtletaActivo, resumenDatosAtleta, eliminarAtletaDefinitivo,
+} from '@/lib/api';
 import PlanBuilder from '@/features/admin/PlanBuilder';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsDesktop } from '@/lib/useViewport';
@@ -127,6 +131,20 @@ function BotonPagina({ icon: Icon, etiqueta, onClick, disabled, derecha }) {
   );
 }
 
+/** Marca visible de cuenta pausada. Va donde se lee el nombre, no escondida
+ *  en la ficha: si no se ve en la lista, el master no sabe a quien reactivar. */
+function Pausada() {
+  return (
+    <span style={{
+      flexShrink: 0, fontSize: 10, fontWeight: 800, textTransform: 'uppercase',
+      letterSpacing: 0.5, color: T.warning, background: 'rgba(224,123,0,0.12)',
+      borderRadius: 6, padding: '2px 6px',
+    }}>
+      Pausada
+    </span>
+  );
+}
+
 function AthletesTable({ rows, coaches, isMaster, selectedId, onPick }) {
   const nombreCoach = (id) => {
     if (!id) return null;
@@ -160,14 +178,20 @@ function AthletesTable({ rows, coaches, isMaster, selectedId, onPick }) {
                   key={a.id}
                   className="fila-atleta"
                   onClick={() => onPick(a)}
-                  style={{ cursor: 'pointer', background: activo ? T.accentBg : 'transparent' }}
+                  style={{
+                    cursor: 'pointer', background: activo ? T.accentBg : 'transparent',
+                    opacity: a.is_active === false ? 0.55 : 1,
+                  }}
                 >
                   <td style={TD}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
                       <Avatar name={a.full_name || a.username} url={a.avatar_url} size={34} />
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {a.full_name || a.username}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                          <span style={{ fontWeight: 700, fontSize: 14, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {a.full_name || a.username}
+                          </span>
+                          {a.is_active === false && <Pausada />}
                         </div>
                         <div style={{ fontSize: 12.5, color: T.text2, fontWeight: 500 }}>@{a.username}</div>
                       </div>
@@ -202,7 +226,266 @@ function AthletesTable({ rows, coaches, isMaster, selectedId, onPick }) {
 }
 
 /* ----------------------------- Detalle de atleta ----------------------------- */
-function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile, onReassigned }) {
+/* ---------------------- Quitar / desactivar / eliminar ------------------ *
+ * Tres acciones, no una. De menor a mayor daño:
+ *
+ *   Quitar de mi lista  (coach)  → solo rompe la relación. Nada se pierde.
+ *   Desactivar          (master) → no puede entrar, conserva todo. Reversible.
+ *   Eliminar definitivo (master) → se va todo. Sin vuelta.
+ *
+ * Por qué "desactivar" es el botón normal y no "borrar": los admins se
+ * equivocan de clic, la gente regresa, y el historial es en parte del atleta.
+ * Por qué el coach no puede borrar cuentas: ese atleta puede ser también del
+ * master, y un clic suyo destruiría trabajo ajeno.
+ * ----------------------------------------------------------------------- */
+
+/** Pide confirmar el borrado enseñando lo que se va a destruir, con números. */
+function ConfirmarBorrado({ athlete, onCancelar, onConfirmado }) {
+  const nombre = athlete.full_name || athlete.username;
+  const [resumen, setResumen] = useState(null);
+  const [escrito, setEscrito] = useState('');
+  const [borrando, setBorrando] = useState(false);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    let vivo = true;
+    resumenDatosAtleta(athlete.id)
+      .then((r) => { if (vivo) setResumen(r); })
+      .catch(() => { if (vivo) setResumen({}); });
+    return () => { vivo = false; };
+  }, [athlete.id]);
+
+  // La fricción: hay que escribir el usuario. Un "¿seguro?" se contesta que sí
+  // sin leerlo; esto obliga a mirar a quién estás borrando.
+  const puede = escrito.trim().toLowerCase() === (athlete.username || '').toLowerCase();
+
+  async function borrar() {
+    setBorrando(true); setErr('');
+    try {
+      await eliminarAtletaDefinitivo(athlete.id);
+      onConfirmado();
+    } catch (e) {
+      setErr(e.message || 'No se pudo eliminar.');
+      setBorrando(false);
+    }
+  }
+
+  const lineas = resumen ? [
+    [resumen.planes, 'plan', 'planes'],
+    [resumen.sesiones_completadas, 'sesión completada', 'sesiones completadas'],
+    [resumen.pesos_registrados, 'peso registrado', 'pesos registrados'],
+    [resumen.dias_bienestar, 'día de bienestar', 'días de bienestar'],
+  ].filter(([n]) => n > 0) : [];
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 5000, background: 'rgba(9,11,16,.55)',
+        display: 'grid', placeItems: 'center', padding: 18, fontFamily: FONT,
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget && !borrando) onCancelar(); }}
+    >
+      <div
+        className="animate-fade-in"
+        style={{
+          width: '100%', maxWidth: 420, background: T.bg2, borderRadius: 20,
+          border: `1px solid ${T.border}`, padding: 22, boxShadow: KP.shPop,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 14 }}>
+          <span style={{ width: 40, height: 40, borderRadius: 13, flexShrink: 0, background: KP.dangerSoft, color: T.danger, display: 'grid', placeItems: 'center' }}>
+            <AlertTriangle size={20} />
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 16.5, fontWeight: 800, color: T.text, lineHeight: 1.2 }}>
+              Eliminar a {nombre}
+            </div>
+            <div style={{ fontSize: 12.5, color: T.text3, fontWeight: 600 }}>Esto no se puede deshacer</div>
+          </div>
+        </div>
+
+        {resumen === null ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: T.text2, fontSize: 13.5, fontWeight: 600, padding: '8px 0 14px' }}>
+            <Loader2 size={15} className="spin" /> Revisando qué se perdería…
+          </div>
+        ) : (
+          <div style={{ background: T.bg, borderRadius: 13, padding: '13px 15px', marginBottom: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 8 }}>
+              Se borra para siempre
+            </div>
+            {lineas.length === 0 ? (
+              <div style={{ fontSize: 13.5, color: T.text2, fontWeight: 600 }}>
+                Su cuenta. No tiene plan ni registros guardados.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <div style={{ fontSize: 13.5, color: T.text, fontWeight: 700 }}>Su cuenta y su acceso</div>
+                {lineas.map(([n, uno, varios]) => (
+                  <div key={varios} style={{ fontSize: 13.5, color: T.text, fontWeight: 700 }}>
+                    {n} {n === 1 ? uno : varios}
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ fontSize: 12, color: T.text3, marginTop: 9, fontWeight: 600, lineHeight: 1.45 }}>
+              Los ejercicios que haya creado se quedan.
+            </div>
+          </div>
+        )}
+
+        <label style={{ display: 'block', fontSize: 13, color: T.text2, fontWeight: 600, marginBottom: 7, lineHeight: 1.45 }}>
+          Para confirmar, escribe <b style={{ color: T.text }}>{athlete.username}</b>
+        </label>
+        <input
+          value={escrito}
+          onChange={(e) => setEscrito(e.target.value)}
+          autoComplete="off"
+          autoCapitalize="none"
+          spellCheck={false}
+          placeholder={athlete.username}
+          style={{
+            width: '100%', boxSizing: 'border-box', border: `1.5px solid ${T.border}`,
+            borderRadius: 11, padding: '12px 13px', fontFamily: FONT, fontSize: 16,
+            fontWeight: 600, color: T.text, background: T.bg, outline: 'none',
+          }}
+        />
+
+        {err && (
+          <div style={{ marginTop: 11, background: KP.dangerSoft, color: T.danger, borderRadius: 11, padding: '10px 12px', fontSize: 13, fontWeight: 700, lineHeight: 1.4 }}>
+            {err}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 9, marginTop: 16 }}>
+          <button
+            type="button"
+            onClick={onCancelar}
+            disabled={borrando}
+            style={{
+              flex: 1, padding: '13px 16px', borderRadius: 12, border: `1.5px solid ${T.border}`,
+              background: T.bg2, color: T.text, cursor: borrando ? 'default' : 'pointer',
+              fontFamily: FONT, fontSize: 14.5, fontWeight: 700,
+            }}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={borrar}
+            disabled={!puede || borrando}
+            style={{
+              flex: 1, padding: '13px 16px', borderRadius: 12, border: 'none',
+              background: puede && !borrando ? T.danger : T.bg3,
+              color: puede && !borrando ? '#fff' : T.text3,
+              cursor: puede && !borrando ? 'pointer' : 'default',
+              fontFamily: FONT, fontSize: 14.5, fontWeight: 800,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+            }}
+          >
+            {borrando ? <><Loader2 size={15} className="spin" /> Eliminando…</> : 'Eliminar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ZonaAdministracion({ athlete, isMaster, soyElCoach, onCambiado, onEliminado }) {
+  const activo = athlete.is_active !== false;
+  const [ocupado, setOcupado] = useState('');
+  const [err, setErr] = useState('');
+  const [confirmando, setConfirmando] = useState(false);
+
+  async function correr(clave, fn) {
+    setOcupado(clave); setErr('');
+    try {
+      const row = await fn();
+      onCambiado?.(row);
+    } catch (e) {
+      setErr(e.message || 'No se pudo completar la acción.');
+    } finally {
+      setOcupado('');
+    }
+  }
+
+  if (!isMaster && !soyElCoach) return null;
+
+  const btn = (extra = {}) => ({
+    display: 'inline-flex', alignItems: 'center', gap: 7, padding: '11px 15px',
+    borderRadius: 11, border: `1px solid ${T.border}`, background: T.bg2,
+    color: T.text2, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
+    ...extra,
+  });
+
+  return (
+    <div style={{ marginTop: 20, borderTop: `1px solid ${T.border}`, paddingTop: 16 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 10 }}>
+        Administrar cuenta
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {soyElCoach && !isMaster && (
+          <button
+            type="button"
+            disabled={!!ocupado}
+            onClick={() => correr('quitar', () => quitarAtletaDeMiLista(athlete.id))}
+            style={btn()}
+          >
+            {ocupado === 'quitar' ? <Loader2 size={14} className="spin" /> : <UserMinus size={14} />}
+            Quitar de mi lista
+          </button>
+        )}
+
+        {isMaster && (
+          <button
+            type="button"
+            disabled={!!ocupado}
+            onClick={() => correr('activo', () => setAtletaActivo(athlete.id, !activo))}
+            style={btn(activo ? {} : { background: T.accentBg, color: T.accent, border: 'none' })}
+          >
+            {ocupado === 'activo' ? <Loader2 size={14} className="spin" /> : <Power size={14} />}
+            {activo ? 'Desactivar' : 'Reactivar'}
+          </button>
+        )}
+
+        {isMaster && (
+          <button
+            type="button"
+            disabled={!!ocupado}
+            onClick={() => setConfirmando(true)}
+            style={btn({ color: T.danger })}
+          >
+            <Trash2 size={14} /> Eliminar definitivamente
+          </button>
+        )}
+      </div>
+
+      <div style={{ fontSize: 12, color: T.text3, marginTop: 10, fontWeight: 600, lineHeight: 1.5 }}>
+        {soyElCoach && !isMaster
+          ? 'Quitarla de tu lista no borra nada: su plan y su historial siguen guardados.'
+          : activo
+            ? 'Desactivar no borra nada: deja de entrar, pero conserva su plan y su historial.'
+            : 'Esta cuenta está desactivada. No puede entrar a la app.'}
+      </div>
+
+      {err && (
+        <div style={{ marginTop: 10, background: KP.dangerSoft, color: T.danger, borderRadius: 11, padding: '10px 12px', fontSize: 13, fontWeight: 700 }}>
+          {err}
+        </div>
+      )}
+
+      {confirmando && (
+        <ConfirmarBorrado
+          athlete={athlete}
+          onCancelar={() => setConfirmando(false)}
+          onConfirmado={() => { setConfirmando(false); onEliminado?.(athlete.id); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile, onReassigned, onEliminado }) {
   const esCompu = useIsDesktop();
   const [plan, setPlan] = useState(null);
   const [state, setState] = useState(null);
@@ -414,6 +697,14 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
         </div>
       )}
 
+      <ZonaAdministracion
+        athlete={athlete}
+        isMaster={isMaster}
+        soyElCoach={!!masterProfile?.id && athlete.coach_id === masterProfile.id}
+        onCambiado={(row) => onReassigned?.(row)}
+        onEliminado={onEliminado}
+      />
+
       {building && (
         <PlanBuilder
           athlete={athlete}
@@ -583,15 +874,18 @@ export default function AthletesPanel() {
                 style={{
                   display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderRadius: 16, cursor: 'pointer',
                   border: `1.5px solid ${active ? T.accent : T.border}`, background: T.bg2, fontFamily: FONT, textAlign: 'left',
-                  boxShadow: active ? KP.shRaise : KP.shCard,
+                  boxShadow: active ? KP.shRaise : KP.shCard, opacity: a.is_active === false ? 0.6 : 1,
                   transition: 'border-color .15s, box-shadow .15s, transform .12s',
                 }}
               >
                 <Avatar name={a.full_name || a.username} url={a.avatar_url} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, color: T.text, fontSize: 14.5, display: 'flex', alignItems: 'center', gap: 7 }}>
-                    {a.full_name || a.username}
-                    {isAdmin && <Shield size={13} color={T.accent} />}
+                  <div style={{ fontWeight: 700, color: T.text, fontSize: 14.5, display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {a.full_name || a.username}
+                    </span>
+                    {isAdmin && <Shield size={13} color={T.accent} style={{ flexShrink: 0 }} />}
+                    {a.is_active === false && <Pausada />}
                   </div>
                   <div style={{ fontSize: 12.5, color: T.text2, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>@{a.username}</div>
                 </div>
@@ -618,8 +912,17 @@ export default function AthletesPanel() {
           coaches={coaches}
           masterProfile={profile}
           onReassigned={(row) => {
-            setAthletes((prev) => prev.map((a) => (a.id === row.id ? { ...a, coach_id: row.coach_id } : a)));
-            setSelected((s) => (s && s.id === row.id ? { ...s, coach_id: row.coach_id } : s));
+            // Se copian los dos campos que la ficha puede cambiar: a quien
+            // pertenece y si esta activa. Copiar solo `coach_id` dejaba el
+            // boton de Desactivar diciendo lo contrario de lo que acababa
+            // de pasar, porque la fila de la lista no se enteraba.
+            const parche = { coach_id: row.coach_id, is_active: row.is_active };
+            setAthletes((prev) => prev.map((a) => (a.id === row.id ? { ...a, ...parche } : a)));
+            setSelected((s) => (s && s.id === row.id ? { ...s, ...parche } : s));
+          }}
+          onEliminado={(id) => {
+            setAthletes((prev) => prev.filter((a) => a.id !== id));
+            setSelected(null);
           }}
           onClose={() => setSelected(null)}
         />

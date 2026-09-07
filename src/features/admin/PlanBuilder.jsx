@@ -2,16 +2,19 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft, X, Plus, Trash2, Copy, ChevronRight, ChevronUp, ChevronDown,
   ChevronLeft, Loader2, Check, Layers, Dumbbell, StickyNote, Zap, AlertCircle,
-  Save, FolderOpen, Clipboard, Eraser, CalendarDays, Settings2, Pencil, Repeat,
+  Save, FolderOpen, Clipboard, Eraser, CalendarDays, Settings2, Pencil, Repeat, Scale, Video,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsDesktop } from '@/lib/useViewport';
 import {
   listExercises, createPlan, updatePlan, listTemplates, saveTemplate, deleteTemplate,
-  getMasterId, tagRepertoire,
+  getMasterId, tagRepertoire, createExercise, listCategories,
+  listExerciseMedia, addExerciseMedia, deleteExerciseMedia,
 } from '@/lib/api';
+import { isLoadedExercise } from '@/lib/training-utils';
 import { T, FONT, KP, CAT_COLORS } from '@/lib/theme';
 import RepertoirePicker from '@/features/admin/RepertoirePicker';
+import MediaUpload from '@/features/admin/MediaUpload';
 
 /* ------------------------------------------------------------------ */
 /* Constantes y helpers de datos                                       */
@@ -343,7 +346,7 @@ function TemplatePicker({ kind, onApply, onClose }) {
 /* Card de ejercicio dentro de un set                                   */
 /* ------------------------------------------------------------------ */
 
-function ExerciseCard({ ex, repertoire, onPatch, onRemove, onMove, canLeft, canRight }) {
+function ExerciseCard({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove, onMove, canLeft, canRight }) {
   const rep = ex.exercise_id ? repertoire.find((r) => r.id === ex.exercise_id) : null;
   return (
     <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden', minWidth: 0 }}>
@@ -391,8 +394,75 @@ function ExerciseCard({ ex, repertoire, onPatch, onRemove, onMove, canLeft, canR
           placeholder="Cue técnico (opcional)…"
           style={{ ...inputStyle, marginTop: 8, padding: '7px 10px', fontSize: 12, color: T.text2 }}
         />
+        <div style={{ marginTop: 9, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <BotonCarga ex={ex} onPatch={onPatch} />
+          <BotonVideoAtleta ex={ex} atleta={atleta} onAbrir={() => onVideoAtleta?.(ex)} />
+        </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Abre el video propio de este atleta para este ejercicio.
+ * Solo aparece si el ejercicio viene del repertorio: un ejercicio sin id no
+ * tiene a qué colgarle un video.
+ */
+function BotonVideoAtleta({ ex, atleta, onAbrir }) {
+  if (!ex.exercise_id || !atleta?.id) return null;
+  return (
+    <button
+      type="button"
+      onClick={onAbrir}
+      title={`Poner un video solo para ${atleta.full_name || atleta.username}`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 9px',
+        borderRadius: 999, cursor: 'pointer', whiteSpace: 'nowrap',
+        border: `1px solid ${T.border}`, background: 'transparent', color: T.text3,
+        fontFamily: FONT, fontSize: 11.5, fontWeight: 700,
+      }}
+    >
+      <Video size={12} /> Su video
+    </button>
+  );
+}
+
+/**
+ * "¿Este ejercicio lleva peso?" — lo decide el coach, no el nombre.
+ *
+ * Antes lo adivinaba una lista fija de palabras (sprint, salto, movilidad…).
+ * Eso choca con que la app sirva para cualquier actividad física: un drill
+ * nuevo con un nombre que la lista no contempla se quedaba sin campo de peso
+ * —o lo mostraba cuando no tocaba— y no había forma de corregirlo.
+ *
+ * El botón enseña el estado EFECTIVO. Mientras el coach no lo toque, sigue
+ * valiendo la sugerencia automática; en cuanto lo toca, manda su decisión.
+ */
+function BotonCarga({ ex, onPatch }) {
+  const efectivo = isLoadedExercise(ex);
+  const explicito = ex.carga !== undefined;
+  return (
+    <button
+      type="button"
+      onClick={() => onPatch({ carga: !efectivo })}
+      title={
+        explicito
+          ? (efectivo ? 'El atleta anota el peso. Toca para quitarlo.' : 'Sin campo de peso. Toca para ponerlo.')
+          : `Sugerido automáticamente: ${efectivo ? 'lleva peso' : 'sin peso'}. Toca para cambiarlo.`
+      }
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 9px',
+        borderRadius: 999, cursor: 'pointer', whiteSpace: 'nowrap',
+        border: `1px solid ${efectivo ? 'transparent' : T.border}`,
+        background: efectivo ? T.accentBg : 'transparent',
+        color: efectivo ? T.accent : T.text3,
+        fontFamily: FONT, fontSize: 11.5, fontWeight: 700,
+        opacity: explicito ? 1 : 0.75,
+      }}
+    >
+      <Scale size={12} />
+      {efectivo ? 'Con peso' : 'Sin peso'}
+    </button>
   );
 }
 
@@ -416,7 +486,7 @@ const inputFila = {
   ...inputStyle, padding: '7px 9px', fontSize: 13, borderRadius: 9, background: T.bg,
 };
 
-function ExerciseRow({ ex, repertoire, onPatch, onRemove, onMove, canUp, canDown }) {
+function ExerciseRow({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove, onMove, canUp, canDown }) {
   const rep = ex.exercise_id ? repertoire.find((r) => r.id === ex.exercise_id) : null;
   return (
     <tr>
@@ -451,6 +521,12 @@ function ExerciseRow({ ex, repertoire, onPatch, onRemove, onMove, canUp, canDown
         <input value={ex.cue || ''} onChange={(e) => onPatch({ cue: e.target.value })}
           placeholder="Opcional…" style={{ ...inputFila, color: T.text2 }} />
       </td>
+      <td style={{ ...celda, width: 104 }}>
+        <BotonCarga ex={ex} onPatch={onPatch} />
+      </td>
+      <td style={{ ...celda, width: 96 }}>
+        <BotonVideoAtleta ex={ex} atleta={atleta} onAbrir={() => onVideoAtleta?.(ex)} />
+      </td>
       <td style={{ ...celda, width: 96 }}>
         <div style={{ display: 'flex', gap: 5, justifyContent: 'flex-end' }}>
           <IconBtn icon={ChevronUp} onClick={() => onMove(-1)} disabled={!canUp} title="Subir" />
@@ -462,11 +538,325 @@ function ExerciseRow({ ex, repertoire, onPatch, onRemove, onMove, canUp, canDown
   );
 }
 
+/**
+ * Crear un ejercicio nuevo sin salir del editor de sesión.
+ *
+ * ANTES: "Ejercicio personalizado" metía `{ name, sets, reps, intensity, notes }`
+ * al set y ya. Sin `exercise_id`. Y como la foto y el video de un ejercicio se
+ * resuelven contra el repertorio a través de ese id, ese ejercicio no podía
+ * tener media: no era que faltara el botón de subir, es que no había a qué
+ * colgarle el archivo. Además vivía solo dentro de ese plan, así que para
+ * usarlo con otro atleta había que volver a escribirlo.
+ *
+ * AHORA: crea una entrada REAL del repertorio —con su foto, su video y si
+ * lleva peso— y la mete al set ya enlazada. Queda disponible para todos tus
+ * planes desde el momento en que la guardas.
+ */
+function CrearEjercicioRapido({ categorias, onCancelar, onCreado }) {
+  const [nombre, setNombre] = useState('');
+  const [categoria, setCategoria] = useState('');
+  const [foto, setFoto] = useState('');
+  const [video, setVideo] = useState('');
+  const [llevaPeso, setLlevaPeso] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function guardar() {
+    const n = nombre.trim();
+    if (!n) { setErr('Ponle un nombre al ejercicio.'); return; }
+    setGuardando(true); setErr('');
+    try {
+      const fila = await createExercise({
+        name: n,
+        category_id: categoria || null,
+        cover_image_url: foto || null,
+        video_url: video || null,
+      });
+      onCreado(fila, llevaPeso);
+    } catch (e) {
+      setErr(e.message || 'No se pudo crear el ejercicio.');
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget && !guardando) onCancelar(); }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 5200, background: 'rgba(9,11,16,.55)',
+        display: 'grid', placeItems: 'center', padding: 16, fontFamily: FONT,
+      }}
+    >
+      <div
+        className="animate-fade-in"
+        style={{
+          width: '100%', maxWidth: 440, background: T.bg2, borderRadius: 20,
+          border: `1px solid ${T.border}`, padding: 20, boxShadow: KP.shPop,
+          maxHeight: '88svh', overflowY: 'auto',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <span style={{ width: 38, height: 38, borderRadius: 12, flexShrink: 0, background: T.accentBg, color: T.accent, display: 'grid', placeItems: 'center' }}>
+            <Dumbbell size={19} />
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 16.5, fontWeight: 800, color: T.text, lineHeight: 1.2 }}>Ejercicio nuevo</div>
+            <div style={{ fontSize: 12.5, color: T.text3, fontWeight: 600 }}>Se guarda en tu repertorio</div>
+          </div>
+          <button type="button" onClick={onCancelar} disabled={guardando}
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.text3, padding: 4 }}>
+            <X size={19} />
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <label style={{ display: 'block' }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text2, marginBottom: 6 }}>Nombre</div>
+            <input
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              placeholder="Ej. Salida en 3 puntos"
+              autoFocus
+              style={{ ...inputStyle, fontSize: 16, fontWeight: 700 }}
+            />
+          </label>
+
+          {categorias.length > 0 && (
+            <label style={{ display: 'block' }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text2, marginBottom: 6 }}>Categoría</div>
+              <select
+                value={categoria}
+                onChange={(e) => setCategoria(e.target.value)}
+                style={{ ...inputStyle, fontSize: 15 }}
+              >
+                <option value="">Sin categoría</option>
+                {categorias.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </label>
+          )}
+
+          <MediaUpload
+            label="Foto" icon={Dumbbell} value={foto} onChange={setFoto}
+            accept="image/*" kind="covers"
+            hint="Se optimiza sola antes de subirla."
+          />
+          <MediaUpload
+            label="Video" icon={Dumbbell} value={video} onChange={setVideo}
+            accept="video/*" kind="videos"
+            hint="Desde el teléfono puedes grabarlo aquí mismo."
+          />
+
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text2, marginBottom: 6 }}>¿El atleta anota el peso?</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[[true, 'Sí, lleva peso'], [false, 'No lleva peso']].map(([v, texto]) => (
+                <button
+                  key={String(v)} type="button" onClick={() => setLlevaPeso(v)}
+                  style={{
+                    flex: 1, padding: '11px 10px', borderRadius: 12, cursor: 'pointer',
+                    border: `1.5px solid ${llevaPeso === v ? T.accent : T.border}`,
+                    background: llevaPeso === v ? T.accentBg : T.bg2,
+                    color: llevaPeso === v ? T.accent : T.text2,
+                    fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
+                  }}
+                >
+                  {texto}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {err && (
+            <div style={{ background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 11, padding: '10px 12px', fontSize: 13, fontWeight: 700 }}>
+              {err}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 9, marginTop: 2 }}>
+            <button
+              type="button" onClick={onCancelar} disabled={guardando}
+              style={{
+                flex: 1, padding: '13px 16px', borderRadius: 12, border: `1.5px solid ${T.border}`,
+                background: T.bg2, color: T.text, cursor: 'pointer', fontFamily: FONT,
+                fontSize: 14.5, fontWeight: 700,
+              }}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button" onClick={guardar} disabled={guardando || !nombre.trim()}
+              style={{
+                flex: 1, padding: '13px 16px', borderRadius: 12, border: 'none',
+                background: nombre.trim() && !guardando ? `linear-gradient(135deg, ${T.accent}, ${T.accentDk})` : T.bg3,
+                color: nombre.trim() && !guardando ? '#fff' : T.text3,
+                cursor: nombre.trim() && !guardando ? 'pointer' : 'default',
+                fontFamily: FONT, fontSize: 14.5, fontWeight: 800,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+              }}
+            >
+              {guardando ? <><Loader2 size={15} className="spin" /> Creando…</> : 'Crear y agregar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Un video grabado SOLO para este atleta.
+ *
+ * Para qué sirve: el ejercicio del repertorio tiene su video general, pero a
+ * veces hay que enseñarle a UNA persona una corrección suya —su rodilla, su
+ * agarre, su ritmo— sin cambiar el ejercicio para todos los demás.
+ *
+ * Este video le gana a todo lo demás: si existe, es el que ve. Se guarda
+ * enlazado al ejercicio y a esa persona, así que se puede quitar después sin
+ * tocar nada del repertorio.
+ */
+function VideoParaEsteAtleta({ ejercicio, atleta, onCerrar }) {
+  const [existente, setExistente] = useState(null);
+  const [cargando, setCargando] = useState(true);
+  const [url, setUrl] = useState('');
+  const [guardando, setGuardando] = useState(false);
+  const [err, setErr] = useState('');
+  const nombreAtleta = atleta?.full_name || atleta?.username || 'este atleta';
+
+  useEffect(() => {
+    let vivo = true;
+    listExerciseMedia([ejercicio.exercise_id])
+      .then((r) => {
+        if (!vivo) return;
+        setExistente(r.find((m) => m.para_atleta === atleta?.id) ?? null);
+      })
+      .catch(() => {})
+      .finally(() => { if (vivo) setCargando(false); });
+    return () => { vivo = false; };
+  }, [ejercicio.exercise_id, atleta?.id]);
+
+  async function guardar() {
+    if (!url) return;
+    setGuardando(true); setErr('');
+    try {
+      // Solo puede haber uno por atleta: el nuevo reemplaza al anterior.
+      if (existente) await deleteExerciseMedia(existente.id);
+      const fila = await addExerciseMedia({
+        exerciseId: ejercicio.exercise_id,
+        url, tipo: 'video',
+        etiqueta: `Para ${nombreAtleta}`,
+        paraAtleta: atleta.id,
+      });
+      setExistente(fila);
+      setUrl('');
+    } catch (e) {
+      setErr(e.message || 'No se pudo guardar.');
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function quitar() {
+    if (!existente) return;
+    setGuardando(true);
+    try {
+      await deleteExerciseMedia(existente.id);
+      setExistente(null);
+    } catch (e) {
+      setErr(e.message || 'No se pudo quitar.');
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget && !guardando) onCerrar(); }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 5300, background: 'rgba(9,11,16,.55)',
+        display: 'grid', placeItems: 'center', padding: 16, fontFamily: FONT,
+      }}
+    >
+      <div className="animate-fade-in" style={{
+        width: '100%', maxWidth: 420, background: T.bg2, borderRadius: 20,
+        border: `1px solid ${T.border}`, padding: 20, boxShadow: KP.shPop,
+        maxHeight: '88svh', overflowY: 'auto',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11, marginBottom: 15 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 16.5, fontWeight: 800, color: T.text, lineHeight: 1.2 }}>
+              Video solo para {nombreAtleta}
+            </div>
+            <div style={{ fontSize: 12.5, color: T.text3, fontWeight: 600, marginTop: 3 }}>
+              {ejercicio.name}
+            </div>
+          </div>
+          <button type="button" onClick={onCerrar} disabled={guardando}
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.text3, padding: 4, flexShrink: 0 }}>
+            <X size={19} />
+          </button>
+        </div>
+
+        {cargando ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: T.text3, fontSize: 13, fontWeight: 600 }}>
+            <Loader2 size={14} className="spin" /> Cargando…
+          </div>
+        ) : existente ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <video src={existente.url} controls playsInline preload="metadata"
+              style={{ width: '100%', borderRadius: 13, background: '#000' }} />
+            <div style={{ fontSize: 12.5, color: T.text2, fontWeight: 600, lineHeight: 1.5 }}>
+              Ya tiene un video propio para este ejercicio. Es el que ve él, en lugar del general.
+            </div>
+            <button type="button" onClick={quitar} disabled={guardando}
+              style={{
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                padding: '12px 16px', borderRadius: 12, border: 'none',
+                background: 'rgba(220,38,38,0.08)', color: T.danger, cursor: 'pointer',
+                fontFamily: FONT, fontSize: 14, fontWeight: 800,
+              }}>
+              {guardando ? <Loader2 size={15} className="spin" /> : <Trash2 size={15} />} Quitar y volver al general
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+            <div style={{ fontSize: 13, color: T.text2, fontWeight: 600, lineHeight: 1.5 }}>
+              Hoy ve el video general del ejercicio. Sube uno aquí y solo él verá ese.
+            </div>
+            <MediaUpload
+              label="Video" icon={Dumbbell} value={url} onChange={setUrl}
+              accept="video/*" kind="videos"
+              hint="Puedes grabarlo desde el teléfono."
+            />
+            {err && (
+              <div style={{ background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 11, padding: '10px 12px', fontSize: 12.5, fontWeight: 700 }}>
+                {err}
+              </div>
+            )}
+            <button type="button" onClick={guardar} disabled={!url || guardando}
+              style={{
+                padding: '12px 16px', borderRadius: 12, border: 'none',
+                background: url && !guardando ? T.accent : T.bg3,
+                color: url && !guardando ? '#fff' : T.text3,
+                cursor: url && !guardando ? 'pointer' : 'default',
+                fontFamily: FONT, fontSize: 14, fontWeight: 800,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+              }}>
+              {guardando ? <><Loader2 size={15} className="spin" /> Guardando…</> : 'Guardar para él'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Editor de sesión (un día) por sets                                   */
 /* ------------------------------------------------------------------ */
 
-function SessionEditor({ day, repertoire, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear }) {
+function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCreado, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear }) {
+  const [creandoEjercicio, setCreandoEjercicio] = useState(false);
+  const [videoDe, setVideoDe] = useState(null);
   const esCompu = useIsDesktop();
   const [pickerCtx, setPickerCtx] = useState(null);
   const blocks = useMemo(() => parseBlocks(day.exercises), [day.exercises]);
@@ -553,6 +943,8 @@ function SessionEditor({ day, repertoire, onPatch, onDelete, onCopy, onSaveToCat
                 const props = (m, mi) => ({
                   ex: m,
                   repertoire,
+                  atleta,
+                  onVideoAtleta: setVideoDe,
                   onPatch: (patch) => writeBlocks((bs) => bs.map((x, k) => (k === bi
                     ? { ...x, members: x.members.map((mm, kk) => (kk === mi ? { ...mm, ...patch } : mm)) }
                     : x))),
@@ -589,6 +981,8 @@ function SessionEditor({ day, repertoire, onPatch, onDelete, onCopy, onSaveToCat
                           <th style={encabezado}>Carga / Int.</th>
                           <th style={encabezado}>Descripción</th>
                           <th style={encabezado}>Cue técnico</th>
+                          <th style={encabezado}>Peso</th>
+                          <th style={encabezado}>Video</th>
                           <th style={{ ...encabezado, textAlign: 'right' }}>Orden</th>
                         </tr>
                       </thead>
@@ -617,7 +1011,7 @@ function SessionEditor({ day, repertoire, onPatch, onDelete, onCopy, onSaveToCat
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
           <Pill icon={Plus} primary onClick={() => setPickerCtx({ mode: 'new-set' })}>Agregar set</Pill>
           <Pill icon={StickyNote} onClick={() => writeBlocks((bs) => [...bs, { type: 'note', ex: { isNote: true, text: '' } }])}>Nota</Pill>
-          <Pill icon={Dumbbell} onClick={() => writeBlocks((bs) => [...bs, { type: 'set', members: [newExercise(null)], rounds: '3' }])}>Ejercicio personalizado</Pill>
+          <Pill icon={Dumbbell} onClick={() => setCreandoEjercicio(true)}>Ejercicio nuevo</Pill>
         </div>
       ) : (
         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -646,17 +1040,40 @@ function SessionEditor({ day, repertoire, onPatch, onDelete, onCopy, onSaveToCat
             </button>
             <button
               type="button"
-              onClick={() => writeBlocks((bs) => [...bs, { type: 'set', members: [newExercise(null)], rounds: '3' }])}
+              onClick={() => setCreandoEjercicio(true)}
               style={{
                 minHeight: 46, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
                 borderRadius: 14, border: `1.5px solid ${T.border}`, background: T.bg2, cursor: 'pointer',
                 fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text2,
               }}
             >
-              <Dumbbell size={16} /> Personalizado
+              <Dumbbell size={16} /> Ejercicio nuevo
             </button>
           </div>
         </div>
+      )}
+
+      {videoDe && (
+        <VideoParaEsteAtleta
+          ejercicio={videoDe}
+          atleta={atleta}
+          onCerrar={() => setVideoDe(null)}
+        />
+      )}
+
+      {creandoEjercicio && (
+        <CrearEjercicioRapido
+          categorias={categorias}
+          onCancelar={() => setCreandoEjercicio(false)}
+          onCreado={(fila, llevaPeso) => {
+            onEjercicioCreado?.(fila);
+            writeBlocks((bs) => [
+              ...bs,
+              { type: 'set', members: [{ ...newExercise(fila), carga: llevaPeso }], rounds: '3' },
+            ]);
+            setCreandoEjercicio(false);
+          }}
+        />
       )}
 
       {pickerCtx && (
@@ -840,6 +1257,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
   const [repertoire, setRepertoire] = useState([]);
+  const [categorias, setCategorias] = useState([]);
   const [clipboard, setClipboard] = useState(null);
   const [modal, setModal] = useState(null);
 
@@ -849,10 +1267,11 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
   // Repertorio para el picker: cada coach ve la base del master + los suyos
   // (no los de otros coaches). El master ve todo.
   useEffect(() => {
-    Promise.all([listExercises(), getMasterId()])
-      .then(([exs, mId]) => {
+    Promise.all([listExercises(), getMasterId(), listCategories()])
+      .then(([exs, mId, cats]) => {
         const tagged = tagRepertoire(exs, mId, user?.id);
         setRepertoire(isMaster ? tagged : tagged.filter((e) => e.isBase || e.isMine));
+        setCategorias(cats);
       })
       .catch(() => {});
   }, [user?.id, isMaster]);
@@ -1267,6 +1686,11 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
                 key={di}
                 day={d}
                 repertoire={repertoire}
+                categorias={categorias}
+                atleta={athlete}
+                onEjercicioCreado={(fila) => setRepertoire((prev) => [
+                  ...prev, { ...fila, isMine: true, isBase: false },
+                ])}
                 onPatch={(patch) => patchDay(nav.pi, wIdx, di, patch)}
                 onDelete={() => {
                   if (window.confirm(`¿Eliminar la sesión "${d.name || d.day}"?`)) {

@@ -31,6 +31,8 @@ export default function ProfileScreen({ onClose }) {
   const [fullName, setFullName] = useState(profile?.full_name || '');
   const [username, setUsername] = useState(profile?.username || '');
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url || '');
+  const [unidad, setUnidad] = useState(profile?.unidad_peso || 'kg');
+  const [genero, setGenero] = useState(profile?.genero || '');
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
@@ -41,7 +43,10 @@ export default function ProfileScreen({ onClose }) {
   const origName = profile?.full_name || '';
   const origUser = profile?.username || '';
   const origAvatar = profile?.avatar_url || '';
-  const dirty = fullName !== origName || username !== origUser || avatarUrl !== origAvatar;
+  const origUnidad = profile?.unidad_peso || 'kg';
+  const origGenero = profile?.genero || '';
+  const dirty = fullName !== origName || username !== origUser || avatarUrl !== origAvatar
+    || unidad !== origUnidad || genero !== origGenero;
 
   // Chequeo de disponibilidad del username (debounced)
   useEffect(() => {
@@ -86,6 +91,8 @@ export default function ProfileScreen({ onClose }) {
       full_name: fullName.trim() || null,
       username: u,
       avatar_url: avatarUrl || null,
+      unidad_peso: unidad,
+      genero: genero || null,
     });
     setSaving(false);
     if (error) { setErr(error.message); return; }
@@ -231,6 +238,71 @@ export default function ProfileScreen({ onClose }) {
               <input value={profile?.email || user?.email || '—'} readOnly disabled style={{ ...inputStyle, color: T.text2 }} />
             </div>
           </label>
+
+          {/* Unidad de peso.
+              Solo cambia como se VEN los pesos: por dentro siempre se guardan
+              en kilos. Por eso cambiar de unidad no toca ni un dato del
+              historial —los mismos numeros salen expresados de otra forma. */}
+          <div>
+            <div style={{ ...label, marginBottom: 7 }}>Peso en</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[['kg', 'Kilos'], ['lb', 'Libras']].map(([valor, texto]) => {
+                const activo = unidad === valor;
+                return (
+                  <button
+                    key={valor}
+                    type="button"
+                    onClick={() => setUnidad(valor)}
+                    style={{
+                      flex: 1, padding: '13px 12px', borderRadius: 12, cursor: 'pointer',
+                      border: `1.5px solid ${activo ? T.accent : T.border}`,
+                      background: activo ? T.accentBg : T.bg2,
+                      color: activo ? T.accent : T.text2,
+                      fontFamily: FONT, fontSize: 14.5, fontWeight: 700,
+                    }}
+                  >
+                    {texto} <span style={{ opacity: 0.7, fontWeight: 600 }}>({valor})</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 12, color: T.text3, marginTop: 7, fontWeight: 600, lineHeight: 1.45 }}>
+              Cambia cómo ves los pesos. Tu historial no se toca.
+            </div>
+          </div>
+
+          {/* Genero.
+              Sirve para UNA sola cosa: si un ejercicio tiene grabada la version
+              de hombre y la de mujer, mostrar la que corresponde. Se puede
+              dejar en blanco, y entonces se ve la version general —que es
+              exactamente lo que se veia antes de que esto existiera. */}
+          <div>
+            <div style={{ ...label, marginBottom: 7 }}>Videos de técnica</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[['', 'Cualquiera'], ['h', 'Hombre'], ['m', 'Mujer']].map(([valor, texto]) => {
+                const activo = genero === valor;
+                return (
+                  <button
+                    key={valor || 'sin'}
+                    type="button"
+                    onClick={() => setGenero(valor)}
+                    style={{
+                      flex: 1, padding: '13px 8px', borderRadius: 12, cursor: 'pointer',
+                      border: `1.5px solid ${activo ? T.accent : T.border}`,
+                      background: activo ? T.accentBg : T.bg2,
+                      color: activo ? T.accent : T.text2,
+                      fontFamily: FONT, fontSize: 14, fontWeight: 700,
+                    }}
+                  >
+                    {texto}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 12, color: T.text3, marginTop: 7, fontWeight: 600, lineHeight: 1.45 }}>
+              Si un ejercicio tiene dos versiones grabadas, te muestra la tuya.
+            </div>
+          </div>
 
           {/* Rol */}
           <div>

@@ -4,7 +4,7 @@ import {
   Check, X, Calculator, BookOpen, TrendingUp, Edit3, Target,
   Zap, Trophy, Clock, FileText, Sparkles, Info, Dumbbell, Heart, Play,
   ChevronLeft, Activity, Home as HomeIcon,
-  Repeat, Eye, Layers, List, Scale, AlertCircle, Moon
+  Repeat, Eye, Layers, List, Scale, AlertCircle, Moon, LineChart as LineChartIcon
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { useIsDesktop } from '@/lib/useViewport';
@@ -14,10 +14,11 @@ import { usePlan } from '@/contexts/PlanContext';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   sessionId, calc1RM, today, greeting, isLoadedExercise,
-  resolveCursor, defaultCursor, isValidCursor, findPreviousWeight,
+  resolveCursor, defaultCursor, isValidCursor, findPreviousWeight, historialDePeso,
   formatIntensity, inferRest, getMuscles,
   sessionForToday, weekOverview, weekdayToday, weekdayLabel
 } from '@/lib/training-utils';
+import { aKilos, desdeKilos, pesoTexto, etiquetaUnidad } from '@/lib/unidades';
 import { useStorage } from '@/contexts/AppStateContext';
 import ExerciseMediaModal from '@/features/training/ExerciseMediaModal';
 
@@ -174,10 +175,146 @@ const MUSCLE_LABELS = {
 
 
 
+/**
+ * Card flotante con el historial de peso de UN ejercicio.
+ *
+ * Lo pidió Andrés así: "un botocito que les despliegue una card flotante donde
+ * pongan con cuánto peso lo están haciendo, para no olvidar el de la vez pasada
+ * y saber su progreso".
+ *
+ * El campo de peso de la fila ya cubría la mitad —anotar y ver el anterior—
+ * pero era una cajita de 54px con un texto gris de 11px debajo, o sea que se
+ * pasaba por alto. Y la otra mitad no existía: "saber su progreso" pide una
+ * historia, no el último dato suelto.
+ */
+function TarjetaProgreso({ nombre, historial, unidad, onCerrar }) {
+  const u = etiquetaUnidad(unidad);
+  const valores = historial.map((h) => desdeKilos(h.kilos, unidad));
+  const max = valores.length ? Math.max(...valores) : 0;
+  const min = valores.length ? Math.min(...valores) : 0;
+  const primero = valores[0];
+  const ultimo = valores[valores.length - 1];
+  const cambio = valores.length > 1 ? Math.round((ultimo - primero) * 10) / 10 : null;
+
+  return (
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onCerrar(); }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 4500, background: 'rgba(9,11,16,.5)',
+        display: 'grid', placeItems: 'end center', fontFamily: FONT,
+      }}
+    >
+      <div
+        className="animate-fade-in"
+        style={{
+          width: '100%', maxWidth: 460, background: LT.surface,
+          borderRadius: '22px 22px 0 0', padding: '18px 18px calc(20px + env(safe-area-inset-bottom))',
+          maxHeight: '78svh', overflowY: 'auto',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 0.7, textTransform: 'uppercase', color: LT.text3 }}>
+              Tu progreso
+            </div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: LT.text, lineHeight: 1.25, marginTop: 3, overflowWrap: 'anywhere' }}>
+              {nombre}
+            </div>
+          </div>
+          <button
+            type="button" onClick={onCerrar} aria-label="Cerrar"
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: LT.text3, padding: 4, flexShrink: 0 }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {historial.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '26px 12px' }}>
+            <Scale size={30} color={LT.text3} style={{ opacity: 0.45 }} />
+            <div style={{ marginTop: 10, fontSize: 13.5, color: LT.text2, fontWeight: 600, lineHeight: 1.5 }}>
+              Todavía no has anotado ningún peso aquí.<br />
+              En cuanto anotes el primero, empiezas a ver tu progreso.
+            </div>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', gap: 9, marginBottom: 15 }}>
+              <div style={{ flex: 1, background: LT.bg, borderRadius: 13, padding: '11px 13px' }}>
+                <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color: LT.text3 }}>Último</div>
+                <div style={{ fontSize: 19, fontWeight: 800, color: LT.text, marginTop: 3, ...NUM_STYLE }}>{ultimo} <span style={{ fontSize: 12, color: LT.text3 }}>{u}</span></div>
+              </div>
+              <div style={{ flex: 1, background: LT.bg, borderRadius: 13, padding: '11px 13px' }}>
+                <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color: LT.text3 }}>Tu máximo</div>
+                <div style={{ fontSize: 19, fontWeight: 800, color: LT.text, marginTop: 3, ...NUM_STYLE }}>{max} <span style={{ fontSize: 12, color: LT.text3 }}>{u}</span></div>
+              </div>
+            </div>
+
+            {cambio !== null && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8, marginBottom: 15,
+                background: cambio > 0 ? LT.mint + '14' : LT.bg, borderRadius: 12, padding: '10px 13px',
+                fontSize: 13, fontWeight: 700, color: cambio > 0 ? LT.mint : LT.text2,
+              }}>
+                <TrendingUp size={15} />
+                {cambio > 0
+                  ? `Has subido ${cambio} ${u} desde la primera vez`
+                  : cambio < 0
+                    ? `${Math.abs(cambio)} ${u} menos que la primera vez`
+                    : 'Mismo peso que la primera vez'}
+              </div>
+            )}
+
+            {valores.length > 1 && (
+              <div style={{ height: 120, marginBottom: 14 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={historial.map((h, i) => ({ i: i + 1, peso: valores[i] }))}>
+                    <XAxis dataKey="i" hide />
+                    <YAxis domain={[Math.floor(min * 0.92), Math.ceil(max * 1.08)]} hide />
+                    <Tooltip
+                      formatter={(v) => [`${v} ${u}`, 'Peso']}
+                      labelFormatter={(i) => `Vez ${i}`}
+                      contentStyle={{ borderRadius: 10, border: `1px solid ${LT.border}`, fontSize: 12, fontFamily: FONT }}
+                    />
+                    <Line type="monotone" dataKey="peso" stroke={LT.blue} strokeWidth={2.5} dot={{ r: 3, fill: LT.blue }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: LT.text3, marginBottom: 7 }}>
+              Cada vez que lo hiciste
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {[...historial].reverse().map((h, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '9px 2px',
+                  borderTop: i === 0 ? 'none' : `1px solid ${LT.border}`,
+                }}>
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: LT.text2, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {h.donde}
+                  </span>
+                  <span style={{ fontSize: 14.5, fontWeight: 800, color: LT.text, flexShrink: 0, ...NUM_STYLE }}>
+                    {desdeKilos(h.kilos, unidad)} <span style={{ fontSize: 11, color: LT.text3, fontWeight: 700 }}>{u}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, oneRMs, sessionsData, phaseId, phaseColor }) => {
-  const { phases: PLAN, resolveExercise } = usePlan();
+  const { phases: PLAN, resolveExercise, medias } = usePlan();
+  const { profile } = useAuth();
+  const unidad = profile?.unidad_peso || 'kg';
+  const u = etiquetaUnidad(unidad);
   const [expanded, setExpanded] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(false);
+  const [progresoAbierto, setProgresoAbierto] = useState(false);
   const exData = sessionData?.exercises?.[idx] || {};
   const pc = phaseColor || LT.blue;
   const repertoire = resolveExercise(ex);
@@ -207,6 +344,27 @@ const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, oneRMs, sessionsData
     if (ex.isNote || !ex.name) return null;
     return findPreviousWeight(PLAN, sessionsData, ex.name);
   }, [PLAN, ex.name, ex.isNote, sessionsData]);
+
+  const historial = useMemo(() => {
+    if (ex.isNote || !ex.name) return [];
+    return historialDePeso(PLAN, sessionsData, ex.name);
+  }, [PLAN, ex.name, ex.isNote, sessionsData]);
+
+  /* El peso se GUARDA en kilos y se ESCRIBE en la unidad del atleta, así que
+     el campo necesita su propio borrador. Sin él, cada tecla iría a kilos y
+     volvería redondeada: escribir "185" en libras haría bailar el número
+     debajo del dedo. El borrador guarda lo tecleado tal cual. */
+  const pesoMostrado = pesoTexto(exData.weight, unidad);
+  const [pesoEscrito, setPesoEscrito] = useState(pesoMostrado);
+  useEffect(() => {
+    // Solo se re-sincroniza cuando lo guardado ya NO es lo que hay escrito
+    // (cambio de ejercicio, o de unidad). Comparando números y no textos,
+    // para que un "8." a medio teclear sobreviva.
+    const a = pesoEscrito.trim() === '' ? null : parseFloat(pesoEscrito);
+    const b = pesoMostrado === '' ? null : parseFloat(pesoMostrado);
+    if (a !== b) setPesoEscrito(pesoMostrado);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pesoMostrado]);
 
   if (ex.isNote) {
     return (
@@ -270,8 +428,19 @@ const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, oneRMs, sessionsData
             style={{ fontSize: 14.5, fontWeight: 700, color: LT.text, lineHeight: 1.25, cursor: hasMedia ? 'pointer' : 'default', overflowWrap: 'anywhere' }}
           >{ex.name}</div>
           {spec && <div style={{ fontSize: 12, color: LT.text2, marginTop: 3, ...NUM_STYLE }}>{spec}</div>}
-          {showWeightInput && previous && (
-            <div style={{ fontSize: 11, color: LT.text3, marginTop: 2, ...NUM_STYLE }}>Anterior: {previous.weight} kg</div>
+          {showWeightInput && (
+            <button
+              type="button"
+              onClick={() => setProgresoAbierto(true)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 4, padding: '4px 9px 4px 7px',
+                border: 'none', borderRadius: 999, background: LT.blueSoft, color: LT.blue,
+                cursor: 'pointer', fontFamily: FONT, fontSize: 11.5, fontWeight: 700, ...NUM_STYLE,
+              }}
+            >
+              <LineChartIcon size={12} />
+              {previous ? `Anterior: ${desdeKilos(previous.weight, unidad)} ${u}` : 'Ver mi progreso'}
+            </button>
           )}
         </div>
 
@@ -282,15 +451,18 @@ const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, oneRMs, sessionsData
             padding: '5px 7px', textAlign: 'center', width: 54, flexShrink: 0,
             background: exData.weight ? LT.mint + '0D' : LT.surface,
           }}>
-            <input type="number" inputMode="decimal" value={exData.weight || ''}
-              onChange={e => onUpdate(idx, { ...exData, weight: e.target.value })}
+            <input type="number" inputMode="decimal" value={pesoEscrito}
+              onChange={e => {
+                setPesoEscrito(e.target.value);
+                onUpdate(idx, { ...exData, weight: String(aKilos(e.target.value, unidad)) });
+              }}
               placeholder="—"
               style={{
                 width: '100%', border: 'none', background: 'transparent', textAlign: 'center',
                 fontSize: 16, fontWeight: 700, color: exData.weight ? LT.mint : LT.text3,
                 outline: 'none', fontFamily: FONT, padding: 0, ...NUM_STYLE,
               }} />
-            <div style={{ fontSize: 8, color: LT.text3, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 1 }}>kg</div>
+            <div style={{ fontSize: 8, color: LT.text3, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 1 }}>{u}</div>
           </div>
         ) : (
           <div style={{ fontSize: 11, color: LT.text3, flexShrink: 0, textAlign: 'right', maxWidth: 80 }}>
@@ -350,15 +522,30 @@ const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, oneRMs, sessionsData
           )}
           {recommended !== null && (
             <div style={{ fontSize: 12, color: LT.mint, fontWeight: 600, ...NUM_STYLE }}>
-              Peso recomendado ≈ {recommended} kg
+              Peso recomendado ≈ {desdeKilos(recommended, unidad)} {u}
             </div>
           )}
           {ex.notes && <div style={{ fontSize: 12, color: LT.text3, marginTop: 6, fontStyle: 'italic' }}>{ex.notes}</div>}
         </div>
       )}
 
+      {progresoAbierto && (
+        <TarjetaProgreso
+          nombre={ex.name}
+          historial={historial}
+          unidad={unidad}
+          onCerrar={() => setProgresoAbierto(false)}
+        />
+      )}
+
       {mediaOpen && (
-        <ExerciseMediaModal exercise={repertoire} planEx={ex} onClose={() => setMediaOpen(false)} />
+        <ExerciseMediaModal
+          exercise={repertoire}
+          planEx={ex}
+          medias={medias}
+          perfil={profile}
+          onClose={() => setMediaOpen(false)}
+        />
       )}
     </div>
   );
@@ -1710,7 +1897,13 @@ const ONE_RM_LIFTS = [
 ];
 
 const OneRMView = ({ oneRMs, setOneRMs }) => {
+  const { profile } = useAuth();
+  const unidad = profile?.unidad_peso || 'kg';
+  const u = etiquetaUnidad(unidad);
   const [calc, setCalc] = useState({ weight: '', reps: '' });
+  // La calculadora no necesita convertir: entra un peso y sale un 1RM en esa
+  // misma unidad. Solo cambia la etiqueta. Los 1RM GUARDADOS sí se convierten,
+  // porque de ellos salen los pesos recomendados de todo el plan.
   const result = useMemo(() => calc1RM(calc.weight, calc.reps), [calc]);
 
   return (
@@ -1731,17 +1924,17 @@ const OneRMView = ({ oneRMs, setOneRMs }) => {
             Peso usado y repeticiones cerca del fallo. Te da el 1RM estimado.
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
-            <Input value={calc.weight} onChange={v => setCalc(c => ({ ...c, weight: v }))} placeholder="Peso" type="number" suffix="kg" />
+            <Input value={calc.weight} onChange={v => setCalc(c => ({ ...c, weight: v }))} placeholder="Peso" type="number" suffix={u} />
             <Input value={calc.reps} onChange={v => setCalc(c => ({ ...c, reps: v }))} placeholder="Reps" type="number" suffix="reps" />
           </div>
           {result && (
             <div style={{ padding: 18, background: T.accentBg, borderRadius: 14, border: `1px solid rgba(30, 64, 224, 0.15)` }}>
               <Caption color={T.accentDk} style={{ marginBottom: 4 }}>1RM estimado</Caption>
               <div style={{ fontSize: 44, fontWeight: 800, color: T.accent, lineHeight: 1, letterSpacing: -1, ...NUM_STYLE }}>
-                {result.avg}<span style={{ fontSize: 16, color: T.accentDk, fontWeight: 500 }}> kg</span>
+                {result.avg}<span style={{ fontSize: 16, color: T.accentDk, fontWeight: 500 }}> {u}</span>
               </div>
               <div style={{ marginTop: 8, fontSize: 11, color: T.text3, ...NUM_STYLE }}>
-                Brzycki {result.brzycki} kg · Epley {result.epley} kg
+                Brzycki {result.brzycki} {u} · Epley {result.epley} {u}
               </div>
             </div>
           )}
@@ -1753,9 +1946,9 @@ const OneRMView = ({ oneRMs, setOneRMs }) => {
           {ONE_RM_LIFTS.map(lift => (
             <div key={lift.key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: T.bg2, borderRadius: 10, border: `1px solid ${T.border}` }}>
               <div style={{ flex: 1, fontSize: 14, fontWeight: 600, color: T.text }}>{lift.name}</div>
-              <Input value={oneRMs[lift.key] ?? ''}
-                onChange={v => setOneRMs(prev => ({ ...prev, [lift.key]: v ? parseFloat(v) : null }))}
-                placeholder="—" type="number" suffix="kg"
+              <Input value={oneRMs[lift.key] == null ? '' : desdeKilos(oneRMs[lift.key], unidad)}
+                onChange={v => setOneRMs(prev => ({ ...prev, [lift.key]: v ? aKilos(v, unidad) : null }))}
+                placeholder="—" type="number" suffix={u}
                 style={{ width: 110, textAlign: 'right', padding: '8px 14px', fontSize: 14 }} />
             </div>
           ))}
@@ -1896,7 +2089,17 @@ const ScienceView = () => (
   </div>
 );
 
+/**
+ * Navegacion del atleta.
+ *
+ * En el telefono va pegada abajo de pared a pared: es donde llega el pulgar.
+ *
+ * En la computadora esa misma franja se estiraba a 1430px con cinco botoncitos
+ * perdidos en el centro, y el cursor no tiene el problema del pulgar. Ahi se
+ * convierte en una barra flotante centrada, del ancho de su contenido.
+ */
 const BottomNav = ({ active, onChange }) => {
+  const esCompu = useIsDesktop();
   const items = [
     { id: 'home', label: 'Hoy', icon: HomeIcon },
     { id: 'plan', label: 'Plan', icon: Layers },
@@ -1906,12 +2109,20 @@ const BottomNav = ({ active, onChange }) => {
   ];
   return (
     <div style={{
-      position: 'fixed', bottom: 0, left: 0, right: 0,
+      position: 'fixed', zIndex: 100,
       background: 'rgba(255, 255, 255, 0.92)', backdropFilter: 'blur(20px)',
       WebkitBackdropFilter: 'blur(20px)',
-      borderTop: `1px solid ${KP.line}`,
-      padding: '8px 4px max(10px, env(safe-area-inset-bottom))',
-      display: 'flex', justifyContent: 'space-around', zIndex: 100,
+      display: 'flex',
+      ...(esCompu ? {
+        bottom: 22, left: '50%', transform: 'translateX(-50%)',
+        border: `1px solid ${KP.line}`, borderRadius: 999,
+        padding: '8px 10px', gap: 4, boxShadow: KP.shPop,
+      } : {
+        bottom: 0, left: 0, right: 0,
+        borderTop: `1px solid ${KP.line}`,
+        padding: '8px 4px max(10px, env(safe-area-inset-bottom))',
+        justifyContent: 'space-around',
+      }),
     }}>
       {items.map(item => {
         const Icon = item.icon;
@@ -1992,6 +2203,7 @@ const NoPlanState = ({ onGoTab }) => (
 
 export default function TrainingApp() {
   const { phases: PLAN, hasPlan, planLoading } = usePlan();
+  const esCompu = useIsDesktop();
   const [tab, setTab] = useState('home');
   const [view, setView] = useState({ level: 'plan' });
   const [sessionsData, setSessionsData] = useStorage('wr:sessions', {});
@@ -2083,7 +2295,12 @@ export default function TrainingApp() {
     }}>
       {showTimeline && <PhaseTimeline activePhaseId={view.phase?.id || activePhaseId}
         sessionsData={sessionsData} onJumpToPhase={jumpToPhase} />}
-      {content}
+      {/* En compu el contenido se centra y deja de estirarse hasta 1272px. Una
+          tarjeta de ese ancho obliga a barrer la pantalla con los ojos de una
+          orilla a la otra para leer una linea. 980 es ancho de lectura. */}
+      <div style={esCompu ? { maxWidth: 980, margin: '0 auto', width: '100%' } : undefined}>
+        {content}
+      </div>
       <BottomNav active={tab} onChange={t => { setTab(t); if (t === 'plan') setView({ level: 'plan' }); }} />
       {cursorPickerOpen && (
         <CursorSelector current={cursor} sessionsData={sessionsData}
