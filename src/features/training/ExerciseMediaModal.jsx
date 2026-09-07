@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { X, ExternalLink, Dumbbell, Timer } from 'lucide-react';
 import { videosParaAtleta, portadaParaAtleta } from '@/lib/videos';
 import { T, FONT, KP } from '@/lib/theme';
@@ -23,6 +23,23 @@ import { T, FONT, KP } from '@/lib/theme';
 export function VideoRecortado({ video, estilo }) {
   const ref = useRef(null);
   const { url, inicio, fin } = video;
+
+  /* Arranca solo al montarse, que es justo cuando el atleta acaba de tocar
+     "reproducir". Sin esto, este componente aparecía con el reproductor
+     nativo ya visible pero PAUSADO en 0:00 — Andrés lo encontró probándolo:
+     tocaba el play grande, el video se mostraba quieto, y hacía falta un
+     QUINTO toque en el botón nativo para que arrancara de verdad.
+
+     Se llama aquí, en un efecto atado al montaje, y no con el atributo
+     `autoPlay`: los navegadores exigen que el video empiece muted si no hay
+     un gesto del usuario detrás. Un efecto que corre justo después del toque
+     sigue contando como gesto del usuario, así que el video arranca CON
+     sonido. `.catch()` traga el rechazo que dan Safari/iOS cuando el gesto ya
+     se perdió por algún reflow lento; si pasa, el botón nativo sigue ahí. */
+  useEffect(() => {
+    ref.current?.play().catch(() => {});
+  }, [url]);
+
   return (
     <video
       key={url}
