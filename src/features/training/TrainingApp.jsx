@@ -4,7 +4,8 @@ import {
   Check, X, Calculator, BookOpen, TrendingUp, Edit3, Target,
   Zap, Trophy, Clock, FileText, Sparkles, Info, Dumbbell, Heart, Play,
   ChevronLeft, Activity, Home as HomeIcon,
-  Repeat, Eye, Layers, List, Scale, LineChart as LineChartIcon
+  Repeat, Eye, Layers, List, Scale, LineChart as LineChartIcon,
+  Minus, Plus,
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { useIsDesktop } from '@/lib/useViewport';
@@ -15,7 +16,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   sessionId, calc1RM, today, greeting, isLoadedExercise,
   resolveCursor, defaultCursor, isValidCursor, findPreviousWeight, historialDePeso,
-  formatIntensity, inferRest, getMuscles,
+  formatIntensity,
   sessionForToday, weekOverview, weekdayToday, weekdayLabel
 } from '@/lib/training-utils';
 import { aKilos, desdeKilos, pesoTexto, etiquetaUnidad } from '@/lib/unidades';
@@ -156,21 +157,6 @@ const PhaseTimeline = ({ activePhaseId, sessionsData, onJumpToPhase }) => {
 
 
 // Etiquetas legibles de músculos en español
-const MUSCLE_LABELS = {
-  pecho: 'Pecho',
-  hombros_f: 'Hombros frontales',
-  hombros_b: 'Hombros posteriores',
-  biceps: 'Bíceps',
-  triceps: 'Tríceps',
-  trapecio: 'Trapecio',
-  dorsal: 'Dorsal',
-  espalda_baja: 'Lumbar',
-  core: 'Core',
-  cuadriceps: 'Cuádriceps',
-  isquios: 'Isquiotibiales',
-  gluteos: 'Glúteos',
-  pantorrillas: 'Gemelos',
-};
 
 
 
@@ -308,12 +294,76 @@ function TarjetaProgreso({ nombre, historial, unidad, onCerrar }) {
   );
 }
 
-const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, oneRMs, sessionsData, phaseId, phaseColor }) => {
+/**
+ * Control de − y + para anotar en el gimnasio.
+ *
+ * Por qué no un campo de texto: entre serie y serie, con las manos ocupadas y
+ * el teléfono a medio metro, abrir el teclado numérico para subir de 70 a 75
+ * son cuatro acciones. Aquí es un toque. El campo del centro sigue siendo
+ * escribible para el que quiera poner un número raro de un jalón.
+ *
+ * `paso` va en la unidad que ve el atleta, no en kilos: 2,5 kg o 5 lb, que es
+ * como suben de verdad los discos.
+ */
+function PasoNumero({ valor, onCambio, paso = 1, min = 0, sufijo, ancho = 118 }) {
+  const num = valor === '' || valor == null ? null : parseFloat(valor);
+  const mueve = (dir) => {
+    const base = Number.isFinite(num) ? num : 0;
+    const siguiente = Math.max(min, Math.round((base + dir * paso) * 100) / 100);
+    onCambio(String(siguiente));
+  };
+  const boton = (dir) => ({
+    width: 34, height: 34, borderRadius: '50%', flexShrink: 0, cursor: 'pointer',
+    display: 'grid', placeItems: 'center', fontFamily: FONT,
+    border: dir > 0 ? 'none' : `1.5px solid ${LT.borderHi}`,
+    background: dir > 0 ? LT.blue : 'transparent',
+    color: dir > 0 ? '#fff' : LT.text2,
+  });
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+      <button type="button" onClick={() => mueve(-1)} aria-label="Bajar" style={boton(-1)}>
+        <Minus size={16} strokeWidth={3} />
+      </button>
+      <div style={{ width: ancho - 80, textAlign: 'center', minWidth: 38 }}>
+        <input
+          type="number" inputMode="decimal" value={valor} placeholder="—"
+          onChange={(e) => onCambio(e.target.value)}
+          style={{
+            width: '100%', border: 'none', background: 'transparent', textAlign: 'center',
+            fontSize: 19, fontWeight: 800, outline: 'none', fontFamily: FONT, padding: 0,
+            color: Number.isFinite(num) ? LT.text : LT.text3, ...NUM_STYLE,
+          }}
+        />
+        {sufijo && (
+          <div style={{
+            fontSize: 9, color: LT.text3, textTransform: 'uppercase',
+            letterSpacing: 0.5, marginTop: -2, fontWeight: 700,
+          }}>{sufijo}</div>
+        )}
+      </div>
+      <button type="button" onClick={() => mueve(1)} aria-label="Subir" style={boton(1)}>
+        <Plus size={16} strokeWidth={3} />
+      </button>
+    </div>
+  );
+}
+
+/** Dato suelto del ejercicio. Solo se pinta si el coach lo puso. */
+function Chip({ children, fuerte }) {
+  return (
+    <span style={{
+      fontSize: 11.5, fontWeight: 700, padding: '3px 9px', borderRadius: 7,
+      background: fuerte ? LT.blueSoft : LT.surface2,
+      color: fuerte ? LT.blue : LT.text2, whiteSpace: 'nowrap', ...NUM_STYLE,
+    }}>{children}</span>
+  );
+}
+
+const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, oneRMs, sessionsData, phaseColor }) => {
   const { phases: PLAN, resolveExercise, medias } = usePlan();
   const { profile } = useAuth();
   const unidad = profile?.unidad_peso || 'kg';
   const u = etiquetaUnidad(unidad);
-  const [expanded, setExpanded] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(false);
   const [progresoAbierto, setProgresoAbierto] = useState(false);
   const exData = sessionData?.exercises?.[idx] || {};
@@ -324,7 +374,6 @@ const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, oneRMs, sessionsData
   // ejercicio a pelo, porque entonces el trabajo del coach no se vería.
   const portada = portadaParaAtleta(repertoire, medias, profile);
   const misVideos = videosParaAtleta(repertoire, medias, profile);
-  const hasMedia = !!(portada || misVideos.length);
 
   const recommended = useMemo(() => {
     if (ex.isNote || !ex.intensity) return null;
@@ -385,153 +434,113 @@ const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, oneRMs, sessionsData
 
   const showWeightInput = isLoadedExercise(ex);
   const formattedIntensity = formatIntensity(ex.intensity);
-  const rest = inferRest(ex, phaseId);
-  const muscles = getMuscles(ex.name, ex.focus);
-  const primaryLabels = muscles.primary.map(m => MUSCLE_LABELS[m]).filter(Boolean);
-  const spec = [ex.reps ? `${ex.reps} reps` : null, formattedIntensity].filter(Boolean).join(' · ');
-  const hasDetails = ex.cue || primaryLabels.length > 0 || recommended !== null || ex.notes;
+  // El descanso lo escribe el coach en el editor de sesión. Antes lo adivinaba
+  // `inferRest` leyendo el nombre del ejercicio, y el atleta lo leía como si
+  // fuera una indicación de su entrenador. Si el coach no lo puso, no se
+  // muestra nada: inventarle un descanso es peor que no darle ninguno.
+  const rest = (ex.descanso || '').trim() || null;
+
+  /* Los datos se pintan SOLO si el coach los puso. Nada de "—" ni de campos
+     vacíos esperando: si no configuró la intensidad o el descanso, esa línea
+     no existe. Petición de Andrés, y es lo correcto — un hueco vacío se lee
+     como un fallo de la app. */
+  const chips = [
+    ex.reps ? `${ex.reps} reps` : null,
+    formattedIntensity || null,
+    rest || null,
+  ].filter(Boolean);
+
+  const pesoAnterior = showWeightInput && previous
+    ? `${desdeKilos(previous.weight, unidad)} ${u}` : null;
+
+  // Los discos suben de 2,5 en 2,5 kilos, o de 5 en 5 libras. Un paso de 1
+  // obligaría a picarle veinte veces para subir un disco.
+  const pasoPeso = unidad === 'lb' ? 5 : 2.5;
 
   return (
-    <div style={{
-      background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 14,
-      padding: '11px 12px', marginBottom: 8,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        {/* Miniatura del repertorio (media viva) o número en el set */}
-        {portada ? (
-          <button
-            type="button"
-            onClick={() => setMediaOpen(true)}
-            aria-label={`Ver técnica de ${ex.name}`}
-            style={{
-              width: 40, height: 40, borderRadius: 10, padding: 0, border: `1px solid ${LT.border}`,
-              cursor: 'pointer', overflow: 'hidden', flexShrink: 0, position: 'relative', background: '#0E1015',
-            }}
-          >
-            <img src={portada} alt=""
-              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-            {misVideos.length > 0 && (
-              <span style={{
-                position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
-                background: 'rgba(0,0,0,0.22)', color: '#fff',
-              }}>
-                <Play size={14} fill="#fff" />
+    <div style={{ padding: '11px 12px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11 }}>
+        {/* La miniatura y el nombre abren la ficha con el video en grande. */}
+        <button
+          type="button"
+          onClick={() => setMediaOpen(true)}
+          style={{
+            flex: 1, minWidth: 0, display: 'flex', alignItems: 'flex-start', gap: 11,
+            background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
+            fontFamily: FONT, textAlign: 'left',
+          }}
+        >
+          <span style={{
+            width: 52, height: 52, borderRadius: 11, flexShrink: 0, position: 'relative',
+            overflow: 'hidden', display: 'grid', placeItems: 'center',
+            background: portada ? '#0E1015' : pc + '14',
+          }}>
+            {portada ? (
+              <>
+                <img src={portada} alt=""
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                {misVideos.length > 0 && (
+                  <span style={{
+                    position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
+                    background: 'rgba(0,0,0,0.25)', color: '#fff',
+                  }}>
+                    <Play size={16} fill="#fff" />
+                  </span>
+                )}
+              </>
+            ) : (
+              <span style={{ fontSize: 15, fontWeight: 800, color: pc, ...NUM_STYLE }}>{num}</span>
+            )}
+          </span>
+
+          <span style={{ flex: 1, minWidth: 0, paddingTop: 1 }}>
+            <span style={{
+              display: 'block', fontSize: 15.5, fontWeight: 700, color: LT.text,
+              lineHeight: 1.25, overflowWrap: 'anywhere',
+            }}>
+              {ex.name}
+            </span>
+            {chips.length > 0 && (
+              <span style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
+                {chips.map((c) => <Chip key={c}>{c}</Chip>)}
               </span>
             )}
-          </button>
-        ) : (
-          <div style={{
-            width: 28, height: 28, borderRadius: 8, background: pc + '14',
-            color: pc, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 13, fontWeight: 700, flexShrink: 0, ...NUM_STYLE,
-          }}>{num}</div>
-        )}
+          </span>
 
-        {/* Nombre + spec + anterior */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            onClick={hasMedia ? () => setMediaOpen(true) : undefined}
-            style={{ fontSize: 14.5, fontWeight: 700, color: LT.text, lineHeight: 1.25, cursor: hasMedia ? 'pointer' : 'default', overflowWrap: 'anywhere' }}
-          >{ex.name}</div>
-          {spec && <div style={{ fontSize: 12, color: LT.text2, marginTop: 3, ...NUM_STYLE }}>{spec}</div>}
-          {showWeightInput && (
-            <button
-              type="button"
-              onClick={() => setProgresoAbierto(true)}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 4, padding: '4px 9px 4px 7px',
-                border: 'none', borderRadius: 999, background: LT.blueSoft, color: LT.blue,
-                cursor: 'pointer', fontFamily: FONT, fontSize: 11.5, fontWeight: 700, ...NUM_STYLE,
-              }}
-            >
-              <LineChartIcon size={12} />
-              {previous ? `Anterior: ${desdeKilos(previous.weight, unidad)} ${u}` : 'Ver mi progreso'}
-            </button>
-          )}
-        </div>
-
-        {/* Peso o estado */}
-        {showWeightInput ? (
-          <div style={{
-            border: `1px solid ${exData.weight ? LT.mint : LT.border}`, borderRadius: 10,
-            padding: '5px 7px', textAlign: 'center', width: 54, flexShrink: 0,
-            background: exData.weight ? LT.mint + '0D' : LT.surface,
-          }}>
-            <input type="number" inputMode="decimal" value={pesoEscrito}
-              onChange={e => {
-                setPesoEscrito(e.target.value);
-                onUpdate(idx, { ...exData, weight: String(aKilos(e.target.value, unidad)) });
-              }}
-              placeholder="—"
-              style={{
-                width: '100%', border: 'none', background: 'transparent', textAlign: 'center',
-                fontSize: 16, fontWeight: 700, color: exData.weight ? LT.mint : LT.text3,
-                outline: 'none', fontFamily: FONT, padding: 0, ...NUM_STYLE,
-              }} />
-            <div style={{ fontSize: 8, color: LT.text3, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 1 }}>{u}</div>
-          </div>
-        ) : (
-          <div style={{ fontSize: 11, color: LT.text3, flexShrink: 0, textAlign: 'right', maxWidth: 80 }}>
-            {ex.sets && ex.reps ? `${ex.sets}×${ex.reps}` : 'Sin carga'}
-          </div>
-        )}
+          <ChevronRight size={18} color={LT.text3} style={{ flexShrink: 0, marginTop: 17 }} />
+        </button>
       </div>
 
-      {/* Toggle detalles */}
-      {hasDetails && (
-        <button onClick={() => setExpanded(!expanded)}
-          style={{
-            background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: FONT,
-            display: 'flex', alignItems: 'center', gap: 4, marginTop: 8, padding: 0,
-            fontSize: 11, color: LT.blue, fontWeight: 600,
-          }}>
-          {expanded ? 'Ocultar' : 'Ver detalle'}
-          {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-        </button>
-      )}
+      {/* Anotar sin salir de la lista. Solo aparece si el ejercicio lleva carga. */}
+      {showWeightInput && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: 10, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${LT.border}`,
+        }}>
+          <button
+            type="button"
+            onClick={() => setProgresoAbierto(true)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0,
+              border: 'none', background: 'transparent', padding: 0, cursor: 'pointer',
+              fontFamily: FONT, fontSize: 12, fontWeight: 700, color: LT.blue, ...NUM_STYLE,
+            }}
+          >
+            <LineChartIcon size={13} style={{ flexShrink: 0 }} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {pesoAnterior ? `Antes: ${pesoAnterior}` : 'Ver mi progreso'}
+            </span>
+          </button>
 
-      {expanded && (
-        <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${LT.border}` }}>
-          <div style={{ display: 'flex', gap: 16, marginBottom: ex.cue || recommended !== null ? 10 : 0, flexWrap: 'wrap' }}>
-            <div>
-              <div style={{ fontSize: 9, color: LT.text3, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase' }}>Series</div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: LT.text, ...NUM_STYLE }}>{ex.sets || '—'}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 9, color: LT.text3, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase' }}>Reps</div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: LT.text }}>{ex.reps || '—'}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 9, color: LT.text3, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase' }}>Carga</div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: LT.text }}>{formattedIntensity || '—'}</div>
-            </div>
-            {rest && (
-              <div>
-                <div style={{ fontSize: 9, color: LT.text3, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase' }}>Descanso</div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: LT.text }}>{rest}</div>
-              </div>
-            )}
-          </div>
-          {primaryLabels.length > 0 && (
-            <div style={{ fontSize: 11, color: LT.text2, marginBottom: ex.cue || recommended !== null ? 10 : 0 }}>
-              Músculos: {primaryLabels.join(' · ')}
-            </div>
-          )}
-          {ex.cue && (
-            <div style={{
-              padding: '8px 12px', background: LT.warning + '0D', borderLeft: `2px solid ${LT.warning}`,
-              borderRadius: '0 6px 6px 0', fontSize: 12, color: LT.text2, lineHeight: 1.45, marginBottom: recommended !== null ? 10 : 0,
-            }}>
-              <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.5, color: LT.warning, textTransform: 'uppercase', marginRight: 6 }}>Técnica</span>
-              {ex.cue}
-            </div>
-          )}
-          {recommended !== null && (
-            <div style={{ fontSize: 12, color: LT.mint, fontWeight: 600, ...NUM_STYLE }}>
-              Peso recomendado ≈ {desdeKilos(recommended, unidad)} {u}
-            </div>
-          )}
-          {ex.notes && <div style={{ fontSize: 12, color: LT.text3, marginTop: 6, fontStyle: 'italic' }}>{ex.notes}</div>}
+          <PasoNumero
+            valor={pesoEscrito}
+            paso={pasoPeso}
+            sufijo={u}
+            onCambio={(v) => {
+              setPesoEscrito(v);
+              onUpdate(idx, { ...exData, weight: v === '' ? '' : String(aKilos(v, unidad)) });
+            }}
+          />
         </div>
       )}
 
@@ -546,11 +555,30 @@ const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, oneRMs, sessionsData
 
       {mediaOpen && (
         <ExerciseMediaModal
-          exercise={repertoire}
+          exercise={repertoire || { name: ex.name }}
           planEx={ex}
           medias={medias}
           perfil={profile}
           onClose={() => setMediaOpen(false)}
+          registro={{
+            notas: ex.notes || null,
+            cue: ex.cue || null,
+            descanso: rest,
+            conPeso: showWeightInput,
+            unidad: u,
+            anterior: pesoAnterior,
+            recomendado: recommended !== null ? `${desdeKilos(recommended, unidad)} ${u}` : null,
+            control: (
+              <PasoNumero
+                valor={pesoEscrito}
+                paso={pasoPeso}
+                onCambio={(v) => {
+                  setPesoEscrito(v);
+                  onUpdate(idx, { ...exData, weight: v === '' ? '' : String(aKilos(v, unidad)) });
+                }}
+              />
+            ),
+          }}
         />
       )}
     </div>
@@ -578,7 +606,7 @@ const groupIntoSets = (exercises) => {
   return groups;
 };
 
-const SetGroup = ({ group, setNum, phaseColor, sessionData, onUpdate, oneRMs, sessionsData, phaseId }) => {
+const SetGroup = ({ group, setNum, phaseColor, sessionData, onUpdate, oneRMs, sessionsData }) => {
   if (group.isNote) {
     return (
       <div style={{
@@ -589,31 +617,55 @@ const SetGroup = ({ group, setNum, phaseColor, sessionData, onUpdate, oneRMs, se
   }
   const count = group.exercises.length;
   const typeLabel = count >= 3 ? 'Tri-serie' : count === 2 ? 'Bi-serie' : null;
-  const series = group.exercises[0].ex.sets;
+  const rondas = group.exercises[0].ex.sets;
+
+  /* Una sola tarjeta por SERIE, con los ejercicios dentro separados por una
+     línea. Antes era una tarjeta por ejercicio, y una bi-serie —dos ejercicios
+     que se alternan— se veía igual que dos ejercicios sueltos: la tarjeta
+     decía "van juntos" y el corte entre tarjetas decía lo contrario. */
   return (
-    <div style={{ marginBottom: 18 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, paddingLeft: 2 }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: LT.text }}>Set {setNum}</span>
-        {typeLabel && (
-          <span style={{ fontSize: 10, fontWeight: 700, color: LT.blue, background: LT.blueSoft, padding: '2px 8px', borderRadius: 6, letterSpacing: 0.3 }}>
-            {typeLabel}
-          </span>
-        )}
-        {series && (
-          <span style={{ fontSize: 11, color: LT.text2 }}>
-            {typeLabel ? `${series} rondas` : `${series} series`}
+    <div style={{ marginBottom: 20 }}>
+      <div style={{
+        display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+        gap: 10, marginBottom: 8, padding: '0 3px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <span style={{ fontSize: 15, fontWeight: 800, color: LT.text }}>Serie {setNum}</span>
+          {typeLabel && (
+            <span style={{
+              fontSize: 10, fontWeight: 800, color: LT.blue, background: LT.blueSoft,
+              padding: '2px 8px', borderRadius: 6, letterSpacing: 0.3, flexShrink: 0,
+            }}>
+              {typeLabel}
+            </span>
+          )}
+        </div>
+        {rondas && (
+          <span style={{ fontSize: 12.5, color: LT.text2, fontWeight: 600, flexShrink: 0, ...NUM_STYLE }}>
+            Se repite {rondas} {parseInt(rondas, 10) === 1 ? 'vez' : 'veces'}
           </span>
         )}
       </div>
+
       {typeLabel && (
-        <div style={{ fontSize: 11, color: LT.text3, marginBottom: 8, paddingLeft: 2 }}>
+        <div style={{ fontSize: 11.5, color: LT.text3, marginBottom: 8, padding: '0 3px', fontWeight: 600 }}>
           Alterna los ejercicios sin descanso completo entre ellos
         </div>
       )}
-      {group.exercises.map(({ ex, idx }, i) => (
-        <ExerciseRow key={idx} ex={ex} idx={idx} num={i + 1} phaseColor={phaseColor} phaseId={phaseId}
-          sessionData={sessionData} onUpdate={onUpdate} oneRMs={oneRMs} sessionsData={sessionsData} />
-      ))}
+
+      <div style={{
+        background: LT.surface, border: `1px solid ${LT.border}`,
+        borderRadius: 16, overflow: 'hidden',
+      }}>
+        {group.exercises.map(({ ex, idx }, i) => (
+          <div key={idx} style={{ borderTop: i > 0 ? `1px solid ${LT.border}` : 'none' }}>
+            <ExerciseRow
+              ex={ex} idx={idx} num={i + 1} phaseColor={phaseColor}
+              sessionData={sessionData} onUpdate={onUpdate} oneRMs={oneRMs} sessionsData={sessionsData}
+            />
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
@@ -909,7 +961,7 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
         return groups.map((g, gi) => {
           if (!g.isNote) setNum += 1;
           return (
-            <SetGroup key={`${selectedIdx}-${gi}`} group={g} setNum={setNum} phaseColor={phaseColor} phaseId={phase.id}
+            <SetGroup key={`${selectedIdx}-${gi}`} group={g} setNum={setNum} phaseColor={phaseColor}
               sessionData={flatSessionData}
               onUpdate={(idx, data) => setExerciseData(null, idx, data)}
               oneRMs={oneRMs} sessionsData={sessionsData} />
@@ -944,7 +996,7 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
                   return groups.map((g, gi) => {
                     if (!g.isNote) setNum += 1;
                     return (
-                      <SetGroup key={gi} group={g} setNum={setNum} phaseColor={phaseColor} phaseId={phase.id}
+                      <SetGroup key={gi} group={g} setNum={setNum} phaseColor={phaseColor}
                         sessionData={blkSessionData}
                         onUpdate={(idx, data) => setExerciseData(bi, idx, data)}
                         oneRMs={oneRMs} sessionsData={sessionsData} />

@@ -387,6 +387,15 @@ function ExerciseCard({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove
               placeholder="70% / RPE 8" style={{ ...inputStyle, padding: '8px 10px', fontSize: 13 }} />
           </Field>
         </div>
+        {/* El descanso lo escribe el COACH. Antes la app lo adivinaba leyendo el
+            nombre del ejercicio y se lo enseñaba al atleta como si fuera una
+            indicación suya. Si aquí se deja vacío, al atleta no le aparece
+            nada: mejor callar que inventarle un dato de entrenamiento. */}
+        <Field label="Descanso">
+          <input value={ex.descanso || ''} onChange={(e) => onPatch({ descanso: e.target.value })}
+            placeholder="2 min / 90 s — opcional"
+            style={{ ...inputStyle, padding: '8px 10px', fontSize: 13, marginTop: 2 }} />
+        </Field>
         <Field label="Descripción">
           <input value={ex.notes || ''} onChange={(e) => onPatch({ notes: e.target.value })}
             placeholder="Ej. 8 repeticiones cada pierna…" style={{ ...inputStyle, padding: '8px 10px', fontSize: 13, marginTop: 2 }} />
@@ -514,6 +523,10 @@ function ExerciseRow({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove,
       <td style={{ ...celda, width: 118 }}>
         <input value={ex.intensity || ''} onChange={(e) => onPatch({ intensity: e.target.value })}
           placeholder="70% / RPE 8" style={inputFila} />
+      </td>
+      <td style={{ ...celda, width: 96 }}>
+        <input value={ex.descanso || ''} onChange={(e) => onPatch({ descanso: e.target.value })}
+          placeholder="2 min" style={inputFila} />
       </td>
       <td style={celda}>
         <input value={ex.notes || ''} onChange={(e) => onPatch({ notes: e.target.value })}
@@ -1050,6 +1063,7 @@ function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCr
                           <th style={encabezado}>Ejercicio</th>
                           <th style={encabezado}>Reps</th>
                           <th style={encabezado}>Carga / Int.</th>
+                          <th style={encabezado}>Descanso</th>
                           <th style={encabezado}>Descripción</th>
                           <th style={encabezado}>Cue técnico</th>
                           <th style={encabezado}>Peso</th>

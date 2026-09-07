@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { X, ExternalLink, Dumbbell } from 'lucide-react';
+import { X, ExternalLink, Dumbbell, Timer } from 'lucide-react';
 import { videosParaAtleta, portadaParaAtleta } from '@/lib/videos';
 import { T, FONT, KP } from '@/lib/theme';
 
@@ -47,7 +47,7 @@ function VideoRecortado({ video }) {
   );
 }
 
-export default function ExerciseMediaModal({ exercise, planEx, medias = [], perfil, onClose }) {
+export default function ExerciseMediaModal({ exercise, planEx, medias = [], perfil, onClose, registro }) {
   const videos = videosParaAtleta(exercise, medias, perfil);
   // La portada también puede estar personalizada para esta persona.
   const portada = portadaParaAtleta(exercise, medias, perfil);
@@ -169,6 +169,79 @@ export default function ExerciseMediaModal({ exercise, planEx, medias = [], perf
               )}
               <VideoRecortado video={video} />
             </>
+          )}
+
+          {/* Lo que escribió el COACH sobre este ejercicio. Cada línea aparece
+              solo si la puso: un bloque vacío con guiones se lee como un fallo
+              de la app, no como "no hay nada que decir aquí". */}
+          {registro?.notas && (
+            <div style={{ fontSize: 14, color: T.text2, marginTop: 12, lineHeight: 1.55 }}>
+              {registro.notas}
+            </div>
+          )}
+
+          {registro?.cue && (
+            <div style={{
+              marginTop: 12, padding: '10px 13px', borderRadius: '0 9px 9px 0',
+              background: `${T.warning}0D`, borderLeft: `2.5px solid ${T.warning}`,
+              fontSize: 13, color: T.text2, lineHeight: 1.5,
+            }}>
+              <span style={{
+                fontSize: 9.5, fontWeight: 800, letterSpacing: 0.6, color: T.warning,
+                textTransform: 'uppercase', marginRight: 7,
+              }}>Técnica</span>
+              {registro.cue}
+            </div>
+          )}
+
+          {registro?.descanso && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8, marginTop: 12,
+              fontSize: 13.5, color: T.text2, fontWeight: 600,
+            }}>
+              <Timer size={15} color={T.text3} style={{ flexShrink: 0 }} />
+              Descansa {registro.descanso} entre series
+            </div>
+          )}
+
+          {/* Registrar lo hecho, sin salir de aquí. Se guarda al instante: no
+              hay botón de guardar porque no hay nada que confirmar. */}
+          {registro?.conPeso && (
+            <div style={{
+              marginTop: 18, paddingTop: 16, borderTop: `1px solid ${T.border}`,
+            }}>
+              <div style={{
+                fontSize: 11, fontWeight: 800, letterSpacing: 0.7, textTransform: 'uppercase',
+                color: T.text3, marginBottom: 11,
+              }}>
+                Registra lo que hiciste
+              </div>
+
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                gap: 12, padding: '12px 14px', border: `1.5px solid ${T.border}`, borderRadius: 14,
+              }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 14.5, fontWeight: 800, color: T.text }}>
+                    Peso <span style={{ color: T.text3, fontWeight: 600 }}>{registro.unidad}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: T.text3, fontWeight: 600, marginTop: 2 }}>
+                    {registro.anterior
+                      ? `La vez pasada: ${registro.anterior}`
+                      : 'Primera vez que lo registras'}
+                  </div>
+                </div>
+                {registro.control}
+              </div>
+
+              {registro.recomendado && (
+                <div style={{
+                  fontSize: 12.5, color: T.text3, fontWeight: 600, marginTop: 9, textAlign: 'center',
+                }}>
+                  Según tu 1RM te tocaría ≈ {registro.recomendado}
+                </div>
+              )}
+            </div>
           )}
 
           {/* Link externo (YouTube, etc.) */}
