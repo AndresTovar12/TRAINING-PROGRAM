@@ -2262,7 +2262,25 @@ export default function TrainingApp() {
     setCursorPickerOpen(false);
   }, [setCursor]);
 
-  const goToPlan = () => { setView({ level: 'plan' }); setTab('plan'); };
+  /* Tocar "Plan" te deja en TU semana, no en la lista de las 9 fases.
+     Andrés: "cuando le pico a Plan todavía tengo que escoger la fase y luego
+     la semana". Eran 3 toques para llegar a un sitio que la app ya sabe cuál
+     es: el puntero dice exactamente en qué fase y semana vas.
+
+     Explorar el programa sigue estando: la flecha de arriba sube a la fase, y
+     de ahí a todas. Se invierte quién paga el precio — antes lo pagaba el que
+     entrena todos los días, ahora el que quiere curiosear el plan entero. */
+  const vistaDelPlan = useCallback(() => (
+    cursorSession
+      ? { level: 'week', phase: cursorSession.phase, week: cursorSession.week }
+      : { level: 'plan' }   // sin plan asignado no hay semana a la que ir
+  ), [cursorSession]);
+
+  /* La flecha de "atrás" de una fase tiene que llegar a la LISTA de fases, no
+     a donde apunta la pestaña. Al hacer que la pestaña "Plan" lleve a tu
+     semana, este botón se fue con ella y dejó la lista de las 9 fases sin
+     ninguna forma de llegar: se volvía sobre sus propios pasos. */
+  const verTodasLasFases = () => { setView({ level: 'plan' }); setTab('plan'); };
   // From Home or anywhere: jump directly to the week view (selected day handled internally)
   // No recibe el día a propósito: la vista de semana ya resalta el que toca.
   const startSession = (phase, week) => {
@@ -2292,7 +2310,7 @@ export default function TrainingApp() {
       content = <PlanOverview onSelectPhase={p => setView({ level: 'phase', phase: p })}
         sessionsData={sessionsData} activePhaseId={activePhaseId} />;
     } else if (view.level === 'phase') {
-      content = <PhaseDetail phase={view.phase} onBack={goToPlan}
+      content = <PhaseDetail phase={view.phase} onBack={verTodasLasFases}
         onSelectWeek={w => setView({ level: 'week', phase: view.phase, week: w })}
         sessionsData={sessionsData} activeWeekKey={activeWeekKey} />;
     } else if (view.level === 'week') {
@@ -2323,7 +2341,7 @@ export default function TrainingApp() {
       <div style={esCompu ? { maxWidth: 980, margin: '0 auto', width: '100%' } : undefined}>
         {content}
       </div>
-      <BottomNav active={tab} onChange={t => { setTab(t); if (t === 'plan') setView({ level: 'plan' }); }} />
+      <BottomNav active={tab} onChange={t => { setTab(t); if (t === 'plan') setView(vistaDelPlan()); }} />
       {cursorPickerOpen && (
         <CursorSelector current={cursor} sessionsData={sessionsData}
           onSelect={handleSelectCursor} onClose={() => setCursorPickerOpen(false)} />
