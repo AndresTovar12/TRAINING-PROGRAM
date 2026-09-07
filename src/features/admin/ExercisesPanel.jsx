@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Plus, Search, X, Trash2, Loader2, Image as ImageIcon, Video, Dumbbell,
-  Copy, RotateCcw, Pencil,
+  Copy, RotateCcw, Pencil, ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useIsWide } from '@/lib/useViewport';
 import {
   listCategories, listExercises, createExercise, updateExercise, deleteExercise,
   getMasterId, tagRepertoire, duplicateExercise,
@@ -183,10 +184,190 @@ function MuscleSelect({ value, onChange, options }) {
  * el master. Entonces guardar NO modifica el original: crea mi versión, que
  * solo ven mis atletas. El original queda intacto y siempre se puede volver.
  */
+/**
+ * Un ejercicio en la lista del teléfono.
+ *
+ * POR QUE NO ES LA TARJETA GRANDE. Medido: la tarjeta con foto ocupa 221 px de
+ * alto, y 116 de esos —el 53%— son el hueco de la imagen. Como 80 de 81
+ * ejercicios no tienen foto, ese hueco casi siempre muestra un icono de
+ * mancuerna sobre color plano. La lista entera medía 19.000 px: 24 pantallazos
+ * para recorrerla.
+ *
+ * Con la fila caben 9 ejercicios por pantalla en vez de 2,5. La foto no se
+ * pierde: se ve en 42 px, y en grande al abrir el ejercicio.
+ *
+ * En computadora se sigue usando la tarjeta: ahí caben cuatro por fila y el
+ * espacio sobra, así que la foto grande sí se gana su lugar.
+ */
+function ExerciseRow({ ex, base, onAbrir, onMedia }) {
+  const color = catColor(ex.category);
+  const tieneVideo = !!(ex.video_url || ex.video_link);
+  const tieneFoto = !!ex.cover_image_url;
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10,
+      background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 13,
+      padding: '8px 9px', boxShadow: KP.shCard,
+    }}>
+      <button
+        type="button"
+        onClick={onAbrir}
+        style={{
+          flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10,
+          background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
+          fontFamily: FONT, textAlign: 'left', minHeight: 44,
+        }}
+      >
+        <span style={{
+          width: 44, height: 44, borderRadius: 10, flexShrink: 0,
+          display: 'grid', placeItems: 'center',
+          background: tieneFoto
+            ? `center/cover no-repeat url(${ex.cover_image_url})`
+            : `${color}14`,
+        }}>
+          {!tieneFoto && <Dumbbell size={19} color={`${color}AA`} />}
+        </span>
+
+        <span style={{ minWidth: 0, flex: 1 }}>
+          <span style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            fontSize: 13.5, fontWeight: 700, color: T.text,
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {ex.name}
+            </span>
+            {ex.esMiVersion && (
+              <Pencil size={11} color={T.accent} style={{ flexShrink: 0 }} />
+            )}
+          </span>
+          <span style={{
+            display: 'block', fontSize: 11.5, color: T.text3, fontWeight: 600,
+            marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {[ex.category?.name, ex.equipment, (ex.muscle_primary || []).join(' · ')]
+              .filter(Boolean).join(' · ') || (base ? 'Base' : '—')}
+          </span>
+        </span>
+      </button>
+
+      {/* El que le falta video se marca en ámbar. Es la única forma de ver de un
+          vistazo cuáles faltan sin abrirlos uno por uno. */}
+      <button
+        type="button"
+        onClick={onMedia}
+        aria-label={tieneVideo ? `Ver o cambiar el video de ${ex.name}` : `Falta video en ${ex.name}: grabarlo`}
+        style={{
+          width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+          display: 'grid', placeItems: 'center', cursor: 'pointer',
+          border: `1px solid ${tieneVideo ? T.border : T.warning}`,
+          background: tieneVideo ? T.bg2 : 'rgba(224,123,0,0.10)',
+          color: tieneVideo ? T.text2 : T.warning,
+        }}
+      >
+        <Video size={16} />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Al tocar un ejercicio en el teléfono no se abre la ficha completa: primero se
+ * pregunta qué se va a hacer.
+ *
+ * Idea de Andrés. La razón por la que gana: los datos de los 81 ejercicios ya
+ * están escritos y nadie los va a volver a tocar; lo que falta es la media, en
+ * 80 de 81. Mandar la ficha completa por delante pone lo que nunca se hace
+ * encima de lo único que se hace.
+ */
+function QueVasAHacer({ ejercicio, onMedia, onEditar, onCerrar }) {
+  const opciones = [
+    {
+      icono: Video, principal: true, et: 'Grabar o subir',
+      sub: 'Video, foto de portada, ángulos', al: onMedia,
+    },
+    {
+      icono: Pencil, principal: false, et: 'Editar el ejercicio',
+      sub: 'Nombre, categoría, equipo, notas', al: onEditar,
+    },
+  ];
+
+  return (
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onCerrar(); }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 2100, background: 'rgba(17,19,24,0.45)',
+        display: 'flex', alignItems: 'flex-end', fontFamily: FONT,
+      }}
+    >
+      <div className="animate-fade-in" style={{
+        width: '100%', background: T.bg2, borderRadius: '20px 20px 0 0',
+        padding: '16px 16px calc(16px + env(safe-area-inset-bottom))',
+        boxShadow: KP.shPop,
+      }}>
+        <div style={{
+          fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 3,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {ejercicio.name}
+        </div>
+        <div style={{ fontSize: 12, color: T.text3, fontWeight: 600, marginBottom: 14 }}>
+          ¿Qué vas a hacer?
+        </div>
+
+        {opciones.map((o) => (
+          <button
+            key={o.et}
+            type="button"
+            onClick={o.al}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 12, width: '100%',
+              minHeight: 60, padding: '12px 14px', borderRadius: 14, marginBottom: 9,
+              cursor: 'pointer', fontFamily: FONT, textAlign: 'left',
+              border: o.principal ? 'none' : `1.5px solid ${T.border}`,
+              background: o.principal ? T.accent : T.bg2,
+              color: o.principal ? '#fff' : T.text,
+            }}
+          >
+            <o.icono size={20} style={{ flexShrink: 0 }} />
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: 'block', fontSize: 14.5, fontWeight: 800 }}>{o.et}</span>
+              <span style={{
+                display: 'block', fontSize: 11.5, fontWeight: 600, marginTop: 1,
+                color: o.principal ? 'rgba(255,255,255,.78)' : T.text3,
+              }}>
+                {o.sub}
+              </span>
+            </span>
+            <ChevronRight size={17} style={{ flexShrink: 0, opacity: .6 }} />
+          </button>
+        ))}
+
+        <button
+          type="button" onClick={onCerrar}
+          style={{
+            width: '100%', minHeight: 46, marginTop: 4, borderRadius: 13,
+            border: 'none', background: 'transparent', cursor: 'pointer',
+            fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text2,
+          }}
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ExerciseEditor({
   exercise, categories, muscleOptions = [], onClose, onSaved, onDeleted,
-  esAjeno, onDuplicate, onGuardadaMiVersion, onRestaurada,
+  esAjeno, onDuplicate, onGuardadaMiVersion, onRestaurada, foco = 'todo',
 }) {
+  // `foco='media'` abre la ficha directo en foto y video, sin los campos de
+  // texto. Los datos de los 81 ejercicios ya están escritos; lo que falta es
+  // la media. Guardar sigue guardando la ficha completa: los campos siguen
+  // ahí en el estado, solo no se pintan.
+  const [soloMedia, setSoloMedia] = useState(foco === 'media');
   const { user } = useAuth();
   const [dupBusy, setDupBusy] = useState(false);
   const [restaurando, setRestaurando] = useState(false);
@@ -304,6 +485,8 @@ function ExerciseEditor({
                 : 'Es un ejercicio base del sistema. Al guardar no lo cambias: creas TU versión, que solo ven tus atletas. El original queda intacto y puedes volver a él cuando quieras.'}
             </div>
           )}
+          {!soloMedia && (
+          <>
           <Input label="Nombre" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Ej. Back Squat" />
 
           <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -341,8 +524,25 @@ function ExerciseEditor({
               }}
             />
           </label>
+          </>
+          )}
 
-          <div style={{ height: 1, background: T.border }} />
+          {soloMedia && (
+            <button
+              type="button"
+              onClick={() => setSoloMedia(false)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 7, alignSelf: 'flex-start',
+                minHeight: 40, padding: '0 13px', borderRadius: 11, cursor: 'pointer',
+                border: `1.5px solid ${T.border}`, background: T.bg2,
+                fontFamily: FONT, fontSize: 13, fontWeight: 700, color: T.text2,
+              }}
+            >
+              <Pencil size={14} /> Editar también los datos
+            </button>
+          )}
+
+          {!soloMedia && <div style={{ height: 1, background: T.border }} />}
 
           <MediaUpload
             label="Foto de portada"
@@ -510,6 +710,9 @@ export default function ExercisesPanel() {
   const [editing, setEditing] = useState(null); // { exercise, esAjeno } | { new: true } | null
   // Mis versiones de los ejercicios base. Se aplican encima del repertorio.
   const [overrides, setOverrides] = useState([]);
+  // En el teléfono, tocar un ejercicio pregunta primero qué se va a hacer.
+  const [preguntando, setPreguntando] = useState(null);
+  const esAncho = useIsWide();
 
   useEffect(() => {
     let cancelled = false;
@@ -586,10 +789,11 @@ export default function ExercisesPanel() {
     setEditing({ exercise: copy, esAjeno: false }); // abre la copia para personalizar
   }
 
-  function openExercise(ex) {
+  function openExercise(ex, foco = 'todo') {
     // Un coach SÍ puede editar los ejercicios base, pero editarlos no cambia el
     // original: crea su propia versión. `esAjeno` es lo que dispara ese camino.
-    setEditing({ exercise: ex, esAjeno: !isMaster && ex.isBase });
+    setPreguntando(null);
+    setEditing({ exercise: ex, esAjeno: !isMaster && ex.isBase, foco });
   }
 
   // Guardé mi versión de un ejercicio base: entra al mapa de versiones y la
@@ -707,14 +911,39 @@ export default function ExercisesPanel() {
       ) : (
         <div
           style={{
-            display: 'grid', gap: 14,
-            gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+            display: 'grid',
+            gap: esAncho ? 14 : 8,
+            // En el teléfono la tarjeta con foto gastaba 116 px por ejercicio en
+            // un hueco que 80 de 81 veces está vacío. En computadora caben
+            // cuatro por fila y la foto grande sí se gana el espacio.
+            // minmax(0, 1fr) y no '1fr' a secas: '1fr' equivale a minmax(auto, 1fr),
+            // y ese `auto` deja que un nombre largo empuje la columna más allá de
+            // la pantalla. Se desbordaba y el botón de grabar quedaba fuera.
+            gridTemplateColumns: esAncho ? 'repeat(auto-fill, minmax(220px, 1fr))' : 'minmax(0, 1fr)',
           }}
         >
-          {filtered.map((ex) => (
-            <ExerciseCard key={ex.id} ex={ex} base={!isMaster && ex.isBase} onClick={() => openExercise(ex)} />
-          ))}
+          {filtered.map((ex) => (esAncho ? (
+            <ExerciseCard
+              key={ex.id} ex={ex} base={!isMaster && ex.isBase}
+              onClick={() => openExercise(ex)}
+            />
+          ) : (
+            <ExerciseRow
+              key={ex.id} ex={ex} base={!isMaster && ex.isBase}
+              onAbrir={() => setPreguntando(ex)}
+              onMedia={() => openExercise(ex, 'media')}
+            />
+          )))}
         </div>
+      )}
+
+      {preguntando && (
+        <QueVasAHacer
+          ejercicio={preguntando}
+          onMedia={() => openExercise(preguntando, 'media')}
+          onEditar={() => openExercise(preguntando, 'todo')}
+          onCerrar={() => setPreguntando(null)}
+        />
       )}
 
       {editing && (
@@ -728,6 +957,7 @@ export default function ExercisesPanel() {
           categories={categories}
           muscleOptions={muscles}
           esAjeno={!!editing.esAjeno}
+          foco={editing.foco || 'todo'}
           onClose={() => setEditing(null)}
           onSaved={handleSaved}
           onDeleted={handleDeleted}
