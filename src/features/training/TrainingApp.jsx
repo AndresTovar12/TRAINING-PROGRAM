@@ -4,7 +4,7 @@ import {
   Check, X, Calculator, BookOpen, TrendingUp, Edit3, Target,
   Zap, Trophy, Clock, FileText, Sparkles, Info, Dumbbell, Heart, Play,
   ChevronLeft, Activity, Home as HomeIcon,
-  Repeat, Eye, Layers, List, Scale, AlertCircle, Moon, LineChart as LineChartIcon
+  Repeat, Eye, Layers, List, Scale, LineChart as LineChartIcon
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { useIsDesktop } from '@/lib/useViewport';
@@ -1426,7 +1426,7 @@ const initialsFrom = (name) => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
-const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, onGoWeek, cursor, onChangeCursor }) => {
+const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, cursor, onChangeCursor }) => {
   const { phases: PLAN, planMeta, kind } = usePlan();
   const { profile } = useAuth();
   const displayName = profile?.full_name || profile?.username || 'Atleta';
@@ -1438,68 +1438,6 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, 
     const d = wellness[today()];
     if (!d || !d.sleep || d.fatigue == null || d.soreness == null || !d.motivation) return null;
     return Math.round((d.sleep + (10 - d.fatigue) + (10 - d.soreness) + d.motivation) / 4 * 10) / 10;
-  }, [wellness]);
-
-  // Días estimados hasta el próximo deload
-  const daysToDeload = useMemo(() => {
-    if (!next) return null;
-    let passed = false;
-    let weeksAhead = 0;
-    for (const phase of PLAN) {
-      for (const week of phase.weekData) {
-        if (passed) {
-          if (phase.id === 'deload') {
-            return { days: weeksAhead * 7, label: `${phase.fullName || 'Deload'} sem ${week.num}` };
-          }
-          weeksAhead++;
-        }
-        if (phase.id === next.phase.id && week.num === next.week.num) {
-          passed = true;
-        }
-      }
-    }
-    return null;
-  }, [next, PLAN]);
-
-  // Próximas 3 sesiones después del cursor (no completadas)
-  const upcomingSessions = useMemo(() => {
-    if (!next) return [];
-    const result = [];
-    let passed = false;
-    outer: for (const phase of PLAN) {
-      for (const week of phase.weekData) {
-        for (let di = 0; di < week.days.length; di++) {
-          if (passed) {
-            const id = sessionId(phase.id, week.num, di);
-            if (!sessionsData[id]?.completed) {
-              result.push({ phase, week, day: week.days[di], dayIdx: di, id });
-              if (result.length >= 3) break outer;
-            }
-          }
-          if (phase.id === next.phase.id && week.num === next.week.num && di === next.dayIdx) {
-            passed = true;
-          }
-        }
-      }
-    }
-    return result;
-  }, [next, sessionsData, PLAN]);
-
-  // Tendencia de bienestar últimos 7 días
-  const readinessTrend = useMemo(() => {
-    const days = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const key = d.toISOString().split('T')[0];
-      const w = wellness[key];
-      let score = null;
-      if (w && w.sleep && w.fatigue != null && w.soreness != null && w.motivation) {
-        score = Math.round((w.sleep + (10 - w.fatigue) + (10 - w.soreness) + w.motivation) / 4 * 10) / 10;
-      }
-      days.push({ d: key.slice(8), score });
-    }
-    return days;
   }, [wellness]);
 
   // Tiempo estimado y conteo de ejercicios del workout
@@ -1515,32 +1453,7 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, 
     return { exercises: 0, duration: '~60 min' };
   }, [next]);
 
-  const { text: greetText, icon: GreetIcon } = greeting();
-  const phaseColor = next ? next.phase.color : T.accent;
-
-  // Icono por categoría
-  const catIcon = (cat) => {
-    if (cat === 'gym') return Dumbbell;
-    if (cat === 'speed') return Zap;
-    if (cat === 'recovery') return Activity;
-    if (cat === 'football') return Trophy;
-    if (cat === 'team') return Trophy;
-    if (cat === 'tests') return AlertCircle;
-    if (cat === 'off') return Moon;
-    return Activity;
-  };
-
-  // Silueta del atleta para hero card (compacta)
-  const AthleteSilhouette = ({ color }) => (
-    <svg viewBox="0 0 100 100" width="140" height="140" style={{ display: 'block' }}>
-      <circle cx="50" cy="22" r="9" fill={color} />
-      <rect x="44" y="32" width="12" height="28" rx="4" fill={color} />
-      <rect x="34" y="36" width="10" height="22" rx="3" fill={color} />
-      <rect x="56" y="36" width="10" height="22" rx="3" fill={color} />
-      <rect x="40" y="60" width="8" height="28" rx="3" fill={color} />
-      <rect x="52" y="60" width="8" height="28" rx="3" fill={color} />
-    </svg>
-  );
+  const { text: greetText } = greeting();
 
   const sessionTitle = next ? (next.day.name || (next.day.blocks ? next.day.blocks.map(b => b.tag.replace(/^Sesi[óo]n \d+ \([AP]M\): /, '')).join(' + ') : next.day.day)) : '';
 
@@ -2241,12 +2154,12 @@ export default function TrainingApp() {
 
   const goToPlan = () => { setView({ level: 'plan' }); setTab('plan'); };
   // From Home or anywhere: jump directly to the week view (selected day handled internally)
-  const startSession = (phase, week, dayIdx) => {
+  // No recibe el día a propósito: la vista de semana ya resalta el que toca.
+  const startSession = (phase, week) => {
     setTab('plan');
     setView({ level: 'week', phase, week });
   };
   const goToPhase = (phase) => { setTab('plan'); setView({ level: 'phase', phase }); };
-  const goToWeek = (phase, week) => { setTab('plan'); setView({ level: 'week', phase, week }); };
   const jumpToPhase = (phase) => { setTab('plan'); setView({ level: 'phase', phase }); };
 
   // Timeline visible on Plan tab, internal views
@@ -2262,7 +2175,6 @@ export default function TrainingApp() {
       onStartSession={startSession}
       onGoTab={t => setTab(t)}
       onGoPhase={goToPhase}
-      onGoWeek={goToWeek}
       cursor={cursor}
       onChangeCursor={() => setCursorPickerOpen(true)} />;
   } else if (tab === 'plan') {

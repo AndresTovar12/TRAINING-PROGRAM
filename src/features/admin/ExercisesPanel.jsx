@@ -10,6 +10,7 @@ import {
 } from '@/lib/api';
 import MediaUpload from '@/features/admin/MediaUpload';
 import VideosDelEjercicio from '@/features/admin/VideosDelEjercicio';
+import RecortarVideo from '@/features/admin/RecortarVideo';
 import { MUSCLE_GROUPS, FINE_MUSCLES, exerciseMatchesGroup } from '@/lib/muscles';
 import { T, FONT, KP } from '@/lib/theme';
 
@@ -124,6 +125,8 @@ function Input({ label, ...props }) {
 const empty = {
   name: '', category_id: '', equipment: '', description: '',
   muscle_primary: '', cover_image_url: '', video_url: '', video_link: '',
+  // Tramo del video que ve el atleta. null = completo. No corta el archivo.
+  recorte_inicio: null, recorte_fin: null,
 };
 
 // Lista desplegable de grupo muscular: primero los grupos (recomendado), luego
@@ -184,6 +187,8 @@ function ExerciseEditor({ exercise, categories, muscleOptions = [], onClose, onS
           cover_image_url: exercise.cover_image_url || '',
           video_url: exercise.video_url || '',
           video_link: exercise.video_link || '',
+          recorte_inicio: exercise.recorte_inicio ?? null,
+          recorte_fin: exercise.recorte_fin ?? null,
         }
       : { ...empty, category_id: categories[0]?.id || '' },
   );
@@ -206,6 +211,8 @@ function ExerciseEditor({ exercise, categories, muscleOptions = [], onClose, onS
       cover_image_url: form.cover_image_url || null,
       video_url: form.video_url || null,
       video_link: form.video_link.trim() || null,
+      recorte_inicio: form.video_url ? form.recorte_inicio : null,
+      recorte_fin: form.video_url ? form.recorte_fin : null,
     };
     try {
       const saved = exercise
@@ -331,6 +338,17 @@ function ExerciseEditor({ exercise, categories, muscleOptions = [], onClose, onS
             kind="videos"
             hint="Sube un MP4, o usa el enlace de abajo si está en redes."
           />
+
+          {form.video_url && (
+            <RecortarVideo
+              url={form.video_url}
+              inicio={form.recorte_inicio}
+              fin={form.recorte_fin}
+              onCambio={({ inicio, fin }) => setForm((f) => ({
+                ...f, recorte_inicio: inicio, recorte_fin: fin,
+              }))}
+            />
+          )}
 
           <Input
             label="Enlace de video (TikTok / Instagram / YouTube)"

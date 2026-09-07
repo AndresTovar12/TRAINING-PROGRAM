@@ -19,8 +19,6 @@ export function AppStateProvider({ children }) {
   const [store, setStore] = useState({});
   const [loaded, setLoaded] = useState(false);
 
-  const storeRef = useRef(store);
-  storeRef.current = store;
   const saveTimer = useRef(null);
   const skipNextSave = useRef(true); // avoid echo-write right after initial load
 
@@ -65,7 +63,11 @@ export function AppStateProvider({ children }) {
         .from('user_app_state')
         .upsert({
           user_id: user.id,
-          data: storeRef.current,
+          // `store` de este render, no una copia guardada aparte: el efecto
+          // depende de `store`, y su limpieza cancela el temporizador anterior
+          // en cada cambio. O sea que el que llega a guardarse es siempre el
+          // último. La copia en un ref no hacía falta y solo podía desfasarse.
+          data: store,
           updated_at: new Date().toISOString(),
         })
         .then(({ error }) => {
@@ -76,7 +78,7 @@ export function AppStateProvider({ children }) {
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [store, loaded, user?.id]);
+  }, [store, loaded, user?.id, user]);
 
   const value = useMemo(() => ({ store, setStore, loaded }), [store, loaded]);
 
@@ -96,20 +98,24 @@ export function useAppState() {
  */
 export function useStorage(key, def) {
   const { store, setStore, loaded } = useAppState();
-  const defRef = useRef(def);
+  // El valor por defecto se congela en el primer render. Si no, quien lo pase
+  // como objeto o array recién creado tendría uno distinto cada vez y lo que
+  // dependa de él se recalcularía sin parar. Va en estado y no en un ref
+  // porque leer un ref mientras se dibuja no está permitido.
+  const [defInicial] = useState(def);
 
-  const value = loaded && key in store ? store[key] : defRef.current;
+  const value = loaded && key in store ? store[key] : defInicial;
 
   const setValue = useCallback(
     (nv) => {
       setStore((prev) => {
-        const prevVal = prev && key in prev ? prev[key] : defRef.current;
+        const prevVal = prev && key in prev ? prev[key] : defInicial;
         const next = typeof nv === 'function' ? nv(prevVal) : nv;
         if (next === prevVal) return prev;
         return { ...prev, [key]: next };
       });
     },
-    [key, setStore],
+    [key, setStore, defInicial],
   );
 
   return [value, setValue];

@@ -37,13 +37,21 @@ export function videosParaAtleta(ejercicio, medias, perfil) {
     url: m.url,
     etiqueta: m.etiqueta || 'Video',
     id: m.id,
+    inicio: m.recorte_inicio ?? null,
+    fin: m.recorte_fin ?? null,
   }));
 
   // El video de siempre entra al final, no al principio: si el coach subió
   // ángulos nuevos es porque son mejores que el original.
   const original = ejercicio.video_url || ejercicio.video_link;
   if (original && !lista.some((v) => v.url === original)) {
-    lista.push({ url: original, etiqueta: lista.length ? 'Original' : 'Video', id: 'original' });
+    lista.push({
+      url: original,
+      etiqueta: lista.length ? 'Original' : 'Video',
+      id: 'original',
+      inicio: ejercicio.recorte_inicio ?? null,
+      fin: ejercicio.recorte_fin ?? null,
+    });
   }
   return lista;
 }

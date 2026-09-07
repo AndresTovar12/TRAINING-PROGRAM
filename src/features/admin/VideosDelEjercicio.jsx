@@ -21,6 +21,7 @@ import { Video, Trash2, Plus, Loader2, X } from 'lucide-react';
 import { listExerciseMedia, addExerciseMedia, deleteExerciseMedia } from '@/lib/api';
 import { ANGULOS_SUGERIDOS } from '@/lib/videos';
 import MediaUpload from '@/features/admin/MediaUpload';
+import RecortarVideo from '@/features/admin/RecortarVideo';
 import { T, FONT } from '@/lib/theme';
 
 const GENEROS = [
@@ -42,6 +43,7 @@ export default function VideosDelEjercicio({ exerciseId, readOnly }) {
   const [url, setUrl] = useState('');
   const [etiqueta, setEtiqueta] = useState('');
   const [genero, setGenero] = useState('');
+  const [recorte, setRecorte] = useState({ inicio: null, fin: null });
   const [guardando, setGuardando] = useState(false);
   const [err, setErr] = useState('');
 
@@ -63,9 +65,13 @@ export default function VideosDelEjercicio({ exerciseId, readOnly }) {
         exerciseId, url, tipo: 'video',
         etiqueta: etiqueta.trim() || null,
         genero: genero || null,
+        inicio: recorte.inicio,
+        fin: recorte.fin,
       });
       setLista((prev) => [...prev, fila]);
-      setUrl(''); setEtiqueta(''); setGenero(''); setAgregando(false);
+      setUrl(''); setEtiqueta(''); setGenero('');
+      setRecorte({ inicio: null, fin: null });
+      setAgregando(false);
     } catch (e) {
       setErr(e.message || 'No se pudo guardar el video.');
     } finally {
@@ -162,6 +168,15 @@ export default function VideosDelEjercicio({ exerciseId, readOnly }) {
             accept="video/*" kind="videos"
             hint="Desde el teléfono puedes grabarlo aquí mismo."
           />
+
+          {url && (
+            <RecortarVideo
+              url={url}
+              inicio={recorte.inicio}
+              fin={recorte.fin}
+              onCambio={setRecorte}
+            />
+          )}
 
           <label style={{ display: 'block' }}>
             <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text2, marginBottom: 6 }}>¿Desde dónde está grabado?</div>

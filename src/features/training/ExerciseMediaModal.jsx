@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { X, ExternalLink, Dumbbell } from 'lucide-react';
 import { videosParaAtleta } from '@/lib/videos';
 import { T, FONT, KP } from '@/lib/theme';
@@ -12,6 +12,41 @@ import { T, FONT, KP } from '@/lib/theme';
  * género, o uno grabado solo para él— y aquí se eligen y se cambian. Cuál sale
  * primero lo decide `videosParaAtleta`; esta pantalla solo los pinta.
  */
+/**
+ * Reproduce un video respetando el tramo que eligió el coach.
+ *
+ * El archivo está completo: lo que se recorta es la reproducción. Arranca en
+ * el segundo marcado y se detiene en el final marcado. Se hace con eventos y
+ * no con `#t=inicio,fin` en la dirección porque Safari ignora el final, que
+ * es justamente la mitad que importa.
+ */
+function VideoRecortado({ video }) {
+  const ref = useRef(null);
+  const { url, inicio, fin } = video;
+  return (
+    <video
+      key={url}
+      ref={ref}
+      src={url}
+      controls
+      playsInline
+      preload="metadata"
+      onLoadedMetadata={() => {
+        if (ref.current && inicio != null) ref.current.currentTime = inicio;
+      }}
+      onTimeUpdate={() => {
+        const v = ref.current;
+        if (!v) return;
+        if (fin != null && v.currentTime >= fin) v.pause();
+        // Si el atleta rebobina antes del inicio, se le devuelve al inicio:
+        // lo de antes es material que el coach decidió no enseñarle.
+        if (inicio != null && v.currentTime < inicio - 0.4) v.currentTime = inicio;
+      }}
+      style={{ width: '100%', borderRadius: 14, marginTop: 12, background: '#000' }}
+    />
+  );
+}
+
 export default function ExerciseMediaModal({ exercise, planEx, medias = [], perfil, onClose }) {
   const videos = videosParaAtleta(exercise, medias, perfil);
   const [activo, setActivo] = useState(0);
@@ -130,14 +165,7 @@ export default function ExerciseMediaModal({ exercise, planEx, medias = [], perf
                   ))}
                 </div>
               )}
-              <video
-                key={video.url}
-                src={video.url}
-                controls
-                playsInline
-                preload="metadata"
-                style={{ width: '100%', borderRadius: 14, marginTop: 12, background: '#000' }}
-              />
+              <VideoRecortado video={video} />
             </>
           )}
 

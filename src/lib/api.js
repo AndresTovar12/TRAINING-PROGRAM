@@ -1,6 +1,5 @@
 import { supabase } from '@/lib/supabase';
 
-const MEDIA_BUCKET = 'exercise-media';
 const AVATAR_BUCKET = 'avatars';
 
 /* ------------------------------- Profile ------------------------------ */
@@ -251,7 +250,7 @@ export async function listExerciseMedia(exerciseIds) {
   return data ?? [];
 }
 
-export async function addExerciseMedia({ exerciseId, url, tipo = 'video', etiqueta, genero, paraAtleta }) {
+export async function addExerciseMedia({ exerciseId, url, tipo = 'video', etiqueta, genero, paraAtleta, inicio, fin }) {
   const { data: auth } = await supabase.auth.getUser();
   const { data, error } = await supabase
     .from('exercise_media')
@@ -262,6 +261,8 @@ export async function addExerciseMedia({ exerciseId, url, tipo = 'video', etique
       etiqueta: etiqueta || null,
       genero: genero || null,
       para_atleta: paraAtleta || null,
+      recorte_inicio: inicio ?? null,
+      recorte_fin: fin ?? null,
       created_by: auth?.user?.id ?? null,
     })
     .select('*')
