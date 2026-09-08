@@ -22,7 +22,7 @@ import { T, FONT, KP } from '@/lib/theme';
  */
 export function VideoRecortado({ video, estilo }) {
   const ref = useRef(null);
-  const { url, inicio, fin } = video;
+  const { url, inicio, fin, sinAudio, encuadre } = video;
 
   /* Arranca solo al montarse, que es justo cuando el atleta acaba de tocar
      "reproducir". Sin esto, este componente aparecía con el reproductor
@@ -40,13 +40,14 @@ export function VideoRecortado({ video, estilo }) {
     ref.current?.play().catch(() => {});
   }, [url]);
 
-  return (
+  const video_ = (
     <video
       key={url}
       ref={ref}
       src={url}
       controls
       playsInline
+      muted={!!sinAudio}
       preload="metadata"
       onLoadedMetadata={() => {
         if (ref.current && inicio != null) ref.current.currentTime = inicio;
@@ -59,8 +60,37 @@ export function VideoRecortado({ video, estilo }) {
         // lo de antes es material que el coach decidió no enseñarle.
         if (inicio != null && v.currentTime < inicio - 0.4) v.currentTime = inicio;
       }}
-      style={estilo ?? { width: '100%', borderRadius: 14, marginTop: 12, background: '#000' }}
+      style={
+        encuadre
+          /* Con encuadre el video se agranda y se desplaza dentro de un marco
+             que lo recorta. Es la única forma de recortar la imagen sin
+             reencodar el archivo — reencodar en el navegador le bajaría la
+             calidad, que es lo que Andrés dijo que más le importa. */
+          ? {
+              position: 'absolute',
+              width: `${100 / encuadre.w}%`,
+              height: `${100 / encuadre.h}%`,
+              left: `${-(encuadre.x / encuadre.w) * 100}%`,
+              top: `${-(encuadre.y / encuadre.h) * 100}%`,
+              display: 'block', background: '#000',
+            }
+          : (estilo ?? { width: '100%', borderRadius: 14, marginTop: 12, background: '#000' })
+      }
     />
+  );
+
+  /* El marco solo existe cuando hay encuadre: si no, sobra un div y el video
+     se coloca solo como siempre. */
+  if (!encuadre) return video_;
+
+  return (
+    <div style={{
+      position: 'relative', overflow: 'hidden', background: '#000',
+      width: '100%', aspectRatio: `${encuadre.w} / ${encuadre.h}`,
+      borderRadius: estilo ? 0 : 14, marginTop: estilo ? 0 : 12,
+    }}>
+      {video_}
+    </div>
   );
 }
 

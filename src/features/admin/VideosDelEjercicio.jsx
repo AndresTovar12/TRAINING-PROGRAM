@@ -17,19 +17,12 @@
  * funcionando igual. Esto se suma; no lo reemplaza.
  */
 import { useEffect, useState } from 'react';
-import { Video, Trash2, Plus, Loader2, X, Scissors } from 'lucide-react';
+import { Video, Trash2, Loader2 } from 'lucide-react';
 import { listExerciseMedia, addExerciseMedia, deleteExerciseMedia, getMasterId } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
-import { ANGULOS_SUGERIDOS } from '@/lib/videos';
 import MediaUpload from '@/features/admin/MediaUpload';
-import EditorVideo from '@/features/admin/EditorVideo';
-import { T, FONT } from '@/lib/theme';
+import { T } from '@/lib/theme';
 
-const GENEROS = [
-  { valor: '', texto: 'Para todos' },
-  { valor: 'h', texto: 'Hombres' },
-  { valor: 'm', texto: 'Mujeres' },
-];
 
 function etiquetaGenero(g) {
   if (g === 'h') return 'Hombres';
@@ -41,13 +34,6 @@ export default function VideosDelEjercicio({ exerciseId }) {
   const { user } = useAuth();
   const [lista, setLista] = useState([]);
   const [cargando, setCargando] = useState(true);
-  const [agregando, setAgregando] = useState(false);
-  const [url, setUrl] = useState('');
-  const [etiqueta, setEtiqueta] = useState('');
-  const [genero, setGenero] = useState('');
-  const [recorte, setRecorte] = useState({ inicio: null, fin: null });
-  const [guardando, setGuardando] = useState(false);
-  const [reeditando, setReeditando] = useState(false);
   const [err, setErr] = useState('');
 
   useEffect(() => {
@@ -68,25 +54,21 @@ export default function VideosDelEjercicio({ exerciseId }) {
     return () => { vivo = false; };
   }, [exerciseId, user?.id]);
 
-  async function guardar() {
-    if (!url) { setErr('Primero sube el video.'); return; }
-    setGuardando(true); setErr('');
+  /* Guarda el video con todo lo que se decidió en el editor. Llega junto —la
+     dirección y los ajustes— porque el editor los resuelve de una sola vez. */
+  async function guardar({ url: subida, inicio, fin, sinAudio, encuadre, genero, etiqueta }) {
+    if (!subida) { setErr('No se pudo subir el video.'); return; }
+    setErr('');
     try {
       const fila = await addExerciseMedia({
-        exerciseId, url, tipo: 'video',
-        etiqueta: etiqueta.trim() || null,
+        exerciseId, url: subida, tipo: 'video',
+        etiqueta: (etiqueta || '').trim() || null,
         genero: genero || null,
-        inicio: recorte.inicio,
-        fin: recorte.fin,
+        inicio, fin, sinAudio, encuadre,
       });
       setLista((prev) => [...prev, fila]);
-      setUrl(''); setEtiqueta(''); setGenero('');
-      setRecorte({ inicio: null, fin: null });
-      setAgregando(false);
     } catch (e) {
       setErr(e.message || 'No se pudo guardar el video.');
-    } finally {
-      setGuardando(false);
     }
   }
 
@@ -150,137 +132,37 @@ export default function VideosDelEjercicio({ exerciseId }) {
         </div>
       )}
 
-      {!agregando && (
-        <button
-          type="button" onClick={() => setAgregando(true)}
-          style={{
-            alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 7,
-            padding: '9px 14px', borderRadius: 11, border: `1.5px dashed ${T.border}`,
-            background: 'transparent', cursor: 'pointer', fontFamily: FONT,
-            fontSize: 13, fontWeight: 700, color: T.text2,
-          }}
-        >
-          <Plus size={15} /> Agregar otro video
-        </button>
-      )}
+      {/* Ya no hay formulario de "Video nuevo".
+          Antes, después de subir, había que contestar abajo "¿quién debe ver
+          este video?" y "¿desde dónde está grabado?". Andrés: "no me hace
+          sentido que esté como última opción hasta abajo, debería ser parte
+          integrada del proceso". Tenía razón: son decisiones sobre ESE video y
+          se toman mirándolo, no en un formulario aparte cuando ya se subió.
 
-      {agregando && (
-        <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 13, padding: 13, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 13, fontWeight: 800, color: T.text }}>Video nuevo</span>
-            <button type="button" onClick={() => { setAgregando(false); setErr(''); }}
-              style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.text3, padding: 2 }}>
-              <X size={17} />
-            </button>
-          </div>
+          Ahora las dos preguntas viven dentro del editor, junto al recorte, el
+          encuadre y el audio. Se elige el archivo, se decide todo con el video
+          delante, y al confirmar se sube y se guarda de una vez. */}
+      <MediaUpload
+        label=""
+        icon={Video}
+        value=""
+        onChange={() => {}}
+        onAjustes={guardar}
+        conDestino
+        accept="video/*"
+        kind="videos"
+        hint="Se abre el editor: recortas, encuadras, quitas el audio y eliges para quién es."
+      />
 
-          <MediaUpload
-            label="Archivo" icon={Video} value={url} onChange={setUrl}
-            onRecorte={setRecorte}
-            accept="video/*" kind="videos"
-            hint="Al elegirlo se abre el editor para quedarte solo con la parte buena."
-          />
-
-          {/* El tramo se elige al subir, en el editor de pantalla completa.
-              Esto solo sirve para volver a entrar y cambiarlo. */}
-          {url && (
-            <button
-              type="button"
-              onClick={() => setReeditando(true)}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 7, alignSelf: 'flex-start',
-                minHeight: 40, padding: '0 13px', borderRadius: 11, cursor: 'pointer',
-                border: `1.5px solid ${T.border}`, background: T.bg2,
-                fontFamily: FONT, fontSize: 13, fontWeight: 700, color: T.text2,
-              }}
-            >
-              <Scissors size={14} />
-              {recorte.inicio != null || recorte.fin != null
-                ? 'Cambiar el tramo que se ve'
-                : 'Recortar el video'}
-            </button>
-          )}
-
-          {reeditando && url && (
-            <EditorVideo
-              url={url}
-              onCancelar={() => setReeditando(false)}
-              onListo={({ inicio, fin }) => { setRecorte({ inicio, fin }); setReeditando(false); }}
-            />
-          )}
-
-          {/* Esta pregunta sube por delante del angulo a proposito. Andres la
-              vio "hasta al final y no muy visible", y tenia razon en el efecto:
-              es la que decide QUIEN va a ver este video, mientras que el angulo
-              solo le pone nombre. Enterrada abajo, nadie la usaba.
-
-              Debajo va una linea que dice lo que hace de verdad, porque
-              "Hombres" a secas no explica que el video deja de verse para el
-              resto. */}
-          <div>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text2, marginBottom: 6 }}>¿Quién debe ver este video?</div>
-            <div style={{ display: 'flex', gap: 7 }}>
-              {GENEROS.map((g) => (
-                <button
-                  key={g.valor} type="button" onClick={() => setGenero(g.valor)}
-                  style={{
-                    flex: 1, minHeight: 44, padding: '10px 8px', borderRadius: 11, cursor: 'pointer',
-                    border: `1.5px solid ${genero === g.valor ? T.accent : T.border}`,
-                    background: genero === g.valor ? T.accentBg : T.bg2,
-                    color: genero === g.valor ? T.accent : T.text2,
-                    fontFamily: FONT, fontSize: 12.5, fontWeight: 700,
-                  }}
-                >
-                  {g.texto}
-                </button>
-              ))}
-            </div>
-            <div style={{ fontSize: 11.5, color: T.text3, marginTop: 7, fontWeight: 600, lineHeight: 1.45 }}>
-              {genero
-                ? 'Solo lo verán los atletas que pusieron eso en su perfil. Los demás siguen viendo el video general.'
-                : 'Lo verán todos tus atletas. Elige Hombres o Mujeres si grabaste una versión para cada uno.'}
-            </div>
-          </div>
-
-          <label style={{ display: 'block' }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text2, marginBottom: 6 }}>¿Desde dónde está grabado?</div>
-            <input
-              value={etiqueta}
-              onChange={(e) => setEtiqueta(e.target.value)}
-              placeholder="Frontal, Lateral, Desde atrás…"
-              list="angulos-sugeridos"
-              style={{
-                width: '100%', boxSizing: 'border-box', border: `1.5px solid ${T.border}`,
-                borderRadius: 11, padding: '11px 13px', fontFamily: FONT, fontSize: 16,
-                fontWeight: 600, color: T.text, background: T.bg2, outline: 'none',
-              }}
-            />
-            <datalist id="angulos-sugeridos">
-              {ANGULOS_SUGERIDOS.map((a) => <option key={a} value={a} />)}
-            </datalist>
-          </label>
-
-          {err && (
-            <div style={{ background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 11, padding: '10px 12px', fontSize: 12.5, fontWeight: 700 }}>
-              {err}
-            </div>
-          )}
-
-          <button
-            type="button" onClick={guardar} disabled={!url || guardando}
-            style={{
-              padding: '12px 16px', borderRadius: 12, border: 'none',
-              background: url && !guardando ? T.accent : T.bg3,
-              color: url && !guardando ? '#fff' : T.text3,
-              cursor: url && !guardando ? 'pointer' : 'default',
-              fontFamily: FONT, fontSize: 14, fontWeight: 800,
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-            }}
-          >
-            {guardando ? <><Loader2 size={15} className="spin" /> Guardando…</> : 'Guardar video'}
-          </button>
+      {err && (
+        <div style={{
+          background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 11,
+          padding: '10px 12px', fontSize: 12.5, fontWeight: 700,
+        }}>
+          {err}
         </div>
       )}
+
     </div>
   );
 }

@@ -157,7 +157,7 @@ export async function deleteExercise(id) {
 // `created_by` ni las fechas: eso identifica al ejercicio, no lo describe.
 export const CAMPOS_EDITABLES = [
   'name', 'description', 'category_id', 'cover_image_url',
-  'video_url', 'video_link', 'recorte_inicio', 'recorte_fin',
+  'video_url', 'video_link', 'recorte_inicio', 'recorte_fin', 'sin_audio', 'encuadre',
   'muscle_primary', 'muscle_secondary', 'equipment',
 ];
 
@@ -344,7 +344,10 @@ export async function listExerciseMedia(exerciseIds) {
   return data ?? [];
 }
 
-export async function addExerciseMedia({ exerciseId, url, tipo = 'video', etiqueta, genero, paraAtleta, inicio, fin }) {
+export async function addExerciseMedia({
+  exerciseId, url, tipo = 'video', etiqueta, genero, paraAtleta, inicio, fin,
+  sinAudio = false, encuadre = null,
+}) {
   const { data: auth } = await supabase.auth.getUser();
   const { data, error } = await supabase
     .from('exercise_media')
@@ -357,6 +360,8 @@ export async function addExerciseMedia({ exerciseId, url, tipo = 'video', etique
       para_atleta: paraAtleta || null,
       recorte_inicio: inicio ?? null,
       recorte_fin: fin ?? null,
+      sin_audio: !!sinAudio,
+      encuadre: encuadre ?? null,
       created_by: auth?.user?.id ?? null,
     })
     .select('*')

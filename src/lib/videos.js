@@ -39,6 +39,10 @@ export function videosParaAtleta(ejercicio, medias, perfil) {
     id: m.id,
     inicio: m.recorte_inicio ?? null,
     fin: m.recorte_fin ?? null,
+    // Se deciden en el editor al subir y se aplican al REPRODUCIR: el archivo
+    // sube intacto para no perder calidad.
+    sinAudio: !!m.sin_audio,
+    encuadre: m.encuadre ?? null,
   }));
 
   // El video de siempre entra al final, no al principio: si el coach subió
@@ -51,6 +55,8 @@ export function videosParaAtleta(ejercicio, medias, perfil) {
       id: 'original',
       inicio: ejercicio.recorte_inicio ?? null,
       fin: ejercicio.recorte_fin ?? null,
+      sinAudio: !!ejercicio.sin_audio,
+      encuadre: ejercicio.encuadre ?? null,
     });
   }
   return lista;

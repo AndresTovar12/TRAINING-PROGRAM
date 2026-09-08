@@ -133,6 +133,8 @@ const empty = {
   muscle_primary: '', cover_image_url: '', video_url: '', video_link: '',
   // Tramo del video que ve el atleta. null = completo. No corta el archivo.
   recorte_inicio: null, recorte_fin: null,
+  // Se aplican al reproducir, no al archivo: el video sube intacto.
+  sin_audio: false, encuadre: null,
 };
 
 // Lista desplegable de grupo muscular: primero los grupos (recomendado), luego
@@ -384,6 +386,8 @@ function ExerciseEditor({
           cover_image_url: exercise.cover_image_url || '',
           video_url: exercise.video_url || '',
           video_link: exercise.video_link || '',
+          sin_audio: exercise.sin_audio ?? false,
+          encuadre: exercise.encuadre ?? null,
           recorte_inicio: exercise.recorte_inicio ?? null,
           recorte_fin: exercise.recorte_fin ?? null,
         }
@@ -408,6 +412,8 @@ function ExerciseEditor({
       cover_image_url: form.cover_image_url || null,
       video_url: form.video_url || null,
       video_link: form.video_link.trim() || null,
+      sin_audio: form.video_url ? !!form.sin_audio : false,
+      encuadre: form.video_url ? (form.encuadre ?? null) : null,
       recorte_inicio: form.video_url ? form.recorte_inicio : null,
       recorte_fin: form.video_url ? form.recorte_fin : null,
     };
@@ -561,8 +567,10 @@ function ExerciseEditor({
             icon={Video}
             value={form.video_url}
             onChange={(v) => set('video_url', v)}
-            onRecorte={({ inicio, fin }) => setForm((f) => ({
-              ...f, recorte_inicio: inicio, recorte_fin: fin,
+            onAjustes={({ inicio, fin, sinAudio, encuadre }) => setForm((f) => ({
+              ...f,
+              recorte_inicio: inicio, recorte_fin: fin,
+              sin_audio: !!sinAudio, encuadre: encuadre ?? null,
             }))}
             accept="video/*"
             kind="videos"
@@ -584,9 +592,9 @@ function ExerciseEditor({
               }}
             >
               <Scissors size={14} />
-              {form.recorte_inicio != null || form.recorte_fin != null
-                ? 'Cambiar el tramo que se ve'
-                : 'Recortar el video'}
+              {form.recorte_inicio != null || form.recorte_fin != null || form.sin_audio || form.encuadre
+                ? 'Cambiar recorte, encuadre o audio'
+                : 'Recortar, encuadrar o silenciar'}
             </button>
           )}
 
@@ -594,8 +602,12 @@ function ExerciseEditor({
             <EditorVideo
               url={form.video_url}
               onCancelar={() => setReeditando(false)}
-              onListo={({ inicio, fin }) => {
-                setForm((f) => ({ ...f, recorte_inicio: inicio, recorte_fin: fin }));
+              onListo={({ inicio, fin, sinAudio, encuadre }) => {
+                setForm((f) => ({
+                  ...f,
+                  recorte_inicio: inicio, recorte_fin: fin,
+                  sin_audio: !!sinAudio, encuadre: encuadre ?? null,
+                }));
                 setReeditando(false);
               }}
             />

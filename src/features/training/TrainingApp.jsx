@@ -1015,6 +1015,37 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
         </div>
       )}
 
+      {/* Cerrar la sesión.
+          Va justo DEBAJO DEL ÚLTIMO EJERCICIO, que es donde estás cuando
+          acabaste. Antes había que subir hasta arriba del todo; luego quedó
+          demasiado abajo, detrás de "Notas del día" y "Tus notas" — Andrés:
+          "entiendo que te lo pedí escondido, pero no tanto". Escribir las
+          notas es opcional y va después; terminar la sesión es el cierre
+          natural de la lista.
+
+          Y va discreto a propósito, decisión de Andrés: "mi plan es que ese
+          botón no sea indispensable, para nada". No es el objetivo de la
+          pantalla —entrenar lo es—, así que no compite con nada. Quien lo
+          ignore no pierde nada; quien quiera cerrarla, lo tiene donde acaba. */}
+      {(selectedDay.exercises || selectedDay.blocks) && (
+        <button
+          type="button"
+          onClick={toggleComplete}
+          style={{
+            width: '100%', minHeight: 48, marginBottom: 14, borderRadius: 14,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 700,
+            border: `1.5px solid ${selectedCompleted ? LT.mint : LT.border}`,
+            background: selectedCompleted ? `${LT.mint}12` : LT.surface,
+            color: selectedCompleted ? LT.mint : LT.text2,
+          }}
+        >
+          {selectedCompleted
+            ? <><Check size={16} strokeWidth={3} /> Sesión terminada · deshacer</>
+            : 'Marcar sesión como terminada'}
+        </button>
+      )}
+
       {selectedDay.notes && (selectedDay.exercises || selectedDay.blocks) && (
         <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
           <div style={{ fontSize: 11, color: LT.text3, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>Notas del día</div>
@@ -1044,33 +1075,6 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
           onBlur={e => e.target.style.borderColor = LT.border}
         />
       </div>
-
-      {/* Cerrar la sesión.
-          Va al FINAL porque es donde estás cuando terminaste de verdad: antes
-          había que subir hasta arriba del todo para marcarla.
-
-          Y va discreto a propósito, decisión de Andrés: "mi plan es que ese
-          botón no sea indispensable, para nada". No es el objetivo de la
-          pantalla —entrenar lo es—, así que no compite con nada. Quien lo
-          ignore no pierde nada; quien quiera cerrarla, lo tiene donde acaba. */}
-      {(selectedDay.exercises || selectedDay.blocks) && (
-        <button
-          type="button"
-          onClick={toggleComplete}
-          style={{
-            width: '100%', minHeight: 48, marginBottom: 14, borderRadius: 14,
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 700,
-            border: `1.5px solid ${selectedCompleted ? LT.mint : LT.border}`,
-            background: selectedCompleted ? `${LT.mint}12` : LT.surface,
-            color: selectedCompleted ? LT.mint : LT.text2,
-          }}
-        >
-          {selectedCompleted
-            ? <><Check size={16} strokeWidth={3} /> Sesión terminada · deshacer</>
-            : 'Marcar sesión como terminada'}
-        </button>
-      )}
 
       {selectedDay.dayScience && (
         <LightCollapsible title="Por qué este día" icon={Info} color={LT.blue}>

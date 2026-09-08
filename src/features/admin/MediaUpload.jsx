@@ -14,7 +14,10 @@ import EditorVideo from '@/features/admin/EditorVideo';
 import { useCoarsePointer } from '@/lib/useViewport';
 import { T, FONT } from '@/lib/theme';
 
-export default function MediaUpload({ label, icon: Icon, value, onChange, accept, kind, hint, onRecorte }) {
+export default function MediaUpload({
+  label, icon: Icon, value, onChange, accept, kind, hint,
+  onAjustes, conDestino = false,
+}) {
   // En el telefono se ofrecen DOS acciones distintas, y grabar va primero.
   //
   // Por que: un solo boton que dice "Subir archivo" con una flecha hacia arriba
@@ -84,8 +87,10 @@ export default function MediaUpload({ label, icon: Icon, value, onChange, accept
     }
   }
 
-  /* Sube el video que ya pasó por el editor, con el tramo que se eligió. */
-  async function subeElVideo({ inicio, fin }) {
+  /* Sube el video que ya pasó por el editor, con todo lo que se decidió ahí:
+     el tramo, el encuadre, si va con audio, y —cuando aplica— para quién es y
+     desde qué ángulo. Nada de eso toca el archivo: se guarda al lado. */
+  async function subeElVideo(ajustes) {
     setBusy(true);
     setErr('');
     setAvance(0);
@@ -93,7 +98,10 @@ export default function MediaUpload({ label, icon: Icon, value, onChange, accept
     try {
       const url = await uploadExerciseMedia(porRevisar, kind, setAvance);
       onChange(url);
-      onRecorte?.({ inicio, fin });
+      // La url va junto a los ajustes: quien guarda una fila entera los
+      // necesita a la vez, y esperar a que el estado se actualice para
+      // leerla por separado es una carrera perdida.
+      onAjustes?.({ ...ajustes, url });
       setPorRevisar(null);
       setArchivo(null);
     } catch (e2) {
@@ -111,6 +119,7 @@ export default function MediaUpload({ label, icon: Icon, value, onChange, accept
           tamaño={porRevisar.size}
           subiendo={busy}
           avance={avance}
+          conDestino={conDestino}
           onCancelar={() => { if (!busy) setPorRevisar(null); }}
           onListo={subeElVideo}
         />
