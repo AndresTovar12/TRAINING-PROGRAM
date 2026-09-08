@@ -466,16 +466,18 @@ export default function EditorVideo({
         flexShrink: 0, padding: '14px 16px calc(16px + env(safe-area-inset-bottom))',
         display: 'flex', alignItems: 'center', gap: 14,
       }}>
+        {/* Aquí solo va lo que INFORMA UN RESULTADO, nunca instrucciones.
+            Andrés: "no es necesario el mensaje de cómo usar las líneas
+            amarillas". Tiene razón: unas manijas amarillas sobre la línea de
+            tiempo ya dicen que se arrastran, y un cartel explicándolo ocupa dos
+            renglones fijos para enseñar algo que se entiende al primer toque.
+            Cuando no hay nada que decir, no se dice nada. */}
         <div style={{ flex: 1, minWidth: 0, color: 'rgba(255,255,255,.62)', fontSize: 12.5, fontWeight: 600 }}>
           {subiendo
             ? `Subiendo… ${avance ?? 0}%`
-            : paso === 'imagen'
-              ? (encuadre ? 'Arrastra la imagen para elegir qué parte se ve' : 'Se ve tal como lo grabaste')
-              : paso === 'destino'
-                ? 'Todo esto se puede cambiar después'
-                : recortado
-                  ? `El atleta verá del ${seg(desde)} al ${seg(hasta)}`
-                  : 'Arrastra los bordes amarillos para quedarte solo con lo bueno'}
+            : recortado && paso === 'tiempo'
+              ? `El atleta verá del ${seg(desde)} al ${seg(hasta)}`
+              : ''}
         </div>
         <button
           type="button"
