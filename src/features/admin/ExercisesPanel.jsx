@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Plus, Search, X, Trash2, Loader2, Image as ImageIcon, Video, Dumbbell,
-  Copy, RotateCcw, Pencil, ChevronRight,
+  Copy, RotateCcw, Pencil, ChevronRight, Scissors,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsWide } from '@/lib/useViewport';
@@ -12,7 +12,7 @@ import {
 } from '@/lib/api';
 import MediaUpload from '@/features/admin/MediaUpload';
 import VideosDelEjercicio from '@/features/admin/VideosDelEjercicio';
-import RecortarVideo from '@/features/admin/RecortarVideo';
+import EditorVideo from '@/features/admin/EditorVideo';
 import { MUSCLE_GROUPS, FINE_MUSCLES, exerciseMatchesGroup } from '@/lib/muscles';
 import { T, FONT, KP } from '@/lib/theme';
 
@@ -371,6 +371,8 @@ function ExerciseEditor({
   const { user } = useAuth();
   const [dupBusy, setDupBusy] = useState(false);
   const [restaurando, setRestaurando] = useState(false);
+  // Reabrir el editor sobre un video YA subido, para cambiarle el tramo.
+  const [reeditando, setReeditando] = useState(false);
   const [form, setForm] = useState(() =>
     exercise
       ? {
@@ -559,19 +561,43 @@ function ExerciseEditor({
             icon={Video}
             value={form.video_url}
             onChange={(v) => set('video_url', v)}
+            onRecorte={({ inicio, fin }) => setForm((f) => ({
+              ...f, recorte_inicio: inicio, recorte_fin: fin,
+            }))}
             accept="video/*"
             kind="videos"
             hint="Sube un MP4, o usa el enlace de abajo si está en redes."
           />
 
+          {/* El recorte ya se eligió al subir, en el editor de pantalla
+              completa. Esto es solo para volver a entrar y cambiarlo sin tener
+              que subir el video otra vez. */}
           {form.video_url && (
-            <RecortarVideo
+            <button
+              type="button"
+              onClick={() => setReeditando(true)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 7, alignSelf: 'flex-start',
+                minHeight: 40, padding: '0 13px', borderRadius: 11, cursor: 'pointer',
+                border: `1.5px solid ${T.border}`, background: T.bg2,
+                fontFamily: FONT, fontSize: 13, fontWeight: 700, color: T.text2,
+              }}
+            >
+              <Scissors size={14} />
+              {form.recorte_inicio != null || form.recorte_fin != null
+                ? 'Cambiar el tramo que se ve'
+                : 'Recortar el video'}
+            </button>
+          )}
+
+          {reeditando && form.video_url && (
+            <EditorVideo
               url={form.video_url}
-              inicio={form.recorte_inicio}
-              fin={form.recorte_fin}
-              onCambio={({ inicio, fin }) => setForm((f) => ({
-                ...f, recorte_inicio: inicio, recorte_fin: fin,
-              }))}
+              onCancelar={() => setReeditando(false)}
+              onListo={({ inicio, fin }) => {
+                setForm((f) => ({ ...f, recorte_inicio: inicio, recorte_fin: fin }));
+                setReeditando(false);
+              }}
             />
           )}
 

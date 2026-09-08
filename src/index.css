@@ -194,3 +194,10 @@ body {
 }
 .animate-sheet { animation: sheet-up 0.22s cubic-bezier(0.22, 1, 0.36, 1); }
 @media (prefers-reduced-motion: reduce) { .animate-sheet { animation: none; } }
+
+/* Fila de pestañas que se desliza sin enseñar la barra de scroll.
+   La barra gris del sistema aparecía debajo de los días de la semana y se leía
+   como un elemento más de la interfaz: una raya que no significa nada y que
+   ensucia justo donde hay que decidir qué día abrir. Deslizar sigue igual. */
+.sin-barra { scrollbar-width: none; -ms-overflow-style: none; }
+.sin-barra::-webkit-scrollbar { display: none; }

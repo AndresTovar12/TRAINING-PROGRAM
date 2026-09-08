@@ -470,7 +470,7 @@ const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, sessionsData, phaseC
                 )}
               </>
             ) : (
-              <span style={{ fontSize: 15, fontWeight: 800, color: pc, ...NUM_STYLE }}>{num}</span>
+              <span style={{ fontSize: 15, fontWeight: 800, color: LT.text3, ...NUM_STYLE }}>{num}</span>
             )}
           </span>
 
@@ -793,46 +793,48 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
 
   return (
     <div style={{ padding: '14px 18px 110px', background: LT.bg, minHeight: '100svh', fontFamily: FONT }}>
+      {/* CABECERA, en cuatro escalones de tamaño.
+          Andres: "es justo la cantidad de info, pero el como lo colocas se ve
+          sucio, saturado, sin jerarquia, todo revuelto". Tenia razon y el
+          motivo era medible: habia tres lineas seguidas de metadatos —volver,
+          semana, dia— todas entre 11 y 15 px. Sin diferencia de tamaño no hay
+          jerarquia, solo tres rayas de texto que se estorban.
+
+          Ahora cada escalon tiene un tamaño distinto y un solo trabajo:
+            11 px gris  -> donde estas (fase, semana, avance)
+            21 px negro -> que semana es
+            15 px       -> los dias, que es lo unico que se toca
+            12 px gris  -> que sesion es la abierta
+
+          UN SOLO ACENTO. Antes convivian el morado de la fase, el verde menta
+          y el azul en 200 px de alto. El color de fase se queda arriba, en la
+          barra de fases, que es donde identifica algo; aqui manda el azul de
+          la app. Los puntos de categoria se quedan porque SI son informacion,
+          pero pequeños y sin competir. */}
       <button onClick={onBack} style={{
-        background: 'transparent', border: 'none', color: LT.text2, cursor: 'pointer',
-        display: 'flex', alignItems: 'center', gap: 4, marginBottom: 14, fontFamily: FONT, fontSize: 13, padding: 0,
+        background: 'transparent', border: 'none', color: LT.text3, cursor: 'pointer',
+        display: 'flex', alignItems: 'center', gap: 3, marginBottom: 2, fontFamily: FONT,
+        fontSize: 11.5, fontWeight: 700, padding: 0, letterSpacing: 0.2,
       }}>
-        <ChevronLeft size={16} /> {phase.fullName}
+        <ChevronLeft size={14} />
+        {phase.fullName}
+        <span style={{ color: LT.text3, fontWeight: 600 }}>
+          {' · '}{phase.mode === 'microcycle' ? 'Microciclo' : `Semana ${week.num} de ${phase.weeks}`}
+          {' · '}{completedCount}/{week.days.length} días
+        </span>
       </button>
 
-      {/* La cabecera, podada.
-          Medido antes: 363 px hasta el primer ejercicio, contra 185 de Avena.
-          Y casi todo era repetición:
-            · "Hipertrofia" salía DOS veces (el botón de volver y este bloque)
-            · el 72% salía TRES veces (aquí, en la línea del día, y en el chip
-              de cada ejercicio)
-            · la barra "0/5" cuenta días de la SEMANA, en una pantalla que
-              enseña UNA sesión: se leía como el avance de la sesión abierta
-          Lo que sobrevive es lo único que el ejercicio de abajo no dice ya:
-          en qué semana del plan vas. */}
-      <div style={{
-        display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginBottom: 14,
+      <h1 style={{
+        fontSize: 21, fontWeight: 800, color: LT.text, margin: '0 0 12px',
+        lineHeight: 1.15, letterSpacing: -0.4,
       }}>
-        <span style={{
-          fontSize: 11, fontWeight: 800, letterSpacing: 0.7, textTransform: 'uppercase',
-          color: phaseColor, flexShrink: 0,
-        }}>
-          {phase.mode === 'microcycle' ? 'Microciclo' : `Semana ${week.num} de ${phase.weeks}`}
-        </span>
-        {week.label && (
-          <span style={{ fontSize: 15, fontWeight: 700, color: LT.text, minWidth: 0 }}>
-            {week.label}
-          </span>
-        )}
-        <span style={{ fontSize: 12.5, color: LT.text3, fontWeight: 600, ...NUM_STYLE }}>
-          {completedCount}/{week.days.length} días
-        </span>
-      </div>
+        {week.label || phase.fullName}
+      </h1>
 
       {week.emph && (
         <div style={{
-          marginBottom: 14, borderLeft: `3px solid ${LT.warning}`, fontSize: 13,
-          color: LT.text, lineHeight: 1.6, padding: '8px 14px',
+          marginBottom: 12, borderLeft: `3px solid ${LT.warning}`, fontSize: 13,
+          color: LT.text, lineHeight: 1.55, padding: '8px 13px',
           background: LT.warning + '0D', borderRadius: '0 8px 8px 0',
         }}>
           {week.emph}
@@ -848,8 +850,8 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
           cuál sigue). Metidas todas en una caja de color, compiten entre
           ellas. Sin caja, el subrayado dice "estás aquí" y las demás señales
           quedan abajo, en voz baja, sin pelearse por el mismo espacio. */}
-      <div style={{
-        display: 'flex', gap: 2, marginBottom: 18, overflowX: 'auto',
+      <div className="sin-barra" style={{
+        display: 'flex', gap: 2, marginBottom: 10, overflowX: 'auto',
         borderBottom: `1px solid ${LT.border}`,
       }}>
         {week.days.map((day, idx) => {
@@ -865,8 +867,8 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
                 padding: esCompu ? '11px 17px 12px' : '11px 12px 12px',
                 border: 'none', background: 'transparent', cursor: 'pointer',
                 fontFamily: FONT, fontSize: 14.5, fontWeight: isSelected ? 800 : 600,
-                color: isSelected ? phaseColor : LT.text2, whiteSpace: 'nowrap', flexShrink: 0,
-                borderBottom: `2.5px solid ${isSelected ? phaseColor : 'transparent'}`,
+                color: isSelected ? LT.blue : LT.text2, whiteSpace: 'nowrap', flexShrink: 0,
+                borderBottom: `2.5px solid ${isSelected ? LT.blue : 'transparent'}`,
                 marginBottom: -1, transition: 'color .12s, border-color .12s',
               }}>
               {esCompu ? (NOMBRE_DIA[day.day] || day.day) : day.day}
@@ -893,7 +895,7 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
                     title={isActive ? 'La dejaste empezada' : undefined}
                     style={{
                       width: 5, height: 5, borderRadius: '50%', background: dcat.c,
-                      boxShadow: isActive ? `0 0 0 2.5px ${phaseColor}55` : 'none',
+                      boxShadow: isActive ? `0 0 0 2.5px ${LT.blue}44` : 'none',
                     }}
                   />
                 )}
@@ -909,19 +911,16 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
           están abajo, ejercicio por ejercicio. Ocupaba media pantalla para
           repetir lo que venía después. */}
       <div style={{
-        display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: '2px 8px',
-        padding: '0 3px', marginBottom: 14,
+        display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '2px 8px',
+        padding: '0 3px', marginBottom: 12,
       }}>
-        <span style={{
-          fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', color: cat.c,
-        }}>
-          {selectedDay.day} · {cat.label}
-        </span>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: cat.c, flexShrink: 0 }} />
         <span style={{ fontSize: 15, fontWeight: 800, color: selectedCompleted ? LT.text2 : LT.text }}>
           {selectedDay.dual ? 'Doble sesión' : selectedDayName}
         </span>
-        <span style={{ fontSize: 13, color: LT.text3, fontWeight: 600, ...NUM_STYLE }}>
+        <span style={{ fontSize: 12.5, color: LT.text3, fontWeight: 600, ...NUM_STYLE }}>
           {[
+            cat.label,
             summary.exCount > 0 && `${summary.exCount} ejercicios`,
             summary.mainIntensity,
           ].filter(Boolean).join(' · ')}

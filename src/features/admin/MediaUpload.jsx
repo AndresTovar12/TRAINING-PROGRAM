@@ -10,10 +10,11 @@ import { useRef, useState } from 'react';
 import { Upload, Loader2, X, Video, Camera, Images } from 'lucide-react';
 import { uploadExerciseMedia } from '@/lib/api';
 import { optimizaImagen, pesoTexto as pesoLegible } from '@/lib/imagen';
+import EditorVideo from '@/features/admin/EditorVideo';
 import { useCoarsePointer } from '@/lib/useViewport';
 import { T, FONT } from '@/lib/theme';
 
-export default function MediaUpload({ label, icon: Icon, value, onChange, accept, kind, hint }) {
+export default function MediaUpload({ label, icon: Icon, value, onChange, accept, kind, hint, onRecorte }) {
   // En el telefono se ofrecen DOS acciones distintas, y grabar va primero.
   //
   // Por que: un solo boton que dice "Subir archivo" con una flecha hacia arriba
@@ -33,6 +34,8 @@ export default function MediaUpload({ label, icon: Icon, value, onChange, accept
   const [ahorro, setAhorro] = useState(null);   // { antes, despues }
   const inputRef = useRef(null);      // elegir de la galeria
   const camaraRef = useRef(null);     // grabar / tomar en el momento
+  // Video elegido y todavia SIN subir, esperando a que lo recorten.
+  const [porRevisar, setPorRevisar] = useState(null);
 
   async function onPick(e) {
     const elegido = e.target.files?.[0];
@@ -41,6 +44,22 @@ export default function MediaUpload({ label, icon: Icon, value, onChange, accept
     setAviso(null);
     setAhorro(null);
     setAvance(0);
+
+    /* UN VIDEO NO SE SUBE DE GOLPE: primero se abre el editor, como en
+       WhatsApp. Andrés: "tengo que seleccionar el video, luego que aparezca en
+       el editor, y ya subirlo".
+
+       Además de que es el orden que espera, ahorra trabajo de verdad: decides
+       el recorte mirando el video entero, y si te arrepientes no gastaste la
+       subida. Las miniaturas salen al instante porque el archivo está aquí, no
+       en Cloudflare. */
+    if ((accept || '').startsWith('video')) {
+      setPorRevisar(elegido);
+      if (inputRef.current) inputRef.current.value = '';
+      if (camaraRef.current) camaraRef.current.value = '';
+      return;
+    }
+
     setBusy(true);
     try {
       // Las fotos se encogen y se reencodan ANTES de salir del teléfono. Los
@@ -65,8 +84,37 @@ export default function MediaUpload({ label, icon: Icon, value, onChange, accept
     }
   }
 
+  /* Sube el video que ya pasó por el editor, con el tramo que se eligió. */
+  async function subeElVideo({ inicio, fin }) {
+    setBusy(true);
+    setErr('');
+    setAvance(0);
+    setArchivo({ nombre: porRevisar.name, mb: Math.round((porRevisar.size / 1048576) * 10) / 10 });
+    try {
+      const url = await uploadExerciseMedia(porRevisar, kind, setAvance);
+      onChange(url);
+      onRecorte?.({ inicio, fin });
+      setPorRevisar(null);
+      setArchivo(null);
+    } catch (e2) {
+      setErr(e2.message || 'Error al subir');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {porRevisar && (
+        <EditorVideo
+          archivo={porRevisar}
+          tamaño={porRevisar.size}
+          subiendo={busy}
+          avance={avance}
+          onCancelar={() => { if (!busy) setPorRevisar(null); }}
+          onListo={subeElVideo}
+        />
+      )}
       <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>{label}</span>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         {enTelefono ? (

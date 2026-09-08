@@ -17,12 +17,12 @@
  * funcionando igual. Esto se suma; no lo reemplaza.
  */
 import { useEffect, useState } from 'react';
-import { Video, Trash2, Plus, Loader2, X } from 'lucide-react';
+import { Video, Trash2, Plus, Loader2, X, Scissors } from 'lucide-react';
 import { listExerciseMedia, addExerciseMedia, deleteExerciseMedia, getMasterId } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { ANGULOS_SUGERIDOS } from '@/lib/videos';
 import MediaUpload from '@/features/admin/MediaUpload';
-import RecortarVideo from '@/features/admin/RecortarVideo';
+import EditorVideo from '@/features/admin/EditorVideo';
 import { T, FONT } from '@/lib/theme';
 
 const GENEROS = [
@@ -47,6 +47,7 @@ export default function VideosDelEjercicio({ exerciseId }) {
   const [genero, setGenero] = useState('');
   const [recorte, setRecorte] = useState({ inicio: null, fin: null });
   const [guardando, setGuardando] = useState(false);
+  const [reeditando, setReeditando] = useState(false);
   const [err, setErr] = useState('');
 
   useEffect(() => {
@@ -175,16 +176,36 @@ export default function VideosDelEjercicio({ exerciseId }) {
 
           <MediaUpload
             label="Archivo" icon={Video} value={url} onChange={setUrl}
+            onRecorte={setRecorte}
             accept="video/*" kind="videos"
-            hint="Después de subirlo puedes recortarlo y quedarte solo con la parte buena."
+            hint="Al elegirlo se abre el editor para quedarte solo con la parte buena."
           />
 
+          {/* El tramo se elige al subir, en el editor de pantalla completa.
+              Esto solo sirve para volver a entrar y cambiarlo. */}
           {url && (
-            <RecortarVideo
+            <button
+              type="button"
+              onClick={() => setReeditando(true)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 7, alignSelf: 'flex-start',
+                minHeight: 40, padding: '0 13px', borderRadius: 11, cursor: 'pointer',
+                border: `1.5px solid ${T.border}`, background: T.bg2,
+                fontFamily: FONT, fontSize: 13, fontWeight: 700, color: T.text2,
+              }}
+            >
+              <Scissors size={14} />
+              {recorte.inicio != null || recorte.fin != null
+                ? 'Cambiar el tramo que se ve'
+                : 'Recortar el video'}
+            </button>
+          )}
+
+          {reeditando && url && (
+            <EditorVideo
               url={url}
-              inicio={recorte.inicio}
-              fin={recorte.fin}
-              onCambio={setRecorte}
+              onCancelar={() => setReeditando(false)}
+              onListo={({ inicio, fin }) => { setRecorte({ inicio, fin }); setReeditando(false); }}
             />
           )}
 
