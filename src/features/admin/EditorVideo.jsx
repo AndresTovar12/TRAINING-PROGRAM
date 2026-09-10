@@ -303,6 +303,15 @@ export default function EditorVideo({
               const v = e.currentTarget;
               setDuracion(v.duration);
               setMedidas({ w: v.videoWidth || 16, h: v.videoHeight || 9 });
+            /* El salto de tiempo NO es un detalle: sin él, en Safari de
+               iPhone el video se ve NEGRO hasta que se reproduce. iOS no pinta
+               ningún fotograma con `preload="metadata"` — carga la duración y
+               deja el lienzo vacío. Pedirle un `currentTime` lo obliga a
+               dibujar ese fotograma. Andrés lo vio en su teléfono: las
+               miniaturas de abajo salían (a esas ya se les hacía el salto) y
+               el video de arriba era un rectángulo negro con el botón de play.
+               En el navegador de escritorio no se reproduce el fallo. */
+              v.currentTime = (ajustes?.recorte_inicio ?? 0) + 0.05;
             }}
             onPlay={() => setReproduciendo(true)}
             onPause={() => setReproduciendo(false)}

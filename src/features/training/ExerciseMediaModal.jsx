@@ -56,7 +56,11 @@ export function VideoRecortado({ video, estilo }) {
       onLoadedMetadata={(e) => {
         const v = e.currentTarget;
         setMedidas({ w: v.videoWidth || 16, h: v.videoHeight || 9 });
-        if (ref.current && inicio != null) ref.current.currentTime = inicio;
+        /* Se salta SIEMPRE, aunque no haya recorte. Sin salto, Safari de iPhone
+           deja el video en negro hasta darle play: con `preload="metadata"` iOS
+           carga la duración pero no dibuja ningún fotograma. El +0,05 es para
+           que el salto ocurra de verdad cuando el recorte empieza en 0. */
+        v.currentTime = (inicio ?? 0) + 0.05;
       }}
       onTimeUpdate={() => {
         const v = ref.current;

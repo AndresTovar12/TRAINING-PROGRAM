@@ -889,8 +889,14 @@ function RanuraMedia({
       {existente ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {tipo === 'video' ? (
-            <video src={existente.url} controls playsInline preload="metadata"
-              style={{ width: '100%', borderRadius: 13, background: '#000' }} />
+            <video
+              src={existente.url} controls playsInline preload="metadata"
+              /* El salto obliga a Safari de iPhone a dibujar un fotograma: con
+                 `preload="metadata"` iOS carga la duración y deja el video en
+                 negro hasta que se le da play. */
+              onLoadedMetadata={(e) => { e.currentTarget.currentTime = 0.05; }}
+              style={{ width: '100%', borderRadius: 13, background: '#000' }}
+            />
           ) : (
             <img src={existente.url} alt=""
               style={{ width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: 13, background: '#000', display: 'block' }} />
