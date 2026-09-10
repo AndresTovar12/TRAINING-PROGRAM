@@ -22,6 +22,10 @@ import { T, FONT, KP } from '@/lib/theme';
  */
 export function VideoRecortado({ video, estilo }) {
   const ref = useRef(null);
+  // Medidas reales del archivo. Hacen falta para saber qué forma tiene el
+  // trozo recortado: el encuadre viene en fracciones, y una fracción no dice
+  // nada de la proporción hasta multiplicarla por los píxeles del video.
+  const [medidas, setMedidas] = useState(null);
   const { url, inicio, fin, sinAudio, encuadre } = video;
 
   /* Arranca solo al montarse, que es justo cuando el atleta acaba de tocar
@@ -49,7 +53,9 @@ export function VideoRecortado({ video, estilo }) {
       playsInline
       muted={!!sinAudio}
       preload="metadata"
-      onLoadedMetadata={() => {
+      onLoadedMetadata={(e) => {
+        const v = e.currentTarget;
+        setMedidas({ w: v.videoWidth || 16, h: v.videoHeight || 9 });
         if (ref.current && inicio != null) ref.current.currentTime = inicio;
       }}
       onTimeUpdate={() => {
@@ -72,6 +78,16 @@ export function VideoRecortado({ video, estilo }) {
               height: `${100 / encuadre.h}%`,
               left: `${-(encuadre.x / encuadre.w) * 100}%`,
               top: `${-(encuadre.y / encuadre.h) * 100}%`,
+              // `fill` y no `contain`: el marco ya tiene la forma exacta del
+              // trozo, así que el video debe llenarlo sin dejar franjas.
+              objectFit: 'fill',
+              /* Sin esto el encuadre NO funciona y no se nota por qué: la app
+                 tiene un `max-width: 100%` global para que las imágenes no se
+                 desborden, y aquí el video TIENE que desbordarse —se agranda
+                 al 166% y se desplaza para que el marco enseñe solo el trozo
+                 elegido. El alto sí se aplicaba y el ancho se quedaba corto,
+                 así que quedaba una franja negra al lado. */
+              maxWidth: 'none', maxHeight: 'none',
               display: 'block', background: '#000',
             }
           : (estilo ?? { width: '100%', borderRadius: 14, marginTop: 12, background: '#000' })
@@ -86,7 +102,15 @@ export function VideoRecortado({ video, estilo }) {
   return (
     <div style={{
       position: 'relative', overflow: 'hidden', background: '#000',
-      width: '100%', aspectRatio: `${encuadre.w} / ${encuadre.h}`,
+      width: '100%',
+      /* La proporción del TROZO, en píxeles reales — no la de sus fracciones.
+         Antes se usaba `encuadre.w / encuadre.h` a secas, y eso da la forma
+         equivocada: recortar 0,6 de ancho por 0,7 de alto de un video vertical
+         no da un marco de 0,857, da uno de 0,48. El marco salía más ancho que
+         el trozo y quedaba una franja negra al lado. */
+      aspectRatio: medidas
+        ? `${encuadre.w * medidas.w} / ${encuadre.h * medidas.h}`
+        : `${encuadre.w} / ${encuadre.h}`,
       borderRadius: estilo ? 0 : 14, marginTop: estilo ? 0 : 12,
     }}>
       {video_}

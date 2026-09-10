@@ -215,7 +215,7 @@ export default function VideosDelEjercicio({
               titulo="Se abre por defecto"
               detalle={etiquetaAjustes(recortePrincipal)}
               destacado
-              onRecortar={() => setEditando({ tipo: 'principal', url: principal })}
+              onRecortar={() => setEditando({ tipo: 'principal', url: principal, ajustes: recortePrincipal })}
               onQuitar={() => onPrincipal?.('')}
             />
           )}
@@ -226,7 +226,7 @@ export default function VideosDelEjercicio({
               url={m.url}
               titulo={m.etiqueta || 'Sin etiqueta'}
               detalle={etiquetaGenero(m.genero)}
-              onRecortar={() => setEditando({ tipo: 'extra', url: m.url, id: m.id })}
+              onRecortar={() => setEditando({ tipo: 'extra', url: m.url, id: m.id, ajustes: m })}
               onQuitar={() => quitar(m.id)}
             />
           ))}
@@ -236,6 +236,7 @@ export default function VideosDelEjercicio({
       {editando && (
         <EditorVideo
           url={editando.url}
+          ajustes={editando.ajustes}
           onCancelar={() => setEditando(null)}
           onListo={async (ajustes) => {
             if (editando.tipo === 'principal') {

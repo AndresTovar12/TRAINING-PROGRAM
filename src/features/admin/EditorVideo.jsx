@@ -64,6 +64,10 @@ const peso = (bytes) => {
 export default function EditorVideo({
   archivo, url, tamaño, onCancelar, onListo, subiendo, avance,
   conDestino = false, generoInicial = '', etiquetaInicial = '',
+  // Lo que este video YA tenía guardado. Sin esto, reabrir el editor sobre
+  // un video ya recortado arrancaba en cero, y confirmar borraba el recorte
+  // anterior sin decir nada.
+  ajustes,
 }) {
   const videoRef = useRef(null);
   const barraRef = useRef(null);
@@ -71,13 +75,13 @@ export default function EditorVideo({
 
   const [duracion, setDuracion] = useState(null);
   const [medidas, setMedidas] = useState(null);   // { w, h } del video original
-  const [inicio, setInicio] = useState(null);
-  const [fin, setFin] = useState(null);
-  const [sinAudio, setSinAudio] = useState(false);
+  const [inicio, setInicio] = useState(ajustes?.recorte_inicio ?? null);
+  const [fin, setFin] = useState(ajustes?.recorte_fin ?? null);
+  const [sinAudio, setSinAudio] = useState(!!ajustes?.sin_audio);
   // El encuadre es un rectángulo editable, en fracciones de 0 a 1 del video.
   // null = se ve entero. Las proporciones solo lo PRECARGAN; después se
   // arrastra libre, que es lo que pidió Andrés: agarrar las esquinas.
-  const [crop, setCrop] = useState(null);
+  const [crop, setCrop] = useState(ajustes?.encuadre ?? null);
   const [genero, setGenero] = useState(generoInicial);
   const [etiqueta, setEtiqueta] = useState(etiquetaInicial);
   const [paso, setPaso] = useState('tiempo');
