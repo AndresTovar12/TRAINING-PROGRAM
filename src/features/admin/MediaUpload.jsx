@@ -15,7 +15,9 @@ import { useCoarsePointer } from '@/lib/useViewport';
 import { T, FONT } from '@/lib/theme';
 
 export default function MediaUpload({
-  label, icon: Icon, value, onChange, accept, kind, hint,
+  // `icon` lo siguen pasando los llamadores. Ya no se pinta —lo reemplazo la
+  // miniatura— pero se acepta para no tener que tocar cada sitio que lo usa.
+  label, icon: _icon, value, onChange, accept, kind, hint,
   onAjustes, conDestino = false,
 }) {
   // En el telefono se ofrecen DOS acciones distintas, y grabar va primero.
@@ -239,14 +241,32 @@ export default function MediaUpload({
           {err}
         </div>
       )}
+      {/* Una miniatura de lo que hay, no la dirección.
+          Andrés: "eso se ve muy feo, no es necesario que lo pongas, mejor una
+          foto chiquita del video seleccionado". Tiene razón: una URL de
+          Cloudflare de cuatro renglones no le dice nada a nadie —no se puede
+          leer ni comprobar de un vistazo— y una miniatura contesta de golpe la
+          única pregunta que importa: ¿es este el archivo correcto? */}
       {value && (
-        <div
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: T.text2,
-            background: T.bg, borderRadius: 9, padding: '8px 10px', wordBreak: 'break-all',
-          }}
-        >
-          <Icon size={14} style={{ flexShrink: 0 }} /> {value}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{
+            width: 54, height: 54, borderRadius: 10, overflow: 'hidden', flexShrink: 0,
+            background: '#0E1015', display: 'grid', placeItems: 'center',
+          }}>
+            {esVideo ? (
+              <video
+                src={value} muted playsInline preload="metadata" tabIndex={-1} aria-hidden="true"
+                onLoadedMetadata={(e) => { e.currentTarget.currentTime = 0.1; }}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              />
+            ) : (
+              <img src={value} alt=""
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            )}
+          </span>
+          <span style={{ fontSize: 12.5, color: T.text2, fontWeight: 600, minWidth: 0 }}>
+            {esVideo ? 'Video guardado' : 'Foto guardada'}
+          </span>
         </div>
       )}
     </div>

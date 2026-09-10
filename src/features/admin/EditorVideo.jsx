@@ -74,8 +74,10 @@ export default function EditorVideo({
   const [inicio, setInicio] = useState(null);
   const [fin, setFin] = useState(null);
   const [sinAudio, setSinAudio] = useState(false);
-  const [formato, setFormato] = useState('orig');
-  const [centro, setCentro] = useState({ x: 0.5, y: 0.5 });
+  // El encuadre es un rectángulo editable, en fracciones de 0 a 1 del video.
+  // null = se ve entero. Las proporciones solo lo PRECARGAN; después se
+  // arrastra libre, que es lo que pidió Andrés: agarrar las esquinas.
+  const [crop, setCrop] = useState(null);
   const [genero, setGenero] = useState(generoInicial);
   const [etiqueta, setEtiqueta] = useState(etiquetaInicial);
   const [paso, setPaso] = useState('tiempo');
@@ -99,20 +101,19 @@ export default function EditorVideo({
   const hasta = fin ?? duracion ?? 0;
   const recortado = inicio != null || fin != null;
 
-  /* El rectángulo que se va a ver, en fracciones del video original.
-     Sale del formato elegido y de dónde se haya arrastrado la imagen. */
-  const encuadre = useMemo(() => {
-    const f = FORMATOS.find((x) => x.id === formato);
-    if (!f?.r || !medidas) return null;
+  const encuadre = crop;
+
+  /* Un rectángulo con la proporción pedida, lo más grande que quepa y centrado.
+     Es solo el punto de partida: después se arrastra a mano. */
+  const rectanguloDe = useCallback((r) => {
+    if (!r || !medidas) return null;
     const rOrig = medidas.w / medidas.h;
     let w = 1;
     let h = 1;
-    if (f.r > rOrig) h = rOrig / f.r;   // más ancho de lo que hay: se recorta arriba y abajo
-    else w = f.r / rOrig;               // más alto: se recorta a los lados
-    const x = Math.min(1 - w, Math.max(0, centro.x - w / 2));
-    const y = Math.min(1 - h, Math.max(0, centro.y - h / 2));
-    return { x: +x.toFixed(4), y: +y.toFixed(4), w: +w.toFixed(4), h: +h.toFixed(4) };
-  }, [formato, medidas, centro]);
+    if (r > rOrig) h = rOrig / r;   // más ancho de lo que hay: se recorta arriba y abajo
+    else w = r / rOrig;             // más alto: se recorta a los lados
+    return { x: (1 - w) / 2, y: (1 - h) / 2, w, h };
+  }, [medidas]);
 
   const tiempoEnX = useCallback((clientX) => {
     const caja = barraRef.current?.getBoundingClientRect();
@@ -121,23 +122,55 @@ export default function EditorVideo({
     return Math.round(p * duracion * 10) / 10;
   }, [duracion]);
 
+  /* Dónde cayó el dedo, en fracciones del VIDEO (no del contenedor). El marco
+     tiene exactamente la proporción del video, así que sus coordenadas y las
+     del video son las mismas: sin esto, un video vertical dentro de una caja
+     ancha haría que el recorte se calculara sobre las franjas negras. */
+  const puntoEnVideo = useCallback((e) => {
+    const caja = marcoRef.current?.getBoundingClientRect();
+    if (!caja) return null;
+    return {
+      x: Math.min(1, Math.max(0, (e.clientX - caja.left) / caja.width)),
+      y: Math.min(1, Math.max(0, (e.clientY - caja.top) / caja.height)),
+    };
+  }, []);
+
   const mover = useCallback((e) => {
+    // --- estirar una esquina ---
+    if (typeof arrastrando === 'string' && arrastrando.startsWith('esq:')) {
+      const esquina = arrastrando.slice(4);
+      const p = puntoEnVideo(e);
+      if (!p || !crop) return;
+      const MIN = 0.12; // nunca tan chico que no se vea nada
+      let { x, y, w, h } = crop;
+      if (esquina.includes('w')) { const nx = Math.min(p.x, x + w - MIN); w += x - nx; x = nx; }
+      if (esquina.includes('e')) { w = Math.max(MIN, Math.min(p.x - x, 1 - x)); }
+      if (esquina.includes('n')) { const ny = Math.min(p.y, y + h - MIN); h += y - ny; y = ny; }
+      if (esquina.includes('s')) { h = Math.max(MIN, Math.min(p.y - y, 1 - y)); }
+      setCrop({ x: Math.max(0, x), y: Math.max(0, y), w, h });
+      return;
+    }
+
+    // --- mover el marco entero ---
     if (arrastrando === 'encuadre') {
-      const caja = marcoRef.current?.getBoundingClientRect();
-      if (!caja) return;
-      setCentro({
-        x: Math.min(1, Math.max(0, (e.clientX - caja.left) / caja.width)),
-        y: Math.min(1, Math.max(0, (e.clientY - caja.top) / caja.height)),
+      const p = puntoEnVideo(e);
+      if (!p || !crop) return;
+      setCrop({
+        ...crop,
+        x: Math.min(1 - crop.w, Math.max(0, p.x - crop.w / 2)),
+        y: Math.min(1 - crop.h, Math.max(0, p.y - crop.h / 2)),
       });
       return;
     }
+
+    // --- las manijas de tiempo ---
     if (!arrastrando || !duracion) return;
     const t = tiempoEnX(e.clientX);
     // Las manijas nunca se cruzan: siempre queda al menos medio segundo.
     if (arrastrando === 'inicio') setInicio(Math.min(t, hasta - 0.5));
     else setFin(Math.max(t, desde + 0.5));
     if (videoRef.current) videoRef.current.currentTime = t;
-  }, [arrastrando, duracion, tiempoEnX, desde, hasta]);
+  }, [arrastrando, crop, duracion, puntoEnVideo, tiempoEnX, desde, hasta]);
 
   useEffect(() => {
     if (!arrastrando) return undefined;
@@ -240,8 +273,22 @@ export default function EditorVideo({
       </div>
 
       {/* ---------- El video ---------- */}
-      <div style={{ flex: 1, position: 'relative', minHeight: 0, overflow: 'hidden' }}>
-        <div ref={marcoRef} style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+      <div style={{
+        flex: 1, minHeight: 0, overflow: 'hidden',
+        display: 'grid', placeItems: 'center', padding: '0 8px',
+      }}>
+        {/* El marco tiene EXACTAMENTE la proporción del video, así que el
+            video lo llena sin franjas negras y las coordenadas del marco son
+            las del video. Sin esto, recortar un video vertical dentro de una
+            caja ancha calcularía el recorte sobre las franjas. */}
+        <div
+          ref={marcoRef}
+          style={{
+            position: 'relative', overflow: 'hidden', background: '#000',
+            aspectRatio: medidas ? `${medidas.w} / ${medidas.h}` : '9 / 16',
+            maxWidth: '100%', maxHeight: '100%',
+          }}
+        >
           <video
             ref={videoRef}
             src={local}
@@ -260,73 +307,93 @@ export default function EditorVideo({
               const v = e.currentTarget;
               if (fin != null && v.currentTime >= fin) v.pause();
             }}
-            /* Anclado a la caja en vez de centrado con `maxHeight: 100%`:
-               dentro de un flex, ese porcentaje se mide contra un track que
-               puede crecer, y el video empujaba el botón de confirmar fuera de
-               la pantalla. Con inset:0 + contain siempre cabe entero. */
-            style={{
-              position: 'absolute', inset: 0, width: '100%', height: '100%',
-              objectFit: 'contain', display: 'block',
-            }}
+            style={{ width: '100%', height: '100%', objectFit: 'fill', display: 'block' }}
           />
 
           {/* Mientras encuadras, lo que se va a perder se oscurece en vez de
-              desaparecer: así se ve qué queda fuera y se puede mover con el
-              dedo antes de decidir. */}
-          {encuadre && paso === 'imagen' && (
-            <div
-              onPointerDown={(e) => { e.preventDefault(); setArrastrando('encuadre'); }}
-              style={{ position: 'absolute', inset: 0, cursor: 'move', touchAction: 'none' }}
-            >
+              desaparecer: se ve qué queda fuera antes de decidir. */}
+          {crop && paso === 'imagen' && (
+            <>
               <div style={{
                 position: 'absolute', left: 0, right: 0, top: 0,
-                height: `${encuadre.y * 100}%`, background: 'rgba(0,0,0,.6)',
+                height: `${crop.y * 100}%`, background: 'rgba(0,0,0,.6)', pointerEvents: 'none',
               }} />
               <div style={{
                 position: 'absolute', left: 0, right: 0, bottom: 0,
-                height: `${(1 - encuadre.y - encuadre.h) * 100}%`, background: 'rgba(0,0,0,.6)',
+                height: `${(1 - crop.y - crop.h) * 100}%`, background: 'rgba(0,0,0,.6)', pointerEvents: 'none',
               }} />
               <div style={{
-                position: 'absolute', left: 0, top: `${encuadre.y * 100}%`,
-                width: `${encuadre.x * 100}%`, height: `${encuadre.h * 100}%`,
-                background: 'rgba(0,0,0,.6)',
+                position: 'absolute', left: 0, top: `${crop.y * 100}%`,
+                width: `${crop.x * 100}%`, height: `${crop.h * 100}%`,
+                background: 'rgba(0,0,0,.6)', pointerEvents: 'none',
               }} />
               <div style={{
-                position: 'absolute', right: 0, top: `${encuadre.y * 100}%`,
-                width: `${(1 - encuadre.x - encuadre.w) * 100}%`, height: `${encuadre.h * 100}%`,
-                background: 'rgba(0,0,0,.6)',
+                position: 'absolute', right: 0, top: `${crop.y * 100}%`,
+                width: `${(1 - crop.x - crop.w) * 100}%`, height: `${crop.h * 100}%`,
+                background: 'rgba(0,0,0,.6)', pointerEvents: 'none',
               }} />
-              <div style={{
-                position: 'absolute',
-                left: `${encuadre.x * 100}%`, top: `${encuadre.y * 100}%`,
-                width: `${encuadre.w * 100}%`, height: `${encuadre.h * 100}%`,
-                border: '2px solid #fff', pointerEvents: 'none',
-              }} />
-            </div>
+
+              {/* El marco se arrastra entero desde el centro… */}
+              <div
+                onPointerDown={(e) => { e.preventDefault(); setArrastrando('encuadre'); }}
+                style={{
+                  position: 'absolute',
+                  left: `${crop.x * 100}%`, top: `${crop.y * 100}%`,
+                  width: `${crop.w * 100}%`, height: `${crop.h * 100}%`,
+                  border: '2px solid #fff', cursor: 'move', touchAction: 'none',
+                }}
+              />
+
+              {/* …y se estira desde cualquiera de las cuatro esquinas. */}
+              {[
+                ['nw', crop.x, crop.y, 'nwse-resize'],
+                ['ne', crop.x + crop.w, crop.y, 'nesw-resize'],
+                ['sw', crop.x, crop.y + crop.h, 'nesw-resize'],
+                ['se', crop.x + crop.w, crop.y + crop.h, 'nwse-resize'],
+              ].map(([id, cx, cy, cursor]) => (
+                <div
+                  key={id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Estirar la esquina ${id}`}
+                  onPointerDown={(e) => { e.preventDefault(); setArrastrando(`esq:${id}`); }}
+                  style={{
+                    position: 'absolute', left: `${cx * 100}%`, top: `${cy * 100}%`,
+                    width: 34, height: 34, marginLeft: -17, marginTop: -17,
+                    cursor, touchAction: 'none', display: 'grid', placeItems: 'center',
+                  }}
+                >
+                  <span style={{
+                    width: 16, height: 16, borderRadius: 3, background: '#fff',
+                    boxShadow: '0 1px 4px rgba(0,0,0,.5)',
+                  }} />
+                </div>
+              ))}
+            </>
+          )}
+
+          {!reproduciendo && paso !== 'imagen' && (
+            <button
+              type="button"
+              aria-label="Ver el video"
+              onClick={() => {
+                const v = videoRef.current;
+                if (v) { v.currentTime = desde; v.play(); }
+              }}
+              style={{
+                position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
+                border: 'none', background: 'transparent', cursor: 'pointer', padding: 0,
+              }}
+            >
+              <span style={{
+                width: 78, height: 78, borderRadius: '50%', display: 'grid', placeItems: 'center',
+                background: 'rgba(220,220,220,.88)',
+              }}>
+                <Play size={32} color="#111318" fill="#111318" style={{ marginLeft: 4 }} />
+              </span>
+            </button>
           )}
         </div>
-
-        {!reproduciendo && paso !== 'imagen' && (
-          <button
-            type="button"
-            aria-label="Ver el video"
-            onClick={() => {
-              const v = videoRef.current;
-              if (v) { v.currentTime = desde; v.play(); }
-            }}
-            style={{
-              position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
-              border: 'none', background: 'transparent', cursor: 'pointer', padding: 0,
-            }}
-          >
-            <span style={{
-              width: 78, height: 78, borderRadius: '50%', display: 'grid', placeItems: 'center',
-              background: 'rgba(220,220,220,.88)',
-            }}>
-              <Play size={32} color="#111318" fill="#111318" style={{ marginLeft: 4 }} />
-            </span>
-          </button>
-        )}
       </div>
 
       {/* ---------- Herramientas ---------- */}
@@ -415,7 +482,11 @@ export default function EditorVideo({
         {paso === 'imagen' && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {FORMATOS.map((f) => (
-              <button key={f.id} type="button" onClick={() => setFormato(f.id)} style={píldora(formato === f.id)}>
+              <button
+                key={f.id} type="button"
+                onClick={() => setCrop(f.r ? rectanguloDe(f.r) : null)}
+                style={píldora(f.r ? false : !crop)}
+              >
                 {f.et}
               </button>
             ))}

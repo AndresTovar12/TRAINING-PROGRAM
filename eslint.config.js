@@ -31,7 +31,10 @@ export default defineConfig([
     },
     rules: {
       // Deuda de limpieza: no rompen en runtime.
-      'no-unused-vars': 'warn',
+      // Un nombre que empieza con _ dice "lo recibo a proposito y no lo uso".
+      // Sirve para props que los llamadores siguen pasando pero que ya no se
+      // pintan: quitarlos de cada sitio a mano es mas riesgo que ganancia.
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       'react-hooks/set-state-in-effect': 'warn',
       'react-hooks/refs': 'warn',
       'react-hooks/preserve-manual-memoization': 'warn',
