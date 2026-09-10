@@ -96,7 +96,7 @@ function CreateCoachModal({ onClose, onCreated }) {
   );
 }
 
-export default function CoachesPanel() {
+export default function CoachesPanel({ onVerComo }) {
   const [coaches, setCoaches] = useState([]);
   const [athletes, setAthletes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -165,9 +165,25 @@ export default function CoachesPanel() {
                 </div>
                 <div style={{ fontSize: 13, color: T.text2, fontWeight: 500 }}>@{c.username}</div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13.5, fontWeight: 700, color: T.text2, background: T.bg, borderRadius: 10, padding: '8px 12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13.5, fontWeight: 700, color: T.text2, background: T.bg, borderRadius: 10, padding: '8px 12px', flexShrink: 0 }}>
                 <Users size={15} color={T.text3} /> {countByCoach[c.id] || 0}
               </div>
+              {/* Entrar a ver lo suyo. Es un filtro, no un cambio de cuenta:
+                  el master ya puede leer estos datos, esto solo los enseña
+                  juntos y sin revolverlos con los propios. */}
+              <button
+                type="button"
+                onClick={() => onVerComo?.(c)}
+                title={`Ver el perfil de ${c.full_name || c.username}`}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 7, flexShrink: 0,
+                  minHeight: 38, padding: '0 13px', borderRadius: 10, cursor: 'pointer',
+                  border: `1.5px solid ${T.border}`, background: T.bg2, color: T.text2,
+                  fontFamily: FONT, fontSize: 13, fontWeight: 700,
+                }}
+              >
+                <Eye size={15} /> Ver como
+              </button>
             </div>
           ))}
         </div>

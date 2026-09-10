@@ -702,9 +702,12 @@ function ExerciseEditor({
   );
 }
 
-export default function ExercisesPanel() {
+export default function ExercisesPanel({ viendoComo }) {
   const { user, profile } = useAuth();
   const isMaster = !!profile?.is_owner;
+  /* De quién es el repertorio que se está mirando. Con "Ver como" el master
+     ve el del coach visitado; el resto del tiempo, el suyo. */
+  const dueño = viendoComo?.id || user?.id;
   const [categories, setCategories] = useState([]);
   const [exercises, setExercises] = useState([]); // crudo (todos los visibles)
   const [masterId, setMasterId] = useState(null);
@@ -725,7 +728,7 @@ export default function ExercisesPanel() {
     (async () => {
       try {
         const [cats, exs, mId, mias] = await Promise.all([
-          listCategories(), listExercises(), getMasterId(), listExerciseOverrides(user?.id),
+          listCategories(), listExercises(), getMasterId(), listExerciseOverrides(dueño),
         ]);
         if (cancelled) return;
         setCategories(cats);
@@ -743,17 +746,26 @@ export default function ExercisesPanel() {
     // render la sesión todavía puede no estar lista. Sin esta dependencia el
     // repertorio cargaría sin mis versiones y nadie vería un error: se
     // mostrarían los ejercicios del master como si nunca los hubiera editado.
-  }, [user?.id]);
+  }, [dueño]);
 
   // Etiqueta base/propio y, para coaches, oculta el repertorio de otros coaches.
   // Encima van MIS versiones: si personalicé un ejercicio base, en mi lista
   // aparece como yo lo dejé, no como lo tiene el master.
   const visible = useMemo(() => {
     const conMisVersiones = aplicarOverrides(exercises, overrides, categories);
-    const tagged = tagRepertoire(conMisVersiones, masterId, user?.id);
-    if (isMaster) return tagged; // el master ve todo
+    const tagged = tagRepertoire(conMisVersiones, masterId, dueño);
+    /* TODOS ven lo mismo: la base más lo suyo. Incluido el master.
+
+       Antes el master veía TODO, también lo que creaba cada coach. Andrés:
+       "los ejercicios que agreguen los coaches no se pueden agregar a mi lista
+       de admin, si no imagínate, se vuelve infinita". Con diez coaches
+       subiendo variantes, su repertorio dejaría de ser suyo.
+
+       Para mirar el de un coach concreto está el botón "Ver como" de la
+       pantalla de coaches, que es donde esa pregunta tiene sentido: dentro de
+       un coach, no revuelto con los propios. */
     return tagged.filter((e) => e.isBase || e.isMine);
-  }, [exercises, overrides, categories, masterId, user?.id, isMaster]);
+  }, [exercises, overrides, categories, masterId, dueño]);
 
   // Músculos finos presentes en el repertorio (para el detalle del editor)
   const muscles = useMemo(() => {

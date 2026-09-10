@@ -277,7 +277,12 @@ export default function EditorVideo({
       {/* ---------- El video ---------- */}
       <div style={{
         flex: 1, minHeight: 0, overflow: 'hidden',
-        display: 'grid', placeItems: 'center', padding: '0 8px',
+        display: 'grid', placeItems: 'center',
+        /* Aire alrededor del video para poder agarrar las esquinas.
+           Andrés: "la separación de los botones y la imagen es poquita". Las
+           manijas sobresalen del marco, así que pegado al borde no hay dónde
+           poner el dedo sin tocar el botón de abajo. */
+        padding: '10px 18px 22px',
       }}>
         {/* El marco tiene EXACTAMENTE la proporción del video, así que el
             video lo llena sin franjas negras y las coordenadas del marco son

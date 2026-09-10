@@ -718,7 +718,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
 }
 
 /* ------------------------------ Panel raíz ------------------------------ */
-export default function AthletesPanel() {
+export default function AthletesPanel({ viendoComo }) {
   const { profile } = useAuth();
   const isMaster = !!profile?.is_owner;
   const narrow = useIsNarrow(880);
@@ -756,23 +756,26 @@ export default function AthletesPanel() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     // Solo atletas (oculta cuentas de coach/master de la lista de clientes)
-    const base = athletes.filter((a) => a.role !== 'admin');
+    // y, si el master entró a ver un coach, solo los de ese coach.
+    const base = athletes.filter((a) => a.role !== 'admin'
+      && (!viendoComo || a.coach_id === viendoComo.id));
     if (!q) return base;
     return base.filter(
       (a) => (a.full_name || '').toLowerCase().includes(q) || (a.username || '').toLowerCase().includes(q),
     );
-  }, [athletes, search]);
+  }, [athletes, search, viendoComo]);
 
   // Las tres preguntas que un coach se hace al abrir la lista.
   const metricas = useMemo(() => {
-    const base = athletes.filter((a) => a.role !== 'admin');
+    const base = athletes.filter((a) => a.role !== 'admin'
+      && (!viendoComo || a.coach_id === viendoComo.id));
     const hace7dias = cargadoEn - 7 * 86400000;
     return {
       total: base.length,
       sinPlan: base.filter((a) => !a.plan).length,
       activos: base.filter((a) => a.lastSeen && new Date(a.lastSeen).getTime() >= hace7dias).length,
     };
-  }, [athletes, cargadoEn]);
+  }, [athletes, cargadoEn, viendoComo]);
 
   if (loading) {
     return (

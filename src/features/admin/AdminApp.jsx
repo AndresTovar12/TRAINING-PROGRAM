@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  Dumbbell, Users, Library, Shield, PanelLeftClose, PanelLeft,
+  Dumbbell, Users, Library, Shield, PanelLeftClose, PanelLeft, Eye, X,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsDesktop } from '@/lib/useViewport';
@@ -18,17 +18,74 @@ export default function AdminApp() {
   const [tab, setTab] = useState('athletes');
   const [menuOpen, setMenuOpen] = useState(true);
 
+  /* "Ver como" un coach: el master mira SUS atletas y SU repertorio, sin salir
+     de su propia sesión.
+
+     Andrés lo pidió así —"un botón en cada coach para meterme a visualizar el
+     perfil como si yo fuera ese coach"— y va junto con el cambio de que su
+     repertorio deje de incluir el de todos: para revisar el de un coach se
+     entra aquí, no se le mezcla en la lista propia.
+
+     NO es entrar con su cuenta. No se toca la sesión ni la contraseña de
+     nadie: es un filtro sobre datos que el master ya puede leer. La diferencia
+     importa el día que algo salga mal — en los registros del servidor las
+     acciones siguen apareciendo a nombre del master, que es quien las hizo. */
+  const [viendoComo, setViendoComo] = useState(null); // { id, nombre } | null
+
   const TABS = [
     { id: 'athletes', label: isMaster ? 'Atletas' : 'Mis atletas', icon: Users },
     { id: 'exercises', label: 'Ejercicios', icon: Library },
     ...(isMaster ? [{ id: 'coaches', label: 'Coaches', icon: Shield }] : []),
   ];
 
+  const entrarComo = (coach) => {
+    setViendoComo({ id: coach.id, nombre: coach.full_name || coach.username });
+    setTab('athletes');
+  };
+
   const content = (
     <>
-      {tab === 'athletes' && <AthletesPanel />}
-      {tab === 'exercises' && <ExercisesPanel />}
-      {tab === 'coaches' && isMaster && <CoachesPanel />}
+      {viendoComo && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16,
+          background: T.accentBg, border: `1.5px solid ${T.accent}44`,
+          borderRadius: 13, padding: '11px 14px',
+        }}>
+          <Eye size={17} color={T.accent} style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Una línea con puntos suspensivos: un nombre largo partido en seis
+                renglones convierte el aviso en el elemento más grande de la
+                pantalla, justo encima de lo que se venía a ver. */}
+            <div style={{
+              fontSize: 13.5, fontWeight: 700, color: T.accent,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              Viendo como {viendoComo.nombre}
+            </div>
+            <div style={{
+              fontSize: 11.5, fontWeight: 600, color: T.text2, marginTop: 2,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              Sus atletas y su repertorio. No estás en su cuenta.
+            </div>
+          </div>
+          <button
+            type="button" onClick={() => setViendoComo(null)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0,
+              minHeight: 38, padding: '0 13px', borderRadius: 10, cursor: 'pointer',
+              border: 'none', background: T.bg2, color: T.text2,
+              fontFamily: FONT, fontSize: 13, fontWeight: 700,
+            }}
+          >
+            <X size={15} /> Salir
+          </button>
+        </div>
+      )}
+
+      {tab === 'athletes' && <AthletesPanel viendoComo={viendoComo} />}
+      {tab === 'exercises' && <ExercisesPanel viendoComo={viendoComo} />}
+      {tab === 'coaches' && isMaster && !viendoComo && <CoachesPanel onVerComo={entrarComo} />}
     </>
   );
 

@@ -237,18 +237,31 @@ export default function VideosDelEjercicio({
         <EditorVideo
           url={editando.url}
           ajustes={editando.ajustes}
+          /* Solo los ángulos guardan "para quién" y "desde dónde": el video
+             principal vive en una columna del ejercicio, que no tiene esos
+             campos. Sin este prop, reabrir un ángulo con las tijeras escondía
+             las dos preguntas y parecía que se habían perdido. */
+          conDestino={editando.tipo === 'extra'}
+          generoInicial={editando.ajustes?.genero || ''}
+          etiquetaInicial={editando.ajustes?.etiqueta || ''}
           onCancelar={() => setEditando(null)}
           onListo={async (ajustes) => {
             if (editando.tipo === 'principal') {
               onRecortePrincipal?.(ajustes);
             } else {
               try {
-                await updateExerciseMedia(editando.id, {
+                const patch = {
                   recorte_inicio: ajustes.inicio ?? null,
                   recorte_fin: ajustes.fin ?? null,
                   sin_audio: !!ajustes.sinAudio,
                   encuadre: ajustes.encuadre ?? null,
-                });
+                  genero: ajustes.genero || null,
+                  etiqueta: (ajustes.etiqueta || '').trim() || null,
+                };
+                await updateExerciseMedia(editando.id, patch);
+                // La lista se refresca en el momento: si no, sigue enseñando la
+                // etiqueta vieja hasta recargar la pantalla.
+                setLista((prev) => prev.map((x) => (x.id === editando.id ? { ...x, ...patch } : x)));
               } catch (e) { setErr(e.message || 'No se pudo guardar el recorte.'); }
             }
             setEditando(null);
@@ -272,7 +285,7 @@ export default function VideosDelEjercicio({
         value=""
         onChange={() => {}}
         onAjustes={agregarVideo}
-        conDestino
+        conDestino={!!principal}
         accept="video/*"
         kind="videos"
         hint="Se abre el editor: recortas, encuadras, quitas el audio y eliges para quién es."
