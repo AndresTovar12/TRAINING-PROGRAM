@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Plus, Search, X, Trash2, Loader2, Image as ImageIcon, Video, Dumbbell,
-  Copy, RotateCcw, Pencil, ChevronRight, Scissors,
+  Copy, RotateCcw, Pencil, ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsWide } from '@/lib/useViewport';
@@ -12,7 +12,6 @@ import {
 } from '@/lib/api';
 import MediaUpload from '@/features/admin/MediaUpload';
 import VideosDelEjercicio from '@/features/admin/VideosDelEjercicio';
-import EditorVideo from '@/features/admin/EditorVideo';
 import { MUSCLE_GROUPS, FINE_MUSCLES, exerciseMatchesGroup } from '@/lib/muscles';
 import { T, FONT, KP } from '@/lib/theme';
 
@@ -373,8 +372,6 @@ function ExerciseEditor({
   const { user } = useAuth();
   const [dupBusy, setDupBusy] = useState(false);
   const [restaurando, setRestaurando] = useState(false);
-  // Reabrir el editor sobre un video YA subido, para cambiarle el tramo.
-  const [reeditando, setReeditando] = useState(false);
   const [form, setForm] = useState(() =>
     exercise
       ? {
@@ -562,56 +559,30 @@ function ExerciseEditor({
             hint="JPG o PNG. Se muestra como portada del ejercicio."
           />
 
-          <MediaUpload
-            label="Video (archivo)"
-            icon={Video}
-            value={form.video_url}
-            onChange={(v) => set('video_url', v)}
-            onAjustes={({ inicio, fin, sinAudio, encuadre }) => setForm((f) => ({
+          <div style={{ height: 1, background: T.border }} />
+
+          {/* El video principal ya NO tiene su propio bloque aquí arriba: vive
+              dentro de la lista de videos, encabezándola. Andrés dijo que lo
+              que no le cuadraba era "que esté separada del video principal", y
+              para quien usa la app son todos videos del mismo ejercicio. Que
+              uno viva en una columna y los otros en otra tabla es un detalle de
+              cómo está guardado, no algo que le importe a nadie. */}
+          <VideosDelEjercicio
+            exerciseId={exercise?.id}
+            principal={form.video_url}
+            recortePrincipal={{
+              recorte_inicio: form.recorte_inicio,
+              recorte_fin: form.recorte_fin,
+              sin_audio: form.sin_audio,
+              encuadre: form.encuadre,
+            }}
+            onPrincipal={(v) => set('video_url', v)}
+            onRecortePrincipal={({ inicio, fin, sinAudio, encuadre }) => setForm((f) => ({
               ...f,
               recorte_inicio: inicio, recorte_fin: fin,
               sin_audio: !!sinAudio, encuadre: encuadre ?? null,
             }))}
-            accept="video/*"
-            kind="videos"
-            hint="Sube un MP4, o usa el enlace de abajo si está en redes."
           />
-
-          {/* El recorte ya se eligió al subir, en el editor de pantalla
-              completa. Esto es solo para volver a entrar y cambiarlo sin tener
-              que subir el video otra vez. */}
-          {form.video_url && (
-            <button
-              type="button"
-              onClick={() => setReeditando(true)}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 7, alignSelf: 'flex-start',
-                minHeight: 40, padding: '0 13px', borderRadius: 11, cursor: 'pointer',
-                border: `1.5px solid ${T.border}`, background: T.bg2,
-                fontFamily: FONT, fontSize: 13, fontWeight: 700, color: T.text2,
-              }}
-            >
-              <Scissors size={14} />
-              {form.recorte_inicio != null || form.recorte_fin != null || form.sin_audio || form.encuadre
-                ? 'Cambiar recorte, encuadre o audio'
-                : 'Recortar, encuadrar o silenciar'}
-            </button>
-          )}
-
-          {reeditando && form.video_url && (
-            <EditorVideo
-              url={form.video_url}
-              onCancelar={() => setReeditando(false)}
-              onListo={({ inicio, fin, sinAudio, encuadre }) => {
-                setForm((f) => ({
-                  ...f,
-                  recorte_inicio: inicio, recorte_fin: fin,
-                  sin_audio: !!sinAudio, encuadre: encuadre ?? null,
-                }));
-                setReeditando(false);
-              }}
-            />
-          )}
 
           <Input
             label="Enlace de video (TikTok / Instagram / YouTube)"
@@ -620,9 +591,6 @@ function ExerciseEditor({
             placeholder="https://…"
           />
 
-          <div style={{ height: 1, background: T.border }} />
-
-          <VideosDelEjercicio exerciseId={exercise?.id} />
 
           {err && (
             <div style={{ background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 11, padding: '11px 14px', fontSize: 13.5, fontWeight: 600 }}>

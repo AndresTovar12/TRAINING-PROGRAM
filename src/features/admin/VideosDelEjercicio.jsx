@@ -17,8 +17,11 @@
  * funcionando igual. Esto se suma; no lo reemplaza.
  */
 import { useEffect, useState } from 'react';
-import { Video, Trash2, Loader2 } from 'lucide-react';
-import { listExerciseMedia, addExerciseMedia, deleteExerciseMedia, getMasterId } from '@/lib/api';
+import { Video, Trash2, Loader2, Scissors } from 'lucide-react';
+import {
+  listExerciseMedia, addExerciseMedia, deleteExerciseMedia, updateExerciseMedia, getMasterId,
+} from '@/lib/api';
+import EditorVideo from '@/features/admin/EditorVideo';
 import { useAuth } from '@/contexts/AuthContext';
 import MediaUpload from '@/features/admin/MediaUpload';
 import { T } from '@/lib/theme';
@@ -30,8 +33,94 @@ function etiquetaGenero(g) {
   return 'Para todos';
 }
 
-export default function VideosDelEjercicio({ exerciseId }) {
+/** Un video de la lista: miniatura, qué es, y qué se le puede hacer. */
+function FilaVideo({ url, titulo, detalle, destacado, onRecortar, onQuitar }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10,
+      background: destacado ? T.accentBg : T.bg,
+      border: `1px solid ${destacado ? T.accent + '55' : T.border}`,
+      borderRadius: 11, padding: 8,
+    }}>
+      {/* Miniatura del propio video, congelada en el primer fotograma. No se
+          usa canvas: leer píxeles exigiría cabeceras de CORS que Cloudflare no
+          manda en las lecturas. */}
+      <span style={{
+        width: 46, height: 46, borderRadius: 9, overflow: 'hidden', flexShrink: 0,
+        background: '#0E1015', display: 'grid', placeItems: 'center',
+      }}>
+        <video
+          src={url} muted playsInline preload="metadata" tabIndex={-1} aria-hidden="true"
+          onLoadedMetadata={(e) => { e.currentTarget.currentTime = 0.1; }}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        />
+      </span>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: 13, fontWeight: 700, color: destacado ? T.accent : T.text,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {titulo}
+        </div>
+        {detalle && (
+          <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 600 }}>{detalle}</div>
+        )}
+      </div>
+
+      <button
+        type="button" onClick={onRecortar} title="Recortar, encuadrar o silenciar"
+        style={{
+          border: 'none', background: 'transparent', cursor: 'pointer',
+          color: T.text2, padding: 6, flexShrink: 0,
+        }}
+      >
+        <Scissors size={15} />
+      </button>
+      <button
+        type="button" onClick={onQuitar} title="Quitar este video"
+        style={{
+          border: 'none', background: 'transparent', cursor: 'pointer',
+          color: T.danger, padding: 6, flexShrink: 0,
+        }}
+      >
+        <Trash2 size={15} />
+      </button>
+    </div>
+  );
+}
+
+/** Resume en una línea qué se le hizo al video, o nada si está tal cual. */
+function etiquetaAjustes(a) {
+  if (!a) return null;
+  const partes = [];
+  if (a.recorte_inicio != null || a.recorte_fin != null) partes.push('recortado');
+  if (a.encuadre) partes.push('encuadrado');
+  if (a.sin_audio) partes.push('sin audio');
+  return partes.length ? partes.join(' · ') : null;
+}
+
+/**
+ * TODOS los videos del ejercicio, en UNA sola lista.
+ *
+ * POR QUÉ SE FUSIONÓ. Antes había dos bloques separados: arriba "Video
+ * (archivo)" —el principal, que vive en la columna `video_url` del ejercicio— y
+ * más abajo "Otros ángulos y versiones", que viven en la tabla `exercise_media`.
+ * Andrés dijo que lo que no le cuadraba era justamente "que esté separada del
+ * video principal", y tiene razón: para quien usa la app son todos videos del
+ * mismo ejercicio, y que estén en dos sitios distintos es un detalle de cómo
+ * está guardado, no algo que le importe a nadie.
+ *
+ * Siguen guardándose en dos sitios —cambiar eso sería una migración y los
+ * planes ya existentes leen `video_url`— pero se ven y se manejan como una
+ * lista. El primero es el que se abre por defecto; el resto son ángulos o
+ * versiones.
+ */
+export default function VideosDelEjercicio({
+  exerciseId, principal, recortePrincipal, onPrincipal, onRecortePrincipal,
+}) {
   const { user } = useAuth();
+  const [editando, setEditando] = useState(null); // qué video se está recortando
   const [lista, setLista] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [err, setErr] = useState('');
@@ -54,11 +143,23 @@ export default function VideosDelEjercicio({ exerciseId }) {
     return () => { vivo = false; };
   }, [exerciseId, user?.id]);
 
-  /* Guarda el video con todo lo que se decidió en el editor. Llega junto —la
-     dirección y los ajustes— porque el editor los resuelve de una sola vez. */
-  async function guardar({ url: subida, inicio, fin, sinAudio, encuadre, genero, etiqueta }) {
+  /* Guarda el video que sale del editor. Llega todo junto —la dirección y los
+     ajustes— porque el editor los resuelve de una vez.
+
+     Si el ejercicio todavía no tiene video, este pasa a ser el principal: el
+     que se abre por defecto. Los siguientes van como ángulos o versiones. Así
+     no hay que explicarle a nadie la diferencia entre dos sitios de guardado
+     que solo existe por dentro. */
+  async function agregarVideo({ url: subida, inicio, fin, sinAudio, encuadre, genero, etiqueta }) {
     if (!subida) { setErr('No se pudo subir el video.'); return; }
     setErr('');
+
+    if (!principal) {
+      onPrincipal?.(subida);
+      onRecortePrincipal?.({ inicio, fin, sinAudio, encuadre });
+      return;
+    }
+
     try {
       const fila = await addExerciseMedia({
         exerciseId, url: subida, tipo: 'video',
@@ -87,7 +188,7 @@ export default function VideosDelEjercicio({ exerciseId }) {
   if (!exerciseId) {
     return (
       <div style={{ fontSize: 12.5, color: T.text3, fontWeight: 600, lineHeight: 1.5 }}>
-        Guarda el ejercicio y podrás agregarle más ángulos y versiones por género.
+        Guarda el ejercicio y podrás agregarle videos: otros ángulos, o una versión para hombres y otra para mujeres.
       </div>
     );
   }
@@ -95,9 +196,9 @@ export default function VideosDelEjercicio({ exerciseId }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div>
-        <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Otros ángulos y versiones</div>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Videos del ejercicio</div>
         <div style={{ fontSize: 11.5, color: T.text3, marginTop: 3, fontWeight: 600, lineHeight: 1.45 }}>
-          Grábalo de frente y de lado, o sube una versión para hombres y otra para mujeres.
+          El primero es el que se abre. Agrega más para tener otros ángulos, o una versión para hombres y otra para mujeres.
         </div>
       </div>
 
@@ -105,31 +206,53 @@ export default function VideosDelEjercicio({ exerciseId }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: T.text3, fontSize: 12.5, fontWeight: 600 }}>
           <Loader2 size={14} className="spin" /> Cargando…
         </div>
-      ) : lista.length > 0 && (
+      ) : (principal || lista.length > 0) && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+          {/* El principal encabeza la lista: es el que se abre por defecto. */}
+          {principal && (
+            <FilaVideo
+              url={principal}
+              titulo="Se abre por defecto"
+              detalle={etiquetaAjustes(recortePrincipal)}
+              destacado
+              onRecortar={() => setEditando({ tipo: 'principal', url: principal })}
+              onQuitar={() => onPrincipal?.('')}
+            />
+          )}
+
           {lista.map((m) => (
-            <div key={m.id} style={{
-              display: 'flex', alignItems: 'center', gap: 10, background: T.bg,
-              border: `1px solid ${T.border}`, borderRadius: 11, padding: '9px 11px',
-            }}>
-              <Video size={15} color={T.accent} style={{ flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {m.etiqueta || 'Sin etiqueta'}
-                </div>
-                <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 600 }}>{etiquetaGenero(m.genero)}</div>
-              </div>
-              {(
-                <button
-                  type="button" onClick={() => quitar(m.id)} title="Quitar este video"
-                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.danger, padding: 4, flexShrink: 0 }}
-                >
-                  <Trash2 size={15} />
-                </button>
-              )}
-            </div>
+            <FilaVideo
+              key={m.id}
+              url={m.url}
+              titulo={m.etiqueta || 'Sin etiqueta'}
+              detalle={etiquetaGenero(m.genero)}
+              onRecortar={() => setEditando({ tipo: 'extra', url: m.url, id: m.id })}
+              onQuitar={() => quitar(m.id)}
+            />
           ))}
         </div>
+      )}
+
+      {editando && (
+        <EditorVideo
+          url={editando.url}
+          onCancelar={() => setEditando(null)}
+          onListo={async (ajustes) => {
+            if (editando.tipo === 'principal') {
+              onRecortePrincipal?.(ajustes);
+            } else {
+              try {
+                await updateExerciseMedia(editando.id, {
+                  recorte_inicio: ajustes.inicio ?? null,
+                  recorte_fin: ajustes.fin ?? null,
+                  sin_audio: !!ajustes.sinAudio,
+                  encuadre: ajustes.encuadre ?? null,
+                });
+              } catch (e) { setErr(e.message || 'No se pudo guardar el recorte.'); }
+            }
+            setEditando(null);
+          }}
+        />
       )}
 
       {/* Ya no hay formulario de "Video nuevo".
@@ -147,7 +270,7 @@ export default function VideosDelEjercicio({ exerciseId }) {
         icon={Video}
         value=""
         onChange={() => {}}
-        onAjustes={guardar}
+        onAjustes={agregarVideo}
         conDestino
         accept="video/*"
         kind="videos"
