@@ -105,8 +105,6 @@ export default function EditorVideo({
   const hasta = fin ?? duracion ?? 0;
   const recortado = inicio != null || fin != null;
 
-  const encuadre = crop;
-
   /* Un rectángulo con la proporción pedida, lo más grande que quepa y centrado.
      Es solo el punto de partida: después se arrastra a mano. */
   const rectanguloDe = useCallback((r) => {
@@ -414,7 +412,23 @@ export default function EditorVideo({
         {pasosVisibles.length > 1 && (
           <div className="sin-barra" style={{ display: 'flex', gap: 8, marginBottom: 14, overflowX: 'auto' }}>
             {pasosVisibles.map((p) => (
-              <button key={p.id} type="button" onClick={() => setPaso(p.id)} style={píldora(paso === p.id)}>
+              <button
+                key={p.id} type="button"
+                onClick={() => {
+                  setPaso(p.id);
+                  /* Al entrar a "Encuadre" el marco aparece sobre el video
+                     ENTERO, listo para agarrarlo por las esquinas. Antes solo
+                     existía si primero elegías una proporción, así que "cortar
+                     a mano" era imposible sin pasar por Vertical o Cuadrado —
+                     justo lo contrario de lo que pidió Andrés.
+
+                     Empezar cubriéndolo todo no significa recortar: al
+                     confirmar, un marco que sigue cubriendo el video entero se
+                     guarda como "sin encuadre". */
+                  if (p.id === 'imagen' && !crop) setCrop({ x: 0, y: 0, w: 1, h: 1 });
+                }}
+                style={píldora(paso === p.id)}
+              >
                 <p.icono size={15} /> {p.et}
               </button>
             ))}
@@ -493,16 +507,45 @@ export default function EditorVideo({
         ))}
 
         {paso === 'imagen' && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {FORMATOS.map((f) => (
-              <button
-                key={f.id} type="button"
-                onClick={() => setCrop(f.r ? rectanguloDe(f.r) : null)}
-                style={píldora(f.r ? false : !crop)}
-              >
-                {f.et}
-              </button>
-            ))}
+          /* Botones chicos con la forma dibujada, no píldoras de texto grandes.
+             Andrés: "no veo la necesidad de poner botones tan grandes en lugar
+             de botoncitos de diferentes encuadres como todas las apps de fotos".
+             La forma del rectángulo dice la proporción mejor que la palabra, y
+             lo que manda aquí es el video, no los controles. */
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            {FORMATOS.map((f) => {
+              const activo = f.r
+                ? !!crop && Math.abs((crop.w * (medidas?.w ?? 1)) / (crop.h * (medidas?.h ?? 1)) - f.r) < 0.02
+                : !crop || (crop.w >= 0.995 && crop.h >= 0.995);
+              // El dibujito mantiene la proporción real dentro de una caja de 22 px.
+              const cajaW = f.r ? Math.min(22, 22 * f.r) : 17;
+              const cajaH = f.r ? Math.min(22, 22 / f.r) : 22;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  title={f.et}
+                  aria-label={f.et}
+                  aria-pressed={activo}
+                  onClick={() => setCrop(f.r ? rectanguloDe(f.r) : { x: 0, y: 0, w: 1, h: 1 })}
+                  style={{
+                    width: 44, height: 44, borderRadius: 11, flexShrink: 0, cursor: 'pointer',
+                    border: 'none', background: activo ? 'rgba(255,255,255,.16)' : 'transparent',
+                    display: 'grid', placeItems: 'center', padding: 0,
+                  }}
+                >
+                  <span style={{
+                    width: cajaW, height: cajaH, borderRadius: 2.5,
+                    border: `2px solid ${activo ? '#fff' : 'rgba(255,255,255,.5)'}`,
+                  }} />
+                </button>
+              );
+            })}
+            <span style={{
+              fontSize: 12, color: 'rgba(255,255,255,.55)', fontWeight: 600, marginLeft: 4,
+            }}>
+              Arrastra las esquinas
+            </span>
           </div>
         )}
 
@@ -566,7 +609,12 @@ export default function EditorVideo({
         <button
           type="button"
           disabled={subiendo || !duracion}
-          onClick={() => onListo({ inicio, fin, sinAudio, encuadre, genero, etiqueta })}
+          onClick={() => onListo({
+            inicio, fin, sinAudio, genero, etiqueta,
+            // Un marco que cubre el video entero no es un recorte: se guarda
+            // como nada para no arrastrar un dato que no dice nada.
+            encuadre: (crop && (crop.w < 0.995 || crop.h < 0.995)) ? crop : null,
+          })}
           aria-label="Usar este video"
           style={{
             width: 58, height: 58, borderRadius: '50%', border: 'none', flexShrink: 0,
