@@ -11,6 +11,8 @@ import { Upload, Loader2, X, Video, Camera, Images } from 'lucide-react';
 import { uploadExerciseMedia } from '@/lib/api';
 import { optimizaImagen, pesoTexto as pesoLegible } from '@/lib/imagen';
 import EditorVideo from '@/features/admin/EditorVideo';
+import EditorFoto from '@/features/admin/EditorFoto';
+import { recortaImagen } from '@/features/admin/recorte';
 import { useCoarsePointer } from '@/lib/useViewport';
 import { T, FONT } from '@/lib/theme';
 
@@ -39,8 +41,9 @@ export default function MediaUpload({
   const [ahorro, setAhorro] = useState(null);   // { antes, despues }
   const inputRef = useRef(null);      // elegir de la galeria
   const camaraRef = useRef(null);     // grabar / tomar en el momento
-  // Video elegido y todavia SIN subir, esperando a que lo recorten.
+  // Elegidos y todavia SIN subir, esperando a que pasen por su editor.
   const [porRevisar, setPorRevisar] = useState(null);
+  const [fotoPorRevisar, setFotoPorRevisar] = useState(null);
 
   async function onPick(e) {
     const elegido = e.target.files?.[0];
@@ -65,21 +68,30 @@ export default function MediaUpload({
       return;
     }
 
-    /* Una foto sube directo, sin pantalla intermedia.
-       Tuve un rato una que preguntaba para quién era. Andrés: "¿te parece que
-       ese es el momento para decidir si es para hombre, para mujer o para
-       todos? tampoco me pareció muy inteligente". Y no: eso se decide después,
-       en la lista del ejercicio, tocando la pastilla del archivo. Elegir una
-       foto y que te interroguen es friccionar el caso normal —que es "para
-       todos"— por culpa del raro. */
+    /* UNA FOTO TAMPOCO SE SUBE DE GOLPE: también pasa por su editor.
+       Andrés: "también para las fotos de portada se debería poder hacer algún
+       recorte o algo así". Y le hace más falta que al video: una foto del
+       carrete sale apaisada y la portada es un recuadro, así que sin recortar
+       decide el navegador qué mitad tira — y suele tirar a la persona. */
+    setFotoPorRevisar(elegido);
+    if (inputRef.current) inputRef.current.value = '';
+    if (camaraRef.current) camaraRef.current.value = '';
+  }
+
+  /* Sube la foto que ya pasó por el editor, cortada de verdad.
+     Recortar primero y encoger después no es el mismo resultado que al revés:
+     así el límite de tamaño se aplica a lo que queda, no a lo que se tiró. */
+  async function subeLaFoto({ encuadre }) {
     setBusy(true);
+    setErr('');
+    setAvance(0);
     try {
-      // Las fotos se encogen y se reencodan ANTES de salir del teléfono. Los
-      // videos no: recomprimirlos aquí sería lento y les quitaría la calidad,
-      // que es justo lo que hay que cuidar.
-      const { archivo: file, aviso: texto, detalle } = await optimizaImagen(elegido);
+      const cortada = await recortaImagen(fotoPorRevisar, encuadre);
+      // Se encoge y reencoda ANTES de salir del teléfono: una foto de 12
+      // megapíxeles para un recuadro de 116 px es gastar datos de todos.
+      const { archivo: file, aviso: texto, detalle } = await optimizaImagen(cortada);
       if (texto) setAviso({ texto, detalle });
-      if (file !== elegido) setAhorro({ antes: elegido.size, despues: file.size });
+      if (file.size < fotoPorRevisar.size) setAhorro({ antes: fotoPorRevisar.size, despues: file.size });
       setArchivo({ nombre: file.name, mb: Math.round((file.size / 1048576) * 10) / 10 });
 
       const url = await uploadExerciseMedia(file, kind, setAvance);
@@ -88,15 +100,12 @@ export default function MediaUpload({
       // el estado se actualice para leerla por separado: eso es una carrera
       // perdida.
       onAjustes?.({ url });
+      setFotoPorRevisar(null);
       setArchivo(null);
     } catch (e2) {
       setErr(e2.message || 'Error al subir');
     } finally {
       setBusy(false);
-      // Se limpian los dos: si no, elegir el MISMO archivo otra vez no
-      // dispara el evento y parece que la app se quedo colgada.
-      if (inputRef.current) inputRef.current.value = '';
-      if (camaraRef.current) camaraRef.current.value = '';
     }
   }
 
@@ -134,6 +143,15 @@ export default function MediaUpload({
           avance={avance}
           onCancelar={() => { if (!busy) setPorRevisar(null); }}
           onListo={subeElVideo}
+        />
+      )}
+      {fotoPorRevisar && (
+        <EditorFoto
+          archivo={fotoPorRevisar}
+          subiendo={busy}
+          avance={avance}
+          onCancelar={() => { if (!busy) setFotoPorRevisar(null); }}
+          onListo={subeLaFoto}
         />
       )}
       <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>{label}</span>
