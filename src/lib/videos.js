@@ -105,3 +105,6 @@ export function portadaParaAtleta(ejercicio, medias, perfil) {
 
 /** Etiquetas sugeridas al subir un ángulo. Se puede escribir cualquier otra. */
 export const ANGULOS_SUGERIDOS = ['Frontal', 'Lateral', 'Desde atrás', 'Cámara lenta', 'Detalle'];
+
+/** Lo mismo para una foto: qué instante del ejercicio enseña. */
+export const MOMENTOS_SUGERIDOS = ['Posición inicial', 'Posición final', 'Agarre', 'Detalle', 'Error común'];

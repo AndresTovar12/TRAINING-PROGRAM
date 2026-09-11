@@ -17,6 +17,7 @@ import { isLoadedExercise } from '@/lib/training-utils';
 import { T, FONT, KP, CAT_COLORS } from '@/lib/theme';
 import RepertoirePicker from '@/features/admin/RepertoirePicker';
 import MediaUpload from '@/features/admin/MediaUpload';
+import Portada from '@/components/Portada';
 
 /* ------------------------------------------------------------------ */
 /* Constantes y helpers de datos                                       */
@@ -353,13 +354,13 @@ function ExerciseCard({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove
   return (
     <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden', minWidth: 0 }}>
       <div style={{ position: 'relative', height: 110, width: '100%', background: '#0E1015' }}>
-        {rep?.cover_image_url ? (
-          <img src={rep.cover_image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', opacity: 0.95 }} />
-        ) : (
-          <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: '#3A3F4C' }}>
-            <Dumbbell size={26} />
-          </div>
-        )}
+        <Portada
+          foto={rep?.cover_image_url}
+          video={rep?.video_url}
+          style={{ position: 'absolute', inset: 0, color: '#3A3F4C' }}
+        >
+          <Dumbbell size={26} />
+        </Portada>
         <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 6 }}>
           <IconBtn sobreFoto icon={ChevronLeft} onClick={() => onMove(-1)} disabled={!canLeft} title="Mover a la izquierda" />
           <IconBtn sobreFoto icon={ChevronRight} onClick={() => onMove(1)} disabled={!canRight} title="Mover a la derecha" />
@@ -503,11 +504,13 @@ function ExerciseRow({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove,
     <tr>
       <td style={celda}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-          <div style={{ width: 38, height: 38, borderRadius: 9, flexShrink: 0, overflow: 'hidden', background: '#0E1015', display: 'grid', placeItems: 'center' }}>
-            {rep?.cover_image_url
-              ? <img src={rep.cover_image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-              : <Dumbbell size={16} color="#3A3F4C" />}
-          </div>
+          <Portada
+            foto={rep?.cover_image_url}
+            video={rep?.video_url}
+            style={{ width: 38, height: 38, borderRadius: 9, flexShrink: 0, background: '#0E1015' }}
+          >
+            <Dumbbell size={16} color="#3A3F4C" />
+          </Portada>
           {ex.exercise_id ? (
             <span style={{ fontWeight: 700, fontSize: 13.5, color: T.text, minWidth: 0 }}>{ex.name}</span>
           ) : (

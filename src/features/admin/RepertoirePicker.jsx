@@ -3,6 +3,7 @@ import { Search, X, Check, Dumbbell, Trash2 } from 'lucide-react';
 import { useMedia } from '@/lib/useViewport';
 import { T, FONT, KP } from '@/lib/theme';
 import { MUSCLE_GROUPS, exerciseMatchesGroup } from '@/lib/muscles';
+import Portada from '@/components/Portada';
 
 /**
  * Selector del repertorio completo (estilo Avena): filtros por categoría,
@@ -168,11 +169,13 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
                     >
                       {esCompu ? (
                         <>
-                          <span style={{ width: 42, height: 42, borderRadius: 9, flexShrink: 0, overflow: 'hidden', background: '#0E1015', display: 'grid', placeItems: 'center' }}>
-                            {ex.cover_image_url
-                              ? <img src={ex.cover_image_url} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                              : <Dumbbell size={17} color="#3A3F4C" />}
-                          </span>
+                          <Portada
+                            foto={ex.cover_image_url}
+                            video={ex.video_url}
+                            style={{ width: 42, height: 42, borderRadius: 9, flexShrink: 0, background: '#0E1015' }}
+                          >
+                            <Dumbbell size={17} color="#3A3F4C" />
+                          </Portada>
                           <span style={{ flex: 1, minWidth: 0 }}>
                             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                               {ex.category && (
@@ -194,14 +197,13 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
                       ) : (
                         <>
                       <div style={{ position: 'relative', height: 96, width: '100%', alignSelf: 'stretch', background: '#0E1015' }}>
-                        {ex.cover_image_url ? (
-                          <img src={ex.cover_image_url} alt="" loading="lazy"
-                            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', opacity: 0.95 }} />
-                        ) : (
-                          <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: '#3A3F4C' }}>
-                            <Dumbbell size={26} />
-                          </div>
-                        )}
+                        <Portada
+                          foto={ex.cover_image_url}
+                          video={ex.video_url}
+                          style={{ position: 'absolute', inset: 0, color: '#3A3F4C' }}
+                        >
+                          <Dumbbell size={26} />
+                        </Portada>
                         <span
                           style={{
                             position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: 9,
@@ -247,13 +249,13 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
               <div style={{ flex: 1, overflowY: 'auto', padding: '0 10px 90px' }}>
                 {picked.map((p) => (
                   <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 4px' }}>
-                    {p.cover_image_url ? (
-                      <img src={p.cover_image_url} alt="" style={{ width: 34, height: 34, borderRadius: 9, objectFit: 'cover', flexShrink: 0 }} />
-                    ) : (
-                      <span style={{ width: 34, height: 34, borderRadius: 9, background: T.bg3, display: 'grid', placeItems: 'center', color: T.text3, flexShrink: 0 }}>
-                        <Dumbbell size={14} />
-                      </span>
-                    )}
+                    <Portada
+                      foto={p.cover_image_url}
+                      video={p.video_url}
+                      style={{ width: 34, height: 34, borderRadius: 9, flexShrink: 0, background: T.bg3, color: T.text3 }}
+                    >
+                      <Dumbbell size={14} />
+                    </Portada>
                     <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {p.name}
                     </span>

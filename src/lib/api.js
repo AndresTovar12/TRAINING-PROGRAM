@@ -2,6 +2,13 @@ import { supabase } from '@/lib/supabase';
 
 const AVATAR_BUCKET = 'avatars';
 
+/* Un año, y sin volver a preguntar.
+   Todo lo que subimos lleva un nombre único que nunca se reutiliza —cambiar
+   una foto crea otro archivo, no pisa el anterior— así que no existe la
+   versión vieja que se pudiera quedar pegada. */
+const CACHE_ETERNO = 'public, max-age=31536000, immutable';
+const CACHE_ETERNO_SEG = '31536000';
+
 /* ------------------------------- Profile ------------------------------ */
 // Sube la foto de perfil al bucket `avatars` (carpeta por usuario, exigido por
 // RLS: el primer segmento del path debe ser el uid). Devuelve la URL pública.
@@ -11,7 +18,10 @@ export async function uploadAvatar(file, userId) {
   const path = `${userId}/avatar-${id}.${safeExt}`;
   const { error } = await supabase.storage
     .from(AVATAR_BUCKET)
-    .upload(path, file, { cacheControl: '3600', upsert: true, contentType: file.type || undefined });
+    // Una hora era muy poco: la foto de perfil se vuelve a bajar sola cada vez
+    // que alguien abre la app al día siguiente. El nombre lleva un id único,
+    // así que guardarla un año no puede dejar pegada una versión vieja.
+    .upload(path, file, { cacheControl: CACHE_ETERNO_SEG, upsert: true, contentType: file.type || undefined });
   if (error) throw error;
   const { data } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(path);
   return data.publicUrl;
@@ -303,6 +313,22 @@ export async function uploadExerciseMedia(file, kind = 'media', onAvance) {
     const xhr = new XMLHttpRequest();
     xhr.open('PUT', permiso.b.subir_a, true);
     xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+    // Permiso para que el telefono se quede con su copia.
+    //
+    // POR QUE: sin esta etiqueta el navegador no guarda nada, y el atleta se
+    // baja el video ENTERO cada vez que abre el ejercicio. Medido el 10 sep
+    // 2026 sobre el video de Back Squat: 1.4 s por 1.6 MB desde wifi, y otra
+    // vez lo mismo a la siguiente. Con la etiqueta, la segunda vez es
+    // instantanea, que es el caso normal: el mismo atleta ve el mismo
+    // ejercicio semana tras semana.
+    //
+    // `immutable` = "ni siquiera preguntes si cambio". Es seguro porque cada
+    // archivo se guarda con un nombre unico que no se reutiliza jamas: editar
+    // un video crea otro archivo con otro nombre, nunca pisa este.
+    //
+    // Va SIN firmar a proposito. Comprobado contra R2 el 10 sep 2026: la
+    // guarda igual, y al no entrar en la firma no puede romper la subida.
+    xhr.setRequestHeader('Cache-Control', CACHE_ETERNO);
 
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onAvance) onAvance(Math.round((e.loaded / e.total) * 100));

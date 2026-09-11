@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from 'react';
 import { X, ExternalLink, Dumbbell, Timer } from 'lucide-react';
 import { videosParaAtleta, portadaParaAtleta } from '@/lib/videos';
 import { T, FONT, KP } from '@/lib/theme';
+import Portada from '@/components/Portada';
 
 /**
  * Ficha de un ejercicio del repertorio: foto de portada, video (archivo o
@@ -151,17 +152,18 @@ export default function ExerciseMediaModal({ exercise, planEx, medias = [], perf
       >
         {/* Portada */}
         <div style={{ position: 'relative', background: '#0E1015' }}>
-          {portada ? (
-            <img
-              src={portada}
-              alt={exercise.name}
-              style={{ width: '100%', height: 230, objectFit: 'cover', display: 'block' }}
-            />
-          ) : (
-            <div style={{ height: 140, display: 'grid', placeItems: 'center', color: '#3A3F4C' }}>
-              <Dumbbell size={44} />
-            </div>
-          )}
+          {/* Sin foto de portada se usa el primer fotograma del video. */}
+          <Portada
+            foto={portada}
+            video={videos[0]?.url}
+            style={{
+              width: '100%',
+              height: (portada || videos.length) ? 230 : 140,
+              color: '#3A3F4C',
+            }}
+          >
+            <Dumbbell size={44} />
+          </Portada>
           <button
             type="button"
             onClick={onClose}

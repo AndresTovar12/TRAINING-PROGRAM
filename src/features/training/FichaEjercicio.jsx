@@ -5,6 +5,7 @@ import { videosParaAtleta, portadaParaAtleta } from '@/lib/videos';
 import { VideoRecortado } from '@/features/training/ExerciseMediaModal';
 import { aKilos, desdeKilos, pesoTexto, etiquetaUnidad } from '@/lib/unidades';
 import { isLoadedExercise, formatIntensity, findPreviousWeight } from '@/lib/training-utils';
+import Portada from '@/components/Portada';
 
 /**
  * La pantalla de UN ejercicio, mientras se entrena.
@@ -128,14 +129,16 @@ export default function FichaEjercicio({
           />
         ) : (
           <>
-            {portada ? (
-              <img src={portada} alt=""
-                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-            ) : (
-              <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center' }}>
-                <Dumbbell size={54} color="#2A3040" />
-              </div>
-            )}
+            {/* Sin foto de portada se usa el primer fotograma del video. Además
+                de tapar el hueco negro, es una vista previa honesta: es
+                literalmente lo que va a salir al darle al play. */}
+            <Portada
+              foto={portada}
+              video={video?.url}
+              style={{ width: '100%', height: '100%' }}
+            >
+              <Dumbbell size={54} color="#2A3040" />
+            </Portada>
 
             {/* Play grande y centrado, como el de Avena. Solo si hay video. */}
             {video && (

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Plus, Search, X, Trash2, Loader2, Image as ImageIcon, Video, Dumbbell,
+  Plus, Search, X, Trash2, Loader2, Video, Dumbbell,
   Copy, RotateCcw, Pencil, ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -10,10 +10,10 @@ import {
   getMasterId, tagRepertoire, duplicateExercise,
   listExerciseOverrides, saveExerciseOverride, deleteExerciseOverride, aplicarOverrides,
 } from '@/lib/api';
-import MediaUpload from '@/features/admin/MediaUpload';
-import VideosDelEjercicio from '@/features/admin/VideosDelEjercicio';
+import MediaDelEjercicio from '@/features/admin/MediaDelEjercicio';
 import { MUSCLE_GROUPS, FINE_MUSCLES, exerciseMatchesGroup } from '@/lib/muscles';
 import { T, FONT, KP } from '@/lib/theme';
+import Portada from '@/components/Portada';
 
 const CAT_FALLBACK = {
   hipertrofia: '#1E40E0', atletico: '#00A372', potencia: '#FF7A52', pliometria: '#A480FF',
@@ -60,11 +60,20 @@ function ExerciseCard({ ex, onClick, base }) {
       <div
         style={{
           height: 116, width: '100%', alignSelf: 'stretch',
-          background: ex.cover_image_url ? `center/cover no-repeat url(${ex.cover_image_url})` : `${color}12`,
+          background: `${color}12`,
           display: 'grid', placeItems: 'center', position: 'relative',
         }}
       >
-        {!ex.cover_image_url && <Dumbbell size={30} color={`${color}88`} />}
+        {/* Sin foto de portada se usa el primer fotograma de su video, si tiene.
+            Antes los ochenta y un ejercicios sin foto se veían idénticos entre
+            sí: el mismo cuadro gris con la misma mancuerna. */}
+        <Portada
+          foto={ex.cover_image_url}
+          video={ex.video_url}
+          style={{ position: 'absolute', inset: 0 }}
+        >
+          <Dumbbell size={30} color={`${color}88`} />
+        </Portada>
         {/* Ya no dice "cerrado con llave": el coach SÍ puede editarlo. Lo que
             importa ahora es distinguir el que él ya hizo suyo del que sigue
             como vino de fábrica. */}
@@ -203,7 +212,6 @@ function MuscleSelect({ value, onChange, options }) {
 function ExerciseRow({ ex, base, onAbrir, onMedia }) {
   const color = catColor(ex.category);
   const tieneVideo = !!(ex.video_url || ex.video_link);
-  const tieneFoto = !!ex.cover_image_url;
 
   return (
     <div style={{
@@ -220,15 +228,16 @@ function ExerciseRow({ ex, base, onAbrir, onMedia }) {
           fontFamily: FONT, textAlign: 'left', minHeight: 44,
         }}
       >
-        <span style={{
-          width: 44, height: 44, borderRadius: 10, flexShrink: 0,
-          display: 'grid', placeItems: 'center',
-          background: tieneFoto
-            ? `center/cover no-repeat url(${ex.cover_image_url})`
-            : `${color}14`,
-        }}>
-          {!tieneFoto && <Dumbbell size={19} color={`${color}AA`} />}
-        </span>
+        <Portada
+          foto={ex.cover_image_url}
+          video={ex.video_url}
+          style={{
+            width: 44, height: 44, borderRadius: 10, flexShrink: 0,
+            background: `${color}14`,
+          }}
+        >
+          <Dumbbell size={19} color={`${color}AA`} />
+        </Portada>
 
         <span style={{ minWidth: 0, flex: 1 }}>
           <span style={{
@@ -549,26 +558,17 @@ function ExerciseEditor({
 
           {!soloMedia && <div style={{ height: 1, background: T.border }} />}
 
-          <MediaUpload
-            label="Foto de portada"
-            icon={ImageIcon}
-            value={form.cover_image_url}
-            onChange={(v) => set('cover_image_url', v)}
-            accept="image/*"
-            kind="covers"
-            hint="JPG o PNG. Se muestra como portada del ejercicio."
-          />
-
-          <div style={{ height: 1, background: T.border }} />
-
-          {/* El video principal ya NO tiene su propio bloque aquí arriba: vive
-              dentro de la lista de videos, encabezándola. Andrés dijo que lo
-              que no le cuadraba era "que esté separada del video principal", y
-              para quien usa la app son todos videos del mismo ejercicio. Que
-              uno viva en una columna y los otros en otra tabla es un detalle de
-              cómo está guardado, no algo que le importe a nadie. */}
-          <VideosDelEjercicio
+          {/* Ni la foto de portada ni el video principal tienen ya su propio
+              bloque aquí arriba: los dos viven dentro de la lista, encabezándola.
+              Andrés dijo del video que lo que no le cuadraba era "que esté
+              separada del video principal", y vale igual para la foto: para
+              quien usa la app son todos archivos del mismo ejercicio. Que unos
+              vivan en una columna y otros en otra tabla es un detalle de cómo
+              está guardado, no algo que le importe a nadie. */}
+          <MediaDelEjercicio
             exerciseId={exercise?.id}
+            portada={form.cover_image_url}
+            onPortada={(v) => set('cover_image_url', v)}
             principal={form.video_url}
             recortePrincipal={{
               recorte_inicio: form.recorte_inicio,

@@ -24,6 +24,7 @@ import { aKilos, desdeKilos, pesoTexto, etiquetaUnidad } from '@/lib/unidades';
 import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
 import { useStorage } from '@/contexts/AppStateContext';
 import FichaEjercicio from '@/features/training/FichaEjercicio';
+import Portada from '@/components/Portada';
 
 // Nombres completos SOLO para mostrar en compu. Lo que guarda el plan sigue
 // siendo 'Lun', 'Mar'… igual que en el editor del entrenador.
@@ -454,12 +455,17 @@ const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, sessionsData, phaseC
           <span style={{
             width: 52, height: 52, borderRadius: 11, flexShrink: 0, position: 'relative',
             overflow: 'hidden', display: 'grid', placeItems: 'center',
-            background: portada ? '#0E1015' : pc + '14',
+            background: (portada || misVideos.length) ? '#0E1015' : pc + '14',
           }}>
-            {portada ? (
+            {(portada || misVideos.length > 0) ? (
               <>
-                <img src={portada} alt=""
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                {/* Sin foto de portada vale el primer fotograma de su video: el
+                    recuadro deja de estar vacío y enseña el ejercicio de verdad. */}
+                <Portada
+                  foto={portada}
+                  video={misVideos[0]?.url}
+                  style={{ position: 'absolute', inset: 0 }}
+                />
                 {misVideos.length > 0 && (
                   <span style={{
                     position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
