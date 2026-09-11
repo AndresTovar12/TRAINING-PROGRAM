@@ -32,7 +32,17 @@ export default function MediaUpload({
   // En computadora no se muestra: `capture` no hace nada y un boton "Grabar"
   // que no graba es peor que no tenerlo.
   const enTelefono = useCoarsePointer();
-  const esVideo = (accept || '').startsWith('video');
+  /* Este botón puede aceptar foto, video, o las dos cosas.
+     "Las dos" es lo que usa la pantalla del ejercicio, y no es un capricho:
+     antes cada grupo (Todos / Hombres / Mujeres) desplegaba cuatro botones
+     —tomar foto, del carrete, grabar, del carrete— o sea los mismos cuatro
+     repetidos tres veces. Andrés: "el video y la portada se repite en los tres
+     botones, eso no me gusta". Aceptando las dos cosas quedan dos botones, y
+     de qué tipo es el archivo lo dice el archivo, no un botón. */
+  const aceptaVideo = (accept || '').includes('video');
+  const aceptaFoto = (accept || '').includes('image');
+  const mixto = aceptaVideo && aceptaFoto;
+  const esVideo = aceptaVideo && !aceptaFoto;
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [avance, setAvance] = useState(0);
@@ -61,7 +71,7 @@ export default function MediaUpload({
        el recorte mirando el video entero, y si te arrepientes no gastaste la
        subida. Las miniaturas salen al instante porque el archivo está aquí, no
        en Cloudflare. */
-    if ((accept || '').startsWith('video')) {
+    if ((elegido.type || '').startsWith('video')) {
       setPorRevisar(elegido);
       if (inputRef.current) inputRef.current.value = '';
       if (camaraRef.current) camaraRef.current.value = '';
@@ -94,12 +104,12 @@ export default function MediaUpload({
       if (file.size < fotoPorRevisar.size) setAhorro({ antes: fotoPorRevisar.size, despues: file.size });
       setArchivo({ nombre: file.name, mb: Math.round((file.size / 1048576) * 10) / 10 });
 
-      const url = await uploadExerciseMedia(file, kind, setAvance);
+      const url = await uploadExerciseMedia(file, mixto ? 'covers' : kind, setAvance);
       onChange(url);
       // Quien lleva una lista necesita la url en el momento, no esperar a que
       // el estado se actualice para leerla por separado: eso es una carrera
       // perdida.
-      onAjustes?.({ url });
+      onAjustes?.({ url, tipo: 'foto' });
       setFotoPorRevisar(null);
       setArchivo(null);
     } catch (e2) {
@@ -118,12 +128,12 @@ export default function MediaUpload({
     setAvance(0);
     setArchivo({ nombre: porRevisar.name, mb: Math.round((porRevisar.size / 1048576) * 10) / 10 });
     try {
-      const url = await uploadExerciseMedia(porRevisar, kind, setAvance);
+      const url = await uploadExerciseMedia(porRevisar, mixto ? 'videos' : kind, setAvance);
       onChange(url);
       // La url va junto a los ajustes: quien guarda una fila entera los
       // necesita a la vez, y esperar a que el estado se actualice para
       // leerla por separado es una carrera perdida.
-      onAjustes?.({ ...ajustes, url });
+      onAjustes?.({ ...ajustes, url, tipo: 'video' });
       setPorRevisar(null);
       setArchivo(null);
     } catch (e2) {
@@ -172,7 +182,7 @@ export default function MediaUpload({
             >
               {busy ? <Loader2 size={15} className="spin" />
                 : esVideo ? <Video size={16} /> : <Camera size={16} />}
-              {busy ? 'Subiendo…' : esVideo ? 'Grabar ahora' : 'Tomar foto'}
+              {busy ? 'Subiendo…' : mixto ? 'Cámara' : esVideo ? 'Grabar ahora' : 'Tomar foto'}
             </button>
             <button
               type="button"
@@ -185,7 +195,7 @@ export default function MediaUpload({
                 fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: T.text2, whiteSpace: 'nowrap',
               }}
             >
-              <Images size={15} /> {esVideo ? 'Del carrete' : 'De mis fotos'}
+              <Images size={15} /> {mixto ? 'Del carrete' : esVideo ? 'Del carrete' : 'De mis fotos'}
             </button>
           </>
         ) : (

@@ -39,21 +39,26 @@
  */
 import { useEffect, useState } from 'react';
 import {
-  Video, Image as ImageIcon, Trash2, Loader2, Scissors, Plus, X,
+  Trash2, Loader2, Scissors, Plus, X, Users, Mars, Venus,
 } from 'lucide-react';
 import {
   listExerciseMedia, addExerciseMedia, deleteExerciseMedia, updateExerciseMedia,
-  updateExercise, getMasterId,
+  updateExercise, getMasterId, uploadExerciseMedia,
 } from '@/lib/api';
 import EditorVideo from '@/features/admin/EditorVideo';
+import EditorFoto from '@/features/admin/EditorFoto';
+import { recortaImagen } from '@/features/admin/recorte';
 import { useAuth } from '@/contexts/AuthContext';
 import MediaUpload from '@/features/admin/MediaUpload';
 import { T, FONT } from '@/lib/theme';
 
 const GRUPOS = [
-  { g: '', et: 'Para todos', pista: 'Lo ve quien no tenga una versión propia' },
-  { g: 'h', et: 'Hombres', pista: null },
-  { g: 'm', et: 'Mujeres', pista: null },
+  { g: '', et: 'Para todos', corto: 'Todos', Icono: Users,
+    pista: 'Lo verá quien no tenga una versión propia' },
+  { g: 'h', et: 'Hombres', corto: 'Hombres', Icono: Mars,
+    pista: 'Solo lo verán los hombres' },
+  { g: 'm', et: 'Mujeres', corto: 'Mujeres', Icono: Venus,
+    pista: 'Solo lo verán las mujeres' },
 ];
 
 /** Resume en una línea qué se le hizo al video, o nada si está tal cual. */
@@ -101,6 +106,8 @@ export default function MediaDelEjercicio({
   const [recortando, setRecortando] = useState(null); // video abierto en el editor
   const [agregandoEn, setAgregandoEn] = useState(null); // grupo con los botones desplegados
   const [moviendo, setMoviendo] = useState(null);       // archivo al que se le cambia de grupo
+  const [recortandoFoto, setRecortandoFoto] = useState(null); // foto abierta en el editor
+  const [ocupado, setOcupado] = useState(false);
   const [lista, setLista] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [err, setErr] = useState('');
@@ -127,7 +134,7 @@ export default function MediaDelEjercicio({
      Las columnas de siempre se usan solo para "Para todos" y solo si están
      libres: media app las lee directo y dejarlas vacías rompería la portada en
      el buscador de repertorio y en las tarjetas del plan. */
-  async function agregar(grupo, tipo, { url: subida, inicio, fin, sinAudio, encuadre }) {
+  async function agregar(grupo, { url: subida, tipo, inicio, fin, sinAudio, encuadre }) {
     if (!subida) { setErr('No se pudo subir el archivo.'); return; }
     setErr('');
     setAgregandoEn(null);
@@ -189,6 +196,28 @@ export default function MediaDelEjercicio({
     await cambiar(item.id, { genero: destino || null });
   }
 
+  /* Vuelve a recortar una foto que ya está subida.
+     No se puede "deshacer" el recorte anterior —esos píxeles ya no existen— así
+     que lo que se corta aquí se corta sobre lo que hay. Se sube como archivo
+     nuevo y se cambia la dirección: el viejo se queda en el bucket, que es lo
+     mismo que pasa al reemplazar una portada. */
+  async function recortarFoto(item, { encuadre, archivo }) {
+    setRecortandoFoto(null);
+    if (!encuadre || !archivo) return;
+    setOcupado(true);
+    setErr('');
+    try {
+      const file = await recortaImagen(archivo, encuadre);
+      const nueva = await uploadExerciseMedia(file, 'covers');
+      if (item.columna) onPortada?.(nueva);
+      else await cambiar(item.id, { url: nueva });
+    } catch (e) {
+      setErr(e.message || 'No se pudo recortar la foto.');
+    } finally {
+      setOcupado(false);
+    }
+  }
+
   async function quitar(item) {
     if (item.columna) {
       if (item.tipo === 'foto') onPortada?.(''); else onPrincipal?.('');
@@ -233,76 +262,78 @@ export default function MediaDelEjercicio({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Fotos y videos</div>
 
-      {/* LOS TRES BOTONES VAN ARRIBA, y no hay secciones.
-          Probé partir la pantalla en tres bloques —Para todos, Hombres,
-          Mujeres— con sus archivos dentro. Andrés: "no me gusta que lo
-          dividiste como en tres secciones horizontales", y al preguntarle qué
-          fallaba eligió "no quiero ver los grupos".
-
-          Tiene razón y el motivo es medible: de las tres secciones, dos decían
-          "Nada todavía" la mayor parte del tiempo. Ocupaban un tercio de la
-          pantalla cada una para no enseñar nada, y repetían tres veces el mismo
-          borde y el mismo botón.
-
-          Lo que sí había que conservar era que NADIE PREGUNTE NADA al subir.
-          Se conserva: el botón que tocas sigue siendo la respuesta. Solo que
-          los tres caben en una fila en vez de en tres cajas. */}
-      <div style={{ display: 'flex', gap: 7 }}>
-        {GRUPOS.map(({ g, et }) => {
+      {/* TRES CARDS ARRIBA, y cada una abre UN SOLO par de botones.
+          Antes cada grupo desplegaba cuatro —tomar foto, de mis fotos, grabar,
+          del carrete—, o sea los mismos cuatro repetidos tres veces. Andrés:
+          "el video y la portada se repite en los tres botones, eso no me
+          gusta". Tenía razón: el tipo de archivo no es una decisión que haya
+          que tomar tres veces, y de hecho no hay que tomarla nunca — lo dice el
+          propio archivo cuando lo eliges. Quedan dos botones: cámara o carrete,
+          y cada uno acepta foto o video indistintamente. */}
+      <div style={{ display: 'flex', gap: 8 }}>
+        {GRUPOS.map(({ g, corto, Icono }) => {
           const activo = agregandoEn === g;
+          const cuantos = todos.filter((m) => (m.genero || '') === g).length;
           return (
             <button
               key={g || 'todos'} type="button"
               onClick={() => setAgregandoEn(activo ? null : g)}
               aria-expanded={activo}
+              aria-label={`Agregar para ${corto.toLowerCase()}`}
               style={{
-                flex: 1, minHeight: 40, borderRadius: 10, cursor: 'pointer', padding: '0 6px',
-                border: activo ? 'none' : `1.5px dashed ${T.borderHi}`,
-                background: activo ? T.accent : 'transparent',
-                color: activo ? '#fff' : T.text2,
-                fontFamily: FONT, fontSize: 12.5, fontWeight: 700,
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                flex: 1, borderRadius: 14, cursor: 'pointer', padding: '12px 6px 11px',
+                border: `1.5px solid ${activo ? T.accent : T.border}`,
+                background: activo ? T.accentBg : T.bg2,
+                fontFamily: FONT, display: 'flex', flexDirection: 'column',
+                alignItems: 'center', gap: 7, position: 'relative',
               }}
             >
-              <Plus size={13} /> {et === 'Para todos' ? 'Todos' : et}
+              <span style={{
+                width: 34, height: 34, borderRadius: '50%', display: 'grid', placeItems: 'center',
+                background: activo ? T.accent : T.bg3,
+                color: activo ? '#fff' : T.text2,
+              }}>
+                <Icono size={18} />
+              </span>
+              <span style={{
+                fontSize: 12, fontWeight: 800, color: activo ? T.accent : T.text,
+              }}>
+                {corto}
+              </span>
+              {/* Cuántos tiene ya. Un número suelto ocupa casi nada y contesta
+                  de un vistazo qué le falta al ejercicio, que es lo que se
+                  perdió al quitar las secciones. */}
+              <span style={{
+                fontSize: 11, fontWeight: 700,
+                color: cuantos ? T.text3 : 'transparent',
+              }}>
+                {cuantos || '0'}
+              </span>
+              <span style={{
+                position: 'absolute', top: 7, right: 7,
+                color: activo ? T.accent : T.text3, display: 'grid',
+              }}>
+                {activo ? <X size={14} /> : <Plus size={14} />}
+              </span>
             </button>
           );
         })}
       </div>
 
-      {/* Las cuatro formas de subir se despliegan bajo el botón elegido. Salen
-          solo cuando hacen falta: enseñarlas por los tres grupos a la vez
-          serían doce botones en pantalla. */}
       {agregandoEn != null && (
         <div style={{
           display: 'flex', flexDirection: 'column', gap: 8,
           border: `1px solid ${T.border}`, borderRadius: 12, padding: 10,
         }}>
           <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 700 }}>
-            {agregandoEn === '' ? 'Lo verá quien no tenga una versión propia'
-              : `Solo lo verán ${agregandoEn === 'h' ? 'los hombres' : 'las mujeres'}`}
+            {GRUPOS.find((x) => x.g === agregandoEn)?.pista}
           </div>
           <MediaUpload
-            label="" icon={ImageIcon} value="" onChange={() => {}}
-            onAjustes={(a) => agregar(agregandoEn, 'foto', a)}
-            accept="image/*" kind="covers"
+            label="" value="" onChange={() => {}}
+            onAjustes={(a) => agregar(agregandoEn, a)}
+            accept="image/*,video/*" kind="covers"
+            hint="Foto o video, lo que elijas."
           />
-          <MediaUpload
-            label="" icon={Video} value="" onChange={() => {}}
-            onAjustes={(a) => agregar(agregandoEn, 'video', a)}
-            accept="video/*" kind="videos"
-          />
-          <button
-            type="button" onClick={() => setAgregandoEn(null)}
-            style={{
-              alignSelf: 'flex-start', minHeight: 32, padding: '0 10px', borderRadius: 9,
-              border: 'none', background: 'transparent', color: T.text3, cursor: 'pointer',
-              fontFamily: FONT, fontSize: 12.5, fontWeight: 700,
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-            }}
-          >
-            <X size={13} /> Cancelar
-          </button>
         </div>
       )}
 
@@ -353,15 +384,19 @@ export default function MediaDelEjercicio({
                   {et}
                 </button>
               </div>
-              {esVideo && (
-                <button
-                  type="button" title="Recortar, encuadrar o silenciar"
-                  onClick={() => setRecortando(m)}
-                  style={{ ...icono, color: T.text2 }}
-                >
-                  <Scissors size={15} />
-                </button>
-              )}
+              {/* La tijera va en los dos, no solo en el video. Andrés: "aún no
+                  das opción de poder editar la foto de portada como para
+                  recortarla y así". Se podía al subirla y ya no después, que es
+                  justo cuando te das cuenta de que quedó torcida. */}
+              <button
+                type="button"
+                title={esVideo ? 'Recortar, encuadrar o silenciar' : 'Recortar'}
+                onClick={() => (esVideo ? setRecortando(m) : setRecortandoFoto(m))}
+                disabled={ocupado}
+                style={{ ...icono, color: T.text2 }}
+              >
+                <Scissors size={15} />
+              </button>
               <button type="button" onClick={() => quitar(m)} title="Quitar"
                 style={{ ...icono, color: T.danger }}>
                 <Trash2 size={15} />
@@ -393,6 +428,15 @@ export default function MediaDelEjercicio({
           </div>
         );
       })}
+
+      {recortandoFoto && (
+        <EditorFoto
+          url={recortandoFoto.url}
+          subiendo={ocupado}
+          onCancelar={() => setRecortandoFoto(null)}
+          onListo={(r) => recortarFoto(recortandoFoto, r)}
+        />
+      )}
 
       {recortando && (
         <EditorVideo

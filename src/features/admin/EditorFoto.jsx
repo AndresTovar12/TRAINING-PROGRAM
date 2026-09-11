@@ -18,14 +18,30 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Check, Loader2 } from 'lucide-react';
 import { FONT } from '@/lib/theme';
-import { useRecorte, CapaRecorte, BotonesFormato } from '@/features/admin/recorte';
+import { useRecorte, CapaRecorte, BotonesFormato, archivoDesdeUrl } from '@/features/admin/recorte';
 
-export default function EditorFoto({ archivo, onCancelar, onListo, subiendo, avance }) {
+export default function EditorFoto({ archivo, url, onCancelar, onListo, subiendo, avance }) {
   const marcoRef = useRef(null);
   const [medidas, setMedidas] = useState(null); // tamaño real, en píxeles
   const { crop, setCrop, setAgarrado, rectanguloDe, recorteReal } = useRecorte({ marcoRef, medidas });
 
-  /* La dirección temporal del archivo del teléfono.
+  /* UNA SOLA FUENTE: siempre se trabaja sobre un archivo.
+     Si llega una foto ya subida, primero se la baja. Así lo que se enseña y lo
+     que se recorta es una dirección temporal del propio navegador, sin
+     restricciones de dominio ni lienzos "sucios" que no se puedan exportar. */
+  const [archivoReal, setArchivoReal] = useState(archivo ?? null);
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    if (archivo) { setArchivoReal(archivo); return undefined; }
+    if (!url) return undefined;
+    let vivo = true;
+    archivoDesdeUrl(url)
+      .then((f) => { if (vivo) setArchivoReal(f); })
+      .catch((e) => { if (vivo) setErr(e.message || 'No se pudo leer la foto.'); });
+    return () => { vivo = false; };
+  }, [archivo, url]);
+
+  /* La dirección temporal del archivo.
      SE CREA Y SE LIBERA DENTRO DEL MISMO EFECTO, a propósito. Tenerla en un
      useMemo y liberarla en un efecto aparte parece equivalente y no lo es:
      React monta, desmonta y vuelve a montar cada pantalla para cazar errores,
@@ -34,13 +50,11 @@ export default function EditorFoto({ archivo, onCancelar, onListo, subiendo, ava
      agarrar. Medido, no deducido: `naturalWidth` valía 0. */
   const [local, setLocal] = useState(null);
   useEffect(() => {
-    if (!archivo) { setLocal(null); return undefined; }
-    const u = URL.createObjectURL(archivo);
+    if (!archivoReal) { setLocal(null); return undefined; }
+    const u = URL.createObjectURL(archivoReal);
     setLocal(u);
     return () => URL.revokeObjectURL(u);
-  }, [archivo]);
-
-  if (!local) return null;
+  }, [archivoReal]);
 
   return createPortal((
     <div style={{
@@ -70,7 +84,7 @@ export default function EditorFoto({ archivo, onCancelar, onListo, subiendo, ava
         <button
           type="button"
           disabled={subiendo || !medidas}
-          onClick={() => onListo({ encuadre: recorteReal })}
+          onClick={() => onListo({ encuadre: recorteReal, archivo: archivoReal })}
           aria-label="Usar esta foto"
           style={{
             minHeight: 42, padding: '0 18px', borderRadius: 999, border: 'none', flexShrink: 0,
@@ -98,6 +112,11 @@ export default function EditorFoto({ archivo, onCancelar, onListo, subiendo, ava
             coordenadas y las de la foto son las mismas. Sin esto, una foto
             vertical dentro de una caja ancha calcularía el recorte sobre los
             márgenes vacíos. */}
+        {!local ? (
+          <div style={{ color: 'rgba(255,255,255,.7)', fontSize: 13.5, fontWeight: 600, textAlign: 'center', padding: 20 }}>
+            {err || 'Abriendo la foto…'}
+          </div>
+        ) : (
         <div
           ref={marcoRef}
           style={{
@@ -122,6 +141,7 @@ export default function EditorFoto({ archivo, onCancelar, onListo, subiendo, ava
           />
           <CapaRecorte crop={crop} onAgarrar={setAgarrado} />
         </div>
+        )}
       </div>
 
       {/* ---------- Proporciones ---------- */}

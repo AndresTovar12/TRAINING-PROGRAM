@@ -206,12 +206,41 @@ export function BotonesFormato({ crop, medidas, rectanguloDe, onElegir }) {
 }
 
 /**
+ * Trae una foto YA SUBIDA como si acabaras de elegirla del teléfono.
+ *
+ * EL `cache: 'reload'` NO ES UNA PRECAUCIÓN, ES EL ARREGLO. Sin él esto falla
+ * siempre, y de una forma que despista mucho:
+ *
+ * La lista del repertorio enseña las portadas con un `<img>` normal, sin pedir
+ * permiso de otro dominio. El navegador se guarda esa respuesta —vive un año,
+ * se lo decimos nosotros— y esa copia guardada NO trae las cabeceras de
+ * permiso. Cuando después se pide la MISMA dirección con permiso, el navegador
+ * reusa la copia vieja, no encuentra las cabeceras y la rechaza.
+ *
+ * Comprobado en el navegador, con la foto ya vista en la lista:
+ *   · `<img crossOrigin="anonymous">`      -> falla
+ *   · `fetch(url, { mode: 'cors' })`        -> falla
+ *   · `fetch(url, { mode: 'cors', cache: 'reload' })` -> 4420 bytes, bien
+ *
+ * Con el archivo en la mano se acabó el problema de raíz: lo que se enseña y
+ * lo que se recorta es una dirección temporal del propio navegador, que no
+ * tiene restricciones de dominio.
+ */
+export async function archivoDesdeUrl(url) {
+  const r = await fetch(url, { mode: 'cors', cache: 'reload' });
+  if (!r.ok) throw new Error('No se pudo leer la foto.');
+  const blob = await r.blob();
+  const ext = (blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+  return new File([blob], `portada.${ext}`, { type: blob.type || 'image/jpeg' });
+}
+
+/**
  * Corta la foto de verdad y devuelve un archivo nuevo.
  *
  * Aquí sí se tocan los píxeles, al revés que en el video: una foto recortada
- * pesa menos, se ve igual, y evita tener que rehacer la cuenta cada vez que se
- * enseña. Se usa JPEG a 0.9 porque estas son fotos de gimnasio, no capturas de
- * texto: a ese nivel no se distingue del original y pesa un tercio.
+ * pesa menos, se ve igual, y evita rehacer la cuenta cada vez que se enseña. Se
+ * usa JPEG a 0.9 porque estas son fotos de gimnasio, no capturas de texto: a
+ * ese nivel no se distingue del original y pesa un tercio.
  */
 export function recortaImagen(archivo, crop) {
   return new Promise((listo, falla) => {
@@ -233,7 +262,7 @@ export function recortaImagen(archivo, crop) {
       );
       lienzo.toBlob((blob) => {
         if (!blob) { falla(new Error('No se pudo recortar la foto.')); return; }
-        const nombre = (archivo.name || 'foto').replace(/\.[^.]+$/, '') + '.jpg';
+        const nombre = `${(archivo.name || 'foto').replace(/\.[^.]+$/, '')}.jpg`;
         listo(new File([blob], nombre, { type: 'image/jpeg' }));
       }, 'image/jpeg', 0.9);
     };
