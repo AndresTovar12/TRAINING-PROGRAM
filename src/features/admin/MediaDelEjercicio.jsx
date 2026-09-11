@@ -1,25 +1,32 @@
 /**
- * Las fotos y videos de un ejercicio, partidos por a quién van dirigidos.
+ * Las fotos y videos de un ejercicio: una sola lista, y arriba tres botones
+ * para elegir a quién va lo que subas.
  *
- * POR QUÉ TRES GRUPOS, y no una lista con etiquetas. Se lo pregunté a Andrés y
- * contestó tres cosas que juntas obligan a este diseño:
+ * DE DÓNDE SALE ESTE DISEÑO. Se lo pregunté a Andrés y contestó cuatro cosas:
  *
- *   1. "Son versiones sueltas, sin jerarquía". No hay un video principal y
- *      unos extras colgando: los tres grupos valen igual.
- *   2. "Casi siempre que pueda" va a querer las dos versiones. O sea que la
- *      respuesta NO es "para todos" la mayoría de las veces.
- *   3. Quiere poder subir SOLO la de mujer, sin obligarse a subir antes una
- *      general.
+ *   1. "Son versiones sueltas, sin jerarquía". No hay un video principal con
+ *      extras colgando.
+ *   2. "Casi siempre que pueda" va a querer las dos versiones.
+ *   3. El atleta ve solo la suya, automático.
+ *   4. La regla de que el primer archivo fuera siempre "para todos": "sí me
+ *      estorba, quítala". Quiere poder subir SOLO la de mujer.
  *
- * El punto 2 es el que tumba lo que tenía antes. Yo había sacado la pregunta
- * "¿para quién es?" del momento de subir con el argumento de que casi siempre
- * se contesta "para todos" y por tanto estorbaba. Ese argumento era falso: él
- * quiere las dos versiones casi siempre.
+ * El punto 2 tumbó lo que tenía antes. Yo había sacado la pregunta "¿para quién
+ * es?" del momento de subir con el argumento de que casi siempre se contesta
+ * "para todos" y por tanto estorbaba. Ese argumento me lo inventé: él quiere
+ * las dos versiones casi siempre.
  *
- * Pero la conclusión no es devolver la pregunta. Es que no haga falta
- * preguntar: **el botón que tocas ES la respuesta**. Tocas "Agregar" dentro de
- * Mujeres y lo que subas queda dirigido a mujeres. Cero preguntas, y de un
- * vistazo ves qué le falta al ejercicio — que con una lista plana no se ve.
+ * Pero la salida no es devolver la pregunta, es que no haga falta: **el botón
+ * que tocas ES la respuesta**. Tocas "Mujeres" y lo que subas queda dirigido a
+ * mujeres, sin que nadie te pregunte nada.
+ *
+ * POR QUÉ UNA FILA DE BOTONES Y NO TRES SECCIONES. Primero partí la pantalla en
+ * tres bloques, cada uno con sus archivos dentro. Andrés: "no me gusta que lo
+ * dividiste como en tres secciones horizontales", y al preguntarle qué fallaba
+ * eligió "no quiero ver los grupos". Dos de los tres bloques decían "Nada
+ * todavía" casi siempre: ocupaban un tercio de la pantalla para no enseñar
+ * nada, y repetían tres veces el mismo borde y el mismo botón. Los tres caben
+ * en una fila.
  *
  * DÓNDE SE GUARDA CADA COSA. "Para todos" usa las columnas de siempre
  * (`cover_image_url`, `video_url`) mientras estén libres, porque media app las
@@ -32,7 +39,7 @@
  */
 import { useEffect, useState } from 'react';
 import {
-  Video, Image as ImageIcon, Trash2, Loader2, Scissors, Plus, X, ArrowRightLeft,
+  Video, Image as ImageIcon, Trash2, Loader2, Scissors, Plus, X,
 } from 'lucide-react';
 import {
   listExerciseMedia, addExerciseMedia, deleteExerciseMedia, updateExerciseMedia,
@@ -204,8 +211,9 @@ export default function MediaDelEjercicio({
     );
   }
 
-  /* Todo junto y ordenado por grupo. Los que viven en una columna del ejercicio
-     entran como uno más, marcados para saber cómo borrarlos y moverlos. */
+  /* Todo en UNA lista, ordenada por grupo pero sin partir la pantalla.
+     Los archivos que viven en una columna del ejercicio entran como uno más,
+     marcados para saber cómo borrarlos y moverlos. */
   const deColumna = [
     portada && {
       id: 'col-foto', columna: true, tipo: 'foto', url: portada, genero: null,
@@ -215,148 +223,172 @@ export default function MediaDelEjercicio({
       ...(recortePrincipal ?? {}),
     },
   ].filter(Boolean);
-  const todos = [...deColumna, ...lista];
-  const delGrupo = (g) => todos.filter((m) => (m.genero || '') === g);
+  const orden = { '': 0, h: 1, m: 2 };
+  const todos = [...deColumna, ...lista]
+    .sort((a, b) => orden[a.genero || ''] - orden[b.genero || '']);
 
   const icono = { border: 'none', background: 'transparent', cursor: 'pointer', padding: 6, flexShrink: 0 };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div>
-        <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Fotos y videos</div>
-        <div style={{ fontSize: 11.5, color: T.text3, marginTop: 3, fontWeight: 600, lineHeight: 1.45 }}>
-          Lo que agregues dentro de un grupo queda dirigido a ese grupo. No hace falta elegir nada más.
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Fotos y videos</div>
+
+      {/* LOS TRES BOTONES VAN ARRIBA, y no hay secciones.
+          Probé partir la pantalla en tres bloques —Para todos, Hombres,
+          Mujeres— con sus archivos dentro. Andrés: "no me gusta que lo
+          dividiste como en tres secciones horizontales", y al preguntarle qué
+          fallaba eligió "no quiero ver los grupos".
+
+          Tiene razón y el motivo es medible: de las tres secciones, dos decían
+          "Nada todavía" la mayor parte del tiempo. Ocupaban un tercio de la
+          pantalla cada una para no enseñar nada, y repetían tres veces el mismo
+          borde y el mismo botón.
+
+          Lo que sí había que conservar era que NADIE PREGUNTE NADA al subir.
+          Se conserva: el botón que tocas sigue siendo la respuesta. Solo que
+          los tres caben en una fila en vez de en tres cajas. */}
+      <div style={{ display: 'flex', gap: 7 }}>
+        {GRUPOS.map(({ g, et }) => {
+          const activo = agregandoEn === g;
+          return (
+            <button
+              key={g || 'todos'} type="button"
+              onClick={() => setAgregandoEn(activo ? null : g)}
+              aria-expanded={activo}
+              style={{
+                flex: 1, minHeight: 40, borderRadius: 10, cursor: 'pointer', padding: '0 6px',
+                border: activo ? 'none' : `1.5px dashed ${T.borderHi}`,
+                background: activo ? T.accent : 'transparent',
+                color: activo ? '#fff' : T.text2,
+                fontFamily: FONT, fontSize: 12.5, fontWeight: 700,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+              }}
+            >
+              <Plus size={13} /> {et === 'Para todos' ? 'Todos' : et}
+            </button>
+          );
+        })}
       </div>
+
+      {/* Las cuatro formas de subir se despliegan bajo el botón elegido. Salen
+          solo cuando hacen falta: enseñarlas por los tres grupos a la vez
+          serían doce botones en pantalla. */}
+      {agregandoEn != null && (
+        <div style={{
+          display: 'flex', flexDirection: 'column', gap: 8,
+          border: `1px solid ${T.border}`, borderRadius: 12, padding: 10,
+        }}>
+          <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 700 }}>
+            {agregandoEn === '' ? 'Lo verá quien no tenga una versión propia'
+              : `Solo lo verán ${agregandoEn === 'h' ? 'los hombres' : 'las mujeres'}`}
+          </div>
+          <MediaUpload
+            label="" icon={ImageIcon} value="" onChange={() => {}}
+            onAjustes={(a) => agregar(agregandoEn, 'foto', a)}
+            accept="image/*" kind="covers"
+          />
+          <MediaUpload
+            label="" icon={Video} value="" onChange={() => {}}
+            onAjustes={(a) => agregar(agregandoEn, 'video', a)}
+            accept="video/*" kind="videos"
+          />
+          <button
+            type="button" onClick={() => setAgregandoEn(null)}
+            style={{
+              alignSelf: 'flex-start', minHeight: 32, padding: '0 10px', borderRadius: 9,
+              border: 'none', background: 'transparent', color: T.text3, cursor: 'pointer',
+              fontFamily: FONT, fontSize: 12.5, fontWeight: 700,
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+            }}
+          >
+            <X size={13} /> Cancelar
+          </button>
+        </div>
+      )}
 
       {cargando ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: T.text3, fontSize: 12.5, fontWeight: 600 }}>
           <Loader2 size={14} className="spin" /> Cargando…
         </div>
-      ) : GRUPOS.map(({ g, et, pista }) => {
-        const items = delGrupo(g);
-        const abierto = agregandoEn === g;
+      ) : todos.length === 0 ? (
+        <div style={{ fontSize: 12, color: T.text3, fontWeight: 600 }}>
+          Nada todavía. Elige arriba para quién es y súbelo.
+        </div>
+      ) : todos.map((m) => {
+        const esVideo = m.tipo === 'video';
+        const detalle = etiquetaAjustes(m);
+        const grupo = m.genero || '';
+        const et = GRUPOS.find((x) => x.g === grupo)?.et ?? 'Para todos';
         return (
-          <div key={g || 'todos'} style={{
-            border: `1px solid ${T.border}`, borderRadius: 13, padding: 10,
+          <div key={m.id} style={{
             display: 'flex', flexDirection: 'column', gap: 8,
+            background: T.bg, border: `1px solid ${T.border}`, borderRadius: 11, padding: 8,
           }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-              <span style={{ fontSize: 13, fontWeight: 800, color: T.text }}>{et}</span>
-              {pista && (
-                <span style={{ fontSize: 11, color: T.text3, fontWeight: 600 }}>{pista}</span>
-              )}
-            </div>
-
-            {items.length === 0 && (
-              <div style={{ fontSize: 12, color: T.text3, fontWeight: 600 }}>Nada todavía</div>
-            )}
-
-            {items.map((m) => {
-              const esVideo = m.tipo === 'video';
-              const detalle = etiquetaAjustes(m);
-              return (
-                <div key={m.id} style={{
-                  display: 'flex', flexDirection: 'column', gap: 8,
-                  background: T.bg, border: `1px solid ${T.border}`, borderRadius: 11, padding: 8,
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Miniatura url={m.url} esVideo={esVideo} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: 13, fontWeight: 700, color: T.text,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <Miniatura url={m.url} esVideo={esVideo} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{
-                        fontSize: 13, fontWeight: 700, color: T.text,
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      }}>
-                        {m.etiqueta || (esVideo ? 'Video' : 'Foto')}
-                      </div>
-                      {detalle && (
-                        <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 600, marginTop: 1 }}>
-                          {detalle}
-                        </div>
-                      )}
-                    </div>
-                    <button
-                      type="button" title="Mover a otro grupo"
-                      onClick={() => setMoviendo(moviendo === m.id ? null : m.id)}
-                      style={{ ...icono, color: T.text2 }}
-                    >
-                      <ArrowRightLeft size={15} />
-                    </button>
-                    {esVideo && (
-                      <button
-                        type="button" title="Recortar, encuadrar o silenciar"
-                        onClick={() => setRecortando(m)}
-                        style={{ ...icono, color: T.text2 }}
-                      >
-                        <Scissors size={15} />
-                      </button>
-                    )}
-                    <button type="button" onClick={() => quitar(m)} title="Quitar"
-                      style={{ ...icono, color: T.danger }}>
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-
-                  {moviendo === m.id && (
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      {GRUPOS.filter((o) => o.g !== g).map((o) => (
-                        <button
-                          key={o.g || 'todos'} type="button"
-                          onClick={() => mover(m, o.g)}
-                          style={{
-                            flex: 1, minHeight: 36, borderRadius: 9, cursor: 'pointer',
-                            border: `1.5px solid ${T.border}`, background: T.bg2, color: T.text2,
-                            fontFamily: FONT, fontSize: 12.5, fontWeight: 700,
-                          }}
-                        >
-                          Mover a {o.et.toLowerCase()}
-                        </button>
-                      ))}
-                    </div>
+                  {esVideo ? 'Video' : 'Foto'}
+                  {detalle && (
+                    <span style={{ color: T.text3, fontWeight: 600 }}> · {detalle}</span>
                   )}
                 </div>
-              );
-            })}
-
-            {/* Un solo botón por grupo, y las cuatro formas de agregar se
-                despliegan al tocarlo. Con tres grupos en pantalla, enseñar las
-                cuatro siempre serían doce botones a la vez. */}
-            {abierto ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <MediaUpload
-                  label="" icon={ImageIcon} value="" onChange={() => {}}
-                  onAjustes={(a) => agregar(g, 'foto', a)}
-                  accept="image/*" kind="covers"
-                />
-                <MediaUpload
-                  label="" icon={Video} value="" onChange={() => {}}
-                  onAjustes={(a) => agregar(g, 'video', a)}
-                  accept="video/*" kind="videos"
-                />
+                {/* La marca ES el control de mover: se toca y se cambia. Un
+                    icono aparte para lo mismo era un botón de más por fila. */}
                 <button
-                  type="button" onClick={() => setAgregandoEn(null)}
+                  type="button"
+                  onClick={() => setMoviendo(moviendo === m.id ? null : m.id)}
+                  aria-expanded={moviendo === m.id}
                   style={{
-                    alignSelf: 'flex-start', minHeight: 34, padding: '0 12px', borderRadius: 9,
-                    border: 'none', background: 'transparent', color: T.text3, cursor: 'pointer',
-                    fontFamily: FONT, fontSize: 12.5, fontWeight: 700,
-                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    marginTop: 3, minHeight: 25, padding: '0 9px', borderRadius: 999,
+                    border: `1px solid ${grupo ? T.accent : T.borderHi}`,
+                    background: grupo ? T.accentBg : 'transparent',
+                    color: grupo ? T.accent : T.text3,
+                    cursor: 'pointer', fontFamily: FONT, fontSize: 11.5, fontWeight: 700,
                   }}
                 >
-                  <X size={13} /> Cancelar
+                  {et}
                 </button>
               </div>
-            ) : (
-              <button
-                type="button" onClick={() => setAgregandoEn(g)}
-                style={{
-                  alignSelf: 'flex-start', minHeight: 38, padding: '0 14px', borderRadius: 10,
-                  border: `1.5px dashed ${T.borderHi}`, background: 'transparent', color: T.text2,
-                  cursor: 'pointer', fontFamily: FONT, fontSize: 12.5, fontWeight: 700,
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                }}
-              >
-                <Plus size={14} /> Agregar {items.length ? 'otro' : ''}
+              {esVideo && (
+                <button
+                  type="button" title="Recortar, encuadrar o silenciar"
+                  onClick={() => setRecortando(m)}
+                  style={{ ...icono, color: T.text2 }}
+                >
+                  <Scissors size={15} />
+                </button>
+              )}
+              <button type="button" onClick={() => quitar(m)} title="Quitar"
+                style={{ ...icono, color: T.danger }}>
+                <Trash2 size={15} />
               </button>
+            </div>
+
+            {moviendo === m.id && (
+              <div style={{ display: 'flex', gap: 6 }}>
+                {GRUPOS.map((o) => {
+                  const aqui = o.g === grupo;
+                  return (
+                    <button
+                      key={o.g || 'todos'} type="button"
+                      onClick={() => (aqui ? setMoviendo(null) : mover(m, o.g))}
+                      style={{
+                        flex: 1, minHeight: 36, borderRadius: 9, cursor: 'pointer',
+                        border: `1.5px solid ${aqui ? T.accent : T.border}`,
+                        background: aqui ? T.accent : T.bg2,
+                        color: aqui ? '#fff' : T.text2,
+                        fontFamily: FONT, fontSize: 12.5, fontWeight: 700,
+                      }}
+                    >
+                      {o.et === 'Para todos' ? 'Todos' : o.et}
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </div>
         );
