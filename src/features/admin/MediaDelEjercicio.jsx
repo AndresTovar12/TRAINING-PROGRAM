@@ -4,51 +4,49 @@
  * POR QUE UNA SOLA LISTA:
  * Antes había tres sitios. Arriba "Foto de portada". Debajo el video principal.
  * Más abajo "otros ángulos y versiones". Para quien usa la app son todos
- * imágenes del mismo ejercicio; que unas vivan en una columna de `exercises` y
- * otras en la tabla `exercise_media` es un detalle de cómo está guardado, no
- * algo que le importe a nadie. Andrés ya lo dijo del video principal: lo que no
- * le cuadraba era "que esté separada". Vale igual para la foto.
+ * archivos del mismo ejercicio; que unos vivan en una columna de `exercises` y
+ * otros en la tabla `exercise_media` es un detalle de cómo está guardado, no
+ * algo que le importe a nadie.
  *
- * POR QUE AHORA SIEMPRE PREGUNTA PARA QUIÉN ES:
- * La pregunta existía, pero solo aparecía a partir del SEGUNDO video. La foto
- * no la tenía nunca. Como casi todos los ejercicios tienen un video y ninguna
- * versión extra, en la práctica no salía jamás — Andrés: "no veo lo de hombre,
- * mujer, ni lo de agregar otro ángulo, en ninguna parte". No estaba escondida
- * por diseño: estaba detrás de un camino al que casi nunca se llega.
+ * DONDE SE DECIDE PARA QUIEN ES CADA ARCHIVO, y por qué aquí y no al subirlo:
+ * lo tuve un rato como un paso dentro del editor, justo después de elegir el
+ * archivo. Andrés: "¿te parece que ese es el momento para decidir si es para
+ * hombre, para mujer o para todos? tampoco me pareció muy inteligente".
  *
- * Ahora sale desde la primera, ya contestada con "Para todos". Se ve que la
- * opción existe y no cuesta ni un toque de más si no se usa.
+ * Tiene razón por dos motivos. Uno, estás mirando un video para recortarlo y de
+ * golpe te preguntan una regla de reparto: son dos tareas distintas pegadas.
+ * Dos, la respuesta es "para todos" casi siempre, así que ese paso frenaba el
+ * caso normal por culpa del raro.
  *
- * DONDE SE GUARDA CADA COSA, y por qué no es arbitrario:
- *   · "Para todos" y sin etiqueta → a la columna de siempre (`cover_image_url`
- *     o `video_url`), si esa columna está libre. Es lo que ya leen los ochenta
- *     y un ejercicios y los planes que hay hechos; cambiarlo obligaría a migrar
- *     sin ganar nada.
- *   · Con género o con etiqueta → a `exercise_media`, que es la única tabla que
- *     tiene esos dos campos. Preguntar algo y no poder guardarlo sería peor que
- *     no preguntarlo.
+ * Aquí significa algo: estás viendo QUÉ tiene el ejercicio, y decides a quién
+ * va cada cosa mirando el conjunto. Se cambia cuando quieras, no solo al subir.
  *
- * CUAL VE CADA ATLETA: lo decide `lib/videos.js`, no esta pantalla. El orden es
- * suyo primero, luego el de su género, luego el general.
+ * LA REGLA, en una frase: la primera foto y el primer video son para todos; los
+ * que agregues después pueden ir dirigidos a hombres o a mujeres.
+ *
+ * No es una regla de pantalla, es dónde cabe el dato. Los primeros viven en una
+ * columna de `exercises` (`cover_image_url`, `video_url`) que no tiene campo de
+ * género — y son, por definición, el archivo por defecto de todo el mundo. Los
+ * siguientes viven en `exercise_media`, que sí lo tiene.
+ *
+ * CUAL VE CADA ATLETA lo decide `lib/videos.js`, no esta pantalla: el suyo
+ * primero, luego el de su género, luego el general.
  */
 import { useEffect, useState } from 'react';
 import {
-  Video, Image as ImageIcon, Trash2, Loader2, Scissors, Users,
+  Video, Image as ImageIcon, Trash2, Loader2, Scissors, Users, Check,
 } from 'lucide-react';
 import {
   listExerciseMedia, addExerciseMedia, deleteExerciseMedia, updateExerciseMedia, getMasterId,
 } from '@/lib/api';
 import EditorVideo from '@/features/admin/EditorVideo';
-import EditorFoto from '@/features/admin/EditorFoto';
 import { useAuth } from '@/contexts/AuthContext';
 import MediaUpload from '@/features/admin/MediaUpload';
-import { T } from '@/lib/theme';
+import { ANGULOS_SUGERIDOS, MOMENTOS_SUGERIDOS } from '@/lib/videos';
+import { T, FONT } from '@/lib/theme';
 
-function etiquetaGenero(g) {
-  if (g === 'h') return 'Hombres';
-  if (g === 'm') return 'Mujeres';
-  return 'Para todos';
-}
+const PUBLICOS = [['', 'Todos'], ['h', 'Hombres'], ['m', 'Mujeres']];
+const nombrePublico = (g) => (PUBLICOS.find(([v]) => v === (g || ''))?.[1] ?? 'Todos');
 
 /** Resume en una línea qué se le hizo al video, o nada si está tal cual. */
 function etiquetaAjustes(a) {
@@ -60,73 +58,30 @@ function etiquetaAjustes(a) {
   return partes.length ? partes.join(' · ') : null;
 }
 
-/** Una fila: miniatura, qué es, para quién es, y qué se le puede hacer. */
-function Fila({ url, esVideo, titulo, detalle, destacado, onEditar, onQuitar }) {
+/** Miniatura del propio archivo.
+
+    No se usa canvas a propósito: leer los píxeles de un video de otro dominio
+    lo "mancha" y el navegador prohíbe exportarlo. Cloudflare no manda las
+    cabeceras que lo permitirían. Comprobado en consola. */
+function Miniatura({ url, esVideo }) {
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 10,
-      background: destacado ? T.accentBg : T.bg,
-      border: `1px solid ${destacado ? `${T.accent}55` : T.border}`,
-      borderRadius: 11, padding: 8,
+    <span style={{
+      width: 44, height: 44, borderRadius: 9, overflow: 'hidden', flexShrink: 0,
+      background: '#0E1015', display: 'grid', placeItems: 'center',
     }}>
-      {/* La miniatura sale del propio archivo. No se usa canvas: leer los
-          píxeles de un video de otro dominio lo "mancha" y el navegador
-          prohíbe exportarlo. Cloudflare no manda las cabeceras que lo
-          permitirían. Comprobado en consola. */}
-      <span style={{
-        width: 46, height: 46, borderRadius: 9, overflow: 'hidden', flexShrink: 0,
-        background: '#0E1015', display: 'grid', placeItems: 'center',
-      }}>
-        {esVideo ? (
-          <video
-            src={url} muted playsInline preload="metadata" tabIndex={-1} aria-hidden="true"
-            // Safari en iPhone deja el recuadro en negro mientras el video no se
-            // haya movido. Pedirle que salte un pelín lo obliga a pintar.
-            onLoadedMetadata={(e) => { e.currentTarget.currentTime = 0.1; }}
-            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-          />
-        ) : (
-          <img src={url} alt="" loading="lazy"
-            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-        )}
-      </span>
-
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontSize: 13, fontWeight: 700, color: destacado ? T.accent : T.text,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          display: 'flex', alignItems: 'center', gap: 6,
-        }}>
-          {esVideo ? <Video size={12} /> : <ImageIcon size={12} />}
-          {titulo}
-        </div>
-        {detalle && (
-          <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 600 }}>{detalle}</div>
-        )}
-      </div>
-
-      {onEditar && (
-        <button
-          type="button" onClick={onEditar}
-          title={esVideo ? 'Recortar, encuadrar, silenciar o cambiar para quién es' : 'Cambiar para quién es'}
-          style={{
-            border: 'none', background: 'transparent', cursor: 'pointer',
-            color: T.text2, padding: 6, flexShrink: 0,
-          }}
-        >
-          {esVideo ? <Scissors size={15} /> : <Users size={15} />}
-        </button>
+      {esVideo ? (
+        <video
+          src={url} muted playsInline preload="metadata" tabIndex={-1} aria-hidden="true"
+          // Safari en iPhone deja el recuadro en negro mientras el video no se
+          // haya movido. Pedirle que salte un pelín lo obliga a pintar.
+          onLoadedMetadata={(e) => { e.currentTarget.currentTime = 0.1; }}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        />
+      ) : (
+        <img src={url} alt="" loading="lazy"
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
       )}
-      <button
-        type="button" onClick={onQuitar} title="Quitar"
-        style={{
-          border: 'none', background: 'transparent', cursor: 'pointer',
-          color: T.danger, padding: 6, flexShrink: 0,
-        }}
-      >
-        <Trash2 size={15} />
-      </button>
-    </div>
+    </span>
   );
 }
 
@@ -136,7 +91,8 @@ export default function MediaDelEjercicio({
   principal, recortePrincipal, onPrincipal, onRecortePrincipal,
 }) {
   const { user } = useAuth();
-  const [editando, setEditando] = useState(null); // qué archivo se está tocando
+  const [recortando, setRecortando] = useState(null); // video abierto en el editor
+  const [abierta, setAbierta] = useState(null);       // fila con el "para quién" desplegado
   const [lista, setLista] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [err, setErr] = useState('');
@@ -144,10 +100,10 @@ export default function MediaDelEjercicio({
   useEffect(() => {
     let vivo = true;
     if (!exerciseId) { setCargando(false); return undefined; }
-    // Se muestran solo los MIOS y los del master. Un ejercicio base lo comparten
-    // todos los coaches: sin este filtro aparecerían aquí los ángulos que subió
-    // otro entrenador —que además no se pueden borrar, así que el botón daría
-    // error sin explicación.
+    // Solo los MIOS y los del master. Un ejercicio base lo comparten todos los
+    // coaches: sin este filtro aparecerían aquí los ángulos que subió otro
+    // entrenador —que además no se pueden borrar, así que el botón daría error
+    // sin explicación.
     Promise.all([listExerciseMedia([exerciseId]), getMasterId()])
       .then(([r, mId]) => {
         if (!vivo) return;
@@ -159,49 +115,47 @@ export default function MediaDelEjercicio({
     return () => { vivo = false; };
   }, [exerciseId, user?.id]);
 
-  /* ¿Esto va a la columna de siempre, o a la tabla de versiones?
-     Va a la columna solo si no hay nada que no quepa ahí —ni género ni
-     etiqueta— y esa columna está libre. */
-  const vaAlHueco = (ocupado, genero, etiqueta) => !ocupado && !genero && !(etiqueta || '').trim();
-
-  async function agregarFoto({ url: subida, genero, etiqueta }) {
+  async function agregarFoto({ url: subida }) {
     if (!subida) { setErr('No se pudo subir la foto.'); return; }
     setErr('');
-
-    if (vaAlHueco(portada, genero, etiqueta)) { onPortada?.(subida); return; }
-
+    if (!portada) { onPortada?.(subida); return; }
     try {
-      const fila = await addExerciseMedia({
-        exerciseId, url: subida, tipo: 'foto',
-        etiqueta: (etiqueta || '').trim() || null,
-        genero: genero || null,
-      });
+      const fila = await addExerciseMedia({ exerciseId, url: subida, tipo: 'foto' });
       setLista((prev) => [...prev, fila]);
     } catch (e) {
       setErr(e.message || 'No se pudo guardar la foto.');
     }
   }
 
-  async function agregarVideo({ url: subida, inicio, fin, sinAudio, encuadre, genero, etiqueta }) {
+  async function agregarVideo({ url: subida, inicio, fin, sinAudio, encuadre }) {
     if (!subida) { setErr('No se pudo subir el video.'); return; }
     setErr('');
-
-    if (vaAlHueco(principal, genero, etiqueta)) {
+    if (!principal) {
       onPrincipal?.(subida);
       onRecortePrincipal?.({ inicio, fin, sinAudio, encuadre });
       return;
     }
-
     try {
       const fila = await addExerciseMedia({
-        exerciseId, url: subida, tipo: 'video',
-        etiqueta: (etiqueta || '').trim() || null,
-        genero: genero || null,
-        inicio, fin, sinAudio, encuadre,
+        exerciseId, url: subida, tipo: 'video', inicio, fin, sinAudio, encuadre,
       });
       setLista((prev) => [...prev, fila]);
     } catch (e) {
       setErr(e.message || 'No se pudo guardar el video.');
+    }
+  }
+
+  /* Cambia a quién va dirigido un archivo, o cómo se llama.
+     Se guarda de una vez y la lista se refresca en el momento: si no, sigue
+     enseñando lo viejo hasta recargar la pantalla. */
+  async function cambiar(id, patch) {
+    const antes = lista;
+    setLista((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+    try {
+      await updateExerciseMedia(id, patch);
+    } catch (e) {
+      setLista(antes);
+      setErr(e.message || 'No se pudo guardar el cambio.');
     }
   }
 
@@ -225,21 +179,26 @@ export default function MediaDelEjercicio({
     );
   }
 
-  const hayAlgo = portada || principal || lista.length > 0;
+  const filaBase = {
+    display: 'flex', alignItems: 'center', gap: 10,
+    background: T.bg, border: `1px solid ${T.border}`,
+    borderRadius: 11, padding: 8,
+  };
+  const icono = { border: 'none', background: 'transparent', cursor: 'pointer', padding: 6, flexShrink: 0 };
+  const título = {
+    fontSize: 13, fontWeight: 700, color: T.text,
+    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+  };
+  const sub = { fontSize: 11.5, color: T.text3, fontWeight: 600, marginTop: 1 };
 
-  /* ¿Alguien se queda sin ver nada?
-     Si el ejercicio SOLO tiene versiones por género, quien no haya puesto el
-     suyo en su perfil no recibe ninguna: la app no adivina, y hace bien —
-     enseñarle la versión equivocada es peor que la genérica. Pero el coach no
-     tiene por qué deducir eso solo, así que se le dice aquí, en el momento en
-     que pasa y no cuando un atleta se queje.
-
-     Hoy importa el doble: las cuentas que ya existen se crearon antes de que
-     el registro preguntara el género, así que lo tienen vacío. */
+  /* Solo hay versiones por género y nadie más las cubre.
+     Quien no haya puesto el suyo en el perfil no recibe ninguna: la app no
+     adivina, y hace bien — enseñarle la versión equivocada es peor que la
+     genérica. Pero el coach no tiene por qué deducirlo solo, así que se le dice
+     aquí, cuando pasa, y no cuando un atleta se queje. */
   const soloPorGenero = (tipo, hueco) => {
     const míos = lista.filter((m) => m.tipo === tipo);
-    return !hueco && míos.length > 0
-      && míos.some((m) => m.genero) && !míos.some((m) => !m.genero);
+    return !hueco && míos.length > 0 && míos.every((m) => m.genero);
   };
   const faltaGenerica = [
     soloPorGenero('video', principal) && 'video',
@@ -248,53 +207,146 @@ export default function MediaDelEjercicio({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div>
-        <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Fotos y videos del ejercicio</div>
-        <div style={{ fontSize: 11.5, color: T.text3, marginTop: 3, fontWeight: 600, lineHeight: 1.45 }}>
-          Al agregar cualquiera se elige para quién es: para todos, o una versión para hombres y otra para mujeres.
-        </div>
-      </div>
+      <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Fotos y videos</div>
 
       {cargando ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: T.text3, fontSize: 12.5, fontWeight: 600 }}>
           <Loader2 size={14} className="spin" /> Cargando…
         </div>
-      ) : hayAlgo && (
+      ) : (portada || principal || lista.length > 0) && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
           {portada && (
-            <Fila
-              url={portada}
-              esVideo={false}
-              titulo="Portada"
-              detalle="Para todos"
-              onQuitar={() => onPortada?.('')}
-            />
+            <div style={filaBase}>
+              <Miniatura url={portada} esVideo={false} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={título}>Foto de portada</div>
+                <div style={sub}>Para todos</div>
+              </div>
+              <button type="button" onClick={() => onPortada?.('')} title="Quitar"
+                style={{ ...icono, color: T.danger }}>
+                <Trash2 size={15} />
+              </button>
+            </div>
           )}
 
-          {/* El video principal encabeza los videos: es el que se abre. */}
           {principal && (
-            <Fila
-              url={principal}
-              esVideo
-              titulo="Se abre por defecto"
-              detalle={[etiquetaAjustes(recortePrincipal), 'Para todos'].filter(Boolean).join(' · ')}
-              destacado
-              onEditar={() => setEditando({ tipo: 'principal', url: principal, ajustes: recortePrincipal })}
-              onQuitar={() => onPrincipal?.('')}
-            />
+            <div style={filaBase}>
+              <Miniatura url={principal} esVideo />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={título}>Video</div>
+                <div style={sub}>
+                  {[etiquetaAjustes(recortePrincipal), 'Para todos'].filter(Boolean).join(' · ')}
+                </div>
+              </div>
+              <button
+                type="button" title="Recortar, encuadrar o silenciar"
+                onClick={() => setRecortando({ tipo: 'principal', url: principal, ajustes: recortePrincipal })}
+                style={{ ...icono, color: T.text2 }}
+              >
+                <Scissors size={15} />
+              </button>
+              <button type="button" onClick={() => onPrincipal?.('')} title="Quitar"
+                style={{ ...icono, color: T.danger }}>
+                <Trash2 size={15} />
+              </button>
+            </div>
           )}
 
-          {lista.map((m) => (
-            <Fila
-              key={m.id}
-              url={m.url}
-              esVideo={m.tipo === 'video'}
-              titulo={m.etiqueta || (m.tipo === 'video' ? 'Otro ángulo' : 'Otra foto')}
-              detalle={etiquetaGenero(m.genero)}
-              onEditar={() => setEditando({ tipo: m.tipo, url: m.url, id: m.id, ajustes: m })}
-              onQuitar={() => quitar(m.id)}
-            />
-          ))}
+          {lista.map((m) => {
+            const esVideo = m.tipo === 'video';
+            const desplegada = abierta === m.id;
+            return (
+              <div key={m.id} style={{ ...filaBase, flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Miniatura url={m.url} esVideo={esVideo} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={título}>
+                      {m.etiqueta || (esVideo ? 'Otro video' : 'Otra foto')}
+                    </div>
+                    {/* La pastilla es el control, no una etiqueta: se toca y se
+                        elige. Es lo que hace visible que la opción existe sin
+                        interrumpir a nadie al subir. */}
+                    <button
+                      type="button"
+                      onClick={() => setAbierta(desplegada ? null : m.id)}
+                      aria-expanded={desplegada}
+                      style={{
+                        marginTop: 3, minHeight: 26, padding: '0 9px', borderRadius: 999,
+                        border: `1px solid ${m.genero ? T.accent : T.borderHi}`,
+                        background: m.genero ? T.accentBg : 'transparent',
+                        color: m.genero ? T.accent : T.text2,
+                        cursor: 'pointer', fontFamily: FONT, fontSize: 11.5, fontWeight: 700,
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                      }}
+                    >
+                      <Users size={11} /> {nombrePublico(m.genero)}
+                    </button>
+                  </div>
+                  {esVideo && (
+                    <button
+                      type="button" title="Recortar, encuadrar o silenciar"
+                      onClick={() => setRecortando({ tipo: 'extra', url: m.url, id: m.id, ajustes: m })}
+                      style={{ ...icono, color: T.text2 }}
+                    >
+                      <Scissors size={15} />
+                    </button>
+                  )}
+                  <button type="button" onClick={() => quitar(m.id)} title="Quitar"
+                    style={{ ...icono, color: T.danger }}>
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+
+                {desplegada && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 2 }}>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {PUBLICOS.map(([v, t]) => {
+                        const activo = (m.genero || '') === v;
+                        return (
+                          <button
+                            key={v || 'todos'} type="button"
+                            onClick={() => cambiar(m.id, { genero: v || null })}
+                            style={{
+                              flex: 1, minHeight: 36, borderRadius: 9, cursor: 'pointer',
+                              border: `1.5px solid ${activo ? T.accent : T.border}`,
+                              background: activo ? T.accent : T.bg2,
+                              color: activo ? '#fff' : T.text2,
+                              fontFamily: FONT, fontSize: 12.5, fontWeight: 700,
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                            }}
+                          >
+                            {activo && <Check size={12} />} {t}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <input
+                      defaultValue={m.etiqueta || ''}
+                      onBlur={(e) => {
+                        const v = e.target.value.trim();
+                        if (v !== (m.etiqueta || '')) cambiar(m.id, { etiqueta: v || null });
+                      }}
+                      placeholder={esVideo ? 'Desde dónde: Frontal, Lateral…' : 'Qué muestra: Posición inicial…'}
+                      list={esVideo ? 'angulos-media' : 'momentos-media'}
+                      style={{
+                        width: '100%', boxSizing: 'border-box', borderRadius: 9,
+                        border: `1.5px solid ${T.border}`, background: T.bg2,
+                        padding: '9px 11px', color: T.text, fontFamily: FONT,
+                        // 16 px o menos hace que iPhone acerque la pantalla al escribir.
+                        fontSize: 16, fontWeight: 600, outline: 'none',
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          <datalist id="angulos-media">
+            {ANGULOS_SUGERIDOS.map((a) => <option key={a} value={a} />)}
+          </datalist>
+          <datalist id="momentos-media">
+            {MOMENTOS_SUGERIDOS.map((a) => <option key={a} value={a} />)}
+          </datalist>
         </div>
       )}
 
@@ -310,90 +362,44 @@ export default function MediaDelEjercicio({
           </div>
           <div style={{ marginTop: 3 }}>
             Quien no haya puesto si es hombre o mujer en su perfil no verá ninguna.
-            Agrega una versión &ldquo;Para todos&rdquo; para cubrirlos.
           </div>
         </div>
       )}
 
-      {/* --- Reabrir algo que ya está subido --- */}
-      {editando && (editando.tipo === 'foto' ? (
-        <EditorFoto
-          url={editando.url}
-          generoInicial={editando.ajustes?.genero || ''}
-          etiquetaInicial={editando.ajustes?.etiqueta || ''}
-          onCancelar={() => setEditando(null)}
-          onListo={async ({ genero, etiqueta }) => {
-            const patch = {
-              genero: genero || null,
-              etiqueta: (etiqueta || '').trim() || null,
-            };
-            try {
-              await updateExerciseMedia(editando.id, patch);
-              // La lista se refresca en el momento: si no, sigue enseñando la
-              // etiqueta vieja hasta recargar la pantalla.
-              setLista((prev) => prev.map((x) => (x.id === editando.id ? { ...x, ...patch } : x)));
-            } catch (e) { setErr(e.message || 'No se pudo guardar el cambio.'); }
-            setEditando(null);
-          }}
-        />
-      ) : (
+      {recortando && (
         <EditorVideo
-          url={editando.url}
-          ajustes={editando.ajustes}
-          /* El video principal vive en una columna del ejercicio, que no tiene
-             género ni etiqueta. Preguntar algo que no se puede guardar es peor
-             que no preguntarlo; por eso ahí no sale la pestaña. Para llegar a
-             una versión por género se agrega otro video, que sí la trae. */
-          conDestino={editando.tipo !== 'principal'}
-          generoInicial={editando.ajustes?.genero || ''}
-          etiquetaInicial={editando.ajustes?.etiqueta || ''}
-          onCancelar={() => setEditando(null)}
+          url={recortando.url}
+          ajustes={recortando.ajustes}
+          onCancelar={() => setRecortando(null)}
           onListo={async (ajustes) => {
-            if (editando.tipo === 'principal') {
+            if (recortando.tipo === 'principal') {
               onRecortePrincipal?.(ajustes);
             } else {
-              const patch = {
+              await cambiar(recortando.id, {
                 recorte_inicio: ajustes.inicio ?? null,
                 recorte_fin: ajustes.fin ?? null,
                 sin_audio: !!ajustes.sinAudio,
                 encuadre: ajustes.encuadre ?? null,
-                genero: ajustes.genero || null,
-                etiqueta: (ajustes.etiqueta || '').trim() || null,
-              };
-              try {
-                await updateExerciseMedia(editando.id, patch);
-                setLista((prev) => prev.map((x) => (x.id === editando.id ? { ...x, ...patch } : x)));
-              } catch (e) { setErr(e.message || 'No se pudo guardar el recorte.'); }
+              });
             }
-            setEditando(null);
+            setRecortando(null);
           }}
         />
-      ))}
-
-      {/* --- Agregar --- */}
-      <MediaUpload
-        label=""
-        icon={ImageIcon}
-        value=""
-        onChange={() => {}}
-        onAjustes={agregarFoto}
-        conDestino
-        accept="image/*"
-        kind="covers"
-        hint="Foto: se elige para quién es antes de subirla."
-      />
+      )}
 
       <MediaUpload
-        label=""
-        icon={Video}
-        value=""
-        onChange={() => {}}
-        onAjustes={agregarVideo}
-        conDestino
-        accept="video/*"
-        kind="videos"
-        hint="Video: se abre el editor para recortar, encuadrar, quitar el audio y elegir para quién es."
+        label="" icon={ImageIcon} value="" onChange={() => {}}
+        onAjustes={agregarFoto} accept="image/*" kind="covers"
       />
+      <MediaUpload
+        label="" icon={Video} value="" onChange={() => {}}
+        onAjustes={agregarVideo} accept="video/*" kind="videos"
+      />
+
+      <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 600, lineHeight: 1.45 }}>
+        La primera foto y el primer video son para todos. Los que agregues después
+        puedes dirigirlos a hombres o a mujeres.
+      </div>
 
       {err && (
         <div style={{

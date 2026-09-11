@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  X, Play, Check, Loader2, Volume2, VolumeX, Crop, Scissors, Users,
+  X, Play, Check, Loader2, Volume2, VolumeX, Crop, Scissors,
 } from 'lucide-react';
 import { FONT, NUM_STYLE } from '@/lib/theme';
-import { ANGULOS_SUGERIDOS } from '@/lib/videos';
 
 /**
  * El editor que aparece JUSTO DESPUÉS de elegir o grabar un video, antes de
@@ -34,10 +33,19 @@ import { ANGULOS_SUGERIDOS } from '@/lib/videos';
 
 const MINIATURAS = 8;
 
+/* AQUÍ NO SE DECIDE PARA QUIÉN ES EL VIDEO, y es a propósito.
+   Lo tuve un rato como tercera pestaña. Andrés: "¿te parece que ese es el
+   momento para decidir si es para hombre, para mujer o para todos? tampoco me
+   pareció muy inteligente". Tiene razón: estás mirando un video para
+   recortarlo, y de golpe te preguntan una regla de reparto. Además la
+   respuesta es "para todos" casi siempre, así que es un paso que casi nadie
+   necesita, metido en medio del que sí.
+   Ahora eso se decide en la lista del ejercicio, tocando la pastilla de cada
+   archivo: ahí se ve de un vistazo qué tiene el ejercicio y a quién va cada
+   cosa, que es cuando la pregunta significa algo. */
 const PASOS = [
   { id: 'tiempo', et: 'Recortar', icono: Scissors },
   { id: 'imagen', et: 'Encuadre', icono: Crop },
-  { id: 'destino', et: 'Para quién', icono: Users },
 ];
 
 /** Proporciones para encuadrar. La primera deja el video como se grabó. */
@@ -63,7 +71,6 @@ const peso = (bytes) => {
 
 export default function EditorVideo({
   archivo, url, tamaño, onCancelar, onListo, subiendo, avance,
-  conDestino = false, generoInicial = '', etiquetaInicial = '',
   // Lo que este video YA tenía guardado. Sin esto, reabrir el editor sobre
   // un video ya recortado arrancaba en cero, y confirmar borraba el recorte
   // anterior sin decir nada.
@@ -82,8 +89,6 @@ export default function EditorVideo({
   // null = se ve entero. Las proporciones solo lo PRECARGAN; después se
   // arrastra libre, que es lo que pidió Andrés: agarrar las esquinas.
   const [crop, setCrop] = useState(ajustes?.encuadre ?? null);
-  const [genero, setGenero] = useState(generoInicial);
-  const [etiqueta, setEtiqueta] = useState(etiquetaInicial);
   const [paso, setPaso] = useState('tiempo');
   const [arrastrando, setArrastrando] = useState(null);
   const [reproduciendo, setReproduciendo] = useState(false);
@@ -230,16 +235,24 @@ export default function EditorVideo({
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
   });
 
-  const pasosVisibles = PASOS.filter((p) => p.id !== 'destino' || conDestino);
 
   return createPortal((
     <div style={{
       position: 'fixed', inset: 0, zIndex: 6000, background: '#000',
       display: 'flex', flexDirection: 'column', fontFamily: FONT,
     }}>
-      {/* ---------- Salir y silenciar ---------- */}
+      {/* ---------- Salir, silenciar y confirmar ----------
+
+           EL BOTÓN DE CONFIRMAR VIVE AQUÍ ARRIBA, no en una franja abajo.
+           Medido a 375x812 cuando estaba abajo: el video ocupaba el 59% del
+           alto y el 72% del ancho, y los adornos se comían 303 px de 812.
+           Andrés: "¿te parece que las proporciones están bien?". No lo
+           estaban. La franja de abajo costaba 88 px solo para un botón; subirlo
+           aquí los devuelve enteros al video, que es lo único que hay que
+           mirar. Es además lo que hace iOS: cancelar a la izquierda, listo a la
+           derecha. */}
       <div style={{
-        padding: 'calc(12px + env(safe-area-inset-top)) 16px 12px', flexShrink: 0,
+        padding: 'calc(10px + env(safe-area-inset-top)) 14px 10px', flexShrink: 0,
         display: 'flex', alignItems: 'center', gap: 10,
       }}>
         <button
@@ -271,6 +284,31 @@ export default function EditorVideo({
         >
           {sinAudio ? <VolumeX size={18} /> : <Volume2 size={18} />}
           {sinAudio ? 'Sin audio' : 'Con audio'}
+        </button>
+
+        <span style={{ flex: 1 }} />
+
+        <button
+          type="button"
+          disabled={subiendo || !duracion}
+          onClick={() => onListo({
+            inicio, fin, sinAudio,
+            // Un marco que cubre el video entero no es un recorte: se guarda
+            // como nada para no arrastrar un dato que no dice nada.
+            encuadre: (crop && (crop.w < 0.995 || crop.h < 0.995)) ? crop : null,
+          })}
+          aria-label="Usar este video"
+          style={{
+            minHeight: 42, padding: '0 18px', borderRadius: 999, border: 'none', flexShrink: 0,
+            background: subiendo || !duracion ? 'rgba(255,255,255,.2)' : '#1E40E0',
+            color: '#fff', cursor: subiendo || !duracion ? 'default' : 'pointer',
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            fontFamily: FONT, fontSize: 14, fontWeight: 800,
+          }}
+        >
+          {subiendo
+            ? <><Loader2 size={17} className="spin" />{avance ?? 0}%</>
+            : <><Check size={18} strokeWidth={3} />Listo</>}
         </button>
       </div>
 
@@ -414,9 +452,9 @@ export default function EditorVideo({
 
       {/* ---------- Herramientas ---------- */}
       <div style={{ flexShrink: 0, padding: '0 16px' }}>
-        {pasosVisibles.length > 1 && (
-          <div className="sin-barra" style={{ display: 'flex', gap: 8, marginBottom: 14, overflowX: 'auto' }}>
-            {pasosVisibles.map((p) => (
+        {PASOS.length > 1 && (
+          <div className="sin-barra" style={{ display: 'flex', gap: 8, marginBottom: 10, overflowX: 'auto' }}>
+            {PASOS.map((p) => (
               <button
                 key={p.id} type="button"
                 onClick={() => {
@@ -554,83 +592,11 @@ export default function EditorVideo({
           </div>
         )}
 
-        {paso === 'destino' && conDestino && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,.62)', marginBottom: 8 }}>
-                ¿Quién debe ver este video?
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {[['', 'Para todos'], ['h', 'Hombres'], ['m', 'Mujeres']].map(([v, t]) => (
-                  <button key={v || 'todos'} type="button" onClick={() => setGenero(v)}
-                    style={{ ...píldora(genero === v), flex: 1 }}>
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,.62)', marginBottom: 8 }}>
-                ¿Desde dónde está grabado?
-              </div>
-              <input
-                value={etiqueta}
-                onChange={(e) => setEtiqueta(e.target.value)}
-                placeholder="Frontal, Lateral, Desde atrás…"
-                list="angulos-editor"
-                style={{
-                  width: '100%', boxSizing: 'border-box', borderRadius: 11,
-                  border: '1.5px solid rgba(255,255,255,.25)', background: 'transparent',
-                  padding: '11px 13px', color: '#fff', fontFamily: FONT,
-                  fontSize: 16, fontWeight: 600, outline: 'none',
-                }}
-              />
-              <datalist id="angulos-editor">
-                {ANGULOS_SUGERIDOS.map((a) => <option key={a} value={a} />)}
-              </datalist>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* ---------- Confirmar ---------- */}
-      <div style={{
-        flexShrink: 0, padding: '14px 16px calc(16px + env(safe-area-inset-bottom))',
-        display: 'flex', alignItems: 'center', gap: 14,
-      }}>
-        {/* Aquí solo va lo que INFORMA UN RESULTADO, nunca instrucciones.
-            Andrés: "no es necesario el mensaje de cómo usar las líneas
-            amarillas". Tiene razón: unas manijas amarillas sobre la línea de
-            tiempo ya dicen que se arrastran, y un cartel explicándolo ocupa dos
-            renglones fijos para enseñar algo que se entiende al primer toque.
-            Cuando no hay nada que decir, no se dice nada. */}
-        <div style={{ flex: 1, minWidth: 0, color: 'rgba(255,255,255,.62)', fontSize: 12.5, fontWeight: 600 }}>
-          {subiendo
-            ? `Subiendo… ${avance ?? 0}%`
-            : recortado && paso === 'tiempo'
-              ? `El atleta verá del ${seg(desde)} al ${seg(hasta)}`
-              : ''}
-        </div>
-        <button
-          type="button"
-          disabled={subiendo || !duracion}
-          onClick={() => onListo({
-            inicio, fin, sinAudio, genero, etiqueta,
-            // Un marco que cubre el video entero no es un recorte: se guarda
-            // como nada para no arrastrar un dato que no dice nada.
-            encuadre: (crop && (crop.w < 0.995 || crop.h < 0.995)) ? crop : null,
-          })}
-          aria-label="Usar este video"
-          style={{
-            width: 58, height: 58, borderRadius: '50%', border: 'none', flexShrink: 0,
-            background: subiendo || !duracion ? 'rgba(255,255,255,.2)' : '#1E40E0',
-            color: '#fff', cursor: subiendo || !duracion ? 'default' : 'pointer',
-            display: 'grid', placeItems: 'center',
-          }}
-        >
-          {subiendo ? <Loader2 size={26} className="spin" /> : <Check size={28} strokeWidth={2.6} />}
-        </button>
-      </div>
+      {/* El hueco de abajo es solo el de la barra del teléfono. Antes aquí
+          había una franja de 88 px con un botón; ese botón subió arriba. */}
+      <div style={{ flexShrink: 0, height: 'env(safe-area-inset-bottom)' }} />
     </div>
   ), document.body);
 }

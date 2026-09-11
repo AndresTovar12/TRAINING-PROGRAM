@@ -11,7 +11,6 @@ import { Upload, Loader2, X, Video, Camera, Images } from 'lucide-react';
 import { uploadExerciseMedia } from '@/lib/api';
 import { optimizaImagen, pesoTexto as pesoLegible } from '@/lib/imagen';
 import EditorVideo from '@/features/admin/EditorVideo';
-import EditorFoto from '@/features/admin/EditorFoto';
 import { useCoarsePointer } from '@/lib/useViewport';
 import { T, FONT } from '@/lib/theme';
 
@@ -19,7 +18,7 @@ export default function MediaUpload({
   // `icon` lo siguen pasando los llamadores. Ya no se pinta —lo reemplazo la
   // miniatura— pero se acepta para no tener que tocar cada sitio que lo usa.
   label, icon: _icon, value, onChange, accept, kind, hint,
-  onAjustes, conDestino = false,
+  onAjustes,
 }) {
   // En el telefono se ofrecen DOS acciones distintas, y grabar va primero.
   //
@@ -42,8 +41,6 @@ export default function MediaUpload({
   const camaraRef = useRef(null);     // grabar / tomar en el momento
   // Video elegido y todavia SIN subir, esperando a que lo recorten.
   const [porRevisar, setPorRevisar] = useState(null);
-  // Lo mismo para una foto: elegida y esperando a que digan para quien es.
-  const [fotoPorRevisar, setFotoPorRevisar] = useState(null);
 
   async function onPick(e) {
     const elegido = e.target.files?.[0];
@@ -68,18 +65,13 @@ export default function MediaUpload({
       return;
     }
 
-    /* UNA FOTO TAMPOCO SE SUBE DE GOLPE cuando hay algo que preguntar.
-       Antes las fotos subían directo y los videos abrían editor, así que la
-       pregunta de "para quién es" existía solo en la mitad de los casos.
-       Andrés no la encontraba por ningún lado y tenía razón: para fotos nunca
-       aparecía. Ahora las dos pasan por la misma pantalla. */
-    if (conDestino) {
-      setFotoPorRevisar(elegido);
-      if (inputRef.current) inputRef.current.value = '';
-      if (camaraRef.current) camaraRef.current.value = '';
-      return;
-    }
-
+    /* Una foto sube directo, sin pantalla intermedia.
+       Tuve un rato una que preguntaba para quién era. Andrés: "¿te parece que
+       ese es el momento para decidir si es para hombre, para mujer o para
+       todos? tampoco me pareció muy inteligente". Y no: eso se decide después,
+       en la lista del ejercicio, tocando la pastilla del archivo. Elegir una
+       foto y que te interroguen es friccionar el caso normal —que es "para
+       todos"— por culpa del raro. */
     setBusy(true);
     try {
       // Las fotos se encogen y se reencodan ANTES de salir del teléfono. Los
@@ -92,6 +84,10 @@ export default function MediaUpload({
 
       const url = await uploadExerciseMedia(file, kind, setAvance);
       onChange(url);
+      // Quien lleva una lista necesita la url en el momento, no esperar a que
+      // el estado se actualice para leerla por separado: eso es una carrera
+      // perdida.
+      onAjustes?.({ url });
       setArchivo(null);
     } catch (e2) {
       setErr(e2.message || 'Error al subir');
@@ -128,35 +124,6 @@ export default function MediaUpload({
     }
   }
 
-  /* Sube la foto que ya pasó por la pantalla de "para quién es".
-     Se encoge y reencoda antes de salir del teléfono, igual que en la subida
-     directa: una foto de 12 megapíxeles para un recuadro de 116 px de alto es
-     gastar datos de todos para nada. */
-  async function subeLaFoto(ajustes) {
-    setBusy(true);
-    setErr('');
-    setAvance(0);
-    try {
-      const { archivo: file, aviso: texto, detalle } = await optimizaImagen(fotoPorRevisar);
-      if (texto) setAviso({ texto, detalle });
-      if (file !== fotoPorRevisar) setAhorro({ antes: fotoPorRevisar.size, despues: file.size });
-      setArchivo({ nombre: file.name, mb: Math.round((file.size / 1048576) * 10) / 10 });
-
-      const url = await uploadExerciseMedia(file, kind, setAvance);
-      onChange(url);
-      // La url viaja junto a los ajustes: quien guarda una fila entera los
-      // necesita a la vez, y esperar a que el estado se actualice para leerla
-      // por separado es una carrera perdida.
-      onAjustes?.({ ...ajustes, url });
-      setFotoPorRevisar(null);
-      setArchivo(null);
-    } catch (e2) {
-      setErr(e2.message || 'Error al subir');
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {porRevisar && (
@@ -165,19 +132,8 @@ export default function MediaUpload({
           tamaño={porRevisar.size}
           subiendo={busy}
           avance={avance}
-          conDestino={conDestino}
           onCancelar={() => { if (!busy) setPorRevisar(null); }}
           onListo={subeElVideo}
-        />
-      )}
-      {fotoPorRevisar && (
-        <EditorFoto
-          archivo={fotoPorRevisar}
-          tamaño={fotoPorRevisar.size}
-          subiendo={busy}
-          avance={avance}
-          onCancelar={() => { if (!busy) setFotoPorRevisar(null); }}
-          onListo={subeLaFoto}
         />
       )}
       <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>{label}</span>
