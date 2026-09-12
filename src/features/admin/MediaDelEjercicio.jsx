@@ -39,7 +39,7 @@
  */
 import { useEffect, useState } from 'react';
 import {
-  Trash2, Loader2, Scissors, Plus, X, Users, Mars, Venus,
+  Trash2, Loader2, Scissors, Users, Mars, Venus,
 } from 'lucide-react';
 import {
   listExerciseMedia, addExerciseMedia, deleteExerciseMedia, updateExerciseMedia,
@@ -109,7 +109,6 @@ export default function MediaDelEjercicio({
      dónde mandar el archivo. Con uno siempre puesto, la pantalla contesta sola
      las dos preguntas: qué estás viendo y a dónde va lo que subas. */
   const [grupo, setGrupo] = useState('');
-  const [abierto, setAbierto] = useState(false); // los botones de subir, desplegados
   const [moviendo, setMoviendo] = useState(null);       // archivo al que se le cambia de grupo
   const [recortandoFoto, setRecortandoFoto] = useState(null); // foto abierta en el editor
   const [ocupado, setOcupado] = useState(false);
@@ -301,7 +300,7 @@ export default function MediaDelEjercicio({
           return (
             <button
               key={g || 'todos'} type="button"
-              onClick={() => { setGrupo(g); setAbierto(false); setMoviendo(null); }}
+              onClick={() => { setGrupo(g); setMoviendo(null); }}
               aria-pressed={activo}
               aria-label={`Ver ${corto.toLowerCase()}`}
               style={{
@@ -427,64 +426,37 @@ export default function MediaDelEjercicio({
         );
       })}
 
-      {/* EL "+" VA DEBAJO DE LA LISTA, y siempre está.
-          Andrés: "falta un botón de + o algo así para agregar otro ángulo de
-          video o de foto". Tenía razón: la única forma de añadir era la card de
-          arriba, que ya se había vuelto el selector de grupo. Un botón que hace
-          dos cosas distintas según el momento no se entiende, y en cuanto el
-          grupo tenía algo, "agregar otro" dejaba de existir a la vista.
-          Ahora la card elige a quién miras, y esto agrega. */}
-      {abierto ? (
-        <div style={{
-          display: 'flex', flexDirection: 'column', gap: 8,
-          border: `1px solid ${T.border}`, borderRadius: 12, padding: 10,
-        }}>
-          {/* LOS CUATRO BOTONES, cada uno diciendo exactamente qué hace.
-              Los tuve un rato reducidos a dos —cámara o carrete, aceptando las
-              dos cosas— porque Andrés dijo que "el video y la portada se repite
-              en los tres botones". Pero lo que le sobraba era la REPETICIÓN, no
-              los botones: se veían tres veces, una por card. Ahora que agregar
-              ocurre en un solo sitio, aparecen una vez, y cada uno vuelve a
-              decir lo suyo. "Grabar ahora" empuja a grabar en el gimnasio, que
-              es de lo que iba todo esto. */}
-          <MediaUpload
-            label="" value="" onChange={() => {}}
-            onAjustes={(a) => agregar(grupo, a)}
-            accept="image/*" kind="covers"
-          />
-          <MediaUpload
-            label="" value="" onChange={() => {}}
-            onAjustes={(a) => agregar(grupo, a)}
-            accept="video/*" kind="videos"
-          />
-          <button
-            type="button" onClick={() => setAbierto(false)}
-            style={{
-              alignSelf: 'flex-start', minHeight: 32, padding: '0 10px', borderRadius: 9,
-              border: 'none', background: 'transparent', color: T.text3, cursor: 'pointer',
-              fontFamily: FONT, fontSize: 12.5, fontWeight: 700,
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-            }}
-          >
-            <X size={13} /> Cancelar
-          </button>
+      {/* LOS CUATRO BOTONES, SIEMPRE A LA VISTA, debajo de la lista.
+          Los tuve un rato escondidos detrás de un "+". Andrés mandó un
+          screenshot: "vi que ya habías puesto los botones que te dije y luego
+          los quitaste de nuevo". No los había quitado — estaban a un toque de
+          distancia. Da igual: si hay que tocar algo para descubrir que siguen
+          ahí, para quien mira están quitados.
+
+          Y el "+" que había pedido no era un botón más: era que se viera dónde
+          agregar cuando el grupo ya tenía cosas. Eso lo resuelven los propios
+          botones estando siempre puestos, justo debajo de lo que hay.
+
+          El renglón de arriba dice a qué grupo van, que es lo único que no se
+          adivina mirándolos. */}
+      <div style={{
+        display: 'flex', flexDirection: 'column', gap: 8,
+        border: `1px solid ${T.border}`, borderRadius: 12, padding: 10,
+      }}>
+        <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 700 }}>
+          {visibles.length ? 'Agregar otro' : 'Agregar'} para {grupoElegido?.corto.toLowerCase()}
         </div>
-      ) : (
-        <button
-          type="button" onClick={() => setAbierto(true)}
-          style={{
-            minHeight: 42, borderRadius: 11, cursor: 'pointer',
-            border: `1.5px dashed ${T.borderHi}`, background: 'transparent', color: T.text2,
-            fontFamily: FONT, fontSize: 13, fontWeight: 700,
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-          }}
-        >
-          <Plus size={16} />
-          {visibles.length
-            ? 'Agregar otro ángulo o foto'
-            : `Agregar foto o video para ${grupoElegido?.corto.toLowerCase()}`}
-        </button>
-      )}
+        <MediaUpload
+          label="" value="" onChange={() => {}}
+          onAjustes={(a) => agregar(grupo, a)}
+          accept="image/*" kind="covers"
+        />
+        <MediaUpload
+          label="" value="" onChange={() => {}}
+          onAjustes={(a) => agregar(grupo, a)}
+          accept="video/*" kind="videos"
+        />
+      </div>
 
       {recortandoFoto && (
         <EditorFoto
