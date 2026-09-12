@@ -104,7 +104,12 @@ export default function MediaDelEjercicio({
 }) {
   const { user } = useAuth();
   const [recortando, setRecortando] = useState(null); // video abierto en el editor
-  const [agregandoEn, setAgregandoEn] = useState(null); // grupo con los botones desplegados
+  /* SIEMPRE hay un grupo elegido, y arranca en "Para todos".
+     Antes se podía no tener ninguno, y entonces el botón de agregar no sabía a
+     dónde mandar el archivo. Con uno siempre puesto, la pantalla contesta sola
+     las dos preguntas: qué estás viendo y a dónde va lo que subas. */
+  const [grupo, setGrupo] = useState('');
+  const [abierto, setAbierto] = useState(false); // los botones de subir, desplegados
   const [moviendo, setMoviendo] = useState(null);       // archivo al que se le cambia de grupo
   const [recortandoFoto, setRecortandoFoto] = useState(null); // foto abierta en el editor
   const [ocupado, setOcupado] = useState(false);
@@ -134,19 +139,19 @@ export default function MediaDelEjercicio({
      Las columnas de siempre se usan solo para "Para todos" y solo si están
      libres: media app las lee directo y dejarlas vacías rompería la portada en
      el buscador de repertorio y en las tarjetas del plan. */
-  async function agregar(grupo, { url: subida, tipo, inicio, fin, sinAudio, encuadre }) {
+  async function agregar(destino, { url: subida, tipo, inicio, fin, sinAudio, encuadre }) {
     if (!subida) { setErr('No se pudo subir el archivo.'); return; }
     setErr('');
 
-    if (grupo === '' && tipo === 'foto' && !portada) { onPortada?.(subida); return; }
-    if (grupo === '' && tipo === 'video' && !principal) {
+    if (destino === '' && tipo === 'foto' && !portada) { onPortada?.(subida); return; }
+    if (destino === '' && tipo === 'video' && !principal) {
       onPrincipal?.(subida);
       onRecortePrincipal?.({ inicio, fin, sinAudio, encuadre });
       return;
     }
     try {
       const fila = await addExerciseMedia({
-        exerciseId, url: subida, tipo, genero: grupo || null, inicio, fin, sinAudio, encuadre,
+        exerciseId, url: subida, tipo, genero: destino || null, inicio, fin, sinAudio, encuadre,
       });
       setLista((prev) => [...prev, fila]);
     } catch (e) {
@@ -265,10 +270,8 @@ export default function MediaDelEjercicio({
      vez dónde miras y dónde agregas; si resalta una y abajo sigue todo, está
      diciendo dos cosas a la vez. Con nada elegido se ve todo lo que tiene el
      ejercicio, que es la vista de entrada. */
-  const visibles = agregandoEn == null
-    ? todos
-    : todos.filter((m) => (m.genero || '') === agregandoEn);
-  const grupoElegido = GRUPOS.find((x) => x.g === agregandoEn);
+  const visibles = todos.filter((m) => (m.genero || '') === grupo);
+  const grupoElegido = GRUPOS.find((x) => x.g === grupo);
 
   const icono = { border: 'none', background: 'transparent', cursor: 'pointer', padding: 6, flexShrink: 0 };
 
@@ -279,9 +282,7 @@ export default function MediaDelEjercicio({
         {/* Decir QUÉ se está mirando cuando no es todo. Una lista filtrada que
             no avisa de que está filtrada hace pensar que faltan cosas. */}
         <span style={{ fontSize: 11.5, color: T.text3, fontWeight: 600 }}>
-          {grupoElegido
-            ? `viendo ${grupoElegido.corto.toLowerCase()}`
-            : `${todos.length || 'nada'}${todos.length ? ' en total' : ''}`}
+          viendo {grupoElegido?.corto.toLowerCase()}
         </span>
       </div>
 
@@ -295,70 +296,44 @@ export default function MediaDelEjercicio({
           y cada uno acepta foto o video indistintamente. */}
       <div style={{ display: 'flex', gap: 8 }}>
         {GRUPOS.map(({ g, corto, Icono }) => {
-          const activo = agregandoEn === g;
+          const activo = grupo === g;
           const cuantos = todos.filter((m) => (m.genero || '') === g).length;
           return (
             <button
               key={g || 'todos'} type="button"
-              onClick={() => setAgregandoEn(activo ? null : g)}
-              aria-expanded={activo}
-              aria-label={`Ver y agregar para ${corto.toLowerCase()}`}
+              onClick={() => { setGrupo(g); setAbierto(false); setMoviendo(null); }}
+              aria-pressed={activo}
+              aria-label={`Ver ${corto.toLowerCase()}`}
               style={{
                 flex: 1, borderRadius: 14, cursor: 'pointer', padding: '12px 6px 11px',
                 border: `1.5px solid ${activo ? T.accent : T.border}`,
                 background: activo ? T.accentBg : T.bg2,
                 fontFamily: FONT, display: 'flex', flexDirection: 'column',
-                alignItems: 'center', gap: 7, position: 'relative',
+                alignItems: 'center', gap: 7,
               }}
             >
               <span style={{
                 width: 34, height: 34, borderRadius: '50%', display: 'grid', placeItems: 'center',
-                background: activo ? T.accent : T.bg3,
-                color: activo ? '#fff' : T.text2,
+                background: activo ? T.accent : T.bg3, color: activo ? '#fff' : T.text2,
               }}>
                 <Icono size={18} />
               </span>
-              <span style={{
-                fontSize: 12, fontWeight: 800, color: activo ? T.accent : T.text,
-              }}>
+              <span style={{ fontSize: 12, fontWeight: 800, color: activo ? T.accent : T.text }}>
                 {corto}
               </span>
-              {/* Cuántos tiene ya. Un número suelto ocupa casi nada y contesta
-                  de un vistazo qué le falta al ejercicio, que es lo que se
-                  perdió al quitar las secciones. */}
-              <span style={{
-                fontSize: 11, fontWeight: 700,
-                color: cuantos ? T.text3 : 'transparent',
-              }}>
+              {/* Cuántos tiene ya. Contesta de un vistazo qué le falta al
+                  ejercicio, y no cambia al moverse entre grupos. */}
+              <span style={{ fontSize: 11, fontWeight: 700, color: cuantos ? T.text3 : 'transparent' }}>
                 {cuantos || '0'}
-              </span>
-              <span style={{
-                position: 'absolute', top: 7, right: 7,
-                color: activo ? T.accent : T.text3, display: 'grid',
-              }}>
-                {activo ? <X size={14} /> : <Plus size={14} />}
               </span>
             </button>
           );
         })}
       </div>
 
-      {agregandoEn != null && (
-        <div style={{
-          display: 'flex', flexDirection: 'column', gap: 8,
-          border: `1px solid ${T.border}`, borderRadius: 12, padding: 10,
-        }}>
-          <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 700 }}>
-            {GRUPOS.find((x) => x.g === agregandoEn)?.pista}
-          </div>
-          <MediaUpload
-            label="" value="" onChange={() => {}}
-            onAjustes={(a) => agregar(agregandoEn, a)}
-            accept="image/*,video/*" kind="covers"
-            hint="Foto o video, lo que elijas."
-          />
-        </div>
-      )}
+      <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 600 }}>
+        {grupoElegido?.pista}
+      </div>
 
       {cargando ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: T.text3, fontSize: 12.5, fontWeight: 600 }}>
@@ -366,15 +341,13 @@ export default function MediaDelEjercicio({
         </div>
       ) : visibles.length === 0 ? (
         <div style={{ fontSize: 12, color: T.text3, fontWeight: 600 }}>
-          {grupoElegido
-            ? `Nada para ${grupoElegido.corto.toLowerCase()} todavía.`
-            : 'Nada todavía. Elige arriba para quién es y súbelo.'}
+          Nada para {grupoElegido?.corto.toLowerCase()} todavía.
         </div>
       ) : visibles.map((m) => {
         const esVideo = m.tipo === 'video';
         const detalle = etiquetaAjustes(m);
-        const grupo = m.genero || '';
-        const et = GRUPOS.find((x) => x.g === grupo)?.et ?? 'Para todos';
+        const suyo = m.genero || '';
+        const et = GRUPOS.find((x) => x.g === suyo)?.et ?? 'Para todos';
         return (
           <div key={m.id} style={{
             display: 'flex', flexDirection: 'column', gap: 8,
@@ -431,7 +404,7 @@ export default function MediaDelEjercicio({
             {moviendo === m.id && (
               <div style={{ display: 'flex', gap: 6 }}>
                 {GRUPOS.map((o) => {
-                  const aqui = o.g === grupo;
+                  const aqui = o.g === suyo;
                   return (
                     <button
                       key={o.g || 'todos'} type="button"
@@ -453,6 +426,52 @@ export default function MediaDelEjercicio({
           </div>
         );
       })}
+
+      {/* EL "+" VA DEBAJO DE LA LISTA, y siempre está.
+          Andrés: "falta un botón de + o algo así para agregar otro ángulo de
+          video o de foto". Tenía razón: la única forma de añadir era la card de
+          arriba, que ya se había vuelto el selector de grupo. Un botón que hace
+          dos cosas distintas según el momento no se entiende, y en cuanto el
+          grupo tenía algo, "agregar otro" dejaba de existir a la vista.
+          Ahora la card elige a quién miras, y esto agrega. */}
+      {abierto ? (
+        <div style={{
+          display: 'flex', flexDirection: 'column', gap: 8,
+          border: `1px solid ${T.border}`, borderRadius: 12, padding: 10,
+        }}>
+          <MediaUpload
+            label="" value="" onChange={() => {}}
+            onAjustes={(a) => agregar(grupo, a)}
+            accept="image/*,video/*" kind="covers"
+          />
+          <button
+            type="button" onClick={() => setAbierto(false)}
+            style={{
+              alignSelf: 'flex-start', minHeight: 32, padding: '0 10px', borderRadius: 9,
+              border: 'none', background: 'transparent', color: T.text3, cursor: 'pointer',
+              fontFamily: FONT, fontSize: 12.5, fontWeight: 700,
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+            }}
+          >
+            <X size={13} /> Cancelar
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button" onClick={() => setAbierto(true)}
+          style={{
+            minHeight: 42, borderRadius: 11, cursor: 'pointer',
+            border: `1.5px dashed ${T.borderHi}`, background: 'transparent', color: T.text2,
+            fontFamily: FONT, fontSize: 13, fontWeight: 700,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+          }}
+        >
+          <Plus size={16} />
+          {visibles.length
+            ? 'Agregar otro ángulo o foto'
+            : `Agregar foto o video para ${grupoElegido?.corto.toLowerCase()}`}
+        </button>
+      )}
 
       {recortandoFoto && (
         <EditorFoto

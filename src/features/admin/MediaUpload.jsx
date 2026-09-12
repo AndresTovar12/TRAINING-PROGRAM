@@ -209,8 +209,12 @@ export default function MediaUpload({
               fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: T.text, whiteSpace: 'nowrap',
             }}
           >
+            {/* En computadora la flecha hacia arriba y "Subir archivo" están
+                bien: ahí sí se busca un archivo que ya existe. Lo que fallaba
+                era no decir QUÉ archivo — Andrés: "esto del screenshot no se
+                entiende". El tipo iba en un renglón aparte, debajo. */}
             {busy ? <Loader2 size={15} className="spin" /> : <Upload size={15} />}
-            {busy ? 'Subiendo…' : 'Subir archivo'}
+            {busy ? 'Subiendo…' : mixto ? 'Elegir foto o video' : esVideo ? 'Elegir video' : 'Elegir foto'}
           </button>
         )}
         {value && (
