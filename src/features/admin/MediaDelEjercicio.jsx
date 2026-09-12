@@ -137,7 +137,6 @@ export default function MediaDelEjercicio({
   async function agregar(grupo, { url: subida, tipo, inicio, fin, sinAudio, encuadre }) {
     if (!subida) { setErr('No se pudo subir el archivo.'); return; }
     setErr('');
-    setAgregandoEn(null);
 
     if (grupo === '' && tipo === 'foto' && !portada) { onPortada?.(subida); return; }
     if (grupo === '' && tipo === 'video' && !principal) {
@@ -256,11 +255,35 @@ export default function MediaDelEjercicio({
   const todos = [...deColumna, ...lista]
     .sort((a, b) => orden[a.genero || ''] - orden[b.genero || '']);
 
+  /* LA CARD ELEGIDA FILTRA LA LISTA.
+     Sin esto, tocar "Hombres" dejaba abajo la lista entera, y como la card
+     quedaba resaltada parecía que esos archivos estaban dentro de Hombres.
+     Andrés: "subí un video en para todos pero le pico a hombre y a mujer, y el
+     mismo video y la misma foto aparece en esos también".
+
+     Tenía razón en que engaña, aunque el dato estuviera bien. La card es a la
+     vez dónde miras y dónde agregas; si resalta una y abajo sigue todo, está
+     diciendo dos cosas a la vez. Con nada elegido se ve todo lo que tiene el
+     ejercicio, que es la vista de entrada. */
+  const visibles = agregandoEn == null
+    ? todos
+    : todos.filter((m) => (m.genero || '') === agregandoEn);
+  const grupoElegido = GRUPOS.find((x) => x.g === agregandoEn);
+
   const icono = { border: 'none', background: 'transparent', cursor: 'pointer', padding: 6, flexShrink: 0 };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Fotos y videos</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Fotos y videos</span>
+        {/* Decir QUÉ se está mirando cuando no es todo. Una lista filtrada que
+            no avisa de que está filtrada hace pensar que faltan cosas. */}
+        <span style={{ fontSize: 11.5, color: T.text3, fontWeight: 600 }}>
+          {grupoElegido
+            ? `viendo ${grupoElegido.corto.toLowerCase()}`
+            : `${todos.length || 'nada'}${todos.length ? ' en total' : ''}`}
+        </span>
+      </div>
 
       {/* TRES CARDS ARRIBA, y cada una abre UN SOLO par de botones.
           Antes cada grupo desplegaba cuatro —tomar foto, de mis fotos, grabar,
@@ -279,7 +302,7 @@ export default function MediaDelEjercicio({
               key={g || 'todos'} type="button"
               onClick={() => setAgregandoEn(activo ? null : g)}
               aria-expanded={activo}
-              aria-label={`Agregar para ${corto.toLowerCase()}`}
+              aria-label={`Ver y agregar para ${corto.toLowerCase()}`}
               style={{
                 flex: 1, borderRadius: 14, cursor: 'pointer', padding: '12px 6px 11px',
                 border: `1.5px solid ${activo ? T.accent : T.border}`,
@@ -341,11 +364,13 @@ export default function MediaDelEjercicio({
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: T.text3, fontSize: 12.5, fontWeight: 600 }}>
           <Loader2 size={14} className="spin" /> Cargando…
         </div>
-      ) : todos.length === 0 ? (
+      ) : visibles.length === 0 ? (
         <div style={{ fontSize: 12, color: T.text3, fontWeight: 600 }}>
-          Nada todavía. Elige arriba para quién es y súbelo.
+          {grupoElegido
+            ? `Nada para ${grupoElegido.corto.toLowerCase()} todavía.`
+            : 'Nada todavía. Elige arriba para quién es y súbelo.'}
         </div>
-      ) : todos.map((m) => {
+      ) : visibles.map((m) => {
         const esVideo = m.tipo === 'video';
         const detalle = etiquetaAjustes(m);
         const grupo = m.genero || '';
