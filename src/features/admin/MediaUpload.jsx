@@ -165,7 +165,7 @@ export default function MediaUpload({
         />
       )}
       <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>{label}</span>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         {enTelefono ? (
           <>
             <button
@@ -173,11 +173,16 @@ export default function MediaUpload({
               onClick={() => camaraRef.current?.click()}
               disabled={busy}
               style={{
-                display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 44,
-                padding: '0 16px', borderRadius: 11, border: 'none',
+                /* `flex: 1` y no ancho automático: con el ancho natural,
+                   "Tomar foto" + "De mis fotos" suman más que el ancho de un
+                   teléfono y se apilaban de cuatro en cuatro, ocupando media
+                   pantalla. Repartiéndose el renglón caben siempre. */
+                flex: 1, minWidth: 0,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                gap: 6, minHeight: 44, padding: '0 10px', borderRadius: 11, border: 'none',
                 background: busy ? T.bg3 : T.accent, color: busy ? T.text3 : '#fff',
                 cursor: busy ? 'default' : 'pointer',
-                fontFamily: FONT, fontSize: 13.5, fontWeight: 800, whiteSpace: 'nowrap',
+                fontFamily: FONT, fontSize: 13, fontWeight: 800, whiteSpace: 'nowrap',
               }}
             >
               {busy ? <Loader2 size={15} className="spin" />
@@ -189,10 +194,12 @@ export default function MediaUpload({
               onClick={() => inputRef.current?.click()}
               disabled={busy}
               style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 44,
-                padding: '0 14px', borderRadius: 11, border: `1.5px solid ${T.border}`,
+                flex: 1, minWidth: 0,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                gap: 6, minHeight: 44, padding: '0 10px', borderRadius: 11,
+                border: `1.5px solid ${T.border}`,
                 background: T.bg2, cursor: busy ? 'default' : 'pointer',
-                fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: T.text2, whiteSpace: 'nowrap',
+                fontFamily: FONT, fontSize: 13, fontWeight: 700, color: T.text2, whiteSpace: 'nowrap',
               }}
             >
               <Images size={15} /> {mixto ? 'Del carrete' : esVideo ? 'Del carrete' : 'De mis fotos'}

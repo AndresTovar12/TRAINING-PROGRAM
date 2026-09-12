@@ -439,10 +439,23 @@ export default function MediaDelEjercicio({
           display: 'flex', flexDirection: 'column', gap: 8,
           border: `1px solid ${T.border}`, borderRadius: 12, padding: 10,
         }}>
+          {/* LOS CUATRO BOTONES, cada uno diciendo exactamente qué hace.
+              Los tuve un rato reducidos a dos —cámara o carrete, aceptando las
+              dos cosas— porque Andrés dijo que "el video y la portada se repite
+              en los tres botones". Pero lo que le sobraba era la REPETICIÓN, no
+              los botones: se veían tres veces, una por card. Ahora que agregar
+              ocurre en un solo sitio, aparecen una vez, y cada uno vuelve a
+              decir lo suyo. "Grabar ahora" empuja a grabar en el gimnasio, que
+              es de lo que iba todo esto. */}
           <MediaUpload
             label="" value="" onChange={() => {}}
             onAjustes={(a) => agregar(grupo, a)}
-            accept="image/*,video/*" kind="covers"
+            accept="image/*" kind="covers"
+          />
+          <MediaUpload
+            label="" value="" onChange={() => {}}
+            onAjustes={(a) => agregar(grupo, a)}
+            accept="video/*" kind="videos"
           />
           <button
             type="button" onClick={() => setAbierto(false)}
