@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft, X, Plus, Trash2, Copy, ChevronRight, ChevronUp, ChevronDown,
-  ChevronLeft, Loader2, Check, Layers, Dumbbell, StickyNote, Zap, AlertCircle,
+  ChevronLeft, Loader2, Check, Layers, Dumbbell, StickyNote, Zap,
   Save, FolderOpen, Clipboard, Eraser, CalendarDays, Settings2, Pencil, Repeat, Scale, Video,
   Image as ImageIcon,
 } from 'lucide-react';
@@ -948,6 +948,110 @@ function RanuraMedia({
 /* Editor de sesión (un día) por sets                                   */
 /* ------------------------------------------------------------------ */
 
+/* ---- días con dos sesiones (AM / PM) ---- */
+const turnoDe = (tag = '') => (tag.match(/\(([AP]M)\)/) || [])[1] || null;
+const limpiaTag = (tag = '') => tag.replace(/^Sesi[óo]n \d+ \([AP]M\):\s*/, '');
+
+/**
+ * La rutina de un día con DOS sesiones, tal cual está guardada.
+ *
+ * POR QUÉ EXISTE. El editor enseñaba en estos días solo un aviso —"Día dual
+ * con bloques… 7 ejercicios en 2 bloques"— y nada de la rutina. Andrés: "más
+ * allá del aviso, no veo la rutina". Medido en su plan: 68 de 175 días son
+ * así (32 de 40 en Fuerza, 28 de 35 en Potencia, 8 de 20 en Football). O sea
+ * que en esas fases el coach no podía ni VER qué le toca al atleta.
+ *
+ * POR QUÉ SOLO SE VE Y NO SE EDITA TODAVÍA. Los ejercicios de estas sesiones
+ * no son series simples. El PM de Potencia es un cluster de French Contrast:
+ * filas con "—" en las series, una fila "Total clusters" que no es un
+ * ejercicio, y el orden encadenado importa. El editor de siempre está hecho
+ * para "se repite 3 veces", y pasarle esto podía reescribir datos al guardar.
+ * El plan de Andrés no se toca sin su permiso. Ver primero, sin riesgo; editar
+ * es otra decisión.
+ *
+ * Comprobado por SQL sobre los 68 días: todos tienen bloques, y los bloques
+ * son de solo tres tipos — `lift` (ejercicios), `speed` (lista de puntos) y
+ * `note` (texto). No hay otra forma que pintar.
+ */
+function SesionesDelDiaDual({ day }) {
+  const bloques = day.blocks || [];
+  const meta = (ex) => {
+    const partes = [];
+    if (ex.sets && ex.sets !== '—') partes.push(ex.sets === '1' ? '1 serie' : `${ex.sets} series`);
+    // "reps" solo detrás de un número o un rango: "3-5 reps" sí, pero
+    // "5/lado reps" no lo escribe nadie — ese dato ya dice su propia unidad.
+    if (ex.reps && ex.reps !== '—') partes.push(/^\d+(\s*-\s*\d+)?$/.test(ex.reps) ? `${ex.reps} reps` : ex.reps);
+    if (ex.intensity) partes.push(ex.intensity);
+    return partes.join(' · ');
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
+      {bloques.map((b, bi) => {
+        const turno = turnoDe(b.tag);
+        return (
+          <div key={bi} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8, padding: '11px 13px',
+              borderBottom: `1px solid ${T.border}`,
+            }}>
+              {turno && (
+                <span style={{
+                  fontSize: 10.5, fontWeight: 800, color: '#fff', borderRadius: 6, padding: '3px 7px',
+                  background: turno === 'PM' ? T.accent : '#D97706', letterSpacing: 0.4, flexShrink: 0,
+                }}>
+                  {turno}
+                </span>
+              )}
+              <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 800, color: T.text }}>
+                {limpiaTag(b.tag) || `Sesión ${bi + 1}`}
+              </span>
+            </div>
+
+            <div style={{ padding: '10px 13px 12px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+              {b.type === 'speed' && (
+                <ul style={{ margin: 0, paddingLeft: 18, color: T.text2, fontSize: 13.5, lineHeight: 1.6 }}>
+                  {(b.bullets || []).map((p, i) => (
+                    <li key={i} style={typeof p === 'object' && p.bold ? { color: T.text, fontWeight: 700 } : undefined}>
+                      {typeof p === 'object' ? p.text : p}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {b.type === 'lift' && (b.exercises || []).map((ex, i) => (ex.isNote ? (
+                <div key={i} style={{
+                  display: 'flex', gap: 8, alignItems: 'flex-start', background: T.accentBg,
+                  borderRadius: 10, padding: '8px 10px', fontSize: 12.5, fontWeight: 700, color: T.accent, lineHeight: 1.45,
+                }}>
+                  <StickyNote size={14} style={{ flexShrink: 0, marginTop: 2 }} /> {ex.text}
+                </div>
+              ) : (
+                <div key={i} style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{ex.name}</div>
+                  {meta(ex) && (
+                    <div style={{ fontSize: 12.5, fontWeight: 600, color: T.text2, marginTop: 1 }}>{meta(ex)}</div>
+                  )}
+                  {ex.notes && (
+                    <div style={{ fontSize: 12, color: T.text3, marginTop: 1, lineHeight: 1.4 }}>{ex.notes}</div>
+                  )}
+                </div>
+              )))}
+
+              {b.type === 'note' && (
+                <div style={{ fontSize: 13, color: T.text2, lineHeight: 1.55 }}>{b.text}</div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+      <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 600, lineHeight: 1.45 }}>
+        Los días con dos sesiones todavía no se editan desde aquí: solo el nombre y el tipo.
+      </div>
+    </div>
+  );
+}
+
 function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCreado, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear }) {
   const [creandoEjercicio, setCreandoEjercicio] = useState(false);
   const [mediaDe, setMediaDe] = useState(null);
@@ -969,16 +1073,7 @@ function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCr
     return (
       <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 18, padding: 16, boxShadow: KP.shCard }}>
         <DayHeader day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog} onClear={onClear} dual />
-        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: T.bg, borderRadius: 14, padding: 14, marginTop: 12 }}>
-          <AlertCircle size={17} color={T.accent} style={{ flexShrink: 0, marginTop: 1 }} />
-          <div style={{ fontSize: 13, color: T.text2, lineHeight: 1.55 }}>
-            <b>Día dual con bloques</b> (estructura avanzada del plan original). Puedes cambiar nombre y
-            categoría; el contenido de sus bloques se conserva intacto.
-            <div style={{ marginTop: 7, fontWeight: 700, color: T.text }}>
-              {plural((day.blocks || []).filter((b) => b.exercises).reduce((s, b) => s + b.exercises.length, 0), 'ejercicio', 'ejercicios')} en {pluralS((day.blocks || []).length, 'bloque')}
-            </div>
-          </div>
-        </div>
+        <SesionesDelDiaDual day={day} />
       </div>
     );
   }
@@ -1264,7 +1359,19 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
     <>
       <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <Field label="Nombre de la sesión" grow>
-          <input value={day.name || ''} onChange={(e) => onPatch({ name: e.target.value })} placeholder="Ej. Tren inferior — fuerza" style={inputStyle} />
+          {/* En un día de dos sesiones el nombre casi nunca está guardado: la
+              app del atleta lo arma juntando las dos ("Velocidad máxima +
+              French Contrast"). Aquí salía "Ej. Tren inferior" y parecía que
+              al día le faltaba nombre. Se enseña lo mismo que ve el atleta,
+              como sugerencia gris — no se escribe nada en el plan. */}
+          <input
+            value={day.name || ''}
+            onChange={(e) => onPatch({ name: e.target.value })}
+            placeholder={dual && day.blocks?.length
+              ? day.blocks.map((b) => limpiaTag(b.tag)).filter(Boolean).join(' + ')
+              : 'Ej. Tren inferior — fuerza'}
+            style={inputStyle}
+          />
         </Field>
         <div style={{ flex: '0 1 180px', minWidth: 140 }}>
           <Field label="Tipo de sesión">
