@@ -25,6 +25,7 @@ import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
 import { useStorage } from '@/contexts/AppStateContext';
 import FichaEjercicio from '@/features/training/FichaEjercicio';
 import Portada from '@/components/Portada';
+import { plural, pluralS } from '@/lib/plural';
 
 // Nombres completos SOLO para mostrar en compu. Lo que guarda el plan sigue
 // siendo 'Lun', 'Mar'… igual que en el editor del entrenador.
@@ -826,7 +827,7 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
         {phase.fullName}
         <span style={{ color: LT.text3, fontWeight: 600 }}>
           {' · '}{phase.mode === 'microcycle' ? 'Microciclo' : `Semana ${week.num} de ${phase.weeks}`}
-          {' · '}{completedCount}/{week.days.length} días
+          {' · '}{completedCount}/{pluralS(week.days.length, 'día')}
         </span>
       </button>
 
@@ -927,7 +928,7 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
         <span style={{ fontSize: 12.5, color: LT.text3, fontWeight: 600, ...NUM_STYLE }}>
           {[
             cat.label,
-            summary.exCount > 0 && `${summary.exCount} ejercicios`,
+            summary.exCount > 0 && plural(summary.exCount, 'ejercicio', 'ejercicios'),
             summary.mainIntensity,
           ].filter(Boolean).join(' · ')}
         </span>
@@ -1236,7 +1237,7 @@ const PhaseDetail = ({ phase, onBack, onSelectWeek, sessionsData, activeWeekKey 
       <div style={{ fontSize: 14.5, color: T.text2, lineHeight: 1.55, marginTop: 20, marginBottom: 24 }}>{phase.objective}</div>
 
       <div style={{ fontSize: 12, color: T.text3, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 14 }}>
-        {phase.mode === 'microcycle' ? 'Microciclo tipo' : `${phase.weekData.length} semanas`}
+        {phase.mode === 'microcycle' ? 'Microciclo tipo' : pluralS(phase.weekData.length, 'semana')}
       </div>
 
       {/* Cards de semana */}
@@ -1304,7 +1305,7 @@ const PlanOverview = ({ onSelectPhase, sessionsData, activePhaseId }) => {
           {PLAN.length === 1 ? 'Tu programa' : `Las ${PLAN.length} fases`}
         </h1>
         <div style={{ marginTop: 6, fontSize: 14, color: T.text2 }}>
-          {PLAN.reduce((s, p) => s + (p.weekData?.length || 0), 0)} semanas · periodización por bloques
+          {pluralS(PLAN.reduce((s, p) => s + (p.weekData?.length || 0), 0), 'semana')} · periodización por bloques
         </div>
       </div>
 
@@ -1600,7 +1601,7 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, 
                 </div>
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.82)', marginTop: 8, lineHeight: 1.4 }}>
                   {kind === 'weekly' ? weekdayLabel(next.day.day) : next.phase.name}<br />
-                  {sessionMeta.exercises ? `${sessionMeta.exercises} ejercicios · ` : ''}{sessionMeta.duration}
+                  {sessionMeta.exercises ? `${plural(sessionMeta.exercises, 'ejercicio', 'ejercicios')} · ` : ''}{sessionMeta.duration}
                   {sessionMeta.dual ? ' · 2 sesiones' : ''}
                 </div>
               </div>
@@ -1718,7 +1719,7 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, 
                 <div style={{ fontSize: 12, color: LT.text2, marginTop: 1 }}>
                   {kind === 'weekly'
                     ? `Rutina semanal · ${week.trainingDays} ${week.trainingDays === 1 ? 'día' : 'días'}`
-                    : `${PLAN.length} ${PLAN.length === 1 ? 'fase' : 'fases'} · ${PLAN.reduce((s, p) => s + (p.weekData?.length || 0), 0)} semanas`}
+                    : `${pluralS(PLAN.length, 'fase')} · ${pluralS(PLAN.reduce((s, p) => s + (p.weekData?.length || 0), 0), 'semana')}`}
                 </div>
               </div>
               <ChevronRight size={18} style={{ color: LT.text3, flexShrink: 0 }} />

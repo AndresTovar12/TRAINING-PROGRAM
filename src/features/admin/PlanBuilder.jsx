@@ -18,6 +18,7 @@ import { T, FONT, KP, CAT_COLORS } from '@/lib/theme';
 import RepertoirePicker from '@/features/admin/RepertoirePicker';
 import MediaUpload from '@/features/admin/MediaUpload';
 import Portada from '@/components/Portada';
+import { plural, pluralS } from '@/lib/plural';
 
 /* ------------------------------------------------------------------ */
 /* Constantes y helpers de datos                                       */
@@ -974,7 +975,7 @@ function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCr
             <b>Día dual con bloques</b> (estructura avanzada del plan original). Puedes cambiar nombre y
             categoría; el contenido de sus bloques se conserva intacto.
             <div style={{ marginTop: 7, fontWeight: 700, color: T.text }}>
-              {(day.blocks || []).filter((b) => b.exercises).reduce((s, b) => s + b.exercises.length, 0)} ejercicios en {(day.blocks || []).length} bloques
+              {plural((day.blocks || []).filter((b) => b.exercises).reduce((s, b) => s + b.exercises.length, 0), 'ejercicio', 'ejercicios')} en {pluralS((day.blocks || []).length, 'bloque')}
             </div>
           </div>
         </div>
@@ -1562,7 +1563,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
             fontFamily: FONT, fontSize: 15, fontWeight: 800, boxShadow: KP.shBtn, opacity: wizDays.length ? 1 : 0.5,
           }}
         >
-          Crear estructura ({wizWeeks} semanas · {wizDays.length} días/sem)
+          Crear estructura ({pluralS(wizWeeks, 'semana')} · {pluralS(wizDays.length, 'día')}/sem)
         </button>
         <div style={{ fontSize: 12.5, color: T.text3, textAlign: 'center', lineHeight: 1.5 }}>
           Después llenas los ejercicios de la semana 1 y los copias al resto con un botón.
@@ -1589,7 +1590,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
               style={{ flex: 1, minWidth: 0, textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, padding: 0 }}>
               <div style={{ fontSize: 14.5, fontWeight: 800, color: T.text }}>{p.name}</div>
               <div style={{ fontSize: 12, color: T.text2, marginTop: 2, fontWeight: 600 }}>
-                {p.weekData.length} semana{p.weekData.length !== 1 ? 's' : ''} · {phaseSessions(p)} sesiones
+                {pluralS(p.weekData.length, 'semana')} · {plural(phaseSessions(p), 'sesión', 'sesiones')}
               </div>
             </button>
             <IconBtn icon={ChevronUp} onClick={() => touch((ps) => moveItem(ps, pi, -1))} disabled={pi === 0} />

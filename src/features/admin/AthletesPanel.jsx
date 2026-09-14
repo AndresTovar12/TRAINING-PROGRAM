@@ -12,6 +12,7 @@ import PlanBuilder from '@/features/admin/PlanBuilder';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsDesktop } from '@/lib/useViewport';
 import { T, FONT, KP } from '@/lib/theme';
+import { plural, pluralS } from '@/lib/plural';
 
 function useIsNarrow(breakpoint = 880) {
   const [narrow, setNarrow] = useState(
@@ -675,7 +676,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
         <div style={{ background: T.bg, borderRadius: 14, padding: 16 }}>
           <div style={{ fontWeight: 800, color: T.text, fontSize: 15 }}>{plan.title}</div>
           <div style={{ fontSize: 12.5, color: T.text2, marginTop: 4, fontWeight: 600 }}>
-            {phases.length} fase{phases.length !== 1 ? 's' : ''} · {totalWeeks} semana{totalWeeks !== 1 ? 's' : ''} · {totalSessions} sesiones
+            {pluralS(phases.length, 'fase')} · {pluralS(totalWeeks, 'semana')} · {plural(totalSessions, 'sesión', 'sesiones')}
           </div>
           {/* Fases resumidas */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 12 }}>
