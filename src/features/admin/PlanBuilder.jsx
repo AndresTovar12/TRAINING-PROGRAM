@@ -13,7 +13,7 @@ import {
   listExerciseMedia, addExerciseMedia, deleteExerciseMedia,
   listExerciseOverrides, aplicarOverrides,
 } from '@/lib/api';
-import { isLoadedExercise } from '@/lib/training-utils';
+import { isLoadedExercise, esDescanso } from '@/lib/training-utils';
 import { T, FONT, KP, CAT_COLORS } from '@/lib/theme';
 import RepertoirePicker from '@/features/admin/RepertoirePicker';
 import MediaUpload from '@/features/admin/MediaUpload';
@@ -41,6 +41,7 @@ const newExercise = (ex) => (ex
   ? { exercise_id: ex.id, name: ex.name, sets: '3', reps: '8-10', intensity: '', notes: '' }
   : { name: '', sets: '3', reps: '10', intensity: '', notes: '' });
 const newDay = (day = 'Lun') => ({ day, name: 'Sesión', cat: 'gym', exercises: [] });
+const DAY_FULL_LOWER = { Lun: 'lunes', Mar: 'martes', 'Mié': 'miércoles', Jue: 'jueves', Vie: 'viernes', 'Sáb': 'sábado', Dom: 'domingo' };
 const newWeek = (num) => ({ num, label: '', load: '', days: [] });
 
 // El número de semana es fijo (num); `label` es solo el título opcional.
@@ -63,7 +64,8 @@ const newPhase = (num, color) => ({
 
 const nextWeekNum = (phase) => Math.max(0, ...phase.weekData.map((w) => w.num || 0)) + 1;
 const nextPhaseNum = (phases) => Math.max(0, ...phases.map((p) => p.num || 0)) + 1;
-const phaseSessions = (p) => p.weekData.reduce((s, w) => s + (w.days?.length || 0), 0);
+// Sin los días OFF, igual que la app del atleta.
+const phaseSessions = (p) => p.weekData.reduce((s, w) => s + (w.days || []).filter((d) => !esDescanso(d)).length, 0);
 
 const normalize = (phases) => phases.map((p) => ({
   ...p,
@@ -1010,7 +1012,7 @@ function SesionesDelDiaDual({ day }) {
 
             <div style={{ padding: '10px 13px 12px', display: 'flex', flexDirection: 'column', gap: 9 }}>
               {b.type === 'speed' && (
-                <ul style={{ margin: 0, paddingLeft: 18, color: T.text2, fontSize: 13.5, lineHeight: 1.6 }}>
+                <ul style={{ listStyleType: 'disc', margin: 0, paddingLeft: 18, color: T.text2, fontSize: 13.5, lineHeight: 1.6 }}>
                   {(b.bullets || []).map((p, i) => (
                     <li key={i} style={typeof p === 'object' && p.bold ? { color: T.text, fontWeight: 700 } : undefined}>
                       {typeof p === 'object' ? p.text : p}
@@ -1079,10 +1081,16 @@ function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCr
   }
 
   const nSets = blocks.filter((b) => b.type === 'set').length;
+  /* Un día OFF vacío es un día de descanso, no una sesión a medio armar.
+     Antes enseñaba "0 sets" y "Agregar set" como botón azul grande: la
+     pantalla empujaba justo a lo contrario de lo que el coach acababa de
+     decidir. Si el día OFF ya tiene sets —porque le cambiaron el tipo después—
+     se enseñan igual: esconderlos haría que existieran sin que nadie los viera. */
+  const descanso = (day.cat || 'gym') === 'off' && nSets === 0;
 
   return (
     <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 18, padding: 16, boxShadow: KP.shCard }}>
-      <DayHeader day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog} onClear={onClear} nSets={nSets} />
+      <DayHeader day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog} onClear={onClear} nSets={descanso ? null : nSets} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 14 }}>
         {blocks.map((b, bi) => {
@@ -1197,7 +1205,14 @@ function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCr
           que leer los tres para encontrar el de siempre. Aqui el principal
           ocupa todo el ancho —imposible de fallar con el pulgar— y los otros
           dos van abajo, mas chicos, repartidos a la mitad. */}
-      {esCompu ? (
+      {descanso ? (
+        <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ fontSize: 13, color: T.text2, lineHeight: 1.5 }}>
+            <b style={{ color: T.text }}>Día de descanso.</b> El atleta no tiene nada que hacer. Si quieres, déjale una nota.
+          </div>
+          <Pill icon={StickyNote} onClick={() => writeBlocks((bs) => [...bs, { type: 'note', ex: { isNote: true, text: '' } }])}>Nota</Pill>
+        </div>
+      ) : esCompu ? (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
           <Pill icon={Plus} primary onClick={() => setPickerCtx({ mode: 'new-set' })}>Agregar set</Pill>
           <Pill icon={StickyNote} onClick={() => writeBlocks((bs) => [...bs, { type: 'note', ex: { isNote: true, text: '' } }])}>Nota</Pill>
@@ -1358,7 +1373,14 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
   return (
     <>
       <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-        <Field label="Nombre de la sesión" grow>
+        {/* 220 px de base y no `flex: 1` pelado. Con `flex: 1` la base es 0, así
+            que el nombre nunca bajaba de renglón: se encogía para dejarle sitio al
+            tipo y al contador. Medido a 375 px: el campo quedaba en ~70 px, la
+            etiqueta en tres renglones, y "Descanso" se leía "Desca". Con base
+            real, en el teléfono el nombre ocupa su renglón y en la compu siguen
+            los tres juntos. */}
+        <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+        <Field label="Nombre de la sesión">
           {/* En un día de dos sesiones el nombre casi nunca está guardado: la
               app del atleta lo arma juntando las dos ("Velocidad máxima +
               French Contrast"). Aquí salía "Ej. Tren inferior" y parecía que
@@ -1373,6 +1395,7 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
             style={inputStyle}
           />
         </Field>
+        </div>
         <div style={{ flex: '0 1 180px', minWidth: 140 }}>
           <Field label="Tipo de sesión">
             <select
@@ -1911,6 +1934,29 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
                 onApplyCatalog={() => setModal({ type: 'tpl-day', payload: { di } })}
               />
             ))}
+
+            {/* OTRA SESIÓN EL MISMO DÍA. El plan ya lo admitía —cada sesión es
+                una entrada con su día de la semana, y puede haber dos con
+                "Lun"— pero el botón de añadir solo aparecía con el día VACÍO.
+                En cuanto el lunes tenía una sesión, no había forma de ponerle
+                la de la tarde. Probado como coach: el menú de la sesión solo
+                ofrecía copiar, y "Pegar" también vivía solo en el día vacío. */}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button type="button"
+                onClick={() => patchWeek(nav.pi, wIdx, (wk) => ({ days: [...(wk.days || []), newDay(activeWeekday)] }))}
+                style={{
+                  flex: '1 1 220px', minHeight: 46, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  borderRadius: 14, border: `1.5px dashed ${T.borderHi}`, background: 'transparent', cursor: 'pointer',
+                  fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text2,
+                }}>
+                <Plus size={16} /> Añadir otra sesión el {DAY_FULL_LOWER[activeWeekday] || activeWeekday.toLowerCase()}
+              </button>
+              {clipboard && (
+                <Pill icon={Clipboard} onClick={() => patchWeek(nav.pi, wIdx, (wk) => ({ days: [...(wk.days || []), { ...clone(clipboard), day: activeWeekday }] }))}>
+                  Pegar rutina
+                </Pill>
+              )}
+            </div>
           </div>
         )}
       </div>

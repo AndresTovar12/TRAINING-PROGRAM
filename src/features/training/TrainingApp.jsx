@@ -18,7 +18,7 @@ import {
   resolveCursor, defaultCursor, isValidCursor, findPreviousWeight, historialDePeso,
   formatIntensity,
   sessionForToday, weekOverview, weekdayToday, weekdayLabel,
-  cursorAlDia, isoWeekKey,
+  cursorAlDia, isoWeekKey, esDescanso, enOrdenDeSemana,
 } from '@/lib/training-utils';
 import { aKilos, desdeKilos, pesoTexto, etiquetaUnidad } from '@/lib/unidades';
 import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
@@ -763,7 +763,9 @@ const LightWeekScience = ({ science }) => {
 const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, activeSessionId }) => {
   const esCompu = useIsDesktop();
   const phaseColor = phase.color || LT.blue;
-  const completedCount = week.days.filter((_, idx) => sessionsData[sessionId(phase.id, week.num, idx)]?.completed).length;
+  // Los días OFF no cuentan: no se "completa" un descanso.
+  const entrenables = week.days.map((d, idx) => ({ d, idx })).filter(({ d }) => !esDescanso(d));
+  const completedCount = entrenables.filter(({ idx }) => sessionsData[sessionId(phase.id, week.num, idx)]?.completed).length;
 
   // Abre en el día de hoy; si hoy no entrena, en el primero de la semana.
   const initialIdx = useMemo(() => {
@@ -782,6 +784,18 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
   const selectedDayName = selectedDay.name || (selectedDay.blocks ? selectedDay.blocks.map(b => b.tag.replace(/^Sesi[óo]n \d+ \([AP]M\): /, '')).join(' + ') : selectedDay.day);
   const cat = CAT_COLORS[selectedDay.cat] || CAT_COLORS.gym;
   const summary = useMemo(() => getDaySummary(selectedDay), [selectedDay]);
+  /* Sesiones que no son de gimnasio. Probado armando una semana como coach:
+     una sesión de velocidad, de recovery o de cancha se escribe con NOTAS
+     ("Sprint 6 x 30 yd", "Foam roller 10 min"), porque no son ejercicios del
+     repertorio. Esas notas se pintaban como separadores de serie —en
+     mayúsculas, azules, 11 px—, así que la sesión entera se leía como una pila
+     de títulos sin contenido. Y un día OFF enseñaba "Marcar sesión como
+     terminada" sobre una pantalla vacía. */
+  const notasDelDia = (selectedDay.exercises || []).filter((e) => e.isNote && e.text);
+  const soloNotas = !selectedDay.blocks && (selectedDay.exercises || []).length > 0
+    && (selectedDay.exercises || []).every((e) => e.isNote);
+  const descansoPuro = esDescanso(selectedDay) && !selectedDay.blocks
+    && !(selectedDay.exercises || []).some((e) => !e.isNote);
 
   const setExerciseData = (blockIdx, exIdx, data) => {
     updateSession(selectedId, prev => {
@@ -827,7 +841,7 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
         {phase.fullName}
         <span style={{ color: LT.text3, fontWeight: 600 }}>
           {' · '}{phase.mode === 'microcycle' ? 'Microciclo' : `Semana ${week.num} de ${phase.weeks}`}
-          {' · '}{completedCount}/{pluralS(week.days.length, 'día')}
+          {' · '}{completedCount}/{pluralS(entrenables.length, 'día')}
         </span>
       </button>
 
@@ -861,7 +875,7 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
         display: 'flex', gap: 2, marginBottom: 10, overflowX: 'auto',
         borderBottom: `1px solid ${LT.border}`,
       }}>
-        {week.days.map((day, idx) => {
+        {enOrdenDeSemana(week.days).map(({ day, idx }) => {
           const id = sessionId(phase.id, week.num, idx);
           const sd = sessionsData[id];
           const isCompleted = !!sd?.completed;
@@ -879,6 +893,13 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
                 marginBottom: -1, transition: 'color .12s, border-color .12s',
               }}>
               {esCompu ? (NOMBRE_DIA[day.day] || day.day) : day.day}
+              {/* Dos sesiones el mismo día daban dos pestañas "Lun" idénticas:
+                  no había forma de saber cuál era cuál sin abrirlas. */}
+              {week.days.filter((x) => x.day === day.day).length > 1 && (
+                <span style={{ fontWeight: 600, color: LT.text3, marginLeft: 3 }}>
+                  {week.days.slice(0, idx + 1).filter((x) => x.day === day.day).length}
+                </span>
+              )}
 
               {/* Una sola marca por dia, siempre del mismo ancho.
                   Antes eran DOS puntos pegados en el dia que estaba a medias:
@@ -945,8 +966,32 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
         )}
       </div>
 
+      {descansoPuro && (
+        <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: 18, marginBottom: 14 }}>
+          <div style={{ fontSize: 17, fontWeight: 800, color: LT.text }}>Día de descanso</div>
+          <div style={{ fontSize: 13.5, color: LT.text2, marginTop: 4, lineHeight: 1.5 }}>
+            Hoy no toca entrenar. Recuperar también es parte del plan.
+          </div>
+          {notasDelDia.length > 0 && (
+            <ul style={{ listStyleType: 'disc', margin: '12px 0 0', paddingLeft: 18, color: LT.text, fontSize: 14, lineHeight: 1.65 }}>
+              {notasDelDia.map((n, i) => <li key={i}>{n.text}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {/* Una sesión hecha solo de notas se lee como lista de instrucciones, igual
+          que las sesiones de velocidad del plan original. */}
+      {!descansoPuro && soloNotas && (
+        <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: '14px 16px', marginBottom: 14 }}>
+          <ul style={{ listStyleType: 'disc', margin: 0, paddingLeft: 18, color: LT.text, fontSize: 14.5, lineHeight: 1.7 }}>
+            {notasDelDia.map((n, i) => <li key={i}>{n.text}</li>)}
+          </ul>
+        </div>
+      )}
+
       {/* Ejercicios agrupados en sets */}
-      {selectedDay.exercises && (() => {
+      {selectedDay.exercises && !soloNotas && !descansoPuro && (() => {
         const groups = groupIntoSets(selectedDay.exercises);
         let setNum = 0;
         return groups.map((g, gi) => {
@@ -995,7 +1040,7 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
                   });
                 })()}
                 {blk.type === 'speed' && (
-                  <ul style={{ margin: '4px 0 0', paddingLeft: 16, color: LT.text2, fontSize: 14, lineHeight: 1.7 }}>
+                  <ul style={{ listStyleType: 'disc', margin: '4px 0 0', paddingLeft: 16, color: LT.text2, fontSize: 14, lineHeight: 1.7 }}>
                     {blk.bullets.map((b, i) => (
                       <li key={i} style={typeof b === 'object' && b.bold ? { color: LT.text, fontWeight: 600 } : {}}>
                         {typeof b === 'object' ? b.text : b}
@@ -1016,7 +1061,7 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
 
       {selectedDay.notes && !selectedDay.exercises && !selectedDay.blocks && (
         <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
-          <ul style={{ margin: 0, paddingLeft: 18, color: LT.text2, fontSize: 14, lineHeight: 1.7 }}>
+          <ul style={{ listStyleType: 'disc', margin: 0, paddingLeft: 18, color: LT.text2, fontSize: 14, lineHeight: 1.7 }}>
             {selectedDay.notes.map((n, i) => <li key={i}>{n}</li>)}
           </ul>
         </div>
@@ -1034,7 +1079,7 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
           botón no sea indispensable, para nada". No es el objetivo de la
           pantalla —entrenar lo es—, así que no compite con nada. Quien lo
           ignore no pierde nada; quien quiera cerrarla, lo tiene donde acaba. */}
-      {(selectedDay.exercises || selectedDay.blocks) && (
+      {(selectedDay.exercises || selectedDay.blocks) && !descansoPuro && (
         <button
           type="button"
           onClick={toggleComplete}
@@ -1056,7 +1101,7 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
       {selectedDay.notes && (selectedDay.exercises || selectedDay.blocks) && (
         <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
           <div style={{ fontSize: 11, color: LT.text3, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>Notas del día</div>
-          <ul style={{ margin: 0, paddingLeft: 18, color: LT.text2, fontSize: 13, lineHeight: 1.7 }}>
+          <ul style={{ listStyleType: 'disc', margin: 0, paddingLeft: 18, color: LT.text2, fontSize: 13, lineHeight: 1.7 }}>
             {selectedDay.notes.map((n, i) => <li key={i}>{n}</li>)}
           </ul>
         </div>
@@ -1159,7 +1204,7 @@ const WeekCard = ({ week, phase, isActiveWeek, isFullyDone, completed, total, lo
       {/* Progreso de días */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <div style={{ display: 'flex', gap: 4 }}>
-          {week.days.map((day, idx) => {
+          {enOrdenDeSemana(week.days).map(({ day, idx }) => {
             const id = sessionId(phase.id, week.num, idx);
             const sd = sessionsData[id];
             const done = !!sd?.completed;
@@ -1265,7 +1310,7 @@ const PhaseDetail = ({ phase, onBack, onSelectWeek, sessionsData, activeWeekKey 
             {phase.advance?.length > 0 && (
               <>
                 <Caption style={{ marginBottom: 6 }}>Marcadores para avanzar</Caption>
-                <ul style={{ margin: 0, paddingLeft: 16, color: T.text2, fontSize: 12, lineHeight: 1.7, marginBottom: 14 }}>
+                <ul style={{ listStyleType: 'disc', margin: 0, paddingLeft: 16, color: T.text2, fontSize: 12, lineHeight: 1.7, marginBottom: 14 }}>
                   {phase.advance.map((a, i) => <li key={i}>{a}</li>)}
                 </ul>
               </>
@@ -1442,7 +1487,8 @@ const CursorSelector = ({ current, sessionsData, onSelect, onClose }) => {
                     {phase.weekData.map(week => {
                       const weekKey = `${phase.id}-w${week.num}`;
                       const weekExpanded = expandedWeek === weekKey;
-                      const completedCount = week.days.filter((_, i) => sessionsData[sessionId(phase.id, week.num, i)]?.completed).length;
+                      const entrenables = week.days.map((d, i) => ({ d, i })).filter(({ d }) => !esDescanso(d));
+                      const completedCount = entrenables.filter(({ i }) => sessionsData[sessionId(phase.id, week.num, i)]?.completed).length;
                       return (
                         <div key={week.num} style={{ marginBottom: 4 }}>
                           <button
@@ -1460,14 +1506,14 @@ const CursorSelector = ({ current, sessionsData, onSelect, onClose }) => {
                                 {phase.mode === 'microcycle' ? 'Microciclo' : `Sem ${week.num}`}
                               </div>
                               <div style={{ fontSize: 11, color: T.text3, ...NUM_STYLE }}>
-                                {completedCount}/{week.days.length} completadas · {week.label || ''}
+                                {completedCount}/{entrenables.length} completadas · {week.label || ''}
                               </div>
                             </div>
                             {weekExpanded ? <ChevronUp size={14} style={{ color: T.text3 }} /> : <ChevronDown size={14} style={{ color: T.text3 }} />}
                           </button>
                           {weekExpanded && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '6px 0 4px 12px' }}>
-                              {week.days.map((day, idx) => {
+                              {enOrdenDeSemana(week.days).map(({ day, idx }) => {
                                 const id = sessionId(phase.id, week.num, idx);
                                 const isDone = !!sessionsData[id]?.completed;
                                 const isCurrent = current && current.phaseId === phase.id && current.weekNum === week.num && current.dayIdx === idx;
@@ -1537,16 +1583,21 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, 
   }, [wellness]);
 
   // Tiempo estimado y conteo de ejercicios del workout
+  /* Las NOTAS no son ejercicios. Antes una sesión de velocidad hecha solo de
+     tres renglones de nota decía "3 ejercicios · ~55 min": ni tenía ejercicios
+     ni nadie había dicho que durara 55 minutos. Sin ejercicios reales no se
+     inventa duración; se dice qué tipo de sesión es. */
   const sessionMeta = useMemo(() => {
-    if (!next) return { exercises: 0, duration: '~55 min' };
+    if (!next) return { exercises: 0, duration: null };
     const d = next.day;
+    const reales = (lista) => (lista || []).filter((e) => !e.isNote).length;
+    const tipo = (CAT_COLORS[d.cat] || CAT_COLORS.gym).label;
     if (d.blocks) {
-      const liftBlocks = d.blocks.filter(b => b.type === 'lift');
-      const exCount = liftBlocks.reduce((s, b) => s + (b.exercises?.length || 0), 0);
+      const exCount = d.blocks.filter((b) => b.type === 'lift').reduce((s, b) => s + reales(b.exercises), 0);
       return { exercises: exCount, duration: d.dual ? '~2 h' : '~75 min', dual: d.dual };
     }
-    if (d.exercises) return { exercises: d.exercises.length, duration: '~55 min' };
-    return { exercises: 0, duration: '~60 min' };
+    const n = reales(d.exercises);
+    return { exercises: n, duration: n ? '~55 min' : tipo };
   }, [next]);
 
   const { text: greetText } = greeting();
@@ -1601,8 +1652,13 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, 
                 </div>
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.82)', marginTop: 8, lineHeight: 1.4 }}>
                   {kind === 'weekly' ? weekdayLabel(next.day.day) : next.phase.name}<br />
-                  {sessionMeta.exercises ? `${plural(sessionMeta.exercises, 'ejercicio', 'ejercicios')} · ` : ''}{sessionMeta.duration}
-                  {sessionMeta.dual ? ' · 2 sesiones' : ''}
+                  {[
+                    sessionMeta.exercises ? plural(sessionMeta.exercises, 'ejercicio', 'ejercicios') : null,
+                    sessionMeta.duration,
+                    sessionMeta.dual ? '2 sesiones' : null,
+                    // Otra sesión hoy además de esta (mañana y tarde como dos entradas).
+                    !sessionMeta.dual && next.sesionesHoy > 1 ? `${next.sesionesHoy} sesiones hoy` : null,
+                  ].filter(Boolean).join(' · ')}
                 </div>
               </div>
               <div style={{
@@ -1730,7 +1786,9 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, 
         <div style={{ padding: '0 18px' }}>
           <div style={{ background: LT.surface, borderRadius: 22, padding: 24 }}>
             <div style={{ fontSize: 22, fontWeight: 700, color: LT.text, lineHeight: 1.2 }}>
-              No tienes rutina asignada para este día
+              {/* Si el coach puso descanso, se dice descanso: "no tienes rutina
+                  asignada" suena a que algo falta, y no falta nada. */}
+              {week.days.find((d) => d.isToday)?.descanso ? 'Hoy descansas' : 'No tienes rutina asignada para este día'}
             </div>
             <div style={{ marginTop: 8, fontSize: 14, color: LT.text2, lineHeight: 1.5 }}>
               {week.next
@@ -2025,7 +2083,7 @@ const ScienceView = () => (
       <Collapsible title="Orden de las fases" icon={Trophy}>
         <div style={{ paddingTop: 4, fontSize: 13.5, color: T.text2, lineHeight: 1.7 }}>
           <p style={{ marginTop: 0 }}>La secuencia hipertrofia → fuerza → potencia → velocidad sigue una cadena de causalidad:</p>
-          <ul style={{ paddingLeft: 16 }}>
+          <ul style={{ listStyleType: 'disc', paddingLeft: 16 }}>
             <li>Más músculo da más potencial de fuerza.</li>
             <li>Más fuerza da más techo de potencia (Cormie et al. 2010).</li>
             <li>Más potencia da más techo de velocidad (Suchomel et al. 2016).</li>
@@ -2059,13 +2117,13 @@ const ScienceView = () => (
         <div style={{ paddingTop: 4, fontSize: 13.5, color: T.text2, lineHeight: 1.7 }}>
           <p style={{ marginTop: 0 }}>Trabajo diario todo el año, no solo en F1.</p>
           <Caption style={{ marginTop: 14, marginBottom: 6 }}>Evaluación · cada 4-6 sem con fisio</Caption>
-          <ul style={{ paddingLeft: 16, marginTop: 0 }}>
+          <ul style={{ listStyleType: 'disc', paddingLeft: 16, marginTop: 0 }}>
             <li>Y-Balance Test bilateral</li>
             <li>Fuerza eversión/inversión/dorsiflexión con dinamómetro</li>
             <li>Knee-to-wall test</li>
           </ul>
           <Caption style={{ marginTop: 14, marginBottom: 6 }}>Trabajo diario · 15-20 min</Caption>
-          <ul style={{ paddingLeft: 16, marginTop: 0 }}>
+          <ul style={{ listStyleType: 'disc', paddingLeft: 16, marginTop: 0 }}>
             <li>Movilidad: knee-to-wall progresivo 3x10, círculos activos</li>
             <li>Fuerza: peroneales, tibial anterior, gemelos con bandas 3x15</li>
             <li>Propiocepción: balance unilateral 3x30 seg ojos cerrados</li>

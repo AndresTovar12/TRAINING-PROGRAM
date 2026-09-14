@@ -221,11 +221,35 @@ const daysOfCurrentWeek = (plan, kind, cursor) => {
 };
 
 // La sesión que toca hoy. null = "No tienes rutina asignada para este día".
+/* Un día OFF es descanso decidido por el coach, no una sesión.
+   Antes contaba como una más: "6 días de entrenamiento" con el domingo de
+   descanso dentro, "0/6 días" en la cabecera, y en la portada "Hoy te toca:
+   Descanso · Empezar sesión". */
+const esDescanso = (day) => (day?.cat || '') === 'off';
+
+/* Los días de una semana en orden de calendario, CONSERVANDO su posición.
+   Una sesión nueva se guarda al final de la lista. Si un coach le añade la de
+   la tarde al lunes, en los datos queda después del domingo, y las pestañas
+   del atleta salían "Lun, Mar, Mié, Jue, Vie, Dom, Lun".
+
+   Se ordena solo al ENSEÑAR, nunca en los datos: el progreso del atleta
+   (sesiones terminadas, pesos) se guarda por la posición de cada sesión.
+   Reordenar la lista movería ese progreso a otro día sin avisar. Por eso cada
+   elemento lleva su `idx` original. */
+const ORDEN_DIAS = { Lun: 0, Mar: 1, 'Mié': 2, Mie: 2, Jue: 3, Vie: 4, 'Sáb': 5, Sab: 5, Dom: 6 };
+const enOrdenDeSemana = (days = []) => days
+  .map((day, idx) => ({ day, idx }))
+  .sort((a, b) => (ORDEN_DIAS[a.day?.day] ?? 9) - (ORDEN_DIAS[b.day?.day] ?? 9) || a.idx - b.idx);
+
 const sessionForToday = (plan, kind, cursor, date = new Date()) => {
   const wd = weekdayToday(date);
   const { phase, week, items } = daysOfCurrentWeek(plan, kind, cursor);
   if (!phase || !week) return null;
-  const hit = items.find(({ day }) => day.day === wd);
+  /* TODAS las de hoy, no la primera. Un día puede tener dos sesiones —mañana y
+     tarde—, y con `find` la segunda no existía para la portada: el atleta veía
+     solo la de la mañana y nada le avisaba de que quedaba otra. */
+  const deHoy = items.filter(({ day }) => day.day === wd && !esDescanso(day));
+  const hit = deHoy[0];
   if (!hit) return null;
   return {
     phase,
@@ -233,6 +257,7 @@ const sessionForToday = (plan, kind, cursor, date = new Date()) => {
     dayIdx: hit.dayIdx,
     day: hit.day,
     id: sessionIdFor(kind, phase.id, week.num, hit.dayIdx, date),
+    sesionesHoy: deHoy.length,
   };
 };
 
@@ -241,19 +266,25 @@ const sessionForToday = (plan, kind, cursor, date = new Date()) => {
 const weekOverview = (plan, kind, cursor, date = new Date()) => {
   const todayKey = weekdayToday(date);
   const { items } = daysOfCurrentWeek(plan, kind, cursor);
+  // Todas las sesiones de cada día, no solo la primera: ver sessionForToday.
   const byWeekday = new Map();
   items.forEach(({ day, dayIdx }) => {
-    if (!byWeekday.has(day.day)) byWeekday.set(day.day, { day, dayIdx });
+    if (!byWeekday.has(day.day)) byWeekday.set(day.day, []);
+    byWeekday.get(day.day).push({ day, dayIdx });
   });
   const order = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   const days = order.map((key) => {
-    const hit = byWeekday.get(key);
+    const todas = byWeekday.get(key) || [];
+    const reales = todas.filter(({ day }) => !esDescanso(day));
     return {
       key,
       isToday: key === todayKey,
-      hasSession: !!hit,
-      name: hit?.day?.name ?? null,
-      dayIdx: hit?.dayIdx ?? null,
+      hasSession: reales.length > 0,
+      // El coach puso descanso a propósito: no es lo mismo que un día sin nada.
+      descanso: todas.length > 0 && reales.length === 0,
+      sesiones: reales.length,
+      name: reales.map(({ day }) => day.name).filter(Boolean).join(' + ') || null,
+      dayIdx: reales[0]?.dayIdx ?? null,
     };
   });
   const todayPos = order.indexOf(todayKey);
@@ -504,5 +535,5 @@ export {
   adivinaSiLlevaCarga,
   totalProgress, getWeekLoad, formatIntensity, inferRest, getPattern, getMuscles,
   weekdayToday, weekdayLabel, isoWeekKey, weeklySessionId, sessionIdFor,
-  sessionForToday, weekOverview,
+  sessionForToday, weekOverview, esDescanso, enOrdenDeSemana,
 };

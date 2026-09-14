@@ -13,6 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useIsDesktop } from '@/lib/useViewport';
 import { T, FONT, KP } from '@/lib/theme';
 import { plural, pluralS } from '@/lib/plural';
+import { esDescanso } from '@/lib/training-utils';
 
 function useIsNarrow(breakpoint = 880) {
   const [narrow, setNarrow] = useState(
@@ -529,8 +530,10 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
   const last = timeAgo(state?.updated_at);
   const phases = plan?.data?.phases ?? [];
   const totalWeeks = phases.reduce((s, p) => s + (p.weekData?.length || 0), 0);
+  // Los días OFF no son sesiones: la app del atleta tampoco los cuenta, y si
+  // aquí sí, el coach ve "7 sesiones" donde su atleta ve "6 días".
   const totalSessions = phases.reduce(
-    (s, p) => s + (p.weekData?.reduce((x, w) => x + (w.days?.length || 0), 0) || 0), 0,
+    (s, p) => s + (p.weekData?.reduce((x, w) => x + (w.days || []).filter((d) => !esDescanso(d)).length, 0) || 0), 0,
   );
   // Sesiones completadas según el estado de la app del atleta
   const completed = useMemo(() => {
