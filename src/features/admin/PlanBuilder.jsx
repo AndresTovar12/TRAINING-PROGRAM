@@ -17,6 +17,7 @@ import { isLoadedExercise, esDescanso } from '@/lib/training-utils';
 import { T, FONT, KP, CAT_COLORS } from '@/lib/theme';
 import RepertoirePicker from '@/features/admin/RepertoirePicker';
 import MediaUpload from '@/features/admin/MediaUpload';
+import SelectorCategoria from '@/features/admin/SelectorCategoria';
 import Portada from '@/components/Portada';
 import { plural, pluralS } from '@/lib/plural';
 
@@ -573,7 +574,7 @@ function ExerciseRow({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove,
  * lleva peso— y la mete al set ya enlazada. Queda disponible para todos tus
  * planes desde el momento en que la guardas.
  */
-function CrearEjercicioRapido({ categorias, onCancelar, onCreado }) {
+function CrearEjercicioRapido({ categorias, onCancelar, onCreado, duenoId, masterId, onCategoriaCreada }) {
   const [nombre, setNombre] = useState('');
   const [categoria, setCategoria] = useState('');
   const [foto, setFoto] = useState('');
@@ -642,19 +643,18 @@ function CrearEjercicioRapido({ categorias, onCancelar, onCreado }) {
             />
           </label>
 
-          {categorias.length > 0 && (
-            <label style={{ display: 'block' }}>
-              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text2, marginBottom: 6 }}>Categoría</div>
-              <select
-                value={categoria}
-                onChange={(e) => setCategoria(e.target.value)}
-                style={{ ...inputStyle, fontSize: 15 }}
-              >
-                <option value="">Sin categoría</option>
-                {categorias.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </label>
-          )}
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text2, marginBottom: 6 }}>Categoría</div>
+            <SelectorCategoria
+              categorias={categorias}
+              value={categoria}
+              onChange={setCategoria}
+              onCreada={onCategoriaCreada}
+              duenoId={duenoId}
+              masterId={masterId}
+              sinCategoria
+            />
+          </div>
 
           <MediaUpload
             label="Foto" icon={Dumbbell} value={foto} onChange={setFoto}
@@ -1054,7 +1054,7 @@ function SesionesDelDiaDual({ day }) {
   );
 }
 
-function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCreado, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear }) {
+function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCreado, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, duenoId, masterId, onCategoriaCreada }) {
   const [creandoEjercicio, setCreandoEjercicio] = useState(false);
   const [mediaDe, setMediaDe] = useState(null);
   const esCompu = useIsDesktop();
@@ -1269,6 +1269,9 @@ function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCr
       {creandoEjercicio && (
         <CrearEjercicioRapido
           categorias={categorias}
+          duenoId={duenoId}
+          masterId={masterId}
+          onCategoriaCreada={onCategoriaCreada}
           onCancelar={() => setCreandoEjercicio(false)}
           onCreado={(fila, llevaPeso) => {
             onEjercicioCreado?.(fila);
@@ -1483,6 +1486,13 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
   const [err, setErr] = useState('');
   const [repertoire, setRepertoire] = useState([]);
   const [categorias, setCategorias] = useState([]);
+  const [masterIdCat, setMasterIdCat] = useState(null);
+  // Se ofrecen las de la app y las propias, no las de otros coaches (que el
+  // master sí puede leer). Ver SelectorCategoria.
+  const categoriasVisibles = useMemo(
+    () => categorias.filter((c) => !c.created_by || c.created_by === masterIdCat || c.created_by === user?.id),
+    [categorias, masterIdCat, user?.id],
+  );
   const [clipboard, setClipboard] = useState(null);
   const [modal, setModal] = useState(null);
 
@@ -1501,6 +1511,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
         const tagged = tagRepertoire(aplicarOverrides(exs, mias, cats), mId, user?.id);
         setRepertoire(isMaster ? tagged : tagged.filter((e) => e.isBase || e.isMine));
         setCategorias(cats);
+        setMasterIdCat(mId);
       })
       .catch(() => {});
   }, [user?.id, isMaster]);
@@ -1915,7 +1926,10 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
                 key={di}
                 day={d}
                 repertoire={repertoire}
-                categorias={categorias}
+                categorias={categoriasVisibles}
+                duenoId={user?.id}
+                masterId={masterIdCat}
+                onCategoriaCreada={(fila) => setCategorias((prev) => [...prev, fila])}
                 atleta={athlete}
                 onEjercicioCreado={(fila) => setRepertoire((prev) => [
                   ...prev, { ...fila, isMine: true, isBase: false },

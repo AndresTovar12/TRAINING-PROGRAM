@@ -1090,23 +1090,56 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
           botón no sea indispensable, para nada". No es el objetivo de la
           pantalla —entrenar lo es—, así que no compite con nada. Quien lo
           ignore no pierde nada; quien quiera cerrarla, lo tiene donde acaba. */}
+      {/* EL BOTÓN DE TERMINAR TIENE QUE PARECER BOTÓN.
+          Era blanco con letra gris y borde gris claro: lo mismo que usa la app
+          para lo DESACTIVADO. Andrés: "está muy feo y gris, ni se ve ni parece
+          botón". Tenía razón: aunque no sea indispensable —la semana avanza
+          sola con el calendario—, quien SÍ quiere cerrar su sesión tiene que
+          encontrarlo al primer vistazo.
+
+          Por eso va relleno de azul, con su palomita. Sigue al FINAL de la lista
+          y no arriba: no compite con entrenar, que es a lo que se viene.
+
+          Hecha, se pinta de verde entero —se lee "listo" desde lejos— y
+          "Deshacer" va aparte y chico. Antes estaba pegado al mismo texto
+          ("Sesión terminada · deshacer") y no se distinguía qué parte se tocaba. */}
       {(selectedDay.exercises || selectedDay.blocks) && !descansoPuro && (
-        <button
-          type="button"
-          onClick={toggleComplete}
-          style={{
-            width: '100%', minHeight: 48, marginBottom: 14, borderRadius: 14,
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 700,
-            border: `1.5px solid ${selectedCompleted ? LT.mint : LT.border}`,
-            background: selectedCompleted ? `${LT.mint}12` : LT.surface,
-            color: selectedCompleted ? LT.mint : LT.text2,
-          }}
-        >
-          {selectedCompleted
-            ? <><Check size={16} strokeWidth={3} /> Sesión terminada · deshacer</>
-            : 'Marcar sesión como terminada'}
-        </button>
+        selectedCompleted ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <div style={{
+              flex: 1, minHeight: 52, borderRadius: 14, background: LT.mint, color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              fontFamily: FONT, fontSize: 15, fontWeight: 800,
+            }}>
+              <Check size={18} strokeWidth={3} /> Sesión terminada
+            </div>
+            <button
+              type="button"
+              onClick={toggleComplete}
+              style={{
+                minHeight: 52, padding: '0 14px', borderRadius: 14, cursor: 'pointer',
+                border: `1.5px solid ${LT.border}`, background: LT.surface, color: LT.text2,
+                fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
+              }}
+            >
+              Deshacer
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={toggleComplete}
+            className="kp-press"
+            style={{
+              width: '100%', minHeight: 52, marginBottom: 14, borderRadius: 14, border: 'none',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9,
+              cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 800, color: '#fff',
+              background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, boxShadow: KP.shBtn,
+            }}
+          >
+            <Check size={18} strokeWidth={3} /> Marcar sesión como terminada
+          </button>
+        )
       )}
 
       {/* En un descanso las notas ya van dentro de su tarjeta: aquí se repetían.

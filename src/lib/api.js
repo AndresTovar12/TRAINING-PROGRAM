@@ -67,6 +67,43 @@ export async function listCategories() {
   return data ?? [];
 }
 
+/* Colores para las categorías que crea cada coach. Distintos de los de las 4
+   de siempre (azul, verde, coral, lila) para que en la lista se distingan. */
+const COLORES_CATEGORIA = ['#FFA047', '#3DD9A0', '#5DA0FF', '#FF80B8', '#E8B400', '#00B8D9', '#9B6BFF', '#6C7A8A'];
+
+/**
+ * Crea una categoría de ejercicio propia del coach.
+ *
+ * El slug lleva un sufijo al azar porque es único POR DUEÑO, no en toda la
+ * app: dos coaches pueden tener cada uno su "Velocidad". Sin sufijo, un coach
+ * que llamara a la suya igual que una de las de siempre chocaría con ella en
+ * los filtros, que usan el slug como llave.
+ *
+ * Quién puede crear, ver y borrar lo decide la base, no esta función: un coach
+ * solo crea a su propio nombre y nadie ve las categorías de otro coach.
+ */
+export async function createCategory({ name, createdBy, cuantas = 0 }) {
+  const limpio = name.trim();
+  const base = limpio.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'categoria';
+  const { data, error } = await supabase
+    .from('exercise_categories')
+    .insert({
+      name: limpio,
+      slug: `${base}-${Math.random().toString(36).slice(2, 6)}`,
+      color: COLORES_CATEGORIA[cuantas % COLORES_CATEGORIA.length],
+      sort_order: 100 + cuantas,
+      created_by: createdBy,
+    })
+    .select('*')
+    .single();
+  if (error) {
+    if (error.code === '23505') throw new Error('Ya tienes una categoría con ese nombre.');
+    throw error;
+  }
+  return data;
+}
+
 /* ----------------------------- Exercises ------------------------------ */
 export async function listExercises() {
   const { data, error } = await supabase

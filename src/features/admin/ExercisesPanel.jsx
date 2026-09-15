@@ -11,6 +11,7 @@ import {
   listExerciseOverrides, saveExerciseOverride, deleteExerciseOverride, aplicarOverrides,
 } from '@/lib/api';
 import MediaDelEjercicio from '@/features/admin/MediaDelEjercicio';
+import SelectorCategoria from '@/features/admin/SelectorCategoria';
 import { MUSCLE_GROUPS, FINE_MUSCLES, exerciseMatchesGroup } from '@/lib/muscles';
 import { T, FONT, KP } from '@/lib/theme';
 import Portada from '@/components/Portada';
@@ -372,6 +373,7 @@ function QueVasAHacer({ ejercicio, onMedia, onEditar, onCerrar }) {
 function ExerciseEditor({
   exercise, categories, muscleOptions = [], onClose, onSaved, onDeleted,
   esAjeno, onDuplicate, onGuardadaMiVersion, onRestaurada, foco = 'todo',
+  duenoId, masterId, onCategoriaCreada, puedeCrearCategoria = true,
 }) {
   // `foco='media'` abre la ficha directo en foto y video, sin los campos de
   // texto. Los datos de los 81 ejercicios ya están escritos; lo que falta es
@@ -503,21 +505,18 @@ function ExerciseEditor({
           <>
           <Input label="Nombre" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Ej. Back Squat" />
 
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Categoría</span>
-            <select
-              value={form.category_id}
-              onChange={(e) => set('category_id', e.target.value)}
-              style={{
-                border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '11px 13px',
-                fontFamily: FONT, fontSize: 14, fontWeight: 600, color: T.text, background: T.bg2, outline: 'none',
-              }}
-            >
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </label>
+          <SelectorCategoria
+            categorias={categories}
+            value={form.category_id}
+            onChange={(id) => set('category_id', id)}
+            onCreada={onCategoriaCreada}
+            duenoId={duenoId}
+            masterId={masterId}
+            puedeCrear={puedeCrearCategoria}
+          />
+          </div>
 
           <Input label="Equipo" value={form.equipment} onChange={(e) => set('equipment', e.target.value)} placeholder="Barra, Mancuerna, Peso corporal…" />
 
@@ -748,6 +747,16 @@ export default function ExercisesPanel({ viendoComo }) {
     // mostrarían los ejercicios del master como si nunca los hubiera editado.
   }, [dueño]);
 
+  /* Las categorías que se OFRECEN: las de la app y las del dueño de esta vista.
+     La base deja al master leer las de todos los coaches; sin este filtro su
+     lista de categorías crecería con las de cada coach, igual que pasaba con
+     los ejercicios. Para resolver la categoría de un ejercicio se sigue usando
+     la lista completa. */
+  const categoriasVisibles = useMemo(
+    () => categories.filter((c) => !c.created_by || c.created_by === masterId || c.created_by === dueño),
+    [categories, masterId, dueño],
+  );
+
   // Etiqueta base/propio y, para coaches, oculta el repertorio de otros coaches.
   // Encima van MIS versiones: si personalicé un ejercicio base, en mi lista
   // aparece como yo lo dejé, no como lo tiene el master.
@@ -895,7 +904,7 @@ export default function ExercisesPanel({ viendoComo }) {
             style={{ border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '11px 13px', fontFamily: FONT, fontSize: 14, fontWeight: 600, color: T.text, background: T.bg2, outline: 'none', cursor: 'pointer' }}
           >
             <option value="all">Todas las categorías ({counts.all ?? 0})</option>
-            {categories.map((c) => (
+            {categoriasVisibles.map((c) => (
               <option key={c.slug} value={c.slug}>{c.name} ({counts[c.slug] ?? 0})</option>
             ))}
           </select>
@@ -972,7 +981,13 @@ export default function ExercisesPanel({ viendoComo }) {
              campos de uno encima de otro sin que nada avisara. */
           key={editing.exercise?.id ?? 'nuevo'}
           exercise={editing.exercise || null}
-          categories={categories}
+          categories={categoriasVisibles}
+          duenoId={dueño}
+          masterId={masterId}
+          // Mirando la cuenta de un coach, una categoría nueva quedaría a nombre
+          // del master —o sea visible para TODOS—, así que ahí no se ofrece.
+          puedeCrearCategoria={!viendoComo}
+          onCategoriaCreada={(fila) => setCategories((prev) => [...prev, fila])}
           muscleOptions={muscles}
           esAjeno={!!editing.esAjeno}
           foco={editing.foco || 'todo'}
