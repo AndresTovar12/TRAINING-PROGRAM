@@ -19,7 +19,7 @@ import RepertoirePicker from '@/features/admin/RepertoirePicker';
 import MediaUpload from '@/features/admin/MediaUpload';
 import SelectorCategoria from '@/features/admin/SelectorCategoria';
 import Portada from '@/components/Portada';
-import { plural, pluralS } from '@/lib/plural';
+import { plural, pluralS, textoReps } from '@/lib/plural';
 
 /* ------------------------------------------------------------------ */
 /* Constantes y helpers de datos                                       */
@@ -980,9 +980,8 @@ function SesionesDelDiaDual({ day }) {
   const meta = (ex) => {
     const partes = [];
     if (ex.sets && ex.sets !== '—') partes.push(ex.sets === '1' ? '1 serie' : `${ex.sets} series`);
-    // "reps" solo detrás de un número o un rango: "3-5 reps" sí, pero
-    // "5/lado reps" no lo escribe nadie — ese dato ya dice su propia unidad.
-    if (ex.reps && ex.reps !== '—') partes.push(/^\d+(\s*-\s*\d+)?$/.test(ex.reps) ? `${ex.reps} reps` : ex.reps);
+    // Misma regla que la app del atleta: "reps" solo detrás de un número.
+    if (textoReps(ex.reps)) partes.push(textoReps(ex.reps));
     if (ex.intensity) partes.push(ex.intensity);
     return partes.join(' · ');
   };

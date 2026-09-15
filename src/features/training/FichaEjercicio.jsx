@@ -6,6 +6,7 @@ import { VideoRecortado } from '@/features/training/ExerciseMediaModal';
 import { aKilos, desdeKilos, pesoTexto, etiquetaUnidad } from '@/lib/unidades';
 import { isLoadedExercise, formatIntensity, findPreviousWeight } from '@/lib/training-utils';
 import Portada from '@/components/Portada';
+import { textoReps } from '@/lib/plural';
 
 /**
  * La pantalla de UN ejercicio, mientras se entrena.
@@ -98,7 +99,8 @@ export default function FichaEjercicio({
   };
 
   const esUltimo = posicion >= total;
-  const meta = [ex.reps && `${ex.reps} reps`, intensidad].filter(Boolean).join(' · ');
+  // "Meta: 30 yd", no "Meta: 30 yd reps": misma regla que la lista de la sesión.
+  const meta = [textoReps(ex.reps), intensidad].filter(Boolean).join(' · ');
 
   const circulo = (relleno) => ({
     width: 46, height: 46, borderRadius: '50%', flexShrink: 0, cursor: 'pointer',

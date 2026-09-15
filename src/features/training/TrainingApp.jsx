@@ -26,7 +26,7 @@ import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
 import { useStorage } from '@/contexts/AppStateContext';
 import FichaEjercicio from '@/features/training/FichaEjercicio';
 import Portada from '@/components/Portada';
-import { plural, pluralS } from '@/lib/plural';
+import { plural, pluralS, textoReps, rondasQueDecir } from '@/lib/plural';
 
 // Nombres completos SOLO para mostrar en compu. Lo que guarda el plan sigue
 // siendo 'Lun', 'Mar'… igual que en el editor del entrenador.
@@ -439,7 +439,7 @@ const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, sessionsData, phaseC
      no existe. Petición de Andrés, y es lo correcto — un hueco vacío se lee
      como un fallo de la app. */
   const chips = [
-    ex.reps ? `${ex.reps} reps` : null,
+    textoReps(ex.reps),
     formattedIntensity || null,
     rest || null,
   ].filter(Boolean);
@@ -617,9 +617,9 @@ const SetGroup = ({ group, setNum, phaseColor, sessionData, onUpdate, oneRMs, se
             </span>
           )}
         </div>
-        {rondas && (
+        {rondasQueDecir(rondas) && (
           <span style={{ fontSize: 12.5, color: LT.text2, fontWeight: 600, flexShrink: 0, ...NUM_STYLE }}>
-            Se repite {rondas} {parseInt(rondas, 10) === 1 ? 'vez' : 'veces'}
+            Se repite {rondasQueDecir(rondas)} veces
           </span>
         )}
       </div>
