@@ -966,19 +966,30 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
         )}
       </div>
 
-      {descansoPuro && (
-        <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: 18, marginBottom: 14 }}>
-          <div style={{ fontSize: 17, fontWeight: 800, color: LT.text }}>Día de descanso</div>
-          <div style={{ fontSize: 13.5, color: LT.text2, marginTop: 4, lineHeight: 1.5 }}>
-            Hoy no toca entrenar. Recuperar también es parte del plan.
+      {/* Las notas de un descanso pueden venir de dos sitios: renglones de nota
+          dentro de `exercises` (lo que escribe el editor de hoy) o la lista
+          `notes` del plan original. El plan de Andrés tiene dos días OFF y los
+          dos usan la segunda: "Descanso activo" con "Caminata Z1 30 min".
+
+          Si el coach escribió algo, SE ENSEÑA LO SUYO y no el texto genérico.
+          "Hoy no toca entrenar" encima de "Caminata Z1 30 min" se contradice. */}
+      {descansoPuro && (() => {
+        const lineas = [...(selectedDay.notes || []), ...notasDelDia.map((n) => n.text)];
+        return (
+          <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: 18, marginBottom: 14 }}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: LT.text }}>Día de descanso</div>
+            {lineas.length > 0 ? (
+              <ul style={{ listStyleType: 'disc', margin: '10px 0 0', paddingLeft: 18, color: LT.text, fontSize: 14, lineHeight: 1.65 }}>
+                {lineas.map((n, i) => <li key={i}>{n}</li>)}
+              </ul>
+            ) : (
+              <div style={{ fontSize: 13.5, color: LT.text2, marginTop: 4, lineHeight: 1.5 }}>
+                Hoy no toca entrenar. Recuperar también es parte del plan.
+              </div>
+            )}
           </div>
-          {notasDelDia.length > 0 && (
-            <ul style={{ listStyleType: 'disc', margin: '12px 0 0', paddingLeft: 18, color: LT.text, fontSize: 14, lineHeight: 1.65 }}>
-              {notasDelDia.map((n, i) => <li key={i}>{n.text}</li>)}
-            </ul>
-          )}
-        </div>
-      )}
+        );
+      })()}
 
       {/* Una sesión hecha solo de notas se lee como lista de instrucciones, igual
           que las sesiones de velocidad del plan original. */}
@@ -1059,7 +1070,7 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
         );
       })}
 
-      {selectedDay.notes && !selectedDay.exercises && !selectedDay.blocks && (
+      {selectedDay.notes && !selectedDay.exercises && !selectedDay.blocks && !descansoPuro && (
         <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
           <ul style={{ listStyleType: 'disc', margin: 0, paddingLeft: 18, color: LT.text2, fontSize: 14, lineHeight: 1.7 }}>
             {selectedDay.notes.map((n, i) => <li key={i}>{n}</li>)}
@@ -1098,7 +1109,10 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
         </button>
       )}
 
-      {selectedDay.notes && (selectedDay.exercises || selectedDay.blocks) && (
+      {/* En un descanso las notas ya van dentro de su tarjeta: aquí se repetían.
+          Pasaba en los dos días OFF del plan de Andrés, porque el plan llega con
+          `exercises: []` y un arreglo vacío cuenta como "tiene ejercicios". */}
+      {selectedDay.notes && (selectedDay.exercises || selectedDay.blocks) && !descansoPuro && (
         <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
           <div style={{ fontSize: 11, color: LT.text3, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>Notas del día</div>
           <ul style={{ listStyleType: 'disc', margin: 0, paddingLeft: 18, color: LT.text2, fontSize: 13, lineHeight: 1.7 }}>
