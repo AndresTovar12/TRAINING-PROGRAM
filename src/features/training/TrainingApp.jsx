@@ -19,6 +19,7 @@ import {
   formatIntensity,
   sessionForToday, weekOverview, weekdayToday, weekdayLabel,
   cursorAlDia, isoWeekKey, esDescanso, enOrdenDeSemana,
+  bloqueQueRepite, ejerciciosDelBloque,
 } from '@/lib/training-utils';
 import { aKilos, desdeKilos, pesoTexto, etiquetaUnidad } from '@/lib/unidades';
 import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
@@ -97,7 +98,17 @@ const PhaseTimeline = ({ activePhaseId, sessionsData, onJumpToPhase }) => {
   const { phases: PLAN } = usePlan();
   return (
     <div style={{
-      padding: '10px 20px 12px',
+      /* EL BOTÓN DE LA CUENTA FLOTA ENCIMA, fijo arriba a la derecha: 42 px a 16
+         del borde, así que ocupa hasta los 58 px de alto y los 58 del lado.
+         Esta barra medía ~48 px e iba de borde a borde. Resultado, visto en el
+         teléfono de Andrés: la foto tapaba el "8" de la última fase y, al bajar
+         en la semana, se quedaba encima de la pestaña "Vie", porque las pestañas
+         pasaban por debajo de la foto antes de meterse bajo la barra.
+
+         Ahora la barra mide 66 px —la foto cabe entera dentro, así lo que se
+         desplaza pasa por debajo de la barra y nunca por debajo de la foto— y
+         deja 70 px libres a la derecha para que sus fases no queden tapadas. */
+      padding: '24px 70px 16px 20px',
       borderBottom: `1px solid ${T.border}`,
       background: T.bg,
       position: 'sticky', top: 0, zIndex: 40,
@@ -663,7 +674,7 @@ const SetGroup = ({ group, setNum, phaseColor, sessionData, onUpdate, oneRMs, se
 
 
 // Helper: get summary info for a day (count of exercises, intensity, etc.)
-const getDaySummary = (day) => {
+const getDaySummary = (day, week, dayIdx) => {
   let exCount = 0;
   let mainIntensity = null;
   let previews = [];
@@ -674,8 +685,10 @@ const getDaySummary = (day) => {
     previews = day.exercises.filter(e => !e.isNote).slice(0, 4);
   } else if (day.blocks) {
     day.blocks.forEach(blk => {
-      if (blk.type === 'lift' && blk.exercises) {
-        const real = blk.exercises.filter(e => !e.isNote);
+      // Con `week`, un bloque "repite la del lunes" cuenta los ejercicios que enseña.
+      const propios = week ? ejerciciosDelBloque(week, dayIdx, blk) : (blk.type === 'lift' ? blk.exercises : null);
+      if (propios && propios.length) {
+        const real = propios.filter(e => !e.isNote);
         exCount += real.length;
         if (!mainIntensity) {
           const first = real.find(e => e.intensity);
@@ -783,7 +796,7 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
   const selectedCompleted = !!sessionData.completed;
   const selectedDayName = selectedDay.name || (selectedDay.blocks ? selectedDay.blocks.map(b => b.tag.replace(/^Sesi[óo]n \d+ \([AP]M\): /, '')).join(' + ') : selectedDay.day);
   const cat = CAT_COLORS[selectedDay.cat] || CAT_COLORS.gym;
-  const summary = useMemo(() => getDaySummary(selectedDay), [selectedDay]);
+  const summary = useMemo(() => getDaySummary(selectedDay, week, selectedIdx), [selectedDay, week, selectedIdx]);
   /* Sesiones que no son de gimnasio. Probado armando una semana como coach:
      una sesión de velocidad, de recovery o de cancha se escribe con NOTAS
      ("Sprint 6 x 30 yd", "Foam roller 10 min"), porque no son ejercicios del
@@ -1021,8 +1034,14 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
         const hasPeriod = /\([AP]M\)/.test(blk.tag);
         const isPM = /\(PM\)/.test(blk.tag);
         const cleanName = blk.tag.replace(/^Sesi[óo]n \d+ \([AP]M\):\s*/, '');
-        const accent = hasPeriod ? (isPM ? phaseColor : LT.warning) : phaseColor;
-        const exN = blk.type === 'lift' && blk.exercises ? blk.exercises.filter(e => !e.isNote).length : null;
+        /* AM y PM con colores FIJOS y opuestos: naranja de mañana, azul de tarde.
+           Antes la tarde tomaba el color de la fase, y en Potencia la fase es
+           naranja: las dos sesiones del día salían del mismo color. Andrés lo
+           vio en su jueves y no se distinguía cuál era cuál. */
+        const accent = hasPeriod ? (isPM ? LT.blue : LT.warning) : phaseColor;
+        const repite = blk.type === 'note' ? bloqueQueRepite(week, selectedIdx, blk) : null;
+        const ejerciciosVistos = ejerciciosDelBloque(week, selectedIdx, blk);
+        const exN = ejerciciosVistos.length ? ejerciciosVistos.filter(e => !e.isNote).length : null;
         const isOpen = !!openBlocks[bi];
         return (
           <div key={`${selectedIdx}-blk-${bi}`} style={{ marginBottom: 12, background: LT.surface, border: `1px solid ${isOpen ? accent + '55' : LT.border}`, borderRadius: 16, overflow: 'hidden' }}>
@@ -1059,7 +1078,34 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
                     ))}
                   </ul>
                 )}
-                {blk.type === 'note' && (
+                {blk.type === 'note' && repite && (
+                  /* "Repite la sesión del lunes": se enseñan AQUÍ los ejercicios de
+                     esa sesión, para verlos y anotar los pesos de hoy. Se guardan con
+                     la llave de este día, así que no pisan lo que anotó el lunes. */
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, margin: '2px 0 14px', fontSize: 13, color: LT.text2, lineHeight: 1.5 }}>
+                      <Repeat size={15} style={{ color: accent, flexShrink: 0, marginTop: 2 }} />
+                      <span>
+                        <b style={{ color: LT.text }}>Igual que el {weekdayLabel(repite.day.day).toLowerCase()}.</b>{' '}
+                        {blk.text}
+                      </span>
+                    </div>
+                    {(() => {
+                      const groups = groupIntoSets(repite.blk.exercises);
+                      let setNum = 0;
+                      return groups.map((g, gi) => {
+                        if (!g.isNote) setNum += 1;
+                        return (
+                          <SetGroup key={gi} group={g} setNum={setNum} phaseColor={phaseColor}
+                            sessionData={blkSessionData}
+                            onUpdate={(idx, data) => setExerciseData(bi, idx, data)}
+                            oneRMs={oneRMs} sessionsData={sessionsData} />
+                        );
+                      });
+                    })()}
+                  </>
+                )}
+                {blk.type === 'note' && !repite && (
                   <div style={{ padding: 12, background: LT.bg, border: `1px solid ${LT.border}`, borderRadius: 10, fontSize: 13, color: LT.text2, lineHeight: 1.6 }}>
                     {blk.text}
                   </div>
@@ -1640,7 +1686,7 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, 
     const reales = (lista) => (lista || []).filter((e) => !e.isNote).length;
     const tipo = (CAT_COLORS[d.cat] || CAT_COLORS.gym).label;
     if (d.blocks) {
-      const exCount = d.blocks.filter((b) => b.type === 'lift').reduce((s, b) => s + reales(b.exercises), 0);
+      const exCount = d.blocks.reduce((s, b) => s + reales(ejerciciosDelBloque(next.week, next.dayIdx, b)), 0);
       return { exercises: exCount, duration: d.dual ? '~2 h' : '~75 min', dual: d.dual };
     }
     const n = reales(d.exercises);

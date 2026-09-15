@@ -303,6 +303,57 @@ const defaultCursor = (plan) => {
   if (!phase || !week) return null;
   return { phaseId: phase.id, weekNum: week.num, dayIdx: 0 };
 };
+/* ---- sesiones que en el plan son solo "Repite la sesión del lunes" ----
+
+   En el plan de Andrés hay 7 sesiones de tarde —los jueves de las 7 semanas de
+   Potencia— que no traen ejercicios: solo el texto "Repite la sesión de French
+   Contrast del lunes con las mismas cargas de esta semana". El atleta tenía que
+   ir al lunes a ver qué hacer, y el jueves no podía anotar sus pesos porque no
+   había ejercicios donde anotarlos.
+
+   Se resuelven al LEER, sin tocar el plan: se busca en la MISMA semana una
+   sesión con ejercicios que se llame igual. Por el nombre de la sesión, no
+   interpretando la frase. Comprobado por SQL en las 7: cada semana tiene
+   exactamente una candidata, la del lunes.
+
+   Si hubiera varias con ese nombre, se usa la del día que menciona el texto; y
+   si aun así no queda una sola, no se adivina: se enseña el texto como estaba. */
+const nombreDeSesion = (tag = '') => tag
+  .replace(/^Sesi[óo]n \d+ \([AP]M\):\s*/, '')
+  .replace(/\s*·\s*~.*$/, '')
+  .trim();
+const DIA_EN_TEXTO = [
+  ['lunes', 'Lun'], ['martes', 'Mar'], ['miércoles', 'Mié'], ['miercoles', 'Mié'],
+  ['jueves', 'Jue'], ['viernes', 'Vie'], ['sábado', 'Sáb'], ['sabado', 'Sáb'], ['domingo', 'Dom'],
+];
+
+const bloqueQueRepite = (week, dayIdx, blk) => {
+  if (!blk || blk.type !== 'note' || !week?.days) return null;
+  const nombre = nombreDeSesion(blk.tag);
+  if (!nombre) return null;
+  const candidatas = [];
+  week.days.forEach((d, i) => {
+    if (i === dayIdx) return;
+    (d.blocks || []).forEach((b) => {
+      if (b.type === 'lift' && (b.exercises || []).length && nombreDeSesion(b.tag) === nombre) {
+        candidatas.push({ day: d, blk: b });
+      }
+    });
+  });
+  if (candidatas.length === 0) return null;
+  const texto = (blk.text || '').toLowerCase();
+  const mencionado = DIA_EN_TEXTO.find(([palabra]) => texto.includes(palabra))?.[1];
+  return candidatas.find((c) => c.day.day === mencionado) || (candidatas.length === 1 ? candidatas[0] : null);
+};
+
+/* Los ejercicios que el atleta ve —y anota— en un bloque: los suyos, o los de
+   la sesión que repite. Los pesos se guardan con la llave de ESTE día y ESTE
+   bloque, así que el jueves y el lunes tienen cada uno los suyos. */
+const ejerciciosDelBloque = (week, dayIdx, blk) => {
+  if (blk?.type === 'lift') return blk.exercises || [];
+  return bloqueQueRepite(week, dayIdx, blk)?.blk.exercises || [];
+};
+
 const findPreviousWeight = (plan, sessionsData, exName) => {
   const target = (exName || '').toLowerCase().trim();
   let latest = null;
@@ -312,7 +363,7 @@ const findPreviousWeight = (plan, sessionsData, exName) => {
     const day = week.days[di]; const allEx = [];
     if (day.exercises) day.exercises.forEach((e, i) => allEx.push({ ex: e, key: `${i}` }));
     if (day.blocks) day.blocks.forEach((blk, bi) => {
-      if (blk.type === 'lift') blk.exercises.forEach((e, i) => allEx.push({ ex: e, key: `${bi}-${i}` }));
+      ejerciciosDelBloque(week, di, blk).forEach((e, i) => allEx.push({ ex: e, key: `${bi}-${i}` }));
     });
     for (const { ex, key } of allEx) {
       if (!ex.name || ex.isNote) continue;
@@ -346,8 +397,9 @@ const historialDePeso = (plan, sessionsData, exName) => {
         const day = week.days[di];
         const todos = [];
         if (day.exercises) day.exercises.forEach((e, i) => todos.push({ ex: e, key: `${i}` }));
+        // Incluye las sesiones "repite la del lunes": lo anotado ahí también es progreso.
         if (day.blocks) day.blocks.forEach((blk, bi) => {
-          if (blk.type === 'lift') blk.exercises.forEach((e, i) => todos.push({ ex: e, key: `${bi}-${i}` }));
+          ejerciciosDelBloque(week, di, blk).forEach((e, i) => todos.push({ ex: e, key: `${bi}-${i}` }));
         });
         for (const { ex, key } of todos) {
           if (!ex.name || ex.isNote) continue;
@@ -536,4 +588,5 @@ export {
   totalProgress, getWeekLoad, formatIntensity, inferRest, getPattern, getMuscles,
   weekdayToday, weekdayLabel, isoWeekKey, weeklySessionId, sessionIdFor,
   sessionForToday, weekOverview, esDescanso, enOrdenDeSemana,
+  bloqueQueRepite, ejerciciosDelBloque, nombreDeSesion,
 };
