@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Loader2, Search, Plus, Trash2, X, ChevronRight, ChevronLeft, Pencil,
   CalendarClock, User as UserIcon, Shield, Layers, ClipboardList, Users,
-  UserMinus, Power, AlertTriangle,
+  UserMinus, Power, AlertTriangle, Eye,
 } from 'lucide-react';
 import {
   getActivePlan, deletePlan, getAthleteState, listAthletesOverview, listCoaches, setAthleteCoach,
@@ -487,7 +487,7 @@ function ZonaAdministracion({ athlete, isMaster, soyElCoach, onCambiado, onElimi
   );
 }
 
-function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile, onReassigned, onEliminado }) {
+function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile, onReassigned, onEliminado, onVerComoAtleta }) {
   const esCompu = useIsDesktop();
   const [plan, setPlan] = useState(null);
   const [state, setState] = useState(null);
@@ -572,6 +572,23 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           <X size={20} />
         </button>
       </div>
+
+      {/* Su app tal cual la ve él, sin salir de esta cuenta. Va arriba de todo
+          porque sirve para revisar cualquier cosa de la ficha, no solo el plan. */}
+      {onVerComoAtleta && (
+        <button
+          type="button"
+          onClick={() => onVerComoAtleta(athlete)}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            minHeight: 46, marginBottom: 18, borderRadius: 12, cursor: 'pointer',
+            border: `1.5px solid ${T.accent}33`, background: T.accentBg, color: T.accent,
+            fontFamily: FONT, fontSize: 14.5, fontWeight: 800,
+          }}
+        >
+          <Eye size={17} /> Ver como atleta
+        </button>
+      )}
 
       {/* Coach asignado (solo master) */}
       {isMaster && (
@@ -722,7 +739,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
 }
 
 /* ------------------------------ Panel raíz ------------------------------ */
-export default function AthletesPanel({ viendoComo }) {
+export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
   const { profile } = useAuth();
   const isMaster = !!profile?.is_owner;
   const narrow = useIsNarrow(880);
@@ -915,6 +932,7 @@ export default function AthletesPanel({ viendoComo }) {
         <AthleteDetail
           key={selected.id}
           athlete={selected}
+          onVerComoAtleta={onVerComoAtleta}
           isMaster={isMaster}
           coaches={coaches}
           masterProfile={profile}

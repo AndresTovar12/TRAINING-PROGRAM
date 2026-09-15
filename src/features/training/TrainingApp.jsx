@@ -12,7 +12,7 @@ import { useIsDesktop } from '@/lib/useViewport';
 import { T, FONT, NUM_STYLE, LT, CAT_COLORS, KP, eyebrow } from '@/lib/theme';
 import { PHASE_IMG } from '@/data/training-data';
 import { usePlan } from '@/contexts/PlanContext';
-import { useAuth } from '@/contexts/AuthContext';
+import { usePerfilDeLaVista } from '@/contexts/VistaContext';
 import {
   sessionId, calc1RM, today, greeting, isLoadedExercise,
   resolveCursor, defaultCursor, isValidCursor, findPreviousWeight, historialDePeso,
@@ -111,7 +111,8 @@ const PhaseTimeline = ({ activePhaseId, sessionsData, onJumpToPhase }) => {
       padding: '24px 70px 16px 20px',
       borderBottom: `1px solid ${T.border}`,
       background: T.bg,
-      position: 'sticky', top: 0, zIndex: 40,
+      // Con el aviso de "Viendo como" arriba, la barra se pega debajo de él.
+      position: 'sticky', top: 'var(--aviso-vista, 0px)', zIndex: 40,
     }}>
       <div style={{ display: 'flex', gap: 3, height: 8, marginBottom: 6 }}>
         {PLAN.map(phase => {
@@ -375,7 +376,7 @@ function Chip({ children, fuerte }) {
 
 const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, sessionsData, phaseColor, onAbrirFicha }) => {
   const { phases: PLAN, resolveExercise, medias } = usePlan();
-  const { profile } = useAuth();
+  const { perfil: profile } = usePerfilDeLaVista();
   const unidad = profile?.unidad_peso || 'kg';
   const u = etiquetaUnidad(unidad);
   const [progresoAbierto, setProgresoAbierto] = useState(false);
@@ -583,7 +584,7 @@ const SetGroup = ({ group, setNum, phaseColor, sessionData, onUpdate, oneRMs, se
      se conoce a si misma. La serie si conoce a todos sus miembros. */
   const [fichaEn, setFichaEn] = useState(null);
   const { phases: planCompleto, resolveExercise, medias } = usePlan();
-  const { profile } = useAuth();
+  const { perfil: profile } = usePerfilDeLaVista();
   if (group.isNote) {
     return (
       <div style={{
@@ -1663,7 +1664,7 @@ const initialsFrom = (name) => {
 
 const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, onVerPrograma, cursor, onChangeCursor }) => {
   const { phases: PLAN, planMeta, kind } = usePlan();
-  const { profile } = useAuth();
+  const { perfil: profile } = usePerfilDeLaVista();
   const displayName = profile?.full_name || profile?.username || 'Atleta';
   // Lo que toca HOY según el calendario del dispositivo (no según lo marcado).
   const next = useMemo(() => sessionForToday(PLAN, kind, cursor), [PLAN, kind, cursor]);
@@ -2063,7 +2064,7 @@ const ONE_RM_LIFTS = [
 ];
 
 const OneRMView = ({ oneRMs, setOneRMs }) => {
-  const { profile } = useAuth();
+  const { perfil: profile } = usePerfilDeLaVista();
   const unidad = profile?.unidad_peso || 'kg';
   const u = etiquetaUnidad(unidad);
   const [calc, setCalc] = useState({ weight: '', reps: '' });
@@ -2497,7 +2498,7 @@ export default function TrainingApp() {
 
   return (
     <div style={{
-      minHeight: '100svh', background: T.bg, color: T.text,
+      minHeight: 'calc(100svh - var(--aviso-vista, 0px))', background: T.bg, color: T.text,
       fontFamily: FONT,
       WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
     }}>

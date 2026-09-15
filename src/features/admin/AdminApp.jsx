@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Dumbbell, Users, Library, Shield, PanelLeftClose, PanelLeft, Eye, X,
 } from 'lucide-react';
@@ -8,6 +8,7 @@ import { T, FONT, KP } from '@/lib/theme';
 import AthletesPanel from '@/features/admin/AthletesPanel';
 import ExercisesPanel from '@/features/admin/ExercisesPanel';
 import CoachesPanel from '@/features/admin/CoachesPanel';
+import VistaComoAtleta from '@/features/admin/VistaComoAtleta';
 
 const SIDEBAR_W = 232;
 
@@ -31,6 +32,25 @@ export default function AdminApp() {
      importa el día que algo salga mal — en los registros del servidor las
      acciones siguen apareciendo a nombre del master, que es quien las hizo. */
   const [viendoComo, setViendoComo] = useState(null); // { id, nombre } | null
+
+  /* "Ver como" un ATLETA: su app de entrenamiento, tal cual la ve él. Lo puede
+     hacer su coach, y el master con cualquiera. Andrés: "así no tengo que
+     estar saltando entre cuentas".
+
+     El panel NO se desmonta mientras tanto: se esconde. Así al salir vuelves a
+     la misma ficha, con el mismo filtro y a la misma altura, en vez de empezar
+     de cero desde la lista. */
+  const [viendoAtleta, setViendoAtleta] = useState(null); // perfil del atleta | null
+  const alturaDelPanel = useRef(0);
+  const entrarComoAtleta = (atleta) => {
+    alturaDelPanel.current = window.scrollY;
+    setViendoAtleta(atleta);
+    window.scrollTo(0, 0);
+  };
+  const salirDeAtleta = () => {
+    setViendoAtleta(null);
+    requestAnimationFrame(() => window.scrollTo(0, alturaDelPanel.current));
+  };
 
   const TABS = [
     { id: 'athletes', label: isMaster ? 'Atletas' : 'Mis atletas', icon: Users },
@@ -83,16 +103,22 @@ export default function AdminApp() {
         </div>
       )}
 
-      {tab === 'athletes' && <AthletesPanel viendoComo={viendoComo} />}
+      {tab === 'athletes' && <AthletesPanel viendoComo={viendoComo} onVerComoAtleta={entrarComoAtleta} />}
       {tab === 'exercises' && <ExercisesPanel viendoComo={viendoComo} />}
       {tab === 'coaches' && isMaster && !viendoComo && <CoachesPanel onVerComo={entrarComo} />}
     </>
   );
 
+  const vistaDeAtleta = viendoAtleta && (
+    <VistaComoAtleta key={viendoAtleta.id} atleta={viendoAtleta} onSalir={salirDeAtleta} />
+  );
+
   /* ------------------------- Teléfono: pestañas arriba ------------------------ */
   if (!isDesktop) {
     return (
-      <div style={{ minHeight: '100svh', background: T.bg, fontFamily: FONT }}>
+      <>
+      {vistaDeAtleta}
+      <div style={{ minHeight: '100svh', background: T.bg, fontFamily: FONT, ...(viendoAtleta ? { display: 'none' } : {}) }}>
         <header
           style={{
             position: 'sticky', top: 0, zIndex: 50, background: 'rgba(255,255,255,0.82)',
@@ -134,12 +160,15 @@ export default function AdminApp() {
         </header>
         <main style={{ padding: '20px 16px 80px' }}>{content}</main>
       </div>
+      </>
     );
   }
 
   /* ---------------------- Computadora: menú lateral fijo --------------------- */
   return (
-    <div style={{ minHeight: '100svh', background: T.bg, fontFamily: FONT, display: 'flex' }}>
+    <>
+    {vistaDeAtleta}
+    <div style={{ minHeight: '100svh', background: T.bg, fontFamily: FONT, display: viendoAtleta ? 'none' : 'flex' }}>
       {/* Menú lateral */}
       {menuOpen && (
         <aside
@@ -226,6 +255,7 @@ export default function AdminApp() {
         <main style={{ flex: 1, padding: '24px 24px 60px', minWidth: 0 }}>{content}</main>
       </div>
     </div>
+    </>
   );
 }
 

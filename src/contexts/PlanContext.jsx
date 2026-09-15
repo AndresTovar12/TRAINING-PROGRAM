@@ -1,14 +1,15 @@
 import {
   createContext, useContext, useEffect, useState, useMemo, useCallback,
 } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { usePerfilDeLaVista } from '@/contexts/VistaContext';
 import {
   getActivePlan, listExercises, listExerciseMedia, getMasterId,
   listExerciseOverrides, aplicarOverrides,
 } from '@/lib/api';
 
 /**
- * Carga el plan activo del usuario autenticado (tabla `plans`, jsonb con la
+ * Carga el plan activo de la persona cuya app se dibuja —quien entró, o el
+ * atleta que su coach está viendo— (tabla `plans`, jsonb con la
  * misma estructura del plan original: fases → semanas → días → ejercicios) y
  * el repertorio de ejercicios para resolver media (foto/video/link) en vivo.
  */
@@ -71,7 +72,7 @@ function normalizePlan(phases) {
 }
 
 export function PlanProvider({ children }) {
-  const { user, profile } = useAuth();
+  const { userId, perfil } = usePerfilDeLaVista();
   const [planRow, setPlanRow] = useState(null);
   const [planLoading, setPlanLoading] = useState(true);
   const [exercisesBase, setExercisesBase] = useState([]);
@@ -81,22 +82,22 @@ export function PlanProvider({ children }) {
 
   // De quién son las versiones que hay que aplicar. Un atleta ve las de SU
   // coach; un coach que abre su propia app de entrenamiento ve las suyas.
-  const coachDeLaVista = profile?.role === 'admin' ? (profile?.id ?? null) : (profile?.coach_id ?? null);
+  const coachDeLaVista = perfil?.role === 'admin' ? (perfil?.id ?? null) : (perfil?.coach_id ?? null);
 
   useEffect(() => {
     let cancelled = false;
-    if (!user?.id) {
+    if (!userId) {
       setPlanRow(null);
       setPlanLoading(false);
       return;
     }
     setPlanLoading(true);
-    getActivePlan(user.id)
+    getActivePlan(userId)
       .then((row) => { if (!cancelled) setPlanRow(row); })
       .catch(() => { if (!cancelled) setPlanRow(null); })
       .finally(() => { if (!cancelled) setPlanLoading(false); });
     return () => { cancelled = true; };
-  }, [user?.id]);
+  }, [userId]);
 
   // Repertorio para media viva (best-effort: si falla, la app sigue sin media)
   useEffect(() => {
@@ -159,10 +160,10 @@ export function PlanProvider({ children }) {
    */
   const medias = useMemo(() => {
     return (mediasTodas ?? []).filter((m) => {
-      if (m.para_atleta) return m.para_atleta === user?.id;
+      if (m.para_atleta) return m.para_atleta === userId;
       return m.created_by === coachDeLaVista || m.created_by === masterId;
     });
-  }, [mediasTodas, coachDeLaVista, masterId, user?.id]);
+  }, [mediasTodas, coachDeLaVista, masterId, userId]);
 
   const phases = useMemo(
     () => normalizePlan(planRow?.data?.phases),

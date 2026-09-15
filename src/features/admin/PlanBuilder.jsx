@@ -287,10 +287,11 @@ function WeekMetaModal({ week, canDelete, onPatch, onDuplicate, onCopyToRest, on
 
 /* Selector de plantillas (día o semana) */
 function TemplatePicker({ kind, onApply, onClose }) {
+  const { user } = useAuth();
   const [rows, setRows] = useState(null);
   useEffect(() => {
-    listTemplates(kind).then(setRows).catch(() => setRows([]));
-  }, [kind]);
+    listTemplates(kind, user?.id).then(setRows).catch(() => setRows([]));
+  }, [kind, user?.id]);
 
   const meta = (t) => {
     if (kind === 'week') {

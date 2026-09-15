@@ -675,10 +675,13 @@ export async function deletePlan(planId) {
 }
 
 /* ----------------------------- Templates ------------------------------ */
-// Plantillas de rutina: kind 'day' (una sesión) o 'week' (7 días)
-export async function listTemplates(kind) {
+// Plantillas de rutina: kind 'day' (una sesión) o 'week' (7 días).
+// `createdBy`: solo las de esa persona. El master puede leerlas todas, y sin
+// este filtro su catálogo saldría revuelto con las de cada coach.
+export async function listTemplates(kind, createdBy) {
   let q = supabase.from('routine_templates').select('*').order('updated_at', { ascending: false });
   if (kind) q = q.eq('kind', kind);
+  if (createdBy) q = q.eq('created_by', createdBy);
   const { data, error } = await q;
   if (error) throw error;
   return data ?? [];

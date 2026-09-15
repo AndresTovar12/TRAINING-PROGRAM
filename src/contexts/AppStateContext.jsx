@@ -2,20 +2,24 @@ import {
   createContext, useContext, useEffect, useRef, useState, useCallback, useMemo,
 } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/contexts/AuthContext';
+import { usePerfilDeLaVista } from '@/contexts/VistaContext';
 
 /**
  * Loads the per-user `user_app_state.data` jsonb blob once, holds it in memory,
  * and persists the whole blob (debounced) on change. `useStorage(key, def)`
  * reads/writes individual keys through this store, preserving the exact
  * interface of the original window.storage-based hook so UI code is unchanged.
+ *
+ * Es el estado de la persona cuya app se dibuja. Si un coach está viendo la app
+ * de su atleta (`soloLectura`), se lee el de ese atleta y no se guarda NUNCA:
+ * lo que toque el coach vive en memoria y se pierde al salir.
  */
 const AppStateContext = createContext(null);
 
 const SAVE_DEBOUNCE_MS = 600;
 
 export function AppStateProvider({ children }) {
-  const { user } = useAuth();
+  const { userId, soloLectura } = usePerfilDeLaVista();
   const [store, setStore] = useState({});
   const [loaded, setLoaded] = useState(false);
 
@@ -28,7 +32,7 @@ export function AppStateProvider({ children }) {
     setLoaded(false);
     skipNextSave.current = true;
 
-    if (!user) {
+    if (!userId) {
       setStore({});
       setLoaded(true);
       return;
@@ -38,7 +42,7 @@ export function AppStateProvider({ children }) {
       const { data } = await supabase
         .from('user_app_state')
         .select('data')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .maybeSingle();
       if (cancelled) return;
       setStore(data?.data && typeof data.data === 'object' ? data.data : {});
@@ -48,11 +52,11 @@ export function AppStateProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [user?.id]);
+  }, [userId]);
 
   // Debounced persistence of the whole blob
   useEffect(() => {
-    if (!loaded || !user) return;
+    if (!loaded || !userId || soloLectura) return;
     if (skipNextSave.current) {
       skipNextSave.current = false;
       return;
@@ -62,7 +66,7 @@ export function AppStateProvider({ children }) {
       supabase
         .from('user_app_state')
         .upsert({
-          user_id: user.id,
+          user_id: userId,
           // `store` de este render, no una copia guardada aparte: el efecto
           // depende de `store`, y su limpieza cancela el temporizador anterior
           // en cada cambio. O sea que el que llega a guardarse es siempre el
@@ -78,7 +82,7 @@ export function AppStateProvider({ children }) {
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [store, loaded, user?.id, user]);
+  }, [store, loaded, userId, soloLectura]);
 
   const value = useMemo(() => ({ store, setStore, loaded }), [store, loaded]);
 

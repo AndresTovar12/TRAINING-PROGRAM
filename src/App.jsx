@@ -63,7 +63,7 @@ function AccountMenu() {
 
   return (
     <>
-    <div ref={ref} style={{ position: 'fixed', top: 16, right: 16, zIndex: 1000, fontFamily: FONT }}>
+    <div ref={ref} style={{ position: 'fixed', top: 'calc(16px + var(--aviso-vista, 0px))', right: 16, zIndex: 1000, fontFamily: FONT }}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
