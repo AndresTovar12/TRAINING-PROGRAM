@@ -354,26 +354,111 @@ const ejerciciosDelBloque = (week, dayIdx, blk) => {
   return bloqueQueRepite(week, dayIdx, blk)?.blk.exercises || [];
 };
 
-const findPreviousWeight = (plan, sessionsData, exName) => {
-  const target = (exName || '').toLowerCase().trim();
-  let latest = null;
-  for (const phase of (plan ?? [])) for (const week of phase.weekData) for (let di = 0; di < week.days.length; di++) {
-    const id = sessionId(phase.id, week.num, di);
-    const sd = sessionsData[id]; if (!sd?.exercises) continue;
-    const day = week.days[di]; const allEx = [];
-    if (day.exercises) day.exercises.forEach((e, i) => allEx.push({ ex: e, key: `${i}` }));
+const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+// El lunes de una semana ISO: "2026-W38" → 14 sep 2026 (en UTC).
+const lunesDeSemanaIso = (clave) => {
+  const m = /^(\d{4})-W(\d{2})$/.exec(clave || '');
+  if (!m) return null;
+  const cuatroDeEnero = new Date(Date.UTC(Number(m[1]), 0, 4)); // siempre cae en la semana 1
+  const lunes = new Date(cuatroDeEnero);
+  lunes.setUTCDate(4 - ((cuatroDeEnero.getUTCDay() || 7) - 1) + (Number(m[2]) - 1) * 7);
+  return lunes;
+};
+
+const LLAVE_SEMANAL = /^wk-(\d{4}-W\d{2})-d(\d+)$/;
+
+/**
+ * Cada vez que el atleta anotó peso en un ejercicio, de la más vieja a la más
+ * nueva, con el `orden` de la sesión en el tiempo.
+ *
+ * Plan por fases: cada día del plan tiene su llave, y el orden es el del plan.
+ *
+ * Rutina que se repite: la MISMA rutina vuelve cada semana, así que cada semana
+ * del calendario es un registro distinto (`wk-2026-W38-d0`). Hasta el 15 sep
+ * 2026 la pantalla de la sesión la guardaba con la llave del plan
+ * (`p-…-w1-d0`), que es la misma todas las semanas: esos registros viejos se
+ * siguen leyendo y cuentan como los más antiguos.
+ */
+const registrosDePeso = (plan, sessionsData, exName, kind = 'periodized') => {
+  const objetivo = (exName || '').toLowerCase().trim();
+  const registros = [];
+  const ordenes = new Map();
+  if (!objetivo) return { registros, ordenDe: () => null };
+  const datos = sessionsData || {};
+  const semanales = kind === 'weekly'
+    ? Object.keys(datos).map((k) => [k, LLAVE_SEMANAL.exec(k)]).filter(([, m]) => m)
+    : [];
+
+  const lee = (id, orden, week, di, donde) => {
+    const sd = datos[id];
+    if (!sd?.exercises) return;
+    const day = week.days[di];
+    const todos = [];
+    if (day.exercises) day.exercises.forEach((e, i) => todos.push({ ex: e, key: `${i}` }));
+    // Incluye las sesiones "repite la del lunes": lo anotado ahí también es progreso.
     if (day.blocks) day.blocks.forEach((blk, bi) => {
-      ejerciciosDelBloque(week, di, blk).forEach((e, i) => allEx.push({ ex: e, key: `${bi}-${i}` }));
+      ejerciciosDelBloque(week, di, blk).forEach((e, i) => todos.push({ ex: e, key: `${bi}-${i}` }));
     });
-    for (const { ex, key } of allEx) {
+    for (const { ex, key } of todos) {
       if (!ex.name || ex.isNote) continue;
-      if (ex.name.toLowerCase().trim() !== target) continue;
-      const data = sd.exercises[key];
-      if (data?.weight) latest = { weight: data.weight };
+      if (ex.name.toLowerCase().trim() !== objetivo) continue;
+      const dato = sd.exercises[key];
+      const kilos = parseFloat(dato?.weight);
+      if (!dato?.weight || Number.isNaN(kilos)) continue;
+      registros.push({ id, orden, kilos, weight: dato.weight, cuando: sd.completedAt || null, donde });
+    }
+  };
+
+  let n = 0;
+  for (const phase of (plan ?? [])) {
+    for (const week of (phase.weekData ?? [])) {
+      for (let di = 0; di < (week.days?.length ?? 0); di++) {
+        const idDelPlan = sessionId(phase.id, week.num, di);
+        if (kind === 'weekly') {
+          const dia = String(di).padStart(3, '0');
+          ordenes.set(idDelPlan, `0000-W00-d${dia}`);
+          lee(idDelPlan, `0000-W00-d${dia}`, week, di, phase.name || 'Rutina');
+          for (const [k, m] of semanales) {
+            if (Number(m[2]) !== di) continue;
+            const lunes = lunesDeSemanaIso(m[1]);
+            const donde = lunes ? `Semana del ${lunes.getUTCDate()} ${MESES_CORTOS[lunes.getUTCMonth()]}` : m[1];
+            lee(k, `${m[1]}-d${dia}`, week, di, donde);
+          }
+        } else {
+          n += 1;
+          ordenes.set(idDelPlan, n);
+          lee(idDelPlan, n, week, di, `${phase.name || phase.id} · sem ${week.num}`);
+        }
+      }
     }
   }
-  return latest;
+  registros.sort((a, b) => (a.orden < b.orden ? -1 : a.orden > b.orden ? 1 : 0));
+
+  const ordenDe = (id) => {
+    if (ordenes.has(id)) return ordenes.get(id);
+    const m = LLAVE_SEMANAL.exec(String(id ?? ''));
+    return m ? `${m[1]}-d${String(m[2]).padStart(3, '0')}` : null;
+  };
+  return { registros, ordenDe };
 };
+
+/**
+ * El último peso que anotó ANTES de la sesión que está viendo.
+ *
+ * `actual` es la llave de esa sesión. Antes no se pasaba y se devolvía el
+ * último peso del plan entero, incluido el que se acababa de anotar HOY: el
+ * atleta ponía 90 y "Antes: 90 kg" le repetía su propio número en vez de
+ * recordarle los 85 de la vez pasada. Sin `actual`, devuelve el último de todos.
+ */
+const findPreviousWeight = (plan, sessionsData, exName, { kind = 'periodized', actual } = {}) => {
+  const { registros, ordenDe } = registrosDePeso(plan, sessionsData, exName, kind);
+  const tope = actual != null ? ordenDe(actual) : null;
+  const previos = tope == null ? registros : registros.filter((r) => r.orden < tope);
+  const ultimo = previos[previos.length - 1];
+  return ultimo ? { weight: ultimo.weight } : null;
+};
+
 /**
  * Todo lo que el atleta ha levantado en un ejercicio, en orden.
  *
@@ -385,39 +470,10 @@ const findPreviousWeight = (plan, sessionsData, exName) => {
  * puede venir vacío: las sesiones sin terminar no tienen fecha de cierre, y aun
  * así el peso anotado cuenta.
  */
-const historialDePeso = (plan, sessionsData, exName) => {
-  const objetivo = (exName || '').toLowerCase().trim();
-  if (!objetivo) return [];
-  const salida = [];
-  for (const phase of (plan ?? [])) {
-    for (const week of (phase.weekData ?? [])) {
-      for (let di = 0; di < (week.days?.length ?? 0); di++) {
-        const sd = sessionsData[sessionId(phase.id, week.num, di)];
-        if (!sd?.exercises) continue;
-        const day = week.days[di];
-        const todos = [];
-        if (day.exercises) day.exercises.forEach((e, i) => todos.push({ ex: e, key: `${i}` }));
-        // Incluye las sesiones "repite la del lunes": lo anotado ahí también es progreso.
-        if (day.blocks) day.blocks.forEach((blk, bi) => {
-          ejerciciosDelBloque(week, di, blk).forEach((e, i) => todos.push({ ex: e, key: `${bi}-${i}` }));
-        });
-        for (const { ex, key } of todos) {
-          if (!ex.name || ex.isNote) continue;
-          if (ex.name.toLowerCase().trim() !== objetivo) continue;
-          const dato = sd.exercises[key];
-          const kilos = parseFloat(dato?.weight);
-          if (!dato?.weight || Number.isNaN(kilos)) continue;
-          salida.push({
-            kilos,
-            cuando: sd.completedAt || null,
-            donde: `${phase.name || phase.id} · sem ${week.num}`,
-          });
-        }
-      }
-    }
-  }
-  return salida;
-};
+const historialDePeso = (plan, sessionsData, exName, kind = 'periodized') => (
+  registrosDePeso(plan, sessionsData, exName, kind).registros
+    .map(({ kilos, cuando, donde }) => ({ kilos, cuando, donde }))
+);
 
 const totalProgress = (plan, sessionsData) => {
   let total = 0, completed = 0;

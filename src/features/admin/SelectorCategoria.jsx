@@ -12,6 +12,11 @@
  * del repertorio y el "Ejercicio nuevo" del editor de planes. Con dos copias,
  * el arreglo llegaría a una sola — ya pasó con el botón de subir archivos.
  *
+ * A LA VISTA, NO DENTRO DE LA LISTA. Al principio "+ Crear categoría nueva…" era
+ * la última opción del desplegable. En el iPhone el desplegable es una rueda:
+ * hay que abrirla y bajar hasta el final para descubrir que existe. Andrés no
+ * la encontró y creyó que se había quitado. Ahora es un botón debajo.
+ *
  * QUÉ VE CADA QUIÉN lo decide la base (reglas de acceso), no esta pantalla:
  * las de siempre, las del master y las propias. Aquí además se esconden las de
  * otros coaches que el master sí puede leer, para que su lista no se llene con
@@ -21,8 +26,6 @@ import { useState } from 'react';
 import { Plus, Loader2, X } from 'lucide-react';
 import { createCategory } from '@/lib/api';
 import { T, FONT } from '@/lib/theme';
-
-const NUEVA = '__nueva__';
 
 // "Velocidad", "velocidad" y "Velocidád" son la misma categoría para una persona.
 const igual = (a = '', b = '') => a.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase()
@@ -71,12 +74,8 @@ export default function SelectorCategoria({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <select
-        value={creando ? NUEVA : (value || '')}
-        onChange={(e) => {
-          if (e.target.value === NUEVA) { setCreando(true); setErr(''); return; }
-          setCreando(false);
-          onChange(e.target.value);
-        }}
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
         style={{ ...campo, cursor: 'pointer' }}
       >
         {sinCategoria && <option value="">Sin categoría</option>}
@@ -89,8 +88,28 @@ export default function SelectorCategoria({
             {mias.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </optgroup>
         )}
-        {puedeCrear && <option value={NUEVA}>+ Crear categoría nueva…</option>}
       </select>
+
+      {!creando && puedeCrear && (
+        <button
+          type="button"
+          onClick={() => { setCreando(true); setErr(''); }}
+          style={{
+            alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6,
+            minHeight: 36, padding: '0 2px', border: 'none', background: 'transparent', cursor: 'pointer',
+            fontFamily: FONT, fontSize: 14, fontWeight: 800, color: T.accent,
+          }}
+        >
+          <Plus size={16} /> Crear categoría nueva
+        </button>
+      )}
+      {!puedeCrear && (
+        /* Viendo como otro coach: la categoría quedaría a nombre de quien está
+           mirando, no del coach. Se dice por qué no está el botón. */
+        <div style={{ fontSize: 12.5, color: T.text3, fontWeight: 600, lineHeight: 1.4 }}>
+          Para crear categorías, sal de «Ver como».
+        </div>
+      )}
 
       {creando && (
         <div style={{

@@ -14,7 +14,7 @@ import { PHASE_IMG } from '@/data/training-data';
 import { usePlan } from '@/contexts/PlanContext';
 import { usePerfilDeLaVista } from '@/contexts/VistaContext';
 import {
-  sessionId, calc1RM, today, greeting, isLoadedExercise,
+  sessionIdFor, calc1RM, today, greeting, isLoadedExercise,
   resolveCursor, defaultCursor, isValidCursor, findPreviousWeight, historialDePeso,
   formatIntensity,
   sessionForToday, weekOverview, weekdayToday, weekdayLabel,
@@ -93,8 +93,18 @@ const Input = ({ value, onChange, placeholder, type = 'text', style, suffix }) =
   </div>
 );
 
+/* La llave con la que se guarda un día del plan. En un plan por fases, cada día
+   del plan tiene la suya. En una rutina que se repite, cada semana del
+   CALENDARIO es un registro nuevo: si no, marcar el lunes lo dejaba marcado
+   todos los lunes, y los pesos de una semana pisaban los de la anterior. */
+const useIdDeSesion = () => {
+  const { kind } = usePlan();
+  return useCallback((phaseId, weekNum, dayIdx) => sessionIdFor(kind, phaseId, weekNum, dayIdx), [kind]);
+};
+
 // Global timeline shown across all internal views
 const PhaseTimeline = ({ activePhaseId, sessionsData, onJumpToPhase }) => {
+  const idDeSesion = useIdDeSesion();
   const { phases: PLAN } = usePlan();
   return (
     <div style={{
@@ -120,7 +130,7 @@ const PhaseTimeline = ({ activePhaseId, sessionsData, onJumpToPhase }) => {
           let completed = 0, total = 0;
           phase.weekData.forEach(w => w.days.forEach((_, i) => {
             total++;
-            if (sessionsData[sessionId(phase.id, w.num, i)]?.completed) completed++;
+            if (sessionsData[idDeSesion(phase.id, w.num, i)]?.completed) completed++;
           }));
           const pct = total > 0 ? completed / total : 0;
           return (
@@ -374,8 +384,8 @@ function Chip({ children, fuerte }) {
   );
 }
 
-const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, sessionsData, phaseColor, onAbrirFicha }) => {
-  const { phases: PLAN, resolveExercise, medias } = usePlan();
+const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, onUpdate, sessionsData, phaseColor, onAbrirFicha }) => {
+  const { phases: PLAN, resolveExercise, medias, kind } = usePlan();
   const { perfil: profile } = usePerfilDeLaVista();
   const unidad = profile?.unidad_peso || 'kg';
   const u = etiquetaUnidad(unidad);
@@ -392,13 +402,14 @@ const ExerciseRow = ({ ex, idx, num, sessionData, onUpdate, sessionsData, phaseC
 
   const previous = useMemo(() => {
     if (ex.isNote || !ex.name) return null;
-    return findPreviousWeight(PLAN, sessionsData, ex.name);
-  }, [PLAN, ex.name, ex.isNote, sessionsData]);
+    // El de la vez pasada: el que acaba de anotar hoy no es "antes".
+    return findPreviousWeight(PLAN, sessionsData, ex.name, { kind, actual: sessionKey });
+  }, [PLAN, ex.name, ex.isNote, sessionsData, kind, sessionKey]);
 
   const historial = useMemo(() => {
     if (ex.isNote || !ex.name) return [];
-    return historialDePeso(PLAN, sessionsData, ex.name);
-  }, [PLAN, ex.name, ex.isNote, sessionsData]);
+    return historialDePeso(PLAN, sessionsData, ex.name, kind);
+  }, [PLAN, ex.name, ex.isNote, sessionsData, kind]);
 
   /* El peso se GUARDA en kilos y se ESCRIBE en la unidad del atleta, así que
      el campo necesita su propio borrador. Sin él, cada tecla iría a kilos y
@@ -578,12 +589,12 @@ const groupIntoSets = (exercises) => {
   return groups;
 };
 
-const SetGroup = ({ group, setNum, phaseColor, sessionData, onUpdate, oneRMs, sessionsData }) => {
+const SetGroup = ({ group, setNum, phaseColor, sessionData, sessionKey, onUpdate, oneRMs, sessionsData }) => {
   /* La ficha del ejercicio vive AQUI y no en cada fila, porque para decir
      "Guardar y siguiente" hay que saber cual es el siguiente — y una fila solo
      se conoce a si misma. La serie si conoce a todos sus miembros. */
   const [fichaEn, setFichaEn] = useState(null);
-  const { phases: planCompleto, resolveExercise, medias } = usePlan();
+  const { phases: planCompleto, resolveExercise, medias, kind } = usePlan();
   const { perfil: profile } = usePerfilDeLaVista();
   if (group.isNote) {
     return (
@@ -639,7 +650,7 @@ const SetGroup = ({ group, setNum, phaseColor, sessionData, onUpdate, oneRMs, se
           <div key={idx} style={{ borderTop: i > 0 ? `1px solid ${LT.border}` : 'none' }}>
             <ExerciseRow
               ex={ex} idx={idx} num={i + 1} phaseColor={phaseColor}
-              sessionData={sessionData} onUpdate={onUpdate} sessionsData={sessionsData}
+              sessionData={sessionData} sessionKey={sessionKey} onUpdate={onUpdate} sessionsData={sessionsData}
               onAbrirFicha={() => setFichaEn(i)}
             />
           </div>
@@ -655,6 +666,8 @@ const SetGroup = ({ group, setNum, phaseColor, sessionData, onUpdate, oneRMs, se
             exData={sessionData?.exercises?.[idx] || {}}
             onUpdate={(d) => onUpdate(idx, d)}
             sessionsData={sessionsData}
+            sessionKey={sessionKey}
+            kind={kind}
             oneRMs={oneRMs}
             plan={planCompleto}
             repertoire={rep || { name: ex.name }}
@@ -775,11 +788,14 @@ const LightWeekScience = ({ science }) => {
 };
 
 const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, activeSessionId }) => {
+  const idDeSesion = useIdDeSesion();
+  const { kind, planMeta } = usePlan();
+  const esRutina = kind === 'weekly';
   const esCompu = useIsDesktop();
   const phaseColor = phase.color || LT.blue;
   // Los días OFF no cuentan: no se "completa" un descanso.
   const entrenables = week.days.map((d, idx) => ({ d, idx })).filter(({ d }) => !esDescanso(d));
-  const completedCount = entrenables.filter(({ idx }) => sessionsData[sessionId(phase.id, week.num, idx)]?.completed).length;
+  const completedCount = entrenables.filter(({ idx }) => sessionsData[idDeSesion(phase.id, week.num, idx)]?.completed).length;
 
   // Abre en el día de hoy; si hoy no entrena, en el primero de la semana.
   const initialIdx = useMemo(() => {
@@ -792,7 +808,7 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
   useEffect(() => { setOpenBlocks({ 0: true }); }, [selectedIdx]);
 
   const selectedDay = week.days[selectedIdx];
-  const selectedId = sessionId(phase.id, week.num, selectedIdx);
+  const selectedId = idDeSesion(phase.id, week.num, selectedIdx);
   const sessionData = sessionsData[selectedId] || {};
   const selectedCompleted = !!sessionData.completed;
   const selectedDayName = selectedDay.name || (selectedDay.blocks ? selectedDay.blocks.map(b => b.tag.replace(/^Sesi[óo]n \d+ \([AP]M\): /, '')).join(' + ') : selectedDay.day);
@@ -846,6 +862,17 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
           barra de fases, que es donde identifica algo; aqui manda el azul de
           la app. Los puntos de categoria se quedan porque SI son informacion,
           pero pequeños y sin competir. */}
+      {/* Una RUTINA QUE SE REPITE no tiene fases ni semanas que recorrer: su
+          "fase" no tiene nombre y siempre es la semana 1 de 1. Antes salía
+          "‹ · Semana 1 de 1 · 0/4 días" sin título, y la flecha llevaba a una
+          ficha de fase vacía. Ahora dice lo que es: esta semana, y su nombre. */}
+      {/* Sin la barra de fases arriba, el botón de la cuenta (fijo, 42 px a la
+          derecha) queda a la altura de estas dos líneas: se les deja su hueco. */}
+      {esRutina ? (
+        <div style={{ fontSize: 11.5, fontWeight: 700, color: LT.text3, marginBottom: 2, letterSpacing: 0.2, paddingRight: 52 }}>
+          Esta semana · {completedCount}/{pluralS(entrenables.length, 'día')}
+        </div>
+      ) : (
       <button onClick={onBack} style={{
         background: 'transparent', border: 'none', color: LT.text3, cursor: 'pointer',
         display: 'flex', alignItems: 'center', gap: 3, marginBottom: 2, fontFamily: FONT,
@@ -858,12 +885,13 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
           {' · '}{completedCount}/{pluralS(entrenables.length, 'día')}
         </span>
       </button>
+      )}
 
       <h1 style={{
         fontSize: 21, fontWeight: 800, color: LT.text, margin: '0 0 12px',
-        lineHeight: 1.15, letterSpacing: -0.4,
+        lineHeight: 1.15, letterSpacing: -0.4, ...(esRutina ? { paddingRight: 52 } : {}),
       }}>
-        {week.label || phase.fullName}
+        {esRutina ? (week.label || planMeta?.title || 'Tu rutina') : (week.label || phase.fullName)}
       </h1>
 
       {week.emph && (
@@ -890,7 +918,7 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
         borderBottom: `1px solid ${LT.border}`,
       }}>
         {enOrdenDeSemana(week.days).map(({ day, idx }) => {
-          const id = sessionId(phase.id, week.num, idx);
+          const id = idDeSesion(phase.id, week.num, idx);
           const sd = sessionsData[id];
           const isCompleted = !!sd?.completed;
           const isActive = activeSessionId === id;
@@ -1023,7 +1051,7 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
           if (!g.isNote) setNum += 1;
           return (
             <SetGroup key={`${selectedIdx}-${gi}`} group={g} setNum={setNum} phaseColor={phaseColor}
-              sessionData={flatSessionData}
+              sessionData={flatSessionData} sessionKey={selectedId}
               onUpdate={(idx, data) => setExerciseData(null, idx, data)}
               oneRMs={oneRMs} sessionsData={sessionsData} />
           );
@@ -1064,7 +1092,7 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
                     if (!g.isNote) setNum += 1;
                     return (
                       <SetGroup key={gi} group={g} setNum={setNum} phaseColor={phaseColor}
-                        sessionData={blkSessionData}
+                        sessionData={blkSessionData} sessionKey={selectedId}
                         onUpdate={(idx, data) => setExerciseData(bi, idx, data)}
                         oneRMs={oneRMs} sessionsData={sessionsData} />
                     );
@@ -1098,7 +1126,7 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
                         if (!g.isNote) setNum += 1;
                         return (
                           <SetGroup key={gi} group={g} setNum={setNum} phaseColor={phaseColor}
-                            sessionData={blkSessionData}
+                            sessionData={blkSessionData} sessionKey={selectedId}
                             onUpdate={(idx, data) => setExerciseData(bi, idx, data)}
                             oneRMs={oneRMs} sessionsData={sessionsData} />
                         );
@@ -1244,6 +1272,7 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
 };
 
 const WeekCard = ({ week, phase, isActiveWeek, isFullyDone, completed, total, loadPct, sessionsData, onClick }) => {
+  const idDeSesion = useIdDeSesion();
   const [hover, setHover] = useState(false);
   const pc = phase.color || T.accent;
   return (
@@ -1299,7 +1328,7 @@ const WeekCard = ({ week, phase, isActiveWeek, isFullyDone, completed, total, lo
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <div style={{ display: 'flex', gap: 4 }}>
           {enOrdenDeSemana(week.days).map(({ day, idx }) => {
-            const id = sessionId(phase.id, week.num, idx);
+            const id = idDeSesion(phase.id, week.num, idx);
             const sd = sessionsData[id];
             const done = !!sd?.completed;
             const cat = CAT_COLORS[day.cat] || CAT_COLORS.gym;
@@ -1329,6 +1358,7 @@ const WeekCard = ({ week, phase, isActiveWeek, isFullyDone, completed, total, lo
 };
 
 const PhaseDetail = ({ phase, onBack, onSelectWeek, sessionsData, activeWeekKey }) => {
+  const idDeSesion = useIdDeSesion();
   // Extract a "load value" 0-100 per week for the arc visualization
   const getWeekLoad = (week) => {
     if (week.load) {
@@ -1349,7 +1379,7 @@ const PhaseDetail = ({ phase, onBack, onSelectWeek, sessionsData, activeWeekKey 
     let completed = 0, total = 0;
     week.days.forEach((_, i) => {
       total++;
-      if (sessionsData[sessionId(phase.id, week.num, i)]?.completed) completed++;
+      if (sessionsData[idDeSesion(phase.id, week.num, i)]?.completed) completed++;
     });
     const isActive = activeWeekKey === `${phase.id}-w${week.num}`;
     return { week, load, completed, total, pct: total > 0 ? completed / total : 0, isActive };
@@ -1357,7 +1387,7 @@ const PhaseDetail = ({ phase, onBack, onSelectWeek, sessionsData, activeWeekKey 
   const maxLoad = Math.max(...arcItems.map(i => i.load), 1);
 
   const weekProgress = (week) => {
-    const completed = week.days.filter((_, idx) => sessionsData[sessionId(phase.id, week.num, idx)]?.completed).length;
+    const completed = week.days.filter((_, idx) => sessionsData[idDeSesion(phase.id, week.num, idx)]?.completed).length;
     return { completed, total: week.days.length };
   };
 
@@ -1427,11 +1457,12 @@ const PhaseDetail = ({ phase, onBack, onSelectWeek, sessionsData, activeWeekKey 
 };
 
 const PlanOverview = ({ onSelectPhase, sessionsData, activePhaseId }) => {
+  const idDeSesion = useIdDeSesion();
   const { phases: PLAN, planMeta } = usePlan();
   const phaseProgress = (phase) => {
     let total = 0, completed = 0;
     phase.weekData.forEach(week => {
-      week.days.forEach((_, idx) => { total++; if (sessionsData[sessionId(phase.id, week.num, idx)]?.completed) completed++; });
+      week.days.forEach((_, idx) => { total++; if (sessionsData[idDeSesion(phase.id, week.num, idx)]?.completed) completed++; });
     });
     return { total, completed, pct: total > 0 ? (completed / total) * 100 : 0 };
   };
@@ -1515,6 +1546,7 @@ const ReadinessRing = ({ score, size = 110 }) => {
 
 // Modal selector de cursor: tap fase → semanas, tap semana → días, tap día → selecciona y cierra
 const CursorSelector = ({ current, sessionsData, onSelect, onClose }) => {
+  const idDeSesion = useIdDeSesion();
   const { phases: PLAN } = usePlan();
   const [expandedPhase, setExpandedPhase] = useState(current?.phaseId || null);
   const [expandedWeek, setExpandedWeek] = useState(current ? `${current.phaseId}-w${current.weekNum}` : null);
@@ -1582,7 +1614,7 @@ const CursorSelector = ({ current, sessionsData, onSelect, onClose }) => {
                       const weekKey = `${phase.id}-w${week.num}`;
                       const weekExpanded = expandedWeek === weekKey;
                       const entrenables = week.days.map((d, i) => ({ d, i })).filter(({ d }) => !esDescanso(d));
-                      const completedCount = entrenables.filter(({ i }) => sessionsData[sessionId(phase.id, week.num, i)]?.completed).length;
+                      const completedCount = entrenables.filter(({ i }) => sessionsData[idDeSesion(phase.id, week.num, i)]?.completed).length;
                       return (
                         <div key={week.num} style={{ marginBottom: 4 }}>
                           <button
@@ -1608,7 +1640,7 @@ const CursorSelector = ({ current, sessionsData, onSelect, onClose }) => {
                           {weekExpanded && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '6px 0 4px 12px' }}>
                               {enOrdenDeSemana(week.days).map(({ day, idx }) => {
-                                const id = sessionId(phase.id, week.num, idx);
+                                const id = idDeSesion(phase.id, week.num, idx);
                                 const isDone = !!sessionsData[id]?.completed;
                                 const isCurrent = current && current.phaseId === phase.id && current.weekNum === week.num && current.dayIdx === idx;
                                 const cat = CAT_COLORS[day.cat] || CAT_COLORS.gym;
@@ -2369,7 +2401,7 @@ const NoPlanState = ({ onGoTab }) => (
 );
 
 export default function TrainingApp() {
-  const { phases: PLAN, hasPlan, planLoading } = usePlan();
+  const { phases: PLAN, hasPlan, planLoading, kind } = usePlan();
   const esCompu = useIsDesktop();
   const [tab, setTab] = useState('home');
   const [view, setView] = useState({ level: 'plan' });
@@ -2406,7 +2438,8 @@ export default function TrainingApp() {
   }, [cursor, storedCursor, setCursor]);
 
   const cursorSession = useMemo(() => resolveCursor(PLAN, cursor), [PLAN, cursor]);
-  const activeSessionId = cursorSession?.id;
+  // En una rutina que se repite no hay puntero que avance: la sesión activa es la de hoy.
+  const activeSessionId = kind === 'weekly' ? sessionForToday(PLAN, kind, cursor)?.id : cursorSession?.id;
   const activeWeekKey = cursorSession ? `${cursorSession.phase.id}-w${cursorSession.week.num}` : null;
   const activePhaseId = cursorSession?.phase.id;
 
@@ -2459,7 +2492,8 @@ export default function TrainingApp() {
   const jumpToPhase = (phase) => { setTab('plan'); setView({ level: 'phase', phase }); };
 
   // Timeline visible on Plan tab, internal views
-  const showTimeline = tab === 'plan' && (view.level === 'phase' || view.level === 'week');
+  // La barra de fases no dice nada en una rutina que se repite: es una sola "fase".
+  const showTimeline = kind !== 'weekly' && tab === 'plan' && (view.level === 'phase' || view.level === 'week');
 
   let content;
   if (planLoading && (tab === 'home' || tab === 'plan')) {

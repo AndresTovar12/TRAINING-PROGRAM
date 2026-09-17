@@ -26,7 +26,7 @@ import { textoReps } from '@/lib/plural';
  * Idea tomada de Avena, que Andrés puso como referencia.
  */
 export default function FichaEjercicio({
-  ex, exData, onUpdate, sessionsData, oneRMs, plan,
+  ex, exData, onUpdate, sessionsData, sessionKey, kind, oneRMs, plan,
   repertoire, medias, perfil,
   serie, posicion, total,
   onCerrar, onSiguiente, onOmitir,
@@ -49,8 +49,9 @@ export default function FichaEjercicio({
   const descanso = (ex.descanso || '').trim() || null;
 
   const anterior = useMemo(
-    () => (ex.name ? findPreviousWeight(plan, sessionsData, ex.name) : null),
-    [plan, sessionsData, ex.name],
+    // El de la vez pasada, no el que se acaba de anotar en esta sesión.
+    () => (ex.name ? findPreviousWeight(plan, sessionsData, ex.name, { kind, actual: sessionKey }) : null),
+    [plan, sessionsData, ex.name, kind, sessionKey],
   );
 
   const recomendado = useMemo(() => {

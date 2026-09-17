@@ -513,7 +513,12 @@ export async function setAthleteCoach(athleteId, coachId) {
 //    Un coach NO puede borrar cuentas: ese atleta puede ser también del master
 //    o pasar mañana con otro coach, y un clic suyo destruiría trabajo ajeno.
 export async function quitarAtletaDeMiLista(athleteId) {
-  return setAthleteCoach(athleteId, null);
+  // Por una función de la base y no editando el perfil: la regla de edición
+  // exige que la fila siga siendo del coach DESPUÉS del cambio, y quitarla es
+  // justo dejar de serlo. Así respondía 403 y el atleta no se iba.
+  const { data, error } = await supabase.rpc('quitar_atleta_de_mi_lista', { atleta: athleteId });
+  if (error) throw error;
+  return data; // { id, coach_id: null, is_active }
 }
 
 // 2. DESACTIVAR / REACTIVAR. Solo el master. No puede entrar y desaparece de
@@ -594,7 +599,9 @@ export async function createCoachAccount({ username, fullName, email, password }
       username, full_name: fullName || undefined, email: email || undefined,
       password, account_type: 'coach',
     }),
-  });
+  }).catch(() => null);
+  // Sin esto, un corte de internet le enseñaba al master "Failed to fetch".
+  if (!res) throw new Error('No se pudo contactar al servidor. Revisa tu conexión.');
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body?.error || 'No se pudo crear el coach');
   return body;

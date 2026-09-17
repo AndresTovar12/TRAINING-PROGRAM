@@ -942,6 +942,13 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
             // boton de Desactivar diciendo lo contrario de lo que acababa
             // de pasar, porque la fila de la lista no se enteraba.
             const parche = { coach_id: row.coach_id, is_active: row.is_active };
+            // Un coach que se quita a un atleta deja de verlo: sale de su lista
+            // ya, sin esperar a recargar (al recargar la base ya no se lo da).
+            if (!isMaster && row.coach_id !== profile?.id) {
+              setAthletes((prev) => prev.filter((a) => a.id !== row.id));
+              setSelected(null);
+              return;
+            }
             setAthletes((prev) => prev.map((a) => (a.id === row.id ? { ...a, ...parche } : a)));
             setSelected((s) => (s && s.id === row.id ? { ...s, ...parche } : s));
           }}
