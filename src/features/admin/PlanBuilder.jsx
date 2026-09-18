@@ -15,10 +15,11 @@ import {
   listExerciseOverrides, aplicarOverrides,
 } from '@/lib/api';
 import { isLoadedExercise, esDescanso } from '@/lib/training-utils';
-import { T, FONT, KP, CAT_COLORS } from '@/lib/theme';
+import { T, FONT, KP } from '@/lib/theme';
 import RepertoirePicker from '@/features/admin/RepertoirePicker';
 import MediaUpload from '@/features/admin/MediaUpload';
 import SelectorCategoria from '@/features/admin/SelectorCategoria';
+import SelectorTipoSesion from '@/features/admin/SelectorTipoSesion';
 import Portada from '@/components/Portada';
 import { plural, pluralS, textoReps } from '@/lib/plural';
 
@@ -34,7 +35,6 @@ const NOMBRE_DIA = {
   Vie: 'Viernes', Sáb: 'Sábado', Dom: 'Domingo',
 };
 const PALETTE = ['#1E40E0', '#3DD9A0', '#FFA047', '#FF7A52', '#A480FF', '#5DA0FF', '#E052A0', '#9090A0'];
-const DAY_CATS = Object.entries(CAT_COLORS).map(([slug, v]) => ({ slug, color: v.c, label: v.label }));
 
 const rid = () => (crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)).slice(0, 8);
 const clone = (o) => structuredClone(o);
@@ -1374,6 +1374,7 @@ function HojaAcciones({ acciones, onClose }) {
 }
 
 function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, nSets, dual }) {
+  const { user } = useAuth();
   const esCompu = useIsDesktop();
   const [menu, setMenu] = useState(false);
   return (
@@ -1402,17 +1403,12 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
           />
         </Field>
         </div>
-        <div style={{ flex: '0 1 180px', minWidth: 140 }}>
+        <div style={{ flex: '0 1 190px', minWidth: 150 }}>
           <Field label="Tipo de sesión">
-            <select
-              value={day.cat || 'gym'}
-              onChange={(e) => onPatch({ cat: e.target.value })}
-              style={{ ...inputStyle, fontWeight: 600, cursor: 'pointer' }}
-            >
-              {DAY_CATS.map((c) => (
-                <option key={c.slug} value={c.slug}>{c.label}</option>
-              ))}
-            </select>
+            {/* Era un <select>: en el iPhone, la rueda gris del sistema. Ahora
+                es la lista de la app, con los colores a la vista y con los
+                tipos que el propio coach se haya creado. */}
+            <SelectorTipoSesion day={day} onPatch={onPatch} coachId={user?.id} />
           </Field>
         </div>
         {nSets != null && (
@@ -1593,6 +1589,47 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
     setNav({ level: 'phase', pi: 0 });
   }
 
+  /* Cambiar la estructura de un plan que ya existe.
+
+     De rutina a fases: lo que hay se queda como la semana 1 de la fase 1, y de
+     ahí el coach agrega semanas. No se pierde nada.
+
+     De fases a rutina: una rutina es UNA semana, así que solo sobrevive la
+     primera del plan. Por eso se pregunta con el número de semanas que se van;
+     y como el plan no se guarda hasta tocar "Guardar", todavía se puede salir
+     sin guardar. */
+  async function cambiaAFases() {
+    const va = await pregunta({
+      titulo: '¿Pasar a un programa por fases?',
+      detalle: 'Lo que ya escribiste se queda como la semana 1 de la fase 1. Después podrás agregar semanas y fases.',
+      confirmar: 'Sí, cambiar',
+    });
+    if (!va) return;
+    setKind('periodized');
+    touch((ps) => ps.map((ph, i) => (i === 0 ? { ...ph, name: ph.name === 'Rutina semanal' ? 'Fase 1' : ph.name } : ph)));
+    setNav({ level: 'phase', pi: 0 });
+  }
+
+  async function cambiaARutina() {
+    const semanas = phases.reduce((s, ph) => s + (ph.weekData?.length || 0), 0);
+    const seVan = Math.max(0, semanas - 1);
+    const va = await pregunta({
+      titulo: '¿Pasar a una rutina que se repite?',
+      detalle: seVan > 0
+        ? `Una rutina es una sola semana que vuelve cada lunes. Se queda la primera y se van las otras ${seVan}.`
+        : 'Una rutina es una sola semana que vuelve cada lunes.',
+      confirmar: 'Sí, cambiar',
+      peligro: seVan > 0,
+    });
+    if (!va) return;
+    const primera = phases[0]?.weekData?.[0];
+    if (!primera) return;
+    setKind('weekly');
+    touch(() => [{ ...phases[0], num: 1, name: 'Rutina semanal', weekData: [{ ...primera, num: 1 }] }]);
+    setWeekIdx(0);
+    setNav({ level: 'phase', pi: 0 });
+  }
+
   function generateQuickPlan() {
     const base = newPhase(1);
     base.name = 'Mi programa';
@@ -1761,6 +1798,21 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
           </div>
         ))}
         <Pill icon={Plus} onClick={() => touch((ps) => [...ps, newPhase(nextPhaseNum(ps))])}>Agregar fase</Pill>
+
+        {/* El camino de vuelta: de programa por fases a rutina que se repite.
+            El de ida está en la cabecera de la rutina. Antes la estructura se
+            elegía al crear el plan y no se podía tocar nunca más. */}
+        <button
+          type="button" onClick={cambiaARutina}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 7, alignSelf: 'flex-start',
+            border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT,
+            fontSize: 12.5, fontWeight: 700, color: T.text2, padding: '10px 2px 0',
+          }}
+        >
+          <Repeat size={14} color={T.text3} />
+          Convertirlo en una rutina que se repite
+        </button>
       </div>
     );
   } else if (nav.level === 'phase') {
@@ -1816,6 +1868,20 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
               </Field>
             </div>
           )}
+          {/* El camino de vuelta también aquí: con un plan de UNA fase la lista
+              de fases no se abre nunca (la flecha de atrás cierra el editor),
+              así que si solo estuviera allá no habría forma de llegar. */}
+          <button
+            type="button" onClick={cambiaARutina}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none',
+              background: 'transparent', cursor: 'pointer', fontFamily: FONT,
+              fontSize: 12.5, fontWeight: 700, color: T.text2, padding: '8px 0 0 2px',
+            }}
+          >
+            <Repeat size={14} color={T.text3} />
+            Convertirlo en una rutina que se repite
+          </button>
         </div>
         )}
 
@@ -1857,8 +1923,21 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
         {/* Nombre + carga de la semana (un tap abre ajustes) */}
         {isWeekly ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-            <Repeat size={15} color={T.accent} />
-            <span style={{ fontSize: 13.5, fontWeight: 800, color: T.text }}>Esta rutina se repite todas las semanas</span>
+            {/* Andrés, 17 sep 2026: "si un atleta tiene entrenamiento semanal no
+                se puede cambiar a fases, al menos no veo cómo desde el teléfono".
+                No se podía: la estructura se elegía al crear el plan y ya. */}
+            <button
+              type="button" onClick={cambiaAFases}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none',
+                background: 'transparent', cursor: 'pointer', fontFamily: FONT,
+                fontSize: 13.5, fontWeight: 800, color: T.text, padding: 0,
+              }}
+            >
+              <Repeat size={15} color={T.accent} />
+              Esta rutina se repite todas las semanas
+              <span style={{ fontSize: 12.5, fontWeight: 800, color: T.accent }}>Cambiar</span>
+            </button>
             <span style={{ flex: 1 }} />
             <Pill icon={FolderOpen} onClick={() => setModal({ type: 'tpl-week' })}>Usar plantilla</Pill>
             <Pill icon={Save} onClick={() => setModal({ type: 'name-week' })}>Guardar como plantilla</Pill>
@@ -2081,7 +2160,10 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
           onClose={() => setModal(null)}
           onSave={async (name) => {
             const d = modal.payload;
-            await saveTemplate({ name, kind: 'day', data: { name: d.name, cat: d.cat, exercises: d.exercises || [] }, createdBy: user?.id });
+            // `catNombre`/`catColor` van con el día: si el tipo es uno propio
+            // del coach, la plantilla tiene que traerlo puesto, no el gris de
+            // "Gym" que saldría al no encontrar la llave.
+            await saveTemplate({ name, kind: 'day', data: { name: d.name, cat: d.cat, catNombre: d.catNombre ?? null, catColor: d.catColor ?? null, exercises: d.exercises || [] }, createdBy: user?.id });
             setModal(null);
           }}
         />
@@ -2120,7 +2202,11 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
           onClose={() => setModal(null)}
           onApply={async (t) => {
             const { di } = modal.payload;
-            const tplDay = { day: activeWeekday, name: t.data?.name || t.name, cat: t.data?.cat || 'gym', exercises: clone(t.data?.exercises || []) };
+            const tplDay = {
+              day: activeWeekday, name: t.data?.name || t.name, cat: t.data?.cat || 'gym',
+              catNombre: t.data?.catNombre ?? null, catColor: t.data?.catColor ?? null,
+              exercises: clone(t.data?.exercises || []),
+            };
             if (di == null) {
               patchWeek(nav.pi, curWeekIdx, (wk) => ({ days: [...(wk.days || []), tplDay] }));
             } else {
@@ -2129,7 +2215,11 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
                 detalle: 'Esta sesión pierde lo que tenga y queda con la rutina del catálogo.',
                 confirmar: 'Sí, aplicarla',
               })) return;
-              patchDay(nav.pi, curWeekIdx, di, { name: tplDay.name, cat: tplDay.cat, exercises: tplDay.exercises });
+              patchDay(nav.pi, curWeekIdx, di, {
+                name: tplDay.name, cat: tplDay.cat,
+                catNombre: tplDay.catNombre, catColor: tplDay.catColor,
+                exercises: tplDay.exercises,
+              });
             }
             setModal(null);
           }}

@@ -502,11 +502,51 @@ function ExerciseEditor({
         </div>
 
         <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Andrés, 17 sep 2026: "ese mensaje está algo de más; sería más fácil
+              poner algo que ayude a volver a la versión original, porque no vi
+              de qué manera le ofrecemos esa opción al coach".
+
+              Tenía razón en las dos cosas. El texto explicaba en cuatro renglones
+              lo que se entiende en uno, y PROMETÍA poder volver al original
+              cuando el botón de volver solo existía DESPUÉS de haber guardado
+              una versión. Ahora: una línea, y cuando hay versión propia el
+              camino de vuelta está aquí mismo, no al final del formulario. */}
           {esAjeno && (
-            <div style={{ background: T.accentBg, color: T.accent, borderRadius: 11, padding: '11px 14px', fontSize: 13, fontWeight: 600, lineHeight: 1.5 }}>
-              {exercise?.esMiVersion
-                ? 'Esta es TU versión de un ejercicio base. Tus atletas ven esta. El original del sistema sigue guardado y puedes volver a él cuando quieras.'
-                : 'Es un ejercicio base del sistema. Al guardar no lo cambias: creas TU versión, que solo ven tus atletas. El original queda intacto y puedes volver a él cuando quieras.'}
+            <div style={{
+              background: T.accentBg, borderRadius: 11, padding: '11px 14px',
+              display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+            }}>
+              <span style={{ flex: 1, minWidth: 180, color: T.accent, fontSize: 13, fontWeight: 600, lineHeight: 1.45 }}>
+                {exercise?.esMiVersion
+                  ? 'Tus atletas ven esta versión. El original del sistema sigue guardado.'
+                  : 'Lo que guardes será TU versión. El ejercicio del sistema no se toca.'}
+              </span>
+              {exercise?.esMiVersion && (
+                <button
+                  type="button"
+                  disabled={restaurando || busy}
+                  onClick={async () => {
+                    const va = await pregunta({
+                      titulo: `¿Volver al original de "${exercise.name}"?`,
+                      detalle: 'Se pierden los cambios que hiciste sobre él. El ejercicio del sistema no se toca.',
+                      confirmar: 'Sí, volver al original',
+                    });
+                    if (!va) return;
+                    setRestaurando(true);
+                    try { await deleteExerciseOverride(exercise.id); onRestaurada(exercise.id); }
+                    catch (e) { setErr(e.message || 'No se pudo restaurar'); setRestaurando(false); }
+                  }}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 13px', borderRadius: 10,
+                    border: 'none', background: T.bg2, color: T.accent, flexShrink: 0,
+                    cursor: (restaurando || busy) ? 'default' : 'pointer',
+                    fontFamily: FONT, fontSize: 13, fontWeight: 800,
+                  }}
+                >
+                  {restaurando ? <Loader2 size={14} className="spin" /> : <RotateCcw size={14} />}
+                  Volver al original
+                </button>
+              )}
             </div>
           )}
           {!soloMedia && (
@@ -613,37 +653,15 @@ function ExerciseEditor({
           }}
         >
           {esAjeno ? (
-            /* Ejercicio de la base: a la izquierda se vuelve al original (solo
-               si ya hay una versión propia que deshacer), a la derecha se
-               guarda la mía. Duplicar sigue existiendo para quien quiera DOS
-               variantes del mismo ejercicio en vez de reemplazar una. */
+            /* Ejercicio de la base: a la izquierda se duplica, a la derecha se
+               guarda la versión propia. Duplicar es para quien quiera DOS
+               variantes del mismo ejercicio en vez de reemplazar una.
+
+               "Volver al original" ya NO está aquí: se subió al aviso de
+               arriba, que es donde se lee que esto es una versión propia. Abajo
+               y al final del formulario no lo encontraba nadie. */
             <>
-              {exercise?.esMiVersion ? (
-                <button
-                  type="button"
-                  disabled={restaurando || busy}
-                  onClick={async () => {
-                    const va = await pregunta({
-                      titulo: `¿Volver al original de "${exercise.name}"?`,
-                      detalle: 'Se pierden los cambios que hiciste sobre él. El ejercicio del sistema no se toca.',
-                      confirmar: 'Sí, volver al original',
-                    });
-                    if (!va) return;
-                    setRestaurando(true);
-                    try { await deleteExerciseOverride(exercise.id); onRestaurada(exercise.id); }
-                    catch (e) { setErr(e.message || 'No se pudo restaurar'); setRestaurando(false); }
-                  }}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 7, padding: '11px 16px', borderRadius: 12,
-                    border: `1.5px solid ${T.border}`, background: T.bg2, color: T.text2,
-                    cursor: restaurando ? 'default' : 'pointer',
-                    fontFamily: FONT, fontSize: 14, fontWeight: 700,
-                  }}
-                >
-                  {restaurando ? <Loader2 size={16} className="spin" /> : <RotateCcw size={16} />} Restaurar original
-                </button>
-              ) : (
-                <button
+              <button
                   type="button"
                   disabled={dupBusy}
                   onClick={async () => {
@@ -659,8 +677,7 @@ function ExerciseEditor({
                   }}
                 >
                   {dupBusy ? <Loader2 size={16} className="spin" /> : <Copy size={16} />} Duplicar aparte
-                </button>
-              )}
+              </button>
               <button
                 type="button"
                 onClick={onSave}

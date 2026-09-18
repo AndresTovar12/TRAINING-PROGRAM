@@ -25,12 +25,36 @@ const PHASE_COLORS = {
 };
 const DAY_FULL = { Lun: 'Lunes', Mar: 'Martes', 'Mié': 'Miércoles', Mie: 'Miércoles', Jue: 'Jueves', Vie: 'Viernes', 'Sáb': 'Sábado', Sab: 'Sábado', Dom: 'Domingo' };
 
+/* Tipos de sesión de base: los ve todo el mundo y no se pueden borrar.
+   Andrés, 17 sep 2026: "qué tal que quien se registra es un instructor de yoga
+   o un fisioterapeuta: la configuración no está hecha para eso". Los siete
+   primeros son los de siempre (su plan los usa); los demás abren la app a
+   entrenadores que no trabajan en un gimnasio.
+
+   Un coach puede además crear los suyos: esos NO viven aquí, viajan dentro del
+   día (`cat: 'otro'` + `catNombre` + `catColor`), y se resuelven con
+   `tipoDeSesion`. Así el atleta lee el nombre sin consultar nada. */
 const CAT_COLORS = {
   gym: { c: '#A480FF', label: 'Gym' }, speed: { c: '#FFA047', label: 'Neural' },
   recovery: { c: '#3DD9A0', label: 'Recovery' }, football: { c: '#FF7A52', label: 'Cancha' },
   tests: { c: '#5DA0FF', label: 'Tests' }, team: { c: '#9090A0', label: 'Equipo' },
+  correr: { c: '#F2555A', label: 'Correr' }, bici: { c: '#00B3C7', label: 'Bici' },
+  natacion: { c: '#3AA0F5', label: 'Natación' }, yoga: { c: '#C084FC', label: 'Yoga' },
+  movilidad: { c: '#22C08A', label: 'Movilidad' }, terapia: { c: '#EC7FB0', label: 'Terapia' },
+  clase: { c: '#F0A81F', label: 'Clase' },
   off: { c: '#555562', label: 'OFF' },
 };
+
+/** El tipo de UN día: de la lista de base, o el propio que escribió el coach. */
+const tipoDeSesion = (day) => {
+  if (day?.cat === 'otro' && (day?.catNombre || '').trim()) {
+    return { c: day.catColor || '#6B7280', label: day.catNombre.trim() };
+  }
+  return CAT_COLORS[day?.cat] || CAT_COLORS.gym;
+};
+
+/** Los colores que se ofrecen al crear un tipo propio. */
+const COLORES_TIPO = ['#A480FF', '#FFA047', '#3DD9A0', '#5DA0FF', '#F2555A', '#00B3C7', '#EC7FB0', '#22C08A', '#F0A81F', '#9090A0'];
 
 /* ============================================================
    KINETIC PRECISION — sistema visual (dirección elegida en Stitch)
@@ -91,6 +115,6 @@ const kpCard = (extra = {}) => ({
 });
 
 export {
-  T, FONT, NUM_STYLE, LT, PHASE_COLORS, DAY_FULL, CAT_COLORS,
+  T, FONT, NUM_STYLE, LT, PHASE_COLORS, DAY_FULL, CAT_COLORS, tipoDeSesion, COLORES_TIPO,
   KP, SPACE, ACCENTS, eyebrow, kpCard,
 };

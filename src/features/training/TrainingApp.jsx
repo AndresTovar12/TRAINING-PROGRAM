@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { useIsDesktop } from '@/lib/useViewport';
-import { T, FONT, NUM_STYLE, LT, CAT_COLORS, KP, eyebrow } from '@/lib/theme';
+import { T, FONT, NUM_STYLE, LT, tipoDeSesion, KP, eyebrow } from '@/lib/theme';
 import { PHASE_IMG } from '@/data/training-data';
 import { usePlan } from '@/contexts/PlanContext';
 import { usePerfilDeLaVista } from '@/contexts/VistaContext';
@@ -759,7 +759,7 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
   const sessionData = sessionsData[selectedId] || {};
   const selectedCompleted = !!sessionData.completed;
   const selectedDayName = selectedDay.name || (selectedDay.blocks ? selectedDay.blocks.map(b => b.tag.replace(/^Sesi[óo]n \d+ \([AP]M\): /, '')).join(' + ') : selectedDay.day);
-  const cat = CAT_COLORS[selectedDay.cat] || CAT_COLORS.gym;
+  const cat = tipoDeSesion(selectedDay);
   const summary = useMemo(() => getDaySummary(selectedDay, week, selectedIdx), [selectedDay, week, selectedIdx]);
   /* Sesiones que no son de gimnasio. Probado armando una semana como coach:
      una sesión de velocidad, de recovery o de cancha se escribe con NOTAS
@@ -870,7 +870,7 @@ const WeekDetail = ({ phase, week, onBack, sessionsData, updateSession, oneRMs, 
           const isCompleted = !!sd?.completed;
           const isActive = activeSessionId === id;
           const isSelected = selectedIdx === idx;
-          const dcat = CAT_COLORS[day.cat] || CAT_COLORS.gym;
+          const dcat = tipoDeSesion(day);
           return (
             <button key={idx} onClick={() => setSelectedIdx(idx)}
               style={{
@@ -1278,7 +1278,7 @@ const WeekCard = ({ week, phase, isActiveWeek, isFullyDone, completed, total, lo
             const id = idDeSesion(phase.id, week.num, idx);
             const sd = sessionsData[id];
             const done = !!sd?.completed;
-            const cat = CAT_COLORS[day.cat] || CAT_COLORS.gym;
+            const cat = tipoDeSesion(day);
             return (
               <div key={idx} style={{
                 width: 26, height: 26, borderRadius: 7,
@@ -1590,7 +1590,7 @@ const CursorSelector = ({ current, sessionsData, onSelect, onClose }) => {
                                 const id = idDeSesion(phase.id, week.num, idx);
                                 const isDone = !!sessionsData[id]?.completed;
                                 const isCurrent = current && current.phaseId === phase.id && current.weekNum === week.num && current.dayIdx === idx;
-                                const cat = CAT_COLORS[day.cat] || CAT_COLORS.gym;
+                                const cat = tipoDeSesion(day);
                                 const dayName = day.name || (day.blocks ? day.blocks.map(b => b.tag.replace(/^Sesi[óo]n \d+ \([AP]M\): /, '')).join(' + ') : day.day);
                                 return (
                                   <button
@@ -1664,7 +1664,7 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, 
     if (!next) return { exercises: 0, duration: null };
     const d = next.day;
     const reales = (lista) => (lista || []).filter((e) => !e.isNote).length;
-    const tipo = (CAT_COLORS[d.cat] || CAT_COLORS.gym).label;
+    const tipo = tipoDeSesion(d).label;
     if (d.blocks) {
       const exCount = d.blocks.reduce((s, b) => s + reales(ejerciciosDelBloque(next.week, next.dayIdx, b)), 0);
       return { exercises: exCount, duration: d.dual ? '~2 h' : '~75 min', dual: d.dual };

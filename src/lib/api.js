@@ -741,3 +741,35 @@ export async function deleteRoutine(id) {
   const { error } = await supabase.from('user_routines').delete().eq('id', id);
   if (error) throw error;
 }
+
+/* ── Tipos de sesión propios ────────────────────────────────────────────────
+   Los de base están en el código (`CAT_COLORS`). Esto es la lista de atajos de
+   cada coach, para no reescribir "Vinyasa" en cada sesión. Lo elegido viaja
+   DENTRO del día del plan, así que borrar un atajo no toca ninguna sesión que
+   ya esté escrita. */
+
+export async function listSessionTypes(coachId) {
+  if (!coachId) return [];
+  const { data, error } = await supabase
+    .from('session_types')
+    .select('*')
+    .eq('coach_id', coachId)
+    .order('nombre');
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function createSessionType({ nombre, color, coachId }) {
+  const { data, error } = await supabase
+    .from('session_types')
+    .insert({ nombre: (nombre || '').trim(), color, coach_id: coachId })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteSessionType(id) {
+  const { error } = await supabase.from('session_types').delete().eq('id', id);
+  if (error) throw error;
+}
