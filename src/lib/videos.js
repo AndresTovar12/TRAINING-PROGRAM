@@ -108,3 +108,54 @@ export const ANGULOS_SUGERIDOS = ['Frontal', 'Lateral', 'Desde atrás', 'Cámara
 
 /** Lo mismo para una foto: qué instante del ejercicio enseña. */
 export const MOMENTOS_SUGERIDOS = ['Posición inicial', 'Posición final', 'Agarre', 'Detalle', 'Error común'];
+
+/* ── Videos que viven fuera: TikTok, YouTube, Instagram ─────────────────────
+   Andrés, 17 sep 2026: "¿cómo le hace si el coach sube varios videos y aparte
+   un TikTok?". Obligarlo a descargar el TikTok y volverlo a subir es trabajo
+   inventado, y encima pierde calidad. Así que se pega la liga y ya.
+
+   Qué devuelve: `null` si es un archivo nuestro; si es una liga, de dónde es,
+   la dirección para incrustarla (`embed`, o `null` si esa plataforma no deja)
+   y el nombre para el botón de abrir fuera.
+
+   POR QUÉ SIEMPRE HAY BOTÓN DE ABRIR FUERA: TikTok e Instagram bloquean el
+   reproductor incrustado cuando les da la gana —cuenta privada, región, o su
+   propia política de ese día— y lo hacen DENTRO del iframe, donde la app no se
+   entera. Con el botón, ese caso deja de ser una pantalla en blanco. */
+
+const LIGAS = [
+  {
+    de: 'YouTube',
+    prueba: /(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{6,})/i,
+    embed: (id) => `https://www.youtube.com/embed/${id}`,
+  },
+  {
+    de: 'Vimeo',
+    prueba: /vimeo\.com\/(?:video\/)?(\d+)/i,
+    embed: (id) => `https://player.vimeo.com/video/${id}`,
+  },
+  {
+    de: 'TikTok',
+    prueba: /tiktok\.com\/.*?\/video\/(\d+)/i,
+    embed: (id) => `https://www.tiktok.com/embed/v2/${id}`,
+  },
+  {
+    // Un reel de Instagram se incrusta con /embed al final de su dirección.
+    de: 'Instagram',
+    prueba: /instagram\.com\/(?:reel|reels|p|tv)\/([\w-]+)/i,
+    embed: (id) => `https://www.instagram.com/reel/${id}/embed`,
+  },
+];
+
+export function ligaExterna(url) {
+  const texto = String(url ?? '').trim();
+  if (!/^https?:\/\//i.test(texto)) return null;
+  for (const l of LIGAS) {
+    const m = l.prueba.exec(texto);
+    if (m) return { de: l.de, embed: l.embed(m[1]), abrir: texto };
+  }
+  // Una dirección de internet que no reconocemos: no se incrusta (podría ser
+  // cualquier cosa), pero sí se puede abrir fuera.
+  if (/\.(mp4|webm|mov|m4v)(\?|$)/i.test(texto)) return null; // archivo de video suelto
+  return { de: 'Enlace', embed: null, abrir: texto };
+}

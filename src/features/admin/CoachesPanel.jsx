@@ -150,7 +150,7 @@ export default function CoachesPanel({ onVerComo }) {
           <Shield size={38} style={{ opacity: 0.4 }} />
           <div style={{ marginTop: 12, fontWeight: 700, color: T.text, fontSize: 15 }}>Aún no hay coaches</div>
           <div style={{ marginTop: 6, fontWeight: 500, color: T.text2, fontSize: 13.5, lineHeight: 1.5 }}>
-            Crea uno tú, o deja que se registren eligiendo "Soy coach".
+            Crea uno tú, o deja que se registren eligiendo «Entreno a otros».
           </div>
         </div>
       ) : (

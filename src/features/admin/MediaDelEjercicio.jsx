@@ -39,7 +39,7 @@
  */
 import { useEffect, useState } from 'react';
 import {
-  Trash2, Loader2, Scissors, Users, Mars, Venus,
+  Trash2, Loader2, Scissors, Users, Mars, Venus, Link as LinkIcon,
 } from 'lucide-react';
 import {
   listExerciseMedia, addExerciseMedia, deleteExerciseMedia, updateExerciseMedia,
@@ -51,6 +51,7 @@ import { recortaImagen } from '@/features/admin/recorte';
 import { useAuth } from '@/contexts/AuthContext';
 import MediaUpload from '@/features/admin/MediaUpload';
 import { T, FONT } from '@/lib/theme';
+import { ligaExterna } from '@/lib/videos';
 
 const GRUPOS = [
   { g: '', et: 'Para todos', corto: 'Todos', Icono: Users,
@@ -81,7 +82,11 @@ function Miniatura({ url, esVideo }) {
       width: 44, height: 44, borderRadius: 9, overflow: 'hidden', flexShrink: 0,
       background: '#0E1015', display: 'grid', placeItems: 'center',
     }}>
-      {esVideo ? (
+      {/* Una liga de TikTok o YouTube no da fotograma: el <video> no la puede
+          leer y el recuadro se queda negro. Se pone el icono de liga. */}
+      {ligaExterna(url) ? (
+        <LinkIcon size={18} color="#8A93A3" />
+      ) : esVideo ? (
         <video
           src={url} muted playsInline preload="metadata" tabIndex={-1} aria-hidden="true"
           // Safari en iPhone deja el recuadro negro mientras el video no se
@@ -115,6 +120,8 @@ export default function MediaDelEjercicio({
   const [lista, setLista] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [err, setErr] = useState('');
+  const [ligaAbierta, setLigaAbierta] = useState(false);
+  const [ligaTexto, setLigaTexto] = useState('');
 
   useEffect(() => {
     let vivo = true;
@@ -138,6 +145,29 @@ export default function MediaDelEjercicio({
      Las columnas de siempre se usan solo para "Para todos" y solo si están
      libres: media app las lee directo y dejarlas vacías rompería la portada en
      el buscador de repertorio y en las tarjetas del plan. */
+  /* Una liga no se sube: se guarda tal cual. Tampoco lleva recorte, ni audio
+     apagado, ni encuadre — eso solo se puede hacer con un archivo nuestro. */
+  async function guardaLiga() {
+    const texto = ligaTexto.trim();
+    const liga = ligaExterna(texto);
+    if (!liga) {
+      setErr('Eso no parece una dirección de video. Copia la liga completa desde la app.');
+      return;
+    }
+    try {
+      const fila = await addExerciseMedia({
+        exerciseId, url: texto, tipo: 'video', genero: grupo || null,
+        inicio: null, fin: null, sinAudio: false, encuadre: null,
+      });
+      setLista((prev) => [...prev, fila]);
+      setLigaAbierta(false);
+      setLigaTexto('');
+      setErr('');
+    } catch (e) {
+      setErr(e.message || 'No se pudo guardar la liga.');
+    }
+  }
+
   async function agregar(destino, { url: subida, tipo, inicio, fin, sinAudio, encuadre }) {
     if (!subida) { setErr('No se pudo subir el archivo.'); return; }
     setErr('');
@@ -456,6 +486,61 @@ export default function MediaDelEjercicio({
           onAjustes={(a) => agregar(grupo, a)}
           accept="video/*" kind="videos"
         />
+
+        {/* Pegar una liga en vez de subir un archivo.
+
+            Andrés, 17 sep 2026: "¿cómo le hace si el coach sube varios videos y
+            aparte un TikTok?". Antes: descargarlo y volverlo a subir, perdiendo
+            calidad por el camino. Ahora se pega y ya. El atleta lo ve dentro de
+            la app, y si la plataforma bloquea el reproductor, con un botón para
+            abrirlo en su app. */}
+        {ligaAbierta ? (
+          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+            <input
+              autoFocus
+              value={ligaTexto}
+              onChange={(e) => { setLigaTexto(e.target.value); setErr(''); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') guardaLiga(); }}
+              placeholder="Pega aquí la dirección del TikTok, YouTube o reel"
+              style={{
+                flex: '1 1 200px', minWidth: 0, padding: '11px 12px', borderRadius: 10,
+                border: `1.5px solid ${T.border}`, background: T.bg, fontFamily: FONT,
+                fontSize: 16, fontWeight: 600, color: T.text, outline: 'none',
+              }}
+            />
+            <button
+              type="button" onClick={guardaLiga}
+              style={{
+                padding: '11px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                background: T.accent, color: '#fff', fontFamily: FONT, fontSize: 14, fontWeight: 800,
+              }}
+            >
+              Guardar
+            </button>
+            <button
+              type="button" onClick={() => { setLigaAbierta(false); setLigaTexto(''); setErr(''); }}
+              style={{
+                padding: '11px 14px', borderRadius: 10, cursor: 'pointer',
+                border: `1.5px solid ${T.border}`, background: T.bg2, color: T.text2,
+                fontFamily: FONT, fontSize: 14, fontWeight: 700,
+              }}
+            >
+              Cancelar
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button" onClick={() => setLigaAbierta(true)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 7, alignSelf: 'flex-start',
+              padding: '10px 13px', borderRadius: 10, cursor: 'pointer',
+              border: `1.5px dashed ${T.borderHi}`, background: 'transparent', color: T.text2,
+              fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
+            }}
+          >
+            <LinkIcon size={15} /> Pegar una liga (TikTok, YouTube, reel)
+          </button>
+        )}
       </div>
 
       {recortandoFoto && (

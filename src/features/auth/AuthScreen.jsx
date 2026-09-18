@@ -73,7 +73,7 @@ function Field({ icon: Icon, label, hint, ...props }) {
 }
 
 export default function AuthScreen({ modoInicial = 'login', onVolver }) {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, entrarConGoogle, googleDisponible } = useAuth();
   const [mode, setMode] = useState(modoInicial); // 'login' | 'register'
   const [identifier, setIdentifier] = useState('');
   const [username, setUsername] = useState('');
@@ -208,6 +208,41 @@ export default function AuthScreen({ modoInicial = 'login', onVolver }) {
           ))}
         </div>
 
+        {/* Entrar con Google.
+
+            Solo se dibuja cuando `VITE_GOOGLE_LOGIN` vale "1". Mientras las
+            llaves no estén puestas, un botón que no funciona es peor que no
+            tenerlo: la persona lo toca, falla, y ya no confía en el resto.
+            Los pasos para encenderlo: `docs/entrar-con-google.md`. */}
+        {googleDisponible && (
+          <>
+            <button
+              type="button"
+              onClick={entrarConGoogle}
+              className="kp-press"
+              style={{
+                width: '100%', minHeight: 50, marginBottom: 14, borderRadius: KP.rBtn,
+                border: `1.5px solid ${KP.line}`, background: KP.surface, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                fontFamily: FONT, fontSize: 15, fontWeight: 700, color: KP.ink,
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+                <path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h11.8c-.5 2.7-2 5-4.4 6.6v5.5h7.1c4.2-3.8 6.6-9.5 6.6-16.1z" />
+                <path fill="#34A853" d="M24 46c6 0 11-2 14.6-5.4l-7.1-5.5c-2 1.3-4.5 2.1-7.5 2.1-5.8 0-10.6-3.9-12.4-9.1H4.3v5.7C7.9 41 15.4 46 24 46z" />
+                <path fill="#FBBC05" d="M11.6 28.1c-.5-1.3-.7-2.7-.7-4.1s.3-2.8.7-4.1v-5.7H4.3C2.8 17.1 2 20.4 2 24s.8 6.9 2.3 9.8l7.3-5.7z" />
+                <path fill="#EA4335" d="M24 10.8c3.3 0 6.2 1.1 8.5 3.3l6.3-6.3C35 4.3 30 2 24 2 15.4 2 7.9 7 4.3 14.2l7.3 5.7c1.8-5.2 6.6-9.1 12.4-9.1z" />
+              </svg>
+              Continuar con Google
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+              <span style={{ flex: 1, height: 1, background: KP.line }} />
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: KP.ink3 }}>o con tu usuario</span>
+              <span style={{ flex: 1, height: 1, background: KP.line }} />
+            </div>
+          </>
+        )}
+
         <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {isLogin ? (
             <Field
@@ -226,9 +261,14 @@ export default function AuthScreen({ modoInicial = 'login', onVolver }) {
                   ¿Cómo vas a usar la app?
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
+                  {/* Andrés, 17 sep 2026: "qué tal que quien se registra no es
+                      necesariamente un coach, qué tal que es un instructor o
+                      instructora de yoga, un fisioterapeuta: la configuración
+                      no está hecha para eso". El rol técnico sigue siendo el
+                      mismo; lo que cambia es que la palabra deje de excluir. */}
                   {[
-                    { v: 'athlete', label: 'Soy atleta', sub: 'Sigo mi plan' },
-                    { v: 'coach', label: 'Soy coach', sub: 'Entreno clientes' },
+                    { v: 'athlete', label: 'Sigo un plan', sub: 'Alguien me entrena' },
+                    { v: 'coach', label: 'Entreno a otros', sub: 'Coach, fisio, instructor…' },
                   ].map((o) => {
                     const active = accountType === o.v;
                     return (
@@ -283,9 +323,9 @@ export default function AuthScreen({ modoInicial = 'login', onVolver }) {
               {accountType === 'athlete' && (
                 <Field
                   icon={UserCheck}
-                  label="Usuario de tu coach"
+                  label="Usuario de quien te entrena"
                   hint="Opcional"
-                  placeholder="usuario_del_coach"
+                  placeholder="su_usuario"
                   autoComplete="off"
                   value={coachUsername}
                   onChange={(e) => setCoachUsername(e.target.value.replace(/\s/g, ''))}

@@ -21,6 +21,7 @@
  * elemento de video, congelado en su primer fotograma. Comprobado en consola.
  */
 import { useEffect, useRef, useState } from 'react';
+import { ligaExterna } from '@/lib/videos';
 
 /**
  * Un video haciendo de foto: sin sonido, sin controles, quieto en el arranque.
@@ -94,9 +95,12 @@ export default function Portada({ foto, video, style, children }) {
         ...style,
       }}
     >
+      {/* Un video que vive fuera (TikTok, YouTube) no da un primer fotograma:
+          el <video> no puede leerlo y el recuadro se quedaría en negro sin que
+          nada lo explique. En ese caso se pinta lo de siempre. */}
       {foto
         ? <img src={foto} alt="" loading="lazy" style={relleno} />
-        : video
+        : (video && !ligaExterna(video))
           ? <VideoComoFoto src={video} estilo={relleno} />
           : children}
     </span>

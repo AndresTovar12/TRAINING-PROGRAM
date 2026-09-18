@@ -147,6 +147,24 @@ export function AuthProvider({ children }) {
     return { error: error ? { message: error.message } : null };
   }, []);
 
+  /* Entrar con Google.
+     APAGADO hasta que existan las llaves: el botón solo se dibuja si
+     `VITE_GOOGLE_LOGIN` vale "1", y Supabase además tiene que tener el
+     proveedor encendido. Ver `docs/entrar-con-google.md`.
+
+     No hace falta nada más en la app: Supabase crea la cuenta y el disparador
+     `handle_new_user` le arma el perfil con un usuario sacado del correo (ya
+     sin choques ni caracteres raros, migración `usuario_automatico_sin_choques`).
+     Quien entre así puede cambiarse el usuario en "Mi perfil". */
+  const entrarConGoogle = useCallback(async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) return { error: { message: 'No se pudo abrir la entrada con Google.' } };
+    return { error: null };
+  }, []);
+
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     setProfile(null);
@@ -187,10 +205,12 @@ export function AuthProvider({ children }) {
       signIn,
       signUp,
       signOut,
+      entrarConGoogle,
+      googleDisponible: import.meta.env.VITE_GOOGLE_LOGIN === '1',
       updateProfile,
       refreshProfile,
     }),
-    [session, profile, loading, signIn, signUp, signOut, updateProfile, refreshProfile],
+    [session, profile, loading, signIn, signUp, signOut, entrarConGoogle, updateProfile, refreshProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

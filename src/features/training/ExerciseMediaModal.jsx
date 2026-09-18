@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
 import { X, ExternalLink, Dumbbell, Timer } from 'lucide-react';
-import { videosParaAtleta, portadaParaAtleta } from '@/lib/videos';
+import { videosParaAtleta, portadaParaAtleta, ligaExterna } from '@/lib/videos';
 import { T, FONT, KP } from '@/lib/theme';
 import Portada from '@/components/Portada';
 
@@ -28,6 +28,7 @@ export function VideoRecortado({ video, estilo }) {
   // nada de la proporción hasta multiplicarla por los píxeles del video.
   const [medidas, setMedidas] = useState(null);
   const { url, inicio, fin, sinAudio, encuadre } = video;
+  const liga = ligaExterna(url);
 
   /* Arranca solo al montarse, que es justo cuando el atleta acaba de tocar
      "reproducir". Sin esto, este componente aparecía con el reproductor
@@ -44,6 +45,58 @@ export function VideoRecortado({ video, estilo }) {
   useEffect(() => {
     ref.current?.play().catch(() => {});
   }, [url]);
+
+  /* Un video que vive fuera (TikTok, YouTube, un reel) no es un archivo
+     nuestro: no se puede recortar, ni quitarle el audio, ni encuadrarlo. Se
+     incrusta tal cual, y debajo queda SIEMPRE el botón de abrirlo en su app:
+     TikTok e Instagram bloquean el reproductor incrustado cuando les parece, y
+     lo hacen dentro del marco, donde esta app no se entera. Sin el botón, eso
+     es una pantalla en blanco sin explicación. */
+  if (liga) {
+    const marco = estilo ?? { width: '100%', borderRadius: 14, marginTop: 12 };
+    return (
+      <div style={marco}>
+        {liga.embed ? (
+          <iframe
+            key={liga.embed}
+            src={liga.embed}
+            title={`Video en ${liga.de}`}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            style={{
+              width: '100%', aspectRatio: liga.de === 'YouTube' || liga.de === 'Vimeo' ? '16 / 9' : '9 / 16',
+              border: 'none', borderRadius: 14, background: '#000', display: 'block',
+            }}
+          />
+        ) : (
+          <div style={{
+            display: 'grid', placeItems: 'center', gap: 8, padding: '34px 18px',
+            background: T.bg3, borderRadius: 14, textAlign: 'center',
+          }}>
+            <ExternalLink size={22} color={T.text2} />
+            <span style={{ fontSize: 13.5, fontWeight: 700, color: T.text2 }}>
+              Este video se ve en {liga.de}
+            </span>
+          </div>
+        )}
+        {/* Con fondo propio: este bloque puede caer sobre la cabecera negra del
+            ejercicio, y un enlace azul sobre negro no se lee. */}
+        <a
+          href={liga.abrir}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 7, margin: '9px 0 0 12px',
+            padding: '7px 12px', borderRadius: 999, background: '#FFFFFF',
+            border: `1px solid ${T.border}`,
+            fontFamily: FONT, fontSize: 13, fontWeight: 800, color: T.accent, textDecoration: 'none',
+          }}
+        >
+          <ExternalLink size={14} /> Abrir en {liga.de}
+        </a>
+      </div>
+    );
+  }
 
   const video_ = (
     <video

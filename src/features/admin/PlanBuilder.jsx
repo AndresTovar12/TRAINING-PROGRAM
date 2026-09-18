@@ -16,6 +16,7 @@ import {
 } from '@/lib/api';
 import { isLoadedExercise, esDescanso } from '@/lib/training-utils';
 import { T, FONT, KP } from '@/lib/theme';
+import { ligaExterna } from '@/lib/videos';
 import RepertoirePicker from '@/features/admin/RepertoirePicker';
 import MediaUpload from '@/features/admin/MediaUpload';
 import SelectorCategoria from '@/features/admin/SelectorCategoria';
@@ -897,7 +898,19 @@ function RanuraMedia({
 
       {existente ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {tipo === 'video' ? (
+          {/* Una liga vive fuera: no se puede reproducir aquí, pero sí abrir. */}
+          {tipo === 'video' && ligaExterna(existente.url) ? (
+            <a
+              href={existente.url} target="_blank" rel="noopener noreferrer"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                padding: '26px 14px', borderRadius: 13, background: T.bg3,
+                fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: T.accent, textDecoration: 'none',
+              }}
+            >
+              Abrir en {ligaExterna(existente.url).de}
+            </a>
+          ) : tipo === 'video' ? (
             <video
               src={existente.url} controls playsInline preload="metadata"
               /* El salto obliga a Safari de iPhone a dibujar un fotograma: con
