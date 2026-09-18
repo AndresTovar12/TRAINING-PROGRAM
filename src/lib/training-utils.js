@@ -366,6 +366,29 @@ const lunesDeSemanaIso = (clave) => {
   return lunes;
 };
 
+/**
+ * Los siete días de la semana del calendario en la que estamos, con su fecha.
+ *
+ * La tira de arriba de la sesión los necesita: el plan dice "Lun", "Mié", pero
+ * el atleta piensa en "15", "17". Se calcula desde el LUNES de la semana ISO
+ * actual, que es el mismo que usa `isoWeekKey` para avanzar el puntero — así
+ * la tira y el plan nunca se desfasan.
+ */
+const diasDeEstaSemana = (hoy = new Date()) => {
+  const lunes = lunesDeSemanaIso(isoWeekKey(hoy));
+  const claves = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+  const hoyClave = weekdayToday(hoy);
+  return claves.map((clave, i) => {
+    const fecha = lunes ? new Date(lunes) : null;
+    if (fecha) fecha.setUTCDate(lunes.getUTCDate() + i);
+    return {
+      clave,
+      numero: fecha ? fecha.getUTCDate() : null,
+      esHoy: clave === hoyClave,
+    };
+  });
+};
+
 const LLAVE_SEMANAL = /^wk-(\d{4}-W\d{2})-d(\d+)$/;
 
 /**
@@ -661,6 +684,6 @@ export {
   adivinaSiLlevaCarga,
   totalProgress, getWeekLoad, formatIntensity, inferRest, getPattern, getMuscles,
   weekdayToday, weekdayLabel, isoWeekKey, weeklySessionId, sessionIdFor,
-  sessionForToday, weekOverview, esDescanso, enOrdenDeSemana,
+  sessionForToday, weekOverview, esDescanso, enOrdenDeSemana, diasDeEstaSemana,
   bloqueQueRepite, ejerciciosDelBloque, nombreDeSesion,
 };
