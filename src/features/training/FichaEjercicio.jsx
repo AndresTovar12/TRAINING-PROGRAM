@@ -94,6 +94,12 @@ export default function FichaEjercicio({
     const nuevo = Math.max(0, Math.round((actual + dir * paso) * 100) / 100);
     escribePeso(String(nuevo));
   };
+  const mueveReps = (dir) => {
+    const actual = parseInt(exData.repsHechas, 10);
+    const base = Number.isFinite(actual) ? actual : 0;
+    onUpdate({ ...exData, repsHechas: String(Math.max(0, base + dir)) });
+  };
+
   const escribePeso = (v) => {
     setPesoEscrito(v);
     onUpdate({ ...exData, weight: v === '' ? '' : String(aKilos(v, unidad)) });
@@ -260,14 +266,51 @@ export default function FichaEjercicio({
           </div>
         )}
 
+        {/* Antes este bloque entero dependía de `conPeso`: en un ejercicio de
+            peso corporal la ficha se quedaba con el video y NADA debajo, y el
+            atleta no tenía dónde decir cuántas hizo. Ahora las reps se anotan
+            siempre y el peso solo cuando lleva carga. */}
+        <div style={{
+          fontSize: 13.5, color: LT.text3, fontWeight: 600, margin: '18px 0 10px',
+        }}>
+          Registra lo que hiciste
+        </div>
+
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+          border: `1.5px solid ${LT.border}`, borderRadius: 18, padding: '16px 16px',
+          background: LT.surface, marginBottom: conPeso ? 10 : 0,
+        }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 16.5, fontWeight: 800, color: LT.text }}>
+              Reps <span style={{ color: LT.text3, fontWeight: 600 }}>hechas</span>
+            </div>
+            <div style={{ fontSize: 13, color: LT.text3, fontWeight: 600, marginTop: 3 }}>
+              {ex.reps ? `Meta: ${ex.reps}` : 'Cuántas te salieron'}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexShrink: 0 }}>
+            <button type="button" onClick={() => mueveReps(-1)} aria-label="Bajar las reps" style={circulo(false)}>
+              <Minus size={20} strokeWidth={3} />
+            </button>
+            <input
+              type="number" inputMode="numeric" value={exData.repsHechas ?? ''} placeholder="—"
+              onChange={(e) => onUpdate({ ...exData, repsHechas: e.target.value })}
+              style={{
+                width: 58, border: 'none', background: 'transparent', textAlign: 'center',
+                fontSize: 27, fontWeight: 800, outline: 'none', fontFamily: FONT, padding: 0,
+                color: exData.repsHechas ? LT.text : LT.text3, ...NUM_STYLE,
+              }}
+            />
+            <button type="button" onClick={() => mueveReps(1)} aria-label="Subir las reps" style={circulo(true)}>
+              <Plus size={20} strokeWidth={3} />
+            </button>
+          </div>
+        </div>
+
         {conPeso && (
           <>
-            <div style={{
-              fontSize: 13.5, color: LT.text3, fontWeight: 600, margin: '18px 0 10px',
-            }}>
-              Registra lo que hiciste
-            </div>
-
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
               border: `1.5px solid ${LT.border}`, borderRadius: 18, padding: '16px 16px',

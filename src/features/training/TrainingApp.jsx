@@ -5,7 +5,6 @@ import {
   Zap, Trophy, Clock, FileText, Sparkles, Info, Dumbbell, Heart, Play,
   ChevronLeft, Activity, Home as HomeIcon,
   Repeat, Eye, Layers, List, Scale, LineChart as LineChartIcon,
-  Minus, Plus,
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { useIsDesktop } from '@/lib/useViewport';
@@ -21,7 +20,7 @@ import {
   cursorAlDia, isoWeekKey, esDescanso, enOrdenDeSemana,
   bloqueQueRepite, ejerciciosDelBloque,
 } from '@/lib/training-utils';
-import { aKilos, desdeKilos, pesoTexto, etiquetaUnidad } from '@/lib/unidades';
+import { aKilos, desdeKilos, etiquetaUnidad } from '@/lib/unidades';
 import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
 import { useStorage } from '@/contexts/AppStateContext';
 import FichaEjercicio from '@/features/training/FichaEjercicio';
@@ -330,49 +329,6 @@ function TarjetaProgreso({ nombre, historial, unidad, onCerrar }) {
  * `paso` va en la unidad que ve el atleta, no en kilos: 2,5 kg o 5 lb, que es
  * como suben de verdad los discos.
  */
-function PasoNumero({ valor, onCambio, paso = 1, min = 0, sufijo, ancho = 118 }) {
-  const num = valor === '' || valor == null ? null : parseFloat(valor);
-  const mueve = (dir) => {
-    const base = Number.isFinite(num) ? num : 0;
-    const siguiente = Math.max(min, Math.round((base + dir * paso) * 100) / 100);
-    onCambio(String(siguiente));
-  };
-  const boton = (dir) => ({
-    width: 34, height: 34, borderRadius: '50%', flexShrink: 0, cursor: 'pointer',
-    display: 'grid', placeItems: 'center', fontFamily: FONT,
-    border: dir > 0 ? 'none' : `1.5px solid ${LT.borderHi}`,
-    background: dir > 0 ? LT.blue : 'transparent',
-    color: dir > 0 ? '#fff' : LT.text2,
-  });
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-      <button type="button" onClick={() => mueve(-1)} aria-label="Bajar" style={boton(-1)}>
-        <Minus size={16} strokeWidth={3} />
-      </button>
-      <div style={{ width: ancho - 80, textAlign: 'center', minWidth: 38 }}>
-        <input
-          type="number" inputMode="decimal" value={valor} placeholder="—"
-          onChange={(e) => onCambio(e.target.value)}
-          style={{
-            width: '100%', border: 'none', background: 'transparent', textAlign: 'center',
-            fontSize: 19, fontWeight: 800, outline: 'none', fontFamily: FONT, padding: 0,
-            color: Number.isFinite(num) ? LT.text : LT.text3, ...NUM_STYLE,
-          }}
-        />
-        {sufijo && (
-          <div style={{
-            fontSize: 9, color: LT.text3, textTransform: 'uppercase',
-            letterSpacing: 0.5, marginTop: -2, fontWeight: 700,
-          }}>{sufijo}</div>
-        )}
-      </div>
-      <button type="button" onClick={() => mueve(1)} aria-label="Subir" style={boton(1)}>
-        <Plus size={16} strokeWidth={3} />
-      </button>
-    </div>
-  );
-}
-
 /** Dato suelto del ejercicio. Solo se pinta si el coach lo puso. */
 function Chip({ children, fuerte }) {
   return (
@@ -384,7 +340,7 @@ function Chip({ children, fuerte }) {
   );
 }
 
-const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, onUpdate, sessionsData, phaseColor, onAbrirFicha }) => {
+const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phaseColor, onAbrirFicha }) => {
   const { phases: PLAN, resolveExercise, medias, kind } = usePlan();
   const { perfil: profile } = usePerfilDeLaVista();
   const unidad = profile?.unidad_peso || 'kg';
@@ -410,22 +366,6 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, onUpdate, sessions
     if (ex.isNote || !ex.name) return [];
     return historialDePeso(PLAN, sessionsData, ex.name, kind);
   }, [PLAN, ex.name, ex.isNote, sessionsData, kind]);
-
-  /* El peso se GUARDA en kilos y se ESCRIBE en la unidad del atleta, así que
-     el campo necesita su propio borrador. Sin él, cada tecla iría a kilos y
-     volvería redondeada: escribir "185" en libras haría bailar el número
-     debajo del dedo. El borrador guarda lo tecleado tal cual. */
-  const pesoMostrado = pesoTexto(exData.weight, unidad);
-  const [pesoEscrito, setPesoEscrito] = useState(pesoMostrado);
-  useEffect(() => {
-    // Solo se re-sincroniza cuando lo guardado ya NO es lo que hay escrito
-    // (cambio de ejercicio, o de unidad). Comparando números y no textos,
-    // para que un "8." a medio teclear sobreviva.
-    const a = pesoEscrito.trim() === '' ? null : parseFloat(pesoEscrito);
-    const b = pesoMostrado === '' ? null : parseFloat(pesoMostrado);
-    if (a !== b) setPesoEscrito(pesoMostrado);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pesoMostrado]);
 
   if (ex.isNote) {
     return (
@@ -459,9 +399,11 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, onUpdate, sessions
   const pesoAnterior = showWeightInput && previous
     ? `${desdeKilos(previous.weight, unidad)} ${u}` : null;
 
-  // Los discos suben de 2,5 en 2,5 kilos, o de 5 en 5 libras. Un paso de 1
-  // obligaría a picarle veinte veces para subir un disco.
-  const pasoPeso = unidad === 'lb' ? 5 : 2.5;
+  // Lo que ya quedó anotado hoy, en una línea. Vacío = todavía no hay nada.
+  const anotado = [
+    exData.repsHechas ? `${exData.repsHechas} ${exData.repsHechas === '1' ? 'rep' : 'reps'}` : null,
+    exData.weight ? `${desdeKilos(exData.weight, unidad)} ${u}` : null,
+  ].filter(Boolean).join(' · ');
 
   return (
     <div style={{ padding: '11px 12px' }}>
@@ -522,38 +464,43 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, onUpdate, sessions
         </button>
       </div>
 
-      {/* Anotar sin salir de la lista. Solo aparece si el ejercicio lleva carga. */}
-      {showWeightInput && (
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          gap: 10, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${LT.border}`,
-        }}>
-          <button
-            type="button"
-            onClick={() => setProgresoAbierto(true)}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0,
-              border: 'none', background: 'transparent', padding: 0, cursor: 'pointer',
-              fontFamily: FONT, fontSize: 12, fontWeight: 700, color: LT.blue, ...NUM_STYLE,
-            }}
-          >
-            <LineChartIcon size={13} style={{ flexShrink: 0 }} />
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {pesoAnterior ? `Antes: ${pesoAnterior}` : 'Ver mi progreso'}
-            </span>
-          </button>
+      {/* Pie de la fila: lo anotado y la puerta al historial.
 
-          <PasoNumero
-            valor={pesoEscrito}
-            paso={pasoPeso}
-            sufijo={u}
-            onCambio={(v) => {
-              setPesoEscrito(v);
-              onUpdate(idx, { ...exData, weight: v === '' ? '' : String(aKilos(v, unidad)) });
-            }}
-          />
-        </div>
-      )}
+          ANTES iban aquí dos ruedas de + y − dentro de la lista. Andrés, 17 sep
+          2026: "mira lo saturada que se ve" comparada con la app que usa de
+          referencia, donde la fila es miniatura, nombre y dos etiquetas, y lo
+          que se anota se anota al abrir el ejercicio. La fila vuelve a tener la
+          altura de una fila; anotar es tocarla. */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: 10, marginTop: 9, paddingTop: 9, borderTop: `1px solid ${LT.border}`,
+      }}>
+        {anotado ? (
+          <span style={{
+            fontSize: 12, fontWeight: 800, color: LT.blue, background: LT.blueSoft,
+            padding: '4px 9px', borderRadius: 7, ...NUM_STYLE,
+          }}>
+            Hoy: {anotado}
+          </span>
+        ) : (
+          <span style={{ fontSize: 12, fontWeight: 600, color: LT.text3 }}>Sin anotar</span>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setProgresoAbierto(true)}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0, flexShrink: 0,
+            border: 'none', background: 'transparent', padding: 0, cursor: 'pointer',
+            fontFamily: FONT, fontSize: 12, fontWeight: 700, color: LT.blue, ...NUM_STYLE,
+          }}
+        >
+          <LineChartIcon size={13} style={{ flexShrink: 0 }} />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {pesoAnterior ? `Antes: ${pesoAnterior}` : 'Mi progreso'}
+          </span>
+        </button>
+      </div>
 
       {progresoAbierto && (
         <TarjetaProgreso
@@ -650,7 +597,7 @@ const SetGroup = ({ group, setNum, phaseColor, sessionData, sessionKey, onUpdate
           <div key={idx} style={{ borderTop: i > 0 ? `1px solid ${LT.border}` : 'none' }}>
             <ExerciseRow
               ex={ex} idx={idx} num={i + 1} phaseColor={phaseColor}
-              sessionData={sessionData} sessionKey={sessionKey} onUpdate={onUpdate} sessionsData={sessionsData}
+              sessionData={sessionData} sessionKey={sessionKey} sessionsData={sessionsData}
               onAbrirFicha={() => setFichaEn(i)}
             />
           </div>
@@ -1837,122 +1784,30 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, 
             </div>
           </div>
 
-          {/* Row: estado + progreso */}
-          <div style={{ display: 'flex', gap: 12, padding: '0 18px 12px' }}>
-            {/* Estado hoy */}
-            <div onClick={() => onGoTab('wellness')}
-              style={{ flex: 1, background: LT.surface, borderRadius: 22, padding: 20, cursor: 'pointer', minWidth: 0 }}>
-              <div style={{ fontSize: 14, color: LT.text2 }}>Estado hoy</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: LT.text, marginTop: 2 }}>
-                {todayScore === null ? 'Sin medir'
-                  : todayScore >= 7 ? 'Listo'
-                  : todayScore >= 5 ? 'Carga media'
-                  : 'Recuperación'}
-              </div>
-              <div style={{ fontSize: 12, color: LT.text2, marginTop: 6, lineHeight: 1.4 }}>
-                {todayScore === null ? 'Registra cómo te sientes' : 'Energía, sueño y fatiga'}
-              </div>
-              <div style={{ background: LT.surface2, borderRadius: 14, padding: '12px', fontSize: 13, fontWeight: 600, color: LT.text2, textAlign: 'center', marginTop: 14 }}>
-                {todayScore === null ? 'Registrar bienestar' : 'Ver detalle'}
-              </div>
-            </div>
-
-            {/* Tu semana: qué días entrenas, cuál es hoy y qué sigue */}
-            <div style={{ flex: 1, background: LT.surface, borderRadius: 22, padding: 20, minWidth: 0 }}>
-              <div style={{ fontSize: 14, color: LT.text2 }}>Tu semana</div>
-              <div style={{ fontSize: 13, color: LT.text, marginTop: 6 }}>
-                {week.trainingDays} {week.trainingDays === 1 ? 'día' : 'días'} de entrenamiento
-              </div>
-              <div style={{ display: 'flex', gap: 4, marginTop: 14, flexWrap: 'wrap' }}>
-                {week.days.map((d) => (
-                  <div
-                    key={d.key}
-                    title={d.name || 'Descanso'}
-                    style={{
-                      flex: '1 1 0', minWidth: 26, textAlign: 'center', borderRadius: 8,
-                      padding: '7px 2px', fontSize: 10.5, fontWeight: 800,
-                      background: d.isToday ? LT.blue : d.hasSession ? LT.blueSoft : LT.surface2,
-                      color: d.isToday ? '#fff' : d.hasSession ? LT.blue : LT.text3,
-                      border: d.isToday ? 'none' : `1px solid ${d.hasSession ? 'transparent' : LT.border}`,
-                    }}
-                  >
-                    {d.key[0]}
-                  </div>
-                ))}
-              </div>
-              <div style={{ fontSize: 11, color: LT.text3, marginTop: 10, lineHeight: 1.4 }}>
-                {week.next
-                  ? `Siguiente: ${weekdayLabel(week.next.key)}${week.next.name ? ` · ${week.next.name}` : ''}`
-                  : 'Sin entrenamientos esta semana'}
-              </div>
-            </div>
-          </div>
-
-          {/* Info del plan */}
-          <div style={{ padding: '0 18px 20px' }}>
-            {/* Esta tarjeta es la puerta al programa completo, y tiene que
-                fijar el nivel a mano. Antes solo cambiaba de pestaña, así que
-                te dejaba en la última pantalla que hubieras visto de "Plan" —
-                normalmente tu propio workout, que es justo lo contrario de lo
-                que promete. Con la pestaña "Plan" apuntando ahora a tu semana,
-                esta es la única forma de ver las fases sin pasar por ahí. */}
-            <div onClick={onVerPrograma}
-              style={{ background: LT.surface, borderRadius: 22, padding: 18, display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer' }}>
-              <div style={{
-                width: 52, height: 52, borderRadius: '50%', background: LT.blueSoft,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                fontSize: 11, fontWeight: 800, color: LT.blue, textAlign: 'center', lineHeight: 1.1,
-              }}><Dumbbell size={22} /></div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 17, fontWeight: 700, color: LT.text }}>{planMeta?.title || 'Mi plan'}</div>
-                <div style={{ fontSize: 12, color: LT.text2, marginTop: 1 }}>
-                  {kind === 'weekly'
-                    ? `Rutina semanal · ${week.trainingDays} ${week.trainingDays === 1 ? 'día' : 'días'}`
-                    : `${pluralS(PLAN.length, 'fase')} · ${pluralS(PLAN.reduce((s, p) => s + (p.weekData?.length || 0), 0), 'semana')}`}
-                </div>
-              </div>
-              <ChevronRight size={18} style={{ color: LT.text3, flexShrink: 0 }} />
-            </div>
-          </div>
         </>
       ) : (
-        <div style={{ padding: '0 18px' }}>
-          <div style={{ background: LT.surface, borderRadius: 22, padding: 24 }}>
-            <div style={{ fontSize: 22, fontWeight: 700, color: LT.text, lineHeight: 1.2 }}>
+        /* Sin sesión hoy. Antes esta tarjeta REEMPLAZABA el tablero entero:
+           quien descansaba perdía de vista su bienestar, su semana y su
+           programa, y la app parecía otra. Ahora solo ocupa el lugar de la
+           sesión; lo de abajo se queda. La tira de días tampoco se repite
+           aquí: ya está en "Tu semana". */
+        <div style={{ padding: '0 18px 12px' }}>
+          <div style={{ background: LT.surface, borderRadius: KP.rCard, padding: 22 }}>
+            <div style={{ fontSize: 20, fontWeight: 700, color: LT.text, lineHeight: 1.2 }}>
               {/* Si el coach puso descanso, se dice descanso: "no tienes rutina
                   asignada" suena a que algo falta, y no falta nada. */}
-              {week.days.find((d) => d.isToday)?.descanso ? 'Hoy descansas' : 'No tienes rutina asignada para este día'}
+              {week.days.find((d) => d.isToday)?.descanso ? 'Hoy descansas' : 'Hoy no te toca entrenar'}
             </div>
             <div style={{ marginTop: 8, fontSize: 14, color: LT.text2, lineHeight: 1.5 }}>
               {week.next
                 ? `Tu siguiente entrenamiento es el ${weekdayLabel(week.next.key)}${week.next.name ? ` · ${week.next.name}` : ''}.`
                 : 'Aún no hay entrenamientos en tu semana.'}
             </div>
-
-            {/* Vista de la semana, para ubicarse */}
-            <div style={{ display: 'flex', gap: 4, marginTop: 18, flexWrap: 'wrap' }}>
-              {week.days.map((d) => (
-                <div
-                  key={d.key}
-                  title={d.name || 'Descanso'}
-                  style={{
-                    flex: '1 1 0', minWidth: 30, textAlign: 'center', borderRadius: 8,
-                    padding: '9px 2px', fontSize: 11, fontWeight: 800,
-                    background: d.isToday ? LT.blue : d.hasSession ? LT.blueSoft : LT.surface2,
-                    color: d.isToday ? '#fff' : d.hasSession ? LT.blue : LT.text3,
-                    border: d.isToday ? 'none' : `1px solid ${d.hasSession ? 'transparent' : LT.border}`,
-                  }}
-                >
-                  {d.key}
-                </div>
-              ))}
-            </div>
-
             <div
               onClick={() => onGoTab('plan')}
               className="kp-press"
               style={{
-                background: LT.blue, borderRadius: 14, padding: '13px', marginTop: 18,
+                background: LT.blue, borderRadius: 14, padding: '13px', marginTop: 16,
                 fontSize: 14, fontWeight: 600, color: '#fff', textAlign: 'center', cursor: 'pointer',
               }}
             >
@@ -1961,6 +1816,84 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, 
           </div>
         </div>
       )}
+
+      {/* Row: estado + progreso */}
+      <div style={{ display: 'flex', gap: 12, padding: '0 18px 12px' }}>
+        {/* Estado hoy */}
+        <div onClick={() => onGoTab('wellness')}
+          style={{ flex: 1, background: LT.surface, borderRadius: 22, padding: 20, cursor: 'pointer', minWidth: 0 }}>
+          <div style={{ fontSize: 14, color: LT.text2 }}>Estado hoy</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: LT.text, marginTop: 2 }}>
+            {todayScore === null ? 'Sin medir'
+              : todayScore >= 7 ? 'Listo'
+              : todayScore >= 5 ? 'Carga media'
+              : 'Recuperación'}
+          </div>
+          <div style={{ fontSize: 12, color: LT.text2, marginTop: 6, lineHeight: 1.4 }}>
+            {todayScore === null ? 'Registra cómo te sientes' : 'Energía, sueño y fatiga'}
+          </div>
+          <div style={{ background: LT.surface2, borderRadius: 14, padding: '12px', fontSize: 13, fontWeight: 600, color: LT.text2, textAlign: 'center', marginTop: 14 }}>
+            {todayScore === null ? 'Registrar bienestar' : 'Ver detalle'}
+          </div>
+        </div>
+
+        {/* Tu semana: qué días entrenas, cuál es hoy y qué sigue */}
+        <div style={{ flex: 1, background: LT.surface, borderRadius: 22, padding: 20, minWidth: 0 }}>
+          <div style={{ fontSize: 14, color: LT.text2 }}>Tu semana</div>
+          <div style={{ fontSize: 13, color: LT.text, marginTop: 6 }}>
+            {week.trainingDays} {week.trainingDays === 1 ? 'día' : 'días'} de entrenamiento
+          </div>
+          <div style={{ display: 'flex', gap: 4, marginTop: 14, flexWrap: 'wrap' }}>
+            {week.days.map((d) => (
+              <div
+                key={d.key}
+                title={d.name || 'Descanso'}
+                style={{
+                  flex: '1 1 0', minWidth: 26, textAlign: 'center', borderRadius: 8,
+                  padding: '7px 2px', fontSize: 10.5, fontWeight: 800,
+                  background: d.isToday ? LT.blue : d.hasSession ? LT.blueSoft : LT.surface2,
+                  color: d.isToday ? '#fff' : d.hasSession ? LT.blue : LT.text3,
+                  border: d.isToday ? 'none' : `1px solid ${d.hasSession ? 'transparent' : LT.border}`,
+                }}
+              >
+                {d.key[0]}
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: LT.text3, marginTop: 10, lineHeight: 1.4 }}>
+            {week.next
+              ? `Siguiente: ${weekdayLabel(week.next.key)}${week.next.name ? ` · ${week.next.name}` : ''}`
+              : 'Sin entrenamientos esta semana'}
+          </div>
+        </div>
+      </div>
+
+      {/* Info del plan */}
+      <div style={{ padding: '0 18px 20px' }}>
+        {/* Esta tarjeta es la puerta al programa completo, y tiene que
+            fijar el nivel a mano. Antes solo cambiaba de pestaña, así que
+            te dejaba en la última pantalla que hubieras visto de "Plan" —
+            normalmente tu propio workout, que es justo lo contrario de lo
+            que promete. Con la pestaña "Plan" apuntando ahora a tu semana,
+            esta es la única forma de ver las fases sin pasar por ahí. */}
+        <div onClick={onVerPrograma}
+          style={{ background: LT.surface, borderRadius: 22, padding: 18, display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer' }}>
+          <div style={{
+            width: 52, height: 52, borderRadius: '50%', background: LT.blueSoft,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            fontSize: 11, fontWeight: 800, color: LT.blue, textAlign: 'center', lineHeight: 1.1,
+          }}><Dumbbell size={22} /></div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 17, fontWeight: 700, color: LT.text }}>{planMeta?.title || 'Mi plan'}</div>
+            <div style={{ fontSize: 12, color: LT.text2, marginTop: 1 }}>
+              {kind === 'weekly'
+                ? `Rutina semanal · ${week.trainingDays} ${week.trainingDays === 1 ? 'día' : 'días'}`
+                : `${pluralS(PLAN.length, 'fase')} · ${pluralS(PLAN.reduce((s, p) => s + (p.weekData?.length || 0), 0), 'semana')}`}
+            </div>
+          </div>
+          <ChevronRight size={18} style={{ color: LT.text3, flexShrink: 0 }} />
+        </div>
+      </div>
     </div>
   );
 };
@@ -2478,11 +2411,19 @@ export default function TrainingApp() {
      Explorar el programa sigue estando: la flecha de arriba sube a la fase, y
      de ahí a todas. Se invierte quién paga el precio — antes lo pagaba el que
      entrena todos los días, ahora el que quiere curiosear el plan entero. */
-  const vistaDelPlan = useCallback(() => (
-    cursorSession
-      ? { level: 'week', phase: cursorSession.phase, week: cursorSession.week }
-      : { level: 'plan' }   // sin plan asignado no hay semana a la que ir
-  ), [cursorSession]);
+  const vistaDelPlan = useCallback(() => {
+    /* Una rutina que se repite tiene UNA semana, y es la única pantalla que
+       dice algo: la lista de "fases" ahí es una sola tarjeta con el nombre del
+       plan. Va derecho a la semana aunque hoy no toque entrenar — que es justo
+       cuando el atleta abre el plan a ver qué le espera. */
+    if (kind === 'weekly') {
+      const fase = (PLAN ?? [])[0];
+      const semana = fase?.weekData?.[0];
+      if (semana) return { level: 'week', phase: fase, week: semana };
+    }
+    if (cursorSession) return { level: 'week', phase: cursorSession.phase, week: cursorSession.week };
+    return { level: 'plan' };   // sin plan asignado no hay semana a la que ir
+  }, [cursorSession, kind, PLAN]);
 
   /* La flecha de "atrás" de una fase tiene que llegar a la LISTA de fases, no
      a donde apunta la pestaña. Al hacer que la pestaña "Plan" lleve a tu
@@ -2502,15 +2443,21 @@ export default function TrainingApp() {
   // La barra de fases no dice nada en una rutina que se repite: es una sola "fase".
   const showTimeline = kind !== 'weekly' && tab === 'plan' && (view.level === 'phase' || view.level === 'week');
 
+  /* Cambiar de pestaña desde el tablero. La pestaña "Plan" además coloca la
+     vista: sin esto, "Ver mi plan" te dejaba donde estuviera `view`, que recién
+     abierta la app es la lista de fases. El atleta pedía su plan y le salía un
+     índice. */
+  const vasA = (t) => { setTab(t); if (t === 'plan') setView(vistaDelPlan()); };
+
   let content;
   if (planLoading && (tab === 'home' || tab === 'plan')) {
     content = <PlanLoadingState />;
   } else if (!hasPlan && (tab === 'home' || tab === 'plan')) {
-    content = <NoPlanState onGoTab={t => setTab(t)} />;
+    content = <NoPlanState onGoTab={vasA} />;
   } else if (tab === 'home') {
     content = <HomeView sessionsData={sessionsData} wellness={wellness}
       onStartSession={startSession}
-      onGoTab={t => setTab(t)}
+      onGoTab={vasA}
       onGoPhase={goToPhase}
       onVerPrograma={verTodasLasFases}
       cursor={cursor}
@@ -2551,7 +2498,7 @@ export default function TrainingApp() {
       <div style={esCompu ? { maxWidth: 980, margin: '0 auto', width: '100%' } : undefined}>
         {content}
       </div>
-      <BottomNav active={tab} onChange={t => { setTab(t); if (t === 'plan') setView(vistaDelPlan()); }} />
+      <BottomNav active={tab} onChange={vasA} />
       {cursorPickerOpen && (
         <CursorSelector current={cursor} sessionsData={sessionsData}
           onSelect={handleSelectCursor} onClose={() => setCursorPickerOpen(false)} />

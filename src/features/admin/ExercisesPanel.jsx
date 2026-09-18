@@ -15,6 +15,7 @@ import SelectorCategoria from '@/features/admin/SelectorCategoria';
 import { MUSCLE_GROUPS, FINE_MUSCLES, exerciseMatchesGroup } from '@/lib/muscles';
 import { T, FONT, KP } from '@/lib/theme';
 import Portada from '@/components/Portada';
+import { useConfirmacion } from '@/components/Confirmacion';
 
 const CAT_FALLBACK = {
   hipertrofia: '#1E40E0', atletico: '#00A372', potencia: '#FF7A52', pliometria: '#A480FF',
@@ -381,6 +382,7 @@ function ExerciseEditor({
   // ahí en el estado, solo no se pintan.
   const [soloMedia, setSoloMedia] = useState(foco === 'media');
   const { user } = useAuth();
+  const pregunta = useConfirmacion();
   const [dupBusy, setDupBusy] = useState(false);
   const [restaurando, setRestaurando] = useState(false);
   const [form, setForm] = useState(() =>
@@ -445,7 +447,13 @@ function ExerciseEditor({
 
   async function onDelete() {
     if (!exercise) return;
-    if (!window.confirm(`¿Eliminar "${exercise.name}"? Esta acción no se puede deshacer.`)) return;
+    const va = await pregunta({
+      titulo: `¿Eliminar "${exercise.name}"?`,
+      detalle: 'Esto no se puede deshacer.',
+      confirmar: 'Sí, eliminarlo',
+      peligro: true,
+    });
+    if (!va) return;
     setBusy(true);
     try {
       await deleteExercise(exercise.id);
@@ -615,7 +623,12 @@ function ExerciseEditor({
                   type="button"
                   disabled={restaurando || busy}
                   onClick={async () => {
-                    if (!window.confirm(`¿Volver al original de "${exercise.name}"? Se pierden los cambios que hiciste sobre él.`)) return;
+                    const va = await pregunta({
+                      titulo: `¿Volver al original de "${exercise.name}"?`,
+                      detalle: 'Se pierden los cambios que hiciste sobre él. El ejercicio del sistema no se toca.',
+                      confirmar: 'Sí, volver al original',
+                    });
+                    if (!va) return;
                     setRestaurando(true);
                     try { await deleteExerciseOverride(exercise.id); onRestaurada(exercise.id); }
                     catch (e) { setErr(e.message || 'No se pudo restaurar'); setRestaurando(false); }

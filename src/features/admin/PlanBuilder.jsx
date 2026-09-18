@@ -6,6 +6,7 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useConfirmacion } from '@/components/Confirmacion';
 import { useIsDesktop } from '@/lib/useViewport';
 import {
   listExercises, createPlan, updatePlan, listTemplates, saveTemplate, deleteTemplate,
@@ -288,6 +289,7 @@ function WeekMetaModal({ week, canDelete, onPatch, onDuplicate, onCopyToRest, on
 /* Selector de plantillas (día o semana) */
 function TemplatePicker({ kind, onApply, onClose }) {
   const { user } = useAuth();
+  const pregunta = useConfirmacion();
   const [rows, setRows] = useState(null);
   useEffect(() => {
     listTemplates(kind, user?.id).then(setRows).catch(() => setRows([]));
@@ -337,7 +339,7 @@ function TemplatePicker({ kind, onApply, onClose }) {
                 <div style={{ fontSize: 12, color: T.text3, marginTop: 2, fontWeight: 600 }}>{meta(t)}</div>
               </button>
               <IconBtn icon={Trash2} danger title="Eliminar plantilla" onClick={async () => {
-                if (!window.confirm(`¿Eliminar la plantilla "${t.name}"?`)) return;
+                if (!await pregunta({ titulo: `¿Eliminar la plantilla "${t.name}"?`, confirmar: 'Sí, eliminarla', peligro: true })) return;
                 await deleteTemplate(t.id);
                 setRows((prev) => prev.filter((r) => r.id !== t.id));
               }} />
@@ -1057,6 +1059,7 @@ function SesionesDelDiaDual({ day }) {
 function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCreado, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, duenoId, masterId, onCategoriaCreada }) {
   const [creandoEjercicio, setCreandoEjercicio] = useState(false);
   const [mediaDe, setMediaDe] = useState(null);
+  const pregunta = useConfirmacion();
   const esCompu = useIsDesktop();
   const [pickerCtx, setPickerCtx] = useState(null);
   const blocks = useMemo(() => parseBlocks(day.exercises), [day.exercises]);
@@ -1130,8 +1133,8 @@ function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCr
                 <Pill icon={Plus} primary onClick={() => setPickerCtx({ mode: 'add', blockIdx: bi })}>Agregar ejercicio</Pill>
                 <IconBtn icon={ChevronUp} onClick={() => moveBlock(bi, -1)} disabled={bi === 0} />
                 <IconBtn icon={ChevronDown} onClick={() => moveBlock(bi, 1)} disabled={bi === blocks.length - 1} />
-                <IconBtn icon={Trash2} danger onClick={() => {
-                  if (window.confirm(`¿Eliminar el Set ${setIdx} completo?`)) writeBlocks((bs) => bs.filter((_, k) => k !== bi));
+                <IconBtn icon={Trash2} danger onClick={async () => {
+                  if (await pregunta({ titulo: `¿Eliminar el Set ${setIdx} completo?`, confirmar: 'Sí, eliminarlo', peligro: true })) writeBlocks((bs) => bs.filter((_, k) => k !== bi));
                 }} />
               </div>
               {(() => {
@@ -1464,6 +1467,7 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
 
 export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
   const esCompu = useIsDesktop();
+  const pregunta = useConfirmacion();
   const { user, profile } = useAuth();
   const isMaster = !!profile?.is_owner;
   const isNew = !planRow;
@@ -1562,8 +1566,17 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
     }
   }
 
-  function handleClose() {
-    if (dirty && !window.confirm('Tienes cambios sin guardar. ¿Salir de todas formas?')) return;
+  async function handleClose() {
+    if (dirty) {
+      const va = await pregunta({
+        titulo: 'Tienes cambios sin guardar',
+        detalle: 'Si sales ahora se pierden.',
+        confirmar: 'Salir sin guardar',
+        cancelar: 'Seguir aquí',
+        peligro: true,
+      });
+      if (!va) return;
+    }
     onClose();
   }
 
@@ -1741,8 +1754,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
               c.id = `p-${rid()}`; c.num = nextPhaseNum(ps); c.name = `${c.name} (copia)`;
               return [...ps.slice(0, pi + 1), c, ...ps.slice(pi + 1)];
             })} />
-            <IconBtn icon={Trash2} danger onClick={() => {
-              if (window.confirm(`¿Eliminar la fase "${p.name}"?`)) touch((ps) => ps.filter((_, i) => i !== pi));
+            <IconBtn icon={Trash2} danger onClick={async () => {
+              if (await pregunta({ titulo: `¿Eliminar la fase "${p.name}"?`, detalle: 'Se va con todas sus semanas y sesiones.', confirmar: 'Sí, eliminarla', peligro: true })) touch((ps) => ps.filter((_, i) => i !== pi));
             }} />
             <ChevronRight size={16} color={T.text3} />
           </div>
@@ -1935,14 +1948,14 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
                   ...prev, { ...fila, isMine: true, isBase: false },
                 ])}
                 onPatch={(patch) => patchDay(nav.pi, wIdx, di, patch)}
-                onDelete={() => {
-                  if (window.confirm(`¿Eliminar la sesión "${d.name || d.day}"?`)) {
+                onDelete={async () => {
+                  if (await pregunta({ titulo: `¿Eliminar la sesión "${d.name || d.day}"?`, confirmar: 'Sí, eliminarla', peligro: true })) {
                     patchWeek(nav.pi, wIdx, (wk) => ({ days: wk.days.filter((_, k) => k !== di) }));
                   }
                 }}
                 onCopy={() => setClipboard(clone(d))}
-                onClear={() => {
-                  if (window.confirm('¿Vaciar todos los sets de esta sesión?')) patchDay(nav.pi, wIdx, di, { exercises: [] });
+                onClear={async () => {
+                  if (await pregunta({ titulo: '¿Vaciar esta sesión?', detalle: 'Se quitan todos sus sets. El nombre y el tipo se quedan.', confirmar: 'Sí, vaciarla', peligro: true })) patchDay(nav.pi, wIdx, di, { exercises: [] });
                 }}
                 onSaveToCatalog={() => setModal({ type: 'name-day', payload: d })}
                 onApplyCatalog={() => setModal({ type: 'tpl-day', payload: { di } })}
@@ -2040,16 +2053,20 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
             });
             setModal(null);
           }}
-          onCopyToRest={() => {
-            if (!window.confirm('¿Copiar los días de esta semana a todas las demás semanas de la fase (reemplaza su contenido)?')) return;
+          onCopyToRest={async () => {
+            if (!await pregunta({
+              titulo: '¿Copiar esta semana a todas las demás?',
+              detalle: 'Las otras semanas de la fase pierden lo que tengan y quedan igual que esta.',
+              confirmar: 'Sí, copiarla',
+            })) return;
             patchPhase(nav.pi, (ph) => ({
               weekData: ph.weekData.map((wk, j) => (j === curWeekIdx ? wk : { ...wk, days: clone(ph.weekData[curWeekIdx].days) })),
             }));
             setModal(null);
           }}
-          onDelete={() => {
+          onDelete={async () => {
             const wk = curPhase.weekData[curWeekIdx];
-            if (!window.confirm(`¿Eliminar «${weekName(wk)}»?`)) return;
+            if (!await pregunta({ titulo: `¿Eliminar «${weekName(wk)}»?`, detalle: 'Se va con todas sus sesiones.', confirmar: 'Sí, eliminarla', peligro: true })) return;
             patchPhase(nav.pi, (ph) => ({ weekData: ph.weekData.filter((_, j) => j !== curWeekIdx) }));
             setWeekIdx((v) => Math.max(0, v - 1));
             setModal(null);
@@ -2085,9 +2102,13 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
         <TemplatePicker
           kind="week"
           onClose={() => setModal(null)}
-          onApply={(t) => {
+          onApply={async (t) => {
             const n = (t.data?.days || []).length;
-            if (!window.confirm(`Aplicar "${t.name}" reemplaza los días de esta semana por ${n} día${n !== 1 ? 's' : ''}. ¿Continuar?`)) return;
+            if (!await pregunta({
+              titulo: `¿Aplicar "${t.name}"?`,
+              detalle: `Esta semana pierde lo que tenga y queda con ${n} día${n !== 1 ? 's' : ''}.`,
+              confirmar: 'Sí, aplicarla',
+            })) return;
             patchWeek(nav.pi, curWeekIdx, { days: clone(t.data?.days || []) });
             setModal(null);
           }}
@@ -2097,13 +2118,17 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
         <TemplatePicker
           kind="day"
           onClose={() => setModal(null)}
-          onApply={(t) => {
+          onApply={async (t) => {
             const { di } = modal.payload;
             const tplDay = { day: activeWeekday, name: t.data?.name || t.name, cat: t.data?.cat || 'gym', exercises: clone(t.data?.exercises || []) };
             if (di == null) {
               patchWeek(nav.pi, curWeekIdx, (wk) => ({ days: [...(wk.days || []), tplDay] }));
             } else {
-              if (!window.confirm(`Aplicar "${t.name}" reemplaza el contenido de esta sesión. ¿Continuar?`)) return;
+              if (!await pregunta({
+                titulo: `¿Aplicar "${t.name}"?`,
+                detalle: 'Esta sesión pierde lo que tenga y queda con la rutina del catálogo.',
+                confirmar: 'Sí, aplicarla',
+              })) return;
               patchDay(nav.pi, curWeekIdx, di, { name: tplDay.name, cat: tplDay.cat, exercises: tplDay.exercises });
             }
             setModal(null);

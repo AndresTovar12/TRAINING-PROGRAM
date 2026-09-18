@@ -10,6 +10,7 @@ import {
 } from '@/lib/api';
 import PlanBuilder from '@/features/admin/PlanBuilder';
 import { useAuth } from '@/contexts/AuthContext';
+import { useConfirmacion } from '@/components/Confirmacion';
 import { useIsDesktop } from '@/lib/useViewport';
 import { T, FONT, KP } from '@/lib/theme';
 import { plural, pluralS } from '@/lib/plural';
@@ -489,6 +490,7 @@ function ZonaAdministracion({ athlete, isMaster, soyElCoach, onCambiado, onElimi
 
 function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile, onReassigned, onEliminado, onVerComoAtleta }) {
   const esCompu = useIsDesktop();
+  const pregunta = useConfirmacion();
   const [plan, setPlan] = useState(null);
   const [state, setState] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -522,7 +524,13 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
 
   async function onDeletePlan() {
     if (!plan) return;
-    if (!window.confirm(`¿Eliminar el plan "${plan.title}" de ${athlete.full_name || athlete.username}? Esta acción no se puede deshacer.`)) return;
+    const va = await pregunta({
+      titulo: `¿Eliminar el plan "${plan.title}"?`,
+      detalle: `Es el plan de ${athlete.full_name || athlete.username}. Esto no se puede deshacer.`,
+      confirmar: 'Sí, eliminarlo',
+      peligro: true,
+    });
+    if (!va) return;
     await deletePlan(plan.id);
     setPlan(null);
   }
