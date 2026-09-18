@@ -7,6 +7,7 @@ import { updateProfile as apiUpdateProfile } from '@/lib/api';
 const AuthContext = createContext(null);
 
 const SIGNUP_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/signup`;
+const LOGIN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/login`;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export function AuthProvider({ children }) {
@@ -53,26 +54,52 @@ export function AuthProvider({ children }) {
   }, [session?.user?.id]);
 
   // Login with username OR email + password
+  /**
+   * Entrar con correo o con nombre de usuario.
+   *
+   * Con CORREO se entra directo contra Supabase Auth, como siempre.
+   *
+   * Con NOMBRE DE USUARIO hay que traducirlo a correo, y eso lo hace ahora una
+   * función del servidor (`login`). Antes lo preguntaba el navegador con
+   * `rpc/email_for_login`, que no pide sesión: cualquiera que supiera un nombre
+   * de usuario obtenía el correo de esa persona. El de un coach se comparte
+   * para registrarse, así que bastaba con eso.
+   */
   const signIn = useCallback(async (identifier, password) => {
     const id = (identifier ?? '').trim();
     if (!id) return { error: { message: 'Ingresa tu usuario o correo' } };
 
-    // Resolve username/email → canonical email via SECURITY DEFINER RPC
-    let email = id;
-    const { data: resolved } = await supabase.rpc('email_for_login', { identifier: id });
-    if (resolved) email = resolved;
-    else if (!id.includes('@')) {
-      return { error: { message: 'Usuario o contraseña incorrectos' } };
+    if (id.includes('@')) {
+      const { error } = await supabase.auth.signInWithPassword({ email: id, password });
+      if (error) {
+        const msg = /invalid login credentials/i.test(error.message)
+          ? 'Usuario o contraseña incorrectos'
+          : error.message;
+        return { error: { message: msg } };
+      }
+      return { error: null };
     }
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      const msg = /invalid login credentials/i.test(error.message)
-        ? 'Usuario o contraseña incorrectos'
-        : error.message;
-      return { error: { message: msg } };
-    }
-    return { error: null };
+    const res = await fetch(LOGIN_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: ANON_KEY,
+        Authorization: `Bearer ${ANON_KEY}`,
+      },
+      body: JSON.stringify({ identificador: id, password }),
+    }).catch(() => null);
+    if (!res) return { error: { message: 'No se pudo contactar al servidor. Revisa tu conexión.' } };
+
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: { message: body?.error || 'Usuario o contraseña incorrectos' } };
+
+    // La función devuelve la sesión ya abierta; aquí solo se guarda.
+    const { error } = await supabase.auth.setSession({
+      access_token: body.access_token,
+      refresh_token: body.refresh_token,
+    });
+    return { error: error ? { message: error.message } : null };
   }, []);
 
   // Register via Edge Function (creates a confirmed user), then auto sign-in
