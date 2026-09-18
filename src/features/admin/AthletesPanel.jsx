@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Loader2, Search, Plus, Trash2, X, ChevronRight, ChevronLeft, Pencil,
-  CalendarClock, User as UserIcon, Shield, Layers, ClipboardList, Users,
-  UserMinus, Power, AlertTriangle, Eye,
+  CalendarClock, User as UserIcon, Shield, ClipboardList, Users,
+  UserMinus, Power, AlertTriangle, Eye, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import {
   getActivePlan, deletePlan, getAthleteState, listAthletesOverview, listCoaches, setAthleteCoach,
@@ -12,7 +12,7 @@ import PlanBuilder from '@/features/admin/PlanBuilder';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useIsDesktop } from '@/lib/useViewport';
-import { T, FONT, KP } from '@/lib/theme';
+import { T, FONT, KP, tipoDeSesion } from '@/lib/theme';
 import { plural, pluralS } from '@/lib/plural';
 import { esDescanso } from '@/lib/training-utils';
 
@@ -420,12 +420,10 @@ function ZonaAdministracion({ athlete, isMaster, soyElCoach, onCambiado, onElimi
     ...extra,
   });
 
+  // Sin título propio: esto vive DENTRO de la sección "Administrar cuenta" de
+  // la ficha, y el título salía dos veces seguidas.
   return (
-    <div style={{ marginTop: 20, borderTop: `1px solid ${T.border}`, paddingTop: 16 }}>
-      <div style={{ fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 10 }}>
-        Administrar cuenta
-      </div>
-
+    <div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {soyElCoach && !isMaster && (
           <button
@@ -488,6 +486,114 @@ function ZonaAdministracion({ athlete, isMaster, soyElCoach, onCambiado, onElimi
   );
 }
 
+/** Una de las acciones grandes de la ficha del atleta. */
+function AccionFicha({ icon: Icon, titulo, detalle, onClick, primaria, abierto }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        width: '100%', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
+        padding: '14px 15px', borderRadius: 14, cursor: 'pointer', fontFamily: FONT,
+        border: primaria ? 'none' : `1.5px solid ${T.border}`,
+        background: primaria ? `linear-gradient(135deg, ${T.accent}, ${T.accentDk})` : T.bg2,
+        boxShadow: primaria ? KP.shBtn : 'none',
+      }}
+    >
+      <span style={{
+        width: 36, height: 36, borderRadius: 11, flexShrink: 0, display: 'grid', placeItems: 'center',
+        background: primaria ? 'rgba(255,255,255,0.18)' : T.accentBg,
+        color: primaria ? '#fff' : T.accent,
+      }}>
+        <Icon size={18} />
+      </span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: 'block', fontSize: 15, fontWeight: 800, color: primaria ? '#fff' : T.text }}>
+          {titulo}
+        </span>
+        {detalle && (
+          <span style={{
+            display: 'block', fontSize: 12.5, fontWeight: 600, marginTop: 2,
+            color: primaria ? 'rgba(255,255,255,0.86)' : T.text2,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {detalle}
+          </span>
+        )}
+      </span>
+      {abierto === undefined
+        ? <ChevronRight size={18} color={primaria ? 'rgba(255,255,255,0.8)' : T.text3} style={{ flexShrink: 0 }} />
+        : (abierto
+          ? <ChevronUp size={18} color={T.text3} style={{ flexShrink: 0 }} />
+          : <ChevronDown size={18} color={T.text3} style={{ flexShrink: 0 }} />)}
+    </button>
+  );
+}
+
+/** Lo que NO es una acción: se pliega para que no estorbe. */
+function SeccionFicha({ titulo, abierta, onToggle, children }) {
+  return (
+    <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 4 }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '12px 2px',
+          border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT,
+          fontSize: 13.5, fontWeight: 800, color: T.text2, textAlign: 'left',
+        }}
+      >
+        <span style={{ flex: 1 }}>{titulo}</span>
+        {abierta ? <ChevronUp size={16} color={T.text3} /> : <ChevronDown size={16} color={T.text3} />}
+      </button>
+      {abierta && <div style={{ paddingBottom: 14 }}>{children}</div>}
+    </div>
+  );
+}
+
+/** El plan de un vistazo, sin poder tocarlo: fases, semanas y sesiones. */
+function ResumenDelPlan({ phases }) {
+  return (
+    <div style={{ background: T.bg, borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {phases.map((f) => (
+        <div key={f.id}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 7 }}>
+            <span style={{ width: 9, height: 9, borderRadius: 3, flexShrink: 0, background: f.color || T.accent }} />
+            <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 800, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {f.name}
+            </span>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: T.text3, flexShrink: 0 }}>
+              {pluralS(f.weekData?.length || 0, 'semana')}
+            </span>
+          </div>
+          {(f.weekData || []).map((w, wi) => (
+            <div key={wi} style={{ paddingLeft: 18, marginBottom: 6 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: T.text3, marginBottom: 3 }}>
+                Semana {w.num ?? wi + 1}
+              </div>
+              {(w.days || []).map((d, di) => {
+                const tipo = tipoDeSesion(d);
+                return (
+                  <div key={di} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
+                    <span style={{ width: 30, fontSize: 11, fontWeight: 800, color: T.text3, flexShrink: 0 }}>{d.day}</span>
+                    <span style={{ width: 7, height: 7, borderRadius: 4, background: tipo.c, flexShrink: 0 }} />
+                    <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {d.name || tipo.label}
+                    </span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: T.text3, flexShrink: 0 }}>
+                      {(d.exercises || []).filter((e) => !e.isNote).length || (d.blocks?.length ? `${d.blocks.length} bloques` : '')}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile, onReassigned, onEliminado, onVerComoAtleta }) {
   const esCompu = useIsDesktop();
   const pregunta = useConfirmacion();
@@ -496,6 +602,8 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
   const [loading, setLoading] = useState(true);
   const [building, setBuilding] = useState(false);
   const [savingCoach, setSavingCoach] = useState(false);
+  const [verPlan, setVerPlan] = useState(false);
+  const [seccion, setSeccion] = useState(null); // null | 'como-va' | 'cuenta'
 
   async function onChangeCoach(coachId) {
     setSavingCoach(true);
@@ -550,8 +658,45 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
     return Object.values(sessions).filter((s) => s?.completed).length;
   }, [state]);
 
-  return (
-    <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: KP.rCard, padding: 22, boxShadow: KP.shCard }}>
+  /* ORDEN DE LA FICHA. Andrés, 17 sep 2026: "hay mucha información saturada;
+     la prioridad sería primero saber si el coach quiere 1- editar el plan,
+     2- solo ver el plan, 3- meterse a verlo como si fuera el atleta, 4- ver el
+     resto de la info, como sesiones completadas".
+
+     Así queda: las tres acciones arriba, grandes y sin adornos, y lo demás
+     plegado. "Aunque sume clics lo hace más eficiente y más intuitivo" —él. */
+  const acciones = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+      <AccionFicha
+        icon={plan ? Pencil : Plus}
+        titulo={plan ? 'Editar el plan' : 'Crear el plan'}
+        detalle={plan ? plan.title : 'Todavía no tiene ninguno'}
+        primaria
+        onClick={() => setBuilding(true)}
+      />
+      {plan && (
+        <AccionFicha
+          icon={ClipboardList}
+          titulo="Ver el plan"
+          detalle={`${pluralS(phases.length, 'fase')} · ${pluralS(totalWeeks, 'semana')} · ${plural(totalSessions, 'sesión', 'sesiones')}`}
+          abierto={verPlan}
+          onClick={() => setVerPlan((v) => !v)}
+        />
+      )}
+      {verPlan && plan && <ResumenDelPlan phases={phases} />}
+      {onVerComoAtleta && (
+        <AccionFicha
+          icon={Eye}
+          titulo="Entrar como el atleta"
+          detalle="Su app tal cual la ve él. Nada se guarda."
+          onClick={() => onVerComoAtleta(athlete)}
+        />
+      )}
+    </div>
+  );
+
+  const cuerpo = (
+    <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
         <Avatar name={athlete.full_name || athlete.username} url={athlete.avatar_url} size={52} />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -567,172 +712,126 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
             {athlete.full_name || athlete.username}
           </div>
           <div
-            title={`@${athlete.username}${athlete.email ? ` · ${athlete.email}` : ''}`}
+            title={`@${athlete.username}`}
             style={{
               fontSize: 13.5, color: T.text2, fontWeight: 500,
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}
           >
-            @{athlete.username}{athlete.email ? ` · ${athlete.email}` : ''}
+            @{athlete.username}
           </div>
         </div>
-        <button type="button" onClick={onClose} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.text2, padding: 4 }}>
+        <button type="button" onClick={onClose} aria-label="Cerrar" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.text2, padding: 4 }}>
           <X size={20} />
         </button>
-      </div>
-
-      {/* Su app tal cual la ve él, sin salir de esta cuenta. Va arriba de todo
-          porque sirve para revisar cualquier cosa de la ficha, no solo el plan. */}
-      {onVerComoAtleta && (
-        <button
-          type="button"
-          onClick={() => onVerComoAtleta(athlete)}
-          style={{
-            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            minHeight: 46, marginBottom: 18, borderRadius: 12, cursor: 'pointer',
-            border: `1.5px solid ${T.accent}33`, background: T.accentBg, color: T.accent,
-            fontFamily: FONT, fontSize: 14.5, fontWeight: 800,
-          }}
-        >
-          <Eye size={17} /> Ver como atleta
-        </button>
-      )}
-
-      {/* Coach asignado (solo master) */}
-      {isMaster && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18, background: T.bg, borderRadius: 12, padding: '11px 14px', flexWrap: 'wrap' }}>
-          <Shield size={16} color={T.accent} />
-          <span style={{ fontSize: 13, fontWeight: 700, color: T.text2 }}>Coach:</span>
-          <select
-            value={athlete.coach_id || ''}
-            onChange={(e) => onChangeCoach(e.target.value)}
-            disabled={savingCoach}
-            style={{ flex: 1, minWidth: 140, border: `1.5px solid ${T.border}`, borderRadius: 10, padding: '8px 10px', fontFamily: FONT, fontSize: 13.5, fontWeight: 600, color: T.text, background: T.bg2, outline: 'none' }}
-          >
-            <option value="">Sin coach (libre)</option>
-            {masterProfile && (
-              <option value={masterProfile.id}>Yo — {masterProfile.full_name || masterProfile.username} (master)</option>
-            )}
-            {coaches.map((c) => (
-              <option key={c.id} value={c.id}>{c.full_name || c.username} (@{c.username})</option>
-            ))}
-          </select>
-          {savingCoach && <Loader2 size={15} className="spin" color={T.text3} />}
-        </div>
-      )}
-
-      <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
-        <div style={{ flex: '1 1 140px', background: T.bg, borderRadius: 12, padding: '12px 14px' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Última actividad</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5, fontWeight: 700, color: T.text, fontSize: 14 }}>
-            <CalendarClock size={15} color={T.text2} /> {last || 'Sin registros'}
-          </div>
-        </div>
-        <div style={{ flex: '1 1 140px', background: T.bg, borderRadius: 12, padding: '12px 14px' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Sesiones completadas</div>
-          <div style={{ marginTop: 5, fontWeight: 800, color: T.accent, fontSize: 18 }}>
-            {completed ?? '—'}{completed != null && totalSessions ? ` / ${totalSessions}` : ''}
-          </div>
-        </div>
-      </div>
-
-      {/* El titulo cede espacio y los botones no. Antes esta fila se dibujaba
-          a 470px —mas ancha que el telefono— y por eso "Editar plan" cabia en
-          un renglon: cabia porque se salia de la pantalla. Ahora que la fila
-          mide lo que mide el telefono, el titulo se recorta si hace falta y
-          los botones se quedan enteros, que es el orden correcto: el titulo
-          se entiende cortado, un boton partido en dos renglones no. */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8, minWidth: 0,
-          fontWeight: 800, color: T.text, fontSize: 15,
-        }}>
-          {/* En telefono no cabe "Plan de entrenamiento" junto a los botones:
-              sale cortado con puntos suspensivos, que se lee peor que una
-              palabra corta y completa. Aqui ya estas dentro de la ficha del
-              atleta y la tarjeta del plan va justo debajo, asi que "Plan"
-              no se presta a confusion. En compu sobra ancho y va completo. */}
-          {esCompu && <ClipboardList size={18} color={T.accent} style={{ flexShrink: 0 }} />}
-          <span style={{ whiteSpace: 'nowrap' }}>
-            {esCompu ? 'Plan de entrenamiento' : 'Plan'}
-          </span>
-        </div>
-        {plan && (
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-            <button
-              type="button"
-              onClick={() => setBuilding(true)}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 14px', borderRadius: 11, border: 'none', cursor: 'pointer', background: T.accentBg, color: T.accent, fontFamily: FONT, fontSize: 13.5, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}
-            >
-              <Pencil size={14} /> Editar plan
-            </button>
-            <button
-              type="button"
-              onClick={onDeletePlan}
-              title="Eliminar plan"
-              style={{ display: 'grid', placeItems: 'center', width: 36, flexShrink: 0, borderRadius: 11, border: `1px solid ${T.border}`, cursor: 'pointer', background: T.bg2, color: T.danger }}
-            >
-              <Trash2 size={15} />
-            </button>
-          </div>
-        )}
       </div>
 
       {loading ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: T.text2, padding: '12px 0', fontWeight: 600 }}>
           <Loader2 size={16} className="spin" /> Cargando…
         </div>
-      ) : !plan ? (
-        <div style={{ textAlign: 'center', padding: '30px 16px' }}>
-          <Layers size={32} color={T.text3} style={{ opacity: 0.5 }} />
-          <div style={{ margin: '10px 0 16px', fontWeight: 600, color: T.text2, fontSize: 13.5 }}>
-            Aún no tiene plan. Créale uno con la misma estructura del programa original.
+      ) : acciones}
+
+      <SeccionFicha titulo="Cómo va" abierta={seccion === 'como-va'} onToggle={() => setSeccion((s) => (s === 'como-va' ? null : 'como-va'))}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 140px', background: T.bg, borderRadius: 12, padding: '12px 14px' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Última actividad</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5, fontWeight: 700, color: T.text, fontSize: 14 }}>
+              <CalendarClock size={15} color={T.text2} /> {last || 'Sin registros'}
+            </div>
           </div>
+          <div style={{ flex: '1 1 140px', background: T.bg, borderRadius: 12, padding: '12px 14px' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Sesiones completadas</div>
+            <div style={{ marginTop: 5, fontWeight: 800, color: T.accent, fontSize: 18 }}>
+              {completed ?? '—'}{completed != null && totalSessions ? ` / ${totalSessions}` : ''}
+            </div>
+          </div>
+        </div>
+        {plan && (
+          <div style={{ fontSize: 12, color: T.text3, marginTop: 10, fontWeight: 600 }}>
+            Plan actualizado {timeAgo(plan.updated_at) || '—'}
+          </div>
+        )}
+      </SeccionFicha>
+
+      <SeccionFicha titulo="Administrar cuenta" abierta={seccion === 'cuenta'} onToggle={() => setSeccion((s) => (s === 'cuenta' ? null : 'cuenta'))}>
+        {isMaster && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, background: T.bg, borderRadius: 12, padding: '11px 14px', flexWrap: 'wrap' }}>
+            <Shield size={16} color={T.accent} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: T.text2 }}>Coach:</span>
+            <select
+              value={athlete.coach_id || ''}
+              onChange={(e) => onChangeCoach(e.target.value)}
+              disabled={savingCoach}
+              style={{ flex: 1, minWidth: 140, border: `1.5px solid ${T.border}`, borderRadius: 10, padding: '8px 10px', fontFamily: FONT, fontSize: 13.5, fontWeight: 600, color: T.text, background: T.bg2, outline: 'none' }}
+            >
+              <option value="">Sin coach (libre)</option>
+              {masterProfile && (
+                <option value={masterProfile.id}>Yo — {masterProfile.full_name || masterProfile.username} (master)</option>
+              )}
+              {coaches.map((c) => (
+                <option key={c.id} value={c.id}>{c.full_name || c.username} (@{c.username})</option>
+              ))}
+            </select>
+            {savingCoach && <Loader2 size={15} className="spin" color={T.text3} />}
+          </div>
+        )}
+
+        {plan && (
           <button
             type="button"
-            onClick={() => setBuilding(true)}
+            onClick={onDeletePlan}
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 20px', borderRadius: 12,
-              border: 'none', cursor: 'pointer', background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`,
-              color: '#fff', fontFamily: FONT, fontSize: 14.5, fontWeight: 700, boxShadow: KP.shBtn,
+              display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 15px', borderRadius: 11,
+              border: `1px solid ${T.border}`, cursor: 'pointer', background: T.bg2, color: T.danger,
+              fontFamily: FONT, fontSize: 13.5, fontWeight: 700, marginBottom: 12,
             }}
           >
-            <Plus size={16} /> Crear plan
+            <Trash2 size={15} /> Eliminar el plan
           </button>
-        </div>
-      ) : (
-        <div style={{ background: T.bg, borderRadius: 14, padding: 16 }}>
-          <div style={{ fontWeight: 800, color: T.text, fontSize: 15 }}>{plan.title}</div>
-          <div style={{ fontSize: 12.5, color: T.text2, marginTop: 4, fontWeight: 600 }}>
-            {pluralS(phases.length, 'fase')} · {pluralS(totalWeeks, 'semana')} · {plural(totalSessions, 'sesión', 'sesiones')}
-          </div>
-          {/* Fases resumidas */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 12 }}>
-            {phases.map((p) => (
-              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ width: 9, height: 9, borderRadius: 3, flexShrink: 0, background: p.color || T.accent }} />
-                <span style={{ fontSize: 13, fontWeight: 700, color: T.text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {p.name}
-                </span>
-                <span style={{ fontSize: 12, color: T.text3, fontWeight: 600, flexShrink: 0 }}>
-                  {p.weekData?.length || 0} sem
-                </span>
-              </div>
-            ))}
-          </div>
-          <div style={{ fontSize: 11.5, color: T.text3, marginTop: 12, fontWeight: 600 }}>
-            Actualizado {timeAgo(plan.updated_at) || '—'}
-          </div>
-        </div>
-      )}
+        )}
 
-      <ZonaAdministracion
-        athlete={athlete}
-        isMaster={isMaster}
-        soyElCoach={!!masterProfile?.id && athlete.coach_id === masterProfile.id}
-        onCambiado={(row) => onReassigned?.(row)}
-        onEliminado={onEliminado}
-      />
+        <ZonaAdministracion
+          athlete={athlete}
+          isMaster={isMaster}
+          soyElCoach={!!masterProfile?.id && athlete.coach_id === masterProfile.id}
+          onCambiado={(row) => onReassigned?.(row)}
+          onEliminado={onEliminado}
+        />
+      </SeccionFicha>
+    </>
+  );
+
+  /* En computadora la ficha flota centrada encima de la lista, no como un panel
+     pegado al costado. Petición de Andrés: "sería mucho mejor que fuera una
+     card flotante, en lugar de que se despliegue así de un costado". */
+  return esCompu ? (
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 900, display: 'grid', placeItems: 'center',
+        padding: 24, background: 'rgba(17, 19, 24, 0.42)',
+      }}
+    >
+      <div style={{
+        width: '100%', maxWidth: 560, maxHeight: '88vh', overflowY: 'auto',
+        background: T.bg2, border: `1px solid ${T.border}`, borderRadius: KP.rCard,
+        padding: 24, boxShadow: KP.shPop,
+      }}>
+        {cuerpo}
+      </div>
+      {building && (
+        <PlanBuilder
+          athlete={athlete}
+          planRow={plan}
+          onClose={() => setBuilding(false)}
+          onSaved={(row) => { setPlan(row); setBuilding(false); }}
+        />
+      )}
+    </div>
+  ) : (
+    <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: KP.rCard, padding: 22, boxShadow: KP.shCard }}>
+      {cuerpo}
 
       {building && (
         <PlanBuilder

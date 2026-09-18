@@ -1481,6 +1481,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
   const [weekIdx, setWeekIdx] = useState(0);
   const [activeWeekday, setActiveWeekday] = useState('Lun');
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [hojaFase, setHojaFase] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
@@ -1825,23 +1826,28 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
 
     body = (
       <div style={{ maxWidth: 980, margin: '0 auto' }}>
-        {/* Detalles de la fase (colapsados) — no aplican a una rutina semanal */}
-        {!isWeekly && (
+        {/* UNA puerta para todo lo que no es escribir la sesión.
+
+            Andrés, 17 sep 2026, sobre esta pantalla: "cero intuitiva… se siente
+            mediocre". Tenía seis renglones de controles antes de llegar al
+            contenido: detalles de la fase, semanas, ajustes de la semana, dos
+            botones de plantilla, el nombre de la semana y los días. Ahora son
+            tres: opciones, semanas y días. Lo demás vive en la hoja. */}
         <div style={{ marginBottom: 14 }}>
           <button
             type="button"
-            onClick={() => setDetailsOpen((v) => !v)}
+            onClick={() => setHojaFase(true)}
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8, border: 'none', cursor: 'pointer',
-              background: 'transparent', color: T.text2, fontFamily: FONT, fontSize: 12.5, fontWeight: 700, padding: '4px 0',
+              display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+              border: `1.5px solid ${T.border}`, borderRadius: 12, padding: '10px 14px',
+              background: T.bg2, color: T.text, fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
             }}
           >
-            <span style={{ width: 10, height: 10, borderRadius: 3, background: p.color || T.accent }} />
-            <Settings2 size={14} />
-            {detailsOpen ? 'Ocultar detalles de la fase' : 'Nombre, color y objetivo de la fase'}
-            {detailsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            <span style={{ width: 10, height: 10, borderRadius: 3, background: isWeekly ? T.accent : (p.color || T.accent) }} />
+            <Settings2 size={15} color={T.text2} />
+            {isWeekly ? 'Opciones de la rutina' : 'Opciones de la fase'}
           </button>
-          {detailsOpen && (
+          {detailsOpen && !isWeekly && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16, marginTop: 8 }}>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 <Field label="Nombre de la fase" grow>
@@ -1868,22 +1874,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
               </Field>
             </div>
           )}
-          {/* El camino de vuelta también aquí: con un plan de UNA fase la lista
-              de fases no se abre nunca (la flecha de atrás cierra el editor),
-              así que si solo estuviera allá no habría forma de llegar. */}
-          <button
-            type="button" onClick={cambiaARutina}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none',
-              background: 'transparent', cursor: 'pointer', fontFamily: FONT,
-              fontSize: 12.5, fontWeight: 700, color: T.text2, padding: '8px 0 0 2px',
-            }}
-          >
-            <Repeat size={14} color={T.text3} />
-            Convertirlo en una rutina que se repite
-          </button>
         </div>
-        )}
 
         {/* Selector de semanas — en una rutina semanal solo hay una */}
         {!isWeekly && (
@@ -1914,9 +1905,6 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
             setWeekIdx(p.weekData.length);
           }} />
           <IconBtn icon={Pencil} title="Ajustes de la semana" onClick={() => setModal({ type: 'week-meta' })} />
-          <span style={{ flex: 1 }} />
-          <Pill icon={FolderOpen} onClick={() => setModal({ type: 'tpl-week' })}>Usar plantilla</Pill>
-          <Pill icon={Save} onClick={() => setModal({ type: 'name-week' })}>Guardar como plantilla</Pill>
         </div>
         )}
 
@@ -1938,9 +1926,6 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
               Esta rutina se repite todas las semanas
               <span style={{ fontSize: 12.5, fontWeight: 800, color: T.accent }}>Cambiar</span>
             </button>
-            <span style={{ flex: 1 }} />
-            <Pill icon={FolderOpen} onClick={() => setModal({ type: 'tpl-week' })}>Usar plantilla</Pill>
-            <Pill icon={Save} onClick={() => setModal({ type: 'name-week' })}>Guardar como plantilla</Pill>
           </div>
         ) : (
           <button
@@ -2153,6 +2138,29 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
           onClose={() => setModal(null)}
         />
       )}
+      {/* Todo lo que no es escribir la sesión, en una sola hoja. Antes eran
+          cinco controles sueltos peleando por el espacio de arriba. */}
+      {hojaFase && curPhase && (
+        <HojaAcciones
+          onClose={() => setHojaFase(false)}
+          acciones={[
+            ...(isWeekly ? [] : [{
+              icon: Settings2,
+              texto: detailsOpen ? 'Ocultar nombre, color y objetivo' : 'Nombre, color y objetivo de la fase',
+              onClick: () => setDetailsOpen((v) => !v),
+            }]),
+            ...(isWeekly ? [] : [{
+              icon: Pencil, texto: 'Ajustes de la semana', onClick: () => setModal({ type: 'week-meta' }),
+            }]),
+            { icon: FolderOpen, texto: 'Usar una plantilla de semana', onClick: () => setModal({ type: 'tpl-week' }) },
+            { icon: Save, texto: 'Guardar esta semana como plantilla', onClick: () => setModal({ type: 'name-week' }) },
+            isWeekly
+              ? { icon: Layers, texto: 'Pasar a un programa por fases', onClick: cambiaAFases }
+              : { icon: Repeat, texto: 'Convertirlo en una rutina que se repite', onClick: cambiaARutina },
+          ]}
+        />
+      )}
+
       {modal?.type === 'name-day' && (
         <NameModal
           title="Guardar rutina en el catálogo"
