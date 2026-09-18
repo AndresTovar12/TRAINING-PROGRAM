@@ -18,17 +18,42 @@ aquí.
 
 ## Cómo se usa aquí
 
-- Configuración en `.oxlintrc.json`, con las 19 reglas genéricas en `error` más
+- Configuración en `.oxlintrc.json`, con las reglas genéricas en `error` más
   `oxc/no-accumulating-spread`. El plugin de Effect NO está registrado: el
   proyecto no depende de Effect.
 - Se corre con `npm run anti-slop`. A propósito NO está dentro de `npm run
-  check`: hoy la regla `require-readable-spacing` marca ~840 avisos de líneas
-  en blanco en código que ya existía, y esa limpieza está sin decidir.
+  check`: quedan hallazgos abiertos que hoy no conviene tocar (ver abajo).
 - Dependencias: `oxlint` y `@oxlint/plugins`, ambas fijadas a la MISMA versión
   exacta (1.83.0). Al subir una, subir la otra.
 
 ## Desviaciones
 
-Ninguna en las reglas. Solo se añadió `dist/`, `scripts/` y `.claude/` a
-`ignorePatterns`, que son salida de compilación y herramientas, no código de la
-app.
+**`require-readable-spacing` está en `off`.** Se probó su autoarreglo el 17 sep
+2026 sobre las 842 marcas que dejaba en el código existente y el resultado era
+peor de leer, no mejor: parte los `if` de una línea y deja el `return` suelto
+con la sangría rota. Ejemplo real de `ProfileScreen.jsx`:
+
+```js
+// antes
+if (!file.type.startsWith('image/')) { setErr('Elige una imagen'); return; }
+
+// después del autoarreglo
+if (!file.type.startsWith('image/')) { setErr('Elige una imagen');
+
+ return; }
+```
+
+Este proyecto usa mucho la guarda de una línea, así que la regla pelea con su
+estilo. Con la regla apagada, `npm run anti-slop` enseña solo hallazgos de
+fondo. Si algún día se quiere, se enciende y se arregla a mano, no con `--fix`.
+
+**Hallazgos abiertos, reportados y NO cambiados** (17 sep 2026): 17
+`no-runtime-typeof` (leen el plan que llega de la base, donde el formato viejo
+convive con el nuevo), 5 `no-array-filter-map` sobre listas de 5-9 elementos, 2
+spreads condicionales en estilos, y en las funciones de servidor viejas 5
+`no-unknown-parameters`, 3 `no-known-value-widening`, 1
+`no-unsafe-dictionary-type` y 1 `require-safety-comment-for-type-assertion`.
+La función `login`, escrita ese día, quedó en cero.
+
+También se añadió `dist/`, `scripts/` y `.claude/` a `ignorePatterns`: son
+salida de compilación y herramientas, no código de la app.
