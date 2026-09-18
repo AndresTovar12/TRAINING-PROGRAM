@@ -187,7 +187,13 @@ Deno.serve(async (req) => {
   if (userId) {
     const { error: errPerfil } = await admin
       .from('profiles')
-      .update({ role, coach_id: coachId, is_owner: false, genero, profesion: isCoach ? profesion : null })
+      // `perfil_completo: true` porque este formulario SÍ pregunta todo. La
+      // columna nace en false para que las cuentas que crea Google —que solo
+      // trae correo y nombre— pasen por la pantalla de bienvenida.
+      .update({
+        role, coach_id: coachId, is_owner: false, genero,
+        profesion: isCoach ? profesion : null, perfil_completo: true,
+      })
       .eq('id', userId)
     if (errPerfil) {
       console.error('update profiles falló:', textoDeError(errPerfil))

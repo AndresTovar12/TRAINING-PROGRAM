@@ -4,11 +4,12 @@ import {
   Briefcase, ChevronDown, Check,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useIsDesktop } from '@/lib/useViewport';
 import { FONT, KP } from '@/lib/theme';
 
 const USERNAME_RE = /^[a-zA-Z0-9_.]{3,30}$/;
 
-function Field({ icon: Icon, label, hint, ...props }) {
+export function Field({ icon: Icon, label, hint, ...props }) {
   const [focus, setFocus] = useState(false);
   const [show, setShow] = useState(false);
   const isPassword = props.type === 'password';
@@ -86,7 +87,7 @@ function Field({ icon: Icon, label, hint, ...props }) {
  * "Otro…" abre un campo de texto de verdad. Una lista cerrada con un "Otro"
  * que no deja escribir es peor que no preguntar: obliga a mentir.
  */
-const OFICIOS = [
+export const OFICIOS = [
   'Entrenador personal',
   'Coach deportivo',
   'Instructor (yoga, pilates, spinning…)',
@@ -94,7 +95,7 @@ const OFICIOS = [
   'Preparador físico',
 ];
 
-function SelectorOficio({ value, onChange }) {
+export function SelectorOficio({ value, onChange }) {
   const [abierto, setAbierto] = useState(false);
   const [otro, setOtro] = useState(false);
   const caja = useRef(null);
@@ -187,6 +188,7 @@ function SelectorOficio({ value, onChange }) {
 
 export default function AuthScreen({ modoInicial = 'login', onVolver }) {
   const { signIn, signUp, entrarConGoogle, googleDisponible } = useAuth();
+  const esCompu = useIsDesktop();
   const [mode, setMode] = useState(modoInicial); // 'login' | 'register'
   const [identifier, setIdentifier] = useState('');
   const [username, setUsername] = useState('');
@@ -255,7 +257,15 @@ export default function AuthScreen({ modoInicial = 'login', onVolver }) {
           'radial-gradient(1100px 620px at 50% -8%, #e7ecfe 0%, rgba(244,245,248,0) 60%), #f4f5f8',
       }}
     >
-      <div style={{ width: '100%', maxWidth: 412 }}>
+      {/* Andrés, 18 sep 2026: "me pusiste el mismo formato de registro para
+          computadora que para teléfono; la forma de la card está como para
+          teléfono y en la compu tienes que scrolear".
+
+          Al registrarse en computadora la tarjeta se ensancha y el formulario
+          se parte en dos columnas: lo obligatorio a la izquierda, lo opcional a
+          la derecha. En teléfono y al ENTRAR no cambia nada — ahí son cuatro
+          campos y una columna angosta se lee mejor que una ancha. */}
+      <div style={{ width: '100%', maxWidth: (esCompu && !isLogin) ? 660 : 412 }}>
       {onVolver && (
         <button
           type="button" onClick={onVolver}
@@ -272,28 +282,41 @@ export default function AuthScreen({ modoInicial = 'login', onVolver }) {
         className="animate-fade-in"
         style={{
           width: '100%', background: KP.surface, borderRadius: 28,
-          padding: '36px 30px 30px',
+          // Al registrarse en compu la tarjeta aprieta el margen: con el doble
+          // de campos, 36px arriba y abajo son 40px de scroll regalados.
+          padding: (esCompu && !isLogin) ? '24px 28px 24px' : '36px 30px 30px',
           border: `1px solid ${KP.line}`,
           boxShadow: '0 24px 60px rgba(17,19,24,0.10), 0 4px 14px rgba(17,19,24,0.05)',
         }}
       >
         {/* Brand */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 26 }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          gap: (esCompu && !isLogin) ? 12 : 0,
+          flexDirection: (esCompu && !isLogin) ? 'row' : 'column',
+          marginBottom: (esCompu && !isLogin) ? 18 : 26,
+        }}>
           <div
             style={{
-              width: 60, height: 60, borderRadius: 18, display: 'grid', placeItems: 'center',
+              width: (esCompu && !isLogin) ? 44 : 60, height: (esCompu && !isLogin) ? 44 : 60,
+              borderRadius: 16, display: 'grid', placeItems: 'center', flexShrink: 0,
               background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`,
-              boxShadow: KP.shBtn, marginBottom: 16,
+              boxShadow: KP.shBtn, marginBottom: (esCompu && !isLogin) ? 0 : 16,
             }}
           >
-            <Dumbbell size={28} color="#fff" strokeWidth={2.4} />
+            <Dumbbell size={(esCompu && !isLogin) ? 22 : 28} color="#fff" strokeWidth={2.4} />
           </div>
-          <div style={{ fontSize: 25, fontWeight: 800, letterSpacing: -0.6, color: KP.ink }}>
+          <div style={{ fontSize: (esCompu && !isLogin) ? 22 : 25, fontWeight: 800, letterSpacing: -0.6, color: KP.ink }}>
             Training<span style={{ color: KP.blue }}> Lab</span>
           </div>
-          <div style={{ fontSize: 14, fontWeight: 500, color: KP.ink2, marginTop: 5 }}>
-            {isLogin ? 'Inicia sesión para entrenar' : 'Crea tu cuenta'}
-          </div>
+          {/* En compu, al registrarse, el logo y el nombre van en fila y este
+              subtítulo sobra: "Registrarse" ya está seleccionado dos renglones
+              abajo. Cada línea que se quita es scroll que no hay que hacer. */}
+          {!(esCompu && !isLogin) && (
+            <div style={{ fontSize: 14, fontWeight: 500, color: KP.ink2, marginTop: 5 }}>
+              {isLogin ? 'Inicia sesión para entrenar' : 'Crea tu cuenta'}
+            </div>
+          )}
         </div>
 
         {/* Tabs */}
@@ -431,60 +454,68 @@ export default function AuthScreen({ modoInicial = 'login', onVolver }) {
                   hasta abajo, después de tres campos opcionales y de una
                   pregunta sobre videos. Ahora lo obligatorio va junto y
                   primero, y lo opcional después de una raya que lo dice. */}
-              <Field
-                icon={User}
-                label="Nombre"
-                hint="Opcional"
-                placeholder="Tu nombre"
-                autoComplete="name"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-              />
-              <Field
-                icon={AtSign}
-                label="Usuario"
-                placeholder="tu_usuario"
-                autoComplete="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-              <Field
-                icon={Lock}
-                label="Contraseña"
-                placeholder="••••••••"
-                type="password"
-                autoComplete="new-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+              <div
+                style={esCompu
+                  ? { display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 18, alignItems: 'start' }
+                  : { display: 'flex', flexDirection: 'column', gap: 14 }}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <Field
+                    icon={User}
+                    label="Nombre"
+                    hint="Opcional"
+                    placeholder="Tu nombre"
+                    autoComplete="name"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                  />
+                  <Field
+                    icon={AtSign}
+                    label="Usuario"
+                    placeholder="tu_usuario"
+                    autoComplete="username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                  />
+                  <Field
+                    icon={Lock}
+                    label="Contraseña"
+                    placeholder="••••••••"
+                    type="password"
+                    autoComplete="new-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '2px 0' }}>
-                <span style={{ flex: 1, height: 1, background: KP.line }} />
-                <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', color: KP.ink3 }}>
-                  Opcional
-                </span>
-                <span style={{ flex: 1, height: 1, background: KP.line }} />
-              </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: esCompu ? 0 : 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '2px 0' }}>
+                    <span style={{ flex: 1, height: 1, background: KP.line }} />
+                    <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', color: KP.ink3 }}>
+                      Opcional
+                    </span>
+                    <span style={{ flex: 1, height: 1, background: KP.line }} />
+                  </div>
 
-              <Field
-                icon={Mail}
-                label="Correo"
-                placeholder="tu@correo.com"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-              {accountType === 'athlete' && (
-                <Field
-                  icon={UserCheck}
-                  label="Usuario de quien te entrena"
-                  placeholder="su_usuario"
-                  autoComplete="off"
-                  value={coachUsername}
-                  onChange={(e) => setCoachUsername(e.target.value.replace(/\s/g, ''))}
-                />
-              )}
+                  <Field
+                    icon={Mail}
+                    label="Correo"
+                    placeholder="tu@correo.com"
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                  {accountType === 'athlete' && (
+                    <Field
+                      icon={UserCheck}
+                      label="Usuario de quien te entrena"
+                      placeholder="su_usuario"
+                      autoComplete="off"
+                      value={coachUsername}
+                      onChange={(e) => setCoachUsername(e.target.value.replace(/\s/g, ''))}
+                    />
+                  )}
 
               {/* Se pregunta AQUI, y no solo en "Mi perfil", por un dato medido:
                   estando escondido en el perfil, 11 de 11 personas lo tenian
@@ -532,6 +563,8 @@ export default function AuthScreen({ modoInicial = 'login', onVolver }) {
                 <div style={{ fontSize: 11.5, fontWeight: 600, color: KP.ink3, marginTop: 7, lineHeight: 1.45 }}>
                   Opcional. Si un ejercicio está grabado en dos versiones, te muestra la tuya.
                   Puedes cambiarlo después en tu perfil.
+                </div>
+              </div>
                 </div>
               </div>
             </>

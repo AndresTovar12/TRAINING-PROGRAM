@@ -773,3 +773,23 @@ export async function deleteSessionType(id) {
   const { error } = await supabase.from('session_types').delete().eq('id', id);
   if (error) throw error;
 }
+
+/**
+ * Terminar de crear la propia cuenta.
+ *
+ * Solo para quien entró con Google: Google da correo y nombre, nada más, así
+ * que el usuario y el tipo de cuenta hay que preguntarlos. La función de la
+ * base valida y solo funciona UNA vez (ver `completar_mi_perfil`).
+ */
+export async function completarMiPerfil({ usuario, tipo, nombre, profesion, coachUsuario, genero }) {
+  const { data, error } = await supabase.rpc('completar_mi_perfil', {
+    p_usuario: usuario,
+    p_tipo: tipo,
+    p_nombre: nombre || null,
+    p_profesion: profesion || null,
+    p_coach_usuario: coachUsuario || null,
+    p_genero: genero || null,
+  });
+  if (error) throw error;
+  return data;
+}

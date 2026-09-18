@@ -4,8 +4,8 @@ El botón ya está programado. Sale en la pantalla de entrada **solo cuando
 existen las llaves**; mientras tanto no se dibuja, a propósito: un botón que
 falla asusta más que uno que no está.
 
-Son cinco pasos. Los tres primeros son en Google, los dos últimos en Supabase y
-en Vercel. **Nada de esto lo puedo hacer yo: hay que entrar con tu contraseña.**
+Son seis pasos. Los tres primeros son en Google, dos en Supabase y el último en
+Vercel. **Nada de esto lo puedo hacer yo: hay que entrar con tu contraseña.**
 
 ---
 
@@ -25,9 +25,21 @@ Es lo que la gente ve cuando Google le pregunta si deja entrar a tu app.
 1. Menú (☰) → **APIs y servicios** → **Pantalla de consentimiento de OAuth**.
 2. Tipo de usuario: **Externo** → **Crear**.
 3. Llena solo lo obligatorio:
-   - Nombre de la aplicación: `Training Lab`
+   - **Nombre de la aplicación: `Training Lab`** ← IMPORTANTE, ver abajo
    - Correo de asistencia: el tuyo
    - Datos de contacto del desarrollador: el tuyo
+
+   > **Esto es lo que sale en las pantallas de Google.** Si lo dejas vacío,
+   > Google enseña la dirección cruda del servidor —
+   > "Ir a ozwqqzrkgunrgxxwxmop.supabase.co", "Google permitirá que
+   > ozwqqzrkgunrgxxwxmop.supabase.co acceda a…" — y eso se lee como una
+   > estafa. Con el nombre puesto dice "Training Lab".
+   >
+   > En el SELECTOR de cuenta ("Elige una cuenta · Ir a…") Google a veces sigue
+   > enseñando el dominio aunque el nombre esté puesto, porque el dominio es de
+   > Supabase y no tuyo. Quitarlo del todo necesita un **dominio propio**
+   > conectado a Supabase (es de paga, y es el mismo dominio que hace falta para
+   > los videos). Es cosmético: el acceso funciona igual.
 4. **Guardar y continuar** en las tres pantallas siguientes, sin tocar nada más.
 5. Al final, en **Usuarios de prueba**, agrega tu propio correo. (Mientras la
    app esté "en pruebas", solo entran los correos de esa lista. Cuando quieras
@@ -66,6 +78,28 @@ Es lo que la gente ve cuando Google le pregunta si deja entrar a tu app.
 5. Pega el **ID de cliente** en `Client ID` y el **Secreto** en `Client Secret`.
 6. **Save**.
 
+## 4b. Decirle a Supabase A DÓNDE devolver a la gente
+
+**Sin este paso, entrar con Google termina en una pantalla de `localhost` que
+no abre.** Pasó de verdad el 18 sep 2026. Supabase solo devuelve a direcciones
+que estén en su lista; si la que manda la app no está, usa la "Site URL", que de
+fábrica es localhost.
+
+1. En Supabase: **Authentication** → **URL Configuration**.
+2. **Site URL**: `https://training-program-kappa.vercel.app`
+3. **Redirect URLs** → **Add URL**, una por una:
+
+   ```
+   https://training-program-kappa.vercel.app
+   https://training-program-kappa.vercel.app/**
+   http://localhost:5173
+   http://localhost:5173/**
+   ```
+
+   Las dos de localhost son para probar en tu Mac. Las de `/**` dejan volver a
+   cualquier pantalla dentro de la app, no solo a la portada.
+4. **Save**.
+
 ## 5. Encender el botón en la app
 
 El botón se dibuja con una variable de entorno. En Vercel:
@@ -92,13 +126,30 @@ y reinicia `npm run dev`.
 
 ## Qué pasa cuando alguien entra con Google
 
-- Supabase crea la cuenta con el correo de Google.
-- El disparador `handle_new_user` le arma el perfil y le pone un **usuario**
-  sacado de su correo, limpio (solo letras, números y guión bajo) y sin chocar
-  con uno que ya exista: si `andres` está tomado, queda `andres2`.
-- Entra como **atleta**. Para volverlo coach hay que cambiarle el rol desde la
-  cuenta master, igual que hoy.
-- Puede cambiarse el usuario y el nombre desde **Mi perfil**.
+Google solo entrega **correo y nombre**. Con eso no alcanza para abrir una
+cuenta aquí: falta el nombre de usuario (es con lo que un atleta encuentra a su
+entrenador) y falta saber si viene a seguir un plan o a crearlos. Así que:
+
+1. Supabase crea la cuenta con el correo de Google.
+2. El disparador `handle_new_user` arma un perfil **incompleto**
+   (`perfil_completo = false`) y le pone un usuario provisional sacado del
+   correo, limpio y sin chocar con uno que exista: si `andres` está tomado,
+   queda `andres2`.
+3. La app NO lo deja entrar todavía: le enseña la pantalla **"Hola, …"**, que
+   pregunta lo que falta —qué va a hacer aquí, su oficio si crea planes, su
+   usuario, quién lo entrena y los videos de técnica— y no se puede saltar.
+   Tiene una salida, "Entré con la cuenta equivocada", por si se equivocó de
+   cuenta de Google.
+4. Al terminar, la base guarda todo de una sola vez con `completar_mi_perfil`.
+   Esa función valida el usuario, comprueba que no esté tomado, resuelve al
+   coach por su nombre de usuario y marca el perfil como completo.
+
+**`completar_mi_perfil` solo corre UNA vez por cuenta.** Después, quien cambia
+un rol es el master y nadie más: no es una puerta de atrás para volverse coach.
+
+Quien se registra por el formulario de siempre nunca ve esa pantalla — ese
+formulario ya pregunta todo, así que la función `signup` marca el perfil como
+completo desde el principio.
 
 ## Si algo falla
 
@@ -108,6 +159,8 @@ y reinicia `npm run dev`.
 | `access_blocked` / "no verificada" | Tu correo no está en **Usuarios de prueba** (paso 2.5), o falta publicar la app. |
 | El botón no aparece | Falta `VITE_GOOGLE_LOGIN=1`, o falta volver a desplegar. |
 | Entra pero se queda cargando | Google está encendido en Supabase pero sin llaves, o con el secreto mal pegado. |
+| **Termina en `localhost` y Safari dice que no pudo conectarse** | Falta el paso 4b: la dirección de la app no está en las Redirect URLs de Supabase, así que te devuelve a la Site URL de fábrica. |
+| Sale el dominio `…supabase.co` en vez de "Training Lab" | Falta el **Nombre de la aplicación** del paso 2.3. |
 
 ## Para apagarlo
 

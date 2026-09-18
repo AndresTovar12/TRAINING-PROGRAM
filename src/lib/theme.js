@@ -45,6 +45,18 @@ const CAT_COLORS = {
   off: { c: '#555562', label: 'OFF' },
 };
 
+/**
+ * El oficio, en corto, para donde solo cabe una palabra.
+ *
+ * "Instructor (yoga, pilates, spinning…)" es útil al elegirlo y es un estorbo
+ * en la cabecera: parte el título en dos renglones. Se corta en el paréntesis.
+ */
+const oficioCorto = (profesion) => {
+  const texto = String(profesion ?? '').trim();
+  if (!texto) return null;
+  return texto.split('(')[0].trim() || texto;
+};
+
 /** El tipo de UN día: de la lista de base, o el propio que escribió el coach. */
 const tipoDeSesion = (day) => {
   if (day?.cat === 'otro' && (day?.catNombre || '').trim()) {
@@ -115,6 +127,6 @@ const kpCard = (extra = {}) => ({
 });
 
 export {
-  T, FONT, NUM_STYLE, LT, PHASE_COLORS, DAY_FULL, CAT_COLORS, tipoDeSesion, COLORES_TIPO,
+  T, FONT, NUM_STYLE, LT, PHASE_COLORS, DAY_FULL, CAT_COLORS, tipoDeSesion, COLORES_TIPO, oficioCorto,
   KP, SPACE, ACCENTS, eyebrow, kpCard,
 };

@@ -6,6 +6,7 @@ import { useIsDesktop } from '@/lib/useViewport';
 import { AppStateProvider } from '@/contexts/AppStateContext';
 import { PlanProvider } from '@/contexts/PlanContext';
 import AuthScreen from '@/features/auth/AuthScreen';
+import Bienvenida from '@/features/auth/Bienvenida';
 import LandingPage from '@/features/landing/LandingPage';
 import TrainingApp from '@/features/training/TrainingApp';
 import AdminApp from '@/features/admin/AdminApp';
@@ -281,6 +282,13 @@ export default function App() {
   // Cuenta pausada por el administrador. Va ANTES de elegir app: si no, el
   // atleta entraria a su rutina y solo fallarian las consultas, una por una.
   if (profile.is_active === false) return <CuentaDesactivada />;
+
+  /* Entró con Google y le falta la mitad de la cuenta. Google solo da correo y
+     nombre: el usuario y el tipo de cuenta hay que preguntarlos, y hasta que
+     los conteste esto es lo único que se ve. Quien se registró por el
+     formulario nunca pasa por aquí (la función `signup` marca el perfil como
+     completo, porque ese formulario sí pregunta todo). */
+  if (profile.perfil_completo === false) return <><Bienvenida /><UpdateBanner /></>;
 
   if (profile.role === 'admin') {
     return (
