@@ -129,7 +129,7 @@ export default function AdminApp() {
             <Brand />
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: -0.3, color: T.text }}>
-                Training Lab · {isMaster ? 'Master' : 'Coach'}
+                Training Lab · {isMaster ? 'Master' : (profile?.profesion || 'Coach')}
               </div>
               <div style={{ fontSize: 12.5, fontWeight: 500, color: T.text2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {profile?.full_name || (isMaster ? 'Administrador' : 'Entrenador')}
@@ -182,7 +182,7 @@ export default function AdminApp() {
             <Brand />
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 14.5, fontWeight: 800, letterSpacing: -0.2, color: T.text }}>Training Lab</div>
-              <div style={{ fontSize: 11.5, fontWeight: 600, color: T.text3 }}>{isMaster ? 'Master' : 'Coach'}</div>
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: T.text3 }}>{isMaster ? 'Master' : (profile?.profesion || 'Coach')}</div>
             </div>
           </div>
 

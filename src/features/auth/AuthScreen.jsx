@@ -1,5 +1,8 @@
-import { useState } from 'react';
-import { Dumbbell, User, Lock, Mail, AtSign, Loader2, ArrowRight, UserCheck, Eye, EyeOff } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import {
+  Dumbbell, User, Lock, Mail, AtSign, Loader2, ArrowRight, UserCheck, Eye, EyeOff,
+  Briefcase, ChevronDown, Check,
+} from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { FONT, KP } from '@/lib/theme';
 
@@ -72,6 +75,116 @@ function Field({ icon: Icon, label, hint, ...props }) {
   );
 }
 
+/**
+ * A qué se dedica quien crea planes.
+ *
+ * Andrés, 18 sep 2026: "en la parte de coach me hubiera gustado que se pudiera
+ * desplegar un menú con opciones como de instructor, fisio, otro". No es un
+ * permiso —el rol lo decide el botón de arriba— sino cómo se presenta: un
+ * fisioterapeuta no se llama coach ni a sí mismo ni a sus pacientes.
+ *
+ * "Otro…" abre un campo de texto de verdad. Una lista cerrada con un "Otro"
+ * que no deja escribir es peor que no preguntar: obliga a mentir.
+ */
+const OFICIOS = [
+  'Entrenador personal',
+  'Coach deportivo',
+  'Instructor (yoga, pilates, spinning…)',
+  'Fisioterapeuta',
+  'Preparador físico',
+];
+
+function SelectorOficio({ value, onChange }) {
+  const [abierto, setAbierto] = useState(false);
+  const [otro, setOtro] = useState(false);
+  const caja = useRef(null);
+
+  useEffect(() => {
+    if (!abierto) return undefined;
+    const fuera = (e) => { if (caja.current && !caja.current.contains(e.target)) setAbierto(false); };
+    document.addEventListener('mousedown', fuera);
+    return () => document.removeEventListener('mousedown', fuera);
+  }, [abierto]);
+
+  if (otro) {
+    return (
+      <Field
+        icon={Briefcase}
+        label="¿A qué te dedicas?"
+        placeholder="Escríbelo"
+        autoComplete="off"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
+  }
+
+  return (
+    <div ref={caja} style={{ position: 'relative' }}>
+      <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', color: KP.ink3, marginBottom: 8 }}>
+        ¿A qué te dedicas?
+      </div>
+      <button
+        type="button"
+        onClick={() => setAbierto((v) => !v)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left',
+          minHeight: 52, padding: '0 14px', borderRadius: KP.rField, cursor: 'pointer',
+          border: `1.5px solid ${KP.line}`, background: KP.bg, fontFamily: FONT,
+          fontSize: 15, fontWeight: 600, color: value ? KP.ink : KP.ink3,
+        }}
+      >
+        <Briefcase size={17} color={KP.ink3} style={{ flexShrink: 0 }} />
+        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {value || 'Elige una'}
+        </span>
+        <ChevronDown size={17} color={KP.ink3} style={{ flexShrink: 0 }} />
+      </button>
+
+      {abierto && (
+        <div
+          className="animate-fade-in"
+          style={{
+            position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 40,
+            background: KP.surface, border: `1px solid ${KP.line}`, borderRadius: 16,
+            boxShadow: KP.shPop, padding: 7,
+          }}
+        >
+          {OFICIOS.map((o) => (
+            <button
+              key={o}
+              type="button"
+              onClick={() => { onChange(o); setAbierto(false); }}
+              style={{
+                width: '100%', minHeight: 46, display: 'flex', alignItems: 'center', gap: 9,
+                padding: '0 11px', borderRadius: 11, border: 'none', cursor: 'pointer',
+                background: value === o ? KP.blueSoft : 'transparent', textAlign: 'left',
+                fontFamily: FONT, fontSize: 14.5, fontWeight: 600, color: value === o ? KP.blue : KP.ink,
+              }}
+            >
+              <span style={{ flex: 1, minWidth: 0 }}>{o}</span>
+              {value === o && <Check size={16} color={KP.blue} />}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => { setOtro(true); onChange(''); setAbierto(false); }}
+            style={{
+              width: '100%', minHeight: 46, display: 'flex', alignItems: 'center', gap: 9,
+              padding: '0 11px', borderRadius: 11, border: 'none', cursor: 'pointer',
+              background: 'transparent', textAlign: 'left', marginTop: 4,
+              borderTop: `1px solid ${KP.line}`,
+              fontFamily: FONT, fontSize: 14.5, fontWeight: 700, color: KP.blue,
+            }}
+          >
+            Otro…
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AuthScreen({ modoInicial = 'login', onVolver }) {
   const { signIn, signUp, entrarConGoogle, googleDisponible } = useAuth();
   const [mode, setMode] = useState(modoInicial); // 'login' | 'register'
@@ -83,6 +196,7 @@ export default function AuthScreen({ modoInicial = 'login', onVolver }) {
   const [accountType, setAccountType] = useState('athlete'); // 'athlete' | 'coach'
   const [coachUsername, setCoachUsername] = useState('');
   const [genero, setGenero] = useState(''); // '' | 'h' | 'm'
+  const [profesion, setProfesion] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -124,6 +238,7 @@ export default function AuthScreen({ modoInicial = 'login', onVolver }) {
       accountType,
       coachUsername: accountType === 'athlete' ? coachUsername.trim() : '',
       genero,
+      profesion: accountType === 'coach' ? profesion : '',
     });
     setBusy(false);
     if (err) setError(err.message);
@@ -258,17 +373,28 @@ export default function AuthScreen({ modoInicial = 'login', onVolver }) {
               {/* Tipo de cuenta */}
               <div>
                 <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', color: KP.ink3, marginBottom: 8 }}>
-                  ¿Cómo vas a usar la app?
+                  ¿Qué vas a hacer aquí?
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  {/* Andrés, 17 sep 2026: "qué tal que quien se registra no es
-                      necesariamente un coach, qué tal que es un instructor o
-                      instructora de yoga, un fisioterapeuta: la configuración
-                      no está hecha para eso". El rol técnico sigue siendo el
-                      mismo; lo que cambia es que la palabra deje de excluir. */}
+                  {/* POR QUÉ ESTAS PALABRAS Y NO OTRAS.
+
+                      El rol técnico es el mismo de siempre; lo que cambia es que
+                      la palabra deje de excluir a quien no se llama "coach"
+                      (Andrés, 17 sep 2026: "qué tal que es un instructor de yoga,
+                      un fisioterapeuta").
+
+                      Se probaron varias parejas con él. Cayeron todas las que
+                      usaban el verbo ENTRENAR en los dos lados ("me entrenan /
+                      yo entreno"): un atleta también diría "yo entreno", así que
+                      la mitad de la gente elige mal. Y cayó "Sigo MI plan",
+                      porque el posesivo se lee como que el plan te lo haces tú.
+
+                      Quedó seguir/crear: dos verbos distintos, y el subtítulo
+                      dice quién escribe el plan, que es lo único que de verdad
+                      separa a los dos. */}
                   {[
-                    { v: 'athlete', label: 'Sigo un plan', sub: 'Alguien me entrena' },
-                    { v: 'coach', label: 'Entreno a otros', sub: 'Coach, fisio, instructor…' },
+                    { v: 'athlete', label: 'Seguir un plan', sub: 'Alguien me lo hace' },
+                    { v: 'coach', label: 'Crear planes', sub: 'Se los hago a otros' },
                   ].map((o) => {
                     const active = accountType === o.v;
                     return (
@@ -293,6 +419,27 @@ export default function AuthScreen({ modoInicial = 'login', onVolver }) {
                 </div>
               </div>
 
+              {/* Solo para quien crea planes. Es una etiqueta suya, no un
+                  permiso: el rol sigue decidiéndolo el botón de arriba. */}
+              {accountType === 'coach' && (
+                <SelectorOficio value={profesion} onChange={setProfesion} />
+              )}
+
+              {/* ORDEN DEL FORMULARIO. Andrés, 18 sep 2026: "el orden en el que
+                  pusiste las cosas no es el mejor, no se ve muy práctico".
+                  Tenía razón y el síntoma era claro: la CONTRASEÑA quedaba
+                  hasta abajo, después de tres campos opcionales y de una
+                  pregunta sobre videos. Ahora lo obligatorio va junto y
+                  primero, y lo opcional después de una raya que lo dice. */}
+              <Field
+                icon={User}
+                label="Nombre"
+                hint="Opcional"
+                placeholder="Tu nombre"
+                autoComplete="name"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+              />
               <Field
                 icon={AtSign}
                 label="Usuario"
@@ -302,18 +449,26 @@ export default function AuthScreen({ modoInicial = 'login', onVolver }) {
                 onChange={(e) => setUsername(e.target.value)}
               />
               <Field
-                icon={User}
-                label="Nombre completo"
-                hint="Opcional"
-                placeholder="Tu nombre"
-                autoComplete="name"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
+                icon={Lock}
+                label="Contraseña"
+                placeholder="••••••••"
+                type="password"
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
               />
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '2px 0' }}>
+                <span style={{ flex: 1, height: 1, background: KP.line }} />
+                <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', color: KP.ink3 }}>
+                  Opcional
+                </span>
+                <span style={{ flex: 1, height: 1, background: KP.line }} />
+              </div>
+
               <Field
                 icon={Mail}
                 label="Correo"
-                hint="Opcional"
                 placeholder="tu@correo.com"
                 type="email"
                 autoComplete="email"
@@ -324,7 +479,6 @@ export default function AuthScreen({ modoInicial = 'login', onVolver }) {
                 <Field
                   icon={UserCheck}
                   label="Usuario de quien te entrena"
-                  hint="Opcional"
                   placeholder="su_usuario"
                   autoComplete="off"
                   value={coachUsername}
@@ -382,15 +536,19 @@ export default function AuthScreen({ modoInicial = 'login', onVolver }) {
               </div>
             </>
           )}
-          <Field
-            icon={Lock}
-            label="Contraseña"
-            placeholder="••••••••"
-            type="password"
-            autoComplete={isLogin ? 'current-password' : 'new-password'}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+          {/* Al registrarse la contraseña va arriba, junto al usuario: ver el
+              comentario del orden. Aquí solo queda la de entrar. */}
+          {isLogin && (
+            <Field
+              icon={Lock}
+              label="Contraseña"
+              placeholder="••••••••"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          )}
 
           {error && (
             <div

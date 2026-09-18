@@ -71,6 +71,7 @@ Deno.serve(async (req) => {
   let payload: {
     username?: string; email?: string; password?: string; full_name?: string
     account_type?: string; coach_username?: string; genero?: string
+    profesion?: string
   }
   try {
     payload = await req.json()
@@ -94,6 +95,11 @@ Deno.serve(async (req) => {
   // adivinarle el genero y enseñarle el equivocado es peor que no saberlo.
   const generoCrudo = (payload.genero ?? '').trim().toLowerCase()
   const genero = generoCrudo === 'h' || generoCrudo === 'm' ? generoCrudo : null
+
+  // A qué se dedica quien entrena a otros. Es una etiqueta, no un permiso: el
+  // rol lo sigue decidiendo `account_type`. Se corta a 40 para que un cliente
+  // que mande basura no llene la columna.
+  const profesion = (payload.profesion ?? '').trim().slice(0, 40) || null
 
   if (!USERNAME_RE.test(username)) {
     return json(
@@ -181,7 +187,7 @@ Deno.serve(async (req) => {
   if (userId) {
     const { error: errPerfil } = await admin
       .from('profiles')
-      .update({ role, coach_id: coachId, is_owner: false, genero })
+      .update({ role, coach_id: coachId, is_owner: false, genero, profesion: isCoach ? profesion : null })
       .eq('id', userId)
     if (errPerfil) {
       console.error('update profiles falló:', textoDeError(errPerfil))
