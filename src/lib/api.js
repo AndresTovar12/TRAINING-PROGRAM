@@ -324,9 +324,7 @@ export async function uploadExerciseMedia(file, kind = 'media', onAvance) {
     );
   }
 
-  const { data: sesion } = await supabase.auth.getSession();
-  const token = sesion?.session?.access_token;
-  if (!token) throw new Error('Tu sesión expiró. Vuelve a entrar e inténtalo otra vez.');
+  const token = await tokenDeAhora();
 
   const extension = (file.name.split('.').pop() || 'bin');
   const carpeta = kind === 'covers' || kind === 'videos' ? kind : 'media';
@@ -554,12 +552,43 @@ export async function resumenDatosAtleta(athleteId) {
 //    acceso (`auth.users`), y esa llave nunca puede estar en el navegador.
 //    Ese borrado arrastra en cascada el perfil, el plan, las sesiones marcadas,
 //    los pesos y el bienestar. NO borra los ejercicios que haya creado.
-export async function eliminarAtletaDefinitivo(athleteId) {
-  const { data: sesion } = await supabase.auth.getSession();
-  const token = sesion?.session?.access_token;
-  if (!token) throw new Error('Tu sesión expiró. Vuelve a entrar e inténtalo otra vez.');
+/**
+ * Un token que de verdad sirve, para las llamadas que NO pasan por supabase-js.
+ *
+ * POR QUÉ EXISTE. `getSession()` devuelve la sesión que hay guardada; si su
+ * token ya venció, dispara la renovación pero TE DEVUELVE EL VIEJO. Las
+ * consultas normales no se enteran porque el cliente de Supabase renueva solo,
+ * pero las dos llamadas que armamos a mano —subir un archivo y eliminar una
+ * cuenta— mandaban ese token vencido y el servidor contestaba "tu sesión
+ * expiró". Con la pestaña abierta un rato largo, fallaba SIEMPRE, mientras el
+ * resto de la app funcionaba: eso es lo que lo hacía tan raro de creer.
+ *
+ * Andrés, 18 sep 2026: "lo de la sesión expirada aparece siempre".
+ */
+async function tokenDeAhora() {
+  const { data } = await supabase.auth.getSession();
+  const sesion = data?.session;
+  if (!sesion?.access_token) {
+    throw new Error('Tu sesión expiró. Vuelve a entrar e inténtalo otra vez.');
+  }
 
-  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-delete-user`, {
+  // `expires_at` viene en segundos. Se renueva con 60 de margen: entre pedir el
+  // token y usarlo pasa tiempo, y un token que vence a mitad del viaje da el
+  // mismo error.
+  const vence = Number(sesion.expires_at || 0);
+  const ahora = Math.floor(Date.now() / 1000);
+  if (!vence || vence - ahora > 60) return sesion.access_token;
+
+  const { data: nueva, error } = await supabase.auth.refreshSession();
+  const token = nueva?.session?.access_token;
+  if (error || !token) {
+    throw new Error('Tu sesión expiró. Vuelve a entrar e inténtalo otra vez.');
+  }
+  return token;
+}
+
+export async function eliminarAtletaDefinitivo(athleteId) {
+  const llamar = async (token) => fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-delete-user`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -569,9 +598,22 @@ export async function eliminarAtletaDefinitivo(athleteId) {
     body: JSON.stringify({ id: athleteId }),
   }).catch(() => null);
 
+  let res = await llamar(await tokenDeAhora());
+
+  /* Cinturón Y tirantes. `tokenDeAhora` renueva con 60 segundos de margen, pero
+     si el reloj del teléfono va adelantado ese margen no alcanza. Si el
+     servidor dice que no reconoce la sesión, se renueva a la fuerza y se
+     reintenta UNA vez: esto es borrar una cuenta, no algo que se pueda repetir
+     en bucle. */
+  if (res && res.status === 401) {
+    const { data } = await supabase.auth.refreshSession();
+    const token = data?.session?.access_token;
+    if (token) res = await llamar(token);
+  }
+
   if (!res) throw new Error('No se pudo contactar al servidor. Revisa tu conexión.');
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body?.error || 'No se pudo eliminar la cuenta.');
+  if (!res.ok) throw new Error(body?.error || `No se pudo eliminar la cuenta (error ${res.status}).`);
   return body;
 }
 

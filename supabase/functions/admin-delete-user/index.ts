@@ -70,7 +70,10 @@ Deno.serve(async (req) => {
 
   const { data: usuario, error: errAuth } = await admin.auth.getUser(token)
   if (errAuth || !usuario?.user) {
-    return json({ error: 'Tu sesión expiró. Vuelve a entrar e inténtalo otra vez.' }, 401, origin)
+    // Texto DISTINTO al del navegador a propósito. Los dos decían lo mismo, y
+    // cuando falló (18 sep 2026) no se podía saber de qué lado venía sin
+    // reproducirlo a mano.
+    return json({ error: 'El servidor no reconoció tu sesión. Vuelve a entrar e inténtalo otra vez.' }, 401, origin)
   }
   const quienPide = usuario.user.id
 

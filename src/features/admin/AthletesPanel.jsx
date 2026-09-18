@@ -148,6 +148,42 @@ function Pausada() {
   );
 }
 
+/**
+ * El usuario que NADIE eligió.
+ *
+ * Quien entra con Google llega sin nombre de usuario: Google solo da correo y
+ * nombre. Para que la cuenta exista, la base le arma uno con la parte del
+ * correo antes de la arroba, limpia — de `ad.tr1213@gmail.com` sale
+ * `ad_tr1213`. Es provisional: la pantalla de bienvenida le pide el suyo.
+ *
+ * El problema que vio Andrés (18 sep 2026): mientras tanto, la lista lo
+ * enseñaba como "@ad_tr1213" igual que a cualquiera. "Se parece al correo pero
+ * no es, y el atleta no lo eligió". Así que no se enseña: se dice lo que pasa.
+ */
+function SinTerminar() {
+  return (
+    <span style={{
+      flexShrink: 0, fontSize: 10, fontWeight: 800, textTransform: 'uppercase',
+      letterSpacing: 0.5, color: T.text2, background: T.bg3,
+      borderRadius: 6, padding: '2px 6px',
+    }}>
+      Sin terminar
+    </span>
+  );
+}
+
+/** Lo que va bajo el nombre: su usuario, o el aviso de que aún no eligió uno. */
+function Arroba({ fila }) {
+  if (fila?.perfil_completo === false) {
+    return (
+      <span style={{ fontSize: 12.5, color: T.text3, fontWeight: 600, fontStyle: 'italic' }}>
+        Todavía no elige usuario
+      </span>
+    );
+  }
+  return <span style={{ fontSize: 12.5, color: T.text2, fontWeight: 500 }}>@{fila?.username}</span>;
+}
+
 function AthletesTable({ rows, coaches, isMaster, selectedId, onPick }) {
   const nombreCoach = (id) => {
     if (!id) return null;
@@ -195,8 +231,9 @@ function AthletesTable({ rows, coaches, isMaster, selectedId, onPick }) {
                             {a.full_name || a.username}
                           </span>
                           {a.is_active === false && <Pausada />}
+                          {a.perfil_completo === false && <SinTerminar />}
                         </div>
-                        <div style={{ fontSize: 12.5, color: T.text2, fontWeight: 500 }}>@{a.username}</div>
+                        <div><Arroba fila={a} /></div>
                       </div>
                     </div>
                   </td>
@@ -718,7 +755,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}
           >
-            @{athlete.username}
+            {athlete.perfil_completo === false ? 'Todavía no elige usuario' : `@${athlete.username}`}
           </div>
         </div>
         <button type="button" onClick={onClose} aria-label="Cerrar" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.text2, padding: 4 }}>
@@ -1017,8 +1054,9 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
                     </span>
                     {isAdmin && <Shield size={13} color={T.accent} style={{ flexShrink: 0 }} />}
                     {a.is_active === false && <Pausada />}
+                    {a.perfil_completo === false && <SinTerminar />}
                   </div>
-                  <div style={{ fontSize: 12.5, color: T.text2, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>@{a.username}</div>
+                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><Arroba fila={a} /></div>
                 </div>
                 <ChevronRight size={18} color={T.text3} />
               </button>
