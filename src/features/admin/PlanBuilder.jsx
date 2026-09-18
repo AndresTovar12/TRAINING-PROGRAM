@@ -1901,7 +1901,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
             <div style={{ width: 70, height: 70, borderRadius: 22, background: T.accentBg, color: T.accent, display: 'grid', placeItems: 'center', margin: '0 auto 16px' }}>
               <CalendarDays size={30} />
             </div>
-            <div style={{ fontSize: 17, fontWeight: 800, color: T.text }}>No hay sesión para el {activeWeekday.toLowerCase()}</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: T.text }}>No hay sesión para el {DAY_FULL_LOWER[activeWeekday] || activeWeekday.toLowerCase()}</div>
             <div style={{ fontSize: 13.5, color: T.text2, marginTop: 8, lineHeight: 1.5 }}>
               Crea una desde cero, tráela del catálogo o pega una copiada.
             </div>
