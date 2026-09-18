@@ -410,35 +410,53 @@ const registrosDePeso = (plan, sessionsData, exName, kind = 'periodized') => {
     }
   };
 
-  let n = 0;
-  for (const phase of (plan ?? [])) {
-    for (const week of (phase.weekData ?? [])) {
-      for (let di = 0; di < (week.days?.length ?? 0); di++) {
-        const idDelPlan = sessionId(phase.id, week.num, di);
-        if (kind === 'weekly') {
-          const dia = String(di).padStart(3, '0');
-          ordenes.set(idDelPlan, `0000-W00-d${dia}`);
-          lee(idDelPlan, `0000-W00-d${dia}`, week, di, phase.name || 'Rutina');
-          for (const [k, m] of semanales) {
-            if (Number(m[2]) !== di) continue;
-            const lunes = lunesDeSemanaIso(m[1]);
-            const donde = lunes ? `Semana del ${lunes.getUTCDate()} ${MESES_CORTOS[lunes.getUTCMonth()]}` : m[1];
-            lee(k, `${m[1]}-d${dia}`, week, di, donde);
-          }
-        } else {
+  if (kind === 'weekly') {
+    /* Una rutina que se repite vive en UNA semana: la del plan. Los registros
+       son las semanas del CALENDARIO, no las del plan, así que este recorrido
+       va aparte. Metido dentro del recorrido de fases y semanas —como estaba—
+       cada registro se leía una vez por semana del plan, y el historial salía
+       duplicado en cuanto la rutina tuviera dos. */
+    const phase = (plan ?? [])[0];
+    const week = phase?.weekData?.[0];
+    for (let di = 0; di < (week?.days?.length ?? 0); di++) {
+      const dia = String(di).padStart(3, '0');
+      const idDelPlan = sessionId(phase.id, week.num, di);
+      ordenes.set(idDelPlan, `0000-W00-d${dia}`);
+      lee(idDelPlan, `0000-W00-d${dia}`, week, di, phase.name || 'Rutina');
+      for (const [k, m] of semanales) {
+        if (Number(m[2]) !== di) continue;
+        const lunes = lunesDeSemanaIso(m[1]);
+        const donde = lunes ? `Semana del ${lunes.getUTCDate()} ${MESES_CORTOS[lunes.getUTCMonth()]}` : m[1];
+        lee(k, `${m[1]}-d${dia}`, week, di, donde);
+      }
+    }
+  } else {
+    let n = 0;
+    for (const phase of (plan ?? [])) {
+      for (const week of (phase.weekData ?? [])) {
+        for (let di = 0; di < (week.days?.length ?? 0); di++) {
           n += 1;
-          ordenes.set(idDelPlan, n);
-          lee(idDelPlan, n, week, di, `${phase.name || phase.id} · sem ${week.num}`);
+          // Con ceros delante para que el orden sea TEXTO en los dos modos: si
+          // uno fuera número y otro texto, compararlos sería una bomba de tiempo.
+          const orden = String(n).padStart(6, '0');
+          const idDelPlan = sessionId(phase.id, week.num, di);
+          ordenes.set(idDelPlan, orden);
+          lee(idDelPlan, orden, week, di, `${phase.name || phase.id} · sem ${week.num}`);
         }
       }
     }
   }
   registros.sort((a, b) => (a.orden < b.orden ? -1 : a.orden > b.orden ? 1 : 0));
 
+  /* El orden de una sesión en el tiempo. Una llave desconocida devuelve un
+     valor que va DESPUÉS de todo: así "lo anterior a ella" es todo lo anotado,
+     que es la respuesta correcta (si la llave no se conoce, no tiene registros
+     propios que se puedan colar como "antes"). Antes devolvía null, y con null
+     `findPreviousWeight` dejaba de filtrar y volvía a enseñar el peso de hoy. */
   const ordenDe = (id) => {
     if (ordenes.has(id)) return ordenes.get(id);
     const m = LLAVE_SEMANAL.exec(String(id ?? ''));
-    return m ? `${m[1]}-d${String(m[2]).padStart(3, '0')}` : null;
+    return m ? `${m[1]}-d${String(m[2]).padStart(3, '0')}` : '~~~~';
   };
   return { registros, ordenDe };
 };
@@ -453,8 +471,8 @@ const registrosDePeso = (plan, sessionsData, exName, kind = 'periodized') => {
  */
 const findPreviousWeight = (plan, sessionsData, exName, { kind = 'periodized', actual } = {}) => {
   const { registros, ordenDe } = registrosDePeso(plan, sessionsData, exName, kind);
-  const tope = actual != null ? ordenDe(actual) : null;
-  const previos = tope == null ? registros : registros.filter((r) => r.orden < tope);
+  const tope = actual == null ? null : ordenDe(actual);
+  const previos = tope === null ? registros : registros.filter((r) => r.orden < tope);
   const ultimo = previos[previos.length - 1];
   return ultimo ? { weight: ultimo.weight } : null;
 };

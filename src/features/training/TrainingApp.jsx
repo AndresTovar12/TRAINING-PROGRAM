@@ -1793,17 +1793,24 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onGoPhase, 
               }}>
                 {cursorCompleted ? 'Ver detalle' : 'Empezar sesión'}
               </div>
-              <div onClick={(e) => { e.stopPropagation(); onChangeCursor(); }}
-                style={{
-                  background: 'rgba(255,255,255,0.15)', borderRadius: 14, padding: '13px',
-                  fontSize: 14, fontWeight: 600, color: '#fff', textAlign: 'center', marginTop: 8,
-                }}>
-                Cambiar día
-              </div>
+              {/* En una rutina que se repite el día lo decide el calendario, no un
+                  puntero: el selector se abría, se elegía un día y no pasaba nada. */}
+              {kind !== 'weekly' && (
+                <div onClick={(e) => { e.stopPropagation(); onChangeCursor(); }}
+                  style={{
+                    background: 'rgba(255,255,255,0.15)', borderRadius: 14, padding: '13px',
+                    fontSize: 14, fontWeight: 600, color: '#fff', textAlign: 'center', marginTop: 8,
+                  }}>
+                  Cambiar día
+                </div>
+              )}
             </div>
 
-            {/* Card foto de fase */}
-            <div onClick={() => onGoPhase(next.phase)}
+            {/* Card foto de fase. En una rutina, el botón dice "Ver la semana" y
+                tiene que llevar a la semana: la ficha de fase ahí no dice nada. */}
+            <div onClick={() => (kind === 'weekly'
+              ? onStartSession(next.phase, next.week, next.dayIdx)
+              : onGoPhase(next.phase))}
               style={{
                 flex: 1, borderRadius: 22, overflow: 'hidden', position: 'relative',
                 background: '#000', minHeight: 232, cursor: 'pointer', minWidth: 0,
