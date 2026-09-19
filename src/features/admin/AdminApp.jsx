@@ -55,7 +55,14 @@ export default function AdminApp() {
   const TABS = [
     { id: 'athletes', label: isMaster ? 'Atletas' : 'Mis atletas', icon: Users },
     { id: 'exercises', label: 'Ejercicios', icon: Library },
-    ...(isMaster ? [{ id: 'coaches', label: 'Coaches', icon: Shield }] : []),
+    /* La pestaña de coaches desaparece mientras el master mira como uno de
+       ellos. Andrés, 18 sep 2026: "sigue apareciendo la columna de coaches, lo
+       cual no es congruente porque eso solo le aparece al admin; no se
+       distingue la diferencia entre la cuenta del admin y la del coach".
+       El contenido ya estaba protegido (`tab === 'coaches' && isMaster &&
+       !viendoComo`), pero la pestaña seguía ahí y eso basta para que la
+       simulación deje de parecerse a lo que ve el coach de verdad. */
+    ...(isMaster && !viendoComo ? [{ id: 'coaches', label: 'Coaches', icon: Shield }] : []),
   ];
 
   const entrarComo = (coach) => {

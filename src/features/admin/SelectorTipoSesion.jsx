@@ -32,6 +32,26 @@ export default function SelectorTipoSesion({ day, onPatch, coachId, puedeCrear =
   const [guardando, setGuardando] = useState(false);
   const [err, setErr] = useState('');
   const caja = useRef(null);
+  /* Si la lista tiene más de lo que cabe. Se mide de verdad en vez de suponer
+     por cuántos tipos hay: el alto depende también de cuántos propios creó el
+     coach y de la letra del teléfono. */
+  const lista = useRef(null);
+  const [hayMas, setHayMas] = useState(false);
+
+  const miraSiHayMas = useCallback(() => {
+    const el = lista.current;
+    if (!el) return;
+    // 4 px de margen: al final del scroll la cuenta no siempre da exacta.
+    setHayMas(el.scrollHeight - el.scrollTop - el.clientHeight > 4);
+  }, []);
+
+  /* Al abrir todavía no hay nada medido, y sin esto el aviso solo aparecería
+     después de que el coach escroleara, que es justo cuando ya no hace falta.
+     Se vuelve a medir cuando cambian los tipos propios: llegan por red después
+     de abrir, y cada uno que entra hace la lista más larga. */
+  useEffect(() => {
+    if (abierto) miraSiHayMas();
+  }, [abierto, mios.length, miraSiHayMas]);
   const pregunta = useConfirmacion();
 
   useEffect(() => {
@@ -50,7 +70,26 @@ export default function SelectorTipoSesion({ day, onPatch, coachId, puedeCrear =
     return () => document.removeEventListener('mousedown', fuera);
   }, [abierto, cerrar]);
 
-  const base = useMemo(() => Object.entries(CAT_COLORS).map(([slug, v]) => ({ slug, ...v })), []);
+  /* EL ORDEN DE LA LISTA, a mano y no el del objeto.
+     Andrés, 18 sep 2026: "«neural», «recovery», «equipo», «test» son las menos
+     importantes, no las pongas primero". Salían arriba solo porque son las más
+     viejas y el objeto conserva el orden en que se escribieron. Primero lo que
+     un coach usa casi a diario, y al final lo suelto.
+     Esto cambia SOLO lo que se ve: lo que se guarda sigue siendo el mismo
+     slug, así que los planes que ya existen no se enteran. */
+  const base = useMemo(() => {
+    const orden = ['gym', 'correr', 'bici', 'natacion', 'yoga', 'movilidad', 'clase',
+      'football', 'terapia', 'off', 'speed', 'recovery', 'tests', 'team'];
+    const puesto = (slug) => {
+      const i = orden.indexOf(slug);
+      // Un tipo nuevo que alguien agregue a CAT_COLORS y olvide poner en la
+      // lista de arriba cae al final, no en medio y al azar.
+      return i === -1 ? orden.length : i;
+    };
+    return Object.entries(CAT_COLORS)
+      .map(([slug, v]) => ({ slug, ...v }))
+      .sort((a, b) => puesto(a.slug) - puesto(b.slug));
+  }, []);
 
   const actual = day?.cat === 'otro' && (day?.catNombre || '').trim()
     ? { label: day.catNombre.trim(), c: day.catColor || '#6B7280' }
@@ -130,12 +169,15 @@ export default function SelectorTipoSesion({ day, onPatch, coachId, puedeCrear =
           style={{
             position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 60,
             background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 14,
-            boxShadow: '0 16px 44px rgba(17,19,24,0.16)', padding: 7,
-            maxHeight: 320, overflowY: 'auto', minWidth: 220,
+            boxShadow: '0 16px 44px rgba(17,19,24,0.16)',
+            /* Ya no hace scroll este, sino la lista de adentro: así el botón de
+               crear se queda pegado abajo, siempre a la vista. */
+            maxHeight: 340, minWidth: 220, display: 'flex', flexDirection: 'column',
+            overflow: 'hidden',
           }}
         >
           {creando ? (
-            <div style={{ padding: 6, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ padding: 13, display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ flex: 1, fontSize: 13, fontWeight: 800, color: T.text }}>Tipo nuevo</span>
                 <button type="button" onClick={() => { setCreando(false); setErr(''); }}
@@ -190,6 +232,14 @@ export default function SelectorTipoSesion({ day, onPatch, coachId, puedeCrear =
             </div>
           ) : (
             <>
+            {/* LA LISTA, CON SU PROPIO SCROLL Y UN AVISO DE QUE SIGUE.
+                Andrés, 18 sep 2026: "cuando se despliega esta lista no te das
+                cuenta que hay más para abajo si la escroleas, eso hay que
+                arreglarlo". El degradado del borde no es adorno: aparece SOLO
+                cuando queda algo por ver, y se apaga al llegar al final. Uno
+                fijo mentiría en las listas cortas. */}
+            <div style={{ position: 'relative', flex: '1 1 auto', minHeight: 0 }}>
+              <div ref={lista} onScroll={miraSiHayMas} style={{ maxHeight: 268, overflowY: 'auto', padding: 7 }}>
               {mios.length > 0 && (
                 <>
                   <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 0.8, color: T.text3, padding: '6px 11px 4px' }}>
@@ -232,14 +282,29 @@ export default function SelectorTipoSesion({ day, onPatch, coachId, puedeCrear =
                 </button>
               ))}
 
+              </div>
+
+              {hayMas && (
+                <span
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute', left: 1, right: 1, bottom: 0, height: 30,
+                    background: `linear-gradient(to top, ${T.bg2}, ${T.bg2}00)`,
+                    pointerEvents: 'none',
+                  }}
+                />
+              )}
+            </div>
+
+            {/* EL PIE, FUERA DEL SCROLL. Antes era la última fila de la lista:
+                "lo de crear tipo nunca lo voy a poder ver porque está hasta
+                abajo, y si no sé que la puedo escrolear, pues menos". */}
+            <div style={{ flexShrink: 0, borderTop: `1px solid ${T.border}`, padding: 7 }}>
               {puedeCrear ? (
                 <button
                   type="button"
                   onClick={() => { setCreando(true); setErr(''); }}
-                  style={{
-                    ...fila(false), marginTop: 5, color: T.accent, fontWeight: 800,
-                    borderTop: `1px solid ${T.border}`, borderRadius: '0 0 10px 10px',
-                  }}
+                  style={{ ...fila(false), color: T.accent, fontWeight: 800 }}
                 >
                   <Plus size={15} /> Crear tipo nuevo
                 </button>
@@ -248,6 +313,7 @@ export default function SelectorTipoSesion({ day, onPatch, coachId, puedeCrear =
                   Para crear tipos, sal de «Ver como».
                 </div>
               )}
+            </div>
             </>
           )}
         </div>

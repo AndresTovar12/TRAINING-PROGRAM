@@ -435,11 +435,17 @@ function BotonVideoAtleta({ ex, atleta, onAbrir }) {
       type="button"
       onClick={onAbrir}
       title={`Poner un video solo para ${atleta.full_name || atleta.username}`}
+      /* CON COLOR PROPIO, no un fantasma gris. Andrés, 18 sep 2026: "lo de
+         peso y video está visualmente muy escondido, y en general le falta un
+         poquito de vida y color a esta parte". Eran dos pastillas
+         transparentes con letra #9CA3AF sobre blanco: se leen mal y no
+         parecen tocables. El violeta lo separa además del azul del peso, que
+         es la otra pastilla de la misma fila. */
       style={{
-        display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 9px',
+        display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 10px',
         borderRadius: 999, cursor: 'pointer', whiteSpace: 'nowrap',
-        border: `1px solid ${T.border}`, background: 'transparent', color: T.text3,
-        fontFamily: FONT, fontSize: 11.5, fontWeight: 700,
+        border: 'none', background: 'rgba(124,92,255,0.12)', color: T.violet,
+        fontFamily: FONT, fontSize: 12, fontWeight: 700,
       }}
     >
       <Video size={12} /> Su video
@@ -471,13 +477,15 @@ function BotonCarga({ ex, onPatch }) {
           : `Sugerido automáticamente: ${efectivo ? 'lleva peso' : 'sin peso'}. Toca para cambiarlo.`
       }
       style={{
-        display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 9px',
+        display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 10px',
         borderRadius: 999, cursor: 'pointer', whiteSpace: 'nowrap',
-        border: `1px solid ${efectivo ? 'transparent' : T.border}`,
-        background: efectivo ? T.accentBg : 'transparent',
-        color: efectivo ? T.accent : T.text3,
-        fontFamily: FONT, fontSize: 11.5, fontWeight: 700,
-        opacity: explicito ? 1 : 0.75,
+        background: efectivo ? T.accentBg : T.bg3,
+        color: efectivo ? T.accent : T.text2,
+        fontFamily: FONT, fontSize: 12, fontWeight: 700,
+        /* "Sugerido por la app" se dice con el borde punteado, no bajándole la
+           opacidad: un gris claro al 75% sobre blanco no lo lee nadie, y
+           encima parecía desactivado cuando sí se puede tocar. */
+        border: explicito ? '1px solid transparent' : `1px dashed ${efectivo ? T.accent : T.borderHi}`,
       }}
     >
       <Scale size={12} />
@@ -838,9 +846,12 @@ function MediaParaEsteAtleta({ ejercicio, atleta, onCerrar }) {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {/* Una línea, no tres. Andrés, 18 sep 2026: "creo que está bastante
+                saturado de información, hay que limpiar y mejorar visualmente
+                para más rápido entendimiento, pero los botones y el acomodo me
+                gustan". Así que se quitó texto, no estructura. */}
             <div style={{ fontSize: 12.5, color: T.text2, fontWeight: 600, lineHeight: 1.5 }}>
-              Lo que pongas aquí lo ve <b>solo {nombreAtleta}</b>, en todas las sesiones
-              donde aparezca este ejercicio. El repertorio no se toca.
+              Lo verá <b>solo {nombreAtleta.split(' ')[0]}</b>. El repertorio no se toca.
             </div>
 
             <RanuraMedia
@@ -852,8 +863,7 @@ function MediaParaEsteAtleta({ ejercicio, atleta, onCerrar }) {
               onQuitar={() => quitar('video')}
               ocupado={guardando === 'video'}
               deshabilitado={ocupado}
-              vacio="Hoy ve el video general del ejercicio."
-              hint="Grábalo con el atleta enfrente: es la corrección que solo le sirve a él."
+              vacio="hoy ve el general"
             />
 
             <RanuraMedia
@@ -865,8 +875,7 @@ function MediaParaEsteAtleta({ ejercicio, atleta, onCerrar }) {
               onQuitar={() => quitar('foto')}
               ocupado={guardando === 'foto'}
               deshabilitado={ocupado}
-              vacio="Hoy ve la foto general del ejercicio."
-              hint="Se ve en la lista y al abrir el ejercicio."
+              vacio="hoy ve la general"
             />
 
             {err && (
@@ -884,16 +893,26 @@ function MediaParaEsteAtleta({ ejercicio, atleta, onCerrar }) {
 /** Una de las dos ranuras (video o foto) del cuadro de arriba. */
 function RanuraMedia({
   titulo, tipo, icono, existente, valor, onValor,
-  onGuardar, onQuitar, ocupado, deshabilitado, vacio, hint,
+  onGuardar, onQuitar, ocupado, deshabilitado, vacio,
 }) {
   const puedeGuardar = !!valor && !deshabilitado;
   return (
     <div>
-      <div style={{
-        fontSize: 11, fontWeight: 800, color: T.text3, letterSpacing: 0.6,
-        textTransform: 'uppercase', marginBottom: 9,
-      }}>
-        {titulo}
+      {/* El título y el estado, en el MISMO renglón. Antes el título salía dos
+          veces —aquí arriba en mayúsculas y otra vez como etiqueta del
+          subidor— y el estado se comía un renglón entero él solo. */}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 9 }}>
+        <span style={{
+          fontSize: 11, fontWeight: 800, color: T.text3, letterSpacing: 0.6,
+          textTransform: 'uppercase', flexShrink: 0,
+        }}>
+          {titulo}
+        </span>
+        {!existente && (
+          <span style={{ fontSize: 11.5, fontWeight: 600, color: T.text4, minWidth: 0 }}>
+            {vacio}
+          </span>
+        )}
       </div>
 
       {existente ? (
@@ -931,19 +950,15 @@ function RanuraMedia({
               cursor: deshabilitado ? 'default' : 'pointer',
               fontFamily: FONT, fontSize: 13.5, fontWeight: 800,
             }}>
-            {ocupado ? <Loader2 size={15} className="spin" /> : <Trash2 size={15} />} Quitar y volver al general
+            {ocupado ? <Loader2 size={15} className="spin" /> : <Trash2 size={15} />} Quitar
           </button>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
-          <div style={{ fontSize: 12.5, color: T.text3, fontWeight: 600, lineHeight: 1.5 }}>
-            {vacio}
-          </div>
           <MediaUpload
-            label={titulo} icon={icono} value={valor} onChange={onValor}
+            label="" icon={icono} value={valor} onChange={onValor}
             accept={tipo === 'video' ? 'video/*' : 'image/*'}
             kind={tipo === 'video' ? 'videos' : 'covers'}
-            hint={hint}
           />
           <button type="button" onClick={onGuardar} disabled={!puedeGuardar}
             style={{
@@ -954,7 +969,7 @@ function RanuraMedia({
               fontFamily: FONT, fontSize: 13.5, fontWeight: 800,
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
             }}>
-            {ocupado ? <><Loader2 size={15} className="spin" /> Guardando…</> : 'Guardar solo para él'}
+            {ocupado ? <><Loader2 size={15} className="spin" /> Guardando…</> : 'Guardar'}
           </button>
         </div>
       )}
@@ -2322,6 +2337,28 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
             }]),
             { icon: FolderOpen, texto: 'Usar una plantilla de semana', onClick: () => setModal({ type: 'tpl-week' }) },
             { icon: Save, texto: 'Guardar esta semana como plantilla', onClick: () => setModal({ type: 'name-week' }) },
+            /* AGREGAR OTRA FASE, DESDE DENTRO DE UNA FASE.
+               Andrés, 18 sep 2026: "aquí no veo cómo se pueden agregar fases
+               por ejemplo, eso hay que arreglarlo". El botón existía, pero en
+               la pantalla de atrás — y con UNA sola fase esa pantalla no se
+               podía alcanzar: `goBack` cerraba el editor entero en vez de
+               subir. O sea que a un plan de una fase no se le podía poner una
+               segunda por ningún lado. Esto sí está siempre a mano. */
+            ...(isWeekly ? [] : [{
+              icon: Plus,
+              texto: 'Agregar otra fase',
+              onClick: () => {
+                touch((ps) => [...ps, newPhase(nextPhaseNum(ps))]);
+                // Se abre la recién creada: agregar algo y quedarte donde
+                // estabas se lee como que no pasó nada.
+                setDetailsOpen(false);
+                setWeekIdx(0);
+                setNav({ level: 'phase', pi: phases.length });
+              },
+            }]),
+            ...(isWeekly || phases.length <= 1 ? [] : [{
+              icon: Layers, texto: 'Ver todas las fases', onClick: () => setNav({ level: 'phases' }),
+            }]),
             isWeekly
               ? { icon: Layers, texto: 'Pasar a un programa por fases', onClick: cambiaAFases }
               : { icon: Repeat, texto: 'Convertirlo en una rutina que se repite', onClick: cambiaARutina },

@@ -3,6 +3,7 @@ import {
   Loader2, Plus, X, Shield, Users, AtSign, IdCard, Mail, Lock, Check, UserPlus, Eye, EyeOff,
 } from 'lucide-react';
 import { listCoaches, listAthletes, createCoachAccount } from '@/lib/api';
+import { useIsWide } from '@/lib/useViewport';
 import { T, FONT, KP } from '@/lib/theme';
 
 const USERNAME_RE = /^[a-zA-Z0-9_.]{3,30}$/;
@@ -97,6 +98,7 @@ function CreateCoachModal({ onClose, onCreated }) {
 }
 
 export default function CoachesPanel({ onVerComo }) {
+  const esAncho = useIsWide();
   const [coaches, setCoaches] = useState([]);
   const [athletes, setAthletes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -156,34 +158,55 @@ export default function CoachesPanel({ onVerComo }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {coaches.map((c) => (
-            <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 13, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 16, padding: '14px 16px', boxShadow: KP.shCard }}>
-              <Avatar name={c.full_name || c.username} url={c.avatar_url} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 800, color: T.text, display: 'flex', alignItems: 'center', gap: 7 }}>
-                  {c.full_name || c.username}
-                  <Shield size={13} color={T.accent} />
+            /* EN TELÉFONO LA FILA SE PARTE EN DOS.
+               Andrés, 18 sep 2026: "mira cómo se apachurran los nombres de los
+               coaches en la versión de teléfono, eso hay que arreglarlo". En
+               375 px, cuatro cosas en un renglón —foto, nombre, cuántos
+               atletas, y "Ver como"— dejan al nombre unos 90 px, y "Andres
+               Daniel Tovar Rocabado" se parte en cuatro líneas de una palabra.
+               Arriba el nombre con todo el ancho; abajo el conteo y el botón. */
+            <div key={c.id} style={{
+              display: 'flex', flexDirection: esAncho ? 'row' : 'column',
+              alignItems: esAncho ? 'center' : 'stretch',
+              gap: esAncho ? 13 : 12,
+              background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 16,
+              padding: '14px 16px', boxShadow: KP.shCard,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 13, flex: 1, minWidth: 0 }}>
+                <Avatar name={c.full_name || c.username} url={c.avatar_url} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: T.text, display: 'flex', alignItems: 'center', gap: 7 }}>
+                    {/* `minWidth: 0` en el padre y nada de `nowrap` aquí: el
+                        nombre largo se parte por palabras, no por letras. */}
+                    <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{c.full_name || c.username}</span>
+                    <Shield size={13} color={T.accent} style={{ flexShrink: 0 }} />
+                  </div>
+                  <div style={{ fontSize: 13, color: T.text2, fontWeight: 500, overflowWrap: 'anywhere' }}>@{c.username}</div>
                 </div>
-                <div style={{ fontSize: 13, color: T.text2, fontWeight: 500 }}>@{c.username}</div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13.5, fontWeight: 700, color: T.text2, background: T.bg, borderRadius: 10, padding: '8px 12px', flexShrink: 0 }}>
-                <Users size={15} color={T.text3} /> {countByCoach[c.id] || 0}
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13.5, fontWeight: 700, color: T.text2, background: T.bg, borderRadius: 10, padding: '8px 12px', flexShrink: 0 }}>
+                  <Users size={15} color={T.text3} /> {countByCoach[c.id] || 0}
+                </div>
+                {/* Entrar a ver lo suyo. Es un filtro, no un cambio de cuenta:
+                    el master ya puede leer estos datos, esto solo los enseña
+                    juntos y sin revolverlos con los propios. */}
+                <button
+                  type="button"
+                  onClick={() => onVerComo?.(c)}
+                  title={`Ver el perfil de ${c.full_name || c.username}`}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                    flex: esAncho ? '0 0 auto' : 1,
+                    minHeight: 38, padding: '0 13px', borderRadius: 10, cursor: 'pointer',
+                    border: `1.5px solid ${T.border}`, background: T.bg2, color: T.text2,
+                    fontFamily: FONT, fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
+                  }}
+                >
+                  <Eye size={15} /> Ver como
+                </button>
               </div>
-              {/* Entrar a ver lo suyo. Es un filtro, no un cambio de cuenta:
-                  el master ya puede leer estos datos, esto solo los enseña
-                  juntos y sin revolverlos con los propios. */}
-              <button
-                type="button"
-                onClick={() => onVerComo?.(c)}
-                title={`Ver el perfil de ${c.full_name || c.username}`}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 7, flexShrink: 0,
-                  minHeight: 38, padding: '0 13px', borderRadius: 10, cursor: 'pointer',
-                  border: `1.5px solid ${T.border}`, background: T.bg2, color: T.text2,
-                  fontFamily: FONT, fontSize: 13, fontWeight: 700,
-                }}
-              >
-                <Eye size={15} /> Ver como
-              </button>
             </div>
           ))}
         </div>

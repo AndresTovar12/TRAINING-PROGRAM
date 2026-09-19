@@ -590,6 +590,8 @@ function SeccionFicha({ titulo, abierta, onToggle, children }) {
 
 /** El plan de un vistazo, sin poder tocarlo: fases, semanas y sesiones. */
 function ResumenDelPlan({ phases }) {
+  // Un día abierto a la vez: son índices, y con varios abiertos se pierde.
+  const [dentro, setDentro] = useState(null);
   return (
     <div style={{ background: T.bg, borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
       {phases.map((f) => (
@@ -610,16 +612,42 @@ function ResumenDelPlan({ phases }) {
               </div>
               {(w.days || []).map((d, di) => {
                 const tipo = tipoDeSesion(d);
+                const llave = `${f.id}-${wi}-${di}`;
+                const abierto = dentro === llave;
+                const cuantos = (d.exercises || []).filter((e) => !e.isNote).length;
                 return (
-                  <div key={di} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
-                    <span style={{ width: 30, fontSize: 11, fontWeight: 800, color: T.text3, flexShrink: 0 }}>{d.day}</span>
-                    <span style={{ width: 7, height: 7, borderRadius: 4, background: tipo.c, flexShrink: 0 }} />
-                    <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {d.name || tipo.label}
-                    </span>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: T.text3, flexShrink: 0 }}>
-                      {(d.exercises || []).filter((e) => !e.isNote).length || (d.blocks?.length ? `${d.blocks.length} bloques` : '')}
-                    </span>
+                  <div key={di}>
+                    {/* EL DÍA SE ABRE. Andrés, 18 sep 2026: "no me refería a
+                        esto con «ver el plan», porque literalmente solo ver la
+                        parte de afuera del plan; no puedo METERME A VER el
+                        plan". Tenía razón: esto era un índice, no el plan.
+                        Se abre en solo lectura a propósito: para tocarlo está
+                        "Editar el plan", justo arriba. */}
+                    <button
+                      type="button"
+                      onClick={() => setDentro(abierto ? null : llave)}
+                      aria-expanded={abierto}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '5px 4px', border: 'none', background: abierto ? T.bg3 : 'transparent',
+                        borderRadius: 8, cursor: 'pointer', fontFamily: FONT, textAlign: 'left',
+                      }}
+                    >
+                      <span style={{ width: 30, fontSize: 11, fontWeight: 800, color: T.text3, flexShrink: 0 }}>{d.day}</span>
+                      <span style={{ width: 7, height: 7, borderRadius: 4, background: tipo.c, flexShrink: 0 }} />
+                      <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {d.name || tipo.label}
+                      </span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: T.text3, flexShrink: 0 }}>
+                        {cuantos || (d.blocks?.length ? `${d.blocks.length} bloques` : '')}
+                      </span>
+                      <ChevronDown
+                        size={13}
+                        color={T.text3}
+                        style={{ flexShrink: 0, transform: abierto ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}
+                      />
+                    </button>
+                    {abierto && <DentroDelDia day={d} />}
                   </div>
                 );
               })}
@@ -627,6 +655,61 @@ function ResumenDelPlan({ phases }) {
           ))}
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Lo que hay DENTRO de un día, en solo lectura.
+ *
+ * Sirve para los dos tipos de día: los normales, con su lista de ejercicios,
+ * y los de dos sesiones (AM/PM), que guardan bloques con su etiqueta.
+ */
+function DentroDelDia({ day }) {
+  const dosis = (e) => [e.sets, e.reps].filter(Boolean).join(' × ') + (e.intensity ? ` · ${e.intensity}` : '');
+
+  const fila = (e, i) => (
+    e.isNote ? (
+      <div key={i} style={{ fontSize: 11.5, fontWeight: 600, color: T.text2, padding: '4px 0', lineHeight: 1.45 }}>
+        {e.text}
+      </div>
+    ) : (
+      <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '3px 0' }}>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: T.text, overflowWrap: 'anywhere' }}>
+          {e.name}
+        </span>
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: T.text2, flexShrink: 0, whiteSpace: 'nowrap' }}>
+          {dosis(e)}
+        </span>
+      </div>
+    )
+  );
+
+  const bloques = day.blocks || [];
+  const sueltos = day.exercises || [];
+
+  if (!bloques.length && !sueltos.length) {
+    return (
+      <div style={{ padding: '6px 4px 10px 38px', fontSize: 11.5, fontWeight: 600, color: T.text3 }}>
+        Este día no tiene ejercicios.
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: '4px 6px 10px 38px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+      {bloques.length > 0
+        ? bloques.map((b, bi) => (
+            <div key={bi}>
+              {b.tag && (
+                <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 0.5, color: T.text3, marginBottom: 3 }}>
+                  {b.tag}
+                </div>
+              )}
+              {(b.exercises || []).map(fila)}
+            </div>
+          ))
+        : sueltos.map(fila)}
     </div>
   );
 }

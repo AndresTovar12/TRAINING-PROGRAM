@@ -1547,6 +1547,15 @@ const initialsFrom = (name) => {
 };
 
 const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerPrograma, cursor, onChangeCursor }) => {
+  /* LAS PROPORCIONES EN COMPU. Andrés, 18 sep 2026: "en teléfono no hay ningún
+     problema con HOME, pero en computadora las proporciones están un poco
+     raras para los atletas nada más". El diagnóstico, medido en 1440 px: los
+     botones son de ancho completo porque en un teléfono eso es lo correcto, y
+     aquí "Ver mi plan" acababa midiendo 980 px de ancho por 44 de alto. Una
+     banda, no un botón. En compu se les pone tope y se dejan a la izquierda,
+     que es donde empieza el texto de su tarjeta. */
+  const esCompu = useIsDesktop();
+  const tope = esCompu ? { maxWidth: 260 } : null;
   const { phases: PLAN, planMeta, kind } = usePlan();
   const { perfil: profile } = usePerfilDeLaVista();
   const displayName = profile?.full_name || profile?.username || 'Atleta';
@@ -1642,19 +1651,24 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
               <div style={{
                 background: '#fff', borderRadius: 14, padding: '13px',
                 fontSize: 14, fontWeight: 600, color: LT.blue, textAlign: 'center', marginTop: 10,
+                ...tope,
               }}>
                 {cursorCompleted ? 'Ver detalle' : 'Empezar sesión'}
               </div>
               {/* En una rutina que se repite el día lo decide el calendario, no un
                   puntero: el selector se abría, se elegía un día y no pasaba nada. */}
               {kind !== 'weekly' && (
-                <div onClick={(e) => { e.stopPropagation(); onChangeCursor(); }}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onChangeCursor(); }}
                   style={{
+                    display: 'block', width: '100%', border: 'none', cursor: 'pointer', fontFamily: FONT,
                     background: 'rgba(255,255,255,0.15)', borderRadius: 14, padding: '13px',
                     fontSize: 14, fontWeight: 600, color: '#fff', textAlign: 'center', marginTop: 8,
+                    ...tope,
                   }}>
                   Cambiar día
-                </div>
+                </button>
               )}
             </div>
 
@@ -1707,16 +1721,19 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
                 ? `Tu siguiente entrenamiento es el ${weekdayLabel(week.next.key)}${week.next.name ? ` · ${week.next.name}` : ''}.`
                 : 'Aún no hay entrenamientos en tu semana.'}
             </div>
-            <div
+            <button
+              type="button"
               onClick={() => onGoTab('plan')}
               className="kp-press"
               style={{
+                display: 'block', width: '100%', border: 'none', fontFamily: FONT,
                 background: LT.blue, borderRadius: 14, padding: '13px', marginTop: 16,
                 fontSize: 14, fontWeight: 600, color: '#fff', textAlign: 'center', cursor: 'pointer',
+                ...tope,
               }}
             >
               Ver mi plan
-            </div>
+            </button>
           </div>
         </div>
       )}
@@ -1736,7 +1753,7 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
           <div style={{ fontSize: 12, color: LT.text2, marginTop: 6, lineHeight: 1.4 }}>
             {todayScore === null ? 'Registra cómo te sientes' : 'Energía, sueño y fatiga'}
           </div>
-          <div style={{ background: LT.surface2, borderRadius: 14, padding: '12px', fontSize: 13, fontWeight: 600, color: LT.text2, textAlign: 'center', marginTop: 14 }}>
+          <div style={{ background: LT.surface2, borderRadius: 14, padding: '12px', fontSize: 13, fontWeight: 600, color: LT.text2, textAlign: 'center', marginTop: 14, ...tope }}>
             {todayScore === null ? 'Registrar bienestar' : 'Ver detalle'}
           </div>
         </div>
@@ -1780,23 +1797,51 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
             normalmente tu propio workout, que es justo lo contrario de lo
             que promete. Con la pestaña "Plan" apuntando ahora a tu semana,
             esta es la única forma de ver las fases sin pasar por ahí. */}
-        <div onClick={onVerPrograma}
-          style={{ background: LT.surface, borderRadius: 22, padding: 18, display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer' }}>
-          <div style={{
+        {/* ES UN BOTÓN Y TIENE QUE PARECERLO. Andrés, 18 sep 2026: "acabo de ver
+            que sí hay un botón para eso en home, pero creo que podrías
+            visualmente mejorarlo un poco para que resalte un poquito más de
+            que es un botón". Era una tarjeta blanca igual a las de alrededor,
+            con una flechita gris: nada la distinguía de la información que
+            solo se lee.
+
+            Y era un `div` con onClick, que además de no parecer botón no lo
+            era: con el teclado no se alcanzaba y un lector de pantalla no lo
+            anunciaba. Ahora es un <button> de verdad, con borde y con la
+            acción escrita en azul a la derecha. */}
+        <button
+          type="button"
+          onClick={onVerPrograma}
+          className="kp-press"
+          style={{
+            width: '100%', textAlign: 'left', cursor: 'pointer', fontFamily: FONT,
+            background: LT.surface, borderRadius: 22, padding: 16,
+            border: `1.5px solid ${LT.blueSoft}`,
+            display: 'flex', alignItems: 'center', gap: 14,
+          }}
+        >
+          <span style={{
             width: 52, height: 52, borderRadius: '50%', background: LT.blueSoft,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            fontSize: 11, fontWeight: 800, color: LT.blue, textAlign: 'center', lineHeight: 1.1,
-          }}><Dumbbell size={22} /></div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 17, fontWeight: 700, color: LT.text }}>{planMeta?.title || 'Mi plan'}</div>
-            <div style={{ fontSize: 12, color: LT.text2, marginTop: 1 }}>
+            color: LT.blue,
+          }}><Dumbbell size={22} /></span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: 'block', fontSize: 17, fontWeight: 700, color: LT.text }}>
+              {planMeta?.title || 'Mi plan'}
+            </span>
+            <span style={{ display: 'block', fontSize: 12, color: LT.text2, marginTop: 1 }}>
               {kind === 'weekly'
                 ? `Rutina semanal · ${week.trainingDays} ${week.trainingDays === 1 ? 'día' : 'días'}`
                 : `${pluralS(PLAN.length, 'fase')} · ${pluralS(PLAN.reduce((s, p) => s + (p.weekData?.length || 0), 0), 'semana')}`}
-            </div>
-          </div>
-          <ChevronRight size={18} style={{ color: LT.text3, flexShrink: 0 }} />
-        </div>
+            </span>
+          </span>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0,
+            background: LT.blueSoft, color: LT.blue, borderRadius: 999,
+            padding: '8px 11px 8px 13px', fontSize: 13, fontWeight: 800,
+          }}>
+            Ver <ChevronRight size={15} />
+          </span>
+        </button>
       </div>
     </div>
   );
