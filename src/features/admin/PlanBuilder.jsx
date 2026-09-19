@@ -22,7 +22,7 @@ import MediaUpload from '@/features/admin/MediaUpload';
 import SelectorCategoria from '@/features/admin/SelectorCategoria';
 import SelectorTipoSesion from '@/features/admin/SelectorTipoSesion';
 import Portada from '@/components/Portada';
-import { plural, pluralS, textoReps } from '@/lib/plural';
+import { plural, pluralS } from '@/lib/plural';
 
 /* ------------------------------------------------------------------ */
 /* Constantes y helpers de datos                                       */
@@ -971,46 +971,103 @@ const turnoDe = (tag = '') => (tag.match(/\(([AP]M)\)/) || [])[1] || null;
 const limpiaTag = (tag = '') => tag.replace(/^Sesi[óo]n \d+ \([AP]M\):\s*/, '');
 
 /**
- * La rutina de un día con DOS sesiones, tal cual está guardada.
+ * Los días de DOS SESIONES, ahora editables.
  *
- * POR QUÉ EXISTE. El editor enseñaba en estos días solo un aviso —"Día dual
- * con bloques… 7 ejercicios en 2 bloques"— y nada de la rutina. Andrés: "más
- * allá del aviso, no veo la rutina". Medido en su plan: 68 de 175 días son
- * así (32 de 40 en Fuerza, 28 de 35 en Potencia, 8 de 20 en Football). O sea
- * que en esas fases el coach no podía ni VER qué le toca al atleta.
+ * QUÉ SON. 68 de los 175 días del plan de Andrés tienen dos sesiones el mismo
+ * día —mañana y tarde— y se guardan distinto: `day.blocks[]` en vez de
+ * `day.exercises[]`. Cada bloque es una sesión: `{ type, tag, exercises[] }`
+ * para las de ejercicios, `{ type:'note', text }` para las de solo texto.
  *
- * POR QUÉ SOLO SE VE Y NO SE EDITA TODAVÍA. Los ejercicios de estas sesiones
- * no son series simples. El PM de Potencia es un cluster de French Contrast:
- * filas con "—" en las series, una fila "Total clusters" que no es un
- * ejercicio, y el orden encadenado importa. El editor de siempre está hecho
- * para "se repite 3 veces", y pasarle esto podía reescribir datos al guardar.
- * El plan de Andrés no se toca sin su permiso. Ver primero, sin riesgo; editar
- * es otra decisión.
+ * POR QUÉ ESTUVO EN SOLO LECTURA HASTA HOY, y por qué este editor es distinto
+ * al de siempre. Estas sesiones NO son series simples. Comprobado leyendo los
+ * datos reales:
  *
- * Comprobado por SQL sobre los 68 días: todos tienen bloques, y los bloques
- * son de solo tres tipos — `lift` (ejercicios), `speed` (lista de puntos) y
- * `note` (texto). No hay otra forma que pintar.
+ *   · `sets: "—"` — un guion largo, que quiere decir "va dentro del cluster de
+ *     arriba". El editor normal lo leería como un número vacío y lo borraría.
+ *   · una fila `"Total clusters"` con `reps: "—"` y `sets: "3-4"`, que no es un
+ *     ejercicio sino el total de la ronda.
+ *   · reps que no son números: "15 min", "10 yd", "5/lado", "3-5".
+ *   · filas de nota sueltas entre ejercicios: "CLUSTER (sin pausa entre los 4)".
+ *
+ * El editor de siempre agrupa por series y las vuelve a escribir al guardar
+ * ("se repite 3 veces"). Pasarle esto lo reescribiría y se perdería la forma.
+ *
+ * ASÍ QUE AQUÍ NADA SE INTERPRETA. Cada campo es texto libre y se guarda tal
+ * cual se escribe; las filas no se reagrupan ni se reordenan solas; y cada
+ * ejercicio se guarda con `{...original, campo}` para no perder los campos que
+ * este editor ni siquiera dibuja (`cue`, `focus`, `role`, `carga`, `descanso`).
  */
-function SesionesDelDiaDual({ day }) {
+function CampoBloque({ etiqueta, ancho, ...props }) {
+  return (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: ancho ? `0 0 ${ancho}px` : 1, minWidth: 0 }}>
+      <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: T.text3 }}>
+        {etiqueta}
+      </span>
+      <input
+        {...props}
+        style={{
+          width: '100%', boxSizing: 'border-box', padding: '9px 10px', borderRadius: 9,
+          border: `1.5px solid ${T.border}`, background: T.bg, fontFamily: FONT,
+          fontSize: 16, fontWeight: 600, color: T.text, outline: 'none',
+        }}
+      />
+    </label>
+  );
+}
+
+function EditorSesionesDelDia({ day, onPatch }) {
   const bloques = day.blocks || [];
-  const meta = (ex) => {
-    const partes = [];
-    if (ex.sets && ex.sets !== '—') partes.push(ex.sets === '1' ? '1 serie' : `${ex.sets} series`);
-    // Misma regla que la app del atleta: "reps" solo detrás de un número.
-    if (textoReps(ex.reps)) partes.push(textoReps(ex.reps));
-    if (ex.intensity) partes.push(ex.intensity);
-    return partes.join(' · ');
-  };
+  const pregunta = useConfirmacion();
+  const [abierto, setAbierto] = useState({});
+
+  const escribe = (fn) => onPatch({ blocks: fn(bloques.map((b) => ({ ...b }))) });
+
+  const parcheaBloque = (bi, parche) => escribe((bs) => bs.map((b, i) => (i === bi ? { ...b, ...parche } : b)));
+
+  const parcheaFila = (bi, fi, parche) => escribe((bs) => bs.map((b, i) => (i === bi ? {
+    ...b,
+    // `{...fila, ...parche}` y no un objeto nuevo: así sobreviven los campos
+    // que este editor no dibuja (cue, focus, role, carga, descanso).
+    exercises: (b.exercises || []).map((e, k) => (k === fi ? { ...e, ...parche } : e)),
+  } : b)));
+
+  const mueveFila = (bi, fi, dir) => escribe((bs) => bs.map((b, i) => {
+    if (i !== bi) return b;
+    const filas = [...(b.exercises || [])];
+    const j = fi + dir;
+    if (j < 0 || j >= filas.length) return b;
+    [filas[fi], filas[j]] = [filas[j], filas[fi]];
+    return { ...b, exercises: filas };
+  }));
+
+  const quitaFila = (bi, fi) => escribe((bs) => bs.map((b, i) => (i === bi
+    ? { ...b, exercises: (b.exercises || []).filter((_, k) => k !== fi) }
+    : b)));
+
+  const agregaFila = (bi, fila) => escribe((bs) => bs.map((b, i) => (i === bi
+    ? { ...b, exercises: [...(b.exercises || []), fila] }
+    : b)));
+
+  const mueveBloque = (bi, dir) => escribe((bs) => {
+    const j = bi + dir;
+    if (j < 0 || j >= bs.length) return bs;
+    const copia = [...bs];
+    [copia[bi], copia[j]] = [copia[j], copia[bi]];
+    return copia;
+  });
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
       {bloques.map((b, bi) => {
         const turno = turnoDe(b.tag);
+        const filas = b.exercises || [];
+        const verMas = !!abierto[bi];
+
         return (
           <div key={bi} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden' }}>
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 8, padding: '11px 13px',
-              borderBottom: `1px solid ${T.border}`,
+              display: 'flex', alignItems: 'center', gap: 8, padding: '10px 11px',
+              borderBottom: `1px solid ${T.border}`, background: T.bg2, flexWrap: 'wrap',
             }}>
               {turno && (
                 <span style={{
@@ -1020,50 +1077,148 @@ function SesionesDelDiaDual({ day }) {
                   {turno}
                 </span>
               )}
-              <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 800, color: T.text }}>
-                {limpiaTag(b.tag) || `Sesión ${bi + 1}`}
-              </span>
+              <input
+                value={b.tag || ''}
+                onChange={(e) => parcheaBloque(bi, { tag: e.target.value })}
+                placeholder={`Sesión ${bi + 1}`}
+                style={{
+                  flex: 1, minWidth: 120, padding: '7px 9px', borderRadius: 8,
+                  border: `1.5px solid transparent`, background: 'transparent', fontFamily: FONT,
+                  fontSize: 16, fontWeight: 800, color: T.text, outline: 'none',
+                }}
+                onFocus={(e) => { e.target.style.borderColor = T.border; e.target.style.background = T.bg; }}
+                onBlur={(e) => { e.target.style.borderColor = 'transparent'; e.target.style.background = 'transparent'; }}
+              />
+              <IconBtn icon={ChevronUp} title="Subir esta sesión" onClick={() => mueveBloque(bi, -1)} disabled={bi === 0} />
+              <IconBtn icon={ChevronDown} title="Bajar esta sesión" onClick={() => mueveBloque(bi, 1)} disabled={bi === bloques.length - 1} />
+              <IconBtn icon={Trash2} danger title="Eliminar esta sesión" onClick={async () => {
+                if (await pregunta({
+                  titulo: `¿Eliminar «${limpiaTag(b.tag) || `Sesión ${bi + 1}`}»?`,
+                  detalle: 'Se va con todos sus ejercicios. El otro turno del día se queda.',
+                  confirmar: 'Sí, eliminarla',
+                  peligro: true,
+                })) escribe((bs) => bs.filter((_, i) => i !== bi));
+              }} />
             </div>
 
-            <div style={{ padding: '10px 13px 12px', display: 'flex', flexDirection: 'column', gap: 9 }}>
-              {b.type === 'speed' && (
-                <ul style={{ listStyleType: 'disc', margin: 0, paddingLeft: 18, color: T.text2, fontSize: 13.5, lineHeight: 1.6 }}>
-                  {(b.bullets || []).map((p, i) => (
-                    <li key={i} style={typeof p === 'object' && p.bold ? { color: T.text, fontWeight: 700 } : undefined}>
-                      {typeof p === 'object' ? p.text : p}
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {b.type === 'lift' && (b.exercises || []).map((ex, i) => (ex.isNote ? (
-                <div key={i} style={{
-                  display: 'flex', gap: 8, alignItems: 'flex-start', background: T.accentBg,
-                  borderRadius: 10, padding: '8px 10px', fontSize: 12.5, fontWeight: 700, color: T.accent, lineHeight: 1.45,
-                }}>
-                  <StickyNote size={14} style={{ flexShrink: 0, marginTop: 2 }} /> {ex.text}
-                </div>
+            <div style={{ padding: '11px 11px 12px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+              {b.type === 'note' ? (
+                <textarea
+                  value={b.text || ''}
+                  onChange={(e) => parcheaBloque(bi, { text: e.target.value })}
+                  rows={3}
+                  placeholder="Lo que tiene que hacer ese turno"
+                  style={{
+                    width: '100%', boxSizing: 'border-box', padding: '10px 11px', borderRadius: 10,
+                    border: `1.5px solid ${T.border}`, background: T.bg2, fontFamily: FONT,
+                    fontSize: 16, fontWeight: 500, color: T.text, outline: 'none', resize: 'vertical', lineHeight: 1.5,
+                  }}
+                />
               ) : (
-                <div key={i} style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{ex.name}</div>
-                  {meta(ex) && (
-                    <div style={{ fontSize: 12.5, fontWeight: 600, color: T.text2, marginTop: 1 }}>{meta(ex)}</div>
-                  )}
-                  {ex.notes && (
-                    <div style={{ fontSize: 12, color: T.text3, marginTop: 1, lineHeight: 1.4 }}>{ex.notes}</div>
-                  )}
-                </div>
-              )))}
+                <>
+                  {filas.map((e, fi) => (
+                    <div key={fi} style={{
+                      background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 11, padding: 10,
+                      display: 'flex', flexDirection: 'column', gap: 9,
+                    }}>
+                      {e.isNote ? (
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                          <StickyNote size={15} color={T.accent} style={{ flexShrink: 0, marginTop: 10 }} />
+                          <textarea
+                            value={e.text || ''}
+                            onChange={(ev) => parcheaFila(bi, fi, { text: ev.target.value })}
+                            rows={2}
+                            placeholder="Nota dentro de la sesión"
+                            style={{
+                              flex: 1, minWidth: 0, boxSizing: 'border-box', padding: '9px 10px', borderRadius: 9,
+                              border: `1.5px solid ${T.border}`, background: T.bg, fontFamily: FONT,
+                              fontSize: 16, fontWeight: 600, color: T.accent, outline: 'none', resize: 'vertical', lineHeight: 1.45,
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <CampoBloque
+                              etiqueta="Ejercicio"
+                              value={e.name || ''}
+                              onChange={(ev) => parcheaFila(bi, fi, { name: ev.target.value })}
+                              placeholder="Ej. Back squat (pesado)"
+                            />
+                          </div>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            {/* Texto libre los dos, a propósito: aquí hay "—",
+                                "3-4", "15 min", "5/lado". Un campo de número
+                                los borraría al guardar. */}
+                            <CampoBloque
+                              etiqueta="Series"
+                              ancho={92}
+                              value={e.sets ?? ''}
+                              onChange={(ev) => parcheaFila(bi, fi, { sets: ev.target.value })}
+                              placeholder="3 o —"
+                            />
+                            <CampoBloque
+                              etiqueta="Reps"
+                              value={e.reps ?? ''}
+                              onChange={(ev) => parcheaFila(bi, fi, { reps: ev.target.value })}
+                              placeholder="5, 30 yd, 15 min…"
+                            />
+                          </div>
 
-              {b.type === 'note' && (
-                <div style={{ fontSize: 13, color: T.text2, lineHeight: 1.55 }}>{b.text}</div>
+                          {verMas && (
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                              <CampoBloque
+                                etiqueta="Intensidad"
+                                value={e.intensity ?? ''}
+                                onChange={(ev) => parcheaFila(bi, fi, { intensity: ev.target.value })}
+                                placeholder="Ej. 80%"
+                              />
+                              <CampoBloque
+                                etiqueta="Notas"
+                                value={e.notes ?? ''}
+                                onChange={(ev) => parcheaFila(bi, fi, { notes: ev.target.value })}
+                                placeholder="Lo que quieras decirle"
+                              />
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                        <IconBtn icon={ChevronUp} title="Subir" onClick={() => mueveFila(bi, fi, -1)} disabled={fi === 0} />
+                        <IconBtn icon={ChevronDown} title="Bajar" onClick={() => mueveFila(bi, fi, 1)} disabled={fi === filas.length - 1} />
+                        <IconBtn icon={Trash2} danger title="Quitar" onClick={() => quitaFila(bi, fi)} />
+                      </div>
+                    </div>
+                  ))}
+
+                  <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <Pill icon={Plus} primary onClick={() => agregaFila(bi, { name: '', sets: '', reps: '' })}>Ejercicio</Pill>
+                    <Pill icon={StickyNote} onClick={() => agregaFila(bi, { isNote: true, text: '' })}>Nota</Pill>
+                    <span style={{ flex: 1 }} />
+                    <Pill icon={verMas ? ChevronUp : ChevronDown} onClick={() => setAbierto((v) => ({ ...v, [bi]: !v[bi] }))}>
+                      {verMas ? 'Menos campos' : 'Intensidad y notas'}
+                    </Pill>
+                  </div>
+                </>
               )}
             </div>
           </div>
         );
       })}
-      <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 600, lineHeight: 1.45 }}>
-        Los días con dos sesiones todavía no se editan desde aquí: solo el nombre y el tipo.
+
+      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+        <Pill icon={Plus} onClick={() => escribe((bs) => [...bs, { type: 'lift', tag: `Sesión ${bs.length + 1}`, exercises: [] }])}>
+          Otra sesión el mismo día
+        </Pill>
+        <Pill icon={StickyNote} onClick={() => escribe((bs) => [...bs, { type: 'note', tag: `Sesión ${bs.length + 1}`, text: '' }])}>
+          Sesión de solo texto
+        </Pill>
+      </div>
+
+      <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 600, lineHeight: 1.5 }}>
+        Aquí nada se corrige solo: «—» en las series y reps como «30 yd» o «5/lado»
+        se guardan tal cual los escribas.
       </div>
     </div>
   );
@@ -1091,7 +1246,7 @@ function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCr
     return (
       <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 18, padding: 16, boxShadow: KP.shCard }}>
         <DayHeader day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog} onClear={onClear} dual />
-        <SesionesDelDiaDual day={day} />
+        <EditorSesionesDelDia day={day} onPatch={onPatch} />
       </div>
     );
   }
