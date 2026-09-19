@@ -109,17 +109,23 @@ function TarjetaProgreso({ nombre, historial, unidad, onCerrar }) {
   return (
     <div
       onClick={(e) => { if (e.target === e.currentTarget) onCerrar(); }}
+      /* Tarjeta FLOTANTE, no hoja pegada abajo. Andrés, 18 sep 2026: "no me
+         gusta cómo la ventanita de mi progreso sale así como de abajo, me
+         gustaría más como card flotante". Subirla al centro también la separa
+         de las hojas que sí son hojas (opciones, programa), que salen de abajo
+         a propósito: ahí el gesto es "asomarse", aquí es "mira este dato". */
       style={{
         position: 'fixed', inset: 0, zIndex: 4500, background: 'rgba(9,11,16,.5)',
-        display: 'grid', placeItems: 'end center', fontFamily: FONT,
+        display: 'grid', placeItems: 'center', padding: 18, fontFamily: FONT,
       }}
     >
       <div
         className="animate-fade-in"
         style={{
-          width: '100%', maxWidth: 460, background: LT.surface,
-          borderRadius: '22px 22px 0 0', padding: '18px 18px calc(20px + env(safe-area-inset-bottom))',
-          maxHeight: '78svh', overflowY: 'auto',
+          width: '100%', maxWidth: 420, background: LT.surface,
+          borderRadius: 24, padding: 18,
+          maxHeight: 'min(78svh, 640px)', overflowY: 'auto',
+          boxShadow: '0 24px 60px rgba(9,11,16,0.28), 0 2px 8px rgba(9,11,16,0.10)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>

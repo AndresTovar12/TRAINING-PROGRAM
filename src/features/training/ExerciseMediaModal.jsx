@@ -2,7 +2,7 @@ import { useRef, useState, useEffect } from 'react';
 import { X, ExternalLink, Dumbbell, Timer } from 'lucide-react';
 import { videosParaAtleta, portadaParaAtleta, ligaExterna } from '@/lib/videos';
 import { T, FONT, KP } from '@/lib/theme';
-import Portada from '@/components/Portada';
+import CarruselDeVideos from '@/features/training/CarruselDeVideos';
 
 /**
  * Ficha de un ejercicio del repertorio: foto de portada, video (archivo o
@@ -203,20 +203,21 @@ export default function ExerciseMediaModal({ exercise, planEx, medias = [], perf
           overflow: 'hidden auto',
         }}
       >
-        {/* Portada */}
-        <div style={{ position: 'relative', background: '#0E1015' }}>
+        {/* Portada. Con varios videos se desliza y salen los puntos: es el
+            mismo gesto que en la ficha de la sesión. */}
+        <div style={{
+          position: 'relative', background: '#0E1015', color: '#3A3F4C',
+          height: (portada || videos.length) ? 230 : 140,
+        }}>
           {/* Sin foto de portada se usa el primer fotograma del video. */}
-          <Portada
-            foto={portada}
-            video={videos[0]?.url}
-            style={{
-              width: '100%',
-              height: (portada || videos.length) ? 230 : 140,
-              color: '#3A3F4C',
-            }}
-          >
-            <Dumbbell size={44} />
-          </Portada>
+          <CarruselDeVideos
+            videos={videos}
+            portada={portada}
+            nombre={exercise.name}
+            activo={activo}
+            onActivo={setActivo}
+            vacio={<Dumbbell size={44} />}
+          />
           <button
             type="button"
             onClick={onClose}
@@ -274,32 +275,8 @@ export default function ExerciseMediaModal({ exercise, planEx, medias = [], perf
             </div>
           )}
 
-          {/* Video. Si hay más de uno, arriba salen los ángulos disponibles. */}
-          {video && (
-            <>
-              {videos.length > 1 && (
-                <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 16 }}>
-                  {videos.map((v, i) => (
-                    <button
-                      key={v.id}
-                      type="button"
-                      onClick={() => setActivo(i)}
-                      style={{
-                        padding: '7px 13px', borderRadius: 999, cursor: 'pointer',
-                        border: `1.5px solid ${i === activo ? T.accent : T.border}`,
-                        background: i === activo ? T.accentBg : T.bg2,
-                        color: i === activo ? T.accent : T.text2,
-                        fontFamily: FONT, fontSize: 12.5, fontWeight: 700,
-                      }}
-                    >
-                      {v.etiqueta}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <VideoRecortado video={video} />
-            </>
-          )}
+          {/* Video. Cuál se ve lo decide la portada de arriba: se desliza. */}
+          {video && <VideoRecortado video={video} />}
 
           {/* Lo que escribió el COACH sobre este ejercicio. Cada línea aparece
               solo si la puso: un bloque vacío con guiones se lee como un fallo

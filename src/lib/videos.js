@@ -16,6 +16,16 @@
  * adivina: mostrarle la versión equivocada es peor que mostrarle la genérica.
  */
 
+/**
+ * Cómo se llama una pastilla cuando el coach no le escribió etiqueta.
+ *
+ * Un archivo nuestro no tiene de dónde sacar un nombre, así que se queda con
+ * `porDefecto`. Uno que vive fuera sí: se llama como su plataforma.
+ */
+function nombreDeLaFuente(url, porDefecto = 'Video') {
+  return ligaExterna(url)?.de || porDefecto;
+}
+
 /** Los videos de ESTE ejercicio que aplican a ESTE atleta, ya ordenados. */
 export function videosParaAtleta(ejercicio, medias, perfil) {
   if (!ejercicio) return [];
@@ -29,13 +39,18 @@ export function videosParaAtleta(ejercicio, medias, perfil) {
   const deMiGénero = genero ? míos.filter((m) => !m.para_atleta && m.genero === genero) : [];
   const paraTodos = míos.filter((m) => !m.para_atleta && !m.genero);
 
-  // El primero de la lista es el que se abre. Los demás quedan como ángulos
-  // entre los que puede cambiar.
-  const elegidos = paraMí.length ? paraMí : (deMiGénero.length ? deMiGénero : paraTodos);
+  /* El orden DECIDE CUÁL SE ABRE, no cuál sobrevive.
+     Hasta el 18 sep 2026 esto era `paraMí.length ? paraMí : (deMiGénero…)`, o
+     sea excluyente: si el coach subía un video "para todos" y además uno "para
+     hombres", un atleta hombre veía SOLO el de hombres y el general
+     desaparecía de su lista. Andrés: "cómo es que el atleta puede verlos todos
+     porque creo que la configuración ahorita solamente permite ver uno".
+     Los del OTRO género siguen fuera: para eso existe esa opción. */
+  const elegidos = [...paraMí, ...deMiGénero, ...paraTodos];
 
   const lista = elegidos.map((m) => ({
     url: m.url,
-    etiqueta: m.etiqueta || 'Video',
+    etiqueta: m.etiqueta || nombreDeLaFuente(m.url),
     id: m.id,
     inicio: m.recorte_inicio ?? null,
     fin: m.recorte_fin ?? null,
@@ -51,7 +66,9 @@ export function videosParaAtleta(ejercicio, medias, perfil) {
   if (original && !lista.some((v) => v.url === original)) {
     lista.push({
       url: original,
-      etiqueta: lista.length ? 'Original' : 'Video',
+      // "Original" solo tiene sentido frente a otros videos NUESTROS. Si es un
+      // TikTok, la pastilla dice TikTok: el atleta ya sabe qué va a ver.
+      etiqueta: nombreDeLaFuente(original, lista.length ? 'Original' : 'Video'),
       id: 'original',
       inicio: ejercicio.recorte_inicio ?? null,
       fin: ejercicio.recorte_fin ?? null,

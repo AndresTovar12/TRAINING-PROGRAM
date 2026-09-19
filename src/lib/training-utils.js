@@ -39,7 +39,17 @@ const isLoadedExercise = (ex) => {
   return adivinaSiLlevaCarga(ex);
 };
 
-/** La vieja lista de palabras. Ya no decide: solo propone un valor por defecto. */
+/**
+ * La vieja lista de palabras. Ya no decide: solo propone un valor por defecto.
+ *
+ * ANTE LA DUDA, SÍ LLEVA PESO. Andrés, 18 sep 2026: "no entiendo por qué aquí
+ * solo deja poner el progreso de las reps, si la mayoría del tiempo es más
+ * importante el del peso". Era un Back Squat. La causa: esta función traía un
+ * `if (!ex.intensity) return false`, así que cualquier ejercicio al que el
+ * coach no le escribió la intensidad quedaba como peso corporal y la ficha del
+ * atleta le escondía el campo del peso. Un campo de peso de más en una plancha
+ * no cuesta nada; uno de menos en una sentadilla pierde el dato.
+ */
 const adivinaSiLlevaCarga = (ex) => {
   if (!ex || ex.isNote) return false;
   const name = (ex.name || '').toLowerCase();
@@ -54,7 +64,6 @@ const adivinaSiLlevaCarga = (ex) => {
   if (name.includes('caminata') || name.includes('walk')) return false;
   if (name.includes('core') || name.includes('mcgill')) return false;
   if (intensity === 'bw' || intensity.includes('bajo') || intensity === 'máximo' || intensity === 'maximo') return false;
-  if (!ex.intensity) return false;
   return true;
 };
 // Validar que un cursor apunte a una sesión existente

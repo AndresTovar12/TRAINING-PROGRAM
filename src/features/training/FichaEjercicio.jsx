@@ -1,11 +1,11 @@
 import { useState, useMemo, useEffect } from 'react';
-import { ChevronLeft, Play, Dumbbell, Timer, Minus, Plus, LineChart as LineChartIcon } from 'lucide-react';
+import { ChevronLeft, Dumbbell, Timer, Minus, Plus, LineChart as LineChartIcon } from 'lucide-react';
 import { LT, FONT, NUM_STYLE } from '@/lib/theme';
 import { videosParaAtleta, portadaParaAtleta } from '@/lib/videos';
 import { VideoRecortado } from '@/features/training/ExerciseMediaModal';
+import CarruselDeVideos, { Puntos } from '@/features/training/CarruselDeVideos';
 import { aKilos, desdeKilos, pesoTexto, etiquetaUnidad } from '@/lib/unidades';
 import { isLoadedExercise, formatIntensity, findPreviousWeight } from '@/lib/training-utils';
-import Portada from '@/components/Portada';
 import { textoReps } from '@/lib/plural';
 
 /**
@@ -89,15 +89,22 @@ export default function FichaEjercicio({
   // Los discos suben de 2,5 en 2,5 kilos o de 5 en 5 libras.
   const paso = unidad === 'lb' ? 5 : 2.5;
 
+  /* BAJAR DESDE VACÍO NO ANOTA NADA, Y BAJAR DESDE CERO BORRA.
+     Andrés, 18 sep 2026: "le puse 0 reps porque le moví a las flechitas y no
+     supe qué hacer y se guardó 0 reps". Antes el `−` sobre un campo vacío
+     escribía un 0 —por el `Math.max(0, …)`— y desde ahí no había salida: 0
+     menos uno volvía a ser 0. Ahora el mismo gesto que lo creó lo deshace. */
   const mueve = (dir) => {
-    const actual = pesoEscrito.trim() === '' ? 0 : parseFloat(pesoEscrito) || 0;
-    const nuevo = Math.max(0, Math.round((actual + dir * paso) * 100) / 100);
-    escribePeso(String(nuevo));
+    const vacio = pesoEscrito.trim() === '';
+    const actual = vacio ? 0 : parseFloat(pesoEscrito) || 0;
+    if (dir < 0 && (vacio || actual <= 0)) { escribePeso(''); return; }
+    escribePeso(String(Math.round((actual + dir * paso) * 100) / 100));
   };
   const mueveReps = (dir) => {
     const actual = parseInt(exData.repsHechas, 10);
-    const base = Number.isFinite(actual) ? actual : 0;
-    onUpdate({ ...exData, repsHechas: String(Math.max(0, base + dir)) });
+    const hay = Number.isFinite(actual);
+    if (dir < 0 && (!hay || actual <= 0)) { onUpdate({ ...exData, repsHechas: '' }); return; }
+    onUpdate({ ...exData, repsHechas: String((hay ? actual : 0) + dir) });
   };
 
   const escribePeso = (v) => {
@@ -132,43 +139,33 @@ export default function FichaEjercicio({
         height: reproduciendo ? 'auto' : (portada || video ? 'min(46vh, 330px)' : 190),
       }}>
         {reproduciendo && video ? (
-          <VideoRecortado
-            video={video}
-            estilo={{ width: '100%', maxHeight: '55vh', display: 'block', background: '#000' }}
-          />
+          <>
+            <VideoRecortado
+              video={video}
+              estilo={{ width: '100%', maxHeight: '55vh', display: 'block', background: '#000' }}
+            />
+            {/* Los puntos siguen ahí mientras se reproduce: cambiar de ángulo
+                sin salir del video es justo para lo que sirven varios ángulos. */}
+            <Puntos videos={videos} activo={angulo} onIr={setAngulo} abajo={10} />
+          </>
         ) : (
           <>
             {/* Sin foto de portada se usa el primer fotograma del video. Además
                 de tapar el hueco negro, es una vista previa honesta: es
-                literalmente lo que va a salir al darle al play. */}
-            <Portada
-              foto={portada}
-              video={video?.url}
-              style={{ width: '100%', height: '100%' }}
-            >
-              <Dumbbell size={54} color="#2A3040" />
-            </Portada>
-
-            {/* Play grande y centrado, como el de Avena. Solo si hay video. */}
-            {video && (
-              <button
-                type="button"
-                onClick={() => setReproduciendo(true)}
-                aria-label={`Ver el video de ${ex.name}`}
-                style={{
-                  position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
-                  border: 'none', background: 'transparent', cursor: 'pointer', padding: 0,
-                }}
-              >
-                <span style={{
-                  width: 74, height: 74, borderRadius: '50%', display: 'grid', placeItems: 'center',
-                  background: 'rgba(255,255,255,0.22)', backdropFilter: 'blur(3px)',
-                  border: '2px solid rgba(255,255,255,0.55)',
-                }}>
-                  <Play size={30} color="#fff" fill="#fff" style={{ marginLeft: 4 }} />
-                </span>
-              </button>
-            )}
+                literalmente lo que va a salir al darle al play.
+                Con más de un video esto se desliza; con uno solo es una foto. */}
+            <CarruselDeVideos
+              videos={videos}
+              portada={portada}
+              nombre={ex.name}
+              activo={angulo}
+              onActivo={setAngulo}
+              onReproducir={() => setReproduciendo(true)}
+              vacio={<Dumbbell size={54} color="#2A3040" />}
+              /* Arriba y no abajo: abajo viven el nombre del ejercicio y la
+                 meta, y los puntos les caerían encima. */
+              puntosArriba={62}
+            />
 
             {/* Sombra para que el texto blanco se lea sobre cualquier foto. */}
             <div style={{
@@ -177,7 +174,9 @@ export default function FichaEjercicio({
               pointerEvents: 'none',
             }} />
 
-            <div style={{ position: 'absolute', left: 18, right: 18, bottom: 16 }}>
+            {/* Sin `pointerEvents: none` este bloque se come el gesto de
+                deslizar en el tercio de abajo de la imagen. */}
+            <div style={{ position: 'absolute', left: 18, right: 18, bottom: 16, pointerEvents: 'none' }}>
               <div style={{
                 fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,.72)', marginBottom: 5,
                 ...NUM_STYLE,
@@ -218,25 +217,8 @@ export default function FichaEjercicio({
 
       {/* ---------- Lo que hay que hacer ---------- */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 18px 24px' }}>
-        {videos.length > 1 && (
-          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 16 }}>
-            {videos.map((v, i) => (
-              <button
-                key={v.id} type="button"
-                onClick={() => { setAngulo(i); setReproduciendo(true); }}
-                style={{
-                  padding: '7px 14px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT,
-                  border: `1.5px solid ${i === angulo ? LT.blue : LT.border}`,
-                  background: i === angulo ? LT.blueSoft : LT.surface,
-                  color: i === angulo ? LT.blue : LT.text2,
-                  fontSize: 12.5, fontWeight: 700,
-                }}
-              >
-                {v.etiqueta}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Aquí vivía una fila de pastillas con los ángulos. Ya no hace falta:
+            los videos se deslizan arriba y los puntos dicen cuántos hay. */}
 
         {/* Cada línea aparece solo si el coach la escribió. Un hueco vacío se
             lee como un fallo de la app, no como "no hay nada que decir". */}
