@@ -4,6 +4,7 @@ import { useMedia } from '@/lib/useViewport';
 import { T, FONT, KP } from '@/lib/theme';
 import { MUSCLE_GROUPS, exerciseMatchesGroup } from '@/lib/muscles';
 import Portada from '@/components/Portada';
+import ListaDesplegable from '@/components/ListaDesplegable';
 
 /**
  * Selector del repertorio completo (estilo Avena): filtros por categoría,
@@ -98,24 +99,32 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
 
           {/* Filtros: tres listas desplegables + limpiar */}
           <div style={{ display: 'flex', gap: 8, paddingBottom: 12, flexWrap: 'wrap' }}>
-            <select
-              value={catId || ''}
-              onChange={(e) => setCatId(e.target.value || null)}
-              style={{ ...selStyle(!!catId), padding: '8px 10px', outline: 'none', flex: '1 1 150px', minWidth: 0 }}
-            >
-              <option value="">Todas las categorías</option>
-              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            <select
-              value={muscle || ''}
-              onChange={(e) => setMuscle(e.target.value || null)}
-              style={{ ...selStyle(!!muscle), padding: '8px 10px', outline: 'none', flex: '1 1 150px', minWidth: 0 }}
-            >
-              <option value="">Parte del cuerpo</option>
-              {MUSCLE_GROUPS.filter((g) => groupCounts[g.id] > 0).map((g) => (
-                <option key={g.id} value={g.id}>{g.label} ({groupCounts[g.id]})</option>
-              ))}
-            </select>
+            <div style={{ flex: '1 1 150px', minWidth: 0 }}>
+              <ListaDesplegable
+                etiqueta="Filtrar por categoría"
+                valor={catId || ''}
+                onCambio={(v) => setCatId(v || null)}
+                estilo={{ ...selStyle(!!catId), padding: '8px 10px' }}
+                opciones={[
+                  { valor: '', etiqueta: 'Todas las categorías' },
+                  ...categories.map((c) => ({ valor: c.id, etiqueta: c.name, color: c.color })),
+                ]}
+              />
+            </div>
+            <div style={{ flex: '1 1 150px', minWidth: 0 }}>
+              <ListaDesplegable
+                etiqueta="Filtrar por parte del cuerpo"
+                valor={muscle || ''}
+                onCambio={(v) => setMuscle(v || null)}
+                estilo={{ ...selStyle(!!muscle), padding: '8px 10px' }}
+                opciones={[
+                  { valor: '', etiqueta: 'Parte del cuerpo' },
+                  ...MUSCLE_GROUPS.filter((g) => groupCounts[g.id] > 0).map((g) => ({
+                    valor: g.id, etiqueta: g.label, nota: String(groupCounts[g.id]),
+                  })),
+                ]}
+              />
+            </div>
             {(catId || muscle) && (
               <button
                 type="button"

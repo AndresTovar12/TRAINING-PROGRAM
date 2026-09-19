@@ -13,6 +13,7 @@ import {
 } from '@/lib/api';
 import MediaDelEjercicio from '@/features/admin/MediaDelEjercicio';
 import SelectorCategoria from '@/features/admin/SelectorCategoria';
+import ListaDesplegable from '@/components/ListaDesplegable';
 import { MUSCLE_GROUPS, FINE_MUSCLES, exerciseMatchesGroup } from '@/lib/muscles';
 import { T, FONT, KP } from '@/lib/theme';
 import Portada from '@/components/Portada';
@@ -159,32 +160,24 @@ function MuscleSelect({ value, onChange, options }) {
     return [...s].sort((a, b) => a.localeCompare(b));
   }, [options, value, groupLabels]);
   const [other, setOther] = useState(false);
-  const selectStyle = {
-    border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '11px 13px',
-    fontFamily: FONT, fontSize: 14, fontWeight: 600, color: T.text, background: T.bg2, outline: 'none', cursor: 'pointer',
-  };
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Grupo muscular</span>
-      <select
-        value={other ? '__other__' : (value || '')}
-        onChange={(e) => {
-          if (e.target.value === '__other__') { setOther(true); onChange(''); }
-          else { setOther(false); onChange(e.target.value); }
+      <ListaDesplegable
+        etiqueta="Grupo muscular"
+        valor={other ? '__other__' : (value || '')}
+        onCambio={(v) => {
+          if (v === '__other__') { setOther(true); onChange(''); }
+          else { setOther(false); onChange(v); }
         }}
-        style={selectStyle}
-      >
-        <option value="">Selecciona…</option>
-        <optgroup label="Grupos">
-          {MUSCLE_GROUPS.map((g) => <option key={g.id} value={g.label}>{g.label}</option>)}
-        </optgroup>
-        {fineOpts.length > 0 && (
-          <optgroup label="Detalle">
-            {fineOpts.map((m) => <option key={m} value={m}>{m}</option>)}
-          </optgroup>
-        )}
-        <option value="__other__">➕ Otro…</option>
-      </select>
+        marcador="Selecciona…"
+        grupos={[
+          { titulo: '', opciones: [{ valor: '', etiqueta: 'Selecciona…' }] },
+          { titulo: 'GRUPOS', opciones: MUSCLE_GROUPS.map((g) => ({ valor: g.label, etiqueta: g.label })) },
+          { titulo: 'DETALLE', opciones: fineOpts.map((m) => ({ valor: m, etiqueta: m })) },
+          { titulo: '', opciones: [{ valor: '__other__', etiqueta: 'Otro…' }] },
+        ]}
+      />
       {other && (
         <Input label="" value={value} onChange={(e) => onChange(e.target.value)} placeholder="Escribe el grupo muscular" autoFocus />
       )}
@@ -375,7 +368,7 @@ function QueVasAHacer({ ejercicio, onMedia, onEditar, onCerrar }) {
 function ExerciseEditor({
   exercise, categories, muscleOptions = [], onClose, onSaved, onDeleted,
   esAjeno, onDuplicate, onGuardadaMiVersion, onRestaurada, foco = 'todo',
-  duenoId, masterId, onCategoriaCreada, puedeCrearCategoria = true,
+  duenoId, masterId, onCategoriaCreada, onCategoriaBorrada, puedeCrearCategoria = true,
 }) {
   // `foco='media'` abre la ficha directo en foto y video, sin los campos de
   // texto. Los datos de los 81 ejercicios ya están escritos; lo que falta es
@@ -625,6 +618,7 @@ function ExerciseEditor({
                   value={form.category_id}
                   onChange={(id) => set('category_id', id)}
                   onCreada={onCategoriaCreada}
+                  onBorrada={onCategoriaBorrada}
                   duenoId={duenoId}
                   masterId={masterId}
                   puedeCrear={puedeCrearCategoria}
@@ -1069,29 +1063,31 @@ export default function ExercisesPanel({ viendoComo }) {
       <div style={{ display: 'flex', gap: 12, marginBottom: 22, flexWrap: 'wrap' }}>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 200px', minWidth: 0 }}>
           <span style={{ fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Categoría</span>
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            style={{ border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '11px 13px', fontFamily: FONT, fontSize: 14, fontWeight: 600, color: T.text, background: T.bg2, outline: 'none', cursor: 'pointer' }}
-          >
-            <option value="all">Todas las categorías ({counts.all ?? 0})</option>
-            {categoriasVisibles.map((c) => (
-              <option key={c.slug} value={c.slug}>{c.name} ({counts[c.slug] ?? 0})</option>
-            ))}
-          </select>
+          <ListaDesplegable
+            etiqueta="Filtrar por categoría"
+            valor={filter}
+            onCambio={setFilter}
+            opciones={[
+              { valor: 'all', etiqueta: 'Todas las categorías', nota: String(counts.all ?? 0) },
+              ...categoriasVisibles.map((c) => ({
+                valor: c.slug, etiqueta: c.name, color: c.color, nota: String(counts[c.slug] ?? 0),
+              })),
+            ]}
+          />
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 200px', minWidth: 0 }}>
           <span style={{ fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Grupo muscular</span>
-          <select
-            value={muscle}
-            onChange={(e) => setMuscle(e.target.value)}
-            style={{ border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '11px 13px', fontFamily: FONT, fontSize: 14, fontWeight: 600, color: T.text, background: T.bg2, outline: 'none', cursor: 'pointer' }}
-          >
-            <option value="all">Todos los grupos</option>
-            {MUSCLE_GROUPS.filter((g) => groupCounts[g.id] > 0).map((g) => (
-              <option key={g.id} value={g.id}>{g.label} ({groupCounts[g.id]})</option>
-            ))}
-          </select>
+          <ListaDesplegable
+            etiqueta="Filtrar por grupo muscular"
+            valor={muscle}
+            onCambio={setMuscle}
+            opciones={[
+              { valor: 'all', etiqueta: 'Todos los grupos' },
+              ...MUSCLE_GROUPS.filter((g) => groupCounts[g.id] > 0).map((g) => ({
+                valor: g.id, etiqueta: g.label, nota: String(groupCounts[g.id]),
+              })),
+            ]}
+          />
         </label>
       </div>
 
@@ -1159,6 +1155,7 @@ export default function ExercisesPanel({ viendoComo }) {
           // del master —o sea visible para TODOS—, así que ahí no se ofrece.
           puedeCrearCategoria={!viendoComo}
           onCategoriaCreada={(fila) => setCategories((prev) => [...prev, fila])}
+          onCategoriaBorrada={(id) => setCategories((prev) => prev.filter((c) => c.id !== id))}
           muscleOptions={muscles}
           esAjeno={!!editing.esAjeno}
           foco={editing.foco || 'todo'}

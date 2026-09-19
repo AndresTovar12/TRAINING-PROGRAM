@@ -15,6 +15,7 @@ import { useIsDesktop } from '@/lib/useViewport';
 import { T, FONT, KP, tipoDeSesion } from '@/lib/theme';
 import { plural, pluralS } from '@/lib/plural';
 import { esDescanso } from '@/lib/training-utils';
+import ListaDesplegable from '@/components/ListaDesplegable';
 
 function useIsNarrow(breakpoint = 880) {
   const [narrow, setNarrow] = useState(
@@ -879,20 +880,26 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, background: T.bg, borderRadius: 12, padding: '11px 14px', flexWrap: 'wrap' }}>
             <Shield size={16} color={T.accent} />
             <span style={{ fontSize: 13, fontWeight: 700, color: T.text2 }}>Coach:</span>
-            <select
-              value={athlete.coach_id || ''}
-              onChange={(e) => onChangeCoach(e.target.value)}
-              disabled={savingCoach}
-              style={{ flex: 1, minWidth: 140, border: `1.5px solid ${T.border}`, borderRadius: 10, padding: '8px 10px', fontFamily: FONT, fontSize: 13.5, fontWeight: 600, color: T.text, background: T.bg2, outline: 'none' }}
-            >
-              <option value="">Sin coach (libre)</option>
-              {masterProfile && (
-                <option value={masterProfile.id}>Yo — {masterProfile.full_name || masterProfile.username} (master)</option>
-              )}
-              {coaches.map((c) => (
-                <option key={c.id} value={c.id}>{c.full_name || c.username} (@{c.username})</option>
-              ))}
-            </select>
+            <div style={{ flex: 1, minWidth: 140 }}>
+              <ListaDesplegable
+                etiqueta="Coach del atleta"
+                valor={athlete.coach_id || ''}
+                onCambio={onChangeCoach}
+                deshabilitado={savingCoach}
+                estilo={{ borderRadius: 10, padding: '8px 10px', fontSize: 13.5 }}
+                opciones={[
+                  { valor: '', etiqueta: 'Sin coach (libre)' },
+                  ...(masterProfile ? [{
+                    valor: masterProfile.id,
+                    etiqueta: `Yo — ${masterProfile.full_name || masterProfile.username}`,
+                    nota: 'master',
+                  }] : []),
+                  ...coaches.map((c) => ({
+                    valor: c.id, etiqueta: c.full_name || c.username, nota: `@${c.username}`,
+                  })),
+                ]}
+              />
+            </div>
             {savingCoach && <Loader2 size={15} className="spin" color={T.text3} />}
           </div>
         )}

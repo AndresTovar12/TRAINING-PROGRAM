@@ -104,6 +104,40 @@ export async function createCategory({ name, createdBy, cuantas = 0 }) {
   return data;
 }
 
+/**
+ * Cuántos ejercicios están puestos en esta categoría.
+ *
+ * Se pregunta ANTES de borrar, para poder decirlo en la advertencia. Un
+ * "¿seguro?" que no dice qué se lleva por delante no sirve de nada.
+ */
+export async function contarEjerciciosDeCategoria(categoryId) {
+  const { count, error } = await supabase
+    .from('exercises')
+    .select('id', { count: 'exact', head: true })
+    .eq('category_id', categoryId);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+/**
+ * Borra una categoría propia.
+ *
+ * Andrés, 19 sep 2026: "¿qué pasa si creo una categoría sin querer y la quiero
+ * borrar? Creo que no se puede". No se podía: la base SÍ lo permitía desde
+ * siempre —la política `categorias_borrar` deja borrar las que creaste tú, y
+ * el master las de la app— pero no había ni función ni botón.
+ *
+ * LOS EJERCICIOS NO SE VAN CON ELLA. La llave foránea es ON DELETE SET NULL,
+ * así que los que estuvieran ahí se quedan sin categoría, no se borran. Por
+ * eso el aviso cuenta cuántos son antes de preguntar.
+ *
+ * Quién puede borrar qué lo decide la base, no esta función.
+ */
+export async function deleteCategory(id) {
+  const { error } = await supabase.from('exercise_categories').delete().eq('id', id);
+  if (error) throw error;
+}
+
 /* ----------------------------- Exercises ------------------------------ */
 export async function listExercises() {
   const { data, error } = await supabase

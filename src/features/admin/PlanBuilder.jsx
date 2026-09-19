@@ -586,7 +586,7 @@ function ExerciseRow({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove,
  * lleva peso— y la mete al set ya enlazada. Queda disponible para todos tus
  * planes desde el momento en que la guardas.
  */
-function CrearEjercicioRapido({ categorias, onCancelar, onCreado, duenoId, masterId, onCategoriaCreada }) {
+function CrearEjercicioRapido({ categorias, onCancelar, onCreado, duenoId, masterId, onCategoriaCreada, onCategoriaBorrada }) {
   const [nombre, setNombre] = useState('');
   const [categoria, setCategoria] = useState('');
   const [foto, setFoto] = useState('');
@@ -662,6 +662,7 @@ function CrearEjercicioRapido({ categorias, onCancelar, onCreado, duenoId, maste
               value={categoria}
               onChange={setCategoria}
               onCreada={onCategoriaCreada}
+              onBorrada={onCategoriaBorrada}
               duenoId={duenoId}
               masterId={masterId}
               sinCategoria
@@ -1239,7 +1240,7 @@ function EditorSesionesDelDia({ day, onPatch }) {
   );
 }
 
-function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCreado, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, duenoId, masterId, onCategoriaCreada }) {
+function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCreado, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, duenoId, masterId, onCategoriaCreada, onCategoriaBorrada }) {
   const [creandoEjercicio, setCreandoEjercicio] = useState(false);
   const [mediaDe, setMediaDe] = useState(null);
   const pregunta = useConfirmacion();
@@ -1458,6 +1459,7 @@ function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCr
           duenoId={duenoId}
           masterId={masterId}
           onCategoriaCreada={onCategoriaCreada}
+          onCategoriaBorrada={onCategoriaBorrada}
           onCancelar={() => setCreandoEjercicio(false)}
           onCreado={(fila, llevaPeso) => {
             onEjercicioCreado?.(fila);
@@ -2190,6 +2192,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
                 duenoId={user?.id}
                 masterId={masterIdCat}
                 onCategoriaCreada={(fila) => setCategorias((prev) => [...prev, fila])}
+                onCategoriaBorrada={(id) => setCategorias((prev) => prev.filter((c) => c.id !== id))}
                 atleta={athlete}
                 onEjercicioCreado={(fila) => setRepertoire((prev) => [
                   ...prev, { ...fila, isMine: true, isBase: false },

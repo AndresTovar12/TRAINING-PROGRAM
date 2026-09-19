@@ -24,7 +24,10 @@
  */
 import { useState } from 'react';
 import { Plus, Loader2, X } from 'lucide-react';
-import { createCategory } from '@/lib/api';
+import { contarEjerciciosDeCategoria, createCategory, deleteCategory } from '@/lib/api';
+import { useConfirmacion } from '@/components/Confirmacion';
+import ListaDesplegable from '@/components/ListaDesplegable';
+import { plural } from '@/lib/plural';
 import { T, FONT } from '@/lib/theme';
 
 // "Velocidad", "velocidad" y "Velocidád" son la misma categoría para una persona.
@@ -32,9 +35,10 @@ const igual = (a = '', b = '') => a.normalize('NFD').replace(/[̀-ͯ]/g, '').tri
   === b.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
 
 export default function SelectorCategoria({
-  categorias = [], value, onChange, onCreada,
+  categorias = [], value, onChange, onCreada, onBorrada,
   duenoId, masterId, sinCategoria = false, puedeCrear = true, estilo,
 }) {
+  const pregunta = useConfirmacion();
   const [creando, setCreando] = useState(false);
   const [nombre, setNombre] = useState('');
   const [guardando, setGuardando] = useState(false);
@@ -42,6 +46,37 @@ export default function SelectorCategoria({
 
   const mias = categorias.filter((c) => c.created_by && c.created_by === duenoId);
   const deLaApp = categorias.filter((c) => !c.created_by || (c.created_by === masterId && c.created_by !== duenoId));
+
+  /* BORRAR UNA CATEGORÍA PROPIA.
+     Andrés, 19 sep 2026: "¿qué pasa si creo una categoría sin querer y la
+     quiero borrar? Creo que no se puede". No se podía, y no era la base: la
+     regla de acceso lo permitía desde siempre. Faltaba el botón.
+
+     Solo las TUYAS: las de la app no llevan bote de basura. Y antes de
+     preguntar se cuenta cuántos ejercicios se quedarían sin categoría, porque
+     un "¿seguro?" que no dice qué se lleva por delante no sirve de nada. */
+  async function borrar(cat) {
+    let cuantos = 0;
+    try { cuantos = await contarEjerciciosDeCategoria(cat.id); } catch { /* se pregunta igual */ }
+    const va = await pregunta({
+      titulo: `¿Borrar la categoría «${cat.name}»?`,
+      detalle: cuantos
+        ? `${plural(cuantos, 'ejercicio se queda', 'ejercicios se quedan')} sin categoría. No se borra ninguno.`
+        : 'No la está usando ningún ejercicio.',
+      confirmar: 'Sí, borrarla',
+      peligro: true,
+    });
+    if (!va) return;
+    try {
+      await deleteCategory(cat.id);
+      // Si era la que estaba puesta, el campo se queda sin nada en vez de
+      // apuntando a algo que ya no existe.
+      if (value === cat.id) onChange('');
+      onBorrada?.(cat.id);
+    } catch (e) {
+      setErr(e.message || 'No se pudo borrar la categoría.');
+    }
+  }
 
   async function crear() {
     const n = nombre.trim();
@@ -73,22 +108,24 @@ export default function SelectorCategoria({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <select
-        value={value || ''}
-        onChange={(e) => onChange(e.target.value)}
-        style={{ ...campo, cursor: 'pointer' }}
-      >
-        {sinCategoria && <option value="">Sin categoría</option>}
-        {/* Agrupadas: se ve de un vistazo cuáles son de la app y cuáles hizo uno. */}
-        <optgroup label="De la app">
-          {deLaApp.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </optgroup>
-        {mias.length > 0 && (
-          <optgroup label="Tuyas">
-            {mias.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </optgroup>
-        )}
-      </select>
+      {/* Agrupadas: se ve de un vistazo cuáles son de la app y cuáles hizo uno.
+          Las tuyas llevan bote de basura; las de la app no. */}
+      <ListaDesplegable
+        etiqueta="Categoría"
+        valor={value || ''}
+        onCambio={onChange}
+        marcador={sinCategoria ? 'Sin categoría' : 'Selecciona…'}
+        estilo={estilo}
+        grupos={[
+          ...(sinCategoria ? [{ titulo: '', opciones: [{ valor: '', etiqueta: 'Sin categoría' }] }] : []),
+          { titulo: 'TUYAS', opciones: mias.map((c) => ({
+            valor: c.id, etiqueta: c.name, color: c.color, alBorrar: () => borrar(c),
+          })) },
+          { titulo: 'DE LA APP', opciones: deLaApp.map((c) => ({
+            valor: c.id, etiqueta: c.name, color: c.color,
+          })) },
+        ]}
+      />
 
       {!creando && puedeCrear && (
         <button
