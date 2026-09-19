@@ -9,6 +9,7 @@ import {
   listCategories, listExercises, createExercise, updateExercise, deleteExercise,
   getMasterId, tagRepertoire, duplicateExercise,
   listExerciseOverrides, saveExerciseOverride, deleteExerciseOverride, aplicarOverrides,
+  addExerciseMedia,
 } from '@/lib/api';
 import MediaDelEjercicio from '@/features/admin/MediaDelEjercicio';
 import SelectorCategoria from '@/features/admin/SelectorCategoria';
@@ -383,6 +384,9 @@ function ExerciseEditor({
   const [soloMedia, setSoloMedia] = useState(foco === 'media');
   const { user } = useAuth();
   const pregunta = useConfirmacion();
+  /* Lo que se grabó ANTES de crear el ejercicio. Vive aquí y no dentro de
+     `MediaDelEjercicio` porque quien lo reparte es `onSave`, que está aquí. */
+  const [nuevos, setNuevos] = useState([]);
   const [dupBusy, setDupBusy] = useState(false);
   const [restaurando, setRestaurando] = useState(false);
   const [form, setForm] = useState(() =>
@@ -427,6 +431,27 @@ function ExerciseEditor({
       recorte_inicio: form.video_url ? form.recorte_inicio : null,
       recorte_fin: form.video_url ? form.recorte_fin : null,
     };
+
+    /* LO QUE SE GRABÓ ANTES DE QUE EL EJERCICIO EXISTIERA.
+       Se reparte en dos: el primer video y la primera foto "para todos" caben
+       en las columnas del propio ejercicio —que es donde media app los busca:
+       el buscador del repertorio, las tarjetas del plan, la insignia de "tiene
+       video"— y viajan dentro de este mismo guardado. El resto (otros ángulos,
+       y las versiones de hombres y de mujeres) son filas de `exercise_media`,
+       y esa tabla pide un `exercise_id`: hasta abajo, cuando ya hay uno. */
+    const primeraFoto = nuevos.find((m) => m.tipo === 'foto' && !m.genero);
+    const primerVideo = nuevos.find((m) => m.tipo === 'video' && !m.genero);
+    if (!exercise) {
+      if (primeraFoto) payload.cover_image_url = primeraFoto.url;
+      if (primerVideo) {
+        payload.video_url = primerVideo.url;
+        payload.recorte_inicio = primerVideo.inicio ?? null;
+        payload.recorte_fin = primerVideo.fin ?? null;
+        payload.sin_audio = !!primerVideo.sinAudio;
+        payload.encuadre = primerVideo.encuadre ?? null;
+      }
+    }
+
     try {
       // Ejercicio de otro (la base del master): se guarda MI versión aparte.
       // El id no cambia, así que los planes que ya lo usan la recogen solos.
@@ -438,6 +463,33 @@ function ExerciseEditor({
       const saved = exercise
         ? await updateExercise(exercise.id, payload)
         : await createExercise({ ...payload, created_by: user?.id ?? null });
+
+      /* Ya hay id: ahora sí caben los demás archivos.
+         Si alguno falla NO se tira el ejercicio —ya está creado, y borrarlo
+         para "dejar limpio" sería perder también lo que sí entró—. Se avisa
+         cuáles faltaron y se cierra: desde su ficha se agregan en dos toques. */
+      const resto = nuevos.filter((m) => m !== primeraFoto && m !== primerVideo);
+      if (!exercise && resto.length) {
+        let fallaron = 0;
+        for (const m of resto) {
+          try {
+            await addExerciseMedia({
+              exerciseId: saved.id, url: m.url, tipo: m.tipo, genero: m.genero || null,
+              inicio: m.inicio ?? null, fin: m.fin ?? null,
+              sinAudio: !!m.sinAudio, encuadre: m.encuadre ?? null,
+            });
+          } catch { fallaron += 1; }
+        }
+        if (fallaron) {
+          await pregunta({
+            titulo: 'El ejercicio se creó, pero faltó guardar archivos',
+            detalle: `${fallaron} de ${resto.length} no se pudieron subir. Ábrelo desde el repertorio y agrégaselos otra vez.`,
+            confirmar: 'Entendido',
+            cancelar: 'Cerrar',
+          });
+        }
+      }
+      setNuevos([]);
       onSaved(saved);
     } catch (e) {
       setErr(e.message || 'Error al guardar');
@@ -629,6 +681,8 @@ function ExerciseEditor({
               recorte_inicio: inicio, recorte_fin: fin,
               sin_audio: !!sinAudio, encuadre: encuadre ?? null,
             }))}
+            nuevos={nuevos}
+            onNuevos={setNuevos}
           />
 
           <Input

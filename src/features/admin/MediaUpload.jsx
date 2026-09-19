@@ -21,6 +21,15 @@ export default function MediaUpload({
   // miniatura— pero se acepta para no tener que tocar cada sitio que lo usa.
   label, icon: _icon, value, onChange, accept, kind, hint,
   onAjustes,
+  /* Dibuja TÚ los botones y quédate con lo de aquí dentro.
+     La pantalla de crear un ejercicio necesita un botón de grabar enorme —el
+     coach está en el gimnasio, cansado, con el tripié puesto— y los dos
+     botones de siempre no sirven para eso. Duplicar el componente sí que no:
+     este archivo existe justamente porque estaba duplicado y los arreglos
+     llegaban a una copia y no a la otra. Con esto, el que llama pone la forma
+     y aquí se queda todo lo que cuesta: el editor, la barra de avance, la
+     optimización de la foto y los avisos. */
+  botones,
 }) {
   // En el telefono se ofrecen DOS acciones distintas, y grabar va primero.
   //
@@ -164,7 +173,21 @@ export default function MediaUpload({
           onListo={subeLaFoto}
         />
       )}
-      <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>{label}</span>
+      {label && !botones && (
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>{label}</span>
+      )}
+      {/* El linter marca aquí "no accedas a refs al dibujar". No se accede: lo
+          que viaja son dos funciones, y la ref se lee cuando alguien las llama,
+          que es siempre dentro de un onClick. Los botones de abajo hacen
+          exactamente lo mismo y no se marcan solo porque están escritos en su
+          sitio en vez de pasarse por una prop. */}
+      {/* eslint-disable-next-line react-hooks/refs */}
+      {botones ? botones({
+        camara: () => camaraRef.current?.click(),
+        carrete: () => inputRef.current?.click(),
+        busy,
+        enTelefono,
+      }) : (
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         {enTelefono ? (
           <>
@@ -238,6 +261,7 @@ export default function MediaUpload({
           </button>
         )}
       </div>
+      )}
       <input ref={inputRef} type="file" accept={accept} onChange={onPick} style={{ display: 'none' }} />
       {/* `capture` es lo que hace que el telefono abra la camara en vez del
           carrete. Va en un input APARTE y no como atributo condicional del de
@@ -296,7 +320,7 @@ export default function MediaUpload({
           Cloudflare de cuatro renglones no le dice nada a nadie —no se puede
           leer ni comprobar de un vistazo— y una miniatura contesta de golpe la
           única pregunta que importa: ¿es este el archivo correcto? */}
-      {value && (
+      {value && !botones && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{
             width: 54, height: 54, borderRadius: 10, overflow: 'hidden', flexShrink: 0,

@@ -50,6 +50,7 @@ import EditorFoto from '@/features/admin/EditorFoto';
 import { recortaImagen } from '@/features/admin/recorte';
 import { useAuth } from '@/contexts/AuthContext';
 import MediaUpload from '@/features/admin/MediaUpload';
+import MediaAlCrear from '@/features/admin/MediaAlCrear';
 import { T, FONT } from '@/lib/theme';
 import { ligaExterna } from '@/lib/videos';
 
@@ -106,6 +107,10 @@ export default function MediaDelEjercicio({
   exerciseId,
   portada, onPortada,
   principal, recortePrincipal, onPrincipal, onRecortePrincipal,
+  // Solo mientras el ejercicio no existe: la lista de lo que se grabó antes de
+  // crearlo. La guarda el formulario, no este componente, porque quien la
+  // reparte al guardar es `ExercisesPanel`.
+  nuevos, onNuevos,
 }) {
   const { user } = useAuth();
   const [recortando, setRecortando] = useState(null); // video abierto en el editor
@@ -294,90 +299,16 @@ export default function MediaDelEjercicio({
     }
   }
 
-  /* EL EJERCICIO TODAVÍA NO EXISTE: se puede grabar igual.
-     Andrés, 18 sep 2026, sobre crear un ejercicio: "aquí ni siquiera te está
-     dando la opción para grabar el video... primero tienes que crear el
-     ejercicio con todas las especificaciones, darte el tiempo, y después irte
-     a buscar el ejercicio para ahora sí añadir el video". Tenía razón: aquí
-     había un párrafo gris que decía justamente eso, y nada más.
-
-     Se puede arreglar porque el video y la foto de un ejercicio recién creado
-     NO viven en `exercise_media`: viven en dos columnas del propio ejercicio,
-     que el formulario ya guarda al crearlo. Así que se llenan antes, en el
-     gimnasio, y viajan con el "Crear ejercicio".
-
-     Lo que sigue necesitando que exista: los ÁNGULOS de más y las versiones
-     por género, que sí son filas de otra tabla y necesitan a quién colgarse.
-     Por eso aquí solo hay un video y una foto, y el texto lo dice. */
   const icono = { border: 'none', background: 'transparent', cursor: 'pointer', padding: 6, flexShrink: 0 };
 
+  /* EL EJERCICIO TODAVÍA NO EXISTE.
+     Se puede grabar igual: la pantalla de crear tiene la suya, que apunta los
+     archivos en una lista y los reparte cuando el ejercicio nace. Ver
+     `MediaAlCrear`, que explica por qué hace falta. */
   if (!exerciseId) {
-    const puesto = (url, esVideo) => (
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        background: T.bg, border: `1px solid ${T.border}`, borderRadius: 11, padding: 8,
-      }}>
-        <Miniatura url={url} esVideo={esVideo} />
-        <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, color: T.text }}>
-          {esVideo ? 'Video' : 'Foto'}
-          <span style={{ color: T.text3, fontWeight: 600 }}> · listo</span>
-        </span>
-        <button
-          type="button"
-          onClick={() => (esVideo ? onPrincipal?.('') : onPortada?.(''))}
-          title="Quitar"
-          style={{ ...icono, color: T.danger }}
-        >
-          <Trash2 size={15} />
-        </button>
-      </div>
-    );
-
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-        <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Fotos y videos</span>
-
-        {principal ? puesto(principal, true) : (
-          <MediaUpload
-            label="" value="" onChange={() => {}}
-            onAjustes={({ url, inicio, fin, sinAudio, encuadre }) => {
-              if (!url) { setErr('No se pudo subir el archivo.'); return; }
-              setErr('');
-              onPrincipal?.(url);
-              onRecortePrincipal?.({ inicio, fin, sinAudio, encuadre });
-            }}
-            accept="video/*" kind="videos"
-          />
-        )}
-
-        {portada ? puesto(portada, false) : (
-          <MediaUpload
-            label="" value="" onChange={() => {}}
-            onAjustes={({ url }) => {
-              if (!url) { setErr('No se pudo subir el archivo.'); return; }
-              setErr('');
-              onPortada?.(url);
-            }}
-            accept="image/*" kind="covers"
-          />
-        )}
-
-        <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 600, lineHeight: 1.5 }}>
-          Con esto basta para crearlo. Los otros ángulos y las versiones para
-          hombres y para mujeres se agregan en cuanto lo guardes.
-        </div>
-
-        {err && (
-          <div style={{
-            background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 11,
-            padding: '10px 12px', fontSize: 12.5, fontWeight: 700,
-          }}>
-            {err}
-          </div>
-        )}
-      </div>
-    );
+    return <MediaAlCrear nuevos={nuevos ?? []} onNuevos={onNuevos ?? (() => {})} />;
   }
+
 
   /* Todo en UNA lista, ordenada por grupo pero sin partir la pantalla.
      Los archivos que viven en una columna del ejercicio entran como uno más,
