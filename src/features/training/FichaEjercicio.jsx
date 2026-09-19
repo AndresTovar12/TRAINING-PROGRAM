@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { ChevronLeft, Dumbbell, Timer, Minus, Plus, LineChart as LineChartIcon } from 'lucide-react';
 import { LT, FONT, NUM_STYLE } from '@/lib/theme';
 import { videosParaAtleta, portadaParaAtleta } from '@/lib/videos';
-import { VideoRecortado } from '@/features/training/ExerciseMediaModal';
+import { VideoRecortado } from '@/features/training/VideoRecortado';
 import CarruselDeVideos, { Puntos } from '@/features/training/CarruselDeVideos';
 import { aKilos, desdeKilos, pesoTexto, etiquetaUnidad } from '@/lib/unidades';
 import { isLoadedExercise, formatIntensity, findPreviousWeight } from '@/lib/training-utils';
