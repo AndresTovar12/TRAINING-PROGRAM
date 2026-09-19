@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Plus, Search, X, Trash2, Loader2, Video, Dumbbell,
+  Plus, Minus, Search, X, Trash2, Loader2, Video, Dumbbell,
   Copy, RotateCcw, Pencil, ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -387,6 +387,10 @@ function ExerciseEditor({
   /* Lo que se grabó ANTES de crear el ejercicio. Vive aquí y no dentro de
      `MediaDelEjercicio` porque quien lo reparte es `onSave`, que está aquí. */
   const [nuevos, setNuevos] = useState([]);
+  /* Los campos que no son el nombre, al crear. Empiezan plegados: lo que el
+     coach viene a hacer es grabar. Se abren solos si al guardar falta algo de
+     ahí dentro — pedir un dato que no se ve es una trampa. */
+  const [detalles, setDetalles] = useState(false);
   const [dupBusy, setDupBusy] = useState(false);
   const [restaurando, setRestaurando] = useState(false);
   const [form, setForm] = useState(() =>
@@ -410,10 +414,15 @@ function ExerciseEditor({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const categoriaElegida = categories.find((c) => c.id === form.category_id)?.name || null;
 
   async function onSave() {
     if (!form.name.trim()) { setErr('El nombre es obligatorio'); return; }
-    if (!form.category_id) { setErr('Selecciona una categoría'); return; }
+    if (!form.category_id) {
+      setDetalles(true);
+      setErr('Falta la categoría. Está en "Agregar detalles", que acabo de abrirte.');
+      return;
+    }
     setErr('');
     setBusy(true);
     const toArr = (s) => s.split(',').map((x) => x.trim()).filter(Boolean);
@@ -601,97 +610,175 @@ function ExerciseEditor({
               )}
             </div>
           )}
-          {!soloMedia && (
-          <>
-          <Input label="Nombre" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Ej. Back Squat" />
+          {/* LOS CAMPOS, SUELTOS. Se declaran aquí y se ordenan abajo, porque el
+              orden NO es el mismo al crear que al editar y moverlos como
+              bloques de JSX es la forma de equivocarse. */}
+          {(() => {
+            const campoNombre = (
+              <Input key="nombre" label="Nombre" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Ej. Back Squat" />
+            );
+            const campoCategoria = (
+              <div key="cat" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Categoría</span>
+                <SelectorCategoria
+                  categorias={categories}
+                  value={form.category_id}
+                  onChange={(id) => set('category_id', id)}
+                  onCreada={onCategoriaCreada}
+                  duenoId={duenoId}
+                  masterId={masterId}
+                  puedeCrear={puedeCrearCategoria}
+                />
+              </div>
+            );
+            const campoEquipo = (
+              <Input key="equipo" label="Equipo" value={form.equipment} onChange={(e) => set('equipment', e.target.value)} placeholder="Barra, Mancuerna, Peso corporal…" />
+            );
+            const campoMusculo = (
+              <MuscleSelect key="musc" value={form.muscle_primary} onChange={(v) => set('muscle_primary', v)} options={muscleOptions} />
+            );
+            const campoNotas = (
+              <label key="notas" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Notas / descripción</span>
+                <textarea
+                  value={form.description}
+                  onChange={(e) => set('description', e.target.value)}
+                  rows={3}
+                  placeholder="Cues técnicos, tempo, observaciones…"
+                  style={{
+                    border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '11px 13px',
+                    fontFamily: FONT, fontSize: 14, fontWeight: 500, color: T.text, outline: 'none',
+                    resize: 'vertical', background: T.bg2,
+                  }}
+                />
+              </label>
+            );
+            const campoLiga = (
+              <Input
+                key="liga"
+                label="Enlace de video (TikTok / Instagram / YouTube)"
+                value={form.video_link}
+                onChange={(e) => set('video_link', e.target.value)}
+                placeholder="https://…"
+              />
+            );
+            /* Ni la foto de portada ni el video principal tienen ya su propio
+               bloque: los dos viven dentro de la lista, encabezándola. Andrés
+               dijo del video que lo que no le cuadraba era "que esté separada
+               del video principal", y vale igual para la foto: para quien usa
+               la app son todos archivos del mismo ejercicio. */
+            const bloqueMedia = (
+              <MediaDelEjercicio
+                key="media"
+                exerciseId={exercise?.id}
+                portada={form.cover_image_url}
+                onPortada={(v) => set('cover_image_url', v)}
+                principal={form.video_url}
+                recortePrincipal={{
+                  recorte_inicio: form.recorte_inicio,
+                  recorte_fin: form.recorte_fin,
+                  sin_audio: form.sin_audio,
+                  encuadre: form.encuadre,
+                }}
+                onPrincipal={(v) => set('video_url', v)}
+                onRecortePrincipal={({ inicio, fin, sinAudio, encuadre }) => setForm((f) => ({
+                  ...f,
+                  recorte_inicio: inicio, recorte_fin: fin,
+                  sin_audio: !!sinAudio, encuadre: encuadre ?? null,
+                }))}
+                nuevos={nuevos}
+                onNuevos={setNuevos}
+              />
+            );
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Categoría</span>
-          <SelectorCategoria
-            categorias={categories}
-            value={form.category_id}
-            onChange={(id) => set('category_id', id)}
-            onCreada={onCategoriaCreada}
-            duenoId={duenoId}
-            masterId={masterId}
-            puedeCrear={puedeCrearCategoria}
-          />
-          </div>
+            const volverALosDatos = soloMedia && (
+              <button
+                key="volver"
+                type="button"
+                onClick={() => setSoloMedia(false)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 7, alignSelf: 'flex-start',
+                  minHeight: 40, padding: '0 13px', borderRadius: 11, cursor: 'pointer',
+                  border: `1.5px solid ${T.border}`, background: T.bg2,
+                  fontFamily: FONT, fontSize: 13, fontWeight: 700, color: T.text2,
+                }}
+              >
+                <Pencil size={14} /> Editar también los datos
+              </button>
+            );
 
-          <Input label="Equipo" value={form.equipment} onChange={(e) => set('equipment', e.target.value)} placeholder="Barra, Mancuerna, Peso corporal…" />
+            if (soloMedia) return <>{volverALosDatos}{bloqueMedia}{campoLiga}</>;
 
-          <MuscleSelect value={form.muscle_primary} onChange={(v) => set('muscle_primary', v)} options={muscleOptions} />
+            /* CREAR: GRABAR VA PRIMERO, y lo demás se pliega.
+               Esta es la maqueta A que escogió Andrés, y la construí mal la
+               primera vez: hice la pantalla nueva pero la dejé en el hueco de
+               siempre, o sea al FINAL, después de nombre, categoría, equipo,
+               músculo y notas. Andrés: "pusiste hasta abajo el botón, cuando
+               tenía que cambiar el orden de todo eso e iba hasta arriba".
 
+               El escenario manda: el coach está en el gimnasio con el tripié
+               puesto y el sol encima. Lo primero que ve tiene que ser grabar.
+               Lo único que se le pide además es el nombre; el resto se llena
+               sentado, o nunca. */
+            if (!exercise) {
+              return (
+                <>
+                  {bloqueMedia}
+                  {campoNombre}
+                  <button
+                    type="button"
+                    onClick={() => setDetalles((v) => !v)}
+                    aria-expanded={detalles}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 11, minHeight: 56, padding: '0 15px',
+                      border: `1px dashed ${T.borderHi}`, background: 'transparent', borderRadius: 14,
+                      cursor: 'pointer', fontFamily: FONT, textAlign: 'left',
+                    }}
+                  >
+                    {detalles ? <Minus size={17} color={T.text3} /> : <Plus size={17} color={T.text3} />}
+                    <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span style={{ fontSize: 13.5, fontWeight: 700, color: T.text2 }}>
+                        {detalles ? 'Ocultar los detalles' : 'Agregar detalles'}
+                      </span>
+                      {/* LA CATEGORÍA, A LA VISTA AUNQUE ESTÉ PLEGADA.
+                          Viene preseleccionada con la primera de la lista. Antes
+                          se veía y se podía cambiar; al plegarla, los ejercicios
+                          se irían apilando en silencio dentro de la que tocara.
+                          Decir dónde va cuesta una palabra. */}
+                      <span style={{ fontSize: 11.5, fontWeight: 500, color: T.text3 }}>
+                        {categoriaElegida
+                          ? `${categoriaElegida} · equipo, músculo, notas`
+                          : 'Categoría, equipo, músculo, notas'}
+                      </span>
+                    </span>
+                  </button>
+                  {detalles && (
+                    <>
+                      {campoCategoria}
+                      {campoEquipo}
+                      {campoMusculo}
+                      {campoNotas}
+                      {campoLiga}
+                    </>
+                  )}
+                </>
+              );
+            }
 
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Notas / descripción</span>
-            <textarea
-              value={form.description}
-              onChange={(e) => set('description', e.target.value)}
-              rows={3}
-              placeholder="Cues técnicos, tempo, observaciones…"
-              style={{
-                border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '11px 13px',
-                fontFamily: FONT, fontSize: 14, fontWeight: 500, color: T.text, outline: 'none',
-                resize: 'vertical', background: T.bg2,
-              }}
-            />
-          </label>
-          </>
-          )}
-
-          {soloMedia && (
-            <button
-              type="button"
-              onClick={() => setSoloMedia(false)}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 7, alignSelf: 'flex-start',
-                minHeight: 40, padding: '0 13px', borderRadius: 11, cursor: 'pointer',
-                border: `1.5px solid ${T.border}`, background: T.bg2,
-                fontFamily: FONT, fontSize: 13, fontWeight: 700, color: T.text2,
-              }}
-            >
-              <Pencil size={14} /> Editar también los datos
-            </button>
-          )}
-
-          {!soloMedia && <div style={{ height: 1, background: T.border }} />}
-
-          {/* Ni la foto de portada ni el video principal tienen ya su propio
-              bloque aquí arriba: los dos viven dentro de la lista, encabezándola.
-              Andrés dijo del video que lo que no le cuadraba era "que esté
-              separada del video principal", y vale igual para la foto: para
-              quien usa la app son todos archivos del mismo ejercicio. Que unos
-              vivan en una columna y otros en otra tabla es un detalle de cómo
-              está guardado, no algo que le importe a nadie. */}
-          <MediaDelEjercicio
-            exerciseId={exercise?.id}
-            portada={form.cover_image_url}
-            onPortada={(v) => set('cover_image_url', v)}
-            principal={form.video_url}
-            recortePrincipal={{
-              recorte_inicio: form.recorte_inicio,
-              recorte_fin: form.recorte_fin,
-              sin_audio: form.sin_audio,
-              encuadre: form.encuadre,
-            }}
-            onPrincipal={(v) => set('video_url', v)}
-            onRecortePrincipal={({ inicio, fin, sinAudio, encuadre }) => setForm((f) => ({
-              ...f,
-              recorte_inicio: inicio, recorte_fin: fin,
-              sin_audio: !!sinAudio, encuadre: encuadre ?? null,
-            }))}
-            nuevos={nuevos}
-            onNuevos={setNuevos}
-          />
-
-          <Input
-            label="Enlace de video (TikTok / Instagram / YouTube)"
-            value={form.video_link}
-            onChange={(e) => set('video_link', e.target.value)}
-            placeholder="https://…"
-          />
-
+            // EDITAR: el coach vino a cambiar datos, no a grabar. Orden de siempre.
+            return (
+              <>
+                {campoNombre}
+                {campoCategoria}
+                {campoEquipo}
+                {campoMusculo}
+                {campoNotas}
+                <div style={{ height: 1, background: T.border }} />
+                {bloqueMedia}
+                {campoLiga}
+              </>
+            );
+          })()}
 
           {err && (
             <div style={{ background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 11, padding: '11px 14px', fontSize: 13.5, fontWeight: 600 }}>

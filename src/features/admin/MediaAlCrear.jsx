@@ -50,6 +50,7 @@ export default function MediaAlCrear({ nuevos, onNuevos }) {
   const [ligaAbierta, setLigaAbierta] = useState(false);
   const [ligaTexto, setLigaTexto] = useState('');
   const [err, setErr] = useState('');
+  const [arrastrando, setArrastrando] = useState(false);
 
   const suma = (datos) => {
     if (!datos?.url) { setErr('No se pudo subir el archivo.'); return; }
@@ -140,18 +141,34 @@ export default function MediaAlCrear({ nuevos, onNuevos }) {
           <MediaUpload
             accept="video/*" kind="videos" value="" onChange={() => {}}
             onAjustes={suma}
-            botones={({ camara, carrete, busy, enTelefono }) => (
+            botones={({ camara, carrete, suelta, busy, enTelefono }) => (
               <button
                 type="button"
                 onClick={enTelefono ? camara : carrete}
                 disabled={busy}
                 className="kp-press"
+                /* Soltar el archivo encima. En la compu es el gesto natural y
+                   la pantalla ya lo ofrecía por escrito: sin esto era una
+                   promesa falsa. `onDragOver` con `preventDefault` es
+                   obligatorio — sin él el navegador se queda el archivo y abre
+                   el video en una pestaña, tirando el formulario a medias. */
+                onDragOver={(e) => { e.preventDefault(); setArrastrando(true); }}
+                onDragLeave={() => setArrastrando(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setArrastrando(false);
+                  suelta(e.dataTransfer?.files?.[0]);
+                }}
                 style={{
                   width: '100%', border: 'none', cursor: busy ? 'default' : 'pointer', padding: '30px 16px',
                   background: `linear-gradient(150deg, ${T.accent}, ${T.accentDk})`,
                   borderRadius: 22, display: 'flex', flexDirection: 'column', alignItems: 'center',
-                  gap: 14, boxShadow: '0 10px 26px rgba(30,64,224,0.30)', fontFamily: FONT,
-                  opacity: busy ? 0.75 : 1,
+                  gap: 14, fontFamily: FONT, opacity: busy ? 0.75 : 1,
+                  boxShadow: arrastrando
+                    ? '0 0 0 4px rgba(30,64,224,0.35), 0 10px 26px rgba(30,64,224,0.30)'
+                    : '0 10px 26px rgba(30,64,224,0.30)',
+                  transform: arrastrando ? 'scale(1.01)' : 'none',
+                  transition: 'box-shadow .15s, transform .15s',
                 }}
               >
                 <span style={{
@@ -165,7 +182,9 @@ export default function MediaAlCrear({ nuevos, onNuevos }) {
                     {busy ? 'Subiendo…' : enTelefono ? 'Grabar el ejercicio' : 'Elegir el video'}
                   </span>
                   <span style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.80)' }}>
-                    {enTelefono ? 'Ponlo en el tripié y dale' : 'O arrástralo aquí desde tu compu'}
+                    {arrastrando ? 'Suéltalo aquí'
+                      : enTelefono ? 'Ponlo en el tripié y dale'
+                      : 'O arrástralo aquí desde tu compu'}
                   </span>
                 </span>
               </button>

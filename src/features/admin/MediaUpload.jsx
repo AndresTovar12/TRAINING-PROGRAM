@@ -64,8 +64,15 @@ export default function MediaUpload({
   const [porRevisar, setPorRevisar] = useState(null);
   const [fotoPorRevisar, setFotoPorRevisar] = useState(null);
 
-  async function onPick(e) {
-    const elegido = e.target.files?.[0];
+  function onPick(e) {
+    tomaArchivo(e.target.files?.[0]);
+  }
+
+  /* El archivo, venga de donde venga: del carrete, de la cámara, o soltado
+     encima. Antes esto vivía dentro de `onPick` y solo sabía leer un evento de
+     <input>, así que arrastrar un video desde la compu no tenía por dónde
+     entrar aunque la pantalla lo ofreciera. */
+  function tomaArchivo(elegido) {
     if (!elegido) return;
     setErr('');
     setAviso(null);
@@ -185,6 +192,7 @@ export default function MediaUpload({
       {botones ? botones({
         camara: () => camaraRef.current?.click(),
         carrete: () => inputRef.current?.click(),
+        suelta: tomaArchivo,
         busy,
         enTelefono,
       }) : (
