@@ -396,12 +396,19 @@ export default function EditorVideo({
               {manija('fin')}
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 11 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 11, flexWrap: 'wrap' }}>
               <span style={{
                 background: 'rgba(255,255,255,.14)', color: '#fff', borderRadius: 8,
                 padding: '6px 11px', fontSize: 13.5, fontWeight: 700, ...NUM_STYLE,
               }}>
+                {/* LA RESOLUCIÓN, A LA VISTA. Andrés, 19 sep 2026: "la cámara
+                    que aparece cuando le pico a grabar está como de pésima
+                    calidad, no es igual que la de mi teléfono normal". Tenía
+                    razón en lo que veía, y la app no puede saberlo por él:
+                    aquí es donde el archivo ya está leído y todavía no se ha
+                    subido, así que es donde el número sirve de algo. */}
                 {seg(dura)}{tamaño ? ` · ${peso(tamaño)}` : ''}
+                {medidas ? ` · ${medidas.w} × ${medidas.h}` : ''}
               </span>
               {recortado && (
                 <button
@@ -416,6 +423,35 @@ export default function EditorVideo({
                 </button>
               )}
             </div>
+
+            {/* EL AVISO DE CALIDAD BAJA.
+                No lo provoca esta app: el archivo se sube tal cual, sin
+                reencodar (reencodar en el navegador le bajaría la calidad, que
+                es justo lo que se quiere evitar). Lo que pasa es que el
+                navegador del iPhone graba peor que la app de Cámara. Está
+                documentado desde iOS 9 y depende del ajuste de "Grabar video"
+                del propio teléfono. Como no está claro que la tabla de
+                entonces siga igual hoy, aquí NO se afirma un motivo: se
+                enseña el número medido y las dos salidas que sí funcionan. */}
+            {medidas && Math.min(medidas.w, medidas.h) < 700 && (
+              <div style={{
+                marginTop: 10, padding: '10px 12px', borderRadius: 11,
+                background: 'rgba(245,197,24,0.14)', border: '1px solid rgba(245,197,24,0.35)',
+                color: '#F5E3A8', fontFamily: FONT, fontSize: 12.5, fontWeight: 600, lineHeight: 1.55,
+              }}>
+                <div style={{ fontWeight: 800, color: '#F5C518' }}>
+                  Este video salió chico: {medidas.w} × {medidas.h}
+                </div>
+                <div style={{ marginTop: 4 }}>
+                  El navegador del teléfono graba con menos calidad que tu app de
+                  Cámara. La app no le hace nada al archivo: lo sube tal cual.
+                </div>
+                <div style={{ marginTop: 6 }}>
+                  Si lo quieres en alta: grábalo con tu app de Cámara y súbelo con
+                  «Del carrete». Ese camino no pierde nada.
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <div style={{ color: 'rgba(255,255,255,.6)', fontSize: 13, fontWeight: 600 }}>

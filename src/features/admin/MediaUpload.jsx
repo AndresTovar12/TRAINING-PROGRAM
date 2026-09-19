@@ -12,6 +12,7 @@ import { uploadExerciseMedia } from '@/lib/api';
 import { optimizaImagen, pesoTexto as pesoLegible } from '@/lib/imagen';
 import EditorVideo from '@/features/admin/EditorVideo';
 import EditorFoto from '@/features/admin/EditorFoto';
+import GrabadoraDeVideo from '@/features/admin/GrabadoraDeVideo';
 import { recortaImagen } from '@/features/admin/recorte';
 import { useCoarsePointer } from '@/lib/useViewport';
 import { T, FONT } from '@/lib/theme';
@@ -63,6 +64,20 @@ export default function MediaUpload({
   // Elegidos y todavia SIN subir, esperando a que pasen por su editor.
   const [porRevisar, setPorRevisar] = useState(null);
   const [fotoPorRevisar, setFotoPorRevisar] = useState(null);
+  /* La cámara de la app. Solo para video: el atajo del navegador graba con
+     calidad recortada y no hay forma de pedirle otra. Ver `GrabadoraDeVideo`. */
+  const [grabadora, setGrabadora] = useState(false);
+
+  /* "Grabar" abre la cámara de la app cuando se puede, y si no, el atajo de
+     siempre. Para FOTO se queda el atajo: ahí la calidad no es el problema y
+     una cámara propia solo añadiría formas de fallar. */
+  const puedeGrabarAqui = aceptaVideo && !aceptaFoto
+    && typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
+
+  function abreLaCamara() {
+    if (puedeGrabarAqui) setGrabadora(true);
+    else camaraRef.current?.click();
+  }
 
   function onPick(e) {
     tomaArchivo(e.target.files?.[0]);
@@ -171,6 +186,19 @@ export default function MediaUpload({
           onListo={subeElVideo}
         />
       )}
+      {grabadora && (
+        <GrabadoraDeVideo
+          onListo={(file) => { setGrabadora(false); tomaArchivo(file); }}
+          onCancelar={() => setGrabadora(false)}
+          /* Sin cámara propia no se deja al coach sin grabar: se cae al atajo
+             del navegador, que da peor calidad pero graba. */
+          onSinCamara={(motivo) => {
+            setGrabadora(false);
+            if (motivo) setErr(`${motivo} Se abrirá la cámara del teléfono.`);
+            camaraRef.current?.click();
+          }}
+        />
+      )}
       {fotoPorRevisar && (
         <EditorFoto
           archivo={fotoPorRevisar}
@@ -190,7 +218,7 @@ export default function MediaUpload({
           sitio en vez de pasarse por una prop. */}
       {/* eslint-disable-next-line react-hooks/refs */}
       {botones ? botones({
-        camara: () => camaraRef.current?.click(),
+        camara: abreLaCamara,
         carrete: () => inputRef.current?.click(),
         suelta: tomaArchivo,
         busy,
@@ -201,7 +229,7 @@ export default function MediaUpload({
           <>
             <button
               type="button"
-              onClick={() => camaraRef.current?.click()}
+              onClick={abreLaCamara}
               disabled={busy}
               style={{
                 /* `flex: 1` y no ancho automático: con el ancho natural,
