@@ -39,7 +39,7 @@
  */
 import { useEffect, useState } from 'react';
 import {
-  Trash2, Loader2, Scissors, Users, Mars, Venus, Link as LinkIcon,
+  Trash2, Loader2, Scissors, Users, Mars, Venus, Link as LinkIcon, RefreshCw,
 } from 'lucide-react';
 import {
   listExerciseMedia, addExerciseMedia, deleteExerciseMedia, updateExerciseMedia,
@@ -115,6 +115,7 @@ export default function MediaDelEjercicio({
      las dos preguntas: qué estás viendo y a dónde va lo que subas. */
   const [grupo, setGrupo] = useState('');
   const [moviendo, setMoviendo] = useState(null);       // archivo al que se le cambia de grupo
+  const [reemplazando, setReemplazando] = useState(null); // archivo que se está cambiando por otro
   const [recortandoFoto, setRecortandoFoto] = useState(null); // foto abierta en el editor
   const [ocupado, setOcupado] = useState(false);
   const [lista, setLista] = useState([]);
@@ -251,6 +252,34 @@ export default function MediaDelEjercicio({
     }
   }
 
+  /* CAMBIAR UNA FOTO O UN VIDEO POR OTRO, EN SU SITIO.
+     Andrés, 18 sep 2026: "si trato de intercambiar la foto de portada por otra
+     como que no hay una opción que me deje hacerlo". Se podía —borrar y volver
+     a subir— pero eso son dos pasos, y el de borrar da miedo. Aquí el archivo
+     nuevo cae sobre el viejo: mismo grupo, misma posición, sin pasar por el
+     hueco intermedio en el que el ejercicio se queda sin portada.
+
+     Los recortes del archivo anterior NO se heredan: un recorte se calculó
+     sobre otro video, y aplicarlo a este cortaría por donde no toca. */
+  async function reemplaza(item, { url: subida, tipo, inicio, fin, sinAudio, encuadre }) {
+    if (!subida) { setErr('No se pudo subir el archivo.'); return; }
+    setErr('');
+    setReemplazando(null);
+    if (item.columna) {
+      if (item.tipo === 'foto') onPortada?.(subida);
+      else { onPrincipal?.(subida); onRecortePrincipal?.({ inicio, fin, sinAudio, encuadre }); }
+      return;
+    }
+    await cambiar(item.id, {
+      url: subida,
+      tipo,
+      recorte_inicio: inicio ?? null,
+      recorte_fin: fin ?? null,
+      sin_audio: !!sinAudio,
+      encuadre: encuadre ?? null,
+    });
+  }
+
   async function quitar(item) {
     if (item.columna) {
       if (item.tipo === 'foto') onPortada?.(''); else onPrincipal?.('');
@@ -265,10 +294,87 @@ export default function MediaDelEjercicio({
     }
   }
 
+  /* EL EJERCICIO TODAVÍA NO EXISTE: se puede grabar igual.
+     Andrés, 18 sep 2026, sobre crear un ejercicio: "aquí ni siquiera te está
+     dando la opción para grabar el video... primero tienes que crear el
+     ejercicio con todas las especificaciones, darte el tiempo, y después irte
+     a buscar el ejercicio para ahora sí añadir el video". Tenía razón: aquí
+     había un párrafo gris que decía justamente eso, y nada más.
+
+     Se puede arreglar porque el video y la foto de un ejercicio recién creado
+     NO viven en `exercise_media`: viven en dos columnas del propio ejercicio,
+     que el formulario ya guarda al crearlo. Así que se llenan antes, en el
+     gimnasio, y viajan con el "Crear ejercicio".
+
+     Lo que sigue necesitando que exista: los ÁNGULOS de más y las versiones
+     por género, que sí son filas de otra tabla y necesitan a quién colgarse.
+     Por eso aquí solo hay un video y una foto, y el texto lo dice. */
+  const icono = { border: 'none', background: 'transparent', cursor: 'pointer', padding: 6, flexShrink: 0 };
+
   if (!exerciseId) {
+    const puesto = (url, esVideo) => (
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        background: T.bg, border: `1px solid ${T.border}`, borderRadius: 11, padding: 8,
+      }}>
+        <Miniatura url={url} esVideo={esVideo} />
+        <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, color: T.text }}>
+          {esVideo ? 'Video' : 'Foto'}
+          <span style={{ color: T.text3, fontWeight: 600 }}> · listo</span>
+        </span>
+        <button
+          type="button"
+          onClick={() => (esVideo ? onPrincipal?.('') : onPortada?.(''))}
+          title="Quitar"
+          style={{ ...icono, color: T.danger }}
+        >
+          <Trash2 size={15} />
+        </button>
+      </div>
+    );
+
     return (
-      <div style={{ fontSize: 12.5, color: T.text3, fontWeight: 600, lineHeight: 1.5 }}>
-        Guarda el ejercicio y podrás agregarle fotos y videos, con una versión para hombres y otra para mujeres si quieres.
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Fotos y videos</span>
+
+        {principal ? puesto(principal, true) : (
+          <MediaUpload
+            label="" value="" onChange={() => {}}
+            onAjustes={({ url, inicio, fin, sinAudio, encuadre }) => {
+              if (!url) { setErr('No se pudo subir el archivo.'); return; }
+              setErr('');
+              onPrincipal?.(url);
+              onRecortePrincipal?.({ inicio, fin, sinAudio, encuadre });
+            }}
+            accept="video/*" kind="videos"
+          />
+        )}
+
+        {portada ? puesto(portada, false) : (
+          <MediaUpload
+            label="" value="" onChange={() => {}}
+            onAjustes={({ url }) => {
+              if (!url) { setErr('No se pudo subir el archivo.'); return; }
+              setErr('');
+              onPortada?.(url);
+            }}
+            accept="image/*" kind="covers"
+          />
+        )}
+
+        <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 600, lineHeight: 1.5 }}>
+          Con esto basta para crearlo. Los otros ángulos y las versiones para
+          hombres y para mujeres se agregan en cuanto lo guardes.
+        </div>
+
+        {err && (
+          <div style={{
+            background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 11,
+            padding: '10px 12px', fontSize: 12.5, fontWeight: 700,
+          }}>
+            {err}
+          </div>
+        )}
       </div>
     );
   }
@@ -302,7 +408,6 @@ export default function MediaDelEjercicio({
   const visibles = todos.filter((m) => (m.genero || '') === grupo);
   const grupoElegido = GRUPOS.find((x) => x.g === grupo);
 
-  const icono = { border: 'none', background: 'transparent', cursor: 'pointer', padding: 6, flexShrink: 0 };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -424,11 +529,36 @@ export default function MediaDelEjercicio({
               >
                 <Scissors size={15} />
               </button>
+              {/* Cambiarlo por otro sin borrarlo primero. */}
+              <button
+                type="button"
+                title={esVideo ? 'Cambiar este video por otro' : 'Cambiar esta foto por otra'}
+                aria-expanded={reemplazando === m.id}
+                onClick={() => setReemplazando(reemplazando === m.id ? null : m.id)}
+                disabled={ocupado}
+                style={{ ...icono, color: reemplazando === m.id ? T.accent : T.text2 }}
+              >
+                <RefreshCw size={15} />
+              </button>
               <button type="button" onClick={() => quitar(m)} title="Quitar"
                 style={{ ...icono, color: T.danger }}>
                 <Trash2 size={15} />
               </button>
             </div>
+
+            {reemplazando === m.id && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 700 }}>
+                  {esVideo ? 'El video nuevo cae sobre este' : 'La foto nueva cae sobre esta'}
+                </div>
+                <MediaUpload
+                  label="" value="" onChange={() => {}}
+                  onAjustes={(a) => reemplaza(m, a)}
+                  accept={esVideo ? 'video/*' : 'image/*'}
+                  kind={esVideo ? 'videos' : 'covers'}
+                />
+              </div>
+            )}
 
             {moviendo === m.id && (
               <div style={{ display: 'flex', gap: 6 }}>
