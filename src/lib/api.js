@@ -621,7 +621,12 @@ async function tokenDeAhora() {
   return token;
 }
 
-export async function eliminarAtletaDefinitivo(athleteId) {
+export async function eliminarAtletaDefinitivo(athleteId, opciones = {}) {
+  /* `opciones` solo se usa al borrar un COACH: dice a dónde van sus atletas
+     (`atletasA`, un id de coach o null) y qué pasa con sus ejercicios
+     (`ejerciciosA`: 'master' o 'borrar'). El servidor lo coloca todo ANTES de
+     borrar; ver `admin-delete-user`. Para un atleta no aplica nada de esto y
+     los campos viajan vacíos. */
   const llamar = async (token) => fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-delete-user`, {
     method: 'POST',
     headers: {
@@ -629,7 +634,7 @@ export async function eliminarAtletaDefinitivo(athleteId) {
       apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ id: athleteId }),
+    body: JSON.stringify({ id: athleteId, ...opciones }),
   }).catch(() => null);
 
   let res = await llamar(await tokenDeAhora());
@@ -649,6 +654,27 @@ export async function eliminarAtletaDefinitivo(athleteId) {
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body?.error || `No se pudo eliminar la cuenta (error ${res.status}).`);
   return body;
+}
+
+/**
+ * Qué deja atrás un coach si se borra. Se pregunta ANTES de enseñar el aviso,
+ * para poder decirlo con números en vez de en abstracto.
+ */
+export async function resumenDatosCoach(coachId) {
+  const cuenta = async (tabla, columna) => {
+    const { count } = await supabase
+      .from(tabla).select('id', { count: 'exact', head: true }).eq(columna, coachId);
+    return count ?? 0;
+  };
+  const [atletas, ejercicios, medios, tipos, categorias, plantillas] = await Promise.all([
+    cuenta('profiles', 'coach_id'),
+    cuenta('exercises', 'created_by'),
+    cuenta('exercise_media', 'created_by'),
+    cuenta('session_types', 'coach_id'),
+    cuenta('exercise_categories', 'created_by'),
+    cuenta('routine_templates', 'created_by'),
+  ]);
+  return { atletas, ejercicios, medios, tipos, categorias, plantillas };
 }
 
 /* ------------------------------- Coaches ------------------------------ */

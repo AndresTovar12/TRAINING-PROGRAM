@@ -20,6 +20,10 @@
  *   1. Solo el master (is_owner) puede llamar.
  *   2. El master no puede borrarse a si mismo (se quedaria sin administrador).
  *   3. No se puede borrar a otro master.
+ *
+ * BORRAR UN COACH, ademas, decide a donde va lo suyo antes de borrarlo: sus
+ * atletas pasan al coach que se diga (o se quedan sin coach) y sus ejercicios
+ * pasan al master o se borran con el. Ver el bloque de mas abajo.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
@@ -84,7 +88,7 @@ Deno.serve(async (req) => {
     return json({ error: 'Solo el administrador puede eliminar cuentas.' }, 403, origin)
   }
 
-  let p: { id?: string }
+  let p: { id?: string; atletasA?: string | null; ejerciciosA?: 'master' | 'borrar' }
   try { p = await req.json() } catch { return json({ error: 'JSON inválido' }, 400, origin) }
   const objetivo = (p.id ?? '').trim()
   if (!objetivo) return json({ error: 'Falta decir a quién eliminar.' }, 400, origin)
@@ -102,6 +106,55 @@ Deno.serve(async (req) => {
     return json({ error: 'No se puede eliminar una cuenta de administrador.' }, 403, origin)
   }
 
+  /* ANTES DE BORRAR: COLOCAR LO QUE DEJA ATRÁS.
+   *
+   * Esto vale sobre todo al borrar un COACH, y es la razón por la que borrar
+   * coaches no existía hasta ahora. Las llaves foráneas dicen:
+   *
+   *   sus atletas (profiles.coach_id)      SET NULL  → se quedan sin coach
+   *   sus ejercicios (exercises.created_by) SET NULL  → se quedan SIN DUEÑO
+   *   sus medios (exercise_media)           SET NULL  → igual
+   *   sus categorías, tipos y versiones     CASCADE   → se borran con él
+   *
+   * El problema está en "sin dueño": la app lee un ejercicio sin `created_by`
+   * como uno DE LA APP, o sea base para todos. Borrar un coach publicaría en
+   * silencio su repertorio privado a todos los demás coaches. Por eso el que
+   * borra tiene que decir a dónde va cada cosa, y por eso se hace aquí y no en
+   * el navegador: son varias escrituras y a medias dejan un desastre.
+   */
+  const { count: cuantosAtletas } = await admin
+    .from('profiles').select('id', { count: 'exact', head: true }).eq('coach_id', objetivo)
+
+  if (cuantosAtletas) {
+    const destino = (p.atletasA ?? '').trim() || null
+    if (destino) {
+      // El destino tiene que ser alguien que pueda entrenar: si no, los
+      // atletas acabarían colgando de otro atleta.
+      const { data: d } = await admin
+        .from('profiles').select('id, role, is_owner').eq('id', destino).maybeSingle()
+      if (!d || (d.role !== 'admin' && !d.is_owner)) {
+        return json({ error: 'A quien quieres pasarle los atletas no es un coach.' }, 400, origin)
+      }
+    }
+    const { error: eAtletas } = await admin
+      .from('profiles').update({ coach_id: destino }).eq('coach_id', objetivo)
+    if (eAtletas) {
+      return json({ error: `No se pudieron mover sus atletas: ${eAtletas.message}` }, 500, origin)
+    }
+  }
+
+  /* Por defecto los ejercicios pasan a quien borra (el master), NO se quedan
+     sin dueño: entre las dos, quedarse sin dueño es la que nadie eligió. */
+  if (p.ejerciciosA === 'borrar') {
+    // Los medios de esos ejercicios caen solos (exercise_id es CASCADE); los
+    // que subió a ejercicios de otros hay que quitarlos aparte.
+    await admin.from('exercises').delete().eq('created_by', objetivo)
+    await admin.from('exercise_media').delete().eq('created_by', objetivo)
+  } else {
+    await admin.from('exercises').update({ created_by: quienPide }).eq('created_by', objetivo)
+    await admin.from('exercise_media').update({ created_by: quienPide }).eq('created_by', objetivo)
+  }
+
   // Un solo borrado: auth.users arrastra el resto por CASCADE.
   const { error } = await admin.auth.admin.deleteUser(objetivo)
   if (error) {
@@ -112,5 +165,6 @@ Deno.serve(async (req) => {
   return json({
     ok: true,
     eliminado: victima.full_name || victima.username || objetivo,
+    atletasMovidos: cuantosAtletas ?? 0,
   }, 200, origin)
 })
