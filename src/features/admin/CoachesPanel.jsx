@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Loader2, Plus, X, Shield, Users, AtSign, IdCard, Mail, Lock, Check, UserPlus, Eye, EyeOff,
+  ChevronRight, CalendarDays,
 } from 'lucide-react';
 import { listCoaches, listAthletes, createCoachAccount } from '@/lib/api';
 import { useIsWide } from '@/lib/useViewport';
@@ -97,6 +98,132 @@ function CreateCoachModal({ onClose, onCreated }) {
   );
 }
 
+/**
+ * La ficha de un coach: quién es, a quién entrena, y la puerta a "ver como".
+ *
+ * POR QUÉ EXISTE. Andrés, 20 sep 2026: "no pasa nada si le pico al coach". La
+ * fila nunca tuvo acción, y eso choca con la lista de atletas —donde tocar sí
+ * abre la ficha— así que se lee como que la app se trabó.
+ *
+ * QUÉ ENSEÑA Y QUÉ NO. Lo que el master no puede ver sin cambiarse de vista:
+ * a qué atletas entrena este coach, de un vistazo. Lo que NO trae es borrar ni
+ * desactivar coaches: eso no existe en la app todavía y tiene una consecuencia
+ * que hay que decidir antes —los ejercicios de un coach borrado se quedan sin
+ * dueño, y sin dueño significa "de la app, para todos"—.
+ */
+function FichaCoach({ coach, atletas, onCerrar, onVerComo }) {
+  const esAncho = useIsWide();
+  const nombre = coach.full_name || coach.username;
+  const desde = coach.created_at
+    ? new Date(coach.created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
+    : null;
+
+  const cuerpo = (
+    <>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 13, marginBottom: 18 }}>
+        <Avatar name={nombre} url={coach.avatar_url} size={52} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 18, fontWeight: 800, color: T.text, lineHeight: 1.25, overflowWrap: 'anywhere' }}>
+            {nombre}
+          </div>
+          <div style={{ fontSize: 13.5, color: T.text2, fontWeight: 600, marginTop: 2, overflowWrap: 'anywhere' }}>
+            @{coach.username}
+          </div>
+          {coach.profesion && (
+            <div style={{ fontSize: 12.5, color: T.text3, fontWeight: 600, marginTop: 3 }}>{coach.profesion}</div>
+          )}
+        </div>
+        <button type="button" onClick={onCerrar} aria-label="Cerrar"
+          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.text3, padding: 4, flexShrink: 0 }}>
+          <X size={19} />
+        </button>
+      </div>
+
+      <button
+        type="button"
+        onClick={onVerComo}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 11, marginBottom: 16,
+          border: 'none', borderRadius: 14, padding: '14px 16px', cursor: 'pointer',
+          background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff',
+          fontFamily: FONT, fontSize: 15, fontWeight: 700, textAlign: 'left', boxShadow: KP.shBtn,
+        }}
+      >
+        <Eye size={18} />
+        <span style={{ flex: 1, minWidth: 0 }}>
+          Ver la app como {nombre.split(' ')[0]}
+          <span style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.82)', marginTop: 2 }}>
+            Sus atletas y su repertorio. No estás cambiando de cuenta.
+          </span>
+        </span>
+      </button>
+
+      <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.7, textTransform: 'uppercase', color: T.text3, marginBottom: 9 }}>
+        Sus atletas ({atletas.length})
+      </div>
+      {atletas.length === 0 ? (
+        <div style={{ fontSize: 13.5, color: T.text2, fontWeight: 600, background: T.bg, borderRadius: 12, padding: '14px 15px', lineHeight: 1.5 }}>
+          Todavía no tiene atletas. Se le asignan desde la ficha de cada atleta,
+          en «Administrar cuenta».
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+          {atletas.map((a) => (
+            <div key={a.id} style={{
+              display: 'flex', alignItems: 'center', gap: 11,
+              background: T.bg, borderRadius: 12, padding: '10px 13px',
+            }}>
+              <Avatar name={a.full_name || a.username} url={a.avatar_url} size={32} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: T.text, overflowWrap: 'anywhere' }}>
+                  {a.full_name || a.username}
+                </div>
+                <div style={{ fontSize: 12, color: T.text3, fontWeight: 600, overflowWrap: 'anywhere' }}>@{a.username}</div>
+              </div>
+              {a.is_active === false && (
+                <span style={{ fontSize: 11, fontWeight: 800, color: T.warning, flexShrink: 0 }}>Desactivada</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {desde && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, marginTop: 16,
+          fontSize: 12.5, color: T.text3, fontWeight: 600,
+        }}>
+          <CalendarDays size={14} /> Su cuenta es del {desde}
+        </div>
+      )}
+    </>
+  );
+
+  // En compu flota centrada; en teléfono ocupa la pantalla. Mismo patrón que
+  // la ficha del atleta, para que las dos listas se comporten igual.
+  return (
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onCerrar(); }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 900, display: 'grid',
+        placeItems: esAncho ? 'center' : 'end stretch',
+        padding: esAncho ? 24 : 0, background: 'rgba(17, 19, 24, 0.42)',
+      }}
+    >
+      <div style={{
+        width: '100%', maxWidth: esAncho ? 520 : 'none',
+        maxHeight: esAncho ? '88vh' : '92svh', overflowY: 'auto',
+        background: T.bg2, border: `1px solid ${T.border}`,
+        borderRadius: esAncho ? KP.rCard : '22px 22px 0 0',
+        padding: esAncho ? 24 : '22px 20px calc(24px + env(safe-area-inset-bottom))',
+        boxShadow: KP.shPop,
+      }}>
+        {cuerpo}
+      </div>
+    </div>
+  );
+}
+
 export default function CoachesPanel({ onVerComo }) {
   const esAncho = useIsWide();
   const [coaches, setCoaches] = useState([]);
@@ -104,6 +231,7 @@ export default function CoachesPanel({ onVerComo }) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [creating, setCreating] = useState(false);
+  const [ficha, setFicha] = useState(null); // el coach cuya ficha está abierta
 
   const load = () => {
     setLoading(true);
@@ -172,7 +300,22 @@ export default function CoachesPanel({ onVerComo }) {
               background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 16,
               padding: '14px 16px', boxShadow: KP.shCard,
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 13, flex: 1, minWidth: 0 }}>
+              {/* TOCAR AL COACH ABRE SU FICHA.
+                  Andrés, 20 sep 2026: "no pasa nada si le pico al coach... el
+                  «ver como coach» sí, pero no pasa nada si le pico en general".
+                  Nunca tuvo acción —viene así desde que se hizo el sistema
+                  multi-coach— y choca con la lista de atletas, donde tocar la
+                  fila SÍ abre la ficha. Una fila que no hace nada al tocarla
+                  se lee como que la app se trabó. */}
+              <button
+                type="button"
+                onClick={() => setFicha(c)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 13, flex: 1, minWidth: 0,
+                  border: 'none', background: 'transparent', cursor: 'pointer',
+                  fontFamily: FONT, textAlign: 'left', padding: 0,
+                }}
+              >
                 <Avatar name={c.full_name || c.username} url={c.avatar_url} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 15, fontWeight: 800, color: T.text, display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -183,7 +326,8 @@ export default function CoachesPanel({ onVerComo }) {
                   </div>
                   <div style={{ fontSize: 13, color: T.text2, fontWeight: 500, overflowWrap: 'anywhere' }}>@{c.username}</div>
                 </div>
-              </div>
+                <ChevronRight size={17} color={T.text3} style={{ flexShrink: 0 }} />
+              </button>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13.5, fontWeight: 700, color: T.text2, background: T.bg, borderRadius: 10, padding: '8px 12px', flexShrink: 0 }}>
@@ -210,6 +354,15 @@ export default function CoachesPanel({ onVerComo }) {
             </div>
           ))}
         </div>
+      )}
+
+      {ficha && (
+        <FichaCoach
+          coach={ficha}
+          atletas={athletes.filter((a) => a.coach_id === ficha.id)}
+          onCerrar={() => setFicha(null)}
+          onVerComo={() => { const c = ficha; setFicha(null); onVerComo?.(c); }}
+        />
       )}
 
       {creating && (
