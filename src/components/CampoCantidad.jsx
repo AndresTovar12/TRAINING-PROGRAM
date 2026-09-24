@@ -25,6 +25,13 @@ export default function CampoCantidad({
 
   const opciones = MEDIDAS.map((o) => ({ valor: o.id, etiqueta: o.etiqueta }));
 
+  /* En la celda de la tabla el botón lee "reps" y no "Repeticiones": el hueco
+     es de 112 px y el nombre entero se salía por la izquierda, encima del
+     nombre del ejercicio. La lista abierta sigue diciéndolo entero, que es
+     donde hace falta entenderlo. En el rótulo NO se acorta: ahí tiene su
+     propia línea y se lee mejor completo. */
+  const opcionesCortas = MEDIDAS.map((o) => ({ valor: o.id, etiqueta: o.etiqueta, corta: o.corta }));
+
   /* Al cambiar de unidad se guarda la cantidad LIMPIA. Si venía "30 yd" y se
      pasa a metros, queda "30" con unidad metros: dejar el "yd" dentro del
      texto haría que se leyera "30 yd m". Un valor que no se entiende —"5/lado"—
@@ -68,7 +75,7 @@ export default function CampoCantidad({
             etiqueta="Unidad"
             valor={id}
             onCambio={cambiaUnidad}
-            opciones={opciones}
+            opciones={opcionesCortas}
             alto={230}
             estilo={{
               width: 'auto', border: 'none', background: 'transparent',

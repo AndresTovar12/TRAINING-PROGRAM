@@ -248,7 +248,12 @@ export default function ListaDesplegable({
           <span style={{ width: 11, height: 11, borderRadius: 6, background: elegida.color, flexShrink: 0 }} />
         )}
         <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {elegida ? elegida.etiqueta : marcador}
+          {/* `corta` es para cuando el botón vive en un hueco estrecho —una
+              celda de tabla— y el nombre entero no cabe: ahí se lee "reps" y
+              la lista sigue diciendo "Repeticiones", que es donde importa
+              entender. Sin esto, el botón se salía de su celda y se encimaba
+              con el nombre del ejercicio. */}
+          {elegida ? (elegida.corta ?? elegida.etiqueta) : marcador}
         </span>
         {elegida?.nota && (
           <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text3, flexShrink: 0 }}>{elegida.nota}</span>
