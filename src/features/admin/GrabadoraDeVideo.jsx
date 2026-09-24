@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, SwitchCamera, Loader2 } from 'lucide-react';
 import { FONT, NUM_STYLE } from '@/lib/theme';
 
@@ -184,18 +185,29 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
   /* La página de atrás se queda quieta mientras la cámara está abierta. Sin
      esto, un dedo que resbala arrastra el formulario que hay debajo y la
      cámara se va de sitio: parece que la app se movió sola. */
+  /* QUE LA PAGINA NO SE MUEVA. En iOS, `overflow: hidden` NO basta: Safari
+     sigue dejando arrastrar. Andrés lo comprobó: "aún así puedo escrollear, y
+     no se debe poder en un momento donde se supone que estás grabando".
+
+     Lo que sí funciona es congelar el cuerpo con `position: fixed` y
+     recordar dónde estaba, para devolverlo al cerrar. Es feo, y es la única
+     forma fiable en iOS. */
   useEffect(() => {
-    /* Se bloquean los DOS. Con solo `body` la página seguía arrastrándose 300
-       px en la prueba: quien hace el scroll aquí es `html`, no `body`, y cuál
-       de los dos es depende del navegador. Poniéndolo en ambos no hay duda. */
-    const raiz = document.documentElement;
-    const antesBody = document.body.style.overflow;
-    const antesRaiz = raiz.style.overflow;
-    document.body.style.overflow = 'hidden';
-    raiz.style.overflow = 'hidden';
+    const y = window.scrollY;
+    const b = document.body;
+    const antes = {
+      position: b.style.position, top: b.style.top, left: b.style.left,
+      right: b.style.right, width: b.style.width, overflow: b.style.overflow,
+    };
+    b.style.position = 'fixed';
+    b.style.top = `-${y}px`;
+    b.style.left = '0';
+    b.style.right = '0';
+    b.style.width = '100%';
+    b.style.overflow = 'hidden';
     return () => {
-      document.body.style.overflow = antesBody;
-      raiz.style.overflow = antesRaiz;
+      Object.assign(b.style, antes);
+      window.scrollTo(0, y);
     };
   }, []);
 
@@ -274,7 +286,22 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
     recRef.current = null;
   }
 
-  return (
+  /* LA CAMARA SE DIBUJA EN EL CUERPO DE LA PAGINA, NO AQUI DENTRO.
+     Andrés: "puedo ver la app atrás de la cámara, en el contorno... esa es
+     otra razón que me indica que no se desplegó una cámara como tal, sino que
+     es una cámara adentro del navegador".
+
+     La causa: el formulario que la abre lleva `.animate-fade-in`, y esa
+     animación TERMINA en `transform: translateY(0)` y se queda ahí, porque su
+     `fill-mode` es `both`. Un `transform`, aunque valga cero, convierte a ese
+     elemento en el marco de referencia de todo lo que sea `position: fixed`
+     por dentro. O sea: la cámara no se estaba midiendo contra la pantalla,
+     sino contra la caja del formulario. De ahí la app asomándose alrededor.
+
+     Con un portal la cámara cuelga directamente del `body` y ya no hay
+     antepasado que pueda encerrarla. No depende de qué animación tenga la
+     pantalla que la abrió, ni hoy ni cuando se agregue otra. */
+  return createPortal(
     <div style={{
       /* `100svh` Y NO `inset: 0`. Andrés, 24 sep 2026: "abre como una cámara
          adentro de Safari, a tal nivel que tengo que hacer scroll para abajo
@@ -287,10 +314,15 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
          ahí el scroll para alcanzar un botón que debería estar siempre a la
          mano.
 
-         `svh` es la altura del viewport CHICO: la que hay con las barras
-         visibles. Midiendo así, el botón entra siempre. El resto de la app ya
-         usaba `svh` para esto; a la cámara se le había olvidado. */
-      position: 'fixed', top: 0, left: 0, right: 0, height: '100svh',
+         `dvh` es la altura del viewport que se ve AHORA MISMO, con las barras
+         puestas o escondidas. Con `svh` —el viewport más chico— el botón sí
+         entraba, pero al esconderse las barras quedaba un hueco abajo por el
+         que se asomaba la app: otra de las cosas que le decían a Andrés que
+         esto era "una cámara dentro del navegador".
+
+         Con el cuerpo congelado (abajo) las barras ya no cambian de estado a
+         media grabación, así que `dvh` tampoco se mueve. */
+      position: 'fixed', top: 0, left: 0, right: 0, height: '100dvh',
       zIndex: 5000, background: '#000',
       display: 'flex', flexDirection: 'column', fontFamily: FONT,
     }}>
@@ -415,6 +447,8 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
         </span>
       </div>
     </div>
+    ,
+    document.body,
   );
 }
 

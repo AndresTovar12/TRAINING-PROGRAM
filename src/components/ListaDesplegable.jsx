@@ -77,7 +77,30 @@ export default function ListaDesplegable({
     if (abierto) miraSiHayMas();
   }, [abierto, planas.length, miraSiHayMas]);
 
-  const elige = (o) => { onCambio(o.valor); cerrar(); };
+  /* ELEGIR SE DISPARA CON EL DEDO, NO CON EL `click`.
+     Andrés, 24 sep 2026, después del primer intento: "probé lo de los botones
+     de las listas y no se arregló, sigue igual".
+
+     Quitar el hover falso no bastó. El fondo del asunto es que en iOS el
+     `click` de un elemento que se redibuja a media pulsación NO es de fiar: si
+     algo cambia entre que el dedo baja y sube, Safari se lo salta. Y esta
+     lista se redibuja sola —el conteo de al lado cambia al filtrar.
+
+     `pointerup` sí llega siempre, con dedo y con ratón. El `click` se deja
+     puesto para el teclado (Enter sobre un botón enfocado no emite
+     `pointerup`), y se ignora si acaba de haber uno para no elegir dos veces. */
+  const yaConElDedo = useRef(false);
+  const elige = (o, conPuntero = false) => {
+    if (conPuntero) {
+      // El `click` sintetizado llega justo detrás del dedo; se ignora ese.
+      yaConElDedo.current = true;
+      window.setTimeout(() => { yaConElDedo.current = false; }, 700);
+    } else if (yaConElDedo.current) {
+      return;
+    }
+    onCambio(o.valor);
+    cerrar();
+  };
 
   const teclas = (e) => {
     if (deshabilitado) return;
@@ -88,7 +111,7 @@ export default function ListaDesplegable({
     if (e.key === 'Escape') { e.preventDefault(); cerrar(); return; }
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      if (planas[activo]) elige(planas[activo]);
+      if (planas[activo]) { yaConElDedo.current = false; elige(planas[activo]); }
       return;
     }
     const salto = { ArrowDown: 1, ArrowUp: -1 }[e.key];
@@ -133,6 +156,7 @@ export default function ListaDesplegable({
              Un teléfono no tiene hover, así que en pantalla táctil esto no
              quita nada: solo deja de provocar el redibujado a media pulsación. */
           onMouseEnter={dedos ? undefined : () => setActivo(i)}
+          onPointerUp={() => elige(o, true)}
           onClick={() => elige(o)}
           style={{
             flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 9,
