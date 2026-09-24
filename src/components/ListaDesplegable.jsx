@@ -165,7 +165,21 @@ export default function ListaDesplegable({
              Un teléfono no tiene hover, así que en pantalla táctil esto no
              quita nada: solo deja de provocar el redibujado a media pulsación. */
           onMouseEnter={dedos ? undefined : () => setActivo(i)}
-          onClick={() => elige(o)}
+          /* EL `preventDefault` ES LO QUE DESACTIVA EL SEGUNDO CLIC.
+             Si esta lista queda dentro de un `<label>` —así estaba en los
+             filtros del repertorio—, el navegador hace lo que hace cualquier
+             label: reenvía el clic a su primer control, que aquí es el botón
+             que ABRE la lista. Resultado: el toque la cerraba y el reenvío la
+             volvía a abrir en el mismo instante. Eso era el parpadeo y la
+             lista que se quedaba abierta.
+
+             Ese reenvío es la acción por defecto del clic, así que cancelarlo
+             lo detiene. Un `<button type="button">` no tiene ninguna otra
+             acción por defecto, así que no se pierde nada.
+
+             Va aquí dentro y no solo en quien la usa, para que el próximo
+             `<label>` que aparezca no vuelva a traer el mismo fallo. */
+          onClick={(e) => { e.preventDefault(); elige(o); }}
           style={{
             flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 9,
             minHeight: 42, padding: '0 11px', borderRadius: 10, border: 'none', cursor: 'pointer',
@@ -192,7 +206,9 @@ export default function ListaDesplegable({
         {o.alBorrar && (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); o.alBorrar(); }}
+            /* Mismo motivo que arriba: sin cancelar, borrar dentro de un
+               `<label>` reabriría la lista de rebote. */
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); o.alBorrar(); }}
             aria-label={`Borrar ${o.etiqueta}`}
             style={{
               border: 'none', background: 'transparent', cursor: 'pointer',
