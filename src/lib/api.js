@@ -970,5 +970,5 @@ async function invitacion(cuerpo) {
 export const verInvitacion = (token) => invitacion({ token, modo: 'ver' });
 
 /** Termina de crear la cuenta: usuario, contraseña y, si quiere, correo. */
-export const activarInvitacion = ({ token, username, password, email, genero }) =>
-  invitacion({ token, modo: 'activar', username, password, email, genero });
+export const activarInvitacion = ({ token, username, password, email, genero, nombre, apellido }) =>
+  invitacion({ token, modo: 'activar', username, password, email, genero, nombre, apellido });

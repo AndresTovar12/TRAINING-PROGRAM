@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AtSign, Dumbbell, Loader2, Lock, Mail } from 'lucide-react';
+import { AtSign, Dumbbell, Loader2, Lock, Mail, User as UserIcon } from 'lucide-react';
 import { Field } from '@/features/auth/AuthScreen';
 import { useAuth } from '@/contexts/AuthContext';
 import { activarInvitacion, verInvitacion } from '@/lib/api';
@@ -22,6 +22,12 @@ export default function ActivarInvitacion({ token, onSalir }) {
   const [datos, setDatos] = useState(null);
   const [error, setError] = useState('');
 
+  /* El usuario nace VACÍO, a propósito. Andrés, 24 sep 2026: "eliges por el
+     cliente su usuario, justo eso es lo que le tienes que dejar a él que
+     elija". Lo que sí viene puesto es su nombre, que el coach ya sabe — y
+     también se puede corregir, por si lo escribió mal o prefiere otro. */
+  const [nombre, setNombre] = useState('');
+  const [apellido, setApellido] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');
@@ -34,7 +40,8 @@ export default function ActivarInvitacion({ token, onSalir }) {
       .then((d) => {
         if (!vivo) return;
         setDatos(d);
-        setUsername(d.usuario_sugerido || '');
+        setNombre(d.nombre || '');
+        setApellido(d.apellido || '');
       })
       .catch((e) => { if (vivo) setError(e.message); })
       .finally(() => { if (vivo) setCargando(false); });
@@ -46,7 +53,7 @@ export default function ActivarInvitacion({ token, onSalir }) {
     setError('');
     setEnviando(true);
     try {
-      const r = await activarInvitacion({ token, username, password, email, genero });
+      const r = await activarInvitacion({ token, username, password, email, genero, nombre, apellido });
       // Ya con la cuenta lista, se entra solo. Pedirle que escriba otra vez lo
       // que acaba de teclear sería un paso de más sin ningún motivo.
       const { error: errEntrar } = await signIn(r.username, password);
@@ -116,8 +123,12 @@ export default function ActivarInvitacion({ token, onSalir }) {
         <h1 style={{ fontSize: 20, fontWeight: 800, color: KP.ink, margin: '0 0 10px', letterSpacing: -0.3 }}>
           Este link ya no sirve
         </h1>
+        {/* El servidor manda la frase entera, porque la necesita completa quien
+            no tenga esta pantalla. Aquí el título ya la dice, así que se quita
+            esa parte en vez de repetirla dos veces seguidas. */}
         <p style={{ fontSize: 15, color: KP.ink2, lineHeight: 1.55, margin: '0 0 22px', fontWeight: 500 }}>
-          {error || 'Pídele uno nuevo a tu entrenador.'}
+          {(error || '').replace(/^\s*Este link ya no sirve\.?\s*/i, '')
+            || 'Pídele uno nuevo a tu entrenador.'}
         </p>
         <button
           type="button"
@@ -153,24 +164,50 @@ export default function ActivarInvitacion({ token, onSalir }) {
   return marco(
     <>
       {logo}
+      {/* Andrés, 24 sep 2026, sobre la primera versión: "ese vocabulario no
+          está muy bueno para una app". Lo de "ya te tiene en su lista" sonaba
+          a fichero de oficina. Ahora: quién te invita, y qué vas a hacer. */}
       <div style={{ textAlign: 'center', marginBottom: 24 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, color: KP.ink, margin: '0 0 8px', letterSpacing: -0.4 }}>
-          Hola, {datos.full_name}
+          Hola, {datos.nombre}
         </h1>
         <p style={{ fontSize: 15, color: KP.ink2, lineHeight: 1.5, margin: 0, fontWeight: 500 }}>
-          <strong style={{ color: KP.ink }}>{datos.coach}</strong> ya te tiene en su lista.
-          Solo falta que elijas cómo entrar.
+          Tu coach <strong style={{ color: KP.ink }}>{datos.coach}</strong> te da la bienvenida.
+          Configura tu cuenta y empieza a entrenar.
         </p>
       </div>
 
       <form onSubmit={enviar} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* Ya vienen puestos, pero se pueden cambiar: el coach pudo escribirlos
+            mal, o el atleta prefiere otro nombre. */}
+        <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Field
+              icon={UserIcon}
+              label="Tu nombre"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              placeholder="Nombre"
+              required
+            />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Field
+              icon={UserIcon}
+              label="Tu apellido"
+              value={apellido}
+              onChange={(e) => setApellido(e.target.value)}
+              placeholder="Apellido"
+            />
+          </div>
+        </div>
         <Field
           icon={AtSign}
-          label="Tu usuario"
+          label="Elige tu usuario"
           hint="con esto entras"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
-          placeholder="tu_usuario"
+          placeholder="como quieras que te llamen"
           autoCapitalize="none"
           autoCorrect="off"
           required

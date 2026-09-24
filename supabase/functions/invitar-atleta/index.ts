@@ -71,13 +71,15 @@ function alAzar(bytes: number): string {
 }
 
 /**
- * Propone un usuario a partir del nombre: "Juan Pérez" -> "juan.perez".
+ * Propone un usuario de arranque a partir del nombre: "Juan Pérez" ->
+ * "juan.perez".
  *
- * Es solo una propuesta. El disparador `handle_new_user` le añade un número si
- * ya está tomado, y el atleta puede cambiarlo al activar su cuenta. Se quitan
- * los acentos porque el usuario solo admite letras, números, guion bajo y punto.
+ * OJO: esto NO es lo que se le enseña al atleta. Es solo un valor para que la
+ * fila exista, porque la columna no admite vacío. Al abrir el link el campo
+ * del usuario le sale en blanco: Andrés, 24 sep 2026, "eliges por el cliente
+ * su usuario, justo eso es lo que le tienes que dejar a él que elija".
  */
-function usuarioSugerido(nombre: string, apellido: string): string {
+function usuarioProvisional(nombre: string, apellido: string): string {
   const limpia = (s: string) =>
     s.normalize('NFD').replace(/[̀-ͯ]/g, '')
       .toLowerCase().replace(/[^a-z0-9]/g, '')
@@ -127,7 +129,7 @@ Deno.serve(async (req) => {
   }
 
   const nombreCompleto = [nombre, apellido].filter(Boolean).join(' ')
-  const usuario = usuarioSugerido(nombre, apellido)
+  const usuario = usuarioProvisional(nombre, apellido)
 
   // Correo de relleno. `@traininglab.app` es el mismo dominio inventado que ya
   // usa `signup`, y el trozo al azar evita chocar con otro atleta del mismo
@@ -167,7 +169,9 @@ Deno.serve(async (req) => {
   const token = alAzar(24)
   const { error: errInv } = await admin
     .from('invitaciones')
-    .insert({ token, coach_id: quienPide, atleta_id: atletaId, tipo: 'personal' })
+    // Nombre y apellido se guardan por separado para poder enseñárselos al
+    // atleta en dos campos y que los pueda corregir.
+    .insert({ token, coach_id: quienPide, atleta_id: atletaId, tipo: 'personal', nombre, apellido: apellido || null })
   if (errInv) {
     await admin.auth.admin.deleteUser(atletaId).catch(() => {})
     return json({ error: `No se pudo crear la invitación: ${textoDeError(errInv)}` }, 400, origin)

@@ -75,6 +75,7 @@ Deno.serve(async (req) => {
   let p: {
     token?: string; modo?: string; username?: string
     password?: string; email?: string; genero?: string
+    nombre?: string; apellido?: string
   }
   try {
     p = await req.json()
@@ -94,7 +95,7 @@ Deno.serve(async (req) => {
 
   const { data: inv } = await admin
     .from('invitaciones')
-    .select('token, coach_id, atleta_id, tipo, usada_en')
+    .select('token, coach_id, atleta_id, tipo, usada_en, nombre, apellido')
     .eq('token', token)
     .maybeSingle()
 
@@ -120,10 +121,30 @@ Deno.serve(async (req) => {
   const coachNombre = coach?.full_name || coach?.username || 'tu entrenador'
 
   if (modo === 'ver') {
+    /* Se manda el nombre y el apellido por separado, para enseñárselos ya
+       puestos y que los pueda corregir.
+
+       NO se manda ningún usuario sugerido, a propósito. Andrés, 24 sep 2026:
+       "eliges por el cliente su usuario, justo eso es lo que le tienes que
+       dejar a él que elija". Lo que se llena por él es su nombre, que el coach
+       ya sabe; el usuario es cosa suya. */
+    /* Respaldo para las invitaciones hechas antes de guardar las dos columnas:
+       se parte el nombre completo por el primer espacio. Es una apuesta —de
+       "Ana María Pérez" saldría nombre "Ana"— pero el atleta tiene los dos
+       campos delante y los puede corregir, que era justamente el punto. Solo
+       aplica a las invitaciones viejas; las nuevas traen el dato exacto. */
+    let nombre = inv.nombre
+    let apellido = inv.apellido
+    if (!nombre) {
+      const partes = (atleta.full_name || '').trim().split(/\s+/)
+      nombre = partes.shift() || ''
+      apellido = partes.join(' ')
+    }
+
     return json({
       ok: true,
-      full_name: atleta.full_name,
-      usuario_sugerido: atleta.username,
+      nombre: nombre || '',
+      apellido: apellido || '',
       coach: coachNombre,
     }, 200, origin)
   }
@@ -133,6 +154,11 @@ Deno.serve(async (req) => {
   const username = (p.username ?? '').trim()
   const password = p.password ?? ''
   const email = (p.email ?? '').trim().toLowerCase()
+  // El atleta puede corregir lo que puso el coach. Si lo deja tal cual llega
+  // igual, así que no hay que distinguir un caso del otro.
+  const nombre = (p.nombre ?? '').trim().slice(0, 60)
+  const apellido = (p.apellido ?? '').trim().slice(0, 60)
+  const nombreFinal = [nombre, apellido].filter(Boolean).join(' ') || atleta.full_name
   const generoCrudo = (p.genero ?? '').trim().toLowerCase()
   const genero = generoCrudo === 'h' || generoCrudo === 'm' ? generoCrudo : null
 
@@ -165,7 +191,7 @@ Deno.serve(async (req) => {
     email: correoFinal,
     password,
     email_confirm: true,
-    user_metadata: { username, full_name: atleta.full_name, role: 'user' },
+    user_metadata: { username, full_name: nombreFinal, role: 'user' },
   })
   if (errAuth) {
     const crudo = textoDeError(errAuth)
@@ -178,7 +204,7 @@ Deno.serve(async (req) => {
 
   const { error: errPerfil } = await admin
     .from('profiles')
-    .update({ username, email: correoFinal, genero, perfil_completo: true })
+    .update({ username, email: correoFinal, genero, full_name: nombreFinal, perfil_completo: true })
     .eq('id', atleta.id)
   if (errPerfil) {
     return json({ error: `No se pudo guardar el perfil: ${textoDeError(errPerfil)}` }, 400, origin)
