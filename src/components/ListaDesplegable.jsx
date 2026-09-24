@@ -77,55 +77,39 @@ export default function ListaDesplegable({
     if (abierto) miraSiHayMas();
   }, [abierto, planas.length, miraSiHayMas]);
 
-  /* ELEGIR SE DISPARA CON EL DEDO, NO CON EL `click`.
-     Andrés, 24 sep 2026, después del primer intento: "probé lo de los botones
-     de las listas y no se arregló, sigue igual".
+  /* ELEGIR OCURRE EN EL `click`, Y EN NINGÚN EVENTO ANTERIOR.
 
-     Quitar el hover falso no bastó. El fondo del asunto es que en iOS el
-     `click` de un elemento que se redibuja a media pulsación NO es de fiar: si
-     algo cambia entre que el dedo baja y sube, Safari se lo salta. Y esta
-     lista se redibuja sola —el conteo de al lado cambia al filtrar.
+     Andrés, 24 sep 2026, sobre el intento anterior: "diste un paso atrás,
+     volvió a actuar como antes".
 
-     `pointerup` sí llega siempre, con dedo y con ratón. El `click` se deja
-     puesto para el teclado (Enter sobre un botón enfocado no emite
-     `pointerup`), y se ignora si acaba de haber uno para no elegir dos veces. */
-  /* EL CLIC FANTASMA SE MATA DE RAIZ, NO SE ESQUIVA.
-     Andrés, 24 sep 2026: "en lugar de abrirme la lista de abajo me abre
-     automáticamente OTRA cosa, como que da click en un ejercicio... no
-     arreglaste el error definitivamente, como que lo parchaste".
+     Tenía razón, y esta vez el fallo se pudo reproducir aquí, sin iPhone.
 
-     Tenía razón. El intento anterior dejaba que Safari disparara su `click` de
-     cortesía y solo le enseñaba a las listas a ignorarlo; el clic seguía ahí y
-     acababa cayendo en lo que hubiera debajo — una tarjeta de ejercicio, por
-     ejemplo. Perseguir a cada víctima no termina nunca.
+     Aquel intento elegía en `pointerup` y después cancelaba el `touchend`
+     para que el navegador no emitiera su clic de cortesía. Chromium respeta
+     esa cancelación; WebKit no. El estándar de eventos táctiles solo obliga a
+     suprimir ese clic cuando se cancela el `touchstart` o el primer
+     `touchmove`; el `touchend` no entra. De ahí que la prueba pasara en este
+     navegador y fallara en el teléfono.
 
-     Lo correcto es que ese clic NO SE GENERE. Cancelar el `touchend` es
-     exactamente lo que se lo pide al navegador: sin él, no hay mouse events de
-     cortesía, y por tanto no hay fantasma que aterrice en ningún sitio.
+     Lo que pasaba en el iPhone: `pointerup` elegía y cerraba la lista, y el
+     clic de cortesía llegaba después, cuando la opción ya no estaba en
+     pantalla. Aterrizaba en lo que hubiera quedado en ese punto — la lista
+     siguiente, una tarjeta de ejercicio, lo que fuera.
 
-     Con eso, cada entrada tiene su camino y no hay que desempatar:
-       dedo     -> `pointerup` (el `click` ya no llega)
-       ratón    -> `click` (no dispara `pointerup` de tipo touch)
-       teclado  -> `click`
+     Así que la raíz no era el clic de cortesía, sino adelantarse a él.
+     Eligiendo en el `click` no queda ningún evento suelto detrás, y no hay
+     nada que pueda caer en el sitio equivocado. El umbral de arrastre
+     tampoco hace falta: después de un desplazamiento el navegador ya no
+     emite clic.
 
-     También se comprueba que el dedo no se haya movido: levantar el dedo
-     después de arrastrar la lista es scroll, no una elección. */
-  const bajada = useRef(null);
+     Cancelar el `touchstart` sí habría funcionado en WebKit, pero se lleva
+     por delante el scroll de la propia lista, que empieza justo encima de
+     estos botones.
 
+     Lo que sí es imprescindible es que el botón no se redibuje entre que el
+     dedo baja y sube: eso sí hace que iOS se salte el `click`. De eso se
+     encarga el `onMouseEnter` de abajo, apagado en pantalla táctil. */
   const elige = (o) => { onCambio(o.valor); cerrar(); };
-
-  const dedoBaja = (e) => {
-    bajada.current = e.pointerType === 'touch' ? { x: e.clientX, y: e.clientY } : null;
-  };
-
-  const dedoSube = (o) => (e) => {
-    if (e.pointerType !== 'touch' || !bajada.current) return;
-    const { x, y } = bajada.current;
-    bajada.current = null;
-    // Más de 10 px es un arrastre: estaba moviendo la lista, no eligiendo.
-    if (Math.abs(e.clientX - x) > 10 || Math.abs(e.clientY - y) > 10) return;
-    elige(o);
-  };
 
   const teclas = (e) => {
     if (deshabilitado) return;
@@ -181,18 +165,14 @@ export default function ListaDesplegable({
              Un teléfono no tiene hover, así que en pantalla táctil esto no
              quita nada: solo deja de provocar el redibujado a media pulsación. */
           onMouseEnter={dedos ? undefined : () => setActivo(i)}
-          onPointerDown={dedoBaja}
-          onPointerUp={dedoSube(o)}
-          /* Cancelar aquí es lo que impide que nazca el clic fantasma. No
-             estorba al scroll: eso lo decide `touchmove`, no `touchend`. */
-          onTouchEnd={(e) => e.preventDefault()}
-          /* Con el `touchend` cancelado, aquí solo llegan el ratón y el teclado.
-             Si algún navegador ignorara esa cancelación, elegir dos veces la
-             MISMA opción no hace daño: pone el mismo valor y cierra. */
           onClick={() => elige(o)}
           style={{
             flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 9,
             minHeight: 42, padding: '0 11px', borderRadius: 10, border: 'none', cursor: 'pointer',
+            /* Le quita a iOS la espera por un posible doble toque. El `click`
+               llega enseguida, y cuanto más corta es esa espera, menos hueco
+               hay para que algo cambie a media pulsación. */
+            touchAction: 'manipulation',
             background: resaltada ? T.bgInteract : 'transparent',
             fontFamily: FONT, fontSize: 14, fontWeight: puesta ? 800 : 600,
             color: puesta ? T.accent : T.text, textAlign: 'left',
@@ -243,6 +223,7 @@ export default function ListaDesplegable({
           border: `1.5px solid ${abierto ? T.accent : T.border}`, borderRadius: 11,
           padding: '11px 13px', background: T.bg2, boxSizing: 'border-box',
           cursor: deshabilitado ? 'default' : 'pointer', opacity: deshabilitado ? 0.6 : 1,
+          touchAction: 'manipulation',
           fontFamily: FONT, fontSize: 14, fontWeight: 600, color: elegida ? T.text : T.text3,
           textAlign: 'left', ...estilo,
         }}
