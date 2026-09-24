@@ -19,6 +19,33 @@ import { T, FONT } from '@/lib/theme';
  * bonitos es un retroceso, así que aquí hay `role="listbox"`, `aria-selected`,
  * flechas, Inicio/Fin, Enter y Escape.
  */
+/* EL CLIC FANTASMA, Y POR QUE HACE FALTA QUE TODAS LAS LISTAS SE ENTEREN.
+ *
+ * Andrés, 24 sep 2026: "si en categoría escojo hipertrofia, automáticamente me
+ * abre la siguiente lista de grupo muscular... una lista desplegable no tiene
+ * por qué abrirme otra cuando selecciono".
+ *
+ * Es consecuencia de elegir con el dedo (`pointerup`) en vez de con el `click`,
+ * que es lo que hubo que hacer para que cerraran en iOS. La cadena:
+ *
+ *   1. El dedo se levanta sobre la opción -> se elige y la lista se cierra YA.
+ *   2. Safari manda su `click` de cortesía unos milisegundos después.
+ *   3. Para entonces el panel ya no está, así que ese clic aterriza sobre lo
+ *      que quedó debajo: el botón del siguiente desplegable. Y lo abre.
+ *
+ * Una bandera dentro del componente no alcanza: quien recibe el clic fantasma
+ * es OTRA lista, con su propio estado. Por eso vive aquí, compartida: durante
+ * un rato corto después de elegir con el dedo, ninguna lista se abre por un
+ * clic. Los toques de verdad llegan mucho después de esos 700 ms.
+ */
+let reciénElegidoConDedo = false;
+let avisoTemporizador;
+function marcaDedo() {
+  reciénElegidoConDedo = true;
+  window.clearTimeout(avisoTemporizador);
+  avisoTemporizador = window.setTimeout(() => { reciénElegidoConDedo = false; }, 700);
+}
+
 export default function ListaDesplegable({
   valor,
   onCambio,
@@ -92,8 +119,10 @@ export default function ListaDesplegable({
   const yaConElDedo = useRef(false);
   const elige = (o, conPuntero = false) => {
     if (conPuntero) {
-      // El `click` sintetizado llega justo detrás del dedo; se ignora ese.
+      // El `click` sintetizado llega justo detrás del dedo; se ignora ese, y
+      // se avisa a las demás listas para que tampoco lo tomen por suyo.
       yaConElDedo.current = true;
+      marcaDedo();
       window.setTimeout(() => { yaConElDedo.current = false; }, 700);
     } else if (yaConElDedo.current) {
       return;
@@ -200,7 +229,13 @@ export default function ListaDesplegable({
     <div ref={caja} style={{ position: 'relative' }}>
       <button
         type="button"
-        onClick={() => { if (!deshabilitado) { if (abierto) cerrar(); else abre(); } }}
+        onClick={() => {
+          if (deshabilitado) return;
+          // Un clic que llega pisándole los talones a una elección con el dedo
+          // no lo hizo nadie: es el fantasma de Safari. Se tira.
+          if (reciénElegidoConDedo && !abierto) return;
+          if (abierto) cerrar(); else abre();
+        }}
         onKeyDown={teclas}
         disabled={deshabilitado}
         aria-haspopup="listbox"
