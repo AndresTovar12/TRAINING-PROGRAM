@@ -895,3 +895,80 @@ export async function completarMiPerfil({ usuario, tipo, nombre, profesion, coac
   if (error) throw error;
   return data;
 }
+
+/* ============================================================
+   INVITACIONES · sumar atletas
+   ============================================================ */
+
+/**
+ * Da de alta a un atleta con solo su nombre y apellido, y devuelve su link.
+ *
+ * Andrés, 24 sep 2026: "desde que el coach genera el link, el cliente se
+ * agrega a su lista de atletas y puede ir trabajando en el atleta aunque el
+ * atleta aún no active su cuenta". Por eso el atleta queda creado de verdad,
+ * no apuntado en una lista de espera: así se le puede armar el plan ya.
+ *
+ * No se le pide correo al coach, a propósito. Él no lo tiene por qué saber.
+ */
+export async function invitarAtleta({ nombre, apellido }) {
+  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invitar-atleta`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${await tokenDeAhora()}`,
+    },
+    body: JSON.stringify({ nombre, apellido }),
+  }).catch(() => null);
+
+  if (!res) throw new Error('No se pudo contactar al servidor. Revisa tu conexión.');
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body?.error || `No se pudo agregar al atleta (error ${res.status}).`);
+  return body; // { token, atleta_id, usuario, full_name }
+}
+
+/** La dirección que se le manda al atleta. */
+export function ligaDeInvitacion(token) {
+  return `${window.location.origin}/?invitacion=${encodeURIComponent(token)}`;
+}
+
+/**
+ * Las invitaciones sin usar de este coach, por atleta.
+ *
+ * Sirve para dos cosas en la lista de atletas: marcar a los que todavía no han
+ * activado, y poder volver a copiar su link sin generar otro.
+ */
+export async function invitacionesPendientes() {
+  const { data, error } = await supabase
+    .from('invitaciones')
+    .select('token, atleta_id, creada_en')
+    .is('usada_en', null)
+    .not('atleta_id', 'is', null);
+  if (error) throw error;
+  return Object.fromEntries((data ?? []).map((i) => [i.atleta_id, i.token]));
+}
+
+/** Llamada sin sesión: quien abre el link todavía no tiene cuenta. */
+async function invitacion(cuerpo) {
+  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/activar-invitacion`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+    },
+    body: JSON.stringify(cuerpo),
+  }).catch(() => null);
+
+  if (!res) throw new Error('No se pudo contactar al servidor. Revisa tu conexión.');
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body?.error || `Algo salió mal (error ${res.status}).`);
+  return body;
+}
+
+/** Quién es el atleta y quién su coach, para saludarlo antes de pedirle nada. */
+export const verInvitacion = (token) => invitacion({ token, modo: 'ver' });
+
+/** Termina de crear la cuenta: usuario, contraseña y, si quiere, correo. */
+export const activarInvitacion = ({ token, username, password, email, genero }) =>
+  invitacion({ token, modo: 'activar', username, password, email, genero });

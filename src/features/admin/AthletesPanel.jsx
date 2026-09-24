@@ -2,13 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Loader2, Search, Plus, Trash2, X, ChevronRight, ChevronLeft, Pencil,
   CalendarClock, User as UserIcon, Shield, ClipboardList, Users,
-  UserMinus, Power, AlertTriangle, Eye, ChevronDown, ChevronUp,
+  UserMinus, Power, AlertTriangle, Eye, ChevronDown, ChevronUp, UserPlus,
+  Check, Copy, Share2,
 } from 'lucide-react';
 import {
   getActivePlan, deletePlan, getAthleteState, listAthletesOverview, listCoaches, setAthleteCoach,
   quitarAtletaDeMiLista, setAtletaActivo, resumenDatosAtleta, eliminarAtletaDefinitivo,
+  invitacionesPendientes, ligaDeInvitacion,
 } from '@/lib/api';
 import PlanBuilder from '@/features/admin/PlanBuilder';
+import AgregarAtleta from '@/features/admin/AgregarAtleta';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useIsDesktop } from '@/lib/useViewport';
@@ -183,6 +186,87 @@ function Arroba({ fila }) {
     );
   }
   return <span style={{ fontSize: 12.5, color: T.text2, fontWeight: 500 }}>@{fila?.username}</span>;
+}
+
+/**
+ * El link de quien todavía no ha entrado, para volver a mandárselo.
+ *
+ * Sin esto, un coach que pierde el mensaje de WhatsApp se queda sin forma de
+ * recuperarlo, y generar otro dejaría al atleta duplicado. El link es siempre
+ * el mismo mientras no se use.
+ */
+function LinkPendiente({ token }) {
+  const [copiado, setCopiado] = useState(false);
+  const liga = ligaDeInvitacion(token);
+
+  const copiar = async () => {
+    try {
+      await navigator.clipboard.writeText(liga);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    } catch {
+      // Safari niega el portapapeles fuera de un toque directo. El link queda
+      // a la vista y seleccionable, que es la salida.
+      setCopiado(false);
+    }
+  };
+
+  const compartir = async () => {
+    try {
+      await navigator.share({ title: 'Tu invitación a Training Lab', url: liga });
+    } catch { /* cancelar la hoja de compartir llega como error */ }
+  };
+
+  return (
+    <div style={{
+      background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 13,
+      padding: '12px 13px', marginBottom: 14,
+    }}>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text, marginBottom: 4 }}>
+        Todavía no ha entrado
+      </div>
+      <p style={{ fontSize: 12.5, color: T.text2, lineHeight: 1.5, margin: '0 0 10px', fontWeight: 500 }}>
+        Ya puedes armarle su plan. Cuando abra este link, elige su usuario y su contraseña.
+      </p>
+      <div style={{
+        background: T.bg3, borderRadius: 9, padding: '8px 10px', marginBottom: 9,
+        fontSize: 11.5, fontWeight: 600, color: T.text2, wordBreak: 'break-all',
+        lineHeight: 1.45, userSelect: 'all',
+      }}>
+        {liga}
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          type="button"
+          onClick={copiar}
+          style={{
+            flex: 1, minHeight: 38, borderRadius: 9, cursor: 'pointer',
+            border: `1.5px solid ${copiado ? T.accent : T.border}`,
+            background: copiado ? T.accentBg : T.bg, color: copiado ? T.accent : T.text,
+            fontFamily: FONT, fontSize: 13, fontWeight: 700, touchAction: 'manipulation',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+          }}
+        >
+          {copiado ? <Check size={15} /> : <Copy size={14} />}
+          {copiado ? 'Copiado' : 'Copiar link'}
+        </button>
+        {typeof navigator !== 'undefined' && navigator.share && (
+          <button
+            type="button"
+            onClick={compartir}
+            style={{
+              flex: 1, minHeight: 38, borderRadius: 9, cursor: 'pointer',
+              border: `1.5px solid ${T.border}`, background: T.bg, color: T.text,
+              fontFamily: FONT, fontSize: 13, fontWeight: 700, touchAction: 'manipulation',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+            }}
+          >
+            <Share2 size={14} /> Compartir
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function AthletesTable({ rows, coaches, isMaster, selectedId, onPick }) {
@@ -715,7 +799,7 @@ function DentroDelDia({ day }) {
   );
 }
 
-function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile, onReassigned, onEliminado, onVerComoAtleta }) {
+function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile, onReassigned, onEliminado, onVerComoAtleta, tokenInvitacion }) {
   const esCompu = useIsDesktop();
   const pregunta = useConfirmacion();
   const [plan, setPlan] = useState(null);
@@ -853,6 +937,11 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
         </div>
       ) : acciones}
 
+      {/* Arriba del todo y sin plegar: cuando un coach acaba de dar de alta a
+          alguien, el link es justo lo que viene a buscar. Escondido en una
+          sección que hay que abrir, no lo encuentra. */}
+      {tokenInvitacion && <LinkPendiente token={tokenInvitacion} />}
+
       <SeccionFicha titulo="Cómo va" abierta={seccion === 'como-va'} onToggle={() => setSeccion((s) => (s === 'como-va' ? null : 'como-va'))}>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <div style={{ flex: '1 1 140px', background: T.bg, borderRadius: 12, padding: '12px 14px' }}>
@@ -989,6 +1078,12 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
   // leer el reloj dentro del useMemo lo dejaria congelado en la primera vuelta.
   const [cargadoEn, setCargadoEn] = useState(0);
 
+  // Alta de atletas por el coach: el diálogo, y los que aún no han activado.
+  const [agregando, setAgregando] = useState(false);
+  const [sinActivar, setSinActivar] = useState({}); // id de atleta -> token
+  // Sube de uno en uno para volver a leer la lista cuando algo la cambia.
+  const [recarga, setRecarga] = useState(0);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -999,6 +1094,11 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
           const c = await listCoaches();
           if (!cancelled) setCoaches(c);
         }
+        /* Quién sigue sin entrar. Va aparte y sin tumbar la carga: si esta
+           consulta falla, la lista de atletas se enseña igual — solo se pierde
+           la etiqueta de "sin activar", que es un adorno, no el contenido. */
+        const inv = await invitacionesPendientes().catch(() => ({}));
+        if (!cancelled) setSinActivar(inv);
       } catch (e2) {
         if (!cancelled) setErr(e2.message || 'Error al cargar');
       } finally {
@@ -1006,7 +1106,7 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [isMaster]);
+  }, [isMaster, recarga]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -1070,6 +1170,28 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
             <StatCard icon={<CalendarClock size={17} />} label="Activos (7 días)" value={metricas.activos} />
           </div>
         )}
+        {/* Dar de alta a un cliente sin esperar a que se registre. Va antes
+            del buscador porque es lo primero que hace un coach con una lista
+            vacía, y buscar en una lista vacía no sirve de nada.
+            Viendo la cuenta de otro coach no aparece: el atleta quedaría a
+            nombre de quien mira, no del coach. */}
+        {!viendoComo && (
+          <button
+            type="button"
+            onClick={() => setAgregando(true)}
+            className="kp-press"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 14,
+              padding: '12px 18px', borderRadius: 999, border: 'none', cursor: 'pointer',
+              background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, color: '#fff',
+              fontFamily: FONT, fontSize: 14.5, fontWeight: 700, boxShadow: KP.shBtn,
+              touchAction: 'manipulation',
+            }}
+          >
+            <UserPlus size={18} /> Agregar atleta
+          </button>
+        )}
+
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 12, padding: '0 14px', marginBottom: 16 }}>
           <Search size={17} color={T.text3} />
           <input
@@ -1187,11 +1309,22 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
             setAthletes((prev) => prev.map((a) => (a.id === row.id ? { ...a, ...parche } : a)));
             setSelected((s) => (s && s.id === row.id ? { ...s, ...parche } : s));
           }}
+          tokenInvitacion={sinActivar[selected.id]}
           onEliminado={(id) => {
             setAthletes((prev) => prev.filter((a) => a.id !== id));
             setSelected(null);
           }}
           onClose={() => setSelected(null)}
+        />
+      )}
+
+      {agregando && (
+        <AgregarAtleta
+          onCerrar={() => setAgregando(false)}
+          /* Se vuelve a leer la lista en vez de meter la fila a mano: el
+             resumen trae cuentas y fechas que solo sabe el servidor, y una
+             fila inventada aquí se vería distinta a las demás. */
+          onCreado={() => setRecarga((n) => n + 1)}
         />
       )}
 

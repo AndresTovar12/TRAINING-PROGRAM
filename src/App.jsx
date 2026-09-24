@@ -6,6 +6,7 @@ import { useIsDesktop } from '@/lib/useViewport';
 import { AppStateProvider } from '@/contexts/AppStateContext';
 import { PlanProvider } from '@/contexts/PlanContext';
 import AuthScreen from '@/features/auth/AuthScreen';
+import ActivarInvitacion from '@/features/auth/ActivarInvitacion';
 import Bienvenida from '@/features/auth/Bienvenida';
 import LandingPage from '@/features/landing/LandingPage';
 import TrainingApp from '@/features/training/TrainingApp';
@@ -272,8 +273,82 @@ function Entrada() {
   );
 }
 
+/**
+ * Quien abre un link de invitación teniendo ya una sesión puesta.
+ *
+ * Le pasa a cualquiera que pruebe el link desde su propio navegador. Sin este
+ * aviso la app lo mandaría a SU cuenta y parecería que el link está roto.
+ */
+function InvitacionConSesion({ onSalir }) {
+  const { signOut } = useAuth();
+  return (
+    <div
+      style={{
+        minHeight: '100svh', display: 'flex', flexDirection: 'column', gap: 18,
+        alignItems: 'center', justifyContent: 'center', textAlign: 'center',
+        padding: 28, fontFamily: FONT,
+        background:
+          'radial-gradient(1100px 620px at 50% -8%, #e7ecfe 0%, rgba(244,245,248,0) 60%), #f4f5f8',
+      }}
+    >
+      <div style={{ maxWidth: 380 }}>
+        <h1 style={{ fontSize: 21, fontWeight: 800, color: KP.ink, margin: '0 0 8px', letterSpacing: -0.4 }}>
+          Ya tienes una sesión abierta
+        </h1>
+        <p style={{ fontSize: 15, color: KP.ink2, lineHeight: 1.55, margin: 0, fontWeight: 500 }}>
+          Para usar esta invitación hay que salir de la cuenta actual. Nada se pierde:
+          vuelves a entrar cuando quieras.
+        </p>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%', maxWidth: 320 }}>
+        <button
+          type="button"
+          onClick={signOut}
+          className="kp-press"
+          style={{
+            padding: '14px 22px', borderRadius: 999, border: 'none',
+            background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, color: '#fff',
+            cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 800, boxShadow: KP.shBtn,
+          }}
+        >
+          Salir y usar la invitación
+        </button>
+        <button
+          type="button"
+          onClick={onSalir}
+          style={{
+            padding: '13px 22px', borderRadius: 999, border: `1.5px solid ${KP.line}`,
+            background: KP.surface, color: KP.ink, cursor: 'pointer',
+            fontFamily: FONT, fontSize: 15, fontWeight: 700,
+          }}
+        >
+          Seguir con mi cuenta
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const { loading, user, profile } = useAuth();
+
+  /* El link de invitación llega como `?invitacion=…`. Se lee una sola vez al
+     arrancar: la app no tiene rutas, así que la dirección solo se mira aquí.
+     Al terminar se borra de la barra para que no quede en el historial ni se
+     vuelva a abrir esta pantalla al recargar. */
+  const [invitacion, setInvitacion] = useState(
+    () => new URLSearchParams(window.location.search).get('invitacion') || null,
+  );
+  const cierraInvitacion = () => {
+    window.history.replaceState({}, '', window.location.pathname);
+    setInvitacion(null);
+  };
+
+  if (invitacion) {
+    if (loading) return <Splash />;
+    if (user) return <InvitacionConSesion onSalir={cierraInvitacion} />;
+    return <ActivarInvitacion token={invitacion} onSalir={cierraInvitacion} />;
+  }
 
   if (loading) return <Splash />;
   if (!user) return <><Entrada /><UpdateBanner /></>;
