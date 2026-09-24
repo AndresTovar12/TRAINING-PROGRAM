@@ -181,6 +181,24 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
 
   useEffect(() => apaga, [apaga]);
 
+  /* La página de atrás se queda quieta mientras la cámara está abierta. Sin
+     esto, un dedo que resbala arrastra el formulario que hay debajo y la
+     cámara se va de sitio: parece que la app se movió sola. */
+  useEffect(() => {
+    /* Se bloquean los DOS. Con solo `body` la página seguía arrastrándose 300
+       px en la prueba: quien hace el scroll aquí es `html`, no `body`, y cuál
+       de los dos es depende del navegador. Poniéndolo en ambos no hay duda. */
+    const raiz = document.documentElement;
+    const antesBody = document.body.style.overflow;
+    const antesRaiz = raiz.style.overflow;
+    document.body.style.overflow = 'hidden';
+    raiz.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = antesBody;
+      raiz.style.overflow = antesRaiz;
+    };
+  }, []);
+
   useEffect(() => {
     if (!grabando) return undefined;
     const t = window.setInterval(() => setSegundos((s) => s + 1), 1000);
@@ -258,7 +276,22 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 5000, background: '#000',
+      /* `100svh` Y NO `inset: 0`. Andrés, 24 sep 2026: "abre como una cámara
+         adentro de Safari, a tal nivel que tengo que hacer scroll para abajo
+         para darle click al punto rojo de record".
+
+         La causa: en iOS, un elemento `fixed` con `inset: 0` se mide contra el
+         viewport de MAQUETA, que es más alto que lo que de verdad se ve cuando
+         Safari tiene sus barras puestas. El fondo del recuadro —justo donde
+         vive el botón de grabar— quedaba por debajo de la barra de abajo. De
+         ahí el scroll para alcanzar un botón que debería estar siempre a la
+         mano.
+
+         `svh` es la altura del viewport CHICO: la que hay con las barras
+         visibles. Midiendo así, el botón entra siempre. El resto de la app ya
+         usaba `svh` para esto; a la cámara se le había olvidado. */
+      position: 'fixed', top: 0, left: 0, right: 0, height: '100svh',
+      zIndex: 5000, background: '#000',
       display: 'flex', flexDirection: 'column', fontFamily: FONT,
     }}>
       <video

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, Trash2 } from 'lucide-react';
+import { useCoarsePointer } from '@/lib/useViewport';
 import { T, FONT } from '@/lib/theme';
 
 /**
@@ -30,6 +31,7 @@ export default function ListaDesplegable({
   estilo,
   alto = 268,
 }) {
+  const dedos = useCoarsePointer();
   const caja = useRef(null);
   const lista = useRef(null);
   const [abierto, setAbierto] = useState(false);
@@ -114,7 +116,23 @@ export default function ListaDesplegable({
           type="button"
           role="option"
           aria-selected={puesta}
-          onMouseEnter={() => setActivo(i)}
+          /* EL RESALTADO POR HOVER, SOLO DONDE HAY PUNTERO.
+             Andrés, 24 sep 2026: "en tu navegador sí se cierra pero en mi
+             teléfono no". Esta línea era la causa.
+
+             En iOS, tocar un botón dispara PRIMERO un `mouseover`/`mouseenter`
+             simulado y solo después `mousedown` y `click`. Ese `mouseenter`
+             llamaba a `setActivo`, React volvía a dibujar la lista entera, y si
+             el nodo que recibió el `mousedown` se reemplaza antes del `mouseup`,
+             el navegador YA NO EMITE el `click`. Sin `click` no corre `elige`,
+             y sin `elige` la lista no se cierra.
+
+             En un navegador de escritorio no pasa porque el hover ocurre mucho
+             antes del clic, no dentro del mismo gesto. Por eso aquí se veía bien.
+
+             Un teléfono no tiene hover, así que en pantalla táctil esto no
+             quita nada: solo deja de provocar el redibujado a media pulsación. */
+          onMouseEnter={dedos ? undefined : () => setActivo(i)}
           onClick={() => elige(o)}
           style={{
             flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 9,
