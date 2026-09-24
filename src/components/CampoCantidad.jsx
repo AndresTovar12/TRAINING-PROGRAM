@@ -47,30 +47,57 @@ export default function CampoCantidad({
     onPatch({ reps: texto, unidad: id });
   };
 
+  /* EL NÚMERO Y LA UNIDAD NO SE SUPERPONEN NUNCA, POR CONSTRUCCIÓN.
+     Andrés, 24 sep 2026, dos veces con captura: "de nuevo mal en la compu".
+
+     Antes la unidad iba flotando encima del campo (`position: absolute`) y el
+     hueco para ella se reservaba con un `paddingRight` en el input. Eso falló
+     por dos sitios a la vez: el `estiloInput` de quien usa el componente trae
+     un `padding` corto que BORRA ese `paddingRight`, y aunque no lo borrara,
+     el hueco era de 46 px y el botón "reps" mide 64.
+
+     Ahora son hermanos dentro de una caja flex: el número se queda con el
+     espacio que sobra (`flex: 1, minWidth: 0`) y la unidad ocupa el suyo. No
+     hay número que reservar ni orden de estilos que respetar — encimarse deja
+     de ser posible.
+
+     El borde y el fondo pasan del input a la caja, para que se siga viendo
+     como un campo y no como dos cosas sueltas. */
+  /* Los espaciados salen del estilo de la caja y se le dan al input de dentro:
+     si se quedaran fuera, el borde se dibujaría separado del número. El `_`
+     delante marca lo que se descarta a propósito. */
+  const {
+    padding, width: _ancho,
+    paddingLeft: _pl, paddingRight: _pr, paddingTop: _pt, paddingBottom: _pb,
+    ...caja
+  } = estiloInput ?? {};
+
   const campo = (
-    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 2, width: '100%',
+      boxSizing: 'border-box', ...caja,
+    }}>
       <input
         value={libre ? (ex?.reps ?? '') : cantidad}
         onChange={(e) => escribe(e.target.value)}
         placeholder={placeholder ?? (id === 'reps' ? '10' : '30')}
         inputMode={libre ? 'text' : 'decimal'}
         style={{
-          width: '100%', boxSizing: 'border-box',
-          // Hueco a la derecha para que la unidad no se encime con el número.
-          paddingRight: conRotulo ? 40 : 46,
-          ...estiloInput,
+          flex: 1, minWidth: 0, border: 'none', background: 'transparent',
+          outline: 'none', padding: padding ?? '7px 9px',
+          font: 'inherit', color: 'inherit',
         }}
       />
       {conRotulo ? (
         <span style={{
-          position: 'absolute', right: 10, pointerEvents: 'none',
+          flexShrink: 0, paddingRight: 10,
           fontSize: 12, fontWeight: 700, color: T.text3,
         }}>
           {libre ? '' : u.corta}
         </span>
       ) : (
         // Sin rótulo arriba, la unidad ES el botón que abre la lista.
-        <div style={{ position: 'absolute', right: 3 }}>
+        <div style={{ flexShrink: 0, paddingRight: 3 }}>
           <ListaDesplegable
             etiqueta="Unidad"
             valor={id}
