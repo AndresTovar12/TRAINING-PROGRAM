@@ -139,11 +139,16 @@ export default function Bienvenida() {
                 </span>
                 <span style={{ flex: 1, height: 1, background: KP.line }} />
               </div>
+              {/* Mismo campo que en el registro: acepta el código del coach o
+                  su usuario, y los dos los resuelve `coach_por_referencia`. */}
               <Field
                 icon={UserCheck}
-                label="Usuario de quien te entrena"
-                placeholder="su_usuario"
+                label="Código de tu entrenador"
+                hint="o su usuario"
+                placeholder="pega aquí su código"
                 autoComplete="off"
+                autoCapitalize="none"
+                autoCorrect="off"
                 value={coachUsuario}
                 onChange={(e) => setCoachUsuario(e.target.value.replace(/\s/g, ''))}
               />

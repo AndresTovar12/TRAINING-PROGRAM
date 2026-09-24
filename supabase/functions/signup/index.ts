@@ -84,7 +84,8 @@ Deno.serve(async (req) => {
   const password = payload.password ?? ''
   let email = (payload.email ?? '').trim().toLowerCase()
   const accountType = (payload.account_type ?? 'athlete').trim().toLowerCase()
-  const coachUsername = (payload.coach_username ?? '').trim()
+  // Puede venir el CÓDIGO del coach o su usuario: la base resuelve los dos.
+  const coachRef = (payload.coach_username ?? '').trim()
 
   // Genero: 'h', 'm', o nada. Se pregunta al darse de alta porque ahi es donde
   // la gente si contesta. Estaba solo en "Mi perfil", escondido, y el resultado
@@ -142,18 +143,19 @@ Deno.serve(async (req) => {
     return json({ error: 'Ese nombre de usuario ya está en uso' }, 409, origin)
   }
 
-  // Si el atleta indicó un coach, resolverlo. Debe existir y ser una cuenta de coach.
+  /* Si el atleta dijo con quién entrena, resolverlo.
+
+     La búsqueda vive en la base (`coach_por_referencia`) y no aquí, porque hay
+     DOS caminos para enlazarse con un coach: este formulario y la pantalla de
+     bienvenida de quien entra con Google. Antes cada uno traía su propia copia
+     de la búsqueda, y dos copias es como se acaba arreglando una sola. */
   let coachId: string | null = null
-  if (!isCoach && coachUsername) {
-    const { data: coach } = await admin
-      .from('profiles')
-      .select('id, role')
-      .ilike('username', coachUsername)
-      .maybeSingle()
-    if (!coach || coach.role !== 'admin') {
-      return json({ error: `No encontramos un coach con el usuario "${coachUsername}"` }, 400, origin)
+  if (!isCoach && coachRef) {
+    const { data: encontrado } = await admin.rpc('coach_por_referencia', { p_ref: coachRef })
+    if (!encontrado) {
+      return json({ error: `No encontramos ningún entrenador con "${coachRef}"` }, 400, origin)
     }
-    coachId = coach.id
+    coachId = encontrado as string
   }
 
   // Crear usuario confirmado (sin email de verificación)

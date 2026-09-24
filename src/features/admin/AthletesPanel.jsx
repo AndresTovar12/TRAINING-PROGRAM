@@ -19,6 +19,7 @@ import { T, FONT, KP, tipoDeSesion } from '@/lib/theme';
 import { plural, pluralS } from '@/lib/plural';
 import { esDescanso } from '@/lib/training-utils';
 import ListaDesplegable from '@/components/ListaDesplegable';
+import CodigoDeCoach from '@/components/CodigoDeCoach';
 
 function useIsNarrow(breakpoint = 880) {
   const [narrow, setNarrow] = useState(
@@ -1176,12 +1177,13 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
             Viendo la cuenta de otro coach no aparece: el atleta quedaría a
             nombre de quien mira, no del coach. */}
         {!viendoComo && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
           <button
             type="button"
             onClick={() => setAgregando(true)}
             className="kp-press"
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 14,
+              display: 'inline-flex', alignItems: 'center', gap: 8,
               padding: '12px 18px', borderRadius: 999, border: 'none', cursor: 'pointer',
               background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, color: '#fff',
               fontFamily: FONT, fontSize: 14.5, fontWeight: 700, boxShadow: KP.shBtn,
@@ -1190,6 +1192,11 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
           >
             <UserPlus size={18} /> Agregar atleta
           </button>
+          {/* La otra forma de sumar a alguien: que se registre él y pegue este
+              código. Va al lado del botón porque es el mismo momento — 'quiero
+              un atleta más' — solo que el trabajo lo hace la otra persona. */}
+          <CodigoDeCoach codigo={profile?.codigo_coach} />
+          </div>
         )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 12, padding: '0 14px', marginBottom: 16 }}>

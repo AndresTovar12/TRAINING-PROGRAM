@@ -507,11 +507,19 @@ export default function AuthScreen({ modoInicial = 'login', onVolver }) {
                     onChange={(e) => setEmail(e.target.value)}
                   />
                   {accountType === 'athlete' && (
+                    /* Andrés, 24 sep 2026: "podría ser más fácil copiar y
+                       pegar un código en lugar del nombre de usuario del
+                       coach". El código va primero porque es lo que él va a
+                       repartir; el usuario sigue valiendo y se dice en la
+                       ayuda, para no dejar tirado a quien ya lo conoce. */
                     <Field
                       icon={UserCheck}
-                      label="Usuario de quien te entrena"
-                      placeholder="su_usuario"
+                      label="Código de tu entrenador"
+                      hint="o su usuario"
+                      placeholder="pega aquí su código"
                       autoComplete="off"
+                      autoCapitalize="none"
+                      autoCorrect="off"
                       value={coachUsername}
                       onChange={(e) => setCoachUsername(e.target.value.replace(/\s/g, ''))}
                     />
