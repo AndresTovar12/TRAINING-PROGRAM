@@ -16,6 +16,7 @@ import {
 } from '@/lib/api';
 import { isLoadedExercise, esDescanso } from '@/lib/training-utils';
 import { T, FONT, KP } from '@/lib/theme';
+import CampoCantidad from '@/components/CampoCantidad';
 import { ligaExterna } from '@/lib/videos';
 import RepertoirePicker from '@/features/admin/RepertoirePicker';
 import MediaUpload from '@/features/admin/MediaUpload';
@@ -387,10 +388,13 @@ function ExerciseCard({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove
           />
         )}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <Field label="Reps">
-            <input value={ex.reps || ''} onChange={(e) => onPatch({ reps: e.target.value })}
-              style={{ ...inputStyle, padding: '8px 10px', fontSize: 13 }} />
-          </Field>
+          {/* El rótulo de este campo es la lista de unidades: reps, segundos,
+              metros, yardas… Ver `CampoCantidad`. */}
+          <CampoCantidad
+            ex={ex}
+            onPatch={onPatch}
+            estiloInput={{ ...inputStyle, padding: '8px 10px', fontSize: 13 }}
+          />
           <Field label="Carga / Int.">
             <input value={ex.intensity || ''} onChange={(e) => onPatch({ intensity: e.target.value })}
               placeholder="70% / RPE 8" style={{ ...inputStyle, padding: '8px 10px', fontSize: 13 }} />
@@ -535,9 +539,11 @@ function ExerciseRow({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove,
           )}
         </div>
       </td>
-      <td style={{ ...celda, width: 92 }}>
-        <input value={ex.reps || ''} onChange={(e) => onPatch({ reps: e.target.value })}
-          placeholder="10" style={inputFila} />
+      {/* Aquí el rótulo lo pone el encabezado de la tabla, uno para todas las
+          filas, y cada ejercicio puede medirse distinto. Así que la unidad va
+          DENTRO del campo y es ella la que abre la lista. */}
+      <td style={{ ...celda, width: 112 }}>
+        <CampoCantidad ex={ex} onPatch={onPatch} conRotulo={false} estiloInput={inputFila} />
       </td>
       <td style={{ ...celda, width: 118 }}>
         <input value={ex.intensity || ''} onChange={(e) => onPatch({ intensity: e.target.value })}
@@ -1173,12 +1179,20 @@ function EditorSesionesDelDia({ day, onPatch }) {
                               onChange={(ev) => parcheaFila(bi, fi, { sets: ev.target.value })}
                               placeholder="3 o —"
                             />
-                            <CampoBloque
-                              etiqueta="Reps"
-                              value={e.reps ?? ''}
-                              onChange={(ev) => parcheaFila(bi, fi, { reps: ev.target.value })}
-                              placeholder="5, 30 yd, 15 min…"
-                            />
+                            {/* Ya no hace falta escribir "30 yd" a mano: el
+                                rótulo abre la lista y la unidad queda guardada. */}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <CampoCantidad
+                                ex={e}
+                                onPatch={(parche) => parcheaFila(bi, fi, parche)}
+                                estiloInput={{
+                                  width: '100%', boxSizing: 'border-box', padding: '9px 10px',
+                                  borderRadius: 9, border: `1.5px solid ${T.border}`,
+                                  background: T.bg, fontFamily: FONT, fontSize: 16,
+                                  fontWeight: 600, color: T.text, outline: 'none',
+                                }}
+                              />
+                            </div>
                           </div>
 
                           {verMas && (

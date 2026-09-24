@@ -25,7 +25,8 @@ import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
 import { useStorage } from '@/contexts/AppStateContext';
 import FichaEjercicio from '@/features/training/FichaEjercicio';
 import Portada from '@/components/Portada';
-import { plural, pluralS, textoReps, rondasQueDecir } from '@/lib/plural';
+import { plural, pluralS, rondasQueDecir } from '@/lib/plural';
+import { textoMeta } from '@/lib/medidas';
 
 // Nombres completos SOLO para mostrar en compu. Lo que guarda el plan sigue
 // siendo 'Lun', 'Mar'… igual que en el editor del entrenador.
@@ -296,7 +297,7 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phas
      no existe. Petición de Andrés, y es lo correcto — un hueco vacío se lee
      como un fallo de la app. */
   const chips = [
-    textoReps(ex.reps),
+    textoMeta(ex),
     formattedIntensity || null,
     rest || null,
   ].filter(Boolean);

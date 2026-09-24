@@ -6,7 +6,13 @@ import { VideoRecortado } from '@/features/training/VideoRecortado';
 import CarruselDeVideos, { Puntos } from '@/features/training/CarruselDeVideos';
 import { aKilos, desdeKilos, pesoTexto, etiquetaUnidad } from '@/lib/unidades';
 import { isLoadedExercise, formatIntensity, findPreviousWeight } from '@/lib/training-utils';
-import { textoReps } from '@/lib/plural';
+/* `unidad` de este archivo es la del PESO (kg o lb). La de la cantidad se
+   importa con otro nombre para no pisarla. */
+import {
+  textoMeta, leeCantidad, esTiempo, metaEnSegundos,
+  medida as infoMedida,
+} from '@/lib/medidas';
+import Cronometro from '@/components/Cronometro';
 
 /**
  * La pantalla de UN ejercicio, mientras se entrena.
@@ -100,11 +106,22 @@ export default function FichaEjercicio({
     if (dir < 0 && (vacio || actual <= 0)) { escribePeso(''); return; }
     escribePeso(String(Math.round((actual + dir * paso) * 100) / 100));
   };
+  /* Cuánto sube y baja la flecha, según lo que se mida. Subir de uno en uno
+     hasta 800 metros no lo hace nadie: son 800 toques. Los pasos son los que
+     se usan al hablar — los metros de diez en diez, los segundos de cinco en
+     cinco, los kilómetros de medio en medio. */
+  const PASO_CANTIDAD = { reps: 1, seg: 5, min: 1, m: 10, km: 0.5, yd: 5, cal: 1 };
+  const medida = leeCantidad(ex);
+  const pasoCantidad = PASO_CANTIDAD[medida.unidad] ?? 1;
+  const enTiempo = !medida.libre && esTiempo(medida.unidad);
+
   const mueveReps = (dir) => {
-    const actual = parseInt(exData.repsHechas, 10);
+    const actual = parseFloat(exData.repsHechas);
     const hay = Number.isFinite(actual);
     if (dir < 0 && (!hay || actual <= 0)) { onUpdate({ ...exData, repsHechas: '' }); return; }
-    onUpdate({ ...exData, repsHechas: String((hay ? actual : 0) + dir) });
+    const nuevo = (hay ? actual : 0) + dir * pasoCantidad;
+    // Redondeo a dos decimales: 0.5 + 0.5 en coma flotante da 1.0000000000001.
+    onUpdate({ ...exData, repsHechas: String(Math.round(Math.max(0, nuevo) * 100) / 100) });
   };
 
   const escribePeso = (v) => {
@@ -113,8 +130,8 @@ export default function FichaEjercicio({
   };
 
   const esUltimo = posicion >= total;
-  // "Meta: 30 yd", no "Meta: 30 yd reps": misma regla que la lista de la sesión.
-  const meta = [textoReps(ex.reps), intensidad].filter(Boolean).join(' · ');
+  // "Meta: 30 yd", no "Meta: 30 yd reps": lo dice la unidad del ejercicio.
+  const meta = [textoMeta(ex), intensidad].filter(Boolean).join(' · ');
 
   const circulo = (relleno) => ({
     width: 46, height: 46, borderRadius: '50%', flexShrink: 0, cursor: 'pointer',
@@ -265,30 +282,47 @@ export default function FichaEjercicio({
         }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 16.5, fontWeight: 800, color: LT.text }}>
-              Reps <span style={{ color: LT.text3, fontWeight: 600 }}>hechas</span>
+              {medida.libre ? 'Reps' : infoMedida(medida.unidad).rotulo}{' '}
+              <span style={{ color: LT.text3, fontWeight: 600 }}>
+                {enTiempo ? 'que aguantaste' : 'que hiciste'}
+              </span>
             </div>
             <div style={{ fontSize: 13, color: LT.text3, fontWeight: 600, marginTop: 3 }}>
-              {ex.reps ? `Meta: ${ex.reps}` : 'Cuántas te salieron'}
+              {textoMeta(ex) ? `Meta: ${textoMeta(ex)}` : 'Lo que te haya salido'}
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexShrink: 0 }}>
-            <button type="button" onClick={() => mueveReps(-1)} aria-label="Bajar las reps" style={circulo(false)}>
-              <Minus size={20} strokeWidth={3} />
-            </button>
-            <input
-              type="number" inputMode="numeric" value={exData.repsHechas ?? ''} placeholder="—"
-              onChange={(e) => onUpdate({ ...exData, repsHechas: e.target.value })}
-              style={{
-                width: 58, border: 'none', background: 'transparent', textAlign: 'center',
-                fontSize: 27, fontWeight: 800, outline: 'none', fontFamily: FONT, padding: 0,
-                color: exData.repsHechas ? LT.text : LT.text3, ...NUM_STYLE,
-              }}
+          {/* En tiempo, el cronómetro. En todo lo demás, las flechas — con el
+              paso de cada unidad, no de uno en uno. */}
+          {enTiempo ? (
+            <Cronometro
+              valor={exData.repsHechas ?? ''}
+              unidad={medida.unidad}
+              metaSeg={metaEnSegundos(ex)}
+              onCambio={(v) => onUpdate({ ...exData, repsHechas: v })}
+              circulo={circulo}
+              LT={LT}
+              NUM_STYLE={NUM_STYLE}
             />
-            <button type="button" onClick={() => mueveReps(1)} aria-label="Subir las reps" style={circulo(true)}>
-              <Plus size={20} strokeWidth={3} />
-            </button>
-          </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexShrink: 0 }}>
+              <button type="button" onClick={() => mueveReps(-1)} aria-label="Bajar" style={circulo(false)}>
+                <Minus size={20} strokeWidth={3} />
+              </button>
+              <input
+                type="number" inputMode="decimal" value={exData.repsHechas ?? ''} placeholder="—"
+                onChange={(e) => onUpdate({ ...exData, repsHechas: e.target.value })}
+                style={{
+                  width: 58, border: 'none', background: 'transparent', textAlign: 'center',
+                  fontSize: 27, fontWeight: 800, outline: 'none', fontFamily: FONT, padding: 0,
+                  color: exData.repsHechas ? LT.text : LT.text3, ...NUM_STYLE,
+                }}
+              />
+              <button type="button" onClick={() => mueveReps(1)} aria-label="Subir" style={circulo(true)}>
+                <Plus size={20} strokeWidth={3} />
+              </button>
+            </div>
+          )}
         </div>
 
         {conPeso && (

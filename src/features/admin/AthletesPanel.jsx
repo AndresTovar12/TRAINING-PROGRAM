@@ -20,6 +20,7 @@ import { plural, pluralS } from '@/lib/plural';
 import { esDescanso } from '@/lib/training-utils';
 import ListaDesplegable from '@/components/ListaDesplegable';
 import CodigoDeCoach from '@/components/CodigoDeCoach';
+import { textoMeta } from '@/lib/medidas';
 
 function useIsNarrow(breakpoint = 880) {
   const [narrow, setNarrow] = useState(
@@ -752,7 +753,8 @@ function ResumenDelPlan({ phases }) {
  * y los de dos sesiones (AM/PM), que guardan bloques con su etiqueta.
  */
 function DentroDelDia({ day }) {
-  const dosis = (e) => [e.sets, e.reps].filter(Boolean).join(' × ') + (e.intensity ? ` · ${e.intensity}` : '');
+  // "4 × 30 yd", no "4 × 30": la unidad es parte de lo que el coach mandó.
+  const dosis = (e) => [e.sets, textoMeta(e)].filter(Boolean).join(' × ') + (e.intensity ? ` · ${e.intensity}` : '');
 
   const fila = (e, i) => (
     e.isNote ? (
