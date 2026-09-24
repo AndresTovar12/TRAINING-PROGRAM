@@ -5,6 +5,8 @@ import { T, FONT, KP } from '@/lib/theme';
 import { MUSCLE_GROUPS, exerciseMatchesGroup } from '@/lib/muscles';
 import Portada from '@/components/Portada';
 import ListaDesplegable from '@/components/ListaDesplegable';
+import InterruptorVista from '@/components/InterruptorVista';
+import { useVistaEjercicios } from '@/lib/useVistaEjercicios';
 
 /**
  * Selector del repertorio completo (estilo Avena): filtros por categoría,
@@ -15,6 +17,14 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
   // Reactivo de verdad: leer window.innerWidth suelto se queda con el ancho de
   // la primera pintada y no se entera si giras el telefono o mueves la ventana.
   const esCompu = useMedia('(min-width: 720px)');
+
+  /* Manda lo que haya elegido Andrés. Mientras no elija nada se queda lo de
+     antes, que aquí era al revés que en el repertorio: filas en la compu y
+     tarjetas en el teléfono. `esCompu` sigue mandando en el panel lateral de
+     elegidos, que es cosa de cuánto ancho hay, no de cómo se quiere ver. */
+  const [vista, eligeVista] = useVistaEjercicios();
+  const enFilas = vista ? vista === 'lista' : esCompu;
+
   const [query, setQuery] = useState('');
   const [catId, setCatId] = useState(null);
   const [muscle, setMuscle] = useState(null);
@@ -137,6 +147,13 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
                 Limpiar filtros
               </button>
             )}
+            {/* Al final de la fila y pegado a la derecha: se usa mucho menos
+                que los filtros, así que no les quita el primer sitio. */}
+            <InterruptorVista
+              vista={enFilas ? 'lista' : 'tarjetas'}
+              onCambio={eligeVista}
+              estilo={{ marginLeft: 'auto' }}
+            />
           </div>
         </div>
 
@@ -149,7 +166,7 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
                 <div style={{ marginTop: 10, fontWeight: 600, color: T.text2, fontSize: 14 }}>Sin resultados.</div>
               </div>
             ) : (
-              <div style={esCompu
+              <div style={enFilas
                 // En compu: una fila por ejercicio. Se recorre el catalogo
                 // entero de arriba abajo leyendo solo los nombres, que es como
                 // se busca un ejercicio cuando ya sabes cual quieres.
@@ -164,7 +181,7 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
                       key={ex.id}
                       type="button"
                       onClick={() => toggle(ex)}
-                      style={esCompu ? {
+                      style={enFilas ? {
                         textAlign: 'left', border: `1.5px solid ${sel ? T.accent : T.border}`, cursor: 'pointer',
                         background: sel ? T.accentBg : T.bg2, borderRadius: 11, padding: '7px 11px 7px 7px',
                         fontFamily: FONT, width: '100%', display: 'flex', alignItems: 'center', gap: 11,
@@ -176,7 +193,7 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
                         display: 'flex', flexDirection: 'column', alignItems: 'stretch', width: '100%',
                       }}
                     >
-                      {esCompu ? (
+                      {enFilas ? (
                         <>
                           <Portada
                             foto={ex.cover_image_url}

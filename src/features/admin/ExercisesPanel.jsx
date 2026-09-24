@@ -14,6 +14,8 @@ import {
 import MediaDelEjercicio from '@/features/admin/MediaDelEjercicio';
 import SelectorCategoria from '@/features/admin/SelectorCategoria';
 import ListaDesplegable from '@/components/ListaDesplegable';
+import InterruptorVista from '@/components/InterruptorVista';
+import { useVistaEjercicios } from '@/lib/useVistaEjercicios';
 import { MUSCLE_GROUPS, FINE_MUSCLES, exerciseMatchesGroup } from '@/lib/muscles';
 import { T, FONT, KP } from '@/lib/theme';
 import Portada from '@/components/Portada';
@@ -887,6 +889,11 @@ export default function ExercisesPanel({ viendoComo }) {
   const [preguntando, setPreguntando] = useState(null);
   const esAncho = useIsWide();
 
+  /* Manda lo que haya elegido Andrés. Mientras no elija nada, se queda lo de
+     siempre: tarjetas en pantalla ancha, lista en el teléfono. */
+  const [vista, eligeVista] = useVistaEjercicios();
+  const enTarjetas = vista ? vista === 'tarjetas' : esAncho;
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -1089,6 +1096,11 @@ export default function ExercisesPanel({ viendoComo }) {
             ]}
           />
         </label>
+        {/* Alineado abajo para que quede a la altura de las dos listas, no de
+            sus rótulos. */}
+        <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 1 }}>
+          <InterruptorVista vista={enTarjetas ? 'tarjetas' : 'lista'} onCambio={eligeVista} />
+        </div>
       </div>
 
       {err && (
@@ -1106,17 +1118,17 @@ export default function ExercisesPanel({ viendoComo }) {
         <div
           style={{
             display: 'grid',
-            gap: esAncho ? 14 : 8,
+            gap: enTarjetas ? 14 : 8,
             // En el teléfono la tarjeta con foto gastaba 116 px por ejercicio en
             // un hueco que 80 de 81 veces está vacío. En computadora caben
             // cuatro por fila y la foto grande sí se gana el espacio.
             // minmax(0, 1fr) y no '1fr' a secas: '1fr' equivale a minmax(auto, 1fr),
             // y ese `auto` deja que un nombre largo empuje la columna más allá de
             // la pantalla. Se desbordaba y el botón de grabar quedaba fuera.
-            gridTemplateColumns: esAncho ? 'repeat(auto-fill, minmax(220px, 1fr))' : 'minmax(0, 1fr)',
+            gridTemplateColumns: enTarjetas ? 'repeat(auto-fill, minmax(220px, 1fr))' : 'minmax(0, 1fr)',
           }}
         >
-          {filtered.map((ex) => (esAncho ? (
+          {filtered.map((ex) => (enTarjetas ? (
             <ExerciseCard
               key={ex.id} ex={ex} base={!isMaster && ex.isBase}
               onClick={() => openExercise(ex)}
