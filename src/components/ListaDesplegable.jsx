@@ -19,33 +19,6 @@ import { T, FONT } from '@/lib/theme';
  * bonitos es un retroceso, así que aquí hay `role="listbox"`, `aria-selected`,
  * flechas, Inicio/Fin, Enter y Escape.
  */
-/* EL CLIC FANTASMA, Y POR QUE HACE FALTA QUE TODAS LAS LISTAS SE ENTEREN.
- *
- * Andrés, 24 sep 2026: "si en categoría escojo hipertrofia, automáticamente me
- * abre la siguiente lista de grupo muscular... una lista desplegable no tiene
- * por qué abrirme otra cuando selecciono".
- *
- * Es consecuencia de elegir con el dedo (`pointerup`) en vez de con el `click`,
- * que es lo que hubo que hacer para que cerraran en iOS. La cadena:
- *
- *   1. El dedo se levanta sobre la opción -> se elige y la lista se cierra YA.
- *   2. Safari manda su `click` de cortesía unos milisegundos después.
- *   3. Para entonces el panel ya no está, así que ese clic aterriza sobre lo
- *      que quedó debajo: el botón del siguiente desplegable. Y lo abre.
- *
- * Una bandera dentro del componente no alcanza: quien recibe el clic fantasma
- * es OTRA lista, con su propio estado. Por eso vive aquí, compartida: durante
- * un rato corto después de elegir con el dedo, ninguna lista se abre por un
- * clic. Los toques de verdad llegan mucho después de esos 700 ms.
- */
-let reciénElegidoConDedo = false;
-let avisoTemporizador;
-function marcaDedo() {
-  reciénElegidoConDedo = true;
-  window.clearTimeout(avisoTemporizador);
-  avisoTemporizador = window.setTimeout(() => { reciénElegidoConDedo = false; }, 700);
-}
-
 export default function ListaDesplegable({
   valor,
   onCambio,
@@ -116,19 +89,42 @@ export default function ListaDesplegable({
      `pointerup` sí llega siempre, con dedo y con ratón. El `click` se deja
      puesto para el teclado (Enter sobre un botón enfocado no emite
      `pointerup`), y se ignora si acaba de haber uno para no elegir dos veces. */
-  const yaConElDedo = useRef(false);
-  const elige = (o, conPuntero = false) => {
-    if (conPuntero) {
-      // El `click` sintetizado llega justo detrás del dedo; se ignora ese, y
-      // se avisa a las demás listas para que tampoco lo tomen por suyo.
-      yaConElDedo.current = true;
-      marcaDedo();
-      window.setTimeout(() => { yaConElDedo.current = false; }, 700);
-    } else if (yaConElDedo.current) {
-      return;
-    }
-    onCambio(o.valor);
-    cerrar();
+  /* EL CLIC FANTASMA SE MATA DE RAIZ, NO SE ESQUIVA.
+     Andrés, 24 sep 2026: "en lugar de abrirme la lista de abajo me abre
+     automáticamente OTRA cosa, como que da click en un ejercicio... no
+     arreglaste el error definitivamente, como que lo parchaste".
+
+     Tenía razón. El intento anterior dejaba que Safari disparara su `click` de
+     cortesía y solo le enseñaba a las listas a ignorarlo; el clic seguía ahí y
+     acababa cayendo en lo que hubiera debajo — una tarjeta de ejercicio, por
+     ejemplo. Perseguir a cada víctima no termina nunca.
+
+     Lo correcto es que ese clic NO SE GENERE. Cancelar el `touchend` es
+     exactamente lo que se lo pide al navegador: sin él, no hay mouse events de
+     cortesía, y por tanto no hay fantasma que aterrice en ningún sitio.
+
+     Con eso, cada entrada tiene su camino y no hay que desempatar:
+       dedo     -> `pointerup` (el `click` ya no llega)
+       ratón    -> `click` (no dispara `pointerup` de tipo touch)
+       teclado  -> `click`
+
+     También se comprueba que el dedo no se haya movido: levantar el dedo
+     después de arrastrar la lista es scroll, no una elección. */
+  const bajada = useRef(null);
+
+  const elige = (o) => { onCambio(o.valor); cerrar(); };
+
+  const dedoBaja = (e) => {
+    bajada.current = e.pointerType === 'touch' ? { x: e.clientX, y: e.clientY } : null;
+  };
+
+  const dedoSube = (o) => (e) => {
+    if (e.pointerType !== 'touch' || !bajada.current) return;
+    const { x, y } = bajada.current;
+    bajada.current = null;
+    // Más de 10 px es un arrastre: estaba moviendo la lista, no eligiendo.
+    if (Math.abs(e.clientX - x) > 10 || Math.abs(e.clientY - y) > 10) return;
+    elige(o);
   };
 
   const teclas = (e) => {
@@ -140,7 +136,7 @@ export default function ListaDesplegable({
     if (e.key === 'Escape') { e.preventDefault(); cerrar(); return; }
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      if (planas[activo]) { yaConElDedo.current = false; elige(planas[activo]); }
+      if (planas[activo]) elige(planas[activo]);
       return;
     }
     const salto = { ArrowDown: 1, ArrowUp: -1 }[e.key];
@@ -185,7 +181,14 @@ export default function ListaDesplegable({
              Un teléfono no tiene hover, así que en pantalla táctil esto no
              quita nada: solo deja de provocar el redibujado a media pulsación. */
           onMouseEnter={dedos ? undefined : () => setActivo(i)}
-          onPointerUp={() => elige(o, true)}
+          onPointerDown={dedoBaja}
+          onPointerUp={dedoSube(o)}
+          /* Cancelar aquí es lo que impide que nazca el clic fantasma. No
+             estorba al scroll: eso lo decide `touchmove`, no `touchend`. */
+          onTouchEnd={(e) => e.preventDefault()}
+          /* Con el `touchend` cancelado, aquí solo llegan el ratón y el teclado.
+             Si algún navegador ignorara esa cancelación, elegir dos veces la
+             MISMA opción no hace daño: pone el mismo valor y cierra. */
           onClick={() => elige(o)}
           style={{
             flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 9,
@@ -229,13 +232,7 @@ export default function ListaDesplegable({
     <div ref={caja} style={{ position: 'relative' }}>
       <button
         type="button"
-        onClick={() => {
-          if (deshabilitado) return;
-          // Un clic que llega pisándole los talones a una elección con el dedo
-          // no lo hizo nadie: es el fantasma de Safari. Se tira.
-          if (reciénElegidoConDedo && !abierto) return;
-          if (abierto) cerrar(); else abre();
-        }}
+        onClick={() => { if (!deshabilitado) { if (abierto) cerrar(); else abre(); } }}
         onKeyDown={teclas}
         disabled={deshabilitado}
         aria-haspopup="listbox"
