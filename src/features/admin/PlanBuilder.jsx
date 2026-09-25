@@ -509,72 +509,110 @@ function BotonCarga({ ex, onPatch }) {
 /* alineado con el de arriba: se compara de un vistazo, en columna.     */
 /* ------------------------------------------------------------------ */
 
-const celda = { padding: '7px 8px', borderBottom: `1px solid ${T.border}`, verticalAlign: 'middle' };
-const encabezado = {
-  textAlign: 'left', padding: '8px', fontSize: 10.5, fontWeight: 800, color: T.text3,
-  textTransform: 'uppercase', letterSpacing: 0.6, borderBottom: `1px solid ${T.border}`, whiteSpace: 'nowrap',
-};
+/* `celda` y `encabezado` se fueron con la tabla: los ejercicios pasaron a ser
+   tarjetas con sus propios rótulos, y el rótulo vive ahora en `RotuloCampo`. */
 const inputFila = {
   ...inputStyle, padding: '7px 9px', fontSize: 13, borderRadius: 9, background: T.bg,
 };
 
+/** El rótulo de un campo de la tarjeta. Mismo tamaño y color que tenían los
+ *  encabezados de la tabla, para que no cambie el aire de la pantalla. */
+function RotuloCampo({ children }) {
+  return (
+    <span style={{
+      display: 'block', fontSize: 10.5, fontWeight: 800, color: T.text3,
+      textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4, whiteSpace: 'nowrap',
+    }}>
+      {children}
+    </span>
+  );
+}
+
+/**
+ * Un ejercicio del set, con sus propios rótulos.
+ *
+ * ERA UNA FILA DE TABLA, con una sola barra de encabezados arriba para todos.
+ * Andrés, 24 sep 2026: "creo que es mejor que hagamos la forma 2, porque luego
+ * también podremos hacer listas desplegables de las demás cosas como carga,
+ * tipo RIR o cosas así".
+ *
+ * Ese es el motivo de fondo y es bueno: en cuanto un campo deja de significar
+ * siempre lo mismo —la cantidad ya son reps o segundos o metros, y la carga va
+ * a ser porcentaje o RPE o RIR—, su rótulo tiene que pertenecer al ejercicio,
+ * no a la columna. Con una barra compartida arriba habría que ir cambiándola
+ * de sitio campo por campo cada vez que se añada uno; así ya está resuelto.
+ *
+ * Cuesta alto: la barra se repite por ejercicio. A cambio, cada uno se lee
+ * completo sin tener que subir la vista hasta los encabezados.
+ */
 function ExerciseRow({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove, onMove, canUp, canDown }) {
   const rep = ex.exercise_id ? repertoire.find((r) => r.id === ex.exercise_id) : null;
   return (
-    <tr>
-      <td style={celda}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-          <Portada
-            foto={rep?.cover_image_url}
-            video={rep?.video_url}
-            style={{ width: 38, height: 38, borderRadius: 9, flexShrink: 0, background: '#0E1015' }}
-          >
-            <Dumbbell size={16} color="#3A3F4C" />
-          </Portada>
-          {ex.exercise_id ? (
-            <span style={{ fontWeight: 700, fontSize: 13.5, color: T.text, minWidth: 0 }}>{ex.name}</span>
-          ) : (
-            <input value={ex.name} onChange={(e) => onPatch({ name: e.target.value })}
-              placeholder="Nombre del ejercicio…" style={{ ...inputFila, fontWeight: 700 }} />
-          )}
-        </div>
-      </td>
-      {/* El rótulo de esta columna baja a cada fila: es la única cuyo
-          significado cambia de un ejercicio a otro —"Back squat 5" junto a
-          "Plancha 30 seg"—. Por eso su encabezado de arriba va vacío. */}
-      <td style={{ ...celda, width: 96 }}>
-        <CampoCantidad ex={ex} onPatch={onPatch} compacto estiloInput={inputFila} />
-      </td>
-      <td style={{ ...celda, width: 118 }}>
-        <input value={ex.intensity || ''} onChange={(e) => onPatch({ intensity: e.target.value })}
-          placeholder="70% / RPE 8" style={inputFila} />
-      </td>
-      <td style={{ ...celda, width: 96 }}>
-        <input value={ex.descanso || ''} onChange={(e) => onPatch({ descanso: e.target.value })}
-          placeholder="2 min" style={inputFila} />
-      </td>
-      <td style={celda}>
-        <input value={ex.notes || ''} onChange={(e) => onPatch({ notes: e.target.value })}
-          placeholder="Ej. 8 cada pierna…" style={inputFila} />
-      </td>
-      <td style={celda}>
-        <input value={ex.cue || ''} onChange={(e) => onPatch({ cue: e.target.value })}
-          placeholder="Opcional…" style={{ ...inputFila, color: T.text2 }} />
-      </td>
-      <td style={{ ...celda, width: 104 }}>
-        <BotonCarga ex={ex} onPatch={onPatch} />
-      </td>
-      <td style={{ ...celda, width: 96 }}>
-        <BotonVideoAtleta ex={ex} atleta={atleta} onAbrir={() => onVideoAtleta?.(ex)} />
-      </td>
-      <td style={{ ...celda, width: 96 }}>
-        <div style={{ display: 'flex', gap: 5, justifyContent: 'flex-end' }}>
+    <div style={{
+      background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 12,
+      padding: '11px 12px', fontFamily: FONT,
+    }}>
+      {/* El nombre manda: ocupa su propia línea, con lo de mover y quitar al
+          otro extremo para que no se toquen sin querer. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <Portada
+          foto={rep?.cover_image_url}
+          video={rep?.video_url}
+          style={{ width: 34, height: 34, borderRadius: 9, flexShrink: 0, background: '#0E1015' }}
+        >
+          <Dumbbell size={15} color="#3A3F4C" />
+        </Portada>
+        {ex.exercise_id ? (
+          <span style={{ flex: 1, minWidth: 0, fontWeight: 700, fontSize: 14, color: T.text }}>{ex.name}</span>
+        ) : (
+          <input value={ex.name} onChange={(e) => onPatch({ name: e.target.value })}
+            placeholder="Nombre del ejercicio…" style={{ ...inputFila, flex: 1, fontWeight: 700 }} />
+        )}
+        <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
           <IconBtn icon={ChevronUp} onClick={() => onMove(-1)} disabled={!canUp} title="Subir" />
           <IconBtn icon={ChevronDown} onClick={() => onMove(1)} disabled={!canDown} title="Bajar" />
           <IconBtn icon={Trash2} danger onClick={onRemove} title="Quitar del set" />
         </div>
-      </td>
-    </tr>
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        {/* El rótulo de la cantidad es la lista de unidades. Ver `CampoCantidad`. */}
+        <CampoCantidad ex={ex} onPatch={onPatch} compacto estiloInput={inputFila} ancho={96} />
+
+        <div style={{ width: 112 }}>
+          <RotuloCampo>Carga / Int.</RotuloCampo>
+          <input value={ex.intensity || ''} onChange={(e) => onPatch({ intensity: e.target.value })}
+            placeholder="70% / RPE 8" style={inputFila} />
+        </div>
+        <div style={{ width: 92 }}>
+          <RotuloCampo>Descanso</RotuloCampo>
+          <input value={ex.descanso || ''} onChange={(e) => onPatch({ descanso: e.target.value })}
+            placeholder="2 min" style={inputFila} />
+        </div>
+        <div style={{ flex: '1 1 150px', minWidth: 130 }}>
+          <RotuloCampo>Descripción</RotuloCampo>
+          <input value={ex.notes || ''} onChange={(e) => onPatch({ notes: e.target.value })}
+            placeholder="Ej. 8 cada pierna…" style={inputFila} />
+        </div>
+        <div style={{ flex: '1 1 130px', minWidth: 120 }}>
+          <RotuloCampo>Cue técnico</RotuloCampo>
+          <input value={ex.cue || ''} onChange={(e) => onPatch({ cue: e.target.value })}
+            placeholder="Opcional…" style={{ ...inputFila, color: T.text2 }} />
+        </div>
+        <div style={{ flexShrink: 0 }}>
+          <RotuloCampo>Peso</RotuloCampo>
+          <BotonCarga ex={ex} onPatch={onPatch} />
+        </div>
+        {/* El botón de video solo existe con un ejercicio del repertorio y un
+            atleta delante; sin él, el rótulo se quedaba solo y descolgado. */}
+        {ex.exercise_id && atleta?.id && (
+          <div style={{ flexShrink: 0 }}>
+            <RotuloCampo>Video</RotuloCampo>
+            <BotonVideoAtleta ex={ex} atleta={atleta} onAbrir={() => onVideoAtleta?.(ex)} />
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -1369,31 +1407,16 @@ function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCr
                     </div>
                   );
                 }
+                /* Ya no es una tabla: cada ejercicio es una tarjeta con sus
+                   propios rótulos. Ver `ExerciseRow` para el motivo. Y al irse
+                   la tabla se va también el `overflow-x` que la envolvía, que
+                   era lo que recortaba las listas desplegables. */
                 return (
-                  <div style={{ border: `1px solid ${T.border}`, borderRadius: 12, background: T.bg2, overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: FONT, minWidth: 720 }}>
-                      <thead>
-                        <tr style={{ background: T.bg }}>
-                          <th style={encabezado}>Ejercicio</th>
-                          {/* Vacío a propósito: cada fila trae su propio rótulo,
-                              porque cada ejercicio puede medirse distinto. */}
-                          <th style={encabezado} />
-                          <th style={encabezado}>Carga / Int.</th>
-                          <th style={encabezado}>Descanso</th>
-                          <th style={encabezado}>Descripción</th>
-                          <th style={encabezado}>Cue técnico</th>
-                          <th style={encabezado}>Peso</th>
-                          <th style={encabezado}>Video</th>
-                          <th style={{ ...encabezado, textAlign: 'right' }}>Orden</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {b.members.map((m, mi) => (
-                          <ExerciseRow key={mi} {...props(m, mi)}
-                            canUp={mi > 0} canDown={mi < b.members.length - 1} />
-                        ))}
-                      </tbody>
-                    </table>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {b.members.map((m, mi) => (
+                      <ExerciseRow key={mi} {...props(m, mi)}
+                        canUp={mi > 0} canDown={mi < b.members.length - 1} />
+                    ))}
                   </div>
                 );
               })()}
