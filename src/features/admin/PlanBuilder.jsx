@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ArrowLeft, X, Plus, Trash2, Copy, ChevronRight, ChevronUp, ChevronDown,
   ChevronLeft, Loader2, Check, Layers, Dumbbell, StickyNote, Zap,
   Save, FolderOpen, Clipboard, Eraser, CalendarDays, Settings2, Pencil, Repeat, Scale, Video,
-  Image as ImageIcon,
+  Image as ImageIcon, MoreHorizontal,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConfirmacion } from '@/components/Confirmacion';
@@ -12,9 +13,10 @@ import {
   listExercises, createPlan, updatePlan, listTemplates, saveTemplate, deleteTemplate,
   getMasterId, tagRepertoire, createExercise, listCategories,
   listExerciseMedia, addExerciseMedia, deleteExerciseMedia,
-  listExerciseOverrides, aplicarOverrides,
+  listExerciseOverrides, aplicarOverrides, getAthleteState,
 } from '@/lib/api';
-import { isLoadedExercise, esDescanso } from '@/lib/training-utils';
+import { isLoadedExercise, dondeVa } from '@/lib/training-utils';
+import NavegadorDelPlan from '@/components/NavegadorDelPlan';
 import { T, FONT, KP } from '@/lib/theme';
 import CampoCantidad from '@/components/CampoCantidad';
 import { ligaExterna } from '@/lib/videos';
@@ -23,7 +25,7 @@ import MediaUpload from '@/features/admin/MediaUpload';
 import SelectorCategoria from '@/features/admin/SelectorCategoria';
 import SelectorTipoSesion from '@/features/admin/SelectorTipoSesion';
 import Portada from '@/components/Portada';
-import { plural, pluralS } from '@/lib/plural';
+import { pluralS } from '@/lib/plural';
 
 /* ------------------------------------------------------------------ */
 /* Constantes y helpers de datos                                       */
@@ -48,6 +50,15 @@ const newDay = (day = 'Lun') => ({ day, name: 'Sesión', cat: 'gym', exercises: 
 const DAY_FULL_LOWER = { Lun: 'lunes', Mar: 'martes', 'Mié': 'miércoles', Jue: 'jueves', Vie: 'viernes', 'Sáb': 'sábado', Dom: 'domingo' };
 const newWeek = (num) => ({ num, label: '', load: '', days: [] });
 
+// Qué día enseñar al cambiar de fase o de semana: el mismo si en la nueva
+// también tiene sesión; si no, el primero que sí tenga. Así no aterrizas en un
+// día vacío mientras la semana tiene otros llenos.
+const diaParaSemana = (wk, actual) => {
+  const dias = wk?.days ?? [];
+  if (dias.some((d) => d.day === actual)) return actual;
+  return WEEKDAYS.find((k) => dias.some((d) => d.day === k)) ?? actual;
+};
+
 // El número de semana es fijo (num); `label` es solo el título opcional.
 // Ignora labels heredados que sean literalmente "Semana N" para no duplicar.
 const weekSubtitle = (w) => {
@@ -68,8 +79,6 @@ const newPhase = (num, color) => ({
 
 const nextWeekNum = (phase) => Math.max(0, ...phase.weekData.map((w) => w.num || 0)) + 1;
 const nextPhaseNum = (phases) => Math.max(0, ...phases.map((p) => p.num || 0)) + 1;
-// Sin los días OFF, igual que la app del atleta.
-const phaseSessions = (p) => p.weekData.reduce((s, w) => s + (w.days || []).filter((d) => !esDescanso(d)).length, 0);
 
 const normalize = (phases) => phases.map((p) => ({
   ...p,
@@ -1541,29 +1550,39 @@ function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCr
  * Aqui se guardan las que casi nunca usas. Cada una ocupa una fila completa
  * de 52px, que es lo que necesita un dedo para no equivocarse, y la de
  * borrar va hasta abajo y separada del resto.
+ *
+ * En la compu sale como card al centro, no pegada abajo. Andrés, 24 sep 2026,
+ * sobre la hoja del programa: "lo único que no me gusta es que la card está
+ * como que saliendo de la parte de abajo". Con los tres puntos del editor esta
+ * hoja se abre a cada rato, así que le aplica lo mismo.
  */
 function HojaAcciones({ acciones, onClose }) {
+  const esCompu = useIsDesktop();
   return (
     <div
       onMouseDown={onClose}
       style={{
         position: 'fixed', inset: 0, zIndex: 2700, background: 'rgba(17,19,24,0.45)',
-        display: 'flex', alignItems: 'flex-end',
+        display: 'flex', alignItems: esCompu ? 'center' : 'flex-end', justifyContent: 'center',
+        padding: esCompu ? 24 : 0,
       }}
     >
       <div
         onMouseDown={(e) => e.stopPropagation()}
-        className="animate-sheet"
+        className={esCompu ? 'animate-fade-in' : 'animate-sheet'}
         style={{
-          width: '100%', background: T.bg, borderRadius: '22px 22px 0 0',
-          padding: '10px 10px calc(14px + env(safe-area-inset-bottom))',
+          width: '100%', maxWidth: esCompu ? 400 : undefined, background: T.bg,
+          borderRadius: esCompu ? 20 : '22px 22px 0 0',
+          padding: esCompu ? 10 : '10px 10px calc(14px + env(safe-area-inset-bottom))',
           fontFamily: FONT, boxShadow: KP.shPop,
         }}
       >
-        <div style={{
-          width: 38, height: 4, borderRadius: 999, background: T.borderHi,
-          margin: '4px auto 10px',
-        }} />
+        {!esCompu && (
+          <div style={{
+            width: 38, height: 4, borderRadius: 999, background: T.borderHi,
+            margin: '4px auto 10px',
+          }} />
+        )}
         {acciones.map((a, i) => (
           <button
             key={a.texto}
@@ -1696,16 +1715,20 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
   // 'weekly' = rutina que se repite (sin fases ni semanas) | 'periodized' = fases
   const [kind, setKind] = useState(() => (planRow?.data?.kind === 'weekly' ? 'weekly' : 'periodized'));
   const isWeekly = kind === 'weekly';
-  // Plan existente de una sola fase → directo al editor (sin pantalla de fases)
-  const [nav, setNav] = useState(() => {
-    if (isNew) return { level: 'start' };
-    const n = planRow?.data?.phases?.length || 0;
-    return n === 1 ? { level: 'phase', pi: 0 } : { level: 'phases' };
-  });
+  /* Un plan que ya existe abre SIEMPRE en la hoja, con una fase abierta. La
+     lista de fases como pantalla aparte se fue el 24 sep 2026: la hoja ya las
+     enseña todas. Ver `NavegadorDelPlan`. */
+  const [nav, setNav] = useState(() => (isNew ? { level: 'start' } : { level: 'phase', pi: 0 }));
   const [weekIdx, setWeekIdx] = useState(0);
-  const [activeWeekday, setActiveWeekday] = useState('Lun');
+  const [activeWeekday, setActiveWeekday] = useState(
+    () => diaParaSemana(planRow?.data?.phases?.[0]?.weekData?.[0], 'Lun'),
+  );
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [hojaFase, setHojaFase] = useState(false);
+  // En el teléfono la hoja y el editor del día no caben juntos: tocar un día
+  // abre su editor a pantalla completa, con flecha para volver a la hoja.
+  const [editandoDiaTel, setEditandoDiaTel] = useState(false);
+  // Qué menú de tres puntos está abierto: { tipo: 'plan' | 'fase' | 'semana', pi }.
+  const [menu, setMenu] = useState(null);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
@@ -1751,6 +1774,68 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
     setNav({ level: 'phase', pi });
   };
 
+  /* DÓNDE VA EL ATLETA, marcado en la hoja del editor igual que en "Ver el
+     plan": se lee su posición guardada y se calcula con `dondeVa`, la misma
+     cuenta que hace su teléfono. La primera vez, además, la hoja se abre ahí:
+     es lo más probable que el coach venga a tocar.
+
+     `undefined` = todavía no llega. Distinto de `null` = llegó y no hay: sin
+     esa diferencia se marcaría el primer día del plan mientras carga. */
+  const [cursorAtleta, setCursorAtleta] = useState(undefined);
+  // Si el coach ya se movió por la hoja, lo que llegue tarde no lo mueve.
+  const yaNavego = useRef(false);
+  useEffect(() => {
+    if (!athlete?.id || isNew) return undefined;
+    let vivo = true;
+    getAthleteState(athlete.id)
+      .then((st) => st?.data?.['wr:cursor'] ?? null, () => null)
+      .then((cursor) => {
+        if (!vivo) return;
+        setCursorAtleta(cursor);
+        if (yaNavego.current) return;
+        const fs = planRow?.data?.phases ?? [];
+        const aqui = dondeVa(fs, planRow?.data?.kind, cursor);
+        const i = fs.findIndex((f) => f.id === aqui?.faseId);
+        if (i < 0) return;
+        const wi = Math.max(0, fs[i].weekData.findIndex((w) => w.num === aqui.semana));
+        const semana = fs[i].weekData[wi];
+        yaNavego.current = true;
+        setNav({ level: 'phase', pi: i });
+        setWeekIdx(wi);
+        setActiveWeekday(aqui.dia != null && semana?.days?.[aqui.dia]
+          ? semana.days[aqui.dia].day
+          : diaParaSemana(semana, 'Lun'));
+      });
+    return () => { vivo = false; };
+  }, [athlete?.id, isNew, planRow]);
+  const aquiAtleta = useMemo(
+    () => (cursorAtleta === undefined ? null : dondeVa(phases, kind, cursorAtleta)),
+    [phases, kind, cursorAtleta],
+  );
+
+  /* El desplazamiento. `main` es el que se desplaza, y no se desmonta al
+     cambiar de la hoja al editor del día: sin esto, en el teléfono el editor
+     abría a media altura, donde estaba el dedo en la hoja; y al volver, la
+     hoja no regresaba al día que tocaste. */
+  const mainRef = useRef(null);
+  const scrollHoja = useRef(0);
+  const scrollPendiente = useRef(null);
+  useLayoutEffect(() => {
+    if (scrollPendiente.current == null || !mainRef.current) return;
+    mainRef.current.scrollTop = scrollPendiente.current;
+    scrollPendiente.current = null;
+  });
+  const abreEditorTel = () => {
+    if (!esCompu && !editandoDiaTel) scrollHoja.current = mainRef.current?.scrollTop ?? 0;
+    scrollPendiente.current = 0;
+    setEditandoDiaTel(true);
+  };
+  const vuelveALaHoja = () => {
+    scrollPendiente.current = scrollHoja.current;
+    setEditandoDiaTel(false);
+    setDetailsOpen(false);
+  };
+
   const touch = (fn) => { setDirty(true); setPhases(fn); };
   const patchPhase = (pi, patch) => touch((ps) => ps.map((p, i) => (i === pi ? { ...p, ...(typeof patch === 'function' ? patch(p) : patch) } : p)));
   const patchWeek = (pi, wi, patch) => patchPhase(pi, (p) => ({
@@ -1786,6 +1871,81 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
       setSaving(false);
     }
   }
+
+  /* Lo que hacen los tres puntos. Son las operaciones que antes vivían en la
+     lista de fases y en el modal de la semana, sacadas a funciones para que
+     las usen los dos sitios sin copiarse. */
+  const moverFase = (pi, dir) => {
+    touch((ps) => moveItem(ps, pi, dir));
+    // La fase abierta sigue a su contenido, no a su posición.
+    if (nav.pi === pi) setNav({ level: 'phase', pi: pi + dir });
+    else if (nav.pi === pi + dir) setNav({ level: 'phase', pi });
+  };
+  const duplicarFase = (pi) => {
+    touch((ps) => {
+      const c = clone(ps[pi]);
+      c.id = `p-${rid()}`; c.num = nextPhaseNum(ps); c.name = `${c.name} (copia)`;
+      return [...ps.slice(0, pi + 1), c, ...ps.slice(pi + 1)];
+    });
+    // Se abre la copia: agregar algo y quedarte donde estabas se lee como que
+    // no pasó nada.
+    setDetailsOpen(false);
+    setNav({ level: 'phase', pi: pi + 1 });
+    setWeekIdx(0);
+  };
+  const eliminarFase = async (pi) => {
+    const ph = phases[pi];
+    if (!ph || phases.length <= 1) return;
+    if (!await pregunta({ titulo: `¿Eliminar la fase "${ph.name}"?`, detalle: 'Se va con todas sus semanas y sesiones.', confirmar: 'Sí, eliminarla', peligro: true })) return;
+    touch((ps) => ps.filter((_, i) => i !== pi));
+    const abierta = nav.pi > pi ? nav.pi - 1 : nav.pi;
+    setNav({ level: 'phase', pi: Math.max(0, Math.min(abierta, phases.length - 2)) });
+    if (nav.pi === pi) { setWeekIdx(0); setDetailsOpen(false); }
+  };
+  const agregarFase = () => {
+    touch((ps) => [...ps, newPhase(nextPhaseNum(ps))]);
+    setDetailsOpen(false);
+    setWeekIdx(0);
+    setNav({ level: 'phase', pi: phases.length });
+  };
+  const agregarSemana = (pi) => {
+    const nueva = phases[pi]?.weekData?.length ?? 0;
+    patchPhase(pi, (ph) => ({ weekData: [...ph.weekData, newWeek(nextWeekNum(ph))] }));
+    setNav({ level: 'phase', pi });
+    setWeekIdx(nueva);
+  };
+  const semanaAbierta = () => Math.max(0, Math.min(weekIdx, (phases[nav.pi]?.weekData?.length ?? 1) - 1));
+  const duplicarSemana = () => {
+    const wi = semanaAbierta();
+    patchPhase(nav.pi, (ph) => {
+      const c = clone(ph.weekData[wi]);
+      c.num = nextWeekNum(ph); // conserva el título; solo cambia el número
+      return { weekData: [...ph.weekData.slice(0, wi + 1), c, ...ph.weekData.slice(wi + 1)] };
+    });
+    setWeekIdx(wi + 1);
+  };
+  const copiarSemanaATodas = async () => {
+    const wi = semanaAbierta();
+    if (!await pregunta({
+      titulo: '¿Copiar esta semana a todas las demás?',
+      detalle: 'Las otras semanas de la fase pierden lo que tengan y quedan igual que esta.',
+      confirmar: 'Sí, copiarla',
+    })) return false;
+    patchPhase(nav.pi, (ph) => ({
+      weekData: ph.weekData.map((wk, j) => (j === wi ? wk : { ...wk, days: clone(ph.weekData[wi].days) })),
+    }));
+    return true;
+  };
+  const eliminarSemana = async () => {
+    const ph = phases[nav.pi];
+    const wi = semanaAbierta();
+    const wk = ph?.weekData?.[wi];
+    if (!wk || ph.weekData.length <= 1) return false;
+    if (!await pregunta({ titulo: `¿Eliminar «${weekName(wk)}»?`, detalle: 'Se va con todas sus sesiones.', confirmar: 'Sí, eliminarla', peligro: true })) return false;
+    patchPhase(nav.pi, (p2) => ({ weekData: p2.weekData.filter((_, j) => j !== wi) }));
+    setWeekIdx(Math.max(0, wi - 1));
+    return true;
+  };
 
   async function handleClose() {
     if (dirty) {
@@ -1877,12 +2037,12 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
     return 'Estructura del plan';
   }, [nav, phases, weekIdx, isWeekly]);
 
+  /* Volver. En el teléfono, desde el editor de un día se vuelve a la hoja; y
+     desde la hoja, se sale. Ya no hay pantalla de fases a la que subir: la
+     hoja las enseña todas. */
   const goBack = () => {
-    if (nav.level === 'phase') {
-      // Con una sola fase (o una rutina semanal) el nivel "fases" no aporta
-      if (isWeekly || (phases.length <= 1 && !isNew)) { handleClose(); return; }
-      setNav({ level: 'phases' });
-    } else handleClose();
+    if (!esCompu && nav.level === 'phase' && editandoDiaTel) { vuelveALaHoja(); return; }
+    handleClose();
   };
 
   /* ---------------- render por nivel ---------------- */
@@ -1986,295 +2146,267 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
         </div>
       </div>
     );
-  } else if (nav.level === 'phases') {
-    body = (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 640, margin: '0 auto' }}>
-        <Field label="Título del plan">
-          <input value={title} onChange={(e) => { setTitle(e.target.value); setDirty(true); }} style={inputStyle} />
-        </Field>
-        <div style={{ fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6, marginTop: 6 }}>
-          Fases del programa ({phases.length})
-        </div>
-        {phases.map((p, pi) => (
-          <div key={p.id}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 12, background: T.bg2,
-              border: `1px solid ${T.border}`, borderLeft: `4px solid ${p.color || T.accent}`,
-              borderRadius: 14, padding: '13px 14px', boxShadow: KP.shCard,
-            }}>
-            <button type="button" onClick={() => openPhase(pi)}
-              style={{ flex: 1, minWidth: 0, textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, padding: 0 }}>
-              <div style={{ fontSize: 14.5, fontWeight: 800, color: T.text }}>{p.name}</div>
-              <div style={{ fontSize: 12, color: T.text2, marginTop: 2, fontWeight: 600 }}>
-                {pluralS(p.weekData.length, 'semana')} · {plural(phaseSessions(p), 'sesión', 'sesiones')}
-              </div>
-            </button>
-            <IconBtn icon={ChevronUp} onClick={() => touch((ps) => moveItem(ps, pi, -1))} disabled={pi === 0} />
-            <IconBtn icon={ChevronDown} onClick={() => touch((ps) => moveItem(ps, pi, 1))} disabled={pi === phases.length - 1} />
-            <IconBtn icon={Copy} title="Duplicar fase" onClick={() => touch((ps) => {
-              const c = clone(ps[pi]);
-              c.id = `p-${rid()}`; c.num = nextPhaseNum(ps); c.name = `${c.name} (copia)`;
-              return [...ps.slice(0, pi + 1), c, ...ps.slice(pi + 1)];
-            })} />
-            <IconBtn icon={Trash2} danger onClick={async () => {
-              if (await pregunta({ titulo: `¿Eliminar la fase "${p.name}"?`, detalle: 'Se va con todas sus semanas y sesiones.', confirmar: 'Sí, eliminarla', peligro: true })) touch((ps) => ps.filter((_, i) => i !== pi));
-            }} />
-            <ChevronRight size={16} color={T.text3} />
-          </div>
-        ))}
-        <Pill icon={Plus} onClick={() => touch((ps) => [...ps, newPhase(nextPhaseNum(ps))])}>Agregar fase</Pill>
-
-        {/* El camino de vuelta: de programa por fases a rutina que se repite.
-            El de ida está en la cabecera de la rutina. Antes la estructura se
-            elegía al crear el plan y no se podía tocar nunca más. */}
-        <button
-          type="button" onClick={cambiaARutina}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 7, alignSelf: 'flex-start',
-            border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT,
-            fontSize: 12.5, fontWeight: 700, color: T.text2, padding: '10px 2px 0',
-          }}
-        >
-          <Repeat size={14} color={T.text3} />
-          Convertirlo en una rutina que se repite
-        </button>
-      </div>
-    );
   } else if (nav.level === 'phase') {
+    /* LA HOJA + EL EDITOR DEL DÍA.
+
+       Andrés, 24 sep 2026: la hoja del programa es "mi forma favorita de ver
+       cualquier plan", y "al navegar el plan de cualquier forma tendría que
+       ser igual". Aquí había dos pantallas —una lista de tarjetas de fases con
+       flechas, y dentro de cada fase fichas de semana y pestañas de días— y
+       ninguna se parecía a la hoja.
+
+       Ahora la hoja ES el índice del editor. Las flechas, copiar y borrar
+       viven en los tres puntos de cada fase y de cada semana (aprobado con
+       maqueta: "sí, hazlo así"). En la compu el día se edita a la derecha y la
+       hoja no se va; en el teléfono, tocar un día abre su editor a pantalla
+       completa. El editor del día no cambia. */
     const p = phases[nav.pi];
-    if (!p) { setNav({ level: 'phases' }); return null; }
-    const wIdx = Math.min(weekIdx, p.weekData.length - 1);
-    const w = p.weekData[wIdx];
+    const wIdx = p ? Math.max(0, Math.min(weekIdx, p.weekData.length - 1)) : 0;
+    const w = p?.weekData?.[wIdx];
     const daysOfWeekday = (w?.days || []).map((d, di) => ({ d, di })).filter((x) => x.d.day === activeWeekday);
-    const sessionCount = (wd) => (w?.days || []).filter((d) => d.day === wd).length;
+    const conDetalles = detailsOpen && !isWeekly && !!p;
 
-    body = (
-      <div style={{ maxWidth: 980, margin: '0 auto' }}>
-        {/* UNA puerta para todo lo que no es escribir la sesión.
-
-            Andrés, 17 sep 2026, sobre esta pantalla: "cero intuitiva… se siente
-            mediocre". Tenía seis renglones de controles antes de llegar al
-            contenido: detalles de la fase, semanas, ajustes de la semana, dos
-            botones de plantilla, el nombre de la semana y los días. Ahora son
-            tres: opciones, semanas y días. Lo demás vive en la hoja. */}
-        <div style={{ marginBottom: 14 }}>
+    const hoja = (
+      <div>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, marginBottom: isWeekly ? 8 : 14 }}>
+          <Field label={isWeekly ? 'Título de la rutina' : 'Título del plan'} grow>
+            <input value={title} onChange={(e) => { setTitle(e.target.value); setDirty(true); }} style={inputStyle} />
+          </Field>
+          {/* Fuera del <label> del campo, a propósito: un <label> le pasa el
+              toque a su campo, y el menú no se abriría. */}
           <button
-            type="button"
-            onClick={() => setHojaFase(true)}
+            type="button" onClick={() => setMenu({ tipo: 'plan' })}
+            aria-label="Opciones del plan" title="Opciones del plan" className="kp-ico"
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer',
-              border: `1.5px solid ${T.border}`, borderRadius: 12, padding: '10px 14px',
-              background: T.bg2, color: T.text, fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
+              width: 42, height: 42, borderRadius: 12, border: 'none', cursor: 'pointer', flexShrink: 0,
+              background: 'transparent', color: T.text2, display: 'grid', placeItems: 'center',
             }}
           >
-            <span style={{ width: 10, height: 10, borderRadius: 3, background: isWeekly ? T.accent : (p.color || T.accent) }} />
-            <Settings2 size={15} color={T.text2} />
-            {isWeekly ? 'Opciones de la rutina' : 'Opciones de la fase'}
+            <MoreHorizontal size={19} />
           </button>
-          {detailsOpen && !isWeekly && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16, marginTop: 8 }}>
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <Field label="Nombre de la fase" grow>
-                  <input value={p.name || ''} onChange={(e) => patchPhase(nav.pi, { name: e.target.value })} placeholder="Ej. Hipertrofia, Bloque de fuerza…" style={inputStyle} />
-                </Field>
-                <Field label="Subtítulo (opcional)" grow>
-                  <input value={p.fullName || ''} onChange={(e) => patchPhase(nav.pi, { fullName: e.target.value })} placeholder="Ej. Recuperación y Evaluación" style={inputStyle} />
-                </Field>
-              </div>
-              <Field label="Color">
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {PALETTE.map((c) => (
-                    <button key={c} type="button" onClick={() => patchPhase(nav.pi, { color: c })} aria-label={`Color ${c}`}
-                      style={{ width: 32, height: 32, borderRadius: 10, cursor: 'pointer', background: c, border: p.color === c ? `3px solid ${T.text}` : '3px solid transparent' }} />
-                  ))}
-                </div>
-              </Field>
-              <Field label="Enfoque en una línea (opcional)">
-                <input value={p.focus || ''} onChange={(e) => patchPhase(nav.pi, { focus: e.target.value })} placeholder="Ej. Masa magra y base estructural" style={inputStyle} />
-              </Field>
-              <Field label="Objetivo (opcional)">
-                <textarea value={p.objective || ''} onChange={(e) => patchPhase(nav.pi, { objective: e.target.value })} rows={3}
-                  style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }} />
-              </Field>
-            </div>
-          )}
         </div>
-
-        {/* Selector de semanas — en una rutina semanal solo hay una */}
-        {!isWeekly && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginBottom: 10 }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6, marginRight: 3 }}>
-            Semana
-          </span>
-          {p.weekData.map((wk, wi) => {
-            const active = wi === wIdx;
-            return (
-              <button
-                key={wi} type="button"
-                onClick={() => { setWeekIdx(wi); setActiveWeekday(p.weekData[wi]?.days?.[0]?.day || activeWeekday); }}
-                style={{
-                  padding: '8px 15px', borderRadius: 20, cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 800,
-                  border: active ? 'none' : `1.5px solid ${T.border}`,
-                  background: active ? `linear-gradient(135deg, ${T.accent}, ${T.accentDk})` : T.bg2,
-                  color: active ? '#fff' : T.text2,
-                  boxShadow: active ? KP.shBtn : 'none',
-                }}
-              >
-                {wi + 1}
-              </button>
-            );
-          })}
-          <IconBtn icon={Plus} title="Agregar semana" onClick={() => {
-            patchPhase(nav.pi, (ph) => ({ weekData: [...ph.weekData, newWeek(nextWeekNum(ph))] }));
-            setWeekIdx(p.weekData.length);
-          }} />
-          <IconBtn icon={Pencil} title="Ajustes de la semana" onClick={() => setModal({ type: 'week-meta' })} />
-        </div>
-        )}
-
-        {/* Nombre + carga de la semana (un tap abre ajustes) */}
-        {isWeekly ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-            {/* Andrés, 17 sep 2026: "si un atleta tiene entrenamiento semanal no
-                se puede cambiar a fases, al menos no veo cómo desde el teléfono".
-                No se podía: la estructura se elegía al crear el plan y ya. */}
-            <button
-              type="button" onClick={cambiaAFases}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none',
-                background: 'transparent', cursor: 'pointer', fontFamily: FONT,
-                fontSize: 13.5, fontWeight: 800, color: T.text, padding: 0,
-              }}
-            >
-              <Repeat size={15} color={T.accent} />
-              Esta rutina se repite todas las semanas
-              <span style={{ fontSize: 12.5, fontWeight: 800, color: T.accent }}>Cambiar</span>
-            </button>
-          </div>
-        ) : (
+        {isWeekly && (
+          /* Andrés, 17 sep 2026: "si un atleta tiene entrenamiento semanal no
+             se puede cambiar a fases, al menos no veo cómo desde el teléfono".
+             También está en los tres puntos, pero esto se queda a la vista. */
           <button
-            type="button" onClick={() => setModal({ type: 'week-meta' })}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, color: T.text, padding: '0 0 10px 2px' }}
+            type="button" onClick={cambiaAFases}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none', background: 'transparent',
+              cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 700, color: T.text2,
+              padding: '2px 2px 12px',
+            }}
           >
-            {weekName(w, wIdx + 1)}{w?.load ? ` · ${w.load}` : ''} <Pencil size={12} color={T.text3} />
+            <Repeat size={14} color={T.accent} />
+            Se repite todas las semanas
+            <span style={{ fontWeight: 800, color: T.accent }}>Cambiar</span>
           </button>
         )}
+        <NavegadorDelPlan
+          fases={phases}
+          kind={kind}
+          quien="atleta"
+          aqui={aquiAtleta}
+          editor={{
+            faseAbierta: nav.pi,
+            semanaAbierta: w?.num,
+            onAbrirFase: (i, semanaNum) => {
+              yaNavego.current = true;
+              const wi = Math.max(0, (phases[i]?.weekData ?? []).findIndex((x) => x.num === semanaNum));
+              const semana = phases[i]?.weekData?.[wi];
+              // "Ir a donde va" y la fase del atleta abren en SU día.
+              const suDia = aquiAtleta && aquiAtleta.faseId === phases[i]?.id
+                && aquiAtleta.semana === semana?.num && aquiAtleta.dia != null
+                ? semana.days[aquiAtleta.dia]?.day : null;
+              setDetailsOpen(false);
+              setNav({ level: 'phase', pi: i });
+              setWeekIdx(wi);
+              setActiveWeekday((d) => suDia || diaParaSemana(semana, d));
+            },
+            onElegirSemana: (num) => {
+              yaNavego.current = true;
+              const wi = Math.max(0, (p?.weekData ?? []).findIndex((x) => x.num === num));
+              setWeekIdx(wi);
+              setActiveWeekday((d) => diaParaSemana(p?.weekData?.[wi], d));
+            },
+            diaElegido: activeWeekday,
+            onElegirDia: (f, i, semana, clave) => {
+              yaNavego.current = true;
+              setActiveWeekday(clave);
+              abreEditorTel();
+            },
+            onMenuFase: (f, i) => { yaNavego.current = true; setMenu({ tipo: 'fase', pi: i }); },
+            onMenuSemana: () => { yaNavego.current = true; setMenu({ tipo: 'semana' }); },
+            onAgregarSemana: (f, i) => { yaNavego.current = true; agregarSemana(i); },
+            onAgregarFase: () => { yaNavego.current = true; agregarFase(); },
+          }}
+        />
+      </div>
+    );
 
-        {/* Tabs de días: pestañas planas con subrayado, no pastillas.
-            El punto azul marca los días que YA tienen sesión. Las pastillas
-            de antes daban ese dato pintando el fondo entero; aquí se dice lo
-            mismo con menos tinta, para que el subrayado sea lo unico que
-            compita por la atencion. */}
-        <div style={{
-          display: 'flex', gap: 2, marginBottom: 18, overflowX: 'auto',
-          borderBottom: `1px solid ${T.border}`,
-        }}>
-          {WEEKDAYS.map((wd) => {
-            const active = activeWeekday === wd;
-            const has = sessionCount(wd) > 0;
-            return (
-              <button
-                key={wd} type="button" onClick={() => setActiveWeekday(wd)}
-                style={{
-                  padding: esCompu ? '11px 17px 12px' : '11px 12px 12px',
-                  border: 'none', background: 'transparent', cursor: 'pointer',
-                  fontFamily: FONT, fontSize: 14.5, fontWeight: active ? 800 : 600,
-                  color: active ? T.accent : T.text2, whiteSpace: 'nowrap', flexShrink: 0,
-                  borderBottom: `2.5px solid ${active ? T.accent : 'transparent'}`,
-                  marginBottom: -1, transition: 'color .12s, border-color .12s',
-                }}
-              >
-                {esCompu ? NOMBRE_DIA[wd] : wd}
-                {has && (
-                  <span style={{
-                    display: 'inline-block', width: 5, height: 5, borderRadius: '50%',
-                    background: active ? T.accent : T.accent + '99', marginLeft: 6, verticalAlign: 'middle',
-                  }} />
-                )}
-              </button>
-            );
-          })}
+    /* Nombre, color y objetivo de la fase. Se abre desde los tres puntos de
+       la fase. "Color" no va en un `Field`: ese es un <label>, y un <label>
+       con varios botones dentro le pasa el toque al primero. */
+    const panelFase = conDetalles && (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16, marginBottom: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ flex: 1, fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+            Nombre, color y objetivo
+          </span>
+          <Pill primary icon={Check} onClick={() => (esCompu ? setDetailsOpen(false) : vuelveALaHoja())}>Listo</Pill>
+        </div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <Field label="Nombre de la fase" grow>
+            <input value={p.name || ''} onChange={(e) => patchPhase(nav.pi, { name: e.target.value })} placeholder="Ej. Hipertrofia, Bloque de fuerza…" style={inputStyle} />
+          </Field>
+          <Field label="Subtítulo (opcional)" grow>
+            <input value={p.fullName || ''} onChange={(e) => patchPhase(nav.pi, { fullName: e.target.value })} placeholder="Ej. Recuperación y Evaluación" style={inputStyle} />
+          </Field>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Color</span>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {PALETTE.map((c) => (
+              <button key={c} type="button" onClick={() => patchPhase(nav.pi, { color: c })} aria-label={`Color ${c}`}
+                style={{ width: 32, height: 32, borderRadius: 10, cursor: 'pointer', background: c, border: p.color === c ? `3px solid ${T.text}` : '3px solid transparent' }} />
+            ))}
+          </div>
+        </div>
+        <Field label="Enfoque en una línea (opcional)">
+          <input value={p.focus || ''} onChange={(e) => patchPhase(nav.pi, { focus: e.target.value })} placeholder="Ej. Masa magra y base estructural" style={inputStyle} />
+        </Field>
+        <Field label="Objetivo (opcional)">
+          <textarea value={p.objective || ''} onChange={(e) => patchPhase(nav.pi, { objective: e.target.value })} rows={3}
+            style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }} />
+        </Field>
+      </div>
+    );
+
+    const editorDelDia = p && (
+      <div>
+        {/* Dónde estás, en una línea. En el teléfono la vuelta a la hoja es la
+            flecha de arriba: una segunda flecha aquí, justo debajo, era dos
+            botones para lo mismo. */}
+        <div style={{ marginBottom: 14, minWidth: 0 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: T.text3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {isWeekly ? 'Rutina que se repite' : `${p.name || 'Fase'} · ${weekName(w, wIdx + 1)}${w?.load ? ` · ${w.load}` : ''}`}
+          </div>
+          <div style={{ fontSize: 19, fontWeight: 800, color: T.text, letterSpacing: -0.3 }}>
+            {conDetalles && !esCompu ? 'Opciones de la fase' : (NOMBRE_DIA[activeWeekday] || activeWeekday)}
+          </div>
         </div>
 
-        {/* Sesiones del día activo */}
-        {daysOfWeekday.length === 0 ? (
-          <div style={{ background: T.bg2, border: `1.5px dashed ${T.borderHi}`, borderRadius: 20, padding: '52px 24px', textAlign: 'center' }}>
-            <div style={{ width: 70, height: 70, borderRadius: 22, background: T.accentBg, color: T.accent, display: 'grid', placeItems: 'center', margin: '0 auto 16px' }}>
-              <CalendarDays size={30} />
-            </div>
-            <div style={{ fontSize: 17, fontWeight: 800, color: T.text }}>No hay sesión para el {DAY_FULL_LOWER[activeWeekday] || activeWeekday.toLowerCase()}</div>
-            <div style={{ fontSize: 13.5, color: T.text2, marginTop: 8, lineHeight: 1.5 }}>
-              Crea una desde cero, tráela del catálogo o pega una copiada.
-            </div>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20, flexWrap: 'wrap' }}>
-              <button type="button"
-                onClick={() => patchWeek(nav.pi, wIdx, (wk) => ({ days: [...(wk.days || []), newDay(activeWeekday)] }))}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 20px', borderRadius: 12, border: 'none', cursor: 'pointer', background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff', fontFamily: FONT, fontSize: 14, fontWeight: 800, boxShadow: KP.shBtn }}>
-                <Plus size={16} /> Añadir sesión
-              </button>
-              <Pill icon={FolderOpen} onClick={() => setModal({ type: 'tpl-day', payload: { di: null } })}>Desde catálogo</Pill>
-              {clipboard && (
-                <Pill icon={Clipboard} onClick={() => patchWeek(nav.pi, wIdx, (wk) => ({ days: [...(wk.days || []), { ...clone(clipboard), day: activeWeekday }] }))}>
-                  Pegar rutina
-                </Pill>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {daysOfWeekday.map(({ d, di }) => (
-              <SessionEditor
-                key={di}
-                day={d}
-                repertoire={repertoire}
-                categorias={categoriasVisibles}
-                duenoId={user?.id}
-                masterId={masterIdCat}
-                onCategoriaCreada={(fila) => setCategorias((prev) => [...prev, fila])}
-                onCategoriaBorrada={(id) => setCategorias((prev) => prev.filter((c) => c.id !== id))}
-                atleta={athlete}
-                onEjercicioCreado={(fila) => setRepertoire((prev) => [
-                  ...prev, { ...fila, isMine: true, isBase: false },
-                ])}
-                onPatch={(patch) => patchDay(nav.pi, wIdx, di, patch)}
-                onDelete={async () => {
-                  if (await pregunta({ titulo: `¿Eliminar la sesión "${d.name || d.day}"?`, confirmar: 'Sí, eliminarla', peligro: true })) {
-                    patchWeek(nav.pi, wIdx, (wk) => ({ days: wk.days.filter((_, k) => k !== di) }));
-                  }
-                }}
-                onCopy={() => setClipboard(clone(d))}
-                onClear={async () => {
-                  if (await pregunta({ titulo: '¿Vaciar esta sesión?', detalle: 'Se quitan todos sus sets. El nombre y el tipo se quedan.', confirmar: 'Sí, vaciarla', peligro: true })) patchDay(nav.pi, wIdx, di, { exercises: [] });
-                }}
-                onSaveToCatalog={() => setModal({ type: 'name-day', payload: d })}
-                onApplyCatalog={() => setModal({ type: 'tpl-day', payload: { di } })}
-              />
-            ))}
+        {panelFase}
 
-            {/* OTRA SESIÓN EL MISMO DÍA. El plan ya lo admitía —cada sesión es
-                una entrada con su día de la semana, y puede haber dos con
-                "Lun"— pero el botón de añadir solo aparecía con el día VACÍO.
-                En cuanto el lunes tenía una sesión, no había forma de ponerle
-                la de la tarde. Probado como coach: el menú de la sesión solo
-                ofrecía copiar, y "Pegar" también vivía solo en el día vacío. */}
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button type="button"
-                onClick={() => patchWeek(nav.pi, wIdx, (wk) => ({ days: [...(wk.days || []), newDay(activeWeekday)] }))}
-                style={{
-                  flex: '1 1 220px', minHeight: 46, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                  borderRadius: 14, border: `1.5px dashed ${T.borderHi}`, background: 'transparent', cursor: 'pointer',
-                  fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text2,
-                }}>
-                <Plus size={16} /> Añadir otra sesión el {DAY_FULL_LOWER[activeWeekday] || activeWeekday.toLowerCase()}
-              </button>
-              {clipboard && (
-                <Pill icon={Clipboard} onClick={() => patchWeek(nav.pi, wIdx, (wk) => ({ days: [...(wk.days || []), { ...clone(clipboard), day: activeWeekday }] }))}>
-                  Pegar rutina
-                </Pill>
-              )}
+        {/* En el teléfono, con las opciones de la fase abiertas no va el día
+            debajo: vino a eso, y abajo parecería parte de lo mismo. */}
+        {!w ? (
+          <div style={{ background: T.bg2, border: `1.5px dashed ${T.borderHi}`, borderRadius: 20, padding: '40px 24px', textAlign: 'center' }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>Esta fase todavía no tiene semanas</div>
+            <div style={{ marginTop: 14 }}>
+              <Pill primary icon={Plus} onClick={() => agregarSemana(nav.pi)}>Agregar semana</Pill>
             </div>
           </div>
+        ) : (esCompu || !conDetalles) && (
+          <>
+            {/* Sesiones del día activo */}
+            {daysOfWeekday.length === 0 ? (
+              <div style={{ background: T.bg2, border: `1.5px dashed ${T.borderHi}`, borderRadius: 20, padding: '52px 24px', textAlign: 'center' }}>
+                <div style={{ width: 70, height: 70, borderRadius: 22, background: T.accentBg, color: T.accent, display: 'grid', placeItems: 'center', margin: '0 auto 16px' }}>
+                  <CalendarDays size={30} />
+                </div>
+                <div style={{ fontSize: 17, fontWeight: 800, color: T.text }}>No hay sesión para el {DAY_FULL_LOWER[activeWeekday] || activeWeekday.toLowerCase()}</div>
+                <div style={{ fontSize: 13.5, color: T.text2, marginTop: 8, lineHeight: 1.5 }}>
+                  Crea una desde cero, tráela del catálogo o pega una copiada.
+                </div>
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20, flexWrap: 'wrap' }}>
+                  <button type="button"
+                    onClick={() => patchWeek(nav.pi, wIdx, (wk) => ({ days: [...(wk.days || []), newDay(activeWeekday)] }))}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 20px', borderRadius: 12, border: 'none', cursor: 'pointer', background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff', fontFamily: FONT, fontSize: 14, fontWeight: 800, boxShadow: KP.shBtn }}>
+                    <Plus size={16} /> Añadir sesión
+                  </button>
+                  <Pill icon={FolderOpen} onClick={() => setModal({ type: 'tpl-day', payload: { di: null } })}>Desde catálogo</Pill>
+                  {clipboard && (
+                    <Pill icon={Clipboard} onClick={() => patchWeek(nav.pi, wIdx, (wk) => ({ days: [...(wk.days || []), { ...clone(clipboard), day: activeWeekday }] }))}>
+                      Pegar rutina
+                    </Pill>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {daysOfWeekday.map(({ d, di }) => (
+                  <SessionEditor
+                    key={di}
+                    day={d}
+                    repertoire={repertoire}
+                    categorias={categoriasVisibles}
+                    duenoId={user?.id}
+                    masterId={masterIdCat}
+                    onCategoriaCreada={(fila) => setCategorias((prev) => [...prev, fila])}
+                    onCategoriaBorrada={(id) => setCategorias((prev) => prev.filter((c) => c.id !== id))}
+                    atleta={athlete}
+                    onEjercicioCreado={(fila) => setRepertoire((prev) => [
+                      ...prev, { ...fila, isMine: true, isBase: false },
+                    ])}
+                    onPatch={(patch) => patchDay(nav.pi, wIdx, di, patch)}
+                    onDelete={async () => {
+                      if (await pregunta({ titulo: `¿Eliminar la sesión "${d.name || d.day}"?`, confirmar: 'Sí, eliminarla', peligro: true })) {
+                        patchWeek(nav.pi, wIdx, (wk) => ({ days: wk.days.filter((_, k) => k !== di) }));
+                      }
+                    }}
+                    onCopy={() => setClipboard(clone(d))}
+                    onClear={async () => {
+                      if (await pregunta({ titulo: '¿Vaciar esta sesión?', detalle: 'Se quitan todos sus sets. El nombre y el tipo se quedan.', confirmar: 'Sí, vaciarla', peligro: true })) patchDay(nav.pi, wIdx, di, { exercises: [] });
+                    }}
+                    onSaveToCatalog={() => setModal({ type: 'name-day', payload: d })}
+                    onApplyCatalog={() => setModal({ type: 'tpl-day', payload: { di } })}
+                  />
+                ))}
+
+                {/* OTRA SESIÓN EL MISMO DÍA. El plan ya lo admitía —cada sesión es
+                    una entrada con su día de la semana, y puede haber dos con
+                    "Lun"— pero el botón de añadir solo aparecía con el día VACÍO.
+                    En cuanto el lunes tenía una sesión, no había forma de ponerle
+                    la de la tarde. Probado como coach: el menú de la sesión solo
+                    ofrecía copiar, y "Pegar" también vivía solo en el día vacío. */}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button type="button"
+                    onClick={() => patchWeek(nav.pi, wIdx, (wk) => ({ days: [...(wk.days || []), newDay(activeWeekday)] }))}
+                    style={{
+                      flex: '1 1 220px', minHeight: 46, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      borderRadius: 14, border: `1.5px dashed ${T.borderHi}`, background: 'transparent', cursor: 'pointer',
+                      fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text2,
+                    }}>
+                    <Plus size={16} /> Añadir otra sesión el {DAY_FULL_LOWER[activeWeekday] || activeWeekday.toLowerCase()}
+                  </button>
+                  {clipboard && (
+                    <Pill icon={Clipboard} onClick={() => patchWeek(nav.pi, wIdx, (wk) => ({ days: [...(wk.days || []), { ...clone(clipboard), day: activeWeekday }] }))}>
+                      Pegar rutina
+                    </Pill>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
         )}
+      </div>
+    );
+
+    body = esCompu ? (
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'minmax(300px, 380px) minmax(0, 1fr)', gap: 24,
+        maxWidth: 1240, margin: '0 auto', alignItems: 'start',
+      }}>
+        {/* La hoja se queda quieta mientras el día de al lado se desplaza. */}
+        <aside style={{ position: 'sticky', top: 0, maxHeight: 'calc(100svh - 110px)', overflowY: 'auto', padding: '2px 4px 8px 2px' }}>
+          {hoja}
+        </aside>
+        <section style={{ minWidth: 0 }}>{editorDelDia}</section>
+      </div>
+    ) : (
+      <div style={{ maxWidth: 640, margin: '0 auto' }}>
+        {editandoDiaTel && editorDelDia ? editorDelDia : hoja}
       </div>
     );
   }
@@ -2282,7 +2414,12 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
   const curPhase = nav.level === 'phase' ? phases[nav.pi] : null;
   const curWeekIdx = curPhase ? Math.min(weekIdx, curPhase.weekData.length - 1) : 0;
 
-  return (
+  /* Colgado del documento, no de la ficha que lo abre. En la compu la ficha
+     es una card flotante con capa 900, y todo lo que va dentro queda
+     encerrado en esa capa aunque pida 2400: el botón de tu cuenta (capa 1000,
+     arriba a la derecha) quedaba ENCIMA de la X del editor, y tocar la X
+     abría el menú de la cuenta. Visto en la prueba del 25 sep 2026. */
+  return createPortal(
     <div style={{ position: 'fixed', inset: 0, zIndex: 2400, background: T.bg, fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
       <header
         style={{
@@ -2326,7 +2463,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
         </div>
       )}
 
-      <main style={{ flex: 1, overflowY: 'auto', padding: '20px 18px 60px' }}>{body}</main>
+      <main ref={mainRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 18px 60px' }}>{body}</main>
 
       {/* Modales */}
       {modal?.type === 'week-meta' && curPhase && (
@@ -2334,76 +2471,65 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
           week={curPhase.weekData[curWeekIdx]}
           canDelete={curPhase.weekData.length > 1}
           onPatch={(patch) => patchWeek(nav.pi, curWeekIdx, patch)}
-          onDuplicate={() => {
-            patchPhase(nav.pi, (ph) => {
-              const c = clone(ph.weekData[curWeekIdx]);
-              c.num = nextWeekNum(ph); // conserva el título; solo cambia el número
-              return { weekData: [...ph.weekData.slice(0, curWeekIdx + 1), c, ...ph.weekData.slice(curWeekIdx + 1)] };
-            });
-            setModal(null);
-          }}
-          onCopyToRest={async () => {
-            if (!await pregunta({
-              titulo: '¿Copiar esta semana a todas las demás?',
-              detalle: 'Las otras semanas de la fase pierden lo que tengan y quedan igual que esta.',
-              confirmar: 'Sí, copiarla',
-            })) return;
-            patchPhase(nav.pi, (ph) => ({
-              weekData: ph.weekData.map((wk, j) => (j === curWeekIdx ? wk : { ...wk, days: clone(ph.weekData[curWeekIdx].days) })),
-            }));
-            setModal(null);
-          }}
-          onDelete={async () => {
-            const wk = curPhase.weekData[curWeekIdx];
-            if (!await pregunta({ titulo: `¿Eliminar «${weekName(wk)}»?`, detalle: 'Se va con todas sus sesiones.', confirmar: 'Sí, eliminarla', peligro: true })) return;
-            patchPhase(nav.pi, (ph) => ({ weekData: ph.weekData.filter((_, j) => j !== curWeekIdx) }));
-            setWeekIdx((v) => Math.max(0, v - 1));
-            setModal(null);
-          }}
+          onDuplicate={() => { duplicarSemana(); setModal(null); }}
+          onCopyToRest={async () => { if (await copiarSemanaATodas()) setModal(null); }}
+          onDelete={async () => { if (await eliminarSemana()) setModal(null); }}
           onClose={() => setModal(null)}
         />
       )}
-      {/* Todo lo que no es escribir la sesión, en una sola hoja. Antes eran
-          cinco controles sueltos peleando por el espacio de arriba. */}
-      {hojaFase && curPhase && (
+      {/* LOS TRES PUNTOS. Antes eran flechas y botones sueltos en la lista de
+          fases, más una hoja de "Opciones de la fase" que mezclaba cosas de
+          la fase, de la semana y del plan. Ahora cada menú habla de UNA cosa:
+          el plan, una fase, o la semana abierta.
+
+          "Agregar fase" sigue siempre a mano (Andrés, 18 sep 2026: "aquí no
+          veo cómo se pueden agregar fases"): abajo de la hoja y en el menú del
+          plan. */}
+      {menu?.tipo === 'plan' && (
         <HojaAcciones
-          onClose={() => setHojaFase(false)}
+          onClose={() => setMenu(null)}
           acciones={[
-            ...(isWeekly ? [] : [{
-              icon: Settings2,
-              texto: detailsOpen ? 'Ocultar nombre, color y objetivo' : 'Nombre, color y objetivo de la fase',
-              onClick: () => setDetailsOpen((v) => !v),
-            }]),
-            ...(isWeekly ? [] : [{
-              icon: Pencil, texto: 'Ajustes de la semana', onClick: () => setModal({ type: 'week-meta' }),
-            }]),
-            { icon: FolderOpen, texto: 'Usar una plantilla de semana', onClick: () => setModal({ type: 'tpl-week' }) },
-            { icon: Save, texto: 'Guardar esta semana como plantilla', onClick: () => setModal({ type: 'name-week' }) },
-            /* AGREGAR OTRA FASE, DESDE DENTRO DE UNA FASE.
-               Andrés, 18 sep 2026: "aquí no veo cómo se pueden agregar fases
-               por ejemplo, eso hay que arreglarlo". El botón existía, pero en
-               la pantalla de atrás — y con UNA sola fase esa pantalla no se
-               podía alcanzar: `goBack` cerraba el editor entero en vez de
-               subir. O sea que a un plan de una fase no se le podía poner una
-               segunda por ningún lado. Esto sí está siempre a mano. */
-            ...(isWeekly ? [] : [{
-              icon: Plus,
-              texto: 'Agregar otra fase',
-              onClick: () => {
-                touch((ps) => [...ps, newPhase(nextPhaseNum(ps))]);
-                // Se abre la recién creada: agregar algo y quedarte donde
-                // estabas se lee como que no pasó nada.
-                setDetailsOpen(false);
-                setWeekIdx(0);
-                setNav({ level: 'phase', pi: phases.length });
-              },
-            }]),
-            ...(isWeekly || phases.length <= 1 ? [] : [{
-              icon: Layers, texto: 'Ver todas las fases', onClick: () => setNav({ level: 'phases' }),
-            }]),
+            ...(isWeekly ? [
+              { icon: FolderOpen, texto: 'Usar una plantilla de semana', onClick: () => setModal({ type: 'tpl-week' }) },
+              { icon: Save, texto: 'Guardar la semana como plantilla', onClick: () => setModal({ type: 'name-week' }) },
+            ] : [
+              { icon: Plus, texto: 'Agregar fase', onClick: agregarFase },
+            ]),
             isWeekly
               ? { icon: Layers, texto: 'Pasar a un programa por fases', onClick: cambiaAFases }
               : { icon: Repeat, texto: 'Convertirlo en una rutina que se repite', onClick: cambiaARutina },
+          ]}
+        />
+      )}
+      {menu?.tipo === 'fase' && phases[menu.pi] && (
+        <HojaAcciones
+          onClose={() => setMenu(null)}
+          acciones={[
+            {
+              icon: Settings2, texto: 'Nombre, color y objetivo',
+              onClick: () => {
+                if (menu.pi !== nav.pi) { setNav({ level: 'phase', pi: menu.pi }); setWeekIdx(0); }
+                setDetailsOpen(true);
+                abreEditorTel();
+              },
+            },
+            ...(menu.pi > 0 ? [{ icon: ChevronUp, texto: 'Subir', onClick: () => moverFase(menu.pi, -1) }] : []),
+            ...(menu.pi < phases.length - 1 ? [{ icon: ChevronDown, texto: 'Bajar', onClick: () => moverFase(menu.pi, 1) }] : []),
+            { icon: Copy, texto: 'Duplicar fase', onClick: () => duplicarFase(menu.pi) },
+            ...(phases.length > 1 ? [{ icon: Trash2, texto: 'Eliminar fase', onClick: () => eliminarFase(menu.pi), peligro: true }] : []),
+          ]}
+        />
+      )}
+      {menu?.tipo === 'semana' && curPhase && (
+        <HojaAcciones
+          onClose={() => setMenu(null)}
+          acciones={[
+            { icon: Pencil, texto: 'Nombre y carga de la semana', onClick: () => setModal({ type: 'week-meta' }) },
+            { icon: Copy, texto: 'Duplicar semana', onClick: duplicarSemana },
+            ...(curPhase.weekData.length > 1 ? [{ icon: Layers, texto: 'Copiarla a todas las semanas', onClick: copiarSemanaATodas }] : []),
+            { icon: FolderOpen, texto: 'Usar una plantilla de semana', onClick: () => setModal({ type: 'tpl-week' }) },
+            { icon: Save, texto: 'Guardarla como plantilla', onClick: () => setModal({ type: 'name-week' }) },
+            ...(curPhase.weekData.length > 1 ? [{ icon: Trash2, texto: 'Eliminar semana', onClick: eliminarSemana, peligro: true }] : []),
           ]}
         />
       )}
@@ -2489,6 +2615,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
         .kp-pill,.kp-ico{transition:background .12s}
         .kp-pill:hover:not(:disabled),.kp-ico:hover:not(:disabled){background:${T.bg3} !important}
       `}</style>
-    </div>
+    </div>,
+    document.body,
   );
 }
