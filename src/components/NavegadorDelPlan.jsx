@@ -27,8 +27,17 @@ import { pluralS } from '@/lib/plural';
  * ese día es donde vas o es otro que seleccionaste".
  */
 export default function NavegadorDelPlan({
-  fases, kind, aqui, viendo, hecha, alTocarDia, abrirEn, detalleDia,
+  fases, kind, aqui, viendo, hecha, alTocarDia, abrirEn, detalleDia, contenidoDia, quien = 'tu',
 }) {
+  /* `quien`: el atleta lee "AQUÍ VAS"; el coach, que mira el plan de otro,
+     "AQUÍ VA". Misma marca, dicha a quien la lee. */
+  const textoAqui = quien === 'tu' ? 'AQUÍ VAS' : 'AQUÍ VA';
+  const textoIr = quien === 'tu' ? 'Ir a donde vas' : 'Ir a donde va';
+
+  /* `contenidoDia`: si viene, tocar un día lo abre AQUÍ MISMO para ver qué
+     tiene, en vez de llevar a otra pantalla. Es lo que usa el coach: él no
+     entrena ese día, solo quiere ver qué le puso. Uno abierto a la vez. */
+  const [diaAbierto, setDiaAbierto] = useState(null);
   const fasesSeguras = fases ?? [];
   const inicio = abrirEn ?? aqui;
   const indiceInicio = Math.max(0, fasesSeguras.findIndex((f) => f.id === inicio?.faseId));
@@ -80,7 +89,7 @@ export default function NavegadorDelPlan({
             fontFamily: FONT, fontSize: 13, fontWeight: 800, color: LT.blue,
           }}
         >
-          <CornerUpLeft size={15} /> Ir a donde vas
+          <CornerUpLeft size={15} /> {textoIr}
         </button>
       )}
 
@@ -111,7 +120,7 @@ export default function NavegadorDelPlan({
                 {f.name}
               </span>
               {/* Aunque esté plegada, la fase donde vas lo sigue diciendo. */}
-              {faseDeAqui && pastilla('AQUÍ VAS', true)}
+              {faseDeAqui && pastilla(textoAqui, true)}
               <span style={{ fontSize: 11.5, fontWeight: 700, color: LT.text3, flexShrink: 0, ...NUM_STYLE }}>
                 {pluralS(f.weekData?.length || 0, 'sem')}
               </span>
@@ -137,7 +146,7 @@ export default function NavegadorDelPlan({
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ width: 9, height: 9, borderRadius: 5, background: f.color || LT.blue, flexShrink: 0 }} />
                 <span style={{ flex: 1, minWidth: 0, fontSize: 15.5, fontWeight: 800, color: LT.text }}>{f.name}</span>
-                {faseDeAqui && pastilla('AQUÍ VAS', true)}
+                {faseDeAqui && pastilla(textoAqui, true)}
               </div>
             )}
 
@@ -181,11 +190,17 @@ export default function NavegadorDelPlan({
                 const suyo = esAqui(f.id, semana.num, idx);
                 const mirando = esViendo(f.id, semana.num, idx);
                 const lista = !!hecha?.(f.id, semana.num, idx);
+                const clave = `${f.id}-${semana.num}-${idx}`;
+                const abiertoAqui = !!contenidoDia && diaAbierto === clave;
                 return (
+                  <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <button
-                    key={idx}
                     type="button"
-                    onClick={() => alTocarDia?.(f, semana, idx)}
+                    aria-expanded={contenidoDia ? abiertoAqui : undefined}
+                    onClick={() => {
+                      if (contenidoDia) setDiaAbierto(abiertoAqui ? null : clave);
+                      alTocarDia?.(f, semana, idx);
+                    }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
                       padding: '10px 11px', borderRadius: 11, cursor: 'pointer', fontFamily: FONT,
@@ -209,10 +224,16 @@ export default function NavegadorDelPlan({
                         || (descanso ? 'Descanso' : tipo.label)}
                     </span>
                     {detalleDia?.(f, semana, idx)}
-                    {suyo && pastilla('AQUÍ VAS', true)}
+                    {suyo && pastilla(textoAqui, true)}
                     {mirando && pastilla('VIENDO', false)}
                     {lista && <Check size={14} strokeWidth={3} style={{ color: LT.mint, flexShrink: 0 }} />}
                   </button>
+                  {abiertoAqui && (
+                    <div style={{ padding: '2px 4px 6px 42px' }}>
+                      {contenidoDia(f, semana, idx)}
+                    </div>
+                  )}
+                  </div>
                 );
               })}
             </div>

@@ -15,9 +15,11 @@ import AgregarAtleta from '@/features/admin/AgregarAtleta';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useIsDesktop } from '@/lib/useViewport';
-import { T, FONT, KP, tipoDeSesion } from '@/lib/theme';
+import { T, FONT, KP } from '@/lib/theme';
 import { plural, pluralS } from '@/lib/plural';
-import { esDescanso } from '@/lib/training-utils';
+import { esDescanso, dondeVa, sessionIdFor } from '@/lib/training-utils';
+import HojaFlotante from '@/components/HojaFlotante';
+import NavegadorDelPlan from '@/components/NavegadorDelPlan';
 import ListaDesplegable from '@/components/ListaDesplegable';
 import CodigoDeCoach from '@/components/CodigoDeCoach';
 import { textoMeta } from '@/lib/medidas';
@@ -675,77 +677,6 @@ function SeccionFicha({ titulo, abierta, onToggle, children }) {
   );
 }
 
-/** El plan de un vistazo, sin poder tocarlo: fases, semanas y sesiones. */
-function ResumenDelPlan({ phases }) {
-  // Un día abierto a la vez: son índices, y con varios abiertos se pierde.
-  const [dentro, setDentro] = useState(null);
-  return (
-    <div style={{ background: T.bg, borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {phases.map((f) => (
-        <div key={f.id}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 7 }}>
-            <span style={{ width: 9, height: 9, borderRadius: 3, flexShrink: 0, background: f.color || T.accent }} />
-            <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 800, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {f.name}
-            </span>
-            <span style={{ fontSize: 11.5, fontWeight: 700, color: T.text3, flexShrink: 0 }}>
-              {pluralS(f.weekData?.length || 0, 'semana')}
-            </span>
-          </div>
-          {(f.weekData || []).map((w, wi) => (
-            <div key={wi} style={{ paddingLeft: 18, marginBottom: 6 }}>
-              <div style={{ fontSize: 11.5, fontWeight: 700, color: T.text3, marginBottom: 3 }}>
-                Semana {w.num ?? wi + 1}
-              </div>
-              {(w.days || []).map((d, di) => {
-                const tipo = tipoDeSesion(d);
-                const llave = `${f.id}-${wi}-${di}`;
-                const abierto = dentro === llave;
-                const cuantos = (d.exercises || []).filter((e) => !e.isNote).length;
-                return (
-                  <div key={di}>
-                    {/* EL DÍA SE ABRE. Andrés, 18 sep 2026: "no me refería a
-                        esto con «ver el plan», porque literalmente solo ver la
-                        parte de afuera del plan; no puedo METERME A VER el
-                        plan". Tenía razón: esto era un índice, no el plan.
-                        Se abre en solo lectura a propósito: para tocarlo está
-                        "Editar el plan", justo arriba. */}
-                    <button
-                      type="button"
-                      onClick={() => setDentro(abierto ? null : llave)}
-                      aria-expanded={abierto}
-                      style={{
-                        width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-                        padding: '5px 4px', border: 'none', background: abierto ? T.bg3 : 'transparent',
-                        borderRadius: 8, cursor: 'pointer', fontFamily: FONT, textAlign: 'left',
-                      }}
-                    >
-                      <span style={{ width: 30, fontSize: 11, fontWeight: 800, color: T.text3, flexShrink: 0 }}>{d.day}</span>
-                      <span style={{ width: 7, height: 7, borderRadius: 4, background: tipo.c, flexShrink: 0 }} />
-                      <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {d.name || tipo.label}
-                      </span>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: T.text3, flexShrink: 0 }}>
-                        {cuantos || (d.blocks?.length ? `${d.blocks.length} bloques` : '')}
-                      </span>
-                      <ChevronDown
-                        size={13}
-                        color={T.text3}
-                        style={{ flexShrink: 0, transform: abierto ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}
-                      />
-                    </button>
-                    {abierto && <DentroDelDia day={d} />}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /**
  * Lo que hay DENTRO de un día, en solo lectura.
  *
@@ -887,11 +818,42 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           icon={ClipboardList}
           titulo="Ver el plan"
           detalle={`${pluralS(phases.length, 'fase')} · ${pluralS(totalWeeks, 'semana')} · ${plural(totalSessions, 'sesión', 'sesiones')}`}
-          abierto={verPlan}
-          onClick={() => setVerPlan((v) => !v)}
+          onClick={() => setVerPlan(true)}
         />
       )}
-      {verPlan && plan && <ResumenDelPlan phases={phases} />}
+      {/* LA MISMA HOJA QUE VE EL ATLETA. Andrés, 24 sep 2026: "debería de
+          ser congruente, al navegar el plan de cualquier forma tendría que ser
+          igual". Aquí había un acordeón con las 35 semanas desplegadas una
+          debajo de otra.
+
+          Dos diferencias, las dos a propósito: dice "AQUÍ VA" en vez de "AQUÍ
+          VAS", porque el coach mira el plan de otro; y tocar un día lo abre en
+          el sitio para ver sus ejercicios, porque el coach no lo va a entrenar. */}
+      {verPlan && plan && (
+        <HojaFlotante
+          titulo={plan.title || 'Plan'}
+          subtitulo={`${athlete.full_name || athlete.username} · ${pluralS(phases.length, 'fase')} · ${pluralS(totalWeeks, 'semana')}`}
+          onCerrar={() => setVerPlan(false)}
+        >
+          <NavegadorDelPlan
+            fases={phases}
+            kind={plan.data?.kind}
+            quien="atleta"
+            aqui={dondeVa(phases, plan.data?.kind, state?.data?.['wr:cursor'])}
+            hecha={(faseId, semana, dia) => !!state?.data?.['wr:sessions']?.[
+              sessionIdFor(plan.data?.kind, faseId, semana, dia)]?.completed}
+            detalleDia={(f, semana, idx) => {
+              const d = semana.days[idx];
+              const n = (d.exercises || []).filter((e) => !e.isNote).length;
+              const texto = n || (d.blocks?.length ? `${d.blocks.length} bloques` : '');
+              return texto ? (
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: T.text3, flexShrink: 0 }}>{texto}</span>
+              ) : null;
+            }}
+            contenidoDia={(f, semana, idx) => <DentroDelDia day={semana.days[idx]} />}
+          />
+        </HojaFlotante>
+      )}
       {onVerComoAtleta && (
         <AccionFicha
           icon={Eye}

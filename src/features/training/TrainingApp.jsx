@@ -18,7 +18,7 @@ import {
   formatIntensity,
   sessionForToday, weekOverview, weekdayToday, weekdayLabel,
   cursorAlDia, isoWeekKey, esDescanso, enOrdenDeSemana,
-  bloqueQueRepite, ejerciciosDelBloque, nombreDeSesion, diasDeEstaSemana, claveDeDia,
+  bloqueQueRepite, ejerciciosDelBloque, nombreDeSesion, diasDeEstaSemana, claveDeDia, dondeVa,
 } from '@/lib/training-utils';
 import HojaFlotante from '@/components/HojaFlotante';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
@@ -2232,11 +2232,9 @@ export default function TrainingApp() {
   const miDia = useMemo(() => sessionForToday(PLAN, kind, cursor), [PLAN, kind, cursor]);
   const activeSessionId = miDia?.id;
 
-  // Dónde va el atleta, para marcarlo en la hoja: su día de hoy si lo tiene;
-  // si hoy descansa, al menos su semana.
-  const aqui = miDia
-    ? { faseId: miDia.phase.id, semana: miDia.week.num, dia: miDia.dayIdx }
-    : cursorSession ? { faseId: cursorSession.phase.id, semana: cursorSession.week.num, dia: null } : null;
+  // Dónde va el atleta, para marcarlo en la hoja. La misma función que usa su
+  // coach al ver su plan: una sola cuenta, dos pantallas que no se contradicen.
+  const aqui = useMemo(() => dondeVa(PLAN, kind, cursor), [PLAN, kind, cursor]);
   const [diaVisto, setDiaVisto] = useState(null);
 
   // El marcado es opcional y NO mueve el puntero: qué se muestra lo decide el

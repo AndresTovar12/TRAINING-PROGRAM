@@ -307,6 +307,29 @@ const sessionForToday = (plan, kind, cursor, date = new Date()) => {
   };
 };
 
+/**
+ * Dónde va un atleta: fase, semana y día. Lo marca "AQUÍ VAS" en la hoja del
+ * programa, y "AQUÍ VA" cuando lo mira su coach.
+ *
+ * Existe para que el atleta y el coach no lo calculen cada uno por su lado.
+ * Dos copias de esta cuenta es justo como la app llegó a tener dos respuestas
+ * distintas a "cuál es mi día".
+ *
+ * `cursorGuardado` es lo que la app del atleta tiene en 'wr:cursor'. Si falta o
+ * es de un plan viejo, se parte del primer día; y se pone al día con el
+ * calendario, igual que en su teléfono. `dia` va en null si hoy descansa: se
+ * marca solo la semana.
+ */
+const dondeVa = (plan, kind, cursorGuardado, date = new Date()) => {
+  if (!plan?.length) return null;
+  const base = isValidCursor(plan, cursorGuardado) ? cursorGuardado : defaultCursor(plan);
+  const cursor = cursorAlDia(plan, base, date);
+  const hoy = sessionForToday(plan, kind, cursor, date);
+  if (hoy) return { faseId: hoy.phase.id, semana: hoy.week.num, dia: hoy.dayIdx };
+  const semana = resolveCursor(plan, cursor);
+  return semana ? { faseId: semana.phase.id, semana: semana.week.num, dia: null } : null;
+};
+
 // Resumen de la semana para la tarjeta "Tu semana": qué días entrenan, cuál es
 // hoy y cuál es el siguiente. No depende de sesiones completadas.
 const weekOverview = (plan, kind, cursor, date = new Date()) => {
@@ -731,5 +754,5 @@ export {
   totalProgress, getWeekLoad, formatIntensity, inferRest, getPattern, getMuscles,
   weekdayToday, weekdayLabel, isoWeekKey, weeklySessionId, sessionIdFor,
   sessionForToday, weekOverview, esDescanso, enOrdenDeSemana, diasDeEstaSemana,
-  bloqueQueRepite, ejerciciosDelBloque, nombreDeSesion, claveDeDia,
+  bloqueQueRepite, ejerciciosDelBloque, nombreDeSesion, claveDeDia, dondeVa,
 };
