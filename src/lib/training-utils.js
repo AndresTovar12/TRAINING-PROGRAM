@@ -122,6 +122,16 @@ const WEEKDAY_LABELS = {
 // 'Lun' … 'Dom' según la fecha local del dispositivo
 const weekdayToday = (date = new Date()) => WEEKDAY_KEYS[date.getDay()];
 
+/**
+ * El día de hoy como texto, '2026-09-24', en la hora del teléfono.
+ *
+ * Sirve para sellar "hoy elegí hacer este día". Va en hora LOCAL a propósito:
+ * con `toISOString()` sería la de Greenwich, y a las 8 de la noche en México
+ * ya sería "mañana" y el día elegido caducaría antes de tiempo.
+ */
+const claveDeDia = (date = new Date()) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
 // Nombre largo en minúsculas ('miércoles') para textos tipo "Siguiente: …"
 const weekdayLabel = (key) => WEEKDAY_LABELS[key] ?? key;
 
@@ -254,6 +264,33 @@ const sessionForToday = (plan, kind, cursor, date = new Date()) => {
   const wd = weekdayToday(date);
   const { phase, week, items } = daysOfCurrentWeek(plan, kind, cursor);
   if (!phase || !week) return null;
+
+  /* EL DÍA QUE EL ATLETA ELIGIÓ HOY GANA AL CALENDARIO, SOLO POR HOY.
+     Andrés, 24 sep 2026: "qué pasa si quiere mover el día" — y eligió que
+     signifique "hoy hago este otro".
+
+     Antes, "Cambiar día" guardaba el día elegido pero esta función lo ignoraba:
+     miraba solo el día de la semana del calendario. Un martes se elegía el
+     jueves y la portada seguía diciendo "hoy te toca" lo del martes, mientras
+     la pantalla del día creía que era el jueves. Dos pantallas, dos respuestas.
+
+     Se sella con la FECHA y vale solo ese día. Mañana manda otra vez el
+     calendario, que es lo que Andrés decidió desde el principio: "avanza con el
+     calendario, pero si quieres regrésalo, puedes". */
+  if (cursor?.diaElegidoEl === claveDeDia(date)) {
+    const elegido = items.find(({ dayIdx }) => dayIdx === cursor.dayIdx);
+    if (elegido && !esDescanso(elegido.day)) {
+      return {
+        phase,
+        week,
+        dayIdx: elegido.dayIdx,
+        day: elegido.day,
+        id: sessionIdFor(kind, phase.id, week.num, elegido.dayIdx, date),
+        sesionesHoy: 1,
+        elegido: true,
+      };
+    }
+  }
   /* TODAS las de hoy, no la primera. Un día puede tener dos sesiones —mañana y
      tarde—, y con `find` la segunda no existía para la portada: el atleta veía
      solo la de la mañana y nada le avisaba de que quedaba otra. */
@@ -694,5 +731,5 @@ export {
   totalProgress, getWeekLoad, formatIntensity, inferRest, getPattern, getMuscles,
   weekdayToday, weekdayLabel, isoWeekKey, weeklySessionId, sessionIdFor,
   sessionForToday, weekOverview, esDescanso, enOrdenDeSemana, diasDeEstaSemana,
-  bloqueQueRepite, ejerciciosDelBloque, nombreDeSesion,
+  bloqueQueRepite, ejerciciosDelBloque, nombreDeSesion, claveDeDia,
 };

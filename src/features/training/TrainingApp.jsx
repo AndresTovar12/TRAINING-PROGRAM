@@ -18,8 +18,10 @@ import {
   formatIntensity,
   sessionForToday, weekOverview, weekdayToday, weekdayLabel,
   cursorAlDia, isoWeekKey, esDescanso, enOrdenDeSemana,
-  bloqueQueRepite, ejerciciosDelBloque, nombreDeSesion, diasDeEstaSemana,
+  bloqueQueRepite, ejerciciosDelBloque, nombreDeSesion, diasDeEstaSemana, claveDeDia,
 } from '@/lib/training-utils';
+import HojaFlotante from '@/components/HojaFlotante';
+import NavegadorDelPlan from '@/components/NavegadorDelPlan';
 import { aKilos, desdeKilos, etiquetaUnidad } from '@/lib/unidades';
 import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
 import { useStorage } from '@/contexts/AppStateContext';
@@ -641,234 +643,61 @@ const LightWeekScience = ({ science }) => {
 };
 
 /**
- * El programa completo, en una hoja que se abre ENCIMA.
+ * El programa completo, abierto encima de la pantalla.
  *
- * POR QUÉ REEMPLAZA A TRES PANTALLAS. Andrés, 17 sep 2026: "me disgusta
- * bastante este proceso de navegar entre las fases y entre las semanas… le
- * picas al botón de plan, te lleva al plan, pero ahí hay un botón que te
- * regresa a la ventana de las semanas y luego a la de las fases; no me
- * termina de convencer". Eran tres niveles para llegar a un sitio que la app
- * ya sabe cuál es.
+ * POR QUÉ REEMPLAZÓ A TRES PANTALLAS. Andrés, 17 sep 2026: "me disgusta
+ * bastante este proceso de navegar entre las fases y entre las semanas". Eran
+ * tres niveles para llegar a un sitio que la app ya sabe cuál es. Eligió la
+ * maqueta A el 18 sep, y el 24 sep dijo que es "mi forma favorita de ver
+ * cualquier plan".
  *
- * Ahora el atleta abre y ya está en su día. El programa entero se consulta
- * desde aquí, sin salir: eligió la maqueta A el 18 sep 2026.
+ * Desde el 24 sep esto es solo la caja (`HojaFlotante`: card en compu,
+ * pantalla completa en el teléfono) con el navegador compartido dentro
+ * (`NavegadorDelPlan`), que es la misma pieza que usa el coach. Así ver un
+ * plan es igual en cualquier parte de la app.
  *
- * Las fases ya terminadas se pliegan; la actual viene abierta con sus semanas
- * y los días de la semana que esté mirando. Tocar un día lleva ahí y cierra.
+ * `aqui` es donde va el atleta DE VERDAD y `viendo` lo que tiene abierto.
+ * Antes la hoja recibía la fase de lo que se miraba y la llamaba "aquí vas":
+ * en cuanto uno abría otro día, la marca se iba detrás de él.
  */
-const HojaDelPrograma = ({ sessionsData, faseActivaId, semanaActiva, onIr, onCerrar }) => {
+const HojaDelPrograma = ({ sessionsData, aqui, viendo, onIr, onCerrar }) => {
   const { phases: PLAN, planMeta, kind } = usePlan();
   const idDeSesion = useIdDeSesion();
 
-  const indiceActivo = Math.max(0, PLAN.findIndex((f) => f.id === faseActivaId));
-  const [abierta, setAbierta] = useState(indiceActivo);
-  const [semanaVista, setSemanaVista] = useState(semanaActiva ?? 1);
-
-  // Cerrar con Escape: la hoja tapa la pantalla entera.
-  useEffect(() => {
-    const alTeclear = (e) => { if (e.key === 'Escape') onCerrar(); };
-    document.addEventListener('keydown', alTeclear);
-    return () => document.removeEventListener('keydown', alTeclear);
-  }, [onCerrar]);
-
-  const hechasDe = (fase) => {
-    let hechas = 0;
-    let total = 0;
-    (fase.weekData ?? []).forEach((w) => (w.days ?? []).forEach((d, i) => {
-      if (esDescanso(d)) return;
-      total += 1;
-      if (sessionsData[idDeSesion(fase.id, w.num, i)]?.completed) hechas += 1;
-    }));
-    return { hechas, total };
-  };
-
   const semanasTotales = PLAN.reduce((s, f) => s + (f.weekData?.length || 0), 0);
-  const semanasHasta = PLAN.slice(0, indiceActivo).reduce((s, f) => s + (f.weekData?.length || 0), 0)
-    + (semanaActiva ?? 1);
-
-  const fase = PLAN[abierta];
-  const semana = (fase?.weekData ?? []).find((w) => w.num === semanaVista) ?? fase?.weekData?.[0];
+  const iAqui = PLAN.findIndex((f) => f.id === aqui?.faseId);
+  const semanasHasta = iAqui < 0 ? null
+    : PLAN.slice(0, iAqui).reduce((s, f) => s + (f.weekData?.length || 0), 0)
+      + Math.max(1, (PLAN[iAqui].weekData ?? []).findIndex((w) => w.num === aqui.semana) + 1);
 
   return (
-    <div
-      onClick={(e) => { if (e.target === e.currentTarget) onCerrar(); }}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 3000, display: 'flex', alignItems: 'flex-end',
-        background: 'rgba(17,19,24,0.45)', fontFamily: FONT,
-      }}
+    <HojaFlotante
+      titulo={planMeta?.title || 'Tu programa'}
+      subtitulo={kind === 'weekly'
+        ? 'Una rutina que se repite cada semana'
+        : [pluralS(PLAN.length, 'fase'), pluralS(semanasTotales, 'semana'), semanasHasta ? `vas en la ${semanasHasta}` : null]
+          .filter(Boolean).join(' · ')}
+      onCerrar={onCerrar}
     >
-      <div
-        className="animate-sheet"
-        style={{
-          width: '100%', maxHeight: '86svh', background: LT.bg,
-          borderRadius: '22px 22px 0 0', display: 'flex', flexDirection: 'column',
-          maxWidth: 560, marginInline: 'auto', boxShadow: KP.shPop,
-        }}
-      >
-        <div style={{ padding: '10px 0 0', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
-          <span style={{ width: 38, height: 4, borderRadius: 999, background: LT.borderHi }} />
-        </div>
-
-        <div style={{ padding: '12px 18px 10px', display: 'flex', alignItems: 'flex-start', gap: 12, flexShrink: 0 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 19, fontWeight: 800, color: LT.text, letterSpacing: -0.3 }}>
-              {planMeta?.title || 'Tu programa'}
-            </div>
-            <div style={{ fontSize: 12.5, fontWeight: 600, color: LT.text3, marginTop: 2, ...NUM_STYLE }}>
-              {kind === 'weekly'
-                ? 'Una rutina que se repite cada semana'
-                : `${pluralS(PLAN.length, 'fase')} · ${pluralS(semanasTotales, 'semana')} · vas en la ${semanasHasta}`}
-            </div>
-          </div>
-          <button
-            type="button" onClick={onCerrar} aria-label="Cerrar"
-            style={{
-              width: 32, height: 32, borderRadius: 16, flexShrink: 0, border: 'none', cursor: 'pointer',
-              background: LT.surface2, color: LT.text2, display: 'grid', placeItems: 'center',
-            }}
-          >
-            <X size={17} />
-          </button>
-        </div>
-
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px calc(20px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {PLAN.map((f, i) => {
-            const { hechas, total } = hechasDe(f);
-            const terminada = total > 0 && hechas === total;
-            const esLaAbierta = i === abierta;
-            const esLaActiva = f.id === faseActivaId;
-
-            if (!esLaAbierta) {
-              return (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => {
-                    setAbierta(i);
-                    // Al abrir OTRA fase se empieza por su primera semana; si
-                    // es la fase donde vas, por la semana donde vas.
-                    setSemanaVista(f.id === faseActivaId ? (semanaActiva ?? 1) : (f.weekData?.[0]?.num ?? 1));
-                  }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
-                    padding: '12px 13px', background: LT.surface, border: `1px solid ${LT.border}`,
-                    borderRadius: 13, cursor: 'pointer', fontFamily: FONT, opacity: terminada ? 0.68 : 1,
-                  }}
-                >
-                  <span style={{ width: 9, height: 9, borderRadius: 5, background: f.color || LT.blue, flexShrink: 0 }} />
-                  <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 700, color: LT.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {f.name}
-                  </span>
-                  <span style={{ fontSize: 11.5, fontWeight: 700, color: LT.text3, flexShrink: 0, ...NUM_STYLE }}>
-                    {pluralS(f.weekData?.length || 0, 'sem')}
-                  </span>
-                  {terminada
-                    ? <Check size={15} strokeWidth={3} style={{ color: LT.mint, flexShrink: 0 }} />
-                    : <ChevronRight size={15} style={{ color: LT.text3, flexShrink: 0 }} />}
-                </button>
-              );
-            }
-
-            return (
-              <div
-                key={f.id}
-                style={{
-                  background: LT.surface, borderRadius: 16, padding: 14,
-                  border: `${esLaActiva ? 2 : 1}px solid ${esLaActiva ? LT.blue : LT.border}`,
-                  display: 'flex', flexDirection: 'column', gap: 11,
-                }}
-              >
-                {/* En una rutina que se repite no hay fase que nombrar: es una
-                    sola, se llama igual que el plan, y su nombre ya está en el
-                    título de arriba. Solo van los días. */}
-                {kind !== 'weekly' && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ width: 9, height: 9, borderRadius: 5, background: f.color || LT.blue, flexShrink: 0 }} />
-                    <span style={{ flex: 1, minWidth: 0, fontSize: 15.5, fontWeight: 800, color: LT.text }}>{f.name}</span>
-                    {esLaActiva && (
-                      <span style={{
-                        fontSize: 10.5, fontWeight: 800, color: LT.blue, background: LT.blueSoft,
-                        padding: '3px 8px', borderRadius: 6, letterSpacing: 0.3, flexShrink: 0,
-                      }}>
-                        AQUÍ VAS
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                {(f.weekData?.length || 0) > 1 && (
-                  <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                    {f.weekData.map((w) => {
-                      const activa = w.num === semanaVista;
-                      const hecha = (w.days ?? []).filter((d) => !esDescanso(d))
-                        .every((_, i2) => sessionsData[idDeSesion(f.id, w.num, i2)]?.completed);
-                      return (
-                        <button
-                          key={w.num}
-                          type="button"
-                          onClick={() => setSemanaVista(w.num)}
-                          style={{
-                            minWidth: 38, padding: '7px 0', borderRadius: 10, cursor: 'pointer',
-                            border: `1px solid ${activa ? LT.blue : LT.border}`,
-                            background: activa ? LT.blue : LT.surface2,
-                            color: activa ? '#fff' : (hecha ? LT.text2 : LT.text3),
-                            fontFamily: FONT, fontSize: 13, fontWeight: 800, ...NUM_STYLE,
-                          }}
-                        >
-                          {w.num}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                  {enOrdenDeSemana(semana?.days ?? []).map(({ day, idx }) => {
-                    const id = idDeSesion(f.id, semana.num, idx);
-                    const hecha = !!sessionsData[id]?.completed;
-                    const tipo = tipoDeSesion(day);
-                    const descanso = esDescanso(day);
-                    return (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => onIr(f, semana, idx)}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
-                          padding: '10px 11px', borderRadius: 11, cursor: 'pointer', fontFamily: FONT,
-                          background: LT.bg, border: `1px solid ${LT.border}`,
-                        }}
-                      >
-                        <span style={{ width: 32, fontSize: 11, fontWeight: 800, color: LT.text3, flexShrink: 0 }}>
-                          {day.day}
-                        </span>
-                        <span style={{ width: 7, height: 7, borderRadius: 4, background: descanso ? LT.text4 : tipo.c, flexShrink: 0 }} />
-                        <span style={{
-                          flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 700,
-                          color: descanso ? LT.text3 : LT.text,
-                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        }}>
-                          {/* `nombreDeSesion` toma la ETIQUETA de un bloque, no el día:
-                              pasarle el objeto reventaba la hoja entera. */}
-                          {day.name
-                            || (day.blocks || []).map((b) => nombreDeSesion(b.tag)).filter(Boolean).join(' + ')
-                            || (descanso ? 'Descanso' : tipo.label)}
-                        </span>
-                        {hecha && <Check size={14} strokeWidth={3} style={{ color: LT.mint, flexShrink: 0 }} />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
+      <NavegadorDelPlan
+        fases={PLAN}
+        kind={kind}
+        aqui={aqui}
+        viendo={viendo}
+        // Se abre en lo que se está mirando, con las dos marcas a la vista:
+        // "AQUÍ VAS" en tu día y "VIENDO" en el otro.
+        abrirEn={viendo ?? aqui}
+        hecha={(faseId, semana, dia) => !!sessionsData[idDeSesion(faseId, semana, dia)]?.completed}
+        alTocarDia={onIr}
+      />
+    </HojaFlotante>
   );
 };
 
-const WeekDetail = ({ phase, week, dayIdx, onVerPrograma, sessionsData, updateSession, oneRMs, activeSessionId }) => {
+const WeekDetail = ({
+  phase, week, dayIdx, onVerPrograma, sessionsData, updateSession, oneRMs, activeSessionId,
+  miDia, onVolverAMiDia, onHacerEsteDia, onDiaVisto,
+}) => {
   const idDeSesion = useIdDeSesion();
   const { kind } = usePlan();
   const esRutina = kind === 'weekly';
@@ -887,6 +716,8 @@ const WeekDetail = ({ phase, week, dayIdx, onVerPrograma, sessionsData, updateSe
     return idx === -1 ? 0 : idx;
   }, [week, dayIdx]);
   const [selectedIdx, setSelectedIdx] = useState(initialIdx);
+  // Lo que se tiene abierto, para que la hoja del programa marque "VIENDO".
+  useEffect(() => { onDiaVisto?.(selectedIdx); }, [selectedIdx, onDiaVisto]);
   const [openBlocks, setOpenBlocks] = useState({ 0: true });
   useEffect(() => { setOpenBlocks({ 0: true }); }, [selectedIdx]);
 
@@ -1061,6 +892,66 @@ const WeekDetail = ({ phase, week, dayIdx, onVerPrograma, sessionsData, updateSe
           );
         })}
       </div>
+
+      {/* ESTÁS VIENDO OTRO DÍA.
+          Andrés, 24 sep 2026: "si te metes a ver algún otro día pierdes la
+          noción de que si ese día que estás viendo es donde vas o es otro que
+          seleccionaste, o qué pasa si quiere mover el día". Eligió que "mover
+          el día" signifique "hoy hago este otro".
+
+          Sale solo cuando lo abierto no es tu día de hoy, y ofrece las dos
+          salidas: volver al tuyo, o quedarte con este. Quedarse lo cambia de
+          verdad —la portada pasa a decir que hoy te toca este— y solo por hoy:
+          mañana vuelve a mandar el calendario. */}
+      {!esDescanso(selectedDay) && !(miDia && miDia.phase.id === phase.id
+        && miDia.week.num === week.num && miDia.dayIdx === selectedIdx) && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+          background: LT.surface, border: `1.5px solid ${LT.borderHi}`, borderRadius: 14,
+          padding: '11px 13px', marginBottom: 14,
+        }}>
+          <div style={{ flex: '1 1 180px', minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 800, color: LT.text }}>
+              Estás viendo {weekdayLabel(selectedDay.day)}
+              {miDia && miDia.week.num !== week.num ? ` · Semana ${week.num}` : ''}
+              {miDia && miDia.phase.id !== phase.id ? ` de ${phase.name}` : ''}
+            </div>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: LT.text3, marginTop: 2 }}>
+              {miDia
+                ? `Hoy te toca: ${miDia.day?.name
+                  || (miDia.day?.blocks || []).map((b) => nombreDeSesion(b.tag)).filter(Boolean).join(' + ')
+                  || tipoDeSesion(miDia.day).label}`
+                : 'Hoy no tienes sesión.'}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 7, flexShrink: 0 }}>
+            {miDia && (
+              <button
+                type="button"
+                onClick={onVolverAMiDia}
+                style={{
+                  padding: '9px 13px', borderRadius: 11, cursor: 'pointer', touchAction: 'manipulation',
+                  border: `1.5px solid ${LT.border}`, background: LT.bg, color: LT.text,
+                  fontFamily: FONT, fontSize: 13, fontWeight: 800,
+                }}
+              >
+                Volver a mi día
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => onHacerEsteDia?.(phase.id, week.num, selectedIdx)}
+              style={{
+                padding: '9px 13px', borderRadius: 11, cursor: 'pointer', touchAction: 'manipulation',
+                border: 'none', background: LT.blue, color: '#fff',
+                fontFamily: FONT, fontSize: 13, fontWeight: 800,
+              }}
+            >
+              Hacer este día
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Qué sesión es. Una línea, no una tarjeta.
           Antes esto era un bloque de ~150 px con el nombre, un círculo para
@@ -2330,8 +2221,23 @@ export default function TrainingApp() {
 
   const cursorSession = useMemo(() => resolveCursor(PLAN, cursor), [PLAN, cursor]);
   // En una rutina que se repite no hay puntero que avance: la sesión activa es la de hoy.
-  const activeSessionId = kind === 'weekly' ? sessionForToday(PLAN, kind, cursor)?.id : cursorSession?.id;
-  const activePhaseId = cursorSession?.phase.id;
+  /* TU DÍA, UNO SOLO PARA TODA LA APP.
+     Antes había dos respuestas: la portada ("hoy te toca") miraba tu semana y
+     el día del calendario; la pantalla del día miraba tu semana y un día
+     guardado aparte que no se movía solo. Por eso "Cambiar día" parecía no
+     hacer nada: se elegía el jueves y la portada seguía con el martes.
+
+     Ahora las dos preguntan lo mismo: `sessionForToday`, que usa el calendario
+     y, si hoy elegiste otro día, ese. */
+  const miDia = useMemo(() => sessionForToday(PLAN, kind, cursor), [PLAN, kind, cursor]);
+  const activeSessionId = miDia?.id;
+
+  // Dónde va el atleta, para marcarlo en la hoja: su día de hoy si lo tiene;
+  // si hoy descansa, al menos su semana.
+  const aqui = miDia
+    ? { faseId: miDia.phase.id, semana: miDia.week.num, dia: miDia.dayIdx }
+    : cursorSession ? { faseId: cursorSession.phase.id, semana: cursorSession.week.num, dia: null } : null;
+  const [diaVisto, setDiaVisto] = useState(null);
 
   // El marcado es opcional y NO mueve el puntero: qué se muestra lo decide el
   // calendario. (Antes, reabrir una sesión completada y editar un peso saltaba
@@ -2349,7 +2255,8 @@ export default function TrainingApp() {
      puedes". Sin volver a sellar, el calendario le pisaría la elección al
      instante y parecería que el selector no hace nada. */
   const handleSelectCursor = useCallback((phaseId, weekNum, dayIdx) => {
-    setCursor({ phaseId, weekNum, dayIdx, fijadoEn: isoWeekKey() });
+    // `diaElegidoEl`: el día elegido manda solo HOY. Ver `sessionForToday`.
+    setCursor({ phaseId, weekNum, dayIdx, fijadoEn: isoWeekKey(), diaElegidoEl: claveDeDia() });
     setCursorPickerOpen(false);
   }, [setCursor]);
 
@@ -2413,7 +2320,13 @@ export default function TrainingApp() {
         phase={view.phase} week={view.week} dayIdx={view.dayIdx}
         onVerPrograma={() => setProgramaAbierto(true)}
         sessionsData={sessionsData} updateSession={updateSession} oneRMs={oneRMs}
-        activeSessionId={activeSessionId} />
+        activeSessionId={activeSessionId}
+        miDia={miDia}
+        onDiaVisto={setDiaVisto}
+        onHacerEsteDia={handleSelectCursor}
+        onVolverAMiDia={() => miDia && setView((v) => ({
+          level: 'week', phase: miDia.phase, week: miDia.week, dayIdx: miDia.dayIdx, salto: (v.salto ?? 0) + 1,
+        }))} />
     ) : <PlanLoadingState />;
   } else if (tab === 'wellness') {
     content = <WellnessView wellness={wellness} setWellness={setWellness} />;
@@ -2437,14 +2350,18 @@ export default function TrainingApp() {
       </div>
       <BottomNav active={tab} onChange={vasA} />
       {cursorPickerOpen && (
-        <CursorSelector current={cursor} sessionsData={sessionsData}
+        <CursorSelector
+          // Resalta tu día DE HOY, el mismo que dice la portada — no un día
+          // guardado de hace semanas.
+          current={aqui ? { phaseId: aqui.faseId, weekNum: aqui.semana, dayIdx: aqui.dia } : cursor}
+          sessionsData={sessionsData}
           onSelect={handleSelectCursor} onClose={() => setCursorPickerOpen(false)} />
       )}
       {programaAbierto && hasPlan && (
         <HojaDelPrograma
           sessionsData={sessionsData}
-          faseActivaId={view.phase?.id || activePhaseId}
-          semanaActiva={view.week?.num}
+          aqui={aqui}
+          viendo={tab === 'plan' && view.week ? { faseId: view.phase?.id, semana: view.week.num, dia: diaVisto } : null}
           onIr={(fase, semana, dayIdx) => {
             setTab('plan');
             setView((v) => ({ level: 'week', phase: fase, week: semana, dayIdx, salto: (v.salto ?? 0) + 1 }));
