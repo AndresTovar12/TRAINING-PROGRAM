@@ -48,7 +48,12 @@ function json(cuerpo: unknown, status = 200, extra: Record<string, string> = {})
  */
 function noAutorizado(descripcion: string, tokenMalo = false) {
   const partes = [`resource_metadata="${APP_URL}/.well-known/oauth-protected-resource/mcp"`]
-  if (tokenMalo) partes.push('error="invalid_token"', `error_description="${descripcion}"`)
+  /* Sin acentos EN LA CABECERA. Una cabecera HTTP solo admite caracteres
+     básicos: con "sesión" o "caducó", la cabecera entera se perdía en el
+     camino (probado contra la función publicada) y la IA ya no sabía dónde
+     volver a pedir permiso. El mensaje con acentos va en el cuerpo. */
+  const ascii = descripcion.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\x20-\x7e]/g, '').replace(/"/g, "'")
+  if (tokenMalo) partes.push('error="invalid_token"', `error_description="${ascii}"`)
   return json(
     { error: tokenMalo ? 'invalid_token' : 'unauthorized', error_description: descripcion },
     401,
