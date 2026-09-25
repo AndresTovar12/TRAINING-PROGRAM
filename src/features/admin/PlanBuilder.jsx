@@ -539,11 +539,11 @@ function ExerciseRow({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove,
           )}
         </div>
       </td>
-      {/* Aquí el rótulo lo pone el encabezado de la tabla, uno para todas las
-          filas, y cada ejercicio puede medirse distinto. Así que la unidad va
-          DENTRO del campo y es ella la que abre la lista. */}
-      <td style={{ ...celda, width: 112 }}>
-        <CampoCantidad ex={ex} onPatch={onPatch} conRotulo={false} estiloInput={inputFila} />
+      {/* El rótulo de esta columna baja a cada fila: es la única cuyo
+          significado cambia de un ejercicio a otro —"Back squat 5" junto a
+          "Plancha 30 seg"—. Por eso su encabezado de arriba va vacío. */}
+      <td style={{ ...celda, width: 96 }}>
+        <CampoCantidad ex={ex} onPatch={onPatch} compacto estiloInput={inputFila} />
       </td>
       <td style={{ ...celda, width: 118 }}>
         <input value={ex.intensity || ''} onChange={(e) => onPatch({ intensity: e.target.value })}
@@ -1375,7 +1375,9 @@ function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCr
                       <thead>
                         <tr style={{ background: T.bg }}>
                           <th style={encabezado}>Ejercicio</th>
-                          <th style={encabezado}>Reps</th>
+                          {/* Vacío a propósito: cada fila trae su propio rótulo,
+                              porque cada ejercicio puede medirse distinto. */}
+                          <th style={encabezado} />
                           <th style={encabezado}>Carga / Int.</th>
                           <th style={encabezado}>Descanso</th>
                           <th style={encabezado}>Descripción</th>
