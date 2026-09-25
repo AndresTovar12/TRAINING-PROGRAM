@@ -12,7 +12,7 @@ import {
 } from './app/training-utils.js'
 import { aKilos, desdeKilos } from './app/unidades.js'
 
-const SOLO_LEER = { readOnlyHint: true, openWorldHint: false } as const
+const SOLO_LEER = { readOnlyHint: true, destructiveHint: false, openWorldHint: false } as const
 const ESCRIBE = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const
 
 /* ------------------------------------------------------------------ */

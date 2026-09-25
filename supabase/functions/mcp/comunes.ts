@@ -5,7 +5,7 @@ import type { Quien } from './sesion.ts'
 import { Aviso, fechaDelAtleta, NOMBRE_DIA, respuesta, seguro, sinAcentos } from './util.ts'
 import { ZONA } from './config.ts'
 
-const SOLO_LEER = { readOnlyHint: true, openWorldHint: false } as const
+const SOLO_LEER = { readOnlyHint: true, destructiveHint: false, openWorldHint: false } as const
 
 const ROL_TEXTO = { atleta: 'atleta', coach: 'coach', master: 'administrador de Training Lab' } as const
 

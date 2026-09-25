@@ -18,7 +18,7 @@ import { dondeVa, historialDePeso } from './app/training-utils.js'
 import { desdeKilos } from './app/unidades.js'
 import { COLORES_TIPO } from './app/theme.js'
 
-const SOLO_LEER = { readOnlyHint: true, openWorldHint: false } as const
+const SOLO_LEER = { readOnlyHint: true, destructiveHint: false, openWorldHint: false } as const
 const ESCRIBE = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } as const
 const BORRA = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false } as const
 

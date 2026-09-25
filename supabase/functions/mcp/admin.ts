@@ -12,7 +12,7 @@ import { Aviso, buscarPersona, nombreDe, respuesta, seguro, sinAcentos, type Per
  * rechazaría aunque la herramienta existiera.
  */
 
-const SOLO_LEER = { readOnlyHint: true, openWorldHint: false } as const
+const SOLO_LEER = { readOnlyHint: true, destructiveHint: false, openWorldHint: false } as const
 const ESCRIBE = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } as const
 const BORRA = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false } as const
 
