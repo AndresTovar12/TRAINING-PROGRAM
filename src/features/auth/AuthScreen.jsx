@@ -186,7 +186,7 @@ export function SelectorOficio({ value, onChange }) {
   );
 }
 
-export default function AuthScreen({ modoInicial = 'login', onVolver }) {
+export default function AuthScreen({ modoInicial = 'login', onVolver, aviso }) {
   const { signIn, signUp, entrarConGoogle, googleDisponible } = useAuth();
   const esCompu = useIsDesktop();
   const [mode, setMode] = useState(modoInicial); // 'login' | 'register'
@@ -277,6 +277,16 @@ export default function AuthScreen({ modoInicial = 'login', onVolver }) {
         >
           ← Volver
         </button>
+      )}
+      {/* Por qué se está pidiendo entrar, cuando no es obvio: por ejemplo, al
+          conectar la IA, la persona venía de Claude o de ChatGPT. */}
+      {aviso && (
+        <div style={{
+          marginBottom: 14, padding: '12px 16px', borderRadius: 16, textAlign: 'center',
+          background: KP.blueSoft, color: KP.blueDk, fontSize: 14, fontWeight: 700, lineHeight: 1.45,
+        }}>
+          {aviso}
+        </div>
       )}
       <div
         className="animate-fade-in"

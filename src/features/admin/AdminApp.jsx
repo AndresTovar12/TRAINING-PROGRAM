@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import {
-  Dumbbell, Users, Library, Shield, PanelLeftClose, PanelLeft, Eye, X,
+  Dumbbell, Users, Library, Shield, PanelLeftClose, PanelLeft, Eye, X, Sparkles,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsDesktop } from '@/lib/useViewport';
@@ -9,6 +9,7 @@ import AthletesPanel from '@/features/admin/AthletesPanel';
 import ExercisesPanel from '@/features/admin/ExercisesPanel';
 import CoachesPanel from '@/features/admin/CoachesPanel';
 import VistaComoAtleta from '@/features/admin/VistaComoAtleta';
+import ConectarIA from '@/features/ia/ConectarIA';
 
 const SIDEBAR_W = 232;
 
@@ -63,6 +64,9 @@ export default function AdminApp() {
        !viendoComo`), pero la pestaña seguía ahí y eso basta para que la
        simulación deje de parecerse a lo que ve el coach de verdad. */
     ...(isMaster && !viendoComo ? [{ id: 'coaches', label: 'Coaches', icon: Shield }] : []),
+    /* Conectar con la IA: en la compu vive aquí, en el menú lateral. En el
+       teléfono NO va en la navegación (decisión de Andrés): va en "Mi perfil". */
+    ...(isDesktop && !viendoComo ? [{ id: 'ia', label: 'Conectar con IA', icon: Sparkles }] : []),
   ];
 
   const entrarComo = (coach) => {
@@ -113,6 +117,7 @@ export default function AdminApp() {
       {tab === 'athletes' && <AthletesPanel viendoComo={viendoComo} onVerComoAtleta={entrarComoAtleta} />}
       {tab === 'exercises' && <ExercisesPanel viendoComo={viendoComo} />}
       {tab === 'coaches' && isMaster && !viendoComo && <CoachesPanel onVerComo={entrarComo} />}
+      {tab === 'ia' && isDesktop && !viendoComo && <ConectarIA />}
     </>
   );
 

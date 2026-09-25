@@ -1,6 +1,14 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [{ "source": "/((?!assets/).*)", "destination": "/index.html" }],
+  "rewrites": [
+    { "source": "/mcp", "destination": "https://ozwqqzrkgunrgxxwxmop.supabase.co/functions/v1/mcp" },
+    { "source": "/mcp/:ruta*", "destination": "https://ozwqqzrkgunrgxxwxmop.supabase.co/functions/v1/mcp/:ruta*" },
+    { "source": "/.well-known/oauth-protected-resource", "destination": "https://ozwqqzrkgunrgxxwxmop.supabase.co/functions/v1/mcp/.well-known/oauth-protected-resource" },
+    { "source": "/.well-known/oauth-protected-resource/:ruta*", "destination": "https://ozwqqzrkgunrgxxwxmop.supabase.co/functions/v1/mcp/.well-known/oauth-protected-resource" },
+    { "source": "/.well-known/oauth-authorization-server", "destination": "https://ozwqqzrkgunrgxxwxmop.supabase.co/functions/v1/mcp/.well-known/oauth-authorization-server" },
+    { "source": "/.well-known/oauth-authorization-server/:ruta*", "destination": "https://ozwqqzrkgunrgxxwxmop.supabase.co/functions/v1/mcp/.well-known/oauth-authorization-server" },
+    { "source": "/((?!assets/).*)", "destination": "/index.html" }
+  ],
   "headers": [
     {
       "source": "/(.*)",

@@ -5,6 +5,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { uploadAvatar, isUsernameAvailable } from '@/lib/api';
 import { T, FONT, KP } from '@/lib/theme';
+import ConectarIA from '@/features/ia/ConectarIA';
 
 const USERNAME_RE = /^[a-zA-Z0-9_.]{3,30}$/;
 
@@ -325,6 +326,13 @@ export default function ProfileScreen({ onClose }) {
               {err}
             </div>
           )}
+
+          {/* En el teléfono es el ÚNICO sitio de esto: no va en la navegación
+              (decisión de Andrés). En la compu el coach también lo tiene en el
+              menú lateral; el atleta, solo aquí. */}
+          <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 22 }}>
+            <ConectarIA enPerfil />
+          </div>
         </div>
       </main>
 

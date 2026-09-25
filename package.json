@@ -10,7 +10,7 @@
     "anti-slop": "oxlint",
     "preview": "vite preview",
     "smoke": "node scripts/smoke.mjs",
-    "check": "npm run build && npm run lint && npm run smoke"
+    "check": "node scripts/compartir-con-mcp.mjs --revisar && npm run build && npm run lint && npm run smoke"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.1",

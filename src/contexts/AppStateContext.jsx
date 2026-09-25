@@ -3,16 +3,26 @@ import {
 } from 'react';
 import { supabase } from '@/lib/supabase';
 import { usePerfilDeLaVista } from '@/contexts/VistaContext';
+import { diferencia, aplicarParche } from '@/lib/estadoPorPartes';
 
 /**
  * Loads the per-user `user_app_state.data` jsonb blob once, holds it in memory,
- * and persists the whole blob (debounced) on change. `useStorage(key, def)`
- * reads/writes individual keys through this store, preserving the exact
- * interface of the original window.storage-based hook so UI code is unchanged.
+ * and persists it (debounced) on change. `useStorage(key, def)` reads/writes
+ * individual keys through this store, preserving the exact interface of the
+ * original window.storage-based hook so UI code is unchanged.
  *
  * Es el estado de la persona cuya app se dibuja. Si un coach está viendo la app
  * de su atleta (`soloLectura`), se lee el de ese atleta y no se guarda NUNCA:
  * lo que toque el coach vive en memoria y se pierde al salir.
+ *
+ * SE GUARDA POR PARTES (25 sep 2026). Antes se mandaba el bloque entero en
+ * cada cambio. Desde que la IA del atleta también anota entrenamientos, eso
+ * borraba lo que la IA anotó mientras la app estaba abierta: la app mandaba
+ * encima su copia vieja. Ahora se manda solo lo que cambió y la base lo mezcla
+ * (`mezclar_mi_estado`). Ver `lib/estadoPorPartes.js`.
+ *
+ * Y al volver a la app se relee de la base: si mientras tanto la IA anotó
+ * algo, se ve sin recargar la página.
  */
 const AppStateContext = createContext(null);
 
@@ -23,16 +33,41 @@ export function AppStateProvider({ children }) {
   const [store, setStore] = useState({});
   const [loaded, setLoaded] = useState(false);
 
-  const saveTimer = useRef(null);
-  const skipNextSave = useRef(true); // avoid echo-write right after initial load
+  /* Lo último que se sabe que tiene la base, y de quién es. Los parches se
+     calculan contra esto. Los tres cambian juntos al cargar a una persona:
+     un guardado que se arme con ellos siempre habla de la misma cuenta. */
+  const enLaBase = useRef({});
+  const deQuien = useRef(null);
+  const ultimoStore = useRef(store);
+  // Los guardados van en fila, uno detrás del otro: dos a la vez podrían
+  // llegar desordenados y el viejo quedar encima del nuevo.
+  const cola = useRef(Promise.resolve());
+
+  const guardarAhora = useCallback(() => {
+    cola.current = cola.current.then(async () => {
+      const usuario = deQuien.current;
+      const parche = diferencia(enLaBase.current, ultimoStore.current);
+      if (!usuario || parche === undefined) return;
+      const { error } = await supabase.rpc('mezclar_mi_estado', { p_usuario: usuario, p_cambios: parche });
+      if (error) {
+        console.error('user_app_state save error', error.message);
+        return;
+      }
+      // Sobre lo que se sabía, no un reemplazo: si mientras tanto se releyó
+      // la base, esto sigue siendo cierto.
+      if (deQuien.current === usuario) enLaBase.current = aplicarParche(enLaBase.current, parche);
+    });
+    return cola.current;
+  }, []);
 
   // Load the blob whenever the user changes
   useEffect(() => {
     let cancelled = false;
     setLoaded(false);
-    skipNextSave.current = true;
 
     if (!userId) {
+      enLaBase.current = {};
+      deQuien.current = null;
       setStore({});
       setLoaded(true);
       return;
@@ -45,7 +80,10 @@ export function AppStateProvider({ children }) {
         .eq('user_id', userId)
         .maybeSingle();
       if (cancelled) return;
-      setStore(data?.data && typeof data.data === 'object' ? data.data : {});
+      const fresco = data?.data && typeof data.data === 'object' ? data.data : {};
+      enLaBase.current = fresco;
+      deQuien.current = userId;
+      setStore(fresco);
       setLoaded(true);
     })();
 
@@ -54,35 +92,39 @@ export function AppStateProvider({ children }) {
     };
   }, [userId]);
 
-  // Debounced persistence of the whole blob
+  // Debounced persistence: solo lo que cambió
   useEffect(() => {
-    if (!loaded || !userId || soloLectura) return;
-    if (skipNextSave.current) {
-      skipNextSave.current = false;
-      return;
-    }
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      supabase
-        .from('user_app_state')
-        .upsert({
-          user_id: userId,
-          // `store` de este render, no una copia guardada aparte: el efecto
-          // depende de `store`, y su limpieza cancela el temporizador anterior
-          // en cada cambio. O sea que el que llega a guardarse es siempre el
-          // último. La copia en un ref no hacía falta y solo podía desfasarse.
-          data: store,
-          updated_at: new Date().toISOString(),
-        })
-        .then(({ error }) => {
-          if (error) console.error('user_app_state save error', error.message);
-        });
-    }, SAVE_DEBOUNCE_MS);
+    ultimoStore.current = store;
+    if (!loaded || !userId || soloLectura) return undefined;
+    const t = setTimeout(guardarAhora, SAVE_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [store, loaded, userId, soloLectura, guardarAhora]);
 
-    return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
+  /* Al irse de la app se guarda YA, sin esperar: el atleta puede estar
+     pasándose a su IA justo después de anotar. Al volver se relee la base, y
+     lo que aún no se guardaba se vuelve a poner encima. */
+  useEffect(() => {
+    if (!userId || !loaded) return undefined;
+    const alCambiar = async () => {
+      if (document.visibilityState !== 'visible') {
+        if (!soloLectura) guardarAhora();
+        return;
+      }
+      await cola.current;
+      const { data, error } = await supabase
+        .from('user_app_state')
+        .select('data')
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (error || deQuien.current !== userId) return;
+      const fresco = data?.data && typeof data.data === 'object' ? data.data : {};
+      const pendiente = diferencia(enLaBase.current, ultimoStore.current);
+      enLaBase.current = fresco;
+      setStore(pendiente === undefined ? fresco : aplicarParche(fresco, pendiente));
     };
-  }, [store, loaded, userId, soloLectura]);
+    document.addEventListener('visibilitychange', alCambiar);
+    return () => document.removeEventListener('visibilitychange', alCambiar);
+  }, [userId, loaded, soloLectura, guardarAhora]);
 
   const value = useMemo(() => ({ store, setStore, loaded }), [store, loaded]);
 

@@ -12,6 +12,7 @@ import LandingPage from '@/features/landing/LandingPage';
 import TrainingApp from '@/features/training/TrainingApp';
 import AdminApp from '@/features/admin/AdminApp';
 import ProfileScreen from '@/features/profile/ProfileScreen';
+import PermisoIA from '@/features/ia/PermisoIA';
 import { FONT, KP } from '@/lib/theme';
 
 function Splash({ label = 'Cargando…' }) {
@@ -344,10 +345,36 @@ export default function App() {
     setInvitacion(null);
   };
 
+  // `/oauth/consent?authorization_id=…`: la IA de alguien pide permiso.
+  const [permisoIA, setPermisoIA] = useState(() => {
+    if (window.location.pathname !== '/oauth/consent') return null;
+    const id = new URLSearchParams(window.location.search).get('authorization_id');
+    // Sin id no hay nada que preguntar: la app normal, en su dirección normal.
+    if (!id) window.history.replaceState({}, '', '/');
+    return id || null;
+  });
+  const cierraPermiso = () => {
+    window.history.replaceState({}, '', '/');
+    setPermisoIA(null);
+  };
+
   if (invitacion) {
     if (loading) return <Splash />;
     if (user) return <InvitacionConSesion onSalir={cierraInvitacion} />;
     return <ActivarInvitacion token={invitacion} onSalir={cierraInvitacion} />;
+  }
+
+  /* La IA de alguien (Claude, ChatGPT, Codex…) pide entrar a su cuenta.
+     Supabase la manda aquí con `authorization_id`. Primero tiene que haber
+     sesión —si no, se entra con la pantalla de siempre, con un aviso de por
+     qué— y luego se pregunta. Ver `features/ia/PermisoIA.jsx`. */
+  if (permisoIA) {
+    if (loading) return <Splash />;
+    if (!user) return <AuthScreen modoInicial="login" aviso="Para conectar tu IA, entra a tu cuenta de Training Lab." />;
+    if (!profile) return <Splash label="Cargando tu perfil…" />;
+    if (profile.is_active === false) return <CuentaDesactivada />;
+    if (profile.perfil_completo === false) return <Bienvenida />;
+    return <PermisoIA authorizationId={permisoIA} onTerminar={cierraPermiso} />;
   }
 
   if (loading) return <Splash />;

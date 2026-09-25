@@ -11,6 +11,7 @@ import {
   invitacionesPendientes, ligaDeInvitacion,
 } from '@/lib/api';
 import PlanBuilder from '@/features/admin/PlanBuilder';
+import CambiosDelPlan from '@/features/admin/CambiosDelPlan';
 import AgregarAtleta from '@/features/admin/AgregarAtleta';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConfirmacion } from '@/components/Confirmacion';
@@ -742,7 +743,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
   const [building, setBuilding] = useState(false);
   const [savingCoach, setSavingCoach] = useState(false);
   const [verPlan, setVerPlan] = useState(false);
-  const [seccion, setSeccion] = useState(null); // null | 'como-va' | 'cuenta'
+  const [seccion, setSeccion] = useState(null); // null | 'como-va' | 'cambios' | 'cuenta'
 
   async function onChangeCoach(coachId) {
     setSavingCoach(true);
@@ -773,7 +774,8 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
     if (!plan) return;
     const va = await pregunta({
       titulo: `¿Eliminar el plan "${plan.title}"?`,
-      detalle: `Es el plan de ${athlete.full_name || athlete.username}. Esto no se puede deshacer.`,
+      // Ya se puede deshacer: la base guarda la versión (ver CambiosDelPlan).
+      detalle: `Es el plan de ${athlete.full_name || athlete.username}. Si te equivocas, lo recuperas en "Cambios del plan".`,
       confirmar: 'Sí, eliminarlo',
       peligro: true,
     });
@@ -906,6 +908,19 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           alguien, el link es justo lo que viene a buscar. Escondido en una
           sección que hay que abrir, no lo encuentra. */}
       {tokenInvitacion && <LinkPendiente token={tokenInvitacion} />}
+
+      {/* Lo que cambió en el plan, y el botón de deshacer. Si lo último lo hizo
+          una IA, sale un aviso a la vista (ver CambiosDelPlan). */}
+      {!loading && (
+        <CambiosDelPlan
+          atleta={athlete}
+          plan={plan}
+          onCambio={setPlan}
+          Seccion={SeccionFicha}
+          abierta={seccion === 'cambios'}
+          onToggle={() => setSeccion((x) => (x === 'cambios' ? null : 'cambios'))}
+        />
+      )}
 
       <SeccionFicha titulo="Cómo va" abierta={seccion === 'como-va'} onToggle={() => setSeccion((s) => (s === 'como-va' ? null : 'como-va'))}>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>

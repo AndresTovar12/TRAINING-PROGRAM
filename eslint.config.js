@@ -17,7 +17,10 @@ import { defineConfig, globalIgnores } from 'eslint/config'
  * La regla: si el lint sale rojo, es alarma de verdad.
  */
 export default defineConfig([
-  globalIgnores(['dist']),
+  // `supabase/functions/mcp/app` son copias exactas de src/lib para el
+  // servidor de la IA (ver scripts/compartir-con-mcp.mjs): los originales ya
+  // se revisan, y revisarlas dos veces duplicaría cada aviso.
+  globalIgnores(['dist', 'supabase/functions/mcp/app']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [
