@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Dumbbell, Loader2, Lock, LogOut, Shield, User as UserIcon, UserCog, RefreshCw } from 'lucide-react';
+import { Dumbbell, Loader2, Lock, LogOut, Shield, Sparkles, User as UserIcon, UserCog, RefreshCw } from 'lucide-react';
 import { useNewVersion } from '@/lib/useNewVersion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsDesktop } from '@/lib/useViewport';
@@ -133,6 +133,22 @@ function AccountMenu() {
           >
             <UserCog size={16} color={KP.blue} /> Mi perfil
           </button>
+          {/* Atajo a "Conectar con IA", que vive en Mi perfil. Andrés: "a los
+              atletas no les pusiste cómo conectarse"; al fondo de Mi perfil no
+              se encontraba. Abre Mi perfil justo ahí. */}
+          <button
+            type="button"
+            onClick={() => { setProfileOpen('ia'); setOpen(false); }}
+            className="kp-press"
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '11px 12px',
+              borderRadius: 12, border: 'none', background: KP.bg, cursor: 'pointer',
+              fontFamily: FONT, fontSize: 14, fontWeight: 600, color: KP.ink, textAlign: 'left',
+              marginBottom: 4,
+            }}
+          >
+            <Sparkles size={16} color={KP.blue} /> Conectar con IA
+          </button>
           <button
             type="button"
             onClick={signOut}
@@ -148,7 +164,7 @@ function AccountMenu() {
         </div>
       )}
     </div>
-    {profileOpen && <ProfileScreen onClose={() => setProfileOpen(false)} />}
+    {profileOpen && <ProfileScreen enfoque={profileOpen === 'ia' ? 'ia' : null} onClose={() => setProfileOpen(false)} />}
     </>
   );
 }

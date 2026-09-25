@@ -26,7 +26,14 @@ const inputStyle = {
   fontSize: 15, fontWeight: 500, color: T.text, padding: '13px 0', minWidth: 0,
 };
 
-export default function ProfileScreen({ onClose }) {
+export default function ProfileScreen({ onClose, enfoque = null }) {
+  // Llegando desde "Conectar con IA" del menú de la cuenta: directo a esa sección.
+  useEffect(() => {
+    if (enfoque !== 'ia') return undefined;
+    const t = setTimeout(() => document.getElementById('conectar-ia')?.scrollIntoView({ block: 'start' }), 60);
+    return () => clearTimeout(t);
+  }, [enfoque]);
+
   const { profile, user, isAdmin, updateProfile } = useAuth();
 
   const [fullName, setFullName] = useState(profile?.full_name || '');
