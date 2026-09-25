@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Trash2 } from 'lucide-react';
 import { useCoarsePointer } from '@/lib/useViewport';
 import { T, FONT } from '@/lib/theme';
@@ -34,6 +35,8 @@ export default function ListaDesplegable({
   const dedos = useCoarsePointer();
   const caja = useRef(null);
   const lista = useRef(null);
+  const panel = useRef(null);
+  const [sitio, setSitio] = useState(null);
   const [abierto, setAbierto] = useState(false);
   const [hayMas, setHayMas] = useState(false);
   const [activo, setActivo] = useState(-1);
@@ -50,7 +53,14 @@ export default function ListaDesplegable({
 
   useEffect(() => {
     if (!abierto) return undefined;
-    const fuera = (e) => { if (caja.current && !caja.current.contains(e.target)) cerrar(); };
+    /* El panel ya no vive dentro de la caja —se dibuja aparte, ver abajo—,
+       así que hay que preguntar por los dos. Sin esto, tocar una opción
+       contaría como "clic fuera" y la lista se cerraría antes de elegir. */
+    const fuera = (e) => {
+      const dentro = (caja.current && caja.current.contains(e.target))
+        || (panel.current && panel.current.contains(e.target));
+      if (!dentro) cerrar();
+    };
     document.addEventListener('mousedown', fuera);
     return () => document.removeEventListener('mousedown', fuera);
   }, [abierto, cerrar]);
@@ -76,6 +86,51 @@ export default function ListaDesplegable({
   useEffect(() => {
     if (abierto) miraSiHayMas();
   }, [abierto, planas.length, miraSiHayMas]);
+
+  /* DÓNDE SE DIBUJA EL PANEL.
+     Andrés, 24 sep 2026, con captura: "mira como la lista desplegable está
+     como escondida detrás de algo, un recuadro, tiene que sobresalir de ese
+     recuadro".
+
+     La tabla de los ejercicios vive dentro de un contenedor con `overflow-x`
+     para poder desplazarla a lo ancho. Ese overflow recorta TODO lo que se
+     salga, y el panel de la lista se salía por abajo: se veía media lista y el
+     resto cortado. No es cosa de `z-index` —por mucho que suba, un recorte no
+     se salta—, así que el panel se dibuja fuera de la tabla, colgado del
+     documento, y se coloca a mano sobre el botón.
+
+     Se recalcula al desplazar y al cambiar el tamaño de la ventana, porque
+     entonces el botón se mueve y el panel tiene que ir con él. El scroll se
+     escucha en fase de captura para enterarse también del de los contenedores
+     de dentro, que no burbujea. */
+  useLayoutEffect(() => {
+    if (!abierto) { setSitio(null); return undefined; }
+
+    const coloca = () => {
+      const b = caja.current?.getBoundingClientRect();
+      if (!b) return;
+      const altoPanel = alto + (pie ? 72 : 16);
+      const debajo = window.innerHeight - b.bottom - 10;
+      // Si abajo no cabe y arriba sí, se abre hacia arriba.
+      const haciaArriba = debajo < Math.min(altoPanel, 180) && b.top > debajo;
+      setSitio({
+        left: b.left,
+        ancho: b.width,
+        top: haciaArriba ? undefined : b.bottom + 6,
+        bottom: haciaArriba ? window.innerHeight - b.top + 6 : undefined,
+        // Lo que de verdad cabe, para que nunca se salga de la pantalla.
+        cabe: Math.max(120, (haciaArriba ? b.top - 16 : debajo) - (pie ? 56 : 0)),
+      });
+    };
+
+    coloca();
+    window.addEventListener('scroll', coloca, true);
+    window.addEventListener('resize', coloca);
+    return () => {
+      window.removeEventListener('scroll', coloca, true);
+      window.removeEventListener('resize', coloca);
+    };
+  }, [abierto, alto, pie]);
 
   /* ELEGIR OCURRE EN EL `click`, Y EN NINGÚN EVENTO ANTERIOR.
 
@@ -265,20 +320,23 @@ export default function ListaDesplegable({
         />
       </button>
 
-      {abierto && (
+      {abierto && sitio && createPortal(
         <div
+          ref={panel}
           className="animate-fade-in"
           role="listbox"
           aria-label={etiqueta}
           onKeyDown={teclas}
           style={{
-            position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 60,
+            position: 'fixed', zIndex: 3000,
+            left: sitio.left, width: Math.max(sitio.ancho, 200),
+            top: sitio.top, bottom: sitio.bottom,
             background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 14,
-            boxShadow: '0 16px 44px rgba(17,19,24,0.16)', minWidth: 200,
+            boxShadow: '0 16px 44px rgba(17,19,24,0.16)',
             /* El scroll lo hace la lista, no esta caja: así el pie —"crear
                uno nuevo"— se queda pegado abajo y no al final del scroll,
                donde nadie lo encuentra. */
-            maxHeight: alto + 72, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+            maxHeight: Math.min(alto + 72, sitio.cabe), display: 'flex', flexDirection: 'column', overflow: 'hidden',
           }}
         >
           <div style={{ position: 'relative', flex: '1 1 auto', minHeight: 0 }}>
@@ -319,7 +377,8 @@ export default function ListaDesplegable({
               {typeof pie === 'function' ? pie({ cerrar }) : pie}
             </div>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
