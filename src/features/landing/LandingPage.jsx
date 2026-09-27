@@ -1,8 +1,13 @@
 import {
-  Dumbbell, Video, Repeat, ArrowRight, Check, Activity, Sparkles,
+  Dumbbell, Video, Repeat, ArrowRight, Check, Activity, Sparkles, Play,
 } from 'lucide-react';
 import { KP, FONT } from '@/lib/theme';
 import { MarcaIA } from '@/features/ia/Maquetas';
+import fotoPista from '@/assets/landing/pista.webp';
+import fotoYoga from '@/assets/landing/yoga.webp';
+import fotoFuerza from '@/assets/landing/fuerza.webp';
+import fotoAgilidad from '@/assets/landing/agilidad.webp';
+import fotoBosu from '@/assets/landing/bosu.webp';
 
 /**
  * Página de presentación (landing), SOLO en computadora.
@@ -22,9 +27,17 @@ import { MarcaIA } from '@/features/ia/Maquetas';
  *   4. Se conecta con la IA de cada quien (Claude, ChatGPT…).
  *
  * Los textos de la portada y del bloque 1 son de Andrés (26 sep 2026).
+ *
+ * FOTOS (las eligió Andrés, 26 sep 2026, con la paleta de la página): la
+ * pista va en la portada; fuerza, deporte y yoga, en el bloque 1; el coach
+ * que graba con el celular, en el bloque 2 ("si lo puedes grabar…"). Van
+ * recortadas y en WebP en src/assets/landing (unos 230 KB las cinco); los
+ * originales pesan 12 MB y no entran al repo.
  */
 
 const ANCHO = 1080;
+// Sombra teñida del azul de la marca, no negra: sobre fondo claro se ve limpia.
+const SOMBRA_FOTO = '0 24px 60px rgba(20, 40, 120, 0.14)';
 
 function Boton({ children, onClick, primario, icon: Icon }) {
   return (
@@ -86,77 +99,107 @@ function Bloque({ numero, eyebrow, titulo, children, icon: Icon, visual, inverti
  * cada vez que cambiemos algo.
  * ------------------------------------------------------------------------ */
 
-/** 1. Cualquier forma de entrenar: las mismas disciplinas que nombra el texto. */
-function VisualActividades() {
-  const actividades = [
-    { nombre: 'Fuerza', ejemplo: 'Sentadilla, press, peso muerto', color: KP.blue },
-    { nombre: 'Deporte', ejemplo: 'Drills, salidas, cambios de dirección', color: KP.mint },
-    { nombre: 'Movilidad y yoga', ejemplo: '90/90 de cadera, saludo al sol', color: KP.violet },
-    { nombre: 'Rehabilitación', ejemplo: 'Isométricos de rodilla, manguito rotador', color: KP.amber },
-  ];
+/** Una foto con su pie abajo (el nombre va fuera de la foto, no encima). */
+function FotoConPie({ src, alt, ancho, alto, nombre, ejemplo, completa }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-      {actividades.map((a) => (
-        <div key={a.nombre} style={{
-          background: KP.surface, border: `1px solid ${KP.line}`, borderRadius: 16,
-          padding: '15px 16px', boxShadow: KP.shCard,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5 }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: a.color, flexShrink: 0 }} />
-            <span style={{ fontSize: 14.5, fontWeight: 800, color: KP.ink }}>{a.nombre}</span>
-          </div>
-          <div style={{ fontSize: 12.5, color: KP.ink3, lineHeight: 1.4, fontWeight: 600 }}>
-            {a.ejemplo}
-          </div>
-        </div>
-      ))}
+    <figure style={{ margin: 0, minWidth: 0, gridColumn: completa ? '1 / -1' : undefined }}>
+      <img
+        src={src} alt={alt} width={ancho} height={alto} loading="lazy" decoding="async"
+        style={{ display: 'block', width: '100%', height: 'auto', borderRadius: 16, boxShadow: KP.shCard }}
+      />
+      <figcaption style={{ marginTop: 10 }}>
+        <span style={{ display: 'block', fontSize: 14.5, fontWeight: 800, color: KP.ink }}>{nombre}</span>
+        <span style={{ display: 'block', fontSize: 12.5, color: KP.ink3, fontWeight: 600, marginTop: 2 }}>{ejemplo}</span>
+      </figcaption>
+    </figure>
+  );
+}
+
+/** 1. Cualquier forma de entrenar: fotos de las disciplinas que nombra el texto. */
+function VisualActividades() {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 14, rowGap: 22 }}>
+      <FotoConPie
+        src={fotoFuerza} ancho={480} alto={400} nombre="Fuerza" ejemplo="Sentadilla, press, remo"
+        alt="Atleta haciendo remo sentado en una máquina de gimnasio"
+      />
+      <FotoConPie
+        src={fotoAgilidad} ancho={480} alto={400} nombre="Deporte" ejemplo="Drills, escalera de agilidad, salidas"
+        alt="Atleta haciendo escalera de agilidad en un estadio mientras un celular lo graba"
+      />
+      <FotoConPie
+        src={fotoYoga} ancho={984} alto={492} completa nombre="Movilidad y yoga" ejemplo="Saludo al sol, 90/90 de cadera"
+        alt="Instructora corrigiendo una postura de yoga frente al mar"
+      />
     </div>
   );
 }
 
-/** 2. Crear un ejercicio es fácil. */
-function VisualRepertorio() {
+/** 2. Crear un ejercicio es fácil: lo grabas y queda en tu repertorio. */
+function VisualGrabar() {
+  // Las miniaturas salen de las mismas fotos de la página: no se descarga nada extra.
   const ejercicios = [
-    { nombre: 'Back Squat con pausa', tipo: 'Gimnasio · Barra', color: KP.blue },
-    { nombre: 'Salida en 3 puntos', tipo: 'Campo · Sin equipo', color: KP.mint },
-    { nombre: 'Estiramiento de psoas', tipo: 'Estiramiento · Colchoneta', color: KP.amber },
+    { nombre: 'Equilibrio en BOSU a una pierna', tipo: 'Rehabilitación · BOSU', foto: fotoBosu, enfoque: '64% 42%', nuevo: true },
+    { nombre: 'Escalera de agilidad', tipo: 'Deporte · Escalera', foto: fotoAgilidad, enfoque: '46% 40%' },
+    { nombre: 'Remo sentado', tipo: 'Fuerza · Máquina', foto: fotoFuerza, enfoque: '42% 38%' },
   ];
   return (
-    <div style={{
-      background: KP.surface, border: `1px solid ${KP.line}`, borderRadius: 20,
-      padding: 16, boxShadow: KP.shCard,
-    }}>
+    <div>
+      <img
+        src={fotoBosu} width={984} height={827} loading="lazy" decoding="async"
+        alt="Entrenador guiando a un atleta en equilibrio sobre un BOSU mientras un celular graba el ejercicio"
+        style={{ display: 'block', width: '100%', height: 'auto', borderRadius: 20, boxShadow: SOMBRA_FOTO }}
+      />
+      {/* Se monta solo sobre el piso de la foto: el atleta y el BOSU quedan a la vista. */}
       <div style={{
-        fontSize: 10.5, fontWeight: 800, color: KP.ink3, letterSpacing: 0.7,
-        textTransform: 'uppercase', padding: '2px 4px 12px',
+        position: 'relative', width: 300, margin: '-72px -20px 0 auto',
+        background: KP.surface, border: `1px solid ${KP.line}`, borderRadius: 18,
+        padding: 14, boxShadow: '0 18px 44px rgba(20, 40, 120, 0.2)',
       }}>
-        Tu repertorio
-      </div>
-      {ejercicios.map((e) => (
-        <div key={e.nombre} style={{
-          display: 'flex', alignItems: 'center', gap: 12, padding: '10px 6px',
-          borderTop: `1px solid ${KP.line}`,
+        <div style={{
+          fontSize: 10.5, fontWeight: 800, color: KP.ink3, letterSpacing: 0.7,
+          textTransform: 'uppercase', padding: '2px 4px 10px',
         }}>
-          <span style={{
-            width: 42, height: 42, borderRadius: 11, flexShrink: 0,
-            background: '#0E1015', display: 'grid', placeItems: 'center',
-          }}>
-            <Video size={16} color="#4A5060" />
-          </span>
-          <span style={{ minWidth: 0 }}>
-            <span style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              fontSize: 14, fontWeight: 700, color: KP.ink,
-            }}>
-              <span style={{ width: 7, height: 7, borderRadius: '50%', background: e.color }} />
-              {e.nombre}
-            </span>
-            <span style={{ display: 'block', fontSize: 12.5, color: KP.ink3, marginTop: 2, fontWeight: 600 }}>
-              {e.tipo}
-            </span>
-          </span>
+          Tu repertorio
         </div>
-      ))}
+        {ejercicios.map((e) => (
+          <div key={e.nombre} style={{
+            display: 'flex', alignItems: 'center', gap: 11, padding: '9px 4px',
+            borderTop: `1px solid ${KP.line}`,
+          }}>
+            <span style={{
+              position: 'relative', width: 44, height: 44, borderRadius: 11, flexShrink: 0, overflow: 'hidden',
+            }}>
+              <img
+                src={e.foto} alt="" width={44} height={44}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: e.enfoque, display: 'block' }}
+              />
+              <span style={{
+                position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
+                background: 'rgba(10, 16, 40, 0.28)',
+              }}>
+                <Play size={13} color="#fff" fill="#fff" />
+              </span>
+            </span>
+            <span style={{ minWidth: 0, flex: 1 }}>
+              <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: KP.ink, lineHeight: 1.3 }}>
+                {e.nombre}
+              </span>
+              <span style={{ display: 'block', fontSize: 12, color: KP.ink3, marginTop: 2, fontWeight: 600 }}>
+                {e.tipo}
+              </span>
+            </span>
+            {e.nuevo && (
+              <span style={{
+                flexShrink: 0, fontSize: 10.5, fontWeight: 800, color: KP.blue, background: KP.blueSoft,
+                borderRadius: 999, padding: '4px 8px',
+              }}>
+                Nuevo
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -323,6 +366,14 @@ export default function LandingPage({ onRegistrarse, onEntrar }) {
             <Boton onClick={onEntrar}>Ya tengo cuenta</Boton>
           </div>
         </div>
+        <img
+          src={fotoPista} width={1448} height={603} fetchPriority="high" decoding="async"
+          alt="Dos corredores entrenando en una pista azul al amanecer"
+          style={{
+            display: 'block', width: '100%', maxWidth: ANCHO - 64, height: 'auto',
+            margin: '52px auto 0', borderRadius: 20, boxShadow: SOMBRA_FOTO,
+          }}
+        />
       </section>
 
       <Bloque
@@ -345,7 +396,7 @@ export default function LandingPage({ onRegistrarse, onEntrar }) {
         icon={Video}
         titulo="Si lo puedes grabar, lo puedes enseñar"
         invertido
-        visual={<VisualRepertorio />}
+        visual={<VisualGrabar />}
       >
         Inventaste una variante en el gimnasio. Armaste un drill nuevo en la cancha.
         Sacas el teléfono, lo grabas ahí mismo, y queda guardado en tu repertorio
