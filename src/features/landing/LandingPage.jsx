@@ -28,16 +28,27 @@ import fotoBosu from '@/assets/landing/bosu.webp';
  *
  * Los textos de la portada y del bloque 1 son de Andrés (26 sep 2026).
  *
- * FOTOS (las eligió Andrés, 26 sep 2026, con la paleta de la página): la
- * pista va en la portada; fuerza, deporte y yoga, en el bloque 1; el coach
- * que graba con el celular, en el bloque 2 ("si lo puedes grabar…"). Van
- * recortadas y en WebP en src/assets/landing (unos 230 KB las cinco); los
- * originales pesan 12 MB y no entran al repo.
+ * FOTOS (las eligió Andrés, 26 sep 2026, con la paleta de la página):
+ *   - Portada: cuatro disciplinas del mismo tamaño (fuerza, deporte, yoga y
+ *     running). Ninguna manda: con una sola foto grande de running, Andrés
+ *     dijo que "va a parecer que es una app de running".
+ *   - Bloque 2: el coach que graba con el celular ("si lo puedes grabar…").
+ * El bloque 1 no repite fotos: muestra cómo se mide cada disciplina.
+ * Van recortadas y en WebP en src/assets/landing (unos 200 KB las cinco);
+ * los originales pesan 12 MB y no entran al repo.
  */
 
 const ANCHO = 1080;
 // Sombra teñida del azul de la marca, no negra: sobre fondo claro se ve limpia.
 const SOMBRA_FOTO = '0 24px 60px rgba(20, 40, 120, 0.14)';
+
+// Portada: en el orden del texto de Andrés (fuerza, deporte, yoga) y running al final.
+const FOTOS_PORTADA = [
+  { src: fotoFuerza, alt: 'Atleta haciendo remo sentado en una máquina de gimnasio' },
+  { src: fotoAgilidad, alt: 'Atleta haciendo escalera de agilidad mientras un celular lo graba' },
+  { src: fotoYoga, alt: 'Instructora corrigiendo una postura de yoga frente al mar' },
+  { src: fotoPista, alt: 'Dos corredores entrenando en una pista al amanecer' },
+];
 
 function Boton({ children, onClick, primario, icon: Icon }) {
   return (
@@ -99,38 +110,48 @@ function Bloque({ numero, eyebrow, titulo, children, icon: Icon, visual, inverti
  * cada vez que cambiemos algo.
  * ------------------------------------------------------------------------ */
 
-/** Una foto con su pie abajo (el nombre va fuera de la foto, no encima). */
-function FotoConPie({ src, alt, ancho, alto, nombre, ejemplo, completa }) {
+/** 1. Cada disciplina tiene su propia lógica: se mide como se entrena. */
+function VisualDisciplinas() {
+  const filas = [
+    { dia: 'Lun', ejercicio: 'Sentadilla', disciplina: 'Fuerza', medida: '4 × 8 · 60 kg', tono: 'blue' },
+    { dia: 'Mar', ejercicio: 'Series en pista', disciplina: 'Resistencia', medida: '6 × 800 m', tono: 'mint' },
+    { dia: 'Jue', ejercicio: 'Saludo al sol', disciplina: 'Movilidad y yoga', medida: '3 × 45 s', tono: 'violet' },
+    { dia: 'Sáb', ejercicio: 'Isométrico de rodilla', disciplina: 'Rehabilitación', medida: '5 × 30 s', tono: 'amber' },
+  ];
   return (
-    <figure style={{ margin: 0, minWidth: 0, gridColumn: completa ? '1 / -1' : undefined }}>
-      <img
-        src={src} alt={alt} width={ancho} height={alto} loading="lazy" decoding="async"
-        style={{ display: 'block', width: '100%', height: 'auto', borderRadius: 16, boxShadow: KP.shCard }}
-      />
-      <figcaption style={{ marginTop: 10 }}>
-        <span style={{ display: 'block', fontSize: 14.5, fontWeight: 800, color: KP.ink }}>{nombre}</span>
-        <span style={{ display: 'block', fontSize: 12.5, color: KP.ink3, fontWeight: 600, marginTop: 2 }}>{ejemplo}</span>
-      </figcaption>
-    </figure>
-  );
-}
-
-/** 1. Cualquier forma de entrenar: fotos de las disciplinas que nombra el texto. */
-function VisualActividades() {
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 14, rowGap: 22 }}>
-      <FotoConPie
-        src={fotoFuerza} ancho={480} alto={400} nombre="Fuerza" ejemplo="Sentadilla, press, remo"
-        alt="Atleta haciendo remo sentado en una máquina de gimnasio"
-      />
-      <FotoConPie
-        src={fotoAgilidad} ancho={480} alto={400} nombre="Deporte" ejemplo="Drills, escalera de agilidad, salidas"
-        alt="Atleta haciendo escalera de agilidad en un estadio mientras un celular lo graba"
-      />
-      <FotoConPie
-        src={fotoYoga} ancho={984} alto={492} completa nombre="Movilidad y yoga" ejemplo="Saludo al sol, 90/90 de cadera"
-        alt="Instructora corrigiendo una postura de yoga frente al mar"
-      />
+    <div style={{
+      background: KP.surface, border: `1px solid ${KP.line}`, borderRadius: 20,
+      padding: 16, boxShadow: KP.shCard,
+    }}>
+      <div style={{
+        fontSize: 10.5, fontWeight: 800, color: KP.ink3, letterSpacing: 0.7,
+        textTransform: 'uppercase', padding: '2px 4px 10px',
+      }}>
+        Tu semana
+      </div>
+      {filas.map((f) => (
+        <div key={f.dia} style={{
+          display: 'grid', gridTemplateColumns: '36px 1fr auto', alignItems: 'center', gap: 12,
+          padding: '12px 4px', borderTop: `1px solid ${KP.line}`,
+        }}>
+          <span style={{ fontSize: 12, fontWeight: 800, color: KP.ink3 }}>{f.dia}</span>
+          <span style={{ minWidth: 0 }}>
+            <span style={{ display: 'block', fontSize: 14.5, fontWeight: 700, color: KP.ink }}>{f.ejercicio}</span>
+            <span style={{
+              display: 'inline-block', marginTop: 5, fontSize: 11.5, fontWeight: 800,
+              color: KP[f.tono], background: KP[`${f.tono}Soft`], borderRadius: 999, padding: '2px 9px',
+            }}>
+              {f.disciplina}
+            </span>
+          </span>
+          <span style={{
+            fontSize: 14, fontWeight: 800, color: KP.ink, fontVariantNumeric: 'tabular-nums',
+            background: KP.bg, borderRadius: 10, padding: '7px 11px', whiteSpace: 'nowrap',
+          }}>
+            {f.medida}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -140,8 +161,8 @@ function VisualGrabar() {
   // Las miniaturas salen de las mismas fotos de la página: no se descarga nada extra.
   const ejercicios = [
     { nombre: 'Equilibrio en BOSU a una pierna', tipo: 'Rehabilitación · BOSU', foto: fotoBosu, enfoque: '64% 42%', nuevo: true },
-    { nombre: 'Escalera de agilidad', tipo: 'Deporte · Escalera', foto: fotoAgilidad, enfoque: '46% 40%' },
-    { nombre: 'Remo sentado', tipo: 'Fuerza · Máquina', foto: fotoFuerza, enfoque: '42% 38%' },
+    { nombre: 'Escalera de agilidad', tipo: 'Deporte · Escalera', foto: fotoAgilidad, enfoque: '30% 38%' },
+    { nombre: 'Remo sentado', tipo: 'Fuerza · Máquina', foto: fotoFuerza, enfoque: '50% 40%' },
   ];
   return (
     <div>
@@ -366,14 +387,21 @@ export default function LandingPage({ onRegistrarse, onEntrar }) {
             <Boton onClick={onEntrar}>Ya tengo cuenta</Boton>
           </div>
         </div>
-        <img
-          src={fotoPista} width={1448} height={603} fetchPriority="high" decoding="async"
-          alt="Dos corredores entrenando en una pista azul al amanecer"
-          style={{
-            display: 'block', width: '100%', maxWidth: ANCHO - 64, height: 'auto',
-            margin: '52px auto 0', borderRadius: 20, boxShadow: SOMBRA_FOTO,
-          }}
-        />
+        <div style={{
+          maxWidth: ANCHO - 64, margin: '52px auto 0', paddingBottom: 28,
+          display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, alignItems: 'start',
+        }}>
+          {FOTOS_PORTADA.map((f, i) => (
+            <img
+              key={f.alt} src={f.src} alt={f.alt} width={486} height={600} decoding="async"
+              fetchPriority={i === 0 ? 'high' : undefined}
+              style={{
+                display: 'block', width: '100%', height: 'auto', borderRadius: 20, boxShadow: SOMBRA_FOTO,
+                transform: i % 2 ? 'translateY(28px)' : undefined,
+              }}
+            />
+          ))}
+        </div>
       </section>
 
       <Bloque
@@ -381,7 +409,7 @@ export default function LandingPage({ onRegistrarse, onEntrar }) {
         eyebrow="Cualquier actividad"
         icon={Activity}
         titulo="Para cualquier forma de entrenar"
-        visual={<VisualActividades />}
+        visual={<VisualDisciplinas />}
       >
         Desde fuerza y trabajo específico para cada deporte, hasta movilidad,
         rehabilitación o yoga. Si forma parte de tu entrenamiento, tiene lugar aquí.
