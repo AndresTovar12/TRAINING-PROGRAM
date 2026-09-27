@@ -166,8 +166,13 @@ export function AuthProvider({ children }) {
     return { error: null };
   }, []);
 
+  // Cierra SOLO esta sesión. Sin `scope`, Supabase cierra TODAS las del usuario
+  // ("global"), y eso incluye los permisos que dio a su IA (ChatGPT, Claude,
+  // Codex, Hermes): el 26 sep 2026 Andrés cerró sesión en la compu y a su
+  // ChatGPT se le murió la conexión ("refresh token not found"). Para quitarle
+  // el acceso a una IA está "Desconectar" en Conectar con IA.
   const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' });
     setProfile(null);
   }, []);
 
