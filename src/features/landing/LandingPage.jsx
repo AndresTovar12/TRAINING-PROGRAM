@@ -1,7 +1,8 @@
 import {
-  Dumbbell, Video, Repeat, ArrowRight, Check, Activity,
+  Dumbbell, Video, Repeat, ArrowRight, Check, Activity, Sparkles,
 } from 'lucide-react';
 import { KP, FONT } from '@/lib/theme';
+import { MarcaIA } from '@/features/ia/Maquetas';
 
 /**
  * Página de presentación (landing), SOLO en computadora.
@@ -14,10 +15,13 @@ import { KP, FONT } from '@/lib/theme';
  * Quien ya tiene sesión abierta nunca la ve: App.jsx la muestra solo cuando
  * no hay usuario.
  *
- * Dice exactamente tres cosas, que son las que distinguen a Training Lab:
- *   1. Sirve para cualquier actividad física, no solo gimnasio.
+ * Dice exactamente cuatro cosas, que son las que distinguen a Training Lab:
+ *   1. Sirve para cualquier forma de entrenar, no solo gimnasio.
  *   2. Crear un ejercicio nuevo es fácil: lo grabas y ya es tuyo.
  *   3. Se pueden armar distintos tipos de entrenamiento (repetido, por fases…).
+ *   4. Se conecta con la IA de cada quien (Claude, ChatGPT…).
+ *
+ * Los textos de la portada y del bloque 1 son de Andrés (26 sep 2026).
  */
 
 const ANCHO = 1080;
@@ -61,7 +65,7 @@ function Bloque({ numero, eyebrow, titulo, children, icon: Icon, visual, inverti
           </div>
           <h2 style={{
             fontSize: 34, fontWeight: 800, color: KP.ink, lineHeight: 1.15,
-            letterSpacing: -0.8, margin: '0 0 14px',
+            letterSpacing: -0.8, margin: '0 0 14px', textWrap: 'balance',
           }}>
             {titulo}
           </h2>
@@ -82,13 +86,13 @@ function Bloque({ numero, eyebrow, titulo, children, icon: Icon, visual, inverti
  * cada vez que cambiemos algo.
  * ------------------------------------------------------------------------ */
 
-/** 1. Cualquier actividad física. */
+/** 1. Cualquier forma de entrenar: las mismas disciplinas que nombra el texto. */
 function VisualActividades() {
   const actividades = [
-    { nombre: 'Gimnasio', ejemplo: 'Sentadilla, press, peso muerto', color: KP.blue },
-    { nombre: 'Campo', ejemplo: 'Drills, salidas, cambios de dirección', color: KP.mint },
-    { nombre: 'Movilidad', ejemplo: '90/90 de cadera, movilidad torácica', color: KP.violet },
-    { nombre: 'Estiramiento', ejemplo: 'Isquiotibiales, psoas, gemelos', color: KP.amber },
+    { nombre: 'Fuerza', ejemplo: 'Sentadilla, press, peso muerto', color: KP.blue },
+    { nombre: 'Deporte', ejemplo: 'Drills, salidas, cambios de dirección', color: KP.mint },
+    { nombre: 'Movilidad y yoga', ejemplo: '90/90 de cadera, saludo al sol', color: KP.violet },
+    { nombre: 'Rehabilitación', ejemplo: 'Isométricos de rodilla, manguito rotador', color: KP.amber },
   ];
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -194,6 +198,59 @@ function VisualFormatos() {
   );
 }
 
+/** 4. Conecta tu IA: lo que se le pregunta y lo que contesta, con tus datos. */
+function VisualIA() {
+  // Las mismas dos vertientes que la guía de la app: en el chat y en la terminal.
+  const grupos = [
+    { donde: 'En el chat', ias: [['claude', 'Claude'], ['chatgpt', 'ChatGPT']] },
+    { donde: 'En la terminal', ias: [['claude-code', 'Claude Code'], ['codex', 'Codex'], ['hermes', 'Hermes']] },
+  ];
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{
+        background: KP.surface, border: `1px solid ${KP.line}`, borderRadius: 20,
+        padding: 18, boxShadow: KP.shCard, display: 'flex', flexDirection: 'column', gap: 10,
+      }}>
+        <div style={{
+          alignSelf: 'flex-end', maxWidth: '80%', background: '#EEF0F3', color: KP.ink,
+          borderRadius: '16px 16px 4px 16px', padding: '10px 14px', fontSize: 14, fontWeight: 600,
+        }}>
+          ¿Cómo van mis atletas esta semana?
+        </div>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          fontSize: 10.5, fontWeight: 800, color: KP.ink3, letterSpacing: 0.6, textTransform: 'uppercase',
+        }}>
+          <MarcaIA app="claude" size={16} /> Usó Training Lab
+        </div>
+        <div style={{ maxWidth: '92%', fontSize: 14.5, color: KP.ink, lineHeight: 1.5, fontWeight: 500 }}>
+          Ana hizo 4 de 4 sesiones. Juan va 2 de 4 y anotó dolor de rodilla:
+          ¿le cambio la sentadilla por una variante sin carga?
+        </div>
+      </div>
+      {grupos.map((g) => (
+        <div key={g.donde} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{
+            width: 104, flexShrink: 0, fontSize: 10.5, fontWeight: 800, color: KP.ink3,
+            letterSpacing: 0.6, textTransform: 'uppercase',
+          }}>
+            {g.donde}
+          </span>
+          {g.ias.map(([id, nombre]) => (
+            <span key={id} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 7, padding: '6px 12px 6px 6px',
+              background: KP.surface, border: `1px solid ${KP.line}`, borderRadius: 999,
+              fontSize: 13, fontWeight: 700, color: KP.ink,
+            }}>
+              <MarcaIA app={id} size={22} /> {nombre}
+            </span>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function LandingPage({ onRegistrarse, onEntrar }) {
   return (
     <div style={{ minHeight: '100svh', background: KP.bg, fontFamily: FONT }}>
@@ -257,9 +314,9 @@ export default function LandingPage({ onRegistrarse, onEntrar }) {
             fontSize: 19, color: KP.ink2, lineHeight: 1.55, fontWeight: 500,
             margin: '0 auto 32px', maxWidth: 680,
           }}>
-            El atleta sabe qué le toca hoy y por qué. El entrenador arma el programa
-            con sus propios ejercicios —grabados con el teléfono, para cualquier
-            actividad física— en el formato que haga falta.
+            Una forma más libre de vivir el entrenamiento: cualquier disciplina,
+            cualquier formato y tus propios ejercicios, todo conectado en un sistema
+            que se adapta a cómo entrenas y a cómo enseñas, no al revés.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
             <Boton primario onClick={onRegistrarse} icon={ArrowRight}>Crear cuenta</Boton>
@@ -272,13 +329,14 @@ export default function LandingPage({ onRegistrarse, onEntrar }) {
         numero="1"
         eyebrow="Cualquier actividad"
         icon={Activity}
-        titulo="No es una app de gimnasio"
+        titulo="Para cualquier forma de entrenar"
         visual={<VisualActividades />}
       >
-        Sirve igual para el gimnasio, para la cancha, para movilidad o para
-        estiramiento. Nada está amarrado a pesas ni a máquinas.
+        Desde fuerza y trabajo específico para cada deporte, hasta movilidad,
+        rehabilitación o yoga. Si forma parte de tu entrenamiento, tiene lugar aquí.
         <br /><br />
-        Si es actividad física y la puedes explicar, la puedes programar aquí.
+        Cada disciplina tiene su propia lógica. Training Lab te permite organizar
+        ejercicios, sesiones y progresiones según cómo se entrena realmente en cada una.
       </Bloque>
 
       <Bloque
@@ -310,6 +368,22 @@ export default function LandingPage({ onRegistrarse, onEntrar }) {
         <br /><br />
         Los tres se arman en el mismo lugar, y el atleta los ve igual de claros
         en su teléfono.
+      </Bloque>
+
+      <Bloque
+        numero="4"
+        eyebrow="Conecta tu IA"
+        icon={Sparkles}
+        titulo="Tu entrenamiento, dentro de tu IA"
+        invertido
+        visual={<VisualIA />}
+      >
+        Conecta Training Lab con Claude o ChatGPT y pregúntale lo que quieras: qué
+        toca hoy, cómo va cada atleta o qué hacer si falta un aparato. Te contesta
+        con tus datos reales.
+        <br /><br />
+        Si eres entrenador, también te ayuda a ajustar los programas. Cada cambio
+        queda guardado y se puede deshacer.
       </Bloque>
 
       {/* Cierre */}
