@@ -2587,12 +2587,15 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
                     la de la tarde. Probado como coach: el menú de la sesión solo
                     ofrecía copiar, y "Pegar" también vivía solo en el día vacío. */}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {/* Sin contorno punteado: "haces mucho ese estilo de
+                      botones, no me gusta" (Andrés, 28 sep 2026). */}
                   <button type="button"
                     onClick={() => patchWeek(nav.pi, wIdx, (wk) => ({ days: [...(wk.days || []), newDay(activeWeekday)] }))}
+                    className="kp-press"
                     style={{
                       flex: '1 1 220px', minHeight: 46, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                      borderRadius: 14, border: `1.5px dashed ${T.borderHi}`, background: 'transparent', cursor: 'pointer',
-                      fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text2,
+                      borderRadius: 14, border: `1.5px solid ${T.border}`, background: T.bg2, cursor: 'pointer',
+                      boxShadow: KP.shCard, fontFamily: FONT, fontSize: 14, fontWeight: 800, color: T.accent,
                     }}>
                     <Plus size={16} /> Añadir otra sesión el {DAY_FULL_LOWER[activeWeekday] || activeWeekday.toLowerCase()}
                   </button>

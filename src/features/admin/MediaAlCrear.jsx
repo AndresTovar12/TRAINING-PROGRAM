@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Camera, Images, Link as LinkIcon, Trash2, Plus, Users, Mars, Venus, Check, ChevronDown, Video } from 'lucide-react';
 import MediaUpload from '@/features/admin/MediaUpload';
 import { ligaExterna } from '@/lib/videos';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, KP } from '@/lib/theme';
 
 /**
  * Las fotos y los videos de un ejercicio que TODAVÍA NO EXISTE.
@@ -198,10 +198,13 @@ export default function MediaAlCrear({ nuevos, onNuevos }) {
         <button
           type="button"
           onClick={() => setAgregando(true)}
+          className="kp-press"
+          /* Sin contorno punteado: "haces mucho ese estilo de botones, no me
+             gusta" (Andrés, 28 sep 2026). */
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 46,
-            border: `1px dashed ${T.borderHi}`, background: T.bg2, borderRadius: 14, cursor: 'pointer',
-            fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: T.accent,
+            border: `1.5px solid ${T.border}`, background: T.bg2, borderRadius: 14, cursor: 'pointer',
+            boxShadow: KP.shCard, fontFamily: FONT, fontSize: 13.5, fontWeight: 800, color: T.accent,
           }}
         >
           <Plus size={16} /> Agregar otro ángulo o versión

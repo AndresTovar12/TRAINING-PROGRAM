@@ -51,7 +51,7 @@ import { recortaImagen } from '@/features/admin/recorte';
 import { useAuth } from '@/contexts/AuthContext';
 import MediaUpload from '@/features/admin/MediaUpload';
 import MediaAlCrear from '@/features/admin/MediaAlCrear';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, KP } from '@/lib/theme';
 import { ligaExterna } from '@/lib/videos';
 
 const GRUPOS = [
@@ -592,11 +592,14 @@ export default function MediaDelEjercicio({
         ) : (
           <button
             type="button" onClick={() => setLigaAbierta(true)}
+            className="kp-press"
+            /* Sin contorno punteado: "haces mucho ese estilo de botones, no me
+               gusta" (Andrés, 28 sep 2026). */
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 7, alignSelf: 'flex-start',
               padding: '10px 13px', borderRadius: 10, cursor: 'pointer',
-              border: `1.5px dashed ${T.borderHi}`, background: 'transparent', color: T.text2,
-              fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
+              border: `1.5px solid ${T.border}`, background: T.bg2, color: T.accent, boxShadow: KP.shCard,
+              fontFamily: FONT, fontSize: 13.5, fontWeight: 800,
             }}
           >
             <LinkIcon size={15} /> Pegar una liga (TikTok, YouTube, reel)

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Plus, Minus, Search, X, Trash2, Loader2, Video, Dumbbell,
-  Copy, RotateCcw, Pencil, ChevronRight,
+  Copy, RotateCcw, Pencil, ChevronRight, ChevronDown,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsWide } from '@/lib/useViewport';
@@ -857,32 +857,59 @@ function ExerciseEditor({
                 <>
                   {bloqueMedia}
                   {campoNombre}
+                  {/* QUE SE VEA. Andrés, 28 sep 2026: "el botón de agregar
+                      detalles casi no se ve y es importante… está perfecto en
+                      donde está y como funciona, pero visualmente agrégale
+                      detallitos para que se note, tampoco muy exagerado". Era
+                      un contorno punteado, gris sobre gris, sin fondo. Ahora es
+                      una tarjeta blanca de borde sólido, con el "+" en su
+                      cuadrito azul, el título en negro y una flecha que dice
+                      que se despliega. */}
                   <button
                     type="button"
                     onClick={() => setDetalles((v) => !v)}
                     aria-expanded={detalles}
+                    className="kp-press"
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 11, minHeight: 56, padding: '0 15px',
-                      border: `1px dashed ${T.borderHi}`, background: 'transparent', borderRadius: 14,
-                      cursor: 'pointer', fontFamily: FONT, textAlign: 'left',
+                      display: 'flex', alignItems: 'center', gap: 12, minHeight: 64, padding: '10px 14px 10px 12px',
+                      border: `1.5px solid ${detalles ? T.accent : T.borderHi}`, background: T.bg2, borderRadius: 14,
+                      boxShadow: KP.shCard, cursor: 'pointer', fontFamily: FONT, textAlign: 'left',
                     }}
                   >
-                    {detalles ? <Minus size={17} color={T.text3} /> : <Plus size={17} color={T.text3} />}
-                    <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <span style={{ fontSize: 13.5, fontWeight: 700, color: T.text2 }}>
+                    <span style={{
+                      width: 38, height: 38, borderRadius: 11, flexShrink: 0, display: 'grid', placeItems: 'center',
+                      background: T.accentBg, color: T.accent,
+                    }}>
+                      {detalles ? <Minus size={19} strokeWidth={2.6} /> : <Plus size={19} strokeWidth={2.6} />}
+                    </span>
+                    <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <span style={{ fontSize: 15, fontWeight: 800, color: T.text }}>
                         {detalles ? 'Ocultar los detalles' : 'Agregar detalles'}
                       </span>
                       {/* LA CATEGORÍA, A LA VISTA AUNQUE ESTÉ PLEGADA.
                           Viene preseleccionada con la primera de la lista. Antes
                           se veía y se podía cambiar; al plegarla, los ejercicios
                           se irían apilando en silencio dentro de la que tocara.
-                          Decir dónde va cuesta una palabra. */}
-                      <span style={{ fontSize: 11.5, fontWeight: 500, color: T.text3 }}>
+                          Decir dónde va cuesta una palabra, y con su color. */}
+                      {/* Se parte en dos líneas en vez de cortarse: en el
+                          teléfono no cabe y "notas" se perdía detrás de "…". */}
+                      <span style={{ fontSize: 12.5, fontWeight: 600, color: T.text2, lineHeight: 1.4 }}>
+                        {categoriaElegida && (
+                          <span style={{
+                            display: 'inline-block', width: 8, height: 8, borderRadius: 4, marginRight: 6,
+                            verticalAlign: 'middle', background: catColor(categories.find((c) => c.id === form.category_id)),
+                          }} />
+                        )}
                         {categoriaElegida
                           ? `${categoriaElegida} · equipo, músculo, notas`
                           : 'Categoría, equipo, músculo, notas'}
                       </span>
                     </span>
+                    <ChevronDown
+                      size={19}
+                      color={T.accent}
+                      style={{ flexShrink: 0, transform: detalles ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}
+                    />
                   </button>
                   {detalles && (
                     <>

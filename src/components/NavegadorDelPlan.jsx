@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Check, ChevronRight, CornerUpLeft, MoreHorizontal, Plus } from 'lucide-react';
-import { LT, FONT, NUM_STYLE, tipoDeSesion } from '@/lib/theme';
+import { LT, KP, FONT, NUM_STYLE, tipoDeSesion } from '@/lib/theme';
 import { esDescanso, enOrdenDeSemana, nombreDeSesion, semanaGlobal } from '@/lib/training-utils';
 import { pluralS } from '@/lib/plural';
 
@@ -268,9 +268,12 @@ export default function NavegadorDelPlan({
                         : editor.onAgregarSemana(f, i))}
                       aria-label="Agregar semana"
                       title="Agregar semana"
+                      /* Azul clarito y sin contorno punteado: "haces mucho
+                         ese estilo de botones, no me gusta" (Andrés, 28 sep
+                         2026). Se distingue de las semanas, que son blancas. */
                       style={{
                         minWidth: 38, padding: '6px 0', borderRadius: 10, cursor: 'pointer',
-                        border: `1.5px dashed ${LT.borderHi}`, background: 'transparent', color: LT.blue,
+                        border: '1.5px solid transparent', background: LT.blueSoft, color: LT.blue,
                         display: 'grid', placeItems: 'center',
                       }}
                     >
@@ -389,10 +392,13 @@ export default function NavegadorDelPlan({
         <button
           type="button"
           onClick={editor.onAgregarFase}
+          className="kp-press"
+          /* Sin contorno punteado: "haces mucho ese estilo de botones, no me
+             gusta" (Andrés, 28 sep 2026). */
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%',
             padding: '11px 13px', borderRadius: 13, cursor: 'pointer', fontFamily: FONT,
-            border: `1.5px dashed ${LT.borderHi}`, background: 'transparent',
+            border: `1.5px solid ${LT.border}`, background: LT.surface, boxShadow: KP.shCard,
             fontSize: 13.5, fontWeight: 800, color: LT.blue,
           }}
         >
