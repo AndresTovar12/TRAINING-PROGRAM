@@ -1826,6 +1826,9 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
   const [menu, setMenu] = useState(null);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Ya se guardó en esta sesión del editor: el botón dice "Guardado" hasta
+  // que se vuelva a cambiar algo.
+  const [haGuardado, setHaGuardado] = useState(false);
   const [err, setErr] = useState('');
   const [repertoire, setRepertoire] = useState([]);
   const [categorias, setCategorias] = useState([]);
@@ -1959,6 +1962,12 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
         ? await updatePlan(planRow.id, { title: title.trim(), phases: data, kind, estructura })
         : await createPlan({ userId: athlete.id, title: title.trim(), phases: data, kind, estructura, createdBy: user?.id });
       setDirty(false);
+      setHaGuardado(true);
+      /* Guardar NO cierra el editor: el coach se queda donde estaba para ver
+         cómo quedó (Andrés, 27 sep 2026). Quien lo abrió recibe el plan
+         guardado, y con él `planRow` cambia; eso vuelve a leer dónde va el
+         atleta, y sin esta marca movería la hoja a su día. */
+      yaNavego.current = true;
       onSaved(row);
     } catch (e) {
       setErr(e.message || 'Error al guardar');
@@ -2581,7 +2590,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 800, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{crumb}</div>
           <div style={{ fontSize: 12, color: T.text2, fontWeight: 600 }}>
-            {athlete.full_name || athlete.username}{dirty ? ' · sin guardar' : ''}
+            {athlete.full_name || athlete.username}{dirty ? ' · sin guardar' : (haGuardado ? ' · guardado' : '')}
           </div>
         </div>
         {nav.level !== 'start' && nav.level !== 'wizard' && (
@@ -2590,11 +2599,12 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
               display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 18px', borderRadius: 12,
               border: 'none', cursor: saving || !dirty ? 'default' : 'pointer',
               background: dirty ? `linear-gradient(135deg, ${T.accent}, ${T.accentDk})` : T.bg3,
-              color: dirty ? '#fff' : T.text3, fontFamily: FONT, fontSize: 14, fontWeight: 800,
+              // Recién guardado, en verde: se lee como "listo", no como botón apagado.
+              color: dirty ? '#fff' : (haGuardado ? KP.mint : T.text3), fontFamily: FONT, fontSize: 14, fontWeight: 800,
               boxShadow: dirty ? KP.shBtn : 'none', opacity: saving ? 0.75 : 1, flexShrink: 0,
             }}>
             {saving ? <Loader2 size={15} className="spin" /> : <Check size={15} />}
-            Guardar
+            {!dirty && haGuardado ? 'Guardado' : 'Guardar'}
           </button>
         )}
         <button type="button" onClick={handleClose} aria-label="Cerrar"

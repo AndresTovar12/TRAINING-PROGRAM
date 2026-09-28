@@ -1028,7 +1028,9 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           athlete={athlete}
           planRow={plan}
           onClose={() => setBuilding(false)}
-          onSaved={(row) => { setPlan(row); setBuilding(false); }}
+          // Guardar NO cierra el editor (Andrés, 27 sep 2026: "prefiero que me
+          // deje ahí para ver cómo quedó"); solo se refresca la ficha de atrás.
+          onSaved={(row) => setPlan(row)}
         />
       )}
     </div>
@@ -1041,7 +1043,9 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           athlete={athlete}
           planRow={plan}
           onClose={() => setBuilding(false)}
-          onSaved={(row) => { setPlan(row); setBuilding(false); }}
+          // Guardar NO cierra el editor (Andrés, 27 sep 2026: "prefiero que me
+          // deje ahí para ver cómo quedó"); solo se refresca la ficha de atrás.
+          onSaved={(row) => setPlan(row)}
         />
       )}
     </div>
