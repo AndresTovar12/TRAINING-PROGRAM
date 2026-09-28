@@ -18,7 +18,7 @@ import { useConfirmacion } from '@/components/Confirmacion';
 import { useIsDesktop } from '@/lib/useViewport';
 import { T, FONT, KP } from '@/lib/theme';
 import { plural, pluralS } from '@/lib/plural';
-import { esDescanso, dondeVa, sessionIdFor } from '@/lib/training-utils';
+import { esDescanso, dondeVa, sessionIdFor, estructuraDelPlan } from '@/lib/training-utils';
 import HojaFlotante from '@/components/HojaFlotante';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
 import ListaDesplegable from '@/components/ListaDesplegable';
@@ -787,6 +787,12 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
   const last = timeAgo(state?.updated_at);
   const phases = plan?.data?.phases ?? [];
   const totalWeeks = phases.reduce((s, p) => s + (p.weekData?.length || 0), 0);
+  // Cómo se describe el plan según su forma: una rutina no tiene "1 fase · 1
+  // semana", y "varias semanas" no enseña fases.
+  const estructura = estructuraDelPlan(plan?.data);
+  const tamano = estructura === 'rutina' ? 'Se repite cada semana'
+    : estructura === 'semanas' ? pluralS(totalWeeks, 'semana')
+      : `${pluralS(phases.length, 'fase')} · ${pluralS(totalWeeks, 'semana')}`;
   // Los días OFF no son sesiones: la app del atleta tampoco los cuenta, y si
   // aquí sí, el coach ve "7 sesiones" donde su atleta ve "6 días".
   const totalSessions = phases.reduce(
@@ -819,7 +825,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
         <AccionFicha
           icon={ClipboardList}
           titulo="Ver el plan"
-          detalle={`${pluralS(phases.length, 'fase')} · ${pluralS(totalWeeks, 'semana')} · ${plural(totalSessions, 'sesión', 'sesiones')}`}
+          detalle={`${tamano} · ${plural(totalSessions, 'sesión', 'sesiones')}`}
           onClick={() => setVerPlan(true)}
         />
       )}
@@ -834,12 +840,13 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
       {verPlan && plan && (
         <HojaFlotante
           titulo={plan.title || 'Plan'}
-          subtitulo={`${athlete.full_name || athlete.username} · ${pluralS(phases.length, 'fase')} · ${pluralS(totalWeeks, 'semana')}`}
+          subtitulo={`${athlete.full_name || athlete.username} · ${tamano}`}
           onCerrar={() => setVerPlan(false)}
         >
           <NavegadorDelPlan
             fases={phases}
             kind={plan.data?.kind}
+            estructura={estructura}
             quien="atleta"
             aqui={dondeVa(phases, plan.data?.kind, state?.data?.['wr:cursor'])}
             hecha={(faseId, semana, dia) => !!state?.data?.['wr:sessions']?.[

@@ -6,6 +6,7 @@ import {
   getActivePlan, listExercises, listExerciseMedia, getMasterId,
   listExerciseOverrides, aplicarOverrides,
 } from '@/lib/api';
+import { estructuraDelPlan } from '@/lib/training-utils';
 
 /**
  * Carga el plan activo de la persona cuya app se dibuja —quien entró, o el
@@ -173,6 +174,8 @@ export function PlanProvider({ children }) {
   // 'weekly' = rutina que se repite | 'periodized' = fases que avanzan.
   // Los planes creados antes de existir este campo son periodizados.
   const kind = planRow?.data?.kind === 'weekly' ? 'weekly' : 'periodized';
+  // Rutina, varias semanas o por fases: ver `estructuraDelPlan`.
+  const estructura = estructuraDelPlan(planRow?.data);
 
   const exercisesById = useMemo(() => {
     const m = new Map();
@@ -202,6 +205,7 @@ export function PlanProvider({ children }) {
     () => ({
       phases: phases ?? [],
       kind,
+      estructura,
       hasPlan: !!phases && phases.length > 0,
       planMeta: planRow ? { id: planRow.id, title: planRow.title } : null,
       planLoading,
@@ -209,7 +213,7 @@ export function PlanProvider({ children }) {
       medias,
       resolveExercise,
     }),
-    [phases, kind, planRow, planLoading, exercises, medias, resolveExercise],
+    [phases, kind, estructura, planRow, planLoading, exercises, medias, resolveExercise],
   );
 
   return <PlanContext.Provider value={value}>{children}</PlanContext.Provider>;

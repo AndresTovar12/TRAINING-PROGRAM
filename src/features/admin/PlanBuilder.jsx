@@ -15,7 +15,9 @@ import {
   listExerciseMedia, addExerciseMedia, deleteExerciseMedia,
   listExerciseOverrides, aplicarOverrides, getAthleteState,
 } from '@/lib/api';
-import { isLoadedExercise, dondeVa } from '@/lib/training-utils';
+import {
+  isLoadedExercise, dondeVa, estructuraDelPlan, kindDeEstructura, semanaGlobal, semanasDelPlan,
+} from '@/lib/training-utils';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
 import { T, FONT, KP } from '@/lib/theme';
 import CampoCantidad from '@/components/CampoCantidad';
@@ -78,6 +80,14 @@ const newPhase = (num, color) => ({
 });
 
 const nextWeekNum = (phase) => Math.max(0, ...phase.weekData.map((w) => w.num || 0)) + 1;
+
+/* Las tres formas de un plan (ver `estructuraDelPlan`), dichas igual al
+   crearlo que al cambiarlo. */
+const FORMAS = [
+  { id: 'rutina', icon: Repeat, title: 'Una rutina que se repite', corto: 'Se repite todas las semanas', desc: 'Misma rutina cada semana, sin fin. Lo más común.' },
+  { id: 'semanas', icon: Zap, title: 'Varias semanas que avanzan', corto: 'Varias semanas que avanzan', desc: 'Arrancas con la misma base y vas subiendo cargas semana a semana.' },
+  { id: 'fases', icon: Layers, title: 'Programa por fases', corto: 'Programa por fases', desc: 'Bloques con objetivos distintos, como un plan de temporada.' },
+];
 const nextPhaseNum = (phases) => Math.max(0, ...phases.map((p) => p.num || 0)) + 1;
 
 const normalize = (phases) => phases.map((p) => ({
@@ -252,7 +262,7 @@ function NameModal({ title, placeholder, onSave, onClose }) {
 }
 
 /* Modal de la semana: nombre, carga y acciones */
-function WeekMetaModal({ week, canDelete, onPatch, onDuplicate, onCopyToRest, onDelete, onClose }) {
+function WeekMetaModal({ week, numero = week.num, canDelete, onPatch, onDuplicate, onCopyToRest, onDelete, onClose }) {
   return (
     <div
       onMouseDown={onClose}
@@ -270,17 +280,17 @@ function WeekMetaModal({ week, canDelete, onPatch, onDuplicate, onCopyToRest, on
           {/* Número de semana: fijo, no editable */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 11, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 12, padding: '11px 14px' }}>
             <span style={{ width: 34, height: 34, borderRadius: 10, background: T.accentBg, color: T.accent, display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 15, flexShrink: 0 }}>
-              {week.num}
+              {numero}
             </span>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 14.5, fontWeight: 800, color: T.text }}>Semana {week.num}</div>
+              <div style={{ fontSize: 14.5, fontWeight: 800, color: T.text }}>Semana {numero}</div>
               <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 600 }}>Número fijo — cambia con el orden</div>
             </div>
           </div>
           <Field label="Título de la semana (opcional)">
             <input value={weekSubtitle(week)} onChange={(e) => onPatch({ label: e.target.value })} placeholder="Ej. Adaptación, Acumulación, Deload…" style={inputStyle} />
             <span style={{ fontSize: 11.5, color: T.text3, marginTop: 4 }}>
-              Se mostrará como <b style={{ color: T.text2 }}>«{weekName(week)}»</b>.
+              Se mostrará como <b style={{ color: T.text2 }}>«{weekName({ ...week, num: numero })}»</b>.
             </span>
           </Field>
           <Field label="Carga de la semana (opcional)">
@@ -1616,6 +1626,88 @@ function HojaAcciones({ acciones, onClose }) {
   );
 }
 
+/** Cambiar la forma de un plan que ya existe: las tres, con la de ahora
+    marcada. Misma caja que `HojaAcciones`. */
+function HojaFormas({ actual, onElegir, onClose }) {
+  const esCompu = useIsDesktop();
+  return (
+    <div
+      onMouseDown={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 2700, background: 'rgba(17,19,24,0.45)',
+        display: 'flex', alignItems: esCompu ? 'center' : 'flex-end', justifyContent: 'center',
+        padding: esCompu ? 24 : 0,
+      }}
+    >
+      <div
+        onMouseDown={(e) => e.stopPropagation()}
+        className={esCompu ? 'animate-fade-in' : 'animate-sheet'}
+        style={{
+          width: '100%', maxWidth: esCompu ? 460 : undefined, background: T.bg,
+          borderRadius: esCompu ? 20 : '22px 22px 0 0',
+          padding: esCompu ? 12 : '10px 12px calc(14px + env(safe-area-inset-bottom))',
+          fontFamily: FONT, boxShadow: KP.shPop,
+        }}
+      >
+        {!esCompu && (
+          <div style={{
+            width: 38, height: 4, borderRadius: 999, background: T.borderHi,
+            margin: '4px auto 10px',
+          }} />
+        )}
+        <div style={{ fontSize: 16, fontWeight: 800, color: T.text, padding: '4px 6px 10px' }}>
+          La forma del plan
+        </div>
+        {FORMAS.map((f) => {
+          const es = f.id === actual;
+          return (
+            <button
+              key={f.id} type="button" disabled={es}
+              onClick={() => { onClose(); onElegir(f.id); }}
+              aria-current={es || undefined}
+              style={{
+                display: 'flex', gap: 12, alignItems: 'center', width: '100%', textAlign: 'left',
+                padding: 12, borderRadius: 14, marginBottom: 7, fontFamily: FONT,
+                border: `1.5px solid ${es ? T.accent : T.border}`,
+                background: es ? T.accentBg : T.bg2, cursor: es ? 'default' : 'pointer',
+              }}
+            >
+              <span style={{
+                width: 40, height: 40, borderRadius: 12, flexShrink: 0, display: 'grid', placeItems: 'center',
+                background: es ? T.accent : T.accentBg, color: es ? '#fff' : T.accent,
+              }}>
+                <f.icon size={20} />
+              </span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 15, fontWeight: 800, color: T.text }}>{f.title}</span>
+                <span style={{ display: 'block', fontSize: 12.5, color: T.text2, marginTop: 2, lineHeight: 1.4 }}>{f.desc}</span>
+              </span>
+              {es && (
+                <span style={{
+                  flexShrink: 0, fontSize: 11, fontWeight: 800, color: T.accent, background: T.bg,
+                  borderRadius: 999, padding: '4px 9px',
+                }}>
+                  Así está
+                </span>
+              )}
+            </button>
+          );
+        })}
+        <button
+          type="button" onClick={onClose}
+          style={{
+            width: '100%', minHeight: 50, marginTop: 4, borderRadius: 14,
+            border: `1.5px solid ${T.border}`, background: T.bg2, cursor: 'pointer',
+            fontFamily: FONT, fontSize: 15, fontWeight: 700, color: T.text2,
+          }}
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, nSets, dual }) {
   const { user } = useAuth();
   const esCompu = useIsDesktop();
@@ -1712,9 +1804,12 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
   const isNew = !planRow;
   const [title, setTitle] = useState(planRow?.title || 'Plan de entrenamiento');
   const [phases, setPhases] = useState(() => (planRow?.data?.phases ? clone(planRow.data.phases) : []));
-  // 'weekly' = rutina que se repite (sin fases ni semanas) | 'periodized' = fases
-  const [kind, setKind] = useState(() => (planRow?.data?.kind === 'weekly' ? 'weekly' : 'periodized'));
+  // La forma del plan: 'rutina' | 'semanas' | 'fases' (ver `estructuraDelPlan`).
+  // De ella sale `kind`: 'weekly' para la rutina, 'periodized' para las otras.
+  const [estructura, setEstructura] = useState(() => (planRow ? estructuraDelPlan(planRow.data) : 'fases'));
+  const kind = kindDeEstructura(estructura);
   const isWeekly = kind === 'weekly';
+  const [formasAbiertas, setFormasAbiertas] = useState(false);
   /* Un plan que ya existe abre SIEMPRE en la hoja, con una fase abierta. La
      lista de fases como pantalla aparte se fue el 24 sep 2026: la hoja ya las
      enseña todas. Ver `NavegadorDelPlan`. */
@@ -1861,8 +1956,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
     try {
       const data = normalize(phases);
       const row = planRow
-        ? await updatePlan(planRow.id, { title: title.trim(), phases: data, kind })
-        : await createPlan({ userId: athlete.id, title: title.trim(), phases: data, kind, createdBy: user?.id });
+        ? await updatePlan(planRow.id, { title: title.trim(), phases: data, kind, estructura })
+        : await createPlan({ userId: athlete.id, title: title.trim(), phases: data, kind, estructura, createdBy: user?.id });
       setDirty(false);
       onSaved(row);
     } catch (e) {
@@ -1915,6 +2010,12 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
     setWeekIdx(nueva);
   };
   const semanaAbierta = () => Math.max(0, Math.min(weekIdx, (phases[nav.pi]?.weekData?.length ?? 1) - 1));
+  /* En "varias semanas" la semana se nombra de corrido (la 4, aunque por
+     dentro sea la 1 de otra fase), y "todas las semanas" son las del plan
+     entero, no las de una fase que el coach no ve. */
+  const deCorrido = estructura === 'semanas';
+  const numeroDeSemana = (ph, wk, fallback) => (deCorrido ? (semanaGlobal(phases, ph?.id, wk?.num) ?? fallback) : (wk?.num ?? fallback));
+  const nombreSemana = (ph, wk, fallback) => weekName({ ...wk, num: numeroDeSemana(ph, wk, fallback) }, fallback);
   const duplicarSemana = () => {
     const wi = semanaAbierta();
     patchPhase(nav.pi, (ph) => {
@@ -1928,9 +2029,17 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
     const wi = semanaAbierta();
     if (!await pregunta({
       titulo: '¿Copiar esta semana a todas las demás?',
-      detalle: 'Las otras semanas de la fase pierden lo que tengan y quedan igual que esta.',
+      detalle: `Las otras semanas ${deCorrido ? 'del plan' : 'de la fase'} pierden lo que tengan y quedan igual que esta.`,
       confirmar: 'Sí, copiarla',
     })) return false;
+    if (deCorrido) {
+      const dias = phases[nav.pi].weekData[wi].days;
+      touch((ps) => ps.map((ph, pi) => ({
+        ...ph,
+        weekData: ph.weekData.map((wk, j) => (pi === nav.pi && j === wi ? wk : { ...wk, days: clone(dias) })),
+      })));
+      return true;
+    }
     patchPhase(nav.pi, (ph) => ({
       weekData: ph.weekData.map((wk, j) => (j === wi ? wk : { ...wk, days: clone(ph.weekData[wi].days) })),
     }));
@@ -1940,8 +2049,18 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
     const ph = phases[nav.pi];
     const wi = semanaAbierta();
     const wk = ph?.weekData?.[wi];
-    if (!wk || ph.weekData.length <= 1) return false;
-    if (!await pregunta({ titulo: `¿Eliminar «${weekName(wk)}»?`, detalle: 'Se va con todas sus sesiones.', confirmar: 'Sí, eliminarla', peligro: true })) return false;
+    // En "varias semanas" se puede borrar mientras quede alguna en el plan: si
+    // era la única de su fase escondida, se va la fase entera.
+    const quedaOtra = deCorrido ? semanasDelPlan(phases) > 1 : ph?.weekData?.length > 1;
+    if (!wk || !quedaOtra) return false;
+    if (!await pregunta({ titulo: `¿Eliminar «${nombreSemana(ph, wk)}»?`, detalle: 'Se va con todas sus sesiones.', confirmar: 'Sí, eliminarla', peligro: true })) return false;
+    if (ph.weekData.length <= 1) {
+      const anterior = Math.max(0, nav.pi - 1);
+      touch((ps) => ps.filter((_, i) => i !== nav.pi));
+      setNav({ level: 'phase', pi: anterior });
+      setWeekIdx(nav.pi > 0 ? (phases[anterior]?.weekData?.length ?? 1) - 1 : 0);
+      return true;
+    }
     patchPhase(nav.pi, (p2) => ({ weekData: p2.weekData.filter((_, j) => j !== wi) }));
     setWeekIdx(Math.max(0, wi - 1));
     return true;
@@ -1974,25 +2093,52 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
     setNav({ level: 'phase', pi: 0 });
   }
 
-  /* Cambiar la estructura de un plan que ya existe.
+  /* CAMBIAR LA FORMA DE UN PLAN QUE YA EXISTE. Las tres, en cualquier
+     sentido. Andrés, PDF 2.0 (18 sep 2026): "acuérdate que son 3 vertientes…
+     siempre debes de poder cambiarla al que quieras". Antes solo había dos
+     caminos, rutina ↔ fases.
 
-     De rutina a fases: lo que hay se queda como la semana 1 de la fase 1, y de
-     ahí el coach agrega semanas. No se pierde nada.
+     - A rutina: una rutina es UNA semana, así que solo sobrevive la primera.
+       Se pregunta con el número de semanas que se van.
+     - De rutina a semanas o fases: lo escrito queda como la semana 1.
+     - Entre semanas y fases NO se tocan los datos: cambia cómo se ven. Lo que
+       anota el atleta y dónde va se guardan por fase y semana; juntar las
+       fases se lo perdería. Si vuelves a fases, regresan como estaban.
 
-     De fases a rutina: una rutina es UNA semana, así que solo sobrevive la
-     primera del plan. Por eso se pregunta con el número de semanas que se van;
-     y como el plan no se guarda hasta tocar "Guardar", todavía se puede salir
+     Como el plan no se guarda hasta tocar "Guardar", todavía se puede salir
      sin guardar. */
-  async function cambiaAFases() {
+  async function cambiarForma(destino) {
+    if (destino === estructura) return;
+    if (destino === 'rutina') { await cambiaARutina(); return; }
+    const desdeRutina = estructura === 'rutina';
+    const semanas = semanasDelPlan(phases);
+    let detalle;
+    if (desdeRutina) {
+      detalle = destino === 'semanas'
+        ? 'Lo que ya escribiste se queda como la semana 1. Después agregas las demás con el +.'
+        : 'Lo que ya escribiste se queda como la semana 1 de la fase 1. Después podrás agregar semanas y fases.';
+    } else if (destino === 'semanas') {
+      detalle = phases.length > 1
+        ? `Las ${phases.length} fases se ven como ${semanas} semanas seguidas. No se borra nada: si vuelves a fases, regresan como estaban.`
+        : 'Se ve como semanas seguidas, sin fase. No se borra nada.';
+    } else {
+      detalle = 'Tus semanas quedan como la fase 1. Después puedes agregar más fases. No se borra nada.';
+    }
     const va = await pregunta({
-      titulo: '¿Pasar a un programa por fases?',
-      detalle: 'Lo que ya escribiste se queda como la semana 1 de la fase 1. Después podrás agregar semanas y fases.',
+      titulo: destino === 'semanas' ? '¿Pasar a varias semanas que avanzan?' : '¿Pasar a un programa por fases?',
+      detalle,
       confirmar: 'Sí, cambiar',
     });
     if (!va) return;
-    setKind('periodized');
-    touch((ps) => ps.map((ph, i) => (i === 0 ? { ...ph, name: ph.name === 'Rutina semanal' ? 'Fase 1' : ph.name } : ph)));
+    // Solo cambia el nombre de la fase cuando era el de la forma anterior.
+    const nombreNuevo = destino === 'semanas' ? 'Mi programa' : 'Fase 1';
+    const eraNombreDeForma = (n) => n === 'Rutina semanal' || n === 'Mi programa';
+    touch((ps) => ps.map((ph, i) => (
+      i === 0 && phases.length === 1 && eraNombreDeForma(ph.name) ? { ...ph, name: nombreNuevo } : ph
+    )));
+    setEstructura(destino);
     setNav({ level: 'phase', pi: 0 });
+    setWeekIdx(0);
   }
 
   async function cambiaARutina() {
@@ -2009,7 +2155,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
     if (!va) return;
     const primera = phases[0]?.weekData?.[0];
     if (!primera) return;
-    setKind('weekly');
+    setEstructura('rutina');
     touch(() => [{ ...phases[0], num: 1, name: 'Rutina semanal', weekData: [{ ...primera, num: 1 }] }]);
     setWeekIdx(0);
     setNav({ level: 'phase', pi: 0 });
@@ -2032,10 +2178,17 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
       const p = phases[nav.pi];
       if (isWeekly) return 'Rutina semanal';
       const wi = Math.min(weekIdx, Math.max(0, (p?.weekData?.length ?? 1) - 1));
+      // En "varias semanas" no hay fase que nombrar: la semana va de corrido.
+      if (estructura === 'semanas') {
+        const wk = p?.weekData?.[wi];
+        const sub = weekSubtitle(wk);
+        const n = semanaGlobal(phases, p?.id, wk?.num) ?? wi + 1;
+        return `Semana ${n} de ${semanasDelPlan(phases)}${sub ? ` · ${sub}` : ''}`;
+      }
       return `${p?.name || 'Fase'} · ${weekName(p?.weekData?.[wi], wi + 1)}`;
     }
     return 'Estructura del plan';
-  }, [nav, phases, weekIdx, isWeekly]);
+  }, [nav, phases, weekIdx, isWeekly, estructura]);
 
   /* Volver. En el teléfono, desde el editor de un día se vuelve a la hoja; y
      desde la hoja, se sale. Ya no hay pantalla de fases a la que subir: la
@@ -2054,26 +2207,14 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
         <div style={{ fontSize: 15, color: T.text2, lineHeight: 1.55, textAlign: 'center', marginBottom: 6 }}>
           ¿Cómo quieres armar el plan de <b style={{ color: T.text }}>{athlete.full_name || athlete.username}</b>?
         </div>
-        {[
-          {
-            icon: Repeat,
-            title: 'Una rutina que se repite',
-            desc: 'Misma rutina cada semana, sin fin. Lo más común.',
-            onClick: () => { setKind('weekly'); startWeeklyPlan(); },
-          },
-          {
-            icon: Zap,
-            title: 'Varias semanas que avanzan',
-            desc: 'Arrancas con la misma base y vas subiendo cargas semana a semana.',
-            onClick: () => { setKind('periodized'); setNav({ level: 'wizard' }); },
-          },
-          {
-            icon: Layers,
-            title: 'Programa por fases',
-            desc: 'Bloques con objetivos distintos, como un plan de temporada.',
-            onClick: () => { setKind('periodized'); touch(() => [newPhase(1)]); openPhase(0); },
-          },
-        ].map((opt) => (
+        {FORMAS.map((forma) => ({
+          ...forma,
+          onClick: {
+            rutina: () => { setEstructura('rutina'); startWeeklyPlan(); },
+            semanas: () => { setEstructura('semanas'); setNav({ level: 'wizard' }); },
+            fases: () => { setEstructura('fases'); touch(() => [newPhase(1)]); openPhase(0); },
+          }[forma.id],
+        })).map((opt) => (
           <button
             key={opt.title} type="button" onClick={opt.onClick}
             style={{
@@ -2185,26 +2326,31 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
             <MoreHorizontal size={19} />
           </button>
         </div>
-        {isWeekly && (
-          /* Andrés, 17 sep 2026: "si un atleta tiene entrenamiento semanal no
-             se puede cambiar a fases, al menos no veo cómo desde el teléfono".
-             También está en los tres puntos, pero esto se queda a la vista. */
-          <button
-            type="button" onClick={cambiaAFases}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none', background: 'transparent',
-              cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 700, color: T.text2,
-              padding: '2px 2px 12px',
-            }}
-          >
-            <Repeat size={14} color={T.accent} />
-            Se repite todas las semanas
-            <span style={{ fontWeight: 800, color: T.accent }}>Cambiar</span>
-          </button>
-        )}
+        {/* La forma del plan, a la vista. Andrés, 17 sep 2026: "si un atleta
+            tiene entrenamiento semanal no se puede cambiar a fases, al menos no
+            veo cómo desde el teléfono". Ahora sale en las tres formas y
+            "Cambiar" ofrece las tres. También está en los tres puntos. */}
+        {(() => {
+          const forma = FORMAS.find((f) => f.id === estructura) ?? FORMAS[2];
+          return (
+            <button
+              type="button" onClick={() => setFormasAbiertas(true)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none', background: 'transparent',
+                cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 700, color: T.text2,
+                padding: '2px 2px 12px',
+              }}
+            >
+              <forma.icon size={14} color={T.accent} />
+              {forma.corto}
+              <span style={{ fontWeight: 800, color: T.accent }}>Cambiar</span>
+            </button>
+          );
+        })()}
         <NavegadorDelPlan
           fases={phases}
           kind={kind}
+          estructura={estructura}
           quien="atleta"
           aqui={aquiAtleta}
           editor={{
@@ -2289,7 +2435,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
             botones para lo mismo. */}
         <div style={{ marginBottom: 14, minWidth: 0 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: T.text3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {isWeekly ? 'Rutina que se repite' : `${p.name || 'Fase'} · ${weekName(w, wIdx + 1)}${w?.load ? ` · ${w.load}` : ''}`}
+            {isWeekly ? 'Rutina que se repite' : `${deCorrido ? nombreSemana(p, w, wIdx + 1) : `${p.name || 'Fase'} · ${weekName(w, wIdx + 1)}`}${w?.load ? ` · ${w.load}` : ''}`}
           </div>
           <div style={{ fontSize: 19, fontWeight: 800, color: T.text, letterSpacing: -0.3 }}>
             {conDetalles && !esCompu ? 'Opciones de la fase' : (NOMBRE_DIA[activeWeekday] || activeWeekday)}
@@ -2469,7 +2615,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
       {modal?.type === 'week-meta' && curPhase && (
         <WeekMetaModal
           week={curPhase.weekData[curWeekIdx]}
-          canDelete={curPhase.weekData.length > 1}
+          numero={numeroDeSemana(curPhase, curPhase.weekData[curWeekIdx], curWeekIdx + 1)}
+          canDelete={(deCorrido ? semanasDelPlan(phases) : curPhase.weekData.length) > 1}
           onPatch={(patch) => patchWeek(nav.pi, curWeekIdx, patch)}
           onDuplicate={() => { duplicarSemana(); setModal(null); }}
           onCopyToRest={async () => { if (await copiarSemanaATodas()) setModal(null); }}
@@ -2485,6 +2632,9 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
           "Agregar fase" sigue siempre a mano (Andrés, 18 sep 2026: "aquí no
           veo cómo se pueden agregar fases"): abajo de la hoja y en el menú del
           plan. */}
+      {formasAbiertas && (
+        <HojaFormas actual={estructura} onElegir={cambiarForma} onClose={() => setFormasAbiertas(false)} />
+      )}
       {menu?.tipo === 'plan' && (
         <HojaAcciones
           onClose={() => setMenu(null)}
@@ -2492,12 +2642,9 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
             ...(isWeekly ? [
               { icon: FolderOpen, texto: 'Usar una plantilla de semana', onClick: () => setModal({ type: 'tpl-week' }) },
               { icon: Save, texto: 'Guardar la semana como plantilla', onClick: () => setModal({ type: 'name-week' }) },
-            ] : [
-              { icon: Plus, texto: 'Agregar fase', onClick: agregarFase },
-            ]),
-            isWeekly
-              ? { icon: Layers, texto: 'Pasar a un programa por fases', onClick: cambiaAFases }
-              : { icon: Repeat, texto: 'Convertirlo en una rutina que se repite', onClick: cambiaARutina },
+            ] : []),
+            ...(estructura === 'fases' ? [{ icon: Plus, texto: 'Agregar fase', onClick: agregarFase }] : []),
+            { icon: Settings2, texto: 'Cambiar la forma del plan', onClick: () => setFormasAbiertas(true) },
           ]}
         />
       )}
@@ -2526,10 +2673,10 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
           acciones={[
             { icon: Pencil, texto: 'Nombre y carga de la semana', onClick: () => setModal({ type: 'week-meta' }) },
             { icon: Copy, texto: 'Duplicar semana', onClick: duplicarSemana },
-            ...(curPhase.weekData.length > 1 ? [{ icon: Layers, texto: 'Copiarla a todas las semanas', onClick: copiarSemanaATodas }] : []),
+            ...((deCorrido ? semanasDelPlan(phases) : curPhase.weekData.length) > 1 ? [{ icon: Layers, texto: 'Copiarla a todas las semanas', onClick: copiarSemanaATodas }] : []),
             { icon: FolderOpen, texto: 'Usar una plantilla de semana', onClick: () => setModal({ type: 'tpl-week' }) },
             { icon: Save, texto: 'Guardarla como plantilla', onClick: () => setModal({ type: 'name-week' }) },
-            ...(curPhase.weekData.length > 1 ? [{ icon: Trash2, texto: 'Eliminar semana', onClick: eliminarSemana, peligro: true }] : []),
+            ...((deCorrido ? semanasDelPlan(phases) : curPhase.weekData.length) > 1 ? [{ icon: Trash2, texto: 'Eliminar semana', onClick: eliminarSemana, peligro: true }] : []),
           ]}
         />
       )}

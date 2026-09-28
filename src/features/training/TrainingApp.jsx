@@ -19,6 +19,7 @@ import {
   sessionForToday, weekOverview, weekdayToday, weekdayLabel,
   cursorAlDia, isoWeekKey, esDescanso, enOrdenDeSemana,
   bloqueQueRepite, ejerciciosDelBloque, nombreDeSesion, diasDeEstaSemana, claveDeDia, dondeVa,
+  semanaGlobal, semanasDelPlan,
 } from '@/lib/training-utils';
 import HojaFlotante from '@/components/HojaFlotante';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
@@ -661,7 +662,7 @@ const LightWeekScience = ({ science }) => {
  * en cuanto uno abría otro día, la marca se iba detrás de él.
  */
 const HojaDelPrograma = ({ sessionsData, aqui, viendo, onIr, onCerrar }) => {
-  const { phases: PLAN, planMeta, kind } = usePlan();
+  const { phases: PLAN, planMeta, kind, estructura } = usePlan();
   const idDeSesion = useIdDeSesion();
 
   const semanasTotales = PLAN.reduce((s, f) => s + (f.weekData?.length || 0), 0);
@@ -675,13 +676,16 @@ const HojaDelPrograma = ({ sessionsData, aqui, viendo, onIr, onCerrar }) => {
       titulo={planMeta?.title || 'Tu programa'}
       subtitulo={kind === 'weekly'
         ? 'Una rutina que se repite cada semana'
-        : [pluralS(PLAN.length, 'fase'), pluralS(semanasTotales, 'semana'), semanasHasta ? `vas en la ${semanasHasta}` : null]
+        // En "varias semanas" no se cuentan fases: no se ven.
+        : [estructura === 'semanas' ? null : pluralS(PLAN.length, 'fase'), pluralS(semanasTotales, 'semana'),
+          semanasHasta ? `vas en la ${semanasHasta}` : null]
           .filter(Boolean).join(' · ')}
       onCerrar={onCerrar}
     >
       <NavegadorDelPlan
         fases={PLAN}
         kind={kind}
+        estructura={estructura}
         aqui={aqui}
         viendo={viendo}
         // Se abre en lo que se está mirando, con las dos marcas a la vista:
@@ -699,8 +703,11 @@ const WeekDetail = ({
   miDia, onVolverAMiDia, onHacerEsteDia, onDiaVisto,
 }) => {
   const idDeSesion = useIdDeSesion();
-  const { kind } = usePlan();
+  const { kind, estructura, phases: PLAN } = usePlan();
   const esRutina = kind === 'weekly';
+  // "Varias semanas": se dice la semana de corrido y no la fase.
+  const deCorrido = estructura === 'semanas';
+  const semanaDeCorrido = deCorrido ? (semanaGlobal(PLAN, phase.id, week.num) ?? week.num) : null;
   const phaseColor = phase.color || LT.blue;
   // Los días OFF no cuentan: no se "completa" un descanso.
   const entrenables = week.days.map((d, idx) => ({ d, idx })).filter(({ d }) => !esDescanso(d));
@@ -805,7 +812,9 @@ const WeekDetail = ({
       }}>
         {esRutina
           ? `Esta semana · ${completedCount}/${pluralS(entrenables.length, 'día')}`
-          : `${phase.name || phase.fullName} · ${phase.mode === 'microcycle' ? 'Microciclo' : `Semana ${week.num} de ${phase.weeks}`} · ${completedCount}/${pluralS(entrenables.length, 'día')}`}
+          : deCorrido
+            ? `Semana ${semanaDeCorrido} de ${semanasDelPlan(PLAN)} · ${completedCount}/${pluralS(entrenables.length, 'día')}`
+            : `${phase.name || phase.fullName} · ${phase.mode === 'microcycle' ? 'Microciclo' : `Semana ${week.num} de ${phase.weeks}`} · ${completedCount}/${pluralS(entrenables.length, 'día')}`}
       </div>
 
       {week.emph && (
@@ -913,8 +922,10 @@ const WeekDetail = ({
           <div style={{ flex: '1 1 180px', minWidth: 0 }}>
             <div style={{ fontSize: 13.5, fontWeight: 800, color: LT.text }}>
               Estás viendo {weekdayLabel(selectedDay.day)}
-              {miDia && miDia.week.num !== week.num ? ` · Semana ${week.num}` : ''}
-              {miDia && miDia.phase.id !== phase.id ? ` de ${phase.name}` : ''}
+              {deCorrido && miDia && (miDia.week.num !== week.num || miDia.phase.id !== phase.id)
+                ? ` · Semana ${semanaDeCorrido}` : ''}
+              {!deCorrido && miDia && miDia.week.num !== week.num ? ` · Semana ${week.num}` : ''}
+              {!deCorrido && miDia && miDia.phase.id !== phase.id ? ` de ${phase.name}` : ''}
             </div>
             <div style={{ fontSize: 12.5, fontWeight: 600, color: LT.text3, marginTop: 2 }}>
               {miDia
@@ -1448,7 +1459,10 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
      que es donde empieza el texto de su tarjeta. */
   const esCompu = useIsDesktop();
   const tope = esCompu ? { maxWidth: 260 } : null;
-  const { phases: PLAN, planMeta, kind } = usePlan();
+  const { phases: PLAN, planMeta, kind, estructura } = usePlan();
+  // "Varias semanas": las tarjetas dicen la semana de corrido, no la fase.
+  const deCorrido = estructura === 'semanas';
+  const semanaDe = (n) => `Semana ${semanaGlobal(PLAN, n.phase.id, n.week.num) ?? n.week.num} de ${semanasDelPlan(PLAN)}`;
   const { perfil: profile } = usePerfilDeLaVista();
   const displayName = profile?.full_name || profile?.username || 'Atleta';
   // Lo que toca HOY según el calendario del dispositivo (no según lo marcado).
@@ -1530,7 +1544,7 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
                   {sessionTitle}
                 </div>
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.82)', marginTop: 8, lineHeight: 1.4 }}>
-                  {kind === 'weekly' ? weekdayLabel(next.day.day) : next.phase.name}<br />
+                  {kind === 'weekly' ? weekdayLabel(next.day.day) : (deCorrido ? semanaDe(next) : next.phase.name)}<br />
                   {[
                     sessionMeta.exercises ? plural(sessionMeta.exercises, 'ejercicio', 'ejercicios') : null,
                     sessionMeta.duration,
@@ -1580,15 +1594,15 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.05) 35%, rgba(0,0,0,0.78) 100%)' }} />
               <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', padding: '16px 16px 0' }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>
-                  {kind === 'weekly' ? 'Tu rutina' : `Fase ${next.phase.num}`}
+                  {kind === 'weekly' ? 'Tu rutina' : (deCorrido ? semanaDe(next) : `Fase ${next.phase.num}`)}
                 </span>
               </div>
               <div style={{ position: 'relative', padding: '0 16px 16px' }}>
                 <div style={{ fontSize: 22, fontWeight: 700, color: '#fff', lineHeight: 1.05, marginBottom: 12 }}>
-                  {kind === 'weekly' ? (planMeta?.title || 'Rutina semanal') : next.phase.name}
+                  {kind === 'weekly' ? (planMeta?.title || 'Rutina semanal') : (deCorrido ? (planMeta?.title || 'Tu programa') : next.phase.name)}
                 </div>
                 <div style={{ background: '#fff', borderRadius: 14, padding: '12px', fontSize: 13, fontWeight: 600, color: '#111', textAlign: 'center' }}>
-                  {kind === 'weekly' ? 'Ver la semana' : 'Ver fase'}
+                  {kind === 'weekly' || deCorrido ? 'Ver la semana' : 'Ver fase'}
                 </div>
               </div>
             </div>
@@ -1723,7 +1737,9 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
             <span style={{ display: 'block', fontSize: 12, color: LT.text2, marginTop: 1 }}>
               {kind === 'weekly'
                 ? `Rutina semanal · ${week.trainingDays} ${week.trainingDays === 1 ? 'día' : 'días'}`
-                : `${pluralS(PLAN.length, 'fase')} · ${pluralS(PLAN.reduce((s, p) => s + (p.weekData?.length || 0), 0), 'semana')}`}
+                : deCorrido
+                  ? pluralS(semanasDelPlan(PLAN), 'semana')
+                  : `${pluralS(PLAN.length, 'fase')} · ${pluralS(semanasDelPlan(PLAN), 'semana')}`}
             </span>
           </span>
           <span style={{

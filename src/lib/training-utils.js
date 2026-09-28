@@ -746,8 +746,50 @@ const getMuscles = (name, focus) => {
   return result;
 };
 
+/**
+ * LA FORMA DEL PLAN. Son tres, las mismas que se escogen al crearlo:
+ *   'rutina'  — una sola semana que se repite siempre.
+ *   'semanas' — varias semanas seguidas que avanzan, sin fases a la vista.
+ *   'fases'   — un programa por fases, cada una con su nombre y objetivo.
+ *
+ * Andrés, PDF 2.0 (18 sep 2026): "acuérdate que son 3 vertientes… siempre
+ * debes de poder cambiarla al que quieras". El plan guarda cuál es en
+ * `data.estructura`; antes solo guardaba `kind`, y "varias semanas" y
+ * "por fases" se guardaban igual, así que la app olvidaba cuál era.
+ *
+ * `kind` sigue guardándose al lado ('weekly' para la rutina, 'periodized' para
+ * las otras dos) porque de él depende cómo se cuentan los días.
+ */
+const ESTRUCTURAS = ['rutina', 'semanas', 'fases'];
+const estructuraDelPlan = (data) => {
+  if (ESTRUCTURAS.includes(data?.estructura)) return data.estructura;
+  if (data?.kind === 'weekly') return 'rutina';
+  // Los planes de antes no la guardaban. "Varias semanas" se creaba con UNA
+  // fase llamada "Mi programa"; con eso se reconoce.
+  const fases = data?.phases ?? [];
+  return fases.length === 1 && fases[0]?.name === 'Mi programa' ? 'semanas' : 'fases';
+};
+const kindDeEstructura = (estructura) => (estructura === 'rutina' ? 'weekly' : 'periodized');
+
+/* En "varias semanas" las semanas se cuentan de corrido, de la 1 a la última,
+   aunque por dentro el plan venga de varias fases (al pasar un programa por
+   fases a semanas NO se juntan los datos: así el atleta no pierde dónde va ni
+   lo que anotó, que se guarda por fase y semana). */
+const semanasDelPlan = (plan) => (plan ?? []).reduce((s, f) => s + (f.weekData?.length || 0), 0);
+const semanaGlobal = (plan, faseId, semanaNum) => {
+  let n = 0;
+  for (const f of plan ?? []) {
+    for (const w of f.weekData ?? []) {
+      n += 1;
+      if (f.id === faseId && w.num === semanaNum) return n;
+    }
+  }
+  return null;
+};
+
 
 export {
+  ESTRUCTURAS, estructuraDelPlan, kindDeEstructura, semanasDelPlan, semanaGlobal,
   sessionId, calc1RM, today, greeting, isLoadedExercise, isValidCursor,
   resolveCursor, advanceCursor, defaultCursor, cursorAlDia, semanasEntre, findPreviousWeight, historialDePeso,
   adivinaSiLlevaCarga,

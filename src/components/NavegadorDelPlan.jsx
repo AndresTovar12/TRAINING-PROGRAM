@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Check, ChevronRight, CornerUpLeft, MoreHorizontal, Plus } from 'lucide-react';
 import { LT, FONT, NUM_STYLE, tipoDeSesion } from '@/lib/theme';
-import { esDescanso, enOrdenDeSemana, nombreDeSesion } from '@/lib/training-utils';
+import { esDescanso, enOrdenDeSemana, nombreDeSesion, semanaGlobal } from '@/lib/training-utils';
 import { pluralS } from '@/lib/plural';
 
 /* Los siete días, empezando en lunes. Son las mismas claves que guarda el plan
@@ -46,11 +46,19 @@ const nombreDe = (day) => day.name
  * los SIETE días —un sábado vacío es justo donde el coach quiere añadir algo—,
  * y cada fase y cada semana tienen sus tres puntos. Aprobado por Andrés con
  * maqueta el 24 sep 2026: "sí, hazlo así".
+ *
+ * LA FORMA DEL PLAN (`estructura`, ver `estructuraDelPlan`). En una rutina no
+ * hay fase que nombrar. En "varias semanas" tampoco: sale UNA tarjeta con las
+ * semanas contadas de corrido, aunque por dentro vengan de varias fases (al
+ * pasar un programa por fases a semanas no se juntan los datos). Sin
+ * `estructura`, se deduce de `kind` como antes.
  */
 export default function NavegadorDelPlan({
-  fases, kind, aqui, viendo, hecha, alTocarDia, abrirEn, detalleDia, contenidoDia, quien = 'tu',
-  editor,
+  fases, kind, estructura: estructuraDada, aqui, viendo, hecha, alTocarDia, abrirEn, detalleDia,
+  contenidoDia, quien = 'tu', editor,
 }) {
+  const estructura = estructuraDada ?? (kind === 'weekly' ? 'rutina' : 'fases');
+  const deCorrido = estructura === 'semanas';
   /* `quien`: el atleta lee "AQUÍ VAS"; el coach, que mira el plan de otro,
      "AQUÍ VA". Misma marca, dicha a quien la lee. */
   const textoAqui = quien === 'tu' ? 'AQUÍ VAS' : 'AQUÍ VA';
@@ -145,6 +153,7 @@ export default function NavegadorDelPlan({
         const faseDeAqui = aqui?.faseId === f.id;
 
         if (i !== abierta) {
+          if (deCorrido) return null;
           const { hechas, total } = cuentaDe(f, hecha);
           const terminada = total > 0 && hechas === total;
           const fila = (
@@ -186,18 +195,28 @@ export default function NavegadorDelPlan({
           );
         }
 
+        // En "varias semanas" la tarjeta es el plan entero: el atleta siempre
+        // está en ella.
+        const tarjetaDeAqui = deCorrido ? !!aqui : faseDeAqui;
+        // Las fichas de semana: las de esta fase, o en "varias semanas" TODAS,
+        // contadas de corrido.
+        const fichas = deCorrido
+          ? fasesSeguras.flatMap((ff, fi) => (ff.weekData ?? []).map((w) => ({ ff, fi, w })))
+          : (f.weekData ?? []).map((w) => ({ ff: f, fi: i, w }));
+        const ultima = fasesSeguras.length - 1;
         return (
           <div
             key={f.id}
             style={{
               background: LT.surface, borderRadius: 16, padding: 14,
-              border: `${faseDeAqui ? 2 : 1}px solid ${faseDeAqui ? LT.blue : LT.border}`,
+              border: `${tarjetaDeAqui ? 2 : 1}px solid ${tarjetaDeAqui ? LT.blue : LT.border}`,
               display: 'flex', flexDirection: 'column', gap: 11,
             }}
           >
             {/* En una rutina que se repite no hay fase que nombrar: es una sola
-                y su nombre ya está en el título. Solo van los días. */}
-            {kind !== 'weekly' && (
+                y su nombre ya está en el título. Solo van los días. En "varias
+                semanas", tampoco: se ven como semanas, no como fases. */}
+            {kind !== 'weekly' && !deCorrido && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ width: 9, height: 9, borderRadius: 5, background: f.color || LT.blue, flexShrink: 0 }} />
                 <span style={{ flex: 1, minWidth: 0, fontSize: 15.5, fontWeight: 800, color: LT.text }}>{f.name}</span>
@@ -208,17 +227,18 @@ export default function NavegadorDelPlan({
 
             {/* Las fichas de las semanas. En el editor salen aunque haya una
                 sola, porque ahí vive el "+" para agregar la segunda. */}
-            {kind !== 'weekly' && ((f.weekData?.length || 0) > 1 || editor) && (
+            {kind !== 'weekly' && (fichas.length > 1 || editor) && (
               <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
-                {f.weekData.map((w) => {
-                  const elegida = w.num === semana?.num;
-                  const suya = faseDeAqui && w.num === aqui.semana;
+                {fichas.map(({ ff, fi, w }, n) => {
+                  const elegida = fi === abierta && w.num === semana?.num;
+                  const suya = aqui?.faseId === ff.id && w.num === aqui.semana;
+                  const numero = deCorrido ? n + 1 : w.num;
                   return (
                     <button
-                      key={w.num}
+                      key={`${ff.id}-${w.num}`}
                       type="button"
-                      onClick={() => elegirSemana(w.num)}
-                      aria-label={`Semana ${w.num}${suya ? (quien === 'tu' ? ', donde vas' : ', donde va') : ''}`}
+                      onClick={() => (fi === abierta ? elegirSemana(w.num) : abrirFase(fi, w.num))}
+                      aria-label={`Semana ${numero}${suya ? (quien === 'tu' ? ', donde vas' : ', donde va') : ''}`}
                       style={{
                         position: 'relative', minWidth: 38, padding: '7px 0', borderRadius: 10, cursor: 'pointer',
                         border: `${suya && !elegida ? 2 : 1}px solid ${elegida || suya ? LT.blue : LT.border}`,
@@ -227,7 +247,7 @@ export default function NavegadorDelPlan({
                         fontFamily: FONT, fontSize: 13, fontWeight: 800, ...NUM_STYLE,
                       }}
                     >
-                      {w.num}
+                      {numero}
                       {/* El puntito dice "tu semana" aunque estés mirando otra. */}
                       {suya && (
                         <span style={{
@@ -242,7 +262,10 @@ export default function NavegadorDelPlan({
                   <>
                     <button
                       type="button"
-                      onClick={() => editor.onAgregarSemana(f, i)}
+                      // En "varias semanas" la nueva va al final de todo.
+                      onClick={() => (deCorrido
+                        ? editor.onAgregarSemana(fasesSeguras[ultima], ultima)
+                        : editor.onAgregarSemana(f, i))}
                       aria-label="Agregar semana"
                       title="Agregar semana"
                       style={{
@@ -254,7 +277,10 @@ export default function NavegadorDelPlan({
                       <Plus size={15} strokeWidth={2.6} />
                     </button>
                     <span style={{ marginLeft: 'auto' }}>
-                      {tresPuntos(`Opciones de la semana ${semana?.num ?? ''}`, () => editor.onMenuSemana(f, i, semana))}
+                      {tresPuntos(
+                        `Opciones de la semana ${(deCorrido ? semanaGlobal(fasesSeguras, f.id, semana?.num) : semana?.num) ?? ''}`,
+                        () => editor.onMenuSemana(f, i, semana),
+                      )}
                     </span>
                   </>
                 )}
@@ -359,7 +385,7 @@ export default function NavegadorDelPlan({
         );
       })}
 
-      {editor && kind !== 'weekly' && (
+      {editor && kind !== 'weekly' && !deCorrido && (
         <button
           type="button"
           onClick={editor.onAgregarFase}

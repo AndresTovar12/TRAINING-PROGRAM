@@ -747,14 +747,14 @@ export async function getActivePlan(userId) {
 
 // `kind`: 'weekly' = rutina semanal que se repite | 'periodized' = fases que
 // avanzan (default para los planes creados antes de existir este campo).
-export async function createPlan({ userId, title, phases, kind, createdBy }) {
+export async function createPlan({ userId, title, phases, kind, estructura, createdBy }) {
   const { data, error } = await supabase
     .from('plans')
     .insert({
       user_id: userId,
       title: title || 'Plan de entrenamiento',
       status: 'active',
-      data: { kind: kind || 'periodized', phases: phases ?? [] },
+      data: { kind: kind || 'periodized', ...(estructura ? { estructura } : {}), phases: phases ?? [] },
       created_by: createdBy ?? null,
     })
     .select('*')
@@ -763,11 +763,14 @@ export async function createPlan({ userId, title, phases, kind, createdBy }) {
   return data;
 }
 
-export async function updatePlan(planId, { title, phases, kind }) {
+export async function updatePlan(planId, { title, phases, kind, estructura }) {
   const patch = { updated_at: new Date().toISOString() };
   if (title !== undefined) patch.title = title;
-  // `data` se reescribe entero, así que el kind viaja siempre junto a las fases
-  if (phases !== undefined) patch.data = { kind: kind || 'periodized', phases };
+  // `data` se reescribe entero, así que el kind y la forma del plan (ver
+  // `estructuraDelPlan`) viajan siempre junto a las fases.
+  if (phases !== undefined) {
+    patch.data = { kind: kind || 'periodized', ...(estructura ? { estructura } : {}), phases };
+  }
   const { data, error } = await supabase
     .from('plans')
     .update(patch)
