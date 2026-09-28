@@ -306,9 +306,14 @@ export function diaDesdeEntrada(
   return { dia, sinFicha }
 }
 
-/** Lo que el editor hace antes de guardar: semanas y duración al día. */
+/**
+ * Lo que el editor hace antes de guardar: semanas y duración al día.
+ * Menos en un microciclo: su `weekData` es UNA semana modelo que se repite y
+ * `weeks` dice cuántas veces (Camp 4, Temporada 11 en el plan de Andrés).
+ * Contarla la dejaría en "1 semana".
+ */
 export function normalizar(fases: any[]) {
-  return fases.map((f) => ({
+  return fases.map((f) => (f.mode === 'microcycle' ? f : {
     ...f,
     weeks: f.weekData.length,
     duration: `${f.weekData.length} semana${f.weekData.length !== 1 ? 's' : ''}`,
