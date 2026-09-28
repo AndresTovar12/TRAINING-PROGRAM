@@ -7,11 +7,18 @@
  * así que la lista entera se volvía indistinguible. Andrés: "si un ejercicio no
  * tiene portada, pues que mientras utilice foto del video como foto de portada".
  *
- * Y tiene razón doble: además de llenar el hueco, el primer fotograma del video
- * es EXACTAMENTE lo que va a ver al abrirlo. No es un relleno bonito; es una
+ * Y tiene razón doble: además de llenar el hueco, un fotograma del video es
+ * EXACTAMENTE lo que va a ver al abrirlo. No es un relleno bonito; es una
  * vista previa de verdad.
  *
- * ORDEN: foto → primer fotograma del video → la mancuerna de siempre.
+ * QUÉ FOTOGRAMA: EL DE LA MITAD. Andrés, 28 sep 2026: "que la foto de portada
+ * que aparece siempre sea exactamente de cuando el video va justo a la
+ * mitad". Antes era el del arranque (0.1 s), que casi siempre es la persona
+ * acomodándose antes de empezar. Si el video está recortado, es la mitad del
+ * tramo que ve el atleta (`desde`/`hasta`), no la del archivo entero: 9 de
+ * los 10 videos del repertorio tienen recorte.
+ *
+ * ORDEN: foto → fotograma de la mitad del video → la mancuerna de siempre.
  *
  * POR QUE NO SE GENERA UNA MINIATURA DE VERDAD:
  * Lo natural sería dibujar el fotograma en un canvas y guardarlo como imagen.
@@ -24,20 +31,38 @@ import { useEffect, useRef, useState } from 'react';
 import { ligaExterna } from '@/lib/videos';
 
 /**
- * Un video haciendo de foto: sin sonido, sin controles, quieto en el arranque.
+ * Un video haciendo de foto: sin sonido, sin controles, quieto a la mitad.
  *
  * DOS DETALLES QUE PARECEN DE MÁS Y NO LO SON:
  *
- * 1. El salto a 0.1 s. Safari en iPhone no dibuja NINGÚN fotograma mientras el
- *    video no se haya movido: carga la duración y deja el recuadro en negro.
- *    Pedirle que salte un pelín lo obliga a pintar. Ya nos pasó tres veces en
- *    pantallas distintas.
+ * 1. El salto. Safari en iPhone no dibuja NINGÚN fotograma mientras el video
+ *    no se haya movido: carga la duración y deja el recuadro en negro. Pedirle
+ *    que salte lo obliga a pintar. Ya nos pasó tres veces en pantallas
+ *    distintas. Ahora el salto es a la mitad, que además es el fotograma que
+ *    se quiere; si la duración no se sabe, vuelve a 0.1 s.
  *
  * 2. Solo se empieza a cargar cuando el recuadro se acerca a la pantalla. En
  *    el repertorio hay ochenta y un ejercicios; si todos pidieran su video a la
  *    vez, abrir la lista con datos móviles costaría más que ver el video.
  */
-function VideoComoFoto({ src, estilo }) {
+// Segundos de un recorte, o null si no hay. La base los manda como número o
+// como texto según la columna, y null o vacío es "sin recorte".
+const segundos = (v) => {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+};
+
+// El punto medio de lo que se ve: del recorte si lo hay, del video si no.
+function mitadDe(duracion, desde, hasta) {
+  const total = Number.isFinite(duracion) && duracion > 0 ? duracion : null;
+  const ini = desde ?? 0;
+  const fin = Math.min(hasta ?? Infinity, total ?? Infinity);
+  if (!Number.isFinite(fin) || fin <= ini) return total ? total / 2 : 0.1;
+  return ini + (fin - ini) / 2;
+}
+
+function VideoComoFoto({ src, estilo, desde, hasta }) {
   const caja = useRef(null);
   // Sin IntersectionObserver (navegadores viejos) se carga de una: es peor
   // quedarse sin portada que gastar de más. Se decide al crear el estado y no
@@ -67,7 +92,9 @@ function VideoComoFoto({ src, estilo }) {
           preload="metadata"
           tabIndex={-1}
           aria-hidden="true"
-          onLoadedMetadata={(e) => { e.currentTarget.currentTime = 0.1; }}
+          onLoadedMetadata={(e) => {
+            e.currentTarget.currentTime = mitadDe(e.currentTarget.duration, segundos(desde), segundos(hasta));
+          }}
           style={estilo}
         />
       )}
@@ -77,11 +104,13 @@ function VideoComoFoto({ src, estilo }) {
 
 /**
  * @param foto   dirección de la foto de portada, si tiene
- * @param video  dirección del video, para sacarle el primer fotograma
+ * @param video  dirección del video, para sacarle el fotograma de la mitad
+ * @param desde  inicio del recorte del video, en segundos (si lo tiene)
+ * @param hasta  fin del recorte del video, en segundos (si lo tiene)
  * @param style  se aplica al recuadro de fuera (tamaño, borde, color de fondo)
  * @param children  lo que se pinta cuando no hay ni foto ni video
  */
-export default function Portada({ foto, video, style, children }) {
+export default function Portada({ foto, video, desde, hasta, style, children }) {
   const relleno = {
     position: 'absolute', inset: 0, width: '100%', height: '100%',
     objectFit: 'cover', display: 'block',
@@ -101,7 +130,7 @@ export default function Portada({ foto, video, style, children }) {
       {foto
         ? <img src={foto} alt="" loading="lazy" style={relleno} />
         : (video && !ligaExterna(video))
-          ? <VideoComoFoto src={video} estilo={relleno} />
+          ? <VideoComoFoto src={video} estilo={relleno} desde={desde} hasta={hasta} />
           : children}
     </span>
   );

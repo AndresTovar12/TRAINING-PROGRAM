@@ -30,6 +30,13 @@ import FichaEjercicio from '@/features/training/FichaEjercicio';
 import Portada from '@/components/Portada';
 import { plural, pluralS, rondasQueDecir } from '@/lib/plural';
 import { textoMeta } from '@/lib/medidas';
+import { useAuth } from '@/contexts/AuthContext';
+import { esArranque, guardaLugar, leeLugar } from '@/lib/lugar';
+import { useLugar, useScrollLugar } from '@/lib/useLugar';
+
+// Las pestañas de la app del atleta. Sirve para desconfiar de la que se guardó
+// al refrescar: una pestaña que ya no existe dejaría la pantalla en blanco.
+const PESTANAS = ['home', 'plan', 'wellness', 'oneRM', 'science'];
 
 // Nombres completos SOLO para mostrar en compu. Lo que guarda el plan sigue
 // siendo 'Lun', 'Mar'… igual que en el editor del entrenador.
@@ -339,6 +346,8 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phas
                 <Portada
                   foto={portada}
                   video={misVideos[0]?.url}
+                  desde={misVideos[0]?.inicio}
+                  hasta={misVideos[0]?.fin}
                   style={{ position: 'absolute', inset: 0 }}
                 />
                 {misVideos.length > 0 && (
@@ -2200,7 +2209,11 @@ const NoPlanState = ({ onGoTab }) => (
 export default function TrainingApp() {
   const { phases: PLAN, hasPlan, planLoading, kind } = usePlan();
   const esCompu = useIsDesktop();
-  const [tab, setTab] = useState('home');
+  const { user } = useAuth();
+  // De quién es esta app: de quien entró, o del atleta que su coach está viendo.
+  // Cada uno tiene su propio lugar guardado (ver `lugar.js`).
+  const { userId: quien } = usePerfilDeLaVista();
+  const [tab, setTab] = useLugar(`app.${quien}.tab`, 'home', (t) => PESTANAS.includes(t));
   const [view, setView] = useState({ level: 'week' });
   const [sessionsData, setSessionsData] = useStorage('wr:sessions', {});
   const [oneRMs, setOneRMs] = useStorage('wr:onerm', {});
@@ -2252,6 +2265,9 @@ export default function TrainingApp() {
   // coach al ver su plan: una sola cuenta, dos pantallas que no se contradicen.
   const aqui = useMemo(() => dondeVa(PLAN, kind, cursor), [PLAN, kind, cursor]);
   const [diaVisto, setDiaVisto] = useState(null);
+  // La semana y el día que tenía abiertos antes de refrescar. Se lee una sola
+  // vez, al arrancar; ver el efecto de abajo.
+  const [lugarPlan] = useState(() => (esArranque() ? leeLugar(user?.id, `app.${quien}.plan`) : undefined));
 
   // El marcado es opcional y NO mueve el puntero: qué se muestra lo decide el
   // calendario. (Antes, reabrir una sesión completada y editar un peso saltaba
@@ -2311,6 +2327,35 @@ export default function TrainingApp() {
      abierta la app es la lista de fases. El atleta pedía su plan y le salía un
      índice. */
   const vasA = (t) => { setTab(t); if (t === 'plan') setView(vistaDelPlan()); };
+
+  /* AL REFRESCAR, VUELVE A DONDE ESTABAS (ver `lugar.js`). La pestaña ya vuelve
+     sola; la de "Plan" además necesita una semana, y `view` arranca sin ella:
+     sin esto, la pantalla se quedaría cargando para siempre. Si se guardó una
+     semana y sigue en el plan, se abre esa, en el día que se estaba viendo; si
+     no, la de siempre: la semana donde va el atleta. */
+  useEffect(() => {
+    if (tab !== 'plan' || view.week || !hasPlan) return;
+    const fase = PLAN.find((f) => f.id === lugarPlan?.faseId);
+    const semana = fase?.weekData?.find((w) => w.num === lugarPlan?.semana);
+    setView(fase && semana
+      ? { level: 'week', phase: fase, week: semana, dayIdx: Number.isInteger(lugarPlan.dia) ? lugarPlan.dia : undefined }
+      : vistaDelPlan());
+  }, [tab, view.week, hasPlan, PLAN, lugarPlan, vistaDelPlan]);
+
+  // Y se anota la semana y el día que se están viendo.
+  useEffect(() => {
+    if (tab !== 'plan' || !view.week) return;
+    guardaLugar(user?.id, `app.${quien}.plan`, {
+      faseId: view.phase?.id, semana: view.week.num, dia: diaVisto,
+    });
+  }, [tab, view.phase, view.week, diaVisto, user?.id, quien]);
+
+  // La altura de la pantalla, para volver a donde estaba. En "Plan" cada día
+  // tiene la suya; se espera a saber cuál es antes de intentar bajar.
+  useScrollLugar(
+    tab === 'plan' ? `app.${quien}.plan.${view.phase?.id}.${view.week?.num}.${diaVisto}` : `app.${quien}.${tab}`,
+    !planLoading && (tab !== 'plan' || (!!view.week && diaVisto != null)),
+  );
 
   let content;
   if (planLoading && (tab === 'home' || tab === 'plan')) {

@@ -28,6 +28,10 @@ import SelectorCategoria from '@/features/admin/SelectorCategoria';
 import SelectorTipoSesion from '@/features/admin/SelectorTipoSesion';
 import Portada from '@/components/Portada';
 import { pluralS } from '@/lib/plural';
+import { esArranque, guardaLugar, leeLugar } from '@/lib/lugar';
+import { useScrollLugar } from '@/lib/useLugar';
+import InterruptorVista from '@/components/InterruptorVista';
+import { useVistaEjercicios } from '@/lib/useVistaEjercicios';
 
 /* ------------------------------------------------------------------ */
 /* Constantes y helpers de datos                                       */
@@ -60,6 +64,23 @@ const diaParaSemana = (wk, actual) => {
   if (dias.some((d) => d.day === actual)) return actual;
   return WEEKDAYS.find((k) => dias.some((d) => d.day === k)) ?? actual;
 };
+
+/* El lugar del coach en el plan, leído de lo que se guardó antes de refrescar
+   (ver `lugar.js`), o `null` si no sirve. Se desconfía de todo: la fase o la
+   semana pudieron borrarse desde entonces, y un índice que ya no existe
+   dejaría el editor en blanco. Guarda `{ pi, wi, dia, tel }`: fase, semana,
+   día y si estaba abierto el editor del día del teléfono. */
+function lugarDelPlan(guardado, fases) {
+  if (!guardado || typeof guardado !== 'object') return null;
+  const fase = Number.isInteger(guardado.pi) ? fases[guardado.pi] : null;
+  if (!fase) return null;
+  const wi = Number.isInteger(guardado.wi) && fase.weekData?.[guardado.wi] ? guardado.wi : 0;
+  const semana = fase.weekData?.[wi];
+  const dia = diaParaSemana(semana, typeof guardado.dia === 'string' ? guardado.dia : 'Lun');
+  // El editor del día solo se reabre si ese día todavía existe.
+  const hayDia = (semana?.days ?? []).some((d) => d.day === dia);
+  return { pi: guardado.pi, wi, dia, editandoDiaTel: guardado.tel === true && hayDia };
+}
 
 // El número de semana es fijo (num); `label` es solo el título opcional.
 // Ignora labels heredados que sean literalmente "Semana N" para no duplicar.
@@ -424,6 +445,8 @@ function ExerciseCard({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove
         <Portada
           foto={rep?.cover_image_url}
           video={rep?.video_url}
+          desde={rep?.recorte_inicio}
+          hasta={rep?.recorte_fin}
           style={{ position: 'absolute', inset: 0, color: '#3A3F4C' }}
         >
           <Dumbbell size={26} />
@@ -605,6 +628,18 @@ function RotuloCampo({ children }) {
  */
 function ExerciseRow({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove, onMove, canUp, canDown, conSeries = false }) {
   const rep = delRepertorio(ex, repertoire);
+  /* EN EL TELÉFONO, LA FILA SE ACOMODA A DOS COLUMNAS. Andrés, 28 sep 2026:
+     eligió "lista" también desde el teléfono. Con los anchos de la compu,
+     "Descripción" y "Cue técnico" quedaban de ~90 px, demasiado para escribir.
+     Aquí las medidas son fluidas: dos por renglón (cantidad y carga; descanso y
+     las pastillas), y descripción y cue a todo el ancho. */
+  const angosta = !useIsDesktop();
+  /* `order` reparte los renglones: primero cantidad y carga; luego descanso con
+     las pastillas de peso y video (van pegadas, no al final); y al último,
+     descripción y cue, cada uno a todo el ancho. En la compu no se usa: ahí
+     todo va en un renglón y el orden es el del código. */
+  const fluido = (orden) => (angosta ? { flex: '1 1 90px', minWidth: 0, order: orden } : null);
+  const completo = (orden) => (angosta ? { flex: '1 1 100%', minWidth: 0, order: orden } : null);
   return (
     <div style={{
       background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 12,
@@ -616,6 +651,8 @@ function ExerciseRow({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove,
         <Portada
           foto={rep?.cover_image_url}
           video={rep?.video_url}
+          desde={rep?.recorte_inicio}
+          hasta={rep?.recorte_fin}
           style={{ width: 34, height: 34, borderRadius: 9, flexShrink: 0, background: '#0E1015' }}
         >
           <Dumbbell size={15} color="#3A3F4C" />
@@ -648,26 +685,32 @@ function ExerciseRow({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove,
           </div>
         )}
         {/* El rótulo de la cantidad es la lista de unidades. Ver `CampoCantidad`. */}
-        <CampoCantidad ex={ex} onPatch={onPatch} compacto estiloInput={inputFila} ancho={96} />
+        {angosta ? (
+          <div style={fluido(0)}>
+            <CampoCantidad ex={ex} onPatch={onPatch} compacto estiloInput={inputFila} />
+          </div>
+        ) : (
+          <CampoCantidad ex={ex} onPatch={onPatch} compacto estiloInput={inputFila} ancho={96} />
+        )}
 
-        <div style={{ width: 100 }}>
+        <div style={fluido(0) ?? { width: 100 }}>
           <RotuloCampo>Carga / Int.</RotuloCampo>
           <input value={ex.intensity || ''} onChange={(e) => onPatch({ intensity: e.target.value })}
             placeholder="70% / RPE 8" style={inputFila} />
         </div>
-        <div style={{ width: 84 }}>
+        <div style={fluido(1) ?? { width: 84 }}>
           <RotuloCampo>Descanso</RotuloCampo>
           <input value={ex.descanso || ''} onChange={(e) => onPatch({ descanso: e.target.value })}
             placeholder="2 min" style={inputFila} />
         </div>
         {/* La base decide si se parte la línea (no el mínimo): va chica, y el
             campo crece para llenar lo que sobre. */}
-        <div style={{ flex: '1 1 90px', minWidth: 90 }}>
+        <div style={completo(3) ?? { flex: '1 1 90px', minWidth: 90 }}>
           <RotuloCampo>Descripción</RotuloCampo>
           <input value={ex.notes || ''} onChange={(e) => onPatch({ notes: e.target.value })}
             placeholder="Ej. 8 cada pierna…" style={inputFila} />
         </div>
-        <div style={{ flex: '1 1 80px', minWidth: 80 }}>
+        <div style={completo(4) ?? { flex: '1 1 80px', minWidth: 80 }}>
           <RotuloCampo>Cue técnico</RotuloCampo>
           <input value={ex.cue || ''} onChange={(e) => onPatch({ cue: e.target.value })}
             placeholder="Opcional…" style={{ ...inputFila, color: T.text2 }} />
@@ -679,7 +722,7 @@ function ExerciseRow({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove,
             dos juntas miden lo mismo que un rótulo con su campo.
             El de video solo existe con un ejercicio del repertorio y un
             atleta delante. */}
-        <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 4 }}>
+        <div style={{ ...(fluido(2) ?? { flexShrink: 0 }), display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 4 }}>
           <BotonCarga ex={ex} onPatch={onPatch} />
           {rep && atleta?.id && (
             <BotonVideoAtleta idEjercicio={rep.id} atleta={atleta} onAbrir={() => onVideoAtleta?.({ ...ex, exercise_id: rep.id })} />
@@ -1100,8 +1143,24 @@ function RanuraMedia({
 /* Editor de sesión (un día) por sets                                   */
 /* ------------------------------------------------------------------ */
 
+/**
+ * ¿Los ejercicios del editor se dibujan como filas o como tarjetas?
+ *
+ * Andrés, 28 sep 2026, desde el teléfono: "aquí también pueda escoger vista de
+ * cards o de lista". Es la MISMA preferencia del repertorio y del selector de
+ * ejercicios (`useVistaEjercicios`): él pidió poder verlo como quiera "en
+ * cualquier pantalla donde salga la lista de ejercicios". Mientras no haya
+ * elegido, el editor se queda con lo de siempre: filas en la compu y tarjetas
+ * en el teléfono.
+ */
+function useEnFilas() {
+  const esCompu = useIsDesktop();
+  const [vista, eligeVista] = useVistaEjercicios();
+  return [vista ? vista === 'lista' : esCompu, eligeVista];
+}
+
 /* ---- días con dos sesiones (AM / PM) ---- */
-const turnoDe = (tag = '') => (tag.match(/\(([AP]M)\)/) || [])[1] || null;
+const turnoDe =(tag = '') => (tag.match(/\(([AP]M)\)/) || [])[1] || null;
 const limpiaTag = (tag = '') => tag.replace(/^Sesi[óo]n \d+ \([AP]M\):\s*/, '');
 
 /**
@@ -1143,7 +1202,7 @@ function EditorSesionesDelDia({
 }) {
   const bloques = day.blocks || [];
   const pregunta = useConfirmacion();
-  const esCompu = useIsDesktop();
+  const [enFilas] = useEnFilas();
   // El número de la sesión (0 = la primera del día) a la que va lo que se
   // elija del repertorio o se cree nuevo. `null` = nada abierto.
   const [eligiendoPara, setEligiendoPara] = useState(null);
@@ -1249,7 +1308,7 @@ function EditorSesionesDelDia({
                       otra; en el teléfono, tarjetas. Las notas ocupan todo el
                       ancho para que el orden de la sesión se lea tal cual. */}
                   {filas.length > 0 && (
-                    <div style={esCompu
+                    <div style={enFilas
                       ? { display: 'flex', flexDirection: 'column', gap: 8 }
                       : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 10 }}
                     >
@@ -1264,7 +1323,7 @@ function EditorSesionesDelDia({
                               <textarea
                                 value={e.text || ''}
                                 onChange={(ev) => parcheaFila(bi, fi, { text: ev.target.value })}
-                                rows={esCompu ? 1 : 2}
+                                rows={enFilas ? 1 : 2}
                                 placeholder="Nota dentro de la sesión…"
                                 style={{
                                   flex: 1, minWidth: 0, boxSizing: 'border-box', padding: '4px 0',
@@ -1289,7 +1348,7 @@ function EditorSesionesDelDia({
                           onMove: (dir) => mueveFila(bi, fi, dir),
                           onRemove: () => quitaFila(bi, fi),
                         };
-                        return esCompu
+                        return enFilas
                           ? <ExerciseRow key={fi} {...props} canUp={fi > 0} canDown={fi < filas.length - 1} />
                           : <ExerciseCard key={fi} {...props} canLeft={fi > 0} canRight={fi < filas.length - 1} />;
                       })}
@@ -1366,6 +1425,7 @@ function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCr
   const [mediaDe, setMediaDe] = useState(null);
   const pregunta = useConfirmacion();
   const esCompu = useIsDesktop();
+  const [enFilas] = useEnFilas();
   const [pickerCtx, setPickerCtx] = useState(null);
   const blocks = useMemo(() => parseBlocks(day.exercises), [day.exercises]);
 
@@ -1382,7 +1442,7 @@ function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCr
   if (isDualDay(day)) {
     return (
       <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 18, padding: 16, boxShadow: KP.shCard }}>
-        <DayHeader day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog} onClear={onClear} dual />
+        <DayHeader day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog} onClear={onClear} dual conVista />
         <EditorSesionesDelDia
           day={day}
           onPatch={onPatch}
@@ -1409,7 +1469,7 @@ function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCr
 
   return (
     <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 18, padding: 16, boxShadow: KP.shCard }}>
-      <DayHeader day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog} onClear={onClear} nSets={descanso ? null : nSets} />
+      <DayHeader day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog} onClear={onClear} nSets={descanso ? null : nSets} conVista={!descanso} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 14 }}>
         {blocks.map((b, bi) => {
@@ -1477,7 +1537,7 @@ function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCr
                     .filter((x) => x.type !== 'set' || x.members.length > 0)),
                 });
 
-                if (!esCompu) {
+                if (!enFilas) {
                   return (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 10 }}>
                       {b.members.map((m, mi) => (
@@ -1769,9 +1829,10 @@ function HojaFormas({ actual, onElegir, onClose }) {
   );
 }
 
-function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, nSets, dual }) {
+function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, nSets, dual, conVista = false }) {
   const { user } = useAuth();
   const esCompu = useIsDesktop();
+  const [enFilas, eligeVista] = useEnFilas();
   const [menu, setMenu] = useState(false);
   return (
     <>
@@ -1835,6 +1896,16 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
             <Settings2 size={16} /> Opciones de la sesión
           </button>
         )}
+        {/* Cómo se ven los ejercicios de abajo: filas o tarjetas. Al final y
+            pegado a la derecha, como en el repertorio: se usa menos que las
+            acciones de la sesión. Sin ejercicios que ver (un día de descanso)
+            no se ofrece. */}
+        {conVista && (
+          <>
+            <span style={{ flex: 1 }} />
+            <InterruptorVista vista={enFilas ? 'lista' : 'tarjetas'} onCambio={eligeVista} />
+          </>
+        )}
       </div>
 
       {menu && (
@@ -1871,18 +1942,28 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
   const kind = kindDeEstructura(estructura);
   const isWeekly = kind === 'weekly';
   const [formasAbiertas, setFormasAbiertas] = useState(false);
+  /* DÓNDE ESTABA EL COACH, al refrescar la app (ver `lugar.js`): fase, semana,
+     día y, en el teléfono, si tenía abierto el editor del día. Solo con un plan
+     que ya existe —uno nuevo sin guardar se pierde al refrescar— y solo al
+     arrancar: al abrir el editor con la app ya en uso, el coach cae donde va el
+     atleta, como siempre. Lo guardado se comprueba contra el plan de ahora: si
+     se borró la fase o la semana, no se usa. */
+  const [restaurado] = useState(() => {
+    if (isNew || !athlete?.id || !esArranque()) return null;
+    return lugarDelPlan(leeLugar(user?.id, `plan.${athlete.id}`), planRow?.data?.phases ?? []);
+  });
   /* Un plan que ya existe abre SIEMPRE en la hoja, con una fase abierta. La
      lista de fases como pantalla aparte se fue el 24 sep 2026: la hoja ya las
      enseña todas. Ver `NavegadorDelPlan`. */
-  const [nav, setNav] = useState(() => (isNew ? { level: 'start' } : { level: 'phase', pi: 0 }));
-  const [weekIdx, setWeekIdx] = useState(0);
+  const [nav, setNav] = useState(() => (isNew ? { level: 'start' } : { level: 'phase', pi: restaurado?.pi ?? 0 }));
+  const [weekIdx, setWeekIdx] = useState(restaurado?.wi ?? 0);
   const [activeWeekday, setActiveWeekday] = useState(
-    () => diaParaSemana(planRow?.data?.phases?.[0]?.weekData?.[0], 'Lun'),
+    () => restaurado?.dia ?? diaParaSemana(planRow?.data?.phases?.[0]?.weekData?.[0], 'Lun'),
   );
   const [detailsOpen, setDetailsOpen] = useState(false);
   // En el teléfono la hoja y el editor del día no caben juntos: tocar un día
   // abre su editor a pantalla completa, con flecha para volver a la hoja.
-  const [editandoDiaTel, setEditandoDiaTel] = useState(false);
+  const [editandoDiaTel, setEditandoDiaTel] = useState(restaurado?.editandoDiaTel ?? false);
   // Qué menú de tres puntos está abierto: { tipo: 'plan' | 'fase' | 'semana', pi }.
   const [menu, setMenu] = useState(null);
   const [dirty, setDirty] = useState(false);
@@ -1941,8 +2022,10 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
      `undefined` = todavía no llega. Distinto de `null` = llegó y no hay: sin
      esa diferencia se marcaría el primer día del plan mientras carga. */
   const [cursorAtleta, setCursorAtleta] = useState(undefined);
-  // Si el coach ya se movió por la hoja, lo que llegue tarde no lo mueve.
-  const yaNavego = useRef(false);
+  // Si el coach ya se movió por la hoja, lo que llegue tarde no lo mueve. Y si
+  // el editor se abrió en el lugar donde estaba antes de refrescar, tampoco:
+  // ese lugar manda sobre "donde va el atleta".
+  const yaNavego = useRef(!!restaurado);
   useEffect(() => {
     if (!athlete?.id || isNew) return undefined;
     let vivo = true;
@@ -1994,6 +2077,36 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
     setEditandoDiaTel(false);
     setDetailsOpen(false);
   };
+
+  // Dónde está el coach en este plan, para volver ahí al refrescar (ver
+  // `lugar.js`). Solo con un plan que ya existe y con una fase abierta.
+  useEffect(() => {
+    if (isNew || !athlete?.id || nav.level !== 'phase') return;
+    guardaLugar(user?.id, `plan.${athlete.id}`, {
+      pi: nav.pi, wi: weekIdx, dia: activeWeekday, tel: editandoDiaTel,
+    });
+  }, [isNew, athlete?.id, user?.id, nav, weekIdx, activeWeekday, editandoDiaTel]);
+
+  // Y cuánto había bajado, en esta hoja o en este día (`main` es lo que se
+  // desplaza, no la ventana).
+  useScrollLugar(
+    !isNew && athlete?.id && nav.level === 'phase'
+      ? `plan.${athlete.id}.${nav.pi}.${weekIdx}.${activeWeekday}.${editandoDiaTel ? 'dia' : 'hoja'}`
+      : null,
+    true,
+    mainRef,
+  );
+
+  /* Recordar DÓNDE estabas no es recordar lo que escribías: refrescar con
+     cambios sin guardar los pierde. Como ahora el editor se vuelve a abrir en
+     el mismo sitio, sería fácil creer que también volvieron. El navegador
+     pregunta antes de dejarte ir. (En el iPhone, Safari ignora el aviso.) */
+  useEffect(() => {
+    if (!dirty) return undefined;
+    const avisa = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', avisa);
+    return () => window.removeEventListener('beforeunload', avisa);
+  }, [dirty]);
 
   const touch = (fn) => { setDirty(true); setPhases(fn); };
   const patchPhase = (pi, patch) => touch((ps) => ps.map((p, i) => (i === pi ? { ...p, ...(typeof patch === 'function' ? patch(p) : patch) } : p)));

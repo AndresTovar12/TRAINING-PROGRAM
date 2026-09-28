@@ -268,6 +268,8 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
                           <Portada
                             foto={ex.cover_image_url}
                             video={ex.video_url}
+                            desde={ex.recorte_inicio}
+                            hasta={ex.recorte_fin}
                             style={{ width: 42, height: 42, borderRadius: 9, flexShrink: 0, background: '#0E1015' }}
                           >
                             <Dumbbell size={17} color="#3A3F4C" />
@@ -296,6 +298,8 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
                         <Portada
                           foto={ex.cover_image_url}
                           video={ex.video_url}
+                          desde={ex.recorte_inicio}
+                          hasta={ex.recorte_fin}
                           style={{ position: 'absolute', inset: 0, color: '#3A3F4C' }}
                         >
                           <Dumbbell size={26} />
@@ -348,6 +352,8 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
                     <Portada
                       foto={p.cover_image_url}
                       video={p.video_url}
+                      desde={p.recorte_inicio}
+                      hasta={p.recorte_fin}
                       style={{ width: 34, height: 34, borderRadius: 9, flexShrink: 0, background: T.bg3, color: T.text3 }}
                     >
                       <Dumbbell size={14} />

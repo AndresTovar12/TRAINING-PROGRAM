@@ -21,6 +21,7 @@ import {
 } from '@/lib/muscles';
 import { crearCategoriaPropia, mismoNombre } from '@/lib/categorias';
 import { coincidencia, pasaFiltros } from '@/lib/buscarEjercicio';
+import { useLugar, useScrollLugar } from '@/lib/useLugar';
 import DialogoNombre from '@/components/DialogoNombre';
 import SeleccionMultiple from '@/components/SeleccionMultiple';
 import { T, FONT, KP } from '@/lib/theme';
@@ -82,6 +83,8 @@ function ExerciseCard({ ex, onClick, base }) {
         <Portada
           foto={ex.cover_image_url}
           video={ex.video_url}
+          desde={ex.recorte_inicio}
+          hasta={ex.recorte_fin}
           style={{ position: 'absolute', inset: 0 }}
         >
           <Dumbbell size={30} color={`${color}88`} />
@@ -274,6 +277,8 @@ function ExerciseRow({ ex, base, onAbrir, onMedia }) {
         <Portada
           foto={ex.cover_image_url}
           video={ex.video_url}
+          desde={ex.recorte_inicio}
+          hasta={ex.recorte_fin}
           style={{
             width: 44, height: 44, borderRadius: 10, flexShrink: 0,
             background: `${color}14`,
@@ -1077,9 +1082,12 @@ export default function ExercisesPanel({ viendoComo }) {
   const [err, setErr] = useState('');
   // Lo marcado en las listas de filtro. Pueden ser varias a la vez: salen
   // solo los ejercicios que las tienen todas (ver `pasaFiltros`).
-  const [catsElegidas, setCatsElegidas] = useState([]); // ids de categoría
-  const [gruposElegidos, setGruposElegidos] = useState([]); // ids de grupo
-  const [search, setSearch] = useState('');
+  // Y se recuerdan al refrescar, igual que lo escrito en el buscador (ver
+  // `lugar.js`). Un id que ya no existe —una categoría borrada— se descarta
+  // más abajo, así que no hace falta comprobarlo aquí.
+  const [catsElegidas, setCatsElegidas] = useLugar('ejercicios.cats', [], Array.isArray); // ids de categoría
+  const [gruposElegidos, setGruposElegidos] = useLugar('ejercicios.grupos', [], Array.isArray); // ids de grupo
+  const [search, setSearch] = useLugar('ejercicios.busca', '', (v) => typeof v === 'string');
   const [editing, setEditing] = useState(null); // { exercise, esAjeno } | { new: true } | null
   // Mis versiones de los ejercicios base. Se aplican encima del repertorio.
   const [overrides, setOverrides] = useState([]);
@@ -1119,6 +1127,9 @@ export default function ExercisesPanel({ viendoComo }) {
     // repertorio cargaría sin mis versiones y nadie vería un error: se
     // mostrarían los ejercicios del master como si nunca los hubiera editado.
   }, [dueño]);
+
+  // La altura de la lista, para volver a donde estaba al refrescar.
+  useScrollLugar('ejercicios', !loading);
 
   /* Las categorías que se OFRECEN: las de la app y las del dueño de esta vista.
      La base deja al master leer las de todos los coaches; sin este filtro su

@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsDesktop } from '@/lib/useViewport';
+import { useLugar } from '@/lib/useLugar';
 import { T, FONT, KP, oficioCorto } from '@/lib/theme';
 import AthletesPanel from '@/features/admin/AthletesPanel';
 import ExercisesPanel from '@/features/admin/ExercisesPanel';
@@ -17,7 +18,11 @@ export default function AdminApp() {
   const { profile } = useAuth();
   const isMaster = !!profile?.is_owner;
   const isDesktop = useIsDesktop();
-  const [tab, setTab] = useState('athletes');
+  // La pestaña se recuerda al refrescar (ver `lugar.js`). Puede venir de una
+  // sesión con otros permisos —una pestaña de coaches que ya no te toca, o la
+  // de IA que en el teléfono no existe—, así que se comprueba abajo contra
+  // las que de verdad hay.
+  const [tabGuardada, setTab] = useLugar('admin.tab', 'athletes', (t) => typeof t === 'string');
   const [menuOpen, setMenuOpen] = useState(true);
 
   /* "Ver como" un coach: el master mira SUS atletas y SU repertorio, sin salir
@@ -32,7 +37,10 @@ export default function AdminApp() {
      nadie: es un filtro sobre datos que el master ya puede leer. La diferencia
      importa el día que algo salga mal — en los registros del servidor las
      acciones siguen apareciendo a nombre del master, que es quien las hizo. */
-  const [viendoComo, setViendoComo] = useState(null); // { id, nombre } | null
+  const [viendoComo, setViendoComo] = useLugar(
+    'admin.viendoComo', null,
+    (v) => isMaster && !!v && typeof v.id === 'string' && typeof v.nombre === 'string',
+  ); // { id, nombre } | null
 
   /* "Ver como" un ATLETA: su app de entrenamiento, tal cual la ve él. Lo puede
      hacer su coach, y el master con cualquiera. Andrés: "así no tengo que
@@ -68,6 +76,7 @@ export default function AdminApp() {
        teléfono NO va en la navegación (decisión de Andrés): va en "Mi perfil". */
     ...(isDesktop && !viendoComo ? [{ id: 'ia', label: 'Conectar con IA', icon: Sparkles }] : []),
   ];
+  const tab = TABS.some((t) => t.id === tabGuardada) ? tabGuardada : 'athletes';
 
   const entrarComo = (coach) => {
     setViendoComo({ id: coach.id, nombre: coach.full_name || coach.username });

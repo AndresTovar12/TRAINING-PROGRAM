@@ -59,7 +59,7 @@ export default function CarruselDeVideos({
 
   const tapa = (v, key) => (
     <div key={key} style={{ position: 'relative', flex: '0 0 100%', height: '100%', scrollSnapAlign: 'center' }}>
-      <Portada foto={portada} video={v?.url} style={{ width: '100%', height: '100%' }}>
+      <Portada foto={portada} video={v?.url} desde={v?.inicio} hasta={v?.fin} style={{ width: '100%', height: '100%' }}>
         {vacio}
       </Portada>
 

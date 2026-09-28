@@ -3,6 +3,7 @@ import {
 } from 'react';
 import { supabase } from '@/lib/supabase';
 import { updateProfile as apiUpdateProfile } from '@/lib/api';
+import { olvidaLugar } from '@/lib/lugar';
 
 const AuthContext = createContext(null);
 
@@ -172,6 +173,8 @@ export function AuthProvider({ children }) {
   // ChatGPT se le murió la conexión ("refresh token not found"). Para quitarle
   // el acceso a una IA está "Desconectar" en Conectar con IA.
   const signOut = useCallback(async () => {
+    // Quien entre después no hereda el lugar donde estaba esta persona.
+    olvidaLugar();
     await supabase.auth.signOut({ scope: 'local' });
     setProfile(null);
   }, []);

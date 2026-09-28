@@ -24,6 +24,8 @@ import NavegadorDelPlan from '@/components/NavegadorDelPlan';
 import ListaDesplegable from '@/components/ListaDesplegable';
 import CodigoDeCoach from '@/components/CodigoDeCoach';
 import { textoMeta } from '@/lib/medidas';
+import { esArranque, guardaLugar, leeLugar } from '@/lib/lugar';
+import { useLugar, useScrollLugar } from '@/lib/useLugar';
 
 function useIsNarrow(breakpoint = 880) {
   const [narrow, setNarrow] = useState(
@@ -740,7 +742,10 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
   const [plan, setPlan] = useState(null);
   const [state, setState] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [building, setBuilding] = useState(false);
+  /* Si el editor del plan estaba abierto, se vuelve a abrir al refrescar (ver
+     `lugar.js`). Ojo: NO se monta mientras `loading`. Sin el plan cargado, el
+     editor creería que el plan no existe, y guardar crearía uno nuevo. */
+  const [building, setBuilding] = useLugar(`editor.${athlete.id}`, false, (v) => v === true);
   const [savingCoach, setSavingCoach] = useState(false);
   const [verPlan, setVerPlan] = useState(false);
   const [seccion, setSeccion] = useState(null); // null | 'como-va' | 'cambios' | 'cuenta'
@@ -1023,7 +1028,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
       }}>
         {cuerpo}
       </div>
-      {building && (
+      {building && !loading && (
         <PlanBuilder
           athlete={athlete}
           planRow={plan}
@@ -1038,7 +1043,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
     <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: KP.rCard, padding: 22, boxShadow: KP.shCard }}>
       {cuerpo}
 
-      {building && (
+      {building && !loading && (
         <PlanBuilder
           athlete={athlete}
           planRow={plan}
@@ -1054,7 +1059,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
 
 /* ------------------------------ Panel raíz ------------------------------ */
 export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const isMaster = !!profile?.is_owner;
   const narrow = useIsNarrow(880);
   const isDesktop = useIsDesktop();
@@ -1080,7 +1085,21 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
     (async () => {
       try {
         const a = await listAthletesOverview();
-        if (!cancelled) { setAthletes(a); setCargadoEn(Date.now()); }
+        if (!cancelled) {
+          setAthletes(a);
+          setCargadoEn(Date.now());
+          /* Al refrescar se vuelve a abrir la ficha que estaba abierta (ver
+             `lugar.js`). Va aquí, junto a la lista y antes de `setLoading`,
+             para que la primera pantalla ya la traiga y no se vea la lista un
+             instante y luego la ficha. Solo vale un atleta que sigue en la
+             lista y que esta vista puede ver. */
+          if (esArranque()) {
+            const id = leeLugar(user?.id, 'atletas.abierto');
+            const fila = id && a.find((x) => x.id === id && x.role !== 'admin'
+              && (!viendoComo || x.coach_id === viendoComo.id));
+            if (fila) setSelected(fila);
+          }
+        }
         if (isMaster) {
           const c = await listCoaches();
           if (!cancelled) setCoaches(c);
@@ -1097,7 +1116,20 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
       }
     })();
     return () => { cancelled = true; };
+    // `user` y `viendoComo` solo se leen para volver a abrir la ficha al
+    // arrancar; cambiarlos no debe volver a pedir la lista.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMaster, recarga]);
+
+  // Se anota qué ficha está abierta. Antes de que llegue la lista NO: en ese
+  // momento `selected` todavía es nulo y anotarlo borraría lo que hay que
+  // restaurar.
+  useEffect(() => {
+    if (loading) return;
+    guardaLugar(user?.id, 'atletas.abierto', selected?.id ?? null);
+  }, [loading, selected?.id, user?.id]);
+  // Y la altura de la lista, para volver a donde estaba.
+  useScrollLugar('atletas', !loading);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
