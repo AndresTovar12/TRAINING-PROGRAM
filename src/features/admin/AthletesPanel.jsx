@@ -1131,12 +1131,18 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
     );
   }
 
-  const twoCol = selected && !narrow;
+  /* En la compu la ficha FLOTA encima de la lista (ver AthleteDetail), así
+     que la lista no le deja hueco ni cambia de forma: sigue igual detrás.
+     Andrés, 27 sep 2026: "lo que está atrás de la card flotante cambia de
+     tamaño… se ve raro". Eran restos del panel lateral de antes: la lista se
+     partía en dos columnas (la segunda quedaba vacía) y la tabla se volvía
+     tarjetas. En tableta la ficha sí va al lado, y ahí siguen las dos
+     columnas. */
+  const twoCol = selected && !narrow && !isDesktop;
   const showList = !(narrow && selected);
-  // Tabla solo cuando hay ancho de verdad y nadie esta abierto. Con el detalle
-  // abierto la lista se encoge a ~280px, y ahi una tabla no se puede leer:
-  // vuelven las tarjetas.
-  const modoTabla = isDesktop && !selected;
+  // Tabla cuando hay ancho de verdad. Con la ficha al lado (tableta) la lista
+  // se encoge a ~280px y ahí una tabla no se lee: van tarjetas.
+  const modoTabla = isDesktop;
 
   // Paginado solo en la tabla. En el telefono la lista se desliza completa,
   // que es como funciona cualquier lista de contactos: ahi paginar estorba.

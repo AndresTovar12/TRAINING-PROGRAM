@@ -373,12 +373,33 @@ function TemplatePicker({ kind, onApply, onClose }) {
   );
 }
 
+/* El ejercicio del repertorio que le toca a uno del plan: por su id, o si no,
+   por su nombre. Es LA MISMA regla que usa la app del atleta para su foto y
+   su video (`resolveExercise` en PlanContext), así que un video puesto desde
+   aquí es el que él ve.
+
+   Hace falta el nombre porque los planes viejos no guardan el id: el de
+   Andrés tiene 328 ejercicios y ninguno lo trae. Por eso "Su video" no salía
+   en su plan (Andrés, 27 sep 2026). Con nombres repetidos gana el último,
+   igual que allá. */
+const normNombre = (s) => (s || '').toLowerCase().trim();
+const delRepertorio = (ex, repertoire) => {
+  if (!ex || ex.isNote) return null;
+  const porId = ex.exercise_id && repertoire.find((r) => r.id === ex.exercise_id);
+  if (porId) return porId;
+  const n = normNombre(ex.name);
+  if (!n) return null;
+  let ultimo = null;
+  repertoire.forEach((r) => { if (normNombre(r.name) === n) ultimo = r; });
+  return ultimo;
+};
+
 /* ------------------------------------------------------------------ */
 /* Card de ejercicio dentro de un set                                   */
 /* ------------------------------------------------------------------ */
 
 function ExerciseCard({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove, onMove, canLeft, canRight }) {
-  const rep = ex.exercise_id ? repertoire.find((r) => r.id === ex.exercise_id) : null;
+  const rep = delRepertorio(ex, repertoire);
   return (
     <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden', minWidth: 0 }}>
       <div style={{ position: 'relative', height: 110, width: '100%', background: '#0E1015' }}>
@@ -439,7 +460,7 @@ function ExerciseCard({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove
         />
         <div style={{ marginTop: 9, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           <BotonCarga ex={ex} onPatch={onPatch} />
-          <BotonVideoAtleta ex={ex} atleta={atleta} onAbrir={() => onVideoAtleta?.(ex)} />
+          <BotonVideoAtleta idEjercicio={rep?.id} atleta={atleta} onAbrir={() => onVideoAtleta?.({ ...ex, exercise_id: rep.id })} />
         </div>
       </div>
     </div>
@@ -451,8 +472,8 @@ function ExerciseCard({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove
  * Solo aparece si el ejercicio viene del repertorio: un ejercicio sin id no
  * tiene a qué colgarle un video.
  */
-function BotonVideoAtleta({ ex, atleta, onAbrir }) {
-  if (!ex.exercise_id || !atleta?.id) return null;
+function BotonVideoAtleta({ idEjercicio, atleta, onAbrir }) {
+  if (!idEjercicio || !atleta?.id) return null;
   return (
     <button
       type="button"
@@ -565,7 +586,7 @@ function RotuloCampo({ children }) {
  * completo sin tener que subir la vista hasta los encabezados.
  */
 function ExerciseRow({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove, onMove, canUp, canDown }) {
-  const rep = ex.exercise_id ? repertoire.find((r) => r.id === ex.exercise_id) : null;
+  const rep = delRepertorio(ex, repertoire);
   return (
     <div style={{
       background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 12,
@@ -631,8 +652,8 @@ function ExerciseRow({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove,
             atleta delante. */}
         <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 4 }}>
           <BotonCarga ex={ex} onPatch={onPatch} />
-          {ex.exercise_id && atleta?.id && (
-            <BotonVideoAtleta ex={ex} atleta={atleta} onAbrir={() => onVideoAtleta?.(ex)} />
+          {rep && atleta?.id && (
+            <BotonVideoAtleta idEjercicio={rep.id} atleta={atleta} onAbrir={() => onVideoAtleta?.({ ...ex, exercise_id: rep.id })} />
           )}
         </div>
       </div>
