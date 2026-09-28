@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Search, X, Check, Dumbbell, Trash2 } from 'lucide-react';
 import { useMedia } from '@/lib/useViewport';
 import { T, FONT, KP } from '@/lib/theme';
-import { gruposConPropios, comoEnGrupo } from '@/lib/muscles';
+import { gruposConPropios } from '@/lib/muscles';
 import { listCategories, listMuscleGroups } from '@/lib/api';
+import { coincidencia, pasaFiltros } from '@/lib/buscarEjercicio';
 import Portada from '@/components/Portada';
 import ListaDesplegable from '@/components/ListaDesplegable';
 import InterruptorVista from '@/components/InterruptorVista';
@@ -27,8 +28,9 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
   const enFilas = vista ? vista === 'lista' : esCompu;
 
   const [query, setQuery] = useState('');
-  const [catId, setCatId] = useState(null);
-  const [muscle, setMuscle] = useState(null);
+  // Lo marcado en las listas: varias a la vez, igual que en el repertorio.
+  const [catIds, setCatIds] = useState([]);
+  const [gruposIds, setGruposIds] = useState([]);
   const [picked, setPicked] = useState([]); // filas del repertorio, en orden de selección
 
   /* Las categorías y los grupos propios, para lo SECUNDARIO de cada ejercicio
@@ -58,38 +60,60 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
     return [...m.values()];
   }, [exercises, todasCategorias]);
 
-  // Conteo por grupo muscular, principal o secundario (solo se ofrecen los
-  // grupos con ejercicios).
+  const categoriasPorId = useMemo(() => new Map(todasCategorias.map((c) => [c.id, c])), [todasCategorias]);
+  const gruposMarcados = useMemo(
+    () => gruposIds.map((id) => grupos.find((g) => g.id === id)).filter(Boolean),
+    [gruposIds, grupos],
+  );
+
+  // Lo que deja pasar el buscador, con su rango: 0 por el nombre o el equipo,
+  // 1 por lo principal, 2 por lo secundario (`coincidencia`).
+  const conTexto = useMemo(() => {
+    const pasan = [];
+    exercises.forEach((e) => {
+      const r = coincidencia(e, query, { categoriasPorId, grupos });
+      if (r >= 0) pasan.push([e, r]);
+    });
+    return pasan;
+  }, [exercises, query, categoriasPorId, grupos]);
+
+  /* Varias marcadas = solo los que las tienen todas, como principal o como
+     secundaria (`pasaFiltros`). Primero los que lo tienen todo como principal;
+     dentro, primero lo que se llama así. El `sort` es estable. */
+  const results = useMemo(() => {
+    const pasan = [];
+    conTexto.forEach(([e, rTexto]) => {
+      const r = pasaFiltros(e, { categoriaIds: catIds, grupos: gruposMarcados });
+      if (r >= 0) pasan.push([r * 3 + rTexto, e]);
+    });
+    return pasan.sort((a, b) => a[0] - b[0]).map(([, e]) => e);
+  }, [conTexto, catIds, gruposMarcados]);
+
+  // Cuántos quedarían al marcar cada opción, con lo ya marcado y lo escrito.
+  const cuantos = (categoriaIds, gruposF) => conTexto
+    .filter(([e]) => pasaFiltros(e, { categoriaIds, grupos: gruposF }) >= 0).length;
+  const catCounts = useMemo(() => {
+    const m = {};
+    categories.forEach((c) => {
+      m[c.id] = cuantos(catIds.includes(c.id) ? catIds : [...catIds, c.id], gruposMarcados);
+    });
+    return m;
+    // `cuantos` solo lee `conTexto`, que ya está en la lista.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conTexto, catIds, gruposMarcados, categories]);
   const groupCounts = useMemo(() => {
     const m = {};
     grupos.forEach((g) => {
-      m[g.id] = exercises.filter((e) => comoEnGrupo(e, g)).length;
+      m[g.id] = cuantos(catIds, gruposMarcados.includes(g) ? gruposMarcados : [...gruposMarcados, g]);
     });
     return m;
-  }, [exercises, grupos]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conTexto, catIds, gruposMarcados, grupos]);
 
-  // Lo secundario también entra, pero después de lo principal: igual que en el
-  // repertorio. El `sort` es estable, así que cada parte guarda su orden.
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const grupo = muscle ? grupos.find((g) => g.id === muscle) : null;
-    const pasan = [];
-    exercises.forEach((e) => {
-      if (q && !e.name.toLowerCase().includes(q) && !(e.equipment || '').toLowerCase().includes(q)) return;
-      let r = 0;
-      if (catId && e.category?.id !== catId) {
-        if (!(e.categorias_secundarias || []).includes(catId)) return;
-        r = 1;
-      }
-      if (grupo) {
-        const como = comoEnGrupo(e, grupo);
-        if (!como) return;
-        if (como === 'secundario') r = 1;
-      }
-      pasan.push([r, e]);
-    });
-    return pasan.sort((a, b) => a[0] - b[0]).map(([, e]) => e);
-  }, [exercises, query, catId, muscle, grupos]);
+  // La línea de abajo de las listas: que se pueden marcar varias, y qué pasa.
+  const ayudaVarias = (texto) => (
+    <div style={{ fontSize: 12, fontWeight: 600, color: T.text3, padding: '3px 6px', lineHeight: 1.4 }}>{texto}</div>
+  );
 
   const pickedIds = useMemo(() => new Set(picked.map((p) => p.id)), [picked]);
   const toggle = (ex) => {
@@ -135,7 +159,7 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar por nombre o equipo…"
+              placeholder="Nombre, equipo, categoría o músculo…"
               style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 16, fontWeight: 500, color: T.text, padding: '12px 0' }}
             />
             {query && (
@@ -150,33 +174,41 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
             <div style={{ flex: '1 1 150px', minWidth: 0 }}>
               <ListaDesplegable
                 etiqueta="Filtrar por categoría"
-                valor={catId || ''}
-                onCambio={(v) => setCatId(v || null)}
-                estilo={{ ...selStyle(!!catId), padding: '8px 10px' }}
+                multiple
+                valor={catIds}
+                onCambio={setCatIds}
+                estilo={{ ...selStyle(catIds.length > 0), padding: '8px 10px' }}
+                pie={ayudaVarias('Puedes marcar varias: salen solo los que las tienen todas.')}
                 opciones={[
-                  { valor: '', etiqueta: 'Todas las categorías' },
-                  ...categories.map((c) => ({ valor: c.id, etiqueta: c.name, color: c.color })),
+                  { limpia: true, valor: '', etiqueta: 'Todas las categorías' },
+                  ...categories.map((c) => ({
+                    valor: c.id, etiqueta: c.name, color: c.color, nota: String(catCounts[c.id] ?? 0),
+                  })),
                 ]}
               />
             </div>
             <div style={{ flex: '1 1 150px', minWidth: 0 }}>
               <ListaDesplegable
                 etiqueta="Filtrar por parte del cuerpo"
-                valor={muscle || ''}
-                onCambio={(v) => setMuscle(v || null)}
-                estilo={{ ...selStyle(!!muscle), padding: '8px 10px' }}
+                multiple
+                valor={gruposMarcados.map((g) => g.id)}
+                onCambio={setGruposIds}
+                estilo={{ ...selStyle(gruposMarcados.length > 0), padding: '8px 10px' }}
+                pie={ayudaVarias('Puedes marcar varias: salen solo los que las trabajan todas.')}
                 opciones={[
-                  { valor: '', etiqueta: 'Parte del cuerpo' },
-                  ...grupos.filter((g) => groupCounts[g.id] > 0).map((g) => ({
-                    valor: g.id, etiqueta: g.label, nota: String(groupCounts[g.id]),
+                  { limpia: true, valor: '', etiqueta: 'Parte del cuerpo' },
+                  // Solo las que dejan algo con lo ya marcado, más las marcadas
+                  // (si no, una marcada que se quedó en 0 ya no se podría quitar).
+                  ...grupos.filter((g) => groupCounts[g.id] > 0 || gruposIds.includes(g.id)).map((g) => ({
+                    valor: g.id, etiqueta: g.label, nota: String(groupCounts[g.id] ?? 0),
                   })),
                 ]}
               />
             </div>
-            {(catId || muscle) && (
+            {(catIds.length > 0 || gruposIds.length > 0) && (
               <button
                 type="button"
-                onClick={() => { setCatId(null); setMuscle(null); }}
+                onClick={() => { setCatIds([]); setGruposIds([]); }}
                 style={{
                   border: 'none', background: 'transparent', cursor: 'pointer', color: T.accent,
                   fontFamily: FONT, fontSize: 12.5, fontWeight: 700, padding: '8px 4px', flexShrink: 0,

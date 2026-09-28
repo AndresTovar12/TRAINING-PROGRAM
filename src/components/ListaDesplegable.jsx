@@ -25,6 +25,14 @@ import { T, FONT } from '@/lib/theme';
  * llamarla. Andrés, 28 sep 2026: "abajo de 'todas las categorías' un botón de
  * 'agregar categoría'". Va dentro de la lista, en el orden en que se pase, y
  * se recorre con las flechas como cualquier otra.
+ *
+ * ELEGIR VARIAS (`multiple`). Andrés, 28 sep 2026: "¿qué tal si quiero hacer
+ * una búsqueda específica de puros ejercicios con dos categorías y dos grupos
+ * musculares?". Con `multiple`, `valor` es la lista de lo elegido y
+ * `onCambio` recibe la lista nueva. Cada opción lleva su casilla y la lista
+ * se queda abierta al marcar, para ir por la siguiente. La opción con
+ * `limpia` ("Todas las categorías") vale cuando no hay nada marcado, y
+ * tocarla lo quita todo y cierra.
  */
 export default function ListaDesplegable({
   valor,
@@ -37,6 +45,7 @@ export default function ListaDesplegable({
   deshabilitado = false,
   estilo,
   alto = 268,
+  multiple = false,
 }) {
   const dedos = useCoarsePointer();
   const caja = useRef(null);
@@ -53,7 +62,16 @@ export default function ListaDesplegable({
     () => (grupos ? grupos.flatMap((g) => g.opciones) : (opciones ?? [])),
     [grupos, opciones],
   );
-  const elegida = planas.find((o) => !o.accion && o.valor === valor) ?? null;
+  const elegidos = multiple ? (Array.isArray(valor) ? valor : []) : null;
+  const estaPuesta = (o) => (multiple
+    ? (o.limpia ? elegidos.length === 0 : elegidos.includes(o.valor))
+    : o.valor === valor);
+  // Lo marcado, en el orden de la lista. Con `multiple` y nada marcado, el
+  // botón dice lo de la opción `limpia` ("Todas las categorías").
+  const marcadas = multiple ? planas.filter((o) => !o.accion && !o.limpia && elegidos.includes(o.valor)) : [];
+  const elegida = multiple
+    ? (marcadas[0] ?? planas.find((o) => o.limpia) ?? null)
+    : (planas.find((o) => !o.accion && o.valor === valor) ?? null);
 
   const cerrar = useCallback(() => { setAbierto(false); setActivo(-1); }, []);
 
@@ -83,7 +101,7 @@ export default function ListaDesplegable({
      y no en un efecto: poner el estado nada más entrar al efecto dispara un
      render de más, y el único momento en que hay que calcularlo es al abrir. */
   const abre = () => {
-    setActivo(Math.max(0, planas.findIndex((o) => !o.accion && o.valor === valor)));
+    setActivo(Math.max(0, planas.findIndex((o) => !o.accion && estaPuesta(o))));
     setAbierto(true);
   };
 
@@ -174,6 +192,16 @@ export default function ListaDesplegable({
     // Primero se cierra: la acción suele abrir algo encima (un diálogo) y la
     // lista no debe quedarse abierta detrás.
     if (o.accion) { cerrar(); o.accion(); return; }
+    if (multiple) {
+      // "Todas" lo quita todo y cierra. Las demás se prenden o se apagan y la
+      // lista se queda abierta, para marcar la siguiente.
+      if (o.limpia) { onCambio([]); cerrar(); return; }
+      onCambio(elegidos.includes(o.valor) ? elegidos.filter((v) => v !== o.valor) : [...elegidos, o.valor]);
+      // El sombreado va con la última que se tocó. Si no, en el teléfono se
+      // quedaba en "Todas", que parecía elegida sin estarlo.
+      setActivo(planas.indexOf(o));
+      return;
+    }
     onCambio(o.valor);
     cerrar();
   };
@@ -235,7 +263,10 @@ export default function ListaDesplegable({
         </div>
       );
     }
-    const puesta = o.valor === valor;
+    const puesta = estaPuesta(o);
+    // Con `multiple`, cada opción lleva su casilla a la izquierda: es lo que
+    // dice, sin leer nada, que se puede marcar más de una.
+    const conCasilla = multiple && !o.limpia;
     return (
       <div key={o.valor ?? `v-${i}`} data-i={i} style={{ display: 'flex', alignItems: 'center' }}>
         <button
@@ -286,6 +317,14 @@ export default function ListaDesplegable({
             color: puesta ? T.accent : T.text, textAlign: 'left',
           }}
         >
+          {conCasilla && (
+            <span aria-hidden="true" style={{
+              width: 18, height: 18, borderRadius: 5, flexShrink: 0, display: 'grid', placeItems: 'center',
+              border: `1.5px solid ${puesta ? T.accent : T.borderHi}`, background: puesta ? T.accent : T.bg2,
+            }}>
+              {puesta && <Check size={12} strokeWidth={3.2} color="#fff" />}
+            </span>
+          )}
           {o.color && (
             <span style={{ width: 11, height: 11, borderRadius: 6, background: o.color, flexShrink: 0 }} />
           )}
@@ -295,7 +334,7 @@ export default function ListaDesplegable({
           {o.nota && (
             <span style={{ fontSize: 12, fontWeight: 700, color: T.text3, flexShrink: 0 }}>{o.nota}</span>
           )}
-          {puesta && <Check size={15} color={T.accent} style={{ flexShrink: 0 }} />}
+          {puesta && !conCasilla && <Check size={15} color={T.accent} style={{ flexShrink: 0 }} />}
         </button>
         {o.alBorrar && (
           <button
@@ -338,16 +377,20 @@ export default function ListaDesplegable({
           textAlign: 'left', ...estilo,
         }}
       >
-        {elegida?.color && (
-          <span style={{ width: 11, height: 11, borderRadius: 6, background: elegida.color, flexShrink: 0 }} />
-        )}
+        {/* Con varias marcadas, un punto de color por cada una (hasta tres). */}
+        {(marcadas.length > 1 ? marcadas : elegida ? [elegida] : [])
+          .filter((o) => o.color).slice(0, 3).map((o) => (
+            <span key={o.valor} style={{ width: 11, height: 11, borderRadius: 6, background: o.color, flexShrink: 0 }} />
+          ))}
         <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {/* `corta` es para cuando el botón vive en un hueco estrecho —una
               celda de tabla— y el nombre entero no cabe: ahí se lee "reps" y
               la lista sigue diciendo "Repeticiones", que es donde importa
               entender. Sin esto, el botón se salía de su celda y se encimaba
               con el nombre del ejercicio. */}
-          {elegida ? (elegida.corta ?? elegida.etiqueta) : marcador}
+          {marcadas.length > 1
+            ? marcadas.map((o) => o.corta ?? o.etiqueta).join(' + ')
+            : elegida ? (elegida.corta ?? elegida.etiqueta) : marcador}
         </span>
         {elegida?.nota && (
           <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text3, flexShrink: 0 }}>{elegida.nota}</span>
@@ -365,6 +408,7 @@ export default function ListaDesplegable({
           className="animate-fade-in"
           role="listbox"
           aria-label={etiqueta}
+          aria-multiselectable={multiple || undefined}
           onKeyDown={teclas}
           style={{
             position: 'fixed', zIndex: 3000,

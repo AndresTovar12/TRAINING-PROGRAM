@@ -17,9 +17,10 @@ import ListaDesplegable from '@/components/ListaDesplegable';
 import InterruptorVista from '@/components/InterruptorVista';
 import { useVistaEjercicios } from '@/lib/useVistaEjercicios';
 import {
-  MUSCLE_GROUPS, FINE_MUSCLES, gruposConPropios, comoEnGrupo, groupForMuscle,
+  MUSCLE_GROUPS, FINE_MUSCLES, gruposConPropios, groupForMuscle,
 } from '@/lib/muscles';
 import { crearCategoriaPropia, mismoNombre } from '@/lib/categorias';
+import { coincidencia, pasaFiltros } from '@/lib/buscarEjercicio';
 import DialogoNombre from '@/components/DialogoNombre';
 import SeleccionMultiple from '@/components/SeleccionMultiple';
 import { T, FONT, KP } from '@/lib/theme';
@@ -209,6 +210,16 @@ async function crearGrupoPropio({ nombre, grupos, duenoId }) {
   const dentro = grupos.find((g) => g.members.some((m) => mismoNombre(m, n)));
   if (dentro) throw new Error(`«${n}» ya está dentro de ${dentro.label}.`);
   return createMuscleGroup({ name: n, createdBy: duenoId });
+}
+
+// La línea de abajo de las listas de filtro que dice que se pueden marcar
+// varias, y qué pasa entonces.
+function AyudaVarias({ texto }) {
+  return (
+    <div style={{ fontSize: 12, fontWeight: 600, color: T.text3, padding: '3px 6px', lineHeight: 1.4 }}>
+      {texto}
+    </div>
+  );
 }
 
 // Rótulo de un campo del editor, con su aclaración chiquita debajo.
@@ -1064,8 +1075,10 @@ export default function ExercisesPanel({ viendoComo }) {
   const [masterId, setMasterId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
-  const [filter, setFilter] = useState('all');
-  const [muscle, setMuscle] = useState('all');
+  // Lo marcado en las listas de filtro. Pueden ser varias a la vez: salen
+  // solo los ejercicios que las tienen todas (ver `pasaFiltros`).
+  const [catsElegidas, setCatsElegidas] = useState([]); // ids de categoría
+  const [gruposElegidos, setGruposElegidos] = useState([]); // ids de grupo
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState(null); // { exercise, esAjeno } | { new: true } | null
   // Mis versiones de los ejercicios base. Se aplican encima del repertorio.
@@ -1151,63 +1164,80 @@ export default function ExercisesPanel({ viendoComo }) {
     return [...s].sort((a, b) => a.localeCompare(b));
   }, [visible]);
 
-  // Conteo por grupo muscular para el desplegable de filtro. Cuenta el
-  // ejercicio en su grupo principal y en los secundarios.
-  const groupCounts = useMemo(() => {
-    const m = {};
-    grupos.forEach((g) => {
-      m[g.id] = visible.filter((e) => comoEnGrupo(e, g)).length;
-    });
-    return m;
-  }, [visible, grupos]);
+  const categoriasPorId = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
 
-  /* LO SECUNDARIO TAMBIÉN FILTRA. Andrés, 28 sep 2026: el "jumping lunge" es
-     Potencia, pero también tiene que salir en Pliometría. Así que el filtro
-     deja pasar lo principal y lo secundario, y ordena: primero los que son de
-     verdad de lo filtrado, después los que entran por lo secundario. Dentro de
-     cada parte se queda el orden alfabético (el `sort` es estable). */
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const cat = filter === 'all' ? null : categoriasVisibles.find((c) => c.slug === filter);
-    const grupo = muscle === 'all' ? null : grupos.find((g) => g.id === muscle);
-    // 0 = entra por lo principal; 1 = por algo secundario; -1 = no entra.
-    const rango = (e) => {
-      let r = 0;
-      if (filter !== 'all' && e.category?.slug !== filter) {
-        if (!cat || !(e.categorias_secundarias || []).includes(cat.id)) return -1;
-        r = 1;
-      }
-      if (grupo) {
-        const como = comoEnGrupo(e, grupo);
-        if (!como) return -1;
-        if (como === 'secundario') r = 1;
-      }
-      return r;
-    };
+  // Lo marcado que todavía existe: una categoría o un grupo borrado con la
+  // lista puesta no deja la pantalla vacía para siempre.
+  const catsMarcadas = useMemo(
+    () => catsElegidas.filter((id) => categoriasPorId.has(id)),
+    [catsElegidas, categoriasPorId],
+  );
+  const gruposMarcados = useMemo(
+    () => gruposElegidos.map((id) => grupos.find((g) => g.id === id)).filter(Boolean),
+    [gruposElegidos, grupos],
+  );
+
+  /* EL BUSCADOR mira nombre, equipo, categoría y músculos, principales y
+     secundarios (`coincidencia`). Cada ejercicio que pasa lleva su rango:
+     0 si coincide por el nombre, 1 por lo principal, 2 por lo secundario. */
+  const conTexto = useMemo(() => {
     const pasan = [];
     visible.forEach((e) => {
-      if (q && !e.name.toLowerCase().includes(q)) return;
-      const r = rango(e);
-      if (r >= 0) pasan.push([r, e]);
+      const r = coincidencia(e, search, { categoriasPorId, grupos });
+      if (r >= 0) pasan.push([e, r]);
+    });
+    return pasan;
+  }, [visible, search, categoriasPorId, grupos]);
+
+  /* LAS LISTAS DE FILTRO, CON VARIAS A LA VEZ. Andrés, 28 sep 2026: "¿qué tal
+     si quiero hacer una búsqueda específica de puros ejercicios con dos
+     categorías y dos grupos musculares?". Con varias marcadas salen solo los
+     que las tienen TODAS, cada una como principal o como secundaria
+     (`pasaFiltros`). Orden: primero los que lo tienen todo como principal,
+     después los que entran por algo secundario; dentro, primero lo que se
+     llama así, y el orden alfabético (el `sort` es estable). */
+  const filtered = useMemo(() => {
+    const pasan = [];
+    conTexto.forEach(([e, rTexto]) => {
+      const r = pasaFiltros(e, { categoriaIds: catsMarcadas, grupos: gruposMarcados });
+      if (r >= 0) pasan.push([r * 3 + rTexto, e]);
     });
     return pasan.sort((a, b) => a[0] - b[0]).map(([, e]) => e);
-  }, [visible, filter, muscle, search, categoriasVisibles, grupos]);
+  }, [conTexto, catsMarcadas, gruposMarcados]);
 
-  // Cuántos por categoría: cada ejercicio cuenta en su principal y en sus
-  // secundarias.
+  /* LOS NÚMEROS DE LAS LISTAS dicen cuántos quedarían al marcar esa opción,
+     con lo que ya está marcado y lo escrito en el buscador. Así se ve antes de
+     tocarla si una combinación deja algo o se queda vacía. En una opción ya
+     marcada, es lo que se ve ahora. Cada ejercicio cuenta en su principal y
+     en sus secundarias. */
+  const cuantos = (categoriaIds, gruposF) => conTexto
+    .filter(([e]) => pasaFiltros(e, { categoriaIds, grupos: gruposF }) >= 0).length;
   const counts = useMemo(() => {
-    const m = { all: visible.length };
-    const slugDe = new Map(categories.map((c) => [c.id, c.slug]));
-    for (const e of visible) {
-      const slugs = new Set([e.category?.slug, ...(e.categorias_secundarias || []).map((id) => slugDe.get(id))]);
-      slugs.forEach((s) => { if (s) m[s] = (m[s] || 0) + 1; });
-    }
+    const m = { all: cuantos([], gruposMarcados) };
+    categoriasVisibles.forEach((c) => {
+      m[c.id] = cuantos(catsMarcadas.includes(c.id) ? catsMarcadas : [...catsMarcadas, c.id], gruposMarcados);
+    });
     return m;
-  }, [visible, categories]);
+    // `cuantos` solo lee `conTexto`, que ya está en la lista.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conTexto, catsMarcadas, gruposMarcados, categoriasVisibles]);
+  const groupCounts = useMemo(() => {
+    const m = { all: cuantos(catsMarcadas, []) };
+    grupos.forEach((g) => {
+      m[g.id] = cuantos(catsMarcadas, gruposMarcados.includes(g) ? gruposMarcados : [...gruposMarcados, g]);
+    });
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conTexto, catsMarcadas, gruposMarcados, grupos]);
 
-  // Lo que se filtra ahora mismo, con nombre: para el aviso de lista vacía.
-  const categoriaFiltrada = filter === 'all' ? null : categoriasVisibles.find((c) => c.slug === filter);
-  const grupoFiltrado = muscle === 'all' ? null : grupos.find((g) => g.id === muscle);
+  // Para el aviso de lista vacía: una sola categoría o un solo grupo, sin
+  // nada más encima, es el caso de "recién creada".
+  const sinTexto = !search.trim();
+  const categoriaSola = catsMarcadas.length === 1 && gruposMarcados.length === 0 && sinTexto
+    ? categoriasPorId.get(catsMarcadas[0]) : null;
+  const grupoSolo = gruposMarcados.length === 1 && catsMarcadas.length === 0 && sinTexto
+    ? gruposMarcados[0] : null;
+  const marcadasVarias = catsMarcadas.length + gruposMarcados.length > 1;
 
   function handleDuplicate(copy) {
     setExercises((prev) => [...prev, copy]);
@@ -1275,7 +1305,7 @@ export default function ExercisesPanel({ viendoComo }) {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar ejercicio…"
+            placeholder="Buscar por nombre, categoría o músculo…"
             style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 16, fontWeight: 500, color: T.text, padding: '12px 0' }}
           />
         </div>
@@ -1298,16 +1328,18 @@ export default function ExercisesPanel({ viendoComo }) {
           <span style={{ fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Categoría</span>
           <ListaDesplegable
             etiqueta="Filtrar por categoría"
-            valor={filter}
-            onCambio={setFilter}
+            multiple
+            valor={catsMarcadas}
+            onCambio={setCatsElegidas}
+            pie={<AyudaVarias texto="Puedes marcar varias: salen solo los ejercicios que las tienen todas." />}
             opciones={[
-              { valor: 'all', etiqueta: 'Todas las categorías', nota: String(counts.all ?? 0) },
+              { limpia: true, valor: 'all', etiqueta: 'Todas las categorías', nota: String(counts.all ?? 0) },
               /* Andrés, 28 sep 2026: "abajo de 'todas las categorías' un botón
                  de 'agregar categoría'". Mirando la cuenta de un coach no se
                  ofrece: quedaría a nombre del master, visible para todos. */
               ...(viendoComo ? [] : [{ accion: () => setCreando('categoria'), etiqueta: 'Agregar categoría' }]),
               ...categoriasVisibles.map((c) => ({
-                valor: c.slug, etiqueta: c.name, color: c.color, nota: String(counts[c.slug] ?? 0),
+                valor: c.id, etiqueta: c.name, color: c.color, nota: String(counts[c.id] ?? 0),
               })),
             ]}
           />
@@ -1316,10 +1348,12 @@ export default function ExercisesPanel({ viendoComo }) {
           <span style={{ fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Grupo muscular</span>
           <ListaDesplegable
             etiqueta="Filtrar por grupo muscular"
-            valor={muscle}
-            onCambio={setMuscle}
+            multiple
+            valor={gruposMarcados.map((g) => g.id)}
+            onCambio={setGruposElegidos}
+            pie={<AyudaVarias texto="Puedes marcar varios: salen solo los ejercicios que los trabajan todos." />}
             opciones={[
-              { valor: 'all', etiqueta: 'Todos los grupos' },
+              { limpia: true, valor: 'all', etiqueta: 'Todos los grupos', nota: String(groupCounts.all ?? 0) },
               ...(viendoComo ? [] : [{ accion: () => setCreando('grupo'), etiqueta: 'Agregar grupo' }]),
               // Todos, también los que van en 0: antes se escondían, y un grupo
               // recién agregado no aparecía por ningún lado.
@@ -1348,11 +1382,13 @@ export default function ExercisesPanel({ viendoComo }) {
           <div style={{ marginTop: 12, fontWeight: 600, color: T.text2, lineHeight: 1.5 }}>
             {/* Una categoría o un grupo recién creados llegan aquí vacíos: se
                 dice cómo llenarlos en vez de un "sin ejercicios" a secas. */}
-            {categoriaFiltrada && !search.trim() && muscle === 'all' && !counts[categoriaFiltrada.slug]
-              ? `«${categoriaFiltrada.name}» todavía no tiene ejercicios. Abre uno y ponla como categoría principal o secundaria.`
-              : grupoFiltrado && !search.trim() && filter === 'all' && !groupCounts[grupoFiltrado.id]
-                ? `«${grupoFiltrado.label}» todavía no tiene ejercicios. Abre uno y elige este grupo como principal o secundario.`
-                : 'Sin ejercicios para este filtro.'}
+            {categoriaSola
+              ? `«${categoriaSola.name}» todavía no tiene ejercicios. Abre uno y ponla como categoría principal o secundaria.`
+              : grupoSolo
+                ? `«${grupoSolo.label}» todavía no tiene ejercicios. Abre uno y elige este grupo como principal o secundario.`
+                : marcadasVarias
+                  ? 'Ningún ejercicio tiene todo lo que marcaste a la vez. Desmarca alguna opción de las listas.'
+                  : 'Sin ejercicios para este filtro.'}
           </div>
         </div>
       ) : (
@@ -1408,13 +1444,16 @@ export default function ExercisesPanel({ viendoComo }) {
           // del master —o sea visible para TODOS—, así que ahí no se ofrece.
           puedeCrearCategoria={!viendoComo}
           onCategoriaCreada={(fila) => setCategories((prev) => [...prev, fila])}
-          onCategoriaBorrada={(id) => setCategories((prev) => prev.filter((c) => c.id !== id))}
+          onCategoriaBorrada={(id) => {
+            setCategories((prev) => prev.filter((c) => c.id !== id));
+            setCatsElegidas((prev) => prev.filter((x) => x !== id));
+          }}
           grupos={grupos}
           puedeCrearGrupo={!viendoComo}
           onGrupoCreado={(fila) => setGruposPropios((prev) => [...prev, fila])}
           onGrupoBorrado={(id) => {
             setGruposPropios((prev) => prev.filter((g) => g.id !== id));
-            if (muscle === `propio-${id}`) setMuscle('all');
+            setGruposElegidos((prev) => prev.filter((x) => x !== `propio-${id}`));
           }}
           muscleOptions={muscles}
           esAjeno={!!editing.esAjeno}
@@ -1440,8 +1479,8 @@ export default function ExercisesPanel({ viendoComo }) {
             // Queda puesta en el filtro, sola: así se ve que existe y el aviso
             // de lista vacía dice qué sigue. Con otro filtro encima saldría un
             // "sin ejercicios" que no explica nada.
-            setFilter(fila.slug);
-            setMuscle('all');
+            setCatsElegidas([fila.id]);
+            setGruposElegidos([]);
             setSearch('');
             setCreando(null);
           }}
@@ -1456,8 +1495,8 @@ export default function ExercisesPanel({ viendoComo }) {
           onCrear={async (nombre) => {
             const fila = await crearGrupoPropio({ nombre, grupos, duenoId: dueño });
             setGruposPropios((prev) => [...prev, fila]);
-            setMuscle(`propio-${fila.id}`);
-            setFilter('all');
+            setGruposElegidos([`propio-${fila.id}`]);
+            setCatsElegidas([]);
             setSearch('');
             setCreando(null);
           }}
