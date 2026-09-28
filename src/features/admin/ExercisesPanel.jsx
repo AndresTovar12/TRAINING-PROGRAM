@@ -9,14 +9,19 @@ import {
   listCategories, listExercises, createExercise, updateExercise, deleteExercise,
   getMasterId, tagRepertoire, duplicateExercise,
   listExerciseOverrides, saveExerciseOverride, deleteExerciseOverride, aplicarOverrides,
-  addExerciseMedia,
+  addExerciseMedia, listMuscleGroups, createMuscleGroup, deleteMuscleGroup,
 } from '@/lib/api';
 import MediaDelEjercicio from '@/features/admin/MediaDelEjercicio';
 import SelectorCategoria from '@/features/admin/SelectorCategoria';
 import ListaDesplegable from '@/components/ListaDesplegable';
 import InterruptorVista from '@/components/InterruptorVista';
 import { useVistaEjercicios } from '@/lib/useVistaEjercicios';
-import { MUSCLE_GROUPS, FINE_MUSCLES, exerciseMatchesGroup } from '@/lib/muscles';
+import {
+  MUSCLE_GROUPS, FINE_MUSCLES, gruposConPropios, comoEnGrupo, groupForMuscle,
+} from '@/lib/muscles';
+import { crearCategoriaPropia, mismoNombre } from '@/lib/categorias';
+import DialogoNombre from '@/components/DialogoNombre';
+import SeleccionMultiple from '@/components/SeleccionMultiple';
 import { T, FONT, KP } from '@/lib/theme';
 import Portada from '@/components/Portada';
 import { useConfirmacion } from '@/components/Confirmacion';
@@ -145,45 +150,74 @@ function Input({ label, ...props }) {
 const empty = {
   name: '', category_id: '', equipment: '', description: '',
   muscle_primary: '', cover_image_url: '', video_url: '', video_link: '',
+  // Lo secundario: también cuenta como… / también trabaja…
+  categorias_secundarias: [], muscle_secondary: [],
   // Tramo del video que ve el atleta. null = completo. No corta el archivo.
   recorte_inicio: null, recorte_fin: null,
   // Se aplican al reproducir, no al archivo: el video sube intacto.
   sin_audio: false, encuadre: null,
 };
 
-// Lista desplegable de grupo muscular: primero los grupos (recomendado), luego
-// el detalle fino ya usado en el repertorio; "➕ Otro…" permite escribir uno nuevo.
-function MuscleSelect({ value, onChange, options }) {
-  const groupLabels = useMemo(() => MUSCLE_GROUPS.map((g) => g.label), []);
+// Lista desplegable del grupo muscular PRINCIPAL: primero los grupos
+// (recomendado), luego el detalle fino ya usado en el repertorio.
+// "Agregar grupo" crea uno que sale también en los filtros; reemplaza al
+// "Otro…" de antes, que escribía un músculo suelto que ningún filtro veía.
+function MuscleSelect({ value, onChange, options, grupos, onAgregarGrupo, alBorrarGrupo }) {
+  const groupLabels = useMemo(() => grupos.map((g) => g.label), [grupos]);
   const fineOpts = useMemo(() => {
     const s = new Set([...(options || []), ...FINE_MUSCLES].filter(Boolean));
     if (value && value.trim()) s.add(value.trim());
     groupLabels.forEach((l) => s.delete(l)); // los grupos van en su propio bloque
     return [...s].sort((a, b) => a.localeCompare(b));
   }, [options, value, groupLabels]);
-  const [other, setOther] = useState(false);
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Grupo muscular</span>
+      <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Grupo muscular principal</span>
       <ListaDesplegable
-        etiqueta="Grupo muscular"
-        valor={other ? '__other__' : (value || '')}
-        onCambio={(v) => {
-          if (v === '__other__') { setOther(true); onChange(''); }
-          else { setOther(false); onChange(v); }
-        }}
+        etiqueta="Grupo muscular principal"
+        valor={value || ''}
+        onCambio={onChange}
         marcador="Selecciona…"
         grupos={[
-          { titulo: '', opciones: [{ valor: '', etiqueta: 'Selecciona…' }] },
-          { titulo: 'GRUPOS', opciones: MUSCLE_GROUPS.map((g) => ({ valor: g.label, etiqueta: g.label })) },
+          { titulo: '', opciones: [
+            { valor: '', etiqueta: 'Selecciona…' },
+            ...(onAgregarGrupo ? [{ accion: onAgregarGrupo, etiqueta: 'Agregar grupo' }] : []),
+          ] },
+          // Los tuyos llevan bote de basura, como las categorías.
+          { titulo: 'GRUPOS', opciones: grupos.map((g) => ({
+            valor: g.label,
+            etiqueta: g.label,
+            ...(g.mio && alBorrarGrupo ? { alBorrar: () => alBorrarGrupo(g) } : {}),
+          })) },
           { titulo: 'DETALLE', opciones: fineOpts.map((m) => ({ valor: m, etiqueta: m })) },
-          { titulo: '', opciones: [{ valor: '__other__', etiqueta: 'Otro…' }] },
         ]}
       />
-      {other && (
-        <Input label="" value={value} onChange={(e) => onChange(e.target.value)} placeholder="Escribe el grupo muscular" autoFocus />
-      )}
     </label>
+  );
+}
+
+/**
+ * Crea un grupo muscular a nombre de `duenoId`. Lanza un error con un mensaje
+ * para la persona si ya existe, o si el nombre es un músculo que ya vive
+ * dentro de otro grupo: "Cuádriceps" es de Piernas, y un grupo "Cuádriceps"
+ * nunca atraparía nada, porque Piernas lo reclama primero.
+ */
+async function crearGrupoPropio({ nombre, grupos, duenoId }) {
+  const n = (nombre || '').trim();
+  if (!n) throw new Error('Ponle un nombre.');
+  if (grupos.some((g) => mismoNombre(g.label, n))) throw new Error('Ya existe un grupo con ese nombre.');
+  const dentro = grupos.find((g) => g.members.some((m) => mismoNombre(m, n)));
+  if (dentro) throw new Error(`«${n}» ya está dentro de ${dentro.label}.`);
+  return createMuscleGroup({ name: n, createdBy: duenoId });
+}
+
+// Rótulo de un campo del editor, con su aclaración chiquita debajo.
+function RotuloConAyuda({ titulo, ayuda }) {
+  return (
+    <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>{titulo}</span>
+      <span style={{ fontSize: 12, fontWeight: 500, color: T.text3 }}>{ayuda}</span>
+    </span>
   );
 }
 
@@ -371,6 +405,7 @@ function ExerciseEditor({
   exercise, categories, muscleOptions = [], onClose, onSaved, onDeleted,
   esAjeno, onDuplicate, onGuardadaMiVersion, onRestaurada, foco = 'todo',
   duenoId, masterId, onCategoriaCreada, onCategoriaBorrada, puedeCrearCategoria = true,
+  grupos = MUSCLE_GROUPS, onGrupoCreado, onGrupoBorrado, puedeCrearGrupo = true,
 }) {
   // `foco='media'` abre la ficha directo en foto y video, sin los campos de
   // texto. Los datos de los 81 ejercicios ya están escritos; lo que falta es
@@ -379,6 +414,25 @@ function ExerciseEditor({
   const [soloMedia, setSoloMedia] = useState(foco === 'media');
   const { user } = useAuth();
   const pregunta = useConfirmacion();
+  const [creandoGrupo, setCreandoGrupo] = useState(false);
+
+  /* Borrar un grupo propio. Los ejercicios no cambian: el músculo va escrito
+     en cada uno y ahí se queda. Solo deja de salir en el filtro de grupos. */
+  async function borrarGrupo(g) {
+    const va = await pregunta({
+      titulo: `¿Borrar el grupo «${g.label}»?`,
+      detalle: 'Ningún ejercicio cambia: el que lo tenga lo sigue diciendo. Solo deja de salir en el filtro de grupos.',
+      confirmar: 'Sí, borrarlo',
+      peligro: true,
+    });
+    if (!va) return;
+    try {
+      await deleteMuscleGroup(g.propio.id);
+      onGrupoBorrado?.(g.propio.id);
+    } catch (e) {
+      setErr(e.message || 'No se pudo borrar el grupo.');
+    }
+  }
   /* Lo que se grabó ANTES de crear el ejercicio. Vive aquí y no dentro de
      `MediaDelEjercicio` porque quien lo reparte es `onSave`, que está aquí. */
   const [nuevos, setNuevos] = useState([]);
@@ -396,6 +450,8 @@ function ExerciseEditor({
           equipment: exercise.equipment || '',
           description: exercise.description || '',
           muscle_primary: (exercise.muscle_primary || []).join(', '),
+          categorias_secundarias: exercise.categorias_secundarias || [],
+          muscle_secondary: exercise.muscle_secondary || [],
           cover_image_url: exercise.cover_image_url || '',
           video_url: exercise.video_url || '',
           video_link: exercise.video_link || '',
@@ -427,6 +483,10 @@ function ExerciseEditor({
       equipment: form.equipment.trim() || null,
       description: form.description.trim() || null,
       muscle_primary: toArr(form.muscle_primary),
+      // Solo las que existen: si se borró una con el editor abierto, su id no
+      // vuelve a guardarse.
+      categorias_secundarias: (form.categorias_secundarias || []).filter((id) => categories.some((c) => c.id === id)),
+      muscle_secondary: form.muscle_secondary || [],
       cover_image_url: form.cover_image_url || null,
       video_url: form.video_url || null,
       video_link: form.video_link.trim() || null,
@@ -612,26 +672,102 @@ function ExerciseEditor({
             const campoNombre = (
               <Input key="nombre" label="Nombre" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Ej. Back Squat" />
             );
+            /* PRINCIPAL Y SECUNDARIAS. Andrés, 28 sep 2026: un "jumping lunge"
+               es principalmente Potencia, pero también Pliometría; saltar la
+               cuerda es Cardio y también Pliometría. La principal es la que
+               pinta el color y manda; las secundarias hacen que el ejercicio
+               salga también al filtrar por ellas. Una categoría no puede ser
+               las dos cosas: al volverla principal se quita de secundarias. */
+            const opcionesCatSec = categories
+              .filter((c) => c.id !== form.category_id)
+              .map((c) => ({ valor: c.id, etiqueta: c.name, color: catColor(c) }));
             const campoCategoria = (
-              <div key="cat" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Categoría</span>
-                <SelectorCategoria
-                  categorias={categories}
-                  value={form.category_id}
-                  onChange={(id) => set('category_id', id)}
-                  onCreada={onCategoriaCreada}
-                  onBorrada={onCategoriaBorrada}
-                  duenoId={duenoId}
-                  masterId={masterId}
-                  puedeCrear={puedeCrearCategoria}
-                />
+              <div key="cat" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Categoría principal</span>
+                  <SelectorCategoria
+                    categorias={categories}
+                    value={form.category_id}
+                    onChange={(id) => setForm((f) => ({
+                      ...f,
+                      category_id: id,
+                      categorias_secundarias: (f.categorias_secundarias || []).filter((x) => x !== id),
+                    }))}
+                    onCreada={onCategoriaCreada}
+                    onBorrada={onCategoriaBorrada}
+                    duenoId={duenoId}
+                    masterId={masterId}
+                    puedeCrear={puedeCrearCategoria}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <RotuloConAyuda titulo="Categorías secundarias" ayuda="Opcional. También sale al filtrar por estas." />
+                  <SeleccionMultiple
+                    opciones={opcionesCatSec}
+                    elegidas={(form.categorias_secundarias || []).filter((id) => opcionesCatSec.some((o) => o.valor === id))}
+                    onCambio={(v) => set('categorias_secundarias', v)}
+                  />
+                </div>
               </div>
             );
             const campoEquipo = (
               <Input key="equipo" label="Equipo" value={form.equipment} onChange={(e) => set('equipment', e.target.value)} placeholder="Barra, Mancuerna, Peso corporal…" />
             );
+            /* LOS SECUNDARIOS, POR GRUPO. En el repertorio ya venían músculos
+               secundarios finos ("Isquios", "Core"…) que ninguna pantalla
+               enseñaba. Cada uno cae en la pastilla de su grupo, que lo dice
+               entre paréntesis: así se ve lo que hay guardado. Apagar un grupo
+               quita todos sus músculos; prenderlo guarda el nombre del grupo.
+               Un músculo que no es de ningún grupo sale como pastilla suelta. */
+            const sec = form.muscle_secondary || [];
+            const claveMusculo = (m) => groupForMuscle(m, grupos)?.id ?? `suelto:${m}`;
+            const elegidasMus = new Set(sec.map(claveMusculo));
+            // El grupo principal no se ofrece otra vez como secundario, salvo
+            // que ya tenga algo: "Cuádriceps" principal con "Isquios"
+            // secundario son los dos de Piernas, y ese dato no se esconde.
+            const gruposPrincipales = new Set((form.muscle_primary || '').split(',')
+              .map((m) => groupForMuscle(m.trim(), grupos)?.id).filter(Boolean));
+            const opcionesMusSec = [
+              ...grupos.filter((g) => !gruposPrincipales.has(g.id) || elegidasMus.has(g.id)).map((g) => {
+                const finos = sec.filter((m) => claveMusculo(m) === g.id && !mismoNombre(m, g.label));
+                return { valor: g.id, etiqueta: finos.length ? `${g.label} (${finos.join(', ')})` : g.label };
+              }),
+              ...sec.filter((m) => !groupForMuscle(m, grupos)).map((m) => ({ valor: `suelto:${m}`, etiqueta: m })),
+            ];
+            const cambiaMusSec = (nuevas) => {
+              const siguiente = sec.filter((m) => nuevas.includes(claveMusculo(m)));
+              nuevas.forEach((k) => {
+                if (k.startsWith('suelto:') || siguiente.some((m) => claveMusculo(m) === k)) return;
+                const g = grupos.find((x) => x.id === k);
+                if (g) siguiente.push(g.label);
+              });
+              set('muscle_secondary', siguiente);
+            };
             const campoMusculo = (
-              <MuscleSelect key="musc" value={form.muscle_primary} onChange={(v) => set('muscle_primary', v)} options={muscleOptions} />
+              <div key="musc" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <MuscleSelect
+                  value={form.muscle_primary}
+                  // Lo que se vuelve principal sale de secundarios: no puede
+                  // ser las dos cosas.
+                  onChange={(v) => setForm((f) => ({
+                    ...f,
+                    muscle_primary: v,
+                    muscle_secondary: (f.muscle_secondary || []).filter((m) => !mismoNombre(m, v)),
+                  }))}
+                  options={muscleOptions}
+                  grupos={grupos}
+                  onAgregarGrupo={puedeCrearGrupo ? () => setCreandoGrupo(true) : undefined}
+                  alBorrarGrupo={borrarGrupo}
+                />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <RotuloConAyuda titulo="Grupos secundarios" ayuda="Opcional. Lo que también trabaja; sale al filtrar por ellos." />
+                  <SeleccionMultiple
+                    opciones={opcionesMusSec}
+                    elegidas={[...elegidasMus]}
+                    onCambio={cambiaMusSec}
+                  />
+                </div>
+              </div>
             );
             const campoNotas = (
               <label key="notas" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -781,6 +917,24 @@ function ExerciseEditor({
               {err}
             </div>
           )}
+
+          {/* Dentro de la tarjeta y no al lado: el fondo del editor se cierra
+              con cualquier clic que le llegue, y los de este diálogo suben
+              por aquí, donde la tarjeta los detiene. */}
+          {creandoGrupo && (
+            <DialogoNombre
+              titulo="Nuevo grupo muscular"
+              detalle="Sale también en el filtro de grupos del repertorio."
+              placeholder="Ej. Antebrazo, Aductores, Cuello…"
+              onCancelar={() => setCreandoGrupo(false)}
+              onCrear={async (nombre) => {
+                const fila = await crearGrupoPropio({ nombre, grupos, duenoId });
+                onGrupoCreado?.(fila);
+                set('muscle_primary', fila.name);
+                setCreandoGrupo(false);
+              }}
+            />
+          )}
         </div>
 
         <div
@@ -875,6 +1029,10 @@ export default function ExercisesPanel({ viendoComo }) {
      ve el del coach visitado; el resto del tiempo, el suyo. */
   const dueño = viendoComo?.id || user?.id;
   const [categories, setCategories] = useState([]);
+  // Los grupos musculares que agregó cada coach (los de siempre están en el código).
+  const [gruposPropios, setGruposPropios] = useState([]);
+  // "Agregar categoría" / "Agregar grupo" desde los filtros: 'categoria' | 'grupo' | null.
+  const [creando, setCreando] = useState(null);
   const [exercises, setExercises] = useState([]); // crudo (todos los visibles)
   const [masterId, setMasterId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -898,11 +1056,14 @@ export default function ExercisesPanel({ viendoComo }) {
     let cancelled = false;
     (async () => {
       try {
-        const [cats, exs, mId, mias] = await Promise.all([
+        const [cats, exs, mId, mias, grupos] = await Promise.all([
           listCategories(), listExercises(), getMasterId(), listExerciseOverrides(dueño),
+          // Si esto falla, el repertorio carga igual, con los grupos de siempre.
+          listMuscleGroups().catch(() => []),
         ]);
         if (cancelled) return;
         setCategories(cats);
+        setGruposPropios(grupos);
         setExercises(exs);
         setMasterId(mId);
         setOverrides(mias);
@@ -927,6 +1088,14 @@ export default function ExercisesPanel({ viendoComo }) {
   const categoriasVisibles = useMemo(
     () => categories.filter((c) => !c.created_by || c.created_by === masterId || c.created_by === dueño),
     [categories, masterId, dueño],
+  );
+
+  // Los grupos, con la misma regla: los de siempre, los del master y los del
+  // dueño de esta vista. `mio` marca los que se pueden borrar desde aquí.
+  const grupos = useMemo(
+    () => gruposConPropios(gruposPropios.filter((g) => g.created_by === masterId || g.created_by === dueño))
+      .map((g) => (g.propio ? { ...g, mio: g.propio.created_by === dueño } : g)),
+    [gruposPropios, masterId, dueño],
   );
 
   // Etiqueta base/propio y, para coaches, oculta el repertorio de otros coaches.
@@ -955,33 +1124,63 @@ export default function ExercisesPanel({ viendoComo }) {
     return [...s].sort((a, b) => a.localeCompare(b));
   }, [visible]);
 
-  // Conteo por grupo muscular para el desplegable de filtro
+  // Conteo por grupo muscular para el desplegable de filtro. Cuenta el
+  // ejercicio en su grupo principal y en los secundarios.
   const groupCounts = useMemo(() => {
     const m = {};
-    MUSCLE_GROUPS.forEach((g) => {
-      m[g.id] = visible.filter((e) => exerciseMatchesGroup(e, g.id)).length;
+    grupos.forEach((g) => {
+      m[g.id] = visible.filter((e) => comoEnGrupo(e, g)).length;
     });
     return m;
-  }, [visible]);
+  }, [visible, grupos]);
 
+  /* LO SECUNDARIO TAMBIÉN FILTRA. Andrés, 28 sep 2026: el "jumping lunge" es
+     Potencia, pero también tiene que salir en Pliometría. Así que el filtro
+     deja pasar lo principal y lo secundario, y ordena: primero los que son de
+     verdad de lo filtrado, después los que entran por lo secundario. Dentro de
+     cada parte se queda el orden alfabético (el `sort` es estable). */
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return visible.filter((e) => {
-      if (filter !== 'all' && e.category?.slug !== filter) return false;
-      if (muscle !== 'all' && !exerciseMatchesGroup(e, muscle)) return false;
-      if (q && !e.name.toLowerCase().includes(q)) return false;
-      return true;
+    const cat = filter === 'all' ? null : categoriasVisibles.find((c) => c.slug === filter);
+    const grupo = muscle === 'all' ? null : grupos.find((g) => g.id === muscle);
+    // 0 = entra por lo principal; 1 = por algo secundario; -1 = no entra.
+    const rango = (e) => {
+      let r = 0;
+      if (filter !== 'all' && e.category?.slug !== filter) {
+        if (!cat || !(e.categorias_secundarias || []).includes(cat.id)) return -1;
+        r = 1;
+      }
+      if (grupo) {
+        const como = comoEnGrupo(e, grupo);
+        if (!como) return -1;
+        if (como === 'secundario') r = 1;
+      }
+      return r;
+    };
+    const pasan = [];
+    visible.forEach((e) => {
+      if (q && !e.name.toLowerCase().includes(q)) return;
+      const r = rango(e);
+      if (r >= 0) pasan.push([r, e]);
     });
-  }, [visible, filter, muscle, search]);
+    return pasan.sort((a, b) => a[0] - b[0]).map(([, e]) => e);
+  }, [visible, filter, muscle, search, categoriasVisibles, grupos]);
 
+  // Cuántos por categoría: cada ejercicio cuenta en su principal y en sus
+  // secundarias.
   const counts = useMemo(() => {
     const m = { all: visible.length };
+    const slugDe = new Map(categories.map((c) => [c.id, c.slug]));
     for (const e of visible) {
-      const s = e.category?.slug;
-      if (s) m[s] = (m[s] || 0) + 1;
+      const slugs = new Set([e.category?.slug, ...(e.categorias_secundarias || []).map((id) => slugDe.get(id))]);
+      slugs.forEach((s) => { if (s) m[s] = (m[s] || 0) + 1; });
     }
     return m;
-  }, [visible]);
+  }, [visible, categories]);
+
+  // Lo que se filtra ahora mismo, con nombre: para el aviso de lista vacía.
+  const categoriaFiltrada = filter === 'all' ? null : categoriasVisibles.find((c) => c.slug === filter);
+  const grupoFiltrado = muscle === 'all' ? null : grupos.find((g) => g.id === muscle);
 
   function handleDuplicate(copy) {
     setExercises((prev) => [...prev, copy]);
@@ -1076,6 +1275,10 @@ export default function ExercisesPanel({ viendoComo }) {
             onCambio={setFilter}
             opciones={[
               { valor: 'all', etiqueta: 'Todas las categorías', nota: String(counts.all ?? 0) },
+              /* Andrés, 28 sep 2026: "abajo de 'todas las categorías' un botón
+                 de 'agregar categoría'". Mirando la cuenta de un coach no se
+                 ofrece: quedaría a nombre del master, visible para todos. */
+              ...(viendoComo ? [] : [{ accion: () => setCreando('categoria'), etiqueta: 'Agregar categoría' }]),
               ...categoriasVisibles.map((c) => ({
                 valor: c.slug, etiqueta: c.name, color: c.color, nota: String(counts[c.slug] ?? 0),
               })),
@@ -1090,8 +1293,11 @@ export default function ExercisesPanel({ viendoComo }) {
             onCambio={setMuscle}
             opciones={[
               { valor: 'all', etiqueta: 'Todos los grupos' },
-              ...MUSCLE_GROUPS.filter((g) => groupCounts[g.id] > 0).map((g) => ({
-                valor: g.id, etiqueta: g.label, nota: String(groupCounts[g.id]),
+              ...(viendoComo ? [] : [{ accion: () => setCreando('grupo'), etiqueta: 'Agregar grupo' }]),
+              // Todos, también los que van en 0: antes se escondían, y un grupo
+              // recién agregado no aparecía por ningún lado.
+              ...grupos.map((g) => ({
+                valor: g.id, etiqueta: g.label, nota: String(groupCounts[g.id] ?? 0),
               })),
             ]}
           />
@@ -1112,7 +1318,15 @@ export default function ExercisesPanel({ viendoComo }) {
       {filtered.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '60px 20px', color: T.text3 }}>
           <Dumbbell size={40} style={{ opacity: 0.4 }} />
-          <div style={{ marginTop: 12, fontWeight: 600, color: T.text2 }}>Sin ejercicios para este filtro.</div>
+          <div style={{ marginTop: 12, fontWeight: 600, color: T.text2, lineHeight: 1.5 }}>
+            {/* Una categoría o un grupo recién creados llegan aquí vacíos: se
+                dice cómo llenarlos en vez de un "sin ejercicios" a secas. */}
+            {categoriaFiltrada && !search.trim() && muscle === 'all' && !counts[categoriaFiltrada.slug]
+              ? `«${categoriaFiltrada.name}» todavía no tiene ejercicios. Abre uno y ponla como categoría principal o secundaria.`
+              : grupoFiltrado && !search.trim() && filter === 'all' && !groupCounts[grupoFiltrado.id]
+                ? `«${grupoFiltrado.label}» todavía no tiene ejercicios. Abre uno y elige este grupo como principal o secundario.`
+                : 'Sin ejercicios para este filtro.'}
+          </div>
         </div>
       ) : (
         <div
@@ -1168,6 +1382,13 @@ export default function ExercisesPanel({ viendoComo }) {
           puedeCrearCategoria={!viendoComo}
           onCategoriaCreada={(fila) => setCategories((prev) => [...prev, fila])}
           onCategoriaBorrada={(id) => setCategories((prev) => prev.filter((c) => c.id !== id))}
+          grupos={grupos}
+          puedeCrearGrupo={!viendoComo}
+          onGrupoCreado={(fila) => setGruposPropios((prev) => [...prev, fila])}
+          onGrupoBorrado={(id) => {
+            setGruposPropios((prev) => prev.filter((g) => g.id !== id));
+            if (muscle === `propio-${id}`) setMuscle('all');
+          }}
           muscleOptions={muscles}
           esAjeno={!!editing.esAjeno}
           foco={editing.foco || 'todo'}
@@ -1177,6 +1398,42 @@ export default function ExercisesPanel({ viendoComo }) {
           onDuplicate={handleDuplicate}
           onGuardadaMiVersion={handleMiVersion}
           onRestaurada={handleRestaurada}
+        />
+      )}
+
+      {creando === 'categoria' && (
+        <DialogoNombre
+          titulo="Nueva categoría"
+          detalle="Después, al editar un ejercicio, la eliges como principal o secundaria."
+          placeholder="Ej. Funcional, Velocidad, Movilidad…"
+          onCancelar={() => setCreando(null)}
+          onCrear={async (nombre) => {
+            const fila = await crearCategoriaPropia({ nombre, categorias: categoriasVisibles, duenoId: dueño, masterId });
+            setCategories((prev) => [...prev, fila]);
+            // Queda puesta en el filtro, sola: así se ve que existe y el aviso
+            // de lista vacía dice qué sigue. Con otro filtro encima saldría un
+            // "sin ejercicios" que no explica nada.
+            setFilter(fila.slug);
+            setMuscle('all');
+            setSearch('');
+            setCreando(null);
+          }}
+        />
+      )}
+      {creando === 'grupo' && (
+        <DialogoNombre
+          titulo="Nuevo grupo muscular"
+          detalle="Después, al editar un ejercicio, lo eliges como principal o secundario."
+          placeholder="Ej. Antebrazo, Aductores, Cuello…"
+          onCancelar={() => setCreando(null)}
+          onCrear={async (nombre) => {
+            const fila = await crearGrupoPropio({ nombre, grupos, duenoId: dueño });
+            setGruposPropios((prev) => [...prev, fila]);
+            setMuscle(`propio-${fila.id}`);
+            setFilter('all');
+            setSearch('');
+            setCreando(null);
+          }}
         />
       )}
 

@@ -138,6 +138,41 @@ export async function deleteCategory(id) {
   if (error) throw error;
 }
 
+/* -------------------------- Grupos musculares -------------------------- *
+ * Los de siempre (Piernas, Glúteo…) viven en el código, `src/lib/muscles.js`.
+ * Aquí solo están los que agrega cada coach. Andrés, 28 sep 2026: "abajo de
+ * 'todos los grupos' ponerle botón de 'agregar grupo'". Quién ve y quién
+ * borra lo deciden las reglas de la base, igual que con las categorías.
+ * ----------------------------------------------------------------------- */
+export async function listMuscleGroups() {
+  const { data, error } = await supabase
+    .from('grupos_musculares')
+    .select('*')
+    .order('created_at');
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function createMuscleGroup({ name, createdBy }) {
+  const { data, error } = await supabase
+    .from('grupos_musculares')
+    .insert({ name: name.trim(), created_by: createdBy })
+    .select('*')
+    .single();
+  if (error) {
+    if (error.code === '23505') throw new Error('Ya tienes un grupo con ese nombre.');
+    throw error;
+  }
+  return data;
+}
+
+/* Los ejercicios no se tocan: el músculo va escrito en cada uno, así que el que
+   lo tenga lo sigue diciendo. Solo deja de salir como grupo en los filtros. */
+export async function deleteMuscleGroup(id) {
+  const { error } = await supabase.from('grupos_musculares').delete().eq('id', id);
+  if (error) throw error;
+}
+
 /* ----------------------------- Exercises ------------------------------ */
 export async function listExercises() {
   const { data, error } = await supabase
@@ -194,6 +229,7 @@ export async function duplicateExercise(ex) {
     video_link: ex.video_link ?? null,
     muscle_primary: ex.muscle_primary ?? null,
     muscle_secondary: ex.muscle_secondary ?? null,
+    categorias_secundarias: ex.categorias_secundarias ?? [],
     equipment: ex.equipment ?? null,
     created_by,
   };
@@ -237,7 +273,7 @@ export async function deleteExercise(id) {
 // Los campos que un coach puede hacer suyos. Deliberadamente NO incluye `id`,
 // `created_by` ni las fechas: eso identifica al ejercicio, no lo describe.
 export const CAMPOS_EDITABLES = [
-  'name', 'description', 'category_id', 'cover_image_url',
+  'name', 'description', 'category_id', 'categorias_secundarias', 'cover_image_url',
   'video_url', 'video_link', 'recorte_inicio', 'recorte_fin', 'sin_audio', 'encuadre',
   'muscle_primary', 'muscle_secondary', 'equipment',
 ];

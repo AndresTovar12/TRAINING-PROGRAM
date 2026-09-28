@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Search, X, Check, Dumbbell, Trash2 } from 'lucide-react';
 import { useMedia } from '@/lib/useViewport';
 import { T, FONT, KP } from '@/lib/theme';
-import { MUSCLE_GROUPS, exerciseMatchesGroup } from '@/lib/muscles';
+import { gruposConPropios, comoEnGrupo } from '@/lib/muscles';
+import { listCategories, listMuscleGroups } from '@/lib/api';
 import Portada from '@/components/Portada';
 import ListaDesplegable from '@/components/ListaDesplegable';
 import InterruptorVista from '@/components/InterruptorVista';
@@ -30,28 +31,65 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
   const [muscle, setMuscle] = useState(null);
   const [picked, setPicked] = useState([]); // filas del repertorio, en orden de selección
 
-  const categories = useMemo(() => {
-    const m = new Map();
-    exercises.forEach((e) => { if (e.category && !m.has(e.category.id)) m.set(e.category.id, e.category); });
-    return [...m.values()];
-  }, [exercises]);
+  /* Las categorías y los grupos propios, para lo SECUNDARIO de cada ejercicio
+     (Andrés, 28 sep 2026: un "jumping lunge" es Potencia y también
+     Pliometría). Se piden aquí, al abrir, y sin ellos el selector funciona
+     igual: con las categorías principales y los grupos de siempre. */
+  const [todasCategorias, setTodasCategorias] = useState([]);
+  const [gruposPropios, setGruposPropios] = useState([]);
+  useEffect(() => {
+    let vivo = true;
+    listCategories().then((c) => { if (vivo) setTodasCategorias(c); }).catch(() => {});
+    listMuscleGroups().then((g) => { if (vivo) setGruposPropios(g); }).catch(() => {});
+    return () => { vivo = false; };
+  }, []);
+  const grupos = useMemo(() => gruposConPropios(gruposPropios), [gruposPropios]);
 
-  // Conteo por grupo muscular (solo se ofrecen los grupos con ejercicios)
+  // Las que usa algún ejercicio, como principal o como secundaria.
+  const categories = useMemo(() => {
+    const porId = new Map(todasCategorias.map((c) => [c.id, c]));
+    const m = new Map();
+    exercises.forEach((e) => {
+      if (e.category && !m.has(e.category.id)) m.set(e.category.id, e.category);
+      (e.categorias_secundarias || []).forEach((id) => {
+        if (!m.has(id) && porId.has(id)) m.set(id, porId.get(id));
+      });
+    });
+    return [...m.values()];
+  }, [exercises, todasCategorias]);
+
+  // Conteo por grupo muscular, principal o secundario (solo se ofrecen los
+  // grupos con ejercicios).
   const groupCounts = useMemo(() => {
     const m = {};
-    MUSCLE_GROUPS.forEach((g) => {
-      m[g.id] = exercises.filter((e) => exerciseMatchesGroup(e, g.id)).length;
+    grupos.forEach((g) => {
+      m[g.id] = exercises.filter((e) => comoEnGrupo(e, g)).length;
     });
     return m;
-  }, [exercises]);
+  }, [exercises, grupos]);
 
+  // Lo secundario también entra, pero después de lo principal: igual que en el
+  // repertorio. El `sort` es estable, así que cada parte guarda su orden.
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return exercises.filter((e) =>
-      (!catId || e.category?.id === catId)
-      && (!muscle || exerciseMatchesGroup(e, muscle))
-      && (!q || e.name.toLowerCase().includes(q) || (e.equipment || '').toLowerCase().includes(q)));
-  }, [exercises, query, catId, muscle]);
+    const grupo = muscle ? grupos.find((g) => g.id === muscle) : null;
+    const pasan = [];
+    exercises.forEach((e) => {
+      if (q && !e.name.toLowerCase().includes(q) && !(e.equipment || '').toLowerCase().includes(q)) return;
+      let r = 0;
+      if (catId && e.category?.id !== catId) {
+        if (!(e.categorias_secundarias || []).includes(catId)) return;
+        r = 1;
+      }
+      if (grupo) {
+        const como = comoEnGrupo(e, grupo);
+        if (!como) return;
+        if (como === 'secundario') r = 1;
+      }
+      pasan.push([r, e]);
+    });
+    return pasan.sort((a, b) => a[0] - b[0]).map(([, e]) => e);
+  }, [exercises, query, catId, muscle, grupos]);
 
   const pickedIds = useMemo(() => new Set(picked.map((p) => p.id)), [picked]);
   const toggle = (ex) => {
@@ -129,7 +167,7 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
                 estilo={{ ...selStyle(!!muscle), padding: '8px 10px' }}
                 opciones={[
                   { valor: '', etiqueta: 'Parte del cuerpo' },
-                  ...MUSCLE_GROUPS.filter((g) => groupCounts[g.id] > 0).map((g) => ({
+                  ...grupos.filter((g) => groupCounts[g.id] > 0).map((g) => ({
                     valor: g.id, etiqueta: g.label, nota: String(groupCounts[g.id]),
                   })),
                 ]}

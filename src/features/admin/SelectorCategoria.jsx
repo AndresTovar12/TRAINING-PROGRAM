@@ -24,15 +24,12 @@
  */
 import { useState } from 'react';
 import { Plus, Loader2, X } from 'lucide-react';
-import { contarEjerciciosDeCategoria, createCategory, deleteCategory } from '@/lib/api';
+import { contarEjerciciosDeCategoria, deleteCategory } from '@/lib/api';
+import { categoriasDeLaApp, categoriasMias, crearCategoriaPropia } from '@/lib/categorias';
 import { useConfirmacion } from '@/components/Confirmacion';
 import ListaDesplegable from '@/components/ListaDesplegable';
 import { plural } from '@/lib/plural';
 import { T, FONT } from '@/lib/theme';
-
-// "Velocidad", "velocidad" y "Velocidád" son la misma categoría para una persona.
-const igual = (a = '', b = '') => a.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase()
-  === b.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
 
 export default function SelectorCategoria({
   categorias = [], value, onChange, onCreada, onBorrada,
@@ -44,8 +41,8 @@ export default function SelectorCategoria({
   const [guardando, setGuardando] = useState(false);
   const [err, setErr] = useState('');
 
-  const mias = categorias.filter((c) => c.created_by && c.created_by === duenoId);
-  const deLaApp = categorias.filter((c) => !c.created_by || (c.created_by === masterId && c.created_by !== duenoId));
+  const mias = categoriasMias(categorias, duenoId);
+  const deLaApp = categoriasDeLaApp(categorias, duenoId, masterId);
 
   /* BORRAR UNA CATEGORÍA PROPIA.
      Andrés, 19 sep 2026: "¿qué pasa si creo una categoría sin querer y la
@@ -79,16 +76,10 @@ export default function SelectorCategoria({
   }
 
   async function crear() {
-    const n = nombre.trim();
-    if (!n) { setErr('Ponle un nombre.'); return; }
-    if ([...mias, ...deLaApp].some((c) => igual(c.name, n))) {
-      setErr('Ya existe una categoría con ese nombre.');
-      return;
-    }
     setGuardando(true);
     setErr('');
     try {
-      const fila = await createCategory({ name: n, createdBy: duenoId, cuantas: mias.length });
+      const fila = await crearCategoriaPropia({ nombre, categorias, duenoId, masterId });
       onCreada?.(fila);
       onChange(fila.id);
       setCreando(false);

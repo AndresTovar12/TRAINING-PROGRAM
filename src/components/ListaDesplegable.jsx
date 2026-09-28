@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { useCoarsePointer } from '@/lib/useViewport';
 import { T, FONT } from '@/lib/theme';
 
@@ -19,6 +19,12 @@ import { T, FONT } from '@/lib/theme';
  * usa con el teclado y lo anuncia un lector de pantalla. Cambiarlo por divs
  * bonitos es un retroceso, así que aquí hay `role="listbox"`, `aria-selected`,
  * flechas, Inicio/Fin, Enter y Escape.
+ *
+ * FILAS DE ACCIÓN. Una opción con `accion` (una función) no se elige: se
+ * ejecuta. Se dibuja en azul con un "+" y la lista se cierra antes de
+ * llamarla. Andrés, 28 sep 2026: "abajo de 'todas las categorías' un botón de
+ * 'agregar categoría'". Va dentro de la lista, en el orden en que se pase, y
+ * se recorre con las flechas como cualquier otra.
  */
 export default function ListaDesplegable({
   valor,
@@ -47,7 +53,7 @@ export default function ListaDesplegable({
     () => (grupos ? grupos.flatMap((g) => g.opciones) : (opciones ?? [])),
     [grupos, opciones],
   );
-  const elegida = planas.find((o) => o.valor === valor) ?? null;
+  const elegida = planas.find((o) => !o.accion && o.valor === valor) ?? null;
 
   const cerrar = useCallback(() => { setAbierto(false); setActivo(-1); }, []);
 
@@ -77,7 +83,7 @@ export default function ListaDesplegable({
      y no en un efecto: poner el estado nada más entrar al efecto dispara un
      render de más, y el único momento en que hay que calcularlo es al abrir. */
   const abre = () => {
-    setActivo(Math.max(0, planas.findIndex((o) => o.valor === valor)));
+    setActivo(Math.max(0, planas.findIndex((o) => !o.accion && o.valor === valor)));
     setAbierto(true);
   };
 
@@ -164,7 +170,13 @@ export default function ListaDesplegable({
      Lo que sí es imprescindible es que el botón no se redibuje entre que el
      dedo baja y sube: eso sí hace que iOS se salte el `click`. De eso se
      encarga el `onMouseEnter` de abajo, apagado en pantalla táctil. */
-  const elige = (o) => { onCambio(o.valor); cerrar(); };
+  const elige = (o) => {
+    // Primero se cierra: la acción suele abrir algo encima (un diálogo) y la
+    // lista no debe quedarse abierta detrás.
+    if (o.accion) { cerrar(); o.accion(); return; }
+    onCambio(o.valor);
+    cerrar();
+  };
 
   const teclas = (e) => {
     if (deshabilitado) return;
@@ -195,8 +207,35 @@ export default function ListaDesplegable({
   }, [abierto, activo]);
 
   const fila = (o, i) => {
-    const puesta = o.valor === valor;
     const resaltada = i === activo;
+    if (o.accion) {
+      return (
+        <div key={`accion-${i}`} data-i={i} style={{ display: 'flex', alignItems: 'center' }}>
+          <button
+            type="button"
+            role="option"
+            aria-selected={false}
+            // Los mismos dos cuidados que las opciones de abajo: sin hover en
+            // pantalla táctil y sin dejar que un `<label>` reenvíe el clic.
+            onMouseEnter={dedos ? undefined : () => setActivo(i)}
+            onClick={(e) => { e.preventDefault(); elige(o); }}
+            style={{
+              flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 9,
+              minHeight: 42, padding: '0 11px', borderRadius: 10, border: 'none', cursor: 'pointer',
+              touchAction: 'manipulation',
+              background: resaltada ? T.bgInteract : 'transparent',
+              fontFamily: FONT, fontSize: 14, fontWeight: 800, color: T.accent, textAlign: 'left',
+            }}
+          >
+            <Plus size={16} strokeWidth={2.6} style={{ flexShrink: 0 }} />
+            <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {o.etiqueta}
+            </span>
+          </button>
+        </div>
+      );
+    }
+    const puesta = o.valor === valor;
     return (
       <div key={o.valor ?? `v-${i}`} data-i={i} style={{ display: 'flex', alignItems: 'center' }}>
         <button
