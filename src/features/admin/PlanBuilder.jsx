@@ -465,7 +465,7 @@ function BotonVideoAtleta({ ex, atleta, onAbrir }) {
          parecen tocables. El violeta lo separa además del azul del peso, que
          es la otra pastilla de la misma fila. */
       style={{
-        display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 10px',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '6px 10px',
         borderRadius: 999, cursor: 'pointer', whiteSpace: 'nowrap',
         border: 'none', background: 'rgba(124,92,255,0.12)', color: T.violet,
         fontFamily: FONT, fontSize: 12, fontWeight: 700,
@@ -500,7 +500,7 @@ function BotonCarga({ ex, onPatch }) {
           : `Sugerido automáticamente: ${efectivo ? 'lleva peso' : 'sin peso'}. Toca para cambiarlo.`
       }
       style={{
-        display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 10px',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '6px 10px',
         borderRadius: 999, cursor: 'pointer', whiteSpace: 'nowrap',
         background: efectivo ? T.accentBg : T.bg3,
         color: efectivo ? T.accent : T.text2,
@@ -594,7 +594,9 @@ function ExerciseRow({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove,
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+      {/* Medidas para que todo quepa en UNA línea desde una laptop de 1180 px
+          (la fila mide unos 650). Si la pantalla es aún más chica, se parte. */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         {/* El rótulo de la cantidad es la lista de unidades. Ver `CampoCantidad`. */}
         <CampoCantidad ex={ex} onPatch={onPatch} compacto estiloInput={inputFila} ancho={96} />
 
@@ -603,33 +605,36 @@ function ExerciseRow({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove,
           <input value={ex.intensity || ''} onChange={(e) => onPatch({ intensity: e.target.value })}
             placeholder="70% / RPE 8" style={inputFila} />
         </div>
-        <div style={{ width: 92 }}>
+        <div style={{ width: 84 }}>
           <RotuloCampo>Descanso</RotuloCampo>
           <input value={ex.descanso || ''} onChange={(e) => onPatch({ descanso: e.target.value })}
             placeholder="2 min" style={inputFila} />
         </div>
-        <div style={{ flex: '1 1 150px', minWidth: 130 }}>
+        {/* La base decide si se parte la línea (no el mínimo): va chica, y el
+            campo crece para llenar lo que sobre. */}
+        <div style={{ flex: '1 1 110px', minWidth: 110 }}>
           <RotuloCampo>Descripción</RotuloCampo>
           <input value={ex.notes || ''} onChange={(e) => onPatch({ notes: e.target.value })}
             placeholder="Ej. 8 cada pierna…" style={inputFila} />
         </div>
-        <div style={{ flex: '1 1 130px', minWidth: 120 }}>
+        <div style={{ flex: '1 1 100px', minWidth: 100 }}>
           <RotuloCampo>Cue técnico</RotuloCampo>
           <input value={ex.cue || ''} onChange={(e) => onPatch({ cue: e.target.value })}
             placeholder="Opcional…" style={{ ...inputFila, color: T.text2 }} />
         </div>
-        <div style={{ flexShrink: 0 }}>
-          <RotuloCampo>Peso</RotuloCampo>
+        {/* PESO Y VIDEO, uno encima del otro y sin rótulo: las pastillas se
+            leen solas ("Con peso", "Su video"). Lado a lado y con rótulo no
+            cabían en la fila y el video se bajaba a otra línea. Andrés, 27 sep
+            2026: "no cabe y se tiene que poner abajo, eso no me gusta". Las
+            dos juntas miden lo mismo que un rótulo con su campo.
+            El de video solo existe con un ejercicio del repertorio y un
+            atleta delante. */}
+        <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 4 }}>
           <BotonCarga ex={ex} onPatch={onPatch} />
-        </div>
-        {/* El botón de video solo existe con un ejercicio del repertorio y un
-            atleta delante; sin él, el rótulo se quedaba solo y descolgado. */}
-        {ex.exercise_id && atleta?.id && (
-          <div style={{ flexShrink: 0 }}>
-            <RotuloCampo>Video</RotuloCampo>
+          {ex.exercise_id && atleta?.id && (
             <BotonVideoAtleta ex={ex} atleta={atleta} onAbrir={() => onVideoAtleta?.(ex)} />
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
