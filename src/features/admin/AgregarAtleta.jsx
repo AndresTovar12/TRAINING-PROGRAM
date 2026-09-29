@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Check, Copy, Loader2, Share2, UserPlus, X } from 'lucide-react';
 import { invitarAtleta, ligaDeInvitacion } from '@/lib/api';
+import { usePalabras } from '@/contexts/PalabrasContext';
 import { T, FONT, KP } from '@/lib/theme';
 
 /**
@@ -16,6 +17,7 @@ import { T, FONT, KP } from '@/lib/theme';
  * tiene por qué saberlo ni tener que preguntárselo antes de poder trabajar.
  */
 export default function AgregarAtleta({ onCerrar, onCreado }) {
+  const { t } = usePalabras();
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
   const [creando, setCreando] = useState(false);
@@ -117,7 +119,7 @@ export default function AgregarAtleta({ onCerrar, onCreado }) {
               <UserPlus size={19} />
             </div>
             <div style={{ fontSize: 16.5, fontWeight: 800, color: T.text }}>
-              {listo ? 'Listo, ya es tu atleta' : 'Agregar atleta'}
+              {t(listo ? 'Listo, ya es tu atleta' : 'Agregar atleta')}
             </div>
           </div>
           <button
@@ -130,12 +132,11 @@ export default function AgregarAtleta({ onCerrar, onCreado }) {
 
         {!listo ? (
           <form onSubmit={generar} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {campo('Nombre del cliente', nombre, setNombre, { placeholder: 'Juan', autoFocus: true, required: true })}
-            {campo('Apellido del cliente', apellido, setApellido, { placeholder: 'Pérez' })}
+            {campo(t('Nombre del cliente'), nombre, setNombre, { placeholder: 'Juan', autoFocus: true, required: true })}
+            {campo(t('Apellido del cliente'), apellido, setApellido, { placeholder: 'Pérez' })}
 
             <p style={{ fontSize: 13, color: T.text2, lineHeight: 1.5, margin: 0, fontWeight: 500 }}>
-              No hace falta su correo. En cuanto generes el link ya aparece en tu lista
-              y puedes armarle el plan, aunque todavía no haya entrado.
+              {t('No hace falta su correo. En cuanto generes el link ya aparece en tu lista y puedes armarle el plan, aunque todavía no haya entrado.')}
             </p>
 
             {error && (
@@ -214,8 +215,7 @@ export default function AgregarAtleta({ onCerrar, onCreado }) {
             </div>
 
             <p style={{ fontSize: 12.5, color: T.text3, lineHeight: 1.5, margin: 0, fontWeight: 500 }}>
-              El link no caduca. Deja de servir cuando lo use, o si desactivas o eliminas
-              al atleta desde tu lista.
+              {t('El link no caduca. Deja de servir cuando lo use, o si desactivas o eliminas al atleta desde tu lista.')}
             </p>
 
             <button

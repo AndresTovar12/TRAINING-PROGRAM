@@ -1,5 +1,6 @@
 import { createContext, useContext, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { PalabrasProvider } from '@/contexts/PalabrasContext';
 
 /**
  * De quién es la app de entrenamiento que se está dibujando.
@@ -21,7 +22,13 @@ const VistaContext = createContext(null);
 
 export function VistaDeAtletaProvider({ atleta, children }) {
   const value = useMemo(() => ({ perfil: atleta }), [atleta]);
-  return <VistaContext.Provider value={value}>{children}</VistaContext.Provider>;
+  // Las palabras son las del coach de ESE atleta, no las de quien mira: un
+  // coach que abre la app de su paciente la ve como la ve el paciente.
+  return (
+    <VistaContext.Provider value={value}>
+      <PalabrasProvider perfil={atleta}>{children}</PalabrasProvider>
+    </VistaContext.Provider>
+  );
 }
 
 /** `{ perfil, userId, soloLectura }` de la persona cuya app se dibuja. */

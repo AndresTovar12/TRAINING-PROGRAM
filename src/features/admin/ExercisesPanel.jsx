@@ -4,6 +4,7 @@ import {
   Copy, RotateCcw, Pencil, ChevronRight, ChevronDown,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePalabras } from '@/contexts/PalabrasContext';
 import { useIsWide } from '@/lib/useViewport';
 import {
   listCategories, listExercises, createExercise, updateExercise, deleteExercise,
@@ -424,6 +425,7 @@ function ExerciseEditor({
   duenoId, masterId, onCategoriaCreada, onCategoriaBorrada, puedeCrearCategoria = true,
   grupos = MUSCLE_GROUPS, onGrupoCreado, onGrupoBorrado, puedeCrearGrupo = true,
 }) {
+  const { t } = usePalabras();
   // `foco='media'` abre la ficha directo en foto y video, sin los campos de
   // texto. Los datos de los 81 ejercicios ya están escritos; lo que falta es
   // la media. Guardar sigue guardando la ficha completa: los campos siguen
@@ -651,7 +653,7 @@ function ExerciseEditor({
             }}>
               <span style={{ flex: 1, minWidth: 180, color: T.accent, fontSize: 13, fontWeight: 600, lineHeight: 1.45 }}>
                 {exercise?.esMiVersion
-                  ? 'Tus atletas ven esta versión. El original del sistema sigue guardado.'
+                  ? t('Tus atletas ven esta versión. El original del sistema sigue guardado.')
                   : 'Lo que guardes será TU versión. El ejercicio del sistema no se toca.'}
               </span>
               {exercise?.esMiVersion && (

@@ -14,6 +14,7 @@ import PlanBuilder from '@/features/admin/PlanBuilder';
 import CambiosDelPlan from '@/features/admin/CambiosDelPlan';
 import AgregarAtleta from '@/features/admin/AgregarAtleta';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePalabras } from '@/contexts/PalabrasContext';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useIsDesktop } from '@/lib/useViewport';
 import { T, FONT, KP } from '@/lib/theme';
@@ -112,7 +113,8 @@ function StatCard({ icon, label, value, tono }) {
 
 /** Celda del plan: titulo + de que tipo es + cuanto mide. */
 function PlanCell({ plan }) {
-  if (!plan) return <span style={{ fontSize: 13.5, color: T.text3, fontWeight: 600 }}>Sin plan</span>;
+  const { t } = usePalabras();
+  if (!plan) return <span style={{ fontSize: 13.5, color: T.text3, fontWeight: 600 }}>{t('Sin plan')}</span>;
   const etiqueta = plan.kind === 'weekly' ? 'Semanal' : 'Por fases';
   const detalle = plan.kind === 'weekly'
     ? `${plan.weeks} semana${plan.weeks === 1 ? '' : 's'}`
@@ -120,7 +122,7 @@ function PlanCell({ plan }) {
   return (
     <div style={{ minWidth: 0 }}>
       <div style={{ fontWeight: 700, fontSize: 13.5, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {plan.title || 'Plan sin título'}
+        {plan.title || t('Plan sin título')}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
         <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, color: T.accent, background: T.accentBg, borderRadius: 6, padding: '2px 6px' }}>{etiqueta}</span>
@@ -204,6 +206,7 @@ function Arroba({ fila }) {
  * el mismo mientras no se use.
  */
 function LinkPendiente({ token }) {
+  const { t } = usePalabras();
   const [copiado, setCopiado] = useState(false);
   const liga = ligaDeInvitacion(token);
 
@@ -234,7 +237,7 @@ function LinkPendiente({ token }) {
         Todavía no ha entrado
       </div>
       <p style={{ fontSize: 12.5, color: T.text2, lineHeight: 1.5, margin: '0 0 10px', fontWeight: 500 }}>
-        Ya puedes armarle su plan. Cuando abra este link, elige su usuario y su contraseña.
+        {t('Ya puedes armarle su plan. Cuando abra este link, elige su usuario y su contraseña.')}
       </p>
       <div style={{
         background: T.bg3, borderRadius: 9, padding: '8px 10px', marginBottom: 9,
@@ -278,6 +281,7 @@ function LinkPendiente({ token }) {
 }
 
 function AthletesTable({ rows, coaches, isMaster, selectedId, onPick }) {
+  const { t } = usePalabras();
   const nombreCoach = (id) => {
     if (!id) return null;
     const c = coaches.find((x) => x.id === id);
@@ -293,8 +297,8 @@ function AthletesTable({ rows, coaches, isMaster, selectedId, onPick }) {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: FONT }}>
           <thead>
             <tr style={{ background: T.bg }}>
-              <th style={TH}>Atleta</th>
-              <th style={TH}>Plan</th>
+              <th style={TH}>{t('Atleta')}</th>
+              <th style={TH}>{t('Plan')}</th>
               <th style={TH}>Última actividad</th>
               {isMaster && <th style={TH}>Coach</th>}
               <th style={{ ...TH, width: 44 }} aria-label="Abrir" />
@@ -347,7 +351,7 @@ function AthletesTable({ rows, coaches, isMaster, selectedId, onPick }) {
               <tr>
                 <td colSpan={cols} style={{ ...TD, borderBottom: 'none', textAlign: 'center', padding: '44px 16px', color: T.text3 }}>
                   <UserIcon size={32} style={{ opacity: 0.4 }} />
-                  <div style={{ marginTop: 10, fontWeight: 600, color: T.text2 }}>Sin atletas.</div>
+                  <div style={{ marginTop: 10, fontWeight: 600, color: T.text2 }}>{t('Sin atletas.')}</div>
                 </td>
               </tr>
             )}
@@ -524,6 +528,7 @@ function ConfirmarBorrado({ athlete, onCancelar, onConfirmado }) {
 }
 
 function ZonaAdministracion({ athlete, isMaster, soyElCoach, onCambiado, onEliminado }) {
+  const { t } = usePalabras();
   const activo = athlete.is_active !== false;
   const [ocupado, setOcupado] = useState('');
   const [err, setErr] = useState('');
@@ -593,9 +598,9 @@ function ZonaAdministracion({ athlete, isMaster, soyElCoach, onCambiado, onElimi
 
       <div style={{ fontSize: 12, color: T.text3, marginTop: 10, fontWeight: 600, lineHeight: 1.5 }}>
         {soyElCoach && !isMaster
-          ? 'Quitarla de tu lista no borra nada: su plan y su historial siguen guardados.'
+          ? t('Quitarla de tu lista no borra nada: su plan y su historial siguen guardados.')
           : activo
-            ? 'Desactivar no borra nada: deja de entrar, pero conserva su plan y su historial.'
+            ? t('Desactivar no borra nada: deja de entrar, pero conserva su plan y su historial.')
             : 'Esta cuenta está desactivada. No puede entrar a la app.'}
       </div>
 
@@ -741,6 +746,7 @@ function DentroDelDia({ day }) {
 function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile, onReassigned, onEliminado, onVerComoAtleta, tokenInvitacion }) {
   const esCompu = useIsDesktop();
   const pregunta = useConfirmacion();
+  const { t } = usePalabras();
   const [plan, setPlan] = useState(null);
   const [state, setState] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -780,9 +786,10 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
   async function onDeletePlan() {
     if (!plan) return;
     const va = await pregunta({
-      titulo: `¿Eliminar el plan "${plan.title}"?`,
+      // Solo se traduce lo fijo: el título del plan y el nombre son de personas.
+      titulo: `${t('¿Eliminar el plan')} "${plan.title}"?`,
       // Ya se puede deshacer: la base guarda la versión (ver CambiosDelPlan).
-      detalle: `Es el plan de ${athlete.full_name || athlete.username}. Si te equivocas, lo recuperas en "Cambios del plan".`,
+      detalle: `${t('Es el plan de')} ${athlete.full_name || athlete.username}. ${t('Si te equivocas, lo recuperas en "Cambios del plan".')}`,
       confirmar: 'Sí, eliminarlo',
       peligro: true,
     });
@@ -823,7 +830,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
       <AccionFicha
         icon={plan ? Pencil : Plus}
-        titulo={plan ? 'Editar el plan' : 'Crear el plan'}
+        titulo={t(plan ? 'Editar el plan' : 'Crear el plan')}
         detalle={plan ? plan.title : 'Todavía no tiene ninguno'}
         primaria
         onClick={() => setBuilding(true)}
@@ -831,7 +838,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
       {plan && (
         <AccionFicha
           icon={ClipboardList}
-          titulo="Ver el plan"
+          titulo={t('Ver el plan')}
           detalle={`${tamano} · ${plural(totalSessions, 'sesión', 'sesiones')}`}
           onClick={() => setVerPlan(true)}
         />
@@ -846,7 +853,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           el sitio para ver sus ejercicios, porque el coach no lo va a entrenar. */}
       {verPlan && plan && (
         <HojaFlotante
-          titulo={plan.title || 'Plan'}
+          titulo={plan.title || t('Plan')}
           subtitulo={`${athlete.full_name || athlete.username} · ${tamano}`}
           onCerrar={() => setVerPlan(false)}
         >
@@ -873,7 +880,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
       {onVerComoAtleta && (
         <AccionFicha
           icon={Eye}
-          titulo="Entrar como el atleta"
+          titulo={t('Entrar como el atleta')}
           detalle="Su app tal cual la ve él. Nada se guarda."
           onClick={() => onVerComoAtleta(athlete)}
         />
@@ -953,7 +960,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
         </div>
         {plan && (
           <div style={{ fontSize: 12, color: T.text3, marginTop: 10, fontWeight: 600 }}>
-            Plan actualizado {timeAgo(plan.updated_at) || '—'}
+            {t('Plan actualizado')} {timeAgo(plan.updated_at) || '—'}
           </div>
         )}
       </SeccionFicha>
@@ -997,7 +1004,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
               fontFamily: FONT, fontSize: 13.5, fontWeight: 700, marginBottom: 12,
             }}
           >
-            <Trash2 size={15} /> Eliminar el plan
+            <Trash2 size={15} /> {t('Eliminar el plan')}
           </button>
         )}
 
@@ -1062,6 +1069,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
 /* ------------------------------ Panel raíz ------------------------------ */
 export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
   const { profile, user } = useAuth();
+  const { t } = usePalabras();
   const isMaster = !!profile?.is_owner;
   const narrow = useIsNarrow(880);
   const isDesktop = useIsDesktop();
@@ -1160,7 +1168,7 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: T.text2, fontWeight: 600, padding: 40 }}>
-        <Loader2 size={18} className="spin" /> Cargando atletas…
+        <Loader2 size={18} className="spin" /> {t('Cargando atletas…')}
       </div>
     );
   }
@@ -1196,8 +1204,8 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
       <div>
         {modoTabla && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginBottom: 16 }}>
-            <StatCard icon={<Users size={17} />} label="Atletas" value={metricas.total} />
-            <StatCard icon={<ClipboardList size={17} />} label="Sin plan" value={metricas.sinPlan} tono={metricas.sinPlan > 0 ? 'alerta' : undefined} />
+            <StatCard icon={<Users size={17} />} label={t('Atletas')} value={metricas.total} />
+            <StatCard icon={<ClipboardList size={17} />} label={t('Sin plan')} value={metricas.sinPlan} tono={metricas.sinPlan > 0 ? 'alerta' : undefined} />
             <StatCard icon={<CalendarClock size={17} />} label="Activos (7 días)" value={metricas.activos} />
           </div>
         )}
@@ -1220,7 +1228,7 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
               touchAction: 'manipulation',
             }}
           >
-            <UserPlus size={18} /> Agregar atleta
+            <UserPlus size={18} /> {t('Agregar atleta')}
           </button>
           {/* La otra forma de sumar a alguien: que se registre él y pegue este
               código. Va al lado del botón porque es el mismo momento — 'quiero
@@ -1234,7 +1242,7 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
           <input
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPagina(1); }}
-            placeholder="Buscar atleta…"
+            placeholder={t('Buscar atleta…')}
             style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 16, fontWeight: 500, color: T.text, padding: '12px 0' }}
           />
         </div>
@@ -1314,7 +1322,7 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
           {filtered.length === 0 && (
             <div style={{ textAlign: 'center', padding: '40px 16px', color: T.text3 }}>
               <UserIcon size={34} style={{ opacity: 0.4 }} />
-              <div style={{ marginTop: 10, fontWeight: 600, color: T.text2 }}>Sin atletas.</div>
+              <div style={{ marginTop: 10, fontWeight: 600, color: T.text2 }}>{t('Sin atletas.')}</div>
             </div>
           )}
         </div>

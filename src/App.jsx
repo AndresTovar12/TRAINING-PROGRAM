@@ -4,6 +4,7 @@ import { useNewVersion } from '@/lib/useNewVersion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsDesktop } from '@/lib/useViewport';
 import { AppStateProvider } from '@/contexts/AppStateContext';
+import { PalabrasProvider, usePalabras } from '@/contexts/PalabrasContext';
 import { PlanProvider } from '@/contexts/PlanContext';
 import AuthScreen from '@/features/auth/AuthScreen';
 import ActivarInvitacion from '@/features/auth/ActivarInvitacion';
@@ -50,6 +51,7 @@ function Splash({ label = 'Cargando…' }) {
 
 function AccountMenu() {
   const { profile, user, isAdmin, signOut } = useAuth();
+  const { t } = usePalabras();
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const ref = useRef(null);
@@ -116,7 +118,7 @@ function AccountMenu() {
                 }}
               >
                 {isAdmin ? <Shield size={11} /> : <UserIcon size={11} />}
-                {isAdmin ? 'Admin' : 'Atleta'}
+                {isAdmin ? 'Admin' : t('Atleta')}
               </div>
             </div>
           </div>
@@ -408,25 +410,29 @@ export default function App() {
      completo, porque ese formulario sí pregunta todo). */
   if (profile.perfil_completo === false) return <><Bienvenida /><UpdateBanner /></>;
 
+  // `PalabrasProvider`: si quien atiende es un fisio, la app dice «pacientes» y
+  // «programa» (ver `lib/palabras.js`). Con cualquier otro oficio no cambia nada.
   if (profile.role === 'admin') {
     return (
-      <>
+      <PalabrasProvider perfil={profile}>
         <AdminApp />
         <AccountMenu />
         <UpdateBanner />
-      </>
+      </PalabrasProvider>
     );
   }
 
   // Todos los atletas usan la misma app completa; su plan viene de la
   // tabla `plans` (el de Andres migrado verbatim, el resto asignado por admin).
   return (
-    <AppStateProvider>
-      <PlanProvider>
-        <TrainingApp />
-        <AccountMenu />
-        <UpdateBanner />
-      </PlanProvider>
-    </AppStateProvider>
+    <PalabrasProvider perfil={profile}>
+      <AppStateProvider>
+        <PlanProvider>
+          <TrainingApp />
+          <AccountMenu />
+          <UpdateBanner />
+        </PlanProvider>
+      </AppStateProvider>
+    </PalabrasProvider>
   );
 }

@@ -3,6 +3,7 @@ import { RotateCcw, Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getActivePlan } from '@/lib/api';
 import { useConfirmacion } from '@/components/Confirmacion';
+import { usePalabras } from '@/contexts/PalabrasContext';
 import { T, FONT, KP } from '@/lib/theme';
 
 /**
@@ -36,6 +37,7 @@ function hace(fecha, ahora) {
 
 export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abierta, onToggle }) {
   const pregunta = useConfirmacion();
+  const { t } = usePalabras();
   const [versiones, setVersiones] = useState([]);
   const [nombres, setNombres] = useState({});
   const [trabajando, setTrabajando] = useState(false);
@@ -79,7 +81,7 @@ export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abiert
 
   async function regresar(v) {
     const va = await pregunta({
-      titulo: '¿Regresar el plan a esta versión?',
+      titulo: t('¿Regresar el plan a esta versión?'),
       detalle: `Queda como estaba antes del cambio de ${quien(v)}, ${hace(v.creada_en, ahora)}. Lo de ahora también se guarda: si te equivocas, lo regresas igual.`,
       confirmar: 'Sí, regresarlo',
     });
@@ -124,8 +126,8 @@ export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abiert
           <Sparkles size={17} color={KP.violet} style={{ flexShrink: 0 }} />
           <div style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 700, color: T.text, lineHeight: 1.4 }}>
             {planBorrado
-              ? `${quien(ultima)} borró el plan ${hace(ultima.creada_en, ahora)}.`
-              : `${ultima.cliente_ia} cambió este plan ${hace(ultima.creada_en, ahora)}.`}
+              ? `${quien(ultima)} ${t('borró el plan')} ${hace(ultima.creada_en, ahora)}.`
+              : `${ultima.cliente_ia} ${t('cambió este plan')} ${hace(ultima.creada_en, ahora)}.`}
           </div>
           <button type="button" disabled={trabajando} onClick={() => regresar(ultima)} style={{ ...boton, background: KP.violet, color: '#fff' }}>
             <RotateCcw size={14} /> {planBorrado ? 'Recuperar' : 'Deshacer'}
@@ -133,7 +135,7 @@ export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abiert
         </div>
       )}
 
-      <Seccion titulo="Cambios del plan" abierta={abierta} onToggle={onToggle}>
+      <Seccion titulo={t('Cambios del plan')} abierta={abierta} onToggle={onToggle}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {versiones.map((v) => (
             <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: `1px solid ${T.border}` }}>

@@ -37,12 +37,28 @@ import {
 import { plural, pluralS, rondasQueDecir } from '@/lib/plural';
 import { textoMeta } from '@/lib/medidas';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePalabras } from '@/contexts/PalabrasContext';
 import { esArranque, guardaLugar, leeLugar } from '@/lib/lugar';
 import { useLugar, useScrollLugar } from '@/lib/useLugar';
 
 // Las pestañas de la app del atleta. Sirve para desconfiar de la que se guardó
 // al refrescar: una pestaña que ya no existe dejaría la pantalla en blanco.
 const PESTANAS = ['home', 'plan', 'wellness', 'oneRM', 'science'];
+// Los pacientes de un fisio no calculan 1RM: eso es de quien levanta pesas
+// (Andrés, 29 sep 2026, diseño del fisio). Sus datos de 1RM, si los hubiera, no se borran.
+const SIN_1RM = ['home', 'plan', 'wellness', 'science'];
+
+// Texto fijo que cambia con el oficio de quien atiende (ver `lib/palabras.js`),
+// para los componentes que se escriben sin cuerpo y no tienen dónde llamar al hook.
+const Palabra = ({ children }) => {
+  const { t } = usePalabras();
+  return t(children);
+};
+// Lo que solo tiene sentido si NO atiende un fisio (el 1RM).
+const Sin1RM = ({ children }) => {
+  const { salud } = usePalabras();
+  return salud ? null : children;
+};
 
 // Nombres completos SOLO para mostrar en compu. Lo que guarda el plan sigue
 // siendo 'Lun', 'Mar'… igual que en el editor del entrenador.
@@ -689,6 +705,7 @@ const WeekDetail = ({
   phase, week, dayIdx, onVerPrograma, sessionsData, updateSession, oneRMs, activeSessionId,
   miDia, onVolverAMiDia, onHacerEsteDia, onDiaVisto,
 }) => {
+  const { t } = usePalabras();
   const idDeSesion = useIdDeSesion();
   const { kind, estructura, phases: PLAN } = usePlan();
   const esRutina = kind === 'weekly';
@@ -1004,7 +1021,7 @@ const WeekDetail = ({
               </ul>
             ) : (
               <div style={{ fontSize: 13.5, color: LT.text2, marginTop: 4, lineHeight: 1.5 }}>
-                Hoy no toca entrenar. Recuperar también es parte del plan.
+                {t('Hoy no toca entrenar. Recuperar también es parte del plan.')}
               </div>
             )}
           </div>
@@ -1547,6 +1564,7 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
      banda, no un botón. En compu se les pone tope y se dejan a la izquierda,
      que es donde empieza el texto de su tarjeta. */
   const esCompu = useIsDesktop();
+  const { t } = usePalabras();
   const tope = esCompu ? { maxWidth: 260 } : null;
   const { phases: PLAN, planMeta, kind, estructura } = usePlan();
   // "Varias semanas": las tarjetas dicen la semana de corrido, no la fase.
@@ -1733,8 +1751,8 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
             </div>
             <div style={{ marginTop: 8, fontSize: 14, color: LT.text2, lineHeight: 1.5 }}>
               {week.next
-                ? `Tu siguiente entrenamiento es el ${weekdayLabel(week.next.key)}${nombreDeSemana(week.next) ? ` · ${nombreDeSemana(week.next)}` : ''}.`
-                : 'Aún no hay entrenamientos en tu semana.'}
+                ? `${t('Tu siguiente entrenamiento es el')} ${weekdayLabel(week.next.key)}${nombreDeSemana(week.next) ? ` · ${nombreDeSemana(week.next)}` : ''}.`
+                : t('Aún no hay entrenamientos en tu semana.')}
             </div>
             <button
               type="button"
@@ -1747,7 +1765,7 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
                 ...tope,
               }}
             >
-              Ver mi plan
+              {t('Ver mi plan')}
             </button>
           </div>
         </div>
@@ -1782,7 +1800,7 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
         <div style={{ flex: 1, background: LT.surface, borderRadius: 22, padding: 20, minWidth: 0 }}>
           <div style={{ fontSize: 14, color: LT.text2 }}>Tu semana</div>
           <div style={{ fontSize: 13, color: LT.text, marginTop: 6 }}>
-            {week.trainingDays} {week.trainingDays === 1 ? 'día' : 'días'} de entrenamiento
+            {week.trainingDays} {t(`${week.trainingDays === 1 ? 'día' : 'días'} de entrenamiento`)}
           </div>
           <div style={{ display: 'flex', gap: 4, marginTop: 14, flexWrap: 'wrap' }}>
             {week.days.map((d) => (
@@ -1804,7 +1822,7 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
           <div style={{ fontSize: 11, color: LT.text3, marginTop: 10, lineHeight: 1.4 }}>
             {week.next
               ? `Siguiente: ${weekdayLabel(week.next.key)}${nombreDeSemana(week.next) ? ` · ${nombreDeSemana(week.next)}` : ''}`
-              : 'Sin entrenamientos esta semana'}
+              : t('Sin entrenamientos esta semana')}
           </div>
         </div>
       </div>
@@ -1846,7 +1864,7 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
           }}><Dumbbell size={22} /></span>
           <span style={{ flex: 1, minWidth: 0 }}>
             <span style={{ display: 'block', fontSize: 17, fontWeight: 700, color: LT.text }}>
-              {planMeta?.title || 'Mi plan'}
+              {planMeta?.title || t('Mi plan')}
             </span>
             <span style={{ display: 'block', fontSize: 12, color: LT.text2, marginTop: 1 }}>
               {kind === 'weekly'
@@ -2075,7 +2093,7 @@ const OneRMView = ({ oneRMs, setOneRMs }) => {
 const ScienceView = () => (
   <div style={{ paddingBottom: 100 }}>
     <div style={{ padding: '20px 20px 24px' }}>
-      <Caption color={T.text3} style={{ marginBottom: 6 }}>El porqué del plan</Caption>
+      <Caption color={T.text3} style={{ marginBottom: 6 }}><Palabra>El porqué del plan</Palabra></Caption>
       <h1 style={{ fontSize: 36, fontWeight: 800, color: T.text, margin: 0, lineHeight: 1.05, letterSpacing: -1 }}>Marco científico</h1>
     </div>
 
@@ -2210,13 +2228,15 @@ const ScienceView = () => (
  */
 const BottomNav = ({ active, onChange }) => {
   const esCompu = useIsDesktop();
+  const { t, salud } = usePalabras();
+  // El 1RM es de fuerza: a un paciente de fisio no le dice nada (ver SIN_1RM).
   const items = [
     { id: 'home', label: 'Hoy', icon: HomeIcon },
-    { id: 'plan', label: 'Plan', icon: Layers },
+    { id: 'plan', label: t('Plan'), icon: Layers },
     { id: 'wellness', label: 'Bienestar', icon: Heart },
     { id: 'oneRM', label: '1RM', icon: Calculator },
     { id: 'science', label: 'Ciencia', icon: BookOpen },
-  ];
+  ].filter((item) => !(salud && item.id === 'oneRM'));
   return (
     <div style={{
       position: 'fixed', zIndex: 100,
@@ -2284,11 +2304,13 @@ const NoPlanState = ({ onGoTab }) => (
       <Calendar size={34} />
     </div>
     <div style={{ fontSize: 21, fontWeight: 800, color: T.text, letterSpacing: -0.3 }}>
-      Tu plan está en camino
+      <Palabra>Tu plan está en camino</Palabra>
     </div>
     <div style={{ fontSize: 14.5, color: T.text2, marginTop: 10, lineHeight: 1.6, maxWidth: 340, marginInline: 'auto' }}>
-      Tu entrenador está preparando tu programa. En cuanto te lo asigne aparecerá aquí,
-      con tus fases, semanas y sesiones listas para entrenar.
+      <Palabra>
+        Tu entrenador está preparando tu programa. En cuanto te lo asigne aparecerá aquí,
+        con tus fases, semanas y sesiones listas para entrenar.
+      </Palabra>
     </div>
     <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 26, flexWrap: 'wrap' }}>
       <button type="button" onClick={() => onGoTab('wellness')} className="kp-press"
@@ -2299,14 +2321,16 @@ const NoPlanState = ({ onGoTab }) => (
         }}>
         <Heart size={16} color={T.accent} /> Registrar bienestar
       </button>
-      <button type="button" onClick={() => onGoTab('oneRM')} className="kp-press"
-        style={{
-          padding: '12px 18px', borderRadius: 13, border: `1.5px solid ${T.border}`, cursor: 'pointer',
-          background: T.bg2, fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text,
-          display: 'inline-flex', alignItems: 'center', gap: 8,
-        }}>
-        <Calculator size={16} color={T.accent} /> Calcular 1RM
-      </button>
+      <Sin1RM>
+        <button type="button" onClick={() => onGoTab('oneRM')} className="kp-press"
+          style={{
+            padding: '12px 18px', borderRadius: 13, border: `1.5px solid ${T.border}`, cursor: 'pointer',
+            background: T.bg2, fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text,
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+          }}>
+          <Calculator size={16} color={T.accent} /> Calcular 1RM
+        </button>
+      </Sin1RM>
     </div>
   </div>
 );
@@ -2318,7 +2342,9 @@ export default function TrainingApp() {
   // De quién es esta app: de quien entró, o del atleta que su coach está viendo.
   // Cada uno tiene su propio lugar guardado (ver `lugar.js`).
   const { userId: quien } = usePerfilDeLaVista();
-  const [tab, setTab] = useLugar(`app.${quien}.tab`, 'home', (t) => PESTANAS.includes(t));
+  const { salud } = usePalabras();
+  const pestanasVisibles = salud ? SIN_1RM : PESTANAS;
+  const [tab, setTab] = useLugar(`app.${quien}.tab`, 'home', (t) => pestanasVisibles.includes(t));
   const [view, setView] = useState({ level: 'week' });
   const [sessionsData, setSessionsData] = useStorage('wr:sessions', {});
   const [oneRMs, setOneRMs] = useStorage('wr:onerm', {});

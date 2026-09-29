@@ -3,6 +3,7 @@ import {
   X, Camera, Loader2, Check, Shield, User as UserIcon, AtSign, Mail, IdCard, Trash2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePalabras } from '@/contexts/PalabrasContext';
 import { uploadAvatar, isUsernameAvailable } from '@/lib/api';
 import { T, FONT, KP } from '@/lib/theme';
 import ConectarIA from '@/features/ia/ConectarIA';
@@ -35,6 +36,8 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
   }, [enfoque]);
 
   const { profile, user, isAdmin, updateProfile } = useAuth();
+  // `tr` y no `t`: arriba hay un `t` de temporizador.
+  const { t: tr } = usePalabras();
 
   const [fullName, setFullName] = useState(profile?.full_name || '');
   const [username, setUsername] = useState(profile?.username || '');
@@ -234,7 +237,7 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
               {nameStatus === 'free' && <Check size={16} color="#00A372" />}
             </div>
             <div style={{ fontSize: 12, color: T.text3, marginTop: 6, lineHeight: 1.4 }}>
-              Con este nombre inicias sesión. Cambiarlo no afecta tu plan ni tu progreso.
+              {tr('Con este nombre inicias sesión. Cambiarlo no afecta tu plan ni tu progreso.')}
             </div>
           </label>
 
@@ -324,7 +327,7 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
               }}
             >
               {isAdmin ? <Shield size={13} /> : <UserIcon size={13} />}
-              {isAdmin ? 'Entrenador (Admin)' : 'Atleta'}
+              {isAdmin ? tr('Entrenador (Admin)') : tr('Atleta')}
             </span>
           </div>
 

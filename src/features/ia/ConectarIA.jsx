@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, Copy, ExternalLink, Loader2, MessagesSquare, RotateCcw, SquareTerminal, Unplug } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePalabras } from '@/contexts/PalabrasContext';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useIsDesktop } from '@/lib/useViewport';
 import { FONT, KP } from '@/lib/theme';
@@ -259,6 +260,7 @@ function IAsConectadas() {
 
 export default function ConectarIA({ enPerfil = false }) {
   const { profile } = useAuth();
+  const { t } = usePalabras();
   const esCompu = useIsDesktop();
   const esAtleta = profile?.role !== 'admin';
   const rol = esAtleta ? 'atleta' : 'coach';
@@ -279,7 +281,7 @@ export default function ConectarIA({ enPerfil = false }) {
 
   const conversacion = esAtleta
     ? ['¿Qué me toca hoy?', 'Pierna: sentadilla 4×8, zancada 3×10 y plancha. La vez pasada hiciste 60 kg.']
-    : ['¿Cómo van mis atletas esta semana?', 'Ana hizo 4 de 4 sesiones. Juan va 2 de 4 y anotó dolor de rodilla.'];
+    : [t('¿Cómo van mis atletas esta semana?'), 'Ana hizo 4 de 4 sesiones. Juan va 2 de 4 y anotó dolor de rodilla.'];
 
   return (
     <div id="conectar-ia" style={{ display: 'flex', flexDirection: 'column', gap: 16, fontFamily: FONT, maxWidth: enPerfil ? undefined : 820, scrollMarginTop: 16 }}>
@@ -316,7 +318,7 @@ export default function ConectarIA({ enPerfil = false }) {
             display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 11px', borderRadius: 99,
             background: KP.surface, border: `1px solid ${KP.line}`, fontSize: 13, fontWeight: 700, color: KP.ink,
           }}>
-            <Check size={14} color={KP.mint} strokeWidth={3} /> {x}
+            <Check size={14} color={KP.mint} strokeWidth={3} /> {t(x)}
           </span>
         ))}
       </div>

@@ -7,6 +7,7 @@ import {
   Image as ImageIcon, MoreHorizontal,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePalabras } from '@/contexts/PalabrasContext';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useIsDesktop } from '@/lib/useViewport';
 import {
@@ -551,6 +552,7 @@ function BotonVideoAtleta({ idEjercicio, atleta, onAbrir }) {
  * valiendo la sugerencia automática; en cuanto lo toca, manda su decisión.
  */
 function BotonCarga({ ex, onPatch }) {
+  const { t } = usePalabras();
   const efectivo = isLoadedExercise(ex);
   const explicito = ex.carga !== undefined;
   return (
@@ -559,7 +561,7 @@ function BotonCarga({ ex, onPatch }) {
       onClick={() => onPatch({ carga: !efectivo })}
       title={
         explicito
-          ? (efectivo ? 'El atleta anota el peso. Toca para quitarlo.' : 'Sin campo de peso. Toca para ponerlo.')
+          ? (efectivo ? t('El atleta anota el peso. Toca para quitarlo.') : 'Sin campo de peso. Toca para ponerlo.')
           : `Sugerido automáticamente: ${efectivo ? 'lleva peso' : 'sin peso'}. Toca para cambiarlo.`
       }
       style={{
@@ -749,6 +751,7 @@ function ExerciseRow({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove,
  * planes desde el momento en que la guardas.
  */
 function CrearEjercicioRapido({ categorias, onCancelar, onCreado, duenoId, masterId, onCategoriaCreada, onCategoriaBorrada }) {
+  const { t } = usePalabras();
   const [nombre, setNombre] = useState('');
   const [categoria, setCategoria] = useState('');
   const [foto, setFoto] = useState('');
@@ -843,7 +846,7 @@ function CrearEjercicioRapido({ categorias, onCancelar, onCreado, duenoId, maste
           />
 
           <div>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text2, marginBottom: 6 }}>¿El atleta anota el peso?</div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text2, marginBottom: 6 }}>{t('¿El atleta anota el peso?')}</div>
             <div style={{ display: 'flex', gap: 8 }}>
               {[[true, 'Sí, lleva peso'], [false, 'No lleva peso']].map(([v, texto]) => (
                 <button
@@ -915,12 +918,13 @@ function CrearEjercicioRapido({ categorias, onCancelar, onCreado, duenoId, maste
  * abrió: si el ejercicio sale en doce sesiones, en las doce ve lo mismo.
  */
 function MediaParaEsteAtleta({ ejercicio, atleta, onCerrar }) {
+  const { t } = usePalabras();
   const [existentes, setExistentes] = useState({ video: null, foto: null });
   const [cargando, setCargando] = useState(true);
   const [nuevo, setNuevo] = useState({ video: '', foto: '' });
   const [guardando, setGuardando] = useState('');
   const [err, setErr] = useState('');
-  const nombreAtleta = atleta?.full_name || atleta?.username || 'este atleta';
+  const nombreAtleta = atleta?.full_name || atleta?.username || t('este atleta');
 
   useEffect(() => {
     let vivo = true;
@@ -1422,6 +1426,7 @@ function EditorSesionesDelDia({
 }
 
 function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCreado, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, duenoId, masterId, onCategoriaCreada, onCategoriaBorrada }) {
+  const { t } = usePalabras();
   const [creandoEjercicio, setCreandoEjercicio] = useState(false);
   const [mediaDe, setMediaDe] = useState(null);
   const pregunta = useConfirmacion();
@@ -1481,7 +1486,7 @@ function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCr
                 <input
                   value={b.ex.text || ''}
                   onChange={(e) => writeBlocks((bs) => bs.map((x, k) => (k === bi ? { ...x, ex: { ...x.ex, text: e.target.value } } : x)))}
-                  placeholder="Nota para el atleta…"
+                  placeholder={t('Nota para el atleta…')}
                   style={{ ...inputStyle, background: 'transparent', border: 'none', padding: '4px 0', color: T.accent, fontWeight: 700, fontSize: 13 }}
                 />
                 <IconBtn icon={ChevronUp} onClick={() => moveBlock(bi, -1)} disabled={bi === 0} />
@@ -1575,7 +1580,7 @@ function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCr
       {descanso ? (
         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ fontSize: 13, color: T.text2, lineHeight: 1.5 }}>
-            <b style={{ color: T.text }}>Día de descanso.</b> El atleta no tiene nada que hacer. Si quieres, déjale una nota.
+            <b style={{ color: T.text }}>Día de descanso.</b> {t('El atleta no tiene nada que hacer. Si quieres, déjale una nota.')}
           </div>
           <Pill icon={StickyNote} onClick={() => writeBlocks((bs) => [...bs, { type: 'note', ex: { isNote: true, text: '' } }])}>Nota</Pill>
         </div>
@@ -1751,6 +1756,7 @@ function HojaAcciones({ acciones, onClose }) {
 /** Cambiar la forma de un plan que ya existe: las tres, con la de ahora
     marcada. Misma caja que `HojaAcciones`. */
 function HojaFormas({ actual, onElegir, onClose }) {
+  const { t } = usePalabras();
   const esCompu = useIsDesktop();
   return (
     <div
@@ -1778,7 +1784,7 @@ function HojaFormas({ actual, onElegir, onClose }) {
           }} />
         )}
         <div style={{ fontSize: 16, fontWeight: 800, color: T.text, padding: '4px 6px 10px' }}>
-          La forma del plan
+          {t('La forma del plan')}
         </div>
         {FORMAS.map((f) => {
           const es = f.id === actual;
@@ -1934,9 +1940,10 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
   const esCompu = useIsDesktop();
   const pregunta = useConfirmacion();
   const { user, profile } = useAuth();
+  const { t } = usePalabras();
   const isMaster = !!profile?.is_owner;
   const isNew = !planRow;
-  const [title, setTitle] = useState(planRow?.title || 'Plan de entrenamiento');
+  const [title, setTitle] = useState(planRow?.title || t('Plan de entrenamiento'));
   const [phases, setPhases] = useState(() => (planRow?.data?.phases ? clone(planRow.data.phases) : []));
   // La forma del plan: 'rutina' | 'semanas' | 'fases' (ver `estructuraDelPlan`).
   // De ella sale `kind`: 'weekly' para la rutina, 'periodized' para las otras.
@@ -2128,8 +2135,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
   };
 
   async function onSave() {
-    if (!title.trim()) { setErr('Ponle un título al plan'); return; }
-    if (phases.length === 0) { setErr('El plan necesita al menos una fase'); return; }
+    if (!title.trim()) { setErr(t('Ponle un título al plan')); return; }
+    if (phases.length === 0) { setErr(t('El plan necesita al menos una fase')); return; }
     setErr('');
     setSaving(true);
     try {
@@ -2214,7 +2221,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
     const wi = semanaAbierta();
     if (!await pregunta({
       titulo: '¿Copiar esta semana a todas las demás?',
-      detalle: `Las otras semanas ${deCorrido ? 'del plan' : 'de la fase'} pierden lo que tengan y quedan igual que esta.`,
+      detalle: `Las otras semanas ${deCorrido ? t('del plan') : 'de la fase'} pierden lo que tengan y quedan igual que esta.`,
       confirmar: 'Sí, copiarla',
     })) return false;
     if (deCorrido) {
@@ -2372,7 +2379,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
       }
       return `${p?.name || 'Fase'} · ${weekName(p?.weekData?.[wi], wi + 1)}`;
     }
-    return 'Estructura del plan';
+    return t('Estructura del plan');
   }, [nav, phases, weekIdx, isWeekly, estructura]);
 
   /* Volver. En el teléfono, desde el editor de un día se vuelve a la hoja; y
@@ -2495,14 +2502,14 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
     const hoja = (
       <div>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, marginBottom: isWeekly ? 8 : 14 }}>
-          <Field label={isWeekly ? 'Título de la rutina' : 'Título del plan'} grow>
+          <Field label={isWeekly ? 'Título de la rutina' : t('Título del plan')} grow>
             <input value={title} onChange={(e) => { setTitle(e.target.value); setDirty(true); }} style={inputStyle} />
           </Field>
           {/* Fuera del <label> del campo, a propósito: un <label> le pasa el
               toque a su campo, y el menú no se abriría. */}
           <button
             type="button" onClick={() => setMenu({ tipo: 'plan' })}
-            aria-label="Opciones del plan" title="Opciones del plan" className="kp-ico"
+            aria-label={t('Opciones del plan')} title={t('Opciones del plan')} className="kp-ico"
             style={{
               width: 42, height: 42, borderRadius: 12, border: 'none', cursor: 'pointer', flexShrink: 0,
               background: 'transparent', color: T.text2, display: 'grid', placeItems: 'center',
@@ -2833,7 +2840,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
               { icon: Save, texto: 'Guardar la semana como plantilla', onClick: () => setModal({ type: 'name-week' }) },
             ] : []),
             ...(estructura === 'fases' ? [{ icon: Plus, texto: 'Agregar fase', onClick: agregarFase }] : []),
-            { icon: Settings2, texto: 'Cambiar la forma del plan', onClick: () => setFormasAbiertas(true) },
+            { icon: Settings2, texto: t('Cambiar la forma del plan'), onClick: () => setFormasAbiertas(true) },
           ]}
         />
       )}

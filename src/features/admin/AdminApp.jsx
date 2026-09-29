@@ -3,6 +3,7 @@ import {
   Dumbbell, Users, Library, Shield, PanelLeftClose, PanelLeft, Eye, X, Sparkles,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePalabras } from '@/contexts/PalabrasContext';
 import { useIsDesktop } from '@/lib/useViewport';
 import { useLugar } from '@/lib/useLugar';
 import { T, FONT, KP, oficioCorto } from '@/lib/theme';
@@ -16,6 +17,7 @@ const SIDEBAR_W = 232;
 
 export default function AdminApp() {
   const { profile } = useAuth();
+  const { t } = usePalabras();
   const isMaster = !!profile?.is_owner;
   const isDesktop = useIsDesktop();
   // La pestaña se recuerda al refrescar (ver `lugar.js`). Puede venir de una
@@ -62,7 +64,7 @@ export default function AdminApp() {
   };
 
   const TABS = [
-    { id: 'athletes', label: isMaster ? 'Atletas' : 'Mis atletas', icon: Users },
+    { id: 'athletes', label: t(isMaster ? 'Atletas' : 'Mis atletas'), icon: Users },
     { id: 'exercises', label: 'Ejercicios', icon: Library },
     /* La pestaña de coaches desaparece mientras el master mira como uno de
        ellos. Andrés, 18 sep 2026: "sigue apareciendo la columna de coaches, lo
