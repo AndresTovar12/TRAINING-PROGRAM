@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { esperadasEstaSemana } from '@/lib/comoVa';
 
 const AVATAR_BUCKET = 'avatars';
 
@@ -523,10 +524,21 @@ export async function listAthletes() {
   return data ?? [];
 }
 
+// Lo que la lista del fisio necesita de cada paciente (dolor, sesiones hechas
+// y dónde va), en UNA consulta para todos y no una por paciente.
+export async function estadoResumido(ids) {
+  if (!ids.length) return [];
+  const { data, error } = await supabase.rpc('estado_resumido', { p_atletas: ids });
+  if (error) throw error;
+  return data ?? [];
+}
+
 // Lista para la tabla del panel: cada atleta con su plan activo y su última
 // actividad. Tres consultas en lote (no una por atleta) que RLS ya acota a lo
 // que el coach puede ver.
-export async function listAthletesOverview() {
+// Con `conEstado` (solo la pide un fisio) cada fila trae también `resumen`:
+// { dolor, hechas, esperadas }, para la línea «Dolor 3 · 1 de 4 esta semana».
+export async function listAthletesOverview(opciones = {}) {
   const [profilesRes, plansRes, stateRes] = await Promise.all([
     supabase.from('profiles').select('*').order('created_at'),
     supabase.from('plans').select('user_id, title, data, updated_at').eq('status', 'active'),
@@ -539,7 +551,7 @@ export async function listAthletesOverview() {
   const seenByUser = new Map();
   (stateRes.data ?? []).forEach((s) => seenByUser.set(s.user_id, s.updated_at));
 
-  return (profilesRes.data ?? []).map((p) => {
+  const filas = (profilesRes.data ?? []).map((p) => {
     const plan = planByUser.get(p.id) ?? null;
     const phases = plan?.data?.phases ?? [];
     return {
@@ -553,6 +565,30 @@ export async function listAthletesOverview() {
           }
         : null,
       lastSeen: seenByUser.get(p.id) ?? null,
+    };
+  });
+  if (!opciones.conEstado) return filas;
+
+  /* Va aparte y sin tumbar la carga: si esta consulta falla, la lista se
+     enseña igual y solo se pierde la línea de dolor. Sin línea, no con una
+     línea que diga «Sin dolor anotado» de alguien que sí lo anotó. */
+  let estados;
+  try {
+    estados = await estadoResumido(filas.filter((p) => p.role !== 'admin').map((p) => p.id));
+  } catch {
+    return filas;
+  }
+  const estadoDe = new Map(estados.map((e) => [e.user_id, e]));
+  return filas.map((p) => {
+    const e = estadoDe.get(p.id);
+    const data = planByUser.get(p.id)?.data;
+    return {
+      ...p,
+      resumen: {
+        dolor: e?.dolor ?? {},
+        hechas: e?.hechas ?? [],
+        esperadas: esperadasEstaSemana(data?.phases, data?.kind === 'weekly' ? 'weekly' : 'periodized', e?.puntero),
+      },
     };
   });
 }

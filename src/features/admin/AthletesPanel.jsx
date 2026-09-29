@@ -10,6 +10,9 @@ import {
   quitarAtletaDeMiLista, setAtletaActivo, resumenDatosAtleta, eliminarAtletaDefinitivo,
   invitacionesPendientes, ligaDeInvitacion, cambiarAlta,
 } from '@/lib/api';
+import {
+  resumenDeDolor, textoDeDolor, hechasEstaSemana, esperadasEstaSemana, lineaDeLista,
+} from '@/lib/comoVa';
 import PlanBuilder from '@/features/admin/PlanBuilder';
 import CambiosDelPlan from '@/features/admin/CambiosDelPlan';
 import NotasDeConsulta from '@/features/admin/NotasDeConsulta';
@@ -281,8 +284,8 @@ function LinkPendiente({ token }) {
   );
 }
 
-function AthletesTable({ rows, coaches, isMaster, selectedId, onPick }) {
-  const { t } = usePalabras();
+function AthletesTable({ rows, coaches, isMaster, selectedId, onPick, ahora }) {
+  const { t, salud } = usePalabras();
   const nombreCoach = (id) => {
     if (!id) return null;
     const c = coaches.find((x) => x.id === id);
@@ -290,7 +293,7 @@ function AthletesTable({ rows, coaches, isMaster, selectedId, onPick }) {
   };
   // La columna "Coach" solo tiene sentido en la cuenta master: un coach viendo
   // a sus propios atletas leeria su nombre repetido en cada fila.
-  const cols = isMaster ? 5 : 4;
+  const cols = 4 + (isMaster ? 1 : 0) + (salud ? 1 : 0);
 
   return (
     <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 16, boxShadow: KP.shCard, overflow: 'hidden' }}>
@@ -300,6 +303,7 @@ function AthletesTable({ rows, coaches, isMaster, selectedId, onPick }) {
             <tr style={{ background: T.bg }}>
               <th style={TH}>{t('Atleta')}</th>
               <th style={TH}>{t('Plan')}</th>
+              {salud && <th style={TH}>Cómo va</th>}
               <th style={TH}>Última actividad</th>
               {isMaster && <th style={TH}>Coach</th>}
               <th style={{ ...TH, width: 44 }} aria-label="Abrir" />
@@ -336,6 +340,11 @@ function AthletesTable({ rows, coaches, isMaster, selectedId, onPick }) {
                     </div>
                   </td>
                   <td style={TD}><PlanCell plan={a.plan} /></td>
+                  {salud && (
+                    <td style={{ ...TD, fontSize: 13.5, fontWeight: 600, color: T.text2 }}>
+                      {a.resumen ? lineaDeLista(a.resumen, new Date(ahora)) : '—'}
+                    </td>
+                  )}
                   <td style={{ ...TD, fontSize: 13.5, color: visto ? T.text2 : T.text3, fontWeight: 600, whiteSpace: 'nowrap' }}>
                     {visto || 'Nunca ha entrado'}
                   </td>
@@ -848,6 +857,15 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
     return Object.values(sessions).filter((s) => s?.completed).length;
   }, [state]);
 
+  // El dolor que anota en «Bienestar» y cuántas sesiones lleva esta semana.
+  const dolor = resumenDeDolor(state?.data?.['wr:wellness']);
+  const estaSemana = hechasEstaSemana(
+    Object.values(state?.data?.['wr:sessions'] ?? {}).filter((s) => s?.completed && s.completedAt).map((s) => s.completedAt),
+  );
+  const sesionesDeLaSemana = esperadasEstaSemana(
+    phases, plan?.data?.kind === 'weekly' ? 'weekly' : 'periodized', state?.data?.['wr:cursor'],
+  );
+
   /* ORDEN DE LA FICHA. Andrés, 17 sep 2026: "hay mucha información saturada;
      la prioridad sería primero saber si el coach quiere 1- editar el plan,
      2- solo ver el plan, 3- meterse a verlo como si fuera el atleta, 4- ver el
@@ -983,7 +1001,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
       )}
 
       <SeccionFicha titulo="Cómo va" abierta={seccion === 'como-va'} onToggle={() => setSeccion((s) => (s === 'como-va' ? null : 'como-va'))}>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
           <div style={{ flex: '1 1 140px', background: T.bg, borderRadius: 12, padding: '12px 14px' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Última actividad</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5, fontWeight: 700, color: T.text, fontSize: 14 }}>
@@ -994,6 +1012,23 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
             <div style={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Sesiones completadas</div>
             <div style={{ marginTop: 5, fontWeight: 800, color: T.accent, fontSize: 18 }}>
               {completed ?? '—'}{completed != null && totalSessions ? ` / ${totalSessions}` : ''}
+            </div>
+          </div>
+          <div style={{ flex: '1 1 140px', background: T.bg, borderRadius: 12, padding: '12px 14px' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Dolor</div>
+            <div style={{ marginTop: 5, fontWeight: 700, color: T.text, fontSize: 14, lineHeight: 1.3 }}>
+              {textoDeDolor(dolor)}
+            </div>
+            {dolor && (
+              <div style={{ marginTop: 2, fontSize: 12, fontWeight: 600, color: T.text3 }}>
+                {new Date(`${dolor.ultimo.fecha}T12:00:00`).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}
+              </div>
+            )}
+          </div>
+          <div style={{ flex: '1 1 140px', background: T.bg, borderRadius: 12, padding: '12px 14px' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Esta semana</div>
+            <div style={{ marginTop: 5, fontWeight: 800, color: T.accent, fontSize: 18 }}>
+              {estaSemana}{sesionesDeLaSemana > 0 ? ` / ${sesionesDeLaSemana}` : ''}
             </div>
           </div>
         </div>
@@ -1143,7 +1178,7 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
     let cancelled = false;
     (async () => {
       try {
-        const a = await listAthletesOverview();
+        const a = await listAthletesOverview({ conEstado: salud });
         if (!cancelled) {
           setAthletes(a);
           setCargadoEn(Date.now());
@@ -1178,7 +1213,7 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
     // `user` y `viendoComo` solo se leen para volver a abrir la ficha al
     // arrancar; cambiarlos no debe volver a pedir la lista.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMaster, recarga]);
+  }, [isMaster, recarga, salud]);
 
   // Se anota qué ficha está abierta. Antes de que llegue la lista NO: en ese
   // momento `selected` todavía es nulo y anotarlo borraría lo que hay que
@@ -1283,6 +1318,11 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
             {a.perfil_completo === false && <SinTerminar />}
           </div>
           <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><Arroba fila={a} /></div>
+          {salud && a.resumen && (
+            <div style={{ fontSize: 12, fontWeight: 600, color: T.text2, marginTop: 3 }}>
+              {lineaDeLista(a.resumen, new Date(cargadoEn))}
+            </div>
+          )}
         </div>
         <ChevronRight size={18} color={T.text3} />
       </button>
@@ -1350,6 +1390,7 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
               isMaster={isMaster}
               selectedId={selected?.id}
               onPick={setSelected}
+              ahora={cargadoEn}
             />
             {totalPaginas > 1 && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 14 }}>
@@ -1413,6 +1454,7 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
                     isMaster={isMaster}
                     selectedId={selected?.id}
                     onPick={setSelected}
+                    ahora={cargadoEn}
                   />
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

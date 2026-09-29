@@ -148,10 +148,13 @@ export default function AdminApp() {
             backdropFilter: 'saturate(180%) blur(16px)', borderBottom: `1px solid ${T.border}`,
           }}
         >
-          <div style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
+          {/* El botón de cuenta va fijo arriba a la derecha: se le deja su hueco (68) y un
+              oficio largo («Fisioterapeuta deportivo») baja a un segundo renglón en vez de
+              quedar escondido debajo de él. */}
+          <div style={{ padding: '14px 68px 14px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
             <Brand />
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: -0.3, color: T.text }}>
+              <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: -0.3, color: T.text, lineHeight: 1.2 }}>
                 Training Lab · {isMaster ? 'Master' : (oficioCorto(profile?.profesion) || 'Coach')}
               </div>
               <div style={{ fontSize: 12.5, fontWeight: 500, color: T.text2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
