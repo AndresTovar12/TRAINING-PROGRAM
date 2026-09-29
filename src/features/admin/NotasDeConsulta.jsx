@@ -27,7 +27,8 @@ const masNuevaPrimero = (a, b) => {
   return a.creada_en < b.creada_en ? 1 : -1;
 };
 
-export default function NotasDeConsulta({ atleta, Seccion, abierta, onToggle }) {
+// `puedeCrear` es falso cuando ya no atiendes a esa persona: sus notas se leen y se cuidan, pero no se escriben nuevas.
+export default function NotasDeConsulta({ atleta, Seccion, abierta, onToggle, puedeCrear = true }) {
   const pregunta = useConfirmacion();
   const [notas, setNotas] = useState(null); // null = cargando
   const [error, setError] = useState('');
@@ -80,7 +81,7 @@ export default function NotasDeConsulta({ atleta, Seccion, abierta, onToggle }) 
   return (
     <Seccion titulo="Notas de consulta · solo tú" abierta={abierta} onToggle={onToggle}>
       {/* Botón blanco, borde azul sólido: el estilo de «agregar» de la app. */}
-      {!redactando && (
+      {!redactando && puedeCrear && (
         <button
           type="button"
           onClick={() => setRedactando({ fecha: hoyLocal(), texto: '' })}

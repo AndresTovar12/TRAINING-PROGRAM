@@ -4,7 +4,7 @@ import {
 } from '@/lib/training-utils';
 import { minutosDeTag, sesionesDelTitulo, textoDeSesiones } from '@/lib/sesiones';
 import { esDeSalud } from '@/lib/palabras';
-import { LT } from '@/lib/theme';
+import { LT, oficioCorto } from '@/lib/theme';
 
 /* PROGRAMAS de un atleta: el de su coach principal y el de cada profesional de
    su equipo. Todo puro (sin leer la base ni el reloj por su cuenta): la portada,
@@ -72,8 +72,17 @@ export function sesionDeHoy(programa, store, hoy = new Date()) {
 /** «Beto López» → «Beto». */
 export const nombreCorto = (nombreCompleto) => String(nombreCompleto ?? '').trim().split(/\s+/)[0] || '';
 
-/** De quién es el programa, en una palabra: «fisio» si su oficio es de salud, si no «coach». */
-export const rolDelPrograma = (programa) => (esDeSalud(programa?.profesional?.profesion) ? 'fisio' : 'coach');
+/** «fisio» si el oficio es de salud, si no «coach»: para etiquetas como «con fisio · Juan». */
+export const rolDeProfesion = (profesion) => (esDeSalud(profesion) ? 'fisio' : 'coach');
+
+/** De quién es el programa, en una palabra. */
+export const rolDelPrograma = (programa) => rolDeProfesion(programa?.profesional?.profesion);
+
+/** El aviso al coach principal: «Laura ahora también va con Juan, fisioterapeuta.» */
+export function textoDeAviso({ atleta, profesional, oficio }) {
+  const o = oficioCorto(oficio);
+  return `${atleta} ahora también va con ${profesional}${o ? `, ${o.toLowerCase()}` : ''}.`;
+}
 
 /** «Beto · coach», «Juan · fisio». Sin nombre a mano, solo el rol. */
 export function etiquetaDePrograma(programa) {

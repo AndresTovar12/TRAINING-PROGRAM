@@ -1808,7 +1808,7 @@ function HojaFormas({ actual, onElegir, onClose }) {
               </span>
               <span style={{ flex: 1, minWidth: 0 }}>
                 <span style={{ display: 'block', fontSize: 15, fontWeight: 800, color: T.text }}>{f.title}</span>
-                <span style={{ display: 'block', fontSize: 12.5, color: T.text2, marginTop: 2, lineHeight: 1.4 }}>{f.desc}</span>
+                <span style={{ display: 'block', fontSize: 12.5, color: T.text2, marginTop: 2, lineHeight: 1.4 }}>{t(f.desc)}</span>
               </span>
               {es && (
                 <span style={{
@@ -1936,13 +1936,18 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
 /* Builder principal                                                    */
 /* ------------------------------------------------------------------ */
 
-export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
+export default function PlanBuilder({ athlete, planRow, onClose, onSaved, profesionalId = null }) {
   const esCompu = useIsDesktop();
   const pregunta = useConfirmacion();
   const { user, profile } = useAuth();
   const { t } = usePalabras();
   const isMaster = !!profile?.is_owner;
   const isNew = !planRow;
+  /* De quién es este programa: null = el del coach principal; con id = el de un
+     profesional del EQUIPO del atleta. Del profesional salen los registros del
+     atleta que se miran aquí (`wr:cursor@<profesional>`) y el lugar guardado. */
+  const claveProfesional = planRow?.profesional_id ?? profesionalId ?? null;
+  const sufijo = claveProfesional ? `@${claveProfesional}` : '';
   const [title, setTitle] = useState(planRow?.title || t('Plan de entrenamiento'));
   const [phases, setPhases] = useState(() => (planRow?.data?.phases ? clone(planRow.data.phases) : []));
   // La forma del plan: 'rutina' | 'semanas' | 'fases' (ver `estructuraDelPlan`).
@@ -1959,7 +1964,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
      se borró la fase o la semana, no se usa. */
   const [restaurado] = useState(() => {
     if (isNew || !athlete?.id || !esArranque()) return null;
-    return lugarDelPlan(leeLugar(user?.id, `plan.${athlete.id}`), planRow?.data?.phases ?? []);
+    return lugarDelPlan(leeLugar(user?.id, `plan.${athlete.id}${sufijo}`), planRow?.data?.phases ?? []);
   });
   /* Un plan que ya existe abre SIEMPRE en la hoja, con una fase abierta. La
      lista de fases como pantalla aparte se fue el 24 sep 2026: la hoja ya las
@@ -2039,7 +2044,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
     if (!athlete?.id || isNew) return undefined;
     let vivo = true;
     getAthleteState(athlete.id)
-      .then((st) => st?.data?.['wr:cursor'] ?? null, () => null)
+      .then((st) => st?.data?.[`wr:cursor${sufijo}`] ?? null, () => null)
       .then((cursor) => {
         if (!vivo) return;
         setCursorAtleta(cursor);
@@ -2058,7 +2063,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
           : diaParaSemana(semana, 'Lun'));
       });
     return () => { vivo = false; };
-  }, [athlete?.id, isNew, planRow]);
+  }, [athlete?.id, isNew, planRow, sufijo]);
   const aquiAtleta = useMemo(
     () => (cursorAtleta === undefined ? null : dondeVa(phases, kind, cursorAtleta)),
     [phases, kind, cursorAtleta],
@@ -2091,16 +2096,16 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
   // `lugar.js`). Solo con un plan que ya existe y con una fase abierta.
   useEffect(() => {
     if (isNew || !athlete?.id || nav.level !== 'phase') return;
-    guardaLugar(user?.id, `plan.${athlete.id}`, {
+    guardaLugar(user?.id, `plan.${athlete.id}${sufijo}`, {
       pi: nav.pi, wi: weekIdx, dia: activeWeekday, tel: editandoDiaTel,
     });
-  }, [isNew, athlete?.id, user?.id, nav, weekIdx, activeWeekday, editandoDiaTel]);
+  }, [isNew, athlete?.id, user?.id, nav, weekIdx, activeWeekday, editandoDiaTel, sufijo]);
 
   // Y cuánto había bajado, en esta hoja o en este día (`main` es lo que se
   // desplaza, no la ventana).
   useScrollLugar(
     !isNew && athlete?.id && nav.level === 'phase'
-      ? `plan.${athlete.id}.${nav.pi}.${weekIdx}.${activeWeekday}.${editandoDiaTel ? 'dia' : 'hoja'}`
+      ? `plan.${athlete.id}${sufijo}.${nav.pi}.${weekIdx}.${activeWeekday}.${editandoDiaTel ? 'dia' : 'hoja'}`
       : null,
     true,
     mainRef,
@@ -2143,7 +2148,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
       const data = normalize(phases);
       const row = planRow
         ? await updatePlan(planRow.id, { title: title.trim(), phases: data, kind, estructura })
-        : await createPlan({ userId: athlete.id, title: title.trim(), phases: data, kind, estructura, createdBy: user?.id });
+        : await createPlan({ userId: athlete.id, title: title.trim(), phases: data, kind, estructura, createdBy: user?.id, profesionalId });
       setDirty(false);
       setHaGuardado(true);
       /* Guardar NO cierra el editor: el coach se queda donde estaba para ver
@@ -2380,7 +2385,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
       return `${p?.name || 'Fase'} · ${weekName(p?.weekData?.[wi], wi + 1)}`;
     }
     return t('Estructura del plan');
-  }, [nav, phases, weekIdx, isWeekly, estructura]);
+  }, [nav, phases, weekIdx, isWeekly, estructura, t]);
 
   /* Volver. En el teléfono, desde el editor de un día se vuelve a la hoja; y
      desde la hoja, se sale. Ya no hay pantalla de fases a la que subir: la
@@ -2397,7 +2402,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
     body = (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 560, margin: '24px auto 0' }}>
         <div style={{ fontSize: 15, color: T.text2, lineHeight: 1.55, textAlign: 'center', marginBottom: 6 }}>
-          ¿Cómo quieres armar el plan de <b style={{ color: T.text }}>{athlete.full_name || athlete.username}</b>?
+          {t('¿Cómo quieres armar el plan de')} <b style={{ color: T.text }}>{athlete.full_name || athlete.username}</b>?
         </div>
         {FORMAS.map((forma) => ({
           ...forma,
@@ -2420,7 +2425,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved }) {
             </span>
             <span>
               <span style={{ display: 'block', fontSize: 15.5, fontWeight: 800, color: T.text }}>{opt.title}</span>
-              <span style={{ display: 'block', fontSize: 13, color: T.text2, marginTop: 3, lineHeight: 1.45 }}>{opt.desc}</span>
+              <span style={{ display: 'block', fontSize: 13, color: T.text2, marginTop: 3, lineHeight: 1.45 }}>{t(opt.desc)}</span>
             </span>
             <ChevronRight size={18} color={T.text3} style={{ marginLeft: 'auto', flexShrink: 0 }} />
           </button>

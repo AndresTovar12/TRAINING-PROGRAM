@@ -30,7 +30,7 @@ import { useAppState, useStorage } from '@/contexts/AppStateContext';
 import { altaReciente } from '@/lib/comoVa';
 import { SelectorDePrograma, SemanaDeTodos, TarjetaDeEquipo } from '@/features/training/EquipoDelAtleta';
 import AvisoDeInvitacion from '@/features/training/AvisoDeInvitacion';
-import { colorDePrograma, etiquetaDePrograma, sesionDeHoy } from '@/lib/programas';
+import { colorDePrograma, etiquetaDePrograma, nombreCorto, sesionDeHoy } from '@/lib/programas';
 import FichaEjercicio from '@/features/training/FichaEjercicio';
 import Portada from '@/components/Portada';
 import EtiquetasDeSesion from '@/components/EtiquetasDeSesion';
@@ -1559,7 +1559,7 @@ const initialsFrom = (name) => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
-const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerPrograma, cursor, onChangeCursor, conQuien, otrosHoy = [], onAbrirOtro }) => {
+const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerPrograma, cursor, onChangeCursor, conQuien, otrosHoy = [], onAbrirOtro, altasDeEquipo = [] }) => {
   /* LAS PROPORCIONES EN COMPU. Andrés, 18 sep 2026: "en teléfono no hay ningún
      problema con HOME, pero en computadora las proporciones están un poco
      raras para los atletas nada más". El diagnóstico, medido en 1440 px: los
@@ -1645,6 +1645,19 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
 
       {/* Alguien quiere atenderlo: se lo pregunta la portada (solo si hay una pendiente). */}
       <AvisoDeInvitacion />
+
+      {/* Un profesional de su equipo le dio de alta: se lo dice la portada durante 7 días. */}
+      {altasDeEquipo.map((p) => (
+        <div key={p.id} style={{
+          margin: '0 18px 12px', background: KP.mintSoft, borderRadius: 16, padding: '13px 15px',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <Check size={18} color={KP.mint} strokeWidth={3} style={{ flexShrink: 0 }} />
+          <div style={{ fontSize: 14, fontWeight: 700, color: LT.text, lineHeight: 1.35 }}>
+            {nombreCorto(p.profesional?.full_name) || 'Tu fisio'} te dio de alta el {new Date(p.altaEn).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })}
+          </div>
+        </div>
+      ))}
 
       {/* Su fisio le dio de alta: se lo dice la portada durante 7 días. El programa
           sigue en «Programa», solo para consultar: no se bloquea nada. */}
@@ -2521,8 +2534,10 @@ export default function TrainingApp() {
   const otrosHoy = useMemo(() => (hayEquipo
     ? programas
       .map((p, i) => ({ programa: p, sesion: sesionDeHoy(p, store), color: colorDePrograma(i) }))
-      .filter((x) => x.programa.id !== programaActivo?.id && x.sesion)
+      // Quien ya te dio de alta no te manda sesiones: su programa queda solo para consultar.
+      .filter((x) => x.programa.id !== programaActivo?.id && !x.programa.altaEn && x.sesion)
     : []), [hayEquipo, programas, programaActivo?.id, store]);
+  const altasDeEquipo = useMemo(() => programas.filter((p) => altaReciente(p.altaEn)), [programas]);
 
   /* AL REFRESCAR, VUELVE A DONDE ESTABAS (ver `lugar.js`). La pestaña ya vuelve
      sola; la de "Plan" además necesita una semana, y `view` arranca sin ella:
@@ -2567,6 +2582,7 @@ export default function TrainingApp() {
       onChangeCursor={() => setCursorPickerOpen(true)}
       conQuien={hayEquipo ? etiquetaDePrograma(programaActivo) : null}
       otrosHoy={otrosHoy}
+      altasDeEquipo={altasDeEquipo}
       onAbrirOtro={(programa, sesion) => {
         setTab('plan');
         setVerTodo(false);

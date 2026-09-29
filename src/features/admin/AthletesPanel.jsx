@@ -6,9 +6,10 @@ import {
   Check, Copy, Share2, CircleCheck, RotateCcw,
 } from 'lucide-react';
 import {
-  getActivePlan, deletePlan, getAthleteState, listAthletesOverview, listCoaches, setAthleteCoach,
+  getProgramas, deletePlan, getAthleteState, listAthletesOverview, listCoaches, setAthleteCoach,
   quitarAtletaDeMiLista, setAtletaActivo, resumenDatosAtleta, eliminarAtletaDefinitivo,
-  invitacionesPendientes, ligaDeInvitacion, cambiarAlta,
+  invitacionesPendientes, ligaDeInvitacion, cambiarAlta, cambiarAltaDeEquipo, nombresDelEquipo,
+  listEquipo, equiposDeMisAtletas, marcarAvisoVisto,
 } from '@/lib/api';
 import {
   resumenDeDolor, textoDeDolor, hechasEstaSemana, esperadasEstaSemana, lineaDeLista,
@@ -17,6 +18,7 @@ import PlanBuilder from '@/features/admin/PlanBuilder';
 import CambiosDelPlan from '@/features/admin/CambiosDelPlan';
 import NotasDeConsulta from '@/features/admin/NotasDeConsulta';
 import AgregarAtleta from '@/features/admin/AgregarAtleta';
+import { AgregarAlEquipo, AvisosDelCoach, FilaDeEquipo, GrupoPlegable } from '@/features/admin/EquipoDeAtleta';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { useConfirmacion } from '@/components/Confirmacion';
@@ -25,6 +27,7 @@ import { T, FONT, KP } from '@/lib/theme';
 import { plural, pluralS } from '@/lib/plural';
 import { esDescanso, dondeVa, sessionIdFor, estructuraDelPlan, nombreDeSesion } from '@/lib/training-utils';
 import { turnoDeTag, minutosDeTag } from '@/lib/sesiones';
+import { nombreCorto, rolDeProfesion } from '@/lib/programas';
 import HojaFlotante from '@/components/HojaFlotante';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
 import ListaDesplegable from '@/components/ListaDesplegable';
@@ -284,7 +287,7 @@ function LinkPendiente({ token }) {
   );
 }
 
-function AthletesTable({ rows, coaches, isMaster, selectedId, onPick, ahora }) {
+function AthletesTable({ rows, coaches, isMaster, selectedId, onPick, ahora, etiquetas, equipoMaster }) {
   const { t, salud } = usePalabras();
   const nombreCoach = (id) => {
     if (!id) return null;
@@ -336,6 +339,9 @@ function AthletesTable({ rows, coaches, isMaster, selectedId, onPick, ahora }) {
                           {a.perfil_completo === false && <SinTerminar />}
                         </div>
                         <div><Arroba fila={a} /></div>
+                        {etiquetas?.get(a.id) && (
+                          <div style={{ fontSize: 12, fontWeight: 700, color: T.accent, marginTop: 2 }}>{etiquetas.get(a.id).join(' · ')}</div>
+                        )}
                       </div>
                     </div>
                   </td>
@@ -350,7 +356,7 @@ function AthletesTable({ rows, coaches, isMaster, selectedId, onPick, ahora }) {
                   </td>
                   {isMaster && (
                     <td style={{ ...TD, fontSize: 13.5, fontWeight: 600, color: coach ? T.text2 : T.text3, whiteSpace: 'nowrap' }}>
-                      {coach || 'Sin asignar'}
+                      {coach ? [coach, ...(equipoMaster?.get(a.id) ?? [])].join(' + ') : 'Sin asignar'}
                     </td>
                   )}
                   <td style={{ ...TD, textAlign: 'right' }}><ChevronRight size={17} color={T.text3} /></td>
@@ -753,26 +759,124 @@ function DentroDelDia({ day }) {
   );
 }
 
-function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile, onReassigned, onAltaCambiada, onEliminado, onVerComoAtleta, tokenInvitacion }) {
+/** «Beto · coach» / «Juan · fisio»: de quién es un programa, según el equipo del atleta. */
+function etiquetaDelPrograma(programa, equipoDe, athlete) {
+  const principalId = equipoDe.find((m) => m.es_principal)?.profesional_id ?? athlete.coach_id ?? null;
+  const miembro = equipoDe.find((m) => m.profesional_id === (programa.profesional_id ?? principalId));
+  const nombre = nombreCorto(miembro?.full_name);
+  if (nombre) return `${nombre} · ${rolDeProfesion(miembro?.profesion)}`;
+  return programa.profesional_id ? 'Equipo' : 'Coach';
+}
+
+/**
+ * «Ver el plan» de un atleta: la misma hoja que ve él. Si tiene equipo, pastillas para
+ * mirar el programa de cada profesional (lo ajeno es solo para leer).
+ *
+ * Dos diferencias con la del atleta, las dos a propósito: dice "AQUÍ VA" en vez de
+ * "AQUÍ VAS", porque quien mira es su profesional; y tocar un día lo abre en el sitio
+ * para ver sus ejercicios, porque no lo va a entrenar.
+ */
+function HojaDelPlanDeAtleta({ athlete, programas, equipoDe, state, inicialId, onCerrar }) {
+  const { t } = usePalabras();
+  const [verId, setVerId] = useState(inicialId ?? programas[0]?.id);
+  const visto = programas.find((p) => p.id === verId) ?? programas[0];
+  if (!visto) return null;
+  const etiquetaDe = (p) => etiquetaDelPrograma(p, equipoDe, athlete);
+  const fases = visto.data?.phases ?? [];
+  const sufijo = visto.profesional_id ? `@${visto.profesional_id}` : '';
+  const estructura = estructuraDelPlan(visto.data);
+  const semanas = fases.reduce((n, p) => n + (p.weekData?.length || 0), 0);
+  const tamano = estructura === 'rutina' ? 'Se repite cada semana'
+    : estructura === 'semanas' ? pluralS(semanas, 'semana')
+      : `${pluralS(fases.length, 'fase')} · ${pluralS(semanas, 'semana')}`;
+  return (
+    <HojaFlotante
+      titulo={visto.title || t('Plan')}
+      subtitulo={`${athlete.full_name || athlete.username} · ${tamano}`}
+      onCerrar={onCerrar}
+    >
+      {programas.length > 1 && (
+        <div role="tablist" aria-label="Programa" style={{ display: 'flex', gap: 8, marginBottom: 12, overflowX: 'auto' }}>
+          {programas.map((p) => {
+            const activa = p.id === visto.id;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                role="tab"
+                aria-selected={activa}
+                onClick={() => setVerId(p.id)}
+                style={{
+                  padding: '8px 14px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800,
+                  border: `1.5px solid ${activa ? T.accent : T.border}`, background: activa ? T.accent : T.bg2,
+                  color: activa ? '#fff' : T.text, whiteSpace: 'nowrap',
+                }}
+              >
+                {etiquetaDe(p)}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <NavegadorDelPlan
+        key={visto.id}
+        fases={fases}
+        kind={visto.data?.kind}
+        estructura={estructura}
+        quien="atleta"
+        aqui={dondeVa(fases, visto.data?.kind, state?.data?.[`wr:cursor${sufijo}`])}
+        hecha={(faseId, semana, dia) => !!state?.data?.[`wr:sessions${sufijo}`]?.[
+          sessionIdFor(visto.data?.kind, faseId, semana, dia)]?.completed}
+        detalleDia={(f, semana, idx) => {
+          const d = semana.days[idx];
+          const n = (d.exercises || []).filter((e) => !e.isNote).length;
+          const texto = n || (d.blocks?.length ? `${d.blocks.length} bloques` : '');
+          return texto ? (
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: T.text3, flexShrink: 0 }}>{texto}</span>
+          ) : null;
+        }}
+        contenidoDia={(f, semana, idx) => <DentroDelDia day={semana.days[idx]} />}
+      />
+    </HojaFlotante>
+  );
+}
+
+function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile, onReassigned, onAltaCambiada, onEliminado, onVerComoAtleta, tokenInvitacion, onEquipoCambiado }) {
   const esCompu = useIsDesktop();
   const pregunta = useConfirmacion();
   const { t, salud } = usePalabras();
   const { profile } = useAuth();
-  const [plan, setPlan] = useState(null);
+  const [programas, setProgramas] = useState([]); // planes activos: el del coach principal y los del equipo
+  const [equipoDe, setEquipoDe] = useState([]);     // quién más atiende a esta persona
+  const [programaElegido, setProgramaElegido] = useState(null); // master: de quién es el que edita (null = el principal)
   const [state, setState] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!athlete.soloNotas);
   /* Si el editor del plan estaba abierto, se vuelve a abrir al refrescar (ver
      `lugar.js`). Ojo: NO se monta mientras `loading`. Sin el plan cargado, el
      editor creería que el plan no existe, y guardar crearía uno nuevo. */
   const [building, setBuilding] = useLugar(`editor.${athlete.id}`, false, (v) => v === true);
   const [savingCoach, setSavingCoach] = useState(false);
   const [verPlan, setVerPlan] = useState(false);
-  const [seccion, setSeccion] = useState(null); // null | 'como-va' | 'cambios' | 'notas' | 'cuenta'
+  const [seccion, setSeccion] = useState(null); // null | 'como-va' | 'cambios' | 'notas' | 'equipo' | 'cuenta'
   /* Las notas de consulta (y dar de alta) son de fisios y solo de quien atiende
      a esta persona: ni el master ni otro profesional las ven, aunque la lista
      les enseñe al paciente. La base lo impone; esto solo evita ofrecer un botón
      que no va a funcionar. */
-  const atiendoYoAEstePaciente = salud && athlete.coach_id === profile?.id;
+  /* EQUIPO. Un profesional puede atender a alguien sin ser su coach principal
+     (`athlete.deEquipo`): edita SU programa, ve el del coach solo para leer, y
+     no administra la cuenta. `athlete.soloNotas`: ya no lo atiende (el atleta lo
+     quitó); solo conserva su nombre y sus notas. El master elige de quién es el
+     programa que edita. */
+  const deEquipo = !!athlete.deEquipo;
+  const soloNotas = !!athlete.soloNotas;
+  const atiendoYoAEstePaciente = salud && (athlete.coach_id === profile?.id || deEquipo);
+  const miClave = deEquipo ? (profile?.id ?? null) : (isMaster ? programaElegido : null);
+  const plan = programas.find((p) => (p.profesional_id ?? null) === miClave) ?? null;
+  const setPlan = (fila) => setProgramas((prev) => (fila
+    ? [...prev.filter((p) => p.id !== fila.id), fila]
+    : prev.filter((p) => (p.profesional_id ?? null) !== miClave)));
+  // Sus registros de ESTE programa: `wr:sessions@<profesional>` si no es el del coach principal.
+  const sufijo = miClave ? `@${miClave}` : '';
   const [cambiandoAlta, setCambiandoAlta] = useState(false);
 
   // Dar de alta no borra nada: el programa y el historial se quedan y se puede
@@ -791,7 +895,9 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
     }
     setCambiandoAlta(true);
     try {
-      onAltaCambiada?.(await cambiarAlta(athlete.id, darDeAlta));
+      onAltaCambiada?.(deEquipo
+        ? { id: athlete.id, alta_en: await cambiarAltaDeEquipo(athlete.id, darDeAlta) }
+        : await cambiarAlta(athlete.id, darDeAlta));
     } catch { /* noop: si falla, el botón sigue como estaba */ }
     finally { setCambiandoAlta(false); }
   }
@@ -807,19 +913,24 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
 
   useEffect(() => {
     let cancelled = false;
+    // Sin nada que cargar (ya no lo atiende): `loading` ya nació en falso.
+    if (soloNotas) return undefined;
     setLoading(true);
     (async () => {
       try {
-        const [p, s] = await Promise.all([getActivePlan(athlete.id), getAthleteState(athlete.id)]);
+        const [ps, s, eq] = await Promise.all([
+          getProgramas(athlete.id), getAthleteState(athlete.id), nombresDelEquipo(athlete.id).catch(() => []),
+        ]);
         if (cancelled) return;
-        setPlan(p);
+        setProgramas(ps);
         setState(s);
+        setEquipoDe(eq);
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [athlete.id]);
+  }, [athlete.id, soloNotas]);
 
   async function onDeletePlan() {
     if (!plan) return;
@@ -852,18 +963,18 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
   );
   // Sesiones completadas según el estado de la app del atleta
   const completed = useMemo(() => {
-    const sessions = state?.data?.['wr:sessions'];
+    const sessions = state?.data?.[`wr:sessions${sufijo}`];
     if (!sessions) return null;
     return Object.values(sessions).filter((s) => s?.completed).length;
-  }, [state]);
+  }, [state, sufijo]);
 
   // El dolor que anota en «Bienestar» y cuántas sesiones lleva esta semana.
   const dolor = resumenDeDolor(state?.data?.['wr:wellness']);
   const estaSemana = hechasEstaSemana(
-    Object.values(state?.data?.['wr:sessions'] ?? {}).filter((s) => s?.completed && s.completedAt).map((s) => s.completedAt),
+    Object.values(state?.data?.[`wr:sessions${sufijo}`] ?? {}).filter((s) => s?.completed && s.completedAt).map((s) => s.completedAt),
   );
   const sesionesDeLaSemana = esperadasEstaSemana(
-    phases, plan?.data?.kind === 'weekly' ? 'weekly' : 'periodized', state?.data?.['wr:cursor'],
+    phases, plan?.data?.kind === 'weekly' ? 'weekly' : 'periodized', state?.data?.[`wr:cursor${sufijo}`],
   );
 
   /* ORDEN DE LA FICHA. Andrés, 17 sep 2026: "hay mucha información saturada;
@@ -875,54 +986,56 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
      plegado. "Aunque sume clics lo hace más eficiente y más intuitivo" —él. */
   const acciones = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+      {/* El master elige de quién es el programa que edita (solo si hay más de uno). */}
+      {isMaster && programas.length > 1 && (
+        <div role="tablist" aria-label="Programa que editas" style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
+          {programas.map((p) => {
+            const activa = (p.profesional_id ?? null) === (programaElegido ?? null);
+            return (
+              <button
+                key={p.id}
+                type="button"
+                role="tab"
+                aria-selected={activa}
+                onClick={() => setProgramaElegido(p.profesional_id ?? null)}
+                style={{
+                  padding: '8px 14px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800,
+                  border: `1.5px solid ${activa ? T.accent : T.border}`, background: activa ? T.accent : T.bg2,
+                  color: activa ? '#fff' : T.text, whiteSpace: 'nowrap',
+                }}
+              >
+                {etiquetaDelPrograma(p, equipoDe, athlete)}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <AccionFicha
         icon={plan ? Pencil : Plus}
-        titulo={t(plan ? 'Editar el plan' : 'Crear el plan')}
+        titulo={deEquipo ? (plan ? 'Editar mi programa' : 'Crear mi programa') : t(plan ? 'Editar el plan' : 'Crear el plan')}
         detalle={plan ? plan.title : 'Todavía no tiene ninguno'}
         primaria
         onClick={() => setBuilding(true)}
       />
-      {plan && (
+      {programas.length > 0 && (
         <AccionFicha
           icon={ClipboardList}
           titulo={t('Ver el plan')}
-          detalle={`${tamano} · ${plural(totalSessions, 'sesión', 'sesiones')}`}
+          detalle={plan
+            ? `${tamano} · ${plural(totalSessions, 'sesión', 'sesiones')}`
+            : (programas.length > 1 ? 'Los programas de su equipo, solo para leer' : 'Solo para leer')}
           onClick={() => setVerPlan(true)}
         />
       )}
-      {/* LA MISMA HOJA QUE VE EL ATLETA. Andrés, 24 sep 2026: "debería de
-          ser congruente, al navegar el plan de cualquier forma tendría que ser
-          igual". Aquí había un acordeón con las 35 semanas desplegadas una
-          debajo de otra.
-
-          Dos diferencias, las dos a propósito: dice "AQUÍ VA" en vez de "AQUÍ
-          VAS", porque el coach mira el plan de otro; y tocar un día lo abre en
-          el sitio para ver sus ejercicios, porque el coach no lo va a entrenar. */}
-      {verPlan && plan && (
-        <HojaFlotante
-          titulo={plan.title || t('Plan')}
-          subtitulo={`${athlete.full_name || athlete.username} · ${tamano}`}
+      {verPlan && programas.length > 0 && (
+        <HojaDelPlanDeAtleta
+          athlete={athlete}
+          programas={programas}
+          equipoDe={equipoDe}
+          state={state}
+          inicialId={plan?.id}
           onCerrar={() => setVerPlan(false)}
-        >
-          <NavegadorDelPlan
-            fases={phases}
-            kind={plan.data?.kind}
-            estructura={estructura}
-            quien="atleta"
-            aqui={dondeVa(phases, plan.data?.kind, state?.data?.['wr:cursor'])}
-            hecha={(faseId, semana, dia) => !!state?.data?.['wr:sessions']?.[
-              sessionIdFor(plan.data?.kind, faseId, semana, dia)]?.completed}
-            detalleDia={(f, semana, idx) => {
-              const d = semana.days[idx];
-              const n = (d.exercises || []).filter((e) => !e.isNote).length;
-              const texto = n || (d.blocks?.length ? `${d.blocks.length} bloques` : '');
-              return texto ? (
-                <span style={{ fontSize: 11.5, fontWeight: 700, color: T.text3, flexShrink: 0 }}>{texto}</span>
-              ) : null;
-            }}
-            contenidoDia={(f, semana, idx) => <DentroDelDia day={semana.days[idx]} />}
-          />
-        </HojaFlotante>
+        />
       )}
       {onVerComoAtleta && (
         <AccionFicha
@@ -945,8 +1058,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
     </div>
   );
 
-  const cuerpo = (
-    <>
+  const encabezado = (
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
         <Avatar name={athlete.full_name || athlete.username} url={athlete.avatar_url} size={52} />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -961,20 +1073,40 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           }}>
             {athlete.full_name || athlete.username}
           </div>
-          <div
-            title={`@${athlete.username}`}
-            style={{
-              fontSize: 13.5, color: T.text2, fontWeight: 500,
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}
-          >
-            {athlete.perfil_completo === false ? 'Todavía no elige usuario' : `@${athlete.username}`}
-          </div>
+          {/* Sin usuario a la vista (ya no lo atiendes) no se dibuja un «@» solo. */}
+          {(athlete.perfil_completo === false || athlete.username) && (
+            <div
+              title={`@${athlete.username}`}
+              style={{
+                fontSize: 13.5, color: T.text2, fontWeight: 500,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}
+            >
+              {athlete.perfil_completo === false ? 'Todavía no elige usuario' : `@${athlete.username}`}
+            </div>
+          )}
         </div>
         <button type="button" onClick={onClose} aria-label="Cerrar" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.text2, padding: 4 }}>
           <X size={20} />
         </button>
       </div>
+  );
+
+  // Ya no lo atiende: solo el nombre y SUS notas (la base se las conserva).
+  const cuerpoSoloNotas = (
+    <>
+      {encabezado}
+      <p style={{ fontSize: 13, color: T.text2, lineHeight: 1.5, margin: '0 0 12px', fontWeight: 500 }}>
+        Ya no atiendes a esta persona: quitó a quien la atendía de su equipo. Conservas tus notas de consulta.
+        Si te vuelve a agregar, todo regresa.
+      </p>
+      <NotasDeConsulta atleta={athlete} Seccion={SeccionFicha} abierta onToggle={() => {}} puedeCrear={false} />
+    </>
+  );
+
+  const cuerpo = (
+    <>
+      {encabezado}
 
       {loading ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: T.text2, padding: '12px 0', fontWeight: 600 }}>
@@ -994,6 +1126,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           atleta={athlete}
           plan={plan}
           onCambio={setPlan}
+          profesionalId={miClave}
           Seccion={SeccionFicha}
           abierta={seccion === 'cambios'}
           onToggle={() => setSeccion((x) => (x === 'cambios' ? null : 'cambios'))}
@@ -1048,6 +1181,19 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
         />
       )}
 
+      {/* Sumar a alguien al equipo del atleta: lo hace su coach principal (y el master). */}
+      {!deEquipo && (athlete.coach_id === profile?.id || isMaster) && (
+        <AgregarAlEquipo
+          atleta={athlete}
+          Seccion={SeccionFicha}
+          abierta={seccion === 'equipo'}
+          onToggle={() => setSeccion((x) => (x === 'equipo' ? null : 'equipo'))}
+          onInvitado={onEquipoCambiado}
+        />
+      )}
+
+      {/* La cuenta la administra su coach principal (o el master), no quien está en su equipo. */}
+      {!deEquipo && (
       <SeccionFicha titulo="Administrar cuenta" abierta={seccion === 'cuenta'} onToggle={() => setSeccion((s) => (s === 'cuenta' ? null : 'cuenta'))}>
         {isMaster && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, background: T.bg, borderRadius: 12, padding: '11px 14px', flexWrap: 'wrap' }}>
@@ -1099,6 +1245,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           onEliminado={onEliminado}
         />
       </SeccionFicha>
+      )}
     </>
   );
 
@@ -1118,12 +1265,13 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
         background: T.bg2, border: `1px solid ${T.border}`, borderRadius: KP.rCard,
         padding: 24, boxShadow: KP.shPop,
       }}>
-        {cuerpo}
+        {soloNotas ? cuerpoSoloNotas : cuerpo}
       </div>
       {building && !loading && (
         <PlanBuilder
           athlete={athlete}
           planRow={plan}
+          profesionalId={miClave}
           onClose={() => setBuilding(false)}
           // Guardar NO cierra el editor (Andrés, 27 sep 2026: "prefiero que me
           // deje ahí para ver cómo quedó"); solo se refresca la ficha de atrás.
@@ -1133,12 +1281,13 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
     </div>
   ) : (
     <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: KP.rCard, padding: 22, boxShadow: KP.shCard }}>
-      {cuerpo}
+      {soloNotas ? cuerpoSoloNotas : cuerpo}
 
       {building && !loading && (
         <PlanBuilder
           athlete={athlete}
           planRow={plan}
+          profesionalId={miClave}
           onClose={() => setBuilding(false)}
           // Guardar NO cierra el editor (Andrés, 27 sep 2026: "prefiero que me
           // deje ahí para ver cómo quedó"); solo se refresca la ficha de atrás.
@@ -1164,6 +1313,10 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
   const [pagina, setPagina] = useState(1);
   const [selected, setSelected] = useState(null);
   const [verAltas, setVerAltas] = useState(false);
+  // EQUIPO: mis filas de `equipo` (a quién atiendo desde el equipo, invitaciones, quitados…) y, de
+  // cada atleta, quién más lo atiende.
+  const [equipoFilas, setEquipoFilas] = useState([]);
+  const [otrosDelEquipo, setOtrosDelEquipo] = useState([]);
   // Momento en que llegaron los datos. Sirve de "ahora" para las metricas:
   // leer el reloj dentro del useMemo lo dejaria congelado en la primera vuelta.
   const [cargadoEn, setCargadoEn] = useState(0);
@@ -1178,9 +1331,25 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
     let cancelled = false;
     (async () => {
       try {
-        const a = await listAthletesOverview({ conEstado: salud });
+        const yo = profile?.id;
+        const [crudos, filasEquipo, otros] = await Promise.all([
+          listAthletesOverview({ conEstado: salud, yo, esMaster: isMaster }),
+          listEquipo().catch(() => []),
+          equiposDeMisAtletas().catch(() => []),
+        ]);
+        // A quien atiendo desde el EQUIPO (no soy su coach principal) lo marco `deEquipo`, y su
+        // alta es la de MI fila del equipo (la del coach principal es otra).
+        const miFilaDe = new Map(filasEquipo
+          .filter((fila) => fila.profesional_id === yo && fila.estado === 'activo')
+          .map((fila) => [fila.atleta_id, fila]));
+        const a = crudos.map((x) => {
+          const fila = !isMaster && x.coach_id !== yo ? miFilaDe.get(x.id) : null;
+          return fila ? { ...x, deEquipo: true, alta_en: fila.alta_en ?? null } : x;
+        });
         if (!cancelled) {
           setAthletes(a);
+          setEquipoFilas(filasEquipo);
+          setOtrosDelEquipo(otros);
           setCargadoEn(Date.now());
           /* Al refrescar se vuelve a abrir la ficha que estaba abierta (ver
              `lugar.js`). Va aquí, junto a la lista y antes de `setLoading`,
@@ -1257,6 +1426,70 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
     };
   }, [athletes, cargadoEn, viendoComo, salud]);
 
+  /* EQUIPO. De cada atleta, quién más lo atiende: «con fisio · Juan» para su coach principal,
+     «con coach · Beto» para quien está en su equipo, y «Beto + Juan (fisio)» en la columna
+     «Coach» del master. */
+  const yoId = profile?.id;
+  const etiquetasDeEquipo = useMemo(() => {
+    const m = new Map();
+    otrosDelEquipo.filter((o) => o.estado === 'activo').forEach((o) => {
+      const texto = `con ${rolDeProfesion(o.otro_oficio)} · ${nombreCorto(o.otro_nombre) || o.otro_usuario}`;
+      m.set(o.atleta_id, [...(m.get(o.atleta_id) ?? []), texto]);
+    });
+    return m;
+  }, [otrosDelEquipo]);
+  const equipoParaMaster = useMemo(() => {
+    const m = new Map();
+    otrosDelEquipo.filter((o) => o.estado === 'activo' && !o.otro_es_principal).forEach((o) => {
+      const texto = `${nombreCorto(o.otro_nombre) || o.otro_usuario} (${rolDeProfesion(o.otro_oficio)})`;
+      m.set(o.atleta_id, [...(m.get(o.atleta_id) ?? []), texto]);
+    });
+    return m;
+  }, [otrosDelEquipo]);
+  // «Esperando que acepte»: invitaciones al equipo que el atleta aún no contesta.
+  const esperando = useMemo(() => equipoFilas.filter((fila) => fila.estado === 'pendiente').map((fila) => {
+    const atleta = athletes.find((x) => x.id === fila.atleta_id) ?? null;
+    const nombre = fila.nombre_atleta || atleta?.full_name || atleta?.username || 'Atleta';
+    if (fila.profesional_id === yoId) {
+      return { clave: `${fila.atleta_id}-${fila.profesional_id}`, nombre, detalle: 'Te invitaron a su equipo. Espera a que acepte.', atleta: null };
+    }
+    const otro = otrosDelEquipo.find((o) => o.atleta_id === fila.atleta_id && o.otro_id === fila.profesional_id);
+    const quien = otro ? `${nombreCorto(otro.otro_nombre) || otro.otro_usuario} (${rolDeProfesion(otro.otro_oficio)})` : 'alguien';
+    return { clave: `${fila.atleta_id}-${fila.profesional_id}`, nombre, detalle: `Invitaste a ${quien}. Espera a que ${nombreCorto(nombre) || nombre} acepte.`, atleta };
+  }), [equipoFilas, athletes, otrosDelEquipo, yoId]);
+  // «Ya no están contigo»: el atleta los quitó de su equipo. Solo queda su nombre y tus notas.
+  const yaNoEstan = useMemo(() => equipoFilas
+    .filter((fila) => fila.profesional_id === yoId && fila.estado === 'quitado')
+    .map((fila) => ({
+      clave: `${fila.atleta_id}-${fila.profesional_id}`,
+      nombre: fila.nombre_atleta || 'Atleta',
+      fila,
+    })), [equipoFilas, yoId]);
+  // Aviso al coach principal cuando alguien se une al equipo de uno de sus atletas.
+  const avisos = useMemo(() => equipoFilas
+    .filter((fila) => fila.estado === 'activo' && !fila.aviso_coach_visto_en)
+    .map((fila) => {
+      const atleta = athletes.find((x) => x.id === fila.atleta_id);
+      const otro = otrosDelEquipo.find((o) => o.atleta_id === fila.atleta_id && o.otro_id === fila.profesional_id);
+      if (!atleta || atleta.coach_id !== yoId || !otro) return null;
+      return {
+        atletaId: fila.atleta_id,
+        profesionalId: fila.profesional_id,
+        atleta: atleta.full_name || atleta.username,
+        profesional: otro.otro_nombre || otro.otro_usuario,
+        oficio: otro.otro_oficio,
+      };
+    })
+    .filter(Boolean), [equipoFilas, athletes, otrosDelEquipo, yoId]);
+
+  async function avisoEntendido(aviso) {
+    try { await marcarAvisoVisto(aviso.atletaId, aviso.profesionalId); } catch { /* si falla, vuelve a salir */ }
+    setEquipoFilas((prev) => prev.map((fila) => (
+      fila.atleta_id === aviso.atletaId && fila.profesional_id === aviso.profesionalId
+        ? { ...fila, aviso_coach_visto_en: new Date().toISOString() }
+        : fila)));
+  }
+
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: T.text2, fontWeight: 600, padding: 40 }}>
@@ -1318,6 +1551,9 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
             {a.perfil_completo === false && <SinTerminar />}
           </div>
           <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><Arroba fila={a} /></div>
+          {etiquetasDeEquipo.get(a.id) && (
+            <div style={{ fontSize: 12, fontWeight: 700, color: T.accent, marginTop: 2 }}>{etiquetasDeEquipo.get(a.id).join(' · ')}</div>
+          )}
           {salud && a.resumen && (
             <div style={{ fontSize: 12, fontWeight: 600, color: T.text2, marginTop: 3 }}>
               {lineaDeLista(a.resumen, new Date(cargadoEn))}
@@ -1333,6 +1569,8 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
     <div style={{ display: 'grid', gridTemplateColumns: twoCol ? 'minmax(280px, 1fr) minmax(0, 1.4fr)' : 'minmax(0, 1fr)', gap: 20, alignItems: 'start' }}>
       {showList && (
       <div>
+        {/* Alguien se unió al equipo de un atleta suyo: se lo dice su coach principal. */}
+        <AvisosDelCoach avisos={avisos} onEntendido={avisoEntendido} />
         {modoTabla && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginBottom: 16 }}>
             <StatCard icon={<Users size={17} />} label={t('Atletas')} value={metricas.total} />
@@ -1364,7 +1602,7 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
           {/* La otra forma de sumar a alguien: que se registre él y pegue este
               código. Va al lado del botón porque es el mismo momento — 'quiero
               un atleta más' — solo que el trabajo lo hace la otra persona. */}
-          <CodigoDeCoach codigo={profile?.codigo_coach} />
+          <CodigoDeCoach codigo={profile?.codigo_coach} nombre={profile?.full_name} />
           </div>
         )}
 
@@ -1391,6 +1629,8 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
               selectedId={selected?.id}
               onPick={setSelected}
               ahora={cargadoEn}
+              etiquetas={etiquetasDeEquipo}
+              equipoMaster={equipoParaMaster}
             />
             {totalPaginas > 1 && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 14 }}>
@@ -1455,6 +1695,8 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
                     selectedId={selected?.id}
                     onPick={setSelected}
                     ahora={cargadoEn}
+                    etiquetas={etiquetasDeEquipo}
+                    equipoMaster={equipoParaMaster}
                   />
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1465,6 +1707,22 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
             )}
           </div>
         )}
+
+        <GrupoPlegable titulo="Esperando que acepte" cuenta={esperando.length}>
+          {esperando.map((e) => (
+            <FilaDeEquipo key={e.clave} nombre={e.nombre} detalle={e.detalle} onClick={e.atleta ? () => setSelected(e.atleta) : undefined} />
+          ))}
+        </GrupoPlegable>
+        <GrupoPlegable titulo="Ya no están contigo" cuenta={yaNoEstan.length}>
+          {yaNoEstan.map((x) => (
+            <FilaDeEquipo
+              key={x.clave}
+              nombre={x.nombre}
+              detalle="Lo quitó de su equipo. Solo conservas tus notas de consulta."
+              onClick={() => setSelected({ id: x.fila.atleta_id, full_name: x.nombre, username: '', role: 'user', soloNotas: true })}
+            />
+          ))}
+        </GrupoPlegable>
       </div>
       )}
 
@@ -1500,6 +1758,7 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
             setSelected((s) => (s && s.id === fila.id ? { ...s, ...parche } : s));
           }}
           tokenInvitacion={sinActivar[selected.id]}
+          onEquipoCambiado={() => setRecarga((n) => n + 1)}
           onEliminado={(id) => {
             setAthletes((prev) => prev.filter((a) => a.id !== id));
             setSelected(null);

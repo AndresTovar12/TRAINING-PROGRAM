@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { Check, Copy } from 'lucide-react';
+import { Check, Copy, QrCode } from 'lucide-react';
 import { T, FONT } from '@/lib/theme';
+import { ligaParaUnirse } from '@/lib/api';
+import MostrarQR from '@/features/admin/MostrarQR';
 
 /**
  * El código del coach, para copiarlo de un toque.
@@ -14,9 +16,14 @@ import { T, FONT } from '@/lib/theme';
  * Se enseña en monoespaciada y espaciado: así se distingue de un texto normal
  * y se lee carácter a carácter, que es como se dicta por teléfono. El código ya
  * viene sin letras confundibles —nada de O, 0, I, L ni 1—, cosa de la base.
+ *
+ * Y un botón de QR: la liga `…/?unirse=CODIGO` en grande, para que quien está
+ * enfrente la escanee con la cámara (un atleta que ya tiene coach y quiere
+ * sumarte a su equipo, o alguien que aún no tiene cuenta). Ver `UnirseAlEquipo`.
  */
-export default function CodigoDeCoach({ codigo, estilo }) {
+export default function CodigoDeCoach({ codigo, estilo, nombre }) {
   const [copiado, setCopiado] = useState(false);
+  const [verQR, setVerQR] = useState(false);
   if (!codigo) return null;
 
   const copiar = async () => {
@@ -32,6 +39,7 @@ export default function CodigoDeCoach({ codigo, estilo }) {
   };
 
   return (
+    <>
     <div
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 10,
@@ -69,6 +77,21 @@ export default function CodigoDeCoach({ codigo, estilo }) {
       >
         {copiado ? <Check size={16} /> : <Copy size={15} />}
       </button>
+      <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); setVerQR(true); }}
+        aria-label="Mostrar QR de mi código"
+        title="Mostrar QR"
+        style={{
+          display: 'grid', placeItems: 'center', width: 36, minHeight: 36, flexShrink: 0,
+          borderRadius: 9, cursor: 'pointer', touchAction: 'manipulation',
+          border: `1.5px solid ${T.border}`, background: T.bg, color: T.text2,
+        }}
+      >
+        <QrCode size={16} />
+      </button>
     </div>
+    {verQR && <MostrarQR liga={ligaParaUnirse(codigo)} nombre={nombre || 'Mi código'} onCerrar={() => setVerQR(false)} />}
+    </>
   );
 }

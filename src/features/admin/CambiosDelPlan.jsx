@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { RotateCcw, Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { getActivePlan } from '@/lib/api';
+import { planDe } from '@/lib/api';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { T, FONT, KP } from '@/lib/theme';
@@ -35,7 +35,7 @@ function hace(fecha, ahora) {
   return d === 1 ? 'ayer' : `hace ${d} días`;
 }
 
-export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abierta, onToggle }) {
+export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abierta, onToggle, profesionalId = null }) {
   const pregunta = useConfirmacion();
   const { t } = usePalabras();
   const [versiones, setVersiones] = useState([]);
@@ -47,10 +47,14 @@ export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abiert
   const [ahora, setAhora] = useState(() => Date.now());
 
   const cargar = useCallback(async () => {
-    const { data } = await supabase
+    // Solo las versiones de ESTE programa (el del coach principal o el de un profesional
+    // del equipo): el master ve las de todos y sin este filtro saldrían revueltas.
+    let consulta = supabase
       .from('plan_versiones')
       .select('id, title, creada_en, cambiada_por, cliente_ia, motivo')
-      .eq('user_id', atleta.id)
+      .eq('user_id', atleta.id);
+    consulta = profesionalId ? consulta.eq('profesional_id', profesionalId) : consulta.is('profesional_id', null);
+    const { data } = await consulta
       .order('creada_en', { ascending: false })
       .limit(15);
     const filas = data ?? [];
@@ -61,7 +65,7 @@ export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abiert
       gente = Object.fromEntries((perfiles ?? []).map((p) => [p.id, p.full_name || p.username]));
     }
     return { filas, gente };
-  }, [atleta.id]);
+  }, [atleta.id, profesionalId]);
 
   useEffect(() => {
     let vivo = true;
@@ -94,7 +98,7 @@ export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abiert
       setTrabajando(false);
       return;
     }
-    const nuevo = await getActivePlan(atleta.id).catch(() => null);
+    const nuevo = await planDe(atleta.id, profesionalId).catch(() => null);
     onCambio?.(nuevo);
     const { filas, gente } = await cargar();
     setVersiones(filas);

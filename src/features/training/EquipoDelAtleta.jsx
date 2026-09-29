@@ -89,7 +89,8 @@ export function SelectorDePrograma({ programas, activoId, verTodo, onTodo, onPro
  * quien lo mandó; tocar un nombre abre el programa completo de esa persona.
  */
 export function SemanaDeTodos({ programas, store, onAbrirDia, onVerPrograma }) {
-  const dias = semanaDeTodos(programas, store);
+  // Lo que ya te dieron de alta no cuenta en la semana: solo se consulta en su pastilla.
+  const dias = semanaDeTodos(programas.filter((p) => !p.altaEn), store);
   const indiceDe = (programaId) => Math.max(0, programas.findIndex((p) => p.id === programaId));
   return (
     <div style={{ padding: '18px 18px 110px' }}>
