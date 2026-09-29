@@ -1646,7 +1646,12 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
                   </div>
                 )}
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.82)', marginTop: 8, lineHeight: 1.4 }}>
-                  {kind === 'weekly' ? weekdayLabel(next.day.day) : (deCorrido ? semanaDe(next) : next.phase.name)}<br />
+                  {/* Aquí iba «Fuerza» (la fase, o la semana de corrido), y la tarjeta de
+                      foto de AL LADO dice lo mismo en grande. Se quitó el 29 sep 2026
+                      con el visto bueno de Andrés (es su Home y se lo preguntamos). Solo
+                      una rutina que se repite dice aquí el día de la semana, que en
+                      ninguna otra parte se menciona. */}
+                  {kind === 'weekly' && <>{weekdayLabel(next.day.day)}<br /></>}
                   {[
                     sessionMeta.exercises ? plural(sessionMeta.exercises, 'ejercicio', 'ejercicios') : null,
                     sessionMeta.duration,
@@ -1760,9 +1765,14 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
               : todayScore >= 5 ? 'Carga media'
               : 'Recuperación'}
           </div>
-          <div style={{ fontSize: 12, color: LT.text2, marginTop: 6, lineHeight: 1.4 }}>
-            {todayScore === null ? 'Registra cómo te sientes' : 'Energía, sueño y fatiga'}
-          </div>
+          {/* «Registra cómo te sientes» repetía lo que dice el botón de abajo
+              («Registrar bienestar»): fuera. Con el puntaje ya puesto sí se queda
+              «Energía, sueño y fatiga», que dice de qué está hecho. */}
+          {todayScore !== null && (
+            <div style={{ fontSize: 12, color: LT.text2, marginTop: 6, lineHeight: 1.4 }}>
+              Energía, sueño y fatiga
+            </div>
+          )}
           <div style={{ background: LT.surface2, borderRadius: 14, padding: '12px', fontSize: 13, fontWeight: 600, color: LT.text2, textAlign: 'center', marginTop: 14, ...tope }}>
             {todayScore === null ? 'Registrar bienestar' : 'Ver detalle'}
           </div>
