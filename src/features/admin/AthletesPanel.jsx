@@ -12,6 +12,7 @@ import {
 } from '@/lib/api';
 import PlanBuilder from '@/features/admin/PlanBuilder';
 import CambiosDelPlan from '@/features/admin/CambiosDelPlan';
+import NotasDeConsulta from '@/features/admin/NotasDeConsulta';
 import AgregarAtleta from '@/features/admin/AgregarAtleta';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
@@ -746,7 +747,8 @@ function DentroDelDia({ day }) {
 function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile, onReassigned, onEliminado, onVerComoAtleta, tokenInvitacion }) {
   const esCompu = useIsDesktop();
   const pregunta = useConfirmacion();
-  const { t } = usePalabras();
+  const { t, salud } = usePalabras();
+  const { profile } = useAuth();
   const [plan, setPlan] = useState(null);
   const [state, setState] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -756,7 +758,12 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
   const [building, setBuilding] = useLugar(`editor.${athlete.id}`, false, (v) => v === true);
   const [savingCoach, setSavingCoach] = useState(false);
   const [verPlan, setVerPlan] = useState(false);
-  const [seccion, setSeccion] = useState(null); // null | 'como-va' | 'cambios' | 'cuenta'
+  const [seccion, setSeccion] = useState(null); // null | 'como-va' | 'cambios' | 'notas' | 'cuenta'
+  /* Las notas de consulta (y dar de alta) son de fisios y solo de quien atiende
+     a esta persona: ni el master ni otro profesional las ven, aunque la lista
+     les enseñe al paciente. La base lo impone; esto solo evita ofrecer un botón
+     que no va a funcionar. */
+  const atiendoYoAEstePaciente = salud && athlete.coach_id === profile?.id;
 
   async function onChangeCoach(coachId) {
     setSavingCoach(true);
@@ -964,6 +971,15 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           </div>
         )}
       </SeccionFicha>
+
+      {atiendoYoAEstePaciente && (
+        <NotasDeConsulta
+          atleta={athlete}
+          Seccion={SeccionFicha}
+          abierta={seccion === 'notas'}
+          onToggle={() => setSeccion((s) => (s === 'notas' ? null : 'notas'))}
+        />
+      )}
 
       <SeccionFicha titulo="Administrar cuenta" abierta={seccion === 'cuenta'} onToggle={() => setSeccion((s) => (s === 'cuenta' ? null : 'cuenta'))}>
         {isMaster && (

@@ -569,6 +569,47 @@ export async function setAthleteCoach(athleteId, coachId) {
   return data;
 }
 
+/* ------------------------- Notas de consulta ------------------------- *
+ * Solo las ve quien las escribió (la base no le da ni una fila a nadie más:
+ * ni al paciente, ni a otro coach, ni al master).
+ * ---------------------------------------------------------------------- */
+export async function listNotasConsulta(atletaId) {
+  const { data, error } = await supabase
+    .from('notas_consulta')
+    .select('id, fecha, texto, creada_en, editada_en')
+    .eq('atleta_id', atletaId)
+    .order('fecha', { ascending: false })
+    .order('creada_en', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function crearNotaConsulta({ atletaId, fecha, texto }) {
+  const { data, error } = await supabase
+    .from('notas_consulta')
+    .insert({ atleta_id: atletaId, fecha, texto: texto.trim() })
+    .select('id, fecha, texto, creada_en, editada_en')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function editarNotaConsulta(id, { fecha, texto }) {
+  const { data, error } = await supabase
+    .from('notas_consulta')
+    .update({ fecha, texto: texto.trim() })
+    .eq('id', id)
+    .select('id, fecha, texto, creada_en, editada_en')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function borrarNotaConsulta(id) {
+  const { error } = await supabase.from('notas_consulta').delete().eq('id', id);
+  if (error) throw error;
+}
+
 /* --------------------- Quitar / desactivar / eliminar ------------------- *
  * Son TRES cosas distintas a propósito, de menor a mayor daño. Un solo botón
  * de "borrar" sería un error: los admins se equivocan de clic, la gente
