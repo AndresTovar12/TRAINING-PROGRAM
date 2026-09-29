@@ -33,6 +33,11 @@ import { T, FONT } from '@/lib/theme';
  * se queda abierta al marcar, para ir por la siguiente. La opción con
  * `limpia` ("Todas las categorías") vale cuando no hay nada marcado, y
  * tocarla lo quita todo y cierra.
+ *
+ * `cabecera` es un bloque fijo ARRIBA de la lista, que no se desplaza con ella
+ * (como `pie` abajo). En las listas de varias opciones lleva el interruptor de
+ * "Todas a la vez / Cualquiera" (ver `ModoDeFiltro`). `separador` es lo que va
+ * entre los nombres en el botón cuando hay varias marcadas.
  */
 export default function ListaDesplegable({
   valor,
@@ -46,6 +51,8 @@ export default function ListaDesplegable({
   estilo,
   alto = 268,
   multiple = false,
+  cabecera,
+  separador = ' + ',
 }) {
   const dedos = useCoarsePointer();
   const caja = useRef(null);
@@ -66,9 +73,12 @@ export default function ListaDesplegable({
   const estaPuesta = (o) => (multiple
     ? (o.limpia ? elegidos.length === 0 : elegidos.includes(o.valor))
     : o.valor === valor);
-  // Lo marcado, en el orden de la lista. Con `multiple` y nada marcado, el
+  // Lo marcado, en el orden en que se marcó (no en el de la lista): así el botón
+  // dice lo mismo que la línea de resultados. Con `multiple` y nada marcado, el
   // botón dice lo de la opción `limpia` ("Todas las categorías").
-  const marcadas = multiple ? planas.filter((o) => !o.accion && !o.limpia && elegidos.includes(o.valor)) : [];
+  const marcadas = multiple
+    ? elegidos.map((v) => planas.find((o) => !o.accion && !o.limpia && o.valor === v)).filter(Boolean)
+    : [];
   const elegida = multiple
     ? (marcadas[0] ?? planas.find((o) => o.limpia) ?? null)
     : (planas.find((o) => !o.accion && o.valor === valor) ?? null);
@@ -133,7 +143,7 @@ export default function ListaDesplegable({
     const coloca = () => {
       const b = caja.current?.getBoundingClientRect();
       if (!b) return;
-      const altoPanel = alto + (pie ? 72 : 16);
+      const altoPanel = alto + (pie ? 72 : 16) + (cabecera ? 96 : 0);
       const debajo = window.innerHeight - b.bottom - 10;
       // Si abajo no cabe y arriba sí, se abre hacia arriba.
       const haciaArriba = debajo < Math.min(altoPanel, 180) && b.top > debajo;
@@ -154,7 +164,7 @@ export default function ListaDesplegable({
       window.removeEventListener('scroll', coloca, true);
       window.removeEventListener('resize', coloca);
     };
-  }, [abierto, alto, pie]);
+  }, [abierto, alto, pie, cabecera]);
 
   /* ELEGIR OCURRE EN EL `click`, Y EN NINGÚN EVENTO ANTERIOR.
 
@@ -389,7 +399,7 @@ export default function ListaDesplegable({
               entender. Sin esto, el botón se salía de su celda y se encimaba
               con el nombre del ejercicio. */}
           {marcadas.length > 1
-            ? marcadas.map((o) => o.corta ?? o.etiqueta).join(' + ')
+            ? marcadas.map((o) => o.corta ?? o.etiqueta).join(separador)
             : elegida ? (elegida.corta ?? elegida.etiqueta) : marcador}
         </span>
         {elegida?.nota && (
@@ -419,9 +429,10 @@ export default function ListaDesplegable({
             /* El scroll lo hace la lista, no esta caja: así el pie —"crear
                uno nuevo"— se queda pegado abajo y no al final del scroll,
                donde nadie lo encuentra. */
-            maxHeight: Math.min(alto + 72, sitio.cabe), display: 'flex', flexDirection: 'column', overflow: 'hidden',
+            maxHeight: Math.min(alto + 72 + (cabecera ? 96 : 0), sitio.cabe), display: 'flex', flexDirection: 'column', overflow: 'hidden',
           }}
         >
+          {cabecera && <div style={{ flexShrink: 0 }}>{cabecera}</div>}
           <div style={{ position: 'relative', flex: '1 1 auto', minHeight: 0 }}>
             <div ref={lista} onScroll={miraSiHayMas} style={{ maxHeight: alto, overflowY: 'auto', padding: 7 }}>
               {grupos

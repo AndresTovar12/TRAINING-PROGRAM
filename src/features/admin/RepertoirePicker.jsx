@@ -5,6 +5,7 @@ import { T, FONT, KP } from '@/lib/theme';
 import { gruposConPropios } from '@/lib/muscles';
 import { listCategories, listMuscleGroups } from '@/lib/api';
 import { coincidencia, pasaFiltros } from '@/lib/buscarEjercicio';
+import ModoDeFiltro, { MODO_POR_DEFECTO, NombresUnidos } from '@/components/ModoDeFiltro';
 import Portada from '@/components/Portada';
 import ListaDesplegable from '@/components/ListaDesplegable';
 import InterruptorVista from '@/components/InterruptorVista';
@@ -31,6 +32,10 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
   // Lo marcado en las listas: varias a la vez, igual que en el repertorio.
   const [catIds, setCatIds] = useState([]);
   const [gruposIds, setGruposIds] = useState([]);
+  // Cómo se combinan las varias marcadas de cada lista: 'cualquiera' de ellas
+  // (por defecto) o 'todas' a la vez (ver `ModoDeFiltro`).
+  const [modoCats, setModoCats] = useState(MODO_POR_DEFECTO);
+  const [modoGrupos, setModoGrupos] = useState(MODO_POR_DEFECTO);
   const [picked, setPicked] = useState([]); // filas del repertorio, en orden de selección
 
   /* Las categorías y los grupos propios, para lo SECUNDARIO de cada ejercicio
@@ -77,21 +82,26 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
     return pasan;
   }, [exercises, query, categoriasPorId, grupos]);
 
-  /* Varias marcadas = solo los que las tienen todas, como principal o como
-     secundaria (`pasaFiltros`). Primero los que lo tienen todo como principal;
-     dentro, primero lo que se llama así. El `sort` es estable. */
+  /* Varias marcadas = los que tienen cualquiera de ellas o solo los que las
+     tienen todas, según el modo de la lista, como principal o como secundaria
+     (`pasaFiltros`). Primero los que lo tienen todo como principal; dentro,
+     primero lo que se llama así. El `sort` es estable. */
   const results = useMemo(() => {
     const pasan = [];
     conTexto.forEach(([e, rTexto]) => {
-      const r = pasaFiltros(e, { categoriaIds: catIds, grupos: gruposMarcados });
+      const r = pasaFiltros(e, {
+        categoriaIds: catIds, grupos: gruposMarcados, modoCategorias: modoCats, modoGrupos,
+      });
       if (r >= 0) pasan.push([r * 3 + rTexto, e]);
     });
     return pasan.sort((a, b) => a[0] - b[0]).map(([, e]) => e);
-  }, [conTexto, catIds, gruposMarcados]);
+  }, [conTexto, catIds, gruposMarcados, modoCats, modoGrupos]);
 
   // Cuántos quedarían al marcar cada opción, con lo ya marcado y lo escrito.
   const cuantos = (categoriaIds, gruposF) => conTexto
-    .filter(([e]) => pasaFiltros(e, { categoriaIds, grupos: gruposF }) >= 0).length;
+    .filter(([e]) => pasaFiltros(e, {
+      categoriaIds, grupos: gruposF, modoCategorias: modoCats, modoGrupos,
+    }) >= 0).length;
   const catCounts = useMemo(() => {
     const m = {};
     categories.forEach((c) => {
@@ -100,7 +110,7 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
     return m;
     // `cuantos` solo lee `conTexto`, que ya está en la lista.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conTexto, catIds, gruposMarcados, categories]);
+  }, [conTexto, catIds, gruposMarcados, categories, modoCats, modoGrupos]);
   const groupCounts = useMemo(() => {
     const m = {};
     grupos.forEach((g) => {
@@ -108,7 +118,11 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
     });
     return m;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conTexto, catIds, gruposMarcados, grupos]);
+  }, [conTexto, catIds, gruposMarcados, grupos, modoCats, modoGrupos]);
+
+  // Los nombres de lo marcado, para decir en palabras qué se está viendo.
+  const nombresCats = catIds.map((id) => categories.find((c) => c.id === id)?.name).filter(Boolean);
+  const nombresGrupos = gruposMarcados.map((g) => g.label);
 
   // La línea de abajo de las listas: que se pueden marcar varias, y qué pasa.
   const ayudaVarias = (texto) => (
@@ -178,7 +192,13 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
                 valor={catIds}
                 onCambio={setCatIds}
                 estilo={{ ...selStyle(catIds.length > 0), padding: '8px 10px' }}
-                pie={ayudaVarias('Puedes marcar varias: salen solo los que las tienen todas.')}
+                separador={modoCats === 'todas' ? ' + ' : ' o '}
+                cabecera={catIds.length >= 2
+                  ? <ModoDeFiltro modo={modoCats} onCambio={setModoCats} nombres={nombresCats} verbo="son" />
+                  : undefined}
+                pie={catIds.length < 2
+                  ? ayudaVarias('Puedes marcar varias. Con dos o más eliges si deben tenerlas todas o cualquiera.')
+                  : undefined}
                 opciones={[
                   { limpia: true, valor: '', etiqueta: 'Todas las categorías' },
                   ...categories.map((c) => ({
@@ -194,7 +214,13 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
                 valor={gruposMarcados.map((g) => g.id)}
                 onCambio={setGruposIds}
                 estilo={{ ...selStyle(gruposMarcados.length > 0), padding: '8px 10px' }}
-                pie={ayudaVarias('Puedes marcar varias: salen solo los que las trabajan todas.')}
+                separador={modoGrupos === 'todas' ? ' + ' : ' o '}
+                cabecera={gruposMarcados.length >= 2
+                  ? <ModoDeFiltro modo={modoGrupos} onCambio={setModoGrupos} nombres={nombresGrupos} verbo="trabajan" />
+                  : undefined}
+                pie={gruposMarcados.length < 2
+                  ? ayudaVarias('Puedes marcar varias. Con dos o más eliges si deben trabajarlas todas o cualquiera.')
+                  : undefined}
                 opciones={[
                   { limpia: true, valor: '', etiqueta: 'Parte del cuerpo' },
                   // Solo las que dejan algo con lo ya marcado, más las marcadas
@@ -225,6 +251,20 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
               estilo={{ marginLeft: 'auto' }}
             />
           </div>
+          {/* Lo que se está viendo, en palabras (ver `ModoDeFiltro`). Solo con
+              varias marcadas en una lista. */}
+          {(catIds.length >= 2 || gruposMarcados.length >= 2) && (
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: T.text2, lineHeight: 1.5, paddingBottom: 10 }}>
+              <b style={{ color: T.text, fontWeight: 800 }}>{results.length}</b>{' '}
+              {results.length === 1 ? 'ejercicio' : 'ejercicios'}
+              {nombresCats.length > 0 && (
+                <> · Categoría: <NombresUnidos nombres={nombresCats} modo={modoCats} /></>
+              )}
+              {nombresGrupos.length > 0 && (
+                <> · Grupo: <NombresUnidos nombres={nombresGrupos} modo={modoGrupos} /></>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Cuerpo: grid + panel de elegidos */}
@@ -233,7 +273,11 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
             {results.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '48px 16px', color: T.text3 }}>
                 <Dumbbell size={34} style={{ opacity: 0.4 }} />
-                <div style={{ marginTop: 10, fontWeight: 600, color: T.text2, fontSize: 14 }}>Sin resultados.</div>
+                <div style={{ marginTop: 10, fontWeight: 600, color: T.text2, fontSize: 14, lineHeight: 1.5 }}>
+                  {catIds.length + gruposMarcados.length > 1
+                    ? 'Ninguno cumple todo lo que marcaste. Quita alguna opción, o elige «Cualquiera» en la lista.'
+                    : 'Sin resultados.'}
+                </div>
               </div>
             ) : (
               <div style={enFilas

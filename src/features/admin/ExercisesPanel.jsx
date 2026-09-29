@@ -22,6 +22,7 @@ import {
 import { crearCategoriaPropia, mismoNombre } from '@/lib/categorias';
 import { coincidencia, pasaFiltros } from '@/lib/buscarEjercicio';
 import { useLugar, useScrollLugar } from '@/lib/useLugar';
+import ModoDeFiltro, { MODOS, MODO_POR_DEFECTO, NombresUnidos } from '@/components/ModoDeFiltro';
 import DialogoNombre from '@/components/DialogoNombre';
 import SeleccionMultiple from '@/components/SeleccionMultiple';
 import { T, FONT, KP } from '@/lib/theme';
@@ -1080,13 +1081,18 @@ export default function ExercisesPanel({ viendoComo }) {
   const [masterId, setMasterId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
-  // Lo marcado en las listas de filtro. Pueden ser varias a la vez: salen
-  // solo los ejercicios que las tienen todas (ver `pasaFiltros`).
+  // Lo marcado en las listas de filtro. Pueden ser varias a la vez: salen los
+  // que tienen cualquiera de ellas o solo los que las tienen todas, según el
+  // modo de cada lista (ver `pasaFiltros`).
   // Y se recuerdan al refrescar, igual que lo escrito en el buscador (ver
   // `lugar.js`). Un id que ya no existe —una categoría borrada— se descarta
   // más abajo, así que no hace falta comprobarlo aquí.
   const [catsElegidas, setCatsElegidas] = useLugar('ejercicios.cats', [], Array.isArray); // ids de categoría
   const [gruposElegidos, setGruposElegidos] = useLugar('ejercicios.grupos', [], Array.isArray); // ids de grupo
+  // Cómo se combinan las varias marcadas de cada lista: 'cualquiera' de ellas
+  // (por defecto) o 'todas' a la vez. Ver `ModoDeFiltro`.
+  const [modoCats, setModoCats] = useLugar('ejercicios.modoCats', MODO_POR_DEFECTO, (v) => MODOS.includes(v));
+  const [modoGrupos, setModoGrupos] = useLugar('ejercicios.modoGrupos', MODO_POR_DEFECTO, (v) => MODOS.includes(v));
   const [search, setSearch] = useLugar('ejercicios.busca', '', (v) => typeof v === 'string');
   const [editing, setEditing] = useState(null); // { exercise, esAjeno } | { new: true } | null
   // Mis versiones de los ejercicios base. Se aplican encima del repertorio.
@@ -1210,11 +1216,13 @@ export default function ExercisesPanel({ viendoComo }) {
   const filtered = useMemo(() => {
     const pasan = [];
     conTexto.forEach(([e, rTexto]) => {
-      const r = pasaFiltros(e, { categoriaIds: catsMarcadas, grupos: gruposMarcados });
+      const r = pasaFiltros(e, {
+        categoriaIds: catsMarcadas, grupos: gruposMarcados, modoCategorias: modoCats, modoGrupos,
+      });
       if (r >= 0) pasan.push([r * 3 + rTexto, e]);
     });
     return pasan.sort((a, b) => a[0] - b[0]).map(([, e]) => e);
-  }, [conTexto, catsMarcadas, gruposMarcados]);
+  }, [conTexto, catsMarcadas, gruposMarcados, modoCats, modoGrupos]);
 
   /* LOS NÚMEROS DE LAS LISTAS dicen cuántos quedarían al marcar esa opción,
      con lo que ya está marcado y lo escrito en el buscador. Así se ve antes de
@@ -1222,7 +1230,9 @@ export default function ExercisesPanel({ viendoComo }) {
      marcada, es lo que se ve ahora. Cada ejercicio cuenta en su principal y
      en sus secundarias. */
   const cuantos = (categoriaIds, gruposF) => conTexto
-    .filter(([e]) => pasaFiltros(e, { categoriaIds, grupos: gruposF }) >= 0).length;
+    .filter(([e]) => pasaFiltros(e, {
+      categoriaIds, grupos: gruposF, modoCategorias: modoCats, modoGrupos,
+    }) >= 0).length;
   const counts = useMemo(() => {
     const m = { all: cuantos([], gruposMarcados) };
     categoriasVisibles.forEach((c) => {
@@ -1231,7 +1241,7 @@ export default function ExercisesPanel({ viendoComo }) {
     return m;
     // `cuantos` solo lee `conTexto`, que ya está en la lista.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conTexto, catsMarcadas, gruposMarcados, categoriasVisibles]);
+  }, [conTexto, catsMarcadas, gruposMarcados, categoriasVisibles, modoCats, modoGrupos]);
   const groupCounts = useMemo(() => {
     const m = { all: cuantos(catsMarcadas, []) };
     grupos.forEach((g) => {
@@ -1239,7 +1249,7 @@ export default function ExercisesPanel({ viendoComo }) {
     });
     return m;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conTexto, catsMarcadas, gruposMarcados, grupos]);
+  }, [conTexto, catsMarcadas, gruposMarcados, grupos, modoCats, modoGrupos]);
 
   // Para el aviso de lista vacía: una sola categoría o un solo grupo, sin
   // nada más encima, es el caso de "recién creada".
@@ -1249,6 +1259,9 @@ export default function ExercisesPanel({ viendoComo }) {
   const grupoSolo = gruposMarcados.length === 1 && catsMarcadas.length === 0 && sinTexto
     ? gruposMarcados[0] : null;
   const marcadasVarias = catsMarcadas.length + gruposMarcados.length > 1;
+  // Los nombres de lo marcado, para decir en palabras qué se está viendo.
+  const nombresCats = catsMarcadas.map((id) => categoriasPorId.get(id)?.name).filter(Boolean);
+  const nombresGrupos = gruposMarcados.map((g) => g.label);
 
   function handleDuplicate(copy) {
     setExercises((prev) => [...prev, copy]);
@@ -1316,7 +1329,7 @@ export default function ExercisesPanel({ viendoComo }) {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nombre, categoría o músculo…"
+            placeholder="Nombre, categoría o músculo…"
             style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 16, fontWeight: 500, color: T.text, padding: '12px 0' }}
           />
         </div>
@@ -1342,7 +1355,16 @@ export default function ExercisesPanel({ viendoComo }) {
             multiple
             valor={catsMarcadas}
             onCambio={setCatsElegidas}
-            pie={<AyudaVarias texto="Puedes marcar varias: salen solo los ejercicios que las tienen todas." />}
+            /* Con dos o más marcadas sale arriba el interruptor "Todas a la
+               vez / Cualquiera" con la frase de lo que va a salir; antes de eso,
+               un aviso de que va a aparecer. Ver `ModoDeFiltro`. */
+            separador={modoCats === 'todas' ? ' + ' : ' o '}
+            cabecera={catsMarcadas.length >= 2
+              ? <ModoDeFiltro modo={modoCats} onCambio={setModoCats} nombres={nombresCats} verbo="son" />
+              : undefined}
+            pie={catsMarcadas.length < 2
+              ? <AyudaVarias texto="Puedes marcar varias. Con dos o más eliges si deben tenerlas todas o cualquiera." />
+              : undefined}
             opciones={[
               { limpia: true, valor: 'all', etiqueta: 'Todas las categorías', nota: String(counts.all ?? 0) },
               /* Andrés, 28 sep 2026: "abajo de 'todas las categorías' un botón
@@ -1362,7 +1384,13 @@ export default function ExercisesPanel({ viendoComo }) {
             multiple
             valor={gruposMarcados.map((g) => g.id)}
             onCambio={setGruposElegidos}
-            pie={<AyudaVarias texto="Puedes marcar varios: salen solo los ejercicios que los trabajan todos." />}
+            separador={modoGrupos === 'todas' ? ' + ' : ' o '}
+            cabecera={gruposMarcados.length >= 2
+              ? <ModoDeFiltro modo={modoGrupos} onCambio={setModoGrupos} nombres={nombresGrupos} verbo="trabajan" />
+              : undefined}
+            pie={gruposMarcados.length < 2
+              ? <AyudaVarias texto="Puedes marcar varios. Con dos o más eliges si deben trabajarlos todos o cualquiera." />
+              : undefined}
             opciones={[
               { limpia: true, valor: 'all', etiqueta: 'Todos los grupos', nota: String(groupCounts.all ?? 0) },
               ...(viendoComo ? [] : [{ accion: () => setCreando('grupo'), etiqueta: 'Agregar grupo' }]),
@@ -1387,6 +1415,24 @@ export default function ExercisesPanel({ viendoComo }) {
         </div>
       )}
 
+      {/* LO QUE SE ESTÁ VIENDO, en palabras y donde se miran los resultados.
+          Andrés, 28 sep 2026: con "Fuerza" y "Pliometría" marcadas, alguien
+          espera todos los de Fuerza y todos los de Pliometría, no los que son
+          las dos cosas. El "y también" y el "o" van en azul: son lo que cambia
+          el significado. Solo sale con varias marcadas en una lista. */}
+      {(catsMarcadas.length >= 2 || gruposMarcados.length >= 2) && (
+        <div style={{ fontSize: 13, fontWeight: 600, color: T.text2, lineHeight: 1.5, margin: '-10px 0 16px' }}>
+          <b style={{ color: T.text, fontWeight: 800 }}>{filtered.length}</b>{' '}
+          {filtered.length === 1 ? 'ejercicio' : 'ejercicios'}
+          {nombresCats.length > 0 && (
+            <> · Categoría: <NombresUnidos nombres={nombresCats} modo={modoCats} /></>
+          )}
+          {nombresGrupos.length > 0 && (
+            <> · Grupo: <NombresUnidos nombres={nombresGrupos} modo={modoGrupos} /></>
+          )}
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '60px 20px', color: T.text3 }}>
           <Dumbbell size={40} style={{ opacity: 0.4 }} />
@@ -1398,7 +1444,7 @@ export default function ExercisesPanel({ viendoComo }) {
               : grupoSolo
                 ? `«${grupoSolo.label}» todavía no tiene ejercicios. Abre uno y elige este grupo como principal o secundario.`
                 : marcadasVarias
-                  ? 'Ningún ejercicio tiene todo lo que marcaste a la vez. Desmarca alguna opción de las listas.'
+                  ? 'Ningún ejercicio cumple todo lo que marcaste. Quita alguna opción, o elige «Cualquiera» en la lista.'
                   : 'Sin ejercicios para este filtro.'}
           </div>
         </div>

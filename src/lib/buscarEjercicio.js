@@ -1,47 +1,57 @@
 import { comoEnGrupo, groupForMuscle } from '@/lib/muscles';
 
+// Cómo se junta lo marcado en una lista. 'todas': el ejercicio tiene que tener
+// TODAS; 'cualquiera': basta UNA. Cada una cuenta igual si es la principal o
+// una secundaria. Devuelve -1 si no pasa, o cuántas entraron por lo secundario
+// (todas) / 0 si alguna es la principal y 1 si solo hay secundarias (cualquiera),
+// que es lo que se usa para ordenar: primero lo que es de verdad.
+function combina(como, modo) {
+  if (modo === 'cualquiera') {
+    if (como.every((c) => !c)) return -1;
+    return como.includes('principal') ? 0 : 1;
+  }
+  if (como.some((c) => !c)) return -1;
+  return como.filter((c) => c === 'secundario').length;
+}
+
 /**
- * ¿Tiene el ejercicio TODAS estas categorías y trabaja TODOS estos grupos?
+ * ¿Pasa el ejercicio los filtros marcados en las listas?
  *
  * Andrés, 28 sep 2026: "¿qué tal si quiero hacer una búsqueda específica de
- * puros ejercicios con dos categorías y dos grupos musculares?". Con varias
- * marcadas en las listas, salen solo los que las tienen todas. Cada una cuenta
- * igual si es la principal o una secundaria.
+ * puros ejercicios con dos categorías y dos grupos musculares?". Y luego:
+ * "alguien puede pensar que si selecciono «fuerza» y aparte «pliométricos» me
+ * van a aparecer todos los de fuerza y también todos los pliométricos". Por eso
+ * cada lista tiene su modo (`ModoDeFiltro`): 'cualquiera' (por defecto: lo que
+ * la mayoría espera de una lista de varias) o 'todas' (la búsqueda específica).
+ * Entre las dos listas manda siempre "y": una categoría Y un grupo.
  *
- * Devuelve cuántas entraron por lo secundario —para ordenar: primero los que
- * lo tienen todo como principal— o -1 si le falta alguna. Sin nada marcado
- * devuelve 0: pasan todos.
+ * Devuelve -1 si no pasa; si pasa, un número para ordenar (0 = todo lo que
+ * marcó es de verdad, más = entra por algo secundario). Sin nada marcado, 0.
  *
  * `categoriaIds`: ids de categoría. `grupos`: los grupos marcados (objetos de
  * `gruposConPropios`).
  */
-export function pasaFiltros(ex, { categoriaIds = [], grupos = [] }) {
-  let secundarias = 0;
-  const principal = ex.category_id ?? ex.category?.id;
-  for (const id of categoriaIds) {
-    if (principal === id) continue;
-    if (!(ex.categorias_secundarias ?? []).includes(id)) return -1;
-    secundarias += 1;
+export function pasaFiltros(ex, {
+  categoriaIds = [], grupos = [], modoCategorias = 'cualquiera', modoGrupos = 'cualquiera',
+}) {
+  let rango = 0;
+  if (categoriaIds.length) {
+    const principal = ex.category_id ?? ex.category?.id;
+    const como = categoriaIds.map((id) => {
+      if (principal === id) return 'principal';
+      return (ex.categorias_secundarias ?? []).includes(id) ? 'secundario' : null;
+    });
+    const r = combina(como, modoCategorias);
+    if (r < 0) return -1;
+    rango += r;
   }
-  for (const g of grupos) {
-    const como = comoEnGrupo(ex, g);
-    if (!como) return -1;
-    if (como === 'secundario') secundarias += 1;
+  if (grupos.length) {
+    const r = combina(grupos.map((g) => comoEnGrupo(ex, g)), modoGrupos);
+    if (r < 0) return -1;
+    rango += r;
   }
-  return secundarias;
+  return rango;
 }
-
-/**
- * Lo que se escribe en el buscador de ejercicios, contra qué se compara.
- *
- * Andrés, 28 sep 2026: "cuando un coach busque un ejercicio debe poder hacer
- * búsquedas con grupos secundarios y categorías secundarias también". Antes
- * el buscador solo miraba el nombre: escribir "pliometría" no encontraba nada
- * que no se llamara así.
- *
- * Se usa en los dos buscadores —el del repertorio y el del editor de planes—
- * para que respondan igual.
- */
 
 // "Glúteo", "gluteo" y "GLÚTEO" son lo mismo al buscar.
 export const sinAcentos = (s) => (s ?? '').toString()
