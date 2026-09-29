@@ -53,6 +53,7 @@ import MediaUpload from '@/features/admin/MediaUpload';
 import MediaAlCrear from '@/features/admin/MediaAlCrear';
 import { T, FONT, KP } from '@/lib/theme';
 import { ligaExterna } from '@/lib/videos';
+import Portada from '@/components/Portada';
 
 const GRUPOS = [
   { g: '', et: 'Para todos', corto: 'Todos', Icono: Users,
@@ -77,7 +78,7 @@ function etiquetaAjustes(a) {
     No se usa canvas a propósito: leer los píxeles de un video de otro dominio
     lo "mancha" y el navegador prohíbe exportarlo. Cloudflare no manda las
     cabeceras que lo permitirían. Comprobado en consola. */
-function Miniatura({ url, esVideo }) {
+function Miniatura({ url, esVideo, desde, hasta }) {
   return (
     <span style={{
       width: 44, height: 44, borderRadius: 9, overflow: 'hidden', flexShrink: 0,
@@ -88,13 +89,9 @@ function Miniatura({ url, esVideo }) {
       {ligaExterna(url) ? (
         <LinkIcon size={18} color="#8A93A3" />
       ) : esVideo ? (
-        <video
-          src={url} muted playsInline preload="metadata" tabIndex={-1} aria-hidden="true"
-          // Safari en iPhone deja el recuadro negro mientras el video no se
-          // haya movido. Pedirle que salte un pelín lo obliga a pintar.
-          onLoadedMetadata={(e) => { e.currentTarget.currentTime = 0.1; }}
-          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-        />
+        /* El fotograma de la MITAD, igual que la portada del ejercicio (ver
+           `Portada`): con recorte, la mitad de lo que ve el atleta. */
+        <Portada video={url} desde={desde} hasta={hasta} style={{ width: '100%', height: '100%' }} />
       ) : (
         <img src={url} alt="" loading="lazy"
           style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
@@ -419,7 +416,7 @@ export default function MediaDelEjercicio({
             background: T.bg, border: `1px solid ${T.border}`, borderRadius: 11, padding: 8,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <Miniatura url={m.url} esVideo={esVideo} />
+              <Miniatura url={m.url} esVideo={esVideo} desde={m.recorte_inicio} hasta={m.recorte_fin} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{
                   fontSize: 13, fontWeight: 700, color: T.text,

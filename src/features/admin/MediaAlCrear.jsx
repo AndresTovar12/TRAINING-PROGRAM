@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Camera, Images, Link as LinkIcon, Trash2, Plus, Users, Mars, Venus, Check, ChevronDown, Video } from 'lucide-react';
 import MediaUpload from '@/features/admin/MediaUpload';
 import { ligaExterna } from '@/lib/videos';
+import Portada from '@/components/Portada';
 import { T, FONT, KP } from '@/lib/theme';
 
 /**
@@ -295,11 +296,8 @@ function Ficha({ item, abierto, onAbrir, onAQuien, onQuitar }) {
           background: '#0E1015', display: 'grid', placeItems: 'center',
         }}>
           {liga ? <LinkIcon size={19} color="#8A93A3" /> : esVideo ? (
-            <video
-              src={item.url} muted playsInline preload="metadata" tabIndex={-1} aria-hidden="true"
-              onLoadedMetadata={(e) => { e.currentTarget.currentTime = 0.1; }}
-              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-            />
+            // El fotograma de la mitad, como la portada (ver `Portada`).
+            <Portada video={item.url} style={{ width: '100%', height: '100%' }} />
           ) : (
             <img src={item.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
           )}

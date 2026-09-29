@@ -15,6 +15,7 @@ import EditorFoto from '@/features/admin/EditorFoto';
 import GrabadoraDeVideo from '@/features/admin/GrabadoraDeVideo';
 import { recortaImagen } from '@/features/admin/recorte';
 import { useCoarsePointer } from '@/lib/useViewport';
+import Portada from '@/components/Portada';
 import { T, FONT } from '@/lib/theme';
 
 export default function MediaUpload({
@@ -363,11 +364,8 @@ export default function MediaUpload({
             background: '#0E1015', display: 'grid', placeItems: 'center',
           }}>
             {esVideo ? (
-              <video
-                src={value} muted playsInline preload="metadata" tabIndex={-1} aria-hidden="true"
-                onLoadedMetadata={(e) => { e.currentTarget.currentTime = 0.1; }}
-                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-              />
+              // El fotograma de la mitad, como la portada (ver `Portada`).
+              <Portada video={value} style={{ width: '100%', height: '100%' }} />
             ) : (
               <img src={value} alt=""
                 style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
