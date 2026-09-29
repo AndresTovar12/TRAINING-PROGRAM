@@ -1,5 +1,6 @@
 import type { Quien } from './sesion.ts'
 import { ZONA } from './config.ts'
+import { esDeSalud, traduce } from './app/palabras.js'
 
 /* ------------------------------------------------------------------ */
 /* Respuestas                                                          */
@@ -54,6 +55,29 @@ export const sinAcentos = (s: string) =>
   String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 
 export const mismoTexto = (a: string, b: string) => sinAcentos(a) === sinAcentos(b)
+
+/* ------------------------------------------------------------------ */
+/* Palabras de cada oficio                                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * El texto con las palabras de quien habla: a un fisio, «pacientes» y
+ * «programa»; a los demás, igual que siempre. Igual que la app (`app/palabras.js`).
+ * REGLA de siempre: solo textos FIJOS. Nunca un nombre ni un título que escribió
+ * alguien: por eso se traduce la frase y el nombre se pega después.
+ */
+export const palabrasDe = (quien: Pick<Quien, 'salud'>) => (texto: string) => traduce(texto, quien.salud) as string
+
+/** «2026-09-29T…» → «29 de septiembre». */
+export const fechaLarga = (iso: string) =>
+  new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', timeZone: ZONA })
+
+/** «Beto López» → «Beto». */
+export const nombreCorto = (nombreCompleto: string | null | undefined) =>
+  String(nombreCompleto ?? '').trim().split(/\s+/)[0] || ''
+
+/** «fisio» si el oficio es de salud; si no, «coach». */
+export const rolDeOficio = (oficio: string | null | undefined): 'coach' | 'fisio' => (esDeSalud(oficio) ? 'fisio' : 'coach')
 
 /* ------------------------------------------------------------------ */
 /* Días y fechas                                                       */
@@ -127,9 +151,11 @@ export interface Persona {
   email: string | null
   created_at: string
   perfil_completo: boolean
+  /** Cuándo le dio de alta su coach principal (si es su paciente). */
+  alta_en: string | null
 }
 
-const CAMPOS_PERSONA = 'id, username, full_name, role, is_owner, coach_id, is_active, unidad_peso, genero, email, created_at, perfil_completo'
+const CAMPOS_PERSONA = 'id, username, full_name, role, is_owner, coach_id, is_active, unidad_peso, genero, email, created_at, perfil_completo, alta_en'
 
 /**
  * Encuentra a un atleta por id, usuario o nombre, ENTRE LOS QUE ESTA PERSONA
@@ -159,7 +185,7 @@ export async function buscarPersona(quien: Quien, ref: string, soloAtletas = tru
   const lista = (porNombre.length > 1 ? porNombre : parecidos)
     .slice(0, 8).map((p) => `${p.full_name || p.username} (@${p.username})`).join(', ')
   if (lista) throw new Aviso(`Hay varias personas que coinciden con "${texto}": ${lista}. Di cuál, con su usuario.`)
-  throw new Aviso(`No encontré a "${texto}" entre ${soloAtletas ? 'tus atletas' : 'las personas que puedes ver'}.`)
+  throw new Aviso(`No encontré a "${texto}" entre ${soloAtletas ? palabrasDe(quien)('tus atletas') : 'las personas que puedes ver'}.`)
 }
 
 export const nombreDe = (p: Pick<Persona, 'full_name' | 'username'>) => p.full_name || p.username

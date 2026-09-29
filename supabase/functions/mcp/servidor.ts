@@ -1,8 +1,10 @@
+// deno-lint-ignore-file no-explicit-any
 import { McpServer } from 'npm:@modelcontextprotocol/sdk@1.30.1/server/mcp.js'
 import { WebStandardStreamableHTTPServerTransport } from 'npm:@modelcontextprotocol/sdk@1.30.1/server/webStandardStreamableHttp.js'
 import { APP_URL, SUPABASE_URL, metadatosDelRecurso } from './config.ts'
 import { quienLlama, SinPermiso, TokenInvalido, type Quien } from './sesion.ts'
-import { fechaDelAtleta, NOMBRE_DIA } from './util.ts'
+import { fechaDelAtleta, NOMBRE_DIA, palabrasDe } from './util.ts'
+import { traduce } from './app/palabras.js'
 import { herramientasComunes } from './comunes.ts'
 import { herramientasDelAtleta } from './atleta.ts'
 import { herramientasDelCoach } from './coach.ts'
@@ -61,25 +63,45 @@ function noAutorizado(descripcion: string, tokenMalo = false) {
   )
 }
 
+/**
+ * A un fisio (o al paciente de un fisio) las herramientas le hablan con SUS
+ * palabras: «pacientes» y «programa», como la app. Solo los textos fijos de
+ * los títulos y las descripciones; los nombres y lo que escribió cada quien no
+ * se tocan. Para los demás no cambia nada.
+ */
+function conPalabras(server: McpServer, quien: Quien) {
+  if (!quien.salud) return
+  const registrar = server.registerTool.bind(server) as (...args: any[]) => unknown
+  ;(server as any).registerTool =(nombre: string, def: any, fn: unknown) =>
+    registrar(nombre, { ...def, title: traduce(def.title, true), description: traduce(def.description, true) }, fn)
+}
+
 function instrucciones(quien: Quien) {
   const hoy = fechaDelAtleta()
+  const p = palabrasDe(quien)
   const rol = quien.rol === 'atleta' ? 'atleta' : quien.rol === 'coach' ? 'coach' : 'administrador (dueño de la app)'
   const comun = [
-    `Training Lab es una app de entrenamiento. Estás conectado como ${quien.nombre} (@${quien.usuario}), que es ${rol}.`,
+    // El nombre y el usuario no se traducen: van como marcas y se pegan después.
+    p(`Training Lab es una app de entrenamiento. Estás conectado como {NOMBRE} (@{USUARIO}), que es ${rol}.`)
+      .replace('{NOMBRE}', quien.nombre).replace('{USUARIO}', quien.usuario),
     `Hoy es ${NOMBRE_DIA[hoy.dia].toLowerCase()} ${hoy.texto} en la hora de México; "hoy" en Training Lab es ese día.`,
     'Habla en español, claro y corto. Usa las unidades de la persona (kg o lb).',
-    'Un plan tiene fases → semanas → días; un día tiene una o más sesiones, y cada sesión sus ejercicios (series, cantidad en reps, segundos o metros, intensidad, descanso, notas). Los ejercicios con el mismo "grupo" van en superserie o circuito.',
+    p('Un plan tiene fases → semanas → días; un día tiene una o más sesiones, y cada sesión sus ejercicios (series, cantidad en reps, segundos o metros, intensidad, descanso, notas). Los ejercicios con el mismo "grupo" van en superserie o circuito.'),
   ]
   const porRol = quien.rol === 'atleta'
     ? [
       'Antes de anotar, mira el día con ver_mi_dia para usar los nombres exactos de los ejercicios.',
-      'Si le falta un aparato, busca alternativas con buscar_ejercicios (por músculo o patrón) y ofrécelas con su video. Tú no cambias su plan: eso lo hace su coach.',
+      p('Si le falta un aparato, busca alternativas con buscar_ejercicios (por músculo o patrón) y ofrécelas con su video. Tú no cambias su plan: eso lo hace su coach.'),
+      'Puedes tener más de un programa: el de tu coach y el de otros profesionales de tu equipo (por ejemplo, tu fisio). ver_mi_plan, ver_mi_dia y ver_mi_semana los dan todos juntos y cada uno dice de quién es ("de"); con el argumento "de" (el nombre, "coach" o "fisio") pides uno solo. Quien ya te dio de alta no te manda sesiones. Al anotar, se guarda en el programa correcto; si hay duda de cuál, pregunta.',
     ]
     : [
-      'Antes de cambiar un plan, léelo con ver_plan_de_atleta. Los cambios de plan se aplican al momento y siempre se pueden deshacer (ver_historial_del_plan, deshacer_cambio_del_plan).',
-      'Al terminar un cambio, di en una o dos líneas qué cambió y a quién.',
+      p('Antes de cambiar un plan, léelo con ver_plan_de_atleta. Los cambios de plan se aplican al momento y siempre se pueden deshacer (ver_historial_del_plan, deshacer_cambio_del_plan).'),
+      p('Al terminar un cambio, di en una o dos líneas qué cambió y a quién.'),
       'Borrar pide confirmación: antes de borrar, di qué se va a borrar.',
       'Para ligar un ejercicio a su ficha con video, escribe su nombre exacto del repertorio (búscalo con buscar_ejercicios).',
+      p('Un atleta puede tener un equipo: su coach principal y otros profesionales (un fisio, por ejemplo), cada uno con SU programa. Los programas de todos se leen juntos (cada cosa dice "de" quién es; con "de" pides uno solo), pero cada quien cambia solo el suyo.')
+        + (quien.rol === 'master' ? ' Como administrador eliges con "de" qué programa cambias; sin él, el del coach principal.' : ''),
+      'Las notas de consulta de un fisio son suyas: no están aquí y no se piden ni se resumen.',
     ]
   return [...comun, ...porRol].join('\n')
 }
@@ -124,6 +146,7 @@ export async function manejar(req: Request): Promise<Response> {
     { name: 'training-lab', title: 'Training Lab', version: '1.0.0' },
     { instructions: instrucciones(quien) },
   )
+  conPalabras(server, quien)
   herramientasComunes(server, quien)
   if (quien.rol === 'atleta') {
     herramientasDelAtleta(server, quien)

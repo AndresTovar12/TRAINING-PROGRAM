@@ -4,15 +4,16 @@ import { z } from 'npm:zod@^4.1.13'
 import { APP_URL } from './config.ts'
 import { llamarFuncion, type Quien } from './sesion.ts'
 import {
-  Aviso, buscarPersona, diaDesdeTexto, fechaDelAtleta, mismoTexto, NOMBRE_DIA, nombreDe, respuesta, seguro, sinAcentos,
-  type Dia, type Persona,
+  Aviso, buscarPersona, diaDesdeTexto, fechaDelAtleta, fechaLarga, mismoTexto, NOMBRE_DIA, nombreCorto, nombreDe, palabrasDe,
+  respuesta, rolDeOficio, seguro, sinAcentos, type Dia, type Persona,
 } from './util.ts'
 import {
-  buscarFase, buscarSemana, describirDia, describirSemana, diaDesdeEntrada, faseNueva, fasesDe, guardarFases,
-  idDeSesion, nombreDelDia, planActivo, repertorioVisible, resumenDelPlan, semanaNueva, siguienteNumFase,
-  siguienteNumSemana, tipoDePlan, normalizar, type Plan, type SesionEntrada,
+  buscarFase, buscarSemana, conEquipo, describirDia, describirSemana, diaDesdeEntrada, elegirPrograma, equipoDe, faseNueva,
+  fasesDe, guardarFases, idDeSesion, miProgramaCon, nombreDelDia, planesActivos, programaQueEdito, planQueEdito,
+  repertorioVisible, resumenDelPlan, semanaNueva, siguienteNumFase, siguienteNumSemana, tipoDePlan, normalizar, claveDeRegistro,
+  type Miembro, type Plan, type Programa, type SesionEntrada,
 } from './plan.ts'
-import { estadoDe, ubicarDia } from './atleta.ts'
+import { cursorDe, estadoDe, registrosDe, ubicarEnTodos } from './atleta.ts'
 import { repertorioConFicha } from './comunes.ts'
 import { dondeVa, historialDePeso } from './app/training-utils.js'
 import { desdeKilos } from './app/unidades.js'
@@ -55,12 +56,48 @@ const SESION_CON_DIA = z.object({ dia: z.string().describe('lunes … domingo'),
 /* Ayudas                                                              */
 /* ------------------------------------------------------------------ */
 
-async function planDe(quien: Quien, ref: string): Promise<{ persona: Persona; plan: Plan }> {
+/**
+ * El plan de un atleta que ESTA persona cambia: el suyo (ver `planQueEdito`).
+ * `programa` viene solo si es el de un profesional del equipo: así el master,
+ * que puede elegir con `de`, ve en la respuesta cuál cambió.
+ */
+async function planDe(quien: Quien, ref: string, de?: string | null): Promise<{ persona: Persona; plan: Plan; programa: { programa?: string } }> {
   const persona = await buscarPersona(quien, ref)
-  const plan = await planActivo(quien, persona.id)
-  if (!plan) throw new Aviso(`${nombreDe(persona)} todavía no tiene plan. Puedes crearle uno con crear_plan.`)
-  return { persona, plan }
+  const r = await planQueEdito(quien, persona, de)
+  if (!r.plan) {
+    // La frase fija se traduce; el nombre y el profesional, no.
+    const de_quien = r.profesionalId === null ? '' : r.profesionalId === quien.id ? ' tuyo' : ` de ${r.de}`
+    throw new Aviso(`${nombreDe(persona)} ${palabrasDe(quien)('todavía no tiene plan')}${de_quien}. Puedes crearle uno con crear_plan.`)
+  }
+  return { persona, plan: r.plan, programa: r.profesionalId ? { programa: r.de } : {} }
 }
+
+/** Los programas de un atleta que esta persona ve y su estado. Con `de`, solo el de ese profesional. */
+async function programasDeAtleta(quien: Quien, persona: Persona, de?: string | null) {
+  const miembros = await equipoDe(quien, persona.id)
+  const [programas, estado] = await Promise.all([planesActivos(quien, persona.id, miembros), estadoDe(quien, persona.id)])
+  const elegidos = de && String(de).trim() ? [elegirPrograma(programas, de)] : programas
+  /* Cada cosa dice de quién es si hay más de un programa, o si el que se ve no es
+     el de esta persona (un fisio que lee el plan del coach de su paciente). */
+  const rotular = conEquipo(programas) || programas.some((x) => x.profesionalId !== miProgramaCon(quien, persona))
+  return { miembros, programas, elegidos, estado, rotular }
+}
+
+/**
+ * Para leer el DETALLE de un plan (no el resumen): el de esta persona, o el que
+ * diga `de`. Sin nada y con varios, se pregunta: un detalle mezclado de dos
+ * programas no le sirve a nadie.
+ */
+function programaParaLeer(quien: Quien, persona: Persona, programas: Programa[], de?: string | null): Programa {
+  if (de && String(de).trim()) return elegirPrograma(programas, de)
+  const propio = programas.find((x) => x.profesionalId === miProgramaCon(quien, persona))
+  if (propio) return propio
+  if (programas.length === 1) return programas[0]
+  throw new Aviso(`${nombreDe(persona)} tiene programas de ${programas.map((x) => x.de).join(' y ')}: di de cuál (argumento "de").`)
+}
+
+/** Programas sin plan ni profesional, para leer los registros de quien aún no tiene ninguno. */
+const SIN_PROGRAMA = { plan: null, profesionalId: null, de: '', rol: 'coach', nombre: '', usuario: '', esPrincipal: true, altaEn: null } as unknown as Programa
 
 /** Arma los días de una semana a partir de sesiones con su día. */
 function diasDesde(sesiones: any[], repertorio: any[], sinFicha: Set<string>) {
@@ -91,8 +128,19 @@ const avisoSinFicha = (sinFicha: Set<string>) => (sinFicha.size
   ? { sin_ficha: [...sinFicha], nota_sin_ficha: 'Estos ejercicios no están en el repertorio: se guardaron con su nombre, pero sin video. Si existen con otro nombre, búscalos con buscar_ejercicios y corrígelos.' }
   : {})
 
+/** Para LEER: solo el programa de un profesional del equipo del atleta. */
+const DE_LEER = z.string().optional()
+  .describe('Si el atleta tiene un equipo (su coach y otros profesionales, como un fisio), cada uno con su programa: de cuál, con su nombre, "coach" o "fisio". Sin esto, todos juntos.')
+
 export function herramientasDelCoach(server: McpServer, quien: Quien) {
   const esMaster = quien.rol === 'master'
+  const p = palabrasDe(quien)
+  /* Para ESCRIBIR, cada quien cambia solo SU programa. El master es el único que
+     elige (con `de`); para los demás el argumento ni existe, así no hay a quién
+     pedirle "cambia el de mi fisio". */
+  const PARAM_DE = esMaster
+    ? { de: z.string().optional().describe('De qué profesional es el programa que se cambia: su nombre, "coach" o "fisio". Sin esto, el del coach principal.') }
+    : {}
 
   /* ================================================================ */
   /* LEER                                                               */
@@ -101,123 +149,173 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
   server.registerTool('listar_atletas', {
     title: 'Listar mis atletas',
     description: esMaster
-      ? 'Todos los atletas de Training Lab, con su coach, su plan, en qué va cada uno, cuándo abrió la app por última vez y cuántas sesiones hizo en los últimos 7 días. Marca los que aún no activan su cuenta.'
-      : 'Tus atletas, con su plan, en qué va cada uno, cuándo abrió la app por última vez y cuántas sesiones hizo en los últimos 7 días. Marca los que aún no activan su cuenta.',
+      ? 'Todos los atletas de Training Lab, con su coach (y su equipo, si tiene), su plan, en qué va cada uno, cuándo abrió la app por última vez y cuántas sesiones hizo en los últimos 7 días. Marca los que aún no activan su cuenta.'
+      : 'Tus atletas —los que atiendes como coach principal y los que te sumaron a su equipo—, con SU plan (el tuyo), en qué va cada uno, con quién más va (coach, fisio…), cuándo abrió la app por última vez y cuántas sesiones hizo en los últimos 7 días. Marca los que aún no activan su cuenta, los que ya diste de alta y las invitaciones a un equipo que esperan respuesta.',
     inputSchema: { incluir_desactivados: z.boolean().optional().describe('También los desactivados. No, si no se dice.') },
     annotations: SOLO_LEER,
   }, seguro(async ({ incluir_desactivados }: any) => {
     const db = quien.db
-    const [perfiles, planes, estados, invitaciones, coaches] = await Promise.all([
-      db.from('profiles').select('id, username, full_name, coach_id, is_active, created_at').eq('role', 'user').order('full_name'),
-      db.from('plans').select('user_id, title, data').eq('status', 'active'),
+    const [perfiles, planes, estados, invitaciones, coaches, equipos, misFilas] = await Promise.all([
+      db.from('profiles').select('id, username, full_name, coach_id, is_active, created_at, alta_en').eq('role', 'user').order('full_name'),
+      db.from('plans').select('user_id, title, data, profesional_id').eq('status', 'active'),
       db.from('user_app_state').select('user_id, updated_at, data'),
       db.from('invitaciones').select('atleta_id').is('usada_en', null).not('atleta_id', 'is', null),
       esMaster ? db.from('profiles').select('id, username, full_name').eq('role', 'admin') : Promise.resolve({ data: [] }),
+      db.rpc('equipos_de_mis_atletas'),
+      db.from('equipo').select('atleta_id, estado, alta_en, nombre_atleta').eq('profesional_id', quien.id),
     ])
     if (perfiles.error) throw new Error(perfiles.error.message)
-    const planDeId = new Map((planes.data ?? []).map((p: any) => [p.user_id, p]))
+    if (equipos.error) throw new Error(equipos.error.message)
+    // Un atleta puede tener un plan por profesional: cada quien ve el SUYO (el del principal, si es su coach o es el master).
+    const planDeId = new Map((planes.data ?? []).map((pl: any) => [`${pl.user_id}|${pl.profesional_id ?? ''}`, pl]))
     const estadoDeId = new Map((estados.data ?? []).map((s: any) => [s.user_id, s]))
     const pendientes = new Set((invitaciones.data ?? []).map((i: any) => i.atleta_id))
     const coachDeId = new Map((coaches.data ?? []).map((c: any) => [c.id, c.full_name || c.username]))
     const hoy = fechaDelAtleta()
     const hace7 = Date.now() - 7 * 86400000
+    const filasDe = (id: string) => (equipos.data ?? []).filter((e: any) => e.atleta_id === id)
+    const miFilaDe = (id: string) => (misFilas.data ?? []).find((e: any) => e.atleta_id === id && e.estado === 'activo')
 
     const atletas = (perfiles.data ?? [])
-      .filter((p: any) => incluir_desactivados || p.is_active)
-      .map((p: any) => {
-        const plan = planDeId.get(p.id) as Plan | undefined
-        const estado = (estadoDeId.get(p.id) as any)?.data ?? {}
+      .filter((a: any) => incluir_desactivados || a.is_active)
+      .map((a: any) => {
+        const miPrograma = miProgramaCon(quien, a)
+        const plan = planDeId.get(`${a.id}|${miPrograma ?? ''}`) as Plan | undefined
+        const estado = (estadoDeId.get(a.id) as any)?.data ?? {}
         let vaEn = null
         if (plan) {
-          const aqui = dondeVa(fasesDe(plan), tipoDePlan(plan), estado['wr:cursor'], hoy.date)
+          const aqui = dondeVa(fasesDe(plan), tipoDePlan(plan), estado[claveDeRegistro('wr:cursor', miPrograma)], hoy.date)
           const fase = fasesDe(plan).find((f) => f.id === aqui?.faseId)
           vaEn = aqui ? `${fase?.name ?? ''} · semana ${aqui.semana}` : null
         }
-        const hechas7 = Object.values(estado['wr:sessions'] ?? {})
+        const hechas7 = Object.values(estado[claveDeRegistro('wr:sessions', miPrograma)] ?? {})
           .filter((s: any) => s?.completed && s.completedAt && Date.parse(s.completedAt) >= hace7).length
+        // Con quién más va: «fisio · Juan», «coach · Beto» (y si aún no acepta, se dice).
+        const con = filasDe(a.id).map((e: any) =>
+          `${rolDeOficio(e.otro_oficio)} · ${nombreCorto(e.otro_nombre) || e.otro_usuario}${e.estado === 'pendiente' ? ' (invitado; aún no acepta)' : ''}`)
+        const alta = miPrograma === null ? a.alta_en : miFilaDe(a.id)?.alta_en
         return {
-          nombre: p.full_name || p.username,
-          usuario: p.username,
-          estado: !p.is_active ? 'desactivado' : pendientes.has(p.id) ? 'aún no activa su cuenta' : 'activo',
-          ...(esMaster ? { coach: coachDeId.get(p.coach_id) ?? 'sin coach' } : {}),
+          nombre: a.full_name || a.username,
+          usuario: a.username,
+          estado: !a.is_active ? 'desactivado' : pendientes.has(a.id) ? 'aún no activa su cuenta' : 'activo',
+          ...(alta ? { dado_de_alta_el: fechaLarga(alta) } : {}),
+          ...(esMaster ? { coach: coachDeId.get(a.coach_id) ?? 'sin coach' } : {}),
+          ...(con.length ? { va_tambien_con: con } : {}),
           plan: plan ? plan.title : null,
           ...(vaEn ? { va_en: vaEn } : {}),
-          ultima_vez_en_la_app: (estadoDeId.get(p.id) as any)?.updated_at ?? null,
+          ultima_vez_en_la_app: (estadoDeId.get(a.id) as any)?.updated_at ?? null,
           sesiones_ultimos_7_dias: hechas7,
         }
       })
-    return respuesta({ total: atletas.length, atletas })
+    // Los que aún no aceptan no se ven (no hay permiso todavía): solo el aviso de que se les invitó.
+    const suyos = new Map((perfiles.data ?? []).filter((a: any) => a.coach_id === quien.id).map((a: any) => [a.id, a.full_name || a.username]))
+    const esperando = [
+      ...(misFilas.data ?? []).filter((e: any) => e.estado === 'pendiente')
+        .map((e: any) => `${e.nombre_atleta || 'Alguien'}: te invitó a su equipo; espera a que acepte.`),
+      // Solo las que hizo ÉL como coach principal (no las de otro coach en un equipo compartido).
+      ...(equipos.data ?? []).filter((e: any) => e.estado === 'pendiente' && suyos.has(e.atleta_id))
+        .map((e: any) => `Invitaste a ${e.otro_nombre || e.otro_usuario} al equipo de ${suyos.get(e.atleta_id)}; espera a que acepte.`),
+    ]
+    return respuesta({ total: atletas.length, atletas, ...(esperando.length ? { esperando_que_acepten: esperando } : {}) })
   }))
 
   server.registerTool('ver_atleta', {
     title: 'Ver un atleta',
-    description: 'Todo de un atleta: su plan y en qué va, sus últimas sesiones hechas con lo que anotó, su bienestar de los últimos días, sus 1RM y, si aún no activa su cuenta, su link de invitación.',
-    inputSchema: { atleta: ATLETA },
+    description: 'Todo de un atleta: su plan y en qué va, sus últimas sesiones hechas con lo que anotó, su bienestar de los últimos días, sus 1RM y, si aún no activa su cuenta, su link de invitación. Si el atleta tiene un equipo (su coach y otros profesionales, como un fisio), da los programas de todos juntos, cada uno con de quién es, y quién está en su equipo; con "de", solo el de uno. Nunca trae notas de consulta.',
+    inputSchema: { atleta: ATLETA, de: DE_LEER },
     annotations: SOLO_LEER,
-  }, seguro(async ({ atleta }: any) => {
+  }, seguro(async ({ atleta, de }: any) => {
     const persona = await buscarPersona(quien, atleta)
-    const [plan, estado, invitacion] = await Promise.all([
-      planActivo(quien, persona.id),
-      estadoDe(quien, persona.id),
+    const [{ miembros, elegidos, estado, rotular }, invitacion] = await Promise.all([
+      programasDeAtleta(quien, persona, de),
       quien.db.from('invitaciones').select('token').eq('atleta_id', persona.id).is('usada_en', null).maybeSingle(),
     ])
     const hoy = fechaDelAtleta()
-    const registros = estado['wr:sessions'] ?? {}
-    const ultimas = Object.entries(registros)
+    const ultimasDe = (pr: Programa) => Object.entries(registrosDe(estado, pr))
       .filter(([, s]: any) => s?.completed)
       .sort(([, a]: any, [, b]: any) => String(b.completedAt ?? '').localeCompare(String(a.completedAt ?? '')))
       .slice(0, 5)
-      .map(([llave, s]: any) => ({ ...diaDeLlave(plan, llave), hecha_el: s.completedAt ?? null, ...(s.notes ? { notas: s.notes } : {}) }))
-    return respuesta({
+      .map(([llave, s]: any) => ({ ...diaDeLlave(pr.plan, llave), hecha_el: s.completedAt ?? null, ...(s.notes ? { notas: s.notes } : {}) }))
+    const resumenDe = (pr: Programa) => (pr.plan ? resumenDelPlan(pr.plan, cursorDe(estado, pr), hoy.date) : null)
+    const base = {
       nombre: nombreDe(persona),
       usuario: persona.username,
       cuenta: !persona.is_active ? 'desactivada' : invitacion.data ? 'aún no la activa' : 'activa',
       ...(invitacion.data ? { link_de_invitacion: `${APP_URL}/?invitacion=${encodeURIComponent(invitacion.data.token)}` } : {}),
       unidad_de_peso: persona.unidad_peso === 'lb' ? 'lb' : 'kg',
-      plan: plan ? resumenDelPlan(plan, estado['wr:cursor'], hoy.date) : null,
-      ultimas_sesiones_hechas: ultimas,
+    }
+    const compartido = {
       bienestar_reciente: Object.entries(estado['wr:wellness'] ?? {}).sort(([a], [b]) => (a < b ? 1 : -1)).slice(0, 7)
         .map(([fecha, v]: any) => ({ fecha, ...v })),
       un_rm_kg: estado['wr:onerm'] ?? {},
+    }
+    if (!rotular && elegidos.length <= 1) {
+      // Sin equipo, exactamente como siempre.
+      const pr = elegidos[0] ?? SIN_PROGRAMA
+      return respuesta({ ...base, plan: resumenDe(pr), ultimas_sesiones_hechas: ultimasDe(pr), ...compartido })
+    }
+    return respuesta({
+      ...base,
+      equipo: miembros.map((m: Miembro) => ({
+        nombre: m.nombre,
+        rol: m.rol,
+        ...(m.esPrincipal ? { es: 'coach principal' } : {}),
+        ...(m.estado === 'pendiente' ? { estado: 'invitado; aún no acepta' } : {}),
+        ...(m.altaEn ? { dado_de_alta_el: fechaLarga(m.altaEn) } : {}),
+      })),
+      programas: elegidos.map((pr) => ({
+        de: pr.de,
+        ...(pr.altaEn ? { dado_de_alta_el: fechaLarga(pr.altaEn) } : {}),
+        plan: resumenDe(pr),
+        ultimas_sesiones_hechas: ultimasDe(pr),
+      })),
+      ...compartido,
     })
   }))
 
   server.registerTool('ver_plan_de_atleta', {
     title: 'Ver el plan de un atleta',
-    description: 'El plan de un atleta. Sin fase: el resumen (fases, semanas, qué sesión hay cada día y dónde va). Con fase y semana: el detalle completo de esa semana, ejercicio por ejercicio, listo para editarlo. Úsala SIEMPRE antes de cambiar un plan.',
+    description: 'El plan de un atleta. Sin fase: el resumen (fases, semanas, qué sesión hay cada día y dónde va). Con fase y semana: el detalle completo de esa semana, ejercicio por ejercicio, listo para editarlo. Úsala SIEMPRE antes de cambiar un plan. Si el atleta tiene un equipo (su coach y otros profesionales, como un fisio), el resumen trae el programa de cada uno, con de quién es; el detalle es de UN programa: el tuyo, o el que pidas con "de".',
     inputSchema: {
       atleta: ATLETA,
       fase: FASE,
       semana: z.number().int().optional().describe('Número de semana. Si hay fase y no semana, la primera.'),
+      de: DE_LEER,
     },
     annotations: SOLO_LEER,
-  }, seguro(async ({ atleta, fase, semana }: any) => {
-    const { persona, plan } = await planDe(quien, atleta)
-    const estado = await estadoDe(quien, persona.id)
-    const fases = fasesDe(plan)
-    if (fase == null && semana == null && tipoDePlan(plan) !== 'weekly') {
-      const hoy = fechaDelAtleta()
-      return respuesta({
-        atleta: nombreDe(persona),
-        ...resumenDelPlan(plan, estado['wr:cursor'], hoy.date),
-        semanas_por_fase: fases.map((f) => ({
-          fase: f.name,
-          semanas: (f.weekData ?? []).map((w: any) => ({
-            semana: w.num,
-            ...(w.label ? { nombre: w.label } : {}),
-            ...(w.load ? { carga: w.load } : {}),
-            dias: describirSemana(w).map((d: any) => `${d.dia} ${d.sesion}`),
-          })),
+  }, seguro(async ({ atleta, fase, semana, de }: any) => {
+    const persona = await buscarPersona(quien, atleta)
+    const { programas, elegidos, estado, rotular } = await programasDeAtleta(quien, persona, de)
+    if (!programas.length) throw new Aviso(`${nombreDe(persona)} ${p('todavía no tiene plan')}. Puedes crearle uno con crear_plan.`)
+    const hoy = fechaDelAtleta()
+    const resumenCompleto = (pr: Programa) => ({
+      ...(rotular ? { de: pr.de } : {}),
+      ...resumenDelPlan(pr.plan, cursorDe(estado, pr), hoy.date),
+      semanas_por_fase: fasesDe(pr.plan).map((f) => ({
+        fase: f.name,
+        semanas: (f.weekData ?? []).map((w: any) => ({
+          semana: w.num,
+          ...(w.label ? { nombre: w.label } : {}),
+          ...(w.load ? { carga: w.load } : {}),
+          dias: describirSemana(w).map((d: any) => `${d.dia} ${d.sesion}`),
         })),
-      })
+      })),
+    })
+    if (fase == null && semana == null && (elegidos.length > 1 || tipoDePlan(elegidos[0].plan) !== 'weekly')) {
+      if (elegidos.length === 1) return respuesta({ atleta: nombreDe(persona), ...resumenCompleto(elegidos[0]) })
+      return respuesta({ atleta: nombreDe(persona), programas: elegidos.map(resumenCompleto) })
     }
-    const fIdx = buscarFase(plan, fase)
+    // El detalle es de UN programa.
+    const pr = programaParaLeer(quien, persona, programas, de)
+    const fases = fasesDe(pr.plan)
+    const fIdx = buscarFase(pr.plan, fase)
     const f = fases[fIdx]
     const sIdx = semana != null ? buscarSemana(f, semana) : 0
     const w = f.weekData[sIdx]
     return respuesta({
       atleta: nombreDe(persona),
-      plan: plan.title,
+      ...(rotular ? { de: pr.de } : {}),
+      plan: pr.plan.title,
       fase: { n: fIdx + 1, nombre: f.name, subtitulo: f.fullName || undefined, enfoque: f.focus || undefined, objetivo: f.objective || undefined, color: f.color },
       semana: { num: w.num, nombre: w.label || undefined, carga: w.load || undefined },
       semanas_de_la_fase: f.weekData.map((x: any) => x.num),
@@ -227,57 +325,72 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
 
   server.registerTool('ver_dia_de_atleta', {
     title: 'Ver el día de un atleta',
-    description: 'La sesión de un atleta en un día, con lo que anotó (pesos y lo que hizo) y si la marcó como hecha. Sin fecha ni día, la de HOY con la misma cuenta que su app.',
+    description: 'La sesión de un atleta en un día, con lo que anotó (pesos y lo que hizo) y si la marcó como hecha. Sin fecha ni día, la de HOY con la misma cuenta que su app. Si el atleta tiene un equipo (su coach y otros profesionales, como un fisio), trae las sesiones de todos, cada una con de quién es; con "de", solo las de uno.',
     inputSchema: {
       atleta: ATLETA,
       fecha: z.string().optional().describe('AAAA-MM-DD'),
       fase: FASE,
       semana: z.number().int().optional(),
       dia: z.string().optional().describe('lunes … domingo'),
+      de: DE_LEER,
     },
     annotations: SOLO_LEER,
-  }, seguro(async ({ atleta, ...args }: any) => {
-    const { persona, plan } = await planDe(quien, atleta)
-    const estado = await estadoDe(quien, persona.id)
-    const u = ubicarDia(plan, estado['wr:cursor'], args)
-    const registros = estado['wr:sessions'] ?? {}
-    if (!u.entradas.length) {
-      return respuesta({ atleta: nombreDe(persona), fecha: u.fecha.texto, mensaje: `Ese día (${NOMBRE_DIA[u.dia]}) no tiene sesión.` })
+  }, seguro(async ({ atleta, de, ...args }: any) => {
+    const persona = await buscarPersona(quien, atleta)
+    const { programas, elegidos, estado, rotular } = await programasDeAtleta(quien, persona, de)
+    if (!programas.length) throw new Aviso(`${nombreDe(persona)} ${p('todavía no tiene plan')}. Puedes crearle uno con crear_plan.`)
+    const ubicados = ubicarEnTodos(elegidos, estado, args)
+    const conSesion = ubicados.filter((x) => x.u.entradas.length)
+    const { u: primero } = ubicados[0]
+    if (!conSesion.length) {
+      return respuesta({ atleta: nombreDe(persona), fecha: primero.fecha.texto, mensaje: `Ese día (${NOMBRE_DIA[primero.dia]}) no tiene sesión.` })
     }
     return respuesta({
       atleta: nombreDe(persona),
-      fecha: u.fecha.texto,
-      sesiones: u.entradas.map((i) => describirDia(u.fase, u.semana, i, registros[idDeSesion(plan, u.fase, u.semana, i, u.fecha.date)])),
+      fecha: primero.fecha.texto,
+      sesiones: conSesion.flatMap(({ pr, u, registros }) => u.entradas.map((i) => {
+        const d = describirDia(u.fase, u.semana, i, registros[idDeSesion(pr.plan, u.fase, u.semana, i, u.fecha.date)])
+        return rotular ? { de: pr.de, ...d } : d
+      })),
     })
   }))
 
   server.registerTool('ver_registros_de_atleta', {
     title: 'Ver los registros de un atleta',
-    description: 'Lo que un atleta ha anotado. Con "ejercicio": todos sus pesos en ese ejercicio, en orden, para ver su progreso. Sin "ejercicio": sus últimas sesiones hechas con lo anotado en cada ejercicio.',
+    description: 'Lo que un atleta ha anotado. Con "ejercicio": todos sus pesos en ese ejercicio, en orden, para ver su progreso. Sin "ejercicio": sus últimas sesiones hechas con lo anotado en cada ejercicio. Si el atleta tiene un equipo (su coach y otros profesionales, como un fisio), junta lo de todos los programas, con de quién es cada cosa; con "de", solo un programa.',
     inputSchema: {
       atleta: ATLETA,
       ejercicio: z.string().optional().describe('Nombre del ejercicio tal como está en su plan.'),
       ultimas: z.number().int().min(1).max(40).optional().describe('Cuántas sesiones. 10 si no se dice.'),
+      de: DE_LEER,
     },
     annotations: SOLO_LEER,
-  }, seguro(async ({ atleta, ejercicio, ultimas }: any) => {
+  }, seguro(async ({ atleta, ejercicio, ultimas, de }: any) => {
     const persona = await buscarPersona(quien, atleta)
-    const [plan, estado] = await Promise.all([planActivo(quien, persona.id), estadoDe(quien, persona.id)])
-    const registros = estado['wr:sessions'] ?? {}
+    const { elegidos, estado, rotular } = await programasDeAtleta(quien, persona, de)
+    // Quien aún no tiene plan puede tener registros: se leen en las claves de siempre.
+    const lista = elegidos.length ? elegidos : [SIN_PROGRAMA]
     const u = quien.unidad
+    const rotula = (pr: Programa) => (rotular ? { de: pr.de } : {})
     if (ejercicio) {
-      const hist = historialDePeso(fasesDe(plan), registros, ejercicio, tipoDePlan(plan))
-      if (!hist.length) throw new Aviso(`${nombreDe(persona)} no tiene pesos anotados en "${ejercicio}".`)
-      return respuesta({
-        atleta: nombreDe(persona), ejercicio, unidad: u,
+      const encontrados = lista
+        .map((pr) => ({ pr, hist: historialDePeso(fasesDe(pr.plan), registrosDe(estado, pr), ejercicio, tipoDePlan(pr.plan)) as any[] }))
+        .filter((x) => x.hist.length)
+      if (!encontrados.length) throw new Aviso(`${nombreDe(persona)} no tiene pesos anotados en "${ejercicio}".`)
+      const detalle = ({ pr, hist }: (typeof encontrados)[number]) => ({
+        ...rotula(pr),
         registros: hist.map((h: any) => ({ peso: desdeKilos(h.kilos, u), cuando: h.cuando, donde: h.donde })),
       })
+      if (encontrados.length === 1) return respuesta({ atleta: nombreDe(persona), ejercicio, unidad: u, ...detalle(encontrados[0]) })
+      return respuesta({ atleta: nombreDe(persona), ejercicio, unidad: u, por_programa: encontrados.map(detalle) })
     }
-    const sesiones = Object.entries(registros)
-      .filter(([, s]: any) => s?.completed || Object.keys(s?.exercises ?? {}).length)
-      .sort(([, a]: any, [, b]: any) => String(b.completedAt ?? '').localeCompare(String(a.completedAt ?? '')))
+    const sesiones = lista
+      .flatMap((pr) => Object.entries(registrosDe(estado, pr)).map(([llave, s]: any) => ({ pr, llave, s })))
+      .filter(({ s }) => s?.completed || Object.keys(s?.exercises ?? {}).length)
+      .sort((a, b) => String(b.s.completedAt ?? '').localeCompare(String(a.s.completedAt ?? '')))
       .slice(0, ultimas ?? 10)
-      .map(([llave, s]: any) => {
+      .map(({ pr, llave, s }) => {
+        const plan = pr.plan
         const donde = diaDeLlave(plan, llave) as any
         const dia = (() => {
           const m = /^(.+)-w(\d+)-d(\d+)$/.exec(llave) ?? /^wk-.+-d(\d+)$/.exec(llave)
@@ -293,6 +406,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
           ;(d.exercises ?? []).forEach((e: any, i: number) => { nombres[`${i}`] = e.name })
         }
         return {
+          ...rotula(pr),
           ...donde,
           hecha: !!s.completed,
           ...(s.completedAt ? { hecha_el: s.completedAt } : {}),
@@ -350,14 +464,17 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
 
   server.registerTool('ver_historial_del_plan', {
     title: 'Ver el historial de cambios de un plan',
-    description: 'Las versiones anteriores del plan de un atleta: cuándo cambió, quién lo cambió y si fue desde una IA. Cada una se puede recuperar con deshacer_cambio_del_plan.',
-    inputSchema: { atleta: ATLETA },
+    description: 'Las versiones anteriores del plan de un atleta (el tuyo, si tiene un equipo con más profesionales): cuándo cambió, quién lo cambió y si fue desde una IA. Cada una se puede recuperar con deshacer_cambio_del_plan.',
+    inputSchema: { atleta: ATLETA, ...PARAM_DE },
     annotations: SOLO_LEER,
-  }, seguro(async ({ atleta }: any) => {
+  }, seguro(async ({ atleta, de }: any) => {
     const persona = await buscarPersona(quien, atleta)
-    const { data, error } = await quien.db
+    const { profesionalId } = await programaQueEdito(quien, persona, de)
+    const versiones = quien.db
       .from('plan_versiones').select('id, title, creada_en, cambiada_por, cliente_ia, motivo')
-      .eq('user_id', persona.id).order('creada_en', { ascending: false }).limit(20)
+      .eq('user_id', persona.id)
+    const { data, error } = await (profesionalId ? versiones.eq('profesional_id', profesionalId) : versiones.is('profesional_id', null))
+      .order('creada_en', { ascending: false }).limit(20)
     if (error) throw new Error(error.message)
     const ids = [...new Set((data ?? []).map((v: any) => v.cambiada_por).filter(Boolean))]
     const { data: gente } = ids.length ? await quien.db.from('profiles').select('id, full_name, username').in('id', ids) : { data: [] }
@@ -400,9 +517,10 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
         })).min(1),
       })).optional().describe('Solo para "fases".'),
       reemplazar: z.boolean().optional().describe('true para reemplazar el plan que ya tiene.'),
+      ...PARAM_DE,
     },
     annotations: { ...ESCRIBE, destructiveHint: true },
-  }, seguro(async ({ atleta, titulo, tipo, sesiones, fases, reemplazar }: any) => {
+  }, seguro(async ({ atleta, titulo, tipo, sesiones, fases, reemplazar, de }: any) => {
     const persona = await buscarPersona(quien, atleta)
     const repertorio = await repertorioVisible(quien)
     const sinFicha = new Set<string>()
@@ -421,9 +539,10 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       })
     }
     const kind = tipo === 'rutina' ? 'weekly' : 'periodized'
-    const existente = await planActivo(quien, persona.id)
+    // El programa de ESTA persona con este atleta: su coach principal, el principal; un profesional del equipo, el suyo.
+    const { plan: existente, profesionalId, de: deProfesional } = await planQueEdito(quien, persona, de)
     if (existente && !reemplazar) {
-      throw new Aviso(`${nombreDe(persona)} ya tiene el plan "${existente.title}". Para reemplazarlo manda reemplazar: true (el anterior queda en el historial). Para cambiar partes, usa editar_dia, agregar_semanas, etc.`)
+      throw new Aviso(`${nombreDe(persona)} ya tiene ${profesionalId ? (profesionalId === quien.id ? 'un programa tuyo' : `un programa de ${deProfesional}`) : p('el plan')} "${existente.title}". Para reemplazarlo manda reemplazar: true (el anterior queda en el historial). Para cambiar partes, usa editar_dia, agregar_semanas, etc.`)
     }
     if (existente) {
       const { data, error } = await quien.db.from('plans')
@@ -434,13 +553,15 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     } else {
       const { error } = await quien.db.from('plans').insert({
         user_id: persona.id,
+        // null = el del coach principal; si no, el programa de este profesional del equipo.
+        profesional_id: profesionalId,
         title: titulo,
         status: 'active',
         data: { kind, phases: normalizar(nuevas) },
         created_by: quien.id,
       })
       if (error) {
-        if (/row-level security|permission/i.test(error.message)) throw new Aviso(`No puedes crearle plan a ${nombreDe(persona)}: no es tu atleta.`)
+        if (/row-level security|permission/i.test(error.message)) throw new Aviso(`No puedes crearle ${p('plan')} a ${nombreDe(persona)}: ${p('no es tu atleta')}.`)
         throw new Error(error.message)
       }
     }
@@ -448,6 +569,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     return respuesta({
       listo: true,
       atleta: nombreDe(persona),
+      ...(profesionalId ? { programa: deProfesional } : {}),
       plan: titulo,
       tipo: tipo === 'rutina' ? 'rutina que se repite' : `${nuevas.length} fase(s), ${semanas} semana(s)`,
       ...(existente ? { reemplazo: `El plan anterior "${existente.title}" quedó en el historial.` } : {}),
@@ -465,10 +587,11 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       semana: z.number().int().optional().describe('Número de semana. En una rutina no hace falta.'),
       dia: z.string().describe('lunes … domingo'),
       sesiones: z.array(z.object(SESION)).describe('Las sesiones de ese día. Normalmente una; dos si entrena mañana y tarde.'),
+      ...PARAM_DE,
     },
     annotations: ESCRIBE,
-  }, seguro(async ({ atleta, fase, semana, dia, sesiones }: any) => {
-    const { persona, plan } = await planDe(quien, atleta)
+  }, seguro(async ({ atleta, fase, semana, dia, sesiones, de }: any) => {
+    const { persona, plan, programa } = await planDe(quien, atleta, de)
     const fases = structuredClone(fasesDe(plan))
     const fIdx = buscarFase(plan, fase)
     const sIdx = buscarSemana(fases[fIdx], tipoDePlan(plan) === 'weekly' ? (semana ?? fases[fIdx].weekData[0]?.num) : semana)
@@ -489,6 +612,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     return respuesta({
       listo: true,
       atleta: nombreDe(persona),
+      ...programa,
       cambio: `${fases[fIdx].name} · semana ${w.num} · ${NOMBRE_DIA[clave]}`,
       ahora: nuevos.length ? nuevos.map((d: any) => `${d.name} (${d.exercises.filter((e: any) => !e.isNote).length} ejercicios)`) : 'sin sesión',
       ...avisoSinFicha(sinFicha),
@@ -504,10 +628,11 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       fase: FASE,
       de_semana: z.number().int().describe('La semana que se copia.'),
       a_semanas: z.union([z.array(z.number().int()), z.literal('todas')]).describe('Las semanas destino, o "todas" las demás de la fase.'),
+      ...PARAM_DE,
     },
     annotations: ESCRIBE,
-  }, seguro(async ({ atleta, fase, de_semana, a_semanas }: any) => {
-    const { persona, plan } = await planDe(quien, atleta)
+  }, seguro(async ({ atleta, fase, de_semana, a_semanas, de }: any) => {
+    const { persona, plan, programa } = await planDe(quien, atleta, de)
     const fases = structuredClone(fasesDe(plan))
     const f = fases[buscarFase(plan, fase)]
     const origen = f.weekData[buscarSemana(f, de_semana)]
@@ -516,7 +641,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       : a_semanas.map((n: number) => f.weekData[buscarSemana(f, n)])
     destinos.forEach((w: any) => { w.days = structuredClone(origen.days) })
     await guardarFases(quien, plan, fases)
-    return respuesta({ listo: true, atleta: nombreDe(persona), fase: f.name, copiada: origen.num, a: destinos.map((w: any) => w.num) })
+    return respuesta({ listo: true, atleta: nombreDe(persona), ...programa, fase: f.name, copiada: origen.num, a: destinos.map((w: any) => w.num) })
   }))
 
   server.registerTool('agregar_semanas', {
@@ -529,10 +654,11 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       copiar_de: z.number().int().optional().describe('Número de la semana que se copia en cada una.'),
       nombre: z.string().optional(),
       carga: z.string().optional(),
+      ...PARAM_DE,
     },
     annotations: ESCRIBE,
-  }, seguro(async ({ atleta, fase, cuantas, copiar_de, nombre, carga }: any) => {
-    const { persona, plan } = await planDe(quien, atleta)
+  }, seguro(async ({ atleta, fase, cuantas, copiar_de, nombre, carga, de }: any) => {
+    const { persona, plan, programa } = await planDe(quien, atleta, de)
     if (tipoDePlan(plan) === 'weekly') throw new Aviso('Una rutina que se repite tiene una sola semana. Para tener varias hay que pasarla a programa por fases en la app.')
     const fases = structuredClone(fasesDe(plan))
     const f = fases[buscarFase(plan, fase)]
@@ -549,7 +675,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       nuevas.push(num)
     }
     await guardarFases(quien, plan, fases)
-    return respuesta({ listo: true, atleta: nombreDe(persona), fase: f.name, semanas_nuevas: nuevas, ...(molde ? { copia_de: molde.num } : {}) })
+    return respuesta({ listo: true, atleta: nombreDe(persona), ...programa, fase: f.name, semanas_nuevas: nuevas, ...(molde ? { copia_de: molde.num } : {}) })
   }))
 
   server.registerTool('editar_semana', {
@@ -561,17 +687,18 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       semana: z.number().int(),
       nombre: z.string().optional().describe('Título de la semana. "" lo quita.'),
       carga: z.string().optional().describe('Ej.: "4×10 al 65% · RIR 3". "" la quita.'),
+      ...PARAM_DE,
     },
     annotations: ESCRIBE,
-  }, seguro(async ({ atleta, fase, semana, nombre, carga }: any) => {
-    const { persona, plan } = await planDe(quien, atleta)
+  }, seguro(async ({ atleta, fase, semana, nombre, carga, de }: any) => {
+    const { persona, plan, programa } = await planDe(quien, atleta, de)
     const fases = structuredClone(fasesDe(plan))
     const f = fases[buscarFase(plan, fase)]
     const w = f.weekData[buscarSemana(f, semana)]
     if (nombre !== undefined) w.label = nombre
     if (carga !== undefined) w.load = carga
     await guardarFases(quien, plan, fases)
-    return respuesta({ listo: true, atleta: nombreDe(persona), fase: f.name, semana: w.num, nombre: w.label, carga: w.load })
+    return respuesta({ listo: true, atleta: nombreDe(persona), ...programa, fase: f.name, semana: w.num, nombre: w.label, carga: w.load })
   }))
 
   server.registerTool('agregar_fase', {
@@ -587,10 +714,11 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       semanas: z.number().int().min(1).max(30).optional().describe('Cuántas semanas vacías. 1 si no se dice.'),
       copiar_semanas_de: z.union([z.string(), z.number()]).optional().describe('Fase de la que se copian todas las semanas.'),
       despues_de: z.union([z.string(), z.number()]).optional().describe('Fase después de la cual va. Al final si no se dice.'),
+      ...PARAM_DE,
     },
     annotations: ESCRIBE,
-  }, seguro(async ({ atleta, nombre, subtitulo, enfoque, objetivo, color, semanas, copiar_semanas_de, despues_de }: any) => {
-    const { persona, plan } = await planDe(quien, atleta)
+  }, seguro(async ({ atleta, nombre, subtitulo, enfoque, objetivo, color, semanas, copiar_semanas_de, despues_de, de }: any) => {
+    const { persona, plan, programa } = await planDe(quien, atleta, de)
     if (tipoDePlan(plan) === 'weekly') throw new Aviso('Una rutina que se repite no tiene fases. Para tenerlas hay que pasarla a programa por fases en la app.')
     const fases = structuredClone(fasesDe(plan))
     const nueva = faseNueva(siguienteNumFase(fases), { nombre, subtitulo, enfoque, objetivo, color })
@@ -602,7 +730,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     const pos = despues_de != null ? buscarFase(plan, despues_de) + 1 : fases.length
     fases.splice(pos, 0, nueva)
     await guardarFases(quien, plan, fases)
-    return respuesta({ listo: true, atleta: nombreDe(persona), fase_nueva: nueva.name, posicion: pos + 1, semanas: nueva.weekData.length })
+    return respuesta({ listo: true, atleta: nombreDe(persona), ...programa, fase_nueva: nueva.name, posicion: pos + 1, semanas: nueva.weekData.length })
   }))
 
   server.registerTool('editar_fase', {
@@ -617,10 +745,11 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       objetivo: z.string().optional(),
       color: z.string().optional(),
       mover_a_posicion: z.number().int().min(1).optional().describe('Nueva posición: 1 = primera.'),
+      ...PARAM_DE,
     },
     annotations: ESCRIBE,
-  }, seguro(async ({ atleta, fase, nombre, subtitulo, enfoque, objetivo, color, mover_a_posicion }: any) => {
-    const { persona, plan } = await planDe(quien, atleta)
+  }, seguro(async ({ atleta, fase, nombre, subtitulo, enfoque, objetivo, color, mover_a_posicion, de }: any) => {
+    const { persona, plan, programa } = await planDe(quien, atleta, de)
     const fases = structuredClone(fasesDe(plan))
     const i = buscarFase(plan, fase)
     const f = fases[i]
@@ -634,18 +763,18 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       fases.splice(Math.min(mover_a_posicion - 1, fases.length), 0, f)
     }
     await guardarFases(quien, plan, fases)
-    return respuesta({ listo: true, atleta: nombreDe(persona), fase: f.name, posicion: fases.indexOf(f) + 1 })
+    return respuesta({ listo: true, atleta: nombreDe(persona), ...programa, fase: f.name, posicion: fases.indexOf(f) + 1 })
   }))
 
   server.registerTool('cambiar_titulo_del_plan', {
     title: 'Cambiar el título del plan',
     description: 'Cambia el título del plan de un atleta.',
-    inputSchema: { atleta: ATLETA, titulo: z.string() },
+    inputSchema: { atleta: ATLETA, titulo: z.string(), ...PARAM_DE },
     annotations: ESCRIBE,
-  }, seguro(async ({ atleta, titulo }: any) => {
-    const { persona, plan } = await planDe(quien, atleta)
+  }, seguro(async ({ atleta, titulo, de }: any) => {
+    const { persona, plan, programa } = await planDe(quien, atleta, de)
     await guardarFases(quien, plan, structuredClone(fasesDe(plan)), titulo)
-    return respuesta({ listo: true, atleta: nombreDe(persona), titulo })
+    return respuesta({ listo: true, atleta: nombreDe(persona), ...programa, titulo })
   }))
 
   server.registerTool('deshacer_cambio_del_plan', {
@@ -654,66 +783,71 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     inputSchema: {
       atleta: ATLETA,
       version: z.string().optional().describe('El id de una versión del historial. Si no se da, la más reciente.'),
+      ...PARAM_DE,
     },
     annotations: ESCRIBE,
-  }, seguro(async ({ atleta, version }: any) => {
+  }, seguro(async ({ atleta, version, de }: any) => {
     const persona = await buscarPersona(quien, atleta)
+    // Solo versiones del programa de ESTA persona (el suyo; el master, el del principal o el que diga).
+    const { profesionalId, de: deProfesional } = await programaQueEdito(quien, persona, de)
     let id = version
     if (!id) {
-      const { data } = await quien.db.from('plan_versiones').select('id').eq('user_id', persona.id)
+      const ultima = quien.db.from('plan_versiones').select('id').eq('user_id', persona.id)
+      const { data } = await (profesionalId ? ultima.eq('profesional_id', profesionalId) : ultima.is('profesional_id', null))
         .order('creada_en', { ascending: false }).limit(1).maybeSingle()
-      if (!data) throw new Aviso(`El plan de ${nombreDe(persona)} no tiene cambios anteriores guardados.`)
+      if (!data) throw new Aviso(`${p('El plan')} de ${nombreDe(persona)} no tiene cambios anteriores guardados.`)
       id = data.id
     }
-    const { data: v } = await quien.db.from('plan_versiones').select('title, creada_en, user_id').eq('id', id).maybeSingle()
-    if (!v || v.user_id !== persona.id) throw new Aviso('Esa versión no es de este atleta.')
+    const { data: v } = await quien.db.from('plan_versiones').select('title, creada_en, user_id, profesional_id').eq('id', id).maybeSingle()
+    if (!v || v.user_id !== persona.id) throw new Aviso(`Esa versión no es de ${p('este atleta')}.`)
+    if ((v.profesional_id ?? null) !== profesionalId) throw new Aviso(`Esa versión es de otro programa de ${nombreDe(persona)}, no del tuyo.`)
     const { error } = await quien.db.rpc('regresar_plan_a_version', { p_version: id })
     if (error) throw new Aviso(error.message)
-    return respuesta({ listo: true, atleta: nombreDe(persona), plan: v.title, regreso_a: `como estaba antes del cambio del ${v.creada_en}` })
+    return respuesta({ listo: true, atleta: nombreDe(persona), ...(profesionalId ? { programa: deProfesional } : {}), plan: v.title, regreso_a: `como estaba antes del cambio del ${v.creada_en}` })
   }))
 
   server.registerTool('quitar_semana', {
     title: 'Quitar una semana',
     description: 'Quita una semana de una fase, con todas sus sesiones. Se puede recuperar con deshacer_cambio_del_plan.',
-    inputSchema: { atleta: ATLETA, fase: FASE, semana: z.number().int() },
+    inputSchema: { atleta: ATLETA, fase: FASE, semana: z.number().int(), ...PARAM_DE },
     annotations: BORRA,
-  }, seguro(async ({ atleta, fase, semana }: any) => {
-    const { persona, plan } = await planDe(quien, atleta)
+  }, seguro(async ({ atleta, fase, semana, de }: any) => {
+    const { persona, plan, programa } = await planDe(quien, atleta, de)
     const fases = structuredClone(fasesDe(plan))
     const f = fases[buscarFase(plan, fase)]
     if (f.weekData.length <= 1) throw new Aviso('Es la única semana de la fase. Para quitar la fase entera usa quitar_fase.')
     const i = buscarSemana(f, semana)
     f.weekData.splice(i, 1)
     await guardarFases(quien, plan, fases)
-    return respuesta({ listo: true, atleta: nombreDe(persona), fase: f.name, semana_quitada: semana, deshacer: 'deshacer_cambio_del_plan la regresa.' })
+    return respuesta({ listo: true, atleta: nombreDe(persona), ...programa, fase: f.name, semana_quitada: semana, deshacer: 'deshacer_cambio_del_plan la regresa.' })
   }))
 
   server.registerTool('quitar_fase', {
     title: 'Quitar una fase',
     description: 'Quita una fase entera del plan, con todas sus semanas y sesiones. Se puede recuperar con deshacer_cambio_del_plan.',
-    inputSchema: { atleta: ATLETA, fase: z.union([z.string(), z.number()]) },
+    inputSchema: { atleta: ATLETA, fase: z.union([z.string(), z.number()]), ...PARAM_DE },
     annotations: BORRA,
-  }, seguro(async ({ atleta, fase }: any) => {
-    const { persona, plan } = await planDe(quien, atleta)
+  }, seguro(async ({ atleta, fase, de }: any) => {
+    const { persona, plan, programa } = await planDe(quien, atleta, de)
     const fases = structuredClone(fasesDe(plan))
     if (fases.length <= 1) throw new Aviso('Es la única fase del plan. Para quitar todo usa borrar_plan.')
     const i = buscarFase(plan, fase)
     const [quitada] = fases.splice(i, 1)
     await guardarFases(quien, plan, fases)
-    return respuesta({ listo: true, atleta: nombreDe(persona), fase_quitada: quitada.name, deshacer: 'deshacer_cambio_del_plan la regresa.' })
+    return respuesta({ listo: true, atleta: nombreDe(persona), ...programa, fase_quitada: quitada.name, deshacer: 'deshacer_cambio_del_plan la regresa.' })
   }))
 
   server.registerTool('borrar_plan', {
     title: 'Borrar el plan de un atleta',
     description: 'Borra el plan activo de un atleta. Sus registros (pesos, sesiones hechas) no se borran. El plan queda en el historial y se puede recuperar con deshacer_cambio_del_plan.',
-    inputSchema: { atleta: ATLETA },
+    inputSchema: { atleta: ATLETA, ...PARAM_DE },
     annotations: BORRA,
-  }, seguro(async ({ atleta }: any) => {
-    const { persona, plan } = await planDe(quien, atleta)
+  }, seguro(async ({ atleta, de }: any) => {
+    const { persona, plan, programa } = await planDe(quien, atleta, de)
     const { data, error } = await quien.db.from('plans').delete().eq('id', plan.id).select('id')
     if (error) throw new Error(error.message)
-    if (!data?.length) throw new Aviso('No tienes permiso para borrar este plan.')
-    return respuesta({ listo: true, atleta: nombreDe(persona), plan_borrado: plan.title, recuperar: 'deshacer_cambio_del_plan lo recupera.' })
+    if (!data?.length) throw new Aviso(`No tienes permiso para borrar ${p('este plan')}.`)
+    return respuesta({ listo: true, atleta: nombreDe(persona), ...programa, plan_borrado: plan.title, recuperar: 'deshacer_cambio_del_plan lo recupera.' })
   }))
 
   /* ================================================================ */
@@ -730,10 +864,11 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       fase: FASE,
       semana: z.number().int().optional(),
       dia: z.string().optional().describe('Para tipo "dia": lunes … domingo. Si ese día tiene dos sesiones, se guarda la primera.'),
+      ...PARAM_DE,
     },
     annotations: ESCRIBE,
-  }, seguro(async ({ nombre, tipo, atleta, fase, semana, dia }: any) => {
-    const { plan } = await planDe(quien, atleta)
+  }, seguro(async ({ nombre, tipo, atleta, fase, semana, dia, de }: any) => {
+    const { plan } = await planDe(quien, atleta, de)
     const fases = fasesDe(plan)
     const f = fases[buscarFase(plan, fase)]
     const w = f.weekData[buscarSemana(f, semana ?? (f.weekData.length === 1 ? f.weekData[0].num : undefined))]
@@ -761,13 +896,14 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       semana: z.number().int().optional(),
       dia: z.string().optional().describe('Para plantillas de día.'),
       agregar: z.boolean().optional().describe('Para plantillas de día: agregar como otra sesión en vez de reemplazar.'),
+      ...PARAM_DE,
     },
     annotations: ESCRIBE,
-  }, seguro(async ({ plantilla, atleta, fase, semana, dia, agregar }: any) => {
+  }, seguro(async ({ plantilla, atleta, fase, semana, dia, agregar, de }: any) => {
     const { data: todas } = await quien.db.from('routine_templates').select('id, name, kind, data').eq('created_by', quien.id)
     const t = (todas ?? []).find((x: any) => x.id === plantilla) ?? (todas ?? []).find((x: any) => mismoTexto(x.name, plantilla))
     if (!t) throw new Aviso(`No encontré la plantilla "${plantilla}". Mira tus plantillas con ver_catalogos.`)
-    const { persona, plan } = await planDe(quien, atleta)
+    const { persona, plan, programa } = await planDe(quien, atleta, de)
     const fases = structuredClone(fasesDe(plan))
     const f = fases[buscarFase(plan, fase)]
     const w = f.weekData[buscarSemana(f, semana ?? (f.weekData.length === 1 ? f.weekData[0].num : undefined))]
@@ -780,7 +916,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       w.days = agregar ? [...w.days, nuevo] : [...w.days.filter((d: any) => d.day !== clave), nuevo]
     }
     await guardarFases(quien, plan, fases)
-    return respuesta({ listo: true, atleta: nombreDe(persona), plantilla: t.name, en: `${f.name} · semana ${w.num}${dia ? ` · ${dia}` : ''}` })
+    return respuesta({ listo: true, atleta: nombreDe(persona), ...programa, plantilla: t.name, en: `${f.name} · semana ${w.num}${dia ? ` · ${dia}` : ''}` })
   }))
 
   server.registerTool('borrar_plantilla', {

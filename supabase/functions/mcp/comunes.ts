@@ -2,7 +2,8 @@
 import type { McpServer } from 'npm:@modelcontextprotocol/sdk@1.30.1/server/mcp.js'
 import { z } from 'npm:zod@^4.1.13'
 import type { Quien } from './sesion.ts'
-import { Aviso, fechaDelAtleta, NOMBRE_DIA, respuesta, seguro, sinAcentos } from './util.ts'
+import { Aviso, fechaDelAtleta, fechaLarga, NOMBRE_DIA, respuesta, seguro, sinAcentos } from './util.ts'
+import { equipoDe } from './plan.ts'
 import { ZONA } from './config.ts'
 
 const SOLO_LEER = { readOnlyHint: true, destructiveHint: false, openWorldHint: false } as const
@@ -53,7 +54,7 @@ export function fichaCorta(e: any) {
 export function herramientasComunes(server: McpServer, quien: Quien) {
   server.registerTool('quien_soy', {
     title: 'Quién soy en Training Lab',
-    description: 'Dice con qué cuenta de Training Lab estás conectado: nombre, usuario, si eres atleta, coach o administrador, tu coach (si eres atleta), la unidad de peso que usas y qué día es hoy para la app. Úsala al empezar si no sabes con quién hablas.',
+    description: 'Dice con qué cuenta de Training Lab estás conectado: nombre, usuario, si eres atleta, coach o administrador, tu oficio (si eres profesional), tu coach y los otros profesionales de tu equipo, como un fisio (si eres atleta), la unidad de peso que usas y qué día es hoy para la app. Úsala al empezar si no sabes con quién hablas.',
     inputSchema: {},
     annotations: SOLO_LEER,
   }, seguro(async () => {
@@ -62,12 +63,24 @@ export function herramientasComunes(server: McpServer, quien: Quien) {
       const { data } = await quien.db.from('profiles').select('full_name, username').eq('id', quien.coachId).maybeSingle()
       if (data) coach = { nombre: data.full_name || data.username, usuario: data.username }
     }
+    // El equipo de un atleta: los profesionales, además de su coach, que ÉL aceptó (o que le invitaron).
+    const equipo = quien.rol === 'atleta'
+      ? (await equipoDe(quien, quien.id)).filter((m) => !m.esPrincipal).map((m) => ({
+        nombre: m.nombre,
+        usuario: m.usuario,
+        rol: m.rol,
+        ...(m.estado === 'pendiente' ? { estado: 'invitación pendiente: aún no la aceptas' } : {}),
+        ...(m.altaEn ? { dado_de_alta_el: fechaLarga(m.altaEn) } : {}),
+      }))
+      : []
     const hoy = fechaDelAtleta()
     return respuesta({
       nombre: quien.nombre,
       usuario: quien.usuario,
       rol: ROL_TEXTO[quien.rol],
+      ...(quien.profesion ? { oficio: quien.profesion } : {}),
       ...(coach ? { coach } : {}),
+      ...(equipo.length ? { equipo } : {}),
       unidad_de_peso: quien.unidad,
       hoy: { fecha: hoy.texto, dia: NOMBRE_DIA[hoy.dia], zona_horaria: ZONA },
     })

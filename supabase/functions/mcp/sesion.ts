@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 import { ANON_KEY, SUPABASE_URL } from './config.ts'
+import { esDeSalud } from './app/palabras.js'
 
 /**
  * Quién está llamando, y con qué permisos.
@@ -22,6 +23,10 @@ export interface Quien {
   coachId: string | null
   unidad: 'kg' | 'lb'
   genero: string | null
+  /** El oficio de un profesional («Fisioterapeuta», «Coach deportivo»…). Un atleta no tiene. */
+  profesion: string | null
+  /** ¿Se le habla con las palabras de un fisio («pacientes», «programa»)? Un profesional, según su oficio; un atleta, según el de su coach. Igual que la app. */
+  salud: boolean
   /** El cliente OAuth (Claude, ChatGPT…) si el token vino de uno. */
   clienteId: string | null
   token: string
@@ -63,7 +68,7 @@ export async function quienLlama(token: string): Promise<Quien> {
 
   const { data: perfil, error: errPerfil } = await db
     .from('profiles')
-    .select('id, username, full_name, role, is_owner, coach_id, is_active, unidad_peso, genero')
+    .select('id, username, full_name, role, is_owner, coach_id, is_active, unidad_peso, genero, profesion')
     .eq('id', data.user.id)
     .maybeSingle()
   if (errPerfil) throw new Error(errPerfil.message)
@@ -73,6 +78,17 @@ export async function quienLlama(token: string): Promise<Quien> {
   const rol: Rol = perfil.role === 'admin' ? (perfil.is_owner ? 'master' : 'coach') : 'atleta'
   const clienteId = reclamos(token).client_id
 
+  /* Las palabras: igual que la app (`PalabrasContext`). Un profesional, las de su
+     oficio; un atleta, las del oficio de su coach principal (la base deja leerlo). */
+  let salud = esDeSalud(perfil.profesion)
+  if (rol === 'atleta') {
+    salud = false
+    if (perfil.coach_id) {
+      const { data: coach } = await db.from('profiles').select('profesion').eq('id', perfil.coach_id).maybeSingle()
+      salud = esDeSalud(coach?.profesion)
+    }
+  }
+
   return {
     id: perfil.id,
     usuario: perfil.username,
@@ -81,6 +97,8 @@ export async function quienLlama(token: string): Promise<Quien> {
     coachId: perfil.coach_id ?? null,
     unidad: perfil.unidad_peso === 'lb' ? 'lb' : 'kg',
     genero: perfil.genero ?? null,
+    profesion: perfil.profesion ?? null,
+    salud,
     clienteId: typeof clienteId === 'string' ? clienteId : null,
     token,
     db,

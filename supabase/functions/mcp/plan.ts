@@ -1,6 +1,8 @@
 // deno-lint-ignore-file no-explicit-any
 import type { Quien } from './sesion.ts'
-import { Aviso, type Dia, NOMBRE_DIA, mismoTexto, sinAcentos } from './util.ts'
+import {
+  Aviso, type Dia, NOMBRE_DIA, type Persona, mismoTexto, nombreCorto, nombreDe, rolDeOficio, sinAcentos,
+} from './util.ts'
 import {
   dondeVa, ejerciciosDelBloque, esDescanso, isLoadedExercise, nombreDeSesion, sessionIdFor,
   enOrdenDeSemana,
@@ -28,20 +30,203 @@ export interface Plan {
   status: string
   data: { kind?: string; phases?: any[] }
   updated_at: string
+  /** De quién es el programa: null = el coach principal; si no, un profesional del equipo del atleta. */
+  profesional_id?: string | null
 }
 
 export const tipoDePlan = (plan: Plan | null) => (plan?.data?.kind === 'weekly' ? 'weekly' : 'periodized')
 export const fasesDe = (plan: Plan | null): any[] => plan?.data?.phases ?? []
 
-export async function planActivo(quien: Quien, userId: string): Promise<Plan | null> {
-  const { data, error } = await quien.db
-    .from('plans')
-    .select('id, user_id, title, status, data, updated_at')
-    .eq('user_id', userId)
-    .eq('status', 'active')
-    .maybeSingle()
+const CAMPOS_PLAN = 'id, user_id, title, status, data, updated_at, profesional_id'
+
+/**
+ * El plan del COACH PRINCIPAL de esta persona (`profesional_id` null): el de
+ * siempre. Un atleta puede tener además un programa de cada profesional de su
+ * equipo (ver `planesActivos`); con dos activos, un `.maybeSingle()` sin filtro
+ * falla, por eso este filtra. Con `profesionalId`, el programa de ESE profesional.
+ */
+export async function planActivo(quien: Quien, userId: string, profesionalId: string | null = null): Promise<Plan | null> {
+  const q = quien.db.from('plans').select(CAMPOS_PLAN).eq('user_id', userId).eq('status', 'active')
+  const { data, error } = await (profesionalId ? q.eq('profesional_id', profesionalId) : q.is('profesional_id', null)).maybeSingle()
   if (error) throw new Error(error.message)
   return (data as Plan) ?? null
+}
+
+/* ------------------------------------------------------------------ */
+/* El equipo de un atleta y el programa de cada quien                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Alguien que atiende a un atleta: su coach principal o un profesional de su
+ * equipo. Los registros del atleta en el programa del principal viven en
+ * `wr:sessions` y `wr:cursor`; en el de un profesional del equipo, en
+ * `wr:sessions@<id>` y `wr:cursor@<id>` (ver `claveDeRegistro`).
+ */
+export interface Miembro {
+  profesionalId: string
+  nombre: string
+  usuario: string
+  oficio: string | null
+  rol: 'coach' | 'fisio'
+  esPrincipal: boolean
+  /** 'activo', o 'pendiente' (lo invitaron y aún no acepta). El principal siempre es activo. */
+  estado: string
+  /** Cuándo le dio de alta un profesional del equipo. */
+  altaEn: string | null
+  /** «Beto (coach)», «Juan (fisio)»: así se dice de quién es cada cosa. */
+  de: string
+}
+
+const etiquetaDe = (nombre: string, rol: string) => (nombreCorto(nombre) ? `${nombreCorto(nombre)} (${rol})` : rol)
+
+/** Cómo se dice de quién es algo: «Beto (coach)». */
+export const etiquetaDeProfesional = (nombre: string | null | undefined, oficio: string | null | undefined) =>
+  etiquetaDe(nombre ?? '', rolDeOficio(oficio))
+
+/**
+ * El coach principal y el equipo (activo y pendiente) de un atleta. La base
+ * solo lo contesta al atleta, a quien lo atiende y al master: para cualquier
+ * otra persona, la lista viene vacía.
+ */
+export async function equipoDe(quien: Quien, atletaId: string): Promise<Miembro[]> {
+  const { data, error } = await quien.db.rpc('nombres_del_equipo', { p_atleta: atletaId })
+  if (error) throw new Error(error.message)
+  const lista = ((data ?? []) as any[]).map((m): Miembro => {
+    const nombre = m.full_name || m.username
+    const rol = rolDeOficio(m.profesion)
+    return {
+      profesionalId: m.profesional_id, nombre, usuario: m.username, oficio: m.profesion ?? null, rol,
+      esPrincipal: !!m.es_principal, estado: m.estado, altaEn: m.alta_en ?? null, de: etiquetaDe(nombre, rol),
+    }
+  })
+  return lista.sort((a, b) => Number(b.esPrincipal) - Number(a.esPrincipal) || a.nombre.localeCompare(b.nombre))
+}
+
+/** Un plan activo de un atleta, con de quién es. */
+export interface Programa {
+  plan: Plan
+  /** null = el del coach principal. */
+  profesionalId: string | null
+  de: string
+  rol: 'coach' | 'fisio'
+  nombre: string
+  usuario: string
+  esPrincipal: boolean
+  /** Si el profesional lo dio de alta: ese programa ya no manda sesiones, solo se consulta. */
+  altaEn: string | null
+}
+
+/**
+ * TODOS los planes activos de un atleta que esta persona puede ver: el del
+ * coach principal primero y luego el de cada profesional de su equipo. Un
+ * programa se ve mientras su profesional siga en el equipo: si el atleta lo
+ * quitó (o aún no acepta), no aparece, aunque el plan siga guardado.
+ */
+export async function planesActivos(quien: Quien, userId: string, equipo?: Miembro[]): Promise<Programa[]> {
+  const [{ data, error }, miembros] = await Promise.all([
+    quien.db.from('plans').select(CAMPOS_PLAN).eq('user_id', userId).eq('status', 'active'),
+    equipo ?? equipoDe(quien, userId),
+  ])
+  if (error) throw new Error(error.message)
+  const vigentes = new Map(miembros.filter((m) => !m.esPrincipal && m.estado === 'activo').map((m) => [m.profesionalId, m]))
+  const principal = miembros.find((m) => m.esPrincipal)
+  const lista: Programa[] = []
+  for (const plan of (data ?? []) as Plan[]) {
+    if (!plan.profesional_id) {
+      lista.push({
+        plan, profesionalId: null, de: principal?.de ?? 'coach', rol: principal?.rol ?? 'coach',
+        nombre: principal?.nombre ?? '', usuario: principal?.usuario ?? '', esPrincipal: true, altaEn: null,
+      })
+      continue
+    }
+    const m = vigentes.get(plan.profesional_id)
+    if (!m) continue
+    lista.push({
+      plan, profesionalId: m.profesionalId, de: m.de, rol: m.rol, nombre: m.nombre, usuario: m.usuario,
+      esPrincipal: false, altaEn: m.altaEn,
+    })
+  }
+  return lista.sort((a, b) => Number(b.esPrincipal) - Number(a.esPrincipal) || a.de.localeCompare(b.de))
+}
+
+/** ¿Tiene más de un programa, o el suyo es de un profesional del equipo? Entonces cada cosa dice de quién es. */
+export const conEquipo = (programas: Programa[]) => programas.length > 1 || programas.some((p) => !p.esPrincipal)
+
+/** `wr:sessions` → `wr:sessions@<profesional>` para el programa de un profesional del equipo. El principal no lleva sufijo. */
+export const claveDeRegistro = (base: string, profesionalId: string | null | undefined) =>
+  (profesionalId ? `${base}@${profesionalId}` : base)
+
+interface Referible { de: string; rol: 'coach' | 'fisio'; esPrincipal: boolean; nombre: string; usuario: string }
+
+/**
+ * «Juan», «@juan», «fisio», «coach» o «principal» → de cuál de la lista se
+ * habla. Si son varios, pide el nombre; si ninguno, dice cuáles hay.
+ */
+export function buscarPorReferencia<T extends Referible>(lista: T[], ref: string): T {
+  const texto = sinAcentos(String(ref ?? '')).replace(/^@/, '').replace(/^(mi|el|la)\s+/, '').trim()
+  const opciones = lista.map((x) => x.de).join(', ')
+  if (!texto) throw new Aviso(`Di de quién: ${opciones}.`)
+  const uno = (m: T[]): T | null => {
+    if (m.length > 1) throw new Aviso(`"${ref}" puede ser más de uno: ${m.map((x) => x.de).join(', ')}. Di su nombre.`)
+    return m[0] ?? null
+  }
+  const encontrado = uno(lista.filter((x) => x.usuario && sinAcentos(x.usuario) === texto))
+    ?? (texto === 'principal' || texto === 'coach principal' ? uno(lista.filter((x) => x.esPrincipal)) : null)
+    ?? (texto === 'coach' || texto === 'fisio' ? uno(lista.filter((x) => x.rol === texto)) : null)
+    ?? uno(lista.filter((x) => sinAcentos(nombreCorto(x.nombre)) === texto || sinAcentos(x.nombre) === texto))
+    ?? uno(lista.filter((x) => sinAcentos(x.nombre).includes(texto)))
+  if (!encontrado) throw new Aviso(`No encontré a "${ref}" entre ${opciones}.`)
+  return encontrado
+}
+
+/** De qué programa se habla: uno de los del atleta, por su profesional. */
+export const elegirPrograma = (programas: Programa[], de: string) => buscarPorReferencia(programas, de)
+
+/**
+ * De quién es el programa de este atleta que ESTA persona lee o cambia por
+ * defecto: el suyo. Su coach principal, el del principal; un profesional del
+ * equipo, el suyo; el master, el del principal. (null = el del coach principal.)
+ */
+export const miProgramaCon = (quien: Quien, persona: Pick<Persona, 'coach_id'>): string | null =>
+  (quien.rol === 'master' || persona.coach_id === quien.id ? null : quien.id)
+
+export interface ProgramaQueEdito {
+  /** null = el del coach principal. */
+  profesionalId: string | null
+  /** «Juan (fisio)»: el profesional dueño del programa. */
+  de: string
+}
+
+/**
+ * El programa que ESTA persona cambia en este atleta:
+ *  - su coach principal, el del principal;
+ *  - un profesional del equipo, el SUYO (la base tampoco le deja tocar otro);
+ *  - el master, el del principal, o el del profesional que diga con `de`.
+ * Cada quien cambia solo lo suyo: pedir el de otro es un aviso claro, no un
+ * error de permisos.
+ */
+export async function programaQueEdito(quien: Quien, persona: Persona, de?: string | null): Promise<ProgramaQueEdito> {
+  const esMaster = quien.rol === 'master'
+  const miPrograma = persona.coach_id === quien.id ? null : quien.id
+  let profesionalId: string | null = miProgramaCon(quien, persona)
+  let etiqueta = etiquetaDe(quien.nombre, rolDeOficio(quien.profesion))
+  if (de && String(de).trim()) {
+    const miembros = (await equipoDe(quien, persona.id)).filter((m) => m.esPrincipal || m.estado === 'activo')
+    const m = buscarPorReferencia(miembros, de)
+    const id = m.esPrincipal ? null : m.profesionalId
+    if (!esMaster && id !== miPrograma) {
+      throw new Aviso(`El programa de ${m.de} lo cambia esa persona. De ${nombreDe(persona)} solo puedes cambiar el tuyo.`)
+    }
+    profesionalId = id
+    etiqueta = m.de
+  }
+  return { profesionalId, de: etiqueta }
+}
+
+/** El plan que esta persona cambia en este atleta (o null si todavía no lo tiene). */
+export async function planQueEdito(quien: Quien, persona: Persona, de?: string | null): Promise<ProgramaQueEdito & { plan: Plan | null }> {
+  const r = await programaQueEdito(quien, persona, de)
+  return { ...r, plan: await planActivo(quien, persona.id, r.profesionalId) }
 }
 
 /* ------------------------------------------------------------------ */
