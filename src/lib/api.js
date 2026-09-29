@@ -610,6 +610,14 @@ export async function borrarNotaConsulta(id) {
   if (error) throw error;
 }
 
+// Da de alta (o reabre) a un paciente propio. La base solo lo permite a quien
+// lo atiende (ver `cambiar_alta` y el candado de `guardar_campos_de_poder`).
+export async function cambiarAlta(atletaId, alta) {
+  const { data, error } = await supabase.rpc('cambiar_alta', { p_atleta: atletaId, p_alta: alta });
+  if (error) throw error;
+  return data;
+}
+
 /* --------------------- Quitar / desactivar / eliminar ------------------- *
  * Son TRES cosas distintas a propósito, de menor a mayor daño. Un solo botón
  * de "borrar" sería un error: los admins se equivocan de clic, la gente

@@ -3,12 +3,12 @@ import {
   Loader2, Search, Plus, Trash2, X, ChevronRight, ChevronLeft, Pencil,
   CalendarClock, User as UserIcon, Shield, ClipboardList, Users,
   UserMinus, Power, AlertTriangle, Eye, ChevronDown, ChevronUp, UserPlus,
-  Check, Copy, Share2,
+  Check, Copy, Share2, CircleCheck, RotateCcw,
 } from 'lucide-react';
 import {
   getActivePlan, deletePlan, getAthleteState, listAthletesOverview, listCoaches, setAthleteCoach,
   quitarAtletaDeMiLista, setAtletaActivo, resumenDatosAtleta, eliminarAtletaDefinitivo,
-  invitacionesPendientes, ligaDeInvitacion,
+  invitacionesPendientes, ligaDeInvitacion, cambiarAlta,
 } from '@/lib/api';
 import PlanBuilder from '@/features/admin/PlanBuilder';
 import CambiosDelPlan from '@/features/admin/CambiosDelPlan';
@@ -744,7 +744,7 @@ function DentroDelDia({ day }) {
   );
 }
 
-function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile, onReassigned, onEliminado, onVerComoAtleta, tokenInvitacion }) {
+function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile, onReassigned, onAltaCambiada, onEliminado, onVerComoAtleta, tokenInvitacion }) {
   const esCompu = useIsDesktop();
   const pregunta = useConfirmacion();
   const { t, salud } = usePalabras();
@@ -764,6 +764,28 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
      les enseñe al paciente. La base lo impone; esto solo evita ofrecer un botón
      que no va a funcionar. */
   const atiendoYoAEstePaciente = salud && athlete.coach_id === profile?.id;
+  const [cambiandoAlta, setCambiandoAlta] = useState(false);
+
+  // Dar de alta no borra nada: el programa y el historial se quedan y se puede
+  // reabrir. Por eso reabrir no pregunta y dar de alta sí (por si fue un toque
+  // sin querer).
+  async function onCambiarAlta() {
+    if (cambiandoAlta) return;
+    const darDeAlta = !athlete.alta_en;
+    if (darDeAlta) {
+      const va = await pregunta({
+        titulo: `¿Dar de alta a ${athlete.full_name || athlete.username}?`,
+        detalle: 'No se borra nada. Podrás reabrirlo.',
+        confirmar: 'Sí, dar de alta',
+      });
+      if (!va) return;
+    }
+    setCambiandoAlta(true);
+    try {
+      onAltaCambiada?.(await cambiarAlta(athlete.id, darDeAlta));
+    } catch { /* noop: si falla, el botón sigue como estaba */ }
+    finally { setCambiandoAlta(false); }
+  }
 
   async function onChangeCoach(coachId) {
     setSavingCoach(true);
@@ -890,6 +912,16 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           titulo={t('Entrar como el atleta')}
           detalle="Su app tal cual la ve él. Nada se guarda."
           onClick={() => onVerComoAtleta(athlete)}
+        />
+      )}
+      {atiendoYoAEstePaciente && (
+        <AccionFicha
+          icon={athlete.alta_en ? RotateCcw : CircleCheck}
+          titulo={athlete.alta_en ? 'Reabrir' : 'Dar de alta'}
+          detalle={athlete.alta_en
+            ? `Dado de alta el ${new Date(athlete.alta_en).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })}`
+            : 'Su programa y su historial se quedan'}
+          onClick={onCambiarAlta}
         />
       )}
     </div>
@@ -1085,7 +1117,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
 /* ------------------------------ Panel raíz ------------------------------ */
 export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
   const { profile, user } = useAuth();
-  const { t } = usePalabras();
+  const { t, salud } = usePalabras();
   const isMaster = !!profile?.is_owner;
   const narrow = useIsNarrow(880);
   const isDesktop = useIsDesktop();
@@ -1096,6 +1128,7 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
   const [search, setSearch] = useState('');
   const [pagina, setPagina] = useState(1);
   const [selected, setSelected] = useState(null);
+  const [verAltas, setVerAltas] = useState(false);
   // Momento en que llegaron los datos. Sirve de "ahora" para las metricas:
   // leer el reloj dentro del useMemo lo dejaria congelado en la primera vuelta.
   const [cargadoEn, setCargadoEn] = useState(0);
@@ -1169,17 +1202,25 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
     );
   }, [athletes, search, viendoComo]);
 
-  // Las tres preguntas que un coach se hace al abrir la lista.
+  /* Un fisio da de alta a sus pacientes: salen de la lista de siempre y quedan
+     en un grupo plegado al final («Dados de alta»). Para los demás oficios
+     nadie tiene alta y todo sigue igual que antes. */
+  const enCurso = useMemo(() => (salud ? filtered.filter((a) => !a.alta_en) : filtered), [salud, filtered]);
+  const dadosDeAlta = useMemo(() => (salud ? filtered.filter((a) => a.alta_en) : []), [salud, filtered]);
+
+  // Las tres preguntas que un coach se hace al abrir la lista. Quien ya recibió
+  // el alta no cuenta: son los pacientes de ahora.
   const metricas = useMemo(() => {
     const base = athletes.filter((a) => a.role !== 'admin'
-      && (!viendoComo || a.coach_id === viendoComo.id));
+      && (!viendoComo || a.coach_id === viendoComo.id)
+      && !(salud && a.alta_en));
     const hace7dias = cargadoEn - 7 * 86400000;
     return {
       total: base.length,
       sinPlan: base.filter((a) => !a.plan).length,
       activos: base.filter((a) => a.lastSeen && new Date(a.lastSeen).getTime() >= hace7dias).length,
     };
-  }, [athletes, cargadoEn, viendoComo]);
+  }, [athletes, cargadoEn, viendoComo, salud]);
 
   if (loading) {
     return (
@@ -1206,13 +1247,47 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
   // que es como funciona cualquier lista de contactos: ahi paginar estorba.
   // La pagina se recorta aqui en vez de con un efecto: si filtras y quedan
   // menos paginas que la que estabas viendo, se ajusta sola sin renders extra.
-  const totalPaginas = Math.max(1, Math.ceil(filtered.length / POR_PAGINA));
+  const totalPaginas = Math.max(1, Math.ceil(enCurso.length / POR_PAGINA));
   const paginaActual = Math.min(pagina, totalPaginas);
   const visibles = modoTabla
-    ? filtered.slice((paginaActual - 1) * POR_PAGINA, paginaActual * POR_PAGINA)
-    : filtered;
-  const desde = filtered.length === 0 ? 0 : (paginaActual - 1) * POR_PAGINA + 1;
-  const hasta = Math.min(paginaActual * POR_PAGINA, filtered.length);
+    ? enCurso.slice((paginaActual - 1) * POR_PAGINA, paginaActual * POR_PAGINA)
+    : enCurso;
+  const desde = enCurso.length === 0 ? 0 : (paginaActual - 1) * POR_PAGINA + 1;
+  const hasta = Math.min(paginaActual * POR_PAGINA, enCurso.length);
+
+  // Una tarjeta de la lista del teléfono. Es una función y no un componente
+  // porque la comparten la lista de siempre y el grupo de dados de alta.
+  const tarjetaDe = (a) => {
+    const active = selected?.id === a.id;
+    const isAdmin = a.role === 'admin';
+    return (
+      <button
+        key={a.id}
+        type="button"
+        onClick={() => setSelected(a)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderRadius: 16, cursor: 'pointer',
+          border: `1.5px solid ${active ? T.accent : T.border}`, background: T.bg2, fontFamily: FONT, textAlign: 'left',
+          boxShadow: active ? KP.shRaise : KP.shCard, opacity: a.is_active === false ? 0.6 : 1,
+          transition: 'border-color .15s, box-shadow .15s, transform .12s',
+        }}
+      >
+        <Avatar name={a.full_name || a.username} url={a.avatar_url} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 700, color: T.text, fontSize: 14.5, display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {a.full_name || a.username}
+            </span>
+            {isAdmin && <Shield size={13} color={T.accent} style={{ flexShrink: 0 }} />}
+            {a.is_active === false && <Pausada />}
+            {a.perfil_completo === false && <SinTerminar />}
+          </div>
+          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><Arroba fila={a} /></div>
+        </div>
+        <ChevronRight size={18} color={T.text3} />
+      </button>
+    );
+  };
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: twoCol ? 'minmax(280px, 1fr) minmax(0, 1.4fr)' : 'minmax(0, 1fr)', gap: 20, alignItems: 'start' }}>
@@ -1279,7 +1354,7 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
             {totalPaginas > 1 && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 14 }}>
                 <div style={{ fontSize: 13, color: T.text2, fontWeight: 600 }}>
-                  Mostrando {desde}–{hasta} de {filtered.length}
+                  Mostrando {desde}–{hasta} de {enCurso.length}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <BotonPagina
@@ -1304,37 +1379,7 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
           </>
         ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {filtered.map((a) => {
-            const active = selected?.id === a.id;
-            const isAdmin = a.role === 'admin';
-            return (
-              <button
-                key={a.id}
-                type="button"
-                onClick={() => setSelected(a)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderRadius: 16, cursor: 'pointer',
-                  border: `1.5px solid ${active ? T.accent : T.border}`, background: T.bg2, fontFamily: FONT, textAlign: 'left',
-                  boxShadow: active ? KP.shRaise : KP.shCard, opacity: a.is_active === false ? 0.6 : 1,
-                  transition: 'border-color .15s, box-shadow .15s, transform .12s',
-                }}
-              >
-                <Avatar name={a.full_name || a.username} url={a.avatar_url} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, color: T.text, fontSize: 14.5, display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {a.full_name || a.username}
-                    </span>
-                    {isAdmin && <Shield size={13} color={T.accent} style={{ flexShrink: 0 }} />}
-                    {a.is_active === false && <Pausada />}
-                    {a.perfil_completo === false && <SinTerminar />}
-                  </div>
-                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><Arroba fila={a} /></div>
-                </div>
-                <ChevronRight size={18} color={T.text3} />
-              </button>
-            );
-          })}
+          {enCurso.map(tarjetaDe)}
           {filtered.length === 0 && (
             <div style={{ textAlign: 'center', padding: '40px 16px', color: T.text3 }}>
               <UserIcon size={34} style={{ opacity: 0.4 }} />
@@ -1342,6 +1387,41 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
             </div>
           )}
         </div>
+        )}
+
+        {dadosDeAlta.length > 0 && (
+          <div style={{ marginTop: 18 }}>
+            <button
+              type="button"
+              onClick={() => setVerAltas((v) => !v)}
+              aria-expanded={verAltas}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 2px',
+                border: 'none', background: 'transparent', cursor: 'pointer',
+                fontFamily: FONT, fontSize: 13.5, fontWeight: 800, color: T.text2,
+              }}
+            >
+              Dados de alta ({dadosDeAlta.length})
+              {verAltas ? <ChevronUp size={15} /> : <ChevronRight size={15} />}
+            </button>
+            {verAltas && (
+              <div style={{ marginTop: 8 }}>
+                {modoTabla ? (
+                  <AthletesTable
+                    rows={dadosDeAlta}
+                    coaches={coaches}
+                    isMaster={isMaster}
+                    selectedId={selected?.id}
+                    onPick={setSelected}
+                  />
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {dadosDeAlta.map(tarjetaDe)}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         )}
       </div>
       )}
@@ -1369,6 +1449,13 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
             }
             setAthletes((prev) => prev.map((a) => (a.id === row.id ? { ...a, ...parche } : a)));
             setSelected((s) => (s && s.id === row.id ? { ...s, ...parche } : s));
+          }}
+          // Dar de alta (o reabrir) cambia solo `alta_en`: se copia a la lista y a
+          // la ficha para que el botón y el grupo se muevan al instante.
+          onAltaCambiada={(fila) => {
+            const parche = { alta_en: fila.alta_en };
+            setAthletes((prev) => prev.map((a) => (a.id === fila.id ? { ...a, ...parche } : a)));
+            setSelected((s) => (s && s.id === fila.id ? { ...s, ...parche } : s));
           }}
           tokenInvitacion={sinActivar[selected.id]}
           onEliminado={(id) => {

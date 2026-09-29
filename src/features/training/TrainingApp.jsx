@@ -27,6 +27,7 @@ import NavegadorDelPlan from '@/components/NavegadorDelPlan';
 import { aKilos, desdeKilos, etiquetaUnidad } from '@/lib/unidades';
 import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
 import { useStorage } from '@/contexts/AppStateContext';
+import { altaReciente } from '@/lib/comoVa';
 import FichaEjercicio from '@/features/training/FichaEjercicio';
 import Portada from '@/components/Portada';
 import EtiquetasDeSesion from '@/components/EtiquetasDeSesion';
@@ -1564,7 +1565,7 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
      banda, no un botón. En compu se les pone tope y se dejan a la izquierda,
      que es donde empieza el texto de su tarjeta. */
   const esCompu = useIsDesktop();
-  const { t } = usePalabras();
+  const { t, coach } = usePalabras();
   const tope = esCompu ? { maxWidth: 260 } : null;
   const { phases: PLAN, planMeta, kind, estructura } = usePlan();
   // "Varias semanas": las tarjetas dicen la semana de corrido, no la fase.
@@ -1638,6 +1639,20 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
           )}
         </div>
       </div>
+
+      {/* Su fisio le dio de alta: se lo dice la portada durante 7 días. El programa
+          sigue en «Programa», solo para consultar: no se bloquea nada. */}
+      {altaReciente(profile?.alta_en) && (
+        <div style={{
+          margin: '0 18px 12px', background: KP.mintSoft, borderRadius: 16, padding: '13px 15px',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <Check size={18} color={KP.mint} strokeWidth={3} style={{ flexShrink: 0 }} />
+          <div style={{ fontSize: 14, fontWeight: 700, color: LT.text, lineHeight: 1.35 }}>
+            {coach?.full_name || 'Tu fisio'} te dio de alta el {new Date(profile.alta_en).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })}
+          </div>
+        </div>
+      )}
 
       {next ? (
         <>
