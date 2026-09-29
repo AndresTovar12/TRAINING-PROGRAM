@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Check, Copy, Loader2, Share2, UserPlus, X } from 'lucide-react';
+import { Check, Copy, Loader2, QrCode, Share2, UserPlus, X } from 'lucide-react';
 import { invitarAtleta, ligaDeInvitacion } from '@/lib/api';
+import MostrarQR from '@/features/admin/MostrarQR';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { T, FONT, KP } from '@/lib/theme';
 
@@ -24,6 +25,7 @@ export default function AgregarAtleta({ onCerrar, onCreado }) {
   const [error, setError] = useState('');
   const [listo, setListo] = useState(null); // { token, full_name }
   const [copiado, setCopiado] = useState(false);
+  const [verQR, setVerQR] = useState(false);
 
   const liga = listo ? ligaDeInvitacion(listo.token) : '';
 
@@ -93,6 +95,7 @@ export default function AgregarAtleta({ onCerrar, onCreado }) {
   );
 
   return (
+    <>
     <div
       onMouseDown={onCerrar}
       style={{
@@ -214,6 +217,23 @@ export default function AgregarAtleta({ onCerrar, onCreado }) {
               )}
             </div>
 
+            {/* Andrés, 29 sep 2026: un botón que lo genere, no un código siempre a la
+                vista. Para el paciente que está sentado enfrente y no tiene a mano
+                el link: lo escanea con la cámara y listo. */}
+            <button
+              type="button"
+              onClick={() => setVerQR(true)}
+              className="kp-press"
+              style={{
+                width: '100%', minHeight: 46, borderRadius: 999, cursor: 'pointer',
+                border: `1.5px solid ${T.accent}`, background: T.bg2, color: T.accent,
+                fontFamily: FONT, fontSize: 14.5, fontWeight: 800, touchAction: 'manipulation',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}
+            >
+              <QrCode size={17} /> Mostrar QR
+            </button>
+
             <p style={{ fontSize: 12.5, color: T.text3, lineHeight: 1.5, margin: 0, fontWeight: 500 }}>
               {t('El link no caduca. Deja de servir cuando lo use, o si desactivas o eliminas al atleta desde tu lista.')}
             </p>
@@ -235,5 +255,9 @@ export default function AgregarAtleta({ onCerrar, onCreado }) {
         <style>{'.spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}'}</style>
       </div>
     </div>
+    {/* Aparte del diálogo: pantalla completa, blanca, para que la cámara del
+        paciente lo lea sin estorbos. */}
+    {verQR && <MostrarQR liga={liga} nombre={listo.full_name} onCerrar={() => setVerQR(false)} />}
+    </>
   );
 }
