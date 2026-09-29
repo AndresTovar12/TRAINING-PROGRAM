@@ -395,19 +395,21 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phas
           referencia, donde la fila es miniatura, nombre y dos etiquetas, y lo
           que se anota se anota al abrir el ejercicio. La fila vuelve a tener la
           altura de una fila; anotar es tocarla. */}
+      {/* Sin «Sin anotar» en gris (Andrés, 29 sep 2026, sobre otras letras grises
+          que no servían de nada): se repetía en CADA ejercicio, entre 4 y 10
+          veces por pantalla, para decir lo que ya dice la ausencia de la pastilla
+          azul de «Hoy: …». Sin nada anotado, el pie solo lleva el enlace. */}
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        display: 'flex', alignItems: 'center', justifyContent: anotado ? 'space-between' : 'flex-end',
         gap: 10, marginTop: 9, paddingTop: 9, borderTop: `1px solid ${LT.border}`,
       }}>
-        {anotado ? (
+        {anotado && (
           <span style={{
             fontSize: 12, fontWeight: 800, color: LT.blue, background: LT.blueSoft,
             padding: '4px 9px', borderRadius: 7, ...NUM_STYLE,
           }}>
             Hoy: {anotado}
           </span>
-        ) : (
-          <span style={{ fontSize: 12, fontWeight: 600, color: LT.text3 }}>Sin anotar</span>
         )}
 
         <button
@@ -555,36 +557,6 @@ const SetGroup = ({ group, setNum, phaseColor, sessionData, sessionKey, onUpdate
       })()}
     </div>
   );
-};
-
-
-// Helper: get summary info for a day (count of exercises, intensity, etc.)
-const getDaySummary = (day, week, dayIdx) => {
-  let exCount = 0;
-  let mainIntensity = null;
-  let previews = [];
-  if (day.exercises) {
-    exCount = day.exercises.filter(e => !e.isNote).length;
-    const first = day.exercises.find(e => !e.isNote && e.intensity);
-    if (first) mainIntensity = first.intensity;
-    previews = day.exercises.filter(e => !e.isNote).slice(0, 4);
-  } else if (day.blocks) {
-    day.blocks.forEach(blk => {
-      // Con `week`, un bloque "repite la del lunes" cuenta los ejercicios que enseña.
-      const propios = week ? ejerciciosDelBloque(week, dayIdx, blk) : (blk.type === 'lift' ? blk.exercises : null);
-      if (propios && propios.length) {
-        const real = propios.filter(e => !e.isNote);
-        exCount += real.length;
-        if (!mainIntensity) {
-          const first = real.find(e => e.intensity);
-          if (first) mainIntensity = first.intensity;
-        }
-        previews.push(...real.slice(0, 2));
-      }
-    });
-    previews = previews.slice(0, 4);
-  }
-  return { exCount, mainIntensity, previews };
 };
 
 
@@ -762,11 +734,6 @@ const WeekDetail = ({
      sigue como siempre, con su botón al final. */
   const varias = variasSesiones(selectedDay);
   const hechos = varias ? bloquesHechos(sessionData, selectedDay.blocks.length) : [];
-  const nHechas = hechos.filter(Boolean).length;
-  // La duración iba pegada al título («Upper Strength · ~70 min»); ahora va aparte.
-  const minutosDelDia = !varias ? minutosDeTag(selectedDay.blocks?.[0]?.tag) : null;
-  const cat = tipoDeSesion(selectedDay);
-  const summary = useMemo(() => getDaySummary(selectedDay, week, selectedIdx), [selectedDay, week, selectedIdx]);
   /* Sesiones que no son de gimnasio. Probado armando una semana como coach:
      una sesión de velocidad, de recovery o de cancha se escribe con NOTAS
      ("Sprint 6 x 30 yd", "Foam roller 10 min"), porque no son ejercicios del
@@ -999,46 +966,25 @@ const WeekDetail = ({
         </div>
       )}
 
-      {/* Qué sesión es. Una línea, no una tarjeta.
-          Antes esto era un bloque de ~150 px con el nombre, un círculo para
-          marcarla terminada, y dos cifras (ejercicios e intensidad) que ya
-          están abajo, ejercicio por ejercicio. Ocupaba media pantalla para
-          repetir lo que venía después. */}
-      <div style={{
-        display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '2px 8px',
-        padding: '0 3px', marginBottom: 12,
-      }}>
-        {/* El NOMBRE ya no va aquí: desde el 18 sep es el título de arriba.
-            Lo que queda es de qué tipo es y de qué tamaño. */}
-        <span style={{ width: 7, height: 7, borderRadius: '50%', background: cat.c, flexShrink: 0 }} />
-        <span style={{ fontSize: 12.5, color: LT.text3, fontWeight: 600, ...NUM_STYLE }}>
-          {[
-            cat.label,
-            summary.exCount > 0 && plural(summary.exCount, 'ejercicio', 'ejercicios'),
-            minutosDelDia,
-            summary.mainIntensity,
-          ].filter(Boolean).join(' · ')}
-        </span>
-        {/* En un día doble, cuántas van: sin ninguna, avisa que hay dos abajo
-            (antes solo decía «AM y PM abajo» y nada más). */}
-        {varias && nHechas < hechos.length && (
-          <span style={{ fontSize: 11, color: LT.warning, fontWeight: 800 }}>
-            {nHechas === 0
-              ? (sesionesDelTitulo(selectedDay).every((s) => s.turno)
-                ? `${sesionesDelTitulo(selectedDay).map((s) => s.turno).join(' y ')} abajo`
-                : `${hechos.length} sesiones abajo`)
-              : `${nHechas} de ${hechos.length} terminadas`}
-          </span>
-        )}
-        {selectedCompleted && (
+      {/* SIN LÍNEA GRIS DE DATOS bajo la tira de días.
+          Aquí iba «Gym · 7 ejercicios · 70 min · 75%» (y en un doble, «AM y PM
+          abajo»). Andrés, 29 sep 2026: «solo saturan la página, no sirven de
+          nada y no se ven bien». Y tenía razón: cuántos ejercicios y cuánto dura
+          ya lo dice la tarjeta de la sesión justo debajo, la intensidad va en
+          cada ejercicio, y el tipo lo dice el color de la tira. Ya se había
+          encogido una vez, de un bloque de 150 px a una línea (18 sep); ahora
+          desaparece. Solo queda la palomita verde cuando el día está hecho; en
+          un doble no hace falta: cada tarjeta dice si va terminada. */}
+      {selectedCompleted && !varias && (
+        <div style={{ padding: '0 3px', marginBottom: 12 }}>
           <span style={{
             display: 'inline-flex', alignItems: 'center', gap: 4,
             fontSize: 11.5, color: LT.mint, fontWeight: 800,
           }}>
             <Check size={13} strokeWidth={3} /> Terminada
           </span>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Las notas de un descanso pueden venir de dos sitios: renglones de nota
           dentro de `exercises` (lo que escribe el editor de hoy) o la lista
@@ -1704,7 +1650,9 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
                   {[
                     sessionMeta.exercises ? plural(sessionMeta.exercises, 'ejercicio', 'ejercicios') : null,
                     sessionMeta.duration,
-                    sessionMeta.dual ? '2 sesiones' : null,
+                    // Con las dos etiquetas arriba, decir «2 sesiones» repetía lo mismo
+                    // (y partía la línea en «2 / sesiones»). Solo si el día trae nombre propio.
+                    sessionMeta.dual && sesionesDeHoy.length <= 1 ? '2 sesiones' : null,
                     // Otra sesión hoy además de esta (mañana y tarde como dos entradas).
                     !sessionMeta.dual && next.sesionesHoy > 1 ? `${next.sesionesHoy} sesiones hoy` : null,
                   ].filter(Boolean).join(' · ')}

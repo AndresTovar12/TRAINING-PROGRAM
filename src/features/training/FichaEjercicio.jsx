@@ -198,7 +198,8 @@ export default function FichaEjercicio({
                 fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,.72)', marginBottom: 5,
                 ...NUM_STYLE,
               }}>
-                Serie {serie} · Ejercicio {posicion} de {total}
+                {/* «Ejercicio 1 de 1» no dice nada: solo se cuenta cuando hay más de uno. */}
+                Serie {serie}{total > 1 ? ` · Ejercicio ${posicion} de ${total}` : ''}
               </div>
               <div style={{
                 fontSize: 25, fontWeight: 800, color: '#fff', lineHeight: 1.15,
