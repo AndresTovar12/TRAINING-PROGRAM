@@ -8,6 +8,7 @@ import { PalabrasProvider, usePalabras } from '@/contexts/PalabrasContext';
 import { PlanProvider } from '@/contexts/PlanContext';
 import AuthScreen from '@/features/auth/AuthScreen';
 import ActivarInvitacion from '@/features/auth/ActivarInvitacion';
+import UnirseAlEquipo from '@/features/auth/UnirseAlEquipo';
 import Bienvenida from '@/features/auth/Bienvenida';
 import LandingPage from '@/features/landing/LandingPage';
 import TrainingApp from '@/features/training/TrainingApp';
@@ -272,9 +273,11 @@ function CuentaDesactivada() {
  * que ya tienen cuenta y solo quieren su rutina del dia, asi que la pagina
  * de presentacion seria un estorbo entre ellos y su entrenamiento.
  */
-function Entrada() {
+function Entrada({ codigo }) {
   const esCompu = useIsDesktop();
-  const [pantalla, setPantalla] = useState(null); // null | 'login' | 'register'
+  // Con un link o QR de equipo (`?unirse=`) se salta la presentación: quien llega
+  // ahí viene a entrar o a crear su cuenta con ese código.
+  const [pantalla, setPantalla] = useState(codigo ? 'login' : null); // null | 'login' | 'register'
 
   if (esCompu && pantalla === null) {
     return (
@@ -287,7 +290,9 @@ function Entrada() {
   return (
     <AuthScreen
       modoInicial={pantalla || 'login'}
-      onVolver={esCompu ? () => setPantalla(null) : undefined}
+      onVolver={esCompu && !codigo ? () => setPantalla(null) : undefined}
+      codigoDeEquipo={codigo || ''}
+      aviso={codigo ? 'Te invitaron a unirte a un equipo. Entra a tu cuenta, o crea una: el código ya va puesto.' : undefined}
     />
   );
 }
@@ -363,6 +368,25 @@ export default function App() {
     setInvitacion(null);
   };
 
+  /* El link o QR del código de un profesional llega como `?unirse=CODIGO`. Se
+     guarda en esta pestaña (`sessionStorage`) porque antes de poder usarlo hay
+     que entrar o registrarse, y eso recarga la pantalla; y se borra de la barra.
+     Se termina en `UnirseAlEquipo`, ya con sesión. */
+  const [unirse, setUnirse] = useState(() => {
+    try {
+      const deLaLiga = new URLSearchParams(window.location.search).get('unirse');
+      if (deLaLiga) {
+        sessionStorage.setItem('tl:unirse', deLaLiga.trim());
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+      return sessionStorage.getItem('tl:unirse') || null;
+    } catch { return null; }
+  });
+  const cierraUnirse = () => {
+    try { sessionStorage.removeItem('tl:unirse'); } catch { /* sin almacenamiento */ }
+    setUnirse(null);
+  };
+
   // `/oauth/consent?authorization_id=…`: la IA de alguien pide permiso.
   const [permisoIA, setPermisoIA] = useState(() => {
     if (window.location.pathname !== '/oauth/consent') return null;
@@ -396,7 +420,7 @@ export default function App() {
   }
 
   if (loading) return <Splash />;
-  if (!user) return <><Entrada /><UpdateBanner /></>;
+  if (!user) return <><Entrada codigo={unirse} /><UpdateBanner /></>;
   if (!profile) return <Splash label="Cargando tu perfil…" />;
 
   // Cuenta pausada por el administrador. Va ANTES de elegir app: si no, el
@@ -409,6 +433,9 @@ export default function App() {
      formulario nunca pasa por aquí (la función `signup` marca el perfil como
      completo, porque ese formulario sí pregunta todo). */
   if (profile.perfil_completo === false) return <><Bienvenida /><UpdateBanner /></>;
+
+  // Abrió un link o QR de equipo: primero eso (ver `UnirseAlEquipo`), luego su app.
+  if (unirse) return <><UnirseAlEquipo codigo={unirse} onTerminar={cierraUnirse} /><UpdateBanner /></>;
 
   // `PalabrasProvider`: si quien atiende es un fisio, la app dice «pacientes» y
   // «programa» (ver `lib/palabras.js`). Con cualquier otro oficio no cambia nada.

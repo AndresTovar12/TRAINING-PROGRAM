@@ -538,21 +538,31 @@ export async function estadoResumido(ids) {
 // que el coach puede ver.
 // Con `conEstado` (solo la pide un fisio) cada fila trae también `resumen`:
 // { dolor, hechas, esperadas }, para la línea «Dolor 3 · 1 de 4 esta semana».
+// `yo` y `esMaster` dicen quién mira, para enseñar el programa que le toca.
 export async function listAthletesOverview(opciones = {}) {
   const [profilesRes, plansRes, stateRes] = await Promise.all([
     supabase.from('profiles').select('*').order('created_at'),
-    supabase.from('plans').select('user_id, title, data, updated_at').eq('status', 'active'),
+    supabase.from('plans').select('user_id, profesional_id, title, data, updated_at').eq('status', 'active'),
     supabase.from('user_app_state').select('user_id, updated_at'),
   ]);
   if (profilesRes.error) throw profilesRes.error;
 
-  const planByUser = new Map();
-  (plansRes.data ?? []).forEach((p) => planByUser.set(p.user_id, p));
+  /* Un atleta puede tener varios programas activos: el de su coach principal
+     (`profesional_id` null) y uno por cada profesional de su equipo. La lista
+     enseña el que le toca a quien mira: el del coach principal para el coach
+     principal y el master, y el SUYO para un profesional del equipo (si aún no
+     lo arma, «Sin programa»: nunca el del coach). */
+  const planPorClave = new Map();
+  (plansRes.data ?? []).forEach((p) => planPorClave.set(`${p.user_id}|${p.profesional_id ?? ''}`, p));
+  const planDeFila = (p) => {
+    const delEquipo = opciones.yo && !opciones.esMaster && p.coach_id !== opciones.yo;
+    return planPorClave.get(`${p.id}|${delEquipo ? opciones.yo : ''}`) ?? null;
+  };
   const seenByUser = new Map();
   (stateRes.data ?? []).forEach((s) => seenByUser.set(s.user_id, s.updated_at));
 
   const filas = (profilesRes.data ?? []).map((p) => {
-    const plan = planByUser.get(p.id) ?? null;
+    const plan = planDeFila(p);
     const phases = plan?.data?.phases ?? [];
     return {
       ...p,
@@ -581,7 +591,7 @@ export async function listAthletesOverview(opciones = {}) {
   const estadoDe = new Map(estados.map((e) => [e.user_id, e]));
   return filas.map((p) => {
     const e = estadoDe.get(p.id);
-    const data = planByUser.get(p.id)?.data;
+    const data = planDeFila(p)?.data;
     return {
       ...p,
       resumen: {
@@ -855,24 +865,51 @@ export async function getAthleteState(userId) {
 /* -------------------------------- Plans -------------------------------- */
 // Plan activo de un usuario (jsonb con { phases: [...] } — misma estructura
 // que el plan original: fases → semanas → días → ejercicios).
+// Es el PRINCIPAL, el de su coach (`profesional_id` null). Los programas de los
+// profesionales de su equipo se piden con `getProgramas` / `planDe`.
 export async function getActivePlan(userId) {
   const { data, error } = await supabase
     .from('plans')
     .select('*')
     .eq('user_id', userId)
     .eq('status', 'active')
+    .is('profesional_id', null)
     .maybeSingle();
+  if (error) throw error;
+  return data ?? null;
+}
+
+// TODOS los programas activos de un usuario: el principal (`profesional_id`
+// null) y uno por cada profesional de su equipo que ya armó el suyo.
+export async function getProgramas(userId) {
+  const { data, error } = await supabase
+    .from('plans')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .order('created_at');
+  if (error) throw error;
+  return data ?? [];
+}
+
+// El programa activo de UN profesional para un atleta (`null` = el coach principal).
+export async function planDe(userId, profesionalId) {
+  let consulta = supabase.from('plans').select('*').eq('user_id', userId).eq('status', 'active');
+  consulta = profesionalId ? consulta.eq('profesional_id', profesionalId) : consulta.is('profesional_id', null);
+  const { data, error } = await consulta.maybeSingle();
   if (error) throw error;
   return data ?? null;
 }
 
 // `kind`: 'weekly' = rutina semanal que se repite | 'periodized' = fases que
 // avanzan (default para los planes creados antes de existir este campo).
-export async function createPlan({ userId, title, phases, kind, estructura, createdBy }) {
+export async function createPlan({ userId, title, phases, kind, estructura, createdBy, profesionalId = null }) {
   const { data, error } = await supabase
     .from('plans')
     .insert({
       user_id: userId,
+      // null = plan del coach principal; con id = programa de un profesional del equipo.
+      profesional_id: profesionalId,
       title: title || 'Plan de entrenamiento',
       status: 'active',
       data: { kind: kind || 'periodized', ...(estructura ? { estructura } : {}), phases: phases ?? [] },
@@ -1051,6 +1088,13 @@ export async function invitarAtleta({ nombre, apellido }) {
   return body; // { token, atleta_id, usuario, full_name }
 }
 
+/* La liga (y el QR) del CÓDIGO de un profesional: `…/?unirse=CODIGO`. Quien la abre
+   con cuenta de atleta ve «¿Lo agregas a tu equipo?»; sin cuenta, entra o se
+   registra con el código ya puesto. Ver `features/auth/UnirseAlEquipo.jsx`. */
+export function ligaParaUnirse(codigo) {
+  return `${window.location.origin}/?unirse=${encodeURIComponent(String(codigo ?? '').trim())}`;
+}
+
 /** La dirección que se le manda al atleta. */
 export function ligaDeInvitacion(token) {
   return `${window.location.origin}/?invitacion=${encodeURIComponent(token)}`;
@@ -1096,3 +1140,44 @@ export const verInvitacion = (token) => invitacion({ token, modo: 'ver' });
 /** Termina de crear la cuenta: usuario, contraseña y, si quiere, correo. */
 export const activarInvitacion = ({ token, username, password, email, genero, nombre, apellido }) =>
   invitacion({ token, modo: 'activar', username, password, email, genero, nombre, apellido });
+
+/* -------------------------------- Equipo -------------------------------- *
+ * Cada atleta tiene su coach principal y, además, un equipo (fisio, etc.) que
+ * ÉL acepta. Todo entra por funciones de la base (RPC): ahí se decide quién
+ * puede qué (ver la migración `equipo_etapa_2`). Los errores traen el mensaje
+ * en español de la propia base: se le enseñan tal cual a la persona.
+ * ------------------------------------------------------------------------ */
+async function llamar(nombre, args = {}) {
+  const { data, error } = await supabase.rpc(nombre, args);
+  if (error) throw error;
+  return data;
+}
+
+// Coach principal + equipo (pendiente y activo) de un atleta.
+export const nombresDelEquipo = (atletaId) => llamar('nombres_del_equipo', { p_atleta: atletaId }).then((d) => d ?? []);
+// De cada atleta de un profesional, quién más lo atiende. Una sola consulta.
+export const equiposDeMisAtletas = () => llamar('equipos_de_mis_atletas').then((d) => d ?? []);
+// Las «Mi versión» de los ejercicios del coach principal y del equipo activo.
+export const versionesDelEquipo = (atletaId) => llamar('versiones_del_equipo', { p_atleta: atletaId }).then((d) => d ?? []);
+// Nombre, oficio y foto de quien tiene ese código o usuario (nunca el correo).
+export const profesionalPorReferencia = (ref) => llamar('profesional_por_referencia', { p_ref: ref }).then((d) => d?.[0] ?? null);
+// El ATLETA agrega a alguien a su equipo. Devuelve { tipo: 'principal' | 'equipo', profesional_id }.
+export const agregarAMiEquipo = (ref) => llamar('agregar_a_mi_equipo', { p_ref: ref });
+// El COACH PRINCIPAL invita a alguien al equipo de un atleta (queda pendiente).
+export const invitarAlEquipo = (atletaId, ref) => llamar('invitar_al_equipo', { p_atleta: atletaId, p_ref: ref });
+export const aceptarInvitacionDeEquipo = (profesionalId) => llamar('aceptar_invitacion_de_equipo', { p_profesional: profesionalId });
+export const rechazarInvitacionDeEquipo = (profesionalId) => llamar('rechazar_invitacion_de_equipo', { p_profesional: profesionalId });
+// El atleta quita a alguien: deja de verlo al instante; no se borra nada.
+export const quitarDeMiEquipo = (profesionalId) => llamar('quitar_de_mi_equipo', { p_profesional: profesionalId });
+// Dar de alta (o reabrir) a un atleta del que soy parte del EQUIPO. Devuelve la fecha o null.
+export const cambiarAltaDeEquipo = (atletaId, alta) => llamar('cambiar_alta_de_equipo', { p_atleta: atletaId, p_alta: alta });
+// El coach principal ya vio el aviso «ahora también va con …».
+export const marcarAvisoVisto = (atletaId, profesionalId) => llamar('marcar_aviso_visto', { p_atleta: atletaId, p_profesional: profesionalId });
+
+// Mis filas de equipo: como atleta (mi equipo) o como profesional (a quién atiendo
+// y a quién dejé de atender, con el nombre copiado). Incluye las «quitado».
+export async function listEquipo() {
+  const { data, error } = await supabase.from('equipo').select('*').order('creado_en');
+  if (error) throw error;
+  return data ?? [];
+}

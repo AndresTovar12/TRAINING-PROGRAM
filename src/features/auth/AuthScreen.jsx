@@ -186,7 +186,7 @@ export function SelectorOficio({ value, onChange }) {
   );
 }
 
-export default function AuthScreen({ modoInicial = 'login', onVolver, aviso }) {
+export default function AuthScreen({ modoInicial = 'login', onVolver, aviso, codigoDeEquipo = '' }) {
   const { signIn, signUp, entrarConGoogle, googleDisponible } = useAuth();
   const esCompu = useIsDesktop();
   const [mode, setMode] = useState(modoInicial); // 'login' | 'register'
@@ -196,7 +196,8 @@ export default function AuthScreen({ modoInicial = 'login', onVolver, aviso }) {
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
   const [accountType, setAccountType] = useState('athlete'); // 'athlete' | 'coach'
-  const [coachUsername, setCoachUsername] = useState('');
+  // Con un link o QR `?unirse=CODIGO` el código de tu entrenador ya viene puesto.
+  const [coachUsername, setCoachUsername] = useState(codigoDeEquipo);
   const [genero, setGenero] = useState(''); // '' | 'h' | 'm'
   const [profesion, setProfesion] = useState('');
   const [busy, setBusy] = useState(false);

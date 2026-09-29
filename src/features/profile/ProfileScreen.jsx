@@ -7,6 +7,7 @@ import { usePalabras } from '@/contexts/PalabrasContext';
 import { uploadAvatar, isUsernameAvailable } from '@/lib/api';
 import { T, FONT, KP } from '@/lib/theme';
 import ConectarIA from '@/features/ia/ConectarIA';
+import MiEquipo from '@/features/profile/MiEquipo';
 
 const USERNAME_RE = /^[a-zA-Z0-9_.]{3,30}$/;
 
@@ -334,6 +335,13 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
           {err && (
             <div style={{ background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 12, padding: '11px 15px', fontWeight: 700, fontSize: 13.5 }}>
               {err}
+            </div>
+          )}
+
+          {/* Un atleta decide quién más lo atiende (fisio…). Los profesionales no lo tienen. */}
+          {!isAdmin && (
+            <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 22 }}>
+              <MiEquipo />
             </div>
           )}
 

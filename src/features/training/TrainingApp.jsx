@@ -26,8 +26,11 @@ import HojaFlotante from '@/components/HojaFlotante';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
 import { aKilos, desdeKilos, etiquetaUnidad } from '@/lib/unidades';
 import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
-import { useStorage } from '@/contexts/AppStateContext';
+import { useAppState, useStorage } from '@/contexts/AppStateContext';
 import { altaReciente } from '@/lib/comoVa';
+import { SelectorDePrograma, SemanaDeTodos, TarjetaDeEquipo } from '@/features/training/EquipoDelAtleta';
+import AvisoDeInvitacion from '@/features/training/AvisoDeInvitacion';
+import { colorDePrograma, etiquetaDePrograma, sesionDeHoy } from '@/lib/programas';
 import FichaEjercicio from '@/features/training/FichaEjercicio';
 import Portada from '@/components/Portada';
 import EtiquetasDeSesion from '@/components/EtiquetasDeSesion';
@@ -1556,7 +1559,7 @@ const initialsFrom = (name) => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
-const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerPrograma, cursor, onChangeCursor }) => {
+const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerPrograma, cursor, onChangeCursor, conQuien, otrosHoy = [], onAbrirOtro }) => {
   /* LAS PROPORCIONES EN COMPU. Andrés, 18 sep 2026: "en teléfono no hay ningún
      problema con HOME, pero en computadora las proporciones están un poco
      raras para los atletas nada más". El diagnóstico, medido en 1440 px: los
@@ -1640,6 +1643,9 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
         </div>
       </div>
 
+      {/* Alguien quiere atenderlo: se lo pregunta la portada (solo si hay una pendiente). */}
+      <AvisoDeInvitacion />
+
       {/* Su fisio le dio de alta: se lo dice la portada durante 7 días. El programa
           sigue en «Programa», solo para consultar: no se bloquea nada. */}
       {altaReciente(profile?.alta_en) && (
@@ -1671,6 +1677,10 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
                 <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)' }}>
                   {cursorCompleted ? 'Completada' : 'Hoy te toca'}
                 </div>
+                {/* Con equipo, la tarjeta dice de quién viene («Beto · coach»). */}
+                {conQuien && (
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.72)', marginTop: 2 }}>{conQuien}</div>
+                )}
                 {sesionesDeHoy.length > 1 ? (
                   <EtiquetasDeSesion sesiones={sesionesDeHoy} sobreAzul envolver tamano={14} style={{ marginTop: 10 }} />
                 ) : (
@@ -1785,6 +1795,18 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
           </div>
         </div>
       )}
+
+      {/* Con equipo: lo que le toca hoy con cada OTRO profesional (el entrenamiento va
+          primero, arriba). Sin equipo no sale nada y la portada es la de siempre. */}
+      {otrosHoy.map(({ programa, sesion, color }) => (
+        <TarjetaDeEquipo
+          key={programa.id}
+          programa={programa}
+          sesion={sesion}
+          color={color}
+          onAbrir={() => onAbrirOtro(programa, sesion)}
+        />
+      ))}
 
       {/* Row: estado + progreso */}
       <div style={{ display: 'flex', gap: 12, padding: '0 18px 12px' }}>
@@ -2351,7 +2373,13 @@ const NoPlanState = ({ onGoTab }) => (
 );
 
 export default function TrainingApp() {
-  const { phases: PLAN, hasPlan, planLoading, kind } = usePlan();
+  const {
+    phases: PLAN, hasPlan, planLoading, kind, programas, programaActivo, elegirPrograma, claveDe,
+  } = usePlan();
+  const { store } = useAppState();
+  const hayEquipo = programas.length > 1;
+  // «Todo» (la semana de todos los profesionales) en la pestaña «Plan».
+  const [verTodo, setVerTodo] = useState(false);
   const esCompu = useIsDesktop();
   const { user } = useAuth();
   // De quién es esta app: de quien entró, o del atleta que su coach está viendo.
@@ -2361,10 +2389,12 @@ export default function TrainingApp() {
   const pestanasVisibles = salud ? SIN_1RM : PESTANAS;
   const [tab, setTab] = useLugar(`app.${quien}.tab`, 'home', (t) => pestanasVisibles.includes(t));
   const [view, setView] = useState({ level: 'week' });
-  const [sessionsData, setSessionsData] = useStorage('wr:sessions', {});
+  // Los registros de un programa de EQUIPO van en claves aparte (`wr:sessions@<profesional>`);
+  // los del coach principal siguen donde estaban. El bienestar y el 1RM son del atleta.
+  const [sessionsData, setSessionsData] = useStorage(claveDe('wr:sessions'), {});
   const [oneRMs, setOneRMs] = useStorage('wr:onerm', {});
   const [wellness, setWellness] = useStorage('wr:wellness', {});
-  const [storedCursor, setCursor] = useStorage('wr:cursor', null);
+  const [storedCursor, setCursor] = useStorage(claveDe('wr:cursor'), null);
   const [cursorPickerOpen, setCursorPickerOpen] = useState(false);
   const [programaAbierto, setProgramaAbierto] = useState(false);
 
@@ -2411,6 +2441,14 @@ export default function TrainingApp() {
   // coach al ver su plan: una sola cuenta, dos pantallas que no se contradicen.
   const aqui = useMemo(() => dondeVa(PLAN, kind, cursor), [PLAN, kind, cursor]);
   const [diaVisto, setDiaVisto] = useState(null);
+  /* Cambiar de programa: se elige el activo y la vista se pone de una vez (con
+     la semana y el día a abrir, o en blanco para que caiga en la semana donde
+     va). Se hace aquí y no en un efecto: un efecto le pisaría el día elegido. */
+  const cambiarPrograma = useCallback((planId, vista) => {
+    elegirPrograma(planId);
+    setView(vista ?? { level: 'week' });
+    setDiaVisto(null);
+  }, [elegirPrograma]);
   // La semana y el día que tenía abiertos antes de refrescar. Se lee una sola
   // vez, al arrancar; ver el efecto de abajo.
   const [lugarPlan] = useState(() => (esArranque() ? leeLugar(user?.id, `app.${quien}.plan`) : undefined));
@@ -2472,7 +2510,19 @@ export default function TrainingApp() {
      vista: sin esto, "Ver mi plan" te dejaba donde estuviera `view`, que recién
      abierta la app es la lista de fases. El atleta pedía su plan y le salía un
      índice. */
-  const vasA = (t) => { setTab(t); if (t === 'plan') setView(vistaDelPlan()); };
+  const vasA = (t) => {
+    setTab(t);
+    // La portada es la del programa principal; «Plan» con equipo cae en «Todo».
+    if (t === 'home') elegirPrograma(null);
+    if (t === 'plan') { setVerTodo(hayEquipo); setView(vistaDelPlan()); }
+  };
+
+  // Lo que toca hoy con los demás profesionales (uno por programa con sesión hoy).
+  const otrosHoy = useMemo(() => (hayEquipo
+    ? programas
+      .map((p, i) => ({ programa: p, sesion: sesionDeHoy(p, store), color: colorDePrograma(i) }))
+      .filter((x) => x.programa.id !== programaActivo?.id && x.sesion)
+    : []), [hayEquipo, programas, programaActivo?.id, store]);
 
   /* AL REFRESCAR, VUELVE A DONDE ESTABAS (ver `lugar.js`). La pestaña ya vuelve
      sola; la de "Plan" además necesita una semana, y `view` arranca sin ella:
@@ -2491,10 +2541,10 @@ export default function TrainingApp() {
   // Y se anota la semana y el día que se están viendo.
   useEffect(() => {
     if (tab !== 'plan' || !view.week) return;
-    guardaLugar(user?.id, `app.${quien}.plan`, {
+    guardaLugar(user?.id, claveDe(`app.${quien}.plan`), {
       faseId: view.phase?.id, semana: view.week.num, dia: diaVisto,
     });
-  }, [tab, view.phase, view.week, diaVisto, user?.id, quien]);
+  }, [tab, view.phase, view.week, diaVisto, user?.id, quien, claveDe]);
 
   // La altura de la pantalla, para volver a donde estaba. En "Plan" cada día
   // tiene la suya; se espera a saber cuál es antes de intentar bajar.
@@ -2514,14 +2564,21 @@ export default function TrainingApp() {
       onGoTab={vasA}
       onVerPrograma={() => setProgramaAbierto(true)}
       cursor={cursor}
-      onChangeCursor={() => setCursorPickerOpen(true)} />;
+      onChangeCursor={() => setCursorPickerOpen(true)}
+      conQuien={hayEquipo ? etiquetaDePrograma(programaActivo) : null}
+      otrosHoy={otrosHoy}
+      onAbrirOtro={(programa, sesion) => {
+        setTab('plan');
+        setVerTodo(false);
+        cambiarPrograma(programa.id, { level: 'week', phase: sesion.phase, week: sesion.week, dayIdx: sesion.dayIdx });
+      }} />;
   } else if (tab === 'plan') {
     /* Una sola pantalla: el DÍA. Las fases y las semanas ya no son pantallas
        por las que se navega, son una hoja que se abre encima (maqueta A, la
        que eligió Andrés el 18 sep 2026). */
-    content = view.week ? (
+    const dia = view.week ? (
       <WeekDetail
-        key={`${view.phase?.id}-${view.week?.num}-${view.salto ?? 0}`}
+        key={`${programaActivo?.id}-${view.phase?.id}-${view.week?.num}-${view.salto ?? 0}`}
         phase={view.phase} week={view.week} dayIdx={view.dayIdx}
         onVerPrograma={() => setProgramaAbierto(true)}
         sessionsData={sessionsData} updateSession={updateSession} oneRMs={oneRMs}
@@ -2533,6 +2590,35 @@ export default function TrainingApp() {
           level: 'week', phase: miDia.phase, week: miDia.week, dayIdx: miDia.dayIdx, salto: (v.salto ?? 0) + 1,
         }))} />
     ) : <PlanLoadingState />;
+    // Con equipo: pastillas «Todo · Beto · Juan». Sin equipo, la pantalla de siempre.
+    content = hayEquipo ? (
+      <>
+        <SelectorDePrograma
+          programas={programas}
+          activoId={programaActivo?.id}
+          verTodo={verTodo}
+          onTodo={() => setVerTodo(true)}
+          onPrograma={(p) => {
+            setVerTodo(false);
+            if (p.id !== programaActivo?.id) cambiarPrograma(p.id);
+          }}
+        />
+        {verTodo ? (
+          <SemanaDeTodos
+            programas={programas}
+            store={store}
+            onAbrirDia={(e) => {
+              setVerTodo(false);
+              cambiarPrograma(e.programaId, { level: 'week', phase: e.phase, week: e.week, dayIdx: e.dayIdx });
+            }}
+            onVerPrograma={(p) => {
+              if (p.id !== programaActivo?.id) cambiarPrograma(p.id);
+              setProgramaAbierto(true);
+            }}
+          />
+        ) : dia}
+      </>
+    ) : dia;
   } else if (tab === 'wellness') {
     content = <WellnessView wellness={wellness} setWellness={setWellness} />;
   } else if (tab === 'oneRM') {
@@ -2569,6 +2655,7 @@ export default function TrainingApp() {
           viendo={tab === 'plan' && view.week ? { faseId: view.phase?.id, semana: view.week.num, dia: diaVisto } : null}
           onIr={(fase, semana, dayIdx) => {
             setTab('plan');
+            setVerTodo(false);
             setView((v) => ({ level: 'week', phase: fase, week: semana, dayIdx, salto: (v.salto ?? 0) + 1 }));
             setProgramaAbierto(false);
           }}
