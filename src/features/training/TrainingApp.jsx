@@ -5,6 +5,7 @@ import {
   Zap, Trophy, Clock, FileText, Sparkles, Info, Dumbbell, Heart, Play,
   Activity, Home as HomeIcon,
   Repeat, Eye, Layers, List, Scale, LineChart as LineChartIcon,
+  Sunrise, Sunset,
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { useIsDesktop } from '@/lib/useViewport';
@@ -28,6 +29,11 @@ import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
 import { useStorage } from '@/contexts/AppStateContext';
 import FichaEjercicio from '@/features/training/FichaEjercicio';
 import Portada from '@/components/Portada';
+import EtiquetasDeSesion from '@/components/EtiquetasDeSesion';
+import {
+  turnoDeTag, minutosDeTag, sinDuracion, variasSesiones, sesionesDelTitulo, textoDeSesiones,
+  bloquesHechos, alternarBloque,
+} from '@/lib/sesiones';
 import { plural, pluralS, rondasQueDecir } from '@/lib/plural';
 import { textoMeta } from '@/lib/medidas';
 import { useAuth } from '@/contexts/AuthContext';
@@ -734,14 +740,31 @@ const WeekDetail = ({
   const [selectedIdx, setSelectedIdx] = useState(initialIdx);
   // Lo que se tiene abierto, para que la hoja del programa marque "VIENDO".
   useEffect(() => { onDiaVisto?.(selectedIdx); }, [selectedIdx, onDiaVisto]);
-  const [openBlocks, setOpenBlocks] = useState({ 0: true });
-  useEffect(() => { setOpenBlocks({ 0: true }); }, [selectedIdx]);
+  /* Qué sesiones del día están desplegadas. Solo se guarda lo que la persona
+     toca; lo demás lo decide `abiertaSola`: un día de UNA sesión la trae
+     abierta, y uno de DOS (mañana y tarde) las trae CERRADAS. Antes la primera
+     salía siempre abierta y empujaba a la segunda fuera de la pantalla: quien
+     abría un doble no se enteraba de que había otra sesión más abajo
+     (Andrés, 29 sep 2026). */
+  const [openBlocks, setOpenBlocks] = useState({});
+  useEffect(() => { setOpenBlocks({}); }, [selectedIdx]);
 
   const selectedDay = week.days[selectedIdx];
   const selectedId = idDeSesion(phase.id, week.num, selectedIdx);
   const sessionData = sessionsData[selectedId] || {};
   const selectedCompleted = !!sessionData.completed;
-  const selectedDayName = selectedDay.name || (selectedDay.blocks ? selectedDay.blocks.map(b => b.tag.replace(/^Sesi[óo]n \d+ \([AP]M\): /, '')).join(' + ') : selectedDay.day);
+  // El título nunca junta las sesiones con «+» ni arrastra «· ~70 min»: ver `lib/sesiones.js`.
+  const selectedDayName = sinDuracion(selectedDay.name || '')
+    || textoDeSesiones(sesionesDelTitulo(selectedDay))
+    || selectedDay.day;
+  /* Un día de dos sesiones lleva SU botón de terminar en cada una, no uno para
+     todo el día: `hechos` dice cuáles van hechas. Un día de una sola sesión
+     sigue como siempre, con su botón al final. */
+  const varias = variasSesiones(selectedDay);
+  const hechos = varias ? bloquesHechos(sessionData, selectedDay.blocks.length) : [];
+  const nHechas = hechos.filter(Boolean).length;
+  // La duración iba pegada al título («Upper Strength · ~70 min»); ahora va aparte.
+  const minutosDelDia = !varias ? minutosDeTag(selectedDay.blocks?.[0]?.tag) : null;
   const cat = tipoDeSesion(selectedDay);
   const summary = useMemo(() => getDaySummary(selectedDay, week, selectedIdx), [selectedDay, week, selectedIdx]);
   /* Sesiones que no son de gimnasio. Probado armando una semana como coach:
@@ -769,6 +792,9 @@ const WeekDetail = ({
     ...prev, completed: !prev?.completed,
     completedAt: !prev?.completed ? new Date().toISOString() : null
   }));
+  // Marca o desmarca UNA de las sesiones de un día doble; el día queda hecho
+  // cuando lo están todas (ver `alternarBloque`).
+  const toggleBloque = (bi) => updateSession(selectedId, (prev) => alternarBloque(prev, bi, selectedDay.blocks.length));
 
   const flatSessionData = { exercises: sessionData.exercises ? Object.fromEntries(Object.entries(sessionData.exercises).filter(([k]) => !k.includes('-')).map(([k, v]) => [parseInt(k), v])) : {} };
 
@@ -812,7 +838,7 @@ const WeekDetail = ({
         fontSize: 21, fontWeight: 800, color: LT.text, margin: '0 0 3px',
         lineHeight: 1.15, letterSpacing: -0.4, paddingRight: 52,
       }}>
-        {selectedDay.dual ? 'Doble sesión' : selectedDayName}
+        {selectedDay.dual || varias ? 'Doble sesión' : selectedDayName}
       </h1>
 
       <div style={{
@@ -938,8 +964,8 @@ const WeekDetail = ({
             </div>
             <div style={{ fontSize: 12.5, fontWeight: 600, color: LT.text3, marginTop: 2 }}>
               {miDia
-                ? `Hoy te toca: ${miDia.day?.name
-                  || (miDia.day?.blocks || []).map((b) => nombreDeSesion(b.tag)).filter(Boolean).join(' + ')
+                ? `Hoy te toca: ${sinDuracion(miDia.day?.name || '')
+                  || textoDeSesiones(sesionesDelTitulo(miDia.day))
                   || tipoDeSesion(miDia.day).label}`
                 : 'Hoy no tienes sesión.'}
             </div>
@@ -989,11 +1015,20 @@ const WeekDetail = ({
           {[
             cat.label,
             summary.exCount > 0 && plural(summary.exCount, 'ejercicio', 'ejercicios'),
+            minutosDelDia,
             summary.mainIntensity,
           ].filter(Boolean).join(' · ')}
         </span>
-        {selectedDay.dual && (
-          <span style={{ fontSize: 11, color: LT.warning, fontWeight: 800 }}>AM y PM abajo</span>
+        {/* En un día doble, cuántas van: sin ninguna, avisa que hay dos abajo
+            (antes solo decía «AM y PM abajo» y nada más). */}
+        {varias && nHechas < hechos.length && (
+          <span style={{ fontSize: 11, color: LT.warning, fontWeight: 800 }}>
+            {nHechas === 0
+              ? (sesionesDelTitulo(selectedDay).every((s) => s.turno)
+                ? `${sesionesDelTitulo(selectedDay).map((s) => s.turno).join(' y ')} abajo`
+                : `${hechos.length} sesiones abajo`)
+              : `${nHechas} de ${hechos.length} terminadas`}
+          </span>
         )}
         {selectedCompleted && (
           <span style={{
@@ -1057,31 +1092,88 @@ const WeekDetail = ({
 
       {selectedDay.blocks && selectedDay.blocks.map((blk, bi) => {
         const blkSessionData = { exercises: sessionData.exercises ? Object.fromEntries(Object.entries(sessionData.exercises).filter(([k]) => k.startsWith(`${bi}-`)).map(([k, v]) => [parseInt(k.split('-')[1]), v])) : {} };
-        const hasPeriod = /\([AP]M\)/.test(blk.tag);
-        const isPM = /\(PM\)/.test(blk.tag);
-        const cleanName = blk.tag.replace(/^Sesi[óo]n \d+ \([AP]M\):\s*/, '');
+        const turno = turnoDeTag(blk.tag);
+        const isPM = turno === 'PM';
+        // Sin «Sesión 2 (PM): » delante ni «· ~65 min» detrás: la duración va aparte.
+        const cleanName = nombreDeSesion(blk.tag) || `Sesión ${bi + 1}`;
+        const minutos = minutosDeTag(blk.tag);
         /* AM y PM con colores FIJOS y opuestos: naranja de mañana, azul de tarde.
            Antes la tarde tomaba el color de la fase, y en Potencia la fase es
            naranja: las dos sesiones del día salían del mismo color. Andrés lo
            vio en su jueves y no se distinguía cuál era cuál. */
-        const accent = hasPeriod ? (isPM ? LT.blue : LT.warning) : phaseColor;
+        const accent = turno ? (isPM ? LT.blue : LT.warning) : phaseColor;
         const repite = blk.type === 'note' ? bloqueQueRepite(week, selectedIdx, blk) : null;
         const ejerciciosVistos = ejerciciosDelBloque(week, selectedIdx, blk);
         const exN = ejerciciosVistos.length ? ejerciciosVistos.filter(e => !e.isNote).length : null;
-        const isOpen = !!openBlocks[bi];
+        // Un día de una sesión la trae abierta; uno de dos, cerradas (ver `openBlocks`).
+        const isOpen = openBlocks[bi] ?? !varias;
+        const hecha = varias && !!hechos[bi];
+        const laSesion = `sesión ${turno ?? bi + 1}`;
+        const Icono = turno ? (isPM ? Sunset : Sunrise) : Dumbbell;
+        const detalle = [exN != null ? plural(exN, 'ejercicio', 'ejercicios') : null, minutos].filter(Boolean).join(' · ');
         return (
-          <div key={`${selectedIdx}-blk-${bi}`} style={{ marginBottom: 12, background: LT.surface, border: `1px solid ${isOpen ? accent + '55' : LT.border}`, borderRadius: 16, overflow: 'hidden' }}>
-            <button onClick={() => setOpenBlocks(p => ({ ...p, [bi]: !p[bi] }))} style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px',
-              background: 'transparent', border: 'none', borderLeft: `4px solid ${accent}`, cursor: 'pointer', fontFamily: FONT, textAlign: 'left',
-            }}>
-              {hasPeriod && <span style={{ fontSize: 10, fontWeight: 800, color: '#fff', background: accent, borderRadius: 6, padding: '3px 8px', letterSpacing: 0.5, flexShrink: 0 }}>{isPM ? 'PM' : 'AM'}</span>}
-              <span style={{ flex: 1, minWidth: 0, fontSize: 14.5, fontWeight: 700, color: LT.text }}>{cleanName}</span>
-              {exN != null && <span style={{ fontSize: 12, fontWeight: 600, color: LT.text3, flexShrink: 0, ...NUM_STYLE }}>{exN} ej</span>}
-              {isOpen ? <ChevronUp size={18} style={{ color: LT.text3, flexShrink: 0 }} /> : <ChevronDown size={18} style={{ color: LT.text3, flexShrink: 0 }} />}
+          /* LA TARJETA DE CADA SESIÓN ES UN BOTÓN Y TIENE QUE PARECERLO.
+             Andrés, 29 sep 2026: «me gustaría que estos 2 botones fueran más
+             bonitos». Eran una fila plana con una rayita de color, y con la
+             primera abierta la segunda ni se veía. Ahora cada una es una
+             tarjeta con su ícono (amanecer / atardecer), su nombre, cuántos
+             ejercicios y cuánto dura, y un botón redondo que dice que se abre.
+             Terminada, su encabezado se pinta de verde, igual que el botón de cerrar. */
+          <div key={`${selectedIdx}-blk-${bi}`} style={{
+            marginBottom: 12, borderRadius: 18, overflow: 'hidden', boxShadow: KP.shCard,
+            background: LT.surface,
+            border: `1.5px solid ${hecha ? `${LT.mint}55` : (isOpen ? `${accent}66` : LT.border)}`,
+          }}>
+            {/* Solo el ENCABEZADO se pinta de verde al terminar: si se pintara toda
+                la tarjeta, la lista de ejercicios de adentro quedaría sobre verde. */}
+            <button
+              type="button"
+              aria-expanded={isOpen}
+              className="kp-press"
+              onClick={() => setOpenBlocks((p) => ({ ...p, [bi]: !(p[bi] ?? !varias) }))}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '13px 14px',
+                background: hecha ? KP.mintSoft : 'transparent', border: 'none', cursor: 'pointer', fontFamily: FONT, textAlign: 'left',
+              }}
+            >
+              <span style={{
+                width: 46, height: 46, borderRadius: 14, flexShrink: 0, display: 'grid', placeItems: 'center',
+                background: hecha ? LT.mint : `${accent}1F`, color: hecha ? '#fff' : accent,
+              }}>
+                {hecha ? <Check size={22} strokeWidth={3} /> : <Icono size={22} />}
+              </span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 15.5, fontWeight: 800, color: LT.text, lineHeight: 1.2, overflowWrap: 'anywhere' }}>
+                  {cleanName}
+                </span>
+                <span style={{
+                  display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '3px 8px', marginTop: 5,
+                  fontSize: 12.5, fontWeight: 600, color: LT.text2, ...NUM_STYLE,
+                }}>
+                  {turno && (
+                    <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.5, color: '#fff', background: accent, borderRadius: 6, padding: '2px 7px' }}>
+                      {turno}
+                    </span>
+                  )}
+                  {/* Terminada, «Terminada» ocupa el lugar de los datos: el ícono
+                      verde ya dice que va hecha y así el encabezado no crece. */}
+                  {hecha ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: LT.mint, fontWeight: 800 }}>
+                      <Check size={13} strokeWidth={3} /> Terminada
+                    </span>
+                  ) : (detalle && <span>{detalle}</span>)}
+                </span>
+              </span>
+              <span aria-hidden="true" style={{
+                width: 32, height: 32, borderRadius: 16, flexShrink: 0, display: 'grid', placeItems: 'center',
+                background: hecha ? '#fff' : LT.surface2, color: LT.text2,
+                transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s',
+              }}>
+                <ChevronDown size={18} />
+              </span>
             </button>
             {isOpen && (
-              <div style={{ padding: '2px 16px 16px' }}>
+              <div style={{ padding: '12px 16px 16px' }}>
                 {blk.type === 'lift' && (() => {
                   const groups = groupIntoSets(blk.exercises);
                   let setNum = 0;
@@ -1136,6 +1228,48 @@ const WeekDetail = ({
                     {blk.text}
                   </div>
                 )}
+                {/* CADA SESIÓN SE TERMINA POR SU LADO (Andrés, 29 sep 2026: «cada
+                    sesión debería tener su botón de marcar como terminada»).
+                    Va al final de la lista, que es donde se está cuando se
+                    acaba, y con la misma cara que el botón del día: azul para
+                    marcar, verde cuando ya está. El del día entero solo sale
+                    en los días de una sesión. */}
+                {varias && (hecha ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
+                    <div style={{
+                      flex: 1, minHeight: 50, borderRadius: 14, background: LT.mint, color: '#fff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      fontFamily: FONT, fontSize: 14.5, fontWeight: 800,
+                    }}>
+                      <Check size={18} strokeWidth={3} /> Sesión {turno ?? bi + 1} terminada
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleBloque(bi)}
+                      style={{
+                        minHeight: 50, padding: '0 14px', borderRadius: 14, cursor: 'pointer',
+                        border: `1.5px solid ${LT.border}`, background: LT.surface, color: LT.text2,
+                        fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
+                      }}
+                    >
+                      Deshacer
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => toggleBloque(bi)}
+                    className="kp-press"
+                    style={{
+                      width: '100%', minHeight: 50, marginTop: 14, borderRadius: 14, border: 'none',
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9,
+                      cursor: 'pointer', fontFamily: FONT, fontSize: 14.5, fontWeight: 800, color: '#fff',
+                      background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, boxShadow: KP.shBtn,
+                    }}
+                  >
+                    <Check size={18} strokeWidth={3} /> Marcar {laSesion} como terminada
+                  </button>
+                ))}
               </div>
             )}
           </div>
@@ -1175,7 +1309,7 @@ const WeekDetail = ({
           Hecha, se pinta de verde entero —se lee "listo" desde lejos— y
           "Deshacer" va aparte y chico. Antes estaba pegado al mismo texto
           ("Sesión terminada · deshacer") y no se distinguía qué parte se tocaba. */}
-      {(selectedDay.exercises || selectedDay.blocks) && !descansoPuro && (
+      {(selectedDay.exercises || selectedDay.blocks) && !descansoPuro && !varias && (
         selectedCompleted ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
             <div style={{
@@ -1408,7 +1542,7 @@ const CursorSelector = ({ current, sessionsData, onSelect, onClose }) => {
                                 const isDone = !!sessionsData[id]?.completed;
                                 const isCurrent = current && current.phaseId === phase.id && current.weekNum === week.num && current.dayIdx === idx;
                                 const cat = tipoDeSesion(day);
-                                const dayName = day.name || (day.blocks ? day.blocks.map(b => b.tag.replace(/^Sesi[óo]n \d+ \([AP]M\): /, '')).join(' + ') : day.day);
+                                const dayName = sinDuracion(day.name || '') || textoDeSesiones(sesionesDelTitulo(day)) || day.day;
                                 return (
                                   <button
                                     key={idx}
@@ -1477,6 +1611,9 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
   // Lo que toca HOY según el calendario del dispositivo (no según lo marcado).
   const next = useMemo(() => sessionForToday(PLAN, kind, cursor), [PLAN, kind, cursor]);
   const week = useMemo(() => weekOverview(PLAN, kind, cursor), [PLAN, kind, cursor]);
+  // Un día con dos entradas se dice «2 sesiones», no «Fuerza + Movilidad»: así no
+  // se lee como una sola (Andrés, 29 sep 2026).
+  const nombreDeSemana = (d) => (d.sesiones > 1 ? `${d.sesiones} sesiones` : d.name);
   const cursorCompleted = next ? !!sessionsData[next.id]?.completed : false;
   const todayScore = useMemo(() => {
     const d = wellness[today()];
@@ -1496,7 +1633,9 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
     const tipo = tipoDeSesion(d).label;
     if (d.blocks) {
       const exCount = d.blocks.reduce((s, b) => s + reales(ejerciciosDelBloque(next.week, next.dayIdx, b)), 0);
-      return { exercises: exCount, duration: d.dual ? '~2 h' : '~75 min', dual: d.dual };
+      // La duración que trae escrita el propio plan, si la trae (ver `lib/sesiones.js`).
+      const propia = d.blocks.length === 1 ? minutosDeTag(d.blocks[0].tag) : null;
+      return { exercises: exCount, duration: d.dual ? '~2 h' : (propia || '~75 min'), dual: d.dual };
     }
     const n = reales(d.exercises);
     return { exercises: n, duration: n ? '~55 min' : tipo };
@@ -1504,7 +1643,11 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
 
   const { text: greetText } = greeting();
 
-  const sessionTitle = next ? (next.day.name || (next.day.blocks ? next.day.blocks.map(b => b.tag.replace(/^Sesi[óo]n \d+ \([AP]M\): /, '')).join(' + ') : next.day.day)) : '';
+  /* El título de hoy. Una sesión: su nombre, sin «· ~70 min» pegado. Dos
+     (mañana y tarde): una etiqueta por cada una, no «Velocidad + Lower
+     Strength» (Andrés, 29 sep 2026). Ver `lib/sesiones.js`. */
+  const sesionesDeHoy = next ? sesionesDelTitulo(next.day) : [];
+  const sessionTitle = next ? (sinDuracion(next.day.name || '') || textoDeSesiones(sesionesDeHoy) || next.day.day) : '';
 
   return (
     <div style={{ paddingBottom: 100, background: LT.bg, minHeight: '100svh', fontFamily: FONT }}>
@@ -1549,9 +1692,13 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
                 <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)' }}>
                   {cursorCompleted ? 'Completada' : 'Hoy te toca'}
                 </div>
-                <div style={{ fontSize: 24, fontWeight: 700, color: '#fff', lineHeight: 1.05, marginTop: 3, letterSpacing: -0.5 }}>
-                  {sessionTitle}
-                </div>
+                {sesionesDeHoy.length > 1 ? (
+                  <EtiquetasDeSesion sesiones={sesionesDeHoy} sobreAzul envolver tamano={14} style={{ marginTop: 10 }} />
+                ) : (
+                  <div style={{ fontSize: 24, fontWeight: 700, color: '#fff', lineHeight: 1.05, marginTop: 3, letterSpacing: -0.5 }}>
+                    {sessionTitle}
+                  </div>
+                )}
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.82)', marginTop: 8, lineHeight: 1.4 }}>
                   {kind === 'weekly' ? weekdayLabel(next.day.day) : (deCorrido ? semanaDe(next) : next.phase.name)}<br />
                   {[
@@ -1633,7 +1780,7 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
             </div>
             <div style={{ marginTop: 8, fontSize: 14, color: LT.text2, lineHeight: 1.5 }}>
               {week.next
-                ? `Tu siguiente entrenamiento es el ${weekdayLabel(week.next.key)}${week.next.name ? ` · ${week.next.name}` : ''}.`
+                ? `Tu siguiente entrenamiento es el ${weekdayLabel(week.next.key)}${nombreDeSemana(week.next) ? ` · ${nombreDeSemana(week.next)}` : ''}.`
                 : 'Aún no hay entrenamientos en tu semana.'}
             </div>
             <button
@@ -1683,7 +1830,7 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
             {week.days.map((d) => (
               <div
                 key={d.key}
-                title={d.name || 'Descanso'}
+                title={nombreDeSemana(d) || 'Descanso'}
                 style={{
                   flex: '1 1 0', minWidth: 26, textAlign: 'center', borderRadius: 8,
                   padding: '7px 2px', fontSize: 10.5, fontWeight: 800,
@@ -1698,7 +1845,7 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
           </div>
           <div style={{ fontSize: 11, color: LT.text3, marginTop: 10, lineHeight: 1.4 }}>
             {week.next
-              ? `Siguiente: ${weekdayLabel(week.next.key)}${week.next.name ? ` · ${week.next.name}` : ''}`
+              ? `Siguiente: ${weekdayLabel(week.next.key)}${nombreDeSemana(week.next) ? ` · ${nombreDeSemana(week.next)}` : ''}`
               : 'Sin entrenamientos esta semana'}
           </div>
         </div>

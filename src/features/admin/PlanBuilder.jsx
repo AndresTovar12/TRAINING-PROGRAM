@@ -28,6 +28,7 @@ import SelectorCategoria from '@/features/admin/SelectorCategoria';
 import SelectorTipoSesion from '@/features/admin/SelectorTipoSesion';
 import Portada from '@/components/Portada';
 import { pluralS } from '@/lib/plural';
+import { sesionesDelTitulo, textoDeSesiones } from '@/lib/sesiones';
 import { esArranque, guardaLugar, leeLugar } from '@/lib/lugar';
 import { useScrollLugar } from '@/lib/useLugar';
 import InterruptorVista from '@/components/InterruptorVista';
@@ -1846,15 +1847,16 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
         <div style={{ flex: '1 1 220px', minWidth: 0 }}>
         <Field label="Nombre de la sesión">
           {/* En un día de dos sesiones el nombre casi nunca está guardado: la
-              app del atleta lo arma juntando las dos ("Velocidad máxima +
-              French Contrast"). Aquí salía "Ej. Tren inferior" y parecía que
+              app del atleta arma el título con las dos ("AM Velocidad máxima ·
+              PM French Contrast"). Aquí salía "Ej. Tren inferior" y parecía que
               al día le faltaba nombre. Se enseña lo mismo que ve el atleta,
-              como sugerencia gris — no se escribe nada en el plan. */}
+              como sugerencia gris — no se escribe nada en el plan. Con el turno
+              delante y sin «+», que se leía como una sola sesión. */}
           <input
             value={day.name || ''}
             onChange={(e) => onPatch({ name: e.target.value })}
             placeholder={dual && day.blocks?.length
-              ? day.blocks.map((b) => limpiaTag(b.tag)).filter(Boolean).join(' + ')
+              ? textoDeSesiones(sesionesDelTitulo({ blocks: day.blocks }))
               : 'Ej. Tren inferior — fuerza'}
             style={inputStyle}
           />

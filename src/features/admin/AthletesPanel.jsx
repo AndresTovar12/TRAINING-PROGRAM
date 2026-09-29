@@ -18,7 +18,8 @@ import { useConfirmacion } from '@/components/Confirmacion';
 import { useIsDesktop } from '@/lib/useViewport';
 import { T, FONT, KP } from '@/lib/theme';
 import { plural, pluralS } from '@/lib/plural';
-import { esDescanso, dondeVa, sessionIdFor, estructuraDelPlan } from '@/lib/training-utils';
+import { esDescanso, dondeVa, sessionIdFor, estructuraDelPlan, nombreDeSesion } from '@/lib/training-utils';
+import { turnoDeTag, minutosDeTag } from '@/lib/sesiones';
 import HojaFlotante from '@/components/HojaFlotante';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
 import ListaDesplegable from '@/components/ListaDesplegable';
@@ -725,7 +726,8 @@ function DentroDelDia({ day }) {
             <div key={bi}>
               {b.tag && (
                 <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 0.5, color: T.text3, marginBottom: 3 }}>
-                  {b.tag}
+                  {/* «Sesión 2 (PM): Lower · ~65 min» → «PM · Lower · 65 min» */}
+                  {[turnoDeTag(b.tag), nombreDeSesion(b.tag), minutosDeTag(b.tag)].filter(Boolean).join(' · ')}
                 </div>
               )}
               {(b.exercises || []).map(fila)}

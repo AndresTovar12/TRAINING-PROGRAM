@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Check, ChevronRight, CornerUpLeft, MoreHorizontal, Plus } from 'lucide-react';
 import { LT, KP, FONT, NUM_STYLE, tipoDeSesion } from '@/lib/theme';
-import { esDescanso, enOrdenDeSemana, nombreDeSesion, semanaGlobal } from '@/lib/training-utils';
+import { esDescanso, enOrdenDeSemana, semanaGlobal } from '@/lib/training-utils';
+import { sesionesDelTitulo, textoDeSesiones } from '@/lib/sesiones';
+import EtiquetasDeSesion from '@/components/EtiquetasDeSesion';
 import { pluralS } from '@/lib/plural';
 
 /* Los siete días, empezando en lunes. Son las mismas claves que guarda el plan
@@ -10,11 +12,30 @@ import { pluralS } from '@/lib/plural';
 const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
 /** Cómo se llama una sesión: su nombre, o sus bloques, o su tipo. */
-const nombreDe = (day) => day.name
-  // `nombreDeSesion` toma la ETIQUETA de un bloque, no el día: pasarle el
-  // objeto reventaba la hoja entera.
-  || (day.blocks || []).map((b) => nombreDeSesion(b.tag)).filter(Boolean).join(' + ')
+const nombreDe = (day) => textoDeSesiones(sesionesDelTitulo(day))
   || (esDescanso(day) ? 'Descanso' : tipoDeSesion(day).label);
+
+/* El título de un renglón de día.
+
+   Un día con UNA sesión se escribe como siempre, cortado con «…» si no cabe.
+   Uno con DOS —mañana y tarde, o el mismo día de la semana con dos entradas—
+   lleva una etiqueta por cada sesión en vez de sus nombres unidos con «+»:
+   «Velocidad + Lower Strength» se lee como una sola sesión que junta las dos
+   cosas (Andrés, 29 sep 2026). El renglón puede crecer a dos líneas. */
+function TituloDelRenglon({ dias, color, peso = 700 }) {
+  const sesiones = sesionesDelTitulo(dias);
+  if (sesiones.length > 1) {
+    return <EtiquetasDeSesion sesiones={sesiones} style={{ flex: 1 }} />;
+  }
+  return (
+    <span style={{
+      flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: peso, color,
+      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+    }}>
+      {nombreDe(Array.isArray(dias) ? dias[0] : dias)}
+    </span>
+  );
+}
 
 /**
  * LA forma de ver un plan en esta app. Solo hay una.
@@ -294,8 +315,8 @@ export default function NavegadorDelPlan({
               {editor
                 ? DIAS.map((clave) => {
                   /* En el editor, un renglón por día de la semana, tenga o no
-                     sesión. Si tiene dos (mañana y tarde), se nombran juntas:
-                     el editor de la derecha las muestra las dos. */
+                     sesión. Si tiene dos (mañana y tarde), cada una lleva su
+                     etiqueta: el editor de la derecha las muestra las dos. */
                   const sesiones = (semana?.days ?? []).filter((d) => d.day === clave);
                   const vacio = sesiones.length === 0;
                   const elegido = editor.diaElegido === clave;
@@ -323,13 +344,13 @@ export default function NavegadorDelPlan({
                         width: 7, height: 7, borderRadius: 4, flexShrink: 0,
                         background: vacio ? 'transparent' : (esDescanso(primera) ? LT.text3 : tipoDeSesion(primera).c),
                       }} />
-                      <span style={{
-                        flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: vacio ? 600 : 700,
-                        color: vacio ? LT.text3 : LT.text,
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      }}>
-                        {vacio ? 'Sin sesión' : sesiones.map(nombreDe).join(' + ')}
-                      </span>
+                      {vacio ? (
+                        <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 600, color: LT.text3 }}>
+                          Sin sesión
+                        </span>
+                      ) : (
+                        <TituloDelRenglon dias={sesiones} color={LT.text} />
+                      )}
                       {suyo && pastilla(textoAqui, !elegido)}
                       {elegido && pastilla('EDITANDO', true)}
                     </button>
@@ -363,13 +384,7 @@ export default function NavegadorDelPlan({
                           {day.day}
                         </span>
                         <span style={{ width: 7, height: 7, borderRadius: 4, background: descanso ? LT.text3 : tipo.c, flexShrink: 0 }} />
-                        <span style={{
-                          flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 700,
-                          color: descanso ? LT.text3 : LT.text,
-                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        }}>
-                          {nombreDe(day)}
-                        </span>
+                        <TituloDelRenglon dias={day} color={descanso ? LT.text3 : LT.text} />
                         {detalleDia?.(f, semana, idx)}
                         {suyo && pastilla(textoAqui, true)}
                         {mirando && pastilla('VIENDO', false)}
