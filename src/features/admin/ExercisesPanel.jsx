@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Plus, Minus, Search, X, Trash2, Loader2, Video, Dumbbell,
-  Copy, RotateCcw, Pencil, ChevronRight, ChevronDown,
+  Copy, RotateCcw, Pencil, ChevronRight, ChevronDown, Zap,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
@@ -13,6 +13,7 @@ import {
   addExerciseMedia, listMuscleGroups, createMuscleGroup, deleteMuscleGroup,
 } from '@/lib/api';
 import MediaDelEjercicio from '@/features/admin/MediaDelEjercicio';
+import ArreglarVideos from '@/features/admin/ArreglarVideos';
 import SelectorCategoria from '@/features/admin/SelectorCategoria';
 import ListaDesplegable from '@/components/ListaDesplegable';
 import InterruptorVista from '@/components/InterruptorVista';
@@ -1103,6 +1104,16 @@ export default function ExercisesPanel({ viendoComo }) {
   const [preguntando, setPreguntando] = useState(null);
   const esAncho = useIsWide();
 
+  /* «Arreglar videos lentos» (ver `ArreglarVideos`). El botón se retira solo
+     cuando la revisión dice que todos los videos ya cargan rápido: los nuevos
+     salen bien de fábrica, así que es un arreglo de una sola vez y no tiene por
+     qué quedarse estorbando. Se recuerda por cuenta, en este navegador. */
+  const claveVideosOk = `tl.videosOk.${user?.id}`;
+  const [arreglando, setArreglando] = useState(false);
+  const [videosOk, setVideosOk] = useState(() => {
+    try { return localStorage.getItem(claveVideosOk) === '1'; } catch { return false; }
+  });
+
   /* Manda lo que haya elegido Andrés. Mientras no elija nada, se queda lo de
      siempre: tarjetas en pantalla ancha, lista en el teléfono. */
   const [vista, eligeVista] = useVistaEjercicios();
@@ -1346,6 +1357,19 @@ export default function ExercisesPanel({ viendoComo }) {
         >
           <Plus size={18} /> Añadir ejercicio
         </button>
+        {!viendoComo && !videosOk && (
+          <button
+            type="button"
+            onClick={() => setArreglando(true)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 16px', borderRadius: 12,
+              border: `1.5px solid ${T.accent}`, cursor: 'pointer', background: T.bg2,
+              color: T.accent, fontFamily: FONT, fontSize: 14, fontWeight: 800,
+            }}
+          >
+            <Zap size={17} /> Arreglar videos lentos
+          </button>
+        )}
       </div>
 
       {/* Filtros: categoría y grupo muscular (listas desplegables) */}
@@ -1477,6 +1501,20 @@ export default function ExercisesPanel({ viendoComo }) {
             />
           )))}
         </div>
+      )}
+
+      {arreglando && (
+        <ArreglarVideos
+          usuario={user?.id}
+          esMaster={isMaster}
+          onCerrar={() => setArreglando(false)}
+          // Las direcciones cambiaron en la base: se vuelve a leer el repertorio.
+          onArreglados={() => { listExercises().then(setExercises).catch(() => {}); }}
+          onTodoBien={() => {
+            try { localStorage.setItem(claveVideosOk, '1'); } catch { /* sin memoria: el botón se queda */ }
+            setVideosOk(true);
+          }}
+        />
       )}
 
       {preguntando && (

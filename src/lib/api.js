@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { esperadasEstaSemana } from '@/lib/comoVa';
+import { conIndice } from '@/lib/indiceDeVideo';
 
 const AVATAR_BUCKET = 'avatars';
 
@@ -386,14 +387,25 @@ const mb = (bytes) => Math.round((bytes / 1048576) * 10) / 10;
  * el video, le doy a la palomita y no sucede nada".
  *
  * `onAvance` recibe un numero de 0 a 100.
+ *
+ * UN VIDEO SALE CON SU INDICE PUESTO. Lo que graba el navegador no lo trae, y
+ * sin el cada video tardaba 10-19 s en dar su primera imagen (ver
+ * `indiceDeVideo`). Se le pone aqui, en el unico sitio por el que pasa toda
+ * subida, y no en cada pantalla: la que se olvidara volveria a subir videos
+ * lentos sin que nadie lo notara. No cambia la imagen, dura ~1 s, y si algo
+ * falla se sube el archivo tal cual: un video lento se ve, uno que no sube no.
+ * `sinIndice` es para quien ya se lo puso (arreglaVideos).
  */
-export async function uploadExerciseMedia(file, kind = 'media', onAvance) {
+export async function uploadExerciseMedia(file, kind = 'media', onAvance, { sinIndice = false } = {}) {
   if (file.size > LIMITE_MEDIA_MB * 1048576) {
     throw new Error(
       `Este archivo pesa ${mb(file.size)} MB, demasiado incluso para un video largo. ` +
       'Revisa que sea el archivo correcto.',
     );
   }
+
+  // De aqui en adelante `file` es el que lleva el indice (o el mismo de antes).
+  if (!sinIndice && (file.type || '').startsWith('video/')) file = (await conIndice(file)).archivo;
 
   const token = await tokenDeAhora();
 
