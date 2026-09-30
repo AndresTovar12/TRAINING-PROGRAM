@@ -10,9 +10,17 @@
  *
  * Uso:  node scripts/smoke.mjs            → contra el servidor local
  *       BASE_URL=https://... node ...     → contra producción
+ *
+ * Las contraseñas de las cuentas NO están en el código (el repositorio es
+ * público): van en el archivo `.env` (git no lo sube) o en el entorno, como
+ * SMOKE_PASSWORD y SMOKE_COACH_PASSWORD. Sin ellas, el script se detiene al
+ * empezar y lo dice.
  */
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import net from 'node:net';
 
 /**
@@ -83,11 +91,35 @@ async function consigueServidor() {
 }
 
 let BASE = 'http://localhost:5173';
-const PASSWORD = process.env.SMOKE_PASSWORD || 'Adtr.123';
+
+/**
+ * Una contraseña del entorno o del `.env` de la raíz (git no lo sube). NUNCA
+ * un valor por defecto aquí: este archivo está en un repositorio público, y lo
+ * que se escriba en él queda visible para siempre en su historial.
+ */
+function leeSecreto(nombre) {
+  if (process.env[nombre]) return process.env[nombre];
+  try {
+    const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
+    const linea = readFileSync(join(raiz, '.env'), 'utf8').split('\n').find((l) => l.startsWith(`${nombre}=`));
+    return linea ? linea.slice(nombre.length + 1).trim().replace(/^(['"])(.*)\1$/, '$2') : undefined;
+  } catch {
+    return undefined;
+  }
+}
+const PASSWORD = leeSecreto('SMOKE_PASSWORD');
+const PASSWORD_COACH = leeSecreto('SMOKE_COACH_PASSWORD');
+if (!PASSWORD || !PASSWORD_COACH) {
+  console.error('✗ Faltan las contraseñas de la prueba de humo. Ya no están en el código: el repositorio es público.');
+  console.error('  Ponlas en el archivo .env (git no lo sube) o en el entorno:');
+  console.error('    SMOKE_PASSWORD=…        (andrestovar_admin y andrestovar)');
+  console.error('    SMOKE_COACH_PASSWORD=…  (coach_prueba)');
+  process.exit(1);
+}
 
 const ACCOUNTS = [
   { user: 'andrestovar_admin', rol: 'master', esAdmin: true },
-  { user: 'coach_prueba', rol: 'coach', esAdmin: true, password: 'Coach.123' },
+  { user: 'coach_prueba', rol: 'coach', esAdmin: true, password: PASSWORD_COACH },
   { user: 'andrestovar', rol: 'atleta', esAdmin: false },
 ];
 
