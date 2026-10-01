@@ -35,7 +35,7 @@
  * se arranca el video «por si acaso»; no hay → el video congelado de siempre.
  */
 import { useEffect, useRef, useState } from 'react';
-import { ligaExterna } from '@/lib/videos';
+import { ligaExterna, estiloDelEncuadre } from '@/lib/videos';
 import { mitadDe, segundos } from '@/lib/fotogramas';
 import { usePoster } from '@/lib/posters';
 
@@ -44,16 +44,21 @@ const RELLENO = {
   objectFit: 'cover', display: 'block',
 };
 
-/** La foto sacada del video: una vista previa borrosa y, encima, la nítida cuando llega. */
-function FotoDeVideo({ fila, grande }) {
+/**
+ * La foto sacada del video: una vista previa borrosa y, encima, la nítida cuando llega.
+ * Con `encuadre` se coloca igual que el video (la caja ya tiene la forma del recorte),
+ * para que al darle play la imagen no «salte».
+ */
+function FotoDeVideo({ fila, grande, encuadre }) {
   const [lista, setLista] = useState(false);
   const src = grande ? fila.poster_url : (fila.mini_url || fila.poster_url);
+  const base = encuadre ? estiloDelEncuadre(encuadre) : RELLENO;
   return (
     <>
       {fila.lqip && (
         <img
           src={fila.lqip} alt="" aria-hidden="true"
-          style={{ ...RELLENO, filter: 'blur(8px)', transform: 'scale(1.12)' }}
+          style={{ ...base, filter: 'blur(8px)', ...(encuadre ? {} : { transform: 'scale(1.12)' }) }}
         />
       )}
       <img
@@ -61,7 +66,7 @@ function FotoDeVideo({ fila, grande }) {
         ref={(el) => { if (el?.complete && el.naturalWidth && !lista) setLista(true); }}
         key={src} src={src} alt="" decoding="async" loading={grande ? 'eager' : 'lazy'}
         onLoad={() => setLista(true)}
-        style={{ ...RELLENO, opacity: lista ? 1 : 0, transition: 'opacity .2s ease' }}
+        style={{ ...base, opacity: lista ? 1 : 0, transition: 'opacity .2s ease' }}
       />
     </>
   );
@@ -132,12 +137,14 @@ function VideoComoFoto({ src, desde, hasta }) {
  * @param video   dirección del video, para sacarle el fotograma de la mitad
  * @param desde   inicio del recorte del video, en segundos (si lo tiene)
  * @param hasta   fin del recorte del video, en segundos (si lo tiene)
+ * @param encuadre  el encuadre del video ({ x, y, w, h }): solo para cuando la caja ya
+ *                  tiene la forma del recorte (la tarjeta de la ficha)
  * @param grande  true en pantallas donde la foto ocupa buena parte de la pantalla
  *                (la ficha del ejercicio): usa la foto grande y no la chica
  * @param style   se aplica al recuadro de fuera (tamaño, borde, color de fondo)
  * @param children  lo que se pinta cuando no hay ni foto ni video
  */
-export default function Portada({ foto, video, desde, hasta, grande = false, style, children }) {
+export default function Portada({ foto, video, desde, hasta, encuadre, grande = false, style, children }) {
   // Un video que vive fuera (TikTok, YouTube) no da un primer fotograma: el
   // <video> no puede leerlo y el recuadro se quedaría en negro sin que nada lo
   // explique. En ese caso se pinta lo de siempre.
@@ -149,7 +156,7 @@ export default function Portada({ foto, video, desde, hasta, grande = false, sty
   if (foto) {
     contenido = <img src={foto} alt="" loading="lazy" style={RELLENO} />;
   } else if (propio) {
-    if (poster) contenido = <FotoDeVideo fila={poster} grande={grande} />;
+    if (poster) contenido = <FotoDeVideo fila={poster} grande={grande} encuadre={encuadre} />;
     else if (poster === undefined) contenido = <Espera />;
     else contenido = <VideoComoFoto src={video} desde={desde} hasta={hasta} />;
   }

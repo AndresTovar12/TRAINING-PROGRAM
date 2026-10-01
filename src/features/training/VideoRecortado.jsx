@@ -1,8 +1,14 @@
 import { useRef, useState, useEffect } from 'react';
-import { ExternalLink, Loader2 } from 'lucide-react';
-import { ligaExterna } from '@/lib/videos';
+import { ExternalLink, Loader2, Maximize2, Pause, Play } from 'lucide-react';
+import { ligaExterna, estiloDelEncuadre } from '@/lib/videos';
 import { usePoster } from '@/lib/posters';
 import { T, FONT } from '@/lib/theme';
+
+const RELLENO = { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' };
+const mmss = (s) => {
+  const n = Math.max(0, Math.floor(s || 0));
+  return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`;
+};
 
 /**
  * Reproduce un video de ejercicio respetando el tramo que eligió el coach.
@@ -12,33 +18,46 @@ import { T, FONT } from '@/lib/theme';
  * no con `#t=inicio,fin` en la dirección porque Safari ignora el final, que
  * es justamente la mitad que importa.
  *
+ * UN VIDEO PROPIO LLENA SU CAJA. No trae marco, forma ni bordes: se coloca con
+ * `position: absolute` dentro de la tarjeta que lo contiene (ver
+ * `TarjetaDeVideo`), que ya tiene la forma exacta del recorte. Así no hay
+ * barras negras y la pantalla no cambia de tamaño al darle play. Los controles
+ * son propios (tocar para pausar, barra de avance del tramo, pantalla completa)
+ * y no los del navegador, que en cada aparato se ven distintos y baratos.
+ *
  * POR QUÉ TIENE ARCHIVO PROPIO. Vivía dentro de `ExerciseMediaModal`, una
  * pantalla que `FichaEjercicio` reemplazó y que terminó sin que nadie la
  * abriera. Al borrarla, esto —que sí se usa— se quedó sin casa.
+ *
+ * @param reproduce      false = montado y preparándose, sin arrancar (ver abajo)
+ * @param reproducirRef  ref donde deja un `play()` para llamarlo dentro del toque
+ * @param onMedidas      avisa del ancho y alto reales del archivo (para la forma de la tarjeta)
+ * @param estilo         solo para videos de fuera (TikTok, YouTube): el marco del iframe
  */
-export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef }) {
+export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef, onMedidas }) {
   const ref = useRef(null);
-  // Medidas reales del archivo. Hacen falta para saber qué forma tiene el
-  // trozo recortado: el encuadre viene en fracciones, y una fracción no dice
-  // nada de la proporción hasta multiplicarla por los píxeles del video.
-  const [medidas, setMedidas] = useState(null);
+  const pista = useRef(null);
+  const arrastra = useRef(false);
   const { url, inicio, fin, sinAudio, encuadre } = video;
   const liga = ligaExterna(url);
   /* La foto del video, que se ve MIENTRAS carga en vez de un cuadro negro con
      el icono de pausa. Andrés, 1 oct 2026: "le pica al video y el video tarda
-     muchísimo en cargar" y lo que ve es un rectángulo negro. Aunque el video
-     ya tarda segundos y no minutos, esos segundos se ven como una foto con su
-     indicador de carga, no como una pantalla rota.
+     muchísimo en cargar" y lo que ve es un rectángulo negro.
      `arrancadoDe` guarda de QUÉ video ya arrancó: así cambiar de ángulo no
      arrastra el «ya arrancó» del anterior. `noArranca` cubre el caso en que
      Safari rechaza el play() automático: sin él la foto taparía los controles
-     para siempre y no habría forma de darle play. */
+     para siempre y no habría forma de darle play (y entonces salen los
+     controles del navegador). `listoDe`: de qué video ya hay datos para
+     arrancar; si ya está listo cuando le dan play, la foto ni se asoma. */
   const poster = usePoster(liga ? null : url);
   const [arrancadoDe, setArrancadoDe] = useState(null);
   const [noArranca, setNoArranca] = useState(null);
-  // `listoDe`: de qué video ya hay datos suficientes para arrancar. Si ya está listo cuando se le da play,
-  // la foto ni se asoma (no hay nada que tapar).
   const [listoDe, setListoDe] = useState(null);
+  const [tiempo, setTiempo] = useState(inicio ?? 0);
+  const [largo, setLargo] = useState(0);
+  const [enPausa, setEnPausa] = useState(true);
+  const [visibles, setVisibles] = useState(true);
+  const [toque, setToque] = useState(0);
   const sinFoto = arrancadoDe === url || noArranca === url || (reproduce && listoDe === url);
 
   /* ARRANCA SOLO, NO A LA ESPERA DE OTRO TOQUE. Sin esto, este componente
@@ -49,10 +68,10 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef 
      Se llama con `play()` y no con el atributo `autoPlay`: los navegadores
      exigen que el video empiece muted si no hay un gesto del usuario detrás.
      `.catch()` traga el rechazo que dan Safari/iOS cuando el gesto ya se perdió;
-     si pasa, el botón nativo sigue ahí.
+     si pasa, salen los controles del navegador.
 
-     CUÁNDO. Con `reproduce` en true desde el principio (lo de siempre) arranca
-     al montarse. Con `reproduce` en false el video se monta ESCONDIDO y solo se
+     CUÁNDO. Con `reproduce` en true desde el principio arranca al montarse. Con
+     `reproduce` en false el video se monta DETRÁS de la portada y solo se
      prepara —baja el índice y salta al inicio del recorte—, para que cuando el
      atleta le dé play ya esté listo (ver `FichaEjercicio`). Medido en Safari y
      Chrome: con 1 s de ventaja el toque pasa de 1-3 s a menos de 0.02 s.
@@ -72,6 +91,13 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef 
     const v = ref.current;
     if (v?.paused) v.play()?.catch(() => setNoArranca(url));
   }, [url, reproduce]);
+
+  // Los controles se esconden solos a los 2.5 s de ir reproduciendo, y vuelven con cualquier toque o al pausar.
+  useEffect(() => {
+    if (!reproduce || enPausa || !visibles) return undefined;
+    const t = setTimeout(() => setVisibles(false), 2500);
+    return () => clearTimeout(t);
+  }, [reproduce, enPausa, visibles, toque]);
 
   /* Un video que vive fuera (TikTok, YouTube, un reel) no es un archivo
      nuestro: no se puede recortar, ni quitarle el audio, ni encuadrarlo. Se
@@ -106,8 +132,8 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef 
             </span>
           </div>
         )}
-        {/* Con fondo propio: este bloque puede caer sobre la cabecera negra del
-            ejercicio, y un enlace azul sobre negro no se lee. */}
+        {/* Con fondo propio: este bloque puede caer sobre un fondo oscuro, y un
+            enlace azul sobre negro no se lee. */}
         <a
           href={liga.abrir}
           target="_blank"
@@ -125,97 +151,66 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef 
     );
   }
 
-  const estiloDelVideo = (
-        encuadre
-          /* Con encuadre el video se agranda y se desplaza dentro de un marco
-             que lo recorta. Es la única forma de recortar la imagen sin
-             reencodar el archivo — reencodar en el navegador le bajaría la
-             calidad, que es lo que Andrés dijo que más le importa. */
-          ? {
-              position: 'absolute',
-              width: `${100 / encuadre.w}%`,
-              height: `${100 / encuadre.h}%`,
-              left: `${-(encuadre.x / encuadre.w) * 100}%`,
-              top: `${-(encuadre.y / encuadre.h) * 100}%`,
-              // `fill` y no `contain`: el marco ya tiene la forma exacta del
-              // trozo, así que el video debe llenarlo sin dejar franjas.
-              objectFit: 'fill',
-              /* Sin esto el encuadre NO funciona y no se nota por qué: la app
-                 tiene un `max-width: 100%` global para que las imágenes no se
-                 desborden, y aquí el video TIENE que desbordarse —se agranda
-                 al 166% y se desplaza para que el marco enseñe solo el trozo
-                 elegido. El alto sí se aplicaba y el ancho se quedaba corto,
-                 así que quedaba una franja negra al lado. */
-              maxWidth: 'none', maxHeight: 'none',
-              display: 'block', background: '#000',
-            }
-          : (estilo ?? { width: '100%', borderRadius: 14, marginTop: 12, background: '#000' })
-  );
+  const ini = inicio ?? 0;
+  const duracion = Math.max(0.1, (fin ?? largo) - ini);
+  const progreso = Math.min(1, Math.max(0, (tiempo - ini) / duracion));
+  const controlesPropios = reproduce && noArranca !== url;
 
-  // Con foto y sin encuadre el video llena un marco que ya tiene la proporción del fotograma.
-  // (Sin las medidas del fotograma no se puede reservar el marco: en ese caso, como si no hubiera foto.)
-  const llenaElMarco = !encuadre && !!poster?.ancho && !!poster?.alto;
-  const video_ = (
-    <video
-      key={url}
-      ref={ref}
-      src={url}
-      controls
-      playsInline
-      muted={!!sinAudio}
-      preload="metadata"
-      onCanPlay={() => setListoDe(url)}
-      onPlaying={() => setArrancadoDe(url)}
-      onError={() => setNoArranca(url)}
-      onLoadedMetadata={(e) => {
-        const v = e.currentTarget;
-        setMedidas({ w: v.videoWidth || 16, h: v.videoHeight || 9 });
-        /* Se salta SIEMPRE, aunque no haya recorte. Sin salto, Safari de iPhone
-           deja el video en negro hasta darle play: con `preload="metadata"` iOS
-           carga la duración pero no dibuja ningún fotograma. El +0,05 es para
-           que el salto ocurra de verdad cuando el recorte empieza en 0. */
-        v.currentTime = (inicio ?? 0) + 0.05;
-      }}
-      onTimeUpdate={() => {
-        const v = ref.current;
-        if (!v) return;
-        if (fin != null && v.currentTime >= fin) v.pause();
-        // Si el atleta rebobina antes del inicio, se le devuelve al inicio:
-        // lo de antes es material que el coach decidió no enseñarle.
-        if (inicio != null && v.currentTime < inicio - 0.4) v.currentTime = inicio;
-      }}
-      style={llenaElMarco
-        ? { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000' }
-        : estiloDelVideo}
-    />
-  );
+  const mostrar = () => { setVisibles(true); setToque((n) => n + 1); };
 
-  /* LA FOTO, ENCIMA DEL VIDEO HASTA QUE ARRANCA. No recibe toques (los
-     controles del video quedan a mano debajo) y se apaga con un fundido. Con
-     encuadre la foto se coloca EXACTAMENTE como el video (mismo estilo), así
-     que cae justo donde va a caer la imagen; sin encuadre llena el marco. */
+  // Tocar el video pausa o sigue. Si ya llegó al final del tramo, vuelve a empezar desde el inicio.
+  const alternar = () => {
+    const v = ref.current;
+    if (!v) return;
+    mostrar();
+    if (v.paused) {
+      if (v.ended || (fin != null && v.currentTime >= fin - 0.15)) v.currentTime = ini;
+      v.play()?.catch(() => setNoArranca(url));
+    } else {
+      v.pause();
+    }
+  };
+
+  // La barra mide el TRAMO que ve el atleta, no el archivo entero.
+  const salta = (e) => {
+    const r = pista.current?.getBoundingClientRect();
+    const v = ref.current;
+    if (!r || !v || !r.width) return;
+    const p = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    v.currentTime = ini + p * duracion;
+    setTiempo(v.currentTime);
+  };
+
+  // Pantalla completa del propio video: en iPhone abre el reproductor de Apple, en lo demás el del navegador.
+  const pantallaCompleta = () => {
+    const v = ref.current;
+    if (!v) return;
+    if (v.requestFullscreen) v.requestFullscreen()?.catch(() => v.webkitEnterFullscreen?.());
+    else v.webkitEnterFullscreen?.();
+  };
+
+  const estiloDelVideo = encuadre
+    ? { ...estiloDelEncuadre(encuadre), background: '#000' }
+    : { ...RELLENO, background: '#000' };
+
+  /* LA FOTO, ENCIMA DEL VIDEO HASTA QUE ARRANCA. No recibe toques y se apaga con
+     un fundido. Con encuadre la foto se coloca EXACTAMENTE como el video, así
+     que cae justo donde va a caer la imagen. */
   const capa = poster && (
     <div
       aria-hidden="true"
       style={{
-        position: 'absolute', inset: 0, pointerEvents: 'none', background: '#000',
+        position: 'absolute', inset: 0, pointerEvents: 'none', background: '#000', zIndex: 1,
         opacity: sinFoto ? 0 : 1, transition: 'opacity .25s ease',
       }}
     >
       {poster.lqip && (
         <img
           src={poster.lqip} alt=""
-          style={encuadre
-            ? { ...estiloDelVideo, filter: 'blur(8px)' }
-            : { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', filter: 'blur(8px)' }}
+          style={{ ...(encuadre ? estiloDelEncuadre(encuadre) : RELLENO), filter: 'blur(8px)' }}
         />
       )}
-      <img
-        src={poster.poster_url} alt=""
-        style={encuadre
-          ? estiloDelVideo
-          : { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }}
-      />
+      <img src={poster.poster_url} alt="" style={encuadre ? estiloDelEncuadre(encuadre) : RELLENO} />
       <span style={{
         position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
         width: 54, height: 54, borderRadius: '50%', background: 'rgba(0,0,0,.45)',
@@ -227,42 +222,100 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef 
     </div>
   );
 
-  /* El marco solo existe cuando hay encuadre o foto: si no, sobra un div y el
-     video se coloca solo como siempre. */
-  if (!encuadre) {
-    if (!llenaElMarco) return video_;
-    // Con foto el marco se reserva ya con la proporción del fotograma: así el
-    // video no «salta» de tamaño cuando termina de leer sus metadatos.
-    return (
-      <div style={{
-        position: 'relative', overflow: 'hidden',
-        aspectRatio: `${poster.ancho} / ${poster.alto}`,
-        ...(estilo ?? { width: '100%', borderRadius: 14, marginTop: 12, background: '#000' }),
-      }}>
-        {video_}
-        {capa}
-      </div>
-    );
-  }
+  const boton = {
+    width: 32, height: 32, flexShrink: 0, border: 'none', background: 'transparent', color: '#fff',
+    display: 'grid', placeItems: 'center', cursor: 'pointer', padding: 0,
+  };
 
   return (
-    <div style={{
-      position: 'relative', overflow: 'hidden', background: '#000',
-      width: '100%',
-      /* La proporción del TROZO, en píxeles reales — no la de sus fracciones.
-         Antes se usaba `encuadre.w / encuadre.h` a secas, y eso da la forma
-         equivocada: recortar 0,6 de ancho por 0,7 de alto de un video vertical
-         no da un marco de 0,857, da uno de 0,48. El marco salía más ancho que
-         el trozo y quedaba una franja negra al lado. */
-      aspectRatio: medidas
-        ? `${encuadre.w * medidas.w} / ${encuadre.h * medidas.h}`
-        : (poster?.ancho && poster?.alto
-          ? `${encuadre.w * poster.ancho} / ${encuadre.h * poster.alto}`
-          : `${encuadre.w} / ${encuadre.h}`),
-      borderRadius: estilo ? 0 : 14, marginTop: estilo ? 0 : 12,
-    }}>
-      {video_}
+    <>
+      <video
+        key={url}
+        ref={ref}
+        src={url}
+        controls={noArranca === url}
+        playsInline
+        muted={!!sinAudio}
+        preload="metadata"
+        onCanPlay={() => setListoDe(url)}
+        onPlaying={() => setArrancadoDe(url)}
+        onPlay={() => setEnPausa(false)}
+        onPause={() => { setEnPausa(true); setVisibles(true); }}
+        onError={() => setNoArranca(url)}
+        onLoadedMetadata={(e) => {
+          const v = e.currentTarget;
+          setLargo(v.duration || 0);
+          if (v.videoWidth && v.videoHeight) onMedidas?.(v.videoWidth, v.videoHeight);
+          /* Se salta SIEMPRE, aunque no haya recorte. Sin salto, Safari de iPhone
+             deja el video en negro hasta darle play: con `preload="metadata"` iOS
+             carga la duración pero no dibuja ningún fotograma. El +0,05 es para
+             que el salto ocurra de verdad cuando el recorte empieza en 0. */
+          v.currentTime = ini + 0.05;
+        }}
+        onTimeUpdate={() => {
+          const v = ref.current;
+          if (!v) return;
+          if (!arrastra.current) setTiempo(v.currentTime);
+          if (fin != null && v.currentTime >= fin) v.pause();
+          // Si el atleta rebobina antes del inicio, se le devuelve al inicio:
+          // lo de antes es material que el coach decidió no enseñarle.
+          if (inicio != null && v.currentTime < inicio - 0.4) v.currentTime = inicio;
+        }}
+        style={estiloDelVideo}
+      />
       {capa}
-    </div>
+
+      {controlesPropios && (
+        <div
+          role="button"
+          tabIndex={-1}
+          aria-label={enPausa ? 'Reproducir' : 'Pausar'}
+          onClick={alternar}
+          style={{ position: 'absolute', inset: 0, zIndex: 3, cursor: 'pointer' }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'absolute', left: 10, right: 10, bottom: 10, height: 40, borderRadius: 20,
+              background: 'rgba(8,10,14,0.66)', display: 'flex', alignItems: 'center', gap: 6,
+              padding: '0 6px 0 4px', fontFamily: FONT,
+              opacity: visibles || enPausa ? 1 : 0, transition: 'opacity .25s ease',
+              pointerEvents: visibles || enPausa ? 'auto' : 'none',
+            }}
+          >
+            <button type="button" onClick={alternar} aria-label={enPausa ? 'Reproducir' : 'Pausar'} style={boton}>
+              {enPausa ? <Play size={17} fill="#fff" /> : <Pause size={17} fill="#fff" />}
+            </button>
+            <div
+              ref={pista}
+              onPointerDown={(e) => {
+                arrastra.current = true;
+                e.currentTarget.setPointerCapture?.(e.pointerId);
+                salta(e);
+                mostrar();
+              }}
+              onPointerMove={(e) => { if (arrastra.current) salta(e); }}
+              onPointerUp={() => { arrastra.current = false; }}
+              onPointerCancel={() => { arrastra.current = false; }}
+              style={{ flex: 1, height: 32, display: 'flex', alignItems: 'center', touchAction: 'none', cursor: 'pointer' }}
+            >
+              <div style={{ position: 'relative', width: '100%', height: 3, borderRadius: 2, background: 'rgba(255,255,255,0.35)' }}>
+                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${progreso * 100}%`, borderRadius: 2, background: '#fff' }} />
+                <div style={{
+                  position: 'absolute', top: -3.5, width: 10, height: 10, borderRadius: '50%', background: '#fff',
+                  left: `calc(${progreso * 100}% - 5px)`,
+                }} />
+              </div>
+            </div>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#fff', minWidth: 30, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+              {mmss(tiempo - ini)}
+            </span>
+            <button type="button" onClick={pantallaCompleta} aria-label="Pantalla completa" style={boton}>
+              <Maximize2 size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

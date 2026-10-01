@@ -189,3 +189,25 @@ export function redPermiteAdelantar() {
   if (!c) return true;
   return !(c.saveData || c.type === 'cellular' || /(^|-)2g$/.test(c.effectiveType ?? ''));
 }
+
+/* ── Colocar un video o una foto según el encuadre del coach ──────────────────
+   El encuadre viene en fracciones del cuadro completo ({ x, y, w, h }). Con él, el
+   video se agranda y se desplaza dentro de una caja que lo recorta: es la única
+   forma de recortar la imagen sin recodificar el archivo (recodificar en el
+   navegador le bajaría la calidad, que es lo que Andrés dijo que más le importa).
+   La caja tiene que tener la forma exacta del trozo, así que `fill` y no `contain`.
+   `maxWidth/maxHeight: none` porque la app tiene un `max-width: 100%` global para
+   que las imágenes no se desborden, y aquí SÍ tienen que desbordarse. */
+export function estiloDelEncuadre(e) {
+  return {
+    position: 'absolute',
+    width: `${100 / e.w}%`,
+    height: `${100 / e.h}%`,
+    left: `${-(e.x / e.w) * 100}%`,
+    top: `${-(e.y / e.h) * 100}%`,
+    objectFit: 'fill',
+    maxWidth: 'none',
+    maxHeight: 'none',
+    display: 'block',
+  };
+}

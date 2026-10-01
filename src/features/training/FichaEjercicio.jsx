@@ -1,9 +1,8 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
-import { ChevronLeft, Dumbbell, Timer, Minus, Plus, LineChart as LineChartIcon } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { ChevronLeft, Timer, Minus, Plus, LineChart as LineChartIcon } from 'lucide-react';
 import { LT, FONT, NUM_STYLE } from '@/lib/theme';
-import { videosParaAtleta, portadaParaAtleta, ligaExterna, redPermiteAdelantar } from '@/lib/videos';
-import { VideoRecortado } from '@/features/training/VideoRecortado';
-import CarruselDeVideos, { Puntos } from '@/features/training/CarruselDeVideos';
+import { videosParaAtleta, portadaParaAtleta } from '@/lib/videos';
+import TarjetaDeVideo from '@/features/training/TarjetaDeVideo';
 import { aKilos, desdeKilos, pesoTexto, etiquetaUnidad } from '@/lib/unidades';
 import { isLoadedExercise, formatIntensity, findPreviousWeight } from '@/lib/training-utils';
 /* `unidad` de este archivo es la del PESO (kg o lb). La de la cantidad se
@@ -14,12 +13,6 @@ import {
 } from '@/lib/medidas';
 import Cronometro from '@/components/Cronometro';
 
-// Montado pero invisible, sin estorbar a la portada ni recibir toques: el video se prepara aquí hasta que le dan play.
-const ESCONDIDO = {
-  position: 'absolute', left: 0, top: 0, width: '100%', height: '100%',
-  overflow: 'hidden', opacity: 0, pointerEvents: 'none',
-};
-
 /**
  * La pantalla de UN ejercicio, mientras se entrena.
  *
@@ -29,8 +22,10 @@ const ESCONDIDO = {
  * gimnasio esta es LA pantalla: el atleta la tiene abierta entre series, mira
  * el video, anota el peso y sigue. Ocupar todo es lo correcto.
  *
- * EL NOMBRE VA SOBRE LA IMAGEN, no debajo. Así la foto llega hasta arriba sin
- * una franja de título encima, y el texto queda donde el ojo ya está mirando.
+ * EL NOMBRE VA ARRIBA DEL VIDEO, y el video en una tarjeta redondeada (ver
+ * `TarjetaDeVideo`). Antes el nombre iba SOBRE una foto a todo el ancho y al
+ * darle play todo saltaba a una caja negra: Andrés, 1 oct 2026, dijo que se veía
+ * «como una página barata hecha sin esfuerzo» y enseñó una app que ya existe.
  *
  * LAS INSTRUCCIONES VAN EN TEXTO GRANDE, no en cajitas de colores. Son lo que
  * el coach quiere decirle: se leen de un vistazo con el teléfono en el suelo.
@@ -45,33 +40,10 @@ export default function FichaEjercicio({
 }) {
   const unidad = perfil?.unidad_peso || 'kg';
   const u = etiquetaUnidad(unidad);
-  const [reproduciendo, setReproduciendo] = useState(false);
-  const [angulo, setAngulo] = useState(0);
-  // El play() del reproductor, para llamarlo dentro del propio toque (ver `VideoRecortado`).
-  const jugador = useRef(null);
-  // Se decide una vez por pantalla: si el teléfono pide ahorrar datos, no se baja nada por adelantado.
-  const [adelanta] = useState(redPermiteAdelantar);
 
   const portada = portadaParaAtleta(repertoire, medias, perfil);
   const videos = videosParaAtleta(repertoire, medias, perfil);
-  const video = videos[angulo] ?? videos[0] ?? null;
-
-  /* EL VIDEO EMPIEZA A BAJAR AL ABRIR EL EJERCICIO, no al tocar play. Andrés,
-     1 oct 2026: «le pica al video y el video tarda muchísimo en cargar». Medido
-     en Safari y Chrome: si el video lleva 1 s preparándose cuando le dan play,
-     arranca en menos de 0.02 s (antes, 1-3 s); más ventaja no mejora nada.
-     Por eso se monta ya, ESCONDIDO detrás de la portada, y al tocar play solo se
-     muestra y se le da play: tiene que ser el MISMO <video>, porque preparar
-     uno y crear otro después no sirve (en Safari se baja entero otra vez).
-     Solo el del ejercicio abierto, no todos los del día: cada video preparado
-     baja entre 4 y 25 MB aunque nadie lo vea. Los que viven fuera (TikTok,
-     YouTube) no se tocan: se incrustarían escondidos. */
-  const preparado = adelanta && !!video && !ligaExterna(video.url);
-  const montado = !!video && (reproduciendo || preparado);
-
-  // Al cambiar de ejercicio el reproductor vuelve a su estado inicial: si no,
-  // el siguiente se abriría ya "reproduciendo" un video que no ha cargado.
-  useEffect(() => { setReproduciendo(false); setAngulo(0); }, [ex?.name]);
+  const hayMedia = !!portada || videos.length > 0;
 
   const conPeso = isLoadedExercise(ex);
   const intensidad = formatIntensity(ex.intensity);
@@ -169,106 +141,63 @@ export default function FichaEjercicio({
       position: 'fixed', inset: 0, zIndex: 3000, background: LT.bg,
       display: 'flex', flexDirection: 'column', fontFamily: FONT,
     }}>
-      {/* ---------- Media, con el nombre encima ---------- */}
-      <div style={{
-        position: 'relative', flexShrink: 0, background: '#0E1015',
-        // Sin foto ni video esta zona no enseña nada: se le da lo justo para
-        // que el nombre respire. 80 de 81 ejercicios están así hoy, y reservar
-        // media pantalla para un hueco negro es el mismo error que tenía la
-        // lista del repertorio.
-        height: reproduciendo ? 'auto' : (portada || video ? 'min(46vh, 330px)' : 190),
-      }}>
-        {/* El reproductor, escondido mientras se prepara y a la vista cuando le
-            dan play. Es el mismo elemento en los dos casos: solo cambia el
-            estilo de su caja, así que no se vuelve a montar ni a bajar. */}
-        {montado && (
-          <div
-            inert={reproduciendo ? undefined : true}
-            aria-hidden={reproduciendo ? undefined : true}
-            style={reproduciendo ? undefined : ESCONDIDO}
-          >
-            <VideoRecortado
-              video={video}
-              reproduce={reproduciendo}
-              reproducirRef={jugador}
-              estilo={{ width: '100%', maxHeight: '55vh', display: 'block', background: '#000' }}
-            />
-            {/* Los puntos siguen ahí mientras se reproduce: cambiar de ángulo
-                sin salir del video es justo para lo que sirven varios ángulos. */}
-            {reproduciendo && <Puntos videos={videos} activo={angulo} onIr={setAngulo} abajo={10} />}
+      {/* Lo de arriba —cabecera, nombre y video— y lo de abajo —lo que hay que
+          hacer— corren en UNA sola columna que se desplaza, con «Seguir» fijo al
+          pie. En una pantalla chica el video se va por arriba al bajar a anotar;
+          en una normal cabe todo sin tocar. En la compu la columna no pasa de
+          520 px de ancho. */}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ maxWidth: 520, margin: '0 auto' }}>
+          {/* ---------- Cabecera, nombre y video ---------- */}
+          <div style={{
+            position: 'sticky', top: 0, zIndex: 5, background: LT.bg,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: 'calc(10px + env(safe-area-inset-top)) 18px 6px',
+          }}>
+            <button
+              type="button" onClick={onCerrar} aria-label="Volver"
+              style={{
+                width: 38, height: 38, borderRadius: '50%', border: `1px solid ${LT.border}`, cursor: 'pointer',
+                background: LT.surface, color: LT.text, display: 'grid', placeItems: 'center',
+              }}
+            >
+              <ChevronLeft size={22} />
+            </button>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: LT.text2, ...NUM_STYLE }}>
+              {/* «Ejercicio 1 de 1» no dice nada: solo se cuenta cuando hay más de uno. */}
+              Serie {serie}{total > 1 ? ` · Ejercicio ${posicion} de ${total}` : ''}
+            </span>
           </div>
-        )}
 
-        {!reproduciendo && (
-          <>
-            {/* Sin foto de portada se usa el primer fotograma del video. Además
-                de tapar el hueco negro, es una vista previa honesta: es
-                literalmente lo que va a salir al darle al play.
-                Con más de un video esto se desliza; con uno solo es una foto. */}
-            <CarruselDeVideos
-              videos={videos}
-              portada={portada}
-              nombre={ex.name}
-              activo={angulo}
-              onActivo={setAngulo}
-              onReproducir={() => { jugador.current?.(); setReproduciendo(true); }}
-              vacio={<Dumbbell size={54} color="#2A3040" />}
-              /* Arriba y no abajo: abajo viven el nombre del ejercicio y la
-                 meta, y los puntos les caerían encima. */
-              puntosArriba={62}
-            />
-
-            {/* Sombra para que el texto blanco se lea sobre cualquier foto. */}
+          <div style={{ padding: '6px 18px 0' }}>
             <div style={{
-              position: 'absolute', left: 0, right: 0, bottom: 0, height: '62%',
-              background: 'linear-gradient(to top, rgba(8,10,14,.92), rgba(8,10,14,0))',
-              pointerEvents: 'none',
-            }} />
-
-            {/* Sin `pointerEvents: none` este bloque se come el gesto de
-                deslizar en el tercio de abajo de la imagen. */}
-            <div style={{ position: 'absolute', left: 18, right: 18, bottom: 16, pointerEvents: 'none' }}>
-              <div style={{
-                fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,.72)', marginBottom: 5,
-                ...NUM_STYLE,
-              }}>
-                {/* «Ejercicio 1 de 1» no dice nada: solo se cuenta cuando hay más de uno. */}
-                Serie {serie}{total > 1 ? ` · Ejercicio ${posicion} de ${total}` : ''}
-              </div>
-              <div style={{
-                fontSize: 25, fontWeight: 800, color: '#fff', lineHeight: 1.15,
-                letterSpacing: -0.4, textWrap: 'balance',
-              }}>
-                {ex.name}
-              </div>
-              {meta && (
-                <span style={{
-                  display: 'inline-block', marginTop: 10, padding: '6px 13px', borderRadius: 999,
-                  background: 'rgba(255,255,255,.17)', color: '#fff',
-                  fontSize: 13, fontWeight: 700, backdropFilter: 'blur(3px)', ...NUM_STYLE,
-                }}>
-                  Meta: {meta}
-                </span>
-              )}
+              fontSize: 25, fontWeight: 800, color: LT.text, lineHeight: 1.15,
+              letterSpacing: -0.4, textWrap: 'balance',
+            }}>
+              {ex.name}
             </div>
-          </>
-        )}
+            {meta && (
+              <span style={{
+                display: 'inline-block', marginTop: 10, padding: '6px 13px', borderRadius: 999,
+                background: LT.blueSoft, color: LT.blue, fontSize: 13, fontWeight: 700, ...NUM_STYLE,
+              }}>
+                Meta: {meta}
+              </span>
+            )}
+          </div>
 
-        <button
-          type="button" onClick={onCerrar} aria-label="Volver"
-          style={{
-            position: 'absolute', top: 'calc(12px + env(safe-area-inset-top))', left: 12,
-            width: 38, height: 38, borderRadius: '50%', border: 'none', cursor: 'pointer',
-            background: 'rgba(8,10,14,0.5)', color: '#fff', display: 'grid', placeItems: 'center',
-            backdropFilter: 'blur(6px)',
-          }}
-        >
-          <ChevronLeft size={22} />
-        </button>
-      </div>
+          {/* Sin foto ni video no hay tarjeta: reservar un hueco oscuro que no enseña
+              nada es el mismo error que tenía la lista del repertorio (80 de 81
+              ejercicios están así hoy). Con `key` del ejercicio, al pasar al
+              siguiente todo vuelve a su estado inicial. */}
+          {hayMedia && (
+            <div style={{ padding: '0 18px' }}>
+              <TarjetaDeVideo key={ex.name} videos={videos} portada={portada} nombre={ex.name} />
+            </div>
+          )}
 
-      {/* ---------- Lo que hay que hacer ---------- */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 18px 24px' }}>
+          {/* ---------- Lo que hay que hacer ---------- */}
+          <div style={{ padding: '20px 18px 24px' }}>
         {/* Aquí vivía una fila de pastillas con los ángulos. Ya no hace falta:
             los videos se deslizan arriba y los puntos dicen cuántos hay. */}
 
@@ -408,14 +337,16 @@ export default function FichaEjercicio({
             )}
           </>
         )}
+          </div>
+        </div>
       </div>
 
       {/* ---------- Seguir ---------- */}
-      <div style={{
-        flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12,
-        padding: '12px 18px calc(12px + env(safe-area-inset-bottom))',
-        borderTop: `1px solid ${LT.border}`, background: LT.surface,
-      }}>
+      <div style={{ flexShrink: 0, borderTop: `1px solid ${LT.border}`, background: LT.surface }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12, maxWidth: 520, margin: '0 auto',
+          padding: '12px 18px calc(12px + env(safe-area-inset-bottom))',
+        }}>
         <button
           type="button"
           onClick={esUltimo ? onCerrar : onOmitir}
@@ -437,6 +368,7 @@ export default function FichaEjercicio({
         >
           {esUltimo ? 'Listo' : 'Guardar y siguiente'}
         </button>
+        </div>
       </div>
     </div>
   );

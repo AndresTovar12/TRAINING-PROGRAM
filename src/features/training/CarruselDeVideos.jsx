@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { Play } from 'lucide-react';
-import { FONT } from '@/lib/theme';
+import { FONT, LT } from '@/lib/theme';
 import Portada from '@/components/Portada';
 
 /**
@@ -23,7 +23,7 @@ import Portada from '@/components/Portada';
  * CON UN SOLO VIDEO no hay carrusel ni puntos: es exactamente lo de siempre.
  */
 export default function CarruselDeVideos({
-  videos, portada, nombre, activo, onActivo, onReproducir, vacio, puntosArriba = null,
+  videos, portada, nombre, activo, onActivo, onReproducir, vacio, puntosArriba = null, sinPuntos = false,
 }) {
   const pista = useRef(null);
   // Mientras la app misma mueve la pista (al tocar un punto), el evento de
@@ -50,6 +50,19 @@ export default function CarruselDeVideos({
     if (caja && activo === 0) caja.scrollLeft = 0;
   }, [nombre, activo]);
 
+  /* Los puntitos pueden estar FUERA del carrusel (debajo de la tarjeta, ver
+     `TarjetaDeVideo`) y cambiar `activo` desde ahí: la pista tiene que
+     acompañarlos. Si el cambio vino de deslizar, ya está en su sitio y no hace nada. */
+  useEffect(() => {
+    const caja = pista.current;
+    if (!caja || !caja.clientWidth) return;
+    const destino = caja.clientWidth * activo;
+    if (Math.abs(caja.scrollLeft - destino) <= 2) return;
+    moviendoSolo.current = true;
+    caja.scrollTo({ left: destino, behavior: 'smooth' });
+    window.setTimeout(() => { moviendoSolo.current = false; }, 420);
+  }, [activo]);
+
   const alDeslizar = () => {
     const caja = pista.current;
     if (!caja || moviendoSolo.current || !caja.clientWidth) return;
@@ -59,7 +72,7 @@ export default function CarruselDeVideos({
 
   const tapa = (v, key) => (
     <div key={key} style={{ position: 'relative', flex: '0 0 100%', height: '100%', scrollSnapAlign: 'center' }}>
-      <Portada grande foto={portada} video={v?.url} desde={v?.inicio} hasta={v?.fin} style={{ width: '100%', height: '100%' }}>
+      <Portada grande foto={portada} video={v?.url} desde={v?.inicio} hasta={v?.fin} encuadre={v?.encuadre} style={{ width: '100%', height: '100%' }}>
         {vacio}
       </Portada>
 
@@ -75,12 +88,12 @@ export default function CarruselDeVideos({
             border: 'none', background: 'transparent', cursor: 'pointer', padding: 0,
           }}
         >
+          {/* Blanco sólido con el triángulo azul: se lee igual sobre cualquier foto, claro u oscuro. */}
           <span style={{
-            width: 74, height: 74, borderRadius: '50%', display: 'grid', placeItems: 'center',
-            background: 'rgba(255,255,255,0.22)', backdropFilter: 'blur(3px)',
-            border: '2px solid rgba(255,255,255,0.55)',
+            width: 64, height: 64, borderRadius: '50%', display: 'grid', placeItems: 'center',
+            background: '#FFFFFF', boxShadow: '0 4px 16px rgba(8,10,14,0.28)',
           }}>
-            <Play size={30} color="#fff" fill="#fff" style={{ marginLeft: 4 }} />
+            <Play size={26} color={LT.blue} fill={LT.blue} style={{ marginLeft: 3 }} />
           </span>
         </button>
       )}
@@ -114,7 +127,7 @@ export default function CarruselDeVideos({
       >
         {videos.map((v, i) => tapa(v, v.id ?? i))}
       </div>
-      <Puntos videos={videos} activo={activo} onIr={vasA} arriba={puntosArriba} />
+      {!sinPuntos && <Puntos videos={videos} activo={activo} onIr={vasA} arriba={puntosArriba} />}
     </>
   );
 }
@@ -126,14 +139,17 @@ export default function CarruselDeVideos({
  * deslizar, así que tocarlos tiene que llevar al video. Cada uno tiene 30 px de
  * zona tocable aunque el punto se dibuje de 7.
  */
-export function Puntos({ videos, activo, onIr, abajo = 12, arriba = null, claro = false }) {
+export function Puntos({ videos, activo, onIr, abajo = 12, arriba = null, claro = false, enFlujo = false }) {
   if (videos.length < 2) return null;
   const sitio = arriba === null ? { bottom: abajo } : { top: arriba };
   return (
-    <div style={{
-      position: 'absolute', left: 0, right: 0, ...sitio,
-      display: 'flex', justifyContent: 'center', gap: 2, pointerEvents: 'none', zIndex: 2,
-    }}>
+    <div style={enFlujo
+      // Debajo de la tarjeta, en el flujo normal de la pantalla.
+      ? { display: 'flex', justifyContent: 'center', gap: 2, marginTop: 6 }
+      : {
+        position: 'absolute', left: 0, right: 0, ...sitio,
+        display: 'flex', justifyContent: 'center', gap: 2, pointerEvents: 'none', zIndex: 2,
+      }}>
       <span style={{
         display: 'flex', alignItems: 'center', gap: 2, padding: '0 6px', borderRadius: 999,
         background: claro ? 'rgba(17,19,24,0.10)' : 'rgba(8,10,14,0.42)',
