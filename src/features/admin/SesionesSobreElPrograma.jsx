@@ -1,48 +1,64 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  ArrowLeft, X, Plus, Lock, Pencil, Repeat, Check, Loader2, Trash2, SkipForward, Undo2,
+  ArrowLeft, X, Plus, Lock, Check, Loader2, Trash2, SkipForward, Undo2, Repeat, CalendarDays, ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConfirmacion } from '@/components/Confirmacion';
+import { useIsDesktop } from '@/lib/useViewport';
 import {
   listExercises, getMasterId, tagRepertoire, listCategories, listExerciseOverrides, aplicarOverrides,
   guardarSesionesPegadas,
 } from '@/lib/api';
 import { conLasMiasPrimero } from '@/lib/categorias';
-import { SessionEditor } from '@/features/admin/PlanBuilder';
-import { T, FONT, KP, tipoDeSesion } from '@/lib/theme';
-import { esDescanso, estructuraDelPlan, isoWeekKey, semanasEntre } from '@/lib/training-utils';
-import { sesionesDelTitulo, sinDuracion, textoDeSesiones } from '@/lib/sesiones';
+import { SessionEditor, Field } from '@/features/admin/PlanBuilder';
+import NavegadorDelPlan from '@/components/NavegadorDelPlan';
+import { T, FONT, KP } from '@/lib/theme';
+import { estructuraDelPlan, isoWeekKey, semanaGlobal, semanasDelPlan, semanasEntre } from '@/lib/training-utils';
 import {
-  DIAS_SEMANA, esHuerfana, fasesConPegadas, indicesDeLaRegla, nombreLargoDeDia, nuevaRegla, reglasDe,
-  semanasDelPrograma, textoDeCuantoOcupa,
+  DIAS_SEMANA, esHuerfana, fasesConPegadas, nombreLargoDeDia, nuevaRegla, reglasDe, semanasDelPrograma,
+  textoDeCuantoOcupa,
 } from '@/lib/pegadas';
 import { colorDePrograma, nombreCorto, rolDeProfesion } from '@/lib/programas';
 
 /* AGREGAR SESIONES AL PROGRAMA DEL COACH (la cuenta del fisio).
 
-   Andrés, 1 oct 2026: el fisio ve una fase del programa del coach, escoge un día
-   —«el miércoles»— y le crea ahí una sesión («fortalecimiento de tobillo») que le
-   aparece al atleta dentro del programa en que ya trabaja. El programa del coach
-   se ve SOLO PARA LEER (candado): ni el fisio mueve lo del coach ni el coach lo
-   del fisio. Lo que el fisio agrega sale con su nombre.
+   Andrés, 1 oct 2026 (el fisio lo probó): «creaste un editor específico bastante feo solo
+   para el fisioterapeuta… lo que tenías que poner era el MISMO editor que tienen los
+   coaches, el mismo donde aparecen todas las sesiones que ya tiene el coach, y que el
+   fisio lo pueda navegar perfectamente de la misma manera que lo hace el coach, pero con
+   una diferencia: el fisio o los otros coaches no pueden modificar lo del otro».
 
-   Y para no armar «estiramientos lunes, miércoles y viernes por un año» a mano,
-   la sesión lleva un bloque «Repetir»: en qué días de la semana cae y hasta
-   dónde. Se guarda UNA regla, no una fila por día (ver `lib/pegadas.js`).
-
-   Dos vistas en la misma pantalla: el programa del coach con las sesiones de
-   cada día, y el editor de UNA sesión (el mismo constructor que usa el coach, más
-   «Repetir»). */
+   Así que esto ES el editor de los coaches, con las mismas piezas y el mismo molde: la hoja
+   del programa a la izquierda (fases, semanas y los siete días, `NavegadorDelPlan` en modo
+   editor) y el día a la derecha (`SessionEditor`). Lo del coach se ve y se navega igual,
+   pero va en solo lectura (candado). Lo del fisio es editable, sale con su nombre y lleva
+   «Repetir»: en qué días de la semana cae y hasta dónde (ver `lib/pegadas.js`: una regla,
+   no una fila por día). Se guarda con «Guardar», como el editor de siempre. */
 
 const ABREV = { Lun: 'L', Mar: 'M', 'Mié': 'X', Jue: 'J', Vie: 'V', 'Sáb': 'S', Dom: 'D' };
+const NOMBRE_DIA = {
+  Lun: 'Lunes', Mar: 'Martes', 'Mié': 'Miércoles', Jue: 'Jueves', Vie: 'Viernes', 'Sáb': 'Sábado', Dom: 'Domingo',
+};
 const capital = (t) => t.charAt(0).toUpperCase() + t.slice(1);
-const copia = (o) => structuredClone(o);
 const normDia = (d) => ({ Mie: 'Mié', Sab: 'Sáb' }[d] ?? d);
-const nombreDelDia = (day) => sinDuracion(day?.name || '')
-  || textoDeSesiones(sesionesDelTitulo(day))
-  || (esDescanso(day) ? 'Descanso' : tipoDeSesion(day).label);
+
+// Lo mismo que el constructor: «Semana 3», con su título si lo trae.
+const weekSubtitle = (w) => {
+  const l = (w?.label || '').trim();
+  return !l || l === `Semana ${w?.num}` ? '' : l;
+};
+const weekName = (w, fallbackNum) => `Semana ${w?.num ?? fallbackNum}${weekSubtitle(w) ? ` · ${weekSubtitle(w)}` : ''}`;
+
+// Qué día enseñar al cambiar de semana: el mismo si ahí también hay algo; si no, el primero que sí.
+const diaParaSemana = (wk, actual) => {
+  const dias = (wk?.days ?? []).map((d) => normDia(d.day));
+  if (dias.includes(actual)) return actual;
+  return DIAS_SEMANA.find((k) => dias.includes(k)) ?? actual;
+};
+
+const reglaVacia = (r) => !(r.sesion?.exercises ?? []).some((e) => !e.isNote || (e.text || '').trim())
+  && !(r.sesion?.blocks ?? []).length;
 
 const botonBlanco = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 40, padding: '0 14px',
@@ -62,7 +78,7 @@ function textoDeAlcance(regla, fases) {
   const nombreDe = (id) => fases.find((f) => f.id === id)?.name ?? '';
   if (a.tipo === 'fases') return `Solo en ${(a.fases ?? []).map(nombreDe).filter(Boolean).join(', ') || 'esas fases'}`;
   if (a.tipo === 'hasta') return `Hasta la semana ${a.hasta?.semana ?? ''}${nombreDe(a.hasta?.faseId) ? ` de ${nombreDe(a.hasta?.faseId)}` : ''}`;
-  if (a.tipo === 'dia') return 'Solo un día';
+  if (a.tipo === 'dia') return 'Solo una semana';
   return 'Todo el programa, hasta que termine';
 }
 
@@ -112,7 +128,7 @@ function BloqueRepetir({
     );
   };
   return (
-    <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 18, padding: 16, marginTop: 16, boxShadow: KP.shCard }}>
+    <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 18, padding: 16, marginTop: 12, boxShadow: KP.shCard }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 16, fontWeight: 800, color: T.text }}>
         <Repeat size={17} color={T.accent} /> Repetir
       </div>
@@ -189,150 +205,98 @@ function BloqueRepetir({
   );
 }
 
-/* ----------------------------------------------------------------------- */
-/* El editor de UNA sesión                                                  */
-/* ----------------------------------------------------------------------- */
-
-function EditorDeSesion({
-  athlete, fases, kind, aqui, regla, ancla, guardando, err, onGuardar, onEliminar, onSaltarEstaSemana, onCancelar,
-}) {
-  const { user, profile } = useAuth();
-  const semanal = kind === 'weekly';
-  const isMaster = !!profile?.is_owner;
-  const lista = useMemo(() => semanasDelPrograma(fases), [fases]);
-
-  // El repertorio de este profesional (la base del master + lo suyo), igual que en el constructor de planes.
-  const [repertoire, setRepertoire] = useState([]);
-  const [categorias, setCategorias] = useState([]);
-  const [masterId, setMasterId] = useState(null);
-  useEffect(() => {
-    Promise.all([listExercises(), getMasterId(), listCategories(), listExerciseOverrides(user?.id)])
-      .then(([exs, mId, cats, mias]) => {
-        const tagged = tagRepertoire(aplicarOverrides(exs, mias, cats), mId, user?.id);
-        setRepertoire(isMaster ? tagged : tagged.filter((e) => e.isBase || e.isMine));
-        setCategorias(cats);
-        setMasterId(mId);
-      })
-      .catch(() => {});
-  }, [user?.id, isMaster]);
-  const categoriasVisibles = useMemo(() => conLasMiasPrimero(
-    categorias.filter((c) => !c.created_by || c.created_by === masterId || c.created_by === user?.id), user?.id,
-  ), [categorias, masterId, user?.id]);
-
-  const [dia, setDia] = useState(() => (regla
-    ? { ...copia(regla.sesion), day: ancla.dia }
-    : { day: ancla.dia, name: '', cat: 'gym', exercises: [] }));
-  const [dias, setDias] = useState(() => (regla?.dias?.length ? regla.dias : [ancla.dia]));
-  const [tipo, setTipo] = useState(() => regla?.alcance?.tipo ?? 'todo');
-  const [fasesSel, setFasesSel] = useState(() => regla?.alcance?.fases ?? [ancla.faseId]);
+/* «Repetir» de UNA sesión: lo cambia en la regla. La fecha es solo de pantalla: el programa no
+   tiene fechas, así que se cuenta cuántas semanas faltan desde donde va el atleta y se guarda
+   la semana a la que llega. */
+function RepetirDeLaRegla({ regla, fases, lista, aqui, ancla, semanal, onCambio }) {
   const [fecha, setFecha] = useState('');
-  const [omitir, setOmitir] = useState(() => regla?.omitir ?? []);
-  const [aviso, setAviso] = useState('');
+  const a = regla.alcance ?? { tipo: 'todo' };
+  const desde = a.desde ?? ancla;
+  const tipo = a.tipo ?? 'todo';
 
-  // De dónde cuenta la regla: la semana donde se abrió (o la que ya tenía).
-  const desde = useMemo(
-    () => regla?.alcance?.desde ?? { faseId: ancla.faseId, semana: ancla.semana, n: ancla.n },
-    [regla, ancla],
-  );
-
-  /* «Hasta una fecha»: el programa no tiene fechas, solo semanas. Se cuenta
-     cuántas semanas faltan para esa fecha desde donde va el atleta (o, si aún no
-     empieza, desde la semana donde se abrió) y se guarda la semana a la que llega. */
-  const hastaDeFecha = useMemo(() => {
-    if (tipo !== 'hasta' || !fecha || !lista.length) return null;
+  const calculaHasta = (f) => {
+    if (!f || !lista.length) return null;
     const base = aqui ?? ancla;
     const i0 = Math.max(0, lista.findIndex((s) => s.faseId === base.faseId && s.semana === base.semana));
-    const k = Math.max(0, semanasEntre(isoWeekKey(new Date()), isoWeekKey(new Date(`${fecha}T12:00:00`))));
+    const k = Math.max(0, semanasEntre(isoWeekKey(new Date()), isoWeekKey(new Date(`${f}T12:00:00`))));
     const iFin = Math.min(lista.length - 1, i0 + k);
     return { ...lista[iFin], termina: i0 + k > lista.length - 1 };
-  }, [tipo, fecha, lista, aqui, ancla]);
+  };
+  const hastaDeFecha = tipo === 'hasta' ? calculaHasta(fecha) : null;
 
-  const alcance = useMemo(() => {
-    if (tipo === 'fases') return { tipo, fases: fasesSel };
-    if (tipo === 'dia') return { tipo, desde };
-    if (tipo === 'hasta') {
-      const hasta = hastaDeFecha
-        ? { faseId: hastaDeFecha.faseId, semana: hastaDeFecha.semana, n: hastaDeFecha.n }
-        : (regla?.alcance?.hasta ?? null);
-      return { tipo, desde, hasta };
-    }
-    return { tipo: 'todo', desde };
-  }, [tipo, fasesSel, desde, hastaDeFecha, regla]);
-
-  const previa = useMemo(() => ({ id: regla?.id ?? 'previa', dias, alcance, omitir }), [regla, dias, alcance, omitir]);
-  const resumen = textoDeCuantoOcupa(previa, fases, { semanal });
-
-  function guardar() {
-    const nombre = (dia.name || '').trim() || 'Sesión';
-    // Una sesión de solo notas («Caminata 20 min») también vale: el atleta la lee como instrucciones.
-    const hayContenido = (dia.exercises ?? []).some((e) => !e.isNote || (e.text || '').trim()) || (dia.blocks ?? []).length > 0;
-    if (!hayContenido) { setAviso('Agrega al menos un ejercicio o una nota.'); return; }
-    if (!dias.length) { setAviso('Elige al menos un día de la semana.'); return; }
-    if (tipo === 'fases' && !fasesSel.length) { setAviso('Elige al menos una fase.'); return; }
-    if (tipo === 'hasta' && !alcance.hasta) { setAviso('Elige hasta qué fecha.'); return; }
-    setAviso('');
-    const sesion = { ...copia(dia), name: nombre };
-    delete sesion.day;
-    onGuardar(regla
-      ? { ...regla, nombre, sesion, dias, alcance, omitir }
-      : nuevaRegla({ sesion: { ...sesion }, dias, alcance }));
-  }
-
-  const aplicaEstaSemana = !!regla && ancla.deLaSemana
-    && indicesDeLaRegla(regla, lista).includes(lista.findIndex((s) => s.faseId === ancla.faseId && s.semana === ancla.semana));
-  const nombresDeSemana = (o) => {
-    const f = fases.find((x) => x.id === o.faseId);
-    return `${f?.name ?? 'Fase'} · semana ${o.semana}`;
+  const cambiaTipo = (nuevo) => {
+    if (nuevo === 'fases') onCambio({ alcance: { tipo: nuevo, desde, fases: a.fases?.length ? a.fases : [desde.faseId] } });
+    else if (nuevo === 'dia') onCambio({ alcance: { tipo: nuevo, desde } });
+    else if (nuevo === 'hasta') onCambio({ alcance: { tipo: nuevo, desde, hasta: a.hasta ?? null } });
+    else onCambio({ alcance: { tipo: 'todo', desde } });
+  };
+  const cambiaFecha = (f) => {
+    setFecha(f);
+    const h = calculaHasta(f);
+    onCambio({ alcance: { tipo: 'hasta', desde, hasta: h ? { faseId: h.faseId, semana: h.semana, n: h.n } : null } });
   };
 
   return (
-    <div style={{ maxWidth: 760, margin: '0 auto' }}>
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 11.5, fontWeight: 800, color: T.accent, letterSpacing: 0.6 }}>
-          {regla ? 'TU SESIÓN' : 'NUEVA SESIÓN'}
-        </div>
-        <div style={{ fontSize: 20, fontWeight: 800, color: T.text, letterSpacing: -0.3 }}>
-          {capital(nombreLargoDeDia(ancla.dia))}
-          {!semanal && <span style={{ color: T.text2, fontWeight: 700 }}> · {ancla.donde}</span>}
-        </div>
+    <BloqueRepetir
+      semanal={semanal}
+      fases={fases}
+      sinFases={fases.length < 2}
+      dias={regla.dias ?? []} onDias={(dias) => onCambio({ dias })}
+      tipo={tipo} onTipo={cambiaTipo}
+      fasesSel={a.fases ?? [desde.faseId]} onFasesSel={(ids) => onCambio({ alcance: { tipo: 'fases', desde, fases: ids } })}
+      fecha={fecha} onFecha={cambiaFecha}
+      hastaDeFecha={hastaDeFecha}
+      hastaGuardado={a.hasta}
+      resumen={textoDeCuantoOcupa(regla, fases, { semanal })}
+    />
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* Lo mío en un día: la sesión (editable), su «Repetir» y sus salidas        */
+/* ----------------------------------------------------------------------- */
+
+function TarjetaDeMiSesion({
+  regla, dia, fases, lista, aqui, ancla, semanal, editorProps, onSesion, onRegla, onSaltar, onQuitar,
+}) {
+  const vacia = reglaVacia(regla);
+  const nombreDeSemana = (o) => `${fases.find((x) => x.id === o.faseId)?.name ?? 'Fase'} · semana ${o.semana}`;
+  return (
+    <div style={{ marginBottom: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 2px 8px' }}>
+        <span style={{
+          fontSize: 10.5, fontWeight: 800, letterSpacing: 0.5, color: T.accent, background: T.accentBg,
+          borderRadius: 6, padding: '3px 8px',
+        }}>
+          TUYA
+        </span>
+        {vacia && (
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>
+            Todavía vacía: agrégale un ejercicio o una nota; si la dejas así, no se guarda.
+          </span>
+        )}
       </div>
 
       <SessionEditor
-        day={dia}
-        repertoire={repertoire}
-        categorias={categoriasVisibles}
-        atleta={athlete}
-        duenoId={user?.id}
-        masterId={masterId}
-        onCategoriaCreada={(fila) => setCategorias((prev) => [...prev, fila])}
-        onCategoriaBorrada={(id) => setCategorias((prev) => prev.filter((c) => c.id !== id))}
-        onEjercicioCreado={(fila) => setRepertoire((prev) => [...prev, { ...fila, isMine: true, isBase: false }])}
-        onPatch={(patch) => setDia((d) => ({ ...d, ...patch }))}
+        day={{ ...regla.sesion, day: dia }}
+        onPatch={onSesion}
+        {...editorProps}
       />
 
-      <BloqueRepetir
-        semanal={semanal}
-        fases={fases}
-        sinFases={fases.length < 2}
-        dias={dias} onDias={setDias}
-        tipo={tipo} onTipo={setTipo}
-        fasesSel={fasesSel} onFasesSel={setFasesSel}
-        fecha={fecha} onFecha={setFecha}
-        hastaDeFecha={hastaDeFecha}
-        hastaGuardado={regla?.alcance?.hasta}
-        resumen={resumen}
+      <RepetirDeLaRegla
+        regla={regla} fases={fases} lista={lista} aqui={aqui} ancla={ancla} semanal={semanal} onCambio={onRegla}
       />
 
-      {omitir.length > 0 && (
+      {(regla.omitir ?? []).length > 0 && (
         <div style={{ marginTop: 12, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 14, padding: '12px 14px' }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: T.text, marginBottom: 8 }}>Semanas que saltaste</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {omitir.map((o) => (
+            {regla.omitir.map((o) => (
               <div key={`${o.faseId}-${o.semana}`} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ flex: 1, fontSize: 13.5, fontWeight: 600, color: T.text2 }}>{nombresDeSemana(o)}</span>
+                <span style={{ flex: 1, fontSize: 13.5, fontWeight: 600, color: T.text2 }}>{nombreDeSemana(o)}</span>
                 <button
                   type="button"
-                  onClick={() => setOmitir((prev) => prev.filter((x) => !(x.faseId === o.faseId && x.semana === o.semana)))}
+                  onClick={() => onRegla({ omitir: regla.omitir.filter((x) => !(x.faseId === o.faseId && x.semana === o.semana)) })}
                   style={{ ...botonBlanco, minHeight: 34, padding: '0 11px', fontSize: 12.5 }}
                 >
                   <Undo2 size={14} /> Volver a ponerla
@@ -343,47 +307,16 @@ function EditorDeSesion({
         </div>
       )}
 
-      {(aviso || err) && (
-        <div style={{ marginTop: 12, background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 12, padding: '11px 15px', fontWeight: 700, fontSize: 13.5 }}>
-          {aviso || err}
-        </div>
-      )}
-
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 18, alignItems: 'center' }}>
-        <button
-          type="button"
-          onClick={guardar}
-          disabled={guardando}
-          style={{
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 50, padding: '0 24px',
-            borderRadius: 14, border: 'none', cursor: guardando ? 'default' : 'pointer', fontFamily: FONT, fontSize: 15.5, fontWeight: 800,
-            color: '#fff', background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, boxShadow: KP.shBtn,
-            opacity: guardando ? 0.75 : 1, flex: '1 1 200px',
-          }}
-        >
-          {guardando ? <Loader2 size={17} className="spin" /> : <Check size={17} />} Guardar sesión
-        </button>
-        <button type="button" onClick={onCancelar} style={{ ...botonBlanco, minHeight: 50, borderColor: T.border, color: T.text2 }}>
-          Cancelar
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
+        {!semanal && (
+          <button type="button" onClick={onSaltar} style={botonBlanco}>
+            <SkipForward size={15} /> No poner esta semana
+          </button>
+        )}
+        <button type="button" onClick={onQuitar} style={{ ...botonBlanco, borderColor: T.danger, color: T.danger }}>
+          <Trash2 size={15} /> Quitarla de todo el programa
         </button>
       </div>
-
-      {regla && (
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 14 }}>
-          {aplicaEstaSemana && (
-            <button type="button" onClick={() => onSaltarEstaSemana(regla, ancla)} style={botonBlanco}>
-              <SkipForward size={15} /> No poner esta semana
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => onEliminar(regla)}
-            style={{ ...botonBlanco, borderColor: T.danger, color: T.danger }}
-          >
-            <Trash2 size={15} /> Quitarla de todo el programa
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -395,35 +328,27 @@ function EditorDeSesion({
 export default function SesionesSobreElPrograma({
   athlete, planDelCoach, filas = [], miFila = null, aqui = null, equipoDe = [], onGuardado, onClose,
 }) {
-  const { user } = useAuth();
+  const esCompu = useIsDesktop();
+  const { user, profile } = useAuth();
   const pregunta = useConfirmacion();
   const autorId = user?.id ?? null;
+  const isMaster = !!profile?.is_owner;
+
   const [fila, setFila] = useState(miFila);
-  const [editor, setEditor] = useState(null);       // { regla, ancla } mientras se edita una sesión
+  const [reglas, setReglas] = useState(() => reglasDe(miFila));
+  const [dirty, setDirty] = useState(false);
+  const [haGuardado, setHaGuardado] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [err, setErr] = useState('');
-  // Al pasar del programa al editor (y de vuelta) se empieza arriba: la pantalla es la misma y conservaría la altura.
-  const principal = useRef(null);
-  useEffect(() => { if (principal.current) principal.current.scrollTop = 0; }, [editor]);
 
   const fases = useMemo(() => planDelCoach?.data?.phases ?? [], [planDelCoach]);
   const kind = planDelCoach?.data?.kind === 'weekly' ? 'weekly' : 'periodized';
   const semanal = kind === 'weekly';
   const estructura = estructuraDelPlan(planDelCoach?.data);
-  const reglas = useMemo(() => reglasDe(fila), [fila]);
   const lista = useMemo(() => semanasDelPrograma(fases), [fases]);
 
-  const semanasPlanas = useMemo(
-    () => fases.flatMap((f, fi) => (f.weekData ?? []).map((w, wi) => ({ fi, wi, f, w }))),
-    [fases],
-  );
-  const [sel, setSel] = useState(() => {
-    const i = lista.findIndex((s) => s.faseId === aqui?.faseId && s.semana === aqui?.semana);
-    return Math.max(0, i);
-  });
-  const actual = semanasPlanas[Math.min(sel, semanasPlanas.length - 1)] ?? null;
-
-  // Lo mío y lo de otros profesionales, repartido en los días del programa del coach.
+  /* Lo mío y lo de otros profesionales, repartido en los días del programa del coach. Los días
+     de la hoja salen del coach y, además, de ellos: un renglón dice lo de todos. */
   const mias = useMemo(() => fasesConPegadas(reglas, fases, { autorId, semanal }), [reglas, fases, autorId, semanal]);
   const deOtros = useMemo(() => filas
     .filter((f) => f.profesional_id !== autorId)
@@ -435,15 +360,128 @@ export default function SesionesSobreElPrograma({
         fases: fasesConPegadas(reglasDe(f), fases, { autorId: f.profesional_id, semanal }),
       };
     }), [filas, autorId, equipoDe, fases, semanal]);
+  const fasesVista = useMemo(() => fases.map((f, fi) => ({
+    ...f,
+    weekData: (f.weekData ?? []).map((w, wi) => ({
+      ...w,
+      days: [
+        ...(w.days ?? []),
+        ...(mias[fi]?.weekData?.[wi]?.days ?? []),
+        ...deOtros.flatMap((o) => o.fases[fi]?.weekData?.[wi]?.days ?? []),
+      ],
+    })),
+  })), [fases, mias, deOtros]);
 
-  async function guardarReglas(siguientes) {
+  // Dónde se abre: donde va el atleta, en su día de hoy si lo hay.
+  const [pi, setPi] = useState(() => Math.max(0, fases.findIndex((f) => f.id === aqui?.faseId)));
+  const [weekIdx, setWeekIdx] = useState(() => {
+    const f = fases[Math.max(0, fases.findIndex((x) => x.id === aqui?.faseId))];
+    return Math.max(0, (f?.weekData ?? []).findIndex((w) => w.num === aqui?.semana));
+  });
+  const [dia, setDia] = useState(() => {
+    const f = fases[Math.max(0, fases.findIndex((x) => x.id === aqui?.faseId))];
+    const semana = f?.weekData?.[Math.max(0, (f?.weekData ?? []).findIndex((w) => w.num === aqui?.semana))];
+    return aqui?.dia != null && semana?.days?.[aqui.dia] ? normDia(semana.days[aqui.dia].day) : diaParaSemana(semana, 'Lun');
+  });
+  const [editandoDiaTel, setEditandoDiaTel] = useState(false);
+
+  const p = fasesVista[pi];
+  const wIdx = p ? Math.max(0, Math.min(weekIdx, p.weekData.length - 1)) : 0;
+  const w = p?.weekData?.[wIdx];
+  const nSemana = lista.findIndex((s) => s.faseId === p?.id && s.semana === w?.num);
+  const ancla = { faseId: p?.id, semana: w?.num, n: Math.max(0, nSemana) };
+
+  // El repertorio de este profesional (la base del master + lo suyo), igual que en el constructor de planes.
+  const [repertoire, setRepertoire] = useState([]);
+  const [categorias, setCategorias] = useState([]);
+  const [masterId, setMasterId] = useState(null);
+  useEffect(() => {
+    Promise.all([listExercises(), getMasterId(), listCategories(), listExerciseOverrides(user?.id)])
+      .then(([exs, mId, cats, mios]) => {
+        const tagged = tagRepertoire(aplicarOverrides(exs, mios, cats), mId, user?.id);
+        setRepertoire(isMaster ? tagged : tagged.filter((e) => e.isBase || e.isMine));
+        setCategorias(cats);
+        setMasterId(mId);
+      })
+      .catch(() => {});
+  }, [user?.id, isMaster]);
+  const categoriasVisibles = useMemo(() => conLasMiasPrimero(
+    categorias.filter((c) => !c.created_by || c.created_by === masterId || c.created_by === user?.id), user?.id,
+  ), [categorias, masterId, user?.id]);
+  const editorProps = {
+    repertoire,
+    categorias: categoriasVisibles,
+    atleta: athlete,
+    duenoId: user?.id,
+    masterId,
+    onCategoriaCreada: (f) => setCategorias((prev) => [...prev, f]),
+    onCategoriaBorrada: (id) => setCategorias((prev) => prev.filter((c) => c.id !== id)),
+    onEjercicioCreado: (f) => setRepertoire((prev) => [...prev, { ...f, isMine: true, isBase: false }]),
+  };
+
+  // Al pasar de la hoja al día (en el teléfono) se empieza arriba: la pantalla es la misma.
+  const principal = useRef(null);
+  useEffect(() => { if (principal.current) principal.current.scrollTop = 0; }, [editandoDiaTel]);
+
+  const toca = () => { setDirty(true); setHaGuardado(false); setErr(''); };
+  const cambiaRegla = (id, parche) => { setReglas((prev) => prev.map((r) => (r.id === id ? { ...r, ...parche } : r))); toca(); };
+  const cambiaSesion = (id, parche) => {
+    setReglas((prev) => prev.map((r) => (r.id === id
+      ? { ...r, sesion: { ...r.sesion, ...parche }, nombre: (parche.name ?? r.sesion?.name ?? r.nombre) || 'Sesión' }
+      : r)));
+    toca();
+  };
+  const añadeMia = () => {
+    setReglas((prev) => [...prev, nuevaRegla({
+      sesion: { name: '', cat: 'gym', exercises: [] },
+      dias: [dia],
+      alcance: { tipo: 'todo', desde: ancla },
+    })]);
+    toca();
+  };
+  const saltaSemana = (r) => cambiaRegla(r.id, { omitir: [...(r.omitir ?? []), { faseId: ancla.faseId, semana: ancla.semana }] });
+  const quitaRegla = async (r) => {
+    const va = await pregunta({
+      titulo: `¿Quitar «${r.nombre}» de todo el programa?`,
+      detalle: 'Se va de todos los días en que cae. Lo que el atleta ya anotó se queda guardado.',
+      confirmar: 'Sí, quitarla',
+      peligro: true,
+    });
+    if (!va) return;
+    setReglas((prev) => prev.filter((x) => x.id !== r.id));
+    toca();
+  };
+
+  async function guardar() {
+    const utiles = reglas.filter((r) => !reglaVacia(r));
+    const mal = utiles.find((r) => (r.alcance?.tipo === 'fases' && !(r.alcance.fases ?? []).length)
+      || (r.alcance?.tipo === 'hasta' && !r.alcance.hasta) || !(r.dias ?? []).length);
+    if (mal) {
+      const falta = !(mal.dias ?? []).length
+        ? 'elige al menos un día de la semana.'
+        : (mal.alcance?.tipo === 'fases' ? 'elige al menos una fase.' : 'elige hasta qué fecha.');
+      setErr(`«${mal.nombre}»: ${falta}`);
+      return;
+    }
+    const sinContenido = reglas.filter(reglaVacia);
+    if (sinContenido.some((r) => reglasDe(fila).some((g) => g.id === r.id))) {
+      const va = await pregunta({
+        titulo: 'Una sesión tuya quedó vacía',
+        detalle: 'Si guardas, se quita del programa.',
+        confirmar: 'Guardar y quitarla',
+        peligro: true,
+      });
+      if (!va) return;
+    }
     setGuardando(true);
     setErr('');
     try {
-      const row = await guardarSesionesPegadas({ fila, atletaId: athlete.id, autorId, sesiones: siguientes });
+      const row = await guardarSesionesPegadas({ fila, atletaId: athlete.id, autorId, sesiones: utiles });
       setFila(row);
+      setReglas(utiles);
+      setDirty(false);
+      setHaGuardado(true);
       onGuardado?.(row);
-      setEditor(null);
     } catch (e) {
       setErr(e.message || 'No se pudo guardar');
     } finally {
@@ -451,195 +489,156 @@ export default function SesionesSobreElPrograma({
     }
   }
 
-  const guardarRegla = (regla) => guardarReglas(
-    reglas.some((r) => r.id === regla.id) ? reglas.map((r) => (r.id === regla.id ? regla : r)) : [...reglas, regla],
-  );
-  const saltarSemana = (regla, ancla) => guardarReglas(reglas.map((r) => (r.id === regla.id
-    ? { ...r, omitir: [...(r.omitir ?? []), { faseId: ancla.faseId, semana: ancla.semana }] }
-    : r)));
-  const eliminarRegla = async (regla) => {
-    const va = await pregunta({
-      titulo: `¿Quitar «${regla.nombre}» de todo el programa?`,
-      detalle: 'Se va de todos los días en que cae. Lo que el atleta ya anotó se queda guardado.',
-      confirmar: 'Sí, quitarla',
-      peligro: true,
-    });
-    if (va) guardarReglas(reglas.filter((r) => r.id !== regla.id));
+  async function cierra() {
+    if (dirty) {
+      const va = await pregunta({
+        titulo: 'Tienes cambios sin guardar',
+        detalle: 'Si sales ahora se pierden.',
+        confirmar: 'Salir sin guardar',
+        cancelar: 'Seguir aquí',
+        peligro: true,
+      });
+      if (!va) return;
+    }
+    onClose();
+  }
+  const volver = () => { if (!esCompu && editandoDiaTel) setEditandoDiaTel(false); else cierra(); };
+
+  /* El lugar de una sesión mía en la hoja: su primera semana, en su primer día. */
+  const irARegla = (r) => {
+    const d = r.alcance?.desde;
+    const fi = Math.max(0, fases.findIndex((f) => f.id === d?.faseId));
+    const wi = Math.max(0, (fases[fi]?.weekData ?? []).findIndex((x) => x.num === d?.semana));
+    setPi(fi);
+    setWeekIdx(wi);
+    setDia(r.dias?.[0] ?? 'Lun');
+    if (!esCompu) setEditandoDiaTel(true);
   };
 
-  const dondeDe = (s) => (estructura === 'fases' && fases.length > 1 ? `${s.f.name} · semana ${s.w.num}` : `Semana ${s.w.num}`);
-  const abrirNueva = (dia) => setEditor({
-    regla: null,
-    ancla: {
-      faseId: actual?.f.id, semana: actual?.w.num, n: sel, dia, deLaSemana: true, donde: actual ? dondeDe(actual) : '',
-    },
-  });
-  const abrirRegla = (regla, deLaSemana = false) => {
-    const d = regla.alcance?.desde;
-    const s = (deLaSemana && actual) ? actual
-      : (semanasPlanas.find((x) => x.f.id === d?.faseId && x.w.num === d?.semana) ?? semanasPlanas[0]);
-    setEditor({
-      regla,
-      ancla: {
-        faseId: s?.f.id, semana: s?.w.num, n: semanasPlanas.indexOf(s), dia: regla.dias?.[0] ?? 'Lun',
-        deLaSemana, donde: s ? dondeDe(s) : '',
-      },
-    });
-  };
-
-  const nombreAtleta = athlete.full_name || athlete.username;
   const coach = equipoDe.find((m) => m.es_principal);
-  const tituloDelPrograma = coach ? `Programa de ${nombreCorto(coach.full_name) || coach.username}` : 'Programa del coach';
-  const volver = () => { if (editor) { setEditor(null); setErr(''); } else onClose(); };
+  const etiquetaCoach = `${nombreCorto(coach?.full_name) || 'Coach'} · ${rolDeProfesion(coach?.profesion)}`;
+  const nombreAtleta = athlete.full_name || athlete.username;
 
-  const cuerpoPrograma = !actual ? (
-    <div style={{ textAlign: 'center', padding: 40, color: T.text2, fontWeight: 700 }}>
-      Este programa todavía no tiene semanas.
-    </div>
-  ) : (
-    <div style={{ maxWidth: 760, margin: '0 auto' }}>
-      {/* Las fases (si hay varias) y las semanas. El puntito es donde va el atleta. */}
-      {estructura === 'fases' && fases.length > 1 && (
-        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginBottom: 10 }}>
-          {fases.map((f, fi) => (
-            <button
-              key={f.id}
-              type="button"
-              aria-pressed={actual.fi === fi}
-              onClick={() => setSel(semanasPlanas.findIndex((x) => x.fi === fi && (aqui?.faseId === f.id ? x.w.num === aqui.semana : x.wi === 0)))}
-              style={chip(actual.fi === fi)}
-            >
-              {f.name}
-            </button>
-          ))}
-        </div>
-      )}
-      {!semanal && semanasPlanas.length > 1 && (
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-          {semanasPlanas.map((s, i) => {
-            if (estructura === 'fases' && s.fi !== actual.fi) return null;
-            const elegida = i === sel;
-            const suya = aqui?.faseId === s.f.id && aqui?.semana === s.w.num;
-            return (
-              <button
-                key={`${s.f.id}-${s.w.num}`}
-                type="button"
-                aria-label={`Semana ${estructura === 'semanas' ? i + 1 : s.w.num}${suya ? ', donde va' : ''}`}
-                onClick={() => setSel(i)}
-                style={{
-                  position: 'relative', minWidth: 40, padding: '8px 0', borderRadius: 10, cursor: 'pointer',
-                  border: `${suya && !elegida ? 2 : 1}px solid ${elegida || suya ? T.accent : T.border}`,
-                  background: elegida ? T.accent : T.bg2, color: elegida ? '#fff' : (suya ? T.accent : T.text2),
-                  fontFamily: FONT, fontSize: 13, fontWeight: 800,
-                }}
-              >
-                {estructura === 'semanas' ? i + 1 : s.w.num}
-                {suya && <span style={{ position: 'absolute', left: '50%', bottom: 3, width: 4, height: 4, marginLeft: -2, borderRadius: 2, background: elegida ? '#fff' : T.accent }} />}
-              </button>
-            );
-          })}
-        </div>
-      )}
+  // La marca de cada renglón de la hoja: candado = lo del coach; «tuya» = lo mío.
+  const marcas = (sesiones) => {
+    const mios = sesiones.some((d) => d.sid && d.autorId === autorId);
+    const deOtro = sesiones.some((d) => d.sid && d.autorId !== autorId);
+    const delCoach = sesiones.some((d) => !d.sid);
+    return (
+      <>
+        {delCoach && <Lock size={12} color={T.text3} style={{ flexShrink: 0 }} />}
+        {deOtro && (
+          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.3, color: T.text2, background: T.bg3, borderRadius: 6, padding: '3px 7px', flexShrink: 0 }}>
+            OTRO
+          </span>
+        )}
+        {mios && (
+          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.3, color: T.accent, background: T.accentBg, borderRadius: 6, padding: '3px 7px', flexShrink: 0 }}>
+            TUYA
+          </span>
+        )}
+      </>
+    );
+  };
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {DIAS_SEMANA.map((d) => {
-          const delCoach = (actual.w.days ?? []).filter((x) => normDia(x.day) === d);
-          const misDelDia = (mias[actual.fi]?.weekData?.[actual.wi]?.days ?? []).filter((x) => x.day === d);
-          const deOtrosDia = deOtros.flatMap((o) => (o.fases[actual.fi]?.weekData?.[actual.wi]?.days ?? [])
-            .filter((x) => x.day === d).map((x) => ({ x, o })));
-          const vacio = !delCoach.length && !misDelDia.length && !deOtrosDia.length;
-          return (
-            <div
-              key={d}
-              style={{
-                display: 'flex', gap: 12, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 14, padding: '11px 12px',
-              }}
-            >
-              <div style={{ width: 36, flexShrink: 0, paddingTop: 3, fontSize: 12, fontWeight: 800, color: T.text2, letterSpacing: 0.4 }}>
-                {d.toUpperCase()}
-              </div>
-              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 7 }}>
-                {delCoach.map((x, k) => (
-                  <div
-                    key={`c${k}`}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 8, background: T.bg, borderRadius: 10, padding: '8px 10px',
-                      color: esDescanso(x) ? T.text3 : T.text2, fontSize: 13.5, fontWeight: 700,
-                    }}
-                  >
-                    <Lock size={13} style={{ flexShrink: 0 }} />
-                    <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{nombreDelDia(x)}</span>
-                  </div>
-                ))}
-                {deOtrosDia.map(({ x, o }, k) => (
-                  <div
-                    key={`o${k}`}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 8, background: `${o.color}12`, border: `1px solid ${o.color}44`,
-                      borderRadius: 10, padding: '8px 10px', fontSize: 13.5, fontWeight: 700, color: T.text2,
-                    }}
-                  >
-                    <Lock size={13} style={{ flexShrink: 0 }} />
-                    <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{nombreDelDia(x)}</span>
-                    <span style={{ fontSize: 10.5, fontWeight: 800, color: o.color, flexShrink: 0 }}>{o.etiqueta}</span>
-                  </div>
-                ))}
-                {misDelDia.map((x, k) => (
-                  <button
-                    key={`m${k}`}
-                    type="button"
-                    onClick={() => abrirRegla(reglas.find((r) => r.id === x.reglaId), true)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left', cursor: 'pointer', fontFamily: FONT,
-                      background: T.accentBg, border: `1.5px solid ${T.accent}`, borderRadius: 10, padding: '8px 10px',
-                      fontSize: 13.5, fontWeight: 800, color: T.text,
-                    }}
-                  >
-                    <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{nombreDelDia(x)}</span>
-                    <span style={{ fontSize: 10.5, fontWeight: 800, color: T.accent, flexShrink: 0 }}>TUYA</span>
-                    <Pencil size={14} color={T.accent} style={{ flexShrink: 0 }} />
-                  </button>
-                ))}
-                {vacio && <span style={{ fontSize: 13.5, fontWeight: 600, color: T.text3, padding: '6px 2px' }}>Sin sesión</span>}
-                <button type="button" onClick={() => abrirNueva(d)} style={{ ...botonBlanco, alignSelf: 'flex-start' }}>
-                  <Plus size={15} /> Agregar sesión mía
-                </button>
-              </div>
-            </div>
-          );
-        })}
+  let crumb = `${p?.name || 'Fase'} · ${weekName(w, wIdx + 1)}`;
+  if (semanal) crumb = 'Rutina semanal';
+  else if (estructura === 'semanas') crumb = `Semana ${semanaGlobal(fases, p?.id, w?.num) ?? wIdx + 1} de ${semanasDelPlan(fases)}`;
+
+  /* ---------- la hoja (izquierda; en el teléfono, la primera pantalla) ---------- */
+  const hoja = (
+    <div>
+      <div style={{ marginBottom: 14 }}>
+        <Field label={semanal ? 'Rutina del coach' : 'Programa del coach'}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 9, border: `1.5px solid ${T.border}`, borderRadius: 11,
+            padding: '10px 12px', background: T.bg3, fontFamily: FONT, fontSize: 14, fontWeight: 600, color: T.text2,
+          }}>
+            <Lock size={14} style={{ flexShrink: 0 }} />
+            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {planDelCoach?.title}
+            </span>
+          </div>
+        </Field>
       </div>
 
+      <NavegadorDelPlan
+        fases={fasesVista}
+        kind={kind}
+        estructura={estructura}
+        quien="atleta"
+        aqui={aqui}
+        editor={{
+          soloLectura: true,
+          faseAbierta: pi,
+          semanaAbierta: w?.num,
+          onAbrirFase: (i, semanaNum) => {
+            const wi = Math.max(0, (fasesVista[i]?.weekData ?? []).findIndex((x) => x.num === semanaNum));
+            const semana = fasesVista[i]?.weekData?.[wi];
+            const suDia = aqui && aqui.faseId === fasesVista[i]?.id && aqui.semana === semana?.num && aqui.dia != null
+              ? normDia(semana.days[aqui.dia]?.day) : null;
+            setPi(i);
+            setWeekIdx(wi);
+            setDia((d) => suDia || diaParaSemana(semana, d));
+          },
+          onElegirSemana: (num) => {
+            const wi = Math.max(0, (p?.weekData ?? []).findIndex((x) => x.num === num));
+            setWeekIdx(wi);
+            setDia((d) => diaParaSemana(p?.weekData?.[wi], d));
+          },
+          diaElegido: dia,
+          onElegirDia: (f, i, semana, clave) => { setDia(clave); if (!esCompu) setEditandoDiaTel(true); },
+          marcas,
+        }}
+      />
+
       {reglas.length > 0 && (
-        <div style={{ marginTop: 26 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 10 }}>
-            Mis sesiones en este programa ({reglas.length})
+        <div style={{ marginTop: 22 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 }}>
+            Mis sesiones ({reglas.length})
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
             {reglas.map((r) => {
               const huerfana = esHuerfana(r, fases);
-              const ocupa = textoDeCuantoOcupa(r, fases, { semanal });
               return (
-                <button
+                <div
                   key={r.id}
-                  type="button"
-                  onClick={() => abrirRegla(r)}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', cursor: 'pointer', fontFamily: FONT,
-                    background: T.bg2, border: `1.5px solid ${huerfana ? T.danger : T.border}`, borderRadius: 14, padding: '12px 14px',
+                    display: 'flex', alignItems: 'center', gap: 6, background: T.bg2, borderRadius: 13,
+                    border: `1.5px solid ${huerfana ? T.danger : T.border}`, padding: '4px 6px 4px 4px',
                   }}
                 >
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: 'block', fontSize: 15, fontWeight: 800, color: T.text, overflowWrap: 'anywhere' }}>{r.nombre}</span>
-                    <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: T.text2, marginTop: 2 }}>
-                      {r.dias.map((x) => ABREV[x]).join(' · ')} · {textoDeAlcance(r, fases)}
+                  <button
+                    type="button"
+                    onClick={() => !huerfana && irARegla(r)}
+                    style={{
+                      flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left',
+                      border: 'none', background: 'transparent', cursor: huerfana ? 'default' : 'pointer', fontFamily: FONT, padding: '8px 9px',
+                    }}
+                  >
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ display: 'block', fontSize: 14, fontWeight: 800, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {r.nombre}
+                      </span>
+                      <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: huerfana ? T.danger : T.text2, marginTop: 2 }}>
+                        {huerfana
+                          ? 'Sin lugar en el programa: el coach lo cambió.'
+                          : `${(r.dias ?? []).map((x) => ABREV[x]).join(' · ')} · ${textoDeAlcance(r, fases)}`}
+                      </span>
                     </span>
-                    <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: huerfana ? T.danger : T.text3, marginTop: 2 }}>
-                      {huerfana ? 'Sin lugar en el programa: el coach lo cambió. Ábrela para moverla o quitarla.' : ocupa}
-                    </span>
-                  </span>
-                  <Pencil size={16} color={T.text3} style={{ flexShrink: 0 }} />
-                </button>
+                    {!huerfana && <ChevronRight size={15} color={T.text3} style={{ flexShrink: 0 }} />}
+                  </button>
+                  {huerfana && (
+                    <button
+                      type="button"
+                      onClick={() => quitaRegla(r)}
+                      aria-label={`Quitar ${r.nombre}`}
+                      style={{ ...botonBlanco, minHeight: 34, padding: '0 10px', borderColor: T.danger, color: T.danger }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -648,12 +647,134 @@ export default function SesionesSobreElPrograma({
     </div>
   );
 
+  /* ---------- el día (derecha; en el teléfono, la segunda pantalla) ---------- */
+  const delCoachDia = (w?.days ?? []).filter((d) => !d.sid && normDia(d.day) === dia);
+  const otrosDia = deOtros.flatMap((o) => (o.fases[pi]?.weekData?.[wIdx]?.days ?? [])
+    .filter((d) => d.day === dia).map((d) => ({ d, o })));
+  const misReglasDia = (mias[pi]?.weekData?.[wIdx]?.days ?? []).filter((d) => d.day === dia)
+    .map((d) => reglas.find((r) => r.id === d.reglaId)).filter(Boolean);
+  const hayAlgo = delCoachDia.length + otrosDia.length + misReglasDia.length > 0;
+
+  const editorDelDia = p && (
+    <div>
+      <div style={{ marginBottom: 14, minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: T.text3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {semanal ? 'Rutina que se repite' : crumb}
+        </div>
+        <div style={{ fontSize: 19, fontWeight: 800, color: T.text, letterSpacing: -0.3 }}>
+          {NOMBRE_DIA[dia] || dia}
+        </div>
+      </div>
+
+      {!w ? (
+        <div style={{ background: T.bg2, border: `1.5px solid ${T.border}`, borderRadius: 20, padding: '40px 24px', textAlign: 'center' }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>Esta fase todavía no tiene semanas</div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {!hayAlgo && (
+            <div style={{ background: T.bg2, border: `1.5px solid ${T.border}`, borderRadius: 20, padding: '52px 24px', textAlign: 'center' }}>
+              <div style={{ width: 70, height: 70, borderRadius: 22, background: T.accentBg, color: T.accent, display: 'grid', placeItems: 'center', margin: '0 auto 16px' }}>
+                <CalendarDays size={30} />
+              </div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: T.text }}>No hay sesión para el {nombreLargoDeDia(dia)}</div>
+              <div style={{ fontSize: 13.5, color: T.text2, marginTop: 8, lineHeight: 1.5 }}>
+                Agrega la tuya: sale con tu nombre y se puede repetir.
+              </div>
+            </div>
+          )}
+
+          {/* LO DEL COACH: el mismo editor, en solo lectura. Se ve y se navega; no se toca. */}
+          {delCoachDia.map((d, k) => (
+            <div key={`c${k}`}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, margin: '0 2px 8px', fontSize: 12.5, fontWeight: 800, color: T.text2 }}>
+                <Lock size={13} /> {etiquetaCoach} · solo lectura
+              </div>
+              <SessionEditor soloLectura day={d} {...editorProps} />
+            </div>
+          ))}
+
+          {otrosDia.map(({ d, o }, k) => (
+            <div key={`o${k}`}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, margin: '0 2px 8px', fontSize: 12.5, fontWeight: 800, color: T.text2 }}>
+                <Lock size={13} /> {o.etiqueta} · solo lectura
+              </div>
+              <SessionEditor soloLectura day={d} {...editorProps} />
+            </div>
+          ))}
+
+          {/* LO MÍO: editable, con su «Repetir». */}
+          {misReglasDia.map((r) => (
+            <TarjetaDeMiSesion
+              key={r.id}
+              regla={r}
+              dia={dia}
+              fases={fases}
+              lista={lista}
+              aqui={aqui}
+              ancla={ancla}
+              semanal={semanal}
+              editorProps={editorProps}
+              onSesion={(parche) => cambiaSesion(r.id, parche)}
+              onRegla={(parche) => cambiaRegla(r.id, parche)}
+              onSaltar={() => saltaSemana(r)}
+              onQuitar={() => quitaRegla(r)}
+            />
+          ))}
+
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={añadeMia}
+              className="kp-press"
+              style={{
+                flex: '1 1 220px', minHeight: 46, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                borderRadius: 14, border: `1.5px solid ${T.accent}`, background: T.bg2, cursor: 'pointer',
+                boxShadow: KP.shCard, fontFamily: FONT, fontSize: 14, fontWeight: 800, color: T.accent,
+              }}
+            >
+              <Plus size={16} /> Añadir sesión mía el {nombreLargoDeDia(dia)}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  let cuerpo;
+  if (!p) {
+    cuerpo = (
+      <div style={{ textAlign: 'center', padding: 40, color: T.text2, fontWeight: 700 }}>
+        Este programa todavía no tiene semanas.
+      </div>
+    );
+  } else if (esCompu) {
+    cuerpo = (
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'minmax(300px, 380px) minmax(0, 1fr)', gap: 24,
+        maxWidth: 1240, margin: '0 auto', alignItems: 'start',
+      }}>
+        <aside style={{ position: 'sticky', top: 0, maxHeight: 'calc(100svh - 110px)', overflowY: 'auto', padding: '2px 4px 8px 2px' }}>
+          {hoja}
+        </aside>
+        <section style={{ minWidth: 0 }}>{editorDelDia}</section>
+      </div>
+    );
+  } else {
+    cuerpo = (
+      <div style={{ maxWidth: 640, margin: '0 auto' }}>
+        {editandoDiaTel && editorDelDia ? editorDelDia : hoja}
+      </div>
+    );
+  }
+
   return createPortal(
     <div style={{ position: 'fixed', inset: 0, zIndex: 2400, background: T.bg, fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
       <header
         style={{
           background: 'rgba(255,255,255,0.86)', backdropFilter: 'saturate(180%) blur(16px)',
-          borderBottom: `1px solid ${T.border}`, padding: '13px 18px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
+          borderBottom: `1px solid ${T.border}`, padding: '13px 18px',
+          display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
         }}
       >
         <button
@@ -666,15 +787,31 @@ export default function SesionesSobreElPrograma({
         </button>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 800, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {editor ? (editor.regla ? 'Tu sesión' : 'Nueva sesión') : tituloDelPrograma}
+            {crumb}
           </div>
-          <div style={{ fontSize: 12, color: T.text2, fontWeight: 600 }}>
-            {nombreAtleta} · {planDelCoach?.title}
+          <div style={{ fontSize: 12, color: T.text2, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {nombreAtleta} · tus sesiones{dirty ? ' · sin guardar' : (haGuardado ? ' · guardado' : '')}
           </div>
         </div>
         <button
           type="button"
-          onClick={onClose}
+          onClick={guardar}
+          disabled={guardando || !dirty}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 18px', borderRadius: 12,
+            border: 'none', cursor: guardando || !dirty ? 'default' : 'pointer',
+            background: dirty ? `linear-gradient(135deg, ${T.accent}, ${T.accentDk})` : T.bg3,
+            // Recién guardado, en verde: se lee como «listo», no como botón apagado.
+            color: dirty ? '#fff' : (haGuardado ? KP.mint : T.text3), fontFamily: FONT, fontSize: 14, fontWeight: 800,
+            boxShadow: dirty ? KP.shBtn : 'none', opacity: guardando ? 0.75 : 1, flexShrink: 0,
+          }}
+        >
+          {guardando ? <Loader2 size={15} className="spin" /> : <Check size={15} />}
+          {!dirty && haGuardado ? 'Guardado' : 'Guardar'}
+        </button>
+        <button
+          type="button"
+          onClick={cierra}
           aria-label="Cerrar"
           style={{ width: 36, height: 36, borderRadius: 11, border: `1px solid ${T.border}`, cursor: 'pointer', background: T.bg2, color: T.text2, display: 'grid', placeItems: 'center', flexShrink: 0 }}
         >
@@ -682,25 +819,13 @@ export default function SesionesSobreElPrograma({
         </button>
       </header>
 
-      <main ref={principal} style={{ flex: 1, overflowY: 'auto', padding: '20px 18px 70px' }}>
-        {editor ? (
-          <EditorDeSesion
-            key={`${editor.regla?.id ?? 'nueva'}-${editor.ancla.dia}-${editor.ancla.n}`}
-            athlete={athlete}
-            fases={fases}
-            kind={kind}
-            aqui={aqui}
-            regla={editor.regla}
-            ancla={editor.ancla}
-            guardando={guardando}
-            err={err}
-            onGuardar={guardarRegla}
-            onEliminar={eliminarRegla}
-            onSaltarEstaSemana={saltarSemana}
-            onCancelar={volver}
-          />
-        ) : cuerpoPrograma}
-      </main>
+      {err && (
+        <div style={{ maxWidth: 980, margin: '14px auto 0', width: 'calc(100% - 36px)', background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 12, padding: '11px 15px', fontWeight: 700, fontSize: 13.5 }}>
+          {err}
+        </div>
+      )}
+
+      <main ref={principal} style={{ flex: 1, overflowY: 'auto', padding: '20px 18px 60px' }}>{cuerpo}</main>
 
       <style>{`
         .spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}

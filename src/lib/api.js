@@ -576,9 +576,12 @@ export async function listAthletesOverview(opciones = {}) {
   const filas = (profilesRes.data ?? []).map((p) => {
     const plan = planDeFila(p);
     const phases = plan?.data?.phases ?? [];
+    // Una rutina semanal sin ninguna sesión es un programa fantasma (ver `esProgramaFantasma`): «Sin plan».
+    const fantasma = plan?.data?.kind === 'weekly'
+      && !phases.some((ph) => (ph.weekData ?? []).some((w) => (w.days ?? []).some((d) => d?.cat !== 'off')));
     return {
       ...p,
-      plan: plan
+      plan: plan && !fantasma
         ? {
             title: plan.title,
             kind: plan.data?.kind === 'weekly' ? 'weekly' : 'periodized',

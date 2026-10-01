@@ -2671,7 +2671,13 @@ export default function TrainingApp() {
      equipo, todo es la app de siempre. Las pastillas y las etiquetas de «quién
      lo puso» salen solo si son al menos dos PERSONAS: si es la misma, no dicen nada. */
   const autores = useMemo(() => autoresDe(programas), [programas]);
-  const hayEquipo = useMemo(() => programas.filter((p) => p.hasPlan && !p.altaEn).length > 1, [programas]);
+  /* Programas con sesiones (uno aparte vacío no cuenta). Con dos o más hay equipo; con uno solo
+     también si NO es el del coach (el coach no puso nada todavía, pero otra persona sí): si no, esa
+     sesión no se vería en ninguna parte. */
+  const hayEquipo = useMemo(() => {
+    const con = programas.filter((p) => p.conSesiones && !p.altaEn);
+    return con.length > 1 || (con.length === 1 && !con[0].esPrincipal && programas.some((p) => p.esPrincipal));
+  }, [programas]);
   // Las pastillas «Todo · Andrés · Ana». Solo esconden; el filtro vale mientras esa persona tenga algo.
   const [filtro, setFiltro] = useState(null);
   const filtroVigente = filtro && autores.some((a) => a.id === filtro) ? filtro : null;
@@ -2830,7 +2836,7 @@ export default function TrainingApp() {
 
   // Programas armados por su cuenta por un profesional (no pegados al del coach): se abren aparte.
   const aparte = useMemo(
-    () => (programaActivo?.esPrincipal ? programas.filter((p) => !p.esPrincipal && !p.sobre && p.hasPlan) : []),
+    () => (programaActivo?.esPrincipal ? programas.filter((p) => !p.esPrincipal && !p.sobre && p.conSesiones) : []),
     [programas, programaActivo?.esPrincipal],
   );
   // Lo que otros le pegaron a una semana del programa, para enseñarlo dentro de su día en la hoja.
@@ -2898,7 +2904,7 @@ export default function TrainingApp() {
   let content;
   if (planLoading && (tab === 'home' || tab === 'plan')) {
     content = <PlanLoadingState />;
-  } else if (!hasPlan && (tab === 'home' || tab === 'plan')) {
+  } else if (!hasPlan && !hayEquipo && (tab === 'home' || tab === 'plan')) {
     content = <NoPlanState onGoTab={vasA} />;
   } else if (tab === 'home') {
     content = <HomeView sessionsData={sessionsData} wellness={wellness}

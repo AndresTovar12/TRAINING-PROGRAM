@@ -22,14 +22,16 @@ const nombreDe = (day) => textoDeSesiones(sesionesDelTitulo(day))
    lleva una etiqueta por cada sesión en vez de sus nombres unidos con «+»:
    «Velocidad + Lower Strength» se lee como una sola sesión que junta las dos
    cosas (Andrés, 29 sep 2026). El renglón puede crecer a dos líneas. */
-function TituloDelRenglon({ dias, color, peso = 700 }) {
+function TituloDelRenglon({ dias, color, peso = 700, minimo }) {
   const sesiones = sesionesDelTitulo(dias);
+  // `minimo`: un ancho por debajo del cual el título no se encoge; el renglón baja de línea antes.
+  const base = minimo ? `1 1 ${minimo}px` : 1;
   if (sesiones.length > 1) {
-    return <EtiquetasDeSesion sesiones={sesiones} style={{ flex: 1 }} />;
+    return <EtiquetasDeSesion sesiones={sesiones} style={{ flex: base }} />;
   }
   return (
     <span style={{
-      flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: peso, color,
+      flex: base, minWidth: 0, fontSize: 13.5, fontWeight: peso, color,
       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
     }}>
       {nombreDe(Array.isArray(dias) ? dias[0] : dias)}
@@ -85,7 +87,13 @@ export default function NavegadorDelPlan({
   const textoAqui = quien === 'tu' ? 'AQUÍ VAS' : 'AQUÍ VA';
   const textoIr = quien === 'tu' ? 'Ir a donde vas' : 'Ir a donde va';
 
-  /* `pegadasDe(fase, semana)`: lo que otros profesionales le pegaron a esta
+  /* MODO EDITOR DE SOLO LECTURA (`editor.soloLectura`). Es el editor de siempre, para
+     navegar un programa AJENO: fases, semanas y los siete días funcionan igual, pero
+     no salen los tres puntos ni «Agregar semana / fase» (no se puede cambiar su
+     forma). `editor.marcas(sesiones)` pone una marca en el renglón de un día
+     («tuya», un candado…). Lo usa quien le agrega sesiones al programa del coach.
+
+     `pegadasDe(fase, semana)`: lo que otros profesionales le pegaron a esta
      semana, [{ dia, day, etiqueta, color, hecha }]. Sale DENTRO de su día, con la
      etiqueta de quien lo puso, junto a lo del coach. Es solo lectura: lo pegado
      lo mueve únicamente su autor. `alTocarPegada(fase, semana, pegada)` abre ese
@@ -217,7 +225,7 @@ export default function NavegadorDelPlan({
           return (
             <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               {fila}
-              {tresPuntos(`Opciones de ${f.name}`, () => editor.onMenuFase(f, i))}
+              {!editor.soloLectura && tresPuntos(`Opciones de ${f.name}`, () => editor.onMenuFase(f, i))}
             </div>
           );
         }
@@ -248,7 +256,7 @@ export default function NavegadorDelPlan({
                 <span style={{ width: 9, height: 9, borderRadius: 5, background: f.color || LT.blue, flexShrink: 0 }} />
                 <span style={{ flex: 1, minWidth: 0, fontSize: 15.5, fontWeight: 800, color: LT.text }}>{f.name}</span>
                 {faseDeAqui && pastilla(textoAqui, true)}
-                {editor && tresPuntos(`Opciones de ${f.name}`, () => editor.onMenuFase(f, i))}
+                {editor && !editor.soloLectura && tresPuntos(`Opciones de ${f.name}`, () => editor.onMenuFase(f, i))}
               </div>
             )}
 
@@ -285,7 +293,7 @@ export default function NavegadorDelPlan({
                     </button>
                   );
                 })}
-                {editor && (
+                {editor && !editor.soloLectura && (
                   <>
                     <button
                       type="button"
@@ -341,6 +349,8 @@ export default function NavegadorDelPlan({
                         padding: '10px 11px', borderRadius: 11, cursor: 'pointer', fontFamily: FONT,
                         background: elegido ? LT.blueSoft : LT.bg,
                         border: `${elegido ? 1.5 : 1}px ${vacio && !elegido ? 'dashed' : 'solid'} ${elegido ? LT.blue : LT.border}`,
+                        // En solo lectura el renglón lleva más marcas (candado, «tuya»): baja de línea antes de apretar el título.
+                        ...(editor.soloLectura ? { flexWrap: 'wrap', rowGap: 6 } : null),
                       }}
                     >
                       <span style={{ width: 32, fontSize: 11, fontWeight: 800, color: elegido ? LT.blue : LT.text3, flexShrink: 0 }}>
@@ -355,10 +365,11 @@ export default function NavegadorDelPlan({
                           Sin sesión
                         </span>
                       ) : (
-                        <TituloDelRenglon dias={sesiones} color={LT.text} />
+                        <TituloDelRenglon dias={sesiones} color={LT.text} minimo={editor.soloLectura ? 112 : undefined} />
                       )}
+                      {editor.marcas?.(sesiones)}
                       {suyo && pastilla(textoAqui, !elegido)}
-                      {elegido && pastilla('EDITANDO', true)}
+                      {elegido && !editor.soloLectura && pastilla('EDITANDO', true)}
                     </button>
                   );
                 })
@@ -444,7 +455,7 @@ export default function NavegadorDelPlan({
         );
       })}
 
-      {editor && kind !== 'weekly' && !deCorrido && (
+      {editor && !editor.soloLectura && kind !== 'weekly' && !deCorrido && (
         <button
           type="button"
           onClick={editor.onAgregarFase}

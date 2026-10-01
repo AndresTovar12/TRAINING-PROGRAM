@@ -28,7 +28,7 @@ import { T, FONT, KP } from '@/lib/theme';
 import { plural, pluralS } from '@/lib/plural';
 import { esDescanso, dondeVa, sessionIdFor, estructuraDelPlan, nombreDeSesion } from '@/lib/training-utils';
 import { turnoDeTag, minutosDeTag } from '@/lib/sesiones';
-import { colorDePrograma, nombreCorto, rolDeProfesion } from '@/lib/programas';
+import { colorDePrograma, esProgramaFantasma, nombreCorto, rolDeProfesion } from '@/lib/programas';
 import { fasesConPegadas, reglasDe } from '@/lib/pegadas';
 import HojaFlotante from '@/components/HojaFlotante';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
@@ -920,6 +920,13 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
   const miFilaPegadas = filasPegadas.find((f) => f.profesional_id === profile?.id) ?? null;
   const miClave = propio ? (profile?.id ?? null) : (isMaster ? programaElegido : null);
   const plan = programas.find((p) => (p.profesional_id ?? null) === miClave) ?? null;
+  /* UN PROGRAMA SIN NINGUNA SESIÓN NO CUENTA (Andrés, 1 oct 2026, el fisio): borró la única sesión
+     de su rutina y «Editar mi programa» y «Ver el programa» seguían ahí, en blanco. Una rutina
+     semanal sin sesiones se trata como si no hubiera programa: «Crear mi programa», y no sale
+     al mirar los programas. La fila sigue en la base hasta que se escriba otra cosa encima o se
+     elimine desde los tres puntos del editor. */
+  const planReal = plan && !esProgramaFantasma(plan.data) ? plan : null;
+  const programasVisibles = programas.filter((p) => !esProgramaFantasma(p.data));
   const setPlan = (fila) => setProgramas((prev) => (fila
     ? [...prev.filter((p) => p.id !== fila.id), fila]
     : prev.filter((p) => (p.profesional_id ?? null) !== miClave)));
@@ -1072,29 +1079,29 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
         />
       )}
       <AccionFicha
-        icon={plan ? Pencil : Plus}
-        titulo={propio ? (plan ? 'Editar mi programa' : 'Crear mi programa') : t(plan ? 'Editar el plan' : 'Crear el plan')}
-        detalle={plan ? plan.title : 'Todavía no tiene ninguno'}
+        icon={planReal ? Pencil : Plus}
+        titulo={propio ? (planReal ? 'Editar mi programa' : 'Crear mi programa') : t(planReal ? 'Editar el plan' : 'Crear el plan')}
+        detalle={planReal ? planReal.title : 'Todavía no tiene ninguno'}
         primaria={!puedePegar}
         onClick={() => setBuilding(true)}
       />
-      {programas.length > 0 && (
+      {programasVisibles.length > 0 && (
         <AccionFicha
           icon={ClipboardList}
           titulo={t('Ver el plan')}
-          detalle={plan
+          detalle={planReal
             ? `${tamano} · ${plural(totalSessions, 'sesión', 'sesiones')}`
-            : (programas.length > 1 ? 'Los programas de su equipo, solo para leer' : 'Solo para leer')}
+            : (programasVisibles.length > 1 ? 'Los programas de su equipo, solo para leer' : 'Solo para leer')}
           onClick={() => setVerPlan(true)}
         />
       )}
-      {verPlan && programas.length > 0 && (
+      {verPlan && programasVisibles.length > 0 && (
         <HojaDelPlanDeAtleta
           athlete={athlete}
-          programas={programas}
+          programas={programasVisibles}
           equipoDe={equipoDe}
           state={state}
-          inicialId={plan?.id}
+          inicialId={planReal?.id}
           pegadas={filasPegadas}
           onCerrar={() => setVerPlan(false)}
         />
@@ -1353,6 +1360,8 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           // Guardar NO cierra el editor (Andrés, 27 sep 2026: "prefiero que me
           // deje ahí para ver cómo quedó"); solo se refresca la ficha de atrás.
           onSaved={(row) => setPlan(row)}
+          // Eliminar el programa desde el editor: la ficha de atrás lo deja de tener.
+          onDeleted={() => { setPlan(null); setBuilding(false); }}
         />
       )}
     </div>
@@ -1369,6 +1378,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           // Guardar NO cierra el editor (Andrés, 27 sep 2026: "prefiero que me
           // deje ahí para ver cómo quedó"); solo se refresca la ficha de atrás.
           onSaved={(row) => setPlan(row)}
+          onDeleted={() => { setPlan(null); setBuilding(false); }}
         />
       )}
     </div>

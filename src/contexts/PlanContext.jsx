@@ -8,7 +8,7 @@ import {
 } from '@/lib/api';
 import { estructuraDelPlan } from '@/lib/training-utils';
 import { adaptadorDeRegistros, fasesConPegadas, reglasDe } from '@/lib/pegadas';
-import { colorDePrograma } from '@/lib/programas';
+import { colorDePrograma, tieneSesiones } from '@/lib/programas';
 
 /**
  * Carga el plan activo de la persona cuya app se dibuja —quien entró, o el
@@ -230,6 +230,7 @@ export function PlanProvider({ children }) {
         kind: row.data?.kind === 'weekly' ? 'weekly' : 'periodized',
         estructura: estructuraDelPlan(row.data),
         hasPlan: phases.length > 0,
+        conSesiones: tieneSesiones(phases),
         ...herramientasDe(duenoId),
       };
     };
@@ -258,6 +259,7 @@ export function PlanProvider({ children }) {
         kind,
         estructura: principal.estructura,
         hasPlan: phases.some((f) => (f.weekData ?? []).some((w) => (w.days ?? []).length > 0)),
+        conSesiones: tieneSesiones(phases),
         // Lo que anota el atleta se guarda con llaves estables y aquí se ve por posición.
         vistaDeRegistros: vista,
         llaveEstable,

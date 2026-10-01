@@ -136,6 +136,24 @@ export function etiquetaDePrograma(programa) {
 }
 
 const CLAVE_DE_DIA = { Mie: 'Mié', Sab: 'Sáb' };
+/**
+ * ¿El programa trae al menos una sesión? Uno con sus fases y semanas pero sin ningún día (el
+ * profesional borró la única sesión) existe, pero no tiene nada que enseñar.
+ */
+export const tieneSesiones = (fases) => (Array.isArray(fases) ? fases : []).some((f) => (
+  (Array.isArray(f?.weekData) ? f.weekData : []).some((w) => (
+    (Array.isArray(w?.days) ? w.days : []).some((d) => !esDescanso(d))
+  ))
+));
+
+/**
+ * Una rutina semanal sin ninguna sesión es un programa «fantasma»: Andrés, 1 oct 2026, el fisio
+ * borró su única sesión y «Editar mi programa» y «Ver el programa» seguían ahí, en blanco. Se
+ * trata como si no hubiera programa. Solo la rutina: un programa de varias semanas sin días
+ * todavía puede tener una estructura que vale la pena (fases, semanas con nombre).
+ */
+export const esProgramaFantasma = (data) => data?.kind === 'weekly' && !tieneSesiones(data?.phases);
+
 /** El día de la semana como lo escribe la app ('Mié', no 'Mie'), de un texto o de un día del plan. */
 export const normalizaDia = (dia) => CLAVE_DE_DIA[dia] ?? dia;
 const claveDelDia = (day) => normalizaDia(day?.day);
@@ -152,7 +170,8 @@ export const autorDe = (programa) => programa?.profesionalId ?? 'coach';
 export function autoresDe(programas) {
   const vistos = new Map();
   (programas ?? []).forEach((p) => {
-    if (!p?.hasPlan || p.altaEn) return;
+    // Un programa sin ninguna sesión no cuenta: quien lo armó no tiene nada puesto.
+    if (!p?.conSesiones || p.altaEn) return;
     const llave = autorDe(p);
     if (vistos.has(llave)) return;
     vistos.set(llave, {

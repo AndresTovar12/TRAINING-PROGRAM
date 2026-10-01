@@ -9,10 +9,11 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { conLasMiasPrimero } from '@/lib/categorias';
+import { esProgramaFantasma } from '@/lib/programas';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useIsDesktop } from '@/lib/useViewport';
 import {
-  listExercises, createPlan, updatePlan, listTemplates, saveTemplate, deleteTemplate,
+  listExercises, createPlan, updatePlan, deletePlan, listTemplates, saveTemplate, deleteTemplate,
   getMasterId, tagRepertoire, createExercise, listCategories,
   listExerciseMedia, addExerciseMedia, deleteExerciseMedia,
   listExerciseOverrides, aplicarOverrides, getAthleteState,
@@ -169,7 +170,7 @@ const inputStyle = {
   background: T.bg2, boxSizing: 'border-box',
 };
 
-function Field({ label, children, grow }) {
+export function Field({ label, children, grow }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: grow ? 1 : undefined, minWidth: 0 }}>
       <span style={{ fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>{label}</span>
@@ -193,7 +194,7 @@ function IconBtn({ icon: Icon, onClick, danger, disabled, title, sobreFoto }) {
   return (
     <button
       type="button" onClick={onClick} disabled={disabled} title={title}
-      className={sobreFoto ? undefined : 'kp-ico'}
+      className={sobreFoto ? 'kp-accion' : 'kp-ico kp-accion'}
       style={{
         width: 30, height: 30, borderRadius: 999, cursor: disabled ? 'default' : 'pointer',
         border: sobreFoto ? `1px solid ${T.border}` : 'none',
@@ -220,13 +221,13 @@ function IconBtn({ icon: Icon, onClick, danger, disabled, title, sobreFoto }) {
  * gris. Cinco de esas en fila pesan igual, asi que el ojo tiene que leerlas
  * una por una en vez de saltar directo a la que importa.
  */
-function Pill({ icon: Icon, children, onClick, primary, solido, danger, disabled }) {
+export function Pill({ icon: Icon, children, onClick, primary, solido, danger, disabled }) {
   const fondo = solido ? T.accent : primary ? T.accentBg : 'transparent';
   const tinta = solido ? '#fff' : danger ? T.danger : primary ? T.accent : T.text2;
   return (
     <button
       type="button" onClick={onClick} disabled={disabled}
-      className={solido || primary ? undefined : 'kp-pill'}
+      className={solido || primary ? 'kp-accion' : 'kp-pill kp-accion'}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 15px', borderRadius: 999,
         border: 'none', cursor: disabled ? 'default' : 'pointer',
@@ -248,9 +249,9 @@ function Stepper({ value, onChange, min = 1 }) {
   };
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      <button type="button" style={btn} onClick={() => onChange(String(Math.max(min, n - 1)))}>−</button>
+      <button type="button" className="kp-accion" style={btn} onClick={() => onChange(String(Math.max(min, n - 1)))}>−</button>
       <span style={{ minWidth: 26, textAlign: 'center', fontWeight: 800, fontSize: 15, color: T.text }}>{value}</span>
-      <button type="button" style={btn} onClick={() => onChange(String(n + 1))}>+</button>
+      <button type="button" className="kp-accion" style={btn} onClick={() => onChange(String(n + 1))}>+</button>
     </span>
   );
 }
@@ -521,6 +522,7 @@ function BotonVideoAtleta({ idEjercicio, atleta, onAbrir }) {
   return (
     <button
       type="button"
+      className="kp-accion"
       onClick={onAbrir}
       title={`Poner un video solo para ${atleta.full_name || atleta.username}`}
       /* CON COLOR PROPIO, no un fantasma gris. Andrés, 18 sep 2026: "lo de
@@ -1204,7 +1206,7 @@ const limpiaTag = (tag = '') => tag.replace(/^Sesi[óo]n \d+ \([AP]M\):\s*/, '')
  */
 function EditorSesionesDelDia({
   day, onPatch, repertoire, atleta, categorias, duenoId, masterId,
-  onEjercicioCreado, onCategoriaCreada, onCategoriaBorrada,
+  onEjercicioCreado, onCategoriaCreada, onCategoriaBorrada, soloLectura = false,
 }) {
   const bloques = day.blocks || [];
   const pregunta = useConfirmacion();
@@ -1361,11 +1363,13 @@ function EditorSesionesDelDia({
                     </div>
                   )}
 
-                  <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-                    <Pill icon={Plus} primary onClick={() => setEligiendoPara(bi)}>Agregar ejercicio</Pill>
-                    <Pill icon={StickyNote} onClick={() => agregaFilas(bi, [{ isNote: true, text: '' }])}>Nota</Pill>
-                    <Pill icon={Dumbbell} onClick={() => setCreandoPara(bi)}>Ejercicio nuevo</Pill>
-                  </div>
+                  {!soloLectura && (
+                    <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                      <Pill icon={Plus} primary onClick={() => setEligiendoPara(bi)}>Agregar ejercicio</Pill>
+                      <Pill icon={StickyNote} onClick={() => agregaFilas(bi, [{ isNote: true, text: '' }])}>Nota</Pill>
+                      <Pill icon={Dumbbell} onClick={() => setCreandoPara(bi)}>Ejercicio nuevo</Pill>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -1373,19 +1377,23 @@ function EditorSesionesDelDia({
         );
       })}
 
-      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-        <Pill icon={Plus} onClick={() => escribe((bs) => [...bs, { type: 'lift', tag: `Sesión ${bs.length + 1}`, exercises: [] }])}>
-          Otra sesión el mismo día
-        </Pill>
-        <Pill icon={StickyNote} onClick={() => escribe((bs) => [...bs, { type: 'note', tag: `Sesión ${bs.length + 1}`, text: '' }])}>
-          Sesión de solo texto
-        </Pill>
-      </div>
+      {!soloLectura && (
+        <>
+          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+            <Pill icon={Plus} onClick={() => escribe((bs) => [...bs, { type: 'lift', tag: `Sesión ${bs.length + 1}`, exercises: [] }])}>
+              Otra sesión el mismo día
+            </Pill>
+            <Pill icon={StickyNote} onClick={() => escribe((bs) => [...bs, { type: 'note', tag: `Sesión ${bs.length + 1}`, text: '' }])}>
+              Sesión de solo texto
+            </Pill>
+          </div>
 
-      <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 600, lineHeight: 1.5 }}>
-        Aquí nada se corrige solo: «—» en las series y reps como «30 yd» o «5/lado»
-        se guardan tal cual los escribas.
-      </div>
+          <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 600, lineHeight: 1.5 }}>
+            Aquí nada se corrige solo: «—» en las series y reps como «30 yd» o «5/lado»
+            se guardan tal cual los escribas.
+          </div>
+        </>
+      )}
 
       {mediaDe && (
         <MediaParaEsteAtleta
@@ -1426,7 +1434,23 @@ function EditorSesionesDelDia({
   );
 }
 
-export function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCreado, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, duenoId, masterId, onCategoriaCreada, onCategoriaBorrada }) {
+/**
+ * El editor de UNA sesión. Con `soloLectura` es el mismo, pero para ver la sesión de
+ * otra persona: se ve igual y no se puede tocar nada (`inert`) ni sale lo de agregar.
+ * Lo usa quien le agrega sesiones al programa de otro: ve las del coach, no las cambia.
+ */
+export function SessionEditor(props) {
+  if (!props.soloLectura) return <SessionEditorInterno {...props} />;
+  return (
+    <div inert aria-readonly="true" className="tl-lectura" style={{ pointerEvents: 'none', opacity: 0.86 }}>
+      {/* Se ve igual, pero sin lo que cambia algo: agregar, mover, quitar, «su video». */}
+      <style>{'.tl-lectura .kp-accion{display:none !important}'}</style>
+      <SessionEditorInterno {...props} />
+    </div>
+  );
+}
+
+function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjercicioCreado, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, duenoId, masterId, onCategoriaCreada, onCategoriaBorrada, soloLectura = false }) {
   const { t } = usePalabras();
   const [creandoEjercicio, setCreandoEjercicio] = useState(false);
   const [mediaDe, setMediaDe] = useState(null);
@@ -1461,6 +1485,7 @@ export function SessionEditor({ day, repertoire, categorias = [], atleta, onEjer
           onEjercicioCreado={onEjercicioCreado}
           onCategoriaCreada={onCategoriaCreada}
           onCategoriaBorrada={onCategoriaBorrada}
+          soloLectura={soloLectura}
         />
       </div>
     );
@@ -1578,7 +1603,7 @@ export function SessionEditor({ day, repertoire, categorias = [], atleta, onEjer
           que leer los tres para encontrar el de siempre. Aqui el principal
           ocupa todo el ancho —imposible de fallar con el pulgar— y los otros
           dos van abajo, mas chicos, repartidos a la mitad. */}
-      {descanso ? (
+      {soloLectura ? null : descanso ? (
         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ fontSize: 13, color: T.text2, lineHeight: 1.5 }}>
             <b style={{ color: T.text }}>Día de descanso.</b> {t('El atleta no tiene nada que hacer. Si quieres, déjale una nota.')}
@@ -1939,13 +1964,14 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
 /* Builder principal                                                    */
 /* ------------------------------------------------------------------ */
 
-export default function PlanBuilder({ athlete, planRow, onClose, onSaved, profesionalId = null }) {
+export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDeleted, profesionalId = null }) {
   const esCompu = useIsDesktop();
   const pregunta = useConfirmacion();
   const { user, profile } = useAuth();
   const { t } = usePalabras();
   const isMaster = !!profile?.is_owner;
-  const isNew = !planRow;
+  // Una rutina semanal sin ninguna sesión es un programa fantasma: se abre como nuevo (se escoge la forma).
+  const isNew = !planRow || esProgramaFantasma(planRow.data);
   /* De quién es este programa: null = el del coach principal; con id = el de un
      profesional del EQUIPO del atleta. Del profesional salen los registros del
      atleta que se miran aquí (`wr:cursor@<profesional>`) y el lugar guardado. */
@@ -2146,6 +2172,21 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, profes
   async function onSave() {
     if (!title.trim()) { setErr(t('Ponle un título al plan')); return; }
     if (phases.length === 0) { setErr(t('El plan necesita al menos una fase')); return; }
+    /* UNA RUTINA SIN NINGUNA SESIÓN. Borrar la única sesión de una rutina suele querer decir «ya
+       no quiero esta rutina» (Andrés, 1 oct 2026, el fisio): guardarla vacía dejaba un programa
+       fantasma. Si ya existía, se pregunta si quitarla; si era nueva, no tiene caso guardarla. */
+    if (esProgramaFantasma({ kind, phases })) {
+      if (!planRow) { setErr('Agrega al menos una sesión antes de guardar.'); return; }
+      const va = await pregunta({
+        titulo: 'La rutina se quedó sin sesiones',
+        detalle: `Guardada así no hay nada que ${t('el atleta')} pueda hacer. ¿La quito?`,
+        confirmar: 'Sí, quitarla',
+        cancelar: 'Seguir editando',
+        peligro: true,
+      });
+      if (va) await eliminarPrograma({ sinPreguntar: true });
+      return;
+    }
     setErr('');
     setSaving(true);
     try {
@@ -2265,6 +2306,29 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, profes
     patchPhase(nav.pi, (p2) => ({ weekData: p2.weekData.filter((_, j) => j !== wi) }));
     setWeekIdx(Math.max(0, wi - 1));
     return true;
+  };
+
+  /* ELIMINAR EL PROGRAMA ENTERO. Andrés, 1 oct 2026 (el fisio): «si quiere borrar la rutina
+     que le puso, no hay una opción de eliminar». Había «Eliminar sesión», pero borrar
+     la única sesión dejaba un programa vacío vivo: «editar mi programa», «ver el programa»
+     en blanco. Aquí está la salida: desde los tres puntos del plan. Se puede recuperar en
+     «Cambios del plan» (la base guarda la versión). */
+  const eliminarPrograma = async ({ sinPreguntar = false } = {}) => {
+    if (!planRow) return;
+    const va = sinPreguntar || await pregunta({
+      titulo: `${t('¿Eliminar el plan')} "${planRow.title || ''}"?`,
+      detalle: `${t('Es el plan de')} ${athlete.full_name || athlete.username}. ${t('Si te equivocas, lo recuperas en "Cambios del plan".')}`,
+      confirmar: 'Sí, eliminarlo',
+      peligro: true,
+    });
+    if (!va) return;
+    try {
+      await deletePlan(planRow.id);
+      setDirty(false);
+      onDeleted?.();
+    } catch (e) {
+      setErr(e.message || 'No se pudo eliminar');
+    }
   };
 
   async function handleClose() {
@@ -2850,6 +2914,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, profes
             ] : []),
             ...(estructura === 'fases' ? [{ icon: Plus, texto: 'Agregar fase', onClick: agregarFase }] : []),
             { icon: Settings2, texto: t('Cambiar la forma del plan'), onClick: () => setFormasAbiertas(true) },
+            ...(planRow && onDeleted ? [{ icon: Trash2, texto: t('Eliminar el plan'), onClick: eliminarPrograma, peligro: true }] : []),
           ]}
         />
       )}
