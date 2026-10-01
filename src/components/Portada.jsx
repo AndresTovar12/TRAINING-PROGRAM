@@ -15,23 +15,64 @@
  * que aparece siempre sea exactamente de cuando el video va justo a la
  * mitad". Antes era el del arranque (0.1 s), que casi siempre es la persona
  * acomodándose antes de empezar. Si el video está recortado, es la mitad del
- * tramo que ve el atleta (`desde`/`hasta`), no la del archivo entero: 9 de
- * los 10 videos del repertorio tienen recorte.
+ * tramo que ve el atleta (`desde`/`hasta`), no la del archivo entero.
  *
- * ORDEN: foto → fotograma de la mitad del video → la mancuerna de siempre.
+ * ORDEN: foto del coach → foto sacada del video → el video congelado → la
+ * mancuerna de siempre.
  *
- * POR QUE NO SE GENERA UNA MINIATURA DE VERDAD:
- * Lo natural sería dibujar el fotograma en un canvas y guardarlo como imagen.
- * No se puede: leer los píxeles de un video que vive en otro dominio "mancha"
- * el canvas y el navegador prohíbe exportarlo. Cloudflare no manda las
- * cabeceras que harían falta para permitirlo. Así que se usa el propio
- * elemento de video, congelado en su primer fotograma. Comprobado en consola.
+ * LA FOTO SACADA DEL VIDEO ES LO QUE HACE QUE SALGA AL INSTANTE.
+ * Andrés, 1 oct 2026: "casi siempre sale un recuadrito negro en lugar de la foto
+ * de portada... ya tendría que estar ahí la foto inmediatamente". Tenía razón: la
+ * portada era el propio video abierto en chiquito, y eso obliga a pedirle a
+ * Cloudflare su índice, saltar a la mitad y bajar varios MB POR CADA ejercicio de
+ * la lista. La app ahora le saca la foto sola al video (ver `fotogramas` y
+ * `posters`) y aquí solo se pinta: primero una vista previa borrosa que viaja
+ * dentro de los datos del ejercicio —ya está ahí cuando se dibuja la pantalla—
+ * y encima, en cuanto llega, la foto nítida.
+ *
+ * TRES ESTADOS de esa foto (ver `usePoster`): hay → se pinta; todavía no se
+ * sabe (primera vez, mientras llega la tabla) → un fondo claro y quieto, NUNCA
+ * se arranca el video «por si acaso»; no hay → el video congelado de siempre.
  */
 import { useEffect, useRef, useState } from 'react';
 import { ligaExterna } from '@/lib/videos';
+import { mitadDe, segundos } from '@/lib/fotogramas';
+import { usePoster } from '@/lib/posters';
+
+const RELLENO = {
+  position: 'absolute', inset: 0, width: '100%', height: '100%',
+  objectFit: 'cover', display: 'block',
+};
+
+/** La foto sacada del video: una vista previa borrosa y, encima, la nítida cuando llega. */
+function FotoDeVideo({ fila, grande }) {
+  const [lista, setLista] = useState(false);
+  const src = grande ? fila.poster_url : (fila.mini_url || fila.poster_url);
+  return (
+    <>
+      {fila.lqip && (
+        <img
+          src={fila.lqip} alt="" aria-hidden="true"
+          style={{ ...RELLENO, filter: 'blur(8px)', transform: 'scale(1.12)' }}
+        />
+      )}
+      <img
+        // Una imagen que ya estaba en la memoria del teléfono puede terminar de cargar antes de que React escuche su `load`.
+        ref={(el) => { if (el?.complete && el.naturalWidth && !lista) setLista(true); }}
+        key={src} src={src} alt="" decoding="async" loading={grande ? 'eager' : 'lazy'}
+        onLoad={() => setLista(true)}
+        style={{ ...RELLENO, opacity: lista ? 1 : 0, transition: 'opacity .2s ease' }}
+      />
+    </>
+  );
+}
+
+// El fondo claro y quieto de «todavía no sé si hay foto». Claro a propósito: el recuadro de la lista es oscuro y un cuadro negro es lo que se quiere evitar.
+const Espera = () => <span aria-hidden="true" style={{ ...RELLENO, background: '#E6E9EF' }} />;
 
 /**
  * Un video haciendo de foto: sin sonido, sin controles, quieto a la mitad.
+ * Es lo de siempre y solo se usa cuando ese video no tiene foto sacada.
  *
  * DOS DETALLES QUE PARECEN DE MÁS Y NO LO SON:
  *
@@ -45,24 +86,7 @@ import { ligaExterna } from '@/lib/videos';
  *    el repertorio hay ochenta y un ejercicios; si todos pidieran su video a la
  *    vez, abrir la lista con datos móviles costaría más que ver el video.
  */
-// Segundos de un recorte, o null si no hay. La base los manda como número o
-// como texto según la columna, y null o vacío es "sin recorte".
-const segundos = (v) => {
-  if (v === null || v === undefined || v === '') return null;
-  const n = Number(v);
-  return Number.isFinite(n) && n >= 0 ? n : null;
-};
-
-// El punto medio de lo que se ve: del recorte si lo hay, del video si no.
-function mitadDe(duracion, desde, hasta) {
-  const total = Number.isFinite(duracion) && duracion > 0 ? duracion : null;
-  const ini = desde ?? 0;
-  const fin = Math.min(hasta ?? Infinity, total ?? Infinity);
-  if (!Number.isFinite(fin) || fin <= ini) return total ? total / 2 : 0.1;
-  return ini + (fin - ini) / 2;
-}
-
-function VideoComoFoto({ src, estilo, desde, hasta }) {
+function VideoComoFoto({ src, desde, hasta }) {
   const caja = useRef(null);
   // Sin IntersectionObserver (navegadores viejos) se carga de una: es peor
   // quedarse sin portada que gastar de más. Se decide al crear el estado y no
@@ -84,6 +108,7 @@ function VideoComoFoto({ src, estilo, desde, hasta }) {
 
   return (
     <span ref={caja} style={{ position: 'absolute', inset: 0 }}>
+      <Espera />
       {visible && (
         <video
           src={src}
@@ -95,7 +120,7 @@ function VideoComoFoto({ src, estilo, desde, hasta }) {
           onLoadedMetadata={(e) => {
             e.currentTarget.currentTime = mitadDe(e.currentTarget.duration, segundos(desde), segundos(hasta));
           }}
-          style={estilo}
+          style={RELLENO}
         />
       )}
     </span>
@@ -103,18 +128,31 @@ function VideoComoFoto({ src, estilo, desde, hasta }) {
 }
 
 /**
- * @param foto   dirección de la foto de portada, si tiene
- * @param video  dirección del video, para sacarle el fotograma de la mitad
- * @param desde  inicio del recorte del video, en segundos (si lo tiene)
- * @param hasta  fin del recorte del video, en segundos (si lo tiene)
- * @param style  se aplica al recuadro de fuera (tamaño, borde, color de fondo)
+ * @param foto    dirección de la foto de portada, si tiene
+ * @param video   dirección del video, para sacarle el fotograma de la mitad
+ * @param desde   inicio del recorte del video, en segundos (si lo tiene)
+ * @param hasta   fin del recorte del video, en segundos (si lo tiene)
+ * @param grande  true en pantallas donde la foto ocupa buena parte de la pantalla
+ *                (la ficha del ejercicio): usa la foto grande y no la chica
+ * @param style   se aplica al recuadro de fuera (tamaño, borde, color de fondo)
  * @param children  lo que se pinta cuando no hay ni foto ni video
  */
-export default function Portada({ foto, video, desde, hasta, style, children }) {
-  const relleno = {
-    position: 'absolute', inset: 0, width: '100%', height: '100%',
-    objectFit: 'cover', display: 'block',
-  };
+export default function Portada({ foto, video, desde, hasta, grande = false, style, children }) {
+  // Un video que vive fuera (TikTok, YouTube) no da un primer fotograma: el
+  // <video> no puede leerlo y el recuadro se quedaría en negro sin que nada lo
+  // explique. En ese caso se pinta lo de siempre.
+  const propio = !!video && !ligaExterna(video);
+  // El gancho se llama siempre; con `null` no busca nada.
+  const poster = usePoster(!foto && propio ? video : null);
+
+  let contenido = children;
+  if (foto) {
+    contenido = <img src={foto} alt="" loading="lazy" style={RELLENO} />;
+  } else if (propio) {
+    if (poster) contenido = <FotoDeVideo fila={poster} grande={grande} />;
+    else if (poster === undefined) contenido = <Espera />;
+    else contenido = <VideoComoFoto src={video} desde={desde} hasta={hasta} />;
+  }
 
   return (
     <span
@@ -124,14 +162,7 @@ export default function Portada({ foto, video, desde, hasta, style, children }) 
         ...style,
       }}
     >
-      {/* Un video que vive fuera (TikTok, YouTube) no da un primer fotograma:
-          el <video> no puede leerlo y el recuadro se quedaría en negro sin que
-          nada lo explique. En ese caso se pinta lo de siempre. */}
-      {foto
-        ? <img src={foto} alt="" loading="lazy" style={relleno} />
-        : (video && !ligaExterna(video))
-          ? <VideoComoFoto src={video} estilo={relleno} desde={desde} hasta={hasta} />
-          : children}
+      {contenido}
     </span>
   );
 }

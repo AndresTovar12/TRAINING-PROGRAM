@@ -14,6 +14,7 @@ import {
 } from '@/lib/api';
 import MediaDelEjercicio from '@/features/admin/MediaDelEjercicio';
 import ArreglarVideos from '@/features/admin/ArreglarVideos';
+import { completaPortadas } from '@/lib/posters';
 import SelectorCategoria from '@/features/admin/SelectorCategoria';
 import ListaDesplegable from '@/components/ListaDesplegable';
 import InterruptorVista from '@/components/InterruptorVista';
@@ -1113,6 +1114,18 @@ export default function ExercisesPanel({ viendoComo }) {
   const [videosOk, setVideosOk] = useState(() => {
     try { return localStorage.getItem(claveVideosOk) === '1'; } catch { return false; }
   });
+
+  /* LAS FOTOS DE LOS VIDEOS SE COMPLETAN SOLAS. Los videos nuevos sacan su foto
+     al subirse; los que ya estaban sin foto, o con una que quedó vieja porque
+     se volvió a recortar el video, se la sacan aquí, en segundo plano y sin que
+     nadie haga nada ni espere (ver `completaPortadas`). Corre al abrir el panel
+     y cada vez que la lista cambia (guardar, duplicar, borrar), siempre unos
+     segundos después para no competir con lo que se está pintando. */
+  useEffect(() => {
+    let parar = false;
+    const t = setTimeout(() => { completaPortadas({ parar: () => parar }).catch(() => {}); }, 2500);
+    return () => { parar = true; clearTimeout(t); };
+  }, [exercises]);
 
   /* Manda lo que haya elegido Andrés. Mientras no elija nada, se queda lo de
      siempre: tarjetas en pantalla ancha, lista en el teléfono. */

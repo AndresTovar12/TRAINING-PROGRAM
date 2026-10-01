@@ -4,6 +4,7 @@ import {
   X, Play, Check, Loader2, Volume2, VolumeX, Crop, Scissors,
 } from 'lucide-react';
 import { FONT, NUM_STYLE } from '@/lib/theme';
+import { capturaDeLaMitad } from '@/lib/fotogramas';
 import { useRecorte, CapaRecorte, BotonesFormato } from '@/features/admin/recorte';
 
 /**
@@ -230,6 +231,14 @@ export default function EditorVideo({
           disabled={subiendo || !duracion}
           onClick={() => onListo({
             inicio, fin, sinAudio, encuadre: recorteReal,
+            /* La FOTO del video, sacada ya mismo del video que se está viendo
+               (solo cuando es un archivo recién elegido: uno ya subido viene de
+               Cloudflare y esta pantalla no puede leer sus píxeles). Es una
+               promesa que NUNCA falla —o trae la foto o trae null— y quien sube
+               el video la espera al final, mientras sube: no agrega espera. */
+            fotogramas: archivo
+              ? capturaDeLaMitad(videoRef.current, { duracion, inicio, fin })
+              : undefined,
           })}
           aria-label="Usar este video"
           style={{

@@ -3,6 +3,7 @@ import { Dumbbell, Loader2, Lock, LogOut, Shield, Sparkles, User as UserIcon, Us
 import { useNewVersion } from '@/lib/useNewVersion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsDesktop } from '@/lib/useViewport';
+import { cargaPosters } from '@/lib/posters';
 import { AppStateProvider } from '@/contexts/AppStateContext';
 import { PalabrasProvider, usePalabras } from '@/contexts/PalabrasContext';
 import { PlanProvider } from '@/contexts/PlanContext';
@@ -355,6 +356,11 @@ function InvitacionConSesion({ onSalir }) {
 
 export default function App() {
   const { loading, user, profile } = useAuth();
+
+  /* La tabla de fotos de los videos se pide en cuanto hay sesión, mientras el
+     perfil y el plan todavía cargan: cuando se dibuja la lista de ejercicios
+     ya está (ver `posters`). */
+  useEffect(() => { if (user) cargaPosters(); }, [user]);
 
   /* El link de invitación llega como `?invitacion=…`. Se lee una sola vez al
      arrancar: la app no tiene rutas, así que la dirección solo se mira aquí.

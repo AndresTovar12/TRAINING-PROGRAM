@@ -16,6 +16,9 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="theme-color" content="#FFFFFF" />
+    <!-- Las fotos y los videos de los ejercicios viven en Cloudflare: abrir la conexión
+         (DNS + TLS) desde el primer momento le quita ~0.3 s a la primera foto. -->
+    <link rel="preconnect" href="https://pub-4a3ae85521d744b5abf16550ea171189.r2.dev" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

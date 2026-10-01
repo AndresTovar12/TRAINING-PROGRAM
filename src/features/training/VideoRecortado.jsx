@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect } from 'react';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Loader2 } from 'lucide-react';
 import { ligaExterna } from '@/lib/videos';
+import { usePoster } from '@/lib/posters';
 import { T, FONT } from '@/lib/theme';
 
 /**
@@ -23,6 +24,19 @@ export function VideoRecortado({ video, estilo }) {
   const [medidas, setMedidas] = useState(null);
   const { url, inicio, fin, sinAudio, encuadre } = video;
   const liga = ligaExterna(url);
+  /* La foto del video, que se ve MIENTRAS carga en vez de un cuadro negro con
+     el icono de pausa. Andrés, 1 oct 2026: "le pica al video y el video tarda
+     muchísimo en cargar" y lo que ve es un rectángulo negro. Aunque el video
+     ya tarda segundos y no minutos, esos segundos se ven como una foto con su
+     indicador de carga, no como una pantalla rota.
+     `arrancadoDe` guarda de QUÉ video ya arrancó: así cambiar de ángulo no
+     arrastra el «ya arrancó» del anterior. `noArranca` cubre el caso en que
+     Safari rechaza el play() automático: sin él la foto taparía los controles
+     para siempre y no habría forma de darle play. */
+  const poster = usePoster(liga ? null : url);
+  const [arrancadoDe, setArrancadoDe] = useState(null);
+  const [noArranca, setNoArranca] = useState(null);
+  const sinFoto = arrancadoDe === url || noArranca === url;
 
   /* Arranca solo al montarse, que es justo cuando el atleta acaba de tocar
      "reproducir". Sin esto, este componente aparecía con el reproductor
@@ -37,7 +51,7 @@ export function VideoRecortado({ video, estilo }) {
      sonido. `.catch()` traga el rechazo que dan Safari/iOS cuando el gesto ya
      se perdió por algún reflow lento; si pasa, el botón nativo sigue ahí. */
   useEffect(() => {
-    ref.current?.play().catch(() => {});
+    ref.current?.play().catch(() => setNoArranca(url));
   }, [url]);
 
   /* Un video que vive fuera (TikTok, YouTube, un reel) no es un archivo
@@ -92,33 +106,7 @@ export function VideoRecortado({ video, estilo }) {
     );
   }
 
-  const video_ = (
-    <video
-      key={url}
-      ref={ref}
-      src={url}
-      controls
-      playsInline
-      muted={!!sinAudio}
-      preload="metadata"
-      onLoadedMetadata={(e) => {
-        const v = e.currentTarget;
-        setMedidas({ w: v.videoWidth || 16, h: v.videoHeight || 9 });
-        /* Se salta SIEMPRE, aunque no haya recorte. Sin salto, Safari de iPhone
-           deja el video en negro hasta darle play: con `preload="metadata"` iOS
-           carga la duración pero no dibuja ningún fotograma. El +0,05 es para
-           que el salto ocurra de verdad cuando el recorte empieza en 0. */
-        v.currentTime = (inicio ?? 0) + 0.05;
-      }}
-      onTimeUpdate={() => {
-        const v = ref.current;
-        if (!v) return;
-        if (fin != null && v.currentTime >= fin) v.pause();
-        // Si el atleta rebobina antes del inicio, se le devuelve al inicio:
-        // lo de antes es material que el coach decidió no enseñarle.
-        if (inicio != null && v.currentTime < inicio - 0.4) v.currentTime = inicio;
-      }}
-      style={
+  const estiloDelVideo = (
         encuadre
           /* Con encuadre el video se agranda y se desplaza dentro de un marco
              que lo recorta. Es la única forma de recortar la imagen sin
@@ -143,13 +131,99 @@ export function VideoRecortado({ video, estilo }) {
               display: 'block', background: '#000',
             }
           : (estilo ?? { width: '100%', borderRadius: 14, marginTop: 12, background: '#000' })
-      }
+  );
+
+  // Con foto y sin encuadre el video llena un marco que ya tiene la proporción del fotograma.
+  // (Sin las medidas del fotograma no se puede reservar el marco: en ese caso, como si no hubiera foto.)
+  const llenaElMarco = !encuadre && !!poster?.ancho && !!poster?.alto;
+  const video_ = (
+    <video
+      key={url}
+      ref={ref}
+      src={url}
+      controls
+      playsInline
+      muted={!!sinAudio}
+      preload="metadata"
+      onPlaying={() => setArrancadoDe(url)}
+      onError={() => setNoArranca(url)}
+      onLoadedMetadata={(e) => {
+        const v = e.currentTarget;
+        setMedidas({ w: v.videoWidth || 16, h: v.videoHeight || 9 });
+        /* Se salta SIEMPRE, aunque no haya recorte. Sin salto, Safari de iPhone
+           deja el video en negro hasta darle play: con `preload="metadata"` iOS
+           carga la duración pero no dibuja ningún fotograma. El +0,05 es para
+           que el salto ocurra de verdad cuando el recorte empieza en 0. */
+        v.currentTime = (inicio ?? 0) + 0.05;
+      }}
+      onTimeUpdate={() => {
+        const v = ref.current;
+        if (!v) return;
+        if (fin != null && v.currentTime >= fin) v.pause();
+        // Si el atleta rebobina antes del inicio, se le devuelve al inicio:
+        // lo de antes es material que el coach decidió no enseñarle.
+        if (inicio != null && v.currentTime < inicio - 0.4) v.currentTime = inicio;
+      }}
+      style={llenaElMarco
+        ? { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000' }
+        : estiloDelVideo}
     />
   );
 
-  /* El marco solo existe cuando hay encuadre: si no, sobra un div y el video
-     se coloca solo como siempre. */
-  if (!encuadre) return video_;
+  /* LA FOTO, ENCIMA DEL VIDEO HASTA QUE ARRANCA. No recibe toques (los
+     controles del video quedan a mano debajo) y se apaga con un fundido. Con
+     encuadre la foto se coloca EXACTAMENTE como el video (mismo estilo), así
+     que cae justo donde va a caer la imagen; sin encuadre llena el marco. */
+  const capa = poster && (
+    <div
+      aria-hidden="true"
+      style={{
+        position: 'absolute', inset: 0, pointerEvents: 'none', background: '#000',
+        opacity: sinFoto ? 0 : 1, transition: 'opacity .25s ease',
+      }}
+    >
+      {poster.lqip && (
+        <img
+          src={poster.lqip} alt=""
+          style={encuadre
+            ? { ...estiloDelVideo, filter: 'blur(8px)' }
+            : { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', filter: 'blur(8px)' }}
+        />
+      )}
+      <img
+        src={poster.poster_url} alt=""
+        style={encuadre
+          ? estiloDelVideo
+          : { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }}
+      />
+      <span style={{
+        position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
+        width: 54, height: 54, borderRadius: '50%', background: 'rgba(0,0,0,.45)',
+        display: 'grid', placeItems: 'center',
+      }}>
+        <Loader2 size={26} color="#fff" className="tl-gira" />
+      </span>
+      <style>{'.tl-gira{animation:tl-gira .8s linear infinite}@keyframes tl-gira{to{transform:rotate(360deg)}}'}</style>
+    </div>
+  );
+
+  /* El marco solo existe cuando hay encuadre o foto: si no, sobra un div y el
+     video se coloca solo como siempre. */
+  if (!encuadre) {
+    if (!llenaElMarco) return video_;
+    // Con foto el marco se reserva ya con la proporción del fotograma: así el
+    // video no «salta» de tamaño cuando termina de leer sus metadatos.
+    return (
+      <div style={{
+        position: 'relative', overflow: 'hidden',
+        aspectRatio: `${poster.ancho} / ${poster.alto}`,
+        ...(estilo ?? { width: '100%', borderRadius: 14, marginTop: 12, background: '#000' }),
+      }}>
+        {video_}
+        {capa}
+      </div>
+    );
+  }
 
   return (
     <div style={{
@@ -162,10 +236,13 @@ export function VideoRecortado({ video, estilo }) {
          el trozo y quedaba una franja negra al lado. */
       aspectRatio: medidas
         ? `${encuadre.w * medidas.w} / ${encuadre.h * medidas.h}`
-        : `${encuadre.w} / ${encuadre.h}`,
+        : (poster?.ancho && poster?.alto
+          ? `${encuadre.w * poster.ancho} / ${encuadre.h * poster.alto}`
+          : `${encuadre.w} / ${encuadre.h}`),
       borderRadius: estilo ? 0 : 14, marginTop: estilo ? 0 : 12,
     }}>
       {video_}
+      {capa}
     </div>
   );
 }

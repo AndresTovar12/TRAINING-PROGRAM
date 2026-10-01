@@ -9,6 +9,8 @@
 import { useRef, useState } from 'react';
 import { Upload, Loader2, X, Video, Camera, Images } from 'lucide-react';
 import { uploadExerciseMedia } from '@/lib/api';
+import { subeFotos, guardaPoster } from '@/lib/posters';
+import { segundos } from '@/lib/fotogramas';
 import { optimizaImagen, pesoTexto as pesoLegible } from '@/lib/imagen';
 import EditorVideo from '@/features/admin/EditorVideo';
 import EditorFoto from '@/features/admin/EditorFoto';
@@ -154,13 +156,26 @@ export default function MediaUpload({
   /* Sube el video que ya pasó por el editor, con todo lo que se decidió ahí:
      el tramo, el encuadre, si va con audio, y —cuando aplica— para quién es y
      desde qué ángulo. Nada de eso toca el archivo: se guarda al lado. */
-  async function subeElVideo(ajustes) {
+  async function subeElVideo(todosLosAjustes) {
+    // `fotogramas` es la promesa de la foto del video (ver `EditorVideo`); no
+    // es un ajuste: no debe viajar a quien guarda la fila.
+    const { fotogramas, ...ajustes } = todosLosAjustes;
     setBusy(true);
     setErr('');
     setAvance(0);
     setArchivo({ nombre: porRevisar.name, mb: Math.round((porRevisar.size / 1048576) * 10) / 10 });
     try {
+      // Las fotos se preparan y suben A LA VEZ que el video, que tarda mucho más:
+      // cuando el video termina, normalmente ya están. Nunca fallan (null si algo sale mal).
+      const fotosListas = Promise.resolve(fotogramas).then(subeFotos);
       const url = await uploadExerciseMedia(porRevisar, mixto ? 'videos' : kind, setAvance);
+      // La foto, ya con la dirección del video, ANTES de avisar que hay video:
+      // así cuando aparece en la lista ya trae su foto y no pasa por el video
+      // congelado. Hasta 5 s de gracia; sin ella el video se ve como siempre, y
+      // no vale la pena hacer esperar más por una foto.
+      const datos = await Promise.race([fotosListas, new Promise((ok) => { setTimeout(() => ok(null), 5000); })]);
+      // Con el recorte que tenía al sacar la foto: si después lo recorta distinto, se sabe que la foto quedó vieja.
+      if (datos) await guardaPoster(url, { ...datos, desde: segundos(ajustes.inicio), hasta: segundos(ajustes.fin) }).catch(() => {});
       onChange(url);
       // La url va junto a los ajustes: quien guarda una fila entera los
       // necesita a la vez, y esperar a que el estado se actualice para
