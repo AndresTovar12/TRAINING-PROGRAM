@@ -174,7 +174,7 @@ function BloqueRepetir({
                 </div>
               </div>
             ))}
-            {opcion('dia', 'Solo este día', 'Una vez, en esta semana.')}
+            {opcion('dia', dias.length > 1 ? 'Solo esta semana' : 'Solo este día', 'Una vez, en esta semana.')}
           </div>
         </>
       )}
