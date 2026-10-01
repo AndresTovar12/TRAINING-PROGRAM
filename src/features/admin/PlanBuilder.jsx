@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
+import { conLasMiasPrimero } from '@/lib/categorias';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useIsDesktop } from '@/lib/useViewport';
 import {
@@ -1991,10 +1992,11 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, profes
   const [masterIdCat, setMasterIdCat] = useState(null);
   // Se ofrecen las de la app y las propias, no las de otros coaches (que el
   // master sí puede leer). Ver SelectorCategoria.
-  const categoriasVisibles = useMemo(
-    () => categorias.filter((c) => !c.created_by || c.created_by === masterIdCat || c.created_by === user?.id),
-    [categorias, masterIdCat, user?.id],
-  );
+  const { salud: ofrecerPrimeroLasMias } = usePalabras();
+  const categoriasVisibles = useMemo(() => {
+    const lista = categorias.filter((c) => !c.created_by || c.created_by === masterIdCat || c.created_by === user?.id);
+    return ofrecerPrimeroLasMias ? conLasMiasPrimero(lista, user?.id) : lista;
+  }, [categorias, masterIdCat, user?.id, ofrecerPrimeroLasMias]);
   const [clipboard, setClipboard] = useState(null);
   const [modal, setModal] = useState(null);
 

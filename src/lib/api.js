@@ -394,7 +394,7 @@ const mb = (bytes) => Math.round((bytes / 1048576) * 10) / 10;
  * subida, y no en cada pantalla: la que se olvidara volveria a subir videos
  * lentos sin que nadie lo notara. No cambia la imagen, dura ~1 s, y si algo
  * falla se sube el archivo tal cual: un video lento se ve, uno que no sube no.
- * `sinIndice` es para quien ya se lo puso (arreglaVideos).
+ * `sinIndice` es para quien ya se lo puso.
  */
 export async function uploadExerciseMedia(file, kind = 'media', onAvance, { sinIndice = false } = {}) {
   if (file.size > LIMITE_MEDIA_MB * 1048576) {

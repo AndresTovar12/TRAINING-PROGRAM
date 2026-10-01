@@ -293,7 +293,7 @@ function Entrada({ codigo }) {
       modoInicial={pantalla || 'login'}
       onVolver={esCompu && !codigo ? () => setPantalla(null) : undefined}
       codigoDeEquipo={codigo || ''}
-      aviso={codigo ? 'Te invitaron a unirte a un equipo. Entra a tu cuenta, o crea una: el código ya va puesto.' : undefined}
+      aviso={codigo ? 'Para unirte al equipo, entra a tu cuenta o crea una: el código ya va puesto.' : undefined}
     />
   );
 }

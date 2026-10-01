@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Plus, Minus, Search, X, Trash2, Loader2, Video, Dumbbell,
-  Copy, RotateCcw, Pencil, ChevronRight, ChevronDown, Zap,
-} from 'lucide-react';
+  Copy, RotateCcw, Pencil, ChevronRight, ChevronDown, } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { useIsWide } from '@/lib/useViewport';
@@ -13,7 +12,6 @@ import {
   addExerciseMedia, listMuscleGroups, createMuscleGroup, deleteMuscleGroup,
 } from '@/lib/api';
 import MediaDelEjercicio from '@/features/admin/MediaDelEjercicio';
-import ArreglarVideos from '@/features/admin/ArreglarVideos';
 import { completaPortadas } from '@/lib/posters';
 import SelectorCategoria from '@/features/admin/SelectorCategoria';
 import ListaDesplegable from '@/components/ListaDesplegable';
@@ -22,7 +20,7 @@ import { useVistaEjercicios } from '@/lib/useVistaEjercicios';
 import {
   MUSCLE_GROUPS, FINE_MUSCLES, gruposConPropios, groupForMuscle,
 } from '@/lib/muscles';
-import { crearCategoriaPropia, mismoNombre } from '@/lib/categorias';
+import { crearCategoriaPropia, mismoNombre, conLasMiasPrimero } from '@/lib/categorias';
 import { coincidencia, pasaFiltros } from '@/lib/buscarEjercicio';
 import { useLugar, useScrollLugar } from '@/lib/useLugar';
 import ModoDeFiltro, { MODOS, MODO_POR_DEFECTO, NombresUnidos } from '@/components/ModoDeFiltro';
@@ -1105,16 +1103,6 @@ export default function ExercisesPanel({ viendoComo }) {
   const [preguntando, setPreguntando] = useState(null);
   const esAncho = useIsWide();
 
-  /* «Arreglar videos lentos» (ver `ArreglarVideos`). El botón se retira solo
-     cuando la revisión dice que todos los videos ya cargan rápido: los nuevos
-     salen bien de fábrica, así que es un arreglo de una sola vez y no tiene por
-     qué quedarse estorbando. Se recuerda por cuenta, en este navegador. */
-  const claveVideosOk = `tl.videosOk.${user?.id}`;
-  const [arreglando, setArreglando] = useState(false);
-  const [videosOk, setVideosOk] = useState(() => {
-    try { return localStorage.getItem(claveVideosOk) === '1'; } catch { return false; }
-  });
-
   /* LAS FOTOS DE LOS VIDEOS SE COMPLETAN SOLAS. Los videos nuevos sacan su foto
      al subirse; los que ya estaban sin foto, o con una que quedó vieja porque
      se volvió a recortar el video, se la sacan aquí, en segundo plano y sin que
@@ -1168,10 +1156,11 @@ export default function ExercisesPanel({ viendoComo }) {
      lista de categorías crecería con las de cada coach, igual que pasaba con
      los ejercicios. Para resolver la categoría de un ejercicio se sigue usando
      la lista completa. */
-  const categoriasVisibles = useMemo(
-    () => categories.filter((c) => !c.created_by || c.created_by === masterId || c.created_by === dueño),
-    [categories, masterId, dueño],
-  );
+  const { salud } = usePalabras();
+  const categoriasVisibles = useMemo(() => {
+    const lista = categories.filter((c) => !c.created_by || c.created_by === masterId || c.created_by === dueño);
+    return salud ? conLasMiasPrimero(lista, dueño) : lista;
+  }, [categories, masterId, dueño, salud]);
 
   // Los grupos, con la misma regla: los de siempre, los del master y los del
   // dueño de esta vista. `mio` marca los que se pueden borrar desde aquí.
@@ -1370,19 +1359,6 @@ export default function ExercisesPanel({ viendoComo }) {
         >
           <Plus size={18} /> Añadir ejercicio
         </button>
-        {!viendoComo && !videosOk && (
-          <button
-            type="button"
-            onClick={() => setArreglando(true)}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 16px', borderRadius: 12,
-              border: `1.5px solid ${T.accent}`, cursor: 'pointer', background: T.bg2,
-              color: T.accent, fontFamily: FONT, fontSize: 14, fontWeight: 800,
-            }}
-          >
-            <Zap size={17} /> Arreglar videos lentos
-          </button>
-        )}
       </div>
 
       {/* Filtros: categoría y grupo muscular (listas desplegables) */}
@@ -1514,20 +1490,6 @@ export default function ExercisesPanel({ viendoComo }) {
             />
           )))}
         </div>
-      )}
-
-      {arreglando && (
-        <ArreglarVideos
-          usuario={user?.id}
-          esMaster={isMaster}
-          onCerrar={() => setArreglando(false)}
-          // Las direcciones cambiaron en la base: se vuelve a leer el repertorio.
-          onArreglados={() => { listExercises().then(setExercises).catch(() => {}); }}
-          onTodoBien={() => {
-            try { localStorage.setItem(claveVideosOk, '1'); } catch { /* sin memoria: el botón se queda */ }
-            setVideosOk(true);
-          }}
-        />
       )}
 
       {preguntando && (

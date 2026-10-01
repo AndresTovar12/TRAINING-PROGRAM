@@ -870,7 +870,17 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
   const deEquipo = !!athlete.deEquipo;
   const soloNotas = !!athlete.soloNotas;
   const atiendoYoAEstePaciente = salud && (athlete.coach_id === profile?.id || deEquipo);
-  const miClave = deEquipo ? (profile?.id ?? null) : (isMaster ? programaElegido : null);
+  /* UN FISIO NO EDITA EL PROGRAMA QUE HIZO OTRO. Andrés, 1 oct 2026: con «Andres_prueba» el fisio
+     veía «Editar el programa» y podía cambiar el que él había asignado desde su cuenta de
+     administrador; con su cuenta real solo veía «Ver el programa» y «Crear mi programa». Pasaba
+     porque ese atleta tenía al fisio como principal, y el principal escribe el programa de «el
+     coach». Ahora, si ese programa lo hizo otra persona, el fisio lo ve solo para leer y trabaja
+     en el SUYO (igual que un fisio del equipo). La base lo impone (`plans_escribir`). A los
+     coaches no les cambia nada. */
+  const planDelCoach = programas.find((p) => (p.profesional_id ?? null) === null) ?? null;
+  const planAjeno = salud && !isMaster && !deEquipo && !!planDelCoach?.created_by && planDelCoach.created_by !== profile?.id;
+  const propio = deEquipo || planAjeno;
+  const miClave = propio ? (profile?.id ?? null) : (isMaster ? programaElegido : null);
   const plan = programas.find((p) => (p.profesional_id ?? null) === miClave) ?? null;
   const setPlan = (fila) => setProgramas((prev) => (fila
     ? [...prev.filter((p) => p.id !== fila.id), fila]
@@ -1012,7 +1022,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
       )}
       <AccionFicha
         icon={plan ? Pencil : Plus}
-        titulo={deEquipo ? (plan ? 'Editar mi programa' : 'Crear mi programa') : t(plan ? 'Editar el plan' : 'Crear el plan')}
+        titulo={propio ? (plan ? 'Editar mi programa' : 'Crear mi programa') : t(plan ? 'Editar el plan' : 'Crear el plan')}
         detalle={plan ? plan.title : 'Todavía no tiene ninguno'}
         primaria
         onClick={() => setBuilding(true)}

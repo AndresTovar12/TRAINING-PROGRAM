@@ -18,6 +18,14 @@ export const categoriasMias = (categorias, duenoId) => (
   categorias.filter((c) => c.created_by && c.created_by === duenoId)
 );
 
+/* Las del dueño de la vista primero, y el resto en su orden de siempre. Un fisio recibe sus categorías
+   (Isométricos, Propiocepción…) al darse de alta, DESPUÉS de las de la app, y quedaban hasta el final
+   de cada lista. Andrés, 1 oct 2026: «las dejaste hasta al final de las listas desplegables». */
+export const conLasMiasPrimero = (categorias, duenoId) => [
+  ...categorias.filter((c) => c.created_by && c.created_by === duenoId),
+  ...categorias.filter((c) => !(c.created_by && c.created_by === duenoId)),
+];
+
 // Las de la app: las de siempre (sin dueño) y las del master.
 export const categoriasDeLaApp = (categorias, duenoId, masterId) => (
   categorias.filter((c) => !c.created_by || (c.created_by === masterId && c.created_by !== duenoId))

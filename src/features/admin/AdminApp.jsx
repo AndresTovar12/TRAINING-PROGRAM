@@ -73,7 +73,7 @@ export default function AdminApp() {
        El contenido ya estaba protegido (`tab === 'coaches' && isMaster &&
        !viendoComo`), pero la pestaña seguía ahí y eso basta para que la
        simulación deje de parecerse a lo que ve el coach de verdad. */
-    ...(isMaster && !viendoComo ? [{ id: 'coaches', label: 'Coaches', icon: Shield }] : []),
+    ...(isMaster && !viendoComo ? [{ id: 'coaches', label: 'Profesionales', icon: Shield }] : []),
     /* Conectar con la IA: en la compu vive aquí, en el menú lateral. En el
        teléfono NO va en la navegación (decisión de Andrés): va en "Mi perfil". */
     ...(isDesktop && !viendoComo ? [{ id: 'ia', label: 'Conectar con IA', icon: Sparkles }] : []),

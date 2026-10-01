@@ -609,7 +609,7 @@ export default function CoachesPanel({ onVerComo }) {
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: T.text2, fontWeight: 600, padding: 40 }}>
-        <Loader2 size={18} className="spin" /> Cargando coaches…
+        <Loader2 size={18} className="spin" /> Cargando profesionales…
       </div>
     );
   }
@@ -618,9 +618,9 @@ export default function CoachesPanel({ onVerComo }) {
     <div style={{ maxWidth: 720, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: T.text }}>Coaches</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: T.text }}>Profesionales</div>
           <div style={{ fontSize: 13, color: T.text2, fontWeight: 500, marginTop: 2 }}>
-            {coaches.length} coach{coaches.length !== 1 ? 'es' : ''} · {unassigned} atleta{unassigned !== 1 ? 's' : ''} sin asignar
+            {coaches.length} profesional{coaches.length !== 1 ? 'es' : ''} · {unassigned} atleta{unassigned !== 1 ? 's' : ''} sin asignar
           </div>
         </div>
         <button type="button" onClick={() => setCreating(true)}
@@ -634,7 +634,7 @@ export default function CoachesPanel({ onVerComo }) {
       {coaches.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '52px 20px', color: T.text3, background: T.bg2, border: `1.5px dashed ${T.borderHi}`, borderRadius: 20 }}>
           <Shield size={38} style={{ opacity: 0.4 }} />
-          <div style={{ marginTop: 12, fontWeight: 700, color: T.text, fontSize: 15 }}>Aún no hay coaches</div>
+          <div style={{ marginTop: 12, fontWeight: 700, color: T.text, fontSize: 15 }}>Aún no hay profesionales</div>
           <div style={{ marginTop: 6, fontWeight: 500, color: T.text2, fontSize: 13.5, lineHeight: 1.5 }}>
             Crea uno tú, o deja que se registren eligiendo «Entreno a otros».
           </div>
@@ -680,7 +680,7 @@ export default function CoachesPanel({ onVerComo }) {
                     <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{c.full_name || c.username}</span>
                     <Shield size={13} color={T.accent} style={{ flexShrink: 0 }} />
                   </div>
-                  <div style={{ fontSize: 13, color: T.text2, fontWeight: 500, overflowWrap: 'anywhere' }}>@{c.username}</div>
+                  <div style={{ fontSize: 13, color: T.text2, fontWeight: 500, overflowWrap: 'anywhere' }}>@{c.username}{c.profesion ? ` · ${c.profesion}` : ''}</div>
                 </div>
                 <ChevronRight size={17} color={T.text3} style={{ flexShrink: 0 }} />
               </button>

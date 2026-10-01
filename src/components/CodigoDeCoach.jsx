@@ -38,13 +38,17 @@ export default function CodigoDeCoach({ codigo, estilo, nombre }) {
     }
   };
 
+  /* DOS RECUADROS, NO UNO. Andrés, 1 oct 2026: «el botón de código y el de crear
+     QR están en el mismo recuadro, tendrían que ir separados». El código (con su
+     botón de copiar) es uno; «Mostrar QR» es otro, con su propio borde. */
   return (
     <>
+    <div style={{ display: 'inline-flex', alignItems: 'stretch', flexWrap: 'wrap', gap: 10, fontFamily: FONT, ...estilo }}>
     <div
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 10,
         background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 12,
-        padding: '8px 9px 8px 13px', fontFamily: FONT, ...estilo,
+        padding: '8px 9px 8px 13px',
       }}
     >
       <div style={{ minWidth: 0 }}>
@@ -77,21 +81,21 @@ export default function CodigoDeCoach({ codigo, estilo, nombre }) {
       >
         {copiado ? <Check size={16} /> : <Copy size={15} />}
       </button>
-      <button
-        type="button"
-        onClick={(e) => { e.preventDefault(); setVerQR(true); }}
-        aria-label="Mostrar QR de mi código"
-        title="Mostrar QR"
-        style={{
-          display: 'grid', placeItems: 'center', width: 36, minHeight: 36, flexShrink: 0,
-          borderRadius: 9, cursor: 'pointer', touchAction: 'manipulation',
-          border: `1.5px solid ${T.border}`, background: T.bg, color: T.text2,
-        }}
-      >
-        <QrCode size={16} />
-      </button>
     </div>
-    {verQR && <MostrarQR liga={ligaParaUnirse(codigo)} nombre={nombre || 'Mi código'} onCerrar={() => setVerQR(false)} />}
+    <button
+      type="button"
+      onClick={(e) => { e.preventDefault(); setVerQR(true); }}
+      aria-label="Mostrar QR de mi código"
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 14px',
+        background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 12, cursor: 'pointer',
+        touchAction: 'manipulation', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, color: T.text,
+      }}
+    >
+      <QrCode size={18} color={T.accent} /> Mostrar QR
+    </button>
+    </div>
+    {verQR &&<MostrarQR liga={ligaParaUnirse(codigo)} nombre={nombre || 'Mi código'} onCerrar={() => setVerQR(false)} />}
     </>
   );
 }
