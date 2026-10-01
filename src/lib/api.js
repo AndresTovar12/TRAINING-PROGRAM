@@ -794,7 +794,33 @@ export async function eliminarAtletaDefinitivo(athleteId, opciones = {}) {
   }
 
   if (!res) throw new Error('No se pudo contactar al servidor. Revisa tu conexión.');
-  const body = await res.json().catch(() => ({}));
+  let body = await res.json().catch(() => ({}));
+
+  /* UNA CUENTA CON PLANES NO SE DEJABA BORRAR («No se pudo eliminar: Database error
+     deleting user»; Andrés, 1 oct 2026).
+
+     La cadena: al borrar la cuenta cae el perfil y, en cascada, sus planes. Cada plan
+     que cae guarda antes su última versión en `plan_versiones` (`guardar_version_del_plan`,
+     lo que permite recuperar un plan borrado), y esa versión se cuelga de una persona
+     que en ese momento YA no existe: la llave foránea la rechaza y se cae el borrado
+     entero.
+
+     Arreglo de raíz pendiente (que ese disparador se salte la versión si la dueña ya
+     no está). Mientras tanto, si el servidor falla justo en el último paso —cuando ya
+     comprobó todos sus candados—, se borran sus planes con la cuenta todavía viva (ahí
+     la versión sí tiene a quién colgarse y se va con ella al caer el perfil) y se
+     reintenta UNA vez. Solo lo puede hacer el master, que es quien llega hasta aquí. */
+  if (!res.ok && res.status === 500 && /^No se pudo eliminar:/.test(body?.error ?? '')) {
+    const { error: ePlanes } = await supabase.from('plans').delete().eq('user_id', athleteId);
+    if (!ePlanes) {
+      const otra = await llamar(await tokenDeAhora());
+      if (otra) {
+        res = otra;
+        body = await otra.json().catch(() => ({}));
+      }
+    }
+  }
+
   if (!res.ok) throw new Error(body?.error || `No se pudo eliminar la cuenta (error ${res.status}).`);
   return body;
 }
