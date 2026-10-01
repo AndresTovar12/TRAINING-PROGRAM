@@ -176,3 +176,16 @@ export function ligaExterna(url) {
   if (/\.(mp4|webm|mov|m4v)(\?|$)/i.test(texto)) return null; // archivo de video suelto
   return { de: 'Enlace', embed: null, abrir: texto };
 }
+
+/* ── ¿Conviene empezar a bajar un video ANTES de que lo pidan? ─────────────────
+   Se hace al abrir un ejercicio (ver `FichaEjercicio`) y al completar fotos
+   (ver `posters`): el video arranca al instante, pero se gastan datos aunque
+   el atleta no lo vea. Se salta donde el propio teléfono avisa que no conviene:
+   «ahorro de datos» activado, datos del celular (solo Android lo dice) o una
+   conexión de las lentas. Safari de iPhone no expone nada de esto, y ahí se
+   adelanta siempre. */
+export function redPermiteAdelantar() {
+  const c = typeof navigator !== 'undefined' ? navigator.connection : null;
+  if (!c) return true;
+  return !(c.saveData || c.type === 'cellular' || /(^|-)2g$/.test(c.effectiveType ?? ''));
+}

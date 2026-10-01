@@ -1,7 +1,7 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { ChevronLeft, Dumbbell, Timer, Minus, Plus, LineChart as LineChartIcon } from 'lucide-react';
 import { LT, FONT, NUM_STYLE } from '@/lib/theme';
-import { videosParaAtleta, portadaParaAtleta } from '@/lib/videos';
+import { videosParaAtleta, portadaParaAtleta, ligaExterna, redPermiteAdelantar } from '@/lib/videos';
 import { VideoRecortado } from '@/features/training/VideoRecortado';
 import CarruselDeVideos, { Puntos } from '@/features/training/CarruselDeVideos';
 import { aKilos, desdeKilos, pesoTexto, etiquetaUnidad } from '@/lib/unidades';
@@ -13,6 +13,12 @@ import {
   medida as infoMedida,
 } from '@/lib/medidas';
 import Cronometro from '@/components/Cronometro';
+
+// Montado pero invisible, sin estorbar a la portada ni recibir toques: el video se prepara aquí hasta que le dan play.
+const ESCONDIDO = {
+  position: 'absolute', left: 0, top: 0, width: '100%', height: '100%',
+  overflow: 'hidden', opacity: 0, pointerEvents: 'none',
+};
 
 /**
  * La pantalla de UN ejercicio, mientras se entrena.
@@ -41,10 +47,27 @@ export default function FichaEjercicio({
   const u = etiquetaUnidad(unidad);
   const [reproduciendo, setReproduciendo] = useState(false);
   const [angulo, setAngulo] = useState(0);
+  // El play() del reproductor, para llamarlo dentro del propio toque (ver `VideoRecortado`).
+  const jugador = useRef(null);
+  // Se decide una vez por pantalla: si el teléfono pide ahorrar datos, no se baja nada por adelantado.
+  const [adelanta] = useState(redPermiteAdelantar);
 
   const portada = portadaParaAtleta(repertoire, medias, perfil);
   const videos = videosParaAtleta(repertoire, medias, perfil);
   const video = videos[angulo] ?? videos[0] ?? null;
+
+  /* EL VIDEO EMPIEZA A BAJAR AL ABRIR EL EJERCICIO, no al tocar play. Andrés,
+     1 oct 2026: «le pica al video y el video tarda muchísimo en cargar». Medido
+     en Safari y Chrome: si el video lleva 1 s preparándose cuando le dan play,
+     arranca en menos de 0.02 s (antes, 1-3 s); más ventaja no mejora nada.
+     Por eso se monta ya, ESCONDIDO detrás de la portada, y al tocar play solo se
+     muestra y se le da play: tiene que ser el MISMO <video>, porque preparar
+     uno y crear otro después no sirve (en Safari se baja entero otra vez).
+     Solo el del ejercicio abierto, no todos los del día: cada video preparado
+     baja entre 4 y 25 MB aunque nadie lo vea. Los que viven fuera (TikTok,
+     YouTube) no se tocan: se incrustarían escondidos. */
+  const preparado = adelanta && !!video && !ligaExterna(video.url);
+  const montado = !!video && (reproduciendo || preparado);
 
   // Al cambiar de ejercicio el reproductor vuelve a su estado inicial: si no,
   // el siguiente se abriría ya "reproduciendo" un video que no ha cargado.
@@ -155,17 +178,28 @@ export default function FichaEjercicio({
         // lista del repertorio.
         height: reproduciendo ? 'auto' : (portada || video ? 'min(46vh, 330px)' : 190),
       }}>
-        {reproduciendo && video ? (
-          <>
+        {/* El reproductor, escondido mientras se prepara y a la vista cuando le
+            dan play. Es el mismo elemento en los dos casos: solo cambia el
+            estilo de su caja, así que no se vuelve a montar ni a bajar. */}
+        {montado && (
+          <div
+            inert={reproduciendo ? undefined : true}
+            aria-hidden={reproduciendo ? undefined : true}
+            style={reproduciendo ? undefined : ESCONDIDO}
+          >
             <VideoRecortado
               video={video}
+              reproduce={reproduciendo}
+              reproducirRef={jugador}
               estilo={{ width: '100%', maxHeight: '55vh', display: 'block', background: '#000' }}
             />
             {/* Los puntos siguen ahí mientras se reproduce: cambiar de ángulo
                 sin salir del video es justo para lo que sirven varios ángulos. */}
-            <Puntos videos={videos} activo={angulo} onIr={setAngulo} abajo={10} />
-          </>
-        ) : (
+            {reproduciendo && <Puntos videos={videos} activo={angulo} onIr={setAngulo} abajo={10} />}
+          </div>
+        )}
+
+        {!reproduciendo && (
           <>
             {/* Sin foto de portada se usa el primer fotograma del video. Además
                 de tapar el hueco negro, es una vista previa honesta: es
@@ -177,7 +211,7 @@ export default function FichaEjercicio({
               nombre={ex.name}
               activo={angulo}
               onActivo={setAngulo}
-              onReproducir={() => setReproduciendo(true)}
+              onReproducir={() => { jugador.current?.(); setReproduciendo(true); }}
               vacio={<Dumbbell size={54} color="#2A3040" />}
               /* Arriba y no abajo: abajo viven el nombre del ejercicio y la
                  meta, y los puntos les caerían encima. */

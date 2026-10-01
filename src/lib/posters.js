@@ -22,6 +22,7 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { supabase } from '@/lib/supabase';
 import { uploadExerciseMedia } from '@/lib/api';
 import { fotoDeUrl, segundos } from '@/lib/fotogramas';
+import { redPermiteAdelantar } from '@/lib/videos';
 
 const CLAVE = 'tl.posters.v1';
 // `desde` y `hasta`: el recorte con el que se sacó la foto (ver `completaPortadas`).
@@ -199,8 +200,7 @@ export async function completaPortadas({ max = 12, parar = () => false } = {}) {
     if (fila && tramos.some((t) => mismoTramo(fila, t))) continue;
     if (Date.now() - (fallidas[url] ?? 0) < REINTENTO_MS) continue;
     if (typeof document !== 'undefined' && document.hidden) break;
-    const conexion = typeof navigator !== 'undefined' ? navigator.connection : null;
-    if (conexion?.saveData || conexion?.type === 'cellular') break;
+    if (!redPermiteAdelantar()) break;
     const [t] = tramos;
     const fotos = await fotoDeUrl(url, t);
     const guardada = fotos ? await subePoster(url, fotos, t) : false;

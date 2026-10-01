@@ -16,7 +16,7 @@ import { T, FONT } from '@/lib/theme';
  * pantalla que `FichaEjercicio` reemplazó y que terminó sin que nadie la
  * abriera. Al borrarla, esto —que sí se usa— se quedó sin casa.
  */
-export function VideoRecortado({ video, estilo }) {
+export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef }) {
   const ref = useRef(null);
   // Medidas reales del archivo. Hacen falta para saber qué forma tiene el
   // trozo recortado: el encuadre viene en fracciones, y una fracción no dice
@@ -36,23 +36,42 @@ export function VideoRecortado({ video, estilo }) {
   const poster = usePoster(liga ? null : url);
   const [arrancadoDe, setArrancadoDe] = useState(null);
   const [noArranca, setNoArranca] = useState(null);
-  const sinFoto = arrancadoDe === url || noArranca === url;
+  // `listoDe`: de qué video ya hay datos suficientes para arrancar. Si ya está listo cuando se le da play,
+  // la foto ni se asoma (no hay nada que tapar).
+  const [listoDe, setListoDe] = useState(null);
+  const sinFoto = arrancadoDe === url || noArranca === url || (reproduce && listoDe === url);
 
-  /* Arranca solo al montarse, que es justo cuando el atleta acaba de tocar
-     "reproducir". Sin esto, este componente aparecía con el reproductor
-     nativo ya visible pero PAUSADO en 0:00 — Andrés lo encontró probándolo:
-     tocaba el play grande, el video se mostraba quieto, y hacía falta un
-     QUINTO toque en el botón nativo para que arrancara de verdad.
+  /* ARRANCA SOLO, NO A LA ESPERA DE OTRO TOQUE. Sin esto, este componente
+     aparecía con el reproductor nativo ya visible pero PAUSADO en 0:00 —
+     Andrés lo encontró probándolo: tocaba el play grande, el video se mostraba
+     quieto, y hacía falta un QUINTO toque en el botón nativo.
 
-     Se llama aquí, en un efecto atado al montaje, y no con el atributo
-     `autoPlay`: los navegadores exigen que el video empiece muted si no hay
-     un gesto del usuario detrás. Un efecto que corre justo después del toque
-     sigue contando como gesto del usuario, así que el video arranca CON
-     sonido. `.catch()` traga el rechazo que dan Safari/iOS cuando el gesto ya
-     se perdió por algún reflow lento; si pasa, el botón nativo sigue ahí. */
+     Se llama con `play()` y no con el atributo `autoPlay`: los navegadores
+     exigen que el video empiece muted si no hay un gesto del usuario detrás.
+     `.catch()` traga el rechazo que dan Safari/iOS cuando el gesto ya se perdió;
+     si pasa, el botón nativo sigue ahí.
+
+     CUÁNDO. Con `reproduce` en true desde el principio (lo de siempre) arranca
+     al montarse. Con `reproduce` en false el video se monta ESCONDIDO y solo se
+     prepara —baja el índice y salta al inicio del recorte—, para que cuando el
+     atleta le dé play ya esté listo (ver `FichaEjercicio`). Medido en Safari y
+     Chrome: con 1 s de ventaja el toque pasa de 1-3 s a menos de 0.02 s.
+
+     El toque llama a `reproducirRef.current()` DENTRO del propio gesto: un
+     play() con sonido solo se acepta ahí, y esperar a que React vuelva a pintar
+     arriesga perderlo en iPhone. El efecto de abajo es la red de seguridad para
+     cuando `reproduce` ya viene en true al montarse. */
   useEffect(() => {
-    ref.current?.play().catch(() => setNoArranca(url));
-  }, [url]);
+    if (!reproducirRef) return undefined;
+    reproducirRef.current = () => ref.current?.play()?.catch(() => setNoArranca(url));
+    return () => { reproducirRef.current = null; };
+  }, [reproducirRef, url]);
+
+  useEffect(() => {
+    if (!reproduce) return;
+    const v = ref.current;
+    if (v?.paused) v.play()?.catch(() => setNoArranca(url));
+  }, [url, reproduce]);
 
   /* Un video que vive fuera (TikTok, YouTube, un reel) no es un archivo
      nuestro: no se puede recortar, ni quitarle el audio, ni encuadrarlo. Se
@@ -145,6 +164,7 @@ export function VideoRecortado({ video, estilo }) {
       playsInline
       muted={!!sinAudio}
       preload="metadata"
+      onCanPlay={() => setListoDe(url)}
       onPlaying={() => setArrancadoDe(url)}
       onError={() => setNoArranca(url)}
       onLoadedMetadata={(e) => {
