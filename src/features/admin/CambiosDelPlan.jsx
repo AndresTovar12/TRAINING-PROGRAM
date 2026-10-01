@@ -49,10 +49,13 @@ export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abiert
   const cargar = useCallback(async () => {
     // Solo las versiones de ESTE programa (el del coach principal o el de un profesional
     // del equipo): el master ve las de todos y sin este filtro saldrían revueltas.
+    // Las sesiones pegadas al programa del coach viven en una fila `draft` del mismo
+    // profesional (ver `lib/pegadas.js`): sus versiones no son cambios del programa.
     let consulta = supabase
       .from('plan_versiones')
       .select('id, title, creada_en, cambiada_por, cliente_ia, motivo')
-      .eq('user_id', atleta.id);
+      .eq('user_id', atleta.id)
+      .neq('status', 'draft');
     consulta = profesionalId ? consulta.eq('profesional_id', profesionalId) : consulta.is('profesional_id', null);
     const { data } = await consulta
       .order('creada_en', { ascending: false })

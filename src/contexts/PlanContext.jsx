@@ -3,10 +3,12 @@ import {
 } from 'react';
 import { usePerfilDeLaVista } from '@/contexts/VistaContext';
 import {
-  getProgramas, nombresDelEquipo, versionesDelEquipo, listExercises, listExerciseMedia, getMasterId,
-  listExerciseOverrides, aplicarOverrides,
+  getProgramas, getSesionesPegadas, nombresDelEquipo, versionesDelEquipo, listExercises, listExerciseMedia,
+  getMasterId, listExerciseOverrides, aplicarOverrides,
 } from '@/lib/api';
 import { estructuraDelPlan } from '@/lib/training-utils';
+import { adaptadorDeRegistros, fasesConPegadas, reglasDe } from '@/lib/pegadas';
+import { colorDePrograma } from '@/lib/programas';
 
 /**
  * Carga el plan activo de la persona cuya app se dibuja —quien entró, o el
@@ -84,10 +86,19 @@ function normalizePlan(phases) {
  *
  * Los registros del atleta (`wr:sessions`, `wr:cursor`) de un programa de
  * equipo van en claves aparte: `wr:sessions@<profesional>`. Ver `claveDe`.
+ *
+ * SESIONES PEGADAS (`lib/pegadas.js`). Lo que un profesional le pega al
+ * programa del coach no es un programa aparte con sus fases: es lo suyo repartido
+ * en los días del programa del coach. Aquí se arma como un programa MÁS de la
+ * lista (`sobre: true`), con las mismas fases y semanas que el del coach y solo
+ * las sesiones de ese profesional. Así todo lo que ya sabe pintar, marcar y
+ * anotar un programa sirve también para esto. Su puntero es el del coach
+ * (`sigueA`) y lo que se anota va en `wr:sessions@<profesional>:sobre`.
  */
 export function PlanProvider({ children }) {
   const { userId, perfil } = usePerfilDeLaVista();
   const [filas, setFilas] = useState([]);              // planes activos: principal + equipo
+  const [filasPegadas, setFilasPegadas] = useState([]); // sesiones pegadas: una fila por autor
   const [miembros, setMiembros] = useState(null);      // equipo (nombres); null = no se pidió
   const [planLoading, setPlanLoading] = useState(true);
   const [exercisesBase, setExercisesBase] = useState([]);
@@ -105,6 +116,7 @@ export function PlanProvider({ children }) {
     setActivoId(null);
     if (!userId) {
       setFilas([]);
+      setFilasPegadas([]);
       setMiembros(null);
       setPlanLoading(false);
       return undefined;
@@ -112,15 +124,17 @@ export function PlanProvider({ children }) {
     setPlanLoading(true);
     (async () => {
       try {
-        const rows = await getProgramas(userId);
+        // Las pegadas van aparte y sin tumbar nada: si fallan, el atleta ve sus programas.
+        const [rows, pegadas] = await Promise.all([getProgramas(userId), getSesionesPegadas(userId).catch(() => [])]);
         // Los nombres solo hacen falta si hay más de un programa.
-        const conEquipo = rows.some((r) => r.profesional_id);
+        const conEquipo = rows.some((r) => r.profesional_id) || pegadas.length > 0;
         const nombres = conEquipo ? await nombresDelEquipo(userId).catch(() => null) : null;
         if (cancelled) return;
         setFilas(rows);
+        setFilasPegadas(pegadas);
         setMiembros(nombres);
       } catch {
-        if (!cancelled) { setFilas([]); setMiembros(null); }
+        if (!cancelled) { setFilas([]); setFilasPegadas([]); setMiembros(null); }
       } finally {
         if (!cancelled) setPlanLoading(false);
       }
@@ -177,11 +191,9 @@ export function PlanProvider({ children }) {
      borra nada y al volver a agregarla regresa todo). */
   const programas = useMemo(() => {
     const activos = miembros ? new Set(miembros.filter((m) => m.estado === 'activo').map((m) => m.profesional_id)) : null;
-    const armar = (row) => {
-      const esPrincipal = !row.profesional_id;
-      const duenoId = row.profesional_id ?? principalId;
-      const miembro = miembros?.find((m) => m.profesional_id === duenoId) ?? null;
-      const phases = normalizePlan(row.data?.phases) ?? [];
+    // Lo que hace falta para pintar los ejercicios de UN profesional: el
+    // repertorio con SUS versiones, sus medios y cómo resolver un ejercicio.
+    const herramientasDe = (duenoId) => {
       const exercises = aplicarOverrides(exercisesBase, overridesTodas.filter((o) => o.coach_id === duenoId));
       const porId = new Map(); const porNombre = new Map();
       exercises.forEach((e) => { porId.set(e.id, e); porNombre.set(norm(e.name), e); });
@@ -189,19 +201,6 @@ export function PlanProvider({ children }) {
         m.para_atleta ? m.para_atleta === userId : (m.created_by === duenoId || m.created_by === masterId)
       ));
       return {
-        id: row.id,
-        clave: row.profesional_id ?? null,        // sufijo de los registros; null = el principal
-        esPrincipal,
-        profesionalId: duenoId ?? null,
-        profesional: miembro
-          ? { id: miembro.profesional_id, full_name: miembro.full_name, username: miembro.username, profesion: miembro.profesion, avatar_url: miembro.avatar_url }
-          : null,
-        altaEn: miembro?.alta_en ?? null,
-        title: row.title,
-        phases,
-        kind: row.data?.kind === 'weekly' ? 'weekly' : 'periodized',
-        estructura: estructuraDelPlan(row.data),
-        hasPlan: phases.length > 0,
         exercises,
         medias,
         resolveExercise: (ex) => {
@@ -211,11 +210,76 @@ export function PlanProvider({ children }) {
         },
       };
     };
-    return filas
+    const profesionalDe = (miembro) => (miembro
+      ? { id: miembro.profesional_id, full_name: miembro.full_name, username: miembro.username, profesion: miembro.profesion, avatar_url: miembro.avatar_url }
+      : null);
+    const armar = (row) => {
+      const esPrincipal = !row.profesional_id;
+      const duenoId = row.profesional_id ?? principalId;
+      const miembro = miembros?.find((m) => m.profesional_id === duenoId) ?? null;
+      const phases = normalizePlan(row.data?.phases) ?? [];
+      return {
+        id: row.id,
+        clave: row.profesional_id ?? null,        // sufijo de los registros; null = el principal
+        esPrincipal,
+        profesionalId: duenoId ?? null,
+        profesional: profesionalDe(miembro),
+        altaEn: miembro?.alta_en ?? null,
+        title: row.title,
+        phases,
+        kind: row.data?.kind === 'weekly' ? 'weekly' : 'periodized',
+        estructura: estructuraDelPlan(row.data),
+        hasPlan: phases.length > 0,
+        ...herramientasDe(duenoId),
+      };
+    };
+    /* Las sesiones de un profesional pegadas al programa del coach, vistas como
+       un programa más. Mismas fases y semanas que el del coach; cada semana trae
+       solo lo del autor. */
+    const armarPegadas = (fila, principal) => {
+      const reglas = reglasDe(fila);
+      const miembro = miembros?.find((m) => m.profesional_id === fila.profesional_id) ?? null;
+      const kind = principal.kind === 'weekly' ? 'weekly' : 'periodized';
+      const phases = normalizePlan(fasesConPegadas(reglas, principal.phases, {
+        autorId: fila.profesional_id, semanal: kind === 'weekly',
+      })) ?? [];
+      const { vista, llaveEstable } = adaptadorDeRegistros(phases, kind);
+      return {
+        id: `${fila.id}:sobre`,
+        clave: `${fila.profesional_id}:sobre`,
+        esPrincipal: false,
+        sobre: true,                               // pegada al programa del coach
+        sigueA: principal,                         // su puntero es el del coach
+        profesionalId: fila.profesional_id,
+        profesional: profesionalDe(miembro),
+        altaEn: miembro?.alta_en ?? null,
+        title: 'Sesiones sobre el programa',
+        phases,
+        kind,
+        estructura: principal.estructura,
+        hasPlan: phases.some((f) => (f.weekData ?? []).some((w) => (w.days ?? []).length > 0)),
+        // Lo que anota el atleta se guarda con llaves estables y aquí se ve por posición.
+        vistaDeRegistros: vista,
+        llaveEstable,
+        ...herramientasDe(fila.profesional_id),
+      };
+    };
+    const propios = filas
       .filter((r) => !r.profesional_id || !activos || activos.has(r.profesional_id))
       .sort((a, b) => (a.profesional_id ? 1 : 0) - (b.profesional_id ? 1 : 0))   // el principal primero
       .map(armar);
-  }, [filas, miembros, exercisesBase, overridesTodas, mediasTodas, masterId, userId, principalId]);
+    const principal = propios.find((p) => p.esPrincipal) ?? null;
+    const pegadas = principal
+      ? filasPegadas
+        .filter((f) => reglasDe(f).length > 0 && (!activos || activos.has(f.profesional_id)))
+        .map((f) => armarPegadas(f, principal))
+      : [];
+    const todos = [...propios, ...pegadas];
+    // Un color por PERSONA, no por programa: sus sesiones pegadas y su programa aparte van del mismo color.
+    const autores = [];
+    todos.forEach((p) => { if (!autores.includes(p.profesionalId)) autores.push(p.profesionalId); });
+    return todos.map((p) => ({ ...p, color: colorDePrograma(autores.indexOf(p.profesionalId)) }));
+  }, [filas, filasPegadas, miembros, exercisesBase, overridesTodas, mediasTodas, masterId, userId, principalId]);
 
   const activo = programas.find((p) => p.id === activoId) ?? programas[0] ?? null;
   const elegirPrograma = useCallback((planId) => setActivoId(planId), []);
@@ -255,4 +319,32 @@ export function usePlan() {
   const ctx = useContext(PlanContext);
   if (!ctx) throw new Error('usePlan debe usarse dentro de <PlanProvider>');
   return ctx;
+}
+
+/**
+ * Pinta a sus hijos como si ESTE programa fuera el activo: sus fases, su manera
+ * de resolver un ejercicio (con las versiones y el video de SU profesional) y
+ * sus medios. Es lo que permite juntar en una sola pantalla las sesiones de
+ * varios profesionales —el día de «Plan» las apila— sin que cada una pierda su
+ * contexto: el ejercicio que puso el fisio se ve con el video del fisio.
+ *
+ * Solo cambia lo que ven los hijos; el programa activo de la app sigue siendo
+ * el mismo.
+ */
+export function ComoPrograma({ programa, children }) {
+  const base = useContext(PlanContext);
+  const value = useMemo(() => ({
+    ...base,
+    phases: programa.phases,
+    kind: programa.kind,
+    estructura: programa.estructura,
+    hasPlan: programa.hasPlan,
+    planMeta: { id: programa.id, title: programa.title },
+    exercises: programa.exercises,
+    medias: programa.medias,
+    resolveExercise: programa.resolveExercise,
+    programaActivo: programa,
+    claveDe: (base0) => (programa.clave ? `${base0}@${programa.clave}` : base0),
+  }), [base, programa]);
+  return <PlanContext.Provider value={value}>{children}</PlanContext.Provider>;
 }

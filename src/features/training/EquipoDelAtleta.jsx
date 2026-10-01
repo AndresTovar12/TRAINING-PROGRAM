@@ -1,59 +1,39 @@
-import { Activity, Check, ChevronRight } from 'lucide-react';
-import { FONT, KP, LT, eyebrow } from '@/lib/theme';
+import { Check, ChevronRight } from 'lucide-react';
+import { FONT, KP, LT } from '@/lib/theme';
 import { plural } from '@/lib/plural';
-import { colorDePrograma, etiquetaDePrograma, nombreCorto, rolDelPrograma, semanaDeTodos } from '@/lib/programas';
+import { etiquetaDePrograma } from '@/lib/programas';
+import { sesionesDelTitulo } from '@/lib/sesiones';
+import EtiquetasDeSesion from '@/components/EtiquetasDeSesion';
 
 /* Lo que ve un atleta que tiene EQUIPO: su coach principal y, además, alguien
-   más (un fisio…) con su propio programa. Sin equipo nada de esto sale y la app
-   es la de siempre. Cada cosa dice de quién viene. */
+   más (un fisio…) que le puso sesiones. Sin equipo nada de esto sale y la app es
+   la de siempre.
 
-/** Lo que le toca hoy con OTRO profesional: una tarjeta compacta, debajo de la principal. */
-export function TarjetaDeEquipo({ programa, sesion, color, onAbrir }) {
-  const datos = [
-    sesion.ejercicios ? plural(sesion.ejercicios, 'ejercicio', 'ejercicios') : null,
-    sesion.minutos,
-  ].filter(Boolean).join(' · ');
+   Para el atleta el programa es UNO SOLO, con varias personas que le ponen
+   cosas. Andrés, 1 oct 2026: nada de pestañas por profesional —«no por lo
+   visual, sino por lo que representa»—; las sesiones de todos van juntas, cada
+   una dice de quién viene, y un filtro deja ver solo lo de uno si se quiere. */
+
+/** «● Beto · coach»: de quién viene algo, con su color. */
+export function EtiquetaDeAutor({ programa, tamano = 12, style }) {
+  const color = programa?.color ?? LT.blue;
   return (
-    <div style={{ padding: '0 18px 12px' }}>
-      <button
-        type="button"
-        onClick={onAbrir}
-        className="kp-press"
-        style={{
-          width: '100%', textAlign: 'left', cursor: 'pointer', fontFamily: FONT,
-          background: LT.surface, borderRadius: 22, padding: 16,
-          border: `1.5px solid ${color}33`, display: 'flex', alignItems: 'center', gap: 14,
-        }}
-      >
-        <span style={{
-          width: 48, height: 48, borderRadius: '50%', background: `${color}1A`, color,
-          display: 'grid', placeItems: 'center', flexShrink: 0,
-        }}>
-          <Activity size={21} />
-        </span>
-        <span style={{ flex: 1, minWidth: 0 }}>
-          <span style={{ display: 'block', fontSize: 12.5, fontWeight: 800, color }}>
-            {sesion.hecha ? 'Terminada' : 'Hoy'} · {etiquetaDePrograma(programa)}
-          </span>
-          <span style={{ display: 'block', fontSize: 17, fontWeight: 700, color: LT.text, marginTop: 2, overflowWrap: 'anywhere' }}>
-            {sesion.titulo}
-          </span>
-          {datos && <span style={{ display: 'block', fontSize: 12, color: LT.text2, marginTop: 2 }}>{datos}</span>}
-        </span>
-        <span style={{
-          display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0,
-          background: `${color}1A`, color, borderRadius: 999, padding: '8px 11px 8px 13px', fontSize: 13, fontWeight: 800,
-        }}>
-          {sesion.hecha ? <Check size={15} strokeWidth={3} /> : null}
-          {sesion.hecha ? 'Ver' : 'Empezar'} <ChevronRight size={15} />
-        </span>
-      </button>
-    </div>
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: FONT,
+      fontSize: tamano, fontWeight: 800, color, ...style,
+    }}>
+      <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+      {etiquetaDePrograma(programa)}
+    </span>
   );
 }
 
-/** Las pastillas de «Plan»: «Todo · Beto · Juan». Solo con dos o más programas. */
-export function SelectorDePrograma({ programas, activoId, verTodo, onTodo, onPrograma }) {
+/**
+ * Las pastillas «Todo · Andrés · Ana». SOLO filtran: esconden lo de los demás,
+ * no abren otro programa. Sin al menos dos personas no salen.
+ */
+export function ChipsDeAutor({ autores, filtro, onFiltro, style }) {
+  if ((autores?.length ?? 0) < 2) return null;
   const pastilla = (activa, color) => ({
     padding: '9px 15px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 800,
     border: `1.5px solid ${activa ? color : LT.border}`,
@@ -61,21 +41,21 @@ export function SelectorDePrograma({ programas, activoId, verTodo, onTodo, onPro
     whiteSpace: 'nowrap', touchAction: 'manipulation',
   });
   return (
-    <div style={{ padding: '18px 18px 0' }}>
-      <div role="tablist" aria-label="Programa" style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
-        <button type="button" role="tab" aria-selected={verTodo} onClick={onTodo} style={pastilla(verTodo, LT.text)}>
+    <div style={{ padding: '0 18px', ...style }}>
+      <div role="tablist" aria-label="Ver lo de" style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
+        <button type="button" role="tab" aria-selected={!filtro} onClick={() => onFiltro(null)} style={pastilla(!filtro, LT.text)}>
           Todo
         </button>
-        {programas.map((p, i) => (
+        {autores.map((a) => (
           <button
-            key={p.id}
+            key={a.id}
             type="button"
             role="tab"
-            aria-selected={!verTodo && p.id === activoId}
-            onClick={() => onPrograma(p)}
-            style={pastilla(!verTodo && p.id === activoId, colorDePrograma(i))}
+            aria-selected={filtro === a.id}
+            onClick={() => onFiltro(a.id)}
+            style={pastilla(filtro === a.id, a.color)}
           >
-            {nombreCorto(p.profesional?.full_name) || rolDelPrograma(p)}
+            {a.nombre}
           </button>
         ))}
       </div>
@@ -84,84 +64,78 @@ export function SelectorDePrograma({ programas, activoId, verTodo, onTodo, onPro
 }
 
 /**
- * «Todo»: la semana de calendario (lunes a domingo) con lo de cada profesional,
- * cada uno según SU puntero. Tocar una sesión abre ese día en el programa de
- * quien lo mandó; tocar un nombre abre el programa completo de esa persona.
+ * «Hoy te toca», con TODAS las sesiones de hoy de todos en una sola tarjeta,
+ * cada una con el nombre de quien la puso. Tocar una lleva a «Plan», a ese día.
  */
-export function SemanaDeTodos({ programas, store, onAbrirDia, onVerPrograma }) {
-  // Lo que ya te dieron de alta no cuenta en la semana: solo se consulta en su pastilla.
-  const dias = semanaDeTodos(programas.filter((p) => !p.altaEn), store);
-  const indiceDe = (programaId) => Math.max(0, programas.findIndex((p) => p.id === programaId));
+export function TarjetaDeHoyDeTodos({ entradas, onAbrir, onCambiarDia, esCompu, conAutor = true }) {
+  const todas = entradas.length > 0 && entradas.every((e) => e.hecha);
   return (
-    <div style={{ padding: '18px 18px 110px' }}>
-      <div style={eyebrow(KP.blue)}>Esta semana</div>
-      <div style={{ fontSize: 26, fontWeight: 800, color: LT.text, letterSpacing: -0.5, marginTop: 6 }}>Todo junto</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-        {programas.map((p, i) => (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => onVerPrograma(p)}
-            className="kp-press"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontFamily: FONT,
-              background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 999,
-              padding: '7px 12px 7px 10px', fontSize: 13, fontWeight: 700, color: LT.text,
-            }}
-          >
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: colorDePrograma(i) }} />
-            {etiquetaDePrograma(p)}
-            <ChevronRight size={14} color={LT.text3} />
-          </button>
-        ))}
-      </div>
+    <div style={{ padding: '0 18px 12px' }}>
+      <div style={{
+        background: `linear-gradient(150deg, ${LT.blue}, ${LT.blueDk})`, borderRadius: KP.rCard,
+        padding: '20px 18px 18px', boxShadow: KP.shBtn, ...(esCompu ? { maxWidth: 560 } : null),
+      }}>
+        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)' }}>
+          {todas ? 'Completadas' : 'Hoy te toca'}
+        </div>
+        <div style={{ fontSize: 24, fontWeight: 700, color: '#fff', lineHeight: 1.05, marginTop: 3, letterSpacing: -0.5 }}>
+          {entradas.length === 1 ? '1 sesión' : `${entradas.length} sesiones`}
+        </div>
 
-      <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {dias.map((d) => (
-          <div
-            key={d.clave}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 14 }}>
+          {entradas.map((e) => {
+            const color = e.programa.color ?? LT.blue;
+            const sesiones = sesionesDelTitulo(e.day);
+            const datos = [e.ejercicios ? plural(e.ejercicios, 'ejercicio', 'ejercicios') : null, e.minutos].filter(Boolean).join(' · ');
+            return (
+              <button
+                key={`${e.programa.id}-${e.dayIdx}`}
+                type="button"
+                onClick={() => onAbrir(e)}
+                className="kp-press"
+                style={{
+                  width: '100%', textAlign: 'left', cursor: 'pointer', fontFamily: FONT, background: '#fff',
+                  border: 'none', borderRadius: 16, padding: '12px 13px 12px 11px',
+                  display: 'flex', alignItems: 'center', gap: 11,
+                }}
+              >
+                <span aria-hidden="true" style={{ width: 5, alignSelf: 'stretch', borderRadius: 5, background: color, flexShrink: 0 }} />
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  {conAutor && <span style={{ display: 'block', fontSize: 12, fontWeight: 800, color }}>{etiquetaDePrograma(e.programa)}</span>}
+                  {sesiones.length > 1 ? (
+                    <EtiquetasDeSesion sesiones={sesiones} envolver tamano={13.5} style={{ marginTop: 5 }} />
+                  ) : (
+                    <span style={{ display: 'block', fontSize: 16.5, fontWeight: 800, color: LT.text, marginTop: 2, overflowWrap: 'anywhere', lineHeight: 1.2 }}>
+                      {e.titulo}
+                    </span>
+                  )}
+                  {datos && <span style={{ display: 'block', fontSize: 12, color: LT.text2, marginTop: 3 }}>{datos}</span>}
+                </span>
+                {e.hecha ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0, fontSize: 12.5, fontWeight: 800, color: LT.mint }}>
+                    <Check size={16} strokeWidth={3} /> Terminada
+                  </span>
+                ) : (
+                  <ChevronRight size={18} color={LT.text3} style={{ flexShrink: 0 }} />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {onCambiarDia && (
+          <button
+            type="button"
+            onClick={onCambiarDia}
             style={{
-              background: LT.surface, borderRadius: 18, padding: '12px 14px', display: 'flex', gap: 12,
-              border: d.esHoy ? `1.5px solid ${LT.blue}` : `1px solid ${LT.border}`,
+              display: 'block', width: '100%', border: 'none', cursor: 'pointer', fontFamily: FONT,
+              background: 'rgba(255,255,255,0.15)', borderRadius: 14, padding: '13px',
+              fontSize: 14, fontWeight: 600, color: '#fff', textAlign: 'center', marginTop: 10,
             }}
           >
-            <div style={{ width: 44, textAlign: 'center', flexShrink: 0, paddingTop: 2 }}>
-              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.6, color: d.esHoy ? LT.blue : LT.text3 }}>
-                {d.clave.toUpperCase()}
-              </div>
-              <div style={{ fontSize: 21, fontWeight: 800, color: d.esHoy ? LT.blue : LT.text }}>{d.numero}</div>
-            </div>
-            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6, justifyContent: 'center' }}>
-              {d.entradas.length === 0 ? (
-                <span style={{ fontSize: 14, fontWeight: 600, color: LT.text3 }}>Sin sesión</span>
-              ) : d.entradas.map((e) => {
-                const programa = programas[indiceDe(e.programaId)];
-                const color = colorDePrograma(indiceDe(e.programaId));
-                return (
-                  <button
-                    key={`${e.programaId}-${e.dayIdx}`}
-                    type="button"
-                    onClick={() => onAbrirDia(e)}
-                    className="kp-press"
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', cursor: 'pointer',
-                      fontFamily: FONT, background: `${color}12`, border: 'none', borderRadius: 12, padding: '9px 11px',
-                    }}
-                  >
-                    <span style={{ width: 4, alignSelf: 'stretch', borderRadius: 4, background: color, flexShrink: 0 }} />
-                    <span style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ display: 'block', fontSize: 11.5, fontWeight: 800, color }}>{etiquetaDePrograma(programa)}</span>
-                      <span style={{ display: 'block', fontSize: 14.5, fontWeight: 700, color: LT.text, overflowWrap: 'anywhere' }}>{e.titulo}</span>
-                    </span>
-                    {e.hecha
-                      ? <Check size={17} color={color} strokeWidth={3} style={{ flexShrink: 0 }} />
-                      : <ChevronRight size={16} color={LT.text3} style={{ flexShrink: 0 }} />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+            Cambiar día
+          </button>
+        )}
       </div>
     </div>
   );

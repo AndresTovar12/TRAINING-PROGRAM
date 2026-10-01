@@ -76,7 +76,7 @@ function TituloDelRenglon({ dias, color, peso = 700 }) {
  */
 export default function NavegadorDelPlan({
   fases, kind, estructura: estructuraDada, aqui, viendo, hecha, alTocarDia, abrirEn, detalleDia,
-  contenidoDia, quien = 'tu', editor,
+  contenidoDia, quien = 'tu', editor, pegadasDe, alTocarPegada,
 }) {
   const estructura = estructuraDada ?? (kind === 'weekly' ? 'rutina' : 'fases');
   const deCorrido = estructura === 'semanas';
@@ -85,7 +85,13 @@ export default function NavegadorDelPlan({
   const textoAqui = quien === 'tu' ? 'AQUÍ VAS' : 'AQUÍ VA';
   const textoIr = quien === 'tu' ? 'Ir a donde vas' : 'Ir a donde va';
 
-  /* `contenidoDia`: si viene, tocar un día lo abre AQUÍ MISMO para ver qué
+  /* `pegadasDe(fase, semana)`: lo que otros profesionales le pegaron a esta
+     semana, [{ dia, day, etiqueta, color, hecha }]. Sale DENTRO de su día, con la
+     etiqueta de quien lo puso, junto a lo del coach. Es solo lectura: lo pegado
+     lo mueve únicamente su autor. `alTocarPegada(fase, semana, pegada)` abre ese
+     día; sin él, el renglón no se toca (el coach lo mira, no lo entrena).
+
+     `contenidoDia`: si viene, tocar un día lo abre AQUÍ MISMO para ver qué
      tiene, en vez de llevar a otra pantalla. Es lo que usa el coach: él no
      entrena ese día, solo quiere ver qué le puso. Uno abierto a la vez. */
   const [diaAbierto, setDiaAbierto] = useState(null);
@@ -356,7 +362,42 @@ export default function NavegadorDelPlan({
                     </button>
                   );
                 })
-                : enOrdenDeSemana(semana?.days ?? []).map(({ day, idx }) => {
+                : renglonesDeLaSemana(semana, pegadasDe?.(f, semana)).map((r) => {
+                  if (r.pegada) {
+                    const pg = r.pegada;
+                    const contenido = (
+                      <>
+                        <span style={{ width: 32, fontSize: 11, fontWeight: 800, color: pg.color, flexShrink: 0 }}>{pg.dia}</span>
+                        <span style={{ width: 7, height: 7, borderRadius: 4, background: pg.color, flexShrink: 0 }} />
+                        <TituloDelRenglon dias={pg.day} color={LT.text} />
+                        <span style={{
+                          fontSize: 10, fontWeight: 800, letterSpacing: 0.3, flexShrink: 0, padding: '3px 7px',
+                          borderRadius: 6, color: pg.color, background: `${pg.color}1A`,
+                        }}>
+                          {pg.etiqueta}
+                        </span>
+                        {pg.hecha && <Check size={14} strokeWidth={3} style={{ color: LT.mint, flexShrink: 0 }} />}
+                      </>
+                    );
+                    const estiloPegada = {
+                      display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
+                      padding: '10px 11px', borderRadius: 11, fontFamily: FONT,
+                      background: `${pg.color}10`, border: `1px solid ${pg.color}44`,
+                    };
+                    return alTocarPegada ? (
+                      <button
+                        key={`pegada-${r.n}`}
+                        type="button"
+                        onClick={() => alTocarPegada(f, semana, pg)}
+                        style={{ ...estiloPegada, cursor: 'pointer' }}
+                      >
+                        {contenido}
+                      </button>
+                    ) : (
+                      <div key={`pegada-${r.n}`} style={estiloPegada}>{contenido}</div>
+                    );
+                  }
+                  const { day, idx } = r;
                   const tipo = tipoDeSesion(day);
                   const descanso = esDescanso(day);
                   const suyo = esAqui(f.id, semana.num, idx);
@@ -422,6 +463,22 @@ export default function NavegadorDelPlan({
       )}
     </div>
   );
+}
+
+const ORDEN_DE_DIA = { Lun: 0, Mar: 1, 'Mié': 2, Mie: 2, Jue: 3, Vie: 4, 'Sáb': 5, Sab: 5, Dom: 6 };
+
+/* Los renglones de una semana: los días del coach y lo pegado, juntos y en orden
+   de calendario. En un mismo día va primero lo del coach. Los del coach siguen
+   siendo { day, idx } (su posición original, de la que cuelga lo que anota el
+   atleta); los pegados, { pegada, n }. */
+function renglonesDeLaSemana(semana, pegadas) {
+  const delCoach = enOrdenDeSemana(semana?.days ?? []);
+  if (!pegadas?.length) return delCoach;
+  const ordenDe = (dia) => ORDEN_DE_DIA[dia] ?? 9;
+  return [
+    ...delCoach.map((r) => ({ ...r, orden: ordenDe(r.day?.day), cual: 0 })),
+    ...pegadas.map((pegada, n) => ({ pegada, n, orden: ordenDe(pegada.dia), cual: 1 })),
+  ].sort((a, b) => a.orden - b.orden || a.cual - b.cual);
 }
 
 /** Cuántas sesiones de una fase están hechas, sin contar descansos. */

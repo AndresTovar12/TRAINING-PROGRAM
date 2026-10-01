@@ -956,6 +956,57 @@ export async function deletePlan(planId) {
   if (error) throw error;
 }
 
+/* ---------------------------- Sesiones pegadas ---------------------------- */
+// Lo que un profesional le pega al programa del coach de un atleta. Ver
+// `lib/pegadas.js`: una fila de `plans` por (atleta, autor) con `status` 'draft'
+// y `data.tipo` 'pegadas', así que `getProgramas` y todo lo que lee programas
+// vivos ni la ve. Las ve el atleta y quien lo atiende; solo la escribe su autor.
+export async function getSesionesPegadas(userId) {
+  const { data, error } = await supabase
+    .from('plans')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('status', 'draft')
+    .contains('data', { tipo: 'pegadas' })
+    .order('created_at');
+  if (error) throw error;
+  return data ?? [];
+}
+
+// Deja en la fila del autor la lista de reglas que llegue (la crea si no hay).
+// Sin reglas, la fila se borra: no se guardan filas vacías.
+export async function guardarSesionesPegadas({ fila, atletaId, autorId, sesiones }) {
+  if (!sesiones.length) {
+    if (fila) await deletePlan(fila.id);
+    return null;
+  }
+  const data = { tipo: 'pegadas', sesiones };
+  if (fila) {
+    const { data: row, error } = await supabase
+      .from('plans')
+      .update({ data, updated_at: new Date().toISOString() })
+      .eq('id', fila.id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    return row;
+  }
+  const { data: row, error } = await supabase
+    .from('plans')
+    .insert({
+      user_id: atletaId,
+      profesional_id: autorId,
+      title: 'Sesiones pegadas',
+      status: 'draft',
+      data,
+      created_by: autorId,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return row;
+}
+
 /* ----------------------------- Templates ------------------------------ */
 // Plantillas de rutina: kind 'day' (una sesión) o 'week' (7 días).
 // `createdBy`: solo las de esa persona. El master puede leerlas todas, y sin

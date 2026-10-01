@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  ChevronRight, ChevronDown, ChevronUp, Calendar,
+  ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Calendar,
   Check, X, Calculator, BookOpen, TrendingUp, Edit3, Target,
   Zap, Trophy, Clock, FileText, Sparkles, Info, Dumbbell, Heart, Play,
   Activity, Home as HomeIcon,
@@ -11,7 +11,7 @@ import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceL
 import { useIsDesktop } from '@/lib/useViewport';
 import { T, FONT, NUM_STYLE, LT, tipoDeSesion, KP, eyebrow } from '@/lib/theme';
 import { PHASE_IMG } from '@/data/training-data';
-import { usePlan } from '@/contexts/PlanContext';
+import { usePlan, ComoPrograma } from '@/contexts/PlanContext';
 import { usePerfilDeLaVista } from '@/contexts/VistaContext';
 import {
   sessionIdFor, calc1RM, today, greeting, isLoadedExercise,
@@ -28,9 +28,12 @@ import { aKilos, desdeKilos, etiquetaUnidad } from '@/lib/unidades';
 import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
 import { useAppState, useStorage } from '@/contexts/AppStateContext';
 import { altaReciente } from '@/lib/comoVa';
-import { SelectorDePrograma, SemanaDeTodos, TarjetaDeEquipo } from '@/features/training/EquipoDelAtleta';
+import { ChipsDeAutor, EtiquetaDeAutor, TarjetaDeHoyDeTodos } from '@/features/training/EquipoDelAtleta';
 import AvisoDeInvitacion from '@/features/training/AvisoDeInvitacion';
-import { colorDePrograma, etiquetaDePrograma, nombreCorto, sesionDeHoy } from '@/lib/programas';
+import {
+  autorDe, autoresDe, entradasDeHoy, escribeRegistro, etiquetaDePrograma, nombreCorto, registrosDe,
+  normalizaDia, resumenDeLaSemana, semanaUnificada,
+} from '@/lib/programas';
 import FichaEjercicio from '@/features/training/FichaEjercicio';
 import Portada from '@/components/Portada';
 import EtiquetasDeSesion from '@/components/EtiquetasDeSesion';
@@ -668,7 +671,9 @@ const LightWeekScience = ({ science }) => {
  * Antes la hoja recibía la fase de lo que se miraba y la llamaba "aquí vas":
  * en cuanto uno abría otro día, la marca se iba detrás de él.
  */
-const HojaDelPrograma = ({ sessionsData, aqui, viendo, onIr, onCerrar }) => {
+const HojaDelPrograma = ({
+  sessionsData, aqui, viendo, onIr, onCerrar, pegadasDe, alTocarPegada, aparte = [], onAbrirAparte,
+}) => {
   const { phases: PLAN, planMeta, kind, estructura } = usePlan();
   const idDeSesion = useIdDeSesion();
 
@@ -700,39 +705,67 @@ const HojaDelPrograma = ({ sessionsData, aqui, viendo, onIr, onCerrar }) => {
         abrirEn={viendo ?? aqui}
         hecha={(faseId, semana, dia) => !!sessionsData[idDeSesion(faseId, semana, dia)]?.completed}
         alTocarDia={onIr}
+        // Lo que otros le pegaron al programa, dentro de su día y con su etiqueta.
+        pegadasDe={pegadasDe}
+        alTocarPegada={alTocarPegada}
       />
+
+      {/* PROGRAMAS APARTE: los que un profesional armó por su cuenta (otro deporte,
+          un tratamiento). No son parte de este programa: tienen sus propias fases
+          y semanas, así que se abren por separado. */}
+      {aparte.length > 0 && (
+        <div style={{ marginTop: 22 }}>
+          <div style={{ ...eyebrow(LT.text3), marginBottom: 9 }}>Programas aparte</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {aparte.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => onAbrirAparte?.(p)}
+                className="kp-press"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', cursor: 'pointer',
+                  fontFamily: FONT, background: LT.surface, borderRadius: 14, padding: '12px 14px',
+                  border: `1.5px solid ${(p.color ?? LT.blue)}44`,
+                }}
+              >
+                <span aria-hidden="true" style={{ width: 5, alignSelf: 'stretch', borderRadius: 5, background: p.color ?? LT.blue, flexShrink: 0 }} />
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <EtiquetaDeAutor programa={p} tamano={11.5} />
+                  <span style={{ display: 'block', fontSize: 15.5, fontWeight: 800, color: LT.text, marginTop: 2, overflowWrap: 'anywhere' }}>
+                    {p.title}
+                  </span>
+                  <span style={{ display: 'block', fontSize: 12, color: LT.text2, marginTop: 2 }}>
+                    {p.kind === 'weekly'
+                      ? 'Rutina semanal'
+                      : [p.estructura === 'semanas' ? null : pluralS(p.phases.length, 'fase'), pluralS(semanasDelPlan(p.phases), 'semana')]
+                        .filter(Boolean).join(' · ')}
+                    {p.altaEn ? ' · te dio de alta' : ''}
+                  </span>
+                </span>
+                <ChevronRight size={17} color={LT.text3} style={{ flexShrink: 0 }} />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </HojaFlotante>
   );
 };
 
-const WeekDetail = ({
-  phase, week, dayIdx, onVerPrograma, sessionsData, updateSession, oneRMs, activeSessionId,
-  miDia, onVolverAMiDia, onHacerEsteDia, onDiaVisto,
-}) => {
+/**
+ * El CUERPO de un día: las sesiones que trae (ejercicios agrupados en sets, los
+ * pesos que anota el atleta, el botón de terminar cada una), sus notas y el
+ * porqué de cada cosa. Es la parte de «Plan» que no depende de en qué programa
+ * se esté: recibe la semana y el día y los registros de SU programa.
+ *
+ * Existe aparte para poder apilar, en el mismo día, lo de varios profesionales
+ * (cada uno dentro de su `ComoPrograma`) sin copiar nada.
+ */
+const CuerpoDelDia = ({ phase, week, dayIdx: selectedIdx, sessionsData, updateSession, oneRMs }) => {
   const { t } = usePalabras();
   const idDeSesion = useIdDeSesion();
-  const { kind, estructura, phases: PLAN } = usePlan();
-  const esRutina = kind === 'weekly';
-  // "Varias semanas": se dice la semana de corrido y no la fase.
-  const deCorrido = estructura === 'semanas';
-  const semanaDeCorrido = deCorrido ? (semanaGlobal(PLAN, phase.id, week.num) ?? week.num) : null;
   const phaseColor = phase.color || LT.blue;
-  // Los días OFF no cuentan: no se "completa" un descanso.
-  const entrenables = week.days.map((d, idx) => ({ d, idx })).filter(({ d }) => !esDescanso(d));
-  const completedCount = entrenables.filter(({ idx }) => sessionsData[idDeSesion(phase.id, week.num, idx)]?.completed).length;
-
-  /* Abre en el día de hoy; si hoy no entrena, en el primero de la semana.
-     `dayIdx` gana cuando se llega desde la hoja del programa: ahí la persona
-     dijo explícitamente qué día quiere ver. */
-  const initialIdx = useMemo(() => {
-    if (dayIdx != null && week.days[dayIdx]) return dayIdx;
-    const wd = weekdayToday();
-    const idx = week.days.findIndex((d) => d.day === wd);
-    return idx === -1 ? 0 : idx;
-  }, [week, dayIdx]);
-  const [selectedIdx, setSelectedIdx] = useState(initialIdx);
-  // Lo que se tiene abierto, para que la hoja del programa marque "VIENDO".
-  useEffect(() => { onDiaVisto?.(selectedIdx); }, [selectedIdx, onDiaVisto]);
   /* Qué sesiones del día están desplegadas. Solo se guarda lo que la persona
      toca; lo demás lo decide `abiertaSola`: un día de UNA sesión la trae
      abierta, y uno de DOS (mañana y tarde) las trae CERRADAS. Antes la primera
@@ -746,10 +779,6 @@ const WeekDetail = ({
   const selectedId = idDeSesion(phase.id, week.num, selectedIdx);
   const sessionData = sessionsData[selectedId] || {};
   const selectedCompleted = !!sessionData.completed;
-  // El título nunca junta las sesiones con «+» ni arrastra «· ~70 min»: ver `lib/sesiones.js`.
-  const selectedDayName = sinDuracion(selectedDay.name || '')
-    || textoDeSesiones(sesionesDelTitulo(selectedDay))
-    || selectedDay.day;
   /* Un día de dos sesiones lleva SU botón de terminar en cada una, no uno para
      todo el día: `hechos` dice cuáles van hechas. Un día de una sola sesión
      sigue como siempre, con su botón al final. */
@@ -787,206 +816,7 @@ const WeekDetail = ({
   const flatSessionData = { exercises: sessionData.exercises ? Object.fromEntries(Object.entries(sessionData.exercises).filter(([k]) => !k.includes('-')).map(([k, v]) => [parseInt(k), v])) : {} };
 
   return (
-    <div style={{ padding: '14px 18px 110px', background: LT.bg, minHeight: '100svh', fontFamily: FONT }}>
-      {/* CABECERA, en cuatro escalones de tamaño.
-          Andres: "es justo la cantidad de info, pero el como lo colocas se ve
-          sucio, saturado, sin jerarquia, todo revuelto". Tenia razon y el
-          motivo era medible: habia tres lineas seguidas de metadatos —volver,
-          semana, dia— todas entre 11 y 15 px. Sin diferencia de tamaño no hay
-          jerarquia, solo tres rayas de texto que se estorban.
-
-          Ahora cada escalon tiene un tamaño distinto y un solo trabajo:
-            11 px gris  -> donde estas (fase, semana, avance)
-            21 px negro -> que semana es
-            15 px       -> los dias, que es lo unico que se toca
-            12 px gris  -> que sesion es la abierta
-
-          UN SOLO ACENTO. Antes convivian el morado de la fase, el verde menta
-          y el azul en 200 px de alto. El color de fase se queda arriba, en la
-          barra de fases, que es donde identifica algo; aqui manda el azul de
-          la app. Los puntos de categoria se quedan porque SI son informacion,
-          pero pequeños y sin competir. */}
-      {/* Una RUTINA QUE SE REPITE no tiene fases ni semanas que recorrer: su
-          "fase" no tiene nombre y siempre es la semana 1 de 1. Antes salía
-          "‹ · Semana 1 de 1 · 0/4 días" sin título, y la flecha llevaba a una
-          ficha de fase vacía. Ahora dice lo que es: esta semana, y su nombre. */}
-      {/* Sin la barra de fases arriba, el botón de la cuenta (fijo, 42 px a la
-          derecha) queda a la altura de estas dos líneas: se les deja su hueco. */}
-      {/* CABECERA, reordenada el 18 sep 2026 con la maqueta que eligió Andrés.
-
-          ANTES lo primero y más arriba era "‹ Fuerza · Semana 7 de 8", y el
-          nombre de la sesión venía después. Él: "lo pusiste hasta arriba como
-          si fuera lo más importante". No lo es: lo importante es qué te toca
-          hoy. Dónde estás dentro del programa es contexto.
-
-          AHORA el título es la sesión, debajo va una línea gris que dice dónde
-          estás y que ya NO se toca, y para moverte por el programa está la
-          hoja que se abre desde el final de la pantalla. */}
-      <h1 style={{
-        fontSize: 21, fontWeight: 800, color: LT.text, margin: '0 0 3px',
-        lineHeight: 1.15, letterSpacing: -0.4, paddingRight: 52,
-      }}>
-        {selectedDay.dual || varias ? 'Doble sesión' : selectedDayName}
-      </h1>
-
-      <div style={{
-        fontSize: 11.5, fontWeight: 700, color: LT.text3, marginBottom: 12,
-        letterSpacing: 0.2, paddingRight: 52, ...NUM_STYLE,
-      }}>
-        {esRutina
-          ? `Esta semana · ${completedCount}/${pluralS(entrenables.length, 'día')}`
-          : deCorrido
-            ? `Semana ${semanaDeCorrido} de ${semanasDelPlan(PLAN)} · ${completedCount}/${pluralS(entrenables.length, 'día')}`
-            : `${phase.name || phase.fullName} · ${phase.mode === 'microcycle' ? 'Microciclo' : `Semana ${week.num} de ${phase.weeks}`} · ${completedCount}/${pluralS(entrenables.length, 'día')}`}
-      </div>
-
-      {week.emph && (
-        <div style={{
-          marginBottom: 12, borderLeft: `3px solid ${LT.warning}`, fontSize: 13,
-          color: LT.text, lineHeight: 1.55, padding: '8px 13px',
-          background: LT.warning + '0D', borderRadius: '0 8px 8px 0',
-        }}>
-          {week.emph}
-        </div>
-      )}
-
-      {/* LA TIRA DE DÍAS, con la fecha de verdad.
-
-          Antes eran pestañas con el nombre del día y un subrayado. Andrés pidió
-          la de la app que usa de referencia: fina, sin tarjetas, el día arriba,
-          el número abajo, y el de hoy con un círculo relleno. El número importa
-          porque el atleta piensa en "el 17", no en "el miércoles".
-
-          Salen los SIETE días, no solo los que entrena: así se ve de un vistazo
-          cuántos descansos hay. Los días sin sesión no se pueden tocar. */}
-      <div style={{ display: 'flex', marginBottom: 14, borderBottom: `1px solid ${LT.border}`, paddingBottom: 2 }}>
-        {diasDeEstaSemana().map(({ clave, numero, esHoy }) => {
-          const cuales = week.days.map((d, idx) => ({ d, idx })).filter((x) => x.d.day === clave);
-          const primero = cuales[0];
-          const hay = !!primero;
-          const seleccionado = hay && cuales.some((x) => x.idx === selectedIdx);
-          const hecho = hay && cuales.every((x) => sessionsData[idDeSesion(phase.id, week.num, x.idx)]?.completed);
-          // La que dejó a medias: el punto lleva un anillo, como antes.
-          const empezada = hay && cuales.some((x) => activeSessionId === idDeSesion(phase.id, week.num, x.idx));
-          const dcat = hay ? tipoDeSesion(primero.d) : null;
-          const descanso = hay && cuales.every((x) => esDescanso(x.d));
-
-          return (
-            <button
-              key={clave}
-              type="button"
-              disabled={!hay}
-              onClick={() => hay && setSelectedIdx(primero.idx)}
-              style={{
-                flex: 1, minWidth: 0, border: 'none', background: 'transparent',
-                cursor: hay ? 'pointer' : 'default', fontFamily: FONT,
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
-                padding: '2px 0 9px',
-              }}
-            >
-              <span style={{
-                fontSize: 11, fontWeight: seleccionado ? 800 : 600,
-                color: seleccionado ? LT.blue : (esHoy ? LT.text2 : LT.text3),
-              }}>
-                {clave}
-              </span>
-              <span style={{
-                width: 27, height: 27, borderRadius: 14, display: 'grid', placeItems: 'center',
-                background: seleccionado ? LT.blue : 'transparent',
-                fontSize: 13.5, fontWeight: seleccionado || esHoy ? 800 : 600,
-                color: seleccionado ? '#fff' : (hay ? LT.text : LT.text4),
-                border: !seleccionado && esHoy ? `1.5px solid ${LT.borderHi}` : '1.5px solid transparent',
-                ...NUM_STYLE,
-              }}>
-                {numero}
-              </span>
-              {/* La marca de abajo: hecha, pendiente, o nada si no entrena. */}
-              <span style={{ display: 'grid', placeItems: 'center', width: 12, height: 10 }}>
-                {hecho ? (
-                  <Check size={11} strokeWidth={3.5} style={{ color: LT.mint }} />
-                ) : hay && !descanso ? (
-                  <span
-                    title={empezada ? 'La dejaste empezada' : undefined}
-                    style={{
-                      width: 5, height: 5, borderRadius: 3,
-                      background: seleccionado ? LT.blue : dcat.c,
-                      boxShadow: empezada && !seleccionado ? `0 0 0 2.5px ${LT.blue}44` : 'none',
-                    }}
-                  />
-                ) : null}
-                {cuales.length > 1 && (
-                  <span style={{ position: 'absolute', marginTop: -18, marginLeft: 20, fontSize: 9, fontWeight: 800, color: LT.text3 }}>
-                    {cuales.length}
-                  </span>
-                )}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ESTÁS VIENDO OTRO DÍA.
-          Andrés, 24 sep 2026: "si te metes a ver algún otro día pierdes la
-          noción de que si ese día que estás viendo es donde vas o es otro que
-          seleccionaste, o qué pasa si quiere mover el día". Eligió que "mover
-          el día" signifique "hoy hago este otro".
-
-          Sale solo cuando lo abierto no es tu día de hoy, y ofrece las dos
-          salidas: volver al tuyo, o quedarte con este. Quedarse lo cambia de
-          verdad —la portada pasa a decir que hoy te toca este— y solo por hoy:
-          mañana vuelve a mandar el calendario. */}
-      {!esDescanso(selectedDay) && !(miDia && miDia.phase.id === phase.id
-        && miDia.week.num === week.num && miDia.dayIdx === selectedIdx) && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
-          background: LT.surface, border: `1.5px solid ${LT.borderHi}`, borderRadius: 14,
-          padding: '11px 13px', marginBottom: 14,
-        }}>
-          <div style={{ flex: '1 1 180px', minWidth: 0 }}>
-            <div style={{ fontSize: 13.5, fontWeight: 800, color: LT.text }}>
-              Estás viendo {weekdayLabel(selectedDay.day)}
-              {deCorrido && miDia && (miDia.week.num !== week.num || miDia.phase.id !== phase.id)
-                ? ` · Semana ${semanaDeCorrido}` : ''}
-              {!deCorrido && miDia && miDia.week.num !== week.num ? ` · Semana ${week.num}` : ''}
-              {!deCorrido && miDia && miDia.phase.id !== phase.id ? ` de ${phase.name}` : ''}
-            </div>
-            <div style={{ fontSize: 12.5, fontWeight: 600, color: LT.text3, marginTop: 2 }}>
-              {miDia
-                ? `Hoy te toca: ${sinDuracion(miDia.day?.name || '')
-                  || textoDeSesiones(sesionesDelTitulo(miDia.day))
-                  || tipoDeSesion(miDia.day).label}`
-                : 'Hoy no tienes sesión.'}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 7, flexShrink: 0 }}>
-            {miDia && (
-              <button
-                type="button"
-                onClick={onVolverAMiDia}
-                style={{
-                  padding: '9px 13px', borderRadius: 11, cursor: 'pointer', touchAction: 'manipulation',
-                  border: `1.5px solid ${LT.border}`, background: LT.bg, color: LT.text,
-                  fontFamily: FONT, fontSize: 13, fontWeight: 800,
-                }}
-              >
-                Volver a mi día
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => onHacerEsteDia?.(phase.id, week.num, selectedIdx)}
-              style={{
-                padding: '9px 13px', borderRadius: 11, cursor: 'pointer', touchAction: 'manipulation',
-                border: 'none', background: LT.blue, color: '#fff',
-                fontFamily: FONT, fontSize: 13, fontWeight: 800,
-              }}
-            >
-              Hacer este día
-            </button>
-          </div>
-        </div>
-      )}
-
+    <>
       {/* SIN LÍNEA GRIS DE DATOS bajo la tira de días.
           Aquí iba «Gym · 7 ejercicios · 70 min · 75%» (y en un doble, «AM y PM
           abajo»). Andrés, 29 sep 2026: «solo saturan la página, no sirven de
@@ -1366,9 +1196,448 @@ const WeekDetail = ({
         </LightCollapsible>
       )}
 
+    </>
+  );
+};
+
+const WeekDetail = ({
+  phase, week, dayIdx, onVerPrograma, sessionsData, updateSession, oneRMs, activeSessionId,
+  miDia, onVolverAMiDia, onHacerEsteDia, onDiaVisto,
+}) => {
+  const idDeSesion = useIdDeSesion();
+  const { kind, estructura, phases: PLAN } = usePlan();
+  const esRutina = kind === 'weekly';
+  // "Varias semanas": se dice la semana de corrido y no la fase.
+  const deCorrido = estructura === 'semanas';
+  const semanaDeCorrido = deCorrido ? (semanaGlobal(PLAN, phase.id, week.num) ?? week.num) : null;
+  // Los días OFF no cuentan: no se "completa" un descanso.
+  const entrenables = week.days.map((d, idx) => ({ d, idx })).filter(({ d }) => !esDescanso(d));
+  const completedCount = entrenables.filter(({ idx }) => sessionsData[idDeSesion(phase.id, week.num, idx)]?.completed).length;
+
+  /* Abre en el día de hoy; si hoy no entrena, en el primero de la semana.
+     `dayIdx` gana cuando se llega desde la hoja del programa: ahí la persona
+     dijo explícitamente qué día quiere ver. */
+  const initialIdx = useMemo(() => {
+    if (dayIdx != null && week.days[dayIdx]) return dayIdx;
+    const wd = weekdayToday();
+    const idx = week.days.findIndex((d) => d.day === wd);
+    return idx === -1 ? 0 : idx;
+  }, [week, dayIdx]);
+  const [selectedIdx, setSelectedIdx] = useState(initialIdx);
+  // Lo que se tiene abierto, para que la hoja del programa marque "VIENDO".
+  useEffect(() => { onDiaVisto?.(selectedIdx); }, [selectedIdx, onDiaVisto]);
+  const selectedDay = week.days[selectedIdx];
+  // El título nunca junta las sesiones con «+» ni arrastra «· ~70 min»: ver `lib/sesiones.js`.
+  const selectedDayName = sinDuracion(selectedDay.name || '')
+    || textoDeSesiones(sesionesDelTitulo(selectedDay))
+    || selectedDay.day;
+  const varias = variasSesiones(selectedDay);
+
+  return (
+    <div style={{ padding: '14px 18px 110px', background: LT.bg, minHeight: '100svh', fontFamily: FONT }}>
+      {/* CABECERA, en cuatro escalones de tamaño.
+          Andres: "es justo la cantidad de info, pero el como lo colocas se ve
+          sucio, saturado, sin jerarquia, todo revuelto". Tenia razon y el
+          motivo era medible: habia tres lineas seguidas de metadatos —volver,
+          semana, dia— todas entre 11 y 15 px. Sin diferencia de tamaño no hay
+          jerarquia, solo tres rayas de texto que se estorban.
+
+          Ahora cada escalon tiene un tamaño distinto y un solo trabajo:
+            11 px gris  -> donde estas (fase, semana, avance)
+            21 px negro -> que semana es
+            15 px       -> los dias, que es lo unico que se toca
+            12 px gris  -> que sesion es la abierta
+
+          UN SOLO ACENTO. Antes convivian el morado de la fase, el verde menta
+          y el azul en 200 px de alto. El color de fase se queda arriba, en la
+          barra de fases, que es donde identifica algo; aqui manda el azul de
+          la app. Los puntos de categoria se quedan porque SI son informacion,
+          pero pequeños y sin competir. */}
+      {/* Una RUTINA QUE SE REPITE no tiene fases ni semanas que recorrer: su
+          "fase" no tiene nombre y siempre es la semana 1 de 1. Antes salía
+          "‹ · Semana 1 de 1 · 0/4 días" sin título, y la flecha llevaba a una
+          ficha de fase vacía. Ahora dice lo que es: esta semana, y su nombre. */}
+      {/* Sin la barra de fases arriba, el botón de la cuenta (fijo, 42 px a la
+          derecha) queda a la altura de estas dos líneas: se les deja su hueco. */}
+      {/* CABECERA, reordenada el 18 sep 2026 con la maqueta que eligió Andrés.
+
+          ANTES lo primero y más arriba era "‹ Fuerza · Semana 7 de 8", y el
+          nombre de la sesión venía después. Él: "lo pusiste hasta arriba como
+          si fuera lo más importante". No lo es: lo importante es qué te toca
+          hoy. Dónde estás dentro del programa es contexto.
+
+          AHORA el título es la sesión, debajo va una línea gris que dice dónde
+          estás y que ya NO se toca, y para moverte por el programa está la
+          hoja que se abre desde el final de la pantalla. */}
+      <h1 style={{
+        fontSize: 21, fontWeight: 800, color: LT.text, margin: '0 0 3px',
+        lineHeight: 1.15, letterSpacing: -0.4, paddingRight: 52,
+      }}>
+        {selectedDay.dual || varias ? 'Doble sesión' : selectedDayName}
+      </h1>
+
+      <div style={{
+        fontSize: 11.5, fontWeight: 700, color: LT.text3, marginBottom: 12,
+        letterSpacing: 0.2, paddingRight: 52, ...NUM_STYLE,
+      }}>
+        {esRutina
+          ? `Esta semana · ${completedCount}/${pluralS(entrenables.length, 'día')}`
+          : deCorrido
+            ? `Semana ${semanaDeCorrido} de ${semanasDelPlan(PLAN)} · ${completedCount}/${pluralS(entrenables.length, 'día')}`
+            : `${phase.name || phase.fullName} · ${phase.mode === 'microcycle' ? 'Microciclo' : `Semana ${week.num} de ${phase.weeks}`} · ${completedCount}/${pluralS(entrenables.length, 'día')}`}
+      </div>
+
+      {week.emph && (
+        <div style={{
+          marginBottom: 12, borderLeft: `3px solid ${LT.warning}`, fontSize: 13,
+          color: LT.text, lineHeight: 1.55, padding: '8px 13px',
+          background: LT.warning + '0D', borderRadius: '0 8px 8px 0',
+        }}>
+          {week.emph}
+        </div>
+      )}
+
+      {/* LA TIRA DE DÍAS, con la fecha de verdad.
+
+          Antes eran pestañas con el nombre del día y un subrayado. Andrés pidió
+          la de la app que usa de referencia: fina, sin tarjetas, el día arriba,
+          el número abajo, y el de hoy con un círculo relleno. El número importa
+          porque el atleta piensa en "el 17", no en "el miércoles".
+
+          Salen los SIETE días, no solo los que entrena: así se ve de un vistazo
+          cuántos descansos hay. Los días sin sesión no se pueden tocar. */}
+      <div style={{ display: 'flex', marginBottom: 14, borderBottom: `1px solid ${LT.border}`, paddingBottom: 2 }}>
+        {diasDeEstaSemana().map(({ clave, numero, esHoy }) => {
+          const cuales = week.days.map((d, idx) => ({ d, idx })).filter((x) => x.d.day === clave);
+          const primero = cuales[0];
+          const hay = !!primero;
+          const seleccionado = hay && cuales.some((x) => x.idx === selectedIdx);
+          const hecho = hay && cuales.every((x) => sessionsData[idDeSesion(phase.id, week.num, x.idx)]?.completed);
+          // La que dejó a medias: el punto lleva un anillo, como antes.
+          const empezada = hay && cuales.some((x) => activeSessionId === idDeSesion(phase.id, week.num, x.idx));
+          const dcat = hay ? tipoDeSesion(primero.d) : null;
+          const descanso = hay && cuales.every((x) => esDescanso(x.d));
+
+          return (
+            <button
+              key={clave}
+              type="button"
+              disabled={!hay}
+              onClick={() => hay && setSelectedIdx(primero.idx)}
+              style={{
+                flex: 1, minWidth: 0, border: 'none', background: 'transparent',
+                cursor: hay ? 'pointer' : 'default', fontFamily: FONT,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+                padding: '2px 0 9px',
+              }}
+            >
+              <span style={{
+                fontSize: 11, fontWeight: seleccionado ? 800 : 600,
+                color: seleccionado ? LT.blue : (esHoy ? LT.text2 : LT.text3),
+              }}>
+                {clave}
+              </span>
+              <span style={{
+                width: 27, height: 27, borderRadius: 14, display: 'grid', placeItems: 'center',
+                background: seleccionado ? LT.blue : 'transparent',
+                fontSize: 13.5, fontWeight: seleccionado || esHoy ? 800 : 600,
+                color: seleccionado ? '#fff' : (hay ? LT.text : LT.text4),
+                border: !seleccionado && esHoy ? `1.5px solid ${LT.borderHi}` : '1.5px solid transparent',
+                ...NUM_STYLE,
+              }}>
+                {numero}
+              </span>
+              {/* La marca de abajo: hecha, pendiente, o nada si no entrena. */}
+              <span style={{ display: 'grid', placeItems: 'center', width: 12, height: 10 }}>
+                {hecho ? (
+                  <Check size={11} strokeWidth={3.5} style={{ color: LT.mint }} />
+                ) : hay && !descanso ? (
+                  <span
+                    title={empezada ? 'La dejaste empezada' : undefined}
+                    style={{
+                      width: 5, height: 5, borderRadius: 3,
+                      background: seleccionado ? LT.blue : dcat.c,
+                      boxShadow: empezada && !seleccionado ? `0 0 0 2.5px ${LT.blue}44` : 'none',
+                    }}
+                  />
+                ) : null}
+                {cuales.length > 1 && (
+                  <span style={{ position: 'absolute', marginTop: -18, marginLeft: 20, fontSize: 9, fontWeight: 800, color: LT.text3 }}>
+                    {cuales.length}
+                  </span>
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ESTÁS VIENDO OTRO DÍA.
+          Andrés, 24 sep 2026: "si te metes a ver algún otro día pierdes la
+          noción de que si ese día que estás viendo es donde vas o es otro que
+          seleccionaste, o qué pasa si quiere mover el día". Eligió que "mover
+          el día" signifique "hoy hago este otro".
+
+          Sale solo cuando lo abierto no es tu día de hoy, y ofrece las dos
+          salidas: volver al tuyo, o quedarte con este. Quedarse lo cambia de
+          verdad —la portada pasa a decir que hoy te toca este— y solo por hoy:
+          mañana vuelve a mandar el calendario. */}
+      {!esDescanso(selectedDay) && !(miDia && miDia.phase.id === phase.id
+        && miDia.week.num === week.num && miDia.dayIdx === selectedIdx) && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+          background: LT.surface, border: `1.5px solid ${LT.borderHi}`, borderRadius: 14,
+          padding: '11px 13px', marginBottom: 14,
+        }}>
+          <div style={{ flex: '1 1 180px', minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 800, color: LT.text }}>
+              Estás viendo {weekdayLabel(selectedDay.day)}
+              {deCorrido && miDia && (miDia.week.num !== week.num || miDia.phase.id !== phase.id)
+                ? ` · Semana ${semanaDeCorrido}` : ''}
+              {!deCorrido && miDia && miDia.week.num !== week.num ? ` · Semana ${week.num}` : ''}
+              {!deCorrido && miDia && miDia.phase.id !== phase.id ? ` de ${phase.name}` : ''}
+            </div>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: LT.text3, marginTop: 2 }}>
+              {miDia
+                ? `Hoy te toca: ${sinDuracion(miDia.day?.name || '')
+                  || textoDeSesiones(sesionesDelTitulo(miDia.day))
+                  || tipoDeSesion(miDia.day).label}`
+                : 'Hoy no tienes sesión.'}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 7, flexShrink: 0 }}>
+            {miDia && (
+              <button
+                type="button"
+                onClick={onVolverAMiDia}
+                style={{
+                  padding: '9px 13px', borderRadius: 11, cursor: 'pointer', touchAction: 'manipulation',
+                  border: `1.5px solid ${LT.border}`, background: LT.bg, color: LT.text,
+                  fontFamily: FONT, fontSize: 13, fontWeight: 800,
+                }}
+              >
+                Volver a mi día
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => onHacerEsteDia?.(phase.id, week.num, selectedIdx)}
+              style={{
+                padding: '9px 13px', borderRadius: 11, cursor: 'pointer', touchAction: 'manipulation',
+                border: 'none', background: LT.blue, color: '#fff',
+                fontFamily: FONT, fontSize: 13, fontWeight: 800,
+              }}
+            >
+              Hacer este día
+            </button>
+          </div>
+        </div>
+      )}
+
+      <CuerpoDelDia
+        phase={phase} week={week} dayIdx={selectedIdx}
+        sessionsData={sessionsData} updateSession={updateSession} oneRMs={oneRMs}
+      />
+
       {/* La puerta al programa completo, al final y en voz baja. Antes era lo
           primero de la pantalla y encima era el camino de vuelta obligatorio;
           ahora abre una hoja encima y no se sale de aquí. */}
+      {onVerPrograma && (
+        <button
+          type="button"
+          onClick={onVerPrograma}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 4,
+            border: 'none', background: 'transparent', cursor: 'pointer', padding: '6px 2px',
+            fontFamily: FONT, fontSize: 12.5, fontWeight: 700, color: LT.blue,
+          }}
+        >
+          Ver todo el programa
+          <ChevronRight size={14} />
+        </button>
+      )}
+    </div>
+  );
+};
+
+/**
+ * Una sesión del día dentro de «Plan» con equipo. Va envuelta en SU programa
+ * (`ComoPrograma`): el ejercicio que puso el fisio se ve con el video del fisio
+ * y lo que anota el atleta se guarda en el lugar de esa sesión, no en el del coach.
+ */
+const FuenteDelDia = ({ fuente, store, setStore, oneRMs, conAutor }) => {
+  const { programa, phase, week, idx, day } = fuente;
+  const sessionsData = useMemo(() => registrosDe(programa, store), [programa, store]);
+  const updateSession = useCallback(
+    (id, cambio) => escribeRegistro(setStore, programa, id, cambio),
+    [setStore, programa],
+  );
+  const color = programa.color ?? LT.blue;
+  const titulo = (day.dual || variasSesiones(day))
+    ? 'Doble sesión'
+    : (sinDuracion(day.name || '') || textoDeSesiones(sesionesDelTitulo(day)) || day.day);
+  return (
+    <ComoPrograma programa={programa}>
+      <section
+        id={`fuente-${programa.id}-${idx}`}
+        aria-label={`${etiquetaDePrograma(programa)}: ${titulo}`}
+        style={{ marginBottom: 28, scrollMarginTop: 12 }}
+      >
+        <div style={{ borderLeft: `4px solid ${color}`, padding: '1px 0 1px 11px', marginBottom: 14 }}>
+          {conAutor && <EtiquetaDeAutor programa={programa} tamano={12.5} />}
+          <div style={{
+            fontSize: 19, fontWeight: 800, color: LT.text, letterSpacing: -0.3, lineHeight: 1.15,
+            marginTop: conAutor ? 3 : 0, overflowWrap: 'anywhere',
+          }}>
+            {titulo}
+          </div>
+        </div>
+        <CuerpoDelDia
+          phase={phase} week={week} dayIdx={idx}
+          sessionsData={sessionsData} updateSession={updateSession} oneRMs={oneRMs}
+        />
+      </section>
+    </ComoPrograma>
+  );
+};
+
+/**
+ * «Plan» de un atleta con EQUIPO: UN solo día con las sesiones de todos.
+ *
+ * Andrés, 1 oct 2026: «dia a dia al atleta le aparezca todas las sesiones de
+ * todos, y en el plan también, pero que si lo quiere filtrar o separar, igual
+ * puede». Antes había una pestaña por profesional; ahora hay una sola semana
+ * (la del coach, con lo que otros le pegaron, y los programas aparte que van
+ * por su cuenta), y las pastillas de arriba solo ESCONDEN lo de los demás.
+ *
+ * Cada sesión dice de quién viene. Se abren, se anotan y se terminan como
+ * siempre (`CuerpoDelDia`), cada una en su programa.
+ */
+const PlanUnificado = ({
+  programas, store, setStore, oneRMs, vista, semanaActual, filtro, onFiltro, autores, onVerPrograma, onClaveVista, foco,
+}) => {
+  const { kind, estructura, phases: PLAN } = usePlan();
+  const dias = useMemo(() => semanaUnificada(programas, store, { vista }), [programas, store, vista]);
+  const visibles = useCallback(
+    (d) => d.fuentes.filter((f) => !filtro || autorDe(f.programa) === filtro),
+    [filtro],
+  );
+  // Abre en el día que se pidió, o en hoy; si ese día no tiene nada, en el primero que sí.
+  const [clave, setClave] = useState(() => {
+    const quiere = vista?.dia ?? weekdayToday();
+    const conSesion = (c) => { const d = dias.find((x) => x.clave === c); return !!d && visibles(d).length > 0; };
+    return conSesion(quiere) ? quiere : (dias.find((d) => visibles(d).length > 0)?.clave ?? quiere);
+  });
+  useEffect(() => { onClaveVista?.(clave); }, [clave, onClaveVista]);
+
+  const dia = dias.find((d) => d.clave === clave) ?? dias[0];
+  const fuentes = visibles(dia);
+  const conAutor = autores.length > 1;
+  /* Si se llegó tocando UNA sesión de «Hoy» (`foco`), la pantalla baja hasta ella: la
+     del fisio puede quedar debajo de una sesión larga del coach, y sin esto parecería
+     que el toque no abrió lo que se tocó. La primera ya queda arriba. */
+  const primera = fuentes[0] ? `${fuentes[0].programa.id}-${fuentes[0].idx}` : null;
+  useEffect(() => {
+    if (!foco || foco === primera) return undefined;
+    const cuadro = requestAnimationFrame(() => {
+      document.getElementById(`fuente-${foco}`)?.scrollIntoView({ block: 'start' });
+    });
+    return () => cancelAnimationFrame(cuadro);
+  }, [foco, primera]);
+  const reales = dias.flatMap((d) => visibles(d)).filter((f) => !f.descanso);
+  const hechas = reales.filter((f) => f.hecha).length;
+  const fase = PLAN.find((f) => f.id === vista?.faseId);
+  const semana = fase?.weekData?.find((w) => w.num === vista?.semana);
+  const ubicacion = !fase || !semana ? null
+    : kind === 'weekly' ? 'Esta semana'
+      : estructura === 'semanas'
+        ? `Semana ${semanaGlobal(PLAN, fase.id, semana.num) ?? semana.num} de ${semanasDelPlan(PLAN)}`
+        : `${fase.name || fase.fullName} · ${fase.mode === 'microcycle' ? 'Microciclo' : `Semana ${semana.num} de ${fase.weeks}`}`;
+  const nombreDia = weekdayLabel(dia.clave);
+  const titulo = semanaActual && dia.esHoy
+    ? `Hoy · ${nombreDia}`
+    : nombreDia.charAt(0).toUpperCase() + nombreDia.slice(1);
+
+  return (
+    <div style={{ padding: '14px 18px 110px', background: LT.bg, minHeight: '100svh', fontFamily: FONT }}>
+      <h1 style={{
+        fontSize: 21, fontWeight: 800, color: LT.text, margin: '0 0 3px',
+        lineHeight: 1.15, letterSpacing: -0.4, paddingRight: 52,
+      }}>
+        {titulo}
+      </h1>
+      <div style={{
+        fontSize: 11.5, fontWeight: 700, color: LT.text3, marginBottom: 12,
+        letterSpacing: 0.2, paddingRight: 52, ...NUM_STYLE,
+      }}>
+        {[ubicacion, reales.length ? `${hechas}/${reales.length} ${reales.length === 1 ? 'sesión' : 'sesiones'}` : null].filter(Boolean).join(' · ')}
+      </div>
+
+      <ChipsDeAutor autores={autores} filtro={filtro} onFiltro={onFiltro} style={{ padding: '0 0 12px' }} />
+
+      {/* La tira de la semana: cada punto es de un color, el de quien puso esa sesión. */}
+      <div style={{ display: 'flex', marginBottom: 16, borderBottom: `1px solid ${LT.border}`, paddingBottom: 2 }}>
+        {dias.map((d) => {
+          const fs = visibles(d);
+          const hay = fs.length > 0;
+          const seleccionado = d.clave === clave;
+          const hecho = hay && fs.every((f) => f.hecha);
+          const descanso = hay && fs.every((f) => f.descanso);
+          const colores = [...new Set(fs.filter((f) => !f.descanso).map((f) => f.programa.color ?? LT.blue))].slice(0, 3);
+          return (
+            <button
+              key={d.clave}
+              type="button"
+              disabled={!hay}
+              onClick={() => hay && setClave(d.clave)}
+              style={{
+                flex: 1, minWidth: 0, border: 'none', background: 'transparent',
+                cursor: hay ? 'pointer' : 'default', fontFamily: FONT,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+                padding: '2px 0 9px',
+              }}
+            >
+              <span style={{
+                fontSize: 11, fontWeight: seleccionado ? 800 : 600,
+                color: seleccionado ? LT.blue : (d.esHoy ? LT.text2 : LT.text3),
+              }}>
+                {d.clave}
+              </span>
+              <span style={{
+                width: 27, height: 27, borderRadius: 14, display: 'grid', placeItems: 'center',
+                background: seleccionado ? LT.blue : 'transparent',
+                fontSize: 13.5, fontWeight: seleccionado || d.esHoy ? 800 : 600,
+                color: seleccionado ? '#fff' : (hay ? LT.text : LT.text4),
+                border: !seleccionado && d.esHoy ? `1.5px solid ${LT.borderHi}` : '1.5px solid transparent',
+                ...NUM_STYLE,
+              }}>
+                {d.numero}
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, height: 10, minWidth: 12 }}>
+                {hecho ? (
+                  <Check size={11} strokeWidth={3.5} style={{ color: LT.mint }} />
+                ) : hay && !descanso ? colores.map((c) => (
+                  <span key={c} style={{ width: 5, height: 5, borderRadius: 3, background: c }} />
+                )) : null}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {fuentes.length === 0 ? (
+        <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: 18, marginBottom: 14 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: LT.text }}>
+            {filtro ? 'Ese día no hay nada de esta persona' : 'Sin sesión este día'}
+          </div>
+        </div>
+      ) : fuentes.map((f) => (
+        <FuenteDelDia
+          key={`${f.programa.id}-${f.phase.id}-${f.week.num}-${f.idx}`}
+          fuente={f} store={store} setStore={setStore} oneRMs={oneRMs} conAutor={conAutor}
+        />
+      ))}
+
       {onVerPrograma && (
         <button
           type="button"
@@ -1559,7 +1828,11 @@ const initialsFrom = (name) => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
-const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerPrograma, cursor, onChangeCursor, conQuien, otrosHoy = [], onAbrirOtro, altasDeEquipo = [] }) => {
+const HomeView = ({
+  sessionsData, wellness, onStartSession, onGoTab, onVerPrograma, cursor, onChangeCursor,
+  hayEquipo = false, conAutor = false, entradas = [], autores = [], filtro = null, onFiltro, onAbrirEntrada, resumenDeEquipo = null,
+  altasDeEquipo = [],
+}) => {
   /* LAS PROPORCIONES EN COMPU. Andrés, 18 sep 2026: "en teléfono no hay ningún
      problema con HOME, pero en computadora las proporciones están un poco
      raras para los atletas nada más". El diagnóstico, medido en 1440 px: los
@@ -1578,7 +1851,9 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
   const displayName = profile?.full_name || profile?.username || 'Atleta';
   // Lo que toca HOY según el calendario del dispositivo (no según lo marcado).
   const next = useMemo(() => sessionForToday(PLAN, kind, cursor), [PLAN, kind, cursor]);
-  const week = useMemo(() => weekOverview(PLAN, kind, cursor), [PLAN, kind, cursor]);
+  const semanaPropia = useMemo(() => weekOverview(PLAN, kind, cursor), [PLAN, kind, cursor]);
+  // Con equipo, «Tu semana» cuenta lo de todos (y respeta el filtro).
+  const week = hayEquipo && resumenDeEquipo ? resumenDeEquipo : semanaPropia;
   // Un día con dos entradas se dice «2 sesiones», no «Fuerza + Movilidad»: así no
   // se lee como una sola (Andrés, 29 sep 2026).
   const nombreDeSemana = (d) => (d.sesiones > 1 ? `${d.sesiones} sesiones` : d.name);
@@ -1616,6 +1891,41 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
      Strength» (Andrés, 29 sep 2026). Ver `lib/sesiones.js`. */
   const sesionesDeHoy = next ? sesionesDelTitulo(next.day) : [];
   const sessionTitle = next ? (sinDuracion(next.day.name || '') || textoDeSesiones(sesionesDeHoy) || next.day.day) : '';
+
+  const sinSesionHoy = (
+        /* Sin sesión hoy. Antes esta tarjeta REEMPLAZABA el tablero entero:
+           quien descansaba perdía de vista su bienestar, su semana y su
+           programa, y la app parecía otra. Ahora solo ocupa el lugar de la
+           sesión; lo de abajo se queda. La tira de días tampoco se repite
+           aquí: ya está en "Tu semana". */
+        <div style={{ padding: '0 18px 12px' }}>
+          <div style={{ background: LT.surface, borderRadius: KP.rCard, padding: 22 }}>
+            <div style={{ fontSize: 20, fontWeight: 700, color: LT.text, lineHeight: 1.2 }}>
+              {/* Si el coach puso descanso, se dice descanso: "no tienes rutina
+                  asignada" suena a que algo falta, y no falta nada. */}
+              {week.days.find((d) => d.isToday)?.descanso ? 'Hoy descansas' : 'Hoy no te toca entrenar'}
+            </div>
+            <div style={{ marginTop: 8, fontSize: 14, color: LT.text2, lineHeight: 1.5 }}>
+              {week.next
+                ? `${t('Tu siguiente entrenamiento es el')} ${weekdayLabel(week.next.key)}${nombreDeSemana(week.next) ? ` · ${nombreDeSemana(week.next)}` : ''}.`
+                : t('Aún no hay entrenamientos en tu semana.')}
+            </div>
+            <button
+              type="button"
+              onClick={() => onGoTab('plan')}
+              className="kp-press"
+              style={{
+                display: 'block', width: '100%', border: 'none', fontFamily: FONT,
+                background: LT.blue, borderRadius: 14, padding: '13px', marginTop: 16,
+                fontSize: 14, fontWeight: 600, color: '#fff', textAlign: 'center', cursor: 'pointer',
+                ...tope,
+              }}
+            >
+              {t('Ver mi plan')}
+            </button>
+          </div>
+        </div>
+  );
 
   return (
     <div style={{ paddingBottom: 100, background: LT.bg, minHeight: '100svh', fontFamily: FONT }}>
@@ -1673,7 +1983,22 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
         </div>
       )}
 
-      {next ? (
+      {/* CON EQUIPO la sesión de hoy es UNA tarjeta con lo de todos, cada cosa con el
+          nombre de quien la puso (Andrés, 1 oct 2026). Sin equipo, la de siempre. */}
+      {hayEquipo ? (
+        <>
+          <ChipsDeAutor autores={autores} filtro={filtro} onFiltro={onFiltro} style={{ paddingBottom: 12 }} />
+          {entradas.length > 0 ? (
+            <TarjetaDeHoyDeTodos
+              entradas={entradas}
+              onAbrir={onAbrirEntrada}
+              onCambiarDia={kind !== 'weekly' && !filtro ? onChangeCursor : undefined}
+              esCompu={esCompu}
+              conAutor={conAutor}
+            />
+          ) : sinSesionHoy}
+        </>
+      ) : next ? (
         <>
           {/* Row: CTA sesión + foto de fase */}
           <div style={{ display: 'flex', gap: 12, padding: '0 18px 12px' }}>
@@ -1690,10 +2015,6 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
                 <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)' }}>
                   {cursorCompleted ? 'Completada' : 'Hoy te toca'}
                 </div>
-                {/* Con equipo, la tarjeta dice de quién viene («Beto · coach»). */}
-                {conQuien && (
-                  <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.72)', marginTop: 2 }}>{conQuien}</div>
-                )}
                 {sesionesDeHoy.length > 1 ? (
                   <EtiquetasDeSesion sesiones={sesionesDeHoy} sobreAzul envolver tamano={14} style={{ marginTop: 10 }} />
                 ) : (
@@ -1774,52 +2095,7 @@ const HomeView = ({ sessionsData, wellness, onStartSession, onGoTab, onVerProgra
           </div>
 
         </>
-      ) : (
-        /* Sin sesión hoy. Antes esta tarjeta REEMPLAZABA el tablero entero:
-           quien descansaba perdía de vista su bienestar, su semana y su
-           programa, y la app parecía otra. Ahora solo ocupa el lugar de la
-           sesión; lo de abajo se queda. La tira de días tampoco se repite
-           aquí: ya está en "Tu semana". */
-        <div style={{ padding: '0 18px 12px' }}>
-          <div style={{ background: LT.surface, borderRadius: KP.rCard, padding: 22 }}>
-            <div style={{ fontSize: 20, fontWeight: 700, color: LT.text, lineHeight: 1.2 }}>
-              {/* Si el coach puso descanso, se dice descanso: "no tienes rutina
-                  asignada" suena a que algo falta, y no falta nada. */}
-              {week.days.find((d) => d.isToday)?.descanso ? 'Hoy descansas' : 'Hoy no te toca entrenar'}
-            </div>
-            <div style={{ marginTop: 8, fontSize: 14, color: LT.text2, lineHeight: 1.5 }}>
-              {week.next
-                ? `${t('Tu siguiente entrenamiento es el')} ${weekdayLabel(week.next.key)}${nombreDeSemana(week.next) ? ` · ${nombreDeSemana(week.next)}` : ''}.`
-                : t('Aún no hay entrenamientos en tu semana.')}
-            </div>
-            <button
-              type="button"
-              onClick={() => onGoTab('plan')}
-              className="kp-press"
-              style={{
-                display: 'block', width: '100%', border: 'none', fontFamily: FONT,
-                background: LT.blue, borderRadius: 14, padding: '13px', marginTop: 16,
-                fontSize: 14, fontWeight: 600, color: '#fff', textAlign: 'center', cursor: 'pointer',
-                ...tope,
-              }}
-            >
-              {t('Ver mi plan')}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Con equipo: lo que le toca hoy con cada OTRO profesional (el entrenamiento va
-          primero, arriba). Sin equipo no sale nada y la portada es la de siempre. */}
-      {otrosHoy.map(({ programa, sesion, color }) => (
-        <TarjetaDeEquipo
-          key={programa.id}
-          programa={programa}
-          sesion={sesion}
-          color={color}
-          onAbrir={() => onAbrirOtro(programa, sesion)}
-        />
-      ))}
+      ) : sinSesionHoy}
 
       {/* Row: estado + progreso */}
       <div style={{ display: 'flex', gap: 12, padding: '0 18px 12px' }}>
@@ -2389,10 +2665,16 @@ export default function TrainingApp() {
   const {
     phases: PLAN, hasPlan, planLoading, kind, programas, programaActivo, elegirPrograma, claveDe,
   } = usePlan();
-  const { store } = useAppState();
-  const hayEquipo = programas.length > 1;
-  // «Todo» (la semana de todos los profesionales) en la pestaña «Plan».
-  const [verTodo, setVerTodo] = useState(false);
+  const { store, setStore } = useAppState();
+  /* EQUIPO = hay más de un programa con sesiones (el del coach y, además, lo que
+     otra persona le pegó o armó aparte). Quien ya dio de alta no cuenta. Sin
+     equipo, todo es la app de siempre. Las pastillas y las etiquetas de «quién
+     lo puso» salen solo si son al menos dos PERSONAS: si es la misma, no dicen nada. */
+  const autores = useMemo(() => autoresDe(programas), [programas]);
+  const hayEquipo = useMemo(() => programas.filter((p) => p.hasPlan && !p.altaEn).length > 1, [programas]);
+  // Las pastillas «Todo · Andrés · Ana». Solo esconden; el filtro vale mientras esa persona tenga algo.
+  const [filtro, setFiltro] = useState(null);
+  const filtroVigente = filtro && autores.some((a) => a.id === filtro) ? filtro : null;
   const esCompu = useIsDesktop();
   const { user } = useAuth();
   // De quién es esta app: de quien entró, o del atleta que su coach está viendo.
@@ -2525,19 +2807,64 @@ export default function TrainingApp() {
      índice. */
   const vasA = (t) => {
     setTab(t);
-    // La portada es la del programa principal; «Plan» con equipo cae en «Todo».
+    // «Hoy» y «Plan» son del programa del coach, con lo de todos adentro. Si se andaba
+    // viendo un programa aparte, se vuelve; la vista queda en blanco para que caiga
+    // en la semana del coach (ver el efecto de abajo).
     if (t === 'home') elegirPrograma(null);
-    if (t === 'plan') { setVerTodo(hayEquipo); setView(vistaDelPlan()); }
+    if (t === 'plan') {
+      if (programaActivo?.esPrincipal) setView(vistaDelPlan());
+      else { elegirPrograma(null); setView({ level: 'week' }); }
+    }
   };
 
-  // Lo que toca hoy con los demás profesionales (uno por programa con sesión hoy).
-  const otrosHoy = useMemo(() => (hayEquipo
-    ? programas
-      .map((p, i) => ({ programa: p, sesion: sesionDeHoy(p, store), color: colorDePrograma(i) }))
-      // Quien ya te dio de alta no te manda sesiones: su programa queda solo para consultar.
-      .filter((x) => x.programa.id !== programaActivo?.id && !x.programa.altaEn && x.sesion)
-    : []), [hayEquipo, programas, programaActivo?.id, store]);
+  // Lo que toca HOY, de todos juntos (el programa del coach, lo que otros le pegaron
+  // y los programas aparte), ya con el filtro puesto.
+  const entradasHoy = useMemo(() => (hayEquipo
+    ? entradasDeHoy(programas, store).filter((e) => !filtroVigente || autorDe(e.programa) === filtroVigente)
+    : []), [hayEquipo, programas, store, filtroVigente]);
+  // «Tu semana» de la portada, con lo de todos.
+  const resumenDeEquipo = useMemo(() => (hayEquipo
+    ? resumenDeLaSemana(semanaUnificada(programas, store), filtroVigente)
+    : null), [hayEquipo, programas, store, filtroVigente]);
   const altasDeEquipo = useMemo(() => programas.filter((p) => altaReciente(p.altaEn)), [programas]);
+
+  // Programas armados por su cuenta por un profesional (no pegados al del coach): se abren aparte.
+  const aparte = useMemo(
+    () => (programaActivo?.esPrincipal ? programas.filter((p) => !p.esPrincipal && !p.sobre && p.hasPlan) : []),
+    [programas, programaActivo?.esPrincipal],
+  );
+  // Lo que otros le pegaron a una semana del programa, para enseñarlo dentro de su día en la hoja.
+  const pegadasDe = useCallback((fase, semana) => programas
+    .filter((p) => p.sobre && !p.altaEn)
+    .flatMap((p) => {
+      const f = p.phases.find((x) => x.id === fase.id);
+      const w = f?.weekData?.find((x) => x.num === semana.num);
+      if (!w) return [];
+      const registros = registrosDe(p, store);
+      return (w.days ?? []).map((day, idx) => ({
+        dia: day.day,
+        day,
+        etiqueta: etiquetaDePrograma(p),
+        color: p.color,
+        hecha: !!registros[sessionIdFor(p.kind, f.id, w.num, idx)]?.completed,
+      }));
+    }), [programas, store]);
+
+  /* La semana que se mira en «Plan» con equipo, en el idioma de `semanaUnificada`:
+     la fase y la semana del coach, y el día de la semana (por nombre, no por
+     posición: lo pegado no tiene la posición de los días del coach). */
+  const vistaUnificada = useMemo(() => (view.week ? {
+    faseId: view.phase?.id,
+    semana: view.week.num,
+    dia: normalizaDia(view.dia ?? (view.dayIdx != null ? view.week.days?.[view.dayIdx]?.day : undefined)),
+  } : null), [view]);
+  const esSemanaActual = !!view.week && (kind === 'weekly'
+    || (!!cursorSession && cursorSession.phase.id === view.phase?.id && cursorSession.week.num === view.week.num));
+  // La hoja marca «VIENDO» el día que se está mirando: se le dice cuál (la posición del primero que coincide).
+  const alVerClave = useCallback((clave) => {
+    const idx = (view.week?.days ?? []).findIndex((d) => normalizaDia(d.day) === clave);
+    setDiaVisto(idx >= 0 ? idx : null);
+  }, [view.week]);
 
   /* AL REFRESCAR, VUELVE A DONDE ESTABAS (ver `lugar.js`). La pestaña ya vuelve
      sola; la de "Plan" además necesita una semana, y `view` arranca sin ella:
@@ -2580,61 +2907,81 @@ export default function TrainingApp() {
       onVerPrograma={() => setProgramaAbierto(true)}
       cursor={cursor}
       onChangeCursor={() => setCursorPickerOpen(true)}
-      conQuien={hayEquipo ? etiquetaDePrograma(programaActivo) : null}
-      otrosHoy={otrosHoy}
+      hayEquipo={hayEquipo}
+      conAutor={autores.length > 1}
+      entradas={entradasHoy}
+      autores={autores}
+      filtro={filtroVigente}
+      onFiltro={setFiltro}
+      resumenDeEquipo={resumenDeEquipo}
       altasDeEquipo={altasDeEquipo}
-      onAbrirOtro={(programa, sesion) => {
+      // Tocar una sesión de hoy abre «Plan» en ese día, con lo de todos.
+      onAbrirEntrada={(e) => {
         setTab('plan');
-        setVerTodo(false);
-        cambiarPrograma(programa.id, { level: 'week', phase: sesion.phase, week: sesion.week, dayIdx: sesion.dayIdx });
+        setView((v) => ({
+          ...vistaDelPlan(), dia: normalizaDia(e.day.day), foco: `${e.programa.id}-${e.dayIdx}`, salto: (v.salto ?? 0) + 1,
+        }));
       }} />;
   } else if (tab === 'plan') {
     /* Una sola pantalla: el DÍA. Las fases y las semanas ya no son pantallas
        por las que se navega, son una hoja que se abre encima (maqueta A, la
-       que eligió Andrés el 18 sep 2026). */
-    const dia = view.week ? (
-      <WeekDetail
-        key={`${programaActivo?.id}-${view.phase?.id}-${view.week?.num}-${view.salto ?? 0}`}
-        phase={view.phase} week={view.week} dayIdx={view.dayIdx}
-        onVerPrograma={() => setProgramaAbierto(true)}
-        sessionsData={sessionsData} updateSession={updateSession} oneRMs={oneRMs}
-        activeSessionId={activeSessionId}
-        miDia={miDia}
-        onDiaVisto={setDiaVisto}
-        onHacerEsteDia={handleSelectCursor}
-        onVolverAMiDia={() => miDia && setView((v) => ({
-          level: 'week', phase: miDia.phase, week: miDia.week, dayIdx: miDia.dayIdx, salto: (v.salto ?? 0) + 1,
-        }))} />
-    ) : <PlanLoadingState />;
-    // Con equipo: pastillas «Todo · Beto · Juan». Sin equipo, la pantalla de siempre.
-    content = hayEquipo ? (
-      <>
-        <SelectorDePrograma
-          programas={programas}
-          activoId={programaActivo?.id}
-          verTodo={verTodo}
-          onTodo={() => setVerTodo(true)}
-          onPrograma={(p) => {
-            setVerTodo(false);
-            if (p.id !== programaActivo?.id) cambiarPrograma(p.id);
-          }}
+       que eligió Andrés el 18 sep 2026).
+
+       CON EQUIPO, ese día trae las sesiones de todos (`PlanUnificado`). Sin
+       equipo, o al abrir un programa aparte desde la hoja, es la pantalla de
+       siempre, de un solo programa. */
+    if (!view.week) {
+      content = <PlanLoadingState />;
+    } else if (hayEquipo && programaActivo?.esPrincipal) {
+      content = (
+        <PlanUnificado
+          key={`${view.phase?.id}-${view.week.num}-${view.dia ?? view.dayIdx ?? ''}-${view.salto ?? 0}`}
+          programas={programas} store={store} setStore={setStore} oneRMs={oneRMs}
+          vista={vistaUnificada} semanaActual={esSemanaActual} foco={view.foco}
+          filtro={filtroVigente} onFiltro={setFiltro} autores={autores}
+          onVerPrograma={() => setProgramaAbierto(true)}
+          onClaveVista={alVerClave}
         />
-        {verTodo ? (
-          <SemanaDeTodos
-            programas={programas}
-            store={store}
-            onAbrirDia={(e) => {
-              setVerTodo(false);
-              cambiarPrograma(e.programaId, { level: 'week', phase: e.phase, week: e.week, dayIdx: e.dayIdx });
-            }}
-            onVerPrograma={(p) => {
-              if (p.id !== programaActivo?.id) cambiarPrograma(p.id);
-              setProgramaAbierto(true);
-            }}
-          />
-        ) : dia}
-      </>
-    ) : dia;
+      );
+    } else {
+      const dia = (
+        <WeekDetail
+          key={`${programaActivo?.id}-${view.phase?.id}-${view.week?.num}-${view.salto ?? 0}`}
+          phase={view.phase} week={view.week} dayIdx={view.dayIdx}
+          onVerPrograma={() => setProgramaAbierto(true)}
+          sessionsData={sessionsData} updateSession={updateSession} oneRMs={oneRMs}
+          activeSessionId={activeSessionId}
+          miDia={miDia}
+          onDiaVisto={setDiaVisto}
+          onHacerEsteDia={handleSelectCursor}
+          onVolverAMiDia={() => miDia && setView((v) => ({
+            level: 'week', phase: miDia.phase, week: miDia.week, dayIdx: miDia.dayIdx, salto: (v.salto ?? 0) + 1,
+          }))} />
+      );
+      // Un programa aparte (de otro profesional) se abre solo: arriba, de quién es y cómo volver.
+      // (Solo si hay un programa del coach al que volver: un atleta cuyo único programa es el
+      // de un profesional no tiene a dónde «volver».)
+      content = programaActivo && !programaActivo.esPrincipal && programas.some((p) => p.esPrincipal) ? (
+        <>
+          <div style={{ padding: '18px 68px 0 18px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => cambiarPrograma(null)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontFamily: FONT,
+                background: LT.surface, border: `1.5px solid ${LT.border}`, borderRadius: 999,
+                padding: '8px 13px 8px 9px', fontSize: 13.5, fontWeight: 800, color: LT.blue, touchAction: 'manipulation',
+              }}
+            >
+              <ChevronLeft size={16} /> Volver a todo
+            </button>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: LT.text3 }}>Programa aparte</span>
+            <EtiquetaDeAutor programa={programaActivo} tamano={13} />
+          </div>
+          {dia}
+        </>
+      ) : dia;
+    }
   } else if (tab === 'wellness') {
     content = <WellnessView wellness={wellness} setWellness={setWellness} />;
   } else if (tab === 'oneRM') {
@@ -2671,11 +3018,24 @@ export default function TrainingApp() {
           viendo={tab === 'plan' && view.week ? { faseId: view.phase?.id, semana: view.week.num, dia: diaVisto } : null}
           onIr={(fase, semana, dayIdx) => {
             setTab('plan');
-            setVerTodo(false);
+            setFiltro(null);   // un día del coach no se vería si el filtro dejara solo a otra persona
             setView((v) => ({ level: 'week', phase: fase, week: semana, dayIdx, salto: (v.salto ?? 0) + 1 }));
             setProgramaAbierto(false);
           }}
           onCerrar={() => setProgramaAbierto(false)}
+          pegadasDe={programaActivo?.esPrincipal ? pegadasDe : undefined}
+          alTocarPegada={(fase, semana, pegada) => {
+            setTab('plan');
+            setFiltro(null);
+            setView((v) => ({ level: 'week', phase: fase, week: semana, dia: pegada.dia, salto: (v.salto ?? 0) + 1 }));
+            setProgramaAbierto(false);
+          }}
+          aparte={aparte}
+          onAbrirAparte={(p) => {
+            setProgramaAbierto(false);
+            setTab('plan');
+            cambiarPrograma(p.id);
+          }}
         />
       )}
     </div>

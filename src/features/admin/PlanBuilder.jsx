@@ -1426,7 +1426,7 @@ function EditorSesionesDelDia({
   );
 }
 
-function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCreado, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, duenoId, masterId, onCategoriaCreada, onCategoriaBorrada }) {
+export function SessionEditor({ day, repertoire, categorias = [], atleta, onEjercicioCreado, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, duenoId, masterId, onCategoriaCreada, onCategoriaBorrada }) {
   const { t } = usePalabras();
   const [creandoEjercicio, setCreandoEjercicio] = useState(false);
   const [mediaDe, setMediaDe] = useState(null);
@@ -1884,15 +1884,17 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
         )}
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.border}`, alignItems: 'center' }}>
+        {/* Una acción que no se pasa no sale: así una sesión pegada al programa de
+            otro (sin catálogo, sin copiar) reusa esta misma cabecera. */}
         {esCompu ? (
           <>
-            {!dual && <Pill icon={FolderOpen} onClick={onApplyCatalog}>Desde catálogo</Pill>}
-            {!dual && <Pill icon={Save} onClick={onSaveToCatalog}>Guardar en catálogo</Pill>}
-            <Pill icon={Copy} onClick={onCopy}>Copiar</Pill>
-            {!dual && <Pill icon={Eraser} onClick={onClear}>Limpiar</Pill>}
-            <Pill icon={Trash2} danger onClick={onDelete}>Eliminar sesión</Pill>
+            {!dual && onApplyCatalog && <Pill icon={FolderOpen} onClick={onApplyCatalog}>Desde catálogo</Pill>}
+            {!dual && onSaveToCatalog && <Pill icon={Save} onClick={onSaveToCatalog}>Guardar en catálogo</Pill>}
+            {onCopy && <Pill icon={Copy} onClick={onCopy}>Copiar</Pill>}
+            {!dual && onClear && <Pill icon={Eraser} onClick={onClear}>Limpiar</Pill>}
+            {onDelete && <Pill icon={Trash2} danger onClick={onDelete}>Eliminar sesión</Pill>}
           </>
-        ) : (
+        ) : (onApplyCatalog || onSaveToCatalog || onCopy || onClear || onDelete) && (
           <button
             type="button" onClick={() => setMenu(true)}
             style={{
@@ -1921,11 +1923,11 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
         <HojaAcciones
           onClose={() => setMenu(false)}
           acciones={[
-            ...(dual ? [] : [{ icon: FolderOpen, texto: 'Desde catálogo', onClick: onApplyCatalog }]),
-            ...(dual ? [] : [{ icon: Save, texto: 'Guardar en catálogo', onClick: onSaveToCatalog }]),
-            { icon: Copy, texto: 'Copiar sesión', onClick: onCopy },
-            ...(dual ? [] : [{ icon: Eraser, texto: 'Limpiar sesión', onClick: onClear }]),
-            { icon: Trash2, texto: 'Eliminar sesión', onClick: onDelete, peligro: true },
+            ...(dual || !onApplyCatalog ? [] : [{ icon: FolderOpen, texto: 'Desde catálogo', onClick: onApplyCatalog }]),
+            ...(dual || !onSaveToCatalog ? [] : [{ icon: Save, texto: 'Guardar en catálogo', onClick: onSaveToCatalog }]),
+            ...(onCopy ? [{ icon: Copy, texto: 'Copiar sesión', onClick: onCopy }] : []),
+            ...(dual || !onClear ? [] : [{ icon: Eraser, texto: 'Limpiar sesión', onClick: onClear }]),
+            ...(onDelete ? [{ icon: Trash2, texto: 'Eliminar sesión', onClick: onDelete, peligro: true }] : []),
           ]}
         />
       )}

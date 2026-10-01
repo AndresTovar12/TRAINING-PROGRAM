@@ -3,10 +3,10 @@ import {
   Loader2, Search, Plus, Trash2, X, ChevronRight, ChevronLeft, Pencil,
   CalendarClock, User as UserIcon, Shield, ClipboardList, Users,
   UserMinus, Power, AlertTriangle, Eye, ChevronDown, ChevronUp, UserPlus,
-  Check, Copy, Share2, CircleCheck, RotateCcw,
+  Check, Copy, Share2, CircleCheck, RotateCcw, CalendarPlus,
 } from 'lucide-react';
 import {
-  getProgramas, deletePlan, getAthleteState, listAthletesOverview, listCoaches, setAthleteCoach,
+  getProgramas, getSesionesPegadas, deletePlan, getAthleteState, listAthletesOverview, listCoaches, setAthleteCoach,
   quitarAtletaDeMiLista, setAtletaActivo, resumenDatosAtleta, eliminarAtletaDefinitivo,
   invitacionesPendientes, ligaDeInvitacion, cambiarAlta, cambiarAltaDeEquipo, nombresDelEquipo,
   listEquipo, equiposDeMisAtletas, marcarAvisoVisto,
@@ -15,6 +15,7 @@ import {
   resumenDeDolor, textoDeDolor, hechasEstaSemana, esperadasEstaSemana, lineaDeLista,
 } from '@/lib/comoVa';
 import PlanBuilder from '@/features/admin/PlanBuilder';
+import SesionesSobreElPrograma from '@/features/admin/SesionesSobreElPrograma';
 import CambiosDelPlan from '@/features/admin/CambiosDelPlan';
 import NotasDeConsulta from '@/features/admin/NotasDeConsulta';
 import AgregarAtleta from '@/features/admin/AgregarAtleta';
@@ -27,7 +28,8 @@ import { T, FONT, KP } from '@/lib/theme';
 import { plural, pluralS } from '@/lib/plural';
 import { esDescanso, dondeVa, sessionIdFor, estructuraDelPlan, nombreDeSesion } from '@/lib/training-utils';
 import { turnoDeTag, minutosDeTag } from '@/lib/sesiones';
-import { nombreCorto, rolDeProfesion } from '@/lib/programas';
+import { colorDePrograma, nombreCorto, rolDeProfesion } from '@/lib/programas';
+import { fasesConPegadas, reglasDe } from '@/lib/pegadas';
 import HojaFlotante from '@/components/HojaFlotante';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
 import ListaDesplegable from '@/components/ListaDesplegable';
@@ -776,11 +778,38 @@ function etiquetaDelPrograma(programa, equipoDe, athlete) {
  * "AQUÍ VAS", porque quien mira es su profesional; y tocar un día lo abre en el sitio
  * para ver sus ejercicios, porque no lo va a entrenar.
  */
-function HojaDelPlanDeAtleta({ athlete, programas, equipoDe, state, inicialId, onCerrar }) {
+function HojaDelPlanDeAtleta({ athlete, programas, equipoDe, state, inicialId, onCerrar, pegadas = [] }) {
   const { t } = usePalabras();
   const [verId, setVerId] = useState(inicialId ?? programas[0]?.id);
   const visto = programas.find((p) => p.id === verId) ?? programas[0];
+  /* Lo que otros profesionales le pegaron al programa del coach, repartido en sus
+     días (ver `lib/pegadas.js`). Sale dentro de cada día, con la etiqueta de quien
+     lo puso, y solo se lee: lo mueve únicamente su autor. */
+  const delCoach = programas.find((p) => !p.profesional_id) ?? null;
+  const pegadasPorAutor = useMemo(() => (delCoach ? pegadas.map((fila, i) => {
+    const m = equipoDe.find((x) => x.profesional_id === fila.profesional_id);
+    return {
+      fila,
+      etiqueta: m ? `${nombreCorto(m.full_name) || m.username} · ${rolDeProfesion(m.profesion)}` : 'Equipo',
+      color: colorDePrograma(1 + i),
+      fases: fasesConPegadas(reglasDe(fila), delCoach.data?.phases ?? [], {
+        autorId: fila.profesional_id, semanal: delCoach.data?.kind === 'weekly',
+      }),
+    };
+  }) : []), [pegadas, delCoach, equipoDe]);
   if (!visto) return null;
+  const esDelCoach = !visto.profesional_id;
+  const pegadasDe = esDelCoach && pegadasPorAutor.length ? (f, semana) => {
+    const fi = (visto.data?.phases ?? []).findIndex((x) => x.id === f.id);
+    const wi = (f.weekData ?? []).findIndex((w) => w.num === semana.num);
+    return pegadasPorAutor.flatMap((o) => (o.fases[fi]?.weekData?.[wi]?.days ?? []).map((day) => ({
+      dia: day.day,
+      day,
+      etiqueta: o.etiqueta,
+      color: o.color,
+      hecha: !!state?.data?.[`wr:sessions@${o.fila.profesional_id}:sobre`]?.[`${f.id}-w${semana.num}-${day.sid}`]?.completed,
+    })));
+  } : undefined;
   const etiquetaDe = (p) => etiquetaDelPrograma(p, equipoDe, athlete);
   const fases = visto.data?.phases ?? [];
   const sufijo = visto.profesional_id ? `@${visto.profesional_id}` : '';
@@ -836,6 +865,7 @@ function HojaDelPlanDeAtleta({ athlete, programas, equipoDe, state, inicialId, o
           ) : null;
         }}
         contenidoDia={(f, semana, idx) => <DentroDelDia day={semana.days[idx]} />}
+        pegadasDe={pegadasDe}
       />
     </HojaFlotante>
   );
@@ -847,6 +877,8 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
   const { t, salud } = usePalabras();
   const { profile } = useAuth();
   const [programas, setProgramas] = useState([]); // planes activos: el del coach principal y los del equipo
+  const [filasPegadas, setFilasPegadas] = useState([]); // sesiones pegadas al programa del coach: una fila por autor
+  const [pegando, setPegando] = useState(false);
   const [equipoDe, setEquipoDe] = useState([]);     // quién más atiende a esta persona
   const [programaElegido, setProgramaElegido] = useState(null); // master: de quién es el que edita (null = el principal)
   const [state, setState] = useState(null);
@@ -880,6 +912,12 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
   const planDelCoach = programas.find((p) => (p.profesional_id ?? null) === null) ?? null;
   const planAjeno = salud && !isMaster && !deEquipo && !!planDelCoach?.created_by && planDelCoach.created_by !== profile?.id;
   const propio = deEquipo || planAjeno;
+  /* PEGAR UNA SESIÓN AL PROGRAMA DEL COACH. Quien trabaja en su propio programa
+     (un fisio, un profesional del equipo) puede además agregar sesiones al del
+     coach, sin tocarlo: quedan pegadas a un día y salen con su nombre (ver
+     `lib/pegadas.js`). Hace falta que ese programa exista. */
+  const puedePegar = propio && !soloNotas && (planDelCoach?.data?.phases?.length ?? 0) > 0;
+  const miFilaPegadas = filasPegadas.find((f) => f.profesional_id === profile?.id) ?? null;
   const miClave = propio ? (profile?.id ?? null) : (isMaster ? programaElegido : null);
   const plan = programas.find((p) => (p.profesional_id ?? null) === miClave) ?? null;
   const setPlan = (fila) => setProgramas((prev) => (fila
@@ -928,11 +966,13 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
     setLoading(true);
     (async () => {
       try {
-        const [ps, s, eq] = await Promise.all([
+        const [ps, s, eq, pg] = await Promise.all([
           getProgramas(athlete.id), getAthleteState(athlete.id), nombresDelEquipo(athlete.id).catch(() => []),
+          getSesionesPegadas(athlete.id).catch(() => []),
         ]);
         if (cancelled) return;
         setProgramas(ps);
+        setFilasPegadas(pg);
         setState(s);
         setEquipoDe(eq);
       } finally {
@@ -1020,11 +1060,22 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           })}
         </div>
       )}
+      {puedePegar && (
+        <AccionFicha
+          icon={CalendarPlus}
+          titulo="Agregar sesión al programa del coach"
+          detalle={reglasDe(miFilaPegadas).length
+            ? `Tienes ${plural(reglasDe(miFilaPegadas).length, 'sesión pegada', 'sesiones pegadas')}`
+            : 'Queda pegada a un día de su programa'}
+          primaria
+          onClick={() => setPegando(true)}
+        />
+      )}
       <AccionFicha
         icon={plan ? Pencil : Plus}
         titulo={propio ? (plan ? 'Editar mi programa' : 'Crear mi programa') : t(plan ? 'Editar el plan' : 'Crear el plan')}
         detalle={plan ? plan.title : 'Todavía no tiene ninguno'}
-        primaria
+        primaria={!puedePegar}
         onClick={() => setBuilding(true)}
       />
       {programas.length > 0 && (
@@ -1044,7 +1095,23 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           equipoDe={equipoDe}
           state={state}
           inicialId={plan?.id}
+          pegadas={filasPegadas}
           onCerrar={() => setVerPlan(false)}
+        />
+      )}
+      {pegando && puedePegar && !loading && (
+        <SesionesSobreElPrograma
+          athlete={athlete}
+          planDelCoach={planDelCoach}
+          filas={filasPegadas}
+          miFila={miFilaPegadas}
+          equipoDe={equipoDe}
+          aqui={dondeVa(planDelCoach.data.phases, planDelCoach.data.kind, state?.data?.['wr:cursor'])}
+          onGuardado={(row) => setFilasPegadas((prev) => {
+            const sin = prev.filter((f) => f.profesional_id !== profile?.id);
+            return row ? [...sin, row] : sin;
+          })}
+          onClose={() => setPegando(false)}
         />
       )}
       {onVerComoAtleta && (
