@@ -8,7 +8,7 @@ import {
   programaDePlan, planDePrograma, fasesConIdsNuevos, sinNotas, tieneNotas, resumenDe, textoDeResumen,
   hijasDe, rutaDeCarpeta, descendientesDe, puedeMoverCarpeta, cabeCarpetaEn, textoDeRuta, coincide,
   nombreDeCopia, NIVELES_DE_CARPETA, arbolDeCarpetas, planDeMovimiento, puedenMoverseCarpetas, carpetasQueSePuedenTraer,
-  carpetasDeAbajoPrimero, claveDeItem, claveDeCarpeta,
+  carpetasDeAbajoPrimero, claveDeItem, claveDeCarpeta, sesionTieneContenido, semanaTieneContenido, planTieneContenido,
 } from '../src/lib/misPlanesDatos.js';
 import { traduce } from '../src/lib/palabras.js';
 
@@ -173,6 +173,20 @@ assert.equal(coincide({ nombre: 'Rutina' }, ''), true);
 assert.equal(nombreDeCopia('Pierna', ['Pierna']), 'Pierna (copia)');
 assert.equal(nombreDeCopia('Pierna', ['Pierna', 'Pierna (copia)']), 'Pierna (copia 2)');
 assert.equal(nombreDeCopia('Pierna (copia)', ['Pierna', 'Pierna (copia)']), 'Pierna (copia 2)', 'copiar una copia no apila «(copia) (copia)»');
+
+/* ---- ¿Hay algo que guardar? Una sesión, una semana o un plan vacíos no ofrecen «Guardar» ---- */
+assert.equal(sesionTieneContenido({ day: 'Lun', name: 'Sesión', exercises: [] }), false, 'sesión vacía');
+assert.equal(sesionTieneContenido({ exercises: [{ isNote: true, text: 'Calienta' }] }), true, 'una nota suelta ya es contenido');
+assert.equal(sesionTieneContenido({ exercises: [ej('Sentadilla')] }), true);
+assert.equal(sesionTieneContenido({ blocks: [{ exercises: [] }, { exercises: [ej('Salto')] }] }), true, 'día doble con un bloque lleno');
+assert.equal(sesionTieneContenido({ blocks: [{ exercises: [] }] }), false);
+assert.equal(sesionTieneContenido(null), false);
+assert.equal(semanaTieneContenido({ days: [{ exercises: [] }, { exercises: [ej('A')] }] }), true);
+assert.equal(semanaTieneContenido({ days: [{ exercises: [] }] }), false);
+assert.equal(semanaTieneContenido({}), false);
+assert.equal(planTieneContenido([{ weekData: [{ days: [{ exercises: [] }] }, { days: [{ exercises: [ej('A')] }] }] }]), true);
+assert.equal(planTieneContenido([{ weekData: [{ days: [{ exercises: [] }] }] }]), false);
+assert.equal(planTieneContenido([]), false);
 
 /* ---- Las palabras de cada oficio: «Mis planes» no cambia, lo demás sí ---- */
 assert.equal(traduce('Guardar todo el plan en Mis planes', true), 'Guardar todo el programa en Mis planes', 'el nombre de la pestaña se queda');

@@ -8,14 +8,14 @@ import FiltroDeTipo from '@/features/misplanes/FiltroDeTipo';
 import { campo } from '@/features/misplanes/estilos';
 
 /**
- * «Desde Mis planes»: elegir algo de lo guardado, navegando por las carpetas o buscando. Lo usan el
+ * «Usar uno guardado»: elegir algo de lo guardado, navegando por las carpetas o buscando. Lo usan el
  * editor (un workout para un día, una rutina para una semana), la pantalla de crear un plan y la
  * ficha de un atleta. Solo deja ELEGIR: guardar, mover o borrar se hace en la pestaña Mis planes.
  *
  * `tipos`: qué clases de cosas enseña. `onElegir(item)` recibe la fila (sin su contenido: se abre
  * con `abrirItem`).
  */
-export default function SelectorDeMisPlanes({ tipos, titulo = 'Desde Mis planes', subtitulo, onElegir, onCerrar }) {
+export default function SelectorDeMisPlanes({ tipos, titulo = 'Usar uno guardado', subtitulo, onElegir, onCerrar }) {
   const { cargando, error, carpetas, items } = useMisPlanes();
   const [nivel, setNivel] = useState(null);
   const [buscar, setBuscar] = useState('');

@@ -40,7 +40,7 @@ import SelectorDeMisPlanes from '@/features/misplanes/SelectorDeMisPlanes';
 import { abrirItem, guardarItem, actualizarItem, borrarItem } from '@/lib/misPlanes';
 import {
   workoutDeSesiones, diasDeWorkout, rutinaDePlan, rutinaDeSemana, planDeRutina, programaDePlan, planDePrograma,
-  sinNotas, tieneNotas,
+  sinNotas, tieneNotas, sesionTieneContenido, semanaTieneContenido, planTieneContenido,
 } from '@/lib/misPlanesDatos';
 
 /* ------------------------------------------------------------------ */
@@ -1794,6 +1794,12 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
   const esCompu = useIsDesktop();
   const [enFilas, eligeVista] = useEnFilas();
   const [menu, setMenu] = useState(false);
+  const [menuPlanes, setMenuPlanes] = useState(false);
+  // Mis planes en la sesión (Andrés, 2 oct 2026): UN solo botón, no dos por tarjeta. Con las dos cosas posibles
+  // —usar un workout guardado y guardar este día— es «Mis planes ▾» con un menú; con una sola, es esa acción directa
+  // (una sesión vacía no ofrece guardar; un día doble no recibe un workout).
+  const puedeUsar = !dual && !!onApplyCatalog;
+  const puedeGuardar = !!onSaveToCatalog;
   return (
     <>
       {/* Nombre y tipo: con `soloLectura` no se tocan. Lo de abajo (acciones e
@@ -1842,8 +1848,9 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
             otro (sin catálogo, sin copiar) reusa esta misma cabecera. */}
         {esCompu ? (
           <>
-            {!dual && onApplyCatalog && <Pill icon={FolderOpen} onClick={onApplyCatalog}>Desde Mis planes</Pill>}
-            {onSaveToCatalog && <Pill icon={Save} onClick={onSaveToCatalog}>Guardar en Mis planes</Pill>}
+            {puedeUsar && puedeGuardar && <Pill icon={FolderOpen} onClick={() => setMenuPlanes(true)}>Mis planes <ChevronDown size={13} /></Pill>}
+            {puedeUsar && !puedeGuardar && <Pill icon={FolderOpen} onClick={onApplyCatalog}>Usar un workout guardado</Pill>}
+            {!puedeUsar && puedeGuardar && <Pill icon={Save} onClick={onSaveToCatalog}>Guardar este día como workout</Pill>}
             {onCopy && <Pill icon={Copy} onClick={onCopy}>Copiar</Pill>}
             {!dual && onClear && <Pill icon={Eraser} onClick={onClear}>Limpiar</Pill>}
             {onDelete && <Pill icon={Trash2} danger onClick={onDelete}>Eliminar sesión</Pill>}
@@ -1877,11 +1884,20 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
         <HojaAcciones
           onClose={() => setMenu(false)}
           acciones={[
-            ...(dual || !onApplyCatalog ? [] : [{ icon: FolderOpen, texto: 'Desde Mis planes', onClick: onApplyCatalog }]),
-            ...(!onSaveToCatalog ? [] : [{ icon: Save, texto: 'Guardar en Mis planes', onClick: onSaveToCatalog }]),
+            ...(puedeUsar ? [{ icon: FolderOpen, texto: 'Usar un workout guardado', onClick: onApplyCatalog }] : []),
+            ...(!puedeGuardar ? [] : [{ icon: Save, texto: 'Guardar este día como workout', onClick: onSaveToCatalog }]),
             ...(onCopy ? [{ icon: Copy, texto: 'Copiar sesión', onClick: onCopy }] : []),
             ...(dual || !onClear ? [] : [{ icon: Eraser, texto: 'Limpiar sesión', onClick: onClear }]),
             ...(onDelete ? [{ icon: Trash2, texto: 'Eliminar sesión', onClick: onDelete, peligro: true }] : []),
+          ]}
+        />
+      )}
+      {menuPlanes && (
+        <HojaAcciones
+          onClose={() => setMenuPlanes(false)}
+          acciones={[
+            { icon: FolderOpen, texto: 'Usar un workout guardado', onClick: onApplyCatalog },
+            { icon: Save, texto: 'Guardar este día como workout', onClick: onSaveToCatalog },
           ]}
         />
       )}
@@ -2486,9 +2502,9 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
             <FolderOpen size={22} />
           </span>
           <span>
-            <span style={{ display: 'block', fontSize: 15.5, fontWeight: 800, color: T.text }}>Desde Mis planes</span>
+            <span style={{ display: 'block', fontSize: 15.5, fontWeight: 800, color: T.text }}>Usar uno guardado</span>
             <span style={{ display: 'block', fontSize: 13, color: T.text2, marginTop: 3, lineHeight: 1.45 }}>
-              Parte de un programa o una rutina que ya guardaste y ajústalo.
+              Parte de un programa o una rutina de Mis planes y ajústalo.
             </span>
           </span>
           <ChevronRight size={18} color={T.text3} style={{ marginLeft: 'auto', flexShrink: 0 }} />
@@ -2723,7 +2739,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
                 </div>
                 <div style={{ fontSize: 17, fontWeight: 800, color: T.text }}>No hay sesión para el {DAY_FULL_LOWER[activeWeekday] || activeWeekday.toLowerCase()}</div>
                 <div style={{ fontSize: 13.5, color: T.text2, marginTop: 8, lineHeight: 1.5 }}>
-                  Crea una desde cero, tráela de Mis planes o pega una copiada.
+                  Crea una desde cero, usa un workout guardado o pega una copiada.
                 </div>
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20, flexWrap: 'wrap' }}>
                   <button type="button"
@@ -2731,7 +2747,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
                     style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 20px', borderRadius: 12, border: 'none', cursor: 'pointer', background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff', fontFamily: FONT, fontSize: 14, fontWeight: 800, boxShadow: KP.shBtn }}>
                     <Plus size={16} /> Añadir sesión
                   </button>
-                  <Pill icon={FolderOpen} onClick={() => setModal({ type: 'tpl-day', payload: { di: null } })}>Desde Mis planes</Pill>
+                  <Pill icon={FolderOpen} onClick={() => setModal({ type: 'tpl-day', payload: { di: null } })}>Usar un workout guardado</Pill>
                   {clipboard && (
                     <Pill icon={Clipboard} onClick={() => patchWeek(nav.pi, wIdx, (wk) => ({ days: [...(wk.days || []), { ...clone(clipboard), day: activeWeekday }] }))}>
                       Pegar rutina
@@ -2765,7 +2781,9 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
                     onClear={async () => {
                       if (await pregunta({ titulo: '¿Vaciar esta sesión?', detalle: 'Se quitan todos sus sets. El nombre y el tipo se quedan.', confirmar: 'Sí, vaciarla', peligro: true })) patchDay(nav.pi, wIdx, di, { exercises: [] });
                     }}
-                    onSaveToCatalog={() => setModal({ type: 'guardar-dia', payload: { sesion: d, delDia: daysOfWeekday.map((x) => x.d) } })}
+                    onSaveToCatalog={sesionTieneContenido(d)
+                      ? () => setModal({ type: 'guardar-dia', payload: { sesion: d, delDia: daysOfWeekday.map((x) => x.d) } })
+                      : undefined}
                     onApplyCatalog={() => setModal({ type: 'tpl-day', payload: { di } })}
                   />
                 ))}
@@ -2903,11 +2921,11 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         <HojaAcciones
           onClose={() => setMenu(null)}
           acciones={[
-            ...(enCatalogo ? [] : [{
-              icon: Save, texto: isWeekly ? 'Guardar la rutina en Mis planes' : t('Guardar todo el plan en Mis planes'),
+            ...(enCatalogo || !planTieneContenido(phases) ? [] : [{
+              icon: Save, texto: isWeekly ? 'Guardar como rutina' : 'Guardar todo como programa',
               onClick: () => setModal({ type: 'guardar-plan' }),
             }]),
-            ...(isWeekly ? [{ icon: FolderOpen, texto: 'Usar una rutina de Mis planes', onClick: () => setModal({ type: 'tpl-week' }) }] : []),
+            ...(isWeekly ? [{ icon: FolderOpen, texto: 'Usar una rutina guardada', onClick: () => setModal({ type: 'tpl-week' }) }] : []),
             ...(estructura === 'fases' ? [{ icon: Plus, texto: 'Agregar fase', onClick: agregarFase }] : []),
             ...(enCatalogo ? [] : [{ icon: Settings2, texto: t('Cambiar la forma del plan'), onClick: () => setFormasAbiertas(true) }]),
             ...(enCatalogo
@@ -2942,8 +2960,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
             { icon: Pencil, texto: 'Nombre y carga de la semana', onClick: () => setModal({ type: 'week-meta' }) },
             { icon: Copy, texto: 'Duplicar semana', onClick: duplicarSemana },
             ...((deCorrido ? semanasDelPlan(phases) : curPhase.weekData.length) > 1 ? [{ icon: Layers, texto: 'Copiarla a todas las semanas', onClick: copiarSemanaATodas }] : []),
-            { icon: FolderOpen, texto: 'Usar una rutina de Mis planes', onClick: () => setModal({ type: 'tpl-week' }) },
-            { icon: Save, texto: 'Guardar la semana en Mis planes', onClick: () => setModal({ type: 'guardar-semana' }) },
+            { icon: FolderOpen, texto: 'Usar una rutina guardada', onClick: () => setModal({ type: 'tpl-week' }) },
+            ...(semanaTieneContenido(curPhase.weekData[curWeekIdx]) ? [{ icon: Save, texto: 'Guardar esta semana como rutina', onClick: () => setModal({ type: 'guardar-semana' }) }] : []),
             ...((deCorrido ? semanasDelPlan(phases) : curPhase.weekData.length) > 1 ? [{ icon: Trash2, texto: 'Eliminar semana', onClick: eliminarSemana, peligro: true }] : []),
           ]}
         />
@@ -2972,7 +2990,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         const { tipo, data } = datosDelCatalogo();
         return (
           <DialogoGuardar
-            titulo={isWeekly ? 'Guardar la rutina en Mis planes' : t('Guardar todo el plan en Mis planes')}
+            titulo={isWeekly ? 'Guardar como rutina' : 'Guardar todo como programa'}
             tipo={tipo} nombreInicial={title} interruptores={casillaDeNotas(tipo, data)} recordarCarpeta
             onGuardar={async ({ nombre, descripcion, carpetaId, interruptores }) => {
               await guardarItem({
@@ -2990,7 +3008,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         const data = rutinaDeSemana(semana);
         return (
           <DialogoGuardar
-            titulo="Guardar la semana en Mis planes" tipo="rutina" recordarCarpeta
+            titulo="Guardar esta semana como rutina" tipo="rutina" recordarCarpeta
             nombreInicial={nombreSemana(curPhase, semana, curWeekIdx + 1)} interruptores={casillaDeNotas('rutina', data)}
             onGuardar={async ({ nombre, descripcion, carpetaId, interruptores }) => {
               await guardarItem({
@@ -3008,7 +3026,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         const varias = delDia.length > 1;
         return (
           <DialogoGuardar
-            titulo="Guardar el workout en Mis planes" tipo="workout" nombreInicial={sesion.name || ''} recordarCarpeta
+            titulo="Guardar este día como workout" tipo="workout" nombreInicial={sesion.name || ''} recordarCarpeta
             interruptores={[
               ...(varias ? [{
                 clave: 'todo', inicial: true,
@@ -3031,7 +3049,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
       })()}
       {modal?.type === 'tpl-week' && curPhase && (
         <SelectorDeMisPlanes
-          tipos={['rutina']} titulo="Usar una rutina de Mis planes" onCerrar={() => setModal(null)}
+          tipos={['rutina']} titulo="Usar una rutina guardada" onCerrar={() => setModal(null)}
           onElegir={async (item) => {
             let datos;
             try { datos = await abrirItem(item); } catch (e) { setErr(e.message || 'No se pudo abrir'); setModal(null); return; }
@@ -3048,7 +3066,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
       )}
       {modal?.type === 'tpl-day' && curPhase && (
         <SelectorDeMisPlanes
-          tipos={['workout']} titulo="Desde Mis planes" onCerrar={() => setModal(null)}
+          tipos={['workout']} titulo="Usar un workout guardado" onCerrar={() => setModal(null)}
           onElegir={async (item) => {
             const { di } = modal.payload;
             let datos;
@@ -3059,7 +3077,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
             } else {
               if (!await pregunta({
                 titulo: `¿Aplicar "${item.nombre}"?`,
-                detalle: 'Esta sesión pierde lo que tenga y queda con el workout de Mis planes.',
+                detalle: 'Esta sesión pierde lo que tenga y queda con el workout guardado.',
                 confirmar: 'Sí, aplicarla',
               })) return;
               // En el lugar de la sesión, sin moverla (lo que anota el atleta cuelga de su posición); si el workout
@@ -3075,7 +3093,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
       )}
       {modal?.type === 'desde-plan' && (
         <SelectorDeMisPlanes
-          tipos={['programa', 'rutina']} titulo={t('Armar el plan desde Mis planes')}
+          tipos={['programa', 'rutina']} titulo="Usar uno guardado"
           subtitulo="Parte de algo que ya guardaste y ajústalo antes de guardarlo." onCerrar={() => setModal(null)}
           onElegir={async (item) => {
             let datos;

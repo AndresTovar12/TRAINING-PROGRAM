@@ -7,7 +7,7 @@ import {
 import { COLOR_DE_TIPO, FONDO_DE_TIPO, ICONO_DE_TIPO } from '@/features/misplanes/estilos';
 
 /* Lo que se enseña de «Mis planes»: las carpetas de un nivel y lo que hay dentro, con su ruta arriba.
-   Lo usan la pestaña (con sus botones por fila) y los selectores («Desde Mis planes», «Asignar»),
+   Lo usan la pestaña (con sus botones por fila) y los selectores («Usar uno guardado», «Asignar»),
    que solo dejan elegir. Con texto en `buscar` se busca en TODAS las carpetas y cada resultado dice
    en cuál está.
 
