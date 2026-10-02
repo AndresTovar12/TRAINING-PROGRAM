@@ -3,6 +3,8 @@ import { RotateCcw, Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { planDe } from '@/lib/api';
 import { useConfirmacion } from '@/components/Confirmacion';
+import BotonEntendido from '@/components/BotonEntendido';
+import { useAvisosVistos } from '@/lib/useAvisosVistos';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { T, FONT, KP } from '@/lib/theme';
 
@@ -16,7 +18,9 @@ import { T, FONT, KP } from '@/lib/theme';
  *
  * Dos piezas:
  *   el aviso — arriba y a la vista, SOLO si lo último fue de una IA y es de
- *              los últimos días: "Claude cambió este plan · Deshacer".
+ *              los últimos días: "Claude cambió este plan · Deshacer". También si
+ *              se borró el plan: "… borró el plan · Recuperar". Con su «Entendido»:
+ *              se acepta y ese aviso ya no vuelve (uno nuevo, de un cambio nuevo, sí).
  *   la lista — plegada, con todas las versiones recientes.
  *
  * Regresar también guarda versión: si alguien se equivoca de versión, se
@@ -38,6 +42,7 @@ function hace(fecha, ahora) {
 export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abierta, onToggle, profesionalId = null }) {
   const pregunta = useConfirmacion();
   const { t } = usePalabras();
+  const { listo: avisosListos, visto: avisoVisto, marcar: aceptarAviso } = useAvisosVistos();
   const [versiones, setVersiones] = useState([]);
   const [nombres, setNombres] = useState({});
   const [trabajando, setTrabajando] = useState(false);
@@ -114,6 +119,9 @@ export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abiert
   const avisoIA = ultima && ultima.cliente_ia && ultima.motivo !== 'restauracion'
     && ahora - new Date(ultima.creada_en).getTime() < DIAS_DEL_AVISO * 86400000;
   const planBorrado = !plan && ultima?.motivo === 'borrado';
+  // Cada cambio es un aviso distinto: aceptar este no esconde el que venga después.
+  const claveDelAviso = ultima ? `plan:${ultima.id}` : null;
+  const hayAviso = (avisoIA || planBorrado) && avisosListos && !avisoVisto(claveDelAviso);
 
   if (!versiones.length) return null;
 
@@ -125,20 +133,23 @@ export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abiert
 
   return (
     <>
-      {(avisoIA || planBorrado) && (
+      {hayAviso && (
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 10, background: KP.violetSoft, borderRadius: 14,
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: KP.violetSoft, borderRadius: 14,
           padding: '11px 12px 11px 14px', margin: '0 0 12px',
         }}>
           <Sparkles size={17} color={KP.violet} style={{ flexShrink: 0 }} />
-          <div style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 700, color: T.text, lineHeight: 1.4 }}>
+          <div style={{ flex: '1 1 200px', minWidth: 0, fontSize: 13.5, fontWeight: 700, color: T.text, lineHeight: 1.4 }}>
             {planBorrado
               ? `${quien(ultima)} ${t('borró el plan')} ${hace(ultima.creada_en, ahora)}.`
               : `${ultima.cliente_ia} ${t('cambió este plan')} ${hace(ultima.creada_en, ahora)}.`}
           </div>
-          <button type="button" disabled={trabajando} onClick={() => regresar(ultima)} style={{ ...boton, background: KP.violet, color: '#fff' }}>
-            <RotateCcw size={14} /> {planBorrado ? 'Recuperar' : 'Deshacer'}
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginLeft: 'auto' }}>
+            <button type="button" disabled={trabajando} onClick={() => regresar(ultima)} style={{ ...boton, background: KP.violet, color: '#fff' }}>
+              <RotateCcw size={14} /> {planBorrado ? 'Recuperar' : 'Deshacer'}
+            </button>
+            <BotonEntendido color={KP.violet} onClick={() => aceptarAviso(claveDelAviso)} />
+          </div>
         </div>
       )}
 

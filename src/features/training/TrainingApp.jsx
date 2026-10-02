@@ -37,6 +37,7 @@ import {
 import FichaEjercicio from '@/features/training/FichaEjercicio';
 import Portada from '@/components/Portada';
 import EtiquetasDeSesion from '@/components/EtiquetasDeSesion';
+import BotonEntendido from '@/components/BotonEntendido';
 import {
   turnoDeTag, minutosDeTag, sinDuracion, variasSesiones, sesionesDelTitulo, textoDeSesiones,
   bloquesHechos, alternarBloque,
@@ -1951,7 +1952,13 @@ const HomeView = ({
   // "Varias semanas": las tarjetas dicen la semana de corrido, no la fase.
   const deCorrido = estructura === 'semanas';
   const semanaDe = (n) => `Semana ${semanaGlobal(PLAN, n.phase.id, n.week.num) ?? n.week.num} de ${semanasDelPlan(PLAN)}`;
-  const { perfil: profile } = usePerfilDeLaVista();
+  const { perfil: profile, soloLectura } = usePerfilDeLaVista();
+  /* Los avisos que ya aceptó con su «Entendido» (uno por aviso; se guardan con el resto de
+     lo suyo). Hasta que cargue lo guardado no se enseña ninguno: uno ya aceptado saldría
+     un instante y se iría. Un coach que mira la app del atleta no acepta nada por él. */
+  const { loaded: estadoListo } = useAppState();
+  const [avisosVistos, setAvisosVistos] = useStorage('ui:avisos-vistos', {});
+  const aceptaAviso = (clave) => setAvisosVistos((prev) => ({ ...prev, [clave]: new Date().toISOString() }));
   const displayName = profile?.full_name || profile?.username || 'Atleta';
   // Lo que toca HOY según el calendario del dispositivo (no según lo marcado).
   const next = useMemo(() => sessionForToday(PLAN, kind, cursor), [PLAN, kind, cursor]);
@@ -2061,29 +2068,31 @@ const HomeView = ({
       <AvisoDeInvitacion />
 
       {/* Un profesional de su equipo le dio de alta: se lo dice la portada durante 7 días. */}
-      {altasDeEquipo.map((p) => (
+      {estadoListo && altasDeEquipo.filter((p) => !avisosVistos[`alta:${p.id}`]).map((p) => (
         <div key={p.id} style={{
           margin: '0 18px 12px', background: KP.mintSoft, borderRadius: 16, padding: '13px 15px',
-          display: 'flex', alignItems: 'center', gap: 10,
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
         }}>
           <Check size={18} color={KP.mint} strokeWidth={3} style={{ flexShrink: 0 }} />
-          <div style={{ fontSize: 14, fontWeight: 700, color: LT.text, lineHeight: 1.35 }}>
+          <div style={{ flex: '1 1 160px', fontSize: 14, fontWeight: 700, color: LT.text, lineHeight: 1.35 }}>
             {nombreCorto(p.profesional?.full_name) || 'Tu fisio'} te dio de alta el {new Date(p.altaEn).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })}
           </div>
+          {!soloLectura && <BotonEntendido color="#00805A" style={{ marginLeft: 'auto' }} onClick={() => aceptaAviso(`alta:${p.id}`)} />}
         </div>
       ))}
 
       {/* Su fisio le dio de alta: se lo dice la portada durante 7 días. El programa
           sigue en «Programa», solo para consultar: no se bloquea nada. */}
-      {altaReciente(profile?.alta_en) && (
+      {estadoListo && altaReciente(profile?.alta_en) && !avisosVistos[`alta:perfil:${profile.alta_en}`] && (
         <div style={{
           margin: '0 18px 12px', background: KP.mintSoft, borderRadius: 16, padding: '13px 15px',
-          display: 'flex', alignItems: 'center', gap: 10,
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
         }}>
           <Check size={18} color={KP.mint} strokeWidth={3} style={{ flexShrink: 0 }} />
-          <div style={{ fontSize: 14, fontWeight: 700, color: LT.text, lineHeight: 1.35 }}>
+          <div style={{ flex: '1 1 160px', fontSize: 14, fontWeight: 700, color: LT.text, lineHeight: 1.35 }}>
             {coach?.full_name || 'Tu fisio'} te dio de alta el {new Date(profile.alta_en).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })}
           </div>
+          {!soloLectura && <BotonEntendido color="#00805A" style={{ marginLeft: 'auto' }} onClick={() => aceptaAviso(`alta:perfil:${profile.alta_en}`)} />}
         </div>
       )}
 
