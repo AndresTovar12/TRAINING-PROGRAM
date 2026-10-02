@@ -3,6 +3,7 @@ import { FONT, KP, LT } from '@/lib/theme';
 import { plural } from '@/lib/plural';
 import { etiquetaDePrograma } from '@/lib/programas';
 import EtiquetasDeSesion from '@/components/EtiquetasDeSesion';
+import ListaDesplegable from '@/components/ListaDesplegable';
 
 /* Lo que ve un atleta que tiene EQUIPO: su coach principal y, además, alguien
    más (un fisio…) que le puso sesiones. Sin equipo nada de esto sale y la app es
@@ -28,36 +29,38 @@ export function EtiquetaDeAutor({ programa, tamano = 12, style }) {
 }
 
 /**
- * Las pastillas «Todo · Andrés · Ana». SOLO filtran: esconden lo de los demás,
- * no abren otro programa. Sin al menos dos personas no salen.
+ * «Ver  Todo ▾»: el filtro por persona. SOLO filtra: esconde lo de los demás, no abre otro
+ * programa. Sin al menos dos personas no sale.
+ *
+ * Es una lista desplegable chiquita y no una fila de pastillas. Andrés, 2 oct 2026:
+ * «imagínate que tengo 4 coaches, de velocidad, de fuerza, de deporte y fisio… puede ser
+ * muy invasivo». Con pastillas cada profesional más era otra pastilla grande arriba de
+ * todo; así ocupa lo mismo con dos que con diez. Con un filtro puesto se nota: el botón
+ * lleva el color y el nombre de la persona.
  */
-export function ChipsDeAutor({ autores, filtro, onFiltro, style }) {
+export function FiltroDeAutor({ autores, filtro, onFiltro, style }) {
   if ((autores?.length ?? 0) < 2) return null;
-  const pastilla = (activa, color) => ({
-    padding: '9px 15px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 800,
-    border: `1.5px solid ${activa ? color : LT.border}`,
-    background: activa ? color : LT.surface, color: activa ? '#fff' : LT.text,
-    whiteSpace: 'nowrap', touchAction: 'manipulation',
-  });
+  const activo = autores.find((a) => a.id === filtro) ?? null;
+  const opciones = [
+    { valor: 'todo', etiqueta: 'Todo' },
+    // En la lista: «Andrés · coach». En el botón, solo el nombre, para que no crezca.
+    ...autores.map((a) => ({ valor: a.id, etiqueta: a.etiqueta, corta: a.nombre, color: a.color })),
+  ];
   return (
-    <div style={{ padding: '0 18px', ...style }}>
-      <div role="tablist" aria-label="Ver lo de" style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
-        <button type="button" role="tab" aria-selected={!filtro} onClick={() => onFiltro(null)} style={pastilla(!filtro, LT.text)}>
-          Todo
-        </button>
-        {autores.map((a) => (
-          <button
-            key={a.id}
-            type="button"
-            role="tab"
-            aria-selected={filtro === a.id}
-            onClick={() => onFiltro(a.id)}
-            style={pastilla(filtro === a.id, a.color)}
-          >
-            {a.nombre}
-          </button>
-        ))}
-      </div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, ...style }}>
+      <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 700, color: LT.text3 }}>Ver</span>
+      <ListaDesplegable
+        valor={activo ? activo.id : 'todo'}
+        onCambio={(v) => onFiltro(v === 'todo' ? null : v)}
+        opciones={opciones}
+        etiqueta="Ver lo de"
+        estilo={{
+          width: 'auto', minHeight: 34, padding: '5px 10px 5px 12px', borderRadius: 999, gap: 7,
+          fontSize: 13, fontWeight: 800, color: LT.text,
+          background: activo ? `${activo.color}14` : LT.surface,
+          border: `1.5px solid ${activo ? `${activo.color}66` : LT.border}`,
+        }}
+      />
     </div>
   );
 }

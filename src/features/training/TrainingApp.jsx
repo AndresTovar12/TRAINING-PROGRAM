@@ -28,7 +28,7 @@ import { aKilos, desdeKilos, etiquetaUnidad } from '@/lib/unidades';
 import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
 import { useAppState, useStorage } from '@/contexts/AppStateContext';
 import { altaReciente } from '@/lib/comoVa';
-import { ChipsDeAutor, EtiquetaDeAutor, TarjetaDeHoyDeTodos } from '@/features/training/EquipoDelAtleta';
+import { FiltroDeAutor, EtiquetaDeAutor, TarjetaDeHoyDeTodos } from '@/features/training/EquipoDelAtleta';
 import AvisoDeInvitacion from '@/features/training/AvisoDeInvitacion';
 import {
   autorDe, autoresDe, entradasDeHoy, escribeRegistro, etiquetaDePrograma, nombreCorto, registrosDe,
@@ -1579,7 +1579,7 @@ const FuenteDelDia = ({ fuente, store, setStore, oneRMs, partes, autor, abiertas
  * todos, y en el plan también, pero que si lo quiere filtrar o separar, igual
  * puede». Antes había una pestaña por profesional; ahora hay una sola semana
  * (la del coach, con lo que otros le pegaron, y los programas aparte que van
- * por su cuenta), y las pastillas de arriba solo ESCONDEN lo de los demás.
+ * por su cuenta), y el filtro «Ver» de arriba solo ESCONDE lo de los demás.
  *
  * Cada sesión es una TARJETA y dice de quién viene con una etiqueta chica. Se abren,
  * se anotan y se terminan como siempre (`CuerpoDelDia`), cada una en su programa.
@@ -1653,7 +1653,7 @@ const PlanUnificado = ({
         {[ubicacion, reales.length ? `${hechas}/${reales.length} ${reales.length === 1 ? 'sesión' : 'sesiones'}` : null].filter(Boolean).join(' · ')}
       </div>
 
-      <ChipsDeAutor autores={autores} filtro={filtro} onFiltro={onFiltro} style={{ padding: '0 0 12px' }} />
+      <FiltroDeAutor autores={autores} filtro={filtro} onFiltro={onFiltro} style={{ marginBottom: 12 }} />
 
       {/* La tira de la semana: cada punto es de un color, el de quien puso esa sesión. */}
       <div style={{ display: 'flex', marginBottom: 16, borderBottom: `1px solid ${LT.border}`, paddingBottom: 2 }}>
@@ -2091,7 +2091,7 @@ const HomeView = ({
           nombre de quien la puso (Andrés, 1 oct 2026). Sin equipo, la de siempre. */}
       {hayEquipo ? (
         <>
-          <ChipsDeAutor autores={autores} filtro={filtro} onFiltro={onFiltro} style={{ paddingBottom: 12 }} />
+          <FiltroDeAutor autores={autores} filtro={filtro} onFiltro={onFiltro} style={{ padding: '0 18px 12px' }} />
           {entradas.length > 0 ? (
             <TarjetaDeHoyDeTodos
               entradas={entradas}
@@ -2772,7 +2772,7 @@ export default function TrainingApp() {
   const { store, setStore } = useAppState();
   /* EQUIPO = hay más de un programa con sesiones (el del coach y, además, lo que
      otra persona le pegó o armó aparte). Quien ya dio de alta no cuenta. Sin
-     equipo, todo es la app de siempre. Las pastillas y las etiquetas de «quién
+     equipo, todo es la app de siempre. El filtro «Ver» y las etiquetas de «quién
      lo puso» salen solo si son al menos dos PERSONAS: si es la misma, no dicen nada. */
   const autores = useMemo(() => autoresDe(programas), [programas]);
   /* Programas con sesiones (uno aparte vacío no cuenta). Con dos o más hay equipo; con uno solo
@@ -2782,7 +2782,7 @@ export default function TrainingApp() {
     const con = programas.filter((p) => p.conSesiones && !p.altaEn);
     return con.length > 1 || (con.length === 1 && !con[0].esPrincipal && programas.some((p) => p.esPrincipal));
   }, [programas]);
-  // Las pastillas «Todo · Andrés · Ana». Solo esconden; el filtro vale mientras esa persona tenga algo.
+  // El filtro «Ver: Todo · Andrés · Ana». Solo esconde; vale mientras esa persona tenga algo.
   const [filtro, setFiltro] = useState(null);
   const filtroVigente = filtro && autores.some((a) => a.id === filtro) ? filtro : null;
   const esCompu = useIsDesktop();
