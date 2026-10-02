@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import {
-  Dumbbell, Users, Library, Shield, PanelLeftClose, PanelLeft, Eye, X, Sparkles,
+  Dumbbell, Users, Library, Shield, PanelLeftClose, PanelLeft, Eye, X, Sparkles, FolderOpen,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
@@ -10,6 +10,7 @@ import { T, FONT, KP, oficioCorto } from '@/lib/theme';
 import AthletesPanel from '@/features/admin/AthletesPanel';
 import ExercisesPanel from '@/features/admin/ExercisesPanel';
 import CoachesPanel from '@/features/admin/CoachesPanel';
+import MisPlanesPanel from '@/features/misplanes/MisPlanesPanel';
 import VistaComoAtleta from '@/features/admin/VistaComoAtleta';
 import ConectarIA from '@/features/ia/ConectarIA';
 
@@ -66,6 +67,10 @@ export default function AdminApp() {
   const TABS = [
     { id: 'athletes', label: t(isMaster ? 'Atletas' : 'Mis atletas'), icon: Users },
     { id: 'exercises', label: 'Ejercicios', icon: Library },
+    /* Mis planes: lo que cada profesional guarda (workouts, rutinas semanales y programas), en carpetas, con
+       su «+ Crear» y su «Asignar» (Andrés, 2 oct 2026). Es de CADA quien, así que desaparece mientras el
+       master mira como otro coach: no tiene caso enseñarle lo suyo en lugar de lo del coach. */
+    ...(!viendoComo ? [{ id: 'misplanes', label: 'Mis planes', icon: FolderOpen }] : []),
     /* La pestaña de coaches desaparece mientras el master mira como uno de
        ellos. Andrés, 18 sep 2026: "sigue apareciendo la columna de coaches, lo
        cual no es congruente porque eso solo le aparece al admin; no se
@@ -127,6 +132,7 @@ export default function AdminApp() {
 
       {tab === 'athletes' && <AthletesPanel viendoComo={viendoComo} onVerComoAtleta={entrarComoAtleta} />}
       {tab === 'exercises' && <ExercisesPanel viendoComo={viendoComo} />}
+      {tab === 'misplanes' && !viendoComo && <MisPlanesPanel />}
       {tab === 'coaches' && isMaster && !viendoComo && <CoachesPanel onVerComo={entrarComo} />}
       {tab === 'ia' && isDesktop && !viendoComo && <ConectarIA />}
     </>

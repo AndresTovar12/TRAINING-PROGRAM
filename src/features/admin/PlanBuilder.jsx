@@ -8,15 +8,12 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
-import { conLasMiasPrimero } from '@/lib/categorias';
 import { esProgramaFantasma } from '@/lib/programas';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useIsDesktop } from '@/lib/useViewport';
 import {
-  listExercises, createPlan, updatePlan, deletePlan, listTemplates, saveTemplate, deleteTemplate,
-  getMasterId, tagRepertoire, createExercise, listCategories,
-  listExerciseMedia, addExerciseMedia, deleteExerciseMedia,
-  listExerciseOverrides, aplicarOverrides, getAthleteState,
+  createPlan, updatePlan, deletePlan, createExercise,
+  listExerciseMedia, addExerciseMedia, deleteExerciseMedia, getAthleteState,
 } from '@/lib/api';
 import {
   isLoadedExercise, dondeVa, estructuraDelPlan, kindDeEstructura, semanaGlobal, semanasDelPlan,
@@ -36,6 +33,14 @@ import { esArranque, guardaLugar, leeLugar } from '@/lib/lugar';
 import { useScrollLugar } from '@/lib/useLugar';
 import InterruptorVista from '@/components/InterruptorVista';
 import { useVistaEjercicios } from '@/lib/useVistaEjercicios';
+import { useRepertorioDelEditor } from '@/features/admin/useRepertorioDelEditor';
+import DialogoGuardar from '@/features/misplanes/DialogoGuardar';
+import SelectorDeMisPlanes from '@/features/misplanes/SelectorDeMisPlanes';
+import { abrirItem, guardarItem, actualizarItem, borrarItem } from '@/lib/misPlanes';
+import {
+  workoutDeSesiones, diasDeWorkout, rutinaDePlan, rutinaDeSemana, planDeRutina, programaDePlan, planDePrograma,
+  sinNotas, tieneNotas,
+} from '@/lib/misPlanesDatos';
 
 /* ------------------------------------------------------------------ */
 /* Constantes y helpers de datos                                       */
@@ -105,6 +110,18 @@ const newPhase = (num, color) => ({
 });
 
 const nextWeekNum = (phase) => Math.max(0, ...phase.weekData.map((w) => w.num || 0)) + 1;
+
+/* Las fases con que arranca un plan NUEVO de Mis planes, según la forma que se eligió en el Centro de
+   creación. «Varias semanas» arranca sin fases: primero se pregunta cuántas semanas y qué días. */
+const fasesDeLaForma = (forma) => {
+  if (forma === 'rutina') {
+    const base = newPhase(1);
+    base.name = 'Rutina semanal';
+    base.weekData = [newWeek(1)];
+    return [base];
+  }
+  return forma === 'fases' ? [newPhase(1)] : [];
+};
 
 /* Las tres formas de un plan (ver `estructuraDelPlan`), dichas igual al
    crearlo que al cambiarlo. */
@@ -256,41 +273,6 @@ function Stepper({ value, onChange, min = 1 }) {
   );
 }
 
-/* Modal chico para pedir nombre (plantillas) */
-function NameModal({ title, placeholder, onSave, onClose }) {
-  const [name, setName] = useState('');
-  return (
-    <div
-      onMouseDown={onClose}
-      style={{ position: 'fixed', inset: 0, zIndex: 2800, background: 'rgba(17,19,24,0.5)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 16 }}
-    >
-      <div onMouseDown={(e) => e.stopPropagation()} className="animate-fade-in"
-        style={{ width: '100%', maxWidth: 400, background: T.bg, borderRadius: 20, padding: 20, fontFamily: FONT, boxShadow: KP.shPop }}>
-        <div style={{ fontSize: 16, fontWeight: 800, color: T.text, marginBottom: 14 }}>{title}</div>
-        <input
-          autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={placeholder}
-          onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) onSave(name.trim()); }}
-          style={inputStyle}
-        />
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
-          <button type="button" onClick={onClose}
-            style={{ padding: '11px 16px', borderRadius: 11, border: `1.5px solid ${T.border}`, background: T.bg2, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: T.text2 }}>
-            Cancelar
-          </button>
-          <button type="button" disabled={!name.trim()} onClick={() => onSave(name.trim())}
-            style={{
-              padding: '11px 18px', borderRadius: 11, border: 'none', cursor: name.trim() ? 'pointer' : 'default',
-              background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff',
-              fontFamily: FONT, fontSize: 13.5, fontWeight: 800, opacity: name.trim() ? 1 : 0.5, boxShadow: KP.shBtn,
-            }}>
-            Guardar
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* Modal de la semana: nombre, carga y acciones */
 function WeekMetaModal({ week, numero = week.num, canDelete, onPatch, onDuplicate, onCopyToRest, onDelete, onClose }) {
   return (
@@ -331,72 +313,6 @@ function WeekMetaModal({ week, numero = week.num, canDelete, onPatch, onDuplicat
             <Pill icon={Copy} onClick={onCopyToRest}>Copiar esta semana a las demás</Pill>
             <Pill icon={Trash2} danger onClick={onDelete} disabled={!canDelete}>Eliminar semana</Pill>
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* Selector de plantillas (día o semana) */
-function TemplatePicker({ kind, onApply, onClose }) {
-  const { user } = useAuth();
-  const pregunta = useConfirmacion();
-  const [rows, setRows] = useState(null);
-  useEffect(() => {
-    listTemplates(kind, user?.id).then(setRows).catch(() => setRows([]));
-  }, [kind, user?.id]);
-
-  const meta = (t) => {
-    if (kind === 'week') {
-      const days = t.data?.days?.length || 0;
-      return `${days} día${days !== 1 ? 's' : ''}`;
-    }
-    const n = (t.data?.exercises || []).filter((e) => !e.isNote).length;
-    return `${n} ejercicio${n !== 1 ? 's' : ''}`;
-  };
-
-  return (
-    <div
-      onMouseDown={onClose}
-      style={{ position: 'fixed', inset: 0, zIndex: 2800, background: 'rgba(17,19,24,0.5)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 16 }}
-    >
-      <div onMouseDown={(e) => e.stopPropagation()} className="animate-fade-in"
-        style={{ width: '100%', maxWidth: 460, maxHeight: '80svh', display: 'flex', flexDirection: 'column', background: T.bg, borderRadius: 20, fontFamily: FONT, boxShadow: KP.shPop, overflow: 'hidden' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 18px 12px' }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>
-            {kind === 'week' ? 'Plantillas de semana' : 'Catálogo de rutinas (día)'}
-          </div>
-          <button type="button" onClick={onClose} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.text2, padding: 4 }}>
-            <X size={19} />
-          </button>
-        </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px 16px' }}>
-          {rows === null ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: T.text2, padding: 16, fontWeight: 600 }}>
-              <Loader2 size={15} className="spin" /> Cargando…
-            </div>
-          ) : rows.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '34px 16px', color: T.text3 }}>
-              <FolderOpen size={30} style={{ opacity: 0.4 }} />
-              <div style={{ marginTop: 10, fontWeight: 600, color: T.text2, fontSize: 13.5 }}>
-                Aún no guardas {kind === 'week' ? 'plantillas de semana' : 'rutinas en el catálogo'}.
-              </div>
-            </div>
-          ) : rows.map((t) => (
-            <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 8px', borderBottom: `1px solid ${T.border}` }}>
-              <button type="button" onClick={() => onApply(t)}
-                style={{ flex: 1, minWidth: 0, textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, padding: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{t.name}</div>
-                <div style={{ fontSize: 12, color: T.text3, marginTop: 2, fontWeight: 600 }}>{meta(t)}</div>
-              </button>
-              <IconBtn icon={Trash2} danger title="Eliminar plantilla" onClick={async () => {
-                if (!await pregunta({ titulo: `¿Eliminar la plantilla "${t.name}"?`, confirmar: 'Sí, eliminarla', peligro: true })) return;
-                await deleteTemplate(t.id);
-                setRows((prev) => prev.filter((r) => r.id !== t.id));
-              }} />
-              <ChevronRight size={15} color={T.text3} />
-            </div>
-          ))}
         </div>
       </div>
     </div>
@@ -1729,7 +1645,7 @@ function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjer
  * como que saliendo de la parte de abajo". Con los tres puntos del editor esta
  * hoja se abre a cada rato, así que le aplica lo mismo.
  */
-function HojaAcciones({ acciones, onClose }) {
+export function HojaAcciones({ acciones, onClose }) {
   const esCompu = useIsDesktop();
   return (
     <div
@@ -1925,8 +1841,8 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
             otro (sin catálogo, sin copiar) reusa esta misma cabecera. */}
         {esCompu ? (
           <>
-            {!dual && onApplyCatalog && <Pill icon={FolderOpen} onClick={onApplyCatalog}>Desde catálogo</Pill>}
-            {!dual && onSaveToCatalog && <Pill icon={Save} onClick={onSaveToCatalog}>Guardar en catálogo</Pill>}
+            {!dual && onApplyCatalog && <Pill icon={FolderOpen} onClick={onApplyCatalog}>Desde Mis planes</Pill>}
+            {onSaveToCatalog && <Pill icon={Save} onClick={onSaveToCatalog}>Guardar en Mis planes</Pill>}
             {onCopy && <Pill icon={Copy} onClick={onCopy}>Copiar</Pill>}
             {!dual && onClear && <Pill icon={Eraser} onClick={onClear}>Limpiar</Pill>}
             {onDelete && <Pill icon={Trash2} danger onClick={onDelete}>Eliminar sesión</Pill>}
@@ -1960,8 +1876,8 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
         <HojaAcciones
           onClose={() => setMenu(false)}
           acciones={[
-            ...(dual || !onApplyCatalog ? [] : [{ icon: FolderOpen, texto: 'Desde catálogo', onClick: onApplyCatalog }]),
-            ...(dual || !onSaveToCatalog ? [] : [{ icon: Save, texto: 'Guardar en catálogo', onClick: onSaveToCatalog }]),
+            ...(dual || !onApplyCatalog ? [] : [{ icon: FolderOpen, texto: 'Desde Mis planes', onClick: onApplyCatalog }]),
+            ...(!onSaveToCatalog ? [] : [{ icon: Save, texto: 'Guardar en Mis planes', onClick: onSaveToCatalog }]),
             ...(onCopy ? [{ icon: Copy, texto: 'Copiar sesión', onClick: onCopy }] : []),
             ...(dual || !onClear ? [] : [{ icon: Eraser, texto: 'Limpiar sesión', onClick: onClear }]),
             ...(onDelete ? [{ icon: Trash2, texto: 'Eliminar sesión', onClick: onDelete, peligro: true }] : []),
@@ -1976,24 +1892,37 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
 /* Builder principal                                                    */
 /* ------------------------------------------------------------------ */
 
-export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDeleted, profesionalId = null }) {
+export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDeleted, profesionalId = null, catalogo = null }) {
   const esCompu = useIsDesktop();
   const pregunta = useConfirmacion();
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const { t } = usePalabras();
-  const isMaster = !!profile?.is_owner;
+  /* MODO MIS PLANES (`catalogo`). El MISMO editor, sin atleta: arma o edita un programa o una rutina que
+     vive en «Mis planes» (Andrés, 2 oct 2026: «el editor quiero que se vea como el que ya uso
+     normalmente»). Cambia solo lo que depende del atleta: arriba va el nombre del plan, no hay «Su
+     video» ni «Aquí va», la forma se elige al crear y no se cambia después (cada forma se guarda en un
+     sitio distinto) y guardar va a Mis planes. `catalogo`: { item, phases, estructura } para algo que ya
+     existe, o { forma, carpetaId } para algo nuevo. */
+  const enCatalogo = !!catalogo;
+  const [filaCatalogo, setFilaCatalogo] = useState(catalogo?.item ?? null);
   // Una rutina semanal sin ninguna sesión es un programa fantasma: se abre como nuevo (se escoge la forma).
-  const isNew = !planRow || esProgramaFantasma(planRow.data);
+  const isNew = enCatalogo ? !catalogo.item : (!planRow || esProgramaFantasma(planRow.data));
   /* De quién es este programa: null = el del coach principal; con id = el de un
      profesional del EQUIPO del atleta. Del profesional salen los registros del
      atleta que se miran aquí (`wr:cursor@<profesional>`) y el lugar guardado. */
   const claveProfesional = planRow?.profesional_id ?? profesionalId ?? null;
   const sufijo = claveProfesional ? `@${claveProfesional}` : '';
-  const [title, setTitle] = useState(planRow?.title || t('Plan de entrenamiento'));
-  const [phases, setPhases] = useState(() => (planRow?.data?.phases ? clone(planRow.data.phases) : []));
+  const [title, setTitle] = useState(() => (enCatalogo ? (catalogo.item?.nombre || '') : (planRow?.title || t('Plan de entrenamiento'))));
+  const [phases, setPhases] = useState(() => {
+    if (enCatalogo) return catalogo.phases ? clone(catalogo.phases) : fasesDeLaForma(catalogo.forma);
+    return planRow?.data?.phases ? clone(planRow.data.phases) : [];
+  });
   // La forma del plan: 'rutina' | 'semanas' | 'fases' (ver `estructuraDelPlan`).
   // De ella sale `kind`: 'weekly' para la rutina, 'periodized' para las otras.
-  const [estructura, setEstructura] = useState(() => (planRow ? estructuraDelPlan(planRow.data) : 'fases'));
+  const [estructura, setEstructura] = useState(() => {
+    if (enCatalogo) return catalogo.estructura || catalogo.forma || 'fases';
+    return planRow ? estructuraDelPlan(planRow.data) : 'fases';
+  });
   const kind = kindDeEstructura(estructura);
   const isWeekly = kind === 'weekly';
   const [formasAbiertas, setFormasAbiertas] = useState(false);
@@ -2010,10 +1939,14 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
   /* Un plan que ya existe abre SIEMPRE en la hoja, con una fase abierta. La
      lista de fases como pantalla aparte se fue el 24 sep 2026: la hoja ya las
      enseña todas. Ver `NavegadorDelPlan`. */
-  const [nav, setNav] = useState(() => (isNew ? { level: 'start' } : { level: 'phase', pi: restaurado?.pi ?? 0 }));
+  const [nav, setNav] = useState(() => {
+    // En Mis planes la forma ya se eligió en el Centro de creación: no hay pantalla de inicio.
+    if (enCatalogo) return isNew && catalogo.forma === 'semanas' ? { level: 'wizard' } : { level: 'phase', pi: 0 };
+    return isNew ? { level: 'start' } : { level: 'phase', pi: restaurado?.pi ?? 0 };
+  });
   const [weekIdx, setWeekIdx] = useState(restaurado?.wi ?? 0);
   const [activeWeekday, setActiveWeekday] = useState(
-    () => restaurado?.dia ?? diaParaSemana(planRow?.data?.phases?.[0]?.weekData?.[0], 'Lun'),
+    () => restaurado?.dia ?? diaParaSemana(phases[0]?.weekData?.[0], 'Lun'),
   );
   const [detailsOpen, setDetailsOpen] = useState(false);
   // En el teléfono la hoja y el editor del día no caben juntos: tocar un día
@@ -2027,38 +1960,15 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
   // que se vuelva a cambiar algo.
   const [haGuardado, setHaGuardado] = useState(false);
   const [err, setErr] = useState('');
-  const [repertoire, setRepertoire] = useState([]);
-  const [categorias, setCategorias] = useState([]);
-  const [masterIdCat, setMasterIdCat] = useState(null);
-  // Se ofrecen las de la app y las propias, no las de otros coaches (que el
-  // master sí puede leer). Ver SelectorCategoria.
-  const { salud: ofrecerPrimeroLasMias } = usePalabras();
-  const categoriasVisibles = useMemo(() => {
-    const lista = categorias.filter((c) => !c.created_by || c.created_by === masterIdCat || c.created_by === user?.id);
-    return ofrecerPrimeroLasMias ? conLasMiasPrimero(lista, user?.id) : lista;
-  }, [categorias, masterIdCat, user?.id, ofrecerPrimeroLasMias]);
+  // El repertorio y las categorías que ve esta persona (lo comparte el editor de workouts de Mis planes).
+  const {
+    repertoire, setRepertoire, setCategorias, masterIdCat, categoriasVisibles,
+  } = useRepertorioDelEditor();
   const [clipboard, setClipboard] = useState(null);
   const [modal, setModal] = useState(null);
 
   const [wizWeeks, setWizWeeks] = useState(4);
   const [wizDays, setWizDays] = useState(['Lun', 'Mié', 'Vie']);
-
-  // Repertorio para el picker: cada coach ve la base del master + los suyos
-  // (no los de otros coaches). El master ve todo.
-  //
-  // Encima se aplican SUS versiones de los ejercicios base: si personalizó el
-  // video de la sentadilla, al armar el plan tiene que ver el suyo, no el del
-  // master. Si no, estaría asignando a ciegas.
-  useEffect(() => {
-    Promise.all([listExercises(), getMasterId(), listCategories(), listExerciseOverrides(user?.id)])
-      .then(([exs, mId, cats, mias]) => {
-        const tagged = tagRepertoire(aplicarOverrides(exs, mias, cats), mId, user?.id);
-        setRepertoire(isMaster ? tagged : tagged.filter((e) => e.isBase || e.isMine));
-        setCategorias(cats);
-        setMasterIdCat(mId);
-      })
-      .catch(() => {});
-  }, [user?.id, isMaster]);
 
   // Al entrar al editor de una fase, arrancar en su primera semana / primer día con sesión
   const openPhase = (pi, wi = 0) => {
@@ -2181,6 +2091,22 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     return next;
   };
 
+  /* Lo que va a Mis planes de lo que hay en pantalla: una rutina semanal es una «rutina» (los días de su
+     semana) y lo demás un «programa». */
+  const datosDelCatalogo = () => {
+    const lista = normalize(phases);
+    return estructura === 'rutina'
+      ? { tipo: 'rutina', data: rutinaDePlan({ phases: lista }) }
+      : { tipo: 'programa', data: programaDePlan({ kind, estructura, phases: lista }) };
+  };
+  // De dónde sale lo que se guarda: «Del plan de Juan» o «Creado desde cero».
+  const origenDelPlan = athlete ? `Del plan de ${athlete.full_name || athlete.username}` : 'Creado desde cero';
+  // La casilla de «¿incluir mis notas?»: solo sale si hay notas que dejar fuera.
+  const casillaDeNotas = (tipo, data) => (tieneNotas(tipo, data) ? [{
+    clave: 'notas', etiqueta: '¿Incluir mis notas?', inicial: true,
+    ayuda: 'Las notas del día y las notas sueltas dentro de las sesiones. Las indicaciones de cada ejercicio se quedan.',
+  }] : []);
+
   async function onSave() {
     if (!title.trim()) { setErr(t('Ponle un título al plan')); return; }
     if (phases.length === 0) { setErr(t('El plan necesita al menos una fase')); return; }
@@ -2197,6 +2123,24 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         peligro: true,
       });
       if (va) await eliminarPrograma({ sinPreguntar: true });
+      return;
+    }
+    if (enCatalogo) {
+      // Algo NUEVO pregunta primero dónde guardarlo; algo que ya existe se actualiza.
+      if (!filaCatalogo) { setModal({ type: 'guardar-catalogo' }); return; }
+      setErr('');
+      setSaving(true);
+      try {
+        const fila = await actualizarItem(filaCatalogo, { nombre: title.trim(), data: datosDelCatalogo().data });
+        setFilaCatalogo(fila);
+        setDirty(false);
+        setHaGuardado(true);
+        onSaved?.(fila);
+      } catch (e) {
+        setErr(e.message || 'Error al guardar');
+      } finally {
+        setSaving(false);
+      }
       return;
     }
     setErr('');
@@ -2326,6 +2270,24 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
      en blanco. Aquí está la salida: desde los tres puntos del plan. Se puede recuperar en
      «Cambios del plan» (la base guarda la versión). */
   const eliminarPrograma = async ({ sinPreguntar = false } = {}) => {
+    if (enCatalogo) {
+      if (!filaCatalogo) return;
+      const va = await pregunta({
+        titulo: `¿Eliminar «${filaCatalogo.nombre}» de Mis planes?`,
+        detalle: 'No se puede recuperar. Los atletas que ya lo recibieron lo conservan: lo que se les dio es una copia.',
+        confirmar: 'Sí, eliminarlo',
+        peligro: true,
+      });
+      if (!va) return;
+      try {
+        await borrarItem(filaCatalogo);
+        setDirty(false);
+        onDeleted?.();
+      } catch (e) {
+        setErr(e.message || 'No se pudo eliminar');
+      }
+      return;
+    }
     if (!planRow) return;
     const va = sinPreguntar || await pregunta({
       titulo: `${t('¿Eliminar el plan')} "${planRow.title || ''}"?`,
@@ -2510,6 +2472,25 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
             <ChevronRight size={18} color={T.text3} style={{ marginLeft: 'auto', flexShrink: 0 }} />
           </button>
         ))}
+        <button
+          type="button" onClick={() => setModal({ type: 'desde-plan' })}
+          style={{
+            display: 'flex', gap: 14, alignItems: 'center', textAlign: 'left', cursor: 'pointer',
+            background: T.bg2, border: `1.5px solid ${T.border}`, borderRadius: 18, padding: 18,
+            fontFamily: FONT, boxShadow: KP.shCard,
+          }}
+        >
+          <span style={{ width: 46, height: 46, borderRadius: 14, background: T.accentBg, color: T.accent, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+            <FolderOpen size={22} />
+          </span>
+          <span>
+            <span style={{ display: 'block', fontSize: 15.5, fontWeight: 800, color: T.text }}>Desde Mis planes</span>
+            <span style={{ display: 'block', fontSize: 13, color: T.text2, marginTop: 3, lineHeight: 1.45 }}>
+              Parte de un programa o una rutina que ya guardaste y ajústalo.
+            </span>
+          </span>
+          <ChevronRight size={18} color={T.text3} style={{ marginLeft: 'auto', flexShrink: 0 }} />
+        </button>
       </div>
     );
   } else if (nav.level === 'wizard') {
@@ -2611,16 +2592,16 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
           const forma = FORMAS.find((f) => f.id === estructura) ?? FORMAS[2];
           return (
             <button
-              type="button" onClick={() => setFormasAbiertas(true)}
+              type="button" onClick={() => setFormasAbiertas(true)} disabled={enCatalogo}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none', background: 'transparent',
-                cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 700, color: T.text2,
+                cursor: enCatalogo ? 'default' : 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 700, color: T.text2,
                 padding: '2px 2px 12px',
               }}
             >
               <forma.icon size={14} color={T.accent} />
               {forma.corto}
-              <span style={{ fontWeight: 800, color: T.accent }}>Cambiar</span>
+              {!enCatalogo && <span style={{ fontWeight: 800, color: T.accent }}>Cambiar</span>}
             </button>
           );
         })()}
@@ -2740,7 +2721,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
                 </div>
                 <div style={{ fontSize: 17, fontWeight: 800, color: T.text }}>No hay sesión para el {DAY_FULL_LOWER[activeWeekday] || activeWeekday.toLowerCase()}</div>
                 <div style={{ fontSize: 13.5, color: T.text2, marginTop: 8, lineHeight: 1.5 }}>
-                  Crea una desde cero, tráela del catálogo o pega una copiada.
+                  Crea una desde cero, tráela de Mis planes o pega una copiada.
                 </div>
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20, flexWrap: 'wrap' }}>
                   <button type="button"
@@ -2748,7 +2729,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
                     style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 20px', borderRadius: 12, border: 'none', cursor: 'pointer', background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff', fontFamily: FONT, fontSize: 14, fontWeight: 800, boxShadow: KP.shBtn }}>
                     <Plus size={16} /> Añadir sesión
                   </button>
-                  <Pill icon={FolderOpen} onClick={() => setModal({ type: 'tpl-day', payload: { di: null } })}>Desde catálogo</Pill>
+                  <Pill icon={FolderOpen} onClick={() => setModal({ type: 'tpl-day', payload: { di: null } })}>Desde Mis planes</Pill>
                   {clipboard && (
                     <Pill icon={Clipboard} onClick={() => patchWeek(nav.pi, wIdx, (wk) => ({ days: [...(wk.days || []), { ...clone(clipboard), day: activeWeekday }] }))}>
                       Pegar rutina
@@ -2782,7 +2763,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
                     onClear={async () => {
                       if (await pregunta({ titulo: '¿Vaciar esta sesión?', detalle: 'Se quitan todos sus sets. El nombre y el tipo se quedan.', confirmar: 'Sí, vaciarla', peligro: true })) patchDay(nav.pi, wIdx, di, { exercises: [] });
                     }}
-                    onSaveToCatalog={() => setModal({ type: 'name-day', payload: d })}
+                    onSaveToCatalog={() => setModal({ type: 'guardar-dia', payload: { sesion: d, delDia: daysOfWeekday.map((x) => x.d) } })}
                     onApplyCatalog={() => setModal({ type: 'tpl-day', payload: { di } })}
                   />
                 ))}
@@ -2861,7 +2842,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 800, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{crumb}</div>
           <div style={{ fontSize: 12, color: T.text2, fontWeight: 600 }}>
-            {athlete.full_name || athlete.username}{dirty ? ' · sin guardar' : (haGuardado ? ' · guardado' : '')}
+            {enCatalogo ? 'Mis planes' : (athlete.full_name || athlete.username)}{dirty ? ' · sin guardar' : (haGuardado ? ' · guardado' : '')}
           </div>
         </div>
         {nav.level !== 'start' && nav.level !== 'wizard' && (
@@ -2920,13 +2901,16 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         <HojaAcciones
           onClose={() => setMenu(null)}
           acciones={[
-            ...(isWeekly ? [
-              { icon: FolderOpen, texto: 'Usar una plantilla de semana', onClick: () => setModal({ type: 'tpl-week' }) },
-              { icon: Save, texto: 'Guardar la semana como plantilla', onClick: () => setModal({ type: 'name-week' }) },
-            ] : []),
+            ...(enCatalogo ? [] : [{
+              icon: Save, texto: isWeekly ? 'Guardar la rutina en Mis planes' : 'Guardar todo el plan en Mis planes',
+              onClick: () => setModal({ type: 'guardar-plan' }),
+            }]),
+            ...(isWeekly ? [{ icon: FolderOpen, texto: 'Usar una rutina de Mis planes', onClick: () => setModal({ type: 'tpl-week' }) }] : []),
             ...(estructura === 'fases' ? [{ icon: Plus, texto: 'Agregar fase', onClick: agregarFase }] : []),
-            { icon: Settings2, texto: t('Cambiar la forma del plan'), onClick: () => setFormasAbiertas(true) },
-            ...(planRow && onDeleted ? [{ icon: Trash2, texto: t('Eliminar el plan'), onClick: eliminarPrograma, peligro: true }] : []),
+            ...(enCatalogo ? [] : [{ icon: Settings2, texto: t('Cambiar la forma del plan'), onClick: () => setFormasAbiertas(true) }]),
+            ...(enCatalogo
+              ? (filaCatalogo ? [{ icon: Trash2, texto: 'Eliminar de Mis planes', onClick: eliminarPrograma, peligro: true }] : [])
+              : (planRow && onDeleted ? [{ icon: Trash2, texto: t('Eliminar el plan'), onClick: eliminarPrograma, peligro: true }] : [])),
           ]}
         />
       )}
@@ -2956,81 +2940,146 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
             { icon: Pencil, texto: 'Nombre y carga de la semana', onClick: () => setModal({ type: 'week-meta' }) },
             { icon: Copy, texto: 'Duplicar semana', onClick: duplicarSemana },
             ...((deCorrido ? semanasDelPlan(phases) : curPhase.weekData.length) > 1 ? [{ icon: Layers, texto: 'Copiarla a todas las semanas', onClick: copiarSemanaATodas }] : []),
-            { icon: FolderOpen, texto: 'Usar una plantilla de semana', onClick: () => setModal({ type: 'tpl-week' }) },
-            { icon: Save, texto: 'Guardarla como plantilla', onClick: () => setModal({ type: 'name-week' }) },
+            { icon: FolderOpen, texto: 'Usar una rutina de Mis planes', onClick: () => setModal({ type: 'tpl-week' }) },
+            { icon: Save, texto: 'Guardar la semana en Mis planes', onClick: () => setModal({ type: 'guardar-semana' }) },
             ...((deCorrido ? semanasDelPlan(phases) : curPhase.weekData.length) > 1 ? [{ icon: Trash2, texto: 'Eliminar semana', onClick: eliminarSemana, peligro: true }] : []),
           ]}
         />
       )}
 
-      {modal?.type === 'name-day' && (
-        <NameModal
-          title="Guardar rutina en el catálogo"
-          placeholder="Ej. Pierna — fuerza básica"
-          onClose={() => setModal(null)}
-          onSave={async (name) => {
-            const d = modal.payload;
-            // `catNombre`/`catColor` van con el día: si el tipo es uno propio
-            // del coach, la plantilla tiene que traerlo puesto, no el gris de
-            // "Gym" que saldría al no encontrar la llave.
-            await saveTemplate({ name, kind: 'day', data: { name: d.name, cat: d.cat, catNombre: d.catNombre ?? null, catColor: d.catColor ?? null, exercises: d.exercises || [] }, createdBy: user?.id });
-            setModal(null);
-          }}
-        />
-      )}
-      {modal?.type === 'name-week' && curPhase && (
-        <NameModal
-          title="Guardar semana como plantilla"
-          placeholder="Ej. Semana hipertrofia 3 días"
-          onClose={() => setModal(null)}
-          onSave={async (name) => {
-            const w = curPhase.weekData[curWeekIdx];
-            await saveTemplate({ name, kind: 'week', data: { days: w?.days || [] }, createdBy: user?.id });
-            setModal(null);
-          }}
-        />
-      )}
+      {/* GUARDAR EN MIS PLANES. Todo sale de la misma ventana: nombre, descripción, carpeta y, cuando hay
+          notas, «¿incluir mis notas?» (se pregunta cada vez: Andrés, 2 oct 2026). */}
+      {modal?.type === 'guardar-catalogo' && (() => {
+        const { tipo, data } = datosDelCatalogo();
+        return (
+          <DialogoGuardar
+            tipo={tipo} nombreInicial={title} carpetaInicial={catalogo?.carpetaId ?? null}
+            onGuardar={async ({ nombre, descripcion, carpetaId }) => {
+              const fila = await guardarItem({ tipo, nombre, descripcion, origen: 'Creado desde cero', carpetaId, data, userId: user?.id });
+              setFilaCatalogo(fila);
+              setTitle(fila.nombre);
+              setDirty(false);
+              setHaGuardado(true);
+              onSaved?.(fila);
+            }}
+            onCerrar={() => setModal(null)}
+          />
+        );
+      })()}
+      {modal?.type === 'guardar-plan' && (() => {
+        const { tipo, data } = datosDelCatalogo();
+        return (
+          <DialogoGuardar
+            titulo={isWeekly ? 'Guardar la rutina en Mis planes' : 'Guardar todo el plan en Mis planes'}
+            tipo={tipo} nombreInicial={title} interruptores={casillaDeNotas(tipo, data)}
+            onGuardar={({ nombre, descripcion, carpetaId, interruptores }) => guardarItem({
+              tipo, nombre, descripcion, origen: origenDelPlan, carpetaId, userId: user?.id,
+              data: interruptores.notas === false ? sinNotas(tipo, data) : data,
+            })}
+            onCerrar={() => setModal(null)}
+          />
+        );
+      })()}
+      {modal?.type === 'guardar-semana' && curPhase && (() => {
+        const semana = curPhase.weekData[curWeekIdx];
+        const data = rutinaDeSemana(semana);
+        return (
+          <DialogoGuardar
+            titulo="Guardar la semana en Mis planes" tipo="rutina"
+            nombreInicial={nombreSemana(curPhase, semana, curWeekIdx + 1)} interruptores={casillaDeNotas('rutina', data)}
+            onGuardar={({ nombre, descripcion, carpetaId, interruptores }) => guardarItem({
+              tipo: 'rutina', nombre, descripcion, origen: origenDelPlan, carpetaId, userId: user?.id,
+              data: interruptores.notas === false ? sinNotas('rutina', data) : data,
+            })}
+            onCerrar={() => setModal(null)}
+          />
+        );
+      })()}
+      {modal?.type === 'guardar-dia' && (() => {
+        const { sesion, delDia } = modal.payload;
+        const varias = delDia.length > 1;
+        return (
+          <DialogoGuardar
+            titulo="Guardar el workout en Mis planes" tipo="workout" nombreInicial={sesion.name || ''}
+            interruptores={[
+              ...(varias ? [{
+                clave: 'todo', inicial: true,
+                etiqueta: `Guardar también las otras ${delDia.length - 1} ${delDia.length === 2 ? 'sesión' : 'sesiones'} de este día`,
+                ayuda: 'Se guardan juntas y se asignan juntas, como un día de doble sesión.',
+              }] : []),
+              ...casillaDeNotas('workout', workoutDeSesiones(varias ? delDia : [sesion])),
+            ]}
+            onGuardar={({ nombre, descripcion, carpetaId, interruptores }) => {
+              const data = workoutDeSesiones(varias && interruptores.todo !== false ? delDia : [sesion]);
+              return guardarItem({
+                tipo: 'workout', nombre, descripcion, origen: origenDelPlan, carpetaId, userId: user?.id,
+                data: interruptores.notas === false ? sinNotas('workout', data) : data,
+              });
+            }}
+            onCerrar={() => setModal(null)}
+          />
+        );
+      })()}
       {modal?.type === 'tpl-week' && curPhase && (
-        <TemplatePicker
-          kind="week"
-          onClose={() => setModal(null)}
-          onApply={async (t) => {
-            const n = (t.data?.days || []).length;
+        <SelectorDeMisPlanes
+          tipos={['rutina']} titulo="Usar una rutina de Mis planes" onCerrar={() => setModal(null)}
+          onElegir={async (item) => {
+            let datos;
+            try { datos = await abrirItem(item); } catch (e) { setErr(e.message || 'No se pudo abrir'); setModal(null); return; }
+            const n = (datos?.days || []).length;
             if (!await pregunta({
-              titulo: `¿Aplicar "${t.name}"?`,
+              titulo: `¿Aplicar "${item.nombre}"?`,
               detalle: `Esta semana pierde lo que tenga y queda con ${n} día${n !== 1 ? 's' : ''}.`,
               confirmar: 'Sí, aplicarla',
             })) return;
-            patchWeek(nav.pi, curWeekIdx, { days: clone(t.data?.days || []) });
+            patchWeek(nav.pi, curWeekIdx, { days: clone(datos?.days || []) });
             setModal(null);
           }}
         />
       )}
       {modal?.type === 'tpl-day' && curPhase && (
-        <TemplatePicker
-          kind="day"
-          onClose={() => setModal(null)}
-          onApply={async (t) => {
+        <SelectorDeMisPlanes
+          tipos={['workout']} titulo="Desde Mis planes" onCerrar={() => setModal(null)}
+          onElegir={async (item) => {
             const { di } = modal.payload;
-            const tplDay = {
-              day: activeWeekday, name: t.data?.name || t.name, cat: t.data?.cat || 'gym',
-              catNombre: t.data?.catNombre ?? null, catColor: t.data?.catColor ?? null,
-              exercises: clone(t.data?.exercises || []),
-            };
+            let datos;
+            try { datos = await abrirItem(item); } catch (e) { setErr(e.message || 'No se pudo abrir'); setModal(null); return; }
+            const nuevas = diasDeWorkout(datos, activeWeekday, item.nombre);
             if (di == null) {
-              patchWeek(nav.pi, curWeekIdx, (wk) => ({ days: [...(wk.days || []), tplDay] }));
+              patchWeek(nav.pi, curWeekIdx, (wk) => ({ days: [...(wk.days || []), ...nuevas] }));
             } else {
               if (!await pregunta({
-                titulo: `¿Aplicar "${t.name}"?`,
-                detalle: 'Esta sesión pierde lo que tenga y queda con la rutina del catálogo.',
+                titulo: `¿Aplicar "${item.nombre}"?`,
+                detalle: 'Esta sesión pierde lo que tenga y queda con el workout de Mis planes.',
                 confirmar: 'Sí, aplicarla',
               })) return;
-              patchDay(nav.pi, curWeekIdx, di, {
-                name: tplDay.name, cat: tplDay.cat,
-                catNombre: tplDay.catNombre, catColor: tplDay.catColor,
-                exercises: tplDay.exercises,
-              });
+              // En el lugar de la sesión, sin moverla (lo que anota el atleta cuelga de su posición); si el workout
+              // trae más sesiones, van al final del día.
+              const lugar = { ...nuevas[0] };
+              delete lugar.day;
+              patchDay(nav.pi, curWeekIdx, di, { blocks: undefined, dual: undefined, notes: undefined, ...lugar });
+              if (nuevas.length > 1) patchWeek(nav.pi, curWeekIdx, (wk) => ({ days: [...(wk.days || []), ...nuevas.slice(1)] }));
             }
+            setModal(null);
+          }}
+        />
+      )}
+      {modal?.type === 'desde-plan' && (
+        <SelectorDeMisPlanes
+          tipos={['programa', 'rutina']} titulo="Armar el plan desde Mis planes"
+          subtitulo="Parte de algo que ya guardaste y ajústalo antes de guardarlo." onCerrar={() => setModal(null)}
+          onElegir={async (item) => {
+            let datos;
+            try { datos = await abrirItem(item); } catch (e) { setErr(e.message || 'No se pudo abrir'); setModal(null); return; }
+            // Es una copia con fases de ids nuevos: lo que el atleta anote no se mezcla con nada anterior.
+            const plan = item.tipo === 'programa' ? planDePrograma(datos) : planDeRutina(datos);
+            setEstructura(plan.estructura);
+            touch(() => plan.phases);
+            setTitle(item.nombre);
+            setWeekIdx(0);
+            setActiveWeekday(diaParaSemana(plan.phases[0]?.weekData?.[0], 'Lun'));
+            setDetailsOpen(false);
+            setNav({ level: 'phase', pi: 0 });
             setModal(null);
           }}
         />

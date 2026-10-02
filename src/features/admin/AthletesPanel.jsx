@@ -3,7 +3,7 @@ import {
   Loader2, Search, Plus, Trash2, X, ChevronRight, ChevronLeft, Pencil,
   CalendarClock, User as UserIcon, Shield, ClipboardList, Users,
   UserMinus, Power, AlertTriangle, Eye, ChevronDown, ChevronUp, UserPlus,
-  Check, Copy, Share2, CircleCheck, RotateCcw, CalendarPlus,
+  Check, Copy, Share2, CircleCheck, RotateCcw, CalendarPlus, FolderOpen,
 } from 'lucide-react';
 import {
   getProgramas, getSesionesPegadas, deletePlan, getAthleteState, listAthletesOverview, listCoaches, setAthleteCoach,
@@ -30,6 +30,7 @@ import { esDescanso, dondeVa, sessionIdFor, estructuraDelPlan, nombreDeSesion } 
 import { turnoDeTag, minutosDeTag } from '@/lib/sesiones';
 import { colorDePrograma, esProgramaFantasma, nombreCorto, rolDeProfesion } from '@/lib/programas';
 import { fasesConPegadas, reglasDe } from '@/lib/pegadas';
+import AsignarAlAtleta from '@/features/misplanes/AsignarAlAtleta';
 import HojaFlotante from '@/components/HojaFlotante';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
 import ListaDesplegable from '@/components/ListaDesplegable';
@@ -889,6 +890,8 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
   const [building, setBuilding] = useLugar(`editor.${athlete.id}`, false, (v) => v === true);
   const [savingCoach, setSavingCoach] = useState(false);
   const [verPlan, setVerPlan] = useState(false);
+  // «Asignar de Mis planes»: darle a este atleta algo que se guardó (programa, rutina o workout).
+  const [asignando, setAsignando] = useState(false);
   const [seccion, setSeccion] = useState(null); // null | 'como-va' | 'cambios' | 'notas' | 'equipo' | 'cuenta'
   /* Las notas de consulta (y dar de alta) son de fisios y solo de quien atiende
      a esta persona: ni el master ni otro profesional las ven, aunque la lista
@@ -1085,6 +1088,22 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
         primaria={!puedePegar}
         onClick={() => setBuilding(true)}
       />
+      {!soloNotas && (
+        <AccionFicha
+          icon={FolderOpen}
+          titulo="Asignar de Mis planes"
+          detalle="Un programa, una rutina o un workout que ya guardaste"
+          onClick={() => setAsignando(true)}
+        />
+      )}
+      {asignando && !loading && (
+        <AsignarAlAtleta
+          atleta={athlete}
+          clave={miClave}
+          onAsignado={(fila) => { if (fila) setPlan(fila); }}
+          onCerrar={() => setAsignando(false)}
+        />
+      )}
       {programasVisibles.length > 0 && (
         <AccionFicha
           icon={ClipboardList}
