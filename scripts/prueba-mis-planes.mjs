@@ -7,7 +7,8 @@ import {
   workoutDeSesiones, diasDeWorkout, sesionesDeWorkout, rutinaDePlan, rutinaDeSemana, planDeRutina,
   programaDePlan, planDePrograma, fasesConIdsNuevos, sinNotas, tieneNotas, resumenDe, textoDeResumen,
   hijasDe, rutaDeCarpeta, descendientesDe, puedeMoverCarpeta, cabeCarpetaEn, textoDeRuta, coincide,
-  nombreDeCopia, NIVELES_DE_CARPETA,
+  nombreDeCopia, NIVELES_DE_CARPETA, arbolDeCarpetas, planDeMovimiento, puedenMoverseCarpetas, carpetasQueSePuedenTraer,
+  carpetasDeAbajoPrimero, claveDeItem, claveDeCarpeta,
 } from '../src/lib/misPlanesDatos.js';
 import { traduce } from '../src/lib/palabras.js';
 
@@ -121,6 +122,47 @@ assert.equal(puedeMoverCarpeta([...cadena, c('x', 'X')], 'x', `n${NIVELES_DE_CAR
 // Una vuelta rara en los datos no cuelga la pantalla.
 const rota = [c('p', 'P', 'q'), c('q', 'Q', 'p')];
 assert.equal(rutaDeCarpeta(rota, 'p').length, 2);
+
+/* ---- Mover: el árbol, el plan de movimiento y su «deshacer» ---- */
+const arbol = arbolDeCarpetas(carpetas);
+assert.deepEqual(arbol.map((x) => [x.carpeta.id, x.nivel]), [['a', 0], ['f', 0], ['ff', 1], ['ff1', 2], ['fv', 1]], 'por nombre, cada una seguida de lo suyo');
+assert.equal(arbol.length, carpetas.length, 'el árbol trae todas las carpetas, una sola vez');
+arbol.forEach(({ carpeta, nivel }) => {
+  assert.equal(nivel, rutaDeCarpeta(carpetas, carpeta.id).length - 1, `el nivel de ${carpeta.id} es su profundidad`);
+});
+assert.equal(arbolDeCarpetas([c('p', 'P', 'q'), c('q', 'Q', 'p')]).length, 0, 'una vuelta rara no cuelga la pantalla');
+
+const cosaA = { tabla: 'routine_templates', id: 'w1', carpetaId: null };
+const cosaB = { tabla: 'programas_guardados', id: 'p1', carpetaId: 'f' };
+const cosaC = { tabla: 'routine_templates', id: 'r1', carpetaId: 'fv' };
+const plan = planDeMovimiento({ items: [cosaA, cosaB, cosaC] }, 'fv');
+assert.deepEqual(plan.ir.map((m) => m.id), ['w1', 'p1'], 'lo que ya estaba ahí no se mueve');
+assert.deepEqual(plan.volver, [
+  { tabla: 'routine_templates', id: 'w1', a: null },
+  { tabla: 'programas_guardados', id: 'p1', a: 'f' },
+], 'deshacer lleva cada cosa a donde estaba');
+assert.deepEqual(planDeMovimiento({ items: [cosaB] }, null).ir, [{ tabla: 'programas_guardados', id: 'p1', a: null }], 'null = arriba de todo');
+assert.equal(planDeMovimiento({ items: [cosaA] }, null).ir.length, 0, 'sin carpeta a sin carpeta no hace nada');
+const conCarpeta = planDeMovimiento({ carpetas: [carpetas.find((x) => x.id === 'ff1')] }, null);
+assert.deepEqual(conCarpeta.ir, [{ tabla: 'carpetas_planes', id: 'ff1', a: null }]);
+assert.deepEqual(conCarpeta.volver, [{ tabla: 'carpetas_planes', id: 'ff1', a: 'ff' }], 'una carpeta también vuelve a su lugar');
+
+assert.equal(claveDeItem(cosaA), 'routine_templates:w1');
+assert.equal(claveDeCarpeta({ id: 'f' }), 'carpetas_planes:f');
+assert.equal(puedenMoverseCarpetas(carpetas, [carpetas.find((x) => x.id === 'f')], 'ff1'), false, 'una carpeta no entra en lo suyo');
+assert.equal(puedenMoverseCarpetas(carpetas, [carpetas.find((x) => x.id === 'fv')], 'a'), true);
+
+// «Traer» a una carpeta: no ella, no lo que ya vive en ella, no lo que cuelga de ella.
+const traibles = carpetasQueSePuedenTraer(carpetas, 'f').map((x) => x.id);
+assert.equal(traibles.includes('f'), false, 'ella misma no');
+assert.equal(traibles.includes('ff'), false, 'lo que ya vive en ella no se trae');
+assert.equal(traibles.includes('ff1'), true, 'pero una subcarpeta de más abajo sí se puede subir');
+assert.equal(traibles.includes('a'), true);
+assert.equal(carpetasQueSePuedenTraer(carpetas, 'ff1').map((x) => x.id).includes('f'), false, 'su carpeta de arriba no cabe dentro de ella');
+
+// Borrar varias carpetas: las de abajo primero.
+const orden = carpetasDeAbajoPrimero(carpetas, [carpetas.find((x) => x.id === 'f'), carpetas.find((x) => x.id === 'ff1')]).map((x) => x.id);
+assert.deepEqual(orden, ['ff1', 'f'], 'la de adentro se borra antes que la que la tiene');
 
 /* ---- Buscar y nombrar copias ---- */
 assert.equal(coincide({ nombre: 'Rutina de Fuerza', descripcion: 'Pretemporada', origen: 'Del plan de Andrés' }, 'fuérza'), true, 'sin acentos');

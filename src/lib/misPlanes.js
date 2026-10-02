@@ -143,6 +143,21 @@ export async function moverCarpeta(id, parentId) {
   if (error) throw error;
 }
 
+// En cada tabla, la columna que dice en qué carpeta vive la fila.
+const COLUMNA_DE_CARPETA = { routine_templates: 'carpeta_id', programas_guardados: 'carpeta_id', carpetas_planes: 'parent_id' };
+
+/**
+ * Cambia de carpeta varias cosas y carpetas de una vez: `[{ tabla, id, a }]` (ver `planDeMovimiento`), con `a` =
+ * la carpeta nueva (`null` = arriba de todo). Solo cambia el lugar: la fecha de «cambiado» no se toca, porque
+ * mover no es editar. Si algo falla se avisa y quien llama vuelve a leer la lista para ver cómo quedó.
+ */
+export async function moverCosas(movimientos) {
+  const respuestas = await Promise.all((movimientos ?? []).map(({ tabla, id, a }) => (
+    supabase.from(tabla).update({ [COLUMNA_DE_CARPETA[tabla]]: a }).eq('id', id)
+  )));
+  respuestas.forEach((r) => { if (r.error) throw r.error; });
+}
+
 /**
  * Borra la carpeta; lo que tenía (subcarpetas y cosas) sube un nivel, a la carpeta de arriba de ella (o a
  * «Sin carpeta»). Primero se sube todo y al final se borra la carpeta: si algo falla a medias, no se pierde nada.

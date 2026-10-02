@@ -2973,7 +2973,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         return (
           <DialogoGuardar
             titulo={isWeekly ? 'Guardar la rutina en Mis planes' : t('Guardar todo el plan en Mis planes')}
-            tipo={tipo} nombreInicial={title} interruptores={casillaDeNotas(tipo, data)}
+            tipo={tipo} nombreInicial={title} interruptores={casillaDeNotas(tipo, data)} recordarCarpeta
             onGuardar={async ({ nombre, descripcion, carpetaId, interruptores }) => {
               await guardarItem({
                 tipo, nombre, descripcion, origen: origenDelPlan, carpetaId, userId: user?.id,
@@ -2990,7 +2990,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         const data = rutinaDeSemana(semana);
         return (
           <DialogoGuardar
-            titulo="Guardar la semana en Mis planes" tipo="rutina"
+            titulo="Guardar la semana en Mis planes" tipo="rutina" recordarCarpeta
             nombreInicial={nombreSemana(curPhase, semana, curWeekIdx + 1)} interruptores={casillaDeNotas('rutina', data)}
             onGuardar={async ({ nombre, descripcion, carpetaId, interruptores }) => {
               await guardarItem({
@@ -3008,7 +3008,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         const varias = delDia.length > 1;
         return (
           <DialogoGuardar
-            titulo="Guardar el workout en Mis planes" tipo="workout" nombreInicial={sesion.name || ''}
+            titulo="Guardar el workout en Mis planes" tipo="workout" nombreInicial={sesion.name || ''} recordarCarpeta
             interruptores={[
               ...(varias ? [{
                 clave: 'todo', inicial: true,

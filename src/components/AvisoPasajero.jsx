@@ -15,6 +15,7 @@ import { FONT, KP } from '@/lib/theme';
  *   const { avisa, trabajando } = useAviso();
  *   avisa('Guardado en Mis planes');                       // ✓ y se va solo
  *   await trabajando('Eliminando…', () => borrar(), 'Eliminado'); // gira mientras dura, luego ✓
+ *   avisa('Movido a «Fuerza»', { accion: { texto: 'Deshacer', alTocar: () => … } }); // con un botón; dura más
  *
  * `trabajando` devuelve lo que devuelva `hacer` y, si falla, quita el aviso y deja pasar el error para
  * que quien llama lo escriba donde corresponde. Sin proveedor no hace nada y `hacer` corre igual.
@@ -36,10 +37,11 @@ export function AvisoProvider({ children }) {
     setAviso(null);
   }, []);
 
-  const avisa = useCallback((texto) => {
+  // Con un botón («Deshacer») el aviso se queda más: da tiempo de verlo y de tocarlo.
+  const avisa = useCallback((texto, { accion = null } = {}) => {
     clearTimeout(reloj.current);
-    setAviso({ texto, ocupado: false });
-    reloj.current = setTimeout(() => setAviso(null), 2600);
+    setAviso({ texto, ocupado: false, accion });
+    reloj.current = setTimeout(() => setAviso(null), accion ? 7000 : 2600);
   }, []);
 
   const trabajando = useCallback(async (texto, hacer, listo) => {
@@ -47,7 +49,9 @@ export function AvisoProvider({ children }) {
     setAviso({ texto, ocupado: true });
     try {
       const resultado = await hacer();
-      if (listo) avisa(listo); else quita();
+      if (!listo) quita();
+      else if (typeof listo === 'string') avisa(listo);
+      else avisa(listo.texto, { accion: listo.accion });
       return resultado;
     } catch (e) {
       quita();
@@ -75,13 +79,24 @@ export function AvisoProvider({ children }) {
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 9, maxWidth: '100%', padding: '11px 17px', borderRadius: 999,
               background: 'rgba(17,19,24,0.94)', color: '#fff', fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
-              boxShadow: KP.shPop,
+              boxShadow: KP.shPop, pointerEvents: aviso.accion ? 'auto' : 'none',
             }}
           >
             {aviso.ocupado
               ? <Loader2 size={16} className="spin" style={{ flexShrink: 0 }} />
               : <Check size={16} color="#3DD9A0" style={{ flexShrink: 0 }} />}
             <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{aviso.texto}</span>
+            {aviso.accion && (
+              <button
+                type="button" onClick={() => { const { alTocar } = aviso.accion; quita(); alTocar(); }}
+                style={{
+                  border: 'none', background: 'transparent', cursor: 'pointer', color: '#8FA8FF', fontFamily: FONT,
+                  fontSize: 13.5, fontWeight: 800, padding: '2px 4px', marginLeft: 2, flexShrink: 0,
+                }}
+              >
+                {aviso.accion.texto}
+              </button>
+            )}
           </div>
         </div>,
         document.body,

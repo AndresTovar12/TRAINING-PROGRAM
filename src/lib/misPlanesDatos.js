@@ -261,6 +261,66 @@ export const textoDeRuta = (carpetas, id) => {
   return ruta.length ? ruta.map((c) => c.nombre).join(' › ') : 'Sin carpeta';
 };
 
+/**
+ * Todas las carpetas como un árbol puesto en fila: cada una seguida de lo que cuelga de ella, con su nivel
+ * (0 = arriba de todo) para dibujarlas con sangría. Aguanta una vuelta rara en los datos.
+ */
+export function arbolDeCarpetas(carpetas, desde = null, nivel = 0, vistas = new Set()) {
+  return hijasDe(carpetas, desde).flatMap((c) => {
+    if (vistas.has(c.id)) return [];
+    vistas.add(c.id);
+    return [{ carpeta: c, nivel }, ...arbolDeCarpetas(carpetas, c.id, nivel + 1, vistas)];
+  });
+}
+
+/* ------------------------------ Mover ------------------------------ */
+
+/** La llave con que se marca una cosa o una carpeta para moverla o borrarla: «tabla:id». */
+export const claveDeItem = (item) => `${item.tabla}:${item.id}`;
+export const claveDeCarpeta = (carpeta) => `carpetas_planes:${carpeta.id}`;
+
+/**
+ * Lo que hay que escribir en la base para llevar cosas (`items`) y carpetas a `destinoId` (`null` = arriba de
+ * todo), y lo que hay que escribir para DESHACERLO. Lo que ya está en ese lugar no se toca. Cada paso es
+ * `{ tabla, id, a }`: la fila `id` de `tabla` pasa a estar en la carpeta `a`.
+ */
+export function planDeMovimiento({ items = [], carpetas = [] }, destinoId) {
+  const a = destinoId ?? null;
+  const ir = [];
+  const volver = [];
+  items.forEach((i) => {
+    if ((i.carpetaId ?? null) === a) return;
+    ir.push({ tabla: i.tabla, id: i.id, a });
+    volver.push({ tabla: i.tabla, id: i.id, a: i.carpetaId ?? null });
+  });
+  carpetas.forEach((c) => {
+    if ((c.parent_id ?? null) === a) return;
+    ir.push({ tabla: 'carpetas_planes', id: c.id, a });
+    volver.push({ tabla: 'carpetas_planes', id: c.id, a: c.parent_id ?? null });
+  });
+  return { ir, volver };
+}
+
+/** ¿Pueden TODAS estas carpetas ir a `destinoId`? (ninguna dentro de sí misma ni pasando del límite de niveles) */
+export const puedenMoverseCarpetas = (todas, aMover, destinoId) => (
+  (aMover ?? []).every((c) => puedeMoverCarpeta(todas, c.id, destinoId))
+);
+
+/**
+ * Las carpetas que se pueden TRAER a `carpetaId`: las que no son ella, ni ya viven en ella, ni cuelgan de ella
+ * (no caben dentro de sí mismas) y no pasan del límite de niveles.
+ */
+export const carpetasQueSePuedenTraer = (todas, carpetaId) => (todas ?? []).filter((c) => (
+  c.id !== carpetaId && (c.parent_id ?? null) !== (carpetaId ?? null) && puedeMoverCarpeta(todas, c.id, carpetaId)
+));
+
+/**
+ * Para borrar varias carpetas a la vez: las de más abajo primero. Así lo que tiene cada una sube a su carpeta
+ * de arriba ANTES de que esa también se borre, y nada se queda colgando de una carpeta que ya no existe.
+ */
+export const carpetasDeAbajoPrimero = (todas, aBorrar) => [...(aBorrar ?? [])]
+  .sort((a, b) => rutaDeCarpeta(todas, b.id).length - rutaDeCarpeta(todas, a.id).length);
+
 /* ----------------------------- Buscar ----------------------------- */
 
 /** Sin acentos ni mayúsculas, sobre el nombre, la descripción y de dónde salió. */

@@ -19,16 +19,30 @@ import {
  * sale aquí y la ventana se queda. Al terminar bien, se cierra sola.
  *
  * `interruptores`: [{ clave, etiqueta, ayuda, inicial }].
+ *
+ * `recordarCarpeta`: al guardar desde el plan de un atleta, la carpeta que se propone es la ÚLTIMA donde se guardó
+ * algo (si todavía existe) en vez de «Sin carpeta» (Andrés, 2 oct 2026: que no haya que mover después lo que ya
+ * se sabe dónde va). Si se cambia a mano, manda lo que se elija.
  */
+
+const claveUltimaCarpeta = (userId) => `tl:mis-planes:ultima-carpeta:${userId}`;
+const leerUltimaCarpeta = (userId) => {
+  try { return localStorage.getItem(claveUltimaCarpeta(userId)) || null; } catch { return null; }
+};
+const recordarUltimaCarpeta = (userId, carpetaId) => {
+  try { localStorage.setItem(claveUltimaCarpeta(userId), carpetaId ?? ''); } catch { /* sin almacenamiento: no pasa nada */ }
+};
+
 export default function DialogoGuardar({
   titulo = 'Guardar en Mis planes', tipo, nombreInicial = '', descripcionInicial = '', carpetaInicial = null,
   interruptores = [], textoBoton = 'Guardar', soloNombre = false, sinCarpeta = false, placeholder = 'Ej. Pretemporada football, 8 semanas',
-  onGuardar, onCerrar,
+  recordarCarpeta = false, onGuardar, onCerrar,
 }) {
   const { cargando, carpetas, recargar, userId } = useMisPlanes();
   const [nombre, setNombre] = useState(nombreInicial);
   const [descripcion, setDescripcion] = useState(descripcionInicial);
   const [carpetaId, setCarpetaId] = useState(carpetaInicial);
+  const [tocada, setTocada] = useState(false); // ya la cambió a mano: manda lo que eligió
   const [eligiendo, setEligiendo] = useState(false);
   const [valores, setValores] = useState(() => Object.fromEntries(interruptores.map((i) => [i.clave, i.inicial !== false])));
   const [guardando, setGuardando] = useState(false);
@@ -36,12 +50,18 @@ export default function DialogoGuardar({
 
   const puede = nombre.trim().length > 0 && !guardando;
 
+  // La carpeta que vale: la que se eligió a mano, o —si se pidió recordar— la última que se usó, si aún existe.
+  const recordada = recordarCarpeta && carpetaInicial == null && !cargando ? leerUltimaCarpeta(userId) : null;
+  const recordadaValida = recordada && carpetas.some((c) => c.id === recordada) ? recordada : null;
+  const carpetaElegida = tocada ? carpetaId : (recordadaValida ?? carpetaId);
+
   async function guardar() {
     if (!puede) return;
     setGuardando(true);
     setError('');
     try {
-      await onGuardar({ nombre: nombre.trim(), descripcion: descripcion.trim(), carpetaId, interruptores: valores });
+      await onGuardar({ nombre: nombre.trim(), descripcion: descripcion.trim(), carpetaId: carpetaElegida, interruptores: valores });
+      if (recordarCarpeta && !sinCarpeta && !soloNombre) recordarUltimaCarpeta(userId, carpetaElegida);
       onCerrar();
     } catch (e) {
       setError(e.message || 'No se pudo guardar');
@@ -103,7 +123,7 @@ export default function DialogoGuardar({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <span style={etiquetaChica}>Carpeta</span>
               {eligiendo ? (
-                <SelectorDeCarpeta carpetas={carpetas} valor={carpetaId} onCambio={setCarpetaId} crearCarpeta={crear} />
+                <SelectorDeCarpeta carpetas={carpetas} valor={carpetaElegida} onCambio={(v) => { setCarpetaId(v); setTocada(true); }} crearCarpeta={crear} />
               ) : (
                 // Las carpetas se leen al abrir la ventana: hasta que llegan no se enseña un nombre que podría ser falso.
                 <button
@@ -115,7 +135,7 @@ export default function DialogoGuardar({
                 >
                   <FolderOpen size={17} color={T.text2} />
                   <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: cargando ? T.text3 : T.text, overflowWrap: 'anywhere' }}>
-                    {cargando ? 'Cargando carpetas…' : textoDeRuta(carpetas, carpetaId)}
+                    {cargando ? 'Cargando carpetas…' : textoDeRuta(carpetas, carpetaElegida)}
                   </span>
                   {!cargando && <span style={{ fontSize: 13, fontWeight: 800, color: T.accent }}>Cambiar</span>}
                 </button>

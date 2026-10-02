@@ -1,14 +1,20 @@
-import { ChevronRight, Folder } from 'lucide-react';
+import { Check, ChevronRight, Folder } from 'lucide-react';
 import { T, FONT } from '@/lib/theme';
 import {
-  TIPOS, ETIQUETA_DE_TIPO, coincide, descendientesDe, hijasDe, porNombre, rutaDeCarpeta, textoDeResumen, textoDeRuta,
+  TIPOS, ETIQUETA_DE_TIPO, claveDeCarpeta, claveDeItem, coincide, descendientesDe, hijasDe, porNombre, rutaDeCarpeta,
+  textoDeResumen, textoDeRuta,
 } from '@/lib/misPlanesDatos';
 import { COLOR_DE_TIPO, FONDO_DE_TIPO, ICONO_DE_TIPO } from '@/features/misplanes/estilos';
 
 /* Lo que se enseña de «Mis planes»: las carpetas de un nivel y lo que hay dentro, con su ruta arriba.
    Lo usan la pestaña (con sus botones por fila) y los selectores («Desde Mis planes», «Asignar»),
    que solo dejan elegir. Con texto en `buscar` se busca en TODAS las carpetas y cada resultado dice
-   en cuál está. */
+   en cuál está.
+
+   Con `onAlternar` (el modo «Seleccionar» de la pestaña) tocar una fila la marca en vez de abrirla, y
+   se esconden sus botones; las carpetas traen una flecha aparte para entrar a ellas. `seleccion` es el
+   conjunto de llaves marcadas (`claveDeItem` / `claveDeCarpeta`). `derechaDeRuta` es lo que va al
+   extremo derecho de la fila de la ruta («Seleccionar»). */
 
 // «hace 3 días», para saber qué tan reciente es lo guardado.
 function hace(fecha) {
@@ -23,9 +29,26 @@ function hace(fecha) {
   return new Date(fecha).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+// La casillita de cada fila en el modo «Seleccionar».
+function Casilla({ marcada }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        width: 22, height: 22, borderRadius: 7, flexShrink: 0, display: 'grid', placeItems: 'center', color: '#fff',
+        border: `2px solid ${marcada ? T.accent : T.borderHi}`, background: marcada ? T.accent : T.bg2,
+      }}
+    >
+      {marcada && <Check size={14} strokeWidth={3} />}
+    </span>
+  );
+}
+
 export default function ListaDeMisPlanes({
   carpetas, items, tipos = TIPOS, nivel = null, onNivel, buscar = '', onItem, accionesItem, accionesCarpeta, vacio,
+  seleccion = null, onAlternar = null, derechaDeRuta = null,
 }) {
+  const seleccionando = !!onAlternar;
   const buscando = buscar.trim().length > 0;
   const visibles = items.filter((i) => tipos.includes(i.tipo));
   const subcarpetas = buscando ? [] : hijasDe(carpetas, nivel);
@@ -58,39 +81,54 @@ export default function ListaDeMisPlanes({
     </button>
   );
 
+  // El borde y el fondo de una tarjeta marcada.
+  const marco = (marcada) => ({
+    background: marcada ? T.accentBg : T.bg2, border: `${marcada ? 1.5 : 1}px solid ${marcada ? T.accent : T.border}`,
+  });
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {!buscando && (nivel != null) && (
-        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2, marginBottom: 2 }}>
-          {migaja('Mis planes', () => onNivel(null), false)}
-          {ruta.map((c, i) => (
-            <span key={c.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-              <ChevronRight size={13} color={T.text3} />
-              {migaja(c.nombre, () => onNivel(c.id), i === ruta.length - 1)}
-            </span>
-          ))}
+      {((!buscando && nivel != null) || derechaDeRuta) && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 2, minHeight: 28 }}>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2, minWidth: 0 }}>
+            {!buscando && nivel != null && (
+              <>
+                {migaja('Mis planes', () => onNivel(null), false)}
+                {ruta.map((c, i) => (
+                  <span key={c.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                    <ChevronRight size={13} color={T.text3} />
+                    {migaja(c.nombre, () => onNivel(c.id), i === ruta.length - 1)}
+                  </span>
+                ))}
+              </>
+            )}
+          </div>
+          {derechaDeRuta}
         </div>
       )}
 
       {subcarpetas.map((c) => {
         const n = cuantasEn(c.id);
         const hijas = hijasDe(carpetas, c.id).length;
+        const marcada = seleccionando && seleccion?.has(claveDeCarpeta(c));
         return (
           // Igual que las tarjetas de abajo: una sola tarjeta con sus «⋯» adentro, para que los bordes queden parejos.
           <div
             key={c.id}
             style={{
-              display: 'flex', alignItems: 'center', gap: 4, background: T.bg2, border: `1px solid ${T.border}`,
-              borderRadius: 14, paddingRight: accionesCarpeta ? 8 : 0,
+              display: 'flex', alignItems: 'center', gap: 4, borderRadius: 14, paddingRight: accionesCarpeta || seleccionando ? 8 : 0,
+              ...marco(marcada),
             }}
           >
             <button
-              type="button" onClick={() => onNivel(c.id)}
+              type="button" onClick={() => (seleccionando ? onAlternar(claveDeCarpeta(c)) : onNivel(c.id))}
+              role={seleccionando ? 'checkbox' : undefined} aria-checked={seleccionando ? !!marcada : undefined}
               style={{
                 flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', cursor: 'pointer',
                 padding: '12px 13px', background: 'transparent', border: 'none', borderRadius: 14, fontFamily: FONT,
               }}
             >
+              {seleccionando && <Casilla marcada={!!marcada} />}
               <span style={{ width: 38, height: 38, borderRadius: 11, background: T.bg3, color: T.text2, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
                 <Folder size={19} />
               </span>
@@ -101,9 +139,16 @@ export default function ListaDeMisPlanes({
                     .filter(Boolean).join(' · ') || (tieneAlgoEn(c.id) ? 'Nada con este filtro' : 'Vacía')}
                 </span>
               </span>
-              <ChevronRight size={16} color={T.text3} style={{ flexShrink: 0 }} />
+              {!seleccionando && <ChevronRight size={16} color={T.text3} style={{ flexShrink: 0 }} />}
             </button>
-            {accionesCarpeta?.(c)}
+            {seleccionando ? (
+              <button
+                type="button" onClick={() => onNivel(c.id)} aria-label={`Abrir ${c.nombre}`} title={`Abrir ${c.nombre}`} className="kp-ico"
+                style={{ width: 38, height: 38, borderRadius: 11, border: 'none', cursor: 'pointer', flexShrink: 0, background: 'transparent', color: T.text2, display: 'grid', placeItems: 'center' }}
+              >
+                <ChevronRight size={18} />
+              </button>
+            ) : accionesCarpeta?.(c)}
           </div>
         );
       })}
@@ -112,24 +157,26 @@ export default function ListaDeMisPlanes({
         const Icono = ICONO_DE_TIPO[item.tipo];
         const color = COLOR_DE_TIPO[item.tipo];
         const resumen = textoDeResumen(item.tipo, item.resumen);
+        const marcada = seleccionando && seleccion?.has(claveDeItem(item));
         return (
           // Una sola tarjeta: el contenido a la izquierda y las acciones («Asignar», «⋯») a la derecha; en un celular, que no
           // cabe todo en una línea, las acciones bajan dentro de la misma tarjeta en lugar de aplastar el nombre.
           <div
             key={`${item.tabla}-${item.id}`}
             style={{
-              display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0 6px', background: T.bg2,
-              border: `1px solid ${T.border}`, borderRadius: 14,
+              display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0 6px', borderRadius: 14, ...marco(marcada),
             }}
           >
             <button
-              type="button" onClick={() => onItem?.(item)} disabled={!onItem}
+              type="button" onClick={() => (seleccionando ? onAlternar(claveDeItem(item)) : onItem?.(item))} disabled={!seleccionando && !onItem}
+              role={seleccionando ? 'checkbox' : undefined} aria-checked={seleccionando ? !!marcada : undefined}
               style={{
                 flex: '1 1 240px', minWidth: 0, display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
-                cursor: onItem ? 'pointer' : 'default', padding: '12px 13px', background: 'transparent',
+                cursor: seleccionando || onItem ? 'pointer' : 'default', padding: '12px 13px', background: 'transparent',
                 border: 'none', borderRadius: 14, fontFamily: FONT,
               }}
             >
+              {seleccionando && <Casilla marcada={!!marcada} />}
               <span style={{ width: 38, height: 38, borderRadius: 11, background: FONDO_DE_TIPO[item.tipo], color, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
                 <Icono size={19} />
               </span>
@@ -155,7 +202,7 @@ export default function ListaDeMisPlanes({
                 </span>
               </span>
             </button>
-            {accionesItem && (
+            {accionesItem && !seleccionando && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto', padding: '8px 10px' }}>
                 {accionesItem(item)}
               </div>
