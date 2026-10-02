@@ -1,3 +1,4 @@
+import { Check } from 'lucide-react';
 import { FONT, KP } from '@/lib/theme';
 
 /* Un «sticker» por sesión.
@@ -10,7 +11,12 @@ import { FONT, KP } from '@/lib/theme';
 
    `sobreAzul`: para la tarjeta azul de Home, donde va en blanco translúcido.
    `envolver`: que un nombre largo pase al renglón de abajo en vez de cortarse;
-   en los renglones de una lista se prefiere cortar con «…» para no crecerlos. */
+   en los renglones de una lista se prefiere cortar con «…» para no crecerlos.
+
+   Una sesión puede venir de OTRA persona (lo que le pegó el fisio al programa del
+   coach): lleva `color` (su punto y su tinte), `autor` (quién es) y `hecha`. Así
+   queda en el mismo renglón que las demás, solo con su etiqueta (Andrés, 2 oct
+   2026: «el programa es un todo»). */
 
 const COLOR_DE_TURNO = {
   AM: { c: KP.amber, soft: KP.amberSoft },
@@ -28,15 +34,29 @@ export default function EtiquetasDeSesion({ sesiones, sobreAzul = false, envolve
     }}>
       {sesiones.map((s, i) => {
         const color = s.turno ? COLOR_DE_TURNO[s.turno] : null;
+        const tinte = s.color ?? null;
+        const nombre = (
+          <span
+            style={{
+              minWidth: 0,
+              // Con el nombre de otra persona debajo el título baja de línea en vez de cortarse en «…».
+              ...(envolver || s.autor
+                ? { overflowWrap: 'anywhere' }
+                : { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }),
+            }}
+          >
+            {s.nombre}
+          </span>
+        );
         return (
           <span
             key={i}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0, maxWidth: '100%',
               padding: s.turno ? '3px 11px 3px 4px' : '3px 11px',
-              borderRadius: envolver ? 14 : KP.rPill,
-              background: sobreAzul ? 'rgba(255,255,255,0.16)' : (color ? color.soft : KP.surfaceMuted),
-              border: `1px solid ${sobreAzul ? 'rgba(255,255,255,0.3)' : (color ? `${color.c}33` : KP.lineHi)}`,
+              borderRadius: envolver || s.autor ? 14 : KP.rPill,
+              background: sobreAzul ? 'rgba(255,255,255,0.16)' : (color ? color.soft : (tinte ? `${tinte}14` : KP.surfaceMuted)),
+              border: `1px solid ${sobreAzul ? 'rgba(255,255,255,0.3)' : (color ? `${color.c}33` : (tinte ? `${tinte}55` : KP.lineHi))}`,
               color: sobreAzul ? '#fff' : KP.ink,
               fontFamily: FONT, fontSize: tamano, fontWeight: 700, lineHeight: 1.25,
             }}
@@ -53,16 +73,18 @@ export default function EtiquetasDeSesion({ sesiones, sobreAzul = false, envolve
                 {s.turno}
               </span>
             )}
-            <span
-              style={{
-                minWidth: 0,
-                ...(envolver
-                  ? { overflowWrap: 'anywhere' }
-                  : { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }),
-              }}
-            >
-              {s.nombre}
-            </span>
+            {tinte && (
+              <span aria-hidden="true" style={{ width: 7, height: 7, borderRadius: '50%', background: tinte, flexShrink: 0 }} />
+            )}
+            {s.autor ? (
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+                {nombre}
+                <span style={{ fontSize: tamano - 2.5, fontWeight: 800, color: tinte ?? KP.ink, lineHeight: 1.2 }}>
+                  {s.autor}
+                </span>
+              </span>
+            ) : nombre}
+            {s.hecha && <Check size={tamano} strokeWidth={3} style={{ flexShrink: 0, color: KP.mint }} />}
           </span>
         );
       })}

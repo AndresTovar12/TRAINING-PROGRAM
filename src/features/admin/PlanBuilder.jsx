@@ -1167,6 +1167,11 @@ function useEnFilas() {
   return [vista ? vista === 'lista' : esCompu, eligeVista];
 }
 
+/* Lo que solo se lee en `SessionEditor soloLectura`: no se toca ni se enfoca
+   (`inert`) y se ve un poco apagado. */
+const enLectura = (activo) => (activo ? { inert: true, 'aria-readonly': true } : null);
+const APAGADO = { opacity: 0.86, pointerEvents: 'none' };
+
 /* ---- días con dos sesiones (AM / PM) ---- */
 const turnoDe =(tag = '') => (tag.match(/\(([AP]M)\)/) || [])[1] || null;
 const limpiaTag = (tag = '') => tag.replace(/^Sesi[óo]n \d+ \([AP]M\):\s*/, '');
@@ -1254,7 +1259,7 @@ function EditorSesionesDelDia({
   });
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
+    <div {...enLectura(soloLectura)} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12, ...(soloLectura ? APAGADO : null) }}>
       {bloques.map((b, bi) => {
         const turno = turnoDe(b.tag);
         const filas = b.exercises || [];
@@ -1436,13 +1441,18 @@ function EditorSesionesDelDia({
 
 /**
  * El editor de UNA sesión. Con `soloLectura` es el mismo, pero para ver la sesión de
- * otra persona: se ve igual y no se puede tocar nada (`inert`) ni sale lo de agregar.
- * Lo usa quien le agrega sesiones al programa de otro: ve las del coach, no las cambia.
+ * otra persona: se ve igual y no se puede tocar nada de lo que la cambia (`inert`) ni
+ * sale lo de agregar. Lo usa quien le agrega sesiones al programa de otro: ve las del
+ * coach, no las cambia.
+ *
+ * El interruptor «tarjetas o lista» SÍ responde: solo cambia cómo se ve, no la sesión
+ * (Andrés, 2 oct 2026: «no está modificando nada, solo es la visualización»). Por eso
+ * el bloqueo va en cada parte que escribe y no en todo el editor de un golpe.
  */
 export function SessionEditor(props) {
   if (!props.soloLectura) return <SessionEditorInterno {...props} />;
   return (
-    <div inert aria-readonly="true" className="tl-lectura" style={{ pointerEvents: 'none', opacity: 0.86 }}>
+    <div aria-readonly="true" className="tl-lectura">
       {/* Se ve igual, pero sin lo que cambia algo: agregar, mover, quitar, «su video». */}
       <style>{'.tl-lectura .kp-accion{display:none !important}'}</style>
       <SessionEditorInterno {...props} />
@@ -1473,7 +1483,7 @@ function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjer
   if (isDualDay(day)) {
     return (
       <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 18, padding: 16, boxShadow: KP.shCard }}>
-        <DayHeader day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog} onClear={onClear} dual conVista />
+        <DayHeader day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog} onClear={onClear} dual conVista soloLectura={soloLectura} />
         <EditorSesionesDelDia
           day={day}
           onPatch={onPatch}
@@ -1501,9 +1511,9 @@ function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjer
 
   return (
     <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 18, padding: 16, boxShadow: KP.shCard }}>
-      <DayHeader day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog} onClear={onClear} nSets={descanso ? null : nSets} conVista={!descanso} />
+      <DayHeader day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog} onClear={onClear} nSets={descanso ? null : nSets} conVista={!descanso} soloLectura={soloLectura} />
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 14 }}>
+      <div {...enLectura(soloLectura)} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 14, ...(soloLectura ? APAGADO : null) }}>
         {blocks.map((b, bi) => {
           if (b.type === 'note') {
             return (
@@ -1862,14 +1872,16 @@ function HojaFormas({ actual, onElegir, onClose }) {
   );
 }
 
-function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, nSets, dual, conVista = false }) {
+function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, nSets, dual, conVista = false, soloLectura = false }) {
   const { user } = useAuth();
   const esCompu = useIsDesktop();
   const [enFilas, eligeVista] = useEnFilas();
   const [menu, setMenu] = useState(false);
   return (
     <>
-      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+      {/* Nombre y tipo: con `soloLectura` no se tocan. Lo de abajo (acciones e
+          interruptor de vista) queda vivo: el interruptor solo cambia cómo se ve. */}
+      <div {...enLectura(soloLectura)} style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap', ...(soloLectura ? APAGADO : null) }}>
         {/* 220 px de base y no `flex: 1` pelado. Con `flex: 1` la base es 0, así
             que el nombre nunca bajaba de renglón: se encogía para dejarle sitio al
             tipo y al contador. Medido a 375 px: el campo quedaba en ~70 px, la

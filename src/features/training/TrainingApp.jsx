@@ -754,18 +754,164 @@ const HojaDelPrograma = ({
 };
 
 /**
+ * La TARJETA de una sesión: un encabezado que se abre y se cierra (ícono, nombre,
+ * cuántos ejercicios y cuánto dura) y, abierta, su contenido.
+ *
+ * LA TARJETA DE CADA SESIÓN ES UN BOTÓN Y TIENE QUE PARECERLO.
+ * Andrés, 29 sep 2026: «me gustaría que estos 2 botones fueran más bonitos». Eran
+ * una fila plana con una rayita de color, y con la primera abierta la segunda ni se
+ * veía. Ahora cada una es una tarjeta con su ícono (amanecer / atardecer), su nombre,
+ * cuántos ejercicios y cuánto dura, y un botón redondo que dice que se abre.
+ * Terminada, su encabezado se pinta de verde, igual que el botón de cerrar.
+ *
+ * La usan las sesiones de un día doble y, en «Plan» con equipo, TODAS las sesiones
+ * del día: la del fisio es una tarjeta más al lado de las del coach, y `autor` (el
+ * programa de quien la puso) le agrega su etiqueta chica.
+ */
+const TarjetaDeSesion = ({ accent, hecha, abierta, onAlternar, Icono, nombre, turno, detalle, autor, children }) => (
+  <div style={{
+    marginBottom: 12, borderRadius: 18, overflow: 'hidden', boxShadow: KP.shCard,
+    background: LT.surface,
+    border: `1.5px solid ${hecha ? `${LT.mint}55` : (abierta ? `${accent}66` : LT.border)}`,
+  }}>
+    {/* Solo el ENCABEZADO se pinta de verde al terminar: si se pintara toda
+        la tarjeta, la lista de ejercicios de adentro quedaría sobre verde. */}
+    <button
+      type="button"
+      aria-expanded={abierta}
+      className="kp-press"
+      onClick={onAlternar}
+      style={{
+        width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '13px 14px',
+        background: hecha ? KP.mintSoft : 'transparent', border: 'none', cursor: 'pointer', fontFamily: FONT, textAlign: 'left',
+      }}
+    >
+      <span style={{
+        width: 46, height: 46, borderRadius: 14, flexShrink: 0, display: 'grid', placeItems: 'center',
+        background: hecha ? LT.mint : `${accent}1F`, color: hecha ? '#fff' : accent,
+      }}>
+        {hecha ? <Check size={22} strokeWidth={3} /> : <Icono size={22} />}
+      </span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        {autor && (
+          <span style={{ display: 'block', marginBottom: 4 }}>
+            <EtiquetaDeAutor programa={autor} tamano={11.5} />
+          </span>
+        )}
+        <span style={{ display: 'block', fontSize: 15.5, fontWeight: 800, color: LT.text, lineHeight: 1.2, overflowWrap: 'anywhere' }}>
+          {nombre}
+        </span>
+        <span style={{
+          display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '3px 8px', marginTop: 5,
+          fontSize: 12.5, fontWeight: 600, color: LT.text2, ...NUM_STYLE,
+        }}>
+          {turno && (
+            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.5, color: '#fff', background: accent, borderRadius: 6, padding: '2px 7px' }}>
+              {turno}
+            </span>
+          )}
+          {/* Terminada, «Terminada» ocupa el lugar de los datos: el ícono
+              verde ya dice que va hecha y así el encabezado no crece. */}
+          {hecha ? (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: LT.mint, fontWeight: 800 }}>
+              <Check size={13} strokeWidth={3} /> Terminada
+            </span>
+          ) : (detalle && <span>{detalle}</span>)}
+        </span>
+      </span>
+      <span aria-hidden="true" style={{
+        width: 32, height: 32, borderRadius: 16, flexShrink: 0, display: 'grid', placeItems: 'center',
+        background: hecha ? '#fff' : LT.surface2, color: LT.text2,
+        transform: abierta ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s',
+      }}>
+        <ChevronDown size={18} />
+      </span>
+    </button>
+    {abierta && (
+      <div style={{ padding: '12px 16px 16px' }}>
+        {children}
+      </div>
+    )}
+  </div>
+);
+
+/**
+ * CADA SESIÓN SE TERMINA POR SU LADO (Andrés, 29 sep 2026: «cada sesión debería
+ * tener su botón de marcar como terminada»). Va al final de la lista, que es donde
+ * se está cuando se acaba, y con la misma cara que el botón del día: azul para
+ * marcar, verde cuando ya está. `laSesion`: «sesión AM», «sesión 2», «sesión».
+ */
+const TerminarSesion = ({ hecha, laSesion, onAlternar }) => (hecha ? (
+  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
+    <div style={{
+      flex: 1, minHeight: 50, borderRadius: 14, background: LT.mint, color: '#fff',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+      fontFamily: FONT, fontSize: 14.5, fontWeight: 800,
+    }}>
+      <Check size={18} strokeWidth={3} /> {laSesion.charAt(0).toUpperCase() + laSesion.slice(1)} terminada
+    </div>
+    <button
+      type="button"
+      onClick={onAlternar}
+      style={{
+        minHeight: 50, padding: '0 14px', borderRadius: 14, cursor: 'pointer',
+        border: `1.5px solid ${LT.border}`, background: LT.surface, color: LT.text2,
+        fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
+      }}
+    >
+      Deshacer
+    </button>
+  </div>
+) : (
+  <button
+    type="button"
+    onClick={onAlternar}
+    className="kp-press"
+    style={{
+      width: '100%', minHeight: 50, marginTop: 14, borderRadius: 14, border: 'none',
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9,
+      cursor: 'pointer', fontFamily: FONT, fontSize: 14.5, fontWeight: 800, color: '#fff',
+      background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, boxShadow: KP.shBtn,
+    }}
+  >
+    <Check size={18} strokeWidth={3} /> Marcar {laSesion} como terminada
+  </button>
+));
+
+/**
+ * Cuántas tarjetas de sesión dibuja un día en «Plan» con equipo: una por turno de un
+ * doble, una si trae ejercicios o notas de sesión, ninguna si es un descanso.
+ */
+const tarjetasDelDia = (day) => {
+  if (day.blocks?.length) return day.blocks.length;
+  const filas = day.exercises || [];
+  return filas.length > 0 && !(esDescanso(day) && !filas.some((e) => !e.isNote)) ? 1 : 0;
+};
+
+/**
  * El CUERPO de un día: las sesiones que trae (ejercicios agrupados en sets, los
  * pesos que anota el atleta, el botón de terminar cada una), sus notas y el
  * porqué de cada cosa. Es la parte de «Plan» que no depende de en qué programa
  * se esté: recibe la semana y el día y los registros de SU programa.
  *
- * Existe aparte para poder apilar, en el mismo día, lo de varios profesionales
+ * Existe aparte para poder armar, en el mismo día, lo de varios profesionales
  * (cada uno dentro de su `ComoPrograma`) sin copiar nada.
+ *
+ * `partes` (solo «Plan» con equipo) dice cuáles piezas se dibujan: 'sesiones',
+ * 'notasDelDia', 'tusNotas' y 'ciencia'. Sin ella salen todas, como siempre. Con
+ * equipo las sesiones de todos van juntas arriba, cada una como una tarjeta
+ * (`entarjetas`), y lo demás —las notas y el porqué científico— sale UNA sola vez,
+ * hasta abajo, que es lo menos importante (Andrés, 2 oct 2026). `autor`: el
+ * programa de quien puso las sesiones, para su etiqueta en cada tarjeta.
  */
-const CuerpoDelDia = ({ phase, week, dayIdx: selectedIdx, sessionsData, updateSession, oneRMs }) => {
+const CuerpoDelDia = ({
+  phase, week, dayIdx: selectedIdx, sessionsData, updateSession, oneRMs,
+  partes, entarjetas = false, abiertasPorDefecto, autor = null,
+}) => {
   const { t } = usePalabras();
   const idDeSesion = useIdDeSesion();
   const phaseColor = phase.color || LT.blue;
+  const quiere = (parte) => !partes || partes.includes(parte);
   /* Qué sesiones del día están desplegadas. Solo se guarda lo que la persona
      toca; lo demás lo decide `abiertaSola`: un día de UNA sesión la trae
      abierta, y uno de DOS (mañana y tarde) las trae CERRADAS. Antes la primera
@@ -783,7 +929,12 @@ const CuerpoDelDia = ({ phase, week, dayIdx: selectedIdx, sessionsData, updateSe
      todo el día: `hechos` dice cuáles van hechas. Un día de una sola sesión
      sigue como siempre, con su botón al final. */
   const varias = variasSesiones(selectedDay);
-  const hechos = varias ? bloquesHechos(sessionData, selectedDay.blocks.length) : [];
+  /* Con `entarjetas` TODAS las sesiones del día son tarjetas, aunque este programa
+     traiga una sola: se terminan cada una por su lado y salen cerradas si hay más
+     de una en el día (lo decide quien arma la pantalla con `abiertasPorDefecto`). */
+  const porTarjeta = varias || entarjetas;
+  const abiertaSola = abiertasPorDefecto ?? !varias;
+  const hechos = porTarjeta && selectedDay.blocks ? bloquesHechos(sessionData, selectedDay.blocks.length) : [];
   /* Sesiones que no son de gimnasio. Probado armando una semana como coach:
      una sesión de velocidad, de recovery o de cancha se escribe con NOTAS
      ("Sprint 6 x 30 yd", "Foam roller 10 min"), porque no son ejercicios del
@@ -812,6 +963,25 @@ const CuerpoDelDia = ({ phase, week, dayIdx: selectedIdx, sessionsData, updateSe
   // Marca o desmarca UNA de las sesiones de un día doble; el día queda hecho
   // cuando lo están todas (ver `alternarBloque`).
   const toggleBloque = (bi) => updateSession(selectedId, (prev) => alternarBloque(prev, bi, selectedDay.blocks.length));
+  /* Con equipo, la sesión de un día de UNA sola sesión también es una tarjeta, igual
+     a las de un doble: así la del fisio no queda como un bloque distinto al lado de
+     las del coach. Sus datos se guardan igual que siempre (por ejercicio y un solo
+     «terminada» para el día). */
+  const tarjetaDelDia = (cuerpo) => {
+    const nombre = sinDuracion(selectedDay.name || '') || textoDeSesiones(sesionesDelTitulo(selectedDay)) || selectedDay.day;
+    const n = (selectedDay.exercises || []).filter((e) => !e.isNote).length;
+    const detalle = [n ? plural(n, 'ejercicio', 'ejercicios') : null, minutosDeTag(selectedDay.name || '')].filter(Boolean).join(' · ');
+    return (
+      <TarjetaDeSesion
+        accent={phaseColor} hecha={selectedCompleted} abierta={openBlocks.dia ?? abiertaSola}
+        onAlternar={() => setOpenBlocks((p) => ({ ...p, dia: !(p.dia ?? abiertaSola) }))}
+        Icono={Dumbbell} nombre={nombre} detalle={detalle} autor={autor}
+      >
+        {cuerpo}
+        <TerminarSesion hecha={selectedCompleted} laSesion="sesión" onAlternar={toggleComplete} />
+      </TarjetaDeSesion>
+    );
+  };
 
   const flatSessionData = { exercises: sessionData.exercises ? Object.fromEntries(Object.entries(sessionData.exercises).filter(([k]) => !k.includes('-')).map(([k, v]) => [parseInt(k), v])) : {} };
 
@@ -826,7 +996,7 @@ const CuerpoDelDia = ({ phase, week, dayIdx: selectedIdx, sessionsData, updateSe
           encogido una vez, de un bloque de 150 px a una línea (18 sep); ahora
           desaparece. Solo queda la palomita verde cuando el día está hecho; en
           un doble no hace falta: cada tarjeta dice si va terminada. */}
-      {selectedCompleted && !varias && (
+      {quiere('sesiones') && selectedCompleted && !porTarjeta && (
         <div style={{ padding: '0 3px', marginBottom: 12 }}>
           <span style={{
             display: 'inline-flex', alignItems: 'center', gap: 4,
@@ -844,7 +1014,7 @@ const CuerpoDelDia = ({ phase, week, dayIdx: selectedIdx, sessionsData, updateSe
 
           Si el coach escribió algo, SE ENSEÑA LO SUYO y no el texto genérico.
           "Hoy no toca entrenar" encima de "Caminata Z1 30 min" se contradice. */}
-      {descansoPuro && (() => {
+      {quiere('sesiones') && descansoPuro && (() => {
         const lineas = [...(selectedDay.notes || []), ...notasDelDia.map((n) => n.text)];
         return (
           <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: 18, marginBottom: 14 }}>
@@ -864,19 +1034,24 @@ const CuerpoDelDia = ({ phase, week, dayIdx: selectedIdx, sessionsData, updateSe
 
       {/* Una sesión hecha solo de notas se lee como lista de instrucciones, igual
           que las sesiones de velocidad del plan original. */}
-      {!descansoPuro && soloNotas && (
-        <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: '14px 16px', marginBottom: 14 }}>
+      {quiere('sesiones') && !descansoPuro && soloNotas && (() => {
+        const lista = (
           <ul style={{ listStyleType: 'disc', margin: 0, paddingLeft: 18, color: LT.text, fontSize: 14.5, lineHeight: 1.7 }}>
             {notasDelDia.map((n, i) => <li key={i}>{n.text}</li>)}
           </ul>
-        </div>
-      )}
+        );
+        return entarjetas ? tarjetaDelDia(lista) : (
+          <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: '14px 16px', marginBottom: 14 }}>
+            {lista}
+          </div>
+        );
+      })()}
 
       {/* Ejercicios agrupados en sets */}
-      {selectedDay.exercises && !soloNotas && !descansoPuro && (() => {
+      {quiere('sesiones') && selectedDay.exercises && !soloNotas && !descansoPuro && (() => {
         const groups = groupIntoSets(selectedDay.exercises);
         let setNum = 0;
-        return groups.map((g, gi) => {
+        const sets = groups.map((g, gi) => {
           if (!g.isNote) setNum += 1;
           return (
             <SetGroup key={`${selectedIdx}-${gi}`} group={g} setNum={setNum} phaseColor={phaseColor}
@@ -885,9 +1060,10 @@ const CuerpoDelDia = ({ phase, week, dayIdx: selectedIdx, sessionsData, updateSe
               oneRMs={oneRMs} sessionsData={sessionsData} />
           );
         });
+        return entarjetas && !selectedDay.blocks ? tarjetaDelDia(sets) : sets;
       })()}
 
-      {selectedDay.blocks && selectedDay.blocks.map((blk, bi) => {
+      {quiere('sesiones') && selectedDay.blocks && selectedDay.blocks.map((blk, bi) => {
         const blkSessionData = { exercises: sessionData.exercises ? Object.fromEntries(Object.entries(sessionData.exercises).filter(([k]) => k.startsWith(`${bi}-`)).map(([k, v]) => [parseInt(k.split('-')[1]), v])) : {} };
         const turno = turnoDeTag(blk.tag);
         const isPM = turno === 'PM';
@@ -903,76 +1079,54 @@ const CuerpoDelDia = ({ phase, week, dayIdx: selectedIdx, sessionsData, updateSe
         const ejerciciosVistos = ejerciciosDelBloque(week, selectedIdx, blk);
         const exN = ejerciciosVistos.length ? ejerciciosVistos.filter(e => !e.isNote).length : null;
         // Un día de una sesión la trae abierta; uno de dos, cerradas (ver `openBlocks`).
-        const isOpen = openBlocks[bi] ?? !varias;
-        const hecha = varias && !!hechos[bi];
+        const isOpen = openBlocks[bi] ?? abiertaSola;
+        const hecha = porTarjeta && !!hechos[bi];
         const laSesion = `sesión ${turno ?? bi + 1}`;
         const Icono = turno ? (isPM ? Sunset : Sunrise) : Dumbbell;
         const detalle = [exN != null ? plural(exN, 'ejercicio', 'ejercicios') : null, minutos].filter(Boolean).join(' · ');
         return (
-          /* LA TARJETA DE CADA SESIÓN ES UN BOTÓN Y TIENE QUE PARECERLO.
-             Andrés, 29 sep 2026: «me gustaría que estos 2 botones fueran más
-             bonitos». Eran una fila plana con una rayita de color, y con la
-             primera abierta la segunda ni se veía. Ahora cada una es una
-             tarjeta con su ícono (amanecer / atardecer), su nombre, cuántos
-             ejercicios y cuánto dura, y un botón redondo que dice que se abre.
-             Terminada, su encabezado se pinta de verde, igual que el botón de cerrar. */
-          <div key={`${selectedIdx}-blk-${bi}`} style={{
-            marginBottom: 12, borderRadius: 18, overflow: 'hidden', boxShadow: KP.shCard,
-            background: LT.surface,
-            border: `1.5px solid ${hecha ? `${LT.mint}55` : (isOpen ? `${accent}66` : LT.border)}`,
-          }}>
-            {/* Solo el ENCABEZADO se pinta de verde al terminar: si se pintara toda
-                la tarjeta, la lista de ejercicios de adentro quedaría sobre verde. */}
-            <button
-              type="button"
-              aria-expanded={isOpen}
-              className="kp-press"
-              onClick={() => setOpenBlocks((p) => ({ ...p, [bi]: !(p[bi] ?? !varias) }))}
-              style={{
-                width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '13px 14px',
-                background: hecha ? KP.mintSoft : 'transparent', border: 'none', cursor: 'pointer', fontFamily: FONT, textAlign: 'left',
-              }}
-            >
-              <span style={{
-                width: 46, height: 46, borderRadius: 14, flexShrink: 0, display: 'grid', placeItems: 'center',
-                background: hecha ? LT.mint : `${accent}1F`, color: hecha ? '#fff' : accent,
-              }}>
-                {hecha ? <Check size={22} strokeWidth={3} /> : <Icono size={22} />}
-              </span>
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: 'block', fontSize: 15.5, fontWeight: 800, color: LT.text, lineHeight: 1.2, overflowWrap: 'anywhere' }}>
-                  {cleanName}
-                </span>
-                <span style={{
-                  display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '3px 8px', marginTop: 5,
-                  fontSize: 12.5, fontWeight: 600, color: LT.text2, ...NUM_STYLE,
-                }}>
-                  {turno && (
-                    <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.5, color: '#fff', background: accent, borderRadius: 6, padding: '2px 7px' }}>
-                      {turno}
-                    </span>
-                  )}
-                  {/* Terminada, «Terminada» ocupa el lugar de los datos: el ícono
-                      verde ya dice que va hecha y así el encabezado no crece. */}
-                  {hecha ? (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: LT.mint, fontWeight: 800 }}>
-                      <Check size={13} strokeWidth={3} /> Terminada
-                    </span>
-                  ) : (detalle && <span>{detalle}</span>)}
-                </span>
-              </span>
-              <span aria-hidden="true" style={{
-                width: 32, height: 32, borderRadius: 16, flexShrink: 0, display: 'grid', placeItems: 'center',
-                background: hecha ? '#fff' : LT.surface2, color: LT.text2,
-                transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s',
-              }}>
-                <ChevronDown size={18} />
-              </span>
-            </button>
-            {isOpen && (
-              <div style={{ padding: '12px 16px 16px' }}>
-                {blk.type === 'lift' && (() => {
-                  const groups = groupIntoSets(blk.exercises);
+          <TarjetaDeSesion
+            key={`${selectedIdx}-blk-${bi}`}
+            accent={accent} hecha={hecha} abierta={isOpen}
+            onAlternar={() => setOpenBlocks((p) => ({ ...p, [bi]: !(p[bi] ?? abiertaSola) }))}
+            Icono={Icono} nombre={cleanName} turno={turno} detalle={detalle} autor={autor}
+          >
+            {blk.type === 'lift' && (() => {
+              const groups = groupIntoSets(blk.exercises);
+              let setNum = 0;
+              return groups.map((g, gi) => {
+                if (!g.isNote) setNum += 1;
+                return (
+                  <SetGroup key={gi} group={g} setNum={setNum} phaseColor={phaseColor}
+                    sessionData={blkSessionData} sessionKey={selectedId}
+                    onUpdate={(idx, data) => setExerciseData(bi, idx, data)}
+                    oneRMs={oneRMs} sessionsData={sessionsData} />
+                );
+              });
+            })()}
+            {blk.type === 'speed' && (
+              <ul style={{ listStyleType: 'disc', margin: '4px 0 0', paddingLeft: 16, color: LT.text2, fontSize: 14, lineHeight: 1.7 }}>
+                {blk.bullets.map((b, i) => (
+                  <li key={i} style={typeof b === 'object' && b.bold ? { color: LT.text, fontWeight: 600 } : {}}>
+                    {typeof b === 'object' ? b.text : b}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {blk.type === 'note' && repite && (
+              /* "Repite la sesión del lunes": se enseñan AQUÍ los ejercicios de
+                 esa sesión, para verlos y anotar los pesos de hoy. Se guardan con
+                 la llave de este día, así que no pisan lo que anotó el lunes. */
+              <>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, margin: '2px 0 14px', fontSize: 13, color: LT.text2, lineHeight: 1.5 }}>
+                  <Repeat size={15} style={{ color: accent, flexShrink: 0, marginTop: 2 }} />
+                  <span>
+                    <b style={{ color: LT.text }}>Igual que el {weekdayLabel(repite.day.day).toLowerCase()}.</b>{' '}
+                    {blk.text}
+                  </span>
+                </div>
+                {(() => {
+                  const groups = groupIntoSets(repite.blk.exercises);
                   let setNum = 0;
                   return groups.map((g, gi) => {
                     if (!g.isNote) setNum += 1;
@@ -984,96 +1138,21 @@ const CuerpoDelDia = ({ phase, week, dayIdx: selectedIdx, sessionsData, updateSe
                     );
                   });
                 })()}
-                {blk.type === 'speed' && (
-                  <ul style={{ listStyleType: 'disc', margin: '4px 0 0', paddingLeft: 16, color: LT.text2, fontSize: 14, lineHeight: 1.7 }}>
-                    {blk.bullets.map((b, i) => (
-                      <li key={i} style={typeof b === 'object' && b.bold ? { color: LT.text, fontWeight: 600 } : {}}>
-                        {typeof b === 'object' ? b.text : b}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {blk.type === 'note' && repite && (
-                  /* "Repite la sesión del lunes": se enseñan AQUÍ los ejercicios de
-                     esa sesión, para verlos y anotar los pesos de hoy. Se guardan con
-                     la llave de este día, así que no pisan lo que anotó el lunes. */
-                  <>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, margin: '2px 0 14px', fontSize: 13, color: LT.text2, lineHeight: 1.5 }}>
-                      <Repeat size={15} style={{ color: accent, flexShrink: 0, marginTop: 2 }} />
-                      <span>
-                        <b style={{ color: LT.text }}>Igual que el {weekdayLabel(repite.day.day).toLowerCase()}.</b>{' '}
-                        {blk.text}
-                      </span>
-                    </div>
-                    {(() => {
-                      const groups = groupIntoSets(repite.blk.exercises);
-                      let setNum = 0;
-                      return groups.map((g, gi) => {
-                        if (!g.isNote) setNum += 1;
-                        return (
-                          <SetGroup key={gi} group={g} setNum={setNum} phaseColor={phaseColor}
-                            sessionData={blkSessionData} sessionKey={selectedId}
-                            onUpdate={(idx, data) => setExerciseData(bi, idx, data)}
-                            oneRMs={oneRMs} sessionsData={sessionsData} />
-                        );
-                      });
-                    })()}
-                  </>
-                )}
-                {blk.type === 'note' && !repite && (
-                  <div style={{ padding: 12, background: LT.bg, border: `1px solid ${LT.border}`, borderRadius: 10, fontSize: 13, color: LT.text2, lineHeight: 1.6 }}>
-                    {blk.text}
-                  </div>
-                )}
-                {/* CADA SESIÓN SE TERMINA POR SU LADO (Andrés, 29 sep 2026: «cada
-                    sesión debería tener su botón de marcar como terminada»).
-                    Va al final de la lista, que es donde se está cuando se
-                    acaba, y con la misma cara que el botón del día: azul para
-                    marcar, verde cuando ya está. El del día entero solo sale
-                    en los días de una sesión. */}
-                {varias && (hecha ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
-                    <div style={{
-                      flex: 1, minHeight: 50, borderRadius: 14, background: LT.mint, color: '#fff',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                      fontFamily: FONT, fontSize: 14.5, fontWeight: 800,
-                    }}>
-                      <Check size={18} strokeWidth={3} /> Sesión {turno ?? bi + 1} terminada
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => toggleBloque(bi)}
-                      style={{
-                        minHeight: 50, padding: '0 14px', borderRadius: 14, cursor: 'pointer',
-                        border: `1.5px solid ${LT.border}`, background: LT.surface, color: LT.text2,
-                        fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
-                      }}
-                    >
-                      Deshacer
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => toggleBloque(bi)}
-                    className="kp-press"
-                    style={{
-                      width: '100%', minHeight: 50, marginTop: 14, borderRadius: 14, border: 'none',
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9,
-                      cursor: 'pointer', fontFamily: FONT, fontSize: 14.5, fontWeight: 800, color: '#fff',
-                      background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, boxShadow: KP.shBtn,
-                    }}
-                  >
-                    <Check size={18} strokeWidth={3} /> Marcar {laSesion} como terminada
-                  </button>
-                ))}
+              </>
+            )}
+            {blk.type === 'note' && !repite && (
+              <div style={{ padding: 12, background: LT.bg, border: `1px solid ${LT.border}`, borderRadius: 10, fontSize: 13, color: LT.text2, lineHeight: 1.6 }}>
+                {blk.text}
               </div>
             )}
-          </div>
+            {porTarjeta && (
+              <TerminarSesion hecha={hecha} laSesion={laSesion} onAlternar={() => toggleBloque(bi)} />
+            )}
+          </TarjetaDeSesion>
         );
       })}
 
-      {selectedDay.notes && !selectedDay.exercises && !selectedDay.blocks && !descansoPuro && (
+      {quiere('sesiones') && selectedDay.notes && !selectedDay.exercises && !selectedDay.blocks && !descansoPuro && (
         <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
           <ul style={{ listStyleType: 'disc', margin: 0, paddingLeft: 18, color: LT.text2, fontSize: 14, lineHeight: 1.7 }}>
             {selectedDay.notes.map((n, i) => <li key={i}>{n}</li>)}
@@ -1106,7 +1185,7 @@ const CuerpoDelDia = ({ phase, week, dayIdx: selectedIdx, sessionsData, updateSe
           Hecha, se pinta de verde entero —se lee "listo" desde lejos— y
           "Deshacer" va aparte y chico. Antes estaba pegado al mismo texto
           ("Sesión terminada · deshacer") y no se distinguía qué parte se tocaba. */}
-      {(selectedDay.exercises || selectedDay.blocks) && !descansoPuro && !varias && (
+      {quiere('sesiones') && (selectedDay.exercises || selectedDay.blocks) && !descansoPuro && !porTarjeta && (
         selectedCompleted ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
             <div style={{
@@ -1148,7 +1227,7 @@ const CuerpoDelDia = ({ phase, week, dayIdx: selectedIdx, sessionsData, updateSe
       {/* En un descanso las notas ya van dentro de su tarjeta: aquí se repetían.
           Pasaba en los dos días OFF del plan de Andrés, porque el plan llega con
           `exercises: []` y un arreglo vacío cuenta como "tiene ejercicios". */}
-      {selectedDay.notes && (selectedDay.exercises || selectedDay.blocks) && !descansoPuro && (
+      {quiere('notasDelDia') && selectedDay.notes && (selectedDay.exercises || selectedDay.blocks) && !descansoPuro && (
         <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
           <div style={{ fontSize: 11, color: LT.text3, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>Notas del día</div>
           <ul style={{ listStyleType: 'disc', margin: 0, paddingLeft: 18, color: LT.text2, fontSize: 13, lineHeight: 1.7 }}>
@@ -1158,39 +1237,41 @@ const CuerpoDelDia = ({ phase, week, dayIdx: selectedIdx, sessionsData, updateSe
       )}
 
       {/* Notas del usuario */}
-      <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-          <Edit3 size={12} style={{ color: LT.text3 }} />
-          <span style={{ fontSize: 11, color: LT.text3, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>Tus notas</span>
+      {quiere('tusNotas') && (
+        <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <Edit3 size={12} style={{ color: LT.text3 }} />
+            <span style={{ fontSize: 11, color: LT.text3, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>Tus notas</span>
+          </div>
+          <textarea
+            value={sessionData.notes || ''}
+            onChange={e => updateNotes(e.target.value)}
+            placeholder="Cómo te sentiste, ajustes, observaciones..."
+            rows={3}
+            style={{
+              width: '100%', background: LT.bg, border: `1px solid ${LT.border}`,
+              borderRadius: 10, padding: 12, color: LT.text, fontFamily: FONT, fontSize: 13,
+              outline: 'none', resize: 'vertical', boxSizing: 'border-box',
+            }}
+            onFocus={e => e.target.style.borderColor = LT.blue}
+            onBlur={e => e.target.style.borderColor = LT.border}
+          />
         </div>
-        <textarea
-          value={sessionData.notes || ''}
-          onChange={e => updateNotes(e.target.value)}
-          placeholder="Cómo te sentiste, ajustes, observaciones..."
-          rows={3}
-          style={{
-            width: '100%', background: LT.bg, border: `1px solid ${LT.border}`,
-            borderRadius: 10, padding: 12, color: LT.text, fontFamily: FONT, fontSize: 13,
-            outline: 'none', resize: 'vertical', boxSizing: 'border-box',
-          }}
-          onFocus={e => e.target.style.borderColor = LT.blue}
-          onBlur={e => e.target.style.borderColor = LT.border}
-        />
-      </div>
+      )}
 
-      {selectedDay.dayScience && (
+      {quiere('ciencia') && selectedDay.dayScience && (
         <LightCollapsible title="Por qué este día" icon={Info} color={LT.blue}>
           <div style={{ fontSize: 13.5, color: LT.text2, lineHeight: 1.7 }}>{selectedDay.dayScience}</div>
         </LightCollapsible>
       )}
 
-      {selectedDay.workoutScience && (
+      {quiere('ciencia') && selectedDay.workoutScience && (
         <LightCollapsible title="Por qué este workout" icon={Sparkles} color={LT.mint}>
           <LightWorkoutScience science={selectedDay.workoutScience} />
         </LightCollapsible>
       )}
 
-      {week.weekScience && (
+      {quiere('ciencia') && week.weekScience && (
         <LightCollapsible title="Por qué esta semana" icon={BookOpen} color={LT.text2}>
           <LightWeekScience science={week.weekScience} />
         </LightCollapsible>
@@ -1461,42 +1542,32 @@ const WeekDetail = ({
 };
 
 /**
- * Una sesión del día dentro de «Plan» con equipo. Va envuelta en SU programa
- * (`ComoPrograma`): el ejercicio que puso el fisio se ve con el video del fisio
+ * Una pieza del día dentro de «Plan» con equipo, de UN programa. Va envuelta en SU
+ * programa (`ComoPrograma`): el ejercicio que puso el fisio se ve con el video del fisio
  * y lo que anota el atleta se guarda en el lugar de esa sesión, no en el del coach.
+ *
+ * `partes` dice cuál pieza dibuja (ver `CuerpoDelDia`). No hay un bloque por persona: las
+ * sesiones de todos van juntas, y lo demás sale una sola vez, hasta abajo.
  */
-const FuenteDelDia = ({ fuente, store, setStore, oneRMs, conAutor }) => {
-  const { programa, phase, week, idx, day } = fuente;
+const FuenteDelDia = ({ fuente, store, setStore, oneRMs, partes, autor, abiertas }) => {
+  const { programa, phase, week, idx } = fuente;
   const sessionsData = useMemo(() => registrosDe(programa, store), [programa, store]);
   const updateSession = useCallback(
     (id, cambio) => escribeRegistro(setStore, programa, id, cambio),
     [setStore, programa],
   );
-  const color = programa.color ?? LT.blue;
-  const titulo = (day.dual || variasSesiones(day))
-    ? 'Doble sesión'
-    : (sinDuracion(day.name || '') || textoDeSesiones(sesionesDelTitulo(day)) || day.day);
+  const cuerpo = (
+    <CuerpoDelDia
+      phase={phase} week={week} dayIdx={idx}
+      sessionsData={sessionsData} updateSession={updateSession} oneRMs={oneRMs}
+      partes={partes} entarjetas abiertasPorDefecto={abiertas} autor={autor}
+    />
+  );
   return (
     <ComoPrograma programa={programa}>
-      <section
-        id={`fuente-${programa.id}-${idx}`}
-        aria-label={`${etiquetaDePrograma(programa)}: ${titulo}`}
-        style={{ marginBottom: 28, scrollMarginTop: 12 }}
-      >
-        <div style={{ borderLeft: `4px solid ${color}`, padding: '1px 0 1px 11px', marginBottom: 14 }}>
-          {conAutor && <EtiquetaDeAutor programa={programa} tamano={12.5} />}
-          <div style={{
-            fontSize: 19, fontWeight: 800, color: LT.text, letterSpacing: -0.3, lineHeight: 1.15,
-            marginTop: conAutor ? 3 : 0, overflowWrap: 'anywhere',
-          }}>
-            {titulo}
-          </div>
-        </div>
-        <CuerpoDelDia
-          phase={phase} week={week} dayIdx={idx}
-          sessionsData={sessionsData} updateSession={updateSession} oneRMs={oneRMs}
-        />
-      </section>
+      {partes.includes('sesiones')
+        ? <div id={`fuente-${programa.id}-${idx}`} style={{ scrollMarginTop: 12 }}>{cuerpo}</div>
+        : cuerpo}
     </ComoPrograma>
   );
 };
@@ -1510,8 +1581,13 @@ const FuenteDelDia = ({ fuente, store, setStore, oneRMs, conAutor }) => {
  * (la del coach, con lo que otros le pegaron, y los programas aparte que van
  * por su cuenta), y las pastillas de arriba solo ESCONDEN lo de los demás.
  *
- * Cada sesión dice de quién viene. Se abren, se anotan y se terminan como
- * siempre (`CuerpoDelDia`), cada una en su programa.
+ * Cada sesión es una TARJETA y dice de quién viene con una etiqueta chica. Se abren,
+ * se anotan y se terminan como siempre (`CuerpoDelDia`), cada una en su programa.
+ *
+ * El día es UN todo (Andrés, 2 oct 2026: «el programa es un "todo"… no que la app se
+ * la pase separándolo»): las tarjetas de todos van seguidas, sin un bloque por
+ * persona, y después, UNA sola vez y hasta abajo —es lo menos importante—, las notas
+ * y el porqué científico.
  */
 const PlanUnificado = ({
   programas, store, setStore, oneRMs, vista, semanaActual, filtro, onFiltro, autores, onVerPrograma, onClaveVista, foco,
@@ -1533,6 +1609,10 @@ const PlanUnificado = ({
   const dia = dias.find((d) => d.clave === clave) ?? dias[0];
   const fuentes = visibles(dia);
   const conAutor = autores.length > 1;
+  /* Cuántas tarjetas trae el día: un doble trae una por turno; un descanso, ninguna.
+     Con UNA sola se abre sola; con varias salen cerradas, como en un doble, para que
+     se vea de un vistazo todo lo que toca. */
+  const totalTarjetas = fuentes.reduce((n, f) => n + tarjetasDelDia(f.day), 0);
   /* Si se llegó tocando UNA sesión de «Hoy» (`foco`), la pantalla baja hasta ella: la
      del fisio puede quedar debajo de una sesión larga del coach, y sin esto parecería
      que el toque no abrió lo que se tocó. La primera ya queda arriba. */
@@ -1631,12 +1711,36 @@ const PlanUnificado = ({
             {filtro ? 'Ese día no hay nada de esta persona' : 'Sin sesión este día'}
           </div>
         </div>
-      ) : fuentes.map((f) => (
-        <FuenteDelDia
-          key={`${f.programa.id}-${f.phase.id}-${f.week.num}-${f.idx}`}
-          fuente={f} store={store} setStore={setStore} oneRMs={oneRMs} conAutor={conAutor}
-        />
-      ))}
+      ) : (
+        <>
+          {fuentes.map((f) => (
+            <FuenteDelDia
+              key={`s-${f.programa.id}-${f.phase.id}-${f.week.num}-${f.idx}`}
+              fuente={f} store={store} setStore={setStore} oneRMs={oneRMs}
+              partes={['sesiones']} autor={conAutor ? f.programa : null}
+              abiertas={totalTarjetas <= 1 || foco === `${f.programa.id}-${f.idx}`}
+            />
+          ))}
+          {fuentes.map((f) => (
+            <FuenteDelDia
+              key={`n-${f.programa.id}-${f.phase.id}-${f.week.num}-${f.idx}`}
+              fuente={f} store={store} setStore={setStore} oneRMs={oneRMs} partes={['notasDelDia']}
+            />
+          ))}
+          {/* Lo que anota el atleta del día es UNO solo, no uno por persona: va con el
+              primer programa del día (el del coach), aunque el filtro lo deje fuera. */}
+          <FuenteDelDia
+            key={`t-${clave}`}
+            fuente={dia.fuentes[0]} store={store} setStore={setStore} oneRMs={oneRMs} partes={['tusNotas']}
+          />
+          {fuentes.map((f) => (
+            <FuenteDelDia
+              key={`c-${f.programa.id}-${f.phase.id}-${f.week.num}-${f.idx}`}
+              fuente={f} store={store} setStore={setStore} oneRMs={oneRMs} partes={['ciencia']}
+            />
+          ))}
+        </>
+      )}
 
       {onVerPrograma && (
         <button

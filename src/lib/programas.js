@@ -2,7 +2,7 @@ import {
   cursorAlDia, defaultCursor, isValidCursor, resolveCursor, sessionForToday, sessionIdFor,
   ejerciciosDelBloque, esDescanso, diasDeEstaSemana,
 } from '@/lib/training-utils';
-import { minutosDeTag, sesionesDelTitulo, textoDeSesiones } from '@/lib/sesiones';
+import { bloquesHechos, minutosDeTag, sesionesDelTitulo, textoDeSesiones } from '@/lib/sesiones';
 import { esDeSalud } from '@/lib/palabras';
 import { LT, oficioCorto } from '@/lib/theme';
 
@@ -97,6 +97,36 @@ export function datosDeSesion({ day, week, dayIdx }) {
 }
 
 /**
+ * Las sesiones de UN día, una por una, para la lista de «Hoy»: un doble sin nombre propio
+ * da una por turno (AM, PM) y todo lo demás, una sola. Cada una dice cuántos ejercicios
+ * trae, cuánto dura y si va hecha; `registro` es lo que el atleta lleva anotado de ese día.
+ *
+ * Así la lista enseña SESIONES y no autores: el doble del coach y la del fisio quedan
+ * juntos, cada uno con su etiqueta (Andrés, 2 oct 2026: «el programa es un todo»).
+ */
+export function partesDelDia({ day, week, dayIdx }, registro) {
+  const sesiones = sesionesDelTitulo(day);
+  const bloques = day?.blocks || [];
+  if (sesiones.length > 1 && sesiones.length === bloques.length) {
+    const hechos = bloquesHechos(registro, bloques.length);
+    return sesiones.map((s, bloque) => ({
+      ...s,
+      bloque,
+      ejercicios: (ejerciciosDelBloque(week, dayIdx, bloques[bloque]) || []).filter((e) => !e.isNote).length,
+      minutos: minutosDeTag(bloques[bloque].tag),
+      hecha: hechos[bloque],
+    }));
+  }
+  return [{
+    turno: null,
+    nombre: textoDeSesiones(sesiones) || day?.day || '',
+    bloque: null,
+    ...datosDeSesion({ day, week, dayIdx }),
+    hecha: !!registro?.completed,
+  }];
+}
+
+/**
  * La sesión de HOY de un programa, lista para pintar en una tarjeta:
  * { …sessionForToday, hecha, titulo, ejercicios, minutos }. Si hoy no toca, null.
  */
@@ -187,7 +217,8 @@ export function autoresDe(programas) {
 /**
  * TODAS las sesiones de HOY de un programa, una por una (no solo la primera):
  * un fisio puede pegar dos el mismo día. Cada una lista para pintar:
- * { programa, phase, week, dayIdx, day, id, hecha, titulo, ejercicios, minutos }.
+ * { programa, phase, week, dayIdx, day, id, hecha, titulo, ejercicios, minutos, partes },
+ * donde `partes` son las sesiones de ese día una por una (ver `partesDelDia`).
  *
  * El día que el atleta eligió hoy con «Cambiar día» gana al calendario, como
  * siempre (lo resuelve `sessionForToday`), y entonces es esa y solo esa.
@@ -196,13 +227,14 @@ export function sesionesDeHoy(programa, store, hoy = new Date()) {
   if (!programa?.hasPlan) return [];
   const unica = sesionDeHoy(programa, store, hoy);
   if (!unica) return [];
+  const registros = registrosDe(programa, store);
   const comoEntrada = (s) => ({
     programa, phase: s.phase, week: s.week, dayIdx: s.dayIdx, day: s.day, id: s.id,
     hecha: s.hecha, titulo: s.titulo, ejercicios: s.ejercicios, minutos: s.minutos,
+    partes: partesDelDia(s, registros[s.id]),
   });
   if (unica.elegido || (unica.sesionesHoy ?? 1) <= 1) return [comoEntrada(unica)];
   const { phase, week } = ubicacion(programa, cursorDePrograma(programa, store, hoy));
-  const registros = registrosDe(programa, store);
   const clave = claveDelDia(unica.day);
   return (week?.days ?? [])
     .map((day, idx) => ({ day, idx }))

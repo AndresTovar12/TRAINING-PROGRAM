@@ -21,11 +21,25 @@ const nombreDe = (day) => textoDeSesiones(sesionesDelTitulo(day))
    Uno con DOS —mañana y tarde, o el mismo día de la semana con dos entradas—
    lleva una etiqueta por cada sesión en vez de sus nombres unidos con «+»:
    «Velocidad + Lower Strength» se lee como una sola sesión que junta las dos
-   cosas (Andrés, 29 sep 2026). El renglón puede crecer a dos líneas. */
-function TituloDelRenglon({ dias, color, peso = 700, minimo }) {
-  const sesiones = sesionesDelTitulo(dias);
+   cosas (Andrés, 29 sep 2026). El renglón puede crecer a dos líneas.
+
+   `extras`: lo que otros profesionales pegaron a ESTE día (la sesión del fisio).
+   Va como una etiqueta más del mismo renglón, con su color y su nombre, y no
+   como un renglón aparte: el programa es un todo y quién puso cada sesión es solo
+   una etiqueta (Andrés, 2 oct 2026). Un descanso del coach con una sesión de otro
+   ese día ya no es descanso: se enseña solo la sesión. */
+function TituloDelRenglon({ dias, color, peso = 700, minimo, extras }) {
   // `minimo`: un ancho por debajo del cual el título no se encoge; el renglón baja de línea antes.
   const base = minimo ? `1 1 ${minimo}px` : 1;
+  if (extras?.length) {
+    const delDia = (Array.isArray(dias) ? dias : [dias]).filter(Boolean);
+    const deOtros = extras.flatMap((pg) => sesionesDelTitulo(pg.day).map((s) => ({
+      ...s, nombre: s.nombre || nombreDe(pg.day), color: pg.color, autor: pg.etiqueta, hecha: pg.hecha,
+    })));
+    const propias = delDia.length && !delDia.every(esDescanso) ? sesionesDelTitulo(delDia) : [];
+    return <EtiquetasDeSesion sesiones={[...propias, ...deOtros]} style={{ flex: base }} />;
+  }
+  const sesiones = sesionesDelTitulo(dias);
   if (sesiones.length > 1) {
     return <EtiquetasDeSesion sesiones={sesiones} style={{ flex: base }} />;
   }
@@ -94,10 +108,12 @@ export default function NavegadorDelPlan({
      («tuya», un candado…). Lo usa quien le agrega sesiones al programa del coach.
 
      `pegadasDe(fase, semana)`: lo que otros profesionales le pegaron a esta
-     semana, [{ dia, day, etiqueta, color, hecha }]. Sale DENTRO de su día, con la
-     etiqueta de quien lo puso, junto a lo del coach. Es solo lectura: lo pegado
-     lo mueve únicamente su autor. `alTocarPegada(fase, semana, pegada)` abre ese
-     día; sin él, el renglón no se toca (el coach lo mira, no lo entrena).
+     semana, [{ dia, day, etiqueta, color, hecha }]. Sale DENTRO del renglón de su
+     día, como una etiqueta más con el nombre de quien lo puso, junto a lo del
+     coach (nunca como un renglón aparte). Es solo lectura: lo pegado lo mueve
+     únicamente su autor. Si ese día el coach no puso nada, el renglón es solo de
+     lo pegado y `alTocarPegada(fase, semana, pegada)` lo abre; sin él, no se toca
+     (el coach lo mira, no lo entrena).
 
      `contenidoDia`: si viene, tocar un día lo abre AQUÍ MISMO para ver qué
      tiene, en vez de llevar a otra pantalla. Es lo que usa el coach: él no
@@ -374,41 +390,34 @@ export default function NavegadorDelPlan({
                   );
                 })
                 : renglonesDeLaSemana(semana, pegadasDe?.(f, semana)).map((r) => {
-                  if (r.pegada) {
-                    const pg = r.pegada;
+                  if (!r.day) {
+                    // Un día donde el coach no puso nada y otro profesional sí: un renglón de día como cualquiera.
+                    const primera = r.extras[0];
                     const contenido = (
                       <>
-                        <span style={{ width: 32, fontSize: 11, fontWeight: 800, color: pg.color, flexShrink: 0 }}>{pg.dia}</span>
-                        <span style={{ width: 7, height: 7, borderRadius: 4, background: pg.color, flexShrink: 0 }} />
-                        <TituloDelRenglon dias={pg.day} color={LT.text} />
-                        <span style={{
-                          fontSize: 10, fontWeight: 800, letterSpacing: 0.3, flexShrink: 0, padding: '3px 7px',
-                          borderRadius: 6, color: pg.color, background: `${pg.color}1A`,
-                        }}>
-                          {pg.etiqueta}
-                        </span>
-                        {pg.hecha && <Check size={14} strokeWidth={3} style={{ color: LT.mint, flexShrink: 0 }} />}
+                        <span style={{ width: 32, fontSize: 11, fontWeight: 800, color: LT.text3, flexShrink: 0 }}>{r.dia}</span>
+                        <span style={{ width: 7, height: 7, borderRadius: 4, background: primera.color, flexShrink: 0 }} />
+                        <TituloDelRenglon extras={r.extras} color={LT.text} />
                       </>
                     );
-                    const estiloPegada = {
+                    const estiloSuelta = {
                       display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
-                      padding: '10px 11px', borderRadius: 11, fontFamily: FONT,
-                      background: `${pg.color}10`, border: `1px solid ${pg.color}44`,
+                      padding: '10px 11px', borderRadius: 11, fontFamily: FONT, background: LT.bg, border: `1px solid ${LT.border}`,
                     };
                     return alTocarPegada ? (
                       <button
-                        key={`pegada-${r.n}`}
+                        key={`suelta-${r.dia}`}
                         type="button"
-                        onClick={() => alTocarPegada(f, semana, pg)}
-                        style={{ ...estiloPegada, cursor: 'pointer' }}
+                        onClick={() => alTocarPegada(f, semana, primera)}
+                        style={{ ...estiloSuelta, cursor: 'pointer' }}
                       >
                         {contenido}
                       </button>
                     ) : (
-                      <div key={`pegada-${r.n}`} style={estiloPegada}>{contenido}</div>
+                      <div key={`suelta-${r.dia}`} style={estiloSuelta}>{contenido}</div>
                     );
                   }
-                  const { day, idx } = r;
+                  const { day, idx, extras } = r;
                   const tipo = tipoDeSesion(day);
                   const descanso = esDescanso(day);
                   const suyo = esAqui(f.id, semana.num, idx);
@@ -416,6 +425,8 @@ export default function NavegadorDelPlan({
                   const lista = !!hecha?.(f.id, semana.num, idx);
                   const clave = `${f.id}-${semana.num}-${idx}`;
                   const abiertoAqui = !!contenidoDia && diaAbierto === clave;
+                  // Un descanso del coach con algo de otro profesional encima ya no es descanso.
+                  const soloDeOtros = descanso && !!extras?.length;
                   return (
                     <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <button
@@ -435,8 +446,8 @@ export default function NavegadorDelPlan({
                         <span style={{ width: 32, fontSize: 11, fontWeight: 800, color: suyo ? LT.blue : LT.text3, flexShrink: 0 }}>
                           {day.day}
                         </span>
-                        <span style={{ width: 7, height: 7, borderRadius: 4, background: descanso ? LT.text3 : tipo.c, flexShrink: 0 }} />
-                        <TituloDelRenglon dias={day} color={descanso ? LT.text3 : LT.text} />
+                        <span style={{ width: 7, height: 7, borderRadius: 4, background: soloDeOtros ? extras[0].color : (descanso ? LT.text3 : tipo.c), flexShrink: 0 }} />
+                        <TituloDelRenglon dias={day} extras={extras} color={descanso && !soloDeOtros ? LT.text3 : LT.text} />
                         {detalleDia?.(f, semana, idx)}
                         {suyo && pastilla(textoAqui, true)}
                         {mirando && pastilla('VIENDO', false)}
@@ -478,18 +489,25 @@ export default function NavegadorDelPlan({
 
 const ORDEN_DE_DIA = { Lun: 0, Mar: 1, 'Mié': 2, Mie: 2, Jue: 3, Vie: 4, 'Sáb': 5, Sab: 5, Dom: 6 };
 
-/* Los renglones de una semana: los días del coach y lo pegado, juntos y en orden
-   de calendario. En un mismo día va primero lo del coach. Los del coach siguen
-   siendo { day, idx } (su posición original, de la que cuelga lo que anota el
-   atleta); los pegados, { pegada, n }. */
+/* Los renglones de una semana: los días del coach, en orden de calendario, con lo
+   pegado DENTRO del renglón de su día (`extras`). Los del coach siguen siendo
+   { day, idx } (su posición original, de la que cuelga lo que anota el atleta).
+   Si ese día de la semana el coach no puso nada, lo pegado hace su propio renglón
+   { dia, extras }, en el lugar que le toca. */
 function renglonesDeLaSemana(semana, pegadas) {
   const delCoach = enOrdenDeSemana(semana?.days ?? []);
   if (!pegadas?.length) return delCoach;
   const ordenDe = (dia) => ORDEN_DE_DIA[dia] ?? 9;
-  return [
-    ...delCoach.map((r) => ({ ...r, orden: ordenDe(r.day?.day), cual: 0 })),
-    ...pegadas.map((pegada, n) => ({ pegada, n, orden: ordenDe(pegada.dia), cual: 1 })),
-  ].sort((a, b) => a.orden - b.orden || a.cual - b.cual);
+  const filas = delCoach.map((r) => ({ ...r, extras: [] }));
+  const sueltas = [];
+  pegadas.forEach((pg) => {
+    const anfitrion = filas.find((r) => ordenDe(r.day?.day) === ordenDe(pg.dia));
+    if (anfitrion) { anfitrion.extras.push(pg); return; }
+    const suelta = sueltas.find((x) => ordenDe(x.dia) === ordenDe(pg.dia));
+    if (suelta) suelta.extras.push(pg);
+    else sueltas.push({ dia: pg.dia, extras: [pg] });
+  });
+  return [...filas, ...sueltas].sort((a, b) => ordenDe(a.day?.day ?? a.dia) - ordenDe(b.day?.day ?? b.dia));
 }
 
 /** Cuántas sesiones de una fase están hechas, sin contar descansos. */

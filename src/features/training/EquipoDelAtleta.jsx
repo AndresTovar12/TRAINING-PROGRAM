@@ -2,7 +2,6 @@ import { Check, ChevronRight } from 'lucide-react';
 import { FONT, KP, LT } from '@/lib/theme';
 import { plural } from '@/lib/plural';
 import { etiquetaDePrograma } from '@/lib/programas';
-import { sesionesDelTitulo } from '@/lib/sesiones';
 import EtiquetasDeSesion from '@/components/EtiquetasDeSesion';
 
 /* Lo que ve un atleta que tiene EQUIPO: su coach principal y, además, alguien
@@ -64,11 +63,15 @@ export function ChipsDeAutor({ autores, filtro, onFiltro, style }) {
 }
 
 /**
- * «Hoy te toca», con TODAS las sesiones de hoy de todos en una sola tarjeta,
- * cada una con el nombre de quien la puso. Tocar una lleva a «Plan», a ese día.
+ * «Hoy te toca», con TODAS las sesiones de hoy en una sola tarjeta. Una fila por
+ * SESIÓN, no por persona: el doble del coach (AM y PM) y la del fisio van en la misma
+ * lista, y cada fila dice de quién es con una etiqueta chica (Andrés, 2 oct 2026:
+ * «el programa es un todo… no que la app se la pase separándolo»).
+ * Tocar una lleva a «Plan», a ese día.
  */
 export function TarjetaDeHoyDeTodos({ entradas, onAbrir, onCambiarDia, esCompu, conAutor = true }) {
-  const todas = entradas.length > 0 && entradas.every((e) => e.hecha);
+  const filas = entradas.flatMap((e) => e.partes.map((p) => ({ e, p })));
+  const todas = filas.length > 0 && filas.every(({ p }) => p.hecha);
   return (
     <div style={{ padding: '0 18px 12px' }}>
       <div style={{
@@ -79,17 +82,16 @@ export function TarjetaDeHoyDeTodos({ entradas, onAbrir, onCambiarDia, esCompu, 
           {todas ? 'Completadas' : 'Hoy te toca'}
         </div>
         <div style={{ fontSize: 24, fontWeight: 700, color: '#fff', lineHeight: 1.05, marginTop: 3, letterSpacing: -0.5 }}>
-          {entradas.length === 1 ? '1 sesión' : `${entradas.length} sesiones`}
+          {filas.length === 1 ? '1 sesión' : `${filas.length} sesiones`}
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 14 }}>
-          {entradas.map((e) => {
+          {filas.map(({ e, p }) => {
             const color = e.programa.color ?? LT.blue;
-            const sesiones = sesionesDelTitulo(e.day);
-            const datos = [e.ejercicios ? plural(e.ejercicios, 'ejercicio', 'ejercicios') : null, e.minutos].filter(Boolean).join(' · ');
+            const datos = [p.ejercicios ? plural(p.ejercicios, 'ejercicio', 'ejercicios') : null, p.minutos].filter(Boolean).join(' · ');
             return (
               <button
-                key={`${e.programa.id}-${e.dayIdx}`}
+                key={`${e.programa.id}-${e.dayIdx}-${p.bloque ?? 'dia'}`}
                 type="button"
                 onClick={() => onAbrir(e)}
                 className="kp-press"
@@ -102,16 +104,16 @@ export function TarjetaDeHoyDeTodos({ entradas, onAbrir, onCambiarDia, esCompu, 
                 <span aria-hidden="true" style={{ width: 5, alignSelf: 'stretch', borderRadius: 5, background: color, flexShrink: 0 }} />
                 <span style={{ flex: 1, minWidth: 0 }}>
                   {conAutor && <span style={{ display: 'block', fontSize: 12, fontWeight: 800, color }}>{etiquetaDePrograma(e.programa)}</span>}
-                  {sesiones.length > 1 ? (
-                    <EtiquetasDeSesion sesiones={sesiones} envolver tamano={13.5} style={{ marginTop: 5 }} />
+                  {p.turno ? (
+                    <EtiquetasDeSesion sesiones={[{ turno: p.turno, nombre: p.nombre }]} envolver tamano={13.5} style={{ marginTop: 5 }} />
                   ) : (
                     <span style={{ display: 'block', fontSize: 16.5, fontWeight: 800, color: LT.text, marginTop: 2, overflowWrap: 'anywhere', lineHeight: 1.2 }}>
-                      {e.titulo}
+                      {p.nombre}
                     </span>
                   )}
                   {datos && <span style={{ display: 'block', fontSize: 12, color: LT.text2, marginTop: 3 }}>{datos}</span>}
                 </span>
-                {e.hecha ? (
+                {p.hecha ? (
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0, fontSize: 12.5, fontWeight: 800, color: LT.mint }}>
                     <Check size={16} strokeWidth={3} /> Terminada
                   </span>
