@@ -9,6 +9,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { esProgramaFantasma } from '@/lib/programas';
+import { useAviso } from '@/components/AvisoPasajero';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useIsDesktop } from '@/lib/useViewport';
 import {
@@ -1895,6 +1896,7 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
 export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDeleted, profesionalId = null, catalogo = null }) {
   const esCompu = useIsDesktop();
   const pregunta = useConfirmacion();
+  const { avisa } = useAviso();
   const { user } = useAuth();
   const { t } = usePalabras();
   /* MODO MIS PLANES (`catalogo`). El MISMO editor, sin atleta: arma o edita un programa o una rutina que
@@ -2902,7 +2904,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
           onClose={() => setMenu(null)}
           acciones={[
             ...(enCatalogo ? [] : [{
-              icon: Save, texto: isWeekly ? 'Guardar la rutina en Mis planes' : 'Guardar todo el plan en Mis planes',
+              icon: Save, texto: isWeekly ? 'Guardar la rutina en Mis planes' : t('Guardar todo el plan en Mis planes'),
               onClick: () => setModal({ type: 'guardar-plan' }),
             }]),
             ...(isWeekly ? [{ icon: FolderOpen, texto: 'Usar una rutina de Mis planes', onClick: () => setModal({ type: 'tpl-week' }) }] : []),
@@ -2970,12 +2972,15 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         const { tipo, data } = datosDelCatalogo();
         return (
           <DialogoGuardar
-            titulo={isWeekly ? 'Guardar la rutina en Mis planes' : 'Guardar todo el plan en Mis planes'}
+            titulo={isWeekly ? 'Guardar la rutina en Mis planes' : t('Guardar todo el plan en Mis planes')}
             tipo={tipo} nombreInicial={title} interruptores={casillaDeNotas(tipo, data)}
-            onGuardar={({ nombre, descripcion, carpetaId, interruptores }) => guardarItem({
-              tipo, nombre, descripcion, origen: origenDelPlan, carpetaId, userId: user?.id,
-              data: interruptores.notas === false ? sinNotas(tipo, data) : data,
-            })}
+            onGuardar={async ({ nombre, descripcion, carpetaId, interruptores }) => {
+              await guardarItem({
+                tipo, nombre, descripcion, origen: origenDelPlan, carpetaId, userId: user?.id,
+                data: interruptores.notas === false ? sinNotas(tipo, data) : data,
+              });
+              avisa('Guardado en Mis planes');
+            }}
             onCerrar={() => setModal(null)}
           />
         );
@@ -2987,10 +2992,13 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
           <DialogoGuardar
             titulo="Guardar la semana en Mis planes" tipo="rutina"
             nombreInicial={nombreSemana(curPhase, semana, curWeekIdx + 1)} interruptores={casillaDeNotas('rutina', data)}
-            onGuardar={({ nombre, descripcion, carpetaId, interruptores }) => guardarItem({
-              tipo: 'rutina', nombre, descripcion, origen: origenDelPlan, carpetaId, userId: user?.id,
-              data: interruptores.notas === false ? sinNotas('rutina', data) : data,
-            })}
+            onGuardar={async ({ nombre, descripcion, carpetaId, interruptores }) => {
+              await guardarItem({
+                tipo: 'rutina', nombre, descripcion, origen: origenDelPlan, carpetaId, userId: user?.id,
+                data: interruptores.notas === false ? sinNotas('rutina', data) : data,
+              });
+              avisa('Guardado en Mis planes');
+            }}
             onCerrar={() => setModal(null)}
           />
         );
@@ -3009,12 +3017,13 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
               }] : []),
               ...casillaDeNotas('workout', workoutDeSesiones(varias ? delDia : [sesion])),
             ]}
-            onGuardar={({ nombre, descripcion, carpetaId, interruptores }) => {
+            onGuardar={async ({ nombre, descripcion, carpetaId, interruptores }) => {
               const data = workoutDeSesiones(varias && interruptores.todo !== false ? delDia : [sesion]);
-              return guardarItem({
+              await guardarItem({
                 tipo: 'workout', nombre, descripcion, origen: origenDelPlan, carpetaId, userId: user?.id,
                 data: interruptores.notas === false ? sinNotas('workout', data) : data,
               });
+              avisa('Guardado en Mis planes');
             }}
             onCerrar={() => setModal(null)}
           />
@@ -3066,7 +3075,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
       )}
       {modal?.type === 'desde-plan' && (
         <SelectorDeMisPlanes
-          tipos={['programa', 'rutina']} titulo="Armar el plan desde Mis planes"
+          tipos={['programa', 'rutina']} titulo={t('Armar el plan desde Mis planes')}
           subtitulo="Parte de algo que ya guardaste y ajústalo antes de guardarlo." onCerrar={() => setModal(null)}
           onElegir={async (item) => {
             let datos;

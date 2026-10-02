@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, Loader2 } from 'lucide-react';
+import { usePalabras } from '@/contexts/PalabrasContext';
 import { planDe, getAthleteState } from '@/lib/api';
 import { dondeVa, estructuraDelPlan } from '@/lib/training-utils';
 import { esProgramaFantasma } from '@/lib/programas';
@@ -20,6 +21,7 @@ const NOMBRE_DIA = { Lun: 'lunes', Mar: 'martes', Mié: 'miércoles', Jue: 'juev
  * (si viene) deja pasar a este atleta sin ponerle nada.
  */
 export default function ElegirDiaDelAtleta({ atleta, clave = null, data, nombre, onListo, onSaltar }) {
+  const { t } = usePalabras();
   const [carga, setCarga] = useState({ listo: false, plan: null, estado: null });
   const [fi, setFi] = useState(null);
   const [semanaNum, setSemanaNum] = useState(null);
@@ -70,7 +72,7 @@ export default function ElegirDiaDelAtleta({ atleta, clave = null, data, nombre,
   if (!carga.listo) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: T.text2, fontWeight: 600, padding: 16 }}>
-        <Loader2 size={16} className="spin" /> Cargando su plan…
+        <Loader2 size={16} className="spin" /> {t('Cargando su plan…')}
       </div>
     );
   }
@@ -79,7 +81,7 @@ export default function ElegirDiaDelAtleta({ atleta, clave = null, data, nombre,
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: T.text2, lineHeight: 1.5 }}>
-          {atleta.full_name || atleta.username} todavía no tiene un plan donde poner el workout. Dale primero un programa o una rutina de Mis planes.
+          {atleta.full_name || atleta.username} {t('todavía no tiene un plan donde poner el workout. Dale primero un programa o una rutina de Mis planes.')}
         </div>
         {onSaltar && <button type="button" onClick={onSaltar} style={{ ...botonBlanco(), alignSelf: 'flex-start' }}>Seguir con el siguiente</button>}
       </div>
@@ -108,7 +110,7 @@ export default function ElegirDiaDelAtleta({ atleta, clave = null, data, nombre,
       {dia && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 14, padding: '12px 14px' }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: T.text, lineHeight: 1.45 }}>
-            Se pone el {NOMBRE_DIA[dia] ?? dia}, en la semana {semana?.num} de {fases[faseIdx]?.name || 'su plan'}.
+            Se pone el {NOMBRE_DIA[dia] ?? dia}, en la semana {semana?.num} de {fases[faseIdx]?.name || t('su plan')}.
           </div>
           {ocupado && (
             <div role="radiogroup" aria-label="Ese día ya tiene sesión" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -129,7 +131,7 @@ export default function ElegirDiaDelAtleta({ atleta, clave = null, data, nombre,
       {error && <div style={{ fontSize: 13, fontWeight: 700, color: T.danger }}>{error}</div>}
 
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap', fontFamily: FONT }}>
-        {onSaltar && <button type="button" onClick={onSaltar} disabled={poniendo} style={botonBlanco(false, poniendo)}>Saltar este atleta</button>}
+        {onSaltar && <button type="button" onClick={onSaltar} disabled={poniendo} style={botonBlanco(false, poniendo)}>{t('Saltar este atleta')}</button>}
         <button type="button" onClick={poner} disabled={!dia || poniendo} style={botonPrincipal(!dia || poniendo)}>
           {poniendo ? <Loader2 size={16} className="spin" /> : <Check size={16} />} Poner aquí
         </button>

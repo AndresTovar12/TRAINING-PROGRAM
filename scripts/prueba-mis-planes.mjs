@@ -9,6 +9,7 @@ import {
   hijasDe, rutaDeCarpeta, descendientesDe, puedeMoverCarpeta, cabeCarpetaEn, textoDeRuta, coincide,
   nombreDeCopia, NIVELES_DE_CARPETA,
 } from '../src/lib/misPlanesDatos.js';
+import { traduce } from '../src/lib/palabras.js';
 
 const ej = (name, extra = {}) => ({ name, sets: '3', reps: '8', ...extra });
 const sesion = (name, ejercicios, extra = {}) => ({ day: 'Lun', name, cat: 'gym', exercises: ejercicios, ...extra });
@@ -131,4 +132,11 @@ assert.equal(nombreDeCopia('Pierna', ['Pierna']), 'Pierna (copia)');
 assert.equal(nombreDeCopia('Pierna', ['Pierna', 'Pierna (copia)']), 'Pierna (copia 2)');
 assert.equal(nombreDeCopia('Pierna (copia)', ['Pierna', 'Pierna (copia)']), 'Pierna (copia 2)', 'copiar una copia no apila «(copia) (copia)»');
 
-console.log('✓ mis planes: workouts (incluye dobles), rutinas, programas con ids nuevos, notas, carpetas y búsqueda');
+/* ---- Las palabras de cada oficio: «Mis planes» no cambia, lo demás sí ---- */
+assert.equal(traduce('Guardar todo el plan en Mis planes', true), 'Guardar todo el programa en Mis planes', 'el nombre de la pestaña se queda');
+assert.equal(traduce('Guardar todo el plan en Mis planes', false), 'Guardar todo el plan en Mis planes', 'quien no es de salud no cambia nada');
+assert.equal(traduce('Asignar a 2 atletas', true), 'Asignar a 2 pacientes');
+assert.equal(traduce('Reemplaza su plan: lo recuperas en «Cambios del plan»', true), 'Reemplaza su programa: lo recuperas en «Cambios del programa»');
+assert.equal(traduce('Mis planes y Plan de Laura', true), 'Mis planes y Programa de Laura', 'lo protegido no frena lo demás');
+
+console.log('✓ mis planes: workouts (incluye dobles), rutinas, programas con ids nuevos, notas, carpetas, búsqueda y palabras del oficio');

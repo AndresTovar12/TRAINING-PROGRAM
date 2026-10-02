@@ -147,8 +147,12 @@ export default function ListaDesplegable({
       const debajo = window.innerHeight - b.bottom - 10;
       // Si abajo no cabe y arriba sí, se abre hacia arriba.
       const haciaArriba = debajo < Math.min(altoPanel, 180) && b.top > debajo;
+      // Pegado al borde derecho de la pantalla (el «Ver Todo ▾» de Mis planes), la lista no cabe hacia la derecha:
+      // entonces se alinea con el borde derecho del botón, sin salirse por ningún lado.
+      const anchoPanel = Math.max(b.width, 200);
+      const cabeAlLado = b.left + anchoPanel <= window.innerWidth - 8;
       setSitio({
-        left: b.left,
+        left: Math.max(8, cabeAlLado ? b.left : b.right - anchoPanel),
         ancho: b.width,
         top: haciaArriba ? undefined : b.bottom + 6,
         bottom: haciaArriba ? window.innerHeight - b.top + 6 : undefined,

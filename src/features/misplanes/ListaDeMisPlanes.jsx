@@ -40,6 +40,11 @@ export default function ListaDeMisPlanes({
     const dentro = new Set([id, ...descendientesDe(carpetas, id)]);
     return visibles.filter((i) => dentro.has(i.carpetaId)).length;
   };
+  // Con un filtro puesto, una carpeta que solo tiene de otra clase no está «Vacía»: no tiene nada de esto.
+  const tieneAlgoEn = (id) => {
+    const dentro = new Set([id, ...descendientesDe(carpetas, id)]);
+    return items.some((i) => dentro.has(i.carpetaId));
+  };
 
   const migaja = (texto, alTocar, ultima) => (
     <button
@@ -71,12 +76,19 @@ export default function ListaDeMisPlanes({
         const n = cuantasEn(c.id);
         const hijas = hijasDe(carpetas, c.id).length;
         return (
-          <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          // Igual que las tarjetas de abajo: una sola tarjeta con sus «⋯» adentro, para que los bordes queden parejos.
+          <div
+            key={c.id}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 4, background: T.bg2, border: `1px solid ${T.border}`,
+              borderRadius: 14, paddingRight: accionesCarpeta ? 8 : 0,
+            }}
+          >
             <button
               type="button" onClick={() => onNivel(c.id)}
               style={{
                 flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', cursor: 'pointer',
-                padding: '12px 13px', background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 14, fontFamily: FONT,
+                padding: '12px 13px', background: 'transparent', border: 'none', borderRadius: 14, fontFamily: FONT,
               }}
             >
               <span style={{ width: 38, height: 38, borderRadius: 11, background: T.bg3, color: T.text2, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
@@ -86,7 +98,7 @@ export default function ListaDeMisPlanes({
                 <span style={{ display: 'block', fontSize: 14.5, fontWeight: 800, color: T.text, overflowWrap: 'anywhere' }}>{c.nombre}</span>
                 <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: T.text3, marginTop: 2 }}>
                   {[hijas ? `${hijas} ${hijas === 1 ? 'carpeta' : 'carpetas'}` : null, n ? `${n} ${n === 1 ? 'cosa' : 'cosas'}` : null]
-                    .filter(Boolean).join(' · ') || 'Vacía'}
+                    .filter(Boolean).join(' · ') || (tieneAlgoEn(c.id) ? 'Nada con este filtro' : 'Vacía')}
                 </span>
               </span>
               <ChevronRight size={16} color={T.text3} style={{ flexShrink: 0 }} />

@@ -154,27 +154,30 @@ export default function AsignarDialog({ item, onCerrar }) {
   /* ---- Resultado ---- */
   if (fase === 'resultado') {
     const ok = resultados.filter((r) => r.estado === 'ok').length;
+    const todos = ok === resultados.length && ok > 0;
     return (
       <Ventana
-        titulo={ok === resultados.length && ok > 0 ? 'Listo' : 'Esto fue lo que pasó'}
-        subtitulo={`${ok} de ${resultados.length} ${resultados.length === 1 ? 'atleta' : 'atletas'}`}
+        titulo={todos ? 'Asignado' : 'Esto fue lo que pasó'}
+        subtitulo={todos ? undefined : t(`${ok} de ${resultados.length} ${resultados.length === 1 ? 'atleta' : 'atletas'}`)}
         onCerrar={onCerrar}
-        pie={<button type="button" onClick={onCerrar} style={botonPrincipal(false)}>Listo</button>}
+        pie={<button type="button" onClick={onCerrar} style={botonPrincipal(false)}>Cerrar</button>}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {resultados.map((r) => {
             const bien = r.estado === 'ok';
+            // Lo bien hecho se dice con la palomita; las palabras son solo para lo que merece explicación.
+            const texto = bien ? (r.reemplazo ? t('Reemplazó su plan anterior (se recupera en «Cambios del plan»).') : null)
+              : r.estado === 'sin-plan' ? t('No tiene plan: se saltó. Dale primero un programa o una rutina.')
+                : r.estado === 'saltado' ? 'Lo saltaste.'
+                  : `No se pudo: ${r.mensaje || 'error'}`;
             return (
               <div key={r.atleta.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 12, padding: '10px 12px' }}>
                 {bien ? <CircleCheck size={18} color={T.accent} style={{ flexShrink: 0, marginTop: 1 }} /> : <AlertTriangle size={18} color={T.warning} style={{ flexShrink: 0, marginTop: 1 }} />}
                 <span style={{ flex: 1, minWidth: 0, fontFamily: FONT }}>
-                  <span style={{ display: 'block', fontSize: 14, fontWeight: 800, color: T.text }}>{r.atleta.full_name || r.atleta.username}</span>
-                  <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: T.text2, marginTop: 2, lineHeight: 1.4 }}>
-                    {bien ? (r.reemplazo ? 'Listo. Reemplazó su plan anterior (se recupera en «Cambios del plan»).' : 'Listo.')
-                      : r.estado === 'sin-plan' ? 'No tiene plan: se saltó. Dale primero un programa o una rutina.'
-                        : r.estado === 'saltado' ? 'Lo saltaste.'
-                          : `No se pudo: ${r.mensaje || 'error'}`}
-                  </span>
+                  <span style={{ display: 'block', fontSize: 14, fontWeight: 800, color: T.text, overflowWrap: 'anywhere' }}>{r.atleta.full_name || r.atleta.username}</span>
+                  {texto && (
+                    <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: T.text2, marginTop: 2, lineHeight: 1.4 }}>{texto}</span>
+                  )}
                 </span>
               </div>
             );
@@ -199,7 +202,10 @@ export default function AsignarDialog({ item, onCerrar }) {
   const puede = lista.length > 0;
   const textoBoton = esWorkout && modo === 'uno'
     ? 'Continuar'
-    : `Asignar a ${lista.length} ${lista.length === 1 ? 'atleta' : 'atletas'}`;
+    : (puede ? t(`Asignar a ${lista.length} ${lista.length === 1 ? 'atleta' : 'atletas'}`) : 'Asignar');
+  // Con pocos atletas no hace falta buscar; con uno solo, tampoco «Elegir todos».
+  const conBuscador = !!atletas && atletas.length > 6;
+  const conTodos = !!atletas && atletas.length > 1;
   return (
     <Ventana
       titulo={titulo} subtitulo={subtitulo} onCerrar={onCerrar} ancho={560}
@@ -218,14 +224,16 @@ export default function AsignarDialog({ item, onCerrar }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ fontSize: 13.5, fontWeight: 600, color: T.text2, lineHeight: 1.5 }}>
           {esWorkout
-            ? 'Elige a quién y después cómo se pone. Siempre es una copia: si luego cambias el workout, lo que ya recibieron no cambia.'
-            : 'Elige a quién. Siempre es una copia, y empieza en la semana 1 el día que lo asignas. Lo que cada atleta ya haya anotado se queda como historial.'}
+            ? 'Cada uno recibe una copia: si luego cambias el workout, la suya no cambia.'
+            : 'Cada uno recibe una copia, que empieza en la semana 1 hoy.'}
         </div>
 
-        <div style={{ position: 'relative' }}>
-          <Search size={16} color={T.text3} style={{ position: 'absolute', left: 12, top: 13 }} />
-          <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={t('Buscar atleta')} style={{ ...campo, paddingLeft: 36 }} />
-        </div>
+        {conBuscador && (
+          <div style={{ position: 'relative' }}>
+            <Search size={16} color={T.text3} style={{ position: 'absolute', left: 12, top: 13 }} />
+            <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={t('Buscar atleta')} style={{ ...campo, paddingLeft: 36 }} />
+          </div>
+        )}
 
         {atletas === null && !error && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: T.text2, fontWeight: 600, padding: 10 }}>
@@ -236,10 +244,12 @@ export default function AsignarDialog({ item, onCerrar }) {
 
         {atletas && (
           <>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13.5, fontWeight: 800, color: T.text }}>
-              <input type="checkbox" checked={todosVisibles} onChange={alternarTodos} style={{ width: 19, height: 19, accentColor: T.accent }} />
-              Elegir todos ({visibles.length})
-            </label>
+            {conTodos && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13.5, fontWeight: 800, color: T.text }}>
+                <input type="checkbox" checked={todosVisibles} onChange={alternarTodos} style={{ width: 19, height: 19, accentColor: T.accent }} />
+                Elegir todos ({visibles.length})
+              </label>
+            )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 280, overflowY: 'auto' }}>
               {visibles.map((a) => (
                 <label
@@ -253,12 +263,12 @@ export default function AsignarDialog({ item, onCerrar }) {
                   <span style={{ flex: 1, minWidth: 0, fontFamily: FONT }}>
                     <span style={{ display: 'block', fontSize: 14, fontWeight: 800, color: T.text, overflowWrap: 'anywhere' }}>{a.full_name || a.username}</span>
                     <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: a.plan ? T.text2 : T.text3, marginTop: 1 }}>
-                      {a.plan ? `Tiene «${a.plan.title}»` : 'Sin plan'}
+                      {a.plan ? `Tiene «${a.plan.title}»` : t('Sin plan')}
                     </span>
                   </span>
                 </label>
               ))}
-              {visibles.length === 0 && <div style={{ fontSize: 13.5, fontWeight: 600, color: T.text3, padding: 10 }}>No hay atletas que coincidan.</div>}
+              {visibles.length === 0 && <div style={{ fontSize: 13.5, fontWeight: 600, color: T.text3, padding: 10 }}>{t('No hay atletas que coincidan.')}</div>}
             </div>
           </>
         )}
@@ -267,8 +277,8 @@ export default function AsignarDialog({ item, onCerrar }) {
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: T.accentBg, borderRadius: 12, padding: '10px 12px', fontSize: 13, fontWeight: 600, color: T.text, lineHeight: 1.45 }}>
             <AlertTriangle size={17} color={T.accent} style={{ flexShrink: 0, marginTop: 1 }} />
             <span>
-              {conPlan.length === 1 ? '1 de los atletas elegidos ya tiene plan' : `${conPlan.length} de los atletas elegidos ya tienen plan`}
-              : se reemplaza con este. El anterior se guarda y se recupera en «Cambios del plan».
+              {t(conPlan.length === 1 ? '1 de los atletas elegidos ya tiene plan' : `${conPlan.length} de los atletas elegidos ya tienen plan`)}
+              {t(': se reemplaza con este. El anterior se recupera en «Cambios del plan»; lo que ya anotaron queda como historial.')}
             </span>
           </div>
         )}
@@ -278,7 +288,7 @@ export default function AsignarDialog({ item, onCerrar }) {
             <div style={{ fontSize: 13.5, fontWeight: 800, color: T.text }}>¿Cómo se pone?</div>
             {[
               ['semana', 'El mismo día de la semana, en la semana en que va cada uno hoy'],
-              ['uno', 'Atleta por atleta: elijo yo la fase, la semana y el día de cada uno'],
+              ['uno', t('Atleta por atleta: elijo yo la fase, la semana y el día de cada uno')],
             ].map(([valor, texto]) => (
               <label key={valor} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, cursor: 'pointer', fontSize: 13.5, fontWeight: 600, color: T.text, lineHeight: 1.4 }}>
                 <input type="radio" name="modo-workout" checked={modo === valor} onChange={() => setModo(valor)} style={{ accentColor: T.accent, marginTop: 2 }} />
@@ -287,17 +297,18 @@ export default function AsignarDialog({ item, onCerrar }) {
             ))}
             {modo === 'semana' && (
               <>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {/* Los siete días en una sola fila, con las mismas siglas del editor (Lun, Mar, Mié…). */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 6 }}>
                   {DIAS.map(([clave, nombre]) => (
                     <button
-                      key={clave} type="button" onClick={() => setDia(clave)}
+                      key={clave} type="button" onClick={() => setDia(clave)} aria-label={nombre} aria-pressed={dia === clave}
                       style={{
-                        padding: '8px 12px', borderRadius: 10, cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 800,
+                        padding: '9px 0', borderRadius: 10, cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 800,
                         border: `1.5px solid ${dia === clave ? T.accent : T.border}`, background: dia === clave ? T.accentBg : T.bg2,
                         color: dia === clave ? T.accent : T.text2,
                       }}
                     >
-                      {nombre}
+                      {clave}
                     </button>
                   ))}
                 </div>
@@ -312,7 +323,7 @@ export default function AsignarDialog({ item, onCerrar }) {
                   </label>
                 ))}
                 <div style={{ fontSize: 12.5, fontWeight: 600, color: T.text3, lineHeight: 1.4 }}>
-                  Quien no tenga plan se salta.
+                  {t('Quien no tenga plan se salta.')}
                 </div>
               </>
             )}

@@ -43,13 +43,23 @@ const comoEl = (original, nuevo) => (
     : nuevo
 );
 
-/** El texto con las palabras del oficio. `salud` = quien atiende es de salud. */
-export function traduce(texto, salud) {
-  if (!salud || typeof texto !== 'string') return texto;
+/* Nombres propios que NO cambian de oficio. «Mis planes» se llama así para todos: para un fisio,
+   «programas» ya es una de las clases de cosas que se guardan ahí (workouts, rutinas y programas),
+   y «Mis programas» se confundiría con ella. */
+const PROTEGIDOS = /(Mis planes)/;
+
+function traduceTrozo(texto) {
   let t = texto;
   for (const [de, a] of FRASES) t = t.split(de).join(a);
   for (const [de, a] of PALABRAS) {
     t = t.replace(new RegExp(`\\b${de}\\b`, 'gi'), (m) => comoEl(m, a));
   }
   return t;
+}
+
+/** El texto con las palabras del oficio. `salud` = quien atiende es de salud. */
+export function traduce(texto, salud) {
+  if (!salud || typeof texto !== 'string') return texto;
+  // Con el separador entre paréntesis, `split` deja lo protegido en las posiciones impares.
+  return texto.split(PROTEGIDOS).map((trozo, i) => (i % 2 ? trozo : traduceTrozo(trozo))).join('');
 }

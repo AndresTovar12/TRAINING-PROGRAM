@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Check, Loader2 } from 'lucide-react';
+import { useAviso } from '@/components/AvisoPasajero';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePalabras } from '@/contexts/PalabrasContext';
 import { planDe } from '@/lib/api';
 import { asignarPlan } from '@/lib/asignar';
 import { abrirItem } from '@/lib/misPlanes';
@@ -24,6 +26,8 @@ import { T } from '@/lib/theme';
  */
 export default function AsignarAlAtleta({ atleta, clave = null, onAsignado, onCerrar }) {
   const { user } = useAuth();
+  const { t } = usePalabras();
+  const { avisa } = useAviso();
   const nombre = atleta.full_name || atleta.username;
   const [item, setItem] = useState(null);
   const [datos, setDatos] = useState(null);
@@ -52,6 +56,7 @@ export default function AsignarAlAtleta({ atleta, clave = null, onAsignado, onCe
       const plan = item.tipo === 'programa' ? planDePrograma(datos) : planDeRutina(datos);
       const { fila } = await asignarPlan({ atletaId: atleta.id, profesionalId: clave, creadorId: user?.id, nombre: item.nombre, plan });
       onAsignado?.(fila);
+      avisa(`Asignado a ${nombre}`);
       onCerrar();
     } catch (e) {
       setError(e.message || 'No se pudo asignar');
@@ -71,7 +76,7 @@ export default function AsignarAlAtleta({ atleta, clave = null, onAsignado, onCe
 
   if (item.tipo === 'workout') {
     return (
-      <Ventana titulo={`«${item.nombre}» para ${nombre}`} subtitulo="Elige el día de su plan donde va." onCerrar={onCerrar} ancho={620}>
+      <Ventana titulo={`«${item.nombre}» para ${nombre}`} subtitulo={t('Elige el día de su plan donde va.')} onCerrar={onCerrar} ancho={620}>
         {cargando ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: T.text2, fontWeight: 600, padding: 16 }}><Loader2 size={16} className="spin" /> Cargando…</div>
         ) : error ? (
@@ -79,7 +84,7 @@ export default function AsignarAlAtleta({ atleta, clave = null, onAsignado, onCe
         ) : (
           <ElegirDiaDelAtleta
             atleta={atleta} clave={clave} data={datos} nombre={item.nombre}
-            onListo={(fila) => { onAsignado?.(fila); onCerrar(); }}
+            onListo={(fila) => { onAsignado?.(fila); avisa(`Asignado a ${nombre}`); onCerrar(); }}
           />
         )}
       </Ventana>
@@ -105,10 +110,10 @@ export default function AsignarAlAtleta({ atleta, clave = null, onAsignado, onCe
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 14, fontWeight: 600, color: T.text2, lineHeight: 1.55 }}>
           <div>
             {actual
-              ? <>Reemplaza su plan <b style={{ color: T.text }}>«{actual.title}»</b>. El anterior se guarda: lo recuperas en «Cambios del plan».</>
-              : 'Será su primer plan.'}
+              ? <>{t('Reemplaza su plan')} <b style={{ color: T.text }}>«{actual.title}»</b>. {t('El anterior se recupera en «Cambios del plan»; lo que ya anotó queda como historial.')}</>
+              : t('Será su primer plan.')}
           </div>
-          <div>Empieza en la semana 1 hoy. Es una copia: si luego cambias lo guardado, lo que ya recibió no cambia. Lo que ya haya anotado se queda como historial.</div>
+          <div>Empieza en la semana 1, hoy.</div>
           {error && <div style={{ color: T.danger, fontWeight: 700 }}>{error}</div>}
         </div>
       )}

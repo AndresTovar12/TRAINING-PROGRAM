@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Loader2, Search } from 'lucide-react';
-import { T, FONT } from '@/lib/theme';
-import { PLURAL_DE_TIPO } from '@/lib/misPlanesDatos';
+import { T } from '@/lib/theme';
 import { useMisPlanes } from '@/lib/useMisPlanes';
 import Ventana from '@/features/misplanes/Ventana';
 import ListaDeMisPlanes from '@/features/misplanes/ListaDeMisPlanes';
+import FiltroDeTipo from '@/features/misplanes/FiltroDeTipo';
 import { campo } from '@/features/misplanes/estilos';
 
 /**
@@ -22,37 +22,19 @@ export default function SelectorDeMisPlanes({ tipos, titulo = 'Desde Mis planes'
   const [filtro, setFiltro] = useState(null);
   const tiposVistos = filtro ? [filtro] : tipos;
 
-  const chip = (valor, texto) => {
-    const activa = filtro === valor;
-    return (
-      <button
-        key={texto} type="button" onClick={() => setFiltro(valor)}
-        style={{
-          padding: '7px 13px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 800, whiteSpace: 'nowrap',
-          border: `1.5px solid ${activa ? T.accent : T.border}`, background: activa ? T.accent : T.bg2, color: activa ? '#fff' : T.text2,
-        }}
-      >
-        {texto}
-      </button>
-    );
-  };
-
   return (
     <Ventana titulo={titulo} subtitulo={subtitulo} onCerrar={onCerrar} ancho={520}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div style={{ position: 'relative' }}>
-          <Search size={16} color={T.text3} style={{ position: 'absolute', left: 12, top: 13 }} />
-          <input
-            value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="Buscar por nombre o descripción"
-            style={{ ...campo, paddingLeft: 36 }}
-          />
-        </div>
-        {tipos.length > 1 && (
-          <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
-            {chip(null, 'Todo')}
-            {tipos.map((t) => chip(t, PLURAL_DE_TIPO[t]))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+            <Search size={16} color={T.text3} style={{ position: 'absolute', left: 12, top: 13 }} />
+            <input
+              value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="Buscar en Mis planes"
+              style={{ ...campo, paddingLeft: 36 }}
+            />
           </div>
-        )}
+          <FiltroDeTipo tipos={tipos} valor={filtro} onCambio={setFiltro} />
+        </div>
         {cargando ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: T.text2, fontWeight: 600, padding: 16 }}>
             <Loader2 size={16} className="spin" /> Cargando…

@@ -126,6 +126,17 @@ body {
   animation: fade-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* El giro del «Cargando…». Muchas pantallas lo traen en su propio <style> (misma regla); esta copia
+   es para las que no: sin ella el ícono de cargar se queda quieto. */
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Entrada escalonada de listas/tarjetas (Kinetic) */
 @keyframes kp-rise {
   from {

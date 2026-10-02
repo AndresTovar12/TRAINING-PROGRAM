@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import {
-  Check, Copy, FolderInput, FolderPlus, Loader2, MoreHorizontal, Pencil, Plus, Search, Send, Trash2,
+  Check, Copy, FolderInput, FolderOpen, FolderPlus, Loader2, MoreHorizontal, Pencil, Plus, Search, Send, TextCursorInput, Trash2,
 } from 'lucide-react';
+import { useAviso } from '@/components/AvisoPasajero';
 import { useConfirmacion } from '@/components/Confirmacion';
+import { usePalabras } from '@/contexts/PalabrasContext';
 import PlanBuilder, { HojaAcciones } from '@/features/admin/PlanBuilder';
 import {
   abrirItem, actualizarItem, borrarCarpeta, borrarItem, crearCarpeta, duplicarItem, moverCarpeta, renombrarCarpeta,
 } from '@/lib/misPlanes';
 import { useMisPlanes } from '@/lib/useMisPlanes';
+import { useIsWide } from '@/lib/useViewport';
 import {
-  PLURAL_DE_TIPO, TIPOS, cabeCarpetaEn, hijasDe, nombreDeCopia, planDeRutina, puedeMoverCarpeta, textoDeRuta,
+  TIPOS, cabeCarpetaEn, hijasDe, nombreDeCopia, planDeRutina, puedeMoverCarpeta, textoDeRuta,
 } from '@/lib/misPlanesDatos';
 import Ventana from '@/features/misplanes/Ventana';
 import ListaDeMisPlanes from '@/features/misplanes/ListaDeMisPlanes';
@@ -18,8 +21,9 @@ import DialogoGuardar from '@/features/misplanes/DialogoGuardar';
 import CentroDeCreacion from '@/features/misplanes/CentroDeCreacion';
 import EditorDeWorkout from '@/features/misplanes/EditorDeWorkout';
 import AsignarDialog from '@/features/misplanes/AsignarDialog';
+import FiltroDeTipo from '@/features/misplanes/FiltroDeTipo';
 import { botonBlanco, botonPrincipal, campo } from '@/features/misplanes/estilos';
-import { T, FONT } from '@/lib/theme';
+import { T } from '@/lib/theme';
 
 /* Mover algo (o una carpeta) a otra carpeta: se entra de carpeta en carpeta y se elige. */
 function DialogoMover({ titulo, carpetas, inicial, excluirId, alMover, onCerrar, crear }) {
@@ -63,6 +67,9 @@ function DialogoMover({ titulo, carpetas, inicial, excluirId, alMover, onCerrar,
  */
 export default function MisPlanesPanel() {
   const pregunta = useConfirmacion();
+  const { t } = usePalabras();
+  const { trabajando } = useAviso();
+  const esAncha = useIsWide();
   const { cargando, error, carpetas, items, userId, recargar } = useMisPlanes();
   const [nivel, setNivel] = useState(null);
   const [buscar, setBuscar] = useState('');
@@ -106,11 +113,14 @@ export default function MisPlanesPanel() {
       : { tipo: 'plan', catalogo: { forma, carpetaId: nivel } });
   }
 
+  // Lo que tarda un par de segundos (la base y volver a leer la lista) avisa que está trabajando y, al terminar, que ya.
   async function duplicar(item) {
     setAviso('');
     try {
-      await duplicarItem(item, nombreDeCopia(item.nombre, items.map((i) => i.nombre)), userId);
-      await recargar();
+      await trabajando('Duplicando…', async () => {
+        await duplicarItem(item, nombreDeCopia(item.nombre, items.map((i) => i.nombre)), userId);
+        await recargar();
+      }, 'Duplicado');
     } catch (e) {
       setAviso(e.message || 'No se pudo duplicar');
     }
@@ -119,13 +129,15 @@ export default function MisPlanesPanel() {
   async function eliminarItem(item) {
     const va = await pregunta({
       titulo: `¿Eliminar «${item.nombre}»?`,
-      detalle: 'No se puede recuperar. Los atletas que ya lo recibieron lo conservan: lo que se les dio es una copia.',
+      detalle: t('No se puede recuperar. Los atletas que ya lo recibieron lo conservan: lo que se les dio es una copia.'),
       confirmar: 'Sí, eliminarlo', peligro: true,
     });
     if (!va) return;
     try {
-      await borrarItem(item);
-      await recargar();
+      await trabajando('Eliminando…', async () => {
+        await borrarItem(item);
+        await recargar();
+      }, 'Eliminado');
     } catch (e) {
       setAviso(e.message || 'No se pudo eliminar');
     }
@@ -140,9 +152,11 @@ export default function MisPlanesPanel() {
     });
     if (!va) return;
     try {
-      await borrarCarpeta(carpeta);
-      if (nivel === carpeta.id) setNivel(carpeta.parent_id ?? null);
-      await recargar();
+      await trabajando('Eliminando la carpeta…', async () => {
+        await borrarCarpeta(carpeta);
+        if (nivel === carpeta.id) setNivel(carpeta.parent_id ?? null);
+        await recargar();
+      }, 'Carpeta eliminada');
     } catch (e) {
       setAviso(e.message || 'No se pudo eliminar la carpeta');
     }
@@ -170,49 +184,32 @@ export default function MisPlanesPanel() {
   );
   const accionesCarpeta = (carpeta) => botonDeMenu(`Opciones de ${carpeta.nombre}`, () => setMenu({ tipo: 'carpeta', carpeta }));
 
-  const chip = (valor, texto) => {
-    const activa = filtro === valor;
-    return (
-      <button
-        key={texto} type="button" onClick={() => setFiltro(valor)}
-        style={{
-          padding: '7px 14px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 800, whiteSpace: 'nowrap',
-          border: `1.5px solid ${activa ? T.accent : T.border}`, background: activa ? T.accent : T.bg2, color: activa ? '#fff' : T.text2,
-        }}
-      >
-        {texto}
-      </button>
-    );
-  };
+  const carpetaOk = cabeCarpetaEn(carpetas, nivel);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 820, margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <div style={{ flex: '1 1 160px', minWidth: 0 }}>
-          <div style={{ fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: -0.4 }}>Mis planes</div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: T.text2, marginTop: 2 }}>
-            Todo lo que guardas: workouts, rutinas semanales y programas.
-          </div>
-        </div>
+      {/* Sin frase gris abajo del título: repetía lo que dicen el filtro y la lista (Andrés: letras grises que repiten).
+          En el celular «Nueva carpeta» es solo el ícono, para que quepa todo en una fila. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ flex: 1, minWidth: 0, fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: -0.4 }}>Mis planes</div>
         <button
-          type="button" onClick={() => setDialogo({ tipo: 'carpeta-nueva' })}
-          disabled={!cabeCarpetaEn(carpetas, nivel)} style={botonBlanco(true, !cabeCarpetaEn(carpetas, nivel))}
+          type="button" onClick={() => setDialogo({ tipo: 'carpeta-nueva' })} disabled={!carpetaOk}
+          aria-label="Nueva carpeta" title="Nueva carpeta"
+          style={{ ...botonBlanco(true, !carpetaOk), ...(esAncha ? null : { width: 42, padding: 0 }) }}
         >
-          <FolderPlus size={16} /> Nueva carpeta
+          <FolderPlus size={17} />{esAncha && <span>Nueva carpeta</span>}
         </button>
         <button type="button" onClick={() => setCreando(true)} style={botonPrincipal(false)}>
           <Plus size={17} /> Crear
         </button>
       </div>
 
-      <div style={{ position: 'relative' }}>
-        <Search size={16} color={T.text3} style={{ position: 'absolute', left: 12, top: 13 }} />
-        <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="Buscar por nombre, descripción u origen" style={{ ...campo, paddingLeft: 36 }} />
-      </div>
-
-      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
-        {chip(null, 'Todo')}
-        {TIPOS.map((t) => chip(t, PLURAL_DE_TIPO[t]))}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+          <Search size={16} color={T.text3} style={{ position: 'absolute', left: 12, top: 13 }} />
+          <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="Buscar en Mis planes" style={{ ...campo, paddingLeft: 36 }} />
+        </div>
+        <FiltroDeTipo tipos={TIPOS} valor={filtro} onCambio={setFiltro} />
       </div>
 
       {(error || aviso) && (
@@ -228,9 +225,17 @@ export default function MisPlanesPanel() {
           carpetas={carpetas} items={items} tipos={tiposVistos} nivel={nivel} onNivel={setNivel} buscar={buscar}
           onItem={abrir} accionesItem={accionesItem} accionesCarpeta={accionesCarpeta}
           vacio={!hayAlgo ? (
-            <div style={{ textAlign: 'center', padding: '44px 20px', color: T.text2, fontWeight: 600, fontSize: 14, lineHeight: 1.6 }}>
-              <div style={{ fontSize: 17, fontWeight: 800, color: T.text, marginBottom: 6 }}>Aquí vivirá todo lo que guardes</div>
-              Crea algo con «Crear», o guarda un plan que ya armaste con «Guardar todo el plan en Mis planes» desde el plan de cualquier atleta.
+            <div style={{ textAlign: 'center', padding: '40px 20px 32px' }}>
+              <span style={{ width: 56, height: 56, borderRadius: 18, background: T.accentBg, color: T.accent, display: 'inline-grid', placeItems: 'center' }}>
+                <FolderOpen size={26} />
+              </span>
+              <div style={{ fontSize: 17, fontWeight: 800, color: T.text, marginTop: 14 }}>Aquí vivirá todo lo que guardes</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: T.text2, lineHeight: 1.5, margin: '6px auto 0', maxWidth: 360 }}>
+                {t('Crea un workout, una rutina o un programa, o guarda el plan de un atleta desde su ficha.')}
+              </div>
+              <button type="button" onClick={() => setCreando(true)} style={{ ...botonPrincipal(false), marginTop: 18 }}>
+                <Plus size={17} /> Crear
+              </button>
             </div>
           ) : undefined}
         />
@@ -265,8 +270,7 @@ export default function MisPlanesPanel() {
           onClose={() => setMenu(null)}
           acciones={[
             { icon: Pencil, texto: 'Abrir y editar', onClick: () => abrir(menu.item) },
-            { icon: Send, texto: 'Asignar a atletas', onClick: () => setDialogo({ tipo: 'asignar', item: menu.item }) },
-            { icon: Pencil, texto: 'Nombre y descripción', onClick: () => setDialogo({ tipo: 'item-renombrar', item: menu.item }) },
+            { icon: TextCursorInput, texto: 'Nombre y descripción', onClick: () => setDialogo({ tipo: 'item-renombrar', item: menu.item }) },
             { icon: Copy, texto: 'Duplicar', onClick: () => duplicar(menu.item) },
             { icon: FolderInput, texto: 'Mover a otra carpeta', onClick: () => setDialogo({ tipo: 'mover-item', item: menu.item }) },
             { icon: Trash2, texto: 'Eliminar', onClick: () => eliminarItem(menu.item), peligro: true },
@@ -277,7 +281,7 @@ export default function MisPlanesPanel() {
         <HojaAcciones
           onClose={() => setMenu(null)}
           acciones={[
-            { icon: Pencil, texto: 'Cambiar el nombre', onClick: () => setDialogo({ tipo: 'carpeta-renombrar', carpeta: menu.carpeta }) },
+            { icon: TextCursorInput, texto: 'Cambiar el nombre', onClick: () => setDialogo({ tipo: 'carpeta-renombrar', carpeta: menu.carpeta }) },
             { icon: FolderInput, texto: 'Mover a otra carpeta', onClick: () => setDialogo({ tipo: 'mover-carpeta', carpeta: menu.carpeta }) },
             { icon: Trash2, texto: 'Eliminar la carpeta', onClick: () => eliminarCarpeta(menu.carpeta), peligro: true },
           ]}

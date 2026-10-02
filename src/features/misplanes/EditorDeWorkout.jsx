@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, Check, Loader2, Plus, Trash2, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePalabras } from '@/contexts/PalabrasContext';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useRepertorioDelEditor } from '@/features/admin/useRepertorioDelEditor';
+import { useIsWide } from '@/lib/useViewport';
 import { SessionEditor, Pill } from '@/features/admin/PlanBuilder';
 import { actualizarItem, borrarItem, guardarItem } from '@/lib/misPlanes';
 import { sesionesDeWorkout, workoutDeSesiones } from '@/lib/misPlanesDatos';
@@ -25,6 +27,8 @@ const sesionNueva = () => ({ day: 'Lun', name: 'Sesión', cat: 'gym', exercises:
  */
 export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted }) {
   const { user } = useAuth();
+  const { t } = usePalabras();
+  const esAncha = useIsWide();
   const pregunta = useConfirmacion();
   const {
     repertoire, setRepertoire, setCategorias, masterIdCat, categoriasVisibles,
@@ -78,7 +82,7 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
     if (!fila) return;
     const va = await pregunta({
       titulo: `¿Eliminar «${fila.nombre}» de Mis planes?`,
-      detalle: 'No se puede recuperar. Los atletas que ya lo recibieron lo conservan: lo que se les dio es una copia.',
+      detalle: t('No se puede recuperar. Los atletas que ya lo recibieron lo conservan: lo que se les dio es una copia.'),
       confirmar: 'Sí, eliminarlo', peligro: true,
     });
     if (!va) return;
@@ -101,7 +105,7 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
       <header
         style={{
           background: 'rgba(255,255,255,0.86)', backdropFilter: 'saturate(180%) blur(16px)', borderBottom: `1px solid ${T.border}`,
-          padding: '13px 18px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
+          padding: esAncha ? '13px 18px' : '13px 12px', display: 'flex', alignItems: 'center', gap: esAncha ? 12 : 8, flexShrink: 0,
         }}
       >
         <button
@@ -111,15 +115,18 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
           <ArrowLeft size={17} />
         </button>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Workout</div>
-          <div style={{ fontSize: 12, color: T.text2, fontWeight: 600 }}>
-            Mis planes{dirty ? ' · sin guardar' : (haGuardado ? ' · guardado' : '')}
+          {/* Arriba va el nombre del workout (o «Workout nuevo» mientras no tiene); abajo, qué es y dónde vive. */}
+          <div style={{ fontSize: 15, fontWeight: 800, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {titulo.trim() || 'Workout nuevo'}
+          </div>
+          <div style={{ fontSize: 12, color: T.text2, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            Workout · Mis planes{dirty ? ' · sin guardar' : (haGuardado ? ' · guardado' : '')}
           </div>
         </div>
         <button
           type="button" onClick={guardar} disabled={guardando || (!dirty && !!fila)}
           style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 18px', borderRadius: 12, border: 'none',
+            display: 'inline-flex', alignItems: 'center', gap: 8, padding: esAncha ? '11px 18px' : '11px 13px', borderRadius: 12, border: 'none',
             cursor: guardando || (!dirty && fila) ? 'default' : 'pointer',
             background: dirty || !fila ? `linear-gradient(135deg, ${T.accent}, ${T.accentDk})` : T.bg3,
             color: dirty || !fila ? '#fff' : (haGuardado ? KP.mint : T.text3), fontFamily: FONT, fontSize: 14, fontWeight: 800,
