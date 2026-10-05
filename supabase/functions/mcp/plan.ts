@@ -8,6 +8,7 @@ import {
   enOrdenDeSemana,
 } from './app/training-utils.js'
 import { textoMeta, MEDIDAS } from './app/medidas.js'
+import { limpiaFormato, resumenDeFormato, textoDeResultado } from './app/formatos.js'
 import { CAT_COLORS, tipoDeSesion } from './app/theme.js'
 
 /**
@@ -297,6 +298,10 @@ export function describirEjercicio(ex: any) {
   d.lleva_peso = isLoadedExercise(ex)
   if (ex.set != null) d.grupo = ex.set
   if (ex.exercise_id) d.ejercicio_id = ex.exercise_id
+  /* El formato con reloj (AMRAP, EMOM, Tabata…) del grupo. Se muestra COMPLETO porque `editar_dia`
+     reemplaza la sesión entera: si la IA no lo ve, lo reescribe sin él y el coach lo pierde. */
+  const formato = ex.formato ? limpiaFormato(ex.formato) : null
+  if (formato) { d.formato = formato; d.formato_resumen = resumenDeFormato(formato) }
   return d
 }
 
@@ -323,6 +328,12 @@ export function describirDia(fase: any, semana: any, diaIdx: number, registro?: 
     tipo: tipoDeSesion(dia).label,
     descanso: esDescanso(dia),
     ejercicios,
+    ...(registro?.formatos && Object.keys(registro.formatos).length ? {
+      // Lo que anotó el atleta de cada Set con formato; la llave es la `n` de su primer ejercicio.
+      resultados_de_formatos: Object.entries(registro.formatos).map(([n, r]: [string, any]) => ({
+        n, resultado: textoDeResultado(r), ...(r?.seg ? { duro_seg: r.seg } : {}),
+      })),
+    } : {}),
     ...(registro ? {
       hecha: !!registro.completed,
       ...(registro.completedAt ? { hecha_el: registro.completedAt } : {}),
@@ -400,6 +411,7 @@ export interface EjercicioEntrada {
   indicaciones?: string
   lleva_peso?: boolean
   grupo?: number
+  formato?: unknown
 }
 
 export interface SesionEntrada {
@@ -451,6 +463,8 @@ export function diaDesdeEntrada(
 ) {
   const sinFicha: string[] = []
   const grupos = new Map<number, string>()
+  // El formato de cada grupo: el del primer ejercicio que lo traiga, y vale para todos los del grupo.
+  const formatosDeGrupo = new Map<number, any>()
   const exercises = (sesion.ejercicios ?? []).map((e) => {
     if (e.nota && !e.nombre) return { isNote: true, text: e.nota }
     if (!e.nombre) throw new Aviso('Cada ejercicio necesita "nombre" (o "nota" si es una nota).')
@@ -479,7 +493,24 @@ export function diaDesdeEntrada(
       ex.set = e.grupo
       ex.sets = grupos.get(e.grupo)
     }
+    if (e.formato != null) {
+      const formato = limpiaFormato(e.formato)
+      if (!formato) {
+        throw new Aviso(`El formato de "${e.nombre}" no se entiende. Manda "pasos": una lista con al menos un tramo {tipo: "trabajo" | "descanso", seg: segundos o null}.`)
+      }
+      if (e.grupo != null) { if (!formatosDeGrupo.has(e.grupo)) formatosDeGrupo.set(e.grupo, formato) } else {
+        ex.formato = formato
+        ex.sets = String(formato.vueltas)
+      }
+    }
     return ex
+  })
+  // Con formato, las «series» del grupo son sus vueltas, y cada ejercicio guarda su copia (igual que el editor).
+  exercises.forEach((ex: any) => {
+    const formato = ex.set != null ? formatosDeGrupo.get(ex.set) : null
+    if (!formato) return
+    ex.formato = JSON.parse(JSON.stringify(formato))
+    ex.sets = String(formato.vueltas)
   })
   const tipo = tipoDesdeTexto(sesion.tipo)
   const dia = {

@@ -8,6 +8,9 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
+import { IconBtn, Pill } from '@/features/admin/piezas';
+import { AvisoDeFormatos, EncabezadoDelSet } from '@/features/admin/FormatoDelSet';
+import { formatoDeMiembros, ponFormato } from '@/lib/formatos';
 import { esProgramaFantasma } from '@/lib/programas';
 import { useAviso } from '@/components/AvisoPasajero';
 import { useConfirmacion } from '@/components/Confirmacion';
@@ -42,6 +45,9 @@ import {
   workoutDeSesiones, diasDeWorkout, rutinaDePlan, rutinaDeSemana, planDeRutina, programaDePlan, planDePrograma,
   sinNotas, tieneNotas, sesionTieneContenido, semanaTieneContenido, planTieneContenido,
 } from '@/lib/misPlanesDatos';
+
+// `Pill` se sigue importando desde aquí (Mis planes); vive en `piezas.jsx`.
+export { Pill };
 
 /* ------------------------------------------------------------------ */
 /* Constantes y helpers de datos                                       */
@@ -157,7 +163,12 @@ const parseBlocks = (exercises = []) => {
     cur = { type: 'set', key, members: [ex] };
     blocks.push(cur);
   });
-  blocks.forEach((b) => { if (b.type === 'set') b.rounds = b.members[0]?.sets ?? '3'; });
+  blocks.forEach((b) => {
+    if (b.type !== 'set') return;
+    b.rounds = b.members[0]?.sets ?? '3';
+    // El formato (AMRAP, EMOM…) es del Set entero y vive repetido en cada ejercicio, como `sets`.
+    b.formato = formatoDeMiembros(b.members);
+  });
   return blocks;
 };
 
@@ -167,8 +178,10 @@ const serializeBlocks = (blocks) => {
   blocks.forEach((b) => {
     if (b.type === 'note') { out.push(b.ex); return; }
     n += 1;
-    b.members.forEach((m) => {
-      const e = { ...m, sets: String(b.rounds ?? m.sets ?? '3') };
+    // Con formato, las «series» pasan a ser sus vueltas; sin él, se quita de todos los ejercicios.
+    const miembros = ponFormato(b.members.map((m) => ({ ...m, sets: String(b.rounds ?? m.sets ?? '3') })), b.formato ?? null);
+    miembros.forEach((m) => {
+      const e = { ...m };
       if (b.members.length > 1) e.set = n; else delete e.set;
       out.push(e);
     });
@@ -194,83 +207,6 @@ export function Field({ label, children, grow }) {
       <span style={{ fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>{label}</span>
       {children}
     </label>
-  );
-}
-
-/**
- * Boton de icono. Por defecto va SIN caja: ni borde ni fondo.
- *
- * Antes cada icono venia en su cuadrito gris. Con cinco juntos, la fila se
- * convierte en cinco cajas identicas y ninguna dice "yo soy la importante".
- * Sin caja, lo que se ve es el icono; el fondo aparece al pasar el mouse,
- * que es cuando hace falta saber que si se puede tocar.
- *
- * `sobreFoto` recupera la caja clara: encima de la imagen oscura de un
- * ejercicio, un icono transparente no se veria.
- */
-function IconBtn({ icon: Icon, onClick, danger, disabled, title, sobreFoto }) {
-  return (
-    <button
-      type="button" onClick={onClick} disabled={disabled} title={title}
-      className={sobreFoto ? 'kp-accion' : 'kp-ico kp-accion'}
-      style={{
-        width: 30, height: 30, borderRadius: 999, cursor: disabled ? 'default' : 'pointer',
-        border: sobreFoto ? `1px solid ${T.border}` : 'none',
-        background: sobreFoto ? T.bg2 : 'transparent',
-        color: danger ? T.danger : T.text3, display: 'grid', placeItems: 'center',
-        opacity: disabled ? 0.3 : 1, flexShrink: 0,
-      }}
-    >
-      <Icon size={15} />
-    </button>
-  );
-}
-
-/**
- * Pastilla de accion, con TRES pesos. El peso es la jerarquia: dice de un
- * vistazo cual es la accion principal y cuales son de apoyo.
- *
- *   solido   → la accion principal de la pantalla. Azul lleno. Una sola.
- *   primary  → accion destacada de apoyo. Azul suave, sin borde.
- *   (nada)   → fantasma: sin fondo ni borde. Todo lo demas.
- *   danger   → fantasma en rojo, para lo que borra.
- *
- * Antes todo lo que no era `primary` era la misma caja blanca con borde
- * gris. Cinco de esas en fila pesan igual, asi que el ojo tiene que leerlas
- * una por una en vez de saltar directo a la que importa.
- */
-export function Pill({ icon: Icon, children, onClick, primary, solido, danger, disabled }) {
-  const fondo = solido ? T.accent : primary ? T.accentBg : 'transparent';
-  const tinta = solido ? '#fff' : danger ? T.danger : primary ? T.accent : T.text2;
-  return (
-    <button
-      type="button" onClick={onClick} disabled={disabled}
-      className={solido || primary ? 'kp-accion' : 'kp-pill kp-accion'}
-      style={{
-        display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 15px', borderRadius: 999,
-        border: 'none', cursor: disabled ? 'default' : 'pointer',
-        background: fondo, color: tinta,
-        fontFamily: FONT, fontSize: 13, fontWeight: 700, opacity: disabled ? 0.4 : 1, flexShrink: 0,
-      }}
-    >
-      {Icon && <Icon size={14} />} {children}
-    </button>
-  );
-}
-
-function Stepper({ value, onChange, min = 1 }) {
-  const n = parseInt(value) || min;
-  const btn = {
-    width: 28, height: 28, borderRadius: 8, border: `1px solid ${T.border}`, cursor: 'pointer',
-    background: T.bg2, color: T.text, display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 15,
-    fontFamily: FONT,
-  };
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      <button type="button" className="kp-accion" style={btn} onClick={() => onChange(String(Math.max(min, n - 1)))}>−</button>
-      <span style={{ minWidth: 26, textAlign: 'center', fontWeight: 800, fontSize: 15, color: T.text }}>{value}</span>
-      <button type="button" className="kp-accion" style={btn} onClick={() => onChange(String(n + 1))}>+</button>
-    </span>
   );
 }
 
@@ -1431,6 +1367,7 @@ function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjer
       <DayHeader day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog} onClear={onClear} nSets={descanso ? null : nSets} conVista={!descanso} soloLectura={soloLectura} />
 
       <div {...enLectura(soloLectura)} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 14, ...(soloLectura ? APAGADO : null) }}>
+        {!soloLectura && nSets > 0 && <AvisoDeFormatos />}
         {blocks.map((b, bi) => {
           if (b.type === 'note') {
             return (
@@ -1452,26 +1389,16 @@ function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjer
           const tag = setTag(b.members.length);
           return (
             <div key={bi} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 16, padding: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
-                <span style={{ fontSize: 14.5, fontWeight: 800, color: T.text }}>Set {setIdx}</span>
-                {tag && (
-                  <span style={{ fontSize: 10.5, fontWeight: 800, color: T.accent, background: T.accentBg, padding: '3px 9px', borderRadius: 8, letterSpacing: 0.4 }}>
-                    {tag.toUpperCase()}
-                  </span>
-                )}
-                <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                  Se repite
-                  <Stepper value={b.rounds} onChange={(v) => writeBlocks((bs) => bs.map((x, k) => (k === bi ? { ...x, rounds: v } : x)))} />
-                  {parseInt(b.rounds) === 1 ? 'vez' : 'veces'}
-                </span>
-                <span style={{ flex: 1 }} />
-                <Pill icon={Plus} primary onClick={() => setPickerCtx({ mode: 'add', blockIdx: bi })}>Agregar ejercicio</Pill>
-                <IconBtn icon={ChevronUp} onClick={() => moveBlock(bi, -1)} disabled={bi === 0} />
-                <IconBtn icon={ChevronDown} onClick={() => moveBlock(bi, 1)} disabled={bi === blocks.length - 1} />
-                <IconBtn icon={Trash2} danger onClick={async () => {
+              <EncabezadoDelSet
+                numero={setIdx} bloque={b} etiquetaDeTipo={tag}
+                onCambio={(parche) => writeBlocks((bs) => bs.map((x, k) => (k === bi ? { ...x, ...parche } : x)))}
+                onAgregar={() => setPickerCtx({ mode: 'add', blockIdx: bi })}
+                onSubir={() => moveBlock(bi, -1)} onBajar={() => moveBlock(bi, 1)}
+                puedeSubir={bi > 0} puedeBajar={bi < blocks.length - 1}
+                onEliminar={async () => {
                   if (await pregunta({ titulo: `¿Eliminar el Set ${setIdx} completo?`, confirmar: 'Sí, eliminarlo', peligro: true })) writeBlocks((bs) => bs.filter((_, k) => k !== bi));
-                }} />
-              </div>
+                }}
+              />
               {(() => {
                 // Un solo juego de handlers. La tarjeta y la fila reciben
                 // exactamente lo mismo; lo unico que cambia es como se dibuja.

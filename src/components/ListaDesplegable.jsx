@@ -53,6 +53,8 @@ export default function ListaDesplegable({
   multiple = false,
   cabecera,
   separador = ' + ',
+  icono: Icono,
+  anchoMinimo = 200,
 }) {
   const dedos = useCoarsePointer();
   const caja = useRef(null);
@@ -149,7 +151,7 @@ export default function ListaDesplegable({
       const haciaArriba = debajo < Math.min(altoPanel, 180) && b.top > debajo;
       // Pegado al borde derecho de la pantalla (el «Ver Todo ▾» de Mis planes), la lista no cabe hacia la derecha:
       // entonces se alinea con el borde derecho del botón, sin salirse por ningún lado.
-      const anchoPanel = Math.max(b.width, 200);
+      const anchoPanel = Math.max(b.width, anchoMinimo);
       const cabeAlLado = b.left + anchoPanel <= window.innerWidth - 8;
       setSitio({
         left: Math.max(8, cabeAlLado ? b.left : b.right - anchoPanel),
@@ -168,7 +170,7 @@ export default function ListaDesplegable({
       window.removeEventListener('scroll', coloca, true);
       window.removeEventListener('resize', coloca);
     };
-  }, [abierto, alto, pie, cabecera]);
+  }, [abierto, alto, pie, cabecera, anchoMinimo]);
 
   /* ELEGIR OCURRE EN EL `click`, Y EN NINGÚN EVENTO ANTERIOR.
 
@@ -321,7 +323,7 @@ export default function ListaDesplegable({
           onClick={(e) => { e.preventDefault(); elige(o); }}
           style={{
             flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 9,
-            minHeight: 42, padding: '0 11px', borderRadius: 10, border: 'none', cursor: 'pointer',
+            minHeight: 42, padding: o.detalle ? '7px 11px' : '0 11px', borderRadius: 10, border: 'none', cursor: 'pointer',
             /* Le quita a iOS la espera por un posible doble toque. El `click`
                llega enseguida, y cuanto más corta es esa espera, menos hueco
                hay para que algo cambie a media pulsación. */
@@ -342,8 +344,17 @@ export default function ListaDesplegable({
           {o.color && (
             <span style={{ width: 11, height: 11, borderRadius: 6, background: o.color, flexShrink: 0 }} />
           )}
-          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {o.etiqueta}
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {o.etiqueta}
+            </span>
+            {/* Una segunda línea con lo que hace la opción, para las listas donde el nombre solo no
+                dice bastante (los formatos de un Set: «AMRAP — máximas rondas en un tiempo»). */}
+            {o.detalle && (
+              <span style={{ display: 'block', fontSize: 12, fontWeight: 500, color: T.text3, marginTop: 1, lineHeight: 1.3 }}>
+                {o.detalle}
+              </span>
+            )}
           </span>
           {o.nota && (
             <span style={{ fontSize: 12, fontWeight: 700, color: T.text3, flexShrink: 0 }}>{o.nota}</span>
@@ -391,6 +402,7 @@ export default function ListaDesplegable({
           textAlign: 'left', ...estilo,
         }}
       >
+        {Icono && <Icono size={14} style={{ flexShrink: 0 }} />}
         {/* Con varias marcadas, un punto de color por cada una (hasta tres). */}
         {(marcadas.length > 1 ? marcadas : elegida ? [elegida] : [])
           .filter((o) => o.color).slice(0, 3).map((o) => (
@@ -426,7 +438,7 @@ export default function ListaDesplegable({
           onKeyDown={teclas}
           style={{
             position: 'fixed', zIndex: 3000,
-            left: sitio.left, width: Math.max(sitio.ancho, 200),
+            left: sitio.left, width: Math.max(sitio.ancho, anchoMinimo),
             top: sitio.top, bottom: sitio.bottom,
             background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 14,
             boxShadow: '0 16px 44px rgba(17,19,24,0.16)',

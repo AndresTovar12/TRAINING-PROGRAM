@@ -44,6 +44,12 @@ import {
 } from '@/lib/sesiones';
 import { plural, pluralS, rondasQueDecir } from '@/lib/plural';
 import { textoMeta } from '@/lib/medidas';
+import {
+  formatoDeMiembros, expande, resumenDeFormato, textoDeResultado, tramosDeTrabajo,
+} from '@/lib/formatos';
+import { LEVANTAMIENTOS, cargaPorPorcentaje } from '@/lib/cargaPorcentaje';
+import RelojDelBloque from '@/features/training/RelojDelBloque';
+import ResultadoDelBloque from '@/features/training/ResultadoDelBloque';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { esArranque, guardaLugar, leeLugar } from '@/lib/lugar';
@@ -286,11 +292,14 @@ function Chip({ children, fuerte }) {
   );
 }
 
-const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phaseColor, onAbrirFicha }) => {
+const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phaseColor, onAbrirFicha, oneRMs }) => {
   const { phases: PLAN, resolveExercise, medias, kind } = usePlan();
   const { perfil: profile } = usePerfilDeLaVista();
+  const { salud } = usePalabras();
   const unidad = profile?.unidad_peso || 'kg';
   const u = etiquetaUnidad(unidad);
+  // Cuando el plan dice «75%», los kilos que son (de SU 1RM). Los pacientes de un fisio no tienen 1RM.
+  const carga = salud ? null : cargaPorPorcentaje(ex, oneRMs, unidad);
   const [progresoAbierto, setProgresoAbierto] = useState(false);
   const exData = sessionData?.exercises?.[idx] || {};
   const pc = phaseColor || LT.blue;
@@ -401,9 +410,10 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phas
             }}>
               {ex.name}
             </span>
-            {chips.length > 0 && (
+            {(chips.length > 0 || (carga && !carga.falta)) && (
               <span style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
                 {chips.map((c) => <Chip key={c}>{c}</Chip>)}
+                {carga && !carga.falta && <Chip fuerte>{carga.texto}</Chip>}
               </span>
             )}
           </span>
@@ -486,13 +496,19 @@ const groupIntoSets = (exercises) => {
   return groups;
 };
 
-const SetGroup = ({ group, setNum, phaseColor, sessionData, sessionKey, onUpdate, oneRMs, sessionsData }) => {
+const SetGroup = ({
+  group, setNum, phaseColor, sessionData, sessionKey, onUpdate, oneRMs, sessionsData,
+  // Solo la sesión normal de un día los pasa: es donde el coach puede ponerle formato a un Set.
+  formatos = null, onFormato = null,
+}) => {
   /* La ficha del ejercicio vive AQUI y no en cada fila, porque para decir
      "Guardar y siguiente" hay que saber cual es el siguiente — y una fila solo
      se conoce a si misma. La serie si conoce a todos sus miembros. */
   const [fichaEn, setFichaEn] = useState(null);
+  const [reloj, setReloj] = useState(false);
+  const [anotando, setAnotando] = useState(false);
   const { phases: planCompleto, resolveExercise, medias, kind } = usePlan();
-  const { perfil: profile } = usePerfilDeLaVista();
+  const { perfil: profile, soloLectura, userId } = usePerfilDeLaVista();
   if (group.isNote) {
     return (
       <div style={{
@@ -504,6 +520,15 @@ const SetGroup = ({ group, setNum, phaseColor, sessionData, sessionKey, onUpdate
   const count = group.exercises.length;
   const typeLabel = count >= 3 ? 'Tri-serie' : count === 2 ? 'Bi-serie' : null;
   const rondas = group.exercises[0].ex.sets;
+
+  /* UN SET CON FORMATO (AMRAP, EMOM, Tabata…): el formato reemplaza el «Se repite N veces». Lo que
+     anota el atleta de todo el Set va en `formatos[<llave del Set>]`, y la llave es la del primer
+     ejercicio, que es como ya se anota cada ejercicio. */
+  const formato = onFormato ? formatoDeMiembros(group.exercises.map(({ ex }) => ex)) : null;
+  const claveFormato = String(group.exercises[0].idx);
+  const resultado = formato ? (formatos?.[claveFormato] ?? null) : null;
+  const resumen = formato ? resumenDeFormato(formato, count) : '';
+  const hayReloj = !!formato && expande(formato, count).length > 0;
 
   /* Una sola tarjeta por SERIE, con los ejercicios dentro separados por una
      línea. Antes era una tarjeta por ejercicio, y una bi-serie —dos ejercicios
@@ -517,7 +542,15 @@ const SetGroup = ({ group, setNum, phaseColor, sessionData, sessionKey, onUpdate
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
           <span style={{ fontSize: 15, fontWeight: 800, color: LT.text }}>Serie {setNum}</span>
-          {typeLabel && (
+          {formato && (
+            <span style={{
+              fontSize: 11.5, fontWeight: 800, color: LT.blue, background: LT.blueSoft,
+              padding: '3px 9px', borderRadius: 7, letterSpacing: 0.2, minWidth: 0, ...NUM_STYLE,
+            }}>
+              {resumen}
+            </span>
+          )}
+          {!formato && typeLabel && (
             <span style={{
               fontSize: 10, fontWeight: 800, color: LT.blue, background: LT.blueSoft,
               padding: '2px 8px', borderRadius: 6, letterSpacing: 0.3, flexShrink: 0,
@@ -526,14 +559,52 @@ const SetGroup = ({ group, setNum, phaseColor, sessionData, sessionKey, onUpdate
             </span>
           )}
         </div>
-        {rondasQueDecir(rondas) && (
+        {!formato && rondasQueDecir(rondas) && (
           <span style={{ fontSize: 12.5, color: LT.text2, fontWeight: 600, flexShrink: 0, ...NUM_STYLE }}>
             Se repite {rondasQueDecir(rondas)} veces
           </span>
         )}
       </div>
 
-      {typeLabel && (
+      {formato && (hayReloj || resultado || !soloLectura) && (
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px 12px', margin: '0 3px 10px' }}>
+          {hayReloj && !soloLectura && (
+            <button
+              type="button" onClick={() => setReloj(true)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8, minHeight: 42, padding: '0 17px', borderRadius: 13, border: 'none',
+                cursor: 'pointer', background: LT.blue, color: '#fff', fontFamily: FONT, fontSize: 14.5, fontWeight: 800, touchAction: 'manipulation',
+              }}
+            >
+              <Play size={16} fill="#fff" /> Iniciar reloj
+            </button>
+          )}
+          {resultado ? (
+            <button
+              type="button" onClick={soloLectura ? undefined : () => setAnotando(true)} disabled={soloLectura}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5, border: 'none', cursor: soloLectura ? 'default' : 'pointer',
+                fontFamily: FONT, fontSize: 12.5, fontWeight: 800, color: LT.blue, background: LT.blueSoft,
+                padding: '6px 11px', borderRadius: 8, ...NUM_STYLE,
+              }}
+            >
+              <Check size={13} strokeWidth={3} /> {textoDeResultado(resultado)}
+            </button>
+          ) : !soloLectura && (
+            <button
+              type="button" onClick={() => setAnotando(true)}
+              style={{
+                border: 'none', background: 'transparent', cursor: 'pointer', padding: '6px 2px', fontFamily: FONT,
+                fontSize: 13.5, fontWeight: 700, color: LT.blue,
+              }}
+            >
+              {formato.anota === 'nada' ? 'Marcar como hecho' : 'Anotar resultado'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {!formato && typeLabel && (
         <div style={{ fontSize: 11.5, color: LT.text3, marginBottom: 8, padding: '0 3px', fontWeight: 600 }}>
           Alterna los ejercicios sin descanso completo entre ellos
         </div>
@@ -548,7 +619,7 @@ const SetGroup = ({ group, setNum, phaseColor, sessionData, sessionKey, onUpdate
             <ExerciseRow
               ex={ex} idx={idx} num={i + 1} phaseColor={phaseColor}
               sessionData={sessionData} sessionKey={sessionKey} sessionsData={sessionsData}
-              onAbrirFicha={() => setFichaEn(i)}
+              onAbrirFicha={() => setFichaEn(i)} oneRMs={oneRMs}
             />
           </div>
         ))}
@@ -579,6 +650,23 @@ const SetGroup = ({ group, setNum, phaseColor, sessionData, sessionKey, onUpdate
           />
         );
       })()}
+
+      {reloj && formato && (
+        <RelojDelBloque
+          formato={formato} ejercicios={group.exercises} serie={setNum} resumen={resumen}
+          clave={`${userId}:${sessionKey}:${claveFormato}`}
+          onGuardar={(r) => onFormato(claveFormato, r)} onCerrar={() => setReloj(false)}
+        />
+      )}
+      {anotando && formato && (
+        <ResultadoDelBloque
+          formato={formato} resumen={resumen} inicial={resultado}
+          sugerido={{ seg: null, rondas: 0, tramos: [], completados: tramosDeTrabajo(formato, count), de: tramosDeTrabajo(formato, count) }}
+          onGuardar={(r) => { onFormato(claveFormato, r); setAnotando(false); }}
+          onBorrar={resultado ? () => { onFormato(claveFormato, null); setAnotando(false); } : undefined}
+          onCerrar={() => setAnotando(false)}
+        />
+      )}
     </div>
   );
 };
@@ -956,6 +1044,12 @@ const CuerpoDelDia = ({
       return { ...prev, exercises: { ...ex, [key]: data } };
     });
   };
+  // Lo que anotó el atleta de un Set entero con formato (rondas, tiempo…); `null` lo borra.
+  const setFormato = (clave, resultado) => updateSession(selectedId, (prev) => {
+    const resto = { ...(prev?.formatos || {}) };
+    if (resultado) resto[clave] = resultado; else delete resto[clave];
+    return { ...prev, formatos: resto };
+  });
   const updateNotes = (notes) => updateSession(selectedId, prev => ({ ...prev, notes }));
   const toggleComplete = () => updateSession(selectedId, prev => ({
     ...prev, completed: !prev?.completed,
@@ -1058,7 +1152,8 @@ const CuerpoDelDia = ({
             <SetGroup key={`${selectedIdx}-${gi}`} group={g} setNum={setNum} phaseColor={phaseColor}
               sessionData={flatSessionData} sessionKey={selectedId}
               onUpdate={(idx, data) => setExerciseData(null, idx, data)}
-              oneRMs={oneRMs} sessionsData={sessionsData} />
+              oneRMs={oneRMs} sessionsData={sessionsData}
+              formatos={sessionData.formatos} onFormato={setFormato} />
           );
         });
         return entarjetas && !selectedDay.blocks ? tarjetaDelDia(sets) : sets;
@@ -2451,17 +2546,8 @@ const WellnessView = ({ wellness, setWellness }) => {
   );
 };
 
-const ONE_RM_LIFTS = [
-  { key: 'back_squat', name: 'Back Squat' },
-  { key: 'front_squat', name: 'Front Squat' },
-  { key: 'bench_press', name: 'Bench Press' },
-  { key: 'incline_bench', name: 'Incline Bench Press' },
-  { key: 'trap_bar_dl', name: 'Trap Bar Deadlift' },
-  { key: 'deadlift', name: 'Deadlift / RDL' },
-  { key: 'overhead_press', name: 'Overhead Press' },
-  { key: 'row', name: 'Barbell Row' },
-  { key: 'hang_clean', name: 'Hang Clean' },
-];
+// Los mismos 9 levantamientos que usa el cálculo de kilos por porcentaje (ver `lib/cargaPorcentaje.js`).
+const ONE_RM_LIFTS = LEVANTAMIENTOS;
 
 const OneRMView = ({ oneRMs, setOneRMs }) => {
   const { perfil: profile } = usePerfilDeLaVista();
@@ -2512,7 +2598,7 @@ const OneRMView = ({ oneRMs, setOneRMs }) => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {ONE_RM_LIFTS.map(lift => (
             <div key={lift.key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: T.bg2, borderRadius: 10, border: `1px solid ${T.border}` }}>
-              <div style={{ flex: 1, fontSize: 14, fontWeight: 600, color: T.text }}>{lift.name}</div>
+              <div style={{ flex: 1, fontSize: 14, fontWeight: 600, color: T.text }}>{lift.nombre}</div>
               <Input value={oneRMs[lift.key] == null ? '' : desdeKilos(oneRMs[lift.key], unidad)}
                 onChange={v => setOneRMs(prev => ({ ...prev, [lift.key]: v ? aKilos(v, unidad) : null }))}
                 placeholder="—" type="number" suffix={u}

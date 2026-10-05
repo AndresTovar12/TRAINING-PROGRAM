@@ -12,6 +12,9 @@ import {
   medida as infoMedida,
 } from '@/lib/medidas';
 import Cronometro from '@/components/Cronometro';
+import { cargaPorPorcentaje } from '@/lib/cargaPorcentaje';
+import { useStorage } from '@/contexts/AppStateContext';
+import { usePalabras } from '@/contexts/PalabrasContext';
 
 /**
  * La pantalla de UN ejercicio, mientras se entrena.
@@ -55,25 +58,11 @@ export default function FichaEjercicio({
     [plan, sessionsData, ex.name, kind, sessionKey],
   );
 
-  const recomendado = useMemo(() => {
-    if (!ex.intensity) return null;
-    const m = ex.intensity.match(/(\d+)%/);
-    if (!m) return null;
-    const pct = parseInt(m[1], 10);
-    const n = (ex.name || '').toLowerCase();
-    let key = null;
-    if (n.includes('squat') && n.includes('front')) key = 'front_squat';
-    else if (n.includes('squat')) key = 'back_squat';
-    else if (n.includes('bench') && n.includes('incline')) key = 'incline_bench';
-    else if (n.includes('bench')) key = 'bench_press';
-    else if (n.includes('trap bar')) key = 'trap_bar_dl';
-    else if (n.includes('deadlift') || n.includes('rdl') || n.includes('romanian')) key = 'deadlift';
-    else if (n.includes('overhead') || (n.includes('press') && !n.includes('bench'))) key = 'overhead_press';
-    else if (n.includes('row')) key = 'row';
-    else if (n.includes('clean')) key = 'hang_clean';
-    if (!key || !oneRMs?.[key]) return null;
-    return Math.round(oneRMs[key] * pct / 100 * 2) / 2;
-  }, [ex.intensity, ex.name, oneRMs]);
+  /* Los kilos que son el «75%» del plan, de SU 1RM y de ESE levantamiento (ver `lib/cargaPorcentaje.js`).
+     Los pacientes de un fisio no tienen 1RM. */
+  const { salud } = usePalabras();
+  const [, setOneRMs] = useStorage('wr:onerm', {});
+  const carga = useMemo(() => (salud ? null : cargaPorPorcentaje(ex, oneRMs, unidad)), [ex, oneRMs, unidad, salud]);
 
   /* El peso se guarda en kilos y se escribe en la unidad del atleta, así que
      el campo necesita su propio borrador. Sin él, cada tecla iría a kilos y
@@ -326,14 +315,23 @@ export default function FichaEjercicio({
               </div>
             </div>
 
-            {recomendado !== null && (
+            {carga && !carga.falta && (
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 7, marginTop: 11,
                 fontSize: 13.5, color: LT.text3, fontWeight: 600, ...NUM_STYLE,
               }}>
                 <LineChartIcon size={14} style={{ flexShrink: 0 }} />
-                Según tu 1RM te tocaría ≈ {desdeKilos(recomendado, unidad)} {u}
+                <span>
+                  {textoDePorcentaje(carga.porcentaje)} de tu 1RM de {carga.lift.nombre}:{' '}
+                  <b style={{ color: LT.blue }}>{carga.texto}</b>
+                </span>
               </div>
+            )}
+            {carga?.falta && (
+              <PedirUnRM
+                carga={carga} unidad={unidad}
+                onGuardar={(kilos) => setOneRMs((prev) => ({ ...prev, [carga.lift.key]: kilos }))}
+              />
             )}
           </>
         )}
@@ -369,6 +367,46 @@ export default function FichaEjercicio({
           {esUltimo ? 'Listo' : 'Guardar y siguiente'}
         </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+const textoDePorcentaje = (p) => (p.min === p.max ? `${p.min}%` : `${p.min}-${p.max}%`);
+
+/**
+ * El plan pide un porcentaje de un levantamiento de la pestaña 1RM y todavía no hay 1RM guardado:
+ * se anota aquí mismo, una vez, y desde entonces salen los kilos en toda la app. Se guarda en
+ * `wr:onerm`, el mismo sitio que la pestaña 1RM, y siempre en kilos.
+ */
+function PedirUnRM({ carga, unidad, onGuardar }) {
+  const [valor, setValor] = useState('');
+  const n = parseFloat(valor.replace(',', '.'));
+  const valido = Number.isFinite(n) && n > 0;
+  return (
+    <div style={{ marginTop: 11, border: `1.5px solid ${LT.border}`, borderRadius: 16, background: LT.surface, padding: '12px 14px' }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: LT.text, lineHeight: 1.4 }}>
+        Pide {textoDePorcentaje(carga.porcentaje)} de tu 1RM de {carga.lift.nombre}. Anótalo una vez y aquí verás cuántos {unidad === 'lb' ? 'libras' : 'kilos'} son.
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <input
+          value={valor} inputMode="decimal" placeholder={`Tu 1RM (${etiquetaUnidad(unidad)})`} aria-label={`Tu 1RM de ${carga.lift.nombre}`}
+          onChange={(e) => setValor(e.target.value)}
+          style={{
+            flex: 1, minWidth: 0, border: `1.5px solid ${LT.border}`, borderRadius: 12, padding: '10px 12px', fontFamily: FONT,
+            fontSize: 16, fontWeight: 700, color: LT.text, outline: 'none', background: LT.bg, ...NUM_STYLE,
+          }}
+        />
+        <button
+          type="button" disabled={!valido} onClick={() => onGuardar(aKilos(n, unidad))}
+          style={{
+            minHeight: 44, padding: '0 18px', borderRadius: 12, border: 'none', cursor: valido ? 'pointer' : 'default',
+            background: LT.blue, color: '#fff', fontFamily: FONT, fontSize: 15, fontWeight: 800, opacity: valido ? 1 : 0.4,
+            touchAction: 'manipulation',
+          }}
+        >
+          Guardar
+        </button>
       </div>
     </div>
   );

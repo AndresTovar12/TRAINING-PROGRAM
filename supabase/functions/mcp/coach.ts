@@ -31,6 +31,22 @@ const ATLETA = z.string().describe('El atleta: su usuario (@juan), su nombre o s
 const FASE = z.union([z.string(), z.number()]).optional()
   .describe('La fase: su número (1, 2…) o su nombre. En una rutina que se repite no hace falta.')
 
+/* El formato de un Set con reloj: lo que corre son los PASOS (una lista de tramos que se repite); el id
+   solo le pone nombre. Ver `src/lib/formatos.js`. */
+const FORMATO = z.object({
+  id: z.string().optional().describe('amrap, emom, tabata, intervalos, fartlek, portiempo o custom (uno propio).'),
+  nombre: z.string().optional().describe('Solo con id "custom": el nombre que ve el atleta (ej.: "Pirámide").'),
+  pasos: z.array(z.object({
+    tipo: z.enum(['trabajo', 'descanso']),
+    seg: z.number().int().nullable().describe('Segundos del tramo. null = hasta que el atleta toque «Listo».'),
+    etiqueta: z.string().optional().describe('Lo que ve el atleta en el reloj (ej.: "Fuerte", "Suave").'),
+  })).describe('La lista de tramos que se repite. AMRAP 12 min: [{tipo:"trabajo",seg:720}]. EMOM: [{tipo:"trabajo",seg:60}]. Tabata: [{tipo:"trabajo",seg:20},{tipo:"descanso",seg:10}]. 8 × 400 m con 90 s: [{tipo:"trabajo",seg:null},{tipo:"descanso",seg:90}].'),
+  vueltas: z.number().int().optional().describe('Cuántas veces se repite la lista de pasos. AMRAP: 1. EMOM de 10 min: 10. Tabata: 8.'),
+  tope: z.number().int().nullable().optional().describe('Segundos tras los que se corta todo, aunque falte (opcional).'),
+  turnan: z.boolean().optional().describe('true: en cada tramo de trabajo toca un ejercicio distinto del grupo, por turnos (circuitos, EMOM alternado).'),
+  anota: z.enum(['rondas', 'tiempo', 'reps', 'km', 'm', 'cal', 'cumplido', 'nada']).optional().describe('Qué anota el atleta al terminar. AMRAP: rondas. EMOM: cumplido. Por tiempo: tiempo.'),
+})
+
 const EJERCICIO = z.object({
   nombre: z.string().optional().describe('Nombre del ejercicio. Si es del repertorio, escríbelo EXACTO para que se ligue a su ficha y su video.'),
   nota: z.string().optional().describe('En vez de un ejercicio, una nota o separador (ej.: "Calentamiento"). Sin nombre.'),
@@ -43,6 +59,7 @@ const EJERCICIO = z.object({
   indicaciones: z.string().optional().describe('Claves técnicas para el atleta.'),
   lleva_peso: z.boolean().optional().describe('Si el atleta anota peso aquí. Si no se dice, la app lo deduce del nombre.'),
   grupo: z.number().int().optional().describe('Ejercicios SEGUIDOS con el mismo número van en superserie o circuito.'),
+  formato: FORMATO.optional().describe('Formato con reloj de ESTE grupo (o del ejercicio si va solo): AMRAP, EMOM, Tabata, intervalos, fartlek… Basta ponerlo en UN ejercicio del grupo y vale para todos. Sustituye a "series". Si el día ya lo traía (ver_plan_de_atleta), mándalo igual o se pierde.'),
 })
 
 const SESION = {
