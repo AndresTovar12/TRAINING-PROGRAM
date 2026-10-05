@@ -1,3 +1,5 @@
+import { desdeKilos } from './unidades.js';
+
 /**
  * Qué mide un ejercicio: NO confundir con `unidades.js`, que son kilos y
  * libras del PESO levantado. Aquí se trata de qué mide la propia serie.
@@ -139,3 +141,90 @@ export function comoReloj(segundos) {
  * nada, y ese era justo el error que hacía que el progreso mintiera.
  */
 export const mismaMedida = (a, b) => leeCantidad(a).unidad === leeCantidad(b).unidad;
+
+/* ------------------------------------------------------------------ */
+/* La carga: cuánto pesa o cuánto cuesta                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * La carga de un ejercicio («75%», «RPE 8», «RIR 2», «20 kg»), como la lista desplegable del
+ * campo «Carga» del editor. Mismo truco que las unidades de arriba y que el «REPS ▾»: el rótulo
+ * ES la lista, y al lado solo va el número.
+ *
+ * Andrés, pendiente #7 (5 oct 2026): «lista desplegable para la carga: kg, RIR, RPE, % 1RM».
+ *
+ * NO SE TOCA NINGÚN PLAN YA ESCRITO, y no hay un campo nuevo. La carga sigue siendo UN texto
+ * (`ex.intensity`) —lo leen el atleta, la IA y `cargaPorcentaje.js`— y el tipo se DEDUCE de él:
+ * «75%» es un porcentaje, «RPE 8» es un RPE. Lo que no encaja («70% / RPE 8», «BW», «Máximo»)
+ * se queda como texto libre y se enseña tal cual: ante la duda, no adivina.
+ */
+export const CARGAS = [
+  { id: 'pct', etiqueta: '% del 1RM', corta: '% 1RM', detalle: 'Un porcentaje de su máximo', ejemplo: '75', sufijo: '%' },
+  { id: 'rpe', etiqueta: 'RPE', corta: 'RPE', detalle: 'Esfuerzo del 1 al 10', ejemplo: '8' },
+  { id: 'rir', etiqueta: 'RIR', corta: 'RIR', detalle: 'Repeticiones que deja en reserva', ejemplo: '2' },
+  { id: 'kg', etiqueta: 'Kilos', corta: 'kg', detalle: 'Un peso fijo', ejemplo: '20', sufijo: 'kg' },
+];
+
+// Un número o un rango de dos: «75», «70-75», «7–8».
+const RANGO = `(${NUMERO}(?:\\s*[-–]\\s*${NUMERO})?)`;
+const LECTURAS = [
+  ['pct', new RegExp(`^${RANGO}\\s*%(?:\\s*(?:del?\\s*)?1\\s*RM)?$`, 'i')],
+  ['rpe', new RegExp(`^RPE\\s*${RANGO}$`, 'i')],
+  ['rir', new RegExp(`^RIR\\s*${RANGO}$`, 'i')],
+  ['kg', new RegExp(`^(${NUMERO})\\s*(?:kgs?|kilos)$`, 'i')],
+];
+
+/**
+ * Lee la carga de un ejercicio y dice de qué tipo es y cuánto: `{ tipo, cantidad }`. Con `tipo: null` el texto
+ * no encaja en ninguno y `cantidad` trae el texto entero, para enseñarlo tal cual.
+ */
+export function leeCarga(ex) {
+  const crudo = String(ex?.intensity ?? '').trim();
+  if (!crudo) return { tipo: null, cantidad: '' };
+  for (const [tipo, lectura] of LECTURAS) {
+    const m = crudo.match(lectura);
+    if (m) return { tipo, cantidad: m[1].replace(/\s/g, '').replace('–', '-') };
+  }
+  return { tipo: null, cantidad: crudo };
+}
+
+/** El texto que se guarda: `('rpe', '8')` → «RPE 8». Sin número, vacío. */
+export function componeCarga(tipo, cantidad) {
+  const n = String(cantidad ?? '').trim();
+  if (!n) return '';
+  if (tipo === 'pct') return `${n}%`;
+  if (tipo === 'rpe') return `RPE ${n}`;
+  if (tipo === 'rir') return `RIR ${n}`;
+  if (tipo === 'kg') return `${n} kg`;
+  return n;
+}
+
+/**
+ * Lo que va en la cajita de número de un tipo, aunque el texto todavía no esté completo: «RPE 7-»
+ * (se está escribiendo un rango) enseña «7-». Por eso no se apoya en `leeCarga`, que rechazaría ese medio camino
+ * y haría desaparecer lo que la persona va tecleando.
+ */
+export function cantidadDeCarga(tipo, texto) {
+  const t = String(texto ?? '').trim();
+  if (tipo === 'pct') return t.replace(/\s*%.*$/, '');
+  if (tipo === 'rpe') return t.replace(/^RPE\s*/i, '');
+  if (tipo === 'rir') return t.replace(/^RIR\s*/i, '');
+  if (tipo === 'kg') return t.replace(/\s*(?:kgs?|kilos).*$/i, '');
+  return t;
+}
+
+/**
+ * Lo que ve un atleta que usa libras cuando el coach pidió un peso fijo: «20 kg» → «45 lb» (a lo que se puede
+ * cargar: de 5 en 5). `null` si no hay nada que convertir —un atleta en kilos, o una carga que no es un peso—
+ * y entonces se enseña el texto de siempre. Un peso del plan es una cantidad de kilos; la unidad del atleta es
+ * solo una forma de verlo (ver `unidades.js`).
+ */
+export function cargaEnSuUnidad(ex, unidad) {
+  if (unidad !== 'lb') return null;
+  const { tipo, cantidad } = leeCarga(ex);
+  if (tipo !== 'kg') return null;
+  const kilos = parseFloat(String(cantidad).replace(',', '.'));
+  if (!Number.isFinite(kilos)) return null;
+  return `${Math.round(desdeKilos(kilos, 'lb') / 5) * 5} lb`;
+}
+

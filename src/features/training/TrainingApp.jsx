@@ -43,7 +43,7 @@ import {
   bloquesHechos, alternarBloque,
 } from '@/lib/sesiones';
 import { plural, pluralS, rondasQueDecir } from '@/lib/plural';
-import { textoMeta } from '@/lib/medidas';
+import { textoMeta, cargaEnSuUnidad } from '@/lib/medidas';
 import {
   formatoDeMiembros, expande, resumenDeFormato, textoDeResultado, tramosDeTrabajo,
 } from '@/lib/formatos';
@@ -334,7 +334,8 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phas
   }
 
   const showWeightInput = isLoadedExercise(ex);
-  const formattedIntensity = formatIntensity(ex.intensity);
+  // Un peso fijo («20 kg») se ve en la unidad de quien entrena; lo demás, como lo escribió el coach.
+  const formattedIntensity = cargaEnSuUnidad(ex, unidad) ?? formatIntensity(ex.intensity);
   // El descanso lo escribe el coach en el editor de sesión. Antes lo adivinaba
   // `inferRest` leyendo el nombre del ejercicio, y el atleta lo leía como si
   // fuera una indicación de su entrenador. Si el coach no lo puso, no se
@@ -591,13 +592,17 @@ const SetGroup = ({
               <Check size={13} strokeWidth={3} /> {textoDeResultado(resultado)}
             </button>
           ) : !soloLectura && (
+            /* Un botón de los suyos —blanco, borde sólido, azul— junto al «Iniciar reloj». Antes era solo texto
+               azul y (Andrés, 5 oct 2026) «el botón casi no se ve». */
             <button
               type="button" onClick={() => setAnotando(true)}
               style={{
-                border: 'none', background: 'transparent', cursor: 'pointer', padding: '6px 2px', fontFamily: FONT,
-                fontSize: 13.5, fontWeight: 700, color: LT.blue,
+                display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 42, padding: '0 15px', borderRadius: 13,
+                cursor: 'pointer', background: '#fff', border: `1.5px solid ${LT.blue}`, color: LT.blue, fontFamily: FONT,
+                fontSize: 14.5, fontWeight: 800, touchAction: 'manipulation',
               }}
             >
+              {formato.anota === 'nada' ? <Check size={15} strokeWidth={3} /> : <Edit3 size={15} />}
               {formato.anota === 'nada' ? 'Marcar como hecho' : 'Anotar resultado'}
             </button>
           )}

@@ -64,7 +64,7 @@ function BotonChico({ children, onClick, peligro = false }) {
       type="button" onClick={onClick}
       style={{
         flex: 1, minHeight: 46, borderRadius: 14, cursor: 'pointer', background: LT.surface,
-        border: `1.5px solid ${LT.border}`, color: peligro ? LT.danger : LT.text2, display: 'flex', alignItems: 'center',
+        border: `1.5px solid ${LT.borderHi}`, color: peligro ? LT.danger : LT.text, display: 'flex', alignItems: 'center',
         justifyContent: 'center', gap: 7, fontFamily: FONT, fontSize: 15, fontWeight: 700, touchAction: 'manipulation',
       }}
     >

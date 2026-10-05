@@ -55,6 +55,7 @@ export default function ListaDesplegable({
   separador = ' + ',
   icono: Icono,
   anchoMinimo = 200,
+  colorFlecha = T.text3,
 }) {
   const dedos = useCoarsePointer();
   const caja = useRef(null);
@@ -423,7 +424,7 @@ export default function ListaDesplegable({
         )}
         <ChevronDown
           size={16}
-          color={T.text3}
+          color={colorFlecha}
           style={{ flexShrink: 0, transform: abierto ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}
         />
       </button>

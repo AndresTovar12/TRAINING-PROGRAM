@@ -34,11 +34,12 @@ const CLAVE_DEL_AVISO = 'aviso:formatos-del-set';
 // Los ejercicios que se repiten en cada Set de la vista: lo que decide si «Se turnan» tiene sentido.
 const hayQueTurnar = (nEjercicios) => nEjercicios >= 2;
 
-/* El botón de la lista de formatos: sin caja y con el tamaño de una frase en «Se repite», o
-   una pastilla azul cuando ya hay un formato elegido. Mismo truco que el «REPS ▾». */
+/* El botón de la lista de formatos. Primero iba sin caja, con el tamaño de una frase (como el «REPS ▾»), y
+   Andrés, 5 oct 2026, dijo que «el botón casi no se ve»: nadie lo encontraba. Ahora es un botón de los suyos
+   —blanco, borde sólido, azul— con el relojito que lo ata al formato. Con un formato elegido es la pastilla azul. */
 const ESTILO_SIN_FORMATO = {
-  width: 'auto', border: 'none', background: 'transparent', minHeight: 0, gap: 3, borderRadius: 8,
-  padding: '5px 6px', fontFamily: FONT, fontSize: 12.5, fontWeight: 700, color: T.text2,
+  width: 'auto', border: `1.5px solid ${T.accent}`, background: '#fff', minHeight: 30, gap: 6, borderRadius: 999,
+  padding: '0 11px', fontFamily: FONT, fontSize: 12.5, fontWeight: 800, color: T.accent,
 };
 const ESTILO_CON_FORMATO = {
   width: 'auto', border: 'none', background: T.accentBg, minHeight: 0, gap: 6, borderRadius: 999,
@@ -46,10 +47,10 @@ const ESTILO_CON_FORMATO = {
 };
 
 // Botón blanco con borde sólido azul: lo que no es la acción principal pero se busca a simple vista.
-function BotonBlanco({ icon: Icon, children, onClick }) {
+function BotonBlanco({ icon: Icon, children, onClick, expandido }) {
   return (
     <button
-      type="button" onClick={onClick} className="kp-accion"
+      type="button" onClick={onClick} className="kp-accion" aria-expanded={expandido}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 32, padding: '0 13px', borderRadius: 999,
         cursor: 'pointer', fontFamily: FONT, fontSize: 12.5, fontWeight: 800, flexShrink: 0,
@@ -124,7 +125,7 @@ export function EncabezadoDelSet({
         {formato ? (
           <ListaDesplegable
             etiqueta="Formato del set" valor={vista} onCambio={elige} opciones={opciones}
-            icono={Timer} estilo={ESTILO_CON_FORMATO} anchoMinimo={270} alto={460}
+            icono={Timer} estilo={ESTILO_CON_FORMATO} colorFlecha={T.accent} anchoMinimo={270} alto={460}
           />
         ) : (
           <>
@@ -136,7 +137,7 @@ export function EncabezadoDelSet({
             <span style={{ ...frase, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
               <ListaDesplegable
                 etiqueta="Formato del set" valor="normal" onCambio={elige} opciones={opciones}
-                estilo={ESTILO_SIN_FORMATO} anchoMinimo={270} alto={460}
+                icono={Timer} estilo={ESTILO_SIN_FORMATO} colorFlecha={T.accent} anchoMinimo={270} alto={460}
               />
               <Stepper value={bloque.rounds} onChange={(v) => onCambio({ rounds: v })} />
               {parseInt(bloque.rounds, 10) === 1 ? 'vez' : 'veces'}
@@ -219,15 +220,9 @@ function FranjaDeFormato({ formato, nEjercicios, onCambio, onTramos }) {
           {total === null ? 'hasta que termines' : `= ${textoDeTiempo(total)}`}
         </span>
         <span style={{ flex: 1 }} />
-        <button
-          type="button" onClick={() => setMas(!mas)} aria-expanded={mas}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 3, border: 'none', background: 'transparent', cursor: 'pointer',
-            padding: '4px 6px', fontFamily: FONT, fontSize: 12.5, fontWeight: 800, color: T.accent, touchAction: 'manipulation',
-          }}
-        >
+        <BotonBlanco onClick={() => setMas(!mas)} expandido={mas}>
           Más {mas ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-        </button>
+        </BotonBlanco>
       </div>
 
       {mas && (

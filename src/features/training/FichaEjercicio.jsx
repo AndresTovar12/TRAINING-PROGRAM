@@ -8,7 +8,7 @@ import { isLoadedExercise, formatIntensity, findPreviousWeight } from '@/lib/tra
 /* `unidad` de este archivo es la del PESO (kg o lb). La de la cantidad se
    importa con otro nombre para no pisarla. */
 import {
-  textoMeta, leeCantidad, esTiempo, metaEnSegundos,
+  textoMeta, leeCantidad, esTiempo, metaEnSegundos, cargaEnSuUnidad,
   medida as infoMedida,
 } from '@/lib/medidas';
 import Cronometro from '@/components/Cronometro';
@@ -49,7 +49,7 @@ export default function FichaEjercicio({
   const hayMedia = !!portada || videos.length > 0;
 
   const conPeso = isLoadedExercise(ex);
-  const intensidad = formatIntensity(ex.intensity);
+  const intensidad = cargaEnSuUnidad(ex, unidad) ?? formatIntensity(ex.intensity);
   const descanso = (ex.descanso || '').trim() || null;
 
   const anterior = useMemo(

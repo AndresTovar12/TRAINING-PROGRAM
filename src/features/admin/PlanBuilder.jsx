@@ -25,6 +25,7 @@ import {
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
 import { T, FONT, KP } from '@/lib/theme';
 import CampoCantidad from '@/components/CampoCantidad';
+import CampoCarga from '@/components/CampoCarga';
 import { ligaExterna } from '@/lib/videos';
 import RepertoirePicker from '@/features/admin/RepertoirePicker';
 import MediaUpload from '@/features/admin/MediaUpload';
@@ -340,10 +341,12 @@ function ExerciseCard({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove
             onPatch={onPatch}
             estiloInput={{ ...inputStyle, padding: '8px 10px', fontSize: 13 }}
           />
-          <Field label="Carga / Int.">
-            <input value={ex.intensity || ''} onChange={(e) => onPatch({ intensity: e.target.value })}
-              placeholder="70% / RPE 8" style={{ ...inputStyle, padding: '8px 10px', fontSize: 13 }} />
-          </Field>
+          {/* Igual que las unidades de arriba: el rótulo es la lista (% 1RM, RPE, RIR, kilos). Ver `CampoCarga`. */}
+          <CampoCarga
+            ex={ex}
+            onPatch={onPatch}
+            estiloInput={{ ...inputStyle, padding: '8px 10px', fontSize: 13 }}
+          />
           {conSeries && campoDescanso}
         </div>
         {!conSeries && campoDescanso}
@@ -553,9 +556,7 @@ function ExerciseRow({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove,
         )}
 
         <div style={fluido(0) ?? { width: 100 }}>
-          <RotuloCampo>Carga / Int.</RotuloCampo>
-          <input value={ex.intensity || ''} onChange={(e) => onPatch({ intensity: e.target.value })}
-            placeholder="70% / RPE 8" style={inputFila} />
+          <CampoCarga ex={ex} onPatch={onPatch} compacto estiloInput={inputFila} />
         </div>
         <div style={fluido(1) ?? { width: 84 }}>
           <RotuloCampo>Descanso</RotuloCampo>
