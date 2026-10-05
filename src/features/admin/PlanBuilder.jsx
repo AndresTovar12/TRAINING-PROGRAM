@@ -23,7 +23,9 @@ import {
   isLoadedExercise, dondeVa, estructuraDelPlan, kindDeEstructura, semanaGlobal, semanasDelPlan,
 } from '@/lib/training-utils';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
-import { T, FONT, KP } from '@/lib/theme';
+import EditorBarra from '@/features/admin/EditorBarra';
+import { useGuiaAncha } from '@/lib/useGuiaAncha';
+import { T, FONT, KP, tipoDeSesion } from '@/lib/theme';
 import { CeldaDeReps, CeldaDeCarga, DebajoDeRepsYCarga } from '@/components/RepsYCarga';
 import CampoDescanso from '@/components/CampoDescanso';
 import { useRepsYCarga } from '@/lib/useRepsYCarga';
@@ -1851,12 +1853,59 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
 /* Builder principal                                                    */
 /* ------------------------------------------------------------------ */
 
+/** El borde de la guía: se arrastra para ensanchar (ver `useGuiaAncha`). Una raya azul al pasar el mouse. */
+function DivisorDeLaGuia({ ancho, min, max, borde }) {
+  const [encima, setEncima] = useState(false);
+  return (
+    <div
+      role="separator" aria-orientation="vertical" aria-label="Ancho de la guía" aria-valuemin={min} aria-valuemax={max} aria-valuenow={ancho}
+      tabIndex={0} title="Arrastra para cambiar el ancho. Doble clic: tamaño original"
+      onMouseEnter={() => setEncima(true)} onMouseLeave={() => setEncima(false)}
+      {...borde}
+      style={{ position: 'absolute', top: 0, bottom: 0, right: -14, width: 12, cursor: 'col-resize', touchAction: 'none', zIndex: 6, outline: 'none' }}
+    >
+      <i style={{ position: 'absolute', left: 4.5, top: 0, bottom: 0, width: 3, borderRadius: 2, background: encima ? T.accent : 'transparent', transition: 'background-color .12s' }} />
+      <i style={{ position: 'absolute', left: 4, top: '50%', width: 4, height: 40, marginTop: -20, borderRadius: 3, background: encima ? T.accent : T.borderHi, transition: 'background-color .12s' }} />
+    </div>
+  );
+}
+
+/** Con la guía oculta: una tira Lun–Dom arriba del día para cambiar de día sin abrirla. */
+function TiraDeDias({ dias, elegido, onElegir }) {
+  return (
+    <div role="group" aria-label="Días de la semana" style={{
+      display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4, background: T.bg2, border: `1px solid ${T.border}`,
+      borderRadius: 13, padding: 4, marginBottom: 14,
+    }}>
+      {WEEKDAYS.map((clave) => {
+        const primera = dias.find((d) => d.day === clave);
+        const on = clave === elegido;
+        return (
+          <button
+            key={clave} type="button" onClick={() => onElegir(clave)} aria-label={NOMBRE_DIA[clave]} aria-pressed={on}
+            style={{
+              border: 'none', cursor: 'pointer', borderRadius: 9, padding: '7px 0 6px', fontFamily: FONT, fontSize: 12, fontWeight: 800,
+              background: on ? T.accent : 'transparent', color: on ? '#fff' : T.text2,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+            }}
+          >
+            {clave}
+            <i style={{ width: 5, height: 5, borderRadius: 3, display: 'block', background: primera ? (on ? '#fff' : tipoDeSesion(primera).c) : 'transparent' }} />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDeleted, profesionalId = null, catalogo = null }) {
   const esCompu = useIsDesktop();
   const pregunta = useConfirmacion();
   const { avisa } = useAviso();
   const { user } = useAuth();
   const { t } = usePalabras();
+  // La guía de la compu: su ancho (se arrastra), si está oculta y Ctrl+B. Ver `useGuiaAncha`.
+  const { medir: medirGuia, ...guia } = useGuiaAncha();
   /* MODO MIS PLANES (`catalogo`). El MISMO editor, sin atleta: arma o edita un programa o una rutina que
      vive en «Mis planes» (Andrés, 2 oct 2026: «el editor quiero que se vea como el que ya uso
      normalmente»). Cambia solo lo que depende del atleta: arriba va el nombre del plan, no hay «Su
@@ -2033,6 +2082,28 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     window.addEventListener('beforeunload', avisa);
     return () => window.removeEventListener('beforeunload', avisa);
   }, [dirty]);
+
+  // Ctrl/⌘+B oculta o muestra la guía (solo en la compu).
+  const alternarGuia = guia.alternar;
+  useEffect(() => {
+    if (!esCompu) return undefined;
+    const alTeclear = (e) => {
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'b') { e.preventDefault(); alternarGuia(); }
+    };
+    document.addEventListener('keydown', alTeclear);
+    return () => document.removeEventListener('keydown', alTeclear);
+  }, [esCompu, alternarGuia]);
+  // Lo que mide la zona que se desplaza: la guía se queda quieta a esa altura mientras el día se mueve.
+  const [altoMain, setAltoMain] = useState(700);
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const medir = () => setAltoMain(el.clientHeight);
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [esCompu, nav.level]);
 
   const touch = (fn) => { setDirty(true); setPhases(fn); };
   const patchPhase = (pi, patch) => touch((ps) => ps.map((p, i) => (i === pi ? { ...p, ...(typeof patch === 'function' ? patch(p) : patch) } : p)));
@@ -2527,6 +2598,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
 
     const hoja = (
       <div>
+        {!esCompu && (<>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, marginBottom: isWeekly ? 8 : 14 }}>
           <Field label={isWeekly ? 'Título de la rutina' : t('Título del plan')} grow>
             <input value={title} onChange={(e) => { setTitle(e.target.value); setDirty(true); }} style={inputStyle} />
@@ -2565,6 +2637,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
             </button>
           );
         })()}
+        </>)}
         <NavegadorDelPlan
           fases={phases}
           kind={kind}
@@ -2763,15 +2836,31 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     );
 
     body = esCompu ? (
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'minmax(300px, 380px) minmax(0, 1fr)', gap: 24,
-        maxWidth: 1240, margin: '0 auto', alignItems: 'start',
-      }}>
-        {/* La hoja se queda quieta mientras el día de al lado se desplaza. */}
-        <aside style={{ position: 'sticky', top: 0, maxHeight: 'calc(100svh - 110px)', overflowY: 'auto', padding: '2px 4px 8px 2px' }}>
-          {hoja}
-        </aside>
-        <section style={{ minWidth: 0 }}>{editorDelDia}</section>
+      <div
+        ref={medirGuia}
+        style={{
+          display: 'grid', gridTemplateColumns: guia.oculta ? 'minmax(0, 1fr)' : `${guia.ancho}px minmax(0, 1fr)`, columnGap: 16,
+          maxWidth: 1776, margin: '0 auto', alignItems: 'start',
+        }}
+      >
+        {/* La guía se queda quieta mientras el día de al lado se desplaza; su borde se arrastra para ensancharla. */}
+        {!guia.oculta && (
+          <div style={{ position: 'sticky', top: 12, height: Math.max(200, altoMain - 24), minWidth: 0 }}>
+            <aside aria-label="Guía del programa" style={{ height: '100%', overflowY: 'auto', opacity: guia.porCerrar ? 0.4 : 1, transition: 'opacity .12s' }}>{hoja}</aside>
+            <DivisorDeLaGuia ancho={guia.ancho} min={280} max={guia.tope} borde={guia.borde} />
+          </div>
+        )}
+        <section style={{ minWidth: 0 }}>
+          <div style={{ maxWidth: 1240, margin: '0 auto' }}>
+            {guia.oculta && p && (
+              <TiraDeDias
+                dias={w?.days || []} elegido={activeWeekday}
+                onElegir={(clave) => { yaNavego.current = true; setActiveWeekday(clave); }}
+              />
+            )}
+            {editorDelDia}
+          </div>
+        </section>
       </div>
     ) : (
       <div style={{ maxWidth: 640, margin: '0 auto' }}>
@@ -2788,8 +2877,41 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
      encerrado en esa capa aunque pida 2400: el botón de tu cuenta (capa 1000,
      arriba a la derecha) quedaba ENCIMA de la X del editor, y tocar la X
      abría el menú de la cuenta. Visto en la prueba del 25 sep 2026. */
+  const botonGuardar = nav.level !== 'start' && nav.level !== 'wizard' && (
+          <button type="button" onClick={onSave} disabled={saving || !dirty}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 18px', borderRadius: 12,
+              border: 'none', cursor: saving || !dirty ? 'default' : 'pointer',
+              background: dirty ? `linear-gradient(135deg, ${T.accent}, ${T.accentDk})` : T.bg3,
+              // Recién guardado, en verde: se lee como "listo", no como botón apagado.
+              color: dirty ? '#fff' : (haGuardado ? KP.mint : T.text3), fontFamily: FONT, fontSize: 14, fontWeight: 800,
+              boxShadow: dirty ? KP.shBtn : 'none', opacity: saving ? 0.75 : 1, flexShrink: 0,
+            }}>
+            {saving ? <Loader2 size={15} className="spin" /> : <Check size={15} />}
+            {!dirty && haGuardado ? 'Guardado' : 'Guardar'}
+          </button>
+  );
+  const barraNueva = esCompu && nav.level === 'phase';
+  const formaActual = FORMAS.find((f) => f.id === estructura) ?? FORMAS[2];
+  const programa = {
+    forma: formaActual, puedeCambiar: !enCatalogo, onCambiar: () => setFormasAbiertas(true),
+    puedeGuardar: !enCatalogo && planTieneContenido(phases), textoGuardar: isWeekly ? 'Guardar rutina' : t('Guardar plan'),
+    onGuardar: () => setModal({ type: 'guardar-plan' }),
+    onUsar: isWeekly ? () => setModal({ type: 'tpl-week' }) : undefined, textoUsar: 'Usar rutina', iconoUsar: FolderOpen, tituloUsar: 'Usar una rutina guardada',
+    onEliminar: (enCatalogo ? !!filaCatalogo : !!(planRow && onDeleted)) ? () => eliminarPrograma() : undefined,
+    textoEliminar: enCatalogo ? 'Eliminar de Mis planes' : 'Eliminar programa',
+  };
+
   return createPortal(
     <div style={{ position: 'fixed', inset: 0, zIndex: 2400, background: T.bg, fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
+      {barraNueva ? (
+        <EditorBarra
+          titulo={title} rotuloTitulo={isWeekly ? 'Título de la rutina' : t('Título del plan')}
+          onTitulo={(v) => { setTitle(v); setDirty(true); }}
+          anchoGuia={guia.ancho} guiaOculta={guia.oculta} onAlternarGuia={guia.alternar}
+          onVolver={goBack} onCerrar={handleClose} programa={programa} derecha={botonGuardar}
+        />
+      ) : (
       <header
         style={{
           background: 'rgba(255,255,255,0.86)', backdropFilter: 'saturate(180%) blur(16px)',
@@ -2807,25 +2929,13 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
             {enCatalogo ? 'Mis planes' : (athlete.full_name || athlete.username)}{dirty ? ' · sin guardar' : (haGuardado ? ' · guardado' : '')}
           </div>
         </div>
-        {nav.level !== 'start' && nav.level !== 'wizard' && (
-          <button type="button" onClick={onSave} disabled={saving || !dirty}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 18px', borderRadius: 12,
-              border: 'none', cursor: saving || !dirty ? 'default' : 'pointer',
-              background: dirty ? `linear-gradient(135deg, ${T.accent}, ${T.accentDk})` : T.bg3,
-              // Recién guardado, en verde: se lee como "listo", no como botón apagado.
-              color: dirty ? '#fff' : (haGuardado ? KP.mint : T.text3), fontFamily: FONT, fontSize: 14, fontWeight: 800,
-              boxShadow: dirty ? KP.shBtn : 'none', opacity: saving ? 0.75 : 1, flexShrink: 0,
-            }}>
-            {saving ? <Loader2 size={15} className="spin" /> : <Check size={15} />}
-            {!dirty && haGuardado ? 'Guardado' : 'Guardar'}
-          </button>
-        )}
+        {botonGuardar}
         <button type="button" onClick={handleClose} aria-label="Cerrar"
           style={{ width: 36, height: 36, borderRadius: 11, border: `1px solid ${T.border}`, cursor: 'pointer', background: T.bg2, color: T.text2, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
           <X size={17} />
         </button>
       </header>
+      )}
 
       {err && (
         <div style={{ maxWidth: 980, margin: '14px auto 0', width: 'calc(100% - 36px)', background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 12, padding: '11px 15px', fontWeight: 700, fontSize: 13.5 }}>
@@ -2833,7 +2943,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         </div>
       )}
 
-      <main ref={mainRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 18px 60px' }}>{body}</main>
+      <main ref={mainRef} style={{ flex: 1, overflowY: 'auto', padding: esCompu && nav.level === 'phase' ? '12px 16px 60px' : '20px 18px 60px' }}>{body}</main>
 
       {/* Modales */}
       {modal?.type === 'week-meta' && curPhase && (
