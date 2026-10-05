@@ -191,7 +191,6 @@ export default function SelectorTipoSesion({ day, onPatch, coachId, puedeCrear =
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') guarda(); }}
-                placeholder="Ej. Vinyasa"
                 maxLength={40}
                 style={{
                   width: '100%', padding: '11px 12px', borderRadius: 10, boxSizing: 'border-box',

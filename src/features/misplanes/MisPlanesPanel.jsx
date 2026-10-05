@@ -415,7 +415,7 @@ export default function MisPlanesPanel() {
       {dialogo?.tipo === 'carpeta-nueva' && (
         <DialogoGuardar
           titulo={enCarpeta ? `Nueva carpeta dentro de «${carpetaActual.nombre}»` : 'Nueva carpeta'}
-          soloNombre textoBoton="Crear" placeholder={enCarpeta ? 'Ej. Pretemporada' : 'Ej. Football americano'}
+          soloNombre textoBoton="Crear"
           onGuardar={async ({ nombre }) => { await crearCarpeta({ nombre, parentId: nivel, userId }); await recargar(); }}
           onCerrar={() => setDialogo(null)}
         />

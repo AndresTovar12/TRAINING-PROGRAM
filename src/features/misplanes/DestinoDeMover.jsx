@@ -95,7 +95,7 @@ export default function DestinoDeMover({ titulo, cosas, carpetas, alElegir, crea
       {nueva && (
         <DialogoGuardar
           titulo={nueva.padre == null ? 'Nueva carpeta' : `Nueva carpeta dentro de «${nueva.nombre}»`}
-          soloNombre textoBoton="Crear" placeholder="Ej. Pretemporada"
+          soloNombre textoBoton="Crear"
           onGuardar={async ({ nombre }) => { await crearCarpeta(nombre, nueva.padre); }}
           onCerrar={() => setNueva(null)}
         />

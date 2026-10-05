@@ -95,4 +95,63 @@ for (const malo of [{}, { pasos: [] }, { pasos: 'x' }, { pasos: [{ tipo: 'trabaj
   cierto(describirDia(fase, plan.weekData[0], 0, { completed: true }).resultados_de_formatos === undefined, 'sin resultados no aparece la llave')
 }
 
+/* ---- Reps y carga distintas en cada vuelta: se escriben, se leen y sobreviven a reescribir la sesión ---- */
+{
+  const piramide = [{ cantidad: 10, intensidad: '60%' }, { cantidad: '8', intensidad: '70%' }, { cantidad: '6 reps', intensidad: '80%' }, { cantidad: 4, intensidad: '85%' }]
+  const { dia } = diaDesdeEntrada('Lun', { ejercicios: [{ nombre: 'Back Squat', series: 4, por_vuelta: piramide }, { nombre: 'Remo', series: 4, cantidad: 8 }] }, [])
+  const [squat, remo] = dia.exercises as any[]
+  igual(squat.porVuelta, [{ reps: '10', intensity: '60%' }, { reps: '8', intensity: '70%' }, { reps: '6', intensity: '80%' }, { reps: '4', intensity: '85%' }], 'una entrada por vuelta, con la cantidad limpia')
+  igual([squat.reps, squat.intensity], ['10', '60%'], 'los campos de siempre llevan la primera vuelta')
+  cierto(!('porVuelta' in remo), 'un ejercicio normal no trae vueltas')
+  const visto = describirEjercicio(squat) as any
+  igual(visto.por_vuelta, [
+    { vuelta: 1, cantidad: '10 reps', intensidad: '60%' }, { vuelta: 2, cantidad: '8 reps', intensidad: '70%' },
+    { vuelta: 3, cantidad: '6 reps', intensidad: '80%' }, { vuelta: 4, cantidad: '4 reps', intensidad: '85%' },
+  ], 'la IA ve cada vuelta')
+  // Ida y vuelta: lo que lee es lo que manda de regreso.
+  const devuelto = (diaDesdeEntrada('Lun', { ejercicios: [{ nombre: visto.nombre, series: visto.series, por_vuelta: visto.por_vuelta }] }, []).dia.exercises as any[])[0]
+  igual(devuelto.porVuelta, squat.porVuelta, 'las vueltas sobreviven a leer y reescribir')
+  // Todas iguales = un ejercicio normal.
+  const plano = (diaDesdeEntrada('Lun', { ejercicios: [{ nombre: 'X', series: 3, por_vuelta: [{ cantidad: 5, intensidad: 'RPE 8' }, { cantidad: 5, intensidad: 'RPE 8' }, { cantidad: 5, intensidad: 'RPE 8' }] }] }, []).dia.exercises as any[])[0]
+  cierto(!('porVuelta' in plano), 'vueltas iguales no dejan lista')
+  igual([plano.reps, plano.intensity], ['5', 'RPE 8'], 'y queda como un ejercicio normal')
+  // En un grupo, las vueltas son las del grupo (las series del primero).
+  const grupo = diaDesdeEntrada('Lun', { ejercicios: [
+    { nombre: 'A', series: 3, grupo: 1 },
+    { nombre: 'B', series: 9, grupo: 1, por_vuelta: [{ cantidad: 12 }, { cantidad: 10 }, { cantidad: 8 }] },
+  ] }, []).dia.exercises as any[]
+  igual(grupo[1].porVuelta.map((f: any) => f.reps), ['12', '10', '8'], 'tres vueltas para un grupo que se repite tres veces')
+  // Lo que no cuadra se dice, no se guarda a medias.
+  for (const [caso, ejercicio] of [
+    ['menos vueltas que series', { nombre: 'X', series: 4, por_vuelta: [{ cantidad: 5 }, { cantidad: 3 }] }],
+    ['una sola serie', { nombre: 'X', series: 1, por_vuelta: [{ cantidad: 5 }] }],
+    ['junto con un formato de reloj', { nombre: 'X', series: 2, por_vuelta: [{ cantidad: 5 }, { cantidad: 3 }], formato: tabata }],
+  ] as [string, any][]) {
+    let aviso = false
+    try { diaDesdeEntrada('Lun', { ejercicios: [ejercicio] }, []) } catch (e) { aviso = e instanceof Aviso }
+    cierto(aviso, `por_vuelta con ${caso} debe dar un aviso claro`)
+  }
+}
+
+/* ---- «Por lado» ---- */
+{
+  const { dia } = diaDesdeEntrada('Lun', { ejercicios: [{ nombre: 'Zancada', cantidad: 10, por_lado: true }, { nombre: 'Viejo', cantidad: '8/lado' }, { nombre: 'Normal', cantidad: 8 }] }, [])
+  const [nuevo, viejo, normal] = (dia.exercises as any[]).map((e) => describirEjercicio(e) as any)
+  igual([nuevo.cantidad, nuevo.por_lado], ['10 reps por lado', true], 'la casilla marcada')
+  igual([viejo.cantidad, viejo.por_lado], ['8 reps por lado', true], 'el «/lado» escrito a la antigua se entiende igual')
+  igual([normal.cantidad, normal.por_lado], ['8 reps', undefined], 'sin lado, como siempre')
+  // La IA devuelve la cantidad tal como la leyó («10 reps por lado»): sigue siendo 10 por lado.
+  const eco = (diaDesdeEntrada('Lun', { ejercicios: [{ nombre: 'Zancada', cantidad: nuevo.cantidad }] }, []).dia.exercises as any[])[0]
+  igual(describirEjercicio(eco).cantidad, '10 reps por lado', 'ida y vuelta')
+}
+
+/* ---- Lo anotado vuelta por vuelta ---- */
+{
+  const { dia } = diaDesdeEntrada('Lun', { ejercicios: [{ nombre: 'Back Squat', series: 2, por_vuelta: [{ cantidad: 5, intensidad: '70%' }, { cantidad: 3, intensidad: '80%' }] }] }, [])
+  const semana = { num: 1, days: [dia] }
+  const registro = { exercises: { '0': { weight: '100', repsHechas: '3', vueltas: { '1': { weight: '100', repsHechas: '3' }, '0': { weight: '90', repsHechas: '5' } } } } }
+  const out = describirDia({ name: 'F1', weekData: [semana] }, semana, 0, registro) as any
+  igual(out.ejercicios[0].anotado, { peso_kg: 100, hecho: '3', por_vuelta: [{ vuelta: 1, peso_kg: 90, hecho: '5' }, { vuelta: 2, peso_kg: 100, hecho: '3' }] }, 'cada vuelta anotada, en orden, y el resumen arriba')
+}
+
 console.log('prueba-mcp-formatos: todo bien')

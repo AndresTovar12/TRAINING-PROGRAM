@@ -365,7 +365,9 @@ export function ponFormato(miembros, f) {
       const { formato: _quitado, ...resto } = m;
       return resto;
     }
-    return { ...m, formato: JSON.parse(JSON.stringify(g)), sets: String(g.vueltas) };
+    // Con reloj, las vueltas son del formato: las reps y cargas distintas por vuelta del ejercicio ya no aplican.
+    const { porVuelta: _sinVueltas, ...resto } = m;
+    return { ...resto, formato: JSON.parse(JSON.stringify(g)), sets: String(g.vueltas) };
   });
 }
 

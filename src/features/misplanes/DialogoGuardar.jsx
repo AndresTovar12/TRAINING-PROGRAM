@@ -35,7 +35,7 @@ const recordarUltimaCarpeta = (userId, carpetaId) => {
 
 export default function DialogoGuardar({
   titulo = 'Guardar en Mis planes', tipo, nombreInicial = '', descripcionInicial = '', carpetaInicial = null,
-  interruptores = [], textoBoton = 'Guardar', soloNombre = false, sinCarpeta = false, placeholder = 'Ej. Pretemporada football, 8 semanas',
+  interruptores = [], textoBoton = 'Guardar', soloNombre = false, sinCarpeta = false,
   recordarCarpeta = false, onGuardar, onCerrar,
 }) {
   const { cargando, carpetas, recargar, userId } = useMisPlanes();
@@ -102,7 +102,7 @@ export default function DialogoGuardar({
         <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           <span style={etiquetaChica}>Nombre</span>
           <input
-            autoFocus value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder={placeholder}
+            autoFocus value={nombre} onChange={(e) => setNombre(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') guardar(); }}
             style={campo}
           />
@@ -114,7 +114,6 @@ export default function DialogoGuardar({
               <span style={etiquetaChica}>Descripción (opcional)</span>
               <textarea
                 value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2}
-                placeholder="Para ti: a quién va, cuántos días, en qué momento del año…"
                 style={{ ...campo, resize: 'vertical', lineHeight: 1.45 }}
               />
             </label>

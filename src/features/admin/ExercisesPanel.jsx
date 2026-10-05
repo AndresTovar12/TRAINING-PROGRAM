@@ -689,7 +689,7 @@ function ExerciseEditor({
               bloques de JSX es la forma de equivocarse. */}
           {(() => {
             const campoNombre = (
-              <Input key="nombre" label="Nombre" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Ej. Back Squat" />
+              <Input key="nombre" label="Nombre" value={form.name} onChange={(e) => set('name', e.target.value)} />
             );
             /* PRINCIPAL Y SECUNDARIAS. Andrés, 28 sep 2026: un "jumping lunge"
                es principalmente Potencia, pero también Pliometría; saltar la
@@ -730,7 +730,7 @@ function ExerciseEditor({
               </div>
             );
             const campoEquipo = (
-              <Input key="equipo" label="Equipo" value={form.equipment} onChange={(e) => set('equipment', e.target.value)} placeholder="Barra, Mancuerna, Peso corporal…" />
+              <Input key="equipo" label="Equipo" value={form.equipment} onChange={(e) => set('equipment', e.target.value)} />
             );
             /* LOS SECUNDARIOS, POR GRUPO. En el repertorio ya venían músculos
                secundarios finos ("Isquios", "Core"…) que ninguna pantalla
@@ -971,7 +971,6 @@ function ExerciseEditor({
             <DialogoNombre
               titulo="Nuevo grupo muscular"
               detalle="Sale también en el filtro de grupos del repertorio."
-              placeholder="Ej. Antebrazo, Aductores, Cuello…"
               onCancelar={() => setCreandoGrupo(false)}
               onCrear={async (nombre) => {
                 const fila = await crearGrupoPropio({ nombre, grupos, duenoId });
@@ -1543,7 +1542,6 @@ export default function ExercisesPanel({ viendoComo }) {
         <DialogoNombre
           titulo="Nueva categoría"
           detalle="Después, al editar un ejercicio, la eliges como principal o secundaria."
-          placeholder="Ej. Funcional, Velocidad, Movilidad…"
           onCancelar={() => setCreando(null)}
           onCrear={async (nombre) => {
             const fila = await crearCategoriaPropia({ nombre, categorias: categoriasVisibles, duenoId: dueño, masterId });
@@ -1562,7 +1560,6 @@ export default function ExercisesPanel({ viendoComo }) {
         <DialogoNombre
           titulo="Nuevo grupo muscular"
           detalle="Después, al editar un ejercicio, lo eliges como principal o secundario."
-          placeholder="Ej. Antebrazo, Aductores, Cuello…"
           onCancelar={() => setCreando(null)}
           onCrear={async (nombre) => {
             const fila = await crearGrupoPropio({ nombre, grupos, duenoId: dueño });

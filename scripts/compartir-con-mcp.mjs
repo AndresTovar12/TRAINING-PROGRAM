@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
-const ARCHIVOS = ['training-utils.js', 'medidas.js', 'theme.js', 'unidades.js', 'plural.js', 'palabras.js', 'formatos.js'];
+const ARCHIVOS = ['training-utils.js', 'medidas.js', 'theme.js', 'unidades.js', 'plural.js', 'palabras.js', 'formatos.js', 'porVuelta.js'];
 const destino = join(raiz, 'supabase/functions/mcp/app');
 const soloRevisar = process.argv.includes('--revisar');
 

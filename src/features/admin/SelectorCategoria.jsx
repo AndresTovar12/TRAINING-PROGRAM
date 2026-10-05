@@ -148,7 +148,7 @@ export default function SelectorCategoria({
             value={nombre}
             onChange={(e) => { setNombre(e.target.value); setErr(''); }}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); crear(); } }}
-            placeholder="Ej. Velocidad, Movilidad, Drills de cancha…"
+            placeholder="Nombre de la categoría"
             autoFocus
             maxLength={40}
             // 16 px: por debajo, el iPhone acerca la pantalla al escribir.

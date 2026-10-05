@@ -7,7 +7,8 @@ import {
   dondeVa, ejerciciosDelBloque, esDescanso, isLoadedExercise, nombreDeSesion, sessionIdFor,
   enOrdenDeSemana,
 } from './app/training-utils.js'
-import { textoMeta, MEDIDAS } from './app/medidas.js'
+import { textoMeta, leeCantidad, MEDIDAS } from './app/medidas.js'
+import { vueltasDe, ejercicioDeVuelta, parcheDeVueltas, rondasDe } from './app/porVuelta.js'
 import { limpiaFormato, resumenDeFormato, textoDeResultado } from './app/formatos.js'
 import { CAT_COLORS, tipoDeSesion } from './app/theme.js'
 
@@ -291,7 +292,19 @@ export function describirEjercicio(ex: any) {
   if (ex.sets) d.series = ex.sets
   const meta = textoMeta(ex)
   if (meta) d.cantidad = meta
+  if (leeCantidad(ex).porLado) d.por_lado = true
   if (ex.intensity) d.intensidad = ex.intensity
+  /* Reps y carga distintas en cada vuelta. Igual que el formato: se enseña entero porque `editar_dia`
+     reemplaza la sesión, y lo que la IA no ve, lo borra al reescribirla. Con esto, "cantidad" e
+     "intensidad" de arriba son solo las de la primera vuelta. */
+  const vueltas = vueltasDe(ex)
+  if (vueltas) {
+    d.por_vuelta = vueltas.map((f: any, i: number) => ({
+      vuelta: i + 1,
+      cantidad: textoMeta({ ...ejercicioDeVuelta(ex, f), porLado: false }) ?? '',
+      intensidad: f.intensity,
+    }))
+  }
   if (ex.descanso) d.descanso = ex.descanso
   if (ex.notes) d.notas = ex.notes
   if (ex.cue) d.indicaciones = ex.cue
@@ -316,6 +329,16 @@ export function describirDia(fase: any, semana: any, diaIdx: number, registro?: 
         ...(anotado.weight ? { peso_kg: Number(anotado.weight) } : {}),
         ...(anotado.repsHechas ? { hecho: anotado.repsHechas } : {}),
       }
+      // Si lo anotó vuelta por vuelta, cada una; arriba queda el resumen (la más pesada).
+      const porVuelta = Object.entries(anotado.vueltas ?? {})
+        .filter(([, v]: [string, any]) => v && (v.weight || v.repsHechas))
+        .sort(([a], [b]) => Number(a) - Number(b))
+        .map(([i, v]: [string, any]) => ({
+          vuelta: Number(i) + 1,
+          ...(v.weight ? { peso_kg: Number(v.weight) } : {}),
+          ...(v.repsHechas ? { hecho: v.repsHechas } : {}),
+        }))
+      if (porVuelta.length) (d.anotado as any).por_vuelta = porVuelta
     }
     return d
   })
@@ -412,6 +435,8 @@ export interface EjercicioEntrada {
   lleva_peso?: boolean
   grupo?: number
   formato?: unknown
+  por_lado?: boolean
+  por_vuelta?: { cantidad?: number | string; intensidad?: string }[]
 }
 
 export interface SesionEntrada {
@@ -465,6 +490,7 @@ export function diaDesdeEntrada(
   const grupos = new Map<number, string>()
   // El formato de cada grupo: el del primer ejercicio que lo traiga, y vale para todos los del grupo.
   const formatosDeGrupo = new Map<number, any>()
+  const vueltasPedidas = new Map<any, { cantidad?: number | string; intensidad?: string }[]>()
   const exercises = (sesion.ejercicios ?? []).map((e) => {
     if (e.nota && !e.nombre) return { isNote: true, text: e.nota }
     if (!e.nombre) throw new Aviso('Cada ejercicio necesita "nombre" (o "nota" si es una nota).')
@@ -487,6 +513,9 @@ export function diaDesdeEntrada(
     if (e.descanso) ex.descanso = e.descanso
     if (e.indicaciones) ex.cue = e.indicaciones
     if (e.lleva_peso !== undefined) ex.carga = e.lleva_peso
+    if (e.por_lado === true) ex.porLado = true
+    // Se colocan al final, cuando ya se sabe cuántas veces se repite el grupo.
+    if (Array.isArray(e.por_vuelta) && e.por_vuelta.length) vueltasPedidas.set(ex, e.por_vuelta)
     if (e.grupo != null) {
       // En una superserie todos dan las mismas vueltas: las del primero.
       if (!grupos.has(e.grupo)) grupos.set(e.grupo, String(ex.sets))
@@ -511,6 +540,22 @@ export function diaDesdeEntrada(
     if (!formato) return
     ex.formato = JSON.parse(JSON.stringify(formato))
     ex.sets = String(formato.vueltas)
+  })
+  /* Reps y carga distintas por vuelta: una entrada por cada vez que se repite el ejercicio (sus "series").
+     Se revisa aquí y no arriba porque en un grupo las series son las del primero. */
+  vueltasPedidas.forEach((pedidas, ex: any) => {
+    if (ex.formato) throw new Aviso(`"${ex.name}": "por_vuelta" no se combina con un "formato" de reloj. Usa uno de los dos.`)
+    const rondas = rondasDe(ex.sets)
+    if (!rondas || pedidas.length !== rondas) {
+      throw new Aviso(`"${ex.name}": "por_vuelta" trae ${pedidas.length} y el ejercicio se repite ${ex.sets} veces ("series"). Manda una entrada por cada vez (mínimo 2).`)
+    }
+    const filas = pedidas.map((v) => {
+      const texto = String(v?.cantidad ?? '').trim()
+      const leida = leeCantidad({ reps: texto, unidad: ex.unidad })
+      return { reps: leida.libre ? texto : leida.cantidad, intensity: String(v?.intensidad ?? '').trim() }
+    })
+    Object.assign(ex, parcheDeVueltas(filas))
+    if (ex.porVuelta === undefined) delete ex.porVuelta
   })
   const tipo = tipoDesdeTexto(sesion.tipo)
   const dia = {

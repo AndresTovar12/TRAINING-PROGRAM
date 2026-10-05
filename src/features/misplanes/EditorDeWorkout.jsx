@@ -156,7 +156,7 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
             <span style={etiquetaChica}>Nombre del workout</span>
             <input
               value={titulo} onChange={(e) => { setTitulo(e.target.value); setDirty(true); }}
-              placeholder="Ej. Pierna — fuerza básica" style={campo}
+              style={campo}
             />
           </label>
 

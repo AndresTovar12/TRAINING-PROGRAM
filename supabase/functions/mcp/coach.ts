@@ -59,6 +59,11 @@ const EJERCICIO = z.object({
   indicaciones: z.string().optional().describe('Claves técnicas para el atleta.'),
   lleva_peso: z.boolean().optional().describe('Si el atleta anota peso aquí. Si no se dice, la app lo deduce del nombre.'),
   grupo: z.number().int().optional().describe('Ejercicios SEGUIDOS con el mismo número van en superserie o circuito.'),
+  por_lado: z.boolean().optional().describe('true si la cantidad es por cada lado (cada pierna, cada brazo). La app lo enseña como "10 reps por lado".'),
+  por_vuelta: z.array(z.object({
+    cantidad: z.union([z.number(), z.string()]).optional().describe('Cuánto en ESA vuelta: 10, "8-10"… En la misma unidad del ejercicio.'),
+    intensidad: z.string().optional().describe('La carga de ESA vuelta: "60%", "RPE 8", "RIR 2", "20 kg".'),
+  })).optional().describe('Solo si las reps o la carga CAMBIAN de una vuelta a otra (pirámides, series de aproximación): una entrada por cada vez que se repite ("series"), en orden. Si todas las vueltas son iguales, no lo mandes. Si el día ya lo traía (ver_plan_de_atleta), mándalo igual o se pierde. No se combina con "formato".'),
   formato: FORMATO.optional().describe('Formato con reloj de ESTE grupo (o del ejercicio si va solo): AMRAP, EMOM, Tabata, intervalos, fartlek… Basta ponerlo en UN ejercicio del grupo y vale para todos. Sustituye a "series". Si el día ya lo traía (ver_plan_de_atleta), mándalo igual o se pierde.'),
 })
 

@@ -24,8 +24,10 @@ import {
 } from '@/lib/training-utils';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
 import { T, FONT, KP } from '@/lib/theme';
-import CampoCantidad from '@/components/CampoCantidad';
-import CampoCarga from '@/components/CampoCarga';
+import { CeldaDeReps, CeldaDeCarga, DebajoDeRepsYCarga } from '@/components/RepsYCarga';
+import CampoDescanso from '@/components/CampoDescanso';
+import { useRepsYCarga } from '@/lib/useRepsYCarga';
+import { normalizaVueltas, rondasDe } from '@/lib/porVuelta';
 import { ligaExterna } from '@/lib/videos';
 import RepertoirePicker from '@/features/admin/RepertoirePicker';
 import MediaUpload from '@/features/admin/MediaUpload';
@@ -180,7 +182,11 @@ const serializeBlocks = (blocks) => {
     if (b.type === 'note') { out.push(b.ex); return; }
     n += 1;
     // Con formato, las «series» pasan a ser sus vueltas; sin él, se quita de todos los ejercicios.
-    const miembros = ponFormato(b.members.map((m) => ({ ...m, sets: String(b.rounds ?? m.sets ?? '3') })), b.formato ?? null);
+    // Y las vueltas distintas de cada ejercicio se recortan o completan a las veces que se repite el Set.
+    const miembros = ponFormato(
+      b.members.map((m) => normalizaVueltas({ ...m, sets: String(b.rounds ?? m.sets ?? '3') })),
+      b.formato ?? null,
+    );
     miembros.forEach((m) => {
       const e = { ...m };
       if (b.members.length > 1) e.set = n; else delete e.set;
@@ -238,13 +244,13 @@ function WeekMetaModal({ week, numero = week.num, canDelete, onPatch, onDuplicat
             </div>
           </div>
           <Field label="Título de la semana (opcional)">
-            <input value={weekSubtitle(week)} onChange={(e) => onPatch({ label: e.target.value })} placeholder="Ej. Adaptación, Acumulación, Deload…" style={inputStyle} />
+            <input value={weekSubtitle(week)} onChange={(e) => onPatch({ label: e.target.value })} style={inputStyle} />
             <span style={{ fontSize: 11.5, color: T.text3, marginTop: 4 }}>
               Se mostrará como <b style={{ color: T.text2 }}>«{weekName({ ...week, num: numero })}»</b>.
             </span>
           </Field>
           <Field label="Carga de la semana (opcional)">
-            <input value={week.load || ''} onChange={(e) => onPatch({ load: e.target.value })} placeholder="Ej. 4×8 al 70% · RIR 3" style={inputStyle} />
+            <input value={week.load || ''} onChange={(e) => onPatch({ load: e.target.value })} style={inputStyle} />
           </Field>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
             <Pill icon={Copy} onClick={onDuplicate}>Duplicar semana</Pill>
@@ -282,21 +288,21 @@ const delRepertorio = (ex, repertoire) => {
 /* Card de ejercicio dentro de un set                                   */
 /* ------------------------------------------------------------------ */
 
-function ExerciseCard({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove, onMove, canLeft, canRight, conSeries = false }) {
+function ExerciseCard({
+  ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove, onMove, canLeft, canRight, conSeries = false,
+  rondas = null, soloLectura = false,
+}) {
   const rep = delRepertorio(ex, repertoire);
+  // Reps, carga, «Por lado» y «Por vuelta»: ver `useRepsYCarga`. En los días de dos sesiones no hay vueltas del Set.
+  const rc = useRepsYCarga({ ex, onPatch, rondas: conSeries ? null : rondas, abiertoDeEntrada: soloLectura });
+  const estiloCampo = { ...inputStyle, padding: '8px 10px', fontSize: 13 };
   /* El descanso lo escribe el COACH. Antes la app lo adivinaba leyendo el
      nombre del ejercicio y se lo enseñaba al atleta como si fuera una
      indicación suya. Si aquí se deja vacío, al atleta no le aparece nada:
      mejor callar que inventarle un dato de entrenamiento.
      Con «Series» (días de dos sesiones) va a media columna, junto a la carga;
      si no, en su propia línea. */
-  const campoDescanso = (
-    <Field label="Descanso">
-      <input value={ex.descanso || ''} onChange={(e) => onPatch({ descanso: e.target.value })}
-        placeholder={conSeries ? '2 min' : '2 min / 90 s — opcional'}
-        style={{ ...inputStyle, padding: '8px 10px', fontSize: 13, marginTop: conSeries ? 0 : 2 }} />
-    </Field>
-  );
+  const campoDescanso = <CampoDescanso ex={ex} onPatch={onPatch} estiloInput={estiloCampo} />;
   return (
     <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden', minWidth: 0 }}>
       <div style={{ position: 'relative', height: 110, width: '100%', background: '#0E1015' }}>
@@ -330,35 +336,31 @@ function ExerciseCard({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove
           {/* Ver `ExerciseRow`: solo en los días de dos sesiones. */}
           {conSeries && (
             <Field label="Series">
-              <input value={ex.sets ?? ''} onChange={(e) => onPatch({ sets: e.target.value })}
-                placeholder="3" style={{ ...inputStyle, padding: '8px 10px', fontSize: 13 }} />
+              <input value={ex.sets ?? ''} onChange={(e) => onPatch({ sets: e.target.value })} style={estiloCampo} />
             </Field>
           )}
-          {/* El rótulo de este campo es la lista de unidades: reps, segundos,
-              metros, yardas… Ver `CampoCantidad`. */}
-          <CampoCantidad
-            ex={ex}
-            onPatch={onPatch}
-            estiloInput={{ ...inputStyle, padding: '8px 10px', fontSize: 13 }}
-          />
-          {/* Igual que las unidades de arriba: el rótulo es la lista (% 1RM, RPE, RIR, kilos). Ver `CampoCarga`. */}
-          <CampoCarga
-            ex={ex}
-            onPatch={onPatch}
-            estiloInput={{ ...inputStyle, padding: '8px 10px', fontSize: 13 }}
-          />
+          {/* El rótulo de cada campo es su lista: reps, segundos, metros… y % 1RM, RPE, RIR, kilos. Ver `RepsYCarga`. */}
+          <CeldaDeReps rc={rc} estiloInput={estiloCampo} />
+          <CeldaDeCarga rc={rc} estiloInput={estiloCampo} />
           {conSeries && campoDescanso}
+          <div style={{ gridColumn: '1 / -1' }}>
+            <DebajoDeRepsYCarga rc={rc} estiloInput={estiloCampo} />
+          </div>
         </div>
-        {!conSeries && campoDescanso}
-        <Field label="Descripción">
-          <input value={ex.notes || ''} onChange={(e) => onPatch({ notes: e.target.value })}
-            placeholder="Ej. 8 repeticiones cada pierna…" style={{ ...inputStyle, padding: '8px 10px', fontSize: 13, marginTop: 2 }} />
-        </Field>
-        <input
-          value={ex.cue || ''} onChange={(e) => onPatch({ cue: e.target.value })}
-          placeholder="Cue técnico (opcional)…"
-          style={{ ...inputStyle, marginTop: 8, padding: '7px 10px', fontSize: 12, color: T.text2 }}
-        />
+        {/* LAS CASILLAS VACÍAS SE QUEDAN VACÍAS. Andrés, 5 oct 2026: «dentro de las casillas, cuando están
+            vacías, normalmente pones en gris un ejemplo; quita eso». El rótulo ya dice qué va en cada una;
+            por eso el cue, que solo tenía su texto gris, ahora lleva rótulo. */}
+        {!conSeries && <div style={{ marginTop: 8 }}>{campoDescanso}</div>}
+        <div style={{ marginTop: 8 }}>
+          <Field label="Descripción">
+            <input value={ex.notes || ''} onChange={(e) => onPatch({ notes: e.target.value })} style={estiloCampo} />
+          </Field>
+        </div>
+        <div style={{ marginTop: 8 }}>
+          <Field label="Cue técnico">
+            <input value={ex.cue || ''} onChange={(e) => onPatch({ cue: e.target.value })} style={{ ...estiloCampo, color: T.text2 }} />
+          </Field>
+        </div>
         <div style={{ marginTop: 9, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           <BotonCarga ex={ex} onPatch={onPatch} />
           <BotonVideoAtleta idEjercicio={rep?.id} atleta={atleta} onAbrir={() => onVideoAtleta?.({ ...ex, exercise_id: rep.id })} />
@@ -457,6 +459,9 @@ function BotonCarga({ ex, onPatch }) {
 const inputFila = {
   ...inputStyle, padding: '7px 9px', fontSize: 13, borderRadius: 9, background: T.bg,
 };
+// Lo que miden las casillas de reps y de carga en la fila de la compu. Las vueltas de debajo usan los mismos.
+const ANCHO_REPS = 96;
+const ANCHO_CARGA = 100;
 
 /** El rótulo de un campo de la tarjeta. Mismo tamaño y color que tenían los
  *  encabezados de la tabla, para que no cambie el aire de la pantalla. */
@@ -488,8 +493,12 @@ function RotuloCampo({ children }) {
  * Cuesta alto: la barra se repite por ejercicio. A cambio, cada uno se lee
  * completo sin tener que subir la vista hasta los encabezados.
  */
-function ExerciseRow({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove, onMove, canUp, canDown, conSeries = false }) {
+function ExerciseRow({
+  ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove, onMove, canUp, canDown, conSeries = false,
+  rondas = null, soloLectura = false,
+}) {
   const rep = delRepertorio(ex, repertoire);
+  const rc = useRepsYCarga({ ex, onPatch, rondas: conSeries ? null : rondas, abiertoDeEntrada: soloLectura });
   /* EN EL TELÉFONO, LA FILA SE ACOMODA A DOS COLUMNAS. Andrés, 28 sep 2026:
      eligió "lista" también desde el teléfono. Con los anchos de la compu,
      "Descripción" y "Cue técnico" quedaban de ~90 px, demasiado para escribir.
@@ -533,8 +542,9 @@ function ExerciseRow({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove,
       </div>
 
       {/* Medidas para que todo quepa en UNA línea desde una laptop de 1180 px
-          (la fila mide 656), también con «Series»: el mínimo es 644. Si la
-          pantalla es aún más chica, se parte. */}
+          (la fila mide 656), también con «Series»: el mínimo es 642. Si la
+          pantalla es aún más chica, se parte. Las casillas vacías van vacías,
+          sin ejemplo en gris (Andrés, 5 oct 2026). */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         {/* Solo en los días de dos sesiones, donde cada ejercicio trae sus
             propias series y en texto libre ("—", "3-4"). En una sesión normal
@@ -542,38 +552,34 @@ function ExerciseRow({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove,
         {conSeries && (
           <div style={{ width: 52 }}>
             <RotuloCampo>Series</RotuloCampo>
-            <input value={ex.sets ?? ''} onChange={(e) => onPatch({ sets: e.target.value })}
-              placeholder="3" style={inputFila} />
+            <input value={ex.sets ?? ''} onChange={(e) => onPatch({ sets: e.target.value })} style={inputFila} />
           </div>
         )}
-        {/* El rótulo de la cantidad es la lista de unidades. Ver `CampoCantidad`. */}
-        {angosta ? (
-          <div style={fluido(0)}>
-            <CampoCantidad ex={ex} onPatch={onPatch} compacto estiloInput={inputFila} />
-          </div>
-        ) : (
-          <CampoCantidad ex={ex} onPatch={onPatch} compacto estiloInput={inputFila} ancho={96} />
-        )}
-
-        <div style={fluido(0) ?? { width: 100 }}>
-          <CampoCarga ex={ex} onPatch={onPatch} compacto estiloInput={inputFila} />
+        {/* El rótulo de cada campo es su lista: unidades y tipo de carga. Ver `RepsYCarga`. */}
+        <div style={fluido(0) ?? { width: ANCHO_REPS }}>
+          <CeldaDeReps rc={rc} compacto estiloInput={inputFila} />
         </div>
-        <div style={fluido(1) ?? { width: 84 }}>
-          <RotuloCampo>Descanso</RotuloCampo>
-          <input value={ex.descanso || ''} onChange={(e) => onPatch({ descanso: e.target.value })}
-            placeholder="2 min" style={inputFila} />
+        <div style={fluido(0) ?? { width: ANCHO_CARGA }}>
+          <CeldaDeCarga rc={rc} compacto estiloInput={inputFila} />
+        </div>
+        {/* En el teléfono, las vueltas y «Por lado» van pegadas a sus dos casillas, antes del descanso. */}
+        {angosta && (
+          <div style={completo(0)}>
+            <DebajoDeRepsYCarga rc={rc} compacto estiloInput={inputFila} />
+          </div>
+        )}
+        <div style={fluido(1) ?? { width: 112 }}>
+          <CampoDescanso ex={ex} onPatch={onPatch} compacto estiloInput={inputFila} />
         </div>
         {/* La base decide si se parte la línea (no el mínimo): va chica, y el
             campo crece para llenar lo que sobre. */}
-        <div style={completo(3) ?? { flex: '1 1 90px', minWidth: 90 }}>
+        <div style={completo(3) ?? { flex: '1 1 76px', minWidth: 76 }}>
           <RotuloCampo>Descripción</RotuloCampo>
-          <input value={ex.notes || ''} onChange={(e) => onPatch({ notes: e.target.value })}
-            placeholder="Ej. 8 cada pierna…" style={inputFila} />
+          <input value={ex.notes || ''} onChange={(e) => onPatch({ notes: e.target.value })} style={inputFila} />
         </div>
-        <div style={completo(4) ?? { flex: '1 1 80px', minWidth: 80 }}>
+        <div style={completo(4) ?? { flex: '1 1 66px', minWidth: 66 }}>
           <RotuloCampo>Cue técnico</RotuloCampo>
-          <input value={ex.cue || ''} onChange={(e) => onPatch({ cue: e.target.value })}
-            placeholder="Opcional…" style={{ ...inputFila, color: T.text2 }} />
+          <input value={ex.cue || ''} onChange={(e) => onPatch({ cue: e.target.value })} style={{ ...inputFila, color: T.text2 }} />
         </div>
         {/* PESO Y VIDEO, uno encima del otro y sin rótulo: las pastillas se
             leen solas ("Con peso", "Su video"). Lado a lado y con rótulo no
@@ -589,6 +595,13 @@ function ExerciseRow({ ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove,
           )}
         </div>
       </div>
+      {/* En la compu, las vueltas 2, 3, 4… caen justo debajo de las casillas de reps y carga (mismos anchos),
+          y la fila de arriba no se mueve: los demás campos siguen alineados con la primera vuelta. */}
+      {!angosta && (
+        <div style={{ marginLeft: conSeries ? 60 : 0 }}>
+          <DebajoDeRepsYCarga rc={rc} compacto estiloInput={inputFila} columnas={`${ANCHO_REPS}px ${ANCHO_CARGA}px`} />
+        </div>
+      )}
     </div>
   );
 }
@@ -671,7 +684,6 @@ function CrearEjercicioRapido({ categorias, onCancelar, onCreado, duenoId, maste
             <input
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
-              placeholder="Ej. Salida en 3 puntos"
               autoFocus
               style={{ ...inputStyle, fontSize: 16, fontWeight: 700 }}
             />
@@ -1209,6 +1221,7 @@ function EditorSesionesDelDia({
                           ex: e,
                           repertoire,
                           atleta,
+                          soloLectura,
                           conSeries: true,
                           onVideoAtleta: setMediaDe,
                           onPatch: (parche) => parcheaFila(bi, fi, parche),
@@ -1248,7 +1261,7 @@ function EditorSesionesDelDia({
           </div>
 
           <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 600, lineHeight: 1.5 }}>
-            Aquí nada se corrige solo: «—» en las series y reps como «30 yd» o «5/lado»
+            Aquí nada se corrige solo: «—» en las series y reps como «30 yd» o «3-5»
             se guardan tal cual los escribas.
           </div>
         </>
@@ -1407,6 +1420,9 @@ function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjer
                   ex: m,
                   repertoire,
                   atleta,
+                  soloLectura,
+                  // «Por vuelta» solo tiene sentido si el Set se repite, y sin reloj (ahí las vueltas son del formato).
+                  rondas: b.formato ? null : rondasDe(b.rounds),
                   onVideoAtleta: setMediaDe,
                   onPatch: (patch) => writeBlocks((bs) => bs.map((x, k) => (k === bi
                     ? { ...x, members: x.members.map((mm, kk) => (kk === mi ? { ...mm, ...patch } : mm)) }
@@ -1750,9 +1766,7 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
           <input
             value={day.name || ''}
             onChange={(e) => onPatch({ name: e.target.value })}
-            placeholder={dual && day.blocks?.length
-              ? textoDeSesiones(sesionesDelTitulo({ blocks: day.blocks }))
-              : 'Ej. Tren inferior — fuerza'}
+            placeholder={dual && day.blocks?.length ? textoDeSesiones(sesionesDelTitulo({ blocks: day.blocks })) : undefined}
             style={inputStyle}
           />
         </Field>
@@ -2607,10 +2621,10 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <Field label="Nombre de la fase" grow>
-            <input value={p.name || ''} onChange={(e) => patchPhase(nav.pi, { name: e.target.value })} placeholder="Ej. Hipertrofia, Bloque de fuerza…" style={inputStyle} />
+            <input value={p.name || ''} onChange={(e) => patchPhase(nav.pi, { name: e.target.value })} style={inputStyle} />
           </Field>
           <Field label="Subtítulo (opcional)" grow>
-            <input value={p.fullName || ''} onChange={(e) => patchPhase(nav.pi, { fullName: e.target.value })} placeholder="Ej. Recuperación y Evaluación" style={inputStyle} />
+            <input value={p.fullName || ''} onChange={(e) => patchPhase(nav.pi, { fullName: e.target.value })} style={inputStyle} />
           </Field>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -2623,7 +2637,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
           </div>
         </div>
         <Field label="Enfoque en una línea (opcional)">
-          <input value={p.focus || ''} onChange={(e) => patchPhase(nav.pi, { focus: e.target.value })} placeholder="Ej. Masa magra y base estructural" style={inputStyle} />
+          <input value={p.focus || ''} onChange={(e) => patchPhase(nav.pi, { focus: e.target.value })} style={inputStyle} />
         </Field>
         <Field label="Objetivo (opcional)">
           <textarea value={p.objective || ''} onChange={(e) => patchPhase(nav.pi, { objective: e.target.value })} rows={3}

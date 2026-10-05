@@ -44,6 +44,8 @@ export const esConteo = (id) => medida(id).familia === 'conteo';
    la más larga a la más corta, porque "min" empieza por "m" y sin ese orden
    "15 min" se leería como 15 metros seguido de basura. */
 const ESCRITURAS = [
+  // «10 reps» dice lo mismo que «10»: así vuelve de una IA que repite la cantidad tal como la leyó.
+  ['reps', ['repeticiones', 'repeticion', 'repetición', 'reps', 'rep']],
   ['cal', ['kcal', 'calorias', 'calorías', 'cals', 'cal']],
   ['min', ['minutos', 'mins', 'min']],
   ['seg', ['segundos', 'segs', 'seg', 's']],
@@ -56,26 +58,45 @@ const ESCRITURAS = [
 const NUMERO = '\\d+(?:[.,]\\d+)?';
 const CANTIDAD = new RegExp(`^(${NUMERO}(?:\\s*-\\s*${NUMERO})?)\\s*(.*)$`);
 
+/* «Por lado»: lo que se hace con cada pierna o cada brazo. Así lo escribían los planes antes de que
+   existiera la casilla («10/lado», «8 por lado», «6 c/lado»), y así se sigue entendiendo. */
+const LADO = /^(.*?\S)\s*(?:(?:c\/|\/|x|por(?:\s+cada)?|cada)\s*lado|\/\s*side|(?:each|per)\s+side)\.?$/i;
+
 /**
  * Lee un ejercicio y dice cuánto es y de qué.
  *
- * Devuelve `{ cantidad, unidad, libre }`:
+ * Devuelve `{ cantidad, unidad, libre, porLado }`:
  *   cantidad — el número o el rango, como texto ("30", "8-10")
  *   unidad   — el id de UNIDADES
  *   libre    — true cuando el texto no se pudo entender. Entonces `cantidad`
  *              trae el texto entero y hay que mostrarlo tal cual.
+ *   porLado  — true si es por cada lado: lo marcó el coach (`ex.porLado`) o el
+ *              texto lo dice («10/lado»). Con `ex.porLado === false` el texto no
+ *              se interpreta: el coach lo desmarcó a propósito.
  */
 export function leeCantidad(ex) {
-  const crudo = String(ex?.reps ?? '').trim();
-  if (!crudo || crudo === '—') return { cantidad: '', unidad: ex?.unidad || 'reps', libre: false };
+  const entero = String(ex?.reps ?? '').trim();
+  const marcado = ex?.porLado;
+  const conLado = marcado === false ? null : entero.match(LADO);
+  if (conLado) {
+    const leido = leeTexto(conLado[1].trim(), ex?.unidad);
+    // «Máximas/lado» no se entiende: se deja entero, sin adivinar (salvo que el coach lo haya marcado).
+    if (!leido.libre || marcado === true) return { ...leido, porLado: true };
+  }
+  return { ...leeTexto(entero, ex?.unidad), porLado: marcado === true };
+}
+
+// La cantidad y su unidad, de un texto que ya no trae «por lado».
+function leeTexto(crudo, unidadPuesta) {
+  if (!crudo || crudo === '—') return { cantidad: '', unidad: unidadPuesta || 'reps', libre: false };
 
   // Si el coach ya eligió la unidad, manda ella. El texto puede traer restos
   // de la unidad vieja ("30 yd" con unidad 'm'), y se limpian.
-  if (ex?.unidad && PORID[ex.unidad]) {
+  if (unidadPuesta && PORID[unidadPuesta]) {
     const m = crudo.match(CANTIDAD);
     return m
-      ? { cantidad: m[1].replace(/\s/g, ''), unidad: ex.unidad, libre: false }
-      : { cantidad: crudo, unidad: ex.unidad, libre: true };
+      ? { cantidad: m[1].replace(/\s/g, ''), unidad: unidadPuesta, libre: false }
+      : { cantidad: crudo, unidad: unidadPuesta, libre: true };
   }
 
   const m = crudo.match(CANTIDAD);
@@ -95,19 +116,20 @@ export function leeCantidad(ex) {
     }
   }
 
-  /* Hay cola y no es una unidad conocida: "5/lado", "10 por brazo", "3 rondas".
-     Se deja entero y sin interpretar. Forzarlo a repeticiones perdería el
-     "/lado", que es justo lo que le dice al atleta qué hacer. */
+  /* Hay cola y no es una unidad conocida: "10 por brazo", "3 rondas". Se deja
+     entero y sin interpretar. Forzarlo a repeticiones perdería el "por brazo",
+     que es justo lo que le dice al atleta qué hacer. */
   return { cantidad: crudo, unidad: 'reps', libre: true };
 }
 
-/** Lo que se lee en pantalla: "30 m", "8-10 reps", "45 seg", "5/lado". */
+/** Lo que se lee en pantalla: "30 m", "8-10 reps", "45 seg", "10 reps por lado". */
 export function textoMeta(ex) {
-  const { cantidad, unidad: id, libre } = leeCantidad(ex);
+  const { cantidad, unidad: id, libre, porLado } = leeCantidad(ex);
   if (!cantidad) return null;
-  if (libre) return cantidad;
-  if (id === 'reps') return cantidad === '1' ? '1 rep' : `${cantidad} reps`;
-  return `${cantidad} ${medida(id).corta}`;
+  const lado = porLado ? ' por lado' : '';
+  if (libre) return `${cantidad}${lado}`;
+  if (id === 'reps') return `${cantidad === '1' ? '1 rep' : `${cantidad} reps`}${lado}`;
+  return `${cantidad} ${medida(id).corta}${lado}`;
 }
 
 /** El número solo, sin rango, para cuentas. `null` si no hay uno limpio. */
@@ -188,6 +210,22 @@ export function leeCarga(ex) {
   return { tipo: null, cantidad: crudo };
 }
 
+/* Lo mismo que LECTURAS, pero con el número a medias: mientras se teclea un rango existe «RPE 7-», y el
+   campo no puede soltar su tipo en ese instante (dejaría de ser «RPE» a media escritura). */
+const A_MEDIAS = [
+  ['pct', /^[\d.,\-–\s]*%$/],
+  ['rpe', /^RPE\s*[\d.,\-–]*$/i],
+  ['rir', /^RIR\s*[\d.,\-–]*$/i],
+  ['kg', /^[\d.,]*\s*(?:kgs?|kilos)$/i],
+];
+
+/** El tipo de una carga que quizá está a medio escribir («RPE 7-» → 'rpe'). Solo para el campo del editor. */
+export function tipoDeCargaAlEscribir(texto) {
+  const t = String(texto ?? '').trim();
+  if (!t) return null;
+  return leeCarga({ intensity: t }).tipo ?? A_MEDIAS.find(([, forma]) => forma.test(t))?.[0] ?? null;
+}
+
 /** El texto que se guarda: `('rpe', '8')` → «RPE 8». Sin número, vacío. */
 export function componeCarga(tipo, cantidad) {
   const n = String(cantidad ?? '').trim();
@@ -226,5 +264,63 @@ export function cargaEnSuUnidad(ex, unidad) {
   const kilos = parseFloat(String(cantidad).replace(',', '.'));
   if (!Number.isFinite(kilos)) return null;
   return `${Math.round(desdeKilos(kilos, 'lb') / 5) * 5} lb`;
+}
+
+/* ------------------------------------------------------------------ */
+/* El descanso: segundos o minutos                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * El descanso de un ejercicio, como la lista desplegable de su campo en el editor: segundos o minutos.
+ *
+ * Andrés, 5 oct 2026: «la casilla de descanso también quiero que la hagas como lista desplegable de
+ * minutos o segundos». Igual que la carga: NO hay un campo nuevo. El descanso sigue siendo UN texto
+ * (`ex.descanso`, que es lo que lee el atleta: «Descansa 90 seg entre cada serie») y la unidad se
+ * deduce de él. Lo que no encaja («3-4 min (completa)», «Recuperación total») se queda como texto.
+ */
+export const DESCANSOS = [
+  { id: 'seg', etiqueta: 'Segundos', corta: 'seg' },
+  { id: 'min', etiqueta: 'Minutos', corta: 'min' },
+];
+
+const LECTURAS_DE_DESCANSO = [
+  ['min', new RegExp(`^${RANGO}\\s*(?:min|mins|minutos?|['′])\\.?$`, 'i')],
+  ['seg', new RegExp(`^${RANGO}\\s*(?:s|seg|segs|segundos?|sec|secs|["″])\\.?$`, 'i')],
+];
+const DESCANSO_A_MEDIAS = [
+  ['min', /^[\d.,\-–\s]*min$/i],
+  ['seg', /^[\d.,\-–\s]*seg$/i],
+];
+
+/** Lee el descanso: `{ unidad, cantidad }`. Con `unidad: null` no encaja y `cantidad` trae el texto entero. */
+export function leeDescanso(ex) {
+  const crudo = String(ex?.descanso ?? '').trim();
+  if (!crudo) return { unidad: null, cantidad: '' };
+  for (const [unidad, lectura] of LECTURAS_DE_DESCANSO) {
+    const m = crudo.match(lectura);
+    if (m) return { unidad, cantidad: m[1].replace(/\s/g, '').replace('–', '-') };
+  }
+  return { unidad: null, cantidad: crudo };
+}
+
+/** La unidad de un descanso que quizá está a medio escribir («60- seg» → 'seg'). Solo para el campo del editor. */
+export function unidadDeDescansoAlEscribir(texto) {
+  const t = String(texto ?? '').trim();
+  if (!t) return null;
+  return leeDescanso({ descanso: t }).unidad ?? DESCANSO_A_MEDIAS.find(([, forma]) => forma.test(t))?.[0] ?? null;
+}
+
+/** El texto que se guarda: `('seg', '90')` → «90 seg». Sin número, vacío. */
+export function componeDescanso(unidad, cantidad) {
+  const n = String(cantidad ?? '').trim();
+  if (!n) return '';
+  return unidad === 'seg' || unidad === 'min' ? `${n} ${unidad}` : n;
+}
+
+/** Lo que va en la cajita de número, aunque el texto esté a medias («60- seg» → «60-»). */
+export function cantidadDeDescanso(unidad, texto) {
+  const t = String(texto ?? '').trim();
+  if (unidad !== 'seg' && unidad !== 'min') return t;
+  return t.replace(/\s*(?:min|mins|minutos?|['′]|s|seg|segs|segundos?|sec|secs|["″])\.?$/i, '');
 }
 

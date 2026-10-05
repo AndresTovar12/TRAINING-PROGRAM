@@ -498,7 +498,7 @@ const registrosDePeso = (plan, sessionsData, exName, kind = 'periodized') => {
       const dato = sd.exercises[key];
       const kilos = parseFloat(dato?.weight);
       if (!dato?.weight || Number.isNaN(kilos)) continue;
-      registros.push({ id, orden, kilos, weight: dato.weight, cuando: sd.completedAt || null, donde });
+      registros.push({ id, orden, kilos, weight: dato.weight, vueltas: dato.vueltas ?? null, cuando: sd.completedAt || null, donde });
     }
   };
 
@@ -566,7 +566,8 @@ const findPreviousWeight = (plan, sessionsData, exName, { kind = 'periodized', a
   const tope = actual == null ? null : ordenDe(actual);
   const previos = tope === null ? registros : registros.filter((r) => r.orden < tope);
   const ultimo = previos[previos.length - 1];
-  return ultimo ? { weight: ultimo.weight } : null;
+  // `vueltas`: lo anotado vuelta por vuelta esa vez, si el ejercicio cambiaba de una a otra (ver `porVuelta.js`).
+  return ultimo ? { weight: ultimo.weight, vueltas: ultimo.vueltas } : null;
 };
 
 /**

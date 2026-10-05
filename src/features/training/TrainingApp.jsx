@@ -48,6 +48,7 @@ import {
   formatoDeMiembros, expande, resumenDeFormato, textoDeResultado, tramosDeTrabajo,
 } from '@/lib/formatos';
 import { LEVANTAMIENTOS, cargaPorPorcentaje } from '@/lib/cargaPorcentaje';
+import { vueltasDe, ejercicioDeVuelta, vueltasAnotadas } from '@/lib/porVuelta';
 import RelojDelBloque from '@/features/training/RelojDelBloque';
 import ResultadoDelBloque from '@/features/training/ResultadoDelBloque';
 import { useAuth } from '@/contexts/AuthContext';
@@ -299,7 +300,7 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phas
   const unidad = profile?.unidad_peso || 'kg';
   const u = etiquetaUnidad(unidad);
   // Cuando el plan dice «75%», los kilos que son (de SU 1RM). Los pacientes de un fisio no tienen 1RM.
-  const carga = salud ? null : cargaPorPorcentaje(ex, oneRMs, unidad);
+  const kilosDe = (e) => { const c = salud ? null : cargaPorPorcentaje(e, oneRMs, unidad); return c && !c.falta ? c.texto : null; };
   const [progresoAbierto, setProgresoAbierto] = useState(false);
   const exData = sessionData?.exercises?.[idx] || {};
   const pc = phaseColor || LT.blue;
@@ -335,7 +336,10 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phas
 
   const showWeightInput = isLoadedExercise(ex);
   // Un peso fijo («20 kg») se ve en la unidad de quien entrena; lo demás, como lo escribió el coach.
-  const formattedIntensity = cargaEnSuUnidad(ex, unidad) ?? formatIntensity(ex.intensity);
+  const cargaQueDecir = (e) => cargaEnSuUnidad(e, unidad) ?? formatIntensity(e.intensity);
+  /* CUANDO CAMBIA DE UNA VUELTA A OTRA (10 al 60 %, 8 al 70 %…), cada vuelta va en SU renglón, con su
+     número delante. Nunca en una sola línea «10-8-6-4»: así se escribe un drop set (Andrés, 5 oct 2026). */
+  const vueltas = vueltasDe(ex);
   // El descanso lo escribe el coach en el editor de sesión. Antes lo adivinaba
   // `inferRest` leyendo el nombre del ejercicio, y el atleta lo leía como si
   // fuera una indicación de su entrenador. Si el coach no lo puso, no se
@@ -346,20 +350,21 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phas
      vacíos esperando: si no configuró la intensidad o el descanso, esa línea
      no existe. Petición de Andrés, y es lo correcto — un hueco vacío se lee
      como un fallo de la app. */
-  const chips = [
-    textoMeta(ex),
-    formattedIntensity || null,
-    rest || null,
-  ].filter(Boolean);
+  const chips = (vueltas ? [rest] : [textoMeta(ex), cargaQueDecir(ex) || null, rest || null]).filter(Boolean);
+  const kilos = vueltas ? null : kilosDe(ex);
 
   const pesoAnterior = showWeightInput && previous
     ? `${desdeKilos(previous.weight, unidad)} ${u}` : null;
 
-  // Lo que ya quedó anotado hoy, en una línea. Vacío = todavía no hay nada.
-  const anotado = [
-    exData.repsHechas ? `${exData.repsHechas} ${exData.repsHechas === '1' ? 'rep' : 'reps'}` : null,
-    exData.weight ? `${desdeKilos(exData.weight, unidad)} ${u}` : null,
-  ].filter(Boolean).join(' · ');
+  // Lo que ya quedó anotado hoy, en una línea. Vacío = todavía no hay nada. Con vueltas distintas: cuántas
+  // lleva y la más pesada (que es el resumen que guarda el ejercicio).
+  const hechas = vueltas ? vueltasAnotadas(exData, vueltas.length) : 0;
+  const anotado = (vueltas
+    ? [hechas ? `${hechas} de ${vueltas.length} vueltas` : null, exData.weight ? `${desdeKilos(exData.weight, unidad)} ${u}` : null]
+    : [
+      exData.repsHechas ? `${exData.repsHechas} ${exData.repsHechas === '1' ? 'rep' : 'reps'}` : null,
+      exData.weight ? `${desdeKilos(exData.weight, unidad)} ${u}` : null,
+    ]).filter(Boolean).join(' · ');
 
   return (
     <div style={{ padding: '11px 12px' }}>
@@ -411,10 +416,30 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phas
             }}>
               {ex.name}
             </span>
-            {(chips.length > 0 || (carga && !carga.falta)) && (
+            {vueltas && (
+              <span style={{ display: 'block', marginTop: 5 }}>
+                {vueltas.map((f, j) => {
+                  const deLaVuelta = ejercicioDeVuelta(ex, f);
+                  const queHacer = [textoMeta(deLaVuelta), cargaQueDecir(deLaVuelta)].filter(Boolean).join(' · ');
+                  const susKilos = kilosDe(deLaVuelta);
+                  return (
+                    <span key={j} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '2.5px 0', fontSize: 13, lineHeight: 1.35, ...NUM_STYLE }}>
+                      <span style={{ width: 12, flexShrink: 0, textAlign: 'center', fontSize: 11.5, fontWeight: 800, color: LT.text3 }}>{j + 1}</span>
+                      <span style={{ fontWeight: 600, color: LT.text2 }}>
+                        {queHacer || (susKilos ? '' : '—')}
+                        {susKilos && queHacer ? ' · ' : ''}
+                        {/* Sin partirse: «≈ 105» en un renglón y «kg» en el siguiente no se lee. */}
+                        {susKilos && <b style={{ fontWeight: 800, color: LT.blue, whiteSpace: 'nowrap' }}>{susKilos}</b>}
+                      </span>
+                    </span>
+                  );
+                })}
+              </span>
+            )}
+            {(chips.length > 0 || kilos) && (
               <span style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
                 {chips.map((c) => <Chip key={c}>{c}</Chip>)}
-                {carga && !carga.falta && <Chip fuerte>{carga.texto}</Chip>}
+                {kilos && <Chip fuerte>{kilos}</Chip>}
               </span>
             )}
           </span>
@@ -436,12 +461,14 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phas
           azul de «Hoy: …». Sin nada anotado, el pie solo lleva el enlace. */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: anotado ? 'space-between' : 'flex-end',
-        gap: 10, marginTop: 9, paddingTop: 9, borderTop: `1px solid ${LT.border}`,
+        // Con vueltas la pastilla es más larga («Hoy: 2 de 2 vueltas · 120 kg»): en un teléfono angosto
+        // baja el enlace a su propio renglón en vez de partirse la pastilla en dos.
+        flexWrap: 'wrap', gap: '6px 10px', marginTop: 9, paddingTop: 9, borderTop: `1px solid ${LT.border}`,
       }}>
         {anotado && (
           <span style={{
             fontSize: 12, fontWeight: 800, color: LT.blue, background: LT.blueSoft,
-            padding: '4px 9px', borderRadius: 7, ...NUM_STYLE,
+            padding: '4px 9px', borderRadius: 7, whiteSpace: 'nowrap', ...NUM_STYLE,
           }}>
             Hoy: {anotado}
           </span>
@@ -451,7 +478,7 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phas
           type="button"
           onClick={() => setProgresoAbierto(true)}
           style={{
-            display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0, flexShrink: 0,
+            display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0, flexShrink: 0, marginLeft: 'auto',
             border: 'none', background: 'transparent', padding: 0, cursor: 'pointer',
             fontFamily: FONT, fontSize: 12, fontWeight: 700, color: LT.blue, ...NUM_STYLE,
           }}

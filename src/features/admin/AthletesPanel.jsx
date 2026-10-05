@@ -36,6 +36,7 @@ import NavegadorDelPlan from '@/components/NavegadorDelPlan';
 import ListaDesplegable from '@/components/ListaDesplegable';
 import CodigoDeCoach from '@/components/CodigoDeCoach';
 import { textoMeta } from '@/lib/medidas';
+import { vueltasDe } from '@/lib/porVuelta';
 import { esArranque, guardaLugar, leeLugar } from '@/lib/lugar';
 import { useLugar, useScrollLugar } from '@/lib/useLugar';
 
@@ -712,8 +713,11 @@ function SeccionFicha({ titulo, abierta, onToggle, children }) {
  * y los de dos sesiones (AM/PM), que guardan bloques con su etiqueta.
  */
 function DentroDelDia({ day }) {
-  // "4 × 30 yd", no "4 × 30": la unidad es parte de lo que el coach mandó.
-  const dosis = (e) => [e.sets, textoMeta(e)].filter(Boolean).join(' × ') + (e.intensity ? ` · ${e.intensity}` : '');
+  // "4 × 30 yd", no "4 × 30": la unidad es parte de lo que el coach mandó. Si cambia de una vuelta a otra
+  // se dice eso y no los números en fila («10-8-6-4» se lee como un drop set); el detalle está en el editor.
+  const dosis = (e) => (vueltasDe(e)
+    ? `${e.sets} vueltas distintas`
+    : [e.sets, textoMeta(e)].filter(Boolean).join(' × ') + (e.intensity ? ` · ${e.intensity}` : ''));
 
   const fila = (e, i) => (
     e.isNote ? (

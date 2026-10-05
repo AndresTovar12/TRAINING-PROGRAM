@@ -36,7 +36,9 @@ const hayQueTurnar = (nEjercicios) => nEjercicios >= 2;
 
 /* El botón de la lista de formatos. Primero iba sin caja, con el tamaño de una frase (como el «REPS ▾»), y
    Andrés, 5 oct 2026, dijo que «el botón casi no se ve»: nadie lo encontraba. Ahora es un botón de los suyos
-   —blanco, borde sólido, azul— con el relojito que lo ata al formato. Con un formato elegido es la pastilla azul. */
+   —blanco, borde sólido, azul—. SIN reloj: «Se repite» son las series de siempre, y el reloj se queda para lo
+   que sí lo lleva (él mismo, horas después: «ahí no quiero que tenga un reloj, pero en las demás opciones sí»).
+   Con un formato elegido es la pastilla azul, con su relojito. */
 const ESTILO_SIN_FORMATO = {
   width: 'auto', border: `1.5px solid ${T.accent}`, background: '#fff', minHeight: 30, gap: 6, borderRadius: 999,
   padding: '0 11px', fontFamily: FONT, fontSize: 12.5, fontWeight: 800, color: T.accent,
@@ -137,7 +139,7 @@ export function EncabezadoDelSet({
             <span style={{ ...frase, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
               <ListaDesplegable
                 etiqueta="Formato del set" valor="normal" onCambio={elige} opciones={opciones}
-                icono={Timer} estilo={ESTILO_SIN_FORMATO} colorFlecha={T.accent} anchoMinimo={270} alto={460}
+                estilo={ESTILO_SIN_FORMATO} colorFlecha={T.accent} anchoMinimo={270} alto={460}
               />
               <Stepper value={bloque.rounds} onChange={(v) => onCambio({ rounds: v })} />
               {parseInt(bloque.rounds, 10) === 1 ? 'vez' : 'veces'}
@@ -307,7 +309,7 @@ function VentanaDeTramos({ titulo, formato, nEjercicios, onCambio, onCerrar }) {
         <label style={{ display: 'block' }}>
           <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text2, marginBottom: 6 }}>Nombre del formato (opcional)</div>
           <input
-            value={g.nombre ?? ''} maxLength={40} placeholder="Ej. Pirámide"
+            value={g.nombre ?? ''} maxLength={40}
             onChange={(e) => onCambio({ ...g, nombre: e.target.value })} style={CAMPO_DE_TEXTO}
           />
         </label>
