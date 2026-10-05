@@ -1,0 +1,1195 @@
+<title>Editor nuevo Training Lab</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+/* Maqueta del editor de planes de Training Lab (versión 9: la guía se pliega desde su propio borde). Una barra arriba, la guía a la izquierda (se oculta y se
+   ensancha con el mouse) y el día a la derecha; en teléfono, guía y día son dos pantallas. Colores, letra e iconos son
+   los de la app (src/lib/theme.js). La app solo tiene tema claro, así que la maqueta también: un solo aspecto, a propósito. */
+:root {
+  color-scheme: light;
+  --bg: #F4F5F8; --sup: #FFFFFF; --sup2: #EDEFF3;
+  --tinta: #111318; --tinta2: #6B7280; --tinta3: #9CA3AF;
+  --linea: #E5E7EB; --linea2: #D1D5DB;
+  --azul: #1E40E0; --azulOsc: #1733B8; --azulSuave: #E8ECFD;
+  --rojo: #DC2626; --rojoSuave: #FCEBEB; --violeta: #7C5CFF; --menta: #00A372;
+  --letra: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+  --sombra: 0 4px 20px rgba(17,19,24,0.04); --sombraPop: 0 16px 44px rgba(17,19,24,0.13);
+}
+body { background: var(--bg); color: var(--tinta); font-family: var(--letra); }
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { overflow: hidden; }
+#escenario { height: 100%; }
+.mando { position: fixed; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 10; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: none; }
+.mando > * { pointer-events: auto; }
+.mando-boton { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 999px; padding: 8px 13px; background: rgba(17,19,24,0.92); color: #fff; font: 700 12.5px var(--letra); cursor: pointer; box-shadow: var(--sombraPop); }
+.mando-panel { width: 330px; max-width: calc(100vw - 28px); background: rgba(17,19,24,0.95); color: #fff; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 12px; box-shadow: var(--sombraPop); }
+.mando-panel[hidden] { display: none; }
+.mando-fila { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ctl-t { font-size: 12.5px; font-weight: 700; color: rgba(255,255,255,.72); }
+.seg { display: inline-flex; background: rgba(255,255,255,.14); border-radius: 10px; padding: 2px; }
+.seg button { border: 0; background: transparent; font: 700 12.5px var(--letra); color: rgba(255,255,255,.78); padding: 6px 11px; border-radius: 8px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: #fff; color: var(--tinta); }
+.mando-nota { margin: 0; font-size: 12.5px; font-weight: 500; line-height: 1.55; color: rgba(255,255,255,.85); }
+button { cursor: pointer; font-family: var(--letra); touch-action: manipulation; transition: transform .12s cubic-bezier(.23,1,.32,1), background-color .12s ease, color .12s ease, opacity .12s ease; }
+button:active:not(:disabled) { transform: scale(.97); }
+:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+input, textarea { font-family: var(--letra); color: var(--tinta); }
+.ico { flex-shrink: 0; }
+
+.marco { position: relative; background: var(--bg); overflow: hidden; width: 100%; height: 100%; }
+.marco.tel { max-width: 430px; margin: 0 auto; border-inline: 1px solid var(--linea2); }
+.app { height: 100%; display: flex; flex-direction: column; }
+.barra { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: rgba(255,255,255,0.92); border-bottom: 1px solid var(--linea); flex-shrink: 0; }
+.barra-izq { display: flex; align-items: center; gap: 8px; width: var(--guia, 360px); flex-shrink: 0; min-width: 0; }
+.barra-id { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.barra-der { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; margin-left: 8px; container-type: inline-size; }
+.prog-grupo { display: flex; align-items: center; gap: 5px; min-width: 0; flex-shrink: 0; }
+/* botones de verdad: blancos, con borde y esquinas redondas; chicos para que quepan siempre en una fila */
+.prog-b { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--linea); background: #fff; border-radius: 9px; padding: 5px 6px; font-size: 11.5px; font-weight: 700; color: var(--tinta2); cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+.prog-b:hover { background: var(--bg); border-color: var(--linea2); color: var(--tinta); }
+.prog-b b { color: var(--azul); font-weight: 800; }
+.prog-b .ico { color: var(--tinta3); }
+.prog-b.azul { color: var(--azul); }
+.prog-b.azul .ico { color: var(--azul); }
+.prog-b.azul:hover { background: var(--azulSuave); border-color: rgba(30,64,224,0.35); }
+.prog-b.borra { color: var(--rojo); border-color: rgba(220,38,38,0.28); }
+.prog-b.borra .ico { color: var(--rojo); }
+.prog-b.borra:hover { color: var(--rojo); background: var(--rojoSuave); border-color: rgba(220,38,38,0.45); }
+.barra-id .rot { margin-bottom: 3px; }
+.barra-titulo { width: 100%; margin: 0; border: 1px solid var(--linea); border-radius: 11px; background: #fff; padding: 6px 11px; font-size: 14px; font-weight: 600; font-family: var(--letra); color: var(--tinta); outline: none; text-overflow: ellipsis; transition: border-color .12s; }
+.barra-titulo:hover { border-color: var(--linea2); }
+.barra-titulo:focus { border-color: var(--azul); }
+.prog-t { display: block; }
+.prog-t .rot { margin-bottom: 4px; }
+.cuad.plega { width: 34px; height: 34px; border-radius: 10px; border-color: var(--linea2); color: var(--azul); }
+.cuad.plega:hover { background: var(--azulSuave); border-color: rgba(30,64,224,0.35); color: var(--azul); }
+.ic.cierra { margin-left: 2px; }
+/* el fondo del workout lleva el color de su tipo, muy clarito */
+.marco:not(.sintono) .sesion { background: linear-gradient(rgba(var(--tc), 0.09), rgba(var(--tc), 0.09)), #fff; border-color: rgba(var(--tc), 0.32); }
+.turno { font-size: 10.5px; font-weight: 800; color: #fff; border-radius: 6px; padding: 3px 7px; letter-spacing: 0.4px; flex-shrink: 0; }
+.turno.am { background: #D97706; }
+.turno.pm { background: var(--azul); }
+.sesion.plegada .ses-cab { padding-bottom: 0; border-bottom: 0; }
+.ses-resumen { margin: 8px 0 0 38px; font-size: 12.5px; font-weight: 600; color: var(--tinta2); }
+.dia-fila.doble { flex-wrap: wrap; row-gap: 5px; }
+.dia-fila .seg2 { flex: 1 1 100%; display: flex; align-items: center; gap: 10px; padding-left: 42px; min-width: 0; }
+/* Los tres botones del programa tienen UN solo tamaño y siempre se ven. Solo si ni así caben junto al título (una ventana muy angosta)
+   bajan, tal cual, a una segunda fila de la barra (lo decide ajustaBarra() midiendo). */
+.barra.dosfilas { flex-wrap: wrap; row-gap: 4px; padding-bottom: 7px; }
+.barra.dosfilas .barra-der { display: contents; }
+.barra.dosfilas .prog-grupo { order: 10; flex: 1 1 100%; }
+.barra.dosfilas .hueco { flex: 1 1 0; }
+.barra-acc { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.barra-acc .prin { padding: 10px 14px; }
+.barra-acc .hist { margin-right: 2px; }
+.cuad.flojo.apagada { background: var(--azulSuave); color: var(--azul); }
+.cuad.flojo.btn-guia { color: var(--azul); }
+.cuad.flojo.btn-guia:hover:not(:disabled) { background: var(--azulSuave); color: var(--azul); }
+.barra-t { flex: 1; min-width: 0; font-size: 15px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 4px; }
+.cuerpo { flex: 1; min-height: 0; }
+.compu .cuerpo { display: grid; grid-template-columns: var(--guia, 360px) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); column-gap: 16px; position: relative; width: 100%; max-width: 1776px; align-self: center; padding: 12px 16px 0; }
+.compu .cuerpo.sin-guia { grid-template-columns: minmax(0, 1fr); }
+.guia, .dia { overflow-y: auto; min-height: 0; }
+.guia { margin-bottom: 12px; display: flex; flex-direction: column; overflow: hidden; }
+.guia-cab { padding: 16px 14px 4px; flex-shrink: 0; }
+.guia-cuerpo { flex: 1; min-height: 0; overflow-y: auto; padding: 0 0 16px; }
+.dia { padding: 0 2px 96px 0; }
+.dia-in { max-width: 1240px; margin: 0 auto; }
+.tel .barra { padding: 10px 12px; }
+.tel .cuerpo { overflow-y: auto; padding: 12px 10px 96px; }
+.tel .cuerpo.es-guia { background: var(--bg); padding: 14px 16px 96px; }
+.divisor { position: absolute; top: 12px; bottom: 12px; left: calc(16px + var(--guia, 360px) + 2px); width: 12px; z-index: 6; cursor: col-resize; touch-action: none; outline: none; }
+.divisor::before { content: ''; position: absolute; left: 4.5px; top: 0; bottom: 0; width: 3px; border-radius: 2px; background: transparent; transition: background-color .12s; }
+.divisor:hover::before, .divisor.activo::before, .divisor:focus-visible::before { background: var(--azul); }
+.divisor .agarre { position: absolute; left: 4px; top: 50%; width: 4px; height: 40px; margin-top: -20px; border-radius: 3px; background: var(--linea2); transition: background-color .12s; }
+.divisor:hover .agarre, .divisor.activo .agarre, .divisor:focus-visible .agarre { background: var(--azul); }
+.guia { transition: opacity .12s; }
+.guia.por-cerrar { opacity: .4; }
+
+.prin { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; cursor: pointer; color: #fff; background: linear-gradient(135deg, var(--azul), var(--azulOsc)); box-shadow: 0 8px 22px rgba(30,64,224,0.24); font-weight: 800; font-size: 14px; padding: 11px 18px; border-radius: 12px; flex-shrink: 0; }
+.prin.apagado { background: var(--sup2); color: var(--tinta3); box-shadow: none; cursor: default; }
+.prin.listo { background: var(--sup2); color: var(--menta); box-shadow: none; cursor: default; }
+.blanco { display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: #fff; border: 1.5px solid var(--linea); color: var(--azul); font-weight: 800; font-size: 13.5px; padding: 10px 15px; border-radius: 12px; cursor: pointer; flex-shrink: 0; }
+.blanco:hover { background: #F8F9FC; }
+.blanco.chico { font-size: 12.5px; padding: 0 11px; min-height: 30px; border-radius: 999px; border-color: var(--azul); }
+.blanco.chico.suave { border-color: var(--linea2); }
+.quieto { display: inline-flex; align-items: center; gap: 7px; background: transparent; border: 0; color: var(--tinta2); font-weight: 700; font-size: 13px; padding: 8px 11px; border-radius: 999px; cursor: pointer; flex-shrink: 0; min-width: 0; }
+.quieto:hover { background: var(--sup2); color: var(--tinta); }
+.quieto.azul { color: var(--azul); }
+.quieto.azul:hover { background: var(--azulSuave); color: var(--azul); }
+.quieto.borra:hover { color: var(--rojo); background: var(--rojoSuave); }
+.quieto.chico { font-size: 12.5px; padding: 6px 9px; }
+.quieto.borde { border: 1.5px solid var(--linea); background: #fff; color: var(--tinta); }
+.quieto.borde .ico { color: var(--tinta3); }
+.cuad { width: 36px; height: 36px; border-radius: 11px; border: 1px solid var(--linea); background: #fff; color: var(--tinta); display: grid; place-items: center; cursor: pointer; flex-shrink: 0; }
+.cuad.flojo { border-color: transparent; background: transparent; color: var(--tinta2); }
+.cuad.flojo:hover:not(:disabled) { background: var(--sup2); color: var(--tinta); }
+.cuad.flojo:disabled { color: var(--linea2); cursor: default; }
+.hist { display: inline-flex; align-items: center; gap: 0; margin-right: 6px; }
+.ic { width: 30px; height: 30px; border-radius: 999px; border: 0; background: transparent; color: var(--tinta3); display: grid; place-items: center; cursor: pointer; flex-shrink: 0; }
+.ic:hover { background: var(--sup2); color: var(--tinta2); }
+.ic.borra:hover { color: var(--rojo); background: var(--rojoSuave); }
+.tel .ic { width: 36px; height: 36px; }
+.hueco { flex: 1; }
+.punto { width: 9px; height: 9px; border-radius: 5px; flex-shrink: 0; display: inline-block; }
+.punto.chico { width: 7px; height: 7px; }
+.punto-btn { width: 26px; height: 26px; margin: 0 -5px; border-radius: 999px; border: 0; background: transparent; display: grid; place-items: center; flex-shrink: 0; }
+.punto-btn .punto { width: 13px; height: 13px; border-radius: 7px; }
+.punto-btn:hover { background: var(--sup2); }
+.menu.menu-color { min-width: 0; width: auto; padding: 10px; }
+.menu-color .colores, .hoja .colores { display: grid; grid-template-columns: repeat(4, 30px); gap: 10px; }
+.hoja .colores { grid-template-columns: repeat(4, 44px); justify-content: center; padding: 8px 0 12px; }
+.hoja .col { width: 44px; height: 44px; }
+.pastilla { font-size: 10px; font-weight: 800; letter-spacing: 0.3px; padding: 3px 7px; border-radius: 6px; color: var(--azul); background: var(--azulSuave); flex-shrink: 0; }
+.gris { font-size: 11.5px; font-weight: 700; color: var(--tinta3); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+
+[data-item] { cursor: grab; }
+[data-item] input, [data-item] textarea { cursor: text; }
+[data-item] button, [data-item] .marca { cursor: pointer; }
+[data-item] label.c { cursor: default; }
+@media (hover: none) { .set-cab, .ej-cab, .fase-fila, .foto { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; } }
+.mover { display: inline-flex; border: 1px solid var(--linea); border-radius: 999px; background: #fff; overflow: hidden; flex-shrink: 0; }
+.mover button { width: 30px; height: 28px; border: 0; background: transparent; color: var(--tinta2); display: grid; place-items: center; cursor: pointer; }
+.mover button + button { border-left: 1px solid var(--linea); }
+.mover button:disabled { color: var(--linea2); cursor: default; }
+.mover button:not(:disabled):hover { background: var(--sup2); color: var(--tinta); }
+.mover.discreto { border: 0; background: transparent; }
+.mover.discreto button { width: 24px; height: 26px; color: var(--linea2); border: 0; border-radius: 7px; }
+.mover.discreto button:not(:disabled):hover { color: var(--tinta); background: var(--sup2); }
+.mover.discreto button:disabled { opacity: .5; }
+.tel .mover button { width: 36px; height: 34px; }
+.tel .mover.discreto button { width: 32px; }
+@media (hover: hover) {
+  .mover.discreto { opacity: 0; }
+  .set-cab:hover .mover.discreto, .ej-cab:hover .mover.discreto, .foto:hover .mover.discreto, .mover.discreto:focus-within { opacity: 1; }
+}
+
+.campo { border: 1.5px solid var(--linea); border-radius: 11px; padding: 10px 12px; width: 100%; font-size: 14px; font-weight: 500; outline: none; background: #fff; min-width: 0; }
+.campo:focus, .c input:focus, .vc input:focus, .vc textarea:focus { border-color: var(--azul); }
+.campo.titulo { font-size: 15px; font-weight: 800; }
+.inline { border: 1.5px solid transparent; background: transparent; border-radius: 9px; padding: 4px 7px; margin-left: -7px; font-family: var(--letra); font-weight: 800; color: var(--tinta); outline: none; min-width: 0; text-overflow: ellipsis; cursor: text; transition: border-color .12s, background-color .12s; }
+.inline:hover { border-color: var(--linea2); background: #fff; }
+.inline:focus { border-color: var(--azul); background: #fff; text-overflow: clip; }
+@media (hover: none) { .inline { border-color: var(--linea); background: #fff; } }
+.guia-in { display: flex; flex-direction: column; gap: 10px; }
+.prog { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+.prog-forma { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: var(--tinta2); padding: 4px 2px 0; }
+.prog-forma .ico { color: var(--azul); }
+.prog-forma .cambiar { border: 0; background: transparent; color: var(--azul); font-weight: 800; font-size: 13px; padding: 4px 7px; border-radius: 8px; cursor: pointer; }
+.prog-forma .cambiar:hover { background: var(--azulSuave); }
+.prog-acc { display: flex; flex-wrap: wrap; gap: 0 2px; margin-left: -6px; }
+.fases { display: flex; flex-direction: column; gap: 10px; }
+.fase-fila { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 12px 13px; background: #fff; border-radius: 13px; cursor: pointer; border: 1px solid var(--linea); color: var(--tinta3); }
+.fase-fila:hover { border-color: var(--linea2); }
+.fase-fila.aqui, .fase-fila.aqui:hover { border-color: var(--azul); }
+.fase-fila b { flex: 1; min-width: 0; font-size: 14px; font-weight: 700; color: var(--tinta); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fase-ab { background: #fff; border: 1px solid var(--linea); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 11px; }
+.fase-ab.aqui { border: 2px solid var(--azul); padding: 13px; }
+.fila { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.fase-n { flex: 1; min-width: 0; font-size: 15.5px; padding-block: 5px; }
+.fase-acc { display: inline-flex; align-items: center; flex-shrink: 0; margin-right: -6px; }
+.fase-acc .ic { width: 28px; height: 28px; }
+.fichas { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
+.ficha { position: relative; min-width: 38px; padding: 7px 0; border-radius: 10px; cursor: pointer; border: 1px solid var(--linea); background: var(--sup2); color: var(--tinta3); font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; display: grid; place-items: center; }
+.ficha.on { background: var(--azul); border-color: var(--azul); color: #fff; }
+.ficha.suya { border: 2px solid var(--azul); color: var(--azul); }
+.ficha.suya.on { border-width: 1px; color: #fff; }
+.ficha .pt { position: absolute; left: 50%; bottom: 3px; width: 4px; height: 4px; margin-left: -2px; border-radius: 2px; background: var(--azul); }
+.ficha.on .pt { background: #fff; }
+.ficha.mas { border-color: transparent; background: var(--azulSuave); color: var(--azul); padding: 6.5px 0; }
+.sem-t { width: 100%; font-size: 13px; font-weight: 600; padding-block: 5px; margin-top: -4px; }
+.sem-t:placeholder-shown:not(:focus) { display: none; }
+.dias { display: flex; flex-direction: column; gap: 7px; }
+.dia-fila { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px 11px; border-radius: 11px; cursor: pointer; background: var(--bg); border: 1px solid var(--linea); color: var(--tinta3); }
+.dia-fila:hover { border-color: var(--linea2); }
+.dia-fila b { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 700; color: var(--tinta); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dia-fila .dl { width: 32px; font-size: 11px; font-weight: 800; color: var(--tinta3); flex-shrink: 0; }
+.dia-fila.on, .dia-fila.on:hover { background: var(--azulSuave); border: 1.5px solid var(--azul); padding: 9.5px 10.5px; }
+.dia-fila.on .dl { color: var(--azul); }
+.dia-fila.vacio:not(.on) { border-style: dashed; }
+.dia-fila .sin { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 600; color: var(--tinta3); }
+.pastilla.suave { color: var(--tinta2); background: var(--sup2); }
+.agrega { display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; padding: 11px 13px; border-radius: 13px; cursor: pointer; border: 1.5px solid var(--linea); background: #fff; box-shadow: var(--sombra); font-size: 13.5px; font-weight: 800; color: var(--azul); }
+
+.tira { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; }
+.tira-donde { font-size: 13px; font-weight: 800; color: var(--tinta); }
+.tira-dias { flex: 1 1 300px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; background: #fff; border: 1px solid var(--linea); border-radius: 13px; padding: 4px; }
+.td { border: 0; background: transparent; cursor: pointer; border-radius: 9px; padding: 7px 0 6px; font-size: 12px; font-weight: 800; color: var(--tinta2); display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.td i { width: 5px; height: 5px; border-radius: 3px; display: block; }
+.td:hover { background: var(--bg); }
+.td.on { background: var(--azul); color: #fff; }
+.td.on i { background: #fff !important; }
+.dia-cab { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.dia-cab h2 { flex: 1; margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.3px; }
+.compu .dia-cab { margin-bottom: 8px; }
+.compu .dia-cab h2 { font-size: 18px; }
+.vista { display: inline-flex; background: var(--sup2); border-radius: 10px; padding: 3px; }
+.vista button { width: 34px; height: 28px; border: 0; background: transparent; border-radius: 8px; color: var(--tinta3); cursor: pointer; display: grid; place-items: center; }
+.vista button[aria-pressed="true"] { background: #fff; color: var(--azul); box-shadow: 0 1px 3px rgba(17,19,24,0.1); }
+
+.sesion { background: #fff; border: 1px solid var(--linea); border-radius: 18px; padding: 16px 18px; box-shadow: var(--sombra); margin-bottom: 14px; }
+.ses-cab { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding-bottom: 12px; border-bottom: 1px solid var(--linea); }
+.tipo { display: inline-flex; align-items: center; gap: 8px; border: 1.5px solid var(--linea); background: #fff; border-radius: 11px; padding: 10px 11px; font-size: 14px; font-weight: 700; color: var(--tinta); cursor: pointer; flex-shrink: 0; }
+.tipo .ico { color: var(--tinta3); }
+.campo.nombre { flex: 1 1 200px; width: auto; font-size: 16px; font-weight: 800; padding: 9px 12px; }
+.herr { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; }
+.tel .ses-cab .nombre { order: -1; flex: 1 1 100%; }
+.tel .ses-cab .quieto.borde { margin-left: auto; }
+.compu .ses-cab .quieto.borde { padding: 10px 13px; border-radius: 11px; font-size: 14px; margin-left: auto; }
+.compu .ses-cab .vista { margin-left: 4px; }
+.sets { display: flex; flex-direction: column; }
+.set { padding: 14px 0; border-top: 1px solid var(--linea); transition: opacity .12s; }
+.set:first-child { border-top: 0; }
+.set-cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.set-n { font-size: 14.5px; font-weight: 800; }
+.etq { font-size: 10.5px; font-weight: 800; color: var(--azul); background: rgba(30,64,224,0.10); padding: 3px 9px; border-radius: 8px; letter-spacing: 0.4px; }
+.rep { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700; color: var(--tinta2); }
+.paso { display: inline-flex; align-items: center; gap: 6px; }
+.paso button { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--linea); cursor: pointer; background: #fff; color: var(--tinta); font-weight: 800; font-size: 15px; display: grid; place-items: center; padding: 0; }
+.paso b { min-width: 26px; text-align: center; font-size: 15px; font-weight: 800; color: var(--tinta); font-variant-numeric: tabular-nums; }
+.pildora-f { display: inline-flex; align-items: center; gap: 6px; border: 0; background: rgba(30,64,224,0.10); color: var(--azul); font-weight: 800; font-size: 13px; padding: 7px 12px; border-radius: 999px; cursor: pointer; }
+.franja { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; background: rgba(30,64,224,0.10); border-radius: 12px; padding: 9px 12px; margin-bottom: 12px; font-size: 12.5px; font-weight: 700; color: var(--tinta2); }
+.franja .az { color: var(--azul); }
+.tel .set-cab .rep, .tel .set-cab .pildora-f { order: 5; }
+.tel .set-cab .rep { flex: 1 1 100%; }
+.ejs { display: flex; flex-direction: column; margin-left: 3px; padding-left: 18px; border-left: 2px solid var(--linea); }
+.ej { padding: 12px 0; min-width: 0; transition: opacity .12s; }
+.ej + .ej { border-top: 1px solid var(--linea); }
+.ejs.tarjetas { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; padding-block: 10px; }
+.ejs.tarjetas .ej { background: #fff; border: 1px solid var(--linea); border-radius: 12px; padding: 11px 12px; }
+.ej-cab { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.ej-cab b { flex: 1; min-width: 0; font-size: 14px; font-weight: 700; }
+.mini { width: 34px; height: 34px; border-radius: 9px; background: var(--sup2); color: var(--tinta3); display: grid; place-items: center; flex-shrink: 0; }
+.ej-campos { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+.c { display: block; min-width: 0; }
+.c.reps { width: 96px; } .c.carga { width: 100px; } .c.desc { width: 116px; }
+.c.crece { flex: 1 1 76px; min-width: 76px; }
+.rot { display: flex; align-items: center; gap: 3px; font-size: 10.5px; font-weight: 800; color: var(--tinta3); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 4px; white-space: nowrap; }
+.rot.lista { color: var(--azul); }
+.c input { width: 100%; border: 1.5px solid var(--linea); border-radius: 9px; padding: 7px 9px; font-size: 13px; font-weight: 500; background: var(--bg); outline: none; }
+.past { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+.past.cab { flex-direction: row; gap: 6px; }
+.pp { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 6px 10px; border-radius: 999px; cursor: pointer; white-space: nowrap; border: 1px solid transparent; background: var(--sup2); color: var(--tinta2); font-size: 12px; font-weight: 700; }
+.pp.on { background: rgba(30,64,224,0.10); color: var(--azul); }
+.pp.video { background: rgba(124,92,255,0.12); color: var(--violeta); }
+.lado { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+.marca { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 700; color: var(--tinta2); cursor: pointer; }
+.marca input { width: 16px; height: 16px; accent-color: var(--azul); margin: 0; }
+.set > .blanco.chico { margin: 8px 0 0 23px; }
+.tel .ej-campos .c.reps, .tel .ej-campos .c.carga, .tel .ej-campos .c.desc, .tel .ej-campos .past { flex: 1 1 110px; width: auto; }
+.tel .ej-campos .lado, .tel .ej-campos .c.todo { flex: 1 1 100%; margin-top: 0; }
+.ej-pie { display: flex; align-items: center; gap: 4px; margin: 8px 0 -3px -6px; }
+.tel .sesion { padding: 14px; border-radius: 16px; }
+.tel .ejs { padding-left: 12px; }
+/* Tonos (lo de la app de hoy, y lo que a Andrés le gustaba): el Set es una tarjeta gris y cada ejercicio una blanca; solo cambia el tono, sin sombras */
+.marco.tonos .ses-cab { padding-bottom: 0; border-bottom: 0; }
+.marco.tonos .sets { gap: 10px; margin-top: 12px; }
+.marco.tonos .set { background: var(--bg); border: 1px solid var(--linea); border-radius: 14px; padding: 12px; }
+.marco.tonos .set-cab { margin-bottom: 10px; }
+.marco.tonos .ejs { gap: 8px; margin-left: 0; padding-left: 0; border-left: 0; }
+.marco.tonos .ej { background: #fff; border: 1px solid var(--linea); border-radius: 12px; padding: 11px 12px; }
+.marco.tonos .ej + .ej { border-top: 1px solid var(--linea); }
+.marco.tonos .ejs.tarjetas { padding-block: 0; }
+.marco.tonos .set > .blanco.chico { margin: 10px 0 0; }
+.marco.tonos.tel .set { padding: 10px; }
+.marco.tonos.tel .ej { padding: 10px; }
+.marco.tonos .set.suelto, .marco.tonos .ej.suelto { background: var(--azulSuave); }
+.tel .set > .blanco.chico { margin-left: 17px; }
+.foto { height: 96px; border-radius: 10px; background: var(--sup2); color: var(--tinta3); display: flex; align-items: flex-start; justify-content: flex-end; gap: 6px; padding: 8px; margin-bottom: 10px; position: relative; }
+.foto > .ico { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+.foto .ic { background: #fff; border: 1px solid var(--linea); }
+.tarjetas .ej-cab { margin-bottom: 8px; }
+.tarjetas .c.reps, .tarjetas .c.carga { flex: 1 1 80px; width: auto; }
+.tarjetas .c.desc, .tarjetas .c.crece { flex: 1 1 100%; width: auto; }
+.tarjetas .past { flex-direction: row; flex: 1 1 100%; }
+.ses-pie { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; align-items: center; }
+.tel .ses-pie .prin { flex: 1 1 100%; min-height: 50px; font-size: 15.5px; border-radius: 14px; }
+.tel .ses-pie .blanco { flex: 1 1 120px; min-height: 44px; }
+.sin-sesion { background: #fff; border: 1px solid var(--linea); border-radius: 18px; padding: 34px 20px; text-align: center; box-shadow: var(--sombra); display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.sin-sesion b { font-size: 16.5px; font-weight: 800; }
+.fila-c { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+
+.suelto { opacity: .35; }
+.set.suelto, .ej.suelto, .fase-fila.suelto, .fase-ab.suelto { background: var(--azulSuave); border-radius: 12px; }
+.fantasma { position: fixed; left: 0; top: 0; z-index: 90; pointer-events: none; display: flex; align-items: center; gap: 9px; max-width: 360px; padding: 9px 14px 9px 10px; background: #fff; border: 1.5px solid var(--azul); border-radius: 12px; box-shadow: var(--sombraPop); font-size: 14px; font-weight: 800; color: var(--tinta); transform: rotate(-.6deg); }
+.fantasma .ico { color: var(--azul); }
+.fantasma span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.linea-ins { position: absolute; z-index: 60; pointer-events: none; background: var(--azul); border-radius: 2px; box-shadow: 0 0 0 3px rgba(30,64,224,0.16); }
+body.arrastrando, body.arrastrando * { cursor: grabbing !important; user-select: none !important; }
+body.ensanchando, body.ensanchando * { cursor: col-resize !important; user-select: none !important; }
+
+.capa { position: absolute; inset: 0; z-index: 20; }
+.capa.oscura { background: rgba(17,19,24,0.45); display: flex; align-items: center; justify-content: center; padding: 18px; }
+.tel .capa.oscura.abajo { align-items: flex-end; padding: 0; }
+.menu { position: absolute; min-width: 232px; max-width: calc(100% - 16px); background: #fff; border: 1px solid var(--linea); border-radius: 14px; box-shadow: var(--sombraPop); padding: 6px; animation: sale .14s cubic-bezier(.23,1,.32,1); }
+@keyframes sale { from { opacity: 0; transform: scale(.97) translateY(-4px); } }
+.menu-t, .hoja-t { font-size: 12.5px; font-weight: 800; color: var(--tinta); padding: 8px 10px 7px; border-bottom: 1px solid var(--linea); margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mi { width: 100%; display: flex; align-items: center; gap: 11px; padding: 9px 10px; border-radius: 9px; border: 0; cursor: pointer; background: transparent; font-size: 14px; font-weight: 600; color: var(--tinta); text-align: left; }
+.mi .ico { color: var(--tinta3); }
+.mi:hover { background: var(--bg); }
+.mi.peligro, .mi.peligro .ico { color: var(--rojo); }
+.mi.peligro:hover { background: var(--rojoSuave); }
+.sep { display: block; height: 1px; background: var(--linea); margin: 5px 4px; }
+.hoja { width: 100%; background: var(--bg); border-radius: 22px 22px 0 0; padding: 8px 10px 14px; animation: sube .22s cubic-bezier(.22,1,.36,1); }
+@keyframes sube { from { transform: translateY(100%); } }
+.asa { display: block; width: 38px; height: 4px; border-radius: 999px; background: var(--linea2); margin: 4px auto 6px; }
+.hoja-t { font-size: 14px; padding: 8px 14px 10px; }
+.hoja .mi { min-height: 50px; font-size: 15.5px; font-weight: 700; padding: 0 14px; gap: 13px; border-radius: 14px; }
+.hoja-x { width: 100%; min-height: 48px; margin-top: 8px; border-radius: 14px; border: 1.5px solid var(--linea); background: #fff; cursor: pointer; font-size: 15px; font-weight: 700; color: var(--tinta2); }
+.ventana { width: 100%; max-width: 420px; max-height: 100%; overflow-y: auto; background: var(--bg); border-radius: 20px; padding: 18px; box-shadow: var(--sombraPop); display: flex; flex-direction: column; gap: 12px; animation: sale .16s cubic-bezier(.23,1,.32,1); }
+.ven-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ven-cab b { font-size: 17px; font-weight: 800; }
+.vc { display: flex; flex-direction: column; gap: 6px; }
+.vc > span { font-size: 13px; font-weight: 700; color: var(--tinta); }
+.vc input, .vc textarea { border: 1.5px solid var(--linea); border-radius: 11px; padding: 10px 12px; font-size: 14px; font-weight: 500; outline: none; background: #fff; width: 100%; resize: vertical; }
+.colores { display: flex; gap: 8px; flex-wrap: wrap; }
+.col { width: 30px; height: 30px; border-radius: 10px; cursor: pointer; border: 3px solid transparent; padding: 0; }
+.col.on { border-color: var(--tinta); }
+.ven-pie { display: flex; justify-content: flex-end; }
+.formas { display: flex; flex-direction: column; gap: 8px; }
+.forma { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 12px; border-radius: 14px; border: 1.5px solid var(--linea); background: #fff; cursor: pointer; }
+.forma.on { border-color: var(--azul); background: var(--azulSuave); cursor: default; }
+.forma .cua { width: 40px; height: 40px; border-radius: 12px; background: var(--azulSuave); color: var(--azul); display: grid; place-items: center; flex-shrink: 0; }
+.forma.on .cua { background: var(--azul); color: #fff; }
+.forma b { display: block; font-size: 15px; font-weight: 800; color: var(--tinta); }
+.forma small { display: block; font-size: 12.5px; color: var(--tinta2); margin-top: 2px; line-height: 1.4; font-weight: 500; }
+.aviso { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 70; display: inline-flex; align-items: center; gap: 9px; max-width: calc(100% - 28px); padding: 11px 17px; border-radius: 999px; background: rgba(17,19,24,0.94); color: #fff; font-size: 13.5px; font-weight: 700; box-shadow: var(--sombraPop); white-space: nowrap; }
+.aviso span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.aviso button { border: 0; background: transparent; cursor: pointer; color: #8FA8FF; font-size: 13.5px; font-weight: 800; padding: 2px 4px; }
+@media (max-width: 760px) { .mando-fila.dispositivo { display: none; } .marco.tel { max-width: none; border-inline: 0; } .mando { right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+</style>
+
+<div id="escenario"></div>
+<div class="mando" id="mando">
+  <div class="mando-panel" id="mando-panel" hidden>
+    <div class="mando-fila"><span class="ctl-t">Mover con</span>
+      <span class="seg" role="group" aria-label="Cómo se mueven los sets y los ejercicios">
+        <button type="button" id="mv-arr" aria-pressed="true">Arrastrar</button>
+        <button type="button" id="mv-fle" aria-pressed="false">Flechas</button>
+      </span>
+    </div>
+    <div class="mando-fila"><span class="ctl-t">Sets y ejercicios</span>
+      <span class="seg" role="group" aria-label="Aspecto de los sets y los ejercicios">
+        <button type="button" id="to-ton" aria-pressed="true">Tonos</button>
+        <button type="button" id="to-lin" aria-pressed="false">Líneas</button>
+      </span>
+    </div>
+    <div class="mando-fila"><span class="ctl-t">Fondo del workout</span>
+      <span class="seg" role="group" aria-label="Fondo de cada workout">
+        <button type="button" id="fo-col" aria-pressed="true">Con color</button>
+        <button type="button" id="fo-bla" aria-pressed="false">Blanco</button>
+      </span>
+    </div>
+    <div class="mando-fila"><span class="ctl-t">Lo que guardas</span>
+      <span class="seg" role="group" aria-label="Si lo que se guarda ya tiene un avance">
+        <button type="button" id="av-si" aria-pressed="true">Ya tiene avance</button>
+        <button type="button" id="av-no" aria-pressed="false">Es nuevo</button>
+      </span>
+    </div>
+    <div class="mando-fila dispositivo"><span class="ctl-t">Ver en</span>
+      <span class="seg" role="group" aria-label="Tamaño de pantalla">
+        <button type="button" id="ver-compu" aria-pressed="true">Computadora</button>
+        <button type="button" id="ver-tel" aria-pressed="false">Teléfono</button>
+      </span>
+    </div>
+    <p class="mando-nota">Haz clic en el nombre del programa o de una fase para cambiarlo, y en la bolita de la fase para cambiar su color. La guía se oculta con el botón de arriba (junto a su borde), arrastrando el borde hasta el fondo o con Ctrl+B. Arrastra el borde de la guía para ensancharla. Arrastra un Set, un ejercicio o una fase agarrándolo de su fila (en el teléfono, mantén presionado y arrastra). Prueba Ctrl+Z (⌘Z en Mac) después de cambiar algo.</p>
+  </div>
+  <button type="button" class="mando-boton" id="mando-boton" aria-expanded="false" aria-controls="mando-panel">Maqueta <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg></button>
+</div>
+
+<script>
+const I = {"panel-left-close":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\"/><path d=\"M9 3v18\"/><path d=\"m16 15-3-3 3-3\"/>","panel-left":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\"/><path d=\"M9 3v18\"/>","x":"<path d=\"M18 6 6 18\"/><path d=\"m6 6 12 12\"/>","arrow-left":"<path d=\"m12 19-7-7 7-7\"/><path d=\"M19 12H5\"/>","arrow-right":"<path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/>","arrow-up":"<path d=\"m5 12 7-7 7 7\"/><path d=\"M12 19V5\"/>","arrow-down":"<path d=\"M12 5v14\"/><path d=\"m19 12-7 7-7-7\"/>","check":"<path d=\"M20 6 9 17l-5-5\"/>","plus":"<path d=\"M5 12h14\"/><path d=\"M12 5v14\"/>","trash-2":"<path d=\"M10 11v6\"/><path d=\"M14 11v6\"/><path d=\"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6\"/><path d=\"M3 6h18\"/><path d=\"M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2\"/>","copy":"<rect width=\"14\" height=\"14\" x=\"8\" y=\"8\" rx=\"2\" ry=\"2\"/><path d=\"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2\"/>","eraser":"<path d=\"M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21\"/><path d=\"m5.082 11.09 8.828 8.828\"/>","folder-open":"<path d=\"m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2\"/>","save":"<path d=\"M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z\"/><path d=\"M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7\"/><path d=\"M7 3v4a1 1 0 0 0 1 1h7\"/>","chevron-down":"<path d=\"m6 9 6 6 6-6\"/>","chevron-right":"<path d=\"m9 18 6-6-6-6\"/>","layers":"<path d=\"M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z\"/><path d=\"M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12\"/><path d=\"M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17\"/>","pencil":"<path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\"/><path d=\"m15 5 4 4\"/>","sticky-note":"<path d=\"M21 9a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 15 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z\"/><path d=\"M15 3v5a1 1 0 0 0 1 1h5\"/>","dumbbell":"<path d=\"M17.596 12.768a2 2 0 1 0 2.829-2.829l-1.768-1.767a2 2 0 0 0 2.828-2.829l-2.828-2.828a2 2 0 0 0-2.829 2.828l-1.767-1.768a2 2 0 1 0-2.829 2.829z\"/><path d=\"m2.5 21.5 1.4-1.4\"/><path d=\"m20.1 3.9 1.4-1.4\"/><path d=\"M5.343 21.485a2 2 0 1 0 2.829-2.828l1.767 1.768a2 2 0 1 0 2.829-2.829l-6.364-6.364a2 2 0 1 0-2.829 2.829l1.768 1.767a2 2 0 0 0-2.828 2.829z\"/><path d=\"m9.6 14.4 4.8-4.8\"/>","scale":"<path d=\"M12 3v18\"/><path d=\"m19 8 3 8a5 5 0 0 1-6 0zV7\"/><path d=\"M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1\"/><path d=\"m5 8 3 8a5 5 0 0 1-6 0zV7\"/><path d=\"M7 21h10\"/>","video":"<path d=\"m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5\"/><rect x=\"2\" y=\"6\" width=\"14\" height=\"12\" rx=\"2\"/>","list":"<path d=\"M3 5h.01\"/><path d=\"M3 12h.01\"/><path d=\"M3 19h.01\"/><path d=\"M8 5h13\"/><path d=\"M8 12h13\"/><path d=\"M8 19h13\"/>","layout-grid":"<rect width=\"7\" height=\"7\" x=\"3\" y=\"3\" rx=\"1\"/><rect width=\"7\" height=\"7\" x=\"14\" y=\"3\" rx=\"1\"/><rect width=\"7\" height=\"7\" x=\"14\" y=\"14\" rx=\"1\"/><rect width=\"7\" height=\"7\" x=\"3\" y=\"14\" rx=\"1\"/>","settings-2":"<path d=\"M14 17H5\"/><path d=\"M19 7h-9\"/><circle cx=\"17\" cy=\"17\" r=\"3\"/><circle cx=\"7\" cy=\"7\" r=\"3\"/>","corner-up-left":"<path d=\"M20 20v-7a4 4 0 0 0-4-4H4\"/><path d=\"M9 14 4 9l5-5\"/>","calendar-plus":"<path d=\"M16 19h6\"/><path d=\"M16 2v4\"/><path d=\"M19 16v6\"/><path d=\"M21 12.598V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8.5\"/><path d=\"M3 10h18\"/><path d=\"M8 2v4\"/>","timer":"<line x1=\"10\" x2=\"14\" y1=\"2\" y2=\"2\"/><line x1=\"12\" x2=\"15\" y1=\"14\" y2=\"11\"/><circle cx=\"12\" cy=\"14\" r=\"8\"/>","undo-2":"<path d=\"M9 14 4 9l5-5\"/><path d=\"M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11\"/>","clipboard":"<rect width=\"8\" height=\"4\" x=\"8\" y=\"2\" rx=\"1\" ry=\"1\"/><path d=\"M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2\"/>","repeat":"<path d=\"m17 2 4 4-4 4\"/><path d=\"M3 11v-1a4 4 0 0 1 4-4h14\"/><path d=\"m7 22-4-4 4-4\"/><path d=\"M21 13v1a4 4 0 0 1-4 4H3\"/>","user":"<path d=\"M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2\"/><circle cx=\"12\" cy=\"7\" r=\"4\"/>","minus":"<path d=\"M5 12h14\"/>","grip-vertical":"<circle cx=\"9\" cy=\"12\" r=\"1\"/><circle cx=\"9\" cy=\"5\" r=\"1\"/><circle cx=\"9\" cy=\"19\" r=\"1\"/><circle cx=\"15\" cy=\"12\" r=\"1\"/><circle cx=\"15\" cy=\"5\" r=\"1\"/><circle cx=\"15\" cy=\"19\" r=\"1\"/>","redo-2":"<path d=\"m15 14 5-5-5-5\"/><path d=\"M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13\"/>","palette":"<path d=\"M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z\"/><circle cx=\"13.5\" cy=\"6.5\" r=\".5\" fill=\"currentColor\"/><circle cx=\"17.5\" cy=\"10.5\" r=\".5\" fill=\"currentColor\"/><circle cx=\"6.5\" cy=\"12.5\" r=\".5\" fill=\"currentColor\"/><circle cx=\"8.5\" cy=\"7.5\" r=\".5\" fill=\"currentColor\"/>","zap":"<path d=\"M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z\"/>","chevron-up":"<path d=\"m18 15-6-6-6 6\"/>","chevron-left":"<path d=\"m15 18-6-6 6-6\"/>","copy-plus":"<line x1=\"15\" x2=\"15\" y1=\"12\" y2=\"18\"/><line x1=\"12\" x2=\"18\" y1=\"15\" y2=\"15\"/><rect width=\"14\" height=\"14\" x=\"8\" y=\"8\" rx=\"2\" ry=\"2\"/><path d=\"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2\"/>","sun":"<circle cx=\"12\" cy=\"12\" r=\"4\"/><path d=\"M12 2v2\"/><path d=\"M12 20v2\"/><path d=\"m4.93 4.93 1.41 1.41\"/><path d=\"m17.66 17.66 1.41 1.41\"/><path d=\"M2 12h2\"/><path d=\"M20 12h2\"/><path d=\"m6.34 17.66-1.41 1.41\"/><path d=\"m19.07 4.93-1.41 1.41\"/>","moon":"<path d=\"M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401\"/>","refresh-cw":"<path d=\"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8\"/><path d=\"M21 3v5h-5\"/><path d=\"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16\"/><path d=\"M8 16H3v5\"/>"};
+const ico = (n, t = 16, extra = '') => `<svg class="ico" width="${t}" height="${t}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${I[n]}</svg>`;
+const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const $ = (s) => document.querySelector(s);
+
+const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+const NOMBRE = { Lun: 'Lunes', Mar: 'Martes', 'Mié': 'Miércoles', Jue: 'Jueves', Vie: 'Viernes', 'Sáb': 'Sábado', Dom: 'Domingo' };
+const TIPOS = { tests: { c: '#5DA0FF', n: 'Tests' }, rec: { c: '#3DD9A0', n: 'Recovery' }, gym: { c: '#A480FF', n: 'Gym' }, neural: { c: '#FFA047', n: 'Neural' } };
+const COLORES = ['#1E40E0', '#3DD9A0', '#FFA047', '#FF7A52', '#A480FF', '#5DA0FF', '#E052A0', '#9090A0'];
+const ANCHO = { min: 280, defecto: 360 };
+
+const ej = (n, o = {}) => ({ n, reps: '', uni: 'Reps', carga: '', tc: 'Carga', desc: '', du: 'seg', nota: '', peso: false, lado: false, ...o });
+const semanasDe = (n, d) => Array.from({ length: n }, () => ({ t: '', l: '', d: JSON.parse(JSON.stringify(d)) }));
+const M = {
+  titulo: 'Pretemporada de fuerza',
+  S: {
+    tests: [
+      { veces: 3, ejs: [ej('Sprint 10 yardas', { reps: '1', carga: 'Máximo', desc: '2', du: 'min' })] },
+      { veces: 3, ejs: [ej('Sprint 20 yardas', { reps: '1', carga: 'Máximo', desc: '3', du: 'min' })] },
+      { veces: 4, ejs: [ej('Salto vertical', { reps: '3', desc: '90', nota: 'Brazos atrás y explota' }), ej('Lanzamiento de balón', { reps: '5', carga: '3', tc: 'Kg', peso: true })] },
+    ],
+    rec: [
+      { veces: 2, ejs: [ej('Movilidad de cadera', { reps: '60', uni: 'Seg', lado: true }), ej('Respiración 90/90', { reps: '2', uni: 'Min' })] },
+      { veces: 1, formato: 'AMRAP', ejs: [ej('Bird Dog', { reps: '8-10', lado: true }), ej('Plank', { reps: '30', uni: 'Seg' })] },
+    ],
+    gym: [
+      { veces: 4, ejs: [ej('Back Squat', { reps: '5', carga: '75', tc: '% 1RM', desc: '3', du: 'min', peso: true })] },
+      { veces: 3, ejs: [ej('Romanian Deadlift', { reps: '8', carga: '7', tc: 'RPE', desc: '2', du: 'min', peso: true }), ej('Pallof Press', { reps: '10', lado: true, peso: true })] },
+    ],
+  },
+  FASES: [
+    { id: 'f1', n: 'Recuperación', c: '#3DD9A0', sub: '', enfoque: '', obj: '', sem: [
+      { t: 'Evaluación y descarga inicial', l: '', d: { Lun: ['Tests neurales', 'tests'], Mar: ['Recuperación activa', 'rec'], 'Mié': ['Tests de fuerza', 'tests'], Jue: ['Recuperación activa', 'rec'], Vie: ['Composición + movilidad', 'rec'] }, d2: { 'Mié': ['Recuperación activa', 'rec'] } },
+      { t: '', l: '', d: { Lun: ['Fuerza general', 'gym'], 'Mié': ['Recuperación activa', 'rec'], Vie: ['Fuerza general', 'gym'] } },
+    ] },
+    { id: 'f2', n: 'Fuerza base', c: '#A480FF', sub: '', enfoque: '', obj: '', sem: semanasDe(4, { Lun: ['Tren inferior', 'gym'], 'Mié': ['Tren superior', 'gym'], Vie: ['Cuerpo completo', 'gym'] }) },
+    { id: 'f3', n: 'Potencia', c: '#FFA047', sub: '', enfoque: '', obj: '', sem: semanasDe(3, { Mar: ['Potencia', 'neural'], Jue: ['Velocidad', 'neural'], 'Sáb': ['Fuerza', 'gym'] }) },
+  ],
+};
+const AQUI = { fase: 'f1', sem: 0, dia: 'Mar' };
+
+const guardarAncho = (v) => { try { localStorage.setItem('maqueta-editor-guia', String(v)); } catch (e) { /* sin almacenamiento: vale mientras dure la visita */ } };
+const leerAncho = () => { try { const v = parseInt(localStorage.getItem('maqueta-editor-guia'), 10); return Number.isFinite(v) ? v : ANCHO.defecto; } catch (e) { return ANCHO.defecto; } };
+
+const foto = () => JSON.stringify(M);
+const E = { equipo: 'compu', guia: true, ancho: leerAncho(), telDia: false, fase: 0, sem: 0, dia: 'Lun', vista: 'lista', mover: 'arrastrar', tonos: true, tono: true, conAvance: true, ses: 0, plegadas: {}, abre: { f1: true }, semV: {}, menu: null, ventana: null, aviso: null, abiertas: {}, arriba: false, noClic: 0, guardada: foto(), yaGuardo: false };
+const H = { pasado: [], futuro: [], ult: { clave: null, t: 0 } };
+let reloj = null;
+
+const semana = () => M.FASES[E.fase].sem[E.sem];
+const sesionDe = (d) => semana().d[d] || null;
+const setsDe = (tipo) => M.S[tipo === 'neural' ? 'tests' : tipo];
+const sesionesDe = (d) => { const s = semana(); return [s.d[d], s.d2 && s.d2[d]].filter(Boolean); };
+const setsDeHoy = () => { const ss = sesionesDe(E.dia); return setsDe((ss[Math.min(E.ses, ss.length - 1)] || ss[0])[1]); };
+const semDefecto = (i) => (AQUI.fase === M.FASES[i].id ? AQUI.sem : 0);
+const semDe = (i) => (i === E.fase ? E.sem : clamp(E.semV[M.FASES[i].id] ?? semDefecto(i), 0, M.FASES[i].sem.length - 1));
+const fijaSes = (el) => { const c = el && el.closest && el.closest('.sesion'); if (c && c.dataset.k !== undefined) E.ses = Number(c.dataset.k); };
+const primerDia = () => DIAS.find((d) => semana().d[d]) || 'Lun';
+const esTel = () => E.equipo === 'tel';
+const sucio = () => foto() !== E.guardada;
+const lugar = () => ({ fase: E.fase, sem: E.sem, dia: E.dia, pl: { ...E.plegadas } });
+
+/* ---------- historial: Deshacer / Rehacer ---------- */
+function registra(clave = null) {
+  const t = Date.now();
+  if (E.aviso && E.aviso.deshacer) E.aviso = null;
+  if (clave && clave === H.ult.clave && t - H.ult.t < 1500) { H.ult.t = t; return; }
+  H.pasado.push({ s: foto(), l: lugar() });
+  if (H.pasado.length > 100) H.pasado.shift();
+  H.futuro = [];
+  H.ult = { clave, t };
+}
+function restaura(paso) {
+  const n = JSON.parse(paso.s);
+  M.titulo = n.titulo; M.S = n.S; M.FASES = n.FASES;
+  E.fase = clamp(paso.l.fase, 0, M.FASES.length - 1);
+  E.sem = clamp(paso.l.sem, 0, M.FASES[E.fase].sem.length - 1);
+  E.dia = paso.l.dia;
+  E.plegadas = { ...(paso.l.pl || {}) };   // lo plegado vuelve como estaba (así deshacer un cambio de orden no deja los workouts al revés)
+  E.ses = 0;
+  H.ult = { clave: null, t: 0 };
+}
+function deshacer() {
+  if (!H.pasado.length) return false;
+  H.futuro.push({ s: foto(), l: lugar() });
+  restaura(H.pasado.pop());
+  return true;
+}
+function rehacer() {
+  if (!H.futuro.length) return false;
+  H.pasado.push({ s: foto(), l: lugar() });
+  restaura(H.futuro.pop());
+  return true;
+}
+
+/* ---------- piezas ---------- */
+const grip = () => '';
+const mover = (a, b, noA, noB, deLado) => `<span class="mover discreto"><button type="button" data-a="${a}" ${noA ? 'disabled' : ''} aria-label="${deLado ? 'Mover antes' : 'Subir'}">${ico(deLado ? 'arrow-left' : 'arrow-up', 14)}</button><button type="button" data-a="${b}" ${noB ? 'disabled' : ''} aria-label="${deLado ? 'Mover después' : 'Bajar'}">${ico(deLado ? 'arrow-right' : 'arrow-down', 14)}</button></span>`;
+const flechas = (a, b, noA, noB, deLado) => (E.mover === 'flechas' ? mover(a, b, noA, noB, deLado) : '');
+const rot = (t, lista) => `<span class="rot ${lista ? 'lista' : ''}">${t}${lista ? ico('chevron-down', 12) : ''}</span>`;
+const campo = (rotulo, valor, lista, cls, b) => `<label class="c ${cls}">${rot(rotulo, lista)}<input data-b="${b}" value="${esc(valor)}" aria-label="${rotulo}"></label>`;
+
+function btnGuardar() {
+  if (sucio()) return `<button type="button" class="prin" data-a="${E.conAvance ? 'menu:g-main' : 'guardar'}">${ico('check', 15)} Guardar</button>`;
+  return `<button type="button" class="prin ${E.yaGuardo ? 'listo' : 'apagado'}" disabled>${ico('check', 15)} ${E.yaGuardo ? 'Guardado' : 'Guardar'}</button>`;
+}
+function botonesHistorial() {
+  const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+  const z = mac ? '⌘Z' : 'Ctrl+Z';
+  const y = mac ? '⇧⌘Z' : 'Ctrl+Y';
+  const des = `<button type="button" class="cuad flojo" data-a="deshacer" ${H.pasado.length ? '' : 'disabled'} title="Deshacer (${z})" aria-label="Deshacer">${ico('undo-2', 18)}</button>`;
+  const reh = `<button type="button" class="cuad flojo" data-a="rehacer" ${H.futuro.length ? '' : 'disabled'} title="Rehacer (${y})" aria-label="Rehacer">${ico('redo-2', 18)}</button>`;
+  if (esTel()) return `<span class="hist">${des}${H.futuro.length ? reh : ''}</span>`;
+  return `<span class="hist">${des}${reh}</span>`;
+}
+function accionesBarra() {
+  return `<div class="barra-acc">${botonesHistorial()}${btnGuardar()}</div>`;
+}
+function vistaToggle() {
+  return `<div class="vista" role="group" aria-label="Cómo ver los ejercicios"><button type="button" data-a="vista:lista" aria-pressed="${E.vista === 'lista'}" aria-label="Lista" title="Ver en lista">${ico('list', 16)}</button><button type="button" data-a="vista:tarjetas" aria-pressed="${E.vista === 'tarjetas'}" aria-label="Tarjetas" title="Ver en tarjetas">${ico('layout-grid', 16)}</button></div>`;
+}
+function barra() {
+  if (esTel()) {
+    return `<div class="barra">
+      <button type="button" class="cuad" data-a="${E.telDia ? 'volver' : 'cerrar'}" aria-label="${E.telDia ? 'Volver a la guía' : 'Cerrar el editor'}">${ico(E.telDia ? 'arrow-left' : 'x', 17)}</button>
+      <div class="barra-t">${E.telDia ? `Sem ${E.sem + 1} · ${esc(M.FASES[E.fase].n)}` : ''}</div>
+      ${accionesBarra()}
+    </div>`;
+  }
+  // La barra se parte como la pantalla: sobre la guía, volver, el título del plan (con su rótulo, como en el editor de hoy) y el botón de la guía, pegado al borde; sobre el día, las opciones de TODO el programa juntas y lo global (deshacer, guardar, cerrar).
+  const txtGuia = E.guia ? 'Ocultar la guía' : 'Mostrar la guía';
+  return `<div class="barra">
+    <div class="barra-izq">
+      <button type="button" class="cuad" data-a="cerrar" aria-label="Volver" title="Volver">${ico('arrow-left', 17)}</button>
+      ${E.guia ? `<label class="barra-id"><span class="rot">Título del plan</span><input class="barra-titulo" data-b="titulo" value="${esc(M.titulo)}" aria-label="Título del plan"></label>` : ''}
+      <button type="button" class="cuad flojo btn-guia ${E.guia ? '' : 'apagada'}" data-a="guia" aria-label="${txtGuia}" title="${txtGuia} (Ctrl+B)">${ico(E.guia ? 'panel-left-close' : 'panel-left', 18)}</button>
+    </div>
+    <div class="barra-der">
+      <div class="prog-grupo" role="group" aria-label="Opciones del programa">
+        <button type="button" class="prog-b" data-a="forma" title="Cambiar la forma del programa">${ico('layers', 12)}<span>Programa por fases</span><b>Cambiar</b></button>
+        <button type="button" class="prog-b azul" data-a="${E.conAvance ? 'menu:g-plan' : 'item:guarda::plan'}" title="Guarda este plan en Mis planes, para usarlo con otros atletas">${ico('save', 12)}<span>Guardar plan</span></button>
+        <button type="button" class="prog-b borra" data-a="demo" title="Eliminar el programa">${ico('trash-2', 12)}<span>Eliminar programa</span></button>
+      </div>
+      <span class="hueco"></span>
+      ${accionesBarra()}
+      <button type="button" class="cuad" data-a="cerrar" aria-label="Cerrar el editor">${ico('x', 17)}</button>
+    </div>
+  </div>`;
+}
+
+function filaFase(f, i) {
+  const aqui = AQUI.fase === f.id;
+  return `<div class="fase-fila ${aqui ? 'aqui' : ''}" role="button" tabindex="0" aria-expanded="false" data-a="fase:${i}" data-item="fase:${i}">${grip(`Arrastrar la fase ${esc(f.n)}`)}<i class="punto" style="background:${f.c}"></i><b>${esc(f.n)}</b>${aqui ? '<span class="pastilla">AQUÍ VA</span>' : ''}${i === E.fase ? '<span class="pastilla">EDITANDO</span>' : ''}<span class="gris">${f.sem.length} sem</span>${ico('chevron-right', 15)}</div>`;
+}
+// Cada fase se abre y se cierra por su cuenta (un clic la abre, otro la cierra); abrir una no cierra las otras.
+// Tocar cualquier cosa de una fase abierta (semana, día, duplicar…) la vuelve la fase que se está editando: por eso llevan data-fi y data-sem.
+function faseAbierta(f, i) {
+  const k0 = semDe(i);
+  const s = f.sem[k0];
+  const aqui = AQUI.fase === f.id;
+  const actual = i === E.fase;
+  const d = ` data-fi="${i}" data-sem="${k0}"`;
+  return `<div class="fase-ab ${aqui ? 'aqui' : ''}" data-item="fase:${i}">
+    <div class="fila"><button type="button" class="punto-btn" data-a="menu:color"${d} aria-label="Cambiar el color de la fase" title="Cambiar el color"><i class="punto" style="background:${f.c}"></i></button>
+      <input class="inline fase-n" data-b="fase:${i}:n" value="${esc(f.n)}" aria-label="Nombre de la fase" title="Cambiar el nombre">
+      <span class="fase-acc">${E.mover === 'flechas' ? `${i > 0 ? `<button type="button" class="ic" data-a="item:sube-fase"${d} aria-label="Subir la fase" title="Subir la fase">${ico('arrow-up', 15)}</button>` : ''}${i < M.FASES.length - 1 ? `<button type="button" class="ic" data-a="item:baja-fase"${d} aria-label="Bajar la fase" title="Bajar la fase">${ico('arrow-down', 15)}</button>` : ''}` : ''}<button type="button" class="ic" data-a="item:dup-fase"${d} aria-label="Duplicar la fase" title="Duplicar la fase">${ico('copy-plus', 15)}</button><button type="button" class="ic borra" data-a="item:quita-fase"${d} aria-label="Eliminar la fase" title="Eliminar la fase">${ico('trash-2', 15)}</button><button type="button" class="ic cierra" data-a="fase-cierra:${i}" aria-expanded="true" aria-label="Cerrar la fase" title="Cerrar la fase">${ico('chevron-down', 16)}</button></span></div>
+    <div class="fichas">
+      ${f.sem.map((w, k) => { const suya = aqui && AQUI.sem === k; return `<button type="button" class="ficha ${k === k0 ? 'on' : ''} ${suya ? 'suya' : ''}" data-a="sem:${i}:${k}" aria-label="Semana ${k + 1}${suya ? ', donde va' : ''}">${k + 1}${suya ? '<i class="pt"></i>' : ''}</button>`; }).join('')}
+      <button type="button" class="ficha mas" data-a="sem-nueva:${i}" aria-label="Agregar semana">${ico('plus', 15)}</button>
+      <span class="hueco"></span>
+      <button type="button" class="quieto chico borde" data-a="menu:semana"${d}>Opciones ${ico('chevron-down', 14)}</button>
+    </div>
+    <input class="inline sem-t" data-b="semt:${i}:${k0}" value="${esc(s.t)}" placeholder=" " aria-label="Título de la semana">
+    <div class="dias">
+      ${DIAS.map((dd) => {
+        const sess = [s.d[dd], s.d2 && s.d2[dd]].filter(Boolean);
+        const on = !esTel() && actual && dd === E.dia ? 'on' : '';
+        const suyo = aqui && AQUI.sem === k0 && AQUI.dia === dd;
+        if (!sess.length) return `<button type="button" class="dia-fila vacio ${on}" data-a="dia:${dd}"${d}><span class="dl">${dd}</span><i class="punto chico" style="background:transparent"></i><span class="sin">Sin sesión</span>${on ? '<span class="pastilla">EDITANDO</span>' : ''}</button>`;
+        const doble = sess.length > 1;
+        return `<button type="button" class="dia-fila ${on} ${doble ? 'doble' : ''}" data-a="dia:${dd}"${d}><span class="dl">${dd}</span><i class="punto chico" style="background:${TIPOS[sess[0][1]].c}"></i><b>${esc(sess[0][0])}</b>${suyo ? `<span class="pastilla ${on ? 'suave' : ''}">AQUÍ VA</span>` : ''}${on ? '<span class="pastilla">EDITANDO</span>' : ''}${doble ? `<span class="seg2"><i class="punto chico" style="background:${TIPOS[sess[1][1]].c}"></i><b>${esc(sess[1][0])}</b></span>` : ''}</button>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+function guia() {
+  const cuerpo = `<div class="fases">${M.FASES.map((f, i) => (E.abre[f.id] ? faseAbierta(f, i) : filaFase(f, i))).join('')}</div>
+    <button type="button" class="agrega" data-a="fase-nueva">${ico('plus', 16)} Agregar fase</button>`;
+  if (esTel()) {
+    const acciones = `<button type="button" class="quieto chico azul" data-a="${E.conAvance ? 'menu:g-plan' : 'item:guarda::plan'}">${ico('save', 14)} Guardar plan</button><button type="button" class="quieto chico borra" data-a="demo">${ico('trash-2', 14)} Eliminar programa</button>`;
+    return `<div class="guia-in"><div class="prog">
+      <label class="prog-t"><span class="rot">Título del plan</span><input class="campo titulo" data-b="titulo" value="${esc(M.titulo)}" aria-label="Título del plan"></label>
+      <div class="prog-forma">${ico('layers', 14)}<span>Programa por fases</span><button type="button" class="cambiar" data-a="forma">Cambiar</button></div>
+      <div class="prog-acc">${acciones}</div>
+    </div>${cuerpo}</div>`;
+  }
+  return `<div class="guia-cuerpo"><div class="guia-in">${cuerpo}</div></div>`;
+}
+
+function tira() {
+  const s = semana();
+  return `<div class="tira">
+    <div class="tira-dias">${DIAS.map((d) => `<button type="button" class="td ${d === E.dia ? 'on' : ''}" data-a="dia:${d}" aria-label="${NOMBRE[d]}">${d}<i style="background:${s.d[d] ? TIPOS[s.d[d][1]].c : 'transparent'}"></i></button>`).join('')}</div>
+  </div>`;
+}
+
+const pastillas = (e, si, ei, enCab) => `<div class="past ${enCab ? 'cab' : ''}"><button type="button" class="pp ${e.peso ? 'on' : ''}" data-a="peso:${si}:${ei}">${ico('scale', 12)} ${e.peso ? 'Con peso' : 'Sin peso'}</button><button type="button" class="pp video" data-a="demo">${ico('video', 12)} Su video</button></div>`;
+const ladoHTML = (e, st, si, ei) => `<div class="lado"><label class="marca"><input type="checkbox" data-b="ej:${si}:${ei}:lado" ${e.lado ? 'checked' : ''}> Por lado</label>${!st.formato && st.veces >= 2 ? `<button type="button" class="blanco chico" data-a="demo">Por vuelta ${ico('chevron-down', 13)}</button>` : ''}</div>`;
+
+function ejFila(e, si, ei, st) {
+  const n = st.ejs.length;
+  const k = `${SESK}:${si}-${ei}`;
+  const tel = esTel();
+  const b = (c) => `ej:${si}:${ei}:${c}`;
+  const conNota = E.abiertas[`${k}d`] || e.nota;
+  const notas = tel
+    ? (conNota ? campo('Descripción', e.nota, false, 'todo', b('nota')) : '')
+    : campo('Descripción', e.nota, false, 'crece', b('nota'));
+  const quitar = `<button type="button" class="ic borra" data-a="ej-quita:${si}:${ei}" aria-label="Quitar ${esc(e.n)}">${ico('trash-2', 15)}</button>`;
+  const fl = flechas(`ej-sube:${si}:${ei}`, `ej-baja:${si}:${ei}`, ei === 0, ei === n - 1);
+  const pieTel = `<div class="ej-pie">${conNota ? '' : `<button type="button" class="quieto chico" data-a="nota:${k}d">${ico('plus', 13)} Descripción</button>`}</div>`;
+  return `<div class="ej" data-item="ej:${si}:${ei}">
+    <div class="ej-cab">${grip(`Arrastrar ${esc(e.n)}`)}<span class="mini">${ico('dumbbell', 15)}</span><b>${esc(e.n)}</b>${tel ? '' : pastillas(e, si, ei, true)}${fl}${quitar}</div>
+    <div class="ej-campos">
+      ${campo(e.uni, e.reps, true, 'reps', b('reps'))}${campo(e.tc, e.carga, true, 'carga', b('carga'))}
+      ${tel ? ladoHTML(e, st, si, ei) : ''}
+      ${campo(`Descanso · ${e.du}`, e.desc, true, 'desc', b('desc'))}
+      ${tel ? pastillas(e, si, ei) : ''}
+      ${notas}
+    </div>
+    ${tel ? pieTel : ladoHTML(e, st, si, ei)}
+  </div>`;
+}
+function ejTarjeta(e, si, ei, st) {
+  const n = st.ejs.length;
+  const b = (c) => `ej:${si}:${ei}:${c}`;
+  return `<div class="ej" data-item="ej:${si}:${ei}">
+    <div class="foto">${ico('dumbbell', 24)}${grip(`Arrastrar ${esc(e.n)}`)}${flechas(`ej-sube:${si}:${ei}`, `ej-baja:${si}:${ei}`, ei === 0, ei === n - 1, !esTel())}<button type="button" class="ic borra" data-a="ej-quita:${si}:${ei}" aria-label="Quitar ${esc(e.n)}">${ico('trash-2', 15)}</button></div>
+    <div class="ej-cab"><b>${esc(e.n)}</b></div>
+    <div class="ej-campos">
+      ${campo(e.uni, e.reps, true, 'reps', b('reps'))}${campo(e.tc, e.carga, true, 'carga', b('carga'))}
+      ${ladoHTML(e, st, si, ei)}
+      ${campo(`Descanso · ${e.du}`, e.desc, true, 'desc', b('desc'))}
+      ${campo('Descripción', e.nota, false, 'crece', b('nota'))}
+      ${pastillas(e, si, ei)}
+    </div>
+  </div>`;
+}
+
+function setHTML(st, i, n) {
+  const etq = st.ejs.length >= 4 ? 'CIRCUITO' : st.ejs.length === 3 ? 'TRI-SERIE' : st.ejs.length === 2 ? 'BI-SERIE' : '';
+  const repite = st.formato
+    ? `<button type="button" class="pildora-f" data-a="demo">${ico('timer', 14)} ${st.formato} ${ico('chevron-down', 13)}</button>`
+    : `<span class="rep"><button type="button" class="blanco chico" data-a="demo">Se repite ${ico('chevron-down', 13)}</button><span class="paso"><button type="button" data-a="menos:${i}" aria-label="Menos veces">−</button><b>${st.veces}</b><button type="button" data-a="mas:${i}" aria-label="Más veces">+</button></span>${st.veces === 1 ? 'vez' : 'veces'}</span>`;
+  return `<div class="set" data-item="set:${i}">
+    <div class="set-cab">
+      ${grip(`Arrastrar el Set ${i + 1}`)}<b class="set-n">Set ${i + 1}</b>${etq && !st.formato ? `<span class="etq">${etq}</span>` : ''}
+      ${repite}
+      <span class="hueco"></span>
+      ${flechas(`sube:${i}`, `baja:${i}`, i === 0, i === n - 1)}
+      <button type="button" class="ic borra" data-a="set-quita:${i}" aria-label="Eliminar el Set ${i + 1}">${ico('trash-2', 15)}</button>
+    </div>
+    ${st.formato ? `<div class="franja"><span>máximas rondas en</span><span class="paso"><button type="button" data-a="demo" aria-label="Menos tiempo">−</button><b>12 min</b><button type="button" data-a="demo" aria-label="Más tiempo">+</button></span><span class="az">= 12 min</span><span class="hueco"></span><button type="button" class="blanco chico" data-a="demo">Más ${ico('chevron-down', 13)}</button></div>` : ''}
+    <div class="ejs ${E.vista === 'tarjetas' ? 'tarjetas' : ''}">${st.ejs.map((e, k) => (E.vista === 'tarjetas' ? ejTarjeta : ejFila)(e, i, k, st)).join('')}</div>
+    <button type="button" class="blanco chico suave" data-a="ej-nuevo:${i}">${ico('plus', 14)} Agregar ejercicio</button>
+  </div>`;
+}
+
+// Un workout (sesión). Lleva de fondo el color de su tipo en un tono muy clarito; en un día con DOS workouts cada uno se pliega
+// (botón azul con borde) y se pueden reordenar arrastrándolos. AM/PM es opcional: el coach lo pone desde «Opciones» si quiere.
+let SESK = 0;
+const rgbDe = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)).join(',');
+function sesionHTML(ses, k, dual) {
+  SESK = k;
+  const sets = setsDe(ses[1]);
+  const clave = `${E.fase}:${E.sem}:${E.dia}:${k}`;
+  const plegada = dual && !!E.plegadas[clave];
+  const tipo = TIPOS[ses[1]];
+  const turno = ses[2] ? `<span class="turno ${ses[2] === 'PM' ? 'pm' : 'am'}">${ses[2]}</span>` : '';
+  const quePlega = plegada ? 'Desplegar' : 'Plegar';
+  const plega = dual ? `<button type="button" class="cuad plega" data-a="plegar:${k}" aria-expanded="${!plegada}" aria-label="${quePlega} el workout ${k + 1}" title="${quePlega}">${ico(plegada ? 'chevron-right' : 'chevron-down', 17)}</button>` : '';
+  const orden = dual ? flechas(`ses-sube:${k}`, `ses-baja:${k}`, k === 0, k === 1) : '';
+  // Como en la app de hoy: las herramientas del workout en UN solo botón y el interruptor de vista al final y a la derecha; en TODOS los workouts del día, para que los botones queden en el mismo lugar (en el teléfono la vista vive en el encabezado del día).
+  const herr = `${orden}<button type="button" class="quieto borde" data-a="menu:sesion">Opciones ${ico('chevron-down', 14)}</button>${esTel() ? '' : vistaToggle()}`;
+  const nEj = sets.reduce((a, st) => a + st.ejs.length, 0);
+  const resumen = `<div class="ses-resumen">${sets.length} ${sets.length === 1 ? 'set' : 'sets'} · ${nEj} ${nEj === 1 ? 'ejercicio' : 'ejercicios'}</div>`;
+  return `<section class="sesion ${plegada ? 'plegada' : ''}" data-k="${k}"${dual ? ` data-item="ses:${k}"` : ''} style="--tc:${rgbDe(tipo.c)}">
+    <div class="ses-cab">
+      ${plega}${turno}<button type="button" class="tipo" data-a="demo"><i class="punto" style="background:${tipo.c}"></i>${tipo.n}${ico('chevron-down', 14)}</button>
+      <input class="campo nombre" data-b="ses:${E.dia}:${k}" value="${esc(ses[0])}" aria-label="Nombre del workout${dual ? ` ${k + 1}` : ''}">
+      ${herr}
+    </div>
+    ${plegada ? resumen : `<div class="sets">${sets.map((st, i) => setHTML(st, i, sets.length)).join('')}</div>
+    <div class="ses-pie"><button type="button" class="prin" data-a="set-nuevo">${ico('plus', 16)} Agregar set</button><button type="button" class="blanco" data-a="demo">${ico('sticky-note', 15)} Nota</button><button type="button" class="blanco" data-a="demo">${ico('dumbbell', 15)} Ejercicio nuevo</button></div>`}
+  </section>`;
+}
+function diaHTML() {
+  const sess = sesionesDe(E.dia);
+  const dual = sess.length > 1;
+  const conTira = esTel() || !E.guia;
+  const vacio = `<div class="sin-sesion"><b>Sin sesión el ${NOMBRE[E.dia].toLowerCase()}</b><div class="fila-c"><button type="button" class="prin" data-a="agrega-sesion">${ico('plus', 16)} Agregar sesión</button><button type="button" class="blanco" data-a="demo">${ico('folder-open', 15)} Usar workout</button></div></div>`;
+  // En compu el día no lleva título aparte (la guía y la tira ya dicen cuál es); en el teléfono el encabezado del día lleva la vista.
+  const cab = esTel() ? `<div class="dia-cab"><h2>${NOMBRE[E.dia]}</h2>${sess.length ? vistaToggle() : ''}</div>` : '';
+  const cuerpo = sess.length
+    ? sess.map((s, k) => sesionHTML(s, k, dual)).join('') + (dual ? '' : `<button type="button" class="agrega" data-a="agrega-sesion2">${ico('plus', 16)} Agregar otra sesión</button>`)
+    : vacio;
+  return `<div class="dia-in">${conTira ? tira() : ''}${cab}${cuerpo}</div>`;
+}
+
+/* La pregunta de TODOS los botones de guardar cuando lo que se trabaja ya tiene un avance: dos opciones, con las frases más cortas. */
+const pideGuardar = (que) => ({ t: () => 'Ya tiene avance', items: () => [{ i: 'refresh-cw', t: 'Actualizar avance', k: `guarda:act:${que}` }, { i: 'copy-plus', t: 'Guardar nuevo', k: `guarda:nuevo:${que}` }] });
+const MENUS = {
+  semana: { t: () => `Semana ${E.sem + 1}`, items: () => [
+    { i: 'copy-plus', t: 'Duplicar semana', k: 'dup-sem' }, { i: 'layers', t: 'Copiar a todas', k: 'copiar-todas' },
+    { i: 'folder-open', t: 'Usar semana', k: 'demo' }, { i: 'save', t: 'Guardar semana', k: E.conAvance ? 'pide:sem' : 'guarda::sem' }, null, { i: 'trash-2', t: 'Eliminar semana', k: 'quita-sem', peligro: true }] },
+  programa: { t: () => 'Programa', items: () => [{ i: 'layers', t: 'Cambiar forma', k: 'forma' }, { i: 'save', t: 'Guardar plan', k: E.conAvance ? 'pide:plan' : 'guarda::plan' }, null, { i: 'trash-2', t: 'Eliminar programa', k: 'demo', peligro: true }] },
+  'g-main': pideGuardar('main'), 'g-plan': pideGuardar('plan'), 'g-sem': pideGuardar('sem'), 'g-wk': pideGuardar('wk'),
+  sesion: { t: () => 'Sesión', items: () => [{ i: 'folder-open', t: 'Usar workout', k: 'demo' }, { i: 'save', t: 'Guardar workout', k: E.conAvance ? 'pide:wk' : 'guarda::wk' }, { i: 'copy', t: 'Copiar', k: 'demo' }, { i: 'eraser', t: 'Vaciar', k: 'vaciar' },
+    ...(((sesionesDe(E.dia)[E.ses] || [])[2]) ? [{ i: 'x', t: 'Quitar turno', k: 'turno:' }, { i: ((sesionesDe(E.dia)[E.ses] || [])[2]) === 'AM' ? 'moon' : 'sun', t: ((sesionesDe(E.dia)[E.ses] || [])[2]) === 'AM' ? 'Cambiar a PM' : 'Cambiar a AM', k: ((sesionesDe(E.dia)[E.ses] || [])[2]) === 'AM' ? 'turno:PM' : 'turno:AM' }] : [{ i: 'sun', t: 'Poner AM', k: 'turno:AM' }, { i: 'moon', t: 'Poner PM', k: 'turno:PM' }]),
+    null, { i: 'trash-2', t: 'Eliminar sesión', k: 'sesion-quita', peligro: true }] },
+};
+
+function ventanaHTML() {
+  const f = M.FASES[E.fase];
+  const x = `<button type="button" class="ic" data-a="cierra" aria-label="Cerrar">${ico('x', 17)}</button>`;
+  if (E.ventana === 'forma') {
+    const FORMAS = [['repeat', 'Una rutina que se repite', 'Misma rutina cada semana, sin fin. Lo más común.'], ['zap', 'Varias semanas que avanzan', 'Arrancas con la misma base y vas subiendo cargas semana a semana.'], ['layers', 'Programa por fases', 'Bloques con objetivos distintos, como un plan de temporada.']];
+    return `<div class="capa oscura" data-a="cierra"><div class="ventana" data-a="nada" role="dialog" aria-label="La forma del programa">
+      <div class="ven-cab"><b>La forma del programa</b>${x}</div>
+      <div class="formas">${FORMAS.map(([i, t, d], k) => `<button type="button" class="forma ${k === 2 ? 'on' : ''}" data-a="${k === 2 ? 'nada' : 'demo'}"><span class="cua">${ico(i, 20)}</span><span style="flex:1;min-width:0"><b>${t}</b><small>${d}</small></span>${k === 2 ? '<span class="pastilla">Así está</span>' : ''}</button>`).join('')}</div>
+    </div></div>`;
+  }
+  const cuerpo = E.ventana === 'semana'
+    ? `<label class="vc"><span>Título de la semana</span><input data-b="sem:t" value="${esc(semana().t)}"></label><label class="vc"><span>Carga de la semana</span><input data-b="sem:l" value="${esc(semana().l)}"></label>`
+    : `<label class="vc"><span>Subtítulo</span><input data-b="fase:${E.fase}:sub" value="${esc(f.sub)}"></label>`;
+  return `<div class="capa oscura" data-a="cierra"><div class="ventana" data-a="nada" role="dialog" aria-label="${E.ventana === 'semana' ? 'Título y carga' : 'Subtítulo de la fase'}">
+    <div class="ven-cab"><b>${E.ventana === 'semana' ? `Semana ${E.sem + 1}` : esc(f.n)}</b>${x}</div>
+    ${cuerpo}
+    <div class="ven-pie"><button type="button" class="prin" data-a="cierra">Listo</button></div>
+  </div></div>`;
+}
+function capasHTML() {
+  let h = '';
+  if (E.menu && E.menu.tipo === 'color') {
+    const colores = COLORES.map((c) => `<button type="button" class="col ${c === M.FASES[E.fase].c ? 'on' : ''}" style="background:${c}" data-a="color-elige:${c}" aria-label="Color ${c}"></button>`).join('');
+    h += esTel()
+      ? `<div class="capa oscura abajo" data-a="cierra"><div class="hoja" data-a="nada"><i class="asa"></i><div class="hoja-t">Color de la fase</div><div class="colores">${colores}</div><button type="button" class="hoja-x" data-a="cierra">Cancelar</button></div></div>`
+      : `<div class="capa" data-a="cierra"><div class="menu menu-color" role="menu" aria-label="Color de la fase" style="top:${E.menu.y}px;${E.menu.lado}:${E.menu.x}px" data-a="nada"><div class="colores">${colores}</div></div></div>`;
+  } else if (E.menu) {
+    const m = MENUS[E.menu.tipo];
+    const items = m.items().map((it) => (it ? `<button type="button" class="mi ${it.peligro ? 'peligro' : ''}" data-a="item:${it.k}">${ico(it.i, 16)} ${it.t}</button>` : '<i class="sep"></i>')).join('');
+    h += esTel()
+      ? `<div class="capa oscura abajo" data-a="cierra"><div class="hoja" data-a="nada"><i class="asa"></i><div class="hoja-t">${esc(m.t())}</div>${items}<button type="button" class="hoja-x" data-a="cierra">Cancelar</button></div></div>`
+      : `<div class="capa" data-a="cierra"><div class="menu" role="menu" style="top:${E.menu.y}px;${E.menu.lado}:${E.menu.x}px" data-a="nada"><div class="menu-t">${esc(m.t())}</div>${items}</div></div>`;
+  }
+  if (E.ventana) h += ventanaHTML();
+  if (E.aviso) h += `<div class="aviso" role="status">${ico(E.aviso.icono || 'check', 16, 'style="color:#3DD9A0"')}<span>${esc(E.aviso.texto)}</span>${E.aviso.deshacer ? '<button type="button" data-a="deshacer">Deshacer</button>' : ''}</div>`;
+  return h;
+}
+
+/* Si lo de la derecha de la barra (opciones del programa, deshacer, guardar, cerrar) no cabe en su fila, las opciones del programa bajan a una segunda fila. */
+function ajustaBarra() {
+  const b = document.querySelector('.barra');
+  if (!b || esTel()) return;
+  b.classList.remove('dosfilas');
+  const der = b.querySelector('.barra-der');
+  if (!der) return;
+  const hijos = [...der.children].filter((e) => e.offsetParent !== null && !e.classList.contains('hueco'));
+  // el grupo del programa se puede achicar sin que se achiquen sus botones: se mide lo que ocupan ellos (scrollWidth), no su caja
+  const ancho = (e) => (e.classList.contains('prog-grupo') ? e.scrollWidth : e.getBoundingClientRect().width);
+  const necesita = hijos.reduce((a, e) => a + ancho(e), 0) + 8 * Math.max(0, hijos.length - 1);
+  if (necesita > der.clientWidth + 1) b.classList.add('dosfilas');
+}
+function pinta() {
+  const viejo = $('.marco');
+  const guardaScroll = {};
+  if (viejo && !E.arriba) ['.guia-cuerpo', '.dia', '.tel .cuerpo'].forEach((s) => { const el = $(s); if (el) guardaScroll[s] = el.scrollTop; });
+  E.arriba = false;
+  const a = document.activeElement;
+  const foco = a && a.dataset && a.dataset.b ? { b: a.dataset.b, i: a.selectionStart, f: a.selectionEnd } : null;
+  const tel = esTel();
+  const cuerpo = tel
+    ? `<div class="cuerpo ${E.telDia ? '' : 'es-guia'}">${E.telDia ? diaHTML() : guia()}</div>`
+    : `<div class="cuerpo ${E.guia ? '' : 'sin-guia'}">${E.guia ? `<aside class="guia">${guia()}</aside><div class="divisor" role="separator" aria-orientation="vertical" aria-label="Ancho de la guía" aria-valuemin="${ANCHO.min}" aria-valuenow="${E.ancho}" tabindex="0" title="Arrastra para cambiar el ancho. Doble clic: tamaño original"><i class="agarre"></i></div>` : ''}<section class="dia">${diaHTML()}</section></div>`;
+  $('#escenario').innerHTML = `<div class="marco ${tel ? 'tel' : 'compu'}${E.tonos ? ' tonos' : ''}${E.tono ? '' : ' sintono'}"><div class="app ${tel ? 'tel' : 'compu'}${!tel && !E.guia ? ' sin-guia' : ''}"${tel ? '' : ` style="--guia:${E.ancho}px"`}>${barra()}${cuerpo}</div>${capasHTML()}</div>`;
+  Object.entries(guardaScroll).forEach(([s, v]) => { const el = $(s); if (el) el.scrollTop = v; });
+  if (foco) {
+    const n = document.querySelector(`[data-b="${foco.b}"]`);
+    if (n) { n.focus({ preventScroll: true }); try { n.setSelectionRange(foco.i, foco.f); } catch (e) { /* un checkbox no tiene selección */ } }
+  }
+  const mn = $('.menu');
+  if (mn && mn.offsetTop + mn.offsetHeight > $('.marco').clientHeight - 8) mn.style.top = `${Math.max(8, E.menu.arriba - mn.offsetHeight - 6)}px`;
+  $('#ver-compu').setAttribute('aria-pressed', String(!tel));
+  $('#ver-tel').setAttribute('aria-pressed', String(tel));
+  $('#mv-arr').setAttribute('aria-pressed', String(E.mover === 'arrastrar'));
+  $('#mv-fle').setAttribute('aria-pressed', String(E.mover === 'flechas'));
+  $('#to-ton').setAttribute('aria-pressed', String(E.tonos));
+  $('#to-lin').setAttribute('aria-pressed', String(!E.tonos));
+  $('#fo-col').setAttribute('aria-pressed', String(E.tono));
+  $('#fo-bla').setAttribute('aria-pressed', String(!E.tono));
+  $('#av-si').setAttribute('aria-pressed', String(E.conAvance));
+  $('#av-no').setAttribute('aria-pressed', String(!E.conAvance));
+  ajustaBarra();
+}
+
+function avisa(texto, deshacerBtn = false, icono) {
+  clearTimeout(reloj);
+  E.aviso = { texto, deshacer: deshacerBtn, icono };
+  // Solo se quita el aviso: volver a dibujar todo a media arrastrada dejaría sin pantalla lo que se está moviendo.
+  reloj = setTimeout(() => { E.aviso = null; const av = document.querySelector('.aviso'); if (av) av.remove(); }, deshacerBtn ? 6500 : 2200);
+}
+function trueca(lista, i, j) { if (j < 0 || j >= lista.length) return; registra(); [lista[i], lista[j]] = [lista[j], lista[i]]; }
+const hayDia = () => { if (!sesionDe(E.dia)) E.dia = primerDia(); };
+
+function ejecutaItem(k, v, w, previo) {
+  const f = M.FASES[E.fase];
+  switch (k) {
+    // pedir la elección (la pregunta se abre donde estaba el menú que se cerró)
+    case 'pide': E.menu = previo ? { ...previo, tipo: `g-${v}` } : null; break;
+    // guardar: v = 'act' (actualizar el avance), 'nuevo' (guardar nuevo) o vacío (nada que preguntar); w = qué se guarda
+    case 'guarda': {
+      if (w === 'main') { E.guardada = foto(); E.yaGuardo = true; }
+      avisa(v === 'act' ? 'Avance actualizado' : v === 'nuevo' ? 'Guardado como nuevo' : ({ main: 'Guardado', plan: 'Plan guardado', sem: 'Semana guardada', wk: 'Workout guardado' })[w] || 'Guardado');
+      break;
+    }
+    case 'turno': { registra(); const s = semana(); const ss = s.d2 && s.d2[E.dia] && E.ses === 1 ? s.d2[E.dia] : s.d[E.dia]; if (v) ss[2] = v; else ss.length = 2; break; }
+    case 'forma': E.ventana = 'forma'; break;
+    case 'dup-fase': { registra(); const c = JSON.parse(JSON.stringify(f)); c.id = `f${Date.now()}`; c.n = `${f.n} (copia)`; E.abre[c.id] = true; M.FASES.splice(E.fase + 1, 0, c); E.fase += 1; E.sem = 0; hayDia(); avisa('Fase duplicada'); break; }
+    case 'quita-fase': {
+      if (M.FASES.length < 2) { avisa('El programa necesita al menos una fase', false, 'x'); break; }
+      registra(); const [fuera] = M.FASES.splice(E.fase, 1); delete E.abre[fuera.id]; E.fase = clamp(E.fase, 0, M.FASES.length - 1); E.sem = 0; hayDia(); avisa(`Se eliminó la fase «${fuera.n}»`, true); break;
+    }
+    case 'sube-fase': trueca(M.FASES, E.fase, E.fase - 1); E.fase = Math.max(0, E.fase - 1); break;
+    case 'baja-fase': trueca(M.FASES, E.fase, E.fase + 1); E.fase = Math.min(M.FASES.length - 1, E.fase + 1); break;
+    case 'dup-sem': { registra(); const c = JSON.parse(JSON.stringify(semana())); f.sem.splice(E.sem + 1, 0, c); E.sem += 1; avisa(`Semana ${E.sem} duplicada`); break; }
+    case 'copiar-todas': { registra(); const d = JSON.parse(JSON.stringify(semana().d)); f.sem.forEach((w, i) => { if (i !== E.sem) w.d = JSON.parse(JSON.stringify(d)); }); avisa('Copiada a las demás semanas'); break; }
+    case 'quita-sem': {
+      if (f.sem.length < 2) { avisa('La fase necesita al menos una semana', false, 'x'); break; }
+      registra(); f.sem.splice(E.sem, 1); E.sem = clamp(E.sem, 0, f.sem.length - 1); hayDia(); avisa('Semana eliminada', true); break;
+    }
+    default: avisa('Maqueta: en la app hace lo de siempre');
+  }
+}
+
+/* Los dos workouts de un día cambian de lugar (por arrastre o con las flechas del modo Flechas); lo plegado y lo tocado los sigue. */
+function cambiaOrdenSes() {
+  const s = semana();
+  if (!(s.d2 && s.d2[E.dia])) return;
+  registra();
+  const a = s.d[E.dia]; s.d[E.dia] = s.d2[E.dia]; s.d2[E.dia] = a;
+  const k0 = `${E.fase}:${E.sem}:${E.dia}:0`; const k1 = `${E.fase}:${E.sem}:${E.dia}:1`;
+  const p0 = E.plegadas[k0]; E.plegadas[k0] = E.plegadas[k1]; E.plegadas[k1] = p0;
+  E.ses = 0;
+}
+/* Dónde se abre un menú: pegado al botón que lo abrió. */
+function posMenu(tipo, el) {
+  const marco = $('.marco');
+  const m = marco.getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  const aLaDerecha = r.left - m.left > m.width / 2;
+  return {
+    tipo, lado: aLaDerecha ? 'right' : 'left',
+    x: Math.max(8, Math.round(aLaDerecha ? m.right - r.right - marco.clientLeft : r.left - m.left - marco.clientLeft)),
+    y: Math.round(r.bottom - m.top - marco.clientTop + 6), arriba: Math.round(r.top - m.top - marco.clientTop),
+  };
+}
+function alTocar(ev) {
+  if (Date.now() - E.noClic < 250) return;
+  const el = ev.target.closest('[data-a]');
+  if (!el || el.disabled) return;
+  const [a, x, y, z] = el.dataset.a.split(':');
+  if (a === 'nada') return;
+  fijaSes(el);
+  // tocar algo de una fase abierta la vuelve la que se está editando (su semana y su día)
+  if (el.dataset.fi !== undefined) { E.fase = Number(el.dataset.fi); E.sem = Number(el.dataset.sem); E.ses = 0; hayDia(); }
+  switch (a) {
+    case 'guia': E.guia = !E.guia; break;
+    case 'fase': { const j = Number(x); const fj = M.FASES[j]; E.abre[fj.id] = true; E.semV[fj.id] = semDefecto(j); break; }
+    case 'fase-cierra': delete E.abre[M.FASES[Number(x)].id]; break;
+    case 'sem': E.fase = Number(x); E.sem = Number(y); E.semV[M.FASES[E.fase].id] = E.sem; E.ses = 0; hayDia(); break;
+    case 'ses-sube': case 'ses-baja': cambiaOrdenSes(); break;
+    case 'plegar': { const c = `${E.fase}:${E.sem}:${E.dia}:${x}`; E.plegadas[c] = !E.plegadas[c]; break; }
+    case 'dia': E.dia = x; E.ses = 0; if (esTel() && !E.telDia) { E.telDia = true; E.arriba = true; } break;
+    case 'volver': E.telDia = false; E.arriba = true; break;
+    case 'cerrar': avisa('Aquí se cierra el editor', false, 'x'); break;
+    case 'vista': E.vista = x; break;
+    case 'forma': E.ventana = 'forma'; break;
+    case 'menu': E.menu = posMenu(x, el); break;
+    case 'cierra': E.menu = null; E.ventana = null; break;
+    case 'item': { const previo = E.menu; E.menu = null; ejecutaItem(x, y, z, previo); break; }
+    case 'color-elige': registra(); M.FASES[E.fase].c = x; E.menu = null; break;
+    case 'sube': trueca(setsDeHoy(), Number(x), Number(x) - 1); break;
+    case 'baja': trueca(setsDeHoy(), Number(x), Number(x) + 1); break;
+    case 'ej-sube': trueca(setsDeHoy()[Number(x)].ejs, Number(y), Number(y) - 1); break;
+    case 'ej-baja': trueca(setsDeHoy()[Number(x)].ejs, Number(y), Number(y) + 1); break;
+    case 'ej-quita': {
+      registra();
+      const sets = setsDeHoy();
+      const [fuera] = sets[Number(x)].ejs.splice(Number(y), 1);
+      if (!sets[Number(x)].ejs.length) sets.splice(Number(x), 1);
+      avisa(`Se quitó ${fuera.n}`, true); break;
+    }
+    case 'set-quita': registra(); setsDeHoy().splice(Number(x), 1); avisa(`Se eliminó el Set ${Number(x) + 1}`, true); break;
+    case 'set-nuevo': registra(); setsDeHoy().push({ veces: 3, ejs: [ej('Ejercicio nuevo', { reps: '8-10' })] }); avisa('Set agregado'); break;
+    case 'ej-nuevo': registra(); setsDeHoy()[Number(x)].ejs.push(ej('Ejercicio nuevo', { reps: '8-10' })); break;
+    case 'peso': { registra(); const e = setsDeHoy()[Number(x)].ejs[Number(y)]; e.peso = !e.peso; break; }
+    case 'vaciar': registra(); setsDeHoy().splice(0); avisa('Sesión vaciada', true); break;
+    case 'sesion-quita': {
+      registra(); const s = semana(); const ss = sesionesDe(E.dia); const n = (ss[Math.min(E.ses, ss.length - 1)] || ss[0])[0];
+      if (E.ses === 1 && s.d2 && s.d2[E.dia]) delete s.d2[E.dia];
+      else if (s.d2 && s.d2[E.dia]) { s.d[E.dia] = s.d2[E.dia]; delete s.d2[E.dia]; }
+      else delete s.d[E.dia];
+      E.ses = 0; avisa(`Se eliminó «${n}»`, true); break;
+    }
+    case 'mas': registra(); setsDeHoy()[Number(x)].veces += 1; break;
+    case 'menos': { const st = setsDeHoy()[Number(x)]; if (st.veces > 1) { registra(); st.veces -= 1; } break; }
+    case 'nota': E.abiertas[x] = true; break;
+    case 'agrega-sesion': registra(); semana().d[E.dia] = ['Sesión', 'gym']; E.ses = 0; break;
+    case 'agrega-sesion2': { registra(); const s = semana(); const t0 = s.d[E.dia][1]; s.d2 = s.d2 || {}; s.d2[E.dia] = ['Sesión de la tarde', t0 === 'rec' ? 'gym' : 'rec']; E.ses = 1; avisa('Segundo workout agregado'); break; }
+    case 'fase-nueva': { registra(); const n = M.FASES.length + 1; M.FASES.push({ id: `f${Date.now()}`, n: `Fase ${n}`, c: COLORES[n % COLORES.length], sub: '', enfoque: '', obj: '', sem: [{ t: '', l: '', d: {} }] }); E.fase = M.FASES.length - 1; E.sem = 0; E.dia = 'Lun'; E.abre[M.FASES[E.fase].id] = true; avisa('Fase agregada'); break; }
+    case 'sem-nueva': { registra(); const fj = M.FASES[Number(x)]; fj.sem.push({ t: '', l: '', d: {} }); E.fase = Number(x); E.sem = fj.sem.length - 1; E.semV[fj.id] = E.sem; E.dia = 'Lun'; E.ses = 0; break; }
+    case 'guardar': E.guardada = foto(); E.yaGuardo = true; avisa('Guardado'); break;
+    case 'deshacer': if (deshacer()) { E.aviso = null; avisa('Cambio deshecho', false, 'undo-2'); } break;
+    case 'rehacer': if (rehacer()) { E.aviso = null; avisa('Cambio rehecho', false, 'redo-2'); } break;
+    case 'demo': avisa('Maqueta: en la app hace lo de siempre'); break;
+    default: return;
+  }
+  pinta();
+}
+
+/* ---------- lo que se escribe: cada campo guarda su valor en el modelo y entra al historial ---------- */
+function resuelve(b) {
+  const p = b.split(':');
+  switch (p[0]) {
+    case 'titulo': return [M, 'titulo'];
+    case 'fase': return [M.FASES[Number(p[1])], p[2]];
+    case 'sem': return [semana(), p[1]];
+    case 'semt': return [M.FASES[Number(p[1])].sem[Number(p[2])], 't'];
+    case 'ses': return [Number(p[2]) ? semana().d2[p[1]] : semana().d[p[1]], 0];
+    case 'ej': return [setsDeHoy()[Number(p[1])].ejs[Number(p[2])], p[3]];
+    default: return [null, null];
+  }
+}
+function alEscribir(ev) {
+  const el = ev.target;
+  if (!el.dataset || !el.dataset.b || !el.closest('.app, .ventana')) return;
+  fijaSes(el);
+  const [obj, k] = resuelve(el.dataset.b);
+  if (!obj) return;
+  registra(el.type === 'checkbox' ? null : `b:${el.dataset.b}`);
+  obj[k] = el.type === 'checkbox' ? el.checked : el.value;
+  if (!E.aviso) { const av = document.querySelector('.aviso'); if (av) av.remove(); }
+  const acc = $('.barra-acc');
+  if (acc) acc.outerHTML = accionesBarra();
+  if (el.dataset.b.startsWith('ses:')) {
+    const [, dd, kk] = el.dataset.b.split(':');
+    const t = document.querySelector(`.fase-ab[data-item="fase:${E.fase}"] .dia-fila[data-a="dia:${dd}"] ${Number(kk) ? '.seg2 b' : 'b'}`);
+    if (t) t.textContent = el.value;
+  }
+}
+
+/* ---------- arrastrar con la manija ⠿ ---------- */
+let arr = null;
+const itemsHermanos = (item) => [...item.parentElement.children].filter((c) => c.dataset.item && c.dataset.item.split(':')[0] === item.dataset.item.split(':')[0]);
+function nombreDeItem(it) {
+  const [t, a, b] = it.dataset.item.split(':');
+  if (t === 'set') return `Set ${Number(a) + 1}`;
+  if (t === 'fase') return M.FASES[Number(a)].n;
+  if (t === 'ses') return sesionesDe(E.dia)[Number(a)][0];
+  return setsDeHoy()[Number(a)].ejs[Number(b)].n;
+}
+function calculaDestino() {
+  const hs = itemsHermanos(arr.item);
+  const enRejilla = hs.length > 1 && hs.some((h) => Math.abs(h.getBoundingClientRect().left - hs[0].getBoundingClientRect().left) > 8);
+  let idx = hs.length;
+  if (enRejilla) {
+    let mejor = Infinity;
+    hs.forEach((h, i) => { const r = h.getBoundingClientRect(); const d = Math.hypot(arr.x - (r.left + r.width / 2), arr.y - (r.top + r.height / 2)); if (d < mejor) { mejor = d; idx = arr.x > r.left + r.width / 2 ? i + 1 : i; } });
+  } else {
+    for (let i = 0; i < hs.length; i += 1) { const r = hs[i].getBoundingClientRect(); if (arr.y < r.top + r.height / 2) { idx = i; break; } }
+  }
+  arr.destino = idx;
+  const marco = $('.marco').getBoundingClientRect();
+  const l = arr.linea;
+  const ref = hs[Math.min(idx, hs.length - 1)].getBoundingClientRect();
+  if (enRejilla) {
+    l.style.cssText = `top:${ref.top - marco.top}px;height:${ref.height}px;width:3px;left:${(idx < hs.length ? ref.left - 6 : ref.right + 3) - marco.left}px`;
+  } else {
+    l.style.cssText = `height:3px;width:${ref.width}px;left:${ref.left - marco.left}px;top:${(idx < hs.length ? ref.top - 5 : ref.bottom + 3) - marco.top}px`;
+  }
+}
+function empiezaArrastre() {
+  if (arr.espera) { clearTimeout(arr.espera); arr.espera = null; }
+  arr.vivo = true;
+  try { window.getSelection().removeAllRanges(); } catch (e) { /* sin selección que quitar */ }
+  if (arr.tactil && navigator.vibrate) { try { navigator.vibrate(12); } catch (e) { /* sin vibración */ } }
+  document.body.classList.add('arrastrando');
+  arr.item.classList.add('suelto');
+  const f = document.createElement('div');
+  f.className = 'fantasma';
+  f.innerHTML = `<span>${esc(nombreDeItem(arr.item))}</span>`;
+  document.body.appendChild(f);
+  arr.fantasma = f;
+  const l = document.createElement('i');
+  l.className = 'linea-ins';
+  $('.marco').appendChild(l);
+  arr.linea = l;
+  posicionaFantasma();
+  calculaDestino();
+  arr.scroll = setInterval(() => {
+    const r = arr.scroller.getBoundingClientRect();
+    if (arr.y < r.top + 56) { arr.scroller.scrollTop -= 14; calculaDestino(); } else if (arr.y > r.bottom - 56) { arr.scroller.scrollTop += 14; calculaDestino(); }
+  }, 16);
+}
+function posicionaFantasma() {
+  arr.fantasma.style.transform = `translate(${arr.x + 14}px, ${arr.y - (arr.tactil ? 64 : 18)}px) rotate(-.6deg)`;
+}
+function terminaArrastre(aplica) {
+  if (!arr) return;
+  clearInterval(arr.scroll);
+  clearTimeout(arr.espera);
+  document.body.classList.remove('arrastrando');
+  if (arr.fantasma) arr.fantasma.remove();
+  if (arr.linea) arr.linea.remove();
+  const a = arr;
+  arr = null;
+  if (!a.vivo) return;
+  E.noClic = Date.now();
+  if (!a.item.isConnected) return;
+  a.item.classList.remove('suelto');
+  if (!aplica) return;
+  const hs = itemsHermanos(a.item);
+  const de = hs.indexOf(a.item);
+  const A = a.destino;
+  if (A === de || A === de + 1) return;
+  const [t, i1] = a.item.dataset.item.split(':');
+  if (t === 'ses') { cambiaOrdenSes(); pinta(); return; }
+  const lista = t === 'set' ? setsDeHoy() : t === 'fase' ? M.FASES : setsDeHoy()[Number(i1)].ejs;
+  const idAbierta = M.FASES[E.fase].id;
+  registra();
+  const [x] = lista.splice(de, 1);
+  lista.splice(A > de ? A - 1 : A, 0, x);
+  if (t === 'fase') E.fase = M.FASES.findIndex((f) => f.id === idAbierta);
+  pinta();
+}
+/* Un Set, un ejercicio o una fase se agarra desde cualquier parte suya que no tenga función propia: lo que se escribe,
+   se toca o se elige (campos, botones, + y −, listas) sigue haciendo lo suyo. Con el mouse empieza al mover 5 px; con el
+   dedo hay que mantener presionado un momento (si no, es para desplazar la pantalla). */
+const INTERACTIVO = 'input, textarea, select, button, a, label, summary, [contenteditable="true"], .paso';
+function agarrable(ev) {
+  if (E.mover !== 'arrastrar' || ev.button > 0 || !ev.target.closest) return null;
+  const item = ev.target.closest('[data-item]');
+  if (!item || !$('#escenario').contains(item)) return null;
+  const propio = ev.target.closest(INTERACTIVO);
+  // un workout se agarra también de los botones de su encabezado (un clic sin mover sigue haciendo lo suyo); no de sus campos
+  if (propio && item.contains(propio) && propio !== item && !(item.classList.contains('sesion') && propio.tagName === 'BUTTON' && propio.closest('.ses-cab'))) return null;
+  return item;
+}
+document.addEventListener('pointerdown', (ev) => {
+  if (arr) return;
+  const item = agarrable(ev);
+  if (!item) return;
+  fijaSes(item);
+  arr = { item, x0: ev.clientX, y0: ev.clientY, x: ev.clientX, y: ev.clientY, vivo: false, tactil: ev.pointerType === 'touch', espera: null, scroller: item.closest('.dia, .guia-cuerpo, .cuerpo') };
+  if (arr.tactil) arr.espera = setTimeout(() => { if (arr && !arr.vivo) empiezaArrastre(); }, 320);
+});
+document.addEventListener('pointermove', (ev) => {
+  if (!arr) return;
+  arr.x = ev.clientX; arr.y = ev.clientY;
+  if (!arr.vivo) {
+    const mov = Math.hypot(arr.x - arr.x0, arr.y - arr.y0);
+    if (arr.tactil) { if (mov > 9) { clearTimeout(arr.espera); arr = null; } return; }
+    if (mov <= 5) return;
+    empiezaArrastre();
+  }
+  posicionaFantasma();
+  calculaDestino();
+});
+document.addEventListener('touchmove', (ev) => { if (arr && arr.vivo && ev.cancelable) ev.preventDefault(); }, { passive: false });
+document.addEventListener('contextmenu', (ev) => { if (arr && arr.tactil) ev.preventDefault(); });
+document.addEventListener('pointerup', () => terminaArrastre(true));
+document.addEventListener('pointercancel', () => terminaArrastre(false));
+
+/* ---------- ensanchar la guía con el mouse, como en Excel ---------- */
+let ens = null;
+const maximo = () => Math.min(560, Math.round($('.cuerpo').clientWidth * 0.42));
+function ponAncho(v, guarda) {
+  E.ancho = clamp(Math.round(v), ANCHO.min, maximo());
+  const c = $('.app');
+  if (c) c.style.setProperty('--guia', `${E.ancho}px`);
+  const d = $('.divisor');
+  if (d) d.setAttribute('aria-valuenow', String(E.ancho));
+  ajustaBarra();
+  if (guarda) guardarAncho(E.ancho);
+}
+document.addEventListener('pointerdown', (ev) => {
+  const d = ev.target.closest && ev.target.closest('.divisor');
+  if (!d || ev.button > 0) return;
+  ev.preventDefault();
+  ens = { x0: ev.clientX, w0: E.ancho, d };
+  d.classList.add('activo');
+  document.body.classList.add('ensanchando');
+  try { d.setPointerCapture(ev.pointerId); } catch (e) { /* idem */ }
+});
+document.addEventListener('pointermove', (ev) => {
+  if (!ens) return;
+  const deseado = ens.w0 + ev.clientX - ens.x0;
+  ens.cierra = deseado < 200;
+  const g = document.querySelector('.guia');
+  if (g) g.classList.toggle('por-cerrar', ens.cierra);
+  ponAncho(deseado, false);
+});
+function sueltaDivisor() {
+  if (!ens) return;
+  ens.d.classList.remove('activo');
+  document.body.classList.remove('ensanchando');
+  const cierra = ens.cierra;
+  if (cierra) E.ancho = ens.w0;
+  guardarAncho(E.ancho);
+  ens = null;
+  if (cierra) { E.guia = false; pinta(); }
+}
+document.addEventListener('pointerup', sueltaDivisor);
+document.addEventListener('pointercancel', sueltaDivisor);
+document.addEventListener('dblclick', (ev) => { if (ev.target.closest && ev.target.closest('.divisor')) { ponAncho(ANCHO.defecto, true); } });
+document.addEventListener('keydown', (ev) => {
+  const d = ev.target.closest && ev.target.closest('.divisor');
+  if (!d || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(ev.key)) return;
+  ev.preventDefault();
+  const paso = ev.shiftKey ? 48 : 16;
+  if (ev.key === 'ArrowLeft') ponAncho(E.ancho - paso, true);
+  else if (ev.key === 'ArrowRight') ponAncho(E.ancho + paso, true);
+  else if (ev.key === 'Home') ponAncho(ANCHO.min, true);
+  else ponAncho(maximo(), true);
+});
+
+/* ---------- teclado: Deshacer, Rehacer, Guardar, Escape ---------- */
+document.addEventListener('keydown', (ev) => {
+  const mod = ev.metaKey || ev.ctrlKey;
+  const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
+  if (mod && !ev.altKey && k === 'z') {
+    ev.preventDefault();
+    const hecho = ev.shiftKey ? rehacer() : deshacer();
+    if (hecho) { E.aviso = null; avisa(ev.shiftKey ? 'Cambio rehecho' : 'Cambio deshecho', false, ev.shiftKey ? 'redo-2' : 'undo-2'); pinta(); }
+  } else if (mod && !ev.altKey && k === 'y') {
+    ev.preventDefault();
+    if (rehacer()) { E.aviso = null; avisa('Cambio rehecho', false, 'redo-2'); pinta(); }
+  } else if (mod && !ev.altKey && k === 'b' && !esTel()) {
+    ev.preventDefault();
+    E.guia = !E.guia;
+    pinta();
+  } else if (mod && !ev.altKey && k === 's') {
+    ev.preventDefault();
+    if (sucio()) {
+      const b = document.querySelector('.barra .prin[data-a]');
+      if (E.conAvance && b) E.menu = posMenu('g-main', b);
+      else { E.guardada = foto(); E.yaGuardo = true; avisa('Guardado'); }
+      pinta();
+    }
+  } else if (k === 'Escape') {
+    if (arr) { terminaArrastre(false); return; }
+    if (E.menu || E.ventana) { E.menu = null; E.ventana = null; pinta(); }
+  }
+});
+
+function ponEquipo(cual) { E.equipo = cual; E.telDia = false; E.menu = null; E.ventana = null; E.arriba = true; pinta(); }
+function ponMover(cual) { E.mover = cual; pinta(); }
+function ponTonos(si) { E.tonos = si; pinta(); }
+function ponTono(si) { E.tono = si; pinta(); }
+function ponAvance(si) { E.conAvance = si; E.menu = null; pinta(); }
+
+const escenario = $('#escenario');
+escenario.addEventListener('click', alTocar);
+escenario.addEventListener('input', alEscribir);
+escenario.addEventListener('change', (ev) => { if (ev.target.type === 'checkbox') alEscribir(ev); });
+$('#ver-compu').addEventListener('click', () => ponEquipo('compu'));
+$('#ver-tel').addEventListener('click', () => ponEquipo('tel'));
+$('#mv-arr').addEventListener('click', () => ponMover('arrastrar'));
+$('#mv-fle').addEventListener('click', () => ponMover('flechas'));
+$('#to-ton').addEventListener('click', () => ponTonos(true));
+$('#to-lin').addEventListener('click', () => ponTonos(false));
+$('#fo-col').addEventListener('click', () => ponTono(true));
+$('#fo-bla').addEventListener('click', () => ponTono(false));
+$('#av-si').addEventListener('click', () => ponAvance(true));
+$('#av-no').addEventListener('click', () => ponAvance(false));
+$('#mando-boton').addEventListener('click', () => { const n = $('#mando-panel'); n.hidden = !n.hidden; $('#mando-boton').setAttribute('aria-expanded', String(!n.hidden)); });
+const angosta = window.matchMedia('(max-width: 760px)');
+angosta.addEventListener('change', () => { if (angosta.matches && E.equipo !== 'tel') ponEquipo('tel'); });
+if (angosta.matches) E.equipo = 'tel';
+window.addEventListener('resize', () => { if (!esTel() && $('.cuerpo') && E.ancho > maximo()) ponAncho(E.ancho, false); else ajustaBarra(); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(ajustaBarra);
+pinta();
+</script>
