@@ -36,18 +36,17 @@ assert.deepEqual(puestas.map((d) => [d.day, d.name, d.cat]), [['Mié', 'Pierna',
 puestas[0].exercises.push(ej('Otro'));
 assert.equal(w2.exercises.length, 3, 'asignar da una COPIA: no toca lo guardado');
 
-/* ---- Un día doble de los que traen `blocks` también se guarda ---- */
-const doble = { day: 'Jue', name: '', dual: true, cat: 'gym', blocks: [
-  { type: 'lift', tag: 'Sesión 1 (AM): Velocidad', exercises: [ej('Sprint')] },
-  { type: 'lift', tag: 'Sesión 2 (PM): Fuerza', exercises: [ej('Press'), ej('Remo'), { isNote: true, text: 'Pausa' }] },
-] };
-const wd = workoutDeSesiones([doble]);
-assert.equal(wd.blocks.length, 2);
-assert.deepEqual(resumenDe('workout', wd), { sesiones: 1, ejercicios: 3 });
-const dd = diasDeWorkout(wd, 'Vie')[0];
-assert.equal(dd.day, 'Vie');
-assert.equal(dd.exercises, undefined, 'un doble no inventa una lista de ejercicios que no tenía');
+/* ---- Un día doble (la sesión de la mañana y la de la tarde: dos entradas del mismo día) también se guarda ---- */
+const am = { day: 'Jue', name: 'Velocidad', turno: 'AM', cat: 'speed', exercises: [ej('Sprint')] };
+const pm = { day: 'Jue', name: 'Fuerza', turno: 'PM', cat: 'gym', exercises: [ej('Press'), ej('Remo'), { isNote: true, text: 'Pausa' }] };
+const wd = workoutDeSesiones([am, pm]);
+assert.equal(wd.otras.length, 1, 'la de la tarde va en `otras`');
+assert.equal(wd.turno, 'AM', 'el turno de cada sesión se guarda con ella');
+assert.deepEqual(resumenDe('workout', wd), { sesiones: 2, ejercicios: 3 });
+const dd = diasDeWorkout(wd, 'Vie');
+assert.deepEqual(dd.map((d) => [d.day, d.turno]), [['Vie', 'AM'], ['Vie', 'PM']], 'al ponerlo en un día, cada sesión conserva su turno');
 assert.equal(diasDeWorkout({ name: '', exercises: undefined }, 'Lun', 'Mi workout')[0].name, 'Mi workout');
+assert.deepEqual(diasDeWorkout({ name: '' }, 'Lun')[0].exercises, [], 'una sesión sin lista queda con una vacía');
 
 /* ---- Quitar las notas ---- */
 const con = sesion('Con notas', [ej('A'), { isNote: true, text: 'nota' }], { notes: ['Toma agua'] });
@@ -57,9 +56,9 @@ const limpio = sinNotas('workout', workoutDeSesiones([con]));
 assert.equal(limpio.notes, undefined);
 assert.deepEqual(limpio.exercises.map((e) => e.name), ['A']);
 const limpioDoble = sinNotas('workout', wd);
-assert.equal(limpioDoble.blocks[1].exercises.length, 2, 'las notas de dentro de un bloque también se van');
-assert.equal(limpioDoble.blocks.length, 2, 'pero los bloques se quedan');
-assert.equal(wd.blocks[1].exercises.length, 3, 'sin tocar lo original');
+assert.equal(limpioDoble.otras[0].exercises.length, 2, 'las notas de dentro de la sesión de la tarde también se van');
+assert.equal(limpioDoble.otras.length, 1, 'pero las sesiones se quedan');
+assert.equal(wd.otras[0].exercises.length, 3, 'sin tocar lo original');
 
 /* ---- Rutina semanal ---- */
 const dias = [sesion('Lunes', [ej('A')]), { ...sesion('Miércoles', [ej('B'), ej('C')]), day: 'Mié' }, { day: 'Vie', name: 'OFF', cat: 'off', exercises: [] }];
@@ -178,8 +177,6 @@ assert.equal(nombreDeCopia('Pierna (copia)', ['Pierna', 'Pierna (copia)']), 'Pie
 assert.equal(sesionTieneContenido({ day: 'Lun', name: 'Sesión', exercises: [] }), false, 'sesión vacía');
 assert.equal(sesionTieneContenido({ exercises: [{ isNote: true, text: 'Calienta' }] }), true, 'una nota suelta ya es contenido');
 assert.equal(sesionTieneContenido({ exercises: [ej('Sentadilla')] }), true);
-assert.equal(sesionTieneContenido({ blocks: [{ exercises: [] }, { exercises: [ej('Salto')] }] }), true, 'día doble con un bloque lleno');
-assert.equal(sesionTieneContenido({ blocks: [{ exercises: [] }] }), false);
 assert.equal(sesionTieneContenido(null), false);
 assert.equal(semanaTieneContenido({ days: [{ exercises: [] }, { exercises: [ej('A')] }] }), true);
 assert.equal(semanaTieneContenido({ days: [{ exercises: [] }] }), false);

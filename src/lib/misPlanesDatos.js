@@ -42,8 +42,7 @@ export function sesionesDeWorkout(data) {
   return [primera, ...(Array.isArray(otras) ? otras : [])];
 }
 
-const ejerciciosDeSesion = (s) => reales(s?.exercises).length
-  + (Array.isArray(s?.blocks) ? s.blocks.reduce((n, b) => n + reales(b?.exercises).length, 0) : 0);
+const ejerciciosDeSesion = (s) => reales(s?.exercises).length;
 
 const sinDia = (d) => { const c = clone(d); delete c.day; return c; };
 
@@ -51,7 +50,7 @@ const sinDia = (d) => { const c = clone(d); delete c.day; return c; };
  * De las sesiones de UN día de la semana (una entrada del plan, o dos: mañana y tarde) a lo
  * que se guarda como workout. La primera va en la raíz con la forma de siempre —nombre, tipo,
  * ejercicios—, así quien solo conoce esa forma (el conector de IA) la sigue leyendo; las
- * demás van en `otras`. Un día de doble sesión con `blocks` se guarda tal cual.
+ * demás van en `otras`.
  */
 export function workoutDeSesiones(sesiones) {
   const [primera, ...otras] = (sesiones ?? []).filter(Boolean).map(sinDia);
@@ -63,7 +62,7 @@ export function workoutDeSesiones(sesiones) {
 export function diasDeWorkout(data, dia, nombreDelItem = '') {
   return sesionesDeWorkout(data).map((s) => {
     const d = { ...clone(s), day: dia, name: s.name || nombreDelItem || 'Sesión', cat: s.cat || 'gym' };
-    if (!Array.isArray(d.exercises) && !d.blocks) d.exercises = [];
+    if (!Array.isArray(d.exercises)) d.exercises = [];
     return d;
   });
 }
@@ -116,14 +115,10 @@ export function planDePrograma(data) {
 /* ---------------------- ¿Hay algo que guardar? --------------------- */
 
 /**
- * ¿Esta sesión tiene algo que guardar? Ejercicios o notas sueltas, o —en un día doble— algún bloque con
- * ejercicios. Una sesión vacía no ofrece «Guardar» (Andrés, 2 oct 2026: «Guardar solo sale si hay algo que
- * guardar»): se guardaría un workout sin nada.
+ * ¿Esta sesión tiene algo que guardar? Ejercicios o notas sueltas. Una sesión vacía no ofrece «Guardar»
+ * (Andrés, 2 oct 2026: «Guardar solo sale si hay algo que guardar»): se guardaría un workout sin nada.
  */
-export const sesionTieneContenido = (d) => (
-  (Array.isArray(d?.exercises) && d.exercises.length > 0)
-  || (Array.isArray(d?.blocks) && d.blocks.some((b) => Array.isArray(b?.exercises) && b.exercises.length > 0))
-);
+export const sesionTieneContenido = (d) => Array.isArray(d?.exercises) && d.exercises.length > 0;
 /** ¿Alguna sesión de esta semana tiene algo? */
 export const semanaTieneContenido = (semana) => (semana?.days ?? []).some(sesionTieneContenido);
 /** ¿Algo del plan tiene contenido? (`phases`: las fases del plan) */
@@ -135,9 +130,6 @@ const sinNotasLaSesion = (d) => {
   const c = clone(d);
   delete c.notes;
   if (Array.isArray(c.exercises)) c.exercises = c.exercises.filter((e) => !e?.isNote);
-  if (Array.isArray(c.blocks)) {
-    c.blocks = c.blocks.map((b) => (Array.isArray(b?.exercises) ? { ...b, exercises: b.exercises.filter((e) => !e?.isNote) } : b));
-  }
   return c;
 };
 
@@ -169,7 +161,6 @@ export function tieneNotas(tipo, data) {
   return dias.some((d) => (
     (Array.isArray(d?.notes) && d.notes.length > 0)
     || (Array.isArray(d?.exercises) && d.exercises.some((e) => e?.isNote))
-    || (Array.isArray(d?.blocks) && d.blocks.some((b) => Array.isArray(b?.exercises) && b.exercises.some((e) => e?.isNote)))
   ));
 }
 

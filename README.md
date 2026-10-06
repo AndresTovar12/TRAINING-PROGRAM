@@ -78,7 +78,7 @@ src/
     auth/AuthScreen.jsx   Login/registro por usuario O email
     training/TrainingApp.jsx   App del atleta (plan intacto)
     admin/                AdminApp, AthletesPanel, ExercisesPanel
-  data/training-data.js   DATOS DEL PLAN — INTOCABLES (ver abajo)
+  data/fotos-de-fase.js   Fotos de cada fase del programa (por id de fase)
   lib/
     supabase.js           Cliente (claves desde env, sin secretos)
     api.js                Acceso a datos (ejercicios, atletas, rutinas, media)

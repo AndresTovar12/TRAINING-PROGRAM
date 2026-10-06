@@ -57,8 +57,7 @@ const diaParaSemana = (wk, actual) => {
   return DIAS_SEMANA.find((k) => dias.includes(k)) ?? actual;
 };
 
-const reglaVacia = (r) => !(r.sesion?.exercises ?? []).some((e) => !e.isNote || (e.text || '').trim())
-  && !(r.sesion?.blocks ?? []).length;
+const reglaVacia = (r) => !(r.sesion?.exercises ?? []).some((e) => !e.isNote || (e.text || '').trim());
 
 const botonBlanco = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 40, padding: '0 14px',

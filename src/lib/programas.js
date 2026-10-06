@@ -1,8 +1,8 @@
 import {
   cursorAlDia, defaultCursor, isValidCursor, resolveCursor, sessionForToday, sessionIdFor,
-  ejerciciosDelBloque, esDescanso, diasDeEstaSemana,
+  esDescanso, diasDeEstaSemana,
 } from '@/lib/training-utils';
-import { bloquesHechos, minutosDeTag, sesionesDelTitulo, textoDeSesiones } from '@/lib/sesiones';
+import { minutosDelNombre, sesionQueRepite, sesionesDelTitulo, sinDuracion, textoDeSesiones } from '@/lib/sesiones';
 import { esDeSalud } from '@/lib/palabras';
 import { LT, oficioCorto } from '@/lib/theme';
 
@@ -85,41 +85,24 @@ function ubicacion(programa, cursor) {
   return { phase: fases[0] ?? null, week: fases[0]?.weekData?.[0] ?? null };
 }
 
-/** Lo que dura y cuántos ejercicios trae una sesión (una sola: sin sumar dobles). */
+/** Lo que dura y cuántos ejercicios trae una sesión (si solo dice «repite…», los de la que repite). */
 export function datosDeSesion({ day, week, dayIdx }) {
-  const reales = (lista) => (lista || []).filter((e) => !e.isNote).length;
-  const bloques = day?.blocks || [];
-  const ejercicios = bloques.length
-    ? bloques.reduce((n, b) => n + reales(ejerciciosDelBloque(week, dayIdx, b)), 0)
-    : reales(day?.exercises);
-  const minutos = bloques.length === 1 ? minutosDeTag(bloques[0].tag) : null;
-  return { ejercicios, minutos };
+  const lista = (sesionQueRepite(week, dayIdx)?.day ?? day)?.exercises || [];
+  return { ejercicios: lista.filter((e) => !e.isNote).length, minutos: minutosDelNombre(day?.name || '') };
 }
 
 /**
- * Las sesiones de UN día, una por una, para la lista de «Hoy»: un doble sin nombre propio
- * da una por turno (AM, PM) y todo lo demás, una sola. Cada una dice cuántos ejercicios
- * trae, cuánto dura y si va hecha; `registro` es lo que el atleta lleva anotado de ese día.
+ * Las sesiones de UN día para la lista de «Hoy»: una por entrada, con su turno (AM o PM) si lo trae. Cada una dice
+ * cuántos ejercicios trae, cuánto dura y si va hecha; `registro` es lo que el atleta lleva anotado de ese día.
  *
  * Así la lista enseña SESIONES y no autores: el doble del coach y la del fisio quedan
  * juntos, cada uno con su etiqueta (Andrés, 2 oct 2026: «el programa es un todo»).
  */
 export function partesDelDia({ day, week, dayIdx }, registro) {
-  const sesiones = sesionesDelTitulo(day);
-  const bloques = day?.blocks || [];
-  if (sesiones.length > 1 && sesiones.length === bloques.length) {
-    const hechos = bloquesHechos(registro, bloques.length);
-    return sesiones.map((s, bloque) => ({
-      ...s,
-      bloque,
-      ejercicios: (ejerciciosDelBloque(week, dayIdx, bloques[bloque]) || []).filter((e) => !e.isNote).length,
-      minutos: minutosDeTag(bloques[bloque].tag),
-      hecha: hechos[bloque],
-    }));
-  }
+  const [sesion] = sesionesDelTitulo(day);
   return [{
-    turno: null,
-    nombre: textoDeSesiones(sesiones) || day?.day || '',
+    turno: sesion?.turno ?? null,
+    nombre: sinDuracion(day?.name || '') || day?.day || '',
     bloque: null,
     ...datosDeSesion({ day, week, dayIdx }),
     hecha: !!registro?.completed,

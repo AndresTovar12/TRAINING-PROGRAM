@@ -4,7 +4,7 @@ import {
   Aviso, type Dia, NOMBRE_DIA, type Persona, mismoTexto, nombreCorto, nombreDe, rolDeOficio, sinAcentos,
 } from './util.ts'
 import {
-  dondeVa, ejerciciosDelBloque, esDescanso, isLoadedExercise, nombreDeSesion, sessionIdFor,
+  dondeVa, esDescanso, isLoadedExercise, sesionQueRepite, sessionIdFor,
   enOrdenDeSemana,
 } from './app/training-utils.js'
 import { textoMeta, leeCantidad, MEDIDAS } from './app/medidas.js'
@@ -275,15 +275,11 @@ export function buscarSemana(fase: any, num?: number | null): number {
 /* Describir, para que la IA lo lea                                    */
 /* ------------------------------------------------------------------ */
 
-/** Los ejercicios de un día con la llave con la que se anotan ("3", "1-2"). */
-export function ejerciciosConLlave(semana: any, diaIdx: number) {
+/** Los ejercicios de una sesión con la llave con la que se anotan ("3"). Una sesión que solo dice «repite…» se anota sobre la lista de la que repite. */
+export function ejerciciosConLlave(semana: any, diaIdx: number): { ex: any; llave: string }[] {
   const dia = semana.days[diaIdx]
-  const todos: { ex: any; llave: string }[] = []
-  ;(dia.exercises ?? []).forEach((ex: any, i: number) => todos.push({ ex, llave: `${i}` }))
-  ;(dia.blocks ?? []).forEach((blk: any, bi: number) => {
-    ejerciciosDelBloque(semana, diaIdx, blk).forEach((ex: any, i: number) => todos.push({ ex, llave: `${bi}-${i}` }))
-  })
-  return todos
+  const lista: any[] = (sesionQueRepite(semana, diaIdx)?.day ?? dia).exercises ?? []
+  return lista.map((ex, i) => ({ ex, llave: `${i}` }))
 }
 
 export function describirEjercicio(ex: any) {
@@ -367,7 +363,6 @@ export function describirDia(fase: any, semana: any, diaIdx: number, registro?: 
 
 export function nombreDelDia(dia: any): string {
   return dia.name
-    || (dia.blocks ?? []).map((b: any) => nombreDeSesion(b.tag)).filter(Boolean).join(' + ')
     || (esDescanso(dia) ? 'Descanso' : tipoDeSesion(dia).label)
 }
 

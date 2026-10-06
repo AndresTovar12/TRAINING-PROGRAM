@@ -27,7 +27,7 @@
        regla = {
          id,                       // estable: de él cuelgan las anotaciones del atleta
          nombre,
-         sesion,                   // el día como lo arma el constructor: { name, cat, exercises | blocks }
+         sesion,                   // el día como lo arma el constructor: { name, cat, exercises }
          dias: ['Lun', 'Mié'],     // en qué días de la semana cae
          alcance: { tipo, desde, hasta, fases },
          omitir: [{ faseId, semana }],
