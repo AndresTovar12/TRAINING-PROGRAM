@@ -2434,8 +2434,12 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     onGuardar: (ev) => guardaEnMisPlanes('plan', ev?.currentTarget, {
       dialogo: { type: 'guardar-plan' }, datos: (previo) => datosDelPlanParaMisPlanes(previo.notas),
     }),
-    onUsar: isWeekly ? () => setModal({ type: 'tpl-week' }) : undefined, textoUsar: 'Usar rutina', iconoUsar: FolderOpen,
-    tituloUsar: 'Usar una rutina de Mis planes',
+    /* «Usar…» de Mis planes (Andrés, 6 oct 2026: «un botón para poner un plan que ya exista en mi almacén»). Una rutina semanal
+       usa una rutina; un programa por fases o por semanas usa un programa (o una rutina) entero, la misma ventana de la
+       pantalla de inicio. Dentro de Mis planes no sale: ahí no se arma el plan de nadie. */
+    onUsar: isWeekly ? () => setModal({ type: 'tpl-week' }) : (!enCatalogo ? () => setModal({ type: 'desde-plan' }) : undefined),
+    textoUsar: isWeekly ? 'Usar rutina' : 'Usar plan', iconoUsar: FolderOpen,
+    tituloUsar: isWeekly ? 'Usar una rutina de Mis planes' : 'Usar un programa o una rutina de Mis planes',
     onEliminar: (enCatalogo ? !!filaCatalogo : !!(planRow && onDeleted)) ? () => eliminarPrograma() : undefined,
     textoEliminar: enCatalogo ? 'Eliminar de Mis planes' : 'Eliminar programa',
   };
@@ -3028,6 +3032,14 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
           tipos={['programa', 'rutina']} titulo="Usar uno guardado"
           subtitulo="Parte de algo que ya guardaste y ajústalo antes de guardarlo." onCerrar={() => setModal(null)}
           onElegir={async (item) => {
+            /* Con algo ya armado, esto lo REEMPLAZA: se pregunta antes (y Ctrl+Z lo recupera). Con el plan vacío —la pantalla de
+               inicio— no hay nada que perder. Si dice que no, la ventana se queda abierta para elegir otro. */
+            if (planTieneContenido(phases) && !(await pregunta({
+              titulo: `¿Usar «${item.nombre}»?`,
+              detalle: `Reemplaza el plan que tienes ahora. Con Ctrl+Z lo recuperas.${planRow ? ` Lo que ${t('el atleta')} ya anotó no se mezcla con el plan nuevo.` : ''}`,
+              confirmar: 'Sí, usarlo',
+              cancelar: 'Cancelar',
+            }))) return;
             let datos;
             try { datos = await abrirItem(item); } catch (e) { setErr(e.message || 'No se pudo abrir'); setModal(null); return; }
             // Es una copia con fases de ids nuevos: lo que el atleta anote no se mezcla con nada anterior.
