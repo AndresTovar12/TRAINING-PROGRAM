@@ -31,9 +31,10 @@ import { LIGA_MCP } from '@/features/ia/queHaceLaIA';
  * «Complementos» (menú «+» o escribiendo @).
  */
 
+// ChatGPT primero: es el que va a usar casi todo el mundo (Andrés, 6 oct 2026: «es más barato»).
 export const CONECTORES = [
-  { id: 'claude', nombre: 'Claude', color: '#D97757' },
   { id: 'chatgpt', nombre: 'ChatGPT', color: '#111318' },
+  { id: 'claude', nombre: 'Claude', color: '#D97757' },
 ];
 
 export const TERMINALES = [
@@ -66,19 +67,30 @@ export function pasosDe(app, esCompu) {
         pantalla: 'claude-conectores', resalta: 'agregar',
       },
       {
-        titulo: 'Pega tu liga',
-        texto: `De nombre ponle Training Lab. ${esCompu ? 'Haz clic en' : 'Toca'} «Agregar».`,
+        titulo: 'Escribe el nombre: Training Lab',
+        pantalla: 'formulario', resalta: 'nombre',
+      },
+      {
+        titulo: 'Pega tu liga en «URL del servidor»',
         pantalla: 'formulario', resalta: 'url',
         acciones: [copiar(LIGA_MCP, 'Copiar liga')],
       },
       {
-        titulo: esCompu ? 'Haz clic en «Conectar» y luego en «Permitir»' : 'Toca «Conectar» y luego «Permitir»',
-        texto: 'Se abre Training Lab. Si te lo pide, entra con tu cuenta.',
+        titulo: toca('«Agregar»'),
+        pantalla: 'formulario', resalta: 'agregar',
+      },
+      {
+        titulo: toca('«Conectar»'),
+        texto: 'Junto a Training Lab, en tu lista de conectores.',
+        pantalla: 'claude-conectores', resalta: 'conectar',
+      },
+      {
+        titulo: toca('«Permitir»'),
+        texto: 'Se abre Training Lab. Si te pide entrar, entra con tu cuenta. Si muestra otra cuenta, toca «¿No eres tú?».',
         pantalla: 'permiso', resalta: 'permitir',
       },
       {
-        titulo: esCompu ? '¡Listo! Úsalo en cualquier chat' : '¡Listo! Úsalo en la app de Claude',
-        texto: 'En un chat: «+» → Conectores → activa Training Lab.',
+        titulo: esCompu ? '¡Listo! En un chat: «+» → Conectores → activa Training Lab' : '¡Listo! En la app de Claude: «+» → Conectores → activa Training Lab',
         pantalla: 'chat', resalta: 'interruptor',
         acciones: [abrir('https://claude.ai/new', esCompu ? 'Abrir Claude' : 'Abrir la app de Claude')],
       },
@@ -87,30 +99,48 @@ export function pasosDe(app, esCompu) {
   if (app === 'chatgpt') {
     return [
       {
-        titulo: 'Abre los complementos de ChatGPT',
-        texto: 'En la barra de la izquierda: Complementos. El botón te lleva directo.',
+        titulo: 'Abre ChatGPT y haz clic en «Complementos»',
+        texto: 'Está en la barra de la izquierda. El botón te lleva directo.',
         pantalla: 'chatgpt-complementos', resalta: 'complementos',
         acciones: [abrir('https://chatgpt.com/plugins', 'Abrir ChatGPT')],
       },
       {
-        titulo: 'Haz clic en «Agregar» y elige «Crear servidor MCP personalizado»',
+        titulo: 'Haz clic en «Agregar»',
+        texto: 'Arriba a la derecha.',
+        pantalla: 'chatgpt-complementos', resalta: 'agregar',
+      },
+      {
+        titulo: 'Elige «Crear servidor MCP personalizado»',
         texto: 'Es la tercera opción del menú.',
         pantalla: 'chatgpt-complementos', resalta: 'crear',
       },
       {
-        titulo: 'Pega tu liga y haz clic en «Crear como complemento»',
-        texto: 'Nombre: Training Lab. Conexión: URL del servidor. Autenticación: OAuth (ya viene así). Marca «Entiendo y quiero continuar». Si no ves el botón de abajo, achica la página (Cmd o Ctrl y –).',
+        titulo: 'Escribe el nombre: Training Lab',
+        pantalla: 'chatgpt-crear', resalta: 'nombre',
+      },
+      {
+        titulo: 'Pega tu liga en «URL del servidor»',
+        texto: 'Autenticación déjala en OAuth: ya viene así.',
         pantalla: 'chatgpt-crear', resalta: 'url',
         acciones: [copiar(LIGA_MCP, 'Copiar liga')],
       },
       {
-        titulo: toca('«Permitir»'),
-        texto: 'Se abre Training Lab. Si te lo pide, entra con tu cuenta. Si muestra otra cuenta, toca «¿No eres tú?».',
+        titulo: 'Marca «Entiendo y quiero continuar»',
+        pantalla: 'chatgpt-crear', resalta: 'casilla',
+      },
+      {
+        titulo: 'Haz clic en «Crear como complemento»',
+        texto: 'Si no ves el botón, achica la página (Cmd o Ctrl y –).',
+        pantalla: 'chatgpt-crear', resalta: 'crear',
+      },
+      {
+        titulo: 'Haz clic en «Permitir»',
+        texto: 'Se abre Training Lab. Si te pide entrar, entra con tu cuenta. Si muestra otra cuenta, toca «¿No eres tú?».',
         pantalla: 'permiso', resalta: 'permitir',
       },
       {
-        titulo: '¡Listo! Úsalo en cualquier chat',
-        texto: 'En un chat: «+» → Complementos → Training Lab. O escribe @ y elígelo.',
+        titulo: '¡Listo! En un chat, escribe @ y elige Training Lab',
+        texto: 'También está en el menú «+», bajo Complementos.',
         pantalla: 'chat', resalta: 'app',
       },
     ];

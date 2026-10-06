@@ -156,6 +156,18 @@ function ClaudeConectores({ resalta }) {
       <div style={{ fontSize: 15, fontWeight: 800, color: KP.ink, margin: '2px 0 8px' }}>Conectores</div>
       {fila('G', 'Google Drive', '#1FA463')}
       {fila('M', 'Gmail', '#EA4335')}
+      {/* Ya agregado: la fila nueva, con su botón «Conectar». */}
+      {resalta === 'conectar' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 0', borderBottom: `1px solid ${KP.line}` }}>
+          <span style={{ width: 18, height: 18, borderRadius: 5, background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, display: 'grid', placeItems: 'center' }}>
+            <Dumbbell size={10} color="#fff" strokeWidth={2.8} />
+          </span>
+          <span style={{ flex: 1, fontSize: 11, fontWeight: 600, color: KP.ink }}>Training Lab</span>
+          <Toca activo>
+            <span style={{ display: 'inline-block', fontSize: 9.5, fontWeight: 800, color: '#fff', background: KP.ink, borderRadius: 6, padding: '3px 8px' }}>Conectar</span>
+          </Toca>
+        </div>
+      )}
       <div style={{ marginTop: 14 }}>
         <Toca activo={resalta === 'agregar'}>
           <div style={{
@@ -171,19 +183,26 @@ function ClaudeConectores({ resalta }) {
   );
 }
 
-function Formulario() {
+/* El formulario de Claude, un clic por paso: `resalta` dice cuál (nombre → url → agregar) y el
+   dibujo va «avanzando»: la liga aparece ya pegada a partir del paso de la liga. */
+function Formulario({ resalta }) {
+  const conLiga = resalta !== 'nombre';
   return (
     <div style={{ background: KP.surface, borderRadius: 12, border: `1px solid ${KP.line}`, padding: 11, boxShadow: '0 8px 20px rgba(17,19,24,.08)' }}>
       <div style={{ fontSize: 12, fontWeight: 800, color: KP.ink, marginBottom: 9 }}>Agregar conector personalizado</div>
       <p style={etiqueta}>Nombre</p>
-      <div style={{ ...campo(false), marginBottom: 12 }}>Training Lab</div>
-      <p style={etiqueta}>URL del servidor</p>
-      <Toca activo etiqueta="Pega tu liga">
-        <div style={campo(true)}>training-program-kappa.vercel.app/mcp</div>
+      <Toca activo={resalta === 'nombre'} etiqueta="Escribe aquí">
+        <div style={campo(resalta === 'nombre')}>Training Lab</div>
       </Toca>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 12 }}>
+      <p style={{ ...etiqueta, marginTop: 12 }}>URL del servidor</p>
+      <Toca activo={resalta === 'url'} etiqueta="Pega tu liga">
+        <div style={{ ...campo(resalta === 'url'), color: conLiga ? KP.ink : KP.ink3 }}>{conLiga ? 'training-program-kappa.vercel.app/mcp' : 'https://'}</div>
+      </Toca>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, marginTop: 12 }}>
         <span style={{ fontSize: 10, fontWeight: 700, color: KP.ink2, padding: '5px 8px' }}>Cancelar</span>
-        <span style={{ fontSize: 10, fontWeight: 800, color: '#fff', background: KP.ink, borderRadius: 7, padding: '5px 10px' }}>Agregar</span>
+        <Toca activo={resalta === 'agregar'}>
+          <span style={{ display: 'inline-block', fontSize: 10, fontWeight: 800, color: '#fff', background: KP.ink, borderRadius: 7, padding: '5px 10px' }}>Agregar</span>
+        </Toca>
       </div>
     </div>
   );
@@ -216,10 +235,12 @@ function ChatGPTComplementos({ resalta }) {
       <div style={{ borderLeft: `1px solid ${KP.line}`, paddingLeft: 9 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: KP.ink }}>Complementos</div>
-          <span style={{
-            fontSize: 10, fontWeight: 800, color: '#fff', background: menuAbierto ? KP.ink : '#3A3F49',
-            borderRadius: 99, padding: '4px 9px', whiteSpace: 'nowrap',
-          }}>Agregar ▾</span>
+          <Toca activo={resalta === 'agregar'}>
+            <span style={{
+              display: 'inline-block', fontSize: 10, fontWeight: 800, color: '#fff', background: KP.ink,
+              borderRadius: 99, padding: '4px 9px', whiteSpace: 'nowrap',
+            }}>Agregar ▾</span>
+          </Toca>
         </div>
         {menuAbierto ? (
           <div style={{
@@ -246,33 +267,51 @@ function ChatGPTComplementos({ resalta }) {
   );
 }
 
-/* El formulario «Crear servidor MCP personalizado» de ChatGPT, con lo que hay que llenar. */
-function ChatGPTCrear() {
+/* El formulario «Crear servidor MCP personalizado» de ChatGPT, un clic por paso: `resalta` dice cuál
+   (nombre → url → casilla → crear) y el dibujo va «avanzando»: la liga ya pegada desde el paso de la
+   liga, la casilla ya marcada desde el paso de la casilla. */
+function ChatGPTCrear({ resalta }) {
+  const avance = ['nombre', 'url', 'casilla', 'crear'].indexOf(resalta);
+  const conLiga = avance >= 1;
+  const marcada = avance >= 2;
   return (
     <div>
       <div style={{ fontSize: 12.5, fontWeight: 800, color: KP.ink, marginBottom: 9 }}>Crear servidor MCP personalizado</div>
       <p style={etiqueta}>Nombre</p>
-      <div style={{ ...campo(false), marginBottom: 9 }}>Training Lab</div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 13 }}>
+      <Toca activo={resalta === 'nombre'} etiqueta="Escribe aquí">
+        <div style={campo(resalta === 'nombre')}>Training Lab</div>
+      </Toca>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '9px 0 13px' }}>
         <p style={{ ...etiqueta, margin: 0 }}>Conexión</p>
         <span style={{ display: 'inline-flex', borderRadius: 6, background: '#EEF0F3', padding: 2, fontSize: 8.5, fontWeight: 700 }}>
           <span style={{ padding: '2px 6px', borderRadius: 5, background: KP.ink, color: '#fff' }}>URL del servidor</span>
           <span style={{ padding: '2px 6px', color: KP.ink2 }}>Túnel</span>
         </span>
       </div>
-      <Toca activo etiqueta="Pega tu liga">
-        <div style={campo(true)}>training-program-kappa.vercel.app/mcp</div>
+      <Toca activo={resalta === 'url'} etiqueta="Pega tu liga">
+        <div style={{ ...campo(resalta === 'url'), color: conLiga ? KP.ink : KP.ink3 }}>{conLiga ? 'training-program-kappa.vercel.app/mcp' : 'https://example.com/mcp'}</div>
       </Toca>
       <p style={{ ...etiqueta, marginTop: 9 }}>Autenticación</p>
       <div style={{ ...campo(false), display: 'flex', justifyContent: 'space-between' }}><span>OAuth</span><span style={{ color: KP.ink3 }}>▾</span></div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 9, fontSize: 10, fontWeight: 700, color: KP.ink }}>
-        <span style={{ width: 13, height: 13, borderRadius: 3, background: KP.blue, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-          <Check size={9} color="#fff" strokeWidth={3.5} />
-        </span>
-        Entiendo y quiero continuar
+      <div style={{ marginTop: 9 }}>
+        <Toca activo={resalta === 'casilla'} etiqueta="Márcala">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 700, color: KP.ink, padding: '2px 0' }}>
+            <span style={{
+              width: 13, height: 13, borderRadius: 3, flexShrink: 0, display: 'grid', placeItems: 'center',
+              background: marcada ? KP.blue : KP.surface, border: `1.5px solid ${marcada ? KP.blue : KP.lineHi}`,
+            }}>
+              {marcada && <Check size={9} color="#fff" strokeWidth={3.5} />}
+            </span>
+            Entiendo y quiero continuar
+          </div>
+        </Toca>
       </div>
-      <div style={{ marginTop: 10, textAlign: 'center', fontSize: 10.5, fontWeight: 800, color: '#fff', background: KP.ink, borderRadius: 99, padding: '6px 0' }}>
-        Crear como complemento
+      <div style={{ marginTop: 10 }}>
+        <Toca activo={resalta === 'crear'}>
+          <div style={{ textAlign: 'center', fontSize: 10.5, fontWeight: 800, color: '#fff', background: KP.ink, borderRadius: 99, padding: '6px 0' }}>
+            Crear como complemento
+          </div>
+        </Toca>
       </div>
     </div>
   );
@@ -335,7 +374,7 @@ function Chat({ app, resalta, rol }) {
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, border: `1px solid ${KP.lineHi}`, borderRadius: 99, padding: '4px 5px 4px 4px' }}>
         <span style={{ width: 18, height: 18, borderRadius: 9, border: `1px solid ${KP.lineHi}`, display: 'grid', placeItems: 'center' }}><Plus size={10} strokeWidth={2.8} color={KP.ink} /></span>
-        <span style={{ fontSize: 9.5, color: KP.ink3, fontWeight: 600 }}>Escribe…</span>
+        <span style={{ fontSize: 9.5, color: app === 'chatgpt' ? KP.ink : KP.ink3, fontWeight: 600 }}>{app === 'chatgpt' ? '@' : 'Escribe…'}</span>
       </div>
     </div>
   );
@@ -375,11 +414,11 @@ function PantallaDelPaso({ paso, app, esCompu, rol }) {
         </Marco>
       );
     case 'formulario':
-      return <Marco tipo={marcoWeb} direccion="claude.ai/settings/connectors"><Formulario /></Marco>;
+      return <Marco tipo={marcoWeb} direccion="claude.ai/settings/connectors"><Formulario resalta={paso.resalta} /></Marco>;
     case 'chatgpt-complementos':
       return <Marco tipo="navegador" direccion="chatgpt.com/plugins"><ChatGPTComplementos resalta={paso.resalta} /></Marco>;
     case 'chatgpt-crear':
-      return <Marco tipo="navegador" direccion="chatgpt.com/plugins"><ChatGPTCrear /></Marco>;
+      return <Marco tipo="navegador" direccion="chatgpt.com/plugins"><ChatGPTCrear resalta={paso.resalta} /></Marco>;
     case 'permiso':
       return <Marco tipo={app === 'chatgpt' ? 'navegador' : marcoWeb} direccion="training-program-kappa.vercel.app"><Permiso app={app} /></Marco>;
     case 'chat':
