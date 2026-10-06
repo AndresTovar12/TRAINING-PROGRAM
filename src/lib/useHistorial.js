@@ -54,6 +54,15 @@ const mismaFoto = (a, b) => {
   return ka.length === kb.length && ka.every((k) => Object.is(a[k], b[k]));
 };
 
+/** ¿Este elemento está FUERA del editor, o dentro de una ventana flotante del editor (guardar, elegir un ejercicio, una pregunta)?
+    Ahí los atajos (Ctrl+Z, Ctrl+S) son de lo que se hace en esa ventana. Con el foco en la página (`body`) o en el propio editor, no. */
+export function enVentanaFlotante(donde, caja) {
+  if (!(donde instanceof Element) || donde === document.body) return false;
+  if (caja && !caja.contains(donde)) return true;
+  for (let n = donde; n && n !== caja; n = n.parentElement) if (getComputedStyle(n).position === 'fixed') return true;
+  return false;
+}
+
 export const HistorialContext = createContext(null);
 /** Lo que necesitan los de adentro del editor: `{ deshacer }` (p. ej., el aviso «Se quitó… Deshacer»). `null` si no hay historial. */
 export const useHistorialDelEditor = () => useContext(HistorialContext);
@@ -132,13 +141,8 @@ export function useHistorial({ leer, aplicar, raiz = null, alCambiar = null }) {
       if (e.defaultPrevented || e.isComposing || !(e.metaKey || e.ctrlKey) || e.altKey) return;
       const tecla = e.key.toLowerCase();
       if (tecla !== 'z' && tecla !== 'y') return;
-      const caja = raiz?.current;
-      const donde = e.target;
-      if (donde instanceof Element && donde !== document.body) {
-        // El foco fuera del editor, o dentro de una ventana flotante: ahí Ctrl+Z es de otra cosa.
-        if (caja && !caja.contains(donde)) return;
-        for (let n = donde; n && n !== caja; n = n.parentElement) if (getComputedStyle(n).position === 'fixed') return;
-      }
+      // El foco fuera del editor, o dentro de una ventana flotante: ahí Ctrl+Z es de otra cosa.
+      if (enVentanaFlotante(e.target, raiz?.current)) return;
       e.preventDefault();
       if (tecla === 'y' || e.shiftKey) rehacer(); else deshacer();
     };

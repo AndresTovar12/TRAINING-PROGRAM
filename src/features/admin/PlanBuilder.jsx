@@ -4,7 +4,7 @@ import {
   ArrowLeft, X, Plus, Trash2, Copy, ChevronRight, ChevronUp, ChevronDown,
   ChevronLeft, Loader2, Check, Layers, Dumbbell, StickyNote, Zap,
   Save, FolderOpen, Clipboard, Eraser, CalendarDays, Repeat, Scale, Video,
-  Image as ImageIcon, CopyPlus, Sun, Moon,
+  Image as ImageIcon, CopyPlus, Sun, Moon, RefreshCw,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
@@ -27,7 +27,7 @@ import BloqueDelPrograma from '@/features/admin/BloqueDelPrograma';
 import MenuDeAcciones from '@/features/admin/MenuDeAcciones';
 import { useFasesAbiertas } from '@/features/admin/useFasesAbiertas';
 import EditorBarra, { BarraDelCelular, BotonesDeHistorial } from '@/features/admin/EditorBarra';
-import { HistorialContext, useHistorial, useHistorialDelEditor } from '@/lib/useHistorial';
+import { HistorialContext, enVentanaFlotante, useHistorial, useHistorialDelEditor } from '@/lib/useHistorial';
 import { mueveEn, propsDeArrastre } from '@/lib/arrastrar';
 import { PlegadasContext, usePlegadas, usePlegadasDelEditor } from '@/lib/usePlegadas';
 import { useGuiaAncha } from '@/lib/useGuiaAncha';
@@ -2015,7 +2015,7 @@ function TiraDeDias({ dias, elegido, onElegir }) {
 export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDeleted, profesionalId = null, catalogo = null }) {
   const esCompu = useIsDesktop();
   const pregunta = useConfirmacion();
-  const { avisa } = useAviso();
+  const { avisa, trabajando } = useAviso();
   const { user } = useAuth();
   const { t } = usePalabras();
   // «Lista o tarjetas»: en el celular el interruptor vive en el título del día.
@@ -2107,6 +2107,16 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
   });
   const dirty = hist.sucio;
   const avisaConDeshacer = (texto) => avisa(texto, { accion: { texto: 'Deshacer', alTocar: hist.deshacer } });
+  /* LA PREGUNTA DE GUARDAR (Andrés, 5 oct 2026: «para todos los botones de guardar, cuando estás trabajando sobre algo que
+     tiene un avance, que la app pregunte si es guardar una nueva versión o actualizar la que ya tenías»; en producción, sin
+     título: solo las dos opciones). Sale pegada al botón (o como hoja de abajo en el celular):
+       · «Actualizar avance» guarda encima de lo que ya estaba guardado;
+       · «Guardar nuevo» abre la ventana de siempre (nombre y carpeta) y crea otra copia.
+     `guardados`: lo que ya se guardó en Mis planes desde esta pantalla (el plan, una semana, un workout), para no hacer otra
+     copia igual cada vez. `preguntaGuardar`: { ancla, alActualizar, alNuevo }. */
+  const guardados = useRef({});
+  const [preguntaGuardar, setPreguntaGuardar] = useState(null);
+  const botonGuardarRef = useRef(null);
   const ctxHistorial = useMemo(() => ({ deshacer: hist.deshacer }), [hist.deshacer]);
   const [saving, setSaving] = useState(false);
   // Ya se guardó en esta sesión del editor: el botón dice "Guardado" hasta
@@ -2270,6 +2280,38 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
       ? { tipo: 'rutina', data: rutinaDePlan({ phases: lista }) }
       : { tipo: 'programa', data: programaDePlan({ kind, estructura, phases: lista }) };
   };
+  /* Lo que se manda a Mis planes, igual que lo arman las ventanas de guardar; `notas` y `todo` son lo que se contestó la
+     última vez (sin contestar, todo se incluye). */
+  const datosDelPlanParaMisPlanes = (notas) => {
+    const { tipo, data } = datosDelCatalogo();
+    return notas === false ? sinNotas(tipo, data) : data;
+  };
+  const datosDeLaSemanaParaMisPlanes = (semana, notas) => {
+    const data = rutinaDeSemana(semana);
+    return notas === false ? sinNotas('rutina', data) : data;
+  };
+  const datosDelDiaParaMisPlanes = (sesion, delDia, { todo, notas } = {}) => {
+    const data = workoutDeSesiones(delDia.length > 1 && todo !== false ? delDia : [sesion]);
+    return notas === false ? sinNotas('workout', data) : data;
+  };
+  /* Guardar en Mis planes lo de esta pantalla. Si ya se guardó desde aquí, pregunta; si no, la ventana de siempre.
+     `datos(previo)`: lo que se escribe al actualizar, con lo que se contestó la primera vez. */
+  const guardaEnMisPlanes = (clave, ancla, { dialogo, datos }) => {
+    const previo = guardados.current[clave];
+    if (!previo) { setModal(dialogo); return; }
+    setPreguntaGuardar({
+      ancla,
+      alActualizar: async () => {
+        try {
+          const fila = await trabajando('Actualizando…', () => actualizarItem(previo.fila, { nombre: previo.fila.nombre, data: datos(previo) }), 'Avance actualizado');
+          guardados.current[clave] = { ...previo, fila };
+        } catch (e) {
+          setErr(e.message || 'No se pudo actualizar');
+        }
+      },
+      alNuevo: () => setModal(dialogo),
+    });
+  };
   // De dónde sale lo que se guarda: «Del plan de Juan» o «Creado desde cero».
   const origenDelPlan = athlete ? `Del plan de ${athlete.full_name || athlete.username}` : 'Creado desde cero';
   // La casilla de «¿incluir mis notas?»: solo sale si hay notas que dejar fuera.
@@ -2278,7 +2320,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     ayuda: 'Las notas del día y las notas sueltas dentro de las sesiones. Las indicaciones de cada ejercicio se quedan.',
   }] : []);
 
-  async function onSave() {
+  async function onSave({ nuevo = false } = {}) {
     if (!title.trim()) { setErr(t('Ponle un título al plan')); return; }
     if (phases.length === 0) { setErr(t('El plan necesita al menos una fase')); return; }
     /* UNA RUTINA SIN NINGUNA SESIÓN. Borrar la única sesión de una rutina suele querer decir «ya
@@ -2299,8 +2341,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     // Lo que se está guardando es ESTE estado: si se sigue escribiendo mientras tarda, eso queda sin guardar.
     const idAlGuardar = hist.idActual();
     if (enCatalogo) {
-      // Algo NUEVO pregunta primero dónde guardarlo; algo que ya existe se actualiza.
-      if (!filaCatalogo) { setModal({ type: 'guardar-catalogo' }); return; }
+      // Algo NUEVO (o «Guardar nuevo») pregunta primero dónde guardarlo; algo que ya existe se actualiza.
+      if (!filaCatalogo || nuevo) { setModal({ type: 'guardar-catalogo' }); return; }
       setErr('');
       setSaving(true);
       try {
@@ -2515,6 +2557,33 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     }
   };
 
+  /* El botón «Guardar» de arriba. Un programa o una rutina de Mis planes que YA existe pregunta (actualizar o guardar otro). El
+     plan de un atleta guarda directo: la base ya guarda cada versión anterior en «Cambios del plan», y un atleta solo puede
+     tener un plan activo por profesional, así que «Guardar nuevo» no tendría dónde caer. */
+  const pideGuardarPrincipal = (ancla) => {
+    if (enCatalogo && filaCatalogo) {
+      setPreguntaGuardar({ ancla, alActualizar: () => onSave(), alNuevo: () => onSave({ nuevo: true }) });
+      return;
+    }
+    onSave();
+  };
+  // Ctrl/⌘+S = el botón «Guardar». Siempre le gana al «guardar página» del navegador; solo guarda si hay algo sin guardar.
+  const guardarConAtajo = useRef(null);
+  useLayoutEffect(() => {
+    guardarConAtajo.current = () => {
+      if (dirty && !saving && nav.level !== 'start' && nav.level !== 'wizard') pideGuardarPrincipal(botonGuardarRef.current);
+    };
+  });
+  useEffect(() => {
+    const alTeclear = (e) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.isComposing || e.key.toLowerCase() !== 's') return;
+      if (enVentanaFlotante(e.target, raizRef.current)) return;
+      e.preventDefault();
+      guardarConAtajo.current?.();
+    };
+    document.addEventListener('keydown', alTeclear);
+    return () => document.removeEventListener('keydown', alTeclear);
+  }, []);
   async function handleClose() {
     if (dirty) {
       const va = await pregunta({
@@ -2632,7 +2701,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
      `BloqueDelPrograma`— reciben lo mismo, ya resuelto aquí. */
   const botonGuardar = nav.level !== 'start' && nav.level !== 'wizard' && (
     <button
-      type="button" onClick={onSave} disabled={saving || !dirty}
+      ref={botonGuardarRef} type="button" onClick={(ev) => pideGuardarPrincipal(ev.currentTarget)} disabled={saving || !dirty}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 18px', borderRadius: 12,
         border: 'none', cursor: saving || !dirty ? 'default' : 'pointer',
@@ -2654,7 +2723,9 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
   const programa = {
     forma: FORMAS.find((f) => f.id === estructura) ?? FORMAS[2], puedeCambiar: !enCatalogo, onCambiar: () => setFormasAbiertas(true),
     puedeGuardar: !enCatalogo && planTieneContenido(phases), textoGuardar: isWeekly ? 'Guardar rutina' : t('Guardar plan'),
-    onGuardar: () => setModal({ type: 'guardar-plan' }),
+    onGuardar: (ev) => guardaEnMisPlanes('plan', ev?.currentTarget, {
+      dialogo: { type: 'guardar-plan' }, datos: (previo) => datosDelPlanParaMisPlanes(previo.notas),
+    }),
     onUsar: isWeekly ? () => setModal({ type: 'tpl-week' }) : undefined, textoUsar: 'Usar rutina', iconoUsar: FolderOpen,
     tituloUsar: 'Usar una rutina guardada de Mis planes',
     onEliminar: (enCatalogo ? !!filaCatalogo : !!(planRow && onDeleted)) ? () => eliminarPrograma() : undefined,
@@ -2912,7 +2983,13 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
                       avisaConDeshacer('Sesión vaciada');
                     }}
                     onSaveToCatalog={sesionTieneContenido(d)
-                      ? () => setModal({ type: 'guardar-dia', payload: { sesion: d, delDia: daysOfWeekday.map((x) => x.d) } })
+                      ? (ancla) => {
+                        const delDia = daysOfWeekday.map((x) => x.d);
+                        guardaEnMisPlanes(`workout:${p.id}:${w.num}:${di}`, ancla, {
+                          dialogo: { type: 'guardar-dia', payload: { sesion: d, delDia, di } },
+                          datos: (previo) => datosDelDiaParaMisPlanes(d, delDia, previo),
+                        });
+                      }
                       : undefined}
                     onApplyCatalog={() => setModal({ type: 'tpl-day', payload: { di } })}
                   />
@@ -3061,6 +3138,15 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
       {formasAbiertas && (
         <HojaFormas actual={estructura} onElegir={cambiarForma} onClose={() => setFormasAbiertas(false)} />
       )}
+      {preguntaGuardar && (
+        <MenuDeAcciones
+          etiqueta="Guardar" ancla={preguntaGuardar.ancla} onClose={() => setPreguntaGuardar(null)}
+          acciones={[
+            { icon: RefreshCw, texto: 'Actualizar avance', onClick: preguntaGuardar.alActualizar },
+            { icon: CopyPlus, texto: 'Guardar nuevo', onClick: preguntaGuardar.alNuevo },
+          ]}
+        />
+      )}
       {menu?.tipo === 'semana' && curPhase && (() => {
         const semana = curPhase.weekData[curWeekIdx];
         const hayOtra = (deCorrido ? semanasDelPlan(phases) : curPhase.weekData.length) > 1;
@@ -3071,7 +3157,12 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
               { icon: CopyPlus, texto: 'Duplicar semana', onClick: duplicarSemana },
               ...(hayOtra ? [{ icon: Layers, texto: 'Copiar a todas', onClick: copiarSemanaATodas }] : []),
               { icon: FolderOpen, texto: 'Usar semana', onClick: () => setModal({ type: 'tpl-week' }) },
-              ...(semanaTieneContenido(semana) ? [{ icon: Save, texto: 'Guardar semana', onClick: () => setModal({ type: 'guardar-semana' }) }] : []),
+              ...(semanaTieneContenido(semana) ? [{
+                icon: Save, texto: 'Guardar semana',
+                onClick: (ancla) => guardaEnMisPlanes(`semana:${curPhase.id}:${semana.num}`, ancla, {
+                  dialogo: { type: 'guardar-semana' }, datos: (previo) => datosDeLaSemanaParaMisPlanes(semana, previo.notas),
+                }),
+              }] : []),
               ...(hayOtra ? [{ icon: Trash2, texto: 'Eliminar semana', onClick: eliminarSemana, peligro: true }] : []),
             ]}
           />
@@ -3104,10 +3195,11 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
             titulo={isWeekly ? 'Guardar rutina' : t('Guardar plan')}
             tipo={tipo} nombreInicial={title} interruptores={casillaDeNotas(tipo, data)} recordarCarpeta
             onGuardar={async ({ nombre, descripcion, carpetaId, interruptores }) => {
-              await guardarItem({
+              const fila = await guardarItem({
                 tipo, nombre, descripcion, origen: origenDelPlan, carpetaId, userId: user?.id,
                 data: interruptores.notas === false ? sinNotas(tipo, data) : data,
               });
+              guardados.current.plan = { fila, notas: interruptores.notas };
               avisa('Guardado en Mis planes');
             }}
             onCerrar={() => setModal(null)}
@@ -3122,10 +3214,11 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
             titulo="Guardar semana" tipo="rutina" recordarCarpeta
             nombreInicial={nombreSemana(curPhase, semana, curWeekIdx + 1)} interruptores={casillaDeNotas('rutina', data)}
             onGuardar={async ({ nombre, descripcion, carpetaId, interruptores }) => {
-              await guardarItem({
+              const fila = await guardarItem({
                 tipo: 'rutina', nombre, descripcion, origen: origenDelPlan, carpetaId, userId: user?.id,
                 data: interruptores.notas === false ? sinNotas('rutina', data) : data,
               });
+              guardados.current[`semana:${curPhase.id}:${semana.num}`] = { fila, notas: interruptores.notas };
               avisa('Guardado en Mis planes');
             }}
             onCerrar={() => setModal(null)}
@@ -3148,10 +3241,13 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
             ]}
             onGuardar={async ({ nombre, descripcion, carpetaId, interruptores }) => {
               const data = workoutDeSesiones(varias && interruptores.todo !== false ? delDia : [sesion]);
-              await guardarItem({
+              const fila = await guardarItem({
                 tipo: 'workout', nombre, descripcion, origen: origenDelPlan, carpetaId, userId: user?.id,
                 data: interruptores.notas === false ? sinNotas('workout', data) : data,
               });
+              guardados.current[`workout:${curPhase.id}:${curPhase.weekData[curWeekIdx].num}:${modal.payload.di}`] = {
+                fila, notas: interruptores.notas, todo: interruptores.todo,
+              };
               avisa('Guardado en Mis planes');
             }}
             onCerrar={() => setModal(null)}

@@ -14,9 +14,11 @@ import { useIsDesktop } from '@/lib/useViewport';
  *   · En el celular es una hoja de abajo con «Cancelar»: un dedo necesita 50 px por fila.
  *
  * `MenuEmergente` es la caja (sirve también para el selector de color de la fase); `MenuDeAcciones` la llena con
- * una lista de acciones `{ icon, texto, onClick, peligro }`. Un `null` en la lista es una raya que separa.
+ * una lista de acciones `{ icon, texto, onClick, peligro }`. Un `null` en la lista es una raya que separa. Cada `onClick`
+ * recibe el botón al que estaba pegado el menú (`ancla`): lo que se abra después puede pegarse al mismo sitio.
+ * Sin `titulo` no sale título (la pregunta de guardar no lleva); `etiqueta` es el nombre para quien usa lector de pantalla.
  */
-export function MenuEmergente({ ancla, titulo, tituloSoloEnCelular = false, onClose, children }) {
+export function MenuEmergente({ ancla, titulo, etiqueta, tituloSoloEnCelular = false, onClose, children }) {
   const esCompu = useIsDesktop();
   const caja = useRef(null);
 
@@ -90,7 +92,7 @@ export function MenuEmergente({ ancla, titulo, tituloSoloEnCelular = false, onCl
         }}
     >
       <div
-        ref={caja} role="menu" aria-label={titulo} onMouseDown={(e) => e.stopPropagation()} onKeyDown={alTeclearEnMenu}
+        ref={caja} role="menu" aria-label={titulo ?? etiqueta} onMouseDown={(e) => e.stopPropagation()} onKeyDown={alTeclearEnMenu}
         className={esCompu ? undefined : 'animate-sheet'}
         style={esCompu
           ? {
@@ -153,10 +155,10 @@ function ItemDelMenu({ icon: Icono, texto, peligro, onClick, grande }) {
   );
 }
 
-export default function MenuDeAcciones({ titulo, acciones, ancla, onClose }) {
+export default function MenuDeAcciones({ titulo, etiqueta, acciones, ancla, onClose }) {
   const esCompu = useIsDesktop();
   return (
-    <MenuEmergente titulo={titulo} ancla={ancla} onClose={onClose}>
+    <MenuEmergente titulo={titulo} etiqueta={etiqueta} ancla={ancla} onClose={onClose}>
       {acciones.map((a, i) => {
         if (!a) return <i key={`raya-${i}`} style={{ display: 'block', height: 1, background: T.border, margin: esCompu ? '5px 4px' : '6px 8px' }} />;
         // Lo destructivo siempre va separado de lo de arriba.
@@ -164,7 +166,7 @@ export default function MenuDeAcciones({ titulo, acciones, ancla, onClose }) {
         return (
           <div key={a.texto}>
             {raya && <i style={{ display: 'block', height: 1, background: T.border, margin: esCompu ? '5px 4px' : '6px 8px' }} />}
-            <ItemDelMenu {...a} grande={!esCompu} onClick={() => { onClose(); a.onClick(); }} />
+            <ItemDelMenu {...a} grande={!esCompu} onClick={() => { onClose(); a.onClick(ancla); }} />
           </div>
         );
       })}

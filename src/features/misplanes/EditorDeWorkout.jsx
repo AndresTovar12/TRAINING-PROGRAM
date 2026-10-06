@@ -1,12 +1,13 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Check, Loader2, Plus, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Check, CopyPlus, Loader2, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useAviso } from '@/components/AvisoPasajero';
 import { BotonesDeHistorial } from '@/features/admin/EditorBarra';
-import { HistorialContext, useHistorial } from '@/lib/useHistorial';
+import { HistorialContext, enVentanaFlotante, useHistorial } from '@/lib/useHistorial';
+import MenuDeAcciones from '@/features/admin/MenuDeAcciones';
 import { PlegadasContext, usePlegadas } from '@/lib/usePlegadas';
 import { mueveEn, propsDeArrastre } from '@/lib/arrastrar';
 import { useRepertorioDelEditor } from '@/features/admin/useRepertorioDelEditor';
@@ -62,6 +63,9 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
   });
   const dirty = hist.sucio;
   const ctxHistorial = useMemo(() => ({ deshacer: hist.deshacer }), [hist.deshacer]);
+  // La pregunta de guardar (ver PlanBuilder): un workout que YA existe pregunta si se actualiza o se guarda otro: { ancla, … }.
+  const [preguntaGuardar, setPreguntaGuardar] = useState(null);
+  const botonGuardarRef = useRef(null);
 
   const cambia = (fn) => { hist.registra(); setSesiones(fn); };
   const cambiaTitulo = (v) => { hist.registra(); setTitulo(v); };
@@ -87,6 +91,29 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
       setGuardando(false);
     }
   }
+
+  const pideGuardar = (ancla) => {
+    if (fila) {
+      setPreguntaGuardar({ ancla, alActualizar: () => guardar(), alNuevo: () => setDialogo(true) });
+      return;
+    }
+    guardar();
+  };
+  // Ctrl/⌘+S = el botón «Guardar» (solo con algo sin guardar).
+  const guardarConAtajo = useRef(null);
+  useLayoutEffect(() => {
+    guardarConAtajo.current = () => { if (dirty && !guardando) pideGuardar(botonGuardarRef.current); };
+  });
+  useEffect(() => {
+    const alTeclear = (e) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.isComposing || e.key.toLowerCase() !== 's') return;
+      if (enVentanaFlotante(e.target, raizRef.current)) return;
+      e.preventDefault();
+      guardarConAtajo.current?.();
+    };
+    document.addEventListener('keydown', alTeclear);
+    return () => document.removeEventListener('keydown', alTeclear);
+  }, []);
 
   async function cerrar() {
     if (dirty) {
@@ -170,7 +197,7 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
           onDeshacer={hist.deshacer} onRehacer={hist.rehacer}
         />
         <button
-          type="button" onClick={guardar} disabled={guardando || (!dirty && !!fila)}
+          ref={botonGuardarRef} type="button" onClick={(ev) => pideGuardar(ev.currentTarget)} disabled={guardando || (!dirty && !!fila)}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 8, padding: esAncha ? '11px 18px' : '11px 13px', borderRadius: 12, border: 'none',
             cursor: guardando || (!dirty && fila) ? 'default' : 'pointer',
@@ -242,6 +269,16 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
           )}
         </div>
       </main>
+
+      {preguntaGuardar && (
+        <MenuDeAcciones
+          etiqueta="Guardar" ancla={preguntaGuardar.ancla} onClose={() => setPreguntaGuardar(null)}
+          acciones={[
+            { icon: RefreshCw, texto: 'Actualizar avance', onClick: preguntaGuardar.alActualizar },
+            { icon: CopyPlus, texto: 'Guardar nuevo', onClick: preguntaGuardar.alNuevo },
+          ]}
+        />
+      )}
 
       {dialogo && (
         <DialogoGuardar
