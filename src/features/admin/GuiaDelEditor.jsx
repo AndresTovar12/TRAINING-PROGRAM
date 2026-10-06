@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, CopyPlus, CornerUpLeft, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, CopyPlus, CornerUpLeft, Plus, Trash2 } from 'lucide-react';
 import { LT, KP, FONT, NUM_STYLE, tipoDeSesion } from '@/lib/theme';
 import { esDescanso } from '@/lib/training-utils';
 import { pluralS } from '@/lib/plural';
 import { useIsDesktop } from '@/lib/useViewport';
+import { propsDeArrastre } from '@/lib/arrastrar';
 import { TituloDelRenglon } from '@/components/NavegadorDelPlan';
 import { DIAS_SEMANA } from '@/lib/pegadas';
 import { MenuEmergente } from '@/features/admin/MenuDeAcciones';
@@ -77,10 +78,10 @@ function BotonIcono({ icono: Icono, etiqueta, onClick, peligro = false, tam, siz
 }
 
 // Una fase cerrada: una fila. Tocarla la abre (no cambia lo que se edita).
-function FilaDeFase({ f, esDeAqui, editando, textoAqui, onAbrir }) {
+function FilaDeFase({ f, esDeAqui, editando, textoAqui, onAbrir, arrastre }) {
   return (
     <button
-      type="button" className={`tl-fila${esDeAqui ? ' tl-azul' : ''}`} aria-expanded={false} onClick={onAbrir}
+      type="button" className={`tl-fila${esDeAqui ? ' tl-azul' : ''}`} aria-expanded={false} onClick={onAbrir} {...arrastre}
       style={{
         display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '12px 13px',
         background: LT.surface, borderRadius: 13, cursor: 'pointer', border: `1px solid ${esDeAqui ? LT.blue : LT.border}`,
@@ -141,6 +142,9 @@ export default function GuiaDelEditor({
   const ultima = lista.length - 1;
   const tamIcono = esCompu ? 28 : 32;
 
+  // Las fases se mueven arrastrándolas (la fila cerrada, o la tarjeta abierta desde sus huecos): `moverFaseA(de, a)`.
+  const arrastreDe = (f) => propsDeArrastre({ lista: 'fases', etiqueta: f.name || 'Fase', alMover: acciones.moverFaseA });
+
   // La semana que se ve en cada fase: la que se edita, o la última que se miró, o donde va el atleta, o la primera.
   const semanaDe = (f, i) => {
     const ws = f.weekData ?? [];
@@ -167,7 +171,7 @@ export default function GuiaDelEditor({
 
     return (
       <div
-        key={f.id}
+        key={f.id} {...(esRutina || deCorrido ? null : arrastreDe(f))}
         style={{
           background: LT.surface, borderRadius: 16, padding: deAqui ? 13 : 14, display: 'flex', flexDirection: 'column', gap: 11,
           border: `${deAqui ? 2 : 1}px solid ${deAqui ? LT.blue : LT.border}`,
@@ -192,9 +196,6 @@ export default function GuiaDelEditor({
               style={{ ...enLinea, flex: 1, fontSize: 15.5, paddingBlock: 5 }}
             />
             <span style={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0, marginRight: -6 }}>
-              {/* Subir y bajar: provisional, hasta que las fases se muevan arrastrándolas. */}
-              {i > 0 && <BotonIcono icono={ArrowUp} etiqueta="Subir la fase" tam={tamIcono} onClick={() => acciones.moverFase(i, -1)} />}
-              {i < ultima && <BotonIcono icono={ArrowDown} etiqueta="Bajar la fase" tam={tamIcono} onClick={() => acciones.moverFase(i, 1)} />}
               <BotonIcono icono={CopyPlus} etiqueta="Duplicar la fase" tam={tamIcono} onClick={() => acciones.duplicarFase(i)} />
               {lista.length > 1 && (
                 <BotonIcono icono={Trash2} etiqueta="Eliminar la fase" peligro tam={tamIcono} onClick={() => acciones.eliminarFase(i)} />
@@ -310,7 +311,7 @@ export default function GuiaDelEditor({
         return (
           <FilaDeFase
             key={f.id} f={f} esDeAqui={aqui?.faseId === f.id} editando={i === faseEditada} textoAqui={textoAqui}
-            onAbrir={() => acciones.abrir(i)}
+            onAbrir={() => acciones.abrir(i)} arrastre={arrastreDe(f)}
           />
         );
       })}
