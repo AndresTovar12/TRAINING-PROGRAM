@@ -1319,10 +1319,6 @@ function EditorSesionesDelDia({
             </Pill>
           </div>
 
-          <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 600, lineHeight: 1.5 }}>
-            Aquí nada se corrige solo: «—» en las series y reps como «30 yd» o «3-5»
-            se guardan tal cual los escribas.
-          </div>
         </>
       )}
 
@@ -1913,11 +1909,12 @@ function DayHeader({
       <div data-cab-arrastre="" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         {plegable && <BotonDePlegar plegada={plegada} onClick={onPlegar} />}
         {turno && <InsigniaDeTurno turno={turno} />}
-        {/* 200 px de base y no `flex: 1` pelado: con `flex: 1` la base es 0, así que el nombre nunca bajaba de renglón
-            y se encogía para dejarle sitio al tipo. En el celular va primero y ocupa su renglón. */}
+        {/* Una base de 140 px (200 en el celular) y no `flex: 1` pelado: con `flex: 1` la base es 0, así que el nombre nunca
+            bajaba de renglón y se encogía para dejarle sitio al tipo. En el celular va primero y ocupa su renglón; en una
+            ventana de 1024 px todo cabe en una fila. */}
         <div
           {...enLectura(soloLectura)}
-          style={{ flex: '1 1 200px', minWidth: 0, order: esCompu ? undefined : -1, ...(esCompu ? null : { flexBasis: '100%' }), ...(soloLectura ? APAGADO : null) }}
+          style={{ flex: esCompu ? '1 1 140px' : '1 1 200px', minWidth: 0, order: esCompu ? undefined : -1, ...(esCompu ? null : { flexBasis: '100%' }), ...(soloLectura ? APAGADO : null) }}
         >
           {/* En un día de dos sesiones el nombre casi nunca está guardado: la app del atleta arma el título con las dos
               ("AM Velocidad máxima · PM French Contrast"). Aquí se enseña lo mismo como sugerencia gris —no se
@@ -1932,7 +1929,10 @@ function DayHeader({
         </div>
         {/* Era un <select>: en el iPhone, la rueda gris del sistema. Ahora es la lista de la app, con los colores a la
             vista y con los tipos que el propio coach se haya creado. */}
-        <div {...enLectura(soloLectura)} style={{ flex: '0 1 170px', minWidth: 140, ...(soloLectura ? APAGADO : null) }}>
+        <div
+          {...enLectura(soloLectura)}
+          style={{ ...(esCompu ? { flex: '0 1 170px', minWidth: 140 } : { flex: '1 1 100px', minWidth: 100 }), ...(soloLectura ? APAGADO : null) }}
+        >
           <SelectorTipoSesion day={day} onPatch={onPatch} coachId={user?.id} />
         </div>
         {acciones.length > 0 && (
@@ -2727,7 +2727,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
       dialogo: { type: 'guardar-plan' }, datos: (previo) => datosDelPlanParaMisPlanes(previo.notas),
     }),
     onUsar: isWeekly ? () => setModal({ type: 'tpl-week' }) : undefined, textoUsar: 'Usar rutina', iconoUsar: FolderOpen,
-    tituloUsar: 'Usar una rutina guardada de Mis planes',
+    tituloUsar: 'Usar una rutina de Mis planes',
     onEliminar: (enCatalogo ? !!filaCatalogo : !!(planRow && onDeleted)) ? () => eliminarPrograma() : undefined,
     textoEliminar: enCatalogo ? 'Eliminar de Mis planes' : 'Eliminar programa',
   };
@@ -2936,10 +2936,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
                 <div style={{ width: 70, height: 70, borderRadius: 22, background: T.accentBg, color: T.accent, display: 'grid', placeItems: 'center', margin: '0 auto 16px' }}>
                   <CalendarDays size={30} />
                 </div>
-                <div style={{ fontSize: 17, fontWeight: 800, color: T.text }}>No hay sesión para el {DAY_FULL_LOWER[activeWeekday] || activeWeekday.toLowerCase()}</div>
-                <div style={{ fontSize: 13.5, color: T.text2, marginTop: 8, lineHeight: 1.5 }}>
-                  Crea una desde cero, usa un workout guardado o pega una copiada.
-                </div>
+                <div style={{ fontSize: 17, fontWeight: 800, color: T.text }}>Sin sesión el {DAY_FULL_LOWER[activeWeekday] || activeWeekday.toLowerCase()}</div>
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20, flexWrap: 'wrap' }}>
                   <button type="button"
                     onClick={() => patchWeek(nav.pi, wIdx, (wk) => ({ days: [...(wk.days || []), newDay(activeWeekday)] }))}

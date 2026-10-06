@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Check, ChevronRight, CornerUpLeft, MoreHorizontal, Plus } from 'lucide-react';
-import { LT, KP, FONT, NUM_STYLE, tipoDeSesion } from '@/lib/theme';
-import { esDescanso, enOrdenDeSemana, semanaGlobal } from '@/lib/training-utils';
+import { Check, ChevronRight, CornerUpLeft } from 'lucide-react';
+import { LT, FONT, NUM_STYLE, tipoDeSesion } from '@/lib/theme';
+import { esDescanso, enOrdenDeSemana } from '@/lib/training-utils';
 import { sesionesDelTitulo, textoDeSesiones } from '@/lib/sesiones';
 import EtiquetasDeSesion from '@/components/EtiquetasDeSesion';
 import { pluralS } from '@/lib/plural';
@@ -78,11 +78,11 @@ export function TituloDelRenglon({ dias, color, peso = 700, minimo, extras }) {
  * de a donde se va: "si te metes a ver algún otro día pierdes la noción de si
  * ese día es donde vas o es otro que seleccionaste".
  *
- * MODO EDITOR (`editor`). La fase y la semana abiertas las lleva quien edita,
- * porque el editor del día de al lado tiene que estar mirando la misma. Salen
- * los SIETE días —un sábado vacío es justo donde el coach quiere añadir algo—,
- * y cada fase y cada semana tienen sus tres puntos. Aprobado por Andrés con
- * maqueta el 24 sep 2026: "sí, hazlo así".
+ * MODO EDITOR DE SOLO LECTURA (`editor`, siempre con `soloLectura`). La fase y la semana
+ * abiertas las lleva quien mira, porque el panel del día de al lado tiene que estar mirando la
+ * misma. Salen los SIETE días —un sábado vacío es justo donde alguien quiere agregar algo—. El
+ * editor que SÍ cambia el plan (`PlanBuilder`) tiene su propia guía, `GuiaDelEditor` (5 oct 2026):
+ * aquí ya no hay «⋯», ni «Agregar semana / fase».
  *
  * LA FORMA DEL PLAN (`estructura`, ver `estructuraDelPlan`). En una rutina no
  * hay fase que nombrar. En "varias semanas" tampoco: sale UNA tarjeta con las
@@ -101,10 +101,9 @@ export default function NavegadorDelPlan({
   const textoAqui = quien === 'tu' ? 'AQUÍ VAS' : 'AQUÍ VA';
   const textoIr = quien === 'tu' ? 'Ir a donde vas' : 'Ir a donde va';
 
-  /* MODO EDITOR DE SOLO LECTURA (`editor.soloLectura`). Es el editor de siempre, para
-     navegar un programa AJENO: fases, semanas y los siete días funcionan igual, pero
-     no salen los tres puntos ni «Agregar semana / fase» (no se puede cambiar su
-     forma). `editor.marcas(sesiones)` pone una marca en el renglón de un día
+  /* MODO EDITOR DE SOLO LECTURA (`editor`). Es para navegar un programa AJENO: fases,
+     semanas y los siete días funcionan igual, pero no se puede cambiar su forma.
+     `editor.marcas(sesiones)` pone una marca en el renglón de un día
      («tuya», un candado…). Lo usa quien le agrega sesiones al programa del coach.
 
      `pegadasDe(fase, semana)`: lo que otros profesionales le pegaron a esta
@@ -165,25 +164,6 @@ export default function NavegadorDelPlan({
     </span>
   );
 
-  // Los tres puntos. Van SIEMPRE como botón aparte, nunca dentro de otro
-  // botón: un botón dentro de otro no es HTML válido y el toque se lo come el
-  // de fuera.
-  const tresPuntos = (etiqueta, alTocar) => (
-    <button
-      type="button"
-      onClick={(e) => { e.preventDefault(); e.stopPropagation(); alTocar(); }}
-      aria-label={etiqueta}
-      title={etiqueta}
-      style={{
-        width: 32, height: 32, borderRadius: 9, flexShrink: 0, cursor: 'pointer',
-        border: 'none', background: 'transparent', color: LT.text2,
-        display: 'grid', placeItems: 'center', touchAction: 'manipulation',
-      }}
-    >
-      <MoreHorizontal size={18} />
-    </button>
-  );
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontFamily: FONT }}>
       {lejosDeAqui && (
@@ -209,7 +189,7 @@ export default function NavegadorDelPlan({
           const terminada = total > 0 && hechas === total;
           const fila = (
             <button
-              key={editor ? undefined : f.id}
+              key={f.id}
               type="button"
               onClick={() => {
                 // En la fase donde vas se abre tu semana; en otra, la primera.
@@ -220,7 +200,7 @@ export default function NavegadorDelPlan({
                 padding: '12px 13px', background: LT.surface, borderRadius: 13, cursor: 'pointer',
                 border: `1px solid ${faseDeAqui ? LT.blue : LT.border}`,
                 fontFamily: FONT, opacity: terminada && !faseDeAqui ? 0.68 : 1,
-                flex: editor ? 1 : undefined, minWidth: 0,
+                minWidth: 0,
               }}
             >
               <span style={{ width: 9, height: 9, borderRadius: 5, background: f.color || LT.blue, flexShrink: 0 }} />
@@ -237,13 +217,7 @@ export default function NavegadorDelPlan({
                 : <ChevronRight size={15} style={{ color: LT.text3, flexShrink: 0 }} />}
             </button>
           );
-          if (!editor) return fila;
-          return (
-            <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              {fila}
-              {!editor.soloLectura && tresPuntos(`Opciones de ${f.name}`, () => editor.onMenuFase(f, i))}
-            </div>
-          );
+          return fila;
         }
 
         // En "varias semanas" la tarjeta es el plan entero: el atleta siempre
@@ -254,7 +228,6 @@ export default function NavegadorDelPlan({
         const fichas = deCorrido
           ? fasesSeguras.flatMap((ff, fi) => (ff.weekData ?? []).map((w) => ({ ff, fi, w })))
           : (f.weekData ?? []).map((w) => ({ ff: f, fi: i, w }));
-        const ultima = fasesSeguras.length - 1;
         return (
           <div
             key={f.id}
@@ -272,12 +245,10 @@ export default function NavegadorDelPlan({
                 <span style={{ width: 9, height: 9, borderRadius: 5, background: f.color || LT.blue, flexShrink: 0 }} />
                 <span style={{ flex: 1, minWidth: 0, fontSize: 15.5, fontWeight: 800, color: LT.text }}>{f.name}</span>
                 {faseDeAqui && pastilla(textoAqui, true)}
-                {editor && !editor.soloLectura && tresPuntos(`Opciones de ${f.name}`, () => editor.onMenuFase(f, i))}
               </div>
             )}
 
-            {/* Las fichas de las semanas. En el editor salen aunque haya una
-                sola, porque ahí vive el "+" para agregar la segunda. */}
+            {/* Las fichas de las semanas. En el editor de solo lectura salen aunque haya una sola. */}
             {kind !== 'weekly' && (fichas.length > 1 || editor) && (
               <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
                 {fichas.map(({ ff, fi, w }, n) => {
@@ -309,35 +280,6 @@ export default function NavegadorDelPlan({
                     </button>
                   );
                 })}
-                {editor && !editor.soloLectura && (
-                  <>
-                    <button
-                      type="button"
-                      // En "varias semanas" la nueva va al final de todo.
-                      onClick={() => (deCorrido
-                        ? editor.onAgregarSemana(fasesSeguras[ultima], ultima)
-                        : editor.onAgregarSemana(f, i))}
-                      aria-label="Agregar semana"
-                      title="Agregar semana"
-                      /* Azul clarito y sin contorno punteado: "haces mucho
-                         ese estilo de botones, no me gusta" (Andrés, 28 sep
-                         2026). Se distingue de las semanas, que son blancas. */
-                      style={{
-                        minWidth: 38, padding: '6px 0', borderRadius: 10, cursor: 'pointer',
-                        border: '1.5px solid transparent', background: LT.blueSoft, color: LT.blue,
-                        display: 'grid', placeItems: 'center',
-                      }}
-                    >
-                      <Plus size={15} strokeWidth={2.6} />
-                    </button>
-                    <span style={{ marginLeft: 'auto' }}>
-                      {tresPuntos(
-                        `Opciones de la semana ${(deCorrido ? semanaGlobal(fasesSeguras, f.id, semana?.num) : semana?.num) ?? ''}`,
-                        () => editor.onMenuSemana(f, i, semana),
-                      )}
-                    </span>
-                  </>
-                )}
               </div>
             )}
 
@@ -365,8 +307,8 @@ export default function NavegadorDelPlan({
                         padding: '10px 11px', borderRadius: 11, cursor: 'pointer', fontFamily: FONT,
                         background: elegido ? LT.blueSoft : LT.bg,
                         border: `${elegido ? 1.5 : 1}px ${vacio && !elegido ? 'dashed' : 'solid'} ${elegido ? LT.blue : LT.border}`,
-                        // En solo lectura el renglón lleva más marcas (candado, «tuya»): baja de línea antes de apretar el título.
-                        ...(editor.soloLectura ? { flexWrap: 'wrap', rowGap: 6 } : null),
+                        // El renglón lleva más marcas (candado, «tuya»): baja de línea antes de apretar el título.
+                        flexWrap: 'wrap', rowGap: 6,
                       }}
                     >
                       <span style={{ width: 32, fontSize: 11, fontWeight: 800, color: elegido ? LT.blue : LT.text3, flexShrink: 0 }}>
@@ -381,11 +323,10 @@ export default function NavegadorDelPlan({
                           Sin sesión
                         </span>
                       ) : (
-                        <TituloDelRenglon dias={sesiones} color={LT.text} minimo={editor.soloLectura ? 112 : undefined} />
+                        <TituloDelRenglon dias={sesiones} color={LT.text} minimo={112} />
                       )}
                       {editor.marcas?.(sesiones)}
                       {suyo && pastilla(textoAqui, !elegido)}
-                      {elegido && !editor.soloLectura && pastilla('EDITANDO', true)}
                     </button>
                   );
                 })
@@ -466,23 +407,6 @@ export default function NavegadorDelPlan({
         );
       })}
 
-      {editor && !editor.soloLectura && kind !== 'weekly' && !deCorrido && (
-        <button
-          type="button"
-          onClick={editor.onAgregarFase}
-          className="kp-press"
-          /* Sin contorno punteado: "haces mucho ese estilo de botones, no me
-             gusta" (Andrés, 28 sep 2026). */
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%',
-            padding: '11px 13px', borderRadius: 13, cursor: 'pointer', fontFamily: FONT,
-            border: `1.5px solid ${LT.border}`, background: LT.surface, boxShadow: KP.shCard,
-            fontSize: 13.5, fontWeight: 800, color: LT.blue,
-          }}
-        >
-          <Plus size={16} /> Agregar fase
-        </button>
-      )}
     </div>
   );
 }

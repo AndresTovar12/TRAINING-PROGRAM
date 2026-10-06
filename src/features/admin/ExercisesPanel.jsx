@@ -1356,7 +1356,7 @@ export default function ExercisesPanel({ viendoComo }) {
             color: '#fff', fontFamily: FONT, fontSize: 14.5, fontWeight: 700, boxShadow: KP.shBtn,
           }}
         >
-          <Plus size={18} /> Añadir ejercicio
+          <Plus size={18} /> Agregar ejercicio
         </button>
       </div>
 
