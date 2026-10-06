@@ -189,55 +189,90 @@ function Formulario() {
   );
 }
 
-function ChatGPTAjustes({ resalta }) {
-  const item = (texto, activo) => (
+/* La página «Complementos» de ChatGPT (chatgpt.com/plugins), como se veía el 6 oct 2026: la barra
+   de la izquierda, el botón «Agregar ▾» y, abierto, su menú de tres opciones. */
+function ChatGPTComplementos({ resalta }) {
+  const menuAbierto = resalta === 'crear';
+  const lateral = (texto, activo) => (
     <div style={{
       fontSize: 10, fontWeight: activo ? 800 : 600, color: activo ? KP.ink : KP.ink2, padding: '5px 7px',
-      borderRadius: 6, background: activo ? '#EEF0F3' : 'transparent',
+      borderRadius: 6, background: activo ? '#EEF0F3' : 'transparent', whiteSpace: 'nowrap',
+    }}>{texto}</div>
+  );
+  const opcion = (texto, activa) => (
+    <div style={{
+      fontSize: 10, fontWeight: activa ? 800 : 600, color: KP.ink, padding: '5px 8px', borderRadius: 6,
+      border: `1.5px solid ${activa ? KP.blue : 'transparent'}`, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
     }}>{texto}</div>
   );
   return (
-    <div>
-      <div style={{ fontSize: 13, fontWeight: 800, color: KP.ink, marginBottom: 8 }}>Configuración</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '84px 1fr', gap: 8 }}>
-        <div>
-          {item('General')}
-          {item('Notificaciones')}
-          <Toca activo={resalta === 'apps'} lado="izquierda">{item('Apps', true)}</Toca>
-          {item('Seguridad')}
+    <div style={{ display: 'grid', gridTemplateColumns: '88px 1fr', gap: 8, minHeight: 140 }}>
+      <div>
+        {lateral('Chat nuevo')}
+        {lateral('Biblioteca')}
+        <Toca activo={resalta === 'complementos'} lado="izquierda">{lateral('Complementos', true)}</Toca>
+        {lateral('Explorar')}
+      </div>
+      <div style={{ borderLeft: `1px solid ${KP.line}`, paddingLeft: 9 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: KP.ink }}>Complementos</div>
+          <span style={{
+            fontSize: 10, fontWeight: 800, color: '#fff', background: menuAbierto ? KP.ink : '#3A3F49',
+            borderRadius: 99, padding: '4px 9px', whiteSpace: 'nowrap',
+          }}>Agregar ▾</span>
         </div>
-        <div style={{ borderLeft: `1px solid ${KP.line}`, paddingLeft: 9 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: KP.ink }}>Apps</div>
-          <div style={{ fontSize: 9, fontWeight: 700, color: KP.ink3, margin: '6px 0 4px' }}>CONFIGURACIÓN AVANZADA</div>
-          <Toca activo={resalta === 'interruptor'}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 6, padding: '6px 7px', borderRadius: 8,
-              border: `1.5px solid ${resalta === 'interruptor' ? KP.blue : KP.line}`,
-            }}>
-              <span style={{ flex: 1, fontSize: 10, fontWeight: 700, color: KP.ink }}>Modo de desarrollador</span>
-              <Interruptor encendido={resalta === 'interruptor'} />
+        {menuAbierto ? (
+          <div style={{
+            marginTop: 10, background: KP.surface,
+            border: `1px solid ${KP.line}`, borderRadius: 10, padding: 5, boxShadow: '0 8px 20px rgba(17,19,24,.12)',
+          }}>
+            {opcion('Crear complemento')}
+            {opcion('Subir archivo comprimido del complemento')}
+            <div style={{ marginTop: 7 }}>
+              <Toca activo etiqueta="Esta opción">{opcion('Crear servidor MCP personalizado', true)}</Toca>
             </div>
-          </Toca>
-        </div>
+          </div>
+        ) : (
+          <>
+            <div style={{ ...campo(false), marginTop: 8, color: KP.ink3 }}>Buscar complementos</div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: KP.ink3, margin: '8px 0 4px' }}>INSTALADOS</div>
+            <div style={{ display: 'flex', gap: 5 }}>
+              {['#EA4335', '#1FA463', '#111318'].map((c) => <span key={c} style={{ width: 16, height: 16, borderRadius: 5, background: c }} />)}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
 }
 
+/* El formulario «Crear servidor MCP personalizado» de ChatGPT, con lo que hay que llenar. */
 function ChatGPTCrear() {
   return (
     <div>
-      <div style={{ fontSize: 12.5, fontWeight: 800, color: KP.ink, marginBottom: 9 }}>Nueva app</div>
+      <div style={{ fontSize: 12.5, fontWeight: 800, color: KP.ink, marginBottom: 9 }}>Crear servidor MCP personalizado</div>
       <p style={etiqueta}>Nombre</p>
-      <div style={{ ...campo(false), marginBottom: 10 }}>Training Lab</div>
-      <p style={etiqueta}>URL del servidor MCP</p>
+      <div style={{ ...campo(false), marginBottom: 9 }}>Training Lab</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 13 }}>
+        <p style={{ ...etiqueta, margin: 0 }}>Conexión</p>
+        <span style={{ display: 'inline-flex', borderRadius: 6, background: '#EEF0F3', padding: 2, fontSize: 8.5, fontWeight: 700 }}>
+          <span style={{ padding: '2px 6px', borderRadius: 5, background: KP.ink, color: '#fff' }}>URL del servidor</span>
+          <span style={{ padding: '2px 6px', color: KP.ink2 }}>Túnel</span>
+        </span>
+      </div>
       <Toca activo etiqueta="Pega tu liga">
         <div style={campo(true)}>training-program-kappa.vercel.app/mcp</div>
       </Toca>
-      <p style={{ ...etiqueta, marginTop: 10 }}>Autenticación</p>
+      <p style={{ ...etiqueta, marginTop: 9 }}>Autenticación</p>
       <div style={{ ...campo(false), display: 'flex', justifyContent: 'space-between' }}><span>OAuth</span><span style={{ color: KP.ink3 }}>▾</span></div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
-        <span style={{ fontSize: 10, fontWeight: 800, color: '#fff', background: KP.ink, borderRadius: 7, padding: '5px 12px' }}>Crear</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 9, fontSize: 10, fontWeight: 700, color: KP.ink }}>
+        <span style={{ width: 13, height: 13, borderRadius: 3, background: KP.blue, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+          <Check size={9} color="#fff" strokeWidth={3.5} />
+        </span>
+        Entiendo y quiero continuar
+      </div>
+      <div style={{ marginTop: 10, textAlign: 'center', fontSize: 10.5, fontWeight: 800, color: '#fff', background: KP.ink, borderRadius: 99, padding: '6px 0' }}>
+        Crear como complemento
       </div>
     </div>
   );
@@ -287,8 +322,8 @@ function Chat({ app, resalta, rol }) {
       <div style={{ flex: 1 }} />
       {/* El menú "+" abierto, con Training Lab. */}
       <div style={{ background: KP.surface, border: `1px solid ${KP.line}`, borderRadius: 10, padding: 7, boxShadow: '0 8px 18px rgba(17,19,24,.10)', width: '78%' }}>
-        <div style={{ fontSize: 8.5, fontWeight: 800, color: KP.ink3, marginBottom: 4 }}>{app === 'chatgpt' ? 'APPS' : 'CONECTORES'}</div>
-        <Toca activo={resalta === 'interruptor' || resalta === 'app'} etiqueta={app === 'chatgpt' ? 'Elígela' : 'Actívalo'}>
+        <div style={{ fontSize: 8.5, fontWeight: 800, color: KP.ink3, marginBottom: 4 }}>{app === 'chatgpt' ? 'COMPLEMENTOS' : 'CONECTORES'}</div>
+        <Toca activo={resalta === 'interruptor' || resalta === 'app'} etiqueta={app === 'chatgpt' ? 'Elígelo' : 'Actívalo'}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 5px', borderRadius: 7, border: `1.5px solid ${KP.blue}` }}>
             <span style={{ width: 15, height: 15, borderRadius: 4, background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, display: 'grid', placeItems: 'center' }}>
               <Dumbbell size={8} color="#fff" strokeWidth={2.8} />
@@ -341,10 +376,10 @@ function PantallaDelPaso({ paso, app, esCompu, rol }) {
       );
     case 'formulario':
       return <Marco tipo={marcoWeb} direccion="claude.ai/settings/connectors"><Formulario /></Marco>;
-    case 'chatgpt-ajustes':
-      return <Marco tipo="navegador" direccion="chatgpt.com"><ChatGPTAjustes resalta={paso.resalta} /></Marco>;
+    case 'chatgpt-complementos':
+      return <Marco tipo="navegador" direccion="chatgpt.com/plugins"><ChatGPTComplementos resalta={paso.resalta} /></Marco>;
     case 'chatgpt-crear':
-      return <Marco tipo="navegador" direccion="chatgpt.com"><ChatGPTCrear /></Marco>;
+      return <Marco tipo="navegador" direccion="chatgpt.com/plugins"><ChatGPTCrear /></Marco>;
     case 'permiso':
       return <Marco tipo={app === 'chatgpt' ? 'navegador' : marcoWeb} direccion="training-program-kappa.vercel.app"><Permiso app={app} /></Marco>;
     case 'chat':
