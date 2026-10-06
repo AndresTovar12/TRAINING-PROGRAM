@@ -1301,7 +1301,11 @@ function EditorSesionesDelDia({
                 onClick: () => quita({
                   pregunta: { titulo: `¿Eliminar «${nombre}»?`, detalle: 'Se va con todos sus ejercicios. El otro turno del día se queda.', confirmar: 'Sí, eliminarla', peligro: true },
                   aviso: `Se eliminó «${nombre}»`,
-                }, () => escribe((bs) => bs.filter((_, i) => i !== bi))),
+                }, () => {
+                  escribe((bs) => bs.filter((_, i) => i !== bi));
+                  // Las que venían después suben un lugar y se llevan lo suyo (lo plegado).
+                  if (puedePlegar) plegadas.quitaLugar(`${clavePlegado}:b`, bi);
+                }),
               },
             ]}
           />
@@ -1438,23 +1442,27 @@ function SessionEditorInterno({
      decidir. Si el día OFF ya tiene sets —porque le cambiaron el tipo después—
      se enseñan igual: esconderlos haría que existieran sin que nadie los viera. */
   const descanso = (day.cat || 'gym') === 'off' && nSets === 0;
+  // Un día de descanso no tiene nada que plegar: sin botón, y nunca se queda plegado.
+  const sePuedePlegar = plegable && !descanso;
+  const estaPlegada = sePuedePlegar && plegada;
 
   return (
     <div {...arrastre} style={tarjetaDeSesion(day)}>
       <DayHeader
         day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog}
         onClear={onClear} nSets={descanso ? null : nSets} conVista={!descanso} vistaFuera={vistaFuera} soloLectura={soloLectura}
-        plegable={plegable} plegada={plegada} onPlegar={onPlegar} turno={turno} onTurno={onTurno}
+        plegable={sePuedePlegar} plegada={estaPlegada} onPlegar={onPlegar} turno={turno} onTurno={onTurno}
       />
 
-      {/* Plegado: solo la cabecera y cuánto trae. */}
-      {plegada && (
+      {/* Plegado: solo la cabecera y cuánto trae. En la compu la cabecera ya dice cuántos sets son: no se repite. */}
+      {estaPlegada && (
         <div style={{ margin: '8px 0 0 42px', fontSize: 12.5, fontWeight: 600, color: T.text2 }}>
-          {pluralS(nSets, 'set')} · {pluralS(blocks.reduce((n, b) => n + (b.type === 'set' ? b.members.length : 0), 0), 'ejercicio')}
+          {!esCompu && <>{pluralS(nSets, 'set')} · </>}
+          {pluralS(blocks.reduce((n, b) => n + (b.type === 'set' ? b.members.length : 0), 0), 'ejercicio')}
         </div>
       )}
 
-      {!plegada && (
+      {!estaPlegada && (
       <div {...enLectura(soloLectura)} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 14, ...(soloLectura ? APAGADO : null) }}>
         {!soloLectura && nSets > 0 && <AvisoDeFormatos />}
         {blocks.map((b, bi) => {
@@ -1560,7 +1568,7 @@ function SessionEditorInterno({
           que leer los tres para encontrar el de siempre. Aqui el principal
           ocupa todo el ancho —imposible de fallar con el pulgar— y los otros
           dos van abajo, mas chicos, repartidos a la mitad. */}
-      {soloLectura || plegada ? null : descanso ? (
+      {soloLectura || estaPlegada ? null : descanso ? (
         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ fontSize: 13, color: T.text2, lineHeight: 1.5 }}>
             <b style={{ color: T.text }}>Día de descanso.</b> {t('El atleta no tiene nada que hacer. Si quieres, déjale una nota.')}
@@ -1831,8 +1839,8 @@ function tarjetaDeSesion(day) {
   return { ...base, background: `linear-gradient(rgba(${rgb},0.09), rgba(${rgb},0.09)), ${T.bg2}`, border: `1px solid rgba(${rgb},0.32)` };
 }
 
-/* PLEGAR un workout (solo con 2 o más en el día): botón blanco con borde y la flechita azul, para que se vea (Andrés, 5 oct
-   2026: «el botoncito para desplegar casi no se ve»). Plegado deja solo la cabecera y su resumen. */
+/* PLEGAR un workout (todos lo traen; en el programa vienen plegados por default): botón blanco con borde y la flechita azul,
+   para que se vea (Andrés, 5 oct 2026: «el botoncito para desplegar casi no se ve»). Plegado deja solo la cabecera y su resumen. */
 function BotonDePlegar({ plegada, onClick }) {
   return (
     <button
@@ -1878,8 +1886,8 @@ const opcionesDeTurno = (turno, onTurno) => (turno
  * COMPU: la de siempre, la que Andrés quiso conservar (6 oct 2026: «este estilito visual de la versión pasada siento que
  * lo perdiste: recupéralo pero no cambies nada»). Nombre y tipo con sus rótulos y el contador de sets; una raya; y debajo las
  * acciones a la vista —«Mis planes ▾», «Copiar», «Limpiar», «Eliminar sesión»— con el interruptor de vista al final y a la
- * derecha. Lo nuevo entra sin cambiar eso: en un día con 2 o más workouts, el botón de plegar y la insignia AM/PM van antes del
- * nombre, y «AM / PM ▾» es una acción más.
+ * derecha. Lo nuevo entra sin cambiar eso: el botón de plegar va antes del nombre, y en un día con 2 o más workouts también la
+ * insignia AM/PM, y «AM / PM ▾» es una acción más.
  *
  * CELULAR: nombre en su renglón, y debajo [plegar] [AM/PM] [tipo ▾] [Opciones ▾] (las acciones van en una hoja de abajo; la
  * vista vive en el título del día: `vistaFuera`).
@@ -2022,6 +2030,13 @@ function DayHeader({
           >
             Opciones <ChevronDown size={14} color={T.text3} />
           </button>
+        )}
+        {/* Cómo se ven los ejercicios de abajo: filas o tarjetas. En el programa vive en el título del día (`vistaFuera`); en
+            el editor de un workout de «Mis planes» y en las sesiones pegadas, aquí. Sin ejercicios que ver (un día de descanso) no se ofrece. */}
+        {conVista && !vistaFuera && (
+          <span style={{ marginLeft: acciones.length ? 4 : 'auto', display: 'inline-flex' }}>
+            <InterruptorVista vista={enFilas ? 'lista' : 'tarjetas'} onCambio={eligeVista} />
+          </span>
         )}
       </div>
       {menus}
@@ -2173,6 +2188,15 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
   });
   const dirty = hist.sucio;
   const avisaConDeshacer = (texto) => avisa(texto, { accion: { texto: 'Deshacer', alTocar: hist.deshacer } });
+  /* Lo que ya estaba al abrir el editor viene plegado; lo que el coach agrega (una sesión nueva, la que pega, la que trae de
+     «Usar workout») se ve abierto. Se llama ANTES de agregar: los workouts nuevos quedan al final de la semana, desde ahí. */
+  const abreLoNuevo = (pi, wIdx, cuantas = 1) => {
+    const f = phases[pi];
+    const sem = f?.weekData?.[wIdx];
+    if (!f || !sem) return;
+    const desde = (sem.days || []).length;
+    plegadas.abre(Array.from({ length: cuantas }, (_, i) => `${f.id}:${sem.num}:${desde + i}`));
+  };
   /* LA PREGUNTA DE GUARDAR (Andrés, 5 oct 2026: «para todos los botones de guardar, cuando estás trabajando sobre algo que
      tiene un avance, que la app pregunte si es guardar una nueva versión o actualizar la que ya tenías»; en producción, sin
      título: solo las dos opciones). Sale pegada al botón (o como hoja de abajo en el celular):
@@ -2925,12 +2949,30 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     const w = p?.weekData?.[wIdx];
     const daysOfWeekday = (w?.days || []).map((d, di) => ({ d, di })).filter((x) => x.d.day === activeWeekday);
 
-    /* VARIOS WORKOUTS EL MISMO DÍA (varias entradas del plan con el mismo día de la semana). Cada uno se pliega, puede llevar
-       AM o PM si el coach quiere (campo `turno`), y se reordenan arrastrándolos: el de la mañana sube, el de la tarde baja. Con
-       uno solo no hay nada de eso. Al reordenar, las entradas de este día se cambian entre SUS lugares de la semana: los demás
-       días no se mueven. */
-    const variosWorkouts = daysOfWeekday.length > 1;
+    /* CADA WORKOUT SE PLIEGA con su botón, también el único del día (Andrés, 6 oct 2026), y por default vienen plegados. Se
+       decide UNA vez, la primera vez que se ve: con algo adentro, plegado; vacío, abierto (ahí es donde se empieza a agregar).
+       Decidido, ya no cambia solo: agregarle el primer ejercicio a un workout vacío no lo pliega en medio de lo que se está
+       haciendo. Una sesión doble (`blocks`) pliega cada una de las suyas en vez de plegarse entera. */
     const llavesDelDia = daysOfWeekday.map(({ di }) => `${p?.id}:${w?.num}:${di}`);
+    const sesionDoble = (d) => isDualDay(d) && (d.blocks?.length ?? 0) > 1;
+    const tieneAlgo = (b) => (b?.type === 'note' ? !!(b.text || '').trim() : (b?.exercises?.length ?? 0) > 0);
+    const porDefecto = {};
+    daysOfWeekday.forEach(({ d }, k) => {
+      if (sesionDoble(d)) d.blocks.forEach((b, bi) => { porDefecto[`${llavesDelDia[k]}:b${bi}`] = tieneAlgo(b); });
+      else porDefecto[llavesDelDia[k]] = sesionTieneContenido(d);
+    });
+    // Decidir al pintar es lo que React pide para un estado que sale de otro dato, y solo la primera vez que se ve cada workout.
+    if (Object.keys(porDefecto).some((c) => !(c in plegadas.pl))) plegadas.decide(porDefecto);
+
+    /* VARIOS WORKOUTS EL MISMO DÍA (varias entradas del plan con el mismo día de la semana). Pueden llevar AM o PM si el coach
+       quiere (campo `turno`), y se reordenan arrastrándolos: el de la mañana sube, el de la tarde baja. Con uno solo no hay nada
+       de eso. Al reordenar, las entradas de este día se cambian entre SUS lugares de la semana: los demás días no se mueven. */
+    const variosWorkouts = daysOfWeekday.length > 1;
+    // Lo que el coach agrega al final de la semana (una sesión nueva, la que pega) se ve abierto: es lo que acaba de pedir.
+    const agregaAlFinal = (nuevas) => {
+      abreLoNuevo(nav.pi, wIdx, nuevas.length);
+      patchWeek(nav.pi, wIdx, (wk) => ({ days: [...(wk.days || []), ...nuevas] }));
+    };
     const moverEntrada = (de, a) => {
       plegadas.reordena(llavesDelDia, de, a);
       patchWeek(nav.pi, wIdx, (wk) => {
@@ -2941,12 +2983,14 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         return { days };
       });
     };
-    const propiedadesDeVariosWorkouts = (d, di, k) => ({
-      clavePlegado: `${p?.id}:${w?.num}:${di}`,
-      ...(variosWorkouts ? {
+    const propiedadesDelWorkout = (d, di, k) => ({
+      clavePlegado: llavesDelDia[k],
+      ...(sesionDoble(d) ? null : {
         plegable: true,
         plegada: !!plegadas.pl[llavesDelDia[k]],
         onPlegar: () => plegadas.alterna(llavesDelDia[k]),
+      }),
+      ...(variosWorkouts ? {
         // Un día que ya trae sus sesiones adentro (`blocks`) lleva el turno en el nombre de cada una.
         turno: isDualDay(d) ? null : (d.turno ?? null),
         onTurno: isDualDay(d) ? undefined : (t) => patchDay(nav.pi, wIdx, di, { turno: t ?? undefined }),
@@ -3005,13 +3049,13 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
                 <div style={{ fontSize: 17, fontWeight: 800, color: T.text }}>Sin sesión el {DAY_FULL_LOWER[activeWeekday] || activeWeekday.toLowerCase()}</div>
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20, flexWrap: 'wrap' }}>
                   <button type="button"
-                    onClick={() => patchWeek(nav.pi, wIdx, (wk) => ({ days: [...(wk.days || []), newDay(activeWeekday)] }))}
+                    onClick={() => agregaAlFinal([newDay(activeWeekday)])}
                     style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 20px', borderRadius: 12, border: 'none', cursor: 'pointer', background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff', fontFamily: FONT, fontSize: 14, fontWeight: 800, boxShadow: KP.shBtn }}>
                     <Plus size={16} /> Agregar sesión
                   </button>
                   <Pill icon={FolderOpen} onClick={() => setModal({ type: 'tpl-day', payload: { di: null } })}>Usar workout</Pill>
                   {clipboard && (
-                    <Pill icon={Clipboard} onClick={() => patchWeek(nav.pi, wIdx, (wk) => ({ days: [...(wk.days || []), { ...clone(clipboard), day: activeWeekday }] }))}>
+                    <Pill icon={Clipboard} onClick={() => agregaAlFinal([{ ...clone(clipboard), day: activeWeekday }])}>
                       Pegar rutina
                     </Pill>
                   )}
@@ -3024,7 +3068,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
                     key={di}
                     day={d}
                     vistaFuera={!esCompu}
-                    {...propiedadesDeVariosWorkouts(d, di, k)}
+                    {...propiedadesDelWorkout(d, di, k)}
                     repertoire={repertoire}
                     categorias={categoriasVisibles}
                     duenoId={user?.id}
@@ -3038,6 +3082,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
                     onPatch={(patch) => patchDay(nav.pi, wIdx, di, patch)}
                     onDelete={() => {
                       patchWeek(nav.pi, wIdx, (wk) => ({ days: wk.days.filter((_, k) => k !== di) }));
+                      // Los que venían después suben un lugar y se llevan lo suyo (lo plegado).
+                      plegadas.quitaLugar(`${p.id}:${w.num}:`, di);
                       avisaConDeshacer(`Se eliminó «${d.name || d.day}»`);
                     }}
                     onCopy={() => setClipboard(clone(d))}
@@ -3068,7 +3114,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
                   {/* Sin contorno punteado: "haces mucho ese estilo de
                       botones, no me gusta" (Andrés, 28 sep 2026). */}
                   <button type="button"
-                    onClick={() => patchWeek(nav.pi, wIdx, (wk) => ({ days: [...(wk.days || []), newDay(activeWeekday)] }))}
+                    onClick={() => agregaAlFinal([newDay(activeWeekday)])}
                     className="kp-press"
                     style={{
                       flex: '1 1 220px', minHeight: 46, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
@@ -3078,7 +3124,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
                     <Plus size={16} /> Agregar otra sesión
                   </button>
                   {clipboard && (
-                    <Pill icon={Clipboard} onClick={() => patchWeek(nav.pi, wIdx, (wk) => ({ days: [...(wk.days || []), { ...clone(clipboard), day: activeWeekday }] }))}>
+                    <Pill icon={Clipboard} onClick={() => agregaAlFinal([{ ...clone(clipboard), day: activeWeekday }])}>
                       Pegar rutina
                     </Pill>
                   )}
@@ -3343,6 +3389,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
             try { datos = await abrirItem(item); } catch (e) { setErr(e.message || 'No se pudo abrir'); setModal(null); return; }
             const nuevas = diasDeWorkout(datos, activeWeekday, item.nombre);
             if (di == null) {
+              abreLoNuevo(nav.pi, curWeekIdx, nuevas.length);
               patchWeek(nav.pi, curWeekIdx, (wk) => ({ days: [...(wk.days || []), ...nuevas] }));
             } else {
               if (!await pregunta({
@@ -3355,7 +3402,10 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
               const lugar = { ...nuevas[0] };
               delete lugar.day;
               patchDay(nav.pi, curWeekIdx, di, { blocks: undefined, dual: undefined, notes: undefined, ...lugar });
-              if (nuevas.length > 1) patchWeek(nav.pi, curWeekIdx, (wk) => ({ days: [...(wk.days || []), ...nuevas.slice(1)] }));
+              if (nuevas.length > 1) {
+                abreLoNuevo(nav.pi, curWeekIdx, nuevas.length - 1);
+                patchWeek(nav.pi, curWeekIdx, (wk) => ({ days: [...(wk.days || []), ...nuevas.slice(1)] }));
+              }
             }
             setModal(null);
           }}
