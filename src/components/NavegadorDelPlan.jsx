@@ -28,7 +28,7 @@ const nombreDe = (day) => textoDeSesiones(sesionesDelTitulo(day))
    como un renglón aparte: el programa es un todo y quién puso cada sesión es solo
    una etiqueta (Andrés, 2 oct 2026). Un descanso del coach con una sesión de otro
    ese día ya no es descanso: se enseña solo la sesión. */
-function TituloDelRenglon({ dias, color, peso = 700, minimo, extras }) {
+export function TituloDelRenglon({ dias, color, peso = 700, minimo, extras }) {
   // `minimo`: un ancho por debajo del cual el título no se encoge; el renglón baja de línea antes.
   const base = minimo ? `1 1 ${minimo}px` : 1;
   if (extras?.length) {
