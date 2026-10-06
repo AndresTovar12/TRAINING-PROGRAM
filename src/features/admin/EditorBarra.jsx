@@ -43,6 +43,35 @@ function BotonDelPrograma({ icono: Icono, children, color = T.text2, colorIcono 
   );
 }
 
+/**
+ * La barra de arriba del editor en el CELULAR (Andrés, 5 oct 2026, con la maqueta aprobada).
+ *
+ * La guía y el día son dos pantallas, y la barra dice en cuál estás: en la guía, `✕` (cierra el editor) y nada de
+ * título; en un día, `←` (vuelve a la guía) y «Sem N · Fase». A la derecha, lo global (Guardar). Sin el nombre del
+ * atleta ni «sin guardar»: el propio botón ya dice si hay algo por guardar.
+ */
+export function BarraDelCelular({ enDia, titulo, onVolver, onCerrar, derecha }) {
+  return (
+    <header
+      style={{
+        background: 'rgba(255,255,255,0.92)', backdropFilter: 'saturate(180%) blur(16px)', borderBottom: `1px solid ${T.border}`,
+        padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, fontFamily: FONT,
+      }}
+    >
+      <button
+        type="button" onClick={enDia ? onVolver : onCerrar} style={cuadrado}
+        aria-label={enDia ? 'Volver a la guía' : 'Cerrar el editor'} title={enDia ? 'Volver a la guía' : 'Cerrar el editor'}
+      >
+        {enDia ? <ArrowLeft size={17} /> : <X size={17} />}
+      </button>
+      <div style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: 800, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {enDia ? titulo : ''}
+      </div>
+      {derecha}
+    </header>
+  );
+}
+
 export default function EditorBarra({
   titulo, rotuloTitulo = 'Título del plan', onTitulo, anchoGuia, guiaOculta, onAlternarGuia,
   onVolver, onCerrar, programa, derecha,
