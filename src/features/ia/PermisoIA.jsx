@@ -68,6 +68,10 @@ export default function PermisoIA({ authorizationId, onTerminar }) {
   async function cambiarDeCuenta() {
     setEstado('enviando');
     try { await supabase.rpc('soltar_permiso_ia', { p_authorization_id: authorizationId }); } catch { /* se sale igual */ }
+    /* La petición ya no es de nadie: se olvida lo consultado para que quien entre —aunque sea la misma
+       cuenta— la vuelva a abrir y Supabase se la ate. Sin esto, la misma cuenta veía la pantalla vieja y
+       «Permitir» fallaba con «authorization not found» (Andrés, 6 oct 2026: «No se pudo completar»). */
+    for (const clave of consultas.keys()) if (clave.endsWith(`:${authorizationId}`)) consultas.delete(clave);
     await signOut();
   }
 
