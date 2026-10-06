@@ -13,7 +13,7 @@
    Tampoco toca lo que se guarda como hecho: las sesiones terminadas viven en el
    mismo registro del día (`wr:sessions`), con una llave más (`bloques`) que los
    registros de antes no tienen y que se entiende sin ella. */
-import { nombreDeSesion } from '@/lib/training-utils';
+import { nombreDeSesion, esDescanso } from '@/lib/training-utils';
 
 /** «Sesión 2 (PM): Lower · ~65 min» → 'PM'. Sin turno en la etiqueta, null. */
 export const turnoDeTag = (tag = '') => (tag.match(/\(([AP]M)\)/) || [])[1] || null;
@@ -58,6 +58,79 @@ export function sesionesDelTitulo(dias) {
     }
   });
   return sesiones;
+}
+
+/* ---- Dos entradas el mismo día de la semana son UN día con dos sesiones ----
+
+   La sesión de la tarde se agrega como una entrada más y queda al final de la semana (ver
+   `enOrdenDeSemana`). Para quien entrena, el lunes sigue siendo UN día, con su sesión de
+   mañana y su sesión de tarde: se juntan al enseñarlas, nunca en los datos, porque lo que
+   anota el atleta se guarda por la posición de cada entrada. */
+
+/**
+ * Las entradas de la semana que caen el mismo día de la semana que la entrada `idx`, en el orden
+ * en que están guardadas: [{ day, idx }]. Un descanso va solo. Con una sola, el día es una
+ * sesión de siempre.
+ */
+export function hermanasDelDia(week, idx) {
+  const dia = week?.days?.[idx];
+  if (!dia) return [];
+  if (esDescanso(dia)) return [{ day: dia, idx }];
+  return week.days
+    .map((day, i) => ({ day, idx: i }))
+    .filter((e) => e.day.day === dia.day && !esDescanso(e.day));
+}
+
+/**
+ * Los renglones de una semana en orden de calendario (`enOrdenDeSemana`) con las entradas del
+ * mismo día de la semana juntas: [{ day, idx, hermanas }]. `day` e `idx` son los de la primera;
+ * `hermanas` trae todas, ella incluida.
+ */
+export function juntaPorDia(filas) {
+  const juntas = [];
+  (filas || []).forEach((fila) => {
+    const previa = juntas[juntas.length - 1];
+    if (previa && !esDescanso(fila.day) && !esDescanso(previa.day) && previa.day.day === fila.day.day) previa.hermanas.push(fila);
+    else juntas.push({ ...fila, hermanas: [fila] });
+  });
+  return juntas;
+}
+
+/* ---- Una sesión que solo dice «Repite la sesión del lunes» ----
+
+   En el plan de Andrés hay 7 sesiones de tarde —los jueves de Potencia— que no traen ejercicios:
+   solo el texto «Repite la sesión de French Contrast del lunes con las mismas cargas de esta
+   semana». Se resuelven al LEER, sin tocar el plan: se busca en la MISMA semana otra sesión con
+   ejercicios que se llame igual (por el nombre, no interpretando la frase). Si hay varias, la del día
+   que menciona el texto; y si aun así no queda una sola, no se adivina. Es la misma regla que
+   `bloqueQueRepite` (training-utils), pero para sesiones sueltas. */
+const DIA_EN_TEXTO = [
+  ['lunes', 'Lun'], ['martes', 'Mar'], ['miércoles', 'Mié'], ['miercoles', 'Mié'],
+  ['jueves', 'Jue'], ['viernes', 'Vie'], ['sábado', 'Sáb'], ['sabado', 'Sáb'], ['domingo', 'Dom'],
+];
+
+/**
+ * Si la entrada `idx` de la semana es solo texto que dice «repite…», la entrada que repite:
+ * { day, idx }. Si no, null. Los pesos que anota el atleta se guardan con la llave de ESTA entrada,
+ * así que el jueves y el lunes tienen cada uno los suyos.
+ */
+export function sesionQueRepite(week, idx) {
+  const dia = week?.days?.[idx];
+  if (!dia || dia.blocks || esDescanso(dia)) return null;
+  const filas = dia.exercises || [];
+  const notas = filas.filter((e) => e.isNote && e.text);
+  if (!notas.length || filas.some((e) => !e.isNote)) return null;
+  const texto = notas.map((e) => e.text).join(' ').toLowerCase();
+  if (!/repit/.test(texto)) return null;
+  const nombre = sinDuracion(dia.name || '');
+  if (!nombre) return null;
+  const candidatas = week.days
+    .map((day, i) => ({ day, idx: i }))
+    .filter((c) => c.idx !== idx && !c.day.blocks && sinDuracion(c.day.name || '') === nombre
+      && (c.day.exercises || []).some((e) => !e.isNote));
+  if (candidatas.length === 0) return null;
+  const mencionado = DIA_EN_TEXTO.find(([palabra]) => texto.includes(palabra))?.[1];
+  return candidatas.find((c) => c.day.day === mencionado) || (candidatas.length === 1 ? candidatas[0] : null);
 }
 
 /**
