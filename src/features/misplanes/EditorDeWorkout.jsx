@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, Check, Loader2, Plus, Trash2, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { useConfirmacion } from '@/components/Confirmacion';
+import { useAviso } from '@/components/AvisoPasajero';
+import { BotonesDeHistorial } from '@/features/admin/EditorBarra';
+import { HistorialContext, useHistorial } from '@/lib/useHistorial';
 import { useRepertorioDelEditor } from '@/features/admin/useRepertorioDelEditor';
 import { useIsWide } from '@/lib/useViewport';
 import { SessionEditor, Pill } from '@/features/admin/PlanBuilder';
@@ -20,7 +23,7 @@ const sesionNueva = () => ({ day: 'Lun', name: 'Sesión', cat: 'gym', exercises:
  * El editor de un WORKOUT de Mis planes: el mismo panel del día que se usa dentro del plan de un atleta
  * (nombre y tipo de la sesión, sets, ejercicios, vista de tarjetas o lista), sin atleta ni plan alrededor
  * (Andrés, 2 oct 2026: «el editor quiero que se vea como el que ya uso normalmente»). Un workout puede traer
- * más de una sesión —mañana y tarde— con «Añadir otra sesión», igual que un día del plan.
+ * más de una sesión —mañana y tarde— con «Agregar otra sesión», igual que un día del plan.
  *
  * `catalogo`: { item, data } para uno que ya existe, o { carpetaId } para uno nuevo. Guardar un workout
  * nuevo pregunta primero nombre, descripción y carpeta; después solo actualiza.
@@ -30,6 +33,7 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
   const { t } = usePalabras();
   const esAncha = useIsWide();
   const pregunta = useConfirmacion();
+  const { avisa } = useAviso();
   const {
     repertoire, setRepertoire, setCategorias, masterIdCat, categoriasVisibles,
   } = useRepertorioDelEditor();
@@ -39,25 +43,38 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
   const [sesiones, setSesiones] = useState(() => (catalogo.data
     ? sesionesDeWorkout(catalogo.data).map((s) => ({ ...clone(s), day: 'Lun' }))
     : [sesionNueva()]));
-  const [dirty, setDirty] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [haGuardado, setHaGuardado] = useState(false);
   const [error, setError] = useState('');
   const [dialogo, setDialogo] = useState(false);
 
-  const cambia = (fn) => { setDirty(true); setSesiones(fn); };
+  /* El historial (Ctrl/⌘+Z) y «¿hay algo sin guardar?», como en el editor del plan (ver `useHistorial`). */
+  const raizRef = useRef(null);
+  const hist = useHistorial({
+    raiz: raizRef,
+    leer: () => ({ titulo, sesiones }),
+    aplicar: (foto) => { setTitulo(foto.titulo); setSesiones(foto.sesiones); },
+    alCambiar: (que) => avisa(que === 'deshacer' ? 'Cambio deshecho' : 'Cambio rehecho'),
+  });
+  const dirty = hist.sucio;
+  const ctxHistorial = useMemo(() => ({ deshacer: hist.deshacer }), [hist.deshacer]);
+
+  const cambia = (fn) => { hist.registra(); setSesiones(fn); };
+  const cambiaTitulo = (v) => { hist.registra(); setTitulo(v); };
   const parchea = (i, patch) => cambia((prev) => prev.map((s, k) => (k === i ? { ...s, ...patch } : s)));
 
   async function guardar() {
     if (!titulo.trim()) { setError('Ponle un nombre al workout'); return; }
     // Algo nuevo pregunta primero dónde guardarlo.
     if (!fila) { setDialogo(true); return; }
+    // Lo que se guarda es ESTE estado: si se sigue escribiendo mientras tarda, eso queda sin guardar.
+    const idAlGuardar = hist.idActual();
     setError('');
     setGuardando(true);
     try {
       const actualizada = await actualizarItem(fila, { nombre: titulo.trim(), data: workoutDeSesiones(sesiones) });
       setFila(actualizada);
-      setDirty(false);
+      hist.marcaGuardado(idAlGuardar);
       setHaGuardado(true);
       onSaved?.(actualizada);
     } catch (e) {
@@ -88,20 +105,23 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
     if (!va) return;
     try {
       await borrarItem(fila);
-      setDirty(false);
+      hist.marcaGuardado();
       onDeleted?.();
     } catch (e) {
       setError(e.message || 'No se pudo eliminar');
     }
   }
 
-  const quitarSesion = async (i) => {
-    const va = await pregunta({ titulo: `¿Quitar la sesión «${sesiones[i].name || i + 1}»?`, detalle: 'Se va con todos sus ejercicios.', confirmar: 'Sí, quitarla', peligro: true });
-    if (va) cambia((prev) => prev.filter((_, k) => k !== i));
+  // De inmediato y con «Deshacer»: equivocarse se arregla con un toque (y con Ctrl+Z).
+  const quitarSesion = (i) => {
+    const nombre = sesiones[i].name || i + 1;
+    cambia((prev) => prev.filter((_, k) => k !== i));
+    avisa(`Se quitó la sesión «${nombre}»`, { accion: { texto: 'Deshacer', alTocar: hist.deshacer } });
   };
 
   return createPortal(
-    <div style={{ position: 'fixed', inset: 0, zIndex: 2400, background: T.bg, fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
+    <HistorialContext.Provider value={ctxHistorial}>
+    <div ref={raizRef} style={{ position: 'fixed', inset: 0, zIndex: 2400, background: T.bg, fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
       <header
         style={{
           background: 'rgba(255,255,255,0.86)', backdropFilter: 'saturate(180%) blur(16px)', borderBottom: `1px solid ${T.border}`,
@@ -123,6 +143,10 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
             Workout · Mis planes{dirty ? ' · sin guardar' : (haGuardado ? ' · guardado' : '')}
           </div>
         </div>
+        <BotonesDeHistorial
+          celular={!esAncha} puedeDeshacer={hist.puedeDeshacer} puedeRehacer={hist.puedeRehacer}
+          onDeshacer={hist.deshacer} onRehacer={hist.rehacer}
+        />
         <button
           type="button" onClick={guardar} disabled={guardando || (!dirty && !!fila)}
           style={{
@@ -155,7 +179,7 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
           <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             <span style={etiquetaChica}>Nombre del workout</span>
             <input
-              value={titulo} onChange={(e) => { setTitulo(e.target.value); setDirty(true); }}
+              value={titulo} onChange={(e) => cambiaTitulo(e.target.value)}
               style={campo}
             />
           </label>
@@ -185,7 +209,7 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
               fontFamily: FONT, fontSize: 14, fontWeight: 800, color: T.accent,
             }}
           >
-            <Plus size={16} /> Añadir otra sesión
+            <Plus size={16} /> Agregar otra sesión
           </button>
 
           {fila && (
@@ -206,7 +230,7 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
             });
             setFila(creada);
             setTitulo(creada.nombre);
-            setDirty(false);
+            hist.marcaGuardado();
             setHaGuardado(true);
             onSaved?.(creada);
           }}
@@ -219,7 +243,8 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
         .kp-pill,.kp-ico{transition:background .12s}
         .kp-pill:hover:not(:disabled),.kp-ico:hover:not(:disabled){background:${T.bg3} !important}
       `}</style>
-    </div>,
+    </div>
+    </HistorialContext.Provider>,
     document.body,
   );
 }

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import { ArrowLeft, X, PanelLeftClose, PanelLeft, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, X, PanelLeftClose, PanelLeft, Save, Trash2, Undo2, Redo2 } from 'lucide-react';
 import { T, FONT } from '@/lib/theme';
 
 /**
@@ -21,6 +21,31 @@ const cuadrado = {
   width: 36, height: 36, borderRadius: 11, flexShrink: 0, cursor: 'pointer', display: 'grid', placeItems: 'center',
   border: `1px solid ${T.border}`, background: T.bg2, color: T.text, fontFamily: FONT,
 };
+
+/**
+ * Deshacer y rehacer (↶ ↷), pegados a «Guardar». Sin borde, grises, y apagados cuando no hay nada que deshacer o rehacer.
+ * En el celular solo sale ↶, y ↷ cuando hay algo que rehacer (el espacio es poco). Los atajos dicen el de esta computadora.
+ */
+export function BotonesDeHistorial({ puedeDeshacer, puedeRehacer, onDeshacer, onRehacer, celular = false }) {
+  const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
+  const boton = (Icono, etiqueta, atajo, activo, onClick) => (
+    <button
+      type="button" onClick={onClick} disabled={!activo} aria-label={etiqueta} title={`${etiqueta} (${atajo})`}
+      style={{
+        ...cuadrado, border: '1px solid transparent', background: 'transparent', color: activo ? T.text2 : T.borderHi,
+        cursor: activo ? 'pointer' : 'default',
+      }}
+    >
+      <Icono size={18} />
+    </button>
+  );
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: 2 }}>
+      {boton(Undo2, 'Deshacer', mac ? '⌘Z' : 'Ctrl+Z', puedeDeshacer, onDeshacer)}
+      {(!celular || puedeRehacer) && boton(Redo2, 'Rehacer', mac ? '⇧⌘Z' : 'Ctrl+Y', puedeRehacer, onRehacer)}
+    </span>
+  );
+}
 
 function BotonDelPrograma({ icono: Icono, children, color = T.text2, colorIcono = T.text3, rojo = false, onClick, titulo, refEl }) {
   const [encima, setEncima] = useState(false);
