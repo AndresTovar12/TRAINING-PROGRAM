@@ -26,7 +26,7 @@ import GuiaDelEditor from '@/features/admin/GuiaDelEditor';
 import BloqueDelPrograma from '@/features/admin/BloqueDelPrograma';
 import MenuDeAcciones from '@/features/admin/MenuDeAcciones';
 import { useFasesAbiertas } from '@/features/admin/useFasesAbiertas';
-import EditorBarra from '@/features/admin/EditorBarra';
+import EditorBarra, { BarraDelCelular } from '@/features/admin/EditorBarra';
 import { useGuiaAncha } from '@/lib/useGuiaAncha';
 import { T, FONT, KP, tipoDeSesion } from '@/lib/theme';
 import { CeldaDeReps, CeldaDeCarga, DebajoDeRepsYCarga } from '@/components/RepsYCarga';
@@ -2419,23 +2419,6 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     setNav({ level: 'phase', pi: 0 });
   }
 
-  const crumb = useMemo(() => {
-    if (nav.level === 'phase') {
-      const p = phases[nav.pi];
-      if (isWeekly) return 'Rutina semanal';
-      const wi = Math.min(weekIdx, Math.max(0, (p?.weekData?.length ?? 1) - 1));
-      // En "varias semanas" no hay fase que nombrar: la semana va de corrido.
-      if (estructura === 'semanas') {
-        const wk = p?.weekData?.[wi];
-        const sub = weekSubtitle(wk);
-        const n = semanaGlobal(phases, p?.id, wk?.num) ?? wi + 1;
-        return `Semana ${n} de ${semanasDelPlan(phases)}${sub ? ` · ${sub}` : ''}`;
-      }
-      return `${p?.name || 'Fase'} · ${weekName(p?.weekData?.[wi], wi + 1)}`;
-    }
-    return t('Estructura del plan');
-  }, [nav, phases, weekIdx, isWeekly, estructura, t]);
-
   /* Volver. En el teléfono, desde el editor de un día se vuelve a la hoja; y
      desde la hoja, se sale. Ya no hay pantalla de fases a la que subir: la
      hoja las enseña todas. */
@@ -2463,6 +2446,10 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     </button>
   );
   const barraNueva = esCompu && nav.level === 'phase';
+  // En el celular, dentro de un día, la barra dice dónde estás: «Sem 2 · Fuerza base».
+  const tituloDelCelular = isWeekly ? 'Rutina'
+    : deCorrido ? `Sem ${numeroDeSemana(faseEditada, semanaEditada, weekIdx + 1)} de ${semanasDelPlan(phases)}`
+      : `Sem ${semanaEditada?.num ?? weekIdx + 1} · ${faseEditada?.name || 'Fase'}`;
   const programa = {
     forma: FORMAS.find((f) => f.id === estructura) ?? FORMAS[2], puedeCambiar: !enCatalogo, onCambiar: () => setFormasAbiertas(true),
     puedeGuardar: !enCatalogo && planTieneContenido(phases), textoGuardar: isWeekly ? 'Guardar rutina' : t('Guardar plan'),
@@ -2620,17 +2607,12 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     const editorDelDia = p && (
       <div>
         {/* En la compu el día no lleva título aparte («Fase 1 · Semana 1», «Lunes»): la guía —o la tira de días, con la
-            guía oculta— ya dice cuál es (Andrés, 5 oct 2026). En el teléfono sí: la guía y el día son dos pantallas, y
-            la vuelta a la hoja es la flecha de arriba. */}
+            guía oculta— ya dice cuál es (Andrés, 5 oct 2026). En el teléfono sí: la guía y el día son dos pantallas;
+            el día se llama arriba y la barra dice «Sem N · Fase». */}
         {!esCompu && (
           <div style={{ marginBottom: 14, minWidth: 0, display: 'flex', alignItems: 'flex-end', gap: 10 }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: T.text3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {isWeekly ? 'Rutina que se repite' : `${deCorrido ? nombreSemana(p, w, wIdx + 1) : `${p.name || 'Fase'} · ${weekName(w, wIdx + 1)}`}${w?.load ? ` · ${w.load}` : ''}`}
-              </div>
-              <div style={{ fontSize: 19, fontWeight: 800, color: T.text, letterSpacing: -0.3 }}>
-                {NOMBRE_DIA[activeWeekday] || activeWeekday}
-              </div>
+            <div style={{ flex: 1, minWidth: 0, fontSize: 19, fontWeight: 800, color: T.text, letterSpacing: -0.3 }}>
+              {NOMBRE_DIA[activeWeekday] || activeWeekday}
             </div>
             {daysOfWeekday.length > 0 && <InterruptorVista vista={enFilas ? 'lista' : 'tarjetas'} onCambio={eligeVista} />}
           </div>
@@ -2787,6 +2769,10 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
           anchoGuia={guia.ancho} guiaOculta={guia.oculta} onAlternarGuia={guia.alternar}
           onVolver={goBack} onCerrar={handleClose} programa={programa} derecha={botonGuardar}
         />
+      ) : !esCompu && nav.level === 'phase' ? (
+        <BarraDelCelular
+          enDia={editandoDiaTel} titulo={tituloDelCelular} onVolver={goBack} onCerrar={handleClose} derecha={botonGuardar}
+        />
       ) : (
       <header
         style={{
@@ -2800,7 +2786,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
           <ArrowLeft size={17} />
         </button>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{crumb}</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t('Estructura del plan')}</div>
           <div style={{ fontSize: 12, color: T.text2, fontWeight: 600 }}>
             {enCatalogo ? 'Mis planes' : (athlete.full_name || athlete.username)}{dirty ? ' · sin guardar' : (haGuardado ? ' · guardado' : '')}
           </div>
