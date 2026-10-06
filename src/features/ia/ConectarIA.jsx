@@ -178,7 +178,7 @@ function ChatGPTEnCelular({ onUsarClaude }) {
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><MarcaIA app="chatgpt" size={46} /></div>
       <h3 style={{ fontSize: 19, fontWeight: 800, color: KP.ink, margin: '0 0 6px', letterSpacing: -0.3 }}>Desde el celular, todavía no</h3>
       <p style={{ fontSize: 14.5, color: KP.ink2, fontWeight: 500, lineHeight: 1.5, margin: '0 auto 16px', maxWidth: 330 }}>
-        ChatGPT solo deja conectar apps desde la computadora. Cuando aprueben Training Lab en su tienda, será de un toque.
+        ChatGPT solo deja agregar un servidor MCP desde la computadora. Cuando aprueben Training Lab en su tienda, será de un toque.
         Claude sí se puede desde el celular.
       </p>
       <button type="button" onClick={onUsarClaude} className="kp-press" style={{

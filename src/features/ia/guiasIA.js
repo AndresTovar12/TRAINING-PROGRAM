@@ -18,9 +18,17 @@ import { LIGA_MCP } from '@/features/ia/queHaceLaIA';
  *   el navegador y luego aparecen solos en la app. La liga
  *   claude.ai/settings/connectors abre el navegador (la app de iPhone no la
  *   reclama) y claude.ai/new abre la app: por eso son esas dos.
- * - ChatGPT: conectar apps propias es solo en la computadora (modo de
- *   desarrollador, web). En el celular, hasta que OpenAI apruebe Training Lab
- *   en su tienda.
+ * - ChatGPT: agregar un servidor MCP propio es solo en la computadora (web,
+ *   planes de pago). En el celular, hasta que OpenAI apruebe Training Lab en
+ *   su tienda.
+ *
+ * ChatGPT, revisado con la cuenta de Andrés el 6 oct 2026: ya NO hay «modo de
+ * desarrollador». En chatgpt.com/plugins («Complementos») está el botón
+ * «Agregar ▾» → «Crear servidor MCP personalizado»; el formulario pide Nombre,
+ * Conexión (URL del servidor), Autenticación (OAuth), la casilla «Entiendo y
+ * quiero continuar» y termina con «Crear como complemento». Luego manda a
+ * nuestra pantalla de permiso y el complemento aparece en el chat bajo
+ * «Complementos» (menú «+» o escribiendo @).
  */
 
 export const CONECTORES = [
@@ -79,30 +87,30 @@ export function pasosDe(app, esCompu) {
   if (app === 'chatgpt') {
     return [
       {
-        titulo: 'Abre la configuración de ChatGPT',
-        texto: 'En la compu: Configuración → Apps.',
-        pantalla: 'chatgpt-ajustes', resalta: 'apps',
-        acciones: [abrir('https://chatgpt.com', 'Abrir ChatGPT')],
+        titulo: 'Abre los complementos de ChatGPT',
+        texto: 'En la barra de la izquierda: Complementos. El botón te lleva directo.',
+        pantalla: 'chatgpt-complementos', resalta: 'complementos',
+        acciones: [abrir('https://chatgpt.com/plugins', 'Abrir ChatGPT')],
       },
       {
-        titulo: 'Activa «Modo de desarrollador»',
-        texto: 'Está en Configuración avanzada.',
-        pantalla: 'chatgpt-ajustes', resalta: 'interruptor',
+        titulo: 'Haz clic en «Agregar» y elige «Crear servidor MCP personalizado»',
+        texto: 'Es la tercera opción del menú.',
+        pantalla: 'chatgpt-complementos', resalta: 'crear',
       },
       {
-        titulo: 'Crea la app: pega tu liga',
-        texto: 'Nombre: Training Lab. Autenticación: OAuth.',
+        titulo: 'Pega tu liga y haz clic en «Crear como complemento»',
+        texto: 'Nombre: Training Lab. Conexión: URL del servidor. Autenticación: OAuth (ya viene así). Marca «Entiendo y quiero continuar». Si no ves el botón de abajo, achica la página (Cmd o Ctrl y –).',
         pantalla: 'chatgpt-crear', resalta: 'url',
         acciones: [copiar(LIGA_MCP, 'Copiar liga')],
       },
       {
         titulo: toca('«Permitir»'),
-        texto: 'Se abre Training Lab. Si te lo pide, entra con tu cuenta.',
+        texto: 'Se abre Training Lab. Si te lo pide, entra con tu cuenta. Si muestra otra cuenta, toca «¿No eres tú?».',
         pantalla: 'permiso', resalta: 'permitir',
       },
       {
-        titulo: '¡Listo! Úsalo en un chat',
-        texto: 'En un chat: «+» → Training Lab.',
+        titulo: '¡Listo! Úsalo en cualquier chat',
+        texto: 'En un chat: «+» → Complementos → Training Lab. O escribe @ y elígelo.',
         pantalla: 'chat', resalta: 'app',
       },
     ];
