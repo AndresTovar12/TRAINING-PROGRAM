@@ -9,6 +9,7 @@ import {
 import { estructuraDelPlan } from '@/lib/training-utils';
 import { adaptadorDeRegistros, fasesConPegadas, reglasDe } from '@/lib/pegadas';
 import { colorDePrograma, tieneSesiones } from '@/lib/programas';
+import { conNombreDeSuFicha } from '@/lib/nombreDeLaFicha';
 
 /**
  * Carga el plan activo de la persona cuya app se dibuja —quien entró, o el
@@ -193,6 +194,8 @@ export function PlanProvider({ children }) {
       return {
         exercises,
         medias,
+        // La ficha de una línea por su `exercise_id` (nunca por nombre): de ahí sale el nombre que se enseña.
+        fichaDe: (ex) => (ex?.exercise_id ? porId.get(ex.exercise_id) ?? null : null),
         resolveExercise: (ex) => {
           if (!ex || ex.isNote) return null;
           if (ex.exercise_id && porId.has(ex.exercise_id)) return porId.get(ex.exercise_id);
@@ -207,7 +210,9 @@ export function PlanProvider({ children }) {
       const esPrincipal = !row.profesional_id;
       const duenoId = row.profesional_id ?? principalId;
       const miembro = miembros?.find((m) => m.profesional_id === duenoId) ?? null;
-      const phases = normalizePlan(row.data?.phases) ?? [];
+      const herramientas = herramientasDe(duenoId);
+      // Cada línea ligada a una ficha se llama como ella (ver `lib/nombreDeLaFicha.js`).
+      const phases = conNombreDeSuFicha(normalizePlan(row.data?.phases) ?? [], herramientas.fichaDe);
       return {
         id: row.id,
         clave: row.profesional_id ?? null,        // sufijo de los registros; null = el principal
@@ -221,7 +226,7 @@ export function PlanProvider({ children }) {
         estructura: estructuraDelPlan(row.data),
         hasPlan: phases.length > 0,
         conSesiones: tieneSesiones(phases),
-        ...herramientasDe(duenoId),
+        ...herramientas,
       };
     };
     /* Las sesiones de un profesional pegadas al programa del coach, vistas como
@@ -231,9 +236,10 @@ export function PlanProvider({ children }) {
       const reglas = reglasDe(fila);
       const miembro = miembros?.find((m) => m.profesional_id === fila.profesional_id) ?? null;
       const kind = principal.kind === 'weekly' ? 'weekly' : 'periodized';
-      const phases = normalizePlan(fasesConPegadas(reglas, principal.phases, {
+      const herramientas = herramientasDe(fila.profesional_id);
+      const phases = conNombreDeSuFicha(normalizePlan(fasesConPegadas(reglas, principal.phases, {
         autorId: fila.profesional_id, semanal: kind === 'weekly',
-      })) ?? [];
+      })) ?? [], herramientas.fichaDe);
       const { vista, llaveEstable } = adaptadorDeRegistros(phases, kind);
       return {
         id: `${fila.id}:sobre`,
@@ -253,7 +259,7 @@ export function PlanProvider({ children }) {
         // Lo que anota el atleta se guarda con llaves estables y aquí se ve por posición.
         vistaDeRegistros: vista,
         llaveEstable,
-        ...herramientasDe(fila.profesional_id),
+        ...herramientas,
       };
     };
     const propios = filas

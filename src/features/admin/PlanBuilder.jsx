@@ -55,6 +55,7 @@ import {
   workoutDeSesiones, diasDeWorkout, rutinaDePlan, rutinaDeSemana, planDeRutina, programaDePlan, planDePrograma,
   sinNotas, tieneNotas, sesionTieneContenido, semanaTieneContenido, planTieneContenido,
 } from '@/lib/misPlanesDatos';
+import { conNombreDeSuFicha, fichaDeLista } from '@/lib/nombreDeLaFicha';
 
 // `Pill` se sigue importando desde aquí (Mis planes); vive en `piezas.jsx`.
 export { Pill };
@@ -201,6 +202,10 @@ const delRepertorio = (ex, repertoire) => {
   return ultimo;
 };
 
+/* El nombre que se enseña de una línea: el de su FICHA (ver `lib/nombreDeLaFicha.js`). Una línea ligada no tiene nombre propio;
+   sin ficha a la mano se queda con el que trae. */
+const nombreDeLaLinea = (ex, rep) => (ex.exercise_id && rep?.id === ex.exercise_id && rep.name) || ex.name;
+
 /* UNA SOLA «DESCRIPCIÓN». Un ejercicio traía dos casillas, «Descripción» (`notes`) y «Cue técnico» (`cue`), y el atleta las
    lee igual, una tras otra (Andrés, 5 oct 2026, maqueta aprobada: una sola). La casilla enseña los dos textos juntos con « · »
    y, en cuanto se escribe en ella, todo pasa a `notes` y `cue` queda vacío: no se pierde nada y a quien no se toca no se le
@@ -246,7 +251,7 @@ function ExerciseCard({
       </div>
       <div style={{ padding: 12 }}>
         {ex.exercise_id ? (
-          <div style={{ fontWeight: 800, fontSize: 14, color: T.text, marginBottom: 10 }}>{ex.name}</div>
+          <div style={{ fontWeight: 800, fontSize: 14, color: T.text, marginBottom: 10 }}>{nombreDeLaLinea(ex, rep)}</div>
         ) : (
           <input
             value={ex.name}
@@ -442,7 +447,7 @@ function ExerciseRow({
           <Dumbbell size={15} color="#3A3F4C" />
         </Portada>
         {ex.exercise_id ? (
-          <span style={{ flex: 1, minWidth: 0, fontWeight: 700, fontSize: 14, color: T.text }}>{ex.name}</span>
+          <span style={{ flex: 1, minWidth: 0, fontWeight: 700, fontSize: 14, color: T.text }}>{nombreDeLaLinea(ex, rep)}</span>
         ) : (
           <input value={ex.name} onChange={(e) => onPatch({ name: e.target.value })}
             placeholder="Nombre del ejercicio…" style={{ ...inputFila, flex: 1, fontWeight: 700 }} />
@@ -1976,8 +1981,9 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
 
   /* Lo que va a Mis planes de lo que hay en pantalla: una rutina semanal es una «rutina» (los días de su
      semana) y lo demás un «programa». */
+  const fasesParaGuardar = () => conNombreDeSuFicha(normalize(phases), fichaDeLista(repertoire));
   const datosDelCatalogo = () => {
-    const lista = normalize(phases);
+    const lista = fasesParaGuardar();
     return estructura === 'rutina'
       ? { tipo: 'rutina', data: rutinaDePlan({ phases: lista }) }
       : { tipo: 'programa', data: programaDePlan({ kind, estructura, phases: lista }) };
@@ -2063,7 +2069,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     setErr('');
     setSaving(true);
     try {
-      const data = normalize(phases);
+      const data = fasesParaGuardar();
       const row = planRow
         ? await updatePlan(planRow.id, { title: title.trim(), phases: data, kind, estructura })
         : await createPlan({ userId: athlete.id, title: title.trim(), phases: data, kind, estructura, createdBy: user?.id, profesionalId });
