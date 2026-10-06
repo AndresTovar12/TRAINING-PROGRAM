@@ -148,8 +148,9 @@ export function EncabezadoDelSet({
         )}
         <span style={{ flex: 1 }} />
         <Pill icon={Plus} primary onClick={onAgregar}>Agregar ejercicio</Pill>
-        <IconBtn icon={ChevronUp} onClick={onSubir} disabled={!puedeSubir} />
-        <IconBtn icon={ChevronDown} onClick={onBajar} disabled={!puedeBajar} />
+        {/* Subir y bajar solo si quien lo usa no deja arrastrar el Set. */}
+        {onSubir && <IconBtn icon={ChevronUp} onClick={onSubir} disabled={!puedeSubir} />}
+        {onBajar && <IconBtn icon={ChevronDown} onClick={onBajar} disabled={!puedeBajar} />}
         <IconBtn icon={Trash2} danger onClick={onEliminar} />
       </div>
 

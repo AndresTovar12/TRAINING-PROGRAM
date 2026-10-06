@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ArrowLeft, X, Plus, Trash2, Copy, ChevronRight, ChevronUp, ChevronDown,
@@ -28,6 +28,7 @@ import MenuDeAcciones from '@/features/admin/MenuDeAcciones';
 import { useFasesAbiertas } from '@/features/admin/useFasesAbiertas';
 import EditorBarra, { BarraDelCelular, BotonesDeHistorial } from '@/features/admin/EditorBarra';
 import { HistorialContext, useHistorial, useHistorialDelEditor } from '@/lib/useHistorial';
+import { mueveEn, propsDeArrastre } from '@/lib/arrastrar';
 import { useGuiaAncha } from '@/lib/useGuiaAncha';
 import { T, FONT, KP, tipoDeSesion } from '@/lib/theme';
 import { CeldaDeReps, CeldaDeCarga, DebajoDeRepsYCarga } from '@/components/RepsYCarga';
@@ -250,7 +251,7 @@ const delRepertorio = (ex, repertoire) => {
 
 function ExerciseCard({
   ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove, onMove, canLeft, canRight, conSeries = false,
-  rondas = null, soloLectura = false,
+  rondas = null, soloLectura = false, arrastre = null,
 }) {
   const rep = delRepertorio(ex, repertoire);
   // Reps, carga, «Por lado» y «Por vuelta»: ver `useRepsYCarga`. En los días de dos sesiones no hay vueltas del Set.
@@ -264,7 +265,7 @@ function ExerciseCard({
      si no, en su propia línea. */
   const campoDescanso = <CampoDescanso ex={ex} onPatch={onPatch} estiloInput={estiloCampo} />;
   return (
-    <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden', minWidth: 0 }}>
+    <div {...arrastre} style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden', minWidth: 0 }}>
       <div style={{ position: 'relative', height: 110, width: '100%', background: '#0E1015' }}>
         <Portada
           foto={rep?.cover_image_url}
@@ -276,8 +277,9 @@ function ExerciseCard({
           <Dumbbell size={26} />
         </Portada>
         <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 6 }}>
-          <IconBtn sobreFoto icon={ChevronLeft} onClick={() => onMove(-1)} disabled={!canLeft} title="Mover a la izquierda" />
-          <IconBtn sobreFoto icon={ChevronRight} onClick={() => onMove(1)} disabled={!canRight} title="Mover a la derecha" />
+          {/* Mover a la izquierda o a la derecha: solo donde no se deja arrastrar la tarjeta. */}
+          {!arrastre && <IconBtn sobreFoto icon={ChevronLeft} onClick={() => onMove(-1)} disabled={!canLeft} title="Mover a la izquierda" />}
+          {!arrastre && <IconBtn sobreFoto icon={ChevronRight} onClick={() => onMove(1)} disabled={!canRight} title="Mover a la derecha" />}
           <IconBtn sobreFoto icon={Trash2} danger onClick={onRemove} title="Quitar del set" />
         </div>
       </div>
@@ -455,7 +457,7 @@ function RotuloCampo({ children }) {
  */
 function ExerciseRow({
   ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove, onMove, canUp, canDown, conSeries = false,
-  rondas = null, soloLectura = false,
+  rondas = null, soloLectura = false, arrastre = null,
 }) {
   const rep = delRepertorio(ex, repertoire);
   const rc = useRepsYCarga({ ex, onPatch, rondas: conSeries ? null : rondas, abiertoDeEntrada: soloLectura });
@@ -472,7 +474,7 @@ function ExerciseRow({
   const fluido = (orden) => (angosta ? { flex: '1 1 90px', minWidth: 0, order: orden } : null);
   const completo = (orden) => (angosta ? { flex: '1 1 100%', minWidth: 0, order: orden } : null);
   return (
-    <div style={{
+    <div {...arrastre} style={{
       background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 12,
       padding: '11px 12px', fontFamily: FONT,
     }}>
@@ -495,8 +497,9 @@ function ExerciseRow({
             placeholder="Nombre del ejercicio…" style={{ ...inputFila, flex: 1, fontWeight: 700 }} />
         )}
         <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
-          <IconBtn icon={ChevronUp} onClick={() => onMove(-1)} disabled={!canUp} title="Subir" />
-          <IconBtn icon={ChevronDown} onClick={() => onMove(1)} disabled={!canDown} title="Bajar" />
+          {/* Subir y bajar: solo donde no se deja arrastrar el ejercicio. */}
+          {!arrastre && <IconBtn icon={ChevronUp} onClick={() => onMove(-1)} disabled={!canUp} title="Subir" />}
+          {!arrastre && <IconBtn icon={ChevronDown} onClick={() => onMove(1)} disabled={!canDown} title="Bajar" />}
           <IconBtn icon={Trash2} danger onClick={onRemove} title="Quitar del set" />
         </div>
       </div>
@@ -1061,6 +1064,9 @@ function EditorSesionesDelDia({
   const bloques = day.blocks || [];
   const quita = useQuitar();
   const [enFilas] = useEnFilas();
+  // Cada lista de ejercicios (una por sesión del día) se identifica con el id de este editor.
+  const uid = useId();
+  const arrastrable = (cfg) => (soloLectura ? undefined : propsDeArrastre(cfg));
   // El número de la sesión (0 = la primera del día) a la que va lo que se
   // elija del repertorio o se cree nuevo. `null` = nada abierto.
   const [eligiendoPara, setEligiendoPara] = useState(null);
@@ -1078,6 +1084,7 @@ function EditorSesionesDelDia({
     exercises: (b.exercises || []).map((e, k) => (k === fi ? { ...e, ...parche } : e)),
   } : b)));
 
+  const mueveFilaA = (bi, de, a) => escribe((bs) => bs.map((b, i) => (i === bi ? { ...b, exercises: mueveEn(b.exercises || [], de, a) } : b)));
   const mueveFila = (bi, fi, dir) => escribe((bs) => bs.map((b, i) => {
     if (i !== bi) return b;
     const filas = [...(b.exercises || [])];
@@ -1174,10 +1181,13 @@ function EditorSesionesDelDia({
                       {filas.map((e, fi) => {
                         if (e.isNote) {
                           return (
-                            <div key={fi} style={{
-                              gridColumn: '1 / -1', display: 'flex', alignItems: 'flex-start', gap: 8,
-                              background: T.accentBg, borderRadius: 12, padding: '9px 12px',
-                            }}>
+                            <div
+                              key={fi} {...arrastrable({ lista: `${uid}:b${bi}`, etiqueta: 'Nota', alMover: (de, a) => mueveFilaA(bi, de, a) })}
+                              style={{
+                                gridColumn: '1 / -1', display: 'flex', alignItems: 'flex-start', gap: 8,
+                                background: T.accentBg, borderRadius: 12, padding: '9px 12px',
+                              }}
+                            >
                               <StickyNote size={15} color={T.accent} style={{ flexShrink: 0, marginTop: 6 }} />
                               <textarea
                                 value={e.text || ''}
@@ -1191,8 +1201,8 @@ function EditorSesionesDelDia({
                                   resize: 'none', lineHeight: 1.45,
                                 }}
                               />
-                              <IconBtn icon={ChevronUp} title="Subir" onClick={() => mueveFila(bi, fi, -1)} disabled={fi === 0} />
-                              <IconBtn icon={ChevronDown} title="Bajar" onClick={() => mueveFila(bi, fi, 1)} disabled={fi === filas.length - 1} />
+                              {soloLectura && <IconBtn icon={ChevronUp} title="Subir" onClick={() => mueveFila(bi, fi, -1)} disabled={fi === 0} />}
+                              {soloLectura && <IconBtn icon={ChevronDown} title="Bajar" onClick={() => mueveFila(bi, fi, 1)} disabled={fi === filas.length - 1} />}
                               <IconBtn icon={Trash2} danger title="Quitar" onClick={() => quita({ aviso: 'Se quitó la nota' }, () => quitaFila(bi, fi))} />
                             </div>
                           );
@@ -1204,6 +1214,7 @@ function EditorSesionesDelDia({
                           soloLectura,
                           conSeries: true,
                           onVideoAtleta: setMediaDe,
+                          arrastre: arrastrable({ lista: `${uid}:b${bi}`, etiqueta: e.name || 'Ejercicio', alMover: (de, a) => mueveFilaA(bi, de, a) }),
                           onPatch: (parche) => parcheaFila(bi, fi, parche),
                           onMove: (dir) => mueveFila(bi, fi, dir),
                           onRemove: () => quita({ aviso: `Se quitó ${e.name || 'el ejercicio'}` }, () => quitaFila(bi, fi)),
@@ -1316,6 +1327,9 @@ function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjer
   const [enFilas] = useEnFilas();
   const [pickerCtx, setPickerCtx] = useState(null);
   const blocks = useMemo(() => parseBlocks(day.exercises), [day.exercises]);
+  // Cada lista de esta sesión (los Sets, los ejercicios de cada Set) se identifica con el id de la sesión.
+  const uid = useId();
+  const arrastrable = (cfg) => (soloLectura ? undefined : propsDeArrastre(cfg));
 
   const writeBlocks = (fn) => onPatch({ exercises: serializeBlocks(fn(parseBlocks(day.exercises))) });
 
@@ -1365,7 +1379,10 @@ function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjer
         {blocks.map((b, bi) => {
           if (b.type === 'note') {
             return (
-              <div key={bi} style={{ display: 'flex', gap: 8, alignItems: 'center', background: T.accentBg, borderRadius: 12, padding: '9px 12px' }}>
+              <div
+                key={bi} {...arrastrable({ lista: `${uid}:sets`, etiqueta: 'Nota', alMover: (de, a) => writeBlocks((bs) => mueveEn(bs, de, a)) })}
+                style={{ display: 'flex', gap: 8, alignItems: 'center', background: T.accentBg, borderRadius: 12, padding: '9px 12px' }}
+              >
                 <StickyNote size={15} color={T.accent} style={{ flexShrink: 0 }} />
                 <input
                   value={b.ex.text || ''}
@@ -1373,8 +1390,8 @@ function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjer
                   placeholder={t('Nota para el atleta…')}
                   style={{ ...inputStyle, background: 'transparent', border: 'none', padding: '4px 0', color: T.accent, fontWeight: 700, fontSize: 13 }}
                 />
-                <IconBtn icon={ChevronUp} onClick={() => moveBlock(bi, -1)} disabled={bi === 0} />
-                <IconBtn icon={ChevronDown} onClick={() => moveBlock(bi, 1)} disabled={bi === blocks.length - 1} />
+                {soloLectura && <IconBtn icon={ChevronUp} onClick={() => moveBlock(bi, -1)} disabled={bi === 0} />}
+                {soloLectura && <IconBtn icon={ChevronDown} onClick={() => moveBlock(bi, 1)} disabled={bi === blocks.length - 1} />}
                 <IconBtn icon={Trash2} danger onClick={() => quita({ aviso: 'Se quitó la nota' }, () => writeBlocks((bs) => bs.filter((_, k) => k !== bi)))} />
               </div>
             );
@@ -1382,13 +1399,15 @@ function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjer
           const setIdx = blocks.slice(0, bi + 1).filter((x) => x.type === 'set').length;
           const tag = setTag(b.members.length);
           return (
-            <div key={bi} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 16, padding: 14 }}>
+            <div
+              key={bi} {...arrastrable({ lista: `${uid}:sets`, etiqueta: `Set ${setIdx}`, alMover: (de, a) => writeBlocks((bs) => mueveEn(bs, de, a)) })}
+              style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 16, padding: 14 }}
+            >
               <EncabezadoDelSet
                 numero={setIdx} bloque={b} etiquetaDeTipo={tag}
                 onCambio={(parche) => writeBlocks((bs) => bs.map((x, k) => (k === bi ? { ...x, ...parche } : x)))}
                 onAgregar={() => setPickerCtx({ mode: 'add', blockIdx: bi })}
-                onSubir={() => moveBlock(bi, -1)} onBajar={() => moveBlock(bi, 1)}
-                puedeSubir={bi > 0} puedeBajar={bi < blocks.length - 1}
+                {...(soloLectura ? { onSubir: () => moveBlock(bi, -1), onBajar: () => moveBlock(bi, 1), puedeSubir: bi > 0, puedeBajar: bi < blocks.length - 1 } : null)}
                 onEliminar={() => quita({
                   pregunta: { titulo: `¿Eliminar el Set ${setIdx} completo?`, confirmar: 'Sí, eliminarlo', peligro: true },
                   aviso: `Se eliminó el Set ${setIdx}`,
@@ -1402,6 +1421,10 @@ function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjer
                   repertoire,
                   atleta,
                   soloLectura,
+                  arrastre: arrastrable({
+                    lista: `${uid}:ej:${bi}`, etiqueta: m.name || 'Ejercicio',
+                    alMover: (de, a) => writeBlocks((bs) => bs.map((x, k) => (k === bi ? { ...x, members: mueveEn(x.members, de, a) } : x))),
+                  }),
                   // «Por vuelta» solo tiene sentido si el Set se repite, y sin reloj (ahí las vueltas son del formato).
                   rondas: b.formato ? null : rondasDe(b.rounds),
                   onVideoAtleta: setMediaDe,
@@ -2102,14 +2125,6 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     days: w.days.map((d, k) => (k === di ? { ...d, ...(typeof patch === 'function' ? patch(d) : patch) } : d)),
   }));
 
-  const moveItem = (arr, i, dir) => {
-    const j = i + dir;
-    if (j < 0 || j >= arr.length) return arr;
-    const next = [...arr];
-    [next[i], next[j]] = [next[j], next[i]];
-    return next;
-  };
-
   /* Lo que va a Mis planes de lo que hay en pantalla: una rutina semanal es una «rutina» (los días de su
      semana) y lo demás un «programa». */
   const datosDelCatalogo = () => {
@@ -2189,11 +2204,12 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
   /* Lo que hacen los tres puntos. Son las operaciones que antes vivían en la
      lista de fases y en el modal de la semana, sacadas a funciones para que
      las usen los dos sitios sin copiarse. */
-  const moverFase = (pi, dir) => {
-    touch((ps) => moveItem(ps, pi, dir));
-    // La fase abierta sigue a su contenido, no a su posición.
-    if (nav.pi === pi) setNav({ level: 'phase', pi: pi + dir });
-    else if (nav.pi === pi + dir) setNav({ level: 'phase', pi });
+  // Las fases se mueven arrastrándolas (de un lugar al lugar `a`). La fase que se edita sigue a su contenido, no a su posición.
+  const moverFaseA = (de, a) => {
+    const idEditada = phases[nav.pi]?.id;
+    touch((ps) => mueveEn(ps, de, a));
+    const ni = mueveEn(phases, de, a).findIndex((f) => f.id === idEditada);
+    if (ni >= 0) setNav({ level: 'phase', pi: ni });
   };
   const duplicarFase = (pi) => {
     touch((ps) => {
@@ -2310,7 +2326,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     colorFase: (i, color) => patchPhase(i, { color }),
     duplicarFase: (i) => { yaNavego.current = true; duplicarFase(i); },
     eliminarFase: (i) => { yaNavego.current = true; eliminarFase(i); },
-    moverFase: (i, dir) => { yaNavego.current = true; moverFase(i, dir); },
+    moverFaseA: (de, a) => { yaNavego.current = true; moverFaseA(de, a); },
     tituloSemana: (i, num, titulo) => {
       const wi = (phases[i]?.weekData ?? []).findIndex((x) => x.num === num);
       if (wi >= 0) patchWeek(i, wi, { label: titulo });
