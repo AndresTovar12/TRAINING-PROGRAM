@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, Copy, ExternalLink, Loader2, MessagesSquare, RotateCcw, SquareTerminal, Unplug } from 'lucide-react';
+import { Check, Copy, ExternalLink, Loader2, MessagesSquare, SquareTerminal, Unplug } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
@@ -16,7 +16,9 @@ import { MarcaIA, Pantalla } from '@/features/ia/Maquetas';
  * Andrés, 25 sep 2026, sobre la primera versión:
  *   1. "Las instrucciones se ven feas, tienen que ser súper amigables
  *      visualmente." → cada paso es una tarjeta con la pantalla que va a ver,
- *      dibujada, y lo que hay que tocar marcado. Uno a la vez.
+ *      dibujada, y lo que hay que tocar marcado. (Hasta el 6 oct eran uno a la
+ *      vez con «Siguiente»; ahora van todos de corrido, un paso por clic: ver
+ *      `Guia`.)
  *   2. "Se tiene que dividir en 2 vertientes: los conectores (Claude y
  *      ChatGPT) y los MCP (Claude Code, Codex, Hermes)." → dos puertas.
  *   3. "A los atletas no les pusiste cómo conectarse; ellos casi no usarán la
@@ -65,86 +67,52 @@ function Accion({ accion, principal }) {
   );
 }
 
+/* La guía entera, de corrido: un paso por clic, cada uno con su dibujo y una sola cosa marcada.
+   Andrés, 6 oct 2026: el cliente sale de la app para hacer los pasos en ChatGPT y, al volver, con el
+   paso a paso de «Siguiente» ya no sabía en cuál iba; y un dibujo que juntaba dos clics («Agregar» y
+   luego la opción del menú) escondía el primero. «No saltarnos, pero visualmente simplificarlo muchísimo». */
 function Guia({ app, esCompu, rol }) {
   const pasos = pasosDe(app, esCompu);
-  const [paso, setPaso] = useState(() => {
-    const g = leeGuardado();
-    return g.app === app && Number.isInteger(g.paso) && g.paso < pasos.length ? g.paso : 0;
-  });
   useEffect(() => {
-    try { localStorage.setItem(GUARDADO, JSON.stringify({ ...leeGuardado(), app, paso })); } catch { /* sin almacenamiento */ }
-  }, [app, paso]);
-
-  const p = pasos[Math.min(paso, pasos.length - 1)];
-  const ultimo = paso === pasos.length - 1;
-
-  const texto = (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-        <span style={{
-          width: 34, height: 34, borderRadius: 17, flexShrink: 0, display: 'grid', placeItems: 'center',
-          background: ultimo ? KP.mint : KP.blue, color: '#fff', fontSize: 15, fontWeight: 800,
-        }}>
-          {ultimo ? <Check size={18} strokeWidth={3} /> : paso + 1}
-        </span>
-        <div style={{ minWidth: 0 }}>
-          <h3 style={{ fontSize: 19, fontWeight: 800, color: KP.ink, margin: '4px 0 0', letterSpacing: -0.3, lineHeight: 1.25, textWrap: 'balance' }}>{p.titulo}</h3>
-          {p.texto && <p style={{ fontSize: 14.5, color: KP.ink2, fontWeight: 500, lineHeight: 1.5, margin: '6px 0 0' }}>{p.texto}</p>}
-        </div>
-      </div>
-      {!!p.acciones?.length && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {p.acciones.map((a, i) => <Accion key={a.texto} accion={a} principal={i === 0} />)}
-        </div>
-      )}
-    </div>
-  );
+    try { localStorage.setItem(GUARDADO, JSON.stringify({ ...leeGuardado(), app })); } catch { /* sin almacenamiento */ }
+  }, [app]);
 
   return (
-    <div style={{ background: KP.surface, border: `1px solid ${KP.line}`, borderRadius: 22, padding: esCompu ? 22 : 16, boxShadow: KP.shCard }}>
-      {/* Cuánto falta: en el celular se sale a Claude y se vuelve, y hay que saber dónde se iba. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-        <span style={{ fontSize: 12, fontWeight: 800, color: KP.ink3, whiteSpace: 'nowrap' }}>Paso {paso + 1} de {pasos.length}</span>
-        <div style={{ flex: 1, display: 'flex', gap: 4 }}>
-          {pasos.map((x, i) => (
-            <button
-              key={x.titulo} type="button" onClick={() => setPaso(i)} aria-label={`Ir al paso ${i + 1}`}
-              style={{ flex: 1, height: 6, borderRadius: 3, border: 'none', padding: 0, cursor: 'pointer', background: i <= paso ? KP.blue : KP.line }}
-            />
-          ))}
-        </div>
-      </div>
-
-      <div style={esCompu
-        ? { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.1fr)', gap: 26, alignItems: 'center' }
-        : { display: 'flex', flexDirection: 'column', gap: 18 }}
-      >
-        {texto}
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px' }}>
-          <Pantalla paso={p} app={app} esCompu={esCompu} rol={rol} />
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
-        {paso > 0 && (
-          <button type="button" onClick={() => setPaso(paso - 1)} style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 46, padding: '0 16px', borderRadius: 14,
-            border: `1.5px solid ${KP.line}`, background: KP.surface, cursor: 'pointer', fontFamily: FONT, fontSize: 14.5, fontWeight: 700, color: KP.ink2,
-          }}>
-            <ArrowLeft size={16} /> Atrás
-          </button>
-        )}
-        <button
-          type="button" onClick={() => setPaso(ultimo ? 0 : paso + 1)} className="kp-press"
-          style={{
-            flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 46, borderRadius: 14,
-            border: ultimo ? `1.5px solid ${KP.line}` : 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 800,
-            background: ultimo ? KP.surface : KP.ink, color: ultimo ? KP.ink2 : '#fff',
-          }}
-        >
-          {ultimo ? <><RotateCcw size={15} /> Ver desde el principio</> : <>Siguiente <ArrowRight size={16} /></>}
-        </button>
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {pasos.map((p, i) => {
+        const ultimo = i === pasos.length - 1;
+        return (
+          <div key={p.titulo} style={{ background: KP.surface, border: `1px solid ${KP.line}`, borderRadius: 22, padding: esCompu ? 22 : 16, boxShadow: KP.shCard }}>
+            <div style={esCompu
+              ? { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.1fr)', gap: 26, alignItems: 'center' }
+              : { display: 'flex', flexDirection: 'column', gap: 16 }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                  <span style={{
+                    width: 34, height: 34, borderRadius: 17, flexShrink: 0, display: 'grid', placeItems: 'center',
+                    background: ultimo ? KP.mint : KP.blue, color: '#fff', fontSize: 15, fontWeight: 800,
+                  }}>
+                    {ultimo ? <Check size={18} strokeWidth={3} /> : i + 1}
+                  </span>
+                  <div style={{ minWidth: 0 }}>
+                    <h3 style={{ fontSize: 19, fontWeight: 800, color: KP.ink, margin: '4px 0 0', letterSpacing: -0.3, lineHeight: 1.25, textWrap: 'balance' }}>{p.titulo}</h3>
+                    {p.texto && <p style={{ fontSize: 14.5, color: KP.ink2, fontWeight: 500, lineHeight: 1.5, margin: '6px 0 0' }}>{p.texto}</p>}
+                  </div>
+                </div>
+                {!!p.acciones?.length && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {p.acciones.map((a, j) => <Accion key={a.texto} accion={a} principal={j === 0} />)}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '6px 0 2px' }}>
+                <Pantalla paso={p} app={app} esCompu={esCompu} rol={rol} />
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
