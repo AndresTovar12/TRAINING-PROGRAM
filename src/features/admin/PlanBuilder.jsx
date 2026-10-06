@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   ArrowLeft, X, Plus, Trash2, Copy, ChevronRight, ChevronUp, ChevronDown,
   ChevronLeft, Loader2, Check, Layers, Dumbbell, StickyNote, Zap,
-  Save, FolderOpen, Clipboard, Eraser, CalendarDays, Settings2, Repeat, Scale, Video,
+  Save, FolderOpen, Clipboard, Eraser, CalendarDays, Repeat, Scale, Video,
   Image as ImageIcon, CopyPlus,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -1286,7 +1286,7 @@ export function SessionEditor(props) {
   );
 }
 
-function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjercicioCreado, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, duenoId, masterId, onCategoriaCreada, onCategoriaBorrada, soloLectura = false }) {
+function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjercicioCreado, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, duenoId, masterId, onCategoriaCreada, onCategoriaBorrada, soloLectura = false, vistaFuera = false }) {
   const { t } = usePalabras();
   const [creandoEjercicio, setCreandoEjercicio] = useState(false);
   const [mediaDe, setMediaDe] = useState(null);
@@ -1308,8 +1308,8 @@ function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjer
 
   if (isDualDay(day)) {
     return (
-      <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 18, padding: 16, boxShadow: KP.shCard }}>
-        <DayHeader day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog} onClear={onClear} dual conVista soloLectura={soloLectura} />
+      <div style={tarjetaDeSesion(day)}>
+        <DayHeader day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog} onClear={onClear} dual conVista vistaFuera={vistaFuera} soloLectura={soloLectura} />
         <EditorSesionesDelDia
           day={day}
           onPatch={onPatch}
@@ -1336,8 +1336,8 @@ function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjer
   const descanso = (day.cat || 'gym') === 'off' && nSets === 0;
 
   return (
-    <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 18, padding: 16, boxShadow: KP.shCard }}>
-      <DayHeader day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog} onClear={onClear} nSets={descanso ? null : nSets} conVista={!descanso} soloLectura={soloLectura} />
+    <div style={tarjetaDeSesion(day)}>
+      <DayHeader day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog} onClear={onClear} conVista={!descanso} vistaFuera={vistaFuera} soloLectura={soloLectura} />
 
       <div {...enLectura(soloLectura)} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 14, ...(soloLectura ? APAGADO : null) }}>
         {!soloLectura && nSets > 0 && <AvisoDeFormatos />}
@@ -1692,115 +1692,93 @@ function HojaFormas({ actual, onElegir, onClose }) {
   );
 }
 
-function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, nSets, dual, conVista = false, soloLectura = false }) {
+/* El color del tipo de la sesión, muy clarito, de fondo de toda la tarjeta (Andrés, 5 oct 2026: «que la card tuviera
+   en un tono muy clarito el color de ese tipo de entrenamiento»; fondo al 9 % y borde al 32 %). Un color propio que
+   no sea #RRGGBB se queda con la tarjeta blanca de siempre. */
+const rgbDe = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(',');
+function tarjetaDeSesion(day) {
+  const c = tipoDeSesion(day).c;
+  const base = { borderRadius: 18, padding: 16, boxShadow: KP.shCard };
+  if (!/^#[0-9a-f]{6}$/i.test(c || '')) return { ...base, background: T.bg2, border: `1px solid ${T.border}` };
+  const rgb = rgbDe(c);
+  return { ...base, background: `linear-gradient(rgba(${rgb},0.09), rgba(${rgb},0.09)), ${T.bg2}`, border: `1px solid rgba(${rgb},0.32)` };
+}
+
+/**
+ * La cabecera de un workout: [tipo ▾] [nombre] [Opciones ▾] [lista | tarjetas].
+ *
+ * Andrés, 5 oct 2026, con la maqueta aprobada: las herramientas del workout van en UN solo botón con nombre
+ * («Opciones ▾», con su menú: Usar workout · Guardar workout · Copiar · Vaciar · Eliminar sesión) y el
+ * interruptor de vista al final y a la derecha, en TODOS los workouts del día para que los botones queden en el mismo
+ * lugar. Sin rótulos grises sobre las casillas ni contador de sets. En el celular el nombre ocupa su renglón y la
+ * vista vive en el título del día (`vistaFuera`).
+ *
+ * Una acción que no se pasa no sale: así una sesión pegada al programa de otro (sin catálogo, sin copiar) reusa esta
+ * misma cabecera. Con `soloLectura` el nombre y el tipo no se tocan; lo de abajo queda vivo, porque el interruptor solo
+ * cambia cómo se ve.
+ */
+function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, dual, conVista = false, vistaFuera = false, soloLectura = false }) {
   const { user } = useAuth();
   const esCompu = useIsDesktop();
   const [enFilas, eligeVista] = useEnFilas();
-  const [menu, setMenu] = useState(false);
-  const [menuPlanes, setMenuPlanes] = useState(false);
-  // Mis planes en la sesión (Andrés, 2 oct 2026): UN solo botón, no dos por tarjeta. Con las dos cosas posibles
-  // —usar un workout guardado y guardar este día— es «Mis planes ▾» con un menú; con una sola, es esa acción directa
-  // (una sesión vacía no ofrece guardar; un día doble no recibe un workout).
-  const puedeUsar = !dual && !!onApplyCatalog;
-  const puedeGuardar = !!onSaveToCatalog;
+  // Abierto: { ancla } (el botón al que se pega el menú).
+  const [menu, setMenu] = useState(null);
+  const acciones = [
+    // Un día doble no recibe un workout; una sesión vacía no ofrece guardarse.
+    ...(!dual && onApplyCatalog ? [{ icon: FolderOpen, texto: 'Usar workout', onClick: onApplyCatalog }] : []),
+    ...(onSaveToCatalog ? [{ icon: Save, texto: 'Guardar workout', onClick: onSaveToCatalog }] : []),
+    ...(onCopy ? [{ icon: Copy, texto: 'Copiar', onClick: onCopy }] : []),
+    ...(!dual && onClear ? [{ icon: Eraser, texto: 'Vaciar', onClick: onClear }] : []),
+    ...(onDelete ? [{ icon: Trash2, texto: 'Eliminar sesión', onClick: onDelete, peligro: true }] : []),
+  ];
   return (
     <>
-      {/* Nombre y tipo: con `soloLectura` no se tocan. Lo de abajo (acciones e
-          interruptor de vista) queda vivo: el interruptor solo cambia cómo se ve. */}
-      <div {...enLectura(soloLectura)} style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap', ...(soloLectura ? APAGADO : null) }}>
-        {/* 220 px de base y no `flex: 1` pelado. Con `flex: 1` la base es 0, así
-            que el nombre nunca bajaba de renglón: se encogía para dejarle sitio al
-            tipo y al contador. Medido a 375 px: el campo quedaba en ~70 px, la
-            etiqueta en tres renglones, y "Descanso" se leía "Desca". Con base
-            real, en el teléfono el nombre ocupa su renglón y en la compu siguen
-            los tres juntos. */}
-        <div style={{ flex: '1 1 220px', minWidth: 0 }}>
-        <Field label="Nombre de la sesión">
-          {/* En un día de dos sesiones el nombre casi nunca está guardado: la
-              app del atleta arma el título con las dos ("AM Velocidad máxima ·
-              PM French Contrast"). Aquí salía "Ej. Tren inferior" y parecía que
-              al día le faltaba nombre. Se enseña lo mismo que ve el atleta,
-              como sugerencia gris — no se escribe nada en el plan. Con el turno
-              delante y sin «+», que se leía como una sola sesión. */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        {/* 200 px de base y no `flex: 1` pelado: con `flex: 1` la base es 0, así que el nombre nunca bajaba de renglón
+            y se encogía para dejarle sitio al tipo. En el celular va primero y ocupa su renglón. */}
+        <div
+          {...enLectura(soloLectura)}
+          style={{ flex: '1 1 200px', minWidth: 0, order: esCompu ? undefined : -1, ...(esCompu ? null : { flexBasis: '100%' }), ...(soloLectura ? APAGADO : null) }}
+        >
+          {/* En un día de dos sesiones el nombre casi nunca está guardado: la app del atleta arma el título con las dos
+              ("AM Velocidad máxima · PM French Contrast"). Aquí se enseña lo mismo como sugerencia gris —no se
+              escribe nada en el plan—, con el turno delante y sin «+», que se leía como una sola sesión. */}
           <input
             value={day.name || ''}
             onChange={(e) => onPatch({ name: e.target.value })}
             placeholder={dual && day.blocks?.length ? textoDeSesiones(sesionesDelTitulo({ blocks: day.blocks })) : undefined}
-            style={inputStyle}
+            aria-label="Nombre del workout"
+            style={{ ...inputStyle, fontSize: 16, fontWeight: 800, padding: '9px 12px' }}
           />
-        </Field>
         </div>
-        <div style={{ flex: '0 1 190px', minWidth: 150 }}>
-          <Field label="Tipo de sesión">
-            {/* Era un <select>: en el iPhone, la rueda gris del sistema. Ahora
-                es la lista de la app, con los colores a la vista y con los
-                tipos que el propio coach se haya creado. */}
-            <SelectorTipoSesion day={day} onPatch={onPatch} coachId={user?.id} />
-          </Field>
+        {/* Era un <select>: en el iPhone, la rueda gris del sistema. Ahora es la lista de la app, con los colores a la
+            vista y con los tipos que el propio coach se haya creado. */}
+        <div {...enLectura(soloLectura)} style={{ flex: '0 1 170px', minWidth: 140, ...(soloLectura ? APAGADO : null) }}>
+          <SelectorTipoSesion day={day} onPatch={onPatch} coachId={user?.id} />
         </div>
-        {nSets != null && (
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text3, paddingBottom: 12 }}>
-            {nSets} set{nSets !== 1 ? 's' : ''}
-          </span>
-        )}
-      </div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.border}`, alignItems: 'center' }}>
-        {/* Una acción que no se pasa no sale: así una sesión pegada al programa de
-            otro (sin catálogo, sin copiar) reusa esta misma cabecera. */}
-        {esCompu ? (
-          <>
-            {puedeUsar && puedeGuardar && <Pill icon={FolderOpen} onClick={() => setMenuPlanes(true)}>Mis planes <ChevronDown size={13} /></Pill>}
-            {puedeUsar && !puedeGuardar && <Pill icon={FolderOpen} onClick={onApplyCatalog}>Usar un workout guardado</Pill>}
-            {!puedeUsar && puedeGuardar && <Pill icon={Save} onClick={onSaveToCatalog}>Guardar este día como workout</Pill>}
-            {onCopy && <Pill icon={Copy} onClick={onCopy}>Copiar</Pill>}
-            {!dual && onClear && <Pill icon={Eraser} onClick={onClear}>Limpiar</Pill>}
-            {onDelete && <Pill icon={Trash2} danger onClick={onDelete}>Eliminar sesión</Pill>}
-          </>
-        ) : (onApplyCatalog || onSaveToCatalog || onCopy || onClear || onDelete) && (
+        {acciones.length > 0 && (
           <button
-            type="button" onClick={() => setMenu(true)}
+            type="button" className="kp-pill" aria-haspopup="menu" aria-label="Opciones del workout"
+            onClick={(e) => setMenu({ ancla: e.currentTarget })}
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8, minHeight: 44,
-              padding: '0 16px', borderRadius: 999, border: `1.5px solid ${T.border}`,
-              background: T.bg2, cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 700,
-              color: T.text2,
+              display: 'inline-flex', alignItems: 'center', gap: 7, flexShrink: 0, marginLeft: 'auto', cursor: 'pointer',
+              border: `1.5px solid ${T.border}`, background: T.bg2, color: T.text, fontFamily: FONT, fontWeight: 700,
+              ...(esCompu ? { fontSize: 14, padding: '10px 13px', borderRadius: 11 } : { fontSize: 13, padding: '8px 12px', borderRadius: 999 }),
             }}
           >
-            <Settings2 size={16} /> Opciones de la sesión
+            Opciones <ChevronDown size={14} color={T.text3} />
           </button>
         )}
-        {/* Cómo se ven los ejercicios de abajo: filas o tarjetas. Al final y
-            pegado a la derecha, como en el repertorio: se usa menos que las
-            acciones de la sesión. Sin ejercicios que ver (un día de descanso)
-            no se ofrece. */}
-        {conVista && (
-          <>
-            <span style={{ flex: 1 }} />
+        {/* Cómo se ven los ejercicios de abajo: filas o tarjetas. Sin ejercicios que ver (un día de descanso) no se ofrece. */}
+        {conVista && !vistaFuera && (
+          <span style={{ marginLeft: acciones.length ? 4 : 'auto', display: 'inline-flex' }}>
             <InterruptorVista vista={enFilas ? 'lista' : 'tarjetas'} onCambio={eligeVista} />
-          </>
+          </span>
         )}
       </div>
 
       {menu && (
-        <HojaAcciones
-          onClose={() => setMenu(false)}
-          acciones={[
-            ...(puedeUsar ? [{ icon: FolderOpen, texto: 'Usar un workout guardado', onClick: onApplyCatalog }] : []),
-            ...(!puedeGuardar ? [] : [{ icon: Save, texto: 'Guardar este día como workout', onClick: onSaveToCatalog }]),
-            ...(onCopy ? [{ icon: Copy, texto: 'Copiar sesión', onClick: onCopy }] : []),
-            ...(dual || !onClear ? [] : [{ icon: Eraser, texto: 'Limpiar sesión', onClick: onClear }]),
-            ...(onDelete ? [{ icon: Trash2, texto: 'Eliminar sesión', onClick: onDelete, peligro: true }] : []),
-          ]}
-        />
-      )}
-      {menuPlanes && (
-        <HojaAcciones
-          onClose={() => setMenuPlanes(false)}
-          acciones={[
-            { icon: FolderOpen, texto: 'Usar un workout guardado', onClick: onApplyCatalog },
-            { icon: Save, texto: 'Guardar este día como workout', onClick: onSaveToCatalog },
-          ]}
-        />
+        <MenuDeAcciones titulo="Sesión" ancla={menu.ancla} onClose={() => setMenu(null)} acciones={acciones} />
       )}
     </>
   );
@@ -1861,6 +1839,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
   const { avisa } = useAviso();
   const { user } = useAuth();
   const { t } = usePalabras();
+  // «Lista o tarjetas»: en el celular el interruptor vive en el título del día.
+  const [enFilas, eligeVista] = useEnFilas();
   // La guía de la compu: su ancho (se arrastra), si está oculta y Ctrl+B. Ver `useGuiaAncha`.
   const { medir: medirGuia, ...guia } = useGuiaAncha();
   /* MODO MIS PLANES (`catalogo`). El MISMO editor, sin atleta: arma o edita un programa o una rutina que
@@ -2488,7 +2468,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     puedeGuardar: !enCatalogo && planTieneContenido(phases), textoGuardar: isWeekly ? 'Guardar rutina' : t('Guardar plan'),
     onGuardar: () => setModal({ type: 'guardar-plan' }),
     onUsar: isWeekly ? () => setModal({ type: 'tpl-week' }) : undefined, textoUsar: 'Usar rutina', iconoUsar: FolderOpen,
-    tituloUsar: 'Usar una rutina guardada',
+    tituloUsar: 'Usar una rutina guardada de Mis planes',
     onEliminar: (enCatalogo ? !!filaCatalogo : !!(planRow && onDeleted)) ? () => eliminarPrograma() : undefined,
     textoEliminar: enCatalogo ? 'Eliminar de Mis planes' : 'Eliminar programa',
   };
@@ -2643,13 +2623,16 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
             guía oculta— ya dice cuál es (Andrés, 5 oct 2026). En el teléfono sí: la guía y el día son dos pantallas, y
             la vuelta a la hoja es la flecha de arriba. */}
         {!esCompu && (
-          <div style={{ marginBottom: 14, minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: T.text3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {isWeekly ? 'Rutina que se repite' : `${deCorrido ? nombreSemana(p, w, wIdx + 1) : `${p.name || 'Fase'} · ${weekName(w, wIdx + 1)}`}${w?.load ? ` · ${w.load}` : ''}`}
+          <div style={{ marginBottom: 14, minWidth: 0, display: 'flex', alignItems: 'flex-end', gap: 10 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.text3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {isWeekly ? 'Rutina que se repite' : `${deCorrido ? nombreSemana(p, w, wIdx + 1) : `${p.name || 'Fase'} · ${weekName(w, wIdx + 1)}`}${w?.load ? ` · ${w.load}` : ''}`}
+              </div>
+              <div style={{ fontSize: 19, fontWeight: 800, color: T.text, letterSpacing: -0.3 }}>
+                {NOMBRE_DIA[activeWeekday] || activeWeekday}
+              </div>
             </div>
-            <div style={{ fontSize: 19, fontWeight: 800, color: T.text, letterSpacing: -0.3 }}>
-              {NOMBRE_DIA[activeWeekday] || activeWeekday}
-            </div>
+            {daysOfWeekday.length > 0 && <InterruptorVista vista={enFilas ? 'lista' : 'tarjetas'} onCambio={eligeVista} />}
           </div>
         )}
 
@@ -2676,9 +2659,9 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
                   <button type="button"
                     onClick={() => patchWeek(nav.pi, wIdx, (wk) => ({ days: [...(wk.days || []), newDay(activeWeekday)] }))}
                     style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 20px', borderRadius: 12, border: 'none', cursor: 'pointer', background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff', fontFamily: FONT, fontSize: 14, fontWeight: 800, boxShadow: KP.shBtn }}>
-                    <Plus size={16} /> Añadir sesión
+                    <Plus size={16} /> Agregar sesión
                   </button>
-                  <Pill icon={FolderOpen} onClick={() => setModal({ type: 'tpl-day', payload: { di: null } })}>Usar un workout guardado</Pill>
+                  <Pill icon={FolderOpen} onClick={() => setModal({ type: 'tpl-day', payload: { di: null } })}>Usar workout</Pill>
                   {clipboard && (
                     <Pill icon={Clipboard} onClick={() => patchWeek(nav.pi, wIdx, (wk) => ({ days: [...(wk.days || []), { ...clone(clipboard), day: activeWeekday }] }))}>
                       Pegar rutina
@@ -2692,6 +2675,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
                   <SessionEditor
                     key={di}
                     day={d}
+                    vistaFuera={!esCompu}
                     repertoire={repertoire}
                     categorias={categoriasVisibles}
                     duenoId={user?.id}
@@ -2736,7 +2720,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
                       borderRadius: 14, border: `1.5px solid ${T.border}`, background: T.bg2, cursor: 'pointer',
                       boxShadow: KP.shCard, fontFamily: FONT, fontSize: 14, fontWeight: 800, color: T.accent,
                     }}>
-                    <Plus size={16} /> Añadir otra sesión el {DAY_FULL_LOWER[activeWeekday] || activeWeekday.toLowerCase()}
+                    <Plus size={16} /> Agregar otra sesión
                   </button>
                   {clipboard && (
                     <Pill icon={Clipboard} onClick={() => patchWeek(nav.pi, wIdx, (wk) => ({ days: [...(wk.days || []), { ...clone(clipboard), day: activeWeekday }] }))}>
@@ -2884,7 +2868,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         const { tipo, data } = datosDelCatalogo();
         return (
           <DialogoGuardar
-            titulo={isWeekly ? 'Guardar como rutina' : 'Guardar todo como programa'}
+            titulo={isWeekly ? 'Guardar rutina' : t('Guardar plan')}
             tipo={tipo} nombreInicial={title} interruptores={casillaDeNotas(tipo, data)} recordarCarpeta
             onGuardar={async ({ nombre, descripcion, carpetaId, interruptores }) => {
               await guardarItem({
@@ -2902,7 +2886,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         const data = rutinaDeSemana(semana);
         return (
           <DialogoGuardar
-            titulo="Guardar esta semana como rutina" tipo="rutina" recordarCarpeta
+            titulo="Guardar semana" tipo="rutina" recordarCarpeta
             nombreInicial={nombreSemana(curPhase, semana, curWeekIdx + 1)} interruptores={casillaDeNotas('rutina', data)}
             onGuardar={async ({ nombre, descripcion, carpetaId, interruptores }) => {
               await guardarItem({
@@ -2920,7 +2904,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         const varias = delDia.length > 1;
         return (
           <DialogoGuardar
-            titulo="Guardar este día como workout" tipo="workout" nombreInicial={sesion.name || ''} recordarCarpeta
+            titulo="Guardar workout" tipo="workout" nombreInicial={sesion.name || ''} recordarCarpeta
             interruptores={[
               ...(varias ? [{
                 clave: 'todo', inicial: true,
@@ -2943,7 +2927,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
       })()}
       {modal?.type === 'tpl-week' && curPhase && (
         <SelectorDeMisPlanes
-          tipos={['rutina']} titulo="Usar una rutina guardada" onCerrar={() => setModal(null)}
+          tipos={['rutina']} titulo={isWeekly ? 'Usar rutina' : 'Usar semana'} onCerrar={() => setModal(null)}
           onElegir={async (item) => {
             let datos;
             try { datos = await abrirItem(item); } catch (e) { setErr(e.message || 'No se pudo abrir'); setModal(null); return; }
@@ -2960,7 +2944,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
       )}
       {modal?.type === 'tpl-day' && curPhase && (
         <SelectorDeMisPlanes
-          tipos={['workout']} titulo="Usar un workout guardado" onCerrar={() => setModal(null)}
+          tipos={['workout']} titulo="Usar workout" onCerrar={() => setModal(null)}
           onElegir={async (item) => {
             const { di } = modal.payload;
             let datos;
