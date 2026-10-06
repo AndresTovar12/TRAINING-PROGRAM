@@ -5,7 +5,7 @@ import BotonEntendido from '@/components/BotonEntendido';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { useAvisosVistos } from '@/lib/useAvisosVistos';
 import Ventana from '@/features/misplanes/Ventana';
-import { IconBtn, Pill, Stepper, Contador } from '@/features/admin/piezas';
+import { IconBtn, Pill, Contador } from '@/features/admin/piezas';
 import {
   FORMATOS, IDS_DE_FORMATOS, ANOTA, formatoNuevo, comoPersonalizado, vistaDe, nombreDeFormato, limpiaFormato,
   segundosTotales, expande, pasoDeEscala, textoDeTiempo,
@@ -27,6 +27,10 @@ import { T, FONT } from '@/lib/theme';
  *   · Lo secundario —qué anota el atleta, si los ejercicios se turnan— está en «Más ▾».
  *   · «Personalizado» es lo único que abre una ventana aparte, para armar los tramos.
  *   · Un aviso corto, una sola vez, con «✓ Entendido», para que se enteren de que existe.
+ *
+ * LAS SERIES DE UN SET (Andrés, 6 oct 2026): el número de «Se repite N veces» se puede teclear —«12», o un rango como
+ * «4-6»— y la lista trae «Sin series» para lo que no se repite (un calentamiento, unos drills). Es lo que su plan trae
+ * y antes solo cabía en la casilla «Series» del editor de los días dobles. Ver `lib/setsDeUnaSesion.js`.
  */
 
 const CLAVE_DEL_AVISO = 'aviso:formatos-del-set';
@@ -92,13 +96,22 @@ export function EncabezadoDelSet({
 }) {
   const formato = bloque.formato ?? null;
   const nEjercicios = bloque.members.length;
-  const vista = formato ? vistaDe(formato) : 'normal';
+  // Sin formato y sin número de series: no se repite («Sin series»). Un guion («—», lo que su plan pone en los ejercicios que van
+  // dentro de un cluster) tampoco dice cuántas veces: el atleta no lee nada, así que aquí se lee igual. El guion se queda guardado
+  // mientras nadie lo cambie.
+  const sinSeries = !formato && (bloque.rounds == null || /^\s*[—–-]+\s*$/.test(String(bloque.rounds)));
+  const vista = formato ? vistaDe(formato) : sinSeries ? 'sin' : 'normal';
   const [ventana, setVentana] = useState(false);
+  // Un número entero se sube y baja con − y +; un rango («4-6») o texto solo se cambia tecleando.
+  const seriesTexto = String(bloque.rounds ?? '');
+  const esNumero = /^\d+$/.test(seriesTexto.trim());
+  const nSeries = esNumero ? parseInt(seriesTexto, 10) : 0;
 
   const pon = (f) => onCambio({ formato: f, rounds: String(f.vueltas) });
 
   const elige = (id) => {
-    if (id === 'normal') { onCambio({ formato: null }); return; }
+    if (id === 'normal') { onCambio({ formato: null, ...(sinSeries ? { rounds: '3' } : null) }); return; }
+    if (id === 'sin') { if (!sinSeries) onCambio({ formato: null, rounds: null }); return; }
     if (id === vista) { if (id === 'custom') setVentana(true); return; }
     if (id === 'custom') {
       // Desde un formato con nombre se queda con sus tramos para retocarlos; desde cero, uno de ejemplo.
@@ -111,6 +124,7 @@ export function EncabezadoDelSet({
 
   const opciones = [
     { valor: 'normal', etiqueta: 'Normal', corta: 'Se repite', detalle: 'Series de siempre' },
+    { valor: 'sin', etiqueta: 'Sin series', corta: 'Sin series', detalle: 'Un calentamiento, unos drills' },
     ...IDS_DE_FORMATOS.map((id) => ({
       valor: id,
       etiqueta: FORMATOS[id].nombre,
@@ -138,11 +152,20 @@ export function EncabezadoDelSet({
             )}
             <span style={{ ...frase, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
               <ListaDesplegable
-                etiqueta="Formato del set" valor="normal" onCambio={elige} opciones={opciones}
+                etiqueta="Formato del set" valor={vista} onCambio={elige} opciones={opciones}
                 estilo={ESTILO_SIN_FORMATO} colorFlecha={T.accent} anchoMinimo={270} alto={460}
               />
-              <Stepper value={bloque.rounds} onChange={(v) => onCambio({ rounds: v })} />
-              {parseInt(bloque.rounds, 10) === 1 ? 'vez' : 'veces'}
+              {!sinSeries && (
+                <>
+                  <Contador
+                    texto={seriesTexto} etiqueta="series" editable ancho={58} teclado="text"
+                    alConfirmar={(t) => onCambio({ rounds: t })}
+                    onMenos={() => onCambio({ rounds: String(Math.max(1, nSeries - 1)) })} menosApagado={!esNumero || nSeries <= 1}
+                    onMas={() => onCambio({ rounds: String(nSeries + 1) })} masApagado={!esNumero}
+                  />
+                  {nSeries === 1 ? 'vez' : 'veces'}
+                </>
+              )}
             </span>
           </>
         )}
