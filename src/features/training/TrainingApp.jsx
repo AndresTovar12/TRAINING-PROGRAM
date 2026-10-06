@@ -42,6 +42,7 @@ import {
   turnoDeTag, minutosDeTag, sinDuracion, variasSesiones, sesionesDelTitulo, textoDeSesiones,
   bloquesHechos, alternarBloque, hermanasDelDia, juntaPorDia, sesionQueRepite,
 } from '@/lib/sesiones';
+import { setTag } from '@/lib/setsDeUnaSesion';
 import { plural, pluralS, rondasQueDecir } from '@/lib/plural';
 import { textoMeta, cargaEnSuUnidad } from '@/lib/medidas';
 import {
@@ -546,7 +547,8 @@ const SetGroup = ({
     );
   }
   const count = group.exercises.length;
-  const typeLabel = count >= 3 ? 'Tri-serie' : count === 2 ? 'Bi-serie' : null;
+  // La misma palabra que el editor: Bi-serie (2), Tri-serie (3), Circuito (4 o más).
+  const typeLabel = setTag(count);
   const rondas = group.exercises[0].ex.sets;
 
   /* UN SET CON FORMATO (AMRAP, EMOM, Tabata…): el formato reemplaza el «Se repite N veces». Lo que
@@ -1611,11 +1613,6 @@ const WeekDetail = ({
                     }}
                   />
                 ) : null}
-                {cuales.length > 1 && (
-                  <span style={{ position: 'absolute', marginTop: -18, marginLeft: 20, fontSize: 9, fontWeight: 800, color: LT.text3 }}>
-                    {cuales.length}
-                  </span>
-                )}
               </span>
             </button>
           );
@@ -2218,7 +2215,8 @@ const HomeView = ({
       return { exercises: exCount, duration: d.dual ? '~2 h' : (propia || '~75 min'), dual: d.dual };
     }
     const n = reales((sesionQueRepite(next.week, next.dayIdx)?.day ?? d).exercises);
-    return { exercises: n, duration: n ? '~55 min' : tipo };
+    // La duración que trae escrita el propio plan en el nombre («· ~70 min»), si la trae.
+    return { exercises: n, duration: n ? (minutosDeTag(d.name || '') || '~55 min') : tipo };
   }, [next, entradasDelDia]);
 
   const { text: greetText } = greeting();
