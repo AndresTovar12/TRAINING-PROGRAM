@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Check, ChevronRight, CornerUpLeft } from 'lucide-react';
 import { LT, FONT, NUM_STYLE, tipoDeSesion } from '@/lib/theme';
 import { esDescanso, enOrdenDeSemana } from '@/lib/training-utils';
-import { sesionesDelTitulo, textoDeSesiones } from '@/lib/sesiones';
+import { sesionesDelTitulo, textoDeSesiones, juntaPorDia } from '@/lib/sesiones';
 import EtiquetasDeSesion from '@/components/EtiquetasDeSesion';
 import { pluralS } from '@/lib/plural';
 
@@ -358,12 +358,14 @@ export default function NavegadorDelPlan({
                       <div key={`suelta-${r.dia}`} style={estiloSuelta}>{contenido}</div>
                     );
                   }
-                  const { day, idx, extras } = r;
+                  const { day, idx, extras, hermanas } = r;
                   const tipo = tipoDeSesion(day);
                   const descanso = esDescanso(day);
-                  const suyo = esAqui(f.id, semana.num, idx);
-                  const mirando = esViendo(f.id, semana.num, idx);
-                  const lista = !!hecha?.(f.id, semana.num, idx);
+                  /* Un día con dos entradas (mañana y tarde) es UN renglón: está «aquí» o «viéndose» si
+                     lo está cualquiera de sus sesiones, y va hecho cuando lo están todas. */
+                  const suyo = hermanas.some((h) => esAqui(f.id, semana.num, h.idx));
+                  const mirando = hermanas.some((h) => esViendo(f.id, semana.num, h.idx));
+                  const lista = hermanas.every((h) => !!hecha?.(f.id, semana.num, h.idx));
                   const clave = `${f.id}-${semana.num}-${idx}`;
                   const abiertoAqui = !!contenidoDia && diaAbierto === clave;
                   // Un descanso del coach con algo de otro profesional encima ya no es descanso.
@@ -388,15 +390,15 @@ export default function NavegadorDelPlan({
                           {day.day}
                         </span>
                         <span style={{ width: 7, height: 7, borderRadius: 4, background: soloDeOtros ? extras[0].color : (descanso ? LT.text3 : tipo.c), flexShrink: 0 }} />
-                        <TituloDelRenglon dias={day} extras={extras} color={descanso && !soloDeOtros ? LT.text3 : LT.text} />
+                        <TituloDelRenglon dias={hermanas.map((h) => h.day)} extras={extras} color={descanso && !soloDeOtros ? LT.text3 : LT.text} />
                         {detalleDia?.(f, semana, idx)}
                         {suyo && pastilla(textoAqui, true)}
                         {mirando && pastilla('VIENDO', false)}
                         {lista && <Check size={14} strokeWidth={3} style={{ color: LT.mint, flexShrink: 0 }} />}
                       </button>
                       {abiertoAqui && (
-                        <div style={{ padding: '2px 4px 6px 42px' }}>
-                          {contenidoDia(f, semana, idx)}
+                        <div style={{ padding: '2px 4px 6px 42px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {hermanas.map((h) => <div key={h.idx}>{contenidoDia(f, semana, h.idx)}</div>)}
                         </div>
                       )}
                     </div>
@@ -415,11 +417,13 @@ const ORDEN_DE_DIA = { Lun: 0, Mar: 1, 'Mié': 2, Mie: 2, Jue: 3, Vie: 4, 'Sáb'
 
 /* Los renglones de una semana: los días del coach, en orden de calendario, con lo
    pegado DENTRO del renglón de su día (`extras`). Los del coach siguen siendo
-   { day, idx } (su posición original, de la que cuelga lo que anota el atleta).
+   { day, idx } (su posición original, de la que cuelga lo que anota el atleta), más
+   `hermanas`: sus entradas del mismo día de la semana, ella incluida (ver `juntaPorDia`).
    Si ese día de la semana el coach no puso nada, lo pegado hace su propio renglón
    { dia, extras }, en el lugar que le toca. */
 function renglonesDeLaSemana(semana, pegadas) {
-  const delCoach = enOrdenDeSemana(semana?.days ?? []);
+  // Las entradas del mismo día de la semana (mañana y tarde) van juntas en un solo renglón.
+  const delCoach = juntaPorDia(enOrdenDeSemana(semana?.days ?? []));
   if (!pegadas?.length) return delCoach;
   const ordenDe = (dia) => ORDEN_DE_DIA[dia] ?? 9;
   const filas = delCoach.map((r) => ({ ...r, extras: [] }));

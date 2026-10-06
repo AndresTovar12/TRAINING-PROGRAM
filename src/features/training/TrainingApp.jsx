@@ -40,7 +40,7 @@ import EtiquetasDeSesion from '@/components/EtiquetasDeSesion';
 import BotonEntendido from '@/components/BotonEntendido';
 import {
   turnoDeTag, minutosDeTag, sinDuracion, variasSesiones, sesionesDelTitulo, textoDeSesiones,
-  bloquesHechos, alternarBloque,
+  bloquesHechos, alternarBloque, hermanasDelDia, juntaPorDia, sesionQueRepite,
 } from '@/lib/sesiones';
 import { plural, pluralS, rondasQueDecir } from '@/lib/plural';
 import { textoMeta, cargaEnSuUnidad } from '@/lib/medidas';
@@ -874,6 +874,13 @@ const HojaDelPrograma = ({
   );
 };
 
+/* AM y PM con colores FIJOS y opuestos: naranja de mañana, azul de tarde. Antes la tarde tomaba el
+   color de la fase, y en Potencia la fase es naranja: las dos sesiones del día salían del mismo
+   color. Andrés lo vio en su jueves y no se distinguía cuál era cuál. Sin turno, el de la fase. */
+const aspectoDeTurno = (turno, colorDeFase) => (turno
+  ? { accent: turno === 'PM' ? LT.blue : LT.warning, Icono: turno === 'PM' ? Sunset : Sunrise }
+  : { accent: colorDeFase, Icono: Dumbbell });
+
 /**
  * La TARJETA de una sesión: un encabezado que se abre y se cierra (ícono, nombre,
  * cuántos ejercicios y cuánto dura) y, abierta, su contenido.
@@ -885,9 +892,10 @@ const HojaDelPrograma = ({
  * cuántos ejercicios y cuánto dura, y un botón redondo que dice que se abre.
  * Terminada, su encabezado se pinta de verde, igual que el botón de cerrar.
  *
- * La usan las sesiones de un día doble y, en «Plan» con equipo, TODAS las sesiones
- * del día: la del fisio es una tarjeta más al lado de las del coach, y `autor` (el
- * programa de quien la puso) le agrega su etiqueta chica.
+ * La usan las sesiones de un día doble (con `blocks`, o dos entradas el mismo día de la
+ * semana) y, en «Plan» con equipo, TODAS las sesiones del día: la del fisio es una
+ * tarjeta más al lado de las del coach, y `autor` (el programa de quien la puso) le
+ * agrega su etiqueta chica.
  */
 const TarjetaDeSesion = ({ accent, hecha, abierta, onAlternar, Icono, nombre, turno, detalle, autor, children }) => (
   <div style={{
@@ -1018,8 +1026,9 @@ const tarjetasDelDia = (day) => {
  * Existe aparte para poder armar, en el mismo día, lo de varios profesionales
  * (cada uno dentro de su `ComoPrograma`) sin copiar nada.
  *
- * `partes` (solo «Plan» con equipo) dice cuáles piezas se dibujan: 'sesiones',
- * 'notasDelDia', 'tusNotas' y 'ciencia'. Sin ella salen todas, como siempre. Con
+ * `partes` (solo «Plan» con equipo, y un día con dos entradas) dice cuáles piezas se dibujan:
+ * 'sesiones', 'notasDelDia', 'tusNotas' y 'ciencia' (que también se puede pedir en dos pedazos:
+ * 'cienciaDelDia' —el porqué del día y del workout— y 'cienciaDeLaSemana'). Sin ella salen todas, como siempre. Con
  * equipo las sesiones de todos van juntas arriba, cada una como una tarjeta
  * (`entarjetas`), y lo demás —las notas y el porqué científico— sale UNA sola vez,
  * hasta abajo, que es lo menos importante (Andrés, 2 oct 2026). `autor`: el
@@ -1096,16 +1105,19 @@ const CuerpoDelDia = ({
      «terminada» para el día). */
   const tarjetaDelDia = (cuerpo) => {
     const nombre = sinDuracion(selectedDay.name || '') || textoDeSesiones(sesionesDelTitulo(selectedDay)) || selectedDay.day;
-    const n = (selectedDay.exercises || []).filter((e) => !e.isNote).length;
+    const n = ((sesionQueRepite(week, selectedIdx)?.day ?? selectedDay).exercises || []).filter((e) => !e.isNote).length;
     const detalle = [n ? plural(n, 'ejercicio', 'ejercicios') : null, minutosDeTag(selectedDay.name || '')].filter(Boolean).join(' · ');
+    // El turno de una sesión suelta (mañana o tarde) lo pone el coach desde «Opciones»: aquí se ve, igual que en un doble.
+    const turno = selectedDay.turno === 'AM' || selectedDay.turno === 'PM' ? selectedDay.turno : null;
+    const { accent, Icono } = aspectoDeTurno(turno, phaseColor);
     return (
       <TarjetaDeSesion
-        accent={phaseColor} hecha={selectedCompleted} abierta={openBlocks.dia ?? abiertaSola}
+        accent={accent} hecha={selectedCompleted} abierta={openBlocks.dia ?? abiertaSola}
         onAlternar={() => setOpenBlocks((p) => ({ ...p, dia: !(p.dia ?? abiertaSola) }))}
-        Icono={Dumbbell} nombre={nombre} detalle={detalle} autor={autor}
+        Icono={Icono} nombre={nombre} turno={turno} detalle={detalle} autor={autor}
       >
         {cuerpo}
-        <TerminarSesion hecha={selectedCompleted} laSesion="sesión" onAlternar={toggleComplete} />
+        <TerminarSesion hecha={selectedCompleted} laSesion={turno ? `sesión ${turno}` : 'sesión'} onAlternar={toggleComplete} />
       </TarjetaDeSesion>
     );
   };
@@ -1162,6 +1174,35 @@ const CuerpoDelDia = ({
       {/* Una sesión hecha solo de notas se lee como lista de instrucciones, igual
           que las sesiones de velocidad del plan original. */}
       {quiere('sesiones') && !descansoPuro && soloNotas && (() => {
+        /* «Repite la sesión del lunes»: se enseñan AQUÍ los ejercicios de esa sesión, para verlos y anotar
+           los pesos de hoy. Se guardan con la llave de este día, así que no pisan lo que anotó el lunes. */
+        const repite = sesionQueRepite(week, selectedIdx);
+        if (repite) {
+          const groups = groupIntoSets(repite.day.exercises);
+          let setNum = 0;
+          const repetida = (
+            <>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, margin: '2px 0 14px', fontSize: 13, color: LT.text2, lineHeight: 1.5 }}>
+                <Repeat size={15} style={{ color: phaseColor, flexShrink: 0, marginTop: 2 }} />
+                <span>
+                  <b style={{ color: LT.text }}>Igual que el {weekdayLabel(repite.day.day).toLowerCase()}.</b>{' '}
+                  {notasDelDia.map((n) => n.text).join(' ')}
+                </span>
+              </div>
+              {groups.map((g, gi) => {
+                if (!g.isNote) setNum += 1;
+                return (
+                  <SetGroup key={`${selectedIdx}-${gi}`} group={g} setNum={setNum} phaseColor={phaseColor}
+                    sessionData={flatSessionData} sessionKey={selectedId}
+                    onUpdate={(idx, data) => setExerciseData(null, idx, data)}
+                    oneRMs={oneRMs} sessionsData={sessionsData}
+                    formatos={sessionData.formatos} onFormato={setFormato} />
+                );
+              })}
+            </>
+          );
+          return entarjetas ? tarjetaDelDia(repetida) : repetida;
+        }
         const lista = (
           <ul style={{ listStyleType: 'disc', margin: 0, paddingLeft: 18, color: LT.text, fontSize: 14.5, lineHeight: 1.7 }}>
             {notasDelDia.map((n, i) => <li key={i}>{n.text}</li>)}
@@ -1194,15 +1235,10 @@ const CuerpoDelDia = ({
       {quiere('sesiones') && selectedDay.blocks && selectedDay.blocks.map((blk, bi) => {
         const blkSessionData = { exercises: sessionData.exercises ? Object.fromEntries(Object.entries(sessionData.exercises).filter(([k]) => k.startsWith(`${bi}-`)).map(([k, v]) => [parseInt(k.split('-')[1]), v])) : {} };
         const turno = turnoDeTag(blk.tag);
-        const isPM = turno === 'PM';
         // Sin «Sesión 2 (PM): » delante ni «· ~65 min» detrás: la duración va aparte.
         const cleanName = nombreDeSesion(blk.tag) || `Sesión ${bi + 1}`;
         const minutos = minutosDeTag(blk.tag);
-        /* AM y PM con colores FIJOS y opuestos: naranja de mañana, azul de tarde.
-           Antes la tarde tomaba el color de la fase, y en Potencia la fase es
-           naranja: las dos sesiones del día salían del mismo color. Andrés lo
-           vio en su jueves y no se distinguía cuál era cuál. */
-        const accent = turno ? (isPM ? LT.blue : LT.warning) : phaseColor;
+        const { accent, Icono } = aspectoDeTurno(turno, phaseColor);
         const repite = blk.type === 'note' ? bloqueQueRepite(week, selectedIdx, blk) : null;
         const ejerciciosVistos = ejerciciosDelBloque(week, selectedIdx, blk);
         const exN = ejerciciosVistos.length ? ejerciciosVistos.filter(e => !e.isNote).length : null;
@@ -1210,7 +1246,6 @@ const CuerpoDelDia = ({
         const isOpen = openBlocks[bi] ?? abiertaSola;
         const hecha = porTarjeta && !!hechos[bi];
         const laSesion = `sesión ${turno ?? bi + 1}`;
-        const Icono = turno ? (isPM ? Sunset : Sunrise) : Dumbbell;
         const detalle = [exN != null ? plural(exN, 'ejercicio', 'ejercicios') : null, minutos].filter(Boolean).join(' · ');
         return (
           <TarjetaDeSesion
@@ -1387,19 +1422,19 @@ const CuerpoDelDia = ({
         </div>
       )}
 
-      {quiere('ciencia') && selectedDay.dayScience && (
+      {(quiere('ciencia') || quiere('cienciaDelDia')) && selectedDay.dayScience && (
         <LightCollapsible title="Por qué este día" icon={Info} color={LT.blue}>
           <div style={{ fontSize: 13.5, color: LT.text2, lineHeight: 1.7 }}>{selectedDay.dayScience}</div>
         </LightCollapsible>
       )}
 
-      {quiere('ciencia') && selectedDay.workoutScience && (
+      {(quiere('ciencia') || quiere('cienciaDelDia')) && selectedDay.workoutScience && (
         <LightCollapsible title="Por qué este workout" icon={Sparkles} color={LT.mint}>
           <LightWorkoutScience science={selectedDay.workoutScience} />
         </LightCollapsible>
       )}
 
-      {quiere('ciencia') && week.weekScience && (
+      {(quiere('ciencia') || quiere('cienciaDeLaSemana')) && week.weekScience && (
         <LightCollapsible title="Por qué esta semana" icon={BookOpen} color={LT.text2}>
           <LightWeekScience science={week.weekScience} />
         </LightCollapsible>
@@ -1419,9 +1454,11 @@ const WeekDetail = ({
   // "Varias semanas": se dice la semana de corrido y no la fase.
   const deCorrido = estructura === 'semanas';
   const semanaDeCorrido = deCorrido ? (semanaGlobal(PLAN, phase.id, week.num) ?? week.num) : null;
-  // Los días OFF no cuentan: no se "completa" un descanso.
-  const entrenables = week.days.map((d, idx) => ({ d, idx })).filter(({ d }) => !esDescanso(d));
-  const completedCount = entrenables.filter(({ idx }) => sessionsData[idDeSesion(phase.id, week.num, idx)]?.completed).length;
+  /* Los días OFF no cuentan: no se "completa" un descanso. Un día con dos entradas (mañana y tarde)
+     cuenta UNA vez, y va hecho cuando lo están las dos. */
+  const entrenables = juntaPorDia(enOrdenDeSemana(week.days)).filter(({ day }) => !esDescanso(day));
+  const completedCount = entrenables
+    .filter(({ hermanas }) => hermanas.every(({ idx }) => sessionsData[idDeSesion(phase.id, week.num, idx)]?.completed)).length;
 
   /* Abre en el día de hoy; si hoy no entrena, en el primero de la semana.
      `dayIdx` gana cuando se llega desde la hoja del programa: ahí la persona
@@ -1441,6 +1478,10 @@ const WeekDetail = ({
     || textoDeSesiones(sesionesDelTitulo(selectedDay))
     || selectedDay.day;
   const varias = variasSesiones(selectedDay);
+  /* Dos entradas el mismo día de la semana (mañana y tarde) son UN día con dos tarjetas, igual que
+     un doble de antes: una por sesión, cada una con su turno y su botón de terminar. */
+  const hermanas = hermanasDelDia(week, selectedIdx);
+  const agrupadas = hermanas.length > 1;
 
   return (
     <div style={{ padding: '14px 18px 110px', background: LT.bg, minHeight: '100svh', fontFamily: FONT }}>
@@ -1482,7 +1523,7 @@ const WeekDetail = ({
         fontSize: 21, fontWeight: 800, color: LT.text, margin: '0 0 3px',
         lineHeight: 1.15, letterSpacing: -0.4, paddingRight: 52,
       }}>
-        {selectedDay.dual || varias ? 'Doble sesión' : selectedDayName}
+        {agrupadas && hermanas.length > 2 ? `${hermanas.length} sesiones` : (selectedDay.dual || varias || agrupadas ? 'Doble sesión' : selectedDayName)}
       </h1>
 
       <div style={{
@@ -1592,7 +1633,7 @@ const WeekDetail = ({
           verdad —la portada pasa a decir que hoy te toca este— y solo por hoy:
           mañana vuelve a mandar el calendario. */}
       {!esDescanso(selectedDay) && !(miDia && miDia.phase.id === phase.id
-        && miDia.week.num === week.num && miDia.dayIdx === selectedIdx) && (
+        && miDia.week.num === week.num && hermanas.some((h) => h.idx === miDia.dayIdx)) && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
           background: LT.surface, border: `1.5px solid ${LT.borderHi}`, borderRadius: 14,
@@ -1608,9 +1649,14 @@ const WeekDetail = ({
             </div>
             <div style={{ fontSize: 12.5, fontWeight: 600, color: LT.text3, marginTop: 2 }}>
               {miDia
-                ? `Hoy te toca: ${sinDuracion(miDia.day?.name || '')
-                  || textoDeSesiones(sesionesDelTitulo(miDia.day))
-                  || tipoDeSesion(miDia.day).label}`
+                ? `Hoy te toca: ${(() => {
+                  // Un día con dos entradas (mañana y tarde) dice sus dos sesiones.
+                  const deHoy = hermanasDelDia(miDia.week, miDia.dayIdx).map((h) => h.day);
+                  return (deHoy.length > 1 ? textoDeSesiones(sesionesDelTitulo(deHoy)) : '')
+                    || sinDuracion(miDia.day?.name || '')
+                    || textoDeSesiones(sesionesDelTitulo(miDia.day))
+                    || tipoDeSesion(miDia.day).label;
+                })()}`
                 : 'Hoy no tienes sesión.'}
             </div>
           </div>
@@ -1643,10 +1689,49 @@ const WeekDetail = ({
         </div>
       )}
 
-      <CuerpoDelDia
-        phase={phase} week={week} dayIdx={selectedIdx}
-        sessionsData={sessionsData} updateSession={updateSession} oneRMs={oneRMs}
-      />
+      {agrupadas ? (
+        <>
+          {/* Una tarjeta por sesión, cerradas (se ve de un vistazo todo lo que toca), y lo demás —notas del
+              día, «Tus notas» y el porqué científico— UNA sola vez y hasta abajo: igual que `PlanUnificado`. */}
+          {hermanas.map(({ idx }) => (
+            <CuerpoDelDia
+              key={`s-${idx}`} phase={phase} week={week} dayIdx={idx}
+              sessionsData={sessionsData} updateSession={updateSession} oneRMs={oneRMs}
+              partes={['sesiones']} entarjetas abiertasPorDefecto={false}
+            />
+          ))}
+          {hermanas.map(({ idx }) => (
+            <CuerpoDelDia
+              key={`n-${idx}`} phase={phase} week={week} dayIdx={idx}
+              sessionsData={sessionsData} updateSession={updateSession} oneRMs={oneRMs}
+              partes={['notasDelDia']}
+            />
+          ))}
+          {/* Lo que anota el atleta del día es UNO solo: va con la primera sesión. */}
+          <CuerpoDelDia
+            phase={phase} week={week} dayIdx={hermanas[0].idx}
+            sessionsData={sessionsData} updateSession={updateSession} oneRMs={oneRMs}
+            partes={['tusNotas']}
+          />
+          {hermanas.map(({ idx }) => (
+            <CuerpoDelDia
+              key={`c-${idx}`} phase={phase} week={week} dayIdx={idx}
+              sessionsData={sessionsData} updateSession={updateSession} oneRMs={oneRMs}
+              partes={['cienciaDelDia']}
+            />
+          ))}
+          <CuerpoDelDia
+            phase={phase} week={week} dayIdx={hermanas[0].idx}
+            sessionsData={sessionsData} updateSession={updateSession} oneRMs={oneRMs}
+            partes={['cienciaDeLaSemana']}
+          />
+        </>
+      ) : (
+        <CuerpoDelDia
+          phase={phase} week={week} dayIdx={selectedIdx}
+          sessionsData={sessionsData} updateSession={updateSession} oneRMs={oneRMs}
+        />
+      )}
 
       {/* La puerta al programa completo, al final y en voz baja. Antes era lo
           primero de la pantalla y encima era el camino de vuelta obligatorio;
@@ -1979,8 +2064,10 @@ const CursorSelector = ({ current, sessionsData, onSelect, onClose }) => {
                     {phase.weekData.map(week => {
                       const weekKey = `${phase.id}-w${week.num}`;
                       const weekExpanded = expandedWeek === weekKey;
-                      const entrenables = week.days.map((d, i) => ({ d, i })).filter(({ d }) => !esDescanso(d));
-                      const completedCount = entrenables.filter(({ i }) => sessionsData[idDeSesion(phase.id, week.num, i)]?.completed).length;
+                      // Un día con dos entradas (mañana y tarde) cuenta UNA vez y va hecho cuando lo están las dos.
+                      const entrenables = juntaPorDia(enOrdenDeSemana(week.days)).filter(({ day }) => !esDescanso(day));
+                      const completedCount = entrenables
+                        .filter(({ hermanas }) => hermanas.every(({ idx }) => sessionsData[idDeSesion(phase.id, week.num, idx)]?.completed)).length;
                       return (
                         <div key={week.num} style={{ marginBottom: 4 }}>
                           <button
@@ -2005,12 +2092,15 @@ const CursorSelector = ({ current, sessionsData, onSelect, onClose }) => {
                           </button>
                           {weekExpanded && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '6px 0 4px 12px' }}>
-                              {enOrdenDeSemana(week.days).map(({ day, idx }) => {
-                                const id = idDeSesion(phase.id, week.num, idx);
-                                const isDone = !!sessionsData[id]?.completed;
-                                const isCurrent = current && current.phaseId === phase.id && current.weekNum === week.num && current.dayIdx === idx;
+                              {juntaPorDia(enOrdenDeSemana(week.days)).map(({ day, idx, hermanas }) => {
+                                const isDone = hermanas.every((h) => !!sessionsData[idDeSesion(phase.id, week.num, h.idx)]?.completed);
+                                const isCurrent = current && current.phaseId === phase.id && current.weekNum === week.num
+                                  && hermanas.some((h) => current.dayIdx === h.idx);
                                 const cat = tipoDeSesion(day);
-                                const dayName = sinDuracion(day.name || '') || textoDeSesiones(sesionesDelTitulo(day)) || day.day;
+                                // Dos entradas el mismo día (mañana y tarde) dicen sus dos sesiones, con su turno.
+                                const dayName = hermanas.length > 1
+                                  ? textoDeSesiones(sesionesDelTitulo(hermanas.map((h) => h.day)))
+                                  : (sinDuracion(day.name || '') || textoDeSesiones(sesionesDelTitulo(day)) || day.day);
                                 return (
                                   <button
                                     key={idx}
@@ -2033,7 +2123,7 @@ const CursorSelector = ({ current, sessionsData, onSelect, onClose }) => {
                                     }}>{dayName}</span>
                                     {isDone && <Check size={13} style={{ color: T.accent }} strokeWidth={3} />}
                                     {isCurrent && <span style={{ fontSize: 9, fontWeight: 800, color: T.accent, letterSpacing: 0.5 }}>ACTUAL</span>}
-                                    {day.dual && <span style={{ fontSize: 9, fontWeight: 800, color: T.warning }}>2X</span>}
+                                    {(day.dual || hermanas.length > 1) && <span style={{ fontSize: 9, fontWeight: 800, color: T.warning }}>2X</span>}
                                   </button>
                                 );
                               })}
@@ -2094,8 +2184,13 @@ const HomeView = ({
   const week = hayEquipo && resumenDeEquipo ? resumenDeEquipo : semanaPropia;
   // Un día con dos entradas se dice «2 sesiones», no «Fuerza + Movilidad»: así no
   // se lee como una sola (Andrés, 29 sep 2026).
-  const nombreDeSemana = (d) => (d.sesiones > 1 ? `${d.sesiones} sesiones` : d.name);
-  const cursorCompleted = next ? !!sessionsData[next.id]?.completed : false;
+  const nombreDeSemana = (d) => (d.sesiones > 1 ? `${d.sesiones} sesiones` : sinDuracion(d.name || ''));
+  /* Un día con dos entradas (mañana y tarde) es UN día: «Completada» solo cuando lo están las dos, y la
+     tarjeta dice sus dos sesiones, igual que un doble de antes. */
+  const entradasDelDia = useMemo(() => (next ? hermanasDelDia(next.week, next.dayIdx) : []), [next]);
+  const cursorCompleted = next
+    ? entradasDelDia.every((h) => !!sessionsData[sessionIdFor(kind, next.phase.id, next.week.num, h.idx)]?.completed)
+    : false;
   const todayScore = useMemo(() => {
     const d = wellness[today()];
     if (!d || !d.sleep || d.fatigue == null || d.soreness == null || !d.motivation) return null;
@@ -2112,22 +2207,26 @@ const HomeView = ({
     const d = next.day;
     const reales = (lista) => (lista || []).filter((e) => !e.isNote).length;
     const tipo = tipoDeSesion(d).label;
+    // Dos entradas el mismo día: sus ejercicios se suman y no se inventa una duración (cada tarjeta trae la suya).
+    if (entradasDelDia.length > 1) {
+      return { exercises: entradasDelDia.reduce((n, h) => n + reales(h.day.exercises), 0), duration: null, agrupadas: true };
+    }
     if (d.blocks) {
       const exCount = d.blocks.reduce((s, b) => s + reales(ejerciciosDelBloque(next.week, next.dayIdx, b)), 0);
       // La duración que trae escrita el propio plan, si la trae (ver `lib/sesiones.js`).
       const propia = d.blocks.length === 1 ? minutosDeTag(d.blocks[0].tag) : null;
       return { exercises: exCount, duration: d.dual ? '~2 h' : (propia || '~75 min'), dual: d.dual };
     }
-    const n = reales(d.exercises);
+    const n = reales((sesionQueRepite(next.week, next.dayIdx)?.day ?? d).exercises);
     return { exercises: n, duration: n ? '~55 min' : tipo };
-  }, [next]);
+  }, [next, entradasDelDia]);
 
   const { text: greetText } = greeting();
 
   /* El título de hoy. Una sesión: su nombre, sin «· ~70 min» pegado. Dos
      (mañana y tarde): una etiqueta por cada una, no «Velocidad + Lower
      Strength» (Andrés, 29 sep 2026). Ver `lib/sesiones.js`. */
-  const sesionesDeHoy = next ? sesionesDelTitulo(next.day) : [];
+  const sesionesDeHoy = next ? sesionesDelTitulo(entradasDelDia.length > 1 ? entradasDelDia.map((h) => h.day) : next.day) : [];
   const sessionTitle = next ? (sinDuracion(next.day.name || '') || textoDeSesiones(sesionesDeHoy) || next.day.day) : '';
 
   const sinSesionHoy = (
@@ -2276,7 +2375,7 @@ const HomeView = ({
                     // (y partía la línea en «2 / sesiones»). Solo si el día trae nombre propio.
                     sessionMeta.dual && sesionesDeHoy.length <= 1 ? '2 sesiones' : null,
                     // Otra sesión hoy además de esta (mañana y tarde como dos entradas).
-                    !sessionMeta.dual && next.sesionesHoy > 1 ? `${next.sesionesHoy} sesiones hoy` : null,
+                    !sessionMeta.dual && !sessionMeta.agrupadas && next.sesionesHoy > 1 ? `${next.sesionesHoy} sesiones hoy` : null,
                   ].filter(Boolean).join(' · ')}
                 </div>
               </div>
