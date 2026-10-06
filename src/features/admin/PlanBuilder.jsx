@@ -1443,7 +1443,7 @@ function SessionEditorInterno({
     <div {...arrastre} style={tarjetaDeSesion(day)}>
       <DayHeader
         day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog}
-        onClear={onClear} conVista={!descanso} vistaFuera={vistaFuera} soloLectura={soloLectura}
+        onClear={onClear} nSets={descanso ? null : nSets} conVista={!descanso} vistaFuera={vistaFuera} soloLectura={soloLectura}
         plegable={plegable} plegada={plegada} onPlegar={onPlegar} turno={turno} onTurno={onTurno}
       />
 
@@ -1873,52 +1873,132 @@ const opcionesDeTurno = (turno, onTurno) => (turno
   ]);
 
 /**
- * La cabecera de un workout: [plegar] [AM/PM] [tipo ▾] [nombre] [Opciones ▾] [lista | tarjetas].
+ * La cabecera de un workout.
  *
- * Andrés, 5 oct 2026, con la maqueta aprobada: las herramientas del workout van en UN solo botón con nombre
- * («Opciones ▾», con su menú: Usar workout · Guardar workout · Copiar · Vaciar · Eliminar sesión) y el
- * interruptor de vista al final y a la derecha, en TODOS los workouts del día para que los botones queden en el mismo
- * lugar. Sin rótulos grises sobre las casillas ni contador de sets. En el celular el nombre ocupa su renglón y la
- * vista vive en el título del día (`vistaFuera`).
+ * COMPU: la de siempre, la que Andrés quiso conservar (6 oct 2026: «este estilito visual de la versión pasada siento que
+ * lo perdiste: recupéralo pero no cambies nada»). Nombre y tipo con sus rótulos y el contador de sets; una raya; y debajo las
+ * acciones a la vista —«Mis planes ▾», «Copiar», «Limpiar», «Eliminar sesión»— con el interruptor de vista al final y a la
+ * derecha. Lo nuevo entra sin cambiar eso: en un día con 2 o más workouts, el botón de plegar y la insignia AM/PM van antes del
+ * nombre, y «AM / PM ▾» es una acción más.
  *
- * Una acción que no se pasa no sale: así una sesión pegada al programa de otro (sin catálogo, sin copiar) reusa esta
- * misma cabecera. Con `soloLectura` el nombre y el tipo no se tocan; lo de abajo queda vivo, porque el interruptor solo
- * cambia cómo se ve.
+ * CELULAR: nombre en su renglón, y debajo [plegar] [AM/PM] [tipo ▾] [Opciones ▾] (las acciones van en una hoja de abajo; la
+ * vista vive en el título del día: `vistaFuera`).
+ *
+ * Una acción que no se pasa no sale: así una sesión pegada al programa de otro (sin catálogo, sin copiar) reusa esta misma
+ * cabecera. Con `soloLectura` el nombre y el tipo no se tocan; lo de abajo queda vivo, porque el interruptor solo cambia cómo
+ * se ve. `data-cab-arrastre`: desde los botones de la cabecera también se agarra el workout para cambiarlo de lugar.
  */
 function DayHeader({
-  day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, dual, conVista = false, vistaFuera = false, soloLectura = false,
+  day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, nSets, dual, conVista = false, vistaFuera = false, soloLectura = false,
   plegable = false, plegada = false, onPlegar, turno = null, onTurno,
 }) {
   const { user } = useAuth();
   const esCompu = useIsDesktop();
   const [enFilas, eligeVista] = useEnFilas();
-  // Abierto: { ancla } (el botón al que se pega el menú).
+  // Menús abiertos, cada uno con `{ ancla }` (el botón al que se pega): «Opciones» (celular), «Mis planes ▾» y «AM / PM ▾» (compu).
   const [menu, setMenu] = useState(null);
+  const [menuPlanes, setMenuPlanes] = useState(null);
+  const [menuTurno, setMenuTurno] = useState(null);
+  // Mis planes en la sesión (Andrés, 2 oct 2026): UN solo botón, no dos por tarjeta. Con las dos cosas posibles
+  // —usar un workout guardado y guardar este día— es «Mis planes ▾» con un menú; con una sola, es esa acción directa
+  // (una sesión vacía no ofrece guardar; un día doble no recibe un workout).
+  const puedeUsar = !dual && !!onApplyCatalog;
+  const puedeGuardar = !!onSaveToCatalog;
   const acciones = [
-    // Un día doble no recibe un workout; una sesión vacía no ofrece guardarse.
-    ...(!dual && onApplyCatalog ? [{ icon: FolderOpen, texto: 'Usar workout', onClick: onApplyCatalog }] : []),
-    ...(onSaveToCatalog ? [{ icon: Save, texto: 'Guardar workout', onClick: onSaveToCatalog }] : []),
+    ...(puedeUsar ? [{ icon: FolderOpen, texto: 'Usar workout', onClick: onApplyCatalog }] : []),
+    ...(puedeGuardar ? [{ icon: Save, texto: 'Guardar workout', onClick: onSaveToCatalog }] : []),
     ...(onCopy ? [{ icon: Copy, texto: 'Copiar', onClick: onCopy }] : []),
     ...(!dual && onClear ? [{ icon: Eraser, texto: 'Vaciar', onClick: onClear }] : []),
     ...(onTurno ? opcionesDeTurno(turno, onTurno) : []),
     ...(onDelete ? [{ icon: Trash2, texto: 'Eliminar sesión', onClick: onDelete, peligro: true }] : []),
   ];
+  const menus = (
+    <>
+      {menu && <MenuDeAcciones titulo="Sesión" ancla={menu.ancla} onClose={() => setMenu(null)} acciones={acciones} />}
+      {menuPlanes && (
+        <MenuDeAcciones
+          titulo="Mis planes" ancla={menuPlanes.ancla} onClose={() => setMenuPlanes(null)}
+          acciones={[
+            { icon: FolderOpen, texto: 'Usar workout', onClick: onApplyCatalog },
+            { icon: Save, texto: 'Guardar workout', onClick: onSaveToCatalog },
+          ]}
+        />
+      )}
+      {menuTurno && onTurno && (
+        <MenuDeAcciones titulo="Turno" ancla={menuTurno.ancla} onClose={() => setMenuTurno(null)} acciones={opcionesDeTurno(turno, onTurno)} />
+      )}
+    </>
+  );
+
+  if (esCompu) {
+    return (
+      <>
+        {/* Nombre y tipo: con `soloLectura` no se tocan. Lo de abajo (acciones e interruptor de vista) queda vivo: el
+            interruptor solo cambia cómo se ve. */}
+        <div data-cab-arrastre="" style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          {/* Plegar y turno, del alto de las casillas (44 px) para que queden a su altura y no a la de su rótulo. */}
+          {plegable && <span style={{ display: 'inline-flex', paddingBottom: 5 }}><BotonDePlegar plegada={plegada} onClick={onPlegar} /></span>}
+          {turno && <span style={{ display: 'inline-flex', alignItems: 'center', height: 44 }}><InsigniaDeTurno turno={turno} /></span>}
+          {/* 220 px de base y no `flex: 1` pelado. Con `flex: 1` la base es 0, así que el nombre nunca bajaba de renglón: se
+              encogía para dejarle sitio al tipo y al contador. */}
+          <div {...enLectura(soloLectura)} style={{ flex: '1 1 220px', minWidth: 0, ...(soloLectura ? APAGADO : null) }}>
+            <Field label="Nombre de la sesión">
+              {/* En un día de dos sesiones el nombre casi nunca está guardado: la app del atleta arma el título con las dos
+                  ("AM Velocidad máxima · PM French Contrast"). Aquí se enseña lo mismo como sugerencia gris —no se
+                  escribe nada en el plan—, con el turno delante y sin «+», que se leía como una sola sesión. */}
+              <input
+                value={day.name || ''}
+                onChange={(e) => onPatch({ name: e.target.value })}
+                placeholder={dual && day.blocks?.length ? textoDeSesiones(sesionesDelTitulo({ blocks: day.blocks })) : undefined}
+                style={inputStyle}
+              />
+            </Field>
+          </div>
+          <div {...enLectura(soloLectura)} style={{ flex: '0 1 190px', minWidth: 150, ...(soloLectura ? APAGADO : null) }}>
+            <Field label="Tipo de sesión">
+              {/* Era un <select>: en el iPhone, la rueda gris del sistema. Ahora es la lista de la app, con los colores a la
+                  vista y con los tipos que el propio coach se haya creado. */}
+              <SelectorTipoSesion day={day} onPatch={onPatch} coachId={user?.id} />
+            </Field>
+          </div>
+          {nSets != null && (
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text3, paddingBottom: 12 }}>
+              {nSets} set{nSets !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+        <div
+          data-cab-arrastre=""
+          style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.border}`, alignItems: 'center' }}
+        >
+          {puedeUsar && puedeGuardar && <Pill icon={FolderOpen} onClick={(e) => setMenuPlanes({ ancla: e.currentTarget })}>Mis planes <ChevronDown size={13} /></Pill>}
+          {puedeUsar && !puedeGuardar && <Pill icon={FolderOpen} onClick={() => onApplyCatalog()}>Usar workout</Pill>}
+          {!puedeUsar && puedeGuardar && <Pill icon={Save} onClick={(e) => onSaveToCatalog(e.currentTarget)}>Guardar workout</Pill>}
+          {onCopy && <Pill icon={Copy} onClick={() => onCopy()}>Copiar</Pill>}
+          {!dual && onClear && <Pill icon={Eraser} onClick={() => onClear()}>Limpiar</Pill>}
+          {onTurno && <Pill icon={Sun} onClick={(e) => setMenuTurno({ ancla: e.currentTarget })}>AM / PM <ChevronDown size={13} /></Pill>}
+          {onDelete && <Pill icon={Trash2} danger onClick={() => onDelete()}>Eliminar sesión</Pill>}
+          {/* Cómo se ven los ejercicios de abajo: filas o tarjetas. Al final y pegado a la derecha, como en el repertorio:
+              se usa menos que las acciones de la sesión. Sin ejercicios que ver (un día de descanso) no se ofrece. */}
+          {conVista && !vistaFuera && (
+            <>
+              <span style={{ flex: 1 }} />
+              <InterruptorVista vista={enFilas ? 'lista' : 'tarjetas'} onCambio={eligeVista} />
+            </>
+          )}
+        </div>
+        {menus}
+      </>
+    );
+  }
+
   return (
     <>
-      {/* `data-cab-arrastre`: desde los botones de esta cabecera también se agarra el workout para cambiarlo de lugar. */}
       <div data-cab-arrastre="" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         {plegable && <BotonDePlegar plegada={plegada} onClick={onPlegar} />}
         {turno && <InsigniaDeTurno turno={turno} />}
-        {/* Una base de 140 px (200 en el celular) y no `flex: 1` pelado: con `flex: 1` la base es 0, así que el nombre nunca
-            bajaba de renglón y se encogía para dejarle sitio al tipo. En el celular va primero y ocupa su renglón; en una
-            ventana de 1024 px todo cabe en una fila. */}
-        <div
-          {...enLectura(soloLectura)}
-          style={{ flex: esCompu ? '1 1 140px' : '1 1 200px', minWidth: 0, order: esCompu ? undefined : -1, ...(esCompu ? null : { flexBasis: '100%' }), ...(soloLectura ? APAGADO : null) }}
-        >
-          {/* En un día de dos sesiones el nombre casi nunca está guardado: la app del atleta arma el título con las dos
-              ("AM Velocidad máxima · PM French Contrast"). Aquí se enseña lo mismo como sugerencia gris —no se
-              escribe nada en el plan—, con el turno delante y sin «+», que se leía como una sola sesión. */}
+        {/* En el celular el nombre va primero y ocupa su renglón. */}
+        <div {...enLectura(soloLectura)} style={{ flex: '1 1 200px', flexBasis: '100%', minWidth: 0, order: -1, ...(soloLectura ? APAGADO : null) }}>
           <input
             value={day.name || ''}
             onChange={(e) => onPatch({ name: e.target.value })}
@@ -1927,12 +2007,7 @@ function DayHeader({
             style={{ ...inputStyle, fontSize: 16, fontWeight: 800, padding: '9px 12px' }}
           />
         </div>
-        {/* Era un <select>: en el iPhone, la rueda gris del sistema. Ahora es la lista de la app, con los colores a la
-            vista y con los tipos que el propio coach se haya creado. */}
-        <div
-          {...enLectura(soloLectura)}
-          style={{ ...(esCompu ? { flex: '0 1 170px', minWidth: 140 } : { flex: '1 1 100px', minWidth: 100 }), ...(soloLectura ? APAGADO : null) }}
-        >
+        <div {...enLectura(soloLectura)} style={{ flex: '1 1 100px', minWidth: 100, ...(soloLectura ? APAGADO : null) }}>
           <SelectorTipoSesion day={day} onPatch={onPatch} coachId={user?.id} />
         </div>
         {acciones.length > 0 && (
@@ -1942,23 +2017,14 @@ function DayHeader({
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 7, flexShrink: 0, marginLeft: 'auto', cursor: 'pointer',
               border: `1.5px solid ${T.border}`, background: T.bg2, color: T.text, fontFamily: FONT, fontWeight: 700,
-              ...(esCompu ? { fontSize: 14, padding: '10px 13px', borderRadius: 11 } : { fontSize: 13, padding: '8px 12px', borderRadius: 999 }),
+              fontSize: 13, padding: '8px 12px', borderRadius: 999,
             }}
           >
             Opciones <ChevronDown size={14} color={T.text3} />
           </button>
         )}
-        {/* Cómo se ven los ejercicios de abajo: filas o tarjetas. Sin ejercicios que ver (un día de descanso) no se ofrece. */}
-        {conVista && !vistaFuera && (
-          <span style={{ marginLeft: acciones.length ? 4 : 'auto', display: 'inline-flex' }}>
-            <InterruptorVista vista={enFilas ? 'lista' : 'tarjetas'} onCambio={eligeVista} />
-          </span>
-        )}
       </div>
-
-      {menu && (
-        <MenuDeAcciones titulo="Sesión" ancla={menu.ancla} onClose={() => setMenu(null)} acciones={acciones} />
-      )}
+      {menus}
     </>
   );
 }
