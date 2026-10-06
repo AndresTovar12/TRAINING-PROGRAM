@@ -246,6 +246,13 @@ const delRepertorio = (ex, repertoire) => {
   return ultimo;
 };
 
+/* UNA SOLA «DESCRIPCIÓN». Un ejercicio traía dos casillas, «Descripción» (`notes`) y «Cue técnico» (`cue`), y el atleta las
+   lee igual, una tras otra (Andrés, 5 oct 2026, maqueta aprobada: una sola). La casilla enseña los dos textos juntos con « · »
+   y, en cuanto se escribe en ella, todo pasa a `notes` y `cue` queda vacío: no se pierde nada y a quien no se toca no se le
+   reescribe nada. */
+const textoDeDescripcion = (ex) => [ex?.notes, ex?.cue].map((x) => String(x ?? '').trim()).filter(Boolean).join(' · ');
+const alEscribirDescripcion = (onPatch) => (e) => onPatch({ notes: e.target.value, cue: '' });
+
 /* ------------------------------------------------------------------ */
 /* Card de ejercicio dentro de un set                                   */
 /* ------------------------------------------------------------------ */
@@ -316,12 +323,7 @@ function ExerciseCard({
         {!conSeries && <div style={{ marginTop: 8 }}>{campoDescanso}</div>}
         <div style={{ marginTop: 8 }}>
           <Field label="Descripción">
-            <input value={ex.notes || ''} onChange={(e) => onPatch({ notes: e.target.value })} style={estiloCampo} />
-          </Field>
-        </div>
-        <div style={{ marginTop: 8 }}>
-          <Field label="Cue técnico">
-            <input value={ex.cue || ''} onChange={(e) => onPatch({ cue: e.target.value })} style={{ ...estiloCampo, color: T.text2 }} />
+            <input value={textoDeDescripcion(ex)} onChange={alEscribirDescripcion(onPatch)} style={estiloCampo} />
           </Field>
         </div>
         <div style={{ marginTop: 9, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -462,6 +464,8 @@ function ExerciseRow({
 }) {
   const rep = delRepertorio(ex, repertoire);
   const rc = useRepsYCarga({ ex, onPatch, rondas: conSeries ? null : rondas, abiertoDeEntrada: soloLectura });
+  // En el celular la «Descripción» vacía no ocupa un renglón: sale con «+ Descripción». En cuanto se toca o se escribe, se queda.
+  const [descripcionAbierta, setDescripcionAbierta] = useState(false);
   /* EN EL TELÉFONO, LA FILA SE ACOMODA A DOS COLUMNAS. Andrés, 28 sep 2026:
      eligió "lista" también desde el teléfono. Con los anchos de la compu,
      "Descripción" y "Cue técnico" quedaban de ~90 px, demasiado para escribir.
@@ -537,14 +541,16 @@ function ExerciseRow({
         </div>
         {/* La base decide si se parte la línea (no el mínimo): va chica, y el
             campo crece para llenar lo que sobre. */}
-        <div style={completo(3) ?? { flex: '1 1 76px', minWidth: 76 }}>
-          <RotuloCampo>Descripción</RotuloCampo>
-          <input value={ex.notes || ''} onChange={(e) => onPatch({ notes: e.target.value })} style={inputFila} />
-        </div>
-        <div style={completo(4) ?? { flex: '1 1 66px', minWidth: 66 }}>
-          <RotuloCampo>Cue técnico</RotuloCampo>
-          <input value={ex.cue || ''} onChange={(e) => onPatch({ cue: e.target.value })} style={{ ...inputFila, color: T.text2 }} />
-        </div>
+        {(!angosta || descripcionAbierta || !!textoDeDescripcion(ex)) && (
+          <div style={completo(3) ?? { flex: '1 1 140px', minWidth: 110 }}>
+            <RotuloCampo>Descripción</RotuloCampo>
+            <input
+              value={textoDeDescripcion(ex)} autoFocus={descripcionAbierta}
+              onChange={(e) => { setDescripcionAbierta(true); onPatch({ notes: e.target.value, cue: '' }); }}
+              style={inputFila}
+            />
+          </div>
+        )}
         {/* PESO Y VIDEO, uno encima del otro y sin rótulo: las pastillas se
             leen solas ("Con peso", "Su video"). Lado a lado y con rótulo no
             cabían en la fila y el video se bajaba a otra línea. Andrés, 27 sep
@@ -559,6 +565,17 @@ function ExerciseRow({
           )}
         </div>
       </div>
+      {angosta && !soloLectura && !descripcionAbierta && !textoDeDescripcion(ex) && (
+        <button
+          type="button" className="kp-accion" onClick={() => setDescripcionAbierta(true)}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 8, marginLeft: -6, padding: '6px 9px', borderRadius: 999,
+            border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 12.5, fontWeight: 700, color: T.text2,
+          }}
+        >
+          <Plus size={13} /> Descripción
+        </button>
+      )}
       {/* En la compu, las vueltas 2, 3, 4… caen justo debajo de las casillas de reps y carga (mismos anchos),
           y la fila de arriba no se mueve: los demás campos siguen alineados con la primera vuelta. */}
       {!angosta && (
