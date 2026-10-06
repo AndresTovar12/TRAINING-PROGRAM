@@ -733,7 +733,7 @@ export default function SesionesSobreElPrograma({
                 boxShadow: KP.shCard, fontFamily: FONT, fontSize: 14, fontWeight: 800, color: T.accent,
               }}
             >
-              <Plus size={16} /> Añadir sesión mía el {nombreLargoDeDia(dia)}
+              <Plus size={16} /> Agregar sesión mía el {nombreLargoDeDia(dia)}
             </button>
           </div>
         </div>
