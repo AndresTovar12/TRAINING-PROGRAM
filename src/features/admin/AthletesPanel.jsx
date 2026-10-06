@@ -26,8 +26,7 @@ import { useConfirmacion } from '@/components/Confirmacion';
 import { useIsDesktop } from '@/lib/useViewport';
 import { T, FONT, KP } from '@/lib/theme';
 import { plural, pluralS } from '@/lib/plural';
-import { esDescanso, dondeVa, sessionIdFor, estructuraDelPlan, nombreDeSesion } from '@/lib/training-utils';
-import { turnoDeTag, minutosDeTag } from '@/lib/sesiones';
+import { esDescanso, dondeVa, sessionIdFor, estructuraDelPlan } from '@/lib/training-utils';
 import { colorDePrograma, esProgramaFantasma, nombreCorto, rolDeProfesion } from '@/lib/programas';
 import { fasesConPegadas, reglasDe } from '@/lib/pegadas';
 import AsignarAlAtleta from '@/features/misplanes/AsignarAlAtleta';
@@ -706,12 +705,7 @@ function SeccionFicha({ titulo, abierta, onToggle, children }) {
   );
 }
 
-/**
- * Lo que hay DENTRO de un día, en solo lectura.
- *
- * Sirve para los dos tipos de día: los normales, con su lista de ejercicios,
- * y los de dos sesiones (AM/PM), que guardan bloques con su etiqueta.
- */
+/** Lo que hay DENTRO de una sesión, en solo lectura: su lista de ejercicios. */
 function DentroDelDia({ day }) {
   // "4 × 30 yd", no "4 × 30": la unidad es parte de lo que el coach mandó. Si cambia de una vuelta a otra
   // se dice eso y no los números en fila («10-8-6-4» se lee como un drop set); el detalle está en el editor.
@@ -736,10 +730,9 @@ function DentroDelDia({ day }) {
     )
   );
 
-  const bloques = day.blocks || [];
   const sueltos = day.exercises || [];
 
-  if (!bloques.length && !sueltos.length) {
+  if (!sueltos.length) {
     return (
       <div style={{ padding: '6px 4px 10px 38px', fontSize: 11.5, fontWeight: 600, color: T.text3 }}>
         Este día no tiene ejercicios.
@@ -749,19 +742,7 @@ function DentroDelDia({ day }) {
 
   return (
     <div style={{ padding: '4px 6px 10px 38px', display: 'flex', flexDirection: 'column', gap: 9 }}>
-      {bloques.length > 0
-        ? bloques.map((b, bi) => (
-            <div key={bi}>
-              {b.tag && (
-                <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 0.5, color: T.text3, marginBottom: 3 }}>
-                  {/* «Sesión 2 (PM): Lower · ~65 min» → «PM · Lower · 65 min» */}
-                  {[turnoDeTag(b.tag), nombreDeSesion(b.tag), minutosDeTag(b.tag)].filter(Boolean).join(' · ')}
-                </div>
-              )}
-              {(b.exercises || []).map(fila)}
-            </div>
-          ))
-        : sueltos.map(fila)}
+      {sueltos.map(fila)}
     </div>
   );
 }
@@ -864,9 +845,8 @@ function HojaDelPlanDeAtleta({ athlete, programas, equipoDe, state, inicialId, o
         detalleDia={(f, semana, idx) => {
           const d = semana.days[idx];
           const n = (d.exercises || []).filter((e) => !e.isNote).length;
-          const texto = n || (d.blocks?.length ? `${d.blocks.length} bloques` : '');
-          return texto ? (
-            <span style={{ fontSize: 11.5, fontWeight: 700, color: T.text3, flexShrink: 0 }}>{texto}</span>
+          return n ? (
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: T.text3, flexShrink: 0 }}>{n}</span>
           ) : null;
         }}
         contenidoDia={(f, semana, idx) => <DentroDelDia day={semana.days[idx]} />}

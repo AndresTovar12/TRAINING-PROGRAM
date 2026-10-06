@@ -6,13 +6,12 @@ import { mueveEn } from '@/lib/arrastrar';
  *
  * Andrés, 5 oct 2026, con la maqueta aprobada: cada workout se pliega con su botón y deja solo su encabezado y su
  * resumen. Y el 6 oct: «que incluso los días que solo tienen un workout se puedan plegar y desplegar con botoncito,
- * y que por default vengan plegados». Ahora se pliegan TODOS (los de un día con uno solo también) y una sesión doble
- * (`blocks`) pliega cada una de las suyas.
+ * y que por default vengan plegados». Ahora se pliegan TODOS (los de un día con uno solo también).
  *
  * Plegar es cosa de la pantalla: NO es un cambio del plan (no entra al historial ni lo enciende «Guardar»). Pero al
  * deshacer vuelve como estaba (va dentro de `lugar` de la foto, ver `useHistorial`) y al reordenar sigue a su workout.
  *
- * Cada workout tiene una llave de texto (`fase:semana:día`, y `:bN` si es una sesión de `blocks`); lo plegado es
+ * Cada workout tiene una llave de texto (`fase:semana:día`); lo plegado es
  * `{ [llave]: true }` y lo abierto `{ [llave]: false }`. Quien pinta recibe el contexto y mira solo su llave.
  *
  * El editor del programa DECIDE cómo viene cada llave la primera vez que se ve (`decide`): con algo adentro, plegado; vacío,

@@ -382,45 +382,39 @@ const defaultCursor = (plan) => {
 
    Se resuelven al LEER, sin tocar el plan: se busca en la MISMA semana una
    sesión con ejercicios que se llame igual. Por el nombre de la sesión, no
-   interpretando la frase. Comprobado por SQL en las 7: cada semana tiene
-   exactamente una candidata, la del lunes.
+   interpretando la frase (solo se exige que el texto diga «repite»). Comprobado
+   por SQL en las 7: cada semana tiene exactamente una candidata, la del lunes.
 
    Si hubiera varias con ese nombre, se usa la del día que menciona el texto; y
    si aun así no queda una sola, no se adivina: se enseña el texto como estaba. */
-const nombreDeSesion = (tag = '') => tag
-  .replace(/^Sesi[óo]n \d+ \([AP]M\):\s*/, '')
-  .replace(/\s*·\s*~.*$/, '')
-  .trim();
+const sinDuracion = (texto = '') => texto.replace(/\s*·\s*~.*$/, '').trim();
 const DIA_EN_TEXTO = [
   ['lunes', 'Lun'], ['martes', 'Mar'], ['miércoles', 'Mié'], ['miercoles', 'Mié'],
   ['jueves', 'Jue'], ['viernes', 'Vie'], ['sábado', 'Sáb'], ['sabado', 'Sáb'], ['domingo', 'Dom'],
 ];
 
-const bloqueQueRepite = (week, dayIdx, blk) => {
-  if (!blk || blk.type !== 'note' || !week?.days) return null;
-  const nombre = nombreDeSesion(blk.tag);
+/**
+ * Si la entrada `idx` de la semana es solo texto que dice «repite…», la entrada que repite:
+ * { day, idx }. Si no, null. Los pesos que anota el atleta se guardan con la llave de ESTA entrada,
+ * así que el jueves y el lunes tienen cada uno los suyos.
+ */
+const sesionQueRepite = (week, idx) => {
+  const dia = week?.days?.[idx];
+  if (!dia || esDescanso(dia)) return null;
+  const filas = dia.exercises || [];
+  const notas = filas.filter((e) => e.isNote && e.text);
+  if (!notas.length || filas.some((e) => !e.isNote)) return null;
+  const texto = notas.map((e) => e.text).join(' ').toLowerCase();
+  if (!/repit/.test(texto)) return null;
+  const nombre = sinDuracion(dia.name || '');
   if (!nombre) return null;
-  const candidatas = [];
-  week.days.forEach((d, i) => {
-    if (i === dayIdx) return;
-    (d.blocks || []).forEach((b) => {
-      if (b.type === 'lift' && (b.exercises || []).length && nombreDeSesion(b.tag) === nombre) {
-        candidatas.push({ day: d, blk: b });
-      }
-    });
-  });
+  const candidatas = week.days
+    .map((day, i) => ({ day, idx: i }))
+    .filter((c) => c.idx !== idx && sinDuracion(c.day.name || '') === nombre
+      && (c.day.exercises || []).some((e) => !e.isNote));
   if (candidatas.length === 0) return null;
-  const texto = (blk.text || '').toLowerCase();
   const mencionado = DIA_EN_TEXTO.find(([palabra]) => texto.includes(palabra))?.[1];
   return candidatas.find((c) => c.day.day === mencionado) || (candidatas.length === 1 ? candidatas[0] : null);
-};
-
-/* Los ejercicios que el atleta ve —y anota— en un bloque: los suyos, o los de
-   la sesión que repite. Los pesos se guardan con la llave de ESTE día y ESTE
-   bloque, así que el jueves y el lunes tienen cada uno los suyos. */
-const ejerciciosDelBloque = (week, dayIdx, blk) => {
-  if (blk?.type === 'lift') return blk.exercises || [];
-  return bloqueQueRepite(week, dayIdx, blk)?.blk.exercises || [];
 };
 
 const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -486,12 +480,8 @@ const registrosDePeso = (plan, sessionsData, exName, kind = 'periodized') => {
     const sd = datos[id];
     if (!sd?.exercises) return;
     const day = week.days[di];
-    const todos = [];
-    if (day.exercises) day.exercises.forEach((e, i) => todos.push({ ex: e, key: `${i}` }));
     // Incluye las sesiones "repite la del lunes": lo anotado ahí también es progreso.
-    if (day.blocks) day.blocks.forEach((blk, bi) => {
-      ejerciciosDelBloque(week, di, blk).forEach((e, i) => todos.push({ ex: e, key: `${bi}-${i}` }));
-    });
+    const todos = ((sesionQueRepite(week, di)?.day ?? day).exercises || []).map((e, i) => ({ ex: e, key: `${i}` }));
     for (const { ex, key } of todos) {
       if (!ex.name || ex.isNote) continue;
       if (ex.name.toLowerCase().trim() !== objetivo) continue;
@@ -797,5 +787,5 @@ export {
   totalProgress, getWeekLoad, formatIntensity, inferRest, getPattern, getMuscles,
   weekdayToday, weekdayLabel, isoWeekKey, weeklySessionId, sessionIdFor,
   sessionForToday, weekOverview, esDescanso, enOrdenDeSemana, diasDeEstaSemana,
-  bloqueQueRepite, ejerciciosDelBloque, nombreDeSesion, claveDeDia, dondeVa,
+  sesionQueRepite, sinDuracion, claveDeDia, dondeVa,
 };

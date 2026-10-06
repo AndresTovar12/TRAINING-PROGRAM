@@ -149,13 +149,12 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
   const llaves = sesiones.map((_, k) => `w:${k}`);
   const moverSesion = (de, a) => { plegadas.reordena(llaves, de, a); cambia((prev) => mueveEn(prev, de, a)); };
   const propiedadesDeLaSesion = (s, i) => ({
-    clavePlegado: llaves[i],
     ...(variasSesiones ? {
       plegable: true,
       plegada: !!plegadas.pl[llaves[i]],
       onPlegar: () => plegadas.alterna(llaves[i]),
-      turno: (s.blocks || s.dual) ? null : (s.turno ?? null),
-      onTurno: (s.blocks || s.dual) ? undefined : (t) => parchea(i, { turno: t ?? undefined }),
+      turno: s.turno ?? null,
+      onTurno: (t) => parchea(i, { turno: t ?? undefined }),
       arrastre: propsDeArrastre({ lista: 'workout:sesiones', etiqueta: s.name || 'Sesión', agarraDeBotonesEn: '[data-cab-arrastre]', alMover: moverSesion }),
     } : null),
   });

@@ -32,21 +32,11 @@ function normalizePlan(phases) {
   if (!Array.isArray(phases)) return null;
   return phases.map((p, pi) => {
     const weekData = arr(p?.weekData).map((w, wi) => {
-      const days = arr(w?.days).map((d) => {
-        if (d?.blocks) {
-          // Día dual (heredado): asegura arrays internos de cada bloque
-          return {
-            ...d,
-            blocks: arr(d.blocks).map((b) => ({ ...b, exercises: b?.exercises ? arr(b.exercises) : b?.exercises })),
-            notes: d.notes == null ? d.notes : arr(d.notes),
-          };
-        }
-        return {
-          ...d,
-          exercises: arr(d?.exercises),
-          notes: d?.notes == null ? d?.notes : arr(d.notes),
-        };
-      });
+      const days = arr(w?.days).map((d) => ({
+        ...d,
+        exercises: arr(d?.exercises),
+        notes: d?.notes == null ? d?.notes : arr(d.notes),
+      }));
       return {
         ...w,
         num: w?.num ?? wi + 1,

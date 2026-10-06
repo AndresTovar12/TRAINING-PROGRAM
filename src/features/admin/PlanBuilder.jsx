@@ -29,7 +29,7 @@ import { useFasesAbiertas } from '@/features/admin/useFasesAbiertas';
 import EditorBarra, { BarraDelCelular, BotonesDeHistorial } from '@/features/admin/EditorBarra';
 import { HistorialContext, enVentanaFlotante, useHistorial, useHistorialDelEditor } from '@/lib/useHistorial';
 import { mueveEn, propsDeArrastre } from '@/lib/arrastrar';
-import { PlegadasContext, usePlegadas, usePlegadasDelEditor } from '@/lib/usePlegadas';
+import { PlegadasContext, usePlegadas } from '@/lib/usePlegadas';
 import { useGuiaAncha } from '@/lib/useGuiaAncha';
 import { T, FONT, KP, tipoDeSesion } from '@/lib/theme';
 import { CeldaDeReps, CeldaDeCarga, DebajoDeRepsYCarga } from '@/components/RepsYCarga';
@@ -43,7 +43,6 @@ import SelectorCategoria from '@/features/admin/SelectorCategoria';
 import SelectorTipoSesion from '@/features/admin/SelectorTipoSesion';
 import Portada from '@/components/Portada';
 import { pluralS } from '@/lib/plural';
-import { sesionesDelTitulo, textoDeSesiones } from '@/lib/sesiones';
 import { esArranque, guardaLugar, leeLugar } from '@/lib/lugar';
 import { useScrollLugar } from '@/lib/useLugar';
 import InterruptorVista from '@/components/InterruptorVista';
@@ -160,24 +159,6 @@ const normalize = (phases) => phases.map((p) => (p.mode === 'microcycle' ? p : {
   weeks: p.weekData.length,
   duration: `${p.weekData.length} semana${p.weekData.length !== 1 ? 's' : ''}`,
 }));
-
-const isDualDay = (d) => !!(d?.dual || d?.blocks);
-
-/* UN DÍA GUARDADO «A LA ANTIGUA» CON UNA SOLA SESIÓN. En el plan de Andrés hay 15 días así: `blocks` con un solo bloque de
-   ejercicios (p. ej. Fuerza, semana 2, el martes). Para el editor es una sesión normal —misma cabecera, mismo plegado, mismos
-   Sets—: `comoSesion` la enseña con su lista de ejercicios donde el editor la espera, y `deSesion` devuelve lo que cambia
-   donde vive (`blocks[0].exercises`). Lo demás (nombre, tipo…) es del día como siempre. Los días con DOS sesiones o con una de
-   solo texto no pasan por aquí: tienen su editor de sesiones (`EditorSesionesDelDia`). */
-const unaSolaSesion = (d) => Array.isArray(d?.blocks) && d.blocks.length === 1 && d.blocks[0]?.type !== 'note';
-const comoSesion = (d) => {
-  const { blocks, dual: _dual, ...resto } = d;
-  return { ...resto, exercises: blocks[0].exercises ?? [] };
-};
-const deSesion = (d, patch) => {
-  if (!('exercises' in patch)) return patch;
-  const { exercises, ...resto } = patch;
-  return { ...resto, blocks: [{ ...d.blocks[0], exercises }] };
-};
 
 
 /* ------------------------------------------------------------------ */
@@ -992,194 +973,6 @@ function useQuitar() {
 const enLectura = (activo) => (activo ? { inert: true, 'aria-readonly': true } : null);
 const APAGADO = { opacity: 0.86, pointerEvents: 'none' };
 
-/* ---- días con dos sesiones (AM / PM) ---- */
-const turnoDe =(tag = '') => (tag.match(/\(([AP]M)\)/) || [])[1] || null;
-const limpiaTag = (tag = '') => tag.replace(/^Sesi[óo]n \d+ \([AP]M\):\s*/, '');
-/* El turno de una sesión de `blocks` vive DENTRO de su nombre («Sesión 2 (PM): Lower · ~65 min»): así lo lee el atleta. Poner
-   o cambiar el turno reescribe solo ese pedazo y respeta lo demás; quitarlo deja el nombre sin el «Sesión N (PM): » de adelante. */
-// El «Sesión N (AM): » de adelante, o '' si no lo trae.
-const prefijoDelTag = (tag = '') => (tag.match(/^Sesi[óo]n \d+ \([AP]M\):\s*/) || [''])[0];
-const conTurnoEnTag = (tag = '', turno, n) => {
-  const nombre = limpiaTag(tag);
-  return turno ? `Sesión ${n} (${turno}): ${nombre}` : nombre;
-};
-
-/**
- * Los días de DOS SESIONES (mañana y tarde): `day.blocks[]` en vez de `day.exercises[]`.
- *
- * QUÉ SON. 68 de los 175 días del plan de Andrés se guardan así: los trajo su app original. Cada bloque es una sesión,
- * `{ type, tag, exercises[] }` las de ejercicios y `{ type: 'note', text }` las de solo texto. La app del atleta los lee tal cual
- * (dos tarjetas, cada una con su «terminar», y el texto de ciencia del día entero), así que el plan se queda como está.
- *
- * LA LISTA DE EJERCICIOS DE CADA SESIÓN SE EDITA CON EL MISMO CUERPO DE SETS QUE CUALQUIER OTRA (`CuerpoDeSets`). Esto tuvo tres
- * épocas y las tres quedan dichas para no repetirlas:
- *   · Antes, un editor propio y viejo. Andrés, 28 sep 2026, viendo su lunes: «me sigue apareciendo así, diferente».
- *   · El 28 sep se emparejó con una fila igual a la normal y una casilla «Series» aparte, en texto libre por ejercicio. La razón era
- *     de miedo, no de diseño: sus datos traen series que no son un número («—», «3-4»; 54 ejercicios) y ejercicios sin series
- *     (calentamientos y drills; 140), y el editor normal los reescribía como «3».
- *   · El 6 oct 2026, ya con las series como texto y el «Sin series» dentro del Set, y probado que leer y volver a guardar sus 886
- *     ejercicios no cambia nada, se quitó lo aparte. Andrés: «NO quiero que parches la app… quiero que POR CONFIGURACIÓN sea
- *     igual». Cada función nueva del editor llega ahora a estos días porque es el mismo componente, no uno emparejado.
- *
- * Aquí quedan solo las partes que son de un DÍA con sesiones: el nombre de cada una (con su turno dentro del texto), plegarlas,
- * moverlas, sus «Opciones» y las de solo texto.
- */
-function EditorSesionesDelDia({
-  day, onPatch, repertoire, atleta, categorias, duenoId, masterId,
-  onEjercicioCreado, onCategoriaCreada, onCategoriaBorrada, soloLectura = false, clavePlegado = null,
-}) {
-  const bloques = day.blocks || [];
-  const quita = useQuitar();
-  // Cada lista de sesiones del día se identifica con el id de este editor.
-  const uid = useId();
-  const arrastrable = (cfg) => (soloLectura ? undefined : propsDeArrastre(cfg));
-  /* Cada sesión se pliega con su botón (solo si el día trae 2 o más). Lo plegado vive en el editor del plan
-     (`usePlegadas`); aquí solo se mira la llave de cada sesión: `<llave del día>:b<N>`. */
-  const plegadas = usePlegadasDelEditor();
-  const puedePlegar = !!plegadas && !!clavePlegado && (day.blocks?.length ?? 0) > 1;
-  const claveDe = (bi) => `${clavePlegado}:b${bi}`;
-  // Abierto: { bi, ancla } (la sesión y el botón al que se pega el menú «Opciones»).
-  const [menuBloque, setMenuBloque] = useState(null);
-
-  const escribe = (fn) => onPatch({ blocks: fn(bloques.map((b) => ({ ...b }))) });
-
-  const parcheaBloque = (bi, parche) => escribe((bs) => bs.map((b, i) => (i === bi ? { ...b, ...parche } : b)));
-
-  return (
-    <div {...enLectura(soloLectura)} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12, ...(soloLectura ? APAGADO : null) }}>
-      {bloques.map((b, bi) => {
-        const turno = turnoDe(b.tag);
-        const plegado = puedePlegar && !!plegadas.pl[claveDe(bi)];
-        const nombreDelBloque = limpiaTag(b.tag) || `Sesión ${bi + 1}`;
-
-        return (
-          <div
-            key={bi}
-            {...arrastrable({
-              lista: `${uid}:bloques`, etiqueta: nombreDelBloque, agarraDeBotonesEn: '[data-cab-arrastre]',
-              // Lo plegado sigue a su sesión.
-              alMover: (de, a) => { plegadas?.reordena(bloques.map((_, k) => claveDe(k)), de, a); escribe((bs) => mueveEn(bs, de, a)); },
-            })}
-            style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden' }}
-          >
-            <div
-              data-cab-arrastre=""
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8, padding: '10px 11px',
-                borderBottom: plegado ? 'none' : `1px solid ${T.border}`, background: T.bg2, flexWrap: 'wrap',
-              }}
-            >
-              {puedePlegar && <BotonDePlegar plegada={plegado} onClick={() => plegadas.alterna(claveDe(bi))} />}
-              {turno && <InsigniaDeTurno turno={turno} />}
-              {/* El nombre se escribe SIN el «Sesión N (AM): » de adelante (el turno ya es la insignia): al escribir, ese
-                  pedazo se conserva tal cual, que es como el atleta lee el turno. */}
-              <input
-                value={limpiaTag(b.tag)}
-                onChange={(e) => parcheaBloque(bi, { tag: prefijoDelTag(b.tag) + e.target.value })}
-                placeholder={`Sesión ${bi + 1}`}
-                aria-label={`Nombre de la sesión ${bi + 1}`}
-                style={{
-                  flex: 1, minWidth: 120, padding: '7px 9px', borderRadius: 8,
-                  border: `1.5px solid transparent`, background: 'transparent', fontFamily: FONT,
-                  fontSize: 16, fontWeight: 800, color: T.text, outline: 'none',
-                }}
-                onFocus={(e) => { e.target.style.borderColor = T.border; e.target.style.background = T.bg; }}
-                onBlur={(e) => { e.target.style.borderColor = 'transparent'; e.target.style.background = 'transparent'; }}
-              />
-              {/* Un solo «Opciones»: el turno (AM/PM, si el coach quiere) y eliminar esta sesión. */}
-              {!soloLectura && (
-                <button
-                  type="button" className="kp-pill" aria-haspopup="menu" aria-label={`Opciones de la sesión ${bi + 1}`}
-                  onClick={(e) => setMenuBloque({ bi, ancla: e.currentTarget })}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 7, flexShrink: 0, cursor: 'pointer',
-                    border: `1.5px solid ${T.border}`, background: T.bg2, color: T.text, fontFamily: FONT, fontWeight: 700,
-                    fontSize: 13.5, padding: '8px 12px', borderRadius: 11,
-                  }}
-                >
-                  Opciones <ChevronDown size={14} color={T.text3} />
-                </button>
-              )}
-            </div>
-
-            {/* Plegada: solo la cabecera y cuánto trae. */}
-            {plegado ? (
-              <div style={{ padding: '0 12px 11px 54px', fontSize: 12.5, fontWeight: 600, color: T.text2, background: T.bg2 }}>
-                {b.type === 'note' ? 'Solo texto' : pluralS((b.exercises || []).filter((e) => !e.isNote).length, 'ejercicio')}
-              </div>
-            ) : (
-            <div style={{ padding: '11px 11px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {b.type === 'note' ? (
-                <textarea
-                  value={b.text || ''}
-                  onChange={(e) => parcheaBloque(bi, { text: e.target.value })}
-                  rows={3}
-                  placeholder="Lo que tiene que hacer ese turno"
-                  style={{
-                    width: '100%', boxSizing: 'border-box', padding: '10px 11px', borderRadius: 10,
-                    border: `1.5px solid ${T.border}`, background: T.bg2, fontFamily: FONT,
-                    fontSize: 16, fontWeight: 500, color: T.text, outline: 'none', resize: 'vertical', lineHeight: 1.5,
-                  }}
-                />
-              ) : (
-                <CuerpoDeSets
-                  exercises={b.exercises || []} onExercises={(ex) => parcheaBloque(bi, { exercises: ex })} repertoire={repertoire}
-                  categorias={categorias} atleta={atleta} onEjercicioCreado={onEjercicioCreado} duenoId={duenoId} masterId={masterId}
-                  onCategoriaCreada={onCategoriaCreada} onCategoriaBorrada={onCategoriaBorrada} soloLectura={soloLectura}
-                  conAviso={bi === 0} separacion={0}
-                />
-              )}
-            </div>
-            )}
-          </div>
-        );
-      })}
-
-      {/* El menú «Opciones» de una sesión del día: su turno y eliminarla. */}
-      {menuBloque && bloques[menuBloque.bi] && (() => {
-        const bi = menuBloque.bi;
-        const b = bloques[bi];
-        const turnoActual = turnoDe(b.tag);
-        const nombre = limpiaTag(b.tag) || `Sesión ${bi + 1}`;
-        return (
-          <MenuDeAcciones
-            titulo={nombre} ancla={menuBloque.ancla} onClose={() => setMenuBloque(null)}
-            acciones={[
-              ...opcionesDeTurno(turnoActual, (t) => parcheaBloque(bi, { tag: conTurnoEnTag(b.tag, t, bi + 1) })),
-              {
-                icon: Trash2, texto: 'Eliminar sesión', peligro: true,
-                onClick: () => quita({
-                  pregunta: { titulo: `¿Eliminar «${nombre}»?`, detalle: 'Se va con todos sus ejercicios. El otro turno del día se queda.', confirmar: 'Sí, eliminarla', peligro: true },
-                  aviso: `Se eliminó «${nombre}»`,
-                }, () => {
-                  escribe((bs) => bs.filter((_, i) => i !== bi));
-                  // Las que venían después suben un lugar y se llevan lo suyo (lo plegado).
-                  if (puedePlegar) plegadas.quitaLugar(`${clavePlegado}:b`, bi);
-                }),
-              },
-            ]}
-          />
-        );
-      })()}
-
-      {!soloLectura && (
-        <>
-          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-            <Pill icon={Plus} onClick={() => escribe((bs) => [...bs, { type: 'lift', tag: `Sesión ${bs.length + 1}`, exercises: [] }])}>
-              Otra sesión el mismo día
-            </Pill>
-            <Pill icon={StickyNote} onClick={() => escribe((bs) => [...bs, { type: 'note', tag: `Sesión ${bs.length + 1}`, text: '' }])}>
-              Sesión de solo texto
-            </Pill>
-          </div>
-
-        </>
-      )}
-
-    </div>
-  );
-}
-
 /**
  * El editor de UNA sesión. Con `soloLectura` es el mismo, pero para ver la sesión de
  * otra persona: se ve igual y no se puede tocar nada de lo que la cambia (`inert`) ni
@@ -1204,14 +997,12 @@ export function SessionEditor(props) {
 /**
  * EL CUERPO DE UNA SESIÓN: sus Sets (y notas) y lo de agregar.
  *
- * Lo usa CADA sesión: una suelta (`day.exercises`) o cada una de las que trae un día doble (`day.blocks[i].exercises`). Lo único
- * que cambia es dónde vive su lista de ejercicios (`exercises` y `onExercises`); todo lo demás —Sets, formatos, series, vueltas,
- * «Descripción», agregar— es el mismo componente. Así lo que se le agrega al editor llega también a los días del plan de Andrés
- * que su app original guardó «a la antigua» (Andrés, 6 oct 2026: «NO quiero que parches la app… quiero que POR CONFIGURACIÓN sea
- * igual»).
+ * Es el ÚNICO cuerpo que edita la lista de ejercicios de una sesión (`day.exercises`): Sets, formatos, series, vueltas,
+ * «Descripción», agregar. Toda función nueva del editor se hace aquí y le llega a todos los planes, incluido el de Andrés
+ * (6 oct 2026: «NO quiero que parches la app… quiero que POR CONFIGURACIÓN sea igual»; su plan ya no tiene días «a la antigua»).
  *
- * Leer la lista como Sets y volver a guardarla no cambia nada que no se haya tocado (`lib/setsDeUnaSesion.js`): comprobado con los
- * 886 ejercicios de su plan, incluidos los 140 sin series y los 54 con rango («4-6»).
+ * Leer la lista como Sets y volver a guardarla no cambia nada que no se haya tocado (`lib/setsDeUnaSesion.js`), incluidos los
+ * ejercicios sin series y los que traen un rango («4-6»).
  *
  * `separacion`: lo que separa el cuerpo de lo de arriba. `conAviso`: si sale el aviso de los formatos (una vez por pantalla).
  */
@@ -1450,32 +1241,10 @@ function CuerpoDeSets({
 function SessionEditorInterno({
   day, repertoire, categorias = [], atleta, onEjercicioCreado, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear,
   duenoId, masterId, onCategoriaCreada, onCategoriaBorrada, soloLectura = false, vistaFuera = false,
-  plegable = false, plegada = false, onPlegar, turno = null, onTurno, arrastre, clavePlegado, sugerencia,
+  plegable = false, plegada = false, onPlegar, turno = null, onTurno, arrastre,
 }) {
   const esCompu = useIsDesktop();
   const blocks = useMemo(() => parseBlocks(day.exercises), [day.exercises]);
-
-  if (isDualDay(day)) {
-    return (
-      <div {...arrastre} style={tarjetaDeSesion(day)}>
-        <DayHeader day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog} onClear={onClear} dual conVista vistaFuera={vistaFuera} soloLectura={soloLectura} />
-        <EditorSesionesDelDia
-          day={day}
-          clavePlegado={clavePlegado}
-          onPatch={onPatch}
-          repertoire={repertoire}
-          atleta={atleta}
-          categorias={categorias}
-          duenoId={duenoId}
-          masterId={masterId}
-          onEjercicioCreado={onEjercicioCreado}
-          onCategoriaCreada={onCategoriaCreada}
-          onCategoriaBorrada={onCategoriaBorrada}
-          soloLectura={soloLectura}
-        />
-      </div>
-    );
-  }
 
   const nSets = blocks.filter((b) => b.type === 'set').length;
   /* Un día OFF vacío es un día de descanso, no una sesión a medio armar.
@@ -1493,7 +1262,7 @@ function SessionEditorInterno({
       <DayHeader
         day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog}
         onClear={onClear} nSets={descanso ? null : nSets} conVista={!descanso} vistaFuera={vistaFuera} soloLectura={soloLectura}
-        plegable={sePuedePlegar} plegada={estaPlegada} onPlegar={onPlegar} turno={turno} onTurno={onTurno} sugerencia={sugerencia}
+        plegable={sePuedePlegar} plegada={estaPlegada} onPlegar={onPlegar} turno={turno} onTurno={onTurno}
       />
 
       {/* Plegado: solo la cabecera y cuánto trae. En la compu la cabecera ya dice cuántos sets son: no se repite. */}
@@ -1745,8 +1514,8 @@ const opcionesDeTurno = (turno, onTurno) => (turno
  * se ve. `data-cab-arrastre`: desde los botones de la cabecera también se agarra el workout para cambiarlo de lugar.
  */
 function DayHeader({
-  day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, nSets, dual, conVista = false, vistaFuera = false, soloLectura = false,
-  plegable = false, plegada = false, onPlegar, turno = null, onTurno, sugerencia,
+  day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, nSets, conVista = false, vistaFuera = false, soloLectura = false,
+  plegable = false, plegada = false, onPlegar, turno = null, onTurno,
 }) {
   const { user } = useAuth();
   const esCompu = useIsDesktop();
@@ -1757,14 +1526,14 @@ function DayHeader({
   const [menuTurno, setMenuTurno] = useState(null);
   // Mis planes en la sesión (Andrés, 2 oct 2026): UN solo botón, no dos por tarjeta. Con las dos cosas posibles
   // —usar un workout guardado y guardar este día— es «Mis planes ▾» con un menú; con una sola, es esa acción directa
-  // (una sesión vacía no ofrece guardar; un día doble no recibe un workout).
-  const puedeUsar = !dual && !!onApplyCatalog;
+  // (una sesión vacía no ofrece guardar).
+  const puedeUsar = !!onApplyCatalog;
   const puedeGuardar = !!onSaveToCatalog;
   const acciones = [
     ...(puedeUsar ? [{ icon: FolderOpen, texto: 'Usar workout', onClick: onApplyCatalog }] : []),
     ...(puedeGuardar ? [{ icon: Save, texto: 'Guardar workout', onClick: onSaveToCatalog }] : []),
     ...(onCopy ? [{ icon: Copy, texto: 'Copiar', onClick: onCopy }] : []),
-    ...(!dual && onClear ? [{ icon: Eraser, texto: 'Vaciar', onClick: onClear }] : []),
+    ...(onClear ? [{ icon: Eraser, texto: 'Vaciar', onClick: onClear }] : []),
     ...(onTurno ? opcionesDeTurno(turno, onTurno) : []),
     ...(onDelete ? [{ icon: Trash2, texto: 'Eliminar sesión', onClick: onDelete, peligro: true }] : []),
   ];
@@ -1799,13 +1568,9 @@ function DayHeader({
               encogía para dejarle sitio al tipo y al contador. */}
           <div {...enLectura(soloLectura)} style={{ flex: '1 1 220px', minWidth: 0, ...(soloLectura ? APAGADO : null) }}>
             <Field label="Nombre de la sesión">
-              {/* En un día de dos sesiones el nombre casi nunca está guardado: la app del atleta arma el título con las dos
-                  ("AM Velocidad máxima · PM French Contrast"). Aquí se enseña lo mismo como sugerencia gris —no se
-                  escribe nada en el plan—, con el turno delante y sin «+», que se leía como una sola sesión. */}
               <input
                 value={day.name || ''}
                 onChange={(e) => onPatch({ name: e.target.value })}
-                placeholder={sugerencia ?? (dual && day.blocks?.length ? textoDeSesiones(sesionesDelTitulo({ blocks: day.blocks })) : undefined)}
                 style={inputStyle}
               />
             </Field>
@@ -1831,7 +1596,7 @@ function DayHeader({
           {puedeUsar && !puedeGuardar && <Pill icon={FolderOpen} onClick={() => onApplyCatalog()}>Usar workout</Pill>}
           {!puedeUsar && puedeGuardar && <Pill icon={Save} onClick={(e) => onSaveToCatalog(e.currentTarget)}>Guardar workout</Pill>}
           {onCopy && <Pill icon={Copy} onClick={() => onCopy()}>Copiar</Pill>}
-          {!dual && onClear && <Pill icon={Eraser} onClick={() => onClear()}>Limpiar</Pill>}
+          {onClear && <Pill icon={Eraser} onClick={() => onClear()}>Limpiar</Pill>}
           {onTurno && <Pill icon={Sun} onClick={(e) => setMenuTurno({ ancla: e.currentTarget })}>AM / PM <ChevronDown size={13} /></Pill>}
           {onDelete && <Pill icon={Trash2} danger onClick={() => onDelete()}>Eliminar sesión</Pill>}
           {/* Cómo se ven los ejercicios de abajo: filas o tarjetas. Al final y pegado a la derecha, como en el repertorio:
@@ -1858,7 +1623,6 @@ function DayHeader({
           <input
             value={day.name || ''}
             onChange={(e) => onPatch({ name: e.target.value })}
-            placeholder={sugerencia ?? (dual && day.blocks?.length ? textoDeSesiones(sesionesDelTitulo({ blocks: day.blocks })) : undefined)}
             aria-label="Nombre del workout"
             style={{ ...inputStyle, fontSize: 16, fontWeight: 800, padding: '9px 12px' }}
           />
@@ -2800,15 +2564,10 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     /* CADA WORKOUT SE PLIEGA con su botón, también el único del día (Andrés, 6 oct 2026), y por default vienen plegados. Se
        decide UNA vez, la primera vez que se ve: con algo adentro, plegado; vacío, abierto (ahí es donde se empieza a agregar).
        Decidido, ya no cambia solo: agregarle el primer ejercicio a un workout vacío no lo pliega en medio de lo que se está
-       haciendo. Una sesión doble (`blocks`) pliega cada una de las suyas en vez de plegarse entera. */
+       haciendo. */
     const llavesDelDia = daysOfWeekday.map(({ di }) => `${p?.id}:${w?.num}:${di}`);
-    const sesionDoble = (d) => isDualDay(d) && (d.blocks?.length ?? 0) > 1;
-    const tieneAlgo = (b) => (b?.type === 'note' ? !!(b.text || '').trim() : (b?.exercises?.length ?? 0) > 0);
     const porDefecto = {};
-    daysOfWeekday.forEach(({ d }, k) => {
-      if (sesionDoble(d)) d.blocks.forEach((b, bi) => { porDefecto[`${llavesDelDia[k]}:b${bi}`] = tieneAlgo(b); });
-      else porDefecto[llavesDelDia[k]] = sesionTieneContenido(d);
-    });
+    daysOfWeekday.forEach(({ d }, k) => { porDefecto[llavesDelDia[k]] = sesionTieneContenido(d); });
     // Decidir al pintar es lo que React pide para un estado que sale de otro dato, y solo la primera vez que se ve cada workout.
     if (Object.keys(porDefecto).some((c) => !(c in plegadas.pl))) plegadas.decide(porDefecto);
 
@@ -2832,16 +2591,12 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
       });
     };
     const propiedadesDelWorkout = (d, di, k) => ({
-      clavePlegado: llavesDelDia[k],
-      ...(sesionDoble(d) ? null : {
-        plegable: true,
-        plegada: !!plegadas.pl[llavesDelDia[k]],
-        onPlegar: () => plegadas.alterna(llavesDelDia[k]),
-      }),
+      plegable: true,
+      plegada: !!plegadas.pl[llavesDelDia[k]],
+      onPlegar: () => plegadas.alterna(llavesDelDia[k]),
       ...(variosWorkouts ? {
-        // Un día que ya trae sus sesiones adentro (`blocks`) lleva el turno en el nombre de cada una.
-        turno: isDualDay(d) ? null : (d.turno ?? null),
-        onTurno: isDualDay(d) ? undefined : (t) => patchDay(nav.pi, wIdx, di, { turno: t ?? undefined }),
+        turno: d.turno ?? null,
+        onTurno: (t) => patchDay(nav.pi, wIdx, di, { turno: t ?? undefined }),
         arrastre: propsDeArrastre({
           lista: `ses:${llavesDelDia[0]}`, etiqueta: d.name || 'Sesión', agarraDeBotonesEn: '[data-cab-arrastre]', alMover: moverEntrada,
         }),
@@ -2912,17 +2667,13 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {daysOfWeekday.map(({ d, di }, k) => {
-                  // Un día «a la antigua» con una sola sesión se edita como una sesión normal (ver `unaSolaSesion`).
-                  const unica = unaSolaSesion(d);
-                  const v = unica ? comoSesion(d) : d;
-                  const alDia = (patch) => patchDay(nav.pi, wIdx, di, unica ? deSesion(d, patch) : patch);
+                  const alDia = (patch) => patchDay(nav.pi, wIdx, di, patch);
                   return (
                   <SessionEditor
                     key={di}
-                    day={v}
-                    sugerencia={unica ? textoDeSesiones(sesionesDelTitulo({ blocks: d.blocks })) : undefined}
+                    day={d}
                     vistaFuera={!esCompu}
-                    {...propiedadesDelWorkout(v, di, k)}
+                    {...propiedadesDelWorkout(d, di, k)}
                     repertoire={repertoire}
                     categorias={categoriasVisibles}
                     duenoId={user?.id}
@@ -3256,7 +3007,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
               // trae más sesiones, van al final del día.
               const lugar = { ...nuevas[0] };
               delete lugar.day;
-              patchDay(nav.pi, curWeekIdx, di, { blocks: undefined, dual: undefined, notes: undefined, ...lugar });
+              patchDay(nav.pi, curWeekIdx, di, { notes: undefined, ...lugar });
               if (nuevas.length > 1) {
                 abreLoNuevo(nav.pi, curWeekIdx, nuevas.length - 1);
                 patchWeek(nav.pi, curWeekIdx, (wk) => ({ days: [...(wk.days || []), ...nuevas.slice(1)] }));
