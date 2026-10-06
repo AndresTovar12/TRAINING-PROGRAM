@@ -66,34 +66,22 @@ export function Pill({ icon: Icon, children, onClick, primary, solido, danger, d
   );
 }
 
-export function Stepper({ value, onChange, min = 1 }) {
-  const n = parseInt(value) || min;
-  const btn = {
-    width: 28, height: 28, borderRadius: 8, border: `1px solid ${T.border}`, cursor: 'pointer',
-    background: T.bg2, color: T.text, display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 15,
-    fontFamily: FONT,
-  };
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      <button type="button" className="kp-accion" style={btn} onClick={() => onChange(String(Math.max(min, n - 1)))}>−</button>
-      <span style={{ minWidth: 26, textAlign: 'center', fontWeight: 800, fontSize: 15, color: T.text }}>{value}</span>
-      <button type="button" className="kp-accion" style={btn} onClick={() => onChange(String(n + 1))}>+</button>
-    </span>
-  );
-}
-
 /**
- * Un número con su − y su +, para lo que no es entero de uno en uno: tiempos («20 s», «1:30») y
- * conteos. Mismo aspecto que `Stepper`, pero el texto lo pone quien lo usa y el paso también.
+ * Un número con su − y su +, para tiempos («20 s», «1:30») y conteos. El texto lo pone quien lo usa y el paso también.
  *
  * Con `editable` el número es un campo donde se puede teclear (las vueltas de un formato: llegar
  * a 20 de uno en uno son 20 toques). Mientras se teclea el campo guarda lo que se ve en un
  * borrador —si no, al borrar el «8» para escribir un «12» el campo se llenaría solo con el valor
  * de antes—, y `onEscribe` recibe el texto tal cual; quien lo usa decide qué hacer con lo que no
  * es un número. Al salir del campo vuelve a mostrarse el valor real.
+ *
+ * Con `alConfirmar` lo tecleado NO se avisa letra por letra (`onEscribe`): se entrega una sola vez, al salir del campo o con
+ * Enter, y solo si cambió y no quedó vacío. Para valores que arrastran otros datos —las series de un Set—, donde el «1» que se
+ * pasa por el camino al escribir «12» no debe tocar nada.
  */
 export function Contador({
   texto, onMenos, onMas, menosApagado = false, masApagado = false, etiqueta = '', ancho = 52, editable = false, onEscribe,
+  alConfirmar, teclado = 'numeric',
 }) {
   const [borrador, setBorrador] = useState(null);
   const btn = (apagado) => ({
@@ -109,9 +97,13 @@ export function Contador({
       >−</button>
       {editable ? (
         <input
-          value={borrador ?? texto} inputMode="numeric" size={2} aria-label={etiqueta || undefined}
+          value={borrador ?? texto} inputMode={teclado} size={2} aria-label={etiqueta || undefined}
           onChange={(e) => { setBorrador(e.target.value); onEscribe?.(e.target.value); }}
-          onBlur={() => setBorrador(null)}
+          onKeyDown={alConfirmar ? (e) => { if (e.key === 'Enter') e.currentTarget.blur(); } : undefined}
+          onBlur={() => {
+            if (alConfirmar && borrador !== null && borrador !== texto && borrador.trim() !== '') alConfirmar(borrador.trim());
+            setBorrador(null);
+          }}
           style={{
             width: ancho - 14, textAlign: 'center', fontWeight: 800, fontSize: 15, color: T.text, fontFamily: FONT,
             border: 'none', background: 'transparent', outline: 'none', padding: 0,
