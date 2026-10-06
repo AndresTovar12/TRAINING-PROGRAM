@@ -26,7 +26,8 @@ import GuiaDelEditor from '@/features/admin/GuiaDelEditor';
 import BloqueDelPrograma from '@/features/admin/BloqueDelPrograma';
 import MenuDeAcciones from '@/features/admin/MenuDeAcciones';
 import { useFasesAbiertas } from '@/features/admin/useFasesAbiertas';
-import EditorBarra, { BarraDelCelular } from '@/features/admin/EditorBarra';
+import EditorBarra, { BarraDelCelular, BotonesDeHistorial } from '@/features/admin/EditorBarra';
+import { HistorialContext, useHistorial, useHistorialDelEditor } from '@/lib/useHistorial';
 import { useGuiaAncha } from '@/lib/useGuiaAncha';
 import { T, FONT, KP, tipoDeSesion } from '@/lib/theme';
 import { CeldaDeReps, CeldaDeCarga, DebajoDeRepsYCarga } from '@/components/RepsYCarga';
@@ -992,6 +993,25 @@ function useEnFilas() {
   return [vista ? vista === 'lista' : esCompu, eligeVista];
 }
 
+/* QUITAR ALGO. Con historial (el editor del plan, con Ctrl+Z) se quita de inmediato y sale el aviso «Se quitó…
+   Deshacer»: preguntar antes es una vuelta de más cuando equivocarse se arregla con un toque (Andrés, 5 oct 2026, maqueta
+   aprobada). Sin historial (los editores que todavía no lo tienen) se pregunta como siempre.
+   `opciones.aviso`: lo que dice el aviso. `opciones.pregunta`: la pregunta sin historial; sin ella, se quita directo. */
+function useQuitar() {
+  const pregunta = useConfirmacion();
+  const { avisa } = useAviso();
+  const hist = useHistorialDelEditor();
+  return async (opciones, quitar) => {
+    if (hist) {
+      quitar();
+      avisa(opciones.aviso, { accion: { texto: 'Deshacer', alTocar: hist.deshacer } });
+      return;
+    }
+    if (opciones.pregunta && !await pregunta(opciones.pregunta)) return;
+    quitar();
+  };
+}
+
 /* Lo que solo se lee en `SessionEditor soloLectura`: no se toca ni se enfoca
    (`inert`) y se ve un poco apagado. */
 const enLectura = (activo) => (activo ? { inert: true, 'aria-readonly': true } : null);
@@ -1039,7 +1059,7 @@ function EditorSesionesDelDia({
   onEjercicioCreado, onCategoriaCreada, onCategoriaBorrada, soloLectura = false,
 }) {
   const bloques = day.blocks || [];
-  const pregunta = useConfirmacion();
+  const quita = useQuitar();
   const [enFilas] = useEnFilas();
   // El número de la sesión (0 = la primera del día) a la que va lo que se
   // elija del repertorio o se cree nuevo. `null` = nada abierto.
@@ -1117,14 +1137,15 @@ function EditorSesionesDelDia({
               />
               <IconBtn icon={ChevronUp} title="Subir esta sesión" onClick={() => mueveBloque(bi, -1)} disabled={bi === 0} />
               <IconBtn icon={ChevronDown} title="Bajar esta sesión" onClick={() => mueveBloque(bi, 1)} disabled={bi === bloques.length - 1} />
-              <IconBtn icon={Trash2} danger title="Eliminar esta sesión" onClick={async () => {
-                if (await pregunta({
+              <IconBtn icon={Trash2} danger title="Eliminar esta sesión" onClick={() => quita({
+                pregunta: {
                   titulo: `¿Eliminar «${limpiaTag(b.tag) || `Sesión ${bi + 1}`}»?`,
                   detalle: 'Se va con todos sus ejercicios. El otro turno del día se queda.',
                   confirmar: 'Sí, eliminarla',
                   peligro: true,
-                })) escribe((bs) => bs.filter((_, i) => i !== bi));
-              }} />
+                },
+                aviso: `Se eliminó «${limpiaTag(b.tag) || `Sesión ${bi + 1}`}»`,
+              }, () => escribe((bs) => bs.filter((_, i) => i !== bi)))} />
             </div>
 
             <div style={{ padding: '11px 11px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1172,7 +1193,7 @@ function EditorSesionesDelDia({
                               />
                               <IconBtn icon={ChevronUp} title="Subir" onClick={() => mueveFila(bi, fi, -1)} disabled={fi === 0} />
                               <IconBtn icon={ChevronDown} title="Bajar" onClick={() => mueveFila(bi, fi, 1)} disabled={fi === filas.length - 1} />
-                              <IconBtn icon={Trash2} danger title="Quitar" onClick={() => quitaFila(bi, fi)} />
+                              <IconBtn icon={Trash2} danger title="Quitar" onClick={() => quita({ aviso: 'Se quitó la nota' }, () => quitaFila(bi, fi))} />
                             </div>
                           );
                         }
@@ -1185,7 +1206,7 @@ function EditorSesionesDelDia({
                           onVideoAtleta: setMediaDe,
                           onPatch: (parche) => parcheaFila(bi, fi, parche),
                           onMove: (dir) => mueveFila(bi, fi, dir),
-                          onRemove: () => quitaFila(bi, fi),
+                          onRemove: () => quita({ aviso: `Se quitó ${e.name || 'el ejercicio'}` }, () => quitaFila(bi, fi)),
                         };
                         return enFilas
                           ? <ExerciseRow key={fi} {...props} canUp={fi > 0} canDown={fi < filas.length - 1} />
@@ -1290,7 +1311,7 @@ function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjer
   const { t } = usePalabras();
   const [creandoEjercicio, setCreandoEjercicio] = useState(false);
   const [mediaDe, setMediaDe] = useState(null);
-  const pregunta = useConfirmacion();
+  const quita = useQuitar();
   const esCompu = useIsDesktop();
   const [enFilas] = useEnFilas();
   const [pickerCtx, setPickerCtx] = useState(null);
@@ -1354,7 +1375,7 @@ function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjer
                 />
                 <IconBtn icon={ChevronUp} onClick={() => moveBlock(bi, -1)} disabled={bi === 0} />
                 <IconBtn icon={ChevronDown} onClick={() => moveBlock(bi, 1)} disabled={bi === blocks.length - 1} />
-                <IconBtn icon={Trash2} danger onClick={() => writeBlocks((bs) => bs.filter((_, k) => k !== bi))} />
+                <IconBtn icon={Trash2} danger onClick={() => quita({ aviso: 'Se quitó la nota' }, () => writeBlocks((bs) => bs.filter((_, k) => k !== bi)))} />
               </div>
             );
           }
@@ -1368,9 +1389,10 @@ function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjer
                 onAgregar={() => setPickerCtx({ mode: 'add', blockIdx: bi })}
                 onSubir={() => moveBlock(bi, -1)} onBajar={() => moveBlock(bi, 1)}
                 puedeSubir={bi > 0} puedeBajar={bi < blocks.length - 1}
-                onEliminar={async () => {
-                  if (await pregunta({ titulo: `¿Eliminar el Set ${setIdx} completo?`, confirmar: 'Sí, eliminarlo', peligro: true })) writeBlocks((bs) => bs.filter((_, k) => k !== bi));
-                }}
+                onEliminar={() => quita({
+                  pregunta: { titulo: `¿Eliminar el Set ${setIdx} completo?`, confirmar: 'Sí, eliminarlo', peligro: true },
+                  aviso: `Se eliminó el Set ${setIdx}`,
+                }, () => writeBlocks((bs) => bs.filter((_, k) => k !== bi)))}
               />
               {(() => {
                 // Un solo juego de handlers. La tarjeta y la fila reciben
@@ -1394,9 +1416,9 @@ function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjer
                     [members[mi], members[j]] = [members[j], members[mi]];
                     return { ...x, members };
                   })),
-                  onRemove: () => writeBlocks((bs) => bs
+                  onRemove: () => quita({ aviso: `Se quitó ${m.name || 'el ejercicio'}` }, () => writeBlocks((bs) => bs
                     .map((x, k) => (k === bi ? { ...x, members: x.members.filter((_, kk) => kk !== mi) } : x))
-                    .filter((x) => x.type !== 'set' || x.members.length > 0)),
+                    .filter((x) => x.type !== 'set' || x.members.length > 0))),
                 });
 
                 if (!enFilas) {
@@ -1899,7 +1921,33 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
   const [editandoDiaTel, setEditandoDiaTel] = useState(restaurado?.editandoDiaTel ?? false);
   // Qué menú de tres puntos está abierto: { tipo: 'plan' | 'fase' | 'semana', pi }.
   const [menu, setMenu] = useState(null);
-  const [dirty, setDirty] = useState(false);
+  /* EL HISTORIAL (Ctrl/⌘+Z) y «¿hay algo sin guardar?» (ver `useHistorial`). Lo que se deshace: el título, las fases y la
+     forma; y con cada foto, dónde estaba quien edita (fase, semana, día) para volver ahí. */
+  const raizRef = useRef(null);
+  const hist = useHistorial({
+    raiz: raizRef,
+    leer: () => ({ title, phases, estructura, lugar: { nav, wi: weekIdx, dia: activeWeekday } }),
+    aplicar: (foto) => {
+      setTitle(foto.title);
+      setPhases(foto.phases);
+      setEstructura(foto.estructura);
+      const { nav: n, wi, dia } = foto.lugar;
+      if (n.level === 'phase' && foto.phases.length) {
+        const pi = Math.max(0, Math.min(n.pi, foto.phases.length - 1));
+        const semanas = foto.phases[pi].weekData ?? [];
+        const w = Math.max(0, Math.min(wi, semanas.length - 1));
+        setNav({ level: 'phase', pi });
+        setWeekIdx(w);
+        setActiveWeekday(diaParaSemana(semanas[w], dia));
+      } else {
+        setNav(n.level === 'phase' ? { level: 'start' } : n);
+      }
+    },
+    alCambiar: (que) => avisa(que === 'deshacer' ? 'Cambio deshecho' : 'Cambio rehecho'),
+  });
+  const dirty = hist.sucio;
+  const avisaConDeshacer = (texto) => avisa(texto, { accion: { texto: 'Deshacer', alTocar: hist.deshacer } });
+  const ctxHistorial = useMemo(() => ({ deshacer: hist.deshacer }), [hist.deshacer]);
   const [saving, setSaving] = useState(false);
   // Ya se guardó en esta sesión del editor: el botón dice "Guardado" hasta
   // que se vuelva a cambiar algo.
@@ -2044,7 +2092,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     return () => ro.disconnect();
   }, [esCompu, nav.level]);
 
-  const touch = (fn) => { setDirty(true); setPhases(fn); };
+  const touch = (fn) => { hist.registra(); setPhases(fn); };
+  const cambiaTitulo = (v) => { hist.registra(); setTitle(v); };
   const patchPhase = (pi, patch) => touch((ps) => ps.map((p, i) => (i === pi ? { ...p, ...(typeof patch === 'function' ? patch(p) : patch) } : p)));
   const patchWeek = (pi, wi, patch) => patchPhase(pi, (p) => ({
     weekData: p.weekData.map((w, j) => (j === wi ? { ...w, ...(typeof patch === 'function' ? patch(w) : patch) } : w)),
@@ -2095,6 +2144,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
       if (va) await eliminarPrograma({ sinPreguntar: true });
       return;
     }
+    // Lo que se está guardando es ESTE estado: si se sigue escribiendo mientras tarda, eso queda sin guardar.
+    const idAlGuardar = hist.idActual();
     if (enCatalogo) {
       // Algo NUEVO pregunta primero dónde guardarlo; algo que ya existe se actualiza.
       if (!filaCatalogo) { setModal({ type: 'guardar-catalogo' }); return; }
@@ -2103,7 +2154,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
       try {
         const fila = await actualizarItem(filaCatalogo, { nombre: title.trim(), data: datosDelCatalogo().data });
         setFilaCatalogo(fila);
-        setDirty(false);
+        hist.marcaGuardado(idAlGuardar);
         setHaGuardado(true);
         onSaved?.(fila);
       } catch (e) {
@@ -2120,7 +2171,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
       const row = planRow
         ? await updatePlan(planRow.id, { title: title.trim(), phases: data, kind, estructura })
         : await createPlan({ userId: athlete.id, title: title.trim(), phases: data, kind, estructura, createdBy: user?.id, profesionalId });
-      setDirty(false);
+      hist.marcaGuardado(idAlGuardar);
       setHaGuardado(true);
       /* Guardar NO cierra el editor: el coach se queda donde estaba para ver
          cómo quedó (Andrés, 27 sep 2026). Quien lo abrió recibe el plan
@@ -2158,11 +2209,12 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
   const eliminarFase = async (pi) => {
     const ph = phases[pi];
     if (!ph || phases.length <= 1) return;
-    if (!await pregunta({ titulo: `¿Eliminar la fase "${ph.name}"?`, detalle: 'Se va con todas sus semanas y sesiones.', confirmar: 'Sí, eliminarla', peligro: true })) return;
+    // De inmediato y con «Deshacer»: equivocarse se arregla con un toque (y con Ctrl+Z).
     touch((ps) => ps.filter((_, i) => i !== pi));
     const abierta = nav.pi > pi ? nav.pi - 1 : nav.pi;
     setNav({ level: 'phase', pi: Math.max(0, Math.min(abierta, phases.length - 2)) });
     if (nav.pi === pi) setWeekIdx(0);
+    avisaConDeshacer(`Se eliminó la fase «${ph.name}»`);
   };
   const agregarFase = () => {
     touch((ps) => [...ps, newPhase(nextPhaseNum(ps))]);
@@ -2191,25 +2243,21 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     });
     setWeekIdx(wi + 1);
   };
-  const copiarSemanaATodas = async () => {
+  // Las otras semanas pierden lo que tengan y quedan igual que esta: se hace de inmediato y se avisa con «Deshacer».
+  const copiarSemanaATodas = () => {
     const wi = semanaAbierta();
-    if (!await pregunta({
-      titulo: '¿Copiar esta semana a todas las demás?',
-      detalle: `Las otras semanas ${deCorrido ? t('del plan') : 'de la fase'} pierden lo que tengan y quedan igual que esta.`,
-      confirmar: 'Sí, copiarla',
-    })) return false;
     if (deCorrido) {
       const dias = phases[nav.pi].weekData[wi].days;
       touch((ps) => ps.map((ph, pi) => ({
         ...ph,
         weekData: ph.weekData.map((wk, j) => (pi === nav.pi && j === wi ? wk : { ...wk, days: clone(dias) })),
       })));
-      return true;
+    } else {
+      patchPhase(nav.pi, (ph) => ({
+        weekData: ph.weekData.map((wk, j) => (j === wi ? wk : { ...wk, days: clone(ph.weekData[wi].days) })),
+      }));
     }
-    patchPhase(nav.pi, (ph) => ({
-      weekData: ph.weekData.map((wk, j) => (j === wi ? wk : { ...wk, days: clone(ph.weekData[wi].days) })),
-    }));
-    return true;
+    avisaConDeshacer(deCorrido ? 'Copiada a las demás semanas del plan' : 'Copiada a las demás semanas de la fase');
   };
   const eliminarSemana = async () => {
     const ph = phases[nav.pi];
@@ -2218,18 +2266,18 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     // En "varias semanas" se puede borrar mientras quede alguna en el plan: si
     // era la única de su fase escondida, se va la fase entera.
     const quedaOtra = deCorrido ? semanasDelPlan(phases) > 1 : ph?.weekData?.length > 1;
-    if (!wk || !quedaOtra) return false;
-    if (!await pregunta({ titulo: `¿Eliminar «${nombreSemana(ph, wk)}»?`, detalle: 'Se va con todas sus sesiones.', confirmar: 'Sí, eliminarla', peligro: true })) return false;
+    if (!wk || !quedaOtra) return;
+    const nombre = nombreSemana(ph, wk);
     if (ph.weekData.length <= 1) {
       const anterior = Math.max(0, nav.pi - 1);
       touch((ps) => ps.filter((_, i) => i !== nav.pi));
       setNav({ level: 'phase', pi: anterior });
       setWeekIdx(nav.pi > 0 ? (phases[anterior]?.weekData?.length ?? 1) - 1 : 0);
-      return true;
+    } else {
+      patchPhase(nav.pi, (p2) => ({ weekData: p2.weekData.filter((_, j) => j !== wi) }));
+      setWeekIdx(Math.max(0, wi - 1));
     }
-    patchPhase(nav.pi, (p2) => ({ weekData: p2.weekData.filter((_, j) => j !== wi) }));
-    setWeekIdx(Math.max(0, wi - 1));
-    return true;
+    avisaConDeshacer(`Se eliminó «${nombre}»`);
   };
 
   /* LO QUE HACE LA GUÍA (`GuiaDelEditor`). Tocar algo DENTRO de una fase —una semana, un día, sus opciones— la vuelve
@@ -2290,7 +2338,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
       if (!va) return;
       try {
         await borrarItem(filaCatalogo);
-        setDirty(false);
+        hist.marcaGuardado();
         onDeleted?.();
       } catch (e) {
         setErr(e.message || 'No se pudo eliminar');
@@ -2307,7 +2355,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     if (!va) return;
     try {
       await deletePlan(planRow.id);
-      setDirty(false);
+      hist.marcaGuardado();
       onDeleted?.();
     } catch (e) {
       setErr(e.message || 'No se pudo eliminar');
@@ -2473,7 +2521,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
           ...forma,
           onClick: {
             rutina: () => { setEstructura('rutina'); startWeeklyPlan(); },
-            semanas: () => { setEstructura('semanas'); setNav({ level: 'wizard' }); },
+            semanas: () => { hist.registra(); setEstructura('semanas'); setNav({ level: 'wizard' }); },
             fases: () => { setEstructura('fases'); touch(() => [newPhase(1)]); openPhase(0); },
           }[forma.id],
         })).map((opt) => (
@@ -2592,7 +2640,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         {!esCompu && (
           <BloqueDelPrograma
             titulo={title} rotuloTitulo={isWeekly ? 'Título de la rutina' : t('Título del plan')}
-            onTitulo={(v) => { setTitle(v); setDirty(true); }} programa={programa}
+            onTitulo={cambiaTitulo} programa={programa}
           />
         )}
         <GuiaDelEditor
@@ -2669,14 +2717,14 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
                       ...prev, { ...fila, isMine: true, isBase: false },
                     ])}
                     onPatch={(patch) => patchDay(nav.pi, wIdx, di, patch)}
-                    onDelete={async () => {
-                      if (await pregunta({ titulo: `¿Eliminar la sesión "${d.name || d.day}"?`, confirmar: 'Sí, eliminarla', peligro: true })) {
-                        patchWeek(nav.pi, wIdx, (wk) => ({ days: wk.days.filter((_, k) => k !== di) }));
-                      }
+                    onDelete={() => {
+                      patchWeek(nav.pi, wIdx, (wk) => ({ days: wk.days.filter((_, k) => k !== di) }));
+                      avisaConDeshacer(`Se eliminó «${d.name || d.day}»`);
                     }}
                     onCopy={() => setClipboard(clone(d))}
-                    onClear={async () => {
-                      if (await pregunta({ titulo: '¿Vaciar esta sesión?', detalle: 'Se quitan todos sus sets. El nombre y el tipo se quedan.', confirmar: 'Sí, vaciarla', peligro: true })) patchDay(nav.pi, wIdx, di, { exercises: [] });
+                    onClear={() => {
+                      patchDay(nav.pi, wIdx, di, { exercises: [] });
+                      avisaConDeshacer('Sesión vaciada');
                     }}
                     onSaveToCatalog={sesionTieneContenido(d)
                       ? () => setModal({ type: 'guardar-dia', payload: { sesion: d, delDia: daysOfWeekday.map((x) => x.d) } })
@@ -2761,17 +2809,30 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
      abría el menú de la cuenta. Visto en la prueba del 25 sep 2026. */
 
   return createPortal(
-    <div style={{ position: 'fixed', inset: 0, zIndex: 2400, background: T.bg, fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
+    <HistorialContext.Provider value={ctxHistorial}>
+    <div ref={raizRef} style={{ position: 'fixed', inset: 0, zIndex: 2400, background: T.bg, fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
       {barraNueva ? (
         <EditorBarra
           titulo={title} rotuloTitulo={isWeekly ? 'Título de la rutina' : t('Título del plan')}
-          onTitulo={(v) => { setTitle(v); setDirty(true); }}
+          onTitulo={cambiaTitulo}
           anchoGuia={guia.ancho} guiaOculta={guia.oculta} onAlternarGuia={guia.alternar}
-          onVolver={goBack} onCerrar={handleClose} programa={programa} derecha={botonGuardar}
+          onVolver={goBack} onCerrar={handleClose} programa={programa}
+          derecha={(
+            <>
+              <BotonesDeHistorial puedeDeshacer={hist.puedeDeshacer} puedeRehacer={hist.puedeRehacer} onDeshacer={hist.deshacer} onRehacer={hist.rehacer} />
+              {botonGuardar}
+            </>
+          )}
         />
       ) : !esCompu && nav.level === 'phase' ? (
         <BarraDelCelular
-          enDia={editandoDiaTel} titulo={tituloDelCelular} onVolver={goBack} onCerrar={handleClose} derecha={botonGuardar}
+          enDia={editandoDiaTel} titulo={tituloDelCelular} onVolver={goBack} onCerrar={handleClose}
+          derecha={(
+            <>
+              <BotonesDeHistorial celular puedeDeshacer={hist.puedeDeshacer} puedeRehacer={hist.puedeRehacer} onDeshacer={hist.deshacer} onRehacer={hist.rehacer} />
+              {botonGuardar}
+            </>
+          )}
         />
       ) : (
       <header
@@ -2842,7 +2903,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
               const fila = await guardarItem({ tipo, nombre, descripcion, origen: 'Creado desde cero', carpetaId, data, userId: user?.id });
               setFilaCatalogo(fila);
               setTitle(fila.nombre);
-              setDirty(false);
+              hist.marcaGuardado();
               setHaGuardado(true);
               onSaved?.(fila);
             }}
@@ -2983,7 +3044,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         .kp-pill,.kp-ico{transition:background .12s}
         .kp-pill:hover:not(:disabled),.kp-ico:hover:not(:disabled){background:${T.bg3} !important}
       `}</style>
-    </div>,
+    </div>
+    </HistorialContext.Provider>,
     document.body,
   );
 }
