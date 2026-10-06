@@ -4,7 +4,7 @@ import {
   ArrowLeft, X, Plus, Trash2, Copy, ChevronRight, ChevronUp, ChevronDown,
   ChevronLeft, Loader2, Check, Layers, Dumbbell, StickyNote, Zap,
   Save, FolderOpen, Clipboard, Eraser, CalendarDays, Repeat, Scale, Video,
-  Image as ImageIcon, CopyPlus,
+  Image as ImageIcon, CopyPlus, Sun, Moon,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
@@ -29,6 +29,7 @@ import { useFasesAbiertas } from '@/features/admin/useFasesAbiertas';
 import EditorBarra, { BarraDelCelular, BotonesDeHistorial } from '@/features/admin/EditorBarra';
 import { HistorialContext, useHistorial, useHistorialDelEditor } from '@/lib/useHistorial';
 import { mueveEn, propsDeArrastre } from '@/lib/arrastrar';
+import { PlegadasContext, usePlegadas, usePlegadasDelEditor } from '@/lib/usePlegadas';
 import { useGuiaAncha } from '@/lib/useGuiaAncha';
 import { T, FONT, KP, tipoDeSesion } from '@/lib/theme';
 import { CeldaDeReps, CeldaDeCarga, DebajoDeRepsYCarga } from '@/components/RepsYCarga';
@@ -1023,6 +1024,14 @@ const APAGADO = { opacity: 0.86, pointerEvents: 'none' };
 /* ---- días con dos sesiones (AM / PM) ---- */
 const turnoDe =(tag = '') => (tag.match(/\(([AP]M)\)/) || [])[1] || null;
 const limpiaTag = (tag = '') => tag.replace(/^Sesi[óo]n \d+ \([AP]M\):\s*/, '');
+/* El turno de una sesión de `blocks` vive DENTRO de su nombre («Sesión 2 (PM): Lower · ~65 min»): así lo lee el atleta. Poner
+   o cambiar el turno reescribe solo ese pedazo y respeta lo demás; quitarlo deja el nombre sin el «Sesión N (PM): » de adelante. */
+// El «Sesión N (AM): » de adelante, o '' si no lo trae.
+const prefijoDelTag = (tag = '') => (tag.match(/^Sesi[óo]n \d+ \([AP]M\):\s*/) || [''])[0];
+const conTurnoEnTag = (tag = '', turno, n) => {
+  const nombre = limpiaTag(tag);
+  return turno ? `Sesión ${n} (${turno}): ${nombre}` : nombre;
+};
 
 /**
  * Los días de DOS SESIONES, ahora editables.
@@ -1059,7 +1068,7 @@ const limpiaTag = (tag = '') => tag.replace(/^Sesi[óo]n \d+ \([AP]M\):\s*/, '')
  */
 function EditorSesionesDelDia({
   day, onPatch, repertoire, atleta, categorias, duenoId, masterId,
-  onEjercicioCreado, onCategoriaCreada, onCategoriaBorrada, soloLectura = false,
+  onEjercicioCreado, onCategoriaCreada, onCategoriaBorrada, soloLectura = false, clavePlegado = null,
 }) {
   const bloques = day.blocks || [];
   const quita = useQuitar();
@@ -1067,6 +1076,13 @@ function EditorSesionesDelDia({
   // Cada lista de ejercicios (una por sesión del día) se identifica con el id de este editor.
   const uid = useId();
   const arrastrable = (cfg) => (soloLectura ? undefined : propsDeArrastre(cfg));
+  /* Cada sesión se pliega con su botón (solo si el día trae 2 o más). Lo plegado vive en el editor del plan
+     (`usePlegadas`); aquí solo se mira la llave de cada sesión: `<llave del día>:b<N>`. */
+  const plegadas = usePlegadasDelEditor();
+  const puedePlegar = !!plegadas && !!clavePlegado && (day.blocks?.length ?? 0) > 1;
+  const claveDe = (bi) => `${clavePlegado}:b${bi}`;
+  // Abierto: { bi, ancla } (la sesión y el botón al que se pega el menú «Opciones»).
+  const [menuBloque, setMenuBloque] = useState(null);
   // El número de la sesión (0 = la primera del día) a la que va lo que se
   // elija del repertorio o se cree nuevo. `null` = nada abierto.
   const [eligiendoPara, setEligiendoPara] = useState(null);
@@ -1102,38 +1118,40 @@ function EditorSesionesDelDia({
     ? { ...b, exercises: [...(b.exercises || []), ...nuevas] }
     : b)));
 
-  const mueveBloque = (bi, dir) => escribe((bs) => {
-    const j = bi + dir;
-    if (j < 0 || j >= bs.length) return bs;
-    const copia = [...bs];
-    [copia[bi], copia[j]] = [copia[j], copia[bi]];
-    return copia;
-  });
-
   return (
     <div {...enLectura(soloLectura)} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12, ...(soloLectura ? APAGADO : null) }}>
       {bloques.map((b, bi) => {
         const turno = turnoDe(b.tag);
         const filas = b.exercises || [];
+        const plegado = puedePlegar && !!plegadas.pl[claveDe(bi)];
+        const nombreDelBloque = limpiaTag(b.tag) || `Sesión ${bi + 1}`;
 
         return (
-          <div key={bi} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden' }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 8, padding: '10px 11px',
-              borderBottom: `1px solid ${T.border}`, background: T.bg2, flexWrap: 'wrap',
-            }}>
-              {turno && (
-                <span style={{
-                  fontSize: 10.5, fontWeight: 800, color: '#fff', borderRadius: 6, padding: '3px 7px',
-                  background: turno === 'PM' ? T.accent : '#D97706', letterSpacing: 0.4, flexShrink: 0,
-                }}>
-                  {turno}
-                </span>
-              )}
+          <div
+            key={bi}
+            {...arrastrable({
+              lista: `${uid}:bloques`, etiqueta: nombreDelBloque, agarraDeBotonesEn: '[data-cab-arrastre]',
+              // Lo plegado sigue a su sesión.
+              alMover: (de, a) => { plegadas?.reordena(bloques.map((_, k) => claveDe(k)), de, a); escribe((bs) => mueveEn(bs, de, a)); },
+            })}
+            style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden' }}
+          >
+            <div
+              data-cab-arrastre=""
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '10px 11px',
+                borderBottom: plegado ? 'none' : `1px solid ${T.border}`, background: T.bg2, flexWrap: 'wrap',
+              }}
+            >
+              {puedePlegar && <BotonDePlegar plegada={plegado} onClick={() => plegadas.alterna(claveDe(bi))} />}
+              {turno && <InsigniaDeTurno turno={turno} />}
+              {/* El nombre se escribe SIN el «Sesión N (AM): » de adelante (el turno ya es la insignia): al escribir, ese
+                  pedazo se conserva tal cual, que es como el atleta lee el turno. */}
               <input
-                value={b.tag || ''}
-                onChange={(e) => parcheaBloque(bi, { tag: e.target.value })}
+                value={limpiaTag(b.tag)}
+                onChange={(e) => parcheaBloque(bi, { tag: prefijoDelTag(b.tag) + e.target.value })}
                 placeholder={`Sesión ${bi + 1}`}
+                aria-label={`Nombre de la sesión ${bi + 1}`}
                 style={{
                   flex: 1, minWidth: 120, padding: '7px 9px', borderRadius: 8,
                   border: `1.5px solid transparent`, background: 'transparent', fontFamily: FONT,
@@ -1142,19 +1160,28 @@ function EditorSesionesDelDia({
                 onFocus={(e) => { e.target.style.borderColor = T.border; e.target.style.background = T.bg; }}
                 onBlur={(e) => { e.target.style.borderColor = 'transparent'; e.target.style.background = 'transparent'; }}
               />
-              <IconBtn icon={ChevronUp} title="Subir esta sesión" onClick={() => mueveBloque(bi, -1)} disabled={bi === 0} />
-              <IconBtn icon={ChevronDown} title="Bajar esta sesión" onClick={() => mueveBloque(bi, 1)} disabled={bi === bloques.length - 1} />
-              <IconBtn icon={Trash2} danger title="Eliminar esta sesión" onClick={() => quita({
-                pregunta: {
-                  titulo: `¿Eliminar «${limpiaTag(b.tag) || `Sesión ${bi + 1}`}»?`,
-                  detalle: 'Se va con todos sus ejercicios. El otro turno del día se queda.',
-                  confirmar: 'Sí, eliminarla',
-                  peligro: true,
-                },
-                aviso: `Se eliminó «${limpiaTag(b.tag) || `Sesión ${bi + 1}`}»`,
-              }, () => escribe((bs) => bs.filter((_, i) => i !== bi)))} />
+              {/* Un solo «Opciones»: el turno (AM/PM, si el coach quiere) y eliminar esta sesión. */}
+              {!soloLectura && (
+                <button
+                  type="button" className="kp-pill" aria-haspopup="menu" aria-label={`Opciones de la sesión ${bi + 1}`}
+                  onClick={(e) => setMenuBloque({ bi, ancla: e.currentTarget })}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 7, flexShrink: 0, cursor: 'pointer',
+                    border: `1.5px solid ${T.border}`, background: T.bg2, color: T.text, fontFamily: FONT, fontWeight: 700,
+                    fontSize: 13.5, padding: '8px 12px', borderRadius: 11,
+                  }}
+                >
+                  Opciones <ChevronDown size={14} color={T.text3} />
+                </button>
+              )}
             </div>
 
+            {/* Plegada: solo la cabecera y cuánto trae. */}
+            {plegado ? (
+              <div style={{ padding: '0 12px 11px 54px', fontSize: 12.5, fontWeight: 600, color: T.text2, background: T.bg2 }}>
+                {b.type === 'note' ? 'Solo texto' : pluralS(filas.filter((e) => !e.isNote).length, 'ejercicio')}
+              </div>
+            ) : (
             <div style={{ padding: '11px 11px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
               {b.type === 'note' ? (
                 <textarea
@@ -1236,9 +1263,33 @@ function EditorSesionesDelDia({
                 </>
               )}
             </div>
+            )}
           </div>
         );
       })}
+
+      {/* El menú «Opciones» de una sesión del día: su turno y eliminarla. */}
+      {menuBloque && bloques[menuBloque.bi] && (() => {
+        const bi = menuBloque.bi;
+        const b = bloques[bi];
+        const turnoActual = turnoDe(b.tag);
+        const nombre = limpiaTag(b.tag) || `Sesión ${bi + 1}`;
+        return (
+          <MenuDeAcciones
+            titulo={nombre} ancla={menuBloque.ancla} onClose={() => setMenuBloque(null)}
+            acciones={[
+              ...opcionesDeTurno(turnoActual, (t) => parcheaBloque(bi, { tag: conTurnoEnTag(b.tag, t, bi + 1) })),
+              {
+                icon: Trash2, texto: 'Eliminar sesión', peligro: true,
+                onClick: () => quita({
+                  pregunta: { titulo: `¿Eliminar «${nombre}»?`, detalle: 'Se va con todos sus ejercicios. El otro turno del día se queda.', confirmar: 'Sí, eliminarla', peligro: true },
+                  aviso: `Se eliminó «${nombre}»`,
+                }, () => escribe((bs) => bs.filter((_, i) => i !== bi))),
+              },
+            ]}
+          />
+        );
+      })()}
 
       {!soloLectura && (
         <>
@@ -1318,7 +1369,11 @@ export function SessionEditor(props) {
   );
 }
 
-function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjercicioCreado, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, duenoId, masterId, onCategoriaCreada, onCategoriaBorrada, soloLectura = false, vistaFuera = false }) {
+function SessionEditorInterno({
+  day, repertoire, categorias = [], atleta, onEjercicioCreado, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear,
+  duenoId, masterId, onCategoriaCreada, onCategoriaBorrada, soloLectura = false, vistaFuera = false,
+  plegable = false, plegada = false, onPlegar, turno = null, onTurno, arrastre, clavePlegado,
+}) {
   const { t } = usePalabras();
   const [creandoEjercicio, setCreandoEjercicio] = useState(false);
   const [mediaDe, setMediaDe] = useState(null);
@@ -1343,10 +1398,11 @@ function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjer
 
   if (isDualDay(day)) {
     return (
-      <div style={tarjetaDeSesion(day)}>
+      <div {...arrastre} style={tarjetaDeSesion(day)}>
         <DayHeader day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog} onClear={onClear} dual conVista vistaFuera={vistaFuera} soloLectura={soloLectura} />
         <EditorSesionesDelDia
           day={day}
+          clavePlegado={clavePlegado}
           onPatch={onPatch}
           repertoire={repertoire}
           atleta={atleta}
@@ -1371,9 +1427,21 @@ function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjer
   const descanso = (day.cat || 'gym') === 'off' && nSets === 0;
 
   return (
-    <div style={tarjetaDeSesion(day)}>
-      <DayHeader day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog} onClear={onClear} conVista={!descanso} vistaFuera={vistaFuera} soloLectura={soloLectura} />
+    <div {...arrastre} style={tarjetaDeSesion(day)}>
+      <DayHeader
+        day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog}
+        onClear={onClear} conVista={!descanso} vistaFuera={vistaFuera} soloLectura={soloLectura}
+        plegable={plegable} plegada={plegada} onPlegar={onPlegar} turno={turno} onTurno={onTurno}
+      />
 
+      {/* Plegado: solo la cabecera y cuánto trae. */}
+      {plegada && (
+        <div style={{ margin: '8px 0 0 42px', fontSize: 12.5, fontWeight: 600, color: T.text2 }}>
+          {pluralS(nSets, 'set')} · {pluralS(blocks.reduce((n, b) => n + (b.type === 'set' ? b.members.length : 0), 0), 'ejercicio')}
+        </div>
+      )}
+
+      {!plegada && (
       <div {...enLectura(soloLectura)} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 14, ...(soloLectura ? APAGADO : null) }}>
         {!soloLectura && nSets > 0 && <AvisoDeFormatos />}
         {blocks.map((b, bi) => {
@@ -1471,6 +1539,7 @@ function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjer
           );
         })}
       </div>
+      )}
 
       {/* Agregar contenido. En la compu los tres caben en una fila y da igual.
           En el telefono NO da igual: "Agregar set" es a lo que vienes, y los
@@ -1478,7 +1547,7 @@ function SessionEditorInterno({ day, repertoire, categorias = [], atleta, onEjer
           que leer los tres para encontrar el de siempre. Aqui el principal
           ocupa todo el ancho —imposible de fallar con el pulgar— y los otros
           dos van abajo, mas chicos, repartidos a la mitad. */}
-      {soloLectura ? null : descanso ? (
+      {soloLectura || plegada ? null : descanso ? (
         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ fontSize: 13, color: T.text2, lineHeight: 1.5 }}>
             <b style={{ color: T.text }}>Día de descanso.</b> {t('El atleta no tiene nada que hacer. Si quieres, déjale una nota.')}
@@ -1749,8 +1818,49 @@ function tarjetaDeSesion(day) {
   return { ...base, background: `linear-gradient(rgba(${rgb},0.09), rgba(${rgb},0.09)), ${T.bg2}`, border: `1px solid rgba(${rgb},0.32)` };
 }
 
+/* PLEGAR un workout (solo con 2 o más en el día): botón blanco con borde y la flechita azul, para que se vea (Andrés, 5 oct
+   2026: «el botoncito para desplegar casi no se ve»). Plegado deja solo la cabecera y su resumen. */
+function BotonDePlegar({ plegada, onClick }) {
+  return (
+    <button
+      type="button" onClick={onClick} aria-expanded={!plegada}
+      aria-label={plegada ? 'Desplegar el workout' : 'Plegar el workout'} title={plegada ? 'Desplegar' : 'Plegar'}
+      style={{
+        width: 34, height: 34, borderRadius: 10, flexShrink: 0, cursor: 'pointer', display: 'grid', placeItems: 'center',
+        border: `1px solid ${T.borderHi}`, background: T.bg2, color: T.accent, touchAction: 'manipulation',
+      }}
+    >
+      {plegada ? <ChevronRight size={17} /> : <ChevronDown size={17} />}
+    </button>
+  );
+}
+
+// El turno de un workout: AM naranja, PM azul (los mismos colores que ve el atleta en sus tarjetas).
+function InsigniaDeTurno({ turno }) {
+  return (
+    <span style={{
+      fontSize: 10.5, fontWeight: 800, color: '#fff', borderRadius: 6, padding: '3px 7px', letterSpacing: 0.4, flexShrink: 0,
+      background: turno === 'PM' ? T.accent : '#D97706',
+    }}>
+      {turno}
+    </span>
+  );
+}
+
+/* AM o PM es OPCIONAL: no sale solo, el coach lo pone si quiere (Andrés, 5 oct 2026: «nunca he entendido cómo funciona lo de
+   AM y PM… que el coach pueda ponerlo si se le antoja»). Sin turno: «Poner AM» y «Poner PM»; con turno: cambiarlo o quitarlo. */
+const opcionesDeTurno = (turno, onTurno) => (turno
+  ? [
+    { icon: turno === 'AM' ? Moon : Sun, texto: `Cambiar a ${turno === 'AM' ? 'PM' : 'AM'}`, onClick: () => onTurno(turno === 'AM' ? 'PM' : 'AM') },
+    { icon: X, texto: 'Quitar turno', onClick: () => onTurno(null) },
+  ]
+  : [
+    { icon: Sun, texto: 'Poner AM', onClick: () => onTurno('AM') },
+    { icon: Moon, texto: 'Poner PM', onClick: () => onTurno('PM') },
+  ]);
+
 /**
- * La cabecera de un workout: [tipo ▾] [nombre] [Opciones ▾] [lista | tarjetas].
+ * La cabecera de un workout: [plegar] [AM/PM] [tipo ▾] [nombre] [Opciones ▾] [lista | tarjetas].
  *
  * Andrés, 5 oct 2026, con la maqueta aprobada: las herramientas del workout van en UN solo botón con nombre
  * («Opciones ▾», con su menú: Usar workout · Guardar workout · Copiar · Vaciar · Eliminar sesión) y el
@@ -1762,7 +1872,10 @@ function tarjetaDeSesion(day) {
  * misma cabecera. Con `soloLectura` el nombre y el tipo no se tocan; lo de abajo queda vivo, porque el interruptor solo
  * cambia cómo se ve.
  */
-function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, dual, conVista = false, vistaFuera = false, soloLectura = false }) {
+function DayHeader({
+  day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, dual, conVista = false, vistaFuera = false, soloLectura = false,
+  plegable = false, plegada = false, onPlegar, turno = null, onTurno,
+}) {
   const { user } = useAuth();
   const esCompu = useIsDesktop();
   const [enFilas, eligeVista] = useEnFilas();
@@ -1774,11 +1887,15 @@ function DayHeader({ day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCat
     ...(onSaveToCatalog ? [{ icon: Save, texto: 'Guardar workout', onClick: onSaveToCatalog }] : []),
     ...(onCopy ? [{ icon: Copy, texto: 'Copiar', onClick: onCopy }] : []),
     ...(!dual && onClear ? [{ icon: Eraser, texto: 'Vaciar', onClick: onClear }] : []),
+    ...(onTurno ? opcionesDeTurno(turno, onTurno) : []),
     ...(onDelete ? [{ icon: Trash2, texto: 'Eliminar sesión', onClick: onDelete, peligro: true }] : []),
   ];
   return (
     <>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      {/* `data-cab-arrastre`: desde los botones de esta cabecera también se agarra el workout para cambiarlo de lugar. */}
+      <div data-cab-arrastre="" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        {plegable && <BotonDePlegar plegada={plegada} onClick={onPlegar} />}
+        {turno && <InsigniaDeTurno turno={turno} />}
         {/* 200 px de base y no `flex: 1` pelado: con `flex: 1` la base es 0, así que el nombre nunca bajaba de renglón
             y se encogía para dejarle sitio al tipo. En el celular va primero y ocupa su renglón. */}
         <div
@@ -1947,13 +2064,16 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
   /* EL HISTORIAL (Ctrl/⌘+Z) y «¿hay algo sin guardar?» (ver `useHistorial`). Lo que se deshace: el título, las fases y la
      forma; y con cada foto, dónde estaba quien edita (fase, semana, día) para volver ahí. */
   const raizRef = useRef(null);
+  // Qué workouts están plegados (cosa de la pantalla, no del plan): al deshacer vuelven como estaban.
+  const plegadas = usePlegadas();
   const hist = useHistorial({
     raiz: raizRef,
-    leer: () => ({ title, phases, estructura, lugar: { nav, wi: weekIdx, dia: activeWeekday } }),
+    leer: () => ({ title, phases, estructura, lugar: { nav, wi: weekIdx, dia: activeWeekday, pl: plegadas.pl } }),
     aplicar: (foto) => {
       setTitle(foto.title);
       setPhases(foto.phases);
       setEstructura(foto.estructura);
+      plegadas.restaura(foto.lugar.pl);
       const { nav: n, wi, dia } = foto.lugar;
       if (n.level === 'phase' && foto.phases.length) {
         const pi = Math.max(0, Math.min(n.pi, foto.phases.length - 1));
@@ -2651,6 +2771,37 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     const w = p?.weekData?.[wIdx];
     const daysOfWeekday = (w?.days || []).map((d, di) => ({ d, di })).filter((x) => x.d.day === activeWeekday);
 
+    /* VARIOS WORKOUTS EL MISMO DÍA (varias entradas del plan con el mismo día de la semana). Cada uno se pliega, puede llevar
+       AM o PM si el coach quiere (campo `turno`), y se reordenan arrastrándolos: el de la mañana sube, el de la tarde baja. Con
+       uno solo no hay nada de eso. Al reordenar, las entradas de este día se cambian entre SUS lugares de la semana: los demás
+       días no se mueven. */
+    const variosWorkouts = daysOfWeekday.length > 1;
+    const llavesDelDia = daysOfWeekday.map(({ di }) => `${p?.id}:${w?.num}:${di}`);
+    const moverEntrada = (de, a) => {
+      plegadas.reordena(llavesDelDia, de, a);
+      patchWeek(nav.pi, wIdx, (wk) => {
+        const lugares = daysOfWeekday.map((x) => x.di);
+        const nuevas = mueveEn(lugares.map((i) => wk.days[i]), de, a);
+        const days = [...wk.days];
+        lugares.forEach((i, n) => { days[i] = nuevas[n]; });
+        return { days };
+      });
+    };
+    const propiedadesDeVariosWorkouts = (d, di, k) => ({
+      clavePlegado: `${p?.id}:${w?.num}:${di}`,
+      ...(variosWorkouts ? {
+        plegable: true,
+        plegada: !!plegadas.pl[llavesDelDia[k]],
+        onPlegar: () => plegadas.alterna(llavesDelDia[k]),
+        // Un día que ya trae sus sesiones adentro (`blocks`) lleva el turno en el nombre de cada una.
+        turno: isDualDay(d) ? null : (d.turno ?? null),
+        onTurno: isDualDay(d) ? undefined : (t) => patchDay(nav.pi, wIdx, di, { turno: t ?? undefined }),
+        arrastre: propsDeArrastre({
+          lista: `ses:${llavesDelDia[0]}`, etiqueta: d.name || 'Sesión', agarraDeBotonesEn: '[data-cab-arrastre]', alMover: moverEntrada,
+        }),
+      } : null),
+    });
+
     const hoja = (
       <div>
         {!esCompu && (
@@ -2717,11 +2868,12 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {daysOfWeekday.map(({ d, di }) => (
+                {daysOfWeekday.map(({ d, di }, k) => (
                   <SessionEditor
                     key={di}
                     day={d}
                     vistaFuera={!esCompu}
+                    {...propiedadesDeVariosWorkouts(d, di, k)}
                     repertoire={repertoire}
                     categorias={categoriasVisibles}
                     duenoId={user?.id}
@@ -2826,6 +2978,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
 
   return createPortal(
     <HistorialContext.Provider value={ctxHistorial}>
+    <PlegadasContext.Provider value={plegadas.valor}>
     <div ref={raizRef} style={{ position: 'fixed', inset: 0, zIndex: 2400, background: T.bg, fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
       {barraNueva ? (
         <EditorBarra
@@ -3061,6 +3214,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         .kp-pill:hover:not(:disabled),.kp-ico:hover:not(:disabled){background:${T.bg3} !important}
       `}</style>
     </div>
+    </PlegadasContext.Provider>
     </HistorialContext.Provider>,
     document.body,
   );

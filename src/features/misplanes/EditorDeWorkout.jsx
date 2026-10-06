@@ -7,6 +7,8 @@ import { useConfirmacion } from '@/components/Confirmacion';
 import { useAviso } from '@/components/AvisoPasajero';
 import { BotonesDeHistorial } from '@/features/admin/EditorBarra';
 import { HistorialContext, useHistorial } from '@/lib/useHistorial';
+import { PlegadasContext, usePlegadas } from '@/lib/usePlegadas';
+import { mueveEn, propsDeArrastre } from '@/lib/arrastrar';
 import { useRepertorioDelEditor } from '@/features/admin/useRepertorioDelEditor';
 import { useIsWide } from '@/lib/useViewport';
 import { SessionEditor, Pill } from '@/features/admin/PlanBuilder';
@@ -50,10 +52,12 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
 
   /* El historial (Ctrl/⌘+Z) y «¿hay algo sin guardar?», como en el editor del plan (ver `useHistorial`). */
   const raizRef = useRef(null);
+  // Qué sesiones están plegadas (cosa de la pantalla): al deshacer vuelven como estaban.
+  const plegadas = usePlegadas();
   const hist = useHistorial({
     raiz: raizRef,
-    leer: () => ({ titulo, sesiones }),
-    aplicar: (foto) => { setTitulo(foto.titulo); setSesiones(foto.sesiones); },
+    leer: () => ({ titulo, sesiones, lugar: { pl: plegadas.pl } }),
+    aplicar: (foto) => { setTitulo(foto.titulo); setSesiones(foto.sesiones); plegadas.restaura(foto.lugar.pl); },
     alCambiar: (que) => avisa(que === 'deshacer' ? 'Cambio deshecho' : 'Cambio rehecho'),
   });
   const dirty = hist.sucio;
@@ -112,6 +116,23 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
     }
   }
 
+  /* Varias sesiones en un workout (mañana y tarde): cada una se pliega, puede llevar AM o PM si el coach quiere y se
+     reordenan arrastrándolas, igual que en un día del plan. */
+  const variasSesiones = sesiones.length > 1;
+  const llaves = sesiones.map((_, k) => `w:${k}`);
+  const moverSesion = (de, a) => { plegadas.reordena(llaves, de, a); cambia((prev) => mueveEn(prev, de, a)); };
+  const propiedadesDeLaSesion = (s, i) => ({
+    clavePlegado: llaves[i],
+    ...(variasSesiones ? {
+      plegable: true,
+      plegada: !!plegadas.pl[llaves[i]],
+      onPlegar: () => plegadas.alterna(llaves[i]),
+      turno: (s.blocks || s.dual) ? null : (s.turno ?? null),
+      onTurno: (s.blocks || s.dual) ? undefined : (t) => parchea(i, { turno: t ?? undefined }),
+      arrastre: propsDeArrastre({ lista: 'workout:sesiones', etiqueta: s.name || 'Sesión', agarraDeBotonesEn: '[data-cab-arrastre]', alMover: moverSesion }),
+    } : null),
+  });
+
   // De inmediato y con «Deshacer»: equivocarse se arregla con un toque (y con Ctrl+Z).
   const quitarSesion = (i) => {
     const nombre = sesiones[i].name || i + 1;
@@ -121,6 +142,7 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
 
   return createPortal(
     <HistorialContext.Provider value={ctxHistorial}>
+    <PlegadasContext.Provider value={plegadas.valor}>
     <div ref={raizRef} style={{ position: 'fixed', inset: 0, zIndex: 2400, background: T.bg, fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
       <header
         style={{
@@ -188,6 +210,7 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
             <SessionEditor
               key={i}
               day={s}
+              {...propiedadesDeLaSesion(s, i)}
               repertoire={repertoire}
               categorias={categoriasVisibles}
               duenoId={user?.id}
@@ -244,6 +267,7 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
         .kp-pill:hover:not(:disabled),.kp-ico:hover:not(:disabled){background:${T.bg3} !important}
       `}</style>
     </div>
+    </PlegadasContext.Provider>
     </HistorialContext.Provider>,
     document.body,
   );
