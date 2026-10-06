@@ -18,6 +18,20 @@ import { queHaceLaIA } from '@/features/ia/queHaceLaIA';
  *   como quién   — la cuenta con la que se está entrando, con salida si no es
  *   qué podrá    — la lista de `queHaceLaIA`, por rol
  */
+/* Abrir la petición en Supabase la ata a esa cuenta, y si la cuenta ya había dado permiso a esa IA la
+   aprueba al instante: una segunda pregunta seguida (React monta dos veces en desarrollo) chocaba con la
+   primera y salía «ya caducó». Una sola pregunta por cuenta y petición; si da error se vuelve a preguntar. */
+const consultas = new Map();
+function detallesDe(clave, authorizationId) {
+  if (!consultas.has(clave)) {
+    consultas.set(clave, supabase.auth.oauth.getAuthorizationDetails(authorizationId).then((respuesta) => {
+      if (respuesta.error || !respuesta.data) consultas.delete(clave);
+      return respuesta;
+    }));
+  }
+  return consultas.get(clave);
+}
+
 export default function PermisoIA({ authorizationId, onTerminar }) {
   const { profile, signOut } = useAuth();
   const [estado, setEstado] = useState('cargando'); // cargando | pregunta | enviando | listo | error
@@ -26,10 +40,10 @@ export default function PermisoIA({ authorizationId, onTerminar }) {
 
   useEffect(() => {
     let vivo = true;
-    supabase.auth.oauth.getAuthorizationDetails(authorizationId).then(({ data, error: err }) => {
+    detallesDe(`${profile?.id}:${authorizationId}`, authorizationId).then(({ data, error: err }) => {
       if (!vivo) return;
       if (err || !data) {
-        setError('Este permiso ya caducó o no es válido. Vuelve a intentarlo desde tu IA.');
+        setError('Este permiso ya caducó, ya se usó o lo abrió otra cuenta. Vuelve a empezar desde tu IA.');
         setEstado('error');
         return;
       }
@@ -43,7 +57,19 @@ export default function PermisoIA({ authorizationId, onTerminar }) {
       setEstado('pregunta');
     });
     return () => { vivo = false; };
-  }, [authorizationId]);
+  }, [authorizationId, profile?.id]);
+
+  /* «¿No eres tú?». Supabase ata cada petición a la PRIMERA cuenta que abre esta pantalla: si se
+     cambiaba de cuenta sin más, la nueva recibía «authorization not found» y aquí se leía «ya
+     caducó» (Andrés, 6 oct 2026, conectando ChatGPT: «cuando le picas a "no eres tú" y tratas de
+     darte de alta con otra cuenta, caduca el permiso»). Antes de salir, esta cuenta suelta la
+     petición (`soltar_permiso_ia`); la cuenta nueva la toma al abrir esta misma pantalla, y la IA
+     no se entera: sigue esperando el mismo permiso. Si soltarla falla, de todos modos se sale. */
+  async function cambiarDeCuenta() {
+    setEstado('enviando');
+    try { await supabase.rpc('soltar_permiso_ia', { p_authorization_id: authorizationId }); } catch { /* se sale igual */ }
+    await signOut();
+  }
 
   async function decide(permitir) {
     setEstado('enviando');
@@ -111,7 +137,7 @@ export default function PermisoIA({ authorizationId, onTerminar }) {
             <p style={{ fontSize: 14.5, color: KP.ink2, fontWeight: 500, lineHeight: 1.5, margin: '0 0 18px' }}>
               Entrará como <b style={{ color: KP.ink }}>{profile?.full_name || profile?.username}</b>{' '}
               (@{profile?.username}).{' '}
-              <button type="button" onClick={signOut} style={enlace}>¿No eres tú?</button>
+              <button type="button" onClick={cambiarDeCuenta} style={enlace}>¿No eres tú?</button>
             </p>
 
             <div style={{ background: KP.surfaceMuted, border: `1px solid ${KP.line}`, borderRadius: 18, padding: '14px 16px', marginBottom: 14 }}>
