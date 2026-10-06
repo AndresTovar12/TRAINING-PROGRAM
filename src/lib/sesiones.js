@@ -51,7 +51,8 @@ export function sesionesDelTitulo(dias) {
       }));
     } else {
       sesiones.push({
-        turno: null,
+        // El turno de una sesión suelta lo pone el coach desde «Opciones» (AM o PM); sin él, ninguno.
+        turno: day.turno === 'AM' || day.turno === 'PM' ? day.turno : null,
         nombre: propio || (bloques.length === 1 ? nombreDeSesion(bloques[0].tag) : ''),
       });
     }

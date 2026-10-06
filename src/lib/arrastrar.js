@@ -17,8 +17,9 @@
  *     <div {...propsDeArrastre({ lista: 'sets:ab', etiqueta: 'Set 2', alMover: (de, a) => … })}>
  * `lista` identifica la lista (todos los de la misma, en el orden en que salen en pantalla, son sus hermanos); `alMover(de, a)`
  * recibe de qué lugar a qué lugar quedó (`a` ya descuenta que el elemento sale de su lugar: es el índice final).
- * `agarraDeBotones`: también se agarra desde los botones del propio elemento (un clic sin mover sigue haciendo lo suyo),
- * para las tarjetas cuyo encabezado es casi todo botones.
+ * `agarraDeBotonesEn`: un selector. Los BOTONES que estén dentro de la parte del elemento que lo cumple también lo agarran
+ * (un clic sin mover sigue haciendo lo suyo): para las tarjetas cuyo encabezado es casi todo botones, como un workout.
+ * Los campos nunca arrastran.
  *
  * Es un solo motor para toda la app (solo hay un puntero arrastrando a la vez): los oyentes se instalan la primera vez.
  */
@@ -179,7 +180,10 @@ function empieza(ev, cfg) {
   const item = ev.currentTarget;
   const propio = ev.target?.closest?.(INTERACTIVO);
   // Lo que tiene función propia sigue haciendo lo suyo (y deja pasar el gesto a quien lo contiene, que también lo ignora).
-  if (propio && item.contains(propio) && propio !== item && !(cfg.agarraDeBotones && propio.tagName === 'BUTTON')) return;
+  if (propio && item.contains(propio) && propio !== item) {
+    const zona = cfg.agarraDeBotonesEn ? propio.closest(cfg.agarraDeBotonesEn) : null;
+    if (!(propio.tagName === 'BUTTON' && zona && item.contains(zona))) return;
+  }
   // El más interno gana: el que contiene a este no empieza otro arrastre.
   ev.stopPropagation();
   instala();
