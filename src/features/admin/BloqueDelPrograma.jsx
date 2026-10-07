@@ -1,14 +1,15 @@
-import { Save, Trash2 } from 'lucide-react';
+import { ChevronDown, Ellipsis, Save } from 'lucide-react';
 import { T, FONT } from '@/lib/theme';
 
 /**
  * Lo del programa entero, arriba de la guía en el CELULAR (en la compu esto vive en la barra de arriba: ver
  * `EditorBarra`). Andrés, 5 oct 2026, con la maqueta aprobada: «así estaba y está bien».
  *
- *   «TÍTULO DEL PLAN» + su casilla · «Programa por fases · Cambiar» · «Guardar plan» y «Eliminar programa»
+ *   «TÍTULO DEL PLAN» + su casilla · «Programa por fases · Cambiar» · «Guardar plan» y «Más ▾»
  *
- * Los dos botones son de texto, sin caja: con el dedo no hace falta marcarlos, y el rojo de «Eliminar» sale al
- * tocarlo. Lo recibe de `PlanBuilder` ya resuelto en `programa` (la misma forma que usa la barra de la compu).
+ * Los botones son de texto, sin caja: con el dedo no hace falta marcarlos. «Más ▾» (7 oct 2026) abre el menú con
+ * lo que no se usa a cada rato: la foto del plan, la ciencia y eliminar el programa (que antes era un botón
+ * rojo suelto). Lo recibe de `PlanBuilder` ya resuelto en `programa` (la misma forma que usa la barra de la compu).
  */
 const ESTILOS = `
 .tl-quieto:hover{background:${T.bg3}}
@@ -76,8 +77,10 @@ export default function BloqueDelPrograma({ titulo, rotuloTitulo, onTitulo, prog
         {programa.puedeGuardar && (
           <BotonDeTexto icono={Save} clase="tl-azul" color={T.accent} onClick={programa.onGuardar}>{programa.textoGuardar}</BotonDeTexto>
         )}
-        {programa.onEliminar && (
-          <BotonDeTexto icono={Trash2} clase="tl-rojo" onClick={programa.onEliminar}>{programa.textoEliminar}</BotonDeTexto>
+        {programa.onMas && (
+          <BotonDeTexto icono={Ellipsis} onClick={(e) => programa.onMas(e.currentTarget)}>
+            Más <ChevronDown size={13} />
+          </BotonDeTexto>
         )}
       </div>
     </div>
