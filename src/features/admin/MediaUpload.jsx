@@ -7,7 +7,9 @@
  * avance— solo llegaba a una de las dos.
  */
 import { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Upload, Loader2, X, Video, Camera, Images } from 'lucide-react';
+import IconoExplicacion from '@/components/IconoExplicacion';
 import { uploadExerciseMedia } from '@/lib/api';
 import { subeFotos, guardaPoster } from '@/lib/posters';
 import { segundos } from '@/lib/fotogramas';
@@ -25,6 +27,11 @@ export default function MediaUpload({
   // miniatura— pero se acepta para no tener que tocar cada sitio que lo usa.
   label, icon: _icon, value, onChange, accept, kind, hint,
   onAjustes,
+  /* QUÉ ES EL VIDEO (ver `lib/proposito.js`). `proposito` lo trae decidido el botón que se tocó («Grabar ejemplo» /
+     «Grabar explicación»): el editor lo muestra y se puede corregir. `preguntaProposito` es para los caminos donde nadie
+     lo ha dicho (un video del carrete, una liga): antes del editor sale «¿Qué es este video?». Sin ninguna de las dos
+     (pantallas que no distinguen), el video no lleva propósito y queda como ejemplo. Una foto nunca pregunta. */
+  proposito, preguntaProposito = false,
   /* Dibuja TÚ los botones y quédate con lo de aquí dentro.
      La pantalla de crear un ejercicio necesita un botón de grabar enorme —el
      coach está en el gimnasio, cansado, con el tripié puesto— y los dos
@@ -71,6 +78,10 @@ export default function MediaUpload({
   // Elegidos y todavia SIN subir, esperando a que pasen por su editor.
   const [porRevisar, setPorRevisar] = useState(null);
   const [fotoPorRevisar, setFotoPorRevisar] = useState(null);
+  // Un video del carrete que espera a que se diga qué es, y lo que se contestó.
+  const [preguntando, setPreguntando] = useState(null);
+  const [queEs, setQueEs] = useState('ejemplo');
+  const conProposito = proposito !== undefined || preguntaProposito;
   /* La cámara de la app. Solo para video: el atajo del navegador graba con
      calidad recortada y no hay forma de pedirle otra. Ver `GrabadoraDeVideo`. */
   const [grabadora, setGrabadora] = useState(false);
@@ -110,7 +121,12 @@ export default function MediaUpload({
        subida. Las miniaturas salen al instante porque el archivo está aquí, no
        en Cloudflare. */
     if ((elegido.type || '').startsWith('video')) {
-      setPorRevisar(elegido);
+      if (preguntaProposito) {
+        setPreguntando(elegido);
+      } else {
+        setQueEs(proposito === 'explicacion' ? 'explicacion' : 'ejemplo');
+        setPorRevisar(elegido);
+      }
       if (inputRef.current) inputRef.current.value = '';
       if (camaraRef.current) camaraRef.current.value = '';
       return;
@@ -211,10 +227,18 @@ export default function MediaUpload({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {preguntando && (
+        <PreguntaDeVideo
+          nombre={preguntando.name}
+          onElige={(que) => { setQueEs(que); setPorRevisar(preguntando); setPreguntando(null); }}
+          onCancelar={() => setPreguntando(null)}
+        />
+      )}
       {porRevisar && (
         <EditorVideo
           archivo={porRevisar}
           tamaño={porRevisar.size}
+          proposito={conProposito ? queEs : undefined}
           subiendo={busy}
           avance={avance}
           onCancelar={() => { if (!busy) setPorRevisar(null); }}
@@ -413,4 +437,57 @@ export default function MediaUpload({
       )}
     </div>
   );
+}
+
+/**
+ * «¿Qué es este video?»: solo cuando el video viene del carrete o de una liga y nadie lo ha dicho (Andrés, 7 oct 2026: «me
+ * gustaría que empezaras a tener más awareness de cuándo es mejor agregar clics»). Dos botones IGUALES: no hay una respuesta
+ * «normal» a la que empujar. Al grabar NO sale: el botón que se tocó ya contestó.
+ */
+export function PreguntaDeVideo({ nombre, onElige, onCancelar }) {
+  const opciones = [
+    { id: 'ejemplo', texto: 'Ejemplo', Icono: Video },
+    { id: 'explicacion', texto: 'Explicación', Icono: IconoExplicacion },
+  ];
+  return createPortal((
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onCancelar(); }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 6000, background: 'rgba(17,19,24,0.55)', display: 'flex',
+        alignItems: 'center', justifyContent: 'center', padding: 16, fontFamily: FONT,
+      }}
+    >
+      <div role="dialog" aria-label="¿Qué es este video?" style={{ width: '100%', maxWidth: 340, background: T.bg2, borderRadius: 22, padding: 16, boxShadow: '0 24px 60px rgba(17,19,24,0.35)' }}>
+        <div style={{ fontSize: 17, fontWeight: 800, color: T.text }}>¿Qué es este video?</div>
+        {nombre && (
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: T.text3, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {nombre}
+          </div>
+        )}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 14 }}>
+          {opciones.map(({ id, texto, Icono }) => (
+            <button
+              key={id} type="button" onClick={() => onElige(id)} className="kp-press"
+              style={{
+                minHeight: 84, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 7,
+                borderRadius: 16, border: `1.5px solid ${T.border}`, background: T.bg2, cursor: 'pointer', fontFamily: FONT,
+                color: T.text, touchAction: 'manipulation',
+              }}
+            >
+              <span style={{ width: 40, height: 40, borderRadius: 13, display: 'grid', placeItems: 'center', background: T.accentBg, color: T.accent }}>
+                <Icono size={20} />
+              </span>
+              <span style={{ fontSize: 14.5, fontWeight: 800 }}>{texto}</span>
+            </button>
+          ))}
+        </div>
+        <button
+          type="button" onClick={onCancelar}
+          style={{ display: 'block', margin: '10px auto 0', border: 'none', background: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: T.text2, padding: '6px 10px' }}
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
+  ), document.body);
 }

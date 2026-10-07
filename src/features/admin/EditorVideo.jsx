@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  X, Play, Check, Loader2, Volume2, VolumeX, Crop, Scissors,
+  X, Play, Check, Loader2, Volume2, VolumeX, Crop, Scissors, Video,
 } from 'lucide-react';
+import IconoExplicacion from '@/components/IconoExplicacion';
 import { FONT, NUM_STYLE } from '@/lib/theme';
 import { capturaDeLaMitad } from '@/lib/fotogramas';
 import { useRecorte, CapaRecorte, BotonesFormato } from '@/features/admin/recorte';
@@ -57,6 +58,9 @@ export default function EditorVideo({
   // un video ya recortado arrancaba en cero, y confirmar borraba el recorte
   // anterior sin decir nada.
   ajustes,
+  // Qué es el video: 'ejemplo' o 'explicacion' (ver `lib/proposito.js`). Sin esta prop (reabrir un video ya guardado, donde
+  // se cambia con la pastilla de su lista) no sale el selector ni se devuelve nada.
+  proposito: propositoInicial,
 }) {
   const videoRef = useRef(null);
   const barraRef = useRef(null);
@@ -67,6 +71,8 @@ export default function EditorVideo({
   const [inicio, setInicio] = useState(ajustes?.recorte_inicio ?? null);
   const [fin, setFin] = useState(ajustes?.recorte_fin ?? null);
   const [sinAudio, setSinAudio] = useState(!!ajustes?.sin_audio);
+  // Lo decidió el botón que se tocó (o la pregunta); aquí solo se CORRIGE si el coach se equivocó de botón.
+  const [queEs, setQueEs] = useState(propositoInicial === 'explicacion' ? 'explicacion' : 'ejemplo');
   const [paso, setPaso] = useState('tiempo');
   /* El encuadre es un rectángulo en fracciones de 0 a 1 del video; null = se ve
      entero. Las proporciones solo lo PRECARGAN: después se arrastra libre, que
@@ -231,6 +237,7 @@ export default function EditorVideo({
           disabled={subiendo || !duracion}
           onClick={() => onListo({
             inicio, fin, sinAudio, encuadre: recorteReal,
+            ...(propositoInicial !== undefined ? { proposito: queEs } : null),
             /* La FOTO del video, sacada ya mismo del video que se está viendo
                (solo cuando es un archivo recién elegido: uno ya subido viene de
                Cloudflare y esta pantalla no puede leer sus píxeles). Es una
@@ -254,6 +261,32 @@ export default function EditorVideo({
             : <><Check size={18} strokeWidth={3} />Listo</>}
         </button>
       </div>
+
+      {/* ---------- Qué es el video ----------
+           Andrés, 7 oct 2026: «si el coach se confundió de botón y ya lo grabó debe tener alguna forma de cambiar de explicación
+           a ejemplo y viceversa». Una fila con las DOS opciones a la vista (no una pastilla que hay que adivinar que se toca),
+           aparte de la barra de arriba, que en un teléfono ya no tiene sitio. */}
+      {propositoInicial !== undefined && (
+        <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'center', padding: '0 14px 6px' }}>
+          <div role="group" aria-label="Qué es este video" style={{ display: 'flex', gap: 2, padding: 3, borderRadius: 12, background: 'rgba(255,255,255,.14)' }}>
+            {[['ejemplo', 'Ejemplo', Video], ['explicacion', 'Explicación', IconoExplicacion]].map(([id, texto, Icono]) => {
+              const activo = queEs === id;
+              return (
+                <button
+                  key={id} type="button" onClick={() => setQueEs(id)} aria-pressed={activo} disabled={subiendo}
+                  style={{
+                    minHeight: 36, padding: '0 14px', borderRadius: 9, border: 'none', cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: FONT, fontSize: 13.5, fontWeight: 800,
+                    background: activo ? '#fff' : 'transparent', color: activo ? '#111318' : 'rgba(255,255,255,.85)',
+                  }}
+                >
+                  <Icono size={16} /> {texto}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ---------- El video ---------- */}
       <div style={{
