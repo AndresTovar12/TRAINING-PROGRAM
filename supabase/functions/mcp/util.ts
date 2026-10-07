@@ -30,6 +30,20 @@ export function fallo(mensaje: string) {
 export class Aviso extends Error {}
 
 /**
+ * «No hice nada: falta preguntar». La herramienta se detiene ANTES de guardar y le dice a la IA qué
+ * preguntarle a la persona (y con qué opciones). No es un error —la IA no debe disculparse ni
+ * reintentar a ciegas—: es una respuesta normal con `guardado: false`. Se lanza desde donde haga
+ * falta y `seguro` la contesta. Ver `preguntas.ts`.
+ */
+export class Pregunta extends Error {
+  datos: Record<string, unknown>
+  constructor(datos: Record<string, unknown>) {
+    super(String(datos.mensaje ?? 'Falta preguntar antes de guardar.'))
+    this.datos = datos
+  }
+}
+
+/**
  * Envuelve el manejo de una herramienta: un error nunca tumba al servidor ni
  * se traga en silencio. Los `Aviso` se dicen tal cual; lo demás, con su texto
  * pero dejando claro que fue un problema, no una respuesta.
@@ -39,6 +53,7 @@ export function seguro<A>(fn: (args: A) => Promise<ReturnType<typeof respuesta> 
     try {
       return await fn(args)
     } catch (e) {
+      if (e instanceof Pregunta) return respuesta(e.datos)
       if (e instanceof Aviso) return fallo(e.message)
       const texto = e instanceof Error ? e.message : String(e)
       console.error('herramienta falló:', texto)
@@ -55,6 +70,15 @@ export const sinAcentos = (s: string) =>
   String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 
 export const mismoTexto = (a: string, b: string) => sinAcentos(a) === sinAcentos(b)
+
+/** «Lat Pull-Down» y «lat pulldown» son el mismo nombre: sin acentos, mayúsculas, espacios ni signos. */
+export const llaveDeNombre = (s: string) => sinAcentos(s).replace(/[^a-z0-9]/g, '')
+
+/** ¿Es el mismo nombre de ejercicio, aunque cambien los espacios, los guiones o las mayúsculas? */
+export const mismoNombre = (a: string, b: string) => {
+  const x = llaveDeNombre(a)
+  return x !== '' && x === llaveDeNombre(b)
+}
 
 /* ------------------------------------------------------------------ */
 /* Palabras de cada oficio                                             */

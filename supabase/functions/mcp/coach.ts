@@ -4,18 +4,20 @@ import { z } from 'npm:zod@^4.1.13'
 import { APP_URL } from './config.ts'
 import { llamarFuncion, type Quien } from './sesion.ts'
 import {
-  Aviso, buscarPersona, diaDesdeTexto, fechaDelAtleta, fechaLarga, mismoTexto, NOMBRE_DIA, nombreCorto, nombreDe, palabrasDe,
+  Aviso, buscarPersona, diaDesdeTexto, fechaDelAtleta, fechaLarga, mismoNombre, mismoTexto, NOMBRE_DIA, nombreCorto, nombreDe, palabrasDe,
   respuesta, rolDeOficio, seguro, sinAcentos, type Dia, type Persona,
 } from './util.ts'
 import {
   buscarFase, buscarSemana, conEquipo, describirDia, describirSemana, diaDesdeEntrada, elegirPrograma, equipoDe, faseNueva,
-  fasesDe, guardarFases, idDeSesion, miProgramaCon, nombreDelDia, planesActivos, programaQueEdito, planQueEdito,
+  fasesDe, guardarFases, idDeSesion, miProgramaCon, nombreDelDia, nombresDeEjercicios, planesActivos, programaQueEdito, planQueEdito,
   repertorioVisible, resumenDelPlan, semanaNueva, siguienteNumFase, siguienteNumSemana, tipoDePlan, normalizar, claveDeRegistro,
   type Miembro, type Plan, type Programa, type SesionEntrada,
 } from './plan.ts'
+import { equiposMasUsados, exigirFichas, preguntaDeDatos } from './preguntas.ts'
 import { cursorDe, estadoDe, registrosDe, ubicarEnTodos } from './atleta.ts'
 import { repertorioConFicha } from './comunes.ts'
 import { dondeVa, historialDePeso } from './app/training-utils.js'
+import { gruposConPropios } from './app/muscles.js'
 import { desdeKilos } from './app/unidades.js'
 import { COLORES_TIPO } from './app/theme.js'
 
@@ -28,6 +30,8 @@ const BORRA = { readOnlyHint: false, destructiveHint: true, idempotentHint: fals
 /* ------------------------------------------------------------------ */
 
 const ATLETA = z.string().describe('El atleta: su usuario (@juan), su nombre o su id.')
+const SIN_FICHA_OK = z.array(z.string()).optional()
+  .describe('Solo después de preguntar: nombres de ejercicios que la persona confirmó que van TAL CUAL, sin ficha del catálogo (o que ya vienen de un plan que existe). Sin esto, un ejercicio que no está en el catálogo con su nombre exacto no se guarda: la herramienta te dice qué preguntar.')
 const FASE = z.union([z.string(), z.number()]).optional()
   .describe('La fase: su número (1, 2…) o su nombre. En una rutina que se repite no hace falta.')
 
@@ -147,7 +151,7 @@ function diaDeLlave(plan: Plan | null, llave: string) {
 }
 
 const avisoSinFicha = (sinFicha: Set<string>) => (sinFicha.size
-  ? { sin_ficha: [...sinFicha], nota_sin_ficha: 'Estos ejercicios no están en el repertorio: se guardaron con su nombre, pero sin video. Si existen con otro nombre, búscalos con buscar_ejercicios y corrígelos.' }
+  ? { sin_ficha: [...sinFicha], nota_sin_ficha: 'Estos ejercicios se guardaron tal cual, sin ficha ni video, como la persona confirmó.' }
   : {})
 
 /** Para LEER: solo el programa de un profesional del equipo del atleta. */
@@ -445,20 +449,24 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
 
   server.registerTool('ver_catalogos', {
     title: 'Ver categorías, tipos de sesión y plantillas',
-    description: 'Tus catálogos: las categorías de ejercicio, tus tipos de sesión propios y tus plantillas de día y de semana.',
+    description: 'Tus catálogos: las categorías de ejercicio, los grupos musculares, el equipo que más se usa, tus tipos de sesión propios y tus plantillas de día y de semana.',
     inputSchema: {},
     annotations: SOLO_LEER,
   }, seguro(async () => {
     const { data: masterId } = await quien.db.rpc('master_id')
-    const [cats, tipos, plantillas] = await Promise.all([
+    const [cats, tipos, plantillas, grupos, repertorio] = await Promise.all([
       quien.db.from('exercise_categories').select('id, name, created_by').order('sort_order'),
       quien.db.from('session_types').select('nombre, color').eq('coach_id', quien.id).order('nombre'),
       quien.db.from('routine_templates').select('id, name, kind, updated_at').eq('created_by', quien.id).order('updated_at', { ascending: false }),
+      gruposMusculares(),
+      repertorioVisible(quien),
     ])
     return respuesta({
       categorias: (cats.data ?? [])
         .filter((c: any) => esMaster || !c.created_by || c.created_by === masterId || c.created_by === quien.id)
         .map((c: any) => ({ nombre: c.name, propia: c.created_by === quien.id })),
+      grupos_musculares: grupos,
+      equipos_mas_usados: equiposMasUsados(repertorio),
       tipos_de_sesion_propios: tipos.data ?? [],
       tipos_de_sesion_de_la_app: ['Gym', 'Neural', 'Recovery', 'Cancha', 'Tests', 'Equipo', 'Correr', 'Bici', 'Natación', 'Yoga', 'Movilidad', 'Terapia', 'Clase', 'OFF'],
       plantillas: (plantillas.data ?? []).map((p: any) => ({ id: p.id, nombre: p.name, tipo: p.kind === 'week' ? 'semana' : 'dia' })),
@@ -520,7 +528,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
 
   server.registerTool('crear_plan', {
     title: 'Crear el plan de un atleta',
-    description: 'Crea el plan de un atleta. Dos tipos: "rutina" (una semana que se repite siempre; manda "sesiones") o "fases" (manda "fases", cada una con sus semanas y cada semana con sus sesiones). Cada sesión lleva su día. Para no repetir semanas iguales: crea la primera y luego usa agregar_semanas con copiar_de. Si el atleta ya tiene plan, falla, salvo con reemplazar: true (el plan anterior queda en el historial y se puede recuperar).',
+    description: 'Crea el plan de un atleta. Dos tipos: "rutina" (una semana que se repite siempre; manda "sesiones") o "fases" (manda "fases", cada una con sus semanas y cada semana con sus sesiones). Cada sesión lleva su día. Para no repetir semanas iguales: crea la primera y luego usa agregar_semanas con copiar_de. Si el atleta ya tiene plan, falla, salvo con reemplazar: true (el plan anterior queda en el historial y se puede recuperar). Cada ejercicio va con su nombre EXACTO del catálogo (búscalo antes con buscar_ejercicios): si alguno no está, no se guarda nada y la herramienta te dice qué preguntarle a la persona.',
     inputSchema: {
       atleta: ATLETA,
       titulo: z.string().describe('Título del plan.'),
@@ -539,10 +547,11 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
         })).min(1),
       })).optional().describe('Solo para "fases".'),
       reemplazar: z.boolean().optional().describe('true para reemplazar el plan que ya tiene.'),
+      sin_ficha_ok: SIN_FICHA_OK,
       ...PARAM_DE,
     },
     annotations: { ...ESCRIBE, destructiveHint: true },
-  }, seguro(async ({ atleta, titulo, tipo, sesiones, fases, reemplazar, de }: any) => {
+  }, seguro(async ({ atleta, titulo, tipo, sesiones, fases, reemplazar, sin_ficha_ok, de }: any) => {
     const persona = await buscarPersona(quien, atleta)
     const repertorio = await repertorioVisible(quien)
     const sinFicha = new Set<string>()
@@ -566,6 +575,8 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     if (existente && !reemplazar) {
       throw new Aviso(`${nombreDe(persona)} ya tiene ${profesionalId ? (profesionalId === quien.id ? 'un programa tuyo' : `un programa de ${deProfesional}`) : p('el plan')} "${existente.title}". Para reemplazarlo manda reemplazar: true (el anterior queda en el historial). Para cambiar partes, usa editar_dia, agregar_semanas, etc.`)
     }
+    // Los ejercicios que no están en el catálogo no se guardan en silencio: se pregunta (ver `preguntas.ts`). Al reemplazar, los que ya tenía el plan anterior no se vuelven a discutir.
+    const comoTexto = exigirFichas({ sinFicha, catalogo: repertorio, yaEnElPlan: nombresDeEjercicios(existente), confirmados: sin_ficha_ok })
     if (existente) {
       const { data, error } = await quien.db.from('plans')
         .update({ title: titulo, data: { kind, phases: normalizar(nuevas) }, updated_at: new Date().toISOString() })
@@ -595,24 +606,25 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       plan: titulo,
       tipo: tipo === 'rutina' ? 'rutina que se repite' : `${nuevas.length} fase(s), ${semanas} semana(s)`,
       ...(existente ? { reemplazo: `El plan anterior "${existente.title}" quedó en el historial.` } : {}),
-      ...avisoSinFicha(sinFicha),
+      ...avisoSinFicha(new Set(comoTexto)),
       mensaje: `Ya lo ve ${nombreDe(persona)} en su app.`,
     })
   }))
 
   server.registerTool('editar_dia', {
     title: 'Cambiar las sesiones de un día',
-    description: 'Reemplaza TODAS las sesiones de un día de la semana, en una semana de una fase, por las que mandes. Para cambiar un solo ejercicio: lee el día con ver_plan_de_atleta, cámbialo y manda la sesión completa. "sesiones": [] deja el día sin sesión. En una rutina que se repite no hace falta fase ni semana.',
+    description: 'Reemplaza TODAS las sesiones de un día de la semana, en una semana de una fase, por las que mandes. Para cambiar un solo ejercicio: lee el día con ver_plan_de_atleta, cámbialo y manda la sesión completa. "sesiones": [] deja el día sin sesión. En una rutina que se repite no hace falta fase ni semana. Cada ejercicio NUEVO va con su nombre EXACTO del catálogo (búscalo antes con buscar_ejercicios): si alguno no está, no se guarda nada y la herramienta te dice qué preguntarle a la persona.',
     inputSchema: {
       atleta: ATLETA,
       fase: FASE,
       semana: z.number().int().optional().describe('Número de semana. En una rutina no hace falta.'),
       dia: z.string().describe('lunes … domingo'),
       sesiones: z.array(z.object(SESION)).describe('Las sesiones de ese día. Normalmente una; dos si entrena mañana y tarde.'),
+      sin_ficha_ok: SIN_FICHA_OK,
       ...PARAM_DE,
     },
     annotations: ESCRIBE,
-  }, seguro(async ({ atleta, fase, semana, dia, sesiones, de }: any) => {
+  }, seguro(async ({ atleta, fase, semana, dia, sesiones, sin_ficha_ok, de }: any) => {
     const { persona, plan, programa } = await planDe(quien, atleta, de)
     const fases = structuredClone(fasesDe(plan))
     const fIdx = buscarFase(plan, fase)
@@ -625,6 +637,8 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       faltan.forEach((f) => sinFicha.add(f))
       return d
     })
+    // Leer un día y reescribirlo no debe volver a discutir lo que el plan ya tenía; lo nuevo que no esté en el catálogo, sí se pregunta.
+    const comoTexto = exigirFichas({ sinFicha, catalogo: repertorio, yaEnElPlan: nombresDeEjercicios(plan), confirmados: sin_ficha_ok })
     const w = fases[fIdx].weekData[sIdx]
     const primero = w.days.findIndex((d: any) => d.day === clave)
     const resto = w.days.filter((d: any) => d.day !== clave)
@@ -637,7 +651,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       ...programa,
       cambio: `${fases[fIdx].name} · semana ${w.num} · ${NOMBRE_DIA[clave]}`,
       ahora: nuevos.length ? nuevos.map((d: any) => `${d.name} (${d.exercises.filter((e: any) => !e.isNote).length} ejercicios)`) : 'sin sesión',
-      ...avisoSinFicha(sinFicha),
+      ...avisoSinFicha(new Set(comoTexto)),
       deshacer: 'Si no quedó bien: deshacer_cambio_del_plan.',
     })
   }))
@@ -992,37 +1006,72 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
   /* REPERTORIO                                                         */
   /* ================================================================ */
 
+  /** Las categorías de ejercicio que esta persona ve: las de la app y las suyas. */
+  async function categoriasVisibles() {
+    const { data } = await quien.db.from('exercise_categories').select('id, name, slug, created_by').order('sort_order')
+    const { data: masterId } = await quien.db.rpc('master_id')
+    return (data ?? []).filter((c: any) => esMaster || !c.created_by || c.created_by === masterId || c.created_by === quien.id) as { id: string; name: string; slug: string }[]
+  }
+
   async function categoriaPorNombre(nombre?: string) {
     if (!nombre) return null
-    const { data } = await quien.db.from('exercise_categories').select('id, name, slug, created_by')
-    const { data: masterId } = await quien.db.rpc('master_id')
-    const visibles = (data ?? []).filter((c: any) => esMaster || !c.created_by || c.created_by === masterId || c.created_by === quien.id)
-    const c = visibles.find((x: any) => mismoTexto(x.name, nombre) || mismoTexto(x.slug, nombre))
-    if (!c) throw new Aviso(`No existe la categoría "${nombre}". Las que hay: ${visibles.map((x: any) => x.name).join(', ')}. Puedes crear una con crear_categoria.`)
-    return c.id as string
+    const visibles = await categoriasVisibles()
+    const c = visibles.find((x) => mismoTexto(x.name, nombre) || mismoTexto(x.slug, nombre))
+    if (!c) throw new Aviso(`No existe la categoría "${nombre}". Las que hay: ${[...new Set(visibles.map((x) => x.name))].join(', ')}. Puedes crear una con crear_categoria.`)
+    return c.id
+  }
+
+  /** Varias categorías por nombre → sus ids, sin repetir y sin la principal (no tiene sentido que sea secundaria de sí misma). */
+  async function categoriasPorNombres(nombres: string[], principal?: string | null) {
+    const ids = new Set<string>()
+    for (const n of nombres) {
+      const id = await categoriaPorNombre(n)
+      if (id && id !== principal) ids.add(id)
+    }
+    return [...ids]
+  }
+
+  /** Los grupos musculares que se ofrecen: los de siempre y los que agregó cada coach (como en la app). */
+  async function gruposMusculares() {
+    const { data } = await quien.db.from('grupos_musculares').select('id, name')
+    return (gruposConPropios(data ?? []) as { label: string }[]).map((g) => g.label)
   }
 
   const CAMPOS_EJERCICIO = {
-    descripcion: z.string().optional(),
+    descripcion: z.string().optional().describe('La nota o descripción del ejercicio.'),
     categoria: z.string().optional().describe('Nombre de la categoría (ver_catalogos).'),
+    categorias_secundarias: z.array(z.string()).optional().describe('Otras categorías a las que también pertenece (por nombre). En editar, [] las quita.'),
     equipo: z.string().optional().describe('Ej.: barra, mancuernas, banda, peso corporal.'),
-    musculos_principales: z.array(z.string()).optional(),
+    musculos_principales: z.array(z.string()).optional().describe('Grupos o músculos que trabaja (ver_catalogos: grupos_musculares), ej.: Piernas, Glúteo.'),
     musculos_secundarios: z.array(z.string()).optional(),
     video: z.string().url().optional().describe('Liga de YouTube, TikTok, Instagram o Vimeo. Los videos grabados se suben en la app.'),
   }
 
   server.registerTool('crear_ejercicio', {
     title: 'Crear un ejercicio',
-    description: 'Agrega un ejercicio a tu repertorio: nombre, categoría, equipo, músculos, descripción y, si quieres, una liga de video (YouTube, TikTok…). Grabar o subir un video se hace en la app.',
-    inputSchema: { nombre: z.string(), ...CAMPOS_EJERCICIO },
+    description: 'Agrega un ejercicio a tu repertorio: nombre, categoría, equipo, grupo muscular, nota y, si quieres, una liga de video (YouTube, TikTok…). Grabar o subir un video se hace en la app. Si solo traes el nombre NO lo guarda: te devuelve la pregunta que debes hacerle a la persona (una sola, con todo lo opcional), salvo que ya haya dicho que lo dejes solo con el nombre (sin_datos: true).',
+    inputSchema: {
+      nombre: z.string(),
+      ...CAMPOS_EJERCICIO,
+      sin_datos: z.boolean().optional().describe('true SOLO si la persona ya dijo que lo dejes solo con el nombre, sin datos.'),
+    },
     annotations: ESCRIBE,
   }, seguro(async (a: any) => {
     const repertorio = await repertorioVisible(quien)
-    const ya = repertorio.find((r) => mismoTexto(r.name, a.nombre))
+    const ya = repertorio.find((r) => mismoNombre(r.name, a.nombre))
     if (ya) throw new Aviso(`Ya existe "${ya.name}" en el repertorio. Úsalo, o ponle otro nombre al nuevo.`)
+    const traeDatos = [a.descripcion, a.categoria, a.equipo, a.video].some((v) => typeof v === 'string' && v.trim())
+      || [a.musculos_principales, a.musculos_secundarios, a.categorias_secundarias].some((l) => Array.isArray(l) && l.length)
+    if (!traeDatos && !a.sin_datos) {
+      // Una sola pregunta con todo lo opcional (ver `preguntas.ts`); «así» = solo el nombre.
+      const [categorias, grupos] = await Promise.all([categoriasVisibles(), gruposMusculares()])
+      preguntaDeDatos(a.nombre.trim(), { categorias: [...new Set(categorias.map((c) => c.name))], grupos, equipos: equiposMasUsados(repertorio) })
+    }
+    const categoriaId = await categoriaPorNombre(a.categoria)
     const { data, error } = await quien.db.from('exercises').insert({
       name: a.nombre.trim(),
-      category_id: await categoriaPorNombre(a.categoria),
+      category_id: categoriaId,
+      categorias_secundarias: await categoriasPorNombres(a.categorias_secundarias ?? [], categoriaId),
       description: a.descripcion ?? null,
       equipment: a.equipo ?? null,
       muscle_primary: a.musculos_principales ?? null,
@@ -1049,6 +1098,10 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     if (a.nombre !== undefined) cambios.name = a.nombre
     if (a.descripcion !== undefined) cambios.description = a.descripcion
     if (a.categoria !== undefined) cambios.category_id = await categoriaPorNombre(a.categoria)
+    if (a.categorias_secundarias !== undefined) {
+      const principal = (cambios.category_id as string | null | undefined) ?? e.category_id ?? null
+      cambios.categorias_secundarias = await categoriasPorNombres(a.categorias_secundarias, principal)
+    }
     if (a.equipo !== undefined) cambios.equipment = a.equipo
     if (a.musculos_principales !== undefined) cambios.muscle_primary = a.musculos_principales
     if (a.musculos_secundarios !== undefined) cambios.muscle_secondary = a.musculos_secundarios
@@ -1061,7 +1114,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       return respuesta({ listo: true, ejercicio: cambios.name ?? e.name })
     }
     // De la app: la versión del coach, con la ficha COMPLETA (igual que la app).
-    const campos = ['name', 'description', 'category_id', 'cover_image_url', 'video_url', 'video_link', 'muscle_primary', 'muscle_secondary', 'equipment']
+    const campos = ['name', 'description', 'category_id', 'categorias_secundarias', 'cover_image_url', 'video_url', 'video_link', 'muscle_primary', 'muscle_secondary', 'equipment']
     const ficha: Record<string, unknown> = {}
     campos.forEach((k) => { if (e[k] !== undefined) ficha[k] = e[k] })
     Object.assign(ficha, cambios)
