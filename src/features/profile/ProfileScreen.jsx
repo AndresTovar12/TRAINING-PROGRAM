@@ -5,6 +5,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { uploadAvatar, isUsernameAvailable } from '@/lib/api';
+import { esImagen, optimizaImagen } from '@/lib/imagen';
 import { T, FONT, KP } from '@/lib/theme';
 import ConectarIA from '@/features/ia/ConectarIA';
 import MiEquipo from '@/features/profile/MiEquipo';
@@ -80,12 +81,16 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    if (!file.type.startsWith('image/')) { setErr('Elige una imagen'); return; }
-    if (file.size > 5 * 1024 * 1024) { setErr('La imagen no debe pasar de 5 MB'); return; }
+    if (!esImagen(file)) { setErr('Elige una imagen'); return; }
     setErr('');
     setUploading(true);
     try {
-      const url = await uploadAvatar(file, user.id);
+      // El formato que sea (el HEIC del iPhone incluido), y achicada: el almacén solo recibe JPG, PNG o WebP de hasta
+      // 5 MB, y un avatar no necesita más de 1600 px. El límite se mide sobre lo que de verdad se sube, no sobre lo
+      // que se eligió: una foto de 8 MB del carrete cabe sobrada una vez achicada.
+      const { archivo: listo } = await optimizaImagen(file);
+      if (listo.size > 5 * 1024 * 1024) { setErr('La imagen no debe pasar de 5 MB'); return; }
+      const url = await uploadAvatar(listo, user.id);
       setAvatarUrl(url);
     } catch (e2) {
       setErr(e2.message || 'No se pudo subir la foto');
