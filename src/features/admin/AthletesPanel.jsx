@@ -32,10 +32,9 @@ import { fasesConPegadas, reglasDe } from '@/lib/pegadas';
 import AsignarAlAtleta from '@/features/misplanes/AsignarAlAtleta';
 import HojaFlotante from '@/components/HojaFlotante';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
+import DentroDelDia from '@/features/admin/DentroDelDia';
 import ListaDesplegable from '@/components/ListaDesplegable';
 import CodigoDeCoach from '@/components/CodigoDeCoach';
-import { textoMeta } from '@/lib/medidas';
-import { vueltasDe } from '@/lib/porVuelta';
 import { esArranque, guardaLugar, leeLugar } from '@/lib/lugar';
 import { useLugar, useScrollLugar } from '@/lib/useLugar';
 
@@ -705,48 +704,6 @@ function SeccionFicha({ titulo, abierta, onToggle, children }) {
   );
 }
 
-/** Lo que hay DENTRO de una sesión, en solo lectura: su lista de ejercicios. */
-function DentroDelDia({ day }) {
-  // "4 × 30 yd", no "4 × 30": la unidad es parte de lo que el coach mandó. Si cambia de una vuelta a otra
-  // se dice eso y no los números en fila («10-8-6-4» se lee como un drop set); el detalle está en el editor.
-  const dosis = (e) => (vueltasDe(e)
-    ? `${e.sets} vueltas distintas`
-    : [e.sets, textoMeta(e)].filter(Boolean).join(' × ') + (e.intensity ? ` · ${e.intensity}` : ''));
-
-  const fila = (e, i) => (
-    e.isNote ? (
-      <div key={i} style={{ fontSize: 11.5, fontWeight: 600, color: T.text2, padding: '4px 0', lineHeight: 1.45 }}>
-        {e.text}
-      </div>
-    ) : (
-      <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '3px 0' }}>
-        <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: T.text, overflowWrap: 'anywhere' }}>
-          {e.name}
-        </span>
-        <span style={{ fontSize: 11.5, fontWeight: 700, color: T.text2, flexShrink: 0, whiteSpace: 'nowrap' }}>
-          {dosis(e)}
-        </span>
-      </div>
-    )
-  );
-
-  const sueltos = day.exercises || [];
-
-  if (!sueltos.length) {
-    return (
-      <div style={{ padding: '6px 4px 10px 38px', fontSize: 11.5, fontWeight: 600, color: T.text3 }}>
-        Este día no tiene ejercicios.
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ padding: '4px 6px 10px 38px', display: 'flex', flexDirection: 'column', gap: 9 }}>
-      {sueltos.map(fila)}
-    </div>
-  );
-}
-
 /** «Beto · coach» / «Juan · fisio»: de quién es un programa, según el equipo del atleta. */
 function etiquetaDelPrograma(programa, equipoDe, athlete) {
   const principalId = equipoDe.find((m) => m.es_principal)?.profesional_id ?? athlete.coach_id ?? null;
@@ -1234,18 +1191,22 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
               {completed ?? '—'}{completed != null && totalSessions ? ` / ${totalSessions}` : ''}
             </div>
           </div>
-          <div style={{ flex: '1 1 140px', background: T.bg, borderRadius: 12, padding: '12px 14px' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Dolor</div>
-            <div style={{ marginTop: 5, fontWeight: 700, color: T.text, fontSize: 14, lineHeight: 1.3 }}>
-              {textoDeDolor(dolor)}
-            </div>
-            {dolor && (
-              <div style={{ marginTop: 2, fontSize: 12, fontWeight: 600, color: T.text3 }}>
-                {new Date(`${dolor.ultimo.fecha}T12:00:00`).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}
+          {/* El dolor es de fisios (Andrés, 7 oct 2026: «no me parece muy necesario para los coaches, para los fisios sí»). */}
+          {salud && (
+            <div style={{ flex: '1 1 140px', background: T.bg, borderRadius: 12, padding: '12px 14px' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Dolor</div>
+              <div style={{ marginTop: 5, fontWeight: 700, color: T.text, fontSize: 14, lineHeight: 1.3 }}>
+                {textoDeDolor(dolor)}
               </div>
-            )}
-          </div>
-          <div style={{ flex: '1 1 140px', background: T.bg, borderRadius: 12, padding: '12px 14px' }}>
+              {dolor && (
+                <div style={{ marginTop: 2, fontSize: 12, fontWeight: 600, color: T.text3 }}>
+                  {new Date(`${dolor.ultimo.fecha}T12:00:00`).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}
+                </div>
+              )}
+            </div>
+          )}
+          {/* Sin la casilla de Dolor quedan tres: la última ocupa todo el ancho en vez de quedarse a media fila. */}
+          <div style={{ flex: '1 1 140px', background: T.bg, borderRadius: 12, padding: '12px 14px', ...(salud ? null : { gridColumn: '1 / -1' }) }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Esta semana</div>
             <div style={{ marginTop: 5, fontWeight: 800, color: T.accent, fontSize: 18 }}>
               {estaSemana}{sesionesDeLaSemana > 0 ? ` / ${sesionesDeLaSemana}` : ''}
