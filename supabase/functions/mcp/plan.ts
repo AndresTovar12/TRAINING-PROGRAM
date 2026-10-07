@@ -12,6 +12,7 @@ import { textoMeta, leeCantidad, MEDIDAS } from './app/medidas.js'
 import { vueltasDe, ejercicioDeVuelta, parcheDeVueltas, rondasDe } from './app/porVuelta.js'
 import { limpiaFormato, resumenDeFormato, textoDeResultado } from './app/formatos.js'
 import { CAT_COLORS, tipoDeSesion } from './app/theme.js'
+import { MAX_TEXTO, MAX_TITULO, normalizaCiencia, nuevoRecuadro } from './app/ciencia.js'
 
 /**
  * Leer y escribir planes con la MISMA forma que usa la app.
@@ -31,7 +32,8 @@ export interface Plan {
   user_id: string
   title: string
   status: string
-  data: { kind?: string; phases?: any[] }
+  /** `foto` y `ciencia` son del PLAN (no de una fase): la foto de Home y los recuadros de «Ciencia». */
+  data: { kind?: string; phases?: any[]; foto?: string; ciencia?: any[] }
   updated_at: string
   /** De quién es el programa: null = el coach principal; si no, un profesional del equipo del atleta. */
   profesional_id?: string | null
@@ -407,12 +409,92 @@ export function resumenDelPlan(plan: Plan, cursor: any, fecha: Date) {
       semanas: (f.weekData ?? []).map((w: any) => w.num),
     })),
     va_en: vaEn,
+    ...resumenDeCiencia(plan),
   }
 }
 
 /** La llave con la que se anota un día: la misma que usa la app. */
 export const idDeSesion = (plan: Plan, fase: any, semana: any, diaIdx: number, fecha: Date) =>
   sessionIdFor(tipoDePlan(plan), fase.id, semana.num, diaIdx, fecha)
+
+/* ------------------------------------------------------------------ */
+/* Ciencia: el porqué del plan                                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * La «Ciencia» de un plan son recuadros con título y texto que el atleta lee en Home (ver `lib/ciencia.js`, que es la
+ * misma pieza que usa la app). Hay de dos clases: los de TODO el plan (`plan.data.ciencia`) y los de UNA fase
+ * (`fase.ciencia`). Es opcional: un plan sin ninguno simplemente no enseña la tarjeta.
+ */
+export interface Recuadro { id: string; titulo: string; texto: string }
+export type ModoCiencia = 'agregar' | 'reemplazar'
+
+export const cienciaDelPlan = (plan: Plan | null): Recuadro[] => normalizaCiencia(plan?.data?.ciencia)
+export const cienciaDeFase = (fase: any): Recuadro[] => normalizaCiencia(fase?.ciencia)
+
+/** Cuántos recuadros tiene el plan en total (los de todo el plan y los de cada fase). */
+export const cuantosRecuadros = (plan: Plan | null) =>
+  cienciaDelPlan(plan).length + fasesDe(plan).reduce((n, f) => n + cienciaDeFase(f).length, 0)
+
+/** Qué recuadros tiene el plan y dónde, sin los textos (para ver_plan_de_atleta). Vacío si no tiene ninguno. */
+export function resumenDeCiencia(plan: Plan) {
+  const delPlan = cienciaDelPlan(plan).map((r) => r.titulo)
+  const porFase = fasesDe(plan)
+    .map((f) => ({ fase: f.name, recuadros: cienciaDeFase(f).map((r) => r.titulo) }))
+    .filter((x) => x.recuadros.length)
+  if (!delPlan.length && !porFase.length) return {}
+  return {
+    ciencia: {
+      ...(delPlan.length ? { del_plan: delPlan } : {}),
+      ...(porFase.length ? { por_fase: porFase } : {}),
+      nota: 'Son los recuadros de «Ciencia» que lee el atleta. El texto completo: ver_ciencia_del_plan.',
+    },
+  }
+}
+
+/**
+ * Lo que manda la IA ([{ titulo, texto }]) → recuadros listos, con su id. No se acorta nada en silencio: un recuadro
+ * demasiado largo o vacío es un aviso para que la IA lo arregle (partirlo, o ponerle título o texto).
+ */
+export function recuadrosDeLaIA(lista: any[] | undefined, donde: string): Recuadro[] {
+  const salida: Recuadro[] = []
+  ;(lista ?? []).forEach((r, i) => {
+    const titulo = String(r?.titulo ?? '').trim()
+    const texto = String(r?.texto ?? '').trim()
+    if (titulo.length > MAX_TITULO) throw new Aviso(`El título del recuadro ${i + 1} (${donde}) mide ${titulo.length} caracteres y el máximo es ${MAX_TITULO}. Acórtalo.`)
+    if (texto.length > MAX_TEXTO) throw new Aviso(`El recuadro "${titulo || i + 1}" (${donde}) mide ${texto.length} caracteres y el máximo es ${MAX_TEXTO}. Pártelo en dos recuadros.`)
+    const nuevo = nuevoRecuadro({ titulo, texto }) as Recuadro | null
+    if (!nuevo) throw new Aviso(`El recuadro ${i + 1} (${donde}) no tiene título ni texto.`)
+    salida.push(nuevo)
+  })
+  return salida
+}
+
+/**
+ * Lo que hace `editar_ciencia` con la lista de recuadros de UN sitio (el plan o una fase):
+ *   «agregar»    cada recuadro se suma al final; si ya hay uno con ese título (sin importar mayúsculas ni acentos), se le
+ *                cambia el texto y se queda donde estaba;
+ *   «reemplazar» la lista queda exactamente como se manda.
+ * `quitar` son títulos que se sacan después. Devuelve la lista nueva y cuánto cambió.
+ */
+export function cambiarRecuadros(actual: Recuadro[], nuevos: Recuadro[], modo: ModoCiencia, quitar: string[] = []) {
+  let lista: Recuadro[] = actual.map((r) => ({ ...r }))
+  let agregados = 0
+  let actualizados = 0
+  if (modo === 'reemplazar') {
+    lista = nuevos.map((r) => ({ ...r }))
+    agregados = nuevos.length
+  } else {
+    for (const r of nuevos) {
+      const i = lista.findIndex((x) => mismoTexto(x.titulo, r.titulo))
+      if (i >= 0) { lista[i] = { ...lista[i], titulo: r.titulo, texto: r.texto }; actualizados += 1 } else { lista.push({ ...r }); agregados += 1 }
+    }
+  }
+  const noEncontrados = quitar.filter((t) => !lista.some((r) => mismoTexto(r.titulo, t)))
+  const antes = lista.length
+  lista = lista.filter((r) => !quitar.some((t) => mismoTexto(r.titulo, t)))
+  return { lista, agregados, actualizados, quitados: antes - lista.length, noEncontrados }
+}
 
 /* ------------------------------------------------------------------ */
 /* Escribir                                                            */
@@ -610,12 +692,18 @@ export function normalizar(fases: any[]) {
  * atleta, la base no lo deja. La versión anterior la guarda sola la base
  * (disparador `plans_guardar_version`), así que siempre se puede deshacer.
  */
-export async function guardarFases(quien: Quien, plan: Plan, fases: any[], titulo?: string) {
+export async function guardarFases(quien: Quien, plan: Plan, fases: any[], titulo?: string, extra?: { ciencia?: Recuadro[] }) {
+  // Todo lo demás de `plan.data` se conserva (la foto del plan, su ciencia): `data` se reescribe entero.
+  const datos: Plan['data'] = { ...plan.data, kind: tipoDePlan(plan), phases: normalizar(fases) }
+  if (extra && 'ciencia' in extra) {
+    if (extra.ciencia?.length) datos.ciencia = extra.ciencia
+    else delete datos.ciencia
+  }
   const { data, error } = await quien.db
     .from('plans')
     .update({
       ...(titulo ? { title: titulo } : {}),
-      data: { ...plan.data, kind: tipoDePlan(plan), phases: normalizar(fases) },
+      data: datos,
       updated_at: new Date().toISOString(),
     })
     .eq('id', plan.id)

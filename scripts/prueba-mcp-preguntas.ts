@@ -610,4 +610,103 @@ const revisaDia = (ejercicios: any[], titulo = 'Sábado') => {
   ok('crear_plan: pide la cantidad que falta y acepta «así lo mando»')
 }
 
+/* ---- Ciencia del plan: lo que escribe y lee la IA (7 oct 2026) ---- */
+{
+  const conCiencia = () => {
+    const base = PLAN_FALSO()
+    return { ...base, data: { ...base.data, foto: '/fotos/plan.jpg', ciencia: [{ id: 'c-1', titulo: 'Por qué esta rutina', texto: 'Frecuencia alta.' }] } }
+  }
+  const ultimo = (a: { cambios: any }[]) => a[a.length - 1].cambios.data
+
+  // Agregar a un plan que no tiene: queda en data.ciencia, con su id, y no se pierde lo demás.
+  {
+    const base = { ...PLAN_FALSO(), data: { ...PLAN_FALSO().data, foto: '/fotos/plan.jpg' } }
+    const { tools, actualizados } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [base] })
+    const r: any = await tools.editar_ciencia({ atleta: 'zz_atleta', recuadros: [{ titulo: 'Objetivo', texto: 'Ganar fuerza.\n\n- Dos días\n\nSentadilla | 3×5 | Controlada' }] })
+    igual([r.structuredContent.listo, r.structuredContent.agregados, r.structuredContent.recuadros_ahora], [true, 1, ['Objetivo']], 'agrega un recuadro al plan')
+    const d = ultimo(actualizados)
+    cierto(d.ciencia[0].id.startsWith('c-') && d.ciencia[0].texto.includes('Sentadilla | 3×5'), 'queda en data.ciencia con su id y su texto')
+    igual([d.foto, d.kind, d.phases.length], ['/fotos/plan.jpg', 'weekly', 1], 'y la foto del plan y las fases se quedan como estaban')
+  }
+  // Mismo título (sin importar mayúsculas ni acentos): se cambia el texto, no se duplica.
+  {
+    const { tools, actualizados } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [conCiencia()] })
+    const r: any = await tools.editar_ciencia({ atleta: 'zz_atleta', recuadros: [{ titulo: 'POR QUE ESTA RUTINA', texto: 'Ahora dice otra cosa.' }] })
+    igual([r.structuredContent.agregados, r.structuredContent.cambiados, r.structuredContent.recuadros_ahora], [0, 1, ['POR QUE ESTA RUTINA']], 'un título que ya existe cambia su texto')
+    igual(ultimo(actualizados).ciencia.length, 1, 'y no se duplica')
+    cierto(ultimo(actualizados).ciencia[0].id === 'c-1', 'conserva su id')
+  }
+  // Quitar: por título; uno que no existe no se inventa ni se ignora.
+  {
+    const { tools, actualizados } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [conCiencia()] })
+    const mal: any = await tools.editar_ciencia({ atleta: 'zz_atleta', quitar: ['No existe'] })
+    cierto(mal.isError && String(mal.content[0].text).includes('"No existe"') && String(mal.content[0].text).includes('Por qué esta rutina'), 'quitar uno que no hay avisa y lista los que hay')
+    igual(actualizados.length, 0, 'sin escribir nada')
+    const bien: any = await tools.editar_ciencia({ atleta: 'zz_atleta', quitar: ['por que esta rutina'] })
+    igual([bien.structuredContent.quitados, bien.structuredContent.recuadros_ahora], [1, []], 'quitar uno que sí hay')
+    cierto(ultimo(actualizados).ciencia === undefined, 'sin recuadros, el plan ya no lleva el campo')
+    igual(ultimo(actualizados).foto, '/fotos/plan.jpg', 'y la foto sigue')
+  }
+  // «reemplazar» que se lleva lo que ya había: primero se pregunta.
+  {
+    const { tools, actualizados } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [conCiencia()] })
+    const frena: any = await tools.editar_ciencia({ atleta: 'zz_atleta', modo: 'reemplazar', recuadros: [{ titulo: 'Otro', texto: 'x' }] })
+    cierto(frena.isError && String(frena.content[0].text).includes('reemplazo_ok') && String(frena.content[0].text).includes('Por qué esta rutina'), 'reemplazar que pierde recuadros no guarda y dice qué preguntar')
+    igual(actualizados.length, 0, 'sin escribir nada')
+    const va: any = await tools.editar_ciencia({ atleta: 'zz_atleta', modo: 'reemplazar', reemplazo_ok: true, recuadros: [{ titulo: 'Otro', texto: 'x' }] })
+    igual(va.structuredContent.recuadros_ahora, ['Otro'], 'con la confirmación, reemplaza')
+    // Reemplazar conservando los que ya había no pierde nada: no hace falta preguntar.
+    const igualPeroConMas: any = await tools.editar_ciencia({ atleta: 'zz_atleta', modo: 'reemplazar', recuadros: [{ titulo: 'Por qué esta rutina', texto: 'Frecuencia alta.' }, { titulo: 'Nuevo', texto: 'y' }] })
+    igual(igualPeroConMas.structuredContent.recuadros_ahora, ['Por qué esta rutina', 'Nuevo'], 'si no se pierde nada, no se pregunta')
+  }
+  // En una fase: va dentro de la fase y no toca la ciencia del plan.
+  {
+    const { tools, actualizados } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [conCiencia()] })
+    const r: any = await tools.editar_ciencia({ atleta: 'zz_atleta', fase: '1', recuadros: [{ titulo: 'Esta fase', texto: 'Base.' }] })
+    igual(r.structuredContent.donde, 'la fase Rutina semanal', 'dice dónde quedó')
+    const d = ultimo(actualizados)
+    igual([d.phases[0].ciencia.map((x: any) => x.titulo), d.ciencia.map((x: any) => x.titulo)], [['Esta fase'], ['Por qué esta rutina']], 'dentro de la fase; la del plan se queda')
+  }
+  // Límites: no se acorta en silencio.
+  {
+    const { tools, actualizados } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [conCiencia()] })
+    const largo: any = await tools.editar_ciencia({ atleta: 'zz_atleta', recuadros: [{ titulo: 'Largo', texto: 'a'.repeat(8001) }] })
+    cierto(largo.isError && String(largo.content[0].text).includes('8000'), 'un texto de más de 8000 caracteres es un aviso')
+    const vacio: any = await tools.editar_ciencia({ atleta: 'zz_atleta', recuadros: [{ titulo: '  ', texto: '' }] })
+    cierto(vacio.isError, 'un recuadro sin título ni texto es un aviso')
+    const nada: any = await tools.editar_ciencia({ atleta: 'zz_atleta' })
+    cierto(nada.isError, 'sin recuadros ni quitar, no hay nada que cambiar')
+    igual(actualizados.length, 0, 'ninguno escribió')
+  }
+  // Leer: texto completo; y el resumen del plan los nombra sin los textos.
+  {
+    const { tools } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [conCiencia()] })
+    const v: any = (await tools.ver_ciencia_del_plan({ atleta: 'zz_atleta' })).structuredContent
+    igual(v.del_plan, [{ titulo: 'Por qué esta rutina', texto: 'Frecuencia alta.' }], 'ver_ciencia_del_plan trae el texto completo')
+    const sin: any = (await herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [PLAN_FALSO()] }).tools.ver_ciencia_del_plan({ atleta: 'zz_atleta' })).structuredContent
+    igual([sin.ciencia, sin.del_plan], ['Este plan no tiene ciencia.', []], 'un plan sin ciencia lo dice')
+    const resumen: any = (await tools.ver_plan_de_atleta({ atleta: 'zz_atleta', fase: '1', semana: '1' })).structuredContent
+    cierto(resumen.dias !== undefined, 'el detalle de siempre sigue igual')
+  }
+  // crear_plan: con ciencia se crea con ciencia; al reemplazar se queda la foto y la ciencia vieja se avisa.
+  {
+    const sesiones = [{ dia: 'lunes', nombre: 'Día 1', ejercicios: [{ nombre: 'Back Squat', series: 4, cantidad: 8 }] }]
+    const nueva = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [] })
+    const r: any = await nueva.tools.crear_plan({ atleta: 'zz_atleta', titulo: 'Con ciencia', tipo: 'rutina', sesiones, ciencia: [{ titulo: 'Por qué', texto: 'Porque sí.' }] })
+    igual(r.structuredContent.listo, true, 'crea el plan con ciencia')
+    igual(nueva.insertados[0].fila.data.ciencia.map((x: any) => x.titulo), ['Por qué'], 'y la ciencia queda en el plan')
+    const fases = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [] })
+    const f: any = await fases.tools.crear_plan({ atleta: 'zz_atleta', titulo: 'Por fases', tipo: 'fases', fases: [{ nombre: 'Base', ciencia: [{ titulo: 'Objetivo', texto: 'Base.' }], semanas: [{ sesiones }] }] })
+    igual(f.structuredContent.listo, true, 'crea un plan por fases')
+    igual(fases.insertados[0].fila.data.phases[0].ciencia.map((x: any) => x.titulo), ['Objetivo'], 'con la ciencia dentro de su fase')
+    cierto(fases.insertados[0].fila.data.ciencia === undefined, 'y sin ciencia del plan, que no se mandó')
+    const viejo = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [conCiencia()] })
+    const re: any = await viejo.tools.crear_plan({ atleta: 'zz_atleta', titulo: 'Nuevo', tipo: 'rutina', sesiones, reemplazar: true })
+    igual(re.structuredContent.listo, true, 'reemplaza el plan')
+    igual([viejo.actualizados[0].cambios.data.foto, viejo.actualizados[0].cambios.data.ciencia], ['/fotos/plan.jpg', undefined], 'la foto del plan se queda; la ciencia vieja no pasa al plan nuevo')
+    cierto(String(re.structuredContent.aviso_ciencia).includes('editar_ciencia'), 'y se avisa que la anterior quedó en el historial')
+  }
+  ok('ciencia del plan: editar_ciencia, ver_ciencia_del_plan y crear_plan con ciencia')
+}
+
 console.log(`\nTodo bien: ${n} grupos de pruebas`)
