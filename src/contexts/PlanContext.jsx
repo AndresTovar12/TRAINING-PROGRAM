@@ -10,6 +10,7 @@ import { estructuraDelPlan } from '@/lib/training-utils';
 import { adaptadorDeRegistros, fasesConPegadas, reglasDe } from '@/lib/pegadas';
 import { colorDePrograma, tieneSesiones } from '@/lib/programas';
 import { conNombreDeSuFicha } from '@/lib/nombreDeLaFicha';
+import { normalizaCiencia } from '@/lib/ciencia';
 
 /**
  * Carga el plan activo de la persona cuya app se dibuja —quien entró, o el
@@ -58,6 +59,9 @@ function normalizePlan(phases) {
       focus: p?.focus ?? '',
       objective: p?.objective ?? '',
       science: p?.science ?? '',
+      // La foto de la fase (Home) y los recuadros de ciencia de esta fase (ver `lib/ciencia.js`).
+      image: typeof p?.image === 'string' ? p.image : '',
+      ciencia: normalizaCiencia(p?.ciencia),
       references: arr(p?.references),
       advance: arr(p?.advance),
       weekData,
@@ -224,6 +228,9 @@ export function PlanProvider({ children }) {
         phases,
         kind: row.data?.kind === 'weekly' ? 'weekly' : 'periodized',
         estructura: estructuraDelPlan(row.data),
+        // La foto del plan (la que sale en Home) y su ciencia: son datos de CADA plan.
+        foto: typeof row.data?.foto === 'string' ? row.data.foto : '',
+        ciencia: normalizaCiencia(row.data?.ciencia),
         hasPlan: phases.length > 0,
         conSesiones: tieneSesiones(phases),
         ...herramientas,
@@ -254,6 +261,8 @@ export function PlanProvider({ children }) {
         phases,
         kind,
         estructura: principal.estructura,
+        foto: '',
+        ciencia: [],
         hasPlan: phases.some((f) => (f.weekData ?? []).some((w) => (w.days ?? []).length > 0)),
         conSesiones: tieneSesiones(phases),
         // Lo que anota el atleta se guarda con llaves estables y aquí se ve por posición.
@@ -296,7 +305,9 @@ export function PlanProvider({ children }) {
       kind: activo?.kind ?? 'periodized',
       estructura: activo?.estructura ?? estructuraDelPlan(null),
       hasPlan: !!activo?.hasPlan,
-      planMeta: activo ? { id: activo.id, title: activo.title } : null,
+      planMeta: activo ? { id: activo.id, title: activo.title, foto: activo.foto ?? '' } : null,
+      // La ciencia del plan (los recuadros de todo el plan; los de cada fase van dentro de la fase).
+      ciencia: activo?.ciencia ?? [],
       planLoading,
       exercises: activo?.exercises ?? aplicarOverrides(exercisesBase, []),
       medias: activo?.medias ?? [],
@@ -337,7 +348,8 @@ export function ComoPrograma({ programa, children }) {
     kind: programa.kind,
     estructura: programa.estructura,
     hasPlan: programa.hasPlan,
-    planMeta: { id: programa.id, title: programa.title },
+    planMeta: { id: programa.id, title: programa.title, foto: programa.foto ?? '' },
+    ciencia: programa.ciencia ?? [],
     exercises: programa.exercises,
     medias: programa.medias,
     resolveExercise: programa.resolveExercise,
