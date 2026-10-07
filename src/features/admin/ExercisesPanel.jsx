@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Plus, Minus, Search, X, Trash2, Loader2, Video, Dumbbell,
-  Copy, RotateCcw, Pencil, ChevronRight, ChevronDown, } from 'lucide-react';
+  Copy, RotateCcw, Pencil, ChevronDown, } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { useIsWide } from '@/lib/useViewport';
@@ -9,11 +9,11 @@ import {
   listCategories, listExercises, createExercise, updateExercise, deleteExercise,
   getMasterId, tagRepertoire, duplicateExercise,
   listExerciseOverrides, saveExerciseOverride, deleteExerciseOverride, aplicarOverrides,
-  addExerciseMedia, listMuscleGroups, createMuscleGroup, deleteMuscleGroup,
+  addExerciseMedia, listMuscleGroups, createMuscleGroup, deleteMuscleGroup, listIdsConVideoExtra,
 } from '@/lib/api';
 import MediaDelEjercicio from '@/features/admin/MediaDelEjercicio';
 import { completaPortadas } from '@/lib/posters';
-import SelectorCategoria from '@/features/admin/SelectorCategoria';
+import SelectorCategoria, { CrearCategoria } from '@/features/admin/SelectorCategoria';
 import ListaDesplegable from '@/components/ListaDesplegable';
 import InterruptorVista from '@/components/InterruptorVista';
 import { useVistaEjercicios } from '@/lib/useVistaEjercicios';
@@ -25,7 +25,7 @@ import { coincidencia, pasaFiltros } from '@/lib/buscarEjercicio';
 import { useLugar, useScrollLugar } from '@/lib/useLugar';
 import ModoDeFiltro, { MODOS, MODO_POR_DEFECTO, NombresUnidos } from '@/components/ModoDeFiltro';
 import DialogoNombre from '@/components/DialogoNombre';
-import SeleccionMultiple from '@/components/SeleccionMultiple';
+import { esExplicacion } from '@/lib/proposito';
 import { T, FONT, KP } from '@/lib/theme';
 import Portada from '@/components/Portada';
 import { useConfirmacion } from '@/components/Confirmacion';
@@ -56,9 +56,9 @@ function detectVideoKind(url) {
   return 'Enlace';
 }
 
-function ExerciseCard({ ex, onClick, base }) {
+function ExerciseCard({ ex, onClick, base, conVideoExtra }) {
   const color = catColor(ex.category);
-  const hasVideo = ex.video_url || ex.video_link;
+  const hasVideo = ex.video_url || ex.video_link || conVideoExtra;
   return (
     <button
       type="button"
@@ -114,7 +114,7 @@ function ExerciseCard({ ex, onClick, base }) {
               display: 'inline-flex', alignItems: 'center', gap: 4,
             }}
           >
-            <Video size={11} /> {ex.video_url ? 'Video' : detectVideoKind(ex.video_link)}
+            <Video size={11} /> {ex.video_url || !ex.video_link ? 'Video' : detectVideoKind(ex.video_link)}
           </span>
         )}
       </div>
@@ -134,15 +134,23 @@ function ExerciseCard({ ex, onClick, base }) {
   );
 }
 
-function Input({ label, ...props }) {
+/* Los rótulos de los campos se LEEN (Andrés, 7 oct 2026: «el formato de recuadro con letritas grises que casi no se ven, en el
+   nombre y la categoría que es de lo más importante, no me gusta»): negros, un poco más grandes, sin la aclaración gris debajo. */
+const ROTULO = { fontSize: 13.5, fontWeight: 700, color: T.text };
+
+// Los equipos más comunes, en lista. Lo que no esté aquí se escribe en «Otro» (el valor sigue siendo texto: el buscador, el
+// selector de ejercicios y el conector lo leen así). Andrés pidió la lista; «Polea» la agregué porque la usan 12 de sus ejercicios.
+const EQUIPOS = ['Peso corporal', 'Barra', 'Mancuerna', 'Kettlebell', 'Máquina', 'Liga', 'Polea'];
+
+function Input({ label, grande = false, ...props }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>{label}</span>
+      <span style={ROTULO}>{label}</span>
       <input
         {...props}
         style={{
-          border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '11px 13px',
-          fontFamily: FONT, fontSize: 14, fontWeight: 500, color: T.text, outline: 'none', background: T.bg2,
+          border: `1.5px solid ${T.border}`, borderRadius: grande ? 12 : 11, padding: grande ? '12px 13px' : '11px 13px',
+          fontFamily: FONT, fontSize: grande ? 17 : 14, fontWeight: grande ? 700 : 500, color: T.text, outline: 'none', background: T.bg2,
           ...props.style,
         }}
         onFocus={(e) => { e.target.style.borderColor = T.accent; }}
@@ -177,10 +185,10 @@ function MuscleSelect({ value, onChange, options, grupos, onAgregarGrupo, alBorr
     return [...s].sort((a, b) => a.localeCompare(b));
   }, [options, value, groupLabels]);
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Grupo muscular principal</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span style={ROTULO}>Grupo muscular</span>
       <ListaDesplegable
-        etiqueta="Grupo muscular principal"
+        etiqueta="Grupo muscular"
         valor={value || ''}
         onCambio={onChange}
         marcador="Selecciona…"
@@ -198,7 +206,7 @@ function MuscleSelect({ value, onChange, options, grupos, onAgregarGrupo, alBorr
           { titulo: 'DETALLE', opciones: fineOpts.map((m) => ({ valor: m, etiqueta: m })) },
         ]}
       />
-    </label>
+    </div>
   );
 }
 
@@ -227,16 +235,6 @@ function AyudaVarias({ texto }) {
   );
 }
 
-// Rótulo de un campo del editor, con su aclaración chiquita debajo.
-function RotuloConAyuda({ titulo, ayuda }) {
-  return (
-    <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>{titulo}</span>
-      <span style={{ fontSize: 12, fontWeight: 500, color: T.text3 }}>{ayuda}</span>
-    </span>
-  );
-}
-
 /**
  * `esAjeno` = este ejercicio no es mío (es de la base del master) y yo no soy
  * el master. Entonces guardar NO modifica el original: crea mi versión, que
@@ -257,164 +255,114 @@ function RotuloConAyuda({ titulo, ayuda }) {
  * En computadora se sigue usando la tarjeta: ahí caben cuatro por fila y el
  * espacio sobra, así que la foto grande sí se gana su lugar.
  */
-function ExerciseRow({ ex, base, onAbrir, onMedia }) {
+function ExerciseRow({ ex, base, abierto, onAbrir, onMedia, onEditar, conVideoExtra }) {
   const color = catColor(ex.category);
-  const tieneVideo = !!(ex.video_url || ex.video_link);
+  // «Tiene video» es el de siempre (columnas del ejercicio) O cualquiera de `exercise_media`: una explicación sola también cuenta.
+  const tieneVideo = !!(ex.video_url || ex.video_link || conVideoExtra);
 
+  /* AL TOCAR UN EJERCICIO SE ABRE AHÍ MISMO, debajo de su nombre: «Grabar o subir» (lo que se hace en el gimnasio) y «Editar el
+     ejercicio». Andrés, 7 oct 2026: la hoja «¿Qué vas a hacer?» subía desde el borde de abajo («el botón aparece hasta abajo,
+     eso no ayuda mucho al momento de estar en el campo de batalla») y rechazó dejarla igual o quitarla; de tres opciones eligió
+     esta: el dedo no se mueve y el nombre queda a la vista. Son dos pantallas DISTINTAS (cada una abre con lo que viniste a hacer
+     y se llama como el botón), no la misma con otro título. La camarita de la derecha sigue yendo directo a «Grabar o subir». */
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 10,
-      background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 13,
-      padding: '8px 9px', boxShadow: KP.shCard,
-    }}>
-      <button
-        type="button"
-        onClick={onAbrir}
-        style={{
-          flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10,
-          background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
-          fontFamily: FONT, textAlign: 'left', minHeight: 44,
-        }}
-      >
-        <Portada
-          foto={ex.cover_image_url}
-          video={ex.video_url}
-          desde={ex.recorte_inicio}
-          hasta={ex.recorte_fin}
+    <div>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        background: T.bg2, border: `1px solid ${abierto ? T.accent : T.border}`, borderRadius: abierto ? '13px 13px 0 0' : 13,
+        padding: '8px 9px', boxShadow: abierto ? '0 0 0 3px rgba(30,64,224,0.12)' : KP.shCard,
+        position: 'relative', zIndex: abierto ? 1 : 0,
+      }}>
+        <button
+          type="button"
+          onClick={onAbrir}
+          aria-expanded={abierto}
           style={{
-            width: 44, height: 44, borderRadius: 10, flexShrink: 0,
-            background: `${color}14`,
+            flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10,
+            background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
+            fontFamily: FONT, textAlign: 'left', minHeight: 44,
           }}
         >
-          <Dumbbell size={19} color={`${color}AA`} />
-        </Portada>
-
-        <span style={{ minWidth: 0, flex: 1 }}>
-          <span style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            fontSize: 13.5, fontWeight: 700, color: T.text,
-          }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {ex.name}
-            </span>
-            {ex.esMiVersion && (
-              <Pencil size={11} color={T.accent} style={{ flexShrink: 0 }} />
-            )}
-          </span>
-          <span style={{
-            display: 'block', fontSize: 11.5, color: T.text3, fontWeight: 600,
-            marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>
-            {[ex.category?.name, ex.equipment, (ex.muscle_primary || []).join(' · ')]
-              .filter(Boolean).join(' · ') || (base ? 'Base' : '—')}
-          </span>
-        </span>
-      </button>
-
-      {/* El que le falta video se marca en ámbar. Es la única forma de ver de un
-          vistazo cuáles faltan sin abrirlos uno por uno. */}
-      <button
-        type="button"
-        onClick={onMedia}
-        aria-label={tieneVideo ? `Ver o cambiar el video de ${ex.name}` : `Falta video en ${ex.name}: grabarlo`}
-        style={{
-          width: 38, height: 38, borderRadius: 10, flexShrink: 0,
-          display: 'grid', placeItems: 'center', cursor: 'pointer',
-          border: `1px solid ${tieneVideo ? T.border : T.warning}`,
-          background: tieneVideo ? T.bg2 : 'rgba(224,123,0,0.10)',
-          color: tieneVideo ? T.text2 : T.warning,
-        }}
-      >
-        <Video size={16} />
-      </button>
-    </div>
-  );
-}
-
-/**
- * Al tocar un ejercicio en el teléfono no se abre la ficha completa: primero se
- * pregunta qué se va a hacer.
- *
- * Idea de Andrés. La razón por la que gana: los datos de los 81 ejercicios ya
- * están escritos y nadie los va a volver a tocar; lo que falta es la media, en
- * 80 de 81. Mandar la ficha completa por delante pone lo que nunca se hace
- * encima de lo único que se hace.
- */
-function QueVasAHacer({ ejercicio, onMedia, onEditar, onCerrar }) {
-  const opciones = [
-    {
-      icono: Video, principal: true, et: 'Grabar o subir',
-      sub: 'Video, foto de portada, ángulos', al: onMedia,
-    },
-    {
-      icono: Pencil, principal: false, et: 'Editar el ejercicio',
-      sub: 'Nombre, categoría, equipo, notas', al: onEditar,
-    },
-  ];
-
-  return (
-    <div
-      onClick={(e) => { if (e.target === e.currentTarget) onCerrar(); }}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 2100, background: 'rgba(17,19,24,0.45)',
-        display: 'flex', alignItems: 'flex-end', fontFamily: FONT,
-      }}
-    >
-      <div className="animate-fade-in" style={{
-        width: '100%', background: T.bg2, borderRadius: '20px 20px 0 0',
-        padding: '16px 16px calc(16px + env(safe-area-inset-bottom))',
-        boxShadow: KP.shPop,
-      }}>
-        <div style={{
-          fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 3,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
-          {ejercicio.name}
-        </div>
-        <div style={{ fontSize: 12, color: T.text3, fontWeight: 600, marginBottom: 14 }}>
-          ¿Qué vas a hacer?
-        </div>
-
-        {opciones.map((o) => (
-          <button
-            key={o.et}
-            type="button"
-            onClick={o.al}
+          <Portada
+            foto={ex.cover_image_url}
+            video={ex.video_url}
+            desde={ex.recorte_inicio}
+            hasta={ex.recorte_fin}
             style={{
-              display: 'flex', alignItems: 'center', gap: 12, width: '100%',
-              minHeight: 60, padding: '12px 14px', borderRadius: 14, marginBottom: 9,
-              cursor: 'pointer', fontFamily: FONT, textAlign: 'left',
-              border: o.principal ? 'none' : `1.5px solid ${T.border}`,
-              background: o.principal ? T.accent : T.bg2,
-              color: o.principal ? '#fff' : T.text,
+              width: 44, height: 44, borderRadius: 10, flexShrink: 0,
+              background: `${color}14`,
             }}
           >
-            <o.icono size={20} style={{ flexShrink: 0 }} />
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: 'block', fontSize: 14.5, fontWeight: 800 }}>{o.et}</span>
-              <span style={{
-                display: 'block', fontSize: 11.5, fontWeight: 600, marginTop: 1,
-                color: o.principal ? 'rgba(255,255,255,.78)' : T.text3,
-              }}>
-                {o.sub}
-              </span>
-            </span>
-            <ChevronRight size={17} style={{ flexShrink: 0, opacity: .6 }} />
-          </button>
-        ))}
+            <Dumbbell size={19} color={`${color}AA`} />
+          </Portada>
 
+          <span style={{ minWidth: 0, flex: 1 }}>
+            <span style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              fontSize: 13.5, fontWeight: 700, color: T.text,
+            }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {ex.name}
+              </span>
+              {ex.esMiVersion && (
+                <Pencil size={11} color={T.accent} style={{ flexShrink: 0 }} />
+              )}
+            </span>
+            <span style={{
+              display: 'block', fontSize: 11.5, color: T.text3, fontWeight: 600,
+              marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {[ex.category?.name, ex.equipment, (ex.muscle_primary || []).join(' · ')]
+                .filter(Boolean).join(' · ') || (base ? 'Base' : '—')}
+            </span>
+          </span>
+        </button>
+
+        {/* El que le falta video se marca en ámbar. Es la única forma de ver de un
+            vistazo cuáles faltan sin abrirlos uno por uno. */}
         <button
-          type="button" onClick={onCerrar}
+          type="button"
+          onClick={onMedia}
+          aria-label={tieneVideo ? `Ver o cambiar el video de ${ex.name}` : `Falta video en ${ex.name}: grabarlo`}
           style={{
-            width: '100%', minHeight: 46, marginTop: 4, borderRadius: 13,
-            border: 'none', background: 'transparent', cursor: 'pointer',
-            fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text2,
+            width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+            display: 'grid', placeItems: 'center', cursor: 'pointer',
+            border: `1px solid ${tieneVideo ? T.border : T.warning}`,
+            background: tieneVideo ? T.bg2 : 'rgba(224,123,0,0.10)',
+            color: tieneVideo ? T.text2 : T.warning,
           }}
         >
-          Cancelar
+          <Video size={16} />
         </button>
       </div>
+
+      {abierto && (
+        <div style={{
+          display: 'flex', flexDirection: 'column', gap: 6, background: T.bg2, border: `1.5px solid ${T.accent}`, borderTop: 'none',
+          borderRadius: '0 0 14px 14px', padding: '8px 8px 9px', marginTop: -1,
+        }}>
+          <button
+            type="button" onClick={onMedia} className="kp-press"
+            style={{
+              minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, border: 'none', borderRadius: 11,
+              background: T.accent, color: '#fff', cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 800, touchAction: 'manipulation',
+            }}
+          >
+            <Video size={17} /> Grabar o subir
+          </button>
+          <button
+            type="button" onClick={onEditar} className="kp-press"
+            style={{
+              minHeight: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, border: `1.5px solid ${T.border}`,
+              borderRadius: 11, background: T.bg2, color: T.text2, cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 700,
+              touchAction: 'manipulation',
+            }}
+          >
+            <Pencil size={14} /> Editar el ejercicio
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -430,7 +378,15 @@ function ExerciseEditor({
   // texto. Los datos de los 81 ejercicios ya están escritos; lo que falta es
   // la media. Guardar sigue guardando la ficha completa: los campos siguen
   // ahí en el estado, solo no se pintan.
-  const [soloMedia, setSoloMedia] = useState(foco === 'media');
+  /* DOS PANTALLAS, no una con otro título. Andrés, 7 oct 2026: «da la impresión de que ya no importa si el usuario le pica a
+     "grabar" o a "editar ejercicio"; debe existir una razón de que sea diferente». «Grabar o subir» abre con lo de grabar (y el
+     título lo dice): los datos quedan al final, plegados, en «Editar también los datos». «Editar el ejercicio» abre con los datos y
+     lo que ya tiene de fotos y videos va al final, con un botón que lleva a «Grabar o subir». Cada una tiene un camino a la otra. */
+  const [modo, setModo] = useState(foco === 'media' ? 'media' : 'datos');
+  const [conDatos, setConDatos] = useState(false);   // en «Grabar o subir»: los datos desplegados
+  const raiz = useRef(null);
+  const [enfocaOtro, setEnfocaOtro] = useState(false);   // el campo de «Otro» toma el cursor solo si se acaba de elegir
+  useEffect(() => { raiz.current?.scrollTo?.({ top: 0 }); }, [modo]);
   const { user } = useAuth();
   const pregunta = useConfirmacion();
   const [creandoGrupo, setCreandoGrupo] = useState(false);
@@ -481,9 +437,24 @@ function ExerciseEditor({
         }
       : { ...empty, category_id: categories[0]?.id || '' },
   );
+  // El equipo es una lista; lo que no esté en ella (un «Conos» de siempre) sale como «Otro» con su texto.
+  const [equipoOtro, setEquipoOtro] = useState(() => {
+    const e = (exercise?.equipment || '').trim();
+    return !!e && !EQUIPOS.some((x) => x.toLowerCase() === e.toLowerCase());
+  });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const eligeEquipo = (v) => {
+    if (v === 'Otro') {
+      setEquipoOtro(true);
+      // Si venía de uno de la lista, el campo empieza vacío para escribir el otro.
+      setForm((f) => ({ ...f, equipment: EQUIPOS.some((x) => x.toLowerCase() === (f.equipment || '').trim().toLowerCase()) ? '' : f.equipment }));
+      return;
+    }
+    setEquipoOtro(false);
+    set('equipment', v);
+  };
   const categoriaElegida = categories.find((c) => c.id === form.category_id)?.name || null;
 
   async function onSave() {
@@ -523,7 +494,8 @@ function ExerciseEditor({
        y las versiones de hombres y de mujeres) son filas de `exercise_media`,
        y esa tabla pide un `exercise_id`: hasta abajo, cuando ya hay uno. */
     const primeraFoto = nuevos.find((m) => m.tipo === 'foto' && !m.genero);
-    const primerVideo = nuevos.find((m) => m.tipo === 'video' && !m.genero);
+    // Las columnas del ejercicio solo guardan EJEMPLOS: una explicación es siempre su propia fila (ver `lib/proposito.js`).
+    const primerVideo = nuevos.find((m) => m.tipo === 'video' && !m.genero && !esExplicacion(m));
     if (!exercise) {
       if (primeraFoto) payload.cover_image_url = primeraFoto.url;
       if (primerVideo) {
@@ -559,7 +531,7 @@ function ExerciseEditor({
             await addExerciseMedia({
               exerciseId: saved.id, url: m.url, tipo: m.tipo, genero: m.genero || null,
               inicio: m.inicio ?? null, fin: m.fin ?? null,
-              sinAudio: !!m.sinAudio, encuadre: m.encuadre ?? null,
+              sinAudio: !!m.sinAudio, encuadre: m.encuadre ?? null, proposito: m.proposito,
             });
           } catch { fallaron += 1; }
         }
@@ -601,6 +573,7 @@ function ExerciseEditor({
 
   return (
     <div
+      ref={raiz}
       onMouseDown={onClose}
       style={{
         position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(17,19,24,0.45)',
@@ -622,10 +595,19 @@ function ExerciseEditor({
             padding: '18px 22px', background: T.bg2, borderBottom: `1px solid ${T.border}`,
           }}
         >
-          <div style={{ fontSize: 17, fontWeight: 800, color: T.text, display: 'flex', alignItems: 'center', gap: 8 }}>
-            {!exercise ? 'Nuevo ejercicio'
-              : esAjeno ? <><Pencil size={16} color={T.accent} /> Mi versión</>
-              : 'Editar ejercicio'}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: T.text, display: 'flex', alignItems: 'center', gap: 8 }}>
+              {!exercise ? 'Nuevo ejercicio'
+                : modo === 'media' ? 'Grabar o subir'
+                : esAjeno ? <><Pencil size={16} color={T.accent} /> Mi versión</>
+                : 'Editar ejercicio'}
+            </div>
+            {/* De qué ejercicio es: el título dice QUÉ se hace aquí, y el nombre CUÁL. */}
+            {exercise && (
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: T.text2, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {exercise.name}
+              </div>
+            )}
           </div>
           <button
             type="button"
@@ -689,7 +671,7 @@ function ExerciseEditor({
               bloques de JSX es la forma de equivocarse. */}
           {(() => {
             const campoNombre = (
-              <Input key="nombre" label="Nombre" value={form.name} onChange={(e) => set('name', e.target.value)} />
+              <Input key="nombre" grande label="Nombre" value={form.name} onChange={(e) => set('name', e.target.value)} />
             );
             /* PRINCIPAL Y SECUNDARIAS. Andrés, 28 sep 2026: un "jumping lunge"
                es principalmente Potencia, pero también Pliometría; saltar la
@@ -700,37 +682,79 @@ function ExerciseEditor({
             const opcionesCatSec = categories
               .filter((c) => c.id !== form.category_id)
               .map((c) => ({ valor: c.id, etiqueta: c.name, color: catColor(c) }));
+            // Elegir una categoría como principal la quita de las secundarias: no puede ser las dos cosas.
+            const poneCategoria = (id) => setForm((f) => ({
+              ...f,
+              category_id: id,
+              categorias_secundarias: (f.categorias_secundarias || []).filter((x) => x !== id),
+            }));
+            /* LISTAS Y NO PASTILLAS. Andrés, 7 oct 2026: «el formato de seleccionar categorías secundarias como stickers está
+               horrible», y «antes de escoger una secundaria me ofrece agregar una nueva, el orden está mal». Las secundarias son
+               una lista desplegable con casillas (la misma de los filtros de arriba) y «Crear categoría nueva» va DESPUÉS. */
             const campoCategoria = (
-              <div key="cat" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div key="cat" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Categoría principal</span>
+                  <span style={ROTULO}>Categoría</span>
                   <SelectorCategoria
                     categorias={categories}
                     value={form.category_id}
-                    onChange={(id) => setForm((f) => ({
-                      ...f,
-                      category_id: id,
-                      categorias_secundarias: (f.categorias_secundarias || []).filter((x) => x !== id),
-                    }))}
+                    onChange={poneCategoria}
                     onCreada={onCategoriaCreada}
                     onBorrada={onCategoriaBorrada}
                     duenoId={duenoId}
                     masterId={masterId}
                     puedeCrear={puedeCrearCategoria}
+                    sinCrear
                   />
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <RotuloConAyuda titulo="Categorías secundarias" ayuda="Opcional. También sale al filtrar por estas." />
-                  <SeleccionMultiple
-                    opciones={opcionesCatSec}
-                    elegidas={(form.categorias_secundarias || []).filter((id) => opcionesCatSec.some((o) => o.valor === id))}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={ROTULO}>Categorías secundarias</span>
+                  <ListaDesplegable
+                    multiple
+                    etiqueta="Categorías secundarias"
+                    marcador="Seleccionar…"
+                    valor={(form.categorias_secundarias || []).filter((id) => opcionesCatSec.some((o) => o.valor === id))}
                     onCambio={(v) => set('categorias_secundarias', v)}
+                    opciones={opcionesCatSec}
+                  />
+                  <CrearCategoria
+                    categorias={categories}
+                    onChange={poneCategoria}
+                    onCreada={onCategoriaCreada}
+                    duenoId={duenoId}
+                    masterId={masterId}
+                    puedeCrear={puedeCrearCategoria}
                   />
                 </div>
               </div>
             );
+            /* EL EQUIPO, EN LISTA. Andrés, 7 oct 2026: «para "equipo" quiero que sea una lista desplegable» con Peso corporal,
+               Barra, Mancuerna, Kettlebell, Máquina, Liga y «Otro (y aquí te dé la opción de escribir)». */
+            const equipoDeLista = EQUIPOS.find((x) => x.toLowerCase() === (form.equipment || '').trim().toLowerCase()) ?? '';
             const campoEquipo = (
-              <Input key="equipo" label="Equipo" value={form.equipment} onChange={(e) => set('equipment', e.target.value)} />
+              <div key="equipo" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={ROTULO}>Equipo</span>
+                <ListaDesplegable
+                  etiqueta="Equipo"
+                  marcador="Selecciona…"
+                  valor={equipoOtro ? 'Otro' : equipoDeLista}
+                  onCambio={(v) => { if (v === 'Otro') setEnfocaOtro(true); eligeEquipo(v); }}
+                  opciones={[...EQUIPOS.map((e) => ({ valor: e, etiqueta: e })), { valor: 'Otro', etiqueta: 'Otro…' }]}
+                />
+                {equipoOtro && (
+                  <input
+                    value={form.equipment}
+                    onChange={(e) => set('equipment', e.target.value)}
+                    aria-label="Escribe cuál equipo"
+                    autoFocus={enfocaOtro}
+                    // 16 px: por debajo, el iPhone acerca la pantalla al escribir.
+                    style={{
+                      border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '11px 13px', fontFamily: FONT, fontSize: 16,
+                      fontWeight: 600, color: T.text, outline: 'none', background: T.bg2, width: '100%', boxSizing: 'border-box',
+                    }}
+                  />
+                )}
+              </div>
             );
             /* LOS SECUNDARIOS, POR GRUPO. En el repertorio ya venían músculos
                secundarios finos ("Isquios", "Core"…) que ninguna pantalla
@@ -763,7 +787,7 @@ function ExerciseEditor({
               set('muscle_secondary', siguiente);
             };
             const campoMusculo = (
-              <div key="musc" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div key="musc" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <MuscleSelect
                   value={form.muscle_primary}
                   // Lo que se vuelve principal sale de secundarios: no puede
@@ -778,24 +802,26 @@ function ExerciseEditor({
                   onAgregarGrupo={puedeCrearGrupo ? () => setCreandoGrupo(true) : undefined}
                   alBorrarGrupo={borrarGrupo}
                 />
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <RotuloConAyuda titulo="Grupos secundarios" ayuda="Opcional. Lo que también trabaja; sale al filtrar por ellos." />
-                  <SeleccionMultiple
-                    opciones={opcionesMusSec}
-                    elegidas={[...elegidasMus]}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={ROTULO}>Grupos secundarios</span>
+                  <ListaDesplegable
+                    multiple
+                    etiqueta="Grupos secundarios"
+                    marcador="Seleccionar…"
+                    valor={[...elegidasMus]}
                     onCambio={cambiaMusSec}
+                    opciones={opcionesMusSec}
                   />
                 </div>
               </div>
             );
             const campoNotas = (
               <label key="notas" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Notas / descripción</span>
+                <span style={ROTULO}>Notas</span>
                 <textarea
                   value={form.description}
                   onChange={(e) => set('description', e.target.value)}
                   rows={3}
-                  placeholder="Cues técnicos, tempo, observaciones…"
                   style={{
                     border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '11px 13px',
                     fontFamily: FONT, fontSize: 14, fontWeight: 500, color: T.text, outline: 'none',
@@ -804,15 +830,16 @@ function ExerciseEditor({
                 />
               </label>
             );
-            const campoLiga = (
+            /* EL ENLACE VIEJO solo sale si ya trae algo: «Pegar liga» (en la lista de fotos y videos) hace lo mismo, y un campo
+               vacío con una aclaración gris debajo era ruido. */
+            const campoLiga = form.video_link ? (
               <Input
                 key="liga"
                 label="Enlace de video (TikTok / Instagram / YouTube)"
                 value={form.video_link}
                 onChange={(e) => set('video_link', e.target.value)}
-                placeholder="https://…"
               />
-            );
+            ) : null;
             /* Ni la foto de portada ni el video principal tienen ya su propio
                bloque: los dos viven dentro de la lista, encabezándola. Andrés
                dijo del video que lo que no le cuadraba era "que esté separada
@@ -839,38 +866,51 @@ function ExerciseEditor({
                 }))}
                 nuevos={nuevos}
                 onNuevos={setNuevos}
+                compacto={!!exercise && modo === 'datos'}
               />
             );
 
-            const volverALosDatos = soloMedia && (
+            // «Editar también los datos»: lo MENOS importante de «Grabar o subir», al final, y con cara de botón (no gris y escondido).
+            const tarjetaDeDatos = (
               <button
-                key="volver"
-                type="button"
-                onClick={() => setSoloMedia(false)}
+                key="det" type="button" onClick={() => setConDatos(true)} className="kp-press"
                 style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 7, alignSelf: 'flex-start',
-                  minHeight: 40, padding: '0 13px', borderRadius: 11, cursor: 'pointer',
-                  border: `1.5px solid ${T.border}`, background: T.bg2,
-                  fontFamily: FONT, fontSize: 13, fontWeight: 700, color: T.text2,
+                  display: 'flex', alignItems: 'center', gap: 12, minHeight: 60, padding: '10px 14px 10px 12px', width: '100%',
+                  border: `1.5px solid ${T.borderHi}`, background: T.bg2, borderRadius: 14, boxShadow: KP.shCard, cursor: 'pointer',
+                  fontFamily: FONT, textAlign: 'left',
                 }}
               >
-                <Pencil size={14} /> Editar también los datos
+                <span style={{ width: 36, height: 36, borderRadius: 11, flexShrink: 0, display: 'grid', placeItems: 'center', background: T.accentBg, color: T.accent }}>
+                  <Pencil size={18} />
+                </span>
+                <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span style={{ fontSize: 14.5, fontWeight: 800, color: T.text }}>Editar también los datos</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: T.text2 }}>Nombre, categoría, equipo, notas</span>
+                </span>
+                <ChevronDown size={19} color={T.accent} style={{ flexShrink: 0 }} />
               </button>
             );
 
-            if (soloMedia) return <>{volverALosDatos}{bloqueMedia}{campoLiga}</>;
+            // GRABAR O SUBIR: lo de grabar primero; los datos, al final y plegados.
+            if (exercise && modo === 'media') {
+              return (
+                <>
+                  {bloqueMedia}
+                  {campoLiga}
+                  {conDatos ? (
+                    <>
+                      <div style={{ height: 1, background: T.border }} />
+                      {campoNombre}
+                      {campoCategoria}
+                      {campoMusculo}
+                      {campoEquipo}
+                      {campoNotas}
+                    </>
+                  ) : tarjetaDeDatos}
+                </>
+              );
+            }
 
-            /* CREAR: GRABAR VA PRIMERO, y lo demás se pliega.
-               Esta es la maqueta A que escogió Andrés, y la construí mal la
-               primera vez: hice la pantalla nueva pero la dejé en el hueco de
-               siempre, o sea al FINAL, después de nombre, categoría, equipo,
-               músculo y notas. Andrés: "pusiste hasta abajo el botón, cuando
-               tenía que cambiar el orden de todo eso e iba hasta arriba".
-
-               El escenario manda: el coach está en el gimnasio con el tripié
-               puesto y el sol encima. Lo primero que ve tiene que ser grabar.
-               Lo único que se le pide además es el nombre; el resto se llena
-               sentado, o nunca. */
             if (!exercise) {
               return (
                 <>
@@ -933,8 +973,8 @@ function ExerciseEditor({
                   {detalles && (
                     <>
                       {campoCategoria}
-                      {campoEquipo}
                       {campoMusculo}
+                      {campoEquipo}
                       {campoNotas}
                       {campoLiga}
                     </>
@@ -943,17 +983,26 @@ function ExerciseEditor({
               );
             }
 
-            // EDITAR: el coach vino a cambiar datos, no a grabar. Orden de siempre.
+            // EDITAR EL EJERCICIO: los datos primero; lo que ya tiene de fotos y videos, al final, con un camino a «Grabar o subir».
             return (
               <>
                 {campoNombre}
                 {campoCategoria}
-                {campoEquipo}
                 {campoMusculo}
+                {campoEquipo}
                 {campoNotas}
+                {campoLiga}
                 <div style={{ height: 1, background: T.border }} />
                 {bloqueMedia}
-                {campoLiga}
+                <button
+                  type="button" onClick={() => setModo('media')} className="kp-press"
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 44, border: `1.5px solid ${T.border}`,
+                    background: T.bg2, borderRadius: 12, boxShadow: KP.shCard, cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 800, color: T.accent,
+                  }}
+                >
+                  <Video size={17} /> Grabar o subir
+                </button>
               </>
             );
           })()}
@@ -988,79 +1037,56 @@ function ExerciseEditor({
             padding: '16px 22px', background: T.bg2, borderTop: `1px solid ${T.border}`,
           }}
         >
-          {esAjeno ? (
-            /* Ejercicio de la base: a la izquierda se duplica, a la derecha se
-               guarda la versión propia. Duplicar es para quien quiera DOS
-               variantes del mismo ejercicio en vez de reemplazar una.
-
-               "Volver al original" ya NO está aquí: se subió al aviso de
-               arriba, que es donde se lee que esto es una versión propia. Abajo
-               y al final del formulario no lo encontraba nadie. */
-            <>
-              <button
-                  type="button"
-                  disabled={dupBusy}
-                  onClick={async () => {
-                    setDupBusy(true);
-                    try { const copy = await duplicateExercise(exercise); onDuplicate(copy); }
-                    catch (e) { setErr(e.message || 'Error al duplicar'); setDupBusy(false); }
-                  }}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 7, padding: '11px 16px', borderRadius: 12,
-                    border: `1.5px solid ${T.border}`, background: T.bg2, color: T.text2,
-                    cursor: dupBusy ? 'default' : 'pointer',
-                    fontFamily: FONT, fontSize: 14, fontWeight: 700,
-                  }}
-                >
-                  {dupBusy ? <Loader2 size={16} className="spin" /> : <Copy size={16} />} Duplicar aparte
-              </button>
-              <button
-                type="button"
-                onClick={onSave}
-                disabled={busy}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 22px', borderRadius: 12,
-                  border: 'none', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1,
-                  background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff',
-                  fontFamily: FONT, fontSize: 14.5, fontWeight: 700, boxShadow: KP.shBtn,
-                }}
-              >
-                {busy && <Loader2 size={16} className="spin" />}
-                Guardar mi versión
-              </button>
-            </>
-          ) : (
-            <>
-              {exercise ? (
-                <button
-                  type="button"
-                  onClick={onDelete}
-                  disabled={busy}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 7, padding: '11px 16px', borderRadius: 12,
-                    border: 'none', background: 'rgba(220,38,38,0.08)', color: T.danger, cursor: 'pointer',
-                    fontFamily: FONT, fontSize: 14, fontWeight: 700,
-                  }}
-                >
-                  <Trash2 size={16} /> Eliminar
-                </button>
-              ) : <span />}
-              <button
-                type="button"
-                onClick={onSave}
-                disabled={busy}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 22px', borderRadius: 12,
-                  border: 'none', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1,
-                  background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff',
-                  fontFamily: FONT, fontSize: 14.5, fontWeight: 700, boxShadow: KP.shBtn,
-                }}
-              >
-                {busy && <Loader2 size={16} className="spin" />}
-                {exercise ? 'Guardar cambios' : 'Crear ejercicio'}
-              </button>
-            </>
-          )}
+          {/* LA IZQUIERDA depende de la pantalla. En «Grabar o subir» no hay nada: ahí solo se graba y se guarda (Andrés, 7 oct 2026:
+              «Grabar o subir» y «Editar ejercicio» tienen que ser dos cosas distintas, y eliminar es de la segunda). En la de
+              datos: un ejercicio de la base se duplica (para quien quiera DOS variantes en vez de reemplazar una) y uno propio se
+              elimina. «Volver al original» NO está aquí: vive en el aviso de arriba, que es donde se lee que esto es una versión propia. */}
+          {exercise && modo === 'media' ? <span /> : esAjeno ? (
+            <button
+              type="button"
+              disabled={dupBusy}
+              onClick={async () => {
+                setDupBusy(true);
+                try { const copy = await duplicateExercise(exercise); onDuplicate(copy); }
+                catch (e) { setErr(e.message || 'Error al duplicar'); setDupBusy(false); }
+              }}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 7, padding: '11px 16px', borderRadius: 12,
+                border: `1.5px solid ${T.border}`, background: T.bg2, color: T.text2,
+                cursor: dupBusy ? 'default' : 'pointer',
+                fontFamily: FONT, fontSize: 14, fontWeight: 700,
+              }}
+            >
+              {dupBusy ? <Loader2 size={16} className="spin" /> : <Copy size={16} />} Duplicar aparte
+            </button>
+          ) : exercise ? (
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={busy}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 7, padding: '11px 16px', borderRadius: 12,
+                border: 'none', background: 'rgba(220,38,38,0.08)', color: T.danger, cursor: 'pointer',
+                fontFamily: FONT, fontSize: 14, fontWeight: 700,
+              }}
+            >
+              <Trash2 size={16} /> Eliminar
+            </button>
+          ) : <span />}
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={busy}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 22px', borderRadius: 12,
+              border: 'none', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1,
+              background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff',
+              fontFamily: FONT, fontSize: 14.5, fontWeight: 700, boxShadow: KP.shBtn,
+            }}
+          >
+            {busy && <Loader2 size={16} className="spin" />}
+            {esAjeno ? 'Guardar mi versión' : exercise ? 'Guardar cambios' : 'Crear ejercicio'}
+          </button>
         </div>
       </div>
     </div>
@@ -1101,6 +1127,17 @@ export default function ExercisesPanel({ viendoComo }) {
   // En el teléfono, tocar un ejercicio pregunta primero qué se va a hacer.
   const [preguntando, setPreguntando] = useState(null);
   const esAncho = useIsWide();
+
+  /* QUÉ EJERCICIOS TIENEN VIDEO EN `exercise_media` (ver `listIdsConVideoExtra`). Se vuelve a leer cada vez que se CIERRA el editor,
+     que es cuando pudo cambiar: grabar o quitar un video escribe esas filas directo, sin pasar por «Guardar». Si falla, la lista
+     se queda como estaba: lo peor es una marca de «falta video» de más. */
+  const [conVideoExtra, setConVideoExtra] = useState(() => new Set());
+  useEffect(() => {
+    if (editing) return undefined;
+    let vivo = true;
+    listIdsConVideoExtra().then((ids) => { if (vivo) setConVideoExtra(ids); }).catch(() => {});
+    return () => { vivo = false; };
+  }, [editing, dueño]);
 
   /* LAS FOTOS DE LOS VIDEOS SE COMPLETAN SOLAS. Los videos nuevos sacan su foto
      al subirse; los que ya estaban sin foto, o con una que quedó vieja porque
@@ -1478,27 +1515,21 @@ export default function ExercisesPanel({ viendoComo }) {
         >
           {filtered.map((ex) => (enTarjetas ? (
             <ExerciseCard
-              key={ex.id} ex={ex} base={!isMaster && ex.isBase}
+              key={ex.id} ex={ex} base={!isMaster && ex.isBase} conVideoExtra={conVideoExtra.has(ex.id)}
               onClick={() => openExercise(ex)}
             />
           ) : (
             <ExerciseRow
-              key={ex.id} ex={ex} base={!isMaster && ex.isBase}
-              onAbrir={() => setPreguntando(ex)}
+              key={ex.id} ex={ex} base={!isMaster && ex.isBase} conVideoExtra={conVideoExtra.has(ex.id)}
+              abierto={preguntando?.id === ex.id}
+              onAbrir={() => setPreguntando(preguntando?.id === ex.id ? null : ex)}
               onMedia={() => openExercise(ex, 'media')}
+              onEditar={() => openExercise(ex, 'todo')}
             />
           )))}
         </div>
       )}
 
-      {preguntando && (
-        <QueVasAHacer
-          ejercicio={preguntando}
-          onMedia={() => openExercise(preguntando, 'media')}
-          onEditar={() => openExercise(preguntando, 'todo')}
-          onCerrar={() => setPreguntando(null)}
-        />
-      )}
 
       {editing && (
         <ExerciseEditor

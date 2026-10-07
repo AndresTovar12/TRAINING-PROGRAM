@@ -488,9 +488,19 @@ export async function listExerciseMedia(exerciseIds) {
   return data ?? [];
 }
 
+/* Los ids de los ejercicios que tienen al menos UN VIDEO en `exercise_media` (una explicación, otro ángulo, una versión por género).
+   El video «de siempre» vive en columnas del propio ejercicio y estos no: sin esta lista, un ejercicio que solo tiene su explicación
+   se vería en el repertorio como «falta video». Solo se pide la columna del id: es una lista de ids, no de videos. */
+export async function listIdsConVideoExtra() {
+  const { data, error } = await supabase
+    .from('exercise_media').select('exercise_id').eq('tipo', 'video').limit(5000);
+  if (error) throw error;
+  return new Set((data ?? []).map((r) => r.exercise_id));
+}
+
 export async function addExerciseMedia({
   exerciseId, url, tipo = 'video', etiqueta, genero, paraAtleta, inicio, fin,
-  sinAudio = false, encuadre = null,
+  sinAudio = false, encuadre = null, proposito = 'ejemplo',
 }) {
   const { data: auth } = await supabase.auth.getUser();
   const { data, error } = await supabase
@@ -499,6 +509,8 @@ export async function addExerciseMedia({
       exercise_id: exerciseId,
       url,
       tipo,
+      // «ejemplo» o «explicacion» (ver `lib/proposito.js`). Una foto siempre es ejemplo.
+      proposito: tipo === 'video' && proposito === 'explicacion' ? 'explicacion' : 'ejemplo',
       etiqueta: etiqueta || null,
       genero: genero || null,
       para_atleta: paraAtleta || null,

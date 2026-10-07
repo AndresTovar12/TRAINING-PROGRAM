@@ -33,12 +33,9 @@ import { T, FONT } from '@/lib/theme';
 
 export default function SelectorCategoria({
   categorias = [], value, onChange, onCreada, onBorrada,
-  duenoId, masterId, sinCategoria = false, puedeCrear = true, estilo,
+  duenoId, masterId, sinCategoria = false, puedeCrear = true, estilo, sinCrear = false,
 }) {
   const pregunta = useConfirmacion();
-  const [creando, setCreando] = useState(false);
-  const [nombre, setNombre] = useState('');
-  const [guardando, setGuardando] = useState(false);
   const [err, setErr] = useState('');
 
   const mias = categoriasMias(categorias, duenoId);
@@ -75,6 +72,51 @@ export default function SelectorCategoria({
     }
   }
 
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {/* Agrupadas: se ve de un vistazo cuáles son de la app y cuáles hizo uno.
+          Las tuyas llevan bote de basura; las de la app no. */}
+      <ListaDesplegable
+        etiqueta="Categoría"
+        valor={value || ''}
+        onCambio={onChange}
+        marcador={sinCategoria ? 'Sin categoría' : 'Selecciona…'}
+        estilo={estilo}
+        grupos={[
+          ...(sinCategoria ? [{ titulo: '', opciones: [{ valor: '', etiqueta: 'Sin categoría' }] }] : []),
+          { titulo: 'TUYAS', opciones: mias.map((c) => ({
+            valor: c.id, etiqueta: c.name, color: c.color, alBorrar: () => borrar(c),
+          })) },
+          { titulo: 'DE LA APP', opciones: deLaApp.map((c) => ({
+            valor: c.id, etiqueta: c.name, color: c.color,
+          })) },
+        ]}
+      />
+
+      {err && <div style={{ fontSize: 12.5, fontWeight: 700, color: T.danger }}>{err}</div>}
+
+      {/* «Crear categoría nueva» va debajo, a la vista. `sinCrear` lo saca de aquí para ponerlo donde se quiera (el editor del
+          repertorio lo pone DESPUÉS de las secundarias: Andrés, 7 oct 2026, «antes de escoger una secundaria me ofrece agregar
+          una nueva, el orden está mal»). */}
+      {!sinCrear && (
+        <CrearCategoria
+          categorias={categorias} onChange={onChange} onCreada={onCreada} duenoId={duenoId} masterId={masterId} puedeCrear={puedeCrear} estilo={estilo}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * «+ Crear categoría nueva»: el botón, su aviso cuando no se puede y el formulario de una línea. Al crearla, queda elegida
+ * (`onChange(id)`: la categoría principal). Vive aparte para poder ponerlo después de otros campos.
+ */
+export function CrearCategoria({ categorias = [], onChange, onCreada, duenoId, masterId, puedeCrear = true, estilo }) {
+  const [creando, setCreando] = useState(false);
+  const [nombre, setNombre] = useState('');
+  const [guardando, setGuardando] = useState(false);
+  const [err, setErr] = useState('');
+
   async function crear() {
     setGuardando(true);
     setErr('');
@@ -98,26 +140,7 @@ export default function SelectorCategoria({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {/* Agrupadas: se ve de un vistazo cuáles son de la app y cuáles hizo uno.
-          Las tuyas llevan bote de basura; las de la app no. */}
-      <ListaDesplegable
-        etiqueta="Categoría"
-        valor={value || ''}
-        onCambio={onChange}
-        marcador={sinCategoria ? 'Sin categoría' : 'Selecciona…'}
-        estilo={estilo}
-        grupos={[
-          ...(sinCategoria ? [{ titulo: '', opciones: [{ valor: '', etiqueta: 'Sin categoría' }] }] : []),
-          { titulo: 'TUYAS', opciones: mias.map((c) => ({
-            valor: c.id, etiqueta: c.name, color: c.color, alBorrar: () => borrar(c),
-          })) },
-          { titulo: 'DE LA APP', opciones: deLaApp.map((c) => ({
-            valor: c.id, etiqueta: c.name, color: c.color,
-          })) },
-        ]}
-      />
-
+    <>
       {!creando && puedeCrear && (
         <button
           type="button"
@@ -181,6 +204,6 @@ export default function SelectorCategoria({
           {err && <div style={{ fontSize: 12.5, fontWeight: 700, color: T.danger }}>{err}</div>}
         </div>
       )}
-    </div>
+    </>
   );
 }

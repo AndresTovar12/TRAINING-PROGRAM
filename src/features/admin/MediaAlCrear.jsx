@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { Camera, Images, Link as LinkIcon, Trash2, Plus, Users, Mars, Venus, Check, ChevronDown, Video } from 'lucide-react';
-import MediaUpload from '@/features/admin/MediaUpload';
-import { ligaExterna } from '@/lib/videos';
+import { Link as LinkIcon, Trash2, Plus, Users, Mars, Venus, ChevronDown } from 'lucide-react';
+import { DosBotonesDeGrabar, FilaDeTres, PanelDeLiga, PastillaDeProposito, SelectorDeProposito } from '@/features/admin/AgregarMedia';
+import { avisoDeLiga, ligaExterna } from '@/lib/videos';
+import { EJEMPLO, esExplicacion, explicacionesPrimero } from '@/lib/proposito';
 import Portada from '@/components/Portada';
+import IconoExplicacion from '@/components/IconoExplicacion';
 import { T, FONT, KP } from '@/lib/theme';
 
 /**
@@ -28,36 +30,42 @@ import { T, FONT, KP } from '@/lib/theme';
  *
  * Por eso aquí no se guarda nada: se sube el archivo y se apunta en una lista
  * que vive en el formulario. Al tocar "Crear ejercicio", `ExercisesPanel`
- * reparte: los "para todos" van a las columnas, y el resto se inserta en
+ * reparte: los ejemplos "para todos" van a las columnas, y el resto (las
+ * explicaciones, otros ángulos, las versiones por género) se inserta en
  * `exercise_media` en cuanto el ejercicio tiene id.
  *
  * "PARA TODOS" VIENE PUESTO Y NO SE PREGUNTA NADA.
  * Se le ofreció a Andrés preguntarle a quién va justo al terminar de grabar y
  * dijo que no: "la pastilla está bien". Tiene razón para el caso que describió
  * — un paso más con el sol encima es un paso que estorba.
+ *
+ * EJEMPLO O EXPLICACIÓN (Andrés, 7 oct 2026). Son DOS BOTONES IGUALES de grabar
+ * (ver `AgregarMedia`): el que se toca ya dice qué es, así que tampoco se
+ * pregunta. Solo un video del carrete o de una liga pregunta, porque nadie lo
+ * ha dicho. Y si el coach se equivocó de botón, la pastilla del video en la
+ * lista lo cambia.
  */
 
 const GRUPOS = [
-  { g: '', et: 'Para todos', corto: 'Todos', Icono: Users, pista: 'Quien no tenga una versión propia' },
-  { g: 'h', et: 'Hombres', corto: 'Hombres', Icono: Mars, pista: 'Solo lo verán ellos' },
-  { g: 'm', et: 'Mujeres', corto: 'Mujeres', Icono: Venus, pista: 'Solo lo verán ellas' },
+  { g: '', et: 'Para todos', corto: 'Todos', Icono: Users },
+  { g: 'h', et: 'Hombres', corto: 'Hombres', Icono: Mars },
+  { g: 'm', et: 'Mujeres', corto: 'Mujeres', Icono: Venus },
 ];
 
 const clave = () => `n-${Math.random().toString(36).slice(2, 9)}`;
 
 export default function MediaAlCrear({ nuevos, onNuevos }) {
   const [abierto, setAbierto] = useState(null);   // archivo con el menú de "para quién" desplegado
+  const [abiertoTipo, setAbiertoTipo] = useState(null); // archivo con el menú de «ejemplo / explicación» desplegado
   const [agregando, setAgregando] = useState(false); // los botones, cuando ya hay algo
   const [ligaAbierta, setLigaAbierta] = useState(false);
-  const [ligaTexto, setLigaTexto] = useState('');
   const [err, setErr] = useState('');
-  const [arrastrando, setArrastrando] = useState(false);
 
   const suma = (datos) => {
     if (!datos?.url) { setErr('No se pudo subir el archivo.'); return; }
     setErr('');
     setAgregando(false);
-    onNuevos([...nuevos, { key: clave(), genero: '', ...datos }]);
+    onNuevos([...nuevos, { key: clave(), genero: '', proposito: EJEMPLO, ...datos }]);
   };
 
   const quita = (k) => onNuevos(nuevos.filter((m) => m.key !== k));
@@ -65,136 +73,46 @@ export default function MediaAlCrear({ nuevos, onNuevos }) {
     onNuevos(nuevos.map((m) => (m.key === k ? { ...m, genero } : m)));
     setAbierto(null);
   };
+  const queEs = (k, proposito) => {
+    onNuevos(nuevos.map((m) => (m.key === k ? { ...m, proposito } : m)));
+    setAbiertoTipo(null);
+  };
 
-  function guardaLiga() {
-    const texto = ligaTexto.trim();
-    if (!ligaExterna(texto)) {
-      setErr('Eso no parece una dirección de video. Copia la liga completa desde la app.');
-      return;
-    }
+  function guardaLiga(texto, proposito) {
+    const aviso = avisoDeLiga(texto);
+    if (aviso) { setErr(aviso); return; }
     setLigaAbierta(false);
-    setLigaTexto('');
-    suma({ url: texto, tipo: 'video' });
+    setErr('');
+    suma({ url: texto, tipo: 'video', proposito });
   }
 
-  /* Los tres botones chicos. Siempre los mismos, cambia solo si hay un
-     "Grabar" enorme encima o no. */
-  const menudos = (conGrabar) => (
-    <div style={{ display: 'flex', gap: 8 }}>
-      {conGrabar && (
-        <MediaUpload
-          accept="video/*" kind="videos" value="" onChange={() => {}}
-          onAjustes={suma}
-          botones={({ camara, carrete, busy, enTelefono }) => (
-            <button type="button" onClick={enTelefono ? camara : carrete} disabled={busy} style={chico}>
-              <Video size={20} color={T.text} />
-              <span style={textoChico}>{busy ? 'Subiendo…' : 'Grabar'}</span>
-            </button>
-          )}
-        />
-      )}
-      <MediaUpload
-        accept="image/*" kind="covers" value="" onChange={() => {}}
-        onAjustes={suma}
-        botones={({ camara, carrete, busy, preparando, enTelefono }) => (
-          <button type="button" onClick={enTelefono ? camara : carrete} disabled={busy} style={chico}>
-            <Camera size={20} color={T.text} />
-            <span style={textoChico}>{busy ? (preparando ? 'Preparando…' : 'Subiendo…') : enTelefono ? 'Tomar foto' : 'Foto'}</span>
-          </button>
-        )}
-      />
-      <MediaUpload
-        accept="image/*,video/*" kind="videos" value="" onChange={() => {}}
-        onAjustes={suma}
-        botones={({ carrete, busy, preparando }) => (
-          <button type="button" onClick={carrete} disabled={busy} style={chico}>
-            <Images size={20} color={T.text2} />
-            <span style={textoChico}>{busy ? (preparando ? 'Preparando…' : 'Subiendo…') : 'Del carrete'}</span>
-          </button>
-        )}
-      />
-      <button type="button" onClick={() => setLigaAbierta(true)} style={chico}>
-        <LinkIcon size={20} color={T.text2} />
-        <span style={textoChico}>Pegar liga</span>
-      </button>
-    </div>
-  );
+  // Las explicaciones primero: es el orden en que las ve el atleta.
+  const lista = explicacionesPrimero(nuevos);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>Fotos y videos</span>
+      <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>Fotos y videos</span>
 
-      {nuevos.map((m) => (
+      {lista.map((m) => (
         <Ficha
           key={m.key}
           item={m}
           abierto={abierto === m.key}
-          onAbrir={() => setAbierto(abierto === m.key ? null : m.key)}
+          onAbrir={() => { setAbierto(abierto === m.key ? null : m.key); setAbiertoTipo(null); }}
           onAQuien={(g) => aQuien(m.key, g)}
+          abiertoTipo={abiertoTipo === m.key}
+          onAbrirTipo={() => { setAbiertoTipo(abiertoTipo === m.key ? null : m.key); setAbierto(null); }}
+          onQueEs={(p) => queEs(m.key, p)}
           onQuitar={() => quita(m.key)}
         />
       ))}
 
-      {nuevos.length === 0 ? (
+      {nuevos.length === 0 || agregando ? (
         <>
-          {/* EL BOTÓN GRANDE. Es la maqueta A tal cual: lo que el coach viene a
-              hacer ocupa media pantalla, y lo demás cabe debajo en una fila. */}
-          <MediaUpload
-            accept="video/*" kind="videos" value="" onChange={() => {}}
-            onAjustes={suma}
-            botones={({ camara, carrete, suelta, busy, enTelefono }) => (
-              <button
-                type="button"
-                onClick={enTelefono ? camara : carrete}
-                disabled={busy}
-                className="kp-press"
-                /* Soltar el archivo encima. En la compu es el gesto natural y
-                   la pantalla ya lo ofrecía por escrito: sin esto era una
-                   promesa falsa. `onDragOver` con `preventDefault` es
-                   obligatorio — sin él el navegador se queda el archivo y abre
-                   el video en una pestaña, tirando el formulario a medias. */
-                onDragOver={(e) => { e.preventDefault(); setArrastrando(true); }}
-                onDragLeave={() => setArrastrando(false)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setArrastrando(false);
-                  suelta(e.dataTransfer?.files?.[0]);
-                }}
-                style={{
-                  width: '100%', border: 'none', cursor: busy ? 'default' : 'pointer', padding: '30px 16px',
-                  background: `linear-gradient(150deg, ${T.accent}, ${T.accentDk})`,
-                  borderRadius: 22, display: 'flex', flexDirection: 'column', alignItems: 'center',
-                  gap: 14, fontFamily: FONT, opacity: busy ? 0.75 : 1,
-                  boxShadow: arrastrando
-                    ? '0 0 0 4px rgba(30,64,224,0.35), 0 10px 26px rgba(30,64,224,0.30)'
-                    : '0 10px 26px rgba(30,64,224,0.30)',
-                  transform: arrastrando ? 'scale(1.01)' : 'none',
-                  transition: 'box-shadow .15s, transform .15s',
-                }}
-              >
-                <span style={{
-                  width: 72, height: 72, borderRadius: 24, background: 'rgba(255,255,255,0.16)',
-                  display: 'grid', placeItems: 'center',
-                }}>
-                  <Video size={34} color="#fff" />
-                </span>
-                <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
-                  <span style={{ fontSize: 20, fontWeight: 800, color: '#fff', letterSpacing: -0.4 }}>
-                    {busy ? 'Subiendo…' : enTelefono ? 'Grabar el ejercicio' : 'Elegir el video'}
-                  </span>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.80)' }}>
-                    {arrastrando ? 'Suéltalo aquí'
-                      : enTelefono ? 'Ponlo en el tripié y dale'
-                      : 'O arrástralo aquí desde tu compu'}
-                  </span>
-                </span>
-              </button>
-            )}
-          />
-          {menudos(false)}
+          {/* LOS DOS BOTONES, iguales. Lo que el coach viene a hacer ocupa media pantalla. */}
+          <DosBotonesDeGrabar onAjustes={suma} compacto={nuevos.length > 0} />
+          <FilaDeTres onAjustes={suma} onLiga={() => { setLigaAbierta(true); setErr(''); }} />
         </>
-      ) : agregando ? (
-        menudos(true)
       ) : (
         <button
           type="button"
@@ -212,45 +130,7 @@ export default function MediaAlCrear({ nuevos, onNuevos }) {
         </button>
       )}
 
-      {ligaAbierta && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-          <input
-            autoFocus
-            value={ligaTexto}
-            onChange={(e) => setLigaTexto(e.target.value)}
-            placeholder="https://www.tiktok.com/…"
-            style={{
-              minHeight: 46, boxSizing: 'border-box', padding: '0 13px', borderRadius: 12,
-              border: `1.5px solid ${T.accent}`, background: T.bg2,
-              fontFamily: FONT, fontSize: 14.5, fontWeight: 600, color: T.text,
-            }}
-          />
-          <div style={{ display: 'flex', gap: 7 }}>
-            <button
-              type="button"
-              onClick={() => { setLigaAbierta(false); setLigaTexto(''); setErr(''); }}
-              style={{
-                flex: 1, minHeight: 42, borderRadius: 11, border: `1px solid ${T.border}`,
-                background: T.bg2, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5,
-                fontWeight: 700, color: T.text2,
-              }}
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={guardaLiga}
-              style={{
-                flex: 1, minHeight: 42, borderRadius: 11, border: 'none',
-                background: T.accent, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5,
-                fontWeight: 700, color: '#fff',
-              }}
-            >
-              Agregar
-            </button>
-          </div>
-        </div>
-      )}
+      {ligaAbierta && <PanelDeLiga onGuarda={guardaLiga} onCancela={() => { setLigaAbierta(false); setErr(''); }} error={err} />}
 
       {/* LA TERCERA CORRECCIÓN, dicha con todas sus letras: no hace falta nada
           de esto para crear el ejercicio. */}
@@ -260,7 +140,7 @@ export default function MediaAlCrear({ nuevos, onNuevos }) {
           : 'Con el nombre basta. El video se puede grabar después.'}
       </div>
 
-      {err && (
+      {err && !ligaAbierta && (
         <div style={{
           background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 11,
           padding: '10px 12px', fontSize: 12.5, fontWeight: 700,
@@ -272,16 +152,10 @@ export default function MediaAlCrear({ nuevos, onNuevos }) {
   );
 }
 
-const chico = {
-  flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center',
-  justifyContent: 'center', gap: 6, minHeight: 66, padding: '0 6px', borderRadius: 15,
-  border: `1px solid ${T.border}`, background: T.bg2, cursor: 'pointer', fontFamily: FONT,
-};
-const textoChico = { fontSize: 12, fontWeight: 700, color: T.text, whiteSpace: 'nowrap' };
-
 /** Un archivo ya subido: qué es, para quién va, y cómo quitarlo. */
-function Ficha({ item, abierto, onAbrir, onAQuien, onQuitar }) {
+function Ficha({ item, abierto, onAbrir, onAQuien, abiertoTipo, onAbrirTipo, onQueEs, onQuitar }) {
   const esVideo = item.tipo === 'video';
+  const explicacion = esVideo && esExplicacion(item);
   const liga = ligaExterna(item.url);
   const grupo = GRUPOS.find((x) => x.g === (item.genero || '')) ?? GRUPOS[0];
 
@@ -304,28 +178,32 @@ function Ficha({ item, abierto, onAbrir, onAQuien, onQuitar }) {
         </span>
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13.5, fontWeight: 700, color: T.text }}>
+            {explicacion && <IconoExplicacion size={15} color={T.accent} />}
             {liga ? liga.de : esVideo ? 'Video' : 'Foto'}
           </div>
-          {/* LA PASTILLA. Es el control entero: se toca y se elige. Viene con
-              "Para todos" puesto y nadie está obligado a tocarla. */}
-          <button
-            type="button"
-            onClick={onAbrir}
-            aria-expanded={abierto}
-            style={{
-              marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 5,
-              minHeight: 28, padding: '0 10px', borderRadius: 999, cursor: 'pointer',
-              border: `1px solid ${item.genero ? T.accent : T.borderHi}`,
-              background: item.genero ? T.accentBg : 'transparent',
-              color: item.genero ? T.accent : T.text3,
-              fontFamily: FONT, fontSize: 11.5, fontWeight: 700,
-            }}
-          >
-            <grupo.Icono size={12} />
-            {grupo.et}
-            <ChevronDown size={12} />
-          </button>
+          {/* LAS PASTILLAS. Cada una es el control entero: se toca y se elige. Vienen con «Para todos» y
+              «Ejemplo» puestos, y nadie está obligado a tocarlas. */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+            <button
+              type="button"
+              onClick={onAbrir}
+              aria-expanded={abierto}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                minHeight: 26, padding: '0 9px 0 10px', borderRadius: 999, cursor: 'pointer',
+                border: `1px solid ${item.genero ? T.accent : T.borderHi}`,
+                background: item.genero ? T.accentBg : T.bg2,
+                color: item.genero ? T.accent : T.text2,
+                fontFamily: FONT, fontSize: 11.5, fontWeight: 700,
+              }}
+            >
+              <grupo.Icono size={12} />
+              {grupo.corto}
+              <ChevronDown size={11} />
+            </button>
+            {esVideo && <PastillaDeProposito valor={item.proposito} abierta={abiertoTipo} onToggle={onAbrirTipo} />}
+          </div>
         </div>
 
         <button
@@ -342,7 +220,7 @@ function Ficha({ item, abierto, onAbrir, onAQuien, onQuitar }) {
       </div>
 
       {abierto && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 6 }}>
           {GRUPOS.map((o) => {
             const aqui = o.g === (item.genero || '');
             return (
@@ -350,33 +228,22 @@ function Ficha({ item, abierto, onAbrir, onAQuien, onQuitar }) {
                 key={o.g || 'todos'}
                 type="button"
                 onClick={() => onAQuien(o.g)}
+                aria-pressed={aqui}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 10, minHeight: 52, padding: '0 11px',
-                  borderRadius: 13, cursor: 'pointer', fontFamily: FONT, textAlign: 'left',
-                  border: `1.5px solid ${aqui ? T.accent : T.border}`,
-                  background: aqui ? T.accentBg : T.bg2,
+                  flex: 1, minHeight: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  borderRadius: 11, cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 800,
+                  border: `1.5px solid ${aqui ? T.accent : T.border}`, background: aqui ? T.accentBg : T.bg2,
+                  color: aqui ? T.accent : T.text2,
                 }}
               >
-                <span style={{
-                  width: 30, height: 30, borderRadius: 10, flexShrink: 0, display: 'grid',
-                  placeItems: 'center', background: aqui ? T.accent : T.bg3,
-                }}>
-                  <o.Icono size={15} color={aqui ? '#fff' : T.text2} />
-                </span>
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ display: 'block', fontSize: 13.5, fontWeight: 800, color: aqui ? T.accent : T.text }}>
-                    {o.corto}
-                  </span>
-                  <span style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: T.text3, marginTop: 1 }}>
-                    {o.pista}
-                  </span>
-                </span>
-                {aqui && <Check size={17} color={T.accent} />}
+                <o.Icono size={14} /> {o.corto}
               </button>
             );
           })}
         </div>
       )}
+
+      {abiertoTipo && <SelectorDeProposito valor={item.proposito} onCambia={onQueEs} />}
     </div>
   );
 }

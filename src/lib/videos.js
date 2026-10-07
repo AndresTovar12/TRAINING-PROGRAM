@@ -177,6 +177,11 @@ export function ligaExterna(url) {
   return { de: 'Enlace', embed: null, abrir: texto };
 }
 
+/** El aviso para enseñar si lo pegado no sirve como liga de video, o `null` si sirve. */
+export function avisoDeLiga(texto) {
+  return ligaExterna(texto) ? null : 'Eso no parece una dirección de video. Copia la liga completa desde la app.';
+}
+
 /* ── ¿Conviene empezar a bajar un video ANTES de que lo pidan? ─────────────────
    Se hace al abrir un ejercicio (ver `FichaEjercicio`) y al completar fotos
    (ver `posters`): el video arranca al instante, pero se gastan datos aunque

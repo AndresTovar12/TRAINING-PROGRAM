@@ -98,8 +98,13 @@ export default function ListaDesplegable({
         || (panel.current && panel.current.contains(e.target));
       if (!dentro) cerrar();
     };
-    document.addEventListener('mousedown', fuera);
-    return () => document.removeEventListener('mousedown', fuera);
+    /* EN CAPTURA, no al subir. Los diálogos de la app (el editor de ejercicios, por ejemplo) detienen el `mousedown` en su tarjeta
+       para que el fondo no los cuente como «clic fuera» y se cierre el diálogo entero. Un oyente del documento que espera a que el
+       evento suba NUNCA lo recibe desde adentro de uno: la lista de «Categorías secundarias» —que se queda abierta mientras se
+       marcan casillas— no se cerraba al tocar en otro lado y dos listas quedaban abiertas a la vez. Por capturar, el documento lo
+       ve primero, antes de que nadie lo detenga. */
+    document.addEventListener('mousedown', fuera, true);
+    return () => document.removeEventListener('mousedown', fuera, true);
   }, [abierto, cerrar]);
 
   const miraSiHayMas = useCallback(() => {
