@@ -3,10 +3,13 @@
 //
 //   deno run -A scripts/prueba-mcp-preguntas.ts
 import { diaDesdeEntrada, firmasDeGrupos, nombresDeEjercicios } from '../supabase/functions/mcp/plan.ts'
+import { NOMBRE_DIA } from '../supabase/functions/mcp/util.ts'
 import { equiposMasUsados, esUnilateral, exigirRespuestas, nuevaRevision, parecidosA, preguntaDeDatos, vistaPrevia, type ItemDeCatalogo, type Renglon, type Revision } from '../supabase/functions/mcp/preguntas.ts'
-import { Pregunta, llaveDeNombre, mismoNombre, palabrasClave, seguro } from '../supabase/functions/mcp/util.ts'
+import { Pregunta, fechaDelAtleta, llaveDeNombre, mismoNombre, palabrasClave, seguro } from '../supabase/functions/mcp/util.ts'
 import { herramientasComunes } from '../supabase/functions/mcp/comunes.ts'
 import { herramientasDelCoach } from '../supabase/functions/mcp/coach.ts'
+import { herramientasDelAtleta } from '../supabase/functions/mcp/atleta.ts'
+import { z } from 'npm:zod@^4.1.13'
 
 const igual = (a: unknown, b: unknown, msg: string) => {
   const x = JSON.stringify(a), y = JSON.stringify(b)
@@ -532,6 +535,68 @@ const revisaDia = (ejercicios: any[], titulo = 'Sábado') => {
   const igualQueAntes = await t2.editar_dia({ atleta: 'zz_atleta', dia: 'sábado', sesiones: [{ nombre: 'Sesión', ejercicios: comoChatGPT.map((e) => ({ ...e })) }] })
   igual([igualQueAntes.structuredContent.listo, a2.length], [true, 1], 'reescribir un día que ya tenía todo no vuelve a preguntar')
   ok('editar_dia con tu ejemplo 2: pregunta «por lado» y reps, confirma las biseries y guarda')
+}
+
+/* ---- ver_atleta: la sesión de HOY completa, sin pedirla aparte ---- */
+{
+  const dias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+  const hoyEs = fechaDelAtleta().dia
+  const planDeSemana = (diasConSesion: string[]) => ({
+    ...PLAN_FALSO(),
+    data: { kind: 'weekly', phases: [{ id: 'p-1', num: 1, name: 'Rutina semanal', weekData: [{ num: 1, label: '', load: '', days: diasConSesion.map((d) => ({
+      day: d, name: `Sesión ${d}`, cat: 'gym', exercises: [
+        { name: 'Back Squat', exercise_id: 'id-backsquat', sets: '4', reps: '8' },
+        { name: 'Step Ups', sets: '3', reps: '6', porLado: true, set: 1 }, { name: 'Squat Jump', sets: '3', reps: '10', set: 1 },
+      ],
+    })) }] }] },
+  })
+  // Con sesión todos los días: hoy trae los ejercicios de verdad.
+  const { tools } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [planDeSemana(dias)] })
+  const con: any = (await tools.ver_atleta({ atleta: 'zz_atleta' })).structuredContent
+  igual(con.hoy.length, 1, 'trae la sesión de hoy')
+  igual(con.hoy[0].dia, hoyEs, 'del día de hoy')
+  igual(con.hoy[0].ejercicios.map((e: any) => e.nombre), ['Back Squat', 'Step Ups', 'Squat Jump'], 'con sus ejercicios, completos')
+  igual(con.hoy[0].ejercicios.map((e: any) => e.grupo ?? null), [null, 1, 1], 'con su biserie')
+  igual(con.hoy[0].ejercicios[1].por_lado, true, 'y su «por lado»')
+  cierto(con.plan !== undefined && con.ultimas_sesiones_hechas !== undefined, 'lo de siempre sigue ahí')
+  // Sin sesión hoy: lo dice, no inventa.
+  const otro = dias.find((d) => d !== hoyEs)!
+  const { tools: t2 } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [planDeSemana([otro])] })
+  const sin: any = (await t2.ver_atleta({ atleta: 'zz_atleta' })).structuredContent
+  igual(sin.hoy, { dia: NOMBRE_DIA[hoyEs], mensaje: 'Hoy no le toca sesión.' }, 'sin sesión hoy, lo dice')
+  // Sin plan: sin «hoy».
+  const { tools: t3 } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [] })
+  const sinPlan: any = (await t3.ver_atleta({ atleta: 'zz_atleta' })).structuredContent
+  cierto(sinPlan.hoy === null || sinPlan.hoy === undefined, 'sin plan no hay sesión de hoy')
+  ok('ver_atleta trae la sesión de hoy completa')
+}
+
+/* ---- Los esquemas que ve la IA: sin tipo doble en la fase ni topes gigantes ---- */
+{
+  const { tools } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [PLAN_FALSO()] })
+  // «fase» y «semana» llegan como texto a veces: se aceptan.
+  const r: any = await tools.ver_plan_de_atleta({ atleta: 'zz_atleta', fase: '1', semana: '1' })
+  cierto(r.structuredContent?.dias !== undefined, 'fase y semana como texto («1») se entienden')
+  ok('fase y semana en texto o número dan igual')
+}
+
+/* ---- Lo que ve la IA: ningún esquema con topes gigantes de enteros ni la fase con tipo doble ---- */
+{
+  const esquemas: Record<string, any> = {}
+  const captura = (rol: string) => ({ registerTool: (nombre: string, def: any) => { esquemas[`${rol}:${nombre}`] = z.toJSONSchema(z.object(def.inputSchema ?? {}), { target: 'draft-7', io: 'input' }) } })
+  const quien: any = { id: 'x', usuario: 'x', nombre: 'X', rol: 'master', salud: false, unidad: 'kg', db: {} }
+  herramientasComunes(captura('comunes'), quien)
+  herramientasDelCoach(captura('coach'), quien)
+  herramientasDelAtleta(captura('atleta'), { ...quien, rol: 'atleta' })
+  const texto = JSON.stringify(esquemas)
+  cierto(Object.keys(esquemas).length >= 40, `se revisaron ${Object.keys(esquemas).length} herramientas`)
+  cierto(!texto.includes('9007199254740991'), 'ningún entero trae los topes gigantes (±9007199254740991)')
+  cierto(!texto.includes('"type":"integer"'), 'ni «integer»: los números son números')
+  for (const [nombre, e] of Object.entries(esquemas)) {
+    const fase = e.properties?.fase
+    if (fase) cierto(fase.type === 'string', `${nombre}: «fase» es solo texto (${JSON.stringify(fase.type)})`)
+  }
+  ok('los esquemas que ve la IA son simples: fase en texto y números sin topes gigantes')
 }
 
 /* ---- crear_plan también ---- */

@@ -165,8 +165,8 @@ function encontrarEjercicio(candidatos: Candidato[], u: Ubicacion, ref: string):
 
 const DIA_ARGS = {
   fecha: z.string().optional().describe('Fecha AAAA-MM-DD. Si no se da, es hoy en la hora del atleta.'),
-  fase: z.union([z.string(), z.number()]).optional().describe('Fase: su número (1, 2…) o su nombre. Solo para ver un día que no es el de hoy.'),
-  semana: z.number().int().optional().describe('Número de semana dentro de la fase.'),
+  fase: z.coerce.string().optional().describe('Fase: su número (1, 2…) o su nombre. Solo para ver un día que no es el de hoy.'),
+  semana: z.coerce.number().optional().describe('Número de semana dentro de la fase.'),
   dia: z.string().optional().describe('Día de la semana: lunes, martes… Si no se da, el de la fecha.'),
 }
 

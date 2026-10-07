@@ -14,7 +14,7 @@ import {
   type Miembro, type Plan, type Programa, type SesionEntrada,
 } from './plan.ts'
 import { anotarDia, equiposMasUsados, exigirRespuestas, nuevaRevision, preguntaDeDatos, type Revision } from './preguntas.ts'
-import { cursorDe, estadoDe, registrosDe, ubicarEnTodos } from './atleta.ts'
+import { cursorDe, estadoDe, registrosDe, ubicarDia, ubicarEnTodos } from './atleta.ts'
 import { repertorioConFicha } from './comunes.ts'
 import { dondeVa, historialDePeso } from './app/training-utils.js'
 import { gruposConPropios } from './app/muscles.js'
@@ -36,7 +36,7 @@ const SIN_CANTIDAD_OK = z.array(z.string()).optional()
   .describe('Solo después de preguntar: nombres de ejercicios que la persona dijo que van SIN repeticiones ni tiempo. Sin esto, un ejercicio sin "cantidad" no se guarda: la herramienta te dice qué preguntar.')
 const ESTRUCTURA_OK = z.boolean().optional()
   .describe('true cuando la persona ya confirmó cómo armaste las biseries, triseries o circuitos (o ya los había pedido explícitamente). Sin esto, la primera vez la herramienta te devuelve la rutina armada para que se la enseñes y no guarda.')
-const FASE = z.union([z.string(), z.number()]).optional()
+const FASE = z.coerce.string().optional()
   .describe('La fase: su número (1, 2…) o su nombre. En una rutina que se repite no hace falta.')
 
 /* El formato de un Set con reloj: lo que corre son los PASOS (una lista de tramos que se repite); el id
@@ -46,11 +46,11 @@ const FORMATO = z.object({
   nombre: z.string().optional().describe('Solo con id "custom": el nombre que ve el atleta (ej.: "Pirámide").'),
   pasos: z.array(z.object({
     tipo: z.enum(['trabajo', 'descanso']),
-    seg: z.number().int().nullable().describe('Segundos del tramo. null = hasta que el atleta toque «Listo».'),
+    seg: z.coerce.number().nullable().describe('Segundos del tramo. null = hasta que el atleta toque «Listo».'),
     etiqueta: z.string().optional().describe('Lo que ve el atleta en el reloj (ej.: "Fuerte", "Suave").'),
   })).describe('La lista de tramos que se repite. AMRAP 12 min: [{tipo:"trabajo",seg:720}]. EMOM: [{tipo:"trabajo",seg:60}]. Tabata: [{tipo:"trabajo",seg:20},{tipo:"descanso",seg:10}]. 8 × 400 m con 90 s: [{tipo:"trabajo",seg:null},{tipo:"descanso",seg:90}].'),
-  vueltas: z.number().int().optional().describe('Cuántas veces se repite la lista de pasos. AMRAP: 1. EMOM de 10 min: 10. Tabata: 8.'),
-  tope: z.number().int().nullable().optional().describe('Segundos tras los que se corta todo, aunque falte (opcional).'),
+  vueltas: z.coerce.number().optional().describe('Cuántas veces se repite la lista de pasos. AMRAP: 1. EMOM de 10 min: 10. Tabata: 8.'),
+  tope: z.coerce.number().nullable().optional().describe('Segundos tras los que se corta todo, aunque falte (opcional).'),
   turnan: z.boolean().optional().describe('true: en cada tramo de trabajo toca un ejercicio distinto del grupo, por turnos (circuitos, EMOM alternado).'),
   anota: z.enum(['rondas', 'tiempo', 'reps', 'km', 'm', 'cal', 'cumplido', 'nada']).optional().describe('Qué anota el atleta al terminar. AMRAP: rondas. EMOM: cumplido. Por tiempo: tiempo.'),
 })
@@ -66,7 +66,7 @@ const EJERCICIO = z.object({
   notas: z.string().optional(),
   indicaciones: z.string().optional().describe('Claves técnicas para el atleta.'),
   lleva_peso: z.boolean().optional().describe('Si el atleta anota peso aquí. Si no se dice, la app lo deduce del nombre.'),
-  grupo: z.number().int().optional().describe('Ejercicios SEGUIDOS con el mismo número van en superserie o circuito. Si la persona separó la lista en bloques (línea en blanco, viñetas, A1/A2, «+»), cada bloque de 2 o más ejercicios es una biserie, triserie o circuito: mismo número para todos los del bloque (1, 2, 3…); los que van solos, sin grupo. No lo preguntes: así lo escribió; la primera vez la herramienta te devuelve la rutina armada para que se la enseñes.'),
+  grupo: z.coerce.number().optional().describe('Ejercicios SEGUIDOS con el mismo número van en superserie o circuito. Si la persona separó la lista en bloques (línea en blanco, viñetas, A1/A2, «+»), cada bloque de 2 o más ejercicios es una biserie, triserie o circuito: mismo número para todos los del bloque (1, 2, 3…); los que van solos, sin grupo. No lo preguntes: así lo escribió; la primera vez la herramienta te devuelve la rutina armada para que se la enseñes.'),
   por_lado: z.boolean().optional().describe('true si la cantidad es por cada lado (cada pierna, cada brazo): la app lo enseña como "10 reps por lado". false si es en total. En un ejercicio a una pierna o un brazo (pistol squat, step ups, búlgara, zancadas, remo a una mano) la persona tiene que decirlo: si no lo dijo, la herramienta te lo pide y no guarda.'),
   por_vuelta: z.array(z.object({
     cantidad: z.union([z.number(), z.string()]).optional().describe('Cuánto en ESA vuelta: 10, "8-10"… En la misma unidad del ejercicio.'),
@@ -258,7 +258,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
 
   server.registerTool('ver_atleta', {
     title: 'Ver un atleta',
-    description: 'Todo de un atleta: su plan y en qué va, sus últimas sesiones hechas con lo que anotó, su bienestar de los últimos días, sus 1RM y, si aún no activa su cuenta, su link de invitación. Si el atleta tiene un equipo (su coach y otros profesionales, como un fisio), da los programas de todos juntos, cada uno con de quién es, y quién está en su equipo; con "de", solo el de uno. Nunca trae notas de consulta.',
+    description: 'Todo de un atleta: su plan y en qué va, la sesión de HOY completa (ejercicio por ejercicio, con lo que ya anotó), sus últimas sesiones hechas con lo que anotó, su bienestar de los últimos días, sus 1RM y, si aún no activa su cuenta, su link de invitación. Si el atleta tiene un equipo (su coach y otros profesionales, como un fisio), da los programas de todos juntos, cada uno con de quién es, y quién está en su equipo; con "de", solo el de uno. Nunca trae notas de consulta.',
     inputSchema: { atleta: ATLETA, de: DE_LEER },
     annotations: SOLO_LEER,
   }, seguro(async ({ atleta, de }: any) => {
@@ -274,6 +274,20 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       .slice(0, 5)
       .map(([llave, s]: any) => ({ ...diaDeLlave(pr.plan, llave), hecha_el: s.completedAt ?? null, ...(s.notes ? { notas: s.notes } : {}) }))
     const resumenDe = (pr: Programa) => (pr.plan ? resumenDelPlan(pr.plan, cursorDe(estado, pr), hoy.date) : null)
+    /* La sesión de HOY completa (la misma cuenta que ver_dia_de_atleta sin argumentos), para no tener que
+       pedirla aparte: ejercicio por ejercicio y con lo que ya anotó. Sin sesión hoy, lo dice. */
+    const hoyDe = (pr: Programa) => {
+      if (!pr.plan) return null
+      try {
+        const u = ubicarDia(pr.plan, cursorDe(estado, pr), {})
+        if (!u.entradas.length) return { dia: NOMBRE_DIA[u.dia], mensaje: 'Hoy no le toca sesión.' }
+        const registros = registrosDe(estado, pr)
+        return u.entradas.map((i) => describirDia(u.fase, u.semana, i, registros[idDeSesion(pr.plan, u.fase, u.semana, i, u.fecha.date)]))
+      } catch (e) {
+        if (e instanceof Aviso) return null
+        throw e
+      }
+    }
     const base = {
       nombre: nombreDe(persona),
       usuario: persona.username,
@@ -289,7 +303,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     if (!rotular && elegidos.length <= 1) {
       // Sin equipo, exactamente como siempre.
       const pr = elegidos[0] ?? SIN_PROGRAMA
-      return respuesta({ ...base, plan: resumenDe(pr), ultimas_sesiones_hechas: ultimasDe(pr), ...compartido })
+      return respuesta({ ...base, plan: resumenDe(pr), hoy: hoyDe(pr), ultimas_sesiones_hechas: ultimasDe(pr), ...compartido })
     }
     return respuesta({
       ...base,
@@ -304,6 +318,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
         de: pr.de,
         ...(pr.altaEn ? { dado_de_alta_el: fechaLarga(pr.altaEn) } : {}),
         plan: resumenDe(pr),
+        hoy: hoyDe(pr),
         ultimas_sesiones_hechas: ultimasDe(pr),
       })),
       ...compartido,
@@ -316,7 +331,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     inputSchema: {
       atleta: ATLETA,
       fase: FASE,
-      semana: z.number().int().optional().describe('Número de semana. Si hay fase y no semana, la primera.'),
+      semana: z.coerce.number().optional().describe('Número de semana. Si hay fase y no semana, la primera.'),
       de: DE_LEER,
     },
     annotations: SOLO_LEER,
@@ -367,7 +382,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       atleta: ATLETA,
       fecha: z.string().optional().describe('AAAA-MM-DD'),
       fase: FASE,
-      semana: z.number().int().optional(),
+      semana: z.coerce.number().optional(),
       dia: z.string().optional().describe('lunes … domingo'),
       de: DE_LEER,
     },
@@ -398,7 +413,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     inputSchema: {
       atleta: ATLETA,
       ejercicio: z.string().optional().describe('Nombre del ejercicio tal como está en su plan.'),
-      ultimas: z.number().int().min(1).max(40).optional().describe('Cuántas sesiones. 10 si no se dice.'),
+      ultimas: z.coerce.number().min(1).max(40).optional().describe('Cuántas sesiones. 10 si no se dice.'),
       de: DE_LEER,
     },
     annotations: SOLO_LEER,
@@ -635,7 +650,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     inputSchema: {
       atleta: ATLETA,
       fase: FASE,
-      semana: z.number().int().optional().describe('Número de semana. En una rutina no hace falta.'),
+      semana: z.coerce.number().optional().describe('Número de semana. En una rutina no hace falta.'),
       dia: z.string().describe('lunes … domingo'),
       sesiones: z.array(z.object(SESION)).describe('Las sesiones de ese día. Normalmente una; dos si entrena mañana y tarde.'),
       sin_ficha_ok: SIN_FICHA_OK,
@@ -687,8 +702,8 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     inputSchema: {
       atleta: ATLETA,
       fase: FASE,
-      de_semana: z.number().int().describe('La semana que se copia.'),
-      a_semanas: z.union([z.array(z.number().int()), z.literal('todas')]).describe('Las semanas destino, o "todas" las demás de la fase.'),
+      de_semana: z.coerce.number().describe('La semana que se copia.'),
+      a_semanas: z.union([z.array(z.coerce.number()), z.literal('todas')]).describe('Las semanas destino, o "todas" las demás de la fase.'),
       ...PARAM_DE,
     },
     annotations: ESCRIBE,
@@ -711,8 +726,8 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     inputSchema: {
       atleta: ATLETA,
       fase: FASE,
-      cuantas: z.number().int().min(1).max(20).optional().describe('1 si no se dice.'),
-      copiar_de: z.number().int().optional().describe('Número de la semana que se copia en cada una.'),
+      cuantas: z.coerce.number().min(1).max(20).optional().describe('1 si no se dice.'),
+      copiar_de: z.coerce.number().optional().describe('Número de la semana que se copia en cada una.'),
       nombre: z.string().optional(),
       carga: z.string().optional(),
       ...PARAM_DE,
@@ -745,7 +760,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     inputSchema: {
       atleta: ATLETA,
       fase: FASE,
-      semana: z.number().int(),
+      semana: z.coerce.number(),
       nombre: z.string().optional().describe('Título de la semana. "" lo quita.'),
       carga: z.string().optional().describe('Ej.: "4×10 al 65% · RIR 3". "" la quita.'),
       ...PARAM_DE,
@@ -772,9 +787,9 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       enfoque: z.string().optional(),
       objetivo: z.string().optional(),
       color: z.string().optional().describe('Hex, ej. #FFA047. Si no, el siguiente de la paleta.'),
-      semanas: z.number().int().min(1).max(30).optional().describe('Cuántas semanas vacías. 1 si no se dice.'),
-      copiar_semanas_de: z.union([z.string(), z.number()]).optional().describe('Fase de la que se copian todas las semanas.'),
-      despues_de: z.union([z.string(), z.number()]).optional().describe('Fase después de la cual va. Al final si no se dice.'),
+      semanas: z.coerce.number().min(1).max(30).optional().describe('Cuántas semanas vacías. 1 si no se dice.'),
+      copiar_semanas_de: z.coerce.string().optional().describe('Fase de la que se copian todas las semanas.'),
+      despues_de: z.coerce.string().optional().describe('Fase después de la cual va. Al final si no se dice.'),
       ...PARAM_DE,
     },
     annotations: ESCRIBE,
@@ -799,13 +814,13 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     description: 'Cambia el nombre, subtítulo, enfoque, objetivo o color de una fase, o la mueve de lugar. No toca sus semanas.',
     inputSchema: {
       atleta: ATLETA,
-      fase: z.union([z.string(), z.number()]),
+      fase: z.coerce.string(),
       nombre: z.string().optional(),
       subtitulo: z.string().optional(),
       enfoque: z.string().optional(),
       objetivo: z.string().optional(),
       color: z.string().optional(),
-      mover_a_posicion: z.number().int().min(1).optional().describe('Nueva posición: 1 = primera.'),
+      mover_a_posicion: z.coerce.number().min(1).optional().describe('Nueva posición: 1 = primera.'),
       ...PARAM_DE,
     },
     annotations: ESCRIBE,
@@ -870,7 +885,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
   server.registerTool('quitar_semana', {
     title: 'Quitar una semana',
     description: 'Quita una semana de una fase, con todas sus sesiones. Se puede recuperar con deshacer_cambio_del_plan.',
-    inputSchema: { atleta: ATLETA, fase: FASE, semana: z.number().int(), ...PARAM_DE },
+    inputSchema: { atleta: ATLETA, fase: FASE, semana: z.coerce.number(), ...PARAM_DE },
     annotations: BORRA,
   }, seguro(async ({ atleta, fase, semana, de }: any) => {
     const { persona, plan, programa } = await planDe(quien, atleta, de)
@@ -886,7 +901,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
   server.registerTool('quitar_fase', {
     title: 'Quitar una fase',
     description: 'Quita una fase entera del plan, con todas sus semanas y sesiones. Se puede recuperar con deshacer_cambio_del_plan.',
-    inputSchema: { atleta: ATLETA, fase: z.union([z.string(), z.number()]), ...PARAM_DE },
+    inputSchema: { atleta: ATLETA, fase: z.coerce.string(), ...PARAM_DE },
     annotations: BORRA,
   }, seguro(async ({ atleta, fase, de }: any) => {
     const { persona, plan, programa } = await planDe(quien, atleta, de)
@@ -923,7 +938,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       tipo: z.enum(['dia', 'semana']),
       atleta: ATLETA,
       fase: FASE,
-      semana: z.number().int().optional(),
+      semana: z.coerce.number().optional(),
       dia: z.string().optional().describe('Para tipo "dia": lunes … domingo. Si ese día tiene dos sesiones, se guarda la primera.'),
       ...PARAM_DE,
     },
@@ -954,7 +969,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       plantilla: z.string().describe('Nombre o id de la plantilla (ver_catalogos).'),
       atleta: ATLETA,
       fase: FASE,
-      semana: z.number().int().optional(),
+      semana: z.coerce.number().optional(),
       dia: z.string().optional().describe('Para plantillas de día.'),
       agregar: z.boolean().optional().describe('Para plantillas de día: agregar como otra sesión en vez de reemplazar.'),
       ...PARAM_DE,

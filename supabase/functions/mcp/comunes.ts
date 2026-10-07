@@ -103,7 +103,7 @@ export function herramientasComunes(server: McpServer, quien: Quien) {
       categoria: z.string().optional().describe('Categoría (principal o secundaria), ej.: Hipertrofia, Fuerza, Potencia, Pliometría, Atlético, Core, Movilidad, Acondicionamiento.'),
       equipo: z.string().optional().describe('Equipo, ej.: barra, mancuernas, banda, peso corporal.'),
       musculo: z.string().optional().describe('Músculo o grupo muscular, ej.: cuádriceps, glúteo, dorsal, piernas, espalda.'),
-      limite: z.number().int().min(1).max(60).optional().describe('Cuántos devolver como máximo. 25 si no se dice.'),
+      limite: z.coerce.number().min(1).max(60).optional().describe('Cuántos devolver como máximo. 25 si no se dice.'),
     },
     annotations: SOLO_LEER,
   }, seguro(async ({ texto, categoria, equipo, musculo, limite }: any) => {
