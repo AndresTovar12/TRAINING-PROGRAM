@@ -65,6 +65,27 @@ siempre) y `wr:sessions@<id>` y `wr:cursor@<id>` para cada profesional del equip
 - Las notas de consulta de un fisio NO entran al conector: no hay ninguna
   herramienta que las lea ni las escriba.
 
+## Cuándo pregunta la IA (7 oct 2026)
+
+Andrés quiere que ChatGPT y Claude pregunten cuando hay duda, pero solo lo que tendrían que adivinar: lo que
+la persona ya dijo no se vuelve a preguntar, y lo que se puede deducir se deduce y se enseña. Son dos piezas:
+
+- **La nota** (`instrucciones` en `servidor.ts`, arriba de todo: OpenAI pide lo importante en los primeros
+  512 caracteres). Es un consejo: cada IA puede o no seguirlo. Cubre lo que el conector no ve (biserie o
+  separados, «por lado», reps que faltan).
+- **Los topes** (`preguntas.ts`). Lo que el conector SÍ revisa solo. Si falta algo se detiene ANTES de
+  guardar y contesta una `Pregunta` (no un error: `guardado: false` + la pregunta y las opciones reales).
+  Cada tope trae su salida, para no preguntar lo que la persona ya dijo:
+  - `crear_ejercicio` solo con el nombre → una sola pregunta con categoría, grupo muscular, equipo y nota.
+    Con cualquier dato, o con `sin_datos: true` («así»), se guarda.
+  - `crear_plan` y `editar_dia` con un ejercicio que no está en el catálogo con su nombre (sin importar
+    mayúsculas, acentos, espacios ni guiones) → no se guarda nada; la respuesta trae los parecidos y cómo
+    preguntar. Con `sin_ficha_ok: [nombres]` se guardan tal cual, sin ficha. Los nombres que el plan ya tenía
+    no cuentan: leer un día y reescribirlo no se frena.
+
+Los parecidos son por letras (el catálogo está casi todo en inglés: «jalón» no encuentra «pull down»); esa
+traducción la hace la IA con `buscar_ejercicios`. Prueba: `scripts/prueba-mcp-preguntas.ts`.
+
 ## Publicar
 
 Con la CLI de Supabase:

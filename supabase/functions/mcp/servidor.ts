@@ -103,7 +103,15 @@ function instrucciones(quien: Quien) {
         + (quien.rol === 'master' ? ' Como administrador eliges con "de" qué programa cambias; sin él, el del coach principal.' : ''),
       'Las notas de consulta de un fisio son suyas: no están aquí y no se piden ni se resumen.',
     ]
-  return [...comun, ...porRol].join('\n')
+  /* CUÁNDO PREGUNTAR, arriba de todo (Andrés, 7 oct 2026): OpenAI pide lo importante en los primeros 512
+     caracteres de estas instrucciones. Solo para quien arma planes y ejercicios. Es el consejo; lo que el
+     conector puede revisar solo son los topes de `preguntas.ts`. */
+  const preguntar = quien.rol === 'atleta' ? [] : [
+    'Pregunta solo lo que tendrías que adivinar; lo que puedas deducir, hazlo y dilo. Lo que la persona ya dijo, no se pregunta. Todas las preguntas en UN solo mensaje, con opciones numeradas.',
+    'Antes de guardar, busca cada ejercicio con buscar_ejercicios (el catálogo está casi todo en inglés) y usa su nombre exacto: si encaja uno solo o es un sinónimo claro, úsalo; si hay varios posibles, pregunta cuál; si ninguno, pregunta si lo creas.',
+    'En una rutina, el descanso y las notas no se preguntan nunca. Biserie o circuito: por cómo agrupó la persona la lista, sin preguntar. Si a un ejercicio le faltan series o reps, o va por lado y no lo dijo, pregunta solo por ese. Si dedujiste algo, muestra la rutina armada antes de guardar.',
+  ].map((t) => p(t))
+  return [...preguntar, ...comun, ...porRol].join('\n')
 }
 
 export async function manejar(req: Request): Promise<Response> {

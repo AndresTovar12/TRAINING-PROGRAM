@@ -1,8 +1,9 @@
 // deno-lint-ignore-file no-explicit-any
 import type { Quien } from './sesion.ts'
 import {
-  Aviso, type Dia, NOMBRE_DIA, type Persona, mismoTexto, nombreCorto, nombreDe, rolDeOficio, sinAcentos,
+  Aviso, type Dia, NOMBRE_DIA, type Persona, mismoNombre, mismoTexto, nombreCorto, nombreDe, rolDeOficio, sinAcentos,
 } from './util.ts'
+import type { ItemDeCatalogo } from './preguntas.ts'
 import {
   dondeVa, esDescanso, isLoadedExercise, sesionQueRepite, sessionIdFor,
   enOrdenDeSemana,
@@ -447,14 +448,21 @@ export interface SesionEntrada {
  */
 export async function repertorioVisible(quien: Quien, coachDe?: string | null) {
   const { data: masterId } = await quien.db.rpc('master_id')
-  let q = quien.db.from('exercises').select('id, name, created_by')
+  // Con equipo, músculos y categoría: es lo que se enseña de cada «parecido» cuando falta preguntar (`preguntas.ts`).
+  let q = quien.db.from('exercises').select('id, name, created_by, equipment, muscle_primary, category:exercise_categories(name)')
   if (quien.rol !== 'master') {
     const duenos = [masterId, coachDe ?? (quien.rol === 'atleta' ? quien.coachId : quien.id)].filter(Boolean)
     q = q.in('created_by', duenos as string[])
   }
   const { data, error } = await q
   if (error) throw new Error(error.message)
-  return (data ?? []) as { id: string; name: string; created_by: string | null }[]
+  return (data ?? []) as (ItemDeCatalogo & { created_by: string | null })[]
+}
+
+/** Los nombres de ejercicio que ya tiene un plan, en cualquier fase, semana y día. */
+export function nombresDeEjercicios(plan: Plan | null): string[] {
+  return fasesDe(plan).flatMap((f: any) => (f.weekData ?? []).flatMap((w: any) => (w.days ?? []).flatMap((d: any) =>
+    (d.exercises ?? []).filter((e: any) => !e.isNote && e.name).map((e: any) => String(e.name)))))
 }
 
 const UNIDADES_VALIDAS = new Set(MEDIDAS.map((m: any) => m.id))
@@ -473,8 +481,9 @@ function tipoDesdeTexto(texto?: string) {
 
 /**
  * Arma un día del plan a partir de lo que manda la IA. Devuelve también los
- * ejercicios que no encontró en el repertorio: se guardan igual, solo sin
- * ficha, y la IA se lo avisa al coach.
+ * ejercicios que no encontró en el repertorio (`sinFicha`): quien llama decide
+ * qué hacer con ellos (`exigirFichas` en `preguntas.ts`: preguntar antes de
+ * guardar, salvo los que la persona ya confirmó que van sin ficha).
  */
 export function diaDesdeEntrada(
   diaSemana: Dia,
@@ -489,7 +498,8 @@ export function diaDesdeEntrada(
   const exercises = (sesion.ejercicios ?? []).map((e) => {
     if (e.nota && !e.nombre) return { isNote: true, text: e.nota }
     if (!e.nombre) throw new Aviso('Cada ejercicio necesita "nombre" (o "nota" si es una nota).')
-    const ficha = repertorio.find((r) => mismoTexto(r.name, e.nombre!))
+    // Igual en todo menos en espacios y guiones: «Lat Pulldown» y «Lat Pull-Down» son la misma ficha.
+    const ficha = repertorio.find((r) => mismoTexto(r.name, e.nombre!)) ?? repertorio.find((r) => mismoNombre(r.name, e.nombre!))
     if (!ficha) sinFicha.push(e.nombre)
     const ex: Record<string, unknown> = {
       ...(ficha ? { exercise_id: ficha.id } : {}),
