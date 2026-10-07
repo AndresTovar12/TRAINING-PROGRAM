@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Tarjetas de Home</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+/* Concepto: la pantalla Home de la app, a su tamaño real, con tres ideas para la tarjeta de Salud y tres para Ciencia.
+   Arriba, los controles; abajo, el celular (o la compu). Los colores de la app no cambian con el tema del visor. */
+:root{
+  --bg:#F6F7F9; --fg:#111318; --muted:#5F6673; --line:#E1E4EA; --panel:#FFFFFF; --accent:#1E40E0; --accent-fg:#FFFFFF; --note:#EEF1FE;
+  /* los colores de la app (siempre en claro) */
+  --a-bg:#F4F5F8; --a-surface:#FFFFFF; --a-surface2:#EDEFF3; --a-text:#111318; --a-text2:#6B7280; --a-text3:#9CA3AF;
+  --a-blue:#1E40E0; --a-blue-dk:#1733B8; --a-blue-soft:#E8ECFD; --a-border:#E5E7EB;
+  --a-mint:#00A372; --a-mint-dk:#007A56; --a-mint-soft:#E3F6EF; --a-violet:#7C5CFF; --a-violet-dk:#5B3FD6; --a-violet-soft:#EFEBFF;
+  --a-amber:#E07B00; --a-coral:#FF7A52;
+  --font:"Inter",-apple-system,BlinkMacSystemFont,"SF Pro Display",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0E1117;--fg:#E8EAF0;--muted:#9AA3B2;--line:#242A38;--panel:#161B26;--accent:#7C93FF;--accent-fg:#0B1020;--note:#172043;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0E1117;--fg:#E8EAF0;--muted:#9AA3B2;--line:#242A38;--panel:#161B26;--accent:#7C93FF;--accent-fg:#0B1020;--note:#172043;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);}
+button{font-family:var(--font)}
+.wrap{max-width:1000px;margin:0 auto;padding-inline:16px;padding-block:22px 48px}
+h1{font-size:24px;font-weight:800;letter-spacing:-.5px;margin:0 0 6px;text-wrap:balance}
+.sub{color:var(--muted);font-size:14px;line-height:1.5;margin:0 0 14px;max-width:62ch}
+.ctl{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+.grp{display:grid;grid-template-columns:58px minmax(0,1fr);align-items:center;gap:8px}
+.grp>span{font-size:10.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--muted)}
+.seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:3px;gap:2px;overflow-x:auto;scrollbar-width:none;width:fit-content;max-width:100%}
+.seg::-webkit-scrollbar{display:none}
+.seg button{flex:none;border:0;background:transparent;color:var(--muted);font-size:13px;font-weight:600;padding:8px 11px;border-radius:10px;cursor:pointer;white-space:nowrap}
+.seg button:hover{color:var(--fg)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg)}
+.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.nota{background:var(--note);border-radius:14px;padding:12px 14px;font-size:13.5px;line-height:1.55;margin:14px 0 0;max-width:78ch}
+.nota b{font-weight:700}
+.stage{background:var(--a-bg);border:1px solid var(--line);border-radius:26px;padding:12px;display:flex;justify-content:center;color:var(--a-text)}
+@media (min-width:560px){.stage{padding:18px}}
+.phone{width:100%;max-width:375px}
+.stage[data-modo="compu"] .phone{max-width:780px}
+
+/* ---- la app ---- */
+.fila{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px}
+.card{background:var(--a-surface);border-radius:22px;padding:20px;color:var(--a-text);min-width:0}
+.card .t{font-size:14px;color:var(--a-text2)}
+.card .v{font-size:18px;font-weight:700;margin-top:2px;line-height:1.2}
+.btn-gris{display:block;width:100%;background:var(--a-surface2);border:0;border-radius:14px;padding:12px;font-size:13px;font-weight:600;color:var(--a-text2);text-align:center;margin-top:14px;cursor:default}
+.chip-ico{width:38px;height:38px;border-radius:12px;background:var(--a-blue-soft);color:var(--a-blue);display:grid;place-items:center;flex:none}
+svg.i{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+.azul{flex:1 1 0;min-width:150px;min-height:200px;border-radius:22px;padding:20px 18px;color:#fff;background:linear-gradient(150deg,var(--a-blue),var(--a-blue-dk));box-shadow:0 8px 22px rgba(30,64,224,.24);display:flex;flex-direction:column}
+.azul small{font-size:13px;opacity:.85}
+.azul h3{margin:2px 0 0;font-size:26px;font-weight:800;letter-spacing:-.5px}
+.azul .sp{flex:1}
+.azul .blanco{background:#fff;color:var(--a-blue);border-radius:14px;padding:12px;text-align:center;font-size:13.5px;font-weight:700}
+.foto{flex:1 1 0;min-width:150px;min-height:200px;border-radius:22px;padding:16px;color:#fff;background:linear-gradient(180deg,rgba(0,0,0,.25),rgba(0,0,0,.62)),linear-gradient(135deg,#3b4a6b,#1b2438 60%,#7a5a3a);display:flex;flex-direction:column;justify-content:space-between}
+.foto b{font-size:13px}
+.foto h3{margin:0 0 10px;font-size:22px;font-weight:800;line-height:1.05}
+.foto .blanco{background:#fff;color:#111;border-radius:14px;padding:12px;text-align:center;font-size:13px;font-weight:700}
+
+.semana{flex:1 1 0;min-width:290px}
+.semana .n{font-size:13px;color:var(--a-text);margin-top:6px}
+.dias{display:flex;gap:4px;flex-wrap:wrap;margin-top:14px}
+.dia{flex:1 1 0;min-width:26px;text-align:center;border-radius:8px;padding:7px 2px;font-size:10.5px;font-weight:800}
+.dia.hoy{background:var(--a-blue);color:#fff}
+.dia.si{background:var(--a-blue-soft);color:var(--a-blue)}
+.dia.no{background:var(--a-surface2);color:var(--a-text3);border:1px solid var(--a-border)}
+.semana .sig{font-size:11px;color:var(--a-text3);margin-top:10px;line-height:1.4}
+
+/* ---- SALUD (comunes) ---- */
+.salud{position:relative;overflow:hidden;flex:1 1 0;min-width:200px;border-radius:22px;padding:20px;cursor:pointer}
+.salud .top{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600}
+.salud .ico{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;flex:none}
+.salud .cuerpo{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px}
+.salud .estado{font-size:26px;font-weight:800;letter-spacing:-.5px;line-height:1.1}
+.salud .cta{margin-top:14px;border:0;border-radius:14px;padding:12px 20px;font-size:13.5px;font-weight:700;cursor:pointer}
+.watch{margin-top:16px;padding-top:12px;display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;align-items:flex-end}
+.watch .et{flex-basis:100%;font-size:10.5px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;opacity:.8}
+.watch div{display:flex;flex-direction:column;gap:1px}
+.watch small{font-size:10.5px;opacity:.78;font-weight:600}
+.watch b{font-size:15px;font-variant-numeric:tabular-nums}
+.watch b i{font-style:normal;font-size:11px;font-weight:600;opacity:.8;margin-left:2px}
+
+/* A: anillo */
+.salud.a{color:#fff;background:radial-gradient(circle at 90% 8%,rgba(255,255,255,.32),transparent 46%),radial-gradient(circle at 0% 100%,rgba(255,255,255,.10),transparent 40%),linear-gradient(150deg,#00B684 0%,#00A372 52%,#07885F 100%);box-shadow:0 8px 22px rgba(0,163,114,.28)}
+.salud.a .ico{background:rgba(255,255,255,.22)}
+.salud.a .top{opacity:.95}
+.salud.a .cta{background:#fff;color:var(--a-mint-dk)}
+.anillo{position:relative;width:96px;height:96px;flex:none}
+.anillo svg.r{width:100%;height:100%;transform:rotate(-90deg)}
+.anillo .centro{position:absolute;inset:0;display:grid;place-items:center}
+.anillo .num{font-size:27px;font-weight:800;letter-spacing:-.6px;font-variant-numeric:tabular-nums}
+.anillo svg.corazon{width:34px;height:34px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.salud.a .mini{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.salud.a .mini span{background:rgba(255,255,255,.20);border-radius:999px;padding:6px 10px;font-size:12px;font-weight:700}
+.salud.a .watch{border-top:1px solid rgba(255,255,255,.30)}
+.vacio .anillo{animation:respira 3.4s ease-in-out infinite}
+@keyframes respira{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+@keyframes llena{from{stroke-dashoffset:var(--c)}}
+.arco{animation:llena 1.1s cubic-bezier(.2,.7,.2,1) both}
+
+/* B: latido */
+.salud.b{color:#fff;background:radial-gradient(circle at 92% 6%,rgba(255,255,255,.30),transparent 44%),linear-gradient(140deg,#FF8A5C 0%,#F2555A 52%,#DD4A92 100%);box-shadow:0 8px 22px rgba(242,85,90,.28)}
+.salud.b .ico{background:rgba(255,255,255,.22)}
+.salud.b .cta{background:#fff;color:#C0314F}
+.salud.b{padding-bottom:54px}
+.salud.b .cuerpo{position:relative;z-index:1}
+.corazon-grande{width:64px;height:64px;flex:none;display:grid;place-items:center;border-radius:20px;background:rgba(255,255,255,.2);animation:late 1.4s ease-in-out infinite}
+.corazon-grande svg{width:34px;height:34px;stroke:#fff;fill:rgba(255,255,255,.22);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.salud.b .puntaje{font-size:34px;font-weight:800;letter-spacing:-1px;font-variant-numeric:tabular-nums;width:64px;height:64px;border-radius:20px;background:rgba(255,255,255,.2);display:grid;place-items:center;animation:late 1.4s ease-in-out infinite}
+@keyframes late{0%,100%{transform:scale(1)}12%{transform:scale(1.10)}24%{transform:scale(1)}36%{transform:scale(1.06)}48%{transform:scale(1)}}
+.ecg{position:absolute;left:0;right:0;bottom:8px;height:40px;width:100%;opacity:.55;pointer-events:none;z-index:0}
+.ecg path{fill:none;stroke:#fff;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:90 330;animation:viaja 2.6s linear infinite}
+@keyframes viaja{from{stroke-dashoffset:420}to{stroke-dashoffset:0}}
+.salud.b .mini{position:relative;z-index:1;display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.salud.b .mini span{background:rgba(255,255,255,.20);border-radius:999px;padding:6px 10px;font-size:12px;font-weight:700}
+.salud.b .watch{position:relative;z-index:1;border-top:1px solid rgba(255,255,255,.30)}
+
+/* C: tablero */
+.salud.c{background:#fff;color:var(--a-text)}
+.salud.c .ico{background:var(--a-mint-soft);color:var(--a-mint)}
+.salud.c .top{color:var(--a-text2);justify-content:flex-start}
+.salud.c .pill{margin-left:auto;padding:6px 11px;border-radius:999px;font-size:12px;font-weight:800}
+.pill.vacia{background:var(--a-surface2);color:var(--a-text2)}
+.pill.lista{background:var(--a-mint-soft);color:var(--a-mint-dk)}
+.mets{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:18px}
+.met{display:flex;flex-direction:column;align-items:center;gap:7px}
+.barra{position:relative;width:100%;max-width:46px;height:62px;border-radius:13px;background:var(--a-surface2);overflow:hidden}
+.barra i{position:absolute;left:0;right:0;bottom:0;border-radius:13px;background:var(--c);animation:sube .9s cubic-bezier(.2,.7,.2,1) both}
+@keyframes sube{from{transform:translateY(100%)}}
+.met b{font-size:16px;font-variant-numeric:tabular-nums}
+.met small{font-size:11px;color:var(--a-text3);font-weight:600;margin-top:-4px}
+.salud.c .cta{width:100%;margin-top:16px;background:var(--a-mint-soft);color:var(--a-mint-dk)}
+.salud.c .watch{border-top:1px solid var(--a-border);color:var(--a-text)}
+.salud.c .watch .et{color:var(--a-text3);opacity:1}
+.salud.c .watch small{color:var(--a-text3);opacity:1}
+
+/* ---- 1RM y CIENCIA ---- */
+.unrm{flex:1 1 0;min-width:140px}
+.ancha{display:flex;align-items:center;gap:14px;width:100%;background:var(--a-surface);border:1.5px solid var(--a-blue-soft);border-radius:22px;padding:16px}
+.ancha .redondo{width:52px;height:52px;border-radius:50%;background:var(--a-blue-soft);color:var(--a-blue);display:grid;place-items:center;flex:none}
+.ancha .tx{flex:1;min-width:0}
+.ancha .tx b{display:block;font-size:17px}
+.ancha .tx span{display:block;font-size:12px;color:var(--a-text2);margin-top:1px}
+.ancha .ver{display:inline-flex;align-items:center;gap:3px;background:var(--a-blue-soft);color:var(--a-blue);border-radius:999px;padding:8px 11px 8px 13px;font-size:13px;font-weight:800;flex:none}
+.ancha .ver svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+
+.cinta{display:flex;align-items:center;gap:12px;width:100%;background:var(--a-violet-soft);border:1px solid #E2DAFF;border-radius:18px;padding:11px 14px;color:var(--a-violet-dk);cursor:pointer}
+.cinta .luz{width:36px;height:36px;border-radius:50%;background:#fff;display:grid;place-items:center;flex:none;box-shadow:0 2px 8px rgba(124,92,255,.18)}
+.cinta .luz svg{width:18px;height:18px;stroke:var(--a-violet);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;animation:brilla 3.6s ease-in-out infinite}
+@keyframes brilla{0%,70%,100%{transform:scale(1) rotate(0)}80%{transform:scale(1.18) rotate(8deg)}90%{transform:scale(1) rotate(0)}}
+.cinta .tx{flex:1;min-width:0;line-height:1.25}
+.cinta .tx small{display:block;font-size:11.5px;font-weight:700;opacity:.8}
+.cinta .tx b{display:block;font-size:14px;color:var(--a-text)}
+.cinta .fl svg{width:16px;height:16px;stroke:var(--a-violet);fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+
+.fila-chip{display:flex;margin-bottom:12px}
+.chipc{display:inline-flex;align-items:center;gap:8px;background:var(--a-violet-soft);color:var(--a-violet-dk);border:1px solid #E2DAFF;border-radius:999px;padding:9px 14px 9px 12px;font-size:13px;font-weight:700;cursor:pointer}
+.chipc svg{width:16px;height:16px;stroke:var(--a-violet);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.chipc .fl svg{width:14px;height:14px;stroke-width:2.4}
+
+.media{flex:1 1 0;min-width:140px;border-radius:22px;padding:20px;background:linear-gradient(160deg,#F5F1FF,#E9E1FF);color:var(--a-text);display:flex;flex-direction:column;cursor:pointer}
+.media .luz{width:38px;height:38px;border-radius:12px;background:#fff;color:var(--a-violet);display:grid;place-items:center;box-shadow:0 2px 8px rgba(124,92,255,.16)}
+.media .t{font-size:14px;color:var(--a-violet-dk);margin-top:12px;font-weight:600}
+.media .v{font-size:18px;font-weight:700;margin-top:2px;line-height:1.2}
+.media .leer{display:block;margin-top:auto;padding-top:14px}
+.media .leer span{display:block;background:rgba(255,255,255,.7);color:var(--a-violet-dk);border-radius:14px;padding:12px;text-align:center;font-size:13px;font-weight:700}
+
+.pie{margin-top:22px;display:grid;gap:12px}
+.pie h2{font-size:15px;margin:0}
+.pie p{margin:0;font-size:14px;line-height:1.6;color:var(--muted);max-width:70ch}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <h1>Tarjetas de Home</h1>
+  <p class="sub">Así quedaría Home con una tarjeta de Salud con más vida y una de Ciencia discreta. Elige una opción de cada fila. Es tu app, con tus colores.</p>
+
+  <div class="ctl" id="controles">
+    <div class="grp"><span>Salud</span><div class="seg" data-clave="salud">
+      <button type="button" data-v="a" aria-pressed="true">A Anillo</button>
+      <button type="button" data-v="b" aria-pressed="false">B Latido</button>
+      <button type="button" data-v="c" aria-pressed="false">C Tablero</button>
+    </div></div>
+    <div class="grp"><span>Datos</span><div class="seg" data-clave="datos">
+      <button type="button" data-v="vacio" aria-pressed="true">Sin medir</button>
+      <button type="button" data-v="medido" aria-pressed="false">Registrado</button>
+      <button type="button" data-v="watch" aria-pressed="false">Apple Watch</button>
+    </div></div>
+    <div class="grp"><span>Ciencia</span><div class="seg" data-clave="ciencia">
+      <button type="button" data-v="cinta" aria-pressed="true">Cinta</button>
+      <button type="button" data-v="chip" aria-pressed="false">Chip</button>
+      <button type="button" data-v="media" aria-pressed="false">Tarjeta</button>
+    </div></div>
+    <div class="grp"><span>Vista</span><div class="seg" data-clave="modo">
+      <button type="button" data-v="cel" aria-pressed="true">Tarjetas</button>
+      <button type="button" data-v="completo" aria-pressed="false">Home completo</button>
+      <button type="button" data-v="compu" aria-pressed="false">Compu</button>
+    </div></div>
+  </div>
+
+  <div class="stage" id="stage" data-modo="cel"><div class="phone" id="phone"></div></div>
+
+  <div class="nota" id="nota"></div>
+
+  <div class="pie">
+    <h2>Lo que recomiendo</h2>
+    <p>Salud en A (verde menta, que ya es de tu marca) y Ciencia en cinta lavanda. Salud es lo único que se toca todos los días, así que lleva el color. 1RM se queda como está, y Ciencia casi no pide atención: una cinta de una línea alcanza. Con el Apple Watch, el anillo y la fila de datos ya tienen su lugar.</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  var estado = {salud:'a', datos:'vacio', ciencia:'cinta', modo:'cel'};
+  var NOTAS = {
+    a:'<b>A · Anillo.</b> Verde menta de la marca, un anillo con tu puntaje del día y un botón blanco. Respira suavemente mientras no has registrado nada.',
+    b:'<b>B · Latido.</b> Coral con un latido que viaja por abajo. La más atrevida: se nota desde lejos, pero se aleja del azul y el menta de la app.',
+    c:'<b>C · Tablero.</b> Tarjeta blanca como las demás, con cuatro barras de colores (sueño, energía, ánimo y dolor). Es la más tranquila y la que más datos enseña.'
+  };
+  var I = {
+    pulso:'<svg class="i" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/></svg>',
+    calc:'<svg class="i" viewBox="0 0 24 24"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01M12 10h.01M8 10h.01M12 14h.01M8 14h.01M12 18h.01M8 18h.01"/></svg>',
+    libro:'<svg class="i" viewBox="0 0 24 24"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>',
+    chispas:'<svg viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4M22 5h-4M4 17v2M5 18H3"/></svg>',
+    flecha:'<svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>',
+    corazon:'<svg viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/></svg>'
+  };
+  var DATOS = {sueno:8, energia:7, animo:8, dolor:2};
+  var PUNTAJE = 7.8;
+
+  function watchHtml(){
+    return '<div class="watch"><span class="et">Apple Watch · ejemplo</span>'
+      + '<div><small>FC en reposo</small><b>52<i>lpm</i></b></div>'
+      + '<div><small>Variabilidad</small><b>68<i>ms</i></b></div>'
+      + '<div><small>Sueño</small><b>7 h 40</b></div></div>';
+  }
+  function chips(){
+    return '<div class="mini"><span>Sueño '+DATOS.sueno+'</span><span>Energía '+DATOS.energia+'</span><span>Ánimo '+DATOS.animo+'</span><span>Dolor '+DATOS.dolor+'</span></div>';
+  }
+  function anillo(){
+    var c = 2*Math.PI*40, med = (estado.datos !== 'vacio');
+    var off = med ? c*(1-PUNTAJE/10) : c;
+    var svg = '<svg class="r" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,.24)" stroke-width="9" '+(med?'':'stroke-dasharray="1.5 11" stroke-linecap="round"')+'/>'
+      + (med ? '<circle class="arco" cx="50" cy="50" r="40" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" style="--c:'+c.toFixed(1)+';stroke-dasharray:'+c.toFixed(1)+';stroke-dashoffset:'+off.toFixed(1)+'"/>' : '')
+      + '</svg>';
+    var centro = med ? '<span class="num">'+PUNTAJE.toFixed(1)+'</span>' : I.corazon.replace('<svg','<svg class="corazon"');
+    return '<div class="anillo">'+svg+'<div class="centro">'+centro+'</div></div>';
+  }
+  function saludA(){
+    var med = (estado.datos !== 'vacio');
+    return '<article class="salud a '+(med?'':'vacio')+'"><div class="top"><span class="ico">'+I.pulso+'</span>Salud</div>'
+      + '<div class="cuerpo"><div><div class="estado">'+(med?'Listo':'Sin medir')+'</div><button class="cta" type="button">'+(med?'Ver detalle':'Registrar')+'</button></div>'+anillo()+'</div>'
+      + (med ? chips() : '') + ((estado.datos === 'watch') ? watchHtml() : '') + '</article>';
+  }
+  function saludB(){
+    var med = (estado.datos !== 'vacio');
+    var ecg = '<svg class="ecg" viewBox="0 0 300 54" preserveAspectRatio="none"><path d="M0 30 H70 L82 30 L90 8 L102 50 L112 20 L120 30 H190 L202 30 L210 12 L220 44 L228 26 L234 30 H300"/></svg>';
+    var lado = med ? '<div class="puntaje">'+PUNTAJE.toFixed(1)+'</div>' : '<div class="corazon-grande">'+I.corazon+'</div>';
+    return '<article class="salud b"><div class="top"><span class="ico">'+I.pulso+'</span>Salud</div>'
+      + '<div class="cuerpo"><div><div class="estado">'+(med?'Listo':'Sin medir')+'</div><button class="cta" type="button">'+(med?'Ver detalle':'Registrar')+'</button></div>'+lado+'</div>'
+      + (med ? chips() : '') + ((estado.datos === 'watch') ? watchHtml() : '') + ecg + '</article>';
+  }
+  function saludC(){
+    var med = (estado.datos !== 'vacio');
+    var mets = [['Sueño',DATOS.sueno,'var(--a-violet)'],['Energía',DATOS.energia,'var(--a-amber)'],['Ánimo',DATOS.animo,'var(--a-mint)'],['Dolor',DATOS.dolor,'var(--a-coral)']];
+    var barras = mets.map(function(m){
+      return '<div class="met"><div class="barra">'+(med?'<i style="--c:'+m[2]+';height:'+(m[1]*10)+'%"></i>':'')+'</div><b>'+(med?m[1]:'–')+'</b><small>'+m[0]+'</small></div>';
+    }).join('');
+    return '<article class="salud c"><div class="top"><span class="ico">'+I.pulso+'</span>Salud<span class="pill '+(med?'lista':'vacia')+'">'+(med?'Listo · '+PUNTAJE.toFixed(1):'Sin medir')+'</span></div>'
+      + '<div class="mets">'+barras+'</div>'
+      + ((estado.datos === 'watch') ? watchHtml() : '')
+      + '<button class="cta" type="button">'+(med?'Ver detalle':'Registrar')+'</button></article>';
+  }
+  function semana(){
+    var d = [['L','si'],['M','si'],['M','hoy'],['J','si'],['V','si'],['S','no'],['D','no']].map(function(x){return '<div class="dia '+x[1]+'">'+x[0]+'</div>';}).join('');
+    return '<div class="card semana"><div class="t">Tu semana</div><div class="n">5 días de entrenamiento</div><div class="dias">'+d+'</div><div class="sig">Siguiente: jueves · 2 sesiones</div></div>';
+  }
+  function unrmMedia(){
+    return '<div class="card unrm"><span class="chip-ico">'+I.calc+'</span><div class="t" style="margin-top:12px">1RM</div><div class="v">Back Squat 140 kg</div><div class="btn-gris">Ver</div></div>';
+  }
+  function unrmAncha(){
+    return '<div class="ancha"><span class="redondo">'+I.calc+'</span><span class="tx"><b>1RM</b><span>Back Squat 140 kg</span></span><span class="ver">Ver <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span></div>';
+  }
+  function cienciaHtml(){
+    if(estado.ciencia === 'cinta') return '<div class="fila"><div class="cinta"><span class="luz">'+I.chispas+'</span><span class="tx"><small>Ciencia</small><b>El porqué de tu plan</b></span><span class="fl">'+I.flecha+'</span></div></div>';
+    if(estado.ciencia === 'chip') return '<div class="fila-chip"><span class="chipc">'+I.chispas+'Ciencia<span class="fl">'+I.flecha+'</span></span></div>';
+    return '';
+  }
+  function render(){
+    var salud = estado.salud === 'a' ? saludA() : estado.salud === 'b' ? saludB() : saludC();
+    var contexto = estado.modo !== 'cel';
+    var arriba = !contexto ? '' : '<div class="fila"><div class="azul"><small>Hoy te toca</small><h3>Lower</h3><small>Gym · 60 min</small><div class="sp"></div><div class="blanco">Empezar sesión</div></div>'
+      + '<div class="foto"><b>Fase 4</b><div><h3>Fuerza</h3><div class="blanco">Ver programa</div></div></div></div>';
+    var medio = '<div class="fila">'+salud+semana()+'</div>';
+    var abajo;
+    if(estado.ciencia === 'media') abajo = '<div class="fila">'+unrmMedia()+'<div class="media"><span class="luz">'+I.libro+'</span><div class="t">Ciencia</div><div class="v">El porqué de tu plan</div><span class="leer"><span>Leer</span></span></div></div>';
+    else abajo = '<div class="fila">'+unrmAncha()+'</div>' + cienciaHtml();
+    document.getElementById('phone').innerHTML = arriba + medio + abajo;
+    document.getElementById('stage').setAttribute('data-modo', estado.modo === 'compu' ? 'compu' : 'cel');
+    document.getElementById('nota').innerHTML = NOTAS[estado.salud];
+  }
+  document.getElementById('controles').addEventListener('click', function(e){
+    var b = e.target.closest('button'); if(!b) return;
+    var seg = b.parentElement; var clave = seg.getAttribute('data-clave'); if(!clave) return;
+    estado[clave] = b.getAttribute('data-v');
+    seg.querySelectorAll('button').forEach(function(x){ x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+    render();
+  });
+  render();
+})();
+</script>
+
+</body>
+</html>
