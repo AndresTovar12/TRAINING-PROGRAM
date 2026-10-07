@@ -112,7 +112,7 @@ const resumen = (e: ItemDeCatalogo) => ({
 /* ------------------------------------------------------------------ */
 
 /** Cómo quedó cada ejercicio de un día, para enseñarle a la persona cómo se entendió su rutina. */
-export interface Renglon { nombre: string; grupo: number | null; series: string; cantidad: string }
+export interface Renglon { nombre: string; grupo: number | null; series: string; cantidad: string; porLado?: boolean }
 
 /** Lo que el conector vio al armar los días y la persona no ha contestado. Ver `exigirRespuestas`. */
 export interface Revision {
@@ -181,7 +181,7 @@ export function firmasDeDia(ejercicios: any[]): string[] {
 }
 
 const etiquetaDeBloque = (n: number) => (n === 2 ? 'BI SERIE' : n === 3 ? 'TRI SERIE' : 'CIRCUITO')
-const textoDe = (r: Renglon) => `${r.nombre}${r.cantidad ? ` ${r.series}×${r.cantidad}` : r.series ? ` ${r.series} series` : ''}`
+const textoDe = (r: Renglon) => `${r.nombre}${r.cantidad ? ` ${r.series}×${r.cantidad}` : r.series ? ` ${r.series} series` : ''}${r.porLado ? ' por lado' : ''}`
 
 /** La rutina como se entendió, para confirmarla: los bloques con su nombre y los ejercicios solos. */
 export function vistaPrevia(lista: Renglon[]): string[] {
@@ -213,6 +213,11 @@ const QUE_HACER_FICHAS =
   + '(3) Si hay varios posibles, pregunta cuál con una lista numerada; si dudas entre uno de su lista y uno nuevo, pregunta «¿es X de tu lista o creo uno nuevo?». '
   + '(4) Si ninguno encaja, pregunta «¿lo creo?» y ofrece en ese mismo mensaje los datos (categoría, grupo muscular, equipo, nota); se crea con crear_ejercicio. '
   + '(5) Si la persona dice que va tal cual, sin ficha, o los nombres vienen de un plan que ya existe, repite la llamada con sin_ficha_ok: [esos nombres].'
+
+const QUE_HACER_AGRUPAR =
+  'AGRUPAR: revisa el mensaje de la persona. Si separó los ejercicios en bloques (línea en blanco, viñetas, A1/A2, «+»), cada bloque de 2 o más es una biserie, triserie o circuito: '
+  + 'vuelve a llamar con el mismo `grupo` (1, 2, 3…) en los ejercicios de cada bloque, y la herramienta te devolverá la rutina armada para que se la enseñes y la confirme. '
+  + 'Si todos van separados, vuelve a llamar con estructura_ok: true.'
 
 const QUE_HACER_GENERAL =
   'Haz TODAS las preguntas juntas, en UN solo mensaje y tal cual (las de "preguntas" y las del catálogo). No preguntes lo que la persona ya dijo. '
@@ -269,7 +274,13 @@ export function exigirRespuestas(o: {
   // 3. Unilaterales sin decir si cuentan por lado.
   const porLado = [...rev.porLado].filter((n) => !ya.has(llaveDeNombre(n)))
 
-  // 4. Biseries o triseries nuevas: se enseña la rutina armada.
+  // 4a. Una rutina pegada de golpe (4 o más ejercicios nuevos) sin ningún grupo: ¿de verdad van todos separados?
+  //     El conector no ve el mensaje de la persona; le pide a la IA que lo revise antes de guardar.
+  const agrupar = o.respuestas?.estructura_ok ? [] : rev.dias
+    .filter((d) => d.lista.every((r) => r.grupo == null) && d.lista.filter((r) => !ya.has(llaveDeNombre(r.nombre))).length >= 4)
+    .map((d) => d.titulo)
+
+  // 4b. Biseries o triseries nuevas: se enseña la rutina armada.
   const estructura = o.respuestas?.estructura_ok ? [] : rev.dias
     .filter((d) => bloquesDe(d.lista).some((b) => !firmas.has(firmaDeBloque(b.map((r) => r.nombre)))))
     .map((d) => ({ dia: d.titulo, rutina: vistaPrevia(d.lista) }))
@@ -287,19 +298,22 @@ export function exigirRespuestas(o: {
     preguntas.push(`Armé la rutina así, ¿está bien?\n${estructura.slice(0, 4).map((d) => `${estructura.length > 1 ? `${d.dia}:\n` : ''}${d.rutina.join('\n')}`).join('\n\n')}`)
   }
 
-  if (catalogo.length || preguntas.length) {
+  if (catalogo.length || preguntas.length || agrupar.length) {
     throw new Pregunta({
       guardado: false,
       motivo: 'faltan_respuestas',
-      mensaje: 'No guardé nada todavía: faltan respuestas de la persona.',
+      mensaje: agrupar.length && !catalogo.length && !preguntas.length
+        ? 'No guardé nada todavía: revisa si los ejercicios van agrupados (biseries, triseries).'
+        : 'No guardé nada todavía: faltan respuestas de la persona.',
       ...(preguntas.length ? { preguntas } : {}),
       pendientes: {
         ...(catalogo.length ? { catalogo } : {}),
         ...(faltaCantidad.length ? { sin_cantidad: faltaCantidad } : {}),
         ...(porLado.length ? { por_lado: porLado } : {}),
         ...(estructura.length ? { estructura } : {}),
+        ...(agrupar.length ? { agrupar } : {}),
       },
-      que_hacer: `${QUE_HACER_GENERAL}${catalogo.length ? ` ${QUE_HACER_FICHAS}` : ''}`,
+      que_hacer: `${QUE_HACER_GENERAL}${catalogo.length ? ` ${QUE_HACER_FICHAS}` : ''}${agrupar.length ? ` ${QUE_HACER_AGRUPAR}` : ''}`,
     })
   }
   return { sinFicha, sinCantidad }

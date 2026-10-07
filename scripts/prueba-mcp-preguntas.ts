@@ -465,6 +465,29 @@ const revisaDia = (ejercicios: any[], titulo = 'Sábado') => {
   ok('la rutina armada se enseña con BI SERIE, TRI SERIE y CIRCUITO')
 }
 
+/* ---- Una rutina pegada de golpe sin ningún grupo: ¿de verdad van todos separados? ---- */
+{
+  const sinGrupos = RUTINA.map(({ grupo: _g, ...e }) => ({ ...e, ...(e.nombre === 'Squat Jump' ? { cantidad: 10 } : {}), por_lado: ['Assisted Pistol Squat', 'Step Ups', 'Bulgarian Split Squat'].includes(e.nombre) ? true : undefined }))
+  const p = pregunta(() => exigirRespuestas({ revision: revisaDia(sinGrupos), catalogo: CATALOGO }))
+  igual((p.datos.pendientes as any).agrupar, ['Sábado'], 'seis ejercicios nuevos y ningún grupo: le pide a la IA que revise el mensaje de la persona')
+  igual(p.datos.preguntas, undefined, 'no es una pregunta para la persona (todavía)')
+  cierto(String(p.datos.que_hacer).includes('AGRUPAR') && String(p.datos.que_hacer).includes('estructura_ok: true'), 'dice cómo seguir: agrupar con `grupo` o confirmar que todos van separados')
+  cierto(String(p.datos.mensaje).includes('agrupados'), 'y el mensaje lo dice')
+  // Si todos van separados, lo dice y sigue.
+  igual(exigirRespuestas({ revision: revisaDia(sinGrupos), catalogo: CATALOGO, respuestas: { estructura_ok: true } }), { sinFicha: [], sinCantidad: [] }, 'con estructura_ok: true se guarda')
+  // Con menos de 4 ejercicios nuevos no se pregunta nada: un cambio simple se hace directo.
+  const tres = revisaDia(sinGrupos.slice(0, 3))
+  igual(exigirRespuestas({ revision: tres, catalogo: CATALOGO }).sinFicha, [], 'tres ejercicios sin grupo se guardan directo')
+  // Reescribir lo que el plan ya tenía (aunque sean seis sin grupo) no se frena.
+  const plan = { data: { phases: [{ weekData: [{ days: [{ exercises: sinGrupos.map((e) => ({ name: e.nombre })) }] }] }] } } as any
+  igual(exigirRespuestas({ revision: revisaDia(sinGrupos), catalogo: CATALOGO, plan: { nombres: nombresDeEjercicios(plan), firmas: firmasDeGrupos(plan) } }), { sinFicha: [], sinCantidad: [] }, 'reescribir un día con los mismos ejercicios no se frena')
+  // Con grupos, ya no es «agrupar»: toca confirmar la estructura.
+  const conGrupos = pregunta(() => exigirRespuestas({ revision: revisaDia(RUTINA.map((e) => (e.nombre === 'Squat Jump' ? { ...e, cantidad: 10 } : { ...e, por_lado: ['Assisted Pistol Squat', 'Step Ups', 'Bulgarian Split Squat'].includes(e.nombre) ? true : undefined }))), catalogo: CATALOGO }))
+  igual((conGrupos.datos.pendientes as any).agrupar, undefined, 'con grupos ya no pide agrupar')
+  cierto((conGrupos.datos.preguntas as string[])[0].includes('3×6 por lado'), 'y la rutina armada enseña el «por lado»')
+  ok('una rutina pegada sin grupos: la IA tiene que revisar el mensaje antes de guardar')
+}
+
 /* ---- De punta a punta con la base de mentira: tu ejemplo 2 en editar_dia ---- */
 {
   const extras = [
@@ -483,6 +506,7 @@ const revisaDia = (ejercicios: any[], titulo = 'Sábado') => {
   igual(primera.structuredContent.pendientes.por_lado, ['Pistol Squat', 'Step Ups', 'Bulgarian Split Squat'], 'pregunta el «por lado» de los tres')
   igual(primera.structuredContent.pendientes.sin_cantidad, ['Squat Jump'], 'y la cantidad que falta')
   igual(primera.structuredContent.pendientes.estructura, undefined, 'sin grupos no hay estructura que confirmar')
+  igual(primera.structuredContent.pendientes.agrupar, ['Sábado · Sesión'], 'pero seis nuevos sin ningún grupo: que la IA revise el mensaje')
 
   // Con las respuestas y los grupos que separó con líneas en blanco: primero pide confirmar la estructura.
   const respondido = [
