@@ -3,8 +3,8 @@
 //
 //   deno run -A scripts/prueba-mcp-preguntas.ts
 import { diaDesdeEntrada, nombresDeEjercicios } from '../supabase/functions/mcp/plan.ts'
-import { equiposMasUsados, exigirFichas, palabrasClave, parecidosA, preguntaDeDatos, type ItemDeCatalogo } from '../supabase/functions/mcp/preguntas.ts'
-import { Pregunta, llaveDeNombre, mismoNombre, seguro } from '../supabase/functions/mcp/util.ts'
+import { equiposMasUsados, exigirFichas, parecidosA, preguntaDeDatos, type ItemDeCatalogo } from '../supabase/functions/mcp/preguntas.ts'
+import { Pregunta, llaveDeNombre, mismoNombre, palabrasClave, seguro } from '../supabase/functions/mcp/util.ts'
 import { herramientasComunes } from '../supabase/functions/mcp/comunes.ts'
 import { herramientasDelCoach } from '../supabase/functions/mcp/coach.ts'
 
@@ -54,6 +54,11 @@ function pregunta(fn: () => unknown): Pregunta {
 {
   cierto(mismoNombre('Lat Pull-Down', 'lat pulldown'), 'sin espacios ni guiones es el mismo nombre')
   cierto(mismoNombre('Pull Ups', 'Pullups'), 'Pull Ups = Pullups')
+  cierto(mismoNombre('Bulgarian split squats', 'Bulgarian Split Squat'), 'solo cambia el plural: es el mismo')
+  cierto(mismoNombre('Lat Pull Downs', 'lat pulldown'), 'plural, espacio y mayúsculas a la vez')
+  cierto(mismoNombre('Curl con barra', 'Curl barra'), 'el relleno («con») no cuenta')
+  cierto(!mismoNombre('Squat Jump', 'Jump Squat'), 'el orden sí cuenta: son ejercicios distintos')
+  cierto(!mismoNombre('Bicep Curl', 'Hammer Bicep Curl'), 'una palabra de más es otro ejercicio')
   cierto(!mismoNombre('Bench Press', 'Incline Bench Press'), 'otro ejercicio no se confunde')
   cierto(!mismoNombre('???', '!!!'), 'dos nombres sin letras no son «el mismo»')
   const { dia, sinFicha } = diaDesdeEntrada('Lun', { ejercicios: [{ nombre: 'Lat Pulldown' }, { nombre: 'Nordic Curl 2' }] }, CATALOGO)
@@ -313,7 +318,7 @@ const buscados = (r: any) => r.structuredContent.ejercicios.map((e: any) => e.no
   const exacto = await tools.editar_dia({ atleta: 'zz_atleta', dia: 'lunes', sesiones: [{ ejercicios: [{ nombre: 'lat pulldown' }, { nombre: 'PULL UPS' }] }] })
   igual([exacto.structuredContent.listo, actualizados.length], [true, 3], 'con el nombre del catálogo se guarda directo')
   const guardado = actualizados[2].cambios.data.phases[0].weekData[0].days[0].exercises
-  igual(guardado.map((e: any) => [e.name, e.exercise_id]), [['Lat Pull Down', 'id-latpulldown'], ['Pull Ups', 'id-pullups']], 'ligados a su ficha, con el nombre del catálogo')
+  igual(guardado.map((e: any) => [e.name, e.exercise_id]), [['Lat Pull Down', 'id-latpulldown'], ['Pull Ups', 'id-pullup']], 'ligados a su ficha, con el nombre del catálogo')
   ok('editar_dia: pregunta por lo nuevo, no frena lo que el plan ya tenía, y con la confirmación guarda')
 }
 

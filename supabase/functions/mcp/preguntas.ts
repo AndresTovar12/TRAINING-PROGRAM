@@ -1,5 +1,5 @@
 // deno-lint-ignore-file no-explicit-any
-import { Pregunta, llaveDeNombre, sinAcentos } from './util.ts'
+import { Pregunta, llaveDeNombre, palabrasClave } from './util.ts'
 
 /**
  * CUÁNDO LA IA PREGUNTA.
@@ -32,18 +32,6 @@ export interface ItemDeCatalogo {
 /* ------------------------------------------------------------------ */
 /* Parecidos                                                           */
 /* ------------------------------------------------------------------ */
-
-const RELLENO = new Set([
-  'de', 'del', 'la', 'el', 'los', 'las', 'en', 'con', 'a', 'al', 'y', 'e', 'o', 'para', 'por', 'un', 'una', 'unos', 'unas',
-  'sin', 'the', 'of', 'on', 'with', 'and',
-])
-
-/** Una palabra sin su plural: «poleas» → «polea», «pulls» → «pull»; «press» se queda igual. */
-const singular = (w: string) => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w)
-
-/** Las palabras que cuentan de un texto: sin acentos, sin relleno («de», «en», «con») y en singular. */
-export const palabrasClave = (texto: string) =>
-  sinAcentos(texto).split(/[^a-z0-9]+/).filter((w) => w && !RELLENO.has(w)).map(singular)
 
 /** Distancia de edición (cuántas letras hay que cambiar). Solo se usa entre palabras de largo parecido. */
 function distancia(a: string, b: string) {
@@ -180,7 +168,7 @@ export function equiposMasUsados(catalogo: ItemDeCatalogo[], max = 8): string[] 
   for (const e of catalogo) {
     const crudo = (e.equipment ?? '').trim()
     if (!crudo) continue
-    const llave = llaveDeNombre(crudo).replace(/s$/, '')
+    const llave = llaveDeNombre(crudo)
     const c = cuenta.get(llave) ?? { n: 0, formas: new Map<string, number>() }
     c.n += 1
     c.formas.set(crudo, (c.formas.get(crudo) ?? 0) + 1)
