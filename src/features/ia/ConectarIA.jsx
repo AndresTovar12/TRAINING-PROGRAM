@@ -8,6 +8,7 @@ import { useIsDesktop } from '@/lib/useViewport';
 import { FONT, KP } from '@/lib/theme';
 import { CONECTORES, TERMINALES, pasosDe } from '@/features/ia/guiasIA';
 import { MarcaIA, Pantalla } from '@/features/ia/Maquetas';
+import { agrupaConexiones } from '@/features/ia/conexiones';
 
 /**
  * Conectar Training Lab con la IA de cada quien.
@@ -152,6 +153,8 @@ function AvisoCompu() {
   );
 }
 
+/* Las IAs que están conectadas DE VERDAD, una por IA (ver `conexiones.js`): antes se listaban los permisos dados
+   alguna vez y a Andrés le salían 9 «conectadas» cuando eran 3. */
 function IAsConectadas() {
   const pregunta = useConfirmacion();
   // null = cargando · [] = ninguna · 'no' = el servidor de permisos no responde
@@ -159,34 +162,33 @@ function IAsConectadas() {
 
   useEffect(() => {
     let vivo = true;
-    supabase.auth.oauth.listGrants().then(({ data, error }) => {
-      if (vivo) setConexiones(error ? 'no' : (data ?? []));
+    Promise.all([supabase.auth.oauth.listGrants(), supabase.rpc('mis_conexiones_ia')]).then(([permisos, sesiones]) => {
+      if (!vivo) return;
+      if (permisos.error) { setConexiones('no'); return; }
+      // Si no se pudo preguntar por las sesiones, se muestran los permisos (sin repetir cada IA).
+      setConexiones(agrupaConexiones(permisos.data ?? [], sesiones.error ? null : (sesiones.data ?? [])));
     });
     return () => { vivo = false; };
   }, []);
 
   async function desconectar(c) {
-    const nombre = c.client?.name || 'esta IA';
     const va = await pregunta({
-      titulo: `¿Desconectar ${nombre}?`,
+      titulo: `¿Desconectar ${c.nombre}?`,
       detalle: 'Deja de poder entrar a tu cuenta en ese momento. La puedes volver a conectar cuando quieras.',
       confirmar: 'Desconectar',
       peligro: true,
     });
     if (!va) return;
-    const { error } = await supabase.auth.oauth.revokeGrant({ clientId: c.client?.id });
-    if (!error) setConexiones((xs) => (Array.isArray(xs) ? xs.filter((x) => x.client?.id !== c.client?.id) : xs));
+    // Todos los clientes de esa IA (ChatGPT, Codex y Hermes registran uno nuevo en cada intento): así se van también
+    // los permisos viejos. Solo importa que los VIVOS se hayan desconectado.
+    const resultados = await Promise.all(c.clientes.map(async (clientId) => ({
+      clientId, ...(await supabase.auth.oauth.revokeGrant({ clientId })),
+    })));
+    const fallo = resultados.some((r) => r.error && c.vivos.includes(r.clientId));
+    if (!fallo) setConexiones((xs) => (Array.isArray(xs) ? xs.filter((x) => x.familia !== c.familia) : xs));
   }
 
   if (conexiones === 'no') return null;
-  const marcaDe = (nombre = '') => {
-    const n = nombre.toLowerCase();
-    if (n.includes('code')) return 'claude-code';
-    if (n.includes('claude')) return 'claude';
-    if (n.includes('codex')) return 'codex';
-    if (n.includes('hermes')) return 'hermes';
-    return 'chatgpt';
-  };
 
   return (
     <div style={{ background: KP.surface, border: `1px solid ${KP.line}`, borderRadius: 22, padding: 18, boxShadow: KP.shCard }}>
@@ -198,12 +200,12 @@ function IAsConectadas() {
         <div style={{ fontSize: 14.5, color: KP.ink2, fontWeight: 500 }}>Todavía no has conectado ninguna.</div>
       )}
       {Array.isArray(conexiones) && conexiones.map((c) => (
-        <div key={c.client?.id} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 0', borderTop: `1px solid ${KP.line}` }}>
-          <MarcaIA app={marcaDe(c.client?.name)} size={34} />
+        <div key={c.familia} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 0', borderTop: `1px solid ${KP.line}` }}>
+          <MarcaIA app={c.familia} size={34} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: KP.ink }}>{c.client?.name || 'IA sin nombre'}</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: KP.ink }}>{c.nombre}</div>
             <div style={{ fontSize: 12.5, fontWeight: 600, color: KP.ink3 }}>
-              Conectada desde el {new Date(c.granted_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })}
+              {c.desde ? `Conectada desde el ${new Date(c.desde).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })}` : 'Conectada'}
             </div>
           </div>
           <button type="button" onClick={() => desconectar(c)} style={{
