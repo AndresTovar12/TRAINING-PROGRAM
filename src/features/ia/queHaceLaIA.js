@@ -19,7 +19,7 @@ export function queHaceLaIA(profile) {
       puede: [
         'Ver tu plan y la sesión que te toca',
         'Ver tu progreso: pesos, récords y sesiones hechas',
-        'Anotar lo que entrenaste y tu bienestar',
+        'Anotar lo que entrenaste y tu salud del día',
         'Proponerte otros ejercicios si te falta un aparato',
       ],
       noPuede: 'No cambia tu plan: eso lo hace tu coach.',
