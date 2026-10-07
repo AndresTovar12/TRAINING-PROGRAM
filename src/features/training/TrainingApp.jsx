@@ -2,10 +2,10 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Calendar,
   Check, X, Calculator, BookOpen, TrendingUp, Edit3, Target,
-  Zap, Trophy, Clock, FileText, Sparkles, Info, Dumbbell, Heart, Play,
-  Activity, Home as HomeIcon,
+  Clock, Sparkles, Info, Dumbbell, Heart, Play,
+  Home as HomeIcon,
   Repeat, Eye, Layers, List, Scale, LineChart as LineChartIcon,
-  Sunrise, Sunset,
+  Sunrise, Sunset, MessageCircle,
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { useIsDesktop } from '@/lib/useViewport';
@@ -23,6 +23,8 @@ import {
   semanaGlobal, semanasDelPlan,
 } from '@/lib/training-utils';
 import HojaFlotante from '@/components/HojaFlotante';
+import CienciaDelPlan from '@/features/training/CienciaDelPlan';
+import { hayCiencia } from '@/lib/ciencia';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
 import { aKilos, desdeKilos, etiquetaUnidad } from '@/lib/unidades';
 import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
@@ -57,12 +59,14 @@ import { usePalabras } from '@/contexts/PalabrasContext';
 import { esArranque, guardaLugar, leeLugar } from '@/lib/lugar';
 import { useLugar, useScrollLugar } from '@/lib/useLugar';
 
-// Las pestañas de la app del atleta. Sirve para desconfiar de la que se guardó
-// al refrescar: una pestaña que ya no existe dejaría la pantalla en blanco.
-const PESTANAS = ['home', 'plan', 'wellness', 'oneRM', 'science'];
-// Los pacientes de un fisio no calculan 1RM: eso es de quien levanta pesas
-// (Andrés, 29 sep 2026, diseño del fisio). Sus datos de 1RM, si los hubiera, no se borran.
-const SIN_1RM = ['home', 'plan', 'wellness', 'science'];
+/* Las pestañas de la app del atleta. Sirve para desconfiar de la que se guardó al refrescar: una pestaña que
+   ya no existe (antes había también 'wellness', 'oneRM' y 'science') dejaría la pantalla en blanco.
+
+   Andrés, 7 oct 2026: la barra de abajo pasa de cinco botones a tres (Home · Entrenar · Mensajes). Bienestar,
+   1RM y Ciencia ya no son pestañas: son tarjetas de Home que se abren como hoja encima (`hoja`). Los pacientes
+   de un fisio no calculan 1RM: eso es de quien levanta pesas (Andrés, 29 sep 2026); sus datos de 1RM, si los
+   hubiera, no se borran. */
+const PESTANAS = ['home', 'plan', 'messages'];
 
 // Texto fijo que cambia con el oficio de quien atiende (ver `lib/palabras.js`),
 // para los componentes que se escriben sin cuerpo y no tienen dónde llamar al hook.
@@ -2049,8 +2053,60 @@ const initialsFrom = (name) => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
+/**
+ * Una tarjeta de Home que abre una hoja encima (1RM, Ciencia). Mismo molde que «Estado hoy»: título, lo que dice,
+ * y abajo el botón (Andrés, 7 oct 2026: «tarjetas bonitas dentro de Home»).
+ *
+ * Con otra tarjeta al lado cada una es media pantalla. SOLA (un plan sin ciencia, o un paciente de fisio que no
+ * calcula 1RM) pasa a fila completa con el molde de «Mi plan · Ver»: media tarjeta con un hueco al lado se veía a medias.
+ */
+const TarjetaDeHome = ({ icono: Icono, titulo, valor, boton, onClick, tope, ancha = false }) => (ancha ? (
+  <button
+    type="button" onClick={onClick} className="kp-press"
+    style={{
+      width: '100%', textAlign: 'left', cursor: 'pointer', fontFamily: FONT, background: LT.surface, borderRadius: 22,
+      padding: 16, border: `1.5px solid ${LT.blueSoft}`, display: 'flex', alignItems: 'center', gap: 14,
+    }}
+  >
+    <span style={{
+      width: 52, height: 52, borderRadius: '50%', background: LT.blueSoft, color: LT.blue,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+    }}><Icono size={22} /></span>
+    <span style={{ flex: 1, minWidth: 0 }}>
+      <span style={{ display: 'block', fontSize: 17, fontWeight: 700, color: LT.text }}>{titulo}</span>
+      <span style={{ display: 'block', fontSize: 12, color: LT.text2, marginTop: 1, overflowWrap: 'anywhere', ...NUM_STYLE }}>{valor}</span>
+    </span>
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0,
+      background: LT.blueSoft, color: LT.blue, borderRadius: 999,
+      padding: '8px 11px 8px 13px', fontSize: 13, fontWeight: 800,
+    }}>
+      {boton} <ChevronRight size={15} />
+    </span>
+  </button>
+) : (
+  <button
+    type="button" onClick={onClick} className="kp-press"
+    style={{
+      flex: 1, minWidth: 0, textAlign: 'left', cursor: 'pointer', fontFamily: FONT, border: 'none',
+      background: LT.surface, borderRadius: 22, padding: 20, display: 'flex', flexDirection: 'column',
+    }}
+  >
+    <span style={{
+      width: 38, height: 38, borderRadius: 12, background: LT.blueSoft, color: LT.blue,
+      display: 'grid', placeItems: 'center', flexShrink: 0,
+    }}><Icono size={19} /></span>
+    <span style={{ fontSize: 14, color: LT.text2, marginTop: 12 }}>{titulo}</span>
+    <span style={{ fontSize: 18, fontWeight: 700, color: LT.text, marginTop: 2, lineHeight: 1.2, overflowWrap: 'anywhere', ...NUM_STYLE }}>{valor}</span>
+    <span style={{
+      display: 'block', background: LT.surface2, borderRadius: 14, padding: '12px', fontSize: 13, fontWeight: 600,
+      color: LT.text2, textAlign: 'center', marginTop: 14, ...tope,
+    }}>{boton}</span>
+  </button>
+));
+
 const HomeView = ({
-  sessionsData, wellness, onStartSession, onGoTab, onVerPrograma, cursor, onChangeCursor,
+  sessionsData, wellness, oneRMs = {}, onStartSession, onGoTab, onAbrirHoja, onVerPrograma, cursor, onChangeCursor,
   hayEquipo = false, conAutor = false, entradas = [], autores = [], filtro = null, onFiltro, onAbrirEntrada, resumenDeEquipo = null,
   altasDeEquipo = [],
 }) => {
@@ -2062,9 +2118,9 @@ const HomeView = ({
      banda, no un botón. En compu se les pone tope y se dejan a la izquierda,
      que es donde empieza el texto de su tarjeta. */
   const esCompu = useIsDesktop();
-  const { t, coach } = usePalabras();
+  const { t, coach, salud } = usePalabras();
   const tope = esCompu ? { maxWidth: 260 } : null;
-  const { phases: PLAN, planMeta, kind, estructura } = usePlan();
+  const { phases: PLAN, planMeta, kind, estructura, ciencia } = usePlan();
   // "Varias semanas": las tarjetas dicen la semana de corrido, no la fase.
   const deCorrido = estructura === 'semanas';
   const semanaDe = (n) => `Semana ${semanaGlobal(PLAN, n.phase.id, n.week.num) ?? n.week.num} de ${semanasDelPlan(PLAN)}`;
@@ -2116,6 +2172,18 @@ const HomeView = ({
   }, [next, entradasDelDia]);
 
   const { text: greetText } = greeting();
+  // La foto de la tarjeta: la de la fase de hoy; si no tiene, la del plan. (La foto fija de antes, mientras se migra.)
+  const fotoDeHome = next ? (next.phase.image || planMeta?.foto || PHASE_IMG[next.phase.id] || '') : '';
+  // Lo de 1RM: el máximo más pesado que ha guardado, en su unidad.
+  const unidadPeso = profile?.unidad_peso || 'kg';
+  const mejorRM = useMemo(() => {
+    const guardados = LEVANTAMIENTOS.map((l) => ({ l, kg: Number(oneRMs?.[l.key]) })).filter((x) => x.kg > 0);
+    if (!guardados.length) return null;
+    const top = guardados.sort((a, b) => b.kg - a.kg)[0];
+    return { nombre: top.l.nombre, kg: top.kg };
+  }, [oneRMs]);
+  const conCiencia = hayCiencia(ciencia, PLAN);
+  const con1RM = !salud;
 
   /* El título de hoy. Una sesión: su nombre, sin «· ~70 min» pegado. Dos
      (mañana y tarde): una etiqueta por cada una, no «Velocidad + Lower
@@ -2294,17 +2362,17 @@ const HomeView = ({
               )}
             </div>
 
-            {/* Card foto de fase. Desde el 18 sep la ficha de fase ya no
-                existe como pantalla: los dos caminos llevan a la semana, y el
-                programa completo se consulta desde la hoja. */}
-            <div onClick={() => onStartSession(next.phase, next.week, next.dayIdx)}
+            {/* Card foto. Desde el 7 oct 2026 ya NO abre la sesión de hoy (eso lo hace la tarjeta azul de al lado y
+                la pestaña «Entrenar»): abre el programa completo, y por eso el botón «Mi plan · Ver» de más abajo
+                ya no sale cuando esta tarjeta está. */}
+            <div onClick={onVerPrograma}
               style={{
                 flex: 1, borderRadius: 22, overflow: 'hidden', position: 'relative',
                 background: '#000', minHeight: 232, cursor: 'pointer', minWidth: 0,
                 display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
               }}>
-              {(typeof PHASE_IMG !== 'undefined' && PHASE_IMG[next.phase.id]) && (
-                <img src={PHASE_IMG[next.phase.id]} alt={next.phase.name}
+              {fotoDeHome && (
+                <img src={fotoDeHome} alt={next.phase.name}
                   style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.92 }} />
               )}
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.05) 35%, rgba(0,0,0,0.78) 100%)' }} />
@@ -2318,7 +2386,7 @@ const HomeView = ({
                   {kind === 'weekly' ? (planMeta?.title || 'Rutina semanal') : (deCorrido ? (planMeta?.title || 'Tu programa') : next.phase.name)}
                 </div>
                 <div style={{ background: '#fff', borderRadius: 14, padding: '12px', fontSize: 13, fontWeight: 600, color: '#111', textAlign: 'center' }}>
-                  {kind === 'weekly' || deCorrido ? 'Ver la semana' : 'Ver fase'}
+                  {kind === 'weekly' ? 'Ver rutina' : 'Ver programa'}
                 </div>
               </div>
             </div>
@@ -2330,7 +2398,7 @@ const HomeView = ({
       {/* Row: estado + progreso */}
       <div style={{ display: 'flex', gap: 12, padding: '0 18px 12px' }}>
         {/* Estado hoy */}
-        <div onClick={() => onGoTab('wellness')}
+        <div onClick={() => onAbrirHoja('wellness')}
           style={{ flex: 1, background: LT.surface, borderRadius: 22, padding: 20, cursor: 'pointer', minWidth: 0 }}>
           <div style={{ fontSize: 14, color: LT.text2 }}>Estado hoy</div>
           <div style={{ fontSize: 22, fontWeight: 700, color: LT.text, marginTop: 2 }}>
@@ -2383,7 +2451,30 @@ const HomeView = ({
         </div>
       </div>
 
-      {/* Info del plan */}
+      {/* 1RM y Ciencia: tarjetas que se abren como hoja encima. 1RM no sale a un paciente de fisio, y Ciencia no sale
+          si el plan no tiene (cada plan trae la suya; ver `lib/ciencia.js`). Las dos juntas son media tarjeta cada
+          una; una sola ocupa la fila entera. */}
+      {(con1RM || conCiencia) && (
+        <div style={{ display: 'flex', gap: 12, padding: '0 18px 12px' }}>
+          {con1RM && (
+            <TarjetaDeHome
+              icono={Calculator} titulo="1RM" onClick={() => onAbrirHoja('oneRM')} tope={tope} ancha={!conCiencia}
+              valor={mejorRM ? `${mejorRM.nombre} ${desdeKilos(mejorRM.kg, unidadPeso)} ${etiquetaUnidad(unidadPeso)}` : 'Sin datos'}
+              boton={mejorRM ? 'Ver' : 'Anotar'}
+            />
+          )}
+          {conCiencia && (
+            <TarjetaDeHome
+              icono={BookOpen} titulo="Ciencia" valor="El porqué de tu plan" boton="Leer"
+              onClick={() => onAbrirHoja('science')} tope={tope} ancha={!con1RM}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Info del plan. Con la tarjeta de foto de arriba, esa ya es la puerta al programa; este botón solo sale
+          cuando no está (con equipo, o un día sin sesión). */}
+      {!(next && !hayEquipo) && (
       <div style={{ padding: '0 18px 20px' }}>
         {/* Esta tarjeta es la puerta al programa completo, y tiene que
             fijar el nivel a mano. Antes solo cambiaba de pestaña, así que
@@ -2439,6 +2530,7 @@ const HomeView = ({
           </span>
         </button>
       </div>
+      )}
     </div>
   );
 };
@@ -2459,7 +2551,7 @@ const Slider = ({ label, hint, value, onChange, max = 10, color = T.accent }) =>
   </div>
 );
 
-const WellnessView = ({ wellness, setWellness }) => {
+const WellnessView = ({ wellness, setWellness, enHoja = false }) => {
   const [date, setDate] = useState(today());
   const dayData = wellness[date] || {};
   const updateDay = (field, value) => setWellness(prev => ({ ...prev, [date]: { ...prev[date], [field]: value } }));
@@ -2482,8 +2574,8 @@ const WellnessView = ({ wellness, setWellness }) => {
   }, [wellness]);
 
   return (
-    <div style={{ paddingBottom: 100 }}>
-      <div style={{ padding: '20px 20px 24px' }}>
+    <div style={{ paddingBottom: enHoja ? 0 : 100, margin: enHoja ? '0 -20px' : 0 }}>
+      <div style={{ padding: enHoja ? '6px 20px 20px' : '20px 20px 24px' }}>
         <Caption color={T.text3} style={{ marginBottom: 6 }}>Bienestar diario</Caption>
         {todayScore !== null ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
@@ -2571,7 +2663,7 @@ const WellnessView = ({ wellness, setWellness }) => {
 // Los mismos 9 levantamientos que usa el cálculo de kilos por porcentaje (ver `lib/cargaPorcentaje.js`).
 const ONE_RM_LIFTS = LEVANTAMIENTOS;
 
-const OneRMView = ({ oneRMs, setOneRMs }) => {
+const OneRMView = ({ oneRMs, setOneRMs, enHoja = false }) => {
   const { perfil: profile } = usePerfilDeLaVista();
   const unidad = profile?.unidad_peso || 'kg';
   const u = etiquetaUnidad(unidad);
@@ -2582,11 +2674,12 @@ const OneRMView = ({ oneRMs, setOneRMs }) => {
   const result = useMemo(() => calc1RM(calc.weight, calc.reps), [calc]);
 
   return (
-    <div style={{ paddingBottom: 100 }}>
-      <div style={{ padding: '20px 20px 24px' }}>
-        <Caption color={T.text3} style={{ marginBottom: 6 }}>Tus máximos</Caption>
-        <h1 style={{ fontSize: 36, fontWeight: 800, color: T.text, margin: 0, lineHeight: 1.05, letterSpacing: -1 }}>1RM</h1>
-        <div style={{ marginTop: 8, fontSize: 14, color: T.text2 }}>El plan usa estos para calcular las cargas. Recalibra al inicio de cada fase.</div>
+    <div style={{ paddingBottom: enHoja ? 0 : 100, margin: enHoja ? '0 -20px' : 0 }}>
+      <div style={{ padding: enHoja ? '6px 20px 20px' : '20px 20px 24px' }}>
+        {/* En la hoja, el título «1RM» ya lo dice la cabecera: no se repite. */}
+        {!enHoja && <Caption color={T.text3} style={{ marginBottom: 6 }}>Tus máximos</Caption>}
+        {!enHoja && <h1 style={{ fontSize: 36, fontWeight: 800, color: T.text, margin: 0, lineHeight: 1.05, letterSpacing: -1 }}>1RM</h1>}
+        <div style={{ marginTop: enHoja ? 0 : 8, fontSize: 14, color: T.text2 }}>El plan usa estos para calcular las cargas. Recalibra al inicio de cada fase.</div>
       </div>
 
       <div style={{ padding: '0 20px' }}>
@@ -2637,133 +2730,6 @@ const OneRMView = ({ oneRMs, setOneRMs }) => {
   );
 };
 
-const ScienceView = () => (
-  <div style={{ paddingBottom: 100 }}>
-    <div style={{ padding: '20px 20px 24px' }}>
-      <Caption color={T.text3} style={{ marginBottom: 6 }}><Palabra>El porqué del plan</Palabra></Caption>
-      <h1 style={{ fontSize: 36, fontWeight: 800, color: T.text, margin: 0, lineHeight: 1.05, letterSpacing: -1 }}>Marco científico</h1>
-    </div>
-
-    <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <Collapsible title="Periodización por bloques" icon={Sparkles} defaultOpen>
-        <div style={{ paddingTop: 4, fontSize: 13.5, color: T.text2, lineHeight: 1.7 }}>
-          <p style={{ marginTop: 0 }}>Modelo de Vladimir Issurin (2008, 2010). Cada bloque concentra el estímulo en una capacidad dominante.</p>
-          <p style={{ marginBottom: 0 }}>Adaptaciones distintas se activan por vías moleculares distintas (mTOR para hipertrofia, AMPK para aeróbicas). Cuando intentas activar varias vías con alto volumen simultáneo, se inhiben mutuamente (Atherton et al. 2005).</p>
-        </div>
-      </Collapsible>
-
-      <Collapsible title="Residuales entrenables" icon={Clock}>
-        <div style={{ paddingTop: 4 }}>
-          <div style={{ fontSize: 13.5, color: T.text2, lineHeight: 1.7, marginBottom: 14 }}>
-            Cada capacidad tiene un tiempo antes de degradarse sin estímulo.
-          </div>
-          {[
-            ['Velocidad y potencia', '~5 días', 'Exposición frecuente todo el año.'],
-            ['Fuerza máxima', '~30 días', '1 sesión semanal alta intensidad.'],
-            ['Aeróbica', '~30 días', '1 tempo por semana.'],
-            ['Movilidad', '~15 días', 'Diaria es el estándar.'],
-            ['Hipertrofia', '~30-60 días', '~1/3 del volumen del bloque.'],
-          ].map((r, i) => (
-            <div key={i} style={{ display: 'flex', gap: 12, padding: '10px 0', borderTop: i > 0 ? `1px solid ${T.border}` : 'none' }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 2 }}>{r[0]}</div>
-                <div style={{ fontSize: 12, color: T.text3 }}>{r[2]}</div>
-              </div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: T.accent, alignSelf: 'flex-start', ...NUM_STYLE }}>{r[1]}</div>
-            </div>
-          ))}
-        </div>
-      </Collapsible>
-
-      <Collapsible title="Dobles sesiones" icon={Zap}>
-        <div style={{ paddingTop: 4, fontSize: 13.5, color: T.text2, lineHeight: 1.7 }}>
-          <p style={{ marginTop: 0 }}>Separación AM/PM mínima de 6 horas reduce la interferencia molecular entre fuerza y resistencia (Wilson et al. 2012).</p>
-          <p style={{ marginBottom: 0 }}>En este plan se usan 3 dobles fijas (L/J/V) en F4 y F5 en lugar de 4 por consistencia operativa.</p>
-        </div>
-      </Collapsible>
-
-      <Collapsible title="Orden de las fases" icon={Trophy}>
-        <div style={{ paddingTop: 4, fontSize: 13.5, color: T.text2, lineHeight: 1.7 }}>
-          <p style={{ marginTop: 0 }}>La secuencia hipertrofia → fuerza → potencia → velocidad sigue una cadena de causalidad:</p>
-          <ul style={{ listStyleType: 'disc', paddingLeft: 16 }}>
-            <li>Más músculo da más potencial de fuerza.</li>
-            <li>Más fuerza da más techo de potencia (Cormie et al. 2010).</li>
-            <li>Más potencia da más techo de velocidad (Suchomel et al. 2016).</li>
-            <li>La velocidad expresa todo lo anterior en patrones específicos del deporte.</li>
-          </ul>
-        </div>
-      </Collapsible>
-
-      <Collapsible title="Nutrición por fase" icon={Target}>
-        <div style={{ paddingTop: 4 }}>
-          {[
-            ['F1-F2', 'Mantenimiento', '1.8-2.0 g/kg', '4-5 g/kg CHO'],
-            ['F3', '+300-500 kcal', '2.0-2.2 g/kg', '5-6 g/kg CHO'],
-            ['F4', 'Mant. o +100-200', '1.8-2.0 g/kg', '5-6 g/kg CHO'],
-            ['F5', 'Mant. o +100', '2.0-2.2 g/kg', '6-7 g/kg CHO'],
-            ['F6', 'Mantenimiento', '1.8-2.0 g/kg', '5-6 g/kg CHO'],
-            ['F7-F8', 'Mant. + game day', '1.8-2.0 g/kg', '6-8 g/kg juego'],
-          ].map((r, i) => (
-            <div key={i} style={{ padding: '10px 0', borderTop: i > 0 ? `1px solid ${T.border}` : 'none' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 2 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: T.text, ...NUM_STYLE }}>{r[0]}</span>
-                <span style={{ fontSize: 12, color: T.text2 }}>{r[1]}</span>
-              </div>
-              <div style={{ fontSize: 11, color: T.text3 }}>Proteína: {r[2]} · CHO: {r[3]}</div>
-            </div>
-          ))}
-        </div>
-      </Collapsible>
-
-      <Collapsible title="Protocolo de tobillo derecho" icon={Activity}>
-        <div style={{ paddingTop: 4, fontSize: 13.5, color: T.text2, lineHeight: 1.7 }}>
-          <p style={{ marginTop: 0 }}>Trabajo diario todo el año, no solo en F1.</p>
-          <Caption style={{ marginTop: 14, marginBottom: 6 }}>Evaluación · cada 4-6 sem con fisio</Caption>
-          <ul style={{ listStyleType: 'disc', paddingLeft: 16, marginTop: 0 }}>
-            <li>Y-Balance Test bilateral</li>
-            <li>Fuerza eversión/inversión/dorsiflexión con dinamómetro</li>
-            <li>Knee-to-wall test</li>
-          </ul>
-          <Caption style={{ marginTop: 14, marginBottom: 6 }}>Trabajo diario · 15-20 min</Caption>
-          <ul style={{ listStyleType: 'disc', paddingLeft: 16, marginTop: 0 }}>
-            <li>Movilidad: knee-to-wall progresivo 3x10, círculos activos</li>
-            <li>Fuerza: peroneales, tibial anterior, gemelos con bandas 3x15</li>
-            <li>Propiocepción: balance unilateral 3x30 seg ojos cerrados</li>
-            <li>Calf raises: 3x15 de pie + 3x15 sentado</li>
-          </ul>
-        </div>
-      </Collapsible>
-
-      <Collapsible title="Referencias completas" icon={FileText}>
-        <div style={{ paddingTop: 4, fontSize: 12, color: T.text2, lineHeight: 1.7 }}>
-          {[
-            'Atherton, P. J., et al. (2005). FASEB Journal.',
-            'Bickel, C. S., Cross, J. M., & Bamman, M. M. (2011). MSSE.',
-            'Bohm, S., Mersmann, F., & Arampatzis, A. (2015). Frontiers in Physiology.',
-            'Bosquet, L., et al. (2007). MSSE.',
-            'Cometti, G. (French Contrast Method).',
-            'Cormie, P., McGuigan, M. R., & Newton, R. U. (2010). Sports Medicine.',
-            'Dupuy, O., et al. (2018). Frontiers in Physiology.',
-            'Faude, O., Kellmann, M., et al. (2014). J Sports Sci Med.',
-            'Halson, S. L. (2014). Sports Medicine.',
-            'Hertel, J., & Corbett, R. O. (2019). J Athletic Training.',
-            'Issurin, V. B. (2008, 2010). Block Periodization.',
-            'McLean, B. D., et al. (2010). IJSPP.',
-            'Meeusen, R., et al. (2013). MSSE.',
-            'Morton, R. W., et al. (2018). BJSM.',
-            'Mujika, I., & Padilla, S. (2003). MSSE.',
-            'Plews, D. J., et al. (2013, 2014). Eur J Appl Physiol.',
-            'Rhea, M. R., et al. (2003). MSSE.',
-            'Schoenfeld, B. J., et al. (2016). Sports Medicine.',
-            'Suchomel, T. J., et al. (2016). Sports Medicine.',
-            'Wilson, J. M., et al. (2012). JSCR.',
-          ].map((ref, i) => <div key={i} style={{ padding: '4px 0' }}>{ref}</div>)}
-        </div>
-      </Collapsible>
-    </div>
-  </div>
-);
-
 /**
  * Navegacion del atleta.
  *
@@ -2775,15 +2741,15 @@ const ScienceView = () => (
  */
 const BottomNav = ({ active, onChange }) => {
   const esCompu = useIsDesktop();
-  const { t, salud } = usePalabras();
-  // El 1RM es de fuerza: a un paciente de fisio no le dice nada (ver SIN_1RM).
+  const { salud } = usePalabras();
+  /* Tres botones (Andrés, 7 oct 2026). «Home» es lo que antes se llamaba «Hoy». «Entrenar» es lo que antes se
+     llamaba «Plan»: abre la sesión de hoy (lo que tocaba ya lo decía la tarjeta azul de Home, y «Plan» sonaba a
+     otra cosa); a un paciente de un fisio le dice «Sesión». Bienestar, 1RM y Ciencia viven dentro de Home. */
   const items = [
-    { id: 'home', label: 'Hoy', icon: HomeIcon },
-    { id: 'plan', label: t('Plan'), icon: Layers },
-    { id: 'wellness', label: 'Bienestar', icon: Heart },
-    { id: 'oneRM', label: '1RM', icon: Calculator },
-    { id: 'science', label: 'Ciencia', icon: BookOpen },
-  ].filter((item) => !(salud && item.id === 'oneRM'));
+    { id: 'home', label: 'Home', icon: HomeIcon },
+    { id: 'plan', label: salud ? 'Sesión' : 'Entrenar', icon: Dumbbell },
+    { id: 'messages', label: 'Mensajes', icon: MessageCircle },
+  ];
   return (
     <div style={{
       position: 'fixed', zIndex: 100,
@@ -2825,6 +2791,23 @@ const BottomNav = ({ active, onChange }) => {
   );
 };
 
+/* «Mensajes»: el botón ya está y la pantalla todavía no. Más adelante los atletas, sus coaches y su equipo se
+   escribirán aquí (Andrés, 7 oct 2026: «quiero tener listo el botón aunque esté vacío»). */
+const MessagesView = () => (
+  <div style={{ padding: '72px 24px 120px', maxWidth: 560, margin: '0 auto', textAlign: 'center' }}>
+    <div style={{
+      width: 76, height: 76, borderRadius: 24, background: T.accentBg, color: T.accent,
+      display: 'grid', placeItems: 'center', margin: '0 auto 20px',
+    }}>
+      <MessageCircle size={34} />
+    </div>
+    <div style={{ fontSize: 21, fontWeight: 800, color: T.text, letterSpacing: -0.3 }}>Mensajes</div>
+    <div style={{ fontSize: 14.5, color: T.text2, marginTop: 10, lineHeight: 1.6 }}>
+      Pronto: mensajes con tu equipo.
+    </div>
+  </div>
+);
+
 // Cargando el plan: skeleton dentro del mismo shell
 const PlanLoadingState = () => (
   <div style={{ padding: '28px 20px 120px', maxWidth: 560, margin: '0 auto' }}>
@@ -2842,7 +2825,7 @@ const PlanLoadingState = () => (
 );
 
 // Sin plan asignado: misma interfaz, mensaje claro; wellness y 1RM siguen disponibles
-const NoPlanState = ({ onGoTab }) => (
+const NoPlanState = ({ onAbrirHoja }) => (
   <div style={{ padding: '48px 20px 120px', maxWidth: 560, margin: '0 auto', textAlign: 'center' }}>
     <div style={{
       width: 76, height: 76, borderRadius: 24, background: T.accentBg, color: T.accent,
@@ -2860,7 +2843,7 @@ const NoPlanState = ({ onGoTab }) => (
       </Palabra>
     </div>
     <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 26, flexWrap: 'wrap' }}>
-      <button type="button" onClick={() => onGoTab('wellness')} className="kp-press"
+      <button type="button" onClick={() => onAbrirHoja('wellness')} className="kp-press"
         style={{
           padding: '12px 18px', borderRadius: 13, border: `1.5px solid ${T.border}`, cursor: 'pointer',
           background: T.bg2, fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text,
@@ -2869,7 +2852,7 @@ const NoPlanState = ({ onGoTab }) => (
         <Heart size={16} color={T.accent} /> Registrar bienestar
       </button>
       <Sin1RM>
-        <button type="button" onClick={() => onGoTab('oneRM')} className="kp-press"
+        <button type="button" onClick={() => onAbrirHoja('oneRM')} className="kp-press"
           style={{
             padding: '12px 18px', borderRadius: 13, border: `1.5px solid ${T.border}`, cursor: 'pointer',
             background: T.bg2, fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text,
@@ -2884,7 +2867,7 @@ const NoPlanState = ({ onGoTab }) => (
 
 export default function TrainingApp() {
   const {
-    phases: PLAN, hasPlan, planLoading, kind, programas, programaActivo, elegirPrograma, claveDe,
+    phases: PLAN, hasPlan, planLoading, kind, programas, programaActivo, elegirPrograma, claveDe, planMeta,
   } = usePlan();
   const { store, setStore } = useAppState();
   /* EQUIPO = hay más de un programa con sesiones (el del coach y, además, lo que
@@ -2908,8 +2891,9 @@ export default function TrainingApp() {
   // Cada uno tiene su propio lugar guardado (ver `lugar.js`).
   const { userId: quien } = usePerfilDeLaVista();
   const { salud } = usePalabras();
-  const pestanasVisibles = salud ? SIN_1RM : PESTANAS;
-  const [tab, setTab] = useLugar(`app.${quien}.tab`, 'home', (t) => pestanasVisibles.includes(t));
+  const [tab, setTab] = useLugar(`app.${quien}.tab`, 'home', (t) => PESTANAS.includes(t));
+  // La hoja que está abierta encima de Home: 'wellness' | 'oneRM' | 'science' | null.
+  const [hoja, setHoja] = useState(null);
   const [view, setView] = useState({ level: 'week' });
   // Los registros de un programa de EQUIPO van en claves aparte (`wr:sessions@<profesional>`);
   // los del coach principal siguen donde estaban. El bienestar y el 1RM son del atleta.
@@ -3126,11 +3110,13 @@ export default function TrainingApp() {
   if (planLoading && (tab === 'home' || tab === 'plan')) {
     content = <PlanLoadingState />;
   } else if (!hasPlan && !hayEquipo && (tab === 'home' || tab === 'plan')) {
-    content = <NoPlanState onGoTab={vasA} />;
+    content = <NoPlanState onAbrirHoja={setHoja} />;
   } else if (tab === 'home') {
     content = <HomeView sessionsData={sessionsData} wellness={wellness}
+      oneRMs={oneRMs}
       onStartSession={startSession}
       onGoTab={vasA}
+      onAbrirHoja={setHoja}
       onVerPrograma={() => setProgramaAbierto(true)}
       cursor={cursor}
       onChangeCursor={() => setCursorPickerOpen(true)}
@@ -3209,12 +3195,8 @@ export default function TrainingApp() {
         </>
       ) : dia;
     }
-  } else if (tab === 'wellness') {
-    content = <WellnessView wellness={wellness} setWellness={setWellness} />;
-  } else if (tab === 'oneRM') {
-    content = <OneRMView oneRMs={oneRMs} setOneRMs={setOneRMs} />;
-  } else if (tab === 'science') {
-    content = <ScienceView />;
+  } else if (tab === 'messages') {
+    content = <MessagesView />;
   }
 
   return (
@@ -3230,6 +3212,22 @@ export default function TrainingApp() {
         {content}
       </div>
       <BottomNav active={tab} onChange={vasA} />
+      {/* Bienestar, 1RM y Ciencia ya no son pestañas: se abren como hoja encima, con su flecha para volver. */}
+      {hoja === 'wellness' && (
+        <HojaFlotante titulo="Bienestar" onCerrar={() => setHoja(null)}>
+          <WellnessView wellness={wellness} setWellness={setWellness} enHoja />
+        </HojaFlotante>
+      )}
+      {hoja === 'oneRM' && !salud && (
+        <HojaFlotante titulo="1RM" onCerrar={() => setHoja(null)}>
+          <OneRMView oneRMs={oneRMs} setOneRMs={setOneRMs} enHoja />
+        </HojaFlotante>
+      )}
+      {hoja === 'science' && (
+        <HojaFlotante titulo="Ciencia" subtitulo={planMeta?.title} onCerrar={() => setHoja(null)}>
+          <CienciaDelPlan />
+        </HojaFlotante>
+      )}
       {cursorPickerOpen && (
         <CursorSelector
           // Resalta tu día DE HOY, el mismo que dice la portada — no un día
