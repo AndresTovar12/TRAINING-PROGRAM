@@ -942,9 +942,36 @@ export async function planDe(userId, profesionalId) {
   return data ?? null;
 }
 
+/**
+ * Lo que se guarda en `plans.data`: el `kind`, la forma, las fases y dos cosas que son del PLAN y no de una fase:
+ * `foto` (la que sale en Home cuando la fase de hoy no tiene la suya) y `ciencia` (los recuadros de «Ciencia»; ver
+ * `lib/ciencia.js`). Se escribe siempre entero, así que todo lo que sea del plan viaja junto a las fases.
+ */
+export const datosDelPlan = ({ kind, estructura, phases, foto, ciencia }) => ({
+  kind: kind || 'periodized',
+  ...(estructura ? { estructura } : {}),
+  phases: phases ?? [],
+  ...(foto ? { foto } : {}),
+  ...(Array.isArray(ciencia) && ciencia.length ? { ciencia } : {}),
+});
+
+/** La foto y la ciencia que el plan ya tiene guardadas (para no perderlas al reescribir `data`). */
+async function extrasDelPlan(planId) {
+  const { data, error } = await supabase
+    .from('plans')
+    .select('foto:data->foto, ciencia:data->ciencia')
+    .eq('id', planId)
+    .single();
+  if (error) throw error;
+  return {
+    foto: typeof data?.foto === 'string' ? data.foto : '',
+    ciencia: Array.isArray(data?.ciencia) ? data.ciencia : [],
+  };
+}
+
 // `kind`: 'weekly' = rutina semanal que se repite | 'periodized' = fases que
 // avanzan (default para los planes creados antes de existir este campo).
-export async function createPlan({ userId, title, phases, kind, estructura, createdBy, profesionalId = null }) {
+export async function createPlan({ userId, title, phases, kind, estructura, foto, ciencia, createdBy, profesionalId = null }) {
   const { data, error } = await supabase
     .from('plans')
     .insert({
@@ -953,7 +980,7 @@ export async function createPlan({ userId, title, phases, kind, estructura, crea
       profesional_id: profesionalId,
       title: title || 'Plan de entrenamiento',
       status: 'active',
-      data: { kind: kind || 'periodized', ...(estructura ? { estructura } : {}), phases: phases ?? [] },
+      data: datosDelPlan({ kind, estructura, phases, foto, ciencia }),
       created_by: createdBy ?? null,
     })
     .select('*')
@@ -962,13 +989,20 @@ export async function createPlan({ userId, title, phases, kind, estructura, crea
   return data;
 }
 
-export async function updatePlan(planId, { title, phases, kind, estructura }) {
+export async function updatePlan(planId, { title, phases, kind, estructura, foto, ciencia }) {
   const patch = { updated_at: new Date().toISOString() };
   if (title !== undefined) patch.title = title;
   // `data` se reescribe entero, así que el kind y la forma del plan (ver
-  // `estructuraDelPlan`) viajan siempre junto a las fases.
+  // `estructuraDelPlan`) viajan siempre junto a las fases. Con la foto y la ciencia del plan, igual: quien las
+  // pasa (el editor) manda lo que quedó, incluso vacío para quitarlas; quien no las pasa (poner un workout en un
+  // día, por ejemplo) las deja como estaban: se leen y se vuelven a escribir.
   if (phases !== undefined) {
-    patch.data = { kind: kind || 'periodized', ...(estructura ? { estructura } : {}), phases };
+    const previos = foto === undefined || ciencia === undefined ? await extrasDelPlan(planId) : null;
+    patch.data = datosDelPlan({
+      kind, estructura, phases,
+      foto: foto === undefined ? previos.foto : foto,
+      ciencia: ciencia === undefined ? previos.ciencia : ciencia,
+    });
   }
   const { data, error } = await supabase
     .from('plans')

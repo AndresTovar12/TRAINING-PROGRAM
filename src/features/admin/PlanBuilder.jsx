@@ -4,7 +4,7 @@ import {
   ArrowLeft, X, Plus, Trash2, Copy, ChevronRight, ChevronUp, ChevronDown,
   ChevronLeft, Loader2, Check, Layers, Dumbbell, StickyNote, Zap,
   Save, FolderOpen, Clipboard, Eraser, CalendarDays, Repeat, Scale, Video,
-  Image as ImageIcon, CopyPlus, Sun, Moon, RefreshCw,
+  Image as ImageIcon, ImagePlus, CopyPlus, Sun, Moon, RefreshCw,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
@@ -25,6 +25,9 @@ import {
 import GuiaDelEditor from '@/features/admin/GuiaDelEditor';
 import BloqueDelPrograma from '@/features/admin/BloqueDelPrograma';
 import MenuDeAcciones from '@/features/admin/MenuDeAcciones';
+import CampoDeFoto from '@/features/admin/CampoDeFoto';
+import HojaFlotante from '@/components/HojaFlotante';
+import { normalizaCiencia } from '@/lib/ciencia';
 import { useFasesAbiertas } from '@/features/admin/useFasesAbiertas';
 import EditorBarra, { BarraDelCelular, BotonesDeHistorial } from '@/features/admin/EditorBarra';
 import { HistorialContext, enVentanaFlotante, useHistorial, useHistorialDelEditor } from '@/lib/useHistorial';
@@ -1748,6 +1751,12 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
   });
   const kind = kindDeEstructura(estructura);
   const isWeekly = kind === 'weekly';
+  /* LA FOTO Y LA CIENCIA DEL PLAN (7 oct 2026). Son del plan entero, no de una fase. `fotoPlan` es la que sale en Home cuando
+     la fase de hoy no tiene la suya (y la única en una rutina o en «varias semanas», que no tienen fases que mostrar);
+     `cienciaPlan`, los recuadros de «Ciencia» (ver `lib/ciencia.js`). La foto de cada fase vive en la fase (`image`). Las dos
+     se deshacen con todo lo demás. */
+  const [fotoPlan, setFotoPlan] = useState(() => (enCatalogo ? (catalogo.foto || '') : (planRow?.data?.foto || '')));
+  const [cienciaPlan, setCienciaPlan] = useState(() => normalizaCiencia(enCatalogo ? catalogo.ciencia : planRow?.data?.ciencia));
   const [formasAbiertas, setFormasAbiertas] = useState(false);
   /* DÓNDE ESTABA EL COACH, al refrescar la app (ver `lugar.js`): fase, semana,
      día y, en el teléfono, si tenía abierto el editor del día. Solo con un plan
@@ -1777,17 +1786,19 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
   // Qué menú de tres puntos está abierto: { tipo: 'plan' | 'fase' | 'semana', pi }.
   const [menu, setMenu] = useState(null);
   /* EL HISTORIAL (Ctrl/⌘+Z) y «¿hay algo sin guardar?» (ver `useHistorial`). Lo que se deshace: el título, las fases y la
-     forma; y con cada foto, dónde estaba quien edita (fase, semana, día) para volver ahí. */
+     forma, la foto y la ciencia del plan; y con cada foto, dónde estaba quien edita (fase, semana, día) para volver ahí. */
   const raizRef = useRef(null);
   // Qué workouts están plegados (cosa de la pantalla, no del plan): al deshacer vuelven como estaban.
   const plegadas = usePlegadas();
   const hist = useHistorial({
     raiz: raizRef,
-    leer: () => ({ title, phases, estructura, lugar: { nav, wi: weekIdx, dia: activeWeekday, pl: plegadas.pl } }),
+    leer: () => ({ title, phases, estructura, fotoPlan, cienciaPlan, lugar: { nav, wi: weekIdx, dia: activeWeekday, pl: plegadas.pl } }),
     aplicar: (foto) => {
       setTitle(foto.title);
       setPhases(foto.phases);
       setEstructura(foto.estructura);
+      setFotoPlan(foto.fotoPlan ?? '');
+      setCienciaPlan(foto.cienciaPlan ?? []);
       plegadas.restaura(foto.lugar.pl);
       const { nav: n, wi, dia } = foto.lugar;
       if (n.level === 'phase' && foto.phases.length) {
@@ -1971,6 +1982,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
 
   const touch = (fn) => { hist.registra(); setPhases(fn); };
   const cambiaTitulo = (v) => { hist.registra(); setTitle(v); };
+  const cambiaFotoPlan = (v) => { hist.registra(); setFotoPlan(v); };
   const patchPhase = (pi, patch) => touch((ps) => ps.map((p, i) => (i === pi ? { ...p, ...(typeof patch === 'function' ? patch(p) : patch) } : p)));
   const patchWeek = (pi, wi, patch) => patchPhase(pi, (p) => ({
     weekData: p.weekData.map((w, j) => (j === wi ? { ...w, ...(typeof patch === 'function' ? patch(w) : patch) } : w)),
@@ -1985,8 +1997,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
   const datosDelCatalogo = () => {
     const lista = fasesParaGuardar();
     return estructura === 'rutina'
-      ? { tipo: 'rutina', data: rutinaDePlan({ phases: lista }) }
-      : { tipo: 'programa', data: programaDePlan({ kind, estructura, phases: lista }) };
+      ? { tipo: 'rutina', data: rutinaDePlan({ phases: lista, foto: fotoPlan, ciencia: cienciaPlan }) }
+      : { tipo: 'programa', data: programaDePlan({ kind, estructura, phases: lista, foto: fotoPlan, ciencia: cienciaPlan }) };
   };
   /* Lo que se manda a Mis planes, igual que lo arman las ventanas de guardar; `notas` y `todo` son lo que se contestó la
      última vez (sin contestar, todo se incluye). */
@@ -2071,8 +2083,11 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     try {
       const data = fasesParaGuardar();
       const row = planRow
-        ? await updatePlan(planRow.id, { title: title.trim(), phases: data, kind, estructura })
-        : await createPlan({ userId: athlete.id, title: title.trim(), phases: data, kind, estructura, createdBy: user?.id, profesionalId });
+        ? await updatePlan(planRow.id, { title: title.trim(), phases: data, kind, estructura, foto: fotoPlan, ciencia: cienciaPlan })
+        : await createPlan({
+          userId: athlete.id, title: title.trim(), phases: data, kind, estructura, foto: fotoPlan, ciencia: cienciaPlan,
+          createdBy: user?.id, profesionalId,
+        });
       hist.marcaGuardado(idAlGuardar);
       setHaGuardado(true);
       /* Guardar NO cierra el editor: el coach se queda donde estaba para ver
@@ -2211,6 +2226,12 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     elegirDia: (i, num, clave) => { editaEn(i, num); setActiveWeekday(clave); abreEditorTel(); },
     nombreFase: (i, nombre) => patchPhase(i, { name: nombre }),
     colorFase: (i, color) => patchPhase(i, { color }),
+    // La foto se busca por el id de la fase: subirla tarda, y para entonces la fase pudo cambiar de lugar.
+    fotoFase: (id, url) => touch((ps) => ps.map((p) => {
+      if (p.id !== id) return p;
+      const { image: _antes, ...resto } = p;
+      return url ? { ...resto, image: url } : resto;
+    })),
     duplicarFase: (i) => { yaNavego.current = true; duplicarFase(i); },
     eliminarFase: (i) => { yaNavego.current = true; eliminarFase(i); },
     moverFaseA: (de, a) => { yaNavego.current = true; moverFaseA(de, a); },
@@ -2428,6 +2449,9 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
   const tituloDelCelular = isWeekly ? 'Rutina'
     : deCorrido ? `Sem ${numeroDeSemana(faseEditada, semanaEditada, weekIdx + 1)} de ${semanasDelPlan(phases)}`
       : `Sem ${semanaEditada?.num ?? weekIdx + 1} · ${faseEditada?.name || 'Fase'}`;
+  // Eliminar el programa (o sacarlo de Mis planes): solo si ya existe en algún lado.
+  const puedeEliminar = enCatalogo ? !!filaCatalogo : !!(planRow && onDeleted);
+  const textoEliminar = enCatalogo ? 'Eliminar de Mis planes' : 'Eliminar programa';
   const programa = {
     forma: FORMAS.find((f) => f.id === estructura) ?? FORMAS[2], puedeCambiar: !enCatalogo, onCambiar: () => setFormasAbiertas(true),
     puedeGuardar: !enCatalogo && planTieneContenido(phases), textoGuardar: isWeekly ? 'Guardar rutina' : t('Guardar plan'),
@@ -2440,8 +2464,9 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     onUsar: isWeekly ? () => setModal({ type: 'tpl-week' }) : (!enCatalogo ? () => setModal({ type: 'desde-plan' }) : undefined),
     textoUsar: isWeekly ? 'Usar rutina' : 'Usar plan', iconoUsar: FolderOpen,
     tituloUsar: isWeekly ? 'Usar una rutina de Mis planes' : 'Usar un programa o una rutina de Mis planes',
-    onEliminar: (enCatalogo ? !!filaCatalogo : !!(planRow && onDeleted)) ? () => eliminarPrograma() : undefined,
-    textoEliminar: enCatalogo ? 'Eliminar de Mis planes' : 'Eliminar programa',
+    /* «Más ▾»: lo del programa que no se usa a cada rato (la foto de Home, la ciencia y eliminar) en UN solo botón. Andrés,
+       7 oct 2026: el editor ya está saturado, y la ciencia «no debe ser muy relevante» aquí. */
+    onMas: (ancla) => setMenu({ tipo: 'mas', ancla }),
   };
 
   /* ---------------- render por nivel ---------------- */
@@ -2872,6 +2897,15 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
           ]}
         />
       )}
+      {menu?.tipo === 'mas' && (
+        <MenuDeAcciones
+          titulo={isWeekly ? 'Rutina' : 'Programa'} ancla={menu.ancla} onClose={() => setMenu(null)}
+          acciones={[
+            { icon: ImagePlus, texto: 'Foto del plan', onClick: () => setModal({ type: 'foto-plan' }) },
+            ...(puedeEliminar ? [{ icon: Trash2, texto: textoEliminar, onClick: () => eliminarPrograma(), peligro: true }] : []),
+          ]}
+        />
+      )}
       {menu?.tipo === 'semana' && curPhase && (() => {
         const semana = curPhase.weekData[curWeekIdx];
         const hayOtra = (deCorrido ? semanasDelPlan(phases) : curPhase.weekData.length) > 1;
@@ -3027,6 +3061,11 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
           }}
         />
       )}
+      {modal?.type === 'foto-plan' && (
+        <HojaFlotante titulo="Foto del plan" onCerrar={() => setModal(null)}>
+          <CampoDeFoto valor={fotoPlan} onCambia={cambiaFotoPlan} alto={200} />
+        </HojaFlotante>
+      )}
       {modal?.type === 'desde-plan' && (
         <SelectorDeMisPlanes
           tipos={['programa', 'rutina']} titulo="Usar uno guardado"
@@ -3046,6 +3085,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
             const plan = item.tipo === 'programa' ? planDePrograma(datos) : planDeRutina(datos);
             setEstructura(plan.estructura);
             touch(() => plan.phases);
+            setFotoPlan(plan.foto ?? '');
+            setCienciaPlan(normalizaCiencia(plan.ciencia));
             setTitle(item.nombre);
             setWeekIdx(0);
             setActiveWeekday(diaParaSemana(plan.phases[0]?.weekData?.[0], 'Lun'));

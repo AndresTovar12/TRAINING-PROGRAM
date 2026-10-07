@@ -69,9 +69,15 @@ export function diasDeWorkout(data, dia, nombreDelItem = '') {
 
 /* ----------------------------- Rutinas ---------------------------- */
 
-/** Lo que se guarda de una rutina semanal: los días de su única semana. */
+/* La foto y la ciencia son del PLAN (ver `datosDelPlan` en api.js): viajan con él a Mis planes y de vuelta. */
+const delPlan = ({ foto, ciencia } = {}) => ({
+  ...(foto ? { foto } : {}),
+  ...(Array.isArray(ciencia) && ciencia.length ? { ciencia: clone(ciencia) } : {}),
+});
+
+/** Lo que se guarda de una rutina semanal: los días de su única semana (y la foto y la ciencia del plan). */
 export function rutinaDePlan(plan) {
-  return { days: clone(plan?.phases?.[0]?.weekData?.[0]?.days ?? []) };
+  return { days: clone(plan?.phases?.[0]?.weekData?.[0]?.days ?? []), ...delPlan(plan) };
 }
 
 /** Lo que se guarda de UNA semana de un programa (el menú de la semana). */
@@ -84,6 +90,7 @@ export function planDeRutina(data) {
   return {
     kind: 'weekly',
     estructura: 'rutina',
+    ...delPlan(data),
     phases: [{
       id: `p-${rid()}`, num: 1, name: 'Rutina semanal', fullName: '', duration: '1 semana', weeks: 1,
       color: COLOR_DE_FASE, focus: '', objective: '',
@@ -99,8 +106,8 @@ export function planDeRutina(data) {
 export const fasesConIdsNuevos = (fases) => clone(fases ?? []).map((f) => ({ ...f, id: `p-${rid()}` }));
 
 /** Lo que se guarda de un programa (`estructura`: 'semanas' | 'fases'). */
-export function programaDePlan({ kind, estructura, phases }) {
-  return { kind: kind || 'periodized', estructura: estructura || 'fases', phases: clone(phases ?? []) };
+export function programaDePlan({ kind, estructura, phases, foto, ciencia }) {
+  return { kind: kind || 'periodized', estructura: estructura || 'fases', phases: clone(phases ?? []), ...delPlan({ foto, ciencia }) };
 }
 
 /** Un programa guardado, listo para dárselo a un atleta: sus fases llevan ids nuevos. */
@@ -109,6 +116,7 @@ export function planDePrograma(data) {
     kind: data?.kind || 'periodized',
     estructura: data?.estructura || 'fases',
     phases: fasesConIdsNuevos(data?.phases),
+    ...delPlan(data),
   };
 }
 

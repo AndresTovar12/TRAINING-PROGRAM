@@ -128,9 +128,12 @@ export default function MisPlanesPanel() {
       if (item.tipo === 'workout') {
         setEditor({ tipo: 'workout', item, data });
       } else if (item.tipo === 'rutina') {
-        setEditor({ tipo: 'plan', catalogo: { item, phases: planDeRutina(data).phases, estructura: 'rutina' } });
+        setEditor({ tipo: 'plan', catalogo: { item, phases: planDeRutina(data).phases, estructura: 'rutina', foto: data.foto, ciencia: data.ciencia } });
       } else {
-        setEditor({ tipo: 'plan', catalogo: { item, phases: data.phases ?? [], estructura: data.estructura || 'fases' } });
+        setEditor({
+          tipo: 'plan',
+          catalogo: { item, phases: data.phases ?? [], estructura: data.estructura || 'fases', foto: data.foto, ciencia: data.ciencia },
+        });
       }
     } catch (e) {
       setAviso(e.message || 'No se pudo abrir');

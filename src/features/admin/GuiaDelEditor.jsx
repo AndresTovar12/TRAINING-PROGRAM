@@ -8,6 +8,7 @@ import { propsDeArrastre } from '@/lib/arrastrar';
 import { TituloDelRenglon } from '@/components/NavegadorDelPlan';
 import { DIAS_SEMANA } from '@/lib/pegadas';
 import { MenuEmergente } from '@/features/admin/MenuDeAcciones';
+import CampoDeFoto from '@/features/admin/CampoDeFoto';
 
 /**
  * La guía del editor de planes: las fases, sus semanas y los siete días de la semana que se ve.
@@ -17,7 +18,8 @@ import { MenuEmergente } from '@/features/admin/MenuDeAcciones';
  *
  *   · Las fases se abren y se cierran CADA UNA por su cuenta (ver `useFasesAbiertas`). Abrir no es editar: lo
  *     que se edita cambia al tocar una semana o un día de otra fase.
- *   · La fase abierta lleva en su encabezado la bolita de color (abre los 8 colores), su nombre ESCRIBIBLE ahí
+ *   · La fase abierta lleva en su encabezado el botón «Color y foto» (la bolita de su color y una flecha; con
+ *     foto, también su miniatura: abre los 8 colores y la foto que sale en Home), su nombre ESCRIBIBLE ahí
  *     mismo, y los iconos de duplicar, eliminar y cerrar. «AQUÍ VA» solo sale con la fase cerrada (abierta, la
  *     marca es el borde azul); la fase que se edita, si está cerrada, dice «EDITANDO».
  *   · La semana lleva un solo «Opciones ▾» y su título se escribe en su línea. Fuera: los «⋯», el panel «Nombre,
@@ -180,15 +182,22 @@ export default function GuiaDelEditor({
         {/* En una rutina que se repite no hay fase que nombrar, y en «varias semanas» tampoco: se ven como semanas. */}
         {!esRutina && !deCorrido && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+            {/* UN BOTÓN, Y TIENE QUE PARECERLO (Andrés, 7 oct 2026: «el botón de color aún no parece botón»). Con
+                borde y flecha, como «Opciones ▾»; abre el color y la foto de la fase. */}
             <button
-              type="button" className="tl-ic" onClick={(e) => setColor({ i, ancla: e.currentTarget })}
-              aria-label="Cambiar el color de la fase" title="Cambiar el color"
+              type="button" className="tl-boton" onClick={(e) => setColor({ i, ancla: e.currentTarget })}
+              aria-haspopup="menu" aria-label="Color y foto de la fase" title="Color y foto"
               style={{
-                width: 26, height: 26, margin: '0 -5px', borderRadius: 999, border: 'none', background: 'transparent',
-                display: 'grid', placeItems: 'center', flexShrink: 0, cursor: 'pointer', padding: 0,
+                display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0, cursor: 'pointer',
+                border: `1.5px solid ${LT.border}`, background: LT.surface, borderRadius: 999,
+                padding: f.image ? '3px 7px 3px 4px' : '6px 7px 6px 9px', touchAction: 'manipulation',
               }}
             >
+              {f.image && (
+                <img src={f.image} alt="" style={{ width: 22, height: 22, borderRadius: 999, objectFit: 'cover', display: 'block' }} />
+              )}
               <i style={{ width: 13, height: 13, borderRadius: 7, background: f.color || LT.blue, display: 'block' }} />
+              <ChevronDown size={13} style={{ color: LT.text3 }} />
             </button>
             <input
               className="tl-enlinea" value={f.name ?? ''} onChange={(e) => acciones.nombreFase(i, e.target.value)}
@@ -331,7 +340,7 @@ export default function GuiaDelEditor({
       )}
 
       {color && lista[color.i] && (
-        <MenuEmergente titulo="Color de la fase" tituloSoloEnCelular ancla={color.ancla} onClose={() => setColor(null)}>
+        <MenuEmergente titulo="Color y foto" ancla={color.ancla} onClose={() => setColor(null)}>
           <div
             style={{
               display: 'grid', gridTemplateColumns: `repeat(4, ${esCompu ? 30 : 44}px)`, gap: 10,
@@ -349,6 +358,12 @@ export default function GuiaDelEditor({
                 }}
               />
             ))}
+          </div>
+          <div style={{ padding: esCompu ? '2px 8px 8px' : '2px 4px 4px' }}>
+            <CampoDeFoto
+              valor={lista[color.i].image || ''} alto={esCompu ? 110 : 150}
+              onCambia={(url) => acciones.fotoFase(lista[color.i].id, url)}
+            />
           </div>
         </MenuEmergente>
       )}

@@ -10,7 +10,6 @@ import {
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { useIsDesktop } from '@/lib/useViewport';
 import { T, FONT, NUM_STYLE, LT, tipoDeSesion, KP, eyebrow } from '@/lib/theme';
-import { PHASE_IMG } from '@/data/fotos-de-fase';
 import { usePlan, ComoPrograma } from '@/contexts/PlanContext';
 import { usePerfilDeLaVista } from '@/contexts/VistaContext';
 import {
@@ -2172,8 +2171,8 @@ const HomeView = ({
   }, [next, entradasDelDia]);
 
   const { text: greetText } = greeting();
-  // La foto de la tarjeta: la de la fase de hoy; si no tiene, la del plan. (La foto fija de antes, mientras se migra.)
-  const fotoDeHome = next ? (next.phase.image || planMeta?.foto || PHASE_IMG[next.phase.id] || '') : '';
+  // La foto de la tarjeta: la de la fase de hoy; si no tiene, la del plan; si tampoco, la tarjeta oscura.
+  const fotoDeHome = next ? (next.phase.image || planMeta?.foto || '') : '';
   // Lo de 1RM: el máximo más pesado que ha guardado, en su unidad.
   const unidadPeso = profile?.unidad_peso || 'kg';
   const mejorRM = useMemo(() => {

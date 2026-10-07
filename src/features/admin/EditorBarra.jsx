@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import { ArrowLeft, X, PanelLeftClose, PanelLeft, Save, Trash2, Undo2, Redo2 } from 'lucide-react';
+import { ArrowLeft, X, PanelLeftClose, PanelLeft, Save, Ellipsis, ChevronDown, Undo2, Redo2 } from 'lucide-react';
 import { T, FONT } from '@/lib/theme';
 
 /**
@@ -12,10 +12,14 @@ import { T, FONT } from '@/lib/theme';
  *   · Sobre el día: las opciones de TODO el programa, juntas y desplegadas (la forma con «Cambiar»,
  *     guardar y eliminar) y, a la derecha, lo global: deshacer/rehacer, Guardar y cerrar.
  *
- * Los tres botones del programa son de VERDAD (con su borde), de un solo tamaño y siempre en el mismo
+ * Los botones del programa son de VERDAD (con su borde), de un solo tamaño y siempre en el mismo
  * lugar, con la guía oculta o a la vista («no me gustó que cambien de lugar»). Si ni así caben junto al
  * título (una ventana muy angosta) bajan a una segunda fila de esta misma barra, con los mismos
  * botones: nunca se juntan en un «Opciones».
+ *
+ * El último es «Más ▾» (7 oct 2026): lo que no se usa a cada rato —la foto del plan, la ciencia, eliminar el
+ * programa— en un solo menú. Antes era un botón rojo de «Eliminar programa», que ocupaba el sitio de lo más
+ * peligroso a la vista de todos.
  */
 const cuadrado = {
   width: 36, height: 36, borderRadius: 11, flexShrink: 0, cursor: 'pointer', display: 'grid', placeItems: 'center',
@@ -205,9 +209,12 @@ export default function EditorBarra({
               <span>{programa.textoGuardar}</span>
             </BotonDelPrograma>
           )}
-          {programa.onEliminar && (
-            <BotonDelPrograma icono={Trash2} rojo onClick={programa.onEliminar} titulo={programa.textoEliminar}>
-              <span>{programa.textoEliminar}</span>
+          {programa.onMas && (
+            <BotonDelPrograma
+              icono={Ellipsis} onClick={(e) => programa.onMas(e.currentTarget)} titulo="Foto, ciencia y más del programa"
+            >
+              <span>Más</span>
+              <ChevronDown size={12} color={T.text3} />
             </BotonDelPrograma>
           )}
         </div>

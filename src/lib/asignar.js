@@ -44,12 +44,16 @@ export function semanaActual(plan, estadoData, hoy = new Date()) {
 }
 
 /**
- * Pone un programa o una rutina (`plan` = { kind, estructura, phases }, con ids de fase nuevos) como el
- * plan de un atleta: sobre el que ya tenía, o como el primero.
+ * Pone un programa o una rutina (`plan` = { kind, estructura, phases, foto?, ciencia? }, con ids de fase nuevos) como
+ * el plan de un atleta: sobre el que ya tenía, o como el primero.
  */
 export async function asignarPlan({ atletaId, profesionalId = null, creadorId, nombre, plan }) {
   const actual = await planDe(atletaId, profesionalId);
-  const datos = { title: nombre, phases: plan.phases, kind: plan.kind, estructura: plan.estructura };
+  // La foto y la ciencia son del plan que se entrega: reemplazan a las del que había (el plan entero se reemplaza).
+  const datos = {
+    title: nombre, phases: plan.phases, kind: plan.kind, estructura: plan.estructura,
+    foto: plan.foto ?? '', ciencia: plan.ciencia ?? [],
+  };
   if (actual) {
     const fila = await updatePlan(actual.id, datos);
     return { fila, reemplazo: !esProgramaFantasma(actual.data) };
