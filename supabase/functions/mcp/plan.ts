@@ -586,7 +586,7 @@ export function diaDesdeEntrada(
   // Un grupo con reloj (AMRAP, EMOM…) ya dice cuánto dura: sus ejercicios no necesitan cantidad.
   const sinCantidadFinal = sinCantidad.filter((x) => !(x.grupo != null && formatosDeGrupo.has(x.grupo))).map((x) => x.nombre)
   const lista: Renglon[] = exercises.filter((ex: any) => !ex.isNote).map((ex: any) => ({
-    nombre: String(ex.name), grupo: ex.set ?? null, series: String(ex.sets ?? ''), cantidad: String(ex.reps ?? ''),
+    nombre: String(ex.name), grupo: ex.set ?? null, series: String(ex.sets ?? ''), cantidad: String(ex.reps ?? ''), porLado: ex.porLado === true,
   }))
   return { dia, sinFicha, sinCantidad: sinCantidadFinal, porLado, lista }
 }
