@@ -8,7 +8,8 @@ import {
   respuesta, rolDeOficio, seguro, sinAcentos, type Dia, type Persona,
 } from './util.ts'
 import {
-  buscarFase, buscarSemana, conEquipo, describirDia, describirSemana, diaDesdeEntrada, elegirPrograma, equipoDe, faseNueva,
+  buscarFase, buscarSemana, cambiarRecuadros, cienciaDeFase, cienciaDelPlan, conEquipo, cuantosRecuadros, describirDia, describirSemana, diaDesdeEntrada,
+  elegirPrograma, equipoDe, faseNueva, recuadrosDeLaIA,
   fasesDe, firmasDeGrupos, guardarFases, idDeSesion, miProgramaCon, nombreDelDia, nombresDeEjercicios, planesActivos, programaQueEdito, planQueEdito,
   repertorioVisible, resumenDelPlan, semanaNueva, siguienteNumFase, siguienteNumSemana, tipoDePlan, normalizar, claveDeRegistro,
   type Miembro, type Plan, type Programa, type SesionEntrada,
@@ -38,6 +39,14 @@ const ESTRUCTURA_OK = z.boolean().optional()
   .describe('true cuando la persona ya confirmó cómo armaste las biseries, triseries o circuitos (o ya los había pedido explícitamente). Sin esto, la primera vez la herramienta te devuelve la rutina armada para que se la enseñes y no guarda.')
 const FASE = z.coerce.string().optional()
   .describe('La fase: su número (1, 2…) o su nombre. En una rutina que se repite no hace falta.')
+
+/* La «Ciencia» de un plan: el porqué de cómo está armado, en recuadros que el atleta lee en Home (ver `lib/ciencia.js`). */
+const RECUADRO = z.object({
+  titulo: z.string().describe('Título corto del recuadro (hasta 120 caracteres).'),
+  texto: z.string().describe('El texto (hasta 8000 caracteres). Una línea en blanco separa párrafos; "- " al inicio de línea hace una viñeta; "## " un subtítulo; "nombre | valor | nota" una fila de tabla.'),
+})
+const CIENCIA = z.array(RECUADRO).optional()
+  .describe('Opcional: la «Ciencia» (el porqué del plan), en recuadros de título y texto. Solo si la persona la pidió o te la dio; no la inventes. Sin esto, el plan simplemente no lleva ciencia.')
 
 /* El formato de un Set con reloj: lo que corre son los PASOS (una lista de tramos que se repite); el id
    solo le pone nombre. Ver `src/lib/formatos.js`. */
@@ -375,6 +384,28 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     })
   }))
 
+  server.registerTool('ver_ciencia_del_plan', {
+    title: 'Ver la ciencia de un plan',
+    description: 'La «Ciencia» de un plan, con el texto completo de cada recuadro: el porqué de cómo está armado, que el atleta lee en Home. Salen los recuadros de TODO el plan y los de cada fase. Úsala antes de cambiarla con editar_ciencia. Si el plan no tiene, lo dice.',
+    inputSchema: { atleta: ATLETA, de: DE_LEER },
+    annotations: SOLO_LEER,
+  }, seguro(async ({ atleta, de }: any) => {
+    const persona = await buscarPersona(quien, atleta)
+    const { programas, elegidos, rotular } = await programasDeAtleta(quien, persona, de)
+    if (!programas.length) throw new Aviso(`${nombreDe(persona)} ${p('todavía no tiene plan')}. Puedes crearle uno con crear_plan.`)
+    const completo = (pr: Programa) => ({
+      ...(rotular ? { de: pr.de } : {}),
+      plan: pr.plan.title,
+      ...(cuantosRecuadros(pr.plan) ? {} : { ciencia: 'Este plan no tiene ciencia.' }),
+      del_plan: cienciaDelPlan(pr.plan).map(({ titulo, texto }) => ({ titulo, texto })),
+      por_fase: fasesDe(pr.plan)
+        .map((f) => ({ fase: f.name, recuadros: cienciaDeFase(f).map(({ titulo, texto }) => ({ titulo, texto })) }))
+        .filter((x) => x.recuadros.length),
+    })
+    if (elegidos.length === 1) return respuesta({ atleta: nombreDe(persona), ...completo(elegidos[0]) })
+    return respuesta({ atleta: nombreDe(persona), programas: elegidos.map(completo) })
+  }))
+
   server.registerTool('ver_dia_de_atleta', {
     title: 'Ver el día de un atleta',
     description: 'La sesión de un atleta en un día, con lo que anotó (pesos y lo que hizo) y si la marcó como hecha. Sin fecha ni día, la de HOY con la misma cuenta que su app. Si el atleta tiene un equipo (su coach y otros profesionales, como un fisio), trae las sesiones de todos, cada una con de quién es; con "de", solo las de uno.',
@@ -554,18 +585,20 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
 
   server.registerTool('crear_plan', {
     title: 'Crear el plan de un atleta',
-    description: 'Crea el plan de un atleta. Dos tipos: "rutina" (una semana que se repite siempre; manda "sesiones") o "fases" (manda "fases", cada una con sus semanas y cada semana con sus sesiones). Cada sesión lleva su día. Para no repetir semanas iguales: crea la primera y luego usa agregar_semanas con copiar_de. Si el atleta ya tiene plan, falla, salvo con reemplazar: true (el plan anterior queda en el historial y se puede recuperar). Cada ejercicio va con su nombre EXACTO del catálogo (búscalo antes con buscar_ejercicios). Antes de guardar, la herramienta revisa que no falte nada; si falta (un ejercicio que no está en el catálogo, la cantidad, si un ejercicio a una pierna o brazo cuenta por lado, o confirmar las biseries que armaste) NO guarda y te devuelve las preguntas para que se las hagas a la persona TODAS JUNTAS, en un solo mensaje.',
+    description: 'Crea el plan de un atleta. Dos tipos: "rutina" (una semana que se repite siempre; manda "sesiones") o "fases" (manda "fases", cada una con sus semanas y cada semana con sus sesiones). Cada sesión lleva su día. Opcional: "ciencia" (y "ciencia" dentro de cada fase) lleva el porqué del plan, solo si la persona la pidió o te la dio. Para no repetir semanas iguales: crea la primera y luego usa agregar_semanas con copiar_de. Si el atleta ya tiene plan, falla, salvo con reemplazar: true (el plan anterior queda en el historial y se puede recuperar). Cada ejercicio va con su nombre EXACTO del catálogo (búscalo antes con buscar_ejercicios). Antes de guardar, la herramienta revisa que no falte nada; si falta (un ejercicio que no está en el catálogo, la cantidad, si un ejercicio a una pierna o brazo cuenta por lado, o confirmar las biseries que armaste) NO guarda y te devuelve las preguntas para que se las hagas a la persona TODAS JUNTAS, en un solo mensaje.',
     inputSchema: {
       atleta: ATLETA,
       titulo: z.string().describe('Título del plan.'),
       tipo: z.enum(['rutina', 'fases']),
       sesiones: z.array(SESION_CON_DIA).optional().describe('Solo para "rutina": las sesiones de la semana que se repite.'),
+      ciencia: CIENCIA,
       fases: z.array(z.object({
         nombre: z.string(),
         subtitulo: z.string().optional(),
         enfoque: z.string().optional().describe('El enfoque en una línea.'),
         objetivo: z.string().optional(),
         color: z.string().optional().describe('Color en hex, ej. #3DD9A0.'),
+        ciencia: CIENCIA,
         semanas: z.array(z.object({
           nombre: z.string().optional(),
           carga: z.string().optional().describe('Ej.: "4×10 al 65% · RIR 3".'),
@@ -579,10 +612,12 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       ...PARAM_DE,
     },
     annotations: { ...ESCRIBE, destructiveHint: true },
-  }, seguro(async ({ atleta, titulo, tipo, sesiones, fases, reemplazar, sin_ficha_ok, sin_cantidad_ok, estructura_ok, de }: any) => {
+  }, seguro(async ({ atleta, titulo, tipo, sesiones, ciencia, fases, reemplazar, sin_ficha_ok, sin_cantidad_ok, estructura_ok, de }: any) => {
     const persona = await buscarPersona(quien, atleta)
     const repertorio = await repertorioVisible(quien)
     const rev = nuevaRevision()
+    // La ciencia se valida ANTES de armar nada: un recuadro vacío o demasiado largo es un aviso para la IA.
+    const cienciaNueva = recuadrosDeLaIA(ciencia, 'todo el plan')
     let nuevas: any[]
     if (tipo === 'rutina') {
       if (!sesiones?.length) throw new Aviso('Para una rutina manda "sesiones", cada una con su día.')
@@ -592,8 +627,10 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     } else {
       if (!fases?.length) throw new Aviso('Para un programa por fases manda "fases", cada una con sus semanas.')
       nuevas = fases.map((f: any, i: number) => {
-        const fase = faseNueva(i + 1, f)
+        const fase: any = faseNueva(i + 1, f)
         fase.weekData = f.semanas.map((w: any, j: number) => ({ ...semanaNueva(j + 1, w), days: diasDesde(w.sesiones, repertorio, rev, `${f.nombre} · semana ${j + 1} · `) }))
+        const deLaFase = recuadrosDeLaIA(f.ciencia, `la fase ${f.nombre}`)
+        if (deLaFase.length) fase.ciencia = deLaFase
         return fase
       })
     }
@@ -612,7 +649,17 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     })
     if (existente) {
       const { data, error } = await quien.db.from('plans')
-        .update({ title: titulo, data: { kind, phases: normalizar(nuevas) }, updated_at: new Date().toISOString() })
+        .update({
+          title: titulo,
+          /* Reemplazar el plan cambia lo que se entrena, no la foto que el coach le puso: esa se queda. La ciencia es del plan
+             viejo (explicaba ESE plan): la nueva es la que mandes, o ninguna; la anterior queda en el historial. */
+          data: {
+            kind, phases: normalizar(nuevas),
+            ...(existente.data?.foto ? { foto: existente.data.foto } : {}),
+            ...(cienciaNueva.length ? { ciencia: cienciaNueva } : {}),
+          },
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', existente.id).select('id').maybeSingle()
       if (error) throw new Error(error.message)
       if (!data) throw new Aviso('No tienes permiso para cambiar el plan de esta persona.')
@@ -623,7 +670,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
         profesional_id: profesionalId,
         title: titulo,
         status: 'active',
-        data: { kind, phases: normalizar(nuevas) },
+        data: { kind, phases: normalizar(nuevas), ...(cienciaNueva.length ? { ciencia: cienciaNueva } : {}) },
         created_by: quien.id,
       })
       if (error) {
@@ -639,6 +686,12 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       plan: titulo,
       tipo: tipo === 'rutina' ? 'rutina que se repite' : `${nuevas.length} fase(s), ${semanas} semana(s)`,
       ...(existente ? { reemplazo: `El plan anterior "${existente.title}" quedó en el historial.` } : {}),
+      ...(cienciaNueva.length || nuevas.some((f) => f.ciencia?.length)
+        ? { ciencia: `Lleva ciencia: ${cienciaNueva.length + nuevas.reduce((n, f) => n + (f.ciencia?.length ?? 0), 0)} recuadro(s).` }
+        : {}),
+      ...(existente && cuantosRecuadros(existente) && !cienciaNueva.length && !nuevas.some((f) => f.ciencia?.length)
+        ? { aviso_ciencia: 'El plan anterior tenía ciencia (recuadros del porqué del plan) y el nuevo no la lleva; la anterior quedó en el historial. Si la quiere de vuelta o una nueva, se agrega con editar_ciencia.' }
+        : {}),
       ...avisosDeRespuestas(aceptado),
       mensaje: `Ya lo ve ${nombreDe(persona)} en su app.`,
     })
@@ -840,6 +893,60 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     }
     await guardarFases(quien, plan, fases)
     return respuesta({ listo: true, atleta: nombreDe(persona), ...programa, fase: f.name, posicion: fases.indexOf(f) + 1 })
+  }))
+
+  server.registerTool('editar_ciencia', {
+    title: 'Cambiar la ciencia de un plan',
+    description: 'Agrega, cambia o quita recuadros de la «Ciencia» de un plan: el porqué de cómo está armado, que el atleta lee en Home. Sin "fase" los recuadros son de TODO el plan; con "fase", de esa fase. Modo "agregar" (el de siempre): cada recuadro se suma al final y, si ya hay uno con ese título, se le cambia el texto. Modo "reemplazar": la lista de ese sitio queda exactamente como la mandes; si con eso se pierden recuadros que ya había, NO guarda y te dice qué preguntarle a la persona (repite con reemplazo_ok: true solo después de que lo confirme). "quitar": títulos de recuadros que se sacan. Léela antes con ver_ciencia_del_plan. No inventes ciencia: solo la que la persona te pidió o te dio. Texto: una línea en blanco separa párrafos; "- " al inicio de línea hace viñetas; "## " un subtítulo; "nombre | valor | nota" una fila de tabla. Se puede deshacer (deshacer_cambio_del_plan).',
+    inputSchema: {
+      atleta: ATLETA,
+      fase: FASE,
+      recuadros: z.array(RECUADRO).optional().describe('Los recuadros a agregar (o a poner, con modo "reemplazar").'),
+      modo: z.enum(['agregar', 'reemplazar']).optional().describe('"agregar" (por defecto) o "reemplazar" toda la lista de ese sitio.'),
+      quitar: z.array(z.string()).optional().describe('Títulos de los recuadros que se quitan.'),
+      reemplazo_ok: z.boolean().optional().describe('true solo después de preguntar y que la persona confirme que se pierden los recuadros que ya había.'),
+      ...PARAM_DE,
+    },
+    annotations: { ...ESCRIBE, destructiveHint: true },
+  }, seguro(async ({ atleta, fase, recuadros, modo, quitar, reemplazo_ok, de }: any) => {
+    const { persona, plan, programa } = await planDe(quien, atleta, de)
+    const enFase = fase != null && String(fase).trim() !== ''
+    const nuevos = recuadrosDeLaIA(recuadros, enFase ? `la fase ${fase}` : 'todo el plan')
+    if (!nuevos.length && !quitar?.length) throw new Aviso('No mandaste nada que cambiar: manda "recuadros" o "quitar".')
+    const fases = structuredClone(fasesDe(plan))
+    const f = enFase ? fases[buscarFase(plan, fase)] : null
+    const donde = enFase ? `la fase ${f.name}` : 'todo el plan'
+    const actual = enFase ? cienciaDeFase(f) : cienciaDelPlan(plan)
+    const modoFinal = modo ?? 'agregar'
+    const hecho = cambiarRecuadros(actual, nuevos, modoFinal, quitar ?? [])
+    if (hecho.noEncontrados.length) {
+      throw new Aviso(`En ${donde} no hay un recuadro llamado ${hecho.noEncontrados.map((t) => `"${t}"`).join(', ')}. Los que hay: ${actual.map((r) => `"${r.titulo}"`).join(', ') || 'ninguno'}. No cambié nada.`)
+    }
+    // «reemplazar» que se lleva recuadros que ya estaban es lo único que se pregunta primero: el resto suma o se pide por título.
+    if (modoFinal === 'reemplazar' && !reemplazo_ok) {
+      const seVan = actual.filter((r) => !hecho.lista.some((x) => mismoTexto(x.titulo, r.titulo))).map((r) => r.titulo)
+      if (seVan.length) {
+        throw new Aviso(`Con "reemplazar" se perderían ${seVan.length} recuadro(s) de ${donde}: ${seVan.map((t) => `"${t}"`).join(', ')}. No cambié nada. Pregúntale a la persona si quiere reemplazarlos (o usa el modo "agregar"); si sí, repite con reemplazo_ok: true.`)
+      }
+    }
+    if (enFase) {
+      if (hecho.lista.length) f.ciencia = hecho.lista
+      else delete f.ciencia
+      await guardarFases(quien, plan, fases)
+    } else {
+      await guardarFases(quien, plan, fases, undefined, { ciencia: hecho.lista })
+    }
+    return respuesta({
+      listo: true,
+      atleta: nombreDe(persona),
+      ...programa,
+      plan: plan.title,
+      donde,
+      agregados: hecho.agregados,
+      cambiados: hecho.actualizados,
+      quitados: hecho.quitados,
+      recuadros_ahora: hecho.lista.map((r) => r.titulo),
+    })
   }))
 
   server.registerTool('cambiar_titulo_del_plan', {

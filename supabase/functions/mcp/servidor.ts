@@ -99,6 +99,7 @@ function instrucciones(quien: Quien) {
       p('Al terminar un cambio, di en una o dos líneas qué cambió y a quién.'),
       'Borrar pide confirmación: antes de borrar, di qué se va a borrar.',
       'Para ligar un ejercicio a su ficha con video, escribe su nombre exacto del repertorio (búscalo con buscar_ejercicios).',
+      p('La «Ciencia» de un plan es opcional: el porqué de cómo está armado, en recuadros que el atleta lee en Home. Solo la escribes si te la piden o te la dan; no la inventes. Se lee con ver_ciencia_del_plan y se cambia con editar_ciencia (o con "ciencia" en crear_plan).'),
       p('Un atleta puede tener un equipo: su coach principal y otros profesionales (un fisio, por ejemplo), cada uno con SU programa. Los programas de todos se leen juntos (cada cosa dice "de" quién es; con "de" pides uno solo), pero cada quien cambia solo el suyo.')
         + (quien.rol === 'master' ? ' Como administrador eliges con "de" qué programa cambias; sin él, el del coach principal.' : ''),
       'Las notas de consulta de un fisio son suyas: no están aquí y no se piden ni se resumen.',

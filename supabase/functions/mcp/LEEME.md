@@ -93,6 +93,24 @@ la persona ya dijo no se vuelve a preguntar, y lo que se puede deducir se deduce
 Los parecidos son por letras (el catálogo está casi todo en inglés: «jalón» no encuentra «pull down»); esa
 traducción la hace la IA con `buscar_ejercicios`. Prueba: `scripts/prueba-mcp-preguntas.ts`.
 
+## La ciencia de un plan (7 oct 2026)
+
+Antes la pestaña «Ciencia» era texto fijo del programa de Andrés. Ahora es DATO de cada plan: recuadros con título y
+texto (`lib/ciencia.js`, copiado a `app/ciencia.js`) que el atleta lee en la tarjeta «Ciencia» de Home.
+
+- Viven en dos sitios: `plans.data.ciencia` (todo el plan) y `fase.ciencia` (una fase, viaja con ella). La foto del plan
+  (`plans.data.foto`) y la de cada fase (`fase.image`) son cosas parecidas: las pone el coach en la app, la IA no las toca.
+- `crear_plan` acepta `ciencia` (del plan) y `ciencia` dentro de cada fase. `ver_ciencia_del_plan` lee los textos
+  completos y `editar_ciencia` agrega, cambia por título, quita o reemplaza (modo `reemplazar` + `reemplazo_ok`).
+  `ver_plan_de_atleta` solo nombra los recuadros (sin texto) para no inflar la respuesta.
+- NO se inventa: la nota de `instrucciones` y las descripciones dicen que solo se escribe si la persona la pidió o la dio.
+- Reglas de preguntar de siempre: `reemplazar` que se lleva recuadros que ya estaban NO guarda y dice qué preguntar;
+  reemplazar un plan entero (`crear_plan` con `reemplazar`) conserva la foto del plan y NO pasa la ciencia vieja al plan
+  nuevo (explicaba otro plan): se avisa y queda en el historial. Un título que no existe al quitar, o un texto de más de
+  8000 caracteres, es un aviso (no se acorta en silencio).
+- `guardarFases` conserva todo lo demás de `plans.data` (`...plan.data`): cualquier herramienta que reescriba las fases deja
+  la foto y la ciencia como estaban. Lo único que arma `data` desde cero es `crear_plan`.
+
 ## Publicar
 
 Con la CLI de Supabase:
