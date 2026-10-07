@@ -2,13 +2,17 @@ import { useState } from 'react';
 import { ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import { T, FONT, KP, NUM_STYLE } from '@/lib/theme';
 import { usePlan } from '@/contexts/PlanContext';
-import { bloquesDeTexto, normalizaCiencia } from '@/lib/ciencia';
+import { bloquesDeTexto, normalizaCiencia, programasConCiencia } from '@/lib/ciencia';
+import { etiquetaDePrograma } from '@/lib/programas';
 
 /**
  * La CIENCIA del plan, como la ve el atleta (se abre desde la tarjeta «Ciencia» de Home).
  *
  * Antes era texto fijo del programa de Andrés para todos. Ahora son los recuadros que el coach (o su IA) escribió
  * en ESE plan: primero los de todo el plan, luego los de cada fase bajo su nombre. Ver `lib/ciencia.js`.
+ *
+ * CON EQUIPO (un atleta con el programa de su coach y el de su fisio, por ejemplo) cada programa trae la suya: se
+ * juntan aquí, cada una bajo el nombre de quien la escribió. Con un solo programa no se dice de quién es.
  */
 
 const estiloTexto = { fontSize: 13.5, color: T.text2, lineHeight: 1.7 };
@@ -83,16 +87,16 @@ export function Recuadro({ titulo, texto, abierto = false }) {
   );
 }
 
-export default function CienciaDelPlan() {
-  const { ciencia, phases, estructura } = usePlan();
+function DeUnPrograma({ ciencia, phases, estructura }) {
   const delPlan = normalizaCiencia(ciencia);
   const porFase = (phases ?? [])
     .map((f) => ({ fase: f, recuadros: normalizaCiencia(f?.ciencia) }))
     .filter((x) => x.recuadros.length > 0);
-  const conFases = estructura !== 'rutina';
+  // Los nombres de fase solo se dicen en un programa POR FASES: en «varias semanas» y en una rutina las fases son un detalle de adentro.
+  const conFases = estructura === 'fases';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontFamily: FONT }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {delPlan.map((r, i) => <Recuadro key={r.id} titulo={r.titulo} texto={r.texto} abierto={i === 0} />)}
       {porFase.map(({ fase, recuadros }) => (
         <div key={fase.id} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -106,6 +110,35 @@ export default function CienciaDelPlan() {
           )}
           {recuadros.map((r) => <Recuadro key={r.id} titulo={r.titulo} texto={r.texto} />)}
         </div>
+      ))}
+    </div>
+  );
+}
+
+export default function CienciaDelPlan() {
+  const { programas, ciencia, phases, estructura } = usePlan();
+  const lista = programasConCiencia(programas);
+
+  // Un solo programa (o ninguno a la vista): sin decir de quién es.
+  if (lista.length <= 1) {
+    const unico = lista[0] ?? { ciencia, phases, estructura };
+    return (
+      <div style={{ fontFamily: FONT }}>
+        <DeUnPrograma ciencia={unico.ciencia} phases={unico.phases} estructura={unico.estructura} />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 22, fontFamily: FONT }}>
+      {lista.map((p) => (
+        <section key={p.id}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 2px 10px', fontSize: 14, fontWeight: 800, color: T.text }}>
+            <i style={{ width: 9, height: 9, borderRadius: 5, background: p.color || T.accent, display: 'block', flexShrink: 0 }} />
+            {etiquetaDePrograma(p)}
+          </div>
+          <DeUnPrograma ciencia={p.ciencia} phases={p.phases} estructura={p.estructura} />
+        </section>
       ))}
     </div>
   );

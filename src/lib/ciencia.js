@@ -18,8 +18,8 @@
 
 const rid = () => (globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)).slice(0, 8);
 
-const MAX_TITULO = 120;
-const MAX_TEXTO = 8000;
+export const MAX_TITULO = 120;
+export const MAX_TEXTO = 8000;
 
 const texto = (v, tope) => (typeof v === 'string' ? v.replace(/\r\n?/g, '\n').trim().slice(0, tope) : '');
 
@@ -30,6 +30,9 @@ export function nuevoRecuadro({ titulo = '', texto: cuerpo = '', id } = {}) {
   if (!t && !c) return null;
   return { id: id || `c-${rid()}`, titulo: t, texto: c };
 }
+
+/** Un recuadro en blanco, para empezar a escribirlo: no pasa por `nuevoRecuadro`, que descarta lo vacío. */
+export const recuadroVacio = () => ({ id: `c-${rid()}`, titulo: '', texto: '' });
 
 /** Lo que llegue en `ciencia` (de la base, de la IA, de una copia vieja) → una lista limpia de recuadros. */
 export function normalizaCiencia(lista) {
@@ -52,6 +55,9 @@ export function normalizaCiencia(lista) {
 export function hayCiencia(ciencia, fases) {
   return normalizaCiencia(ciencia).length > 0 || (fases ?? []).some((f) => normalizaCiencia(f?.ciencia).length > 0);
 }
+
+/** Los programas de un atleta que traen ciencia (uno que ya dio de alta no cuenta). Con equipo, cada programa trae la suya. */
+export const programasConCiencia = (programas) => (programas ?? []).filter((p) => !p.altaEn && hayCiencia(p.ciencia, p.phases));
 
 /** Cuántos recuadros tiene el plan en total (para «Ciencia · 3» en el editor). */
 export function cuantosRecuadros(ciencia, fases) {
