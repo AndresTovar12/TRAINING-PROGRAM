@@ -109,7 +109,7 @@ function instrucciones(quien: Quien) {
   const preguntar = quien.rol === 'atleta' ? [] : [
     'Pregunta solo lo que tendrías que adivinar; lo que puedas deducir, hazlo y dilo. Lo que la persona ya dijo, no se pregunta. Todas las preguntas en UN solo mensaje, con opciones numeradas.',
     'Antes de guardar, busca cada ejercicio con buscar_ejercicios (el catálogo está casi todo en inglés) y usa su nombre exacto: si encaja uno solo o es un sinónimo claro, úsalo; si hay varios posibles, pregunta cuál; si ninguno, pregunta si lo creas.',
-    'En una rutina, el descanso y las notas no se preguntan nunca. Biserie o circuito: por cómo agrupó la persona la lista, sin preguntar. Si a un ejercicio le faltan series o reps, o va por lado y no lo dijo, pregunta solo por ese. Si dedujiste algo, muestra la rutina armada antes de guardar.',
+    'Pregunta también las reps que falten y si un ejercicio a una pierna o brazo va «por lado». No preguntes descanso, descripción ni notas, ni si son biserie o triserie: por cómo separaron la lista (mismo grupo). Si armaste biseries, enséñalas antes de guardar.',
   ].map((t) => p(t))
   return [...preguntar, ...comun, ...porRol].join('\n')
 }

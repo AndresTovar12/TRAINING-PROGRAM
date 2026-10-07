@@ -9,11 +9,11 @@ import {
 } from './util.ts'
 import {
   buscarFase, buscarSemana, conEquipo, describirDia, describirSemana, diaDesdeEntrada, elegirPrograma, equipoDe, faseNueva,
-  fasesDe, guardarFases, idDeSesion, miProgramaCon, nombreDelDia, nombresDeEjercicios, planesActivos, programaQueEdito, planQueEdito,
+  fasesDe, firmasDeGrupos, guardarFases, idDeSesion, miProgramaCon, nombreDelDia, nombresDeEjercicios, planesActivos, programaQueEdito, planQueEdito,
   repertorioVisible, resumenDelPlan, semanaNueva, siguienteNumFase, siguienteNumSemana, tipoDePlan, normalizar, claveDeRegistro,
   type Miembro, type Plan, type Programa, type SesionEntrada,
 } from './plan.ts'
-import { equiposMasUsados, exigirFichas, preguntaDeDatos } from './preguntas.ts'
+import { anotarDia, equiposMasUsados, exigirRespuestas, nuevaRevision, preguntaDeDatos, type Revision } from './preguntas.ts'
 import { cursorDe, estadoDe, registrosDe, ubicarEnTodos } from './atleta.ts'
 import { repertorioConFicha } from './comunes.ts'
 import { dondeVa, historialDePeso } from './app/training-utils.js'
@@ -32,6 +32,10 @@ const BORRA = { readOnlyHint: false, destructiveHint: true, idempotentHint: fals
 const ATLETA = z.string().describe('El atleta: su usuario (@juan), su nombre o su id.')
 const SIN_FICHA_OK = z.array(z.string()).optional()
   .describe('Solo después de preguntar: nombres de ejercicios que la persona confirmó que van TAL CUAL, sin ficha del catálogo (o que ya vienen de un plan que existe). Sin esto, un ejercicio que no está en el catálogo con su nombre exacto no se guarda: la herramienta te dice qué preguntar.')
+const SIN_CANTIDAD_OK = z.array(z.string()).optional()
+  .describe('Solo después de preguntar: nombres de ejercicios que la persona dijo que van SIN repeticiones ni tiempo. Sin esto, un ejercicio sin "cantidad" no se guarda: la herramienta te dice qué preguntar.')
+const ESTRUCTURA_OK = z.boolean().optional()
+  .describe('true cuando la persona ya confirmó cómo armaste las biseries, triseries o circuitos (o ya los había pedido explícitamente). Sin esto, la primera vez la herramienta te devuelve la rutina armada para que se la enseñes y no guarda.')
 const FASE = z.union([z.string(), z.number()]).optional()
   .describe('La fase: su número (1, 2…) o su nombre. En una rutina que se repite no hace falta.')
 
@@ -55,15 +59,15 @@ const EJERCICIO = z.object({
   nombre: z.string().optional().describe('Nombre del ejercicio. Si es del repertorio, escríbelo EXACTO para que se ligue a su ficha y su video.'),
   nota: z.string().optional().describe('En vez de un ejercicio, una nota o separador (ej.: "Calentamiento"). Sin nombre.'),
   series: z.union([z.number(), z.string()]).optional().describe('Series; si va en grupo, las vueltas del grupo. 3 si no se dice.'),
-  cantidad: z.union([z.number(), z.string()]).optional().describe('Cuánto por serie: "8-10", 12, 30… La unidad va aparte.'),
+  cantidad: z.union([z.number(), z.string()]).optional().describe('Cuánto por serie: "8-10", 12, 30… La unidad va aparte. Si la persona no la dijo, NO la inventes ni la dejes vacía en silencio: pregúntala (la herramienta te la pide y no guarda sin ella).'),
   unidad: z.enum(['reps', 'seg', 'min', 'm', 'km', 'yd', 'cal']).optional().describe('reps si no se dice.'),
   intensidad: z.string().optional().describe('Ej.: "RIR 2", "75%", "RPE 8".'),
   descanso: z.string().optional().describe('Ej.: "90 s", "2 min".'),
   notas: z.string().optional(),
   indicaciones: z.string().optional().describe('Claves técnicas para el atleta.'),
   lleva_peso: z.boolean().optional().describe('Si el atleta anota peso aquí. Si no se dice, la app lo deduce del nombre.'),
-  grupo: z.number().int().optional().describe('Ejercicios SEGUIDOS con el mismo número van en superserie o circuito.'),
-  por_lado: z.boolean().optional().describe('true si la cantidad es por cada lado (cada pierna, cada brazo). La app lo enseña como "10 reps por lado".'),
+  grupo: z.number().int().optional().describe('Ejercicios SEGUIDOS con el mismo número van en superserie o circuito. Si la persona separó la lista en bloques (línea en blanco, viñetas, A1/A2, «+»), cada bloque de 2 o más ejercicios es una biserie, triserie o circuito: mismo número para todos los del bloque (1, 2, 3…); los que van solos, sin grupo. No lo preguntes: así lo escribió; la primera vez la herramienta te devuelve la rutina armada para que se la enseñes.'),
+  por_lado: z.boolean().optional().describe('true si la cantidad es por cada lado (cada pierna, cada brazo): la app lo enseña como "10 reps por lado". false si es en total. En un ejercicio a una pierna o un brazo (pistol squat, step ups, búlgara, zancadas, remo a una mano) la persona tiene que decirlo: si no lo dijo, la herramienta te lo pide y no guarda.'),
   por_vuelta: z.array(z.object({
     cantidad: z.union([z.number(), z.string()]).optional().describe('Cuánto en ESA vuelta: 10, "8-10"… En la misma unidad del ejercicio.'),
     intensidad: z.string().optional().describe('La carga de ESA vuelta: "60%", "RPE 8", "RIR 2", "20 kg".'),
@@ -125,12 +129,13 @@ function programaParaLeer(quien: Quien, persona: Persona, programas: Programa[],
 /** Programas sin plan ni profesional, para leer los registros de quien aún no tiene ninguno. */
 const SIN_PROGRAMA = { plan: null, profesionalId: null, de: '', rol: 'coach', nombre: '', usuario: '', esPrincipal: true, altaEn: null } as unknown as Programa
 
-/** Arma los días de una semana a partir de sesiones con su día. */
-function diasDesde(sesiones: any[], repertorio: any[], sinFicha: Set<string>) {
+/** Arma los días de una semana a partir de sesiones con su día; lo que falta preguntar queda anotado en `rev`. */
+function diasDesde(sesiones: any[], repertorio: any[], rev: Revision, donde = '') {
   return (sesiones ?? []).map((s) => {
-    const { dia, sinFicha: faltan } = diaDesdeEntrada(diaDesdeTexto(s.dia), s as SesionEntrada, repertorio)
-    faltan.forEach((f) => sinFicha.add(f))
-    return dia
+    const clave = diaDesdeTexto(s.dia)
+    const armado = diaDesdeEntrada(clave, s as SesionEntrada, repertorio)
+    anotarDia(rev, `${donde}${NOMBRE_DIA[clave]}${s.nombre ? ` · ${s.nombre}` : ''}`, armado)
+    return armado.dia
   })
 }
 
@@ -153,6 +158,12 @@ function diaDeLlave(plan: Plan | null, llave: string) {
 const avisoSinFicha = (sinFicha: Set<string>) => (sinFicha.size
   ? { sin_ficha: [...sinFicha], nota_sin_ficha: 'Estos ejercicios se guardaron tal cual, sin ficha ni video, como la persona confirmó.' }
   : {})
+
+/** Lo que se guardó sin ficha o sin cantidad porque la persona lo confirmó: se le dice. */
+const avisosDeRespuestas = (r: { sinFicha: string[]; sinCantidad: string[] }) => ({
+  ...avisoSinFicha(new Set(r.sinFicha)),
+  ...(r.sinCantidad.length ? { sin_cantidad: r.sinCantidad, nota_sin_cantidad: 'Estos ejercicios se guardaron sin repeticiones ni tiempo, como la persona dijo.' } : {}),
+})
 
 /** Para LEER: solo el programa de un profesional del equipo del atleta. */
 const DE_LEER = z.string().optional()
@@ -528,7 +539,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
 
   server.registerTool('crear_plan', {
     title: 'Crear el plan de un atleta',
-    description: 'Crea el plan de un atleta. Dos tipos: "rutina" (una semana que se repite siempre; manda "sesiones") o "fases" (manda "fases", cada una con sus semanas y cada semana con sus sesiones). Cada sesión lleva su día. Para no repetir semanas iguales: crea la primera y luego usa agregar_semanas con copiar_de. Si el atleta ya tiene plan, falla, salvo con reemplazar: true (el plan anterior queda en el historial y se puede recuperar). Cada ejercicio va con su nombre EXACTO del catálogo (búscalo antes con buscar_ejercicios): si alguno no está, no se guarda nada y la herramienta te dice qué preguntarle a la persona.',
+    description: 'Crea el plan de un atleta. Dos tipos: "rutina" (una semana que se repite siempre; manda "sesiones") o "fases" (manda "fases", cada una con sus semanas y cada semana con sus sesiones). Cada sesión lleva su día. Para no repetir semanas iguales: crea la primera y luego usa agregar_semanas con copiar_de. Si el atleta ya tiene plan, falla, salvo con reemplazar: true (el plan anterior queda en el historial y se puede recuperar). Cada ejercicio va con su nombre EXACTO del catálogo (búscalo antes con buscar_ejercicios). Antes de guardar, la herramienta revisa que no falte nada; si falta (un ejercicio que no está en el catálogo, la cantidad, si un ejercicio a una pierna o brazo cuenta por lado, o confirmar las biseries que armaste) NO guarda y te devuelve las preguntas para que se las hagas a la persona TODAS JUNTAS, en un solo mensaje.',
     inputSchema: {
       atleta: ATLETA,
       titulo: z.string().describe('Título del plan.'),
@@ -548,24 +559,26 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       })).optional().describe('Solo para "fases".'),
       reemplazar: z.boolean().optional().describe('true para reemplazar el plan que ya tiene.'),
       sin_ficha_ok: SIN_FICHA_OK,
+      sin_cantidad_ok: SIN_CANTIDAD_OK,
+      estructura_ok: ESTRUCTURA_OK,
       ...PARAM_DE,
     },
     annotations: { ...ESCRIBE, destructiveHint: true },
-  }, seguro(async ({ atleta, titulo, tipo, sesiones, fases, reemplazar, sin_ficha_ok, de }: any) => {
+  }, seguro(async ({ atleta, titulo, tipo, sesiones, fases, reemplazar, sin_ficha_ok, sin_cantidad_ok, estructura_ok, de }: any) => {
     const persona = await buscarPersona(quien, atleta)
     const repertorio = await repertorioVisible(quien)
-    const sinFicha = new Set<string>()
+    const rev = nuevaRevision()
     let nuevas: any[]
     if (tipo === 'rutina') {
       if (!sesiones?.length) throw new Aviso('Para una rutina manda "sesiones", cada una con su día.')
       const base = faseNueva(1, { nombre: 'Rutina semanal' })
-      base.weekData = [{ ...semanaNueva(1), days: diasDesde(sesiones, repertorio, sinFicha) }]
+      base.weekData = [{ ...semanaNueva(1), days: diasDesde(sesiones, repertorio, rev) }]
       nuevas = [base]
     } else {
       if (!fases?.length) throw new Aviso('Para un programa por fases manda "fases", cada una con sus semanas.')
       nuevas = fases.map((f: any, i: number) => {
         const fase = faseNueva(i + 1, f)
-        fase.weekData = f.semanas.map((w: any, j: number) => ({ ...semanaNueva(j + 1, w), days: diasDesde(w.sesiones, repertorio, sinFicha) }))
+        fase.weekData = f.semanas.map((w: any, j: number) => ({ ...semanaNueva(j + 1, w), days: diasDesde(w.sesiones, repertorio, rev, `${f.nombre} · semana ${j + 1} · `) }))
         return fase
       })
     }
@@ -575,8 +588,13 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     if (existente && !reemplazar) {
       throw new Aviso(`${nombreDe(persona)} ya tiene ${profesionalId ? (profesionalId === quien.id ? 'un programa tuyo' : `un programa de ${deProfesional}`) : p('el plan')} "${existente.title}". Para reemplazarlo manda reemplazar: true (el anterior queda en el historial). Para cambiar partes, usa editar_dia, agregar_semanas, etc.`)
     }
-    // Los ejercicios que no están en el catálogo no se guardan en silencio: se pregunta (ver `preguntas.ts`). Al reemplazar, los que ya tenía el plan anterior no se vuelven a discutir.
-    const comoTexto = exigirFichas({ sinFicha, catalogo: repertorio, yaEnElPlan: nombresDeEjercicios(existente), confirmados: sin_ficha_ok })
+    // Lo que falta no se guarda en silencio: se le pregunta a la persona, todo junto (ver `preguntas.ts`). Al reemplazar, lo que ya tenía el plan anterior no se vuelve a discutir.
+    const aceptado = exigirRespuestas({
+      revision: rev,
+      catalogo: repertorio,
+      plan: existente ? { nombres: nombresDeEjercicios(existente), firmas: firmasDeGrupos(existente) } : null,
+      respuestas: { sin_ficha_ok, sin_cantidad_ok, estructura_ok },
+    })
     if (existente) {
       const { data, error } = await quien.db.from('plans')
         .update({ title: titulo, data: { kind, phases: normalizar(nuevas) }, updated_at: new Date().toISOString() })
@@ -606,14 +624,14 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       plan: titulo,
       tipo: tipo === 'rutina' ? 'rutina que se repite' : `${nuevas.length} fase(s), ${semanas} semana(s)`,
       ...(existente ? { reemplazo: `El plan anterior "${existente.title}" quedó en el historial.` } : {}),
-      ...avisoSinFicha(new Set(comoTexto)),
+      ...avisosDeRespuestas(aceptado),
       mensaje: `Ya lo ve ${nombreDe(persona)} en su app.`,
     })
   }))
 
   server.registerTool('editar_dia', {
     title: 'Cambiar las sesiones de un día',
-    description: 'Reemplaza TODAS las sesiones de un día de la semana, en una semana de una fase, por las que mandes. Para cambiar un solo ejercicio: lee el día con ver_plan_de_atleta, cámbialo y manda la sesión completa. "sesiones": [] deja el día sin sesión. En una rutina que se repite no hace falta fase ni semana. Cada ejercicio NUEVO va con su nombre EXACTO del catálogo (búscalo antes con buscar_ejercicios): si alguno no está, no se guarda nada y la herramienta te dice qué preguntarle a la persona.',
+    description: 'Reemplaza TODAS las sesiones de un día de la semana, en una semana de una fase, por las que mandes. Para cambiar un solo ejercicio: lee el día con ver_plan_de_atleta, cámbialo y manda la sesión completa. "sesiones": [] deja el día sin sesión. En una rutina que se repite no hace falta fase ni semana. Cada ejercicio NUEVO va con su nombre EXACTO del catálogo (búscalo antes con buscar_ejercicios). Antes de guardar, la herramienta revisa que no falte nada; si falta (un ejercicio que no está en el catálogo, la cantidad, si un ejercicio a una pierna o brazo cuenta por lado, o confirmar las biseries que armaste) NO guarda y te devuelve las preguntas para que se las hagas a la persona TODAS JUNTAS, en un solo mensaje. Lo que ya estaba en el día no se vuelve a preguntar.',
     inputSchema: {
       atleta: ATLETA,
       fase: FASE,
@@ -621,24 +639,31 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       dia: z.string().describe('lunes … domingo'),
       sesiones: z.array(z.object(SESION)).describe('Las sesiones de ese día. Normalmente una; dos si entrena mañana y tarde.'),
       sin_ficha_ok: SIN_FICHA_OK,
+      sin_cantidad_ok: SIN_CANTIDAD_OK,
+      estructura_ok: ESTRUCTURA_OK,
       ...PARAM_DE,
     },
     annotations: ESCRIBE,
-  }, seguro(async ({ atleta, fase, semana, dia, sesiones, sin_ficha_ok, de }: any) => {
+  }, seguro(async ({ atleta, fase, semana, dia, sesiones, sin_ficha_ok, sin_cantidad_ok, estructura_ok, de }: any) => {
     const { persona, plan, programa } = await planDe(quien, atleta, de)
     const fases = structuredClone(fasesDe(plan))
     const fIdx = buscarFase(plan, fase)
     const sIdx = buscarSemana(fases[fIdx], tipoDePlan(plan) === 'weekly' ? (semana ?? fases[fIdx].weekData[0]?.num) : semana)
     const clave: Dia = diaDesdeTexto(dia)
     const repertorio = await repertorioVisible(quien)
-    const sinFicha = new Set<string>()
+    const rev = nuevaRevision()
     const nuevos = sesiones.map((s: any) => {
-      const { dia: d, sinFicha: faltan } = diaDesdeEntrada(clave, s, repertorio)
-      faltan.forEach((f) => sinFicha.add(f))
-      return d
+      const armado = diaDesdeEntrada(clave, s, repertorio)
+      anotarDia(rev, `${NOMBRE_DIA[clave]}${s.nombre ? ` · ${s.nombre}` : ''}`, armado)
+      return armado.dia
     })
-    // Leer un día y reescribirlo no debe volver a discutir lo que el plan ya tenía; lo nuevo que no esté en el catálogo, sí se pregunta.
-    const comoTexto = exigirFichas({ sinFicha, catalogo: repertorio, yaEnElPlan: nombresDeEjercicios(plan), confirmados: sin_ficha_ok })
+    // Leer un día y reescribirlo no debe volver a discutir lo que el plan ya tenía; lo nuevo que falte, sí se pregunta, todo junto.
+    const aceptado = exigirRespuestas({
+      revision: rev,
+      catalogo: repertorio,
+      plan: { nombres: nombresDeEjercicios(plan), firmas: firmasDeGrupos(plan) },
+      respuestas: { sin_ficha_ok, sin_cantidad_ok, estructura_ok },
+    })
     const w = fases[fIdx].weekData[sIdx]
     const primero = w.days.findIndex((d: any) => d.day === clave)
     const resto = w.days.filter((d: any) => d.day !== clave)
@@ -651,7 +676,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       ...programa,
       cambio: `${fases[fIdx].name} · semana ${w.num} · ${NOMBRE_DIA[clave]}`,
       ahora: nuevos.length ? nuevos.map((d: any) => `${d.name} (${d.exercises.filter((e: any) => !e.isNote).length} ejercicios)`) : 'sin sesión',
-      ...avisoSinFicha(new Set(comoTexto)),
+      ...avisosDeRespuestas(aceptado),
       deshacer: 'Si no quedó bien: deshacer_cambio_del_plan.',
     })
   }))
