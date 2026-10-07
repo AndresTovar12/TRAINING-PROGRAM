@@ -549,7 +549,7 @@ export default function AuthScreen({ modoInicial = 'login', onVolver, aviso, cod
                   fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase',
                   color: KP.ink3, marginBottom: 8,
                 }}>
-                  Videos de técnica
+                  Sexo
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   {[
@@ -578,10 +578,6 @@ export default function AuthScreen({ modoInicial = 'login', onVolver, aviso, cod
                       </button>
                     );
                   })}
-                </div>
-                <div style={{ fontSize: 11.5, fontWeight: 600, color: KP.ink3, marginTop: 7, lineHeight: 1.45 }}>
-                  Opcional. Si un ejercicio está grabado en dos versiones, te muestra la tuya.
-                  Puedes cambiarlo después en tu perfil.
                 </div>
               </div>
                 </div>

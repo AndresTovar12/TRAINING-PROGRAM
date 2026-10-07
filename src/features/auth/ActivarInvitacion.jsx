@@ -241,15 +241,12 @@ export default function ActivarInvitacion({ token, onSalir }) {
 
         <div>
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: KP.ink3, marginBottom: 7 }}>
-            Género <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 600 }}>· opcional</span>
+            Sexo <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 600 }}>· opcional</span>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {bGenero('h', 'Hombre')}
             {bGenero('m', 'Mujer')}
           </div>
-          <p style={{ fontSize: 12.5, color: KP.ink3, lineHeight: 1.5, margin: '7px 0 0', fontWeight: 500 }}>
-            Si lo dices, verás los videos grabados para ti cuando los haya.
-          </p>
         </div>
 
         {error && (

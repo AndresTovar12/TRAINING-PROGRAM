@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  X, Camera, Loader2, Check, Shield, User as UserIcon, AtSign, Mail, IdCard, Trash2,
+  X, Camera, Loader2, Check, Shield, User as UserIcon, Users, Sparkles, AtSign, Mail, IdCard, Trash2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
@@ -29,14 +29,16 @@ const inputStyle = {
 };
 
 export default function ProfileScreen({ onClose, enfoque = null }) {
-  // Llegando desde "Conectar con IA" del menú de la cuenta: directo a esa sección.
-  useEffect(() => {
-    if (enfoque !== 'ia') return undefined;
-    const t = setTimeout(() => document.getElementById('conectar-ia')?.scrollIntoView({ block: 'start' }), 60);
-    return () => clearTimeout(t);
-  }, [enfoque]);
-
   const { profile, user, isAdmin, updateProfile } = useAuth();
+  /* «Mi perfil» va por secciones, no todo junto (Andrés, 6 oct 2026): tus datos, tu equipo (solo el
+     atleta decide quién más lo atiende) y la inteligencia artificial. Llegando desde «Conectar con
+     IA» del menú de la cuenta se abre directo la de la IA. */
+  const secciones = [
+    { id: 'perfil', texto: 'Perfil', Icono: UserIcon },
+    ...(!isAdmin ? [{ id: 'equipo', texto: 'Mi equipo', Icono: Users }] : []),
+    { id: 'ia', texto: 'Inteligencia artificial', Icono: Sparkles },
+  ];
+  const [seccion, setSeccion] = useState(enfoque === 'ia' ? 'ia' : 'perfil');
   // `tr` y no `t`: arriba hay un `t` de temporizador.
   const { t: tr } = usePalabras();
 
@@ -134,7 +136,7 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
         }}
       >
         <div style={{ flex: 1, fontSize: 16, fontWeight: 800, color: T.text }}>Mi perfil</div>
-        <button
+        {seccion === 'perfil' && <button
           type="button" onClick={onSave} disabled={saving || !dirty || nameStatus === 'taken' || nameStatus === 'invalid'}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 18px', borderRadius: 12,
@@ -147,7 +149,7 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
         >
           {saving ? <Loader2 size={15} className="spin" /> : ok ? <Check size={15} /> : <Check size={15} />}
           {ok ? 'Guardado' : 'Guardar'}
-        </button>
+        </button>}
         <button
           type="button" onClick={onClose} aria-label="Cerrar"
           style={{ width: 36, height: 36, borderRadius: 11, border: `1px solid ${T.border}`, cursor: 'pointer', background: T.bg2, color: T.text2, display: 'grid', placeItems: 'center', flexShrink: 0 }}
@@ -156,8 +158,31 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
         </button>
       </header>
 
-      <main style={{ flex: 1, overflowY: 'auto', padding: '28px 18px 60px' }}>
-        <div style={{ maxWidth: 460, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 22 }}>
+      <nav aria-label="Secciones de Mi perfil" style={{ flexShrink: 0, padding: '12px 18px 0' }}>
+        <div role="tablist" style={{ maxWidth: 560, margin: '0 auto', display: 'flex', gap: 4, padding: 4, background: T.bg3, borderRadius: 16 }}>
+          {secciones.map(({ id, texto, Icono }) => {
+            const activa = seccion === id;
+            return (
+              <button
+                key={id} type="button" role="tab" aria-selected={activa} onClick={() => setSeccion(id)}
+                style={{
+                  flex: 1, minHeight: 46, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                  padding: '6px 8px', borderRadius: 12, border: 'none', cursor: 'pointer', fontFamily: FONT,
+                  fontSize: 13.5, fontWeight: 800, lineHeight: 1.15, textAlign: 'center',
+                  background: activa ? T.bg2 : 'transparent', color: activa ? T.accent : T.text2,
+                  boxShadow: activa ? KP.shCard : 'none',
+                }}
+              >
+                <Icono size={16} strokeWidth={2.4} style={{ flexShrink: 0 }} /> {texto}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
+      <main style={{ flex: 1, overflowY: 'auto', padding: '22px 18px 60px' }}>
+        <div style={{ maxWidth: seccion === 'ia' ? 820 : 460, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 22 }}>
+          {seccion === 'perfil' && <>
           {/* Avatar */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
             <div style={{ position: 'relative' }}>
@@ -283,15 +308,15 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
             </div>
           </div>
 
-          {/* Genero.
-              Sirve para UNA sola cosa: si un ejercicio tiene grabada la version
-              de hombre y la de mujer, mostrar la que corresponde. Se puede
-              dejar en blanco, y entonces se ve la version general —que es
-              exactamente lo que se veia antes de que esto existiera. */}
+          {/* Sexo.
+              Por dentro sirve para UNA sola cosa: si un ejercicio tiene grabada la version
+              de hombre y la de mujer, mostrar la que corresponde. Se puede dejar en blanco
+              («Prefiero no decir») y entonces se ve la version general. A la persona NO se
+              le dice para que sirve (Andrés, 6 oct 2026: «que ni siquiera se enteren»). */}
           <div>
-            <div style={{ ...label, marginBottom: 7 }}>Videos de técnica</div>
+            <div style={{ ...label, marginBottom: 7 }}>Sexo</div>
             <div style={{ display: 'flex', gap: 8 }}>
-              {[['', 'Cualquiera'], ['h', 'Hombre'], ['m', 'Mujer']].map(([valor, texto]) => {
+              {[['h', 'Hombre'], ['m', 'Mujer'], ['', 'Prefiero no decir']].map(([valor, texto]) => {
                 const activo = genero === valor;
                 return (
                   <button
@@ -310,9 +335,6 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
                   </button>
                 );
               })}
-            </div>
-            <div style={{ fontSize: 12, color: T.text3, marginTop: 7, fontWeight: 600, lineHeight: 1.45 }}>
-              Si un ejercicio tiene dos versiones grabadas, te muestra la tuya.
             </div>
           </div>
 
@@ -338,19 +360,15 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
             </div>
           )}
 
+          </>}
+
           {/* Un atleta decide quién más lo atiende (fisio…). Los profesionales no lo tienen. */}
-          {!isAdmin && (
-            <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 22 }}>
-              <MiEquipo />
-            </div>
-          )}
+          {seccion === 'equipo' && !isAdmin && <MiEquipo />}
 
           {/* En el teléfono es el ÚNICO sitio de esto: no va en la navegación
               (decisión de Andrés). En la compu el coach también lo tiene en el
               menú lateral; el atleta, solo aquí. */}
-          <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 22 }}>
-            <ConectarIA enPerfil />
-          </div>
+          {seccion === 'ia' && <ConectarIA enPerfil />}
         </div>
       </main>
 
