@@ -2,9 +2,8 @@
 import type { McpServer } from 'npm:@modelcontextprotocol/sdk@1.30.1/server/mcp.js'
 import { z } from 'npm:zod@^4.1.13'
 import type { Quien } from './sesion.ts'
-import { Aviso, fechaDelAtleta, fechaLarga, NOMBRE_DIA, respuesta, seguro, sinAcentos } from './util.ts'
+import { Aviso, fechaDelAtleta, fechaLarga, NOMBRE_DIA, palabrasClave, respuesta, seguro, sinAcentos } from './util.ts'
 import { equipoDe } from './plan.ts'
-import { palabrasClave } from './preguntas.ts'
 import { MUSCLE_GROUPS, comoEnGrupo } from './app/muscles.js'
 import { ZONA } from './config.ts'
 

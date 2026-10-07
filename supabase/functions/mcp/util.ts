@@ -71,10 +71,28 @@ export const sinAcentos = (s: string) =>
 
 export const mismoTexto = (a: string, b: string) => sinAcentos(a) === sinAcentos(b)
 
-/** «Lat Pull-Down» y «lat pulldown» son el mismo nombre: sin acentos, mayúsculas, espacios ni signos. */
-export const llaveDeNombre = (s: string) => sinAcentos(s).replace(/[^a-z0-9]/g, '')
+const RELLENO = new Set([
+  'de', 'del', 'la', 'el', 'los', 'las', 'en', 'con', 'a', 'al', 'y', 'e', 'o', 'para', 'por', 'un', 'una', 'unos', 'unas',
+  'sin', 'the', 'of', 'on', 'with', 'and',
+])
 
-/** ¿Es el mismo nombre de ejercicio, aunque cambien los espacios, los guiones o las mayúsculas? */
+/** Una palabra sin su plural: «poleas» → «polea», «pulls» → «pull»; «press» se queda igual. */
+const singular = (w: string) => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w)
+
+/** Las palabras que cuentan de un texto: sin acentos, sin relleno («de», «en», «con») y en singular. */
+export const palabrasClave = (texto: string) =>
+  sinAcentos(texto).split(/[^a-z0-9]+/).filter((w) => w && !RELLENO.has(w)).map(singular)
+
+/**
+ * «Lat Pull-Down», «lat pulldown» y «Lat Pull Downs» son el mismo nombre: sin acentos, mayúsculas,
+ * espacios, signos, relleno ni plurales. «Bulgarian split squats» = «Bulgarian Split Squat».
+ */
+export const llaveDeNombre = (s: string) => {
+  const llave = palabrasClave(s).join('')
+  return llave.length > 3 && llave.endsWith('s') && !llave.endsWith('ss') ? llave.slice(0, -1) : llave
+}
+
+/** ¿Es el mismo nombre de ejercicio, aunque cambien los espacios, los guiones, las mayúsculas o el plural? */
 export const mismoNombre = (a: string, b: string) => {
   const x = llaveDeNombre(a)
   return x !== '' && x === llaveDeNombre(b)
