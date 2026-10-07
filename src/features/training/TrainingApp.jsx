@@ -23,6 +23,7 @@ import {
 } from '@/lib/training-utils';
 import HojaFlotante from '@/components/HojaFlotante';
 import CienciaDelPlan from '@/features/training/CienciaDelPlan';
+import { TarjetaDeSalud, CintaDeCiencia } from '@/features/training/TarjetasDeHome';
 import { programasConCiencia } from '@/lib/ciencia';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
 import { aKilos, desdeKilos, etiquetaUnidad } from '@/lib/unidades';
@@ -2053,13 +2054,11 @@ const initialsFrom = (name) => {
 };
 
 /**
- * Una tarjeta de Home que abre una hoja encima (1RM, Ciencia). Mismo molde que «Estado hoy»: título, lo que dice,
- * y abajo el botón (Andrés, 7 oct 2026: «tarjetas bonitas dentro de Home»).
- *
- * Con otra tarjeta al lado cada una es media pantalla. SOLA (un plan sin ciencia, o un paciente de fisio que no
- * calcula 1RM) pasa a fila completa con el molde de «Mi plan · Ver»: media tarjeta con un hueco al lado se veía a medias.
+ * La fila de 1RM en Home: el molde de «Mi plan · Ver» (ícono redondo, título, lo que dice y «Ver ›»).
+ * Andrés, 7 oct 2026: «el de 1RM está bien como está, porque es una calculadora». Salud y Ciencia tienen lo suyo
+ * en `TarjetasDeHome`.
  */
-const TarjetaDeHome = ({ icono: Icono, titulo, valor, boton, onClick, tope, ancha = false }) => (ancha ? (
+const FilaDeUnRM = ({ valor, boton, onClick }) => (
   <button
     type="button" onClick={onClick} className="kp-press"
     style={{
@@ -2070,9 +2069,9 @@ const TarjetaDeHome = ({ icono: Icono, titulo, valor, boton, onClick, tope, anch
     <span style={{
       width: 52, height: 52, borderRadius: '50%', background: LT.blueSoft, color: LT.blue,
       display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-    }}><Icono size={22} /></span>
+    }}><Calculator size={22} /></span>
     <span style={{ flex: 1, minWidth: 0 }}>
-      <span style={{ display: 'block', fontSize: 17, fontWeight: 700, color: LT.text }}>{titulo}</span>
+      <span style={{ display: 'block', fontSize: 17, fontWeight: 700, color: LT.text }}>1RM</span>
       <span style={{ display: 'block', fontSize: 12, color: LT.text2, marginTop: 1, overflowWrap: 'anywhere', ...NUM_STYLE }}>{valor}</span>
     </span>
     <span style={{
@@ -2083,26 +2082,7 @@ const TarjetaDeHome = ({ icono: Icono, titulo, valor, boton, onClick, tope, anch
       {boton} <ChevronRight size={15} />
     </span>
   </button>
-) : (
-  <button
-    type="button" onClick={onClick} className="kp-press"
-    style={{
-      flex: 1, minWidth: 0, textAlign: 'left', cursor: 'pointer', fontFamily: FONT, border: 'none',
-      background: LT.surface, borderRadius: 22, padding: 20, display: 'flex', flexDirection: 'column',
-    }}
-  >
-    <span style={{
-      width: 38, height: 38, borderRadius: 12, background: LT.blueSoft, color: LT.blue,
-      display: 'grid', placeItems: 'center', flexShrink: 0,
-    }}><Icono size={19} /></span>
-    <span style={{ fontSize: 14, color: LT.text2, marginTop: 12 }}>{titulo}</span>
-    <span style={{ fontSize: 18, fontWeight: 700, color: LT.text, marginTop: 2, lineHeight: 1.2, overflowWrap: 'anywhere', ...NUM_STYLE }}>{valor}</span>
-    <span style={{
-      display: 'block', background: LT.surface2, borderRadius: 14, padding: '12px', fontSize: 13, fontWeight: 600,
-      color: LT.text2, textAlign: 'center', marginTop: 14, ...tope,
-    }}>{boton}</span>
-  </button>
-));
+);
 
 const HomeView = ({
   sessionsData, wellness, oneRMs = {}, onStartSession, onGoTab, onAbrirHoja, onVerPrograma, cursor, onChangeCursor,
@@ -2400,28 +2380,10 @@ const HomeView = ({
           la misma línea»). `flex: 1 1 0` con `minWidth` hace las dos cosas: parten iguales cuando caben, y se acomodan
           en filas cuando no. */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: '0 18px 12px' }}>
-        {/* Salud (antes «Estado hoy»: ahí también se va a conectar el Apple Watch) */}
-        <div onClick={() => onAbrirHoja('wellness')}
-          style={{ flex: '1 1 0', minWidth: 200, background: LT.surface, borderRadius: 22, padding: 20, cursor: 'pointer' }}>
-          <div style={{ fontSize: 14, color: LT.text2 }}>Salud</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: LT.text, marginTop: 2 }}>
-            {todayScore === null ? 'Sin medir'
-              : todayScore >= 7 ? 'Listo'
-              : todayScore >= 5 ? 'Carga media'
-              : 'Recuperación'}
-          </div>
-          {/* «Registra cómo te sientes» repetía lo que dice el botón de abajo
-              («Registrar»): fuera. Con el puntaje ya puesto sí se queda
-              «Energía, sueño y fatiga», que dice de qué está hecho. */}
-          {todayScore !== null && (
-            <div style={{ fontSize: 12, color: LT.text2, marginTop: 6, lineHeight: 1.4 }}>
-              Energía, sueño y fatiga
-            </div>
-          )}
-          <div style={{ background: LT.surface2, borderRadius: 14, padding: '12px', fontSize: 13, fontWeight: 600, color: LT.text2, textAlign: 'center', marginTop: 14, ...tope }}>
-            {todayScore === null ? 'Registrar' : 'Ver detalle'}
-          </div>
-        </div>
+        {/* Salud (antes «Estado hoy»: ahí también se va a conectar el Apple Watch). Ver `TarjetasDeHome`. */}
+        <TarjetaDeSalud
+          puntaje={todayScore} dia={wellness[today()]} onAbrir={() => onAbrirHoja('wellness')} tope={tope}
+        />
 
         {/* Tu semana: qué días entrenas, cuál es hoy y qué sigue */}
         <div style={{ flex: '1 1 0', minWidth: 290, background: LT.surface, borderRadius: 22, padding: 20 }}>
@@ -2454,24 +2416,20 @@ const HomeView = ({
         </div>
       </div>
 
-      {/* 1RM y Ciencia: tarjetas que se abren como hoja encima. 1RM no sale a un paciente de fisio, y Ciencia no sale
-          si el plan no tiene (cada plan trae la suya; ver `lib/ciencia.js`). Las dos juntas son media tarjeta cada
-          una; una sola ocupa la fila entera. */}
-      {(con1RM || conCiencia) && (
-        <div style={{ display: 'flex', gap: 12, padding: '0 18px 12px' }}>
-          {con1RM && (
-            <TarjetaDeHome
-              icono={Calculator} titulo="1RM" onClick={() => onAbrirHoja('oneRM')} tope={tope} ancha={!conCiencia}
-              valor={mejorRM ? `${mejorRM.nombre} ${desdeKilos(mejorRM.kg, unidadPeso)} ${etiquetaUnidad(unidadPeso)}` : 'Sin datos'}
-              boton={mejorRM ? 'Ver' : 'Anotar'}
-            />
-          )}
-          {conCiencia && (
-            <TarjetaDeHome
-              icono={BookOpen} titulo="Ciencia" valor="El porqué de tu plan" boton="Leer"
-              onClick={() => onAbrirHoja('science')} tope={tope} ancha={!con1RM}
-            />
-          )}
+      {/* 1RM (una fila) y Ciencia (una cinta de una línea): se abren como hoja encima. 1RM no sale a un paciente de fisio,
+          y Ciencia no sale si el plan no tiene (cada plan trae la suya; ver `lib/ciencia.js`). */}
+      {con1RM && (
+        <div style={{ padding: '0 18px 12px' }}>
+          <FilaDeUnRM
+            onClick={() => onAbrirHoja('oneRM')}
+            valor={mejorRM ? `${mejorRM.nombre} ${desdeKilos(mejorRM.kg, unidadPeso)} ${etiquetaUnidad(unidadPeso)}` : 'Sin datos'}
+            boton={mejorRM ? 'Ver' : 'Anotar'}
+          />
+        </div>
+      )}
+      {conCiencia && (
+        <div style={{ padding: '0 18px 12px' }}>
+          <CintaDeCiencia onAbrir={() => onAbrirHoja('science')} />
         </div>
       )}
 
