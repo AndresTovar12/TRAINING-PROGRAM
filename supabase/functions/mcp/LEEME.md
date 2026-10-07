@@ -78,10 +78,17 @@ la persona ya dijo no se vuelve a preguntar, y lo que se puede deducir se deduce
   Cada tope trae su salida, para no preguntar lo que la persona ya dijo:
   - `crear_ejercicio` solo con el nombre → una sola pregunta con categoría, grupo muscular, equipo y nota.
     Con cualquier dato, o con `sin_datos: true` («así»), se guarda.
-  - `crear_plan` y `editar_dia` con un ejercicio que no está en el catálogo con su nombre (sin importar
-    mayúsculas, acentos, espacios ni guiones) → no se guarda nada; la respuesta trae los parecidos y cómo
-    preguntar. Con `sin_ficha_ok: [nombres]` se guardan tal cual, sin ficha. Los nombres que el plan ya tenía
-    no cuentan: leer un día y reescribirlo no se frena.
+  - `crear_plan` y `editar_dia` revisan, ANTES de guardar, cuatro cosas, y si falta algo NO guardan y
+    contestan TODAS las preguntas juntas (para que la IA las haga en un solo mensaje):
+    1. un ejercicio que no está en el catálogo con su nombre (sin importar mayúsculas, acentos, espacios,
+       guiones ni plural) → trae los parecidos y cómo preguntar; `sin_ficha_ok: [nombres]` lo deja pasar;
+    2. un ejercicio sin cantidad (ni reps, ni tiempo, ni reloj de formato, ni vueltas) → `sin_cantidad_ok`
+       («así lo mando»);
+    3. un ejercicio a una pierna o un brazo (por su nombre: pistol, step ups, búlgara, zancadas…) sin decir
+       `por_lado` true o false;
+    4. biseries, triseries o circuitos NUEVOS (`grupo`): se devuelve la rutina armada con BI SERIE / TRI SERIE
+       para que la persona la confirme; `estructura_ok: true` la deja pasar.
+    Lo que el plan ya tenía (nombres y agrupaciones) no cuenta: leer un día y reescribirlo no se frena.
 
 Los parecidos son por letras (el catálogo está casi todo en inglés: «jalón» no encuentra «pull down»); esa
 traducción la hace la IA con `buscar_ejercicios`. Prueba: `scripts/prueba-mcp-preguntas.ts`.

@@ -3,7 +3,7 @@ import type { Quien } from './sesion.ts'
 import {
   Aviso, type Dia, NOMBRE_DIA, type Persona, mismoNombre, mismoTexto, nombreCorto, nombreDe, rolDeOficio, sinAcentos,
 } from './util.ts'
-import type { ItemDeCatalogo } from './preguntas.ts'
+import { esUnilateral, firmasDeDia, type ItemDeCatalogo, type Renglon } from './preguntas.ts'
 import {
   dondeVa, esDescanso, isLoadedExercise, sesionQueRepite, sessionIdFor,
   enOrdenDeSemana,
@@ -459,6 +459,11 @@ export async function repertorioVisible(quien: Quien, coachDe?: string | null) {
   return (data ?? []) as (ItemDeCatalogo & { created_by: string | null })[]
 }
 
+/** Las biseries, triseries y circuitos que ya tiene un plan (cada uno, por los nombres de sus ejercicios). */
+export function firmasDeGrupos(plan: Plan | null): Set<string> {
+  return new Set(fasesDe(plan).flatMap((f: any) => (f.weekData ?? []).flatMap((w: any) => (w.days ?? []).flatMap((d: any) => firmasDeDia(d.exercises ?? [])))))
+}
+
 /** Los nombres de ejercicio que ya tiene un plan, en cualquier fase, semana y día. */
 export function nombresDeEjercicios(plan: Plan | null): string[] {
   return fasesDe(plan).flatMap((f: any) => (f.weekData ?? []).flatMap((w: any) => (w.days ?? []).flatMap((d: any) =>
@@ -491,6 +496,9 @@ export function diaDesdeEntrada(
   repertorio: { id: string; name: string }[],
 ) {
   const sinFicha: string[] = []
+  // Lo que la persona no dijo y quien arma la rutina tendría que preguntar (ver `exigirRespuestas`).
+  const sinCantidad: { nombre: string; grupo: number | null }[] = []
+  const porLado: string[] = []
   const grupos = new Map<number, string>()
   // El formato de cada grupo: el del primer ejercicio que lo traiga, y vale para todos los del grupo.
   const formatosDeGrupo = new Map<number, any>()
@@ -519,6 +527,12 @@ export function diaDesdeEntrada(
     if (e.indicaciones) ex.cue = e.indicaciones
     if (e.lleva_peso !== undefined) ex.carga = e.lleva_peso
     if (e.por_lado === true) ex.porLado = true
+    const nombreFinal = String(ex.name)
+    // Sin cantidad: ni reps ni tiempo, ni un reloj de formato, ni vueltas con su cantidad.
+    if ((e.cantidad == null || String(e.cantidad).trim() === '') && e.formato == null && !(Array.isArray(e.por_vuelta) && e.por_vuelta.length)) {
+      sinCantidad.push({ nombre: nombreFinal, grupo: e.grupo ?? null })
+    }
+    if (e.por_lado === undefined && esUnilateral(nombreFinal)) porLado.push(nombreFinal)
     // Se colocan al final, cuando ya se sabe cuántas veces se repite el grupo.
     if (Array.isArray(e.por_vuelta) && e.por_vuelta.length) vueltasPedidas.set(ex, e.por_vuelta)
     if (e.grupo != null) {
@@ -569,7 +583,12 @@ export function diaDesdeEntrada(
     ...tipo,
     exercises,
   }
-  return { dia, sinFicha }
+  // Un grupo con reloj (AMRAP, EMOM…) ya dice cuánto dura: sus ejercicios no necesitan cantidad.
+  const sinCantidadFinal = sinCantidad.filter((x) => !(x.grupo != null && formatosDeGrupo.has(x.grupo))).map((x) => x.nombre)
+  const lista: Renglon[] = exercises.filter((ex: any) => !ex.isNote).map((ex: any) => ({
+    nombre: String(ex.name), grupo: ex.set ?? null, series: String(ex.sets ?? ''), cantidad: String(ex.reps ?? ''),
+  }))
+  return { dia, sinFicha, sinCantidad: sinCantidadFinal, porLado, lista }
 }
 
 /**
