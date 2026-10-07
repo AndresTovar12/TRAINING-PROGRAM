@@ -96,20 +96,20 @@ export default function MediaAlCrear({ nuevos, onNuevos }) {
       <MediaUpload
         accept="image/*" kind="covers" value="" onChange={() => {}}
         onAjustes={suma}
-        botones={({ camara, carrete, busy, enTelefono }) => (
+        botones={({ camara, carrete, busy, preparando, enTelefono }) => (
           <button type="button" onClick={enTelefono ? camara : carrete} disabled={busy} style={chico}>
             <Camera size={20} color={T.text} />
-            <span style={textoChico}>{busy ? 'Subiendo…' : enTelefono ? 'Tomar foto' : 'Foto'}</span>
+            <span style={textoChico}>{busy ? (preparando ? 'Preparando…' : 'Subiendo…') : enTelefono ? 'Tomar foto' : 'Foto'}</span>
           </button>
         )}
       />
       <MediaUpload
         accept="image/*,video/*" kind="videos" value="" onChange={() => {}}
         onAjustes={suma}
-        botones={({ carrete, busy }) => (
+        botones={({ carrete, busy, preparando }) => (
           <button type="button" onClick={carrete} disabled={busy} style={chico}>
             <Images size={20} color={T.text2} />
-            <span style={textoChico}>{busy ? 'Subiendo…' : 'Del carrete'}</span>
+            <span style={textoChico}>{busy ? (preparando ? 'Preparando…' : 'Subiendo…') : 'Del carrete'}</span>
           </button>
         )}
       />

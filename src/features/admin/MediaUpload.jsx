@@ -11,7 +11,7 @@ import { Upload, Loader2, X, Video, Camera, Images } from 'lucide-react';
 import { uploadExerciseMedia } from '@/lib/api';
 import { subeFotos, guardaPoster } from '@/lib/posters';
 import { segundos } from '@/lib/fotogramas';
-import { optimizaImagen, pesoTexto as pesoLegible } from '@/lib/imagen';
+import { aImagenWeb, optimizaImagen, pesoTexto as pesoLegible } from '@/lib/imagen';
 import EditorVideo from '@/features/admin/EditorVideo';
 import EditorFoto from '@/features/admin/EditorFoto';
 import GrabadoraDeVideo from '@/features/admin/GrabadoraDeVideo';
@@ -57,6 +57,10 @@ export default function MediaUpload({
   const mixto = aceptaVideo && aceptaFoto;
   const esVideo = aceptaVideo && !aceptaFoto;
   const [busy, setBusy] = useState(false);
+  /* `busy` también vale mientras se prepara la foto (un HEIC tarda unos segundos en pasar a JPG): los botones se
+     apagan igual, y solo cambia lo que dicen. */
+  const [preparando, setPreparando] = useState(false);
+  const textoOcupado = preparando ? 'Preparando…' : 'Subiendo…';
   const [err, setErr] = useState('');
   const [avance, setAvance] = useState(0);
   const [archivo, setArchivo] = useState(null); // { nombre, mb }
@@ -90,8 +94,8 @@ export default function MediaUpload({
      encima. Antes esto vivía dentro de `onPick` y solo sabía leer un evento de
      <input>, así que arrastrar un video desde la compu no tenía por dónde
      entrar aunque la pantalla lo ofreciera. */
-  function tomaArchivo(elegido) {
-    if (!elegido) return;
+  async function tomaArchivo(elegido) {
+    if (!elegido || preparando) return;
     setErr('');
     setAviso(null);
     setAhorro(null);
@@ -116,8 +120,23 @@ export default function MediaUpload({
        Andrés: "también para las fotos de portada se debería poder hacer algún
        recorte o algo así". Y le hace más falta que al video: una foto del
        carrete sale apaisada y la portada es un recuadro, así que sin recortar
-       decide el navegador qué mitad tira — y suele tirar a la persona. */
-    setFotoPorRevisar(elegido);
+       decide el navegador qué mitad tira — y suele tirar a la persona.
+
+       Y el editor necesita una foto que el navegador sepa dibujar. Un HEIC (las
+       fotos del iPhone sueltas) Chrome no lo abre: se pasa a JPG ANTES, aquí, y
+       si no se puede leer el aviso sale ya, no después de abrir un editor vacío.
+       Andrés: «me rechaza las HEIC». Una foto que ya viene en JPG, PNG o WebP
+       pasa sin esperar. */
+    setBusy(true);
+    setPreparando(true);
+    try {
+      setFotoPorRevisar(await aImagenWeb(elegido));
+    } catch (e2) {
+      setErr(e2.message || 'No se pudo abrir esa foto.');
+    } finally {
+      setBusy(false);
+      setPreparando(false);
+    }
     if (inputRef.current) inputRef.current.value = '';
     if (camaraRef.current) camaraRef.current.value = '';
   }
@@ -238,6 +257,7 @@ export default function MediaUpload({
         carrete: () => inputRef.current?.click(),
         suelta: tomaArchivo,
         busy,
+        preparando,
         enTelefono,
       }) : (
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -262,7 +282,7 @@ export default function MediaUpload({
             >
               {busy ? <Loader2 size={15} className="spin" />
                 : esVideo ? <Video size={16} /> : <Camera size={16} />}
-              {busy ? 'Subiendo…' : mixto ? 'Cámara' : esVideo ? 'Grabar ahora' : 'Tomar foto'}
+              {busy ? textoOcupado : mixto ? 'Cámara' : esVideo ? 'Grabar ahora' : 'Tomar foto'}
             </button>
             <button
               type="button"
@@ -296,7 +316,7 @@ export default function MediaUpload({
                 era no decir QUÉ archivo — Andrés: "esto del screenshot no se
                 entiende". El tipo iba en un renglón aparte, debajo. */}
             {busy ? <Loader2 size={15} className="spin" /> : <Upload size={15} />}
-            {busy ? 'Subiendo…' : mixto ? 'Elegir foto o video' : esVideo ? 'Elegir video' : 'Elegir foto'}
+            {busy ? textoOcupado : mixto ? 'Elegir foto o video' : esVideo ? 'Elegir video' : 'Elegir foto'}
           </button>
         )}
         {value && (

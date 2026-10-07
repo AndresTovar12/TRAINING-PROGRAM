@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Crop, ImagePlus, Loader2 } from 'lucide-react';
 import { LT, FONT } from '@/lib/theme';
-import { optimizaImagen } from '@/lib/imagen';
+import { esImagen, optimizaImagen } from '@/lib/imagen';
 import { uploadExerciseMedia } from '@/lib/api';
 import { posicionDeFoto, separaFoto } from '@/lib/fotoConFoco';
 import EncuadreDeFoto from '@/features/admin/EncuadreDeFoto';
@@ -13,6 +13,7 @@ import EncuadreDeFoto from '@/features/admin/EncuadreDeFoto';
  * Sin foto, un botón «Agregar foto»; con foto, se ve y se puede cambiar o quitar. La foto se achica y se pasa a
  * WebP en el navegador (`optimizaImagen`) y se sube al mismo almacén que las portadas de los ejercicios: la dirección
  * que devuelve es la que se guarda en el plan. Un nombre único por archivo, así que cambiarla no deja una vieja pegada.
+ * Acepta el formato que sea (HEIC del iPhone incluido): `optimizaImagen` lo pasa a uno que el servidor recibe.
  *
  * `valor`: la dirección de la foto ('' si no hay). `onCambia(url)`: llega con la nueva, o con '' al quitarla.
  *
@@ -28,6 +29,8 @@ const boton = {
 export default function CampoDeFoto({ valor, onCambia, alto = 130 }) {
   const input = useRef(null);
   const [subiendo, setSubiendo] = useState(false);
+  // Antes de subir: leer la foto, pasarla a un formato que se pueda subir y achicarla (un HEIC tarda unos segundos).
+  const [preparando, setPreparando] = useState(false);
   const [avance, setAvance] = useState(0);
   const [error, setError] = useState('');
   const [aviso, setAviso] = useState('');
@@ -39,11 +42,13 @@ export default function CampoDeFoto({ valor, onCambia, alto = 130 }) {
     if (!archivo) return;
     setError('');
     setAviso('');
-    if (!archivo.type?.startsWith('image/')) { setError('Elige una imagen (JPG, PNG o WebP).'); return; }
+    if (!esImagen(archivo)) { setError('Elige una foto (JPG, HEIC, PNG, WebP…).'); return; }
     setSubiendo(true);
+    setPreparando(true);
     setAvance(0);
     try {
       const { archivo: listo, aviso: poca } = await optimizaImagen(archivo);
+      setPreparando(false);
       const url = await uploadExerciseMedia(listo, 'covers', setAvance);
       onCambia(url);
       if (poca) setAviso(poca);
@@ -51,6 +56,7 @@ export default function CampoDeFoto({ valor, onCambia, alto = 130 }) {
       setError(err?.message || 'No se pudo subir la foto.');
     } finally {
       setSubiendo(false);
+      setPreparando(false);
     }
   }
 
@@ -82,7 +88,7 @@ export default function CampoDeFoto({ valor, onCambia, alto = 130 }) {
                 position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.78)', display: 'flex', alignItems: 'center',
                 justifyContent: 'center', gap: 8, fontSize: 13, fontWeight: 800, color: LT.text,
               }}>
-                <Loader2 size={16} className="spin" /> Subiendo… {avance}%
+                <Loader2 size={16} className="spin" /> {preparando ? 'Preparando foto…' : `Subiendo… ${avance}%`}
               </div>
             )}
           </div>
@@ -98,7 +104,7 @@ export default function CampoDeFoto({ valor, onCambia, alto = 130 }) {
       ) : (
         <button type="button" onClick={abrir} disabled={subiendo} style={{ ...boton, width: '100%', color: LT.blue }}>
           {subiendo
-            ? <><Loader2 size={16} className="spin" /> Subiendo… {avance}%</>
+            ? <><Loader2 size={16} className="spin" /> {preparando ? 'Preparando foto…' : `Subiendo… ${avance}%`}</>
             : <><ImagePlus size={16} /> Agregar foto</>}
         </button>
       )}
