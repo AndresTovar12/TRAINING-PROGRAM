@@ -84,8 +84,9 @@ function pesoDePalabra(q: string, c: string) {
  * Los ejercicios del catálogo que se parecen a lo que se escribió, los más parecidos primero.
  * Solo por las letras: el catálogo está casi todo en inglés, así que «jalón» no encuentra «pull down».
  * Eso lo traduce la IA con `buscar_ejercicios`; esto es la ayuda para cuando no lo hizo. Para que
- * entre, al menos una palabra tiene que parecerse a una del NOMBRE (si no, solo por el equipo entrarían
- * todos los de la polea). Ya dentro, el equipo, la categoría y los músculos suman un poco.
+ * entre tienen que cumplirse dos cosas: al menos una palabra se parece a una del NOMBRE, y se parecen
+ * MÁS de la mitad de las palabras de lo escrito (el equipo, la categoría y los músculos también
+ * cuentan). Si no, «jalón en poleas» traería todo lo que lleva «polea» en el nombre.
  */
 export function parecidosA(escrito: string, catalogo: ItemDeCatalogo[], max = 6): ItemDeCatalogo[] {
   const pedidas = palabrasClave(escrito)
@@ -95,15 +96,17 @@ export function parecidosA(escrito: string, catalogo: ItemDeCatalogo[], max = 6)
     const enOtros = palabrasClave([e.equipment, e.category?.name, ...(e.muscle_primary ?? [])].filter(Boolean).join(' '))
     let puntos = 0
     let porNombre = 0
+    let parecidas = 0
     for (const q of pedidas) {
       const n = Math.max(0, ...enNombre.map((c) => pesoDePalabra(q, c)))
       const o = Math.max(0, ...enOtros.map((c) => pesoDePalabra(q, c)))
       if (n) porNombre += 1
+      if (n || o) parecidas += 1
       // Lo que ya cuenta en el nombre no suma otra vez por el equipo.
       puntos += n ? n * 2 : o
     }
-    return { e, puntos, porNombre }
-  }).filter((x) => x.porNombre > 0)
+    return { e, puntos, porNombre, parecidas }
+  }).filter((x) => x.porNombre > 0 && x.parecidas * 2 > pedidas.length)
   puntuados.sort((a, b) => b.puntos - a.puntos || a.e.name.length - b.e.name.length || a.e.name.localeCompare(b.e.name))
   return puntuados.slice(0, max).map((x) => x.e)
 }

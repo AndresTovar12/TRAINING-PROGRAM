@@ -71,7 +71,7 @@ function pregunta(fn: () => unknown): Pregunta {
   const p = pregunta(() => exigirFichas({ sinFicha: ['jalón en poleas'], catalogo: CATALOGO }))
   igual(p.datos.guardado, false, 'no se guardó')
   igual(p.datos.motivo, 'ejercicios_fuera_del_catalogo', 'dice por qué')
-  igual((p.datos.pendientes as any[]).map((x) => x.escrito), ['jalón en poleas'], 'dice cuál nombre falta')
+  igual((p.datos.pendientes as any[]).map((x) => [x.escrito, x.caso]), [['jalón en poleas', 'ninguno']], 'dice cuál nombre falta, y que ningún parecido sirve (la IA lo busca ella)')
   cierto(String(p.datos.que_hacer).includes('UN solo mensaje'), 'trae cómo preguntar: todo en un solo mensaje')
   cierto(String(p.datos.que_hacer).includes('sin_ficha_ok'), 'y la salida para lo que va tal cual')
   ok('un nombre que no está en el catálogo no se guarda: se pregunta')
@@ -79,7 +79,9 @@ function pregunta(fn: () => unknown): Pregunta {
 {
   // Los parecidos son por letras. Un nombre casi igual en inglés sí se encuentra; uno en español puro, no.
   igual(nombres(parecidosA('bulgarian split squats', CATALOGO)).slice(0, 2), ['Bulgarian Split Squat', 'Bulgarian Squat Jumps'], '«bulgarian split squats» (plural) encuentra el suyo primero')
-  igual(nombres(parecidosA('sentadilla búlgara con mancuernas', CATALOGO)).slice(0, 2), ['Bulgarian Split Squat', 'Bulgarian Squat Jumps'], '«búlgara» ~ «bulgarian»; el equipo suma a la de mancuerna')
+  igual(nombres(parecidosA('sentadilla búlgara con mancuernas', CATALOGO)), ['Bulgarian Split Squat'], '«búlgara» ~ «bulgarian» y «mancuernas» ~ su equipo: solo el que cumple las dos')
+  igual(nombres(parecidosA('jalón en poleas', CATALOGO)), [], '«jalón en poleas»: solo «polea» coincide (la mitad), así que no se inventan parecidos como «Remo Poleas»')
+  igual(nombres(parecidosA('Trap Bar Deadlift', CATALOGO)), [], 'una sola palabra de tres («deadlift») no basta')
   igual(nombres(parecidosA('Rumanian Deadlift', CATALOGO)), ['Romanian Deadlift'], '«Rumanian» ~ «Romanian» (una letra)')
   igual(nombres(parecidosA('jumping squats', CATALOGO)).slice(0, 1), ['Squat Jump'], '«jumping squats» → Squat Jump')
   igual(nombres(parecidosA('sentadilla', CATALOGO)), [], 'una palabra en español sin parecido en el nombre no trae nada (no se inventan parecidos por el equipo)')
