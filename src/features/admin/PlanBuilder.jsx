@@ -1142,12 +1142,11 @@ function CuerpoDeSets({
         })}
       </div>
 
-      {/* Agregar contenido. En la compu los tres caben en una fila y da igual.
-          En el telefono NO da igual: "Agregar set" es a lo que vienes, y los
-          otros dos son casos sueltos. Si los tres pesan lo mismo, cada vez hay
-          que leer los tres para encontrar el de siempre. Aqui el principal
-          ocupa todo el ancho —imposible de fallar con el pulgar— y los otros
-          dos van abajo, mas chicos, repartidos a la mitad. */}
+      {/* Agregar contenido. "Agregar set" es a lo que vienes, y los otros dos
+          son casos sueltos. Si los tres pesan lo mismo, cada vez hay que leer
+          los tres para encontrar el de siempre. El principal es el grande y
+          azul —en el telefono ocupa todo el ancho, imposible de fallar con el
+          pulgar— y los otros dos van debajo, mas chicos. */}
       {soloLectura ? null : descanso ? (
         <div style={{ marginTop: separacion, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ fontSize: 13, color: T.text2, lineHeight: 1.5 }}>
@@ -1155,18 +1154,21 @@ function CuerpoDeSets({
           </div>
           <Pill icon={StickyNote} onClick={() => writeBlocks((bs) => [...bs, { type: 'note', ex: { isNote: true, text: '' } }])}>Nota</Pill>
         </div>
-      ) : esCompu ? (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: separacion }}>
-          <Pill icon={Plus} primary onClick={() => setPickerCtx({ mode: 'new-set' })}>Agregar set</Pill>
-          <Pill icon={StickyNote} onClick={() => writeBlocks((bs) => [...bs, { type: 'note', ex: { isNote: true, text: '' } }])}>Nota</Pill>
-          <Pill icon={Dumbbell} onClick={() => setCreandoEjercicio(true)}>Ejercicio nuevo</Pill>
-        </div>
       ) : (
-        <div style={{ marginTop: separacion, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        /* El MISMO bloque en compu y en celular. Andrés, 7 oct 2026, sobre la compu: «Agregar set me gusta el
+           botón pero siento que está muy escondidito abajo en la esquina cuando es lo primero que tienes que
+           picar para comenzar a construir una rutina». Era una pastilla pálida a la izquierda, del mismo peso
+           que «Nota». Ahora es el botón azul lleno: en una sesión VACÍA, al centro y de buen tamaño (es lo único
+           que hay que hacer); con sets, a todo el ancho al final de la lista. «Nota» y «Ejercicio nuevo» van
+           debajo, blancos con borde y más chicos. */
+        <div style={{
+          marginTop: separacion, display: 'flex', flexDirection: 'column', gap: 8,
+          ...(esCompu && nSets === 0 ? { alignItems: 'center', padding: '18px 8px 4px' } : null),
+        }}>
           <button
-            type="button" onClick={() => setPickerCtx({ mode: 'new-set' })}
+            type="button" className="kp-press" onClick={() => setPickerCtx({ mode: 'new-set' })}
             style={{
-              width: '100%', minHeight: 52, display: 'flex', alignItems: 'center',
+              width: '100%', maxWidth: esCompu && nSets === 0 ? 320 : undefined, minHeight: 52, display: 'flex', alignItems: 'center',
               justifyContent: 'center', gap: 9, borderRadius: 16, border: 'none', cursor: 'pointer',
               background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff',
               fontFamily: FONT, fontSize: 16, fontWeight: 800, boxShadow: KP.shBtn,
@@ -1174,29 +1176,25 @@ function CuerpoDeSets({
           >
             <Plus size={20} /> Agregar set
           </button>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <button
-              type="button"
-              onClick={() => writeBlocks((bs) => [...bs, { type: 'note', ex: { isNote: true, text: '' } }])}
-              style={{
-                minHeight: 46, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                borderRadius: 14, border: `1.5px solid ${T.border}`, background: T.bg2, cursor: 'pointer',
-                fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text2,
-              }}
-            >
-              <StickyNote size={16} /> Nota
-            </button>
-            <button
-              type="button"
-              onClick={() => setCreandoEjercicio(true)}
-              style={{
-                minHeight: 46, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                borderRadius: 14, border: `1.5px solid ${T.border}`, background: T.bg2, cursor: 'pointer',
-                fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text2,
-              }}
-            >
-              <Dumbbell size={16} /> Ejercicio nuevo
-            </button>
+          <div style={esCompu
+            ? { display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }
+            : { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}
+          >
+            {[
+              { icono: StickyNote, texto: 'Nota', al: () => writeBlocks((bs) => [...bs, { type: 'note', ex: { isNote: true, text: '' } }]) },
+              { icono: Dumbbell, texto: 'Ejercicio nuevo', al: () => setCreandoEjercicio(true) },
+            ].map(({ icono: Icono, texto, al }) => (
+              <button
+                key={texto} type="button" className="kp-press" onClick={al}
+                style={{
+                  minHeight: esCompu ? 40 : 46, padding: esCompu ? '0 16px' : undefined, display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', gap: 7, borderRadius: esCompu ? 12 : 14, border: `1.5px solid ${T.border}`,
+                  background: T.bg2, cursor: 'pointer', fontFamily: FONT, fontSize: esCompu ? 13.5 : 14, fontWeight: 700, color: T.text2,
+                }}
+              >
+                <Icono size={16} /> {texto}
+              </button>
+            ))}
           </div>
         </div>
       )}

@@ -21,7 +21,11 @@ import { T, FONT, KP } from '@/lib/theme';
  *              los últimos días: "Claude cambió este plan · Deshacer". También si
  *              se borró el plan: "… borró el plan · Recuperar". Con su «Entendido»:
  *              se acepta y ese aviso ya no vuelve (uno nuevo, de un cambio nuevo, sí).
- *   la lista — plegada, con todas las versiones recientes.
+ *   la lista — plegada, con las versiones recientes. Cada una lleva su «Entendido»
+ *              (Andrés, 7 oct 2026: «todo tipo de esos avisos también tendría un botón de
+ *              “entendido” para que no se haga una lista gigante de cambios»): la que ya
+ *              viste sale de la lista, con la misma clave del aviso de arriba (`plan:<versión>`),
+ *              y queda un «Ver todos» chico para poder regresar a una versión vieja.
  *
  * Regresar también guarda versión: si alguien se equivoca de versión, se
  * rehace desde la misma lista.
@@ -47,6 +51,8 @@ export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abiert
   const [nombres, setNombres] = useState({});
   const [trabajando, setTrabajando] = useState(false);
   const [error, setError] = useState('');
+  // «Ver todos»: trae de vuelta, atenuadas, las versiones que ya se aceptaron.
+  const [verTodos, setVerTodos] = useState(false);
   // La hora se toma al cargar, no en cada dibujo: dibujar tiene que dar lo
   // mismo cada vez. "hace 5 min" se pone al día al volver a cargar la lista.
   const [ahora, setAhora] = useState(() => Date.now());
@@ -86,10 +92,15 @@ export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abiert
     return () => { vivo = false; };
   }, [cargar, plan?.updated_at]);
 
-  const quien = (v) => {
-    const persona = nombres[v.cambiada_por] || 'alguien';
-    return v.cliente_ia ? `${v.cliente_ia} (IA de ${persona})` : persona;
+  // Quién hizo el cambio, o '' si no se sabe. En la lista no se escribe «alguien»: no dice nada.
+  const autorDe = (v) => {
+    const persona = nombres[v.cambiada_por] || '';
+    if (!v.cliente_ia) return persona;
+    return persona ? `${v.cliente_ia} (IA de ${persona})` : v.cliente_ia;
   };
+  // En una frase sí hace falta alguien que haga la acción.
+  const quien = (v) => autorDe(v) || 'alguien';
+  const claveDe = (v) => `plan:${v.id}`;
 
   async function regresar(v) {
     const va = await pregunta({
@@ -120,10 +131,15 @@ export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abiert
     && ahora - new Date(ultima.creada_en).getTime() < DIAS_DEL_AVISO * 86400000;
   const planBorrado = !plan && ultima?.motivo === 'borrado';
   // Cada cambio es un aviso distinto: aceptar este no esconde el que venga después.
-  const claveDelAviso = ultima ? `plan:${ultima.id}` : null;
+  const claveDelAviso = ultima ? claveDe(ultima) : null;
   const hayAviso = (avisoIA || planBorrado) && avisosListos && !avisoVisto(claveDelAviso);
 
   if (!versiones.length) return null;
+
+  // Hasta saber qué se aceptó no se enseña ninguna fila: una ya aceptada aparecería un instante y se iría.
+  const sinAceptar = avisosListos ? versiones.filter((v) => !avisoVisto(claveDe(v))) : [];
+  const yaAceptadas = avisosListos ? versiones.length - sinAceptar.length : 0;
+  const filas = verTodos ? versiones : sinAceptar;
 
   const boton = {
     display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 36, padding: '0 13px', borderRadius: 10,
@@ -155,22 +171,48 @@ export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abiert
 
       <Seccion titulo={t('Cambios del plan')} abierta={abierta} onToggle={onToggle}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {versiones.map((v) => (
-            <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: `1px solid ${T.border}` }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>
-                  {v.motivo === 'borrado' ? 'Antes de borrarlo' : v.motivo === 'restauracion' ? 'Antes de regresar a otra versión' : 'Antes de un cambio'}
-                </div>
-                <div style={{ fontSize: 12.5, fontWeight: 600, color: T.text3 }}>
-                  {quien(v)} · {hace(v.creada_en, ahora)}
-                </div>
-              </div>
-              <button type="button" disabled={trabajando} onClick={() => regresar(v)} style={{ ...boton, background: T.bg2, color: T.text2, border: `1px solid ${T.border}` }}>
-                <RotateCcw size={14} /> Regresar
-              </button>
+          {avisosListos && filas.length === 0 && (
+            <div style={{ fontSize: 13, fontWeight: 600, color: T.text2, padding: '9px 0', borderBottom: `1px solid ${T.border}` }}>
+              Nada por revisar.
             </div>
-          ))}
+          )}
+          {filas.map((v) => {
+            const aceptada = avisoVisto(claveDe(v));
+            return (
+              <div
+                key={v.id}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '9px 0',
+                  borderBottom: `1px solid ${T.border}`, opacity: aceptada ? 0.6 : 1,
+                }}
+              >
+                <div style={{ flex: '1 1 150px', minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>
+                    {v.motivo === 'borrado' ? 'Antes de borrarlo' : v.motivo === 'restauracion' ? 'Antes de regresar a otra versión' : 'Antes de un cambio'}
+                  </div>
+                  <div style={{ fontSize: 12.5, fontWeight: 600, color: T.text3 }}>
+                    {[autorDe(v), hace(v.creada_en, ahora)].filter(Boolean).join(' · ')}
+                  </div>
+                </div>
+                <button type="button" disabled={trabajando} onClick={() => regresar(v)} style={{ ...boton, background: T.bg2, color: T.text2, border: `1px solid ${T.border}` }}>
+                  <RotateCcw size={14} /> Regresar
+                </button>
+                {!aceptada && <BotonEntendido color={T.accent} onClick={() => aceptarAviso(claveDe(v))} />}
+              </div>
+            );
+          })}
         </div>
+        {yaAceptadas > 0 && (
+          <button
+            type="button" onClick={() => setVerTodos((x) => !x)}
+            style={{
+              border: 'none', background: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 700,
+              color: T.accent, padding: '10px 2px 2px',
+            }}
+          >
+            {verTodos ? 'Esconder los que ya vi' : `Ver todos (${versiones.length})`}
+          </button>
+        )}
         {error && <div style={{ color: T.danger, fontSize: 13, fontWeight: 700, marginTop: 10 }}>{error}</div>}
       </Seccion>
     </>
