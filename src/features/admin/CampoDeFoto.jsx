@@ -1,8 +1,10 @@
 import { useRef, useState } from 'react';
-import { ImagePlus, Loader2 } from 'lucide-react';
+import { Crop, ImagePlus, Loader2 } from 'lucide-react';
 import { LT, FONT } from '@/lib/theme';
 import { optimizaImagen } from '@/lib/imagen';
 import { uploadExerciseMedia } from '@/lib/api';
+import { posicionDeFoto, separaFoto } from '@/lib/fotoConFoco';
+import EncuadreDeFoto from '@/features/admin/EncuadreDeFoto';
 
 /**
  * La foto de una fase o de un plan: la que sale en la tarjeta de Home del atleta (Andrés, 7 oct 2026: «el coach
@@ -13,6 +15,9 @@ import { uploadExerciseMedia } from '@/lib/api';
  * que devuelve es la que se guarda en el plan. Un nombre único por archivo, así que cambiarla no deja una vieja pegada.
  *
  * `valor`: la dirección de la foto ('' si no hay). `onCambia(url)`: llega con la nueva, o con '' al quitarla.
+ *
+ * «Encuadrar» (sobre la foto) abre la hoja donde se elige qué parte no debe cortarse: ese punto va pegado a la dirección
+ * (`lib/fotoConFoco.js`), así que `onCambia` también recibe la misma foto con otro punto.
  */
 const boton = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, cursor: 'pointer', fontFamily: FONT,
@@ -26,6 +31,7 @@ export default function CampoDeFoto({ valor, onCambia, alto = 130 }) {
   const [avance, setAvance] = useState(0);
   const [error, setError] = useState('');
   const [aviso, setAviso] = useState('');
+  const [encuadrando, setEncuadrando] = useState(false);
 
   async function elegir(e) {
     const archivo = e.target.files?.[0];
@@ -57,7 +63,20 @@ export default function CampoDeFoto({ valor, onCambia, alto = 130 }) {
       {valor ? (
         <>
           <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', background: LT.surface2, height: alto }}>
-            <img src={valor} alt="Foto" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            <img
+              src={separaFoto(valor).url} alt="Foto"
+              style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: posicionDeFoto(valor), display: 'block' }}
+            />
+            <button
+              type="button" onClick={() => setEncuadrando(true)} disabled={subiendo}
+              style={{
+                position: 'absolute', left: 8, bottom: 8, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+                border: 'none', borderRadius: 999, padding: '6px 11px 6px 9px', background: 'rgba(255,255,255,0.94)', color: LT.text,
+                fontFamily: FONT, fontSize: 12, fontWeight: 800, boxShadow: '0 2px 10px rgba(0,0,0,0.25)', touchAction: 'manipulation',
+              }}
+            >
+              <Crop size={14} /> Encuadrar
+            </button>
             {subiendo && (
               <div style={{
                 position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.78)', display: 'flex', alignItems: 'center',
@@ -84,6 +103,7 @@ export default function CampoDeFoto({ valor, onCambia, alto = 130 }) {
         </button>
       )}
 
+      {encuadrando && valor && <EncuadreDeFoto valor={valor} onCambia={onCambia} onCerrar={() => setEncuadrando(false)} />}
       {error && <div role="alert" style={{ fontSize: 12.5, fontWeight: 600, color: LT.danger, lineHeight: 1.4 }}>{error}</div>}
       {aviso && <div style={{ fontSize: 12.5, fontWeight: 600, color: LT.text2, lineHeight: 1.4 }}>{aviso}</div>}
     </div>

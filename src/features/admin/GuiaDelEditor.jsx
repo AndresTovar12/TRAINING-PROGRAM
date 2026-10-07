@@ -9,6 +9,7 @@ import { TituloDelRenglon } from '@/components/NavegadorDelPlan';
 import { DIAS_SEMANA } from '@/lib/pegadas';
 import { MenuEmergente } from '@/features/admin/MenuDeAcciones';
 import CampoDeFoto from '@/features/admin/CampoDeFoto';
+import { posicionDeFoto, separaFoto } from '@/lib/fotoConFoco';
 
 /**
  * La guía del editor de planes: las fases, sus semanas y los siete días de la semana que se ve.
@@ -194,7 +195,10 @@ export default function GuiaDelEditor({
               }}
             >
               {f.image && (
-                <img src={f.image} alt="" style={{ width: 22, height: 22, borderRadius: 999, objectFit: 'cover', display: 'block' }} />
+                <img
+                  src={separaFoto(f.image).url} alt=""
+                  style={{ width: 22, height: 22, borderRadius: 999, objectFit: 'cover', objectPosition: posicionDeFoto(f.image), display: 'block' }}
+                />
               )}
               <i style={{ width: 13, height: 13, borderRadius: 7, background: f.color || LT.blue, display: 'block' }} />
               <ChevronDown size={13} style={{ color: LT.text3 }} />

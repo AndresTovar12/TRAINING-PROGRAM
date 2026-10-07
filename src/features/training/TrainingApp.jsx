@@ -23,10 +23,11 @@ import {
 } from '@/lib/training-utils';
 import HojaFlotante from '@/components/HojaFlotante';
 import CienciaDelPlan from '@/features/training/CienciaDelPlan';
-import { TarjetaDeSalud, CintaDeCiencia } from '@/features/training/TarjetasDeHome';
+import { TarjetaDeSalud, TarjetaDeFoto, CintaDeCiencia } from '@/features/training/TarjetasDeHome';
 import { programasConCiencia } from '@/lib/ciencia';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
 import { aKilos, desdeKilos, etiquetaUnidad } from '@/lib/unidades';
+import { maximoParaHome, useUnRM } from '@/lib/unRM';
 import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
 import { useAppState, useStorage } from '@/contexts/AppStateContext';
 import { altaReciente } from '@/lib/comoVa';
@@ -2085,7 +2086,7 @@ const FilaDeUnRM = ({ valor, boton, onClick }) => (
 );
 
 const HomeView = ({
-  sessionsData, wellness, oneRMs = {}, onStartSession, onGoTab, onAbrirHoja, onVerPrograma, cursor, onChangeCursor,
+  sessionsData, wellness, oneRMs = {}, fechasRM = {}, onStartSession, onGoTab, onAbrirHoja, onVerPrograma, cursor, onChangeCursor,
   hayEquipo = false, conAutor = false, entradas = [], autores = [], filtro = null, onFiltro, onAbrirEntrada, resumenDeEquipo = null,
   altasDeEquipo = [],
 }) => {
@@ -2151,16 +2152,18 @@ const HomeView = ({
   }, [next, entradasDelDia]);
 
   const { text: greetText } = greeting();
-  // La foto de la tarjeta: la de la fase de hoy; si no tiene, la del plan; si tampoco, la tarjeta oscura.
-  const fotoDeHome = next ? (next.phase.image || planMeta?.foto || '') : '';
-  // Lo de 1RM: el máximo más pesado que ha guardado, en su unidad.
+  /* LA FOTO DE LA TARJETA: la de la fase de hoy; si no tiene, la del plan; si tampoco, la tarjeta oscura. Con equipo puede
+     no tocar sesión del coach principal hoy (`next` vacío) y aun así hay una fase en la que va: se usa esa. */
+  const faseDeHoy = next?.phase ?? PLAN.find((f) => f.id === cursor?.phaseId) ?? PLAN[0] ?? null;
+  const fotoDeHome = faseDeHoy ? (faseDeHoy.image || planMeta?.foto || '') : '';
+  const etiquetaFoto = kind === 'weekly' ? 'Tu rutina'
+    : deCorrido ? (next ? semanaDe(next) : (planMeta?.title || 'Tu programa')) : `Fase ${faseDeHoy?.num ?? ''}`;
+  const tituloFoto = kind === 'weekly' ? (planMeta?.title || 'Rutina semanal')
+    : deCorrido ? (planMeta?.title || 'Tu programa') : (faseDeHoy?.name ?? '');
+  const botonFoto = kind === 'weekly' ? 'Ver rutina' : 'Ver programa';
+  // Lo de 1RM: el máximo que guardó más recientemente (los de antes no tienen fecha: el más pesado), en su unidad.
   const unidadPeso = profile?.unidad_peso || 'kg';
-  const mejorRM = useMemo(() => {
-    const guardados = LEVANTAMIENTOS.map((l) => ({ l, kg: Number(oneRMs?.[l.key]) })).filter((x) => x.kg > 0);
-    if (!guardados.length) return null;
-    const top = guardados.sort((a, b) => b.kg - a.kg)[0];
-    return { nombre: top.l.nombre, kg: top.kg };
-  }, [oneRMs]);
+  const mejorRM = useMemo(() => maximoParaHome(oneRMs, fechasRM, LEVANTAMIENTOS), [oneRMs, fechasRM]);
   // Con equipo cada programa trae su ciencia: la tarjeta sale si CUALQUIERA la tiene, no solo el que está activo.
   const conCiencia = programasConCiencia(programas).length > 0;
   const con1RM = !salud;
@@ -2270,13 +2273,32 @@ const HomeView = ({
         <>
           <FiltroDeAutor autores={autores} filtro={filtro} onFiltro={onFiltro} style={{ padding: '0 18px 12px' }} />
           {entradas.length > 0 ? (
-            <TarjetaDeHoyDeTodos
-              entradas={entradas}
-              onAbrir={onAbrirEntrada}
-              onCambiarDia={kind !== 'weekly' && !filtro ? onChangeCursor : undefined}
-              esCompu={esCompu}
-              conAutor={conAutor}
-            />
+            /* Con una foto que enseñar, la tarjeta de todos y la foto van en una fila (en celular, una debajo de la otra).
+               Es la foto del programa en que va el atleta (el de su coach principal); sin foto, la tarjeta sola como siempre. */
+            fotoDeHome ? (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: '0 18px 12px' }}>
+                <TarjetaDeHoyDeTodos
+                  entradas={entradas}
+                  onAbrir={onAbrirEntrada}
+                  onCambiarDia={kind !== 'weekly' && !filtro ? onChangeCursor : undefined}
+                  esCompu={esCompu}
+                  conAutor={conAutor}
+                  enFila
+                />
+                <TarjetaDeFoto
+                  foto={fotoDeHome} etiqueta={etiquetaFoto} titulo={tituloFoto} boton={botonFoto} onAbrir={onVerPrograma}
+                  style={{ flex: '1 1 0', minWidth: 220, minHeight: 170 }}
+                />
+              </div>
+            ) : (
+              <TarjetaDeHoyDeTodos
+                entradas={entradas}
+                onAbrir={onAbrirEntrada}
+                onCambiarDia={kind !== 'weekly' && !filtro ? onChangeCursor : undefined}
+                esCompu={esCompu}
+                conAutor={conAutor}
+              />
+            )
           ) : sinSesionHoy}
         </>
       ) : next ? (
@@ -2345,31 +2367,7 @@ const HomeView = ({
             {/* Card foto. Desde el 7 oct 2026 ya NO abre la sesión de hoy (eso lo hace la tarjeta azul de al lado y
                 la pestaña «Entrenar»): abre el programa completo, y por eso el botón «Mi plan · Ver» de más abajo
                 ya no sale cuando esta tarjeta está. */}
-            <div onClick={onVerPrograma}
-              style={{
-                flex: 1, borderRadius: 22, overflow: 'hidden', position: 'relative',
-                background: '#000', minHeight: 232, cursor: 'pointer', minWidth: 0,
-                display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-              }}>
-              {fotoDeHome && (
-                <img src={fotoDeHome} alt={next.phase.name}
-                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.92 }} />
-              )}
-              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.05) 35%, rgba(0,0,0,0.78) 100%)' }} />
-              <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', padding: '16px 16px 0' }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>
-                  {kind === 'weekly' ? 'Tu rutina' : (deCorrido ? semanaDe(next) : `Fase ${next.phase.num}`)}
-                </span>
-              </div>
-              <div style={{ position: 'relative', padding: '0 16px 16px' }}>
-                <div style={{ fontSize: 22, fontWeight: 700, color: '#fff', lineHeight: 1.05, marginBottom: 12 }}>
-                  {kind === 'weekly' ? (planMeta?.title || 'Rutina semanal') : (deCorrido ? (planMeta?.title || 'Tu programa') : next.phase.name)}
-                </div>
-                <div style={{ background: '#fff', borderRadius: 14, padding: '12px', fontSize: 13, fontWeight: 600, color: '#111', textAlign: 'center' }}>
-                  {kind === 'weekly' ? 'Ver rutina' : 'Ver programa'}
-                </div>
-              </div>
-            </div>
+            <TarjetaDeFoto foto={fotoDeHome} etiqueta={etiquetaFoto} titulo={tituloFoto} boton={botonFoto} onAbrir={onVerPrograma} />
           </div>
 
         </>
@@ -2624,7 +2622,7 @@ const WellnessView = ({ wellness, setWellness, enHoja = false }) => {
 // Los mismos 9 levantamientos que usa el cálculo de kilos por porcentaje (ver `lib/cargaPorcentaje.js`).
 const ONE_RM_LIFTS = LEVANTAMIENTOS;
 
-const OneRMView = ({ oneRMs, setOneRMs, enHoja = false }) => {
+const OneRMView = ({ oneRMs, ponRM, enHoja = false }) => {
   const { perfil: profile } = usePerfilDeLaVista();
   const unidad = profile?.unidad_peso || 'kg';
   const u = etiquetaUnidad(unidad);
@@ -2676,7 +2674,7 @@ const OneRMView = ({ oneRMs, setOneRMs, enHoja = false }) => {
             <div key={lift.key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: T.bg2, borderRadius: 10, border: `1px solid ${T.border}` }}>
               <div style={{ flex: 1, fontSize: 14, fontWeight: 600, color: T.text }}>{lift.nombre}</div>
               <Input value={oneRMs[lift.key] == null ? '' : desdeKilos(oneRMs[lift.key], unidad)}
-                onChange={v => setOneRMs(prev => ({ ...prev, [lift.key]: v ? aKilos(v, unidad) : null }))}
+                onChange={v => ponRM(lift.key, v ? aKilos(v, unidad) : null)}
                 placeholder="—" type="number" suffix={u}
                 style={{ width: 110, textAlign: 'right', padding: '8px 14px', fontSize: 14 }} />
             </div>
@@ -2859,7 +2857,7 @@ export default function TrainingApp() {
   // Los registros de un programa de EQUIPO van en claves aparte (`wr:sessions@<profesional>`);
   // los del coach principal siguen donde estaban. El bienestar y el 1RM son del atleta.
   const [sessionsData, setSessionsData] = useStorage(claveDe('wr:sessions'), {});
-  const [oneRMs, setOneRMs] = useStorage('wr:onerm', {});
+  const { oneRMs, fechas: fechasRM, ponRM } = useUnRM();
   const [wellness, setWellness] = useStorage('wr:wellness', {});
   const [storedCursor, setCursor] = useStorage(claveDe('wr:cursor'), null);
   const [cursorPickerOpen, setCursorPickerOpen] = useState(false);
@@ -3074,7 +3072,7 @@ export default function TrainingApp() {
     content = <NoPlanState onAbrirHoja={setHoja} />;
   } else if (tab === 'home') {
     content = <HomeView sessionsData={sessionsData} wellness={wellness}
-      oneRMs={oneRMs}
+      oneRMs={oneRMs} fechasRM={fechasRM}
       onStartSession={startSession}
       onGoTab={vasA}
       onAbrirHoja={setHoja}
@@ -3181,7 +3179,7 @@ export default function TrainingApp() {
       )}
       {hoja === 'oneRM' && !salud && (
         <HojaFlotante titulo="1RM" onCerrar={() => setHoja(null)}>
-          <OneRMView oneRMs={oneRMs} setOneRMs={setOneRMs} enHoja />
+          <OneRMView oneRMs={oneRMs} ponRM={ponRM} enHoja />
         </HojaFlotante>
       )}
       {hoja === 'science' && (
