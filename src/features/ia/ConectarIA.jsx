@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Check, Copy, ExternalLink, Loader2, MessagesSquare, SquareTerminal, Unplug } from 'lucide-react';
+import { Check, Copy, ExternalLink, Loader2, MessagesSquare, Monitor, SquareTerminal, Unplug } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useIsDesktop } from '@/lib/useViewport';
 import { FONT, KP } from '@/lib/theme';
-import { queHaceLaIA } from '@/features/ia/queHaceLaIA';
-import { CONECTORES, TERMINALES, pasosDe, sePuedeAqui } from '@/features/ia/guiasIA';
+import { CONECTORES, TERMINALES, pasosDe } from '@/features/ia/guiasIA';
 import { MarcaIA, Pantalla } from '@/features/ia/Maquetas';
 
 /**
@@ -72,7 +71,7 @@ function Accion({ accion, principal }) {
    paso a paso de «Siguiente» ya no sabía en cuál iba; y un dibujo que juntaba dos clics («Agregar» y
    luego la opción del menú) escondía el primero. «No saltarnos, pero visualmente simplificarlo muchísimo». */
 function Guia({ app, esCompu, rol }) {
-  const pasos = pasosDe(app, esCompu);
+  const pasos = pasosDe(app);
   useEffect(() => {
     try { localStorage.setItem(GUARDADO, JSON.stringify({ ...leeGuardado(), app })); } catch { /* sin almacenamiento */ }
   }, [app]);
@@ -81,12 +80,12 @@ function Guia({ app, esCompu, rol }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {pasos.map((p, i) => {
         const ultimo = i === pasos.length - 1;
+        // «Abrir ChatGPT / Claude» no sirve desde el celular: los pasos se hacen en la compu.
+        const acciones = (p.acciones ?? []).filter((a) => esCompu || a.tipo !== 'abrir');
         return (
           <div key={p.titulo} style={{ background: KP.surface, border: `1px solid ${KP.line}`, borderRadius: 22, padding: esCompu ? 22 : 16, boxShadow: KP.shCard }}>
-            <div style={esCompu
-              ? { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.1fr)', gap: 26, alignItems: 'center' }
-              : { display: 'flex', flexDirection: 'column', gap: 16 }}
-            >
+            {/* Texto y dibujo lado a lado si caben (cada uno de 300 px o más); si no, uno sobre otro. */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 290px), 1fr))', gap: esCompu ? 26 : 16, alignItems: 'center' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                   <span style={{
@@ -100,14 +99,14 @@ function Guia({ app, esCompu, rol }) {
                     {p.texto && <p style={{ fontSize: 14.5, color: KP.ink2, fontWeight: 500, lineHeight: 1.5, margin: '6px 0 0' }}>{p.texto}</p>}
                   </div>
                 </div>
-                {!!p.acciones?.length && (
+                {acciones.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {p.acciones.map((a, j) => <Accion key={a.texto} accion={a} principal={j === 0} />)}
+                    {acciones.map((a, j) => <Accion key={a.texto} accion={a} principal={j === 0} />)}
                   </div>
                 )}
               </div>
               <div style={{ display: 'flex', justifyContent: 'center', padding: '6px 0 2px' }}>
-                <Pantalla paso={p} app={app} esCompu={esCompu} rol={rol} />
+                <Pantalla paso={p} app={app} esCompu rol={rol} />
               </div>
             </div>
           </div>
@@ -139,23 +138,16 @@ function SelectorDeApp({ opciones, elegida, onElegir }) {
   );
 }
 
-/** ChatGPT desde el celular: todavía no se puede, y se dice claro, con salida. */
-function ChatGPTEnCelular({ onUsarClaude }) {
+/* En el celular los pasos se LEEN, pero se hacen en una computadora (Andrés, 6 oct 2026: «que la persona
+   quiere las instrucciones en el teléfono pero las acciones las hace en su compu: un mensaje y ya»). */
+function AvisoCompu() {
   return (
-    <div style={{ background: KP.surface, border: `1px solid ${KP.line}`, borderRadius: 22, padding: 20, boxShadow: KP.shCard, textAlign: 'center' }}>
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><MarcaIA app="chatgpt" size={46} /></div>
-      <h3 style={{ fontSize: 19, fontWeight: 800, color: KP.ink, margin: '0 0 6px', letterSpacing: -0.3 }}>Desde el celular, todavía no</h3>
-      <p style={{ fontSize: 14.5, color: KP.ink2, fontWeight: 500, lineHeight: 1.5, margin: '0 auto 16px', maxWidth: 330 }}>
-        ChatGPT solo deja agregar un servidor MCP desde la computadora. Cuando aprueben Training Lab en su tienda, será de un toque.
-        Claude sí se puede desde el celular.
-      </p>
-      <button type="button" onClick={onUsarClaude} className="kp-press" style={{
-        display: 'inline-flex', alignItems: 'center', gap: 9, minHeight: 48, padding: '0 20px', borderRadius: 14, border: 'none', cursor: 'pointer',
-        background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, color: '#fff', fontFamily: FONT, fontSize: 15, fontWeight: 800, boxShadow: KP.shBtn,
-      }}>
-        <MarcaIA app="claude" size={24} /> Conectar Claude
-      </button>
-      <p style={{ fontSize: 12.5, color: KP.ink3, fontWeight: 600, margin: '12px 0 0' }}>¿Tienes compu? Abre Training Lab ahí: está esta misma guía.</p>
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10, background: KP.blueSoft, color: KP.ink, borderRadius: 16,
+      padding: '12px 14px', fontSize: 14.5, fontWeight: 700, lineHeight: 1.35,
+    }}>
+      <Monitor size={20} color={KP.blue} strokeWidth={2.4} style={{ flexShrink: 0 }} />
+      Estos pasos se hacen en una computadora.
     </div>
   );
 }
@@ -232,7 +224,6 @@ export default function ConectarIA({ enPerfil = false }) {
   const esCompu = useIsDesktop();
   const esAtleta = profile?.role !== 'admin';
   const rol = esAtleta ? 'atleta' : 'coach';
-  const { puede } = queHaceLaIA(profile);
 
   const [rama, setRama] = useState(() => (esAtleta ? 'conectores' : (leeGuardado().rama === 'mcp' ? 'mcp' : 'conectores')));
   const opciones = rama === 'mcp' ? TERMINALES : CONECTORES;
@@ -253,20 +244,17 @@ export default function ConectarIA({ enPerfil = false }) {
 
   return (
     <div id="conectar-ia" style={{ display: 'flex', flexDirection: 'column', gap: 16, fontFamily: FONT, maxWidth: enPerfil ? undefined : 820, scrollMarginTop: 16 }}>
-      {/* LO QUE SE GANA, antes que los pasos: sin esto, es una lista de clics sin porqué. */}
+      {/* LO QUE SE GANA, antes que los pasos: sin esto, es una lista de clics sin porqué. Solo el título y un ejemplo: más texto saturaba (Andrés, 6 oct 2026). */}
       <div style={{
-        borderRadius: 24, padding: esCompu && !enPerfil ? 26 : 20, color: '#fff', position: 'relative', overflow: 'hidden',
+        borderRadius: 24, padding: esCompu ? 26 : 20, color: '#fff', position: 'relative', overflow: 'hidden',
         background: `linear-gradient(145deg, ${KP.blue} 0%, ${KP.blueDk} 100%)`,
-        display: esCompu && !enPerfil ? 'grid' : 'flex', gridTemplateColumns: '1fr 1fr', flexDirection: 'column', gap: 18, alignItems: 'center',
+        display: esCompu ? 'grid' : 'flex', gridTemplateColumns: '1fr 1fr', flexDirection: 'column', gap: 18, alignItems: 'center',
       }}>
         <div>
           <div style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase', opacity: 0.75 }}>Conectar con tu IA</div>
-          <h2 style={{ fontSize: esCompu && !enPerfil ? 28 : 23, fontWeight: 800, margin: '6px 0 6px', letterSpacing: -0.5, lineHeight: 1.12, textWrap: 'balance' }}>
+          <h2 style={{ fontSize: esCompu ? 28 : 23, fontWeight: 800, margin: '6px 0 6px', letterSpacing: -0.5, lineHeight: 1.12, textWrap: 'balance' }}>
             {esAtleta ? 'Tu entrenamiento, en tu IA' : 'Tu equipo, en tu IA'}
           </h2>
-          <p style={{ fontSize: 14.5, fontWeight: 500, lineHeight: 1.5, margin: 0, opacity: 0.88 }}>
-            Pregúntale a Claude o ChatGPT y te contesta con tus datos de Training Lab.
-          </p>
         </div>
         <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ alignSelf: 'flex-end', maxWidth: '85%', background: 'rgba(255,255,255,0.18)', borderRadius: '16px 16px 4px 16px', padding: '9px 13px', fontSize: 14, fontWeight: 600 }}>
@@ -277,18 +265,6 @@ export default function ConectarIA({ enPerfil = false }) {
             {conversacion[1]}
           </div>
         </div>
-      </div>
-
-      {/* Lo que puede hacer, en fichas: se lee de un vistazo. */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-        {puede.map((x) => (
-          <span key={x} style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 11px', borderRadius: 99,
-            background: KP.surface, border: `1px solid ${KP.line}`, fontSize: 13, fontWeight: 700, color: KP.ink,
-          }}>
-            <Check size={14} color={KP.mint} strokeWidth={3} /> {t(x)}
-          </span>
-        ))}
       </div>
 
       {/* LAS DOS VERTIENTES. Solo para quien arma planes: las terminales no son para el atleta. */}
@@ -333,9 +309,8 @@ export default function ConectarIA({ enPerfil = false }) {
         </div>
       )}
 
-      {sePuedeAqui(appValida, esCompu)
-        ? <Guia key={`${appValida}-${esCompu}`} app={appValida} esCompu={esCompu} rol={rol} />
-        : <ChatGPTEnCelular onUsarClaude={() => setApp('claude')} />}
+      {!esCompu && rama === 'conectores' && <AvisoCompu />}
+      <Guia key={`${appValida}-${esCompu}`} app={appValida} esCompu={esCompu} rol={rol} />
 
       <IAsConectadas />
 

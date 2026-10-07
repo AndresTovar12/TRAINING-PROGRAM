@@ -46,53 +46,63 @@ export const TERMINALES = [
 const abrir = (href, texto) => ({ tipo: 'abrir', href, texto });
 const copiar = (valor, texto) => ({ tipo: 'copiar', valor, texto });
 
-/** ¿Se puede conectar esta IA desde este aparato? */
-export const sePuedeAqui = (app, esCompu) => esCompu || app !== 'chatgpt';
-
-export function pasosDe(app, esCompu) {
-  // En la compu se hace clic; en el celular se toca.
-  const toca = (que) => (esCompu ? `Haz clic en ${que}` : `Toca ${que}`);
+/* Los pasos de Claude y de ChatGPT se hacen en una computadora (en el celular se leen, y la pantalla avisa).
+   Por eso dicen «Haz clic» siempre. Un paso por clic: Andrés, 6 oct 2026, «no saltarnos, pero visualmente
+   simplificarlo muchísimo». */
+export function pasosDe(app) {
   if (app === 'claude') {
     return [
       {
-        titulo: esCompu ? 'Abre los conectores de Claude' : 'Abre Claude en el navegador',
-        texto: esCompu
-          ? 'Configuración → Conectores. El botón te lleva directo.'
-          : 'Se agrega en la página de Claude, no en la app. Después aparece solo en la app.',
-        pantalla: 'claude-conectores', resalta: 'direccion',
-        acciones: [abrir('https://claude.ai/settings/connectors', 'Abrir Claude')],
+        titulo: 'Abre Claude y haz clic en «Personalización»',
+        texto: 'Está en la barra de la izquierda.',
+        pantalla: 'claude-inicio', resalta: 'personalizar',
+        acciones: [abrir('https://claude.ai', 'Abrir Claude')],
       },
       {
-        titulo: toca('«Agregar conector personalizado»'),
+        titulo: 'Haz clic en «Conectores»',
+        texto: 'Arriba, junto a Habilidades y Plugins.',
+        pantalla: 'claude-conectores', resalta: 'conectores',
+      },
+      {
+        titulo: 'Haz clic en «+ Agregar»',
+        texto: 'Arriba a la derecha.',
         pantalla: 'claude-conectores', resalta: 'agregar',
       },
       {
-        titulo: 'Escribe el nombre: Training Lab',
-        pantalla: 'formulario', resalta: 'nombre',
+        titulo: 'Elige «Agregar conector personalizado»',
+        pantalla: 'claude-conectores', resalta: 'personalizado',
       },
       {
-        titulo: 'Pega tu liga en «URL del servidor»',
-        pantalla: 'formulario', resalta: 'url',
+        titulo: 'Escribe el nombre: Training Lab',
+        pantalla: 'claude-formulario', resalta: 'nombre',
+      },
+      {
+        titulo: 'Pega tu liga en «URL del servidor MCP»',
+        pantalla: 'claude-formulario', resalta: 'url',
         acciones: [copiar(LIGA_MCP, 'Copiar liga')],
       },
       {
-        titulo: toca('«Agregar»'),
-        pantalla: 'formulario', resalta: 'agregar',
+        titulo: 'Haz clic en «Continuar»',
+        pantalla: 'claude-formulario', resalta: 'continuar',
       },
       {
-        titulo: toca('«Conectar»'),
+        titulo: 'Haz clic en «Agregar»',
+        texto: 'La autenticación déjala como viene.',
+        pantalla: 'claude-formulario', resalta: 'agregar',
+      },
+      {
+        titulo: 'Haz clic en «Conectar»',
         texto: 'Junto a Training Lab, en tu lista de conectores.',
         pantalla: 'claude-conectores', resalta: 'conectar',
       },
       {
-        titulo: toca('«Permitir»'),
+        titulo: 'Haz clic en «Permitir»',
         texto: 'Se abre Training Lab. Si te pide entrar, entra con tu cuenta. Si muestra otra cuenta, toca «¿No eres tú?».',
         pantalla: 'permiso', resalta: 'permitir',
       },
       {
-        titulo: esCompu ? '¡Listo! En un chat: «+» → Conectores → activa Training Lab' : '¡Listo! En la app de Claude: «+» → Conectores → activa Training Lab',
+        titulo: '¡Listo! En un chat: «+» → Conectores → activa Training Lab',
         pantalla: 'chat', resalta: 'interruptor',
-        acciones: [abrir('https://claude.ai/new', esCompu ? 'Abrir Claude' : 'Abrir la app de Claude')],
       },
     ];
   }

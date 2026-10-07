@@ -142,68 +142,128 @@ function Interruptor({ encendido = true }) {
   );
 }
 
-function ClaudeConectores({ resalta }) {
-  const fila = (letra, nombre, color) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 0', borderBottom: `1px solid ${KP.line}` }}>
-      <span style={{ width: 18, height: 18, borderRadius: 5, background: color, color: '#fff', fontSize: 9, fontWeight: 800, display: 'grid', placeItems: 'center' }}>{letra}</span>
-      <span style={{ flex: 1, fontSize: 11, fontWeight: 600, color: KP.ink }}>{nombre}</span>
-      <span style={{ fontSize: 9, fontWeight: 700, color: KP.ink3 }}>Conectado</span>
-    </div>
-  );
+/* Piezas que repiten Claude y ChatGPT: un renglón de la barra de la izquierda y una opción de un menú. */
+const itemLateral = (texto, activo) => (
+  <div style={{
+    fontSize: 10, fontWeight: activo ? 800 : 600, color: activo ? KP.ink : KP.ink2, padding: '5px 7px',
+    borderRadius: 6, background: activo ? '#EEF0F3' : 'transparent', whiteSpace: 'nowrap',
+  }}>{texto}</div>
+);
+const opcionDeMenu = (texto, activa) => (
+  <div style={{
+    fontSize: 10, fontWeight: activa ? 800 : 600, color: KP.ink, padding: '5px 8px', borderRadius: 6,
+    border: `1.5px solid ${activa ? KP.blue : 'transparent'}`, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+  }}>{texto}</div>
+);
+const botonNegro = (texto, extra = {}) => (
+  <span style={{
+    display: 'inline-block', fontSize: 10, fontWeight: 800, color: '#fff', background: KP.ink, borderRadius: 99,
+    padding: '4px 10px', whiteSpace: 'nowrap', ...extra,
+  }}>{texto}</span>
+);
+
+/* Claude, como se ve en tu cuenta (revisado con la de Andrés el 6 oct 2026), un clic por paso.
+   Pantalla 1: la barra de la izquierda, con «Personalización». */
+function ClaudeInicio({ resalta }) {
   return (
-    <div>
-      <div style={{ fontSize: 9.5, fontWeight: 700, color: KP.ink3 }}>‹ Configuración</div>
-      <div style={{ fontSize: 15, fontWeight: 800, color: KP.ink, margin: '2px 0 8px' }}>Conectores</div>
-      {fila('G', 'Google Drive', '#1FA463')}
-      {fila('M', 'Gmail', '#EA4335')}
-      {/* Ya agregado: la fila nueva, con su botón «Conectar». */}
-      {resalta === 'conectar' && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 0', borderBottom: `1px solid ${KP.line}` }}>
-          <span style={{ width: 18, height: 18, borderRadius: 5, background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, display: 'grid', placeItems: 'center' }}>
-            <Dumbbell size={10} color="#fff" strokeWidth={2.8} />
-          </span>
-          <span style={{ flex: 1, fontSize: 11, fontWeight: 600, color: KP.ink }}>Training Lab</span>
-          <Toca activo>
-            <span style={{ display: 'inline-block', fontSize: 9.5, fontWeight: 800, color: '#fff', background: KP.ink, borderRadius: 6, padding: '3px 8px' }}>Conectar</span>
-          </Toca>
+    <div style={{ display: 'grid', gridTemplateColumns: '98px minmax(0, 1fr)', gap: 8, minHeight: 150 }}>
+      <div>
+        {itemLateral('Nuevo')}
+        {itemLateral('Proyectos')}
+        {itemLateral('Artifacts')}
+        {itemLateral('Programadas')}
+        <div style={{ marginTop: resalta === 'personalizar' ? 10 : 0 }}>
+          <Toca activo={resalta === 'personalizar'} lado="izquierda">{itemLateral('Personalización', true)}</Toca>
         </div>
-      )}
-      <div style={{ marginTop: 14 }}>
-        <Toca activo={resalta === 'agregar'}>
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, borderRadius: 9,
-            border: `1.5px solid ${resalta === 'agregar' ? KP.blue : KP.lineHi}`, padding: '7px 6px',
-            fontSize: 10.5, fontWeight: 700, color: KP.ink,
-          }}>
-            <Plus size={11} strokeWidth={2.8} /> Agregar conector personalizado
-          </div>
-        </Toca>
+      </div>
+      <div style={{ borderLeft: `1px solid ${KP.line}`, paddingLeft: 9 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: KP.ink, margin: '14px 0 10px' }}>¿Cómo puedo ayudarte hoy?</div>
+        <div style={{ ...campo(false), color: KP.ink3 }}>Escribe aquí…</div>
       </div>
     </div>
   );
 }
 
-/* El formulario de Claude, un clic por paso: `resalta` dice cuál (nombre → url → agregar) y el
-   dibujo va «avanzando»: la liga aparece ya pegada a partir del paso de la liga. */
-function Formulario({ resalta }) {
-  const conLiga = resalta !== 'nombre';
+/* Pantalla 2: la página «Personalización» → pestaña «Conectores». `resalta` dice cuál clic toca: la pestaña
+   («conectores»), el botón «+ Agregar» («agregar»), la opción del menú («personalizado») o el botón «Conectar»
+   del renglón nuevo («conectar»). */
+function ClaudeConectores({ resalta }) {
+  const pestana = (texto, activa) => (
+    <span style={{
+      display: 'inline-block', fontSize: 9.5, fontWeight: activa ? 800 : 600, color: activa ? KP.ink : KP.ink2,
+      background: activa ? KP.surface : 'transparent', borderRadius: 6, padding: '3px 7px', whiteSpace: 'nowrap',
+      boxShadow: activa ? '0 1px 3px rgba(17,19,24,.12)' : 'none',
+    }}>{texto}</span>
+  );
+  const fila = (letra, nombre, color, derecha) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 0', borderBottom: `1px solid ${KP.line}` }}>
+      <span style={{ width: 18, height: 18, borderRadius: 5, background: color, color: '#fff', fontSize: 9, fontWeight: 800, display: 'grid', placeItems: 'center' }}>{letra}</span>
+      <span style={{ flex: 1, fontSize: 11, fontWeight: 600, color: KP.ink }}>{nombre}</span>
+      {derecha ?? <span style={{ fontSize: 9, fontWeight: 700, color: KP.ink3 }}>Conectado</span>}
+    </div>
+  );
+  return (
+    <div style={{ minHeight: 150 }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: KP.ink, marginBottom: 8 }}>Personalización</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 3, padding: 3, background: '#EEF0F3', borderRadius: 9 }}>
+          {pestana('Habilidades')}
+          <Toca activo={resalta === 'conectores'}>{pestana('Conectores', true)}</Toca>
+          {pestana('Plugins')}
+        </div>
+        <Toca activo={resalta === 'agregar'}>{botonNegro('+ Agregar')}</Toca>
+      </div>
+      {resalta === 'personalizado' ? (
+        <div style={{ marginTop: 10, marginLeft: 'auto', width: 'fit-content', maxWidth: '100%', background: KP.surface, border: `1px solid ${KP.line}`, borderRadius: 10, padding: 5, boxShadow: '0 8px 20px rgba(17,19,24,.12)' }}>
+          <Toca activo etiqueta="Esta opción">{opcionDeMenu('Agregar conector personalizado', true)}</Toca>
+        </div>
+      ) : (
+        <div style={{ marginTop: 8 }}>
+          {fila('G', 'Google Drive', '#1FA463')}
+          {fila('M', 'Gmail', '#EA4335')}
+          {resalta === 'conectar' && fila('', 'Training Lab', KP.blue, <Toca activo>{botonNegro('Conectar', { borderRadius: 6 })}</Toca>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* Pantalla 3: la ventana «Agregar conector personalizado» (son 2 pasos). Paso 1: «nombre», «url» y
+   «continuar». Paso 2 (autenticación, Claude ya la detecta): «agregar». */
+function ClaudeFormulario({ resalta }) {
+  const paso2 = resalta === 'agregar';
+  const conLiga = resalta === 'continuar' || paso2;
+  const conNombre = resalta !== 'nombre';
+  const pie = (cancelar, texto, activa) => (
+    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, marginTop: 12 }}>
+      <span style={{ fontSize: 10, fontWeight: 700, color: KP.ink2, padding: '5px 8px' }}>{cancelar}</span>
+      <Toca activo={activa}>{botonNegro(texto, { borderRadius: 7, padding: '5px 11px' })}</Toca>
+    </div>
+  );
   return (
     <div style={{ background: KP.surface, borderRadius: 12, border: `1px solid ${KP.line}`, padding: 11, boxShadow: '0 8px 20px rgba(17,19,24,.08)' }}>
-      <div style={{ fontSize: 12, fontWeight: 800, color: KP.ink, marginBottom: 9 }}>Agregar conector personalizado</div>
-      <p style={etiqueta}>Nombre</p>
-      <Toca activo={resalta === 'nombre'} etiqueta="Escribe aquí">
-        <div style={campo(resalta === 'nombre')}>Training Lab</div>
-      </Toca>
-      <p style={{ ...etiqueta, marginTop: 12 }}>URL del servidor</p>
-      <Toca activo={resalta === 'url'} etiqueta="Pega tu liga">
-        <div style={{ ...campo(resalta === 'url'), color: conLiga ? KP.ink : KP.ink3 }}>{conLiga ? 'training-program-kappa.vercel.app/mcp' : 'https://'}</div>
-      </Toca>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, marginTop: 12 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, color: KP.ink2, padding: '5px 8px' }}>Cancelar</span>
-        <Toca activo={resalta === 'agregar'}>
-          <span style={{ display: 'inline-block', fontSize: 10, fontWeight: 800, color: '#fff', background: KP.ink, borderRadius: 7, padding: '5px 10px' }}>Agregar</span>
-        </Toca>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6, marginBottom: 9 }}>
+        <span style={{ fontSize: 12, fontWeight: 800, color: KP.ink }}>Agregar conector personalizado</span>
+        <span style={{ fontSize: 9, fontWeight: 700, color: KP.ink3, whiteSpace: 'nowrap' }}>Paso {paso2 ? 2 : 1} de 2</span>
       </div>
+      {!paso2 && (<>
+        <p style={etiqueta}>Nombre</p>
+        <Toca activo={resalta === 'nombre'} etiqueta="Escribe aquí">
+          <div style={{ ...campo(resalta === 'nombre'), color: conNombre ? KP.ink : KP.ink3 }}>{conNombre ? 'Training Lab' : 'Nombre'}</div>
+        </Toca>
+        <p style={{ ...etiqueta, marginTop: 12 }}>URL del servidor MCP</p>
+        <Toca activo={resalta === 'url'} etiqueta="Pega tu liga">
+          <div style={{ ...campo(resalta === 'url'), color: conLiga ? KP.ink : KP.ink3 }}>{conLiga ? 'training-program-kappa.vercel.app/mcp' : 'URL del servidor MCP'}</div>
+        </Toca>
+        {pie('Cancelar', 'Continuar', resalta === 'continuar')}
+      </>)}
+      {paso2 && (<>
+        <p style={etiqueta}>Autenticación</p>
+        <div style={{ ...campo(false), display: 'flex', justifyContent: 'space-between' }}><span>Iniciar sesión ahora</span><span style={{ color: KP.ink3 }}>Detectado</span></div>
+        <p style={{ ...etiqueta, marginTop: 9 }}>Cliente OAuth</p>
+        <div style={{ ...campo(false), display: 'flex', justifyContent: 'space-between' }}><span>Registrar automáticamente</span><span style={{ color: KP.ink3 }}>Detectado</span></div>
+        {pie('Atrás', 'Agregar', true)}
+      </>)}
     </div>
   );
 }
@@ -212,28 +272,18 @@ function Formulario({ resalta }) {
    de la izquierda, el botón «Agregar ▾» y, abierto, su menú de tres opciones. */
 function ChatGPTComplementos({ resalta }) {
   const menuAbierto = resalta === 'crear';
-  const lateral = (texto, activo) => (
-    <div style={{
-      fontSize: 10, fontWeight: activo ? 800 : 600, color: activo ? KP.ink : KP.ink2, padding: '5px 7px',
-      borderRadius: 6, background: activo ? '#EEF0F3' : 'transparent', whiteSpace: 'nowrap',
-    }}>{texto}</div>
-  );
-  const opcion = (texto, activa) => (
-    <div style={{
-      fontSize: 10, fontWeight: activa ? 800 : 600, color: KP.ink, padding: '5px 8px', borderRadius: 6,
-      border: `1.5px solid ${activa ? KP.blue : 'transparent'}`, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-    }}>{texto}</div>
-  );
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '88px 1fr', gap: 8, minHeight: 140 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '88px minmax(0, 1fr)', gap: 8, minHeight: 140 }}>
       <div>
-        {lateral('Chat nuevo')}
-        {lateral('Biblioteca')}
-        <Toca activo={resalta === 'complementos'} lado="izquierda">{lateral('Complementos', true)}</Toca>
-        {lateral('Explorar')}
+        {itemLateral('Chat nuevo')}
+        {itemLateral('Biblioteca')}
+        <div style={{ marginTop: resalta === 'complementos' ? 10 : 0 }}>
+          <Toca activo={resalta === 'complementos'} lado="izquierda">{itemLateral('Complementos', true)}</Toca>
+        </div>
+        {itemLateral('Explorar')}
       </div>
       <div style={{ borderLeft: `1px solid ${KP.line}`, paddingLeft: 9 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, flexWrap: 'wrap' }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: KP.ink }}>Complementos</div>
           <Toca activo={resalta === 'agregar'}>
             <span style={{
@@ -247,10 +297,10 @@ function ChatGPTComplementos({ resalta }) {
             marginTop: 10, background: KP.surface,
             border: `1px solid ${KP.line}`, borderRadius: 10, padding: 5, boxShadow: '0 8px 20px rgba(17,19,24,.12)',
           }}>
-            {opcion('Crear complemento')}
-            {opcion('Subir archivo comprimido del complemento')}
+            {opcionDeMenu('Crear complemento')}
+            {opcionDeMenu('Subir archivo comprimido del complemento')}
             <div style={{ marginTop: 7 }}>
-              <Toca activo etiqueta="Esta opción">{opcion('Crear servidor MCP personalizado', true)}</Toca>
+              <Toca activo etiqueta="Esta opción">{opcionDeMenu('Crear servidor MCP personalizado', true)}</Toca>
             </div>
           </div>
         ) : (
@@ -401,28 +451,25 @@ function Terminal({ lineas }) {
 
 /** La pantalla de un paso, en el marco que le toca según el aparato. */
 export function Pantalla({ paso, app, esCompu, rol }) {
-  return <EnCompu.Provider value={esCompu}><PantallaDelPaso paso={paso} app={app} esCompu={esCompu} rol={rol} /></EnCompu.Provider>;
+  return <EnCompu.Provider value={esCompu}><PantallaDelPaso paso={paso} app={app} rol={rol} /></EnCompu.Provider>;
 }
 
-function PantallaDelPaso({ paso, app, esCompu, rol }) {
-  const marcoWeb = esCompu ? 'navegador' : 'telefono';
+function PantallaDelPaso({ paso, app, rol }) {
   switch (paso.pantalla) {
+    case 'claude-inicio':
+      return <Marco tipo="navegador" direccion="claude.ai"><ClaudeInicio resalta={paso.resalta} /></Marco>;
     case 'claude-conectores':
-      return (
-        <Marco tipo={marcoWeb} direccion="claude.ai/settings/connectors" resaltaDireccion={paso.resalta === 'direccion'}>
-          <ClaudeConectores resalta={paso.resalta} />
-        </Marco>
-      );
-    case 'formulario':
-      return <Marco tipo={marcoWeb} direccion="claude.ai/settings/connectors"><Formulario resalta={paso.resalta} /></Marco>;
+      return <Marco tipo="navegador" direccion="claude.ai"><ClaudeConectores resalta={paso.resalta} /></Marco>;
+    case 'claude-formulario':
+      return <Marco tipo="navegador" direccion="claude.ai"><ClaudeFormulario resalta={paso.resalta} /></Marco>;
     case 'chatgpt-complementos':
       return <Marco tipo="navegador" direccion="chatgpt.com/plugins"><ChatGPTComplementos resalta={paso.resalta} /></Marco>;
     case 'chatgpt-crear':
       return <Marco tipo="navegador" direccion="chatgpt.com/plugins"><ChatGPTCrear resalta={paso.resalta} /></Marco>;
     case 'permiso':
-      return <Marco tipo={app === 'chatgpt' ? 'navegador' : marcoWeb} direccion="training-program-kappa.vercel.app"><Permiso app={app} /></Marco>;
+      return <Marco tipo="navegador" direccion="training-program-kappa.vercel.app"><Permiso app={app} /></Marco>;
     case 'chat':
-      return <Marco tipo={app === 'chatgpt' ? 'navegador' : marcoWeb}><Chat app={app} resalta={paso.resalta} rol={rol} /></Marco>;
+      return <Marco tipo="navegador"><Chat app={app} resalta={paso.resalta} rol={rol} /></Marco>;
     case 'terminal':
       return <Marco tipo="terminal"><Terminal lineas={paso.lineas} /></Marco>;
     case 'terminal-pregunta':
