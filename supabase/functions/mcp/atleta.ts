@@ -488,6 +488,6 @@ export function herramientasDelAtleta(server: McpServer, quien: Quien) {
     // El bienestar es de la persona, no de un programa: una sola clave para todos.
     const { error } = await quien.db.rpc('mezclar_mi_estado', { p_usuario: quien.id, p_cambios: { 'wr:wellness': { [fecha]: valores } } })
     if (error) throw new Error(error.message)
-    return respuesta({ listo: true, fecha, anotado: args, mensaje: 'Ya se ve en Bienestar, en la app de Training Lab.' })
+    return respuesta({ listo: true, fecha, anotado: args, mensaje: 'Ya se ve en Salud, en la app de Training Lab.' })
   }))
 }

@@ -430,7 +430,7 @@ function ConfirmarBorrado({ athlete, onCancelar, onConfirmado }) {
     [resumen.planes, 'plan', 'planes'],
     [resumen.sesiones_completadas, 'sesión completada', 'sesiones completadas'],
     [resumen.pesos_registrados, 'peso registrado', 'pesos registrados'],
-    [resumen.dias_bienestar, 'día de bienestar', 'días de bienestar'],
+    [resumen.dias_bienestar, 'chequeo de salud', 'chequeos de salud'],
   ].filter(([n]) => n > 0) : [];
 
   return (

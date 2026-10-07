@@ -2,7 +2,7 @@ import {
   cursorAlDia, defaultCursor, isValidCursor, weekOverview,
 } from '@/lib/training-utils';
 
-/* «Cómo va» un paciente: el dolor que anota en «Bienestar» (0 a 10) y cuántas
+/* «Cómo va» un paciente: el dolor que anota en «Salud» (0 a 10) y cuántas
    sesiones lleva esta semana. Todo puro (sin leer la base ni el reloj por su
    cuenta): la ficha, la lista del fisio y la portada del paciente lo usan
    igual, y así se puede probar sin abrir la app. */

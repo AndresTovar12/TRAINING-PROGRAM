@@ -2395,12 +2395,15 @@ const HomeView = ({
         </>
       ) : sinSesionHoy}
 
-      {/* Row: estado + progreso */}
-      <div style={{ display: 'flex', gap: 12, padding: '0 18px 12px' }}>
-        {/* Estado hoy */}
+      {/* Row: salud + progreso. En compu van lado a lado; en un celular «Tu semana» baja a su propia línea: sus siete
+          días necesitan ~290 px y la mitad de un celular da ~130 (Andrés, 7 oct 2026: «el viernes no alcanza a estar en
+          la misma línea»). `flex: 1 1 0` con `minWidth` hace las dos cosas: parten iguales cuando caben, y se acomodan
+          en filas cuando no. */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: '0 18px 12px' }}>
+        {/* Salud (antes «Estado hoy»: ahí también se va a conectar el Apple Watch) */}
         <div onClick={() => onAbrirHoja('wellness')}
-          style={{ flex: 1, background: LT.surface, borderRadius: 22, padding: 20, cursor: 'pointer', minWidth: 0 }}>
-          <div style={{ fontSize: 14, color: LT.text2 }}>Estado hoy</div>
+          style={{ flex: '1 1 0', minWidth: 200, background: LT.surface, borderRadius: 22, padding: 20, cursor: 'pointer' }}>
+          <div style={{ fontSize: 14, color: LT.text2 }}>Salud</div>
           <div style={{ fontSize: 22, fontWeight: 700, color: LT.text, marginTop: 2 }}>
             {todayScore === null ? 'Sin medir'
               : todayScore >= 7 ? 'Listo'
@@ -2408,7 +2411,7 @@ const HomeView = ({
               : 'Recuperación'}
           </div>
           {/* «Registra cómo te sientes» repetía lo que dice el botón de abajo
-              («Registrar bienestar»): fuera. Con el puntaje ya puesto sí se queda
+              («Registrar»): fuera. Con el puntaje ya puesto sí se queda
               «Energía, sueño y fatiga», que dice de qué está hecho. */}
           {todayScore !== null && (
             <div style={{ fontSize: 12, color: LT.text2, marginTop: 6, lineHeight: 1.4 }}>
@@ -2416,12 +2419,12 @@ const HomeView = ({
             </div>
           )}
           <div style={{ background: LT.surface2, borderRadius: 14, padding: '12px', fontSize: 13, fontWeight: 600, color: LT.text2, textAlign: 'center', marginTop: 14, ...tope }}>
-            {todayScore === null ? 'Registrar bienestar' : 'Ver detalle'}
+            {todayScore === null ? 'Registrar' : 'Ver detalle'}
           </div>
         </div>
 
         {/* Tu semana: qué días entrenas, cuál es hoy y qué sigue */}
-        <div style={{ flex: 1, background: LT.surface, borderRadius: 22, padding: 20, minWidth: 0 }}>
+        <div style={{ flex: '1 1 0', minWidth: 290, background: LT.surface, borderRadius: 22, padding: 20 }}>
           <div style={{ fontSize: 14, color: LT.text2 }}>Tu semana</div>
           <div style={{ fontSize: 13, color: LT.text, marginTop: 6 }}>
             {week.trainingDays} {t(`${week.trainingDays === 1 ? 'día' : 'días'} de entrenamiento`)}
@@ -2576,7 +2579,7 @@ const WellnessView = ({ wellness, setWellness, enHoja = false }) => {
   return (
     <div style={{ paddingBottom: enHoja ? 0 : 100, margin: enHoja ? '0 -20px' : 0 }}>
       <div style={{ padding: enHoja ? '6px 20px 20px' : '20px 20px 24px' }}>
-        <Caption color={T.text3} style={{ marginBottom: 6 }}>Bienestar diario</Caption>
+        <Caption color={T.text3} style={{ marginBottom: 6 }}>Salud diaria</Caption>
         {todayScore !== null ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
             <ReadinessRing score={todayScore} size={110} />
@@ -2640,7 +2643,7 @@ const WellnessView = ({ wellness, setWellness, enHoja = false }) => {
                 <YAxis tick={{ fill: T.text3, fontSize: 10 }} axisLine={{ stroke: T.border }} tickLine={{ stroke: T.border }} />
                 <Tooltip contentStyle={{ background: T.bg3, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12 }} />
                 <ReferenceLine y={7} stroke={T.accent} strokeDasharray="3 3" strokeOpacity={0.3} />
-                <Line type="monotone" dataKey="bienestar" stroke={T.accent} strokeWidth={2.5} dot={{ fill: T.accent, r: 3 }} name="Bienestar" />
+                <Line type="monotone" dataKey="bienestar" stroke={T.accent} strokeWidth={2.5} dot={{ fill: T.accent, r: 3 }} name="Puntaje" />
                 <Line type="monotone" dataKey="hrv" stroke={T.info} strokeWidth={2} dot={{ fill: T.info, r: 3 }} name="Variabilidad cardiaca" />
               </LineChart>
             </ResponsiveContainer>
@@ -2849,7 +2852,7 @@ const NoPlanState = ({ onAbrirHoja }) => (
           background: T.bg2, fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text,
           display: 'inline-flex', alignItems: 'center', gap: 8,
         }}>
-        <Heart size={16} color={T.accent} /> Registrar bienestar
+        <Heart size={16} color={T.accent} /> Registrar salud
       </button>
       <Sin1RM>
         <button type="button" onClick={() => onAbrirHoja('oneRM')} className="kp-press"
@@ -3214,7 +3217,7 @@ export default function TrainingApp() {
       <BottomNav active={tab} onChange={vasA} />
       {/* Bienestar, 1RM y Ciencia ya no son pestañas: se abren como hoja encima, con su flecha para volver. */}
       {hoja === 'wellness' && (
-        <HojaFlotante titulo="Bienestar" onCerrar={() => setHoja(null)}>
+        <HojaFlotante titulo="Salud" onCerrar={() => setHoja(null)}>
           <WellnessView wellness={wellness} setWellness={setWellness} enHoja />
         </HojaFlotante>
       )}
