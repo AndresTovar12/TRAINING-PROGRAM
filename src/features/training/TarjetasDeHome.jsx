@@ -1,5 +1,6 @@
 import { ChevronRight, HeartPulse, Sparkles } from 'lucide-react';
 import { LT, KP, FONT, NUM_STYLE } from '@/lib/theme';
+import { separaFoto } from '@/lib/fotoConFoco';
 
 /**
  * Las tarjetas de Home con más vida: «Salud» y la cinta de «Ciencia».
@@ -132,5 +133,40 @@ export function CintaDeCiencia({ onAbrir }) {
       </span>
       <ChevronRight size={16} color={KP.violet} style={{ flexShrink: 0 }} />
     </button>
+  );
+}
+
+/**
+ * La tarjeta de foto de Home: la foto de la fase de hoy (o la del plan) con su etiqueta, su título y «Ver programa».
+ * Abre el programa completo. Con un solo programa va junto a la tarjeta azul de «Hoy te toca»; con equipo (varios
+ * profesionales), junto a la de todos (en celular, debajo). La foto se recorta alrededor del punto que eligió quien
+ * la puso (`lib/fotoConFoco.js`); sin foto, queda la tarjeta oscura.
+ */
+export function TarjetaDeFoto({ foto, etiqueta, titulo, boton, onAbrir, style }) {
+  const { url, x, y } = separaFoto(foto);
+  const abre = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAbrir(); } };
+  return (
+    <div
+      role="button" tabIndex={0} onClick={onAbrir} onKeyDown={abre}
+      style={{
+        flex: 1, minWidth: 0, minHeight: 232, position: 'relative', overflow: 'hidden', borderRadius: KP.rCard, cursor: 'pointer',
+        background: '#000', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', ...style,
+      }}
+    >
+      {url && (
+        <img
+          src={url} alt={titulo}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: `${x}% ${y}%`, opacity: 0.92 }}
+        />
+      )}
+      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.05) 35%, rgba(0,0,0,0.78) 100%)' }} />
+      <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', padding: '16px 16px 0' }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{etiqueta}</span>
+      </div>
+      <div style={{ position: 'relative', padding: '0 16px 16px' }}>
+        <div style={{ fontSize: 22, fontWeight: 700, color: '#fff', lineHeight: 1.05, marginBottom: 12 }}>{titulo}</div>
+        <div style={{ background: '#fff', borderRadius: KP.rBtn, padding: 12, fontSize: 13, fontWeight: 600, color: '#111', textAlign: 'center' }}>{boton}</div>
+      </div>
+    </div>
   );
 }

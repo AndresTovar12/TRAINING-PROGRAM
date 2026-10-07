@@ -14,7 +14,7 @@ import {
 import { vueltasDe, ejercicioDeVuelta, anotadoEnVuelta, conVueltaAnotada } from '@/lib/porVuelta';
 import Cronometro from '@/components/Cronometro';
 import { cargaPorPorcentaje } from '@/lib/cargaPorcentaje';
-import { useStorage } from '@/contexts/AppStateContext';
+import { useUnRM } from '@/lib/unRM';
 import { usePalabras } from '@/contexts/PalabrasContext';
 
 /**
@@ -77,7 +77,7 @@ export default function FichaEjercicio({
   /* Los kilos que son el «75%» del plan, de SU 1RM y de ESE levantamiento (ver `lib/cargaPorcentaje.js`).
      Los pacientes de un fisio no tienen 1RM. */
   const { salud } = usePalabras();
-  const [, setOneRMs] = useStorage('wr:onerm', {});
+  const { ponRM } = useUnRM();
   const carga = salud ? null : cargaPorPorcentaje(exV, oneRMs, unidad);
   // El peso de la vez pasada: el de ESTA vuelta si entonces también se anotó por vueltas; si no, el del ejercicio.
   const pesoPasado = (vueltas && anterior?.vueltas?.[iv]?.weight) || anterior?.weight || null;
@@ -393,7 +393,7 @@ export default function FichaEjercicio({
             {carga?.falta && (
               <PedirUnRM
                 carga={carga} unidad={unidad}
-                onGuardar={(kilos) => setOneRMs((prev) => ({ ...prev, [carga.lift.key]: kilos }))}
+                onGuardar={(kilos) => ponRM(carga.lift.key, kilos)}
               />
             )}
           </>

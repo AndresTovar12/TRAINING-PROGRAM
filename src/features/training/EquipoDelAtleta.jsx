@@ -72,14 +72,16 @@ export function FiltroDeAutor({ autores, filtro, onFiltro, style }) {
  * «el programa es un todo… no que la app se la pase separándolo»).
  * Tocar una lleva a «Plan», a ese día.
  */
-export function TarjetaDeHoyDeTodos({ entradas, onAbrir, onCambiarDia, esCompu, conAutor = true }) {
+export function TarjetaDeHoyDeTodos({ entradas, onAbrir, onCambiarDia, esCompu, conAutor = true, enFila = false }) {
   const filas = entradas.flatMap((e) => e.partes.map((p) => ({ e, p })));
   const todas = filas.length > 0 && filas.every(({ p }) => p.hecha);
+  /* `enFila`: va dentro de una fila con la tarjeta de foto (Home con equipo): ya no pone su propio margen de pantalla,
+     parte el ancho con la foto y, si no caben juntas (un celular), se queda con toda la línea. */
   return (
-    <div style={{ padding: '0 18px 12px' }}>
+    <div style={enFila ? { flex: '1 1 0', minWidth: 300, display: 'flex' } : { padding: '0 18px 12px' }}>
       <div style={{
         background: `linear-gradient(150deg, ${LT.blue}, ${LT.blueDk})`, borderRadius: KP.rCard,
-        padding: '20px 18px 18px', boxShadow: KP.shBtn, ...(esCompu ? { maxWidth: 560 } : null),
+        padding: '20px 18px 18px', boxShadow: KP.shBtn, ...(enFila ? { flex: 1, minWidth: 0 } : (esCompu ? { maxWidth: 560 } : null)),
       }}>
         <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)' }}>
           {todas ? 'Completadas' : 'Hoy te toca'}
