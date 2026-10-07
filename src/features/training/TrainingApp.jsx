@@ -23,7 +23,7 @@ import {
 } from '@/lib/training-utils';
 import HojaFlotante from '@/components/HojaFlotante';
 import CienciaDelPlan from '@/features/training/CienciaDelPlan';
-import { hayCiencia } from '@/lib/ciencia';
+import { programasConCiencia } from '@/lib/ciencia';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
 import { aKilos, desdeKilos, etiquetaUnidad } from '@/lib/unidades';
 import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
@@ -2119,7 +2119,7 @@ const HomeView = ({
   const esCompu = useIsDesktop();
   const { t, coach, salud } = usePalabras();
   const tope = esCompu ? { maxWidth: 260 } : null;
-  const { phases: PLAN, planMeta, kind, estructura, ciencia } = usePlan();
+  const { phases: PLAN, planMeta, kind, estructura, programas } = usePlan();
   // "Varias semanas": las tarjetas dicen la semana de corrido, no la fase.
   const deCorrido = estructura === 'semanas';
   const semanaDe = (n) => `Semana ${semanaGlobal(PLAN, n.phase.id, n.week.num) ?? n.week.num} de ${semanasDelPlan(PLAN)}`;
@@ -2181,7 +2181,8 @@ const HomeView = ({
     const top = guardados.sort((a, b) => b.kg - a.kg)[0];
     return { nombre: top.l.nombre, kg: top.kg };
   }, [oneRMs]);
-  const conCiencia = hayCiencia(ciencia, PLAN);
+  // Con equipo cada programa trae su ciencia: la tarjeta sale si CUALQUIERA la tiene, no solo el que está activo.
+  const conCiencia = programasConCiencia(programas).length > 0;
   const con1RM = !salud;
 
   /* El título de hoy. Una sesión: su nombre, sin «· ~70 min» pegado. Dos
@@ -2866,7 +2867,7 @@ const NoPlanState = ({ onAbrirHoja }) => (
 
 export default function TrainingApp() {
   const {
-    phases: PLAN, hasPlan, planLoading, kind, programas, programaActivo, elegirPrograma, claveDe, planMeta,
+    phases: PLAN, hasPlan, planLoading, kind, programas, programaActivo, elegirPrograma, claveDe,
   } = usePlan();
   const { store, setStore } = useAppState();
   /* EQUIPO = hay más de un programa con sesiones (el del coach y, además, lo que
@@ -3223,7 +3224,8 @@ export default function TrainingApp() {
         </HojaFlotante>
       )}
       {hoja === 'science' && (
-        <HojaFlotante titulo="Ciencia" subtitulo={planMeta?.title} onCerrar={() => setHoja(null)}>
+        // Con un solo programa con ciencia, su nombre; con varios (equipo), cada uno lleva el suyo dentro y aquí no se dice ninguno.
+        <HojaFlotante titulo="Ciencia" subtitulo={programasConCiencia(programas).length === 1 ? programasConCiencia(programas)[0].title : undefined} onCerrar={() => setHoja(null)}>
           <CienciaDelPlan />
         </HojaFlotante>
       )}

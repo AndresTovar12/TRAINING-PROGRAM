@@ -4,7 +4,7 @@ import {
   ArrowLeft, X, Plus, Trash2, Copy, ChevronRight, ChevronUp, ChevronDown,
   ChevronLeft, Loader2, Check, Layers, Dumbbell, StickyNote, Zap,
   Save, FolderOpen, Clipboard, Eraser, CalendarDays, Repeat, Scale, Video,
-  Image as ImageIcon, ImagePlus, CopyPlus, Sun, Moon, RefreshCw,
+  Image as ImageIcon, ImagePlus, Sparkles, CopyPlus, Sun, Moon, RefreshCw,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
@@ -27,7 +27,8 @@ import BloqueDelPrograma from '@/features/admin/BloqueDelPrograma';
 import MenuDeAcciones from '@/features/admin/MenuDeAcciones';
 import CampoDeFoto from '@/features/admin/CampoDeFoto';
 import HojaFlotante from '@/components/HojaFlotante';
-import { normalizaCiencia } from '@/lib/ciencia';
+import EditorDeCiencia from '@/features/admin/EditorDeCiencia';
+import { normalizaCiencia, recuadroVacio, cuantosRecuadros } from '@/lib/ciencia';
 import { useFasesAbiertas } from '@/features/admin/useFasesAbiertas';
 import EditorBarra, { BarraDelCelular, BotonesDeHistorial } from '@/features/admin/EditorBarra';
 import { HistorialContext, enVentanaFlotante, useHistorial, useHistorialDelEditor } from '@/lib/useHistorial';
@@ -1983,6 +1984,31 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
   const touch = (fn) => { hist.registra(); setPhases(fn); };
   const cambiaTitulo = (v) => { hist.registra(); setTitle(v); };
   const cambiaFotoPlan = (v) => { hist.registra(); setFotoPlan(v); };
+  /* LOS RECUADROS DE CIENCIA. Cada grupo es «plan» (los de todo el plan) o el id de una fase (los suyos, que viajan con
+     ella). Todo cambio pasa por el historial como cualquier otro; escribir seguido en un campo cuenta como un solo paso. */
+  const recuadrosDe = (clave) => (clave === 'plan' ? cienciaPlan : (phases.find((f) => f.id === clave)?.ciencia ?? []));
+  const ponRecuadros = (clave, lista) => {
+    if (clave === 'plan') { hist.registra(); setCienciaPlan(lista); return; }
+    touch((ps) => ps.map((f) => (f.id === clave ? { ...f, ciencia: lista } : f)));
+  };
+  const cienciaAgrega = (clave) => {
+    const r = recuadroVacio();
+    ponRecuadros(clave, [...recuadrosDe(clave), r]);
+    return r.id;
+  };
+  const cienciaCambia = (clave, id, patch) => ponRecuadros(clave, recuadrosDe(clave).map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  const cienciaMueve = (clave, id, delta) => {
+    const lista = [...recuadrosDe(clave)];
+    const i = lista.findIndex((r) => r.id === id);
+    const j = i + delta;
+    if (i < 0 || j < 0 || j >= lista.length) return;
+    [lista[i], lista[j]] = [lista[j], lista[i]];
+    ponRecuadros(clave, lista);
+  };
+  const cienciaQuita = (clave, id) => {
+    ponRecuadros(clave, recuadrosDe(clave).filter((r) => r.id !== id));
+    avisaConDeshacer('Recuadro quitado');
+  };
   const patchPhase = (pi, patch) => touch((ps) => ps.map((p, i) => (i === pi ? { ...p, ...(typeof patch === 'function' ? patch(p) : patch) } : p)));
   const patchWeek = (pi, wi, patch) => patchPhase(pi, (p) => ({
     weekData: p.weekData.map((w, j) => (j === wi ? { ...w, ...(typeof patch === 'function' ? patch(w) : patch) } : w)),
@@ -1993,12 +2019,20 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
 
   /* Lo que va a Mis planes de lo que hay en pantalla: una rutina semanal es una «rutina» (los días de su
      semana) y lo demás un «programa». */
-  const fasesParaGuardar = () => conNombreDeSuFicha(normalize(phases), fichaDeLista(repertoire));
+  /* Los recuadros de ciencia se escriben crudos (con sus espacios y, mientras se teclea, a medias) y se limpian AL GUARDAR:
+     sin título ni texto no hay recuadro, y una fase o un plan sin ninguno no lleva el campo. */
+  const cienciaParaGuardar = () => normalizaCiencia(cienciaPlan);
+  const sinCienciaVacia = (f) => {
+    const { ciencia: cruda, ...resto } = f;
+    const limpia = normalizaCiencia(cruda);
+    return limpia.length ? { ...resto, ciencia: limpia } : resto;
+  };
+  const fasesParaGuardar = () => conNombreDeSuFicha(normalize(phases), fichaDeLista(repertoire)).map(sinCienciaVacia);
   const datosDelCatalogo = () => {
     const lista = fasesParaGuardar();
     return estructura === 'rutina'
-      ? { tipo: 'rutina', data: rutinaDePlan({ phases: lista, foto: fotoPlan, ciencia: cienciaPlan }) }
-      : { tipo: 'programa', data: programaDePlan({ kind, estructura, phases: lista, foto: fotoPlan, ciencia: cienciaPlan }) };
+      ? { tipo: 'rutina', data: rutinaDePlan({ phases: lista, foto: fotoPlan, ciencia: cienciaParaGuardar() }) }
+      : { tipo: 'programa', data: programaDePlan({ kind, estructura, phases: lista, foto: fotoPlan, ciencia: cienciaParaGuardar() }) };
   };
   /* Lo que se manda a Mis planes, igual que lo arman las ventanas de guardar; `notas` y `todo` son lo que se contestó la
      última vez (sin contestar, todo se incluye). */
@@ -2083,9 +2117,9 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     try {
       const data = fasesParaGuardar();
       const row = planRow
-        ? await updatePlan(planRow.id, { title: title.trim(), phases: data, kind, estructura, foto: fotoPlan, ciencia: cienciaPlan })
+        ? await updatePlan(planRow.id, { title: title.trim(), phases: data, kind, estructura, foto: fotoPlan, ciencia: cienciaParaGuardar() })
         : await createPlan({
-          userId: athlete.id, title: title.trim(), phases: data, kind, estructura, foto: fotoPlan, ciencia: cienciaPlan,
+          userId: athlete.id, title: title.trim(), phases: data, kind, estructura, foto: fotoPlan, ciencia: cienciaParaGuardar(),
           createdBy: user?.id, profesionalId,
         });
       hist.marcaGuardado(idAlGuardar);
@@ -2902,6 +2936,10 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
           titulo={isWeekly ? 'Rutina' : 'Programa'} ancla={menu.ancla} onClose={() => setMenu(null)}
           acciones={[
             { icon: ImagePlus, texto: 'Foto del plan', onClick: () => setModal({ type: 'foto-plan' }) },
+            {
+              icon: Sparkles, onClick: () => setModal({ type: 'ciencia' }),
+              texto: cuantosRecuadros(cienciaPlan, phases) ? `Ciencia del plan · ${cuantosRecuadros(cienciaPlan, phases)}` : 'Ciencia del plan',
+            },
             ...(puedeEliminar ? [{ icon: Trash2, texto: textoEliminar, onClick: () => eliminarPrograma(), peligro: true }] : []),
           ]}
         />
@@ -3060,6 +3098,22 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
             setModal(null);
           }}
         />
+      )}
+      {modal?.type === 'ciencia' && (
+        <HojaFlotante
+          titulo="Ciencia del plan" subtitulo={`El porqué del plan, que ${t('el atleta')} lee en «Ciencia».`} onCerrar={() => setModal(null)}
+        >
+          <EditorDeCiencia
+            grupos={[
+              { clave: 'plan', nombre: estructura === 'fases' ? 'Todo el plan' : null, recuadros: cienciaPlan },
+              ...(estructura === 'fases'
+                ? phases.filter((f) => (f.ciencia ?? []).length > 0).map((f) => ({ clave: f.id, nombre: f.name || 'Fase', recuadros: f.ciencia }))
+                : []),
+            ]}
+            fases={estructura === 'fases' ? phases.map((f) => ({ id: f.id, name: f.name })) : null}
+            onAgregar={cienciaAgrega} onCambiar={cienciaCambia} onMover={cienciaMueve} onQuitar={cienciaQuita}
+          />
+        </HojaFlotante>
       )}
       {modal?.type === 'foto-plan' && (
         <HojaFlotante titulo="Foto del plan" onCerrar={() => setModal(null)}>
