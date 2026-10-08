@@ -332,6 +332,7 @@ export default function SesionesSobreElPrograma({
   const pregunta = useConfirmacion();
   const autorId = user?.id ?? null;
   const isMaster = !!profile?.is_owner;
+  const sinBase = !isMaster && profile?.repertorio_base === false;
 
   const [fila, setFila] = useState(miFila);
   const [reglas, setReglas] = useState(() => reglasDe(miFila));
@@ -398,14 +399,15 @@ export default function SesionesSobreElPrograma({
     Promise.all([listExercises(), getMasterId(), listCategories(), listExerciseOverrides(user?.id)])
       .then(([exs, mId, cats, mios]) => {
         const tagged = tagRepertoire(aplicarOverrides(exs, mios, cats), mId, user?.id);
-        setRepertoire(isMaster ? tagged : tagged.filter((e) => e.isBase || e.isMine));
+        // Con «Ejercicios de Training Lab» apagados (Mi perfil) solo sale lo suyo.
+        setRepertoire(isMaster ? tagged : tagged.filter((e) => (e.isBase && !sinBase) || e.isMine));
         setCategorias(cats);
         setMasterId(mId);
       })
       .catch(() => {});
-  }, [user?.id, isMaster]);
+  }, [user?.id, isMaster, sinBase]);
   const categoriasVisibles = useMemo(() => conLasMiasPrimero(
-    categorias.filter((c) => !c.created_by || c.created_by === masterId || c.created_by === user?.id), user?.id,
+    categorias.filter((c) => (sinBase ? c.created_by === user?.id : (!c.created_by || c.created_by === masterId || c.created_by === user?.id))), user?.id,
   ), [categorias, masterId, user?.id]);
   const editorProps = {
     repertoire,

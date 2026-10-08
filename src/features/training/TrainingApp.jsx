@@ -2783,8 +2783,12 @@ const PlanLoadingState = () => (
   </div>
 );
 
-// Sin plan asignado: misma interfaz, mensaje claro; wellness y 1RM siguen disponibles
-const NoPlanState = ({ onAbrirHoja }) => (
+// Sin plan asignado: misma interfaz, mensaje claro; wellness y 1RM siguen disponibles.
+// Si ya tiene entrenador, se le dice por su nombre (Andrés, 8 oct 2026, maqueta del inicio); si no, dónde ponerle el código.
+const NoPlanState = ({ onAbrirHoja }) => {
+  const { coach } = usePalabras();
+  const nombre = (coach?.full_name || '').trim().split(' ')[0];
+  return (
   <div style={{ padding: '48px 20px 120px', maxWidth: 560, margin: '0 auto', textAlign: 'center' }}>
     <div style={{
       width: 76, height: 76, borderRadius: 24, background: T.accentBg, color: T.accent,
@@ -2793,12 +2797,13 @@ const NoPlanState = ({ onAbrirHoja }) => (
       <Calendar size={34} />
     </div>
     <div style={{ fontSize: 21, fontWeight: 800, color: T.text, letterSpacing: -0.3 }}>
-      <Palabra>Tu plan está en camino</Palabra>
+      <Palabra>{nombre ? `${nombre} está armando tu plan` : 'Tu plan está en camino'}</Palabra>
     </div>
     <div style={{ fontSize: 14.5, color: T.text2, marginTop: 10, lineHeight: 1.6, maxWidth: 340, marginInline: 'auto' }}>
       <Palabra>
-        Tu entrenador está preparando tu programa. En cuanto te lo asigne aparecerá aquí,
-        con tus fases, semanas y sesiones listas para entrenar.
+        {coach
+          ? 'En cuanto te lo asigne aparecerá aquí, con tus sesiones listas para entrenar.'
+          : 'Ponle el código de tu entrenador en Mi perfil → Mi equipo, y en cuanto te arme tu plan aparecerá aquí.'}
       </Palabra>
     </div>
     <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 26, flexWrap: 'wrap' }}>
@@ -2822,7 +2827,8 @@ const NoPlanState = ({ onAbrirHoja }) => (
       </Sin1RM>
     </div>
   </div>
-);
+  );
+};
 
 export default function TrainingApp() {
   const {

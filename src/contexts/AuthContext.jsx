@@ -104,7 +104,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   // Register via Edge Function (creates a confirmed user), then auto sign-in
-  const signUp = useCallback(async ({ username, email, password, fullName, accountType, coachUsername, genero, profesion }) => {
+  const signUp = useCallback(async ({ username, email, password, fullName, accountType, coachUsername, genero, profesion, inicioPaso }) => {
     let res;
     try {
       res = await fetch(SIGNUP_URL, {
@@ -123,6 +123,8 @@ export function AuthProvider({ children }) {
           coach_username: coachUsername || undefined,
           genero: genero || undefined,
           profesion: profesion || undefined,
+          // El inicio nuevo pregunta lo demás DESPUÉS, pantalla por pantalla (ver `features/inicio`).
+          inicio_paso: inicioPaso || undefined,
         }),
       });
     } catch {

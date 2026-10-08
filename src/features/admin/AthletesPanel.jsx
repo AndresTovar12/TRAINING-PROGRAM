@@ -3,13 +3,13 @@ import {
   Loader2, Search, Plus, Trash2, X, ChevronRight, ChevronLeft, Pencil,
   CalendarClock, User as UserIcon, Shield, ClipboardList, Users,
   UserMinus, Power, AlertTriangle, Eye, ChevronDown, ChevronUp, UserPlus,
-  Check, Copy, Share2, CircleCheck, RotateCcw, CalendarPlus, FolderOpen,
+  Check, Copy, Share2, CircleCheck, RotateCcw, CalendarPlus, FolderOpen, ListChecks,
 } from 'lucide-react';
 import {
   getProgramas, getSesionesPegadas, deletePlan, getAthleteState, listAthletesOverview, listCoaches, setAthleteCoach,
   quitarAtletaDeMiLista, setAtletaActivo, resumenDatosAtleta, eliminarAtletaDefinitivo,
   invitacionesPendientes, ligaDeInvitacion, cambiarAlta, cambiarAltaDeEquipo, nombresDelEquipo,
-  listEquipo, equiposDeMisAtletas, marcarAvisoVisto,
+  listEquipo, equiposDeMisAtletas, marcarAvisoVisto, primerosPasos,
 } from '@/lib/api';
 import {
   resumenDeDolor, textoDeDolor, hechasEstaSemana, esperadasEstaSemana, lineaDeLista,
@@ -35,6 +35,8 @@ import NavegadorDelPlan from '@/components/NavegadorDelPlan';
 import DentroDelDia from '@/features/admin/DentroDelDia';
 import ListaDesplegable from '@/components/ListaDesplegable';
 import CodigoDeCoach from '@/components/CodigoDeCoach';
+import BotonEntendido from '@/components/BotonEntendido';
+import { useAvisosVistos } from '@/lib/useAvisosVistos';
 import { esArranque, guardaLugar, leeLugar } from '@/lib/lugar';
 import { useLugar, useScrollLugar } from '@/lib/useLugar';
 
@@ -1350,7 +1352,78 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
 }
 
 /* ------------------------------ Panel raíz ------------------------------ */
-export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
+/* «Primeros pasos»: lo que recibe al coach nuevo en su lista vacía (maqueta del inicio, 8 oct 2026). Cuatro cosas; cada
+   una se palomea sola cuando ya la hizo (`primeros_pasos()` en la base) y cada renglón lleva a hacerla. Se quita con
+   «Entendido» y no vuelve, y desaparece sola cuando las cuatro están hechas. `clave` cambia cuando la lista se recarga,
+   para volver a preguntar qué ya está hecho. */
+function PrimerosPasos({ clave, onAgregar, onIrA, onAbrirPerfil, compu }) {
+  const { t } = usePalabras();
+  const { listo, visto, marcar } = useAvisosVistos();
+  const [hecho, setHecho] = useState(null);
+
+  useEffect(() => {
+    let vivo = true;
+    primerosPasos().then((h) => { if (vivo) setHecho(h || {}); }).catch(() => { if (vivo) setHecho({}); });
+    return () => { vivo = false; };
+  }, [clave]);
+
+  if (!listo || visto('primeros-pasos') || !hecho) return null;
+  const pasos = [
+    { id: 'atletas', texto: t('Agrega a tu primer atleta'), accion: onAgregar },
+    { id: 'planes', texto: 'Arma tu primer plan', accion: () => onIrA?.('misplanes') },
+    { id: 'ejercicios', texto: 'Graba o sube un video de ejercicio', accion: () => onIrA?.('exercises') },
+    // En la compu «Conectar con IA» es una pestaña; en el teléfono vive en Mi perfil.
+    { id: 'ia', texto: 'Conecta tu IA (ChatGPT o Claude)', accion: () => (compu ? onIrA?.('ia') : onAbrirPerfil?.('ia')) },
+  ];
+  const hechos = pasos.filter((p) => hecho[p.id]).length;
+  if (hechos === pasos.length) return null;
+
+  return (
+    <section
+      aria-label="Primeros pasos"
+      style={{ background: T.bg2, border: `1.5px solid ${KP.lineHi}`, borderRadius: 18, padding: '14px 14px 6px', marginBottom: 16, boxShadow: KP.shCard }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <span style={{ width: 34, height: 34, borderRadius: 10, display: 'grid', placeItems: 'center', background: KP.blueSoft, color: KP.blue, flexShrink: 0 }}>
+          <ListChecks size={18} />
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 15.5, fontWeight: 800, color: T.text }}>Primeros pasos</div>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>{hechos} de {pasos.length}</div>
+        </div>
+        <BotonEntendido color={KP.blue} onClick={() => marcar('primeros-pasos')} />
+      </div>
+      {pasos.map((p) => {
+        const ok = !!hecho[p.id];
+        return (
+          <button
+            key={p.id}
+            type="button"
+            onClick={p.accion}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 12, minHeight: 50, padding: '0 4px',
+              border: 'none', borderTop: `1px solid ${T.border}`, background: 'transparent', cursor: 'pointer',
+              fontFamily: FONT, textAlign: 'left', touchAction: 'manipulation',
+            }}
+          >
+            <span style={{
+              width: 24, height: 24, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center', color: '#fff',
+              border: `2px solid ${ok ? KP.mint : KP.lineHi}`, background: ok ? KP.mint : 'transparent',
+            }}>
+              {ok && <Check size={14} strokeWidth={3} />}
+            </span>
+            <span style={{ flex: 1, fontSize: 14.5, fontWeight: 700, color: ok ? T.text3 : T.text, textDecoration: ok ? 'line-through' : 'none' }}>
+              {p.texto}
+            </span>
+            {!ok && <ChevronRight size={17} color={T.text3} />}
+          </button>
+        );
+      })}
+    </section>
+  );
+}
+
+export default function AthletesPanel({ viendoComo, onVerComoAtleta, onIrA, onAbrirPerfil }) {
   const { profile, user } = useAuth();
   const { t, salud } = usePalabras();
   const isMaster = !!profile?.is_owner;
@@ -1622,6 +1695,9 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta }) {
       <div>
         {/* Alguien se unió al equipo de un atleta suyo: se lo dice su coach principal. */}
         <AvisosDelCoach avisos={avisos} onEntendido={avisoEntendido} />
+        {!viendoComo && !isMaster && (
+          <PrimerosPasos clave={recarga} onAgregar={() => setAgregando(true)} onIrA={onIrA} onAbrirPerfil={onAbrirPerfil} compu={isDesktop} />
+        )}
         {modoTabla && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginBottom: 16 }}>
             <StatCard icon={<Users size={17} />} label={t('Atletas')} value={metricas.total} />

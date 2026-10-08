@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { esDeSalud, traduce } from '@/lib/palabras';
+import { esDeSalud, esInstructor, modoDePalabras, traduce } from '@/lib/palabras';
 
 /* Quién atiende a esta persona, y si es de salud.
 
@@ -43,12 +43,14 @@ export function PalabrasProvider({ perfil, children }) {
       ? { profesion: perfil?.profesion ?? null, full_name: perfil?.full_name ?? null }
       : (idDelCoach ? (leidos[idDelCoach] ?? leeCache(idDelCoach)) : null);
     const salud = esDeSalud(coach?.profesion);
-    return { salud, coach, t: (x) => traduce(x, salud) };
+    const instructor = esInstructor(coach?.profesion);
+    const modo = modoDePalabras(coach?.profesion);
+    return { salud, instructor, coach, t: (x) => traduce(x, modo) };
   }, [esPro, perfil?.profesion, perfil?.full_name, idDelCoach, leidos]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
-/** `{ t, salud, coach }`: `t('Mis atletas')` → «Mis pacientes» si atiende un fisio. */
+/** `{ t, salud, instructor, coach }`: `t('Mis atletas')` → «Mis pacientes» si atiende un fisio, «Mis alumnos» si da clases. */
 // eslint-disable-next-line react-refresh/only-export-components
 export const usePalabras = () => useContext(Ctx);

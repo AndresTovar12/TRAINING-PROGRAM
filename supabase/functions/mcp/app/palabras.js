@@ -16,6 +16,12 @@ const sinAcentos = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '
 /** ¿Este oficio es de salud? «Fisioterapeuta», «Fisioterapeuta deportivo», «fisio»… */
 export const esDeSalud = (profesion) => /fisio/i.test(sinAcentos(profesion));
 
+/** ¿Da clases? «Instructor (yoga, pilates, spinning…)», «instructora de pilates», «maestra de yoga»… Sus atletas son «alumnos». */
+export const esInstructor = (profesion) => /instructor|yoga|pilates|spinning|clases|maestr/i.test(sinAcentos(profesion));
+
+/** El modo de palabras de un oficio: 'salud', 'instructor' o null (todo como siempre). */
+export const modoDePalabras = (profesion) => (esDeSalud(profesion) ? 'salud' : esInstructor(profesion) ? 'instructor' : null);
+
 // Frases enteras primero: mandan sobre las palabras sueltas.
 const FRASES = [
   ['Plan de entrenamiento', 'Programa de ejercicios'],
@@ -36,6 +42,12 @@ const PALABRAS = [
   ['coaches', 'fisios'], ['coach', 'fisio'],
 ];
 
+/* El instructor de yoga, pilates o spinning tiene ALUMNOS (Andrés, 8 oct 2026). Lo demás —plan, entrenador— se queda. */
+const PALABRAS_INSTRUCTOR = [
+  ['atletas', 'alumnos'], ['atleta', 'alumno'],
+  ['clientes', 'alumnos'], ['cliente', 'alumno'],
+];
+
 // Conserva la mayúscula: «Atletas» → «Pacientes», «atletas» → «pacientes».
 const comoEl = (original, nuevo) => (
   original[0] !== original[0].toLowerCase()
@@ -48,8 +60,12 @@ const comoEl = (original, nuevo) => (
    y «Mis programas» se confundiría con ella. */
 const PROTEGIDOS = /(Mis planes)/;
 
-function traduceTrozo(texto) {
+function traduceTrozo(texto, modo) {
   let t = texto;
+  if (modo === 'instructor') {
+    for (const [de, a] of PALABRAS_INSTRUCTOR) t = t.replace(new RegExp(`\\b${de}\\b`, 'gi'), (m) => comoEl(m, a));
+    return t;
+  }
   for (const [de, a] of FRASES) t = t.split(de).join(a);
   for (const [de, a] of PALABRAS) {
     t = t.replace(new RegExp(`\\b${de}\\b`, 'gi'), (m) => comoEl(m, a));
@@ -57,9 +73,13 @@ function traduceTrozo(texto) {
   return t;
 }
 
-/** El texto con las palabras del oficio. `salud` = quien atiende es de salud. */
-export function traduce(texto, salud) {
-  if (!salud || typeof texto !== 'string') return texto;
+/**
+ * El texto con las palabras del oficio. `modo`: 'salud' (quien atiende es de salud), 'instructor', o nada. Por compatibilidad,
+ * `true` sigue valiendo como 'salud' (así lo llama el conector de IA).
+ */
+export function traduce(texto, modo) {
+  const m = modo === true ? 'salud' : modo;
+  if (!m || typeof texto !== 'string') return texto;
   // Con el separador entre paréntesis, `split` deja lo protegido en las posiciones impares.
-  return texto.split(PROTEGIDOS).map((trozo, i) => (i % 2 ? trozo : traduceTrozo(trozo))).join('');
+  return texto.split(PROTEGIDOS).map((trozo, i) => (i % 2 ? trozo : traduceTrozo(trozo, m))).join('');
 }

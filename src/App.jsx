@@ -10,7 +10,7 @@ import { PlanProvider } from '@/contexts/PlanContext';
 import AuthScreen from '@/features/auth/AuthScreen';
 import ActivarInvitacion from '@/features/auth/ActivarInvitacion';
 import UnirseAlEquipo from '@/features/auth/UnirseAlEquipo';
-import Bienvenida from '@/features/auth/Bienvenida';
+import Inicio from '@/features/inicio/Inicio';
 import LandingPage from '@/features/landing/LandingPage';
 import TrainingApp from '@/features/training/TrainingApp';
 import AdminApp from '@/features/admin/AdminApp';
@@ -51,11 +51,15 @@ function Splash({ label = 'Cargando…' }) {
   );
 }
 
-function AccountMenu() {
+function AccountMenu({ perfil, onPerfil }) {
   const { profile, user, isAdmin, signOut } = useAuth();
   const { t } = usePalabras();
   const [open, setOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
+  // Si quien lo monta manda `onPerfil`, Mi perfil se abre desde fuera también (el panel del coach lo abre en «Primeros
+  // pasos» → Conectar con IA). Si no, lo lleva el menú solo, como siempre.
+  const [perfilLocal, setPerfilLocal] = useState(false);
+  const profileOpen = onPerfil ? perfil : perfilLocal;
+  const setProfileOpen = onPerfil || setPerfilLocal;
   const ref = useRef(null);
 
   useEffect(() => {
@@ -274,7 +278,7 @@ function CuentaDesactivada() {
  * que ya tienen cuenta y solo quieren su rutina del dia, asi que la pagina
  * de presentacion seria un estorbo entre ellos y su entrenamiento.
  */
-function Entrada({ codigo }) {
+function Entrada({ codigo, onCodigoUsado }) {
   const esCompu = useIsDesktop();
   // Con un link o QR de equipo (`?unirse=`) se salta la presentación: quien llega
   // ahí viene a entrar o a crear su cuenta con ese código.
@@ -288,11 +292,23 @@ function Entrada({ codigo }) {
       />
     );
   }
+  /* Crear la cuenta: el inicio nuevo, una pregunta por pantalla (ver `features/inicio`). Entrar va primero y esto se
+     abre desde su botón «Crear cuenta» (Andrés, 8 oct 2026). Con un código de equipo, el código ya va puesto. */
+  if (pantalla === 'register') {
+    return (
+      <Inicio
+        key="nuevo"
+        modo="nuevo"
+        codigo={codigo || ''}
+        onVolver={() => setPantalla('login')}
+        onCuentaCreada={codigo ? onCodigoUsado : undefined}
+      />
+    );
+  }
   return (
     <AuthScreen
-      modoInicial={pantalla || 'login'}
       onVolver={esCompu && !codigo ? () => setPantalla(null) : undefined}
-      codigoDeEquipo={codigo || ''}
+      onCrearCuenta={() => setPantalla('register')}
       aviso={codigo ? 'Para unirte al equipo, entra a tu cuenta o crea una: el código ya va puesto.' : undefined}
     />
   );
@@ -356,6 +372,8 @@ function InvitacionConSesion({ onSalir }) {
 
 export default function App() {
   const { loading, user, profile } = useAuth();
+  // Mi perfil del coach: lo abre el menú de la cuenta y también su panel (ver `AccountMenu`).
+  const [perfilDelCoach, setPerfilDelCoach] = useState(false);
 
   /* La tabla de fotos de los videos se pide en cuanto hay sesión, mientras el
      perfil y el plan todavía cargan: cuando se dibuja la lista de ejercicios
@@ -418,27 +436,26 @@ export default function App() {
      qué— y luego se pregunta. Ver `features/ia/PermisoIA.jsx`. */
   if (permisoIA) {
     if (loading) return <Splash />;
-    if (!user) return <AuthScreen modoInicial="login" aviso="Para conectar tu IA, entra a tu cuenta de Training Lab." />;
+    if (!user) return <AuthScreen aviso="Para conectar tu IA, entra a tu cuenta de Training Lab." />;
     if (!profile) return <Splash label="Cargando tu perfil…" />;
     if (profile.is_active === false) return <CuentaDesactivada />;
-    if (profile.perfil_completo === false) return <Bienvenida />;
+    if (profile.perfil_completo === false) return <Inicio key="google" modo="google" />;
     return <PermisoIA authorizationId={permisoIA} onTerminar={cierraPermiso} />;
   }
 
   if (loading) return <Splash />;
-  if (!user) return <><Entrada codigo={unirse} /><UpdateBanner /></>;
+  if (!user) return <><Entrada codigo={unirse} onCodigoUsado={cierraUnirse} /><UpdateBanner /></>;
   if (!profile) return <Splash label="Cargando tu perfil…" />;
 
   // Cuenta pausada por el administrador. Va ANTES de elegir app: si no, el
   // atleta entraria a su rutina y solo fallarian las consultas, una por una.
   if (profile.is_active === false) return <CuentaDesactivada />;
 
-  /* Entró con Google y le falta la mitad de la cuenta. Google solo da correo y
-     nombre: el usuario y el tipo de cuenta hay que preguntarlos, y hasta que
-     los conteste esto es lo único que se ve. Quien se registró por el
-     formulario nunca pasa por aquí (la función `signup` marca el perfil como
-     completo, porque ese formulario sí pregunta todo). */
-  if (profile.perfil_completo === false) return <><Bienvenida /><UpdateBanner /></>;
+  /* Entró con Google y le falta decir qué tipo de cuenta es (Google solo da correo y nombre): hasta que conteste, esto es
+     lo único que se ve. Y quien creó su cuenta y cerró a la mitad de las preguntas retoma donde iba (`inicio_paso`). Las
+     dos cosas son el mismo inicio (ver `features/inicio`); la `key` lo vuelve a armar al cambiar de modo. */
+  if (profile.perfil_completo === false) return <><Inicio key="google" modo="google" /><UpdateBanner /></>;
+  if (profile.inicio_paso) return <><Inicio key="retomar" modo="retomar" /><UpdateBanner /></>;
 
   // Abrió un link o QR de equipo: primero eso (ver `UnirseAlEquipo`), luego su app.
   if (unirse) return <><UnirseAlEquipo codigo={unirse} onTerminar={cierraUnirse} /><UpdateBanner /></>;
@@ -448,8 +465,8 @@ export default function App() {
   if (profile.role === 'admin') {
     return (
       <PalabrasProvider perfil={profile}>
-        <AdminApp />
-        <AccountMenu />
+        <AdminApp onAbrirPerfil={setPerfilDelCoach} />
+        <AccountMenu perfil={perfilDelCoach} onPerfil={setPerfilDelCoach} />
         <UpdateBanner />
       </PalabrasProvider>
     );
