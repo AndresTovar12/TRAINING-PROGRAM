@@ -5,6 +5,7 @@ import BotonEntendido from '@/components/BotonEntendido';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useAvisosVistos } from '@/lib/useAvisosVistos';
+import { useIsDesktop } from '@/lib/useViewport';
 import Ventana from '@/features/misplanes/Ventana';
 import { IconBtn, Pill, Contador } from '@/features/admin/piezas';
 import {
@@ -56,6 +57,24 @@ const ESTILO_CON_FORMATO = {
   padding: '7px 12px', fontFamily: FONT, fontSize: 13, fontWeight: 800, color: T.accent,
 };
 
+/* UNA SOLA CÁPSULA: «Se repite ▾ │ − 3 + veces». Andrés, 9 oct 2026: «"se repite" está separado de la cantidad de veces
+   que se repite, entonces uno no encuentra la relación». Antes la lista era una pastilla y el contador flotaba al lado; ahora
+   la lista es la parte izquierda de la cápsula y el número con su «veces», la derecha, con una rayita entre las dos. Se lee
+   como una frase. El estilo de la cápsula es el que tenía la lista sola (blanco con borde azul; azul suave con lapsos). */
+const DENTRO_DE_LA_CAPSULA = (conFormato) => ({
+  ...(conFormato ? ESTILO_CON_FORMATO : ESTILO_SIN_FORMATO),
+  border: 'none', background: 'transparent', minHeight: 30, padding: '0 10px 0 11px',
+});
+/* En un teléfono, «⏱ Lapsos personalizados ▾ − 1 + vez» no cabe en un renglón: la cápsula se parte en dos (la lista arriba,
+   las veces abajo) sin dejar de ser UNA caja. Con un solo renglón, el radio de 18 en una caja de 34 es la misma pastilla. */
+const CAPSULA = (conFormato) => ({
+  display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', rowGap: 2, borderRadius: 18, boxSizing: 'border-box',
+  minHeight: 34, padding: '2px 10px 2px 0', maxWidth: '100%',
+  ...(conFormato
+    ? { border: 'none', background: T.accentBg }
+    : { border: `1.5px solid ${T.accent}`, background: '#fff' }),
+});
+
 // Botón blanco con borde sólido azul: lo que no es la acción principal pero se busca a simple vista.
 function BotonBlanco({ icon: Icon, children, onClick, expandido }) {
   return (
@@ -99,6 +118,8 @@ export function EncabezadoDelSet({
   numero, bloque, etiquetaDeTipo, onCambio, onAgregar, onSubir, onBajar, onEliminar, puedeSubir, puedeBajar, onLapsos,
 }) {
   const pregunta = useConfirmacion();
+  // En la compu la cápsula cabe en un renglón y lleva la rayita; en el teléfono las veces bajan de renglón, sin rayita.
+  const esCompu = useIsDesktop();
   const formato = bloque.formato ?? null;
   // En «Lapsos personalizados» sus ejercicios traen lapsos y no hay reloj de formato.
   const lapsos = !formato && !!bloque.lapsos;
@@ -188,25 +209,34 @@ export function EncabezadoDelSet({
                 {etiquetaDeTipo.toUpperCase()}
               </span>
             )}
-            <span style={{ ...frase, display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-              {/* Con lapsos es la pastilla azul con su relojito, como cualquier formato; las series siguen al lado. */}
+            {sinSeries ? (
               <ListaDesplegable
                 etiqueta="Formato del set" valor={vista} onCambio={elige} opciones={opciones}
-                icono={lapsos ? Timer : undefined} estilo={lapsos ? ESTILO_CON_FORMATO : ESTILO_SIN_FORMATO}
-                colorFlecha={T.accent} anchoMinimo={270} alto={460}
+                estilo={ESTILO_SIN_FORMATO} colorFlecha={T.accent} anchoMinimo={270} alto={460}
               />
-              {!sinSeries && (
-                <>
+            ) : (
+              /* La cápsula: la lista («Se repite ▾», o «⏱ Lapsos personalizados ▾») y las veces que se repite, juntas. */
+              <span style={CAPSULA(lapsos)}>
+                <ListaDesplegable
+                  etiqueta="Formato del set" valor={vista} onCambio={elige} opciones={opciones}
+                  icono={lapsos ? Timer : undefined} estilo={DENTRO_DE_LA_CAPSULA(lapsos)}
+                  colorFlecha={T.accent} anchoMinimo={270} alto={460}
+                />
+                {/* Las veces, con una rayita que las separa de la lista (si bajan de renglón, la rayita baja con ellas). */}
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', minHeight: 28,
+                  ...(esCompu ? { borderLeft: `1px solid ${T.accent}${lapsos ? '55' : '66'}`, paddingLeft: 8, marginLeft: 2 } : { paddingLeft: 11 }),
+                }}>
                   <Contador
-                    texto={seriesTexto} etiqueta="series" editable ancho={58} teclado="text"
+                    texto={seriesTexto} etiqueta="series" editable ancho={50} teclado="text"
                     alConfirmar={(t) => onCambio({ rounds: t })}
                     onMenos={() => onCambio({ rounds: String(Math.max(1, nSeries - 1)) })} menosApagado={!esNumero || nSeries <= 1}
                     onMas={() => onCambio({ rounds: String(nSeries + 1) })} masApagado={!esNumero}
                   />
-                  {nSeries === 1 ? 'vez' : 'veces'}
-                </>
-              )}
-            </span>
+                  <span style={{ ...frase, marginLeft: 6, flexShrink: 0 }}>{nSeries === 1 ? 'vez' : 'veces'}</span>
+                </span>
+              </span>
+            )}
           </>
         )}
         <span style={{ flex: 1 }} />
