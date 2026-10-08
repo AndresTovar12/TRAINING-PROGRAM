@@ -1,3 +1,5 @@
+import { explicacionesPrimero, esExplicacion } from '@/lib/proposito';
+
 /**
  * Qué video le toca ver a cada atleta.
  *
@@ -14,17 +16,10 @@
  *
  * Si el atleta no puso género, el paso 2 no aplica y cae en el 3. Nunca se le
  * adivina: mostrarle la versión equivocada es peor que mostrarle la genérica.
- */
-
-/**
- * Cómo se llama una pastilla cuando el coach no le escribió etiqueta.
  *
- * Un archivo nuestro no tiene de dónde sacar un nombre, así que se queda con
- * `porDefecto`. Uno que vive fuera sí: se llama como su plataforma.
+ * Y SOBRE ESE ORDEN, UNA REGLA MÁS: las EXPLICACIONES van antes que los ejemplos (Andrés, 7 oct 2026: «el video con explicación
+ * tenga prioridad, así primero se ve la explicación y luego el ejemplo»). Dentro de cada clase se conserva el orden de arriba.
  */
-function nombreDeLaFuente(url, porDefecto = 'Video') {
-  return ligaExterna(url)?.de || porDefecto;
-}
 
 /** Los videos de ESTE ejercicio que aplican a ESTE atleta, ya ordenados. */
 export function videosParaAtleta(ejercicio, medias, perfil) {
@@ -50,7 +45,9 @@ export function videosParaAtleta(ejercicio, medias, perfil) {
 
   const lista = elegidos.map((m) => ({
     url: m.url,
-    etiqueta: m.etiqueta || nombreDeLaFuente(m.url),
+    // Lo que escribió el coach, si algo. El nombre que se VE se decide al final: depende de cuántos videos hay y de cuál es cuál.
+    escrita: m.etiqueta || null,
+    proposito: m.proposito,
     id: m.id,
     inicio: m.recorte_inicio ?? null,
     fin: m.recorte_fin ?? null,
@@ -66,9 +63,9 @@ export function videosParaAtleta(ejercicio, medias, perfil) {
   if (original && !lista.some((v) => v.url === original)) {
     lista.push({
       url: original,
-      // "Original" solo tiene sentido frente a otros videos NUESTROS. Si es un
-      // TikTok, la pastilla dice TikTok: el atleta ya sabe qué va a ver.
-      etiqueta: nombreDeLaFuente(original, lista.length ? 'Original' : 'Video'),
+      escrita: null,
+      // El video de siempre es SIEMPRE un ejemplo (ver `lib/proposito.js`).
+      proposito: undefined,
       id: 'original',
       inicio: ejercicio.recorte_inicio ?? null,
       fin: ejercicio.recorte_fin ?? null,
@@ -76,7 +73,19 @@ export function videosParaAtleta(ejercicio, medias, perfil) {
       encuadre: ejercicio.encuadre ?? null,
     });
   }
-  return lista;
+
+  /* CÓMO SE LLAMA CADA UNO. La explicación se llama «Explicación». Un ejemplo se llama como lo puso el coach («De frente»); si no
+     escribió nada, como su plataforma (si es un TikTok, «TikTok»: el atleta ya sabe qué va a ver); y si es un archivo nuestro,
+     «Ejemplo» cuando hay otros videos con qué compararlo, o «Video» si es el único. */
+  const hay = lista.length;
+  return explicacionesPrimero(lista).map(({ escrita, ...v }) => {
+    const explicacion = esExplicacion(v);
+    return {
+      ...v,
+      explicacion,
+      etiqueta: explicacion ? 'Explicación' : (escrita || ligaExterna(v.url)?.de || (hay > 1 ? 'Ejemplo' : 'Video')),
+    };
+  });
 }
 
 /** Solo la dirección del video que se abre por defecto. null si no hay ninguno. */

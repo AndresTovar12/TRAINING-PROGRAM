@@ -1,13 +1,17 @@
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Dumbbell } from 'lucide-react';
 import { ligaExterna, redPermiteAdelantar } from '@/lib/videos';
 import { usePoster } from '@/lib/posters';
-import CarruselDeVideos, { Puntos } from '@/features/training/CarruselDeVideos';
+import { useAppState, useStorage } from '@/contexts/AppStateContext';
+import CarruselDeVideos, { EtiquetaDeVideo, Puntos } from '@/features/training/CarruselDeVideos';
 import { VideoRecortado } from '@/features/training/VideoRecortado';
 
 // Lo más alto que puede ser la tarjeta: deja sitio abajo para anotar reps y peso sin tener que bajar
 // (con más, en un teléfono normal la segunda caja de anotar ya se queda detrás del botón de seguir).
 const ALTO_MAXIMO = '38vh';
+
+// La clave con que se recuerda (en `ui:avisos-vistos`, como los demás avisos) que esta persona ya deslizó entre videos una vez.
+const PISTA = 'desliza-videos';
 
 /**
  * El video de un ejercicio, en una tarjeta con las esquinas redondeadas.
@@ -38,12 +42,29 @@ const ALTO_MAXIMO = '38vh';
  * entre 4 y 25 MB aunque nadie lo vea. Los que viven fuera (TikTok, YouTube) no
  * se preparan: se incrustarían escondidos.
  *
+ * CON MÁS DE UN VIDEO SE DESLIZA, también reproduciendo (Andrés, 7 oct 2026: «con más de un video no se puede deslizar para ver
+ * el segundo»). Antes del play se deslizan las portadas (`CarruselDeVideos`); con el video corriendo, el dedo de lado sobre él
+ * cambia al siguiente y arranca solo (ver `VideoRecortado`, `onDeslizar`). Los puntitos de abajo hacen lo mismo y son los que
+ * sirven con un ratón. La EXPLICACIÓN es el primero (ver `videosParaAtleta`); mientras corre, su nombre se ve unos segundos.
+ *
  * Se monta con `key` del ejercicio: al pasar al siguiente, todo vuelve a su
  * estado inicial (sin video «ya reproduciendo» que no ha cargado).
  */
 export default function TarjetaDeVideo({ videos, portada, nombre }) {
   const [reproduciendo, setReproduciendo] = useState(false);
   const [angulo, setAngulo] = useState(0);
+  /* LA PISTA «DESLIZA ›» sale en el primer video hasta que esta persona cambie de video una vez, por el medio que sea. Se espera
+     a que el estado cargue: si no, una que ya la vio la vería un instante en cada ejercicio. */
+  const { loaded } = useAppState();
+  const [avisos, setAvisos] = useStorage('ui:avisos-vistos', {});
+  const pista = loaded && videos.length > 1 && !avisos?.[PISTA];
+  const cambia = (i) => {
+    setAngulo(i);
+    if (pista) setAvisos((a) => ({ ...(a ?? {}), [PISTA]: new Date().toISOString() }));
+  };
+  /* SI EL IPHONE NO DEJA ARRANCAR SOLO EL VIDEO AL QUE SE DESLIZÓ (solo un toque lo permite), se vuelve a su portada con el botón
+     de play, que sí es un toque. Mejor eso que los controles del navegador. Tiene que ser estable: lo usa un efecto del reproductor. */
+  const alRechazar = useCallback(() => setReproduciendo(false), []);
   // El play() del reproductor, para llamarlo dentro del propio toque (ver `VideoRecortado`).
   const jugador = useRef(null);
   // Se decide una vez por pantalla: si el teléfono pide ahorrar datos, no se baja nada por adelantado.
@@ -72,7 +93,7 @@ export default function TarjetaDeVideo({ videos, portada, nombre }) {
     return (
       <div style={{ marginTop: 14 }}>
         <VideoRecortado video={video} estilo={{ width: '100%', borderRadius: 20 }} />
-        <Puntos videos={videos} activo={angulo} onIr={setAngulo} enFlujo claro />
+        <Puntos videos={videos} activo={angulo} onIr={cambia} enFlujo claro />
       </div>
     );
   }
@@ -90,7 +111,20 @@ export default function TarjetaDeVideo({ videos, portada, nombre }) {
             reproduce={reproduciendo}
             reproducirRef={jugador}
             onMedidas={(w, h) => setMedidasDe({ url: video.url, w, h })}
+            onRechazado={alRechazar}
+            onDeslizar={videos.length > 1 ? (d) => {
+              const i = Math.min(videos.length - 1, Math.max(0, angulo + d));
+              if (i !== angulo) cambia(i);
+            } : undefined}
           />
+        )}
+
+        {/* Cuál es, unos segundos al empezar y al cambiar (con `key` se reinicia): después se quita sola para no estorbar. */}
+        {reproduciendo && videos.length > 1 && (
+          <>
+            <EtiquetaDeVideo key={video.id ?? angulo} video={video} style={{ zIndex: 4, animation: 'tl-etiqueta 3s ease forwards' }} />
+            <style>{'@keyframes tl-etiqueta{0%,75%{opacity:1}100%{opacity:0}}'}</style>
+          </>
         )}
 
         {!reproduciendo && (
@@ -100,7 +134,8 @@ export default function TarjetaDeVideo({ videos, portada, nombre }) {
               portada={portada}
               nombre={nombre}
               activo={angulo}
-              onActivo={setAngulo}
+              onActivo={cambia}
+              pista={pista}
               onReproducir={() => { jugador.current?.(); setReproduciendo(true); }}
               vacio={<Dumbbell size={54} color="#2A3040" />}
               sinPuntos
@@ -108,7 +143,7 @@ export default function TarjetaDeVideo({ videos, portada, nombre }) {
           </div>
         )}
       </div>
-      <Puntos videos={videos} activo={angulo} onIr={setAngulo} enFlujo claro />
+      <Puntos videos={videos} activo={angulo} onIr={cambia} enFlujo claro />
     </div>
   );
 }
