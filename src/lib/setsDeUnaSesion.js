@@ -1,5 +1,6 @@
-import { formatoDeMiembros, ponFormato } from '@/lib/formatos';
-import { normalizaVueltas } from '@/lib/porVuelta';
+import { formatoDeMiembros, ponFormato } from './formatos.js';
+import { normalizaVueltas } from './porVuelta.js';
+import { conLapsosSegun, hayLapsos } from './lapsos.js';
 
 /**
  * Los Sets de una sesión: la lista de ejercicios de una sesión, agrupada como la ve el editor (y el atleta).
@@ -8,6 +9,10 @@ import { normalizaVueltas } from '@/lib/porVuelta';
  * ejercicios (bi-serie, tri-serie…); el que no lo trae es un Set de un solo ejercicio. Las notas sueltas no son Sets.
  * La misma lista sirve a una sesión suelta (`day.exercises`) y a cada sesión de un día doble (`day.blocks[i].exercises`):
  * lo que cambia es dónde vive, no cómo se edita.
+ *
+ * LOS LAPSOS (Andrés, 8 oct 2026): un Set puede estar en «Lapsos personalizados» (`b.lapsos`): cada ejercicio trae varios
+ * lapsos seguidos (cuánto · carga · descanso). Como el formato y las series, es del Set y vive repetido en cada ejercicio
+ * (`ex.lapsos`); ver `lib/lapsos.js`.
  *
  * LAS SERIES de un Set (`rounds`) son lo que traen sus ejercicios en `sets`, y pueden ser tres cosas:
  *   · un número («5»): «Se repite 5 veces»;
@@ -34,6 +39,8 @@ export const parseBlocks = (exercises = []) => {
     b.rounds = b.members[0]?.sets ?? null;
     // El formato (AMRAP, EMOM…) es del Set entero y vive repetido en cada ejercicio, como `sets`.
     b.formato = formatoDeMiembros(b.members);
+    // «Lapsos personalizados»: sus ejercicios traen `lapsos` (y nunca va junto a un formato de reloj).
+    b.lapsos = !b.formato && hayLapsos(b.members);
   });
   return blocks;
 };
@@ -78,7 +85,7 @@ export const serializeBlocks = (blocks) => {
     // Con formato, las «series» pasan a ser sus vueltas; sin él, se quita de todos los ejercicios.
     // Y las vueltas distintas de cada ejercicio se recortan o completan a las veces que se repite el Set.
     const miembros = ponFormato(
-      b.members.map((m) => normalizaVueltas(conSeries(m, b.rounds))),
+      conLapsosSegun(b.members.map((m) => normalizaVueltas(conSeries(m, b.rounds))), !!b.lapsos && !b.formato),
       b.formato ?? null,
     );
     const grupo = b.members.length > 1 ? (propios[i] ?? nuevoNumero()) : null;

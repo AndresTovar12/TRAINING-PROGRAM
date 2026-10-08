@@ -10,6 +10,7 @@ import {
 } from './app/training-utils.js'
 import { textoMeta, leeCantidad, MEDIDAS } from './app/medidas.js'
 import { vueltasDe, ejercicioDeVuelta, parcheDeVueltas, rondasDe } from './app/porVuelta.js'
+import { lapsosDe, parcheDeLapsos, aLapsos, comoEjercicio, MAX_LAPSOS } from './app/lapsos.js'
 import { limpiaFormato, resumenDeFormato, textoDeResultado } from './app/formatos.js'
 import { CAT_COLORS, tipoDeSesion } from './app/theme.js'
 import { MAX_TEXTO, MAX_TITULO, normalizaCiencia, nuevoRecuadro } from './app/ciencia.js'
@@ -304,6 +305,18 @@ export function describirEjercicio(ex: any) {
       intensidad: f.intensity,
     }))
   }
+  /* Los lapsos de un ejercicio (Correr: 800 m a 4:34-5:00, luego 2 min a 6:39-7:00). Igual que el formato y las vueltas, se
+     enseñan completos: `editar_dia` reemplaza la sesión, y lo que la IA no ve, lo borra al reescribirla. Con esto,
+     "cantidad", "intensidad" y "descanso" de arriba son solo los del primer y el último lapso. */
+  const lapsos = lapsosDe(ex)
+  if (lapsos) {
+    d.lapsos = lapsos.map((l: any, i: number) => ({
+      lapso: i + 1,
+      cantidad: textoMeta({ ...comoEjercicio(ex, l), porLado: false }) ?? '',
+      intensidad: l.intensity,
+      descanso: l.descanso,
+    }))
+  }
   if (ex.descanso) d.descanso = ex.descanso
   if (ex.notes) d.notas = ex.notes
   if (ex.cue) d.indicaciones = ex.cue
@@ -515,6 +528,7 @@ export interface EjercicioEntrada {
   formato?: unknown
   por_lado?: boolean
   por_vuelta?: { cantidad?: number | string; intensidad?: string }[]
+  lapsos?: { cantidad?: number | string; unidad?: string; intensidad?: string; descanso?: string }[]
 }
 
 export interface SesionEntrada {
@@ -585,6 +599,8 @@ export function diaDesdeEntrada(
   // El formato de cada grupo: el del primer ejercicio que lo traiga, y vale para todos los del grupo.
   const formatosDeGrupo = new Map<number, any>()
   const vueltasPedidas = new Map<any, { cantidad?: number | string; intensidad?: string }[]>()
+  // Los lapsos de cada ejercicio que los pidió: se arman al final, cuando ya se sabe qué ejercicios comparten Set.
+  const lapsosPedidos = new Map<any, NonNullable<EjercicioEntrada['lapsos']>>()
   const exercises = (sesion.ejercicios ?? []).map((e) => {
     if (e.nota && !e.nombre) return { isNote: true, text: e.nota }
     if (!e.nombre) throw new Aviso('Cada ejercicio necesita "nombre" (o "nota" si es una nota).')
@@ -611,8 +627,18 @@ export function diaDesdeEntrada(
     if (e.por_lado === true) ex.porLado = true
     const nombreFinal = String(ex.name)
     // Sin cantidad: ni reps ni tiempo, ni un reloj de formato, ni vueltas con su cantidad.
-    if ((e.cantidad == null || String(e.cantidad).trim() === '') && e.formato == null && !(Array.isArray(e.por_vuelta) && e.por_vuelta.length)) {
+    const conLapsos = Array.isArray(e.lapsos) && e.lapsos.length > 0
+    if ((e.cantidad == null || String(e.cantidad).trim() === '') && e.formato == null && !(Array.isArray(e.por_vuelta) && e.por_vuelta.length) && !conLapsos) {
       sinCantidad.push({ nombre: nombreFinal, grupo: e.grupo ?? null })
+    }
+    // Cada lapso dice cuánto: si falta en alguno, se pregunta igual que una cantidad que falta.
+    if (conLapsos && e.lapsos!.some((l) => l?.cantidad == null || String(l.cantidad).trim() === '')) {
+      sinCantidad.push({ nombre: nombreFinal, grupo: e.grupo ?? null })
+    }
+    if (conLapsos) {
+      if (e.lapsos!.length > MAX_LAPSOS) throw new Aviso(`"${nombreFinal}": ${e.lapsos!.length} lapsos son demasiados (máximo ${MAX_LAPSOS}).`)
+      if (e.por_vuelta?.length) throw new Aviso(`"${nombreFinal}": "lapsos" no se combina con "por_vuelta": cada lapso ya trae su cantidad y su carga. Usa uno de los dos.`)
+      lapsosPedidos.set(ex, e.lapsos!)
     }
     if (e.por_lado === undefined && esUnilateral(nombreFinal)) porLado.push(nombreFinal)
     // Se colocan al final, cuando ya se sabe cuántas veces se repite el grupo.
@@ -658,6 +684,34 @@ export function diaDesdeEntrada(
     Object.assign(ex, parcheDeVueltas(filas))
     if (ex.porVuelta === undefined) delete ex.porVuelta
   })
+  /* Lapsos: cada uno es «cuánto · carga · descanso», en la unidad que diga (o la del ejercicio si solo trae un número).
+     Un Set está en lapsos cuando sus ejercicios los traen: si UNO del grupo los pide, todos los del grupo quedan en lapsos
+     (los que no los pidieron, con un lapso: el de su línea), igual que en el editor. */
+  lapsosPedidos.forEach((pedidos, ex: any) => {
+    if (ex.formato || (ex.set != null && formatosDeGrupo.has(ex.set))) {
+      throw new Aviso(`"${ex.name}": "lapsos" no se combina con un "formato" de reloj. Usa uno de los dos.`)
+    }
+    const filas = pedidos.map((l) => {
+      const texto = String(l?.cantidad ?? '').trim()
+      if (l?.unidad && !UNIDADES_VALIDAS.has(l.unidad)) {
+        throw new Aviso(`"${ex.name}": la unidad "${l.unidad}" de un lapso no existe. Usa: ${[...UNIDADES_VALIDAS].join(', ')}.`)
+      }
+      // Un número solo toma la unidad del ejercicio; si el texto ya dice «800 m», manda lo que dice.
+      const unidad = l?.unidad ?? (/^[\d.,\s\-–]*$/.test(texto) ? (ex.unidad as string | undefined) : undefined)
+      const leida = leeCantidad({ reps: texto, unidad })
+      return { reps: leida.libre ? texto : leida.cantidad, unidad: leida.unidad, intensity: String(l?.intensidad ?? '').trim(), descanso: String(l?.descanso ?? '').trim() }
+    })
+    Object.assign(ex, parcheDeLapsos(filas))
+    delete ex.porVuelta
+  })
+  if (lapsosPedidos.size) {
+    const enLapsos = new Set<any>([...lapsosPedidos.keys()].map((ex: any) => ex.set ?? ex))
+    exercises.forEach((ex: any, i: number) => {
+      if (ex.isNote || ex.lapsos || !enLapsos.has(ex.set ?? ex)) return
+      if (ex.formato) throw new Aviso(`"${ex.name}": va en un grupo con "lapsos" y no puede tener "formato" de reloj.`)
+      exercises[i] = aLapsos(ex)
+    })
+  }
   const tipo = tipoDesdeTexto(sesion.tipo)
   const dia = {
     day: diaSemana,

@@ -81,6 +81,12 @@ const EJERCICIO = z.object({
     cantidad: z.union([z.number(), z.string()]).optional().describe('Cuánto en ESA vuelta: 10, "8-10"… En la misma unidad del ejercicio.'),
     intensidad: z.string().optional().describe('La carga de ESA vuelta, con las mismas formas que "intensidad": "60%", "85% intensidad", "RPE 8", "RIR 2", "20 kg", "Zona 3"…'),
   })).optional().describe('Solo si las reps o la carga CAMBIAN de una vuelta a otra (pirámides, series de aproximación): una entrada por cada vez que se repite ("series"), en orden. Si todas las vueltas son iguales, no lo mandes. Si el día ya lo traía (ver_plan_de_atleta), mándalo igual o se pierde. No se combina con "formato".'),
+  lapsos: z.array(z.object({
+    cantidad: z.union([z.number(), z.string()]).optional().describe('Cuánto en ESE lapso: 800, "8-10", 2… Si la persona no lo dijo, pregúntalo.'),
+    unidad: z.enum(['reps', 'seg', 'min', 'm', 'km', 'yd', 'cal']).optional().describe('La unidad de ESE lapso (puede cambiar de uno a otro: 1 km, luego 500 m, luego 4 min). Si falta, la del ejercicio.'),
+    intensidad: z.string().optional().describe('La carga de ESE lapso, con las mismas formas que "intensidad": "4:34-5:00 min/km", "Zona 4", "85% intensidad", "250 W", "20 kg"…'),
+    descanso: z.string().optional().describe('Lo que descansa al terminar ESE lapso: "1 min", "90 s". Sin descanso, no lo mandes.'),
+  })).optional().describe('Un ejercicio con VARIOS TRAMOS SEGUIDOS, cada uno con su cantidad, su carga y su descanso: correr 800 m a 4:34-5:00 y luego 2 min a 6:39-7:00; remar 500 m y luego 1 min suave. Es UN ejercicio con varios lapsos, NO varios ejercicios repetidos ni un "formato". En un grupo (superserie o circuito), si UN ejercicio trae lapsos, el Set entero se arma en lapsos y los demás quedan con uno solo. Las "series" dicen cuántas veces se repite el Set. No se combina con "por_vuelta" ni con "formato". Si el día ya los traía (ver_plan_de_atleta), mándalos igual o se pierden.'),
   formato: FORMATO.optional().describe('Formato con reloj de ESTE grupo (o del ejercicio si va solo): AMRAP, EMOM, Tabata, intervalos, fartlek… Basta ponerlo en UN ejercicio del grupo y vale para todos. Sustituye a "series". Si el día ya lo traía (ver_plan_de_atleta), mándalo igual o se pierde.'),
 })
 

@@ -10,6 +10,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { IconBtn, Pill } from '@/features/admin/piezas';
 import { AvisoDeFormatos, EncabezadoDelSet } from '@/features/admin/FormatoDelSet';
+import LapsosDelEjercicio, { PorLadoDelEjercicio } from '@/features/admin/LapsosDelEjercicio';
+import { traeLapsos } from '@/lib/lapsos';
 import { parseBlocks, serializeBlocks, setTag } from '@/lib/setsDeUnaSesion';
 import { esProgramaFantasma } from '@/lib/programas';
 import { useAviso } from '@/components/AvisoPasajero';
@@ -223,7 +225,7 @@ const alEscribirDescripcion = (onPatch) => (e) => onPatch({ notes: e.target.valu
 
 function ExerciseCard({
   ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove, onMove, canLeft, canRight,
-  rondas = null, soloLectura = false, arrastre = null,
+  rondas = null, soloLectura = false, arrastre = null, burbuja = false, onCerrarBurbuja,
 }) {
   const rep = delRepertorio(ex, repertoire);
   // Reps, carga, «Por lado» y «Por vuelta»: ver `useRepsYCarga`.
@@ -264,18 +266,27 @@ function ExerciseCard({
             style={{ ...inputStyle, padding: '8px 10px', fontWeight: 800, marginBottom: 10 }}
           />
         )}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          {/* El rótulo de cada campo es su lista: reps, segundos, metros… y % 1RM, RPE, RIR, kilos. Ver `RepsYCarga`. */}
-          <CeldaDeReps rc={rc} estiloInput={estiloCampo} />
-          <CeldaDeCarga rc={rc} estiloInput={estiloCampo} />
-          <div style={{ gridColumn: '1 / -1' }}>
-            <DebajoDeRepsYCarga rc={rc} estiloInput={estiloCampo} />
+        {/* En «Lapsos personalizados» el ejercicio abre sus lapsos en vez de una sola línea de reps y carga. */}
+        {traeLapsos(ex) ? (
+          <>
+            <LapsosDelEjercicio ex={ex} onPatch={onPatch} estiloInput={estiloCampo} angosta burbuja={burbuja} onCerrarBurbuja={onCerrarBurbuja} />
+            <div style={{ marginTop: 7 }}><PorLadoDelEjercicio ex={ex} onPatch={onPatch} /></div>
+          </>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {/* El rótulo de cada campo es su lista: reps, segundos, metros… y % 1RM, RPE, RIR, kilos. Ver `RepsYCarga`. */}
+            <CeldaDeReps rc={rc} estiloInput={estiloCampo} />
+            <CeldaDeCarga rc={rc} estiloInput={estiloCampo} />
+            <div style={{ gridColumn: '1 / -1' }}>
+              <DebajoDeRepsYCarga rc={rc} estiloInput={estiloCampo} />
+            </div>
           </div>
-        </div>
+        )}
         {/* LAS CASILLAS VACÍAS SE QUEDAN VACÍAS. Andrés, 5 oct 2026: «dentro de las casillas, cuando están
             vacías, normalmente pones en gris un ejemplo; quita eso». El rótulo ya dice qué va en cada una;
             por eso el cue, que solo tenía su texto gris, ahora lleva rótulo. */}
-        <div style={{ marginTop: 8 }}>{campoDescanso}</div>
+        {/* Con lapsos, cada uno trae su propio descanso. */}
+        {!traeLapsos(ex) && <div style={{ marginTop: 8 }}>{campoDescanso}</div>}
         <div style={{ marginTop: 8 }}>
           <Field label="Descripción">
             <input value={textoDeDescripcion(ex)} onChange={alEscribirDescripcion(onPatch)} style={estiloCampo} />
@@ -415,10 +426,12 @@ function RotuloCampo({ children }) {
  */
 function ExerciseRow({
   ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove, onMove, canUp, canDown,
-  rondas = null, soloLectura = false, arrastre = null,
+  rondas = null, soloLectura = false, arrastre = null, burbuja = false, onCerrarBurbuja,
 }) {
   const rep = delRepertorio(ex, repertoire);
   const rc = useRepsYCarga({ ex, onPatch, rondas, abiertoDeEntrada: soloLectura });
+  // En un Set de «Lapsos personalizados» el ejercicio abre sus lapsos (ver `LapsosDelEjercicio`).
+  const enLapsos = traeLapsos(ex);
   // En el celular la «Descripción» vacía no ocupa un renglón: sale con «+ Descripción». En cuanto se toca o se escribe, se queda.
   const [descripcionAbierta, setDescripcionAbierta] = useState(false);
   /* EN EL TELÉFONO, LA FILA SE ACOMODA A DOS COLUMNAS. Andrés, 28 sep 2026:
@@ -469,22 +482,36 @@ function ExerciseRow({
           casillas vacías van vacías, sin ejemplo en gris (Andrés, 5 oct 2026).
           Las series NO van aquí: son del Set entero («Se repite 3 veces»). */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        {/* El rótulo de cada campo es su lista: unidades y tipo de carga. Ver `RepsYCarga`. */}
-        <div style={fluido(0) ?? { width: ANCHO_REPS }}>
-          <CeldaDeReps rc={rc} compacto estiloInput={inputFila} />
-        </div>
-        <div style={fluido(0) ?? { width: ANCHO_CARGA }}>
-          <CeldaDeCarga rc={rc} compacto estiloInput={inputFila} />
-        </div>
-        {/* En el teléfono, las vueltas y «Por lado» van pegadas a sus dos casillas, antes del descanso. */}
-        {angosta && (
-          <div style={completo(0)}>
-            <DebajoDeRepsYCarga rc={rc} compacto estiloInput={inputFila} />
+        {enLapsos ? (
+          /* «Lapsos personalizados»: en vez de una línea de reps, carga y descanso, una fila por lapso (cada uno con su
+             descanso), y «Por lado» —que es del ejercicio— justo debajo. */
+          <div style={completo(0) ?? { flex: '1 1 100%', minWidth: 0 }}>
+            <LapsosDelEjercicio
+              ex={ex} onPatch={onPatch} estiloInput={inputFila} angosta={angosta} burbuja={burbuja} onCerrarBurbuja={onCerrarBurbuja}
+              columnasCompu={`16px ${ANCHO_REPS}px ${ANCHO_CARGA}px 112px 30px`}
+            />
+            <div style={{ marginTop: 8 }}><PorLadoDelEjercicio ex={ex} onPatch={onPatch} /></div>
           </div>
+        ) : (
+          <>
+            {/* El rótulo de cada campo es su lista: unidades y tipo de carga. Ver `RepsYCarga`. */}
+            <div style={fluido(0) ?? { width: ANCHO_REPS }}>
+              <CeldaDeReps rc={rc} compacto estiloInput={inputFila} />
+            </div>
+            <div style={fluido(0) ?? { width: ANCHO_CARGA }}>
+              <CeldaDeCarga rc={rc} compacto estiloInput={inputFila} />
+            </div>
+            {/* En el teléfono, las vueltas y «Por lado» van pegadas a sus dos casillas, antes del descanso. */}
+            {angosta && (
+              <div style={completo(0)}>
+                <DebajoDeRepsYCarga rc={rc} compacto estiloInput={inputFila} />
+              </div>
+            )}
+            <div style={fluido(1) ?? { width: 112 }}>
+              <CampoDescanso ex={ex} onPatch={onPatch} compacto estiloInput={inputFila} />
+            </div>
+          </>
         )}
-        <div style={fluido(1) ?? { width: 112 }}>
-          <CampoDescanso ex={ex} onPatch={onPatch} compacto estiloInput={inputFila} />
-        </div>
         {/* La base decide si se parte la línea (no el mínimo): va chica, y el
             campo crece para llenar lo que sobre. */}
         {(!angosta || descripcionAbierta || !!textoDeDescripcion(ex)) && (
@@ -524,7 +551,7 @@ function ExerciseRow({
       )}
       {/* En la compu, las vueltas 2, 3, 4… caen justo debajo de las casillas de reps y carga (mismos anchos),
           y la fila de arriba no se mueve: los demás campos siguen alineados con la primera vuelta. */}
-      {!angosta && (
+      {!angosta && !enLapsos && (
         <DebajoDeRepsYCarga rc={rc} compacto estiloInput={inputFila} columnas={`${ANCHO_REPS}px ${ANCHO_CARGA}px`} />
       )}
     </div>
@@ -1026,6 +1053,8 @@ function CuerpoDeSets({
   const esCompu = useIsDesktop();
   const [enFilas] = useEnFilas();
   const [pickerCtx, setPickerCtx] = useState(null);
+  // El Set donde se acaba de elegir «Lapsos personalizados»: ahí una burbuja señala el «+ Lapso» hasta que se acepte o se toque en otro lado.
+  const [burbujaEn, setBurbujaEn] = useState(null);
   const blocks = useMemo(() => parseBlocks(exercises), [exercises]);
   const nSets = blocks.filter((b) => b.type === 'set').length;
   // Cada lista de este cuerpo (los Sets, los ejercicios de cada Set) se identifica con su id.
@@ -1076,6 +1105,7 @@ function CuerpoDeSets({
               <EncabezadoDelSet
                 numero={setIdx} bloque={b} etiquetaDeTipo={tag}
                 onCambio={(parche) => writeBlocks((bs) => bs.map((x, k) => (k === bi ? { ...x, ...parche } : x)))}
+                onLapsos={() => setBurbujaEn(bi)}
                 onAgregar={() => setPickerCtx({ mode: 'add', blockIdx: bi })}
                 {...(soloLectura ? { onSubir: () => moveBlock(bi, -1), onBajar: () => moveBlock(bi, 1), puedeSubir: bi > 0, puedeBajar: bi < blocks.length - 1 } : null)}
                 onEliminar={() => quita({
@@ -1095,8 +1125,12 @@ function CuerpoDeSets({
                     lista: `${uid}:ej:${bi}`, etiqueta: m.name || 'Ejercicio',
                     alMover: (de, a) => writeBlocks((bs) => bs.map((x, k) => (k === bi ? { ...x, members: mueveEn(x.members, de, a) } : x))),
                   }),
-                  // «Por vuelta» solo tiene sentido si el Set se repite, y sin reloj (ahí las vueltas son del formato).
-                  rondas: b.formato ? null : rondasDe(b.rounds),
+                  // «Por vuelta» solo tiene sentido si el Set se repite, y sin reloj (ahí las vueltas son del formato) ni
+                  // lapsos (cada lapso ya trae su carga: un solo lugar para cada dato).
+                  rondas: b.formato || b.lapsos ? null : rondasDe(b.rounds),
+                  // La burbuja del «+ Lapso» va en el primer ejercicio del Set donde se acaba de elegir el formato.
+                  burbuja: !soloLectura && b.lapsos && burbujaEn === bi && mi === 0,
+                  onCerrarBurbuja: () => setBurbujaEn(null),
                   onVideoAtleta: setMediaDe,
                   onPatch: (patch) => writeBlocks((bs) => bs.map((x, k) => (k === bi
                     ? { ...x, members: x.members.map((mm, kk) => (kk === mi ? { ...mm, ...patch } : mm)) }

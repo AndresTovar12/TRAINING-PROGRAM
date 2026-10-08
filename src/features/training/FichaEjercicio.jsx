@@ -12,6 +12,7 @@ import {
   medida as infoMedida,
 } from '@/lib/medidas';
 import { vueltasDe, ejercicioDeVuelta, anotadoEnVuelta, conVueltaAnotada } from '@/lib/porVuelta';
+import { lapsosDe, comoEjercicio } from '@/lib/lapsos';
 import Cronometro from '@/components/Cronometro';
 import { cargaPorPorcentaje } from '@/lib/cargaPorcentaje';
 import { useUnRM } from '@/lib/unRM';
@@ -66,7 +67,11 @@ export default function FichaEjercicio({
 
   const conPeso = isLoadedExercise(ex);
   const intensidad = cargaEnSuUnidad(exV, unidad) ?? formatIntensity(exV.intensity);
-  const descanso = (ex.descanso || '').trim() || null;
+  /* LOS LAPSOS: con varios, la ficha los enseña en orden —cuánto, carga y descanso de cada uno— en lugar de una sola meta.
+     Cada lapso trae su propio descanso, así que tampoco dice «Descansa X entre cada serie». */
+  const lapsosDeLaFicha = lapsosDe(ex);
+  const lapsos = lapsosDeLaFicha && lapsosDeLaFicha.length > 1 ? lapsosDeLaFicha : null;
+  const descanso = lapsos ? null : ((ex.descanso || '').trim() || null);
 
   const anterior = useMemo(
     // El de la vez pasada, no el que se acaba de anotar en esta sesión.
@@ -203,7 +208,24 @@ export default function FichaEjercicio({
             }}>
               {ex.name}
             </div>
-            {meta && (
+            {lapsos ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6, marginTop: 10 }}>
+                {lapsos.map((l, j) => {
+                  const deEste = comoEjercicio(ex, l);
+                  const queHacer = [textoMeta(deEste), cargaEnSuUnidad(deEste, unidad) ?? formatIntensity(deEste.intensity), l.descanso ? `descanso ${l.descanso}` : null]
+                    .filter(Boolean).join(' · ');
+                  return (
+                    <span key={j} style={{
+                      display: 'inline-flex', alignItems: 'baseline', gap: 9, padding: '6px 13px', borderRadius: 999,
+                      background: LT.blueSoft, color: LT.blue, fontSize: 13, fontWeight: 700, ...NUM_STYLE,
+                    }}>
+                      <span style={{ width: 12, textAlign: 'center', fontSize: 11.5, fontWeight: 800, opacity: 0.75 }}>{j + 1}</span>
+                      {queHacer || '—'}
+                    </span>
+                  );
+                })}
+              </div>
+            ) : meta && (
               <span style={{
                 display: 'inline-block', marginTop: 10, padding: '6px 13px', borderRadius: 999,
                 background: LT.blueSoft, color: LT.blue, fontSize: 13, fontWeight: 700, ...NUM_STYLE,
@@ -302,7 +324,7 @@ export default function FichaEjercicio({
               </span>
             </div>
             <div style={{ fontSize: 13, color: LT.text3, fontWeight: 600, marginTop: 3 }}>
-              {textoMeta(exV) ? `Meta: ${textoMeta(exV)}` : 'Lo que te haya salido'}
+              {textoMeta(exV) && !lapsos ? `Meta: ${textoMeta(exV)}` : 'Lo que te haya salido'}
             </div>
           </div>
 

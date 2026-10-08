@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, Pencil, Plus, Timer, Trash2 } from 'lucide-reac
 import ListaDesplegable from '@/components/ListaDesplegable';
 import BotonEntendido from '@/components/BotonEntendido';
 import { usePalabras } from '@/contexts/PalabrasContext';
+import { useConfirmacion } from '@/components/Confirmacion';
 import { useAvisosVistos } from '@/lib/useAvisosVistos';
 import Ventana from '@/features/misplanes/Ventana';
 import { IconBtn, Pill, Contador } from '@/features/admin/piezas';
@@ -10,6 +11,7 @@ import {
   FORMATOS, IDS_DE_FORMATOS, ANOTA, formatoNuevo, comoPersonalizado, vistaDe, nombreDeFormato, limpiaFormato,
   segundosTotales, expande, pasoDeEscala, textoDeTiempo,
 } from '@/lib/formatos';
+import { perderiaLapsos, perderiaVueltas } from '@/lib/lapsos';
 import { T, FONT } from '@/lib/theme';
 
 /**
@@ -25,7 +27,9 @@ import { T, FONT } from '@/lib/theme';
  *   · Con un formato elegido, una pastilla con su nombre ocupa el lugar de «Se repite N veces» y
  *     debajo sale UNA franja con sus números (los mismos − y + del editor).
  *   · Lo secundario —qué anota el atleta, si los ejercicios se turnan— está en «Más ▾».
- *   · «Personalizado» es lo único que abre una ventana aparte, para armar los tramos.
+ *   · «Lapsos personalizados» (8 oct 2026) es el último de la lista y NO lleva reloj de Set: cada ejercicio abre sus
+ *     lapsos (cuánto · carga · descanso) dentro de su propia tarjeta. Reemplaza al viejo «Personalizado» de tramos, que ya
+ *     no se puede crear; uno que ya existía en un plan se sigue viendo y editando (su ventana de tramos).
  *   · Un aviso corto, una sola vez, con «✓ Entendido», para que se enteren de que existe.
  *
  * LAS SERIES DE UN SET (Andrés, 6 oct 2026): el número de «Se repite N veces» se puede teclear —«12», o un rango como
@@ -77,7 +81,7 @@ export function AvisoDeFormatos() {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: T.accentBg, borderRadius: 12, padding: '10px 14px' }}>
       <span style={{ flex: 1, minWidth: 200, fontSize: 13, fontWeight: 600, color: T.accent, lineHeight: 1.4 }}>
-        Un Set también puede ser AMRAP, EMOM, Tabata, Fartlek… Toca «Se repite» para elegir el formato.
+        Un Set también puede ser AMRAP, EMOM, Tabata, Fartlek o llevar lapsos personalizados… Toca «Se repite» para elegir el formato.
       </span>
       <BotonEntendido color={T.accent} onClick={() => marcar(CLAVE_DEL_AVISO)} />
     </div>
@@ -92,29 +96,60 @@ export function AvisoDeFormatos() {
  * recibe lo que cambia de él (`{ rounds }` o `{ formato }`).
  */
 export function EncabezadoDelSet({
-  numero, bloque, etiquetaDeTipo, onCambio, onAgregar, onSubir, onBajar, onEliminar, puedeSubir, puedeBajar,
+  numero, bloque, etiquetaDeTipo, onCambio, onAgregar, onSubir, onBajar, onEliminar, puedeSubir, puedeBajar, onLapsos,
 }) {
+  const pregunta = useConfirmacion();
   const formato = bloque.formato ?? null;
+  // En «Lapsos personalizados» sus ejercicios traen lapsos y no hay reloj de formato.
+  const lapsos = !formato && !!bloque.lapsos;
   const nEjercicios = bloque.members.length;
   // Sin formato y sin número de series: no se repite («Sin series»). Un guion («—», lo que su plan pone en los ejercicios que van
   // dentro de un cluster) tampoco dice cuántas veces: el atleta no lee nada, así que aquí se lee igual. El guion se queda guardado
   // mientras nadie lo cambie.
   const sinSeries = !formato && (bloque.rounds == null || /^\s*[—–-]+\s*$/.test(String(bloque.rounds)));
-  const vista = formato ? vistaDe(formato) : sinSeries ? 'sin' : 'normal';
+  const vista = formato ? vistaDe(formato) : lapsos ? 'lapsos' : sinSeries ? 'sin' : 'normal';
   const [ventana, setVentana] = useState(false);
   // Un número entero se sube y baja con − y +; un rango («4-6») o texto solo se cambia tecleando.
   const seriesTexto = String(bloque.rounds ?? '');
   const esNumero = /^\d+$/.test(seriesTexto.trim());
   const nSeries = esNumero ? parseInt(seriesTexto, 10) : 0;
 
-  const pon = (f) => onCambio({ formato: f, rounds: String(f.vueltas) });
+  const pon = (f) => onCambio({ formato: f, lapsos: false, rounds: String(f.vueltas) });
 
-  const elige = (id) => {
-    if (id === 'normal') { onCambio({ formato: null, ...(sinSeries ? { rounds: '3' } : null) }); return; }
-    if (id === 'sin') { if (!sinSeries) onCambio({ formato: null, rounds: null }); return; }
-    if (id === vista) { if (id === 'custom') setVentana(true); return; }
+  const elige = async (id) => {
+    // Elegir «Lapsos personalizados» otra vez también vuelve a señalar el «+ Lapso»: sale cada vez que se elige.
+    if (id === 'lapsos' && vista === 'lapsos') { onLapsos?.(); return; }
+    if (id === vista && id !== 'normal' && id !== 'sin') { if (id === 'custom') setVentana(true); return; }
+    // Salir de los lapsos deja a cada ejercicio con su primero: si eso quita algo, se pregunta antes.
+    if (lapsos && id !== 'lapsos' && perderiaLapsos(bloque.members)) {
+      const ok = await pregunta({
+        titulo: '¿Salir de los lapsos?',
+        detalle: 'Cada ejercicio se queda solo con su primer lapso. Lo puedes deshacer con la flecha de arriba.',
+        confirmar: 'Sí, salir',
+        peligro: true,
+      });
+      if (!ok) return;
+    }
+    // Entrar a lapsos con vueltas distintas («Por vuelta») deja solo la primera: se pregunta antes, como al salir.
+    if (id === 'lapsos' && !lapsos && perderiaVueltas(bloque.members)) {
+      const ok = await pregunta({
+        titulo: '¿Pasar a lapsos?',
+        detalle: 'Algún ejercicio tiene reps o carga distintas en cada vuelta. Con lapsos se queda solo la vuelta 1. Lo puedes deshacer con la flecha de arriba.',
+        confirmar: 'Sí, pasar a lapsos',
+        peligro: true,
+      });
+      if (!ok) return;
+    }
+    if (id === 'normal') { onCambio({ formato: null, lapsos: false, ...(sinSeries ? { rounds: '3' } : null) }); return; }
+    if (id === 'sin') { if (!sinSeries || lapsos) onCambio({ formato: null, lapsos: false, rounds: null }); return; }
+    if (id === 'lapsos') {
+      // Sin series, los lapsos corren una vez; con series, se repiten esas veces.
+      onCambio({ formato: null, lapsos: true, ...(sinSeries ? { rounds: '1' } : null) });
+      onLapsos?.();
+      return;
+    }
     if (id === 'custom') {
-      // Desde un formato con nombre se queda con sus tramos para retocarlos; desde cero, uno de ejemplo.
+      // Solo se llega aquí desde un Personalizado que ya existía: sigue con sus tramos.
       pon(formato ? comoPersonalizado(formato) : formatoNuevo('custom'));
       setVentana(true);
       return;
@@ -125,13 +160,16 @@ export function EncabezadoDelSet({
   const opciones = [
     { valor: 'normal', etiqueta: 'Normal', corta: 'Se repite', detalle: 'Series de siempre' },
     { valor: 'sin', etiqueta: 'Sin series', corta: 'Sin series', detalle: 'Un calentamiento, unos drills' },
-    ...IDS_DE_FORMATOS.map((id) => ({
+    // El «Personalizado» de tramos ya no se crea: solo aparece donde un plan viejo ya lo tiene.
+    ...IDS_DE_FORMATOS.filter((id) => id !== 'custom' || vista === 'custom').map((id) => ({
       valor: id,
       etiqueta: FORMATOS[id].nombre,
       // Un Personalizado con nombre propio se llama así en la pastilla, no «Personalizado».
       corta: id === 'custom' && formato ? nombreDeFormato(formato) : undefined,
       detalle: FORMATOS[id].detalle,
     })),
+    // El último de la lista: cada ejercicio del Set abre sus lapsos.
+    { valor: 'lapsos', etiqueta: 'Lapsos personalizados', corta: 'Lapsos personalizados', detalle: 'Cada ejercicio con sus lapsos: cuánto, carga, descanso' },
   ];
 
   return (
@@ -150,10 +188,12 @@ export function EncabezadoDelSet({
                 {etiquetaDeTipo.toUpperCase()}
               </span>
             )}
-            <span style={{ ...frase, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ ...frase, display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+              {/* Con lapsos es la pastilla azul con su relojito, como cualquier formato; las series siguen al lado. */}
               <ListaDesplegable
                 etiqueta="Formato del set" valor={vista} onCambio={elige} opciones={opciones}
-                estilo={ESTILO_SIN_FORMATO} colorFlecha={T.accent} anchoMinimo={270} alto={460}
+                icono={lapsos ? Timer : undefined} estilo={lapsos ? ESTILO_CON_FORMATO : ESTILO_SIN_FORMATO}
+                colorFlecha={T.accent} anchoMinimo={270} alto={460}
               />
               {!sinSeries && (
                 <>
