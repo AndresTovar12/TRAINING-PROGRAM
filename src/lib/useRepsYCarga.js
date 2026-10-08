@@ -6,6 +6,13 @@ import { vueltasDe, varian, filasParaEditar, parcheDeVueltas } from '@/lib/porVu
 const NADA_CAMBIA = { reps: false, intensity: false, alguno: false };
 // Lo único que cabe en una cajita de número: cifras, coma o punto, y la raya de un rango.
 const soloNumero = (texto) => texto.replace(/[^\d.,\-–]/g, '');
+/* Lo que cabe en la casilla de cada tipo: un ritmo («4:34-5:00») admite los dos puntos; una zona es de una cifra
+   o un rango de dos («2-3»), y nunca pasa del 5 que se puede escribir de un golpe. */
+const cabeEnLaCasilla = (tipo, texto) => {
+  if (tipo === 'ritmo' || tipo === 'nado') return texto.replace(/[^\d:\-–]/g, '');
+  if (tipo === 'zona') return texto.replace(/[^\d\-–]/g, '').slice(0, 3);
+  return soloNumero(texto);
+};
 const sinRayaSuelta = (texto) => texto.replace(/^[-–.,]+|[-–.,]+$/g, '');
 
 /**
@@ -93,7 +100,7 @@ export function useRepsYCarga({ ex, onPatch, rondas = null, abiertoDeEntrada = f
   const textoDeCarga = (j) => String((j === null ? ex?.intensity : filas[j].intensity) ?? '');
   /** Lo que va en la casilla de carga de la vuelta `j` (`null` = la casilla única). */
   const cargaDe = (j) => (tipo ? cantidadDeCarga(tipo, textoDeCarga(j).trim()) : textoDeCarga(j));
-  const escribeCarga = (j, texto) => guarda(j, { intensity: tipo ? componeCarga(tipo, soloNumero(texto)) : texto });
+  const escribeCarga = (j, texto) => guarda(j, { intensity: tipo ? componeCarga(tipo, cabeEnLaCasilla(tipo, texto)) : texto });
   // Al salir del campo se limpia un rango que se quedó a medias («7-»): mientras se teclea tiene que poder existir.
   const alSalirDeCarga = (j) => {
     if (!tipo) return;

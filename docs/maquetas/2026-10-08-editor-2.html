@@ -1,0 +1,780 @@
+<title>Editor 2.0</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&display=swap">
+<style>
+/* Layout: una barra arriba (escenarios + teléfono/compu + atleta), el aparato a la izquierda, las notas a la derecha; en
+   teléfono todo en una columna. Dentro del aparato, los colores son los de la app de verdad (siempre claros). */
+:root {
+  --bg: #EEF0F5; --sup: #FFFFFF; --fg: #111318; --fg2: #5B6472; --fg3: #8A93A2; --linea: #DDE1E8;
+  --azul: #1E40E0; --azulSuave: #E8ECFD; --menta: #00A372; --mentaSuave: #E3F6EF; --naranja: #E07B00; --naranjaSuave: #FDF0E0;
+  --sombra: 0 24px 60px rgba(17,19,24,0.12);
+  --letra: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --kBg: #F4F5F8; --kSup: #FFFFFF; --kBg3: #EDEFF3; --kInk: #111318; --kInk2: #6B7280; --kInk3: #9CA3AF;
+  --kLinea: #E5E7EB; --kLineaHi: #D1D5DB; --kAzul: #1E40E0; --kAzulDk: #1733B8; --kAzulSoft: #E8ECFD;
+  --kRojo: #DC2626; --kMenta: #00A372; --kMentaSoft: #E3F6EF; --kVioleta: #A480FF; --kVioletaSoft: #F3EEFF;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15171C; --sup: #1E2128; --fg: #F2F3F6; --fg2: #B3B9C6; --fg3: #7E8695; --linea: #2E323B;
+    --azulSuave: #263166; --mentaSuave: #163F32; --naranjaSuave: #4A2F0C; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15171C; --sup: #1E2128; --fg: #F2F3F6; --fg2: #B3B9C6; --fg3: #7E8695; --linea: #2E323B;
+  --azulSuave: #263166; --mentaSuave: #163F32; --naranjaSuave: #4A2F0C; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--letra); margin: 0; padding-inline: 16px; padding-block: 18px 60px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+button { font-family: inherit; }
+.pagina { max-width: 1280px; margin: 0 auto; }
+.cab { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-bottom: 16px; }
+.cab h1 { font-size: 20px; font-weight: 800; letter-spacing: -0.4px; }
+.cab .sub { font-size: 13px; color: var(--fg2); font-weight: 600; }
+.pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill { border: 1.5px solid var(--linea); background: var(--sup); color: var(--fg); border-radius: 999px; padding: 8px 13px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.pill[aria-pressed="true"] { background: var(--azul); border-color: var(--azul); color: #fff; }
+.seg { display: inline-flex; border: 1.5px solid var(--linea); border-radius: 999px; overflow: hidden; background: var(--sup); }
+.seg button { border: none; background: transparent; color: var(--fg2); padding: 8px 13px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--azul); color: #fff; }
+.dos { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 22px; align-items: start; }
+@media (max-width: 980px) { .dos { grid-template-columns: minmax(0, 1fr); } }
+.notas { background: var(--sup); border: 1px solid var(--linea); border-radius: 18px; padding: 16px 18px; position: sticky; top: env(safe-area-inset-top, 0px); max-height: calc(100vh - 20px); overflow: auto; min-width: 0; }
+@media (max-width: 980px) { .notas { position: static; max-height: none; } }
+.notas h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--fg3); font-weight: 800; margin-bottom: 10px; }
+.nota { display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid var(--linea); font-size: 13.5px; line-height: 1.45; }
+.nota:first-of-type { border-top: none; padding-top: 0; }
+.nota b { display: block; font-weight: 800; margin-bottom: 2px; }
+.nota .n { width: 22px; height: 22px; border-radius: 7px; background: var(--azulSuave); color: var(--azul); font-weight: 800; font-size: 12px; display: grid; place-items: center; flex-shrink: 0; }
+.pregunta { background: var(--naranjaSuave); border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.45; margin-top: 10px; }
+.pregunta b { color: var(--naranja); }
+.tabla { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+.tabla th, .tabla td { text-align: left; padding: 6px 6px; border-top: 1px solid var(--linea); vertical-align: top; }
+.tabla th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--fg3); border-top: none; }
+.si { color: var(--menta); font-weight: 800; } .no { color: var(--fg3); font-weight: 700; }
+.decisiones { margin-top: 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.dec { background: var(--sup); border: 1px solid var(--linea); border-radius: 16px; padding: 14px 16px; font-size: 13.5px; line-height: 1.45; min-width: 0; }
+.dec h3 { font-size: 14px; font-weight: 800; margin-bottom: 6px; }
+.dec h3 span { color: var(--azul); margin-right: 6px; }
+.dec.p h3 span { color: var(--naranja); }
+
+/* ---------- el aparato ---------- */
+.escena { display: flex; justify-content: center; align-items: flex-start; min-width: 0; }
+.tel { width: 375px; max-width: 100%; height: 760px; background: var(--kBg); border-radius: 44px; border: 10px solid #1A1C22; overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--sombra); color: var(--kInk); font-family: var(--letra); }
+.compu { width: 100%; max-width: 880px; background: var(--kBg); border-radius: 18px; border: 1px solid var(--kLineaHi); overflow: hidden; box-shadow: var(--sombra); color: var(--kInk); font-family: var(--letra); }
+.ap-cab { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: rgba(255,255,255,0.92); border-bottom: 1px solid var(--kLinea); flex-shrink: 0; }
+.tel .ap-cab { padding-top: 22px; }
+.ap-cab .atras, .ap-cab .x { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--kLinea); background: #fff; display: grid; place-items: center; color: var(--kInk); flex-shrink: 0; }
+.ap-cab .tit { flex: 1; min-width: 0; }
+.ap-cab .tit b { display: block; font-size: 15px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ap-cab .tit small { display: block; font-size: 12px; color: var(--kInk2); font-weight: 600; }
+.ap-cab .guardar { border: none; background: linear-gradient(135deg, var(--kAzul), var(--kAzulDk)); color: #fff; border-radius: 12px; padding: 9px 14px; font-weight: 800; font-size: 13.5px; }
+.ap-cuerpo { flex: 1; overflow: auto; padding: 14px 14px 40px; position: relative; }
+.compu .ap-cuerpo { padding: 18px 22px 28px; max-height: 760px; }
+.rot { font-size: 10.5px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; color: var(--kInk3); margin-bottom: 6px; }
+.campo { border: 1.5px solid var(--kLinea); background: #fff; border-radius: 12px; padding: 10px 12px; font-size: 14px; font-weight: 600; color: var(--kInk); }
+.sesion { background: var(--kVioletaSoft); border: 1.5px solid rgba(164,128,255,0.32); border-radius: 18px; padding: 14px; margin-top: 14px; }
+.sesion.run { background: #E6F7F1; border-color: rgba(0,163,114,0.3); }
+.sesion.hyrox { background: #FDECEC; border-color: rgba(242,85,90,0.3); }
+.ses-cab { display: grid; gap: 10px; align-items: end; margin-bottom: 10px; }
+.compu .ses-cab { grid-template-columns: minmax(0, 1.6fr) 190px auto; }
+.tipo { display: flex; align-items: center; gap: 8px; }
+.tipo .punto { width: 9px; height: 9px; border-radius: 99px; flex-shrink: 0; }
+.tipo .flecha { margin-left: auto; color: var(--kInk3); }
+.nsets { font-size: 12px; color: var(--kInk2); font-weight: 700; align-self: center; white-space: nowrap; }
+.ses-fila2 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.ses-fila2 .espacio { flex: 1; }
+.vista { display: inline-flex; background: var(--kBg3); border-radius: 10px; padding: 3px; }
+.vista span { width: 30px; height: 26px; border-radius: 8px; display: grid; place-items: center; color: var(--kInk3); }
+.vista span.on { background: #fff; color: var(--kAzul); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.bblanco { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 12px; border-radius: 999px; border: 1.5px solid var(--kAzul); background: #fff; color: var(--kAzul); font-size: 12.5px; font-weight: 800; cursor: pointer; white-space: nowrap; }
+.bprim { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 12px; border-radius: 999px; border: none; background: var(--kAzulSoft); color: var(--kAzul); font-size: 12.5px; font-weight: 800; cursor: pointer; white-space: nowrap; }
+.bgris { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 12px; border-radius: 999px; border: 1.5px solid var(--kLineaHi); background: #fff; color: var(--kInk2); font-size: 12.5px; font-weight: 800; cursor: pointer; }
+.set { background: rgba(255,255,255,0.55); border: 1px solid rgba(255,255,255,0.9); border-radius: 16px; padding: 12px; }
+.set-cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.set-cab .num { font-size: 14.5px; font-weight: 800; }
+.set-cab .espacio { flex: 1; }
+.set-cab .que { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tel .set-cab .num { flex: 1 1 100%; }
+.tel .set-cab .espacio { flex: 1 1 100%; height: 0; }
+.cont { display: inline-flex; align-items: center; gap: 2px; }
+.cont b { min-width: 30px; text-align: center; font-size: 14px; font-weight: 800; }
+.cont button { width: 26px; height: 26px; border-radius: 8px; border: 1.5px solid var(--kLinea); background: #fff; color: var(--kInk); font-weight: 800; cursor: pointer; display: grid; place-items: center; }
+.frase { font-size: 12.5px; font-weight: 700; color: var(--kInk2); }
+.bicono { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--kLinea); background: #fff; color: var(--kInk2); display: grid; place-items: center; cursor: pointer; }
+.bicono.rojo { color: var(--kRojo); }
+.pastilla-f { display: inline-flex; align-items: center; gap: 6px; background: var(--kAzulSoft); color: var(--kAzul); border-radius: 999px; padding: 7px 12px; font-size: 13px; font-weight: 800; cursor: pointer; border: none; }
+.franja { background: var(--kAzulSoft); border-radius: 12px; padding: 9px 12px; margin-bottom: 12px; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
+.franja .espacio { flex: 1; }
+.ej { background: #fff; border: 1px solid var(--kLinea); border-radius: 12px; padding: 11px 12px; margin-top: 8px; }
+.ej-cab { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.ej.plegada { display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer; }
+.ej.plegada .foto { width: 30px; height: 30px; border-radius: 8px; background: #0E1015; display: grid; place-items: center; color: #3A3F4C; flex-shrink: 0; }
+.ej.plegada .foto.verde { background: var(--kMentaSoft); color: var(--kMenta); }
+.ej.plegada .foto.lila { background: #FFF1F6; color: #EC7FB0; }
+.ej.plegada .nombre { font-weight: 700; font-size: 14px; white-space: nowrap; }
+.ej.plegada .resumen { flex: 1; min-width: 0; font-size: 12.5px; color: var(--kInk2); font-weight: 600; text-align: right; }
+.ej.plegada .flecha { color: var(--kInk3); flex-shrink: 0; }
+.tel .ej.plegada { flex-wrap: wrap; }
+.tel .ej.plegada .resumen { flex-basis: 100%; text-align: left; padding-left: 40px; margin-top: -4px; }
+.ej-cab .foto { width: 34px; height: 34px; border-radius: 9px; background: #0E1015; display: grid; place-items: center; color: #3A3F4C; flex-shrink: 0; }
+.ej-cab .foto.verde { background: var(--kMentaSoft); color: var(--kMenta); }
+.ej-cab .foto.lila { background: #FFF1F6; color: #EC7FB0; }
+.ej-cab .nombre { flex: 1; min-width: 0; font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.campos { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+.tel .campos { display: grid; grid-template-columns: 1fr 1fr; }
+.tel .campos .ancho { grid-column: 1 / -1; }
+.c { min-width: 0; }
+.compu .c.reps { width: 96px; } .compu .c.carga { width: 120px; } .compu .c.entre { width: 110px; } .compu .c.desc { width: 112px; } .compu .c.descr { flex: 1 1 140px; min-width: 110px; }
+.rl { border: none; background: transparent; display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: var(--kAzul); padding: 0 0 3px; cursor: pointer; white-space: nowrap; }
+.rl.nuevo { color: var(--kMenta); }
+.caja { display: flex; align-items: center; gap: 2px; border: 1.5px solid var(--kLinea); background: var(--kBg); border-radius: 10px; min-height: 36px; padding: 0 9px; font-size: 13.5px; font-weight: 700; color: var(--kInk); }
+.caja span.u { margin-left: auto; font-size: 11.5px; color: var(--kInk3); font-weight: 700; }
+.caja.vacia { color: transparent; }
+.conpeso { display: inline-flex; align-items: center; gap: 5px; border: 1.5px dashed var(--kAzul); color: var(--kAzul); background: #fff; border-radius: 999px; padding: 0 11px; min-height: 30px; font-size: 12px; font-weight: 800; white-space: nowrap; align-self: flex-end; }
+.chip-kg { display: inline-flex; align-items: center; background: var(--kMentaSoft); color: var(--kMenta); border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 800; margin-top: 4px; white-space: nowrap; }
+.debajo { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; margin-top: 7px; font-size: 12.5px; font-weight: 700; color: var(--kInk2); }
+.debajo label { display: inline-flex; align-items: center; gap: 6px; }
+.debajo input { width: 16px; height: 16px; margin: 0; accent-color: var(--kAzul); }
+.bchico { display: inline-flex; align-items: center; gap: 4px; min-height: 24px; padding: 0 9px; border-radius: 999px; border: 1.5px solid var(--kAzul); background: #fff; color: var(--kAzul); font-size: 12px; font-weight: 800; cursor: pointer; }
+.bchico.lleno { background: var(--kAzulSoft); border-color: transparent; }
+/* las filas de lapsos de UN ejercicio: debajo de su nombre, como las vueltas de «Por vuelta» */
+.laps { display: grid; gap: 6px 8px; margin-top: 2px; align-items: end; }
+.compu .laps { grid-template-columns: 16px 96px 120px 112px 28px; }
+.tel .laps { grid-template-columns: 16px 1fr 1fr 28px; }
+.laps .n { font-size: 11.5px; font-weight: 800; color: var(--kInk3); text-align: center; align-self: center; }
+.laps .rl { font-size: 9.5px; }
+.tel .laps .desc { grid-column: 2 / 4; }
+.entre-sets { display: flex; align-items: center; gap: 10px; margin: 10px 2px; }
+.entre-sets .raya { flex: 1; height: 1px; background: var(--kLineaHi); }
+.chip-desc { display: inline-flex; align-items: center; gap: 5px; border: none; background: var(--kAzulSoft); color: var(--kAzul); border-radius: 999px; padding: 5px 12px; font-size: 12.5px; font-weight: 800; cursor: pointer; }
+.menu-desc { padding: 6px 8px 8px; min-width: 250px; }
+.menu-desc .tit { font-size: 12.5px; font-weight: 800; color: var(--kInk2); padding: 4px 2px 8px; }
+.menu-desc .fila { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.menu-desc .quitar { margin-top: 8px; border: none; background: transparent; color: var(--kRojo); font-size: 12.5px; font-weight: 800; cursor: pointer; padding: 6px 2px; }
+.ud { display: inline-flex; border: 1.5px solid var(--kLinea); border-radius: 9px; overflow: hidden; }
+.ud button { border: none; background: #fff; color: var(--kInk2); padding: 5px 9px; font-size: 12px; font-weight: 800; cursor: pointer; }
+.ud button[aria-pressed="true"] { background: var(--kAzul); color: #fff; }
+.aviso { background: var(--kAzulSoft); color: var(--kAzul); border-radius: 12px; padding: 10px 12px; font-size: 13px; font-weight: 600; line-height: 1.4; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.aviso .ent { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; border: 1.5px solid var(--kAzul); background: #fff; color: var(--kAzul); border-radius: 10px; padding: 6px 11px; font-size: 12.5px; font-weight: 800; }
+.agregar-set { display: flex; justify-content: center; margin-top: 12px; }
+.nuevo-tag { display: inline-flex; align-items: center; background: var(--kMentaSoft); color: var(--kMenta); border-radius: 6px; padding: 2px 6px; font-size: 9.5px; font-weight: 800; letter-spacing: 0.4px; margin-left: 6px; vertical-align: middle; }
+.lista { position: absolute; z-index: 50; background: #fff; border: 1px solid var(--kLinea); border-radius: 14px; box-shadow: 0 16px 44px rgba(17,19,24,0.16); padding: 6px; min-width: 240px; max-height: 380px; overflow: auto; color: var(--kInk); font-family: var(--letra); }
+.lista .sec { font-size: 10px; font-weight: 800; letter-spacing: 0.7px; text-transform: uppercase; color: var(--kInk3); padding: 8px 10px 4px; }
+.lista .op { display: flex; align-items: center; gap: 8px; width: 100%; border: none; background: transparent; text-align: left; border-radius: 9px; padding: 8px 10px; font-size: 13.5px; font-weight: 700; color: var(--kInk); cursor: pointer; }
+.lista .op:hover { background: var(--kBg); }
+.lista .op.on { background: var(--kAzulSoft); color: var(--kAzul); }
+.lista .op small { display: block; font-size: 11.5px; color: var(--kInk2); font-weight: 600; }
+.lista .op .t { flex: 1; min-width: 0; }
+.lista .op .sel { color: var(--kAzul); }
+/* atleta */
+.at .bloque { background: #fff; border: 1px solid var(--kLinea); border-radius: 16px; padding: 12px; margin-bottom: 10px; }
+.at .bloque .cab3 { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 800; color: var(--kInk2); margin-bottom: 8px; }
+.at .bloque .cab3 .f { margin-left: auto; background: var(--kAzulSoft); color: var(--kAzul); border-radius: 999px; padding: 3px 9px; font-size: 11.5px; }
+.at .linea { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--kLinea); }
+.at .linea:first-of-type { border-top: none; }
+.at .linea .play { width: 34px; height: 34px; border-radius: 9px; background: var(--kAzulSoft); color: var(--kAzul); display: grid; place-items: center; flex-shrink: 0; font-size: 11px; font-weight: 800; }
+.at .linea .tx { flex: 1; min-width: 0; }
+.at .linea .tx b { display: block; font-size: 14px; }
+.at .linea .tx small { display: block; font-size: 12px; color: var(--kInk2); font-weight: 600; line-height: 1.4; }
+.at .anota { display: flex; gap: 6px; flex-shrink: 0; }
+.at .anota span { border: 1.5px solid var(--kLinea); border-radius: 9px; min-width: 54px; padding: 6px 8px; font-size: 12px; font-weight: 700; color: var(--kInk3); text-align: center; }
+.at .descansa { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 2px 0 10px; font-size: 12.5px; font-weight: 800; color: var(--kAzul); }
+.at .descansa .raya { flex: 1; height: 1px; background: var(--kLineaHi); }
+.at .cta { display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--kAzul); color: #fff; border-radius: 14px; padding: 13px; font-weight: 800; font-size: 14.5px; }
+.reloj { background: #0E1015; color: #fff; border-radius: 18px; padding: 14px; margin-bottom: 10px; }
+.reloj .paso { font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #9CA3AF; }
+.reloj .que { font-size: 16px; font-weight: 800; margin-top: 4px; }
+.reloj .obj { font-size: 12.5px; color: #C7CBD4; font-weight: 600; margin-top: 2px; }
+.reloj .tiempo { font-size: 38px; font-weight: 800; letter-spacing: -1px; margin: 8px 0 4px; font-variant-numeric: tabular-nums; }
+.reloj .como { font-size: 11.5px; color: #9CA3AF; font-weight: 700; }
+.reloj .botones { display: flex; gap: 8px; margin-top: 10px; }
+.reloj .botones span { flex: 1; text-align: center; border-radius: 12px; padding: 10px; font-weight: 800; font-size: 13.5px; background: #fff; color: #0E1015; }
+.reloj .botones span.gris { background: #2A2E3A; color: #fff; }
+.regla { background: var(--azulSuave); color: var(--azul); border-radius: 12px; padding: 10px 12px; font-size: 13px; font-weight: 700; line-height: 1.4; margin-bottom: 12px; }
+.contra { margin-top: 6px; font-size: 12.5px; line-height: 1.45; }
+.contra b { display: inline-block; min-width: 46px; color: var(--fg3); font-weight: 800; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; }
+.burbuja { position: absolute; z-index: 55; max-width: 270px; background: var(--kAzul); color: #fff; border-radius: 14px; padding: 11px 12px 10px; font-size: 13px; font-weight: 600; line-height: 1.4; box-shadow: 0 14px 34px rgba(30,64,224,0.35); }
+.burbuja::before { content: ''; position: absolute; top: -7px; left: 22px; width: 14px; height: 14px; background: var(--kAzul); transform: rotate(45deg); border-radius: 3px; }
+.burbuja b.tt { display: block; font-size: 14px; font-weight: 800; margin-bottom: 3px; }
+.burbuja .ej-mini { background: rgba(255,255,255,0.16); border-radius: 10px; padding: 7px 9px; margin-top: 8px; font-size: 12px; font-weight: 700; line-height: 1.5; }
+.burbuja .ej-mini i { font-style: normal; display: inline-block; width: 16px; opacity: 0.8; }
+.burbuja .ent { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; border: 1.5px solid #fff; background: #fff; color: var(--kAzul); border-radius: 9px; padding: 5px 10px; font-size: 12.5px; font-weight: 800; cursor: pointer; }
+.ojo { font-size: 11.5px; font-weight: 700; color: var(--fg3); margin-top: 8px; text-align: center; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="pagina">
+  <header class="cab">
+    <div>
+      <h1>Editor 2.0</h1>
+      <div class="sub">v10 · «Lapsos personalizados» con burbuja cada vez que se elige · franja = la línea · descanso entre Sets · Intensidad</div>
+    </div>
+    <div class="pills" id="escenarios"></div>
+    <div class="seg" id="aparato">
+      <button type="button" data-v="tel" aria-pressed="true">Teléfono</button>
+      <button type="button" data-v="compu" aria-pressed="false">Compu</button>
+    </div>
+    <div class="seg" id="quien">
+      <button type="button" data-q="coach" aria-pressed="true">Editor</button>
+      <button type="button" data-q="atleta" aria-pressed="false">Lo que ve el atleta</button>
+    </div>
+  </header>
+
+  <main class="dos">
+    <section class="escena" id="escena"></section>
+    <aside class="notas" id="notas"></aside>
+  </main>
+
+  <section class="decisiones" id="decisiones"></section>
+</div>
+
+<script>
+/* ============================================================
+   Datos
+   ============================================================ */
+const MEDIDAS = [
+  { id: 'reps', et: 'Repeticiones', corta: 'reps', rot: 'Reps', grupo: 'fuerza' },
+  { id: 'seg', et: 'Segundos', corta: 'seg', rot: 'Seg', grupo: 'tiempo' },
+  { id: 'min', et: 'Minutos', corta: 'min', rot: 'Min', grupo: 'tiempo' },
+  { id: 'm', et: 'Metros', corta: 'm', rot: 'M', grupo: 'distancia' },
+  { id: 'km', et: 'Kilómetros', corta: 'km', rot: 'Km', grupo: 'distancia' },
+  { id: 'yd', et: 'Yardas', corta: 'yd', rot: 'Yd', grupo: 'distancia' },
+  { id: 'cal', et: 'Calorías', corta: 'cal', rot: 'Cal', grupo: 'energia' },
+];
+const CARGAS = [
+  { id: 'pct', et: '% del 1RM', corta: '% 1RM', det: 'Un porcentaje de su máximo; la app lo pasa a kilos', suf: '%', grupo: 'Fuerza' },
+  { id: 'kg', et: 'Kilos', corta: 'kg', det: 'Un peso fijo', suf: 'kg', grupo: 'Fuerza' },
+  { id: 'int', et: 'Intensidad', corta: 'Intensidad', det: 'Un porcentaje de esfuerzo, sin 1RM: 85 %, 100 %', suf: '%', grupo: 'Esfuerzo', nuevo: true },
+  { id: 'rpe', et: 'RPE', corta: 'RPE', det: 'Esfuerzo del 1 al 10', grupo: 'Esfuerzo' },
+  { id: 'rir', et: 'RIR', corta: 'RIR', det: 'Repeticiones que deja en reserva', grupo: 'Esfuerzo' },
+  { id: 'ritmo', et: 'Ritmo', corta: 'Ritmo · min/km', det: 'Minutos por kilómetro: «4:34» o un rango «4:34-5:00»', suf: 'min/km', grupo: 'Cardio', nuevo: true },
+  { id: 'zona', et: 'Zona de FC', corta: 'Zona', det: 'Del 1 al 5, con sus pulsaciones', suf: 'Z', grupo: 'Cardio', nuevo: true },
+  { id: 'w', et: 'Vatios', corta: 'W', det: 'Potencia en la bici o el remo', suf: 'W', grupo: 'Cardio', nuevo: true },
+  { id: 'nado', et: 'Ritmo de nado', corta: 'Ritmo · min/100 m', det: 'Minutos por cada 100 metros', suf: '/100 m', grupo: 'Cardio', nuevo: true },
+];
+/* LA LISTA DE FORMATOS ES LA DE LA APP DE HOY, con sus mismos nombres y en su mismo orden (Andrés: «esos nombrecitos
+   por favor no me los cambies»). Lo único que cambia es qué hace el último, «Lapsos personalizados»: cada ejercicio del Set abre sus LAPSOS.
+   El Set solo dice cuántas veces se repite; el tiempo y el ritmo viven en la línea y en sus lapsos. */
+const FORMATOS = [
+  { id: 'normal', et: 'Normal', det: 'Series de siempre' },
+  { id: 'sin', et: 'Sin series', det: 'Un calentamiento, unos drills' },
+  { id: 'amrap', et: 'AMRAP', det: 'Máximas rondas en un tiempo' },
+  { id: 'emom', et: 'EMOM', det: 'Cada X minutos, varias veces' },
+  { id: 'tabata', et: 'Tabata', det: 'Trabajo y descanso cortos' },
+  { id: 'intervalos', et: 'Intervalos', det: 'Trabajo y descanso a tu medida' },
+  { id: 'fartlek', et: 'Fartlek', det: 'Tramos fuertes y suaves' },
+  { id: 'portiempo', et: 'Por tiempo', det: 'Lo más rápido posible' },
+  { id: 'custom', et: 'Lapsos personalizados', det: 'Cada ejercicio con sus lapsos: cuánto, carga, descanso', cambia: true },
+];
+const PLANTILLAS = { tabata: { trab: 20, desc: 10, series: '8' }, intervalos: { trab: 30, desc: 30, series: '10' }, fartlek: { trab: 120, desc: 180, series: '6' } };
+const ES_PLANTILLA = (f) => Object.prototype.hasOwnProperty.call(PLANTILLAS, f);
+const SIN_DESCANSO = new Set(['amrap', 'emom', 'portiempo']);
+const CON_FRANJA = (f) => ES_PLANTILLA(f) || SIN_DESCANSO.has(f);
+// El tiempo de trabajo y el descanso de una plantilla SON los de sus líneas: la franja los lee y los escribe ahí.
+const trabDe = (set) => { const v = set.lineas.map((l) => Number(l.cant) || 0); return v.every((x) => x === v[0]) ? v[0] : null; };
+const descDe = (set) => { const v = set.lineas.map((l) => Number(l.dv) || 0); return v.every((x) => x === v[0]) ? v[0] : null; };
+const BUSCA = {
+  gym: ['Back Squat', 'Hip Thrust', 'Thruster', 'Wall Ball', 'Sled Push', 'Burpee'],
+  cardio: ['Correr', 'Nadar', 'Bici', 'Remo', 'Caminar'],
+};
+/* Qué trae cada ejercicio nuevo lo decide EL EJERCICIO: Correr trae Km y Ritmo; Back Squat trae Reps y % 1RM. */
+const DEFAULT_DE = { Correr: ['km', 'ritmo'], Nadar: ['m', 'nado'], Bici: ['min', 'w'], Remo: ['m', 'w'], Caminar: ['min', 'zona'] };
+
+// `abierta`: la línea se ve con sus casillas; plegada es un renglón (nombre · cuánto · carga · descanso).
+const ej = (o) => ({ nombre: '', medida: 'reps', cant: '', entre: '', carga: 'pct', cv: '', du: 'seg', dv: '', descr: '', lado: false, peso: true, foto: 'gym', abierta: true, lapsos: null, ...o });
+// Un lapso de UN ejercicio: lo mismo que la línea, sin nombre (cuánto · carga · descanso después).
+const lap = (medida, cant, carga, cv, du = 'seg', dv = '') => ({ medida, cant, carga, cv, du, dv });
+
+const ESC = {
+  hyrox: {
+    titulo: 'Hyrox · simulación', tipo: 'Hyrox', color: '#F2555A', clase: 'hyrox', nsets: 1,
+    sets: [
+      { formato: 'normal', series: '4', lineas: [
+        ej({ nombre: 'Correr', medida: 'km', cant: '1', carga: 'ritmo', cv: '4:00', du: 'seg', dv: '', peso: false, foto: 'run', abierta: false }),
+        ej({ nombre: 'Thruster', medida: 'reps', cant: '10', carga: 'kg', cv: '40', du: 'seg', dv: '', abierta: false }),
+        ej({ nombre: 'Correr', medida: 'm', cant: '500', carga: 'ritmo', cv: '6:00', du: 'seg', dv: '', peso: false, foto: 'run', abierta: true }),
+        ej({ nombre: 'Sled Push', medida: 'm', cant: '50', carga: 'kg', cv: '102', du: 'seg', dv: '', abierta: false }),
+        ej({ nombre: 'Correr', medida: 'km', cant: '1.5', carga: 'ritmo', cv: '4:30', du: 'min', dv: '1', peso: false, foto: 'run', abierta: false }),
+      ] },
+    ],
+    notas: [
+      ['Tu ejemplo, en orden', 'Un Set «Normal» que se repite 4 veces con cinco líneas: Correr 1 km, Thruster, Correr 500 m, Sled Push, Correr 1,5 km. Entre cada Correr va fuerza, así que cada Correr es su propia línea. Es lo de siempre; no cambia nada.'],
+      ['Cada línea trae lo suyo', 'El ritmo y el tiempo de cada vuelta están en su línea (500 m a 6:00). El Set solo dice «se repite 4 veces».'],
+      ['Plegadas, se lee de un vistazo', 'Solo la tercera línea está abierta. Las demás son un renglón. Toca una para abrirla; «Plegar» la cierra.'],
+      ['Después de la última vuelta, solo la raya', 'El descanso de la última línea (1 min en Correr 1,5 km) corre entre vuelta y vuelta. Después de la ÚLTIMA vuelta ya no corre: si hay otro Set, manda la raya entre los dos Sets.'],
+      ['Qué mide el reloj y qué no', 'Teléfono: mide tiempo (cuenta regresiva y cronómetro). No mide metros ni reps: corre el cronómetro y el atleta toca «Listo»; la app guarda cuánto tardó. Reloj inteligente (cuando vayamos a la App Store): mide tiempo, distancia, ritmo y pulsaciones, así que en «Correr 1 km» avanza solo al llegar. Las reps nunca las mide nadie: se tocan.'],
+    ],
+    pregunta: null,
+  },
+  hyroxL: {
+    titulo: 'Hyrox · lapsos y fuerza', tipo: 'Hyrox', color: '#F2555A', clase: 'hyrox', nsets: 1,
+    sets: [
+      { formato: 'custom', series: '4', lineas: [
+        ej({ nombre: 'Correr', peso: false, foto: 'run', abierta: true, lapsos: [lap('km', '1', 'ritmo', '4:00'), lap('m', '500', 'ritmo', '6:00'), lap('km', '1.5', 'ritmo', '4:30')] }),
+        ej({ nombre: 'Thruster', abierta: true, lapsos: [lap('reps', '10', 'kg', '40')] }),
+        ej({ nombre: 'Wall Ball', abierta: false, lapsos: [lap('reps', '15', 'kg', '6', 'min', '1')] }),
+      ] },
+    ],
+    notas: [
+      ['«Lapsos personalizados»: el último de la lista', 'Toca «Lapsos personalizados ▾» (arriba del Set): es la lista de siempre (Normal, Sin series, AMRAP…). El último se llama así y dice lo que hace. Al elegirlo, cada ejercicio del Set muestra sus lapsos.'],
+      ['La burbuja, cada vez que lo eliges', 'Cada vez que alguien elige «Lapsos personalizados» en la lista, una burbuja señala el botón «+ Lapso» y explica con un ejemplo de cardio qué hace. «Entendido» (o tocar en otro lado) la quita; no bloquea nada. Solo sale al ELEGIR el formato, no al abrir un workout que ya lo trae. Pruébalo: en cualquier pestaña, abre la lista del Set y elige «Lapsos personalizados» (aunque ya esté elegido).'],
+      ['No importa en qué se mida el ejercicio', 'Correr tiene tres lapsos (km, m, km). El Thruster tiene uno (10 reps · 40 kg). Se ven igual: un lapso es «cuánto + carga + descanso». No hay que poner el ejercicio en tiempo ni en distancia para usarlo.'],
+      ['«+ Lapso»', 'Cada ejercicio de un Set de lapsos personalizados trae «+ Lapso». Pruébalo en el Thruster: agrega una fila (por ejemplo, 8 reps con 50 kg).'],
+      ['El orden', 'Se hace así: los tres lapsos de Correr, luego Thruster, luego Wall Ball; ×4. Si quieres fuerza ENTRE los lapsos de correr, ese Set va en «Normal» con una línea por Correr (pestaña anterior).'],
+      ['Aquí no hay «Por vuelta»', '«Por vuelta» solo existe en «Normal». En lapsos personalizados cada lapso ya trae su carga: un lugar para cada dato.'],
+      ['El descanso está en cada lapso', 'Correr no tiene casilla «Descanso» propia: cada lapso trae la suya. El Wall Ball tiene un lapso con 1 min de descanso.'],
+    ],
+    pregunta: null,
+  },
+  running: {
+    titulo: 'Pista · martes', tipo: 'Running', color: '#00A372', clase: 'run', nsets: 3,
+    sets: [
+      { formato: 'sin', series: null, descansoDespues: { n: 2, u: 'min' }, lineas: [ej({ nombre: 'Correr', medida: 'min', cant: '10', carga: 'ritmo', cv: '6:34-7:30', du: 'seg', dv: '', descr: 'Calentamiento', peso: false, foto: 'run', abierta: false })] },
+      { formato: 'custom', series: '4', lineas: [
+        ej({ nombre: 'Correr', peso: false, foto: 'run', abierta: true, lapsos: [lap('m', '800', 'ritmo', '4:34-5:00'), lap('min', '2', 'ritmo', '6:39-7:00')] }),
+      ] },
+      { formato: 'sin', series: null, lineas: [ej({ nombre: 'Correr', medida: 'min', cant: '8', carga: 'ritmo', cv: '6:34-7:30', du: 'seg', dv: '', descr: 'Vuelta a la calma', peso: false, foto: 'run', abierta: false })] },
+    ],
+    notas: [
+      ['Un solo Correr con sus lapsos', 'Set 2: «Lapsos personalizados» × 4. Una sola línea de Correr con dos lapsos: 800 m a 4:34-5:00 y 2 min a 6:39-7:00. Calentamiento y vuelta a la calma son Sets «Sin series».'],
+      ['Descanso entre Sets', 'La raya entre el Set 1 y el 2 lleva el chip «⏱ 2 min»; tócalo para cambiarlo o quitarlo. Entre el 2 y el 3 sale «+ Descanso».'],
+      ['Intensidad y ritmo en «CARGA ▾»', 'La lista tiene tres grupos: Fuerza (% del 1RM, Kilos), Esfuerzo (Intensidad, RPE, RIR) y Cardio (Ritmo, Zona, Vatios, Nado). «Intensidad» es un porcentaje a secas, sin 1RM. Toca «RITMO ▾» en un lapso.'],
+      ['Lo que trae una línea nueva', 'Viene con lo último que usaste con ese ejercicio (Correr en Km y Ritmo). Nada que configurar. Las listas siempre traen todo.'],
+    ],
+    pregunta: 'La Zona de FC necesita las zonas del atleta. Propongo calcularlas con su fecha de nacimiento (220 − edad) y que las corrija en Mi perfil → «Mis zonas». ¿Ahora o después?',
+  },
+  intervalos: {
+    titulo: 'Bici · intervalos', tipo: 'Bici', color: '#00B3C7', clase: 'run', nsets: 2,
+    sets: [
+      { formato: 'intervalos', series: '10', lineas: [
+        ej({ nombre: 'Bici', medida: 'seg', cant: '30', carga: 'w', cv: '250', du: 'seg', dv: '30', peso: false, foto: 'run', abierta: true }),
+      ] },
+      { formato: 'tabata', series: '8', lineas: [
+        ej({ nombre: 'Burpee', medida: 'seg', cant: '20', carga: 'libre', cv: '', du: 'seg', dv: '10', peso: false, abierta: false }),
+        ej({ nombre: 'Mountain Climber', medida: 'seg', cant: '20', carga: 'libre', cv: '', du: 'seg', dv: '10', peso: false, abierta: false }),
+      ] },
+    ],
+    notas: [
+      ['La franja y la línea dicen lo mismo', 'Set 1 (Intervalos): la franja dice 30 s trabajo · 30 s descanso · 10 veces. La línea de Bici dice SEG 30 y DESCANSO 30. Son los MISMOS números: toca − o + en la franja y mira cómo cambia la línea.'],
+      ['Tabata con dos ejercicios', 'Set 2: Burpee y Mountain Climber, cada uno 20 s con 10 s de descanso, ×8. Se hacen en orden: Burpee, Climber, Burpee, Climber… La franja cambia los dos juntos. Si a uno le pones otro tiempo, la franja dice «Varía».'],
+      ['Las otras plantillas, igual', 'Toca «Intervalos ▾» para ver la lista: Tabata y Fartlek hacen lo mismo con otros números. AMRAP, EMOM y Por tiempo siguen como ya quedaron.'],
+      ['Si la línea ya no encaja', 'Si cambias una línea a algo que no es un Tabata (por ejemplo, la pasas a reps), la franja se va y el Set vuelve a «Normal».'],
+    ],
+    pregunta: null,
+  },
+};
+const ORDEN = ['hyrox', 'hyroxL', 'running', 'intervalos'];
+const NOMBRE = { hyrox: 'Hyrox: correr y fuerza alternados', hyroxL: 'Hyrox: lapsos y luego fuerza', running: 'Running: lapsos personalizados', intervalos: 'Intervalos y Tabata' };
+
+// `burbuja`: en qué Set señalar el «+ Lapso». Sale CADA VEZ que se elige «Lapsos personalizados» (no se recuerda que ya la vio).
+const E = { esc: 'hyroxL', v: 'tel', q: 'coach', mas: false, datos: {}, burbuja: { esc: 'hyroxL', si: 0 } };
+for (const k of ORDEN) E.datos[k] = JSON.parse(JSON.stringify(ESC[k]));
+const S = () => E.datos[E.esc];
+
+/* ============================================================
+   Dibujo
+   ============================================================ */
+const svg = {
+  flecha: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
+  arriba: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>',
+  mas: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  basura: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>',
+  reloj: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg>',
+  x: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+  atras: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>',
+  peso: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 8v8M18 8v8M3 10v4M21 10v4M6 12h12"/></svg>',
+  pesa: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 8v8M18 8v8M3 10v4M21 10v4M6 12h12"/></svg>',
+  correr: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="15" cy="4" r="2"/><path d="m8 21 3-6 3 2 2 5M5 12l4-3 4 2 3-3 3 3"/></svg>',
+  yoga: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="2"/><path d="M4 18h16M12 6v6l-5 6M12 12l5 6"/></svg>',
+  play: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',
+  playG: '<svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',
+  subir: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg>',
+  liga: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>',
+  video: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg>',
+  check: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>',
+  lista: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
+  rejilla: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+};
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const medidaDe = (id) => MEDIDAS.find((m) => m.id === id) || MEDIDAS[0];
+const cargaDe = (id) => CARGAS.find((c) => c.id === id) || null;
+const formatoDe = (id) => FORMATOS.find((f) => f.id === id) || FORMATOS[0];
+const tel = () => E.v === 'tel';
+const descTexto = (d) => (d ? `${d.n} ${d.u}` : '');
+const segText = (s) => (s >= 60 ? (s % 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s / 60} min`) : `${s} s`);
+
+function caja(valor, sufijo, extra = '') {
+  const vacia = !valor;
+  return `<div class="caja ${vacia ? 'vacia' : ''} ${extra}">${esc(valor || '0')}${sufijo && !vacia ? `<span class="u">${esc(sufijo)}</span>` : ''}</div>`;
+}
+function fotoDe(l) {
+  if (l.foto === 'run') return `<span class="foto verde">${svg.correr}</span>`;
+  if (l.foto === 'yoga') return `<span class="foto lila">${svg.yoga}</span>`;
+  return `<span class="foto">${svg.pesa}</span>`;
+}
+function celdas(l, si, li, k = null, set = null) {
+  const m = medidaDe(l.medida);
+  const c = cargaDe(l.carga);
+  const kk = k === null ? '' : ` data-k="${k}"`;
+  const reps = `<div class="c reps"><button type="button" class="rl" data-lista="medida" data-si="${si}" data-li="${li}"${kk}>${esc(m.rot)} ${svg.flecha}</button>${caja(l.cant, tel() ? '' : m.corta)}</div>`;
+  const carga = `<div class="c carga"><button type="button" class="rl ${c && c.nuevo ? 'nuevo' : ''}" data-lista="carga" data-si="${si}" data-li="${li}"${kk}>${esc(c ? c.corta : 'Carga')} ${svg.flecha}</button>${caja(l.cv, c && c.suf && !tel() ? c.suf : '')}</div>`;
+  const desc = set && SIN_DESCANSO.has(set.formato) ? '' : `<div class="c desc"><button type="button" class="rl" data-lista="descanso" data-si="${si}" data-li="${li}"${kk}>Descanso · ${l.du} ${svg.flecha}</button>${caja(l.dv, '')}</div>`;
+  return { reps, carga, desc };
+}
+
+function lineaHTML(l, si, li, set) {
+  const chipKg = l.kg ? `<span class="chip-kg">${esc(l.kg)}</span>` : '';
+  const pesoC = `<span class="conpeso">${svg.peso} ${l.peso ? 'Con peso' : 'Sin peso'}</span>`;
+  const descrC = `<div class="c descr ${tel() ? 'ancho' : ''}"><div class="rot">Descripción</div>${caja(l.descr, '')}</div>`;
+  // «Por vuelta» solo en «Normal»; los lapsos solo en «Lapsos personalizados»: nunca los dos en la misma línea.
+  const porVuelta = set.formato === 'normal' ? `<button type="button" class="bchico">Por vuelta ${svg.flecha}</button>` : '';
+  const plegar = `<button type="button" class="bchico" style="margin-left:auto;border-color:var(--kLineaHi);color:var(--kInk2)" data-cierra-linea="${si}" data-li="${li}">Plegar ${svg.arriba}</button>`;
+  const cab = `<div class="ej-cab">${fotoDe(l)}<span class="nombre">${esc(l.nombre)}</span><button type="button" class="bicono rojo">${svg.basura}</button></div>`;
+  const porLado = `<label><input type="checkbox" ${l.lado ? 'checked' : ''}> Por lado</label>`;
+  if (!l.abierta) {
+    const resumen = l.lapsos && l.lapsos.length > 1
+      ? `${l.lapsos.length} lapsos · ` + l.lapsos.map((x) => [cuantoTexto(x), cargaTexto(x)].filter(Boolean).join(' ')).join(' → ')
+      : (() => { const x = l.lapsos ? l.lapsos[0] : l; return [cuantoTexto(x), cargaTexto(x), x.dv && !SIN_DESCANSO.has(set.formato) ? `descanso ${x.dv} ${x.du}` : ''].filter(Boolean).join(' · '); })();
+    return `<div class="ej plegada" data-abre="${si}" data-li="${li}" role="button">${fotoDe(l)}<span class="nombre">${esc(l.nombre)}</span><span class="resumen">${esc(resumen)}</span><span class="flecha">${svg.flecha}</span></div>`;
+  }
+  if (l.lapsos) {
+    // Personalizado: las casillas de la línea son filas numeradas, una por lapso (como las vueltas de «Por vuelta»).
+    const filas = l.lapsos.map((x, k) => {
+      const c = celdas(x, si, li, k, set);
+      return `<span class="n">${k + 1}</span>${c.reps}${c.carga}${c.desc}<button type="button" class="bicono rojo" data-quita-lapso="${si}" data-li="${li}" data-k="${k}">${svg.basura}</button>`;
+    }).join('');
+    return `<div class="ej">${cab}
+      <div class="laps">${filas}</div>
+      <div class="debajo"><button type="button" class="bchico" data-mas-lapso="${si}" data-li="${li}">${svg.mas} Lapso</button><span class="frase" style="font-weight:600">${l.lapsos.length} ${l.lapsos.length === 1 ? 'lapso' : 'lapsos seguidos'} de ${esc(l.nombre)}</span>${plegar}</div>
+      <div class="campos" style="margin-top:8px">${descrC}${pesoC}</div>
+      <div class="debajo">${porLado}</div>
+    </div>`;
+  }
+  const c = celdas(l, si, li, null, set);
+  const debajo = `<div class="debajo">${porLado}${porVuelta}${tel() ? '' : chipKg}${plegar}</div>`;
+  if (tel()) {
+    return `<div class="ej">${cab}
+      <div class="campos">${c.reps}${c.carga}
+        <div class="ancho">${debajo}</div>
+        ${c.desc}<div style="align-self:end">${pesoC}${chipKg}</div>
+        ${l.descr ? descrC : ''}
+      </div>
+      ${l.descr ? '' : `<div style="margin-top:8px"><span class="frase">${svg.mas} Descripción</span></div>`}
+    </div>`;
+  }
+  return `<div class="ej">${cab}<div class="campos">${c.reps}${c.carga}${c.desc}${descrC}${pesoC}</div>${debajo}</div>`;
+}
+
+function setCabHTML(set, si) {
+  const n = si + 1;
+  const f = set.formato;
+  let que;
+  const cont = (v, et) => `<span class="cont"><button type="button">−</button><b>${esc(v)}</b><button type="button">+</button></span><span class="frase">${et}</span>`;
+  if (f === 'normal') que = `<button type="button" class="bblanco" data-lista="formato" data-si="${si}">Se repite ${svg.flecha}</button>${cont(set.series, 'veces')}`;
+  else if (f === 'sin') que = `<button type="button" class="bblanco" data-lista="formato" data-si="${si}">Sin series ${svg.flecha}</button>`;
+  else if (f === 'custom') que = `<button type="button" class="pastilla-f" data-lista="formato" data-si="${si}">${svg.reloj} Lapsos personalizados ${svg.flecha}</button>${cont(set.series, 'veces')}`;
+  else que = `<button type="button" class="pastilla-f" data-lista="formato" data-si="${si}">${svg.reloj} ${esc(formatoDe(f).et)} ${svg.flecha}</button>`;
+  return `<div class="set-cab"><span class="num">Set ${n}</span><span class="que">${que}</span><span class="espacio"></span>
+    <button type="button" class="bprim" data-busca="${si}">${svg.mas} Agregar ejercicio</button><button type="button" class="bicono rojo">${svg.basura}</button></div>`;
+}
+
+/* La franja de los formatos: la de la app de hoy. */
+function franjaHTML(set, si) {
+  const f = set.formato;
+  const cont = (campo, valor, et, ancho = 50) => `<span class="cont"><button type="button" data-franja="${campo}" data-dir="-1" data-si="${si}">−</button><b style="min-width:${ancho}px">${valor}</b><button type="button" data-franja="${campo}" data-dir="1" data-si="${si}">+</button></span><span class="frase">${et}</span>`;
+  let dentro = '';
+  if (ES_PLANTILLA(f)) {
+    const t = trabDe(set), d = descDe(set);
+    const suma = set.lineas.reduce((a, l) => a + (Number(l.cant) || 0) + (Number(l.dv) || 0), 0) * Number(set.series);
+    dentro = `${cont('trab', t === null ? 'Varía' : segText(t), f === 'fartlek' ? 'fuerte' : 'trabajo')}${cont('desc', d === null ? 'Varía' : segText(d), f === 'fartlek' ? 'suave' : 'descanso')}${cont('series', set.series, f === 'tabata' ? 'rondas' : 'veces', 30)}<span class="frase" style="color:var(--kAzul)">${t !== null && d !== null ? '= ' + segText(suma) : ''}</span>`;
+  } else if (f === 'amrap') dentro = `<span class="frase">máximas rondas en</span>${cont('tope', `${set.tope} min`, '')}<span class="frase" style="color:var(--kAzul)">= ${set.tope} min</span>`;
+  else if (f === 'emom') dentro = `<span class="frase">cada</span>${cont('cada', segText(set.cada), '·')}${cont('series', set.series, 'veces', 30)}<span class="frase" style="color:var(--kAzul)">= ${(set.cada * Number(set.series)) / 60} min</span>`;
+  else if (f === 'portiempo') dentro = `${cont('series', set.series, 'rondas', 30)}<span class="frase">lo más rápido posible</span>`;
+  return `<div class="franja">${dentro}<span class="espacio"></span><button type="button" class="bblanco" data-mas="1">Más ${E.mas ? svg.arriba : svg.flecha}</button>
+    ${E.mas ? `<div style="flex:1 1 100%;border-top:1px solid rgba(30,64,224,.2);padding-top:8px;display:flex;flex-wrap:wrap;gap:8px 16px" class="frase"><span>El atleta anota <button type="button" class="bgris">${f === 'amrap' ? 'Rondas' : f === 'portiempo' ? 'Tiempo' : 'Nada'} ${svg.flecha}</button></span></div>` : ''}</div>`;
+}
+
+function entreSetsHTML(set, si) {
+  if (set.descansoDespues) return `<div class="entre-sets"><span class="raya"></span><button type="button" class="chip-desc" data-lista="descansoSet" data-si="${si}">${svg.reloj} ${esc(descTexto(set.descansoDespues))}</button><span class="raya"></span></div>`;
+  return `<div class="entre-sets"><span class="raya"></span><button type="button" class="bchico" data-pon-descanso="${si}">${svg.mas} Descanso</button><span class="raya"></span></div>`;
+}
+
+
+function setHTML(set, si) {
+  return `<div class="set">${setCabHTML(set, si)}${CON_FRANJA(set.formato) ? franjaHTML(set, si) : ''}${set.lineas.map((l, li) => lineaHTML(l, si, li, set)).join('')}</div>`;
+}
+
+function sesionHTML(s) {
+  const cab = tel()
+    ? `<div class="campo" style="font-size:15px;font-weight:800;margin-bottom:8px">${esc(s.titulo)}</div>
+       <div class="ses-fila2"><div class="campo tipo" style="flex:1"><span class="punto" style="background:${s.color}"></span>${esc(s.tipo)}<span class="flecha">${svg.flecha}</span></div><span class="vista"><span class="on">${svg.lista}</span><span>${svg.rejilla}</span></span></div>
+       <div class="ses-fila2"><button type="button" class="bgris">Opciones ${svg.flecha}</button></div>`
+    : `<div class="ses-cab"><div><div class="rot">Nombre de la sesión</div><div class="campo">${esc(s.titulo)}</div></div>
+       <div><div class="rot">Tipo de sesión</div><div class="campo tipo"><span class="punto" style="background:${s.color}"></span>${esc(s.tipo)}<span class="flecha">${svg.flecha}</span></div></div>
+       <span class="nsets">${s.nsets} sets</span></div>
+       <div class="ses-fila2"><span class="frase">Mis planes ${svg.flecha} · Copiar · Limpiar · Eliminar sesión · Opciones ${svg.flecha}</span><span class="espacio"></span><span class="vista"><span class="on">${svg.lista}</span><span>${svg.rejilla}</span></span></div>`;
+  const sets = s.sets.map((set, si) => `${setHTML(set, si)}${si < s.sets.length - 1 ? entreSetsHTML(set, si) : ''}`).join('');
+  return `<div class="sesion ${s.clase}">${cab}${sets}
+    <div class="agregar-set"><button type="button" class="bblanco">${svg.mas} Agregar set</button></div></div>`;
+}
+
+function editorHTML() {
+  const s = S();
+  return `<div class="ap-cab"><span class="atras">${svg.atras}</span><span class="tit"><b>${esc(s.titulo)}</b><small>Workout · Mis planes</small></span><button type="button" class="guardar">${svg.check} Guardar</button><span class="x">${svg.x}</span></div>
+    <div class="ap-cuerpo"><div class="rot">Nombre del workout</div><div class="campo">${esc(s.titulo)}</div>${sesionHTML(s)}</div>`;
+}
+
+/* ---------- lo que ve el atleta ---------- */
+function cargaTexto(l) {
+  const c = cargaDe(l.carga);
+  if (!c || !l.cv) return '';
+  if (c.id === 'pct') return `${l.cv} %${l.kg ? ' · ' + l.kg : ''}`;
+  if (c.id === 'ritmo') return `${l.cv} min/km`;
+  if (c.id === 'zona') return `zona ${l.cv} · 150-165 ppm`;
+  if (c.id === 'kg') return `${l.cv} kg`;
+  if (c.id === 'int') return `${l.cv} % de intensidad`;
+  if (c.id === 'rpe') return `RPE ${l.cv}`;
+  return `${l.cv} ${c.suf || ''}`;
+}
+function cuantoTexto(l) { return `${l.cant} ${medidaDe(l.medida).corta}`; }
+function lineaAtleta(l0, set, k) {
+  // Un Personalizado con un solo lapso se lee igual que una línea normal.
+  const l = l0.lapsos && l0.lapsos.length === 1 ? { ...l0, ...l0.lapsos[0], lapsos: null } : l0;
+  const num = set.lineas.length > 1 ? k + 1 : svg.play;
+  if (l.lapsos) {
+    const laps = l.lapsos.map((x, j) => `<div class="linea" style="padding-left:14px"><span class="play" style="width:26px;height:26px;background:${['seg', 'min'].includes(x.medida) ? 'var(--kAzulSoft)' : 'var(--kMentaSoft)'};color:${['seg', 'min'].includes(x.medida) ? 'var(--kAzul)' : 'var(--kMenta)'}">${j + 1}</span><div class="tx"><b>${esc(cuantoTexto(x))}</b><small>${esc([cargaTexto(x), x.dv ? `descansa ${x.dv} ${x.du}` : '', ['seg', 'min'].includes(x.medida) ? 'lo cuenta el reloj' : 'toca «Listo» al terminar'].filter(Boolean).join(' · '))}</small></div><span class="anota"><span>${['seg', 'min'].includes(x.medida) ? '✓' : 'min:seg'}</span></span></div>`).join('');
+    return `<div class="linea"><span class="play">${num}</span><div class="tx"><b>${esc(l.nombre)}</b><small>${l.lapsos.length} lapsos seguidos</small></div></div>${laps}`;
+  }
+  const desc = l.dv && !SIN_DESCANSO.has(set.formato) ? `descansa ${l.dv} ${l.du}` : '';
+  const anota = l.peso ? `<span class="anota"><span>reps</span><span>kg</span></span>` : (['m', 'km'].includes(l.medida) ? `<span class="anota"><span>min:seg</span></span>` : `<span class="anota"><span>✓</span></span>`);
+  return `<div class="linea"><span class="play">${num}</span><div class="tx"><b>${esc(l.nombre)}</b><small>${esc([cuantoTexto(l), cargaTexto(l), desc, l.descr].filter(Boolean).join(' · '))}</small></div>${anota}</div>`;
+}
+function relojHTML(s) {
+  // El reloj del atleta, en el primer Set con algo que correr: lo lleva línea por línea y lapso por lapso.
+  const set = s.sets.find((x) => x.lineas.length > 1 || x.lineas.some((l) => l.lapsos && l.lapsos.length > 1) || !['normal', 'sin'].includes(x.formato)) || s.sets[0];
+  const si = s.sets.indexOf(set) + 1;
+  const l0 = set.lineas[0];
+  const x = l0.lapsos ? { ...l0.lapsos[0], nombre: l0.nombre } : l0;
+  const total = set.lineas.reduce((a, y) => a + (y.lapsos ? y.lapsos.length : 1), 0);
+  const tiempo = ['seg', 'min'].includes(x.medida);
+  const vuelta = ES_PLANTILLA(set.formato) ? `${formatoDe(set.formato).et} · ronda 1 de ${set.series}` : set.formato === 'amrap' ? `AMRAP · quedan ${set.tope}:00` : set.formato === 'emom' ? `EMOM · minuto 1 de ${set.series}` : `Vuelta 1 de ${set.series || 1}`;
+  return `<div class="reloj"><div class="paso">Set ${si} · ${vuelta} · 1/${total}</div><div class="que">${esc(x.nombre)} · ${esc(cuantoTexto(x))}</div><div class="obj">${esc(cargaTexto(x) || 'sin carga')}</div>
+    <div class="tiempo">${tiempo ? (x.medida === 'min' ? `${String(x.cant).padStart(2, '0')}:00` : `00:${String(x.cant).padStart(2, '0')}`) : '00:00'}</div>
+    <div class="como">${tiempo ? 'cuenta regresiva · avanza solo' : (x.medida === 'reps' ? 'cronómetro · toca Listo al acabar las reps' : 'cronómetro · toca Listo al llegar · un reloj inteligente avanza solo')}</div>
+    <div class="botones"><span class="gris">Pausa</span><span>${tiempo ? 'Saltar' : 'Listo'}</span></div></div>`;
+}
+function atletaHTML() {
+  const s = S();
+  let cuerpo = relojHTML(s);
+  s.sets.forEach((set, si) => {
+    const g = set.formato;
+    const f = ['normal', 'custom'].includes(g) ? `<span class="f">${esc(set.series)} vueltas</span>`
+      : ES_PLANTILLA(g) ? `<span class="f">${svg.reloj} ${esc(formatoDe(g).et)} · ${segText(trabDe(set) ?? 0)} / ${segText(descDe(set) ?? 0)} × ${set.series}</span>`
+      : g === 'amrap' ? `<span class="f">${svg.reloj} AMRAP · ${set.tope} min</span>`
+      : g === 'emom' ? `<span class="f">${svg.reloj} EMOM · cada ${segText(set.cada)} × ${set.series}</span>`
+      : g === 'portiempo' ? `<span class="f">${svg.reloj} Por tiempo · ${set.series} rondas</span>` : '';
+    cuerpo += `<div class="bloque"><div class="cab3">Set ${si + 1}${f}</div>${set.lineas.map((l, k) => lineaAtleta(l, set, k)).join('')}</div>`;
+    if (set.descansoDespues) cuerpo += `<div class="descansa"><span class="raya"></span>${svg.reloj} Descansa ${esc(descTexto(set.descansoDespues))}<span class="raya"></span></div>`;
+  });
+  return `<div class="ap-cab"><span class="atras">${svg.atras}</span><span class="tit"><b>${esc(s.titulo)}</b><small>Hoy · ${s.nsets} ${s.nsets === 1 ? 'set' : 'sets'}</small></span></div><div class="ap-cuerpo at">${cuerpo}</div>`;
+}
+
+/* ---------- listas ---------- */
+function listaHTML(tipo, s, l, si) {
+  const sec = (t) => `<div class="sec">${t}</div>`;
+  const op = (valor, et, det, on, nuevo) => `<button type="button" class="op ${on ? 'on' : ''}" data-valor="${valor}"><span class="t">${esc(et)}${nuevo ? '<span class="nuevo-tag">NUEVO</span>' : ''}${det ? `<small>${esc(det)}</small>` : ''}</span>${on ? `<span class="sel">${svg.check}</span>` : ''}</button>`;
+  const cardio = l && (l.foto === 'run' || ['m', 'km', 'min'].includes(l.medida));
+  if (tipo === 'medida') {
+    const fuerza = MEDIDAS.filter((m) => m.grupo === 'fuerza').map((m) => op(m.id, m.et, null, l.medida === m.id)).join('');
+    const resto = MEDIDAS.filter((m) => m.grupo !== 'fuerza').map((m) => op(m.id, m.et, null, l.medida === m.id)).join('');
+    return cardio ? sec('Tiempo y distancia') + resto + sec('Fuerza') + fuerza : sec('Fuerza') + fuerza + sec('Tiempo y distancia') + resto;
+  }
+  if (tipo === 'carga') {
+    const grupos = cardio ? ['Cardio', 'Esfuerzo', 'Fuerza'] : ['Fuerza', 'Esfuerzo', 'Cardio'];
+    return grupos.map((g) => sec(g) + CARGAS.filter((c) => c.grupo === g).map((c) => op(c.id, c.et, c.det, l.carga === c.id, c.nuevo)).join('')).join('') + sec('') + op('libre', 'Texto libre', 'Escribe lo que quieras: «70% / RPE 8»', l.carga === 'libre');
+  }
+  if (tipo === 'descanso') return op('seg', 'Segundos', null, l.du === 'seg') + op('min', 'Minutos', null, l.du === 'min') + op('libre', 'Texto libre', 'Escribe lo que quieras: «Recuperación total»', false);
+  if (tipo === 'formato') {
+    const set = s.sets[si];
+    return FORMATOS.map((f) => op(f.id, f.et, f.det, set.formato === f.id, f.cambia)).join('');
+  }
+  if (tipo === 'busca') {
+    const esCardio = s.clase === 'run' || s.clase === 'hyrox';
+    const orden = esCardio ? ['cardio', 'gym'] : ['gym', 'cardio'];
+    return `<div class="sec" style="text-transform:none;letter-spacing:0;font-size:12.5px">Buscar o escribir el nombre…</div>` + orden.map((g) => sec(g === 'cardio' ? 'Cardio · traen Km/Min y Ritmo' : 'Gym · traen Reps y % 1RM') + BUSCA[g].map((n) => op(n, n, null, false)).join('')).join('');
+  }
+  if (tipo === 'descansoSet') {
+    const d = l;
+    return `<div class="menu-desc"><div class="tit">Después del Set ${si + 1}, antes del siguiente</div>
+      <div class="fila"><span class="cont"><button type="button" data-acc="menos">−</button><b>${d.n} ${d.u}</b><button type="button" data-acc="mas">+</button></span>
+      <span class="ud"><button type="button" data-acc="seg" aria-pressed="${d.u === 'seg'}">seg</button><button type="button" data-acc="min" aria-pressed="${d.u === 'min'}">min</button></span></div>
+      <button type="button" class="quitar" data-acc="quitar">Quitar el descanso</button></div>`;
+  }
+  return '';
+}
+
+let listaAbierta = null;
+function cierraLista() { if (listaAbierta) { listaAbierta.remove(); listaAbierta = null; } }
+function abreLista(ancla, tipo, si, li, k) {
+  cierraLista();
+  const s = S();
+  let l = null;
+  if (li !== undefined) l = s.sets[si].lineas[li];
+  if (k !== undefined) l = s.sets[si].lineas[li].lapsos[k];
+  if (tipo === 'descansoSet') l = s.sets[si].descansoDespues;
+  const div = document.createElement('div');
+  div.className = 'lista';
+  div.innerHTML = listaHTML(tipo, s, l, si);
+  const marco = document.getElementById('marco');
+  marco.appendChild(div);
+  const r = ancla.getBoundingClientRect(); const mr = marco.getBoundingClientRect();
+  let x = r.left - mr.left, y = r.bottom - mr.top + 6;
+  if (x + 260 > mr.width) x = Math.max(8, mr.width - 268);
+  if (y + 340 > mr.height) y = Math.max(8, r.top - mr.top - 346);
+  div.style.left = x + 'px'; div.style.top = y + 'px';
+  listaAbierta = div;
+  div.querySelectorAll('.op').forEach((b) => b.addEventListener('click', () => {
+    const v = b.dataset.valor;
+    if (tipo === 'medida') l.medida = v;
+    if (tipo === 'carga') { l.carga = v; l.cv = ''; l.kg = ''; }
+    if (tipo === 'descanso') l.du = v === 'libre' ? 'seg' : v;
+    if (tipo === 'formato') {
+      const set = s.sets[si];
+      // Salir de «Personalizado»: cada línea se queda con su primer lapso (en la app real se pregunta antes, con «Deshacer»).
+      const aLinea = (x) => { if (x.lapsos) { const t = x.lapsos[0]; Object.assign(x, { medida: t.medida, cant: t.cant, carga: t.carga, cv: t.cv, du: t.du, dv: t.dv, lapsos: null }); } };
+      // Entrar a «Personalizado»: TODA línea abre sus lapsos, en la medida que sea (reps, seg, m, km, cal). Empiezan con un solo lapso: el de la línea.
+      const aLapsos = (x) => { if (!x.lapsos) x.lapsos = [lap(x.medida, x.cant, x.carga, x.cv, x.du, x.dv)]; };
+      set.formato = v;
+      set.lineas.forEach(aLinea);
+      if (v === 'normal') set.series = set.series || '3';
+      if (v === 'sin') set.series = null;
+      if (v === 'custom') { set.series = set.series || '4'; set.lineas.forEach(aLapsos); set.lineas[0].abierta = true; E.burbuja = { esc: E.esc, si }; }
+      if (v === 'amrap') set.tope = set.tope || 12;
+      if (v === 'emom') { set.cada = set.cada || 60; set.series = set.series || '10'; }
+      if (v === 'portiempo') set.series = set.series || '3';
+      if (ES_PLANTILLA(v)) {
+        const P = PLANTILLAS[v]; set.series = P.series;
+        set.lineas.forEach((x) => { x.medida = 'seg'; x.cant = String(P.trab); x.du = 'seg'; x.dv = String(P.desc); });
+      }
+    }
+    if (tipo === 'busca') {
+      const d = DEFAULT_DE[v];
+      const nueva = ej({ nombre: v, medida: d ? d[0] : 'reps', carga: d ? d[1] : 'pct', foto: d ? 'run' : 'gym', peso: !d, abierta: true });
+      if (s.sets[si].formato === 'custom') nueva.lapsos = [lap(nueva.medida, '', nueva.carga, '', 'seg', '')];
+      s.sets[si].lineas.push(nueva);
+    }
+    cierraLista(); pinta();
+  }));
+  div.querySelectorAll('[data-acc]').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const set = s.sets[si]; const d = set.descansoDespues; const a = b.dataset.acc;
+    if (a === 'quitar') { set.descansoDespues = null; cierraLista(); pinta(); return; }
+    if (a === 'menos') d.n = Math.max(d.u === 'min' ? 1 : 5, d.n - (d.u === 'min' ? 1 : 5));
+    if (a === 'mas') d.n = d.n + (d.u === 'min' ? 1 : 5);
+    if (a === 'seg' || a === 'min') { if (d.u !== a) { d.u = a; d.n = a === 'min' ? Math.max(1, Math.round(d.n / 60)) : d.n * 60; } }
+    pinta(); abreLista(document.querySelector(`[data-lista="descansoSet"][data-si="${si}"]`), 'descansoSet', si);
+  }));
+}
+
+/* ---------- pintar ---------- */
+function pinta() {
+  const esc_ = document.getElementById('escenarios');
+  esc_.innerHTML = ORDEN.map((k) => `<button type="button" class="pill" data-esc="${k}" aria-pressed="${E.esc === k}">${NOMBRE[k]}</button>`).join('');
+  document.querySelectorAll('#aparato button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === E.v)));
+  document.querySelectorAll('#quien button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.q === E.q)));
+  const esAtleta = E.q === 'atleta';
+  const claseMarco = esAtleta || tel() ? 'tel' : 'compu';
+  document.getElementById('escena').innerHTML = `<div style="width:100%;display:flex;flex-direction:column;align-items:center;min-width:0"><div class="${claseMarco}" id="marco" style="position:relative">${esAtleta ? atletaHTML() : editorHTML()}</div>
+    <div class="ojo">${esAtleta ? 'El atleta siempre lo ve en su teléfono. Arriba, su reloj en la primera línea.' : 'Toca el botón del Set («Se repite ▾», «Lapsos personalizados ▾», «Intervalos ▾») para ver la lista; − y + de la franja; una línea plegada para abrirla; y el chip «⏱ 2 min» de la raya.'}</div></div>`;
+
+  // La burbuja de la primera vez, pegada al «+ Lapso» del primer ejercicio del Set.
+  if (!esAtleta && E.burbuja && E.burbuja.esc === E.esc) {
+    const marcoEl = document.getElementById('marco');
+    const area = marcoEl.querySelector('.ap-cuerpo');
+    const boton = marcoEl.querySelector(`[data-mas-lapso="${E.burbuja.si}"]`) || marcoEl.querySelector('[data-mas-lapso]');
+    if (boton && area) {
+      const div = document.createElement('div');
+      div.className = 'burbuja';
+      div.innerHTML = `<b class="tt">Un ejercicio, varios lapsos</b>Con «+ Lapso» armas un intervalo con un solo ejercicio. Por ejemplo, Correr:<div class="ej-mini"><i>1</i>800 m · rápido (4:34 min/km)<br><i>2</i>2 min · suave (6:39 min/km)</div><button type="button" class="ent" data-entendido="1">${svg.check} Entendido</button>`;
+      area.appendChild(div);
+      const r = boton.getBoundingClientRect(); const ar = area.getBoundingClientRect();
+      div.style.left = Math.max(8, r.left - ar.left + area.scrollLeft - 8) + 'px'; div.style.top = (r.bottom - ar.top + area.scrollTop + 10) + 'px';
+      area.scrollTop = Math.max(0, r.top - ar.top + area.scrollTop - 150);
+      div.querySelector('[data-entendido]').addEventListener('click', (e) => { e.stopPropagation(); E.burbuja = null; pinta(); });
+    }
+  }
+
+  const s = S();
+  const tabla = E.esc === 'hyrox' ? `<table class="tabla"><tr><th>Mide…</th><th>Teléfono</th><th>Reloj inteligente</th></tr>
+    <tr><td>Tiempo</td><td class="si">sí</td><td class="si">sí</td></tr><tr><td>Distancia y ritmo</td><td class="no">no · «Listo»</td><td class="si">sí · avanza solo</td></tr>
+    <tr><td>Pulsaciones (zona)</td><td class="no">no</td><td class="si">sí</td></tr><tr><td>Reps y kilos</td><td class="no">no · se tocan</td><td class="no">no · se tocan</td></tr></table>` : '';
+  document.getElementById('notas').innerHTML = `<div class="regla">La regla: el tiempo y el ritmo viven en la LÍNEA. El Set solo dice cuántas veces se repite.</div><h2>Qué cambia aquí</h2>${s.notas.map(([t, x], i) => `<div class="nota"><span class="n">${i + 1}</span><div><b>${esc(t)}</b>${esc(x)}</div></div>`).join('')}${tabla}${s.pregunta ? `<div class="pregunta"><b>Pregunta:</b> ${esc(s.pregunta)}</div>` : ''}`;
+
+  esc_.querySelectorAll('[data-esc]').forEach((b) => b.addEventListener('click', () => { E.esc = b.dataset.esc; E.mas = false; cierraLista(); pinta(); }));
+  const marco = document.getElementById('marco');
+  marco.querySelectorAll('[data-lista]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); abreLista(b, b.dataset.lista, Number(b.dataset.si), b.dataset.li === undefined ? undefined : Number(b.dataset.li), b.dataset.k === undefined ? undefined : Number(b.dataset.k)); }));
+  marco.querySelectorAll('[data-busca]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); abreLista(b, 'busca', Number(b.dataset.busca)); }));
+  marco.querySelectorAll('[data-pon-descanso]').forEach((b) => b.addEventListener('click', () => { s.sets[Number(b.dataset.ponDescanso)].descansoDespues = { n: 2, u: 'min' }; pinta(); }));
+  marco.querySelectorAll('[data-mas]').forEach((b) => b.addEventListener('click', () => { E.mas = !E.mas; pinta(); }));
+  // Plegar y abrir líneas; «Otro tramo» = la misma línea debajo, vacía y abierta.
+  marco.querySelectorAll('[data-abre]').forEach((b) => b.addEventListener('click', () => { s.sets[Number(b.dataset.abre)].lineas[Number(b.dataset.li)].abierta = true; pinta(); }));
+  marco.querySelectorAll('[data-cierra-linea]').forEach((b) => b.addEventListener('click', () => { s.sets[Number(b.dataset.cierraLinea)].lineas[Number(b.dataset.li)].abierta = false; pinta(); }));
+  // «+ Lapso»: la línea pasa a tener lapsos (el de ahora + uno vacío); con lapsos, agrega otro.
+  marco.querySelectorAll('[data-mas-lapso]').forEach((b) => b.addEventListener('click', () => {
+    const l = s.sets[Number(b.dataset.masLapso)].lineas[Number(b.dataset.li)];
+    if (!l.lapsos) l.lapsos = [lap(l.medida, l.cant, l.carga, l.cv, l.du, l.dv), lap(l.medida, '', l.carga, '', 'seg', '')];
+    else { const u = l.lapsos[l.lapsos.length - 1]; l.lapsos.push(lap(u.medida, '', u.carga, '', 'seg', '')); }
+    pinta();
+  }));
+  marco.querySelectorAll('[data-quita-lapso]').forEach((b) => b.addEventListener('click', () => {
+    const l = s.sets[Number(b.dataset.quitaLapso)].lineas[Number(b.dataset.li)];
+    if (l.lapsos.length > 1) l.lapsos.splice(Number(b.dataset.k), 1);
+    pinta();
+  }));
+  // La franja escribe en las líneas: − y + cambian los MISMOS números que se ven abajo.
+  marco.querySelectorAll('[data-franja]').forEach((b) => b.addEventListener('click', () => {
+    const set = s.sets[Number(b.dataset.si)]; const dir = Number(b.dataset.dir); const campo = b.dataset.franja;
+    if (campo === 'series') set.series = String(Math.max(1, Number(set.series) + dir));
+    else if (campo === 'tope') set.tope = Math.max(1, set.tope + dir);
+    else if (campo === 'cada') set.cada = Math.max(15, set.cada + dir * 15);
+    else {
+      const base = campo === 'trab' ? (trabDe(set) ?? Number(set.lineas[0].cant)) : (descDe(set) ?? Number(set.lineas[0].dv || 0));
+      const nuevo = Math.max(campo === 'trab' ? 5 : 0, base + dir * 5);
+      set.lineas.forEach((l) => { if (campo === 'trab') l.cant = String(nuevo); else l.dv = String(nuevo); });
+    }
+    pinta();
+  }));
+}
+
+document.querySelectorAll('#aparato button').forEach((b) => b.addEventListener('click', () => { E.v = b.dataset.v; cierraLista(); pinta(); }));
+document.querySelectorAll('#quien button').forEach((b) => b.addEventListener('click', () => { E.q = b.dataset.q; cierraLista(); pinta(); }));
+document.addEventListener('click', (e) => {
+  if (listaAbierta && !listaAbierta.contains(e.target)) cierraLista();
+  // Tocar en otro lado también quita la burbuja; abrir una lista o el propio «+ Lapso» no.
+  const b = document.querySelector('.burbuja');
+  // Solo cuenta tocar DENTRO del editor (los botones de arriba de la maqueta no son la app).
+  if (b && !b.contains(e.target) && e.target.closest('#marco') && !e.target.closest('[data-lista], [data-mas-lapso]')) { E.burbuja = null; b.remove(); }
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cierraLista(); });
+
+/* ---------- decisiones ---------- */
+const DECISIONES = [
+  ['La regla', 'Un solo lugar para cada dato. El tiempo y la intensidad (cuánto dura, cuánto descansa, a qué ritmo) viven en la LÍNEA del ejercicio y en sus lapsos. El Set solo dice cuántas veces se repite y, a lo más, qué plantilla llena esos números.'],
+  ['La lista de formatos', 'Normal, Sin series, AMRAP, EMOM, Tabata, Intervalos, Fartlek, Por tiempo: los mismos nombres y el mismo orden de hoy. «Normal» se ve en el Set como «Se repite ▾», igual que ahora. Solo el último cambia de nombre: «Personalizado» → «Lapsos personalizados».'],
+  ['«Lapsos personalizados»', 'Es el último de la lista (donde estaba «Personalizado») y dice lo que hace. Al elegirlo, cada ejercicio del Set muestra sus lapsos: filas con cuánto (reps, seg, min, m, km, cal) · carga · descanso. Sirve igual para correr que para fuerza: no hay que poner el ejercicio en tiempo ni en distancia antes. «+ Lapso» agrega una fila. Si entre dos lapsos de correr va fuerza, ese Set va en «Normal» con una línea por Correr.'],
+  ['La burbuja, cada vez que se elige', 'Al elegir «Lapsos personalizados», se abre el primer ejercicio y una burbuja señala el «+ Lapso»: «Un ejercicio, varios lapsos. Con «+ Lapso» armas un intervalo con un solo ejercicio. Por ejemplo, Correr: 1 · 800 m rápido · 2 · 2 min suave». El ejemplo es de cardio a propósito: es para lo que se pensó. Sale CADA VEZ que se elige (no se recuerda que ya la vio), se quita con «Entendido» o tocando en otro lado, y no bloquea. No sale al abrir un workout que ya lo trae.'],
+  ['Plantillas: Tabata, Intervalos, Fartlek', 'Escriben los números en las líneas y la franja de siempre (− 30 s + trabajo − 30 s + descanso − 10 + veces) edita ESOS mismos números. Con dos ejercicios, la franja los cambia juntos; si a uno le pones otro tiempo, dice «Varía».'],
+  ['Descanso entre Sets', 'Vive en la raya entre dos Sets. Sin descanso, un «+ Descanso» chico. Con descanso, un chip «⏱ 2 min»; tocarlo abre un menú pegado con − +, seg/min y «Quitar». Después de la última vuelta de un Set solo cuenta la raya.'],
+  ['Cargas', '«Intensidad» (un porcentaje a secas, sin 1RM), Ritmo (min/km, con rango), Zona de FC (1-5), Vatios y Ritmo de nado (min/100 m). En tres grupos: Fuerza (% del 1RM, Kilos), Esfuerzo (Intensidad, RPE, RIR) y Cardio. «85 %» de intensidad se guarda distinto de «85 %» del 1RM.'],
+  ['Qué mide el reloj', 'Teléfono: solo tiempo (cuenta regresiva en seg/min; cronómetro en lo demás, y el atleta toca «Listo»: la app guarda cuánto tardó). Reloj inteligente (App Store): tiempo, distancia, ritmo y pulsaciones; en un lapso de metros avanza solo. Reps y kilos: nadie los mide, se tocan.'],
+  ['Una línea nueva viene con lo último usado', 'Correr en Km y Ritmo; Back Squat en Reps y % 1RM. Nada en la ficha ni en la categoría: funciona igual si el coach borra todo y arma lo suyo. Las listas siempre traen todo.'],
+];
+const PREGUNTAS = [
+  ['A', '¿Te sirve el ejemplo de la burbuja?', 'Usa Correr con 800 m rápido y 2 min suave. ¿Lo dejo así, o prefieres otro ejemplo (Bici, Nado, o uno de fuerza)?'],
+  ['B', 'Zonas del atleta', 'Propongo: la app calcula sus zonas con la fecha de nacimiento que ya pide el inicio (220 − edad) y el atleta las corrige en Mi perfil → «Mis zonas». ¿Ahora o después?'],
+  ['C', '¿Plegadas por default?', 'Aquí dejé algunas líneas abiertas para que se vieran las casillas. En la app real propongo: las líneas vienen plegadas y se abre la que tocas (y la que acabas de agregar). ¿Sí?'],
+];
+document.getElementById('decisiones').innerHTML = `<div style="grid-column:1/-1"><h2 style="font-size:15px;font-weight:800">Decisiones</h2></div>` + DECISIONES.map(([t, x], i) => `<div class="dec"><h3><span>${i + 1}</span>${esc(t)}</h3>${esc(x)}</div>`).join('')  + `<div style="grid-column:1/-1;margin-top:8px"><h2 style="font-size:15px;font-weight:800">Preguntas para ti</h2></div>` + PREGUNTAS.map(([n, t, x]) => `<div class="dec p"><h3><span>${n}</span>${esc(t)}</h3>${esc(x)}</div>`).join('');
+
+pinta();
+</script>

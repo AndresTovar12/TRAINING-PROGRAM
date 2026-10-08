@@ -65,6 +65,8 @@ export function levantamientoDe(ex) {
  * 75. Solo el primero que aparezca («70% / RPE 8»). `null` si no hay ninguno que se entienda.
  */
 export function porcentajeDe(intensidad) {
+  // «85% intensidad» es un esfuerzo, no un porcentaje del 1RM: no hay kilos que sacar de ahí.
+  if (/%\s*intensidad/i.test(String(intensidad ?? ''))) return null;
   const t = String(intensidad ?? '').replace(',', '.');
   const num = '(\\d{1,3}(?:\\.\\d+)?)';
   const rango = t.match(new RegExp(`${num}\\s*(?:-|–|—|a)\\s*${num}\\s*%`, 'i'));
