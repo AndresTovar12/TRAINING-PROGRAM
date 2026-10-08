@@ -70,7 +70,7 @@ const EJERCICIO = z.object({
   series: z.union([z.number(), z.string()]).optional().describe('Series; si va en grupo, las vueltas del grupo. 3 si no se dice.'),
   cantidad: z.union([z.number(), z.string()]).optional().describe('Cuánto por serie: "8-10", 12, 30… La unidad va aparte. Si la persona no la dijo, NO la inventes ni la dejes vacía en silencio: pregúntala (la herramienta te la pide y no guarda sin ella).'),
   unidad: z.enum(['reps', 'seg', 'min', 'm', 'km', 'yd', 'cal']).optional().describe('reps si no se dice.'),
-  intensidad: z.string().optional().describe('Ej.: "RIR 2", "75%", "RPE 8".'),
+  intensidad: z.string().optional().describe('La carga, escrita EXACTO así para que el editor la reconozca. Fuerza: "75%" (porcentaje del 1RM; la app lo pasa a kilos), "20 kg". Esfuerzo: "85% intensidad" (porcentaje de esfuerzo SIN 1RM: nunca se pasa a kilos; úsalo cuando la persona dice "al 85% de intensidad" en cardio o en un ejercicio sin 1RM), "RPE 8", "RIR 2". Cardio: "4:34-5:00 min/km" (ritmo de carrera, un tiempo o un rango), "Zona 4" (zona de frecuencia cardiaca, 1 a 5), "250 W" (vatios), "1:45 /100 m" (ritmo de nado). Una carga sola por ejercicio; si la persona dio dos ("75% / RPE 8") se guarda como texto tal cual.'),
   descanso: z.string().optional().describe('Ej.: "90 s", "2 min".'),
   notas: z.string().optional(),
   indicaciones: z.string().optional().describe('Claves técnicas para el atleta.'),
@@ -79,7 +79,7 @@ const EJERCICIO = z.object({
   por_lado: z.boolean().optional().describe('true si la cantidad es por cada lado (cada pierna, cada brazo): la app lo enseña como "10 reps por lado". false si es en total. En un ejercicio a una pierna o un brazo (pistol squat, step ups, búlgara, zancadas, remo a una mano) la persona tiene que decirlo: si no lo dijo, la herramienta te lo pide y no guarda.'),
   por_vuelta: z.array(z.object({
     cantidad: z.union([z.number(), z.string()]).optional().describe('Cuánto en ESA vuelta: 10, "8-10"… En la misma unidad del ejercicio.'),
-    intensidad: z.string().optional().describe('La carga de ESA vuelta: "60%", "RPE 8", "RIR 2", "20 kg".'),
+    intensidad: z.string().optional().describe('La carga de ESA vuelta, con las mismas formas que "intensidad": "60%", "85% intensidad", "RPE 8", "RIR 2", "20 kg", "Zona 3"…'),
   })).optional().describe('Solo si las reps o la carga CAMBIAN de una vuelta a otra (pirámides, series de aproximación): una entrada por cada vez que se repite ("series"), en orden. Si todas las vueltas son iguales, no lo mandes. Si el día ya lo traía (ver_plan_de_atleta), mándalo igual o se pierde. No se combina con "formato".'),
   formato: FORMATO.optional().describe('Formato con reloj de ESTE grupo (o del ejercicio si va solo): AMRAP, EMOM, Tabata, intervalos, fartlek… Basta ponerlo en UN ejercicio del grupo y vale para todos. Sustituye a "series". Si el día ya lo traía (ver_plan_de_atleta), mándalo igual o se pierde.'),
 })

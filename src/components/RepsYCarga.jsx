@@ -2,7 +2,7 @@ import { Fragment } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import ListaDesplegable from '@/components/ListaDesplegable';
 import { estiloDeRotulo } from '@/components/estiloDeRotulo';
-import { MEDIDAS, CARGAS, medida as uni } from '@/lib/medidas';
+import { MEDIDAS, CARGAS, GRUPOS_DE_CARGA, medida as uni } from '@/lib/medidas';
 import { T, FONT } from '@/lib/theme';
 
 /**
@@ -100,7 +100,7 @@ const repsDeFila = (rc, j, { estiloInput, compacto, conNumero }) => {
 const cargaDeFila = (rc, j, { estiloInput, compacto }) => (
   <Caja
     valor={rc.cargaDe(j)} onCambio={(t) => rc.escribeCarga(j, t)} onSalir={() => rc.alSalirDeCarga(j)}
-    estiloInput={estiloInput} modo={rc.tipo ? 'decimal' : 'text'}
+    estiloInput={estiloInput} modo={rc.tipo && !rc.info?.texto ? 'decimal' : 'text'}
     etiqueta={j === null ? 'Carga' : `Carga de la vuelta ${j + 1}`}
     sufijo={!compacto ? rc.info?.sufijo : null}
   />
@@ -128,15 +128,19 @@ export function CeldaDeReps({ rc, estiloInput, compacto = false, ancho }) {
 
 /** El rótulo-lista del tipo de carga (% 1RM, RPE, RIR, kilos, texto libre) y su casilla. */
 export function CeldaDeCarga({ rc, estiloInput, compacto = false, ancho }) {
-  const opciones = [
-    ...CARGAS.map((c) => ({ valor: c.id, etiqueta: c.etiqueta, corta: c.corta, detalle: c.detalle })),
-    { valor: 'libre', etiqueta: 'Texto libre', corta: 'Carga', detalle: 'Escribe lo que quieras: «70% / RPE 8»' },
+  // Tres grupos —Fuerza, Esfuerzo, Cardio— y, aparte, el texto libre.
+  const grupos = [
+    ...GRUPOS_DE_CARGA.map((titulo) => ({
+      titulo,
+      opciones: CARGAS.filter((c) => c.grupo === titulo).map((c) => ({ valor: c.id, etiqueta: c.etiqueta, corta: c.corta, detalle: c.detalle })),
+    })),
+    { titulo: 'Otra', opciones: [{ valor: 'libre', etiqueta: 'Texto libre', corta: 'Carga', detalle: 'Escribe lo que quieras: «70% / RPE 8»' }] },
   ];
   return (
     <div style={{ minWidth: 0, width: ancho }}>
       <ListaDesplegable
-        etiqueta="De qué es la carga" valor={rc.tipo ?? 'libre'} onCambio={rc.elegirTipo} opciones={opciones}
-        alto={300} anchoMinimo={250} estilo={estiloDeRotulo(compacto)}
+        etiqueta="De qué es la carga" valor={rc.tipo ?? 'libre'} onCambio={rc.elegirTipo} grupos={grupos}
+        alto={380} anchoMinimo={250} estilo={estiloDeRotulo(compacto)}
       />
       {rc.desplegado
         ? cargaDeFila(rc, 0, { estiloInput, compacto })

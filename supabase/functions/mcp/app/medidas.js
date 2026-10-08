@@ -181,19 +181,38 @@ export const mismaMedida = (a, b) => leeCantidad(a).unidad === leeCantidad(b).un
  * se queda como texto libre y se enseña tal cual: ante la duda, no adivina.
  */
 export const CARGAS = [
-  { id: 'pct', etiqueta: '% del 1RM', corta: '% 1RM', detalle: 'Un porcentaje de su máximo', ejemplo: '75', sufijo: '%' },
-  { id: 'rpe', etiqueta: 'RPE', corta: 'RPE', detalle: 'Esfuerzo del 1 al 10', ejemplo: '8' },
-  { id: 'rir', etiqueta: 'RIR', corta: 'RIR', detalle: 'Repeticiones que deja en reserva', ejemplo: '2' },
-  { id: 'kg', etiqueta: 'Kilos', corta: 'kg', detalle: 'Un peso fijo', ejemplo: '20', sufijo: 'kg' },
+  { id: 'pct', grupo: 'Fuerza', etiqueta: '% del 1RM', corta: '% 1RM', detalle: 'Un porcentaje de su máximo; la app lo pasa a kilos', ejemplo: '75', sufijo: '%' },
+  { id: 'kg', grupo: 'Fuerza', etiqueta: 'Kilos', corta: 'kg', detalle: 'Un peso fijo', ejemplo: '20', sufijo: 'kg' },
+  { id: 'int', grupo: 'Esfuerzo', etiqueta: 'Intensidad', corta: 'Intensidad', detalle: 'Un porcentaje de esfuerzo, sin 1RM: 85 %, 100 %', ejemplo: '85', sufijo: '%' },
+  { id: 'rpe', grupo: 'Esfuerzo', etiqueta: 'RPE', corta: 'RPE', detalle: 'Esfuerzo del 1 al 10', ejemplo: '8' },
+  { id: 'rir', grupo: 'Esfuerzo', etiqueta: 'RIR', corta: 'RIR', detalle: 'Repeticiones que deja en reserva', ejemplo: '2' },
+  { id: 'ritmo', grupo: 'Cardio', etiqueta: 'Ritmo', corta: 'Ritmo', detalle: 'Minutos por kilómetro: «4:34» o un rango «4:34-5:00»', ejemplo: '4:34', sufijo: 'min/km', texto: true },
+  { id: 'zona', grupo: 'Cardio', etiqueta: 'Zona de FC', corta: 'Zona', detalle: 'Del 1 al 5, con sus pulsaciones', ejemplo: '4', sufijo: 'Z' },
+  { id: 'w', grupo: 'Cardio', etiqueta: 'Vatios', corta: 'W', detalle: 'Potencia en la bici o el remo', ejemplo: '250', sufijo: 'W' },
+  { id: 'nado', grupo: 'Cardio', etiqueta: 'Ritmo de nado', corta: 'Ritmo nado', detalle: 'Minutos por cada 100 metros', ejemplo: '1:45', sufijo: '/100 m', texto: true },
 ];
+
+/* Los grupos en que se parte la lista «CARGA ▾», en este orden. */
+export const GRUPOS_DE_CARGA = ['Fuerza', 'Esfuerzo', 'Cardio'];
 
 // Un número o un rango de dos: «75», «70-75», «7–8».
 const RANGO = `(${NUMERO}(?:\\s*[-–]\\s*${NUMERO})?)`;
+// Un ritmo es un tiempo («4:34») o un rango de dos («4:34-5:00»).
+const TIEMPO = '\\d{1,2}:\\d{2}';
+const RANGO_DE_TIEMPO = `(${TIEMPO}(?:\\s*[-–]\\s*${TIEMPO})?)`;
+/* ORDEN: «85% intensidad» se prueba ANTES que «%» a secas. Aunque no se pisan (el porcentaje del 1RM exige
+   terminar en «%» o «1RM»), así queda dicho: una intensidad NO es un porcentaje del 1RM y nunca se
+   convierte a kilos (ver `porcentajeDe`). */
 const LECTURAS = [
+  ['int', new RegExp(`^${RANGO}\\s*%\\s*intensidad$`, 'i')],
   ['pct', new RegExp(`^${RANGO}\\s*%(?:\\s*(?:del?\\s*)?1\\s*RM)?$`, 'i')],
   ['rpe', new RegExp(`^RPE\\s*${RANGO}$`, 'i')],
   ['rir', new RegExp(`^RIR\\s*${RANGO}$`, 'i')],
   ['kg', new RegExp(`^(${NUMERO})\\s*(?:kgs?|kilos)$`, 'i')],
+  ['ritmo', new RegExp(`^${RANGO_DE_TIEMPO}\\s*(?:min\\s*/\\s*km)$`, 'i')],
+  ['zona', new RegExp(`^Z(?:ona)?\\s*(\\d(?:\\s*[-–]\\s*\\d)?)$`, 'i')],
+  ['w', new RegExp(`^${RANGO}\\s*(?:W|vatios|watts)$`, 'i')],
+  ['nado', new RegExp(`^${RANGO_DE_TIEMPO}\\s*/\\s*100\\s*m$`, 'i')],
 ];
 
 /**
@@ -213,10 +232,15 @@ export function leeCarga(ex) {
 /* Lo mismo que LECTURAS, pero con el número a medias: mientras se teclea un rango existe «RPE 7-», y el
    campo no puede soltar su tipo en ese instante (dejaría de ser «RPE» a media escritura). */
 const A_MEDIAS = [
+  ['int', /^[\d.,\-–\s]*%\s*intensidad$/i],
   ['pct', /^[\d.,\-–\s]*%$/],
   ['rpe', /^RPE\s*[\d.,\-–]*$/i],
   ['rir', /^RIR\s*[\d.,\-–]*$/i],
   ['kg', /^[\d.,]*\s*(?:kgs?|kilos)$/i],
+  ['ritmo', /^[\d:\-–\s]*\s*min\s*\/\s*km$/i],
+  ['zona', /^Zona\s*[\d\-–]*$/i],
+  ['w', /^[\d.,\-–]*\s*(?:W|vatios|watts)$/i],
+  ['nado', /^[\d:\-–\s]*\s*\/\s*100\s*m$/i],
 ];
 
 /** El tipo de una carga que quizá está a medio escribir («RPE 7-» → 'rpe'). Solo para el campo del editor. */
@@ -231,9 +255,14 @@ export function componeCarga(tipo, cantidad) {
   const n = String(cantidad ?? '').trim();
   if (!n) return '';
   if (tipo === 'pct') return `${n}%`;
+  if (tipo === 'int') return `${n}% intensidad`;
   if (tipo === 'rpe') return `RPE ${n}`;
   if (tipo === 'rir') return `RIR ${n}`;
   if (tipo === 'kg') return `${n} kg`;
+  if (tipo === 'ritmo') return `${n} min/km`;
+  if (tipo === 'zona') return `Zona ${n}`;
+  if (tipo === 'w') return `${n} W`;
+  if (tipo === 'nado') return `${n} /100 m`;
   return n;
 }
 
@@ -244,10 +273,14 @@ export function componeCarga(tipo, cantidad) {
  */
 export function cantidadDeCarga(tipo, texto) {
   const t = String(texto ?? '').trim();
-  if (tipo === 'pct') return t.replace(/\s*%.*$/, '');
+  if (tipo === 'pct' || tipo === 'int') return t.replace(/\s*%.*$/, '');
   if (tipo === 'rpe') return t.replace(/^RPE\s*/i, '');
   if (tipo === 'rir') return t.replace(/^RIR\s*/i, '');
   if (tipo === 'kg') return t.replace(/\s*(?:kgs?|kilos).*$/i, '');
+  if (tipo === 'ritmo') return t.replace(/\s*min\s*\/\s*km.*$/i, '');
+  if (tipo === 'zona') return t.replace(/^Z(?:ona)?\s*/i, '');
+  if (tipo === 'w') return t.replace(/\s*(?:W|vatios|watts).*$/i, '');
+  if (tipo === 'nado') return t.replace(/\s*\/\s*100\s*m.*$/i, '');
   return t;
 }
 

@@ -3,12 +3,16 @@
 //
 //   node scripts/prueba-carga.mjs
 import assert from 'node:assert/strict';
-import { CARGAS, leeCarga, componeCarga, cantidadDeCarga, cargaEnSuUnidad } from '../src/lib/medidas.js';
+import { CARGAS, GRUPOS_DE_CARGA, leeCarga, componeCarga, cantidadDeCarga, cargaEnSuUnidad, tipoDeCargaAlEscribir } from '../src/lib/medidas.js';
+import { porcentajeDe } from '../src/lib/cargaPorcentaje.js';
 
 const lee = (intensity) => leeCarga({ intensity });
 
-/* ---- Los cuatro tipos de la lista, en su orden ---- */
-assert.deepEqual(CARGAS.map((c) => c.id), ['pct', 'rpe', 'rir', 'kg']);
+/* ---- Los nueve tipos de la lista, en sus tres grupos y en su orden ---- */
+assert.deepEqual(CARGAS.map((c) => c.id), ['pct', 'kg', 'int', 'rpe', 'rir', 'ritmo', 'zona', 'w', 'nado']);
+assert.deepEqual(GRUPOS_DE_CARGA, ['Fuerza', 'Esfuerzo', 'Cardio']);
+assert.deepEqual(GRUPOS_DE_CARGA.map((g) => CARGAS.filter((c) => c.grupo === g).map((c) => c.id)),
+  [['pct', 'kg'], ['int', 'rpe', 'rir'], ['ritmo', 'zona', 'w', 'nado']]);
 
 /* ---- Leer: el tipo sale del texto que ya hay, sin un campo nuevo ---- */
 assert.deepEqual(lee('75%'), { tipo: 'pct', cantidad: '75' });
@@ -24,6 +28,41 @@ assert.deepEqual(lee('RIR 2'), { tipo: 'rir', cantidad: '2' });
 assert.deepEqual(lee('20 kg'), { tipo: 'kg', cantidad: '20' });
 assert.deepEqual(lee('20kg'), { tipo: 'kg', cantidad: '20' });
 assert.deepEqual(lee('82.5 kg'), { tipo: 'kg', cantidad: '82.5' });
+
+/* ---- Las cargas de cardio y la intensidad ---- */
+assert.deepEqual(lee('85% intensidad'), { tipo: 'int', cantidad: '85' });
+assert.deepEqual(lee('80-90% intensidad'), { tipo: 'int', cantidad: '80-90' });
+assert.deepEqual(lee('4:34 min/km'), { tipo: 'ritmo', cantidad: '4:34' });
+assert.deepEqual(lee('4:34-5:00 min/km'), { tipo: 'ritmo', cantidad: '4:34-5:00' });
+assert.deepEqual(lee('Zona 4'), { tipo: 'zona', cantidad: '4' });
+assert.deepEqual(lee('Zona 2-3'), { tipo: 'zona', cantidad: '2-3' });
+assert.deepEqual(lee('Z3'), { tipo: 'zona', cantidad: '3' });
+assert.deepEqual(lee('250 W'), { tipo: 'w', cantidad: '250' });
+assert.deepEqual(lee('200-250 W'), { tipo: 'w', cantidad: '200-250' });
+assert.deepEqual(lee('1:45 /100 m'), { tipo: 'nado', cantidad: '1:45' });
+assert.deepEqual(lee('1:45-2:00 /100 m'), { tipo: 'nado', cantidad: '1:45-2:00' });
+assert.equal(componeCarga('int', '85'), '85% intensidad');
+assert.equal(componeCarga('ritmo', '4:34-5:00'), '4:34-5:00 min/km');
+assert.equal(componeCarga('zona', '4'), 'Zona 4');
+assert.equal(componeCarga('w', '250'), '250 W');
+assert.equal(componeCarga('nado', '1:45'), '1:45 /100 m');
+for (const [tipo, cantidad] of [['int', '85'], ['int', '80-90'], ['ritmo', '4:34'], ['ritmo', '4:34-5:00'], ['zona', '4'], ['zona', '2-3'], ['w', '250'], ['w', '200-250'], ['nado', '1:45']]) {
+  assert.deepEqual(lee(componeCarga(tipo, cantidad)), { tipo, cantidad }, `${tipo} ${cantidad}: ida y vuelta`);
+}
+// A medio escribir no se pierde el tipo ni lo tecleado.
+assert.equal(tipoDeCargaAlEscribir('85-% intensidad'), 'int');
+assert.equal(tipoDeCargaAlEscribir('4:3 min/km'), 'ritmo');
+assert.equal(tipoDeCargaAlEscribir('4:34-5 min/km'), 'ritmo');
+assert.equal(tipoDeCargaAlEscribir('2- /100 m'), 'nado');
+assert.equal(cantidadDeCarga('ritmo', '4:34-5 min/km'), '4:34-5');
+assert.equal(cantidadDeCarga('zona', 'Zona 4'), '4');
+assert.equal(cantidadDeCarga('w', '250 W'), '250');
+assert.equal(cantidadDeCarga('nado', '1:45 /100 m'), '1:45');
+assert.equal(cantidadDeCarga('int', '85% intensidad'), '85');
+// «85% intensidad» NO es el 85% del 1RM: nunca se convierte a kilos.
+assert.equal(porcentajeDe('85% intensidad'), null, 'una intensidad no se pasa a kilos');
+assert.equal(porcentajeDe('80-90% intensidad'), null);
+assert.deepEqual(porcentajeDe('85%'), { min: 85, max: 85 }, 'el % del 1RM de siempre sigue igual');
 
 /* ---- Lo que no encaja se queda como texto, entero y sin tocar ---- */
 assert.deepEqual(lee(''), { tipo: null, cantidad: '' });

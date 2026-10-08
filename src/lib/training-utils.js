@@ -624,7 +624,8 @@ const inferRest = (ex, phaseId) => {
     return '3-4 min entre clusters';
   }
   // Fuerza máxima (F4, F5 con compuestos pesados ≥80%)
-  const pctMatch = intensity.match(/(\d+)\s*%/);
+  // «85% intensidad» no es un porcentaje del 1RM: no dice que la carga sea máxima.
+  const pctMatch = /%\s*intensidad/.test(intensity) ? null : intensity.match(/(\d+)\s*%/);
   const pct = pctMatch ? parseInt(pctMatch[1]) : null;
   if ((phaseId === 'f4' || phaseId === 'f5') && (ex.role === 'main' || (pct && pct >= 80))) {
     return '3-5 min';
