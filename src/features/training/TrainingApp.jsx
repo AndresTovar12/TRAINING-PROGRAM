@@ -300,7 +300,7 @@ function Chip({ children, fuerte }) {
   );
 }
 
-const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phaseColor, onAbrirFicha, oneRMs }) => {
+const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phaseColor, onAbrirFicha, oneRMs, sinDescanso = false }) => {
   const { phases: PLAN, resolveExercise, medias, kind } = usePlan();
   const { perfil: profile } = usePerfilDeLaVista();
   const { salud } = usePalabras();
@@ -356,7 +356,8 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phas
   // `inferRest` leyendo el nombre del ejercicio, y el atleta lo leía como si
   // fuera una indicación de su entrenador. Si el coach no lo puso, no se
   // muestra nada: inventarle un descanso es peor que no darle ninguno.
-  const rest = (ex.descanso || '').trim() || null;
+  // En un Set con reloj (AMRAP, Tabata…) el descanso lo marca el reloj: el del ejercicio, si quedó guardado, no se enseña.
+  const rest = sinDescanso ? null : ((ex.descanso || '').trim() || null);
 
   /* Los datos se pintan SOLO si el coach los puso. Nada de "—" ni de campos
      vacíos esperando: si no configuró la intensidad o el descanso, esa línea
@@ -683,7 +684,7 @@ const SetGroup = ({
             <ExerciseRow
               ex={ex} idx={idx} num={i + 1} phaseColor={phaseColor}
               sessionData={sessionData} sessionKey={sessionKey} sessionsData={sessionsData}
-              onAbrirFicha={() => setFichaEn(i)} oneRMs={oneRMs}
+              onAbrirFicha={() => setFichaEn(i)} oneRMs={oneRMs} sinDescanso={!!formato}
             />
           </div>
         ))}
@@ -706,6 +707,7 @@ const SetGroup = ({
             medias={medias}
             perfil={profile}
             serie={setNum}
+            sinDescanso={!!formato}
             posicion={fichaEn + 1}
             total={group.exercises.length}
             onCerrar={() => setFichaEn(null)}

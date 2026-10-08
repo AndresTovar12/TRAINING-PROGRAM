@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useConfirmacion } from '@/components/Confirmacion';
-import { CARGAS, leeCantidad, componeCarga, cantidadDeCarga, tipoDeCargaAlEscribir } from '@/lib/medidas';
+import { CARGAS, leeCantidad, componeCarga, cantidadDeCarga, tipoDeCargaAlEscribir, esCluster, repsDeCluster } from '@/lib/medidas';
 import { vueltasDe, varian, filasParaEditar, parcheDeVueltas } from '@/lib/porVuelta';
 
 const NADA_CAMBIA = { reps: false, intensity: false, alguno: false };
@@ -72,13 +72,24 @@ export function useRepsYCarga({ ex, onPatch, rondas = null, abiertoDeEntrada = f
     }
   };
 
-  const escribeReps = (j, texto) => guarda(j, { reps: texto }, { unidad: leida.unidad, ...fijaElLado });
+  /* Escribir «2+2+2» en las reps vuelve cluster al ejercicio: así no hay que ir primero a la lista (Andrés, 8 oct 2026). */
+  const escribeReps = (j, texto) => {
+    const unidad = leida.unidad === 'reps' && esCluster(texto) ? 'cluster' : leida.unidad;
+    guarda(j, { reps: texto }, { unidad, ...fijaElLado });
+  };
 
   /* Al cambiar de unidad se guarda la cantidad LIMPIA: si venía «30 yd» y se pasa a metros, queda «30» con
      unidad metros. Un valor que no se entiende se respeta tal cual. */
   const cambiaUnidad = (nueva) => {
-    const limpia = (texto) => { const l = lee(String(texto ?? '')); return l.libre ? String(texto ?? '') : l.cantidad; };
-    const extra = { unidad: nueva, ...fijaElLado };
+    /* Salir de «Cluster» deja las reps de todo el cluster («2+2+2» → 6) y se lleva la pausa entre bloques: sin bloques no hay pausa. */
+    const dejaElCluster = leida.unidad === 'cluster' && nueva !== 'cluster';
+    const limpia = (texto) => {
+      const crudo = String(texto ?? '');
+      if (dejaElCluster && repsDeCluster(crudo) !== null) return String(repsDeCluster(crudo));
+      const l = lee(crudo);
+      return l.libre ? crudo : l.cantidad;
+    };
+    const extra = { unidad: nueva, ...(dejaElCluster ? { entreBloques: undefined } : null), ...fijaElLado };
     if (guardadas) onPatch({ ...extra, ...parcheDeVueltas(guardadas.map((f) => ({ ...f, reps: limpia(f.reps) }))) });
     else onPatch({ reps: limpia(ex?.reps), ...extra });
   };
@@ -154,6 +165,9 @@ export function useRepsYCarga({ ex, onPatch, rondas = null, abiertoDeEntrada = f
   return {
     puedeVariar: !!rondas, desplegado, filas, hayVueltas: !!guardadas, cambia, alternar, dejarIguales,
     unidad: leida.unidad, porLado: leida.porLado, repsDe, escribeReps, cambiaUnidad, ponLado,
+    // La pausa entre los bloques de un cluster, en segundos («15» o un rango «15-30»).
+    cluster: leida.unidad === 'cluster', entreBloques: String(ex?.entreBloques ?? ''),
+    ponEntreBloques: (texto) => onPatch({ entreBloques: soloNumero(texto) || undefined }),
     tipo, info, cargaDe, escribeCarga, alSalirDeCarga, elegirTipo,
   };
 }

@@ -226,7 +226,7 @@ const alEscribirDescripcion = (onPatch) => (e) => onPatch({ notes: e.target.valu
 
 function ExerciseCard({
   ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove, onMove, canLeft, canRight,
-  rondas = null, soloLectura = false, arrastre = null, burbuja = false, onCerrarBurbuja,
+  rondas = null, soloLectura = false, arrastre = null, burbuja = false, onCerrarBurbuja, sinDescanso = false,
 }) {
   const rep = delRepertorio(ex, repertoire);
   // Reps, carga, «Por lado» y «Por vuelta»: ver `useRepsYCarga`.
@@ -286,8 +286,8 @@ function ExerciseCard({
         {/* LAS CASILLAS VACÍAS SE QUEDAN VACÍAS. Andrés, 5 oct 2026: «dentro de las casillas, cuando están
             vacías, normalmente pones en gris un ejemplo; quita eso». El rótulo ya dice qué va en cada una;
             por eso el cue, que solo tenía su texto gris, ahora lleva rótulo. */}
-        {/* Con lapsos, cada uno trae su propio descanso. */}
-        {!traeLapsos(ex) && <div style={{ marginTop: 8 }}>{campoDescanso}</div>}
+        {/* Con lapsos, cada uno trae su propio descanso; con reloj de formato, lo marca el reloj. */}
+        {!traeLapsos(ex) && !sinDescanso && <div style={{ marginTop: 8 }}>{campoDescanso}</div>}
         <div style={{ marginTop: 8 }}>
           <Field label="Descripción">
             <input value={textoDeDescripcion(ex)} onChange={alEscribirDescripcion(onPatch)} style={estiloCampo} />
@@ -427,7 +427,7 @@ function RotuloCampo({ children }) {
  */
 function ExerciseRow({
   ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove, onMove, canUp, canDown,
-  rondas = null, soloLectura = false, arrastre = null, burbuja = false, onCerrarBurbuja,
+  rondas = null, soloLectura = false, arrastre = null, burbuja = false, onCerrarBurbuja, sinDescanso = false,
 }) {
   const rep = delRepertorio(ex, repertoire);
   const rc = useRepsYCarga({ ex, onPatch, rondas, abiertoDeEntrada: soloLectura });
@@ -508,9 +508,12 @@ function ExerciseRow({
                 <DebajoDeRepsYCarga rc={rc} compacto estiloInput={inputFila} />
               </div>
             )}
-            <div style={fluido(1) ?? { width: 112 }}>
-              <CampoDescanso ex={ex} onPatch={onPatch} compacto estiloInput={inputFila} />
-            </div>
+            {/* En un Set con reloj (AMRAP, EMOM, Tabata…) el descanso lo marca el reloj: no hay casilla (un solo lugar para cada dato). */}
+            {!sinDescanso && (
+              <div style={fluido(1) ?? { width: 112 }}>
+                <CampoDescanso ex={ex} onPatch={onPatch} compacto estiloInput={inputFila} />
+              </div>
+            )}
           </>
         )}
         {/* La base decide si se parte la línea (no el mínimo): va chica, y el
@@ -1135,6 +1138,8 @@ function CuerpoDeSets({
                   // La burbuja del «+ Lapso» va en el primer ejercicio del Set donde se acaba de elegir el formato.
                   burbuja: !soloLectura && b.lapsos && burbujaEn === bi && mi === 0,
                   onCerrarBurbuja: () => setBurbujaEn(null),
+                  // Con un reloj de formato, el descanso lo marca el reloj y la línea no trae su casilla.
+                  sinDescanso: !!b.formato,
                   onVideoAtleta: setMediaDe,
                   onPatch: (patch) => writeBlocks((bs) => bs.map((x, k) => (k === bi
                     ? { ...x, members: x.members.map((mm, kk) => (kk === mi ? { ...mm, ...patch } : mm)) }

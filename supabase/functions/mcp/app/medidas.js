@@ -31,6 +31,8 @@ export const MEDIDAS = [
   { id: 'km', etiqueta: 'Kilómetros', corta: 'km', rotulo: 'Kilómetros', familia: 'distancia' },
   { id: 'yd', etiqueta: 'Yardas', corta: 'yd', rotulo: 'Yardas', familia: 'distancia' },
   { id: 'cal', etiqueta: 'Calorías', corta: 'cal', rotulo: 'Calorías', familia: 'energia' },
+  // Reps en bloques con una pausa corta entre ellos («2+2+2»); la pausa se guarda aparte (`ex.entreBloques`, segundos).
+  { id: 'cluster', etiqueta: 'Cluster', corta: 'cluster', rotulo: 'Cluster', familia: 'conteo' },
 ];
 
 const PORID = Object.fromEntries(MEDIDAS.map((u) => [u.id, u]));
@@ -86,9 +88,23 @@ export function leeCantidad(ex) {
   return { ...leeTexto(entero, ex?.unidad), porLado: marcado === true };
 }
 
+/* Un cluster: reps en bloques («2+2+2», «3+2+1»). Con la unidad sin elegir —lo que traen los planes ya escritos— o ya
+   en cluster, el texto se lee como tal; con otra unidad elegida («30 seg»), manda la unidad. */
+const CLUSTER = /^\d+(?:\+\d+)+$/;
+export const esCluster = (texto) => CLUSTER.test(String(texto ?? '').replace(/\s/g, ''));
+
+/** Las reps de todo el cluster: «2+2+2» → 6. `null` si el texto no es un cluster. */
+export function repsDeCluster(texto) {
+  const t = String(texto ?? '').replace(/\s/g, '');
+  return CLUSTER.test(t) ? t.split('+').reduce((a, n) => a + parseInt(n, 10), 0) : null;
+}
+
 // La cantidad y su unidad, de un texto que ya no trae «por lado».
 function leeTexto(crudo, unidadPuesta) {
   if (!crudo || crudo === '—') return { cantidad: '', unidad: unidadPuesta || 'reps', libre: false };
+  if ((!unidadPuesta || unidadPuesta === 'cluster') && esCluster(crudo)) {
+    return { cantidad: crudo.replace(/\s/g, ''), unidad: 'cluster', libre: false };
+  }
 
   // Si el coach ya eligió la unidad, manda ella. El texto puede traer restos
   // de la unidad vieja ("30 yd" con unidad 'm'), y se limpian.
@@ -128,6 +144,10 @@ export function textoMeta(ex) {
   if (!cantidad) return null;
   const lado = porLado ? ' por lado' : '';
   if (libre) return `${cantidad}${lado}`;
+  if (id === 'cluster') {
+    const entre = String(ex?.entreBloques ?? '').trim();
+    return `${cantidad} reps${lado}${entre ? ` · ${entre} s entre bloques` : ''}`;
+  }
   if (id === 'reps') return `${cantidad === '1' ? '1 rep' : `${cantidad} reps`}${lado}`;
   return `${cantidad} ${medida(id).corta}${lado}`;
 }
