@@ -8,7 +8,7 @@ import {
   dondeVa, esDescanso, isLoadedExercise, sesionQueRepite, sessionIdFor,
   enOrdenDeSemana,
 } from './app/training-utils.js'
-import { textoMeta, leeCantidad, MEDIDAS } from './app/medidas.js'
+import { textoMeta, leeCantidad, MEDIDAS, esCluster } from './app/medidas.js'
 import { vueltasDe, ejercicioDeVuelta, parcheDeVueltas, rondasDe } from './app/porVuelta.js'
 import { lapsosDe, parcheDeLapsos, aLapsos, comoEjercicio, MAX_LAPSOS } from './app/lapsos.js'
 import { limpiaFormato, resumenDeFormato, textoDeResultado } from './app/formatos.js'
@@ -292,6 +292,12 @@ export function describirEjercicio(ex: any) {
   if (ex.sets) d.series = ex.sets
   const meta = textoMeta(ex)
   if (meta) d.cantidad = meta
+  // Un cluster se manda como «2+2+2» con su unidad y su pausa aparte: así vuelve igual al reescribir la sesión.
+  if (leeCantidad(ex).unidad === 'cluster') {
+    d.cantidad = leeCantidad(ex).cantidad
+    d.unidad = 'cluster'
+    if (ex.entreBloques) d.entre_bloques = String(ex.entreBloques)
+  }
   if (leeCantidad(ex).porLado) d.por_lado = true
   if (ex.intensity) d.intensidad = ex.intensity
   /* Reps y carga distintas en cada vuelta. Igual que el formato: se enseña entero porque `editar_dia`
@@ -530,6 +536,7 @@ export interface EjercicioEntrada {
   formato?: unknown
   por_lado?: boolean
   descanso_set?: string
+  entre_bloques?: string
   por_vuelta?: { cantidad?: number | string; intensidad?: string }[]
   lapsos?: { cantidad?: number | string; unidad?: string; intensidad?: string; descanso?: string }[]
 }
@@ -626,6 +633,10 @@ export function diaDesdeEntrada(
     }
     if (e.descanso) ex.descanso = e.descanso
     if (e.descanso_set && String(e.descanso_set).trim()) ex.descansoSet = String(e.descanso_set).trim()
+    if (e.entre_bloques && String(e.entre_bloques).trim()) {
+      if (ex.unidad !== 'cluster' && !esCluster(String(ex.reps ?? ''))) throw new Aviso(`"${ex.name}": "entre_bloques" solo va con un cluster (unidad "cluster" y cantidad como "2+2+2").`)
+      ex.entreBloques = String(e.entre_bloques).trim()
+    }
     if (e.indicaciones) ex.cue = e.indicaciones
     if (e.lleva_peso !== undefined) ex.carga = e.lleva_peso
     if (e.por_lado === true) ex.porLado = true

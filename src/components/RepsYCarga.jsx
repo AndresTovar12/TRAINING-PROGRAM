@@ -89,7 +89,7 @@ const repsDeFila = (rc, j, { estiloInput, compacto, conNumero }) => {
   return (
     <Caja
       valor={valor} onCambio={(t) => rc.escribeReps(j, t)} estiloInput={estiloInput}
-      modo={libre ? 'text' : 'decimal'} numero={conNumero ? j + 1 : null}
+      modo={libre || rc.cluster ? 'text' : 'decimal'} numero={conNumero ? j + 1 : null}
       etiqueta={j === null ? 'Cantidad' : `Cantidad de la vuelta ${j + 1}`}
       // En la lista de ejercicios el recuadro lleva solo el número: el rótulo de arriba ya dice de qué es.
       sufijo={!compacto && !libre ? uni(rc.unidad).corta : null}
@@ -190,6 +190,17 @@ export function DebajoDeRepsYCarga({ rc, estiloInput, compacto = false, columnas
           />
           Por lado
         </label>
+        {/* La pausa entre los bloques de un cluster, en segundos. Un rango («15-30») vale. La pausa entre SERIES sigue siendo el descanso. */}
+        {rc.cluster && (
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: FONT, fontSize: 12.5, fontWeight: 700, color: T.text2 }}>
+            Entre bloques
+            <span style={{ width: 78 }}>
+              <Caja
+                valor={rc.entreBloques} onCambio={rc.ponEntreBloques} estiloInput={estiloInput} sufijo="s" etiqueta="Segundos entre bloques"
+              />
+            </span>
+          </label>
+        )}
         {rc.puedeVariar && (
           <button
             type="button" className="kp-accion" onClick={rc.alternar} aria-expanded={rc.desplegado}

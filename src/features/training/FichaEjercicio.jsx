@@ -9,7 +9,7 @@ import { isLoadedExercise, formatIntensity, findPreviousWeight } from '@/lib/tra
    importa con otro nombre para no pisarla. */
 import {
   textoMeta, leeCantidad, leeCarga, esTiempo, metaEnSegundos, cargaEnSuUnidad,
-  medida as infoMedida,
+  medida as infoMedida, repsDeCluster,
 } from '@/lib/medidas';
 import { vueltasDe, ejercicioDeVuelta, anotadoEnVuelta, conVueltaAnotada } from '@/lib/porVuelta';
 import { lapsosDe, comoEjercicio } from '@/lib/lapsos';
@@ -40,7 +40,7 @@ import { usePalabras } from '@/contexts/PalabrasContext';
 export default function FichaEjercicio({
   ex, exData, onUpdate, sessionsData, sessionKey, kind, oneRMs, plan,
   repertoire, medias, perfil,
-  serie, posicion, total,
+  serie, posicion, total, sinDescanso = false,
   onCerrar, onSiguiente, onOmitir,
 }) {
   const unidad = perfil?.unidad_peso || 'kg';
@@ -71,7 +71,7 @@ export default function FichaEjercicio({
      Cada lapso trae su propio descanso, así que tampoco dice «Descansa X entre cada serie». */
   const lapsosDeLaFicha = lapsosDe(ex);
   const lapsos = lapsosDeLaFicha && lapsosDeLaFicha.length > 1 ? lapsosDeLaFicha : null;
-  const descanso = lapsos ? null : ((ex.descanso || '').trim() || null);
+  const descanso = lapsos || sinDescanso ? null : ((ex.descanso || '').trim() || null);
 
   const anterior = useMemo(
     // El de la vez pasada, no el que se acaba de anotar en esta sesión.
@@ -119,7 +119,7 @@ export default function FichaEjercicio({
      hasta 800 metros no lo hace nadie: son 800 toques. Los pasos son los que
      se usan al hablar — los metros de diez en diez, los segundos de cinco en
      cinco, los kilómetros de medio en medio. */
-  const PASO_CANTIDAD = { reps: 1, seg: 5, min: 1, m: 10, km: 0.5, yd: 5, cal: 1 };
+  const PASO_CANTIDAD = { reps: 1, seg: 5, min: 1, m: 10, km: 0.5, yd: 5, cal: 1, cluster: 1 };
   const medida = leeCantidad(exV);
   const pasoCantidad = PASO_CANTIDAD[medida.unidad] ?? 1;
   const enTiempo = !medida.libre && esTiempo(medida.unidad);
@@ -127,7 +127,8 @@ export default function FichaEjercicio({
   /* LO QUE PIDE EL PLAN, para que el «+» arranque ahí en vez de en cero. De un rango («8-10») vale el
      primero. El peso sale del porcentaje de su 1RM o de un peso fijo («20 kg»), ya en su unidad. */
   const cantidadDeLaMeta = (() => {
-    const n = medida.libre ? NaN : parseFloat(String(medida.cantidad).replace(',', '.'));
+    // Un cluster («2+2+2») son las reps de todos sus bloques juntos: 6, no 2.
+    const n = medida.libre ? NaN : (repsDeCluster(medida.cantidad) ?? parseFloat(String(medida.cantidad).replace(',', '.')));
     return Number.isFinite(n) && n > 0 ? n : null;
   })();
   const pesoDeLaMeta = (() => {
@@ -318,7 +319,7 @@ export default function FichaEjercicio({
         }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 16.5, fontWeight: 800, color: LT.text }}>
-              {medida.libre ? 'Reps' : infoMedida(medida.unidad).rotulo}{' '}
+              {medida.libre || medida.unidad === 'cluster' ? 'Reps' : infoMedida(medida.unidad).rotulo}{' '}
               <span style={{ color: LT.text3, fontWeight: 600 }}>
                 {enTiempo ? 'que aguantaste' : 'que hiciste'}
               </span>

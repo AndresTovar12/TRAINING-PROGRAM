@@ -304,7 +304,9 @@ function FranjaDeFormato({ formato, nEjercicios, onCambio, onTramos }) {
               estilo={{ width: 'auto', minHeight: 0, padding: '7px 11px', fontSize: 13, gap: 7 }} anchoMinimo={210} alto={330}
             />
           </span>
-          {alTrabajo && (
+          {/* «Hasta Listo» ya no se ofrece al armar un Intervalos (el tiempo manda): solo aparece si el plan ya lo traía, para poder
+              ponerle un tiempo. */}
+          {alTrabajo === 'listo' && (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
               <span style={frase}>El trabajo dura</span>
               <ListaDesplegable

@@ -100,3 +100,20 @@ console.log('prueba-mcp-lapsos: todo bien')
   igual((describirEjercicio(e[0]) as any).descanso_set, undefined, 'y solo donde está')
 }
 console.log('prueba-mcp-lapsos (descanso entre Sets): todo bien')
+
+/* ---- El cluster: «2+2+2» y su pausa entre bloques ---- */
+{
+  const { dia: d } = diaDesdeEntrada('Lun', {
+    ejercicios: [
+      { nombre: 'Power Clean', series: 4, cantidad: '2+2+2', unidad: 'cluster', entre_bloques: '15-30', intensidad: '75%', descanso: '3 min' },
+      { nombre: 'Push Press', series: 3, cantidad: '3+3' },
+    ],
+  }, [])
+  const e = d.exercises as any[]
+  igual([e[0].reps, e[0].unidad, e[0].entreBloques, e[0].descanso], ['2+2+2', 'cluster', '15-30', '3 min'], 'el cluster con su pausa, y el descanso entre series aparte')
+  const visto: any = describirEjercicio(e[0])
+  igual([visto.cantidad, visto.unidad, visto.entre_bloques], ['2+2+2', 'cluster', '15-30'], 'la IA lo lee como lo escribió')
+  igual((describirEjercicio(e[1]) as any).unidad, 'cluster', '«3+3» sin unidad también se lee como cluster')
+  lanza(() => diaDesdeEntrada('Lun', { ejercicios: [{ nombre: 'Sentadilla', cantidad: 5, entre_bloques: '15' }] }, []), 'entre_bloques sin cluster')
+}
+console.log('prueba-mcp-lapsos (cluster): todo bien')
