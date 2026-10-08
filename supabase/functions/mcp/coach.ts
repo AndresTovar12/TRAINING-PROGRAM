@@ -72,6 +72,7 @@ const EJERCICIO = z.object({
   unidad: z.enum(['reps', 'seg', 'min', 'm', 'km', 'yd', 'cal']).optional().describe('reps si no se dice.'),
   intensidad: z.string().optional().describe('La carga, escrita EXACTO así para que el editor la reconozca. Fuerza: "75%" (porcentaje del 1RM; la app lo pasa a kilos), "20 kg". Esfuerzo: "85% intensidad" (porcentaje de esfuerzo SIN 1RM: nunca se pasa a kilos; úsalo cuando la persona dice "al 85% de intensidad" en cardio o en un ejercicio sin 1RM), "RPE 8", "RIR 2". Cardio: "4:34-5:00 min/km" (ritmo de carrera, un tiempo o un rango), "Zona 4" (zona de frecuencia cardiaca, 1 a 5), "250 W" (vatios), "1:45 /100 m" (ritmo de nado). Una carga sola por ejercicio; si la persona dio dos ("75% / RPE 8") se guarda como texto tal cual.'),
   descanso: z.string().optional().describe('Ej.: "90 s", "2 min".'),
+  descanso_set: z.string().optional().describe('Lo que se descansa al TERMINAR el Set entero, antes de empezar el siguiente: "2 min", "90 s". Es distinto de "descanso", que es el de entre las series de este ejercicio. En un grupo (superserie, circuito) vale para todo el Set. No lo mandes si no hay descanso entre Sets. Si el día ya lo traía (ver_plan_de_atleta), mándalo igual o se pierde.'),
   notas: z.string().optional(),
   indicaciones: z.string().optional().describe('Claves técnicas para el atleta.'),
   lleva_peso: z.boolean().optional().describe('Si el atleta anota peso aquí. Si no se dice, la app lo deduce del nombre.'),

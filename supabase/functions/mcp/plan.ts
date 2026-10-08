@@ -318,6 +318,8 @@ export function describirEjercicio(ex: any) {
     }))
   }
   if (ex.descanso) d.descanso = ex.descanso
+  // Lo que se descansa al terminar el Set, antes del siguiente (vive en el último ejercicio del Set).
+  if (ex.descansoSet) d.descanso_set = ex.descansoSet
   if (ex.notes) d.notas = ex.notes
   if (ex.cue) d.indicaciones = ex.cue
   d.lleva_peso = isLoadedExercise(ex)
@@ -527,6 +529,7 @@ export interface EjercicioEntrada {
   grupo?: number
   formato?: unknown
   por_lado?: boolean
+  descanso_set?: string
   por_vuelta?: { cantidad?: number | string; intensidad?: string }[]
   lapsos?: { cantidad?: number | string; unidad?: string; intensidad?: string; descanso?: string }[]
 }
@@ -622,6 +625,7 @@ export function diaDesdeEntrada(
       if (e.unidad !== 'reps') ex.unidad = e.unidad
     }
     if (e.descanso) ex.descanso = e.descanso
+    if (e.descanso_set && String(e.descanso_set).trim()) ex.descansoSet = String(e.descanso_set).trim()
     if (e.indicaciones) ex.cue = e.indicaciones
     if (e.lleva_peso !== undefined) ex.carga = e.lleva_peso
     if (e.por_lado === true) ex.porLado = true
@@ -712,6 +716,18 @@ export function diaDesdeEntrada(
       exercises[i] = aLapsos(ex)
     })
   }
+  /* El descanso entre Sets es del Set: si la IA lo puso en un ejercicio de un grupo (superserie, circuito) que no es el último,
+     se muda al último, que es donde lo guarda el editor. */
+  const rayas = new Map<number, string>()
+  exercises.forEach((ex: any) => {
+    if (ex.set == null || ex.descansoSet === undefined) return
+    if (!rayas.has(ex.set)) rayas.set(ex.set, ex.descansoSet)
+    delete ex.descansoSet
+  })
+  rayas.forEach((descanso, grupo) => {
+    const miembros = exercises.filter((ex: any) => ex.set === grupo)
+    if (miembros.length) (miembros[miembros.length - 1] as any).descansoSet = descanso
+  })
   const tipo = tipoDesdeTexto(sesion.tipo)
   const dia = {
     day: diaSemana,
