@@ -33,11 +33,24 @@ const mmss = (s) => {
  * @param reproducirRef  ref donde deja un `play()` para llamarlo dentro del toque
  * @param onMedidas      avisa del ancho y alto reales del archivo (para la forma de la tarjeta)
  * @param estilo         solo para videos de fuera (TikTok, YouTube): el marco del iframe
+ * @param onRechazado    el navegador no dejó que el video arrancara solo (iPhone, sin un toque que lo pida). Si lo pasan, se
+ *                       llama en vez de sacar los controles del navegador; tiene que ser estable (el efecto lo usa).
+ * @param onDeslizar     con más de un video: se llama con 1 (siguiente) o -1 (anterior) al deslizar el dedo de lado sobre el
+ *                       video que se reproduce. Andrés, 7 oct 2026: «con más de un video no se puede deslizar para ver el
+ *                       segundo». Solo con el dedo (un ratón arrastrando no cambia de video) y no con la barra de avance,
+ *                       que ya usa el gesto de lado para adelantar.
+ *
+ * UN SOLO <video> PARA TODOS LOS ÁNGULOS. Al cambiar de video lo que cambia es su `src`, no el elemento. No es un detalle:
+ * Safari de iPhone solo deja arrancar un video CON SONIDO si el toque lo pide, y deslizar no cuenta como toque. Pero un
+ * elemento al que ya se le dio play con un toque conserva ese permiso: si se creara otro para cada ángulo, el siguiente se
+ * quedaría parado con los controles del navegador. (Por eso no lleva `key={url}`.)
  */
-export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef, onMedidas }) {
+export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef, onMedidas, onDeslizar, onRechazado }) {
   const ref = useRef(null);
   const pista = useRef(null);
   const arrastra = useRef(false);
+  // El dedo que está deslizando de lado sobre el video: dónde empezó y si ya cambió de video (ver `onDeslizar`).
+  const gesto = useRef(null);
   const { url, inicio, fin, sinAudio, encuadre } = video;
   const liga = ligaExterna(url);
   /* La foto del video, que se ve MIENTRAS carga en vez de un cuadro negro con
@@ -89,8 +102,15 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef,
   useEffect(() => {
     if (!reproduce) return;
     const v = ref.current;
-    if (v?.paused) v.play()?.catch(() => setNoArranca(url));
-  }, [url, reproduce]);
+    if (v?.paused) {
+      v.play()?.catch((e) => {
+        // «Interrumpido» no es un rechazo: pasa al cambiar de video a media carga, y el de ahora ya viene en camino.
+        if (e?.name === 'AbortError') return;
+        if (onRechazado) onRechazado();
+        else setNoArranca(url);
+      });
+    }
+  }, [url, reproduce, onRechazado]);
 
   // Los controles se esconden solos a los 2.5 s de ir reproduciendo, y vuelven con cualquier toque o al pausar.
   useEffect(() => {
@@ -171,6 +191,25 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef,
     }
   };
 
+  /* DESLIZAR DE LADO CAMBIA DE VIDEO. Con `touch-action: pan-y` el navegador se queda con el movimiento vertical (la página
+     sigue bajando y subiendo) y nos entrega el horizontal. 44 px y más de lado que de alto: un toque torcido no cambia nada.
+     El `click` que algunos navegadores disparan al soltar se descarta (`gesto.hecho`), o el video se pausaría al cambiar. */
+  const alBajar = (e) => {
+    if (!onDeslizar || e.pointerType === 'mouse') return;
+    gesto.current = { x: e.clientX, y: e.clientY, hecho: false };
+  };
+  const alMover = (e) => {
+    const g = gesto.current;
+    if (!g || g.hecho) return;
+    const dx = e.clientX - g.x;
+    const dy = e.clientY - g.y;
+    if (Math.abs(dx) < 44 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    g.hecho = true;
+    onDeslizar(dx < 0 ? 1 : -1);
+  };
+  const alSoltar = () => { window.setTimeout(() => { gesto.current = null; }, 0); };
+  const alTocar = () => { if (!gesto.current?.hecho) alternar(); };
+
   // La barra mide el TRAMO que ve el atleta, no el archivo entero.
   const salta = (e) => {
     const r = pista.current?.getBoundingClientRect();
@@ -230,13 +269,14 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef,
   return (
     <>
       <video
-        key={url}
         ref={ref}
         src={url}
         controls={noArranca === url}
         playsInline
         muted={!!sinAudio}
         preload="metadata"
+        // Empieza a cargar OTRO video en el mismo elemento (otro ángulo): el reloj y la duración del anterior ya no valen.
+        onLoadStart={() => { setTiempo(inicio ?? 0); setLargo(0); setEnPausa(true); }}
         onCanPlay={() => setListoDe(url)}
         onPlaying={() => setArrancadoDe(url)}
         onPlay={() => setEnPausa(false)}
@@ -270,11 +310,19 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef,
           role="button"
           tabIndex={-1}
           aria-label={enPausa ? 'Reproducir' : 'Pausar'}
-          onClick={alternar}
-          style={{ position: 'absolute', inset: 0, zIndex: 3, cursor: 'pointer' }}
+          onClick={alTocar}
+          onPointerDown={alBajar}
+          onPointerMove={alMover}
+          onPointerUp={alSoltar}
+          onPointerCancel={alSoltar}
+          style={{ position: 'absolute', inset: 0, zIndex: 3, cursor: 'pointer', touchAction: onDeslizar ? 'pan-y' : undefined }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
+            // La barra y los botones son suyos: arrastrar la barra no cambia de video.
+            onPointerDown={(e) => e.stopPropagation()}
+            onPointerMove={(e) => e.stopPropagation()}
+            onPointerUp={(e) => e.stopPropagation()}
             style={{
               position: 'absolute', left: 10, right: 10, bottom: 10, height: 40, borderRadius: 20,
               background: 'rgba(8,10,14,0.66)', display: 'flex', alignItems: 'center', gap: 6,

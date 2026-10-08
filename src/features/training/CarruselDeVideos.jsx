@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { Play } from 'lucide-react';
+import { ChevronsRight, Play } from 'lucide-react';
 import { FONT, LT } from '@/lib/theme';
 import Portada from '@/components/Portada';
+import IconoExplicacion from '@/components/IconoExplicacion';
 
 /**
  * Los videos de un ejercicio, uno al lado de otro, deslizando.
@@ -14,16 +15,18 @@ import Portada from '@/components/Portada';
  * "hay más". Deslizar sí: es el gesto que ya conoce cualquiera que use un
  * teléfono, y los puntos de abajo dicen cuántos hay sin explicar nada.
  *
- * QUÉ SE DESLIZA Y QUÉ NO. Se deslizan las PORTADAS, no los videos
- * reproduciéndose. Al darle al play, el que está elegido ocupa el lugar entero
- * y los puntos siguen abajo para cambiar sin dejar de ver. Reproducir dentro de
- * un carrusel horizontal es pelear con el gesto: deslizar para cambiar de video
- * y deslizar para adelantarlo son el mismo movimiento.
+ * QUÉ SE DESLIZA AQUÍ Y QUÉ NO. Aquí se deslizan las PORTADAS, antes del play. Al darle al play, el que está elegido ocupa el
+ * lugar entero y el deslizar pasa a ser un gesto del propio reproductor (ver `VideoRecortado`, `onDeslizar`): adelantar el video
+ * se hace en su barra, no arrastrando la imagen, así que los dos gestos no se estorban. Andrés, 7 oct 2026: «con más de un video
+ * no se puede deslizar para ver el segundo».
+ *
+ * LA EXPLICACIÓN VA PRIMERO (ver `videosParaAtleta`) y se distingue a la vista: etiqueta blanca con el ícono de la persona
+ * hablando, y su puntito es un anillo azul en vez de un punto gris. En el primero, la primera vez, una pista «Desliza ›».
  *
  * CON UN SOLO VIDEO no hay carrusel ni puntos: es exactamente lo de siempre.
  */
 export default function CarruselDeVideos({
-  videos, portada, nombre, activo, onActivo, onReproducir, vacio, puntosArriba = null, sinPuntos = false,
+  videos, portada, nombre, activo, onActivo, onReproducir, vacio, puntosArriba = null, sinPuntos = false, pista: conPista = false,
 }) {
   const pista = useRef(null);
   // Mientras la app misma mueve la pista (al tocar un punto), el evento de
@@ -70,7 +73,7 @@ export default function CarruselDeVideos({
     if (i !== activo && i >= 0 && i < videos.length) onActivo(i);
   };
 
-  const tapa = (v, key) => (
+  const tapa = (v, key, i = 0) => (
     <div key={key} style={{ position: 'relative', flex: '0 0 100%', height: '100%', scrollSnapAlign: 'center' }}>
       <Portada grande foto={portada} video={v?.url} desde={v?.inicio} hasta={v?.fin} encuadre={v?.encuadre} style={{ width: '100%', height: '100%' }}>
         {vacio}
@@ -100,13 +103,16 @@ export default function CarruselDeVideos({
 
       {/* La etiqueta solo cuando hay con qué comparar: "De frente" a secas, en
           un ejercicio con un único video, no informa nada. */}
-      {varios && v?.etiqueta && (
+      {varios && v?.etiqueta && <EtiquetaDeVideo video={v} />}
+
+      {/* La pista, solo en el primero y hasta que la persona deslice una vez (lo decide `TarjetaDeVideo`). */}
+      {varios && conPista && i === 0 && (
         <span style={{
-          position: 'absolute', top: 12, right: 12, padding: '5px 11px', borderRadius: 999,
-          background: 'rgba(8,10,14,0.55)', backdropFilter: 'blur(4px)',
-          fontFamily: FONT, fontSize: 11.5, fontWeight: 800, color: '#fff', pointerEvents: 'none',
+          position: 'absolute', right: 10, bottom: 12, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 10px',
+          borderRadius: 999, background: 'rgba(8,10,14,0.45)', fontFamily: FONT, fontSize: 11, fontWeight: 700, color: '#fff',
+          pointerEvents: 'none',
         }}>
-          {v.etiqueta}
+          Desliza <ChevronsRight size={12} />
         </span>
       )}
     </div>
@@ -125,10 +131,31 @@ export default function CarruselDeVideos({
           scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch',
         }}
       >
-        {videos.map((v, i) => tapa(v, v.id ?? i))}
+        {videos.map((v, i) => tapa(v, v.id ?? i, i))}
       </div>
       {!sinPuntos && <Puntos videos={videos} activo={activo} onIr={vasA} arriba={puntosArriba} />}
     </>
+  );
+}
+
+/**
+ * El nombre del video, en una pastilla sobre su esquina de arriba a la derecha. La EXPLICACIÓN va en blanco con el ícono de la
+ * persona hablando (Andrés: «el primer video lleva la etiqueta "Explicación"»); los ejemplos, oscuros y con su ángulo. La usan
+ * las portadas (aquí) y el video reproduciéndose (ver `TarjetaDeVideo`, donde se apaga sola).
+ */
+export function EtiquetaDeVideo({ video, style }) {
+  const explicacion = !!video?.explicacion;
+  return (
+    <span style={{
+      position: 'absolute', top: 12, right: 12, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 11px',
+      borderRadius: 999, fontFamily: FONT, fontSize: 11.5, fontWeight: 800, pointerEvents: 'none',
+      background: explicacion ? '#FFFFFF' : 'rgba(8,10,14,0.55)', color: explicacion ? LT.blue : '#fff',
+      backdropFilter: explicacion ? undefined : 'blur(4px)', boxShadow: explicacion ? '0 2px 8px rgba(8,10,14,0.22)' : undefined,
+      ...style,
+    }}>
+      {explicacion && <IconoExplicacion size={13} color={LT.blue} />}
+      {video?.etiqueta}
+    </span>
   );
 }
 
@@ -169,13 +196,23 @@ export function Puntos({ videos, activo, onIr, abajo = 12, arriba = null, claro 
               cursor: 'pointer', display: 'grid', placeItems: 'center', padding: 0,
             }}
           >
-            <span style={{
-              width: i === activo ? 18 : 7, height: 7, borderRadius: 999,
-              background: i === activo
-                ? (claro ? '#111318' : '#fff')
-                : (claro ? 'rgba(17,19,24,0.28)' : 'rgba(255,255,255,0.45)'),
-              transition: 'width .2s, background .2s',
-            }} />
+            {v.explicacion ? (
+              /* La EXPLICACIÓN es un anillo azul (relleno cuando es la que se ve): se distingue de los ejemplos sin leer nada. */
+              <span style={{
+                width: i === activo ? 18 : 9, height: 9, borderRadius: 999, boxSizing: 'border-box',
+                border: `2px solid ${claro ? LT.blue : '#fff'}`,
+                background: i === activo ? (claro ? LT.blue : '#fff') : 'transparent',
+                transition: 'width .2s, background .2s',
+              }} />
+            ) : (
+              <span style={{
+                width: i === activo ? 18 : 7, height: 7, borderRadius: 999,
+                background: i === activo
+                  ? (claro ? '#111318' : '#fff')
+                  : (claro ? 'rgba(17,19,24,0.28)' : 'rgba(255,255,255,0.45)'),
+                transition: 'width .2s, background .2s',
+              }} />
+            )}
           </button>
         ))}
       </span>
