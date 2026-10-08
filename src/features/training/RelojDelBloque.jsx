@@ -10,6 +10,8 @@ import { leeRelojGuardado, guardaReloj, borraReloj } from '@/lib/relojGuardado';
 import { preparaAudio, pitido } from '@/lib/pitidos';
 import { usePantallaEncendida } from '@/lib/pantallaEncendida';
 import { textoMeta } from '@/lib/medidas';
+import { lapsosDe } from '@/lib/lapsos';
+import { formatIntensity } from '@/lib/training-utils';
 import ResultadoDelBloque from '@/features/training/ResultadoDelBloque';
 
 /**
@@ -32,9 +34,15 @@ const leeSonido = () => {
 };
 
 // Lo que dice debajo del número, según el formato. Solo cambia el texto: el reloj corre igual.
-function textoDeAvance(id, formato, v, nEjercicios) {
+function textoDeAvance(id, formato, v, nEjercicios, rondas = 1) {
   const { tramo } = v;
   if (!tramo) return '';
+  // Lapsos personalizados: de qué ronda y de qué lapso es el tramo (un descanso es de la ronda en curso).
+  if (id === 'lapsos') {
+    const ronda = rondas > 1 ? `Ronda ${tramo.vuelta} de ${rondas}` : '';
+    const lapso = tramo.tipo === 'trabajo' && tramo.de > 1 ? `Lapso ${tramo.lapso + 1} de ${tramo.de}` : '';
+    return [lapso, ronda].filter(Boolean).join(' · ');
+  }
   if (id === 'emom') return `Intervalo ${v.i + 1} de ${v.n}`;
   if (id === 'tabata' || id === 'intervalos') return `Ronda ${tramo.vuelta} de ${formato.vueltas}`;
   if (id === 'fartlek') return `Tramo ${tramo.vuelta} de ${formato.vueltas}`;
@@ -73,13 +81,20 @@ function BotonChico({ children, onClick, peligro = false }) {
   );
 }
 
-export default function RelojDelBloque({ formato, ejercicios, serie, clave, resumen, onGuardar, onCerrar }) {
+/**
+ * `plan`: los tramos ya armados, para un Set en «Lapsos personalizados» (ver `tramosDeLapsos` en `lib/lapsos.js`); sin él,
+ * salen del formato. Con lapsos, `formato` solo trae lo que el resultado necesita (`anota`).
+ */
+export default function RelojDelBloque({ formato, plan: planDado = null, ejercicios, serie, clave, resumen, onGuardar, onCerrar }) {
   const pregunta = useConfirmacion();
   const nEj = ejercicios.length;
-  const plan = useMemo(() => expande(formato, nEj), [formato, nEj]);
+  // Los tramos de lapsos se guardan como texto para que su identidad no cambie con cada dibujo de la pantalla de arriba.
+  const claveDelPlan = useMemo(() => (planDado ? JSON.stringify(planDado) : null), [planDado]);
+  const plan = useMemo(() => (claveDelPlan ? JSON.parse(claveDelPlan) : expande(formato, nEj)), [claveDelPlan, formato, nEj]);
   const tope = formato.tope ?? null;
-  const firma = useMemo(() => JSON.stringify([formato, nEj]), [formato, nEj]);
-  const id = vistaDe(formato);
+  const firma = useMemo(() => JSON.stringify(claveDelPlan ? [formato, nEj, claveDelPlan] : [formato, nEj]), [formato, nEj, claveDelPlan]);
+  const id = claveDelPlan ? 'lapsos' : vistaDe(formato);
+  const rondas = plan.reduce((m, t) => Math.max(m, t.vuelta ?? 1), 1);
 
   const [est, setEst] = useState(() => leeRelojGuardado(clave, firma, plan));
   const [ahora, setAhora] = useState(() => Date.now());
@@ -163,7 +178,9 @@ export default function RelojDelBloque({ formato, ejercicios, serie, clave, resu
   if (v.fase === 'fin') rotulo = 'Terminaste';
   else if (id === 'amrap') rotulo = 'Tiempo restante';
   else if (tramo) rotulo = etiquetaDeTramo(tramo);
-  const avance = v.fase === 'fin' ? '' : textoDeAvance(id, formato, v, nEj);
+  const avance = v.fase === 'fin' ? '' : textoDeAvance(id, formato, v, nEj, rondas);
+  // En lapsos, lo que toca en este tramo: «800 m · 4:34-5:00 min/km».
+  const queToca = v.fase !== 'fin' && tramo?.tipo === 'trabajo' ? [tramo.texto, formatIntensity(tramo.carga)].filter(Boolean).join(' · ') : '';
 
   // A quién le toca: en un descanso, a quien sigue (para ir acomodándose).
   const quien = enCurso && tramo ? (tramo.tipo === 'trabajo' ? tramo.ejercicio : (proximo?.ejercicio ?? tramo.ejercicio)) : null;
@@ -214,6 +231,7 @@ export default function RelojDelBloque({ formato, ejercicios, serie, clave, resu
               {grande}
             </div>
             <div style={{ fontSize: 15, fontWeight: 700, color: LT.text2, minHeight: 22, marginTop: 4, ...NUM_STYLE }}>{avance}</div>
+            {queToca && <div style={{ fontSize: 17, fontWeight: 800, color: LT.text, marginTop: 4, ...NUM_STYLE }}>{queToca}</div>}
             {v.progreso !== null && enCurso && (
               <div style={{ height: 8, borderRadius: 4, background: LT.surface2, margin: '14px 6px 0', overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${Math.round(v.progreso * 100)}%`, background: color, borderRadius: 4 }} />
@@ -221,7 +239,7 @@ export default function RelojDelBloque({ formato, ejercicios, serie, clave, resu
             )}
             <div style={{ display: 'flex', justifyContent: 'center', gap: 16, flexWrap: 'wrap', fontSize: 13, fontWeight: 700, color: LT.text3, marginTop: 10, minHeight: 18, ...NUM_STYLE }}>
               {enCurso && proximo && (
-                <span>Sigue: {etiquetaDeTramo(proximo)}{proximo.seg ? ` · ${textoDeTiempo(proximo.seg)}` : ''}</span>
+                <span>Sigue: {etiquetaDeTramo(proximo)}{proximo.texto ? ` · ${proximo.texto}` : proximo.seg ? ` · ${textoDeTiempo(proximo.seg)}` : ''}</span>
               )}
               {enCurso && v.topeRestanteSeg !== null && <span>Tope: {relojTexto(v.topeRestanteSeg)}</span>}
               {abierto && v.fase === 'corriendo' && <span>Toca «Listo» cuando termines</span>}
@@ -272,7 +290,9 @@ export default function RelojDelBloque({ formato, ejercicios, serie, clave, resu
                   }}
                 >
                   <span style={{ fontSize: 15, fontWeight: toca ? 800 : 700, color: toca ? LT.blue : LT.text, overflowWrap: 'anywhere' }}>{ex.name}</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: toca ? LT.blue : LT.text3, flexShrink: 0, ...NUM_STYLE }}>{textoMeta(ex)}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: toca ? LT.blue : LT.text3, flexShrink: 0, ...NUM_STYLE }}>
+                    {(lapsosDe(ex)?.length ?? 0) > 1 ? `${lapsosDe(ex).length} lapsos` : textoMeta(ex)}
+                  </span>
                 </div>
               );
             })}

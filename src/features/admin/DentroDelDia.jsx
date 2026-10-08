@@ -1,6 +1,7 @@
 import { T, tipoDeSesion } from '@/lib/theme';
 import { textoMeta } from '@/lib/medidas';
 import { vueltasDe } from '@/lib/porVuelta';
+import { lapsosDe } from '@/lib/lapsos';
 import { parseBlocks, setTag } from '@/lib/setsDeUnaSesion';
 
 /**
@@ -26,7 +27,9 @@ export default function DentroDelDia({ day }) {
   // En un Set de varios ejercicios las vueltas ya las dice la etiqueta del Set: aquí solo lo de cada uno.
   const dosis = (e, enSet) => (vueltasDe(e)
     ? `${e.sets} vueltas distintas`
-    : (enSet ? [textoMeta(e)] : [e.sets, textoMeta(e)]).filter(Boolean).join(' × ') + (e.intensity ? ` · ${e.intensity}` : ''));
+    : (lapsosDe(e)?.length ?? 0) > 1
+      ? [enSet ? null : e.sets, `${lapsosDe(e).length} lapsos`].filter(Boolean).join(' × ')
+      : (enSet ? [textoMeta(e)] : [e.sets, textoMeta(e)]).filter(Boolean).join(' × ') + (e.intensity ? ` · ${e.intensity}` : ''));
 
   const fila = (e, i, enSet) => (
     <div key={i} style={{ position: 'relative', display: 'flex', alignItems: 'baseline', gap: 8, padding: '4px 0 4px 16px' }}>

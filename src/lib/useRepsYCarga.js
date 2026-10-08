@@ -29,16 +29,19 @@ const sinRayaSuelta = (texto) => texto.replace(/^[-–.,]+|[-–.,]+$/g, '');
  * que se repite 4 veces, van a ser 12 filas. Sería mejor que se puedan desplegar». Por eso desplegar es un
  * estado de pantalla de cada ejercicio (no se guarda en el plan) y arranca cerrado.
  *
+ * `tipoInicial`: con qué tipo de carga arranca la casilla mientras esté vacía (un lapso nuevo hereda el del anterior).
+ *
  * `rondas`: cuántas veces se repite el Set, o `null` si este ejercicio no puede variar por vuelta (un Set
  * de una sola vuelta, un formato de reloj, un día de dos turnos). `abiertoDeEntrada`: en solo lectura no
  * se puede tocar nada, así que lo que varía se enseña ya desplegado.
  */
-export function useRepsYCarga({ ex, onPatch, rondas = null, abiertoDeEntrada = false }) {
+export function useRepsYCarga({ ex, onPatch, rondas = null, abiertoDeEntrada = false, tipoInicial = null }) {
   const pregunta = useConfirmacion();
   const guardadas = vueltasDe(ex, rondas);
   const [abierto, setAbierto] = useState(() => abiertoDeEntrada && !!guardadas);
   // El tipo de carga elegido en la lista mientras la casilla está vacía: sin texto no hay de dónde deducirlo.
-  const [elegido, setElegido] = useState(null);
+  // `tipoInicial`: el de la fila de arriba, para un lapso nuevo (mismo tipo de carga que el anterior, casilla vacía).
+  const [elegido, setElegido] = useState(tipoInicial);
 
   const desplegado = abierto && !!rondas;
   const cambia = guardadas ? varian(guardadas) : NADA_CAMBIA;

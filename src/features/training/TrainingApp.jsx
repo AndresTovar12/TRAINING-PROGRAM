@@ -53,6 +53,7 @@ import {
 } from '@/lib/formatos';
 import { LEVANTAMIENTOS, cargaPorPorcentaje } from '@/lib/cargaPorcentaje';
 import { vueltasDe, ejercicioDeVuelta, vueltasAnotadas } from '@/lib/porVuelta';
+import { lapsosDe, comoEjercicio, tramosDeLapsos, hayLapsos } from '@/lib/lapsos';
 import RelojDelBloque from '@/features/training/RelojDelBloque';
 import ResultadoDelBloque from '@/features/training/ResultadoDelBloque';
 import { useAuth } from '@/contexts/AuthContext';
@@ -346,6 +347,11 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phas
   /* CUANDO CAMBIA DE UNA VUELTA A OTRA (10 al 60 %, 8 al 70 %…), cada vuelta va en SU renglón, con su
      número delante. Nunca en una sola línea «10-8-6-4»: así se escribe un drop set (Andrés, 5 oct 2026). */
   const vueltas = vueltasDe(ex);
+  /* LOS LAPSOS (Andrés, 8 oct 2026): un ejercicio con varios lapsos seguidos —Correr: 800 m a 4:34, luego 2 min a 6:39—
+     los enseña en orden, uno por renglón y con su número, igual que las vueltas. Con un solo lapso se lee como una línea
+     de siempre. Cada lapso trae su propio descanso, así que no hay chip de descanso del ejercicio. */
+  const lapsosDelEj = lapsosDe(ex);
+  const lapsos = lapsosDelEj && lapsosDelEj.length > 1 ? lapsosDelEj : null;
   // El descanso lo escribe el coach en el editor de sesión. Antes lo adivinaba
   // `inferRest` leyendo el nombre del ejercicio, y el atleta lo leía como si
   // fuera una indicación de su entrenador. Si el coach no lo puso, no se
@@ -356,8 +362,12 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phas
      vacíos esperando: si no configuró la intensidad o el descanso, esa línea
      no existe. Petición de Andrés, y es lo correcto — un hueco vacío se lee
      como un fallo de la app. */
-  const chips = (vueltas ? [rest] : [textoMeta(ex), cargaQueDecir(ex) || null, rest || null]).filter(Boolean);
-  const kilos = vueltas ? null : kilosDe(ex);
+  const chips = (vueltas ? [rest] : lapsos ? [] : [textoMeta(ex), cargaQueDecir(ex) || null, rest || null]).filter(Boolean);
+  const kilos = vueltas || lapsos ? null : kilosDe(ex);
+  // Lo que se enseña renglón por renglón: las vueltas distintas o los lapsos, cada uno con lo suyo.
+  const renglones = vueltas
+    ? vueltas.map((f) => ({ ej: ejercicioDeVuelta(ex, f), despues: null }))
+    : lapsos ? lapsos.map((l) => ({ ej: comoEjercicio(ex, l), despues: l.descanso ? `descanso ${l.descanso}` : null })) : null;
 
   const pesoAnterior = showWeightInput && previous
     ? `${desdeKilos(previous.weight, unidad)} ${u}` : null;
@@ -422,20 +432,21 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phas
             }}>
               {ex.name}
             </span>
-            {vueltas && (
+            {renglones && (
               <span style={{ display: 'block', marginTop: 5 }}>
-                {vueltas.map((f, j) => {
-                  const deLaVuelta = ejercicioDeVuelta(ex, f);
+                {renglones.map(({ ej: deLaVuelta, despues }, j) => {
                   const queHacer = [textoMeta(deLaVuelta), cargaQueDecir(deLaVuelta)].filter(Boolean).join(' · ');
                   const susKilos = kilosDe(deLaVuelta);
                   return (
                     <span key={j} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '2.5px 0', fontSize: 13, lineHeight: 1.35, ...NUM_STYLE }}>
                       <span style={{ width: 12, flexShrink: 0, textAlign: 'center', fontSize: 11.5, fontWeight: 800, color: LT.text3 }}>{j + 1}</span>
                       <span style={{ fontWeight: 600, color: LT.text2 }}>
-                        {queHacer || (susKilos ? '' : '—')}
+                        {queHacer || (susKilos || despues ? '' : '—')}
                         {susKilos && queHacer ? ' · ' : ''}
                         {/* Sin partirse: «≈ 105» en un renglón y «kg» en el siguiente no se lee. */}
                         {susKilos && <b style={{ fontWeight: 800, color: LT.blue, whiteSpace: 'nowrap' }}>{susKilos}</b>}
+                        {/* En lapsos, lo que descansa tras ese lapso va al final del renglón. */}
+                        {despues ? `${queHacer || susKilos ? ' · ' : ''}${despues}` : ''}
                       </span>
                     </span>
                   );
@@ -559,11 +570,21 @@ const SetGroup = ({
   /* UN SET CON FORMATO (AMRAP, EMOM, Tabata…): el formato reemplaza el «Se repite N veces». Lo que
      anota el atleta de todo el Set va en `formatos[<llave del Set>]`, y la llave es la del primer
      ejercicio, que es como ya se anota cada ejercicio. */
-  const formato = onFormato ? formatoDeMiembros(group.exercises.map(({ ex }) => ex)) : null;
+  const losEjercicios = group.exercises.map(({ ex }) => ex);
+  const formato = onFormato ? formatoDeMiembros(losEjercicios) : null;
+  /* UN SET EN «LAPSOS PERSONALIZADOS» (Andrés, 8 oct 2026) no lleva un formato guardado, pero también tiene su reloj: los
+     tramos salen de los lapsos de cada ejercicio (ver `tramosDeLapsos`). Para el reloj y el resultado se comporta como un
+     formato que anota «tramos completados»; el encabezado del Set no cambia (sigue diciendo «Se repite N veces»). */
+  const planDeLapsos = onFormato && !formato && hayLapsos(losEjercicios) ? tramosDeLapsos(losEjercicios, rondas) : null;
+  const formatoDeLapsos = planDeLapsos && planDeLapsos.length > 0
+    ? { id: 'lapsos', pasos: [], vueltas: 1, tope: null, turnan: false, anota: 'cumplido' }
+    : null;
+  const conReloj = formato ?? formatoDeLapsos;
   const claveFormato = String(group.exercises[0].idx);
-  const resultado = formato ? (formatos?.[claveFormato] ?? null) : null;
-  const resumen = formato ? resumenDeFormato(formato, count) : '';
-  const hayReloj = !!formato && expande(formato, count).length > 0;
+  const resultado = conReloj ? (formatos?.[claveFormato] ?? null) : null;
+  const resumen = formato ? resumenDeFormato(formato, count) : (formatoDeLapsos ? 'Lapsos personalizados' : '');
+  const hayReloj = formato ? expande(formato, count).length > 0 : !!formatoDeLapsos;
+  const tramosDeTrabajoDelSet = formato ? tramosDeTrabajo(formato, count) : (planDeLapsos ?? []).filter((t) => t.tipo === 'trabajo').length;
 
   /* Una sola tarjeta por SERIE, con los ejercicios dentro separados por una
      línea. Antes era una tarjeta por ejercicio, y una bi-serie —dos ejercicios
@@ -601,7 +622,7 @@ const SetGroup = ({
         )}
       </div>
 
-      {formato && (hayReloj || resultado || !soloLectura) && (
+      {conReloj && (hayReloj || resultado || !soloLectura) && (
         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px 12px', margin: '0 3px 10px' }}>
           {hayReloj && !soloLectura && (
             <button
@@ -636,8 +657,8 @@ const SetGroup = ({
                 fontSize: 14.5, fontWeight: 800, touchAction: 'manipulation',
               }}
             >
-              {formato.anota === 'nada' ? <Check size={15} strokeWidth={3} /> : <Edit3 size={15} />}
-              {formato.anota === 'nada' ? 'Marcar como hecho' : 'Anotar resultado'}
+              {conReloj.anota === 'nada' ? <Check size={15} strokeWidth={3} /> : <Edit3 size={15} />}
+              {conReloj.anota === 'nada' ? 'Marcar como hecho' : 'Anotar resultado'}
             </button>
           )}
         </div>
@@ -690,17 +711,17 @@ const SetGroup = ({
         );
       })()}
 
-      {reloj && formato && (
+      {reloj && conReloj && (
         <RelojDelBloque
-          formato={formato} ejercicios={group.exercises} serie={setNum} resumen={resumen}
+          formato={conReloj} plan={planDeLapsos} ejercicios={group.exercises} serie={setNum} resumen={resumen}
           clave={`${userId}:${sessionKey}:${claveFormato}`}
           onGuardar={(r) => onFormato(claveFormato, r)} onCerrar={() => setReloj(false)}
         />
       )}
-      {anotando && formato && (
+      {anotando && conReloj && (
         <ResultadoDelBloque
-          formato={formato} resumen={resumen} inicial={resultado}
-          sugerido={{ seg: null, rondas: 0, tramos: [], completados: tramosDeTrabajo(formato, count), de: tramosDeTrabajo(formato, count) }}
+          formato={conReloj} resumen={resumen} inicial={resultado}
+          sugerido={{ seg: null, rondas: 0, tramos: [], completados: tramosDeTrabajoDelSet, de: tramosDeTrabajoDelSet }}
           onGuardar={(r) => { onFormato(claveFormato, r); setAnotando(false); }}
           onBorrar={resultado ? () => { onFormato(claveFormato, null); setAnotando(false); } : undefined}
           onCerrar={() => setAnotando(false)}
