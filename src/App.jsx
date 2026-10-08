@@ -301,7 +301,7 @@ function Entrada({ codigo, onCodigoUsado }) {
         modo="nuevo"
         codigo={codigo || ''}
         onVolver={() => setPantalla('login')}
-        onCuentaCreada={codigo ? onCodigoUsado : undefined}
+        onCodigoUsado={codigo ? onCodigoUsado : undefined}
       />
     );
   }
@@ -439,7 +439,7 @@ export default function App() {
     if (!user) return <AuthScreen aviso="Para conectar tu IA, entra a tu cuenta de Training Lab." />;
     if (!profile) return <Splash label="Cargando tu perfil…" />;
     if (profile.is_active === false) return <CuentaDesactivada />;
-    if (profile.perfil_completo === false) return <Inicio key="google" modo="google" />;
+    if (profile.perfil_completo === false) return <Inicio key="google" modo="google" codigo={unirse || ''} onCodigoUsado={cierraUnirse} />;
     return <PermisoIA authorizationId={permisoIA} onTerminar={cierraPermiso} />;
   }
 
@@ -454,8 +454,8 @@ export default function App() {
   /* Entró con Google y le falta decir qué tipo de cuenta es (Google solo da correo y nombre): hasta que conteste, esto es
      lo único que se ve. Y quien creó su cuenta y cerró a la mitad de las preguntas retoma donde iba (`inicio_paso`). Las
      dos cosas son el mismo inicio (ver `features/inicio`); la `key` lo vuelve a armar al cambiar de modo. */
-  if (profile.perfil_completo === false) return <><Inicio key="google" modo="google" /><UpdateBanner /></>;
-  if (profile.inicio_paso) return <><Inicio key="retomar" modo="retomar" /><UpdateBanner /></>;
+  if (profile.perfil_completo === false) return <><Inicio key="google" modo="google" codigo={unirse || ''} onCodigoUsado={cierraUnirse} /><UpdateBanner /></>;
+  if (profile.inicio_paso) return <><Inicio key="retomar" modo="retomar" codigo={unirse || ''} onCodigoUsado={cierraUnirse} /><UpdateBanner /></>;
 
   // Abrió un link o QR de equipo: primero eso (ver `UnirseAlEquipo`), luego su app.
   if (unirse) return <><UnirseAlEquipo codigo={unirse} onTerminar={cierraUnirse} /><UpdateBanner /></>;
