@@ -35,8 +35,10 @@ export const FINE_MUSCLES = [...new Set(MUSCLE_GROUPS.flatMap((g) => g.members))
  * coach. Uno propio que se llame igual que uno de siempre no se repite.
  * `propio` lleva la fila de la base, para poder borrarlo.
  */
-export function gruposConPropios(propios = []) {
-  const vistos = new Set(MUSCLE_GROUPS.map((g) => norm(g.label)));
+export function gruposConPropios(propios = [], { sinLosDeSiempre = false } = {}) {
+  // «Desde cero» (Mi perfil → Ejercicios de Training Lab apagados): solo los grupos que el coach creó.
+  const base = sinLosDeSiempre ? [] : MUSCLE_GROUPS;
+  const vistos = new Set(base.map((g) => norm(g.label)));
   const extra = [];
   propios.forEach((fila) => {
     const n = norm(fila.name);
@@ -44,7 +46,7 @@ export function gruposConPropios(propios = []) {
     vistos.add(n);
     extra.push({ id: `propio-${fila.id}`, label: fila.name.trim(), members: [], propio: fila });
   });
-  return [...MUSCLE_GROUPS, ...extra];
+  return [...base, ...extra];
 }
 
 // ¿Alguno de estos músculos es de este grupo? Vale el nombre del grupo

@@ -31,7 +31,6 @@ export default function ActivarInvitacion({ token, onSalir }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');
-  const [genero, setGenero] = useState('');
   const [enviando, setEnviando] = useState(false);
 
   useEffect(() => {
@@ -53,7 +52,9 @@ export default function ActivarInvitacion({ token, onSalir }) {
     setError('');
     setEnviando(true);
     try {
-      const r = await activarInvitacion({ token, username, password, email, genero, nombre, apellido });
+      // Lo demás (sexo, unidad, fecha de nacimiento) se pregunta después, pantalla por pantalla: el servidor deja
+      // `inicio_paso = 'sexo'` y el inicio nuevo sigue desde ahí (ver `features/inicio`).
+      const r = await activarInvitacion({ token, username, password, email, nombre, apellido });
       // Ya con la cuenta lista, se entra solo. Pedirle que escriba otra vez lo
       // que acaba de teclear sería un paso de más sin ningún motivo.
       const { error: errEntrar } = await signIn(r.username, password);
@@ -145,22 +146,6 @@ export default function ActivarInvitacion({ token, onSalir }) {
     );
   }
 
-  const bGenero = (v, etq) => (
-    <button
-      type="button"
-      onClick={(e) => { e.preventDefault(); setGenero(genero === v ? '' : v); }}
-      style={{
-        flex: 1, minHeight: 42, borderRadius: 12, cursor: 'pointer', touchAction: 'manipulation',
-        border: `1.5px solid ${genero === v ? KP.blue : KP.line}`,
-        background: genero === v ? 'rgba(30,64,224,0.06)' : KP.surface,
-        color: genero === v ? KP.blue : KP.ink2,
-        fontFamily: FONT, fontSize: 14, fontWeight: 700,
-      }}
-    >
-      {etq}
-    </button>
-  );
-
   return marco(
     <>
       {logo}
@@ -238,16 +223,6 @@ export default function ActivarInvitacion({ token, onSalir }) {
         <p style={{ fontSize: 12.5, color: KP.ink3, lineHeight: 1.5, margin: '-6px 0 0', fontWeight: 500 }}>
           Sirve para recuperar tu contraseña si se te olvida. Sin él, se la tendrás que pedir a {datos.coach}.
         </p>
-
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: KP.ink3, marginBottom: 7 }}>
-            Sexo <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 600 }}>· opcional</span>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {bGenero('h', 'Hombre')}
-            {bGenero('m', 'Mujer')}
-          </div>
-        </div>
 
         {error && (
           <div

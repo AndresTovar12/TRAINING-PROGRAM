@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   X, Camera, Loader2, Check, Shield, User as UserIcon, Users, Sparkles, AtSign, Mail, IdCard, Trash2,
+  Library, Calendar, Map, ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
@@ -9,6 +10,10 @@ import { esImagen, optimizaImagen } from '@/lib/imagen';
 import { T, FONT, KP } from '@/lib/theme';
 import ConectarIA from '@/features/ia/ConectarIA';
 import MiEquipo from '@/features/profile/MiEquipo';
+import MisEjercicios from '@/features/profile/MisEjercicios';
+import SelectorOficio from '@/components/SelectorOficio';
+import SelectorDisciplinas from '@/components/SelectorDisciplinas';
+import RecorridoOtraVez from '@/features/inicio/RecorridoOtraVez';
 
 const USERNAME_RE = /^[a-zA-Z0-9_.]{3,30}$/;
 
@@ -28,15 +33,29 @@ const inputStyle = {
   flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT,
   fontSize: 15, fontWeight: 500, color: T.text, padding: '13px 0', minWidth: 0,
 };
+// Dos o tres opciones en fila, de las que solo una está puesta (kilos/libras, hombre/mujer, equipo/solo yo).
+const opcion = (activo) => ({
+  flex: 1, padding: '13px 8px', borderRadius: 12, cursor: 'pointer',
+  border: `1.5px solid ${activo ? T.accent : T.border}`,
+  background: activo ? T.accentBg : T.bg2,
+  color: activo ? T.accent : T.text2,
+  fontFamily: FONT, fontSize: 14, fontWeight: 700,
+});
 
+/* Lo mismo que se contesta en el inicio se cambia aquí (Andrés, 8 oct 2026: ninguna respuesta del inicio es definitiva).
+   El coach: a qué se dedica, qué entrena y si trabaja en equipo. El atleta: su fecha de nacimiento. Y los dos pueden ver
+   el recorrido otra vez. */
 export default function ProfileScreen({ onClose, enfoque = null }) {
   const { profile, user, isAdmin, updateProfile } = useAuth();
+  const isMaster = !!profile?.is_owner;
   /* «Mi perfil» va por secciones, no todo junto (Andrés, 6 oct 2026): tus datos, tu equipo (solo el
-     atleta decide quién más lo atiende) y la inteligencia artificial. Llegando desde «Conectar con
-     IA» del menú de la cuenta se abre directo la de la IA. */
+     atleta decide quién más lo atiende), tus ejercicios (solo el coach) y la inteligencia artificial.
+     Llegando desde «Conectar con IA» del menú de la cuenta se abre directo la de la IA. */
   const secciones = [
     { id: 'perfil', texto: 'Perfil', Icono: UserIcon },
     ...(!isAdmin ? [{ id: 'equipo', texto: 'Mi equipo', Icono: Users }] : []),
+    // El master no: los ejercicios de Training Lab SON los suyos.
+    ...(isAdmin && !isMaster ? [{ id: 'ejercicios', texto: 'Mis ejercicios', Icono: Library }] : []),
     { id: 'ia', texto: 'Inteligencia artificial', Icono: Sparkles },
   ];
   const [seccion, setSeccion] = useState(enfoque === 'ia' ? 'ia' : 'perfil');
@@ -48,6 +67,11 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url || '');
   const [unidad, setUnidad] = useState(profile?.unidad_peso || 'kg');
   const [genero, setGenero] = useState(profile?.genero || '');
+  const [profesion, setProfesion] = useState(profile?.profesion || '');
+  const [disciplinas, setDisciplinas] = useState(profile?.disciplinas || []);
+  const [equipo, setEquipo] = useState(!!profile?.trabaja_en_equipo);
+  const [nacimiento, setNacimiento] = useState(profile?.fecha_nacimiento || '');
+  const [recorrido, setRecorrido] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
@@ -60,8 +84,14 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
   const origAvatar = profile?.avatar_url || '';
   const origUnidad = profile?.unidad_peso || 'kg';
   const origGenero = profile?.genero || '';
+  const origProfesion = profile?.profesion || '';
+  const origDisciplinas = (profile?.disciplinas || []).join(',');
+  const origEquipo = !!profile?.trabaja_en_equipo;
+  const origNacimiento = profile?.fecha_nacimiento || '';
   const dirty = fullName !== origName || username !== origUser || avatarUrl !== origAvatar
-    || unidad !== origUnidad || genero !== origGenero;
+    || unidad !== origUnidad || genero !== origGenero
+    || (isAdmin && (profesion !== origProfesion || disciplinas.join(',') !== origDisciplinas || equipo !== origEquipo))
+    || (!isAdmin && nacimiento !== origNacimiento);
 
   // Chequeo de disponibilidad del username (debounced)
   useEffect(() => {
@@ -112,6 +142,10 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
       avatar_url: avatarUrl || null,
       unidad_peso: unidad,
       genero: genero || null,
+      // Lo del coach y lo del atleta van por separado: cada quien manda solo lo suyo.
+      ...(isAdmin
+        ? { profesion: profesion.trim() || null, disciplinas, trabaja_en_equipo: equipo }
+        : { fecha_nacimiento: nacimiento || null }),
     });
     setSaving(false);
     if (error) { setErr(error.message); return; }
@@ -281,6 +315,30 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
             </div>
           </label>
 
+          {/* Lo del coach: a qué se dedica (decide las palabras de la app), qué entrena (ordena lo que ve primero, nunca
+              esconde nada) y si trabaja con más profesionales. Es lo mismo que contestó en el inicio. */}
+          {isAdmin && (
+            <>
+              <SelectorOficio value={profesion} onChange={setProfesion} etiqueta="A qué te dedicas" />
+
+              <div>
+                <div style={{ ...label, marginBottom: 8 }}>Qué entrenas</div>
+                <SelectorDisciplinas value={disciplinas} onChange={setDisciplinas} />
+                <div style={{ fontSize: 12, color: T.text3, marginTop: 8, fontWeight: 600, lineHeight: 1.45 }}>
+                  Ordena lo que ves primero. Nunca esconde nada.
+                </div>
+              </div>
+
+              <div>
+                <div style={{ ...label, marginBottom: 7 }}>Trabajo con más profesionales</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button type="button" onClick={() => setEquipo(true)} style={opcion(equipo)}>Sí, somos un equipo</button>
+                  <button type="button" onClick={() => setEquipo(false)} style={opcion(!equipo)}>Por ahora, solo yo</button>
+                </div>
+              </div>
+            </>
+          )}
+
           {/* Unidad de peso.
               Solo cambia como se VEN los pesos: por dentro siempre se guardan
               en kilos. Por eso cambiar de unidad no toca ni un dato del
@@ -288,25 +346,11 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
           <div>
             <div style={{ ...label, marginBottom: 7 }}>Peso en</div>
             <div style={{ display: 'flex', gap: 8 }}>
-              {[['kg', 'Kilos'], ['lb', 'Libras']].map(([valor, texto]) => {
-                const activo = unidad === valor;
-                return (
-                  <button
-                    key={valor}
-                    type="button"
-                    onClick={() => setUnidad(valor)}
-                    style={{
-                      flex: 1, padding: '13px 12px', borderRadius: 12, cursor: 'pointer',
-                      border: `1.5px solid ${activo ? T.accent : T.border}`,
-                      background: activo ? T.accentBg : T.bg2,
-                      color: activo ? T.accent : T.text2,
-                      fontFamily: FONT, fontSize: 14.5, fontWeight: 700,
-                    }}
-                  >
-                    {texto} <span style={{ opacity: 0.7, fontWeight: 600 }}>({valor})</span>
-                  </button>
-                );
-              })}
+              {[['kg', 'Kilos'], ['lb', 'Libras']].map(([valor, texto]) => (
+                <button key={valor} type="button" onClick={() => setUnidad(valor)} style={{ ...opcion(unidad === valor), padding: '13px 12px', fontSize: 14.5 }}>
+                  {texto} <span style={{ opacity: 0.7, fontWeight: 600 }}>({valor})</span>
+                </button>
+              ))}
             </div>
             <div style={{ fontSize: 12, color: T.text3, marginTop: 7, fontWeight: 600, lineHeight: 1.45 }}>
               Cambia cómo ves los pesos. Tu historial no se toca.
@@ -321,27 +365,27 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
           <div>
             <div style={{ ...label, marginBottom: 7 }}>Sexo</div>
             <div style={{ display: 'flex', gap: 8 }}>
-              {[['h', 'Hombre'], ['m', 'Mujer'], ['', 'Prefiero no decir']].map(([valor, texto]) => {
-                const activo = genero === valor;
-                return (
-                  <button
-                    key={valor || 'sin'}
-                    type="button"
-                    onClick={() => setGenero(valor)}
-                    style={{
-                      flex: 1, padding: '13px 8px', borderRadius: 12, cursor: 'pointer',
-                      border: `1.5px solid ${activo ? T.accent : T.border}`,
-                      background: activo ? T.accentBg : T.bg2,
-                      color: activo ? T.accent : T.text2,
-                      fontFamily: FONT, fontSize: 14, fontWeight: 700,
-                    }}
-                  >
-                    {texto}
-                  </button>
-                );
-              })}
+              {[['h', 'Hombre'], ['m', 'Mujer'], ['', 'Prefiero no decir']].map(([valor, texto]) => (
+                <button key={valor || 'sin'} type="button" onClick={() => setGenero(valor)} style={opcion(genero === valor)}>
+                  {texto}
+                </button>
+              ))}
             </div>
           </div>
+
+          {/* Fecha de nacimiento del atleta: para sus zonas de esfuerzo y para que su entrenador sepa su edad. */}
+          {!isAdmin && (
+            <label style={{ display: 'block' }}>
+              <div style={{ ...label, marginBottom: 7 }}>Fecha de nacimiento</div>
+              <div style={inputWrap}>
+                <Calendar size={18} color={T.text3} style={{ flexShrink: 0 }} />
+                <input
+                  type="date" value={nacimiento} onChange={(e) => setNacimiento(e.target.value)}
+                  max={new Date().toISOString().slice(0, 10)} style={inputStyle}
+                />
+              </div>
+            </label>
+          )}
 
           {/* Rol */}
           <div>
@@ -359,6 +403,24 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
             </span>
           </div>
 
+          {/* El recorrido del inicio, otra vez: qué hace cada parte de la app. */}
+          <button
+            type="button"
+            onClick={() => setRecorrido(true)}
+            className="kp-press"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 12, width: '100%', minHeight: 56, padding: '0 14px', borderRadius: 14,
+              border: `1.5px solid ${KP.lineHi}`, background: T.bg2, cursor: 'pointer', fontFamily: FONT, textAlign: 'left',
+              touchAction: 'manipulation',
+            }}
+          >
+            <span style={{ width: 34, height: 34, borderRadius: 10, display: 'grid', placeItems: 'center', background: KP.blueSoft, color: KP.blue, flexShrink: 0 }}>
+              <Map size={18} />
+            </span>
+            <span style={{ flex: 1, fontSize: 14.5, fontWeight: 800, color: T.text }}>Ver el recorrido otra vez</span>
+            <ChevronRight size={17} color={T.text3} />
+          </button>
+
           {err && (
             <div style={{ background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 12, padding: '11px 15px', fontWeight: 700, fontSize: 13.5 }}>
               {err}
@@ -370,12 +432,17 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
           {/* Un atleta decide quién más lo atiende (fisio…). Los profesionales no lo tienen. */}
           {seccion === 'equipo' && !isAdmin && <MiEquipo />}
 
+          {/* El coach: los ejercicios de Training Lab prendidos o apagados, volver al original, borrar todo lo suyo. */}
+          {seccion === 'ejercicios' && isAdmin && !isMaster && <MisEjercicios />}
+
           {/* En el teléfono es el ÚNICO sitio de esto: no va en la navegación
               (decisión de Andrés). En la compu el coach también lo tiene en el
               menú lateral; el atleta, solo aquí. */}
           {seccion === 'ia' && <ConectarIA enPerfil />}
         </div>
       </main>
+
+      {recorrido && <RecorridoOtraVez onCerrar={() => setRecorrido(false)} />}
 
       <style>{`.spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>

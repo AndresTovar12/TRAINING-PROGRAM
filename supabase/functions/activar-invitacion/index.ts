@@ -204,7 +204,9 @@ Deno.serve(async (req) => {
 
   const { error: errPerfil } = await admin
     .from('profiles')
-    .update({ username, email: correoFinal, genero, full_name: nombreFinal, perfil_completo: true })
+    // `inicio_paso`: lo que falta por contestar sigue en la app, pantalla por pantalla
+    // (sexo, unidad, fecha de nacimiento y el recorrido). Ver `features/inicio`.
+    .update({ username, email: correoFinal, genero, full_name: nombreFinal, perfil_completo: true, inicio_paso: 'sexo' })
     .eq('id', atleta.id)
   if (errPerfil) {
     return json({ error: `No se pudo guardar el perfil: ${textoDeError(errPerfil)}` }, 400, origin)

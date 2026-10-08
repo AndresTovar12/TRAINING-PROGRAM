@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
   let payload: {
     username?: string; email?: string; password?: string; full_name?: string
     account_type?: string; coach_username?: string; genero?: string
-    profesion?: string
+    profesion?: string; inicio_paso?: string
   }
   try {
     payload = await req.json()
@@ -101,6 +101,13 @@ Deno.serve(async (req) => {
   // rol lo sigue decidiendo `account_type`. Se corta a 40 para que un cliente
   // que mande basura no llene la columna.
   const profesion = (payload.profesion ?? '').trim().slice(0, 40) || null
+
+  // El inicio nuevo (8 oct 2026) crea la cuenta con lo mínimo y pregunta lo demás
+  // DESPUÉS, pantalla por pantalla. Aquí se deja apuntado cuál es la siguiente para
+  // que, si la persona cierra a la mitad, al volver retome donde iba. Lista cerrada:
+  // un cliente no puede mandar a la app a una pantalla que no existe.
+  const PASOS = new Set(['nombre', 'oficio', 'entrena', 'equipo', 'repertorio', 'codigo', 'sexo', 'unidad', 'nacimiento', 'listo'])
+  const inicioPaso = PASOS.has(payload.inicio_paso ?? '') ? payload.inicio_paso! : null
 
   if (!USERNAME_RE.test(username)) {
     return json(
@@ -195,6 +202,7 @@ Deno.serve(async (req) => {
       .update({
         role, coach_id: coachId, is_owner: false, genero,
         profesion: isCoach ? profesion : null, perfil_completo: true,
+        inicio_paso: inicioPaso,
       })
       .eq('id', userId)
     if (errPerfil) {

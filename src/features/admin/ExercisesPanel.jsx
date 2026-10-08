@@ -1193,17 +1193,24 @@ export default function ExercisesPanel({ viendoComo }) {
      los ejercicios. Para resolver la categoría de un ejercicio se sigue usando
      la lista completa. */
   const { salud } = usePalabras();
+  /* «EJERCICIOS DE TRAINING LAB» APAGADOS (Mi perfil, `repertorio_base`; Andrés, 7 oct 2026: «que puedan iniciar desde cero
+     el suyo propio… absolutamente todo, categorías, músculos»). Ni los ejercicios, ni las categorías, ni los grupos de la
+     app: solo lo suyo. Nada se borra: se vuelven a prender cuando quiera. Solo en la vista propia (mirando como otro coach,
+     el perfil que manda es el de él, no el de quien mira). */
+  const sinBase = !isMaster && !viendoComo && profile?.repertorio_base === false;
   const categoriasVisibles = useMemo(() => {
-    const lista = categories.filter((c) => !c.created_by || c.created_by === masterId || c.created_by === dueño);
+    const lista = categories.filter((c) => (sinBase ? c.created_by === dueño : (!c.created_by || c.created_by === masterId || c.created_by === dueño)));
     return salud ? conLasMiasPrimero(lista, dueño) : lista;
-  }, [categories, masterId, dueño, salud]);
+  }, [categories, masterId, dueño, salud, sinBase]);
 
   // Los grupos, con la misma regla: los de siempre, los del master y los del
   // dueño de esta vista. `mio` marca los que se pueden borrar desde aquí.
   const grupos = useMemo(
-    () => gruposConPropios(gruposPropios.filter((g) => g.created_by === masterId || g.created_by === dueño))
-      .map((g) => (g.propio ? { ...g, mio: g.propio.created_by === dueño } : g)),
-    [gruposPropios, masterId, dueño],
+    () => gruposConPropios(
+      gruposPropios.filter((g) => (sinBase ? g.created_by === dueño : (g.created_by === masterId || g.created_by === dueño))),
+      { sinLosDeSiempre: sinBase },
+    ).map((g) => (g.propio ? { ...g, mio: g.propio.created_by === dueño } : g)),
+    [gruposPropios, masterId, dueño, sinBase],
   );
 
   // Etiqueta base/propio y, para coaches, oculta el repertorio de otros coaches.
@@ -1222,8 +1229,8 @@ export default function ExercisesPanel({ viendoComo }) {
        Para mirar el de un coach concreto está el botón "Ver como" de la
        pantalla de coaches, que es donde esa pregunta tiene sentido: dentro de
        un coach, no revuelto con los propios. */
-    return tagged.filter((e) => e.isBase || e.isMine);
-  }, [exercises, overrides, categories, masterId, dueño]);
+    return tagged.filter((e) => (e.isBase && !sinBase) || e.isMine);
+  }, [exercises, overrides, categories, masterId, dueño, sinBase]);
 
   // Músculos finos presentes en el repertorio (para el detalle del editor)
   const muscles = useMemo(() => {
@@ -1490,7 +1497,10 @@ export default function ExercisesPanel({ viendoComo }) {
           <div style={{ marginTop: 12, fontWeight: 600, color: T.text2, lineHeight: 1.5 }}>
             {/* Una categoría o un grupo recién creados llegan aquí vacíos: se
                 dice cómo llenarlos en vez de un "sin ejercicios" a secas. */}
-            {categoriaSola
+            {visible.length === 0 && sinBase
+              /* Empezó desde cero (Mi perfil → Mis ejercicios): la lista vacía es lo esperado, no un filtro sin resultados. */
+              ? 'Tu lista empieza vacía. Agrega tu primer ejercicio, o prende los de Training Lab en Mi perfil → Mis ejercicios.'
+              : categoriaSola
               ? `«${categoriaSola.name}» todavía no tiene ejercicios. Abre uno y ponla como categoría principal o secundaria.`
               : grupoSolo
                 ? `«${grupoSolo.label}» todavía no tiene ejercicios. Abre uno y elige este grupo como principal o secundario.`

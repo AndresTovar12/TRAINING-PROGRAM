@@ -1175,6 +1175,72 @@ export async function deleteSessionType(id) {
   if (error) throw error;
 }
 
+/* ------------------------- Mi perfil → Mis ejercicios ------------------------ *
+ * Lo que el inicio promete (8 oct 2026, «es solo el punto de partida»): el coach
+ * puede volver al original de Training Lab o borrar TODO lo suyo cuando quiera.
+ * Quién puede borrar qué lo decide la base (RLS): aquí solo se pide.
+ * ----------------------------------------------------------------------------- */
+
+async function miId() {
+  const { data: auth } = await supabase.auth.getUser();
+  const yo = auth?.user?.id;
+  if (!yo) throw new Error('Tu sesión expiró. Vuelve a entrar.');
+  return yo;
+}
+
+/** Cuánto hay de cada cosa, para decirlo con números antes de preguntar «¿seguro?». */
+export async function contarMiRepertorio() {
+  const yo = await miId();
+  // `llave`: qué columna pedir para contar. `exercise_overrides` no tiene `id` (su llave es coach + ejercicio).
+  const cuenta = async (tabla, columna, llave = 'id') => {
+    const { count, error } = await supabase.from(tabla).select(llave, { count: 'exact', head: true }).eq(columna, yo);
+    if (error) throw error;
+    return count ?? 0;
+  };
+  const [ejercicios, categorias, grupos, tipos, versiones] = await Promise.all([
+    cuenta('exercises', 'created_by'),
+    cuenta('exercise_categories', 'created_by'),
+    cuenta('grupos_musculares', 'created_by'),
+    cuenta('session_types', 'coach_id'),
+    cuenta('exercise_overrides', 'coach_id', 'exercise_id'),
+  ]);
+  return { ejercicios, categorias, grupos, tipos, versiones };
+}
+
+/** Volver al original de Training Lab: se borran TODAS mis versiones de los ejercicios base. Los originales nunca se tocaron. */
+export async function borrarTodasMisVersiones() {
+  const yo = await miId();
+  const { error } = await supabase.from('exercise_overrides').delete().eq('coach_id', yo);
+  if (error) throw error;
+}
+
+/**
+ * Borrar todo lo mío: ejercicios (sus videos y mis versiones se van con ellos, en cascada), categorías (los ejercicios
+ * ajenos que las usaran se quedan sin categoría, no se borran), grupos musculares y tipos de sesión. Los archivos de video
+ * siguen en el almacén sin nadie que los apunte; no estorban y no se cobran aparte. Los planes que ya usaban un ejercicio
+ * conservan su nombre dentro del plan, solo pierden la ficha.
+ */
+export async function borrarMiRepertorio() {
+  const yo = await miId();
+  const pasos = [
+    supabase.from('exercises').delete().eq('created_by', yo),
+    supabase.from('exercise_categories').delete().eq('created_by', yo),
+    supabase.from('grupos_musculares').delete().eq('created_by', yo),
+    supabase.from('session_types').delete().eq('coach_id', yo),
+  ];
+  for (const paso of pasos) {
+    const { error } = await paso;
+    if (error) throw error;
+  }
+}
+
+/** Qué ya hizo el coach nuevo: `{ atletas, planes, ejercicios, ia }`, cada uno true/false. Para la tarjeta «Primeros pasos». */
+export async function primerosPasos() {
+  const { data, error } = await supabase.rpc('primeros_pasos');
+  if (error) throw error;
+  return data ?? {};
+}
+
 /**
  * Terminar de crear la propia cuenta.
  *

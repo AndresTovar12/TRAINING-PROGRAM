@@ -16,7 +16,7 @@ import ConectarIA from '@/features/ia/ConectarIA';
 
 const SIDEBAR_W = 232;
 
-export default function AdminApp() {
+export default function AdminApp({ onAbrirPerfil }) {
   const { profile } = useAuth();
   const { t } = usePalabras();
   const isMaster = !!profile?.is_owner;
@@ -130,7 +130,7 @@ export default function AdminApp() {
         </div>
       )}
 
-      {tab === 'athletes' && <AthletesPanel viendoComo={viendoComo} onVerComoAtleta={entrarComoAtleta} />}
+      {tab === 'athletes' && <AthletesPanel viendoComo={viendoComo} onVerComoAtleta={entrarComoAtleta} onIrA={setTab} onAbrirPerfil={onAbrirPerfil} />}
       {tab === 'exercises' && <ExercisesPanel viendoComo={viendoComo} />}
       {tab === 'misplanes' && !viendoComo && <MisPlanesPanel />}
       {tab === 'coaches' && isMaster && !viendoComo && <CoachesPanel onVerComo={entrarComo} />}
