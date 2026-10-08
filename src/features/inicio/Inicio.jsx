@@ -1,19 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Activity, AtSign, Bike, Calendar, Check, ChevronLeft, ChevronRight, Dumbbell, Eye, EyeOff, Flame, HeartPulse,
   Loader2, Lock, Mail, Medal, MoreHorizontal, PersonStanding, Plus, Repeat, Trophy, User, Users, Video, Waves,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsWide } from '@/lib/useViewport';
+import BotonGoogle from '@/components/BotonGoogle';
 import { supabase } from '@/lib/supabase';
 import { agregarAMiEquipo, completarMiPerfil, profesionalPorReferencia } from '@/lib/api';
 import { DISCIPLINAS, OFICIOS_DEL_INICIO, convieneRepertorioBase, nombreDeDisciplina } from '@/lib/oficios';
 import { FONT, KP, oficioCorto } from '@/lib/theme';
 import {
-  botonPrimario, cajaDeCampo, cuadroDeIcono, enlace, entrada, error as estiloError, garantia, opcion, rotulo, subtitulo,
+  botonPrimario, botonSecundario, cajaDeCampo, cuadroDeIcono, enlace, entrada, error as estiloError, garantia, opcion, rotulo, subtitulo,
   tarjeta, titulo,
 } from '@/features/inicio/estilos';
 import Recorrido from '@/features/inicio/Recorrido';
+import { guardaTipoPendiente, leeTipoPendiente, olvidaTipoPendiente } from '@/features/inicio/tipoPendiente';
 import fotoFuerza from '@/assets/landing/fuerza.webp';
 import fotoPista from '@/assets/landing/pista.webp';
 import fotoYoga from '@/assets/landing/yoga.webp';
@@ -31,7 +33,10 @@ import fotoAgilidad from '@/assets/landing/agilidad.webp';
  *     perfil, con `inicio_paso` apuntando a lo que falta: si cierra a la mitad, al volver retoma donde iba (App.jsx vuelve a
  *     abrir esto mientras `inicio_paso` no sea null).
  *   · CON GOOGLE NO SE TECLEA NADA: nombre y correo salen de Google, y el usuario ya lo propuso la base (`handle_new_user`).
- *     Solo falta decir qué tipo de cuenta es (`completar_mi_perfil`) y seguir con las preguntas.
+ *     Solo falta decir qué tipo de cuenta es (`completar_mi_perfil`) y seguir con las preguntas. «Continuar con Google»
+ *     está en Entrar Y dentro de «Crear cuenta» (primera pantalla y la de usuario y contraseña): quien toca «Crear cuenta»
+ *     nunca pierde esa salida (Andrés, 8 oct 2026). Si ya había contestado el tipo, viaja con él (`tipoPendiente.js`) y al
+ *     volver de Google no se le pregunta otra vez.
  *   · LO QUE ENTRENA ORDENA, NUNCA QUITA: ninguna respuesta esconde opciones; solo decide qué sale primero.
  *   · NINGUNA RESPUESTA ES UNA PUERTA: «Por ahora, solo yo» y «¿Cómo quieres empezar con tus ejercicios?» dicen con todas
  *     sus letras lo que siempre se podrá hacer, y Mi perfil lo cambia.
@@ -39,7 +44,8 @@ import fotoAgilidad from '@/assets/landing/agilidad.webp';
  *
  * Tres modos, según de dónde viene la persona:
  *   'nuevo'   sin sesión, desde «Crear cuenta» (o desde un link `?unirse=CÓDIGO`, con el código ya puesto).
- *   'google'  con sesión pero sin tipo de cuenta (`perfil_completo = false`): solo la primera pregunta.
+ *   'google'  con sesión pero sin tipo de cuenta (`perfil_completo = false`): solo la primera pregunta (o ninguna, si ya
+ *             la había contestado antes de irse a Google).
  *   'retomar' con sesión y `inicio_paso` pendiente: lo que falta, desde donde se quedó.
  * App.jsx le pone `key={modo}`: al cambiar de modo se vuelve a armar con la lista de pasos que le toca.
  */
@@ -135,12 +141,17 @@ function Garantia({ children }) {
   );
 }
 
-export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCuentaCreada }) {
-  const { profile, signUp, updateProfile, refreshProfile } = useAuth();
+/* `codigo`: el código de equipo de un link `?unirse=` (en 'nuevo' ya se usa al crear la cuenta; en 'google' y 'retomar' llega
+   puesto en la pregunta del código). `onCodigoUsado` avisa cuando ya se usó, para que la app no vuelva a pedirlo. */
+export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigoUsado }) {
+  const { profile, signUp, updateProfile, refreshProfile, googleDisponible } = useAuth();
   const compu = useIsWide();
 
+  // Con Google: si ya había contestado el tipo antes de salir, se aplica solo (ver el efecto de abajo).
+  const [tipoDeGoogle] = useState(() => (modo === 'google' ? leeTipoPendiente() : null));
+
   // Lo de ANTES de la cuenta vive aquí; lo de después, en el perfil.
-  const [tipo, setTipo] = useState(modo === 'nuevo' && codigo ? 'atleta' : null);
+  const [tipo, setTipo] = useState(modo === 'nuevo' && codigo ? 'atleta' : tipoDeGoogle);
   const [usuario, setUsuario] = useState('');
   const [clave, setClave] = useState('');
   const [correo, setCorreo] = useState('');
@@ -149,7 +160,7 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCuenta
   const [pasos] = useState(() => pasosDe(modo, profile, profile?.role === 'admin'));
   const [i, setI] = useState(() => Math.max(0, pasos.indexOf(profile?.inicio_paso)));
   const paso = pasos[i] ?? pasos[0];
-  const [ocupado, setOcupado] = useState(false);
+  const [ocupado, setOcupado] = useState(!!tipoDeGoogle);
   const [error, setError] = useState('');
 
   // Lo que se está contestando en la pantalla de ahora, con lo que el perfil ya traía.
@@ -162,7 +173,7 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCuenta
   const [otro, setOtro] = useState(() => (profile?.profesion && !OFICIOS_DEL_INICIO.some((o) => o.valor === profile.profesion) ? profile.profesion : ''));
   const [entrena, setEntrena] = useState(() => new Set(profile?.disciplinas ?? []));
   const [repertorio, setRepertorio] = useState(null); // null = todavía no se decidió: se propone según lo que entrena
-  const [textoCodigo, setTextoCodigo] = useState('');
+  const [textoCodigo, setTextoCodigo] = useState(modo === 'nuevo' ? '' : codigo);
   const [pro, setPro] = useState(null);   // a quién apunta el código escrito
   const [nac, setNac] = useState(profile?.fecha_nacimiento || '');
   const [coachNombre, setCoachNombre] = useState(null);
@@ -224,15 +235,11 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCuenta
     });
     if (e) { setError(e.message); setOcupado(false); return; }
     // La sesión nueva vuelve a dibujar la app; esta pantalla se va sola. El código de equipo ya se usó.
-    onCuentaCreada?.();
+    onCodigoUsado?.();
   }
 
-  async function eligeTipo(v) {
-    setTipo(v);
-    if (modo === 'nuevo') { setTimeout(() => setI(1), 140); return; }
-    // Con Google: el tipo de cuenta se guarda de una vez (solo se puede una vez) y se sigue con lo que le toca.
-    setOcupado(true);
-    setError('');
+  // Con Google: el tipo de cuenta se guarda de una vez (solo se puede una vez) y se sigue con lo que le toca.
+  async function guardaTipoDeGoogle(v) {
     try {
       await completarMiPerfil({ usuario: profile.username, tipo: v === 'coach' ? 'coach' : 'athlete', nombre: profile.full_name });
       const sig = v === 'coach' ? 'oficio' : (profile.coach_id ? 'sexo' : 'codigo');
@@ -246,12 +253,32 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCuenta
     }
   }
 
+  function eligeTipo(v) {
+    setTipo(v);
+    if (modo === 'nuevo') { setTimeout(() => setI(1), 140); return; }
+    setOcupado(true);
+    setError('');
+    guardaTipoDeGoogle(v);
+  }
+
+  // Volvió de Google y ya había contestado el tipo de cuenta: se guarda sin preguntarle otra vez. Si falla, queda la
+  // pregunta de siempre (con el error), así que nunca se atora.
+  const aplicado = useRef(false);
+  useEffect(() => {
+    if (!tipoDeGoogle || aplicado.current) return;
+    aplicado.current = true;
+    olvidaTipoPendiente();
+    guardaTipoDeGoogle(tipoDeGoogle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function quedarConElCoach() {
     setOcupado(true);
     setError('');
     try {
       await agregarAMiEquipo(textoCodigo.trim());
       await refreshProfile();
+      onCodigoUsado?.();
       await guarda({});
     } catch (e) {
       setError(e.message || 'No se pudo agregar a tu entrenador.');
@@ -318,7 +345,13 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCuenta
         <span style={{ fontSize: 14, fontWeight: 500, color: KP.ink2, lineHeight: 1.45 }}>{qu}</span>
       </button>
     );
-    cuerpo = (
+    // Volvió de Google con el tipo ya contestado: no se le enseña la pregunta, solo que se está guardando.
+    cuerpo = modo === 'google' && tipoDeGoogle && ocupado ? (
+      <div role="status" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, textAlign: 'center' }}>
+        <Loader2 size={30} className="spin" color={KP.blue} />
+        <p style={{ ...subtitulo, margin: 0 }}>Preparando tu cuenta…</p>
+      </div>
+    ) : (
       <>
         {modo === 'google' && (
           <p style={{ ...subtitulo, margin: '14px 0 0' }}>Google nos dio tu nombre y tu correo. Falta lo que solo tú sabes.</p>
@@ -331,6 +364,11 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCuenta
         {Error}
       </>
     );
+    // Quien llegó con «Crear cuenta» también puede seguir con Google desde aquí; lo del tipo se lo pregunta al volver
+    // (salvo que ya viniera elegido, como con un link de equipo).
+    if (modo === 'nuevo' && googleDisponible) {
+      pie = <BotonGoogle conO antes={() => guardaTipoPendiente(tipo)} style={botonSecundario} />;
+    }
   } else if (paso === 'cuenta') {
     const valido = USERNAME_RE.test(usuario.trim()) && clave.length >= 6;
     const sigue = () => {
@@ -347,7 +385,13 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCuenta
         {Error}
       </>
     );
-    pie = continuar(sigue, 'Continuar', !valido);
+    pie = (
+      <>
+        {continuar(sigue, 'Continuar', !valido)}
+        {/* La otra manera de crear la cuenta: ya contestó el tipo, así que viaja con él y al volver no se le repite. */}
+        <BotonGoogle conO antes={() => guardaTipoPendiente(tipo)} style={botonSecundario} />
+      </>
+    );
   } else if (paso === 'correo') {
     const bien = !correo.trim() || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(correo.trim());
     cuerpo = (
