@@ -83,10 +83,33 @@ export function parcheDeLapsos(lapsos) {
   };
 }
 
-/** El ejercicio ya en lapsos: con UN lapso (el de su línea) si todavía no traía. */
-export function aLapsos(ex) {
+/**
+ * ¿La línea sigue tal como nace un ejercicio nuevo en el editor (8-10 reps, o 10 si lo escribió el coach, y nada más)?
+ * Entonces nadie ha puesto nada ahí y se puede estrenar con otra medida sin borrarle nada a nadie.
+ */
+export function esLineaSinEstrenar(ex) {
+  const reps = String(ex?.reps ?? '').trim();
+  const unidad = ex?.unidad;
+  return (reps === '8-10' || reps === '10')
+    && (!unidad || unidad === 'reps')
+    && !String(ex?.intensity ?? '').trim()
+    && !String(ex?.descanso ?? '').trim()
+    && ex?.porLado !== true
+    && !(Array.isArray(ex?.porVuelta) && ex.porVuelta.length);
+}
+
+/**
+ * El ejercicio ya en lapsos: con UN lapso (el de su línea) si todavía no traía.
+ *
+ * `deCardio` (solo el editor): Andrés, 8 oct 2026: «cuando escoge lapsos personalizados, que automáticamente se ponga Km y en
+ * carga, ritmo». Si la línea está SIN ESTRENAR, su primer lapso arranca en kilómetros y vacío (la casilla de carga, en Ritmo:
+ * ver `LapsosDelEjercicio`). Una línea que ya tiene algo (10 reps con 40 kg) se queda como estaba: ahí no se adivina.
+ */
+export function aLapsos(ex, { deCardio = false } = {}) {
   if (!ex || ex.isNote) return ex;
-  const base = traeLapsos(ex) ? lapsosDe(ex) : [lapsoDeLinea(ex)];
+  const base = traeLapsos(ex)
+    ? lapsosDe(ex)
+    : [deCardio && esLineaSinEstrenar(ex) ? limpio({ reps: '', unidad: 'km', intensity: '', descanso: '' }) : lapsoDeLinea(ex)];
   return quitaVacios({ ...ex, ...parcheDeLapsos(base) });
 }
 
@@ -115,14 +138,14 @@ function quitaVacios(ex) {
  * Los ejercicios de un Set tal como deben guardarse: todos con lapsos si el Set está en lapsos personalizados, ninguno
  * si no. Lo que ya estaba bien no se toca (ni se reescribe, ni cambia de identidad).
  */
-export function conLapsosSegun(miembros, activo) {
+export function conLapsosSegun(miembros, activo, opciones = {}) {
   return miembros.map((m) => {
     if (m.isNote) return m;
     if (activo) {
       if (traeLapsos(m) && !m.porVuelta && !m.formato) return m;
       // Los lapsos mandan: el reloj de formato y las vueltas distintas se quitan (serían el mismo dato en dos sitios).
       const { formato: _reloj, ...sinReloj } = m;
-      return aLapsos(sinReloj);
+      return aLapsos(sinReloj, opciones);
     }
     return traeLapsos(m) ? aNormal(m) : m;
   });

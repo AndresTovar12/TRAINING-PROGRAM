@@ -87,7 +87,7 @@ export const serializeBlocks = (blocks) => {
     // Con formato, las «series» pasan a ser sus vueltas; sin él, se quita de todos los ejercicios.
     // Y las vueltas distintas de cada ejercicio se recortan o completan a las veces que se repite el Set.
     const miembros = ponFormato(
-      conLapsosSegun(b.members.map((m) => normalizaVueltas(conSeries(m, b.rounds))), !!b.lapsos && !b.formato),
+      conLapsosSegun(b.members.map((m) => normalizaVueltas(conSeries(m, b.rounds))), !!b.lapsos && !b.formato, { deCardio: true }),
       b.formato ?? null,
     );
     const grupo = b.members.length > 1 ? (propios[i] ?? nuevoNumero()) : null;
