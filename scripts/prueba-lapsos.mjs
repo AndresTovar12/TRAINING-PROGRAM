@@ -4,7 +4,7 @@
 //   node scripts/prueba-lapsos.mjs
 import assert from 'node:assert/strict';
 import {
-  traeLapsos, lapsosDe, lapsoDeLinea, parcheDeLapsos, aLapsos, aNormal, conLapsosSegun, perderiaLapsos, perderiaVueltas,
+  traeLapsos, lapsosDe, lapsoDeLinea, esLineaSinEstrenar, parcheDeLapsos, aLapsos, aNormal, conLapsosSegun, perderiaLapsos, perderiaVueltas,
   tramosDeLapsos, segundosDeLapso, descansoDeLapsoEnSegundos, cuantoDeLapso,
 } from '../src/lib/lapsos.js';
 import { parseBlocks, serializeBlocks } from '../src/lib/setsDeUnaSesion.js';
@@ -150,6 +150,28 @@ const correr = {
   assert.equal(descansoDeLapsoEnSegundos({ descanso: '60-90 seg' }), 60, 'de un rango, el primero');
   assert.equal(descansoDeLapsoEnSegundos({ descanso: 'Recuperación total' }), null);
   assert.equal(descansoDeLapsoEnSegundos({ descanso: '' }), null);
+}
+
+/* ---- Al elegir «Lapsos personalizados», una línea sin estrenar arranca en Km ---- */
+{
+  const sesion = [
+    { name: 'Correr', sets: '3', reps: '8-10', intensity: '', set: 1 },
+    { name: 'Thruster', sets: '3', reps: '10', intensity: '40 kg', set: 1 },
+    { name: 'Remo', sets: '3', reps: '500', unidad: 'm', set: 1 },
+    { name: 'Burpee', sets: '3', reps: '10', unidad: 'reps', set: 1, porLado: true },
+  ];
+  const bs = parseBlocks(sesion);
+  bs[0].lapsos = true;
+  const g = serializeBlocks(bs);
+  assert.deepEqual(lapsosDe(g[0]), [{ reps: '', unidad: 'km', intensity: '', descanso: '' }], 'sin estrenar: Km y vacío');
+  assert.equal(g[0].unidad, 'km');
+  assert.deepEqual(lapsosDe(g[1]), [{ reps: '10', unidad: 'reps', intensity: '40 kg', descanso: '' }], 'con carga puesta: no se toca');
+  assert.deepEqual(lapsosDe(g[2]), [{ reps: '500', unidad: 'm', intensity: '', descanso: '' }], 'con su medida puesta: no se toca');
+  assert.equal(lapsosDe(g[3])[0].unidad, 'reps', 'con «por lado» marcado: no se toca');
+  // Desde la IA no se adivina: un ejercicio de 10 reps es de 10 reps.
+  assert.deepEqual(lapsosDe(aLapsos({ name: 'Burpee', reps: '10' })), [{ reps: '10', unidad: 'reps', intensity: '', descanso: '' }]);
+  assert.equal(esLineaSinEstrenar({ reps: '8-10' }), true);
+  assert.equal(esLineaSinEstrenar({ reps: '8-10', intensity: '75%' }), false);
 }
 
 console.log('prueba-lapsos: todo bien');

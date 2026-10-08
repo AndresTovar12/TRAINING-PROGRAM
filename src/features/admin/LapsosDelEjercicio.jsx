@@ -6,7 +6,7 @@ import CampoDescanso from '@/components/CampoDescanso';
 import { CeldaDeReps, CeldaDeCarga } from '@/components/RepsYCarga';
 import { IconBtn } from '@/features/admin/piezas';
 import { useRepsYCarga } from '@/lib/useRepsYCarga';
-import { tipoDeCargaAlEscribir } from '@/lib/medidas';
+import { tipoDeCargaAlEscribir, esDistancia } from '@/lib/medidas';
 import { lapsosDe, parcheDeLapsos, comoEjercicio, MAX_LAPSOS } from '@/lib/lapsos';
 import { T, FONT } from '@/lib/theme';
 
@@ -146,7 +146,8 @@ export default function LapsosDelEjercicio({ ex, onPatch, estiloInput, angosta, 
         {lapsos.map((l, k) => (
           <FilaDeLapso
             key={k} ex={ex} lapso={l} k={k} estiloInput={estiloInput} angosta={angosta}
-            tipoPrevio={k > 0 ? tipoDeCargaAlEscribir(lapsos[k - 1].intensity) : null}
+            // Con la casilla vacía, la carga arranca en lo del lapso de arriba; el primero, en Ritmo si lo suyo es una distancia.
+            tipoPrevio={(k > 0 ? tipoDeCargaAlEscribir(lapsos[k - 1].intensity) : null) ?? (esDistancia(l.unidad) ? 'ritmo' : null)}
             onCambio={(p) => cambia(k, p)} onQuitar={() => quita(k)} puedeQuitar={lapsos.length > 1}
           />
         ))}
