@@ -84,3 +84,19 @@ lanza(() => diaDesdeEntrada('Lun', { ejercicios: [{ nombre: 'Correr', lapsos: [{
 }
 
 console.log('prueba-mcp-lapsos: todo bien')
+
+/* ---- El descanso entre Sets viaja con el último ejercicio del Set ---- */
+{
+  const { dia: d } = diaDesdeEntrada('Lun', {
+    ejercicios: [
+      { nombre: 'Sentadilla', series: 3, grupo: 1, cantidad: 5, descanso_set: '2 min' },
+      { nombre: 'Remo', series: 3, grupo: 1, cantidad: 8 },
+      { nombre: 'Plancha', series: 2, cantidad: 30, unidad: 'seg' },
+    ],
+  }, [])
+  const e = d.exercises as any[]
+  igual([e[0].descansoSet, e[1].descansoSet, e[2].descansoSet], [undefined, '2 min', undefined], 'el descanso entre Sets pasa al último del grupo')
+  igual((describirEjercicio(e[1]) as any).descanso_set, '2 min', 'la IA lo lee')
+  igual((describirEjercicio(e[0]) as any).descanso_set, undefined, 'y solo donde está')
+}
+console.log('prueba-mcp-lapsos (descanso entre Sets): todo bien')

@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ArrowLeft, X, Plus, Trash2, Copy, ChevronRight, ChevronUp, ChevronDown,
@@ -11,6 +11,7 @@ import { usePalabras } from '@/contexts/PalabrasContext';
 import { IconBtn, Pill } from '@/features/admin/piezas';
 import { AvisoDeFormatos, EncabezadoDelSet } from '@/features/admin/FormatoDelSet';
 import LapsosDelEjercicio, { PorLadoDelEjercicio } from '@/features/admin/LapsosDelEjercicio';
+import DescansoEntreSets from '@/features/admin/DescansoEntreSets';
 import { traeLapsos } from '@/lib/lapsos';
 import { parseBlocks, serializeBlocks, setTag } from '@/lib/setsDeUnaSesion';
 import { esProgramaFantasma } from '@/lib/programas';
@@ -1097,9 +1098,12 @@ function CuerpoDeSets({
           }
           const setIdx = blocks.slice(0, bi + 1).filter((x) => x.type === 'set').length;
           const tag = setTag(b.members.length);
+          // La raya con el descanso entre este Set y el siguiente: solo hay raya si viene otro Set después.
+          const hayOtroSet = blocks.slice(bi + 1).some((x) => x.type === 'set');
           return (
+            <Fragment key={bi}>
             <div
-              key={bi} {...arrastrable({ lista: `${uid}:sets`, etiqueta: `Set ${setIdx}`, alMover: (de, a) => writeBlocks((bs) => mueveEn(bs, de, a)) })}
+              {...arrastrable({ lista: `${uid}:sets`, etiqueta: `Set ${setIdx}`, alMover: (de, a) => writeBlocks((bs) => mueveEn(bs, de, a)) })}
               style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 16, padding: 14 }}
             >
               <EncabezadoDelSet
@@ -1172,6 +1176,13 @@ function CuerpoDeSets({
                 );
               })()}
             </div>
+            {hayOtroSet && (
+              <DescansoEntreSets
+                numero={setIdx} valor={b.descansoDespues} soloLectura={soloLectura}
+                onCambio={(texto) => writeBlocks((bs) => bs.map((x, k) => (k === bi ? { ...x, descansoDespues: texto } : x)))}
+              />
+            )}
+            </Fragment>
           );
         })}
       </div>

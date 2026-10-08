@@ -41,6 +41,8 @@ export const parseBlocks = (exercises = []) => {
     b.formato = formatoDeMiembros(b.members);
     // «Lapsos personalizados»: sus ejercicios traen `lapsos` (y nunca va junto a un formato de reloj).
     b.lapsos = !b.formato && hayLapsos(b.members);
+    // El descanso que sigue al Set (la raya entre dos Sets): vive en su ÚLTIMO ejercicio (`descansoSet`), como texto («2 min»).
+    b.descansoDespues = String(b.members[b.members.length - 1]?.descansoSet ?? '').trim();
   });
   return blocks;
 };
@@ -89,7 +91,14 @@ export const serializeBlocks = (blocks) => {
       b.formato ?? null,
     );
     const grupo = b.members.length > 1 ? (propios[i] ?? nuevoNumero()) : null;
-    miembros.forEach((m) => {
+    // El descanso entre Sets va solo en el último ejercicio: si se agregó o quitó uno, se muda con el Set. Un Set que no
+    // trae `descansoDespues` (armado fuera del editor) conserva el que ya tenían sus ejercicios.
+    const ultimo = miembros[miembros.length - 1];
+    const raya = b.descansoDespues === undefined ? String(ultimo?.descansoSet ?? '').trim() : String(b.descansoDespues ?? '').trim();
+    miembros.forEach((m0, k) => {
+      let m = m0;
+      if (k === miembros.length - 1 && raya) { if (m.descansoSet !== raya) m = { ...m, descansoSet: raya }; }
+      else if ('descansoSet' in m) { const { descansoSet: _quitado, ...resto } = m; m = resto; }
       const e = { ...m };
       if (grupo !== null) e.set = grupo; else delete e.set;
       out.push(e);

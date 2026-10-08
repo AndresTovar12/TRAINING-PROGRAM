@@ -5,7 +5,7 @@ import {
   Clock, Sparkles, Info, Dumbbell, Heart, Play,
   Home as HomeIcon,
   Repeat, Eye, Layers, List, Scale, LineChart as LineChartIcon,
-  Sunrise, Sunset, MessageCircle,
+  Sunrise, Sunset, MessageCircle, Timer,
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { useIsDesktop } from '@/lib/useViewport';
@@ -545,6 +545,8 @@ const SetGroup = ({
   group, setNum, phaseColor, sessionData, sessionKey, onUpdate, oneRMs, sessionsData,
   // Solo la sesión normal de un día los pasa: es donde el coach puede ponerle formato a un Set.
   formatos = null, onFormato = null,
+  // Si después de este Set viene otro: solo entonces se enseña el descanso entre Sets (en el último no hay a qué esperar).
+  conDescansoDespues = false,
 }) => {
   /* La ficha del ejercicio vive AQUI y no en cada fila, porque para decir
      "Guardar y siguiente" hay que saber cual es el siguiente — y una fila solo
@@ -563,6 +565,8 @@ const SetGroup = ({
     );
   }
   const count = group.exercises.length;
+  // El descanso entre este Set y el siguiente vive en su último ejercicio (`descansoSet`).
+  const descansoSet = conDescansoDespues ? String(group.exercises[count - 1]?.ex?.descansoSet ?? '').trim() : '';
   // La misma palabra que el editor: Bi-serie (2), Tri-serie (3), Circuito (4 o más).
   const typeLabel = setTag(count);
   const rondas = group.exercises[0].ex.sets;
@@ -726,6 +730,16 @@ const SetGroup = ({
           onBorrar={resultado ? () => { onFormato(claveFormato, null); setAnotando(false); } : undefined}
           onCerrar={() => setAnotando(false)}
         />
+      )}
+      {/* Lo que se descansa al terminar este Set, antes del siguiente: una línea entre las dos tarjetas. */}
+      {descansoSet && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '14px 3px -6px', color: LT.text2 }}>
+          <span aria-hidden="true" style={{ flex: 1, height: 1, background: LT.border }} />
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, ...NUM_STYLE }}>
+            <Timer size={14} /> Descansa {descansoSet}
+          </span>
+          <span aria-hidden="true" style={{ flex: 1, height: 1, background: LT.border }} />
+        </div>
       )}
     </div>
   );
@@ -1207,6 +1221,7 @@ const CuerpoDelDia = ({
                 if (!g.isNote) setNum += 1;
                 return (
                   <SetGroup key={`${selectedIdx}-${gi}`} group={g} setNum={setNum} phaseColor={phaseColor}
+                    conDescansoDespues={groups.slice(gi + 1).some((x) => !x.isNote)}
                     sessionData={ejerciciosAnotados} sessionKey={selectedId}
                     onUpdate={(idx, data) => setExerciseData(idx, data)}
                     oneRMs={oneRMs} sessionsData={sessionsData}
@@ -1237,6 +1252,7 @@ const CuerpoDelDia = ({
           if (!g.isNote) setNum += 1;
           return (
             <SetGroup key={`${selectedIdx}-${gi}`} group={g} setNum={setNum} phaseColor={phaseColor}
+              conDescansoDespues={groups.slice(gi + 1).some((x) => !x.isNote)}
               sessionData={ejerciciosAnotados} sessionKey={selectedId}
               onUpdate={(idx, data) => setExerciseData(idx, data)}
               oneRMs={oneRMs} sessionsData={sessionsData}

@@ -83,6 +83,12 @@ export default function DentroDelDia({ day }) {
               </div>
             )}
             {b.members.map((e, i) => fila(e, i, varios))}
+            {/* El descanso que sigue al Set, solo si viene otro Set después. */}
+            {b.descansoDespues && bloques.slice(bi + 1).some((x) => x.type === 'set') && (
+              <div style={{ padding: '3px 0 0 16px', fontSize: 11, fontWeight: 700, color: T.text3 }}>
+                descansa {b.descansoDespues} antes del siguiente
+              </div>
+            )}
           </div>
         );
       })}
