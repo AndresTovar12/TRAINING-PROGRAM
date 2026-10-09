@@ -33,19 +33,6 @@ export function tiempoTotal(ms) {
 /** Un ritmo guardado en segundos, como se lee: 274 → «4:34». */
 const ritmoDe = (seg) => relojDe(seg);
 
-/**
- * Dónde va el atleta, en una línea: «Serie 1 de 4 · Vuelta 2 de 5 · Lapso 1 de 2». Con Sets de un solo ejercicio y sin vueltas:
- * «Ejercicio 2 de 4». Las vueltas de un rango dicen «Vuelta 2 de 5-6».
- */
-export function lineaDeAvance(plan, paso) {
-  if (!paso) return '';
-  if (paso.tipo === 'nota' || plan.simple) return `${paso.tipo === 'nota' ? 'Paso' : 'Ejercicio'} ${paso.n} de ${plan.total}`;
-  const partes = [`Serie ${paso.serie} de ${plan.series}`];
-  if (paso.vueltas > 1) partes.push(`Vuelta ${paso.vuelta} de ${paso.vueltasMin === paso.vueltas ? paso.vueltas : `${paso.vueltasMin}-${paso.vueltas}`}`);
-  if (paso.lapsos > 1) partes.push(`Lapso ${paso.lapso} de ${paso.lapsos}`);
-  return partes.join(' · ');
-}
-
 /* ------------------------------------------------------------------ */
 /* Las cifras grandes                                                  */
 /* ------------------------------------------------------------------ */
@@ -87,16 +74,29 @@ export function cifrasDelPaso(paso, kilos = null) {
   ].filter(Boolean);
 }
 
-/** Lo planeado en una línea: «5 reps · 78% carga · ≈105 kg». Para «Sigue:», «Planeado:» y la lista. */
+/**
+ * Una cifra como se lee en una pastillita: «5 reps», «78%», «RIR 2», «Z2», «≈105 kg». El nombre de la carga («carga», «intensidad», «zona») sobra,
+ * el «%» y la «Z» ya lo dicen; RIR y RPE sí van, porque son lo único que explica el número.
+ */
+export function textoDeCifra(c) {
+  if (!c) return '';
+  if (c.texto || c.etiqueta === 'carga' || c.etiqueta === 'intensidad' || c.etiqueta === 'zona') return String(c.valor);
+  if (c.etiqueta === 'RIR' || c.etiqueta === 'RPE') return `${c.etiqueta} ${c.valor}`;
+  return `${c.valor} ${c.etiqueta}`;
+}
+
+/** Las pastillitas de un paso, de las listas y de «Sigue»: `[{ texto, fuerte }]` (`fuerte`: los kilos, en azul). */
+export function pastillasDelPaso(paso, kilos = null) {
+  return cifrasDelPaso(paso, kilos).map((c) => ({ texto: textoDeCifra(c), fuerte: !!c.destacado }));
+}
+
+/** Lo planeado en una línea: «5 reps · 78% · ≈105 kg». Para «Sigue» y «Planeado». */
 export function textoDeLoPlaneado(paso, kilos = null) {
   if (!paso) return '';
-  const carga = cifraDeCarga(paso);
-  const cargaTexto = carga ? (carga.texto ? carga.valor : (paso.meta.tipo === 'pct' ? `${carga.valor} carga` : paso.meta.texto)) : null;
-  return [
-    paso.tipo === 'ejercicio' ? paso.texto : '',
-    cargaTexto,
-    kilos ? `${kilos.aprox ? '≈' : ''}${kilos.valor} ${kilos.unidad}` : (paso.meta?.tipo === 'kg' ? paso.meta.texto : null),
-  ].filter(Boolean).join(' · ');
+  const partes = pastillasDelPaso(paso, kilos).map((p) => p.texto);
+  // Un peso fijo («20 kg») sin kilos calculados se dice como lo escribió el coach.
+  if (!kilos && paso.tipo === 'ejercicio' && paso.meta?.tipo === 'kg') partes.push(paso.meta.texto);
+  return partes.join(' · ');
 }
 
 /* ------------------------------------------------------------------ */
@@ -115,28 +115,113 @@ export function segmentosDeAvance(plan, estados) {
   return piezas.map((p) => (p.total ? p.hechos / p.total : 0));
 }
 
-/** Los pasos de la lista «Tu entreno», agrupados por Set y sin los descansos: `[{ titulo, pasos: [{ paso, i }] }]`. */
-export function gruposDeLaLista(plan) {
-  const grupos = [];
-  plan.pasos.forEach((paso, i) => {
-    if (paso.tipo === 'descanso') return;
-    const titulo = paso.serie ? `Serie ${paso.serie}` : null;
-    const ultimo = grupos[grupos.length - 1];
-    if (ultimo && ultimo.titulo === titulo) ultimo.pasos.push({ paso, i });
-    else grupos.push({ titulo, pasos: [{ paso, i }] });
-  });
-  return grupos;
+/**
+ * Las vueltas de un Set, en puntos: `[{ estado: 'hecha' | 'actual' | 'pendiente', opcional }]`, uno por vuelta; `[]` si el Set no se repite.
+ * Una vuelta está hecha cuando todos sus pasos están hechos o saltados; la que va es la del paso que se mira (`claveActual`).
+ */
+export function puntosDeVueltas(plan, estados, serie, claveActual) {
+  const delSet = plan.pasos.filter((p) => p.tipo === 'ejercicio' && p.serie === serie);
+  const total = delSet.reduce((m, p) => Math.max(m, p.vueltas), 0);
+  if (total <= 1) return [];
+  const puntos = [];
+  for (let v = 1; v <= total; v += 1) {
+    const pasos = delSet.filter((p) => p.vuelta === v);
+    const hecha = pasos.length > 0 && pasos.every((p) => estados[p.i] !== 'pendiente');
+    const actual = !hecha && pasos.some((p) => p.clave === claveActual);
+    puntos.push({ estado: hecha ? 'hecha' : (actual ? 'actual' : 'pendiente'), opcional: pasos.some((p) => p.opcional) });
+  }
+  return puntos;
 }
 
-/** Qué se dice de un paso en la lista: «Vuelta 2 · Lapso 1 · 5 reps · 78% carga · ≈105 kg». */
-export function subtituloDeLaLista(paso, kilos = null) {
-  if (paso.tipo === 'reloj') return paso.resumen;
-  return [
-    paso.vueltas > 1 ? `Vuelta ${paso.vuelta}` : null,
-    paso.lapsos > 1 ? `Lapso ${paso.lapso}` : null,
-    textoDeLoPlaneado(paso, kilos),
-    paso.opcional ? 'Opcional' : null,
-  ].filter(Boolean).join(' · ');
+/**
+ * La serie a la vista, en un Set de dos ejercicios o más (bi-serie, tri-serie, circuito): cuál es cada uno y cuál toca.
+ * `{ nombre: 'Bi-serie', letras: [{ letra: 'A', nombre: 'Lunges', estado: 'hecho' | 'actual' | 'pendiente' }] }`, o `null` si no aplica.
+ */
+export function serieALaVista(plan, estados, paso) {
+  if (!paso || paso.tipo !== 'ejercicio' || !(paso.ejerciciosEnSerie > 1)) return null;
+  const letras = [];
+  for (let e = 1; e <= paso.ejerciciosEnSerie; e += 1) {
+    const q = plan.pasos.find((x) => x.tipo === 'ejercicio' && x.serie === paso.serie && x.vuelta === paso.vuelta && x.ejercicioEnSerie === e);
+    if (q) {
+      letras.push({
+        letra: String.fromCharCode(64 + e),
+        nombre: q.nombre,
+        estado: q.clave === paso.clave ? 'actual' : (estados[q.i] !== 'pendiente' ? 'hecho' : 'pendiente'),
+      });
+    }
+  }
+  return { nombre: paso.serieTag, letras };
+}
+
+/**
+ * «Ver todo»: el entreno como lo escribió el coach, UNA TARJETA POR SET y una fila por ejercicio (las vueltas no se repiten en filas: van en
+ * puntos). La fila lleva a su primer paso pendiente; lo ya hecho no lleva a ningún lado.
+ *
+ *   [{ serie, titulo, etiqueta, puntos, reloj, resultado, esActual, filas: [{ idx, nombre, estado, clave, pastillas }] }]
+ *   estado  'hecho' · 'actual' (el paso que se mira) · 'saltado' (no queda nada por hacer pero se saltó algo) · 'pendiente'
+ *   etiqueta  lo que es el Set: «Bi-serie», «AMRAP · 12 min», «5 rondas» (en lapsos); `null` si es un Set de un ejercicio
+ *   puntos  las vueltas (ver `puntosDeVueltas`); `reloj` el Set lo corre un reloj; `resultado` lo que quedó anotado de ese reloj (o `null`)
+ *
+ * `kilosDe(paso)` dice los kilos de ese paso (de su 1RM) o `null`; `resultadoDe(paso)` el resultado de un reloj, ya escrito, o `null`.
+ */
+export function tarjetasDeLaLista(plan, estados, claveActual, { kilosDe = () => null, resultadoDe = () => null } = {}) {
+  const tarjetas = [];
+  plan.pasos.forEach((paso) => {
+    if (paso.tipo === 'descanso') return;
+    const serie = paso.serie ?? null;
+    let t = tarjetas[tarjetas.length - 1];
+    if (!t || t.serie !== serie) {
+      t = { serie, titulo: serie ? `Serie ${serie}` : null, etiqueta: null, puntos: [], reloj: false, resultado: null, esActual: false, filas: [], _pasos: [] };
+      tarjetas.push(t);
+    }
+    t._pasos.push(paso);
+  });
+  tarjetas.forEach((t) => {
+    const [primero] = t._pasos;
+    if (primero.tipo === 'reloj') {
+      t.reloj = true;
+      t.etiqueta = primero.deLapsos ? (primero.rondas > 1 ? `${primero.rondas} rondas` : null) : primero.resumen;
+      t.resultado = resultadoDe(primero);
+      const estado = primero.clave === claveActual ? 'actual' : (estados[primero.i] === 'pendiente' ? 'pendiente' : (estados[primero.i] === 'hecho' ? 'hecho' : 'saltado'));
+      const irA = estado === 'hecho' ? null : primero.clave;
+      t.filas = primero.miembros.map((m) => ({
+        idx: m.idx,
+        nombre: m.nombre,
+        estado,
+        clave: irA,
+        pastillas: primero.deLapsos
+          ? [{ texto: m.lapsos.map((l) => l.texto).filter(Boolean).join(' → '), fuerte: false }].filter((x) => x.texto)
+          : [m.texto, m.carga].filter(Boolean).map((texto) => ({ texto, fuerte: false })),
+      }));
+    } else if (primero.tipo === 'nota') {
+      t.filas = t._pasos.map((p) => ({
+        idx: p.idx,
+        nombre: p.nombre,
+        estado: p.clave === claveActual ? 'actual' : (estados[p.i] === 'pendiente' ? 'pendiente' : (estados[p.i] === 'hecho' ? 'hecho' : 'saltado')),
+        clave: estados[p.i] === 'hecho' ? null : p.clave,
+        pastillas: [],
+      }));
+    } else {
+      const porEjercicio = new Map();
+      t._pasos.forEach((p) => { if (!porEjercicio.has(p.idx)) porEjercicio.set(p.idx, []); porEjercicio.get(p.idx).push(p); });
+      t.filas = [...porEjercicio.values()].map((pasos) => {
+        const faltan = pasos.filter((p) => estados[p.i] !== 'hecho');
+        const requeridos = pasos.filter((p) => !p.opcional && estados[p.i] === 'pendiente');
+        const salto = pasos.some((p) => estados[p.i] === 'saltado');
+        const proximo = faltan[0] ?? pasos[0];
+        let estado = 'hecho';
+        if (pasos.some((p) => p.clave === claveActual)) estado = 'actual';
+        else if (requeridos.length) estado = 'pendiente';
+        else if (salto) estado = 'saltado';
+        return { idx: pasos[0].idx, nombre: pasos[0].nombre, estado, clave: estado === 'hecho' ? null : (faltan[0]?.clave ?? null), pastillas: pastillasDelPaso(proximo, kilosDe(proximo)) };
+      });
+      if (primero.ejerciciosEnSerie > 1) t.etiqueta = primero.serieTag;
+      t.puntos = puntosDeVueltas(plan, estados, t.serie, claveActual);
+    }
+    t.esActual = t.filas.some((f) => f.estado === 'actual');
+    delete t._pasos;
+  });
+  return tarjetas;
 }
 
 /* ------------------------------------------------------------------ */

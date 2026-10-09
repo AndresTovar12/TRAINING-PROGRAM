@@ -20,7 +20,7 @@ import { etiquetaDeTramo, expande } from './formatos.js';
  *                      'ritmoPorKm' (seg/km) · 'zonaFC' · 'potencia' (W) · 'ritmoNadoPor100m' (seg/100 m) · 'texto'
  *             porLado  `true` si se hace con cada lado (cada pierna, cada brazo): un adaptador puede duplicar el paso o decírselo al atleta
  *             clave    la del paso en la app (`lib/entreno.js`): lo que un reloj devuelve («terminé el paso 12») se traduce a eso para marcarlo
- *             desde    en los pasos que salen de un reloj de formato (un tramo de un Tabata), la clave del paso de la app del que salieron
+ *             desde    en los pasos que salen de un reloj de formato (un tramo de un Tabata) o de un Set en lapsos, la clave del paso de la app del que salieron
  *   grupos  pistas para PLEGAR repeticiones (Apple `IntervalBlock`, los pasos de repetición de un FIT): un Set que se repite `repeticiones`
  *           veces ocupa los pasos `desde`…`hasta` (índices de `pasos`, ambos incluidos; ya cuentan los descansos entre vueltas). Si hay vueltas
  *           opcionales («5-6»), `opcionales` las cuenta y van al final del grupo. El descanso de DESPUÉS del Set queda fuera. Un adaptador que no
@@ -52,7 +52,7 @@ function metaCanonica(m) {
 
 // Un paso de la app → uno o varios canónicos (un reloj de formato se vuelve sus tramos).
 function pasosCanonicos(paso) {
-  const comun = { opcional: !!paso.opcional };
+  const comun = { opcional: !!paso.opcional, ...(paso.desde ? { desde: paso.desde } : null) };
   if (paso.tipo === 'descanso') {
     return [{ clave: paso.clave, tipo: 'recuperacion', nombre: 'Descanso', termina: terminaCanonica(paso.termina), meta: null, ...comun }];
   }
@@ -90,8 +90,11 @@ function pasosCanonicos(paso) {
 /** El plan de pasos de una sesión (`pasosDeLaSesion`) como un entreno que cualquier reloj puede seguir: ver «LA FORMA». */
 export function aEntrenoCanonico(plan, { nombre = '' } = {}) {
   const pasos = [];
+  // Un Set en lapsos personalizados es UN paso con reloj para el atleta, pero para un reloj de pulsera es la sucesión de sus lapsos: se abre
+  // aquí en los pasos que guarda (`pasosInternos`), cada uno con su clave bajo la del paso de la app y `desde` apuntando a él.
+  const abre = (p) => (p.pasosInternos ? p.pasosInternos.map((q) => ({ ...q, clave: `${p.clave}#${q.clave}`, desde: p.clave })) : [p]);
   // Para cada paso de la app: dónde empiezan y terminan sus pasos canónicos (un reloj de formato ocupa varios).
-  const lugar = plan.pasos.map((p) => {
+  const lugar = plan.pasos.flatMap(abre).map((p) => {
     const desde = pasos.length;
     pasos.push(...pasosCanonicos(p));
     return { paso: p, desde, hasta: pasos.length - 1 };

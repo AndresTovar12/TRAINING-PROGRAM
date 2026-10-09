@@ -366,7 +366,9 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phas
      vacíos esperando: si no configuró la intensidad o el descanso, esa línea
      no existe. Petición de Andrés, y es lo correcto — un hueco vacío se lee
      como un fallo de la app. */
-  const chips = (vueltas ? [rest] : lapsos ? [] : [textoMeta(ex), cargaQueDecir(ex) || null, rest || null]).filter(Boolean);
+  // «descanso 150 seg», no «150 seg» suelto: junto a «5 reps» una cifra sin nombre se lee como lo que dura el ejercicio.
+  const descansoChip = rest ? `descanso ${rest}` : null;
+  const chips = (vueltas ? [descansoChip] : lapsos ? [] : [textoMeta(ex), cargaQueDecir(ex) || null, descansoChip]).filter(Boolean);
   const kilos = vueltas || lapsos ? null : kilosDe(ex);
   // Lo que se enseña renglón por renglón: las vueltas distintas o los lapsos, cada uno con lo suyo.
   const renglones = vueltas
@@ -530,6 +532,8 @@ const SetGroup = ({
   formatos = null, onFormato = null,
   // Si después de este Set viene otro: solo entonces se enseña el descanso entre Sets (en el último no hay a qué esperar).
   conDescansoDespues = false,
+  // «Iniciar entreno» está arriba de la lista: el reloj de este Set vive ADENTRO del entreno, así que aquí no hay otro botón de inicio.
+  conEntreno = false,
 }) => {
   /* La ficha del ejercicio vive AQUI y no en cada fila, porque para decir
      "Guardar y siguiente" hay que saber cual es el siguiente — y una fila solo
@@ -569,6 +573,10 @@ const SetGroup = ({
   const conReloj = formato ?? formatoDeLapsos;
   const claveFormato = String(group.exercises[0].idx);
   const resultado = conReloj ? (formatos?.[claveFormato] ?? null) : null;
+  /* UNA SOLA PUERTA DE INICIO (Andrés, 9 oct 2026: «está raro que hay un botón que dice "iniciar reloj" y otro que dice "iniciar entreno"»).
+     Con «Iniciar entreno» arriba, el reloj de un AMRAP o de unos lapsos es un paso del entreno y aquí no hay otro botón. Lo que SÍ queda es
+     lo anotado (el resultado, que se puede corregir). Sin el botón de arriba (la sesión ya está terminada), los botones de siempre siguen. */
+  const unaPuerta = conEntreno && !soloLectura;
   const resumen = formato ? resumenDeFormato(formato, count) : (formatoDeLapsos ? 'Lapsos personalizados' : '');
   const hayReloj = formato ? expande(formato, count).length > 0 : !!formatoDeLapsos;
   const tramosDeTrabajoDelSet = formato ? tramosDeTrabajo(formato, count) : (planDeLapsos ?? []).filter((t) => t.tipo === 'trabajo').length;
@@ -579,12 +587,14 @@ const SetGroup = ({
      decía "van juntos" y el corte entre tarjetas decía lo contrario. */
   return (
     <div style={{ marginBottom: 20 }}>
+      {/* Con el resultado anotado o la etiqueta de un formato largo, el encabezado no cabe en un renglón en un teléfono angosto: lo de la
+          derecha pasa DEBAJO, a la derecha, en vez de apretar el título hasta partirlo. */}
       <div style={{
-        display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
-        gap: 10, marginBottom: 8, padding: '0 3px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap',
+        gap: '6px 10px', marginBottom: 8, padding: '0 3px',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <span style={{ fontSize: 15, fontWeight: 800, color: LT.text }}>Serie {setNum}</span>
+          <span style={{ fontSize: 15, fontWeight: 800, color: LT.text, whiteSpace: 'nowrap' }}>Serie {setNum}</span>
           {formato && (
             <span style={{
               fontSize: 11.5, fontWeight: 800, color: LT.blue, background: LT.blueSoft,
@@ -602,14 +612,27 @@ const SetGroup = ({
             </span>
           )}
         </div>
-        {!formato && rondasQueDecir(rondas) && (
-          <span style={{ fontSize: 12.5, color: LT.text2, fontWeight: 600, flexShrink: 0, ...NUM_STYLE }}>
-            Se repite {rondasQueDecir(rondas)} veces
-          </span>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: '4px 8px', marginLeft: 'auto' }}>
+          {unaPuerta && conReloj && resultado && (
+            <button
+              type="button" onClick={() => setAnotando(true)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4, border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 12, fontWeight: 800,
+                color: LT.mint, background: KP.mintSoft, padding: '4px 9px', borderRadius: 7, touchAction: 'manipulation', ...NUM_STYLE,
+              }}
+            >
+              <Check size={12} strokeWidth={3.5} /> {textoDeResultado(resultado)}
+            </button>
+          )}
+          {!formato && rondasQueDecir(rondas) && (
+            <span style={{ fontSize: 12.5, color: LT.text2, fontWeight: 600, ...NUM_STYLE }}>
+              Se repite {rondasQueDecir(rondas)} veces
+            </span>
+          )}
+        </div>
       </div>
 
-      {conReloj && (hayReloj || resultado || !soloLectura) && (
+      {conReloj && !unaPuerta && (hayReloj || resultado || !soloLectura) && (
         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px 12px', margin: '0 3px 10px' }}>
           {hayReloj && !soloLectura && (
             <button
@@ -651,12 +674,6 @@ const SetGroup = ({
         </div>
       )}
 
-      {!formato && typeLabel && (
-        <div style={{ fontSize: 11.5, color: LT.text3, marginBottom: 8, padding: '0 3px', fontWeight: 600 }}>
-          Alterna los ejercicios sin descanso completo entre ellos
-        </div>
-      )}
-
       <div style={{
         background: LT.surface, border: `1px solid ${LT.border}`,
         borderRadius: 16, overflow: 'hidden',
@@ -688,13 +705,11 @@ const SetGroup = ({
             repertoire={rep || { name: ex.name }}
             medias={medias}
             perfil={profile}
-            serie={setNum}
             sinDescanso={!!formato}
             posicion={fichaEn + 1}
             total={group.exercises.length}
             onCerrar={() => setFichaEn(null)}
             onSiguiente={() => setFichaEn(fichaEn + 1)}
-            onOmitir={() => setFichaEn(fichaEn + 1)}
           />
         );
       })()}
@@ -1125,7 +1140,7 @@ const CuerpoDelDia = ({
                     sessionData={ejerciciosAnotados} sessionKey={selectedId}
                     onUpdate={(idx, data) => setExerciseData(idx, data)}
                     oneRMs={oneRMs} sessionsData={sessionsData}
-                    formatos={sessionData.formatos} onFormato={setFormato} />
+                    formatos={sessionData.formatos} onFormato={setFormato} conEntreno={!selectedCompleted} />
                 );
               })}
             </>
@@ -1160,7 +1175,7 @@ const CuerpoDelDia = ({
               sessionData={ejerciciosAnotados} sessionKey={selectedId}
               onUpdate={(idx, data) => setExerciseData(idx, data)}
               oneRMs={oneRMs} sessionsData={sessionsData}
-              formatos={sessionData.formatos} onFormato={setFormato} />
+              formatos={sessionData.formatos} onFormato={setFormato} conEntreno={!selectedCompleted} />
           );
         });
         const lista = <>{botonDelEntreno()}{sets}</>;
@@ -1301,16 +1316,10 @@ const WeekDetail = ({
   miDia, onVolverAMiDia, onHacerEsteDia, onDiaVisto,
 }) => {
   const idDeSesion = useIdDeSesion();
-  const { kind, estructura, phases: PLAN } = usePlan();
-  const esRutina = kind === 'weekly';
+  const { estructura, phases: PLAN } = usePlan();
   // "Varias semanas": se dice la semana de corrido y no la fase.
   const deCorrido = estructura === 'semanas';
   const semanaDeCorrido = deCorrido ? (semanaGlobal(PLAN, phase.id, week.num) ?? week.num) : null;
-  /* Los días OFF no cuentan: no se "completa" un descanso. Un día con dos entradas (mañana y tarde)
-     cuenta UNA vez, y va hecho cuando lo están las dos. */
-  const entrenables = juntaPorDia(enOrdenDeSemana(week.days)).filter(({ day }) => !esDescanso(day));
-  const completedCount = entrenables
-    .filter(({ hermanas }) => hermanas.every(({ idx }) => sessionsData[idDeSesion(phase.id, week.num, idx)]?.completed)).length;
 
   /* Abre en el día de hoy; si hoy no entrena, en el primero de la semana.
      `dayIdx` gana cuando se llega desde la hoja del programa: ahí la persona
@@ -1370,23 +1379,14 @@ const WeekDetail = ({
           AHORA el título es la sesión, debajo va una línea gris que dice dónde
           estás y que ya NO se toca, y para moverte por el programa está la
           hoja que se abre desde el final de la pantalla. */}
+      {/* SIN LA LÍNEA GRIS bajo el título. Aquí iba «Esta semana · 1/5 días» (y «Semana 3 de 8 · …»). Andrés, 9 oct 2026: «letritas grises que no
+          sirven de nada»; dónde va en el programa lo dice la hoja del programa y los días hechos, la tira de abajo. */}
       <h1 style={{
-        fontSize: 21, fontWeight: 800, color: LT.text, margin: '0 0 3px',
+        fontSize: 21, fontWeight: 800, color: LT.text, margin: '0 0 14px',
         lineHeight: 1.15, letterSpacing: -0.4, paddingRight: 52,
       }}>
         {hermanas.length > 2 ? `${hermanas.length} sesiones` : (agrupadas ? 'Doble sesión' : selectedDayName)}
       </h1>
-
-      <div style={{
-        fontSize: 11.5, fontWeight: 700, color: LT.text3, marginBottom: 12,
-        letterSpacing: 0.2, paddingRight: 52, ...NUM_STYLE,
-      }}>
-        {esRutina
-          ? `Esta semana · ${completedCount}/${pluralS(entrenables.length, 'día')}`
-          : deCorrido
-            ? `Semana ${semanaDeCorrido} de ${semanasDelPlan(PLAN)} · ${completedCount}/${pluralS(entrenables.length, 'día')}`
-            : `${phase.name || phase.fullName} · ${phase.mode === 'microcycle' ? 'Microciclo' : `Semana ${week.num} de ${phase.weeks}`} · ${completedCount}/${pluralS(entrenables.length, 'día')}`}
-      </div>
 
       {week.emph && (
         <div style={{
@@ -1651,7 +1651,6 @@ const FuenteDelDia = ({ fuente, store, setStore, oneRMs, partes, autor, abiertas
 const PlanUnificado = ({
   programas, store, setStore, oneRMs, vista, semanaActual, filtro, onFiltro, autores, onVerPrograma, onClaveVista, foco,
 }) => {
-  const { kind, estructura, phases: PLAN } = usePlan();
   const dias = useMemo(() => semanaUnificada(programas, store, { vista }), [programas, store, vista]);
   const visibles = useCallback(
     (d) => d.fuentes.filter((f) => !filtro || autorDe(f.programa) === filtro),
@@ -1683,15 +1682,6 @@ const PlanUnificado = ({
     });
     return () => cancelAnimationFrame(cuadro);
   }, [foco, primera]);
-  const reales = dias.flatMap((d) => visibles(d)).filter((f) => !f.descanso);
-  const hechas = reales.filter((f) => f.hecha).length;
-  const fase = PLAN.find((f) => f.id === vista?.faseId);
-  const semana = fase?.weekData?.find((w) => w.num === vista?.semana);
-  const ubicacion = !fase || !semana ? null
-    : kind === 'weekly' ? 'Esta semana'
-      : estructura === 'semanas'
-        ? `Semana ${semanaGlobal(PLAN, fase.id, semana.num) ?? semana.num} de ${semanasDelPlan(PLAN)}`
-        : `${fase.name || fase.fullName} · ${fase.mode === 'microcycle' ? 'Microciclo' : `Semana ${semana.num} de ${fase.weeks}`}`;
   const nombreDia = weekdayLabel(dia.clave);
   const titulo = semanaActual && dia.esHoy
     ? `Hoy · ${nombreDia}`
@@ -1700,17 +1690,11 @@ const PlanUnificado = ({
   return (
     <div style={{ padding: '14px 18px 110px', background: LT.bg, minHeight: '100svh', fontFamily: FONT }}>
       <h1 style={{
-        fontSize: 21, fontWeight: 800, color: LT.text, margin: '0 0 3px',
+        fontSize: 21, fontWeight: 800, color: LT.text, margin: '0 0 14px',
         lineHeight: 1.15, letterSpacing: -0.4, paddingRight: 52,
       }}>
         {titulo}
       </h1>
-      <div style={{
-        fontSize: 11.5, fontWeight: 700, color: LT.text3, marginBottom: 12,
-        letterSpacing: 0.2, paddingRight: 52, ...NUM_STYLE,
-      }}>
-        {[ubicacion, reales.length ? `${hechas}/${reales.length} ${reales.length === 1 ? 'sesión' : 'sesiones'}` : null].filter(Boolean).join(' · ')}
-      </div>
 
       <FiltroDeAutor autores={autores} filtro={filtro} onFiltro={onFiltro} style={{ marginBottom: 12 }} />
 
@@ -1868,8 +1852,7 @@ const CursorSelector = ({ current, sessionsData, onSelect, onClose }) => {
           borderBottom: `1px solid ${T.border}`,
         }}>
           <div>
-            <Caption color={T.accent} style={{ marginBottom: 4 }}>Cambiar sesión actual</Caption>
-            <div style={{ fontSize: 13, color: T.text2 }}>Elige fase, semana y día</div>
+            <Caption color={T.accent}>Cambiar sesión actual</Caption>
           </div>
           <button onClick={onClose} style={{
             background: T.bg3, border: 'none', width: 32, height: 32, borderRadius: '50%',
@@ -2485,13 +2468,11 @@ const WellnessView = ({ wellness, setWellness, enHoja = false }) => {
               <div style={{ fontSize: 17, fontWeight: 700, color: T.text, marginBottom: 4, lineHeight: 1.25 }}>
                 {todayScore >= 7 ? 'Listo para entrenar' : todayScore >= 5 ? 'Considera reducir carga' : 'Recuperación prioridad'}
               </div>
-              <div style={{ fontSize: 13, color: T.text2, lineHeight: 1.5 }}>Puntaje compuesto de tus 4 indicadores diarios.</div>
             </div>
           </div>
         ) : (
           <>
             <h1 style={{ fontSize: 32, fontWeight: 800, color: T.text, margin: 0, lineHeight: 1.05, letterSpacing: -0.8 }}>¿Cómo estás hoy?</h1>
-            <div style={{ marginTop: 8, fontSize: 14, color: T.text2 }}>Completa los 4 indicadores abajo para ver tu puntaje.</div>
           </>
         )}
       </div>
@@ -2506,19 +2487,18 @@ const WellnessView = ({ wellness, setWellness, enHoja = false }) => {
 
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 14, color: T.text, marginBottom: 4, fontWeight: 500 }}>Variabilidad cardiaca</div>
-            <div style={{ fontSize: 11, color: T.text3, marginBottom: 8 }}>Medida con app (HRV4Training, Elite HRV, Whoop, Oura). En milisegundos.</div>
+            <div style={{ fontSize: 11, color: T.text3, marginBottom: 8 }}>Medida con app (HRV4Training, Elite HRV, Whoop, Oura)</div>
             <Input value={dayData.hrv ?? ''} onChange={v => updateDay('hrv', v ? parseFloat(v) : null)} placeholder="—" type="number" suffix="ms" />
           </div>
 
           <div>
             <div style={{ fontSize: 14, color: T.text, marginBottom: 4, fontWeight: 500 }}>Pulso en reposo</div>
-            <div style={{ fontSize: 11, color: T.text3, marginBottom: 8 }}>Medido en ayunas al despertar. En pulsaciones por minuto.</div>
+            <div style={{ fontSize: 11, color: T.text3, marginBottom: 8 }}>Medido en ayunas al despertar</div>
             <Input value={dayData.rhr ?? ''} onChange={v => updateDay('rhr', v ? parseFloat(v) : null)} placeholder="—" type="number" suffix="bpm" />
           </div>
         </Card>
 
         <Card style={{ marginBottom: 14 }}>
-          <Caption style={{ marginBottom: 14 }}>4 indicadores · escala 0 a 10</Caption>
           <Slider label="Sueño" hint="¿Qué tan bien dormiste anoche? 0 mal · 10 excelente"
             value={dayData.sleep} onChange={v => updateDay('sleep', v)} color={T.info} />
           <Slider label="Fatiga" hint="0 sin fatiga · 10 exhausto"
@@ -2580,7 +2560,7 @@ const OneRMView = ({ oneRMs, ponRM, enHoja = false }) => {
         {/* En la hoja, el título «1RM» ya lo dice la cabecera: no se repite. */}
         {!enHoja && <Caption color={T.text3} style={{ marginBottom: 6 }}>Tus máximos</Caption>}
         {!enHoja && <h1 style={{ fontSize: 36, fontWeight: 800, color: T.text, margin: 0, lineHeight: 1.05, letterSpacing: -1 }}>1RM</h1>}
-        <div style={{ marginTop: enHoja ? 0 : 8, fontSize: 14, color: T.text2 }}>El plan usa estos para calcular las cargas. Recalibra al inicio de cada fase.</div>
+        <div style={{ marginTop: enHoja ? 0 : 8, fontSize: 14, color: T.text2 }}>El plan usa estos para calcular las cargas.</div>
       </div>
 
       <div style={{ padding: '0 20px' }}>

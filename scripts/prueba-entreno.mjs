@@ -4,7 +4,7 @@
 //   node scripts/prueba-entreno.mjs
 import assert from 'node:assert/strict';
 import {
-  MAX_PASOS, rondasDelSet, deporteDelTipo, pasosDeLaSesion, leeAvance, iniciaEntreno, marcaListo, saltaPaso, vuelveAtras, masDescanso,
+  MAX_PASOS, FORMATO_DE_LAPSOS, rondasDelSet, deporteDelTipo, pasosDeLaSesion, leeAvance, iniciaEntreno, marcaListo, saltaPaso, vuelveAtras, masDescanso,
   terminaEntreno, reabreEntreno, vistaDelEntreno, empiezaPaso, quitaCronometro, cuentaDe,
 } from '../src/lib/entreno.js';
 import { ponFormato } from '../src/lib/formatos.js';
@@ -186,7 +186,7 @@ const lower = {
   assert.deepEqual(pasosDeLaSesion({ cat: 'gym', exercises: abierto }).pasos[0].termina, { por: 'boton' });
 }
 
-/* ---- Cardio por lapsos: cada lapso es un paso, con su ritmo y su descanso ---- */
+/* ---- Cardio por lapsos: un Set con varios tramos es UN paso con reloj; sus lapsos viven dentro, con su ritmo y su descanso ---- */
 {
   const lapsos = [
     { reps: '800', unidad: 'm', intensity: '4:34-5:00 min/km', descanso: '' },
@@ -198,9 +198,27 @@ const lower = {
   };
   const plan = pasosDeLaSesion(dia);
   assert.equal(plan.deporte, 'correr');
-  assert.equal(tipos(plan), 'E E D60 E E D60 E E D60 E E E');
-  assert.equal(plan.total, 9);
-  const [l1, l2, descanso] = plan.pasos;
+  assert.equal(tipos(plan), 'R E', 'el Set en lapsos es un paso con reloj; la caminata, un ejercicio');
+  assert.equal(plan.total, 2);
+  const [reloj, caminata] = plan.pasos;
+  assert.equal(reloj.clave, 'r.0');
+  assert.equal(reloj.deLapsos, true);
+  assert.deepEqual(reloj.formato, FORMATO_DE_LAPSOS);
+  assert.equal(reloj.resumen, 'Correr');
+  assert.equal(reloj.rondas, 4);
+  assert.equal(reloj.claveFormato, '0');
+  assert.equal(caminata.clave, '1.1.0');
+  // El reloj de siempre corre estos tramos: 2 lapsos × 4 rondas, el descanso solo tras el 2.º lapso, y ninguno al final.
+  assert.equal(reloj.tramos.filter((t) => t.tipo === 'trabajo').length, 8);
+  assert.equal(reloj.tramos.filter((t) => t.tipo === 'descanso').length, 3);
+  assert.equal(reloj.tramos[reloj.tramos.length - 1].tipo, 'trabajo');
+  assert.deepEqual(reloj.miembros[0].lapsos.map((l) => l.texto), ['800 m', '2 min']);
+  assert.deepEqual(reloj.miembros[0].lapsos.map((l) => l.descanso), ['', '60 seg']);
+  assert.deepEqual(reloj.termina, { por: 'boton' }, 'con un lapso en metros no hay tiempo total');
+  // Los pasos de cada lapso se guardan DENTRO (para el reloj de pulsera), con su ritmo y su descanso.
+  const internos = reloj.pasosInternos;
+  assert.equal(tipos({ pasos: internos }), 'E E D60 E E D60 E E D60 E E', 'sin el descanso de después del Set: ese es un paso de afuera');
+  const [l1, l2, descanso] = internos;
   assert.deepEqual(l1.termina, { por: 'distancia', min: 800, max: 800, valor: 800, cantidad: '800', unidad: 'm' });
   assert.deepEqual(l1.meta, { tipo: 'ritmo', texto: '4:34-5:00 min/km', min: 274, max: 300 }, 'ritmo en segundos por km');
   assert.deepEqual([l1.lapso, l1.lapsos, l1.vuelta, l1.vueltas], [1, 2, 1, 4]);
@@ -210,6 +228,22 @@ const lower = {
   assert.equal(descanso.seg, 60);
   assert.equal(descanso.entre, 'rondas', 'tras el último lapso de la vuelta');
   assert.equal(descanso.clave, 'd.0.1.1');
+  // Un solo lapso y una sola ronda NO necesita reloj: es un ejercicio más.
+  const uno = pasosDeLaSesion({ cat: 'correr', exercises: [ex('Correr', { sets: '1', ...parcheDeLapsos([lapsos[0]]) })] });
+  assert.equal(tipos(uno), 'E');
+  assert.equal(uno.pasos[0].clave, '0.1.0');
+  // Dos ejercicios con un lapso cada uno, una sola ronda: dos tramos de trabajo, así que reloj.
+  const dos = pasosDeLaSesion({ cat: 'correr', exercises: [ex('Remo', { set: 1, ...parcheDeLapsos([lapsos[0]]) }), ex('Correr', { set: 1, ...parcheDeLapsos([lapsos[1]]) })] });
+  assert.equal(tipos(dos), 'R');
+  assert.equal(dos.pasos[0].resumen, 'Remo + Correr');
+  // El descanso entre Sets va DESPUÉS del reloj, igual que con un AMRAP.
+  const con = pasosDeLaSesion({ cat: 'correr', exercises: [ex('Correr', { sets: '2', descansoSet: '3 min', ...parcheDeLapsos(lapsos) }), ex('Caminata', { reps: '5', unidad: 'min' })] });
+  assert.equal(tipos(con), 'R D180 E');
+  assert.equal(con.pasos[1].clave, 'd.r.0');
+  assert.equal(con.pasos[1].entre, 'sets');
+  // Marcar el paso con reloj lo da por hecho, y el siguiente es el descanso.
+  const hecho = marcaListo(con, iniciaEntreno(undefined, 1000), 2000);
+  assert.equal(vistaDelEntreno(con, hecho, 2000).actual.clave, 'd.r.0');
   // Una distancia en km y en yardas se pasa a metros.
   const km = pasosDeLaSesion({ cat: 'correr', exercises: [ex('Rodaje', { reps: '5', unidad: 'km', intensity: 'Zona 2' }), ex('Sprint', { reps: '40', unidad: 'yd' })] });
   assert.deepEqual(km.pasos[0].termina, { por: 'distancia', min: 5000, max: 5000, valor: 5000, cantidad: '5', unidad: 'km' });

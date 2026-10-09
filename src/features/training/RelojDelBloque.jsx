@@ -242,7 +242,6 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
                 <span>Sigue: {etiquetaDeTramo(proximo)}{proximo.texto ? ` · ${proximo.texto}` : proximo.seg ? ` · ${textoDeTiempo(proximo.seg)}` : ''}</span>
               )}
               {enCurso && v.topeRestanteSeg !== null && <span>Tope: {relojTexto(v.topeRestanteSeg)}</span>}
-              {abierto && v.fase === 'corriendo' && <span>Toca «Listo» cuando termines</span>}
             </div>
           </div>
 

@@ -66,12 +66,17 @@ const lower = {
   assert.deepEqual(c.pasos[0].termina, { por: 'distancia', valor: 800 });
   assert.deepEqual(c.pasos[0].meta, { tipo: 'ritmoPorKm', min: 274, max: 300 });
   assert.deepEqual([c.pasos[0].lapso, c.pasos[0].lapsos], [1, 2]);
+  // Para el atleta es UN paso con reloj; para un reloj de pulsera, la sucesión de sus lapsos, cada uno con su clave bajo la del paso de la app.
+  assert.equal(c.pasos[0].clave, 'r.0#0.1.0');
+  assert.equal(c.pasos[0].desde, 'r.0', 'sale del paso con reloj de la app');
+  assert.ok(c.pasos.slice(0, -1).every((p) => p.desde === 'r.0'), 'todos los pasos del Set en lapsos, descansos incluidos, salen de él');
+  assert.equal(c.pasos[c.pasos.length - 1].desde, undefined, 'el rodaje es un paso de la app, sin `desde`');
   assert.deepEqual(c.pasos[1].termina, { por: 'tiempo', valor: 120 });
   assert.deepEqual(c.pasos[1].meta, { tipo: 'zonaFC', min: 3, max: 3 });
   const rodaje = c.pasos[c.pasos.length - 1];
   assert.deepEqual(rodaje.termina, { por: 'distancia', valor: 5000 });
   assert.deepEqual(rodaje.meta, { tipo: 'potencia', min: 250, max: 250 });
-  assert.deepEqual(c.grupos, [{ serie: 1, repeticiones: 4, opcionales: 0, desde: 0, hasta: c.pasos.findIndex((p) => p.clave === '0.4.1') }]);
+  assert.deepEqual(c.grupos, [{ serie: 1, repeticiones: 4, opcionales: 0, desde: 0, hasta: c.pasos.findIndex((p) => p.clave === 'r.0#0.4.1') }]);
 }
 
 /* ---- Un reloj de formato se vuelve sus tramos ---- */

@@ -1,6 +1,6 @@
 import { leeCantidad, leeCarga, leeDescanso, textoMeta } from './medidas.js';
 import { formatoDeMiembros, nombreDeFormato, resumenDeFormato, segundosTotales } from './formatos.js';
-import { comoEjercicio, hayLapsos, lapsoDeLinea, lapsosDe } from './lapsos.js';
+import { comoEjercicio, cuantoDeLapso, hayLapsos, lapsoDeLinea, lapsosDe, tramosDeLapsos } from './lapsos.js';
 import { ejercicioDeVuelta, vueltasDe } from './porVuelta.js';
 import { groupIntoSets, setTag } from './setsDeUnaSesion.js';
 
@@ -15,7 +15,9 @@ import { groupIntoSets, setTag } from './setsDeUnaSesion.js';
  *
  * LOS PASOS. Una sesión se vuelve una lista plana y ordenada. Cada paso es de un tipo:
  *   · 'ejercicio' — hacer algo, una vez (una vuelta de un ejercicio, un lapso de cardio);
- *   · 'reloj'     — un Set con formato (AMRAP, EMOM, Tabata…) entero: lo corre el reloj de siempre (`RelojDelBloque`);
+ *   · 'reloj'     — un Set con formato (AMRAP, EMOM, Tabata…) entero, o un Set en «Lapsos personalizados» con más de un tramo de
+ *                   trabajo: lo corre el reloj de siempre (`RelojDelBloque`). Una sola puerta: el atleta no ve dos botones de inicio;
+ *                   un Set en lapsos guarda aquí dentro SUS pasos (`pasosInternos`) para el contrato de los relojes de pulsera;
  *   · 'nota'      — un día que el coach escribió solo con notas («Sprint 6 x 30 yd»): cada nota es un paso;
  *   · 'descanso'  — esperar, SOLO si el coach lo escribió (`descanso` entre vueltas, `descansoSet` entre Sets).
  *
@@ -63,6 +65,8 @@ import { groupIntoSets, setTag } from './setsDeUnaSesion.js';
  */
 
 const VERSION = 1;
+/** El «formato» de un Set en lapsos personalizados: no trae pasos (salen de los lapsos de cada ejercicio), solo dice cómo se anota el resultado. */
+export const FORMATO_DE_LAPSOS = { id: 'lapsos', pasos: [], vueltas: 1, tope: null, turnan: false, anota: 'cumplido' };
 // Topes de sensatez, los mismos que ya tienen el reloj de formatos y el de lapsos: un dato malformado no debe armar 12 000 pasos.
 export const MAX_PASOS = 2000;
 const MAX_RONDAS = 60;
@@ -185,6 +189,9 @@ export function deporteDelTipo(day) {
 
 const nombreDe = (ex) => texto(ex?.name) || 'Ejercicio';
 
+// El título de un Set con reloj en lapsos: los nombres de sus ejercicios («Correr», «Remo + Correr», «Remo + Correr + 2 más»).
+const tituloDeNombres = (nombres) => (nombres.length <= 2 ? nombres.join(' + ') : `${nombres.slice(0, 2).join(' + ')} + ${nombres.length - 2} más`);
+
 const pasoDeDescanso = (lectura, entre, despuesDe) => ({
   clave: `d.${despuesDe}`,
   tipo: 'descanso',
@@ -287,54 +294,102 @@ export function pasosDeLaSesion(day, { deporte } = {}) {
     const enLapsos = hayLapsos(exs);
     if (exs.length > 1 || rondas.max > 1 || enLapsos) salida.simple = false;
 
-    for (let r = 1; r <= rondas.max; r += 1) {
-      miembros.forEach(({ ex, idx }, e) => {
-        const cadaVuelta = enLapsos ? null : vueltasDe(ex);
-        const delaVuelta = cadaVuelta ? ejercicioDeVuelta(ex, cadaVuelta[r - 1] ?? cadaVuelta[cadaVuelta.length - 1]) : ex;
-        const lapsos = enLapsos ? (lapsosDe(ex) ?? [lapsoDeLinea(ex)]) : [null];
-        lapsos.forEach((lapso, k) => {
-          const ef = lapso ? comoEjercicio(ex, lapso) : delaVuelta;
-          const clave = `${idx}.${r}.${k}`;
-          const ultimoDelSet = r === rondas.max && e === exs.length - 1 && k === lapsos.length - 1;
-          const nota = texto(ex.notes);
-          const cue = texto(ex.cue);
-          mete({
-            clave,
-            tipo: 'ejercicio',
-            ...enLaSerie,
-            encabezado: r === 1 && e === 0 && k === 0 ? delSet : '',
-            ejercicioEnSerie: e + 1,
-            vuelta: r,
-            vueltas: rondas.max,
-            vueltasMin: rondas.min,
-            opcional: r > rondas.min,
-            lapso: k + 1,
-            lapsos: lapsos.length,
-            idx,
-            nombre: nombreDe(ex),
-            ...(nota ? { nota } : null),
-            ...(cue ? { cue } : null),
-            porLado: leeCantidad(ef).porLado,
-            texto: textoMeta(ef) ?? '',
-            termina: terminaDe(ef),
-            meta: metaDe(ef),
-            intensidad: 'trabajo',
-          });
-          // Qué descanso viene después: el del Set entero al acabarlo; si no, el del lapso o el del ejercicio.
-          let descanso = null;
-          if (ultimoDelSet) {
-            if (descansoSet) descanso = { lectura: descansoSet, entre: 'sets' };
-          } else {
-            const lectura = lecturaDeDescanso(lapso ? lapso.descanso : ex.descanso);
-            if (lectura) {
-              const finDeVuelta = e === exs.length - 1 && k === lapsos.length - 1;
-              descanso = { lectura, entre: finDeVuelta ? 'rondas' : (k === lapsos.length - 1 ? 'ejercicios' : 'lapsos') };
+    // Los pasos de las vueltas del Set: uno por ejercicio (y por lapso), con sus descansos. `entra` recibe cada uno; `conDescansoDelSet`
+    // dice si el descanso de DESPUÉS del Set va entre ellos.
+    const armaVueltas = (entra, conDescansoDelSet) => {
+      for (let r = 1; r <= rondas.max; r += 1) {
+        miembros.forEach(({ ex, idx }, e) => {
+          const cadaVuelta = enLapsos ? null : vueltasDe(ex);
+          const delaVuelta = cadaVuelta ? ejercicioDeVuelta(ex, cadaVuelta[r - 1] ?? cadaVuelta[cadaVuelta.length - 1]) : ex;
+          const lapsos = enLapsos ? (lapsosDe(ex) ?? [lapsoDeLinea(ex)]) : [null];
+          lapsos.forEach((lapso, k) => {
+            const ef = lapso ? comoEjercicio(ex, lapso) : delaVuelta;
+            const clave = `${idx}.${r}.${k}`;
+            const ultimoDelSet = r === rondas.max && e === exs.length - 1 && k === lapsos.length - 1;
+            const nota = texto(ex.notes);
+            const cue = texto(ex.cue);
+            entra({
+              clave,
+              tipo: 'ejercicio',
+              ...enLaSerie,
+              encabezado: r === 1 && e === 0 && k === 0 ? delSet : '',
+              ejercicioEnSerie: e + 1,
+              vuelta: r,
+              vueltas: rondas.max,
+              vueltasMin: rondas.min,
+              opcional: r > rondas.min,
+              lapso: k + 1,
+              lapsos: lapsos.length,
+              idx,
+              nombre: nombreDe(ex),
+              ...(nota ? { nota } : null),
+              ...(cue ? { cue } : null),
+              porLado: leeCantidad(ef).porLado,
+              texto: textoMeta(ef) ?? '',
+              termina: terminaDe(ef),
+              meta: metaDe(ef),
+              intensidad: 'trabajo',
+            });
+            // Qué descanso viene después: el del Set entero al acabarlo; si no, el del lapso o el del ejercicio.
+            let descanso = null;
+            if (ultimoDelSet) {
+              if (descansoSet && conDescansoDelSet) descanso = { lectura: descansoSet, entre: 'sets' };
+            } else {
+              const lectura = lecturaDeDescanso(lapso ? lapso.descanso : ex.descanso);
+              if (lectura) {
+                const finDeVuelta = e === exs.length - 1 && k === lapsos.length - 1;
+                descanso = { lectura, entre: finDeVuelta ? 'rondas' : (k === lapsos.length - 1 ? 'ejercicios' : 'lapsos') };
+              }
             }
-          }
-          if (descanso) mete(pasoDeDescanso(descanso.lectura, descanso.entre, clave));
+            if (descanso) entra(pasoDeDescanso(descanso.lectura, descanso.entre, clave));
+          });
         });
+      }
+    };
+
+    /* UN SET EN LAPSOS PERSONALIZADOS con más de un tramo de trabajo (varios lapsos o varias rondas) lo corre el reloj de siempre, igual que un
+       AMRAP: así el día tiene UNA sola puerta de inicio («Iniciar entreno») y el reloj vive adentro. Con un solo tramo es un ejercicio más
+       (un «Correr 2 km a Z2» no necesita reloj). Los pasos de cada lapso no se pierden: quedan en `pasosInternos`, que es lo que un reloj
+       de pulsera necesita (ver `lib/entrenoCanonico.js`). Las rondas del reloj son las mínimas: lo opcional («5-6 veces») no lo corre. */
+    const tramos = enLapsos ? tramosDeLapsos(exs, rondas.min) : [];
+    if (enLapsos && tramos.filter((t) => t.tipo === 'trabajo').length > 1) {
+      const clave = `r.${miembros[0].idx}`;
+      const nombres = miembros.map(({ ex }) => nombreDe(ex));
+      const pasosInternos = [];
+      armaVueltas((p) => { pasosInternos.push(p); }, false);
+      const total = tramos.every((t) => t.seg !== null) ? tramos.reduce((suma, t) => suma + t.seg, 0) : 0;
+      mete({
+        clave,
+        tipo: 'reloj',
+        ...enLaSerie,
+        encabezado: delSet,
+        ejercicioEnSerie: 1,
+        vuelta: 1,
+        vueltas: 1,
+        vueltasMin: 1,
+        opcional: false,
+        nombre: nombres.join(' + '),
+        resumen: tituloDeNombres(nombres),
+        formato: FORMATO_DE_LAPSOS,
+        deLapsos: true,
+        rondas: rondas.min,
+        tramos,
+        claveFormato: String(miembros[0].idx),
+        miembros: miembros.map(({ ex, idx }) => ({
+          idx,
+          nombre: nombreDe(ex),
+          texto: '',
+          carga: '',
+          lapsos: (lapsosDe(ex) ?? [lapsoDeLinea(ex)]).map((l) => ({ texto: cuantoDeLapso(ex, l) ?? '', carga: texto(l.intensity), descanso: texto(l.descanso) })),
+        })),
+        intensidad: 'trabajo',
+        termina: total ? { por: 'tiempo', min: total, max: total, valor: total } : { por: 'boton' },
+        pasosInternos,
       });
+      if (descansoSet) mete(pasoDeDescanso(descansoSet, 'sets', clave));
+      return;
     }
+    armaVueltas(mete, true);
   });
 
   return acaba(salida);
