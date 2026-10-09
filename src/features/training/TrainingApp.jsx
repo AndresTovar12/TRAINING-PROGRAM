@@ -39,6 +39,7 @@ import {
 } from '@/lib/programas';
 import FichaEjercicio from '@/features/training/FichaEjercicio';
 import TarjetaDeSesion from '@/features/training/TarjetaDeSesion';
+import BotonDelEntreno from '@/features/training/BotonDelEntreno';
 import Portada from '@/components/Portada';
 import EtiquetasDeSesion from '@/components/EtiquetasDeSesion';
 import BotonEntendido from '@/components/BotonEntendido';
@@ -1019,6 +1020,14 @@ const CuerpoDelDia = ({
     ...prev, completed: !prev?.completed,
     completedAt: !prev?.completed ? new Date().toISOString() : null
   }));
+  /* «Iniciar entreno»: abre el MODO ENTRENO de esta sesión (ver `BotonDelEntreno`). Una sesión que dice «repite el martes» se entrena con
+     los ejercicios del martes (`ejercicios`), pero lo que se anota queda en SU lugar. */
+  const botonDelEntreno = (ejercicios) => (
+    <BotonDelEntreno
+      dia={selectedDay} ejercicios={ejercicios} aspecto={aspectoDelTipo(selectedDay)} registro={sessionData}
+      onRegistro={(cambio) => updateSession(selectedId, cambio)} onFormato={setFormato} sesionId={selectedId} oneRMs={oneRMs}
+    />
+  );
   /* Con equipo, la sesión de un día de UNA sola sesión también es una tarjeta, igual
      a las de un doble: así la del fisio no queda como un bloque distinto al lado de
      las del coach. Sus datos se guardan igual que siempre (por ejercicio y un solo
@@ -1107,6 +1116,7 @@ const CuerpoDelDia = ({
                   {notasDelDia.map((n) => n.text).join(' ')}
                 </span>
               </div>
+              {botonDelEntreno(repite.day.exercises)}
               {groups.map((g, gi) => {
                 if (!g.isNote) setNum += 1;
                 return (
@@ -1149,7 +1159,8 @@ const CuerpoDelDia = ({
               formatos={sessionData.formatos} onFormato={setFormato} />
           );
         });
-        return entarjetas ? tarjetaDelDia(sets) : sets;
+        const lista = <>{botonDelEntreno()}{sets}</>;
+        return entarjetas ? tarjetaDelDia(lista) : lista;
       })()}
 
       {quiere('sesiones') && selectedDay.notes && !selectedDay.exercises && !descansoPuro && (
