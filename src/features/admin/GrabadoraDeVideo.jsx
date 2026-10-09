@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, SwitchCamera, Loader2, Mic, MicOff } from 'lucide-react';
+import BotonEntendido from '@/components/BotonEntendido';
+import { useAvisosVistos } from '@/lib/useAvisosVistos';
 import { FONT, NUM_STYLE } from '@/lib/theme';
 
 /**
@@ -102,34 +104,53 @@ function tieneImagen(blob) {
   });
 }
 
-/* LA CÁMARA SE QUEDA ABIERTA UN RATITO, Y EL MICRÓFONO NO SE ABRE HASTA GRABAR.
+/* UN SOLO PERMISO, Y NADA QUE SE PIDA A MEDIO GRABAR.
 
-   Andrés, 9 oct 2026: «cada vez que voy a grabar me pide los permisos del iPhone y me quita la música». Eran dos cosas:
+   Andrés, 9 oct 2026 (segunda vuelta): «ahora me pidió DOS permisos… y cada vez que cierro y abro la app me vuelve a pedir
+   los permisos de la cámara… y después de darle permiso como que glitchea».
 
-   1. PERMISOS. Cada vez que se abría esta pantalla se pedía la cámara de cero y al cerrarla se apagaba, así que cada
-      repetición —grabar, no gustar, volver a grabar; grabar el ejemplo y luego la explicación— volvía a preguntar. Ahora la
-      cámara que se obtuvo se GUARDA aquí, fuera del componente, y se apaga sola a los pocos segundos de cerrar la pantalla (o
-      en cuanto la app se va al fondo). Dentro de ese ratito, volver a abrir la cámara es instantáneo y no pregunta nada.
+   Lo que se aprendió:
+   · Pedir la cámara al abrir y el micrófono al grabar son DOS preguntas. Pedidos juntos, iOS hace UNA («cámara y
+     micrófono»). Así que si se va a grabar con sonido, se piden juntos al abrir.
+   · Activar el micrófono con la vista previa ya corriendo es lo que «glitchea»: al prender el audio, iOS cambia la sesión de
+     sonido del teléfono y Safari pausa los videos de la página, incluida la vista previa. Por eso el micrófono se decide ANTES
+     de que arranque la vista previa, y durante la grabación no se pide nada más.
+   · Un video de EJEMPLO (el ejercicio en el gimnasio, con música) arranca con el micrófono APAGADO: no se pide, y la música
+     sigue (el micrófono es lo que la corta; la cámara sola no). Una EXPLICACIÓN (el coach hablando) arranca con el
+     micrófono prendido. El botón de arriba lo cambia y se acuerda, por tipo de video.
+   · CUÁNTAS VECES PREGUNTA SAFARI no depende de la app: pregunta una vez por cada carga de la página, salvo que la
+     persona ponga «Permitir» en los ajustes del sitio. Por eso, la vez que pregunta, sale un aviso con el camino exacto.
 
-   2. LA MÚSICA. Pedir el micrófono (`audio: true`) activa la sesión de audio del teléfono y iOS corta lo que suene de fondo,
-      aunque todavía no estés grabando nada. La cámara sola NO toca el audio. Por eso la vista previa va SIN micrófono y el
-      micrófono se pide hasta el momento de grabar, y se suelta en cuanto se para. Con el micrófono apagado (el botón de
-      arriba) la música no se corta nunca. */
+   Y la cámara obtenida se GUARDA aquí, fuera del componente, un rato después de cerrar la pantalla: grabar otra vez enseguida
+   (repetir, o el ejemplo y luego la explicación) es instantáneo y no vuelve a preguntar. */
 const GRACIA_MS = 45_000;
 let guardada = null;   // { stream, lado, reloj }
 let pendiente = null;  // { lado, promesa }: una cámara que se está pidiendo ahora mismo
-// Cuántas pantallas están usando la cámara guardada. Solo cuando nadie la usa empieza la cuenta para apagarla.
+// Cuántas pantallas tienen la cámara reservada. Solo cuando ninguna la tiene empieza la cuenta para apagarla.
 let usos = 0;
+// Si en ESTA carga de la página el navegador ya preguntó por la cámara (y entonces va a preguntar en cada carga).
+let pregunto = null;
 
-const estaViva = (stream) => !!stream && stream.getVideoTracks().some((t) => t.readyState === 'live');
+const viva = (t) => t.readyState === 'live';
+const estaViva = (stream) => !!stream && stream.getVideoTracks().some(viva);
+const conMicro = (stream) => !!stream && stream.getAudioTracks().some(viva);
 
 function apagaLaCamara() {
-  if (guardada) {
-    window.clearTimeout(guardada.reloj);
-    guardada.stream.getTracks().forEach((t) => t.stop());
-    guardada = null;
-  }
-  usos = 0;
+  if (!guardada) return;
+  window.clearTimeout(guardada.reloj);
+  guardada.stream.getTracks().forEach((t) => t.stop());
+  guardada = null;
+}
+
+// Quita el micrófono de la cámara guardada: el teléfono le devuelve el sonido a quien lo tenía.
+function sueltaElMicrofono() {
+  if (!guardada) return;
+  guardada.stream.getAudioTracks().forEach((t) => { t.stop(); guardada.stream.removeTrack(t); });
+}
+
+function reservaLaCamara() {
+  usos += 1;
+  if (guardada) { window.clearTimeout(guardada.reloj); guardada.reloj = null; }
 }
 
 // Una pantalla deja de usar la cámara: si ya nadie la usa, aguanta un rato por si se vuelve a grabar.
@@ -140,35 +161,52 @@ function sueltaLaCamara() {
   guardada.reloj = window.setTimeout(apagaLaCamara, GRACIA_MS);
 }
 
-async function tomaLaCamara(lado) {
-  let stream;
-  if (guardada && guardada.lado === lado && estaViva(guardada.stream)) {
-    stream = guardada.stream;
-  } else if (pendiente && pendiente.lado === lado) {
-    // Dos pantallas la piden a la vez (pasa al reabrir deprisa): comparten la misma, no se piden dos.
-    stream = await pendiente.promesa;
-  } else {
-    apagaLaCamara();
-    const promesa = navigator.mediaDevices.getUserMedia({
-      /* `ideal` y no `exact`: si el teléfono no tiene 1080p, se queda con lo
-         más cercano en vez de fallar y dejar al coach sin grabar. */
-      video: {
-        facingMode: { ideal: lado },
-        width: { ideal: 1920 },
-        height: { ideal: 1080 },
-        frameRate: { ideal: 30 },
-      },
-      audio: false,
-    }).then((nueva) => {
-      guardada = { stream: nueva, lado, reloj: null };
-      return nueva;
-    }).finally(() => { if (pendiente?.promesa === promesa) pendiente = null; });
-    pendiente = { lado, promesa };
-    stream = await promesa;
-  }
-  if (guardada) { window.clearTimeout(guardada.reloj); guardada.reloj = null; }
-  usos += 1;
+/* ¿Va a preguntar el navegador? Se mira antes de pedir (donde el navegador lo dice) y, si no lo dice, se deduce de lo que
+   tardó la respuesta: un permiso ya dado contesta al instante; una pregunta en pantalla tarda lo que tarde el dedo. */
+async function elNavegadorPregunta() {
+  try {
+    const r = await navigator.permissions?.query?.({ name: 'camera' });
+    if (r?.state === 'granted') return false;
+    if (r?.state === 'prompt') return true;
+  } catch { /* este navegador no lo dice: se deduce del tiempo */ }
+  return null;
+}
+
+const PEDIDO_DE_VIDEO = {
+  /* `ideal` y no `exact`: si el teléfono no tiene 1080p, se queda con lo más cercano en vez de fallar y dejar al coach
+     sin grabar. */
+  facingMode: null, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 },
+};
+
+async function pideAlNavegador(pedido) {
+  const antes = performance.now();
+  const sabe = pregunto === null ? await elNavegadorPregunta() : null;
+  const stream = await navigator.mediaDevices.getUserMedia(pedido);
+  if (pregunto === null) pregunto = sabe ?? (performance.now() - antes > 350);
   return stream;
+}
+
+/**
+ * La cámara (y el micrófono, si `conAudio`), guardada o nueva. Si la guardada sirve pero le falta el micrófono, se le
+ * agrega; si le sobra, se le quita. Dos pantallas que la piden a la vez comparten la misma petición.
+ */
+async function tomaLaCamara(lado, conAudio) {
+  if (guardada && guardada.lado === lado && estaViva(guardada.stream)) {
+    if (conAudio && !conMicro(guardada.stream)) {
+      const micro = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micro.getAudioTracks().forEach((t) => guardada.stream.addTrack(t));
+    } else if (!conAudio && conMicro(guardada.stream)) {
+      sueltaElMicrofono();
+    }
+    return guardada.stream;
+  }
+  if (pendiente && pendiente.lado === lado) { await pendiente.promesa; return tomaLaCamara(lado, conAudio); }
+  apagaLaCamara();
+  const promesa = pideAlNavegador({ video: { ...PEDIDO_DE_VIDEO, facingMode: { ideal: lado } }, audio: conAudio })
+    .then((nueva) => { guardada = { stream: nueva, lado, reloj: null }; return nueva; })
+    .finally(() => { if (pendiente?.promesa === promesa) pendiente = null; });
+  pendiente = { lado, promesa };
+  return promesa;
 }
 
 // Con la app en el fondo no hay motivo para tener la cámara prendida: si estaba solo esperando, se apaga.
@@ -177,18 +215,28 @@ if (typeof document !== 'undefined') {
 }
 
 const LLAVE_SONIDO = 'tl:grabar:sonido';
-const leeSonido = () => { try { return window.localStorage.getItem(LLAVE_SONIDO) !== 'no'; } catch { return true; } };
+const CLAVE_DEL_AVISO = 'aviso:permiso-de-camara';
+// Lo que se eligió para este tipo de video; sin elección, un ejemplo va sin micrófono y lo demás con él.
+function leeSonido(proposito) {
+  try {
+    const v = window.localStorage.getItem(`${LLAVE_SONIDO}:${proposito ?? ''}`);
+    if (v === 'si' || v === 'no') return v === 'si';
+  } catch { /* sin almacenamiento */ }
+  return proposito !== 'ejemplo';
+}
+const esAppDeInicio = () => typeof navigator !== 'undefined' && navigator.standalone === true;
 
-export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
+/** `proposito`: 'ejemplo' o 'explicacion' (ver `lib/proposito.js`); decide si el micrófono arranca prendido. */
+export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, proposito }) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const recRef = useRef(null);
   const trozosRef = useRef([]);
+  const { listo: avisosListos, visto, marcar } = useAvisosVistos();
 
-  /* Los avisos al de fuera viven en una ref, NO en las dependencias del efecto
-     que abre la cámara. Llegan como funciones escritas al vuelo, así que cada
-     render del formulario trae unas nuevas: en las dependencias, eso reabría
-     la cámara una y otra vez —y cada reapertura parpadea y pide permiso. */
+  /* Los avisos al de fuera viven en una ref, NO en las dependencias del efecto que abre la cámara. Llegan como funciones
+     escritas al vuelo, así que cada render del formulario trae unas nuevas: en las dependencias, eso reabría la cámara una y
+     otra vez, y cada reapertura parpadea y pide permiso. */
   const avisos = useRef({ onListo, onSinCamara });
   useEffect(() => { avisos.current = { onListo, onSinCamara }; });
 
@@ -197,84 +245,87 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
   const [grabando, setGrabando] = useState(false);
   const [segundos, setSegundos] = useState(0);
   const [preparando, setPreparando] = useState(true);
+  // La vista previa ya pinta: hasta entonces se queda el velo con el giro, sin un negro de por medio.
+  const [pintando, setPintando] = useState(false);
   const [err, setErr] = useState('');
-  // Si se graba con el micrófono. Apagado, el teléfono no toca el audio y la música sigue sonando.
-  const [conSonido, setConSonido] = useState(leeSonido);
+  const [conSonido, setConSonido] = useState(() => leeSonido(proposito));
   const [aviso, setAviso] = useState('');
-  const audioRef = useRef(null); // el micrófono, solo mientras se graba
+  const [preguntaCadaVez, setPreguntaCadaVez] = useState(false);
 
-  /* Soltar la cámara al irse: queda un ratito guardada (ver arriba). `apagaYa` es para cuando algo falló: ahí no se
-     guarda nada, para que el siguiente intento empiece limpio. */
-  const suelta = useCallback(() => {
-    // Solo suelta quien la tenía: cerrar con el botón y desmontar la pantalla llaman las dos, y no deben restar dos veces.
-    if (!streamRef.current) return;
-    streamRef.current = null;
-    sueltaLaCamara();
-  }, []);
-  const apagaYa = useCallback(() => {
-    streamRef.current = null;
-    apagaLaCamara();
-  }, []);
-  // El micrófono nunca se guarda: en cuanto no hace falta, se suelta.
-  const sueltaElMicro = useCallback(() => {
-    audioRef.current?.getTracks().forEach((t) => t.stop());
-    audioRef.current = null;
-  }, []);
+  // Esta pantalla tiene la cámara reservada mientras esté abierta; al cerrarla, queda guardada un rato.
+  useEffect(() => { reservaLaCamara(); return sueltaLaCamara; }, []);
 
-  /* Cambiar de cámara reinicia la espera AQUÍ y no dentro del efecto: poner el
-     estado nada más entrar al efecto dispara un render de más, y además el
-     único momento en que hay que volver a esperar es justo este. */
   const cambiaDeLado = () => {
     setPreparando(true);
+    setPintando(false);
     setErr('');
     setLado((l) => (l === 'environment' ? 'user' : 'environment'));
   };
 
+  const cambiaSonido = () => {
+    const nuevo = !conSonido;
+    setConSonido(nuevo);
+    setAviso('');
+    try { window.localStorage.setItem(`${LLAVE_SONIDO}:${proposito ?? ''}`, nuevo ? 'si' : 'no'); } catch { /* sin almacenamiento */ }
+  };
+
+  // Si al prender el micrófono Safari pausó la vista previa, se vuelve a echar a andar.
+  const reanudaVista = () => { videoRef.current?.play?.().catch(() => {}); };
+
   useEffect(() => {
     let vivo = true;
-
     (async () => {
       if (!navigator.mediaDevices?.getUserMedia || !mejorFormato()) {
         if (vivo) avisos.current.onSinCamara?.('Este navegador no sabe grabar por su cuenta.');
         return;
       }
+      let stream;
       try {
-        const stream = await tomaLaCamara(lado);
-        // Si la pantalla ya se cerró mientras esperaba el permiso, la cámara se queda guardada (no se pierde el permiso).
-        if (!vivo) { sueltaLaCamara(); return; }
-        streamRef.current = stream;
-        if (videoRef.current) videoRef.current.srcObject = stream;
-        const ajustes = stream.getVideoTracks()[0]?.getSettings() ?? {};
-        if (ajustes.width && ajustes.height) setMedidas({ w: ajustes.width, h: ajustes.height });
-        setPreparando(false);
+        stream = await tomaLaCamara(lado, conSonido);
       } catch (e) {
         if (!vivo) return;
         const negado = /NotAllowed|Permission/i.test(String(e?.name || e));
-        if (negado) {
-          setErr('No diste permiso para usar la cámara. Puedes darlo en los ajustes del navegador.');
-          setPreparando(false);
-        } else {
-          avisos.current.onSinCamara?.('No se pudo abrir la cámara de la app.');
+        /* Sin permiso para el micrófono no se pierde la cámara: se vuelve a pedir sin él y se graba mudo. */
+        if (negado && conSonido) {
+          try {
+            stream = await tomaLaCamara(lado, false);
+            setConSonido(false);
+            setAviso('Sin permiso para el micrófono: se graba sin sonido.');
+          } catch { stream = null; }
+        }
+        if (!stream) {
+          if (negado) {
+            setErr('No diste permiso para usar la cámara. Puedes darlo en los ajustes del navegador.');
+            setPreparando(false);
+          } else {
+            avisos.current.onSinCamara?.('No se pudo abrir la cámara de la app.');
+          }
+          return;
         }
       }
+      if (!vivo) return;
+      streamRef.current = stream;
+      const v = videoRef.current;
+      if (v && v.srcObject !== stream) v.srcObject = stream;
+      reanudaVista();
+      const ajustes = stream.getVideoTracks()[0]?.getSettings() ?? {};
+      if (ajustes.width && ajustes.height) setMedidas({ w: ajustes.width, h: ajustes.height });
+      setPreparando(false);
+      if (pregunto) setPreguntaCadaVez(true);
     })();
-
     return () => { vivo = false; };
-  }, [lado]);
+  }, [lado, conSonido]);
 
-  // Al cerrar la pantalla —por donde sea— la cámara queda guardada un rato y el micrófono se suelta ya.
-  useEffect(() => () => { sueltaElMicro(); suelta(); }, [suelta, sueltaElMicro]);
+  // Por si el navegador nunca avisa que ya pinta: a los dos segundos se quita el velo de todos modos.
+  useEffect(() => {
+    if (preparando || pintando) return undefined;
+    const t = window.setTimeout(() => setPintando(true), 2000);
+    return () => window.clearTimeout(t);
+  }, [preparando, pintando]);
 
-  /* La página de atrás se queda quieta mientras la cámara está abierta. Sin
-     esto, un dedo que resbala arrastra el formulario que hay debajo y la
-     cámara se va de sitio: parece que la app se movió sola. */
-  /* QUE LA PAGINA NO SE MUEVA. En iOS, `overflow: hidden` NO basta: Safari
-     sigue dejando arrastrar. Andrés lo comprobó: "aún así puedo escrollear, y
-     no se debe poder en un momento donde se supone que estás grabando".
-
-     Lo que sí funciona es congelar el cuerpo con `position: fixed` y
-     recordar dónde estaba, para devolverlo al cerrar. Es feo, y es la única
-     forma fiable en iOS. */
+  /* QUE LA PÁGINA NO SE MUEVA mientras la cámara está abierta. En iOS, `overflow: hidden` NO basta: Safari sigue dejando
+     arrastrar. Andrés lo comprobó: "aún así puedo escrollear, y no se debe poder en un momento donde se supone que estás
+     grabando". Lo que sí funciona es congelar el cuerpo con `position: fixed` y recordar dónde estaba. */
   useEffect(() => {
     const y = window.scrollY;
     const b = document.body;
@@ -300,74 +351,50 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
     return () => window.clearInterval(t);
   }, [grabando]);
 
-  async function arranca() {
+  function arranca() {
     const stream = streamRef.current;
     if (!stream) return;
     setAviso('');
-
-    /* El micrófono se pide AQUÍ, al empezar a grabar, y no al abrir la cámara (ver arriba). Si no se da el permiso, no se
-       cancela nada: se graba el video sin sonido y se avisa. */
-    let entrada = stream;
-    if (conSonido) {
-      try {
-        const micro = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioRef.current = micro;
-        entrada = new MediaStream([...stream.getVideoTracks(), ...micro.getAudioTracks()]);
-      } catch {
-        setAviso('No diste permiso al micrófono: se grabará sin sonido.');
-      }
-    }
-    if (!streamRef.current) { sueltaElMicro(); return; }
-
-    const formato = mejorFormato(entrada.getAudioTracks().length > 0);
-    if (!formato) { sueltaElMicro(); setErr('Este navegador no sabe grabar video.'); return; }
+    // Nada se pide aquí: la cámara y el micrófono (si va) ya están desde que se abrió la pantalla.
+    const formato = mejorFormato(conMicro(stream));
+    if (!formato) { setErr('Este navegador no sabe grabar video.'); return; }
 
     trozosRef.current = [];
     const alto = medidas?.h ?? 1080;
     let rec;
     try {
-      rec = new MediaRecorder(entrada, { mimeType: formato.mime, videoBitsPerSecond: ritmo(alto) });
+      rec = new MediaRecorder(stream, { mimeType: formato.mime, videoBitsPerSecond: ritmo(alto) });
     } catch {
-      sueltaElMicro();
       setErr('Este navegador rechazó grabar en ese formato.');
       return;
     }
 
     rec.ondataavailable = (e) => { if (e.data?.size) trozosRef.current.push(e.data); };
-    // Sin esto, un fallo a mitad de la grabación no se ve por ningún lado y el
-    // coach se queda mirando el cronómetro correr sobre nada.
-    rec.onerror = () => { sueltaElMicro(); setGrabando(false); setErr('Se cortó la grabación. Inténtalo otra vez.'); };
+    // Sin esto, un fallo a mitad de la grabación no se ve por ningún lado y el coach se queda mirando el cronómetro.
+    rec.onerror = () => { setGrabando(false); setErr('Se cortó la grabación. Inténtalo otra vez.'); };
     rec.onstop = async () => {
-      // El micrófono se suelta apenas termina la grabación, para que el teléfono le devuelva el audio a quien lo tenía.
-      sueltaElMicro();
-      /* El tipo va SIN `;codecs=…`: el servidor compara contra una lista
-         cerrada ('video/mp4', 'video/webm') y con la coletilla no coincide,
-         así que la subida se rechazaría con "tipo no permitido". */
+      /* El tipo va SIN `;codecs=…`: el servidor compara contra una lista cerrada ('video/mp4', 'video/webm') y con la
+         coletilla no coincide. */
       const blob = new Blob(trozosRef.current, { type: formato.base });
-      /* NUNCA entregar un archivo vacío. Si algo falló, lo que sale es un
-         video de 0 bytes que sube sin protestar y luego no se reproduce: un
-         ejercicio con su video roto es peor que uno sin video. */
+      /* NUNCA entregar un archivo vacío: un video de 0 bytes sube sin protestar y luego no se reproduce. */
       if (!blob.size) {
         setGrabando(false);
         setErr('No se grabó nada. Inténtalo otra vez, o usa la cámara del teléfono.');
         return;
       }
-      /* Y NUNCA entregar un video que no se puede ver.
-         Un archivo puede pesar, traer sus dos pistas y aun así no tener imagen
-         decodificable: probando esto en el navegador de escritorio salió justo
-         eso —pesaba 18 KB, duraba 4,2 s, sonaba, y medía 0 × 0—. Subirlo
-         habría dejado un ejercicio con el video roto y sin forma de saberlo.
-         Así que se comprueba aquí, y si no tiene imagen se devuelve al coach a
-         la cámara del teléfono: peor calidad, pero un video que existe. */
+      /* Y NUNCA entregar un video que no se puede ver (pesaba, sonaba, y medía 0 × 0: pasó). Si no tiene imagen se
+         devuelve al coach a la cámara del teléfono: peor calidad, pero un video que existe. */
       const sirve = await tieneImagen(blob);
       if (!sirve) {
         setGrabando(false);
         setErr('La grabación salió sin imagen. Se abrirá la cámara del teléfono.');
-        apagaYa();
+        streamRef.current = null;
+        apagaLaCamara();
         window.setTimeout(() => avisos.current.onSinCamara?.(''), 1800);
         return;
       }
-      suelta();
+      // Grabado: el micrófono se suelta ya (la música vuelve); la cámara queda guardada por si se repite.
+      sueltaElMicrofono();
       avisos.current.onListo(new File([blob], `grabacion.${formato.ext}`, { type: formato.base }));
     };
 
@@ -376,7 +403,6 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
     try {
       rec.start(1000);
     } catch {
-      sueltaElMicro();
       setErr('No se pudo empezar a grabar.');
       return;
     }
@@ -389,42 +415,20 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
     recRef.current = null;
   }
 
-  /* LA CAMARA SE DIBUJA EN EL CUERPO DE LA PAGINA, NO AQUI DENTRO.
-     Andrés: "puedo ver la app atrás de la cámara, en el contorno... esa es
-     otra razón que me indica que no se desplegó una cámara como tal, sino que
-     es una cámara adentro del navegador".
+  const cierra = () => {
+    sueltaElMicrofono();
+    streamRef.current = null;
+    onCancelar();
+  };
 
-     La causa: el formulario que la abre lleva `.animate-fade-in`, y esa
-     animación TERMINA en `transform: translateY(0)` y se queda ahí, porque su
-     `fill-mode` es `both`. Un `transform`, aunque valga cero, convierte a ese
-     elemento en el marco de referencia de todo lo que sea `position: fixed`
-     por dentro. O sea: la cámara no se estaba midiendo contra la pantalla,
-     sino contra la caja del formulario. De ahí la app asomándose alrededor.
+  const velo = preparando || !pintando || !!err;
+  const avisoDePermiso = preguntaCadaVez && !grabando && avisosListos && !visto(CLAVE_DEL_AVISO);
 
-     Con un portal la cámara cuelga directamente del `body` y ya no hay
-     antepasado que pueda encerrarla. No depende de qué animación tenga la
-     pantalla que la abrió, ni hoy ni cuando se agregue otra. */
+  /* LA CÁMARA SE DIBUJA EN EL CUERPO DE LA PÁGINA (portal): así ningún antepasado con `transform` la encierra. Y mide
+     `100dvh`, no `inset: 0`: en iOS un `fixed` con `inset: 0` se mide contra el viewport de maqueta y el botón de grabar
+     quedaba debajo de la barra de Safari (Andrés, 24 sep 2026). */
   return createPortal(
     <div style={{
-      /* `100svh` Y NO `inset: 0`. Andrés, 24 sep 2026: "abre como una cámara
-         adentro de Safari, a tal nivel que tengo que hacer scroll para abajo
-         para darle click al punto rojo de record".
-
-         La causa: en iOS, un elemento `fixed` con `inset: 0` se mide contra el
-         viewport de MAQUETA, que es más alto que lo que de verdad se ve cuando
-         Safari tiene sus barras puestas. El fondo del recuadro —justo donde
-         vive el botón de grabar— quedaba por debajo de la barra de abajo. De
-         ahí el scroll para alcanzar un botón que debería estar siempre a la
-         mano.
-
-         `dvh` es la altura del viewport que se ve AHORA MISMO, con las barras
-         puestas o escondidas. Con `svh` —el viewport más chico— el botón sí
-         entraba, pero al esconderse las barras quedaba un hueco abajo por el
-         que se asomaba la app: otra de las cosas que le decían a Andrés que
-         esto era "una cámara dentro del navegador".
-
-         Con el cuerpo congelado (abajo) las barras ya no cambian de estado a
-         media grabación, así que `dvh` tampoco se mueve. */
       position: 'fixed', top: 0, left: 0, right: 0, height: '100dvh',
       zIndex: 5000, background: '#000',
       display: 'flex', flexDirection: 'column', fontFamily: FONT,
@@ -433,13 +437,10 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
         ref={videoRef}
         autoPlay
         playsInline
-        /* Muteado a propósito: el micrófono SÍ se graba, pero sacarlo por la
-           bocina mientras grabas es un acople instantáneo. */
+        /* Muteado a propósito: el micrófono SÍ se graba, pero sacarlo por la bocina mientras grabas es un acople. */
         muted
-        /* El respaldo de la medida. `getSettings()` de la pista no siempre trae
-           ancho y alto —depende del navegador y de la fuente—, y el elemento de
-           video sí los sabe en cuanto lee los metadatos. Sin esto, la etiqueta
-           de "1080p" se quedaba en blanco justo cuando más sirve. */
+        onPlaying={() => setPintando(true)}
+        /* El respaldo de la medida: `getSettings()` no siempre trae ancho y alto, y el elemento sí los sabe. */
         onLoadedMetadata={(e) => {
           const v = e.currentTarget;
           if (v.videoWidth && v.videoHeight) setMedidas({ w: v.videoWidth, h: v.videoHeight });
@@ -451,12 +452,7 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
         position: 'absolute', top: 'calc(12px + env(safe-area-inset-top))', left: 12, right: 12,
         display: 'flex', alignItems: 'center', gap: 10,
       }}>
-        <button
-          type="button"
-          onClick={() => { sueltaElMicro(); suelta(); onCancelar(); }}
-          aria-label="Cerrar la cámara"
-          style={redondo}
-        >
+        <button type="button" onClick={cierra} aria-label="Cerrar la cámara" style={redondo}>
           <X size={20} color="#fff" />
         </button>
 
@@ -482,39 +478,26 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
           </span>
         ) : (
           <>
-            {/* El micrófono: apagado, la música del teléfono no se corta. Se acuerda de lo que se eligió. */}
+            {/* El micrófono. Apagado, el teléfono no toca el sonido y la música sigue. Se acuerda por tipo de video. */}
             <button
-              type="button"
-              onClick={() => {
-                const nuevo = !conSonido;
-                setConSonido(nuevo);
-                setAviso('');
-                try { window.localStorage.setItem(LLAVE_SONIDO, nuevo ? 'si' : 'no'); } catch { /* sin almacenamiento */ }
-              }}
-              aria-pressed={!conSonido}
+              type="button" onClick={cambiaSonido} aria-pressed={!conSonido}
               aria-label={conSonido ? 'Grabar sin sonido' : 'Grabar con sonido'}
               style={{ ...redondo, background: conSonido ? 'rgba(0,0,0,0.45)' : '#F5C518' }}
             >
               {conSonido ? <Mic size={19} color="#fff" /> : <MicOff size={19} color="#111318" />}
             </button>
-            <button
-              type="button"
-              onClick={cambiaDeLado}
-              aria-label="Cambiar de cámara"
-              style={redondo}
-            >
+            <button type="button" onClick={cambiaDeLado} aria-label="Cambiar de cámara" style={redondo}>
               <SwitchCamera size={19} color="#fff" />
             </button>
           </>
         )}
       </div>
 
-      {(preparando || err) && (
+      {velo && (
         <div style={{
           position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
           background: 'rgba(0,0,0,0.6)', padding: 24, textAlign: 'center',
-          /* Si la cámara sigue viva, el aviso no debe robarle los toques al
-             botón de grabar: se lee y se vuelve a intentar sin salir. */
+          /* Si la cámara sigue viva, el aviso no debe robarle los toques al botón de grabar. */
           pointerEvents: err && !preparando ? 'none' : 'auto',
         }}>
           {err ? (
@@ -538,6 +521,24 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
         </div>
       )}
 
+      {/* Safari pregunta por la cámara en cada carga de la página, salvo que se le diga «Permitir» para este sitio. Es cosa
+          del navegador, no de la app: lo único que puede hacer la app es decir dónde está ese ajuste, la vez que pasa. */}
+      {avisoDePermiso && (
+        <div style={{
+          position: 'absolute', left: 14, right: 14, bottom: 'calc(132px + env(safe-area-inset-bottom))',
+          background: 'rgba(30,64,224,0.94)', backdropFilter: 'blur(8px)', color: '#fff', borderRadius: 14,
+          padding: '11px 12px 10px', fontSize: 13, fontWeight: 600, lineHeight: 1.4,
+        }}>
+          <b style={{ display: 'block', fontSize: 14, fontWeight: 800, marginBottom: 3 }}>¿Te pregunta cada vez?</b>
+          {esAppDeInicio()
+            ? 'Es iOS, no la app. Para que deje de preguntar: Ajustes del iPhone → Safari → Cámara y Micrófono → Permitir.'
+            : 'Es Safari, no la app. Para que deje de preguntar: toca «AA» junto a la dirección → Ajustes del sitio web → Cámara y Micrófono → Permitir.'}
+          <div style={{ marginTop: 8 }}>
+            <BotonEntendido color="#1E40E0" onClick={() => marcar(CLAVE_DEL_AVISO)} style={{ minHeight: 0, padding: '5px 10px', borderRadius: 9, fontSize: 12.5 }} />
+          </div>
+        </div>
+      )}
+
       <div style={{
         position: 'absolute', left: 0, right: 0,
         bottom: 'calc(26px + env(safe-area-inset-bottom))',
@@ -546,12 +547,12 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
         <button
           type="button"
           onClick={grabando ? para : arranca}
-          disabled={preparando || !!err}
+          disabled={velo}
           aria-label={grabando ? 'Parar de grabar' : 'Grabar'}
           style={{
             width: 78, height: 78, borderRadius: '50%', cursor: 'pointer',
             border: '5px solid rgba(255,255,255,0.85)', background: 'transparent',
-            display: 'grid', placeItems: 'center', opacity: preparando || err ? 0.4 : 1,
+            display: 'grid', placeItems: 'center', opacity: velo ? 0.4 : 1,
           }}
         >
           <span style={{
@@ -566,8 +567,7 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
           {aviso || (grabando ? 'Tócalo otra vez para terminar' : (conSonido ? 'Tócalo para grabar' : 'Tócalo para grabar · sin sonido'))}
         </span>
       </div>
-    </div>
-    ,
+    </div>,
     document.body,
   );
 }

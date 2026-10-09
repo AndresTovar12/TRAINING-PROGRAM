@@ -247,6 +247,7 @@ export default function MediaUpload({
       )}
       {grabadora && (
         <GrabadoraDeVideo
+          proposito={proposito === 'explicacion' ? 'explicacion' : proposito !== undefined ? 'ejemplo' : undefined}
           onListo={(file) => { setGrabadora(false); tomaArchivo(file); }}
           onCancelar={() => setGrabadora(false)}
           /* Sin cámara propia no se deja al coach sin grabar: se cae al atajo
