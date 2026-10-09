@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Check, ChevronLeft, Timer, Minus, Plus, LineChart as LineChartIcon } from 'lucide-react';
+import { Check, ChevronLeft, Timer, Minus, Plus } from 'lucide-react';
 import { LT, FONT, NUM_STYLE } from '@/lib/theme';
 import { videosParaAtleta, portadaParaAtleta } from '@/lib/videos';
 import TarjetaDeVideo from '@/features/training/TarjetaDeVideo';
@@ -40,8 +40,8 @@ import { usePalabras } from '@/contexts/PalabrasContext';
 export default function FichaEjercicio({
   ex, exData, onUpdate, sessionsData, sessionKey, kind, oneRMs, plan,
   repertoire, medias, perfil,
-  serie, posicion, total, sinDescanso = false,
-  onCerrar, onSiguiente, onOmitir,
+  posicion, total, sinDescanso = false,
+  onCerrar, onSiguiente,
 }) {
   const unidad = perfil?.unidad_peso || 'kg';
   const u = etiquetaUnidad(unidad);
@@ -155,8 +155,8 @@ export default function FichaEjercicio({
   };
 
   const esUltimo = posicion >= total;
-  // "Meta: 30 yd", no "Meta: 30 yd reps": lo dice la unidad del ejercicio.
-  const meta = [textoMeta(exV), intensidad].filter(Boolean).join(' · ');
+  // «30 yd», no «30 yd reps»: lo dice la unidad del ejercicio. Con el 1RM, los kilos de ese porcentaje van en la misma pastilla.
+  const meta = [textoMeta(exV), intensidad, carga && !carga.falta ? carga.texto : null].filter(Boolean).join(' · ');
   // En un Set de un solo ejercicio, el botón grande lleva de una vuelta a la siguiente. Con varios
   // ejercicios (bi-serie) sigue pasando al siguiente ejercicio, que cae en la misma vuelta.
   const quedanVueltas = !!vueltas && total === 1 && iv < vueltas.length - 1;
@@ -196,10 +196,6 @@ export default function FichaEjercicio({
             >
               <ChevronLeft size={22} />
             </button>
-            <span style={{ fontSize: 12.5, fontWeight: 700, color: LT.text2, ...NUM_STYLE }}>
-              {/* «Ejercicio 1 de 1» no dice nada: solo se cuenta cuando hay más de uno. */}
-              Serie {serie}{total > 1 ? ` · Ejercicio ${posicion} de ${total}` : ''}
-            </span>
           </div>
 
           <div style={{ padding: '6px 18px 0' }}>
@@ -231,7 +227,7 @@ export default function FichaEjercicio({
                 display: 'inline-block', marginTop: 10, padding: '6px 13px', borderRadius: 999,
                 background: LT.blueSoft, color: LT.blue, fontSize: 13, fontWeight: 700, ...NUM_STYLE,
               }}>
-                {vueltas ? `Vuelta ${iv + 1}` : 'Meta'}: {meta}
+                {vueltas ? `Vuelta ${iv + 1}: ${meta}` : meta}
               </span>
             )}
           </div>
@@ -270,25 +266,21 @@ export default function FichaEjercicio({
         )}
 
         {descanso && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 9, marginBottom: 14,
-            fontSize: 16, color: LT.text2, fontWeight: 600,
-          }}>
-            <Timer size={18} color={LT.text3} style={{ flexShrink: 0 }} />
-            Descansa {descanso} entre cada serie
+          <div style={{ marginBottom: 16 }}>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, background: LT.surface2,
+              fontSize: 13, fontWeight: 700, color: LT.text2, ...NUM_STYLE,
+            }}>
+              <Timer size={15} style={{ flexShrink: 0 }} /> Descanso {descanso}
+            </span>
           </div>
         )}
 
         {/* Antes este bloque entero dependía de `conPeso`: en un ejercicio de
             peso corporal la ficha se quedaba con el video y NADA debajo, y el
             atleta no tenía dónde decir cuántas hizo. Ahora las reps se anotan
-            siempre y el peso solo cuando lleva carga. */}
-        <div style={{
-          fontSize: 13.5, color: LT.text3, fontWeight: 600, margin: '18px 0 10px',
-        }}>
-          {vueltas ? 'Registra cada vuelta' : 'Registra lo que hiciste'}
-        </div>
-
+            siempre y el peso solo cuando lleva carga. Sin rótulo gris encima
+            («Registra lo que hiciste»): las casillas ya lo dicen (Andrés, 9 oct 2026). */}
         {vueltas && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 12 }}>
             {vueltas.map((_, j) => {
@@ -323,9 +315,6 @@ export default function FichaEjercicio({
               <span style={{ color: LT.text3, fontWeight: 600 }}>
                 {enTiempo ? 'que aguantaste' : 'que hiciste'}
               </span>
-            </div>
-            <div style={{ fontSize: 13, color: LT.text3, fontWeight: 600, marginTop: 3 }}>
-              {textoMeta(exV) && !lapsos ? `Meta: ${textoMeta(exV)}` : 'Lo que te haya salido'}
             </div>
           </div>
 
@@ -375,11 +364,11 @@ export default function FichaEjercicio({
                 <div style={{ fontSize: 16.5, fontWeight: 800, color: LT.text }}>
                   Peso <span style={{ color: LT.text3, fontWeight: 600 }}>{u}</span>
                 </div>
-                <div style={{ fontSize: 13, color: LT.text3, fontWeight: 600, marginTop: 3 }}>
-                  {pesoPasado
-                    ? `La vez pasada: ${desdeKilos(pesoPasado, unidad)}`
-                    : 'Primera vez que lo registras'}
-                </div>
+                {pesoPasado && (
+                  <div style={{ fontSize: 13, color: LT.text3, fontWeight: 600, marginTop: 3 }}>
+                    La vez pasada: {desdeKilos(pesoPasado, unidad)}
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexShrink: 0 }}>
@@ -401,18 +390,6 @@ export default function FichaEjercicio({
               </div>
             </div>
 
-            {carga && !carga.falta && (
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 7, marginTop: 11,
-                fontSize: 13.5, color: LT.text3, fontWeight: 600, ...NUM_STYLE,
-              }}>
-                <LineChartIcon size={14} style={{ flexShrink: 0 }} />
-                <span>
-                  {textoDePorcentaje(carga.porcentaje)} de tu 1RM de {carga.lift.nombre}:{' '}
-                  <b style={{ color: LT.blue }}>{carga.texto}</b>
-                </span>
-              </div>
-            )}
             {carga?.falta && (
               <PedirUnRM
                 carga={carga} unidad={unidad}
@@ -426,32 +403,20 @@ export default function FichaEjercicio({
       </div>
 
       {/* ---------- Seguir ---------- */}
-      <div style={{ flexShrink: 0, borderTop: `1px solid ${LT.border}`, background: LT.surface }}>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 12, maxWidth: 520, margin: '0 auto',
-          padding: '12px 18px calc(12px + env(safe-area-inset-bottom))',
-        }}>
-        <button
-          type="button"
-          onClick={esUltimo ? onCerrar : onOmitir}
-          style={{
-            border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT,
-            fontSize: 15, fontWeight: 700, color: LT.text2, padding: '12px 6px', flexShrink: 0,
-          }}
-        >
-          {esUltimo ? 'Cerrar' : 'Omitir'}
-        </button>
-        <button
-          type="button"
-          onClick={quedanVueltas ? () => setVuelta(iv + 1) : esUltimo ? onCerrar : onSiguiente}
-          style={{
-            flex: 1, minHeight: 52, borderRadius: 15, border: 'none', cursor: 'pointer',
-            background: LT.blue, color: '#fff', fontFamily: FONT,
-            fontSize: 16, fontWeight: 800,
-          }}
-        >
-          {quedanVueltas ? 'Siguiente vuelta' : esUltimo ? 'Listo' : 'Guardar y siguiente'}
-        </button>
+      {/* Un solo botón (Andrés, 9 oct 2026, con la maqueta): «Omitir» y «Guardar y siguiente» hacían lo mismo —todo se guarda al tocar—, así que
+          queda «Seguir»: al siguiente ejercicio, a la siguiente vuelta o, si no hay más, de vuelta a la lista. */}
+      <div style={{ flexShrink: 0 }}>
+        <div style={{ maxWidth: 520, margin: '0 auto', padding: '10px 18px calc(14px + env(safe-area-inset-bottom))' }}>
+          <button
+            type="button" className="kp-press"
+            onClick={quedanVueltas ? () => setVuelta(iv + 1) : esUltimo ? onCerrar : onSiguiente}
+            style={{
+              width: '100%', minHeight: 58, borderRadius: 18, border: 'none', cursor: 'pointer', color: '#fff', fontFamily: FONT, fontSize: 17, fontWeight: 800,
+              background: `linear-gradient(140deg, ${LT.blue}, ${LT.blueDk})`, boxShadow: '0 8px 22px rgba(30,64,224,0.24)', touchAction: 'manipulation',
+            }}
+          >
+            {quedanVueltas ? 'Siguiente vuelta' : 'Seguir'}
+          </button>
         </div>
       </div>
     </div>

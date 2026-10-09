@@ -51,8 +51,8 @@ Para que el progreso de siempre (peso, repeticiones, récords, la IA) siga funci
 
 | Paso | Clave | Ejemplo |
 |---|---|---|
-| Ejercicio / lapso | `<idx>.<vuelta>.<lapso>` | `0.3.0` = ejercicio en la posición 0 de la lista del día, vuelta 3, lapso 0 |
-| Set con reloj (AMRAP, EMOM…) | `r.<idx>` | `r.2` |
+| Ejercicio | `<idx>.<vuelta>.<lapso>` | `0.3.0` = ejercicio en la posición 0 de la lista del día, vuelta 3 (el lapso es siempre 0: un ejercicio con varios lapsos es un Set con reloj) |
+| Set con reloj (AMRAP, EMOM… o varios lapsos) | `r.<idx>` | `r.2` |
 | Nota (día de puras notas) | `n.<idx>` | `n.1` |
 | Descanso | `d.<clave del paso anterior>` | `d.0.1.0` |
 
@@ -81,6 +81,7 @@ Para que el progreso de siempre (peso, repeticiones, récords, la IA) siga funci
 - **`meta.tipo`**: `porcentaje1RM` · `peso` (kg) · `intensidad` (%) · `rpe` · `rir` · `ritmoPorKm` (segundos por km) · `zonaFC` · `potencia` (W) · `ritmoNadoPor100m` (segundos) · `texto` (lo que no encaja, tal cual lo escribió el coach). Los kilos que salen de «78 %» dependen del 1RM del atleta y **no** viajan aquí.
 - **`tipo`**: `trabajo` · `recuperacion` · `nota`. Reservados: `calentamiento` y `enfriamiento` (hoy el editor no los marca).
 - **Un reloj de formato** (AMRAP, EMOM, Tabata, intervalos…) sale ya **expandido en sus tramos con tiempo** (`clave` = `r.2#0`, `r.2#1`…, y `desde` = `r.2`); un reloj solo entiende pasos con tiempo.
+- **Un Set en lapsos personalizados** con más de un tramo de trabajo (varios lapsos o varias rondas) es, para el atleta, UN paso con reloj (`r.<idx>`: una sola puerta de inicio), pero para un reloj de pulsera es la sucesión de sus lapsos: sale **abierto en sus pasos de trabajo y descanso, con su distancia, su ritmo y su zona** (`clave` = `r.0#0.1.0`, `r.0#d.0.1.1`…, y `desde` = `r.0`). Con un solo lapso y una sola ronda no lleva reloj: es un ejercicio más.
 - **`grupos`**: pista para plegar repeticiones. El Set de la `serie` 1 se repite 5 veces y ocupa los pasos 0 a 8 (incluidos los descansos *entre* vueltas); el descanso de *después* del Set (índice 9) queda fuera. Con vueltas opcionales («5-6 veces») `opcionales` las cuenta y van al final. Un adaptador que no pliega usa la lista plana.
 - **`deporte`**: `fuerza`, `velocidad`, `correr`, `bici`, `natacion`, `yoga`, `movilidad`, `recuperacion`, `futbol`, `pruebas`, `equipo`, `terapia`, `clase`, o `null` en un tipo propio del coach (habría que preguntar una vez «¿qué mide el reloj?»).
 

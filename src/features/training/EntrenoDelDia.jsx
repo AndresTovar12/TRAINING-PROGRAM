@@ -7,7 +7,7 @@ import { preparaAudio, pitido } from '@/lib/pitidos';
 import { isLoadedExercise } from '@/lib/training-utils';
 import { cargaPorPorcentaje } from '@/lib/cargaPorcentaje';
 import { aKilos, desdeKilos, etiquetaUnidad } from '@/lib/unidades';
-import { FORMATOS, tramosDeTrabajo, vistaDe } from '@/lib/formatos';
+import { FORMATOS, textoDeResultado, tramosDeTrabajo, vistaDe } from '@/lib/formatos';
 import { anotadoEnVuelta } from '@/lib/porVuelta';
 import { palabrasDelEntreno } from '@/lib/entrenoPalabras';
 import { FUNCIONES } from '@/lib/funciones';
@@ -15,7 +15,8 @@ import {
   cuentaDe, empiezaPaso, marcaListo, masDescanso as sumaDescanso, pasosDeLaSesion, quitaCronometro, saltaPaso, terminaEntreno, vistaDelEntreno, vuelveAtras,
 } from '@/lib/entreno';
 import {
-  camposDeCambiar, cantidadPlaneada, cifrasDelPaso, exDataTrasListo, lineaDeAvance, segmentosDeAvance, textoDeLoPlaneado, tiempoTotal,
+  camposDeCambiar, cantidadPlaneada, cifrasDelPaso, exDataTrasListo, puntosDeVueltas, segmentosDeAvance, serieALaVista, tarjetasDeLaLista, textoDeLoPlaneado,
+  tiempoTotal,
 } from '@/lib/entrenoDatos';
 import Portada from '@/components/Portada';
 import RelojDelBloque from '@/features/training/RelojDelBloque';
@@ -153,6 +154,20 @@ export default function EntrenoDelDia({
     );
   };
 
+  // La foto o el video de un ejercicio, para su fila en «Ver todo»: `{ nodo, conVideo }`, o `null` si no tiene (entonces va su número).
+  const miniaturaDeFila = (fila) => {
+    const ex = dia.exercises[fila.idx];
+    const m = ex && !ex.isNote ? medios?.(ex) : null;
+    const v = m?.videos?.[0];
+    if (!m || (!m.portada && !v)) return null;
+    return { nodo: <Portada foto={m.portada} video={v?.url} desde={v?.inicio} hasta={v?.fin} style={{ position: 'absolute', inset: 0 }} />, conVideo: !!m.videos?.length };
+  };
+  // Lo que quedó anotado de un Set con reloj («8 rondas»), o `null`.
+  const resultadoDe = (p) => {
+    const r = registro?.formatos?.[p.claveFormato];
+    return r ? textoDeResultado(r) : null;
+  };
+
   /* ---------- Las acciones: cada una escribe en el registro al instante ---------- */
   const escribe = (cambio) => onRegistro(cambio);
 
@@ -182,7 +197,10 @@ export default function EntrenoDelDia({
     escribe((prev) => ({ ...prev, entreno: saltaPaso(plan, prev?.entreno, t, clave) }));
     setEnfoque(null);
   };
+  // Mirando un paso que se tocó en «Ver todo», «Anterior» regresa a donde iba: asomarse a otro ejercicio no deshace lo hecho.
+  const mirandoOtro = !!enfocado && paso === enfocado;
   const anterior = () => {
+    if (mirandoOtro) { setEnfoque(null); return; }
     escribe((prev) => ({ ...prev, entreno: vuelveAtras(plan, prev?.entreno) }));
     setEnfoque(null);
     setVerFin(false);
@@ -233,18 +251,23 @@ export default function EntrenoDelDia({
     listo();
   };
 
+  // Lo que se dice bajo el título de un Set con reloj: lo que es el formato, o las rondas de unos lapsos.
+  const detalleDelReloj = (p) => (p.deLapsos ? (p.rondas > 1 ? `${p.rondas} rondas` : '') : FORMATOS[vistaDe(p.formato)]?.detalle);
+
   /* ---------- Qué se dibuja ---------- */
   const fondo = enDescanso && aspecto?.fondo ? `${aspecto.fondo}, ${LT.bg}` : LT.bg;
   const segmentos = segmentosDeAvance(plan, vista.estados);
+  // El tiempo total solo se dice al final: mientras se entrena no corre a la vista (Andrés: «nadie se va a detener a leer las letritas grises»).
   const tiempo = tiempoTotal(vista.transcurrido) ?? '';
-  const linea = mostrarFin ? '' : lineaDeAvance(plan, enDescanso ? vista.siguiente : paso);
+  // El paso que toca, o (en un descanso) el que viene: de ahí salen los puntos de las vueltas y lo que se resalta en «Ver todo».
+  const queToca = enDescanso ? vista.siguiente : paso;
+  const serieDelPaso = paso?.tipo === 'ejercicio' ? serieALaVista(plan, vista.estados, paso) : null;
+  const puntosDelPaso = paso?.tipo === 'ejercicio' ? puntosDeVueltas(plan, vista.estados, paso.serie, paso.clave) : [];
 
   const siguienteDeDescanso = enDescanso && vista.siguiente ? {
     nombre: vista.siguiente.tipo === 'reloj' ? vista.siguiente.resumen : vista.siguiente.nombre,
-    detalle: [
-      vista.siguiente.vueltas > 1 ? `Vuelta ${vista.siguiente.vuelta} de ${vista.siguiente.vueltasMin === vista.siguiente.vueltas ? vista.siguiente.vueltas : `${vista.siguiente.vueltasMin}-${vista.siguiente.vueltas}`}` : null,
-      vista.siguiente.tipo === 'reloj' ? null : textoDeLoPlaneado(vista.siguiente, kilosDe(vista.siguiente)),
-    ].filter(Boolean).join(' · '),
+    detalle: vista.siguiente.tipo === 'reloj' ? '' : textoDeLoPlaneado(vista.siguiente, kilosDe(vista.siguiente)),
+    puntos: vista.siguiente.tipo === 'ejercicio' ? puntosDeVueltas(plan, vista.estados, vista.siguiente.serie, vista.siguiente.clave) : [],
   } : null;
 
   const kilosDelPaso = kilosDe(paso);
@@ -284,7 +307,7 @@ export default function EntrenoDelDia({
   } else if (paso.tipo === 'reloj') {
     pantalla = (
       <PantallaDeReloj
-        paso={paso} detalle={FORMATOS[vistaDe(paso.formato)]?.detalle} resultado={resultadoDelReloj} puedeAnterior={vista.puedeAnterior}
+        paso={paso} detalle={detalleDelReloj(paso)} resultado={resultadoDelReloj} puedeAnterior={vista.puedeAnterior || mirandoOtro}
         onIniciar={() => { preparaAudio(); setReloj(true); }} onAnotar={() => setAnotando(true)} onListo={() => listo()}
         onSaltar={saltar} onAnterior={anterior} tecnica={{ activa: tecnicaActiva, etiqueta: palabras.tecnicaTitulo, onClick: abreTecnica }}
       />
@@ -294,11 +317,11 @@ export default function EntrenoDelDia({
     pantalla = (
       <PantallaDePaso
         paso={paso} video={paso.tipo === 'ejercicio' ? videoDe(exDe(paso), mediosDelPaso) : null} cifras={cifrasDelPaso(paso, kilosDelPaso)} anotado={anotadoDe(paso)}
-        sigue={siguiente}
+        sigue={siguiente} serie={serieDelPaso} puntos={puntosDelPaso}
         cronometro={paso.termina?.por === 'tiempo' ? (
           <CronometroDelPaso segundos={paso.termina.valor ?? paso.termina.min} cuenta={cuenta} onEmpezar={empezarCronometro} onQuitar={detenerCronometro} />
         ) : null}
-        etiquetaDeCambiar={cambiar ? (cambiar.planeado.reps || cambiar.planeado.kg ? 'Cambiar' : 'Anotar') : null} puedeAnterior={vista.puedeAnterior}
+        etiquetaDeCambiar={cambiar ? (cambiar.planeado.reps || cambiar.planeado.kg ? 'Cambiar' : 'Anotar') : null} puedeAnterior={vista.puedeAnterior || mirandoOtro}
         onListo={() => listo()} onCambiar={() => setHoja('cambiar')} onSaltar={saltar} onAnterior={anterior}
         tecnica={{ activa: tecnicaActiva, etiqueta: palabras.tecnicaTitulo, onClick: abreTecnica }}
       />
@@ -306,7 +329,9 @@ export default function EntrenoDelDia({
   }
 
   const ejerciciosDelReloj = paso?.tipo === 'reloj' ? paso.miembros.map((m) => ({ ex: dia.exercises[m.idx], idx: m.idx })) : [];
-  const tramosDelReloj = paso?.tipo === 'reloj' ? tramosDeTrabajo(paso.formato, paso.miembros.length) : 0;
+  // Un Set en lapsos corre los tramos que armó el motor (ver `pasosDeLaSesion`); un formato, los suyos.
+  const tramosDelReloj = paso?.tipo === 'reloj' ? (paso.deLapsos ? paso.tramos.filter((t) => t.tipo === 'trabajo').length : tramosDeTrabajo(paso.formato, paso.miembros.length)) : 0;
+  const nombreDelReloj = paso?.deLapsos ? 'Lapsos personalizados' : paso?.resumen;
 
   return createPortal(
     <div
@@ -316,7 +341,7 @@ export default function EntrenoDelDia({
     >
       {!mostrarFin && (
         <BarraDelEntreno
-          segmentos={segmentos} linea={linea} tiempo={tiempo} fondo={fondo} palabras={palabras}
+          segmentos={segmentos} fondo={fondo} palabras={palabras}
           onCerrar={() => setHoja('salir')} onLista={() => setHoja('lista')}
         />
       )}
@@ -324,7 +349,7 @@ export default function EntrenoDelDia({
 
       {hoja === 'lista' && (
         <HojaDeLista
-          plan={plan} estados={vista.estados} actualClave={paso?.clave} kilosDe={kilosDe} palabras={palabras}
+          tarjetas={tarjetasDeLaLista(plan, vista.estados, queToca?.clave ?? null, { kilosDe, resultadoDe })} miniaturaDe={miniaturaDeFila} palabras={palabras}
           onElegir={(clave) => { setEnfoque(clave); setHoja(null); }}
           onTerminar={() => { setHoja(null); setVerFin(true); }}
           onCerrar={() => setHoja(null)}
@@ -349,13 +374,13 @@ export default function EntrenoDelDia({
 
       {reloj && paso?.tipo === 'reloj' && (
         <RelojDelBloque
-          formato={paso.formato} plan={null} ejercicios={ejerciciosDelReloj} serie={paso.serie} resumen={paso.resumen}
+          formato={paso.formato} plan={paso.tramos ?? null} ejercicios={ejerciciosDelReloj} serie={paso.serie} resumen={nombreDelReloj}
           clave={`${userId}:${sesionId}:${paso.claveFormato}`} onGuardar={guardaResultado} onCerrar={() => setReloj(false)}
         />
       )}
       {anotando && paso?.tipo === 'reloj' && (
         <ResultadoDelBloque
-          formato={paso.formato} resumen={paso.resumen} inicial={resultadoDelReloj}
+          formato={paso.formato} resumen={nombreDelReloj} inicial={resultadoDelReloj}
           sugerido={{ seg: null, rondas: 0, tramos: [], completados: tramosDelReloj, de: tramosDelReloj }}
           onGuardar={guardaResultado}
           onBorrar={resultadoDelReloj ? () => { onFormato(paso.claveFormato, null); setAnotando(false); } : undefined}

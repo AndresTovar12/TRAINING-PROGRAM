@@ -5,10 +5,11 @@
 import assert from 'node:assert/strict';
 import { pasosDeLaSesion, marcaListo, saltaPaso, vistaDelEntreno } from '../src/lib/entreno.js';
 import {
-  relojDe, tiempoTotal, lineaDeAvance, cifrasDelPaso, textoDeLoPlaneado, segmentosDeAvance, gruposDeLaLista, subtituloDeLaLista, cantidadPlaneada,
-  camposDeCambiar, exDataTrasListo,
+  relojDe, tiempoTotal, cifrasDelPaso, textoDeCifra, pastillasDelPaso, textoDeLoPlaneado, segmentosDeAvance, puntosDeVueltas, serieALaVista,
+  tarjetasDeLaLista, cantidadPlaneada, camposDeCambiar, exDataTrasListo,
 } from '../src/lib/entrenoDatos.js';
 import { parcheDeLapsos } from '../src/lib/lapsos.js';
+import { ponFormato } from '../src/lib/formatos.js';
 import { palabrasDelEntreno } from '../src/lib/entrenoPalabras.js';
 import { parcheDeVueltas, vueltasAnotadas } from '../src/lib/porVuelta.js';
 
@@ -46,30 +47,67 @@ const lower = {
   assert.equal(tiempoTotal(6 * 3600 * 1000 + 1), null, 'retomado al día siguiente: nada, no «26:12:00»');
 }
 
-/* ---- Dónde va ---- */
+/* ---- Las vueltas, en puntos ---- */
 {
   const plan = pasosDeLaSesion(lower);
-  assert.equal(lineaDeAvance(plan, plan.pasos[0]), 'Serie 1 de 3 · Vuelta 1 de 5');
-  const bi = plan.pasos.find((p) => p.nombre === 'Hip Thrust');
-  assert.equal(lineaDeAvance(plan, bi), 'Serie 2 de 3 · Vuelta 1 de 3');
-  // Con un Set sin vueltas no se dice «vuelta 1 de 1».
+  const estados = (av) => vistaDelEntreno(plan, av, 0).estados;
+  const estadosDe = (puntos) => puntos.map((p) => p.estado);
+  // Back Squat × 5: al empezar, la primera es la que va.
+  assert.deepEqual(estadosDe(puntosDeVueltas(plan, estados(undefined), 1, '0.1.0')), ['actual', 'pendiente', 'pendiente', 'pendiente', 'pendiente']);
+  // Hecha la vuelta 1 (y su descanso): la 2 es la que va.
+  let av;
+  for (let k = 0; k < 2; k += 1) av = marcaListo(plan, av, 1000 + k);
+  assert.deepEqual(estadosDe(puntosDeVueltas(plan, estados(av), 1, '0.2.0')), ['hecha', 'actual', 'pendiente', 'pendiente', 'pendiente']);
+  // Una vuelta saltada también queda atrás.
+  av = saltaPaso(plan, av, 2000);
+  assert.deepEqual(estadosDe(puntosDeVueltas(plan, estados(av), 1, '0.3.0')), ['hecha', 'hecha', 'actual', 'pendiente', 'pendiente']);
+  // En una bi-serie la vuelta está hecha cuando están hechos LOS DOS ejercicios.
+  const bi = puntosDeVueltas(plan, estados(undefined), 2, '1.1.0');
+  assert.equal(bi.length, 3);
+  av = marcaListo(plan, undefined, 3000, undefined, '1.1.0'); // solo el 1.º de la bi-serie
+  assert.deepEqual(estadosDe(puntosDeVueltas(plan, estados(av), 2, '2.1.0')), ['actual', 'pendiente', 'pendiente'], 'a medias sigue siendo la que va');
+  // Un Set que no se repite no lleva puntos.
   const solo = pasosDeLaSesion({ cat: 'gym', exercises: [ex('A', { sets: '1' }), ex('B', { sets: '2', set: 7 }), ex('C', { sets: '2', set: 7 })] });
-  assert.equal(lineaDeAvance(solo, solo.pasos[0]), 'Serie 1 de 2');
-  // Un día de puros nombres: «Ejercicio 2 de 4».
-  const poca = pasosDeLaSesion({ cat: 'gym', exercises: [ex('A'), ex('B'), ex('C'), ex('D')] });
-  assert.equal(lineaDeAvance(poca, poca.pasos[1]), 'Ejercicio 2 de 4');
-  // Un rango de vueltas.
-  const vel = pasosDeLaSesion({ cat: 'speed', exercises: [ex('Sprint', { sets: '5-6', reps: '30', unidad: 'yd' }), ex('Roller', { reps: '5', unidad: 'min' })] });
-  assert.equal(lineaDeAvance(vel, vel.pasos[1]), 'Serie 1 de 2 · Vuelta 2 de 5-6');
-  // Lapsos.
-  const lap = pasosDeLaSesion({
-    cat: 'correr', exercises: [ex('Correr', { sets: '4', ...parcheDeLapsos([{ reps: '800', unidad: 'm', intensity: '', descanso: '' }, { reps: '2', unidad: 'min', intensity: '', descanso: '' }]) })],
+  assert.deepEqual(puntosDeVueltas(solo, vistaDelEntreno(solo, undefined, 0).estados, 1, '0.1.0'), []);
+  assert.equal(puntosDeVueltas(solo, vistaDelEntreno(solo, undefined, 0).estados, 2, '1.1.0').length, 2);
+  // Un rango de vueltas: las de más son opcionales (punteadas).
+  const vel = pasosDeLaSesion({ cat: 'speed', exercises: [ex('Sprint', { sets: '5-6', reps: '30', unidad: 'yd' })] });
+  const pv = puntosDeVueltas(vel, vistaDelEntreno(vel, undefined, 0).estados, 1, '0.1.0');
+  assert.equal(pv.length, 6);
+  assert.deepEqual(pv.map((p) => p.opcional), [false, false, false, false, false, true]);
+  // Un reloj no se cuenta en vueltas (no son pasos de ejercicio).
+  const amrap = pasosDeLaSesion({ cat: 'gym', exercises: ponFormato([ex('Burpees', { set: 1 })], { id: 'amrap', pasos: [{ tipo: 'trabajo', seg: 720 }], vueltas: 1, tope: null, turnan: false, anota: 'rondas' }) });
+  assert.deepEqual(puntosDeVueltas(amrap, vistaDelEntreno(amrap, undefined, 0).estados, 1, 'r.0'), []);
+}
+
+/* ---- La serie a la vista: bi-serie, tri-serie, circuito ---- */
+{
+  const plan = pasosDeLaSesion(lower);
+  const hip = plan.pasos.find((p) => p.nombre === 'Hip Thrust');
+  const antes = serieALaVista(plan, vistaDelEntreno(plan, undefined, 0).estados, hip);
+  assert.deepEqual(antes, {
+    nombre: 'Bi-serie',
+    letras: [{ letra: 'A', nombre: 'Bulgarian Split Squat', estado: 'pendiente' }, { letra: 'B', nombre: 'Hip Thrust', estado: 'actual' }],
   });
-  assert.equal(lineaDeAvance(lap, lap.pasos[1]), 'Serie 1 de 1 · Vuelta 1 de 4 · Lapso 2 de 2');
-  // Notas.
-  const notas = pasosDeLaSesion({ cat: 'speed', exercises: [{ isNote: true, text: 'Sprint 6 x 30 yd' }, { isNote: true, text: 'Foam roller' }] });
-  assert.equal(lineaDeAvance(notas, notas.pasos[1]), 'Paso 2 de 2');
-  assert.equal(lineaDeAvance(plan, null), '');
+  // Lunges hecho, toca Squat jumps: A con palomita, B es el que va.
+  const av = marcaListo(plan, undefined, 1000, undefined, '1.1.0');
+  const bulgaro = plan.pasos.find((p) => p.nombre === 'Bulgarian Split Squat');
+  assert.deepEqual(serieALaVista(plan, vistaDelEntreno(plan, av, 0).estados, hip).letras.map((l) => [l.letra, l.estado]), [['A', 'hecho'], ['B', 'actual']]);
+  assert.deepEqual(serieALaVista(plan, vistaDelEntreno(plan, av, 0).estados, bulgaro).letras.map((l) => l.estado), ['actual', 'pendiente'], 'se mira cada paso con sus ojos');
+  // En la vuelta 2 los dos vuelven a quedar por hacer.
+  const v2 = plan.pasos.find((p) => p.nombre === 'Hip Thrust' && p.vuelta === 2);
+  assert.deepEqual(serieALaVista(plan, vistaDelEntreno(plan, av, 0).estados, v2).letras.map((l) => l.estado), ['pendiente', 'actual']);
+  // Un Set de un ejercicio no tiene serie que enseñar; un descanso tampoco.
+  assert.equal(serieALaVista(plan, vistaDelEntreno(plan, undefined, 0).estados, plan.pasos[0]), null);
+  assert.equal(serieALaVista(plan, vistaDelEntreno(plan, undefined, 0).estados, plan.pasos[1]), null);
+  assert.equal(serieALaVista(plan, vistaDelEntreno(plan, undefined, 0).estados, null), null);
+  // Tri-serie y circuito se llaman como en el editor.
+  const tres = pasosDeLaSesion({ cat: 'gym', exercises: [ex('A', { sets: '2', set: 1 }), ex('B', { set: 1 }), ex('C', { set: 1 })] });
+  assert.equal(serieALaVista(tres, vistaDelEntreno(tres, undefined, 0).estados, tres.pasos[0]).nombre, 'Tri-serie');
+  const cuatro = pasosDeLaSesion({ cat: 'gym', exercises: [ex('A', { set: 1 }), ex('B', { set: 1 }), ex('C', { set: 1 }), ex('D', { set: 1 })] });
+  const circuito = serieALaVista(cuatro, vistaDelEntreno(cuatro, undefined, 0).estados, cuatro.pasos[2]);
+  assert.equal(circuito.nombre, 'Circuito');
+  assert.deepEqual(circuito.letras.map((l) => l.letra), ['A', 'B', 'C', 'D']);
 }
 
 /* ---- Las cifras ---- */
@@ -82,10 +120,10 @@ const lower = {
     { valor: '78%', etiqueta: 'carga' },
     { valor: '≈105', etiqueta: 'kg', destacado: true },
   ]);
-  assert.equal(textoDeLoPlaneado(plan.pasos[0], kilos), '5 reps · 78% carga · ≈105 kg');
+  assert.equal(textoDeLoPlaneado(plan.pasos[0], kilos), '5 reps · 78% · ≈105 kg');
   // Sin 1RM no hay casilla de kilos y la línea sigue diciendo lo que sí se sabe.
   assert.equal(cifrasDelPaso(plan.pasos[0], null).length, 2);
-  assert.equal(textoDeLoPlaneado(plan.pasos[0]), '5 reps · 78% carga');
+  assert.equal(textoDeLoPlaneado(plan.pasos[0]), '5 reps · 78%');
   // «6 reps por lado» + RIR.
   const bulgaro = plan.pasos.find((p) => p.nombre === 'Bulgarian Split Squat');
   assert.deepEqual(cifrasDelPaso(bulgaro), [{ valor: '6', etiqueta: 'reps por lado' }, { valor: '2', etiqueta: 'RIR' }]);
@@ -111,14 +149,24 @@ const lower = {
     ],
   }).pasos;
   assert.deepEqual(cifrasDelPaso(varios[0], { valor: 20, unidad: 'kg', aprox: false }), [{ valor: '8–10', etiqueta: 'reps' }, { valor: '20', etiqueta: 'kg', destacado: true }], 'un peso fijo no repite su cifra de carga');
-  assert.equal(textoDeLoPlaneado(varios[0], { valor: 20, unidad: 'kg', aprox: false }), '8-10 reps · 20 kg');
-  assert.equal(textoDeLoPlaneado(varios[0]), '8-10 reps · 20 kg', 'sin kilos calculados, dice el peso del coach');
+  assert.equal(textoDeLoPlaneado(varios[0], { valor: 20, unidad: 'kg', aprox: false }), '8–10 reps · 20 kg');
+  assert.equal(textoDeLoPlaneado(varios[0]), '8–10 reps · 20 kg', 'sin kilos calculados, dice el peso del coach');
   assert.deepEqual(cifrasDelPaso(varios[1]), [{ valor: '800', etiqueta: 'm' }, { valor: '4:34–5:00', etiqueta: 'min/km' }]);
   assert.deepEqual(cifrasDelPaso(varios[2]), [{ valor: '5', etiqueta: 'km' }, { valor: 'Z2–3', etiqueta: 'zona' }]);
   assert.deepEqual(cifrasDelPaso(varios[3]), [{ valor: '1', etiqueta: 'reps' }, { valor: 'Máximo', etiqueta: 'carga', texto: true }]);
   assert.deepEqual(cifrasDelPaso(varios[4]), [{ valor: 'AMRAP', etiqueta: 'meta', texto: true }, { valor: '7–8', etiqueta: 'RPE' }]);
   assert.deepEqual(cifrasDelPaso(varios[5]), [{ valor: '2+2+2', etiqueta: 'reps' }]);
   assert.deepEqual(cifrasDelPaso(varios[6]), [{ valor: '10', etiqueta: 'reps' }, { valor: '85%', etiqueta: 'intensidad' }]);
+  // Las pastillas de las listas: el nombre de la carga sobra donde el «%» o la «Z» ya lo dicen; RIR y RPE sí van.
+  assert.deepEqual(pastillasDelPaso(plan.pasos[0], kilos), [{ texto: '5 reps', fuerte: false }, { texto: '78%', fuerte: false }, { texto: '≈105 kg', fuerte: true }]);
+  assert.deepEqual(pastillasDelPaso(bulgaro).map((x) => x.texto), ['6 reps por lado', 'RIR 2']);
+  assert.deepEqual(pastillasDelPaso(varios[1]).map((x) => x.texto), ['800 m', '4:34–5:00 min/km']);
+  assert.deepEqual(pastillasDelPaso(varios[2]).map((x) => x.texto), ['5 km', 'Z2–3']);
+  assert.deepEqual(pastillasDelPaso(varios[3]).map((x) => x.texto), ['1 reps', 'Máximo']);
+  assert.deepEqual(pastillasDelPaso(varios[4]).map((x) => x.texto), ['AMRAP', 'RPE 7–8']);
+  assert.deepEqual(pastillasDelPaso(varios[6]).map((x) => x.texto), ['10 reps', '85%']);
+  assert.deepEqual(pastillasDelPaso(nombre), []);
+  assert.equal(textoDeCifra(null), '');
   // Lo que no es un ejercicio no tiene cifras.
   const conDescanso = pasosDeLaSesion(lower);
   assert.deepEqual(cifrasDelPaso(conDescanso.pasos[1]), []);
@@ -142,18 +190,62 @@ const lower = {
   assert.deepEqual(segmentosDeAvance(notas, vistaDelEntreno(notas, marcaListo(notas, undefined, 1), 2).estados), [0.5]);
 }
 
-/* ---- La lista «Tu entreno» ---- */
+/* ---- «Ver todo»: una tarjeta por Set ---- */
 {
   const plan = pasosDeLaSesion(lower);
-  const grupos = gruposDeLaLista(plan);
-  assert.deepEqual(grupos.map((g) => [g.titulo, g.pasos.length]), [['Serie 1', 5], ['Serie 2', 6], ['Serie 3', 2]], 'sin los descansos');
-  assert.equal(grupos[0].pasos[0].i, 0);
-  assert.equal(grupos[0].pasos[1].i, 2, 'el lugar real en `plan.pasos` (el descanso de en medio ocupa el 1)');
-  assert.equal(subtituloDeLaLista(plan.pasos[0], { valor: 105, unidad: 'kg', aprox: true }), 'Vuelta 1 · 5 reps · 78% carga · ≈105 kg');
-  const vel = pasosDeLaSesion({ cat: 'speed', exercises: [ex('Sprint', { sets: '1-2', reps: '30', unidad: 'm' })] });
-  assert.equal(subtituloDeLaLista(vel.pasos[1]), 'Vuelta 2 · 30 m · Opcional');
-  const notas = pasosDeLaSesion({ cat: 'speed', exercises: [{ isNote: true, text: 'A' }] });
-  assert.deepEqual(gruposDeLaLista(notas).map((g) => g.titulo), [null]);
+  const estados = (av) => vistaDelEntreno(plan, av, 0).estados;
+  const t0 = tarjetasDeLaLista(plan, estados(undefined), '0.1.0');
+  assert.deepEqual(t0.map((t) => [t.titulo, t.etiqueta, t.filas.length, t.puntos.length]), [['Serie 1', null, 1, 5], ['Serie 2', 'Bi-serie', 2, 3], ['Serie 3', null, 1, 2]]);
+  assert.deepEqual(t0.map((t) => t.esActual), [true, false, false]);
+  assert.deepEqual(t0[0].filas[0], { idx: 0, nombre: 'Back Squat', estado: 'actual', clave: '0.1.0', pastillas: [{ texto: '5 reps', fuerte: false }, { texto: '78%', fuerte: false }] });
+  assert.deepEqual(t0[1].filas.map((f) => [f.nombre, f.estado, f.clave]), [['Bulgarian Split Squat', 'pendiente', '1.1.0'], ['Hip Thrust', 'pendiente', '2.1.0']]);
+  // Con los kilos del 1RM, la pastilla azul.
+  const conKilos = tarjetasDeLaLista(plan, estados(undefined), '0.1.0', { kilosDe: (p) => (p.nombre === 'Back Squat' ? { valor: 105, unidad: 'kg', aprox: true } : null) });
+  assert.deepEqual(conKilos[0].filas[0].pastillas.map((x) => [x.texto, x.fuerte]), [['5 reps', false], ['78%', false], ['≈105 kg', true]]);
+  // Hechas las 5 vueltas de Back Squat: su fila queda hecha y ya no lleva a ningún lado; la bi-serie es la que va.
+  let av;
+  for (let k = 0; k < 10; k += 1) av = marcaListo(plan, av, 1000 + k);
+  const t1 = tarjetasDeLaLista(plan, estados(av), '1.1.0');
+  assert.deepEqual([t1[0].filas[0].estado, t1[0].filas[0].clave, t1[0].esActual], ['hecho', null, false]);
+  assert.deepEqual(t1[0].puntos.map((p) => p.estado), ['hecha', 'hecha', 'hecha', 'hecha', 'hecha']);
+  assert.deepEqual([t1[1].filas[0].estado, t1[1].esActual], ['actual', true]);
+  // Una fila a medias lleva a su primera vuelta pendiente (no a la que ya hizo).
+  av = marcaListo(plan, av, 2000); // Bulgarian 1
+  av = marcaListo(plan, av, 2001); // Hip Thrust 1
+  const t2 = tarjetasDeLaLista(plan, estados(av), '1.2.0');
+  assert.equal(t2[1].filas[0].clave, '1.2.0');
+  assert.equal(t2[1].filas[1].clave, '2.2.0');
+  // Lo saltado: si no queda nada por hacer del ejercicio pero se saltó algo, se marca «saltado» y sigue llevando a él.
+  const dos = pasosDeLaSesion({ cat: 'gym', exercises: [ex('A', { sets: '2', reps: '5' }), ex('B', { reps: '5' })] });
+  let a2 = saltaPaso(dos, undefined, 1000);
+  a2 = marcaListo(dos, a2, 1001);
+  const ts = tarjetasDeLaLista(dos, vistaDelEntreno(dos, a2, 0).estados, '1.1.0');
+  assert.deepEqual([ts[0].filas[0].estado, ts[0].filas[0].clave], ['saltado', '0.1.0']);
+  // Un día de puros nombres: una tarjeta por ejercicio, sin título.
+  const nombres = pasosDeLaSesion({ cat: 'gym', exercises: [ex('A'), ex('B')] });
+  assert.deepEqual(tarjetasDeLaLista(nombres, vistaDelEntreno(nombres, undefined, 0).estados, '0.1.0').map((t) => [t.titulo, t.filas.map((f) => f.nombre)]), [['Serie 1', ['A']], ['Serie 2', ['B']]]);
+  // Un día de puras notas: sin título de serie, una fila por nota.
+  const notas = pasosDeLaSesion({ cat: 'speed', exercises: [{ isNote: true, text: 'A' }, { isNote: true, text: 'B' }] });
+  const tn = tarjetasDeLaLista(notas, vistaDelEntreno(notas, undefined, 0).estados, 'n.0');
+  assert.equal(tn.length, 1, 'todas las notas en una sola tarjeta');
+  assert.deepEqual(tn[0].filas.map((f) => [tn[0].titulo, f.nombre, f.estado]), [[null, 'A', 'actual'], [null, 'B', 'pendiente']]);
+  // Un AMRAP: una tarjeta con su formato por etiqueta y una fila por ejercicio; el resultado, si ya quedó anotado.
+  const amrap = pasosDeLaSesion({
+    cat: 'gym',
+    exercises: ponFormato([ex('Burpees', { reps: '10', set: 3 }), ex('Swings', { reps: '15', intensity: '24 kg', set: 3 })], { id: 'amrap', pasos: [{ tipo: 'trabajo', seg: 720 }], vueltas: 1, tope: null, turnan: false, anota: 'rondas' }),
+  });
+  const ta = tarjetasDeLaLista(amrap, vistaDelEntreno(amrap, undefined, 0).estados, 'r.0', { resultadoDe: () => '8 rondas' });
+  assert.deepEqual([ta[0].reloj, ta[0].etiqueta, ta[0].resultado, ta[0].puntos], [true, 'AMRAP · 12 min', '8 rondas', []]);
+  assert.deepEqual(ta[0].filas.map((f) => [f.nombre, f.estado, f.clave, f.pastillas.map((x) => x.texto)]), [['Burpees', 'actual', 'r.0', ['10 reps']], ['Swings', 'actual', 'r.0', ['15 reps', '24 kg']]]);
+  // Un Set en lapsos con reloj: «4 rondas» y lo que se corre en cada una, de lapso en lapso.
+  const lap = pasosDeLaSesion({
+    cat: 'correr', exercises: [ex('Correr', { sets: '4', ...parcheDeLapsos([{ reps: '800', unidad: 'm', intensity: '', descanso: '' }, { reps: '2', unidad: 'min', intensity: '', descanso: '' }]) })],
+  });
+  const tl = tarjetasDeLaLista(lap, vistaDelEntreno(lap, undefined, 0).estados, 'r.0');
+  assert.deepEqual([tl[0].reloj, tl[0].etiqueta, tl[0].filas[0].pastillas.map((x) => x.texto)], [true, '4 rondas', ['800 m → 2 min']]);
+  // Hecho el reloj, la fila ya no lleva a ningún lado.
+  const hecho = marcaListo(lap, undefined, 1000);
+  assert.deepEqual([tarjetasDeLaLista(lap, vistaDelEntreno(lap, hecho, 0).estados, null)[0].filas[0].estado, tarjetasDeLaLista(lap, vistaDelEntreno(lap, hecho, 0).estados, null)[0].filas[0].clave], ['hecho', null]);
 }
 
 /* ---- «Cambiar» ---- */
@@ -239,8 +331,8 @@ const lower = {
   assert.deepEqual(Object.keys(salud).sort(), Object.keys(normal).sort(), 'un paciente tiene todos los mismos textos (ninguno se queda sin decir)');
   assert.equal(normal.iniciar, 'Iniciar entreno');
   assert.equal(salud.iniciar, 'Iniciar ejercicios');
-  assert.match(normal.finTexto, /coach/);
-  assert.match(salud.finTexto, /fisio/);
+  assert.match(normal.finNotas, /coach/);
+  assert.match(salud.finNotas, /fisio/);
   assert.doesNotMatch(Object.values(salud).join(' '), /entren|coach/i, 'ni «entreno» ni «coach» le llegan a un paciente');
   assert.match(normal.tecnicaTitulo, /Grabar técnica para tu coach/);
   assert.match(salud.tecnicaTitulo, /fisio/);
