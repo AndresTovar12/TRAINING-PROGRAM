@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
   X, Play, Check, Loader2, Volume2, VolumeX, Crop, RotateCcw, ChevronLeft, ChevronRight, Video,
@@ -7,6 +7,8 @@ import IconoExplicacion from '@/components/IconoExplicacion';
 import { FONT, NUM_STYLE } from '@/lib/theme';
 import { capturaDeLaMitad } from '@/lib/fotogramas';
 import PantallaDeEncuadre from '@/features/admin/PantallaDeEncuadre';
+import { useCuerpoQuieto } from '@/lib/useCuerpoQuieto';
+import { miniaturasDeVideo } from '@/lib/miniaturasDeVideo';
 
 /**
  * El editor que aparece JUSTO DESPUÉS de elegir o grabar un video, antes de subirlo. Hecho a imagen del de WhatsApp.
@@ -38,7 +40,8 @@ const MINIATURAS = 10;
 // Lo que miden las manijas de la tira. El tiempo se mide sobre la tira SIN ellas, que van a los lados.
 const MANIJA = 17;
 
-const GRIS = 'rgba(58,58,60,.85)';
+/* Sin `backdrop-filter`: en iPhone, un desenfoque encima de un video que se reproduce parpadea y cuesta cuadros. */
+const GRIS = 'rgba(58,58,60,.92)';
 
 const seg = (s) => {
   if (s == null || Number.isNaN(s)) return '0:00';
@@ -62,7 +65,7 @@ function cabeEn(caja, aspecto) {
 
 const redondo = (extra) => ({
   width: 40, height: 40, borderRadius: '50%', border: 'none', cursor: 'pointer', flexShrink: 0,
-  background: GRIS, color: '#fff', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+  background: GRIS, color: '#fff',
   display: 'grid', placeItems: 'center', touchAction: 'manipulation', ...extra,
 });
 
@@ -111,8 +114,9 @@ export default function EditorVideo({
     return () => URL.revokeObjectURL(u);
   }, [archivo, url]);
 
-  // El espacio que queda para el video: se mide, para que su marco tenga EXACTAMENTE la proporción de lo que se va a ver.
-  useEffect(() => {
+  // El espacio que queda para el video: se mide ANTES de pintar (así el video no aparece un cuadro después), y se vuelve a
+  // medir si la pantalla cambia. Su marco tiene EXACTAMENTE la proporción de lo que se va a ver.
+  useLayoutEffect(() => {
     const el = escenaRef.current;
     if (!el) return undefined;
     const mide = () => { const r = el.getBoundingClientRect(); setCaja({ w: r.width, h: r.height }); };
@@ -120,7 +124,23 @@ export default function EditorVideo({
     const o = new ResizeObserver(mide);
     o.observe(el);
     return () => o.disconnect();
-  }, [local]);
+  }, []);
+
+  /* LAS MINIATURAS DE LA TIRA, con un solo decodificador (ver `lib/miniaturasDeVideo.js`). `null` mientras se hacen (la
+     tira va oscura), la lista de imágenes al terminar, o 'videos' si no se pudieron: entonces la tira de videos de antes. */
+  const [minis, setMinis] = useState(null);
+  useEffect(() => {
+    if (!local) return undefined;
+    let vivo = true;
+    setMinis(null);
+    miniaturasDeVideo(local, MINIATURAS, { remoto: !archivo })
+      .then((m) => { if (vivo) setMinis(m); })
+      .catch(() => { if (vivo) setMinis('videos'); });
+    return () => { vivo = false; };
+  }, [local, archivo]);
+
+  // La página de atrás se queda quieta: un dedo que resbala sobre la tira no debe mover nada (ver `useCuerpoQuieto`).
+  useCuerpoQuieto();
 
   const desde = inicio ?? 0;
   const hasta = fin ?? duracion ?? 0;
@@ -170,8 +190,6 @@ export default function EditorVideo({
     };
   }, [arrastrando, mover]);
 
-  if (!local) return null;
-
   // Un porcentaje del tiempo, dentro de la pista útil (la que queda entre las dos manijas de los extremos).
   const x = (t) => `calc((100% - ${MANIJA * 2}px) * ${duracion ? t / duracion : 0})`;
   const dura = Math.max(0, hasta - desde);
@@ -216,7 +234,9 @@ export default function EditorVideo({
 
   return createPortal((
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 6000, background: '#000',
+      /* `100dvh` y no `inset: 0`: en iOS un `fixed` con `inset: 0` se mide contra el viewport de maqueta y la franja de abajo
+         (con el botón de listo) quedaba debajo de la barra de Safari. Con el cuerpo quieto, `dvh` no se mueve. */
+      position: 'fixed', top: 0, left: 0, right: 0, height: '100dvh', zIndex: 6000, background: '#000',
       display: 'flex', flexDirection: 'column', fontFamily: FONT, color: '#fff',
     }}>
       {/* El hueco de arriba es solo el de la barra de estado del teléfono, como en WhatsApp. */}
@@ -225,14 +245,15 @@ export default function EditorVideo({
       {/* ---------- El video, con todos los controles encima ---------- */}
       <div ref={escenaRef} style={{ position: 'relative', flex: 1, minHeight: 0, overflow: 'hidden', background: '#0d0d0e' }}>
         <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
-          {tamano && (
+          {tamano && local && (
             <div style={{ position: 'relative', width: tamano.w, height: tamano.h, overflow: 'hidden', background: '#000' }}>
               <video
                 ref={videoRef}
                 src={local}
                 playsInline
                 muted={sinAudio}
-                preload="metadata"
+                // El archivo recién grabado está aquí mismo: se carga entero y la reproducción no se traba.
+                preload={archivo ? 'auto' : 'metadata'}
                 onLoadedMetadata={(e) => {
                   const v = e.currentTarget;
                   setDuracion(v.duration);
@@ -327,8 +348,11 @@ export default function EditorVideo({
               {/* Miniaturas: el propio video congelado en varios puntos. No se usa canvas a propósito: leer píxeles exige
                   cabeceras de CORS y los videos ya subidos vienen de Cloudflare, que no las manda. Pedirle un
                   `currentTime` a un <video> no lee píxeles. */}
-              <div style={{ position: 'absolute', top: 3, bottom: 3, left: MANIJA, right: MANIJA, display: 'flex', overflow: 'hidden' }}>
-                {Array.from({ length: MINIATURAS }, (_, i) => (
+              <div style={{ position: 'absolute', top: 3, bottom: 3, left: MANIJA, right: MANIJA, display: 'flex', overflow: 'hidden', background: '#1a1a1c' }}>
+                {Array.isArray(minis) && minis.map((src, i) => (
+                  <img key={i} src={src} alt="" draggable={false} style={{ flex: 1, minWidth: 0, height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }} />
+                ))}
+                {minis === 'videos' && Array.from({ length: MINIATURAS }, (_, i) => (
                   <video
                     key={i} src={local} muted playsInline preload="metadata"
                     tabIndex={-1} aria-hidden="true"
@@ -364,14 +388,14 @@ export default function EditorVideo({
               style={{
                 height: 34, minWidth: 46, padding: '0 12px', borderRadius: 9, border: 'none', cursor: 'pointer', pointerEvents: 'auto',
                 background: sinAudio ? '#F5C518' : GRIS, color: sinAudio ? '#111318' : '#fff',
-                display: 'grid', placeItems: 'center', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+                display: 'grid', placeItems: 'center',
               }}
             >
               {sinAudio ? <VolumeX size={21} /> : <Volume2 size={21} />}
             </button>
             <span style={{
               height: 34, padding: '0 13px', borderRadius: 9, background: GRIS, display: 'inline-flex', alignItems: 'center',
-              fontSize: 15, fontWeight: 600, backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', whiteSpace: 'nowrap', ...NUM_STYLE,
+              fontSize: 15, fontWeight: 600, whiteSpace: 'nowrap', ...NUM_STYLE,
             }}>
               {seg(dura)}{tamaño ? ` · ${peso(tamaño)}` : ''}
             </span>
@@ -381,7 +405,6 @@ export default function EditorVideo({
             {propositoInicial !== undefined && (
               <div role="group" aria-label="Qué es este video" style={{
                 display: 'flex', height: 34, padding: 2, borderRadius: 17, background: GRIS, pointerEvents: 'auto',
-                backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
               }}>
                 {[['ejemplo', 'Ejemplo', Video], ['explicacion', 'Explicación', IconoExplicacion]].map(([id, texto, Icono]) => {
                   const activo = queEs === id;
@@ -447,7 +470,7 @@ export default function EditorVideo({
       </div>
 
       {/* ---------- Encuadre: su propia pantalla ---------- */}
-      {encuadrando && (
+      {encuadrando && local && (
         <PantallaDeEncuadre
           medio={{ tipo: 'video', src: local }} medidas={medidas} inicial={encuadre} posicion={desde}
           onCancelar={() => setEncuadrando(false)}
