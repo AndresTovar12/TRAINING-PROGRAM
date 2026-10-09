@@ -48,6 +48,31 @@ export const parseBlocks = (exercises = []) => {
 };
 
 /**
+ * Lo mismo que `parseBlocks`, pero CONSERVANDO la posición de cada ejercicio en la lista (`idx`): lo que anota el atleta se
+ * guarda por esa posición (`sesión.exercises[idx]`), y el modo entreno (`lib/entreno.js`) también. Ejercicios con el mismo
+ * número de `set` van juntos (bi-serie, tri-serie…); sin `set`, cada uno es su Set. Las notas son grupos aparte.
+ * Devuelve `[{ isNote: true, ex, idx } | { key, exercises: [{ ex, idx }] }]`.
+ */
+export const groupIntoSets = (exercises = []) => {
+  const groups = [];
+  let current = null;
+  exercises.forEach((ex, idx) => {
+    if (ex.isNote) {
+      groups.push({ isNote: true, ex, idx });
+      current = null;
+      return;
+    }
+    const key = ex.set != null ? `set-${ex.set}` : `solo-${idx}`;
+    if (!current || current.key !== key) {
+      current = { key, exercises: [] };
+      groups.push(current);
+    }
+    current.exercises.push({ ex, idx });
+  });
+  return groups;
+};
+
+/**
  * El ejercicio con las series de su Set. Sin series (`null`) ninguno trae `sets`; con ellas, todos traen lo mismo.
  * Un `sets` que ya dice lo mismo se deja tal cual (ni siquiera cambia de tipo). `undefined` = el Set no dijo nada:
  * se queda lo que el ejercicio ya traía, o «3» si no traía nada (un Set nuevo).

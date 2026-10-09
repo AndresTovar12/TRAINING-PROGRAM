@@ -46,7 +46,7 @@ import {
   minutosDelNombre, sinDuracion, sesionesDelTitulo, textoDeSesiones,
   hermanasDelDia, juntaPorDia, sesionQueRepite,
 } from '@/lib/sesiones';
-import { setTag } from '@/lib/setsDeUnaSesion';
+import { setTag, groupIntoSets } from '@/lib/setsDeUnaSesion';
 import { aspectoDelTipo } from '@/lib/aspectoDelTipo';
 import { plural, pluralS, rondasQueDecir } from '@/lib/plural';
 import { textoMeta, cargaEnSuUnidad } from '@/lib/medidas';
@@ -521,27 +521,6 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phas
 
     </div>
   );
-};
-
-// Helper: agrupa ejercicios en sets segun la propiedad `set`. Ejercicios con el mismo
-// numero de set se muestran juntos (bi-serie / tri-serie). Sin `set`, cada uno es su set.
-const groupIntoSets = (exercises) => {
-  const groups = [];
-  let current = null;
-  exercises.forEach((ex, idx) => {
-    if (ex.isNote) {
-      groups.push({ isNote: true, ex, idx });
-      current = null;
-      return;
-    }
-    const key = ex.set != null ? `set-${ex.set}` : `solo-${idx}`;
-    if (!current || current.key !== key) {
-      current = { key, exercises: [] };
-      groups.push(current);
-    }
-    current.exercises.push({ ex, idx });
-  });
-  return groups;
 };
 
 const SetGroup = ({
