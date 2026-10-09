@@ -3,9 +3,11 @@
    Andrés, 29 sep 2026 (DOBLES SESIONES ERRORES.pdf): en varios sitios un día de
    doble sesión se titulaba «Velocidad + Lower Strength», y eso puede leerse como
    UNA sesión que junta velocidad y fuerza. Son dos: una de mañana y otra de
-   tarde. Cada sesión es una entrada del plan con su nombre y, si el coach quiere,
-   su turno (`turno: 'AM' | 'PM'`, desde «Opciones»); aquí se sacan una por una
-   para que cada pantalla le ponga su etiqueta a cada una en vez de unirlas con un «+».
+   tarde. Cada sesión es una entrada del plan con su nombre; aquí se sacan una por
+   una para que cada pantalla le ponga su etiqueta a cada una en vez de unirlas con un «+».
+   El turno (`turno: 'AM' | 'PM'`, que el coach pone desde «Opciones») se queda en el
+   plan y en su editor, pero el atleta ya no lo ve: Andrés, 9 oct 2026, «le estoy
+   dando demasiada importancia al horario».
 
    Desde el 6 oct 2026 todos los planes se guardan así: ya no existe el día con
    las sesiones adentro (`blocks`). */
@@ -28,8 +30,6 @@ export const minutosDelNombre = (nombre = '') => {
  */
 export function sesionesDelTitulo(dias) {
   return (Array.isArray(dias) ? dias : [dias]).filter(Boolean).map((day) => ({
-    // El turno de una sesión lo pone el coach desde «Opciones» (AM o PM); sin él, ninguno.
-    turno: day.turno === 'AM' || day.turno === 'PM' ? day.turno : null,
     nombre: sinDuracion(day.name || ''),
   }));
 }
@@ -72,13 +72,10 @@ export function juntaPorDia(filas) {
 
 /**
  * Las mismas sesiones en una línea de texto, para las frases donde no caben
- * etiquetas. Con turnos: «AM Velocidad · PM Lower Strength». Sin ellos se dice
- * cuántas son, para que no se lea como una sola: «2 sesiones: Fuerza · Movilidad».
+ * etiquetas. Con varias se dice cuántas son, para que no se lea como una sola:
+ * «2 sesiones: Fuerza · Movilidad». Sin AM ni PM (Andrés, 9 oct 2026).
  */
 export function textoDeSesiones(sesiones) {
   if (sesiones.length <= 1) return sesiones[0]?.nombre || '';
-  if (sesiones.every((s) => s.turno)) {
-    return sesiones.map((s) => `${s.turno} ${s.nombre}`).join(' · ');
-  }
   return `${sesiones.length} sesiones: ${sesiones.map((s) => s.nombre).join(' · ')}`;
 }

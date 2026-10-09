@@ -5,7 +5,7 @@ import {
   Clock, Sparkles, Info, Dumbbell, Heart, Play,
   Home as HomeIcon,
   Repeat, Eye, Layers, List, Scale, LineChart as LineChartIcon,
-  Sunrise, Sunset, MessageCircle, Timer,
+  MessageCircle, Timer,
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { useIsDesktop } from '@/lib/useViewport';
@@ -38,6 +38,7 @@ import {
   normalizaDia, resumenDeLaSemana, semanaUnificada,
 } from '@/lib/programas';
 import FichaEjercicio from '@/features/training/FichaEjercicio';
+import TarjetaDeSesion from '@/features/training/TarjetaDeSesion';
 import Portada from '@/components/Portada';
 import EtiquetasDeSesion from '@/components/EtiquetasDeSesion';
 import BotonEntendido from '@/components/BotonEntendido';
@@ -46,6 +47,7 @@ import {
   hermanasDelDia, juntaPorDia, sesionQueRepite,
 } from '@/lib/sesiones';
 import { setTag } from '@/lib/setsDeUnaSesion';
+import { aspectoDelTipo } from '@/lib/aspectoDelTipo';
 import { plural, pluralS, rondasQueDecir } from '@/lib/plural';
 import { textoMeta, cargaEnSuUnidad } from '@/lib/medidas';
 import {
@@ -918,110 +920,20 @@ const HojaDelPrograma = ({
   );
 };
 
-/* AM y PM con colores FIJOS y opuestos: naranja de mañana, azul de tarde. Antes la tarde tomaba el
-   color de la fase, y en Potencia la fase es naranja: las dos sesiones del día salían del mismo
-   color. Andrés lo vio en su jueves y no se distinguía cuál era cuál. Sin turno, el de la fase. */
-const aspectoDeTurno = (turno, colorDeFase) => (turno
-  ? { accent: turno === 'PM' ? LT.blue : LT.warning, Icono: turno === 'PM' ? Sunset : Sunrise }
-  : { accent: colorDeFase, Icono: Dumbbell });
-
-/**
- * La TARJETA de una sesión: un encabezado que se abre y se cierra (ícono, nombre,
- * cuántos ejercicios y cuánto dura) y, abierta, su contenido.
- *
- * LA TARJETA DE CADA SESIÓN ES UN BOTÓN Y TIENE QUE PARECERLO.
- * Andrés, 29 sep 2026: «me gustaría que estos 2 botones fueran más bonitos». Eran
- * una fila plana con una rayita de color, y con la primera abierta la segunda ni se
- * veía. Ahora cada una es una tarjeta con su ícono (amanecer / atardecer), su nombre,
- * cuántos ejercicios y cuánto dura, y un botón redondo que dice que se abre.
- * Terminada, su encabezado se pinta de verde, igual que el botón de cerrar.
- *
- * La usan las sesiones de un día doble (dos entradas el mismo día de la semana) y, en
- * «Plan» con equipo, TODAS las sesiones del día: la del fisio es una
- * tarjeta más al lado de las del coach, y `autor` (el programa de quien la puso) le
- * agrega su etiqueta chica.
- */
-const TarjetaDeSesion = ({ accent, hecha, abierta, onAlternar, Icono, nombre, turno, detalle, autor, children }) => (
-  <div style={{
-    marginBottom: 12, borderRadius: 18, overflow: 'hidden', boxShadow: KP.shCard,
-    background: LT.surface,
-    border: `1.5px solid ${hecha ? `${LT.mint}55` : (abierta ? `${accent}66` : LT.border)}`,
-  }}>
-    {/* Solo el ENCABEZADO se pinta de verde al terminar: si se pintara toda
-        la tarjeta, la lista de ejercicios de adentro quedaría sobre verde. */}
-    <button
-      type="button"
-      aria-expanded={abierta}
-      className="kp-press"
-      onClick={onAlternar}
-      style={{
-        width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '13px 14px',
-        background: hecha ? KP.mintSoft : 'transparent', border: 'none', cursor: 'pointer', fontFamily: FONT, textAlign: 'left',
-      }}
-    >
-      <span style={{
-        width: 46, height: 46, borderRadius: 14, flexShrink: 0, display: 'grid', placeItems: 'center',
-        background: hecha ? LT.mint : `${accent}1F`, color: hecha ? '#fff' : accent,
-      }}>
-        {hecha ? <Check size={22} strokeWidth={3} /> : <Icono size={22} />}
-      </span>
-      <span style={{ flex: 1, minWidth: 0 }}>
-        {autor && (
-          <span style={{ display: 'block', marginBottom: 4 }}>
-            <EtiquetaDeAutor programa={autor} tamano={11.5} />
-          </span>
-        )}
-        <span style={{ display: 'block', fontSize: 15.5, fontWeight: 800, color: LT.text, lineHeight: 1.2, overflowWrap: 'anywhere' }}>
-          {nombre}
-        </span>
-        <span style={{
-          display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '3px 8px', marginTop: 5,
-          fontSize: 12.5, fontWeight: 600, color: LT.text2, ...NUM_STYLE,
-        }}>
-          {turno && (
-            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.5, color: '#fff', background: accent, borderRadius: 6, padding: '2px 7px' }}>
-              {turno}
-            </span>
-          )}
-          {/* Terminada, «Terminada» ocupa el lugar de los datos: el ícono
-              verde ya dice que va hecha y así el encabezado no crece. */}
-          {hecha ? (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: LT.mint, fontWeight: 800 }}>
-              <Check size={13} strokeWidth={3} /> Terminada
-            </span>
-          ) : (detalle && <span>{detalle}</span>)}
-        </span>
-      </span>
-      <span aria-hidden="true" style={{
-        width: 32, height: 32, borderRadius: 16, flexShrink: 0, display: 'grid', placeItems: 'center',
-        background: hecha ? '#fff' : LT.surface2, color: LT.text2,
-        transform: abierta ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s',
-      }}>
-        <ChevronDown size={18} />
-      </span>
-    </button>
-    {abierta && (
-      <div style={{ padding: '12px 16px 16px' }}>
-        {children}
-      </div>
-    )}
-  </div>
-);
-
 /**
  * CADA SESIÓN SE TERMINA POR SU LADO (Andrés, 29 sep 2026: «cada sesión debería
  * tener su botón de marcar como terminada»). Va al final de la lista, que es donde
  * se está cuando se acaba, y con la misma cara que el botón del día: azul para
- * marcar, verde cuando ya está. `laSesion`: «sesión AM», «sesión 2», «sesión».
+ * marcar, verde cuando ya está. Cada una va dentro de SU tarjeta, así que basta con decir «sesión».
  */
-const TerminarSesion = ({ hecha, laSesion, onAlternar }) => (hecha ? (
+const TerminarSesion = ({ hecha, onAlternar }) => (hecha ? (
   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
     <div style={{
       flex: 1, minHeight: 50, borderRadius: 14, background: LT.mint, color: '#fff',
       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
       fontFamily: FONT, fontSize: 14.5, fontWeight: 800,
     }}>
-      <Check size={18} strokeWidth={3} /> {laSesion.charAt(0).toUpperCase() + laSesion.slice(1)} terminada
+      <Check size={18} strokeWidth={3} /> Sesión terminada
     </div>
     <button
       type="button"
@@ -1047,7 +959,7 @@ const TerminarSesion = ({ hecha, laSesion, onAlternar }) => (hecha ? (
       background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, boxShadow: KP.shBtn,
     }}
   >
-    <Check size={18} strokeWidth={3} /> Marcar {laSesion} como terminada
+    <Check size={18} strokeWidth={3} /> Marcar sesión como terminada
   </button>
 ));
 
@@ -1136,17 +1048,14 @@ const CuerpoDelDia = ({
     const nombre = sinDuracion(selectedDay.name || '') || textoDeSesiones(sesionesDelTitulo(selectedDay)) || selectedDay.day;
     const n = ((sesionQueRepite(week, selectedIdx)?.day ?? selectedDay).exercises || []).filter((e) => !e.isNote).length;
     const detalle = [n ? plural(n, 'ejercicio', 'ejercicios') : null, minutosDelNombre(selectedDay.name || '')].filter(Boolean).join(' · ');
-    // El turno de una sesión suelta (mañana o tarde) lo pone el coach desde «Opciones»: aquí se ve, igual que en un doble.
-    const turno = selectedDay.turno === 'AM' || selectedDay.turno === 'PM' ? selectedDay.turno : null;
-    const { accent, Icono } = aspectoDeTurno(turno, phaseColor);
     return (
       <TarjetaDeSesion
-        accent={accent} hecha={selectedCompleted} abierta={openBlocks.dia ?? abiertaSola}
+        aspecto={aspectoDelTipo(selectedDay)} hecha={selectedCompleted} abierta={openBlocks.dia ?? abiertaSola}
         onAlternar={() => setOpenBlocks((p) => ({ ...p, dia: !(p.dia ?? abiertaSola) }))}
-        Icono={Icono} nombre={nombre} turno={turno} detalle={detalle} autor={autor}
+        nombre={nombre} detalle={detalle} autor={autor}
       >
         {cuerpo}
-        <TerminarSesion hecha={selectedCompleted} laSesion={turno ? `sesión ${turno}` : 'sesión'} onAlternar={toggleComplete} />
+        <TerminarSesion hecha={selectedCompleted} onAlternar={toggleComplete} />
       </TarjetaDeSesion>
     );
   };
@@ -1427,7 +1336,7 @@ const WeekDetail = ({
     || textoDeSesiones(sesionesDelTitulo(selectedDay))
     || selectedDay.day;
   /* Dos entradas el mismo día de la semana (mañana y tarde) son UN día con dos tarjetas, igual que
-     un doble de antes: una por sesión, cada una con su turno y su botón de terminar. */
+     un doble de antes: una por sesión, cada una con el color de su tipo y su botón de terminar. */
   const hermanas = hermanasDelDia(week, selectedIdx);
   const agrupadas = hermanas.length > 1;
 
@@ -2040,7 +1949,7 @@ const CursorSelector = ({ current, sessionsData, onSelect, onClose }) => {
                                 const isCurrent = current && current.phaseId === phase.id && current.weekNum === week.num
                                   && hermanas.some((h) => current.dayIdx === h.idx);
                                 const cat = tipoDeSesion(day);
-                                // Dos entradas el mismo día (mañana y tarde) dicen sus dos sesiones, con su turno.
+                                // Dos entradas el mismo día (mañana y tarde) dicen sus dos sesiones.
                                 const dayName = hermanas.length > 1
                                   ? textoDeSesiones(sesionesDelTitulo(hermanas.map((h) => h.day)))
                                   : (sinDuracion(day.name || '') || textoDeSesiones(sesionesDelTitulo(day)) || day.day);

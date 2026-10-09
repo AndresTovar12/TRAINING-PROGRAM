@@ -2,7 +2,6 @@ import { Check, ChevronRight } from 'lucide-react';
 import { FONT, KP, LT } from '@/lib/theme';
 import { plural } from '@/lib/plural';
 import { etiquetaDePrograma } from '@/lib/programas';
-import EtiquetasDeSesion from '@/components/EtiquetasDeSesion';
 import ListaDesplegable from '@/components/ListaDesplegable';
 
 /* Lo que ve un atleta que tiene EQUIPO: su coach principal y, además, alguien
@@ -109,13 +108,9 @@ export function TarjetaDeHoyDeTodos({ entradas, onAbrir, onCambiarDia, esCompu, 
                 <span aria-hidden="true" style={{ width: 5, alignSelf: 'stretch', borderRadius: 5, background: color, flexShrink: 0 }} />
                 <span style={{ flex: 1, minWidth: 0 }}>
                   {conAutor && <span style={{ display: 'block', fontSize: 12, fontWeight: 800, color }}>{etiquetaDePrograma(e.programa)}</span>}
-                  {p.turno ? (
-                    <EtiquetasDeSesion sesiones={[{ turno: p.turno, nombre: p.nombre }]} envolver tamano={13.5} style={{ marginTop: 5 }} />
-                  ) : (
-                    <span style={{ display: 'block', fontSize: 16.5, fontWeight: 800, color: LT.text, marginTop: 2, overflowWrap: 'anywhere', lineHeight: 1.2 }}>
-                      {p.nombre}
-                    </span>
-                  )}
+                  <span style={{ display: 'block', fontSize: 16.5, fontWeight: 800, color: LT.text, marginTop: 2, overflowWrap: 'anywhere', lineHeight: 1.2 }}>
+                    {p.nombre}
+                  </span>
                   {datos && <span style={{ display: 'block', fontSize: 12, color: LT.text2, marginTop: 3 }}>{datos}</span>}
                 </span>
                 {p.hecha ? (
