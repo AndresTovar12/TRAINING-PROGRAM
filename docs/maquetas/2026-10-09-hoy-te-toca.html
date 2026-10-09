@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Tarjeta Hoy te toca</title>
+<meta name="description" content="Tres ideas para la tarjeta azul de Home, puestas junto a la de Salud para ver si ya van a la par.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+:root{
+  --bg:#F6F7F9; --fg:#111318; --muted:#5F6673; --line:#E1E4EA; --panel:#FFFFFF; --accent:#1E40E0; --accent-fg:#FFFFFF; --note:#EEF1FE;
+  /* los colores de la app (siempre en claro) */
+  --a-bg:#F4F5F8; --a-surface:#FFFFFF; --a-surface2:#EDEFF3; --a-text:#111318; --a-text2:#6B7280; --a-text3:#9CA3AF;
+  --a-blue:#1E40E0; --a-blue-dk:#1733B8; --a-blue-soft:#E8ECFD; --a-border:#E5E7EB;
+  --a-mint:#00A372; --a-mint-soft:#E3F6EF; --a-violet:#7C5CFF; --a-amber:#E07B00; --a-coral:#FF7A52;
+  --font:"Inter",-apple-system,BlinkMacSystemFont,"SF Pro Display",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0E1117;--fg:#E8EAF0;--muted:#9AA3B2;--line:#242A38;--panel:#161B26;--accent:#7C93FF;--accent-fg:#0B1020;--note:#172043;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0E1117;--fg:#E8EAF0;--muted:#9AA3B2;--line:#242A38;--panel:#161B26;--accent:#7C93FF;--accent-fg:#0B1020;--note:#172043;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font)}
+button{font-family:var(--font)}
+.wrap{max-width:1040px;margin:0 auto;padding:24px 16px 72px}
+h1{font-size:28px;font-weight:800;letter-spacing:-.7px;margin:0 0 6px;text-wrap:balance}
+h2{font-size:17px;font-weight:800;letter-spacing:-.3px;margin:0 0 8px}
+.sub{color:var(--muted);font-size:15px;line-height:1.55;margin:0 0 16px;max-width:64ch}
+.ctl{display:flex;flex-direction:column;gap:8px;margin-bottom:18px}
+.grp{display:grid;grid-template-columns:62px minmax(0,1fr);align-items:center;gap:8px}
+.grp>span{font-size:10.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--muted)}
+.seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:3px;gap:2px;overflow-x:auto;scrollbar-width:none;width:fit-content;max-width:100%}
+.seg::-webkit-scrollbar{display:none}
+.seg button{flex:none;border:0;background:transparent;color:var(--muted);font-size:13px;font-weight:600;padding:8px 12px;border-radius:10px;cursor:pointer;white-space:nowrap}
+.seg button:hover{color:var(--fg)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg)}
+.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (max-width:560px){.seg{flex-wrap:wrap;overflow:visible}}
+.par{display:grid;grid-template-columns:minmax(0,392px) minmax(0,1fr);gap:34px;align-items:start}
+@media (max-width:900px){.par{grid-template-columns:minmax(0,1fr)}}
+.par.compu{grid-template-columns:minmax(0,1fr)}
+.caja{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px 18px 8px;margin-bottom:18px}
+.caja ol{margin:0;padding:0;list-style:none}
+.caja li{display:grid;grid-template-columns:28px minmax(0,1fr);gap:10px;padding:11px 0;border-top:1px solid var(--line);font-size:14px;line-height:1.5}
+.caja li:first-child{border-top:0}
+.caja li .n{width:24px;height:24px;border-radius:8px;background:var(--note);color:var(--accent);display:grid;place-items:center;font-weight:800;font-size:12px;margin-top:1px}
+.caja li b{font-weight:700}
+.rec{background:var(--note);border-radius:14px;padding:14px 16px;font-size:14px;line-height:1.55}
+.rec b{font-weight:700}
+
+/* ---------- el teléfono ---------- */
+.tel{width:392px;max-width:100%;height:800px;border-radius:46px;border:9px solid #141720;background:var(--a-bg);position:relative;overflow:hidden;box-shadow:0 30px 60px rgba(17,19,24,.22);margin:0 auto;color:var(--a-text)}
+.tel::before{content:"";position:absolute;left:50%;top:9px;transform:translateX(-50%);width:112px;height:28px;border-radius:999px;background:#141720;z-index:30}
+.pant{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;padding:50px 0 24px;scrollbar-width:none}
+.pant::-webkit-scrollbar{display:none}
+.compu .tel{width:100%;height:auto;border-radius:22px;border:1px solid var(--line);box-shadow:none;margin:0}
+.compu .tel::before{display:none}
+.compu .pant{position:static;padding:22px 0 24px;overflow:visible}
+svg.i{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* ---------- Home (a su tamaño real) ---------- */
+.enc{display:flex;align-items:center;gap:14px;padding:14px 18px 14px}
+.avatar{width:56px;height:56px;border-radius:50%;background:linear-gradient(140deg,var(--a-blue),var(--a-blue-dk));display:grid;place-items:center;color:#fff;font-weight:800;font-size:18px;box-shadow:0 8px 22px rgba(30,64,224,.24);flex:none}
+.enc .sal{font-size:11px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--a-blue);line-height:1}
+.enc .nom{font-size:24px;font-weight:800;letter-spacing:-.4px;line-height:1.12;margin-top:6px}
+.enc .fase{font-size:12.5px;font-weight:600;color:var(--a-text2);margin-top:5px}
+.fila{display:flex;flex-wrap:wrap;gap:12px;padding:0 18px 12px}
+.fila.una{flex-direction:column;flex-wrap:nowrap}
+.compu .fila.dos{flex-wrap:nowrap}
+.card{background:var(--a-surface);border-radius:22px;padding:20px;color:var(--a-text);min-width:0}
+.card .t{font-size:14px;color:var(--a-text2)}
+.foto{flex:1 1 0;min-width:0;min-height:232px;border-radius:22px;padding:0;color:#fff;background:linear-gradient(180deg,rgba(0,0,0,.28),rgba(0,0,0,.66)),linear-gradient(135deg,#3b4a6b,#1b2438 58%,#8a6238);display:flex;flex-direction:column;position:relative;overflow:hidden}
+.foto .in{display:flex;flex-direction:column;justify-content:space-between;flex:1;padding:16px}
+.fila.una .foto{min-height:150px}
+.foto b{font-size:13px}
+.foto h3{margin:0 0 12px;font-size:22px;font-weight:700;line-height:1.05}
+.foto .blanco{background:#fff;color:#111;border-radius:14px;padding:12px;text-align:center;font-size:13px;font-weight:600}
+.fila.una .foto .bajo{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.fila.una .foto h3{margin:0}
+.fila.una .foto .blanco{padding:11px 16px;white-space:nowrap}
+
+/* Salud (la que él eligió: «B · Latido») */
+.salud{position:relative;overflow:hidden;flex:1 1 0;min-width:200px;border-radius:22px;padding:20px 20px 54px;cursor:pointer;color:#fff;background:radial-gradient(circle at 92% 6%,rgba(255,255,255,.30),transparent 44%),linear-gradient(140deg,#FF8A5C 0%,#F2555A 52%,#DD4A92 100%);box-shadow:0 8px 22px rgba(242,85,90,.28)}
+.salud .top{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600}
+.salud .ico{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;flex:none;background:rgba(255,255,255,.22)}
+.salud .cuerpo{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px}
+.salud .estado{font-size:26px;font-weight:800;letter-spacing:-.5px;line-height:1.1}
+.salud .cta{margin-top:14px;border:0;border-radius:14px;padding:12px 20px;font-size:13.5px;font-weight:700;cursor:pointer;background:#fff;color:#C0314F}
+.salud .puntaje{font-size:34px;font-weight:800;letter-spacing:-1px;font-variant-numeric:tabular-nums;width:64px;height:64px;border-radius:20px;background:rgba(255,255,255,.2);display:grid;place-items:center;animation:late 1.4s ease-in-out infinite}
+@keyframes late{0%,100%{transform:scale(1)}12%{transform:scale(1.10)}24%{transform:scale(1)}36%{transform:scale(1.06)}48%{transform:scale(1)}}
+.ecg{position:absolute;left:0;right:0;bottom:8px;height:40px;width:100%;opacity:.55;pointer-events:none;z-index:0}
+.ecg path{fill:none;stroke:#fff;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:90 330;animation:viaja 2.6s linear infinite}
+@keyframes viaja{from{stroke-dashoffset:420}to{stroke-dashoffset:0}}
+.salud .mini{position:relative;z-index:1;display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.salud .mini span{background:rgba(255,255,255,.20);border-radius:999px;padding:6px 10px;font-size:12px;font-weight:700}
+.semana{flex:1 1 0;min-width:290px}
+.semana .n{font-size:13px;color:var(--a-text);margin-top:6px}
+.dias{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-top:14px;align-items:start}
+.dia{text-align:center;border-radius:8px;padding:7px 2px;font-size:10.5px;font-weight:800}
+.dia.ahora{background:var(--a-blue);color:#fff}
+.dia.si{background:var(--a-blue-soft);color:var(--a-blue)}
+.dia.no{background:var(--a-surface2);color:var(--a-text3);border:1px solid var(--a-border)}
+
+/* ===================== LA TARJETA «HOY TE TOCA» ===================== */
+.hoy-w{flex:1 1 0;min-width:0;container-type:inline-size}
+.fila.una .hoy-w{flex:none;width:100%}
+.hoy{position:relative;overflow:hidden;border-radius:22px;color:#fff;display:flex;flex-direction:column;min-height:236px;cursor:pointer;isolation:isolate;-webkit-tap-highlight-color:transparent;transition:transform .15s ease}
+.hoy:active{transform:scale(.99)}
+.hoy button{cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .12s ease}
+.hoy button:active{transform:scale(.97)}
+.hoy ul{list-style:none;margin:0;padding:0}
+.hoy .play{position:relative;display:grid;place-items:center;flex:none;border-radius:50%}
+.hoy .play svg{fill:currentColor;stroke:none}
+.hoy .play::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:2px solid currentColor;opacity:0;animation:onda 2.6s ease-out infinite}
+@keyframes onda{0%{transform:scale(.78);opacity:.55}70%,100%{transform:scale(1.28);opacity:0}}
+@keyframes respira{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
+.hoy .brillo{position:absolute;inset:0;z-index:-1;pointer-events:none}
+
+/* ---------- A · Energía ---------- */
+.hoy.a{padding:18px;background:radial-gradient(circle at 94% 2%,rgba(255,255,255,.36),transparent 44%),radial-gradient(circle at 0% 108%,rgba(122,152,255,.58),transparent 52%),linear-gradient(150deg,#2F52F3 0%,#1E40E0 46%,#1733B8 100%);box-shadow:0 12px 28px rgba(30,64,224,.34),inset 0 1px 0 rgba(255,255,255,.26)}
+.hoy.a .cab{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:36px}
+.hoy.a .et{display:flex;align-items:center;gap:10px;font-size:13.5px;font-weight:600;color:rgba(255,255,255,.94)}
+.hoy.a .tile{width:34px;height:34px;border-radius:11px;background:rgba(255,255,255,.2);display:grid;place-items:center;flex:none}
+.hoy.a .tile.ok{background:#fff;color:var(--a-mint)}
+.hoy.a .cent{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:12px}
+.hoy.a .izq{min-width:0;flex:1}
+.hoy.a .tit{margin:0;font-size:25px;font-weight:800;letter-spacing:-.6px;line-height:1.06;text-wrap:balance}
+.hoy.a .ses{display:flex;flex-direction:column;gap:9px}
+.hoy.a .ses li{display:flex;align-items:center;gap:10px;font-size:16.5px;font-weight:800;letter-spacing:-.2px;line-height:1.15}
+.hoy.a .ses .t{width:34px;height:34px;border-radius:11px;background:#fff;display:grid;place-items:center;flex:none}
+.hoy.a .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.hoy.a .m{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.18);border-radius:999px;padding:6px 10px;font-size:12px;font-weight:700}
+.hoy.a .m svg{width:14px;height:14px}
+.hoy.a .lado{display:none}
+.hoy.a .vidrio{position:relative;width:76px;height:76px;border-radius:24px;background:linear-gradient(150deg,rgba(255,255,255,.30),rgba(255,255,255,.10));border:1px solid rgba(255,255,255,.3);display:grid;place-items:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 10px 24px rgba(8,22,110,.25);animation:respira 3.6s ease-in-out infinite}
+.hoy.a .vidrio svg{width:38px;height:38px;stroke-width:1.8}
+.hoy.a .vidrio.ok{background:#fff;color:var(--a-mint)}
+.hoy.a .acc{margin-top:auto;padding-top:18px;display:flex;flex-direction:column;gap:4px}
+.hoy.a .cta{display:flex;align-items:center;justify-content:center;gap:11px;min-height:54px;border:0;border-radius:17px;background:#fff;color:var(--a-blue);font-size:15.5px;font-weight:800;padding:0 18px 0 10px;box-shadow:0 10px 20px rgba(8,22,110,.3)}
+.hoy.a .cta .play{width:34px;height:34px;background:linear-gradient(140deg,#2F52F3,#1733B8);color:#2F52F3}
+.hoy.a .cta .play svg{color:#fff;width:13px;height:13px;margin-left:1px}
+.hoy.a .cta .corto{display:none}
+.hoy.a .sec{border:0;background:transparent;color:rgba(255,255,255,.94);font-size:14px;font-weight:700;min-height:38px;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:12px}
+.hoy.a .sec svg{width:16px;height:16px}
+.hoy.a .sec.alto{display:none}
+@container (max-width:219px){
+  .hoy.a{padding:16px 13px 13px}
+  .hoy.a .et{font-size:12.5px;gap:8px}
+  .hoy.a .cab .tile{width:30px;height:30px;border-radius:10px}
+  .hoy.a .tit{font-size:21px;overflow-wrap:anywhere}
+  .hoy.a .meta{gap:5px}
+  .hoy.a .m{padding:5px 9px;font-size:11.5px}
+  .hoy.a .ses li{font-size:14.5px;gap:8px}
+  .hoy.a .ses .t{width:28px;height:28px;border-radius:9px}
+  .hoy.a .cta .largo{display:none}
+  .hoy.a .cta .corto{display:inline}
+  .hoy.a .cta{min-height:46px;font-size:14px;gap:8px;padding:0 10px 0 7px}
+  .hoy.a .cta .play{width:30px;height:30px}
+  .hoy.a .sec{font-size:13px}
+}
+@container (min-width:300px){
+  .hoy.a{padding:20px}
+  .hoy.a .cab .tile{display:none}
+  .hoy.a .tit{font-size:31px}
+  .hoy.a .ses li{font-size:19px}
+  .hoy.a .ses .t{width:38px;height:38px;border-radius:12px}
+  .hoy.a .lado{display:block}
+  .hoy.a .sec.bajo{display:none}
+  .hoy.a .sec.alto{display:flex;border:1px solid rgba(255,255,255,.34);background:rgba(255,255,255,.12);padding:0 14px 0 12px;min-height:36px;border-radius:999px;font-size:13px}
+  .hoy.a .sec.alto svg{width:15px;height:15px}
+}
+
+/* ---------- B · Pase ---------- */
+.hoy.b{min-height:0;background:#fff;color:var(--a-text);box-shadow:0 10px 26px rgba(30,64,224,.16),0 0 0 1px rgba(30,64,224,.06)}
+.hoy.b .top{position:relative;padding:16px 16px 34px;background:radial-gradient(circle at 94% -4%,rgba(255,255,255,.36),transparent 46%),radial-gradient(circle at 0% 120%,rgba(122,152,255,.5),transparent 52%),linear-gradient(150deg,#2F52F3 0%,#1E40E0 50%,#1733B8 100%);color:#fff;display:flex;align-items:center;gap:12px;overflow:hidden}
+.hoy.b .top::before,.hoy.b .top::after{content:"";position:absolute;border-radius:50%;border:1px solid rgba(255,255,255,.2);pointer-events:none}
+.hoy.b .top::before{width:150px;height:150px;right:-36px;top:-60px}
+.hoy.b .top::after{width:230px;height:230px;right:-76px;top:-100px;border-color:rgba(255,255,255,.1)}
+.hoy.b .cal{position:relative;width:46px;border-radius:12px;background:#fff;color:#111318;text-align:center;overflow:hidden;box-shadow:0 5px 12px rgba(8,22,110,.3);flex:none}
+.hoy.b .cal small{display:block;background:var(--a-blue-dk);color:#fff;font-size:9.5px;font-weight:800;letter-spacing:.9px;padding:3px 0 2px}
+.hoy.b .cal b{display:block;font-size:22px;font-weight:800;line-height:1.1;padding:2px 0 4px;font-variant-numeric:tabular-nums}
+.hoy.b .et{position:relative;font-size:15px;font-weight:700;line-height:1.2}
+.hoy.b .hoja{position:relative;margin-top:-20px;background:#fff;border-radius:20px 20px 0 0;padding:16px;display:flex;flex-direction:column;flex:1}
+.hoy.b .tit{margin:0;font-size:24px;font-weight:800;letter-spacing:-.5px;line-height:1.08;color:var(--a-text);text-wrap:balance}
+.hoy.b .nombre{display:flex;align-items:center;gap:12px}
+.hoy.b .nombre .t{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;flex:none}
+.hoy.b .nombre .t svg{width:22px;height:22px}
+.hoy.b .ses{display:flex;flex-direction:column;gap:10px}
+.hoy.b .ses li{display:flex;align-items:center;gap:12px;font-size:16.5px;font-weight:800;letter-spacing:-.2px;line-height:1.15;color:var(--a-text)}
+.hoy.b .ses .t{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;flex:none}
+.hoy.b .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.hoy.b .m{display:inline-flex;align-items:center;gap:6px;background:var(--a-blue-soft);color:var(--a-blue);border-radius:999px;padding:6px 10px;font-size:12px;font-weight:800}
+.hoy.b .m svg{width:14px;height:14px}
+.hoy.b .acc{margin-top:auto;padding-top:16px;display:flex;flex-direction:column;gap:4px}
+.hoy.b .cta{display:flex;align-items:center;justify-content:center;gap:9px;min-height:52px;border:0;border-radius:16px;background:linear-gradient(140deg,#2F52F3,#1733B8);color:#fff;font-size:15px;font-weight:800;box-shadow:0 8px 20px rgba(30,64,224,.3)}
+.hoy.b .cta .play{width:auto;height:auto;border-radius:0}
+.hoy.b .cta .play::after{display:none}
+.hoy.b .cta svg{width:15px;height:15px}
+.hoy.b .cta .corto{display:none}
+.hoy.b .sec{border:0;background:transparent;color:var(--a-blue);font-size:13.5px;font-weight:800;min-height:38px;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:12px}
+.hoy.b .sec svg{width:16px;height:16px}
+@container (max-width:219px){
+  .hoy.b .top{padding:14px 12px 30px;gap:9px}
+  .hoy.b .cal{width:40px}
+  .hoy.b .et{font-size:13.5px}
+  .hoy.b .hoja{padding:14px 12px 12px}
+  .hoy.b .nombre .t{display:none}
+  .hoy.b .tit{font-size:20px;overflow-wrap:anywhere}
+  .hoy.b .ses li{font-size:14.5px}
+  .hoy.b .ses .t{width:32px;height:32px;border-radius:10px}
+  .hoy.b .cta .largo{display:none}
+  .hoy.b .cta .corto{display:inline}
+  .hoy.b .cta{min-height:46px;font-size:14px}
+}
+@container (min-width:300px){
+  .hoy.b .top{padding:18px 20px 38px}
+  .hoy.b .hoja{padding:18px 20px 20px;margin-top:-22px}
+  .hoy.b .tit{font-size:30px}
+  .hoy.b .ses li{font-size:18px}
+  .hoy.b .nombre .t{width:52px;height:52px;border-radius:16px}
+}
+@container (min-width:340px){
+  .hoy.b .acc{flex-direction:row;align-items:center;gap:10px}
+  .hoy.b .cta{flex:1 1 auto}
+  .hoy.b .sec{padding:0 14px}
+}
+
+/* ---------- C · Cartel ---------- */
+.hoy.c{padding:18px;background:linear-gradient(165deg,#1C3AD6 0%,#142A9E 52%,#0C1A66 100%);box-shadow:0 14px 30px rgba(14,30,120,.4),inset 0 1px 0 rgba(255,255,255,.18)}
+.hoy.c .brillo{background:var(--glow)}
+.hoy.c .grid{display:flex;flex-direction:column;flex:1}
+.hoy.c .cab{display:flex;align-items:center;gap:8px;align-self:flex-start;background:rgba(255,255,255,.14);border-radius:999px;padding:6px 12px 6px 10px;font-size:12.5px;font-weight:700}
+.hoy.c .cab i{width:8px;height:8px;border-radius:50%;background:var(--tc);box-shadow:0 0 0 3px rgba(255,255,255,.18),0 0 10px var(--tc)}
+.hoy.c .escena{flex:1;display:grid;place-items:center;padding:20px 0 12px;min-height:104px}
+.hoy.c .discos{display:flex;align-items:center;justify-content:center}
+.hoy.c .disco{position:relative;width:92px;height:92px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.3);color:#fff;animation:respira 3.6s ease-in-out infinite}
+.hoy.c .disco::before,.hoy.c .disco::after{content:"";position:absolute;border-radius:50%;border:1px solid rgba(255,255,255,.16)}
+.hoy.c .disco::before{inset:-12px}
+.hoy.c .disco::after{inset:-26px;border-color:rgba(255,255,255,.08)}
+.hoy.c .disco svg{width:40px;height:40px;stroke-width:1.8}
+.hoy.c .discos.dos .disco{width:78px;height:78px}
+.hoy.c .discos.dos .disco+.disco{margin-left:-12px}
+.hoy.c .discos.dos .disco::before,.hoy.c .discos.dos .disco::after{display:none}
+.hoy.c .discos.dos .disco svg{width:34px;height:34px}
+.hoy.c .discos .disco.ok{background:#fff;color:var(--a-mint);border-color:#fff}
+.hoy.c .tit{margin:0;font-size:26px;font-weight:800;letter-spacing:-.6px;line-height:1.06;text-wrap:balance}
+.hoy.c .ses li{font-size:19px;font-weight:800;letter-spacing:-.3px;line-height:1.14}
+.hoy.c .ses li+li{margin-top:4px}
+.hoy.c .meta{margin-top:8px;font-size:13px;font-weight:600;color:rgba(255,255,255,.84);display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center}
+.hoy.c .meta span{display:inline-flex;align-items:center;gap:5px}
+.hoy.c .meta svg{width:14px;height:14px}
+.hoy.c .abajo{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:16px}
+.hoy.c .ghost{height:44px;border-radius:999px;border:1.5px solid rgba(255,255,255,.34);background:rgba(255,255,255,.08);color:#fff;display:flex;align-items:center;justify-content:center;gap:8px;flex:none;padding:0 14px 0 12px;font-size:13px;font-weight:700}
+.hoy.c .ghost svg{width:17px;height:17px}
+.hoy.c .ghost span{display:none}
+.hoy.c .big{width:64px;height:64px;border:0;border-radius:50%;padding:0;background:#fff;box-shadow:0 10px 22px rgba(4,12,70,.45);flex:none;display:grid;place-items:center;color:var(--a-blue)}
+.hoy.c .big .play{width:100%;height:100%;border-radius:50%;color:#fff}
+.hoy.c .big svg{width:24px;height:24px;margin-left:3px;color:var(--a-blue);fill:var(--a-blue);stroke:none}
+.hoy.c .big.ver svg{margin-left:0;fill:none;stroke:var(--a-blue);stroke-width:2.2}
+@container (max-width:219px){
+  .hoy.c{padding:14px}
+  .hoy.c .tit{font-size:22px;overflow-wrap:anywhere}
+  .hoy.c .disco{width:84px;height:84px}
+  .hoy.c .disco svg{width:36px;height:36px}
+  .hoy.c .ses li{font-size:15.5px}
+  .hoy.c .meta{font-size:12.5px}
+  .hoy.c .big{width:58px;height:58px}
+}
+@container (min-width:300px){
+  .hoy.c{padding:20px}
+  .hoy.c .tit{font-size:31px}
+  .hoy.c .ses li{font-size:21px}
+  .hoy.c .disco{width:108px;height:108px}
+  .hoy.c .disco svg{width:46px;height:46px}
+  .hoy.c .discos.dos .disco{width:90px;height:90px}
+  .hoy.c .discos.dos .disco svg{width:38px;height:38px}
+  .hoy.c .ghost span{display:inline}
+}
+
+/* ---------- Hoy descansas (la misma plaza, en calma) ---------- */
+.hoy.r{background:#fff;color:var(--a-text);min-height:0;padding:20px 18px 18px;cursor:default;box-shadow:0 8px 22px rgba(30,64,224,.08),0 0 0 1px var(--a-border)}
+.hoy.r .brillo{background:radial-gradient(circle at 96% 0%,rgba(232,236,253,.9),transparent 48%),radial-gradient(circle at 0% 110%,rgba(238,241,254,.9),transparent 50%)}
+.hoy.r .cab{display:flex;align-items:center;gap:12px}
+.hoy.r .luna{width:46px;height:46px;border-radius:15px;background:var(--a-blue-soft);color:var(--a-blue);display:grid;place-items:center;flex:none}
+.hoy.r .luna svg{width:22px;height:22px}
+.hoy.r h3{margin:0;font-size:24px;font-weight:800;letter-spacing:-.5px;line-height:1.1}
+.hoy.r .sig{display:inline-flex;align-items:center;gap:8px;margin-top:14px;background:var(--a-blue-soft);color:var(--a-blue);border-radius:999px;padding:8px 12px 8px 10px;font-size:13px;font-weight:800;max-width:100%}
+.hoy.r .sig .t{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;flex:none;background:#fff}
+.hoy.r .sig .t svg{width:13px;height:13px}
+.hoy.r .ver{margin-top:16px;display:flex;align-items:center;justify-content:center;gap:8px;min-height:48px;border:0;border-radius:15px;background:var(--a-blue);color:#fff;font-size:14.5px;font-weight:800;box-shadow:0 8px 18px rgba(30,64,224,.24)}
+.hoy.r .ver svg{width:16px;height:16px}
+@container (min-width:300px){.hoy.r{padding:22px}.hoy.r .ver{display:inline-flex;padding:0 22px}}
+
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Tarjeta «Hoy te toca»</h1>
+  <p class="sub">Tres ideas para la tarjeta azul de Home, puestas junto a la de Salud para ver si ya van a la par. Toca los botones para ver cada situación.</p>
+
+  <div class="ctl" id="controles">
+    <div class="grp"><span>Idea</span><div class="seg" data-clave="op">
+      <button type="button" data-v="a" aria-pressed="true">A · Energía</button>
+      <button type="button" data-v="b" aria-pressed="false">B · Pase</button>
+      <button type="button" data-v="c" aria-pressed="false">C · Cartel</button>
+    </div></div>
+    <div class="grp"><span>Día</span><div class="seg" data-clave="est">
+      <button type="button" data-v="uno" aria-pressed="true">Una sesión</button>
+      <button type="button" data-v="dos" aria-pressed="false">Dos sesiones</button>
+      <button type="button" data-v="hecha" aria-pressed="false">Completada</button>
+      <button type="button" data-v="descanso" aria-pressed="false">Descanso</button>
+    </div></div>
+    <div class="grp"><span>Foto</span><div class="seg" data-clave="foto">
+      <button type="button" data-v="debajo" aria-pressed="true">Debajo</button>
+      <button type="button" data-v="lado" aria-pressed="false">Al lado</button>
+    </div></div>
+    <div class="grp"><span>Vista</span><div class="seg" data-clave="vista">
+      <button type="button" data-v="cel" aria-pressed="true">Celular</button>
+      <button type="button" data-v="compu" aria-pressed="false">Compu</button>
+    </div></div>
+  </div>
+
+  <div class="par" id="par">
+    <div id="escenario"><div class="tel"><div class="pant" id="pant"></div></div></div>
+    <div>
+      <div class="caja">
+        <h2>Qué cambia</h2>
+        <ol>
+          <li><span class="n">1</span><span><b>El nombre de la sesión manda.</b> Grande, de un vistazo. Se acabaron los cuadritos que parecían casillas de un formulario.</span></li>
+          <li><span class="n">2</span><span><b>Cada sesión lleva el ícono y el color de su tipo</b>, igual que las tarjetas del día, en lugar de AM y PM.</span></li>
+          <li><span class="n">3</span><span><b>Un solo botón protagonista.</b> «Cambiar día» queda en segundo plano.</span></li>
+          <li><span class="n">4</span><span><b>El mismo cuidado que Salud:</b> luz, profundidad y un detalle que se mueve.</span></li>
+          <li><span class="n">5</span><span><b>En el celular tiene el ancho completo.</b> Hoy comparte la fila con la foto y le toca media pantalla: por eso el nombre se parte en tres renglones. La foto baja a una banda; si prefieres verlas lado a lado, está en «Al lado».</span></li>
+        </ol>
+      </div>
+      <div class="rec" id="rec"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var IC = {"dumbbell": "<path d=\"M17.596 12.768a2 2 0 1 0 2.829-2.829l-1.768-1.767a2 2 0 0 0 2.828-2.829l-2.828-2.828a2 2 0 0 0-2.829 2.828l-1.767-1.768a2 2 0 1 0-2.829 2.829z\"/><path d=\"m2.5 21.5 1.4-1.4\"/><path d=\"m20.1 3.9 1.4-1.4\"/><path d=\"M5.343 21.485a2 2 0 1 0 2.829-2.828l1.767 1.768a2 2 0 1 0 2.829-2.829l-6.364-6.364a2 2 0 1 0-2.829 2.829l1.768 1.767a2 2 0 0 0-2.828 2.829z\"/><path d=\"m9.6 14.4 4.8-4.8\"/>", "zap": "<path d=\"M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z\"/>", "play": "<path d=\"M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z\"/>", "calendar-days": "<path d=\"M8 2v4\"/><path d=\"M16 2v4\"/><rect width=\"18\" height=\"18\" x=\"3\" y=\"4\" rx=\"2\"/><path d=\"M3 10h18\"/><path d=\"M8 14h.01\"/><path d=\"M12 14h.01\"/><path d=\"M16 14h.01\"/><path d=\"M8 18h.01\"/><path d=\"M12 18h.01\"/><path d=\"M16 18h.01\"/>", "clock": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 6v6l4 2\"/>", "list-checks": "<path d=\"M13 5h8\"/><path d=\"M13 12h8\"/><path d=\"M13 19h8\"/><path d=\"m3 17 2 2 4-4\"/><path d=\"m3 7 2 2 4-4\"/>", "moon": "<path d=\"M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401\"/>", "heart-pulse": "<path d=\"M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5\"/><path d=\"M3.22 13H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27\"/>", "arrow-right": "<path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/>", "circle-check": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"m9 12 2 2 4-4\"/>"};
+  IC.check = '<path d="M20 6 9 17l-5-5"/>';
+  function ico(n, cls){ return '<svg class="'+(cls||'i')+'" viewBox="0 0 24 24" aria-hidden="true">'+IC[n]+'</svg>'; }
+  function rgba(c, a){ var n = parseInt(c.slice(1), 16); return 'rgba('+(n>>16&255)+','+(n>>8&255)+','+(n&255)+','+a+')'; }
+  function oscuro(c, k){ var n = parseInt(c.slice(1), 16); return 'rgb('+Math.round((n>>16&255)*k)+','+Math.round((n>>8&255)*k)+','+Math.round((n&255)*k)+')'; }
+
+  var TIPOS = {
+    gym:   {c:'#A480FF', ic:'dumbbell'},
+    speed: {c:'#FFA047', ic:'zap'}
+  };
+  var EST = {
+    uno:   {ses:[{n:'Upper Strength', t:'gym'}], ej:11, dur:'~70 min'},
+    dos:   {ses:[{n:'Velocidad', t:'speed'}, {n:'Upper Strength (variación)', t:'gym'}], ej:11, dur:null},
+    hecha: {ses:[{n:'Upper Strength', t:'gym'}], ej:11, dur:'~70 min', ok:true}
+  };
+  var S = {op:'a', est:'uno', foto:'debajo', vista:'cel'};
+  var RECS = {
+    a:'<b>Mi recomendación: A · Energía.</b> Es la más cercana a Salud: luz, profundidad y un detalle que se mueve (el play late). Conserva todo lo que ya tenía la tarjeta y le da jerarquía: primero el nombre, luego los datos, al final el botón.',
+    b:'<b>B · Pase.</b> La más clara: nombre en negro sobre blanco, con la fecha de hoy en un calendario. Es la que mejor se lee a pleno sol y la que más se parece a las demás tarjetas blancas de la app.',
+    c:'<b>C · Cartel.</b> La más limpia: casi sin texto, con el ícono del tipo brillando y un botón redondo enorme. Se ve muy bien, pero enseña menos de un vistazo. Es también la que mejor se ve si prefieres la foto al lado.'
+  };
+
+  function mm(){ return '<div class="mini"><span>Sueño 8</span><span>Energía 7</span><span>Ánimo 8</span><span>Dolor 2</span></div>'; }
+  var ECG = '<svg class="ecg" viewBox="0 0 300 54" preserveAspectRatio="none" aria-hidden="true"><path d="M0 30 H70 L82 30 L90 8 L102 50 L112 20 L120 30 H190 L202 30 L210 12 L220 44 L228 26 L234 30 H300"/></svg>';
+  function salud(){
+    return '<article class="salud"><div class="top"><span class="ico">'+ico('heart-pulse')+'</span>Salud</div>'
+      + '<div class="cuerpo"><div><div class="estado">Listo</div><button class="cta" type="button">Ver detalle</button></div><div class="puntaje">7.8</div></div>'+mm()+ECG+'</article>';
+  }
+  function semana(){
+    var d = [['L','si'],['M','si'],['M','si'],['J','ahora'],['V','si'],['S','no'],['D','no']].map(function(x){return '<div class="dia '+x[1]+'">'+x[0]+'</div>';}).join('');
+    return '<div class="card semana"><div class="t">Tu semana</div><div class="n">5 días de entrenamiento</div><div class="dias">'+d+'</div></div>';
+  }
+  function foto(){
+    return '<div class="foto"><div class="in"><b>Fase 4</b><div class="bajo"><h3>Fuerza</h3><div class="blanco">Ver programa</div></div></div></div>';
+  }
+  function datos(e){ return {t0:TIPOS[e.ses[0].t], doble:e.ses.length > 1}; }
+
+  /* ---------- A · Energía ---------- */
+  function heroA(e){
+    var d = datos(e), t0 = d.t0;
+    var etiqueta = (e.ok?'Completada':'Hoy te toca');
+    var cab = '<div class="cab"><span class="et"><span class="tile'+(e.ok?' ok':'')+'">'+(e.ok?ico('check'):ico(t0.ic))+'</span>'+etiqueta+'</span>'
+      + (e.ok ? '' : '<button class="sec alto" type="button">'+ico('calendar-days')+'Cambiar día</button>')+'</div>';
+    var izq;
+    if(d.doble){
+      izq = '<ul class="ses">'+e.ses.map(function(s){var t=TIPOS[s.t];return '<li><span class="t" style="color:'+oscuro(t.c,.62)+'">'+ico(t.ic)+'</span>'+s.n+'</li>';}).join('')+'</ul>';
+    } else {
+      izq = '<h3 class="tit">'+e.ses[0].n+'</h3>';
+    }
+    izq += '<div class="meta"><span class="m">'+ico('list-checks')+e.ej+' ejercicios</span>'+(e.dur?'<span class="m">'+ico('clock')+e.dur+'</span>':'')+'</div>';
+    var lado = d.doble ? '' : '<div class="lado"><span class="vidrio'+(e.ok?' ok':'')+'">'+(e.ok?ico('check'):ico(t0.ic))+'</span></div>';
+    var cta = e.ok
+      ? '<button class="cta" type="button" style="padding-left:20px">Ver detalle '+ico('arrow-right')+'</button>'
+      : '<button class="cta" type="button"><span class="play">'+ico('play')+'</span><span class="largo">Empezar sesión</span><span class="corto">Empezar</span></button>';
+    var sec = e.ok ? '' : '<button class="sec bajo" type="button">'+ico('calendar-days')+'Cambiar día</button>';
+    return '<div class="hoy-w"><article class="hoy a"><span class="brillo"></span>'
+      + cab + '<div class="cent"><div class="izq">'+izq+'</div>'+lado+'</div><div class="acc">'+cta+sec+'</div></article></div>';
+  }
+
+  /* ---------- B · Pase ---------- */
+  function heroB(e){
+    var d = datos(e), t0 = d.t0;
+    var top = '<div class="top"><span class="cal"><small>JUE</small><b>9</b></span><span class="et">'+(e.ok?'Completada':'Hoy te toca')+'</span></div>';
+    var cuerpo;
+    if(d.doble){
+      cuerpo = '<ul class="ses">'+e.ses.map(function(s){var t=TIPOS[s.t];return '<li><span class="t" style="background:'+rgba(t.c,.16)+';color:'+oscuro(t.c,.62)+'">'+ico(t.ic)+'</span>'+s.n+'</li>';}).join('')+'</ul>';
+    } else {
+      cuerpo = '<div class="nombre"><span class="t" style="background:'+(e.ok?'var(--a-mint-soft)':rgba(t0.c,.16))+';color:'+(e.ok?'var(--a-mint)':oscuro(t0.c,.62))+'">'+(e.ok?ico('check'):ico(t0.ic))+'</span><h3 class="tit">'+e.ses[0].n+'</h3></div>';
+    }
+    var meta = '<div class="meta"><span class="m">'+ico('list-checks')+e.ej+' ejercicios</span>'+(e.dur?'<span class="m">'+ico('clock')+e.dur+'</span>':'')+'</div>';
+    var cta = e.ok
+      ? '<button class="cta" type="button">Ver detalle '+ico('arrow-right')+'</button>'
+      : '<button class="cta" type="button"><span class="play">'+ico('play')+'</span><span class="largo">Empezar sesión</span><span class="corto">Empezar</span></button>';
+    var sec = e.ok ? '' : '<button class="sec" type="button">'+ico('calendar-days')+'Cambiar día</button>';
+    return '<div class="hoy-w"><article class="hoy b">'+top+'<div class="hoja">'+cuerpo+meta+'<div class="acc">'+cta+sec+'</div></div></article></div>';
+  }
+
+  /* ---------- C · Cartel ---------- */
+  function heroC(e){
+    var d = datos(e), t0 = d.t0;
+    var glow = 'radial-gradient(circle at 74% 30%,'+rgba(t0.c,.62)+',transparent 52%),radial-gradient(circle at 8% 110%,rgba(110,140,255,.38),transparent 50%)';
+    if(d.doble) glow = 'radial-gradient(circle at 64% 30%,'+rgba(TIPOS[e.ses[0].t].c,.5)+',transparent 46%),radial-gradient(circle at 92% 38%,'+rgba(TIPOS[e.ses[1].t].c,.5)+',transparent 44%),radial-gradient(circle at 8% 110%,rgba(110,140,255,.36),transparent 50%)';
+    var cab = '<div class="cab"><i></i>'+(e.ok?'Completada':'Hoy te toca')+'</div>';
+    var discos = '<div class="discos'+(d.doble?' dos':'')+'">'+e.ses.map(function(s){
+      var t = TIPOS[s.t];
+      return '<span class="disco'+(e.ok?' ok':'')+'">'+(e.ok?ico('check'):ico(t.ic))+'</span>';
+    }).join('')+'</div>';
+    var cuerpo = d.doble
+      ? '<ul class="ses">'+e.ses.map(function(s){return '<li>'+s.n+'</li>';}).join('')+'</ul>'
+      : '<h3 class="tit">'+e.ses[0].n+'</h3>';
+    var meta = '<div class="meta"><span>'+ico('list-checks')+e.ej+' ejercicios</span>'+(e.dur?'<span>'+ico('clock')+e.dur+'</span>':'')+'</div>';
+    var ghost = e.ok ? '<span></span>' : '<button class="ghost" type="button" aria-label="Cambiar día">'+ico('calendar-days')+'<span>Cambiar día</span></button>';
+    var big = e.ok
+      ? '<button class="big ver" type="button" aria-label="Ver detalle">'+ico('arrow-right')+'</button>'
+      : '<button class="big" type="button" aria-label="Empezar sesión"><span class="play">'+ico('play')+'</span></button>';
+    return '<div class="hoy-w"><article class="hoy c" style="--tc:'+t0.c+';--glow:'+glow+'"><span class="brillo"></span>'
+      + '<div class="grid">'+cab+'<div class="escena">'+discos+'</div><div class="cuerpo">'+cuerpo+meta+'</div><div class="abajo">'+ghost+big+'</div></div></article></div>';
+  }
+
+  /* ---------- Hoy descansas ---------- */
+  function heroR(){
+    return '<div class="hoy-w"><article class="hoy r"><span class="brillo"></span>'
+      + '<div class="cab"><span class="luna">'+ico('moon')+'</span><h3>Hoy descansas</h3></div>'
+      + '<span class="sig"><span class="t" style="color:'+oscuro(TIPOS.gym.c,.62)+'">'+ico('dumbbell')+'</span>Sigue: viernes · Lower Strength</span>'
+      + '<button class="ver" type="button">Ver mi plan '+ico('arrow-right')+'</button></article></div>';
+  }
+
+  function render(){
+    var e = EST[S.est];
+    var hero = S.est === 'descanso' ? heroR() : (S.op === 'a' ? heroA(e) : S.op === 'b' ? heroB(e) : heroC(e));
+    var apilada = S.vista === 'cel' && S.foto === 'debajo' && S.est !== 'descanso';
+    var enc = '<div class="enc"><div class="avatar">AT</div><div><div class="sal">Buenos días</div><div class="nom">Andrés Tovar</div><div class="fase">Fase 4 · Semana 3 de 4</div></div></div>';
+    var arriba = S.est === 'descanso'
+      ? '<div class="fila una">'+hero+'</div>'
+      : '<div class="fila '+(apilada?'una':'dos')+'">'+hero+foto()+'</div>';
+    var medio = '<div class="fila">'+salud()+semana()+'</div>';
+    document.getElementById('pant').innerHTML = enc + arriba + medio;
+    document.getElementById('par').className = 'par' + (S.vista === 'compu' ? ' compu' : '');
+    document.getElementById('escenario').className = S.vista === 'compu' ? 'compu' : '';
+    document.getElementById('rec').innerHTML = RECS[S.op];
+    var t = document.querySelector('.compu .tel'); if(t) t.style.maxWidth = '860px';
+  }
+  document.getElementById('controles').addEventListener('click', function(ev){
+    var b = ev.target.closest('button'); if(!b) return;
+    var seg = b.parentElement; var clave = seg.getAttribute('data-clave'); if(!clave) return;
+    S[clave] = b.getAttribute('data-v');
+    seg.querySelectorAll('button').forEach(function(x){ x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+    render();
+  });
+  render();
+  window.__S = S; window.__render = render;
+})();
+</script>
+</body>
+</html>
