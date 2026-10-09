@@ -6,6 +6,7 @@ import {
 import IconoExplicacion from '@/components/IconoExplicacion';
 import { FONT, NUM_STYLE } from '@/lib/theme';
 import { capturaDeLaMitad } from '@/lib/fotogramas';
+import { estiloDelEncuadre } from '@/lib/videos';
 import PantallaDeEncuadre from '@/features/admin/PantallaDeEncuadre';
 import { useCuerpoQuieto } from '@/lib/useCuerpoQuieto';
 import { miniaturasDeVideo } from '@/lib/miniaturasDeVideo';
@@ -199,24 +200,30 @@ export default function EditorVideo({
   /* EL ARRASTRE VA A LA VELOCIDAD DE LA PANTALLA, Y EL VIDEO LO SIGUE COMO PUEDE. Cada movimiento del dedo guarda dónde va y
      se aplica una vez por cuadro de pantalla (no una vez por evento). Y el salto del video de la vista previa, que en un
      iPhone es lo caro (es decodificar 1080p en otro punto), no se pide mientras el anterior no termine: la manija nunca
-     espera al video. Mientras se arrastra se usa `fastSeek` (al fotograma clave más cercano, casi gratis) y al soltar, el
-     salto exacto. */
+     espera al video, y el último punto pedido es el que gana.
+
+     SIEMPRE SALTOS EXACTOS, NUNCA `fastSeek`. Se probó `fastSeek` mientras se arrastra (en teoría «al fotograma clave más
+     cercano, casi gratis»), y en el iPhone hace esto: hacia adelante da el cuadro pedido, pero hacia ATRÁS, aunque sea un
+     pelo, se va al fotograma clave anterior, que puede estar un segundo entero antes. Con el dedo casi quieto sobre la
+     manija (que tiembla unos píxeles ida y vuelta) la vista previa brincaba a otra escena y volvía, una y otra vez, y al
+     soltar «saltaba» al cuadro de verdad (Andrés, 9 oct 2026, con un video de su pantalla: 15 brincos en un arrastre).
+     Un salto exacto cuesta decodificar desde el fotograma clave anterior hasta el punto, y el iPhone lo hace sobrado. */
   const dedo = useRef(null);      // el último clientX del dedo
   const cuadro = useRef(null);    // el rAF pendiente
   const limites = useRef({ desde, hasta });
   limites.current = { desde, hasta };
   const buscado = useRef(null);   // un tiempo que se pidió mientras el video todavía saltaba
 
-  const muestra = useCallback((t, exacto = false) => {
+  const muestra = useCallback((t) => {
     const v = videoRef.current;
     if (!v || !Number.isFinite(t)) return;
-    if (v.seeking && !exacto) { buscado.current = t; return; }
+    // Un salto a la vez: si el video todavía va hacia el anterior, se apunta este y se pide al llegar (ver `onSeeked`).
+    if (v.seeking) { buscado.current = t; return; }
     buscado.current = null;
-    if (!exacto && typeof v.fastSeek === 'function') v.fastSeek(t);
-    else v.currentTime = t;
+    v.currentTime = t;
   }, []);
 
-  const aplica = useCallback((cual, clientX, exacto = false) => {
+  const aplica = useCallback((cual, clientX) => {
     if (!duracion) return;
     const { desde: d, hasta: h } = limites.current;
     // Las manijas nunca se cruzan: siempre queda al menos medio segundo.
@@ -224,11 +231,11 @@ export default function EditorVideo({
       const t = Math.max(0, Math.min(tiempoEnX(clientX, MANIJA / 2), h - 0.5));
       // Llevada al principio es «sin recorte», no «recorte desde 0»: así el botón de restablecer se apaga solo.
       setInicio(t <= 0.02 ? null : t);
-      muestra(t, exacto);
+      muestra(t);
     } else {
       const t = Math.min(duracion, Math.max(tiempoEnX(clientX, -MANIJA / 2), d + 0.5));
       setFin(t >= duracion - 0.02 ? null : t);
-      muestra(t, exacto);
+      muestra(t);
     }
   }, [duracion, tiempoEnX, muestra]);
 
@@ -244,7 +251,8 @@ export default function EditorVideo({
 
   const suelta = useCallback(() => {
     if (cuadro.current) { cancelAnimationFrame(cuadro.current); cuadro.current = null; }
-    if (arrastrando && dedo.current !== null) aplica(arrastrando, dedo.current, true);
+    // El último punto del dedo se aplica siempre; si el video aún va hacia el anterior, llegará a este al terminar.
+    if (arrastrando && dedo.current !== null) aplica(arrastrando, dedo.current);
     dedo.current = null;
     setArrastrando(null);
   }, [arrastrando, aplica]);
@@ -391,12 +399,12 @@ export default function EditorVideo({
                   const v = e.currentTarget;
                   if (fin != null && v.currentTime >= fin) v.pause();
                 }}
-                // Con encuadre, el video se agranda y se corre para que solo se vea lo que queda dentro del marco.
-                style={encuadre ? {
-                  position: 'absolute', display: 'block', objectFit: 'fill',
-                  width: `${100 / encuadre.w}%`, height: `${100 / encuadre.h}%`,
-                  left: `${(-encuadre.x / encuadre.w) * 100}%`, top: `${(-encuadre.y / encuadre.h) * 100}%`,
-                } : { width: '100%', height: '100%', objectFit: 'fill', display: 'block' }}
+                /* Con encuadre, el video se agranda y se corre para que solo se vea lo que queda dentro del marco. Es LA
+                   MISMA pieza con la que lo ve el atleta (`estiloDelEncuadre`), y no una copia: la copia que había aquí
+                   no quitaba el `max-width: 100%` que la app pone a todo video, así que el video agrandado se quedaba del
+                   ancho de la caja, corrido a la izquierda, y la derecha salía NEGRA (Andrés, 9 oct 2026, con un video
+                   de su pantalla). */
+                style={encuadre ? estiloDelEncuadre(encuadre) : { width: '100%', height: '100%', objectFit: 'fill', display: 'block' }}
               />
 
               {/* Una tapa negra que se desvanece cuando el primer fotograma ya está pintado. Es una tapa y NO `opacity: 0` en el
