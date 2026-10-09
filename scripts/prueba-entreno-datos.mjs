@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import { pasosDeLaSesion, marcaListo, saltaPaso, vistaDelEntreno } from '../src/lib/entreno.js';
 import {
-  relojDe, lineaDeAvance, cifrasDelPaso, textoDeLoPlaneado, segmentosDeAvance, gruposDeLaLista, subtituloDeLaLista, cantidadPlaneada,
+  relojDe, tiempoTotal, lineaDeAvance, cifrasDelPaso, textoDeLoPlaneado, segmentosDeAvance, gruposDeLaLista, subtituloDeLaLista, cantidadPlaneada,
   camposDeCambiar, exDataTrasListo,
 } from '../src/lib/entrenoDatos.js';
 import { parcheDeLapsos } from '../src/lib/lapsos.js';
@@ -32,6 +32,18 @@ const lower = {
   assert.equal(relojDe(-4), '0:00');
   assert.equal(relojDe(59.6), '1:00');
   assert.equal(relojDe('x'), '0:00');
+}
+
+/* ---- El tiempo total, callado ---- */
+{
+  assert.equal(tiempoTotal(0), '0:00');
+  assert.equal(tiempoTotal(75_000), '1:15');
+  assert.equal(tiempoTotal(3_725_000), '1:02:05');
+  assert.equal(tiempoTotal(null), null, 'sin iniciar no hay tiempo');
+  assert.equal(tiempoTotal(undefined), null);
+  assert.equal(tiempoTotal(-5), null);
+  assert.equal(tiempoTotal(6 * 3600 * 1000), '6:00:00');
+  assert.equal(tiempoTotal(6 * 3600 * 1000 + 1), null, 'retomado al día siguiente: nada, no «26:12:00»');
 }
 
 /* ---- Dónde va ---- */

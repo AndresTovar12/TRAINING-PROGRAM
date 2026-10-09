@@ -1137,10 +1137,14 @@ const CuerpoDelDia = ({
             {notasDelDia.map((n, i) => <li key={i}>{n.text}</li>)}
           </ul>
         );
-        return entarjetas ? tarjetaDelDia(lista) : (
-          <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: '14px 16px', marginBottom: 14 }}>
-            {lista}
-          </div>
+        // Un día de puras notas también se puede entrenar: cada nota es un paso (ver `lib/entreno.js`).
+        return entarjetas ? tarjetaDelDia(<>{botonDelEntreno()}{lista}</>) : (
+          <>
+            {botonDelEntreno()}
+            <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: '14px 16px', marginBottom: 14 }}>
+              {lista}
+            </div>
+          </>
         );
       })()}
 

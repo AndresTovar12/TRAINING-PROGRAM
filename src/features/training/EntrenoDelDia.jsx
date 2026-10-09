@@ -15,7 +15,7 @@ import {
   cuentaDe, empiezaPaso, marcaListo, masDescanso as sumaDescanso, pasosDeLaSesion, quitaCronometro, saltaPaso, terminaEntreno, vistaDelEntreno, vuelveAtras,
 } from '@/lib/entreno';
 import {
-  camposDeCambiar, cantidadPlaneada, cifrasDelPaso, exDataTrasListo, lineaDeAvance, relojDe, segmentosDeAvance, textoDeLoPlaneado,
+  camposDeCambiar, cantidadPlaneada, cifrasDelPaso, exDataTrasListo, lineaDeAvance, segmentosDeAvance, textoDeLoPlaneado, tiempoTotal,
 } from '@/lib/entrenoDatos';
 import Portada from '@/components/Portada';
 import RelojDelBloque from '@/features/training/RelojDelBloque';
@@ -236,7 +236,7 @@ export default function EntrenoDelDia({
   /* ---------- Qué se dibuja ---------- */
   const fondo = enDescanso && aspecto?.fondo ? `${aspecto.fondo}, ${LT.bg}` : LT.bg;
   const segmentos = segmentosDeAvance(plan, vista.estados);
-  const tiempo = relojDe((vista.transcurrido ?? 0) / 1000);
+  const tiempo = tiempoTotal(vista.transcurrido) ?? '';
   const linea = mostrarFin ? '' : lineaDeAvance(plan, enDescanso ? vista.siguiente : paso);
 
   const siguienteDeDescanso = enDescanso && vista.siguiente ? {
@@ -255,7 +255,7 @@ export default function EntrenoDelDia({
   } : null;
 
   const resumenDeFin = [
-    { valor: tiempo, etiqueta: 'Tiempo' },
+    { valor: tiempo || '—', etiqueta: 'Tiempo' },
     { valor: String(vista.hechos), etiqueta: 'Hechos' },
     vista.saltados > 0
       ? { valor: String(vista.saltados), etiqueta: 'Saltados' }
