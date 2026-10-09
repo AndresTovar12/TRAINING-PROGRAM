@@ -22,6 +22,14 @@ export function relojDe(segundos) {
   return h ? `${h}:${dos(m)}:${dos(s % 60)}` : `${m}:${dos(s % 60)}`;
 }
 
+// Un entreno que se retoma al día siguiente no «dura» 26 horas: pasadas seis, el tiempo total ya no se dice (mejor nada que un número absurdo).
+const LIMITE_DEL_TIEMPO = 6 * 3600 * 1000;
+
+/** El tiempo total para la barra de arriba: «12:30», o `null` si no ha iniciado o pasó de seis horas. */
+export function tiempoTotal(ms) {
+  return ms === null || ms === undefined || !(ms >= 0) || ms > LIMITE_DEL_TIEMPO ? null : relojDe(ms / 1000);
+}
+
 /** Un ritmo guardado en segundos, como se lee: 274 → «4:34». */
 const ritmoDe = (seg) => relojDe(seg);
 
