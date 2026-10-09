@@ -143,8 +143,8 @@ export default function EditorVideo({
     }).catch(() => { if (vivo) setMinis((m) => ({ ...m, fallo: true })); });
     return () => { vivo = false; };
   }, [local, archivo]);
-  // Mientras llegan, los huecos enseñan la primera (que sale casi al instante): la tira nunca se ve vacía.
-  const primera = minis.lista.find(Boolean) ?? null;
+  // Mientras llegan, cada hueco se queda oscuro y se llena de izquierda a derecha: no se repite la primera en todos (así la
+  // tira cambiaba de aspecto diez veces mientras se llenaba, y eso se leía como un parpadeo).
 
   // Por si el navegador nunca avisa que pintó: a los dos segundos de tener las medidas, se muestra de todos modos.
   useEffect(() => {
@@ -169,31 +169,73 @@ export default function EditorVideo({
 
   /* El tiempo que dice un dedo sobre la tira. La tira útil NO incluye las manijas (van a los lados), así que se mide
      contra la pista sin ellas. `ajuste` compensa que el dedo agarra la manija por su centro y no por el borde que marca. */
+  /* El tiempo que dice un dedo sobre la tira. La tira útil NO incluye las manijas (van a los lados), así que se mide
+     contra la pista sin ellas. `ajuste` compensa que el dedo agarra la manija por su centro y no por el borde que marca.
+     SIN REDONDEAR A DÉCIMAS: con un video de 3 s eran 30 posiciones posibles, y la manija avanzaba a saltos de 10 px
+     (Andrés, 9 oct 2026, con un video de su pantalla: «la barrita de arriba no es nada fluida»). Centésimas bastan. */
   const tiempoEnX = useCallback((clientX, ajuste = 0) => {
     const c = pistaRef.current?.getBoundingClientRect();
     if (!c || !duracion) return 0;
     const ancho = c.width - MANIJA * 2;
     const p = Math.min(1, Math.max(0, (clientX + ajuste - (c.left + MANIJA)) / ancho));
-    return Math.round(p * duracion * 10) / 10;
+    return Math.round(p * duracion * 100) / 100;
   }, [duracion]);
 
-  const mover = useCallback((e) => {
-    if (!arrastrando || !duracion) return;
+  /* EL ARRASTRE VA A LA VELOCIDAD DE LA PANTALLA, Y EL VIDEO LO SIGUE COMO PUEDE. Cada movimiento del dedo guarda dónde va y
+     se aplica una vez por cuadro de pantalla (no una vez por evento). Y el salto del video de la vista previa, que en un
+     iPhone es lo caro (es decodificar 1080p en otro punto), no se pide mientras el anterior no termine: la manija nunca
+     espera al video. Mientras se arrastra se usa `fastSeek` (al fotograma clave más cercano, casi gratis) y al soltar, el
+     salto exacto. */
+  const dedo = useRef(null);      // el último clientX del dedo
+  const cuadro = useRef(null);    // el rAF pendiente
+  const limites = useRef({ desde, hasta });
+  limites.current = { desde, hasta };
+  const buscado = useRef(null);   // un tiempo que se pidió mientras el video todavía saltaba
+
+  const muestra = useCallback((t, exacto = false) => {
+    const v = videoRef.current;
+    if (!v || !Number.isFinite(t)) return;
+    if (v.seeking && !exacto) { buscado.current = t; return; }
+    buscado.current = null;
+    if (!exacto && typeof v.fastSeek === 'function') v.fastSeek(t);
+    else v.currentTime = t;
+  }, []);
+
+  const aplica = useCallback((cual, clientX, exacto = false) => {
+    if (!duracion) return;
+    const { desde: d, hasta: h } = limites.current;
     // Las manijas nunca se cruzan: siempre queda al menos medio segundo.
-    if (arrastrando === 'inicio') {
-      const t = Math.min(tiempoEnX(e.clientX, MANIJA / 2), hasta - 0.5);
-      setInicio(Math.max(0, t));
-      if (videoRef.current) videoRef.current.currentTime = Math.max(0, t);
+    if (cual === 'inicio') {
+      const t = Math.max(0, Math.min(tiempoEnX(clientX, MANIJA / 2), h - 0.5));
+      // Llevada al principio es «sin recorte», no «recorte desde 0»: así el botón de restablecer se apaga solo.
+      setInicio(t <= 0.02 ? null : t);
+      muestra(t, exacto);
     } else {
-      const t = Math.max(tiempoEnX(e.clientX, -MANIJA / 2), desde + 0.5);
-      setFin(Math.min(duracion, t));
-      if (videoRef.current) videoRef.current.currentTime = Math.min(duracion, t);
+      const t = Math.min(duracion, Math.max(tiempoEnX(clientX, -MANIJA / 2), d + 0.5));
+      setFin(t >= duracion - 0.02 ? null : t);
+      muestra(t, exacto);
     }
-  }, [arrastrando, duracion, tiempoEnX, desde, hasta]);
+  }, [duracion, tiempoEnX, muestra]);
+
+  const mover = useCallback((e) => {
+    if (!arrastrando) return;
+    dedo.current = e.clientX;
+    if (cuadro.current) return;
+    cuadro.current = requestAnimationFrame(() => {
+      cuadro.current = null;
+      aplica(arrastrando, dedo.current);
+    });
+  }, [arrastrando, aplica]);
+
+  const suelta = useCallback(() => {
+    if (cuadro.current) { cancelAnimationFrame(cuadro.current); cuadro.current = null; }
+    if (arrastrando && dedo.current !== null) aplica(arrastrando, dedo.current, true);
+    dedo.current = null;
+    setArrastrando(null);
+  }, [arrastrando, aplica]);
 
   useEffect(() => {
     if (!arrastrando) return undefined;
-    const suelta = () => setArrastrando(null);
     window.addEventListener('pointermove', mover);
     window.addEventListener('pointerup', suelta);
     window.addEventListener('pointercancel', suelta);
@@ -202,7 +244,7 @@ export default function EditorVideo({
       window.removeEventListener('pointerup', suelta);
       window.removeEventListener('pointercancel', suelta);
     };
-  }, [arrastrando, mover]);
+  }, [arrastrando, mover, suelta]);
 
   // Un porcentaje del tiempo, dentro de la pista útil (la que queda entre las dos manijas de los extremos).
   const x = (t) => `calc((100% - ${MANIJA * 2}px) * ${duracion ? t / duracion : 0})`;
@@ -279,7 +321,11 @@ export default function EditorVideo({
                 }}
                 // Al llegar al punto pedido, el cuadro ya está listo; dos cuadros de pantalla de respiro y la tapa se desvanece.
                 // (Se probó `requestVideoFrameCallback`: en un video quieto, después de un salto, ya pasó y no vuelve a avisar.)
-                onSeeked={() => { requestAnimationFrame(() => requestAnimationFrame(() => setPintado(true))); }}
+                onSeeked={() => {
+                  requestAnimationFrame(() => requestAnimationFrame(() => setPintado(true)));
+                  // Si el dedo siguió moviéndose mientras el video saltaba, ahora se va a donde quedó.
+                  if (buscado.current !== null) { const t = buscado.current; buscado.current = null; muestra(t); }
+                }}
                 onPlay={() => setReproduciendo(true)}
                 onPause={() => setReproduciendo(false)}
                 onTimeUpdate={(e) => {
@@ -370,9 +416,9 @@ export default function EditorVideo({
                   cabeceras de CORS y los videos ya subidos vienen de Cloudflare, que no las manda. Pedirle un
                   `currentTime` a un <video> no lee píxeles. */}
               <div style={{ position: 'absolute', top: 3, bottom: 3, left: MANIJA, right: MANIJA, display: 'flex', overflow: 'hidden', background: '#1a1a1c' }}>
-                {!minis.fallo && primera && Array.from({ length: MINIATURAS }, (_, i) => (
-                  <img key={i} src={minis.lista[i] ?? primera} alt="" draggable={false} style={{ flex: 1, minWidth: 0, height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }} />
-                ))}
+                {!minis.fallo && Array.from({ length: MINIATURAS }, (_, i) => (minis.lista[i]
+                  ? <img key={i} src={minis.lista[i]} alt="" draggable={false} style={{ flex: 1, minWidth: 0, height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }} />
+                  : <span key={i} aria-hidden="true" style={{ flex: 1, minWidth: 0, height: '100%', background: '#1a1a1c', display: 'block' }} />))}
                 {minis.fallo && Array.from({ length: MINIATURAS }, (_, i) => (
                   <video
                     key={i} src={local} muted playsInline preload="metadata"
@@ -418,7 +464,7 @@ export default function EditorVideo({
               height: 34, padding: '0 13px', borderRadius: 9, background: GRIS, display: 'inline-flex', alignItems: 'center',
               fontSize: 15, fontWeight: 600, whiteSpace: 'nowrap', ...NUM_STYLE,
             }}>
-              {seg(dura)}{tamaño ? ` · ${peso(tamaño)}` : ''}
+              {duracion ? seg(dura) : '–:––'}{tamaño ? ` · ${peso(tamaño)}` : ''}
             </span>
             <span style={{ flex: 1 }} />
             {/* Dónde WhatsApp tiene «Video | GIF»: qué es este video. Una sola caja con las dos opciones a la vista; la
