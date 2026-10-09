@@ -101,6 +101,19 @@ svg.i{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke
 .chipb{display:inline-block;background:var(--a-blue-soft);color:var(--a-blue);border-radius:999px;padding:2px 8px;font-size:11px;font-weight:800;margin-right:6px}
 .btn-b{margin-top:auto;flex:none;display:flex;align-items:center;justify-content:center;gap:8px;min-height:50px;border-radius:15px;background:var(--a-blue);color:#fff;font-size:15px;font-weight:800;box-shadow:0 8px 20px rgba(30,64,224,.26)}
 
+.wb-ini{display:flex;align-items:center;justify-content:center;gap:9px;min-height:48px;border-radius:16px;background:linear-gradient(140deg,#2F52F3,#1733B8);color:#fff;font-size:16px;font-weight:800;box-shadow:0 8px 20px rgba(30,64,224,.26);margin-bottom:10px}
+.wb-ini svg.i{width:17px;height:17px;fill:#fff;stroke:none}
+.wb-et{margin-top:18px}
+.wb-et span{display:inline-block;background:var(--a-blue-soft);color:var(--a-blue);border-radius:8px;padding:4px 9px;font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase}
+.wb-n{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-top:12px}
+.wb-n .pc-n{flex:1;min-width:0;font-size:28px}.wb-n .pc-pts{margin-top:9px;flex:none}
+.wb-cf{display:flex;gap:9px;margin-top:16px}
+.wb-cf div{flex:1;background:#fff;border:1px solid var(--a-border);border-radius:16px;padding:14px 6px 12px;text-align:center}
+.wb-cf b{display:block;font-size:34px;font-weight:800;letter-spacing:-1px;line-height:1.05}
+.wb-cf span{display:block;margin-top:4px;font-size:12.5px;font-weight:700;color:var(--a-text2)}
+.wb-ab{margin-top:auto}
+.wb-ab .pc-ok{flex:none;width:100%}
+.wb-tx{display:flex;justify-content:space-between;margin-top:10px;font-size:14px;font-weight:700;color:var(--a-text2);padding:0 6px}
 /* B · la app: Hoy */
 .hy-sal{font-size:11px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--a-blue);line-height:1}
 .hy-nom{font-size:22px;font-weight:800;letter-spacing:-.4px;line-height:1.1;margin:5px 0 14px}
@@ -220,7 +233,7 @@ svg.i{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke
 .pasos li::before{content:counter(p);width:30px;height:30px;border-radius:10px;background:var(--note);color:var(--accent);display:grid;place-items:center;font-weight:800;font-size:14px}
 .pasos b{font-size:16px;font-weight:700;letter-spacing:-.2px;line-height:1.35}
 .quien{font-size:12px;font-weight:800;letter-spacing:.6px;border-radius:999px;padding:4px 10px;white-space:nowrap}
-.quien.yo{background:var(--note);color:var(--accent)}.quien.tu{background:var(--mid-bg);color:var(--mid)}
+.quien.yo{background:var(--note);color:var(--accent)}.quien.ya{background:var(--ok-bg);color:var(--ok)}.quien.tu{background:var(--mid-bg);color:var(--mid)}
 .caja{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:6px 18px}
 @media (max-width:520px){.pasos li{grid-template-columns:32px minmax(0,1fr)}.pasos .quien{grid-column:2;justify-self:start}}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
@@ -229,10 +242,10 @@ svg.i{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke
 <body>
 <div class="wrap">
   <h1>Web simple, app completa</h1>
-  <p class="lead">La web te deja ver y anotar el entreno. La app te lo guía: con voz y vibración, con la pantalla bloqueada, con el reloj y sin señal.</p>
+  <p class="lead">La web te deja ver, anotar y hacer el entreno paso a paso. La app te lo guía de verdad: con voz y vibración, con la pantalla bloqueada, con el reloj y sin señal.</p>
 
   <div class="roles">
-    <div class="rol"><div class="ic" data-i="globe"></div><div class="v">Web</div><h3>Ver y anotar</h3><p>Tu día en una lista clara, con video, kilos, reps y notas. Sin cuentas regresivas ni pasos.</p></div>
+    <div class="rol"><div class="ic" data-i="globe"></div><div class="v">Web</div><h3>Ver, anotar y entrenar</h3><p>Tu día en una lista clara y un «Iniciar entreno» básico: un ejercicio a la vez, «Listo» y descanso. Sin voz, sin vibración, sin avisos con el teléfono bloqueado.</p></div>
     <div class="rol"><div class="ic" data-i="smartphone"></div><div class="v">App</div><h3>Guiar</h3><p>Un paso a la vez, con voz y vibración. Sigue funcionando con el teléfono bloqueado y sin señal.</p></div>
     <div class="rol"><div class="ic" data-i="watch"></div><div class="v">Reloj</div><h3>Avisar en la muñeca</h3><p>Intervalos con ritmo y zona de pulso, sin sacar el teléfono.</p></div>
   </div>
@@ -244,23 +257,34 @@ svg.i{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke
 
   <section>
     <h2>La web, más simple</h2>
-    <div class="web2">
-      <div class="web2-l">
-        <div class="lista se-queda"><h3>Se queda en la web</h3><ul id="seQueda"></ul></div>
-        <div class="lista se-va"><h3>Se va a la app</h3><ul id="seVa"></ul></div>
-      </div>
+    <div class="dos">
+      <div class="lista se-queda"><h3>Se queda en la web</h3><ul id="seQueda"></ul></div>
+      <div class="lista se-va"><h3>Se va a la app</h3><ul id="seVa"></ul></div>
+    </div>
+    <div class="grupo"><div class="mocks dos-col">
       <figure>
         <div class="ph"><div class="in">
           <div class="wa-top"><span class="wa-back"><i data-i="chevron-left"></i></span><div class="wa-t">Lunes</div></div>
           <div class="wa-ses"><span class="tile" style="background:rgba(164,128,255,.2);color:#5F4A99"><i data-i="dumbbell"></i></span><b>Upper Strength</b></div>
-          <div class="ex"><div class="h"><span class="n">Back Squat</span><span class="chk on"><i data-i="check"></i></span></div><div class="p">5 × 105 kg · 78 %</div><div class="sets"><i class="on">5</i><i class="on">5</i><i class="on">5</i><i class="on">5</i><i class="on">5</i></div></div>
+          <div class="wb-ini"><i data-i="play"></i>Iniciar entreno</div>
+          <div class="ex"><div class="h"><span class="n">Back Squat</span><span class="chk"></span></div><div class="p">5 × 105 kg · 78 %</div><div class="sets"><i>5</i><i>5</i><i>5</i><i>5</i><i>5</i></div></div>
           <div class="ex"><div class="h"><span class="n">Hex Bar Deadlift</span><span class="chk"></span></div><div class="p">4 × 6 · 120 kg</div><div class="sets"><i>6</i><i>6</i><i>6</i><i>6</i></div></div>
           <div class="ex"><div class="h"><span class="n"><span class="chipb">Bi-serie</span>Bulgarian Split Squat + Hip Thrust</span><span class="chk"></span></div><div class="p">3 × 10</div></div>
           <div class="btn-b">Terminar sesión</div>
         </div></div>
-        <figcaption>Tu día, en una lista</figcaption>
+        <figcaption>Tu día, con «Iniciar entreno»</figcaption>
       </figure>
-    </div>
+      <figure>
+        <div class="ph"><div class="in">
+          <div class="pc-top"><span class="pc-x"><i data-i="x"></i></span><div class="pc-bar"><i class="on"></i><i class="on"></i><i></i><i></i></div></div>
+          <div class="wb-et"><span>Bi-serie</span></div>
+          <div class="wb-n"><div class="pc-n" style="margin-top:0">Bulgarian Split Squat</div><div class="pc-pts" style="margin-top:0"><i class="ac"></i><i></i><i></i></div></div>
+          <div class="wb-cf"><div><b>6</b><span>reps por lado</span></div><div><b>2</b><span>RIR</span></div></div>
+          <div class="wb-ab"><span class="pc-ok"><i data-i="check"></i>Listo</span><div class="wb-tx"><span>Anterior</span><span>Cambiar</span><span>Saltar</span></div></div>
+        </div></div>
+        <figcaption>Un ejercicio a la vez, sin lo demás</figcaption>
+      </figure>
+    </div></div>
   </section>
 
   <section>
@@ -350,7 +374,7 @@ svg.i{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke
   <section>
     <h2>Lo que falta</h2>
     <div class="caja"><ol class="pasos">
-      <li><b>Dejar la web simple</b><span class="quien yo">YO</span></li>
+      <li><b>Dejar la guía de la web básica, con su «Iniciar entreno»</b><span class="quien ya">HECHO</span></li>
       <li><b>Maqueta de la app para que la apruebes</b><span class="quien yo">YO</span></li>
       <li><b>Cuenta de Apple Developer (99 USD al año) y el dominio</b><span class="quien tu">TÚ</span></li>
       <li><b>La app en TestFlight con la guía, los avisos y el modo sin conexión (se compila en la nube: esta Mac no tiene Xcode)</b><span class="quien yo">YO</span></li>
@@ -373,8 +397,8 @@ svg.i{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke
   var FILAS = [
     ['Ver tu día y el video de cada ejercicio', OK('Sí'), OK('Sí'), MID('Resumen')],
     ['Anotar kilos, reps y notas', OK('Sí'), OK('Sí, más rápido'), NO('Después')],
-    ['Guía paso a paso: qué sigue', NO('Lista'), OK('Sí'), OK('Cardio')],
-    ['Descansos que avisan con el teléfono bloqueado', NO('No'), OK('Sí'), OK('Cardio')],
+    ['Guía paso a paso: qué sigue', MID('Básica'), OK('Sí'), OK('Cardio')],
+    ['Descanso con cuenta regresiva', MID('Pantalla encendida'), OK('Y bloqueado'), OK('Cardio')],
     ['Voz y vibración', NO('No'), OK('Sí'), OK('Vibración')],
     ['Relojes de bloque: AMRAP, EMOM, intervalos', MID('Básico'), OK('Sí'), OK('Intervalos')],
     ['Cardio con ritmo, zona y pulso', NO('No'), OK('Sí'), OK('Sí')],
@@ -392,16 +416,16 @@ svg.i{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke
     ['check','Las tarjetas del día, con el color y el ícono del tipo'],
     ['check','La ficha del ejercicio con su video'],
     ['check','Anotar kilos, reps y notas'],
-    ['check','El reloj de siempre en los Sets con formato (AMRAP, EMOM, intervalos)'],
+    ['check','«Iniciar entreno»: un ejercicio a la vez, con «Listo», «Cambiar» y descanso'],
+    ['check','El reloj de siempre en los Sets con formato (AMRAP, EMOM, intervalos y lapsos)'],
     ['check','Terminar la sesión']
   ].map(function(x){ return li(x[0], x[1]); }).join('');
   document.getElementById('seVa').innerHTML = [
-    ['arrow-right','«Iniciar entreno» paso a paso'],
-    ['arrow-right','Los descansos con cuenta regresiva y aviso'],
-    ['arrow-right','Bi-series A/B y las vueltas en puntos'],
-    ['arrow-right','«Ver todo» por serie'],
-    ['arrow-right','Los lapsos como pasos con reloj'],
-    ['arrow-right','«Grabar técnica»']
+    ['arrow-right','«Ver todo»: el workout entero por series'],
+    ['arrow-right','El par A/B de las bi-series'],
+    ['arrow-right','El cronómetro de cada paso con tiempo'],
+    ['arrow-right','Voz, vibración y avisos con el teléfono bloqueado'],
+    ['arrow-right','«Grabar técnica» funcionando']
   ].map(function(x){ return li(x[0], x[1]); }).join('');
 })();
 </script>
