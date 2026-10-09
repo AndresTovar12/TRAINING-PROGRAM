@@ -92,16 +92,14 @@ export function datosDeSesion({ day, week, dayIdx }) {
 }
 
 /**
- * Las sesiones de UN día para la lista de «Hoy»: una por entrada, con su turno (AM o PM) si lo trae. Cada una dice
+ * Las sesiones de UN día para la lista de «Hoy»: una por entrada. Cada una dice
  * cuántos ejercicios trae, cuánto dura y si va hecha; `registro` es lo que el atleta lleva anotado de ese día.
  *
  * Así la lista enseña SESIONES y no autores: el doble del coach y la del fisio quedan
  * juntos, cada uno con su etiqueta (Andrés, 2 oct 2026: «el programa es un todo»).
  */
 export function partesDelDia({ day, week, dayIdx }, registro) {
-  const [sesion] = sesionesDelTitulo(day);
   return [{
-    turno: sesion?.turno ?? null,
     nombre: sinDuracion(day?.name || '') || day?.day || '',
     bloque: null,
     ...datosDeSesion({ day, week, dayIdx }),
