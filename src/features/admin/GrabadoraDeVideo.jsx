@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, SwitchCamera, Loader2, Mic, MicOff } from 'lucide-react';
 import BotonEntendido from '@/components/BotonEntendido';
 import { useAvisosVistos } from '@/lib/useAvisosVistos';
 import { FONT, NUM_STYLE } from '@/lib/theme';
 import { useCuerpoQuieto } from '@/lib/useCuerpoQuieto';
+import { miniaturasEnVivo } from '@/lib/miniaturasEnVivo';
 
 /**
  * Grabar el ejercicio DENTRO de la app, no con el atajo del navegador.
@@ -233,6 +234,10 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
   const streamRef = useRef(null);
   const recRef = useRef(null);
   const trozosRef = useRef([]);
+  /* Las miniaturas de la tira se sacan MIENTRAS se graba (ver `lib/miniaturasEnVivo.js`), y al parar viajan con el archivo
+     al editor, junto con la foto del primer cuadro: el editor abre ya con la imagen y la tira puestas. */
+  const enVivoRef = useRef(null);    // lo que está capturando ahora
+  const adelantoRef = useRef(null);  // lo capturado, esperando a que el archivo esté listo
   const { listo: avisosListos, visto, marcar } = useAvisosVistos();
 
   /* Los avisos al de fuera viven en una ref, NO en las dependencias del efecto que abre la cámara. Llegan como funciones
@@ -252,8 +257,12 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
      aviso no basta: se espera un respiro más y se entra con un fundido. Mientras tanto, negro liso y el giro. */
   const [reproduce, setReproduce] = useState(false); // el navegador ya dice que reproduce
   const [revelado, setRevelado] = useState(false);   // ya se ve a pantalla completa
-  // Entre parar de grabar y que se abra el editor: un fondo liso y a propósito, no un negro con los botones de antes.
+  /* Entre parar de grabar y que se abra el editor: la pantalla se CONGELA en lo último que se vio (una foto de la vista
+     previa, sacada al tocar «parar»), no un negro con los botones de antes ni un negro con un giro (Andrés, 9 oct 2026,
+     comparando con WhatsApp: «parar de grabar se siente brusco»). El giro solo sale si el archivo tarda en estar listo. */
   const [procesando, setProcesando] = useState(false);
+  const [congelado, setCongelado] = useState(null);   // la foto en la que se congela la pantalla
+  const [tardando, setTardando] = useState(false);     // el archivo lleva medio segundo sin estar listo: giro
   const [err, setErr] = useState('');
   const [conSonido, setConSonido] = useState(() => leeSonido(proposito));
   const [aviso, setAviso] = useState('');
@@ -261,6 +270,15 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
 
   // Esta pantalla tiene la cámara reservada mientras esté abierta; al cerrarla, queda guardada un rato.
   useEffect(() => { reservaLaCamara(); return sueltaLaCamara; }, []);
+  // Si la pantalla se cierra a medio grabar, el reloj de las capturas se para con ella.
+  useEffect(() => () => { enVivoRef.current?.termina(); enVivoRef.current = null; }, []);
+
+  // El giro de «procesando» solo si de verdad se tarda: medio segundo mirando una foto quieta no necesita aviso.
+  useEffect(() => {
+    if (!procesando) return undefined;
+    const t = window.setTimeout(() => setTardando(true), 500);
+    return () => window.clearTimeout(t);
+  }, [procesando]);
 
   const cambiaDeLado = () => {
     setPreparando(true);
@@ -360,24 +378,35 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
     }
 
     rec.ondataavailable = (e) => { if (e.data?.size) trozosRef.current.push(e.data); };
+    // Un fallo a medio grabar: se deja de capturar y la pantalla vuelve a la cámara, con el aviso.
+    const falla = (texto) => {
+      enVivoRef.current?.termina();
+      enVivoRef.current = null;
+      adelantoRef.current = null;
+      setGrabando(false);
+      setProcesando(false);
+      setTardando(false);
+      setCongelado(null);
+      setErr(texto);
+    };
     // Sin esto, un fallo a mitad de la grabación no se ve por ningún lado y el coach se queda mirando el cronómetro.
-    rec.onerror = () => { setGrabando(false); setProcesando(false); setErr('Se cortó la grabación. Inténtalo otra vez.'); };
+    rec.onerror = () => falla('Se cortó la grabación. Inténtalo otra vez.');
     rec.onstop = async () => {
       /* El tipo va SIN `;codecs=…`: el servidor compara contra una lista cerrada ('video/mp4', 'video/webm') y con la
          coletilla no coincide. */
       const blob = new Blob(trozosRef.current, { type: formato.base });
       /* NUNCA entregar un archivo vacío: un video de 0 bytes sube sin protestar y luego no se reproduce. */
       if (!blob.size) {
-        setGrabando(false);
-        setProcesando(false);
-        setErr('No se grabó nada. Inténtalo otra vez, o usa la cámara del teléfono.');
+        falla('No se grabó nada. Inténtalo otra vez, o usa la cámara del teléfono.');
         return;
       }
       /* Y NUNCA entregar un video que no se puede ver (pesaba, sonaba, y medía 0 × 0: pasó). Si no tiene imagen se
          devuelve al coach a la cámara del teléfono: peor calidad, pero un video que existe. */
       const sirve = await tieneImagen(blob);
       if (!sirve) {
+        adelantoRef.current = null;
         setGrabando(false);
+        setCongelado(null);
         setErr('La grabación salió sin imagen. Se abrirá la cámara del teléfono.');
         streamRef.current = null;
         apagaLaCamara();
@@ -386,7 +415,10 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
       }
       // Grabado: el micrófono se suelta ya (la música vuelve); la cámara queda guardada por si se repite.
       sueltaElMicrofono();
-      avisos.current.onListo(new File([blob], `grabacion.${formato.ext}`, { type: formato.base }));
+      // Con el archivo van las miniaturas y la foto del primer cuadro, para que el editor abra ya completo.
+      const adelanto = adelantoRef.current ? { ...adelantoRef.current, medidas: medidas ?? null } : null;
+      adelantoRef.current = null;
+      avisos.current.onListo(new File([blob], `grabacion.${formato.ext}`, { type: formato.base }), adelanto);
     };
 
     recRef.current = rec;
@@ -398,10 +430,18 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
       return;
     }
     setGrabando(true);
+    // Desde este instante se capturan las miniaturas de la vista previa. Si no se puede, el editor las sacará del archivo.
+    try { enVivoRef.current = videoRef.current ? miniaturasEnVivo(videoRef.current) : null; } catch { enVivoRef.current = null; }
   }
 
   function para() {
+    const enVivo = enVivoRef.current;
+    enVivoRef.current = null;
+    // Primero la foto (la vista previa sigue viva) y luego se para: la pantalla se queda en lo último que se vio.
+    setCongelado(enVivo?.foto() ?? null);
+    adelantoRef.current = enVivo?.termina() ?? null;
     setGrabando(false);
+    setTardando(false);
     setProcesando(true);
     recRef.current?.stop();
     recRef.current = null;
@@ -569,11 +609,18 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
         </span>
       </div>
 
-      {/* Recién parada la grabación, iOS apaga la vista previa un momento y reaparecían los botones de grabar. Se tapa con un
-          fondo liso y un giro, a propósito, hasta que se abre el editor. */}
+      {/* Recién parada la grabación, iOS apaga la vista previa un momento y reaparecían los botones de grabar. Se tapa con la
+          foto de lo último que se vio (como si la imagen se congelara), hasta que se abre el editor. Sin foto, negro liso.
+          El giro solo si el archivo tarda. */}
       {procesando && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 3, background: '#000', display: 'grid', placeItems: 'center' }}>
-          <Loader2 size={30} color="#fff" className="spin" />
+          {congelado && (
+            <img
+              src={congelado} alt="" draggable={false}
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+            />
+          )}
+          {(tardando || !congelado) && <Loader2 size={30} color="#fff" className="spin" style={{ position: 'relative' }} />}
         </div>
       )}
     </div>,

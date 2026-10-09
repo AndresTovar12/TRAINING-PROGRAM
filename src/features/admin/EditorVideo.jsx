@@ -42,6 +42,10 @@ const MANIJA = 17;
 
 /* Sin `backdrop-filter`: en iPhone, un desenfoque encima de un video que se reproduce parpadea y cuesta cuadros. */
 const GRIS = 'rgba(58,58,60,.92)';
+// El amarillo de WhatsApp: las manijas mientras se arrastran, y el botón del sonido apagado.
+const AMARILLO = '#F5C518';
+// Lo que queda fuera del recorte en la tira: aclarado, no oscurecido (así lo enseña WhatsApp).
+const FUERA = 'rgba(255,255,255,.62)';
 
 const seg = (s) => {
   if (s == null || Number.isNaN(s)) return '0:00';
@@ -80,13 +84,20 @@ export default function EditorVideo({
   proposito: propositoInicial,
   // Para quién o para qué ejercicio es: el «Yo» de WhatsApp, en la franja de abajo. Opcional.
   destino,
+  /* Lo que la cámara de la app sacó MIENTRAS grababa (ver `lib/miniaturasEnVivo.js`): `{ miniaturas, portada, duracion,
+     medidas }`. Con esto el editor abre ya con la tira llena y la imagen puesta, antes de haber abierto el archivo; la
+     duración y las medidas de verdad llegan con los metadatos y se quedan con ellas. Un video del carrete o uno ya subido
+     no lo trae, y todo se saca del archivo como siempre. */
+  adelanto = null,
 }) {
   const videoRef = useRef(null);
   const pistaRef = useRef(null);
   const escenaRef = useRef(null);
 
-  const [duracion, setDuracion] = useState(null);
-  const [medidas, setMedidas] = useState(null);   // { w, h } del video original
+  const [duracion, setDuracion] = useState(adelanto?.duracion ?? null);
+  const [medidas, setMedidas] = useState(adelanto?.medidas ?? null);   // { w, h } del video original
+  // El archivo ya se abrió y dijo su duración de verdad (la del adelanto es la del reloj, y puede diferir unas décimas).
+  const [medido, setMedido] = useState(false);
   const [inicio, setInicio] = useState(ajustes?.recorte_inicio ?? null);
   const [fin, setFin] = useState(ajustes?.recorte_fin ?? null);
   const [sinAudio, setSinAudio] = useState(!!ajustes?.sin_audio);
@@ -108,9 +119,11 @@ export default function EditorVideo({
      calculaba al vuelo y se liberaba en un efecto aparte, que parece
      equivalente y no lo es: React monta, desmonta y vuelve a montar cada
      pantalla para cazar errores, y en ese ida y vuelta la dirección se liberaba
-     pero no se volvía a crear. El video quedaba sin cargar. */
+     pero no se volvía a crear. El video quedaba sin cargar.
+     Y es un efecto de DISPOSICIÓN (antes de pintar): así el primer cuadro ya trae el video con su foto de adelanto, en vez
+     de un cuadro negro y la foto al siguiente. */
   const [local, setLocal] = useState(url ?? null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!archivo) { setLocal(url ?? null); return undefined; }
     const u = URL.createObjectURL(archivo);
     setLocal(u);
@@ -131,9 +144,11 @@ export default function EditorVideo({
 
   /* LAS MINIATURAS DE LA TIRA, con un solo decodificador (ver `lib/miniaturasDeVideo.js`). `null` mientras se hacen (la
      tira va oscura), la lista de imágenes al terminar, o 'videos' si no se pudieron: entonces la tira de videos de antes. */
-  const [minis, setMinis] = useState({ lista: [], fallo: false });
+  const [minis, setMinis] = useState({ lista: adelanto?.miniaturas ?? [], fallo: false });
+  const yaVienen = (adelanto?.miniaturas?.length ?? 0) >= MINIATURAS;
   useEffect(() => {
-    if (!local) return undefined;
+    // Recién grabado, las miniaturas ya vinieron con el archivo: no hay nada que sacar.
+    if (!local || yaVienen) return undefined;
     let vivo = true;
     setMinis({ lista: [], fallo: false });
     miniaturasDeVideo(local, MINIATURAS, {
@@ -142,7 +157,7 @@ export default function EditorVideo({
       alCadaUna: (i, src) => { if (vivo) setMinis((m) => { const lista = [...m.lista]; lista[i] = src; return { ...m, lista }; }); },
     }).catch(() => { if (vivo) setMinis((m) => ({ ...m, fallo: true })); });
     return () => { vivo = false; };
-  }, [local, archivo]);
+  }, [local, archivo, yaVienen]);
   // Mientras llegan, cada hueco se queda oscuro y se llena de izquierda a derecha: no se repite la primera en todos (así la
   // tira cambiaba de aspecto diez veces mientras se llenaba, y eso se leía como un parpadeo).
 
@@ -246,6 +261,43 @@ export default function EditorVideo({
     };
   }, [arrastrando, mover, suelta]);
 
+  /* EL CURSOR BLANCO DE LA TIRA SE MUEVE A LA VELOCIDAD DE LA PANTALLA. Antes seguía al aviso `timeupdate` del video, que
+     en Safari llega unas 4 veces por segundo: la línea iba a brincos mientras el video, debajo, iba fluido (Andrés, 9 oct
+     2026, comparando con WhatsApp cuadro por cuadro: 60 pasos por segundo contra 4-8). Ahora, mientras reproduce, cada cuadro
+     de pantalla lee dónde va el video y mueve la línea directo, sin pasar por React (por eso su posición no va en el JSX). */
+  const cursorRef = useRef(null);
+  const pintaCursor = useCallback((t, enMarcha) => {
+    const el = cursorRef.current;
+    const pista = pistaRef.current;
+    if (!el || !pista || !duracion) return;
+    const { desde: d, hasta: h } = limites.current;
+    const ancho = pista.clientWidth - MANIJA * 2;
+    el.style.transform = `translate3d(${(Math.min(t, duracion) / duracion) * ancho}px, 0, 0)`;
+    // Se ve mientras reproduce, o parado en un punto dentro del recorte (no al principio: eso es «sin empezar»).
+    el.style.opacity = (enMarcha || t > d + 0.2) && t <= h + 0.05 ? '1' : '0';
+  }, [duracion]);
+
+  useEffect(() => {
+    if (!reproduciendo) return undefined;
+    let id = 0;
+    const paso = () => {
+      const v = videoRef.current;
+      if (v) {
+        pintaCursor(v.currentTime, true);
+        // La vista previa respeta el recorte: se para justo donde el atleta dejará de ver.
+        if (fin != null && v.currentTime >= fin) v.pause();
+      }
+      id = requestAnimationFrame(paso);
+    };
+    id = requestAnimationFrame(paso);
+    return () => cancelAnimationFrame(id);
+  }, [reproduciendo, pintaCursor, fin]);
+
+  // Parado (o recién llegado a un punto), la línea se coloca una vez y se queda.
+  useLayoutEffect(() => {
+    if (!reproduciendo) pintaCursor(tiempo, false);
+  }, [tiempo, desde, hasta, reproduciendo, pintaCursor]);
+
   // Un porcentaje del tiempo, dentro de la pista útil (la que queda entre las dos manijas de los extremos).
   const x = (t) => `calc((100% - ${MANIJA * 2}px) * ${duracion ? t / duracion : 0})`;
   const dura = Math.max(0, hasta - desde);
@@ -280,7 +332,9 @@ export default function EditorVideo({
         position: 'absolute', top: 0, bottom: 0, width: MANIJA, zIndex: 3, cursor: 'ew-resize', touchAction: 'none',
         // La del inicio queda a la izquierda de su tiempo; la del final, a la derecha del suyo.
         left: cual === 'inicio' ? x(desde) : `calc(${MANIJA}px + ${x(hasta)})`,
-        background: '#050505', color: '#fff', display: 'grid', placeItems: 'center',
+        // Mientras se arrastra, las dos se ponen amarillas (como en WhatsApp); al soltar, vuelven.
+        background: arrastrando ? AMARILLO : '#050505', color: arrastrando ? '#111318' : '#fff',
+        display: 'grid', placeItems: 'center',
         borderRadius: cual === 'inicio' ? '7px 0 0 7px' : '0 7px 7px 0',
       }}
     >
@@ -313,6 +367,7 @@ export default function EditorVideo({
                 onLoadedMetadata={(e) => {
                   const v = e.currentTarget;
                   setDuracion(v.duration);
+                  setMedido(true);
                   setMedidas({ w: v.videoWidth || 16, h: v.videoHeight || 9 });
                   /* El salto de tiempo NO es un detalle: sin él, en Safari de iPhone el video se ve NEGRO hasta que se
                      reproduce. iOS no pinta ningún fotograma con `preload="metadata"`: carga la duración y deja el lienzo
@@ -321,17 +376,19 @@ export default function EditorVideo({
                 }}
                 // Al llegar al punto pedido, el cuadro ya está listo; dos cuadros de pantalla de respiro y la tapa se desvanece.
                 // (Se probó `requestVideoFrameCallback`: en un video quieto, después de un salto, ya pasó y no vuelve a avisar.)
-                onSeeked={() => {
+                onSeeked={(e) => {
                   requestAnimationFrame(() => requestAnimationFrame(() => setPintado(true)));
+                  setTiempo(e.currentTarget.currentTime);
                   // Si el dedo siguió moviéndose mientras el video saltaba, ahora se va a donde quedó.
                   if (buscado.current !== null) { const t = buscado.current; buscado.current = null; muestra(t); }
                 }}
                 onPlay={() => setReproduciendo(true)}
-                onPause={() => setReproduciendo(false)}
+                onPause={(e) => { setReproduciendo(false); setTiempo(e.currentTarget.currentTime); }}
                 onTimeUpdate={(e) => {
-                  // La vista previa respeta el recorte: ves justo lo que verá el atleta.
+                  /* La vista previa respeta el recorte: ves justo lo que verá el atleta. Es el respaldo del paro (el de cada
+                     cuadro de pantalla, en `pintaCursor`, no corre con la pestaña escondida). El cursor de la tira NO se
+                     mueve desde aquí: este aviso llega 4 veces por segundo. */
                   const v = e.currentTarget;
-                  setTiempo(v.currentTime);
                   if (fin != null && v.currentTime >= fin) v.pause();
                 }}
                 // Con encuadre, el video se agranda y se corre para que solo se vea lo que queda dentro del marco.
@@ -344,7 +401,13 @@ export default function EditorVideo({
 
               {/* Una tapa negra que se desvanece cuando el primer fotograma ya está pintado. Es una tapa y NO `opacity: 0` en el
                   video: un video sin opacidad no presenta cuadros en Safari, y el aviso de «pinté» no llegaba nunca. */}
-              <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: '#000', opacity: pintado ? 0 : 1, transition: 'opacity .18s ease', pointerEvents: 'none' }} />
+              <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: '#000', opacity: pintado ? 0 : 1, transition: 'opacity .18s ease', pointerEvents: 'none' }}>
+                {/* Recién grabado, la tapa es la foto del primer cuadro (ver `lib/miniaturasEnVivo.js`): el editor abre ya con
+                    la imagen, y el video de verdad entra encima sin que se note. */}
+                {adelanto?.portada && (
+                  <img src={adelanto.portada} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'fill', display: 'block' }} />
+                )}
+              </div>
 
               {/* Tocar el video lo reproduce o lo pausa; el botón grande solo se ve con el video quieto. */}
               <button
@@ -354,7 +417,7 @@ export default function EditorVideo({
                   border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, WebkitTapHighlightColor: 'transparent',
                 }}
               >
-                {!reproduciendo && pintado && (
+                {!reproduciendo && (pintado || !!adelanto?.portada) && (
                   <span style={{
                     width: 70, height: 70, borderRadius: '50%', display: 'grid', placeItems: 'center',
                     background: 'rgba(232,228,228,.9)', boxShadow: '0 4px 18px rgba(0,0,0,.25)',
@@ -367,38 +430,47 @@ export default function EditorVideo({
           )}
         </div>
 
-        {!pintado && (
+        {!pintado && !adelanto?.portada && (
           <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', pointerEvents: 'none' }}>
             <Loader2 size={30} color="rgba(255,255,255,.75)" className="spin" />
           </div>
         )}
 
         {/* ---------- Arriba: salir y las herramientas ---------- */}
+        {/* Mientras se arrastra una manija, en su lugar va el tramo que queda («0:01 - 0:05»), como en WhatsApp. */}
         <div style={{
           position: 'absolute', top: 12, left: 14, right: 14, display: 'flex', alignItems: 'center', gap: 10, pointerEvents: 'none',
         }}>
-          <button
-            type="button" onClick={onCancelar} disabled={subiendo} aria-label="Cancelar"
-            style={{ ...redondo(), pointerEvents: 'auto', opacity: subiendo ? 0.45 : 1 }}
-          >
-            <X size={23} />
-          </button>
-          <span style={{ flex: 1 }} />
-          {cambiado && (
-            <button
-              type="button" onClick={restablecer} disabled={subiendo} aria-label="Quitar todos los cambios"
-              style={{ ...redondo(), pointerEvents: 'auto' }}
-            >
-              <RotateCcw size={21} />
-            </button>
+          {arrastrando ? (
+            <span aria-live="polite" style={{ flex: 1, height: 40, display: 'grid', placeItems: 'center', fontSize: 15, fontWeight: 600, ...NUM_STYLE }}>
+              {seg(desde)} - {seg(hasta)}
+            </span>
+          ) : (
+            <>
+              <button
+                type="button" onClick={onCancelar} disabled={subiendo} aria-label="Cancelar"
+                style={{ ...redondo(), pointerEvents: 'auto', opacity: subiendo ? 0.45 : 1 }}
+              >
+                <X size={23} />
+              </button>
+              <span style={{ flex: 1 }} />
+              {cambiado && (
+                <button
+                  type="button" onClick={restablecer} disabled={subiendo} aria-label="Quitar todos los cambios"
+                  style={{ ...redondo(), pointerEvents: 'auto' }}
+                >
+                  <RotateCcw size={21} />
+                </button>
+              )}
+              <button
+                type="button" onClick={() => { videoRef.current?.pause(); setEncuadrando(true); }} disabled={subiendo || !medidas}
+                aria-label="Encuadre"
+                style={{ ...redondo(encuadre ? { background: '#fff', color: '#111318' } : null), pointerEvents: 'auto' }}
+              >
+                <Crop size={22} />
+              </button>
+            </>
           )}
-          <button
-            type="button" onClick={() => { videoRef.current?.pause(); setEncuadrando(true); }} disabled={subiendo || !medidas}
-            aria-label="Encuadre"
-            style={{ ...redondo(encuadre ? { background: '#fff', color: '#111318' } : null), pointerEvents: 'auto' }}
-          >
-            <Crop size={22} />
-          </button>
         </div>
 
         {/* ---------- La tira del tiempo ---------- */}
@@ -430,14 +502,26 @@ export default function EditorVideo({
                     style={{ flex: 1, minWidth: 0, height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }}
                   />
                 ))}
-                {/* Lo que queda fuera del recorte se oscurece, no desaparece. */}
-                <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: duracion ? `${(desde / duracion) * 100}%` : 0, background: 'rgba(0,0,0,.68)', pointerEvents: 'none' }} />
-                <div style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: duracion ? `${100 - (hasta / duracion) * 100}%` : 0, background: 'rgba(0,0,0,.68)', pointerEvents: 'none' }} />
-                {/* Dónde va la reproducción. */}
-                {(reproduciendo || tiempo > desde + 0.2) && tiempo <= hasta && (
-                  <div style={{ position: 'absolute', top: 0, bottom: 0, left: `${(tiempo / duracion) * 100}%`, width: 2.5, marginLeft: -1, background: '#fff', borderRadius: 2, pointerEvents: 'none' }} />
-                )}
+                {/* Lo que queda fuera del recorte se aclara (como en WhatsApp), no desaparece. */}
+                <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: duracion ? `${(desde / duracion) * 100}%` : 0, background: FUERA, pointerEvents: 'none' }} />
+                <div style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: duracion ? `${100 - (hasta / duracion) * 100}%` : 0, background: FUERA, pointerEvents: 'none' }} />
+                {/* Dónde va la reproducción. Lo coloca `pintaCursor` directo, sin React: por eso aquí no lleva posición. */}
+                <div
+                  ref={cursorRef} aria-hidden="true"
+                  style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: 2.5, marginLeft: -1, background: '#fff', borderRadius: 2, pointerEvents: 'none', opacity: 0, willChange: 'transform' }}
+                />
               </div>
+              {/* Mientras se arrastra una manija, el trozo que queda se enmarca en amarillo, de manija a manija. */}
+              {arrastrando && (
+                <div
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute', top: 0, bottom: 0, zIndex: 2, pointerEvents: 'none', boxSizing: 'border-box',
+                    left: x(desde), width: `calc(${MANIJA * 2}px + (100% - ${MANIJA * 2}px) * ${duracion ? (hasta - desde) / duracion : 1})`,
+                    border: `2.5px solid ${AMARILLO}`, borderRadius: 8,
+                  }}
+                />
+              )}
               {manija('inicio')}
               {manija('fin')}
             </div>
@@ -454,7 +538,7 @@ export default function EditorVideo({
                  nada, y al atleta le suena de golpe en los audífonos mientras entrena: por eso está a la vista. */
               style={{
                 height: 34, minWidth: 46, padding: '0 12px', borderRadius: 9, border: 'none', cursor: 'pointer', pointerEvents: 'auto',
-                background: sinAudio ? '#F5C518' : GRIS, color: sinAudio ? '#111318' : '#fff',
+                background: sinAudio ? AMARILLO : GRIS, color: sinAudio ? '#111318' : '#fff',
                 display: 'grid', placeItems: 'center',
               }}
             >
@@ -464,7 +548,7 @@ export default function EditorVideo({
               height: 34, padding: '0 13px', borderRadius: 9, background: GRIS, display: 'inline-flex', alignItems: 'center',
               fontSize: 15, fontWeight: 600, whiteSpace: 'nowrap', ...NUM_STYLE,
             }}>
-              {duracion ? seg(dura) : '–:––'}{tamaño ? ` · ${peso(tamaño)}` : ''}
+              {medido ? seg(dura) : '–:––'}{tamaño ? ` · ${peso(tamaño)}` : ''}
             </span>
             <span style={{ flex: 1 }} />
             {/* Dónde WhatsApp tiene «Video | GIF»: qué es este video. Una sola caja con las dos opciones a la vista; la
@@ -511,7 +595,7 @@ export default function EditorVideo({
         <span style={{ flex: 1 }} />
         <button
           type="button"
-          disabled={subiendo || !duracion}
+          disabled={subiendo || !medido}
           onClick={() => onListo({
             inicio, fin, sinAudio, encuadre,
             ...(propositoInicial !== undefined ? { proposito: queEs } : null),
@@ -525,8 +609,8 @@ export default function EditorVideo({
           aria-label="Usar este video"
           style={{
             width: 50, height: 50, borderRadius: '50%', border: 'none', flexShrink: 0, color: '#fff',
-            background: subiendo || !duracion ? 'rgba(255,255,255,.2)' : '#1E40E0',
-            cursor: subiendo || !duracion ? 'default' : 'pointer',
+            background: subiendo || !medido ? 'rgba(255,255,255,.2)' : '#1E40E0',
+            cursor: subiendo || !medido ? 'default' : 'pointer',
             display: 'grid', placeItems: 'center', fontFamily: FONT, fontSize: 13, fontWeight: 800,
           }}
         >

@@ -49,7 +49,7 @@
  */
 import { useEffect, useState } from 'react';
 import {
-  Trash2, Loader2, Scissors, Users, Mars, Venus, Link as LinkIcon, RefreshCw, ChevronDown,
+  Trash2, Scissors, Users, Mars, Venus, Link as LinkIcon, RefreshCw, ChevronDown,
 } from 'lucide-react';
 import {
   listExerciseMedia, addExerciseMedia, deleteExerciseMedia, updateExerciseMedia,
@@ -553,16 +553,26 @@ export default function MediaDelEjercicio({
         </>
       )}
 
-      {cargando ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: T.text3, fontSize: 12.5, fontWeight: 600 }}>
-          <Loader2 size={14} className="spin" /> Cargando…
+      {/* Lo que ya tiene entra DESLIZÁNDOSE cuando llega, y sin nada que enseñar no ocupa ni un píxel. Antes había una fila
+          «Cargando…» que desaparecía un instante después de abrir, y la ventana se encogía de golpe (Andrés, 9 oct 2026,
+          con un video de su pantalla). Es un hueco que se abre de 0 a lo que mida la lista; el margen negativo descuenta
+          el espacio que el padre pone entre hijos, para que cerrado no deje ni ese hueco. */}
+      <div
+        aria-busy={cargando}
+        style={{
+          display: 'grid', gridTemplateRows: !cargando && visibles.length > 0 ? '1fr' : '0fr',
+          transition: 'grid-template-rows .22s ease', marginTop: -11,
+        }}
+      >
+        <div style={{ minHeight: 0, overflow: 'hidden' }}>
+          {visibles.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 11, paddingTop: 11 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{compacto ? 'Fotos y videos' : 'Lo que ya tiene'}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{lista_}</div>
+            </div>
+          )}
         </div>
-      ) : visibles.length > 0 && (
-        <>
-          <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{compacto ? 'Fotos y videos' : 'Lo que ya tiene'}</span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{lista_}</div>
-        </>
-      )}
+      </div>
 
       {recortandoFoto && (
         <EditorFoto
