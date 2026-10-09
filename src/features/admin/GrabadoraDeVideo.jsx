@@ -246,8 +246,14 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
   const [grabando, setGrabando] = useState(false);
   const [segundos, setSegundos] = useState(0);
   const [preparando, setPreparando] = useState(true);
-  // La vista previa ya pinta: hasta entonces se queda el velo con el giro, sin un negro de por medio.
-  const [pintando, setPintando] = useState(false);
+  /* LA VISTA PREVIA SE MUESTRA RECIÉN CUANDO YA ESTÁ A PANTALLA COMPLETA. Andrés, 9 oct 2026, con un video de su pantalla: al
+     abrir la cámara, iOS enseña primero la imagen en una cajita chica en el centro (≈0,4 s) y de golpe la abre a pantalla
+     completa. Eso se leía como un salto. El navegador ya dice «reproduciendo» mientras todavía está en la cajita, así que ese
+     aviso no basta: se espera un respiro más y se entra con un fundido. Mientras tanto, negro liso y el giro. */
+  const [reproduce, setReproduce] = useState(false); // el navegador ya dice que reproduce
+  const [revelado, setRevelado] = useState(false);   // ya se ve a pantalla completa
+  // Entre parar de grabar y que se abra el editor: un fondo liso y a propósito, no un negro con los botones de antes.
+  const [procesando, setProcesando] = useState(false);
   const [err, setErr] = useState('');
   const [conSonido, setConSonido] = useState(() => leeSonido(proposito));
   const [aviso, setAviso] = useState('');
@@ -258,7 +264,8 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
 
   const cambiaDeLado = () => {
     setPreparando(true);
-    setPintando(false);
+    setReproduce(false);
+    setRevelado(false);
     setErr('');
     setLado((l) => (l === 'environment' ? 'user' : 'environment'));
   };
@@ -317,12 +324,13 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
     return () => { vivo = false; };
   }, [lado, conSonido]);
 
-  // Por si el navegador nunca avisa que ya pinta: a los dos segundos se quita el velo de todos modos.
+  // Se revela medio segundo después de que el navegador diga que reproduce (la cajita chica dura ≈0,4 s). Si nunca lo dice,
+  // a los dos segundos y medio se revela de todos modos, para no dejar al coach mirando un giro.
   useEffect(() => {
-    if (preparando || pintando) return undefined;
-    const t = window.setTimeout(() => setPintando(true), 2000);
+    if (preparando || revelado) return undefined;
+    const t = window.setTimeout(() => setRevelado(true), reproduce ? 520 : 2500);
     return () => window.clearTimeout(t);
-  }, [preparando, pintando]);
+  }, [preparando, reproduce, revelado]);
 
   // La página de atrás se queda quieta mientras la cámara está abierta (ver `useCuerpoQuieto`).
   useCuerpoQuieto();
@@ -353,7 +361,7 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
 
     rec.ondataavailable = (e) => { if (e.data?.size) trozosRef.current.push(e.data); };
     // Sin esto, un fallo a mitad de la grabación no se ve por ningún lado y el coach se queda mirando el cronómetro.
-    rec.onerror = () => { setGrabando(false); setErr('Se cortó la grabación. Inténtalo otra vez.'); };
+    rec.onerror = () => { setGrabando(false); setProcesando(false); setErr('Se cortó la grabación. Inténtalo otra vez.'); };
     rec.onstop = async () => {
       /* El tipo va SIN `;codecs=…`: el servidor compara contra una lista cerrada ('video/mp4', 'video/webm') y con la
          coletilla no coincide. */
@@ -361,6 +369,7 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
       /* NUNCA entregar un archivo vacío: un video de 0 bytes sube sin protestar y luego no se reproduce. */
       if (!blob.size) {
         setGrabando(false);
+        setProcesando(false);
         setErr('No se grabó nada. Inténtalo otra vez, o usa la cámara del teléfono.');
         return;
       }
@@ -393,6 +402,7 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
 
   function para() {
     setGrabando(false);
+    setProcesando(true);
     recRef.current?.stop();
     recRef.current = null;
   }
@@ -403,7 +413,9 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
     onCancelar();
   };
 
-  const velo = preparando || !pintando || !!err;
+  const velo = preparando || !revelado || !!err;
+  // Mientras se abre, solo la ✕ (para poder salir); el resto entra con un fundido junto con la imagen.
+  const aparece = { opacity: revelado && !procesando ? 1 : 0, pointerEvents: revelado && !procesando ? 'auto' : 'none', transition: 'opacity .2s ease' };
   const avisoDePermiso = preguntaCadaVez && !grabando && avisosListos && !visto(CLAVE_DEL_AVISO);
 
   /* LA CÁMARA SE DIBUJA EN EL CUERPO DE LA PÁGINA (portal): así ningún antepasado con `transform` la encierra. Y mide
@@ -421,27 +433,31 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
         playsInline
         /* Muteado a propósito: el micrófono SÍ se graba, pero sacarlo por la bocina mientras grabas es un acople. */
         muted
-        onPlaying={() => setPintando(true)}
+        onPlaying={() => setReproduce(true)}
         /* El respaldo de la medida: `getSettings()` no siempre trae ancho y alto, y el elemento sí los sabe. */
         onLoadedMetadata={(e) => {
           const v = e.currentTarget;
           if (v.videoWidth && v.videoHeight) setMedidas({ w: v.videoWidth, h: v.videoHeight });
         }}
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+        // Oculto hasta estar a pantalla completa, y entra con un fundido (ver `revelado`).
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: revelado ? 1 : 0, transition: 'opacity .2s ease' }}
       />
 
       <div style={{
         position: 'absolute', top: 'calc(12px + env(safe-area-inset-top))', left: 12, right: 12,
-        display: 'flex', alignItems: 'center', gap: 10,
+        display: 'flex', alignItems: 'center', gap: 10, zIndex: 2,
       }}>
-        <button type="button" onClick={cierra} aria-label="Cerrar la cámara" style={redondo}>
+        <button
+          type="button" onClick={cierra} aria-label="Cerrar la cámara"
+          style={{ ...redondo, opacity: procesando ? 0 : 1, pointerEvents: procesando ? 'none' : 'auto', transition: 'opacity .2s ease' }}
+        >
           <X size={20} color="#fff" />
         </button>
 
         {medidas?.h && (
           <span style={{
             padding: '6px 11px', borderRadius: 999, background: 'rgba(0,0,0,0.5)',
-            color: '#fff', fontSize: 12.5, fontWeight: 800, ...NUM_STYLE,
+            color: '#fff', fontSize: 12.5, fontWeight: 800, ...NUM_STYLE, ...aparece,
           }}>
             {medidas.h >= 2000 ? '4K' : `${medidas.h}p`}
           </span>
@@ -464,11 +480,11 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
             <button
               type="button" onClick={cambiaSonido} aria-pressed={!conSonido}
               aria-label={conSonido ? 'Grabar sin sonido' : 'Grabar con sonido'}
-              style={{ ...redondo, background: conSonido ? 'rgba(0,0,0,0.5)' : '#F5C518' }}
+              style={{ ...redondo, background: conSonido ? 'rgba(0,0,0,0.5)' : '#F5C518', ...aparece }}
             >
               {conSonido ? <Mic size={19} color="#fff" /> : <MicOff size={19} color="#111318" />}
             </button>
-            <button type="button" onClick={cambiaDeLado} aria-label="Cambiar de cámara" style={redondo}>
+            <button type="button" onClick={cambiaDeLado} aria-label="Cambiar de cámara" style={{ ...redondo, ...aparece }}>
               <SwitchCamera size={19} color="#fff" />
             </button>
           </>
@@ -478,7 +494,8 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
       {velo && (
         <div style={{
           position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
-          background: 'rgba(0,0,0,0.6)', padding: 24, textAlign: 'center',
+          // Abriéndose: negro liso (nada de controles medio apagados debajo). Con un error la cámara sigue viva y se ve atrás.
+          background: err ? 'rgba(0,0,0,0.6)' : '#000', padding: 24, textAlign: 'center',
           /* Si la cámara sigue viva, el aviso no debe robarle los toques al botón de grabar. */
           pointerEvents: err && !preparando ? 'none' : 'auto',
         }}>
@@ -524,7 +541,9 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
       <div style={{
         position: 'absolute', left: 0, right: 0,
         bottom: 'calc(26px + env(safe-area-inset-bottom))',
-        display: 'grid', placeItems: 'center', gap: 10,
+        display: 'grid', placeItems: 'center', gap: 10, zIndex: 2,
+        // Con un error el botón sigue donde estaba (la cámara está viva); si no, entra junto con la imagen.
+        ...(err ? null : aparece),
       }}>
         <button
           type="button"
@@ -549,6 +568,14 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
           {aviso || (grabando ? 'Tócalo otra vez para terminar' : (conSonido ? 'Tócalo para grabar' : 'Tócalo para grabar · sin sonido'))}
         </span>
       </div>
+
+      {/* Recién parada la grabación, iOS apaga la vista previa un momento y reaparecían los botones de grabar. Se tapa con un
+          fondo liso y un giro, a propósito, hasta que se abre el editor. */}
+      {procesando && (
+        <div style={{ position: 'absolute', inset: 0, zIndex: 3, background: '#000', display: 'grid', placeItems: 'center' }}>
+          <Loader2 size={30} color="#fff" className="spin" />
+        </div>
+      )}
     </div>,
     document.body,
   );

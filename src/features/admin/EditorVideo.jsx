@@ -99,6 +99,9 @@ export default function EditorVideo({
   const [reproduciendo, setReproduciendo] = useState(false);
   const [tiempo, setTiempo] = useState(0);
   const [caja, setCaja] = useState(null);
+  /* El video se muestra cuando YA tiene su primer fotograma pintado. Antes se veía un cuadro negro con el botón de reproducir
+     unos instantes antes de la imagen (Andrés, 9 oct 2026, con un video de su pantalla). Hasta entonces, el giro. */
+  const [pintado, setPintado] = useState(false);
 
   /* La dirección temporal del archivo del teléfono.
      SE CREA Y SE LIBERA DENTRO DEL MISMO EFECTO, a propósito. Antes se
@@ -128,16 +131,27 @@ export default function EditorVideo({
 
   /* LAS MINIATURAS DE LA TIRA, con un solo decodificador (ver `lib/miniaturasDeVideo.js`). `null` mientras se hacen (la
      tira va oscura), la lista de imágenes al terminar, o 'videos' si no se pudieron: entonces la tira de videos de antes. */
-  const [minis, setMinis] = useState(null);
+  const [minis, setMinis] = useState({ lista: [], fallo: false });
   useEffect(() => {
     if (!local) return undefined;
     let vivo = true;
-    setMinis(null);
-    miniaturasDeVideo(local, MINIATURAS, { remoto: !archivo })
-      .then((m) => { if (vivo) setMinis(m); })
-      .catch(() => { if (vivo) setMinis('videos'); });
+    setMinis({ lista: [], fallo: false });
+    miniaturasDeVideo(local, MINIATURAS, {
+      remoto: !archivo,
+      // Cada miniatura entra apenas está lista: la tira se llena de izquierda a derecha, sin esperar a las diez.
+      alCadaUna: (i, src) => { if (vivo) setMinis((m) => { const lista = [...m.lista]; lista[i] = src; return { ...m, lista }; }); },
+    }).catch(() => { if (vivo) setMinis((m) => ({ ...m, fallo: true })); });
     return () => { vivo = false; };
   }, [local, archivo]);
+  // Mientras llegan, los huecos enseñan la primera (que sale casi al instante): la tira nunca se ve vacía.
+  const primera = minis.lista.find(Boolean) ?? null;
+
+  // Por si el navegador nunca avisa que pintó: a los dos segundos de tener las medidas, se muestra de todos modos.
+  useEffect(() => {
+    if (pintado || !duracion) return undefined;
+    const t = window.setTimeout(() => setPintado(true), 2000);
+    return () => window.clearTimeout(t);
+  }, [pintado, duracion]);
 
   // La página de atrás se queda quieta: un dedo que resbala sobre la tira no debe mover nada (ver `useCuerpoQuieto`).
   useCuerpoQuieto();
@@ -263,6 +277,9 @@ export default function EditorVideo({
                      vacío. Pedirle un `currentTime` lo obliga a dibujar ese fotograma. */
                   v.currentTime = (ajustes?.recorte_inicio ?? 0) + 0.05;
                 }}
+                // Al llegar al punto pedido, el cuadro ya está listo; dos cuadros de pantalla de respiro y la tapa se desvanece.
+                // (Se probó `requestVideoFrameCallback`: en un video quieto, después de un salto, ya pasó y no vuelve a avisar.)
+                onSeeked={() => { requestAnimationFrame(() => requestAnimationFrame(() => setPintado(true))); }}
                 onPlay={() => setReproduciendo(true)}
                 onPause={() => setReproduciendo(false)}
                 onTimeUpdate={(e) => {
@@ -279,6 +296,10 @@ export default function EditorVideo({
                 } : { width: '100%', height: '100%', objectFit: 'fill', display: 'block' }}
               />
 
+              {/* Una tapa negra que se desvanece cuando el primer fotograma ya está pintado. Es una tapa y NO `opacity: 0` en el
+                  video: un video sin opacidad no presenta cuadros en Safari, y el aviso de «pinté» no llegaba nunca. */}
+              <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: '#000', opacity: pintado ? 0 : 1, transition: 'opacity .18s ease', pointerEvents: 'none' }} />
+
               {/* Tocar el video lo reproduce o lo pausa; el botón grande solo se ve con el video quieto. */}
               <button
                 type="button" aria-label={reproduciendo ? 'Pausar el video' : 'Ver el video'} onClick={alternar}
@@ -287,7 +308,7 @@ export default function EditorVideo({
                   border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, WebkitTapHighlightColor: 'transparent',
                 }}
               >
-                {!reproduciendo && (
+                {!reproduciendo && pintado && (
                   <span style={{
                     width: 70, height: 70, borderRadius: '50%', display: 'grid', placeItems: 'center',
                     background: 'rgba(232,228,228,.9)', boxShadow: '0 4px 18px rgba(0,0,0,.25)',
@@ -300,7 +321,7 @@ export default function EditorVideo({
           )}
         </div>
 
-        {!duracion && (
+        {!pintado && (
           <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', pointerEvents: 'none' }}>
             <Loader2 size={30} color="rgba(255,255,255,.75)" className="spin" />
           </div>
@@ -349,10 +370,10 @@ export default function EditorVideo({
                   cabeceras de CORS y los videos ya subidos vienen de Cloudflare, que no las manda. Pedirle un
                   `currentTime` a un <video> no lee píxeles. */}
               <div style={{ position: 'absolute', top: 3, bottom: 3, left: MANIJA, right: MANIJA, display: 'flex', overflow: 'hidden', background: '#1a1a1c' }}>
-                {Array.isArray(minis) && minis.map((src, i) => (
-                  <img key={i} src={src} alt="" draggable={false} style={{ flex: 1, minWidth: 0, height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }} />
+                {!minis.fallo && primera && Array.from({ length: MINIATURAS }, (_, i) => (
+                  <img key={i} src={minis.lista[i] ?? primera} alt="" draggable={false} style={{ flex: 1, minWidth: 0, height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }} />
                 ))}
-                {minis === 'videos' && Array.from({ length: MINIATURAS }, (_, i) => (
+                {minis.fallo && Array.from({ length: MINIATURAS }, (_, i) => (
                   <video
                     key={i} src={local} muted playsInline preload="metadata"
                     tabIndex={-1} aria-hidden="true"
