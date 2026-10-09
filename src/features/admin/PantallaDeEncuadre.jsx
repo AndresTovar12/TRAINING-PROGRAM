@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Check, Loader2, RotateCcw, RectangleHorizontal } from 'lucide-react';
 import { FONT } from '@/lib/theme';
 import { useRecorte, CapaRecorte, BotonesFormato } from '@/features/admin/recorte';
+import { useCuerpoQuieto } from '@/lib/useCuerpoQuieto';
 
 /**
  * La pantalla de ENCUADRE: una pantalla completa y oscura solo para recortar, como la de WhatsApp.
@@ -25,7 +26,7 @@ import { useRecorte, CapaRecorte, BotonesFormato } from '@/features/admin/recort
  */
 
 const FONDO = 'radial-gradient(ellipse at 50% 42%, #2c2c2e 0%, #161617 62%, #0d0d0e 100%)';
-const GRIS = 'rgba(58,58,60,.85)';
+const GRIS = 'rgba(58,58,60,.92)';
 
 // Cuánto cabe un recuadro con esa proporción dentro de una caja, sin pasarse por ningún lado.
 function cabeEn(caja, aspecto) {
@@ -47,8 +48,12 @@ export default function PantallaDeEncuadre({
     marcoRef, medidas, inicial: inicial ?? { x: 0, y: 0, w: 1, h: 1 },
   });
 
-  // El espacio libre para el cuadro: se mide, no se adivina, para que el marco tenga EXACTAMENTE la proporción del original.
-  useEffect(() => {
+  // La página de atrás se queda quieta mientras se arrastran las esquinas (ver `useCuerpoQuieto`).
+  useCuerpoQuieto();
+
+  // El espacio libre para el cuadro: se mide ANTES de pintar, para que el marco tenga EXACTAMENTE la proporción del original
+  // y no aparezca un cuadro después.
+  useLayoutEffect(() => {
     const el = cajaRef.current;
     if (!el) return undefined;
     const mide = () => { const r = el.getBoundingClientRect(); setCaja({ w: r.width, h: r.height }); };
@@ -69,7 +74,8 @@ export default function PantallaDeEncuadre({
 
   return createPortal((
     <div style={{
-      position: 'fixed', inset: 0, zIndex, background: FONDO, color: '#fff', fontFamily: FONT,
+      // `100dvh` y no `inset: 0`: en iOS, con `inset: 0` los botones de abajo quedaban bajo la barra de Safari.
+      position: 'fixed', top: 0, left: 0, right: 0, height: '100dvh', zIndex, background: FONDO, color: '#fff', fontFamily: FONT,
       display: 'flex', flexDirection: 'column', userSelect: 'none', WebkitUserSelect: 'none',
     }}>
       {/* ---------- El cuadro ---------- */}
@@ -110,7 +116,7 @@ export default function PantallaDeEncuadre({
       {/* ---------- Las proporciones, si se abrieron ---------- */}
       {formas && (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '0 16px 10px' }}>
-          <div style={{ padding: '4px 10px', borderRadius: 14, background: GRIS, backdropFilter: 'blur(8px)' }}>
+          <div style={{ padding: '4px 10px', borderRadius: 14, background: GRIS }}>
             <BotonesFormato crop={crop} medidas={medidas} rectanguloDe={rectanguloDe} onElegir={setCrop} />
           </div>
         </div>

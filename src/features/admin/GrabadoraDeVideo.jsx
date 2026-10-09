@@ -4,6 +4,7 @@ import { X, SwitchCamera, Loader2, Mic, MicOff } from 'lucide-react';
 import BotonEntendido from '@/components/BotonEntendido';
 import { useAvisosVistos } from '@/lib/useAvisosVistos';
 import { FONT, NUM_STYLE } from '@/lib/theme';
+import { useCuerpoQuieto } from '@/lib/useCuerpoQuieto';
 
 /**
  * Grabar el ejercicio DENTRO de la app, no con el atajo del navegador.
@@ -323,27 +324,8 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
     return () => window.clearTimeout(t);
   }, [preparando, pintando]);
 
-  /* QUE LA PÁGINA NO SE MUEVA mientras la cámara está abierta. En iOS, `overflow: hidden` NO basta: Safari sigue dejando
-     arrastrar. Andrés lo comprobó: "aún así puedo escrollear, y no se debe poder en un momento donde se supone que estás
-     grabando". Lo que sí funciona es congelar el cuerpo con `position: fixed` y recordar dónde estaba. */
-  useEffect(() => {
-    const y = window.scrollY;
-    const b = document.body;
-    const antes = {
-      position: b.style.position, top: b.style.top, left: b.style.left,
-      right: b.style.right, width: b.style.width, overflow: b.style.overflow,
-    };
-    b.style.position = 'fixed';
-    b.style.top = `-${y}px`;
-    b.style.left = '0';
-    b.style.right = '0';
-    b.style.width = '100%';
-    b.style.overflow = 'hidden';
-    return () => {
-      Object.assign(b.style, antes);
-      window.scrollTo(0, y);
-    };
-  }, []);
+  // La página de atrás se queda quieta mientras la cámara está abierta (ver `useCuerpoQuieto`).
+  useCuerpoQuieto();
 
   useEffect(() => {
     if (!grabando) return undefined;
@@ -458,8 +440,8 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
 
         {medidas?.h && (
           <span style={{
-            padding: '6px 11px', borderRadius: 999, background: 'rgba(0,0,0,0.45)',
-            backdropFilter: 'blur(6px)', color: '#fff', fontSize: 12.5, fontWeight: 800, ...NUM_STYLE,
+            padding: '6px 11px', borderRadius: 999, background: 'rgba(0,0,0,0.5)',
+            color: '#fff', fontSize: 12.5, fontWeight: 800, ...NUM_STYLE,
           }}>
             {medidas.h >= 2000 ? '4K' : `${medidas.h}p`}
           </span>
@@ -482,7 +464,7 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
             <button
               type="button" onClick={cambiaSonido} aria-pressed={!conSonido}
               aria-label={conSonido ? 'Grabar sin sonido' : 'Grabar con sonido'}
-              style={{ ...redondo, background: conSonido ? 'rgba(0,0,0,0.45)' : '#F5C518' }}
+              style={{ ...redondo, background: conSonido ? 'rgba(0,0,0,0.5)' : '#F5C518' }}
             >
               {conSonido ? <Mic size={19} color="#fff" /> : <MicOff size={19} color="#111318" />}
             </button>
@@ -526,7 +508,7 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
       {avisoDePermiso && (
         <div style={{
           position: 'absolute', left: 14, right: 14, bottom: 'calc(132px + env(safe-area-inset-bottom))',
-          background: 'rgba(30,64,224,0.94)', backdropFilter: 'blur(8px)', color: '#fff', borderRadius: 14,
+          background: 'rgba(30,64,224,0.94)', color: '#fff', borderRadius: 14,
           padding: '11px 12px 10px', fontSize: 13, fontWeight: 600, lineHeight: 1.4,
         }}>
           <b style={{ display: 'block', fontSize: 14, fontWeight: 800, marginBottom: 3 }}>¿Te pregunta cada vez?</b>
@@ -572,8 +554,9 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
   );
 }
 
+/* Sin `backdrop-filter`: en iPhone, un desenfoque encima de un video en vivo parpadea y cuesta cuadros. */
 const redondo = {
   width: 38, height: 38, borderRadius: '50%', border: 'none', cursor: 'pointer',
-  background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)',
+  background: 'rgba(0,0,0,0.5)',
   display: 'grid', placeItems: 'center', flexShrink: 0,
 };
