@@ -13,7 +13,6 @@ import { FONT, KP } from '@/lib/theme';
    distinguen por su nombre y por el orden en que vienen. El turno que el coach
    le pone a un workout sigue en SU editor.
 
-   `sobreAzul`: para la tarjeta azul de Home, donde va en blanco translúcido.
    `envolver`: que un nombre largo pase al renglón de abajo en vez de cortarse;
    en los renglones de una lista se prefiere cortar con «…» para no crecerlos.
 
@@ -22,7 +21,7 @@ import { FONT, KP } from '@/lib/theme';
    queda en el mismo renglón que las demás, solo con su etiqueta (Andrés, 2 oct
    2026: «el programa es un todo»). */
 
-export default function EtiquetasDeSesion({ sesiones, sobreAzul = false, envolver = false, tamano = 12.5, style }) {
+export default function EtiquetasDeSesion({ sesiones, envolver = false, tamano = 12.5, style }) {
   return (
     <span style={{
       display: 'flex', gap: 6, minWidth: 0,
@@ -53,9 +52,9 @@ export default function EtiquetasDeSesion({ sesiones, sobreAzul = false, envolve
               display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0, maxWidth: '100%',
               padding: '3px 11px',
               borderRadius: envolver || s.autor ? 14 : KP.rPill,
-              background: sobreAzul ? 'rgba(255,255,255,0.16)' : (tinte ? `${tinte}14` : KP.surfaceMuted),
-              border: `1px solid ${sobreAzul ? 'rgba(255,255,255,0.3)' : (tinte ? `${tinte}55` : KP.lineHi)}`,
-              color: sobreAzul ? '#fff' : KP.ink,
+              background: tinte ? `${tinte}14` : KP.surfaceMuted,
+              border: `1px solid ${tinte ? `${tinte}55` : KP.lineHi}`,
+              color: KP.ink,
               fontFamily: FONT, fontSize: tamano, fontWeight: 700, lineHeight: 1.25,
             }}
           >
