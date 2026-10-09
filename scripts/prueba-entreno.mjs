@@ -475,6 +475,18 @@ const lower = {
   assert.deepEqual(JSON.parse(JSON.stringify(unido)), unido);
 }
 
+/* ---- El hueco de «grabar técnica»: el id del video de esa vuelta se conserva en su marca ---- */
+{
+  const plan = pasosDeLaSesion(lower);
+  const av = marcaListo(plan, undefined, 1000, { reps: '5', tecnica: '  9f3a-video  ', otro: 'x' });
+  assert.deepEqual(av.hechos['0.1.0'], { t: 1000, n: 'Back Squat', reps: '5', tecnica: '9f3a-video' });
+  assert.equal(marcaListo(plan, undefined, 1, { tecnica: 'x'.repeat(200) }).hechos['0.1.0'].tecnica.length, 64, 'con tope de largo');
+  assert.equal('tecnica' in marcaListo(plan, undefined, 1, { tecnica: '   ' }).hechos['0.1.0'], false, 'vacío no se guarda');
+  // Sobrevive a releerlo de la base y a otras marcas.
+  const dos = marcaListo(plan, JSON.parse(JSON.stringify(av)), 2000);
+  assert.equal(dos.hechos['0.1.0'].tecnica, '9f3a-video');
+}
+
 /* ---- Tocar un paso de la lista: uno de adelante, uno saltado ---- */
 {
   const plan = pasosDeLaSesion(lower);

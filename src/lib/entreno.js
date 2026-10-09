@@ -39,8 +39,9 @@ import { groupIntoSets, setTag } from './setsDeUnaSesion.js';
  * (pulso, pasos); esto es la estructura del entreno que se le MANDARÍA.
  *
  * EL AVANCE (`sesión.entreno`, dentro del registro del atleta, junto a `exercises` y `formatos`):
- *   { v, inicio, fin, hechos: { [clave]: { t, n, reps?, kg?, seg? } }, saltados: { [clave]: { t, n } }, extra: { [clave]: seg },
+ *   { v, inicio, fin, hechos: { [clave]: { t, n, reps?, kg?, seg?, tecnica? } }, saltados: { [clave]: { t, n } }, extra: { [clave]: seg },
  *     empezados: { [clave]: hora } }
+ * `tecnica` es el id del video que el atleta grabó de ESA vuelta para su coach (futuro: ver `lib/funciones.js`); aquí solo se conserva.
  * `extra` son los segundos que se le sumaron a un descanso («+30 s»); `empezados` la hora en que el atleta arrancó el cronómetro
  * OPCIONAL de un paso con tiempo (la plancha de 30 seg, el «2 min a 6:39» de un lapso): igual que el descanso, solo se guarda cuándo
  * empezó, y lo que queda se calcula de ahí. Tampoco avanza solo.
@@ -404,7 +405,7 @@ function posicionDe(plan, av) {
   return { i, actual: i === -1 ? null : pasos[i] };
 }
 
-// Solo estos datos pueden acompañar a un «Listo» cuando el atleta cambió lo planeado: un texto corto o un número.
+// Solo estos datos pueden acompañar a un «Listo»: lo que el atleta cambió de lo planeado (un texto corto o un número) y el id de su video de técnica.
 function limpiaReal(real) {
   if (!esObjeto(real)) return {};
   const salida = {};
@@ -414,6 +415,8 @@ function limpiaReal(real) {
   });
   const seg = Number(real.seg);
   if (real.seg !== undefined && real.seg !== null && Number.isFinite(seg) && seg >= 0) salida.seg = Math.round(seg);
+  const tecnica = texto(real.tecnica);
+  if (tecnica) salida.tecnica = tecnica.slice(0, 64);
   return salida;
 }
 

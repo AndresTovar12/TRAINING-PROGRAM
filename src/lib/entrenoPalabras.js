@@ -16,6 +16,8 @@ const NORMAL = {
   finTexto: 'Tu avance ya está guardado. Cuéntale a tu coach cómo te fue, si quieres.',
   finNotasAria: 'Notas para tu coach',
   finVolver: 'Volver al entreno',
+  tecnicaTitulo: 'Grabar técnica para tu coach',
+  tecnicaTexto: 'Muy pronto. Vas a grabar esta serie desde aquí y le llegará a tu coach por mensajes, sin salir del entreno.',
 };
 
 const SALUD = {
@@ -29,6 +31,8 @@ const SALUD = {
   finTexto: 'Tu avance ya está guardado. Cuéntale a tu fisio cómo te fue, si quieres.',
   finNotasAria: 'Notas para tu fisio',
   finVolver: 'Volver a los ejercicios',
+  tecnicaTitulo: 'Grabar técnica para tu fisio',
+  tecnicaTexto: 'Muy pronto. Vas a grabar este ejercicio desde aquí y le llegará a tu fisio por mensajes, sin salir de los ejercicios.',
 };
 
 /** Los textos fijos del entreno: los de siempre, o los de un paciente (`salud`). */

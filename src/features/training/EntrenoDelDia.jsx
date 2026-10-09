@@ -10,6 +10,7 @@ import { aKilos, desdeKilos, etiquetaUnidad } from '@/lib/unidades';
 import { FORMATOS, tramosDeTrabajo, vistaDe } from '@/lib/formatos';
 import { anotadoEnVuelta } from '@/lib/porVuelta';
 import { palabrasDelEntreno } from '@/lib/entrenoPalabras';
+import { FUNCIONES } from '@/lib/funciones';
 import {
   cuentaDe, empiezaPaso, marcaListo, masDescanso as sumaDescanso, pasosDeLaSesion, quitaCronometro, saltaPaso, terminaEntreno, vistaDelEntreno, vuelveAtras,
 } from '@/lib/entreno';
@@ -21,7 +22,8 @@ import RelojDelBloque from '@/features/training/RelojDelBloque';
 import ResultadoDelBloque from '@/features/training/ResultadoDelBloque';
 import TarjetaDeVideo from '@/features/training/TarjetaDeVideo';
 import {
-  BarraDelEntreno, CronometroDelPaso, HojaDeCambiar, HojaDeLista, HojaDeSalir, PantallaDeDescanso, PantallaDeFin, PantallaDePaso, PantallaDeReloj,
+  BarraDelEntreno, CronometroDelPaso, HojaDeCambiar, HojaDeLista, HojaDeSalir, HojaDeTecnica, PantallaDeDescanso, PantallaDeFin, PantallaDePaso,
+  PantallaDeReloj,
 } from '@/features/training/PantallasDelEntreno';
 
 /**
@@ -40,6 +42,7 @@ import {
  *     progreso, los récords y la IA sigan leyendo lo mismo. «Cambiar» solo trae lo que salió distinto (ver `exDataTrasListo`).
  *   · EL RELOJ SIRVE Y NUNCA MANDA. Los avisos son sonidos opcionales; nada avanza solo; el tiempo total va chico y callado.
  *
+ * `onGrabarTecnica(paso)` (opcional) es quien graba la técnica: mientras `FUNCIONES.grabarTecnica` esté apagada, la cámara de cada paso solo dice «Pronto».
  * `medios(ex)` dice la foto y los videos de un ejercicio (`{ portada, videos }`), `oneRMs` los máximos del atleta (para pasar «78 %» a
  * kilos) y `salud` que es un paciente (sin 1RM). `sesionId` y `userId` son la llave con la que el reloj de un Set recuerda dónde iba.
  */
@@ -51,7 +54,7 @@ const leeSonido = () => {
 };
 
 export default function EntrenoDelDia({
-  dia, aspecto, registro, onRegistro, onFormato, sesionId, userId, unidadDePeso = 'kg', oneRMs, salud = false, medios, alCerrar,
+  dia, aspecto, registro, onRegistro, onFormato, sesionId, userId, unidadDePeso = 'kg', oneRMs, salud = false, medios, alCerrar, onGrabarTecnica,
 }) {
   // La página de atrás se queda quieta mientras el entreno está abierto (ver `useCuerpoQuieto`).
   useCuerpoQuieto();
@@ -213,6 +216,9 @@ export default function EntrenoDelDia({
     }));
     alCerrar();
   };
+  // La cámara de «grabar técnica»: apagada solo explica que viene; prendida (y con quien la grabe) llama a `onGrabarTecnica`.
+  const tecnicaActiva = FUNCIONES.grabarTecnica && !!onGrabarTecnica;
+  const abreTecnica = () => { if (tecnicaActiva) onGrabarTecnica(paso); else setHoja('tecnica'); };
   const volverAlEntreno = () => {
     // Con todo hecho no queda ningún paso al que volver: se regresa al último.
     if (vista.completo) anterior(); else setVerFin(false);
@@ -280,7 +286,7 @@ export default function EntrenoDelDia({
       <PantallaDeReloj
         paso={paso} detalle={FORMATOS[vistaDe(paso.formato)]?.detalle} resultado={resultadoDelReloj} puedeAnterior={vista.puedeAnterior}
         onIniciar={() => { preparaAudio(); setReloj(true); }} onAnotar={() => setAnotando(true)} onListo={() => listo()}
-        onSaltar={saltar} onAnterior={anterior}
+        onSaltar={saltar} onAnterior={anterior} tecnica={{ activa: tecnicaActiva, etiqueta: palabras.tecnicaTitulo, onClick: abreTecnica }}
       />
     );
   } else {
@@ -294,6 +300,7 @@ export default function EntrenoDelDia({
         ) : null}
         etiquetaDeCambiar={cambiar ? (cambiar.planeado.reps || cambiar.planeado.kg ? 'Cambiar' : 'Anotar') : null} puedeAnterior={vista.puedeAnterior}
         onListo={() => listo()} onCambiar={() => setHoja('cambiar')} onSaltar={saltar} onAnterior={anterior}
+        tecnica={{ activa: tecnicaActiva, etiqueta: palabras.tecnicaTitulo, onClick: abreTecnica }}
       />
     );
   }
@@ -337,6 +344,7 @@ export default function EntrenoDelDia({
           onCerrar={() => setHoja(null)}
         />
       )}
+      {hoja === 'tecnica' && <HojaDeTecnica palabras={palabras} onCerrar={() => setHoja(null)} />}
       {hoja === 'salir' && <HojaDeSalir palabras={palabras} onSalir={alCerrar} onSeguir={() => setHoja(null)} />}
 
       {reloj && paso?.tipo === 'reloj' && (

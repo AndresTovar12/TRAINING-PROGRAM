@@ -230,6 +230,8 @@ const lower = {
   assert.match(normal.finTexto, /coach/);
   assert.match(salud.finTexto, /fisio/);
   assert.doesNotMatch(Object.values(salud).join(' '), /entren|coach/i, 'ni «entreno» ni «coach» le llegan a un paciente');
+  assert.match(normal.tecnicaTitulo, /Grabar técnica para tu coach/);
+  assert.match(salud.tecnicaTitulo, /fisio/);
 }
 
 console.log('prueba-entreno-datos: todo bien');
