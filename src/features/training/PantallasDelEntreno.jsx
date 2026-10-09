@@ -144,7 +144,9 @@ export function PuntosDeVueltas({ puntos }) {
  * con su palomita; lo que falta, con su letra. Con dos ejercicios se dicen los dos nombres; con más, solo el del que toca (el nombre ya está en
  * grande debajo). `serie` viene de `serieALaVista`.
  */
-function SerieALaVista({ serie }) {
+function SerieALaVista({ serie, simple = false }) {
+  // La versión básica (la web) solo dice qué es («BI-SERIE»); el par A/B es de la guía completa.
+  if (simple) return <div style={{ marginTop: 12 }}><Etiqueta>{serie.nombre}</Etiqueta></div>;
   const nombres = serie.letras.length === 2;
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 12 }}>
@@ -181,7 +183,7 @@ function SerieALaVista({ serie }) {
 
 /**
  * Cerrar, el avance por Sets y «Ver todo». Nada más: ni dónde va en letras ni el tiempo corriendo (ver el comentario de arriba). El tiempo
- * total se dice al final, en «Entrenamiento terminado».
+ * total se dice al final, en «Entrenamiento terminado». Sin `onLista` (la versión básica de la web) no sale «Ver todo».
  */
 export function BarraDelEntreno({ segmentos, fondo, palabras, onCerrar, onLista }) {
   return (
@@ -196,15 +198,17 @@ export function BarraDelEntreno({ segmentos, fondo, palabras, onCerrar, onLista 
               </span>
             ))}
           </div>
-          <button
-            type="button" onClick={onLista} className="kp-press"
-            style={{
-              height: 38, padding: '0 14px 0 11px', borderRadius: 999, border: `1px solid ${LT.border}`, background: LT.surface, color: LT.blue, cursor: 'pointer',
-              display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0, fontFamily: FONT, fontSize: 13.5, fontWeight: 800, touchAction: 'manipulation',
-            }}
-          >
-            <List size={17} /> Ver todo
-          </button>
+          {onLista && (
+            <button
+              type="button" onClick={onLista} className="kp-press"
+              style={{
+                height: 38, padding: '0 14px 0 11px', borderRadius: 999, border: `1px solid ${LT.border}`, background: LT.surface, color: LT.blue, cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0, fontFamily: FONT, fontSize: 13.5, fontWeight: 800, touchAction: 'manipulation',
+              }}
+            >
+              <List size={17} /> Ver todo
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -270,7 +274,7 @@ function CronometroDelPaso({ segundos, cuenta, onEmpezar, onQuitar }) {
  * centro con «Sigue: …» (el hueco de un video o de unas cifras vacías se lee como un fallo de la app).
  */
 export function PantallaDePaso({
-  paso, video, cifras, anotado, sigue, serie, puntos, cronometro, etiquetaDeCambiar, puedeAnterior, tecnica,
+  paso, video, cifras, anotado, sigue, serie, serieSimple = false, puntos, cronometro, etiquetaDeCambiar, puedeAnterior, tecnica,
   onListo, onCambiar, onSaltar, onAnterior,
 }) {
   const nota = [paso.nota, paso.cue].filter(Boolean);
@@ -286,7 +290,7 @@ export function PantallaDePaso({
               {paso.encabezado}
             </div>
           )}
-          {serie && <SerieALaVista serie={serie} />}
+          {serie && <SerieALaVista serie={serie} simple={serieSimple} />}
           {paso.opcional && <div style={{ marginTop: 8 }}><Etiqueta suave>Opcional</Etiqueta></div>}
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, margin: solo ? '0 0 10px' : '10px 0 14px' }}>
             <h1 style={{

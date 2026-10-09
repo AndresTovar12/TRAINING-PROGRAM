@@ -236,6 +236,8 @@ export default function EntrenoDelDia({
   };
   // La cámara de «grabar técnica»: apagada solo explica que viene; prendida (y con quien la grabe) llama a `onGrabarTecnica`.
   const tecnicaActiva = FUNCIONES.grabarTecnica && !!onGrabarTecnica;
+  // La guía completa («Ver todo», el par A/B, el cronómetro de cada paso) es de la app descargable; la web va con la básica (ver `lib/funciones.js`).
+  const completo = FUNCIONES.entrenoCompleto;
   const abreTecnica = () => { if (tecnicaActiva) onGrabarTecnica(paso); else setHoja('tecnica'); };
   const volverAlEntreno = () => {
     // Con todo hecho no queda ningún paso al que volver: se regresa al último.
@@ -317,8 +319,8 @@ export default function EntrenoDelDia({
     pantalla = (
       <PantallaDePaso
         paso={paso} video={paso.tipo === 'ejercicio' ? videoDe(exDe(paso), mediosDelPaso) : null} cifras={cifrasDelPaso(paso, kilosDelPaso)} anotado={anotadoDe(paso)}
-        sigue={siguiente} serie={serieDelPaso} puntos={puntosDelPaso}
-        cronometro={paso.termina?.por === 'tiempo' ? (
+        sigue={siguiente} serie={serieDelPaso} serieSimple={!completo} puntos={puntosDelPaso}
+        cronometro={completo && paso.termina?.por === 'tiempo' ? (
           <CronometroDelPaso segundos={paso.termina.valor ?? paso.termina.min} cuenta={cuenta} onEmpezar={empezarCronometro} onQuitar={detenerCronometro} />
         ) : null}
         etiquetaDeCambiar={cambiar ? (cambiar.planeado.reps || cambiar.planeado.kg ? 'Cambiar' : 'Anotar') : null} puedeAnterior={vista.puedeAnterior || mirandoOtro}
@@ -342,7 +344,7 @@ export default function EntrenoDelDia({
       {!mostrarFin && (
         <BarraDelEntreno
           segmentos={segmentos} fondo={fondo} palabras={palabras}
-          onCerrar={() => setHoja('salir')} onLista={() => setHoja('lista')}
+          onCerrar={() => setHoja('salir')} onLista={completo ? () => setHoja('lista') : undefined}
         />
       )}
       {pantalla}
