@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import {
   MAX_PASOS, rondasDelSet, deporteDelTipo, pasosDeLaSesion, leeAvance, iniciaEntreno, marcaListo, saltaPaso, vuelveAtras, masDescanso,
-  terminaEntreno, reabreEntreno, vistaDelEntreno,
+  terminaEntreno, reabreEntreno, vistaDelEntreno, empiezaPaso, quitaCronometro, cuentaDe,
 } from '../src/lib/entreno.js';
 import { ponFormato } from '../src/lib/formatos.js';
 import { parcheDeLapsos } from '../src/lib/lapsos.js';
@@ -53,7 +53,7 @@ const lower = {
   const [primero] = plan.pasos;
   assert.equal(primero.clave, '0.1.0');
   assert.equal(primero.nombre, 'Back Squat');
-  assert.deepEqual(primero.termina, { por: 'reps', min: 5, max: 5, valor: 5 });
+  assert.deepEqual(primero.termina, { por: 'reps', min: 5, max: 5, valor: 5, cantidad: '5', unidad: 'reps' });
   assert.deepEqual(primero.meta, { tipo: 'pct', texto: '78%', min: 78, max: 78 });
   assert.equal(primero.texto, '5 reps');
   assert.deepEqual([primero.serie, primero.vuelta, primero.vueltas, primero.opcional, primero.intensidad], [1, 1, 5, false, 'trabajo']);
@@ -76,7 +76,7 @@ const lower = {
   assert.deepEqual(bi.map((p) => p.clave), ['2.1.0', '3.1.0', '2.2.0', '3.2.0', '2.3.0', '3.3.0']);
   // Una plancha por lado de 30 seg: termina por tiempo y es la última del día (sin descanso al final).
   const plancha = plan.pasos[plan.pasos.length - 1];
-  assert.deepEqual(plancha.termina, { por: 'tiempo', min: 30, max: 30, valor: 30 });
+  assert.deepEqual(plancha.termina, { por: 'tiempo', min: 30, max: 30, valor: 30, cantidad: '30', unidad: 'seg' });
   assert.equal(plancha.texto, '30 seg por lado');
   assert.equal(plancha.meta, null, 'sin carga escrita no hay meta');
   // Orden y numeración: `i` sigue la lista, `n` salta los descansos.
@@ -125,11 +125,11 @@ const lower = {
   assert.equal(plan.total, 6, '5 sprints + el foam roller; la vuelta 6 no cuenta');
   const sprints = plan.pasos.filter((p) => p.nombre === 'Sprint 30 m');
   assert.deepEqual(sprints.map((p) => p.opcional), [false, false, false, false, false, true]);
-  assert.deepEqual(sprints[0].termina, { por: 'distancia', min: 30, max: 30, valor: 30 });
+  assert.deepEqual(sprints[0].termina, { por: 'distancia', min: 30, max: 30, valor: 30, cantidad: '30', unidad: 'm' });
   assert.deepEqual(sprints[0].meta, { tipo: 'texto', texto: 'Máximo' }, 'una carga que no encaja se enseña tal cual');
   assert.deepEqual([sprints[5].vuelta, sprints[5].vueltas, sprints[5].vueltasMin], [6, 6, 5]);
   const roller = plan.pasos[plan.pasos.length - 1];
-  assert.deepEqual(roller.termina, { por: 'tiempo', min: 600, max: 600, valor: 600 });
+  assert.deepEqual(roller.termina, { por: 'tiempo', min: 600, max: 600, valor: 600, cantidad: '10', unidad: 'min' });
 
   // Mientras falte algo que hacer (el foam roller viene DESPUÉS de la vuelta opcional), lo opcional no es «lo único que queda».
   let av;
@@ -201,10 +201,10 @@ const lower = {
   assert.equal(tipos(plan), 'E E D60 E E D60 E E D60 E E E');
   assert.equal(plan.total, 9);
   const [l1, l2, descanso] = plan.pasos;
-  assert.deepEqual(l1.termina, { por: 'distancia', min: 800, max: 800, valor: 800 });
+  assert.deepEqual(l1.termina, { por: 'distancia', min: 800, max: 800, valor: 800, cantidad: '800', unidad: 'm' });
   assert.deepEqual(l1.meta, { tipo: 'ritmo', texto: '4:34-5:00 min/km', min: 274, max: 300 }, 'ritmo en segundos por km');
   assert.deepEqual([l1.lapso, l1.lapsos, l1.vuelta, l1.vueltas], [1, 2, 1, 4]);
-  assert.deepEqual(l2.termina, { por: 'tiempo', min: 120, max: 120, valor: 120 });
+  assert.deepEqual(l2.termina, { por: 'tiempo', min: 120, max: 120, valor: 120, cantidad: '2', unidad: 'min' });
   assert.deepEqual(l2.meta, { tipo: 'ritmo', texto: '6:39-7:00 min/km', min: 399, max: 420 });
   assert.equal(l2.clave, '0.1.1', 'el 2.º lapso de la vuelta 1');
   assert.equal(descanso.seg, 60);
@@ -212,9 +212,10 @@ const lower = {
   assert.equal(descanso.clave, 'd.0.1.1');
   // Una distancia en km y en yardas se pasa a metros.
   const km = pasosDeLaSesion({ cat: 'correr', exercises: [ex('Rodaje', { reps: '5', unidad: 'km', intensity: 'Zona 2' }), ex('Sprint', { reps: '40', unidad: 'yd' })] });
-  assert.deepEqual(km.pasos[0].termina, { por: 'distancia', min: 5000, max: 5000, valor: 5000 });
+  assert.deepEqual(km.pasos[0].termina, { por: 'distancia', min: 5000, max: 5000, valor: 5000, cantidad: '5', unidad: 'km' });
   assert.deepEqual(km.pasos[0].meta, { tipo: 'zona', texto: 'Zona 2', min: 2, max: 2 });
   assert.equal(km.pasos[1].termina.valor, 36.58);
+  assert.deepEqual([km.pasos[1].termina.cantidad, km.pasos[1].termina.unidad], ['40', 'yd'], 'las pantallas dicen lo que escribió el coach: 40 yd, no 36.58 m');
 }
 
 /* ---- Cargas, vueltas distintas, clusters y rangos ---- */
@@ -232,8 +233,8 @@ const lower = {
   };
   const p = pasosDeLaSesion(dia).pasos.filter((x) => x.tipo === 'ejercicio');
   assert.deepEqual(p.slice(0, 3).map((x) => [x.termina.valor, x.meta.min]), [[10, 60], [8, 70], [6, 80]], 'cada vuelta con sus reps y su carga');
-  assert.deepEqual(p[3].termina, { por: 'reps', min: 6, max: 6, valor: 6, bloques: [2, 2, 2], entreBloques: 20 });
-  assert.deepEqual(p[5].termina, { por: 'reps', min: 8, max: 10, valor: null }, 'un rango no tiene valor fijo');
+  assert.deepEqual(p[3].termina, { por: 'reps', min: 6, max: 6, valor: 6, cantidad: '2+2+2', unidad: 'cluster', bloques: [2, 2, 2], entreBloques: 20 });
+  assert.deepEqual(p[5].termina, { por: 'reps', min: 8, max: 10, valor: null, cantidad: '8-10', unidad: 'reps' }, 'un rango no tiene valor fijo');
   assert.deepEqual(p[5].meta, { tipo: 'kg', texto: '20 kg', min: 20, max: 20 });
   assert.deepEqual(p[6].meta, { tipo: 'w', texto: '250 W', min: 250, max: 250 });
   assert.deepEqual(p[7].meta, { tipo: 'nado', texto: '1:45-2:00 /100 m', min: 105, max: 120 });
@@ -274,6 +275,9 @@ const lower = {
   });
   assert.deepEqual(mixto.pasos.map((p) => [p.nombre, p.encabezado]), [['Movilidad', 'CALENTAMIENTO'], ['Sentadilla', 'FUERZA'], ['Press', '']]);
   assert.equal(mixto.soloNotas, false);
+  // Con varias vueltas, la nota encabeza solo la primera.
+  const vueltas = pasosDeLaSesion({ cat: 'gym', exercises: [{ isNote: true, text: 'BLOQUE A' }, ex('Remo', { sets: '3', reps: '8' })] });
+  assert.deepEqual(vueltas.pasos.map((p) => p.encabezado), ['BLOQUE A', '', ''], 'la nota de sección va en el primer paso del Set, no en cada vuelta');
 }
 
 /* ---- Lo que NO tiene pasos ---- */
@@ -436,7 +440,7 @@ const lower = {
 
 /* ---- Lo que llega de la base puede venir roto ---- */
 {
-  const vacio = { inicio: null, fin: null, hechos: {}, saltados: {}, extra: {} };
+  const vacio = { inicio: null, fin: null, hechos: {}, saltados: {}, extra: {}, empezados: {} };
   for (const basura of [undefined, null, 'x', 7, [], { hechos: [] }, { hechos: 'a', saltados: 5, inicio: 'ayer', extra: { a: -1, b: 'x', c: 0 } }]) {
     assert.deepEqual(leeAvance(basura), vacio);
   }
@@ -469,6 +473,77 @@ const lower = {
   assert.deepEqual(Object.keys(unido.hechos).sort(), ['0.1.0', '0.2.0', 'd.0.1.0']);
   // Todo es JSON puro (sin `undefined`, sin fechas, sin funciones).
   assert.deepEqual(JSON.parse(JSON.stringify(unido)), unido);
+}
+
+/* ---- Tocar un paso de la lista: uno de adelante, uno saltado ---- */
+{
+  const plan = pasosDeLaSesion(lower);
+  let av;
+  av = marcaListo(plan, av, 1000); // Back Squat, vuelta 1
+  av = marcaListo(plan, av, 2000); // su descanso
+  assert.equal(vistaDelEntreno(plan, av, 2500).actual.clave, '0.2.0');
+  // El atleta toca «Hip Thrust» en la lista (más adelante, con un descanso detrás) y lo hace.
+  const adelante = marcaListo(plan, av, 3000, { reps: '9' }, '3.1.0');
+  assert.deepEqual(adelante.hechos['3.1.0'], { t: 3000, n: 'Hip Thrust', reps: '9' });
+  assert.deepEqual(adelante.hechos['d.3.1.0'], { t: 3000 }, 'el descanso que le seguía ya no tiene sentido: queda hecho');
+  let v = vistaDelEntreno(plan, adelante, 3500);
+  assert.equal(v.actual.clave, '0.2.0', 'el paso actual no cambia: sigue siendo el primero sin marca');
+  assert.equal(v.hechos, 2);
+  const e = v.estados;
+  assert.equal(e.length, plan.pasos.length);
+  assert.equal(e[plan.pasos.findIndex((p) => p.clave === '3.1.0')], 'hecho');
+  assert.equal(e[plan.pasos.findIndex((p) => p.clave === '0.2.0')], 'pendiente');
+  // Uno de adelante que se salta: queda saltado y tampoco deja descanso suelto.
+  const salto = saltaPaso(plan, av, 3000, '3.1.0');
+  assert.deepEqual(salto.saltados['3.1.0'], { t: 3000, n: 'Hip Thrust' });
+  assert.deepEqual(salto.hechos['d.3.1.0'], { t: 3000 });
+  assert.equal(vistaDelEntreno(plan, salto, 3500).estados[plan.pasos.findIndex((p) => p.clave === '3.1.0')], 'saltado');
+  // Lo saltado se puede hacer después: pasa a hecho y sale de saltados.
+  const rehecho = marcaListo(plan, salto, 4000, undefined, '3.1.0');
+  assert.deepEqual([rehecho.hechos['3.1.0'].t, '3.1.0' in rehecho.saltados], [4000, false]);
+  // Lo hecho no se salta.
+  assert.deepEqual(saltaPaso(plan, rehecho, 5000, '3.1.0').saltados, {});
+  // Una clave que no existe no hace nada.
+  assert.deepEqual(marcaListo(plan, av, 6000, undefined, 'no.existe').hechos, av.hechos);
+  // Un paso que YA es el actual, con o sin clave, se marca igual.
+  assert.deepEqual(marcaListo(plan, av, 7000, undefined, '0.2.0').hechos['0.2.0'], { t: 7000, n: 'Back Squat' });
+  // Marcar un descanso por su clave es «Seguir».
+  assert.deepEqual(Object.keys(marcaListo(plan, iniciaEntreno(undefined, 1), 9, undefined, 'd.0.1.0').hechos), ['d.0.1.0']);
+}
+
+/* ---- El cronómetro OPCIONAL de un paso con tiempo ---- */
+{
+  const plan = pasosDeLaSesion({ cat: 'gym', exercises: [ex('Plancha', { reps: '30', unidad: 'seg' }), ex('Dominadas', { reps: '8' })] });
+  const T0 = 50_000;
+  assert.equal(cuentaDe(plan.pasos[0], undefined, T0), null, 'sin arrancar no hay cuenta');
+  let av = empiezaPaso(plan, undefined, T0);
+  assert.deepEqual(av.empezados, { '0.1.0': T0 });
+  assert.equal(av.inicio, T0, 'arrancar el cronómetro también inicia el entreno');
+  assert.deepEqual(av.empezados, empiezaPaso(plan, av, T0 + 9000).empezados, 'arrancarlo otra vez no lo reinicia');
+  let c = cuentaDe(plan.pasos[0], av, T0 + 10_000);
+  assert.deepEqual([c.seg, c.restan, c.vencido, c.pasado, c.fin], [30, 20, false, 0, T0 + 30_000]);
+  c = cuentaDe(plan.pasos[0], av, T0 + 30_000);
+  assert.deepEqual([c.restan, c.vencido, c.pasado], [0, true, 0], 'llega a cero: avisa');
+  c = cuentaDe(plan.pasos[0], av, T0 + 45_000);
+  assert.deepEqual([c.restan, c.pasado], [-15, 15], 'y sigue contando hacia arriba, sin avanzar solo');
+  assert.equal(vistaDelEntreno(plan, av, T0 + 45_000).actual.clave, '0.1.0');
+  assert.equal(vistaDelEntreno(plan, av, T0 + 10_000).cuenta.restan, 20, 'la vista trae la cuenta del paso actual');
+  // Un paso que no es de tiempo no tiene cronómetro, aunque se «arranque».
+  assert.equal(cuentaDe(plan.pasos[1], empiezaPaso(plan, av, T0, '1.1.0'), T0), null);
+  // Con rango de tiempo se cuenta el menor.
+  const rango = pasosDeLaSesion({ cat: 'gym', exercises: [ex('Wall sit', { reps: '30-40', unidad: 'seg' })] });
+  assert.equal(cuentaDe(rango.pasos[0], empiezaPaso(rango, undefined, 0), 0).seg, 30);
+  // Detenerlo lo deja como si no se hubiera arrancado.
+  assert.deepEqual(quitaCronometro(plan, av).empezados, {});
+  // «Listo» limpia el cronómetro de ese paso, y «Anterior» el de los pasos que deshace.
+  const hecho = marcaListo(plan, av, T0 + 31_000);
+  assert.deepEqual(hecho.empezados, {});
+  assert.equal(vistaDelEntreno(plan, hecho, T0 + 32_000).cuenta, null);
+  const conOtro = empiezaPaso(plan, marcaListo(plan, undefined, T0), T0 + 1000);
+  assert.deepEqual(Object.keys(conOtro.empezados), ['1.1.0']);
+  assert.deepEqual(vuelveAtras(plan, conOtro).empezados, {}, 'al volver atrás se quitan los cronómetros de lo que se deshace');
+  // Un cronómetro roto en la base se ignora.
+  assert.deepEqual(leeAvance({ empezados: { a: 'x', b: -1, c: 5 } }).empezados, { c: 5 });
 }
 
 console.log('prueba-entreno: todo bien');

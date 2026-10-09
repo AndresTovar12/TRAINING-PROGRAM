@@ -25,8 +25,9 @@ import { groupIntoSets, setTag } from './setsDeUnaSesion.js';
  *
  * LO CANÓNICO. Todos los relojes del mundo guían con la MISMA estructura (ver la nota de relojes inteligentes): pasos con
  * cómo terminan + una meta opcional + cuántas veces se repiten + el deporte. Cada paso lo trae ya:
- *   termina   { por: 'reps' | 'tiempo' | 'distancia' | 'calorias' | 'boton', min, max, valor }
+ *   termina   { por: 'reps' | 'tiempo' | 'distancia' | 'calorias' | 'boton', min, max, valor, cantidad, unidad }
  *             tiempo en SEGUNDOS, distancia en METROS (km y yardas ya convertidos), `valor` solo si es un número fijo.
+ *             `cantidad` y `unidad` son lo que escribió el coach tal cual («8-10» reps, «40» yd): las pantallas lo dicen así.
  *             'boton' = termina cuando el atleta lo dice (`texto` trae lo que escribió el coach, si algo).
  *   meta      null, o { tipo, texto, min, max }, con los ids de `CARGAS` (pct, kg, int, rpe, rir, ritmo, zona, w, nado, o
  *             'texto' si no encaja en ninguno). Ritmo en SEGUNDOS por km y ritmo de nado en segundos por 100 m.
@@ -38,7 +39,11 @@ import { groupIntoSets, setTag } from './setsDeUnaSesion.js';
  * (pulso, pasos); esto es la estructura del entreno que se le MANDARÍA.
  *
  * EL AVANCE (`sesión.entreno`, dentro del registro del atleta, junto a `exercises` y `formatos`):
- *   { v, inicio, fin, hechos: { [clave]: { t, n, reps?, kg?, seg? } }, saltados: { [clave]: { t, n } }, extra: { [clave]: seg } }
+ *   { v, inicio, fin, hechos: { [clave]: { t, n, reps?, kg?, seg? } }, saltados: { [clave]: { t, n } }, extra: { [clave]: seg },
+ *     empezados: { [clave]: hora } }
+ * `extra` son los segundos que se le sumaron a un descanso («+30 s»); `empezados` la hora en que el atleta arrancó el cronómetro
+ * OPCIONAL de un paso con tiempo (la plancha de 30 seg, el «2 min a 6:39» de un lapso): igual que el descanso, solo se guarda cuándo
+ * empezó, y lo que queda se calcula de ahí. Tampoco avanza solo.
  * Son OBJETOS con el paso por llave, nunca listas: la base mezcla los objetos llave por llave a cualquier profundidad y
  * REEMPLAZA las listas enteras (ver `estadoPorPartes.js`); así el teléfono y un reloj pueden marcar pasos distintos sin
  * pisarse.
@@ -115,7 +120,7 @@ function terminaDe(e) {
     const bloques = cantidad.split('+').map((n) => parseInt(n, 10));
     const total = bloques.reduce((a, n) => a + n, 0);
     const entre = rangoDe(e?.entreBloques)?.min;
-    return { por: 'reps', min: total, max: total, valor: total, bloques, ...(entre ? { entreBloques: entre } : null) };
+    return { por: 'reps', min: total, max: total, valor: total, cantidad, unidad, bloques, ...(entre ? { entreBloques: entre } : null) };
   }
   const r = rangoDe(cantidad);
   if (!r) return { por: 'boton', texto: cantidad };
@@ -126,7 +131,7 @@ function terminaDe(e) {
   else if (unidad === 'cal') por = 'calorias';
   const min = redondea(r.min * k);
   const max = redondea(r.max * k);
-  return { por, min, max, valor: min === max ? min : null };
+  return { por, min, max, valor: min === max ? min : null, cantidad, unidad };
 }
 
 /** La carga o el objetivo de un ejercicio (o lapso): ver «LO CANÓNICO». `null` si el coach no puso ninguna. */
@@ -245,7 +250,9 @@ export function pasosDeLaSesion(day, { deporte } = {}) {
     const exs = miembros.map((m) => m.ex);
     const hayOtroSet = si < sets.length;
     const descansoSet = hayOtroSet ? lecturaDeDescanso(exs[exs.length - 1]?.descansoSet) : null;
-    const enLaSerie = { serie: si, serieTag: setTag(exs.length), ejerciciosEnSerie: exs.length, encabezado: encabezado.join(' · ') };
+    const enLaSerie = { serie: si, serieTag: setTag(exs.length), ejerciciosEnSerie: exs.length };
+    // La nota de sección («CALENTAMIENTO») encabeza solo el PRIMER paso del Set que sigue: en la vuelta 2 ya no hace falta repetirla.
+    const delSet = encabezado.join(' · ');
     encabezado = [];
 
     const formato = formatoDeMiembros(exs);
@@ -257,6 +264,7 @@ export function pasosDeLaSesion(day, { deporte } = {}) {
         clave,
         tipo: 'reloj',
         ...enLaSerie,
+        encabezado: delSet,
         ejercicioEnSerie: 1,
         vuelta: 1,
         vueltas: 1,
@@ -293,6 +301,7 @@ export function pasosDeLaSesion(day, { deporte } = {}) {
             clave,
             tipo: 'ejercicio',
             ...enLaSerie,
+            encabezado: r === 1 && e === 0 && k === 0 ? delSet : '',
             ejercicioEnSerie: e + 1,
             vuelta: r,
             vueltas: rondas.max,
@@ -361,7 +370,9 @@ export function leeAvance(entreno) {
   };
   const extra = {};
   if (esObjeto(e.extra)) Object.entries(e.extra).forEach(([k, v]) => { if (Number.isFinite(v) && v > 0) extra[k] = v; });
-  return { inicio: hora(e.inicio), fin: hora(e.fin), hechos: marcas(e.hechos), saltados: marcas(e.saltados), extra };
+  const empezados = {};
+  if (esObjeto(e.empezados)) Object.entries(e.empezados).forEach(([k, v]) => { if (hora(v) !== null) empezados[k] = v; });
+  return { inicio: hora(e.inicio), fin: hora(e.fin), hechos: marcas(e.hechos), saltados: marcas(e.saltados), extra, empezados };
 }
 
 // Lo que se guarda en `sesión.entreno`: sin llaves vacías en `null`, que es lo que la base espera.
@@ -372,6 +383,7 @@ const aGuardar = (av) => ({
   hechos: av.hechos,
   saltados: av.saltados,
   extra: av.extra,
+  empezados: av.empezados,
 });
 
 const nombreCorto = (p) => String(p.nombre ?? '').slice(0, 40);
@@ -411,27 +423,95 @@ export function iniciaEntreno(entreno, ahora) {
   return aGuardar({ ...av, inicio: av.inicio ?? ahora });
 }
 
+// El paso al que se refiere una acción: el que se pidió por su clave, o el actual. `i` es su lugar; -1 si no existe.
+function objetivoDe(plan, av, clave) {
+  const pasos = plan?.pasos ?? [];
+  const { i: iActual } = posicionDe(plan, av);
+  const i = clave ? pasos.findIndex((p) => p.clave === clave) : iActual;
+  return { i, iActual, paso: i === -1 ? null : pasos[i], pasos };
+}
+
+// Si el atleta hizo un paso ADELANTE de donde iba (tocó otro en la lista), el descanso que le sigue ya no tiene sentido: queda hecho.
+function sinDescansosSueltos(av, hechos, { i, iActual, pasos }, ahora) {
+  if (iActual === -1 || i <= iActual) return hechos;
+  const salida = { ...hechos };
+  for (let k = i + 1; k < pasos.length && pasos[k].tipo === 'descanso'; k += 1) {
+    if (!marcaDe(av, pasos[k])) salida[pasos[k].clave] = { t: ahora };
+  }
+  return salida;
+}
+
 /**
  * «Listo» en el paso actual (o «Seguir», si es un descanso). Da por hecho lo planeado; `real` solo viaja si el atleta lo
  * CAMBIÓ: `{ reps, kg, seg }`. Si todavía no se había iniciado, esto también inicia.
+ *
+ * `clave`: marcar OTRO paso (el que se tocó en la lista de «Tu entreno»): sirve para uno de adelante o para uno que se había
+ * saltado. El paso actual no cambia: sigue siendo el primero sin marca.
  */
-export function marcaListo(plan, entreno, ahora, real) {
+export function marcaListo(plan, entreno, ahora, real, clave) {
   const av = leeAvance(entreno);
   const inicio = av.inicio ?? ahora;
-  const { actual } = posicionDe(plan, av);
-  if (!actual) return aGuardar({ ...av, inicio });
-  const dato = { t: ahora, ...(actual.tipo === 'descanso' ? null : { n: nombreCorto(actual) }), ...limpiaReal(real) };
-  return aGuardar({ ...av, inicio, hechos: { ...av.hechos, [actual.clave]: dato } });
+  const o = objetivoDe(plan, av, clave);
+  if (!o.paso) return aGuardar({ ...av, inicio });
+  const dato = { t: ahora, ...(o.paso.tipo === 'descanso' ? null : { n: nombreCorto(o.paso) }), ...limpiaReal(real) };
+  const saltados = { ...av.saltados };
+  const empezados = { ...av.empezados };
+  delete saltados[o.paso.clave];
+  delete empezados[o.paso.clave];
+  const hechos = sinDescansosSueltos(av, { ...av.hechos, [o.paso.clave]: dato }, o, ahora);
+  return aGuardar({ ...av, inicio, hechos, saltados, empezados });
 }
 
-/** «Saltar» el paso actual: queda marcado como saltado (un descanso que se salta cuenta como terminado). */
-export function saltaPaso(plan, entreno, ahora) {
+/** «Saltar» el paso actual (o el que se pidió con `clave`): queda saltado; un descanso que se salta cuenta como terminado. Lo ya hecho no se salta. */
+export function saltaPaso(plan, entreno, ahora, clave) {
   const av = leeAvance(entreno);
   const inicio = av.inicio ?? ahora;
-  const { actual } = posicionDe(plan, av);
-  if (!actual) return aGuardar({ ...av, inicio });
-  if (actual.tipo === 'descanso') return aGuardar({ ...av, inicio, hechos: { ...av.hechos, [actual.clave]: { t: ahora } } });
-  return aGuardar({ ...av, inicio, saltados: { ...av.saltados, [actual.clave]: { t: ahora, n: nombreCorto(actual) } } });
+  const o = objetivoDe(plan, av, clave);
+  if (!o.paso) return aGuardar({ ...av, inicio });
+  if (o.paso.tipo === 'descanso') return aGuardar({ ...av, inicio, hechos: { ...av.hechos, [o.paso.clave]: { t: ahora } } });
+  if (av.hechos[o.paso.clave]) return aGuardar({ ...av, inicio });
+  const empezados = { ...av.empezados };
+  delete empezados[o.paso.clave];
+  const hechos = sinDescansosSueltos(av, av.hechos, o, ahora);
+  return aGuardar({ ...av, inicio, hechos, saltados: { ...av.saltados, [o.paso.clave]: { t: ahora, n: nombreCorto(o.paso) } }, empezados });
+}
+
+/**
+ * El atleta arrancó el cronómetro OPCIONAL de un paso con tiempo (el actual, o el que se pidió con `clave`). Solo guarda la hora; ver
+ * `cuentaDe`. Arrancarlo otra vez no lo reinicia.
+ */
+export function empiezaPaso(plan, entreno, ahora, clave) {
+  const av = leeAvance(entreno);
+  const inicio = av.inicio ?? ahora;
+  const { paso } = objetivoDe(plan, av, clave);
+  if (!paso || paso.tipo === 'descanso' || av.empezados[paso.clave] !== undefined) return aGuardar({ ...av, inicio });
+  return aGuardar({ ...av, inicio, empezados: { ...av.empezados, [paso.clave]: ahora } });
+}
+
+/** Detiene el cronómetro de un paso (el actual, o el que se pidió con `clave`): se puede volver a arrancar desde cero. */
+export function quitaCronometro(plan, entreno, clave) {
+  const av = leeAvance(entreno);
+  const { paso } = objetivoDe(plan, av, clave);
+  if (!paso) return aGuardar(av);
+  const empezados = { ...av.empezados };
+  delete empezados[paso.clave];
+  return aGuardar({ ...av, empezados });
+}
+
+/**
+ * La cuenta del cronómetro de un paso con tiempo: `{ desde, seg, fin, restan, vencido, pasado }`, o `null` si no lo tiene o no se ha
+ * arrancado. `seg` es el tiempo fijo del paso (de un rango, el menor). Igual que el descanso: al llegar a cero avisa pero NO avanza
+ * solo, y `pasado` cuenta hacia arriba hasta que el atleta toca «Listo».
+ */
+export function cuentaDe(paso, entreno, ahora) {
+  const av = leeAvance(entreno);
+  const desde = paso ? av.empezados[paso.clave] : undefined;
+  if (desde === undefined || paso.termina?.por !== 'tiempo') return null;
+  const seg = paso.termina.valor ?? paso.termina.min;
+  if (!(seg > 0)) return null;
+  const fin = desde + seg * 1000;
+  const restan = Math.ceil((fin - ahora) / 1000);
+  return { desde, seg, fin, restan, vencido: restan <= 0, pasado: restan < 0 ? -restan : 0 };
 }
 
 /**
@@ -449,12 +529,15 @@ export function vuelveAtras(plan, entreno) {
   const hechos = { ...av.hechos };
   const saltados = { ...av.saltados };
   const extra = { ...av.extra };
-  for (let k = j; k < tope; k += 1) {
+  const empezados = { ...av.empezados };
+  // Hasta el paso en el que se estaba (inclusive): lo que tenía a medias —un cronómetro, un «+30 s»— se deja al irse.
+  for (let k = j; k <= tope && k < pasos.length; k += 1) {
     delete hechos[pasos[k].clave];
     delete saltados[pasos[k].clave];
     delete extra[pasos[k].clave];
+    delete empezados[pasos[k].clave];
   }
-  return aGuardar({ ...av, fin: null, hechos, saltados, extra });
+  return aGuardar({ ...av, fin: null, hechos, saltados, extra, empezados });
 }
 
 /** «+30 s» en el descanso actual. Un descanso que solo dice texto no tiene cuenta, así que no se alarga. */
@@ -486,6 +569,8 @@ export function reabreEntreno(entreno) {
  *   descansoDespues  si el paso actual va seguido de un descanso, ese paso
  *   descanso      si el paso actual ES un descanso: { paso, desde, extra, seg, fin, restan, vencido, pasado }
  *                 (`seg`, `fin` y `restan` son `null` si solo dice texto; `restan` baja de 0 al pasarse y `pasado` cuenta cuánto)
+ *   cuenta        si el paso actual tiene su cronómetro en marcha: ver `cuentaDe`
+ *   estados       el estado de cada paso, en el orden de `plan.pasos`: 'hecho' · 'saltado' · 'pendiente' (para la lista de «Tu entreno»)
  *   hechos, saltados, total   cuántos pasos de los que hay que hacer van hechos o saltados, y cuántos son
  *   completo      no queda ningún paso (ni opcional)
  *   soloLoOpcional  ya se hizo todo lo que había que hacer y lo que queda es opcional («5-6 veces»)
@@ -531,6 +616,8 @@ export function vistaDelEntreno(plan, entreno, ahora) {
     siguiente: despues.find((p) => p.tipo !== 'descanso') ?? null,
     descansoDespues: actual && actual.tipo !== 'descanso' && despues[0]?.tipo === 'descanso' ? despues[0] : null,
     descanso,
+    cuenta: actual ? cuentaDe(actual, entreno, ahora) : null,
+    estados: marcas.map((m) => m?.estado ?? 'pendiente'),
     hechos,
     saltados,
     total: plan?.total ?? 0,
