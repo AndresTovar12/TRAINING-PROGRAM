@@ -77,6 +77,8 @@ export default function MediaUpload({
   const camaraRef = useRef(null);     // grabar / tomar en el momento
   // Elegidos y todavia SIN subir, esperando a que pasen por su editor.
   const [porRevisar, setPorRevisar] = useState(null);
+  // Lo que la cámara de la app sacó mientras grababa (miniaturas, foto del primer cuadro): el editor abre ya completo.
+  const [adelanto, setAdelanto] = useState(null);
   const [fotoPorRevisar, setFotoPorRevisar] = useState(null);
   // Un video del carrete que espera a que se diga qué es, y lo que se contestó.
   const [preguntando, setPreguntando] = useState(null);
@@ -105,12 +107,14 @@ export default function MediaUpload({
      encima. Antes esto vivía dentro de `onPick` y solo sabía leer un evento de
      <input>, así que arrastrar un video desde la compu no tenía por dónde
      entrar aunque la pantalla lo ofreciera. */
-  async function tomaArchivo(elegido) {
+  async function tomaArchivo(elegido, adelantado = null) {
     if (!elegido || preparando) return;
     setErr('');
     setAviso(null);
     setAhorro(null);
     setAvance(0);
+    // Solo la cámara de la app lo trae; del carrete, de la compu o soltado encima, el editor saca todo del archivo.
+    setAdelanto(adelantado ?? null);
 
     /* UN VIDEO NO SE SUBE DE GOLPE: primero se abre el editor, como en
        WhatsApp. Andrés: "tengo que seleccionar el video, luego que aparezca en
@@ -238,6 +242,7 @@ export default function MediaUpload({
         <EditorVideo
           archivo={porRevisar}
           tamaño={porRevisar.size}
+          adelanto={adelanto}
           proposito={conProposito ? queEs : undefined}
           subiendo={busy}
           avance={avance}
@@ -248,7 +253,7 @@ export default function MediaUpload({
       {grabadora && (
         <GrabadoraDeVideo
           proposito={proposito === 'explicacion' ? 'explicacion' : proposito !== undefined ? 'ejemplo' : undefined}
-          onListo={(file) => { setGrabadora(false); tomaArchivo(file); }}
+          onListo={(file, adelantado) => { setGrabadora(false); tomaArchivo(file, adelantado); }}
           onCancelar={() => setGrabadora(false)}
           /* Sin cámara propia no se deja al coach sin grabar: se cae al atajo
              del navegador, que da peor calidad pero graba. */
