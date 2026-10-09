@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, SwitchCamera, Loader2 } from 'lucide-react';
+import { X, SwitchCamera, Loader2, Mic, MicOff } from 'lucide-react';
 import { FONT, NUM_STYLE } from '@/lib/theme';
 
 /**
@@ -102,6 +102,83 @@ function tieneImagen(blob) {
   });
 }
 
+/* LA CÁMARA SE QUEDA ABIERTA UN RATITO, Y EL MICRÓFONO NO SE ABRE HASTA GRABAR.
+
+   Andrés, 9 oct 2026: «cada vez que voy a grabar me pide los permisos del iPhone y me quita la música». Eran dos cosas:
+
+   1. PERMISOS. Cada vez que se abría esta pantalla se pedía la cámara de cero y al cerrarla se apagaba, así que cada
+      repetición —grabar, no gustar, volver a grabar; grabar el ejemplo y luego la explicación— volvía a preguntar. Ahora la
+      cámara que se obtuvo se GUARDA aquí, fuera del componente, y se apaga sola a los pocos segundos de cerrar la pantalla (o
+      en cuanto la app se va al fondo). Dentro de ese ratito, volver a abrir la cámara es instantáneo y no pregunta nada.
+
+   2. LA MÚSICA. Pedir el micrófono (`audio: true`) activa la sesión de audio del teléfono y iOS corta lo que suene de fondo,
+      aunque todavía no estés grabando nada. La cámara sola NO toca el audio. Por eso la vista previa va SIN micrófono y el
+      micrófono se pide hasta el momento de grabar, y se suelta en cuanto se para. Con el micrófono apagado (el botón de
+      arriba) la música no se corta nunca. */
+const GRACIA_MS = 45_000;
+let guardada = null;   // { stream, lado, reloj }
+let pendiente = null;  // { lado, promesa }: una cámara que se está pidiendo ahora mismo
+// Cuántas pantallas están usando la cámara guardada. Solo cuando nadie la usa empieza la cuenta para apagarla.
+let usos = 0;
+
+const estaViva = (stream) => !!stream && stream.getVideoTracks().some((t) => t.readyState === 'live');
+
+function apagaLaCamara() {
+  if (guardada) {
+    window.clearTimeout(guardada.reloj);
+    guardada.stream.getTracks().forEach((t) => t.stop());
+    guardada = null;
+  }
+  usos = 0;
+}
+
+// Una pantalla deja de usar la cámara: si ya nadie la usa, aguanta un rato por si se vuelve a grabar.
+function sueltaLaCamara() {
+  usos = Math.max(0, usos - 1);
+  if (usos > 0 || !guardada) return;
+  window.clearTimeout(guardada.reloj);
+  guardada.reloj = window.setTimeout(apagaLaCamara, GRACIA_MS);
+}
+
+async function tomaLaCamara(lado) {
+  let stream;
+  if (guardada && guardada.lado === lado && estaViva(guardada.stream)) {
+    stream = guardada.stream;
+  } else if (pendiente && pendiente.lado === lado) {
+    // Dos pantallas la piden a la vez (pasa al reabrir deprisa): comparten la misma, no se piden dos.
+    stream = await pendiente.promesa;
+  } else {
+    apagaLaCamara();
+    const promesa = navigator.mediaDevices.getUserMedia({
+      /* `ideal` y no `exact`: si el teléfono no tiene 1080p, se queda con lo
+         más cercano en vez de fallar y dejar al coach sin grabar. */
+      video: {
+        facingMode: { ideal: lado },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        frameRate: { ideal: 30 },
+      },
+      audio: false,
+    }).then((nueva) => {
+      guardada = { stream: nueva, lado, reloj: null };
+      return nueva;
+    }).finally(() => { if (pendiente?.promesa === promesa) pendiente = null; });
+    pendiente = { lado, promesa };
+    stream = await promesa;
+  }
+  if (guardada) { window.clearTimeout(guardada.reloj); guardada.reloj = null; }
+  usos += 1;
+  return stream;
+}
+
+// Con la app en el fondo no hay motivo para tener la cámara prendida: si estaba solo esperando, se apaga.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => { if (document.hidden && guardada?.reloj) apagaLaCamara(); });
+}
+
+const LLAVE_SONIDO = 'tl:grabar:sonido';
+const leeSonido = () => { try { return window.localStorage.getItem(LLAVE_SONIDO) !== 'no'; } catch { return true; } };
+
 export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -121,12 +198,27 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
   const [segundos, setSegundos] = useState(0);
   const [preparando, setPreparando] = useState(true);
   const [err, setErr] = useState('');
+  // Si se graba con el micrófono. Apagado, el teléfono no toca el audio y la música sigue sonando.
+  const [conSonido, setConSonido] = useState(leeSonido);
+  const [aviso, setAviso] = useState('');
+  const audioRef = useRef(null); // el micrófono, solo mientras se graba
 
-  /* Apagar la cámara de verdad. Si no se paran las pistas, el punto verde del
-     teléfono se queda encendido aunque esta pantalla ya no esté. */
-  const apaga = useCallback(() => {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
+  /* Soltar la cámara al irse: queda un ratito guardada (ver arriba). `apagaYa` es para cuando algo falló: ahí no se
+     guarda nada, para que el siguiente intento empiece limpio. */
+  const suelta = useCallback(() => {
+    // Solo suelta quien la tenía: cerrar con el botón y desmontar la pantalla llaman las dos, y no deben restar dos veces.
+    if (!streamRef.current) return;
     streamRef.current = null;
+    sueltaLaCamara();
+  }, []);
+  const apagaYa = useCallback(() => {
+    streamRef.current = null;
+    apagaLaCamara();
+  }, []);
+  // El micrófono nunca se guarda: en cuanto no hace falta, se suelta.
+  const sueltaElMicro = useCallback(() => {
+    audioRef.current?.getTracks().forEach((t) => t.stop());
+    audioRef.current = null;
   }, []);
 
   /* Cambiar de cámara reinicia la espera AQUÍ y no dentro del efecto: poner el
@@ -147,19 +239,9 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
         return;
       }
       try {
-        apaga();
-        const stream = await navigator.mediaDevices.getUserMedia({
-          /* `ideal` y no `exact`: si el teléfono no tiene 1080p, se queda con lo
-             más cercano en vez de fallar y dejar al coach sin grabar. */
-          video: {
-            facingMode: { ideal: lado },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            frameRate: { ideal: 30 },
-          },
-          audio: true,
-        });
-        if (!vivo) { stream.getTracks().forEach((t) => t.stop()); return; }
+        const stream = await tomaLaCamara(lado);
+        // Si la pantalla ya se cerró mientras esperaba el permiso, la cámara se queda guardada (no se pierde el permiso).
+        if (!vivo) { sueltaLaCamara(); return; }
         streamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;
         const ajustes = stream.getVideoTracks()[0]?.getSettings() ?? {};
@@ -178,9 +260,10 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
     })();
 
     return () => { vivo = false; };
-  }, [lado, apaga]);
+  }, [lado]);
 
-  useEffect(() => apaga, [apaga]);
+  // Al cerrar la pantalla —por donde sea— la cámara queda guardada un rato y el micrófono se suelta ya.
+  useEffect(() => () => { sueltaElMicro(); suelta(); }, [suelta, sueltaElMicro]);
 
   /* La página de atrás se queda quieta mientras la cámara está abierta. Sin
      esto, un dedo que resbala arrastra el formulario que hay debajo y la
@@ -217,18 +300,35 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
     return () => window.clearInterval(t);
   }, [grabando]);
 
-  function arranca() {
+  async function arranca() {
     const stream = streamRef.current;
     if (!stream) return;
-    const formato = mejorFormato(stream.getAudioTracks().length > 0);
-    if (!formato) { setErr('Este navegador no sabe grabar video.'); return; }
+    setAviso('');
+
+    /* El micrófono se pide AQUÍ, al empezar a grabar, y no al abrir la cámara (ver arriba). Si no se da el permiso, no se
+       cancela nada: se graba el video sin sonido y se avisa. */
+    let entrada = stream;
+    if (conSonido) {
+      try {
+        const micro = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioRef.current = micro;
+        entrada = new MediaStream([...stream.getVideoTracks(), ...micro.getAudioTracks()]);
+      } catch {
+        setAviso('No diste permiso al micrófono: se grabará sin sonido.');
+      }
+    }
+    if (!streamRef.current) { sueltaElMicro(); return; }
+
+    const formato = mejorFormato(entrada.getAudioTracks().length > 0);
+    if (!formato) { sueltaElMicro(); setErr('Este navegador no sabe grabar video.'); return; }
 
     trozosRef.current = [];
     const alto = medidas?.h ?? 1080;
     let rec;
     try {
-      rec = new MediaRecorder(stream, { mimeType: formato.mime, videoBitsPerSecond: ritmo(alto) });
+      rec = new MediaRecorder(entrada, { mimeType: formato.mime, videoBitsPerSecond: ritmo(alto) });
     } catch {
+      sueltaElMicro();
       setErr('Este navegador rechazó grabar en ese formato.');
       return;
     }
@@ -236,8 +336,10 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
     rec.ondataavailable = (e) => { if (e.data?.size) trozosRef.current.push(e.data); };
     // Sin esto, un fallo a mitad de la grabación no se ve por ningún lado y el
     // coach se queda mirando el cronómetro correr sobre nada.
-    rec.onerror = () => { setGrabando(false); setErr('Se cortó la grabación. Inténtalo otra vez.'); };
+    rec.onerror = () => { sueltaElMicro(); setGrabando(false); setErr('Se cortó la grabación. Inténtalo otra vez.'); };
     rec.onstop = async () => {
+      // El micrófono se suelta apenas termina la grabación, para que el teléfono le devuelva el audio a quien lo tenía.
+      sueltaElMicro();
       /* El tipo va SIN `;codecs=…`: el servidor compara contra una lista
          cerrada ('video/mp4', 'video/webm') y con la coletilla no coincide,
          así que la subida se rechazaría con "tipo no permitido". */
@@ -261,11 +363,11 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
       if (!sirve) {
         setGrabando(false);
         setErr('La grabación salió sin imagen. Se abrirá la cámara del teléfono.');
-        apaga();
+        apagaYa();
         window.setTimeout(() => avisos.current.onSinCamara?.(''), 1800);
         return;
       }
-      apaga();
+      suelta();
       avisos.current.onListo(new File([blob], `grabacion.${formato.ext}`, { type: formato.base }));
     };
 
@@ -274,6 +376,7 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
     try {
       rec.start(1000);
     } catch {
+      sueltaElMicro();
       setErr('No se pudo empezar a grabar.');
       return;
     }
@@ -350,7 +453,7 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
       }}>
         <button
           type="button"
-          onClick={() => { apaga(); onCancelar(); }}
+          onClick={() => { sueltaElMicro(); suelta(); onCancelar(); }}
           aria-label="Cerrar la cámara"
           style={redondo}
         >
@@ -378,14 +481,31 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
             {reloj(segundos)}
           </span>
         ) : (
-          <button
-            type="button"
-            onClick={cambiaDeLado}
-            aria-label="Cambiar de cámara"
-            style={redondo}
-          >
-            <SwitchCamera size={19} color="#fff" />
-          </button>
+          <>
+            {/* El micrófono: apagado, la música del teléfono no se corta. Se acuerda de lo que se eligió. */}
+            <button
+              type="button"
+              onClick={() => {
+                const nuevo = !conSonido;
+                setConSonido(nuevo);
+                setAviso('');
+                try { window.localStorage.setItem(LLAVE_SONIDO, nuevo ? 'si' : 'no'); } catch { /* sin almacenamiento */ }
+              }}
+              aria-pressed={!conSonido}
+              aria-label={conSonido ? 'Grabar sin sonido' : 'Grabar con sonido'}
+              style={{ ...redondo, background: conSonido ? 'rgba(0,0,0,0.45)' : '#F5C518' }}
+            >
+              {conSonido ? <Mic size={19} color="#fff" /> : <MicOff size={19} color="#111318" />}
+            </button>
+            <button
+              type="button"
+              onClick={cambiaDeLado}
+              aria-label="Cambiar de cámara"
+              style={redondo}
+            >
+              <SwitchCamera size={19} color="#fff" />
+            </button>
+          </>
         )}
       </div>
 
@@ -443,7 +563,7 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara }) {
           }} />
         </button>
         <span style={{ fontSize: 12.5, fontWeight: 600, color: 'rgba(255,255,255,0.75)' }}>
-          {grabando ? 'Tócalo otra vez para terminar' : 'Tócalo para grabar'}
+          {aviso || (grabando ? 'Tócalo otra vez para terminar' : (conSonido ? 'Tócalo para grabar' : 'Tócalo para grabar · sin sonido'))}
         </span>
       </div>
     </div>

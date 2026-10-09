@@ -107,10 +107,16 @@ export function useRecorte({ marcoRef, medidas, inicial = null }) {
 }
 
 /** Lo que se va a perder se oscurece, en vez de desaparecer: se ve qué queda
-    fuera ANTES de decidir. Va dentro de la caja con la proporción del original. */
-export function CapaRecorte({ crop, onAgarrar }) {
+    fuera ANTES de decidir. Va dentro de la caja con la proporción del original.
+
+    EL ASPECTO ES EL DEL RECORTE DE WHATSAPP (Andrés, 9 oct 2026: «casi casi
+    igualito»): un filo blanco delgado, cuatro esquinas en «L» gruesas, y una
+    cuadrícula de tercios que aparece solo mientras se arrastra. Antes eran
+    cuatro cuadritos blancos que tapaban lo que había justo en la esquina. */
+export function CapaRecorte({ crop, onAgarrar, agarrado = null }) {
   if (!crop) return null;
-  const sombra = { background: 'rgba(0,0,0,.6)', pointerEvents: 'none', position: 'absolute' };
+  const sombra = { background: 'rgba(0,0,0,.62)', pointerEvents: 'none', position: 'absolute' };
+  const raya = { position: 'absolute', background: 'rgba(255,255,255,.42)', pointerEvents: 'none' };
   return (
     <>
       <div style={{ ...sombra, left: 0, right: 0, top: 0, height: `${crop.y * 100}%` }} />
@@ -131,37 +137,57 @@ export function CapaRecorte({ crop, onAgarrar }) {
           position: 'absolute',
           left: `${crop.x * 100}%`, top: `${crop.y * 100}%`,
           width: `${crop.w * 100}%`, height: `${crop.h * 100}%`,
-          border: '2px solid #fff', cursor: 'move', touchAction: 'none',
+          border: '1px solid rgba(255,255,255,.92)', boxSizing: 'border-box', cursor: 'move', touchAction: 'none',
         }}
-      />
+      >
+        {/* La cuadrícula de tercios: ayuda a encuadrar y solo estorba si se queda siempre. */}
+        {agarrado && (
+          <>
+            <span style={{ ...raya, left: '33.33%', top: 0, bottom: 0, width: 1 }} />
+            <span style={{ ...raya, left: '66.66%', top: 0, bottom: 0, width: 1 }} />
+            <span style={{ ...raya, top: '33.33%', left: 0, right: 0, height: 1 }} />
+            <span style={{ ...raya, top: '66.66%', left: 0, right: 0, height: 1 }} />
+          </>
+        )}
+      </div>
 
       {/* …y se estira desde cualquiera de las cuatro esquinas. La zona que
-          responde al dedo es de 34 px aunque el dibujo sea de 18: una esquina
-          de 18 px no se acierta con el pulgar. */}
+          responde al dedo es de 44 px aunque el dibujo sea de 22: una esquina
+          de 22 px no se acierta con el pulgar. La «L» se dibuja pegada al
+          rincón del marco, hacia adentro. */}
       {[
         ['nw', crop.x, crop.y, 'nwse-resize'],
         ['ne', crop.x + crop.w, crop.y, 'nesw-resize'],
         ['sw', crop.x, crop.y + crop.h, 'nesw-resize'],
         ['se', crop.x + crop.w, crop.y + crop.h, 'nwse-resize'],
-      ].map(([id, cx, cy, cursor]) => (
-        <div
-          key={id}
-          role="button"
-          tabIndex={0}
-          aria-label={`Estirar la esquina ${id}`}
-          onPointerDown={(e) => { e.preventDefault(); onAgarrar(`esq:${id}`); }}
-          style={{
-            position: 'absolute', left: `${cx * 100}%`, top: `${cy * 100}%`,
-            width: 34, height: 34, marginLeft: -17, marginTop: -17,
-            cursor, touchAction: 'none', display: 'grid', placeItems: 'center',
-          }}
-        >
-          <span style={{
-            width: 18, height: 18, border: '3px solid #fff', borderRadius: 2,
-            boxShadow: '0 0 0 1px rgba(0,0,0,.35)',
-          }} />
-        </div>
-      ))}
+      ].map(([id, cx, cy, cursor]) => {
+        const norte = id.includes('n');
+        const oeste = id.includes('w');
+        const gruesa = '4px solid #fff';
+        return (
+          <div
+            key={id}
+            role="button"
+            tabIndex={0}
+            aria-label={`Estirar la esquina ${id}`}
+            onPointerDown={(e) => { e.preventDefault(); onAgarrar(`esq:${id}`); }}
+            style={{
+              position: 'absolute', left: `${cx * 100}%`, top: `${cy * 100}%`,
+              width: 44, height: 44, marginLeft: -22, marginTop: -22,
+              cursor, touchAction: 'none',
+            }}
+          >
+            <span style={{
+              position: 'absolute', width: 26, height: 26,
+              // El rincón de la «L» cae EXACTAMENTE sobre la esquina del marco (que está en el centro de esta zona).
+              left: oeste ? 22 - 2 : 22 - 24, top: norte ? 22 - 2 : 22 - 24,
+              borderTop: norte ? gruesa : 'none', borderBottom: norte ? 'none' : gruesa,
+              borderLeft: oeste ? gruesa : 'none', borderRight: oeste ? 'none' : gruesa,
+              boxSizing: 'border-box', filter: 'drop-shadow(0 0 1px rgba(0,0,0,.45))',
+            }} />
+          </div>
+        );
+      })}
     </>
   );
 }
