@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bell, BellOff, Check, ChevronLeft, List, Minus, Play, Plus, Timer, X } from 'lucide-react';
+import { Bell, BellOff, Check, ChevronLeft, List, Minus, Play, Plus, Timer, Video, X } from 'lucide-react';
 import { LT, KP, FONT, NUM_STYLE } from '@/lib/theme';
 import { textoDeResultado } from '@/lib/formatos';
 import { gruposDeLaLista, relojDe, subtituloDeLaLista } from '@/lib/entrenoDatos';
@@ -55,6 +55,32 @@ function BotonDeTexto({ children, onClick, disabled = false, color = LT.text2 })
       }}
     >
       {children}
+    </button>
+  );
+}
+
+/**
+ * «Grabar técnica para el coach»: la cámara de cada paso. Mientras la función esté apagada (`lib/funciones.js`) lleva su «Pronto», igual que
+ * «Mensajes»; en un teléfono muy angosto la palabra se esconde (`.pronto-texto`) y queda el ícono, para que quepa la fila.
+ */
+function BotonDeTecnica({ activa, etiqueta, onClick }) {
+  return (
+    <button
+      type="button" onClick={onClick} aria-label={etiqueta}
+      style={{
+        border: 'none', background: 'transparent', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 4px',
+        color: LT.text2, touchAction: 'manipulation',
+      }}
+    >
+      <Video size={19} />
+      {!activa && (
+        <span
+          className="pronto-texto"
+          style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 0.3, padding: '3px 7px', borderRadius: 7, background: LT.surface2, color: LT.text2 }}
+        >
+          Pronto
+        </span>
+      )}
     </button>
   );
 }
@@ -161,7 +187,7 @@ function CronometroDelPaso({ segundos, cuenta, onEmpezar, onQuitar }) {
  * fallo de la app).
  */
 export function PantallaDePaso({
-  paso, video, cifras, anotado, sigue, cronometro, etiquetaDeCambiar, puedeAnterior,
+  paso, video, cifras, anotado, sigue, cronometro, etiquetaDeCambiar, puedeAnterior, tecnica,
   onListo, onCambiar, onSaltar, onAnterior,
 }) {
   const nota = [paso.nota, paso.cue].filter(Boolean);
@@ -217,6 +243,7 @@ export function PantallaDePaso({
             <BotonDeTexto onClick={onAnterior} disabled={!puedeAnterior}><ChevronLeft size={17} /> Anterior</BotonDeTexto>
             {etiquetaDeCambiar && <BotonDeTexto onClick={onCambiar} color={LT.text}>{etiquetaDeCambiar}</BotonDeTexto>}
             <BotonDeTexto onClick={onSaltar} color={LT.text}>Saltar</BotonDeTexto>
+            {tecnica && paso.tipo === 'ejercicio' && <BotonDeTecnica {...tecnica} />}
           </div>
         </div>
       </div>
@@ -232,7 +259,7 @@ export function PantallaDePaso({
  * Un Set con formato (AMRAP, EMOM, Tabata…) es UN paso: lo corre el reloj de siempre (`RelojDelBloque`), que es la pantalla
  * protagonista mientras dura. Aquí solo se dice qué es, con qué ejercicios, y se abre el reloj o se anota el resultado a mano.
  */
-export function PantallaDeReloj({ paso, detalle, resultado, puedeAnterior, onIniciar, onAnotar, onListo, onSaltar, onAnterior }) {
+export function PantallaDeReloj({ paso, detalle, resultado, puedeAnterior, tecnica, onIniciar, onAnotar, onListo, onSaltar, onAnterior }) {
   return (
     <>
       <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -279,6 +306,7 @@ export function PantallaDeReloj({ paso, detalle, resultado, puedeAnterior, onIni
             <BotonDeTexto onClick={onAnterior} disabled={!puedeAnterior}><ChevronLeft size={17} /> Anterior</BotonDeTexto>
             {resultado && <BotonDeTexto onClick={onAnotar} color={LT.text}>Cambiar resultado</BotonDeTexto>}
             <BotonDeTexto onClick={onSaltar} color={LT.text}>Saltar</BotonDeTexto>
+            {tecnica && <BotonDeTecnica {...tecnica} />}
           </div>
         </div>
       </div>
@@ -412,7 +440,7 @@ export function PantallaDeFin({ resumen, notas, palabras, onNotas, onTerminar, o
 /* ------------------------------------------------------------------ */
 
 // La hoja que sube desde abajo, como la de «Tu resultado» del reloj.
-function Hoja({ etiqueta, titulo, subtitulo, onCerrar, children }) {
+function Hoja({ etiqueta, titulo, subtitulo, icono, onCerrar, children }) {
   return (
     <div
       onMouseDown={onCerrar}
@@ -426,6 +454,11 @@ function Hoja({ etiqueta, titulo, subtitulo, onCerrar, children }) {
         }}
       >
         <div aria-hidden="true" style={{ width: 38, height: 4, borderRadius: 2, background: LT.borderHi, margin: '0 auto 14px' }} />
+        {icono && (
+          <div aria-hidden="true" style={{ width: 52, height: 52, borderRadius: 16, background: LT.blueSoft, color: LT.blue, display: 'grid', placeItems: 'center', marginBottom: 12 }}>
+            {icono}
+          </div>
+        )}
         <div style={{ fontSize: 22, fontWeight: 800, color: LT.text, letterSpacing: -0.4 }}>{titulo}</div>
         {subtitulo && <div style={{ fontSize: 14.5, fontWeight: 500, color: LT.text2, margin: '5px 0 0', lineHeight: 1.45 }}>{subtitulo}</div>}
         <div style={{ marginTop: 16 }}>{children}</div>
@@ -558,6 +591,15 @@ export function HojaDeCambiar({ campos, planeado, inicial, unidadDePeso, resumen
       </div>
       <div style={{ marginTop: 18 }}><BotonGrande onClick={guarda}>Guardar y seguir</BotonGrande></div>
       <div style={{ textAlign: 'center', marginTop: 2 }}><BotonDeTexto onClick={onCerrar}>Cancelar</BotonDeTexto></div>
+    </Hoja>
+  );
+}
+
+/** «Grabar técnica para tu coach»: mientras no se prenda (`lib/funciones.js`), dice que viene y por dónde llegará. */
+export function HojaDeTecnica({ palabras, onCerrar }) {
+  return (
+    <Hoja etiqueta={palabras.tecnicaTitulo} titulo={palabras.tecnicaTitulo} subtitulo={palabras.tecnicaTexto} icono={<Video size={25} />} onCerrar={onCerrar}>
+      <BotonGrande onClick={onCerrar}>Entendido</BotonGrande>
     </Hoja>
   );
 }
