@@ -2,13 +2,13 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Calendar,
   Check, X, Calculator, BookOpen, TrendingUp, Edit3, Target,
-  Clock, Sparkles, Info, Dumbbell, Heart, Play,
+  Clock, Sparkles, Info, Dumbbell, Heart, Play, CalendarDays, ListChecks,
   Home as HomeIcon,
   Repeat, Eye, Layers, List, Scale, LineChart as LineChartIcon,
   MessageCircle, Timer,
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
-import { useIsDesktop } from '@/lib/useViewport';
+import { useIsDesktop, useIsWide } from '@/lib/useViewport';
 import { T, FONT, NUM_STYLE, LT, tipoDeSesion, KP, eyebrow } from '@/lib/theme';
 import { usePlan, ComoPrograma } from '@/contexts/PlanContext';
 import { usePerfilDeLaVista } from '@/contexts/VistaContext';
@@ -24,6 +24,7 @@ import {
 import HojaFlotante from '@/components/HojaFlotante';
 import CienciaDelPlan from '@/features/training/CienciaDelPlan';
 import { TarjetaDeSalud, TarjetaDeFoto, CintaDeCiencia } from '@/features/training/TarjetasDeHome';
+import { TarjetaDeHoy, TarjetaDeDescanso } from '@/features/training/TarjetaDeHoy';
 import { programasConCiencia } from '@/lib/ciencia';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
 import { aKilos, desdeKilos, etiquetaUnidad } from '@/lib/unidades';
@@ -41,7 +42,6 @@ import FichaEjercicio from '@/features/training/FichaEjercicio';
 import TarjetaDeSesion from '@/features/training/TarjetaDeSesion';
 import BotonDelEntreno from '@/features/training/BotonDelEntreno';
 import Portada from '@/components/Portada';
-import EtiquetasDeSesion from '@/components/EtiquetasDeSesion';
 import BotonEntendido from '@/components/BotonEntendido';
 import {
   minutosDelNombre, sinDuracion, sesionesDelTitulo, textoDeSesiones,
@@ -2023,6 +2023,8 @@ const HomeView = ({
      banda, no un botón. En compu se les pone tope y se dejan a la izquierda,
      que es donde empieza el texto de su tarjeta. */
   const esCompu = useIsDesktop();
+  // Tablet o más: la tarjeta de hoy y la foto van lado a lado. En un celular la de hoy toma todo el ancho y la foto baja a una banda.
+  const esAncha = useIsWide();
   const { t, coach, salud } = usePalabras();
   const tope = esCompu ? { maxWidth: 260 } : null;
   const { phases: PLAN, planMeta, kind, estructura, programas } = usePlan();
@@ -2099,39 +2101,52 @@ const HomeView = ({
   const sesionesDeHoy = next ? sesionesDelTitulo(entradasDelDia.length > 1 ? entradasDelDia.map((h) => h.day) : next.day) : [];
   const sessionTitle = next ? (sinDuracion(next.day.name || '') || textoDeSesiones(sesionesDeHoy) || next.day.day) : '';
 
+  /* La tarjeta de hoy en un celular toma todo el ancho (antes compartía la fila con la foto y le tocaba media pantalla: el nombre se
+     partía en tres renglones); en tablet o compu va lado a lado con la foto. Sola, en compu, no se estira por toda la pantalla. */
+  const lugarDeHoy = esAncha ? { flex: '1 1 0' } : { width: '100%' };
+  const lugarSola = { width: '100%', ...(esCompu ? { maxWidth: 560 } : null) };
+  const filaDeHoy = { display: 'flex', flexDirection: esAncha ? 'row' : 'column', gap: 12, padding: '0 18px 12px' };
+  const fotoDeHoy = (
+    <TarjetaDeFoto
+      foto={fotoDeHome} etiqueta={etiquetaFoto} titulo={tituloFoto} boton={botonFoto} onAbrir={onVerPrograma} banda={!esAncha}
+      style={esAncha ? { flex: '1 1 0', minWidth: 0 } : { flex: 'none', minHeight: 150 }}
+    />
+  );
+
+  /* Las sesiones de la tarjeta de hoy, una por una, cada una con el aspecto de su tipo (ícono y color). Un día con dos entradas
+     (mañana y tarde) es UN día con dos sesiones. */
+  const sesionesDelCartel = next
+    ? (entradasDelDia.length > 1 ? entradasDelDia : [{ day: next.day }]).map((h, i) => ({
+      nombre: entradasDelDia.length > 1 ? (sesionesDeHoy[i]?.nombre || `Sesión ${i + 1}`) : sessionTitle,
+      aspecto: aspectoDelTipo(h.day),
+    }))
+    : [];
+  const diaDeLaRutina = next && kind === 'weekly' ? weekdayLabel(next.day.day) : null;
+  const metaDelCartel = [
+    // Solo una rutina que se repite dice aquí el día de la semana, que en ninguna otra parte se menciona.
+    diaDeLaRutina ? { Icono: CalendarDays, texto: diaDeLaRutina.charAt(0).toUpperCase() + diaDeLaRutina.slice(1) } : null,
+    sessionMeta.exercises ? { Icono: ListChecks, texto: plural(sessionMeta.exercises, 'ejercicio', 'ejercicios') } : null,
+    // Sin ejercicios reales la «duración» es el tipo de sesión, no un tiempo: sin reloj.
+    sessionMeta.duration ? { Icono: sessionMeta.exercises ? Clock : null, texto: sessionMeta.duration } : null,
+    // Otra sesión hoy además de esta (mañana y tarde como dos entradas).
+    !sessionMeta.agrupadas && next?.sesionesHoy > 1 ? { texto: `${next.sesionesHoy} sesiones hoy` } : null,
+  ].filter(Boolean);
+
+  /* Sin sesión hoy. Antes esta tarjeta REEMPLAZABA el tablero entero: quien descansaba perdía de vista su bienestar, su semana y su
+     programa, y la app parecía otra. Ahora solo ocupa el lugar de la sesión; lo de abajo se queda. La tira de días tampoco se repite
+     aquí: ya está en "Tu semana". */
   const sinSesionHoy = (
-        /* Sin sesión hoy. Antes esta tarjeta REEMPLAZABA el tablero entero:
-           quien descansaba perdía de vista su bienestar, su semana y su
-           programa, y la app parecía otra. Ahora solo ocupa el lugar de la
-           sesión; lo de abajo se queda. La tira de días tampoco se repite
-           aquí: ya está en "Tu semana". */
-        <div style={{ padding: '0 18px 12px' }}>
-          <div style={{ background: LT.surface, borderRadius: KP.rCard, padding: 22 }}>
-            <div style={{ fontSize: 20, fontWeight: 700, color: LT.text, lineHeight: 1.2 }}>
-              {/* Si el coach puso descanso, se dice descanso: "no tienes rutina
-                  asignada" suena a que algo falta, y no falta nada. */}
-              {week.days.find((d) => d.isToday)?.descanso ? 'Hoy descansas' : 'Hoy no te toca entrenar'}
-            </div>
-            <div style={{ marginTop: 8, fontSize: 14, color: LT.text2, lineHeight: 1.5 }}>
-              {week.next
-                ? `${t('Tu siguiente entrenamiento es el')} ${weekdayLabel(week.next.key)}${nombreDeSemana(week.next) ? ` · ${nombreDeSemana(week.next)}` : ''}.`
-                : t('Aún no hay entrenamientos en tu semana.')}
-            </div>
-            <button
-              type="button"
-              onClick={() => onGoTab('plan')}
-              className="kp-press"
-              style={{
-                display: 'block', width: '100%', border: 'none', fontFamily: FONT,
-                background: LT.blue, borderRadius: 14, padding: '13px', marginTop: 16,
-                fontSize: 14, fontWeight: 600, color: '#fff', textAlign: 'center', cursor: 'pointer',
-                ...tope,
-              }}
-            >
-              {t('Ver mi plan')}
-            </button>
-          </div>
-        </div>
+    <div style={{ padding: '0 18px 12px' }}>
+      <TarjetaDeDescanso
+        /* Si el coach puso descanso, se dice descanso: "no tienes rutina asignada" suena a que algo falta, y no falta nada. */
+        titulo={week.days.find((d) => d.isToday)?.descanso ? 'Hoy descansas' : 'Hoy no te toca entrenar'}
+        siguiente={week.next ? `Sigue: ${weekdayLabel(week.next.key)}${nombreDeSemana(week.next) ? ` · ${nombreDeSemana(week.next)}` : ''}` : null}
+        vacia={t('Aún no hay entrenamientos en tu semana.')}
+        boton={t('Ver mi plan')}
+        onVerPlan={() => onGoTab('plan')}
+        style={lugarSola}
+      />
+    </div>
   );
 
   return (
@@ -2198,104 +2213,35 @@ const HomeView = ({
         <>
           <FiltroDeAutor autores={autores} filtro={filtro} onFiltro={onFiltro} style={{ padding: '0 18px 12px' }} />
           {entradas.length > 0 ? (
-            /* Con una foto que enseñar, la tarjeta de todos y la foto van en una fila (en celular, una debajo de la otra).
+            /* Con una foto que enseñar, la tarjeta de todos y la foto van juntas (en celular, una debajo de la otra).
                Es la foto del programa en que va el atleta (el de su coach principal); sin foto, la tarjeta sola como siempre. */
-            fotoDeHome ? (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: '0 18px 12px' }}>
-                <TarjetaDeHoyDeTodos
-                  entradas={entradas}
-                  onAbrir={onAbrirEntrada}
-                  onCambiarDia={kind !== 'weekly' && !filtro ? onChangeCursor : undefined}
-                  esCompu={esCompu}
-                  conAutor={conAutor}
-                  enFila
-                />
-                <TarjetaDeFoto
-                  foto={fotoDeHome} etiqueta={etiquetaFoto} titulo={tituloFoto} boton={botonFoto} onAbrir={onVerPrograma}
-                  style={{ flex: '1 1 0', minWidth: 220, minHeight: 170 }}
-                />
-              </div>
-            ) : (
+            <div style={fotoDeHome ? filaDeHoy : { padding: '0 18px 12px' }}>
               <TarjetaDeHoyDeTodos
                 entradas={entradas}
                 onAbrir={onAbrirEntrada}
                 onCambiarDia={kind !== 'weekly' && !filtro ? onChangeCursor : undefined}
-                esCompu={esCompu}
                 conAutor={conAutor}
+                style={fotoDeHome ? lugarDeHoy : lugarSola}
               />
-            )
+              {fotoDeHome && fotoDeHoy}
+            </div>
           ) : sinSesionHoy}
         </>
       ) : next ? (
-        <>
-          {/* Row: CTA sesión + foto de fase */}
-          <div style={{ display: 'flex', gap: 12, padding: '0 18px 12px' }}>
-            {/* Card CTA azul */}
-            <div onClick={() => onStartSession(next.phase, next.week, next.dayIdx)}
-              className="kp-press"
-              style={{
-                flex: 1, background: `linear-gradient(150deg, ${LT.blue}, ${LT.blueDk})`,
-                borderRadius: KP.rCard, padding: '20px 18px',
-                display: 'flex', flexDirection: 'column', minHeight: 232, cursor: 'pointer',
-                minWidth: 0, boxShadow: KP.shBtn,
-              }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)' }}>
-                  {cursorCompleted ? 'Completada' : 'Hoy te toca'}
-                </div>
-                {sesionesDeHoy.length > 1 ? (
-                  <EtiquetasDeSesion sesiones={sesionesDeHoy} sobreAzul envolver tamano={14} style={{ marginTop: 10 }} />
-                ) : (
-                  <div style={{ fontSize: 24, fontWeight: 700, color: '#fff', lineHeight: 1.05, marginTop: 3, letterSpacing: -0.5 }}>
-                    {sessionTitle}
-                  </div>
-                )}
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.82)', marginTop: 8, lineHeight: 1.4 }}>
-                  {/* Aquí iba «Fuerza» (la fase, o la semana de corrido), y la tarjeta de
-                      foto de AL LADO dice lo mismo en grande. Se quitó el 29 sep 2026
-                      con el visto bueno de Andrés (es su Home y se lo preguntamos). Solo
-                      una rutina que se repite dice aquí el día de la semana, que en
-                      ninguna otra parte se menciona. */}
-                  {kind === 'weekly' && <>{weekdayLabel(next.day.day)}<br /></>}
-                  {[
-                    sessionMeta.exercises ? plural(sessionMeta.exercises, 'ejercicio', 'ejercicios') : null,
-                    sessionMeta.duration,
-                    // Otra sesión hoy además de esta (mañana y tarde como dos entradas).
-                    !sessionMeta.agrupadas && next.sesionesHoy > 1 ? `${next.sesionesHoy} sesiones hoy` : null,
-                  ].filter(Boolean).join(' · ')}
-                </div>
-              </div>
-              <div style={{
-                background: '#fff', borderRadius: 14, padding: '13px',
-                fontSize: 14, fontWeight: 600, color: LT.blue, textAlign: 'center', marginTop: 10,
-                ...tope,
-              }}>
-                {cursorCompleted ? 'Ver detalle' : 'Empezar sesión'}
-              </div>
-              {/* En una rutina que se repite el día lo decide el calendario, no un
-                  puntero: el selector se abría, se elegía un día y no pasaba nada. */}
-              {kind !== 'weekly' && (
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onChangeCursor(); }}
-                  style={{
-                    display: 'block', width: '100%', border: 'none', cursor: 'pointer', fontFamily: FONT,
-                    background: 'rgba(255,255,255,0.15)', borderRadius: 14, padding: '13px',
-                    fontSize: 14, fontWeight: 600, color: '#fff', textAlign: 'center', marginTop: 8,
-                    ...tope,
-                  }}>
-                  Cambiar día
-                </button>
-              )}
-            </div>
-
-            {/* Card foto. Desde el 7 oct 2026 ya NO abre la sesión de hoy (eso lo hace la tarjeta azul de al lado y
-                la pestaña «Entrenar»): abre el programa completo, y por eso el botón «Mi plan · Ver» de más abajo
-                ya no sale cuando esta tarjeta está. */}
-            <TarjetaDeFoto foto={fotoDeHome} etiqueta={etiquetaFoto} titulo={tituloFoto} boton={botonFoto} onAbrir={onVerPrograma} />
-          </div>
-
-        </>
+        /* La tarjeta de hoy y la foto de la fase. Desde el 7 oct 2026 la foto ya NO abre la sesión de hoy (eso lo hace la tarjeta de hoy y
+           la pestaña «Entrenar»): abre el programa completo, y por eso el botón «Mi plan · Ver» de más abajo ya no sale cuando está. */
+        <div style={filaDeHoy}>
+          <TarjetaDeHoy
+            sesiones={sesionesDelCartel}
+            completada={cursorCompleted}
+            meta={metaDelCartel}
+            onAbrir={() => onStartSession(next.phase, next.week, next.dayIdx)}
+            /* En una rutina que se repite el día lo decide el calendario, no un puntero: el selector se abría, se elegía un día y no pasaba nada. */
+            onCambiarDia={kind !== 'weekly' ? onChangeCursor : undefined}
+            style={lugarDeHoy}
+          />
+          {fotoDeHoy}
+        </div>
       ) : sinSesionHoy}
 
       {/* Row: salud + progreso. En compu van lado a lado; en un celular «Tu semana» baja a su propia línea: sus siete

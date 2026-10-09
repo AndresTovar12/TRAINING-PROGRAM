@@ -229,3 +229,176 @@ body {
 
 /* En un teléfono muy angosto la palabra «Pronto» de la cámara del entreno se esconde: queda el ícono y la fila de abajo cabe. */
 @media (max-width: 359px) { .pronto-texto { display: none; } }
+
+/* ============================================================
+   «HOY TE TOCA» de Home: el cartel.
+   Andrés, 9 oct 2026 (PDF «Arreglar widget feo»): la tarjeta azul «está muy feo… es de los más importantes… se ve
+   super opacado por el de salud». Se enseñaron tres ideas en una maqueta (`docs/maquetas/2026-10-09-hoy-te-toca.html`)
+   y eligió «C · Cartel»: el ícono del tipo de sesión brillando en un disco, el nombre en grande y UN solo botón
+   protagonista (el play redondo). «Cambiar día» queda aparte, en segundo plano.
+
+   Vive aquí y no en línea porque necesita lo que el estilo en línea no puede: `container-type` (el tamaño se decide por
+   el ancho de la TARJETA, no por el de la pantalla), pseudo-elementos para los anillos y animaciones. El color del tipo
+   de sesión llega en `--tc` y su resplandor en `--glow`; los pone el componente (`TarjetaDeHoy.jsx`).
+   Con `prefers-reduced-motion` las animaciones se apagan con la regla de más arriba.
+   ============================================================ */
+@keyframes tl-respira { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.045); } }
+@keyframes tl-onda { 0% { transform: scale(0.78); opacity: 0.55; } 70%, 100% { transform: scale(1.28); opacity: 0; } }
+
+.tl-hoy-w { container-type: inline-size; min-width: 0; display: flex; flex-direction: column; }
+.tl-hoy {
+  position: relative; isolation: isolate; overflow: hidden; flex: 1; display: flex; flex-direction: column; min-height: 236px;
+  border-radius: 22px; padding: 18px; color: #fff; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none; user-select: none;
+  background: linear-gradient(165deg, #1c3ad6 0%, #142a9e 52%, #0c1a66 100%);
+  box-shadow: 0 14px 30px rgba(14, 30, 120, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  transition: transform 0.15s ease;
+}
+.tl-hoy:active { transform: scale(0.99); }
+.tl-hoy.fija { cursor: default; }
+.tl-hoy.fija:active { transform: none; }
+.tl-hoy button { cursor: pointer; -webkit-tap-highlight-color: transparent; transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.15s ease; }
+.tl-hoy button:active { transform: scale(0.97); }
+.tl-hoy button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.tl-hoy ul { list-style: none; margin: 0; padding: 0; }
+.tl-hoy-brillo { position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--glow); }
+.tl-hoy-grid { display: flex; flex-direction: column; flex: 1; }
+
+/* «● Hoy te toca»: la píldora de arriba. El punto lleva el color del tipo de la primera sesión. */
+.tl-hoy-cab {
+  display: flex; align-items: center; gap: 8px; align-self: flex-start; padding: 6px 12px 6px 10px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14); font-size: 12.5px; font-weight: 700;
+}
+.tl-hoy-cab i {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--tc, #fff);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.18), 0 0 10px var(--tc, #fff);
+}
+
+/* La escena: el disco con el ícono del tipo (uno por sesión, hasta tres) y dos anillos tenues que lo rodean. */
+.tl-hoy-escena { flex: 1; display: grid; place-items: center; padding: 20px 0 12px; min-height: 104px; }
+.tl-hoy-discos { display: flex; align-items: center; justify-content: center; }
+.tl-hoy-disco {
+  position: relative; width: 92px; height: 92px; border-radius: 50%; display: grid; place-items: center; color: #fff;
+  background: rgba(255, 255, 255, 0.14); border: 1px solid rgba(255, 255, 255, 0.3); animation: tl-respira 3.6s ease-in-out infinite;
+}
+.tl-hoy-disco::before, .tl-hoy-disco::after { content: ''; position: absolute; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.16); }
+.tl-hoy-disco::before { inset: -12px; }
+.tl-hoy-disco::after { inset: -26px; border-color: rgba(255, 255, 255, 0.08); }
+.tl-hoy-disco svg { width: 40px; height: 40px; stroke-width: 1.8; }
+.tl-hoy-disco.ok { background: #fff; border-color: #fff; color: var(--color-mint); }
+.tl-hoy-discos.varios .tl-hoy-disco { width: 78px; height: 78px; }
+.tl-hoy-discos.varios .tl-hoy-disco + .tl-hoy-disco { margin-left: -12px; }
+.tl-hoy-discos.varios .tl-hoy-disco::before, .tl-hoy-discos.varios .tl-hoy-disco::after { display: none; }
+.tl-hoy-discos.varios .tl-hoy-disco svg { width: 34px; height: 34px; }
+
+/* El nombre: grande, de un vistazo. Con dos sesiones, una línea por cada una. */
+.tl-hoy-tit { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.6px; line-height: 1.06; text-wrap: balance; overflow-wrap: anywhere; }
+.tl-hoy-ses li { font-size: 19px; font-weight: 800; letter-spacing: -0.3px; line-height: 1.14; overflow-wrap: anywhere; }
+.tl-hoy-ses li + li { margin-top: 4px; }
+.tl-hoy-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 8px; font-size: 13px; font-weight: 600; color: rgba(255, 255, 255, 0.84); }
+.tl-hoy-meta span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.tl-hoy-meta svg { width: 14px; height: 14px; }
+
+/* Abajo: «Cambiar día» chico a la izquierda y el play enorme a la derecha. */
+.tl-hoy-abajo { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 16px; }
+.tl-hoy-ghost {
+  height: 44px; flex: none; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 14px 0 12px; border-radius: 999px;
+  border: 1.5px solid rgba(255, 255, 255, 0.34); background: rgba(255, 255, 255, 0.08); color: #fff; font-size: 13px; font-weight: 700;
+}
+.tl-hoy-ghost svg { width: 17px; height: 17px; }
+.tl-hoy-big {
+  width: 64px; height: 64px; flex: none; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: #fff;
+  box-shadow: 0 10px 22px rgba(4, 12, 70, 0.45); color: var(--color-accent);
+}
+.tl-hoy-big svg { width: 24px; height: 24px; margin-left: 3px; fill: var(--color-accent); stroke: none; }
+.tl-hoy-big.ver svg { margin-left: 0; fill: none; stroke: var(--color-accent); stroke-width: 2.2; }
+/* El anillo que se abre desde el play: avisa dónde tocar sin ser otro texto. */
+.tl-hoy-play { position: relative; width: 100%; height: 100%; display: grid; place-items: center; border-radius: 50%; color: #fff; }
+.tl-hoy-play::after {
+  content: ''; position: absolute; inset: -5px; border-radius: 50%; border: 2px solid currentColor; opacity: 0;
+  animation: tl-onda 2.6s ease-out infinite;
+}
+
+/* En un celular angosto (SE) lo de arriba va más compacto; desde 300 px de tarjeta, todo crece. */
+@container (max-width: 259px) { .tl-hoy-ghost span { display: none; } }
+@container (min-width: 300px) {
+  .tl-hoy { padding: 20px; }
+  .tl-hoy-tit { font-size: 31px; }
+  .tl-hoy-ses li { font-size: 21px; }
+  .tl-hoy-disco { width: 108px; height: 108px; }
+  .tl-hoy-disco svg { width: 46px; height: 46px; }
+  .tl-hoy-discos.varios .tl-hoy-disco { width: 90px; height: 90px; }
+  .tl-hoy-discos.varios .tl-hoy-disco svg { width: 38px; height: 38px; }
+}
+
+/* Con equipo: una fila de vidrio por sesión. Toda la fila abre su sesión. */
+.tl-hoy-fila {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px; border-radius: 18px; text-align: left; color: #fff; font-family: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.22); background: rgba(255, 255, 255, 0.12);
+}
+.tl-hoy-fila + .tl-hoy-fila { margin-top: 9px; }
+.tl-hoy-fila-ic {
+  width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.3);
+}
+.tl-hoy-fila-ic svg { width: 20px; height: 20px; stroke-width: 1.9; }
+.tl-hoy-fila-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tl-hoy-fila-au { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 800; color: rgba(255, 255, 255, 0.92); }
+.tl-hoy-fila-au i { width: 8px; height: 8px; flex: none; margin: 0 1px; border-radius: 50%; background: var(--au, #fff); box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.92); }
+.tl-hoy-fila-nm { font-size: 17px; font-weight: 800; letter-spacing: -0.2px; line-height: 1.15; overflow-wrap: anywhere; }
+.tl-hoy-fila-dt { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 12.5px; font-weight: 600; color: rgba(255, 255, 255, 0.8); }
+.tl-hoy-fila-dt span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.tl-hoy-fila-dt svg { width: 13px; height: 13px; }
+.tl-hoy-fila-go { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 50%; background: #fff; color: var(--color-accent); }
+.tl-hoy-fila-go svg { width: 16px; height: 16px; margin-left: 2px; fill: currentColor; stroke: none; }
+.tl-hoy-fila-go.ok { color: var(--color-mint); }
+.tl-hoy-fila-go.ok svg { margin-left: 0; fill: none; stroke: currentColor; stroke-width: 3; }
+.tl-hoy-aparte {
+  display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 44px; margin-top: 12px; border-radius: 999px;
+  border: 1.5px solid rgba(255, 255, 255, 0.34); background: rgba(255, 255, 255, 0.08); color: #fff; font-family: inherit; font-size: 13.5px; font-weight: 700;
+}
+.tl-hoy-aparte svg { width: 17px; height: 17px; }
+@container (min-width: 300px) {
+  .tl-hoy-fila { gap: 12px; padding: 10px; }
+  .tl-hoy-fila-ic { width: 46px; height: 46px; }
+  .tl-hoy-fila-go { width: 40px; height: 40px; }
+}
+
+/* Con mouse (compu) los botones responden al pasar por encima; con el dedo no hay «pasar». */
+@media (hover: hover) {
+  .tl-hoy-big:hover { transform: scale(1.05); box-shadow: 0 12px 26px rgba(4, 12, 70, 0.55); }
+  .tl-hoy-ghost:hover, .tl-hoy-aparte:hover { background: rgba(255, 255, 255, 0.18); }
+  .tl-hoy-fila:hover { background: rgba(255, 255, 255, 0.2); }
+  .tl-descanso-ver:hover { filter: brightness(1.07); }
+}
+
+/* Hoy no entrena: la misma plaza, en calma. Blanca, con una luna y lo que sigue. */
+.tl-descanso {
+  position: relative; isolation: isolate; overflow: hidden; flex: 1; border-radius: 22px; padding: 20px 18px 18px; background: #fff; color: var(--color-ink);
+  box-shadow: 0 8px 22px rgba(30, 64, 224, 0.08), 0 0 0 1px var(--color-line);
+}
+.tl-descanso::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(circle at 96% 0%, rgba(232, 236, 253, 0.9), transparent 48%), radial-gradient(circle at 0% 110%, rgba(238, 241, 254, 0.9), transparent 50%);
+}
+.tl-descanso-cab { display: flex; align-items: center; gap: 12px; }
+.tl-descanso-luna { width: 46px; height: 46px; flex: none; display: grid; place-items: center; border-radius: 15px; background: var(--color-accent-soft); color: var(--color-accent); }
+.tl-descanso-luna svg { width: 22px; height: 22px; }
+.tl-descanso h3 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.1; text-wrap: balance; }
+.tl-descanso-sig {
+  display: inline-flex; align-items: center; gap: 8px; max-width: 100%; margin-top: 14px; padding: 8px 12px 8px 10px; border-radius: 999px;
+  background: var(--color-accent-soft); color: var(--color-accent); font-size: 13px; font-weight: 800; overflow-wrap: anywhere;
+}
+.tl-descanso-sig svg { width: 15px; height: 15px; flex: none; }
+.tl-descanso-vacia { margin: 14px 0 0; font-size: 15px; line-height: 1.4; color: var(--color-ink-2); }
+.tl-descanso-ver {
+  display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 48px; margin-top: 16px; padding: 0 22px; border: 0; border-radius: 15px;
+  background: var(--color-accent); color: #fff; font-family: inherit; font-size: 14.5px; font-weight: 800; cursor: pointer; box-shadow: 0 8px 18px rgba(30, 64, 224, 0.24);
+  transition: transform 0.12s ease;
+}
+.tl-descanso-ver:active { transform: scale(0.97); }
+.tl-descanso-ver svg { width: 16px; height: 16px; }
+@container (min-width: 300px) {
+  .tl-descanso { padding: 22px; }
+  .tl-descanso-ver { display: inline-flex; width: auto; }
+}

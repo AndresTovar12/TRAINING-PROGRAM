@@ -141,8 +141,11 @@ export function CintaDeCiencia({ onAbrir }) {
  * Abre el programa completo. Con un solo programa va junto a la tarjeta azul de «Hoy te toca»; con equipo (varios
  * profesionales), junto a la de todos (en celular, debajo). La foto se recorta alrededor del punto que eligió quien
  * la puso (`lib/fotoConFoco.js`); sin foto, queda la tarjeta oscura.
+ *
+ * `banda`: va DEBAJO de la tarjeta de hoy y a todo el ancho (un celular): el título a la izquierda y «Ver programa» a la
+ * derecha, en una sola línea. Quien la usa le pone también un `minHeight` chico.
  */
-export function TarjetaDeFoto({ foto, etiqueta, titulo, boton, onAbrir, style }) {
+export function TarjetaDeFoto({ foto, etiqueta, titulo, boton, onAbrir, style, banda = false }) {
   const { url, x, y } = separaFoto(foto);
   const abre = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAbrir(); } };
   return (
@@ -163,9 +166,12 @@ export function TarjetaDeFoto({ foto, etiqueta, titulo, boton, onAbrir, style })
       <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', padding: '16px 16px 0' }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{etiqueta}</span>
       </div>
-      <div style={{ position: 'relative', padding: '0 16px 16px' }}>
-        <div style={{ fontSize: 22, fontWeight: 700, color: '#fff', lineHeight: 1.05, marginBottom: 12 }}>{titulo}</div>
-        <div style={{ background: '#fff', borderRadius: KP.rBtn, padding: 12, fontSize: 13, fontWeight: 600, color: '#111', textAlign: 'center' }}>{boton}</div>
+      <div style={{ position: 'relative', padding: '0 16px 16px', ...(banda ? { display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 } : null) }}>
+        <div style={{ fontSize: 22, fontWeight: 700, color: '#fff', lineHeight: 1.05, marginBottom: banda ? 0 : 12, minWidth: 0, overflowWrap: 'anywhere' }}>{titulo}</div>
+        <div style={{
+          background: '#fff', borderRadius: KP.rBtn, padding: banda ? '11px 16px' : 12, fontSize: 13, fontWeight: 600, color: '#111', textAlign: 'center',
+          ...(banda ? { whiteSpace: 'nowrap', flexShrink: 0 } : null),
+        }}>{boton}</div>
       </div>
     </div>
   );
