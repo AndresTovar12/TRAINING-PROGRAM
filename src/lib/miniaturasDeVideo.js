@@ -1,5 +1,16 @@
-import { saltaA } from './fotogramas.js';
 
+/* Lleva el video escondido a `t` y espera a que ese fotograma esté listo. A diferencia de `saltaA` (fotogramas.js), NO espera
+   a que el navegador «pinte» el fotograma: este video no se ve, y un video fuera de pantalla en iPhone puede no avisar nunca
+   que pintó, así que cada miniatura costaba 300 ms de tope solo por esperar (≈3 s con diez). Aquí basta el aviso de que se
+   llegó al punto (`seeked`) y un respiro de un cuadro. */
+function saltaSinPrisa(video, t) {
+  return new Promise((ok, mal) => {
+    const tope = setTimeout(() => { video.removeEventListener('seeked', llego); mal(new Error('el video no llegó a ese punto')); }, 4000);
+    const llego = () => { clearTimeout(tope); requestAnimationFrame(() => ok()); };
+    video.addEventListener('seeked', llego, { once: true });
+    video.currentTime = t;
+  });
+}
 /**
  * Las miniaturas de la tira del tiempo del editor de video, con UN solo decodificador.
  *
@@ -12,7 +23,7 @@ import { saltaA } from './fotogramas.js';
  * dominio (`crossOrigin`): el bucket lo autoriza (ver `fotogramas.js`). Si algo no se puede —un navegador que no deja leer
  * el lienzo—, lanza, y el editor vuelve a la tira de videos de antes.
  */
-export async function miniaturasDeVideo(src, cuantas, { remoto = false, alto = 80 } = {}) {
+export async function miniaturasDeVideo(src, cuantas, { remoto = false, alto = 80, alCadaUna = null } = {}) {
   const v = document.createElement('video');
   v.muted = true;
   v.playsInline = true;
@@ -35,10 +46,13 @@ export async function miniaturasDeVideo(src, cuantas, { remoto = false, alto = 8
     const ctx = lienzo.getContext('2d');
     const salida = [];
     for (let i = 0; i < cuantas; i += 1) {
-      await saltaA(v, (dur / cuantas) * i + dur / (cuantas * 2), 4000);
+      await saltaSinPrisa(v, (dur / cuantas) * i + dur / (cuantas * 2));
       ctx.drawImage(v, 0, 0, lienzo.width, lienzo.height);
       // Lanza si el lienzo quedó «sucio» (un video de otro dominio sin permiso): entonces se usa la tira de videos.
-      salida.push(lienzo.toDataURL('image/jpeg', 0.65));
+      const imagen = lienzo.toDataURL('image/jpeg', 0.65);
+      salida.push(imagen);
+      // Cada una se entrega apenas está: la tira se llena de izquierda a derecha en vez de esperar a las diez.
+      alCadaUna?.(i, imagen);
     }
     return salida;
   } finally {

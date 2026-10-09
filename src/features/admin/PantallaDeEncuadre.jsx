@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Check, Loader2, RotateCcw, RectangleHorizontal } from 'lucide-react';
 import { FONT } from '@/lib/theme';
@@ -44,6 +44,8 @@ export default function PantallaDeEncuadre({
   const videoRef = useRef(null);
   const [caja, setCaja] = useState(null);
   const [formas, setFormas] = useState(false);
+  // La imagen se muestra cuando ya pintó su primer cuadro: antes se veía un negro un instante (ver `EditorVideo`).
+  const [pintado, setPintado] = useState(false);
   const { crop, setCrop, agarrado, setAgarrado, rectanguloDe, recorteReal } = useRecorte({
     marcoRef, medidas, inicial: inicial ?? { x: 0, y: 0, w: 1, h: 1 },
   });
@@ -62,6 +64,13 @@ export default function PantallaDeEncuadre({
     o.observe(el);
     return () => o.disconnect();
   }, []);
+
+  // Por si el navegador nunca avisa que pintó el cuadro: a los dos segundos se muestra de todos modos.
+  useEffect(() => {
+    if (pintado || !medio?.src) return undefined;
+    const t = window.setTimeout(() => setPintado(true), 2000);
+    return () => window.clearTimeout(t);
+  }, [pintado, medio?.src]);
 
   const tamano = medidas ? cabeEn(caja, medidas.w / medidas.h) : null;
   const completo = !recorteReal;
@@ -103,11 +112,19 @@ export default function PantallaDeEncuadre({
                 ref={videoRef} src={medio.src} muted playsInline preload="auto"
                 /* En iPhone un video con `preload` no pinta ningún fotograma hasta que se le pide un tiempo. */
                 onLoadedMetadata={(e) => { e.currentTarget.currentTime = (posicion || 0) + 0.05; }}
+                // Al llegar al punto pedido, el cuadro ya está listo; dos cuadros de pantalla de respiro y la tapa se desvanece.
+                // (Se probó `requestVideoFrameCallback`: en un video quieto, después de un salto, ya pasó y no vuelve a avisar.)
+                onSeeked={() => { requestAnimationFrame(() => requestAnimationFrame(() => setPintado(true))); }}
                 style={{ width: '100%', height: '100%', objectFit: 'fill', display: 'block', pointerEvents: 'none' }}
               />
             ) : (
-              <img src={medio.src} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'fill', display: 'block', pointerEvents: 'none' }} />
+              <img
+                src={medio.src} alt="" draggable={false} onLoad={() => setPintado(true)}
+                style={{ width: '100%', height: '100%', objectFit: 'fill', display: 'block', pointerEvents: 'none' }}
+              />
             )}
+            {/* Tapa negra que se desvanece al pintar el primer cuadro (no `opacity: 0` en la imagen: ver `EditorVideo`). */}
+            <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: '#000', opacity: pintado ? 0 : 1, transition: 'opacity .18s ease', pointerEvents: 'none' }} />
             <CapaRecorte crop={crop} onAgarrar={setAgarrado} agarrado={agarrado} />
           </div>
         )}
