@@ -96,7 +96,7 @@ function Contenido({ atleta, esAtleta, abrirEn, onCerrar }) {
     const sesion = detalle.origen === 'app' ? m.sesionesSinReloj.find((s) => s.id === detalle.sesionId) ?? null : m.sesionDe.get(detalle.id) ?? null;
     cuerpo = (
       <DetalleDeEntreno
-        key={detalle.id} actividad={detalle} sesion={sesion} unidadPeso={unidadPeso}
+        key={detalle.id} actividad={detalle} sesion={sesion} unidadPeso={unidadPeso} conSello={esAtleta}
         alVolver={() => setDetalle(null)} puedeBorrar={detalle.origen !== 'app'} alBorrado={() => { setDetalle(null); m.recarga(); }}
       />
     );

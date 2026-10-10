@@ -1,11 +1,11 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import {
   ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Calendar,
   Check, X, Calculator, BookOpen, TrendingUp, Edit3, Target,
   Clock, Sparkles, Info, Dumbbell, Heart, Play, CalendarDays, ListChecks,
   Home as HomeIcon,
   Repeat, Eye, Layers, List, Scale, LineChart as LineChartIcon,
-  MessageCircle, Timer, HeartPulse, Moon, Upload, Activity,
+  MessageCircle, Timer, HeartPulse, Moon, Upload, Activity, Share2,
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useIsDesktop, useIsWide } from '@/lib/useViewport';
@@ -64,6 +64,7 @@ import { lapsosDe, comoEjercicio, tramosDeLapsos, hayLapsos } from '@/lib/lapsos
 import RelojDelBloque from '@/features/training/RelojDelBloque';
 import ResultadoDelBloque from '@/features/training/ResultadoDelBloque';
 import { useAuth } from '@/contexts/AuthContext';
+import { tramoDeLaSesion } from '@/lib/metricas/porSerie';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { esArranque, guardaLugar, leeLugar } from '@/lib/lugar';
 import { useLugar, useScrollLugar } from '@/lib/useLugar';
@@ -902,7 +903,22 @@ const HojaDelPrograma = ({
  * se está cuando se acaba, y con la misma cara que el botón del día: azul para
  * marcar, verde cuando ya está. Cada una va dentro de SU tarjeta, así que basta con decir «sesión».
  */
-const TerminarSesion = ({ hecha, onAlternar }) => (hecha ? (
+// El sello para redes de una sesión terminada (ver `features/sello`): la hoja se carga solo cuando se pide.
+const HojaDelSello = lazy(() => import('@/features/sello/HojaDelSello'));
+
+const BotonDelSello = ({ onSello, alto = 50 }) => (
+  <button
+    type="button" onClick={onSello} className="kp-press"
+    style={{
+      minHeight: alto, padding: '0 14px', borderRadius: 14, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+      border: `1.5px solid ${LT.blue}`, background: LT.surface, color: LT.blue, fontFamily: FONT, fontSize: 13.5, fontWeight: 800, touchAction: 'manipulation',
+    }}
+  >
+    <Share2 size={16} /> Sello
+  </button>
+);
+
+const TerminarSesion = ({ hecha, onAlternar, onSello }) => (hecha ? (
   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
     <div style={{
       flex: 1, minHeight: 50, borderRadius: 14, background: LT.mint, color: '#fff',
@@ -911,6 +927,7 @@ const TerminarSesion = ({ hecha, onAlternar }) => (hecha ? (
     }}>
       <Check size={18} strokeWidth={3} /> Sesión terminada
     </div>
+    {onSello && <BotonDelSello onSello={onSello} />}
     <button
       type="button"
       onClick={onAlternar}
@@ -986,6 +1003,11 @@ const CuerpoDelDia = ({
   const selectedId = idDeSesion(phase.id, week.num, selectedIdx);
   const sessionData = sessionsData[selectedId] || {};
   const selectedCompleted = !!sessionData.completed;
+  /* El sello para redes: solo el propio atleta (no quien mira su plan en solo lectura) y solo de una sesión terminada en la que el entreno guiado
+     midió algo (si se marcó terminada a mano, sin hacer nada en el entreno, no hay con qué armarlo). */
+  const { perfil: perfilDelSello, soloLectura: miraSoloLectura, userId: atletaDelSello } = usePerfilDeLaVista();
+  const [selloAbierto, setSelloAbierto] = useState(false);
+  const puedeSello = !miraSoloLectura && selectedCompleted && !!tramoDeLaSesion(sessionData);
   /* Con `entarjetas` la sesión es una tarjeta, aunque este programa traiga una sola: se termina cada una por su lado y
      salen cerradas si hay más de una en el día (lo decide quien arma la pantalla con `abiertasPorDefecto`). Sin
      `entarjetas`, un día de una sola sesión sigue como siempre, con su botón de terminar al final. */
@@ -1041,7 +1063,7 @@ const CuerpoDelDia = ({
         nombre={nombre} detalle={detalle} autor={autor}
       >
         {cuerpo}
-        <TerminarSesion hecha={selectedCompleted} onAlternar={toggleComplete} />
+        <TerminarSesion hecha={selectedCompleted} onAlternar={toggleComplete} onSello={puedeSello ? () => setSelloAbierto(true) : null} />
       </TarjetaDeSesion>
     );
   };
@@ -1051,6 +1073,14 @@ const CuerpoDelDia = ({
 
   return (
     <>
+      {selloAbierto && (
+        <Suspense fallback={null}>
+          <HojaDelSello
+            atletaId={atletaDelSello} registro={sessionData} sesionId={selectedId} nombre={sinDuracion(selectedDay.name || '')}
+            Icono={aspectoDelTipo(selectedDay).Icono} unidadPeso={perfilDelSello?.unidad_peso || 'kg'} onCerrar={() => setSelloAbierto(false)}
+          />
+        </Suspense>
+      )}
       {/* SIN LÍNEA GRIS DE DATOS bajo la tira de días.
           Aquí iba «Gym · 7 ejercicios · 70 min · 75%» (y en un doble, «AM y PM
           abajo»). Andrés, 29 sep 2026: «solo saturan la página, no sirven de
@@ -1208,6 +1238,7 @@ const CuerpoDelDia = ({
             }}>
               <Check size={18} strokeWidth={3} /> Sesión terminada
             </div>
+            {puedeSello && <BotonDelSello onSello={() => setSelloAbierto(true)} alto={52} />}
             <button
               type="button"
               onClick={toggleComplete}
