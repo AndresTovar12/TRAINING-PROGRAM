@@ -106,6 +106,7 @@ La lista plana es el **mapa de regreso**: el paso *i* que ejecutó el reloj es `
 - Cuando la persona **vuelve** a un paso (atrás, «Ver todo») o **cancela** la cuenta, nada arranca; tampoco al recargar la app (el entreno guiado solo se abre con su botón): ve el Set con su botón «Empezar» (o «Seguir», si el reloj iba a medias).
 - Un reloj que ya tiene resultado no arranca solo.
 - **Un descanso que llega a cero termina solo**: avisa y se pasa al paso que sigue (un instante después, para que se oiga el aviso). «Seguir» lo adelanta y «+30 s» lo alarga antes de que acabe; ya no cuenta hacia arriba («+0:09»). Andrés (9 oct 2026): eso «podría perder el punto de que la app guíe en el entrenamiento y podría ser redundante con el botón de +30 s». Un descanso escrito con palabras («Recuperación total») no tiene cuenta y espera «Seguir». Un ejercicio, en cambio, siempre espera el «Listo» de la persona.
+- **En el descanso se ve el video del ejercicio que sigue**, dentro de la tarjeta «Sigue» (la misma tarjeta de video de la pantalla del ejercicio). Andrés (10 oct 2026): «que mientras está el atleta en descanso pueda ver el video del ejercicio que sigue». Sin video (o si el paso que sigue es un Set con reloj), «Sigue» es la tarjeta de siempre, abajo junto a los botones.
 
 ## 7. Lo que NO está (a propósito)
 

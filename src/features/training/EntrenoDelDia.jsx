@@ -150,20 +150,10 @@ export default function EntrenoDelDia({
     ].filter(Boolean).join(' · ');
   };
 
-  const videoDe = (ex, m) => {
+  const videoDe = (ex, m, opciones) => {
     if (!ex || !m || (!m.portada && !(m.videos?.length))) return null;
-    return <TarjetaDeVideo key={ex.name} videos={m.videos ?? []} portada={m.portada} nombre={ex.name} />;
+    return <TarjetaDeVideo key={ex.name} videos={m.videos ?? []} portada={m.portada} nombre={ex.name} {...opciones} />;
   };
-  const miniaturaDe = (m) => {
-    const v = m?.videos?.[0];
-    if (!m || (!m.portada && !v)) return null;
-    return (
-      <span style={{ position: 'relative', width: 46, height: 46, borderRadius: 12, overflow: 'hidden', flexShrink: 0, background: '#0E1015' }}>
-        <Portada foto={m.portada} video={v?.url} desde={v?.inicio} hasta={v?.fin} style={{ position: 'absolute', inset: 0 }} />
-      </span>
-    );
-  };
-
   // La foto o el video de un ejercicio, para su fila en «Ver todo»: `{ nodo, conVideo }`, o `null` si no tiene (entonces va su número).
   const miniaturaDeFila = (fila) => {
     const ex = dia.exercises[fila.idx];
@@ -335,7 +325,7 @@ export default function EntrenoDelDia({
   } else if (enDescanso) {
     pantalla = (
       <PantallaDeDescanso
-        descanso={vista.descanso} siguiente={siguienteDeDescanso} miniatura={miniaturaDe(mediosDelSiguiente)} sonido={sonido}
+        descanso={vista.descanso} siguiente={siguienteDeDescanso} video={videoDe(exDe(vista.siguiente), mediosDelSiguiente, { enCarta: true, altoMaximo: '30vh' })} sonido={sonido}
         puedeAnterior={vista.puedeAnterior} onSeguir={seguirDelDescanso} onMas={masDescanso} onAnterior={anterior} onSonido={alternaSonido}
       />
     );

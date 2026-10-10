@@ -153,26 +153,17 @@ export function serieALaVista(plan, estados, paso) {
   return { nombre: paso.serieTag, letras };
 }
 
-/** Un tiempo en palabras cortas, para una frase: «27 s», «2 min», «1 min 30 s». */
-export function tiempoEnPalabras(seg) {
-  const n = Math.round(Number(seg));
-  if (!(n > 0)) return '';
-  if (n < 60) return `${n} s`;
-  const m = Math.floor(n / 60);
-  const r = n % 60;
-  return r === 0 ? `${m} min` : `${m} min ${r} s`;
-}
-
 /**
  * La serie EXPLICADA: lo que va en la tarjeta de la izquierda de las cifras. Andrés, 9 oct 2026 («Experiencia de workout 2.0»): «¿te parece que "Serie 1 de 3"
- * le da una buena noción al usuario del set? Yo no creo». Una pastilla con dos números no decía qué es la serie. Esto dice, en palabras:
+ * le da una buena noción al usuario del set? Yo no creo». Una pastilla con dos números no decía qué es la serie. La tarjeta dice DÓNDE vas, y nada más:
  *
  *   etiqueta   lo que es el Set: «Bi-serie», «Tri-serie»… (o `null` si es un solo ejercicio)
- *   titulo     «Serie 2 de 4»: la vuelta en que va (cada vuelta del Set es una serie del ejercicio, o del par en una bi-serie)
+ *   numero     en qué serie va (cada vuelta del Set es una serie del ejercicio, o del par en una bi-serie), y `total` cuántas son; `null` si el Set no se repite
+ *   puntos     las vueltas del Set (ver `puntosDeVueltas`): de ahí sale la barrita de avance de la tarjeta
  *   par        en una bi-serie o más: `[{ letra: 'A', nombre, estado }]`, el que toca y los demás (ver `serieALaVista`)
- *   quedan     cuántas series faltan DESPUÉS de esta (sin contar las opcionales); 0 = es la última
- *   descanso   el descanso que viene al terminar este paso («27 s»), o `null`
- *   sigue      lo que cambia en la serie que sigue («80%»): solo si la carga o las reps son distintas
+ *
+ * Y NADA MÁS. Andrés, 10 oct 2026: «lo de "luego" y "descanso" solo estorba y satura»: ni lo que cambia en la serie que sigue, ni el descanso, ni cuántas faltan
+ * (eso lo dice la barrita). El descanso se ve cuando llega, con su cuenta.
  *
  * Es `null` si el ejercicio se hace una sola vez y no va en un Set de varios: ahí no hay serie que explicar.
  */
@@ -181,27 +172,14 @@ export function resumenDeLaSerie(plan, estados, paso) {
   const puntos = puntosDeVueltas(plan, estados, paso.serie, paso.clave);
   const par = serieALaVista(plan, estados, paso);
   if (puntos.length < 2 && !par) return null;
-  const total = Math.max(puntos.length, 1);
   const queVa = puntos.findIndex((x) => x.estado === 'actual');
-  const numero = queVa >= 0 ? queVa + 1 : Math.min(total, puntos.filter((x) => x.estado === 'hecha').length + 1);
-  const quedan = puntos.filter((x, i) => i > numero - 1 && x.estado === 'pendiente' && !x.opcional).length;
-  const despues = plan.pasos[paso.i + 1];
-  const descanso = despues?.tipo === 'descanso' ? tiempoEnPalabras(despues.seg) || null : null;
-  // La serie que sigue DEL MISMO ejercicio: si cambia algo (80 % en vez de 75 %), se dice.
-  const siguiente = plan.pasos.find((q) => q.tipo === 'ejercicio' && q.serie === paso.serie && q.ejercicioEnSerie === paso.ejercicioEnSerie && q.vuelta === paso.vuelta + 1);
-  let sigue = null;
-  if (siguiente) {
-    const ahora = pastillasDelPaso(paso).map((x) => x.texto);
-    const cambia = pastillasDelPaso(siguiente).map((x) => x.texto).filter((t) => !ahora.includes(t));
-    sigue = cambia.length ? cambia.join(' · ') : null;
-  }
+  const numero = queVa >= 0 ? queVa + 1 : Math.min(puntos.length, puntos.filter((x) => x.estado === 'hecha').length + 1);
   return {
     etiqueta: par ? par.nombre : null,
-    titulo: puntos.length >= 2 ? `Serie ${numero} de ${total}` : null,
+    numero: puntos.length >= 2 ? numero : null,
+    total: puntos.length >= 2 ? puntos.length : null,
+    puntos,
     par: par ? par.letras : null,
-    quedan,
-    descanso,
-    sigue,
   };
 }
 
