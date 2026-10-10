@@ -121,12 +121,26 @@ Con la CLI de Supabase:
 contestar 401 con la pista de dónde pedirlo, y dejar leer sus metadatos sin
 sesión.
 
-Sin la CLI (como se hizo el 25 sep 2026): el repositorio es público, así que se
-despliega un `index.ts` de tres líneas que importa `servidor.ts` desde GitHub,
-fijado a un commit:
+Sin la CLI (cómo se hace hoy, desde el 10 oct 2026): el código se sirve desde el SITIO, no desde GitHub, para que el
+repositorio pueda ser privado. Un `index.ts` de pocas líneas importa `servidor.ts` de una carpeta por versión que
+nunca se reescribe:
 
-    import { manejar } from 'https://raw.githubusercontent.com/AndresTovar12/TRAINING-PROGRAM/<commit>/supabase/functions/mcp/servidor.ts'
+    import { manejar } from 'https://training-program-kappa.vercel.app/conector/v20/servidor.ts'
     Deno.serve(manejar)
 
-Supabase baja ese código al desplegar, así que un commit nuevo no cambia nada
-hasta volver a desplegar con su número.
+Pasos:
+
+1. `node scripts/compartir-con-mcp.mjs` (si cambió algo de `src/lib`) y `node scripts/prueba-mcp-formatos.ts`/las pruebas de siempre.
+2. `node scripts/publica-conector.mjs`: copia `supabase/functions/mcp` a `public/conector/vNN/` (la siguiente versión) y
+   imprime el `index.ts` con ese número. Quedan las dos últimas versiones.
+3. Commit y push a `main` (Vercel despliega). Comprobar que cada archivo de `https://…/conector/vNN/` da 200 y es igual
+   al local (hash).
+4. Desplegar la función `mcp` con ese `index.ts` y `verify_jwt: false`. Para VOLVER ATRÁS: desplegar el `index.ts`
+   de la versión anterior.
+
+`node scripts/publica-conector.mjs --revisar` dice si la última versión publicada es igual a `supabase/functions/mcp`.
+El código del conector queda legible desde el sitio (como lo estaba en GitHub); no lleva claves: esas viven en las
+variables de entorno de la función. Si cambia el dominio del sitio, hay que desplegar con el dominio nuevo.
+
+Hasta el 10 oct 2026 se importaba de `raw.githubusercontent.com/AndresTovar12/TRAINING-PROGRAM/<commit>/…`, lo que obligaba a
+tener el repositorio público.
