@@ -206,13 +206,13 @@ begin
   return ruta;
 end $$;
 
--- El atleta le manda a un profesional el video de una serie: crea la técnica y su tarjeta en la conversación. `p_intento_de`: la técnica anterior de la
+-- El atleta le manda a un profesional el video de una serie: crea la técnica y su tarjeta en la conversación. Devuelve el id de la TÉCNICA (el motor del entreno lo guarda en `hechos[clave].tecnica`). `p_intento_de`: la técnica anterior de la
 -- misma serie («Mandar otro intento»).
 create or replace function public.mandar_tecnica(
   p_profesional uuid, p_ejercicio text, p_detalle text, p_sesion text, p_clave text,
   p_ruta text, p_mime text, p_segundos integer, p_bytes bigint, p_intento_de uuid default null
 ) returns uuid language plpgsql security definer set search_path = public as $$
-declare a uuid := auth.uid(); tid uuid; mid uuid;
+declare a uuid := auth.uid(); tid uuid;
 begin
   if a is null then raise exception 'Entra con tu cuenta para mandar el video.'; end if;
   if not public.puede_escribir(a, p_profesional) then raise exception 'No le puedes escribir a esta persona.'; end if;
@@ -225,9 +225,8 @@ begin
   values (a, p_profesional, left(p_ejercicio, 200), left(p_detalle, 200), p_sesion, p_clave, p_ruta, p_mime, p_segundos, p_bytes, p_intento_de)
   returning id into tid;
   insert into public.mensajes (atleta_id, profesional_id, autor_id, tipo, tecnica_id, adjunto)
-  values (a, p_profesional, a, 'tecnica', tid, jsonb_build_object('ruta', p_ruta, 'mime', p_mime, 'segundos', p_segundos, 'bytes', p_bytes))
-  returning id into mid;
-  return mid;
+  values (a, p_profesional, a, 'tecnica', tid, jsonb_build_object('ruta', p_ruta, 'mime', p_mime, 'segundos', p_segundos, 'bytes', p_bytes));
+  return tid;
 end $$;
 
 -- El profesional contesta una técnica: «correcta» (un solo toque) o «corregir» (texto, nota de voz o video propio y, si quiere, el segundo del video donde está el detalle).

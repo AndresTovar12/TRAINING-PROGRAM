@@ -91,7 +91,22 @@ function BotonDeTexto({ children, onClick, disabled = false, color = LT.text2 })
  * «Grabar técnica para el coach»: la cámara de cada paso. Mientras la función esté apagada (`lib/funciones.js`) lleva su «Pronto», igual que
  * «Mensajes»; en un teléfono muy angosto la palabra se esconde (`.pronto-texto`) y queda el ícono, para que quepa la fila.
  */
-function BotonDeTecnica({ activa, etiqueta, onClick }) {
+function BotonDeTecnica({ activa, etiqueta, onClick, enviada = false }) {
+  // Prendida: un botón con su borde (como la ✕ de «quitar»): una cámara suelta no se leía como botón. Con ✓ verde si ya mandó la de esta serie.
+  if (activa) {
+    return (
+      <button
+        type="button" onClick={onClick} aria-label={enviada ? `${etiqueta} (ya mandaste una)` : etiqueta} className="kp-press"
+        style={{
+          width: 50, minHeight: 50, flexShrink: 0, borderRadius: 16, border: `1.5px solid ${enviada ? LT.mint : LT.borderHi}`, background: LT.surface, color: enviada ? LT.mint : LT.text,
+          cursor: 'pointer', display: 'grid', placeItems: 'center', touchAction: 'manipulation', position: 'relative',
+        }}
+      >
+        <Video size={20} />
+        {enviada && <span aria-hidden="true" style={{ position: 'absolute', top: -5, right: -5, width: 18, height: 18, borderRadius: '50%', background: LT.mint, color: '#fff', display: 'grid', placeItems: 'center' }}><Check size={11} strokeWidth={3.5} /></span>}
+      </button>
+    );
+  }
   return (
     <button
       type="button" onClick={onClick} aria-label={etiqueta}

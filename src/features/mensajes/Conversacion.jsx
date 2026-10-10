@@ -1,14 +1,18 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ChevronLeft, Loader2 } from 'lucide-react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Check, ChevronLeft, Flag, Loader2 } from 'lucide-react';
 import { T, KP, FONT } from '@/lib/theme';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useMensajes } from '@/contexts/MensajesContext';
-import { eliminaMensaje, leeMensajes, mandaArchivo, mandaTexto, marcaVistos, POR_PAGINA, urlsFirmadas } from '@/lib/mensajesApi';
+import { eliminaMensaje, leeMensajes, leeTecnicas, mandaArchivo, mandaTexto, marcaVistos, POR_PAGINA, respondeTecnica, urlsFirmadas } from '@/lib/mensajesApi';
 import { Avatar } from '@/features/mensajes/piezas';
 import Adjunto from '@/features/mensajes/Adjunto';
 import Redactor from '@/features/mensajes/Redactor';
 import { preparaArchivo } from '@/features/mensajes/adjuntos';
-import { diaTexto, horaTexto } from '@/features/mensajes/formato';
+import TarjetaDeTecnica from '@/features/mensajes/TarjetaDeTecnica';
+import { diaTexto, horaTexto, reloj } from '@/features/mensajes/formato';
+
+const GrabaTecnica = lazy(() => import('@/features/mensajes/GrabaTecnica'));
+const CorregirTecnica = lazy(() => import('@/features/mensajes/CorregirTecnica'));
 
 /* UNA CONVERSACIÓN: lo que se han dicho un atleta y un profesional, y donde escribir.
 
@@ -23,29 +27,67 @@ import { diaTexto, horaTexto } from '@/features/mensajes/formato';
 const mismoDia = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
 
 const CON_ARCHIVO = new Set(['foto', 'video', 'voz']);
+const esVeredicto = (m) => m.tipo === 'correccion' && m.texto === 'Técnica correcta' && !m.adjunto && m.marca_s == null;
 
-function Burbuja({ m, mio, ultimoMio, elegido, url, alElegir, alEliminar, alFallar }) {
+/** El archivo de una corrección es una nota de voz o un video: se dibuja con el mismo `Adjunto` de los mensajes sueltos, según su tipo de archivo. */
+const comoAdjunto = (m) => ({ ...m, tipo: String(m.adjunto?.mime ?? '').startsWith('audio') ? 'voz' : 'video' });
+
+function Burbuja({ m, mio, ultimoMio, elegido, url, tecnica, alElegir, alEliminar, alFallar, alSaltar, acciones }) {
   const borrado = !!m.eliminado_en;
-  const archivo = CON_ARCHIVO.has(m.tipo) && !borrado;
+  const esTecnica = m.tipo === 'tecnica' && !borrado;
+  const correccion = m.tipo === 'correccion' && !borrado;
+  const veredicto = correccion && esVeredicto(m);
+  const archivo = (CON_ARCHIVO.has(m.tipo) || esTecnica || (correccion && !!m.adjunto)) && !borrado;
   const color = mio ? '#fff' : T.text;
   return (
-    <div style={{ alignSelf: mio ? 'flex-end' : 'flex-start', maxWidth: 'min(82%, 520px)', display: 'flex', flexDirection: 'column', alignItems: mio ? 'flex-end' : 'flex-start' }}>
+    <div style={{ alignSelf: mio ? 'flex-end' : 'flex-start', maxWidth: esTecnica ? undefined : 'min(82%, 520px)', width: esTecnica ? 'min(320px, 92%)' : undefined, display: 'flex', flexDirection: 'column', alignItems: mio ? 'flex-end' : 'flex-start' }}>
       <div
         role={mio && !borrado ? 'button' : undefined} tabIndex={mio && !borrado ? 0 : undefined}
         onClick={mio && !borrado ? (e) => { if (!e.target.closest('video, audio, button, img')) alElegir(m.id); } : undefined}
         onKeyDown={mio && !borrado ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); alElegir(m.id); } } : undefined}
         aria-label={mio && !borrado ? 'Tu mensaje: toca para ver opciones' : undefined}
         style={{
-          display: 'block', textAlign: 'left', fontFamily: FONT, fontSize: 15.5, lineHeight: 1.4, padding: archivo ? '4px 4px 6px' : '9px 13px 7px', cursor: mio && !borrado ? 'pointer' : 'default', touchAction: 'manipulation',
+          display: 'block', textAlign: 'left', fontFamily: FONT, fontSize: 15.5, lineHeight: 1.4, padding: esTecnica ? 0 : (archivo ? '4px 4px 6px' : '9px 13px 7px'), cursor: mio && !borrado ? 'pointer' : 'default', touchAction: 'manipulation',
           border: borrado ? `1px solid ${T.border}` : 'none', borderRadius: 18, borderBottomRightRadius: mio ? 6 : 18, borderBottomLeftRadius: mio ? 18 : 6,
-          background: borrado ? 'transparent' : (mio ? T.accent : KP.surface), color: borrado ? T.text3 : color,
-          boxShadow: !borrado && !mio ? KP.shCard : 'none', maxWidth: '100%', outline: 'none',
+          background: borrado ? 'transparent' : (mio && !esTecnica ? T.accent : KP.surface), color: borrado ? T.text3 : (esTecnica ? T.text : color),
+          boxShadow: !borrado && (!mio || esTecnica) ? KP.shCard : 'none', maxWidth: '100%', width: esTecnica ? '100%' : undefined, boxSizing: 'border-box', outline: 'none',
         }}
       >
         {borrado && <span style={{ fontStyle: 'italic', fontSize: 14.5 }}>Mensaje eliminado</span>}
-        {!borrado && archivo && <Adjunto m={m} mio={mio} url={url} alFallar={alFallar} />}
-        {!borrado && !archivo && <span style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{m.texto}</span>}
-        {!borrado && (
+        {esTecnica && (
+          <TarjetaDeTecnica
+            m={m} t={tecnica} soyAtleta={mio} url={url} alFallar={alFallar}
+            alCorrecta={acciones.alCorrecta} alCorregir={acciones.alCorregir} alOtroIntento={acciones.alOtroIntento}
+          />
+        )}
+        {correccion && tecnica && (
+          <span style={{ display: 'block', fontSize: 12.5, fontWeight: 800, opacity: 0.8, padding: m.adjunto ? '2px 8px 6px' : '0 0 5px' }}>
+            {[tecnica.ejercicio, tecnica.detalle].filter(Boolean).join(' · ')}
+          </span>
+        )}
+        {veredicto && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontWeight: 800, padding: '2px 4px' }}>
+            <span style={{ width: 24, height: 24, borderRadius: '50%', background: mio ? 'rgba(255,255,255,0.22)' : KP.mintSoft, color: mio ? '#fff' : KP.mint, display: 'grid', placeItems: 'center' }}><Check size={15} strokeWidth={3.2} /></span>
+            Técnica correcta
+          </span>
+        )}
+        {correccion && !veredicto && (
+          <span style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
+            {m.marca_s != null && (
+              <button
+                type="button" onClick={() => alSaltar(m.tecnica_id, m.marca_s)} className="kp-press"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 34, padding: '0 12px', borderRadius: 999, border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, fontVariantNumeric: 'tabular-nums', touchAction: 'manipulation', background: mio ? 'rgba(255,255,255,0.22)' : T.accentBg, color: mio ? '#fff' : T.accent }}
+              >
+                <Flag size={14} /> En el segundo {reloj(m.marca_s)}
+              </button>
+            )}
+            {m.adjunto && <Adjunto m={comoAdjunto(m)} mio={mio} url={url} alFallar={alFallar} />}
+            {m.texto && <span style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', padding: m.adjunto ? '0 8px' : 0 }}>{m.texto}</span>}
+          </span>
+        )}
+        {!borrado && CON_ARCHIVO.has(m.tipo) && <Adjunto m={m} mio={mio} url={url} alFallar={alFallar} />}
+        {!borrado && !archivo && !veredicto && m.tipo !== 'correccion' && <span style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{m.texto}</span>}
+        {!borrado && !esTecnica && (
           <span style={{ display: 'block', textAlign: 'right', fontSize: 11, fontWeight: 600, marginTop: 2, padding: archivo ? '0 8px 0 0' : 0, opacity: 0.7, fontVariantNumeric: 'tabular-nums' }}>{horaTexto(m.creado_en)}</span>
         )}
       </div>
@@ -78,6 +120,10 @@ export default function Conversacion({ fila, uid, etiqueta = null, onVolver = nu
   const [urls, setUrls] = useState(() => new Map());
   const [error, setError] = useState(null);
   const [elegido, setElegido] = useState(null);
+  const [tecnicas, setTecnicas] = useState(() => new Map());
+  const [tic, setTic] = useState(0); // sube cuando YO hice un cambio (corregir, otro intento): vuelve a leer sin esperar la conexión en vivo
+  const [corrigiendo, setCorrigiendo] = useState(null); // la técnica que el profesional está corrigiendo
+  const [otroIntento, setOtroIntento] = useState(null); // la técnica de la que el atleta manda otro intento
   const zona = useRef(null);
   const renovadas = useRef(new Set());
   const cantidad = useRef(POR_PAGINA);
@@ -106,7 +152,7 @@ export default function Conversacion({ fila, uid, etiqueta = null, onVolver = nu
       }
     })();
     return () => { vivo = false; };
-  }, [a, p, uid, version, recarga]);
+  }, [a, p, uid, version, tic, recarga]);
 
   // Baja al último mensaje cuando llega uno (si se estaba viendo lo más nuevo, o si lo mandé yo); al traer los anteriores se queda donde estaba.
   useLayoutEffect(() => {
@@ -141,6 +187,15 @@ export default function Conversacion({ fila, uid, etiqueta = null, onVolver = nu
       setTrayendo(false);
     }
   }
+
+  // Las técnicas de las tarjetas de lo que hay en pantalla (estado, ejercicio, de qué serie): una sola pregunta, y otra cada vez que algo cambia en vivo.
+  const idsDeTecnicas = [...new Set(mensajes.filter((m) => m.tecnica_id).map((m) => m.tecnica_id))].join('|');
+  useEffect(() => {
+    if (!idsDeTecnicas) return undefined;
+    let vivo = true;
+    leeTecnicas(idsDeTecnicas.split('|')).then((mapa) => { if (vivo) setTecnicas(mapa); }).catch(() => {});
+    return () => { vivo = false; };
+  }, [idsDeTecnicas, version, tic]);
 
   // Pide las direcciones de los archivos de lo que hay en pantalla (una sola vez por lote); las que ya se tenían salen de la memoria.
   const rutas = mensajes.filter((m) => m.adjunto?.ruta && !m.adjunto_borrado && !m.eliminado_en).map((m) => m.adjunto.ruta).join('|');
@@ -206,6 +261,28 @@ export default function Conversacion({ fila, uid, etiqueta = null, onVolver = nu
     }
   }
 
+  const refresca = () => { setTic((n) => n + 1); recarga(); };
+
+  // «Técnica correcta»: un toque. Se vuelve a leer en cuanto responde la base, sin esperar la conexión en vivo.
+  async function marcaCorrecta(t) {
+    setError(null);
+    try {
+      await respondeTecnica({ tecnicaId: t.id, veredicto: 'correcta' });
+      refresca();
+    } catch (e) {
+      setError(e?.message ?? 'No se pudo marcar la técnica');
+    }
+  }
+
+  // El chip «En el segundo 0:12» de una corrección: lleva el video de la tarjeta a ese segundo y lo pone a correr.
+  function saltaAlSegundo(tecnicaId, segundo) {
+    const video = zona.current?.querySelector(`video[data-tecnica="${tecnicaId}"]`);
+    if (!video) return;
+    video.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    video.currentTime = segundo;
+    video.play().catch(() => {});
+  }
+
   async function elimina(m) {
     const va = await pregunta({ titulo: '¿Eliminar este mensaje?', detalle: 'Se borra para los dos.', confirmar: 'Sí, eliminarlo', peligro: true });
     if (!va) return;
@@ -217,6 +294,14 @@ export default function Conversacion({ fila, uid, etiqueta = null, onVolver = nu
       setError(e?.message ?? 'No se pudo eliminar');
     }
   }
+
+  // Lo que se puede hacer con una tarjeta de técnica: el profesional la marca o la corrige; el atleta manda otro intento. Con la conversación cerrada, nada.
+  const soyAtleta = uid === a;
+  const acciones = {
+    alCorrecta: !soyAtleta && fila.activa ? marcaCorrecta : null,
+    alCorregir: !soyAtleta && fila.activa ? setCorrigiendo : null,
+    alOtroIntento: soyAtleta && fila.activa ? setOtroIntento : null,
+  };
 
   const ultimoMioId = [...mensajes].reverse().find((m) => m.autor_id === uid && !m.eliminado_en)?.id ?? null;
   const filas = [];
@@ -231,6 +316,7 @@ export default function Conversacion({ fila, uid, etiqueta = null, onVolver = nu
     filas.push(
       <Burbuja
         key={m.id} m={m} mio={m.autor_id === uid} ultimoMio={m.id === ultimoMioId} elegido={elegido === m.id} url={m.adjunto?.ruta ? urls.get(m.adjunto.ruta) ?? null : null} alFallar={alFallar}
+        tecnica={m.tecnica_id ? tecnicas.get(m.tecnica_id) ?? null : null} alSaltar={saltaAlSegundo} acciones={acciones}
         alElegir={(id) => setElegido((prev) => (prev === id ? null : id))} alEliminar={elimina}
       />,
     );
@@ -291,6 +377,23 @@ export default function Conversacion({ fila, uid, etiqueta = null, onVolver = nu
         <div style={{ flexShrink: 0, padding: '14px 16px calc(14px + env(safe-area-inset-bottom))', background: KP.surface, borderTop: `1px solid ${KP.line}`, textAlign: 'center', fontSize: 14, fontWeight: 700, color: T.text2 }}>
           Esta conversación está cerrada. Solo puedes leerla.
         </div>
+      )}
+      {corrigiendo && (
+        <Suspense fallback={null}>
+          <CorregirTecnica
+            t={corrigiendo} url={urls.get(corrigiendo.ruta) ?? null}
+            alListo={() => { setCorrigiendo(null); refresca(); }} alCerrar={() => setCorrigiendo(null)}
+          />
+        </Suspense>
+      )}
+      {otroIntento && (
+        <Suspense fallback={null}>
+          <GrabaTecnica
+            atletaId={a} destino={{ id: p, nombre: fila.otro_nombre }} ejercicio={otroIntento.ejercicio} detalle={otroIntento.detalle}
+            sesionId={otroIntento.sesion_id} clave={otroIntento.clave} intentoDe={otroIntento.id}
+            alEnviar={refresca} alCerrar={() => setOtroIntento(null)}
+          />
+        </Suspense>
       )}
     </div>
   );
