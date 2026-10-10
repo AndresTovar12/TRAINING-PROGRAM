@@ -65,6 +65,9 @@ import RelojDelBloque from '@/features/training/RelojDelBloque';
 import ResultadoDelBloque from '@/features/training/ResultadoDelBloque';
 import { useAuth } from '@/contexts/AuthContext';
 import { tramoDeLaSesion } from '@/lib/metricas/porSerie';
+import { useMensajes } from '@/contexts/MensajesContext';
+import { NumeroRojo } from '@/features/mensajes/piezas';
+import MensajesDelAtleta from '@/features/mensajes/MensajesDelAtleta';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { esArranque, guardaLugar, leeLugar } from '@/lib/lugar';
 import { useLugar, useScrollLugar } from '@/lib/useLugar';
@@ -2606,6 +2609,7 @@ const OneRMView = ({ oneRMs, ponRM, enHoja = false }) => {
 const BottomNav = ({ active, onChange }) => {
   const esCompu = useIsDesktop();
   const { salud } = usePalabras();
+  const { sinLeer } = useMensajes();
   /* Tres botones (Andrés, 7 oct 2026). «Home» es lo que antes se llamaba «Hoy». «Entrenar» es lo que antes se
      llamaba «Plan»: abre la sesión de hoy (lo que tocaba ya lo decía la tarjeta azul de Home, y «Plan» sonaba a
      otra cosa); a un paciente de un fisio le dice «Sesión». Bienestar, 1RM y Ciencia viven dentro de Home. */
@@ -2642,10 +2646,11 @@ const BottomNav = ({ active, onChange }) => {
             transition: 'color 0.15s', minWidth: 56,
           }}>
             <span style={{
-              display: 'grid', placeItems: 'center', width: 44, height: 30, borderRadius: 999,
+              position: 'relative', display: 'grid', placeItems: 'center', width: 44, height: 30, borderRadius: 999,
               background: isActive ? KP.blueSoft : 'transparent', transition: 'background 0.18s',
             }}>
               <Icon size={20} strokeWidth={isActive ? 2.5 : 1.9} />
+              {item.id === 'messages' && <NumeroRojo n={sinLeer} tam={17} style={{ position: 'absolute', top: -4, right: 2, border: '2px solid #fff', minWidth: 21, height: 21 }} />}
             </span>
             <span style={{ fontSize: 10.5, fontWeight: isActive ? 700 : 600, letterSpacing: 0.3 }}>{item.label}</span>
           </button>
@@ -2654,23 +2659,6 @@ const BottomNav = ({ active, onChange }) => {
     </div>
   );
 };
-
-/* «Mensajes»: el botón ya está y la pantalla todavía no. Más adelante los atletas, sus coaches y su equipo se
-   escribirán aquí (Andrés, 7 oct 2026: «quiero tener listo el botón aunque esté vacío»). */
-const MessagesView = () => (
-  <div style={{ padding: '72px 24px 120px', maxWidth: 560, margin: '0 auto', textAlign: 'center' }}>
-    <div style={{
-      width: 76, height: 76, borderRadius: 24, background: T.accentBg, color: T.accent,
-      display: 'grid', placeItems: 'center', margin: '0 auto 20px',
-    }}>
-      <MessageCircle size={34} />
-    </div>
-    <div style={{ fontSize: 21, fontWeight: 800, color: T.text, letterSpacing: -0.3 }}>Mensajes</div>
-    <div style={{ fontSize: 14.5, color: T.text2, marginTop: 10, lineHeight: 1.6 }}>
-      Pronto: mensajes con tu equipo.
-    </div>
-  </div>
-);
 
 // Cargando el plan: skeleton dentro del mismo shell
 const PlanLoadingState = () => (
@@ -3068,7 +3056,7 @@ export default function TrainingApp() {
       ) : dia;
     }
   } else if (tab === 'messages') {
-    content = <MessagesView />;
+    content = <MensajesDelAtleta />;
   }
 
   return (

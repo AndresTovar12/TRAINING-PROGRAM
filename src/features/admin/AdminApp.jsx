@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react';
 import {
-  Dumbbell, Users, Library, Shield, PanelLeftClose, PanelLeft, Eye, X, Sparkles, FolderOpen,
+  Dumbbell, Users, Library, Shield, PanelLeftClose, PanelLeft, Eye, X, Sparkles, FolderOpen, MessageCircle,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useMensajes } from '@/contexts/MensajesContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { useIsDesktop } from '@/lib/useViewport';
 import { useLugar } from '@/lib/useLugar';
@@ -13,12 +14,15 @@ import CoachesPanel from '@/features/admin/CoachesPanel';
 import MisPlanesPanel from '@/features/misplanes/MisPlanesPanel';
 import VistaComoAtleta from '@/features/admin/VistaComoAtleta';
 import ConectarIA from '@/features/ia/ConectarIA';
+import MensajesDelCoach from '@/features/mensajes/MensajesDelCoach';
+import { NumeroRojo } from '@/features/mensajes/piezas';
 
 const SIDEBAR_W = 232;
 
 export default function AdminApp({ onAbrirPerfil }) {
   const { profile } = useAuth();
   const { t } = usePalabras();
+  const { sinLeer } = useMensajes();
   const isMaster = !!profile?.is_owner;
   const isDesktop = useIsDesktop();
   // La pestaña se recuerda al refrescar (ver `lugar.js`). Puede venir de una
@@ -66,6 +70,8 @@ export default function AdminApp({ onAbrirPerfil }) {
 
   const TABS = [
     { id: 'athletes', label: t(isMaster ? 'Atletas' : 'Mis atletas'), icon: Users },
+    // Los mensajes son de CADA cuenta: mientras el master mira como otro coach no se enseñan los suyos.
+    ...(!viendoComo ? [{ id: 'messages', label: 'Mensajes', icon: MessageCircle, numero: sinLeer }] : []),
     { id: 'exercises', label: 'Ejercicios', icon: Library },
     /* Mis planes: lo que cada profesional guarda (workouts, rutinas semanales y programas), en carpetas, con
        su «+ Crear» y su «Asignar» (Andrés, 2 oct 2026). Es de CADA quien, así que desaparece mientras el
@@ -130,6 +136,7 @@ export default function AdminApp({ onAbrirPerfil }) {
         </div>
       )}
 
+      {tab === 'messages' && !viendoComo && <MensajesDelCoach />}
       {tab === 'athletes' && <AthletesPanel viendoComo={viendoComo} onVerComoAtleta={entrarComoAtleta} onIrA={setTab} onAbrirPerfil={onAbrirPerfil} />}
       {tab === 'exercises' && <ExercisesPanel viendoComo={viendoComo} />}
       {tab === 'misplanes' && !viendoComo && <MisPlanesPanel />}
@@ -170,7 +177,7 @@ export default function AdminApp({ onAbrirPerfil }) {
           </div>
           <div style={{ padding: '0 20px', overflowX: 'auto' }}>
             <div style={{ display: 'flex', gap: 4 }}>
-              {TABS.map(({ id, label, icon: Icon }) => {
+              {TABS.map(({ id, label, icon: Icon, numero }) => {
                 const active = tab === id;
                 return (
                   <button
@@ -183,7 +190,7 @@ export default function AdminApp({ onAbrirPerfil }) {
                       borderBottom: `2.5px solid ${active ? T.accent : 'transparent'}`,
                     }}
                   >
-                    <Icon size={17} /> {label}
+                    <Icon size={17} /> {label}<NumeroRojo n={numero} tam={18} />
                   </button>
                 );
               })}
@@ -219,7 +226,7 @@ export default function AdminApp({ onAbrirPerfil }) {
           </div>
 
           <nav style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {TABS.map(({ id, label, icon: Icon }) => {
+            {TABS.map(({ id, label, icon: Icon, numero }) => {
               const active = tab === id;
               return (
                 <button
@@ -233,7 +240,7 @@ export default function AdminApp({ onAbrirPerfil }) {
                     fontFamily: FONT, fontSize: 14, fontWeight: active ? 800 : 600,
                   }}
                 >
-                  <Icon size={17} /> {label}
+                  <Icon size={17} /> {label}<NumeroRojo n={numero} tam={18} style={{ marginLeft: 'auto' }} />
                 </button>
               );
             })}
