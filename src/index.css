@@ -262,6 +262,9 @@ body {
 .tl-hoy button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 .tl-hoy ul { list-style: none; margin: 0; padding: 0; }
 .tl-hoy-brillo { position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--glow); }
+/* El nombre que se escribe sobre la vista previa de «Tipo nuevo» (lo que no se puede poner en línea: el placeholder y el foco). */
+.tl-tipo-nombre::placeholder { color: rgba(255, 255, 255, 0.5); }
+.tl-tipo-nombre:focus { border-bottom-color: #fff !important; }
 .tl-hoy-grid { display: flex; flex-direction: column; flex: 1; }
 
 /* «● Hoy te toca»: la píldora de arriba. El punto lleva el color del tipo de la primera sesión. */
