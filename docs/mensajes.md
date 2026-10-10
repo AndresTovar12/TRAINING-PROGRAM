@@ -30,9 +30,17 @@ La migración se aplicó con `execute_sql` en cuatro pasos: `apply_migration` la
 - `src/lib/mensajesApi.js`: las llamadas. `src/contexts/MensajesContext.jsx`: la bandeja, el número rojo y la conexión en vivo (con `key` por cuenta; no usa la cuenta de «Ver como»).
 - `src/features/mensajes/`: `Bandeja` (la lista, con «Sin leer» y «Por revisar» para el profesional), `Conversacion`, `MensajesDelAtleta` (la pestaña de abajo), `MensajesDelCoach` (pestaña del panel: lista + conversación en la computadora, pantalla completa en el teléfono), `PantallaDeChat` (sigue a `visualViewport` para que la caja de escribir quede sobre el teclado), `piezas.jsx`, `formato.js`.
 
+## Fotos, videos y notas de voz (segunda entrega)
+
+- **Redactor:** el clip abre la galería o la cámara (el teléfono ofrece las dos); el micrófono (cuando no hay texto) graba una nota de voz con ✕ para tirarla y ✓ para mandarla (`useGrabadoraDeVoz`: `audio/mp4` en Safari, `audio/webm` en Chrome; la duración se mide con el reloj; se corta a los 3 minutos).
+- **Preparar** (`adjuntos.js`): la foto se pasa a JPG/WebP y se achica (`optimizaImagen`, también HEIC); el video se revisa (≤ 60 s y ≤ 50 MB, con una frase que dice qué hacer si no cabe) y se le pone índice sin recodificar (`conIndice`).
+- **Bucket privado `mensajes`**, 50 MB por archivo, rutas `<atleta>/<profesional>/<uuid>.<ext>`. Se ve con direcciones firmadas de una hora (`urlsFirmadas`: se piden en lote, se guardan 55 minutos y se renuevan una vez si dejan de servir). Probado con cuentas simuladas: un tercero ve 0 archivos.
+- **Borrar** un mensaje con archivo también quita el archivo del bucket.
+- **Vencimiento:** función `limpia-mensajes` (Edge Function, sin JWT: solo quita lo que ya venció, así que llamarla de más no daña nada) + trabajo `limpia-mensajes` de pg_cron todos los días a las 04:20 UTC por pg_net. Borra los archivos de fotos, videos, notas de voz y correcciones de más de **90 días** y los videos de técnica de más de **30**; la fila se queda con `adjunto_borrado` / `video_borrado` y el mensaje dice «La foto ya venció.». También quita las carpetas de cuentas que ya no existen. Lotes de 200 por llamada. Probada: con una foto envejecida a 91 días el archivo desapareció y la burbuja pasó a «venció».
+- La voz no se pudo grabar de verdad en el panel de pruebas (no hay micrófono): se probó subiendo un `.m4a` por la misma función y escuchándolo.
+
 ## Pendiente (en este orden)
 
-1. **Adjuntos del chat:** foto, video (hasta 60 s) y nota de voz; vencen a los 90 días (los textos, nunca).
-2. **Técnica:** grabarla en el entreno (también en la web), tarjeta con los dos botones, «Corregir» (texto, nota de voz, video propio, marcar el segundo), «Mandar otro intento»; vence a los 30 días; a quien puso el ejercicio en el plan.
-3. **Vencimiento:** función programada que borra los archivos vencidos.
-4. Aviso a varios atletas (después), notificación del teléfono (con la app descargable).
+1. **Técnica:** grabarla en el entreno (también en la web), tarjeta con los dos botones, «Corregir» (texto, nota de voz, video propio, marcar el segundo), «Mandar otro intento»; vence a los 30 días; a quien puso el ejercicio en el plan.
+2. Aviso a varios atletas (después), notificación del teléfono (con la app descargable).
+3. Los mensajes QA entre `zz_qa_pac` y `zz_qa_fisio` quedaron en la base (el `delete` por SQL sale «declined»); borrarlos cuando se pueda.
