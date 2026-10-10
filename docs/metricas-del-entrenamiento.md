@@ -74,7 +74,8 @@ Un entreno crudo es `{ formato, deporte, deporte_original, titulo, dispositivo, 
 
 1. `node scripts/genera-demo-metricas.mjs <carpeta>` inventa 14 semanas de un corredor (`export.zip` de Apple Salud con ~85 entrenos y 97 días de recuperación, más un `.fit`, un `.gpx` repetido y un `.tcx`) con una historia: bloque fuerte al final, una gripe en la semana 7, y los últimos 5 días con el pulso en reposo subiendo. Misma semilla = mismos archivos.
 2. Con el servidor de desarrollo corriendo y una **cuenta de pruebas** con sesión abierta: abrir la ficha de su paciente → «Métricas del reloj» → «Importar entrenos» y soltar los archivos. (Subir archivos en pruebas automáticas: `DataTransfer` + `change` sobre el `input[type=file]` oculto.)
-3. Para borrar lo importado y repetir: la app solo borra entrenos de uno en uno (con confirmación); en pruebas se borra con la sesión del QA por la API (`DELETE /rest/v1/actividades?atleta_id=eq.<id>` y lo mismo en `recuperacion_diaria`; las series caen en cascada).
+3. Para abrir la hoja directo, sin pasar por la lista y la ficha: una página temporal en la raíz (`qa-metricas.html` + `qa-metricas.jsx`) que monta `MetricasDelAtleta` con los mismos proveedores de `main.jsx` (`AuthProvider`, `ConfirmacionProvider`, `AvisoProvider`) y la sesión de pruebas ya abierta: `/qa-metricas.html?atleta=<uuid>&nombre=…[&esAtleta=1][&abrir=importar]`. **No se sube**: se borra antes del commit.
+4. Para borrar lo importado y repetir: la app solo borra entrenos de uno en uno (con confirmación); en pruebas se borra con la sesión del QA por la API (`DELETE /rest/v1/actividades?atleta_id=eq.<id>` y lo mismo en `recuperacion_diaria`; las series caen en cascada).
 
 ## 7. Trampas ya pagadas
 
@@ -82,13 +83,15 @@ Un entreno crudo es `{ formato, deporte, deporte_original, titulo, dispositivo, 
 - **Apple guarda el pulso en registros sueltos**, no dentro del entreno: hay que cruzar la ventana de tiempo. El lector va de una sola pasada y en trozos (un trozo puede cortar una etiqueta a la mitad: lo incompleto espera al siguiente), guarda los latidos en listas numéricas que crecen sin copiarse y, al terminar, a cada entreno le pega los latidos que caen dentro de su ventana.
 - **El sueño de la noche cuenta para el día en que despierta** (se corta al mediodía) y las fuentes encimadas (reloj y teléfono) no se suman.
 - **Pasos y calorías**: el reloj y el teléfono cuentan lo mismo; gana el que más contó, no se suman.
+- **Una muestra de solo pulso no es un punto de la ruta**: no lleva distancia. Cuando se la dábamos «la del último punto», la velocidad salía ~25 % más lenta (gráfica de ritmo a 6:20 con kilómetros a 4:47). Pasa cuando el pulso y la ruta caen a la misma hora.
+- **El mismo entreno por dos caminos** (reloj y Strava en la misma tanda): se queda el que trae más datos (pulso, serie, distancia, calorías) y se le agrega lo que el otro sabía (el nombre de Strava, las calorías). Contra lo que ya está en la base solo se salta.
 - Las constantes de pantalla van en archivos aparte (`tonos.js`, `graficasUtil.js`): el lint de React Refresh no deja exportar constantes junto a componentes.
 - `HojaFlotante` ahora publica `--hoja-px`, `--hoja-pt` y `--hoja-pb` (el relleno del cuerpo) para que una barra pegada (`BarraFija`, las pestañas) llegue de borde a borde con margen negativo.
 - Probar con el **árbol real** (los mismos proveedores que `main.jsx`), no con un arnés a medias.
 
 ## 8. Lo que quedó fuera a propósito (ideas para después)
 
-- **La lista de atletas con su estado de hoy** (forma + recuperación en la fila, para ver de un golpe a quién hay que escribirle). Pide una consulta de todo el equipo; se propone en la maqueta del 10 oct.
+- **La lista de atletas con su estado de hoy** (forma + recuperación en la fila, para ver de un golpe a quién hay que escribirle). Pide una consulta de todo el equipo; se propone, con tres dibujos, en la maqueta `docs/maquetas/2026-10-10-metricas-del-reloj.html` (publicada también como Artifact: https://claude.ai/artifact/GZfWNz2Bsu5rxpa61rFDCw), junto con otras cuatro decisiones de diseño por si se quiere cambiar algo.
 - **Conector de IA**: una herramienta para que ChatGPT/Claude lean las métricas de un atleta.
 - **Plan contra real**: unir `actividades.sesion` con el entreno guiado y mostrar lo hecho junto a lo planeado.
 - **HealthKit en vivo y relojes** (ver `docs/entreno-y-reloj.md`).

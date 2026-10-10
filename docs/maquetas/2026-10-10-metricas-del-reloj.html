@@ -1,0 +1,445 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Métricas del reloj</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+/* Maqueta con el diseño REAL de la app (Kinetic): fondo gris frío, tarjetas blancas de 22 px, azul de marca y ámbar/menta solo como estado.
+   Arriba, capturas de la pantalla ya publicada. Abajo, lo que se puede cambiar: cada opción está dibujada con los mismos números de la demostración. */
+:root {
+  --bg: #F4F5F8; --surface: #FFFFFF; --soft: #F7F8FB; --muted: #EDEFF3; --line: #E5E7EB; --line2: #ECEEF2;
+  --ink: #111318; --ink2: #5B616E; --ink3: #8B93A1;
+  --blue: #1E40E0; --blue-dk: #1733B8; --blue-soft: #EEF1FE;
+  --mint: #00A372; --mint-soft: #E3F6EF; --mint-ink: #007A55;
+  --amber: #E07B00; --amber-soft: #FCF1E1; --amber-ink: #A85A00;
+  --danger: #DC2626; --danger-soft: #FCEBEB;
+  --orange: #E8590C; --pink: #D6336C; --gold: #F59F00;
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+  --sh-card: 0 4px 20px rgba(17, 19, 24, 0.05); --sh-pop: 0 16px 44px rgba(17, 19, 24, 0.16); --sh-btn: 0 8px 22px rgba(30, 64, 224, 0.24);
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+button, input { font: inherit; color: inherit; }
+.pagina { max-width: 1120px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 120px; display: flex; flex-direction: column; gap: 44px; }
+h1, h2, h3, p { margin: 0; text-wrap: balance; }
+.eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--ink3); }
+.num { font-feature-settings: "tnum" 1; font-variant-numeric: tabular-nums; }
+
+/* ---------- cabecera ---------- */
+.cab { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.cab h1 { font-size: clamp(30px, 6vw, 44px); line-height: 1.02; letter-spacing: -1.2px; font-weight: 800; }
+.cab .eyebrow { display: block; margin-bottom: 10px; }
+.estado { display: inline-flex; align-items: center; gap: 8px; padding: 7px 13px; border-radius: 999px; background: var(--mint-soft); color: var(--mint-ink); font-size: 13px; font-weight: 800; white-space: nowrap; }
+.estado i { width: 8px; height: 8px; border-radius: 50%; background: var(--mint); }
+
+/* ---------- controles de «Así se ve» ---------- */
+.controles { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.seg { display: inline-flex; padding: 4px; gap: 2px; background: var(--muted); border-radius: 14px; }
+.seg button, .pestanas button { min-height: 40px; padding: 0 16px; border: 0; border-radius: 11px; background: transparent; color: var(--ink2); font-weight: 800; font-size: 14px; cursor: pointer; white-space: nowrap; touch-action: manipulation; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(17, 19, 24, 0.12); }
+.seg button:disabled { opacity: 0.4; cursor: default; }
+.pestanas { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-block: 2px; }
+.pestanas button { border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); min-height: 40px; }
+.pestanas button[aria-selected="true"] { background: var(--ink); border-color: var(--ink); color: #fff; }
+button:focus-visible, label.opcion:focus-within, a:focus-visible { outline: 3px solid rgba(30, 64, 224, 0.45); outline-offset: 2px; }
+.leyenda { margin-top: 14px; font-size: 16px; font-weight: 600; color: var(--ink); }
+.escenario { margin-top: 18px; }
+.nota { margin-top: 16px; font-size: 12.5px; font-weight: 600; color: var(--ink3); }
+
+/* aparatos */
+.compu { display: flex; flex-direction: column; gap: 20px; max-width: 980px; }
+.ventana { border-radius: 16px; overflow: hidden; box-shadow: var(--sh-pop); background: #8A8C90; }
+.ventana img { display: block; width: 100%; height: auto; }
+.telefonos { display: flex; gap: 26px; overflow-x: auto; padding: 8px 4px 22px; scroll-snap-type: x proximity; }
+.tel { flex: 0 0 auto; scroll-snap-align: start; width: 262px; }
+.marco { position: relative; border: 9px solid #15171C; border-radius: 40px; overflow: hidden; background: #fff; box-shadow: var(--sh-pop); padding-top: 30px; }
+.marco::before { content: ""; position: absolute; z-index: 2; top: 7px; left: 50%; width: 74px; height: 20px; margin-left: -37px; border-radius: 12px; background: #15171C; }
+.marco img { display: block; width: 100%; height: auto; }
+
+/* ---------- decisiones ---------- */
+.titulo-seccion { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+.titulo-seccion h2 { font-size: clamp(24px, 4.4vw, 32px); letter-spacing: -0.8px; line-height: 1.08; font-weight: 800; }
+.decisiones { display: flex; flex-direction: column; gap: 18px; }
+fieldset.decision { margin: 0; min-width: 0; border: 1px solid var(--line2); border-radius: 22px; background: var(--surface); box-shadow: var(--sh-card); padding: 18px; }
+fieldset.decision legend { padding: 0; float: left; width: 100%; font-size: 18px; font-weight: 800; letter-spacing: -0.3px; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.opciones { clear: both; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 12px; }
+label.opcion { position: relative; display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 12px; border: 1.5px solid var(--line); border-radius: 18px; background: var(--surface); cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
+label.opcion input { position: absolute; opacity: 0; pointer-events: none; }
+label.opcion:hover { border-color: #C9CFDB; }
+label.opcion:has(input:checked) { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(30, 64, 224, 0.14); }
+.mini { min-height: 128px; border-radius: 12px; background: var(--soft); border: 1px solid var(--line2); padding: 12px; display: flex; flex-direction: column; justify-content: center; gap: 8px; overflow: hidden; }
+.pie-opcion { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.pie-opcion b { font-size: 14.5px; font-weight: 800; }
+.insignia { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 800; white-space: nowrap; }
+.insignia.pub { background: var(--mint-soft); color: var(--mint-ink); }
+.insignia.prop { background: var(--blue-soft); color: var(--blue-dk); }
+.marca { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; flex: 0 0 auto; }
+label.opcion:has(input:checked) .marca { border-color: var(--blue); background: var(--blue); }
+label.opcion:has(input:checked) .marca::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #fff; }
+
+/* mini: la carga */
+.m-carga { display: flex; justify-content: space-between; gap: 6px; }
+.m-num b { display: block; font-size: 30px; line-height: 1; letter-spacing: -0.8px; font-weight: 800; }
+.m-num span { display: block; margin-top: 5px; font-size: 12px; font-weight: 700; color: var(--ink2); }
+.m-num span small { font-weight: 700; color: var(--ink3); }
+.m-estado { font-size: 12.5px; font-weight: 800; color: var(--amber); }
+/* mini: la semana */
+.m-semana { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; align-items: end; height: 64px; }
+.m-semana div { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; }
+.m-semana i { width: 100%; max-width: 20px; border-radius: 6px; background: var(--blue); }
+.m-semana s { text-decoration: none; width: 9px; height: 3px; border-radius: 2px; background: var(--line); }
+.m-semana em { font-style: normal; font-size: 10.5px; font-weight: 700; color: var(--ink3); width: 17px; height: 17px; border-radius: 50%; display: grid; place-items: center; }
+.m-semana em.hoy { background: var(--blue); color: #fff; }
+.m-zonas { display: flex; height: 12px; border-radius: 6px; overflow: hidden; gap: 2px; }
+.m-leyenda { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; font-weight: 700; color: var(--ink2); }
+.m-leyenda b { color: var(--ink); }
+.m-cifras { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.m-cifras b { font-size: 26px; font-weight: 800; letter-spacing: -0.6px; }
+.m-cifras span { font-size: 12px; font-weight: 700; color: var(--ink2); }
+/* mini: lista de atletas */
+.m-fila { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line2); min-width: 0; }
+.m-fila:first-child { border-top: 0; }
+.m-av { width: 26px; height: 26px; border-radius: 9px; background: var(--blue-soft); color: var(--blue); font-size: 10.5px; font-weight: 800; display: grid; place-items: center; flex: 0 0 auto; }
+.m-nombre { flex: 1 1 auto; min-width: 0; font-size: 12.5px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-nombre small { display: block; font-size: 10.5px; font-weight: 600; color: var(--ink3); }
+.m-estado-fila { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 800; white-space: nowrap; }
+.pto { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.chip { display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 800; white-space: nowrap; }
+.chip.am { background: var(--amber-soft); color: var(--amber-ink); }
+.chip.ve { background: var(--mint-soft); color: var(--mint-ink); }
+.chip.ro { background: var(--danger-soft); color: var(--danger); }
+.chip.gr { background: var(--muted); color: var(--ink2); }
+.m-barritas { display: inline-flex; align-items: flex-end; gap: 2px; height: 18px; }
+.m-barritas i { width: 4px; border-radius: 2px; background: var(--blue); }
+.m-chips { display: inline-flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+/* mini: el atleta */
+.m-tabs { display: flex; gap: 3px; padding: 3px; border-radius: 11px; background: var(--muted); }
+.m-tabs span { flex: 1; text-align: center; padding: 5px 2px; border-radius: 8px; font-size: 10px; font-weight: 800; color: var(--ink2); white-space: nowrap; }
+.m-tabs span.on { background: var(--surface); color: var(--blue); box-shadow: 0 1px 3px rgba(17, 19, 24, 0.12); }
+.m-tarjeta { background: var(--surface); border: 1px solid var(--line2); border-radius: 14px; padding: 10px; box-shadow: var(--sh-card); }
+.m-tarjeta .eyebrow { font-size: 9.5px; }
+.m-tarjeta strong { display: block; margin-top: 4px; font-size: 14px; font-weight: 800; color: var(--amber); letter-spacing: -0.2px; }
+.m-botones { display: flex; gap: 6px; margin-top: 8px; }
+.m-boton { padding: 5px 9px; border-radius: 9px; font-size: 10.5px; font-weight: 800; background: var(--blue); color: #fff; }
+.m-boton.sec { background: var(--surface); color: var(--ink); border: 1.5px solid var(--line); }
+.mas { text-align: center; font-weight: 800; color: var(--ink3); font-size: 14px; line-height: 1; }
+
+/* ---------- qué sigue y resumen ---------- */
+.sigue { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 10px; }
+label.casilla { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 18px; background: var(--surface); border: 1.5px solid var(--line); cursor: pointer; font-weight: 700; }
+label.casilla input { width: 20px; height: 20px; accent-color: var(--blue); flex: 0 0 auto; }
+label.casilla:has(input:checked) { border-color: var(--blue); background: var(--blue-soft); }
+.resumen-final { background: var(--surface); border: 1px solid var(--line2); border-radius: 22px; box-shadow: var(--sh-card); padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.resumen-final ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-weight: 600; }
+.resumen-final ol li b { font-weight: 800; }
+.vacio { color: var(--ink2); font-weight: 600; }
+.barra-fija { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)); background: rgba(255, 255, 255, 0.94); border-top: 1px solid var(--line); backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
+.barra-fija span { font-weight: 800; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 0 20px; border: 0; border-radius: 14px; background: linear-gradient(140deg, var(--blue), var(--blue-dk)); color: #fff; font-weight: 800; font-size: 15px; box-shadow: var(--sh-btn); cursor: pointer; touch-action: manipulation; }
+.btn:active { transform: scale(0.98); }
+.btn.sec { background: var(--surface); color: var(--ink); box-shadow: none; border: 1.5px solid var(--line); }
+textarea.copia { width: 100%; min-height: 150px; border: 1.5px solid var(--line); border-radius: 14px; padding: 12px; font-family: var(--font); font-size: 13.5px; background: var(--soft); color: var(--ink); resize: vertical; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (max-width: 520px) { fieldset.decision { padding: 14px; } .tel { width: 236px; } }
+</style>
+
+<main class="pagina">
+  <header class="cab">
+    <div>
+      <span class="eyebrow">Training Lab</span>
+      <h1>Métricas del reloj</h1>
+    </div>
+    <span class="estado"><i></i>En producción · 10 oct</span>
+  </header>
+
+  <!-- ===================== ASÍ SE VE ===================== -->
+  <section aria-labelledby="t-asi">
+    <div class="titulo-seccion"><h2 id="t-asi">Así se ve</h2></div>
+    <div class="controles">
+      <div class="seg" role="group" aria-label="Aparato">
+        <button type="button" data-aparato="compu" aria-pressed="true">Computadora</button>
+        <button type="button" data-aparato="tel" aria-pressed="false">Teléfono</button>
+      </div>
+      <div class="pestanas" role="tablist" aria-label="Pantalla">
+        <button type="button" role="tab" data-pantalla="resumen" aria-selected="true">Resumen</button>
+        <button type="button" role="tab" data-pantalla="entrenos" aria-selected="false">Entrenos</button>
+        <button type="button" role="tab" data-pantalla="detalle" aria-selected="false">Un entreno</button>
+        <button type="button" role="tab" data-pantalla="carga" aria-selected="false">Carga</button>
+        <button type="button" role="tab" data-pantalla="recuperacion" aria-selected="false">Recuperación</button>
+        <button type="button" role="tab" data-pantalla="importar" aria-selected="false">Importar</button>
+      </div>
+    </div>
+    <p class="leyenda" id="leyenda" aria-live="polite"></p>
+
+    <div class="escenario" id="escenario">
+      <!-- RESUMEN -->
+      <div class="grupo compu" data-pantalla="resumen" data-aparato="compu">
+        <figure class="ventana"><img loading="lazy" src="metricas-del-reloj/d-resumen-1.webp" alt="Resumen: tres tarjetas con la forma de hoy, la semana en curso y la recuperación"></figure>
+        <figure class="ventana"><img loading="lazy" src="metricas-del-reloj/d-resumen-2.webp" alt="Las últimas 12 semanas por zonas de pulso y cómo reparte su esfuerzo"></figure>
+        <figure class="ventana"><img loading="lazy" src="metricas-del-reloj/d-resumen-3.webp" alt="Tiempo en cada zona y los últimos entrenos"></figure>
+      </div>
+      <div class="grupo telefonos" data-pantalla="resumen" data-aparato="tel">
+        <figure class="tel"><div class="marco"><img loading="lazy" src="metricas-del-reloj/p-resumen-1.webp" alt="Resumen en el teléfono: la forma de hoy y la semana"></div></figure>
+        <figure class="tel"><div class="marco"><img loading="lazy" src="metricas-del-reloj/p-resumen-2.webp" alt="Recuperación del día en el teléfono"></div></figure>
+        <figure class="tel"><div class="marco"><img loading="lazy" src="metricas-del-reloj/p-resumen-3.webp" alt="Las últimas 12 semanas en el teléfono"></div></figure>
+      </div>
+      <!-- ENTRENOS -->
+      <div class="grupo compu" data-pantalla="entrenos" data-aparato="compu">
+        <figure class="ventana"><img loading="lazy" src="metricas-del-reloj/d-entrenos.webp" alt="Lista de entrenos agrupada por semana, con filtros de periodo y deporte"></figure>
+      </div>
+      <div class="grupo telefonos" data-pantalla="entrenos" data-aparato="tel">
+        <figure class="tel"><div class="marco"><img loading="lazy" src="metricas-del-reloj/p-entrenos.webp" alt="Lista de entrenos en el teléfono"></div></figure>
+      </div>
+      <!-- UN ENTRENO -->
+      <div class="grupo compu" data-pantalla="detalle" data-aparato="compu">
+        <figure class="ventana"><img loading="lazy" src="metricas-del-reloj/d-detalle-1.webp" alt="Detalle de un rodaje de calidad: cifras y pulso con zonas"></figure>
+        <figure class="ventana"><img loading="lazy" src="metricas-del-reloj/d-detalle-2.webp" alt="Ritmo y altura del mismo entreno"></figure>
+        <figure class="ventana"><img loading="lazy" src="metricas-del-reloj/d-detalle-3.webp" alt="Tiempo en cada zona y la ruta"></figure>
+        <figure class="ventana"><img loading="lazy" src="metricas-del-reloj/d-detalle-4.webp" alt="Cada kilómetro con su ritmo y su pulso"></figure>
+      </div>
+      <div class="grupo telefonos" data-pantalla="detalle" data-aparato="tel">
+        <figure class="tel"><div class="marco"><img loading="lazy" src="metricas-del-reloj/p-detalle-1.webp" alt="Detalle en el teléfono: cifras y pulso"></div></figure>
+        <figure class="tel"><div class="marco"><img loading="lazy" src="metricas-del-reloj/p-detalle-2.webp" alt="Ritmo y altura en el teléfono"></div></figure>
+        <figure class="tel"><div class="marco"><img loading="lazy" src="metricas-del-reloj/p-detalle-3.webp" alt="Ruta y kilómetros en el teléfono"></div></figure>
+      </div>
+      <!-- CARGA -->
+      <div class="grupo compu" data-pantalla="carga" data-aparato="compu">
+        <figure class="ventana"><img loading="lazy" src="metricas-del-reloj/d-carga-1.webp" alt="Forma de hoy y condición contra fatiga"></figure>
+        <figure class="ventana"><img loading="lazy" src="metricas-del-reloj/d-carga-2.webp" alt="La forma de cada día con sus franjas con nombre"></figure>
+      </div>
+      <div class="grupo telefonos" data-pantalla="carga" data-aparato="tel">
+        <figure class="tel"><div class="marco"><img loading="lazy" src="metricas-del-reloj/p-carga-1.webp" alt="Carga en el teléfono: forma de hoy"></div></figure>
+        <figure class="tel"><div class="marco"><img loading="lazy" src="metricas-del-reloj/p-carga-2.webp" alt="Gráfica de forma en el teléfono"></div></figure>
+      </div>
+      <!-- RECUPERACIÓN -->
+      <div class="grupo compu" data-pantalla="recuperacion" data-aparato="compu">
+        <figure class="ventana"><img loading="lazy" src="metricas-del-reloj/d-recup-1.webp" alt="Recuperación de hoy y pulso en reposo contra lo normal"></figure>
+        <figure class="ventana"><img loading="lazy" src="metricas-del-reloj/d-recup-2.webp" alt="Variabilidad del pulso y sueño"></figure>
+        <figure class="ventana"><img loading="lazy" src="metricas-del-reloj/d-recup-3.webp" alt="Sueño por etapas y otras medidas"></figure>
+      </div>
+      <div class="grupo telefonos" data-pantalla="recuperacion" data-aparato="tel">
+        <figure class="tel"><div class="marco"><img loading="lazy" src="metricas-del-reloj/p-recup-1.webp" alt="Recuperación en el teléfono"></div></figure>
+        <figure class="tel"><div class="marco"><img loading="lazy" src="metricas-del-reloj/p-recup-2.webp" alt="Sueño y otras medidas en el teléfono"></div></figure>
+      </div>
+      <!-- IMPORTAR -->
+      <div class="grupo compu" data-pantalla="importar" data-aparato="compu">
+        <figure class="ventana"><img loading="lazy" src="metricas-del-reloj/d-vacio.webp" alt="Antes de importar: estado vacío"></figure>
+        <figure class="ventana"><img loading="lazy" src="metricas-del-reloj/d-importar-elegir.webp" alt="Elegir los archivos del reloj"></figure>
+        <figure class="ventana"><img loading="lazy" src="metricas-del-reloj/d-importar-revisar.webp" alt="Revisar lo que encontró: 87 entrenos nuevos, 1 ya estaba"></figure>
+      </div>
+    </div>
+    <p class="nota">Datos de ejemplo: un corredor inventado con 14 semanas de entrenos.</p>
+  </section>
+
+  <!-- ===================== LO QUE PUEDES CAMBIAR ===================== -->
+  <section aria-labelledby="t-cambios">
+    <div class="titulo-seccion"><span class="eyebrow">5 decisiones</span><h2 id="t-cambios">Lo que puedes cambiar</h2></div>
+    <div class="decisiones" id="decisiones"></div>
+  </section>
+
+  <section aria-labelledby="t-sigue">
+    <div class="titulo-seccion"><h2 id="t-sigue">¿Qué sigue?</h2></div>
+    <div class="sigue" id="sigue"></div>
+  </section>
+
+  <section aria-labelledby="t-mis" id="mis">
+    <div class="titulo-seccion"><h2 id="t-mis">Mis elecciones</h2></div>
+    <div class="resumen-final">
+      <div id="lista-elecciones"></div>
+      <textarea class="copia" id="texto-copia" readonly hidden aria-label="Texto para copiar"></textarea>
+      <div><button type="button" class="btn" id="copiar">Copiar para pegarlo en el chat</button></div>
+    </div>
+  </section>
+</main>
+
+<div class="barra-fija" role="region" aria-label="Resumen de cambios">
+  <span id="cuenta">Sin cambios</span>
+  <button type="button" class="btn" id="copiar-2">Copiar mis elecciones</button>
+</div>
+
+<script>
+/* Los números de las gráficas son los de la demostración: la curva de condición, fatiga y forma de los últimos 84 días y la semana en curso. */
+const D = {
+  ctl: [9.7,9.8,9.6,10.4,10.4,10.2,11.7,12.9,12.8,14,14.4,14.6,14.5,15.9,15.9,15.5,16.6,17.2,17.1,16.7,18.4,19.3,19.2,20.2,21,21.2,20.7,22.4,22.3,22.1,21.6,21,20.5,20.3,22.1,23,23.1,24,24.3,24.3,23.7,25.5,25.3,25.2,26,26.6,26.3,26.9,28.8,29.8,29.5,30.3,31.1,31.2,31.5,33.6,33.2,33.4,34,34.7,34.3,34.6,36.6,37.7,37.1,37.6,37.6,37.2,37,38.9,39.4,38.9,39.4,40,40.4,41.6,43.8,44.7,44.6,44.9,45.5,45.8,45.8,44.7],
+  atl: [30.2,28,24,26.8,24.7,21.1,28.9,33.3,30.1,34.4,34.2,32.3,29.1,35.5,32.9,28.2,33,34.2,31,26.5,35.4,38.3,35.2,38.9,40.8,39.4,33.8,41.9,38.4,35.1,30.1,25.8,22.1,20.3,31.2,35.5,34.4,38.1,37.7,35.5,30.5,40.4,37.2,34.5,38.1,40.2,36.6,38.3,48.1,51.7,46.7,48.8,50.9,48.8,48.4,58.4,52.5,50.6,52,53.5,48.4,48.4,58.3,61.7,54.5,55.4,52.5,48.3,45.5,55.4,56.2,50.7,52.1,53.7,54.3,59.8,69.9,71.9,67.2,66.2,66.4,65.3,62.6,53.7],
+  tsb: [-22.8,-20.5,-18.2,-14.4,-16.4,-14.2,-11,-17.1,-20.4,-17.2,-20.5,-19.8,-17.7,-14.6,-19.6,-17,-12.7,-16.4,-17,-13.9,-9.9,-17,-19,-16,-18.7,-19.9,-18.2,-13.1,-19.5,-16.2,-13,-8.5,-4.7,-1.5,-0.1,-9.1,-12.4,-11.2,-14.1,-13.4,-11.3,-6.8,-14.9,-11.9,-9.3,-12.2,-13.6,-10.2,-11.4,-19.4,-21.8,-17.2,-18.5,-19.9,-17.6,-16.9,-24.8,-19.3,-17.2,-18,-18.8,-14.1,-13.8,-21.7,-24,-17.5,-17.8,-14.9,-11.1,-8.5,-16.5,-16.8,-11.8,-12.7,-13.7,-13.9,-18.1,-26.2,-27.2,-22.6,-21.2,-20.9,-19.5,-16.8],
+  semana: [39, 60, 68, 58, 47, 0, 0],
+  zonas: [600, 1080, 7670, 1330, 2235],
+};
+const COLOR_ZONA = ['#8FA0C2', '#38A8F5', '#25C08A', '#F5A442', '#E04A5F'];
+const LETRAS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+
+/* ------------------------------------------------------------------ pantallas ------------------------------------------------------------------ */
+const LEYENDAS = {
+  resumen: 'Tres preguntas: ¿cómo llega hoy?, ¿qué hizo esta semana?, ¿recupera bien?',
+  entrenos: 'Cada entreno en una fila: deporte, hora, tiempo, distancia, pulso y su carga.',
+  detalle: 'El pulso con sus zonas, el ritmo, la altura, la ruta y cada kilómetro con su pulso.',
+  carga: 'Condición, fatiga y forma, como en TrainingPeaks pero dichas en español.',
+  recuperacion: 'Pulso en reposo, HRV y sueño contra lo normal de esa misma persona.',
+  importar: 'Se sueltan los archivos del reloj, se revisa lo que encontró y se guarda.',
+};
+const estadoVista = { aparato: 'compu', pantalla: 'resumen' };
+function pinta() {
+  const { aparato, pantalla } = estadoVista;
+  document.querySelectorAll('.grupo').forEach((g) => { g.hidden = !(g.dataset.pantalla === pantalla && g.dataset.aparato === aparato); });
+  document.querySelectorAll('[data-aparato][aria-pressed]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.aparato === aparato)));
+  document.querySelectorAll('[data-pantalla][role=tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.pantalla === pantalla)));
+  document.querySelector('[data-aparato=tel][aria-pressed]').disabled = pantalla === 'importar';
+  document.getElementById('leyenda').textContent = LEYENDAS[pantalla];
+}
+document.querySelectorAll('[data-aparato][aria-pressed]').forEach((b) => b.addEventListener('click', () => { estadoVista.aparato = b.dataset.aparato; pinta(); }));
+document.querySelectorAll('[data-pantalla][role=tab]').forEach((b) => b.addEventListener('click', () => {
+  estadoVista.pantalla = b.dataset.pantalla;
+  if (estadoVista.pantalla === 'importar') estadoVista.aparato = 'compu';
+  pinta();
+}));
+
+/* ------------------------------------------------------------------ dibujos de las opciones ------------------------------------------------------------------ */
+const camino = (vals, w, h, min, max, pad = 4) => vals.map((v, i) => `${i ? 'L' : 'M'}${(pad + (i / (vals.length - 1)) * (w - 2 * pad)).toFixed(1)},${(h - pad - ((v - min) / (max - min)) * (h - 2 * pad)).toFixed(1)}`).join(' ');
+const W = 232; const H = 104;
+function formaBandas() {
+  const min = -45; const max = 32; const y = (v) => H - 4 - ((v - min) / (max - min)) * (H - 8);
+  const bandas = [[25, max, '#1E40E0'], [5, 25, '#00A372'], [-10, 5, '#8A93A6'], [-30, -10, '#E07B00'], [min, -30, '#DC2626']];
+  const rects = bandas.map(([a, b, c]) => `<rect x="0" y="${y(b).toFixed(1)}" width="${W}" height="${(y(a) - y(b)).toFixed(1)}" fill="${c}" opacity=".14"/>`).join('');
+  const nombres = [['Mucho descanso', 28, '#1E40E0'], ['En plena forma', 14, '#00A372'], ['Equilibrio', -2, '#6B7280'], ['Entrenando fuerte', -20, '#A85A00'], ['Sobrecarga', -38, '#DC2626']]
+    .map(([t, v, c]) => `<text x="5" y="${(y(v) + 3).toFixed(1)}" font-size="8.5" font-weight="700" fill="${c}" stroke="#fff" stroke-width="2.4" paint-order="stroke" stroke-linejoin="round">${t}</text>`).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Forma con franjas con nombre">${rects}<path d="${camino(D.tsb, W, H, min, max)}" fill="none" stroke="#111318" stroke-width="1.8" stroke-linejoin="round"/>${nombres}</svg>`;
+}
+function formaTresLineas() {
+  const min = -30; const max = 78;
+  const cero = H - 4 - ((0 - min) / (max - min)) * (H - 8);
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Condición, fatiga y forma en tres líneas"><line x1="0" x2="${W}" y1="${cero.toFixed(1)}" y2="${cero.toFixed(1)}" stroke="#D1D5DB" stroke-dasharray="3 3"/><path d="${camino(D.ctl, W, H, min, max)}" fill="none" stroke="#1E40E0" stroke-width="1.8"/><path d="${camino(D.atl, W, H, min, max)}" fill="none" stroke="#D6336C" stroke-width="1.8"/><path d="${camino(D.tsb, W, H, min, max)}" fill="none" stroke="#F59F00" stroke-width="1.8"/></svg>`
+    + '<div class="m-leyenda"><span style="color:#1E40E0">● CTL</span><span style="color:#D6336C">● ATL</span><span style="color:#B87600">● TSB</span></div>';
+}
+function formaBarras() {
+  const min = -32; const max = 32; const y = (v) => H - 4 - ((v - min) / (max - min)) * (H - 8); const y0 = y(0);
+  const n = D.tsb.length; const ancho = (W - 8) / n;
+  const barras = D.tsb.map((v, i) => {
+    const c = v > 5 ? '#00A372' : v >= -10 ? '#8A93A6' : v >= -30 ? '#E07B00' : '#DC2626';
+    const yy = Math.min(y(v), y0); const hh = Math.abs(y(v) - y0);
+    return `<rect x="${(4 + i * ancho).toFixed(1)}" y="${yy.toFixed(1)}" width="${(ancho * 0.7).toFixed(1)}" height="${Math.max(1, hh).toFixed(1)}" rx="1" fill="${c}"/>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Forma de cada día en barras de color"><line x1="0" x2="${W}" y1="${y0.toFixed(1)}" y2="${y0.toFixed(1)}" stroke="#9CA3AF" stroke-width=".8"/>${barras}</svg>`;
+}
+const semanaBarras = () => {
+  const tope = Math.max(40, ...D.semana);
+  return '<div class="m-semana" role="img" aria-label="Carga de cada día de la semana">' + D.semana.map((c, i) => {
+    const barra = c > 0 ? `<i style="height:${Math.max(6, Math.round((c / tope) * 40))}px"></i>` : '<s></s>';
+    return `<div>${barra}<em class="${i === 5 ? 'hoy' : ''}">${LETRAS[i]}</em></div>`;
+  }).join('') + '</div>';
+};
+const zonasSemana = () => {
+  const t = D.zonas.reduce((a, b) => a + b, 0); const p = (x) => Math.round((x / t) * 100);
+  return `<div class="m-zonas" role="img" aria-label="Tiempo por zona esta semana">${D.zonas.map((v, i) => `<span style="flex:${v};background:${COLOR_ZONA[i]}"></span>`).join('')}</div>`
+    + `<div class="m-leyenda"><span><b>${p(D.zonas[0] + D.zonas[1])} %</b> fácil</span><span><b>${p(D.zonas[2])} %</b> medio</span><span><b>${p(D.zonas[3] + D.zonas[4])} %</b> duro</span></div>`;
+};
+const cifrasSemana = () => '<div class="m-cifras num"><div><b>5</b> <span>entrenos</span></div><div><b>4 h 33</b> <span>de tiempo</span></div><div><b style="color:var(--blue)">272</b> <span>de carga</span></div></div><div class="m-leyenda"><span><b>↓ 7 %</b> de carga vs la semana pasada</span></div>';
+const numerosCarga = (n1, n2, n3, sub) => `<div class="m-carga num"><div class="m-num"><b style="color:#1E40E0">45</b><span>${n1}${sub ? ` <small>${sub[0]}</small>` : ''}</span></div><div class="m-num"><b style="color:#E8590C">54</b><span>${n2}${sub ? ` <small>${sub[1]}</small>` : ''}</span></div><div class="m-num"><b style="color:#E07B00">−17</b><span>${n3}${sub ? ` <small>${sub[2]}</small>` : ''}</span></div></div>`;
+
+const ATLETAS = [
+  { i: 'MR', n: 'Mariana Ruiz', p: 'Media maratón · semana 11', e: 'am', t: 'Atención', f: 'Pulso en reposo +3', fm: '−17', fr: 'Atención', w: [39, 60, 68, 58, 47, 0, 0] },
+  { i: 'LP', n: 'Luis Paredes', p: 'Fuerza base', e: 've', t: 'Recuperando bien', f: 'Todo en lo normal', fm: '+8', fr: 'Bien', w: [30, 0, 44, 0, 52, 40, 0] },
+  { i: 'CT', n: 'Camila Torres', p: 'Ciclismo de ruta', e: 'ro', t: 'Cuerpo cargado', f: 'HRV −14 %, sueño 5.8 h', fm: '−34', fr: 'Cargado', w: [70, 62, 80, 58, 76, 66, 0] },
+];
+const COLOR_E = { am: 'var(--amber)', ve: 'var(--mint)', ro: 'var(--danger)' };
+const listaA = () => ATLETAS.map((a) => `<div class="m-fila"><span class="m-av">${a.i}</span><span class="m-nombre">${a.n}</span><span class="m-estado-fila" style="color:${COLOR_E[a.e] === 'var(--mint)' ? 'var(--mint-ink)' : COLOR_E[a.e]}"><i class="pto" style="background:${COLOR_E[a.e]}"></i>${a.f}</span></div>`).join('');
+const listaB = () => ATLETAS.map((a) => `<div class="m-fila"><span class="m-av">${a.i}</span><span class="m-nombre">${a.n}</span><span class="m-chips"><span class="chip ${a.e}">Forma ${a.fm}</span><span class="chip ${a.e}">${a.fr}</span></span></div>`).join('');
+const listaC = () => ATLETAS.map((a) => { const tope = Math.max(40, ...a.w); return `<div class="m-fila"><span class="m-av">${a.i}</span><span class="m-nombre">${a.n}</span><span class="m-barritas" aria-hidden="true">${a.w.map((c) => `<i style="height:${c ? Math.max(3, Math.round((c / tope) * 18)) : 2}px;${c ? '' : 'background:var(--line)'}"></i>`).join('')}</span><span class="chip ${a.e}">${a.t}</span></div>`; }).join('');
+const listaD = () => ATLETAS.map((a) => `<div class="m-fila"><span class="m-av">${a.i}</span><span class="m-nombre">${a.n}<small>${a.p}</small></span><span class="chip gr">Sin estado</span></div>`).join('');
+
+const tarjetaHome = () => '<div class="m-tarjeta"><span class="eyebrow">Tu forma</span><strong>Entrenando fuerte</strong><svg viewBox="0 0 120 26" width="100%" height="26" aria-hidden="true"><path d="' + camino(D.tsb.slice(-28), 120, 26, -32, 0, 2) + '" fill="none" stroke="#E07B00" stroke-width="1.8" stroke-linejoin="round"/></svg><div class="m-botones"><span class="chip am">Recuperación: Atención</span></div></div>';
+const tabsPerfil = () => '<div class="m-tabs"><span>Perfil</span><span>Mi equipo</span><span class="on">Mis métricas</span><span>IA</span></div><div class="m-tarjeta"><span class="eyebrow">Mis métricas del reloj</span><div class="m-botones"><span class="m-boton">Ver mis métricas</span><span class="m-boton sec">Importar</span></div></div>';
+
+/* ------------------------------------------------------------------ las decisiones ------------------------------------------------------------------ */
+const DECISIONES = [
+  { id: 'palabras', pregunta: 'Palabras de la carga', porDefecto: 'A', opciones: [
+    { v: 'A', nombre: 'En español simple', est: 'pub', mini: () => numerosCarga('Condición', 'Fatiga', 'Forma') },
+    { v: 'B', nombre: 'Siglas de TrainingPeaks', est: 'prop', mini: () => numerosCarga('CTL', 'ATL', 'TSB') },
+    { v: 'C', nombre: 'Las dos juntas', est: 'prop', mini: () => numerosCarga('Condición', 'Fatiga', 'Forma', ['CTL', 'ATL', 'TSB']) },
+  ] },
+  { id: 'forma', pregunta: 'Gráfica de la forma', porDefecto: 'A', opciones: [
+    { v: 'A', nombre: 'Franjas con nombre', est: 'pub', mini: formaBandas },
+    { v: 'B', nombre: 'Tres líneas, como TrainingPeaks', est: 'prop', mini: formaTresLineas },
+    { v: 'C', nombre: 'Barras de color por día', est: 'prop', mini: formaBarras },
+  ] },
+  { id: 'semana', pregunta: 'Tarjeta «Esta semana»', porDefecto: 'A', opciones: [
+    { v: 'A', nombre: 'Barras por día', est: 'pub', mini: semanaBarras },
+    { v: 'B', nombre: 'Barra de zonas', est: 'prop', mini: zonasSemana },
+    { v: 'C', nombre: 'Solo cifras', est: 'prop', mini: cifrasSemana },
+  ] },
+  { id: 'lista', pregunta: 'La lista de atletas con su estado de hoy', porDefecto: 'D', opciones: [
+    { v: 'A', nombre: 'Un punto de color y una frase', est: 'prop', mini: listaA },
+    { v: 'B', nombre: 'Dos chips: forma y recuperación', est: 'prop', mini: listaB },
+    { v: 'C', nombre: 'Barritas de la semana y un chip', est: 'prop', mini: listaC },
+    { v: 'D', nombre: 'Sin cambios: solo en la ficha', est: 'pub', mini: listaD },
+  ] },
+  { id: 'atleta', pregunta: 'Dónde lo ve el atleta', porDefecto: 'A', opciones: [
+    { v: 'A', nombre: 'Mi perfil, pestaña «Mis métricas»', est: 'pub', mini: tabsPerfil },
+    { v: 'B', nombre: 'Tarjeta en el Home', est: 'prop', mini: tarjetaHome },
+    { v: 'C', nombre: 'Las dos', est: 'prop', mini: () => `<div class="m-tabs"><span>Perfil</span><span>Mi equipo</span><span class="on">Mis métricas</span><span>IA</span></div><div class="mas">+</div>${tarjetaHome()}` },
+  ] },
+];
+const SIGUE = [
+  ['ia', 'Conectar con IA: que ChatGPT o Claude lean las métricas de un atleta'],
+  ['plan', 'Plan contra real: lo hecho junto a lo planeado'],
+  ['potencia', 'Zonas por potencia y por ritmo'],
+  ['mapa', 'Mapa de fondo en la ruta'],
+  ['app', 'En la app instalable: HealthKit sin exportar archivos'],
+];
+
+const cont = document.getElementById('decisiones');
+cont.innerHTML = DECISIONES.map((d) => `<fieldset class="decision" data-id="${d.id}"><legend>${d.pregunta}</legend><div class="opciones">${d.opciones.map((o) => `
+  <label class="opcion"><input type="radio" name="${d.id}" value="${o.v}" ${o.v === d.porDefecto ? 'checked' : ''}>
+    <span class="mini">${o.mini()}</span>
+    <span class="pie-opcion"><b>${o.nombre}</b><span class="insignia ${o.est}">${o.est === 'pub' ? 'Publicada' : 'Propuesta'}</span></span>
+  </label>`).join('')}</div></fieldset>`).join('');
+document.getElementById('sigue').innerHTML = SIGUE.map(([id, t]) => `<label class="casilla"><input type="checkbox" value="${id}" data-sigue="${t}"><span>${t}</span></label>`).join('');
+
+/* ------------------------------------------------------------------ resumen y copiar ------------------------------------------------------------------ */
+function elecciones() {
+  const cambios = [];
+  DECISIONES.forEach((d) => {
+    const v = document.querySelector(`input[name=${d.id}]:checked`).value;
+    if (v !== d.porDefecto) { const o = d.opciones.find((x) => x.v === v); cambios.push([d.pregunta, o.nombre]); }
+  });
+  const sigue = [...document.querySelectorAll('[data-sigue]:checked')].map((c) => c.dataset.sigue);
+  return { cambios, sigue };
+}
+function textoCopia({ cambios, sigue }) {
+  const lineas = ['Métricas del reloj: lo que elijo'];
+  if (!cambios.length) lineas.push('Diseño: me quedo con lo publicado.');
+  cambios.forEach(([p, n], i) => lineas.push(`${i + 1}. ${p}: ${n}`));
+  if (sigue.length) lineas.push('', 'Lo que sigue:', ...sigue.map((s) => `- ${s}`));
+  return lineas.join('\n');
+}
+function actualiza() {
+  const e = elecciones();
+  const n = e.cambios.length + e.sigue.length;
+  document.getElementById('cuenta').textContent = n ? `${n} ${n === 1 ? 'elección' : 'elecciones'}` : 'Sin cambios';
+  const lista = document.getElementById('lista-elecciones');
+  lista.innerHTML = n
+    ? `<ol>${e.cambios.map(([p, o]) => `<li><b>${p}:</b> ${o}</li>`).join('')}${e.sigue.map((s) => `<li><b>Sigue:</b> ${s}</li>`).join('')}</ol>`
+    : '<p class="vacio">Todavía nada: se queda lo publicado.</p>';
+}
+document.querySelectorAll('input[type=radio], input[type=checkbox]').forEach((i) => i.addEventListener('change', actualiza));
+async function copiar(boton) {
+  const texto = textoCopia(elecciones());
+  const area = document.getElementById('texto-copia');
+  area.value = texto;
+  const antes = boton.textContent;
+  try {
+    await navigator.clipboard.writeText(texto);
+    boton.textContent = 'Copiado';
+  } catch (e) {
+    area.hidden = false; area.focus(); area.select();   // sin permiso del portapapeles: se deja el texto a la vista, seleccionado
+    boton.textContent = 'Selecciona y copia';
+  }
+  setTimeout(() => { boton.textContent = antes; }, 2200);
+}
+document.getElementById('copiar').addEventListener('click', (e) => copiar(e.currentTarget));
+document.getElementById('copiar-2').addEventListener('click', (e) => { document.getElementById('mis').scrollIntoView({ behavior: 'smooth', block: 'center' }); copiar(e.currentTarget); });
+
+pinta();
+actualiza();
+</script>
