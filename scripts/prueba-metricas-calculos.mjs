@@ -156,6 +156,14 @@ const casi = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg ?? ''}
   assert.ok(completaMuestras(conSalto)[3].dist < 20, 'el salto no cuenta');
   // La velocidad del reloj manda sobre la calculada.
   assert.equal(completaMuestras([{ t: 0, dist: 0, vel: 9 }, { t: 5, dist: 5, vel: 9 }])[0].vel, 9);
+  // El Apple Watch da el pulso y la ruta en muestras DISTINTAS, a veces a la misma hora: una muestra de solo pulso no es un punto de la ruta, no lleva distancia
+  // y no estorba al calcular la velocidad (antes salía 25 % más lenta).
+  const mezcla = [];
+  for (let t = 0; t <= 300; t += 5) { mezcla.push({ t, fc: 140 }); mezcla.push({ t, lat: 20, lon: -99 + (3 * t) / mPorGrado }); }
+  const mz = completaMuestras(mezcla);
+  assert.ok(mz.filter((x) => x.fc !== undefined).every((x) => x.dist === undefined), 'el pulso solo no lleva distancia');
+  const velocidades = mz.filter((x) => x.lat !== undefined && x.vel !== undefined).map((x) => x.vel);
+  casi(velocidades.reduce((a, b) => a + b, 0) / velocidades.length, 3, 0.05, 'velocidad media con pulso y ruta a la misma hora');
 }
 
 /* ---- El resumen de un entreno ---- */

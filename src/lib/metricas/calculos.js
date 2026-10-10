@@ -171,8 +171,10 @@ export function completaMuestras(muestras) {
           if (d / dt < 100) acumulada += d;
         }
         previo = x;
+        // Solo las muestras que SON un punto de la ruta llevan distancia. Una de solo pulso (el Apple Watch las da aparte, a veces a la misma hora) con la
+        // distancia «del último punto» tendría una distancia vieja, y la velocidad calculada contra ella saldría más lenta de lo real.
+        x.dist = acumulada;
       }
-      if (previo) x.dist = acumulada;
     });
   }
   const conDist = m.filter((x) => typeof x.dist === 'number');

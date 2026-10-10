@@ -157,12 +157,25 @@ export function esElMismo(a, b) {
   return encima / Math.min(a1 - a0, b1 - b0) >= 0.7;
 }
 
+/** Lo que un entreno repetido sabe y el otro no (el nombre que le puso en Strava, las calorías del reloj): se le agrega al que se queda. */
+const COMPLEMENTOS = ['titulo', 'kcal_activas', 'kcal_totales', 'dispositivo'];
+function completaCon(ganador, otro) {
+  const g = ganador.fila ?? ganador;
+  const o = otro.fila ?? otro;
+  COMPLEMENTOS.forEach((campo) => { if (!g[campo] && o[campo]) g[campo] = o[campo]; });
+}
+
 /**
  * Separa los entrenos nuevos de los que ya estaban (en la base o repetidos dentro de la misma tanda).
- * Entre dos repetidos de la misma tanda se queda el que trae más datos (pulso, series). Devuelve `{ nuevos, repetidos }`.
+ * Entre dos repetidos de la misma tanda se queda el que trae más datos (pulso, series, distancia y calorías del reloj) y se le agrega lo que el otro sabía y él
+ * no (el nombre de Strava, por ejemplo). Devuelve `{ nuevos, repetidos }`.
  */
 export function separaRepetidos(nuevos, existentes) {
-  const riqueza = (x) => ((x.fila ?? x).fc_media || (x.resumen?.fc_media) || x.calculado?.fc_media ? 2 : 0) + (x.series || x.muestras?.length ? 1 : 0);
+  const riqueza = (x) => {
+    const f = x.fila ?? x;
+    return ((f.fc_media || x.resumen?.fc_media || x.calculado?.fc_media) ? 2 : 0) + ((x.series || x.muestras?.length) ? 1 : 0)
+      + (f.distancia_m > 0 ? 1 : 0) + ((f.kcal_activas > 0 || f.kcal_totales > 0) ? 1 : 0);
+  };
   const aceptados = [];
   const repetidos = [];
   nuevos.forEach((n) => {
@@ -170,7 +183,8 @@ export function separaRepetidos(nuevos, existentes) {
     if (existentes.some((e) => esElMismo(e, base))) { repetidos.push(n); return; }
     const hermano = aceptados.findIndex((a) => esElMismo(a.fila ?? a, base));
     if (hermano < 0) { aceptados.push(n); return; }
-    if (riqueza(n) > riqueza(aceptados[hermano])) { repetidos.push(aceptados[hermano]); aceptados[hermano] = n; } else repetidos.push(n);
+    if (riqueza(n) > riqueza(aceptados[hermano])) { completaCon(n, aceptados[hermano]); repetidos.push(aceptados[hermano]); aceptados[hermano] = n; }
+    else { completaCon(aceptados[hermano], n); repetidos.push(n); }
   });
   return { nuevos: aceptados, repetidos };
 }
