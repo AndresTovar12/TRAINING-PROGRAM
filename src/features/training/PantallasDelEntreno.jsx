@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bell, BellOff, Check, ChevronLeft, ChevronRight, List, Minus, Pencil, Play, Plus, Timer, Video, X } from 'lucide-react';
+import { Bell, BellOff, Check, ChevronLeft, ChevronRight, List, Minus, Pencil, Play, Plus, Share2, Timer, Video, X } from 'lucide-react';
 import { LT, KP, FONT, NUM_STYLE } from '@/lib/theme';
 import { textoDeResultado } from '@/lib/formatos';
 import { relojDe } from '@/lib/entrenoDatos';
@@ -604,7 +604,7 @@ export function PantallaDeDescanso({ descanso, siguiente, video, sonido, puedeAn
 /* ------------------------------------------------------------------ */
 
 /** «Entrenamiento terminado»: lo que se hizo, una nota para el coach y «Terminar sesión». El avance ya estaba guardado. */
-export function PantallaDeFin({ resumen, notas, palabras, onNotas, onTerminar, onVolver, yaTerminada }) {
+export function PantallaDeFin({ resumen, notas, palabras, onNotas, onTerminar, onVolver, onSello, yaTerminada }) {
   return (
     <>
       <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -616,6 +616,7 @@ export function PantallaDeFin({ resumen, notas, palabras, onNotas, onTerminar, o
           <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
             {resumen.map((c) => <Cifra key={c.etiqueta} {...c} />)}
           </div>
+          {onSello && <div style={{ marginBottom: 18 }}><BotonSecundario ancho onClick={onSello}><Share2 size={18} /> Crear sello</BotonSecundario></div>}
           <label htmlFor="entreno-notas" style={{ display: 'block', textAlign: 'left', fontSize: 15, fontWeight: 800, color: LT.text, margin: '0 2px 8px' }}>
             {palabras.finNotas}
           </label>

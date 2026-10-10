@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { LT, FONT } from '@/lib/theme';
 import { useCuerpoQuieto } from '@/lib/useCuerpoQuieto';
@@ -54,6 +54,9 @@ import {
  * kilos) y `salud` que es un paciente (sin 1RM). `sesionId` y `userId` son la llave con la que el reloj de un Set recuerda dónde iba.
  */
 
+// La hoja del sello se carga solo cuando se pide (ver `features/sello`).
+const HojaDelSello = lazy(() => import('@/features/sello/HojaDelSello'));
+
 // La misma preferencia que el reloj de un Set: quien silenció uno, silenció los dos.
 const LLAVE_DEL_SONIDO = 'tl:reloj:sonido';
 const leeSonido = () => {
@@ -76,6 +79,8 @@ export default function EntrenoDelDia({
   const [enfoque, setEnfoque] = useState(null);
   const [hoja, setHoja] = useState(null);
   const [verFin, setVerFin] = useState(false);
+  // El sello para redes, desde el final del entreno.
+  const [sello, setSello] = useState(false);
   // `reloj`: la persona tocó «Empezar» en la pantalla del Set (corre ya). `llegando`: lo último que hizo fue AVANZAR; empieza en `true` porque este entreno solo
   // se abre con el botón «Iniciar entreno» o «Continuar entreno» del día. `cerradoEn`: el Set cuyo reloj cerró a mano, para que no se vuelva a abrir solo.
   const [reloj, setReloj] = useState(false);
@@ -319,7 +324,7 @@ export default function EntrenoDelDia({
       <PantallaDeFin
         resumen={resumenDeFin} notas={registro?.notes ?? ''} yaTerminada={!!registro?.completed} palabras={palabras}
         onNotas={(notes) => escribe((prev) => ({ ...prev, notes }))}
-        onTerminar={terminarSesion} onVolver={volverAlEntreno}
+        onTerminar={terminarSesion} onVolver={volverAlEntreno} onSello={() => setSello(true)}
       />
     );
   } else if (enDescanso) {
@@ -399,6 +404,14 @@ export default function EntrenoDelDia({
         />
       )}
       {hoja === 'tecnica' && <HojaDeTecnica palabras={palabras} onCerrar={() => setHoja(null)} />}
+      {sello && (
+        <Suspense fallback={null}>
+          <HojaDelSello
+            atletaId={userId} registro={registro} sesionId={sesionId} nombre={dia.name || ''} Icono={aspecto?.Icono} unidadPeso={unidadDePeso}
+            onCerrar={() => setSello(false)}
+          />
+        </Suspense>
+      )}
 
       {(reloj || relojSolo) && paso?.tipo === 'reloj' && (
         <RelojDelBloque

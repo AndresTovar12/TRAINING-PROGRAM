@@ -1,0 +1,227 @@
+<meta charset="utf-8">
+<title>Sello T-LAB</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500..900&family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+/* Sello final: tipografía ancha y centrada, T•LAB con el punto al centro. Cardio con GPS lleva la ruta; todo lo demás lleva solo el ícono.
+   Página: tokens de la app (azul #1E40E0, radio 22, Inter). */
+:root{
+  --bg:#F4F5F8; --surface:#FFFFFF; --ink:#0F1530; --muted:#5B6482; --line:#DDE1EE;
+  --blue:#1E40E0; --on-blue:#FFFFFF;
+  --font:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0B0F20; --surface:#151B33; --ink:#EEF0FA; --muted:#9BA4C6; --line:#272F52;
+    --blue:#5C7DFF; --on-blue:#0B0F20; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0B0F20; --surface:#151B33; --ink:#EEF0FA; --muted:#9BA4C6; --line:#272F52;
+  --blue:#5C7DFF; --on-blue:#0B0F20; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);margin:0;padding-inline:16px;padding-block:28px 56px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1120px;margin-inline:auto;display:flex;flex-direction:column;gap:26px}
+h1{font-size:28px;font-weight:800;letter-spacing:-.02em;margin:0;text-wrap:balance}
+.pick{margin:6px 0 0;font-size:14px;font-weight:500;color:var(--muted)}
+
+.ctl{display:flex;flex-wrap:wrap;gap:18px 28px;align-items:flex-end;background:var(--surface);border:1.5px solid var(--line);border-radius:22px;padding:18px 18px 20px}
+.grp{display:flex;flex-direction:column;gap:8px;min-width:0}
+.gl{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button,.reset{font:inherit;font-size:13.5px;font-weight:700;min-height:44px;padding:0 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;touch-action:manipulation}
+.seg button[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:var(--on-blue)}
+.reset{border-color:var(--blue);color:var(--blue);margin-left:auto}
+.seg button:focus-visible,.reset:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+
+.opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,320px));justify-content:center;gap:34px 30px}
+.opt{display:flex;flex-direction:column;gap:14px;min-width:0}
+.opt h2{margin:0;font-size:18px;font-weight:800;letter-spacing:-.01em;text-align:center}
+.frame{position:relative;width:100%;aspect-ratio:9/16;border-radius:28px;overflow:hidden;background:#222;box-shadow:0 14px 34px rgba(15,21,48,.22)}
+.frame .bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.frame .chk{position:absolute;inset:0;background-color:#171B30;background-image:linear-gradient(45deg,#232948 25%,transparent 25%,transparent 75%,#232948 75%),linear-gradient(45deg,#232948 25%,transparent 25%,transparent 75%,#232948 75%);background-size:22px 22px;background-position:0 0,11px 11px}
+.frame svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.piece{cursor:grab;touch-action:none}
+.piece.drag{cursor:grabbing}
+.piece .hit{stroke:transparent;stroke-width:1.2}
+.piece.drag .hit{stroke:rgba(255,255,255,.55)}
+.fb{font-family:'Archivo','Arial',system-ui,sans-serif;font-stretch:125%}
+text{font-variant-numeric:tabular-nums}
+@media (max-width:420px){ h1{font-size:24px} .reset{margin-left:0} }
+</style>
+
+<main class="wrap">
+  <div>
+    <h1>Sello T-LAB</h1>
+    <p class="pick">Arrastra cada pieza para moverla.</p>
+  </div>
+
+  <section class="ctl" aria-label="Controles">
+    <div class="grp"><span class="gl">Entreno</span><div class="seg" id="c-ses"></div></div>
+    <div class="grp"><span class="gl">Fondo</span><div class="seg" id="c-bg"></div></div>
+    <button class="reset" id="reset" type="button">Acomodo original</button>
+  </section>
+
+  <section class="opts" id="opts" aria-label="Sello"></section>
+</main>
+
+<script>
+(function(){
+  var BLUE='#3578FF';
+  var W=360,H=640;
+
+  /* ---------- datos de ejemplo ---------- */
+  var ICONS={
+    run:{p:['M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2']},
+    gym:{p:['M17.596 12.768a2 2 0 1 0 2.829-2.829l-1.768-1.767a2 2 0 0 0 2.828-2.829l-2.828-2.828a2 2 0 0 0-2.829 2.828l-1.767-1.768a2 2 0 1 0-2.829 2.829z','m2.5 21.5 1.4-1.4','m20.1 3.9 1.4-1.4','M5.343 21.485a2 2 0 1 0 2.829-2.828l1.767 1.768a2 2 0 1 0 2.829-2.829l-6.364-6.364a2 2 0 1 0-2.829 2.829l1.768 1.767a2 2 0 0 0-2.828 2.829z','m9.6 14.4 4.8-4.8']},
+    yoga:{p:['M12 5a3 3 0 1 1 3 3m-3-3a3 3 0 1 0-3 3m3-3v1M9 8a3 3 0 1 0 3 3M9 8h1m5 0a3 3 0 1 1-3 3m3-3h-1m-2 3v-1','M12 10v12','M12 22c4.2 0 7-1.667 7-5-4.2 0-7 1.667-7 5Z','M12 22c-4.2 0-7-1.667-7-5 4.2 0 7 1.667 7 5Z'],c:true}
+  };
+  // Cardio = Distance, Pace, Time (y la ruta si hubo GPS). Todo lo demás = Time, Avg heart rate, Calories y solo el ícono.
+  // Cada entreno dice qué sellos ofrece: uno, o dos si es mixto (el atleta escoge).
+  var SES={
+    run:{es:'Carrera con GPS',photo:'pista.webp',pos:'50% 50%',icon:'run',sellos:[
+      {t:'Carrera con GPS',kind:'route',stats:[['Distance','8.42','km'],['Pace','5:12','/km'],['Time','43:48','min']]}]},
+    cinta:{es:'Cinta, sin GPS',photo:'pista.webp',pos:'30% 50%',icon:'run',sellos:[
+      {t:'Cardio sin GPS',kind:'icon',stats:[['Distance','5.00','km'],['Pace','6:00','/km'],['Time','30:00','min']]}]},
+    gym:{es:'Fuerza',photo:'fuerza.webp',pos:'50% 50%',icon:'gym',sellos:[
+      {t:'Fuerza',kind:'icon',stats:[['Time','52:10','min'],['Avg heart rate','131','bpm'],['Calories','318','kcal']]}]},
+    yoga:{es:'Yoga',photo:'yoga.webp',pos:'38% 50%',icon:'yoga',sellos:[
+      {t:'Yoga',kind:'icon',stats:[['Time','38:05','min'],['Avg heart rate','92','bpm'],['Calories','164','kcal']]}]},
+    mix:{es:'Mixto (Hyrox)',photo:'agilidad.webp',pos:'28% 50%',icon:'gym',sellos:[
+      {t:'Sello de cardio',kind:'route',stats:[['Distance','12.6','km'],['Pace','5:48','/km'],['Time','1:12:30','']]},
+      {t:'Sello general',kind:'icon',stats:[['Time','1:12:30',''],['Avg heart rate','148','bpm'],['Calories','780','kcal']]}]}
+  };
+  var ROUTE=[[8,72],[14,62],[12,50],[22,44],[26,32],[20,22],[30,12],[44,10],[52,20],[50,32],[60,38],[72,34],[82,24],[92,28],[94,42],[84,52],[72,56],[66,66],[76,74],[90,70]];
+
+  var state={ses:'gym',bg:'photo'};
+  var off={};   // acomodo por sello y pieza
+
+  /* ---------- geometría ---------- */
+  function f(n){return Math.round(n*100)/100}
+  function rnd(seed){var s=seed;return function(){s=(s*1664525+1013904223)%4294967296;return s/4294967296}}
+  // Parte cada tramo en pedazos con un temblor chico: así la ruta se ve como un rastro de GPS.
+  function jag(pts,k,amp,seed){
+    var r=rnd(seed),out=[pts[0]];
+    for(var i=0;i<pts.length-1;i++){
+      var a=pts[i],b=pts[i+1];
+      for(var j=1;j<=k;j++){
+        var t=j/k,x=a[0]+(b[0]-a[0])*t,y=a[1]+(b[1]-a[1])*t;
+        if(j<k){x+=(r()-.5)*amp;y+=(r()-.5)*amp}
+        out.push([x,y]);
+      }
+    }
+    return out;
+  }
+  function poly(pts){return 'M'+pts.map(function(p){return f(p[0])+' '+f(p[1])}).join('L')}
+  var LW=4.6;
+  function drawRoute(w,h){
+    var pad=LW;
+    var pts=jag(ROUTE,4,1.1,11).map(function(q){return [pad+q[0]/100*(w-2*pad), pad+q[1]/80*(h-2*pad)]});
+    return '<path d="'+poly(pts)+'" fill="none" stroke="'+BLUE+'" stroke-width="'+LW+'" stroke-linecap="round" stroke-linejoin="round"/>';
+  }
+  function glyph(key,x,y,s,col){
+    var I=ICONS[key];
+    return '<g transform="translate('+f(x)+','+f(y)+') scale('+f(s/24)+')" fill="none" stroke="'+col+'" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">'+
+      I.p.map(function(d){return '<path d="'+d+'"/>'}).join('')+(I.c?'<circle cx="12" cy="8" r="2"/>':'')+'</g>';
+  }
+
+  /* ---------- la tipografía elegida: ancha y centrada ---------- */
+  var C={cls:'fb',lab:{size:12,w:600,ls:.2},val:{size:38,w:800},unit:{size:14,w:700,dx:4},logo:{size:38,w:800,ls:2.4}};
+  var BW=236,PITCH=74;
+  function px(w){return (W-w)/2}
+
+  function build(S,iconKey){
+    var P=[];
+    if(S.kind==='route'){var rw=176,rh=140;P.push({id:'line',x:px(rw),y:112,w:rw,h:rh,html:drawRoute(rw,rh)});}
+    else{var d=100;P.push({id:'icon',x:px(d),y:140,w:d,h:d,html:glyph(iconKey,d*.1,d*.1,d*.8,'#fff')});}
+    var X=BW/2,rows=S.stats.map(function(st,i){
+      var u=st[2]?'<tspan font-size="'+C.unit.size+'" font-weight="'+C.unit.w+'" dx="'+C.unit.dx+'">'+st[2]+'</tspan>':'';
+      return '<g transform="translate(0,'+(i*PITCH)+')">'+
+        '<text class="'+C.cls+'" x="'+X+'" y="12" text-anchor="middle" font-size="'+C.lab.size+'" font-weight="'+C.lab.w+'" fill="#fff" fill-opacity=".95" letter-spacing="'+C.lab.ls+'">'+st[0]+'</text>'+
+        '<text class="'+C.cls+'" x="'+X+'" y="'+(12+C.val.size+2)+'" text-anchor="middle" font-size="'+C.val.size+'" font-weight="'+C.val.w+'" fill="#fff">'+st[1]+u+'</text></g>';
+    }).join('');
+    P.push({id:'stats',x:px(BW),y:276,w:BW,h:PITCH*3-8,html:rows});
+    // logo T•LAB: letras blancas grandes y el punto azul dibujado a media altura de las mayúsculas (ver fixLogo)
+    var lw=190,L=C.logo,base=38;
+    P.push({id:'logo',x:px(lw),y:506,w:lw,h:46,html:
+      '<g class="lg" data-w="'+lw+'" data-size="'+L.size+'" data-ls="'+L.ls+'" data-base="'+base+'">'+
+      '<text class="'+C.cls+' lgT" x="0" y="'+base+'" font-size="'+L.size+'" font-weight="'+L.w+'" letter-spacing="'+L.ls+'" fill="#fff">T</text>'+
+      '<circle class="lgD" cx="0" cy="0" r="1" fill="'+BLUE+'"/>'+
+      '<text class="'+C.cls+' lgL" x="0" y="'+base+'" font-size="'+L.size+'" font-weight="'+L.w+'" letter-spacing="'+L.ls+'" fill="#fff">LAB</text></g>'});
+    return P;
+  }
+
+  /* ---------- pintar ---------- */
+  function offOf(i,id){var o=(off[i]=off[i]||{});return (o[id]=o[id]||[0,0])}
+  // Mide las letras ya dibujadas y pone T, el punto y LAB centrados juntos; el punto a media altura de las mayúsculas.
+  function fixLogo(el){
+    var g=el.querySelector('.lg');if(!g)return;
+    var T=g.querySelector('.lgT'),L=g.querySelector('.lgL'),Dt=g.querySelector('.lgD');
+    var size=+g.getAttribute('data-size'),ls=+g.getAttribute('data-ls'),lw=+g.getAttribute('data-w'),base=+g.getAttribute('data-base');
+    var wT=T.getComputedTextLength()-ls,wL=L.getComputedTextLength()-ls;
+    var gap=size*.3,r=size*.17,x0=(lw-(wT+gap+2*r+gap+wL))/2;
+    T.setAttribute('x',f(x0));
+    Dt.setAttribute('cx',f(x0+wT+gap+r));Dt.setAttribute('cy',f(base-size*.35));Dt.setAttribute('r',f(r));
+    L.setAttribute('x',f(x0+wT+2*gap+2*r));
+  }
+  function renderAll(){
+    var ses=SES[state.ses],host=document.getElementById('opts');
+    host.innerHTML=ses.sellos.map(function(S,i){
+      var P=build(S,ses.icon);
+      var bg=(state.bg==='photo')
+        ?'<img class="bg" src="../../src/assets/landing/'+ses.photo+'" alt="" style="object-position:'+ses.pos+'">'
+        :'<div class="chk"></div>';
+      var g=P.map(function(p){
+        var o=offOf(i,p.id);
+        return '<g class="piece" data-id="'+p.id+'" data-i="'+i+'" data-x="'+p.x+'" data-y="'+p.y+'" data-w="'+p.w+'" data-h="'+p.h+'" transform="translate('+f(p.x+o[0])+','+f(p.y+o[1])+')" filter="url(#sh'+i+')">'+
+          '<rect class="hit" x="-6" y="-6" width="'+(p.w+12)+'" height="'+(p.h+12)+'" rx="10" fill="transparent"/>'+p.html+'</g>';
+      }).join('');
+      return '<article class="opt"><h2>'+S.t+'</h2><div class="frame" data-i="'+i+'" aria-label="'+S.t+' sobre '+(state.bg==='photo'?'foto':'fondo transparente')+'">'+bg+
+        '<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+S.t+'"><defs><filter id="sh'+i+'" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="1.4" stdDeviation="2.2" flood-color="#000" flood-opacity=".4"/></filter></defs>'+g+'</svg></div></article>';
+    }).join('');
+    Array.prototype.forEach.call(host.querySelectorAll('.frame'),fixLogo);
+  }
+
+  /* ---------- controles ---------- */
+  function seg(id,items,cur,on){
+    var el=document.getElementById(id);
+    el.innerHTML=items.map(function(it){
+      return '<button type="button" data-v="'+it[0]+'" aria-pressed="'+(it[0]===cur)+'">'+it[1]+'</button>';
+    }).join('');
+    el.onclick=function(e){var b=e.target.closest('button');if(!b)return;on(b.getAttribute('data-v'))};
+  }
+  function controls(){
+    seg('c-ses',Object.keys(SES).map(function(k){return [k,SES[k].es]}),state.ses,function(v){state.ses=v;off={};controls();renderAll()});
+    seg('c-bg',[['photo','Foto'],['clear','Transparente']],state.bg,function(v){state.bg=v;controls();renderAll()});
+  }
+  document.getElementById('reset').onclick=function(){off={};renderAll()};
+
+  /* ---------- arrastrar piezas ---------- */
+  var drag=null;
+  function toSvg(svg,e){var p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;var m=svg.getScreenCTM();return m?p.matrixTransform(m.inverse()):{x:e.clientX,y:e.clientY}}
+  var host=document.getElementById('opts');
+  host.addEventListener('pointerdown',function(e){
+    var g=e.target.closest&&e.target.closest('.piece'),fr=g&&g.closest('.frame'),svg=fr&&fr.querySelector('svg');
+    if(!g||!svg)return;
+    var p=toSvg(svg,e),i=g.getAttribute('data-i'),id=g.getAttribute('data-id'),o=offOf(i,id);
+    drag={svg:svg,g:g,i:i,id:id,sx:p.x,sy:p.y,ox:o[0],oy:o[1],bx:+g.getAttribute('data-x'),by:+g.getAttribute('data-y'),w:+g.getAttribute('data-w'),h:+g.getAttribute('data-h')};
+    g.classList.add('drag');
+    try{fr.setPointerCapture(e.pointerId)}catch(x){}
+    e.preventDefault();
+  });
+  host.addEventListener('pointermove',function(e){
+    if(!drag)return;
+    var p=toSvg(drag.svg,e),nx=drag.ox+(p.x-drag.sx),ny=drag.oy+(p.y-drag.sy);
+    var ax=Math.min(Math.max(drag.bx+nx,-drag.w*.6),W-drag.w*.4),ay=Math.min(Math.max(drag.by+ny,-drag.h*.4),H-drag.h*.6);
+    nx=ax-drag.bx;ny=ay-drag.by;
+    var o=offOf(drag.i,drag.id);o[0]=nx;o[1]=ny;
+    drag.g.setAttribute('transform','translate('+f(ax)+','+f(ay)+')');
+  });
+  var end=function(){if(drag){drag.g.classList.remove('drag');drag=null}};
+  host.addEventListener('pointerup',end);host.addEventListener('pointercancel',end);
+  host.addEventListener('touchmove',function(e){if(drag)e.preventDefault()},{passive:false});
+
+  controls();renderAll();
+  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(renderAll);
+})();
+</script>

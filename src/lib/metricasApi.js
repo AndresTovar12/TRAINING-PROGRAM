@@ -14,12 +14,13 @@ export { listRecuperacion };
 const COLUMNAS_DE_LA_LISTA = 'id,atleta_id,origen,formato,dispositivo,deporte,titulo,inicio,fin,desfase_min,duracion_s,movimiento_s,distancia_m,desnivel_pos_m,fc_media,fc_max,fc_min,kcal_activas,kcal_totales,zonas_s,umbrales,carga,carga_metodo';
 const PAGINA = 1000;
 
-/** Los entrenos de un atleta desde `desdeDia` (`AAAA-MM-DD`), del más nuevo al más viejo. Pide por páginas: la base devuelve hasta 1000 filas por vez. */
-export async function listActividades(atletaId, { desdeDia = null, tope = 5000 } = {}) {
+/** Los entrenos de un atleta desde `desdeDia` (y hasta `hastaDia`, si se da; los dos `AAAA-MM-DD`), del más nuevo al más viejo. Pide por páginas: la base devuelve hasta 1000 filas por vez. */
+export async function listActividades(atletaId, { desdeDia = null, hastaDia = null, tope = 5000 } = {}) {
   const filas = [];
   for (let desde = 0; desde < tope; desde += PAGINA) {
     let q = supabase.from('actividades').select(COLUMNAS_DE_LA_LISTA).eq('atleta_id', atletaId).order('inicio', { ascending: false }).range(desde, desde + PAGINA - 1);
     if (desdeDia) q = q.gte('inicio', `${desdeDia}T00:00:00Z`);
+    if (hastaDia) q = q.lte('inicio', `${hastaDia}T23:59:59Z`);
     const { data, error } = await q;
     if (error) throw error;
     filas.push(...(data ?? []));

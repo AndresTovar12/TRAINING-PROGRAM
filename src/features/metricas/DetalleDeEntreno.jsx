@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, Trash2 } from 'lucide-react';
+import { Activity, ChevronLeft, Dumbbell, Share2, Trash2 } from 'lucide-react';
 import { LT, KP, FONT, NUM_STYLE } from '@/lib/theme';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { ZONAS, limitesDeZonas, zonaDe } from '@/lib/metricas/calculos';
 import { DEPORTES, nombreDelDeporte } from '@/lib/metricas/deportes';
 import { borraActividad, getActividad, getSeries } from '@/lib/metricasApi';
 import { filasPorSerie } from '@/lib/metricas/porSerie';
+import { sellosDeActividad, sellosDeSesionGuiada } from '@/lib/sello/datos';
 import {
   distanciaTexto, duracionTexto, fechaLarga, horaTexto, relojTexto, ritmoTexto, velocidadTexto,
 } from '@/lib/metricas/formato';
@@ -13,6 +14,8 @@ import { BarraDeZonas, GraficaDeLinea, RutaEnMapa } from './Graficas';
 import { COLORES_DE_ZONA, ejeDeTiempo, marcasNumericas } from './graficasUtil';
 import { Cargando, Dato, MosaicoDeDeporte, Seccion, Tarjeta } from './Piezas';
 import PorSerie from './PorSerie';
+import { ICONOS } from './tonos';
+import EditorDelSello from '@/features/sello/EditorDelSello';
 
 /* EL DETALLE DE UN ENTRENO: lo que el coach abre cuando quiere ver cómo fue de verdad.
    Arriba, los números de siempre; después el pulso en el tiempo con sus zonas pintadas detrás (se ve de golpe si fue fácil o duro), el ritmo, la ruta, el tiempo
@@ -199,12 +202,13 @@ function SeriesDeFuerza({ sets }) {
   );
 }
 
-export default function DetalleDeEntreno({ actividad, sesion = null, unidadPeso = 'kg', alVolver, puedeBorrar, alBorrado }) {
+export default function DetalleDeEntreno({ actividad, sesion = null, unidadPeso = 'kg', conSello = false, alVolver, puedeBorrar, alBorrado }) {
   const pregunta = useConfirmacion();
   const soloApp = actividad.origen === 'app';
   // Una sesión guiada sin reloj no tiene qué pedirle a la base: llega completa (quien lo abre pone `key` por entreno, así que no hay que reiniciar).
   const [estado, setEstado] = useState(() => (soloApp ? { cargando: false, fila: actividad, series: null, error: null } : { cargando: true, fila: null, series: null, error: null }));
   const [borrando, setBorrando] = useState(false);
+  const [verSello, setVerSello] = useState(false);
 
   useEffect(() => {
     if (soloApp) return undefined;
@@ -235,6 +239,13 @@ export default function DetalleDeEntreno({ actividad, sesion = null, unidadPeso 
   const kmExtra = fila.metricas?.km ?? [];
   const sets = fila.metricas?.sets ?? [];
   const tieneRuta = !!estado.series?.ruta;
+  // El sello para redes (solo lo ve el propio atleta): con los datos del reloj, o con lo que midió la app si fue una sesión guiada sin reloj.
+  const sellos = useMemo(() => {
+    if (!conSello || estado.cargando) return [];
+    return soloApp
+      ? sellosDeSesionGuiada({ registro: sesion?.registro, inicio: sesion?.inicio, fin: sesion?.fin, unidadPeso }).sellos
+      : sellosDeActividad({ fila, series: estado.series, sesion, unidadPeso }).sellos;
+  }, [conSello, estado.cargando, estado.series, soloApp, fila, sesion, unidadPeso]);
 
   const tiles = useMemo(() => [
     { valor: duracionTexto(fila.duracion_s), etiqueta: fila.movimiento_s && fila.duracion_s - fila.movimiento_s > 60 ? `de tiempo (${duracionTexto(fila.movimiento_s)} en movimiento)` : 'de tiempo' },
@@ -259,6 +270,20 @@ export default function DetalleDeEntreno({ actividad, sesion = null, unidadPeso 
     try { await borraActividad(actividad.id); alBorrado?.(); } catch (e) { setEstado((s) => ({ ...s, error: e?.message ?? 'No se pudo borrar' })); setBorrando(false); }
   }
 
+  if (verSello && sellos.length) {
+    return (
+      <div>
+        <button
+          type="button" onClick={() => setVerSello(false)}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 2, padding: '6px 10px 6px 4px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 14.5, fontWeight: 800, color: LT.blue, touchAction: 'manipulation', marginBottom: 10 }}
+        >
+          <ChevronLeft size={18} /> Entreno
+        </button>
+        <EditorDelSello sellos={sellos} Icono={soloApp ? Dumbbell : (ICONOS[fila.deporte] ?? Activity)} />
+      </div>
+    );
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 14 }}>
@@ -268,6 +293,15 @@ export default function DetalleDeEntreno({ actividad, sesion = null, unidadPeso 
         >
           <ChevronLeft size={18} /> Entrenos
         </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {sellos.length > 0 && (
+            <button
+              type="button" onClick={() => setVerSello(true)} className="kp-press"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 12, border: `1.5px solid ${LT.blue}`, background: LT.surface, cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 800, color: LT.blue, touchAction: 'manipulation' }}
+            >
+              <Share2 size={15} /> Sello
+            </button>
+          )}
         {puedeBorrar && (
           <button
             type="button" onClick={borrar} disabled={borrando} aria-label="Borrar este entreno"
@@ -276,6 +310,7 @@ export default function DetalleDeEntreno({ actividad, sesion = null, unidadPeso 
             <Trash2 size={15} /> Borrar
           </button>
         )}
+        </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
