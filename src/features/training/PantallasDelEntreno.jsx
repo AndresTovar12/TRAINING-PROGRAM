@@ -16,8 +16,9 @@ import { relojDe } from '@/lib/entrenoDatos';
  *
  * SIN LETRAS GRISES (Andrés, 9 oct 2026: «nadie se va a detener mid workout a leer las letritas grises»): ni «Serie 2 de 4 · Vuelta 2 de 3»
  * en un renglón chiquito, ni «Toca Seguir cuando estés listo». Pero lo que se dice tiene que SE LEER: esa misma noche, ya probándolo, los
- * puntitos de las vueltas «no se entienden» y los botones de abajo «estaban muy escondidos». Entonces: la serie va con su palabra, en una
- * pastilla («Serie 2 de 5»), y todo lo que se puede tocar es un botón de verdad, con borde y con lo que hace escrito. Y el tiempo que
+ * puntitos de las vueltas «no se entienden» y los botones de abajo «estaban muy escondidos». Entonces: la serie va con su palabra y todo lo que
+ * se puede tocar es un botón de verdad, con borde y con lo que hace escrito. Y una pastilla («Serie 2 de 5») tampoco daba «una buena noción del
+ * set» (Andrés, 9 oct 2026, «Experiencia de workout 2.0»): ahora la serie se EXPLICA en una tarjeta al lado de las cifras (`TarjetaDeLaSerie`). Y el tiempo que
  * llevas SÍ se ve, arriba, en una pastilla («En ningún momento puedo ver cuánto tiempo llevo entrenando»).
  */
 
@@ -155,44 +156,6 @@ export function SerieDelSet({ puntos }) {
   );
 }
 
-/**
- * La serie a la vista, solo en un Set de dos ejercicios o más: el tipo («BI-SERIE») y el par A/B. El que toca va en azul con su nombre; lo hecho,
- * con su palomita; lo que falta, con su letra. Con dos ejercicios se dicen los dos nombres; con más, solo el del que toca (el nombre ya está en
- * grande debajo). `serie` viene de `serieALaVista`.
- */
-function SerieALaVista({ serie, simple = false }) {
-  // La versión básica (la web) solo dice qué es («BI-SERIE»); el par A/B es de la guía completa.
-  if (simple) return <div style={{ marginTop: 12 }}><Etiqueta>{serie.nombre}</Etiqueta></div>;
-  const nombres = serie.letras.length === 2;
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 12 }}>
-      <Etiqueta>{serie.nombre}</Etiqueta>
-      <span style={{
-        display: 'inline-flex', flexWrap: 'wrap', gap: 2, padding: 3, minWidth: 0, maxWidth: '100%', boxSizing: 'border-box',
-        border: `1.5px solid ${LT.border}`, borderRadius: serie.letras.length > 4 ? 18 : 999, background: LT.surface,
-      }}>
-        {serie.letras.map((l) => {
-          const toca = l.estado === 'actual';
-          return (
-            <span
-              key={l.letra} aria-current={toca ? 'step' : undefined}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 30, padding: nombres || toca ? '0 12px 0 10px' : '0 10px', borderRadius: 999,
-                fontSize: 13.5, fontWeight: 700, minWidth: 0, boxSizing: 'border-box', background: toca ? LT.blue : 'transparent', color: toca ? '#fff' : LT.text2,
-              }}
-            >
-              {l.estado === 'hecho'
-                ? <Check size={14} strokeWidth={3} color={LT.mint} style={{ flexShrink: 0 }} aria-label="Hecho" />
-                : <b style={{ fontWeight: 800, color: toca ? '#fff' : LT.blue, opacity: toca ? 0.9 : 0.85 }}>{l.letra}</b>}
-              {(nombres || toca) && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{l.nombre}</span>}
-            </span>
-          );
-        })}
-      </span>
-    </div>
-  );
-}
-
 /* ------------------------------------------------------------------ */
 /* La barra de arriba                                                  */
 /* ------------------------------------------------------------------ */
@@ -251,15 +214,50 @@ export function BarraDelEntreno({ segmentos, fondo, palabras, tiempo, onCerrar, 
 function Cifra({ valor, etiqueta, destacado = false, texto = false }) {
   return (
     <div className="cifra" style={{
-      flex: 1, minWidth: 0, background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: '14px 8px 12px', textAlign: 'center',
+      flex: 1, minWidth: 0, background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 14, padding: '8px 8px 7px', textAlign: 'center',
+      display: 'flex', flexDirection: 'column', justifyContent: 'center',
     }}>
       <div
-        className={texto ? 'cifra-texto' : 'cifra-valor'}
+        className={texto ? 'cifra-texto-chica' : 'cifra-valor-chica'}
         style={{ '--n': String(valor).length, fontWeight: 800, color: destacado ? LT.blue : LT.text, ...NUM_STYLE }}
       >
         {valor}
       </div>
-      <div style={{ fontSize: 12.5, fontWeight: 700, color: LT.text2, marginTop: 5 }}>{etiqueta}</div>
+      <div style={{ fontSize: 12, fontWeight: 700, color: LT.text2, marginTop: 2 }}>{etiqueta}</div>
+    </div>
+  );
+}
+
+/**
+ * La serie EXPLICADA, junto a las cifras (ver `resumenDeLaSerie`). Andrés, 9 oct 2026: «¿te parece que "Serie 1 de 3" le da una buena noción al usuario del
+ * set? Yo no creo». Dice QUÉ es la serie en palabras: si es una bi-serie, los dos ejercicios y cuál toca; en qué serie va, cuántas faltan después de esta,
+ * cuánto se descansa al terminar y qué cambia en la que sigue.
+ */
+function TarjetaDeLaSerie({ resumen }) {
+  const { etiqueta, titulo, par, quedan, descanso, sigue } = resumen;
+  const falta = quedan === 0 ? 'Es la última' : (quedan === 1 ? 'Falta 1 después' : `Faltan ${quedan} después`);
+  return (
+    <div style={{
+      flex: 1, minWidth: 0, background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: '11px 13px 12px', display: 'flex', flexDirection: 'column', gap: 4,
+    }}>
+      {etiqueta && <div style={{ marginBottom: 2 }}><Etiqueta>{etiqueta}</Etiqueta></div>}
+      {titulo && <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: -0.3, color: LT.text, ...NUM_STYLE }}>{titulo}</div>}
+      {par && par.map((l) => {
+        const toca = l.estado === 'actual';
+        return (
+          <div key={l.letra} aria-current={toca ? 'step' : undefined} style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0, fontSize: 14.5, fontWeight: toca ? 800 : 600, color: toca ? LT.text : LT.text2 }}>
+            {l.estado === 'hecho'
+              ? <Check size={14} strokeWidth={3} color={LT.mint} style={{ flexShrink: 0 }} aria-label="Hecho" />
+              : <b style={{ flexShrink: 0, width: 14, textAlign: 'center', fontWeight: 800, color: toca ? LT.blue : LT.text3 }}>{l.letra}</b>}
+            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.nombre}</span>
+            {toca && <span aria-hidden="true" style={{ width: 7, height: 7, borderRadius: '50%', background: LT.blue, flexShrink: 0 }} />}
+          </div>
+        );
+      })}
+      {/* En una bi-serie el título («Serie 1 de 3») ya dice que faltan más: la línea sobra, y la tarjeta es la más alta. Sola, o en la última, sí se dice. */}
+      {titulo && (!par || quedan === 0) && <div style={{ fontSize: 13.5, fontWeight: 600, color: LT.text2, lineHeight: 1.3 }}>{falta}</div>}
+      {sigue && <div style={{ fontSize: 13.5, fontWeight: 600, color: LT.text2, lineHeight: 1.3 }}>Luego: <b style={{ color: LT.text }}>{sigue}</b></div>}
+      {descanso && <div style={{ fontSize: 13.5, fontWeight: 600, color: LT.text2, lineHeight: 1.3 }}>Descanso: <b style={{ color: LT.text }}>{descanso}</b></div>}
     </div>
   );
 }
@@ -301,13 +299,12 @@ function CronometroDelPaso({ segundos, cuenta, onEmpezar, onQuitar }) {
  * centro con «Sigue: …» (el hueco de un video o de unas cifras vacías se lee como un fallo de la app).
  */
 export function PantallaDePaso({
-  paso, video, cifras, anotado, sigue, serie, serieSimple = false, puntos, cronometro, etiquetaDeCambiar, puedeAnterior, tecnica,
+  paso, video, cifras, anotado, sigue, resumen, cronometro, etiquetaDeCambiar, puedeAnterior, tecnica,
   onListo, onCambiar, onSaltar, onAnterior,
 }) {
   const nota = [paso.nota, paso.cue].filter(Boolean);
   const hayCronometro = paso.tipo === 'ejercicio' && paso.termina?.por === 'tiempo' && cronometro;
-  const conVueltas = puntos.length > 1;
-  const solo = !video && !cifras.length && !nota.length && !hayCronometro && !anotado && !serie && !conVueltas && !paso.opcional;
+  const solo = !video && !cifras.length && !nota.length && !hayCronometro && !anotado && !resumen && !paso.opcional;
   return (
     <>
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
@@ -317,16 +314,14 @@ export function PantallaDePaso({
               {paso.encabezado}
             </div>
           )}
-          {serie && <SerieALaVista serie={serie} simple={serieSimple} />}
           {paso.opcional && <div style={{ marginTop: 8 }}><Etiqueta suave>Opcional</Etiqueta></div>}
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, margin: solo ? '0 0 10px' : '10px 0 14px' }}>
+          <div style={{ margin: solo ? '0 0 10px' : '14px 0 12px' }}>
             <h1 style={{
-              margin: 0, flex: 1, minWidth: 0, fontSize: solo ? 38 : 30, fontWeight: 800, letterSpacing: -0.7, lineHeight: 1.1, color: LT.text,
+              margin: 0, fontSize: solo ? 38 : 30, fontWeight: 800, letterSpacing: -0.7, lineHeight: 1.1, color: LT.text,
               textAlign: solo ? 'center' : 'left', overflowWrap: 'anywhere', textWrap: 'balance',
             }}>
               {paso.nombre}
             </h1>
-            {conVueltas && <span style={{ marginTop: 6, flexShrink: 0 }}><SerieDelSet puntos={puntos} /></span>}
           </div>
           {solo && sigue && (
             <div style={{ textAlign: 'center', fontSize: 15, fontWeight: 700, color: LT.text3 }}>
@@ -334,9 +329,15 @@ export function PantallaDePaso({
             </div>
           )}
           {video && <div style={{ marginBottom: 14 }}>{video}</div>}
-          {cifras.length > 0 && (
-            <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-              {cifras.map((c, i) => <Cifra key={i} {...c} />)}
+          {/* La serie explicada a la izquierda y las cifras APILADAS a la derecha (la mitad de espacio que antes). Sin serie que explicar, las cifras van en una fila. */}
+          {(resumen || cifras.length > 0) && (
+            <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, marginBottom: 14 }}>
+              {resumen && <TarjetaDeLaSerie resumen={resumen} />}
+              {cifras.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: resumen ? 'column' : 'row', gap: 8, flex: resumen ? '0 0 38%' : 1, minWidth: 0 }}>
+                  {cifras.map((c, i) => <Cifra key={i} {...c} />)}
+                </div>
+              )}
             </div>
           )}
           {hayCronometro && <div style={{ marginBottom: 14 }}>{cronometro}</div>}
@@ -449,15 +450,18 @@ export function PantallaDeReloj({ paso, detalle, resultado, puedeAnterior, tecni
 /* ------------------------------------------------------------------ */
 
 /**
- * El descanso: solo existe porque el coach lo escribió. Cuenta hacia abajo, avisa al llegar a cero y SIGUE contando hacia arriba, sin
- * reproche: nunca avanza solo. Un descanso escrito con palabras («Recuperación total») no tiene cuenta: se lee tal cual y espera «Seguir».
+ * El descanso: solo existe porque el coach lo escribió. Cuenta hacia abajo y, al llegar a cero, avisa y la app pasa sola a lo que sigue: «Seguir»
+ * lo adelanta y «+30 s» lo alarga ANTES de que acabe. Antes seguía contando hacia arriba («+0:09»); Andrés (9 oct 2026): «podría perderse el punto de
+ * que la app guíe en entrenamiento y podría ser redundante con el botón de +30 s». Un descanso escrito con palabras («Recuperación total») no tiene
+ * cuenta: se lee tal cual y espera «Seguir».
  * `siguiente` es lo que viene (para ir acomodándose): su nombre, lo planeado, sus vueltas en puntos y su miniatura si tiene foto o video.
  * Sin frases que expliquen el botón: el botón ya dice «Seguir».
  */
 export function PantallaDeDescanso({ descanso, siguiente, miniatura, sonido, puedeAnterior, onSeguir, onMas, onAnterior, onSonido }) {
   const { paso } = descanso;
   const conCuenta = descanso.restan !== null;
-  const grande = !conCuenta ? '' : (descanso.vencido ? `+${relojDe(descanso.pasado)}` : relojDe(descanso.restan));
+  // Al llegar a cero el descanso se acaba y la app sigue sola (ver `EntrenoDelDia`): ya no hay un «+0:09» que cuente de más.
+  const grande = !conCuenta ? '' : relojDe(Math.max(0, descanso.restan));
   const avance = !conCuenta || descanso.seg <= 0 ? 0 : Math.min(1, Math.max(0, (descanso.seg - descanso.restan) / descanso.seg));
   return (
     <>

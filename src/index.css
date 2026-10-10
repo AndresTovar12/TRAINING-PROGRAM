@@ -226,6 +226,12 @@ body {
   line-height: 1.1; letter-spacing: -0.5px; white-space: nowrap;
 }
 .cifra-texto { font-size: 20px; line-height: 1.15; letter-spacing: -0.3px; overflow-wrap: anywhere; }
+/* La cifra CHICA: la mitad de espacio (Andrés, 9 oct 2026: «creo que hiciste muy grande esto y eso quita espacio»). Va apilada junto a la tarjeta de la serie. */
+.cifra-valor-chica {
+  font-size: 22px; font-size: min(28px, calc((100cqw - 2px) / (var(--n, 3) * 0.72)));
+  line-height: 1.1; letter-spacing: -0.5px; white-space: nowrap;
+}
+.cifra-texto-chica { font-size: 17px; line-height: 1.15; letter-spacing: -0.3px; overflow-wrap: anywhere; }
 
 /* En un teléfono muy angosto la palabra «Pronto» de la cámara del entreno se esconde: queda el ícono y la fila de abajo cabe. */
 @media (max-width: 359px) { .pronto-texto { display: none; } }

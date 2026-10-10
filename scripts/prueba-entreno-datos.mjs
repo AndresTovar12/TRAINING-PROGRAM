@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { pasosDeLaSesion, marcaListo, saltaPaso, vistaDelEntreno } from '../src/lib/entreno.js';
 import {
   relojDe, tiempoTotal, cifrasDelPaso, textoDeCifra, pastillasDelPaso, textoDeLoPlaneado, segmentosDeAvance, puntosDeVueltas, serieALaVista,
-  tarjetasDeLaLista, cantidadPlaneada, camposDeCambiar, exDataTrasListo,
+  tarjetasDeLaLista, cantidadPlaneada, camposDeCambiar, exDataTrasListo, resumenDeLaSerie, tiempoEnPalabras,
 } from '../src/lib/entrenoDatos.js';
 import { parcheDeLapsos } from '../src/lib/lapsos.js';
 import { ponFormato } from '../src/lib/formatos.js';
@@ -322,6 +322,64 @@ const lower = {
   assert.deepEqual([reg.vueltas[0].repsHechas, reg.vueltas[1].repsHechas, reg.vueltas[2].repsHechas], ['10', '8', '6']);
   // Todo es JSON puro.
   assert.deepEqual(JSON.parse(JSON.stringify(reg)), reg);
+}
+
+/* ---- La serie explicada (la tarjeta de la izquierda de las cifras) ---- */
+{
+  assert.equal(tiempoEnPalabras(27), '27 s');
+  assert.equal(tiempoEnPalabras(120), '2 min');
+  assert.equal(tiempoEnPalabras(90), '1 min 30 s');
+  assert.equal(tiempoEnPalabras(0), '');
+  // La rutina real de «Prueba 1» (9 oct 2026): correr en lapsos, bi-serie Back Squat + Row (3 vueltas, con carga distinta por vuelta) y Sprint 400 m ×4.
+  const prueba1 = {
+    day: 'Lun', name: 'Sesión', cat: 'gym',
+    exercises: [
+      ex('correr', { sets: '1', reps: '1', unidad: 'km', descansoSet: '20 seg', ...parcheDeLapsos([{ reps: '1', unidad: 'km', intensity: '5:30 min/km', descanso: '' }, { reps: '1', unidad: 'km', intensity: '4:50 min/km', descanso: '' }]) }),
+      ex('Back Squat', { set: 1, sets: '3', reps: '8-10', intensity: '75%', descanso: '27 seg', ...parcheDeVueltas([{ reps: '8-10', intensity: '75%' }, { reps: '8-10', intensity: '80%' }, { reps: '8-10', intensity: '85%' }]) }),
+      ex('Row', { set: 1, sets: '3', reps: '8-10', intensity: '60% intensidad', porLado: true, descanso: '36 seg', descansoSet: '30 seg', ...parcheDeVueltas([{ reps: '8-10', intensity: '60% intensidad' }, { reps: '8-10', intensity: '70% intensidad' }, { reps: '8-10', intensity: '80% intensidad' }]) }),
+      ex('Sprint', { sets: '4', reps: '400', unidad: 'm', intensity: '100% intensidad', descanso: '42 seg' }),
+    ],
+  };
+  const plan = pasosDeLaSesion(prueba1);
+  const estados = plan.pasos.map(() => 'pendiente');
+  const de = (nombre, vuelta) => plan.pasos.find((p) => p.tipo === 'ejercicio' && p.nombre === nombre && p.vuelta === vuelta);
+  // Bi-serie: dice qué es, en qué serie va, el par con el que toca, cuántas faltan, el descanso y qué cambia en la que sigue.
+  const a1 = resumenDeLaSerie(plan, estados, de('Back Squat', 1));
+  assert.equal(a1.etiqueta, 'Bi-serie');
+  assert.equal(a1.titulo, 'Serie 1 de 3');
+  assert.deepEqual(a1.par.map((l) => `${l.letra}:${l.nombre}:${l.estado}`), ['A:Back Squat:actual', 'B:Row:pendiente']);
+  assert.equal(a1.quedan, 2);
+  assert.equal(a1.descanso, '27 s');
+  assert.equal(a1.sigue, '80%', 'se dice lo que cambia en la serie que sigue');
+  const b1 = resumenDeLaSerie(plan, estados, de('Row', 1));
+  assert.equal(b1.descanso, '36 s', 'cada ejercicio dice SU descanso');
+  assert.equal(b1.sigue, '70%', 'la cifra dice «70%» (el rótulo «intensidad» va aparte)');
+  const ultima = resumenDeLaSerie(plan, estados, de('Row', 3));
+  assert.equal(ultima.titulo, 'Serie 3 de 3');
+  assert.equal(ultima.quedan, 0);
+  assert.equal(ultima.sigue, null, 'la última no tiene serie que sigue');
+  assert.equal(ultima.descanso, '30 s', 'el descanso del Set, al terminar la última vuelta');
+  // Un ejercicio que se repite: sin par ni etiqueta, y si la carga no cambia no se dice «Luego».
+  const s2 = resumenDeLaSerie(plan, estados, de('Sprint', 2));
+  assert.equal(s2.etiqueta, null);
+  assert.equal(s2.par, null);
+  assert.equal(s2.titulo, 'Serie 2 de 4');
+  assert.equal(s2.quedan, 2);
+  assert.equal(s2.sigue, null);
+  assert.equal(s2.descanso, '42 s');
+  assert.equal(resumenDeLaSerie(plan, estados, de('Sprint', 4)).descanso, null, 'el último paso del entreno no tiene descanso después');
+  // Lo hecho cuenta: con la serie 1 hecha, la 2 dice que falta 1.
+  const hechos = plan.pasos.map((p) => (p.tipo === 'ejercicio' && p.serie === 3 && p.vuelta === 1 ? 'hecho' : 'pendiente'));
+  assert.equal(resumenDeLaSerie(plan, hechos, de('Sprint', 2)).quedan, 2);
+  // Un ejercicio suelto, de una sola serie, no tiene serie que explicar; un reloj tampoco.
+  const suelto = pasosDeLaSesion({ day: 'Lun', name: 'x', cat: 'gym', exercises: [ex('Dominadas', { sets: '1', reps: '8' })] });
+  assert.equal(resumenDeLaSerie(suelto, suelto.pasos.map(() => 'pendiente'), suelto.pasos[0]), null);
+  assert.equal(resumenDeLaSerie(plan, estados, plan.pasos[0]), null, 'el paso con reloj no lleva tarjeta de serie');
+  assert.equal(resumenDeLaSerie(plan, estados, null), null);
+  // En una bi-serie con una letra hecha, la tarjeta la marca como hecha.
+  const mitad = plan.pasos.map((p) => (p === de('Back Squat', 1) ? 'hecho' : 'pendiente'));
+  const r = resumenDeLaSerie(plan, mitad, de('Row', 1));
+  assert.deepEqual(r.par.map((l) => l.estado), ['hecho', 'actual']);
 }
 
 /* ---- Las palabras ---- */

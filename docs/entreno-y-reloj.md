@@ -104,7 +104,8 @@ La lista plana es el **mapa de regreso**: el paso *i* que ejecutó el reloj es `
 
 - Cuando la persona **avanza** (iniciar o continuar el entreno, «Listo», «Seguir», «Saltar») y el paso al que llega es un **reloj**, el reloj corre solo, con una cuenta de 3 segundos que se puede cancelar. Nadie empieza a correr en el mismo instante en que toca un botón.
 - Cuando la persona **vuelve** a un paso (atrás, «Ver todo») o **cancela** la cuenta, nada arranca; tampoco al recargar la app (el entreno guiado solo se abre con su botón): ve el Set con su botón «Empezar» (o «Seguir», si el reloj iba a medias).
-- Un reloj que ya tiene resultado no arranca solo. Y ningún paso *termina* solo: el reloj sirve, nunca manda.
+- Un reloj que ya tiene resultado no arranca solo.
+- **Un descanso que llega a cero termina solo**: avisa y se pasa al paso que sigue (un instante después, para que se oiga el aviso). «Seguir» lo adelanta y «+30 s» lo alarga antes de que acabe; ya no cuenta hacia arriba («+0:09»). Andrés (9 oct 2026): eso «podría perder el punto de que la app guíe en el entrenamiento y podría ser redundante con el botón de +30 s». Un descanso escrito con palabras («Recuperación total») no tiene cuenta y espera «Seguir». Un ejercicio, en cambio, siempre espera el «Listo» de la persona.
 
 ## 7. Lo que NO está (a propósito)
 
