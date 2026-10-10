@@ -112,7 +112,7 @@ Un entreno crudo es `{ formato, deporte, deporte_original, titulo, dispositivo, 
 - **La lista de atletas con su estado de hoy** (forma + recuperación en la fila, para ver de un golpe a quién hay que escribirle). Pide una consulta de todo el equipo; se propone, con tres dibujos, en la maqueta `docs/maquetas/2026-10-10-metricas-del-reloj.html` (publicada también como Artifact: https://claude.ai/artifact/GZfWNz2Bsu5rxpa61rFDCw), junto con otras cuatro decisiones de diseño por si se quiere cambiar algo.
 - **Conector de IA**: una herramienta para que ChatGPT/Claude lean las métricas de un atleta.
 - **Plan contra real**: mostrar lo hecho junto a lo planeado (la unión por hora ya existe, ver §1b; falta comparar con el plan y escribir `actividades.sesion`).
-- **Técnica por serie**: el campo `hechos[clave].tecnica` existe; falta el botón (apagado, «Pronto») y mensajes con video. Se ve en la maqueta de la app instalable.
+- **Técnica por serie** (Andrés, 10 oct 2026): es **opcional** y el atleta decide si la **envía a su coach por Mensajes** (el video llega a la bandeja del coach, que responde ahí; no se pega a la serie). El campo `hechos[clave].tecnica` existe para guardar el id; falta el botón (apagado, «Pronto») y el video en Mensajes. Se ve en la maqueta de la app instalable.
 - **Cronómetro por distancia** en los lapsos de metros (sigue pendiente de su sí).
 - **HealthKit en vivo y relojes** (ver `docs/entreno-y-reloj.md`).
 - **Mapa de fondo** en la ruta (hoy se dibuja sola, sin terceros ni permisos).
