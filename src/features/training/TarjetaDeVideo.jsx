@@ -49,8 +49,11 @@ const PISTA = 'desliza-videos';
  *
  * Se monta con `key` del ejercicio: al pasar al siguiente, todo vuelve a su
  * estado inicial (sin video «ya reproduciendo» que no ha cargado).
+ *
+ * `enCarta` es para cuando el video va DENTRO de otra tarjeta (el descanso: «Sigue» con su video): sin margen de arriba ni sombra propia y con la esquina
+ * menos redonda, para que se vea una sola pieza. `altoMaximo` (una medida CSS, por defecto 38vh) es lo más alto que puede ser.
  */
-export default function TarjetaDeVideo({ videos, portada, nombre }) {
+export default function TarjetaDeVideo({ videos, portada, nombre, enCarta = false, altoMaximo = ALTO_MAXIMO }) {
   const [reproduciendo, setReproduciendo] = useState(false);
   const [angulo, setAngulo] = useState(0);
   /* LA PISTA «DESLIZA ›» sale en el primer video hasta que esta persona cambie de video una vez, por el medio que sea. Se espera
@@ -91,19 +94,19 @@ export default function TarjetaDeVideo({ videos, portada, nombre }) {
   // Un video de fuera se incrusta tal cual (ver `VideoRecortado`): no cabe en la tarjeta.
   if (reproduciendo && externo) {
     return (
-      <div style={{ marginTop: 14 }}>
-        <VideoRecortado video={video} estilo={{ width: '100%', borderRadius: 20 }} />
+      <div style={{ marginTop: enCarta ? 0 : 14 }}>
+        <VideoRecortado video={video} estilo={{ width: '100%', borderRadius: enCarta ? 16 : 20 }} />
         <Puntos videos={videos} activo={angulo} onIr={cambia} enFlujo claro />
       </div>
     );
   }
 
   return (
-    <div style={{ marginTop: 14 }}>
+    <div style={{ marginTop: enCarta ? 0 : 14 }}>
       <div style={{
-        position: 'relative', overflow: 'hidden', margin: '0 auto', borderRadius: 20, background: '#0E1015',
-        boxShadow: '0 8px 24px rgba(17,19,24,0.14)',
-        aspectRatio: `${aspecto}`, width: `min(100%, calc(${ALTO_MAXIMO} * ${aspecto}))`, maxWidth: 480,
+        position: 'relative', overflow: 'hidden', margin: '0 auto', borderRadius: enCarta ? 16 : 20, background: '#0E1015',
+        boxShadow: enCarta ? 'none' : '0 8px 24px rgba(17,19,24,0.14)',
+        aspectRatio: `${aspecto}`, width: `min(100%, calc(${altoMaximo} * ${aspecto}))`, maxWidth: 480,
       }}>
         {propio && (reproduciendo || adelanta) && (
           <VideoRecortado

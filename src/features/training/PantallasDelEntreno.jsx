@@ -124,12 +124,12 @@ function Pastilla({ children, fuerte = false }) {
   );
 }
 
-// La etiqueta de lo que es un Set («BI-SERIE», «CON RELOJ»): azul suave; gris (`suave`) si es un aviso («OPCIONAL»).
-function Etiqueta({ children, suave = false }) {
+// La etiqueta de lo que es un Set («BI-SERIE», «CON RELOJ»): azul suave; gris (`suave`) si es un aviso («OPCIONAL»); `chica` cuando va junto a otra cosa en un renglón.
+function Etiqueta({ children, suave = false, chica = false }) {
   return (
     <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 9px', borderRadius: 7, fontSize: 11.5, fontWeight: 800, letterSpacing: 0.5,
-      textTransform: 'uppercase', whiteSpace: 'nowrap', background: suave ? LT.surface2 : LT.blueSoft, color: suave ? LT.text2 : LT.blue,
+      display: 'inline-flex', alignItems: 'center', gap: 6, padding: chica ? '3px 7px' : '4px 9px', borderRadius: 7, fontSize: chica ? 10.5 : 11.5, fontWeight: 800,
+      letterSpacing: chica ? 0.4 : 0.5, textTransform: 'uppercase', whiteSpace: 'nowrap', background: suave ? LT.surface2 : LT.blueSoft, color: suave ? LT.text2 : LT.blue,
     }}>
       {children}
     </span>
@@ -214,7 +214,7 @@ export function BarraDelEntreno({ segmentos, fondo, palabras, tiempo, onCerrar, 
 function Cifra({ valor, etiqueta, destacado = false, texto = false }) {
   return (
     <div className="cifra" style={{
-      flex: 1, minWidth: 0, background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 14, padding: '8px 8px 7px', textAlign: 'center',
+      flex: 1, minWidth: 0, background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: '8px 8px 7px', textAlign: 'center',
       display: 'flex', flexDirection: 'column', justifyContent: 'center',
     }}>
       <div
@@ -230,34 +230,93 @@ function Cifra({ valor, etiqueta, destacado = false, texto = false }) {
 
 /**
  * La serie EXPLICADA, junto a las cifras (ver `resumenDeLaSerie`). Andrés, 9 oct 2026: «¿te parece que "Serie 1 de 3" le da una buena noción al usuario del
- * set? Yo no creo». Dice QUÉ es la serie en palabras: si es una bi-serie, los dos ejercicios y cuál toca; en qué serie va, cuántas faltan después de esta,
- * cuánto se descansa al terminar y qué cambia en la que sigue.
+ * set? Yo no creo». Dice DÓNDE vas, en tres piezas: el número de la serie GRANDE (con su «de 3» y una barrita que se va llenando), lo que es el Set
+ * («BI-SERIE») y, si son varios ejercicios, el par A/B con el que toca resaltado.
+ *
+ * Y NADA MÁS. Andrés (10 oct 2026) quitó «Luego» y «Descanso»: «solo estorba y satura». Lo bonito sale de la jerarquía, no de más texto: lo que toca es lo más
+ * fuerte (letra azul y fila sombreada), lo que sigue se apaga y lo que ya hiciste lleva su palomita.
  */
 function TarjetaDeLaSerie({ resumen }) {
-  const { etiqueta, titulo, par, quedan, descanso, sigue } = resumen;
-  const falta = quedan === 0 ? 'Es la última' : (quedan === 1 ? 'Falta 1 después' : `Faltan ${quedan} después`);
+  const { etiqueta, numero, total, puntos, par } = resumen;
+  const cuenta = numero !== null && total > 1;
+  // Un ejercicio que se repite (sin par): la tarjeta es solo el contador, y se centra para no quedar con un hueco abajo.
+  const sola = !par;
   return (
-    <div style={{
-      flex: 1, minWidth: 0, background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: '11px 13px 12px', display: 'flex', flexDirection: 'column', gap: 4,
-    }}>
-      {etiqueta && <div style={{ marginBottom: 2 }}><Etiqueta>{etiqueta}</Etiqueta></div>}
-      {titulo && <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: -0.3, color: LT.text, ...NUM_STYLE }}>{titulo}</div>}
-      {par && par.map((l) => {
-        const toca = l.estado === 'actual';
-        return (
-          <div key={l.letra} aria-current={toca ? 'step' : undefined} style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0, fontSize: 14.5, fontWeight: toca ? 800 : 600, color: toca ? LT.text : LT.text2 }}>
-            {l.estado === 'hecho'
-              ? <Check size={14} strokeWidth={3} color={LT.mint} style={{ flexShrink: 0 }} aria-label="Hecho" />
-              : <b style={{ flexShrink: 0, width: 14, textAlign: 'center', fontWeight: 800, color: toca ? LT.blue : LT.text3 }}>{l.letra}</b>}
-            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.nombre}</span>
-            {toca && <span aria-hidden="true" style={{ width: 7, height: 7, borderRadius: '50%', background: LT.blue, flexShrink: 0 }} />}
-          </div>
-        );
-      })}
-      {/* En una bi-serie el título («Serie 1 de 3») ya dice que faltan más: la línea sobra, y la tarjeta es la más alta. Sola, o en la última, sí se dice. */}
-      {titulo && (!par || quedan === 0) && <div style={{ fontSize: 13.5, fontWeight: 600, color: LT.text2, lineHeight: 1.3 }}>{falta}</div>}
-      {sigue && <div style={{ fontSize: 13.5, fontWeight: 600, color: LT.text2, lineHeight: 1.3 }}>Luego: <b style={{ color: LT.text }}>{sigue}</b></div>}
-      {descanso && <div style={{ fontSize: 13.5, fontWeight: 600, color: LT.text2, lineHeight: 1.3 }}>Descanso: <b style={{ color: LT.text }}>{descanso}</b></div>}
+    <div
+      role="group" aria-label={[etiqueta, cuenta ? `serie ${numero} de ${total}` : null].filter(Boolean).join(', ')}
+      style={{
+        flex: 1, minWidth: 0, background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: '12px 12px 10px',
+        display: 'flex', flexDirection: 'column', justifyContent: sola ? 'center' : 'flex-start', gap: 10,
+      }}
+    >
+      {(cuenta || etiqueta) && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px 8px' }}>
+          {cuenta && (
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, ...NUM_STYLE }}>
+              <span style={{ fontSize: 15, fontWeight: 700, color: LT.text2 }}>Serie</span>
+              <span style={{ fontSize: sola ? 34 : 26, fontWeight: 800, letterSpacing: -0.8, lineHeight: 1, color: LT.blue }}>{numero}</span>
+              <span style={{ fontSize: 15, fontWeight: 700, color: LT.text2 }}>de {total}</span>
+            </div>
+          )}
+          {etiqueta && <Etiqueta chica={cuenta}>{etiqueta}</Etiqueta>}
+        </div>
+      )}
+      {cuenta && <BarraDeSeries puntos={puntos} />}
+      {par && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, margin: '0 -6px -2px' }}>
+          {par.map((l) => <FilaDelPar key={l.letra} {...l} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// La barrita de las series: una pieza por serie. La que va, azul fuerte; las hechas, azul suave; las que faltan, vacías. Con muchas series, una sola barra.
+function BarraDeSeries({ puntos }) {
+  const pista = 'rgba(17,19,24,0.1)';
+  if (puntos.length > 12) {
+    const hechas = puntos.filter((p) => p.estado !== 'pendiente').length;
+    return (
+      <div aria-hidden="true" style={{ height: 5, borderRadius: 3, background: pista, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${Math.round((hechas / puntos.length) * 100)}%`, background: LT.blue, borderRadius: 3 }} />
+      </div>
+    );
+  }
+  return (
+    <div aria-hidden="true" style={{ display: 'flex', gap: 4 }}>
+      {puntos.map((p, i) => (
+        <span
+          key={i}
+          style={{
+            flex: 1, height: 5, borderRadius: 3, background: p.estado === 'pendiente' ? pista : LT.blue, opacity: p.estado === 'hecha' ? 0.4 : 1,
+            transition: 'opacity 0.25s, background 0.25s',
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// Un ejercicio del par (A, B…): el que toca, con su letra en azul y la fila sombreada; el que ya hiciste, con su palomita; el que falta, apagado.
+function FilaDelPar({ letra, nombre, estado }) {
+  const toca = estado === 'actual';
+  const hecho = estado === 'hecho';
+  const insignia = toca
+    ? { background: LT.blue, color: '#fff' }
+    : (hecho ? { background: KP.mintSoft, color: LT.mint } : { background: LT.surface, border: `1.5px solid ${LT.borderHi}`, color: LT.text2 });
+  return (
+    <div
+      aria-current={toca ? 'step' : undefined}
+      style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, padding: '5px 8px 5px 6px', borderRadius: 11, background: toca ? LT.blueSoft : 'transparent' }}
+    >
+      <span style={{ width: 22, height: 22, borderRadius: 7, flexShrink: 0, boxSizing: 'border-box', display: 'grid', placeItems: 'center', fontSize: 12.5, fontWeight: 800, ...insignia }}>
+        {hecho ? <Check size={13} strokeWidth={3.2} aria-label="Hecho" /> : letra}
+      </span>
+      <span style={{
+        minWidth: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 14.5, fontWeight: toca ? 800 : 600, color: toca ? LT.text : LT.text2,
+      }}>
+        {nombre}
+      </span>
     </div>
   );
 }
@@ -454,23 +513,37 @@ export function PantallaDeReloj({ paso, detalle, resultado, puedeAnterior, tecni
  * lo adelanta y «+30 s» lo alarga ANTES de que acabe. Antes seguía contando hacia arriba («+0:09»); Andrés (9 oct 2026): «podría perderse el punto de
  * que la app guíe en entrenamiento y podría ser redundante con el botón de +30 s». Un descanso escrito con palabras («Recuperación total») no tiene
  * cuenta: se lee tal cual y espera «Seguir».
- * `siguiente` es lo que viene (para ir acomodándose): su nombre, lo planeado, sus vueltas en puntos y su miniatura si tiene foto o video.
- * Sin frases que expliquen el botón: el botón ya dice «Seguir».
+ * `siguiente` es lo que viene (para ir acomodándose): su nombre, lo planeado y sus vueltas en puntos. Si el ejercicio que sigue tiene video (o foto), llega en
+ * `video` y se VE aquí, en la tarjeta de «Sigue»: Andrés (10 oct 2026): «que mientras está el atleta en descanso pueda ver el video del ejercicio que sigue».
+ * Sin video, «Sigue» es la tarjeta de siempre, abajo junto a los botones. Sin frases que expliquen el botón: el botón ya dice «Seguir».
  */
-export function PantallaDeDescanso({ descanso, siguiente, miniatura, sonido, puedeAnterior, onSeguir, onMas, onAnterior, onSonido }) {
+export function PantallaDeDescanso({ descanso, siguiente, video, sonido, puedeAnterior, onSeguir, onMas, onAnterior, onSonido }) {
   const { paso } = descanso;
   const conCuenta = descanso.restan !== null;
+  const conVideo = !!siguiente && !!video;
   // Al llegar a cero el descanso se acaba y la app sigue sola (ver `EntrenoDelDia`): ya no hay un «+0:09» que cuente de más.
   const grande = !conCuenta ? '' : relojDe(Math.max(0, descanso.restan));
   const avance = !conCuenta || descanso.seg <= 0 ? 0 : Math.min(1, Math.max(0, (descanso.seg - descanso.restan) / descanso.seg));
+  // Con el video a la vista, la cuenta se achica un poco para que quepan las dos cosas sin tener que desplazarse.
+  const tamano = grande.length > 5 ? (conVideo ? 60 : 76) : (conVideo ? 84 : 108);
+  const datosDelSiguiente = siguiente && (
+    <>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color: LT.text3 }}>Sigue</div>
+        <div style={{ fontSize: 17, fontWeight: 800, color: LT.text, overflowWrap: 'anywhere', lineHeight: 1.2, marginTop: 2 }}>{siguiente.nombre}</div>
+        {siguiente.detalle && <div style={{ fontSize: 13, fontWeight: 600, color: LT.text2, marginTop: 3, ...NUM_STYLE }}>{siguiente.detalle}</div>}
+      </div>
+      <SerieDelSet puntos={siguiente.puntos} />
+    </>
+  );
   return (
     <>
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ ...COLUMNA, padding: '0 18px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'center' }}>
+        <div style={{ ...COLUMNA, padding: conVideo ? '8px 18px 14px' : '0 18px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'center' }}>
           <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: -0.2, color: LT.text }}>Descanso</div>
           {conCuenta ? (
             <>
-              <div role="timer" style={{ fontSize: grande.length > 5 ? 76 : 108, fontWeight: 800, lineHeight: 1.05, letterSpacing: -3, color: descanso.vencido ? LT.text2 : LT.text, margin: '8px 0 14px', ...NUM_STYLE }}>
+              <div role="timer" style={{ fontSize: tamano, fontWeight: 800, lineHeight: 1.05, letterSpacing: -3, color: descanso.vencido ? LT.text2 : LT.text, margin: conVideo ? '4px 0 12px' : '8px 0 14px', ...NUM_STYLE }}>
                 {grande}
               </div>
               <div style={{ height: 6, borderRadius: 3, background: 'rgba(17,19,24,0.12)', margin: '0 28px', overflow: 'hidden' }}>
@@ -481,21 +554,21 @@ export function PantallaDeDescanso({ descanso, siguiente, miniatura, sonido, pue
           ) : (
             <div style={{ fontSize: 34, fontWeight: 800, letterSpacing: -0.6, lineHeight: 1.15, color: LT.text, margin: '14px 0 0', overflowWrap: 'anywhere' }}>{paso.texto}</div>
           )}
+          {conVideo && (
+            <div style={{ marginTop: 18, textAlign: 'left', background: LT.surface, border: `1.5px solid ${LT.border}`, borderRadius: 22, padding: 8 }}>
+              {video}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 6px 4px' }}>{datosDelSiguiente}</div>
+            </div>
+          )}
         </div>
       </div>
       <div style={{ flexShrink: 0, padding: '10px 0 calc(10px + env(safe-area-inset-bottom))' }}>
         <div style={{ ...COLUMNA, padding: '0 18px' }}>
-          {siguiente && (
+          {siguiente && !conVideo && (
             <div style={{
               display: 'flex', alignItems: 'center', gap: 12, background: LT.surface, border: `1.5px solid ${LT.border}`, borderRadius: 18, padding: '12px 14px', marginBottom: 12,
             }}>
-              {miniatura}
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color: LT.text3 }}>Sigue</div>
-                <div style={{ fontSize: 17, fontWeight: 800, color: LT.text, overflowWrap: 'anywhere', lineHeight: 1.2, marginTop: 2 }}>{siguiente.nombre}</div>
-                {siguiente.detalle && <div style={{ fontSize: 13, fontWeight: 600, color: LT.text2, marginTop: 3, ...NUM_STYLE }}>{siguiente.detalle}</div>}
-              </div>
-              <SerieDelSet puntos={siguiente.puntos} />
+              {datosDelSiguiente}
             </div>
           )}
           <div style={{ display: 'flex', gap: 10 }}>
