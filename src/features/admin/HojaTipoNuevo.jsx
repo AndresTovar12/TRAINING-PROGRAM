@@ -170,7 +170,7 @@ export default function HojaTipoNuevo({ propios, conUso, onGuardar, onCerrar }) 
             ref={rejilla}
             style={{
               display: 'grid', gridTemplateColumns: `repeat(${esCompu ? 9 : 6}, minmax(0, 1fr))`, gridAutoRows: 'min-content', gap: 7, overflowY: 'auto', padding: '6px 6px 14px', margin: '0 -6px',
-              ...(esCompu ? { height: 238 } : { flex: 1, minHeight: 200 }), background: SOMBRAS_DE_SCROLL, WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain',
+              ...(esCompu ? { height: 238 } : { flex: 1, minHeight: 132 }), background: SOMBRAS_DE_SCROLL, WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain',
             }}
           >
             {!catalogo && <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 9, padding: '18px 6px', fontSize: 14.5, fontWeight: 600, color: LT.text2 }}><Loader2 size={17} className="spin" /> Cargando íconos…</div>}

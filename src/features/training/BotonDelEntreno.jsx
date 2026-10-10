@@ -117,8 +117,8 @@ export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, on
             <span style={{ fontSize: 13.5, fontWeight: 800, opacity: 0.85, ...NUM_STYLE }}>{Math.min(vista.hechos, plan.total)} de {plan.total}</span>
           )}
         </button>
-        {/* Quitar el entreno guiado: solo cuando ya empezó (ahí «Continuar» estorba si el atleta prefirió terminar con la lista). */}
-        {empezado && (
+        {/* Quitar el entreno guiado: solo junto a «Continuar» (ahí estorba si el atleta prefirió terminar con la lista); «Iniciar entreno» va solo. */}
+        {continuando && (
           <button
             type="button" onClick={quita} className="kp-press" aria-label={palabras.quitarAria}
             style={{
