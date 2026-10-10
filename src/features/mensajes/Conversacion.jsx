@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ChevronLeft, Loader2, Send } from 'lucide-react';
+import { ChevronLeft, Loader2 } from 'lucide-react';
 import { T, KP, FONT } from '@/lib/theme';
-import { useIsDesktop } from '@/lib/useViewport';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useMensajes } from '@/contexts/MensajesContext';
-import { eliminaMensaje, leeMensajes, mandaTexto, marcaVistos, POR_PAGINA } from '@/lib/mensajesApi';
+import { eliminaMensaje, leeMensajes, mandaArchivo, mandaTexto, marcaVistos, POR_PAGINA, urlsFirmadas } from '@/lib/mensajesApi';
 import { Avatar } from '@/features/mensajes/piezas';
+import Adjunto from '@/features/mensajes/Adjunto';
+import Redactor from '@/features/mensajes/Redactor';
+import { preparaArchivo } from '@/features/mensajes/adjuntos';
 import { diaTexto, horaTexto } from '@/features/mensajes/formato';
 
 /* UNA CONVERSACIÓN: lo que se han dicho un atleta y un profesional, y donde escribir.
@@ -20,28 +22,33 @@ import { diaTexto, horaTexto } from '@/features/mensajes/formato';
 
 const mismoDia = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
 
-function Burbuja({ m, mio, ultimoMio, elegido, alElegir, alEliminar }) {
+const CON_ARCHIVO = new Set(['foto', 'video', 'voz']);
+
+function Burbuja({ m, mio, ultimoMio, elegido, url, alElegir, alEliminar, alFallar }) {
   const borrado = !!m.eliminado_en;
+  const archivo = CON_ARCHIVO.has(m.tipo) && !borrado;
   const color = mio ? '#fff' : T.text;
   return (
     <div style={{ alignSelf: mio ? 'flex-end' : 'flex-start', maxWidth: 'min(82%, 520px)', display: 'flex', flexDirection: 'column', alignItems: mio ? 'flex-end' : 'flex-start' }}>
-      <button
-        type="button" onClick={mio && !borrado ? () => alElegir(m.id) : undefined} disabled={!mio || borrado}
+      <div
+        role={mio && !borrado ? 'button' : undefined} tabIndex={mio && !borrado ? 0 : undefined}
+        onClick={mio && !borrado ? (e) => { if (!e.target.closest('video, audio, button, img')) alElegir(m.id); } : undefined}
+        onKeyDown={mio && !borrado ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); alElegir(m.id); } } : undefined}
         aria-label={mio && !borrado ? 'Tu mensaje: toca para ver opciones' : undefined}
         style={{
-          display: 'block', textAlign: 'left', fontFamily: FONT, fontSize: 15.5, lineHeight: 1.4, padding: '9px 13px 7px', cursor: mio && !borrado ? 'pointer' : 'default', touchAction: 'manipulation',
+          display: 'block', textAlign: 'left', fontFamily: FONT, fontSize: 15.5, lineHeight: 1.4, padding: archivo ? '4px 4px 6px' : '9px 13px 7px', cursor: mio && !borrado ? 'pointer' : 'default', touchAction: 'manipulation',
           border: borrado ? `1px solid ${T.border}` : 'none', borderRadius: 18, borderBottomRightRadius: mio ? 6 : 18, borderBottomLeftRadius: mio ? 18 : 6,
           background: borrado ? 'transparent' : (mio ? T.accent : KP.surface), color: borrado ? T.text3 : color,
-          boxShadow: !borrado && !mio ? KP.shCard : 'none', maxWidth: '100%',
+          boxShadow: !borrado && !mio ? KP.shCard : 'none', maxWidth: '100%', outline: 'none',
         }}
       >
-        {borrado ? <span style={{ fontStyle: 'italic', fontSize: 14.5 }}>Mensaje eliminado</span> : (
-          <span style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{m.texto}</span>
-        )}
+        {borrado && <span style={{ fontStyle: 'italic', fontSize: 14.5 }}>Mensaje eliminado</span>}
+        {!borrado && archivo && <Adjunto m={m} mio={mio} url={url} alFallar={alFallar} />}
+        {!borrado && !archivo && <span style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{m.texto}</span>}
         {!borrado && (
-          <span style={{ display: 'block', textAlign: 'right', fontSize: 11, fontWeight: 600, marginTop: 2, opacity: 0.7, fontVariantNumeric: 'tabular-nums' }}>{horaTexto(m.creado_en)}</span>
+          <span style={{ display: 'block', textAlign: 'right', fontSize: 11, fontWeight: 600, marginTop: 2, padding: archivo ? '0 8px 0 0' : 0, opacity: 0.7, fontVariantNumeric: 'tabular-nums' }}>{horaTexto(m.creado_en)}</span>
         )}
-      </button>
+      </div>
       {elegido && (
         <button
           type="button" onClick={() => alEliminar(m)} className="kp-press"
@@ -60,19 +67,19 @@ function Burbuja({ m, mio, ultimoMio, elegido, alElegir, alEliminar }) {
 export default function Conversacion({ fila, uid, etiqueta = null, onVolver = null, conMargenSuperior = false }) {
   const { version, recarga } = useMensajes();
   const pregunta = useConfirmacion();
-  const esCompu = useIsDesktop();
   const a = fila.atleta_id;
   const p = fila.profesional_id;
   const [mensajes, setMensajes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [hayMas, setHayMas] = useState(false);
   const [trayendo, setTrayendo] = useState(false);
-  const [texto, setTexto] = useState('');
-  const [enviando, setEnviando] = useState(false);
+  const [ocupado, setOcupado] = useState(false);
+  const [subiendo, setSubiendo] = useState(null);
+  const [urls, setUrls] = useState(() => new Map());
   const [error, setError] = useState(null);
   const [elegido, setElegido] = useState(null);
   const zona = useRef(null);
-  const campo = useRef(null);
+  const renovadas = useRef(new Set());
   const cantidad = useRef(POR_PAGINA);
   const pegado = useRef(true); // ¿está viendo lo más nuevo? Si sí, lo que llegue lo baja solo.
   const alturaPrevia = useRef(null);
@@ -135,28 +142,67 @@ export default function Conversacion({ fila, uid, etiqueta = null, onVolver = nu
     }
   }
 
-  const ajustaAlto = useCallback(() => {
-    const t = campo.current;
-    if (!t) return;
-    t.style.height = 'auto';
-    t.style.height = `${Math.min(t.scrollHeight, 132)}px`;
+  // Pide las direcciones de los archivos de lo que hay en pantalla (una sola vez por lote); las que ya se tenían salen de la memoria.
+  const rutas = mensajes.filter((m) => m.adjunto?.ruta && !m.adjunto_borrado && !m.eliminado_en).map((m) => m.adjunto.ruta).join('|');
+  useEffect(() => {
+    if (!rutas) return undefined;
+    let vivo = true;
+    urlsFirmadas(rutas.split('|')).then((mapa) => { if (vivo) setUrls(mapa); }).catch(() => {});
+    return () => { vivo = false; };
+  }, [rutas]);
+  // Una dirección que dejó de servir se pide de nuevo (una vez por archivo: si sigue fallando, es otra cosa).
+  const alFallar = useCallback((ruta) => {
+    if (renovadas.current.has(ruta)) return;
+    renovadas.current.add(ruta);
+    urlsFirmadas([ruta], { renueva: true }).then((mapa) => setUrls((prev) => new Map([...prev, ...mapa]))).catch(() => {});
   }, []);
 
-  async function envia() {
-    const limpio = texto.trim();
-    if (!limpio || enviando) return;
-    setEnviando(true);
+  const agrega = (m) => {
+    setMensajes((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
+    cantidad.current += 1;
+  };
+
+  async function envia(texto) {
+    setOcupado(true);
     setError(null);
     try {
-      const m = await mandaTexto({ atletaId: a, profesionalId: p, autorId: uid, texto: limpio });
-      setMensajes((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
-      cantidad.current += 1;
-      setTexto('');
-      requestAnimationFrame(() => { if (campo.current) { campo.current.style.height = 'auto'; campo.current.focus(); } });
+      agrega(await mandaTexto({ atletaId: a, profesionalId: p, autorId: uid, texto }));
     } catch (e) {
       setError(e?.message ?? 'No se pudo mandar el mensaje');
+      throw e;
     } finally {
-      setEnviando(false);
+      setOcupado(false);
+    }
+  }
+
+  // Una foto o un video de la galería o de la cámara: se prepara (se achica, se le pone índice, se revisa cuánto dura) y se sube.
+  async function enviaArchivo(elegido) {
+    setOcupado(true);
+    setError(null);
+    setSubiendo('Preparando…');
+    try {
+      const listo = await preparaArchivo(elegido);
+      setSubiendo(listo.tipo === 'video' ? 'Subiendo el video…' : 'Subiendo la foto…');
+      agrega(await mandaArchivo({ atletaId: a, profesionalId: p, autorId: uid, tipo: listo.tipo, archivo: listo.archivo, mime: listo.mime, meta: listo.meta }));
+    } catch (e) {
+      setError(e?.message ?? 'No se pudo mandar el archivo');
+    } finally {
+      setOcupado(false);
+      setSubiendo(null);
+    }
+  }
+
+  async function enviaVoz(archivo, segundos) {
+    setOcupado(true);
+    setError(null);
+    setSubiendo('Subiendo la nota de voz…');
+    try {
+      agrega(await mandaArchivo({ atletaId: a, profesionalId: p, autorId: uid, tipo: 'voz', archivo, meta: { segundos } }));
+    } catch (e) {
+      setError(e?.message ?? 'No se pudo mandar la nota de voz');
+    } finally {
+      setOcupado(false);
+      setSubiendo(null);
     }
   }
 
@@ -184,7 +230,7 @@ export default function Conversacion({ fila, uid, etiqueta = null, onVolver = nu
     }
     filas.push(
       <Burbuja
-        key={m.id} m={m} mio={m.autor_id === uid} ultimoMio={m.id === ultimoMioId} elegido={elegido === m.id}
+        key={m.id} m={m} mio={m.autor_id === uid} ultimoMio={m.id === ultimoMioId} elegido={elegido === m.id} url={m.adjunto?.ruta ? urls.get(m.adjunto.ruta) ?? null : null} alFallar={alFallar}
         alElegir={(id) => setElegido((prev) => (prev === id ? null : id))} alEliminar={elimina}
       />,
     );
@@ -240,26 +286,7 @@ export default function Conversacion({ fila, uid, etiqueta = null, onVolver = nu
       {error && <div role="alert" style={{ margin: '0 14px 8px', padding: '9px 12px', borderRadius: 12, background: KP.dangerSoft, color: KP.danger, fontSize: 13.5, fontWeight: 700 }}>{error}</div>}
 
       {fila.activa ? (
-        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'flex-end', gap: 8, padding: '8px 12px calc(10px + env(safe-area-inset-bottom))', background: KP.surface, borderTop: `1px solid ${KP.line}` }}>
-          <textarea
-            ref={campo} value={texto} rows={1} placeholder="Escribe un mensaje" aria-label="Escribe un mensaje" maxLength={4000}
-            onChange={(e) => { setTexto(e.target.value); ajustaAlto(); }}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && esCompu) { e.preventDefault(); envia(); } }}
-            style={{
-              flex: 1, minWidth: 0, resize: 'none', border: `1.5px solid ${T.border}`, borderRadius: 20, background: T.bg, padding: '11px 15px', fontFamily: FONT, fontSize: 16, lineHeight: 1.35,
-              color: T.text, outline: 'none', maxHeight: 132,
-            }}
-          />
-          <button
-            type="button" onClick={envia} disabled={!texto.trim() || enviando} aria-label="Enviar" className="kp-press"
-            style={{
-              width: 46, height: 46, borderRadius: '50%', border: 'none', flexShrink: 0, display: 'grid', placeItems: 'center', touchAction: 'manipulation',
-              cursor: texto.trim() && !enviando ? 'pointer' : 'default', background: texto.trim() ? T.accent : T.bg3, color: texto.trim() ? '#fff' : T.text3,
-            }}
-          >
-            {enviando ? <Loader2 size={20} className="spin" /> : <Send size={20} />}
-          </button>
-        </div>
+        <Redactor alTexto={envia} alArchivo={enviaArchivo} alVoz={enviaVoz} alError={setError} ocupado={ocupado} subiendo={subiendo} />
       ) : (
         <div style={{ flexShrink: 0, padding: '14px 16px calc(14px + env(safe-area-inset-bottom))', background: KP.surface, borderTop: `1px solid ${KP.line}`, textAlign: 'center', fontSize: 14, fontWeight: 700, color: T.text2 }}>
           Esta conversación está cerrada. Solo puedes leerla.

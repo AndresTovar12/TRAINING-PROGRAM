@@ -57,6 +57,60 @@ export async function eliminaMensaje(id) {
   return ruta ?? null;
 }
 
+/* ------------------------------------------------------------------ */
+/* Archivos: foto, video y nota de voz                                 */
+/* ------------------------------------------------------------------ */
+
+const EXTENSION = {
+  'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/webm': 'webm',
+  'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/aac': 'aac', 'audio/mpeg': 'mp3', 'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/wav': 'wav',
+};
+/** «video/mp4;codecs=avc1» → «video/mp4»: lo que el bucket entiende. */
+export const mimeBase = (mime) => String(mime || '').split(';')[0].trim().toLowerCase();
+export const extensionDe = (mime) => EXTENSION[mimeBase(mime)] ?? 'bin';
+
+/** Sube un archivo al bucket privado, a la carpeta de esta conversación. Devuelve su ruta (`<atleta>/<profesional>/<id>.<ext>`). */
+export async function subeArchivo({ atletaId, profesionalId, archivo, mime = archivo.type }) {
+  const tipo = mimeBase(mime);
+  const ruta = `${atletaId}/${profesionalId}/${crypto.randomUUID()}.${extensionDe(tipo)}`;
+  const { error } = await supabase.storage.from(BUCKET).upload(ruta, archivo, { contentType: tipo, upsert: false, cacheControl: '3600' });
+  if (error) throw error;
+  return ruta;
+}
+
+/**
+ * Manda una foto, un video o una nota de voz: sube el archivo y guarda el mensaje. Si el mensaje no se guarda, el archivo se quita (no se queda huérfano).
+ * `meta`: `{ segundos, ancho, alto }` de lo que se sepa del archivo.
+ */
+export async function mandaArchivo({ atletaId, profesionalId, autorId, tipo, archivo, mime = archivo.type, meta = {} }) {
+  const ruta = await subeArchivo({ atletaId, profesionalId, archivo, mime });
+  const adjunto = { ruta, mime: mimeBase(mime), bytes: archivo.size, ...meta };
+  const { data, error } = await supabase.from('mensajes')
+    .insert({ atleta_id: atletaId, profesional_id: profesionalId, autor_id: autorId, tipo, adjunto })
+    .select().single();
+  if (error) {
+    await supabase.storage.from(BUCKET).remove([ruta]).catch(() => {});
+    throw error;
+  }
+  return data;
+}
+
+// Las direcciones firmadas duran una hora; se guardan 55 minutos para no pedir la misma cada vez que se dibuja una burbuja.
+const VIDA_DE_LA_URL = 55 * 60 * 1000;
+const urls = new Map(); // ruta → { url, hasta }
+
+/** Las direcciones para ver o escuchar esos archivos: `Map<ruta, url>` (lo que no se pudo firmar no está). */
+export async function urlsFirmadas(rutas, { renueva = false } = {}) {
+  const ahora = Date.now();
+  const faltan = [...new Set(rutas)].filter((r) => r && (renueva || !urls.has(r) || urls.get(r).hasta < ahora));
+  if (faltan.length) {
+    const { data, error } = await supabase.storage.from(BUCKET).createSignedUrls(faltan, 3600);
+    if (error) throw error;
+    (data ?? []).forEach((d) => { if (d.signedUrl && !d.error) urls.set(d.path, { url: d.signedUrl, hasta: ahora + VIDA_DE_LA_URL }); });
+  }
+  return new Map(rutas.filter((r) => urls.has(r)).map((r) => [r, urls.get(r).url]));
+}
+
 /**
  * Avisa cuando algo cambia en los mensajes o las técnicas de `uid` (llegó uno, lo vieron, lo borraron). La base solo manda lo que esa persona puede leer.
  * Devuelve la función que corta la suscripción.
