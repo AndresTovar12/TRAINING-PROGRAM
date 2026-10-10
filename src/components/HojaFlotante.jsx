@@ -92,7 +92,8 @@ export default function HojaFlotante({ titulo, subtitulo, onCerrar, pie = null, 
   const cuerpo = (
     <div style={{
       flex: 1, minHeight: 0, overflowY: 'auto',
-      padding: esCompu ? '0 18px 20px' : '14px 14px calc(24px + env(safe-area-inset-bottom))',
+      // Con un pie fijo abajo, el margen de seguridad del iPhone lo pone el pie; el cuerpo no lo repite.
+      padding: esCompu ? (pie ? '0 18px 14px' : '0 18px 20px') : (pie ? '14px 14px 14px' : '14px 14px calc(24px + env(safe-area-inset-bottom))'),
     }}>
       {children}
     </div>

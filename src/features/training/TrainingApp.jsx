@@ -42,6 +42,7 @@ import FichaEjercicio from '@/features/training/FichaEjercicio';
 import TarjetaDeSesion from '@/features/training/TarjetaDeSesion';
 import BotonDelEntreno from '@/features/training/BotonDelEntreno';
 import { reiniciaSiTerminado } from '@/lib/entreno';
+import { relojAMedias } from '@/lib/relojGuardado';
 import Portada from '@/components/Portada';
 import BotonEntendido from '@/components/BotonEntendido';
 import {
@@ -643,7 +644,7 @@ const SetGroup = ({
                 cursor: 'pointer', background: LT.blue, color: '#fff', fontFamily: FONT, fontSize: 14.5, fontWeight: 800, touchAction: 'manipulation',
               }}
             >
-              <Play size={16} fill="#fff" /> Iniciar reloj
+              <Play size={16} fill="#fff" /> {relojAMedias(`${userId}:${sessionKey}:${claveFormato}`) ? 'Seguir reloj' : 'Iniciar reloj'}
             </button>
           )}
           {resultado ? (
