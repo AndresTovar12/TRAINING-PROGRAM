@@ -428,7 +428,7 @@ export function leeAvance(entreno) {
   if (esObjeto(e.extra)) Object.entries(e.extra).forEach(([k, v]) => { if (Number.isFinite(v) && v > 0) extra[k] = v; });
   const empezados = {};
   if (esObjeto(e.empezados)) Object.entries(e.empezados).forEach(([k, v]) => { if (hora(v) !== null) empezados[k] = v; });
-  return { inicio: hora(e.inicio), fin: hora(e.fin), hechos: marcas(e.hechos), saltados: marcas(e.saltados), extra, empezados };
+  return { inicio: hora(e.inicio), fin: hora(e.fin), oculto: e.oculto === true, hechos: marcas(e.hechos), saltados: marcas(e.saltados), extra, empezados };
 }
 
 // Lo que se guarda en `sesión.entreno`: sin llaves vacías en `null`, que es lo que la base espera.
@@ -436,6 +436,7 @@ const aGuardar = (av) => ({
   v: VERSION,
   ...(av.inicio !== null ? { inicio: av.inicio } : null),
   ...(av.fin !== null ? { fin: av.fin } : null),
+  ...(av.oculto ? { oculto: true } : null),
   hechos: av.hechos,
   saltados: av.saltados,
   extra: av.extra,
@@ -618,6 +619,14 @@ export function reabreEntreno(entreno) {
 }
 
 /**
+ * El atleta quitó el entreno guiado de esta sesión: «Continuar entreno» ya no sale (Andrés, 9 oct 2026: «no puedo hacer que desaparezca»). Lo que
+ * anotó se queda en la lista de siempre; solo se esconde la guía.
+ */
+export function ocultaEntreno(entreno) {
+  return aGuardar({ ...leeAvance(entreno), oculto: true });
+}
+
+/**
  * Lo que una pantalla (o un reloj) necesita saber AHORA, calculado del plan, el avance guardado y la hora:
  *
  *   estado        'sin' (no ha empezado) · 'curso' · 'fin' (el atleta lo dio por terminado)
@@ -632,6 +641,7 @@ export function reabreEntreno(entreno) {
  *   hechos, saltados, total   cuántos pasos de los que hay que hacer van hechos o saltados, y cuántos son
  *   completo      no queda ningún paso (ni opcional)
  *   soloLoOpcional  ya se hizo todo lo que había que hacer y lo que queda es opcional («5-6 veces»)
+ *   oculto        el atleta quitó el entreno guiado de esta sesión (ver `ocultaEntreno`)
  *   transcurrido  milisegundos desde que inició hasta ahora (o hasta que terminó); `null` si no ha iniciado
  *   puedeAnterior hay un ejercicio al cual regresar
  */
@@ -679,6 +689,7 @@ export function vistaDelEntreno(plan, entreno, ahora) {
     hechos,
     saltados,
     total: plan?.total ?? 0,
+    oculto: av.oculto,
     completo: actual === null && pasos.length > 0,
     soloLoOpcional: actual !== null && !faltaAlgoRequerido && pasos.length > 0,
     transcurrido: av.inicio === null ? null : Math.max(0, (av.fin ?? ahora) - av.inicio),

@@ -23,7 +23,7 @@ import RelojDelBloque from '@/features/training/RelojDelBloque';
 import ResultadoDelBloque from '@/features/training/ResultadoDelBloque';
 import TarjetaDeVideo from '@/features/training/TarjetaDeVideo';
 import {
-  BarraDelEntreno, CronometroDelPaso, HojaDeCambiar, HojaDeLista, HojaDeSalir, HojaDeTecnica, PantallaDeDescanso, PantallaDeFin, PantallaDePaso,
+  BarraDelEntreno, CronometroDelPaso, HojaDeCambiar, HojaDeLista, HojaDeTecnica, PantallaDeDescanso, PantallaDeFin, PantallaDePaso,
   PantallaDeReloj,
 } from '@/features/training/PantallasDelEntreno';
 
@@ -165,7 +165,7 @@ export default function EntrenoDelDia({
   // Lo que quedó anotado de un Set con reloj («8 rondas»), o `null`.
   const resultadoDe = (p) => {
     const r = registro?.formatos?.[p.claveFormato];
-    return r ? textoDeResultado(r) : null;
+    return r ? textoDeResultado(r, p.deLapsos ? 'lapso' : undefined) : null;
   };
 
   /* ---------- Las acciones: cada una escribe en el registro al instante ---------- */
@@ -259,7 +259,8 @@ export default function EntrenoDelDia({
   /* ---------- Qué se dibuja ---------- */
   const fondo = enDescanso && aspecto?.fondo ? `${aspecto.fondo}, ${LT.bg}` : LT.bg;
   const segmentos = segmentosDeAvance(plan, vista.estados);
-  // El tiempo total solo se dice al final: mientras se entrena no corre a la vista (Andrés: «nadie se va a detener a leer las letritas grises»).
+  /* El tiempo que llevas: arriba, en una pastilla, y al final en el resumen. Lo quitamos del paso (9 oct, mañana: «letritas grises») y esa noche
+     Andrés lo extrañó: «en ningún momento puedo ver cuánto tiempo llevo entrenando». Pasadas muchas horas (retomar al día siguiente) no se dice. */
   const tiempo = tiempoTotal(vista.transcurrido) ?? '';
   // El paso que toca, o (en un descanso) el que viene: de ahí salen los puntos de las vueltas y lo que se resalta en «Ver todo».
   const queToca = enDescanso ? vista.siguiente : paso;
@@ -278,6 +279,14 @@ export default function EntrenoDelDia({
     campos: camposCambiar,
     planeado: { reps: cantidadPlaneada(paso) ?? '', kg: kilosDelPaso ? String(kilosDelPaso.numero) : '' },
   } : null;
+
+  /* Qué dice el botón de ajustar lo hecho: «Cambiar» a secas no decía QUÉ (Andrés, 9 oct 2026: «¿cambiar qué?»). Con lo planeado se «cambia»; sin
+     nada planeado se «anota»; y siempre se dice qué: reps, kilos, tiempo… */
+  const textoDeCambiar = cambiar
+    ? (cambiar.planeado.reps || cambiar.planeado.kg
+      ? `Cambiar ${camposCambiar.map((c) => (c.clave === 'kg' ? 'kilos' : c.rotulo.toLowerCase())).join(' o ')}`
+      : `Anotar ${camposCambiar.map((c) => (c.clave === 'kg' ? 'kilos' : c.rotulo.toLowerCase())).join(' y ')}`)
+    : null;
 
   const resumenDeFin = [
     { valor: tiempo || '—', etiqueta: 'Tiempo' },
@@ -311,7 +320,7 @@ export default function EntrenoDelDia({
       <PantallaDeReloj
         paso={paso} detalle={detalleDelReloj(paso)} resultado={resultadoDelReloj} puedeAnterior={vista.puedeAnterior || mirandoOtro}
         onIniciar={() => { preparaAudio(); setReloj(true); }} onAnotar={() => setAnotando(true)} onListo={() => listo()}
-        onSaltar={saltar} onAnterior={anterior} tecnica={{ activa: tecnicaActiva, etiqueta: palabras.tecnicaTitulo, onClick: abreTecnica }}
+        onSaltar={saltar} onAnterior={anterior} tecnica={completo ? { activa: tecnicaActiva, etiqueta: palabras.tecnicaTitulo, onClick: abreTecnica } : null}
       />
     );
   } else {
@@ -323,9 +332,9 @@ export default function EntrenoDelDia({
         cronometro={completo && paso.termina?.por === 'tiempo' ? (
           <CronometroDelPaso segundos={paso.termina.valor ?? paso.termina.min} cuenta={cuenta} onEmpezar={empezarCronometro} onQuitar={detenerCronometro} />
         ) : null}
-        etiquetaDeCambiar={cambiar ? (cambiar.planeado.reps || cambiar.planeado.kg ? 'Cambiar' : 'Anotar') : null} puedeAnterior={vista.puedeAnterior || mirandoOtro}
+        etiquetaDeCambiar={textoDeCambiar} puedeAnterior={vista.puedeAnterior || mirandoOtro}
         onListo={() => listo()} onCambiar={() => setHoja('cambiar')} onSaltar={saltar} onAnterior={anterior}
-        tecnica={{ activa: tecnicaActiva, etiqueta: palabras.tecnicaTitulo, onClick: abreTecnica }}
+        tecnica={completo ? { activa: tecnicaActiva, etiqueta: palabras.tecnicaTitulo, onClick: abreTecnica } : null}
       />
     );
   }
@@ -343,8 +352,8 @@ export default function EntrenoDelDia({
     >
       {!mostrarFin && (
         <BarraDelEntreno
-          segmentos={segmentos} fondo={fondo} palabras={palabras}
-          onCerrar={() => setHoja('salir')} onLista={completo ? () => setHoja('lista') : undefined}
+          segmentos={segmentos} fondo={fondo} palabras={palabras} tiempo={tiempo || null}
+          onCerrar={alCerrar} onLista={completo ? () => setHoja('lista') : undefined}
         />
       )}
       {pantalla}
@@ -372,12 +381,11 @@ export default function EntrenoDelDia({
         />
       )}
       {hoja === 'tecnica' && <HojaDeTecnica palabras={palabras} onCerrar={() => setHoja(null)} />}
-      {hoja === 'salir' && <HojaDeSalir palabras={palabras} onSalir={alCerrar} onSeguir={() => setHoja(null)} />}
 
       {reloj && paso?.tipo === 'reloj' && (
         <RelojDelBloque
           formato={paso.formato} plan={paso.tramos ?? null} ejercicios={ejerciciosDelReloj} serie={paso.serie} resumen={nombreDelReloj}
-          clave={`${userId}:${sesionId}:${paso.claveFormato}`} onGuardar={guardaResultado} onCerrar={() => setReloj(false)}
+          clave={`${userId}:${sesionId}:${paso.claveFormato}`} empezarYa onGuardar={guardaResultado} onCerrar={() => setReloj(false)}
         />
       )}
       {anotando && paso?.tipo === 'reloj' && (

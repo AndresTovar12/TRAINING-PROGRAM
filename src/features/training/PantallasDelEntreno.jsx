@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bell, BellOff, Check, ChevronLeft, ChevronRight, List, Minus, Play, Plus, Timer, Video, X } from 'lucide-react';
+import { Bell, BellOff, Check, ChevronLeft, ChevronRight, List, Minus, Pencil, Play, Plus, Timer, Video, X } from 'lucide-react';
 import { LT, KP, FONT, NUM_STYLE } from '@/lib/theme';
 import { textoDeResultado } from '@/lib/formatos';
 import { relojDe } from '@/lib/entrenoDatos';
@@ -14,9 +14,11 @@ import { relojDe } from '@/lib/entrenoDatos';
  * LA REGLA DE ORO: se dibuja SOLO lo que el coach escribió. Sin video no hay hueco de video; sin cifras no hay tarjetas; sin
  * notas no hay párrafo. Una pantalla de un ejercicio que solo trae su nombre es el nombre, «Sigue: …» y un botón.
  *
- * SIN LETRAS GRISES (Andrés, 9 oct 2026: «nadie se va a detener mid workout a leer las letritas grises»): ni «Serie 2 de 4 · Vuelta 2 de 3»,
- * ni el tiempo corriendo, ni «Toca Seguir cuando estés listo». Dónde va el atleta se ve, no se lee: la vuelta son PUNTOS junto al nombre, y en
- * una bi-serie el par A/B dice cuál toca y cuál ya se hizo.
+ * SIN LETRAS GRISES (Andrés, 9 oct 2026: «nadie se va a detener mid workout a leer las letritas grises»): ni «Serie 2 de 4 · Vuelta 2 de 3»
+ * en un renglón chiquito, ni «Toca Seguir cuando estés listo». Pero lo que se dice tiene que SE LEER: esa misma noche, ya probándolo, los
+ * puntitos de las vueltas «no se entienden» y los botones de abajo «estaban muy escondidos». Entonces: la serie va con su palabra, en una
+ * pastilla («Serie 2 de 5»), y todo lo que se puede tocar es un botón de verdad, con borde y con lo que hace escrito. Y el tiempo que
+ * llevas SÍ se ve, arriba, en una pastilla («En ningún momento puedo ver cuánto tiempo llevo entrenando»).
  */
 
 /* ------------------------------------------------------------------ */
@@ -48,7 +50,28 @@ function BotonGrande({ children, onClick, variante = 'azul', disabled = false })
   );
 }
 
-// Un botón de texto, de los de la fila de abajo («Anterior», «Cambiar», «Saltar»).
+/**
+ * Un botón de los que NO son lo principal pero tienen que verse («Anterior», «Saltar», «Cambiar reps o kilos»): borde y letra firmes, con lo que
+ * hace escrito. Andrés (9 oct 2026): los de texto suelto de abajo «están muy escondidos, ni me había percatado de que estaban».
+ * `ancho`: ocupa toda la línea; si no, comparte la fila con su vecino a partes iguales.
+ */
+function BotonSecundario({ children, onClick, disabled = false, ancho = false }) {
+  return (
+    <button
+      type="button" onClick={onClick} disabled={disabled} className="kp-press"
+      style={{
+        flex: ancho ? undefined : 1, width: ancho ? '100%' : undefined, minWidth: 0, minHeight: 50, borderRadius: 16, cursor: disabled ? 'default' : 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '0 10px', fontFamily: FONT, fontSize: 15.5, fontWeight: 800,
+        touchAction: 'manipulation', border: `1.5px solid ${disabled ? LT.border : LT.borderHi}`, background: LT.surface,
+        color: disabled ? LT.text3 : LT.text, opacity: disabled ? 0.65 : 1,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// Un botón de texto (para las hojas: «Cancelar», «Seguir»…).
 function BotonDeTexto({ children, onClick, disabled = false, color = LT.text2 }) {
   return (
     <button
@@ -112,29 +135,22 @@ function Etiqueta({ children, suave = false }) {
   );
 }
 
-const estiloDeUnPunto = (p) => {
-  if (p.estado === 'hecha') return { width: 11, height: 11, background: LT.blue, border: `2px solid ${LT.blue}` };
-  if (p.estado === 'actual') return { width: 13, height: 13, background: LT.surface, border: `3px solid ${LT.blue}` };
-  // Una vuelta opcional (lo que pasa de «5-6 veces») que falta es un anillo más chico y más tenue: no es obligatoria. (Punteado no: a 11 px se rompe.)
-  if (p.opcional) return { width: 9, height: 9, margin: '0 1px', background: 'transparent', border: `1.5px solid ${LT.borderHi}` };
-  return { width: 11, height: 11, background: LT.surface, border: `2px solid ${LT.borderHi}` };
-};
-
 /**
- * Las vueltas de un Set, en puntos: llena = hecha, con anillo = la que va, vacía = la que falta (más chica y tenue si es opcional). Con más de diez
- * los puntos no caben y se dice con un número («3/12»). `puntos` viene de `puntosDeVueltas`.
+ * En qué serie va, con su palabra: «Serie 2 de 5». Antes eran puntos junto al nombre (llena = hecha, anillo = la que va) y Andrés los probó con su
+ * iPhone: «los puntitos de los sets no se les entiende ni representan lo suficiente… al menos no en las primeras experiencias del usuario». Una
+ * pastilla azul con la palabra se lee a la primera. `puntos` viene de `puntosDeVueltas`: cada vuelta del Set es una serie del ejercicio (o del par,
+ * en una bi-serie). Con una sola vuelta no sale.
  */
-export function PuntosDeVueltas({ puntos }) {
+export function SerieDelSet({ puntos }) {
   if (!puntos || puntos.length < 2) return null;
   const queVa = puntos.findIndex((p) => p.estado === 'actual');
   const numero = queVa >= 0 ? queVa + 1 : Math.min(puntos.length, puntos.filter((p) => p.estado === 'hecha').length + 1);
-  const etiqueta = `Vuelta ${numero} de ${puntos.length}`;
-  if (puntos.length > 10) {
-    return <span role="img" aria-label={etiqueta} style={{ flexShrink: 0, fontSize: 14.5, fontWeight: 800, color: LT.blue, ...NUM_STYLE }}>{numero}/{puntos.length}</span>;
-  }
   return (
-    <span role="img" aria-label={etiqueta} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-      {puntos.map((p, i) => <span key={i} style={{ display: 'block', boxSizing: 'border-box', flex: 'none', borderRadius: '50%', ...estiloDeUnPunto(p) }} />)}
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', flexShrink: 0, whiteSpace: 'nowrap', padding: '6px 12px', borderRadius: 999, fontSize: 14, fontWeight: 800,
+      background: LT.blueSoft, color: LT.blue, ...NUM_STYLE,
+    }}>
+      Serie {numero} de {puntos.length}
     </span>
   );
 }
@@ -182,10 +198,10 @@ function SerieALaVista({ serie, simple = false }) {
 /* ------------------------------------------------------------------ */
 
 /**
- * Cerrar, el avance por Sets y «Ver todo». Nada más: ni dónde va en letras ni el tiempo corriendo (ver el comentario de arriba). El tiempo
- * total se dice al final, en «Entrenamiento terminado». Sin `onLista` (la versión básica de la web) no sale «Ver todo».
+ * Cerrar, el avance por Sets, el tiempo que llevas y «Ver todo». Sin `onLista` (la versión básica de la web) no sale «Ver todo»; sin `tiempo`
+ * (todavía no inicia, o pasaron muchas horas) no sale el tiempo. Cerrar sale directo: el avance ya está guardado y «Continuar entreno» lo retoma.
  */
-export function BarraDelEntreno({ segmentos, fondo, palabras, onCerrar, onLista }) {
+export function BarraDelEntreno({ segmentos, fondo, palabras, tiempo, onCerrar, onLista }) {
   return (
     <div style={{ position: 'sticky', top: 0, zIndex: 5, background: fondo, padding: 'calc(10px + env(safe-area-inset-top)) 0 8px' }}>
       <div style={{ ...COLUMNA, padding: '0 18px' }}>
@@ -198,6 +214,17 @@ export function BarraDelEntreno({ segmentos, fondo, palabras, onCerrar, onLista 
               </span>
             ))}
           </div>
+          {tiempo && (
+            <span
+              role="timer" aria-label={`Llevas ${tiempo}`}
+              style={{
+                height: 38, padding: '0 13px 0 11px', borderRadius: 999, border: `1px solid ${LT.border}`, background: LT.surface, color: LT.text, flexShrink: 0,
+                display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: FONT, fontSize: 15, fontWeight: 800, ...NUM_STYLE,
+              }}
+            >
+              <Timer size={17} color={LT.blue} /> {tiempo}
+            </span>
+          )}
           {onLista && (
             <button
               type="button" onClick={onLista} className="kp-press"
@@ -299,7 +326,7 @@ export function PantallaDePaso({
             }}>
               {paso.nombre}
             </h1>
-            {conVueltas && <span style={{ marginTop: 11, flexShrink: 0 }}><PuntosDeVueltas puntos={puntos} /></span>}
+            {conVueltas && <span style={{ marginTop: 6, flexShrink: 0 }}><SerieDelSet puntos={puntos} /></span>}
           </div>
           {solo && sigue && (
             <div style={{ textAlign: 'center', fontSize: 15, fontWeight: 700, color: LT.text3 }}>
@@ -324,12 +351,13 @@ export function PantallaDePaso({
         </div>
       </div>
       <div style={{ flexShrink: 0, padding: '10px 0 calc(10px + env(safe-area-inset-bottom))' }}>
-        <div style={{ ...COLUMNA, padding: '0 18px' }}>
+        <div style={{ ...COLUMNA, padding: '0 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           <BotonGrande onClick={onListo}><Check size={22} strokeWidth={3} /> Listo</BotonGrande>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-            <BotonDeTexto onClick={onAnterior} disabled={!puedeAnterior}><ChevronLeft size={17} /> Anterior</BotonDeTexto>
-            {etiquetaDeCambiar && <BotonDeTexto onClick={onCambiar} color={LT.text}>{etiquetaDeCambiar}</BotonDeTexto>}
-            <BotonDeTexto onClick={onSaltar} color={LT.text}>Saltar</BotonDeTexto>
+          {/* «Cambiar» a secas no decía QUÉ: ahora dice qué se puede cambiar («Cambiar reps o kilos»). */}
+          {etiquetaDeCambiar && <BotonSecundario ancho onClick={onCambiar}><Pencil size={17} /> {etiquetaDeCambiar}</BotonSecundario>}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <BotonSecundario onClick={onAnterior} disabled={!puedeAnterior}><ChevronLeft size={18} /> Anterior</BotonSecundario>
+            <BotonSecundario onClick={onSaltar}>Saltar <ChevronRight size={18} /></BotonSecundario>
             {tecnica && paso.tipo === 'ejercicio' && <BotonDeTecnica {...tecnica} />}
           </div>
         </div>
@@ -348,6 +376,7 @@ export function PantallaDePaso({
  * y se abre el reloj o se anota el resultado a mano.
  */
 export function PantallaDeReloj({ paso, detalle, resultado, puedeAnterior, tecnica, onIniciar, onAnotar, onListo, onSaltar, onAnterior }) {
+  const conLapsos = !!paso.deLapsos;
   return (
     <>
       <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -383,25 +412,29 @@ export function PantallaDeReloj({ paso, detalle, resultado, puedeAnterior, tecni
             ))}
           </div>
           {resultado && (
-            <div style={{ marginTop: 14 }}><Pastilla fuerte><Check size={14} strokeWidth={3} /> Resultado: {textoDeResultado(resultado)}</Pastilla></div>
+            <div style={{ marginTop: 14 }}><Pastilla fuerte><Check size={14} strokeWidth={3} /> Resultado: {textoDeResultado(resultado, conLapsos ? 'lapso' : undefined)}</Pastilla></div>
           )}
           {paso.nota && <p style={{ margin: '14px 0 0', fontSize: 18, lineHeight: 1.5, fontWeight: 500, color: LT.text }}>{paso.nota}</p>}
         </div>
       </div>
       <div style={{ flexShrink: 0, padding: '10px 0 calc(10px + env(safe-area-inset-bottom))' }}>
         <div style={{ ...COLUMNA, padding: '0 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {/* «Iniciar entreno» → «Iniciar reloj» → «Iniciar»: tres «iniciar» seguidos (Andrés: «qué raro, redundante»). Aquí el botón dice lo que
+              hace, «Empezar», y el reloj arranca ya, sin otro «Iniciar» adentro. */}
           {resultado ? (
-            <BotonGrande onClick={onListo}><Check size={22} strokeWidth={3} /> Listo</BotonGrande>
+            <>
+              <BotonGrande onClick={onListo}><Check size={22} strokeWidth={3} /> Listo</BotonGrande>
+              <BotonSecundario ancho onClick={onAnotar}><Pencil size={17} /> Cambiar el resultado</BotonSecundario>
+            </>
           ) : (
             <>
-              <BotonGrande onClick={onIniciar}><Play size={20} fill="#fff" /> Iniciar reloj</BotonGrande>
-              <BotonGrande variante="borde" onClick={onAnotar}>Anotar resultado sin reloj</BotonGrande>
+              <BotonGrande onClick={onIniciar}><Play size={20} fill="#fff" /> Empezar</BotonGrande>
+              <BotonSecundario ancho onClick={onAnotar}><Pencil size={17} /> Anotar sin reloj</BotonSecundario>
             </>
           )}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <BotonDeTexto onClick={onAnterior} disabled={!puedeAnterior}><ChevronLeft size={17} /> Anterior</BotonDeTexto>
-            {resultado && <BotonDeTexto onClick={onAnotar} color={LT.text}>Cambiar resultado</BotonDeTexto>}
-            <BotonDeTexto onClick={onSaltar} color={LT.text}>Saltar</BotonDeTexto>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <BotonSecundario onClick={onAnterior} disabled={!puedeAnterior}><ChevronLeft size={18} /> Anterior</BotonSecundario>
+            <BotonSecundario onClick={onSaltar}>Saltar <ChevronRight size={18} /></BotonSecundario>
             {tecnica && <BotonDeTecnica {...tecnica} />}
           </div>
         </div>
@@ -457,7 +490,7 @@ export function PantallaDeDescanso({ descanso, siguiente, miniatura, sonido, pue
                 <div style={{ fontSize: 17, fontWeight: 800, color: LT.text, overflowWrap: 'anywhere', lineHeight: 1.2, marginTop: 2 }}>{siguiente.nombre}</div>
                 {siguiente.detalle && <div style={{ fontSize: 13, fontWeight: 600, color: LT.text2, marginTop: 3, ...NUM_STYLE }}>{siguiente.detalle}</div>}
               </div>
-              <PuntosDeVueltas puntos={siguiente.puntos} />
+              <SerieDelSet puntos={siguiente.puntos} />
             </div>
           )}
           <div style={{ display: 'flex', gap: 10 }}>
@@ -474,13 +507,12 @@ export function PantallaDeDescanso({ descanso, siguiente, miniatura, sonido, pue
               </button>
             )}
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-            <BotonDeTexto onClick={onAnterior} disabled={!puedeAnterior} color={LT.text}><ChevronLeft size={17} /> Anterior</BotonDeTexto>
+          <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+            <BotonSecundario onClick={onAnterior} disabled={!puedeAnterior}><ChevronLeft size={18} /> Anterior</BotonSecundario>
             {conCuenta && (
-              <BotonDeTexto onClick={onSonido}>
-                {sonido ? <Bell size={16} /> : <BellOff size={16} />}
-                <span style={{ fontWeight: 700, fontSize: 14 }}>{sonido ? 'Avisa al llegar a 0' : 'Sin aviso'}</span>
-              </BotonDeTexto>
+              <BotonSecundario onClick={onSonido}>
+                {sonido ? <Bell size={17} /> : <BellOff size={17} />} {sonido ? 'Con aviso' : 'Sin aviso'}
+              </BotonSecundario>
             )}
           </div>
         </div>
@@ -521,7 +553,7 @@ export function PantallaDeFin({ resumen, notas, palabras, onNotas, onTerminar, o
       <div style={{ flexShrink: 0, padding: '10px 0 calc(10px + env(safe-area-inset-bottom))' }}>
         <div style={{ ...COLUMNA, padding: '0 18px', textAlign: 'center' }}>
           <BotonGrande variante="verde" onClick={onTerminar}><Check size={21} strokeWidth={3} /> {yaTerminada ? 'Listo' : 'Terminar sesión'}</BotonGrande>
-          <BotonDeTexto onClick={onVolver}>{palabras.finVolver}</BotonDeTexto>
+          <div style={{ marginTop: 10 }}><BotonSecundario ancho onClick={onVolver}><ChevronLeft size={18} /> {palabras.finVolver}</BotonSecundario></div>
         </div>
       </div>
     </>
@@ -629,7 +661,7 @@ function FilaDeLaLista({ fila, n, miniatura, conLinea, onElegir }) {
 
 /**
  * «Ver todo»: el entreno como lo escribió el coach, UNA TARJETA POR SET. La del Set que toca lleva borde azul; el ejercicio que toca, azul suave.
- * Las vueltas de un Set van en puntos en su encabezado (no una fila por vuelta). Tocar un ejercicio que falta lleva a él (lo saltado sigue ahí);
+ * Las vueltas de un Set van como «Serie 2 de 5» en su encabezado (no una fila por vuelta). Tocar un ejercicio que falta lleva a él (lo saltado sigue ahí);
  * lo hecho no se toca. «Seguir» cierra la hoja y el atleta sigue donde iba; «Terminar entreno» da por cerrado lo que falte.
  *
  * `tarjetas` viene de `tarjetasDeLaLista`; `miniaturaDe(fila)` dice la foto o el video de ese ejercicio (`{ nodo, conVideo }`) o `null`.
@@ -646,7 +678,7 @@ export function HojaDeLista({ tarjetas, miniaturaDe, palabras, onElegir, onTermi
                 <Check size={11} strokeWidth={3.5} /> {t.resultado || 'Hecho'}
               </span>
             ) : null)
-          : (t.puntos.length > 1 ? <PuntosDeVueltas puntos={t.puntos} /> : null);
+          : (t.puntos.length > 1 ? <SerieDelSet puntos={t.puntos} /> : null);
         const conEncabezado = !!(t.titulo || t.etiqueta || derecha);
         return (
           <section
@@ -744,19 +776,6 @@ export function HojaDeTecnica({ palabras, onCerrar }) {
   return (
     <Hoja etiqueta={palabras.tecnicaTitulo} titulo={palabras.tecnicaTitulo} subtitulo={palabras.tecnicaTexto} icono={<Video size={25} />} onCerrar={onCerrar}>
       <BotonGrande onClick={onCerrar}>Entendido</BotonGrande>
-    </Hoja>
-  );
-}
-
-/** «¿Salir del entreno?»: el avance se guarda solo, así que salir no pierde nada. */
-export function HojaDeSalir({ palabras, onSalir, onSeguir }) {
-  return (
-    <Hoja
-      etiqueta={palabras.salirAria} titulo={palabras.salirTitulo} onCerrar={onSeguir}
-      subtitulo="Tu avance queda guardado. Puedes continuar cuando quieras, aunque pase un rato o te llamen."
-    >
-      <BotonGrande onClick={onSalir}>Salir y guardar</BotonGrande>
-      <div style={{ textAlign: 'center', marginTop: 2 }}><BotonDeTexto onClick={onSeguir}>Seguir entrenando</BotonDeTexto></div>
     </Hoja>
   );
 }

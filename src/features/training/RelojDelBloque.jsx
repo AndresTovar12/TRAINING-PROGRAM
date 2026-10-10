@@ -85,7 +85,7 @@ function BotonChico({ children, onClick, peligro = false }) {
  * `plan`: los tramos ya armados, para un Set en «Lapsos personalizados» (ver `tramosDeLapsos` en `lib/lapsos.js`); sin él,
  * salen del formato. Con lapsos, `formato` solo trae lo que el resultado necesita (`anota`).
  */
-export default function RelojDelBloque({ formato, plan: planDado = null, ejercicios, serie, clave, resumen, onGuardar, onCerrar }) {
+export default function RelojDelBloque({ formato, plan: planDado = null, ejercicios, serie, clave, resumen, empezarYa = false, onGuardar, onCerrar }) {
   const pregunta = useConfirmacion();
   const nEj = ejercicios.length;
   // Los tramos de lapsos se guardan como texto para que su identidad no cambie con cada dibujo de la pantalla de arriba.
@@ -96,7 +96,11 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
   const id = claveDelPlan ? 'lapsos' : vistaDe(formato);
   const rondas = plan.reduce((m, t) => Math.max(m, t.vuelta ?? 1), 1);
 
-  const [est, setEst] = useState(() => leeRelojGuardado(clave, firma, plan));
+  // `empezarYa`: quien lo abre acaba de decir «Empezar» (o «Iniciar reloj»): que no pida un «Iniciar» más. Si lo dejó pausado, sigue pausado.
+  const [est, setEst] = useState(() => {
+    const guardado = leeRelojGuardado(clave, firma, plan);
+    return empezarYa && guardado.fase === 'listo' ? inicia(guardado, Date.now()) : guardado;
+  });
   const [ahora, setAhora] = useState(() => Date.now());
   const [sonido, setSonido] = useState(leeSonido);
 
@@ -307,7 +311,7 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
             {v.fase === 'corriendo' && (abierto
               ? (
                 <>
-                  <BotonGrande onClick={hecho}><Check size={22} strokeWidth={3} /> Listo</BotonGrande>
+                  <BotonGrande onClick={hecho}><Check size={22} strokeWidth={3} /> {id === 'lapsos' ? 'Lapso listo' : 'Listo'}</BotonGrande>
                   <div style={{ display: 'flex', gap: 10 }}>
                     <BotonChico onClick={pausar}><Pause size={17} /> Pausa</BotonChico>
                     <BotonChico onClick={terminar}>Terminar</BotonChico>

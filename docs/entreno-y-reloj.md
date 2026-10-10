@@ -21,6 +21,7 @@ El entreno es **un dato, no una pantalla**: una lista de pasos (lo que manda el 
   "v": 1,
   "inicio": 1791560000000,
   "fin": 1791563600000,
+  "oculto": true,
   "hechos":   { "0.1.0": { "t": 1791560060000, "n": "Back Squat", "reps": "6", "kg": "107.5" } },
   "saltados": { "3.1.0": { "t": 1791560500000, "n": "Hip Thrust" } },
   "extra":    { "d.0.1.0": 30 },
@@ -30,6 +31,7 @@ El entreno es **un dato, no una pantalla**: una lista de pasos (lo que manda el 
 
 - **Horas en milisegundos de época** (`Date.now()`). Todo lo que se ve (cuánto queda de un descanso, el tiempo total) se calcula con la hora de ahora: nunca con un contador. Así aguanta una llamada, la pantalla bloqueada o que el sistema mate la app.
 - **`hechos[clave]`**: el paso se hizo en `t`. `n` es el nombre del ejercicio en ese momento: si el coach cambió ese lugar por otro ejercicio, la marca vieja ya no cuenta. `reps`/`kg`/`seg` solo viajan si el atleta **cambió** lo planeado (`kg` siempre en kilos). `tecnica` queda reservada: el id del video que el atleta grabó de esa vuelta (ver `src/lib/funciones.js`).
+- **`oculto`**: el atleta quitó el entreno guiado de esa sesión (la ✕ junto a «Continuar entreno»): la app ya no ofrece «Iniciar/Continuar». Solo existe cuando es `true`; no borra nada de lo hecho. Un reloj puede ignorarlo.
 - **`saltados`**: igual, pero el paso se saltó. Sigue pendiente en la lista.
 - **`extra[clave]`**: segundos que se le sumaron a un descanso («+30 s»). **`empezados[clave]`**: cuándo se arrancó el cronómetro *opcional* de un paso con tiempo.
 - **El paso actual = el primer paso de la lista sin marca.** No se guarda. Un descanso empieza cuando se marcó el paso anterior. Nada avanza solo.

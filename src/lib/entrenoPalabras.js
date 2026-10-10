@@ -6,12 +6,13 @@
  * cubren «entreno»); lo que escribió una persona —el nombre de un ejercicio, una nota— nunca se toca.
  */
 const NORMAL = {
+  quitarTitulo: '¿Quitar el entreno guiado?',
+  quitarAria: 'Quitar el entreno guiado',
   iniciar: 'Iniciar entreno',
   continuar: 'Continuar entreno',
   salirAria: 'Salir del entreno',
   listaTitulo: 'Tu entreno',
   listaTerminar: 'Terminar entreno',
-  salirTitulo: '¿Salir del entreno?',
   finTitulo: 'Entrenamiento terminado',
   finNotas: 'Notas para tu coach',
   finVolver: 'Volver al entreno',
@@ -20,12 +21,13 @@ const NORMAL = {
 };
 
 const SALUD = {
+  quitarTitulo: '¿Quitar los ejercicios guiados?',
+  quitarAria: 'Quitar los ejercicios guiados',
   iniciar: 'Iniciar ejercicios',
   continuar: 'Continuar ejercicios',
   salirAria: 'Salir de los ejercicios',
   listaTitulo: 'Tus ejercicios',
   listaTerminar: 'Terminar ejercicios',
-  salirTitulo: '¿Salir de los ejercicios?',
   finTitulo: 'Sesión terminada',
   finNotas: 'Notas para tu fisio',
   finVolver: 'Volver a los ejercicios',
