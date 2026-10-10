@@ -1160,10 +1160,12 @@ export async function listSessionTypes(coachId) {
   return data ?? [];
 }
 
-export async function createSessionType({ nombre, color, coachId }) {
+/* `icono` es el id del catálogo de íconos (`lib/iconosDeTipo.datos.js`), no el dibujo: «boxeo», «pesa-rusa». Sin él (los tipos de antes, o los que crea la IA)
+   la app le busca uno por su nombre. */
+export async function createSessionType({ nombre, color, icono = null, coachId }) {
   const { data, error } = await supabase
     .from('session_types')
-    .insert({ nombre: (nombre || '').trim(), color, coach_id: coachId })
+    .insert({ nombre: (nombre || '').trim(), color, icono: icono || null, coach_id: coachId })
     .select()
     .single();
   if (error) throw error;

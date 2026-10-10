@@ -586,8 +586,9 @@ function tipoDesdeTexto(texto?: string) {
     if (buscado === slug || buscado === sinAcentos(info.label)) return { cat: slug }
   }
   if (buscado === 'descanso') return { cat: 'off' }
-  // Uno propio del coach: viaja dentro del día, igual que en el editor.
-  return { cat: 'otro', catNombre: texto.trim(), catColor: '#6B7280' }
+  // Uno propio del coach: viaja dentro del día, igual que en el editor. Sin `catIcono` a propósito: la app le busca el que le va a su nombre
+  // (y si el día traía el ícono de otro tipo propio, aquí se limpia para que no se quede el viejo).
+  return { cat: 'otro', catNombre: texto.trim(), catColor: '#6B7280', catIcono: null }
 }
 
 /**

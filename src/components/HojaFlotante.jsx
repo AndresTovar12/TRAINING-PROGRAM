@@ -16,11 +16,13 @@ import { LT, FONT, KP, NUM_STYLE } from '@/lib/theme';
  *   computadora → card flotante al centro, con aire alrededor
  *   teléfono    → pantalla completa, con flecha para volver
  *
+ * `pie` (opcional): un pie fijo abajo, fuera del desplazamiento.
+ *
  * Se dibuja colgada del documento y no dentro de la pantalla que la abre: un
  * `transform` o un `overflow` de cualquier antepasado la encerraría o la
  * recortaría. Ya pasó con la cámara y con las listas desplegables.
  */
-export default function HojaFlotante({ titulo, subtitulo, onCerrar, children }) {
+export default function HojaFlotante({ titulo, subtitulo, onCerrar, pie = null, children }) {
   const esCompu = useIsDesktop();
 
   useEffect(() => {
@@ -96,6 +98,16 @@ export default function HojaFlotante({ titulo, subtitulo, onCerrar, children }) 
     </div>
   );
 
+  // `pie`: lo que se queda fijo abajo mientras el cuerpo se desplaza (el botón de «Guardar» de un formulario largo).
+  const pieFijo = pie && (
+    <div style={{
+      flexShrink: 0, borderTop: `1px solid ${LT.border}`, background: LT.bg,
+      padding: esCompu ? '12px 18px 16px' : '12px 14px calc(12px + env(safe-area-inset-bottom))',
+    }}>
+      {pie}
+    </div>
+  );
+
   if (!esCompu) {
     return createPortal(
       <div
@@ -108,6 +120,7 @@ export default function HojaFlotante({ titulo, subtitulo, onCerrar, children }) 
       >
         {cabecera}
         {cuerpo}
+        {pieFijo}
       </div>,
       document.body,
     );
@@ -133,6 +146,7 @@ export default function HojaFlotante({ titulo, subtitulo, onCerrar, children }) 
       >
         {cabecera}
         {cuerpo}
+        {pieFijo}
       </div>
     </div>,
     document.body,

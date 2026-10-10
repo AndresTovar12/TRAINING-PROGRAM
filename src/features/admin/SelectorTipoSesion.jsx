@@ -1,8 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, Loader2, Plus, Trash2, X } from 'lucide-react';
-import { CAT_COLORS, COLORES_TIPO, FONT, T } from '@/lib/theme';
-import { createSessionType, deleteSessionType, listSessionTypes } from '@/lib/api';
-import { useConfirmacion } from '@/components/Confirmacion';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Check, ChevronDown, Plus, SlidersHorizontal } from 'lucide-react';
+import { useAviso } from '@/components/AvisoPasajero';
+import { aspectoDelTipo } from '@/lib/aspectoDelTipo';
+import { cargaCatalogo } from '@/lib/iconosDeTipo';
+import { FONT, T, tipoDeSesion } from '@/lib/theme';
+import HojaTipoNuevo from '@/features/admin/HojaTipoNuevo';
+import HojaTiposDeSesion from '@/features/admin/HojaTiposDeSesion';
+import MosaicoDeTipo from '@/features/admin/MosaicoDeTipo';
+import { useTiposDeSesion } from '@/features/admin/useTiposDeSesion';
 
 /**
  * El tipo de sesión, con la lista de la app en vez de la del sistema.
@@ -10,34 +15,44 @@ import { useConfirmacion } from '@/components/Confirmacion';
  * POR QUÉ NO ES UN <select>. Andrés, 17 sep 2026: "no me gustan esas listas de
  * formato de Safari, me gustaría nuestro propio formato". En el iPhone el
  * desplegable nativo es una rueda gris a media pantalla que no enseña colores
- * ni deja crear nada. Aquí se ven los colores, que es lo que el coach reconoce
- * de un vistazo en el calendario.
+ * ni deja crear nada. Aquí se ven el color y el ÍCONO de cada tipo, que es lo
+ * que el coach reconoce de un vistazo en el calendario (y su atleta, en «Hoy te toca»).
  *
  * LO PROPIO DE CADA COACH. Los de base están en el código y los ve todo el
- * mundo. Además cada coach guarda los suyos ("Vinyasa", "Terapia de hombro")
- * con su color. Lo que se elige viaja DENTRO del día del plan:
+ * mundo (menos los que el coach haya quitado). Además cada coach guarda los
+ * suyos ("Vinyasa", "Boxeo") con su color y su ícono. Lo que se elige viaja
+ * DENTRO del día del plan:
  *
  *   base   → { cat: 'yoga' }
- *   propio → { cat: 'otro', catNombre: 'Vinyasa', catColor: '#C084FC' }
+ *   propio → { cat: 'otro', catNombre: 'Vinyasa', catColor: '#C084FC', catIcono: 'flor' }
  *
- * Por eso el atleta lee el nombre sin consultar nada, y borrar un atajo no
- * deja ninguna sesión sin tipo.
+ * Por eso el atleta lee el nombre, el color y el ícono sin consultar nada, y
+ * quitar un tipo no deja ninguna sesión sin tipo.
+ *
+ * ELEGIR ES UN MENÚ CHICO; CREAR Y ADMINISTRAR TIENEN SU HOJA. Andrés, 9 oct 2026:
+ * «cada coach debe poder agregar tipos de sesión pero también eliminar los que
+ * no les gusten, entonces ahorita no hay espacio para eso». El menú se queda
+ * rápido (elegir es lo que se hace cien veces) y al pie lleva dos botones:
+ * «Crear tipo» (nombre, color e ícono, con vista previa) y «Administrar»
+ * (quitar los suyos y los de la app, y volver a ponerlos). Ver `HojaTipoNuevo`
+ * y `HojaTiposDeSesion`.
  */
 export default function SelectorTipoSesion({ day, onPatch, coachId, puedeCrear = true }) {
   const [abierto, setAbierto] = useState(false);
-  const [mios, setMios] = useState([]);
-  const [creando, setCreando] = useState(false);
-  const [nombre, setNombre] = useState('');
-  const [color, setColor] = useState(COLORES_TIPO[0]);
-  const [guardando, setGuardando] = useState(false);
-  const [err, setErr] = useState('');
+  const [escena, setEscena] = useState(null); // null | 'admin' | 'nuevo'
+  const [desde, setDesde] = useState('menu'); // desde dónde se abrió «Tipo nuevo»: 'menu' (se usa en la sesión) o 'admin'
+  const [nuevoId, setNuevoId] = useState(null);
   const caja = useRef(null);
+  const { avisa } = useAviso();
+  const { propios, base, baseQuitada, quitaBase, ponBase, crea, quitaPropio, refresca } = useTiposDeSesion(coachId);
+  // Crear y administrar necesitan saber de quién son los tipos.
+  const puedeAdministrar = puedeCrear && !!coachId;
+
   /* Si la lista tiene más de lo que cabe. Se mide de verdad en vez de suponer
      por cuántos tipos hay: el alto depende también de cuántos propios creó el
      coach y de la letra del teléfono. */
   const lista = useRef(null);
   const [hayMas, setHayMas] = useState(false);
-
   const miraSiHayMas = useCallback(() => {
     const el = lista.current;
     if (!el) return;
@@ -47,116 +62,78 @@ export default function SelectorTipoSesion({ day, onPatch, coachId, puedeCrear =
 
   /* Al abrir todavía no hay nada medido, y sin esto el aviso solo aparecería
      después de que el coach escroleara, que es justo cuando ya no hace falta.
-     Se vuelve a medir cuando cambian los tipos propios: llegan por red después
-     de abrir, y cada uno que entra hace la lista más larga. */
+     Se vuelve a medir cuando cambian los tipos: llegan por red después de
+     abrir, y cada uno que entra hace la lista más larga. */
   useEffect(() => {
     if (abierto) miraSiHayMas();
-  }, [abierto, mios.length, miraSiHayMas]);
-  const pregunta = useConfirmacion();
+  }, [abierto, propios.length, base.length, miraSiHayMas]);
 
-  useEffect(() => {
-    if (!coachId) return;
-    listSessionTypes(coachId).then(setMios).catch(() => setMios([]));
-  }, [coachId]);
-
-  const cerrar = useCallback(() => {
-    setAbierto(false); setCreando(false); setNombre(''); setErr('');
-  }, []);
+  const abre = () => {
+    // Los íconos de la hoja de «Tipo nuevo» empiezan a bajar al abrir el menú, para que estén cuando se necesiten.
+    if (!abierto) cargaCatalogo().catch(() => { /* sin red: la hoja avisa que no cargaron */ });
+    setAbierto((v) => !v);
+  };
+  const cierra = useCallback(() => setAbierto(false), []);
 
   useEffect(() => {
     if (!abierto) return undefined;
-    const fuera = (e) => { if (caja.current && !caja.current.contains(e.target)) cerrar(); };
+    const fuera = (e) => { if (caja.current && !caja.current.contains(e.target)) cierra(); };
+    const tecla = (e) => { if (e.key === 'Escape') cierra(); };
     document.addEventListener('mousedown', fuera);
-    return () => document.removeEventListener('mousedown', fuera);
-  }, [abierto, cerrar]);
+    document.addEventListener('keydown', tecla);
+    return () => { document.removeEventListener('mousedown', fuera); document.removeEventListener('keydown', tecla); };
+  }, [abierto, cierra]);
 
-  /* EL ORDEN DE LA LISTA, a mano y no el del objeto.
-     Andrés, 18 sep 2026: "«neural», «recovery», «equipo», «test» son las menos
-     importantes, no las pongas primero". Salían arriba solo porque son las más
-     viejas y el objeto conserva el orden en que se escribieron. Primero lo que
-     un coach usa casi a diario, y al final lo suelto.
-     Esto cambia SOLO lo que se ve: lo que se guarda sigue siendo el mismo
-     slug, así que los planes que ya existen no se enteran. */
-  const base = useMemo(() => {
-    const orden = ['gym', 'correr', 'bici', 'natacion', 'yoga', 'movilidad', 'clase',
-      'football', 'terapia', 'off', 'speed', 'recovery', 'tests', 'team'];
-    const puesto = (slug) => {
-      const i = orden.indexOf(slug);
-      // Un tipo nuevo que alguien agregue a CAT_COLORS y olvide poner en la
-      // lista de arriba cae al final, no en medio y al azar.
-      return i === -1 ? orden.length : i;
-    };
-    return Object.entries(CAT_COLORS)
-      .map(([slug, v]) => ({ slug, ...v }))
-      .sort((a, b) => puesto(a.slug) - puesto(b.slug));
-  }, []);
-
-  const actual = day?.cat === 'otro' && (day?.catNombre || '').trim()
-    ? { label: day.catNombre.trim(), c: day.catColor || '#6B7280' }
-    : (CAT_COLORS[day?.cat] || CAT_COLORS.gym);
+  const actual = tipoDeSesion(day);
+  const aspectoActual = aspectoDelTipo(day);
 
   const eligeBase = (slug) => {
-    // Se limpian el nombre y el color propios: si se quedan, vuelven a salir
+    // Se limpian el nombre, el color y el ícono propios: si se quedan, vuelven a salir
     // en cuanto alguien toque `cat` sin pasar por aquí.
-    onPatch({ cat: slug, catNombre: null, catColor: null });
-    cerrar();
+    onPatch({ cat: slug, catNombre: null, catColor: null, catIcono: null });
+    cierra();
   };
-
   const eligeMio = (t) => {
-    onPatch({ cat: 'otro', catNombre: t.nombre, catColor: t.color });
-    cerrar();
+    onPatch({ cat: 'otro', catNombre: t.nombre, catColor: t.color, catIcono: t.icono ?? null });
+    cierra();
   };
 
-  const guarda = async () => {
-    const limpio = nombre.trim();
-    if (!limpio) { setErr('Ponle un nombre'); return; }
-    if (mios.some((m) => m.nombre.toLowerCase() === limpio.toLowerCase())) {
-      setErr('Ya tienes uno con ese nombre'); return;
-    }
-    setGuardando(true);
-    setErr('');
-    try {
-      const fila = await createSessionType({ nombre: limpio, color, coachId });
-      setMios((prev) => [...prev, fila].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+  const abreNuevo = (de) => { setDesde(de); setAbierto(false); setEscena('nuevo'); };
+  const abreAdmin = () => { setAbierto(false); setEscena('admin'); refresca(); };
+  const cierraNuevo = () => setEscena(desde === 'admin' ? 'admin' : null);
+
+  const guardaNuevo = async (datos) => {
+    const fila = await crea(datos);
+    avisa(`«${fila.nombre}» guardado`);
+    if (desde === 'admin') {
+      setNuevoId(fila.id);
+      setEscena('admin');
+    } else {
       eligeMio(fila);
-    } catch (e) {
-      setErr(e.message || 'No se pudo guardar');
-      setGuardando(false);
+      setEscena(null);
     }
-  };
-
-  const borra = async (t) => {
-    const va = await pregunta({
-      titulo: `¿Quitar "${t.nombre}" de tu lista?`,
-      detalle: 'Las sesiones que ya lo usan no cambian: conservan su nombre y su color.',
-      confirmar: 'Sí, quitarlo',
-      peligro: true,
-    });
-    if (!va) return;
-    await deleteSessionType(t.id);
-    setMios((prev) => prev.filter((m) => m.id !== t.id));
   };
 
   const fila = (activo) => ({
-    display: 'flex', alignItems: 'center', gap: 9, width: '100%',
-    padding: '10px 11px', borderRadius: 10, border: 'none', cursor: 'pointer',
+    display: 'flex', alignItems: 'center', gap: 11, width: '100%', minHeight: 46,
+    padding: '6px 10px', borderRadius: 12, border: 'none', cursor: 'pointer',
     background: activo ? T.accentBg : 'transparent', textAlign: 'left',
-    fontFamily: FONT, fontSize: 14, fontWeight: 600, color: T.text,
+    fontFamily: FONT, fontSize: 14.5, fontWeight: 600, color: T.text,
   });
+  const encabezado = { fontSize: 10.5, fontWeight: 800, letterSpacing: 0.8, color: T.text3, padding: '8px 10px 4px' };
 
   return (
     <div ref={caja} style={{ position: 'relative' }}>
       <button
-        type="button"
-        onClick={() => setAbierto((v) => !v)}
+        type="button" onClick={abre} aria-haspopup="true" aria-expanded={abierto}
         style={{
-          width: '100%', display: 'flex', alignItems: 'center', gap: 9,
-          padding: '12px 13px', borderRadius: 12, border: `1.5px solid ${T.border}`,
+          width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+          padding: '8px 12px 8px 8px', borderRadius: 12, border: `1.5px solid ${T.border}`,
           background: T.bg2, cursor: 'pointer', fontFamily: FONT, fontSize: 14,
           fontWeight: 700, color: T.text, textAlign: 'left',
         }}
       >
-        <span style={{ width: 11, height: 11, borderRadius: 6, background: actual.c, flexShrink: 0 }} />
+        <MosaicoDeTipo aspecto={aspectoActual} tam={28} />
         <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {actual.label}
         </span>
@@ -168,155 +145,103 @@ export default function SelectorTipoSesion({ day, onPatch, coachId, puedeCrear =
           className="animate-fade-in"
           style={{
             position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 60,
-            background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 14,
+            background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 16,
             boxShadow: '0 16px 44px rgba(17,19,24,0.16)',
-            /* Ya no hace scroll este, sino la lista de adentro: así el botón de
-               crear se queda pegado abajo, siempre a la vista. */
-            maxHeight: 340, minWidth: 220, display: 'flex', flexDirection: 'column',
+            /* Ya no hace scroll este, sino la lista de adentro: así los botones de
+               crear y administrar se quedan pegados abajo, siempre a la vista. */
+            maxHeight: 420, minWidth: 262, display: 'flex', flexDirection: 'column',
             overflow: 'hidden',
           }}
         >
-          {creando ? (
-            <div style={{ padding: 13, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ flex: 1, fontSize: 13, fontWeight: 800, color: T.text }}>Tipo nuevo</span>
-                <button type="button" onClick={() => { setCreando(false); setErr(''); }}
-                  aria-label="Cancelar"
-                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.text3, padding: 2 }}>
-                  <X size={16} />
-                </button>
-              </div>
-              <input
-                autoFocus
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') guarda(); }}
-                maxLength={40}
-                style={{
-                  width: '100%', padding: '11px 12px', borderRadius: 10, boxSizing: 'border-box',
-                  border: `1.5px solid ${T.border}`, background: T.bg, fontFamily: FONT,
-                  fontSize: 16, fontWeight: 600, color: T.text, outline: 'none',
-                }}
-              />
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {COLORES_TIPO.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setColor(c)}
-                    aria-label={`Color ${c}`}
-                    style={{
-                      width: 26, height: 26, borderRadius: 13, cursor: 'pointer', background: c,
-                      border: c === color ? `2.5px solid ${T.text}` : '2.5px solid transparent',
-                      display: 'grid', placeItems: 'center',
-                    }}
-                  >
-                    {c === color && <Check size={13} color="#fff" strokeWidth={3.5} />}
-                  </button>
-                ))}
-              </div>
-              {err && <div style={{ fontSize: 12.5, fontWeight: 600, color: T.danger }}>{err}</div>}
-              <button
-                type="button"
-                onClick={guarda}
-                disabled={guardando}
-                style={{
-                  padding: '11px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
-                  background: T.accent, color: '#fff', fontFamily: FONT, fontSize: 14, fontWeight: 800,
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                }}
-              >
-                {guardando && <Loader2 size={15} className="spin" />} Guardar y usar
-              </button>
-            </div>
-          ) : (
-            <>
-            {/* LA LISTA, CON SU PROPIO SCROLL Y UN AVISO DE QUE SIGUE.
-                Andrés, 18 sep 2026: "cuando se despliega esta lista no te das
-                cuenta que hay más para abajo si la escroleas, eso hay que
-                arreglarlo". El degradado del borde no es adorno: aparece SOLO
-                cuando queda algo por ver, y se apaga al llegar al final. Uno
-                fijo mentiría en las listas cortas. */}
-            <div style={{ position: 'relative', flex: '1 1 auto', minHeight: 0 }}>
-              <div ref={lista} onScroll={miraSiHayMas} style={{ maxHeight: 268, overflowY: 'auto', padding: 7 }}>
-              {mios.length > 0 && (
+          {/* LA LISTA, CON SU PROPIO SCROLL Y UN AVISO DE QUE SIGUE.
+              Andrés, 18 sep 2026: "cuando se despliega esta lista no te das
+              cuenta que hay más para abajo si la escroleas, eso hay que
+              arreglarlo". El degradado del borde no es adorno: aparece SOLO
+              cuando queda algo por ver, y se apaga al llegar al final. Uno
+              fijo mentiría en las listas cortas. */}
+          <div style={{ position: 'relative', flex: '1 1 auto', minHeight: 0 }}>
+            <div ref={lista} onScroll={miraSiHayMas} style={{ maxHeight: 330, overflowY: 'auto', padding: 7 }}>
+              {propios.length > 0 && (
                 <>
-                  <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 0.8, color: T.text3, padding: '6px 11px 4px' }}>
-                    LOS TUYOS
-                  </div>
-                  {mios.map((m) => {
+                  <div style={encabezado}>LOS TUYOS</div>
+                  {propios.map((m) => {
                     const activo = day?.cat === 'otro' && day?.catNombre === m.nombre;
                     return (
-                      <div key={m.id} style={{ display: 'flex', alignItems: 'center' }}>
-                        <button type="button" onClick={() => eligeMio(m)} style={fila(activo)}>
-                          <span style={{ width: 11, height: 11, borderRadius: 6, background: m.color, flexShrink: 0 }} />
-                          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {m.nombre}
-                          </span>
-                          {activo && <Check size={15} color={T.accent} />}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => borra(m)}
-                          aria-label={`Quitar ${m.nombre}`}
-                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.text3, padding: '8px 8px' }}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
+                      <button key={m.id} type="button" onClick={() => eligeMio(m)} style={fila(activo)}>
+                        <MosaicoDeTipo aspecto={aspectoDelTipo({ cat: 'otro', catNombre: m.nombre, catColor: m.color, catIcono: m.icono })} tam={30} />
+                        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.nombre}</span>
+                        {activo && <Check size={16} color={T.accent} />}
+                      </button>
                     );
                   })}
-                  <div style={{ height: 1, background: T.border, margin: '6px 4px' }} />
                 </>
               )}
 
-              <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 0.8, color: T.text3, padding: '6px 11px 4px' }}>
-                DE LA APP
-              </div>
-              {base.map((b) => (
-                <button key={b.slug} type="button" onClick={() => eligeBase(b.slug)} style={fila(day?.cat === b.slug)}>
-                  <span style={{ width: 11, height: 11, borderRadius: 6, background: b.c, flexShrink: 0 }} />
-                  <span style={{ flex: 1, minWidth: 0 }}>{b.label}</span>
-                  {day?.cat === b.slug && <Check size={15} color={T.accent} />}
-                </button>
-              ))}
-
-              </div>
-
-              {hayMas && (
-                <span
-                  aria-hidden="true"
-                  style={{
-                    position: 'absolute', left: 1, right: 1, bottom: 0, height: 30,
-                    background: `linear-gradient(to top, ${T.bg2}, ${T.bg2}00)`,
-                    pointerEvents: 'none',
-                  }}
-                />
-              )}
+              <div style={encabezado}>DE LA APP</div>
+              {base.map((b) => {
+                const activo = day?.cat === b.slug;
+                return (
+                  <button key={b.slug} type="button" onClick={() => eligeBase(b.slug)} style={fila(activo)}>
+                    <MosaicoDeTipo aspecto={aspectoDelTipo({ cat: b.slug })} tam={30} />
+                    <span style={{ flex: 1, minWidth: 0 }}>{b.label}</span>
+                    {activo && <Check size={16} color={T.accent} />}
+                  </button>
+                );
+              })}
             </div>
 
-            {/* EL PIE, FUERA DEL SCROLL. Antes era la última fila de la lista:
-                "lo de crear tipo nunca lo voy a poder ver porque está hasta
-                abajo, y si no sé que la puedo escrolear, pues menos". */}
-            <div style={{ flexShrink: 0, borderTop: `1px solid ${T.border}`, padding: 7 }}>
-              {puedeCrear ? (
+            {hayMas && (
+              <span
+                aria-hidden="true"
+                style={{
+                  position: 'absolute', left: 1, right: 1, bottom: 0, height: 30,
+                  background: `linear-gradient(to top, ${T.bg2}, ${T.bg2}00)`,
+                  pointerEvents: 'none',
+                }}
+              />
+            )}
+          </div>
+
+          {/* EL PIE, FUERA DEL SCROLL. Antes era la última fila de la lista:
+              "lo de crear tipo nunca lo voy a poder ver porque está hasta
+              abajo, y si no sé que la puedo escrolear, pues menos". */}
+          <div style={{ flexShrink: 0, borderTop: `1px solid ${T.border}`, padding: 7 }}>
+            {puedeAdministrar ? (
+              <div style={{ display: 'flex', gap: 6 }}>
                 <button
-                  type="button"
-                  onClick={() => { setCreando(true); setErr(''); }}
-                  style={{ ...fila(false), color: T.accent, fontWeight: 800 }}
+                  type="button" onClick={() => abreNuevo('menu')}
+                  style={{ ...pieDelMenu, background: T.accentBg, color: T.accent }}
                 >
-                  <Plus size={15} /> Crear tipo nuevo
+                  <Plus size={16} strokeWidth={2.6} /> Crear tipo
                 </button>
-              ) : (
-                <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 600, padding: '9px 11px', lineHeight: 1.4 }}>
-                  Para crear tipos, sal de «Ver como».
-                </div>
-              )}
-            </div>
-            </>
-          )}
+                <button type="button" onClick={abreAdmin} style={{ ...pieDelMenu, background: 'transparent', color: T.text2 }}>
+                  <SlidersHorizontal size={16} /> Administrar
+                </button>
+              </div>
+            ) : (
+              <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 600, padding: '9px 11px', lineHeight: 1.4 }}>
+                Para crear tipos, sal de «Ver como».
+              </div>
+            )}
+          </div>
         </div>
+      )}
+
+      {escena === 'admin' && (
+        <HojaTiposDeSesion
+          propios={propios} base={base} baseQuitada={baseQuitada} nuevoId={nuevoId}
+          onNuevo={() => abreNuevo('admin')} onQuitaPropio={quitaPropio} onQuitaBase={quitaBase} onPonBase={ponBase}
+          onCerrar={() => { setEscena(null); setNuevoId(null); }}
+        />
+      )}
+      {escena === 'nuevo' && (
+        <HojaTipoNuevo propios={propios} conUso={desde === 'menu'} onGuardar={guardaNuevo} onCerrar={cierraNuevo} />
       )}
     </div>
   );
 }
+
+const pieDelMenu = {
+  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 44, padding: '0 10px', border: 'none', borderRadius: 12,
+  cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 800, touchAction: 'manipulation',
+};

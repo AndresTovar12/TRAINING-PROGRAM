@@ -1070,7 +1070,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       if (!dia) throw new Aviso('Para guardar un día, di cuál.')
       const d = w.days.find((x: any) => x.day === diaDesdeTexto(dia))
       if (!d) throw new Aviso(`Ese día no tiene sesión en la semana ${w.num}.`)
-      data = { name: d.name, cat: d.cat, catNombre: d.catNombre ?? null, catColor: d.catColor ?? null, exercises: structuredClone(d.exercises ?? []) }
+      data = { name: d.name, cat: d.cat, catNombre: d.catNombre ?? null, catColor: d.catColor ?? null, catIcono: d.catIcono ?? null, exercises: structuredClone(d.exercises ?? []) }
     }
     const { error } = await quien.db.from('routine_templates').insert({ name: nombre, kind: tipo === 'semana' ? 'week' : 'day', data, created_by: quien.id })
     if (error) throw new Error(error.message)
@@ -1103,7 +1103,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     } else {
       if (!dia) throw new Aviso('Es una plantilla de día: di en qué día va.')
       const clave = diaDesdeTexto(dia)
-      const nuevo = { day: clave, name: t.data?.name || t.name, cat: t.data?.cat || 'gym', catNombre: t.data?.catNombre ?? null, catColor: t.data?.catColor ?? null, exercises: structuredClone(t.data?.exercises ?? []) }
+      const nuevo = { day: clave, name: t.data?.name || t.name, cat: t.data?.cat || 'gym', catNombre: t.data?.catNombre ?? null, catColor: t.data?.catColor ?? null, catIcono: t.data?.catIcono ?? null, exercises: structuredClone(t.data?.exercises ?? []) }
       w.days = agregar ? [...w.days, nuevo] : [...w.days.filter((d: any) => d.day !== clave), nuevo]
     }
     await guardarFases(quien, plan, fases)
