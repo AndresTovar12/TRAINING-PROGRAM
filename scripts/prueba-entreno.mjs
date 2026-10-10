@@ -474,7 +474,7 @@ const lower = {
 
 /* ---- Lo que llega de la base puede venir roto ---- */
 {
-  const vacio = { inicio: null, fin: null, oculto: false, hechos: {}, saltados: {}, extra: {}, empezados: {} };
+  const vacio = { nombre: null, inicio: null, fin: null, oculto: false, hechos: {}, saltados: {}, extra: {}, empezados: {} };
   for (const basura of [undefined, null, 'x', 7, [], { hechos: [] }, { hechos: 'a', saltados: 5, inicio: 'ayer', extra: { a: -1, b: 'x', c: 0 } }]) {
     assert.deepEqual(leeAvance(basura), vacio);
   }
@@ -534,7 +534,7 @@ const lower = {
 /* ---- Viaja bien por la base: se guarda por llaves y se mezcla sin pisar a otro dispositivo ---- */
 {
   const plan = pasosDeLaSesion(lower);
-  const a = iniciaEntreno(undefined, 100);
+  const a = iniciaEntreno(undefined, 100, plan);
   const b = marcaListo(plan, a, 200);
   // Un «Listo» solo manda ESA llave: no el avance entero.
   assert.deepEqual(diferencia(a, b), { hechos: { '0.1.0': { t: 200, n: 'Back Squat' } } });
@@ -633,6 +633,33 @@ const lower = {
   assert.deepEqual(vuelveAtras(plan, conOtro).empezados, {}, 'al volver atrás se quitan los cronómetros de lo que se deshace');
   // Un cronómetro roto en la base se ignora.
   assert.deepEqual(leeAvance({ empezados: { a: 'x', b: -1, c: 5 } }).empezados, { c: 5 });
+}
+
+/* ---- Lo que el coach necesita para reconocer la sesión y medir los descansos ---- */
+{
+  const plan = pasosDeLaSesion({ ...lower, name: 'Lower Strength' });
+  assert.equal(plan.nombre, 'Lower Strength');
+  let av = iniciaEntreno(undefined, 1000, plan);
+  assert.equal(av.nombre, 'Lower Strength', 'el nombre de la sesión se guarda al arrancar');
+  assert.equal(iniciaEntreno(av, 2000, pasosDeLaSesion({ ...lower, name: 'Otro nombre' })).nombre, 'Lower Strength', 'una sola vez: no se pisa');
+  assert.equal(iniciaEntreno(undefined, 1000).nombre, undefined, 'sin plan no se inventa un nombre');
+  assert.equal(marcaListo(plan, undefined, 1000).nombre, 'Lower Strength', 'el primer «Listo» también lo guarda si no se había iniciado');
+  av = marcaListo(plan, av, 31_000);                       // la serie 1 de Back Squat
+  av = marcaListo(plan, av, 31_000 + 160_000);            // el descanso planeado de 150 s, tomado en 160
+  assert.deepEqual(av.hechos['d.0.1.0'], { t: 191_000, p: 150 }, 'el descanso guarda lo planeado (`p`) y cuándo terminó (`t`)');
+  assert.deepEqual(Object.keys(av.hechos['0.1.0']).sort(), ['n', 't'], 'una serie hecha tal cual se planeó no lleva datos extra');
+  // Saltar un descanso lo cierra igual, con lo planeado.
+  av = marcaListo(plan, av, 200_000);                      // la serie 2
+  av = saltaPaso(plan, av, 205_000);                       // el descanso, saltado
+  assert.deepEqual(av.hechos['d.0.2.0'], { t: 205_000, p: 150 });
+  // Un descanso sin cuenta (texto libre) no inventa un planeado.
+  const libre = pasosDeLaSesion({ cat: 'gym', name: 'Libre', exercises: [ex('Press', { sets: '2', reps: '8', descanso: 'Recuperación total' }), ex('Remo', { sets: '1', reps: '8' })] });
+  let b = marcaListo(libre, undefined, 1000);
+  b = marcaListo(libre, b, 5000);
+  assert.deepEqual(b.hechos['d.0.1.0'], { t: 5000 });
+  // El nombre que viene roto de la base se limpia.
+  assert.equal(leeAvance({ nombre: 7 }).nombre, null);
+  assert.equal(leeAvance({ nombre: '  Fuerza  ' }).nombre, 'Fuerza');
 }
 
 console.log('prueba-entreno: todo bien');

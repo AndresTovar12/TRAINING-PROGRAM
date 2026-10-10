@@ -83,7 +83,7 @@ export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, on
     // El audio solo se despierta con un toque de la persona; con el reloj arrancando solo, este es el toque.
     preparaAudio();
     // La hora de inicio se guarda una sola vez.
-    onRegistro((prev) => ({ ...prev, entreno: iniciaEntreno(prev?.entreno, Date.now()) }));
+    onRegistro((prev) => ({ ...prev, entreno: iniciaEntreno(prev?.entreno, Date.now(), plan) }));
     setFallo(false);
     setIntento((n) => n + 1);
     setAbierto(true);

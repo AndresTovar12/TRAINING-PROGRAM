@@ -2,6 +2,9 @@ import { supabase } from '@/lib/supabase';
 import { estimaUmbrales } from '@/lib/metricas/calculos';
 import { diaLocal, pulsoEnReposoMediano, pulsoMaximoVisto, sumaDias } from '@/lib/metricas/forma';
 import { construyeActividad, recalculaConUmbrales, separaRepetidos } from '@/lib/metricas/construye';
+import { listRecuperacion } from '@/lib/recuperacionApi';
+
+export { listRecuperacion };
 
 /* El acceso a la base de las MÉTRICAS del entrenamiento: entrenos (`actividades`), sus series, la recuperación de cada día y los umbrales del atleta.
    Los permisos los pone la base (igual que `plans`): el atleta ve y guarda lo suyo; el coach (o quien lo atiende) ve y guarda lo de sus atletas.
@@ -43,20 +46,6 @@ export async function getSeries(actividadId) {
 export async function borraActividad(id) {
   const { error } = await supabase.from('actividades').delete().eq('id', id);
   if (error) throw error;
-}
-
-/** La recuperación de cada día (pulso en reposo, HRV, sueño…) desde `desdeDia`, del más viejo al más nuevo. */
-export async function listRecuperacion(atletaId, { desdeDia = null } = {}) {
-  const filas = [];
-  for (let desde = 0; desde < 5000; desde += PAGINA) {
-    let q = supabase.from('recuperacion_diaria').select('*').eq('atleta_id', atletaId).order('dia', { ascending: true }).range(desde, desde + PAGINA - 1);
-    if (desdeDia) q = q.gte('dia', desdeDia);
-    const { data, error } = await q;
-    if (error) throw error;
-    filas.push(...(data ?? []));
-    if ((data ?? []).length < PAGINA) break;
-  }
-  return filas;
 }
 
 /** Los umbrales que escribió el atleta o su coach (pulso máximo, de reposo y de umbral), o `null` si nadie los escribió. */

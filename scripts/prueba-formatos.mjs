@@ -175,6 +175,18 @@ assert.deepEqual(limpiaResultado({ anota: 'rondas', valor: '7', extra: '', seg: 
 assert.equal(limpiaResultado({ anota: 'dolor', valor: 3 }).anota, 'nada');
 assert.equal(limpiaResultado({ anota: 'reps', valor: -4 }).valor, 0, 'no hay repeticiones negativas');
 assert.equal(limpiaResultado(null), null);
+{
+  // La huella de cada tramo (ventanas y lapsos) se limpia: lo que no es número o no tiene la forma se descarta, y nada queda vacío.
+  const r = limpiaResultado({
+    anota: 'cumplido', valor: 2, tramos: [30, 40], de: 2,
+    ventanas: [[1000.4, 31000], ['x', 5], [31000, 71000], [1]],
+    lapsos: [{ tipo: 'trabajo', plan: 30, etiqueta: 'Sprint', texto: '400 m', vuelta: 1 }, null, { tipo: 'raro', plan: null, vuelta: 'x' }],
+  });
+  assert.deepEqual(r.ventanas, [[1000, 31000], [31000, 71000]]);
+  assert.deepEqual(r.lapsos, [{ tipo: 'trabajo', plan: 30, etiqueta: 'Sprint', texto: '400 m', vuelta: 1 }, { tipo: 'trabajo', plan: null, etiqueta: '', texto: '', vuelta: 1 }]);
+  assert.equal('ventanas' in limpiaResultado({ anota: 'nada', ventanas: [] }), false, 'sin ventanas no se guarda un arreglo vacío');
+  assert.equal(limpiaResultado({ anota: 'nada', ventanas: Array.from({ length: MAX_TRAMOS + 50 }, (_, i) => [i, i + 1]) }).ventanas.length, MAX_TRAMOS);
+}
 
 /* ---- El reloj ---- */
 const T0 = 1_000_000;
@@ -257,7 +269,10 @@ const ve = (c, est, seg) => vista(est, c.plan, T0 + seg * SEG, c.tope);
   assert.equal(e.motivo, 'completo');
   assert.deepEqual(e.hechos, [100, 130, 170], 'los parciales de cada ronda');
   assert.equal(ve(c, e, 400).totalSeg, 400);
-  assert.deepEqual(sugerido(e, c.plan), { seg: 400, rondas: 0, tramos: [100, 130, 170], completados: 3, de: 3 });
+  const { ventanas, lapsos, ...resto } = sugerido(e, c.plan);
+  assert.deepEqual(resto, { seg: 400, rondas: 0, tramos: [100, 130, 170], completados: 3, de: 3 });
+  assert.deepEqual(ventanas, [[T0, T0 + 100 * SEG], [T0 + 100 * SEG, T0 + 230 * SEG], [T0 + 230 * SEG, T0 + 400 * SEG]], 'cada «Listo» cierra una ventana y abre la siguiente');
+  assert.deepEqual(lapsos.map((l) => [l.tipo, l.vuelta]), [['trabajo', 1], ['trabajo', 2], ['trabajo', 3]], 'la huella de cada tramo hecho');
 }
 
 // Con tope: corta en medio de un tramo y el total es el tope.
@@ -272,7 +287,10 @@ const ve = (c, est, seg) => vista(est, c.plan, T0 + seg * SEG, c.tope);
   assert.equal(e.fase, 'fin');
   assert.equal(e.motivo, 'tope');
   assert.equal(ve(c, e, 151).totalSeg, 150);
-  assert.deepEqual(sugerido(e, c.plan), { seg: 150, rondas: 0, tramos: [100], completados: 1, de: 3 });
+  const { ventanas, lapsos, ...resto } = sugerido(e, c.plan);
+  assert.deepEqual(resto, { seg: 150, rondas: 0, tramos: [100], completados: 1, de: 3 });
+  assert.deepEqual(ventanas, [[T0, T0 + 100 * SEG]], 'el tramo que cortó el tope no tiene ventana: no se completó');
+  assert.equal(lapsos.length, 1);
 }
 
 // El tope también corta cuando la pantalla durmió pasado el tope en un tramo con tiempo.
@@ -303,6 +321,31 @@ const ve = (c, est, seg) => vista(est, c.plan, T0 + seg * SEG, c.tope);
 {
   const x = avanza(inicia(nuevoReloj(), T0), [], T0 + SEG);
   assert.equal(x.fase, 'fin');
+}
+
+/* ---- Las ventanas de cada tramo (para cortar el pulso y el ritmo del reloj de pulsera) ---- */
+{
+  // Tabata: 20 s de trabajo + 10 s de descanso. Con la pantalla dormida 100 s, `avanza` salta varios tramos y cada ventana termina donde empieza la siguiente.
+  const c = corre(tab);
+  let e = arranca(c);
+  e = avanza(e, c.plan, T0 + 100 * SEG, c.tope);
+  assert.deepEqual(e.ventanas.slice(0, 4), [[T0, T0 + 20 * SEG], [T0 + 20 * SEG, T0 + 30 * SEG], [T0 + 30 * SEG, T0 + 50 * SEG], [T0 + 50 * SEG, T0 + 60 * SEG]]);
+  assert.equal(e.ventanas.length, e.hechos.length, 'una ventana por cada tramo terminado');
+  assert.equal(e.tramoDesde, T0 + 90 * SEG, 'el tramo en curso arrancó donde terminó el anterior, no donde llegó el aviso');
+  // Una pausa dentro de un tramo no mueve su hora de arranque: la ventana lo incluye completo.
+  const d = corre(tab);
+  let x = arranca(d);
+  x = pausa(x, T0 + 5 * SEG);
+  x = inicia(x, T0 + 40 * SEG);
+  assert.equal(x.tramoDesde, T0, 'reanudar conserva la hora en que empezó el tramo');
+  x = avanza(x, d.plan, T0 + 56 * SEG, d.tope); // le faltaban 15 s de los 20: termina en T0 + 55 s
+  assert.deepEqual(x.ventanas[0], [T0, T0 + 55 * SEG]);
+  // Un reloj guardado antes de que existieran las ventanas se sigue aceptando, sin inventarlas.
+  const { ventanas: _v, tramoDesde: _t, ...viejo } = { ...x, hechos: [20, 10], i: 2 };
+  const r = reanuda(JSON.parse(JSON.stringify(viejo)), d.plan);
+  assert.deepEqual(r.ventanas, []);
+  assert.deepEqual(sugerido(r, d.plan).ventanas, [], 'sin ventanas completas no se ofrecen');
+  assert.deepEqual(reanuda({ ...x, ventanas: [[1, 'x']] }, d.plan), nuevoReloj(), 'una ventana malformada no sirve');
 }
 
 /* ---- Guardar el reloj a medias ---- */

@@ -9,8 +9,8 @@ import { separaFoto } from '@/lib/fotoConFoco';
  * Watch) y «el de ciencia puede ser discreto pero coqueto». Se enseñaron tres ideas para cada una en una maqueta
  * (`docs/maquetas/2026-10-07-home-tarjetas.html`) y eligió Salud «B · Latido» y Ciencia en «cinta».
  *
- *   · SALUD: coral con un latido que viaja por abajo. Sin datos, un corazón que late; con los cuatro indicadores del
- *     día, el puntaje en su lugar y cada indicador en un chip, con las mismas palabras de la hoja de Salud.
+ *   · SALUD: coral con un latido que viaja por abajo. Sin datos, un corazón que late; con dolor anotado, ese número en su lugar;
+ *     con reloj, su veredicto de recuperación como título y cada medida (reposo, HRV, sueño) en un chip.
  *   · CIENCIA: una cinta lavanda de una línea. Es lo que menos se usa: no pide más atención que esa.
  *
  * Las animaciones se apagan con `prefers-reduced-motion`.
@@ -30,17 +30,27 @@ const BRILLO = 'radial-gradient(circle at 92% 6%, rgba(255,255,255,0.30), transp
 const BORDE_LAVANDA = '#E2DAFF';
 const LAVANDA_OSCURO = '#5B3FD6';
 
-/** Los cuatro indicadores del día, como los llama la hoja de Salud. */
-const INDICADORES = [['Sueño', 'sleep'], ['Fatiga', 'fatigue'], ['Dolor', 'soreness'], ['Motivación', 'motivation']];
+/** Cómo se dice el dolor del día: «dolor» con un coach de entrenamiento; «molestia» con los pacientes de un fisio (el dolor puede venir de cualquier parte). */
+const NIVELES_DE_DOLOR = ['Dolor leve', 'Dolor moderado', 'Dolor fuerte'];
+const NIVELES_DE_MOLESTIA = ['Molestia leve', 'Molestia moderada', 'Molestia fuerte'];
+const etiquetaDeDolor = (n, salud) => (n === 0
+  ? (salud ? 'Sin molestia' : 'Sin dolor')
+  : (salud ? NIVELES_DE_MOLESTIA : NIVELES_DE_DOLOR)[n <= 3 ? 0 : n <= 6 ? 1 : 2]);
+
+const MEDIDAS_DEL_RELOJ = [['Reposo', 'reposo', 'lpm'], ['HRV', 'hrv', 'ms'], ['Sueño', 'sueno', 'h']];
 
 /**
- * `puntaje`: el del día (0 a 10) o null si falta algo. `dia`: lo anotado hoy (`sleep`, `fatigue`, `soreness`,
- * `motivation`). `tope`: el ancho máximo del botón en compu.
+ * Andrés, 10 oct 2026: la salud diaria queda en lo que sirve. Con reloj, el pulso en reposo, la variabilidad cardiaca (HRV) y el sueño llegan solos; lo único
+ * que el atleta anota es el dolor muscular. Sin reloj, la tarjeta no pide nada más que eso.
+ *
+ * `dolor`: el de hoy (0 a 10) o null si no lo ha anotado. `reloj`: `useRecuperacionReciente()`. `salud`: el coach es un fisio (se dice «molestia»).
+ * `tope`: el ancho máximo del botón en compu.
  */
-export function TarjetaDeSalud({ puntaje, dia, onAbrir, tope }) {
-  const medido = puntaje !== null;
-  const estado = !medido ? 'Sin medir' : puntaje >= 7 ? 'Listo' : puntaje >= 5 ? 'Carga media' : 'Recuperación';
-  const chips = medido ? INDICADORES.filter(([, k]) => dia?.[k] != null) : [];
+export function TarjetaDeSalud({ dolor, reloj, salud = false, onAbrir, tope }) {
+  const hayDolor = dolor != null;
+  const hayAlgo = hayDolor || reloj.hayReloj;
+  const estado = reloj.lectura?.titulo ?? (hayDolor ? etiquetaDeDolor(dolor, salud) : reloj.hayReloj ? 'Datos del reloj' : 'Sin medir');
+  const chips = MEDIDAS_DEL_RELOJ.filter(([, k]) => reloj.recientes[k]);
 
   return (
     <div
@@ -69,28 +79,33 @@ export function TarjetaDeSalud({ puntaje, dia, onAbrir, tope }) {
               background: '#fff', color: '#C0314F', fontSize: 13.5, fontWeight: 700, ...tope,
             }}
           >
-            {medido ? 'Ver detalle' : 'Registrar'}
+            {hayAlgo ? 'Ver detalle' : 'Registrar'}
           </button>
         </div>
         <div
-          className="tl-late" aria-label={medido ? `Puntaje ${puntaje}` : undefined}
+          className="tl-late" aria-label={hayDolor ? `${salud ? 'Molestia' : 'Dolor'} ${dolor} de 10` : undefined}
           style={{
             width: 64, height: 64, flexShrink: 0, borderRadius: 20, background: 'rgba(255,255,255,0.20)', display: 'grid', placeItems: 'center',
           }}
         >
-          {medido
-            ? <span style={{ fontSize: 34, fontWeight: 800, letterSpacing: -1, ...NUM_STYLE }}>{puntaje.toFixed(1)}</span>
+          {hayDolor
+            ? (
+              <span style={{ textAlign: 'center', lineHeight: 1 }}>
+                <span style={{ display: 'block', fontSize: 30, fontWeight: 800, letterSpacing: -1, ...NUM_STYLE }}>{dolor}</span>
+                <span style={{ display: 'block', fontSize: 10.5, fontWeight: 700, marginTop: 3, opacity: 0.85 }}>{salud ? 'molestia' : 'dolor'}</span>
+              </span>
+            )
             : <HeartPulse size={34} strokeWidth={2} fill="rgba(255,255,255,0.22)" />}
         </div>
       </div>
 
       {chips.length > 0 && (
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 14 }}>
-          {chips.map(([nombre, k]) => (
+          {chips.map(([nombre, k, unidad]) => (
             <span key={k} style={{
               background: 'rgba(255,255,255,0.20)', borderRadius: 999, padding: '6px 10px', fontSize: 12, fontWeight: 700, ...NUM_STYLE,
             }}>
-              {nombre} {Number(dia[k])}
+              {nombre} {reloj.recientes[k].valor} {unidad}
             </span>
           ))}
         </div>

@@ -26,7 +26,7 @@ class Limite extends Component {
   }
 }
 
-/** `atleta`: `{ id, full_name, username }`. `esAtleta`: lo abre el propio atleta. `abrirEn`: `'importar'` para llegar directo a la importación. */
+/** `atleta`: `{ id, full_name, username }`. `esAtleta`: lo abre el propio atleta. `abrirEn`: `'importar'` para llegar directo a la importación, `'recuperacion'` para abrir en esa pestaña. */
 export default function AbreMetricas({ atleta, esAtleta = false, abrirEn = null, onCerrar }) {
   return (
     <Limite onCerrar={onCerrar}>

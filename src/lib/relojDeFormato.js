@@ -27,20 +27,24 @@
  *   hechos   — lo que duró cada tramo terminado, en segundos (los parciales)
  *   motivo   — por qué terminó: 'completo' · 'tope' · 'manual'
  *   rondas   — el contador de rondas que lleva el atleta (AMRAP)
+ *   tramoDesde — la hora a la que EMPEZÓ el tramo en el que va (con sus pausas dentro; no cambia al reanudar)
+ *   ventanas — de cada tramo terminado, `[empezó, terminó]` en milisegundos de la hora (van en el mismo orden que `hechos`). Sirven para
+ *              cortar lo que midió el reloj de pulsera (pulso, ritmo) justo en cada tramo: «por lapso» en el detalle del entreno
  */
 
 export function nuevoReloj() {
-  return { fase: 'listo', i: 0, corrido: 0, desde: null, antes: 0, hechos: [], motivo: null, rondas: 0 };
+  return { fase: 'listo', i: 0, corrido: 0, desde: null, antes: 0, hechos: [], motivo: null, rondas: 0, tramoDesde: null, ventanas: [] };
 }
 
 // Milisegundos del tramo actual, ahora mismo.
 const enTramo = (est, ahora) => est.corrido + (est.fase === 'corriendo' ? Math.max(0, ahora - est.desde) : 0);
 
-const terminado = (est, motivo, antes) => ({ ...est, fase: 'fin', motivo, antes, corrido: 0, desde: null });
+const terminado = (est, motivo, antes) => ({ ...est, fase: 'fin', motivo, antes, corrido: 0, desde: null, tramoDesde: null });
 
 export function inicia(est, ahora) {
   if (est.fase !== 'listo' && est.fase !== 'pausa') return est;
-  return { ...est, fase: 'corriendo', desde: ahora };
+  // Un tramo que ya había empezado (se reanuda tras una pausa) conserva su hora de arranque.
+  return { ...est, fase: 'corriendo', desde: ahora, tramoDesde: est.tramoDesde ?? ahora };
 }
 
 export function pausa(est, ahora) {
@@ -66,7 +70,11 @@ export function avanza(est, plan, ahora, tope = null) {
     if (hastaElTope <= finDelTramo && trans >= hastaElTope) return terminado(e, 'tope', tope * 1000);
     if (trans < finDelTramo) return e;
     const sobra = trans - finDelTramo;
-    e = { ...e, antes: e.antes + finDelTramo, hechos: [...e.hechos, t.seg], i: e.i + 1, corrido: 0, desde: ahora - sobra };
+    const termino = ahora - sobra; // el siguiente tramo empieza donde terminó este, no donde llegó el aviso
+    e = {
+      ...e, antes: e.antes + finDelTramo, hechos: [...e.hechos, t.seg], ventanas: [...e.ventanas, [e.tramoDesde ?? e.desde, termino]],
+      i: e.i + 1, corrido: 0, desde: termino, tramoDesde: termino,
+    };
     if (e.i >= plan.length) return terminado(e, 'completo', e.antes);
   }
   return e;
@@ -77,7 +85,10 @@ export function listo(est, plan, ahora, tope = null) {
   const e = avanza(est, plan, ahora, tope);
   if (e.fase !== 'corriendo' || !plan[e.i]) return e;
   const trans = e.corrido + Math.max(0, ahora - e.desde);
-  const sig = { ...e, antes: e.antes + trans, hechos: [...e.hechos, Math.round(trans / 1000)], i: e.i + 1, corrido: 0, desde: ahora };
+  const sig = {
+    ...e, antes: e.antes + trans, hechos: [...e.hechos, Math.round(trans / 1000)], ventanas: [...e.ventanas, [e.tramoDesde ?? e.desde, ahora]],
+    i: e.i + 1, corrido: 0, desde: ahora, tramoDesde: ahora,
+  };
   return sig.i >= plan.length ? terminado(sig, 'completo', sig.antes) : sig;
 }
 
@@ -121,7 +132,11 @@ export function vista(est, plan, ahora, tope = null) {
   };
 }
 
-/** Lo que el reloj ya sabe del resultado, para llenar de antemano lo que el atleta anota. */
+/**
+ * Lo que el reloj ya sabe del resultado, para llenar de antemano lo que el atleta anota. Además del resultado lleva la HUELLA de cada tramo terminado
+ * (`ventanas` y `lapsos`): cuándo corrió y qué era (trabajo o descanso, cuánto se planeó, cómo se llamaba y qué pedía, como «400 m»). Así el coach puede ver,
+ * por cada lapso, cuánto tardó y —con el reloj de pulsera— cómo iba el pulso.
+ */
 export function sugerido(est, plan) {
   const trabajo = plan.filter((t) => t.tipo === 'trabajo');
   const hechosDeTrabajo = plan.slice(0, est.hechos.length).filter((t) => t.tipo === 'trabajo').length;
@@ -129,6 +144,8 @@ export function sugerido(est, plan) {
     seg: Math.floor(est.antes / 1000),
     rondas: est.rondas,
     tramos: est.hechos,
+    ventanas: est.ventanas.length === est.hechos.length ? est.ventanas : [], // un reloj viejo sin ventanas no inventa las que le faltan
+    lapsos: plan.slice(0, est.hechos.length).map((t) => ({ tipo: t.tipo, plan: t.seg, etiqueta: t.etiqueta ?? '', texto: t.texto ?? '', vuelta: t.vuelta })),
     completados: hechosDeTrabajo,
     de: trabajo.length,
   };
@@ -151,6 +168,12 @@ export function reanuda(guardado, plan) {
     && NUMEROS.every((k) => Number.isFinite(g[k]) && g[k] >= 0)
     && g.i <= plan.length
     && Array.isArray(g.hechos) && g.hechos.every((x) => Number.isFinite(x))
+    // Lo guardado antes de que existieran las ventanas no las trae: se acepta y se queda sin ellas (nunca rompe, solo no corta por lapso).
+    && (g.ventanas === undefined || (Array.isArray(g.ventanas) && g.ventanas.every((w) => Array.isArray(w) && w.length === 2 && w.every((x) => Number.isFinite(x)))))
+    && (g.tramoDesde === undefined || g.tramoDesde === null || Number.isFinite(g.tramoDesde))
     && (g.fase !== 'corriendo' || Number.isFinite(g.desde));
-  return valido ? { ...nuevoReloj(), ...g, desde: g.fase === 'corriendo' ? g.desde : null } : nuevoReloj();
+  if (!valido) return nuevoReloj();
+  const e = { ...nuevoReloj(), ...g, desde: g.fase === 'corriendo' ? g.desde : null };
+  // Un reloj viejo que ya llevaba tramos hechos no tiene sus ventanas: no se cortarían bien, así que se deja el arreglo corto y `sugerido` no lo usa.
+  return e.ventanas.length === e.hechos.length ? e : { ...e, ventanas: [] };
 }
