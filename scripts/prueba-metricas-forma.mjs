@@ -4,8 +4,9 @@
 import assert from 'node:assert/strict';
 import {
   diaLocal, sumaDias, diasEntre, lunesDe, cargaPorDia, curvaDeForma, estadoDeForma, rampaDeCondicion, porSemana, cambioEnPorCiento, pulsoMaximoVisto,
-  pulsoEnReposoMediano, resumenDeRecuperacion,
+  pulsoEnReposoMediano, resumenDeRecuperacion, totalesHasta,
 } from '../src/lib/metricas/forma.js';
+import { derivaDelAtleta, facilMedioDuro } from '../src/lib/metricas/derivados.js';
 
 const casi = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg ?? ''} esperaba ${b} ± ${tol}, salió ${a}`);
 
@@ -175,6 +176,61 @@ const casi = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg ?? ''}
   assert.equal(pulsoEnReposoMediano(normal, { hoy }), 52);
   assert.equal(pulsoEnReposoMediano([], { hoy }), null);
   assert.equal(pulsoEnReposoMediano(dias('2026-09-21', hoy, (d) => ({ fc_reposo: d < '2026-10-01' ? 60 : 50 })), { hoy }), 55, '10 días a 60 y 10 a 50: la mediana es 55');
+}
+
+/* ---- Todo junto: lo que muestran las pantallas ---- */
+{
+  const hoy = '2026-10-10'; // sábado
+  const act = (dia, carga, extra = {}) => ({ inicio: `${dia}T13:00:00Z`, desfase_min: -360, duracion_s: 3600, carga, fc_media: 150, zonas_s: [600, 1800, 900, 300, 0], ...extra });
+  // 7 semanas de 4 entrenos de 60 puntos, y esta semana dos más fuertes.
+  const lista = [];
+  for (let s = 0; s < 7; s += 1) for (const d of [0, 2, 4, 5]) lista.push(act(sumaDias('2026-08-17', s * 7 + d), 60));
+  lista.push(act('2026-10-05', 90), act('2026-10-07', 80));
+  const d = derivaDelAtleta({ actividades: lista, recuperacion: [], hoy });
+  assert.equal(d.curva.length, diasEntre('2026-08-17', hoy) + 1);
+  assert.equal(d.curva[0].dia, '2026-08-17');
+  assert.ok(d.forma.ctl > 15 && d.forma.atl > d.forma.ctl * 0.8);
+  assert.ok(['equilibrio', 'productivo', 'fresco', 'riesgo', 'descansado', 'sin-base'].includes(d.estado.clave));
+  assert.equal(d.semanas.length, 12);
+  assert.equal(d.estaSemana.lunes, '2026-10-05');
+  assert.equal(d.estaSemana.sesiones, 2);
+  assert.equal(d.estaSemana.carga, 170);
+  assert.equal(d.semanaPasada.carga, 240);
+  assert.equal(d.cambios.carga, -6, 'de lunes a ayer (viernes): 170 contra 180 de la semana pasada hasta el mismo día; hoy no cuenta');
+  assert.equal(d.cargaDeLaSemana, 170);
+  assert.equal(d.ultimos.length, 5);
+  assert.equal(d.ultimos[0].inicio, '2026-10-07T13:00:00Z', 'los más nuevos primero');
+  assert.equal(d.primerDia, '2026-08-17');
+  assert.equal(d.diasDeHistorial, 54);
+  assert.equal(d.deLas4, 14, 'de las últimas 4 semanas (28 días)');
+  assert.deepEqual(d.zonas4, [600 * 14, 1800 * 14, 900 * 14, 300 * 14, 0]);
+  assert.equal(d.recuperacion.veredicto.clave, 'sin-datos');
+  assert.deepEqual(d.entrenosDeHoy, []);
+  // A MITAD DE SEMANA se compara con la pasada a la misma altura (lunes a miércoles contra lunes a miércoles), no contra la semana completa.
+  const mitad = derivaDelAtleta({ actividades: lista, recuperacion: [], hoy: '2026-10-07' }); // miércoles
+  assert.equal(mitad.semanaEnCurso, true);
+  assert.equal(mitad.estaSemana.carga, 170);
+  assert.equal(mitad.cambios.carga, 50, 'de lunes a ayer (martes): 90 contra 60 (el lunes y martes de la semana pasada)');
+  assert.equal(derivaDelAtleta({ actividades: lista, recuperacion: [], hoy: '2026-10-05' }).cambios.carga, null, 'el lunes todavía no hay con qué comparar');
+  assert.deepEqual(mitad.diasDeLaSemana.map((x) => x.carga), [90, 0, 80, 0, 0, 0, 0]);
+  assert.deepEqual(mitad.diasDeLaSemana.map((x) => x.sesiones), [1, 0, 1, 0, 0, 0, 0]);
+  assert.deepEqual(mitad.diasDeLaSemana.map((x) => x.esHoy), [false, false, true, false, false, false, false]);
+  assert.deepEqual(mitad.diasDeLaSemana.map((x) => x.futuro), [false, false, false, true, true, true, true]);
+  assert.equal(d.semanaEnCurso, true, 'el sábado la semana todavía no termina');
+  assert.equal(derivaDelAtleta({ actividades: lista, recuperacion: [], hoy: '2026-10-11' }).semanaEnCurso, false, 'el domingo ya es la semana completa');
+  assert.equal(totalesHasta(lista, { lunes: '2026-09-28', hasta: '2026-09-30' }).carga, 120);
+  assert.deepEqual(totalesHasta([], { lunes: '2026-09-28', hasta: '2026-09-30' }), { sesiones: 0, duracion_s: 0, carga: 0 });
+  // Sin entrenos: todo vacío pero sin romper.
+  const vacio = derivaDelAtleta({ actividades: [], recuperacion: [], hoy });
+  assert.deepEqual(vacio.curva, []);
+  assert.equal(vacio.forma, null);
+  assert.equal(vacio.estado, null);
+  assert.equal(vacio.estaSemana.sesiones, 0);
+  assert.equal(vacio.diasDeHistorial, 0);
+  assert.equal(vacio.cambios.carga, null);
+  // Fácil / medio / duro.
+  assert.deepEqual(facilMedioDuro([600, 1800, 900, 300, 0]), { facil: 67, medio: 25, duro: 8 });
+  assert.equal(facilMedioDuro([0, 0, 0, 0, 0]), null);
 }
 
 console.log('prueba-metricas-forma: todo bien');
