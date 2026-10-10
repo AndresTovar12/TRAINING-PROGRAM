@@ -19,10 +19,12 @@ El entreno es **un dato, no una pantalla**: una lista de pasos (lo que manda el 
 ```json
 {
   "v": 1,
+  "nombre": "Lower Strength",
   "inicio": 1791560000000,
   "fin": 1791563600000,
   "oculto": true,
-  "hechos":   { "0.1.0": { "t": 1791560060000, "n": "Back Squat", "reps": "6", "kg": "107.5" } },
+  "hechos":   { "0.1.0": { "t": 1791560060000, "n": "Back Squat", "reps": "6", "kg": "107.5" },
+                "d.0.1.0": { "t": 1791560220000, "p": 150 } },
   "saltados": { "3.1.0": { "t": 1791560500000, "n": "Hip Thrust" } },
   "extra":    { "d.0.1.0": 30 },
   "empezados":{ "1.2.0": 1791560900000 }
@@ -30,13 +32,24 @@ El entreno es **un dato, no una pantalla**: una lista de pasos (lo que manda el 
 ```
 
 - **Horas en milisegundos de época** (`Date.now()`). Todo lo que se ve (cuánto queda de un descanso, el tiempo total) se calcula con la hora de ahora: nunca con un contador. Así aguanta una llamada, la pantalla bloqueada o que el sistema mate la app.
+- **`nombre`** (10 oct 2026): el nombre de la sesión (sin la duración estimada) cuando se arrancó. Sirve para que el coach reconozca la sesión en sus métricas sin reconstruir el plan.
 - **`hechos[clave]`**: el paso se hizo en `t`. `n` es el nombre del ejercicio en ese momento: si el coach cambió ese lugar por otro ejercicio, la marca vieja ya no cuenta. `reps`/`kg`/`seg` solo viajan si el atleta **cambió** lo planeado (`kg` siempre en kilos). `tecnica` queda reservada: el id del video que el atleta grabó de esa vuelta (ver `src/lib/funciones.js`).
 - **`oculto`**: el atleta quitó el entreno guiado de esa sesión (la ✕ junto a «Continuar entreno»): la app ya no ofrece «Iniciar/Continuar». Solo existe cuando es `true`; no borra nada de lo hecho. Un reloj puede ignorarlo.
 - **Deshacer una sesión terminada** (el botón «Deshacer» junto a «Sesión terminada»): si el entreno también tenía `fin`, la app borra el avance (`reiniciaSiTerminado` en `lib/entreno.js`) y vuelve a ofrecer «Iniciar entreno» desde cero. Lo anotado en la lista no se toca; un entreno a medias (sin `fin`) se queda como está, y `oculto` se conserva.
+- **Un descanso** (`d.<clave>`) guarda `t` (cuándo terminó) y, si tenía cuenta, `p` (lo que se planeó, en segundos): junto con el `t` del paso anterior dice cuánto descansó de verdad. Un descanso que se cerró solo porque el atleta hizo un paso de adelante no lleva `p` (no se tomó).
 - **`saltados`**: igual, pero el paso se saltó. Sigue pendiente en la lista.
 - **`extra[clave]`**: segundos que se le sumaron a un descanso («+30 s»). **`empezados[clave]`**: cuándo se arrancó el cronómetro *opcional* de un paso con tiempo.
 - **El paso actual = el primer paso de la lista sin marca.** No se guarda. Un descanso empieza cuando se marcó el paso anterior. Nada avanza solo.
 - **Son objetos por llave, nunca listas**, a propósito: la base mezcla los objetos llave por llave a cualquier profundidad y *reemplaza* las listas enteras (ver `src/lib/estadoPorPartes.js`).
+
+### Lo que deja un Set con reloj (`sesión.formatos[<idx>]`, 10 oct 2026)
+
+Además del resultado de siempre (`anota`, `valor`, `extra`, `seg`, `tramos`, `de`, `en`), el reloj de un Set deja la **huella de cada tramo hecho**, en el mismo orden que `tramos`:
+
+- **`ventanas`**: `[[empezó, terminó], …]` en milisegundos de época. Cada «Listo» cierra una y abre la siguiente; con la pantalla dormida cada ventana termina donde empieza la siguiente (no donde llegó el aviso). Una pausa dentro de un tramo no mueve su hora de arranque. El tramo que cortó el tope o el «Terminar» no tiene ventana (no se completó).
+- **`lapsos`**: `[{ tipo: 'trabajo'|'descanso', plan, etiqueta, texto, vuelta }]`: qué era cada tramo (`plan` = segundos planeados o `null` si espera «Listo»; `texto` = lo que pedía, como «400 m»).
+
+Con eso, y con el pulso del reloj de pulsera para esas horas, el coach ve «Por lapso» (`lib/metricas/porSerie.js`). Un reloj guardado antes de este cambio no trae ventanas: se acepta y simplemente no se corta por lapso. Pruebas: `scripts/prueba-formatos.mjs` y `scripts/prueba-entreno.mjs`.
 
 ### Cómo se escribe
 

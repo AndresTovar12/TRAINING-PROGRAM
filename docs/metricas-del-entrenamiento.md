@@ -16,6 +16,24 @@
 
 Pruebas: `node scripts/prueba-metricas-calculos.mjs`, `-forma.mjs`, `-lectura.mjs`, `-importa.mjs` (todas con archivos inventados).
 
+## 1b. Salud diaria, «Por serie» y Fuerza (10 oct 2026, segunda vuelta)
+
+Pedido de Andrés: lo que el atleta teclea «no es muy válido», así que **la salud diaria se llena con el reloj y el atleta solo anota el dolor**; y el coach quiere ver **cada serie y cada lapso** de un entreno.
+
+| Pieza | Dónde | Qué hace |
+|---|---|---|
+| Salud diaria | `useRecuperacionReciente` (`src/lib/`), `recuperacionApi.js`, `TarjetaDeSalud` (`TarjetasDeHome.jsx`), `WellnessView` (`TrainingApp.jsx`) | Pulso en reposo, variabilidad cardiaca y sueño se leen de `recuperacion_diaria` (solo lectura, en voz del atleta: `lecturaParaElAtleta` en `forma.js`). Sin reloj la app **no los pide**: ofrece «Importar entrenos». Lo único que se anota es **«Dolor muscular»** (con pacientes de un fisio, «Dolor o molestia»); se guarda en la llave de siempre, `wr:wellness[día].soreness`. Quitados: motivación, fatiga y sueño anotado (lo viejo se queda en la cuenta, sin usarse). El conector de IA `anotar_bienestar` **sigue aceptando los cuatro campos** (se ajusta después). |
+| Por serie y por lapso | `src/lib/metricas/porSerie.js` (puro), `PorSerie.jsx`, `useMetricas` | Junta el entreno guiado (`user_app_state`), los resultados de los Sets con reloj (`ventanas`, `lapsos`) y, si hay, el pulso del reloj de pulsera cortado en cada ventana (`pulsoEnVentana`). Une cada entreno del reloj con la sesión guiada que se hizo a la vez (`uneConActividades`: traslape de al menos la mitad de lo más corto). Una sesión guiada **sin** reloj sale en la lista como un entreno de origen `app` («Sin reloj»), con su «Por serie». |
+| Fuerza | `src/lib/metricas/fuerza.js` (puro), `Fuerza.jsx` | Quinta pestaña (solo si hay series con peso): kilos de la semana contra la pasada **a la misma altura**, series cumplidas (hechas de hechas + saltadas), kilos por semana, **máximo estimado** por levantamiento (Epley, hasta 12 reps) y récords de los últimos 30 días. |
+
+**De dónde sale cada número** (las etiquetas que Andrés aprobó, sin género): «Lo midió la app» (tiempo), «Lo midió el reloj» (pulso y lo que baja en el descanso), «Lo escribió a mano» (kilos/reps que el atleta cambió, calorías de una máquina) y «Dejó lo del plan» (tocó «Listo» sin cambiar nada: es lo que decía el plan, **no algo comprobado**). Salen de `hechos[clave].reps/kg` (solo viajan si el atleta cambió) contra `exercises[idx]` (que «Listo» llena con lo planeado).
+
+**Reglas de las filas:** una serie solo trae su **duración** si antes hubo un descanso marcado (si no, el tiempo desde la anterior incluye todo lo que pasó en medio); su pulso, igual. «Bajó N» = el pico de la serie menos el pulso en los últimos 8 s del descanso. El ritmo de un lapso en metros sale del cronómetro de la app y la distancia que pedía el plan, no del GPS. Los puntos de las series reducidas promedian de 3 a 25 s: el máximo por ventana es el de esos promedios (un pico de un instante sale algo más bajo).
+
+Quitado a propósito: **«qué tan duro estuvo, del 1 al 10»** (otro dato que teclear: saturación). La carga de un entreno sin pulso sigue estimada («≈»).
+
+Pruebas: `node scripts/prueba-metricas-porserie.mjs`, `-fuerza.mjs` y las de siempre. Maqueta de lo que **solo se puede con la app instalable** (GPS, banda de pulso, Apple Watch directo, otros aparatos, máquinas Bluetooth, técnica por serie): `docs/maquetas/2026-10-10-lo-que-abre-la-app.html` (Artifact: https://claude.ai/artifact/6ehSqM8Tdhr9YFNudsjfDz).
+
 ## 2. La base (migraciones `metricas_del_entrenamiento` y `metricas_perfil_en_umbrales`)
 
 | Tabla | Una fila es… | Lo importante |
@@ -93,7 +111,9 @@ Un entreno crudo es `{ formato, deporte, deporte_original, titulo, dispositivo, 
 
 - **La lista de atletas con su estado de hoy** (forma + recuperación en la fila, para ver de un golpe a quién hay que escribirle). Pide una consulta de todo el equipo; se propone, con tres dibujos, en la maqueta `docs/maquetas/2026-10-10-metricas-del-reloj.html` (publicada también como Artifact: https://claude.ai/artifact/GZfWNz2Bsu5rxpa61rFDCw), junto con otras cuatro decisiones de diseño por si se quiere cambiar algo.
 - **Conector de IA**: una herramienta para que ChatGPT/Claude lean las métricas de un atleta.
-- **Plan contra real**: unir `actividades.sesion` con el entreno guiado y mostrar lo hecho junto a lo planeado.
+- **Plan contra real**: mostrar lo hecho junto a lo planeado (la unión por hora ya existe, ver §1b; falta comparar con el plan y escribir `actividades.sesion`).
+- **Técnica por serie**: el campo `hechos[clave].tecnica` existe; falta el botón (apagado, «Pronto») y mensajes con video. Se ve en la maqueta de la app instalable.
+- **Cronómetro por distancia** en los lapsos de metros (sigue pendiente de su sí).
 - **HealthKit en vivo y relojes** (ver `docs/entreno-y-reloj.md`).
 - **Mapa de fondo** en la ruta (hoy se dibuja sola, sin terceros ni permisos).
 - Zonas por **potencia** y por **ritmo** (los umbrales `ftp_w` y `ritmo_umbral_s_km` ya tienen columna).
