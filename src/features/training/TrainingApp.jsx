@@ -621,7 +621,7 @@ const SetGroup = ({
                 color: LT.mint, background: KP.mintSoft, padding: '4px 9px', borderRadius: 7, touchAction: 'manipulation', ...NUM_STYLE,
               }}
             >
-              <Check size={12} strokeWidth={3.5} /> {textoDeResultado(resultado)}
+              <Check size={12} strokeWidth={3.5} /> {textoDeResultado(resultado, planDeLapsos ? 'lapso' : undefined)}
             </button>
           )}
           {!formato && rondasQueDecir(rondas) && (
@@ -654,7 +654,7 @@ const SetGroup = ({
                 padding: '6px 11px', borderRadius: 8, ...NUM_STYLE,
               }}
             >
-              <Check size={13} strokeWidth={3} /> {textoDeResultado(resultado)}
+              <Check size={13} strokeWidth={3} /> {textoDeResultado(resultado, planDeLapsos ? 'lapso' : undefined)}
             </button>
           ) : !soloLectura && (
             /* Un botón de los suyos —blanco, borde sólido, azul— junto al «Iniciar reloj». Antes era solo texto
@@ -717,7 +717,7 @@ const SetGroup = ({
       {reloj && conReloj && (
         <RelojDelBloque
           formato={conReloj} plan={planDeLapsos} ejercicios={group.exercises} serie={setNum} resumen={resumen}
-          clave={`${userId}:${sessionKey}:${claveFormato}`}
+          clave={`${userId}:${sessionKey}:${claveFormato}`} empezarYa
           onGuardar={(r) => onFormato(claveFormato, r)} onCerrar={() => setReloj(false)}
         />
       )}

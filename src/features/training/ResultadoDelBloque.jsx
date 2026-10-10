@@ -129,7 +129,7 @@ export default function ResultadoDelBloque({
     cal: <NumeroGrande etiqueta="Calorías" valor={valor} onCambio={setValor} paso={5} unidad="cal" />,
     cumplido: (
       <NumeroGrande
-        etiqueta="Tramos completados" detalle={de ? `De ${de}` : undefined} valor={valor} onCambio={setValor}
+        etiqueta={formato?.id === 'lapsos' ? 'Lapsos completados' : 'Tramos completados'} detalle={de ? `De ${de}` : undefined} valor={valor} onCambio={setValor}
       />
     ),
     nada: null,

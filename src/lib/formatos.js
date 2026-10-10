@@ -406,8 +406,12 @@ export function limpiaResultado(r) {
   return salida;
 }
 
-/** Lo anotado, como se lee: «7 rondas + 3 reps», «12:34», «8 de 10 tramos». Sin número, «Hecho». */
-export function textoDeResultado(r) {
+/**
+ * Lo anotado, como se lee: «7 rondas + 3 reps», «12:34», «8 de 10 tramos». Sin número, «Hecho».
+ * `palabra`: cómo se llama cada pieza de lo «cumplido»: un formato dice «tramo» (AMRAP por tramos, fartlek…) y unos lapsos personalizados dicen
+ * «lapso» (Andrés: «la palabra es lapsos, nunca tramos»).
+ */
+export function textoDeResultado(r, palabra = 'tramo') {
   if (!r) return '';
   const v = numero(r.valor);
   if (v === null) return 'Hecho';
@@ -424,7 +428,7 @@ export function textoDeResultado(r) {
     case 'cal': return `${v} cal`;
     case 'cumplido': {
       const de = numero(r.de);
-      return `${v}${de ? ` de ${de}` : ''} ${(de ?? v) === 1 ? 'tramo' : 'tramos'}`;
+      return `${v}${de ? ` de ${de}` : ''} ${(de ?? v) === 1 ? palabra : `${palabra}s`}`;
     }
     default: return 'Hecho';
   }

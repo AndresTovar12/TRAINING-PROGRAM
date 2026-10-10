@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import {
   MAX_PASOS, FORMATO_DE_LAPSOS, rondasDelSet, deporteDelTipo, pasosDeLaSesion, leeAvance, iniciaEntreno, marcaListo, saltaPaso, vuelveAtras, masDescanso,
-  terminaEntreno, reabreEntreno, vistaDelEntreno, empiezaPaso, quitaCronometro, cuentaDe,
+  terminaEntreno, reabreEntreno, ocultaEntreno, vistaDelEntreno, empiezaPaso, quitaCronometro, cuentaDe,
 } from '../src/lib/entreno.js';
 import { ponFormato } from '../src/lib/formatos.js';
 import { parcheDeLapsos } from '../src/lib/lapsos.js';
@@ -474,7 +474,7 @@ const lower = {
 
 /* ---- Lo que llega de la base puede venir roto ---- */
 {
-  const vacio = { inicio: null, fin: null, hechos: {}, saltados: {}, extra: {}, empezados: {} };
+  const vacio = { inicio: null, fin: null, oculto: false, hechos: {}, saltados: {}, extra: {}, empezados: {} };
   for (const basura of [undefined, null, 'x', 7, [], { hechos: [] }, { hechos: 'a', saltados: 5, inicio: 'ayer', extra: { a: -1, b: 'x', c: 0 } }]) {
     assert.deepEqual(leeAvance(basura), vacio);
   }
@@ -486,6 +486,27 @@ const lower = {
   const limpio = marcaListo(plan, { hechos: 'roto', extra: 3 }, 100);
   assert.deepEqual(Object.keys(limpio.hechos), ['0.1.0']);
   assert.equal(limpio.v, 1);
+}
+
+/* ---- Quitar el entreno guiado de una sesión («Continuar entreno» ya no sale) ---- */
+{
+  const plan = pasosDeLaSesion(lower);
+  const a = marcaListo(plan, iniciaEntreno(undefined, 100), 200);
+  assert.equal(vistaDelEntreno(plan, a, 300).oculto, false, 'por defecto el entreno guiado está a la vista');
+  const oculto = ocultaEntreno(a);
+  assert.equal(vistaDelEntreno(plan, oculto, 300).oculto, true);
+  assert.deepEqual(Object.keys(oculto.hechos), ['0.1.0'], 'quitarlo no borra lo que ya se hizo');
+  assert.equal(oculto.oculto, true);
+  assert.equal(a.oculto, undefined, 'sin quitarlo no se guarda la llave');
+  // Sigue oculto aunque el atleta siga marcando pasos (o termine y deshaga).
+  const sigue = marcaListo(plan, oculto, 400);
+  assert.equal(vistaDelEntreno(plan, sigue, 500).oculto, true);
+  assert.equal(vistaDelEntreno(plan, terminaEntreno(oculto, 600), 700).oculto, true);
+  // Lo que llega roto no oculta nada.
+  assert.equal(leeAvance({ oculto: 'sí' }).oculto, false);
+  assert.equal(leeAvance({ oculto: 1 }).oculto, false);
+  // Viaja por la base como una llave más.
+  assert.deepEqual(diferencia(a, oculto), { oculto: true });
 }
 
 /* ---- Viaja bien por la base: se guarda por llaves y se mezcla sin pisar a otro dispositivo ---- */
