@@ -384,8 +384,8 @@ const numero = (v) => {
 /**
  * El resultado de un Set con formato, listo para guardar en el registro del día
  * (`sesión.formatos[<clave del Set>]`): `anota` dice qué es el `valor`; `extra` son las reps
- * sueltas de un AMRAP; `seg` lo que duró todo; `tramos` los parciales; `de` cuántos tramos
- * de trabajo había. Lo que no es número queda en `null`: un campo vacío no es un cero.
+ * sueltas de un AMRAP; `seg` lo que duró todo; `tramos` los parciales; `ventanas` y `lapsos` la
+ * hora y la descripción de cada parcial; `de` cuántos tramos de trabajo había. Lo que no es número queda en `null`: un campo vacío no es un cero.
  */
 export function limpiaResultado(r) {
   if (!r || typeof r !== 'object') return null;
@@ -401,6 +401,23 @@ export function limpiaResultado(r) {
     seg: seg === null ? null : Math.round(seg),
   };
   if (Array.isArray(r.tramos)) salida.tramos = r.tramos.map(n).filter((x) => x !== null).map(Math.round);
+  // La huella de cada tramo hecho (ver `sugerido` en `relojDeFormato.js`): cuándo corrió y qué era. Se guardan juntas y en el mismo orden que `tramos`.
+  if (Array.isArray(r.ventanas)) {
+    const v = r.ventanas
+      .filter((w) => Array.isArray(w) && w.length === 2 && w.every((x) => Number.isFinite(x)))
+      .slice(0, MAX_TRAMOS).map((w) => [Math.round(w[0]), Math.round(w[1])]);
+    if (v.length) salida.ventanas = v;
+  }
+  if (Array.isArray(r.lapsos)) {
+    const l = r.lapsos.slice(0, MAX_TRAMOS).filter((x) => x && typeof x === 'object').map((x) => ({
+      tipo: x.tipo === 'descanso' ? 'descanso' : 'trabajo',
+      plan: n(x.plan) === null ? null : Math.round(n(x.plan)),
+      etiqueta: String(x.etiqueta ?? '').slice(0, 60),
+      texto: String(x.texto ?? '').slice(0, 40),
+      vuelta: n(x.vuelta) === null ? 1 : Math.round(n(x.vuelta)),
+    }));
+    if (l.length) salida.lapsos = l;
+  }
   if (n(r.de) !== null) salida.de = Math.round(n(r.de));
   if (typeof r.en === 'string') salida.en = r.en.slice(0, 40);
   return salida;

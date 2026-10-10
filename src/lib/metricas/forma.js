@@ -24,6 +24,9 @@ export function diaLocal(inicio, desfaseMin = 0) {
   return new Date(ms + (Number(desfaseMin) || 0) * 60000).toISOString().slice(0, 10);
 }
 
+/** El día de hoy (`AAAA-MM-DD`) en la hora de quien mira. */
+export const hoyLocal = () => diaLocal(Date.now(), -new Date().getTimezoneOffset());
+
 const aMs = (dia) => Date.parse(`${dia}T00:00:00Z`);
 const aDia = (ms) => new Date(ms).toISOString().slice(0, 10);
 /** Un día más (o menos) otros `n`. */
@@ -227,3 +230,25 @@ export function resumenDeRecuperacion(filas, { hoy }) {
         : { clave: 'cargado', titulo: 'Cuerpo cargado', detalle: 'Varias señales fuera de lo normal a la vez: conviene aligerar la carga y preguntarle cómo está.', tono: 'rojo' };
   return { reposo, hrv, sueno, veredicto };
 }
+
+const NOMBRE_EN_VOZ_PROPIA = { fc_reposo: 'tu pulso en reposo', hrv_ms: 'tu variabilidad cardiaca', sueno_s: 'tu sueño' };
+const lista = (v) => (v.length <= 1 ? (v[0] ?? '') : `${v.slice(0, -1).join(', ')} y ${v[v.length - 1]}`);
+
+/**
+ * El veredicto de `resumenDeRecuperacion`, dicho al propio atleta (en segunda persona) para la tarjeta y la hoja de Salud. `null` cuando todavía no hay con qué
+ * opinar (sin datos, o datos de la semana sin una base con la cual compararlos).
+ */
+export function lecturaParaElAtleta(resumen) {
+  const v = resumen?.veredicto;
+  if (!v || v.clave === 'sin-datos') return null;
+  const medidas = [resumen.reposo, resumen.hrv, resumen.sueno];
+  const conDatos = medidas.filter((m) => m.estado === 'bien' || m.estado === 'atencion');
+  const fuera = conDatos.filter((m) => m.estado === 'atencion');
+  const detalle = v.clave === 'bien'
+    ? `${lista(conDatos.map((m) => NOMBRE_EN_VOZ_PROPIA[m.campo]))} ${conDatos.length === 1 ? 'va' : 'van'} dentro de lo normal para ti.`.replace(/^./, (c) => c.toUpperCase())
+    : v.clave === 'atencion'
+      ? `Una señal fuera de lo normal: ${NOMBRE_EN_VOZ_PROPIA[fuera[0].campo]}. Escucha cómo te sientes antes de entrenar fuerte.`
+      : `Varias señales fuera de lo normal a la vez (${lista(fuera.map((m) => NOMBRE_EN_VOZ_PROPIA[m.campo]))}). Aligera la carga de hoy.`;
+  return { clave: v.clave, titulo: v.titulo, detalle, tono: v.tono };
+}
+

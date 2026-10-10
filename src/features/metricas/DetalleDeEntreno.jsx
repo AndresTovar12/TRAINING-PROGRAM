@@ -5,16 +5,21 @@ import { useConfirmacion } from '@/components/Confirmacion';
 import { ZONAS, limitesDeZonas, zonaDe } from '@/lib/metricas/calculos';
 import { DEPORTES, nombreDelDeporte } from '@/lib/metricas/deportes';
 import { borraActividad, getActividad, getSeries } from '@/lib/metricasApi';
+import { filasPorSerie } from '@/lib/metricas/porSerie';
 import {
   distanciaTexto, duracionTexto, fechaLarga, horaTexto, relojTexto, ritmoTexto, velocidadTexto,
 } from '@/lib/metricas/formato';
 import { BarraDeZonas, GraficaDeLinea, RutaEnMapa } from './Graficas';
 import { COLORES_DE_ZONA, ejeDeTiempo, marcasNumericas } from './graficasUtil';
 import { Cargando, Dato, MosaicoDeDeporte, Seccion, Tarjeta } from './Piezas';
+import PorSerie from './PorSerie';
 
 /* EL DETALLE DE UN ENTRENO: lo que el coach abre cuando quiere ver cómo fue de verdad.
    Arriba, los números de siempre; después el pulso en el tiempo con sus zonas pintadas detrás (se ve de golpe si fue fácil o duro), el ritmo, la ruta, el tiempo
-   en cada zona y las vueltas. Todo con el valor exacto a un toque (arrastrando el dedo por la gráfica). */
+   en cada zona y las vueltas. Todo con el valor exacto a un toque (arrastrando el dedo por la gráfica).
+
+   Si ese entreno se hizo con el entreno guiado de la app (`sesion`, ver `useMetricas`), antes de las gráficas va «Por serie»: cada serie, lapso o set con su tiempo,
+   su pulso y lo que descansó. Una sesión guiada SIN reloj de pulsera llega aquí como un entreno de origen `app`: no tiene pulso ni gráficas, solo «Por serie». */
 
 const METODOS = { escrito: 'escrito a mano', visto: 'el más alto que se le ha visto', edad: 'estimado por su edad', medido: 'medido en reposo', estimado: 'estimado', 'por defecto': 'valor por defecto' };
 
@@ -194,12 +199,15 @@ function SeriesDeFuerza({ sets }) {
   );
 }
 
-export default function DetalleDeEntreno({ actividad, alVolver, puedeBorrar, alBorrado }) {
+export default function DetalleDeEntreno({ actividad, sesion = null, unidadPeso = 'kg', alVolver, puedeBorrar, alBorrado }) {
   const pregunta = useConfirmacion();
-  const [estado, setEstado] = useState({ cargando: true, fila: null, series: null, error: null });
+  const soloApp = actividad.origen === 'app';
+  // Una sesión guiada sin reloj no tiene qué pedirle a la base: llega completa (quien lo abre pone `key` por entreno, así que no hay que reiniciar).
+  const [estado, setEstado] = useState(() => (soloApp ? { cargando: false, fila: actividad, series: null, error: null } : { cargando: true, fila: null, series: null, error: null }));
   const [borrando, setBorrando] = useState(false);
 
   useEffect(() => {
+    if (soloApp) return undefined;
     let cancelado = false;
     (async () => {
       try {
@@ -210,9 +218,13 @@ export default function DetalleDeEntreno({ actividad, alVolver, puedeBorrar, alB
       }
     })();
     return () => { cancelado = true; };
-  }, [actividad]);
+  }, [actividad, soloApp]);
 
   const fila = estado.fila ?? actividad;
+  const porSerie = useMemo(
+    () => (sesion && !estado.cargando ? filasPorSerie(sesion, { actividad: soloApp ? null : fila, series: estado.series }) : null),
+    [sesion, estado.cargando, estado.series, fila, soloApp],
+  );
   const fcMax = fila.umbrales?.fc_max ?? null;
   const conRitmo = DEPORTES[fila.deporte]?.ritmo;
   const ritmoMedio = fila.metricas?.ritmo_medio_s_km ?? (fila.distancia_m >= 100 && fila.movimiento_s ? Math.round((fila.movimiento_s / fila.distancia_m) * 1000) : null);
@@ -286,6 +298,7 @@ export default function DetalleDeEntreno({ actividad, alVolver, puedeBorrar, alB
 
       {estado.cargando ? <Cargando texto="Cargando el pulso y la ruta…" /> : (
         <>
+          {porSerie && <PorSerie resultado={porSerie} unidadPeso={unidadPeso} conReloj={!soloApp} />}
           {estado.series?.fc && (
             <Seccion titulo="Pulso" ayuda="Las franjas de color son las zonas de pulso: cuanto más arriba, más duro. Arrastra el dedo (o el cursor) por la gráfica para ver el valor de cada momento. Las líneas punteadas verticales son cambios de vuelta.">
               <Tarjeta relleno={12}>
@@ -296,7 +309,7 @@ export default function DetalleDeEntreno({ actividad, alVolver, puedeBorrar, alB
           {!estado.series?.fc && fila.fc_media > 0 && (
             <Seccion titulo="Pulso"><div style={{ fontSize: 14.5, color: LT.text2, fontWeight: 500, lineHeight: 1.45 }}>De este entreno solo se guardó el resumen: pulso medio {fila.fc_media} lpm y máximo {fila.fc_max} lpm. Las gráficas no están (es un entreno viejo de una importación grande).</div></Seccion>
           )}
-          {!estado.series && !(fila.fc_media > 0) && (
+          {!estado.series && !(fila.fc_media > 0) && !soloApp && (
             <Seccion titulo="Pulso"><div style={{ fontSize: 14.5, color: LT.text2, fontWeight: 500, lineHeight: 1.45 }}>Este entreno no trae pulso medido.</div></Seccion>
           )}
           {estado.series?.vel && (

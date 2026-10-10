@@ -1,12 +1,63 @@
 import { useMemo, useState } from 'react';
-import { Activity, ChevronRight, Flame, HeartPulse, Route, Timer } from 'lucide-react';
+import { Activity, ChevronRight, Flame, HeartPulse, ListChecks, Route, Timer, Watch } from 'lucide-react';
 import { LT, KP, FONT, NUM_STYLE } from '@/lib/theme';
 import { nombreDelDeporte } from '@/lib/metricas/deportes';
 import { diaLocal, lunesDe, sumaDias } from '@/lib/metricas/forma';
 import { distanciaTexto, duracionTexto, fechaCorta, horaTexto, rangoDeSemana } from '@/lib/metricas/formato';
+import { filasPorSerie } from '@/lib/metricas/porSerie';
 import { EstadoVacio, MosaicoDeDeporte } from './Piezas';
 
-/* La lista de entrenos, de la semana más nueva a la más vieja, con los totales de cada semana arriba. Un toque abre el detalle. */
+/* La lista de entrenos, de la semana más nueva a la más vieja, con los totales de cada semana arriba. Un toque abre el detalle.
+
+   Entre los entrenos del reloj van también las sesiones del entreno GUIADO de la app que no tuvieron reloj de pulsera (`sesiones`): sin pulso, pero con su «Por serie».
+   Se reconocen por `origen: 'app'`. */
+
+/** Una sesión guiada sin reloj, vestida como un entreno para que la lista y el detalle la traten igual: sin pulso ni gráficas. */
+function comoEntreno(s) {
+  const inicio = new Date(s.inicio);
+  return {
+    id: `sesion:${s.id}`, origen: 'app', deporte: 'fuerza', titulo: s.nombre || 'Entreno guiado', dispositivo: 'App de entreno', sesionId: s.id,
+    inicio: inicio.toISOString(), desfase_min: -inicio.getTimezoneOffset(), duracion_s: Math.max(0, Math.round((s.fin - s.inicio) / 1000)),
+  };
+}
+
+/** Lo mismo que `FilaDeEntreno`, para una sesión guiada sin reloj: duración, cuántas series y lapsos hizo, y que no hay pulso. */
+export function FilaDeSesion({ s, alAbrir, conFecha = true }) {
+  const a = comoEntreno(s);
+  const { resumen } = useMemo(() => filasPorSerie({ registro: s.registro }), [s]);
+  const hechos = resumen.series + resumen.lapsos;
+  const stats = [
+    a.duracion_s > 0 && { Icono: Timer, texto: duracionTexto(a.duracion_s) },
+    hechos > 0 && { Icono: ListChecks, texto: `${hechos} ${resumen.lapsos > 0 && resumen.series === 0 ? (hechos === 1 ? 'lapso' : 'lapsos') : (hechos === 1 ? 'serie' : 'series')}` },
+    { Icono: Watch, texto: 'Sin reloj' },
+  ].filter(Boolean);
+  return (
+    <button
+      type="button" onClick={() => alAbrir(a)} className="kp-press"
+      aria-label={`${a.titulo}, ${fechaCorta(a.inicio, a.desfase_min)}, ${stats.map((x) => x.texto).join(', ')}`}
+      style={{
+        width: '100%', display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) auto', columnGap: 12, rowGap: 8, alignItems: 'center', padding: '12px 14px',
+        border: `1px solid ${KP.line}`, borderRadius: 16, background: KP.surface, cursor: 'pointer', textAlign: 'left', fontFamily: FONT, touchAction: 'manipulation',
+      }}
+    >
+      <MosaicoDeDeporte deporte={a.deporte} size={44} />
+      <span style={{ minWidth: 0 }}>
+        <span style={{ display: 'block', fontSize: 15.5, fontWeight: 800, color: LT.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.titulo}</span>
+        <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: LT.text2, marginTop: 2, ...NUM_STYLE }}>
+          {conFecha ? `${fechaCorta(a.inicio, a.desfase_min)} · ${horaTexto(a.inicio, a.desfase_min)}` : horaTexto(a.inicio, a.desfase_min)} · {a.dispositivo}
+        </span>
+      </span>
+      <ChevronRight size={18} color={LT.text3} />
+      <span style={{ gridColumn: '2 / -1', display: 'flex', flexWrap: 'wrap', gap: '4px 14px' }}>
+        {stats.map(({ Icono, texto }, i) => (
+          <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, fontWeight: 700, color: LT.text, ...NUM_STYLE }}>
+            <Icono size={14} color={LT.text3} />{texto}
+          </span>
+        ))}
+      </span>
+    </button>
+  );
+}
 
 /** Un entreno en una fila: ícono del deporte, título, cuándo, y lo principal (tiempo, distancia, pulso o calorías) con su carga. */
 export function FilaDeEntreno({ a, alAbrir, conFecha = true }) {
@@ -70,7 +121,7 @@ function deportesDe(lista) {
   return [...cuenta.entries()].sort((a, b) => b[1] - a[1]);
 }
 
-export default function ListaDeEntrenos({ d, hoy, alAbrir, alImportar, puedeImportar }) {
+export default function ListaDeEntrenos({ d, hoy, alAbrir, alImportar, puedeImportar, sesiones = [] }) {
   const [rango, setRango] = useState(90);
   const [deporte, setDeporte] = useState(null);
   const limite = useMemo(() => {
@@ -80,18 +131,26 @@ export default function ListaDeEntrenos({ d, hoy, alAbrir, alImportar, puedeImpo
   const delRango = useMemo(() => d.lista.filter((a) => (diaLocal(a.inicio, a.desfase_min) ?? '') >= limite), [d.lista, limite]);
   const deportes = useMemo(() => deportesDe(delRango), [delRango]);
   const filtrados = deporte ? delRango.filter((a) => a.deporte === deporte) : delRango;
+  // Las sesiones guiadas sin reloj entran con el deporte «fuerza» (no se guarda otro): se filtran igual que los entrenos y viven en el mismo periodo.
+  const sesionesDelRango = useMemo(
+    () => sesiones.filter((s) => (diaLocal(s.inicio, -new Date(s.inicio).getTimezoneOffset()) ?? '') >= limite && (!deporte || deporte === 'fuerza')),
+    [sesiones, limite, deporte],
+  );
 
   const semanas = useMemo(() => {
     const grupos = new Map();
-    filtrados.forEach((a) => {
-      const lunes = lunesDe(diaLocal(a.inicio, a.desfase_min));
+    const mete = (dia, item) => {
+      const lunes = lunesDe(dia);
       if (!grupos.has(lunes)) grupos.set(lunes, []);
-      grupos.get(lunes).push(a);
-    });
+      grupos.get(lunes).push(item);
+    };
+    filtrados.forEach((a) => mete(diaLocal(a.inicio, a.desfase_min), { clave: a.id, ms: Date.parse(a.inicio), a }));
+    sesionesDelRango.forEach((s) => mete(diaLocal(s.inicio, -new Date(s.inicio).getTimezoneOffset()), { clave: `sesion:${s.id}`, ms: s.inicio, s }));
+    grupos.forEach((lista) => lista.sort((x, y) => y.ms - x.ms));
     return [...grupos.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1));
-  }, [filtrados]);
+  }, [filtrados, sesionesDelRango]);
 
-  if (!d.lista.length) {
+  if (!d.lista.length && !sesiones.length) {
     return (
       <EstadoVacio icono={Activity} titulo="Todavía no hay entrenos" texto="Cuando se importen entrenos del reloj o de archivos, aparecen aquí con su pulso, su ritmo y su carga.">
         {puedeImportar && alImportar}
@@ -133,10 +192,10 @@ export default function ListaDeEntrenos({ d, hoy, alAbrir, alImportar, puedeImpo
           ))}
         </div>
       )}
-      {!filtrados.length && <div style={{ padding: '24px 4px', color: LT.text2, fontWeight: 600, fontSize: 14.5 }}>No hay entrenos en este periodo.</div>}
+      {!filtrados.length && !sesionesDelRango.length && <div style={{ padding: '24px 4px', color: LT.text2, fontWeight: 600, fontSize: 14.5 }}>No hay entrenos en este periodo.</div>}
       {semanas.map(([lunes, lista]) => {
-        const tiempo = lista.reduce((s, a) => s + (a.duracion_s ?? 0), 0);
-        const carga = Math.round(lista.reduce((s, a) => s + (a.carga ?? 0), 0));
+        const tiempo = lista.reduce((suma, x) => suma + (x.a ? (x.a.duracion_s ?? 0) : Math.max(0, Math.round((x.s.fin - x.s.inicio) / 1000))), 0);
+        const carga = Math.round(lista.reduce((suma, x) => suma + (x.a?.carga ?? 0), 0));
         return (
           <section key={lunes} style={{ marginTop: 16 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginBottom: 8, padding: '0 2px' }}>
@@ -146,7 +205,7 @@ export default function ListaDeEntrenos({ d, hoy, alAbrir, alImportar, puedeImpo
               </span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {lista.map((a) => <FilaDeEntreno key={a.id} a={a} alAbrir={alAbrir} />)}
+              {lista.map((x) => (x.a ? <FilaDeEntreno key={x.clave} a={x.a} alAbrir={alAbrir} /> : <FilaDeSesion key={x.clave} s={x.s} alAbrir={alAbrir} />))}
             </div>
           </section>
         );

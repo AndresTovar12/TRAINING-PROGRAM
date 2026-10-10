@@ -5,13 +5,15 @@ import {
   Clock, Sparkles, Info, Dumbbell, Heart, Play, CalendarDays, ListChecks,
   Home as HomeIcon,
   Repeat, Eye, Layers, List, Scale, LineChart as LineChartIcon,
-  MessageCircle, Timer,
+  MessageCircle, Timer, HeartPulse, Moon, Upload, Activity,
 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useIsDesktop, useIsWide } from '@/lib/useViewport';
 import { T, FONT, NUM_STYLE, LT, tipoDeSesion, KP, eyebrow } from '@/lib/theme';
 import { usePlan, ComoPrograma } from '@/contexts/PlanContext';
 import { usePerfilDeLaVista } from '@/contexts/VistaContext';
+import { useRecuperacionReciente } from '@/lib/useRecuperacionReciente';
+import AbreMetricas from '@/features/metricas/AbreMetricas';
 import {
   sessionIdFor, calc1RM, today, greeting, isLoadedExercise,
   resolveCursor, defaultCursor, isValidCursor, findPreviousWeight, historialDePeso,
@@ -106,29 +108,6 @@ const Card = ({ children, style, onClick, active }) => {
         transform: (hover && onClick) ? 'translateY(-2px)' : 'none',
         ...style,
       }}>{children}</div>
-  );
-};
-const Collapsible = ({ title, icon: Icon, children, defaultOpen = false, subtle = false }) => {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div style={{
-      background: subtle ? 'transparent' : T.bg2,
-      border: subtle ? 'none' : `1px solid ${KP.line}`, borderRadius: 20, overflow: 'hidden',
-      boxShadow: subtle ? 'none' : KP.shCard,
-    }}>
-      <button onClick={() => setOpen(!open)} style={{
-        width: '100%', padding: '15px 18px', background: 'transparent', border: 'none', color: T.text,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 700, textAlign: 'left',
-      }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {Icon && <Icon size={14} style={{ color: T.accent }} />}
-          {title}
-        </span>
-        {open ? <ChevronUp size={16} style={{ color: T.text3 }} /> : <ChevronDown size={16} style={{ color: T.text3 }} />}
-      </button>
-      {open && <div style={{ padding: '0 18px 18px' }}>{children}</div>}
-    </div>
   );
 };
 const Input = ({ value, onChange, placeholder, type = 'text', style, suffix }) => (
@@ -1807,28 +1786,6 @@ const PlanUnificado = ({
   );
 };
 
-const ReadinessRing = ({ score, size = 110 }) => {
-  const stroke = 8;
-  const radius = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference * (1 - (score || 0) / 10);
-  const color = score >= 7 ? T.accent : score >= 5 ? T.warning : T.danger;
-  return (
-    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
-      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx={size/2} cy={size/2} r={radius} stroke={T.bg3} strokeWidth={stroke} fill="none" />
-        <circle cx={size/2} cy={size/2} r={radius} stroke={color} strokeWidth={stroke} fill="none"
-          strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round"
-          style={{ transition: 'stroke-dashoffset 0.6s, stroke 0.3s' }} />
-      </svg>
-      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ fontSize: 28, fontWeight: 800, color, lineHeight: 1, ...NUM_STYLE }}>{score?.toFixed(1) || '—'}</div>
-        <div style={{ fontSize: 10, color: T.text3, marginTop: 2, fontWeight: 600 }}>/ 10</div>
-      </div>
-    </div>
-  );
-};
-
 // Modal selector de cursor: tap fase → semanas, tap semana → días, tap día → selecciona y cierra
 const CursorSelector = ({ current, sessionsData, onSelect, onClose }) => {
   const idDeSesion = useIdDeSesion();
@@ -2015,7 +1972,7 @@ const FilaDeUnRM = ({ valor, boton, onClick }) => (
 );
 
 const HomeView = ({
-  sessionsData, wellness, oneRMs = {}, fechasRM = {}, onStartSession, onGoTab, onAbrirHoja, onVerPrograma, cursor, onChangeCursor,
+  sessionsData, wellness, reloj, oneRMs = {}, fechasRM = {}, onStartSession, onGoTab, onAbrirHoja, onVerPrograma, cursor, onChangeCursor,
   hayEquipo = false, conAutor = false, entradas = [], autores = [], filtro = null, onFiltro, onAbrirEntrada, resumenDeEquipo = null,
   altasDeEquipo = [],
 }) => {
@@ -2057,11 +2014,6 @@ const HomeView = ({
   const cursorCompleted = next
     ? entradasDelDia.every((h) => !!sessionsData[sessionIdFor(kind, next.phase.id, next.week.num, h.idx)]?.completed)
     : false;
-  const todayScore = useMemo(() => {
-    const d = wellness[today()];
-    if (!d || !d.sleep || d.fatigue == null || d.soreness == null || !d.motivation) return null;
-    return Math.round((d.sleep + (10 - d.fatigue) + (10 - d.soreness) + d.motivation) / 4 * 10) / 10;
-  }, [wellness]);
 
   // Tiempo estimado y conteo de ejercicios del workout
   /* Las NOTAS no son ejercicios. Antes una sesión de velocidad hecha solo de
@@ -2255,7 +2207,7 @@ const HomeView = ({
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: '0 18px 12px' }}>
         {/* Salud (antes «Estado hoy»: ahí también se va a conectar el Apple Watch). Ver `TarjetasDeHome`. */}
         <TarjetaDeSalud
-          puntaje={todayScore} dia={wellness[today()]} onAbrir={() => onAbrirHoja('wellness')} tope={tope}
+          dolor={wellness[today()]?.soreness ?? null} reloj={reloj} salud={salud} onAbrir={() => onAbrirHoja('wellness')} tope={tope}
         />
 
         {/* Tu semana: qué días entrenas, cuál es hoy y qué sigue */}
@@ -2376,117 +2328,167 @@ const Slider = ({ label, hint, value, onChange, max = 10, color = T.accent }) =>
         <div style={{ fontSize: 14, color: T.text, fontWeight: 500 }}>{label}</div>
         {hint && <div style={{ fontSize: 11, color: T.text3, marginTop: 1 }}>{hint}</div>}
       </div>
-      <span style={{ fontSize: 18, fontWeight: 800, color, ...NUM_STYLE }}>{value || 0}</span>
+      <span style={{ fontSize: 18, fontWeight: 800, color: value == null ? T.text3 : color, ...NUM_STYLE }}>{value ?? '—'}</span>
     </div>
     <input type="range" min="0" max={max} value={value || 0}
       onChange={e => onChange(parseInt(e.target.value))}
+      aria-label={label}
       style={{ width: '100%', accentColor: color, cursor: 'pointer' }}
     />
   </div>
 );
 
-const WellnessView = ({ wellness, setWellness, enHoja = false }) => {
+const COLOR_DEL_TONO = { verde: LT.mint, ambar: T.warning, rojo: T.danger, neutro: T.text3 };
+
+/* Cómo se dice el estado de UNA medida del reloj frente a lo normal del atleta (ver `resumenDeRecuperacion`). */
+const ESTADO_DE_MEDIDA = {
+  bien: ['Esta semana, normal', LT.mint],
+  atencion: ['Esta semana, fuera de lo normal', T.warning],
+  'sin-base': ['Aprendiendo qué es normal en ti', T.text3],
+  'sin-datos': ['Sin datos esta semana', T.text3],
+};
+
+/** Una medida que dejó el reloj: el valor más reciente, cómo va la semana y lo normal del atleta. Solo se lee: no se escribe. */
+const FilaDelReloj = ({ nombre, icono: Icono, medida, reciente }) => {
+  const [texto, color] = ESTADO_DE_MEDIDA[medida.estado] ?? ESTADO_DE_MEDIDA['sin-datos'];
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderTop: `1px solid ${KP.line}` }}>
+      <span style={{ width: 34, height: 34, borderRadius: 11, background: T.bg3, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+        <Icono size={17} style={{ color: T.text2 }} />
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{nombre}</div>
+        <div style={{ fontSize: 12, color, fontWeight: 600, marginTop: 1 }}>{texto}</div>
+      </div>
+      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: T.text, ...NUM_STYLE }}>
+          {reciente ? reciente.valor : '—'}<span style={{ fontSize: 12, fontWeight: 700, color: T.text3, marginLeft: 3 }}>{medida.unidad}</span>
+        </div>
+        {medida.base !== null && <div style={{ fontSize: 11, color: T.text3, ...NUM_STYLE }}>Normal: {medida.base} {medida.unidad}</div>}
+      </div>
+    </div>
+  );
+};
+
+/* SALUD DIARIA. Andrés, 10 oct 2026: «si el atleta tiene reloj, las dos casillas se llenan con eso; si no tiene, que la app no las pida». El pulso en reposo,
+   la variabilidad cardiaca (HRV) y el sueño se leen de lo que importó el reloj (`useRecuperacionReciente`). Lo ÚNICO que el atleta anota es el dolor muscular
+   (con pacientes de un fisio: «dolor o molestia», porque puede venir de cualquier parte). Motivación, fatiga y el sueño anotado se quitaron: al coach no le
+   servían. Lo viejo que ya estaba guardado en `wr:wellness` se queda en la cuenta, sin usarse. */
+const WellnessView = ({ wellness, setWellness, reloj, enHoja = false }) => {
+  const { salud } = usePalabras();
+  const { perfil, userId, soloLectura } = usePerfilDeLaVista();
   const [date, setDate] = useState(today());
+  const [metricas, setMetricas] = useState(null); // null | 'importar' | 'recuperacion'
   const dayData = wellness[date] || {};
   const updateDay = (field, value) => setWellness(prev => ({ ...prev, [date]: { ...prev[date], [field]: value } }));
+  const nombreDelDolor = salud ? 'Dolor o molestia' : 'Dolor muscular';
 
-  const chartData = useMemo(() => {
-    const dates = Object.keys(wellness).sort().slice(-14);
-    return dates.map(d => ({
-      date: d.slice(5),
-      hrv: wellness[d].hrv || null,
-      bienestar: wellness[d].sleep && wellness[d].fatigue != null && wellness[d].soreness != null && wellness[d].motivation
-        ? Math.round((wellness[d].sleep + (10 - wellness[d].fatigue) + (10 - wellness[d].soreness) + wellness[d].motivation) / 4 * 10) / 10
-        : null,
-    }));
-  }, [wellness]);
+  const chartData = useMemo(() => Object.keys(wellness).sort()
+    .filter(d => wellness[d].soreness != null)
+    .slice(-14)
+    .map(d => ({ date: d.slice(5), dolor: wellness[d].soreness })), [wellness]);
 
-  const todayScore = useMemo(() => {
-    const d = wellness[today()];
-    if (!d || !d.sleep || d.fatigue == null || d.soreness == null || !d.motivation) return null;
-    return Math.round((d.sleep + (10 - d.fatigue) + (10 - d.soreness) + d.motivation) / 4 * 10) / 10;
-  }, [wellness]);
+  const { lectura, hayReloj, resumen, recientes } = reloj;
+  const atleta = { id: userId, full_name: perfil?.full_name, username: perfil?.username, unidad_peso: perfil?.unidad_peso };
 
   return (
     <div style={{ paddingBottom: enHoja ? 0 : 100, margin: enHoja ? '0 -20px' : 0 }}>
       <div style={{ padding: enHoja ? '6px 20px 20px' : '20px 20px 24px' }}>
         <Caption color={T.text3} style={{ marginBottom: 6 }}>Salud diaria</Caption>
-        {todayScore !== null ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-            <ReadinessRing score={todayScore} size={110} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 17, fontWeight: 700, color: T.text, marginBottom: 4, lineHeight: 1.25 }}>
-                {todayScore >= 7 ? 'Listo para entrenar' : todayScore >= 5 ? 'Considera reducir carga' : 'Recuperación prioridad'}
-              </div>
-            </div>
-          </div>
-        ) : (
+        {lectura ? (
           <>
-            <h1 style={{ fontSize: 32, fontWeight: 800, color: T.text, margin: 0, lineHeight: 1.05, letterSpacing: -0.8 }}>¿Cómo estás hoy?</h1>
+            <h1 style={{ fontSize: 30, fontWeight: 800, color: T.text, margin: 0, lineHeight: 1.05, letterSpacing: -0.8, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span aria-hidden="true" style={{ width: 12, height: 12, borderRadius: '50%', background: COLOR_DEL_TONO[lectura.tono] ?? T.text3, flexShrink: 0 }} />
+              {lectura.titulo}
+            </h1>
+            <div style={{ fontSize: 14, color: T.text2, marginTop: 8, lineHeight: 1.45 }}>{lectura.detalle}</div>
           </>
+        ) : (
+          <h1 style={{ fontSize: 32, fontWeight: 800, color: T.text, margin: 0, lineHeight: 1.05, letterSpacing: -0.8 }}>¿Cómo estás hoy?</h1>
         )}
       </div>
 
       <div style={{ padding: '0 20px' }}>
+        {hayReloj && (
+          <Card style={{ marginBottom: 14, paddingBottom: soloLectura ? 6 : 18 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <Activity size={14} style={{ color: T.text3 }} />
+              <Caption>Lo que midió tu reloj</Caption>
+            </div>
+            <FilaDelReloj nombre="Pulso en reposo" icono={HeartPulse} medida={resumen.reposo} reciente={recientes.reposo} />
+            <FilaDelReloj nombre="Variabilidad cardiaca" icono={Activity} medida={resumen.hrv} reciente={recientes.hrv} />
+            <FilaDelReloj nombre="Sueño" icono={Moon} medida={resumen.sueno} reciente={recientes.sueno} />
+            {!soloLectura && (
+              <button type="button" onClick={() => setMetricas('recuperacion')} className="kp-press"
+                style={{
+                  marginTop: 6, width: '100%', padding: '12px 14px', borderRadius: KP.rBtn, border: `1.5px solid ${LT.blue}`, background: T.bg2, color: LT.blue,
+                  fontFamily: FONT, fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                }}>
+                Ver mi recuperación <ChevronRight size={15} />
+              </button>
+            )}
+          </Card>
+        )}
+
+        {!hayReloj && !soloLectura && (
+          <Card style={{ marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ width: 38, height: 38, borderRadius: 12, background: LT.blueSoft, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                <HeartPulse size={19} style={{ color: LT.blue }} />
+              </span>
+              <div style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: T.text, lineHeight: 1.35 }}>
+                Con tu reloj, tu pulso en reposo, tu variabilidad cardiaca y tu sueño se llenan solos.
+              </div>
+            </div>
+            <button type="button" onClick={() => setMetricas('importar')} className="kp-press"
+              style={{
+                marginTop: 14, width: '100%', padding: '12px 14px', borderRadius: KP.rBtn, border: `1.5px solid ${LT.blue}`, background: T.bg2, color: LT.blue,
+                fontFamily: FONT, fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}>
+              <Upload size={16} /> Importar entrenos del reloj
+            </button>
+          </Card>
+        )}
+
         <Card style={{ marginBottom: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
             <Calendar size={14} style={{ color: T.text3 }} />
-            <input type="date" value={date} onChange={e => setDate(e.target.value)}
+            <input type="date" value={date} onChange={e => e.target.value && setDate(e.target.value)} aria-label="Día que anotas"
               style={{ background: T.bg3, border: `1px solid ${T.border}`, borderRadius: 8, color: T.text, padding: '6px 10px', fontFamily: FONT, fontSize: 13, outline: 'none' }} />
           </div>
-
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 14, color: T.text, marginBottom: 4, fontWeight: 500 }}>Variabilidad cardiaca</div>
-            <div style={{ fontSize: 11, color: T.text3, marginBottom: 8 }}>Medida con app (HRV4Training, Elite HRV, Whoop, Oura)</div>
-            <Input value={dayData.hrv ?? ''} onChange={v => updateDay('hrv', v ? parseFloat(v) : null)} placeholder="—" type="number" suffix="ms" />
-          </div>
-
-          <div>
-            <div style={{ fontSize: 14, color: T.text, marginBottom: 4, fontWeight: 500 }}>Pulso en reposo</div>
-            <div style={{ fontSize: 11, color: T.text3, marginBottom: 8 }}>Medido en ayunas al despertar</div>
-            <Input value={dayData.rhr ?? ''} onChange={v => updateDay('rhr', v ? parseFloat(v) : null)} placeholder="—" type="number" suffix="bpm" />
-          </div>
-        </Card>
-
-        <Card style={{ marginBottom: 14 }}>
-          <Slider label="Sueño" hint="¿Qué tan bien dormiste anoche? 0 mal · 10 excelente"
-            value={dayData.sleep} onChange={v => updateDay('sleep', v)} color={T.info} />
-          <Slider label="Fatiga" hint="0 sin fatiga · 10 exhausto"
-            value={dayData.fatigue} onChange={v => updateDay('fatigue', v)} color={T.warning} />
-          <Slider label="Dolor o molestias" hint="0 sin nada · 10 dolor importante"
+          <Slider label={nombreDelDolor}
+            hint={salud ? 'De cualquier parte del cuerpo · 0 nada · 10 muy fuerte' : 'Qué tan adolorido estás de los músculos · 0 nada · 10 muy fuerte'}
             value={dayData.soreness} onChange={v => updateDay('soreness', v)} color={T.danger} />
-          <Slider label="Motivación" hint="0 ninguna · 10 listo para todo"
-            value={dayData.motivation} onChange={v => updateDay('motivation', v)} color={T.accent} />
+          {dayData.soreness == null && (
+            <button type="button" onClick={() => updateDay('soreness', 0)} className="kp-press"
+              style={{
+                padding: '9px 14px', borderRadius: 999, border: 'none', background: LT.blueSoft, color: LT.blue,
+                fontFamily: FONT, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              }}>
+              {salud ? 'Sin molestia' : 'Sin dolor'}
+            </button>
+          )}
         </Card>
 
         {chartData.length >= 2 && (
           <Card style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
               <TrendingUp size={14} style={{ color: T.text3 }} />
-              <Caption>Tendencia · últimos 14 días</Caption>
+              <Caption>{nombreDelDolor} · últimos 14 días</Caption>
             </div>
-            <ResponsiveContainer width="100%" height={180}>
+            <ResponsiveContainer width="100%" height={160}>
               <LineChart data={chartData}>
                 <XAxis dataKey="date" tick={{ fill: T.text3, fontSize: 10 }} axisLine={{ stroke: T.border }} tickLine={{ stroke: T.border }} />
-                <YAxis tick={{ fill: T.text3, fontSize: 10 }} axisLine={{ stroke: T.border }} tickLine={{ stroke: T.border }} />
+                <YAxis domain={[0, 10]} tick={{ fill: T.text3, fontSize: 10 }} axisLine={{ stroke: T.border }} tickLine={{ stroke: T.border }} />
                 <Tooltip contentStyle={{ background: T.bg3, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12 }} />
-                <ReferenceLine y={7} stroke={T.accent} strokeDasharray="3 3" strokeOpacity={0.3} />
-                <Line type="monotone" dataKey="bienestar" stroke={T.accent} strokeWidth={2.5} dot={{ fill: T.accent, r: 3 }} name="Puntaje" />
-                <Line type="monotone" dataKey="hrv" stroke={T.info} strokeWidth={2} dot={{ fill: T.info, r: 3 }} name="Variabilidad cardiaca" />
+                <Line type="monotone" dataKey="dolor" stroke={T.danger} strokeWidth={2.5} dot={{ fill: T.danger, r: 3 }} name={nombreDelDolor} />
               </LineChart>
             </ResponsiveContainer>
           </Card>
         )}
-
-        <Collapsible title="Cómo usar estos datos" icon={Info}>
-          <div style={{ fontSize: 13, color: T.text2, lineHeight: 1.7, paddingTop: 4 }}>
-            <p style={{ marginTop: 0 }}><strong style={{ color: T.text }}>Avance entre fases:</strong> puntaje mayor a 7 sostenido 3-5 días, variabilidad cardiaca en línea base, pulso en reposo estable, sin molestia residual.</p>
-            <p><strong style={{ color: T.text }}>Variabilidad cardiaca:</strong> Plews et al. 2013, 2014. La métrica más sensible al estado del sistema nervioso.</p>
-            <p><strong style={{ color: T.text }}>Los 4 indicadores:</strong> McLean et al. 2010. Validado para monitoreo de atletas.</p>
-            <p style={{ marginBottom: 0 }}><strong style={{ color: T.text }}>Bajada sostenida:</strong> si tu puntaje cae 2-3 días seguidos, reduce carga o salta la sesión.</p>
-          </div>
-        </Collapsible>
       </div>
+
+      {metricas && <AbreMetricas atleta={atleta} esAtleta abrirEn={metricas} onCerrar={() => setMetricas(null)} />}
     </div>
   );
 };
@@ -2737,6 +2739,8 @@ export default function TrainingApp() {
   const [sessionsData, setSessionsData] = useStorage(claveDe('wr:sessions'), {});
   const { oneRMs, fechas: fechasRM, ponRM } = useUnRM();
   const [wellness, setWellness] = useStorage('wr:wellness', {});
+  // Lo que dejó el reloj (reposo, HRV, sueño): se lee una vez y lo usan la tarjeta de Home y la hoja de Salud.
+  const reloj = useRecuperacionReciente();
   const [storedCursor, setCursor] = useStorage(claveDe('wr:cursor'), null);
   const [cursorPickerOpen, setCursorPickerOpen] = useState(false);
   const [programaAbierto, setProgramaAbierto] = useState(false);
@@ -2949,7 +2953,7 @@ export default function TrainingApp() {
   } else if (!hasPlan && !hayEquipo && (tab === 'home' || tab === 'plan')) {
     content = <NoPlanState onAbrirHoja={setHoja} />;
   } else if (tab === 'home') {
-    content = <HomeView sessionsData={sessionsData} wellness={wellness}
+    content = <HomeView sessionsData={sessionsData} wellness={wellness} reloj={reloj}
       oneRMs={oneRMs} fechasRM={fechasRM}
       onStartSession={startSession}
       onGoTab={vasA}
@@ -3052,7 +3056,7 @@ export default function TrainingApp() {
       {/* Bienestar, 1RM y Ciencia ya no son pestañas: se abren como hoja encima, con su flecha para volver. */}
       {hoja === 'wellness' && (
         <HojaFlotante titulo="Salud" onCerrar={() => setHoja(null)}>
-          <WellnessView wellness={wellness} setWellness={setWellness} enHoja />
+          <WellnessView wellness={wellness} setWellness={setWellness} reloj={reloj} enHoja />
         </HojaFlotante>
       )}
       {hoja === 'oneRM' && !salud && (

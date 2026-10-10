@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import {
   diaLocal, sumaDias, diasEntre, lunesDe, cargaPorDia, curvaDeForma, estadoDeForma, rampaDeCondicion, porSemana, cambioEnPorCiento, pulsoMaximoVisto,
-  pulsoEnReposoMediano, resumenDeRecuperacion, totalesHasta,
+  pulsoEnReposoMediano, resumenDeRecuperacion, totalesHasta, lecturaParaElAtleta,
 } from '../src/lib/metricas/forma.js';
 import { derivaDelAtleta, facilMedioDuro } from '../src/lib/metricas/derivados.js';
 
@@ -172,6 +172,14 @@ const casi = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg ?? ''}
   assert.equal(p.hrv.estado, 'sin-base');
   assert.equal(p.sueno.estado, 'bien');
   assert.equal(p.veredicto.clave, 'bien', 'el sueño solo sí puede decir algo');
+  // Lo mismo, dicho al atleta en segunda persona (y sin nada que decir cuando no hay con qué comparar).
+  assert.equal(lecturaParaElAtleta(bien).titulo, 'Recuperando bien');
+  assert.equal(lecturaParaElAtleta(bien).detalle, 'Tu pulso en reposo, tu variabilidad cardiaca y tu sueño van dentro de lo normal para ti.');
+  assert.match(lecturaParaElAtleta(u).detalle, /^Una señal fuera de lo normal: tu sueño\./);
+  assert.match(lecturaParaElAtleta(c).detalle, /tu pulso en reposo y tu variabilidad cardiaca/);
+  assert.equal(lecturaParaElAtleta(c).tono, 'rojo');
+  assert.equal(lecturaParaElAtleta(p).detalle, 'Tu sueño va dentro de lo normal para ti.', 'una sola medida concuerda en singular');
+  assert.equal(lecturaParaElAtleta(resumenDeRecuperacion([], { hoy })), null);
   // La mediana del reposo, para las zonas y la carga.
   assert.equal(pulsoEnReposoMediano(normal, { hoy }), 52);
   assert.equal(pulsoEnReposoMediano([], { hoy }), null);

@@ -1,10 +1,13 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Activity, ChevronLeft, Settings2, Upload } from 'lucide-react';
 import { LT, KP, FONT } from '@/lib/theme';
 import HojaFlotante from '@/components/HojaFlotante';
 import { duracionTexto } from '@/lib/metricas/formato';
+import { analisisDeFuerza } from '@/lib/metricas/fuerza';
+import { lecturaParaElAtleta } from '@/lib/metricas/forma';
 import CargaYForma from './CargaYForma';
 import DetalleDeEntreno from './DetalleDeEntreno';
+import Fuerza from './Fuerza';
 import ImportarEntrenos from './ImportarEntrenos';
 import ListaDeEntrenos from './ListaDeEntrenos';
 import { Boton, Cargando, EstadoVacio, Pestanas } from './Piezas';
@@ -14,7 +17,8 @@ import UmbralesDelAtleta from './UmbralesDelAtleta';
 import { useMetricas } from './useMetricas';
 
 /* LAS MÉTRICAS DE UN ATLETA: la pantalla que el coach abre desde su ficha (y el atleta desde su perfil) para ver cómo entrena de verdad, según su reloj.
-   Cuatro pestañas (Resumen, Entrenos, Carga, Recuperación), el detalle de cada entreno, la importación de archivos y los umbrales de pulso.
+   Cuatro pestañas (Resumen, Entrenos, Carga, Recuperación) y una quinta, Fuerza, cuando el atleta ha anotado series con peso en el entreno guiado; el detalle de
+   cada entreno, la importación de archivos y los umbrales de pulso.
 
    Andrés (10 oct 2026): «es muy importante (especialmente con el Apple Watch y app instalable) que el coach pueda ver todas las métricas del entrenamiento…
    ritmo cardiaco, etc.»; «se comparte todo»; y que el tablero «sea fácil de entender». Los datos son del atleta: los ve y los puede importar, y los ve quien
@@ -23,11 +27,12 @@ import { useMetricas } from './useMetricas';
 const PESTANAS = [
   { id: 'resumen', titulo: 'Resumen' }, { id: 'entrenos', titulo: 'Entrenos' }, { id: 'carga', titulo: 'Carga' }, { id: 'recuperacion', titulo: 'Recuperación' },
 ];
+const PESTANA_DE_FUERZA = { id: 'fuerza', titulo: 'Fuerza' };
 
 function Contenido({ atleta, esAtleta, abrirEn, onCerrar }) {
   const m = useMetricas(atleta.id);
   const contenido = useRef(null);
-  const [vista, setVistaTal] = useState('resumen');
+  const [vista, setVistaTal] = useState(abrirEn === 'recuperacion' ? 'recuperacion' : 'resumen');
   const [detalle, setDetalleTal] = useState(null);
   // Al cambiar de pestaña o abrir un entreno se empieza desde arriba (la hoja ya venía desplazada de la pantalla anterior).
   const arriba = () => contenido.current?.closest('[data-hoja-cuerpo]')?.scrollTo({ top: 0 });
@@ -35,7 +40,15 @@ function Contenido({ atleta, esAtleta, abrirEn, onCerrar }) {
   const setDetalle = (d) => { setDetalleTal(d); arriba(); };
   const [panel, setPanel] = useState(abrirEn === 'importar' ? 'importar' : null); // null | 'importar' | 'umbrales'
   const nombre = atleta.full_name || atleta.username || 'Atleta';
-  const hayDatos = m.actividades.length > 0 || m.recuperacion.length > 0;
+  const hayDatos = m.actividades.length > 0 || m.recuperacion.length > 0 || m.sesionesSinReloj.length > 0;
+  const fuerza = useMemo(() => analisisDeFuerza(m.guiadas, { hoy: m.hoy }), [m.guiadas, m.hoy]);
+  const pestanas = fuerza.hay ? [...PESTANAS, PESTANA_DE_FUERZA] : PESTANAS;
+  const unidadPeso = atleta.unidad_peso === 'lb' ? 'lb' : 'kg';
+  // Cuando lo abre el propio atleta, el veredicto de su recuperación se le dice a él («tu pulso en reposo…»), no a su coach («conviene preguntarle…»).
+  const d = useMemo(() => {
+    const lectura = esAtleta ? lecturaParaElAtleta(m.d.recuperacion) : null;
+    return lectura ? { ...m.d, recuperacion: { ...m.d.recuperacion, veredicto: { ...m.d.recuperacion.veredicto, detalle: lectura.detalle } } } : m.d;
+  }, [m.d, esAtleta]);
 
   const subtitulo = m.cargando && !hayDatos ? '' : `${m.actividades.length} ${m.actividades.length === 1 ? 'entreno' : 'entrenos'}${m.d.estaSemana?.duracion_s ? ` · esta semana ${duracionTexto(m.d.estaSemana.duracion_s)}` : ''}`;
   const botonDeImportar = (
@@ -79,7 +92,14 @@ function Contenido({ atleta, esAtleta, abrirEn, onCerrar }) {
   } else if (m.cargando && !hayDatos) {
     cuerpo = <Cargando texto="Cargando las métricas…" />;
   } else if (detalle) {
-    cuerpo = <DetalleDeEntreno key={detalle.id} actividad={detalle} alVolver={() => setDetalle(null)} puedeBorrar alBorrado={() => { setDetalle(null); m.recarga(); }} />;
+    // Un entreno del reloj trae su sesión guiada si se hizo a la vez; una sesión guiada sin reloj (`origen: 'app'`) es solo esa sesión y no se puede borrar de aquí.
+    const sesion = detalle.origen === 'app' ? m.sesionesSinReloj.find((s) => s.id === detalle.sesionId) ?? null : m.sesionDe.get(detalle.id) ?? null;
+    cuerpo = (
+      <DetalleDeEntreno
+        key={detalle.id} actividad={detalle} sesion={sesion} unidadPeso={unidadPeso}
+        alVolver={() => setDetalle(null)} puedeBorrar={detalle.origen !== 'app'} alBorrado={() => { setDetalle(null); m.recarga(); }}
+      />
+    );
   } else if (!hayDatos) {
     cuerpo = (
       <>
@@ -98,14 +118,15 @@ function Contenido({ atleta, esAtleta, abrirEn, onCerrar }) {
       <>
         {/* Las pestañas se quedan arriba al desplazarse: el coach salta de una a otra sin volver a subir. */}
         <div style={{ position: 'sticky', top: 'calc(var(--hoja-pt, 0px) * -1)', zIndex: 5, background: LT.bg, margin: 'calc(var(--hoja-pt, 0px) * -1) calc(var(--hoja-px, 18px) * -1) 0', padding: 'calc(var(--hoja-pt, 0px) + 2px) var(--hoja-px, 18px) 8px' }}>
-          <Pestanas items={PESTANAS} valor={vista} onChange={setVista} etiqueta="Métricas" />
+          <Pestanas items={pestanas} valor={vista} onChange={setVista} etiqueta="Métricas" />
         </div>
         {acciones}
         <div style={{ marginTop: 16 }}>
-          {vista === 'resumen' && <Resumen d={m.d} umbrales={m.umbrales} alAbrir={setDetalle} alIrA={setVista} />}
-          {vista === 'entrenos' && <ListaDeEntrenos d={m.d} hoy={m.hoy} alAbrir={setDetalle} puedeImportar alImportar={botonDeImportar} />}
+          {vista === 'resumen' && <Resumen d={d} umbrales={m.umbrales} alAbrir={setDetalle} alIrA={setVista} />}
+          {vista === 'entrenos' && <ListaDeEntrenos d={m.d} hoy={m.hoy} alAbrir={setDetalle} puedeImportar alImportar={botonDeImportar} sesiones={m.sesionesSinReloj} />}
           {vista === 'carga' && <CargaYForma d={m.d} />}
-          {vista === 'recuperacion' && <Recuperacion d={m.d} recuperacion={m.recuperacion} hoy={m.hoy} />}
+          {vista === 'recuperacion' && <Recuperacion d={d} recuperacion={m.recuperacion} hoy={m.hoy} />}
+          {vista === 'fuerza' && <Fuerza a={fuerza} hoy={m.hoy} unidadPeso={unidadPeso} />}
         </div>
       </>
     );
@@ -121,7 +142,7 @@ function Contenido({ atleta, esAtleta, abrirEn, onCerrar }) {
   );
 }
 
-/** `atleta`: `{ id, full_name, username }`. `esAtleta`: lo abre el propio atleta (cambia los textos). `abrirEn`: `'importar'` para llegar directo a traer archivos. */
+/** `atleta`: `{ id, full_name, username }`. `esAtleta`: lo abre el propio atleta (cambia los textos). `abrirEn`: `'importar'` para llegar directo a traer archivos, `'recuperacion'` para abrir en esa pestaña. */
 export default function MetricasDelAtleta({ atleta, esAtleta = false, abrirEn = null, onCerrar }) {
   // Con `key` por atleta: al cambiar de persona, todo empieza de cero.
   return <Contenido key={atleta.id} atleta={atleta} esAtleta={esAtleta} abrirEn={abrirEn} onCerrar={onCerrar} />;

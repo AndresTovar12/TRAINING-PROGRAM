@@ -89,7 +89,8 @@ export default function ResultadoDelBloque({
     onGuardar(limpiaResultado({
       anota, valor: v, extra: anota === 'rondas' ? num(extra) : null,
       seg: sugerido?.seg ?? inicial?.seg ?? (anota === 'tiempo' ? v : null),
-      tramos: sugerido?.tramos ?? inicial?.tramos, de, en: new Date().toISOString(),
+      tramos: sugerido?.tramos ?? inicial?.tramos, ventanas: sugerido?.ventanas ?? inicial?.ventanas, lapsos: sugerido?.lapsos ?? inicial?.lapsos,
+      de, en: new Date().toISOString(),
     }));
   };
 
