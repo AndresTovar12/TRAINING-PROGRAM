@@ -15,14 +15,12 @@ const enLaApp = () => typeof window !== 'undefined' && !!window.Capacitor?.isNat
 
 export const FUNCIONES = Object.freeze({
   /**
-   * «Grabar técnica para el coach»: desde un paso del entreno, el atleta graba SU serie y le llega a su coach por mensajes, sin salir del
-   * entreno. Apagada: el botón de cámara de cada paso dice «Pronto» y abre una hoja que lo explica.
-   *
-   * Para prenderla faltan dos cosas: (1) que `EntrenoDelDia` reciba `onGrabarTecnica(paso)` (quien abre la cámara y sube el video: ver
-   * `GrabadoraDeVideo` y `MediaUpload`), y (2) que «Mensajes» exista, que es a donde llega. El video queda ligado a ESA vuelta con el id
-   * que se guarda en `entreno.hechos[clave].tecnica` (el motor ya lo conserva: ver `limpiaReal` en `lib/entreno.js`).
+   * «Grabar técnica para el coach»: desde un paso del entreno, el atleta graba SU serie (hasta 60 s) y le llega, como tarjeta con «Técnica correcta» y «Corregir», a quien puso
+   * ese ejercicio en el plan, sin salir del entreno. PRENDIDA el 10 oct 2026 («ya haz que sirva»), también en la web: no cuelga de `entrenoCompleto`.
+   * Cámara y envío: `features/mensajes/GrabaTecnica`; la tarjeta: `features/mensajes/TarjetaDeTecnica` (ver docs/mensajes.md). El id de la técnica queda ligado a ESA vuelta en
+   * `entreno.hechos[clave].tecnica` (el motor ya lo conserva: ver `limpiaReal` en `lib/entreno.js`). Sin a quién mandársela (un atleta sin coach), el botón no sale.
    */
-  grabarTecnica: false,
+  grabarTecnica: true,
 
   /**
    * La guía COMPLETA del entreno: «Ver todo» (todo el workout por series), el par A/B de las bi-series y el cronómetro de cada paso con tiempo.

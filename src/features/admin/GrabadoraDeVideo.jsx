@@ -228,8 +228,10 @@ function leeSonido(proposito) {
 }
 const esAppDeInicio = () => typeof navigator !== 'undefined' && navigator.standalone === true;
 
-/** `proposito`: 'ejemplo' o 'explicacion' (ver `lib/proposito.js`); decide si el micrófono arranca prendido. */
-export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, proposito }) {
+/** `proposito`: 'ejemplo' o 'explicacion' (ver `lib/proposito.js`) o 'tecnica'; decide si el micrófono arranca prendido.
+ *  `maxSegundos`: la grabación se corta sola a ese tiempo (el video de técnica, 60 s) y el reloj dice cuánto queda. `ritmoMaximo`: tope de bits por segundo (la técnica pide
+ *  ≤ 4 Mbps para que 60 s quepan en los 50 MB del bucket de mensajes; sin él, 1080p graba a 8 Mbps). */
+export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, proposito, maxSegundos = null, ritmoMaximo = null }) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const recRef = useRef(null);
@@ -359,6 +361,11 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
     return () => window.clearInterval(t);
   }, [grabando]);
 
+  // Con tope de tiempo (la técnica, 60 s), al llegar se para solo, igual que si se tocara el botón.
+  useEffect(() => {
+    if (grabando && maxSegundos && segundos >= maxSegundos) para();
+  }, [grabando, segundos, maxSegundos]);
+
   function arranca() {
     const stream = streamRef.current;
     if (!stream) return;
@@ -371,7 +378,7 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
     const alto = medidas?.h ?? 1080;
     let rec;
     try {
-      rec = new MediaRecorder(stream, { mimeType: formato.mime, videoBitsPerSecond: ritmo(alto) });
+      rec = new MediaRecorder(stream, { mimeType: formato.mime, videoBitsPerSecond: Math.min(ritmo(alto), ritmoMaximo ?? Infinity) });
     } catch {
       setErr('Este navegador rechazó grabar en ese formato.');
       return;
@@ -512,7 +519,7 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
             fontSize: 13, fontWeight: 800, ...NUM_STYLE,
           }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff' }} />
-            {reloj(segundos)}
+            {maxSegundos ? `${reloj(segundos)} / ${reloj(maxSegundos)}` : reloj(segundos)}
           </span>
         ) : (
           <>

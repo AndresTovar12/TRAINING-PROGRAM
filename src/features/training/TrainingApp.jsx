@@ -1048,7 +1048,7 @@ const CuerpoDelDia = ({
   const botonDelEntreno = (ejercicios) => (
     <BotonDelEntreno
       dia={selectedDay} ejercicios={ejercicios} aspecto={aspectoDelTipo(selectedDay)} registro={sessionData}
-      onRegistro={(cambio) => updateSession(selectedId, cambio)} onFormato={setFormato} sesionId={selectedId} oneRMs={oneRMs}
+      onRegistro={(cambio) => updateSession(selectedId, cambio)} onFormato={setFormato} sesionId={selectedId} oneRMs={oneRMs} autor={autor}
     />
   );
   /* Con equipo, la sesión de un día de UNA sola sesión también es una tarjeta, igual

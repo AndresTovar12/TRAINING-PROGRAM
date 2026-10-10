@@ -54,8 +54,9 @@ import {
  * kilos) y `salud` que es un paciente (sin 1RM). `sesionId` y `userId` son la llave con la que el reloj de un Set recuerda dónde iba.
  */
 
-// La hoja del sello se carga solo cuando se pide (ver `features/sello`).
+// La hoja del sello y la grabadora de técnica se cargan solo cuando se piden (ver `features/sello` y `features/mensajes`).
 const HojaDelSello = lazy(() => import('@/features/sello/HojaDelSello'));
+const GrabaTecnica = lazy(() => import('@/features/mensajes/GrabaTecnica'));
 
 // La misma preferencia que el reloj de un Set: quien silenció uno, silenció los dos.
 const LLAVE_DEL_SONIDO = 'tl:reloj:sonido';
@@ -64,7 +65,7 @@ const leeSonido = () => {
 };
 
 export default function EntrenoDelDia({
-  dia, aspecto, registro, onRegistro, onFormato, sesionId, userId, unidadDePeso = 'kg', oneRMs, salud = false, medios, alCerrar, onGrabarTecnica,
+  dia, aspecto, registro, onRegistro, onFormato, sesionId, userId, unidadDePeso = 'kg', oneRMs, salud = false, medios, alCerrar, destinoDeTecnica = null,
 }) {
   // La página de atrás se queda quieta mientras el entreno está abierto (ver `useCuerpoQuieto`).
   useCuerpoQuieto();
@@ -81,6 +82,9 @@ export default function EntrenoDelDia({
   const [verFin, setVerFin] = useState(false);
   // El sello para redes, desde el final del entreno.
   const [sello, setSello] = useState(false);
+  // La técnica que se está grabando (el paso, congelado al tocar la cámara) y la última que se mandó de cada paso: `{ [clave]: idDeLaTécnica }`.
+  const [grabandoTecnica, setGrabandoTecnica] = useState(null);
+  const [tecnicasMandadas, setTecnicasMandadas] = useState({});
   // `reloj`: la persona tocó «Empezar» en la pantalla del Set (corre ya). `llegando`: lo último que hizo fue AVANZAR; empieza en `true` porque este entreno solo
   // se abre con el botón «Iniciar entreno» o «Continuar entreno» del día. `cerradoEn`: el Set cuyo reloj cerró a mano, para que no se vuelva a abrir solo.
   const [reloj, setReloj] = useState(false);
@@ -182,6 +186,9 @@ export default function EntrenoDelDia({
     preparaAudio();
     const objetivo = paso;
     if (!objetivo) return;
+    // Si de este paso se mandó una técnica, su id queda ligado a esta vuelta (`hechos[clave].tecnica`).
+    const tecnica = tecnicasMandadas[objetivo.clave];
+    if (tecnica) real = { ...(real ?? {}), tecnica };
     const clave = enfocado && objetivo === enfocado ? enfocado.clave : undefined;
     const kilos = kilosDe(objetivo);
     const ex = exDe(objetivo);
@@ -254,11 +261,16 @@ export default function EntrenoDelDia({
     }));
     alCerrar();
   };
-  // La cámara de «grabar técnica»: apagada solo explica que viene; prendida (y con quien la grabe) llama a `onGrabarTecnica`.
-  const tecnicaActiva = FUNCIONES.grabarTecnica && !!onGrabarTecnica;
+  // La cámara de «grabar técnica» (también en la web): sale si la función está prendida y hay a quién mandársela (quien puso el ejercicio); apagada, solo explica que viene.
+  const tecnicaActiva = FUNCIONES.grabarTecnica && !!destinoDeTecnica?.id;
   // La guía completa («Ver todo», el par A/B, el cronómetro de cada paso) es de la app descargable; la web va con la básica (ver `lib/funciones.js`).
   const completo = FUNCIONES.entrenoCompleto;
-  const abreTecnica = () => { if (tecnicaActiva) onGrabarTecnica(paso); else setHoja('tecnica'); };
+  const abreTecnica = () => { if (tecnicaActiva) setGrabandoTecnica(paso); else setHoja('tecnica'); };
+  const nombreDelDestino = (destinoDeTecnica?.nombre ?? '').trim().split(/\s+/)[0] || 'tu coach';
+  // Lo que se le pasa a las pantallas del paso: prendida, la cámara con su ✓ si ya se mandó una de esta serie; apagada, su «Pronto» (solo en la guía completa).
+  const tecnicaDelPaso = FUNCIONES.grabarTecnica
+    ? (tecnicaActiva && paso ? { activa: true, etiqueta: `Grabar técnica para ${nombreDelDestino}`, onClick: abreTecnica, enviada: !!tecnicasMandadas[paso.clave] } : null)
+    : (completo ? { activa: false, etiqueta: palabras.tecnicaTitulo, onClick: abreTecnica } : null);
   const volverAlEntreno = () => {
     // Con todo hecho no queda ningún paso al que volver: se regresa al último.
     if (vista.completo) anterior(); else setVerFin(false);
@@ -340,7 +352,7 @@ export default function EntrenoDelDia({
         paso={paso} detalle={detalleDelReloj(paso)} resultado={resultadoDelReloj} puedeAnterior={vista.puedeAnterior || mirandoOtro}
         enMarcha={relojAMedias(`${userId}:${sesionId}:${paso.claveFormato}`)}
         onIniciar={() => { preparaAudio(); setReloj(true); }} onAnotar={() => setAnotando(true)} onListo={() => listo()}
-        onSaltar={saltar} onAnterior={anterior} tecnica={completo ? { activa: tecnicaActiva, etiqueta: palabras.tecnicaTitulo, onClick: abreTecnica } : null}
+        onSaltar={saltar} onAnterior={anterior} tecnica={tecnicaDelPaso}
       />
     );
   } else {
@@ -354,7 +366,7 @@ export default function EntrenoDelDia({
         ) : null}
         etiquetaDeCambiar={textoDeCambiar} puedeAnterior={vista.puedeAnterior || mirandoOtro}
         onListo={() => listo()} onCambiar={() => setHoja('cambiar')} onSaltar={saltar} onAnterior={anterior}
-        tecnica={completo ? { activa: tecnicaActiva, etiqueta: palabras.tecnicaTitulo, onClick: abreTecnica } : null}
+        tecnica={tecnicaDelPaso}
       />
     );
   }
@@ -404,6 +416,18 @@ export default function EntrenoDelDia({
         />
       )}
       {hoja === 'tecnica' && <HojaDeTecnica palabras={palabras} onCerrar={() => setHoja(null)} />}
+      {grabandoTecnica && tecnicaActiva && (
+        <Suspense fallback={null}>
+          <GrabaTecnica
+            atletaId={userId} destino={destinoDeTecnica} sesionId={sesionId} clave={grabandoTecnica.clave}
+            ejercicio={grabandoTecnica.tipo === 'ejercicio' ? grabandoTecnica.nombre : (grabandoTecnica.resumen || 'Set')}
+            detalle={grabandoTecnica.tipo === 'ejercicio' && grabandoTecnica.vueltas > 1 ? `Serie ${grabandoTecnica.vuelta} de ${grabandoTecnica.vueltas}` : null}
+            intentoDe={tecnicasMandadas[grabandoTecnica.clave] ?? null}
+            alEnviar={(id) => setTecnicasMandadas((prev) => ({ ...prev, [grabandoTecnica.clave]: id }))}
+            alCerrar={() => setGrabandoTecnica(null)}
+          />
+        </Suspense>
+      )}
       {sello && (
         <Suspense fallback={null}>
           <HojaDelSello

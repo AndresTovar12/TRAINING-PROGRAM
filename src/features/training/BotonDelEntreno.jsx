@@ -48,11 +48,22 @@ class LimiteDelEntreno extends Component {
  * Es el único sitio que habla con los contextos de la app (el plan, el perfil de quien se mira, las palabras): `EntrenoDelDia` recibe todo
  * por propiedades, para poder probarse solo.
  */
-export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, onRegistro, onFormato, sesionId, oneRMs }) {
-  const { resolveExercise, medias } = usePlan();
+export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, onRegistro, onFormato, sesionId, oneRMs, autor = null }) {
+  const { resolveExercise, medias, programaActivo } = usePlan();
   const { perfil, soloLectura, userId } = usePerfilDeLaVista();
-  const { salud } = usePalabras();
+  const { salud, coach } = usePalabras();
   const pregunta = useConfirmacion();
+  /* A quién le llega la técnica que grabe el atleta: a quien puso ESTE ejercicio en el plan. `autor` es el programa de quien puso esta sesión (su coach, o un
+     profesional de su equipo con su programa o sus sesiones pegadas); si la pantalla no lo trae, el programa que se está viendo. Sin dueño (un atleta sin coach)
+     no hay a quién y la cámara no sale. */
+  const destinoDeTecnica = useMemo(() => {
+    const programa = autor ?? programaActivo;
+    const id = programa?.profesionalId;
+    if (!id) return null;
+    const pro = programa.profesional;
+    const nombre = pro?.full_name || pro?.username || (id === perfil?.coach_id ? (coach?.full_name || coach?.username) : null) || 'tu coach';
+    return { id, nombre };
+  }, [autor, programaActivo, perfil?.coach_id, coach]);
   const [abierto, setAbierto] = useState(false);
   const [intento, setIntento] = useState(0);
   const [fallo, setFallo] = useState(false);
@@ -139,7 +150,7 @@ export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, on
         <LimiteDelEntreno key={intento} alFallar={() => { setAbierto(false); setFallo(true); }}>
           <EntrenoDelDia
             dia={diaDeEntreno} aspecto={aspecto} registro={registro} onRegistro={onRegistro} onFormato={onFormato} sesionId={sesionId} userId={userId}
-            unidadDePeso={perfil?.unidad_peso || 'kg'} oneRMs={oneRMs} salud={salud} medios={medios} alCerrar={() => setAbierto(false)}
+            unidadDePeso={perfil?.unidad_peso || 'kg'} oneRMs={oneRMs} salud={salud} medios={medios} alCerrar={() => setAbierto(false)} destinoDeTecnica={destinoDeTecnica}
           />
         </LimiteDelEntreno>
       )}

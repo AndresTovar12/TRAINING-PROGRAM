@@ -111,6 +111,48 @@ export async function urlsFirmadas(rutas, { renueva = false } = {}) {
   return new Map(rutas.filter((r) => urls.has(r)).map((r) => [r, urls.get(r).url]));
 }
 
+/* ------------------------------------------------------------------ */
+/* Técnica: el video de una serie, mandado a quien puso el ejercicio   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * El atleta le manda a un profesional el video de una serie: sube el archivo y crea la técnica con su tarjeta en la conversación (la función `mandar_tecnica`).
+ * Devuelve el id de la técnica. Si no se pudo crear, el archivo se quita. `intentoDe`: la técnica anterior de la misma serie («Mandar otro intento»).
+ */
+export async function mandaTecnica({ atletaId, profesionalId, ejercicio, detalle = null, sesionId = null, clave = null, archivo, mime = archivo.type, segundos = null, intentoDe = null }) {
+  const ruta = await subeArchivo({ atletaId, profesionalId, archivo, mime });
+  const { data, error } = await supabase.rpc('mandar_tecnica', {
+    p_profesional: profesionalId, p_ejercicio: ejercicio, p_detalle: detalle, p_sesion: sesionId, p_clave: clave,
+    p_ruta: ruta, p_mime: mimeBase(mime), p_segundos: segundos === null ? null : Math.round(segundos), p_bytes: archivo.size, p_intento_de: intentoDe,
+  });
+  if (error) {
+    await supabase.storage.from(BUCKET).remove([ruta]).catch(() => {});
+    throw error;
+  }
+  return data;
+}
+
+/** Las técnicas con esos ids (la tarjeta de cada mensaje de técnica): `Map<id, fila>`. */
+export async function leeTecnicas(ids) {
+  const unicos = [...new Set(ids)].filter(Boolean);
+  if (!unicos.length) return new Map();
+  const { data, error } = await supabase.from('tecnicas').select('*').in('id', unicos);
+  if (error) throw error;
+  return new Map((data ?? []).map((t) => [t.id, t]));
+}
+
+/**
+ * El profesional contesta una técnica. `veredicto`: 'correcta' (un toque) o 'corregir' (con `texto` y/o `adjunto` —`{ ruta, mime, bytes, segundos }` de un archivo ya subido—
+ * y, si quiere, `marca`: el segundo del video donde está el detalle).
+ */
+export async function respondeTecnica({ tecnicaId, veredicto, texto = null, adjunto = null, marca = null }) {
+  const { data, error } = await supabase.rpc('responder_tecnica', {
+    p_tecnica: tecnicaId, p_veredicto: veredicto, p_texto: texto, p_adjunto: adjunto, p_marca: marca === null ? null : Math.max(0, Math.round(marca)),
+  });
+  if (error) throw error;
+  return data;
+}
+
 /**
  * Avisa cuando algo cambia en los mensajes o las técnicas de `uid` (llegó uno, lo vieron, lo borraron). La base solo manda lo que esa persona puede leer.
  * Devuelve la función que corta la suscripción.

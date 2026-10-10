@@ -6,6 +6,12 @@ const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'o
 const DIAS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 const inicioDelDia = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 
+/** «0:12»: los segundos de un video o de una nota, como reloj. */
+export function reloj(s) {
+  const t = Math.max(0, Math.round(s));
+  return `${Math.floor(t / 60)}:${dos(t % 60)}`;
+}
+
 /** «14:32» (en la hora de quien mira). */
 export function horaTexto(iso) {
   const d = new Date(iso);

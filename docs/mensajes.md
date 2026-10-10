@@ -39,8 +39,21 @@ La migración se aplicó con `execute_sql` en cuatro pasos: `apply_migration` la
 - **Vencimiento:** función `limpia-mensajes` (Edge Function, sin JWT: solo quita lo que ya venció, así que llamarla de más no daña nada) + trabajo `limpia-mensajes` de pg_cron todos los días a las 04:20 UTC por pg_net. Borra los archivos de fotos, videos, notas de voz y correcciones de más de **90 días** y los videos de técnica de más de **30**; la fila se queda con `adjunto_borrado` / `video_borrado` y el mensaje dice «La foto ya venció.». También quita las carpetas de cuentas que ya no existen. Lotes de 200 por llamada. Probada: con una foto envejecida a 91 días el archivo desapareció y la burbuja pasó a «venció».
 - La voz no se pudo grabar de verdad en el panel de pruebas (no hay micrófono): se probó subiendo un `.m4a` por la misma función y escuchándolo.
 
+## Técnica por video (tercera entrega)
+
+**El camino del atleta.** En el entreno guiado, el paso de cada serie tiene (a la derecha de «Saltar») un botón con una cámara. Al tocarlo se abre la cámara de la app (la misma de los ejemplos del coach: `GrabadoraDeVideo` con `proposito="tecnica"`), que corta sola a los **60 s** y graba a ≤ 4 Mbps para que quepa en los 50 MB del bucket. Si la cámara no abre, se ofrece la del teléfono (`<input capture>`). Después: «Mandar a …» o «Grabar otra vez»; se sube con índice (`conIndice`, sin recodificar) y `mandar_tecnica` crea la tarjeta. El botón queda con ✓ verde en esa serie y el entreno sigue. El motor guarda el id en `entreno.hechos[clave].tecnica`. Funciona también en la web (`FUNCIONES.grabarTecnica`).
+
+**A quién le llega.** A quien puso esa sesión en el plan: `autor` (el programa de quien la puso; con sesiones pegadas es el profesional, sin ellas el coach). Si la pantalla no trae autor, el programa que se está viendo. Sin dueño no hay a quién y el botón queda en «Pronto». Código: `BotonDelEntreno` (`destinoDeTecnica`), `EntrenoDelDia`, `GrabaTecnica`.
+
+**La tarjeta** (`TarjetaDeTecnica`): ejercicio, «Serie 2 de 4» (y «Otro intento»), el video y un sello de estado. Quien la ve como profesional, con la técnica «por revisar», tiene dos botones: **«Técnica correcta»** (un toque; manda una burbuja con ✓) y **«Corregir»**. El atleta ve «En revisión», «Técnica correcta» o «Tiene correcciones» y, ya revisada, **«Mandar otro intento»** (graba otra con `p_intento_de`). Con la conversación cerrada no hay botones. A los 30 días el video vence y la tarjeta lo dice.
+
+**Corregir** (`CorregirTecnica`, hoja flotante): el video del atleta, **«Marcar este segundo»** (guarda `currentTime`), un texto, y UNA cosa más: nota de voz o **«Mi video»** (el del profesional, con el mismo cuidado que cualquier video: ≤ 60 s, ≤ 50 MB, con índice). Lleva texto y/o archivo; `responder_tecnica('corregir', …)` crea la corrección y pasa la técnica a «corregida».
+
+**La corrección en el chat.** Es una burbuja que dice sobre qué técnica es («Sentadilla trasera · Serie 2 de 4»: sin esto, con varias técnicas seguidas no se sabría), el chip **«En el segundo 0:12»** (al tocarlo, el video de la tarjeta salta ahí y corre) y el texto o el archivo. «Técnica correcta» es una burbuja corta con ✓. Todo se vuelve a leer en cuanto la base contesta, sin esperar la conexión en vivo (`tic`).
+
+**Probado** con cuentas QA y una cámara falsa de Chromium (`--use-fake-device-for-media-stream`): grabar en el entreno → subir → tarjeta del profesional; «Corregir» con marca y texto, con video propio; «Técnica correcta»; «Mandar otro intento» desde el chat. NO probado en un iPhone real (Safari, `MediaRecorder` con `audio/mp4`, pantalla completa).
+
 ## Pendiente (en este orden)
 
-1. **Técnica:** grabarla en el entreno (también en la web), tarjeta con los dos botones, «Corregir» (texto, nota de voz, video propio, marcar el segundo), «Mandar otro intento»; vence a los 30 días; a quien puso el ejercicio en el plan.
-2. Aviso a varios atletas (después), notificación del teléfono (con la app descargable).
-3. Los mensajes QA entre `zz_qa_pac` y `zz_qa_fisio` quedaron en la base (el `delete` por SQL sale «declined»); borrarlos cuando se pueda.
+1. Aviso a varios atletas (después), notificación del teléfono (con la app descargable).
+2. Los mensajes QA entre `zz_qa_pac` y `zz_qa_fisio` quedaron en la base (el `delete` por SQL sale «declined»), con sus técnicas y archivos; borrarlos cuando se pueda.
