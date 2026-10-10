@@ -1177,6 +1177,24 @@ export async function deleteSessionType(id) {
   if (error) throw error;
 }
 
+/* Los tipos de la APP que este coach quitó de su selector (`['neural', 'tests']`). Viven en su bloque de estado (`user_app_state.data`, llave
+   `ui:tipos-quitados`) y se guardan con `mezclar_mi_estado`, igual que los avisos aceptados (`useAvisosVistos`): el editor del coach NO está
+   dentro de `AppStateProvider` (solo la app del atleta), así que no puede usar `useStorage`. La lista se reemplaza entera en cada cambio. */
+const LLAVE_TIPOS_QUITADOS = 'ui:tipos-quitados';
+
+export async function listTiposQuitados(coachId) {
+  if (!coachId) return [];
+  const { data, error } = await supabase.from('user_app_state').select('data').eq('user_id', coachId).maybeSingle();
+  if (error) throw error;
+  const lista = data?.data?.[LLAVE_TIPOS_QUITADOS];
+  return Array.isArray(lista) ? lista.filter((x) => typeof x === 'string') : [];
+}
+
+export async function saveTiposQuitados(coachId, lista) {
+  const { error } = await supabase.rpc('mezclar_mi_estado', { p_usuario: coachId, p_cambios: { [LLAVE_TIPOS_QUITADOS]: lista } });
+  if (error) throw error;
+}
+
 /* ------------------------- Mi perfil → Mis ejercicios ------------------------ *
  * Lo que el inicio promete (8 oct 2026, «es solo el punto de partida»): el coach
  * puede volver al original de Training Lab o borrar TODO lo suyo cuando quiera.

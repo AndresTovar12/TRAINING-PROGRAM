@@ -93,9 +93,15 @@ export default function HojaTiposDeSesion({ propios, base, baseQuitada, nuevoId 
       setError(e?.message || 'No se pudo quitar. Intenta de nuevo.');
     }
   };
+  // Se quita al instante y se avisa con «Deshacer»; si la base no alcanza a guardarlo, se regresa solo y aquí se escribe el error.
   const quitaBase = (b) => {
-    onQuitaBase(b.slug);
-    avisa(`«${b.label}» quitado`, { accion: { texto: 'Deshacer', alTocar: () => onPonBase(b.slug) } });
+    setError('');
+    onQuitaBase(b.slug).catch(() => setError('No se pudo quitar. Intenta de nuevo.'));
+    avisa(`«${b.label}» quitado`, { accion: { texto: 'Deshacer', alTocar: () => onPonBase(b.slug).catch(() => setError('No se pudo volver a poner. Intenta de nuevo.')) } });
+  };
+  const ponBase = (b) => {
+    setError('');
+    onPonBase(b.slug).catch(() => setError('No se pudo volver a poner. Intenta de nuevo.'));
   };
 
   const abiertosLosQuitados = verQuitados && baseQuitada.length > 0;
@@ -160,7 +166,7 @@ export default function HojaTiposDeSesion({ propios, base, baseQuitada, nuevoId 
             <Caja>
               {baseQuitada.map((b, i) => (
                 <Fila key={b.slug} primera={i === 0} nombre={b.label} aspecto={aspectoDe({ cat: b.slug })}>
-                  <BotonDeFila color={LT.blue} onClick={() => onPonBase(b.slug)} etiquetaAria={`Volver a poner ${b.label}`}>Volver a poner</BotonDeFila>
+                  <BotonDeFila color={LT.blue} onClick={() => ponBase(b)} etiquetaAria={`Volver a poner ${b.label}`}>Volver a poner</BotonDeFila>
                 </Fila>
               ))}
             </Caja>
