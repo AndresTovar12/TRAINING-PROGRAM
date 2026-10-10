@@ -25,7 +25,10 @@ export const FUNCIONES = Object.freeze({
   grabarTecnica: false,
 
   /**
-   * La guía COMPLETA del entreno: «Ver todo» (todo el workout por series), el par A/B de las bi-series y el cronómetro de cada paso con tiempo.
+   * La guía COMPLETA del entreno: «Ver todo» (todo el workout por series), «Grabar técnica» y el cronómetro de cada paso con tiempo.
+   *
+   * OJO: la tarjeta del Set con el par A/B de una bi-serie («Luego», «Descanso») NO cuelga de aquí; sale en la web y en la app. Andrés, 10 oct 2026
+   * (PDF «Experiencia de workout 2.0»): sin ella el atleta no entiende qué Set está haciendo.
    *
    * Andrés, 9 oct 2026 (noche): el modo entreno de la web se sentía complejo porque intentaba hacer lo mismo que la app descargable y el Apple
    * Watch. Decidió la web más simple y menos capaz, CON su botón «Iniciar entreno»; la app es la que guía de verdad (ver
