@@ -26,11 +26,7 @@
 
 1. **Cambiar las 3 contraseñas que estuvieron en el repositorio público** (las de `andrestovar_admin`, `andrestovar` y `coach_prueba`, commit `19bc668`). Ahora se hace desde Mi perfil › Cambiar contraseña. Quitarlas del archivo no basta: siguen en el historial público.
 2. **Interruptor «Leaked password protection»** (Authentication › Sign In / Providers › Email › Password security): rechaza contraseñas que ya aparecieron en filtraciones. Es un ajuste del panel de Supabase; en algunos planes no está disponible. El linter lo marca como aviso.
-3. **Poner el repositorio privado** (GitHub › Settings › Danger Zone › Change visibility) y, con eso, ya no limpiar el historial. Si se prefiere limpiarlo (`git filter-repo` + `push --force`; Andrés lo pidió el 30 sep): Cambia TODOS los SHA, y el conector de IA baja su código por SHA: hay que redesplegar su `index.ts` con el SHA nuevo y probarlo, y Vercel redespliega. Aun así GitHub puede conservar los commits viejos por SHA y los forks pueden tenerlos: por eso la rotación del punto 1 es obligatoria. Sin hacer todavía (hay que confirmarlo).
-
-## Repositorio privado y el conector de IA (10 oct 2026)
-
-Para poder poner el repositorio **privado**, el conector de IA ya no baja su código de GitHub: se sirve desde el sitio, en `public/conector/vNN/` (ver `supabase/functions/mcp/LEEME.md` y `scripts/publica-conector.mjs`). La página web en Vercel se despliega igual con un repositorio privado. El código del conector (solo ese pedazo, sin claves) sigue siendo legible desde el sitio. Con el repositorio privado, la reescritura del historial de git ya no hace falta, pero **cambiar las contraseñas expuestas sigue siendo obligatorio** (quien las copió mientras era público las conserva).
+3. **Limpiar el historial de git** (`git filter-repo` + `push --force`): Andrés lo pidió el 30 sep. Cambia TODOS los SHA, y el conector de IA baja su código por SHA: hay que redesplegar su `index.ts` con el SHA nuevo y probarlo, y Vercel redespliega. Aun así GitHub puede conservar los commits viejos por SHA y los forks pueden tenerlos: por eso la rotación del punto 1 es obligatoria. Sin hacer todavía (hay que confirmarlo).
 
 ## Pendientes menores (decididos a no tocar ahora)
 
