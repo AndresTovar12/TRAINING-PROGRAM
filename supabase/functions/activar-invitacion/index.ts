@@ -165,8 +165,8 @@ Deno.serve(async (req) => {
   if (!USERNAME_RE.test(username)) {
     return json({ error: 'El usuario debe tener 3-30 caracteres (letras, números, _ o .)' }, 400, origin)
   }
-  if (password.length < 6) {
-    return json({ error: 'La contraseña debe tener al menos 6 caracteres' }, 400, origin)
+  if (password.length < 8) {
+    return json({ error: 'La contraseña debe tener al menos 8 caracteres' }, 400, origin)
   }
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return json({ error: 'Correo inválido' }, 400, origin)

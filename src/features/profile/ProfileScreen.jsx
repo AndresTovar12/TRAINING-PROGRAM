@@ -11,6 +11,7 @@ import { T, FONT, KP } from '@/lib/theme';
 import ConectarIA from '@/features/ia/ConectarIA';
 import MiEquipo from '@/features/profile/MiEquipo';
 import MisEjercicios from '@/features/profile/MisEjercicios';
+import CambiarContrasena from '@/features/profile/CambiarContrasena';
 import TarjetaDeMisMetricas from '@/features/metricas/TarjetaDeMisMetricas';
 import SelectorOficio from '@/components/SelectorOficio';
 import SelectorDisciplinas from '@/components/SelectorDisciplinas';
@@ -422,6 +423,9 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
             <ChevronRight size={17} color={T.text3} />
           </button>
 
+          {/* Su contraseña: se cambia aquí (antes solo se podía por SQL). */}
+          <CambiarContrasena />
+
           {err && (
             <div style={{ background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 12, padding: '11px 15px', fontWeight: 700, fontSize: 13.5 }}>
               {err}
@@ -434,7 +438,7 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
           {seccion === 'equipo' && !isAdmin && <MiEquipo />}
 
           {/* Las métricas de su reloj: pulso, ritmo, carga y recuperación. Las ve él y quien lo atiende. */}
-          {seccion === 'metricas' && !isAdmin && <TarjetaDeMisMetricas atleta={{ id: user.id, full_name: profile?.full_name, username: profile?.username }} />}
+          {seccion === 'metricas' && !isAdmin && <TarjetaDeMisMetricas atleta={{ id: user.id, full_name: profile?.full_name, username: profile?.username, unidad_peso: profile?.unidad_peso }} />}
 
           {/* El coach: los ejercicios de Training Lab prendidos o apagados, volver al original, borrar todo lo suyo. */}
           {seccion === 'ejercicios' && isAdmin && !isMaster && <MisEjercicios />}

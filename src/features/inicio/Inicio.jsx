@@ -20,6 +20,7 @@ import fotoFuerza from '@/assets/landing/fuerza.webp';
 import fotoPista from '@/assets/landing/pista.webp';
 import fotoYoga from '@/assets/landing/yoga.webp';
 import fotoAgilidad from '@/assets/landing/agilidad.webp';
+import { problemaDeContrasena } from '@/lib/contrasena';
 
 /**
  * El inicio: crear la cuenta y dejar la app armada, una pregunta por pantalla.
@@ -370,10 +371,11 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
       pie = <BotonGoogle conO antes={() => guardaTipoPendiente(tipo)} style={botonSecundario} />;
     }
   } else if (paso === 'cuenta') {
-    const valido = USERNAME_RE.test(usuario.trim()) && clave.length >= 6;
+    const valido = USERNAME_RE.test(usuario.trim()) && !problemaDeContrasena(clave, { usuario: usuario.trim() });
     const sigue = () => {
       if (!USERNAME_RE.test(usuario.trim())) { setError('El usuario lleva de 3 a 30 letras, números, _ o .'); return; }
-      if (clave.length < 6) { setError('La contraseña lleva al menos 6 caracteres.'); return; }
+      const problema = problemaDeContrasena(clave, { usuario: usuario.trim() });
+      if (problema) { setError(problema); return; }
       setI(i + 1);
     };
     cuerpo = (

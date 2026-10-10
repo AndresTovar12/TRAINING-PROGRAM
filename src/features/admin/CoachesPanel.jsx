@@ -8,6 +8,7 @@ import {
   setAtletaActivo, eliminarAtletaDefinitivo, resumenDatosCoach,
 } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { problemaDeContrasena } from '@/lib/contrasena';
 import { useConfirmacion } from '@/components/Confirmacion';
 import ListaDesplegable from '@/components/ListaDesplegable';
 import { plural } from '@/lib/plural';
@@ -41,7 +42,8 @@ function CreateCoachModal({ onClose, onCreated }) {
 
   async function onSave() {
     if (!USERNAME_RE.test(username.trim())) { setErr('Usuario: 3-30 caracteres (letras, números, _ o .)'); return; }
-    if (password.length < 6) { setErr('La contraseña debe tener al menos 6 caracteres'); return; }
+    const problema = problemaDeContrasena(password, { usuario: username, correo: email });
+    if (problema) { setErr(problema); return; }
     setErr('');
     setBusy(true);
     try {
@@ -82,7 +84,7 @@ function CreateCoachModal({ onClose, onCreated }) {
           {field(<Mail size={17} color={T.text3} />, 'Correo (opcional)', <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="coach@correo.com" type="email" style={bare} />)}
           {field(<Lock size={17} color={T.text3} />, 'Contraseña', (
             <>
-              <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" type={showPw ? 'text' : 'password'} style={bare} />
+              <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 8 caracteres" type={showPw ? 'text' : 'password'} style={bare} />
               <button type="button" onClick={() => setShowPw((v) => !v)} aria-label={showPw ? 'Ocultar' : 'Ver'} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.text3, padding: 4, display: 'grid', placeItems: 'center' }}>
                 {showPw ? <EyeOff size={17} /> : <Eye size={17} />}
               </button>
