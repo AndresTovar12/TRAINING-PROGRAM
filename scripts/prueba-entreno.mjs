@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import {
   MAX_PASOS, FORMATO_DE_LAPSOS, rondasDelSet, deporteDelTipo, pasosDeLaSesion, leeAvance, iniciaEntreno, marcaListo, saltaPaso, vuelveAtras, masDescanso,
-  terminaEntreno, reabreEntreno, ocultaEntreno, vistaDelEntreno, empiezaPaso, quitaCronometro, cuentaDe,
+  terminaEntreno, reabreEntreno, ocultaEntreno, reiniciaSiTerminado, vistaDelEntreno, empiezaPaso, quitaCronometro, cuentaDe,
 } from '../src/lib/entreno.js';
 import { ponFormato } from '../src/lib/formatos.js';
 import { parcheDeLapsos } from '../src/lib/lapsos.js';
@@ -507,6 +507,28 @@ const lower = {
   assert.equal(leeAvance({ oculto: 1 }).oculto, false);
   // Viaja por la base como una llave más.
   assert.deepEqual(diferencia(a, oculto), { oculto: true });
+}
+
+/* ---- «Deshacer» una sesión terminada: el entreno guiado empieza de nuevo ---- */
+{
+  const plan = pasosDeLaSesion(lower);
+  const hecho = marcaListo(plan, iniciaEntreno(undefined, 100), 200);
+  // Terminado: se borra el avance entero (vuelve a ser «Iniciar entreno» desde cero).
+  const terminado = terminaEntreno(hecho, 300);
+  assert.equal(vistaDelEntreno(plan, terminado, 400).estado, 'fin');
+  assert.equal(reiniciaSiTerminado(terminado), undefined, 'un entreno terminado se reinicia');
+  assert.equal(vistaDelEntreno(plan, reiniciaSiTerminado(terminado), 400).estado, 'sin', 'y se ofrece «Iniciar entreno» otra vez');
+  assert.equal(vistaDelEntreno(plan, reiniciaSiTerminado(terminado), 400).hechos, 0);
+  // A medias (nunca terminado): se queda como está, para «Continuar».
+  assert.equal(reiniciaSiTerminado(hecho), hecho, 'un entreno a medias no se toca');
+  assert.equal(reiniciaSiTerminado(undefined), undefined);
+  // Quien lo quitó con la ✕ sigue sin verlo, pero sin pasos ni «terminado».
+  const quitado = reiniciaSiTerminado(terminaEntreno(ocultaEntreno(hecho), 300));
+  assert.equal(vistaDelEntreno(plan, quitado, 400).oculto, true);
+  assert.equal(vistaDelEntreno(plan, quitado, 400).hechos, 0);
+  assert.equal(vistaDelEntreno(plan, quitado, 400).estado, 'sin');
+  // Por la base viaja como una llave borrada.
+  assert.deepEqual(diferencia({ entreno: terminado }, { entreno: reiniciaSiTerminado(terminado) }), { entreno: { __borrar: true } });
 }
 
 /* ---- Viaja bien por la base: se guarda por llaves y se mezcla sin pisar a otro dispositivo ---- */

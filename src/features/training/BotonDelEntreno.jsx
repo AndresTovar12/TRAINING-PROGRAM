@@ -36,7 +36,7 @@ class LimiteDelEntreno extends Component {
 }
 
 /**
- * El botón de la sesión que abre el MODO ENTRENO: «Iniciar entreno» (azul), «Continuar entreno 3 de 12» (con borde, y una ✕ para quitarlo) o nada.
+ * El botón de la sesión que abre el MODO ENTRENO: «Iniciar entreno» (azul), «Continuar entreno 3 de 12» (con borde, cuando ya hay pasos hechos, y una ✕ para quitarlo) o nada.
  *
  * Va arriba de la lista de ejercicios del día, dentro de su tarjeta. No sale si no hay nada que entrenar (un descanso), si la sesión ya
  * está terminada (ya dice «Terminada»), ni cuando alguien mira el plan de otra persona en solo lectura.
@@ -54,8 +54,6 @@ export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, on
   const { salud } = usePalabras();
   const pregunta = useConfirmacion();
   const [abierto, setAbierto] = useState(false);
-  // Se abrió con «Iniciar entreno» (no con «Continuar»): si lo primero es un reloj, arranca solo (ver `EntrenoDelDia`).
-  const [inicioNuevo, setInicioNuevo] = useState(false);
   const [intento, setIntento] = useState(0);
   const [fallo, setFallo] = useState(false);
   // Una sesión que dice «repite el martes» se entrena con los ejercicios del martes (`ejercicios`); lo que se anota queda en SU lugar.
@@ -79,12 +77,13 @@ export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, on
   // Ya se dio por terminado, o el atleta lo quitó: no hay nada que iniciar ni que continuar (si lo está mirando abierto, sigue abierto).
   if (!abierto && (vista.estado === 'fin' || vista.oculto)) return null;
   const empezado = vista.estado !== 'sin';
+  // «Continuar» solo cuando ya hay algo hecho: abrir el entreno y cerrarlo sin tocar un paso no es «Continuar entreno 0 de 7», es empezar.
+  const continuando = empezado && vista.hechos + vista.saltados > 0;
   const abre = () => {
     // El audio solo se despierta con un toque de la persona; con el reloj arrancando solo, este es el toque.
     preparaAudio();
     // La hora de inicio se guarda una sola vez.
     onRegistro((prev) => ({ ...prev, entreno: iniciaEntreno(prev?.entreno, Date.now()) }));
-    setInicioNuevo(!empezado);
     setFallo(false);
     setIntento((n) => n + 1);
     setAbierto(true);
@@ -107,14 +106,14 @@ export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, on
           style={{
             flex: 1, minWidth: 0, minHeight: 54, borderRadius: 18, cursor: 'pointer', fontFamily: FONT, fontSize: 17, fontWeight: 800,
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, touchAction: 'manipulation',
-            ...(empezado
+            ...(continuando
               ? { border: `2px solid ${LT.blue}`, background: LT.surface, color: LT.blue }
               : { border: 'none', background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, color: '#fff', boxShadow: KP.shBtn }),
           }}
         >
-          <Play size={empezado ? 17 : 18} fill={empezado ? 'none' : '#fff'} />
-          {empezado ? palabras.continuar : palabras.iniciar}
-          {empezado && plan.total > 0 && (
+          <Play size={continuando ? 17 : 18} fill={continuando ? 'none' : '#fff'} />
+          {continuando ? palabras.continuar : palabras.iniciar}
+          {continuando && plan.total > 0 && (
             <span style={{ fontSize: 13.5, fontWeight: 800, opacity: 0.85, ...NUM_STYLE }}>{Math.min(vista.hechos, plan.total)} de {plan.total}</span>
           )}
         </button>
@@ -140,7 +139,7 @@ export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, on
         <LimiteDelEntreno key={intento} alFallar={() => { setAbierto(false); setFallo(true); }}>
           <EntrenoDelDia
             dia={diaDeEntreno} aspecto={aspecto} registro={registro} onRegistro={onRegistro} onFormato={onFormato} sesionId={sesionId} userId={userId}
-            unidadDePeso={perfil?.unidad_peso || 'kg'} oneRMs={oneRMs} salud={salud} medios={medios} inicioNuevo={inicioNuevo} alCerrar={() => setAbierto(false)}
+            unidadDePeso={perfil?.unidad_peso || 'kg'} oneRMs={oneRMs} salud={salud} medios={medios} alCerrar={() => setAbierto(false)}
           />
         </LimiteDelEntreno>
       )}
