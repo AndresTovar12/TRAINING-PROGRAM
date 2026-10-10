@@ -26,9 +26,18 @@ import ResultadoDelBloque from '@/features/training/ResultadoDelBloque';
  * CERRAR PAUSA. La X no deja el reloj corriendo a escondidas: lo pausa y lo guarda. Al volver
  * a abrirlo está donde lo dejó. Si la app se recarga con el reloj en marcha (el sistema mató la
  * pestaña), al volver sigue contando desde la hora real, porque lo guardado es CUÁNDO empezó.
+ *
+ * CÓMO ARRANCA. Tres maneras, según quién lo abrió y por qué:
+ *   · `empezarYa`: la persona acaba de tocar «Empezar» (o «Iniciar reloj» en la lista): corre ya, sin otro «Iniciar».
+ *   · `conCuenta`: lo abrió el MODO ENTRENO porque la persona avanzó («Iniciar entreno», «Listo», «Seguir») y toca un reloj.
+ *     Andrés, 9 oct 2026: «si ya le piqué a iniciar entrenamiento y se supone que tú me guías, ¿por qué no inicias el reloj?».
+ *     Corre solo, pero con un 3, 2, 1 que se puede cancelar: nadie empieza a correr en el mismo instante en que toca un botón.
+ *   · sin ninguno: se abre en cero y espera su «Iniciar».
  */
 
 const LLAVE_DEL_SONIDO = 'tl:reloj:sonido';
+// Los segundos del «3, 2, 1» con que arranca solo (`conCuenta`).
+const SEG_DE_CUENTA = 3;
 const leeSonido = () => {
   try { return window.localStorage.getItem(LLAVE_DEL_SONIDO) !== 'no'; } catch { return true; }
 };
@@ -85,7 +94,7 @@ function BotonChico({ children, onClick, peligro = false }) {
  * `plan`: los tramos ya armados, para un Set en «Lapsos personalizados» (ver `tramosDeLapsos` en `lib/lapsos.js`); sin él,
  * salen del formato. Con lapsos, `formato` solo trae lo que el resultado necesita (`anota`).
  */
-export default function RelojDelBloque({ formato, plan: planDado = null, ejercicios, serie, clave, resumen, empezarYa = false, onGuardar, onCerrar }) {
+export default function RelojDelBloque({ formato, plan: planDado = null, ejercicios, serie, clave, resumen, empezarYa = false, conCuenta = false, onGuardar, onCerrar }) {
   const pregunta = useConfirmacion();
   const nEj = ejercicios.length;
   // Los tramos de lapsos se guardan como texto para que su identidad no cambie con cada dibujo de la pantalla de arriba.
@@ -96,13 +105,16 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
   const id = claveDelPlan ? 'lapsos' : vistaDe(formato);
   const rondas = plan.reduce((m, t) => Math.max(m, t.vuelta ?? 1), 1);
 
-  // `empezarYa`: quien lo abre acaba de decir «Empezar» (o «Iniciar reloj»): que no pida un «Iniciar» más. Si lo dejó pausado, sigue pausado.
+  // `empezarYa`: quien lo abre acaba de tocar el botón grande («Empezar», «Seguir» o «Iniciar reloj»): que no pida otro «Iniciar» adentro.
+  // Uno pausado también sigue: quien lo dejó en pausa y vuelve a tocar el botón grande quiere seguir, no encontrarse otro botón.
   const [est, setEst] = useState(() => {
     const guardado = leeRelojGuardado(clave, firma, plan);
-    return empezarYa && guardado.fase === 'listo' ? inicia(guardado, Date.now()) : guardado;
+    return empezarYa && (guardado.fase === 'listo' || guardado.fase === 'pausa') ? inicia(guardado, Date.now()) : guardado;
   });
   const [ahora, setAhora] = useState(() => Date.now());
   const [sonido, setSonido] = useState(leeSonido);
+  // `conCuenta`: solo con el reloj en cero. Uno que ya iba (pausado) vuelve a donde estaba, sin cuenta.
+  const [preparaHasta, setPreparaHasta] = useState(() => (conCuenta && est.fase === 'listo' ? Date.now() + SEG_DE_CUENTA * 1000 : null));
 
   // El reloj se calcula con la hora: este temporizador solo avisa a la pantalla que se vuelva a dibujar.
   useEffect(() => {
@@ -115,12 +127,33 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
     return () => clearInterval(t);
   }, [est.fase, plan, tope]);
 
+  // El «3, 2, 1»: al llegar a cero el reloj arranca solo. Con `Date.now()` y no contando tics: si el teléfono duerme la pestaña, al volver ya toca.
+  useEffect(() => {
+    if (preparaHasta === null) return undefined;
+    const t = setInterval(() => {
+      const ya = Date.now();
+      setAhora(ya);
+      if (ya >= preparaHasta) {
+        setPreparaHasta(null);
+        setEst((e) => (e.fase === 'listo' ? inicia(e, ya) : e));
+      }
+    }, 100);
+    return () => clearInterval(t);
+  }, [preparaHasta]);
+
   // Cada cambio de estado se guarda: si la app se recarga, el reloj sigue donde iba.
   useEffect(() => { guardaReloj(clave, firma, est); }, [clave, firma, est]);
 
   usePantallaEncendida(est.fase === 'corriendo');
 
   const v = vista(est, plan, ahora, tope);
+  const preparando = preparaHasta !== null && v.fase === 'listo';
+  const cuentaAtras = preparando ? Math.max(1, Math.ceil((preparaHasta - ahora) / 1000)) : 0;
+
+  // Un pitido por cada número de la cuenta; el del arranque lo da el de abajo («cambio»).
+  useEffect(() => {
+    if (cuentaAtras > 0 && sonido) pitido('cuenta');
+  }, [cuentaAtras, sonido]);
 
   // Los pitidos: 3, 2, 1 en los tramos con tiempo, el cambio de tramo y el final.
   const previo = useRef({ i: est.i, restante: null, fase: est.fase });
@@ -180,8 +213,11 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
 
   let rotulo = '';
   if (v.fase === 'fin') rotulo = 'Terminaste';
+  else if (preparando) rotulo = 'Prepárate';
   else if (id === 'amrap') rotulo = 'Tiempo restante';
   else if (tramo) rotulo = etiquetaDeTramo(tramo);
+  // Mientras cuenta, el número manda; lo que viene primero («Lapso 1 de 4 · 1 km · 4:40 min/km») sigue debajo, que es justo lo que hay que saber.
+  if (preparando) grande = String(cuentaAtras);
   const avance = v.fase === 'fin' ? '' : textoDeAvance(id, formato, v, nEj, rondas);
   // En lapsos, lo que toca en este tramo: «800 m · 4:34-5:00 min/km».
   const queToca = v.fase !== 'fin' && tramo?.tipo === 'trabajo' ? [tramo.texto, formatIntensity(tramo.carga)].filter(Boolean).join(' · ') : '';
@@ -228,7 +264,7 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
             <div
               aria-live="off" role="timer"
               style={{
-                fontSize: grande.length > 5 ? 70 : 96, fontWeight: 800, lineHeight: 1.05, letterSpacing: -2,
+                fontSize: preparando ? 132 : (grande.length > 5 ? 70 : 96), fontWeight: 800, lineHeight: 1.05, letterSpacing: -2,
                 color: v.fase === 'fin' ? LT.text : color, ...NUM_STYLE,
               }}
             >
@@ -307,7 +343,9 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
       {v.fase !== 'fin' && (
         <div style={{ flexShrink: 0, borderTop: `1px solid ${LT.border}`, background: LT.surface }}>
           <div style={{ maxWidth: 520, margin: '0 auto', padding: '12px 18px calc(12px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {v.fase === 'listo' && <BotonGrande onClick={empieza}><Play size={22} fill="#fff" /> Iniciar</BotonGrande>}
+            {/* Contando 3, 2, 1: un solo botón, «Cancelar», que deja el reloj en cero y regresa (quien no estaba listo no pierde nada). */}
+            {preparando && <div style={{ display: 'flex' }}><BotonChico onClick={cierra}>Cancelar</BotonChico></div>}
+            {v.fase === 'listo' && !preparando && <BotonGrande onClick={empieza}><Play size={22} fill="#fff" /> Iniciar</BotonGrande>}
             {v.fase === 'corriendo' && (abierto
               ? (
                 <>

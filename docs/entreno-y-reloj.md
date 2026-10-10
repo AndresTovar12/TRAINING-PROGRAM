@@ -97,14 +97,22 @@ La lista plana es el **mapa de regreso**: el paso *i* que ejecutó el reloj es `
 
 **COROS, Polar, Suunto, Wahoo.** Entran por sus programas de socios o por TrainingPeaks como puente (de pago); con este formato cada uno es un adaptador chico más una solicitud.
 
-## 6. Lo que NO está (a propósito)
+## 6. Cómo arranca un reloj (para quien guíe desde otro dispositivo)
+
+**Un solo «empezar» por intención.** Andrés (9 oct 2026): «si ya le piqué a iniciar entrenamiento y se supone que tú me guías, ¿por qué no inicias el reloj?». La regla, que cualquier app o reloj que guíe debe repetir:
+
+- Cuando la persona **avanza** (iniciar el entreno, «Listo», «Seguir», «Saltar») y el paso al que llega es un **reloj**, el reloj corre solo, con una cuenta de 3 segundos que se puede cancelar. Nadie empieza a correr en el mismo instante en que toca un botón.
+- Cuando la persona **vuelve** a un paso (atrás, «Ver todo», retomar un entreno ya empezado) o **cancela** la cuenta, nada arranca: ve el Set con su botón «Empezar» (o «Seguir», si el reloj iba a medias).
+- Un reloj que ya tiene resultado no arranca solo. Y ningún paso *termina* solo: el reloj sirve, nunca manda.
+
+## 7. Lo que NO está (a propósito)
 
 - Ninguna app nativa, ni la del reloj. Este documento y `entrenoCanonico.js` son la base, no el adaptador.
 - **GPS y cardio con la pantalla en la mano en la web**: descartado por Andrés. El seguimiento con pantalla bloqueada pide ubicación en segundo plano, que solo existe en la app nativa (y en un reloj, lo lleva el reloj).
 - Lo que el sensor mide de vuelta (pulso, ruta, ritmo por vuelta) no tiene dónde guardarse todavía. Cuando haya app nativa: probablemente `entreno.sensor` por paso, con la misma regla de objetos por llave.
 - «Grabar técnica para el coach» está apagado (`src/lib/funciones.js`); hoy solo existe su botón con «Pronto» y el campo `tecnica`.
 
-## 7. Cómo probarlo
+## 8. Cómo probarlo
 
 ```
 node scripts/prueba-entreno.mjs            # los pasos y el avance, con horas inventadas
