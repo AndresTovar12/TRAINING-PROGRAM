@@ -4,7 +4,7 @@
    gráfica de rendimiento (condición, fatiga y forma). Aquí se llaman por su nombre en español, con la sigla chica por si el coach ya la conoce:
      Condición (CTL)  el promedio de la carga de las últimas ~6 semanas: lo que el cuerpo ya aguanta
      Fatiga (ATL)     el promedio de la última semana: lo que trae encima ahora
-     Forma (TSB)      condición de ayer menos fatiga de ayer: positiva = descansado, negativa = cargado
+     Forma (TSB)      condición de ayer menos fatiga de ayer: positiva = llega con energía, negativa = trae carga encima
 
    Todo es puro: recibe filas ya leídas de la base (`actividades`, `recuperacion_diaria`) y devuelve números y textos. Los días son texto `AAAA-MM-DD` en
    la hora LOCAL del entreno (`inicio` + `desfase_min`): un entreno de las 11 de la noche en México cuenta ese día, no el siguiente.
@@ -77,11 +77,11 @@ export function curvaDeForma(porDia, { desde, hasta, constanteCtl = 42, constant
  */
 export function estadoDeForma(tsb, ctl) {
   if (!(ctl >= 8)) return { clave: 'sin-base', titulo: 'Poco historial', detalle: 'Todavía no hay suficientes entrenos para saber cuánto carga normalmente.', tono: 'neutro' };
-  if (tsb > 25) return { clave: 'descansado', titulo: 'Descansado de más', detalle: 'Lleva días con poca carga: puede estar perdiendo condición.', tono: 'azul' };
-  if (tsb > 5) return { clave: 'fresco', titulo: 'Fresco', detalle: 'Viene descansado: buen momento para un entreno duro o una prueba.', tono: 'verde' };
+  if (tsb > 25) return { clave: 'descansado', titulo: 'Mucho descanso', detalle: 'Lleva días con poca carga: puede estar perdiendo condición.', tono: 'azul' };
+  if (tsb > 5) return { clave: 'fresco', titulo: 'En plena forma', detalle: 'Llega con energía: buen momento para un entreno duro o una prueba.', tono: 'verde' };
   if (tsb >= -10) return { clave: 'equilibrio', titulo: 'En equilibrio', detalle: 'Lo que entrena y lo que descansa van parejos.', tono: 'neutro' };
-  if (tsb >= -30) return { clave: 'productivo', titulo: 'Entrenando fuerte', detalle: 'Está cargado, pero dentro de lo que suele dar progreso.', tono: 'ambar' };
-  return { clave: 'riesgo', titulo: 'Muy cargado', detalle: 'La fatiga es mucho más alta que su condición: riesgo de sobreentrenamiento. Conviene descansar.', tono: 'rojo' };
+  if (tsb >= -30) return { clave: 'productivo', titulo: 'Entrenando fuerte', detalle: 'Trae mucha carga encima, pero dentro de lo que suele dar progreso.', tono: 'ambar' };
+  return { clave: 'riesgo', titulo: 'Sobrecarga', detalle: 'La fatiga es mucho más alta que su condición: riesgo de sobreentrenamiento. Conviene descansar.', tono: 'rojo' };
 }
 
 /** Cuánto subió (o bajó) la condición en los últimos 7 días de la curva, en puntos por semana. `null` con menos de una semana de curva. */
@@ -122,6 +122,20 @@ export function porSemana(actividades, { semanas = 12, hoy } = {}) {
       fc_media: c._pesoFc > 0 ? Math.round(c._fc / c._pesoFc) : null, zonas_s: c.zonas_s, kcal: Math.round(c.kcal),
     };
   });
+}
+
+/**
+ * Los totales de los entrenos de `lunes` hasta `hasta` (incluido): `{ sesiones, duracion_s, carga }`. Sirve para comparar la semana en curso con la pasada A ESTA
+ * ALTURA (de lunes a jueves contra lunes a jueves): comparar una semana a medias con una completa siempre diría «bajó».
+ */
+export function totalesHasta(actividades, { lunes, hasta }) {
+  let sesiones = 0; let duracion = 0; let carga = 0;
+  (actividades ?? []).forEach((a) => {
+    const dia = diaLocal(a.inicio, a.desfase_min);
+    if (!dia || dia < lunes || dia > hasta) return;
+    sesiones += 1; duracion += a.duracion_s ?? 0; carga += a.carga ?? 0;
+  });
+  return { sesiones, duracion_s: duracion, carga: Math.round(carga) };
 }
 
 /** Cuánto cambió `ahora` respecto a `antes`, en por ciento entero (+12, −8). `null` si no hay con qué comparar. */
@@ -207,7 +221,7 @@ export function resumenDeRecuperacion(filas, { hoy }) {
   const veredicto = conDatos.length === 0
     ? { clave: 'sin-datos', titulo: 'Sin datos de recuperación', detalle: 'Faltan el pulso en reposo, la HRV o el sueño de los últimos días.', tono: 'neutro' }
     : alertas === 0
-      ? { clave: 'bien', titulo: 'Recuperado', detalle: 'Su pulso en reposo, su HRV y su sueño van dentro de lo normal para él.', tono: 'verde' }
+      ? { clave: 'bien', titulo: 'Recuperando bien', detalle: 'Su pulso en reposo, su HRV y su sueño van dentro de lo normal en su caso.', tono: 'verde' }
       : alertas === 1
         ? { clave: 'atencion', titulo: 'Atención', detalle: `Una señal fuera de lo normal: ${conDatos.find((m) => m.estado === 'atencion').texto.toLowerCase()}. Conviene preguntarle cómo se siente.`, tono: 'ambar' }
         : { clave: 'cargado', titulo: 'Cuerpo cargado', detalle: 'Varias señales fuera de lo normal a la vez: conviene aligerar la carga y preguntarle cómo está.', tono: 'rojo' };

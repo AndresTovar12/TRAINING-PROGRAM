@@ -216,6 +216,15 @@ const casi = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg ?? ''}
   const vc = vueltasPorKm(cambio);
   assert.equal(vc[0].ritmo, 250);
   assert.equal(vc[1].ritmo, 200);
+  // El Apple Watch da el pulso y la ruta en muestras DISTINTAS (cada una cada 5 s, desfasadas): el pulso de cada km sale igual que si vinieran juntos.
+  const separadas = [];
+  for (let t = 0; t <= 750; t += 5) separadas.push({ t, dist: 4 * t });
+  for (let t = 2; t <= 750; t += 5) separadas.push({ t, fc: t < 250 ? 140 : 170 });
+  const vs = vueltasPorKm(separadas);
+  assert.equal(vs.length, 3, '3000 m = tres km');
+  assert.deepEqual(vs.map((x) => x.fc), [140, 170, 170]);
+  assert.deepEqual(vs.map((x) => x.fcmax), [140, 170, 170]);
+  assert.deepEqual(vs.map((x) => x.ritmo), [250, 250, 250]);
 }
 
 /* ---- Las series reducidas ---- */

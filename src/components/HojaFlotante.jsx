@@ -17,12 +17,13 @@ import { LT, FONT, KP, NUM_STYLE } from '@/lib/theme';
  *   teléfono    → pantalla completa, con flecha para volver
  *
  * `pie` (opcional): un pie fijo abajo, fuera del desplazamiento.
+ * `ancho` (opcional, 580 px por defecto): lo ancho que es la card en computadora; las métricas, con sus gráficas, piden más.
  *
  * Se dibuja colgada del documento y no dentro de la pantalla que la abre: un
  * `transform` o un `overflow` de cualquier antepasado la encerraría o la
  * recortaría. Ya pasó con la cámara y con las listas desplegables.
  */
-export default function HojaFlotante({ titulo, subtitulo, onCerrar, pie = null, children }) {
+export default function HojaFlotante({ titulo, subtitulo, onCerrar, pie = null, ancho = 580, children }) {
   const esCompu = useIsDesktop();
 
   useEffect(() => {
@@ -90,10 +91,14 @@ export default function HojaFlotante({ titulo, subtitulo, onCerrar, pie = null, 
   );
 
   const cuerpo = (
-    <div style={{
+    <div data-hoja-cuerpo style={{
       flex: 1, minHeight: 0, overflowY: 'auto',
       // Con un pie fijo abajo, el margen de seguridad del iPhone lo pone el pie; el cuerpo no lo repite.
       padding: esCompu ? (pie ? '0 18px 14px' : '0 18px 20px') : (pie ? '14px 14px 14px' : '14px 14px calc(24px + env(safe-area-inset-bottom))'),
+      // El relleno del cuerpo, a la mano de lo que va adentro: una barra pegada arriba o abajo (`position: sticky`) lo estira con margen negativo para llegar hasta el borde de la hoja.
+      '--hoja-px': esCompu ? '18px' : '14px',
+      '--hoja-pt': esCompu ? '0px' : '14px',
+      '--hoja-pb': esCompu ? (pie ? '14px' : '20px') : (pie ? '14px' : 'calc(24px + env(safe-area-inset-bottom))'),
     }}>
       {children}
     </div>
@@ -140,7 +145,7 @@ export default function HojaFlotante({ titulo, subtitulo, onCerrar, pie = null, 
         role="dialog" aria-modal="true" aria-label={titulo}
         className="animate-fade-in"
         style={{
-          width: '100%', maxWidth: 580, maxHeight: 'min(86vh, 900px)',
+          width: '100%', maxWidth: ancho, maxHeight: 'min(86vh, 900px)',
           background: LT.bg, borderRadius: 22, boxShadow: KP.shPop,
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
         }}

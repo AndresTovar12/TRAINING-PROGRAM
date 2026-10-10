@@ -275,9 +275,13 @@ export function resumenDeMuestras(muestras, { duracionS = null, umbralDeMovimien
  * de 200 m. Necesita muestras con `dist` (si no la traen, `completaMuestras` la saca de la ruta).
  */
 export function vueltasPorKm(muestras, { largo = 1000 } = {}) {
-  const m = completaMuestras(muestras).filter((x) => typeof x.dist === 'number');
+  const todas = completaMuestras(muestras);
+  const m = todas.filter((x) => typeof x.dist === 'number');
   if (m.length < 2) return [];
-  const w = pesos(m);
+  // El pulso y la ruta casi nunca vienen en las mismas muestras (el Apple Watch da un latido cada 5 s y la ruta otro punto cada 5 s, desfasados): el pulso de
+  // cada kilómetro se promedia con TODAS las muestras que lo traen, pesadas entre ellas, y no solo con las que además tienen distancia.
+  const conPulso = todas.filter((x) => esPulso(x.fc));
+  const wPulso = pesos(conPulso);
   // La hora (en segundos desde el inicio) a la que se llega a cierta distancia: interpolando entre las dos muestras que la rodean.
   const tiempoEn = (d) => {
     for (let i = 1; i < m.length; i += 1) {
@@ -296,17 +300,17 @@ export function vueltasPorKm(muestras, { largo = 1000 } = {}) {
     if (d1 - d0 < 200) break;
     const t0 = tiempoEn(d0);
     const t1 = tiempoEn(d1);
-    const dentro = m.map((x, i) => ({ x, w: w[i] })).filter(({ x }) => x.t >= t0 && x.t < t1);
+    const dentro = m.filter((x) => x.t >= t0 && x.t < t1);
     let sumaFc = 0; let pesoFc = 0; let maxFc = null;
-    dentro.forEach(({ x, w: peso }) => {
-      if (esPulso(x.fc)) { sumaFc += x.fc * peso; pesoFc += peso; maxFc = maxFc === null ? x.fc : Math.max(maxFc, x.fc); }
+    conPulso.forEach((x, i) => {
+      if (x.t >= t0 && x.t < t1) { sumaFc += x.fc * wPulso[i]; pesoFc += wPulso[i]; maxFc = maxFc === null ? x.fc : Math.max(maxFc, x.fc); }
     });
     const dur = t1 - t0;
     vueltas.push({
       n: n + 1, tipo: 'km', t0: Math.round(t0), dur: Math.round(dur), dist: Math.round(d1 - d0),
       fc: pesoFc > 0 ? Math.round(sumaFc / pesoFc) : null, fcmax: maxFc,
       ritmo: dur > 0 && d1 - d0 > 0 ? Math.round((dur / (d1 - d0)) * 1000) : null,
-      sube: desnivelDe(dentro.map(({ x }) => x.alt)).sube,
+      sube: desnivelDe(dentro.map((x) => x.alt)).sube,
     });
   }
   return vueltas;

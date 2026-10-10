@@ -3,7 +3,7 @@ import {
   Loader2, Search, Plus, Trash2, X, ChevronRight, ChevronLeft, Pencil,
   CalendarClock, User as UserIcon, Shield, ClipboardList, Users,
   UserMinus, Power, AlertTriangle, Eye, ChevronDown, ChevronUp, UserPlus,
-  Check, Copy, Share2, CircleCheck, RotateCcw, CalendarPlus, FolderOpen, ListChecks,
+  Check, Copy, Share2, CircleCheck, RotateCcw, CalendarPlus, FolderOpen, ListChecks, HeartPulse,
 } from 'lucide-react';
 import {
   getProgramas, getSesionesPegadas, deletePlan, getAthleteState, listAthletesOverview, listCoaches, setAthleteCoach,
@@ -23,6 +23,7 @@ import { AgregarAlEquipo, AvisosDelCoach, FilaDeEquipo, GrupoPlegable } from '@/
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { useConfirmacion } from '@/components/Confirmacion';
+import AbreMetricas from '@/features/metricas/AbreMetricas';
 import { useIsDesktop } from '@/lib/useViewport';
 import { T, FONT, KP } from '@/lib/theme';
 import { plural, pluralS } from '@/lib/plural';
@@ -836,6 +837,8 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
   // «Asignar de Mis planes»: darle a este atleta algo que se guardó (programa, rutina o workout).
   const [asignando, setAsignando] = useState(false);
   const [seccion, setSeccion] = useState(null); // null | 'como-va' | 'cambios' | 'notas' | 'equipo' | 'cuenta'
+  // Las métricas del reloj (pulso, ritmo, carga, recuperación): una hoja aparte, se baja al abrirla.
+  const [verMetricas, setVerMetricas] = useState(false);
   /* Las notas de consulta (y dar de alta) son de fisios y solo de quien atiende
      a esta persona: ni el master ni otro profesional las ven, aunque la lista
      les enseñe al paciente. La base lo impone; esto solo evita ofrecer un botón
@@ -1083,6 +1086,15 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           onClose={() => setPegando(false)}
         />
       )}
+      {!soloNotas && (
+        <AccionFicha
+          icon={HeartPulse}
+          titulo="Métricas del reloj"
+          detalle="Pulso, ritmo, carga y recuperación"
+          onClick={() => setVerMetricas(true)}
+        />
+      )}
+      {verMetricas && <AbreMetricas atleta={athlete} onCerrar={() => setVerMetricas(false)} />}
       {onVerComoAtleta && (
         <AccionFicha
           icon={Eye}

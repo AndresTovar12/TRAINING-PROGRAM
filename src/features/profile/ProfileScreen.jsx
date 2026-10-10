@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   X, Camera, Loader2, Check, Shield, User as UserIcon, Users, Sparkles, AtSign, Mail, IdCard, Trash2,
-  Library, Calendar, Map, ChevronRight,
+  Library, Calendar, Map, ChevronRight, HeartPulse,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
@@ -11,6 +11,7 @@ import { T, FONT, KP } from '@/lib/theme';
 import ConectarIA from '@/features/ia/ConectarIA';
 import MiEquipo from '@/features/profile/MiEquipo';
 import MisEjercicios from '@/features/profile/MisEjercicios';
+import TarjetaDeMisMetricas from '@/features/metricas/TarjetaDeMisMetricas';
 import SelectorOficio from '@/components/SelectorOficio';
 import SelectorDisciplinas from '@/components/SelectorDisciplinas';
 import RecorridoOtraVez from '@/features/inicio/RecorridoOtraVez';
@@ -53,7 +54,7 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
      Llegando desde «Conectar con IA» del menú de la cuenta se abre directo la de la IA. */
   const secciones = [
     { id: 'perfil', texto: 'Perfil', Icono: UserIcon },
-    ...(!isAdmin ? [{ id: 'equipo', texto: 'Mi equipo', Icono: Users }] : []),
+    ...(!isAdmin ? [{ id: 'equipo', texto: 'Mi equipo', Icono: Users }, { id: 'metricas', texto: 'Mis métricas', Icono: HeartPulse }] : []),
     // El master no: los ejercicios de Training Lab SON los suyos.
     ...(isAdmin && !isMaster ? [{ id: 'ejercicios', texto: 'Mis ejercicios', Icono: Library }] : []),
     { id: 'ia', texto: 'Inteligencia artificial', Icono: Sparkles },
@@ -431,6 +432,9 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
 
           {/* Un atleta decide quién más lo atiende (fisio…). Los profesionales no lo tienen. */}
           {seccion === 'equipo' && !isAdmin && <MiEquipo />}
+
+          {/* Las métricas de su reloj: pulso, ritmo, carga y recuperación. Las ve él y quien lo atiende. */}
+          {seccion === 'metricas' && !isAdmin && <TarjetaDeMisMetricas atleta={{ id: user.id, full_name: profile?.full_name, username: profile?.username }} />}
 
           {/* El coach: los ejercicios de Training Lab prendidos o apagados, volver al original, borrar todo lo suyo. */}
           {seccion === 'ejercicios' && isAdmin && !isMaster && <MisEjercicios />}
