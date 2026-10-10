@@ -143,6 +143,10 @@ export default function SelectorTipoSesion({ day, onPatch, coachId, puedeCrear =
       {abierto && (
         <div
           className="animate-fade-in"
+          /* El selector va dentro de un <label> (`Field` del editor). Un clic en una fila del menú cierra el menú, y el <label> —que al terminar el
+             clic ya no ve la fila— le pasa un clic «de cortesía» al primer botón que encuentra: el que abre el menú. Resultado, en el editor ancho:
+             elegías un tipo y el menú se volvía a abrir. Cancelar la acción por defecto del clic lo evita. */
+          onClick={(e) => e.preventDefault()}
           style={{
             position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 60,
             background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 16,
