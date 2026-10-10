@@ -16,7 +16,7 @@ import {
   cuentaDe, empiezaPaso, marcaListo, masDescanso as sumaDescanso, pasosDeLaSesion, quitaCronometro, saltaPaso, terminaEntreno, vistaDelEntreno, vuelveAtras,
 } from '@/lib/entreno';
 import {
-  camposDeCambiar, cantidadPlaneada, cifrasDelPaso, exDataTrasListo, puntosDeVueltas, segmentosDeAvance, serieALaVista, tarjetasDeLaLista, textoDeLoPlaneado,
+  camposDeCambiar, cantidadPlaneada, cifrasDelPaso, exDataTrasListo, puntosDeVueltas, resumenDeLaSerie, segmentosDeAvance, tarjetasDeLaLista, textoDeLoPlaneado,
   tiempoTotal,
 } from '@/lib/entrenoDatos';
 import Portada from '@/components/Portada';
@@ -42,7 +42,8 @@ import {
  *     salir». Una llamada, el teléfono bloqueado o iOS matando la pestaña no pierden nada: al volver se calcula todo de nuevo.
  *   · «LISTO» DA POR HECHO LO PLANEADO y escribe también el registro de siempre (`exercises[idx]`: peso y reps hechas) para que el
  *     progreso, los récords y la IA sigan leyendo lo mismo. «Cambiar» solo trae lo que salió distinto (ver `exDataTrasListo`).
- *   · EL RELOJ SIRVE Y NUNCA MANDA. Los avisos son sonidos opcionales; ningún paso avanza solo; el tiempo total va chico y callado.
+ *   · EL RELOJ SIRVE Y NO TE DEJA PERDIDO. Los avisos son sonidos opcionales y el tiempo total va chico y callado. Un ejercicio siempre espera tu «Listo»; lo único
+ *     que sigue solo es lo que la app mide por ti: un descanso que llega a cero (avisa y pasa a lo que sigue) y un reloj al que llegas avanzando (ver abajo).
  *   · UN SOLO «EMPEZAR» POR INTENCIÓN. Andrés (9 oct 2026): «si ya le piqué a iniciar entrenamiento y se supone que tú me guías, ¿por qué no
  *     inicias el reloj?». Cuando la persona AVANZA (`llegando`: «Iniciar entreno», «Continuar entreno», «Listo», «Seguir», «Saltar») y el
  *     paso al que llega es un reloj, el reloj se abre y corre solo, con un 3, 2, 1 que se cancela (ver `conCuenta` en `RelojDelBloque`). Volver atrás,
@@ -219,6 +220,17 @@ export default function EntrenoDelDia({
     setVerFin(false);
   };
   const seguirDelDescanso = () => { preparaAudio(); listo(); };
+  /* UN DESCANSO QUE LLEGA A CERO TERMINA SOLO: el pitido avisa y la app pasa a lo que sigue (un instante después, para que se oiga). Andrés (9 oct 2026,
+     «Experiencia de workout 2.0»): el «+0:09» que seguía contando de más «podría perder el punto de que la app guíe en el entrenamiento y podría ser
+     redundante con el botón de +30 s». «Seguir» lo adelanta; «+30 s» lo alarga antes de que acabe. Un descanso escrito con palabras no cuenta: espera «Seguir». */
+  const descansoVencido = enDescanso && !!vista.descanso?.vencido;
+  const sigueDelDescanso = useRef(null);
+  useEffect(() => { sigueDelDescanso.current = seguirDelDescanso; });
+  useEffect(() => {
+    if (!descansoVencido) return undefined;
+    const t = setTimeout(() => sigueDelDescanso.current?.(), 350);
+    return () => clearTimeout(t);
+  }, [descansoVencido]);
   const masDescanso = () => escribe((prev) => ({ ...prev, entreno: sumaDescanso(plan, prev?.entreno, 30) }));
   const empezarCronometro = () => {
     const t = Date.now();
@@ -277,8 +289,7 @@ export default function EntrenoDelDia({
   const tiempo = tiempoTotal(vista.transcurrido) ?? '';
   // El paso que toca, o (en un descanso) el que viene: de ahí salen los puntos de las vueltas y lo que se resalta en «Ver todo».
   const queToca = enDescanso ? vista.siguiente : paso;
-  const serieDelPaso = paso?.tipo === 'ejercicio' ? serieALaVista(plan, vista.estados, paso) : null;
-  const puntosDelPaso = paso?.tipo === 'ejercicio' ? puntosDeVueltas(plan, vista.estados, paso.serie, paso.clave) : [];
+  const resumenDeLaSerieDelPaso = paso?.tipo === 'ejercicio' ? resumenDeLaSerie(plan, vista.estados, paso) : null;
 
   const siguienteDeDescanso = enDescanso && vista.siguiente ? {
     nombre: vista.siguiente.tipo === 'reloj' ? vista.siguiente.resumen : vista.siguiente.nombre,
@@ -342,7 +353,7 @@ export default function EntrenoDelDia({
     pantalla = (
       <PantallaDePaso
         paso={paso} video={paso.tipo === 'ejercicio' ? videoDe(exDe(paso), mediosDelPaso) : null} cifras={cifrasDelPaso(paso, kilosDelPaso)} anotado={anotadoDe(paso)}
-        sigue={siguiente} serie={serieDelPaso} serieSimple={!completo} puntos={puntosDelPaso}
+        sigue={siguiente} resumen={resumenDeLaSerieDelPaso}
         cronometro={completo && paso.termina?.por === 'tiempo' ? (
           <CronometroDelPaso segundos={paso.termina.valor ?? paso.termina.min} cuenta={cuenta} onEmpezar={empezarCronometro} onQuitar={detenerCronometro} />
         ) : null}
