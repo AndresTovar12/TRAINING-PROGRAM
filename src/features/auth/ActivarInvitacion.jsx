@@ -4,6 +4,7 @@ import { Field } from '@/features/auth/AuthScreen';
 import { useAuth } from '@/contexts/AuthContext';
 import { activarInvitacion, verInvitacion } from '@/lib/api';
 import { FONT, KP } from '@/lib/theme';
+import { problemaDeContrasena } from '@/lib/contrasena';
 
 /**
  * Lo que ve el atleta cuando abre el link que le mandó su entrenador.
@@ -50,6 +51,8 @@ export default function ActivarInvitacion({ token, onSalir }) {
   async function enviar(e) {
     e.preventDefault();
     setError('');
+    const problema = problemaDeContrasena(password, { usuario: username, correo: email });
+    if (problema) { setError(problema); return; }
     setEnviando(true);
     try {
       // Lo demás (sexo, unidad, fecha de nacimiento) se pregunta después, pantalla por pantalla: el servidor deja
@@ -203,7 +206,7 @@ export default function ActivarInvitacion({ token, onSalir }) {
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          placeholder="mínimo 6 caracteres"
+          placeholder="mínimo 8 caracteres"
           required
         />
         <Field
