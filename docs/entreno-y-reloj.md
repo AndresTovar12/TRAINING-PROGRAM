@@ -32,6 +32,7 @@ El entreno es **un dato, no una pantalla**: una lista de pasos (lo que manda el 
 - **Horas en milisegundos de época** (`Date.now()`). Todo lo que se ve (cuánto queda de un descanso, el tiempo total) se calcula con la hora de ahora: nunca con un contador. Así aguanta una llamada, la pantalla bloqueada o que el sistema mate la app.
 - **`hechos[clave]`**: el paso se hizo en `t`. `n` es el nombre del ejercicio en ese momento: si el coach cambió ese lugar por otro ejercicio, la marca vieja ya no cuenta. `reps`/`kg`/`seg` solo viajan si el atleta **cambió** lo planeado (`kg` siempre en kilos). `tecnica` queda reservada: el id del video que el atleta grabó de esa vuelta (ver `src/lib/funciones.js`).
 - **`oculto`**: el atleta quitó el entreno guiado de esa sesión (la ✕ junto a «Continuar entreno»): la app ya no ofrece «Iniciar/Continuar». Solo existe cuando es `true`; no borra nada de lo hecho. Un reloj puede ignorarlo.
+- **Deshacer una sesión terminada** (el botón «Deshacer» junto a «Sesión terminada»): si el entreno también tenía `fin`, la app borra el avance (`reiniciaSiTerminado` en `lib/entreno.js`) y vuelve a ofrecer «Iniciar entreno» desde cero. Lo anotado en la lista no se toca; un entreno a medias (sin `fin`) se queda como está, y `oculto` se conserva.
 - **`saltados`**: igual, pero el paso se saltó. Sigue pendiente en la lista.
 - **`extra[clave]`**: segundos que se le sumaron a un descanso («+30 s»). **`empezados[clave]`**: cuándo se arrancó el cronómetro *opcional* de un paso con tiempo.
 - **El paso actual = el primer paso de la lista sin marca.** No se guarda. Un descanso empieza cuando se marcó el paso anterior. Nada avanza solo.
@@ -101,8 +102,8 @@ La lista plana es el **mapa de regreso**: el paso *i* que ejecutó el reloj es `
 
 **Un solo «empezar» por intención.** Andrés (9 oct 2026): «si ya le piqué a iniciar entrenamiento y se supone que tú me guías, ¿por qué no inicias el reloj?». La regla, que cualquier app o reloj que guíe debe repetir:
 
-- Cuando la persona **avanza** (iniciar el entreno, «Listo», «Seguir», «Saltar») y el paso al que llega es un **reloj**, el reloj corre solo, con una cuenta de 3 segundos que se puede cancelar. Nadie empieza a correr en el mismo instante en que toca un botón.
-- Cuando la persona **vuelve** a un paso (atrás, «Ver todo», retomar un entreno ya empezado) o **cancela** la cuenta, nada arranca: ve el Set con su botón «Empezar» (o «Seguir», si el reloj iba a medias).
+- Cuando la persona **avanza** (iniciar o continuar el entreno, «Listo», «Seguir», «Saltar») y el paso al que llega es un **reloj**, el reloj corre solo, con una cuenta de 3 segundos que se puede cancelar. Nadie empieza a correr en el mismo instante en que toca un botón.
+- Cuando la persona **vuelve** a un paso (atrás, «Ver todo») o **cancela** la cuenta, nada arranca; tampoco al recargar la app (el entreno guiado solo se abre con su botón): ve el Set con su botón «Empezar» (o «Seguir», si el reloj iba a medias).
 - Un reloj que ya tiene resultado no arranca solo. Y ningún paso *termina* solo: el reloj sirve, nunca manda.
 
 ## 7. Lo que NO está (a propósito)

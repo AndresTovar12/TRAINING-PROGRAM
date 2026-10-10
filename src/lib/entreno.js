@@ -619,6 +619,18 @@ export function reabreEntreno(entreno) {
 }
 
 /**
+ * «Deshacer» una sesión terminada: si el entreno guiado también se había dado por terminado, se EMPIEZA DE NUEVO. Andrés, 9 oct 2026: tras «Deshacer» el
+ * botón no volvía (a propósito, para que no saliera un «Continuar entreno 7 de 7» de algo ya terminado) y no había manera de volver a entrenar la
+ * sesión con la guía. Los pasos hechos se borran; lo que se anotó en la lista de ejercicios no se toca. Un entreno a medias (nunca terminado) se
+ * queda como está, para «Continuar»; y quien lo quitó con la ✕ (`oculto`) sigue sin verlo.
+ */
+export function reiniciaSiTerminado(entreno) {
+  const av = leeAvance(entreno);
+  if (av.fin === null) return entreno;
+  return av.oculto ? aGuardar({ ...leeAvance(undefined), oculto: true }) : undefined;
+}
+
+/**
  * El atleta quitó el entreno guiado de esta sesión: «Continuar entreno» ya no sale (Andrés, 9 oct 2026: «no puedo hacer que desaparezca»). Lo que
  * anotó se queda en la lista de siempre; solo se esconde la guía.
  */

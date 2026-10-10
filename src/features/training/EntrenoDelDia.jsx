@@ -44,9 +44,9 @@ import {
  *     progreso, los récords y la IA sigan leyendo lo mismo. «Cambiar» solo trae lo que salió distinto (ver `exDataTrasListo`).
  *   · EL RELOJ SIRVE Y NUNCA MANDA. Los avisos son sonidos opcionales; ningún paso avanza solo; el tiempo total va chico y callado.
  *   · UN SOLO «EMPEZAR» POR INTENCIÓN. Andrés (9 oct 2026): «si ya le piqué a iniciar entrenamiento y se supone que tú me guías, ¿por qué no
- *     inicias el reloj?». Cuando la persona AVANZA (`llegando`: «Iniciar entreno», «Listo», «Seguir», «Saltar») y el paso al que llega es un
- *     reloj, el reloj se abre y corre solo, con un 3, 2, 1 que se cancela (ver `conCuenta` en `RelojDelBloque`). Volver atrás, tocar un paso en
- *     «Ver todo» o retomar un entreno NUNCA arrancan nada: ahí sí está la pantalla del Set con su «Empezar».
+ *     inicias el reloj?». Cuando la persona AVANZA (`llegando`: «Iniciar entreno», «Continuar entreno», «Listo», «Seguir», «Saltar») y el
+ *     paso al que llega es un reloj, el reloj se abre y corre solo, con un 3, 2, 1 que se cancela (ver `conCuenta` en `RelojDelBloque`). Volver atrás,
+ *     tocar un paso en «Ver todo» o recargar la app NUNCA arrancan nada: ahí sí está la pantalla del Set con su «Empezar».
  *
  * `onGrabarTecnica(paso)` (opcional) es quien graba la técnica: mientras `FUNCIONES.grabarTecnica` esté apagada, la cámara de cada paso solo dice «Pronto».
  * `medios(ex)` dice la foto y los videos de un ejercicio (`{ portada, videos }`), `oneRMs` los máximos del atleta (para pasar «78 %» a
@@ -61,7 +61,6 @@ const leeSonido = () => {
 
 export default function EntrenoDelDia({
   dia, aspecto, registro, onRegistro, onFormato, sesionId, userId, unidadDePeso = 'kg', oneRMs, salud = false, medios, alCerrar, onGrabarTecnica,
-  inicioNuevo = false,
 }) {
   // La página de atrás se queda quieta mientras el entreno está abierto (ver `useCuerpoQuieto`).
   useCuerpoQuieto();
@@ -76,10 +75,10 @@ export default function EntrenoDelDia({
   const [enfoque, setEnfoque] = useState(null);
   const [hoja, setHoja] = useState(null);
   const [verFin, setVerFin] = useState(false);
-  // `reloj`: la persona tocó «Empezar» en la pantalla del Set (corre ya). `llegando`: lo último que hizo fue AVANZAR (o acaba de tocar «Iniciar entreno»,
-  // `inicioNuevo`). `cerradoEn`: el Set cuyo reloj cerró a mano, para que no se vuelva a abrir solo.
+  // `reloj`: la persona tocó «Empezar» en la pantalla del Set (corre ya). `llegando`: lo último que hizo fue AVANZAR; empieza en `true` porque este entreno solo
+  // se abre con el botón «Iniciar entreno» o «Continuar entreno» del día. `cerradoEn`: el Set cuyo reloj cerró a mano, para que no se vuelva a abrir solo.
   const [reloj, setReloj] = useState(false);
-  const [llegando, setLlegando] = useState(inicioNuevo);
+  const [llegando, setLlegando] = useState(true);
   const [cerradoEn, setCerradoEn] = useState(null);
   const [anotando, setAnotando] = useState(false);
   const [sonido, setSonido] = useState(leeSonido);

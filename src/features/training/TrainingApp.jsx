@@ -41,6 +41,7 @@ import {
 import FichaEjercicio from '@/features/training/FichaEjercicio';
 import TarjetaDeSesion from '@/features/training/TarjetaDeSesion';
 import BotonDelEntreno from '@/features/training/BotonDelEntreno';
+import { reiniciaSiTerminado } from '@/lib/entreno';
 import Portada from '@/components/Portada';
 import BotonEntendido from '@/components/BotonEntendido';
 import {
@@ -1031,9 +1032,11 @@ const CuerpoDelDia = ({
     return { ...prev, formatos: resto };
   });
   const updateNotes = (notes) => updateSession(selectedId, prev => ({ ...prev, notes }));
+  // «Deshacer» también empieza de nuevo el entreno guiado si ya estaba terminado (ver `reiniciaSiTerminado`).
   const toggleComplete = () => updateSession(selectedId, prev => ({
     ...prev, completed: !prev?.completed,
-    completedAt: !prev?.completed ? new Date().toISOString() : null
+    completedAt: !prev?.completed ? new Date().toISOString() : null,
+    ...(prev?.completed ? { entreno: reiniciaSiTerminado(prev?.entreno) } : null),
   }));
   /* «Iniciar entreno»: abre el MODO ENTRENO de esta sesión (ver `BotonDelEntreno`). Una sesión que dice «repite el martes» se entrena con
      los ejercicios del martes (`ejercicios`), pero lo que se anota queda en SU lugar. */
