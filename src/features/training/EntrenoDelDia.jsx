@@ -11,6 +11,7 @@ import { FORMATOS, textoDeResultado, tramosDeTrabajo, vistaDe } from '@/lib/form
 import { anotadoEnVuelta } from '@/lib/porVuelta';
 import { palabrasDelEntreno } from '@/lib/entrenoPalabras';
 import { FUNCIONES } from '@/lib/funciones';
+import { relojAMedias } from '@/lib/relojGuardado';
 import {
   cuentaDe, empiezaPaso, marcaListo, masDescanso as sumaDescanso, pasosDeLaSesion, quitaCronometro, saltaPaso, terminaEntreno, vistaDelEntreno, vuelveAtras,
 } from '@/lib/entreno';
@@ -41,7 +42,11 @@ import {
  *     salir». Una llamada, el teléfono bloqueado o iOS matando la pestaña no pierden nada: al volver se calcula todo de nuevo.
  *   · «LISTO» DA POR HECHO LO PLANEADO y escribe también el registro de siempre (`exercises[idx]`: peso y reps hechas) para que el
  *     progreso, los récords y la IA sigan leyendo lo mismo. «Cambiar» solo trae lo que salió distinto (ver `exDataTrasListo`).
- *   · EL RELOJ SIRVE Y NUNCA MANDA. Los avisos son sonidos opcionales; nada avanza solo; el tiempo total va chico y callado.
+ *   · EL RELOJ SIRVE Y NUNCA MANDA. Los avisos son sonidos opcionales; ningún paso avanza solo; el tiempo total va chico y callado.
+ *   · UN SOLO «EMPEZAR» POR INTENCIÓN. Andrés (9 oct 2026): «si ya le piqué a iniciar entrenamiento y se supone que tú me guías, ¿por qué no
+ *     inicias el reloj?». Cuando la persona AVANZA (`llegando`: «Iniciar entreno», «Listo», «Seguir», «Saltar») y el paso al que llega es un
+ *     reloj, el reloj se abre y corre solo, con un 3, 2, 1 que se cancela (ver `conCuenta` en `RelojDelBloque`). Volver atrás, tocar un paso en
+ *     «Ver todo» o retomar un entreno NUNCA arrancan nada: ahí sí está la pantalla del Set con su «Empezar».
  *
  * `onGrabarTecnica(paso)` (opcional) es quien graba la técnica: mientras `FUNCIONES.grabarTecnica` esté apagada, la cámara de cada paso solo dice «Pronto».
  * `medios(ex)` dice la foto y los videos de un ejercicio (`{ portada, videos }`), `oneRMs` los máximos del atleta (para pasar «78 %» a
@@ -56,6 +61,7 @@ const leeSonido = () => {
 
 export default function EntrenoDelDia({
   dia, aspecto, registro, onRegistro, onFormato, sesionId, userId, unidadDePeso = 'kg', oneRMs, salud = false, medios, alCerrar, onGrabarTecnica,
+  inicioNuevo = false,
 }) {
   // La página de atrás se queda quieta mientras el entreno está abierto (ver `useCuerpoQuieto`).
   useCuerpoQuieto();
@@ -70,7 +76,11 @@ export default function EntrenoDelDia({
   const [enfoque, setEnfoque] = useState(null);
   const [hoja, setHoja] = useState(null);
   const [verFin, setVerFin] = useState(false);
+  // `reloj`: la persona tocó «Empezar» en la pantalla del Set (corre ya). `llegando`: lo último que hizo fue AVANZAR (o acaba de tocar «Iniciar entreno»,
+  // `inicioNuevo`). `cerradoEn`: el Set cuyo reloj cerró a mano, para que no se vuelva a abrir solo.
   const [reloj, setReloj] = useState(false);
+  const [llegando, setLlegando] = useState(inicioNuevo);
+  const [cerradoEn, setCerradoEn] = useState(null);
   const [anotando, setAnotando] = useState(false);
   const [sonido, setSonido] = useState(leeSonido);
 
@@ -189,6 +199,7 @@ export default function EntrenoDelDia({
       return dato ? { ...siguiente, exercises: { ...(prev?.exercises || {}), [objetivo.idx]: dato } } : siguiente;
     });
     setEnfoque(null);
+    setLlegando(true);
   };
   const saltar = () => {
     const t = Date.now();
@@ -196,10 +207,13 @@ export default function EntrenoDelDia({
     const clave = enfocado && paso === enfocado ? enfocado.clave : undefined;
     escribe((prev) => ({ ...prev, entreno: saltaPaso(plan, prev?.entreno, t, clave) }));
     setEnfoque(null);
+    setLlegando(true);
   };
   // Mirando un paso que se tocó en «Ver todo», «Anterior» regresa a donde iba: asomarse a otro ejercicio no deshace lo hecho.
   const mirandoOtro = !!enfocado && paso === enfocado;
   const anterior = () => {
+    setLlegando(false);
+    setCerradoEn(null);
     if (mirandoOtro) { setEnfoque(null); return; }
     escribe((prev) => ({ ...prev, entreno: vuelveAtras(plan, prev?.entreno) }));
     setEnfoque(null);
@@ -319,6 +333,7 @@ export default function EntrenoDelDia({
     pantalla = (
       <PantallaDeReloj
         paso={paso} detalle={detalleDelReloj(paso)} resultado={resultadoDelReloj} puedeAnterior={vista.puedeAnterior || mirandoOtro}
+        enMarcha={relojAMedias(`${userId}:${sesionId}:${paso.claveFormato}`)}
         onIniciar={() => { preparaAudio(); setReloj(true); }} onAnotar={() => setAnotando(true)} onListo={() => listo()}
         onSaltar={saltar} onAnterior={anterior} tecnica={completo ? { activa: tecnicaActiva, etiqueta: palabras.tecnicaTitulo, onClick: abreTecnica } : null}
       />
@@ -343,6 +358,9 @@ export default function EntrenoDelDia({
   // Un Set en lapsos corre los tramos que armó el motor (ver `pasosDeLaSesion`); un formato, los suyos.
   const tramosDelReloj = paso?.tipo === 'reloj' ? (paso.deLapsos ? paso.tramos.filter((t) => t.tipo === 'trabajo').length : tramosDeTrabajo(paso.formato, paso.miembros.length)) : 0;
   const nombreDelReloj = paso?.deLapsos ? 'Lapsos personalizados' : paso?.resumen;
+  // El reloj se abre SOLO cuando se llegó avanzando a un Set con reloj que no tiene resultado, y la persona no lo cerró ya.
+  const relojSolo = llegando && paso?.tipo === 'reloj' && !mirandoOtro && !resultadoDelReloj && !mostrarFin && !anotando && cerradoEn !== paso.claveFormato;
+  const cierraReloj = () => { setReloj(false); setCerradoEn(paso?.claveFormato ?? null); };
 
   return createPortal(
     <div
@@ -353,7 +371,7 @@ export default function EntrenoDelDia({
       {!mostrarFin && (
         <BarraDelEntreno
           segmentos={segmentos} fondo={fondo} palabras={palabras} tiempo={tiempo || null}
-          onCerrar={alCerrar} onLista={completo ? () => setHoja('lista') : undefined}
+          onCerrar={alCerrar} onLista={completo ? () => { setLlegando(false); setHoja('lista'); } : undefined}
         />
       )}
       {pantalla}
@@ -361,7 +379,7 @@ export default function EntrenoDelDia({
       {hoja === 'lista' && (
         <HojaDeLista
           tarjetas={tarjetasDeLaLista(plan, vista.estados, queToca?.clave ?? null, { kilosDe, resultadoDe })} miniaturaDe={miniaturaDeFila} palabras={palabras}
-          onElegir={(clave) => { setEnfoque(clave); setHoja(null); }}
+          onElegir={(clave) => { setLlegando(false); setEnfoque(clave); setHoja(null); }}
           onTerminar={() => { setHoja(null); setVerFin(true); }}
           onCerrar={() => setHoja(null)}
         />
@@ -382,10 +400,11 @@ export default function EntrenoDelDia({
       )}
       {hoja === 'tecnica' && <HojaDeTecnica palabras={palabras} onCerrar={() => setHoja(null)} />}
 
-      {reloj && paso?.tipo === 'reloj' && (
+      {(reloj || relojSolo) && paso?.tipo === 'reloj' && (
         <RelojDelBloque
+          key={paso.claveFormato}
           formato={paso.formato} plan={paso.tramos ?? null} ejercicios={ejerciciosDelReloj} serie={paso.serie} resumen={nombreDelReloj}
-          clave={`${userId}:${sesionId}:${paso.claveFormato}`} empezarYa onGuardar={guardaResultado} onCerrar={() => setReloj(false)}
+          clave={`${userId}:${sesionId}:${paso.claveFormato}`} empezarYa={reloj} conCuenta={!reloj} onGuardar={guardaResultado} onCerrar={cierraReloj}
         />
       )}
       {anotando && paso?.tipo === 'reloj' && (

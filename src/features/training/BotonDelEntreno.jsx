@@ -8,6 +8,7 @@ import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
 import { iniciaEntreno, ocultaEntreno, pasosDeLaSesion, vistaDelEntreno } from '@/lib/entreno';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { palabrasDelEntreno } from '@/lib/entrenoPalabras';
+import { preparaAudio } from '@/lib/pitidos';
 import EntrenoDelDia from '@/features/training/EntrenoDelDia';
 
 /**
@@ -53,6 +54,8 @@ export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, on
   const { salud } = usePalabras();
   const pregunta = useConfirmacion();
   const [abierto, setAbierto] = useState(false);
+  // Se abrió con «Iniciar entreno» (no con «Continuar»): si lo primero es un reloj, arranca solo (ver `EntrenoDelDia`).
+  const [inicioNuevo, setInicioNuevo] = useState(false);
   const [intento, setIntento] = useState(0);
   const [fallo, setFallo] = useState(false);
   // Una sesión que dice «repite el martes» se entrena con los ejercicios del martes (`ejercicios`); lo que se anota queda en SU lugar.
@@ -77,8 +80,11 @@ export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, on
   if (!abierto && (vista.estado === 'fin' || vista.oculto)) return null;
   const empezado = vista.estado !== 'sin';
   const abre = () => {
+    // El audio solo se despierta con un toque de la persona; con el reloj arrancando solo, este es el toque.
+    preparaAudio();
     // La hora de inicio se guarda una sola vez.
     onRegistro((prev) => ({ ...prev, entreno: iniciaEntreno(prev?.entreno, Date.now()) }));
+    setInicioNuevo(!empezado);
     setFallo(false);
     setIntento((n) => n + 1);
     setAbierto(true);
@@ -134,7 +140,7 @@ export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, on
         <LimiteDelEntreno key={intento} alFallar={() => { setAbierto(false); setFallo(true); }}>
           <EntrenoDelDia
             dia={diaDeEntreno} aspecto={aspecto} registro={registro} onRegistro={onRegistro} onFormato={onFormato} sesionId={sesionId} userId={userId}
-            unidadDePeso={perfil?.unidad_peso || 'kg'} oneRMs={oneRMs} salud={salud} medios={medios} alCerrar={() => setAbierto(false)}
+            unidadDePeso={perfil?.unidad_peso || 'kg'} oneRMs={oneRMs} salud={salud} medios={medios} inicioNuevo={inicioNuevo} alCerrar={() => setAbierto(false)}
           />
         </LimiteDelEntreno>
       )}

@@ -37,6 +37,16 @@ export function guardaReloj(clave, firma, est) {
   }
 }
 
+/** ¿Hay un reloj de este Set a medias (pausado o corriendo)? Para que el botón diga «Seguir» y no «Empezar». */
+export function relojAMedias(clave) {
+  try {
+    const g = JSON.parse(window.localStorage.getItem(PREFIJO + clave) || 'null');
+    return (g?.est?.fase === 'pausa' || g?.est?.fase === 'corriendo') && Date.now() - g.en < VIGENCIA_MS;
+  } catch {
+    return false;
+  }
+}
+
 export function borraReloj(clave) {
   try { window.localStorage.removeItem(PREFIJO + clave); } catch { /* nada que borrar */ }
 }

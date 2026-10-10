@@ -375,7 +375,7 @@ export function PantallaDePaso({
  * (`RelojDelBloque`), que es la pantalla protagonista mientras dura. Aquí solo se dice qué es, con qué ejercicios (y, en lapsos, qué lapsos),
  * y se abre el reloj o se anota el resultado a mano.
  */
-export function PantallaDeReloj({ paso, detalle, resultado, puedeAnterior, tecnica, onIniciar, onAnotar, onListo, onSaltar, onAnterior }) {
+export function PantallaDeReloj({ paso, detalle, resultado, puedeAnterior, tecnica, enMarcha = false, onIniciar, onAnotar, onListo, onSaltar, onAnterior }) {
   const conLapsos = !!paso.deLapsos;
   return (
     <>
@@ -419,8 +419,9 @@ export function PantallaDeReloj({ paso, detalle, resultado, puedeAnterior, tecni
       </div>
       <div style={{ flexShrink: 0, padding: '10px 0 calc(10px + env(safe-area-inset-bottom))' }}>
         <div style={{ ...COLUMNA, padding: '0 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {/* «Iniciar entreno» → «Iniciar reloj» → «Iniciar»: tres «iniciar» seguidos (Andrés: «qué raro, redundante»). Aquí el botón dice lo que
-              hace, «Empezar», y el reloj arranca ya, sin otro «Iniciar» adentro. */}
+          {/* Esta pantalla ya NO es un paso obligado entre «Iniciar entreno» y el reloj (Andrés: «si ya le piqué a iniciar entrenamiento, ¿por qué
+              tengo que picar iniciar reloj?»): al avanzar, `EntrenoDelDia` abre el reloj solo, con su 3, 2, 1. Aquí se llega al volver atrás, al tocar
+              el Set en «Ver todo», al retomar el entreno o al cancelar la cuenta; el botón arranca ya (o sigue, si el reloj iba a medias). */}
           {resultado ? (
             <>
               <BotonGrande onClick={onListo}><Check size={22} strokeWidth={3} /> Listo</BotonGrande>
@@ -428,7 +429,7 @@ export function PantallaDeReloj({ paso, detalle, resultado, puedeAnterior, tecni
             </>
           ) : (
             <>
-              <BotonGrande onClick={onIniciar}><Play size={20} fill="#fff" /> Empezar</BotonGrande>
+              <BotonGrande onClick={onIniciar}><Play size={20} fill="#fff" /> {enMarcha ? 'Seguir' : 'Empezar'}</BotonGrande>
               <BotonSecundario ancho onClick={onAnotar}><Pencil size={17} /> Anotar sin reloj</BotonSecundario>
             </>
           )}
