@@ -201,6 +201,18 @@ const tcx = (inicioIso, minutos) => `<TrainingCenterDatabase><Activities><Activi
   assert.equal(repetidos.length, 2);
   assert.equal(ok[0].fila.fc_media, 150, 'entre dos iguales de la misma tanda se queda el que trae pulso');
   assert.equal(ok[1].fila.inicio, '2026-10-05T14:00:00.000Z');
+  // El mismo rodaje del reloj (con distancia y calorías) y de Strava (con su nombre): se queda el del reloj y se le agrega el nombre.
+  const reloj = { inicio: Date.parse('2026-10-06T11:33:00Z'), duracion_s: 3078, distancia_m: 9570, kcal_activas: 674, dispositivo: 'Apple Watch', titulo: null, resumen: { fc_media: 146 }, series: {} };
+  const strava = { inicio: Date.parse('2026-10-06T11:33:00Z'), duracion_s: 3075, distancia_m: null, kcal_activas: null, dispositivo: 'Strava', titulo: 'Calidad: 4 x 6 min', calculado: { fc_media: 146 }, series: {} };
+  for (const orden of [[strava, reloj], [reloj, strava]]) {
+    const copia = orden.map((x) => ({ ...x }));
+    const r = separaRepetidos(copia, []);
+    assert.equal(r.nuevos.length, 1);
+    assert.equal(r.repetidos.length, 1);
+    assert.equal(r.nuevos[0].dispositivo, 'Apple Watch', 'gana el que trae distancia y calorías, entre en el orden que entre');
+    assert.equal(r.nuevos[0].titulo, 'Calidad: 4 x 6 min', 'y se queda con el nombre del otro');
+    assert.equal(r.nuevos[0].kcal_activas, 674);
+  }
 }
 
 console.log('prueba-metricas-importa: todo bien');

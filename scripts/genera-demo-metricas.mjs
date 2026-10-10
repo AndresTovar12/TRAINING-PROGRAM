@@ -10,7 +10,7 @@
 //
 // La historia que cuenta (para que las gráficas tengan algo que decir): 14 semanas que suben con una semana de descanso cada cuarta, una gripe en la
 // semana 7 (tres días sin entrenar y el pulso en reposo arriba), un bloque fuerte al final con dos sesiones de calidad por semana, y los últimos 5 días con el
-// pulso en reposo subiendo hasta 6 latidos, la HRV bajando y menos sueño: «entrena fuerte y su cuerpo ya lo está resintiendo».
+// pulso en reposo subiendo hasta 8 latidos, la HRV bajando y menos sueño: «entrena fuerte y su cuerpo ya lo está resintiendo».
 // Todo sale de un generador con semilla fija: el mismo comando da siempre los mismos archivos.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -211,7 +211,7 @@ dias.forEach((d, n) => {
   const progreso = n / dias.length;
   const gripe = GRIPE.has(d) || GRIPE.has(dia(d, -1));
   const k = CANSANCIO[d] ?? 0;
-  const reposo = Math.round(54 - 3 * progreso + (gripe ? 7 : 0) + 6 * k + entre(-1.0, 1.0));
+  const reposo = Math.round(54 - 3 * progreso + (gripe ? 7 : 0) + 8 * k + entre(-1.0, 1.0));
   const hrv = Math.round((60 + 6 * progreso) * (gripe ? 0.72 : 1 - 0.14 * k) + entre(-3.5, 3.5));
   lineas.push(rec(`${Q}RestingHeartRate`, FUENTE, 'count/min', d, hora(0), hora(23, 59), reposo));
   [3, 4, 5].forEach((h) => lineas.push(rec(`${Q}HeartRateVariabilitySDNN`, FUENTE, 'ms', d, hora(h), hora(h, 1), Math.max(18, hrv + Math.round(entre(-5, 5))))));
