@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, lazy, Suspense } from 'react';
 import { Dumbbell, Loader2, Lock, LogOut, Shield, Sparkles, User as UserIcon, UserCog, RefreshCw } from 'lucide-react';
 import { useNewVersion } from '@/lib/useNewVersion';
 import { useAuth } from '@/contexts/AuthContext';
@@ -16,6 +16,10 @@ import TrainingApp from '@/features/training/TrainingApp';
 import AdminApp from '@/features/admin/AdminApp';
 import ProfileScreen from '@/features/profile/ProfileScreen';
 import PermisoIA from '@/features/ia/PermisoIA';
+import { rutaDeTienda } from '@/lib/tiendaApi';
+
+// La tienda pública (`/@usuario`, `/@usuario/plan`): la ve cualquiera, con o sin cuenta. Va aparte para que quien solo usa la app no la baje.
+const TiendaPublica = lazy(() => import('@/features/tienda/TiendaPublica'));
 import { FONT, KP } from '@/lib/theme';
 
 function Splash({ label = 'Cargando…' }) {
@@ -423,6 +427,13 @@ export default function App() {
     window.history.replaceState({}, '', '/');
     setPermisoIA(null);
   };
+
+  /* Las páginas de venta (`/@usuario`, `/@usuario/plan`, y las dos de regreso del pago) las ve cualquiera, sin cuenta. Con cuenta a medio crear (le falta el inicio) se sigue el
+     camino de siempre y, al terminarlo, la dirección sigue siendo la del plan: ahí se retoma la compra. */
+  const tienda = rutaDeTienda(window.location.pathname);
+  if (tienda && (loading || !user || (profile && profile.perfil_completo !== false && !profile.inicio_paso))) {
+    return <Suspense fallback={<Splash />}><TiendaPublica ruta={tienda} /></Suspense>;
+  }
 
   if (invitacion) {
     if (loading) return <Splash />;
