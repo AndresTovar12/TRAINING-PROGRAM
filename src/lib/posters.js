@@ -23,6 +23,7 @@ import { supabase } from '@/lib/supabase';
 import { uploadExerciseMedia } from '@/lib/api';
 import { fotoDeUrl, segundos } from '@/lib/fotogramas';
 import { redPermiteAdelantar } from '@/lib/videos';
+import { esVideoNuestro } from '@/lib/medios';
 
 const CLAVE = 'tl.posters.v1';
 // `desde` y `hasta`: el recorte con el que se sacó la foto (ver `completaPortadas`).
@@ -138,9 +139,6 @@ const mismoSegundo = (a, b) => {
 };
 const mismoTramo = (fila, t) => mismoSegundo(fila.desde, t.desde) && mismoSegundo(fila.hasta, t.hasta);
 
-// Donde viven nuestros videos (la dirección pública que abren los atletas; no es un secreto).
-const CARPETA_DE_VIDEOS = 'https://pub-4a3ae85521d744b5abf16550ea171189.r2.dev/videos/';
-
 /* Los videos a los que este aparato no les pudo sacar foto (por ejemplo un .mov en HEVC en un
    navegador que no lo decodifica): se anotan, y no se reintentan en un día. Sin esto, dos videos así
    al principio de la fila harían que la corrida se rindiera siempre antes de llegar a los demás.
@@ -176,19 +174,18 @@ const anotaFallida = (url) => {
  */
 export async function completaPortadas({ max = 12, parar = () => false } = {}) {
   await cargaPosters();
+  /* Solo los videos NUESTROS (no ligas de TikTok o YouTube). Se filtra aquí y no en la consulta para reconocer la dirección de ahora y la del dominio propio (`lib/medios.js`). */
   const [propios, extras] = await Promise.all([
-    supabase.from('exercises').select('video_url, recorte_inicio, recorte_fin')
-      .like('video_url', `${CARPETA_DE_VIDEOS}%`),
-    supabase.from('exercise_media').select('url, recorte_inicio, recorte_fin')
-      .eq('tipo', 'video').like('url', `${CARPETA_DE_VIDEOS}%`),
+    supabase.from('exercises').select('video_url, recorte_inicio, recorte_fin').not('video_url', 'is', null),
+    supabase.from('exercise_media').select('url, recorte_inicio, recorte_fin').eq('tipo', 'video'),
   ]);
   // Cada video con TODOS los recortes con que algún ejercicio lo usa: un mismo video puede estar en varios (un ejercicio copiado) y cada uno pudo recortarlo distinto.
   const cola = new Map();
   const anota = (url, desde, hasta) => {
     cola.set(url, [...(cola.get(url) ?? []), { desde: segundos(desde), hasta: segundos(hasta) }]);
   };
-  (propios.data ?? []).forEach((e) => anota(e.video_url, e.recorte_inicio, e.recorte_fin));
-  (extras.data ?? []).forEach((m) => anota(m.url, m.recorte_inicio, m.recorte_fin));
+  (propios.data ?? []).filter((e) => esVideoNuestro(e.video_url)).forEach((e) => anota(e.video_url, e.recorte_inicio, e.recorte_fin));
+  (extras.data ?? []).filter((m) => esVideoNuestro(m.url)).forEach((m) => anota(m.url, m.recorte_inicio, m.recorte_fin));
 
   const fallidas = leeFallidas();
   let hechas = 0;

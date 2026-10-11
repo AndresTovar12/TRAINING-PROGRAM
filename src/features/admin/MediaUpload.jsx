@@ -11,6 +11,9 @@ import { createPortal } from 'react-dom';
 import { Upload, Loader2, X, Video, Camera, Images } from 'lucide-react';
 import IconoExplicacion from '@/components/IconoExplicacion';
 import { uploadExerciseMedia } from '@/lib/api';
+import { leeMiEspacio } from '@/lib/espacioApi';
+import { avisoSiNoCabe, avisoSiEsMuyGrande } from '@/lib/espacio';
+import { usePantallaEncendida } from '@/lib/pantallaEncendida';
 import { subeFotos, guardaPoster } from '@/lib/posters';
 import { segundos } from '@/lib/fotogramas';
 import { aImagenWeb, optimizaImagen, pesoTexto as pesoLegible } from '@/lib/imagen';
@@ -64,6 +67,8 @@ export default function MediaUpload({
   const mixto = aceptaVideo && aceptaFoto;
   const esVideo = aceptaVideo && !aceptaFoto;
   const [busy, setBusy] = useState(false);
+  /* Una clase de una hora tarda en subir (3.5 GB son ~25 minutos con buen internet) y un teléfono que se apaga a medio camino corta la subida. */
+  usePantallaEncendida(busy);
   /* `busy` también vale mientras se prepara la foto (un HEIC tarda unos segundos en pasar a JPG): los botones se
      apagan igual, y solo cambia lo que dicen. */
   const [preparando, setPreparando] = useState(false);
@@ -125,6 +130,16 @@ export default function MediaUpload({
        subida. Las miniaturas salen al instante porque el archivo está aquí, no
        en Cloudflare. */
     if ((elegido.type || '').startsWith('video')) {
+      /* ANTES DE ABRIR EL EDITOR: si el video no cabe, que se sepa ya. Editar el recorte de una clase de 3 GB y esperar una subida de media hora para enterarse al final
+         de que no hay espacio (o de que el archivo es de más de 5 GB) sería lo peor. El servidor lo vuelve a revisar al dar el permiso; esto solo ahorra la espera. */
+      const noCabe = avisoSiEsMuyGrande(elegido.size) ?? avisoSiNoCabe(await leeMiEspacio(), elegido.size);
+      if (noCabe) {
+        setErr(noCabe);
+        // Se vacía el campo: sin esto, volver a elegir el MISMO archivo (tras borrar videos) no dispararía nada.
+        if (inputRef.current) inputRef.current.value = '';
+        if (camaraRef.current) camaraRef.current.value = '';
+        return;
+      }
       if (preguntaProposito) {
         setPreguntando(elegido);
       } else {

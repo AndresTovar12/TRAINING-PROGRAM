@@ -13,7 +13,9 @@
  *      escapó (un archivo reemplazado en el editor, una cuenta borrada).
  *
  * QUÉ SIGNIFICA «APARECE EN ALGÚN LADO»: `rutas_r2_en_uso()` busca en ejercicios, videos extra, fichas propias, planes, versiones, respaldos, «Mis planes», plantillas,
- * portadas y el estado de la app.
+ * portadas, el estado de la app, los planes publicados en la vitrina y «Mis rutinas».
+ *
+ * AL BORRAR UN ARCHIVO también se quita su fila de `medios_peso` (el espacio de videos de cada coach; lo anota `r2-upload`).
  *
  * TOPES DE SEGURIDAD:
  *   · si `rutas_r2_en_uso()` falla o viene vacía, no borra nada;
@@ -133,6 +135,9 @@ Deno.serve(async (req) => {
           await bd.from('video_posters').delete().eq('video_url', p.video_url)
         }
       }
+      // Los archivos que ya no existen dejan de contar en el espacio de su coach (`medios_peso`, ver r2-upload).
+      const idas = resultado.filter((f) => /^(borrado|portada borrada)/.test(f.estado)).map((f) => f.ruta)
+      if (idas.length) await bd.from('medios_peso').delete().in('ruta', idas)
       return responde({ modo: 'instante', prueba: probar, resultado })
     }
 
@@ -170,6 +175,7 @@ Deno.serve(async (req) => {
       if (r.ok || r.status === 404) borrados.push(o.ruta)
       else errores.push(`${o.ruta}: ${r.status}`)
     }
+    if (borrados.length) await bd.from('medios_peso').delete().in('ruta', borrados)
     const videos = borrados.filter((r) => r.startsWith('videos/'))
     if (videos.length) {
       const { data: portadas } = await bd.from('video_posters').select('video_url')

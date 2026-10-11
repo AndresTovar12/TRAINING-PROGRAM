@@ -1,6 +1,8 @@
 import { supabase } from '@/lib/supabase';
 import { esperadasEstaSemana } from '@/lib/comoVa';
 import { conIndice } from '@/lib/indiceDeVideo';
+import { TOPE_POR_ARCHIVO_MB, avisoSiEsMuyGrande } from '@/lib/espacio';
+import { anotaEspacio } from '@/lib/espacioApi';
 
 const AVATAR_BUCKET = 'avatars';
 
@@ -356,19 +358,17 @@ export function aplicarOverrides(exercises, overrides, categorias) {
 
 /* ------------------------------- Media -------------------------------- */
 /**
- * Tope de subida. Con Cloudflare R2 no hay un limite practico: un solo archivo
- * puede llegar a 5 GB. Se deja un tope alto solo para atajar equivocaciones
- * (arrastrar una carpeta entera, un archivo corrupto de 4 GB).
+ * Tope de subida: lo que cabe en UNA subida a Cloudflare R2 (≈ 5 GB por archivo, sin trocear). Una clase de una hora en 1080p pesa ≈ 3.5 GB y cabe; en 4K (≈ 11 GB la hora)
+ * no. El número vive en `lib/espacio.js` junto al aviso que se le da al coach, y debe coincidir con el de la función `r2-upload`, que lo vuelve a revisar en el servidor.
  *
  * Historia, para que no se repita: antes esto valia 100, luego 50, y ninguno
  * era correcto. El limite real lo imponia el plan gratis de Supabase Storage
  * —50 MB fijos, imposibles de subir sin pagar— y se descubrio de la peor
  * forma: un archivo de 120 MB se transfirio COMPLETO durante 75 segundos y el
- * servidor lo rechazo al final. Por eso se migro a R2.
+ * servidor lo rechazo al final. Por eso se migro a R2. Luego fue 2 GB, hasta
+ * que las maestras de pilates quisieron subir clases completas (11 oct 2026).
  */
-export const LIMITE_MEDIA_MB = 2048;
-
-const mb = (bytes) => Math.round((bytes / 1048576) * 10) / 10;
+export const LIMITE_MEDIA_MB = TOPE_POR_ARCHIVO_MB;
 
 /**
  * Sube un archivo al repertorio y devuelve su URL publica.
@@ -397,12 +397,8 @@ const mb = (bytes) => Math.round((bytes / 1048576) * 10) / 10;
  * `sinIndice` es para quien ya se lo puso.
  */
 export async function uploadExerciseMedia(file, kind = 'media', onAvance, { sinIndice = false } = {}) {
-  if (file.size > LIMITE_MEDIA_MB * 1048576) {
-    throw new Error(
-      `Este archivo pesa ${mb(file.size)} MB, demasiado incluso para un video largo. ` +
-      'Revisa que sea el archivo correcto.',
-    );
-  }
+  const demasiado = avisoSiEsMuyGrande(file.size);
+  if (demasiado) throw new Error(demasiado);
 
   // De aqui en adelante `file` es el que lleva el indice (o el mismo de antes).
   if (!sinIndice && (file.type || '').startsWith('video/')) file = (await conIndice(file)).archivo;
@@ -420,11 +416,17 @@ export async function uploadExerciseMedia(file, kind = 'media', onAvance, { sinI
       apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ tipo: file.type, extension, carpeta }),
+    // `bytes`: el servidor lo suma al espacio de videos del coach y, si no le cabe, no da el permiso (antes de gastar la subida).
+    body: JSON.stringify({ tipo: file.type, extension, carpeta, bytes: file.size }),
   }).then((r) => r.json().then((b) => ({ ok: r.ok, b })))
     .catch(() => ({ ok: false, b: { error: 'No se pudo contactar al servidor.' } }));
 
-  if (!permiso.ok) throw new Error(permiso.b?.error || 'No se pudo autorizar la subida.');
+  if (!permiso.ok) {
+    // «Sin espacio» trae el espacio tal como está: la barra se pone al día aunque la subida no haya ocurrido.
+    anotaEspacio(permiso.b?.espacio);
+    throw new Error(permiso.b?.error || 'No se pudo autorizar la subida.');
+  }
+  anotaEspacio(permiso.b.espacio);
 
   // Paso 2: mandar el archivo directo a Cloudflare
   await new Promise((listo, falla) => {
