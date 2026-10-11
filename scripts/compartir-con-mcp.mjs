@@ -61,8 +61,25 @@ for (const nombre of ARCHIVOS) {
   }
 }
 
+/* Las ayudas de Stripe (`stripe.js`) viven en las tres funciones que hablan con Stripe, idénticas: `comprar` es la original y `stripe-webhook` y `reembolsar` llevan copia. */
+{
+  const original = readFileSync(join(raiz, 'supabase/functions/comprar/stripe.js'), 'utf8');
+  for (const funcion of ['stripe-webhook', 'reembolsar']) {
+    const copia = join(raiz, `supabase/functions/${funcion}/stripe.js`);
+    const igual = existsSync(copia) && readFileSync(copia, 'utf8') === original;
+    if (igual) continue;
+    if (soloRevisar) {
+      console.error(`✗ supabase/functions/${funcion}/stripe.js ya no es igual a supabase/functions/comprar/stripe.js`);
+      malos += 1;
+    } else {
+      writeFileSync(copia, original);
+      console.log(`copiado stripe.js (${funcion})`);
+    }
+  }
+}
+
 if (malos) {
-  console.error('\nCorre `node scripts/compartir-con-mcp.mjs` y vuelve a desplegar la función `mcp` y/o `programa-comprado`.');
+  console.error('\nCorre `node scripts/compartir-con-mcp.mjs` y vuelve a desplegar las funciones que cambiaron.');
   process.exit(1);
 }
-if (soloRevisar) console.log('✓ Las funciones mcp y programa-comprado usan las mismas piezas que la app.');
+if (soloRevisar) console.log('✓ Las funciones mcp, programa-comprado y las de Stripe usan las mismas piezas que la app.');
