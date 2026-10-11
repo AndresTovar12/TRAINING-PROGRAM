@@ -6,6 +6,7 @@ import {
   getProgramas, getSesionesPegadas, nombresDelEquipo, versionesDelEquipo, listExercises, listExerciseMedia,
   getMasterId, listExerciseOverrides, aplicarOverrides,
 } from '@/lib/api';
+import { leeMisCompras } from '@/lib/comprasApi';
 import { estructuraDelPlan } from '@/lib/training-utils';
 import { adaptadorDeRegistros, fasesConPegadas, reglasDe } from '@/lib/pegadas';
 import { colorDePrograma, tieneSesiones } from '@/lib/programas';
@@ -91,10 +92,11 @@ function normalizePlan(phases) {
  * (`sigueA`) y lo que se anota va en `wr:sessions@<profesional>:sobre`.
  */
 export function PlanProvider({ children }) {
-  const { userId, perfil } = usePerfilDeLaVista();
+  const { userId, perfil, soloLectura } = usePerfilDeLaVista();
   const [filas, setFilas] = useState([]);              // planes activos: principal + equipo
   const [filasPegadas, setFilasPegadas] = useState([]); // sesiones pegadas: una fila por autor
   const [miembros, setMiembros] = useState(null);      // equipo (nombres); null = no se pidió
+  const [comprados, setComprados] = useState([]);       // los planes que COMPRÓ (ya recortados por el servidor); solo de quien entró
   const [planLoading, setPlanLoading] = useState(true);
   const [exercisesBase, setExercisesBase] = useState([]);
   const [overridesTodas, setOverridesTodas] = useState([]);
@@ -136,6 +138,15 @@ export function PlanProvider({ children }) {
     })();
     return () => { cancelled = true; };
   }, [userId]);
+
+  /* Los planes que COMPRÓ, aparte y sin hacer esperar al resto: llegan cuando llegan y la app ya está pintada con lo demás. Quien ve la app de otro persona («Ver como»)
+     no trae las compras de esa persona: la función solo contesta por quien entró. */
+  useEffect(() => {
+    let cancelled = false;
+    if (!userId || soloLectura) { setComprados([]); return undefined; }
+    leeMisCompras().then((c) => { if (!cancelled) setComprados(c); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [userId, soloLectura]);
 
   // Repertorio para media viva (best-effort: si falla, la app sigue sin media)
   useEffect(() => {
@@ -271,6 +282,40 @@ export function PlanProvider({ children }) {
         ...herramientas,
       };
     };
+    /* UN PLAN COMPRADO, visto como un programa más. El servidor ya lo recortó (`lib/ventana.js`): las semanas que no se ven llegan cerradas (`bloqueada`), sin ejercicios.
+       Va en su propia clave de registros (`compra:<id>`): se puede tener varios planes del mismo coach. `cursorBase` es dónde empieza el puntero (la fase de entrada y
+       la semana de la compra); sin él, el calendario contaría desde el día en que abra la app. Cerrado (vencido o por armar) no trae sesiones: no sale en «Hoy». */
+    const armarComprada = (c) => {
+      const v = c.vendedor ?? null;
+      const duenoId = v?.id ?? null;
+      const herramientas = herramientasDe(duenoId);
+      const data = c.programa?.data ?? {};
+      const phases = conNombreDeSuFicha(normalizePlan(data.phases) ?? [], herramientas.fichaDe);
+      const cerrada = !c.programa || c.programa.resumen?.cerrado || c.estado === 'vencida' || c.estado === 'por_armar';
+      return {
+        id: `compra:${c.compra_id}`,
+        clave: `compra:${c.compra_id}`,
+        esPrincipal: false,
+        comprado: true,
+        compra: {
+          id: c.compra_id, estado: c.estado, tipo: c.tipo, inicio: c.inicio, periodoHasta: c.periodo_hasta, graciaHasta: c.gracia_hasta, entregaLimite: c.entrega_limite,
+          chat: !!c.chat, tecnica: !!c.tecnica, ventanaSemanas: c.ventana_semanas ?? null, resumen: c.programa?.resumen ?? null,
+        },
+        profesionalId: duenoId,
+        profesional: v ? { id: v.id, full_name: v.nombre, username: v.usuario, profesion: v.profesion, avatar_url: v.foto } : null,
+        altaEn: null,
+        title: c.titulo,
+        phases,
+        kind: data.kind === 'weekly' ? 'weekly' : 'periodized',
+        estructura: estructuraDelPlan(data),
+        foto: typeof data.foto === 'string' ? data.foto : '',
+        ciencia: normalizaCiencia(data.ciencia),
+        cursorBase: c.programa?.cursorInicial ?? null,
+        hasPlan: !cerrada && phases.some((f) => (f.weekData ?? []).some((w) => (w.days ?? []).length > 0)),
+        conSesiones: !cerrada && tieneSesiones(phases),
+        ...herramientas,
+      };
+    };
     const propios = filas
       .filter((r) => !r.profesional_id || !activos || activos.has(r.profesional_id))
       .sort((a, b) => (a.profesional_id ? 1 : 0) - (b.profesional_id ? 1 : 0))   // el principal primero
@@ -281,12 +326,13 @@ export function PlanProvider({ children }) {
         .filter((f) => reglasDe(f).length > 0 && (!activos || activos.has(f.profesional_id)))
         .map((f) => armarPegadas(f, principal))
       : [];
-    const todos = [...propios, ...pegadas];
+    const compradas = comprados.map(armarComprada);
+    const todos = [...propios, ...pegadas, ...compradas];
     // Un color por PERSONA, no por programa: sus sesiones pegadas y su programa aparte van del mismo color.
     const autores = [];
     todos.forEach((p) => { if (!autores.includes(p.profesionalId)) autores.push(p.profesionalId); });
     return todos.map((p) => ({ ...p, color: colorDePrograma(autores.indexOf(p.profesionalId)) }));
-  }, [filas, filasPegadas, miembros, exercisesBase, overridesTodas, mediasTodas, masterId, userId, principalId]);
+  }, [filas, filasPegadas, comprados, miembros, exercisesBase, overridesTodas, mediasTodas, masterId, userId, principalId]);
 
   const activo = programas.find((p) => p.id === activoId) ?? programas[0] ?? null;
   const elegirPrograma = useCallback((planId) => setActivoId(planId), []);

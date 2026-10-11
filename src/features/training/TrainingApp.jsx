@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import {
-  ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Calendar,
+  ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Calendar, Lock,
   Check, X, Calculator, BookOpen, TrendingUp, Edit3, Target,
   Clock, Sparkles, Info, Dumbbell, Heart, Play, CalendarDays, ListChecks,
   Home as HomeIcon,
@@ -1888,6 +1888,24 @@ const CursorSelector = ({ current, sessionsData, onSelect, onClose }) => {
                     {phase.weekData.map(week => {
                       const weekKey = `${phase.id}-w${week.num}`;
                       const weekExpanded = expandedWeek === weekKey;
+                      // Un plan comprado: una semana que aún no se ve llega cerrada (sin ejercicios) y no se abre.
+                      if (week.bloqueada) {
+                        return (
+                          <div key={week.num} style={{ marginBottom: 4 }}>
+                            <div
+                              style={{
+                                width: '100%', background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 14px',
+                                display: 'flex', alignItems: 'center', gap: 10, opacity: 0.6, fontFamily: FONT,
+                              }}
+                            >
+                              <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, color: T.text }}>
+                                {phase.mode === 'microcycle' ? 'Microciclo' : `Sem ${week.num}`}
+                              </div>
+                              <Lock size={14} style={{ color: T.text3 }} />
+                            </div>
+                          </div>
+                        );
+                      }
                       // Un día con dos entradas (mañana y tarde) cuenta UNA vez y va hecho cuando lo están las dos.
                       const entrenables = juntaPorDia(enOrdenDeSemana(week.days)).filter(({ day }) => !esDescanso(day));
                       const completedCount = entrenables
@@ -2773,9 +2791,14 @@ export default function TrainingApp() {
      de 8" y creía que era por no marcar las sesiones. Marcar tampoco lo movía.
 
      Ahora avanza una semana del plan por cada semana de calendario que pasa. */
+  const cursorInicialDeCompra = programaActivo?.cursorBase ?? null;
   const cursorBase = useMemo(
-    () => (isValidCursor(PLAN, storedCursor) ? storedCursor : defaultCursor(PLAN)),
-    [PLAN, storedCursor],
+    () => {
+      if (isValidCursor(PLAN, storedCursor)) return storedCursor;
+      // Un plan comprado empieza donde lo dejó la compra, no el día en que se abre la app.
+      return isValidCursor(PLAN, cursorInicialDeCompra) ? cursorInicialDeCompra : defaultCursor(PLAN);
+    },
+    [PLAN, storedCursor, cursorInicialDeCompra],
   );
   const cursor = useMemo(() => cursorAlDia(PLAN, cursorBase), [PLAN, cursorBase]);
 

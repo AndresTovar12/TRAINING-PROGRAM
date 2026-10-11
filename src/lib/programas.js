@@ -65,7 +65,9 @@ export function cursorDePrograma(programa, store, hoy = new Date()) {
       : null;
   }
   const guardado = store?.[claveDeRegistro('wr:cursor', programa)];
-  const base = isValidCursor(programa.phases, guardado) ? guardado : defaultCursor(programa.phases);
+  // Un plan comprado empieza donde lo dejó la compra (fase de entrada y semana en que se compró); sin eso, el calendario contaría desde el día en que abra la app.
+  const base = isValidCursor(programa.phases, guardado) ? guardado
+    : (isValidCursor(programa.phases, programa.cursorBase) ? programa.cursorBase : defaultCursor(programa.phases));
   return cursorAlDia(programa.phases, base, hoy);
 }
 
