@@ -12,6 +12,7 @@ import {
   addExerciseMedia, listMuscleGroups, createMuscleGroup, deleteMuscleGroup, listIdsConVideoExtra,
 } from '@/lib/api';
 import MediaDelEjercicio from '@/features/admin/MediaDelEjercicio';
+import EspacioDeVideos from '@/features/admin/EspacioDeVideos';
 import { completaPortadas } from '@/lib/posters';
 import SelectorCategoria, { CrearCategoria } from '@/features/admin/SelectorCategoria';
 import ListaDesplegable from '@/components/ListaDesplegable';
@@ -1403,6 +1404,9 @@ export default function ExercisesPanel({ viendoComo }) {
           <Plus size={18} /> Agregar ejercicio
         </button>
       </div>
+
+      {/* El espacio de videos del coach (no sale para el dueño ni mirando la cuenta de otro). */}
+      <EspacioDeVideos activo={!viendoComo} />
 
       {/* Filtros: categoría y grupo muscular (listas desplegables) */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 22, flexWrap: 'wrap' }}>

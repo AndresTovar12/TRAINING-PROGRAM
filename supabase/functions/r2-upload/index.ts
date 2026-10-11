@@ -17,8 +17,23 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { AwsClient } from 'npm:aws4fetch@1.0.20'
 
 // La direccion publica NO es secreta: es justamente la que abren los atletas
-// para ver los videos. Por eso vive en el codigo y no en los secretos.
-const PUBLICA = 'https://pub-4a3ae85521d744b5abf16550ea171189.r2.dev'
+// para ver los videos. Por eso puede vivir en el codigo.
+//
+// CUANDO HAYA DOMINIO: se pone el secreto `R2_PUBLIC_URL` (por ejemplo
+// `https://videos.midominio.com`) y los archivos NUEVOS salen con esa direccion,
+// sin tocar el codigo. La anterior (`r2.dev`) sigue reconocida: `sellar` y la
+// limpieza trabajan con la RUTA del archivo (`videos/<id>.mp4`), no con el host.
+// Ver docs/dominio.md.
+const PUBLICA_ANTERIOR = 'https://pub-4a3ae85521d744b5abf16550ea171189.r2.dev'
+const PUBLICA = (Deno.env.get('R2_PUBLIC_URL') ?? '').trim().replace(/\/+$/, '') || PUBLICA_ANTERIOR
+const HOSTS_PROPIOS = [PUBLICA, PUBLICA_ANTERIOR]
+const RUTA_EN_URL = /((?:videos|covers|media)\/[A-Za-z0-9._-]+)$/
+
+// Con dominio propio, la app deja de vivir en `*.vercel.app`: se agrega por
+// secreto (`SITIO_URL` y, si hay mas de uno, `ORIGENES_EXTRA` separados por coma).
+const ORIGENES_PROPIOS = [Deno.env.get('SITIO_URL'), ...(Deno.env.get('ORIGENES_EXTRA') ?? '').split(',')]
+  .map((o) => (o ?? '').trim().replace(/\/+$/, ''))
+  .filter(Boolean)
 
 const DEFAULT_ORIGINS = [
   'http://localhost:5173',
@@ -30,7 +45,7 @@ function corsHeaders(origin: string | null): Record<string, string> {
   let allow = DEFAULT_ORIGINS[0]
   if (origin) {
     try {
-      if (DEFAULT_ORIGINS.includes(origin) || /\.vercel\.app$/.test(new URL(origin).hostname)) {
+      if (DEFAULT_ORIGINS.includes(origin) || ORIGENES_PROPIOS.includes(origin) || /\.vercel\.app$/.test(new URL(origin).hostname)) {
         allow = origin
       }
     } catch { /* origin malformado */ }
@@ -59,6 +74,13 @@ const TIPOS_OK = new Set([
 ])
 
 const CARPETAS_OK = new Set(['covers', 'videos', 'media'])
+
+// Lo mas que cabe en UNA subida: R2 acepta ~5 GB por archivo (4.995 GiB) sin trocear.
+// Una clase de una hora en 1080p pesa ~3.5 GB; en 4K ~11 GB, y esa no cabe en un solo
+// envio. El tope vive tambien en la app (`LIMITE_MEDIA_MB`) para avisar antes de subir.
+const TOPE_POR_ARCHIVO_BYTES = 4800 * 1048576
+
+const gb = (b: number) => `${(Math.round((b / 1e9) * 10) / 10).toLocaleString('es-MX')} GB`
 
 // Un año, y sin volver a preguntar. Cada archivo se guarda con un nombre unico
 // que no se reutiliza nunca —editar una foto crea otro archivo, no pisa el
@@ -108,7 +130,7 @@ Deno.serve(async (req) => {
   }
 
   // --- Que quiere subir ---------------------------------------------------
-  let p: { tipo?: string; extension?: string; carpeta?: string; accion?: string }
+  let p: { tipo?: string; extension?: string; carpeta?: string; accion?: string; bytes?: number }
   try { p = await req.json() } catch { return json({ error: 'JSON inválido' }, 400, origin) }
 
   const accountId = (Deno.env.get('R2_ACCOUNT_ID') ?? '').trim()
@@ -142,7 +164,9 @@ Deno.serve(async (req) => {
 
     const urls = new Set<string>()
     const anota = (u: unknown) => {
-      if (typeof u === 'string' && u.startsWith(`${PUBLICA}/`)) urls.add(u.slice(PUBLICA.length + 1))
+      if (typeof u !== 'string' || !HOSTS_PROPIOS.some((h) => u.startsWith(`${h}/`))) return
+      const ruta = u.match(RUTA_EN_URL)?.[1]
+      if (ruta) urls.add(ruta)
     }
     for (const f of ejercicios.data ?? []) { anota(f.video_url); anota(f.cover_image_url) }
     for (const f of extras.data ?? []) anota(f.url)
@@ -185,6 +209,37 @@ Deno.serve(async (req) => {
   const id = crypto.randomUUID()
   const ruta = `${carpeta}/${id}.${ext}`
 
+  /* --- Espacio del coach ---------------------------------------------------
+   * Los videos se pagan por lo que pesan guardados. Cada coach tiene un espacio
+   * (10 GB y 7 GB mas por cada cliente que le paga; el dueno, sin limite): la
+   * regla vive en la base (`espacio_del_coach`, ver docs/sql/2026-10-11-espacio-de-videos.sql).
+   * Aqui se mira ANTES de dar el permiso, para que nadie suba 3 GB y se entere
+   * al final de que no cabian. Solo se frena un VIDEO: una foto pesa unos KB y
+   * nunca debe quedarse sin subir por esto (ni las portadas automaticas).
+   * `bytes` lo declara la app; si no llega (una app vieja) se anota 0 y se deja
+   * pasar: esto cuida el costo, no es una puerta de seguridad. */
+  const bytes = Number.isFinite(Number(p.bytes)) && Number(p.bytes) > 0 ? Math.floor(Number(p.bytes)) : 0
+  if (bytes > TOPE_POR_ARCHIVO_BYTES) {
+    return json({
+      codigo: 'archivo_muy_grande',
+      error: `Este archivo pesa ${gb(bytes)} y el máximo por archivo es ${gb(TOPE_POR_ARCHIVO_BYTES)} (una clase de ~80 minutos en 1080p). Grábala en 1080p o divídela en dos partes.`,
+    }, 413, origin)
+  }
+  const { data: antes, error: errEspacio } = await admin.rpc('espacio_del_coach', { p_coach: usuario.user.id })
+  if (errEspacio) console.error('espacio_del_coach:', errEspacio.message) // no se bloquea una subida por un fallo de la cuenta
+  const espacio = antes as { usado: number; limite: number | null; clientes: number; ilimitado: boolean; base: number; por_cliente: number } | null
+  if (tipo.startsWith('video/') && espacio && espacio.limite !== null && espacio.usado + bytes > espacio.limite) {
+    return json({
+      codigo: 'sin_espacio',
+      error: `No te alcanza el espacio para este video: usaste ${gb(espacio.usado)} de ${gb(espacio.limite)} y este pesa ${gb(bytes)}. Borra videos que ya no uses; cada cliente que te pague te suma ${gb(espacio.por_cliente)}.`,
+      espacio,
+    }, 403, origin)
+  }
+  if (bytes > 0) {
+    const { error: errPeso } = await admin.from('medios_peso').insert({ ruta, coach_id: usuario.user.id, bytes, tipo })
+    if (errPeso) console.error('medios_peso:', errPeso.message)
+  }
+
   // --- Firmar el permiso --------------------------------------------------
   const aws = clienteR2()
 
@@ -198,5 +253,6 @@ Deno.serve(async (req) => {
     subir_a: firmada.url,               // donde el navegador manda el archivo
     url_publica: `${PUBLICA}/${ruta}`,  // lo que se guarda en la base
     ruta,
+    espacio: espacio ? { ...espacio, usado: espacio.usado + bytes } : null, // para que la barra se actualice sin otra llamada
   }, 200, origin)
 })
