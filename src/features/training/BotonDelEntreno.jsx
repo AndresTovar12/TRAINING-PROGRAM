@@ -60,6 +60,8 @@ export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, on
     const programa = autor ?? programaActivo;
     const id = programa?.profesionalId;
     if (!id) return null;
+    // Un plan comprado sin «técnica por video» (lo apaga el coach por plan): la cámara no sale.
+    if (programa.comprado && !programa.compra?.tecnica) return null;
     const pro = programa.profesional;
     const nombre = pro?.full_name || pro?.username || (id === perfil?.coach_id ? (coach?.full_name || coach?.username) : null) || 'tu coach';
     return { id, nombre };

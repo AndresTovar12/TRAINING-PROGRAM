@@ -5,7 +5,7 @@
  * UNA vez (tabla `stripe_eventos`): si Stripe lo repite, se ignora. Si algo falla a medias, se contesta 500 y Stripe vuelve a mandarlo.
  *
  * Qué hace con cada aviso (ver docs/superpowers/specs/2026-10-10-monetizacion-design.md, secciones 3 y 8):
- *   checkout.session.completed → la compra pasa a «activa» (arranca ese día, aparece el vínculo con el coach en su lista) y, si fue pago único, se anota el cobro.
+ *   checkout.session.completed → la compra pasa a «activa» (arranca ese día y la base crea el vínculo con el coach) y, si fue pago único, se anota el cobro.
  *   invoice.paid               → cada cobro mensual: se anota en `pagos`, se reparte (el coach recibe lo suyo) y se alarga el periodo; también activa una compra que aún estuviera «pendiente».
  *   invoice.payment_failed     → «gracia» por 3 días.
  *   customer.subscription.updated / deleted → marca que canceló / la compra pasa a «vencida».
@@ -45,20 +45,12 @@ async function buscaCompra({ compraId, suscripcion }: { compraId?: string | null
   return null
 }
 
-/** La compra queda activa y el comprador aparece como suscriptor en la lista del coach (fila de `equipo` con origen «compra»). */
+/** La compra queda activa. El vínculo con el coach (la fila de `equipo` con origen «compra») lo crea la base sola: disparador `compras_vinculo`, ver docs/sql/2026-10-11-monetizacion.sql. */
 async function activa(c: Obj, cambios: Obj = {}) {
   const { error } = await bd.from('compras').update({
     estado: c.estado === 'reembolsada' ? c.estado : 'activa', inicio: c.inicio ?? hoy(), gracia_hasta: null, actualizada_en: ahora().toISOString(), ...cambios,
   }).eq('id', c.id)
   if (error) throw error
-  const { data: fila } = await bd.from('equipo').select('estado').eq('atleta_id', c.atleta_id).eq('profesional_id', c.coach_id).maybeSingle()
-  if (!fila) {
-    const { error: e } = await bd.from('equipo').insert({ atleta_id: c.atleta_id, profesional_id: c.coach_id, estado: 'activo', origen: 'compra', aceptado_en: ahora().toISOString() })
-    if (e) throw e
-  } else if (fila.estado !== 'activo') {
-    const { error: e } = await bd.from('equipo').update({ estado: 'activo', origen: 'compra', aceptado_en: ahora().toISOString(), quitado_en: null }).eq('atleta_id', c.atleta_id).eq('profesional_id', c.coach_id)
-    if (e) throw e
-  }
 }
 
 /** Anota UN cobro en el libro de pagos y le manda al coach su parte. Un mismo cobro o factura se atiende una sola vez. */
