@@ -252,3 +252,93 @@ grant execute on function public.plan_publico(text, text) to anon, authenticated
 -- Probado el 11 oct 2026 con cuentas simuladas (`set local role` + `request.jwt.claims`, todo dentro de un bloque que termina en `raise exception` para no guardar nada):
 -- el dueño publica y ve su vitrina y sus versiones; el atleta y otro profesional ven 0 filas y no pueden crear vitrina, crear compras ni publicar; sin sesión,
 -- `plan_publico` NO trae ejercicios de la segunda semana ni de las otras fases (solo nombres y una semana de muestra) y las tablas se leen en 0 filas.
+
+-- ------------------------------------------------------------------------------------------------------------------------------------------------
+-- Stripe: eventos atendidos y llaves únicas (11 oct 2026)
+-- ------------------------------------------------------------------------------------------------------------------------------------------------
+
+create table if not exists public.stripe_eventos (
+  id text primary key,
+  tipo text not null,
+  recibido_en timestamptz not null default now()
+);
+comment on table public.stripe_eventos is 'Los eventos de Stripe ya atendidos (por su id): si Stripe repite uno, no se procesa dos veces. Solo la lee el servidor.';
+alter table public.stripe_eventos enable row level security;   -- sin permisos para nadie: solo la llave de servicio
+
+-- Un cobro o una factura de Stripe se anota UNA vez en el libro de pagos, aunque el evento llegue repetido.
+create unique index if not exists pagos_charge_unico on public.pagos (stripe_charge_id) where stripe_charge_id is not null;
+create unique index if not exists pagos_invoice_unico on public.pagos (stripe_invoice_id) where stripe_invoice_id is not null;
+create index if not exists compras_suscripcion on public.compras (stripe_subscription_id) where stripe_subscription_id is not null;
+
+-- ------------------------------------------------------------------------------------------------------------------------------------------------
+-- Suscriptores, chat y técnica por plan; vencimientos (11 oct 2026)
+-- ------------------------------------------------------------------------------------------------------------------------------------------------
+-- El vínculo de un suscriptor con su coach es una fila de `equipo` con origen «compra»: nace con la compra y se cierra al terminar. Así reutiliza la lista de atletas del coach y los permisos
+-- que ya existen. Lo único nuevo es que el CHAT y la TÉCNICA de ese vínculo dependen de los interruptores del plan (`vitrina_planes.chat` y `.tecnica`): para el coach principal y para el
+-- equipo de siempre (origen «equipo», que es todo lo que existía) nada cambia.
+
+create or replace function public.vinculo_escribible(a uuid, p uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.hay_vinculo(a, p) and (
+       exists (select 1 from public.profiles where id = a and coach_id = p)
+    or exists (select 1 from public.equipo where atleta_id = a and profesional_id = p and estado = 'activo' and origen = 'equipo')
+    or exists (select 1 from public.compras c join public.vitrina_planes v on v.id = c.vitrina_plan_id
+                where c.atleta_id = a and c.coach_id = p and c.estado in ('activa', 'gracia') and v.chat)
+  );
+$$;
+create or replace function public.vinculo_tecnica(a uuid, p uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.hay_vinculo(a, p) and (
+       exists (select 1 from public.profiles where id = a and coach_id = p)
+    or exists (select 1 from public.equipo where atleta_id = a and profesional_id = p and estado = 'activo' and origen = 'equipo')
+    or exists (select 1 from public.compras c join public.vitrina_planes v on v.id = c.vitrina_plan_id
+                where c.atleta_id = a and c.coach_id = p and c.estado in ('activa', 'gracia') and v.tecnica)
+  );
+$$;
+revoke execute on function public.vinculo_escribible(uuid, uuid) from public, anon;
+revoke execute on function public.vinculo_tecnica(uuid, uuid) from public, anon;
+grant execute on function public.vinculo_escribible(uuid, uuid) to authenticated;
+grant execute on function public.vinculo_tecnica(uuid, uuid) to authenticated;
+
+create or replace function public.compras_sincroniza_vinculo()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.estado in ('activa', 'gracia', 'por_armar') and (tg_op = 'INSERT' or old.estado is distinct from new.estado) then
+    insert into public.equipo (atleta_id, profesional_id, estado, origen, aceptado_en)
+    values (new.atleta_id, new.coach_id, 'activo', 'compra', now())
+    on conflict (atleta_id, profesional_id) do update set estado = 'activo', origen = 'compra', aceptado_en = now(), quitado_en = null
+      where public.equipo.estado <> 'activo';
+  elsif tg_op = 'UPDATE' and old.estado in ('activa', 'gracia', 'por_armar') and new.estado in ('vencida', 'reembolsada', 'cancelada') then
+    if not exists (select 1 from public.compras c where c.atleta_id = new.atleta_id and c.coach_id = new.coach_id and c.id <> new.id and c.estado in ('activa', 'gracia', 'por_armar')) then
+      update public.equipo set estado = 'quitado', quitado_en = now()
+       where atleta_id = new.atleta_id and profesional_id = new.coach_id and origen = 'compra' and estado = 'activo';
+    end if;
+  end if;
+  return null;
+end $$;
+create trigger compras_vinculo after insert or update of estado on public.compras for each row execute function public.compras_sincroniza_vinculo();
+
+-- Cada hora (pg_cron `vence-compras`, minuto 7): lo que se venció solo.
+create or replace function public.vence_compras()
+returns integer language plpgsql security definer set search_path = public as $$
+declare n integer := 0; k integer;
+begin
+  update public.compras set estado = 'vencida', actualizada_en = now() where estado = 'gracia' and gracia_hasta is not null and gracia_hasta < now();
+  get diagnostics k = row_count; n := n + k;
+  update public.compras set estado = 'vencida', actualizada_en = now() where estado = 'activa' and tipo = 'membresia' and periodo_hasta is not null and periodo_hasta < now() - interval '3 days';
+  get diagnostics k = row_count; n := n + k;
+  update public.compras set estado = 'cancelada', actualizada_en = now() where estado = 'pendiente' and creada_en < now() - interval '1 day';
+  get diagnostics k = row_count; n := n + k;
+  return n;
+end $$;
+revoke execute on function public.vence_compras() from public, anon, authenticated;
+-- select cron.schedule('vence-compras', '7 * * * *', 'select public.vence_compras()');   (ya programado)
+
+-- Las cuatro funciones de mensajes que ya existían cambian en UNA línea cada una (se hizo reemplazando ese texto en su definición, sin tocar nada más):
+--   puede_escribir:    `public.hay_vinculo(a, p)`  →  `public.vinculo_escribible(a, p)`
+--   mandar_tecnica:    la comprobación de `puede_escribir`  →  `vinculo_tecnica` + las dos cuentas activas («No le puedes mandar tu técnica a esta persona.»)
+--   responder_tecnica: la comprobación de `puede_escribir`  →  `vinculo_tecnica` + las dos cuentas activas («La conversación está cerrada.»)
+--   bandeja:           `activa` = `(vinculo_escribible(...) or vinculo_tecnica(...)) and las dos cuentas activas`
+-- Limitación conocida: un plan con técnica y SIN chat deja la conversación activa pero el texto libre falla con el aviso de siempre.
+-- Probado (dentro de un bloque que termina en `raise exception`): lo de siempre (coach principal y equipo) sigue escribiendo; con compra y chat/técnica encendidos se puede;
+-- con chat apagado no se escribe y la técnica sí; con los dos apagados nada (y mandar_tecnica lo dice); al vencer la compra la fila de equipo pasa a «quitado».
