@@ -44,8 +44,25 @@ for (const nombre of ARCHIVOS) {
   }
 }
 
+/* La ventana de un plan comprado (`lib/ventana.js`) la usa también la Edge Function `programa-comprado`, que es la que recorta el plan ANTES de mandarlo. Copia exacta:
+   si la app y el servidor recortaran distinto, el atleta vería menos (o más) de lo que el coach decidió. */
+{
+  const original = readFileSync(join(raiz, 'src/lib/ventana.js'), 'utf8');
+  const copia = join(raiz, 'supabase/functions/programa-comprado/ventana.js');
+  const igual = existsSync(copia) && readFileSync(copia, 'utf8') === original;
+  if (!igual) {
+    if (soloRevisar) {
+      console.error('✗ supabase/functions/programa-comprado/ventana.js ya no es igual a src/lib/ventana.js');
+      malos += 1;
+    } else {
+      writeFileSync(copia, original);
+      console.log('copiado ventana.js (programa-comprado)');
+    }
+  }
+}
+
 if (malos) {
-  console.error('\nCorre `node scripts/compartir-con-mcp.mjs` y vuelve a desplegar la función `mcp`.');
+  console.error('\nCorre `node scripts/compartir-con-mcp.mjs` y vuelve a desplegar la función `mcp` y/o `programa-comprado`.');
   process.exit(1);
 }
-if (soloRevisar) console.log('✓ La función mcp usa las mismas piezas que la app.');
+if (soloRevisar) console.log('✓ Las funciones mcp y programa-comprado usan las mismas piezas que la app.');
