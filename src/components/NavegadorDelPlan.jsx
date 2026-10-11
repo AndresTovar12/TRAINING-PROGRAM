@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, ChevronRight, CornerUpLeft } from 'lucide-react';
+import { Check, ChevronRight, CornerUpLeft, Lock } from 'lucide-react';
 import { LT, FONT, NUM_STYLE, tipoDeSesion } from '@/lib/theme';
 import { esDescanso, enOrdenDeSemana } from '@/lib/training-utils';
 import { sesionesDelTitulo, textoDeSesiones, juntaPorDia } from '@/lib/sesiones';
@@ -255,21 +255,25 @@ export default function NavegadorDelPlan({
                   const elegida = fi === abierta && w.num === semana?.num;
                   const suya = aqui?.faseId === ff.id && w.num === aqui.semana;
                   const numero = deCorrido ? n + 1 : w.num;
+                  // Un plan comprado: las semanas que aún no se ven llegan cerradas (el servidor ya les quitó los ejercicios). Se ven con candado y no se abren.
+                  const cerrada = !!w.bloqueada;
                   return (
                     <button
                       key={`${ff.id}-${w.num}`}
                       type="button"
+                      disabled={cerrada}
                       onClick={() => (fi === abierta ? elegirSemana(w.num) : abrirFase(fi, w.num))}
-                      aria-label={`Semana ${numero}${suya ? (quien === 'tu' ? ', donde vas' : ', donde va') : ''}`}
+                      aria-label={cerrada ? `Semana ${numero}, aún no disponible` : `Semana ${numero}${suya ? (quien === 'tu' ? ', donde vas' : ', donde va') : ''}`}
                       style={{
-                        position: 'relative', minWidth: 38, padding: '7px 0', borderRadius: 10, cursor: 'pointer',
+                        position: 'relative', minWidth: 38, padding: '7px 0', borderRadius: 10, cursor: cerrada ? 'default' : 'pointer',
+                        opacity: cerrada ? 0.55 : 1,
                         border: `${suya && !elegida ? 2 : 1}px solid ${elegida || suya ? LT.blue : LT.border}`,
                         background: elegida ? LT.blue : LT.surface2,
                         color: elegida ? '#fff' : (suya ? LT.blue : LT.text3),
                         fontFamily: FONT, fontSize: 13, fontWeight: 800, ...NUM_STYLE,
                       }}
                     >
-                      {numero}
+                      {cerrada ? <Lock size={12} strokeWidth={2.6} style={{ verticalAlign: '-1px' }} /> : numero}
                       {/* El puntito dice "tu semana" aunque estés mirando otra. */}
                       {suya && (
                         <span style={{
@@ -330,6 +334,7 @@ export default function NavegadorDelPlan({
                     </button>
                   );
                 })
+                : semana?.bloqueada ? <SemanaCerrada dias={semana.days} />
                 : renglonesDeLaSemana(semana, pegadasDe?.(f, semana)).map((r) => {
                   if (!r.day) {
                     // Un día donde el coach no puso nada y otro profesional sí: un renglón de día como cualquiera.
@@ -410,6 +415,25 @@ export default function NavegadorDelPlan({
       })}
 
     </div>
+  );
+}
+
+/* Una semana que el comprador todavía no puede ver: solo los nombres de sus días, con el candado y el contenido difuminado. No hay nada detrás: el servidor ya quitó los
+   ejercicios (`lib/ventana.js`), esto es solo el aspecto. */
+function SemanaCerrada({ dias }) {
+  return (
+    <>
+      {(dias ?? []).map((d, i) => (
+        <div
+          key={`${d.day}-${i}`} aria-label={`${d.day}: aún no disponible`}
+          style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 11px', borderRadius: 11, fontFamily: FONT, background: LT.bg, border: `1px solid ${LT.border}` }}
+        >
+          <span style={{ width: 32, fontSize: 11, fontWeight: 800, color: LT.text3, flexShrink: 0 }}>{d.day}</span>
+          <span aria-hidden="true" style={{ flex: 1, height: 11, borderRadius: 6, background: LT.border, filter: 'blur(3px)', maxWidth: 190 }} />
+          <Lock size={14} style={{ color: LT.text3, flexShrink: 0 }} />
+        </div>
+      ))}
+    </>
   );
 }
 
