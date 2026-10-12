@@ -1,5 +1,7 @@
 # El sello para redes (T•LAB)
 
+> **Desde el 12 oct 2026 se llama «activity card» en toda la app** (Andrés). El código, las carpetas y esta nota siguen diciendo «sello»; lo que ve el usuario dice «activity card».
+
 **Pedido de Andrés, 10 oct 2026** (competir con el «sello» de Strava: una imagen con los números del entreno para pegarla en una historia de Instagram o en CapCut). El diseño lo eligió él de varias maquetas (`docs/maquetas/2026-10-10-sello-t-lab.html` tiene la última); quedó como la propuesta **B «Ancha»**.
 
 ## Cómo es

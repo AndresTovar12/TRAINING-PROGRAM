@@ -299,7 +299,7 @@ export default function DetalleDeEntreno({ actividad, sesion = null, unidadPeso 
               type="button" onClick={() => setVerSello(true)} className="kp-press"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 12, border: `1.5px solid ${LT.blue}`, background: LT.surface, cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 800, color: LT.blue, touchAction: 'manipulation' }}
             >
-              <Share2 size={15} /> Sello
+              <Share2 size={15} /> Activity card
             </button>
           )}
         {puedeBorrar && (

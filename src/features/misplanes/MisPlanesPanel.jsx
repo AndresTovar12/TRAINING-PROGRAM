@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import {
-  ChevronLeft, Copy, FolderInput, FolderOutput, FolderPlus, Loader2, MoreHorizontal, Pencil, Plus, Search, Send, SquareCheck,
+  ChevronLeft, Copy, FolderInput, FolderOutput, FolderPlus, Loader2, MoreHorizontal, Pencil, Play, Plus, Search, Send, SquareCheck,
   TextCursorInput, Trash2,
 } from 'lucide-react';
 import { useAviso } from '@/components/AvisoPasajero';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import PlanBuilder, { HojaAcciones } from '@/features/admin/PlanBuilder';
+import { useAuth } from '@/contexts/AuthContext';
 import {
-  abrirItem, actualizarItem, borrarCarpeta, borrarItem, crearCarpeta, duplicarItem, renombrarCarpeta,
+  abrirItem, actualizarItem, borrarCarpeta, borrarItem, crearCarpeta, duplicarItem, marcaDemo, renombrarCarpeta,
 } from '@/lib/misPlanes';
 import { useMisPlanes } from '@/lib/useMisPlanes';
 import { useIsWide } from '@/lib/useViewport';
@@ -49,6 +50,8 @@ export default function MisPlanesPanel() {
   const { trabajando } = useAviso();
   const esAncha = useIsWide();
   const { cargando, error, carpetas, items, userId, recargar } = useMisPlanes();
+  const { profile } = useAuth();
+  const esDueno = !!profile?.is_owner; // solo el dueño marca workouts de demostración
   const llevar = useMoverCosas({ carpetas, recargar });
   const [nivelElegido, setNivel] = useState(null);
   const [buscar, setBuscar] = useState('');
@@ -149,6 +152,19 @@ export default function MisPlanesPanel() {
   }
 
   // Lo que tarda un par de segundos (la base y volver a leer la lista) avisa que está trabajando y, al terminar, que ya.
+  // «Demo workout»: lo que cualquier persona con cuenta puede hacer desde Entrenar para ver cómo se inicia un workout.
+  async function alternaDemo(item) {
+    setAviso('');
+    try {
+      await trabajando(item.demo ? 'Quitando…' : 'Marcando…', async () => {
+        await marcaDemo(item.id, !item.demo);
+        await recargar();
+      }, item.demo ? 'Ya no es demo' : 'Ahora es demo workout');
+    } catch (e) {
+      setAviso(e.message || 'No se pudo cambiar');
+    }
+  }
+
   async function duplicar(item) {
     setAviso('');
     try {
@@ -391,6 +407,7 @@ export default function MisPlanesPanel() {
             { icon: Pencil, texto: 'Abrir y editar', onClick: () => abrir(menu.item) },
             { icon: TextCursorInput, texto: 'Nombre y descripción', onClick: () => setDialogo({ tipo: 'item-renombrar', item: menu.item }) },
             { icon: Copy, texto: 'Duplicar', onClick: () => duplicar(menu.item) },
+            ...(esDueno && menu.item.tipo === 'workout' ? [{ icon: Play, texto: menu.item.demo ? 'Quitar de demo workouts' : 'Marcar como demo workout', onClick: () => alternaDemo(menu.item) }] : []),
             ...(menu.item.carpetaId ? [{
               icon: FolderOutput, texto: `Sacar de «${nombreDeCarpeta(menu.item.carpetaId)}»`,
               onClick: () => moverA({ items: [menu.item], carpetas: [] }, carpetas.find((c) => c.id === menu.item.carpetaId)?.parent_id ?? null),

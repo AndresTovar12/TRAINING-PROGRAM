@@ -22,10 +22,10 @@ export default function HojaDelSello({ atletaId, registro, sesionId, nombre, Ico
   }, []);
 
   return (
-    <HojaFlotante titulo="Sello" onCerrar={onCerrar} ancho={560}>
-      {estado.cargando && <Cargando texto="Armando tu sello…" />}
+    <HojaFlotante titulo="Activity card" onCerrar={onCerrar} ancho={560}>
+      {estado.cargando && <Cargando texto="Armando tu activity card…" />}
       {!estado.cargando && estado.sellos.length === 0 && (
-        <EstadoVacio icono={Activity} titulo="Todavía no hay nada que contar" texto="Haz algún ejercicio con el entreno guiado y aquí aparecerá el sello de tu sesión." />
+        <EstadoVacio icono={Activity} titulo="Todavía no hay nada que contar" texto="Haz algún ejercicio con el entreno guiado y aquí aparecerá la activity card de tu sesión." />
       )}
       {!estado.cargando && estado.sellos.length > 0 && <EditorDelSello sellos={estado.sellos} Icono={Icono} />}
     </HojaFlotante>

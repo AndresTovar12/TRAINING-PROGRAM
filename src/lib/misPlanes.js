@@ -12,7 +12,7 @@ import { resumenDe } from '@/lib/misPlanesDatos';
 const TABLA_DE = { workout: 'routine_templates', clase: 'routine_templates', rutina: 'routine_templates', programa: 'programas_guardados' };
 const KIND_DE = { workout: 'day', clase: 'day', rutina: 'week' };
 const COLUMNAS = 'id, name, descripcion, origen, carpeta_id, resumen, created_at, updated_at';
-const COLUMNAS_PLANTILLA = `${COLUMNAS}, kind`;
+const COLUMNAS_PLANTILLA = `${COLUMNAS}, kind, demo`;
 
 /* Una clase es un workout (kind 'day') cuyo resumen dice `clase` (ver `resumenDe`). */
 const tipoDeFila = (fila, tabla) => {
@@ -30,6 +30,7 @@ const comoItem = (fila, tabla) => ({
   origen: fila.origen ?? '',
   carpetaId: fila.carpeta_id ?? null,
   resumen: fila.resumen ?? null,
+  demo: !!fila.demo, // un workout de demostración (lo marca el dueño; ver `marcaDemo`)
   creado: fila.created_at,
   actualizado: fila.updated_at,
 });
@@ -177,5 +178,11 @@ export async function borrarCarpeta(carpeta) {
   ]);
   subidas.forEach((r) => { if (r.error) throw r.error; });
   const { error } = await supabase.from('carpetas_planes').delete().eq('id', carpeta.id);
+  if (error) throw error;
+}
+
+/** Marca (o desmarca) un workout como DEMOSTRACIÓN: cualquier persona con cuenta lo puede hacer desde «Entrenar». Solo lo puede el dueño; la base lo exige. */
+export async function marcaDemo(id, demo) {
+  const { error } = await supabase.rpc('marcar_demo', { p_id: id, p_demo: !!demo });
   if (error) throw error;
 }
