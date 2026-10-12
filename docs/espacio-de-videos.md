@@ -30,9 +30,14 @@ Lo que sigue en uso (aparece en un ejercicio o video extra del coach) **más** l
 
 Solo se frena un **video**; una foto o una portada automática nunca se queda sin subir por esto.
 
-## Una clase completa en el plan
+## Una clase completa
 
-No hay pantalla especial: la clase es un **ejercicio** cuyo video es la clase completa, y en la sesión del plan puede ser su única línea. El atleta la ve igual que cualquier ejercicio (video del ejercicio abierto, sin descarga por adelantado: `preload="metadata"`).
+**«Clase» es un tipo más de lo que se guarda en Mis planes** (workout, rutina, programa, clase). Una clase es un video largo que la instructora sube **una sola vez** y usa en todas las sesiones que quiera. No hay tabla nueva: es una sesión con un campo más, `clase: { url, duracion }` (ver `src/lib/clases.js`), así que se guarda, se copia y se asigna como cualquier workout.
+
+- **Crearla:** Mis planes → «+ Crear» → «Clase» (para quien da clases sale primero). El editor trae «Subir video», «Pegar liga» (YouTube/Vimeo) y, debajo, los Sets opcionales. Sin video no se guarda.
+- **Ponerla en una sesión:** pastilla «Clase» en la sesión (a la vista para instructoras; para los demás, en el menú «Mis planes ▾» de la sesión) con «Subir video», «Pegar liga» y «De mis clases»; o «Usar workout», que ahora también lista las clases.
+- **El alumno:** abre la sesión y arriba ve «Clase · 45 min» con el reproductor; al terminar, «Marcar sesión como terminada» de siempre.
+- **Espacio:** el video cuenta contra el espacio del coach mientras viva en un ejercicio, un video extra o una clase (en Mis planes o en el plan de un alumno).
 
 ## Límites conocidos (a propósito)
 

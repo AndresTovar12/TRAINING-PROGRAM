@@ -43,6 +43,8 @@ import {
 import FichaEjercicio from '@/features/training/FichaEjercicio';
 import TarjetaDeSesion from '@/features/training/TarjetaDeSesion';
 import BotonDelEntreno from '@/features/training/BotonDelEntreno';
+import TarjetaDeClase from '@/features/training/TarjetaDeClase';
+import { claseDe, duracionTexto } from '@/lib/clases';
 import { reiniciaSiTerminado } from '@/lib/entreno';
 import { relojAMedias } from '@/lib/relojGuardado';
 import Portada from '@/components/Portada';
@@ -965,6 +967,8 @@ const TerminarSesion = ({ hecha, onAlternar, onSello }) => (hecha ? (
  */
 const tarjetasDelDia = (day) => {
   const filas = day.exercises || [];
+  // Una clase sola (sin ejercicios) también es una tarjeta: es lo que hay que hacer ese día.
+  if (claseDe(day)) return 1;
   return filas.length > 0 && !(esDescanso(day) && !filas.some((e) => !e.isNote)) ? 1 : 0;
 };
 
@@ -1023,6 +1027,9 @@ const CuerpoDelDia = ({
      mayúsculas, azules, 11 px—, así que la sesión entera se leía como una pila
      de títulos sin contenido. Y un día OFF enseñaba "Marcar sesión como
      terminada" sobre una pantalla vacía. */
+  // La clase de la sesión (un video largo; ver `lib/clases.js`): va arriba de todo lo demás.
+  const claseDelDia = claseDe(selectedDay);
+  const tarjetaDeClase = claseDelDia ? <TarjetaDeClase clase={claseDelDia} nombre={sinDuracion(selectedDay.name || '')} /> : null;
   const notasDelDia = (selectedDay.exercises || []).filter((e) => e.isNote && e.text);
   const soloNotas = (selectedDay.exercises || []).length > 0 && (selectedDay.exercises || []).every((e) => e.isNote);
   const descansoPuro = esDescanso(selectedDay) && !(selectedDay.exercises || []).some((e) => !e.isNote);
@@ -1058,6 +1065,7 @@ const CuerpoDelDia = ({
   const tarjetaDelDia = (cuerpo) => {
     const nombre = sinDuracion(selectedDay.name || '') || textoDeSesiones(sesionesDelTitulo(selectedDay)) || selectedDay.day;
     const n = ((sesionQueRepite(week, selectedIdx)?.day ?? selectedDay).exercises || []).filter((e) => !e.isNote).length;
+    // La duración de una clase NO va aquí: ya la dice «Clase · 45 min» justo debajo, dentro de la tarjeta.
     const detalle = [n ? plural(n, 'ejercicio', 'ejercicios') : null, minutosDelNombre(selectedDay.name || '')].filter(Boolean).join(' · ');
     return (
       <TarjetaDeSesion
@@ -1169,8 +1177,9 @@ const CuerpoDelDia = ({
           </ul>
         );
         // Un día de puras notas también se puede entrenar: cada nota es un paso (ver `lib/entreno.js`).
-        return entarjetas ? tarjetaDelDia(<>{botonDelEntreno()}{lista}</>) : (
+        return entarjetas ? tarjetaDelDia(<>{tarjetaDeClase}{botonDelEntreno()}{lista}</>) : (
           <>
+            {tarjetaDeClase}
             {botonDelEntreno()}
             <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: '14px 16px', marginBottom: 14 }}>
               {lista}
@@ -1194,7 +1203,7 @@ const CuerpoDelDia = ({
               formatos={sessionData.formatos} onFormato={setFormato} conEntreno={!selectedCompleted} />
           );
         });
-        const lista = <>{botonDelEntreno()}{sets}</>;
+        const lista = <>{tarjetaDeClase}{botonDelEntreno()}{sets}</>;
         return entarjetas ? tarjetaDelDia(lista) : lista;
       })()}
 
@@ -2136,6 +2145,8 @@ const HomeView = ({
     sessionMeta.exercises ? { Icono: ListChecks, texto: plural(sessionMeta.exercises, 'ejercicio', 'ejercicios') } : null,
     // Sin ejercicios reales la «duración» es el tipo de sesión, no un tiempo: sin reloj.
     sessionMeta.duration ? { Icono: sessionMeta.exercises ? Clock : null, texto: sessionMeta.duration } : null,
+    // Una clase dice cuánto dura (si se sabe).
+    next && !sessionMeta.duration && claseDe(next.day) && duracionTexto(claseDe(next.day).duracion) ? { Icono: Clock, texto: duracionTexto(claseDe(next.day).duracion) } : null,
     // Otra sesión hoy además de esta (mañana y tarde como dos entradas).
     !sessionMeta.agrupadas && next?.sesionesHoy > 1 ? { texto: `${next.sesionesHoy} sesiones hoy` } : null,
   ].filter(Boolean);

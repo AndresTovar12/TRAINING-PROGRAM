@@ -14,6 +14,8 @@ import { uploadExerciseMedia } from '@/lib/api';
 import { leeMiEspacio } from '@/lib/espacioApi';
 import { avisoSiNoCabe, avisoSiEsMuyGrande } from '@/lib/espacio';
 import { usePantallaEncendida } from '@/lib/pantallaEncendida';
+import { leeVideo } from '@/features/mensajes/adjuntos';
+import { duracionDelTramo } from '@/lib/clases';
 import { subeFotos, guardaPoster } from '@/lib/posters';
 import { segundos } from '@/lib/fotogramas';
 import { aImagenWeb, optimizaImagen, pesoTexto as pesoLegible } from '@/lib/imagen';
@@ -44,6 +46,9 @@ export default function MediaUpload({
      y aquí se queda todo lo que cuesta: el editor, la barra de avance, la
      optimización de la foto y los avisos. */
   botones,
+  /* Quien necesita saber QUÉ se subió y cuánto dura (una clase completa): recibe `{ url, duracion, inicio, fin }` cuando el video ya está arriba. Lo demás
+     de siempre —`onChange`, `onAjustes`— no cambia. */
+  alSubir,
 }) {
   // En el telefono se ofrecen DOS acciones distintas, y grabar va primero.
   //
@@ -222,6 +227,8 @@ export default function MediaUpload({
       // Las fotos se preparan y suben A LA VEZ que el video, que tarda mucho más:
       // cuando el video termina, normalmente ya están. Nunca fallan (null si algo sale mal).
       const fotosListas = Promise.resolve(fotogramas).then(subeFotos);
+      // Cuánto dura el archivo, leído mientras sube (solo si alguien lo va a usar).
+      const medida = alSubir ? leeVideo(porRevisar).catch(() => null) : null;
       const url = await uploadExerciseMedia(porRevisar, mixto ? 'videos' : kind, setAvance);
       // La foto, ya con la dirección del video, ANTES de avisar que hay video:
       // así cuando aparece en la lista ya trae su foto y no pasa por el video
@@ -235,6 +242,10 @@ export default function MediaUpload({
       // necesita a la vez, y esperar a que el estado se actualice para
       // leerla por separado es una carrera perdida.
       onAjustes?.({ ...ajustes, url, tipo: 'video' });
+      if (alSubir) {
+        const total = (await medida)?.segundos ?? null;
+        alSubir({ url, duracion: duracionDelTramo({ total, inicio: segundos(ajustes.inicio), fin: segundos(ajustes.fin) }), inicio: segundos(ajustes.inicio), fin: segundos(ajustes.fin) });
+      }
       setPorRevisar(null);
       setArchivo(null);
     } catch (e2) {

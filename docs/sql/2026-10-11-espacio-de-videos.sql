@@ -14,7 +14,7 @@
 -- QUÉ SE GUARDA. `medios_peso`: una fila por archivo subido (ruta, quién, cuánto pesa). La anota la Edge Function `r2-upload` al darle permiso de subir. Nadie la lee desde la app:
 -- el coach pregunta con `mi_espacio()`.
 --
--- QUÉ CUENTA COMO «USADO». Solo lo que sigue en uso: un archivo cuenta si aparece en un ejercicio o en un video extra del coach, o si se subió hace menos de un día (puede ser un
+-- QUÉ CUENTA COMO «USADO». Solo lo que sigue en uso: un archivo cuenta si aparece en un ejercicio, en un video extra o en una CLASE del coach (dentro de Mis planes o del plan de un alumno), o si se subió hace menos de un día (puede ser un
 -- borrador abierto en el editor que todavía no se guarda). Así, al borrar un ejercicio el espacio vuelve al instante, aunque el archivo siga unos días en Cloudflare esperando
 -- a la limpieza (`limpia-r2`).
 --
@@ -54,6 +54,13 @@ begin
                    where e.created_by = p_coach and (e.video_url like '%' || mp.ruta or e.cover_image_url like '%' || mp.ruta))
        or exists (select 1 from public.exercise_media m
                    where m.created_by = p_coach and m.url like '%' || mp.ruta)
+       -- Las CLASES: un video largo vive dentro de la sesión (`sesion.clase.url`), en Mis planes o en el plan de un alumno.
+       or exists (select 1 from public.routine_templates t
+                   where t.created_by = p_coach and t.data::text like '%' || mp.ruta || '%')
+       or exists (select 1 from public.programas_guardados g
+                   where g.created_by = p_coach and g.data::text like '%' || mp.ruta || '%')
+       or exists (select 1 from public.plans pl
+                   where (pl.created_by = p_coach or pl.profesional_id = p_coach) and pl.data::text like '%' || mp.ruta || '%')
      );
   return jsonb_build_object(
     'usado', v_usado,

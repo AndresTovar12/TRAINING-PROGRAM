@@ -13,7 +13,7 @@ import {
 import { useMisPlanes } from '@/lib/useMisPlanes';
 import { useIsWide } from '@/lib/useViewport';
 import {
-  TIPOS, cabeCarpetaEn, carpetasDeAbajoPrimero, carpetasQueSePuedenTraer, claveDeCarpeta, claveDeItem, coincide, hijasDe,
+  TIPOS, cabeCarpetaEn, carpetasDeAbajoPrimero, esDeUnDia, carpetasQueSePuedenTraer, claveDeCarpeta, claveDeItem, coincide, hijasDe,
   nombreDeCopia, planDeRutina, rutaDeCarpeta, textoDeRuta,
 } from '@/lib/misPlanesDatos';
 import ListaDeMisPlanes from '@/features/misplanes/ListaDeMisPlanes';
@@ -125,7 +125,7 @@ export default function MisPlanesPanel() {
     setAviso('');
     try {
       const data = await abrirItem(item);
-      if (item.tipo === 'workout') {
+      if (esDeUnDia(item.tipo)) {
         setEditor({ tipo: 'workout', item, data });
       } else if (item.tipo === 'rutina') {
         setEditor({ tipo: 'plan', catalogo: { item, phases: planDeRutina(data).phases, estructura: 'rutina', foto: data.foto, ciencia: data.ciencia } });
@@ -143,8 +143,8 @@ export default function MisPlanesPanel() {
   function crear(forma) {
     setCreando(false);
     setAgregando(false);
-    setEditor(forma === 'workout'
-      ? { tipo: 'workout', carpetaId: nivel }
+    setEditor(forma === 'workout' || forma === 'clase'
+      ? { tipo: 'workout', carpetaId: nivel, ...(forma === 'clase' ? { esClase: true } : null) }
       : { tipo: 'plan', catalogo: { forma, carpetaId: nivel } });
   }
 
@@ -369,7 +369,7 @@ export default function MisPlanesPanel() {
 
       {editor?.tipo === 'workout' && (
         <EditorDeWorkout
-          catalogo={{ item: editor.item, data: editor.data, carpetaId: editor.carpetaId }}
+          catalogo={{ item: editor.item, data: editor.data, carpetaId: editor.carpetaId, esClase: editor.esClase }}
           onClose={() => { setEditor(null); recargar(); }}
           onSaved={() => recargar()}
           onDeleted={() => { setEditor(null); recargar(); }}

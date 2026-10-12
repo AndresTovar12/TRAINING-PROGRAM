@@ -4,7 +4,7 @@ import {
   ArrowLeft, X, Plus, Trash2, Copy, ChevronRight, ChevronUp, ChevronDown,
   ChevronLeft, Loader2, Check, Layers, Dumbbell, StickyNote, Zap,
   Save, FolderOpen, Clipboard, Eraser, CalendarDays, Repeat, Scale, Video,
-  Image as ImageIcon, ImagePlus, Sparkles, CopyPlus, Sun, Moon, RefreshCw,
+  Image as ImageIcon, ImagePlus, Sparkles, CopyPlus, Sun, Moon, RefreshCw, PlayCircle,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
@@ -46,6 +46,9 @@ import { rondasDe } from '@/lib/porVuelta';
 import { ligaExterna } from '@/lib/videos';
 import RepertoirePicker from '@/features/admin/RepertoirePicker';
 import MediaUpload from '@/features/admin/MediaUpload';
+import ClaseDeLaSesion, { HojaDeClase } from '@/features/admin/ClaseDeLaSesion';
+import { claseDe } from '@/lib/clases';
+import { esInstructor } from '@/lib/palabras';
 import SelectorCategoria from '@/features/admin/SelectorCategoria';
 import SelectorTipoSesion from '@/features/admin/SelectorTipoSesion';
 import Portada from '@/components/Portada';
@@ -1298,9 +1301,12 @@ function CuerpoDeSets({
 function SessionEditorInterno({
   day, repertoire, categorias = [], atleta, onEjercicioCreado, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear,
   duenoId, masterId, onCategoriaCreada, onCategoriaBorrada, soloLectura = false, vistaFuera = false,
-  plegable = false, plegada = false, onPlegar, turno = null, onTurno, arrastre,
+  plegable = false, plegada = false, onPlegar, turno = null, onTurno, arrastre, claseObligatoria = false,
 }) {
   const esCompu = useIsDesktop();
+  const { profile } = useAuth();
+  const quita = useQuitar();
+  const [agregandoClase, setAgregandoClase] = useState(false);
   const blocks = useMemo(() => parseBlocks(day.exercises), [day.exercises]);
 
   const nSets = blocks.filter((b) => b.type === 'set').length;
@@ -1313,6 +1319,11 @@ function SessionEditorInterno({
   // Un día de descanso no tiene nada que plegar: sin botón, y nunca se queda plegado.
   const sePuedePlegar = plegable && !descanso;
   const estaPlegada = sePuedePlegar && plegada;
+  /* LA CLASE de la sesión (ver `lib/clases.js`): una sola por sesión, arriba de los Sets. Quien da clases tiene el botón «Clase» a la vista; los demás
+     lo encuentran en el menú de la sesión. Con una clase ya puesta el botón no sale (se cambia o se quita desde su tarjeta). */
+  const clase = claseDe(day);
+  const puedePonerClase = !soloLectura && !descanso && !clase && !claseObligatoria;
+  const quitarLaClase = () => quita({ aviso: 'Se quitó la clase', pregunta: { titulo: '¿Quitar la clase de esta sesión?', detalle: 'El video se queda en tu espacio y en Mis planes si lo guardaste.', confirmar: 'Sí, quitarla' } }, () => onPatch({ clase: undefined }));
 
   return (
     <div {...arrastre} style={tarjetaDeSesion(day)}>
@@ -1320,7 +1331,15 @@ function SessionEditorInterno({
         day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog}
         onClear={onClear} nSets={descanso ? null : nSets} conVista={!descanso} vistaFuera={vistaFuera} soloLectura={soloLectura}
         plegable={sePuedePlegar} plegada={estaPlegada} onPlegar={onPlegar} turno={turno} onTurno={onTurno}
+        onAgregarClase={puedePonerClase ? () => setAgregandoClase(true) : undefined} destacarClase={esInstructor(profile?.profesion)}
       />
+
+      {/* La clase, o —si esta sesión es una clase de Mis planes que aún no tiene video— sus acciones a la vista. */}
+      {!estaPlegada && !soloLectura && (clase || claseObligatoria) && (
+        <ClaseDeLaSesion clase={clase} pedir={claseObligatoria} onClase={(nueva) => onPatch({ clase: nueva })} onQuitar={quitarLaClase} conMias={!claseObligatoria} />
+      )}
+      {!estaPlegada && soloLectura && clase && <ClaseDeLaSesion clase={clase} onClase={() => {}} onQuitar={() => {}} />}
+      {agregandoClase && <HojaDeClase onCerrar={() => setAgregandoClase(false)} onElige={(nueva) => { setAgregandoClase(false); onPatch({ clase: nueva }); }} />}
 
       {/* Plegado: solo la cabecera y cuánto trae. En la compu la cabecera ya dice cuántos sets son: no se repite. */}
       {estaPlegada && (
@@ -1572,7 +1591,7 @@ const opcionesDeTurno = (turno, onTurno) => (turno
  */
 function DayHeader({
   day, onPatch, onDelete, onCopy, onSaveToCatalog, onApplyCatalog, onClear, nSets, conVista = false, vistaFuera = false, soloLectura = false,
-  plegable = false, plegada = false, onPlegar, turno = null, onTurno,
+  plegable = false, plegada = false, onPlegar, turno = null, onTurno, onAgregarClase, destacarClase = false,
 }) {
   const { user } = useAuth();
   const esCompu = useIsDesktop();
@@ -1589,6 +1608,7 @@ function DayHeader({
   const acciones = [
     ...(puedeUsar ? [{ icon: FolderOpen, texto: 'Usar workout', onClick: onApplyCatalog }] : []),
     ...(puedeGuardar ? [{ icon: Save, texto: 'Guardar workout', onClick: onSaveToCatalog }] : []),
+    ...(onAgregarClase ? [{ icon: PlayCircle, texto: 'Agregar clase', onClick: onAgregarClase }] : []),
     ...(onCopy ? [{ icon: Copy, texto: 'Copiar', onClick: onCopy }] : []),
     ...(onClear ? [{ icon: Eraser, texto: 'Vaciar', onClick: onClear }] : []),
     ...(onTurno ? opcionesDeTurno(turno, onTurno) : []),
@@ -1603,6 +1623,7 @@ function DayHeader({
           acciones={[
             { icon: FolderOpen, texto: 'Usar workout', onClick: onApplyCatalog },
             { icon: Save, texto: 'Guardar workout', onClick: onSaveToCatalog },
+            ...(onAgregarClase && !destacarClase ? [{ icon: PlayCircle, texto: 'Agregar clase', onClick: onAgregarClase }] : []),
           ]}
         />
       )}
@@ -1652,6 +1673,7 @@ function DayHeader({
           {puedeUsar && puedeGuardar && <Pill icon={FolderOpen} onClick={(e) => setMenuPlanes({ ancla: e.currentTarget })}>Mis planes <ChevronDown size={13} /></Pill>}
           {puedeUsar && !puedeGuardar && <Pill icon={FolderOpen} onClick={() => onApplyCatalog()}>Usar workout</Pill>}
           {!puedeUsar && puedeGuardar && <Pill icon={Save} onClick={(e) => onSaveToCatalog(e.currentTarget)}>Guardar workout</Pill>}
+          {onAgregarClase && destacarClase && <Pill icon={PlayCircle} onClick={() => onAgregarClase()}>Clase</Pill>}
           {onCopy && <Pill icon={Copy} onClick={() => onCopy()}>Copiar</Pill>}
           {onClear && <Pill icon={Eraser} onClick={() => onClear()}>Limpiar</Pill>}
           {onTurno && <Pill icon={Sun} onClick={(e) => setMenuTurno({ ancla: e.currentTarget })}>AM / PM <ChevronDown size={13} /></Pill>}
@@ -3075,7 +3097,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         const varias = delDia.length > 1;
         return (
           <DialogoGuardar
-            titulo="Guardar workout" tipo="workout" nombreInicial={sesion.name || ''} recordarCarpeta
+            titulo={claseDe(sesion) ? 'Guardar clase' : 'Guardar workout'} tipo={claseDe(sesion) ? 'clase' : 'workout'} nombreInicial={sesion.name || ''} recordarCarpeta
             interruptores={[
               ...(varias ? [{
                 clave: 'todo', inicial: true,
@@ -3087,7 +3109,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
             onGuardar={async ({ nombre, descripcion, carpetaId, interruptores }) => {
               const data = workoutDeSesiones(varias && interruptores.todo !== false ? delDia : [sesion]);
               const fila = await guardarItem({
-                tipo: 'workout', nombre, descripcion, origen: origenDelPlan, carpetaId, userId: user?.id,
+                tipo: claseDe(sesion) ? 'clase' : 'workout', nombre, descripcion, origen: origenDelPlan, carpetaId, userId: user?.id,
                 data: interruptores.notas === false ? sinNotas('workout', data) : data,
               });
               guardados.current[`workout:${curPhase.id}:${curPhase.weekData[curWeekIdx].num}:${modal.payload.di}`] = {
@@ -3118,7 +3140,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
       )}
       {modal?.type === 'tpl-day' && curPhase && (
         <SelectorDeMisPlanes
-          tipos={['workout']} titulo="Usar workout" onCerrar={() => setModal(null)}
+          tipos={['workout', 'clase']} titulo="Usar workout" onCerrar={() => setModal(null)}
           onElegir={async (item) => {
             const { di } = modal.payload;
             let datos;
@@ -3137,7 +3159,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
               // trae más sesiones, van al final del día.
               const lugar = { ...nuevas[0] };
               delete lugar.day;
-              patchDay(nav.pi, curWeekIdx, di, { notes: undefined, ...lugar });
+              // `clase: undefined` primero: lo que traiga lo guardado la pone; si no trae, la de antes se va (esta sesión «queda con el workout guardado»).
+              patchDay(nav.pi, curWeekIdx, di, { notes: undefined, clase: undefined, ...lugar });
               if (nuevas.length > 1) {
                 abreLoNuevo(nav.pi, curWeekIdx, nuevas.length - 1);
                 patchWeek(nav.pi, curWeekIdx, (wk) => ({ days: [...(wk.days || []), ...nuevas.slice(1)] }));

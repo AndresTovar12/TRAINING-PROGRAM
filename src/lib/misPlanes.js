@@ -9,12 +9,17 @@ import { resumenDe } from '@/lib/misPlanesDatos';
      { id, tabla, tipo, nombre, descripcion, origen, carpetaId, resumen, creado, actualizado }
    Lo guardado en sí (`data`) no viaja en la lista: se pide al abrirlo con `abrirItem`. */
 
-const TABLA_DE = { workout: 'routine_templates', rutina: 'routine_templates', programa: 'programas_guardados' };
-const KIND_DE = { workout: 'day', rutina: 'week' };
+const TABLA_DE = { workout: 'routine_templates', clase: 'routine_templates', rutina: 'routine_templates', programa: 'programas_guardados' };
+const KIND_DE = { workout: 'day', clase: 'day', rutina: 'week' };
 const COLUMNAS = 'id, name, descripcion, origen, carpeta_id, resumen, created_at, updated_at';
 const COLUMNAS_PLANTILLA = `${COLUMNAS}, kind`;
 
-const tipoDeFila = (fila, tabla) => (tabla === 'programas_guardados' ? 'programa' : (fila.kind === 'week' ? 'rutina' : 'workout'));
+/* Una clase es un workout (kind 'day') cuyo resumen dice `clase` (ver `resumenDe`). */
+const tipoDeFila = (fila, tabla) => {
+  if (tabla === 'programas_guardados') return 'programa';
+  if (fila.kind === 'week') return 'rutina';
+  return fila.resumen?.clase ? 'clase' : 'workout';
+};
 
 const comoItem = (fila, tabla) => ({
   id: fila.id,
@@ -39,6 +44,7 @@ async function completarResumenes(items) {
     try {
       const data = await abrirItem(i);
       i.resumen = resumenDe(i.tipo, data);
+      if (i.resumen?.clase) i.tipo = 'clase';
       await supabase.from(i.tabla).update({ resumen: i.resumen }).eq('id', i.id);
     } catch {
       /* se queda sin resumen */
