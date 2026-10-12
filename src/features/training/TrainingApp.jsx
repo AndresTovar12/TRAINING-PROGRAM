@@ -37,6 +37,7 @@ import { altaReciente } from '@/lib/comoVa';
 import { FiltroDeAutor, EtiquetaDeAutor, TarjetaDeHoyDeTodos } from '@/features/training/EquipoDelAtleta';
 import AvisoDeInvitacion from '@/features/training/AvisoDeInvitacion';
 import { HojaDeBiblioteca, TarjetaDeBiblioteca } from '@/features/training/BibliotecaDeClases';
+import EntrenoLibre from '@/features/libre/EntrenoLibre';
 import {
   autorDe, autoresDe, entradasDeHoy, escribeRegistro, etiquetaDePrograma, nombreCorto, registrosDe,
   normalizaDia, resumenDeLaSemana, semanaUnificada,
@@ -2054,7 +2055,7 @@ const HomeView = ({
   // "Varias semanas": las tarjetas dicen la semana de corrido, no la fase.
   const deCorrido = estructura === 'semanas';
   const semanaDe = (n) => `Semana ${semanaGlobal(PLAN, n.phase.id, n.week.num) ?? n.week.num} de ${semanasDelPlan(PLAN)}`;
-  const { perfil: profile, soloLectura } = usePerfilDeLaVista();
+  const { perfil: profile, soloLectura, userId: atletaId } = usePerfilDeLaVista();
   /* Los avisos que ya aceptó con su «Entendido» (uno por aviso; se guardan con el resto de
      lo suyo). Hasta que cargue lo guardado no se enseña ninguno: uno ya aceptado saldría
      un instante y se iría. Un coach que mira la app del atleta no acepta nada por él. */
@@ -2387,6 +2388,13 @@ const HomeView = ({
         </button>
       </div>
       )}
+
+      {/* Entrenar por su cuenta (correr, bici, nadar…): el plan va arriba y esto abajo (Andrés, 12 oct 2026). Quien mira la app de otra persona no lo ve. */}
+      {!soloLectura && atletaId && (
+        <div style={{ padding: '0 18px 28px' }}>
+          <EntrenoLibre userId={atletaId} unidadPeso={unidadPeso} />
+        </div>
+      )}
     </div>
   );
 };
@@ -2714,35 +2722,29 @@ const PlanLoadingState = () => (
 
 // Sin plan asignado: misma interfaz, mensaje claro; wellness y 1RM siguen disponibles.
 // Si ya tiene entrenador, se le dice por su nombre (Andrés, 8 oct 2026, maqueta del inicio); si no, dónde ponerle el código.
+/* LO QUE VE QUIEN NO TIENE UN PLAN (12 oct 2026): casi todos los que entran solos vienen a correr, nadar o andar en bici y sacar su activity card. Para ellos Home es el botón «Entrenar»
+   (ver `features/libre`), «Tus entrenos» y, si compraron una biblioteca de clases, sus clases. Con entrenador y sin plan todavía se les dice que lo está armando. */
 const NoPlanState = ({ onAbrirHoja }) => {
   const { coach } = usePalabras();
-  const { bibliotecas } = usePlan();
+  const { bibliotecas, programas } = usePlan();
+  const { perfil, soloLectura, userId } = usePerfilDeLaVista();
   const nombre = (coach?.full_name || '').trim().split(' ')[0];
+  const conLibre = !soloLectura && !!userId;
   return (
-  <div style={{ padding: `${bibliotecas.length > 0 ? 84 : 48}px 20px 120px`, maxWidth: 560, margin: '0 auto', textAlign: 'center' }}>
-    {bibliotecas.length > 0 ? (
-      // Quien solo compró una biblioteca de clases no espera un plan: lo que tiene son sus clases.
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, textAlign: 'left', marginBottom: 8 }}>
+  <div style={{ padding: '84px 20px 120px', maxWidth: 560, margin: '0 auto' }}>
+    {bibliotecas.length > 0 && (
+      // Quien compró una biblioteca de clases no espera un plan: lo que tiene son sus clases.
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 18 }}>
         {bibliotecas.map((b) => <TarjetaDeBiblioteca key={b.id} biblioteca={b} onAbrir={() => onAbrirHoja(`biblioteca:${b.id}`)} />)}
       </div>
-    ) : (<>
-    <div style={{
-      width: 76, height: 76, borderRadius: 24, background: T.accentBg, color: T.accent,
-      display: 'grid', placeItems: 'center', margin: '0 auto 20px',
-    }}>
-      <Calendar size={34} />
-    </div>
-    <div style={{ fontSize: 21, fontWeight: 800, color: T.text, letterSpacing: -0.3 }}>
-      <Palabra>{nombre ? `${nombre} está armando tu plan` : 'Tu plan está en camino'}</Palabra>
-    </div>
-    <div style={{ fontSize: 14.5, color: T.text2, marginTop: 10, lineHeight: 1.6, maxWidth: 340, marginInline: 'auto' }}>
-      <Palabra>
-        {coach
-          ? 'En cuanto te lo asigne aparecerá aquí, con tus sesiones listas para entrenar.'
-          : 'Ponle el código de tu entrenador en Mi perfil → Mi equipo, y en cuanto te arme tu plan aparecerá aquí.'}
-      </Palabra>
-    </div>
-    </>)}
+    )}
+    {coach && bibliotecas.length === 0 && (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: T.bg2, borderRadius: 20, padding: 16, marginBottom: 18 }}>
+        <span style={{ width: 48, height: 48, borderRadius: 16, background: T.accentBg, color: T.accent, display: 'grid', placeItems: 'center', flexShrink: 0 }}><Calendar size={24} /></span>
+        <span style={{ fontSize: 16, fontWeight: 800, color: T.text, lineHeight: 1.3 }}><Palabra>{nombre ? `${nombre} está armando tu plan` : 'Tu plan está en camino'}</Palabra></span>
+      </div>
+    )}
+    {conLibre && <EntrenoLibre userId={userId} unidadPeso={perfil?.unidad_peso || 'kg'} />}
     <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 26, flexWrap: 'wrap' }}>
       <button type="button" onClick={() => onAbrirHoja('wellness')} className="kp-press"
         style={{
@@ -2763,7 +2765,23 @@ const NoPlanState = ({ onAbrirHoja }) => {
         </button>
       </Sin1RM>
     </div>
+    {!coach && programas.length === 0 && (
+      <div style={{ fontSize: 13.5, fontWeight: 600, color: T.text3, textAlign: 'center', marginTop: 22, lineHeight: 1.5 }}>
+        <Palabra>¿Tienes el código de un entrenador? Ponlo en Mi perfil → Mi equipo.</Palabra>
+      </div>
+    )}
   </div>
+  );
+};
+
+/* La pestaña «Entrenar» de quien no tiene plan: las opciones directo, sin pasar por la hoja (12 oct 2026). */
+const EntrenarSinPlan = () => {
+  const { perfil, soloLectura, userId } = usePerfilDeLaVista();
+  return (
+    <div style={{ padding: '84px 20px 120px', maxWidth: 560, margin: '0 auto' }}>
+      <div style={{ fontSize: 24, fontWeight: 800, color: T.text, letterSpacing: -0.4, marginBottom: 16 }}>Entrenar</div>
+      {!soloLectura && userId && <EntrenoLibre userId={userId} unidadPeso={perfil?.unidad_peso || 'kg'} enLinea />}
+    </div>
   );
 };
 
@@ -3018,7 +3036,9 @@ export default function TrainingApp() {
   let content;
   if (planLoading && (tab === 'home' || tab === 'plan')) {
     content = <PlanLoadingState />;
-  } else if (!hasPlan && !hayEquipo && (tab === 'home' || tab === 'plan')) {
+  } else if (!hasPlan && !hayEquipo && tab === 'plan') {
+    content = <EntrenarSinPlan />;
+  } else if (!hasPlan && !hayEquipo && tab === 'home') {
     content = <NoPlanState onAbrirHoja={setHoja} />;
   } else if (tab === 'home') {
     content = <HomeView sessionsData={sessionsData} wellness={wellness} reloj={reloj}
