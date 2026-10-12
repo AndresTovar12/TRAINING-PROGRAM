@@ -53,7 +53,7 @@ export async function programaParaVender(programaGuardadoId) {
 }
 
 const CAMPOS_EDITABLES = [
-  'programa_guardado_id', 'slug', 'titulo', 'descripcion', 'objetivo', 'nivel', 'deportes', 'edades', 'sexo', 'equipo', 'foto_url', 'tipo', 'precio_mxn',
+  'programa_guardado_id', 'slug', 'titulo', 'descripcion', 'objetivo', 'nivel', 'deportes', 'edades', 'sexo', 'equipo', 'foto_url', 'video_url', 'tipo', 'precio_mxn',
   'ventana_semanas', 'chat', 'tecnica',
 ];
 const solo = (obj) => Object.fromEntries(CAMPOS_EDITABLES.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));

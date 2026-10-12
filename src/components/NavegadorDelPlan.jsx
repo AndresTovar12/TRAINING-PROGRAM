@@ -84,6 +84,10 @@ export function TituloDelRenglon({ dias, color, peso = 700, minimo, extras }) {
  * editor que SÍ cambia el plan (`PlanBuilder`) tiene su propia guía, `GuiaDelEditor` (5 oct 2026):
  * aquí ya no hay «⋯», ni «Agregar semana / fase».
  *
+ * MODO «ELEGIR DÓNDE ENTRO» (`entrada`, 12 oct 2026): quien va a comprar un programa elige en qué semana empieza, tocando una ficha de semana (cualquiera, incluso a la mitad de una
+ * fase). `entrada` = { faseId, semana, alElegir(faseId, semana) }. La semana elegida se marca como siempre marca «donde vas» (borde azul y puntito), pero dice «EMPIEZAS AQUÍ», y el
+ * resto es igual: fases, semanas y los días de la semana que se mira, con el nombre de cada sesión. Se usa en la página pública de un plan, donde los días llegan SIN ejercicios.
+ *
  * LA FORMA DEL PLAN (`estructura`, ver `estructuraDelPlan`). En una rutina no
  * hay fase que nombrar. En "varias semanas" tampoco: sale UNA tarjeta con las
  * semanas contadas de corrido, aunque por dentro vengan de varias fases (al
@@ -91,15 +95,17 @@ export function TituloDelRenglon({ dias, color, peso = 700, minimo, extras }) {
  * `estructura`, se deduce de `kind` como antes.
  */
 export default function NavegadorDelPlan({
-  fases, kind, estructura: estructuraDada, aqui, viendo, hecha, alTocarDia, abrirEn, detalleDia,
-  contenidoDia, quien = 'tu', editor, pegadasDe, alTocarPegada,
+  fases, kind, estructura: estructuraDada, aqui: aquiDado, viendo, hecha, alTocarDia, abrirEn, detalleDia,
+  contenidoDia, quien = 'tu', editor, pegadasDe, alTocarPegada, entrada,
 }) {
   const estructura = estructuraDada ?? (kind === 'weekly' ? 'rutina' : 'fases');
   const deCorrido = estructura === 'semanas';
+  // Al elegir dónde entrar, la semana elegida hace de «donde vas» (sin día: ningún día se marca).
+  const aqui = entrada ? { faseId: entrada.faseId, semana: entrada.semana, dia: null } : aquiDado;
   /* `quien`: el atleta lee "AQUÍ VAS"; el coach, que mira el plan de otro,
      "AQUÍ VA". Misma marca, dicha a quien la lee. */
-  const textoAqui = quien === 'tu' ? 'AQUÍ VAS' : 'AQUÍ VA';
-  const textoIr = quien === 'tu' ? 'Ir a donde vas' : 'Ir a donde va';
+  const textoAqui = entrada ? 'EMPIEZAS AQUÍ' : (quien === 'tu' ? 'AQUÍ VAS' : 'AQUÍ VA');
+  const textoIr = entrada ? 'Ir a donde empiezas' : (quien === 'tu' ? 'Ir a donde vas' : 'Ir a donde va');
 
   /* MODO EDITOR DE SOLO LECTURA (`editor`). Es para navegar un programa AJENO: fases,
      semanas y los siete días funcionan igual, pero no se puede cambiar su forma.
@@ -262,8 +268,11 @@ export default function NavegadorDelPlan({
                       key={`${ff.id}-${w.num}`}
                       type="button"
                       disabled={cerrada}
-                      onClick={() => (fi === abierta ? elegirSemana(w.num) : abrirFase(fi, w.num))}
-                      aria-label={cerrada ? `Semana ${numero}, aún no disponible` : `Semana ${numero}${suya ? (quien === 'tu' ? ', donde vas' : ', donde va') : ''}`}
+                      onClick={() => {
+                        if (fi === abierta) elegirSemana(w.num); else abrirFase(fi, w.num);
+                        entrada?.alElegir(ff.id, w.num);
+                      }}
+                      aria-label={cerrada ? `Semana ${numero}, aún no disponible` : `Semana ${numero}${suya ? (entrada ? ', donde empiezas' : (quien === 'tu' ? ', donde vas' : ', donde va')) : ''}`}
                       style={{
                         position: 'relative', minWidth: 38, padding: '7px 0', borderRadius: 10, cursor: cerrada ? 'default' : 'pointer',
                         opacity: cerrada ? 0.55 : 1,
