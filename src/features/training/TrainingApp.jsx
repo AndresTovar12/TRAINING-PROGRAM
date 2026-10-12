@@ -38,7 +38,7 @@ import { FiltroDeAutor, EtiquetaDeAutor, TarjetaDeHoyDeTodos } from '@/features/
 import AvisoDeInvitacion from '@/features/training/AvisoDeInvitacion';
 import { HojaDeBiblioteca, TarjetaDeBiblioteca } from '@/features/training/BibliotecaDeClases';
 import EntrenoLibre from '@/features/libre/EntrenoLibre';
-import TarjetaDeExplorar from '@/features/explorar/TarjetaDeExplorar';
+import Widget from '@/features/libre/Widget';
 
 const Explorar = lazy(() => import('@/features/explorar/Explorar'));
 import {
@@ -2395,7 +2395,7 @@ const HomeView = ({
       {/* Entrenar por su cuenta (correr, bici, nadar…): el plan va arriba y esto abajo (Andrés, 12 oct 2026). Quien mira la app de otra persona no lo ve. */}
       {!soloLectura && atletaId && !demoActiva && (
         <div style={{ padding: '0 18px 28px' }}>
-          <EntrenoLibre userId={atletaId} unidadPeso={unidadPeso} />
+          <EntrenoLibre userId={atletaId} unidadPeso={unidadPeso} variante="compacta" />
         </div>
       )}
     </div>
@@ -2751,28 +2751,34 @@ const NoPlanState = ({ onAbrirHoja, alIrAExplorar }) => {
         <span style={{ fontSize: 16, fontWeight: 800, color: T.text, lineHeight: 1.3 }}><Palabra>{nombre ? `${nombre} está armando tu plan` : 'Tu plan está en camino'}</Palabra></span>
       </div>
     )}
-    {conLibre && <EntrenoLibre userId={userId} unidadPeso={perfil?.unidad_peso || 'kg'} conEmpujon={sinEntrenador} alIrAExplorar={alIrAExplorar} />}
-    {conLibre && sinEntrenador && alIrAExplorar && <div style={{ marginTop: 20 }}><TarjetaDeExplorar alTocar={alIrAExplorar} /></div>}
-    <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 26, flexWrap: 'wrap' }}>
-      <button type="button" onClick={() => onAbrirHoja('wellness')} className="kp-press"
-        style={{
-          padding: '12px 18px', borderRadius: 13, border: `1.5px solid ${T.border}`, cursor: 'pointer',
-          background: T.bg2, fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text,
-          display: 'inline-flex', alignItems: 'center', gap: 8,
-        }}>
-        <Heart size={16} color={T.accent} /> Registrar salud
-      </button>
-      <Sin1RM>
-        <button type="button" onClick={() => onAbrirHoja('oneRM')} className="kp-press"
+    {conLibre ? (
+      // Sin plan, Home son widgets (12 oct 2026): el cartel «Entrenar», Activity card, Explorar, Demo workout, Salud y 1RM, y «Tus entrenos».
+      <EntrenoLibre userId={userId} unidadPeso={perfil?.unidad_peso || 'kg'} conEmpujon={sinEntrenador} alIrAExplorar={alIrAExplorar}>
+        <Widget tono="coral" Icono={Heart} titulo="Salud" sub="Cómo te sientes hoy" alTocar={() => onAbrirHoja('wellness')} />
+        <Sin1RM><Widget tono="claro" Icono={Calculator} titulo="1RM" sub="Calcula tu máximo" alTocar={() => onAbrirHoja('oneRM')} /></Sin1RM>
+      </EntrenoLibre>
+    ) : (
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+        <button type="button" onClick={() => onAbrirHoja('wellness')} className="kp-press"
           style={{
             padding: '12px 18px', borderRadius: 13, border: `1.5px solid ${T.border}`, cursor: 'pointer',
             background: T.bg2, fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text,
             display: 'inline-flex', alignItems: 'center', gap: 8,
           }}>
-          <Calculator size={16} color={T.accent} /> Calcular 1RM
+          <Heart size={16} color={T.accent} /> Registrar salud
         </button>
-      </Sin1RM>
-    </div>
+        <Sin1RM>
+          <button type="button" onClick={() => onAbrirHoja('oneRM')} className="kp-press"
+            style={{
+              padding: '12px 18px', borderRadius: 13, border: `1.5px solid ${T.border}`, cursor: 'pointer',
+              background: T.bg2, fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text,
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+            }}>
+            <Calculator size={16} color={T.accent} /> Calcular 1RM
+          </button>
+        </Sin1RM>
+      </div>
+    )}
     {!coach && programas.length === 0 && (
       <div style={{ fontSize: 13.5, fontWeight: 600, color: T.text3, textAlign: 'center', marginTop: 22, lineHeight: 1.5 }}>
         <Palabra>¿Tienes el código de un entrenador? Ponlo en Mi perfil → Mi equipo.</Palabra>
