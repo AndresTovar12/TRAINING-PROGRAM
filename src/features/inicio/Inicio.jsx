@@ -358,9 +358,9 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
         {modo === 'google' && (
           <p style={{ ...subtitulo, margin: '14px 0 0' }}>Google nos dio tu nombre y tu correo. Falta lo que solo tú sabes.</p>
         )}
-        <h1 style={titulo(compu)}>¿Qué tipo de cuenta quieres?</h1>
+        <h1 style={titulo(compu)}>¿Qué vas a hacer?</h1>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
-          {t('atleta', 'Sigo un plan', 'Atleta, alumno, paciente o corredor: alguien me arma lo que hago.', User)}
+          {t('atleta', 'Entreno', 'Corro, nado, hago pesas o sigo el plan de un entrenador.', User)}
           {t('coach', 'Creo planes', 'Entrenador, coach, instructor, fisioterapeuta o preparador: yo armo lo que hacen otros.', Users)}
         </div>
         {Error}

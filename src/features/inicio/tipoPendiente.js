@@ -2,7 +2,7 @@
  * El tipo de cuenta que alguien ya contestó ANTES de irse a Google.
  *
  * «Continuar con Google» saca a la persona de la app (a Google, y de vuelta) y todo lo que había en pantalla se pierde. Si
- * ya había contestado «Sigo un plan» o «Creo planes», al volver no se le pregunta otra vez: se anota aquí, en esta pestaña
+ * ya había contestado «Entreno» o «Creo planes», al volver no se le pregunta otra vez: se anota aquí, en esta pestaña
  * (`sessionStorage`), con la hora, y vale 15 minutos. Pasado ese tiempo, o si nunca volvió, se ignora.
  *
  * Valores: 'coach' | 'atleta' (los mismos de `Inicio`).
