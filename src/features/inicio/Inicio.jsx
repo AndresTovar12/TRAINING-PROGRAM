@@ -176,6 +176,7 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
   const [repertorio, setRepertorio] = useState(null); // null = todavía no se decidió: se propone según lo que entrena
   const [textoCodigo, setTextoCodigo] = useState(modo === 'nuevo' ? '' : codigo);
   const [pro, setPro] = useState(null);   // a quién apunta el código escrito
+  const [conCodigo, setConCodigo] = useState(false); // «Tengo el código de mi entrenador»: pasa de las dos opciones al campo del código
   const [nac, setNac] = useState(profile?.fecha_nacimiento || '');
   const [coachNombre, setCoachNombre] = useState(null);
 
@@ -531,12 +532,30 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
         {Error}
       </>
     );
+  } else if (paso === 'codigo' && !conCodigo && !textoCodigo.trim()) {
+    // «¿Cómo quieres empezar?» (12 oct 2026): dos opciones IGUALES. Quien entrena por su cuenta (correr, nadar, sacar su activity card) no tiene por qué pasar por un código.
+    const o = (t, I, alTocar) => (
+      <button type="button" className="kp-press" onClick={alTocar} disabled={ocupado} style={opcion(false)}>
+        <span style={cuadroDeIcono()}><I size={22} /></span>
+        <span style={{ flex: 1 }}>{t}</span>
+      </button>
+    );
+    cuerpo = (
+      <>
+        <h1 style={titulo(compu)}>¿Cómo quieres empezar?</h1>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 22 }}>
+          {o('Tengo el código de mi entrenador', Users, () => setConCodigo(true))}
+          {o('Entreno por mi cuenta', User, () => guarda({}))}
+        </div>
+        {Error}
+      </>
+    );
   } else if (paso === 'codigo') {
     const resuelto = !!pro;
     cuerpo = (
       <>
-        <h1 style={titulo(compu)}>¿Tienes el código de tu entrenador?</h1>
-        <p style={subtitulo}>Te lo da él: un código, un link o un QR. Si no lo tienes, sigue y lo pones después.</p>
+        <h1 style={titulo(compu)}>El código de tu entrenador</h1>
+        <p style={subtitulo}>Te lo da él: un código, un link o un QR.</p>
         <Campo id="ini-codigo" label="Código o usuario" icono={Users} value={textoCodigo} onChange={(v) => setTextoCodigo(v.replace(/\s/g, ''))} extra={{ autoCapitalize: 'characters', autoCorrect: 'off', spellCheck: false }} />
         {resuelto && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 18, border: `1.5px solid ${KP.mint}`, background: KP.mintSoft }}>
@@ -559,7 +578,7 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
     pie = (
       <>
         {continuar(quedarConElCoach, resuelto ? `Quedar con ${(pro.full_name || pro.username).split(' ')[0]}` : 'Continuar', !resuelto)}
-        <button type="button" onClick={() => guarda({})} disabled={ocupado} style={enlace}>Todavía no</button>
+        <button type="button" onClick={() => { setConCodigo(false); setTextoCodigo(''); setPro(null); }} disabled={ocupado} style={enlace}>Atrás</button>
       </>
     );
   } else if (paso === 'sexo') {
