@@ -3,6 +3,7 @@ import { Play, Timer } from 'lucide-react';
 import HojaFlotante from '@/components/HojaFlotante';
 import { LT, FONT, NUM_STYLE } from '@/lib/theme';
 import { usePlan } from '@/contexts/PlanContext';
+import TarjetaDeExplorar from '@/features/explorar/TarjetaDeExplorar';
 import { relojDeCronometro } from '@/lib/entrenoLibre';
 import { nombreDelDeporte } from '@/lib/metricas/deportes';
 import HojaDeDemos from './HojaDeDemos';
@@ -21,12 +22,16 @@ import { botonGrande } from './estilosLibre';
    «Demo workout»: sale solo si hay workouts de demostración; al elegir uno se abre como el workout de hoy (`abreDemo`) y `alIrAHome` (si se da) lleva a Home, donde está su botón de empezar.
    Ver `lib/entrenoLibre.js`. */
 
-export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = false, alIrAHome = null }) {
+// El aviso de Explorar al cerrar la activity card sale una vez por visita (dura lo que la pestaña del navegador).
+const yaSeLeOfrecio = () => { try { return sessionStorage.getItem('tl:explorar-ofrecido') === '1'; } catch { return false; } };
+const marcaOfrecido = () => { try { sessionStorage.setItem('tl:explorar-ofrecido', '1'); } catch { /* sin almacenamiento: puede salir otra vez */ } };
+
+export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = false, alIrAHome = null, conEmpujon = false, alIrAExplorar = null }) {
   const crono = useCronometroLibre(userId);
   const { filas, recarga } = useEntrenosRecientes(userId);
   const { abreDemo } = usePlan();
   const demos = useDemos(userId);
-  const [hoja, setHoja] = useState(null); // null | 'elegir' | 'demos' | 'cronometro' | { resumen: fila }
+  const [hoja, setHoja] = useState(null); // null | 'elegir' | 'demos' | 'cronometro' | 'empujon' | { resumen: fila }
   const alDemo = demos?.length ? () => setHoja('demos') : null;
 
   const elige = (deporte) => { crono.inicia(deporte); setHoja('cronometro'); };
@@ -69,7 +74,21 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
           alGuardado={(fila) => { recarga(); setHoja({ resumen: fila }); }}
         />
       )}
-      {hoja?.resumen && <ResumenLibre fila={hoja.resumen} unidadPeso={unidadPeso} alCerrar={() => setHoja(null)} />}
+      {hoja?.resumen && (
+        <ResumenLibre
+          fila={hoja.resumen} unidadPeso={unidadPeso} alCerrar={() => setHoja(null)}
+          // Al cerrar la activity card, una sola vez por visita y solo a quien no tiene plan ni entrenador: «¿Quieres un plan hecho por un coach?».
+          alCerrarTarjeta={conEmpujon && alIrAExplorar && !yaSeLeOfrecio() ? () => { marcaOfrecido(); setHoja({ ...hoja, empujon: true }); } : undefined}
+        />
+      )}
+      {hoja?.resumen && hoja.empujon && (
+        <HojaFlotante titulo="Explorar" onCerrar={() => setHoja(null)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <TarjetaDeExplorar alTocar={() => { setHoja(null); alIrAExplorar(); }} />
+            <button type="button" onClick={() => setHoja(null)} className="kp-press" style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 800, color: LT.text2, padding: '10px 0' }}>Ahora no</button>
+          </div>
+        </HojaFlotante>
+      )}
     </>
   );
 }
