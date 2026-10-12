@@ -1,67 +1,31 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, CalendarDays, Check, Dumbbell, Loader2, MessageCircle, ShieldCheck, Video } from 'lucide-react';
+import { CalendarDays, Check, Loader2, Mail, MessageCircle, ShieldCheck, Video } from 'lucide-react';
 import { LT, FONT, NUM_STYLE } from '@/lib/theme';
 import { useAuth } from '@/contexts/AuthContext';
-import AuthScreen from '@/features/auth/AuthScreen';
+import AuthScreen, { Field } from '@/features/auth/AuthScreen';
+import HojaFlotante from '@/components/HojaFlotante';
 import { iniciaCompra, leePerfilPublico, leePlanPublico } from '@/lib/tiendaApi';
 import { oficioCorto } from '@/lib/theme';
 import { chipsDeParaQuien } from '@/lib/paraQuien';
 import { ligaExterna } from '@/lib/videos';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
+import { Aviso, Marco } from './PiezasDeTienda';
+import { botonAzul } from './estilosDeTienda';
+import CompraLista from './CompraLista';
+import { correoValido } from '@/lib/compraLista';
 import {
   entradaDeCorrido, primeraEntrada, resumenDeEntrada, semanaSugerida, semanasDeMeses, semanasHastaFecha, totalDeSemanas,
 } from '@/lib/entradaAlPlan';
 
 /* LA TIENDA PÚBLICA: la página de un coach y la de cada plan que vende (monetización, 11 oct 2026).
 
-   Se abre con un link (`/@usuario` y `/@usuario/plan`), sin cuenta: lo que sale es lo que el coach quiso enseñar (la ficha, los nombres de las fases y UNA semana de muestra; el plan,
-   jamás). Comprar pide cuenta de atleta y manda a la página de pago de Stripe; al volver, el plan ya está en su app. La compra vive en la web a propósito: dentro de la app de iPhone,
+   Se abre con un link (`/@usuario` y `/@usuario/plan`), sin cuenta: lo que sale es lo que el coach quiso enseñar (la ficha y la hoja del programa con los nombres de cada día; el plan,
+   jamás). Comprar NO pide cuenta: con sesión de atleta la compra es de su cuenta; sin sesión solo escribe su correo y paga, y la cuenta se le crea al confirmarse el pago (página «Listo»,
+   `CompraLista.jsx`). Al volver, el plan ya está en su app. La compra vive en la web a propósito: dentro de la app de iPhone,
    Apple obligaría a cobrar con su sistema y a repartir el dinero a mano. Mismo diseño claro de la app; en el teléfono primero, que es de donde llega el link de Instagram. */
 
 const pesos = (n) => `$${Number(n).toLocaleString('es-MX')}`;
 const TIPO = { membresia: 'al mes', pago_unico: 'pago único' };
-
-function Marco({ children, alVolver }) {
-  return (
-    <div style={{ minHeight: '100svh', background: LT.bg, fontFamily: FONT, color: LT.text }}>
-      <div style={{ maxWidth: 640, margin: '0 auto', padding: 'calc(14px + env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom))' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 40, marginBottom: 14 }}>
-          {alVolver && (
-            <button
-              type="button" onClick={alVolver} aria-label="Volver"
-              style={{ width: 40, height: 40, borderRadius: 13, border: 'none', background: LT.surface, color: LT.text, display: 'grid', placeItems: 'center', cursor: 'pointer', boxShadow: '0 1px 3px rgba(17,19,24,0.08)' }}
-            >
-              <ArrowLeft size={20} />
-            </button>
-          )}
-          <a href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none', color: LT.text, fontWeight: 800, fontSize: 15 }}>
-            <span style={{ width: 28, height: 28, borderRadius: 9, background: LT.blue, color: '#fff', display: 'grid', placeItems: 'center' }}><Dumbbell size={16} /></span>
-            Training Lab
-          </a>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-const Aviso = ({ titulo, texto, boton, alTocar }) => (
-  <Marco>
-    <div style={{ background: LT.surface, borderRadius: 20, padding: '36px 22px', textAlign: 'center', boxShadow: '0 1px 4px rgba(17,19,24,0.06)' }}>
-      <div style={{ fontSize: 20, fontWeight: 800 }}>{titulo}</div>
-      {texto && <div style={{ fontSize: 15, fontWeight: 600, color: LT.text2, lineHeight: 1.5, margin: '8px auto 0', maxWidth: 360 }}>{texto}</div>}
-      {boton && (
-        <button type="button" onClick={alTocar} style={{ ...botonAzul(false), marginTop: 20, width: 'auto', padding: '0 24px' }}>{boton}</button>
-      )}
-    </div>
-  </Marco>
-);
-
-const botonAzul = (apagado) => ({
-  width: '100%', minHeight: 54, borderRadius: 16, border: 'none', cursor: apagado ? 'default' : 'pointer', fontFamily: FONT, fontSize: 16.5, fontWeight: 800, color: '#fff',
-  background: `linear-gradient(135deg, ${LT.blue}, ${LT.blueDk})`, boxShadow: '0 6px 16px rgba(30,64,224,0.28)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9,
-  opacity: apagado ? 0.6 : 1, touchAction: 'manipulation',
-});
 
 const Avatar = ({ foto, nombre, tam = 56 }) => (
   <span style={{ width: tam, height: tam, borderRadius: tam * 0.34, overflow: 'hidden', background: LT.blueSoft, color: LT.blue, display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: tam * 0.38, flexShrink: 0 }}>
@@ -219,6 +183,9 @@ function PaginaDelPlan({ usuario, slug, alVolver }) {
   const [entrada, setEntrada] = useState(null); // { faseId, semana }: dónde empieza quien compra
   const [claveDeHoja, setClaveDeHoja] = useState(0); // al sugerir una semana, la hoja se vuelve a abrir en ella
   const [entrando, setEntrando] = useState(false);
+  const [avisoDeEntrada, setAvisoDeEntrada] = useState(null); // por qué se le pide entrar (por defecto, para comprar con su cuenta)
+  const [pideCorreo, setPideCorreo] = useState(false);        // la hoja donde quien no tiene cuenta escribe su correo
+  const [correo, setCorreo] = useState('');
   const [comprando, setComprando] = useState(false);
   const [error, setError] = useState(null);
 
@@ -231,7 +198,7 @@ function PaginaDelPlan({ usuario, slug, alVolver }) {
   }, [usuario, slug]);
 
   // Se entra a la cuenta en esta misma página y, al volver, la compra sigue donde iba.
-  if (entrando && !user) return <AuthScreen aviso="Entra o crea tu cuenta de atleta para comprar este plan." />;
+  if (entrando && !user) return <AuthScreen onVolver={() => { setEntrando(false); setAvisoDeEntrada(null); }} aviso={avisoDeEntrada ?? 'Entra a tu cuenta de atleta para comprar este plan.'} />;
   if (plan === undefined) return <Marco alVolver={alVolver}><div role="status" style={{ display: 'flex', justifyContent: 'center', padding: 48, color: LT.text2 }}><Loader2 size={22} className="spin" /></div></Marco>;
   if (plan === null) return <Aviso titulo="Este plan ya no está disponible" texto="Puede que su coach lo haya retirado." boton="Ver al coach" alTocar={alVolver} />;
 
@@ -242,17 +209,27 @@ function PaginaDelPlan({ usuario, slug, alVolver }) {
   const dias = diasPorSemana(hoja);
   const esCoach = profile?.role === 'admin';
   const sugiere = (n) => { setEntrada(entradaDeCorrido(hoja, n)); setClaveDeHoja((c) => c + 1); };
-  const compra = async () => {
-    if (!user) { setEntrando(true); return; }
-    if (esCoach) { setError('Para comprar necesitas una cuenta de atleta.'); return; }
+  // Con sesión, la compra es de su cuenta. Sin sesión se le pide solo su correo (`correoDeInvitado`) y la cuenta se le crea al confirmarse el pago.
+  const empieza = async (correoDeInvitado = null) => {
     setComprando(true);
     setError(null);
     try {
-      window.location.assign(await iniciaCompra({ usuario, slug, faseDeEntrada: entrada?.faseId ?? null, semanaDeEntrada: entrada?.semana ?? null }));
+      window.location.assign(await iniciaCompra({ usuario, slug, faseDeEntrada: entrada?.faseId ?? null, semanaDeEntrada: entrada?.semana ?? null, correo: correoDeInvitado }));
     } catch (e) {
-      setError(e?.message ?? 'No se pudo empezar la compra.');
+      if (e?.codigo === 'tiene_cuenta') { setPideCorreo(false); setAvisoDeEntrada(e.message); setEntrando(true); } // ese correo ya tiene cuenta: que entre y la compra queda en ella
+      else setError(e?.message ?? 'No se pudo empezar la compra.');
       setComprando(false);
     }
+  };
+  const compra = () => {
+    if (esCoach) { setError('Para comprar necesitas una cuenta de atleta.'); return; }
+    if (!user) { setError(null); setPideCorreo(true); return; }
+    empieza();
+  };
+  const enviaCorreo = (e) => {
+    e.preventDefault();
+    if (!correoValido(correo)) { setError('Escribe un correo válido.'); return; }
+    empieza(correo.trim());
   };
 
   return (
@@ -316,7 +293,7 @@ function PaginaDelPlan({ usuario, slug, alVolver }) {
         }}
       >
         <div style={{ maxWidth: 640, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {error && <div role="alert" style={{ padding: '9px 12px', borderRadius: 12, background: '#FDECEC', color: LT.danger, fontSize: 14, fontWeight: 700 }}>{error}</div>}
+          {error && !pideCorreo && <div role="alert" style={{ padding: '9px 12px', borderRadius: 12, background: '#FDECEC', color: LT.danger, fontSize: 14, fontWeight: 700 }}>{error}</div>}
           {plan.ventas === false ? (
             // Mientras Stripe no esté conectado (o este coach no tenga su cuenta de cobro lista) se puede ver y compartir, pero no comprar.
             <button type="button" disabled style={botonAzul(true)}>Pronto podrás comprarlo · {pesos(plan.precio)} {TIPO[plan.tipo] ?? ''}</button>
@@ -328,16 +305,32 @@ function PaginaDelPlan({ usuario, slug, alVolver }) {
           )}
         </div>
       </div>
+
+      {pideCorreo && !user && (
+        <HojaFlotante titulo="Comprar" subtitulo={`${plan.titulo} · ${pesos(plan.precio)} ${TIPO[plan.tipo] ?? ''}`} onCerrar={() => { setPideCorreo(false); setError(null); }} ancho={460}>
+          <form onSubmit={enviaCorreo} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 6 }}>
+            <Field icon={Mail} label="Tu correo" type="email" inputMode="email" autoComplete="email" autoFocus placeholder="tu@correo.com" value={correo} onChange={(e) => { setCorreo(e.target.value); setError(null); }} />
+            <div style={{ fontSize: 14, fontWeight: 600, color: LT.text2, lineHeight: 1.45 }}>Con este correo entras a tu plan. Tu cuenta se crea al pagar.</div>
+            {error && <div role="alert" style={{ padding: '9px 12px', borderRadius: 12, background: '#FDECEC', color: LT.danger, fontSize: 14, fontWeight: 700 }}>{error}</div>}
+            <button type="submit" disabled={comprando} style={botonAzul(comprando)}>
+              {comprando ? <Loader2 size={20} className="spin" /> : null}
+              Continuar al pago
+            </button>
+            <button type="button" onClick={() => { setPideCorreo(false); setEntrando(true); }} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 700, color: LT.blue, padding: '8px 4px' }}>
+              ¿Ya tienes cuenta? Entrar
+            </button>
+          </form>
+        </HojaFlotante>
+      )}
     </Marco>
   );
 }
 
 /* ------------------------------ Al volver del pago ------------------------------ */
 
-function AlVolver({ tipo }) {
-  const abre = () => { window.location.assign('/'); };
-  if (tipo === 'cancelada') return <Aviso titulo="No se hizo ningún cobro" texto="Cancelaste el pago. Cuando quieras, vuelve a intentarlo desde la página del plan." boton="Ir a mi app" alTocar={abre} />;
-  return <Aviso titulo="Listo, ya es tuyo" texto="Tu plan ya está en tu app. Si no lo ves de inmediato, espera unos segundos y vuelve a abrirla." boton="Abrir mi app" alTocar={abre} />;
+// «Cancelar» en la página de pago regresa a la página del plan; esta pantalla solo la usan las ligas viejas de `/compra/cancelada`.
+function Cancelada() {
+  return <Aviso titulo="No se hizo ningún cobro" texto="Cancelaste el pago. Cuando quieras, vuelve a intentarlo desde la página del plan." boton="Ir a Training Lab" alTocar={() => { window.location.assign('/'); }} />;
 }
 
 /* ------------------------------ La ruta ------------------------------ */
@@ -365,6 +358,7 @@ export default function TiendaPublica({ ruta }) {
     return () => window.removeEventListener('popstate', alRetroceder);
   }, []);
 
-  if (ruta.tipo === 'lista' || ruta.tipo === 'cancelada') return <AlVolver tipo={ruta.tipo} />;
+  if (ruta.tipo === 'lista') return <CompraLista />;
+  if (ruta.tipo === 'cancelada') return <Cancelada />;
   return slug ? <PaginaDelPlan usuario={ruta.usuario} slug={slug} alVolver={vuelve} /> : <PaginaDelCoach usuario={ruta.usuario} alElegir={abrePlan} />;
 }
