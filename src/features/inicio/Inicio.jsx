@@ -20,7 +20,7 @@ import fotoFuerza from '@/assets/landing/fuerza.webp';
 import fotoPista from '@/assets/landing/pista.webp';
 import fotoYoga from '@/assets/landing/yoga.webp';
 import fotoAgilidad from '@/assets/landing/agilidad.webp';
-import { problemaDeContrasena } from '@/lib/contrasena';
+import { MIN_CONTRASENA, problemaDeContrasena } from '@/lib/contrasena';
 
 /**
  * El inicio: crear la cuenta y dejar la app armada, una pregunta por pantalla.
@@ -181,7 +181,11 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
   const [coachNombre, setCoachNombre] = useState(null);
 
   // Al cambiar de pantalla, arriba. En la compu el marco tiene su propio scroll; en el teléfono es la página.
-  useEffect(() => { window.scrollTo(0, 0); setError(''); }, [i]);
+  const conservaError = useRef(false); // al regresar a corregir el usuario o la contraseña, el mensaje viaja con la persona
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    if (conservaError.current) conservaError.current = false; else setError('');
+  }, [i]);
 
   // ¿A quién apunta el código? Se busca mientras se escribe, con una pausa para no preguntar letra por letra.
   useEffect(() => {
@@ -235,7 +239,15 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
       coachUsername: tipo === 'atleta' ? codigo : '',
       inicioPaso: 'nombre',
     });
-    if (e) { setError(e.message); setOcupado(false); return; }
+    if (e) {
+      // Un usuario ocupado o una contraseña que el servidor no acepta se corrigen en el paso del usuario, no aquí (donde la persona ya no ve esos campos).
+      const m = String(e.message || '');
+      const alPasoDeLaCuenta = pasos.indexOf('cuenta');
+      if (/usuario|contraseña|password/i.test(m) && !/correo|email/i.test(m) && alPasoDeLaCuenta >= 0) { conservaError.current = true; setI(alPasoDeLaCuenta); }
+      setError(m);
+      setOcupado(false);
+      return;
+    }
     // La sesión nueva vuelve a dibujar la app; esta pantalla se va sola. El código de equipo ya se usó.
     onCodigoUsado?.();
   }
@@ -373,6 +385,22 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
     }
   } else if (paso === 'cuenta') {
     const valido = USERNAME_RE.test(usuario.trim()) && !problemaDeContrasena(clave, { usuario: usuario.trim() });
+    /* Lo que falta, dicho EN VIVO (12 oct 2026, «está difícil crear contraseñas»): antes el botón se apagaba y no decía por qué. Mientras solo falta largo se dice cuánto falta
+       (sin regañar); si es otra cosa (muy común, lleva tu usuario…) se dice qué; y cuando ya sirve, un «Lista». */
+    const u = usuario.trim();
+    const avisoDeUsuario = !u ? null
+      : u.length < 3 ? { texto: `Faltan ${3 - u.length} ${3 - u.length === 1 ? 'carácter' : 'caracteres'} en el usuario.`, tono: 'espera' }
+      : !USERNAME_RE.test(u) ? { texto: 'El usuario solo lleva letras, números, _ o . (sin espacios ni acentos).', tono: 'mal' }
+      : null;
+    const faltan = MIN_CONTRASENA - clave.length;
+    const problemaClave = clave ? problemaDeContrasena(clave, { usuario: u }) : null;
+    const avisoDeClave = !clave ? null
+      : faltan > 0 ? { texto: `Faltan ${faltan} ${faltan === 1 ? 'carácter' : 'caracteres'}.`, tono: 'espera' }
+      : problemaClave ? { texto: problemaClave, tono: 'mal' }
+      : { texto: 'Contraseña lista.', tono: 'bien' };
+    const pintaAviso = (a) => (a ? (
+      <p role="status" style={{ margin: '-8px 2px 14px', fontSize: 13.5, fontWeight: 700, lineHeight: 1.4, color: a.tono === 'bien' ? KP.mint : a.tono === 'mal' ? KP.danger : KP.ink2 }}>{a.texto}</p>
+    ) : null);
     const sigue = () => {
       if (!USERNAME_RE.test(usuario.trim())) { setError('El usuario lleva de 3 a 30 letras, números, _ o .'); return; }
       const problema = problemaDeContrasena(clave, { usuario: usuario.trim() });
@@ -383,8 +411,10 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
       <>
         <h1 style={titulo(compu)}>Tu usuario y contraseña</h1>
         <p style={subtitulo}>Con esto entras. Lo demás lo guardamos paso a paso.</p>
-        <Campo id="ini-usuario" label="Usuario" icono={AtSign} value={usuario} onChange={(v) => setUsuario(v.replace(/\s/g, ''))} extra={{ autoCapitalize: 'none', autoCorrect: 'off', autoComplete: 'username', spellCheck: false }} />
-        <Campo id="ini-clave" label="Contraseña" icono={Lock} tipo="password" ojo value={clave} onChange={setClave} extra={{ autoComplete: 'new-password' }} />
+        <Campo id="ini-usuario" label="Usuario" icono={AtSign} value={usuario} onChange={(v) => setUsuario(v.replace(/\s/g, ''))} extra={{ placeholder: 'tu_usuario', autoCapitalize: 'none', autoCorrect: 'off', autoComplete: 'username', spellCheck: false }} />
+        {pintaAviso(avisoDeUsuario)}
+        <Campo id="ini-clave" label="Contraseña" icono={Lock} tipo="password" ojo value={clave} onChange={setClave} extra={{ placeholder: `Mínimo ${MIN_CONTRASENA} caracteres`, autoComplete: 'new-password' }} />
+        {pintaAviso(avisoDeClave)}
         {Error}
       </>
     );
