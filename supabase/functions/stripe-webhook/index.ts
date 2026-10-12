@@ -6,6 +6,7 @@
  *
  * Qué hace con cada aviso (ver docs/superpowers/specs/2026-10-10-monetizacion-design.md, secciones 3 y 8):
  *   checkout.session.completed → la compra pasa a «activa» (arranca ese día y la base crea el vínculo con el coach) y, si fue pago único, se anota el cobro.
+ *                                Si quien compró NO tenía cuenta (compró con solo su correo), AQUÍ se le crea, ya con el pago confirmado, y la compra queda a su nombre.
  *   invoice.paid               → cada cobro mensual: se anota en `pagos`, se reparte (el coach recibe lo suyo) y se alarga el periodo; también activa una compra que aún estuviera «pendiente».
  *   invoice.payment_failed     → «gracia» por 3 días.
  *   customer.subscription.updated / deleted → marca que canceló / la compra pasa a «vencida».
@@ -45,10 +46,54 @@ async function buscaCompra({ compraId, suscripcion }: { compraId?: string | null
   return null
 }
 
+const contrasenaAlAzar = () => Array.from(crypto.getRandomValues(new Uint8Array(24)), (b) => b.toString(16).padStart(2, '0')).join('')
+
+/**
+ * La cuenta de quien compró sin tener una: la que ya tenga ese correo o, si no hay, una nueva. Solo se llama con el pago confirmado, nunca antes (nadie crea cuentas ajenas escribiendo un correo).
+ * La cuenta nueva nace con una contraseña al azar que nadie conoce; quien pagó pone la suya en la página «Listo» (función `compra-lista`). Nace con el perfil armado y le falta el
+ * inicio de siempre (sexo, unidad, nacimiento), que la app le hace al abrir. Devuelve `nueva: true` solo si la creó esta llamada.
+ */
+async function aseguraCuenta(c: Obj, nombre: string | null): Promise<{ id: string; nueva: boolean }> {
+  const correo = String(c.correo_comprador ?? '').trim().toLowerCase()
+  if (!correo) throw new Error(`La compra ${c.id} no tiene atleta ni correo.`)
+  const buscar = async () => {
+    const { data } = await bd.rpc('usuario_por_correo', { p_correo: correo })
+    return Array.isArray(data) ? data[0] : data
+  }
+  const revisa = (u: Obj) => {
+    if (u.role !== 'user' || u.is_active === false) throw new Error(`El correo de la compra ${c.id} es de una cuenta que no puede comprar como atleta.`)
+    return { id: u.id as string, nueva: false }
+  }
+  const ya = await buscar()
+  if (ya) return revisa(ya)
+  const nombreLimpio = (nombre ?? '').trim().slice(0, 80)
+  const { data, error } = await bd.auth.admin.createUser({
+    email: correo, password: contrasenaAlAzar(), email_confirm: true, user_metadata: { full_name: nombreLimpio, role: 'user' },
+  })
+  if (error || !data?.user) {
+    // Otro aviso del mismo pago pudo crearla un instante antes: se toma la que quedó.
+    const otra = await buscar()
+    if (otra) return revisa(otra)
+    throw error ?? new Error('No se pudo crear la cuenta del comprador.')
+  }
+  const { error: errPerfil } = await bd.from('profiles').update({
+    role: 'user', is_owner: false, perfil_completo: true, inicio_paso: nombreLimpio ? 'sexo' : 'nombre',
+  }).eq('id', data.user.id)
+  if (errPerfil) throw errPerfil
+  return { id: data.user.id, nueva: true }
+}
+
 /** La compra queda activa. El vínculo con el coach (la fila de `equipo` con origen «compra») lo crea la base sola: disparador `compras_vinculo`, ver docs/sql/2026-10-11-monetizacion.sql. */
-async function activa(c: Obj, cambios: Obj = {}) {
+async function activa(c: Obj, cambios: Obj = {}, nombreDelComprador: string | null = null) {
+  const cuenta: Obj = {}
+  if (!c.atleta_id) {
+    const a = await aseguraCuenta(c, nombreDelComprador)
+    cuenta.atleta_id = a.id
+    if (a.nueva) cuenta.cuenta_nueva = true // solo se escribe cuando es verdad: otro aviso del mismo pago no debe borrarlo
+    c.atleta_id = a.id
+  }
   const { error } = await bd.from('compras').update({
-    estado: c.estado === 'reembolsada' ? c.estado : 'activa', inicio: c.inicio ?? hoy(), gracia_hasta: null, actualizada_en: ahora().toISOString(), ...cambios,
+    estado: c.estado === 'reembolsada' ? c.estado : 'activa', inicio: c.inicio ?? hoy(), gracia_hasta: null, actualizada_en: ahora().toISOString(), ...cuenta, ...cambios,
   }).eq('id', c.id)
   if (error) throw error
 }
@@ -107,7 +152,7 @@ async function atiende(evento: Obj) {
         const s = await llamaStripe(clave(), 'GET', `/v1/subscriptions/${suscripcion}`)
         periodoHasta = aFecha(finDePeriodoDeSuscripcion(s))
       }
-      await activa(c, { stripe_customer_id: idDe(o.customer) ?? c.stripe_customer_id, stripe_subscription_id: suscripcion, stripe_payment_intent_id: idDe(o.payment_intent), periodo_hasta: periodoHasta })
+      await activa(c, { stripe_customer_id: idDe(o.customer) ?? c.stripe_customer_id, stripe_subscription_id: suscripcion, stripe_payment_intent_id: idDe(o.payment_intent), periodo_hasta: periodoHasta }, o.customer_details?.name ?? null)
       // Pago único: el cobro se anota aquí (en una membresía lo anota `invoice.paid`).
       if (!suscripcion && o.payment_intent && clave()) {
         const pi = await llamaStripe(clave(), 'GET', `/v1/payment_intents/${idDe(o.payment_intent)}`)
@@ -119,7 +164,7 @@ async function atiende(evento: Obj) {
       const suscripcion = suscripcionDeFactura(o)
       const c = await buscaCompra({ compraId: compraIdDeFactura(o), suscripcion })
       if (!c) return
-      await activa(c, { stripe_customer_id: idDe(o.customer) ?? c.stripe_customer_id, stripe_subscription_id: suscripcion ?? c.stripe_subscription_id, periodo_hasta: aFecha(finDePeriodoDeFactura(o)) })
+      await activa(c, { stripe_customer_id: idDe(o.customer) ?? c.stripe_customer_id, stripe_subscription_id: suscripcion ?? c.stripe_subscription_id, periodo_hasta: aFecha(finDePeriodoDeFactura(o)) }, o.customer_name ?? null)
       if ((o.amount_paid ?? 0) > 0) await registraPago(c, { bruto: o.amount_paid / 100, cobro: cobroDeFactura(o), factura: o.id })
       return
     }

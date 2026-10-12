@@ -431,7 +431,8 @@ export default function App() {
   /* Las páginas de venta (`/@usuario`, `/@usuario/plan`, y las dos de regreso del pago) las ve cualquiera, sin cuenta. Con cuenta a medio crear (le falta el inicio) se sigue el
      camino de siempre y, al terminarlo, la dirección sigue siendo la del plan: ahí se retoma la compra. */
   const tienda = rutaDeTienda(window.location.pathname);
-  if (tienda && (loading || !user || (profile && profile.perfil_completo !== false && !profile.inicio_paso))) {
+  // La de «Listo» (después de pagar) se ve SIEMPRE: quien compró sin cuenta la estrena ahí con su inicio pendiente, y ese inicio no debe taparle cómo abrir o instalar la app.
+  if (tienda && (tienda.tipo === 'lista' || loading || !user || (profile && profile.perfil_completo !== false && !profile.inicio_paso))) {
     return <Suspense fallback={<Splash />}><TiendaPublica ruta={tienda} /></Suspense>;
   }
 
