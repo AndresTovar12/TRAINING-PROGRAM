@@ -5,12 +5,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { botonBlanco, botonPrincipal } from '@/features/misplanes/estilos';
 import FichaDelPlanEnVenta from '@/features/vitrina/FichaDelPlanEnVenta';
-import { ligaPublica, listaMiVitrina, retiraPlan } from '@/lib/vitrinaApi';
+import { leeVentasAbiertas, ligaPublica, listaMiVitrina, retiraPlan } from '@/lib/vitrinaApi';
 
 /* MI VITRINA: los planes que un coach pone a la venta (nombre que decidió Andrés, 10 oct 2026; antes se llamaba «menú»).
 
    Cada plan es una tarjeta con su estado (Borrador, Publicado o Retirado), su precio, cuántos suscriptores tiene y su liga para compartir en Instagram o WhatsApp.
-   En la etapa 1 solo el dueño la tiene (la pestaña no sale a los demás y la base tampoco los deja). */
+   La tiene CUALQUIER profesional (Andrés, 12 oct 2026; antes era solo del dueño). Mientras Stripe no esté conectado, publicar funciona y el botón de comprar dice «Pronto»: una franja lo avisa. */
 
 const ESTADOS = {
   borrador: { texto: 'Borrador', fondo: KP.amberSoft, tinta: KP.amber },
@@ -65,6 +65,8 @@ export default function MiVitrina() {
   const [planes, setPlanes] = useState(null);
   const [error, setError] = useState(null);
   const [editando, setEditando] = useState(undefined); // undefined = cerrada · null = plan nuevo · fila = editar
+  const [ventas, setVentas] = useState(true); // ¿ya se puede cobrar? (hasta saberlo, no se asusta a nadie con el aviso)
+  useEffect(() => { leeVentasAbiertas().then(setVentas).catch(() => {}); }, []);
 
   const carga = useCallback(async () => {
     try { setPlanes(await listaMiVitrina()); setError(null); } catch (e) { setError(e?.message ?? 'No se pudo cargar tu vitrina.'); setPlanes((p) => p ?? []); }
@@ -86,6 +88,11 @@ export default function MiVitrina() {
         <button type="button" onClick={() => setEditando(null)} style={botonPrincipal(false)}><Plus size={17} /> Poner un plan en venta</button>
       </div>
       {error && <div role="alert" style={{ padding: '10px 14px', borderRadius: 12, background: KP.dangerSoft, color: KP.danger, fontSize: 14, fontWeight: 700 }}>{error}</div>}
+      {!ventas && (
+        <div role="status" style={{ padding: '10px 14px', borderRadius: 12, background: KP.amberSoft, color: KP.amber, fontSize: 14, fontWeight: 700, lineHeight: 1.4 }}>
+          Los cobros se abren pronto. Publica tus planes desde ya: el botón de comprar dirá «Pronto» hasta entonces.
+        </div>
+      )}
       {planes === null ? (
         <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 8, color: T.text2, fontWeight: 600, padding: 16 }}><Loader2 size={17} className="spin" /> Cargando…</div>
       ) : planes.length === 0 ? (
@@ -100,7 +107,7 @@ export default function MiVitrina() {
       )}
       {editando !== undefined && (
         <FichaDelPlanEnVenta
-          key={editando?.id ?? 'nuevo'} plan={editando} usuario={usuario}
+          key={editando?.id ?? 'nuevo'} plan={editando} slugsOcupados={planes?.filter((p) => p.id !== editando?.id).map((p) => p.slug) ?? []}
           alCerrar={(guardado) => { setEditando(undefined); if (guardado) carga(); }}
         />
       )}

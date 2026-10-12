@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import AuthScreen from '@/features/auth/AuthScreen';
 import { iniciaCompra, leePerfilPublico, leePlanPublico } from '@/lib/tiendaApi';
 import { oficioCorto } from '@/lib/theme';
+import { chipsDeParaQuien } from '@/lib/paraQuien';
 
 /* LA TIENDA PÚBLICA: la página de un coach y la de cada plan que vende (monetización, 11 oct 2026).
 
@@ -196,10 +197,10 @@ function PaginaDelPlan({ usuario, slug, alVolver }) {
         {plan.foto && <img src={plan.foto} alt="" style={{ width: '100%', maxHeight: 260, objectFit: 'cover', borderRadius: 20 }} />}
         <div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1.15, letterSpacing: -0.4, overflowWrap: 'anywhere' }}>{plan.titulo}</div>
         <CabezaDelCoach coach={plan.coach} />
-        {(plan.nivel || plan.objetivo || plan.deportes?.length > 0) && (
+        {(plan.nivel || chipsDeParaQuien(plan).length > 0) && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {plan.nivel && <Chip>{{ principiante: 'Principiante', intermedio: 'Intermedio', avanzado: 'Avanzado', todos: 'Todos los niveles' }[plan.nivel] ?? plan.nivel}</Chip>}
-            {plan.deportes?.map((d) => <Chip key={d}>{d}</Chip>)}
+            {chipsDeParaQuien(plan).map((c) => <Chip key={c}>{c}</Chip>)}
           </div>
         )}
         {plan.descripcion && <div style={{ fontSize: 15.5, fontWeight: 500, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{plan.descripcion}</div>}
@@ -262,10 +263,15 @@ function PaginaDelPlan({ usuario, slug, alVolver }) {
       >
         <div style={{ maxWidth: 640, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {error && <div role="alert" style={{ padding: '9px 12px', borderRadius: 12, background: '#FDECEC', color: LT.danger, fontSize: 14, fontWeight: 700 }}>{error}</div>}
-          <button type="button" onClick={compra} disabled={comprando || loading} style={botonAzul(comprando || loading)}>
-            {comprando ? <Loader2 size={20} className="spin" /> : <Check size={20} strokeWidth={3} />}
-            Comprar · {pesos(plan.precio)} {TIPO[plan.tipo] ?? ''}
-          </button>
+          {plan.ventas === false ? (
+            // Mientras Stripe no esté conectado (o este coach no tenga su cuenta de cobro lista) se puede ver y compartir, pero no comprar.
+            <button type="button" disabled style={botonAzul(true)}>Pronto podrás comprarlo · {pesos(plan.precio)} {TIPO[plan.tipo] ?? ''}</button>
+          ) : (
+            <button type="button" onClick={compra} disabled={comprando || loading} style={botonAzul(comprando || loading)}>
+              {comprando ? <Loader2 size={20} className="spin" /> : <Check size={20} strokeWidth={3} />}
+              Comprar · {pesos(plan.precio)} {TIPO[plan.tipo] ?? ''}
+            </button>
+          )}
         </div>
       </div>
     </Marco>

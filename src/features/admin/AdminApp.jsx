@@ -78,8 +78,9 @@ export default function AdminApp({ onAbrirPerfil }) {
        su «+ Crear» y su «Asignar» (Andrés, 2 oct 2026). Es de CADA quien, así que desaparece mientras el
        master mira como otro coach: no tiene caso enseñarle lo suyo en lugar de lo del coach. */
     ...(!viendoComo ? [{ id: 'misplanes', label: 'Mis planes', icon: FolderOpen }] : []),
-    /* Mi vitrina: los planes que se ponen a la venta (monetización, 11 oct 2026). En la etapa 1 solo la tiene el dueño: la base tampoco deja crear vitrina a nadie más. */
-    ...(isMaster && !viendoComo ? [{ id: 'vitrina', label: 'Mi vitrina', icon: Store }] : []),
+    /* Mi vitrina: los planes que se ponen a la venta (monetización). Es de CADA profesional (Andrés, 12 oct 2026; el 11 oct era solo del dueño), así que, como Mis planes,
+       desaparece mientras el master mira como otro coach. */
+    ...(!viendoComo ? [{ id: 'vitrina', label: 'Mi vitrina', icon: Store }] : []),
     /* La pestaña de coaches desaparece mientras el master mira como uno de
        ellos. Andrés, 18 sep 2026: "sigue apareciendo la columna de coaches, lo
        cual no es congruente porque eso solo le aparece al admin; no se
@@ -143,7 +144,7 @@ export default function AdminApp({ onAbrirPerfil }) {
       {tab === 'athletes' && <AthletesPanel viendoComo={viendoComo} onVerComoAtleta={entrarComoAtleta} onIrA={setTab} onAbrirPerfil={onAbrirPerfil} />}
       {tab === 'exercises' && <ExercisesPanel viendoComo={viendoComo} />}
       {tab === 'misplanes' && !viendoComo && <MisPlanesPanel />}
-      {tab === 'vitrina' && isMaster && !viendoComo && <MiVitrina />}
+      {tab === 'vitrina' && !viendoComo && <MiVitrina />}
       {tab === 'coaches' && isMaster && !viendoComo && <CoachesPanel onVerComo={entrarComo} />}
       {tab === 'ia' && isDesktop && !viendoComo && <ConectarIA />}
     </>

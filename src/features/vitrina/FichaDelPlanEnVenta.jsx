@@ -3,23 +3,21 @@ import { Check, Layers, Loader2 } from 'lucide-react';
 import { T, KP, FONT } from '@/lib/theme';
 import Ventana from '@/features/misplanes/Ventana';
 import SelectorDeMisPlanes from '@/features/misplanes/SelectorDeMisPlanes';
+import CampoDeFoto from '@/features/admin/CampoDeFoto';
 import { botonBlanco, botonPrincipal, campo, etiquetaChica } from '@/features/misplanes/estilos';
-import {
-  PRECIO_MINIMO, TIPOS_DE_VENTA, VENTANAS, guardaPlanEnVenta, ligaPublica, programaParaVender, publicaPlan, slugDe,
-} from '@/lib/vitrinaApi';
+import { PRECIO_MINIMO, TIPOS_DE_VENTA, VENTANAS, VENTANA_MAXIMA, guardaPlanEnVenta, programaParaVender, publicaPlan, slugUnico } from '@/lib/vitrinaApi';
+import { DEPORTES, EDADES, EQUIPOS, NIVELES, SEXOS, marcadosValidos } from '@/lib/paraQuien';
 
 /* LA FICHA DE UN PLAN EN VENTA: lo que el coach llena para venderlo.
 
-   Andrés, 10-11 oct 2026: la ficha dice qué es el plan, para quién, qué objetivo tiene y cuánto cuesta; el coach decide por dónde puede entrar quien lo compra, cuántas semanas
-   ve hacia adelante (el resto, borroso) y si lleva chat y técnica por video. El plan sale de uno de «Mis planes»; al publicar se guarda una COPIA: lo que siga editando en «Mis planes»
-   no toca lo vendido hasta que vuelva a publicar. Precio mínimo $500.
+   Andrés, 12 oct 2026 (rediseño aprobado): el nombre, la descripción y la foto salen del plan de «Mis planes» y se pueden cambiar; «Para quién es» ya no es un texto libre sino
+   opciones (deporte o disciplina, edades, sexo, equipo que necesita, nivel) más el objetivo; precio y cómo se cobra (mínimo $500); qué incluye (chat y técnica por video) y cuánto ve
+   el comprador hacia adelante (por defecto un mes completo; se puede bajar, nunca subir). Se fueron «por dónde se puede entrar» —ahora el comprador elige la semana en la hoja del programa— y
+   «tu liga», que se arma sola con el nombre del plan y no cambia después (ya anda en Instagram).
 
-   `plan`: la fila existente (o null si es nuevo). `usuario`: el nombre que va en la liga. `alCerrar(guardado?)`: se cerró; si trae el plan, se guardó o publicó. */
+   El plan sale de uno de «Mis planes»; al publicar se guarda una COPIA: lo que siga editando allá no toca lo vendido hasta que vuelva a publicar.
 
-const NIVELES = [
-  { id: '', nombre: 'Sin nivel' }, { id: 'principiante', nombre: 'Principiante' }, { id: 'intermedio', nombre: 'Intermedio' },
-  { id: 'avanzado', nombre: 'Avanzado' }, { id: 'todos', nombre: 'Todos los niveles' },
-];
+   `plan`: la fila existente (o null si es nuevo). `slugsOcupados`: las ligas que ya usan los otros planes de este coach. `alCerrar(guardado?)`: se cerró; si trae el plan, se guardó o publicó. */
 
 const Campo = ({ etiqueta, children }) => (
   <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -27,6 +25,37 @@ const Campo = ({ etiqueta, children }) => (
     {children}
   </label>
 );
+
+// Las opciones de una pregunta: una (`multiple` false) o varias. Cada una es un botón del tamaño de un dedo.
+function Opciones({ etiqueta, opciones, valor, alCambiar, multiple = false, nota }) {
+  const marcada = (id) => (multiple ? valor.includes(id) : valor === id);
+  const toca = (id) => {
+    if (!multiple) { alCambiar(id); return; }
+    alCambiar(valor.includes(id) ? valor.filter((x) => x !== id) : [...valor, id]);
+  };
+  return (
+    <div role={multiple ? 'group' : 'radiogroup'} aria-label={etiqueta} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span style={etiquetaChica}>{etiqueta}</span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+        {opciones.map((o) => {
+          const on = marcada(o.id);
+          return (
+            <button
+              key={o.id} type="button" role={multiple ? 'checkbox' : 'radio'} aria-checked={on} onClick={() => toca(o.id)}
+              style={{
+                minHeight: 40, padding: '0 13px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6,
+                border: `1.5px solid ${on ? T.accent : T.border}`, background: on ? T.accentBg : T.bg2, color: on ? T.accent : T.text2,
+              }}
+            >
+              {on && <Check size={14} strokeWidth={3.2} />}{o.nombre}
+            </button>
+          );
+        })}
+      </div>
+      {nota && <span style={{ fontSize: 12.5, fontWeight: 600, color: T.text3 }}>{nota}</span>}
+    </div>
+  );
+}
 
 const Interruptor = ({ activo, alCambiar, etiqueta }) => (
   <button
@@ -46,24 +75,27 @@ const Interruptor = ({ activo, alCambiar, etiqueta }) => (
   </button>
 );
 
-export default function FichaDelPlanEnVenta({ plan, usuario, alCerrar }) {
+const Titulo = ({ children }) => <div style={{ fontSize: 15, fontWeight: 800, color: T.text, marginTop: 4 }}>{children}</div>;
+
+export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar }) {
   const nuevo = !plan;
   const [f, setF] = useState(() => ({
     programa_guardado_id: plan?.programa_guardado_id ?? null,
     titulo: plan?.titulo ?? '',
-    slug: plan?.slug ?? '',
     descripcion: plan?.descripcion ?? '',
-    para_quien: plan?.para_quien ?? '',
+    foto_url: plan?.foto_url ?? '',
     objetivo: plan?.objetivo ?? '',
-    nivel: plan?.nivel ?? '',
+    nivel: plan?.nivel ?? 'todos',
+    deportes: Array.isArray(plan?.deportes) ? plan.deportes : [],
+    edades: Array.isArray(plan?.edades) ? plan.edades : [],
+    sexo: plan?.sexo ?? 'todos',
+    equipo: Array.isArray(plan?.equipo) ? plan.equipo : [],
     tipo: plan?.tipo === 'pago_unico' ? 'pago_unico' : 'membresia',
     precio_mxn: plan?.precio_mxn ?? '',
-    fases_de_entrada: Array.isArray(plan?.fases_de_entrada) ? plan.fases_de_entrada : [],
-    ventana_semanas: plan ? plan.ventana_semanas : 4,
+    ventana_semanas: Math.min(VENTANA_MAXIMA, plan?.ventana_semanas ?? VENTANA_MAXIMA),
     chat: !!plan?.chat,
     tecnica: !!plan?.tecnica,
   }));
-  const [ligaALaMano, setLigaALaMano] = useState(!!plan?.slug);
   const [programa, setPrograma] = useState(null);
   const [cargandoPrograma, setCargandoPrograma] = useState(!!plan?.programa_guardado_id);
   const [eligiendo, setEligiendo] = useState(false);
@@ -81,6 +113,7 @@ export default function FichaDelPlanEnVenta({ plan, usuario, alCerrar }) {
     return () => { vivo = false; };
   }, [plan?.programa_guardado_id]);
 
+  // Al escoger el plan, la ficha se llena con lo suyo: nombre, descripción y foto (solo lo que todavía está vacío: no se pisa lo que el coach ya escribió).
   const eligeUnPlan = async (item) => {
     setEligiendo(false);
     setError(null);
@@ -88,13 +121,13 @@ export default function FichaDelPlanEnVenta({ plan, usuario, alCerrar }) {
     try {
       const p = await programaParaVender(item.id);
       setPrograma(p);
-      pon({
+      setF((prev) => ({
+        ...prev,
         programa_guardado_id: item.id,
-        titulo: f.titulo || p?.nombre || item.nombre,
-        slug: ligaALaMano ? f.slug : slugDe(f.titulo || p?.nombre || item.nombre),
-        // Por defecto se entra por la primera fase.
-        fases_de_entrada: p?.fases?.length ? [p.fases[0].id] : [],
-      });
+        titulo: prev.titulo || p?.nombre || item.nombre,
+        descripcion: prev.descripcion || p?.descripcion || '',
+        foto_url: prev.foto_url || p?.foto || '',
+      }));
     } catch (e) {
       setError(e?.message ?? 'No se pudo abrir ese plan.');
     } finally {
@@ -108,12 +141,8 @@ export default function FichaDelPlanEnVenta({ plan, usuario, alCerrar }) {
     if (!f.programa_guardado_id) lista.push('Escoge el plan que vendes.');
     if (!f.titulo.trim()) lista.push('Ponle un nombre.');
     if (!Number.isFinite(precio) || precio < PRECIO_MINIMO) lista.push(`El precio mínimo es $${PRECIO_MINIMO}.`);
-    if (f.slug.length < 2) lista.push('Falta la liga.');
-    if (programa?.fases?.length && programa.kind !== 'weekly' && f.fases_de_entrada.length === 0) lista.push('Marca por dónde se puede entrar.');
     return lista;
-  }, [f, precio, programa]);
-
-  const alternaFase = (id) => pon({ fases_de_entrada: f.fases_de_entrada.includes(id) ? f.fases_de_entrada.filter((x) => x !== id) : [...f.fases_de_entrada, id] });
+  }, [f, precio]);
 
   const guarda = async (publicar) => {
     if (problemas.length) { setError(problemas[0]); return; }
@@ -123,13 +152,18 @@ export default function FichaDelPlanEnVenta({ plan, usuario, alCerrar }) {
       let guardado = await guardaPlanEnVenta({
         id: plan?.id ?? null,
         ...f,
+        // La liga se decide una sola vez, al crear el plan.
+        slug: plan?.slug ?? slugUnico(f.titulo, slugsOcupados),
         titulo: f.titulo.trim(),
         descripcion: f.descripcion.trim() || null,
-        para_quien: f.para_quien.trim() || null,
         objetivo: f.objetivo.trim() || null,
+        foto_url: f.foto_url || null,
         nivel: f.nivel || null,
+        deportes: marcadosValidos(DEPORTES, f.deportes),
+        edades: marcadosValidos(EDADES, f.edades),
+        equipo: marcadosValidos(EQUIPOS, f.equipo),
         precio_mxn: precio,
-        fases_de_entrada: f.fases_de_entrada,
+        ventana_semanas: Math.min(VENTANA_MAXIMA, Math.max(1, Number(f.ventana_semanas) || VENTANA_MAXIMA)),
       });
       if (publicar) {
         const version = await publicaPlan(guardado.id);
@@ -161,7 +195,7 @@ export default function FichaDelPlanEnVenta({ plan, usuario, alCerrar }) {
           </div>
         )}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           <Campo etiqueta="El plan">
             <button
               type="button" onClick={() => setEligiendo(true)}
@@ -176,86 +210,47 @@ export default function FichaDelPlanEnVenta({ plan, usuario, alCerrar }) {
           </Campo>
 
           <Campo etiqueta="Nombre">
-            <input
-              value={f.titulo} maxLength={120} placeholder="Por ejemplo: Velocidad para receptores" style={campo}
-              onChange={(e) => pon({ titulo: e.target.value, ...(ligaALaMano ? null : { slug: slugDe(e.target.value) }) })}
-            />
+            <input value={f.titulo} maxLength={120} placeholder="Por ejemplo: Velocidad para receptores" style={campo} onChange={(e) => pon({ titulo: e.target.value })} />
           </Campo>
           <Campo etiqueta="Descripción">
             <textarea value={f.descripcion} maxLength={4000} rows={4} placeholder="Qué incluye y cómo se entrena" style={{ ...campo, resize: 'vertical' }} onChange={(e) => pon({ descripcion: e.target.value })} />
           </Campo>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 14 }}>
-            <Campo etiqueta="Para quién"><input value={f.para_quien} maxLength={500} placeholder="Jugadores de fútbol americano" style={campo} onChange={(e) => pon({ para_quien: e.target.value })} /></Campo>
-            <Campo etiqueta="Objetivo"><input value={f.objetivo} maxLength={500} placeholder="Llegar fuerte a la temporada" style={campo} onChange={(e) => pon({ objetivo: e.target.value })} /></Campo>
-          </div>
-          <Campo etiqueta="Nivel">
-            <select value={f.nivel} style={campo} onChange={(e) => pon({ nivel: e.target.value })}>
-              {NIVELES.map((n) => <option key={n.id} value={n.id}>{n.nombre}</option>)}
-            </select>
+          <Campo etiqueta="Foto del plan">
+            <CampoDeFoto valor={f.foto_url} onCambia={(url) => pon({ foto_url: url })} />
           </Campo>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 14 }}>
-            <Campo etiqueta="Cómo se cobra">
-              <select value={f.tipo} style={campo} onChange={(e) => pon({ tipo: e.target.value })}>
-                {TIPOS_DE_VENTA.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-              </select>
-            </Campo>
-            <Campo etiqueta={f.tipo === 'pago_unico' ? 'Precio (pesos)' : 'Precio al mes (pesos)'}>
-              <input
-                value={f.precio_mxn} inputMode="numeric" placeholder={`${PRECIO_MINIMO} o más`} style={campo}
-                onChange={(e) => pon({ precio_mxn: e.target.value.replace(/\D/g, '') })}
-              />
-            </Campo>
-          </div>
+          <Titulo>Para quién es</Titulo>
+          <Opciones etiqueta="Deporte o disciplina" opciones={DEPORTES} valor={f.deportes} alCambiar={(v) => pon({ deportes: v })} multiple />
+          <Opciones etiqueta="Edades" opciones={EDADES} valor={f.edades} alCambiar={(v) => pon({ edades: v })} multiple nota="Sin marcar: todas las edades." />
+          <Opciones etiqueta="Sexo" opciones={SEXOS} valor={f.sexo} alCambiar={(v) => pon({ sexo: v })} />
+          <Opciones etiqueta="Equipo que necesita" opciones={EQUIPOS} valor={f.equipo} alCambiar={(v) => pon({ equipo: v })} multiple />
+          <Opciones etiqueta="Nivel" opciones={NIVELES} valor={f.nivel} alCambiar={(v) => pon({ nivel: v })} />
+          <Campo etiqueta="Objetivo">
+            <input value={f.objetivo} maxLength={500} placeholder="Llegar fuerte a la temporada" style={campo} onChange={(e) => pon({ objetivo: e.target.value })} />
+          </Campo>
 
-          {programa?.fases?.length > 0 && programa.kind !== 'weekly' && (
-            <Campo etiqueta="Por dónde se puede entrar">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {programa.fases.map((fase) => {
-                  const marcada = f.fases_de_entrada.includes(fase.id);
-                  return (
-                    <button
-                      key={fase.id} type="button" role="checkbox" aria-checked={marcada} onClick={() => alternaFase(fase.id)}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 10, minHeight: 42, padding: '0 12px', borderRadius: 11, cursor: 'pointer', textAlign: 'left', fontFamily: FONT,
-                        border: `1.5px solid ${marcada ? T.accent : T.border}`, background: marcada ? T.accentBg : T.bg2, fontSize: 14, fontWeight: 700, color: T.text,
-                      }}
-                    >
-                      <span style={{ width: 20, height: 20, borderRadius: 6, border: `2px solid ${marcada ? T.accent : T.borderHi}`, background: marcada ? T.accent : 'transparent', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-                        {marcada && <Check size={13} color="#fff" strokeWidth={3.5} />}
-                      </span>
-                      <span style={{ flex: 1, minWidth: 0 }}>{fase.nombre}</span>
-                      <span style={{ color: T.text3, fontSize: 12.5, fontWeight: 700 }}>{fase.semanas} sem</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </Campo>
-          )}
+          <Titulo>Cuánto cuesta</Titulo>
+          <Opciones etiqueta="Cómo se cobra" opciones={TIPOS_DE_VENTA} valor={f.tipo} alCambiar={(v) => pon({ tipo: v })} />
+          <Campo etiqueta={f.tipo === 'pago_unico' ? 'Precio (pesos)' : 'Precio al mes (pesos)'}>
+            <input
+              value={f.precio_mxn} inputMode="numeric" placeholder={`${PRECIO_MINIMO} o más`} style={campo}
+              onChange={(e) => pon({ precio_mxn: e.target.value.replace(/\D/g, '') })}
+            />
+          </Campo>
 
-          {programa?.kind !== 'weekly' && (
-            <Campo etiqueta="Cuánto ve el comprador hacia adelante">
-              <select
-                value={f.ventana_semanas == null ? 'todo' : String(f.ventana_semanas)} style={campo}
-                onChange={(e) => pon({ ventana_semanas: e.target.value === 'todo' ? null : Number(e.target.value) })}
-              >
-                {VENTANAS.map((v) => <option key={v.nombre} value={v.valor == null ? 'todo' : String(v.valor)}>{v.nombre}</option>)}
-              </select>
-            </Campo>
-          )}
-
+          <Titulo>Qué incluye</Titulo>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10 }}>
             <Interruptor activo={f.chat} alCambiar={(v) => pon({ chat: v })} etiqueta="Chat con el coach" />
             <Interruptor activo={f.tecnica} alCambiar={(v) => pon({ tecnica: v })} etiqueta="Técnica por video" />
           </div>
 
-          <Campo etiqueta="Tu liga">
-            <input
-              value={f.slug} maxLength={60} style={campo} placeholder="velocidad-para-receptores"
-              onChange={(e) => { setLigaALaMano(true); pon({ slug: slugDe(e.target.value) }); }}
+          {programa?.kind !== 'weekly' && (
+            <Opciones
+              etiqueta="Cuánto ve el comprador hacia adelante"
+              opciones={VENTANAS.map((v) => ({ id: v.valor, nombre: v.nombre }))} valor={f.ventana_semanas} alCambiar={(v) => pon({ ventana_semanas: v })}
+              nota="Lo demás lo ve borroso, con candado."
             />
-            <span style={{ fontSize: 13, fontWeight: 600, color: T.text2, overflowWrap: 'anywhere' }}>{ligaPublica(usuario || 'tu-usuario', f.slug || '…')}</span>
-          </Campo>
+          )}
         </div>
       </Ventana>
       {eligiendo && <SelectorDeMisPlanes tipos={['programa']} titulo="El plan que vendes" onElegir={eligeUnPlan} onCerrar={() => setEligiendo(false)} />}
