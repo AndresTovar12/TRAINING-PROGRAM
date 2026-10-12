@@ -8,17 +8,26 @@ export const PRECIO_MINIMO = 500;
 /* QUÉ SE VENDE (12 oct 2026): un programa, una rutina semanal, un workout o una clase de «Mis planes». Al publicar, todo se vuelve la misma forma de plan (ver
    docs/sql/2026-10-12-vender-rutinas-workouts-y-clases.sql). Un workout o una clase SUELTOS se venden solo a pago único y con un mínimo menor: con $500 una clase no se vendería.
    Supuesto de esa parte (Andrés puede cambiarlo): $100. Es este número y la base (`vitrina_precio_minimo`). */
-export const CONTENIDOS = ['programa', 'rutina', 'workout', 'clase'];
-export const ETIQUETA_DE_CONTENIDO = { programa: 'Programa', rutina: 'Rutina semanal', workout: 'Workout', clase: 'Clase' };
+export const CONTENIDOS = ['programa', 'rutina', 'workout', 'clase', 'biblioteca'];
+export const ETIQUETA_DE_CONTENIDO = { programa: 'Programa', rutina: 'Rutina semanal', workout: 'Workout', clase: 'Clase', biblioteca: 'Biblioteca de clases' };
 export const PRECIO_MINIMO_SUELTO = 100;
 /** Un workout o una clase: una sola cosa que se compra una vez (no una mensualidad). */
 export const esSuelto = (contenido) => contenido === 'workout' || contenido === 'clase';
-export const precioMinimoDe = (contenido) => (esSuelto(contenido) ? PRECIO_MINIMO_SUELTO : PRECIO_MINIMO);
-/** Lo suelto SIEMPRE es pago único; lo demás respeta lo que el coach eligió (membresía si no eligió nada). */
-export const tipoDeCobroDe = (contenido, tipo) => (esSuelto(contenido) || tipo === 'pago_unico' ? 'pago_unico' : 'membresia');
+/** «Todas mis clases»: una membresía mensual que da acceso a todas las clases de Mis planes del coach (también las que agregue después; ver `docs/sql/2026-10-12-biblioteca-de-clases.sql`). */
+export const esBiblioteca = (contenido) => contenido === 'biblioteca';
+export const precioMinimoDe = (contenido) => (esSuelto(contenido) || esBiblioteca(contenido) ? PRECIO_MINIMO_SUELTO : PRECIO_MINIMO);
+/** Lo suelto SIEMPRE es pago único y la biblioteca SIEMPRE membresía; lo demás respeta lo que el coach eligió (membresía si no eligió nada). */
+export const tipoDeCobroDe = (contenido, tipo) => {
+  if (esBiblioteca(contenido)) return 'membresia';
+  return esSuelto(contenido) || tipo === 'pago_unico' ? 'pago_unico' : 'membresia';
+};
 
 /** Lo que se vende, en pocas palabras para tarjetas y listas: «Clase · 45 min», «Workout», «Rutina semanal», «12 semanas». */
-export function textoDeContenido({ contenido = 'programa', semanas = 0, duracion_clase: duracion = null } = {}) {
+export function textoDeContenido({ contenido = 'programa', semanas = 0, duracion_clase: duracion = null, n_clases: nClases = null } = {}) {
+  if (contenido === 'biblioteca') {
+    const n = Number(nClases);
+    return Number.isFinite(n) && n > 0 ? `Biblioteca · ${n} ${n === 1 ? 'clase' : 'clases'}` : 'Biblioteca de clases';
+  }
   if (contenido === 'clase') return ['Clase', duracionTexto(duracion)].filter(Boolean).join(' · ');
   if (contenido === 'workout') return 'Workout';
   if (contenido === 'rutina') return 'Rutina semanal';

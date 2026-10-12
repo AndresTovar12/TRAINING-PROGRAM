@@ -7,7 +7,7 @@ import HojaFlotante from '@/components/HojaFlotante';
 import { iniciaCompra, leePerfilPublico, leePlanPublico } from '@/lib/tiendaApi';
 import { oficioCorto } from '@/lib/theme';
 import { chipsDeParaQuien } from '@/lib/paraQuien';
-import { esSuelto, textoDeContenido } from '@/lib/vitrinaDatos';
+import { esBiblioteca, esSuelto, textoDeContenido } from '@/lib/vitrinaDatos';
 import { duracionTexto } from '@/lib/clases';
 import { ligaExterna } from '@/lib/videos';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
@@ -207,6 +207,8 @@ function PaginaDelPlan({ usuario, slug, alVolver }) {
   const hoja = plan.hoja ?? [];
   const semanal = plan.kind === 'weekly';
   const suelto = esSuelto(plan.contenido); // un workout o una clase: no hay semanas ni hoja que enseñar, solo qué trae
+  const biblioteca = esBiblioteca(plan.contenido); // «todas mis clases»: se enseña cuántas y cuáles hay hoy (solo nombre y duración)
+  const clases = Array.isArray(plan.clases) ? plan.clases : [];
   const total = totalDeSemanas(hoja);
   const resumen = !semanal && entrada ? resumenDeEntrada(hoja, entrada.faseId, entrada.semana) : null;
   const dias = diasPorSemana(hoja);
@@ -264,7 +266,25 @@ function PaginaDelPlan({ usuario, slug, alVolver }) {
           </Bloque>
         )}
 
-        {!suelto && (plan.chat || plan.tecnica || total > 0) && (
+        {biblioteca && (
+          <Bloque titulo="Incluye">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 15, fontWeight: 700 }}><Video size={18} color={LT.blue} /> {clases.length === 1 ? 'Una clase en video' : `${clases.length} clases en video`}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 15, fontWeight: 700 }}><Check size={18} color={LT.blue} /> Las clases nuevas se suman solas</div>
+          </Bloque>
+        )}
+        {biblioteca && clases.length > 0 && (
+          <Bloque titulo="Las clases">
+            {clases.slice(0, 12).map((c, i) => (
+              <div key={`${c.nombre}-${i}`} style={{ display: 'flex', alignItems: 'baseline', gap: 10, fontSize: 15, fontWeight: 600 }}>
+                <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{c.nombre}</span>
+                {c.duracion ? <span style={{ color: LT.text2, fontWeight: 700, whiteSpace: 'nowrap', ...NUM_STYLE }}>{duracionTexto(c.duracion)}</span> : null}
+              </div>
+            ))}
+            {clases.length > 12 && <div style={{ fontSize: 14, fontWeight: 700, color: LT.text2 }}>y {clases.length - 12} más</div>}
+          </Bloque>
+        )}
+
+        {!suelto && !biblioteca && (plan.chat || plan.tecnica || total > 0) && (
           <Bloque titulo="Incluye">
             {total > 0 && !semanal && <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 15, fontWeight: 700 }}><CalendarDays size={18} color={LT.blue} /> {semanasTexto(total)} de entrenamiento{dias ? `, ${dias} ${dias === 1 ? 'día' : 'días'} por semana` : ''}</div>}
             {total > 0 && semanal && dias > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 15, fontWeight: 700 }}><CalendarDays size={18} color={LT.blue} /> Una rutina de {dias} {dias === 1 ? 'día' : 'días'} por semana que se repite</div>}
