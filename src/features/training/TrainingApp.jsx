@@ -5,7 +5,7 @@ import {
   Clock, Sparkles, Info, Dumbbell, Heart, Play, CalendarDays, ListChecks,
   Home as HomeIcon,
   Repeat, Eye, Layers, List, Scale, LineChart as LineChartIcon,
-  MessageCircle, Timer, HeartPulse, Moon, Upload, Activity, Share2,
+  MessageCircle, Timer, HeartPulse, Moon, Upload, Activity, Share2, Compass,
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useIsDesktop, useIsWide } from '@/lib/useViewport';
@@ -38,6 +38,9 @@ import { FiltroDeAutor, EtiquetaDeAutor, TarjetaDeHoyDeTodos } from '@/features/
 import AvisoDeInvitacion from '@/features/training/AvisoDeInvitacion';
 import { HojaDeBiblioteca, TarjetaDeBiblioteca } from '@/features/training/BibliotecaDeClases';
 import EntrenoLibre from '@/features/libre/EntrenoLibre';
+import TarjetaDeExplorar from '@/features/explorar/TarjetaDeExplorar';
+
+const Explorar = lazy(() => import('@/features/explorar/Explorar'));
 import {
   autorDe, autoresDe, entradasDeHoy, escribeRegistro, etiquetaDePrograma, nombreCorto, registrosDe,
   normalizaDia, resumenDeLaSemana, semanaUnificada,
@@ -83,7 +86,7 @@ import { useLugar, useScrollLugar } from '@/lib/useLugar';
    1RM y Ciencia ya no son pestañas: son tarjetas de Home que se abren como hoja encima (`hoja`). Los pacientes
    de un fisio no calculan 1RM: eso es de quien levanta pesas (Andrés, 29 sep 2026); sus datos de 1RM, si los
    hubiera, no se borran. */
-const PESTANAS = ['home', 'plan', 'messages'];
+const PESTANAS = ['home', 'plan', 'messages', 'explore'];
 
 // Texto fijo que cambia con el oficio de quien atiende (ver `lib/palabras.js`),
 // para los componentes que se escriben sin cuerpo y no tienen dónde llamar al hook.
@@ -2650,17 +2653,20 @@ const OneRMView = ({ oneRMs, ponRM, enHoja = false }) => {
  * perdidos en el centro, y el cursor no tiene el problema del pulgar. Ahi se
  * convierte en una barra flotante centrada, del ancho de su contenido.
  */
-const BottomNav = ({ active, onChange }) => {
+const BottomNav = ({ active, onChange, conMensajes = true, conExplorar = true }) => {
   const esCompu = useIsDesktop();
   const { salud } = usePalabras();
   const { sinLeer } = useMensajes();
   /* Tres botones (Andrés, 7 oct 2026). «Home» es lo que antes se llamaba «Hoy». «Entrenar» es lo que antes se
      llamaba «Plan»: abre la sesión de hoy (lo que tocaba ya lo decía la tarjeta azul de Home, y «Plan» sonaba a
      otra cosa); a un paciente de un fisio le dice «Sesión». Bienestar, 1RM y Ciencia viven dentro de Home. */
+  /* Y «Explorar» (12 oct 2026): los coaches con planes a la venta. «Mensajes» sale solo cuando hay con quién hablar (entrenador, equipo o un plan con chat): quien entra por su cuenta ve
+     Home · Entrenar · Explorar. */
   const items = [
     { id: 'home', label: 'Home', icon: HomeIcon },
     { id: 'plan', label: salud ? 'Sesión' : 'Entrenar', icon: Dumbbell },
-    { id: 'messages', label: 'Mensajes', icon: MessageCircle },
+    ...(conMensajes ? [{ id: 'messages', label: 'Mensajes', icon: MessageCircle }] : []),
+    ...(conExplorar ? [{ id: 'explore', label: 'Explorar', icon: Compass }] : []),
   ];
   return (
     <div style={{
@@ -2724,12 +2730,13 @@ const PlanLoadingState = () => (
 // Si ya tiene entrenador, se le dice por su nombre (Andrés, 8 oct 2026, maqueta del inicio); si no, dónde ponerle el código.
 /* LO QUE VE QUIEN NO TIENE UN PLAN (12 oct 2026): casi todos los que entran solos vienen a correr, nadar o andar en bici y sacar su activity card. Para ellos Home es el botón «Entrenar»
    (ver `features/libre`), «Tus entrenos» y, si compraron una biblioteca de clases, sus clases. Con entrenador y sin plan todavía se les dice que lo está armando. */
-const NoPlanState = ({ onAbrirHoja }) => {
+const NoPlanState = ({ onAbrirHoja, alIrAExplorar }) => {
   const { coach } = usePalabras();
   const { bibliotecas, programas } = usePlan();
   const { perfil, soloLectura, userId } = usePerfilDeLaVista();
   const nombre = (coach?.full_name || '').trim().split(' ')[0];
   const conLibre = !soloLectura && !!userId;
+  const sinEntrenador = !coach && programas.length === 0; // sin entrenador y sin ningún plan: a ellos se les empuja hacia Explorar
   return (
   <div style={{ padding: '84px 20px 120px', maxWidth: 560, margin: '0 auto' }}>
     {bibliotecas.length > 0 && (
@@ -2744,7 +2751,8 @@ const NoPlanState = ({ onAbrirHoja }) => {
         <span style={{ fontSize: 16, fontWeight: 800, color: T.text, lineHeight: 1.3 }}><Palabra>{nombre ? `${nombre} está armando tu plan` : 'Tu plan está en camino'}</Palabra></span>
       </div>
     )}
-    {conLibre && <EntrenoLibre userId={userId} unidadPeso={perfil?.unidad_peso || 'kg'} />}
+    {conLibre && <EntrenoLibre userId={userId} unidadPeso={perfil?.unidad_peso || 'kg'} conEmpujon={sinEntrenador} alIrAExplorar={alIrAExplorar} />}
+    {conLibre && sinEntrenador && alIrAExplorar && <div style={{ marginTop: 20 }}><TarjetaDeExplorar alTocar={alIrAExplorar} /></div>}
     <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 26, flexWrap: 'wrap' }}>
       <button type="button" onClick={() => onAbrirHoja('wellness')} className="kp-press"
         style={{
@@ -2775,12 +2783,13 @@ const NoPlanState = ({ onAbrirHoja }) => {
 };
 
 /* La pestaña «Entrenar» de quien no tiene plan: las opciones directo, sin pasar por la hoja (12 oct 2026). */
-const EntrenarSinPlan = ({ alIrAHome }) => {
+const EntrenarSinPlan = ({ alIrAHome, alIrAExplorar }) => {
+  const { coach } = usePalabras();
   const { perfil, soloLectura, userId } = usePerfilDeLaVista();
   return (
     <div style={{ padding: '84px 20px 120px', maxWidth: 560, margin: '0 auto' }}>
       <div style={{ fontSize: 24, fontWeight: 800, color: T.text, letterSpacing: -0.4, marginBottom: 16 }}>Entrenar</div>
-      {!soloLectura && userId && <EntrenoLibre userId={userId} unidadPeso={perfil?.unidad_peso || 'kg'} enLinea alIrAHome={alIrAHome} />}
+      {!soloLectura && userId && <EntrenoLibre userId={userId} unidadPeso={perfil?.unidad_peso || 'kg'} enLinea alIrAHome={alIrAHome} conEmpujon={!coach} alIrAExplorar={alIrAExplorar} />}
     </div>
   );
 };
@@ -2809,9 +2818,17 @@ export default function TrainingApp() {
   const { user } = useAuth();
   // De quién es esta app: de quien entró, o del atleta que su coach está viendo.
   // Cada uno tiene su propio lugar guardado (ver `lugar.js`).
-  const { userId: quien } = usePerfilDeLaVista();
+  const { userId: quien, soloLectura: miraAjeno } = usePerfilDeLaVista();
   const { salud } = usePalabras();
   const [tab, setTab] = useLugar(`app.${quien}.tab`, 'home', (t) => PESTANAS.includes(t));
+  const { profile: miPerfil } = useAuth();
+  const { filas: filasDeMensajes, cargando: cargandoMensajes } = useMensajes();
+  // «Mensajes» solo con quién hablar; «Explorar» no se enseña al coach que mira la app de un atleta.
+  const conMensajes = miraAjeno || filasDeMensajes.length > 0 || !!miPerfil?.coach_id || (cargandoMensajes && tab === 'messages');
+  const conExplorar = !miraAjeno;
+  useEffect(() => {
+    if ((tab === 'messages' && !conMensajes && !cargandoMensajes) || (tab === 'explore' && !conExplorar)) setTab('home');
+  }, [tab, conMensajes, conExplorar, cargandoMensajes, setTab]);
   // La hoja que está abierta encima de Home: 'wellness' | 'oneRM' | 'science' | null.
   const [hoja, setHoja] = useState(null);
   const [view, setView] = useState({ level: 'week' });
@@ -3037,9 +3054,9 @@ export default function TrainingApp() {
   if (planLoading && (tab === 'home' || tab === 'plan')) {
     content = <PlanLoadingState />;
   } else if (!hasPlan && !hayEquipo && tab === 'plan') {
-    content = <EntrenarSinPlan alIrAHome={() => vasA('home')} />;
+    content = <EntrenarSinPlan alIrAHome={() => vasA('home')} alIrAExplorar={() => vasA('explore')} />;
   } else if (!hasPlan && !hayEquipo && tab === 'home') {
-    content = <NoPlanState onAbrirHoja={setHoja} />;
+    content = <NoPlanState onAbrirHoja={setHoja} alIrAExplorar={() => vasA('explore')} />;
   } else if (tab === 'home') {
     content = <HomeView sessionsData={sessionsData} wellness={wellness} reloj={reloj}
       oneRMs={oneRMs} fechasRM={fechasRM}
@@ -3126,6 +3143,8 @@ export default function TrainingApp() {
     }
   } else if (tab === 'messages') {
     content = <MensajesDelAtleta />;
+  } else if (tab === 'explore') {
+    content = <Suspense fallback={null}><Explorar userId={user?.id} /></Suspense>;
   }
 
   return (
@@ -3140,7 +3159,7 @@ export default function TrainingApp() {
       <div style={esCompu ? { maxWidth: 980, margin: '0 auto', width: '100%' } : undefined}>
         {content}
       </div>
-      <BottomNav active={tab} onChange={vasA} />
+      <BottomNav active={tab} onChange={vasA} conMensajes={conMensajes} conExplorar={conExplorar} />
       {/* Bienestar, 1RM y Ciencia ya no son pestañas: se abren como hoja encima, con su flecha para volver. */}
       {/* Mientras se hace un demo workout, un aviso para salir de la demo (12 oct 2026): sin él, la app se vería como la de alguien con un solo workout y no habría cómo volver. */}
       {demoActiva && (
