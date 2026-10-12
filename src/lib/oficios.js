@@ -53,4 +53,4 @@ export const convieneRepertorioBase = (disciplinas = []) => (
   disciplinas.length === 0 || disciplinas.some((d) => LES_SIRVE_EL_REPERTORIO.has(d))
 );
 
-export { esInstructor } from '@/lib/palabras';
+export { esInstructor } from './palabras.js';
