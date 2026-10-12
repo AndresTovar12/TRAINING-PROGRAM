@@ -17,7 +17,7 @@ import { Boton } from '@/features/metricas/Piezas';
 
    `sellos`: de `lib/sello/datos.js`. `Icono`: el componente del ícono del tipo de sesión (para el sello sin ruta). */
 
-const ARCHIVO = { nada: 'tlab-sello.png', foto: 'tlab-sello-foto.png' };
+const ARCHIVO = { nada: 'tlab-activity-card.png', foto: 'tlab-activity-card-foto.png' };
 const DAMERO = 'repeating-conic-gradient(#232948 0% 25%, #171B30 0% 50%) 50% / 22px 22px';
 
 const puedeCompartir = () => {
@@ -52,7 +52,7 @@ function Miniatura({ sello, icono, activa, alElegir }) {
   }, [sello, icono]);
   return (
     <button
-      type="button" onClick={alElegir} aria-pressed={activa} aria-label={`Sello de ${sello.titulo.toLowerCase()}`} className="kp-press"
+      type="button" onClick={alElegir} aria-pressed={activa} aria-label={`Activity card de ${sello.titulo.toLowerCase()}`} className="kp-press"
       style={{
         flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '10px 8px 12px', borderRadius: 18, cursor: 'pointer', fontFamily: FONT,
         border: `2px solid ${activa ? LT.blue : LT.border}`, background: LT.surface, touchAction: 'manipulation',
@@ -223,7 +223,7 @@ export default function EditorDelSello({ sellos, Icono }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'stretch' }}>
       {sellos.length > 1 && (
-        <div role="group" aria-label="Elige tu sello" style={{ display: 'flex', gap: 10 }}>
+        <div role="group" aria-label="Elige tu activity card" style={{ display: 'flex', gap: 10 }}>
           {sellos.map((s, i) => <Miniatura key={s.id} sello={s} icono={icono || null} activa={i === indice} alElegir={() => setIndice(i)} />)}
         </div>
       )}
@@ -233,7 +233,7 @@ export default function EditorDelSello({ sellos, Icono }) {
         style={{ position: 'relative', width: 'min(100%, 300px, calc(56vh * 9 / 16))', aspectRatio: '9 / 16', margin: '0 auto', borderRadius: 22, overflow: 'hidden', background: DAMERO, boxShadow: KP.shCard }}
       >
         <canvas
-          ref={lienzo} role="img" aria-label="Vista previa del sello"
+          ref={lienzo} role="img" aria-label="Vista previa de la activity card"
           onPointerDown={alBajar} onPointerMove={alMover} onPointerUp={alSoltar} onPointerCancel={alSoltar}
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', touchAction: 'none', cursor: 'grab' }}
         />

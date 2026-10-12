@@ -921,7 +921,7 @@ const BotonDelSello = ({ onSello, alto = 50 }) => (
       border: `1.5px solid ${LT.blue}`, background: LT.surface, color: LT.blue, fontFamily: FONT, fontSize: 13.5, fontWeight: 800, touchAction: 'manipulation',
     }}
   >
-    <Share2 size={16} /> Sello
+    <Share2 size={16} /> Activity card
   </button>
 );
 
@@ -2051,7 +2051,7 @@ const HomeView = ({
   const esAncha = useIsWide();
   const { t, coach, salud } = usePalabras();
   const tope = esCompu ? { maxWidth: 260 } : null;
-  const { phases: PLAN, planMeta, kind, estructura, programas, bibliotecas } = usePlan();
+  const { phases: PLAN, planMeta, kind, estructura, programas, bibliotecas, demoActiva } = usePlan();
   // "Varias semanas": las tarjetas dicen la semana de corrido, no la fase.
   const deCorrido = estructura === 'semanas';
   const semanaDe = (n) => `Semana ${semanaGlobal(PLAN, n.phase.id, n.week.num) ?? n.week.num} de ${semanasDelPlan(PLAN)}`;
@@ -2390,7 +2390,7 @@ const HomeView = ({
       )}
 
       {/* Entrenar por su cuenta (correr, bici, nadar…): el plan va arriba y esto abajo (Andrés, 12 oct 2026). Quien mira la app de otra persona no lo ve. */}
-      {!soloLectura && atletaId && (
+      {!soloLectura && atletaId && !demoActiva && (
         <div style={{ padding: '0 18px 28px' }}>
           <EntrenoLibre userId={atletaId} unidadPeso={unidadPeso} />
         </div>
@@ -2775,19 +2775,19 @@ const NoPlanState = ({ onAbrirHoja }) => {
 };
 
 /* La pestaña «Entrenar» de quien no tiene plan: las opciones directo, sin pasar por la hoja (12 oct 2026). */
-const EntrenarSinPlan = () => {
+const EntrenarSinPlan = ({ alIrAHome }) => {
   const { perfil, soloLectura, userId } = usePerfilDeLaVista();
   return (
     <div style={{ padding: '84px 20px 120px', maxWidth: 560, margin: '0 auto' }}>
       <div style={{ fontSize: 24, fontWeight: 800, color: T.text, letterSpacing: -0.4, marginBottom: 16 }}>Entrenar</div>
-      {!soloLectura && userId && <EntrenoLibre userId={userId} unidadPeso={perfil?.unidad_peso || 'kg'} enLinea />}
+      {!soloLectura && userId && <EntrenoLibre userId={userId} unidadPeso={perfil?.unidad_peso || 'kg'} enLinea alIrAHome={alIrAHome} />}
     </div>
   );
 };
 
 export default function TrainingApp() {
   const {
-    phases: PLAN, hasPlan, planLoading, kind, programas, bibliotecas, programaActivo, elegirPrograma, claveDe,
+    phases: PLAN, hasPlan, planLoading, kind, programas, bibliotecas, demoActiva, cierraDemo, programaActivo, elegirPrograma, claveDe,
   } = usePlan();
   const { store, setStore } = useAppState();
   /* EQUIPO = hay más de un programa con sesiones (el del coach y, además, lo que
@@ -3037,7 +3037,7 @@ export default function TrainingApp() {
   if (planLoading && (tab === 'home' || tab === 'plan')) {
     content = <PlanLoadingState />;
   } else if (!hasPlan && !hayEquipo && tab === 'plan') {
-    content = <EntrenarSinPlan />;
+    content = <EntrenarSinPlan alIrAHome={() => vasA('home')} />;
   } else if (!hasPlan && !hayEquipo && tab === 'home') {
     content = <NoPlanState onAbrirHoja={setHoja} />;
   } else if (tab === 'home') {
@@ -3142,6 +3142,18 @@ export default function TrainingApp() {
       </div>
       <BottomNav active={tab} onChange={vasA} />
       {/* Bienestar, 1RM y Ciencia ya no son pestañas: se abren como hoja encima, con su flecha para volver. */}
+      {/* Mientras se hace un demo workout, un aviso para salir de la demo (12 oct 2026): sin él, la app se vería como la de alguien con un solo workout y no habría cómo volver. */}
+      {demoActiva && (
+        <div style={{ position: 'fixed', left: 0, right: 0, bottom: 'calc(86px + env(safe-area-inset-bottom))', zIndex: 40, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
+          <div style={{ pointerEvents: 'auto', display: 'inline-flex', alignItems: 'center', gap: 12, background: LT.text, color: '#fff', borderRadius: 999, padding: '8px 8px 8px 18px', fontFamily: FONT, fontSize: 14, fontWeight: 800, boxShadow: '0 6px 20px rgba(17,19,24,0.28)' }}>
+            Demo workout
+            <button
+              type="button" onClick={() => { cierraDemo(); vasA('home'); }} className="kp-press"
+              style={{ border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 800, color: LT.text, background: '#fff', borderRadius: 999, padding: '8px 16px', touchAction: 'manipulation' }}
+            >Salir de la demo</button>
+          </div>
+        </div>
+      )}
       {typeof hoja === 'string' && hoja.startsWith('biblioteca:') && (() => {
         const b = bibliotecas.find((x) => x.id === hoja.slice('biblioteca:'.length));
         return b ? <HojaDeBiblioteca biblioteca={b} onCerrar={() => setHoja(null)} /> : null;

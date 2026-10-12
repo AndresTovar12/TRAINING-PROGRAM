@@ -190,7 +190,7 @@ export default function ListaDeMisPlanes({
                   )}
                 </span>
                 <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color, marginTop: 3 }}>
-                  {[ETIQUETA_DE_TIPO[item.tipo], resumen].filter(Boolean).join(' · ')}
+                  {[ETIQUETA_DE_TIPO[item.tipo], item.demo ? 'Demo' : null, resumen].filter(Boolean).join(' · ')}
                 </span>
                 {item.descripcion && (
                   <span style={{ display: 'block', fontSize: 12.5, fontWeight: 500, color: T.text2, marginTop: 3, lineHeight: 1.4, overflowWrap: 'anywhere' }}>

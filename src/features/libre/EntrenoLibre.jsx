@@ -2,12 +2,15 @@ import { useState } from 'react';
 import { Play, Timer } from 'lucide-react';
 import HojaFlotante from '@/components/HojaFlotante';
 import { LT, FONT, NUM_STYLE } from '@/lib/theme';
+import { usePlan } from '@/contexts/PlanContext';
 import { relojDeCronometro } from '@/lib/entrenoLibre';
 import { nombreDelDeporte } from '@/lib/metricas/deportes';
+import HojaDeDemos from './HojaDeDemos';
 import OpcionesDeEntrenar from './OpcionesDeEntrenar';
 import PantallaDelCronometro from './PantallaDelCronometro';
 import ResumenLibre from './ResumenLibre';
 import TusEntrenos from './TusEntrenos';
+import { useDemos } from './useDemos';
 import { useCronometroLibre, useEntrenosRecientes } from './useEntrenoLibre';
 import { botonGrande } from './estilosLibre';
 
@@ -15,12 +18,16 @@ import { botonGrande } from './estilosLibre';
      · un botón grande «Entrenar» que abre la hoja con los deportes (o, con `enLinea`, las opciones puestas directo: pestaña Entrenar)
      · si hay un cronómetro corriendo, una tarjeta «Entreno en curso» que lo reabre (el cronómetro sigue aunque se cierre la hoja)
      · «Tus entrenos»: lo que ya hizo, y de ahí se vuelve a sacar la activity card
-   `alDemo`: abre los workouts de demostración (si no se da, esa opción no sale). Ver `lib/entrenoLibre.js`. */
+   «Demo workout»: sale solo si hay workouts de demostración; al elegir uno se abre como el workout de hoy (`abreDemo`) y `alIrAHome` (si se da) lleva a Home, donde está su botón de empezar.
+   Ver `lib/entrenoLibre.js`. */
 
-export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = false, alDemo = null }) {
+export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = false, alIrAHome = null }) {
   const crono = useCronometroLibre(userId);
   const { filas, recarga } = useEntrenosRecientes(userId);
-  const [hoja, setHoja] = useState(null); // null | 'elegir' | 'cronometro' | { resumen: fila }
+  const { abreDemo } = usePlan();
+  const demos = useDemos(userId);
+  const [hoja, setHoja] = useState(null); // null | 'elegir' | 'demos' | 'cronometro' | { resumen: fila }
+  const alDemo = demos?.length ? () => setHoja('demos') : null;
 
   const elige = (deporte) => { crono.inicia(deporte); setHoja('cronometro'); };
   const enCurso = !!crono.cronometro;
@@ -50,8 +57,11 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
 
       {hoja === 'elegir' && (
         <HojaFlotante titulo="Entrenar" onCerrar={() => setHoja(null)}>
-          <OpcionesDeEntrenar alElegir={elige} alDemo={alDemo ? () => { setHoja(null); alDemo(); } : null} />
+          <OpcionesDeEntrenar alElegir={elige} alDemo={alDemo} />
         </HojaFlotante>
+      )}
+      {hoja === 'demos' && demos?.length > 0 && (
+        <HojaDeDemos demos={demos} alCerrar={() => setHoja(null)} alElegir={(d) => { abreDemo(d); setHoja(null); alIrAHome?.(); }} />
       )}
       {hoja === 'cronometro' && enCurso && (
         <PantallaDelCronometro

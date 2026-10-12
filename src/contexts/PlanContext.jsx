@@ -12,6 +12,7 @@ import { adaptadorDeRegistros, fasesConPegadas, reglasDe } from '@/lib/pegadas';
 import { colorDePrograma, tieneSesiones } from '@/lib/programas';
 import { conNombreDeSuFicha } from '@/lib/nombreDeLaFicha';
 import { normalizaCiencia } from '@/lib/ciencia';
+import { diasDeWorkout, planDeRutina } from '@/lib/misPlanesDatos';
 
 /**
  * Carga el plan activo de la persona cuya app se dibuja —quien entró, o el
@@ -97,6 +98,7 @@ export function PlanProvider({ children }) {
   const [filasPegadas, setFilasPegadas] = useState([]); // sesiones pegadas: una fila por autor
   const [miembros, setMiembros] = useState(null);      // equipo (nombres); null = no se pidió
   const [comprados, setComprados] = useState([]);       // los planes que COMPRÓ (ya recortados por el servidor); solo de quien entró
+  const [demo, setDemo] = useState(null);               // un workout de DEMOSTRACIÓN que se está haciendo (mientras dura, es el único «programa»); null = ninguno
   const [planLoading, setPlanLoading] = useState(true);
   const [exercisesBase, setExercisesBase] = useState([]);
   const [overridesTodas, setOverridesTodas] = useState([]);
@@ -327,13 +329,30 @@ export function PlanProvider({ children }) {
         .map((f) => armarPegadas(f, principal))
       : [];
     // Una biblioteca de clases no es un programa (no tiene fases ni sesiones por semana): va aparte, en `bibliotecas`.
+    /* UN WORKOUT DE DEMOSTRACIÓN, visto como un programa de un solo día (12 oct 2026): para quien quiere ver cómo se inicia un workout, tenga o no un plan. Cae EN EL DÍA DE HOY
+       (así sale en «Hoy te toca»), va en su propia clave de registros (`demo:<id>`) y no lleva cámara de técnica (no tiene a quién mandársela). Mientras dura, es el único programa:
+       la app se ve como la de alguien con ese workout y nada más, sin mezclarse con el resto; `cierraDemo` la deja como estaba. */
+    const armarDemo = (d) => {
+      const herramientas = herramientasDe(d.autor_id);
+      const hoy = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'][new Date().getDay()];
+      const plan = planDeRutina({ days: diasDeWorkout(d.data, hoy, d.name) });
+      const phases = conNombreDeSuFicha(normalizePlan(plan.phases) ?? [], herramientas.fichaDe);
+      return {
+        id: `demo:${d.id}`, clave: `demo:${d.id}`, esPrincipal: false, esDemo: true,
+        comprado: true, compra: { id: null, estado: 'activa', tipo: 'pago_unico', chat: false, tecnica: false },
+        profesionalId: d.autor_id ?? null, profesional: null, altaEn: null,
+        title: d.name, phases, kind: 'weekly', estructura: 'rutina', foto: '', ciencia: [],
+        hasPlan: true, conSesiones: tieneSesiones(phases),
+        ...herramientas,
+      };
+    };
     const compradas = comprados.filter((c) => !c.biblioteca).map(armarComprada);
-    const todos = [...propios, ...pegadas, ...compradas];
+    const todos = demo ? [armarDemo(demo)] : [...propios, ...pegadas, ...compradas];
     // Un color por PERSONA, no por programa: sus sesiones pegadas y su programa aparte van del mismo color.
     const autores = [];
     todos.forEach((p) => { if (!autores.includes(p.profesionalId)) autores.push(p.profesionalId); });
     return todos.map((p) => ({ ...p, color: colorDePrograma(autores.indexOf(p.profesionalId)) }));
-  }, [filas, filasPegadas, comprados, miembros, exercisesBase, overridesTodas, mediasTodas, masterId, userId, principalId]);
+  }, [filas, filasPegadas, comprados, demo, miembros, exercisesBase, overridesTodas, mediasTodas, masterId, userId, principalId]);
 
   /* Las BIBLIOTECAS de clases que compró («todas mis clases»): una por compra, con las clases que trae la función en este momento. `estado` decide si se ven (vencida = lista vacía y «Renovar»). */
   const bibliotecas = useMemo(() => comprados.filter((c) => c.biblioteca).map((c) => ({
@@ -367,11 +386,14 @@ export function PlanProvider({ children }) {
       // Varios programas
       programas,
       bibliotecas,
+      demoActiva: demo,
+      abreDemo: setDemo,
+      cierraDemo: () => setDemo(null),
       programaActivo: activo,
       elegirPrograma,
       claveDe,
     }),
-    [activo, programas, bibliotecas, planLoading, exercisesBase, elegirPrograma, claveDe],
+    [activo, programas, bibliotecas, demo, planLoading, exercisesBase, elegirPrograma, claveDe],
   );
 
   return <PlanContext.Provider value={value}>{children}</PlanContext.Provider>;

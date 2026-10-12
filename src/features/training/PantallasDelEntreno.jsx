@@ -631,7 +631,7 @@ export function PantallaDeFin({ resumen, notas, palabras, onNotas, onTerminar, o
           <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
             {resumen.map((c) => <Cifra key={c.etiqueta} {...c} />)}
           </div>
-          {onSello && <div style={{ marginBottom: 18 }}><BotonSecundario ancho onClick={onSello}><Share2 size={18} /> Crear sello</BotonSecundario></div>}
+          {onSello && <div style={{ marginBottom: 18 }}><BotonSecundario ancho onClick={onSello}><Share2 size={18} /> Activity card</BotonSecundario></div>}
           <label htmlFor="entreno-notas" style={{ display: 'block', textAlign: 'left', fontSize: 15, fontWeight: 800, color: LT.text, margin: '0 2px 8px' }}>
             {palabras.finNotas}
           </label>
