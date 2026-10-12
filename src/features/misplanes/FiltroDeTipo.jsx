@@ -4,7 +4,7 @@ import { COLOR_DE_TIPO, FONDO_DE_TIPO } from '@/features/misplanes/estilos';
 import { T, FONT } from '@/lib/theme';
 
 // En el botón, el nombre corto; en la lista, el entero.
-const CORTO = { workout: 'Workouts', rutina: 'Rutinas', programa: 'Programas' };
+const CORTO = { workout: 'Workouts', rutina: 'Rutinas', programa: 'Programas', clase: 'Clases' };
 
 /**
  * «Ver  Todo ▾»: qué clase de cosas se enseñan (workouts, rutinas o programas). Es la misma lista

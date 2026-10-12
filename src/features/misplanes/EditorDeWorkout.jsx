@@ -15,6 +15,7 @@ import { useIsWide } from '@/lib/useViewport';
 import { SessionEditor, Pill } from '@/features/admin/PlanBuilder';
 import { actualizarItem, borrarItem, guardarItem } from '@/lib/misPlanes';
 import { sesionesDeWorkout, workoutDeSesiones } from '@/lib/misPlanesDatos';
+import { esClase as traeClase, sesionDeClase } from '@/lib/clases';
 import DialogoGuardar from '@/features/misplanes/DialogoGuardar';
 import { campo, etiquetaChica } from '@/features/misplanes/estilos';
 import { T, FONT, KP } from '@/lib/theme';
@@ -30,6 +31,9 @@ const sesionNueva = () => ({ day: 'Lun', name: 'Sesión', cat: 'gym', exercises:
  *
  * `catalogo`: { item, data } para uno que ya existe, o { carpetaId } para uno nuevo. Guardar un workout
  * nuevo pregunta primero nombre, descripción y carpeta; después solo actualiza.
+ *
+ * UNA CLASE (`catalogo.esClase`, o un item que ya lo es) se arma aquí mismo: es un workout cuya primera sesión trae el video de la clase (ver `lib/clases.js`).
+ * Mientras no tiene video, la primera sesión enseña las acciones a la vista —subir, pegar liga— porque es lo único que hay que hacer; sin video no se guarda.
  */
 export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted }) {
   const { user } = useAuth();
@@ -40,12 +44,13 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
   const {
     repertoire, setRepertoire, setCategorias, masterIdCat, categoriasVisibles,
   } = useRepertorioDelEditor();
+  const esClase = !!catalogo.esClase || catalogo.item?.tipo === 'clase';
   const [fila, setFila] = useState(catalogo.item ?? null);
   const [titulo, setTitulo] = useState(catalogo.item?.nombre ?? '');
   // El día de la semana no se guarda en un workout: aquí es solo un relleno que el editor del día pide.
   const [sesiones, setSesiones] = useState(() => (catalogo.data
     ? sesionesDeWorkout(catalogo.data).map((s) => ({ ...clone(s), day: 'Lun' }))
-    : [sesionNueva()]));
+    : [esClase ? sesionDeClase() : sesionNueva()]));
   const [guardando, setGuardando] = useState(false);
   const [haGuardado, setHaGuardado] = useState(false);
   const [error, setError] = useState('');
@@ -72,7 +77,8 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
   const parchea = (i, patch) => cambia((prev) => prev.map((s, k) => (k === i ? { ...s, ...patch } : s)));
 
   async function guardar() {
-    if (!titulo.trim()) { setError('Ponle un nombre al workout'); return; }
+    if (!titulo.trim()) { setError(esClase ? 'Ponle un nombre a la clase' : 'Ponle un nombre al workout'); return; }
+    if (esClase && !sesiones.some(traeClase)) { setError('Sube el video de la clase para guardarla'); return; }
     // Algo nuevo pregunta primero dónde guardarlo.
     if (!fila) { setDialogo(true); return; }
     // Lo que se guarda es ESTE estado: si se sigue escribiendo mientras tarda, eso queda sin guardar.
@@ -185,10 +191,10 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
         <div style={{ flex: 1, minWidth: 0 }}>
           {/* Arriba va el nombre del workout (o «Workout nuevo» mientras no tiene); abajo, qué es y dónde vive. */}
           <div style={{ fontSize: 15, fontWeight: 800, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {titulo.trim() || 'Workout nuevo'}
+            {titulo.trim() || (esClase ? 'Clase nueva' : 'Workout nuevo')}
           </div>
           <div style={{ fontSize: 12, color: T.text2, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            Workout · Mis planes{dirty ? ' · sin guardar' : (haGuardado ? ' · guardado' : '')}
+            {esClase ? 'Clase' : 'Workout'} · Mis planes{dirty ? ' · sin guardar' : (haGuardado ? ' · guardado' : '')}
           </div>
         </div>
         <BotonesDeHistorial
@@ -225,7 +231,7 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
       <main style={{ flex: 1, overflowY: 'auto', padding: '20px 18px 60px' }}>
         <div style={{ maxWidth: 760, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            <span style={etiquetaChica}>Nombre del workout</span>
+            <span style={etiquetaChica}>{esClase ? 'Nombre de la clase' : 'Nombre del workout'}</span>
             <input
               value={titulo} onChange={(e) => cambiaTitulo(e.target.value)}
               style={campo}
@@ -246,6 +252,7 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
               onEjercicioCreado={(f) => setRepertoire((prev) => [...prev, { ...f, isMine: true, isBase: false }])}
               onPatch={(patch) => parchea(i, patch)}
               onDelete={sesiones.length > 1 ? () => quitarSesion(i) : undefined}
+              claseObligatoria={esClase && i === 0 && !sesiones.some(traeClase)}
             />
           ))}
 
@@ -281,10 +288,10 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
 
       {dialogo && (
         <DialogoGuardar
-          tipo="workout" nombreInicial={titulo} carpetaInicial={catalogo.carpetaId ?? null}
+          tipo={esClase ? 'clase' : 'workout'} nombreInicial={titulo} carpetaInicial={catalogo.carpetaId ?? null}
           onGuardar={async ({ nombre, descripcion, carpetaId }) => {
             const creada = await guardarItem({
-              tipo: 'workout', nombre, descripcion, origen: 'Creado desde cero', carpetaId,
+              tipo: esClase ? 'clase' : 'workout', nombre, descripcion, origen: 'Creado desde cero', carpetaId,
               data: workoutDeSesiones(sesiones), userId: user?.id,
             });
             setFila(creada);

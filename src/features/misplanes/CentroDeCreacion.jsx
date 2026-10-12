@@ -1,5 +1,7 @@
 import { ChevronRight, FolderInput, Zap } from 'lucide-react';
 import { usePalabras } from '@/contexts/PalabrasContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { esInstructor } from '@/lib/palabras';
 import Ventana from '@/features/misplanes/Ventana';
 import { COLOR_DE_TIPO, FONDO_DE_TIPO, ICONO_DE_TIPO } from '@/features/misplanes/estilos';
 import { T, FONT, KP } from '@/lib/theme';
@@ -13,6 +15,8 @@ const OPCIONES = [
   { forma: 'semanas', tipo: 'programa', icono: Zap, titulo: 'Varias semanas que avanzan', desc: 'Arrancas con la misma base y vas subiendo cargas semana a semana.' },
   { forma: 'fases', tipo: 'programa', titulo: 'Programa por fases', desc: 'Bloques con objetivos distintos, como un plan de temporada.' },
 ];
+// Un video largo que se sube una vez y se usa en todas las sesiones que se quiera. Para una instructora es lo PRIMERO; para los demás, lo último.
+const CLASE = { forma: 'clase', tipo: 'clase', titulo: 'Clase', desc: 'Un video que subes una vez y usas en todas las sesiones que quieras.' };
 
 function Tarjeta({ Icono, color, fondo, titulo, desc, onClick }) {
   return (
@@ -36,15 +40,17 @@ function Tarjeta({ Icono, color, fondo, titulo, desc, onClick }) {
 }
 
 /**
- * El Centro de creación: lo que se abre con «+ Crear» en Mis planes. Cuatro tarjetas grandes; la que se elige
+ * El Centro de creación: lo que se abre con «+ Crear» en Mis planes. Cinco tarjetas grandes (la «Clase» va primero para quien da clases); la que se elige
  * abre el MISMO editor de siempre, sin atleta (Andrés, 2 oct 2026).
  *
  * Dentro de una carpeta el botón es «+ Agregar» (`agregar`): el título dice a qué carpeta se agrega y, si viene
- * `onTraer`, debajo de las cuatro cosas que se pueden CREAR va una más, «Traer algo que ya tengo», para meter
+ * `onTraer`, debajo de las cosas que se pueden CREAR va una más, «Traer algo que ya tengo», para meter
  * aquí lo que ya existe.
  */
 export default function CentroDeCreacion({ carpetaTexto, agregar = false, onElegir, onTraer, onCerrar }) {
   const { t } = usePalabras();
+  const { profile } = useAuth();
+  const opciones = esInstructor(profile?.profesion) ? [CLASE, ...OPCIONES] : [...OPCIONES, CLASE];
   return (
     <Ventana
       titulo={agregar ? `Agregar a ${carpetaTexto}` : 'Centro de creación'}
@@ -53,7 +59,7 @@ export default function CentroDeCreacion({ carpetaTexto, agregar = false, onEleg
       ancho={520}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 4 }}>
-        {OPCIONES.map((o) => (
+        {opciones.map((o) => (
           <Tarjeta
             key={o.forma} Icono={o.icono ?? ICONO_DE_TIPO[o.tipo]} color={COLOR_DE_TIPO[o.tipo]} fondo={FONDO_DE_TIPO[o.tipo]}
             titulo={o.titulo} desc={t(o.desc)} onClick={() => onElegir(o.forma)}

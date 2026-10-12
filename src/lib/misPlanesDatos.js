@@ -16,12 +16,21 @@
    conector de IA, que no conoce 'programa': por eso los programas viven en otra tabla y
    no se mezclan con ellas.
 
+   Y un cuarto tipo, que NO es una cosa nueva en la base (11 oct 2026):
+
+     clase     — un workout cuya sesión trae `clase` (un video largo que la instructora sube UNA vez; ver `lib/clases.js`)
+                 → `routine_templates`, kind 'day': es un workout, y se llama «Clase» en las listas porque su resumen lo marca
+
    Lo que se guarda es una COPIA. Al darlo a un atleta también: cambiar el catálogo después
    no mueve lo que el atleta ya recibió, ni al revés. */
 
-export const TIPOS = ['workout', 'rutina', 'programa'];
-export const ETIQUETA_DE_TIPO = { workout: 'Workout', rutina: 'Rutina semanal', programa: 'Programa' };
-export const PLURAL_DE_TIPO = { workout: 'Workouts', rutina: 'Rutinas semanales', programa: 'Programas' };
+import { claseDe, duracionTexto } from './clases.js';
+
+export const TIPOS = ['workout', 'rutina', 'programa', 'clase'];
+export const ETIQUETA_DE_TIPO = { workout: 'Workout', rutina: 'Rutina semanal', programa: 'Programa', clase: 'Clase' };
+export const PLURAL_DE_TIPO = { workout: 'Workouts', rutina: 'Rutinas semanales', programa: 'Programas', clase: 'Clases' };
+/** Lo que se guarda como UN DÍA de sesiones: un workout y una clase (que es un workout con video). */
+export const esDeUnDia = (tipo) => tipo === 'workout' || tipo === 'clase';
 // Carpetas dentro de carpetas, hasta aquí: más abajo ya nadie encuentra nada.
 export const NIVELES_DE_CARPETA = 5;
 
@@ -126,7 +135,7 @@ export function planDePrograma(data) {
  * ¿Esta sesión tiene algo que guardar? Ejercicios o notas sueltas. Una sesión vacía no ofrece «Guardar»
  * (Andrés, 2 oct 2026: «Guardar solo sale si hay algo que guardar»): se guardaría un workout sin nada.
  */
-export const sesionTieneContenido = (d) => Array.isArray(d?.exercises) && d.exercises.length > 0;
+export const sesionTieneContenido = (d) => (Array.isArray(d?.exercises) && d.exercises.length > 0) || !!claseDe(d);
 /** ¿Alguna sesión de esta semana tiene algo? */
 export const semanaTieneContenido = (semana) => (semana?.days ?? []).some(sesionTieneContenido);
 /** ¿Algo del plan tiene contenido? (`phases`: las fases del plan) */
@@ -147,7 +156,7 @@ const sinNotasLaSesion = (d) => {
  * indicaciones de cada ejercicio (descripción, cue, descanso) se quedan: son del ejercicio.
  */
 export function sinNotas(tipo, data) {
-  if (tipo === 'workout') {
+  if (esDeUnDia(tipo)) {
     const [primera, ...otras] = sesionesDeWorkout(data).map(sinNotasLaSesion);
     return otras.length ? { ...primera, otras } : primera;
   }
@@ -163,7 +172,7 @@ export function sinNotas(tipo, data) {
 
 /** ¿Hay notas que quitar? Para no preguntar «¿incluir tus notas?» cuando no hay ninguna. */
 export function tieneNotas(tipo, data) {
-  const dias = tipo === 'workout' ? sesionesDeWorkout(data)
+  const dias = esDeUnDia(tipo) ? sesionesDeWorkout(data)
     : tipo === 'rutina' ? (data?.days ?? [])
       : (data?.phases ?? []).flatMap((f) => (f.weekData ?? []).flatMap((w) => w.days ?? []));
   return dias.some((d) => (
@@ -174,9 +183,12 @@ export function tieneNotas(tipo, data) {
 
 /** Lo que se enseña en la lista sin leer cada cosa entera: se calcula al guardar. */
 export function resumenDe(tipo, data) {
-  if (tipo === 'workout') {
+  if (esDeUnDia(tipo)) {
     const sesiones = sesionesDeWorkout(data);
-    return { sesiones: sesiones.length, ejercicios: sesiones.reduce((n, s) => n + ejerciciosDeSesion(s), 0) };
+    const base = { sesiones: sesiones.length, ejercicios: sesiones.reduce((n, s) => n + ejerciciosDeSesion(s), 0) };
+    /* Si una sesión trae clase, esto es una «Clase»: así la lista lo sabe sin leer cada cosa entera (`tipoDeFila`). */
+    const clase = sesiones.map(claseDe).find(Boolean);
+    return clase ? { ...base, clase: true, ...(clase.duracion ? { duracion: clase.duracion } : null) } : base;
   }
   if (tipo === 'rutina') {
     const dias = (Array.isArray(data?.days) ? data.days : []).filter((d) => !esDescanso(d));
@@ -196,6 +208,8 @@ export function resumenDe(tipo, data) {
 /** El resumen en palabras: «3 fases · 12 semanas · 36 sesiones». */
 export function textoDeResumen(tipo, resumen) {
   if (!resumen) return '';
+  // Una clase dice cuánto dura (y, si trae ejercicios además del video, cuántos).
+  if (tipo === 'clase') return [duracionTexto(resumen.duracion), resumen.ejercicios ? plural(resumen.ejercicios, 'ejercicio', 'ejercicios') : ''].filter(Boolean).join(' · ');
   if (tipo === 'workout') {
     return [plural(resumen.sesiones ?? 1, 'sesión', 'sesiones'), plural(resumen.ejercicios ?? 0, 'ejercicio', 'ejercicios')].join(' · ');
   }

@@ -1,4 +1,4 @@
-import { Dumbbell, Layers, Repeat } from 'lucide-react';
+import { Dumbbell, Layers, PlayCircle, Repeat } from 'lucide-react';
 import { T, FONT, KP } from '@/lib/theme';
 
 /* Estilos de «Mis planes». Mismas medidas y colores que el editor de planes, para que no se
@@ -30,8 +30,8 @@ export const etiquetaChica = {
 };
 
 // Cada tipo, con su color: el que se ve en la lista y en los selectores.
-export const COLOR_DE_TIPO = { workout: KP.amber, rutina: KP.violet, programa: T.accent };
-export const FONDO_DE_TIPO = { workout: KP.amberSoft, rutina: KP.violetSoft, programa: T.accentBg };
+export const COLOR_DE_TIPO = { workout: KP.amber, rutina: KP.violet, programa: T.accent, clase: KP.mint };
+export const FONDO_DE_TIPO = { workout: KP.amberSoft, rutina: KP.violetSoft, programa: T.accentBg, clase: KP.mintSoft };
 
 // Y su ícono.
-export const ICONO_DE_TIPO = { workout: Dumbbell, rutina: Repeat, programa: Layers };
+export const ICONO_DE_TIPO = { workout: Dumbbell, rutina: Repeat, programa: Layers, clase: PlayCircle };

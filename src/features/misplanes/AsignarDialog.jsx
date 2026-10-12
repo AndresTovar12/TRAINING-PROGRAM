@@ -7,7 +7,7 @@ import { abrirItem } from '@/lib/misPlanes';
 import {
   asignarPlanAVarios, asignarWorkoutAVarios, programaDe,
 } from '@/lib/asignar';
-import { planDePrograma, planDeRutina, textoDeResumen } from '@/lib/misPlanesDatos';
+import { esDeUnDia, planDePrograma, planDeRutina, textoDeResumen } from '@/lib/misPlanesDatos';
 import Ventana from '@/features/misplanes/Ventana';
 import ElegirDiaDelAtleta from '@/features/misplanes/ElegirDiaDelAtleta';
 import { botonBlanco, botonPrincipal, campo } from '@/features/misplanes/estilos';
@@ -29,7 +29,7 @@ export default function AsignarDialog({ item, onCerrar }) {
   const { salud, t } = usePalabras();
   const yo = user?.id;
   const esMaster = !!profile?.is_owner;
-  const esWorkout = item.tipo === 'workout';
+  const esWorkout = esDeUnDia(item.tipo); // un workout y una clase se dan igual: en un día del plan
 
   const [atletas, setAtletas] = useState(null);
   const [error, setError] = useState('');

@@ -7,7 +7,7 @@ import { planDe } from '@/lib/api';
 import { asignarPlan } from '@/lib/asignar';
 import { abrirItem } from '@/lib/misPlanes';
 import { esProgramaFantasma } from '@/lib/programas';
-import { TIPOS, planDePrograma, planDeRutina } from '@/lib/misPlanesDatos';
+import { TIPOS, esDeUnDia, planDePrograma, planDeRutina } from '@/lib/misPlanesDatos';
 import Ventana from '@/features/misplanes/Ventana';
 import SelectorDeMisPlanes from '@/features/misplanes/SelectorDeMisPlanes';
 import ElegirDiaDelAtleta from '@/features/misplanes/ElegirDiaDelAtleta';
@@ -74,7 +74,7 @@ export default function AsignarAlAtleta({ atleta, clave = null, onAsignado, onCe
 
   const cargando = !error && (datos === null || actual === undefined);
 
-  if (item.tipo === 'workout') {
+  if (esDeUnDia(item.tipo)) {
     return (
       <Ventana titulo={`«${item.nombre}» para ${nombre}`} subtitulo={t('Elige el día de su plan donde va.')} onCerrar={onCerrar} ancho={620}>
         {cargando ? (
