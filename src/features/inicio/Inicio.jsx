@@ -59,7 +59,7 @@ const FOTOS = { fuerza: fotoFuerza, pista: fotoPista, yoga: fotoYoga, agilidad: 
 
 // Todo el camino de cada quien, para la barra de arriba. `listo` y `tour` no cuentan: ya no son preguntas.
 const ORDEN_COACH = ['tipo', 'cuenta', 'correo', 'nombre', 'oficio', 'entrena', 'equipo', 'repertorio', 'listo', 'tour'];
-const ORDEN_ATLETA = ['tipo', 'cuenta', 'correo', 'nombre', 'codigo', 'sexo', 'unidad', 'nacimiento', 'listo', 'tour'];
+const ORDEN_ATLETA = ['tipo', 'cuenta', 'correo', 'nombre', 'codigo', 'sexo', 'nacimiento', 'listo', 'tour'];
 const SIN_BARRA = new Set(['listo', 'tour']);
 const ANTES_DE_LA_CUENTA = new Set(['tipo', 'cuenta', 'correo']);
 const USERNAME_RE = /^[a-zA-Z0-9_.]{3,30}$/;
@@ -626,20 +626,6 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
         {Error}
       </>
     );
-  } else if (paso === 'unidad') {
-    const o = (v, t, s) => (
-      <button key={v} type="button" className="kp-press" onClick={() => guarda({ unidad_peso: v })} disabled={ocupado} style={{ ...opcion(false), flexDirection: 'column', justifyContent: 'center', gap: 2, minHeight: 92, fontSize: 24 }}>
-        {t}<small style={{ fontSize: 13, color: KP.ink2, fontWeight: 600 }}>{s}</small>
-      </button>
-    );
-    cuerpo = (
-      <>
-        <h1 style={titulo(compu)}>¿Kilos o libras?</h1>
-        <p style={subtitulo}>Para tus cargas y tus récords.</p>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>{o('kg', 'kg', 'Kilos')}{o('lb', 'lb', 'Libras')}</div>
-        {Error}
-      </>
-    );
   } else if (paso === 'nacimiento') {
     cuerpo = (
       <>
@@ -668,7 +654,6 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
       : [
         ['Usuario', `@${profile?.username ?? ''}`],
         ['Entrenador', profile?.coach_id ? (coachNombre || '…') : 'Todavía no'],
-        ['Unidad', profile?.unidad_peso === 'lb' ? 'Libras' : 'Kilos'],
         ['Sexo', profile?.genero === 'h' ? 'Hombre' : profile?.genero === 'm' ? 'Mujer' : 'Prefiere no decir'],
       ];
     cuerpo = (
