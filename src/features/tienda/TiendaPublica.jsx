@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CalendarDays, Check, Loader2, Mail, MessageCircle, ShieldCheck, Video } from 'lucide-react';
+import { CalendarDays, Check, Dumbbell, Loader2, Mail, MessageCircle, ShieldCheck, Video } from 'lucide-react';
 import { LT, FONT, NUM_STYLE } from '@/lib/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import AuthScreen, { Field } from '@/features/auth/AuthScreen';
@@ -7,6 +7,8 @@ import HojaFlotante from '@/components/HojaFlotante';
 import { iniciaCompra, leePerfilPublico, leePlanPublico } from '@/lib/tiendaApi';
 import { oficioCorto } from '@/lib/theme';
 import { chipsDeParaQuien } from '@/lib/paraQuien';
+import { esSuelto, textoDeContenido } from '@/lib/vitrinaDatos';
+import { duracionTexto } from '@/lib/clases';
 import { ligaExterna } from '@/lib/videos';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
 import { Aviso, Marco } from './PiezasDeTienda';
@@ -74,7 +76,7 @@ function PaginaDelCoach({ usuario, alElegir }) {
               {p.descripcion && <div style={{ fontSize: 14, fontWeight: 500, color: LT.text2, lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.descripcion}</div>}
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4, ...NUM_STYLE }}>
                 <span style={{ fontSize: 20, fontWeight: 800, color: LT.blue }}>{pesos(p.precio)}</span>
-                <span style={{ fontSize: 13.5, fontWeight: 700, color: LT.text2 }}>{TIPO[p.tipo] ?? ''}{p.semanas ? ` · ${p.semanas} ${p.semanas === 1 ? 'semana' : 'semanas'}` : ''}</span>
+                <span style={{ fontSize: 13.5, fontWeight: 700, color: LT.text2 }}>{[TIPO[p.tipo], textoDeContenido(p)].filter(Boolean).join(' · ')}</span>
               </div>
             </div>
           </button>
@@ -204,6 +206,7 @@ function PaginaDelPlan({ usuario, slug, alVolver }) {
 
   const hoja = plan.hoja ?? [];
   const semanal = plan.kind === 'weekly';
+  const suelto = esSuelto(plan.contenido); // un workout o una clase: no hay semanas ni hoja que enseñar, solo qué trae
   const total = totalDeSemanas(hoja);
   const resumen = !semanal && entrada ? resumenDeEntrada(hoja, entrada.faseId, entrada.semana) : null;
   const dias = diasPorSemana(hoja);
@@ -253,7 +256,15 @@ function PaginaDelPlan({ usuario, slug, alVolver }) {
           </Bloque>
         )}
 
-        {(plan.chat || plan.tecnica || total > 0) && (
+        {suelto && (
+          <Bloque titulo="Incluye">
+            {plan.contenido === 'clase'
+              ? <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 15, fontWeight: 700 }}><Video size={18} color={LT.blue} /> Una clase en video{plan.duracion_clase ? ` de ${duracionTexto(plan.duracion_clase)}` : ''}</div>
+              : <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 15, fontWeight: 700 }}><Dumbbell size={18} color={LT.blue} /> {plan.sesiones > 1 ? `${plan.sesiones} sesiones de entrenamiento` : 'Un workout completo'}</div>}
+          </Bloque>
+        )}
+
+        {!suelto && (plan.chat || plan.tecnica || total > 0) && (
           <Bloque titulo="Incluye">
             {total > 0 && !semanal && <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 15, fontWeight: 700 }}><CalendarDays size={18} color={LT.blue} /> {semanasTexto(total)} de entrenamiento{dias ? `, ${dias} ${dias === 1 ? 'día' : 'días'} por semana` : ''}</div>}
             {total > 0 && semanal && dias > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 15, fontWeight: 700 }}><CalendarDays size={18} color={LT.blue} /> Una rutina de {dias} {dias === 1 ? 'día' : 'días'} por semana que se repite</div>}
@@ -263,7 +274,7 @@ function PaginaDelPlan({ usuario, slug, alVolver }) {
         )}
 
         {/* La hoja del programa, igual a la que ve el atleta, SIN ejercicios: fases, semanas y el nombre de la sesión de cada día. Quien compra toca la semana donde empieza. */}
-        {hoja.length > 0 && (
+        {hoja.length > 0 && !suelto && (
           <Bloque titulo={semanal ? 'La rutina' : `El programa · ${semanasTexto(total)}`}>
             {!semanal && total > 1 && <CuantoTiempoTienes fases={hoja} alSugerir={sugiere} />}
             {resumen && (
