@@ -326,13 +326,19 @@ export function PlanProvider({ children }) {
         .filter((f) => reglasDe(f).length > 0 && (!activos || activos.has(f.profesional_id)))
         .map((f) => armarPegadas(f, principal))
       : [];
-    const compradas = comprados.map(armarComprada);
+    // Una biblioteca de clases no es un programa (no tiene fases ni sesiones por semana): va aparte, en `bibliotecas`.
+    const compradas = comprados.filter((c) => !c.biblioteca).map(armarComprada);
     const todos = [...propios, ...pegadas, ...compradas];
     // Un color por PERSONA, no por programa: sus sesiones pegadas y su programa aparte van del mismo color.
     const autores = [];
     todos.forEach((p) => { if (!autores.includes(p.profesionalId)) autores.push(p.profesionalId); });
     return todos.map((p) => ({ ...p, color: colorDePrograma(autores.indexOf(p.profesionalId)) }));
   }, [filas, filasPegadas, comprados, miembros, exercisesBase, overridesTodas, mediasTodas, masterId, userId, principalId]);
+
+  /* Las BIBLIOTECAS de clases que compró («todas mis clases»): una por compra, con las clases que trae la función en este momento. `estado` decide si se ven (vencida = lista vacía y «Renovar»). */
+  const bibliotecas = useMemo(() => comprados.filter((c) => c.biblioteca).map((c) => ({
+    id: c.compra_id, titulo: c.titulo, estado: c.estado, clases: c.biblioteca.clases ?? [], vendedor: c.vendedor ?? null,
+  })), [comprados]);
 
   const activo = programas.find((p) => p.id === activoId) ?? programas[0] ?? null;
   const elegirPrograma = useCallback((planId) => setActivoId(planId), []);
@@ -360,11 +366,12 @@ export function PlanProvider({ children }) {
       resolveExercise: activo?.resolveExercise ?? (() => null),
       // Varios programas
       programas,
+      bibliotecas,
       programaActivo: activo,
       elegirPrograma,
       claveDe,
     }),
-    [activo, programas, planLoading, exercisesBase, elegirPrograma, claveDe],
+    [activo, programas, bibliotecas, planLoading, exercisesBase, elegirPrograma, claveDe],
   );
 
   return <PlanContext.Provider value={value}>{children}</PlanContext.Provider>;

@@ -8,6 +8,8 @@
  *
  * Responde `{ compras: [...] }`, una por compra del atleta que sigue viva (activa, en gracia, vencida o por armar), cada una con:
  *   estado, tipo, fechas, el nombre y la foto de quien lo vende, si lleva chat y técnica, y `programa` = { title, data, cursorInicial, resumen } (null si aún no se entrega).
+ *   Una BIBLIOTECA de clases («todas mis clases») no trae `programa`: trae `biblioteca` = { clases: [{ id, nombre, descripcion, clase }] }, las clases de «Mis planes» de quien la vende AHORA (las que
+ *   agregue después aparecen solas), y solo con la compra activa o en gracia; con la membresía vencida la lista va vacía.
  * Solo manda lo del dueño de la sesión: nunca se pide el id de nadie.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
@@ -82,7 +84,15 @@ Deno.serve(async (req) => {
       const plan = planDe.get(c.vitrina_plan_id)
       const coach = coachDe.get(c.coach_id)
       let programa = null
-      if (c.estado !== 'por_armar') {
+      let biblioteca = null
+      if (plan?.contenido === 'biblioteca') {
+        const vigente = c.estado === 'activa' || c.estado === 'gracia'
+        const { data: filas, error: e4 } = vigente
+          ? await bd.from('routine_templates').select('id, name, descripcion, data').eq('created_by', c.coach_id).eq('kind', 'day').filter('resumen->>clase', 'eq', 'true').order('name')
+          : { data: [], error: null }
+        if (e4) throw e4
+        biblioteca = { clases: (filas ?? []).filter((f) => f.data?.clase?.url).map((f) => ({ id: f.id, nombre: f.name, descripcion: f.descripcion ?? '', clase: f.data.clase })) }
+      } else if (c.estado !== 'por_armar') {
         const { data: version, error: e3 } = await bd.from('vitrina_versiones').select('titulo, data').eq('vitrina_plan_id', c.vitrina_plan_id).eq('n', c.version_n).maybeSingle()
         if (e3) throw e3
         if (version) {
@@ -110,6 +120,7 @@ Deno.serve(async (req) => {
         ventana_semanas: plan?.ventana_semanas ?? null,
         vendedor: coach ? { id: coach.id, usuario: coach.username, nombre: coach.full_name, foto: coach.avatar_url, profesion: coach.profesion } : null,
         programa,
+        biblioteca,
       })
     }
     return json({ compras: salida }, 200, origen)

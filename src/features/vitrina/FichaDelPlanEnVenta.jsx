@@ -8,7 +8,7 @@ import { HojaDeClase } from '@/features/admin/ClaseDeLaSesion';
 import { ligaExterna } from '@/lib/videos';
 import { botonBlanco, botonPrincipal, campo, etiquetaChica } from '@/features/misplanes/estilos';
 import {
-  ETIQUETA_DE_CONTENIDO, TIPOS_DE_VENTA, VENTANAS, VENTANA_MAXIMA, esSuelto, fuenteParaVender, guardaPlanEnVenta, precioMinimoDe, publicaPlan, slugUnico, tipoDeCobroDe,
+  ETIQUETA_DE_CONTENIDO, TIPOS_DE_VENTA, VENTANAS, VENTANA_MAXIMA, cuentaMisClases, esBiblioteca, esSuelto, fuenteParaVender, guardaPlanEnVenta, precioMinimoDe, publicaPlan, slugUnico, tipoDeCobroDe,
 } from '@/lib/vitrinaApi';
 import { DEPORTES, EDADES, EQUIPOS, NIVELES, SEXOS, marcadosValidos } from '@/lib/paraQuien';
 
@@ -107,6 +107,7 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
   const fuenteId = plan?.plantilla_id ?? plan?.programa_guardado_id ?? null; // de dónde sale lo que se vende (un programa o una plantilla de Mis planes)
   const [cargandoPrograma, setCargandoPrograma] = useState(!!fuenteId);
   const [eligiendo, setEligiendo] = useState(false);
+  const [nClases, setNClases] = useState(null); // cuántas clases hay en Mis planes (para la biblioteca); null = todavía no se sabe
   const [eligiendoVideo, setEligiendoVideo] = useState(false);
   const [guardando, setGuardando] = useState(null); // 'borrador' | 'publicar'
   const [error, setError] = useState(null);
@@ -121,6 +122,20 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
       .finally(() => { if (vivo) setCargandoPrograma(false); });
     return () => { vivo = false; };
   }, [fuenteId, plan?.contenido]);
+
+  const biblioteca = esBiblioteca(f.contenido);
+  useEffect(() => {
+    if (!biblioteca) return undefined;
+    let vivo = true;
+    cuentaMisClases().then((n) => { if (vivo) setNClases(n); }).catch(() => {});
+    return () => { vivo = false; };
+  }, [biblioteca]);
+  // «Todas mis clases»: no se escoge nada de Mis planes; entran todas las clases que tengas (también las que agregues después).
+  const aBiblioteca = () => {
+    setPrograma(null);
+    setError(null);
+    setF((prev) => ({ ...prev, contenido: 'biblioteca', programa_guardado_id: null, plantilla_id: null, tipo: 'membresia', chat: false, tecnica: false, titulo: prev.titulo || 'Biblioteca de clases' }));
+  };
 
   // Al escoger el plan, la ficha se llena con lo suyo: nombre, descripción y foto (solo lo que todavía está vacío: no se pisa lo que el coach ya escribió).
   const eligeUnPlan = async (item) => {
@@ -152,11 +167,12 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
   const precio = Number.parseInt(String(f.precio_mxn).replace(/\D/g, ''), 10);
   const problemas = useMemo(() => {
     const lista = [];
-    if (!f.programa_guardado_id && !f.plantilla_id) lista.push('Escoge lo que vendes.');
+    if (!f.programa_guardado_id && !f.plantilla_id && !biblioteca) lista.push('Escoge lo que vendes.');
+    if (biblioteca && nClases === 0) lista.push('Todavía no tienes clases en Mis planes. Guarda al menos una.');
     if (!f.titulo.trim()) lista.push('Ponle un nombre.');
     if (!Number.isFinite(precio) || precio < precioMinimoDe(f.contenido)) lista.push(`El precio mínimo es $${precioMinimoDe(f.contenido)}.`);
     return lista;
-  }, [f, precio]);
+  }, [f, precio, biblioteca, nClases]);
 
   const guarda = async (publicar) => {
     if (problemas.length) { setError(problemas[0]); return; }
@@ -179,7 +195,7 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
         equipo: marcadosValidos(EQUIPOS, f.equipo),
         precio_mxn: precio,
         tipo: tipoDeCobroDe(f.contenido, f.tipo),
-        ...(esSuelto(f.contenido) ? { chat: false, tecnica: false } : null),
+        ...(esSuelto(f.contenido) || biblioteca ? { chat: false, tecnica: false } : null),
         ventana_semanas: Math.min(VENTANA_MAXIMA, Math.max(1, Number(f.ventana_semanas) || VENTANA_MAXIMA)),
       });
       if (publicar) {
@@ -220,10 +236,22 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
             >
               <Layers size={17} color={T.accent} />
               <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {cargandoPrograma ? 'Cargando…' : (programa?.nombre ?? (fuenteId || f.programa_guardado_id || f.plantilla_id ? 'Plan de Mis planes' : 'Escoger de Mis planes'))}
+                {biblioteca
+                  ? `Todas mis clases${nClases != null ? ` · ${nClases} ${nClases === 1 ? 'clase' : 'clases'}` : ''}`
+                  : cargandoPrograma ? 'Cargando…' : (programa?.nombre ?? (fuenteId || f.programa_guardado_id || f.plantilla_id ? 'Plan de Mis planes' : 'Escoger de Mis planes'))}
               </span>
-              <span style={{ color: T.accent, fontSize: 13, fontWeight: 800 }}>{f.programa_guardado_id || f.plantilla_id ? `${ETIQUETA_DE_CONTENIDO[f.contenido] ?? ''} · Cambiar` : 'Escoger'}</span>
+              <span style={{ color: T.accent, fontSize: 13, fontWeight: 800 }}>{biblioteca || f.programa_guardado_id || f.plantilla_id ? `${ETIQUETA_DE_CONTENIDO[f.contenido] ?? ''} · Cambiar` : 'Escoger'}</span>
             </button>
+            {!biblioteca && (
+              <button type="button" onClick={aBiblioteca} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, color: T.accent, padding: '8px 2px 0', textAlign: 'left' }}>
+                O vende todas tus clases a la vez, como una biblioteca
+              </button>
+            )}
+            {biblioteca && (
+              <div style={{ fontSize: 13.5, fontWeight: 600, color: T.text2, lineHeight: 1.45, paddingTop: 8 }}>
+                Quien se suscribe ve todas las clases que tengas en Mis planes. Las que agregues después se suman solas.
+              </div>
+            )}
           </Campo>
 
           <Campo etiqueta="Nombre">
@@ -262,7 +290,7 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
           </Campo>
 
           <Titulo>Cuánto cuesta</Titulo>
-          {!esSuelto(f.contenido) && <Opciones etiqueta="Cómo se cobra" opciones={TIPOS_DE_VENTA} valor={f.tipo} alCambiar={(v) => pon({ tipo: v })} />}
+          {!esSuelto(f.contenido) && !biblioteca && <Opciones etiqueta="Cómo se cobra" opciones={TIPOS_DE_VENTA} valor={f.tipo} alCambiar={(v) => pon({ tipo: v })} />}
           <Campo etiqueta={tipoDeCobroDe(f.contenido, f.tipo) === 'pago_unico' ? 'Precio (pesos)' : 'Precio al mes (pesos)'}>
             <input
               value={f.precio_mxn} inputMode="numeric" placeholder={`${precioMinimoDe(f.contenido)} o más`} style={campo}
@@ -270,7 +298,7 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
             />
           </Campo>
 
-          {!esSuelto(f.contenido) && (
+          {!esSuelto(f.contenido) && !biblioteca && (
             <>
               <Titulo>Qué incluye</Titulo>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10 }}>

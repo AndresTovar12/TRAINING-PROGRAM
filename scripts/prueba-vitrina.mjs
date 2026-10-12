@@ -1,6 +1,6 @@
 /* Pruebas de la vitrina (lo puro): `node scripts/prueba-vitrina.mjs`. Sin red ni base de datos. */
 import assert from 'node:assert/strict';
-import { PRECIO_MINIMO, PRECIO_MINIMO_SUELTO, CONTENIDOS, esSuelto, precioMinimoDe, tipoDeCobroDe, textoDeContenido, VENTANAS, VENTANA_MAXIMA, slugDe, slugUnico, ligaPublica } from '../src/lib/vitrinaDatos.js';
+import { PRECIO_MINIMO, PRECIO_MINIMO_SUELTO, CONTENIDOS, esBiblioteca, esSuelto, precioMinimoDe, tipoDeCobroDe, textoDeContenido, VENTANAS, VENTANA_MAXIMA, slugDe, slugUnico, ligaPublica } from '../src/lib/vitrinaDatos.js';
 import { EDADES, SEXOS, EQUIPOS, NIVELES, marcadosValidos, textoDeEdades, chipsDeParaQuien } from '../src/lib/paraQuien.js';
 
 /* ---- Las listas traen lo que dijo Andrés ---- */
@@ -37,7 +37,7 @@ assert.equal(VENTANAS.at(-1).nombre, '1 mes');
 assert.equal(PRECIO_MINIMO, 500);
 
 /* ---- Qué se vende (12 oct): programas, rutinas, workouts y clases ---- */
-assert.deepEqual(CONTENIDOS, ['programa', 'rutina', 'workout', 'clase']);
+assert.deepEqual(CONTENIDOS, ['programa', 'rutina', 'workout', 'clase', 'biblioteca']);
 assert.equal(esSuelto('clase') && esSuelto('workout'), true);
 assert.equal(esSuelto('programa') || esSuelto('rutina') || esSuelto(undefined), false);
 assert.equal(precioMinimoDe('programa'), 500);
@@ -52,6 +52,13 @@ assert.equal(tipoDeCobroDe('programa', undefined), 'membresia');
 assert.equal(textoDeContenido({ contenido: 'clase', duracion_clase: 2700 }), 'Clase · 45 min');
 assert.equal(textoDeContenido({ contenido: 'clase' }), 'Clase', 'una clase con liga no trae duración');
 assert.equal(textoDeContenido({ contenido: 'workout' }), 'Workout');
+assert.equal(esBiblioteca('biblioteca') && !esBiblioteca('clase') && !esBiblioteca(undefined), true);
+assert.equal(esSuelto('biblioteca'), false, 'una biblioteca no es «suelta»: es una membresía');
+assert.equal(precioMinimoDe('biblioteca'), 100);
+assert.equal(tipoDeCobroDe('biblioteca', 'pago_unico'), 'membresia', 'la biblioteca siempre es mensual');
+assert.equal(textoDeContenido({ contenido: 'biblioteca', n_clases: 24 }), 'Biblioteca · 24 clases');
+assert.equal(textoDeContenido({ contenido: 'biblioteca', n_clases: 1 }), 'Biblioteca · 1 clase');
+assert.equal(textoDeContenido({ contenido: 'biblioteca' }), 'Biblioteca de clases');
 assert.equal(textoDeContenido({ contenido: 'rutina', semanas: 1 }), 'Rutina semanal');
 assert.equal(textoDeContenido({ contenido: 'programa', semanas: 12 }), '12 semanas');
 assert.equal(textoDeContenido({ semanas: 1 }), '1 semana', 'sin contenido es un programa (los planes de antes)');

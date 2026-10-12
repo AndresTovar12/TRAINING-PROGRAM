@@ -36,6 +36,7 @@ import { useAppState, useStorage } from '@/contexts/AppStateContext';
 import { altaReciente } from '@/lib/comoVa';
 import { FiltroDeAutor, EtiquetaDeAutor, TarjetaDeHoyDeTodos } from '@/features/training/EquipoDelAtleta';
 import AvisoDeInvitacion from '@/features/training/AvisoDeInvitacion';
+import { HojaDeBiblioteca, TarjetaDeBiblioteca } from '@/features/training/BibliotecaDeClases';
 import {
   autorDe, autoresDe, entradasDeHoy, escribeRegistro, etiquetaDePrograma, nombreCorto, registrosDe,
   normalizaDia, resumenDeLaSemana, semanaUnificada,
@@ -2049,7 +2050,7 @@ const HomeView = ({
   const esAncha = useIsWide();
   const { t, coach, salud } = usePalabras();
   const tope = esCompu ? { maxWidth: 260 } : null;
-  const { phases: PLAN, planMeta, kind, estructura, programas } = usePlan();
+  const { phases: PLAN, planMeta, kind, estructura, programas, bibliotecas } = usePlan();
   // "Varias semanas": las tarjetas dicen la semana de corrido, no la fase.
   const deCorrido = estructura === 'semanas';
   const semanaDe = (n) => `Semana ${semanaGlobal(PLAN, n.phase.id, n.week.num) ?? n.week.num} de ${semanasDelPlan(PLAN)}`;
@@ -2320,6 +2321,12 @@ const HomeView = ({
           <CintaDeCiencia onAbrir={() => onAbrirHoja('science')} />
         </div>
       )}
+      {/* Las bibliotecas de clases que compró («todas mis clases»): una tarjeta por biblioteca. */}
+      {bibliotecas.map((b) => (
+        <div key={b.id} style={{ padding: '0 18px 12px' }}>
+          <TarjetaDeBiblioteca biblioteca={b} onAbrir={() => onAbrirHoja(`biblioteca:${b.id}`)} />
+        </div>
+      ))}
 
       {/* Info del plan. Con la tarjeta de foto de arriba, esa ya es la puerta al programa; este botón solo sale
           cuando no está (con equipo, o un día sin sesión). */}
@@ -2709,9 +2716,16 @@ const PlanLoadingState = () => (
 // Si ya tiene entrenador, se le dice por su nombre (Andrés, 8 oct 2026, maqueta del inicio); si no, dónde ponerle el código.
 const NoPlanState = ({ onAbrirHoja }) => {
   const { coach } = usePalabras();
+  const { bibliotecas } = usePlan();
   const nombre = (coach?.full_name || '').trim().split(' ')[0];
   return (
-  <div style={{ padding: '48px 20px 120px', maxWidth: 560, margin: '0 auto', textAlign: 'center' }}>
+  <div style={{ padding: `${bibliotecas.length > 0 ? 84 : 48}px 20px 120px`, maxWidth: 560, margin: '0 auto', textAlign: 'center' }}>
+    {bibliotecas.length > 0 ? (
+      // Quien solo compró una biblioteca de clases no espera un plan: lo que tiene son sus clases.
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, textAlign: 'left', marginBottom: 8 }}>
+        {bibliotecas.map((b) => <TarjetaDeBiblioteca key={b.id} biblioteca={b} onAbrir={() => onAbrirHoja(`biblioteca:${b.id}`)} />)}
+      </div>
+    ) : (<>
     <div style={{
       width: 76, height: 76, borderRadius: 24, background: T.accentBg, color: T.accent,
       display: 'grid', placeItems: 'center', margin: '0 auto 20px',
@@ -2728,6 +2742,7 @@ const NoPlanState = ({ onAbrirHoja }) => {
           : 'Ponle el código de tu entrenador en Mi perfil → Mi equipo, y en cuanto te arme tu plan aparecerá aquí.'}
       </Palabra>
     </div>
+    </>)}
     <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 26, flexWrap: 'wrap' }}>
       <button type="button" onClick={() => onAbrirHoja('wellness')} className="kp-press"
         style={{
@@ -2754,7 +2769,7 @@ const NoPlanState = ({ onAbrirHoja }) => {
 
 export default function TrainingApp() {
   const {
-    phases: PLAN, hasPlan, planLoading, kind, programas, programaActivo, elegirPrograma, claveDe,
+    phases: PLAN, hasPlan, planLoading, kind, programas, bibliotecas, programaActivo, elegirPrograma, claveDe,
   } = usePlan();
   const { store, setStore } = useAppState();
   /* EQUIPO = hay más de un programa con sesiones (el del coach y, además, lo que
@@ -3107,6 +3122,10 @@ export default function TrainingApp() {
       </div>
       <BottomNav active={tab} onChange={vasA} />
       {/* Bienestar, 1RM y Ciencia ya no son pestañas: se abren como hoja encima, con su flecha para volver. */}
+      {typeof hoja === 'string' && hoja.startsWith('biblioteca:') && (() => {
+        const b = bibliotecas.find((x) => x.id === hoja.slice('biblioteca:'.length));
+        return b ? <HojaDeBiblioteca biblioteca={b} onCerrar={() => setHoja(null)} /> : null;
+      })()}
       {hoja === 'wellness' && (
         <HojaFlotante titulo="Salud" onCerrar={() => setHoja(null)}>
           <WellnessView wellness={wellness} setWellness={setWellness} reloj={reloj} enHoja />

@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
    lo que ya se vende hasta que vuelva a publicar. Desde el 12 oct 2026 la tiene CUALQUIER profesional (la base lo permite y le impide saltarse «Publicar»). */
 
 export {
-  PRECIO_MINIMO, TIPOS_DE_VENTA, VENTANA_MAXIMA, VENTANAS, CONTENIDOS, ETIQUETA_DE_CONTENIDO, esSuelto, precioMinimoDe, tipoDeCobroDe, textoDeContenido, slugDe, slugUnico, ligaPublica,
+  PRECIO_MINIMO, TIPOS_DE_VENTA, VENTANA_MAXIMA, VENTANAS, CONTENIDOS, ETIQUETA_DE_CONTENIDO, esBiblioteca, esSuelto, precioMinimoDe, tipoDeCobroDe, textoDeContenido, slugDe, slugUnico, ligaPublica,
 } from './vitrinaDatos.js';
 
 /** ¿Ya se puede cobrar en Training Lab? Hasta que Stripe esté conectado es que no: se publica y el botón de comprar dice «Pronto». */
@@ -78,6 +78,15 @@ export async function fuenteParaVender(item) {
     duracionClase: tipo === 'clase' && Number.isFinite(duracion) && duracion > 0 ? duracion : null,
     fases: [],
   };
+}
+
+/** Cuántas clases tiene quien entró en «Mis planes» (tipo «Clase»): las que entrarían a su biblioteca. */
+export async function cuentaMisClases() {
+  const uid = await miId();
+  const { count, error } = await supabase.from('routine_templates').select('id', { count: 'exact', head: true })
+    .eq('created_by', uid).eq('kind', 'day').filter('resumen->>clase', 'eq', 'true');
+  if (error) throw error;
+  return count ?? 0;
 }
 
 const CAMPOS_EDITABLES = [
