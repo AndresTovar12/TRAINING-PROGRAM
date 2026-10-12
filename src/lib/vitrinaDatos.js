@@ -1,7 +1,30 @@
 /* LA VITRINA, lo puro: precios, tipos de venta, la ventana y la liga de cada plan. Sin red ni React: lo usan las pantallas y `scripts/prueba-vitrina.mjs`. */
 
+import { duracionTexto } from './clases.js';
+
 /** El precio mínimo de un plan, en pesos (Andrés, 11 oct 2026). La base lo vuelve a exigir. */
 export const PRECIO_MINIMO = 500;
+
+/* QUÉ SE VENDE (12 oct 2026): un programa, una rutina semanal, un workout o una clase de «Mis planes». Al publicar, todo se vuelve la misma forma de plan (ver
+   docs/sql/2026-10-12-vender-rutinas-workouts-y-clases.sql). Un workout o una clase SUELTOS se venden solo a pago único y con un mínimo menor: con $500 una clase no se vendería.
+   Supuesto de esa parte (Andrés puede cambiarlo): $100. Es este número y la base (`vitrina_precio_minimo`). */
+export const CONTENIDOS = ['programa', 'rutina', 'workout', 'clase'];
+export const ETIQUETA_DE_CONTENIDO = { programa: 'Programa', rutina: 'Rutina semanal', workout: 'Workout', clase: 'Clase' };
+export const PRECIO_MINIMO_SUELTO = 100;
+/** Un workout o una clase: una sola cosa que se compra una vez (no una mensualidad). */
+export const esSuelto = (contenido) => contenido === 'workout' || contenido === 'clase';
+export const precioMinimoDe = (contenido) => (esSuelto(contenido) ? PRECIO_MINIMO_SUELTO : PRECIO_MINIMO);
+/** Lo suelto SIEMPRE es pago único; lo demás respeta lo que el coach eligió (membresía si no eligió nada). */
+export const tipoDeCobroDe = (contenido, tipo) => (esSuelto(contenido) || tipo === 'pago_unico' ? 'pago_unico' : 'membresia');
+
+/** Lo que se vende, en pocas palabras para tarjetas y listas: «Clase · 45 min», «Workout», «Rutina semanal», «12 semanas». */
+export function textoDeContenido({ contenido = 'programa', semanas = 0, duracion_clase: duracion = null } = {}) {
+  if (contenido === 'clase') return ['Clase', duracionTexto(duracion)].filter(Boolean).join(' · ');
+  if (contenido === 'workout') return 'Workout';
+  if (contenido === 'rutina') return 'Rutina semanal';
+  const n = Number(semanas);
+  return Number.isFinite(n) && n > 0 ? `${n} ${n === 1 ? 'semana' : 'semanas'}` : '';
+}
 
 export const TIPOS_DE_VENTA = [
   { id: 'membresia', nombre: 'Membresía mensual' },

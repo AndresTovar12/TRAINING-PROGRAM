@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { botonBlanco, botonPrincipal } from '@/features/misplanes/estilos';
 import FichaDelPlanEnVenta from '@/features/vitrina/FichaDelPlanEnVenta';
-import { leeVentasAbiertas, ligaPublica, listaMiVitrina, retiraPlan } from '@/lib/vitrinaApi';
+import { ETIQUETA_DE_CONTENIDO, leeVentasAbiertas, ligaPublica, listaMiVitrina, retiraPlan } from '@/lib/vitrinaApi';
 
 /* MI VITRINA: los planes que un coach pone a la venta (nombre que decidió Andrés, 10 oct 2026; antes se llamaba «menú»).
 
@@ -32,7 +32,8 @@ function Tarjeta({ plan, usuario, alEditar, alRetirar }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 17, fontWeight: 800, color: T.text, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{plan.titulo}</div>
           <div style={{ fontSize: 14, fontWeight: 700, color: T.text2, marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
-            {pesos(plan.precio_mxn)}{plan.tipo === 'pago_unico' ? '' : ' al mes'} · {plan.suscriptores} {plan.suscriptores === 1 ? 'suscriptor' : 'suscriptores'}
+            {plan.contenido && plan.contenido !== 'programa' ? `${ETIQUETA_DE_CONTENIDO[plan.contenido]} · ` : ''}{pesos(plan.precio_mxn)}{plan.tipo === 'pago_unico' ? '' : ' al mes'} · {plan.suscriptores}{' '}
+            {plan.tipo === 'pago_unico' ? (plan.suscriptores === 1 ? 'compra' : 'compras') : (plan.suscriptores === 1 ? 'suscriptor' : 'suscriptores')}
           </div>
         </div>
         <span style={{ padding: '3px 10px', borderRadius: 999, background: e.fondo, color: e.tinta, fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap' }}>{e.texto}</span>
@@ -85,7 +86,7 @@ export default function MiVitrina() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 820, margin: '0 auto', fontFamily: FONT }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ flex: 1, minWidth: 0, fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: -0.4 }}>Mi vitrina</div>
-        <button type="button" onClick={() => setEditando(null)} style={botonPrincipal(false)}><Plus size={17} /> Poner un plan en venta</button>
+        <button type="button" onClick={() => setEditando(null)} style={botonPrincipal(false)}><Plus size={17} /> Poner algo en venta</button>
       </div>
       {error && <div role="alert" style={{ padding: '10px 14px', borderRadius: 12, background: KP.dangerSoft, color: KP.danger, fontSize: 14, fontWeight: 700 }}>{error}</div>}
       {!ventas && (
@@ -98,9 +99,9 @@ export default function MiVitrina() {
       ) : planes.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '44px 20px', background: KP.surface, borderRadius: 18, boxShadow: KP.shCard }}>
           <span style={{ width: 56, height: 56, borderRadius: 18, background: T.accentBg, color: T.accent, display: 'inline-grid', placeItems: 'center' }}><Store size={26} /></span>
-          <div style={{ fontSize: 17, fontWeight: 800, color: T.text, marginTop: 14 }}>Aquí vendes tus planes</div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: T.text2, lineHeight: 1.5, margin: '6px auto 0', maxWidth: 340 }}>Escoge uno de Mis planes, ponle precio y comparte tu liga.</div>
-          <button type="button" onClick={() => setEditando(null)} style={{ ...botonPrincipal(false), marginTop: 18 }}><Plus size={17} /> Poner un plan en venta</button>
+          <div style={{ fontSize: 17, fontWeight: 800, color: T.text, marginTop: 14 }}>Aquí vendes lo tuyo</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: T.text2, lineHeight: 1.5, margin: '6px auto 0', maxWidth: 340 }}>Escoge un programa, una rutina, un workout o una clase de Mis planes, ponle precio y comparte tu liga.</div>
+          <button type="button" onClick={() => setEditando(null)} style={{ ...botonPrincipal(false), marginTop: 18 }}><Plus size={17} /> Poner algo en venta</button>
         </div>
       ) : (
         planes.map((p) => <Tarjeta key={p.id} plan={p} usuario={usuario} alEditar={setEditando} alRetirar={retira} />)

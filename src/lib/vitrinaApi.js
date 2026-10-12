@@ -5,7 +5,9 @@ import { supabase } from '@/lib/supabase';
    Un plan en venta sale de uno de «Mis planes» (`programas_guardados`). Al PUBLICAR se guarda una copia (una versión): lo que el coach siga editando en «Mis planes» no toca
    lo que ya se vende hasta que vuelva a publicar. Desde el 12 oct 2026 la tiene CUALQUIER profesional (la base lo permite y le impide saltarse «Publicar»). */
 
-export { PRECIO_MINIMO, TIPOS_DE_VENTA, VENTANA_MAXIMA, VENTANAS, slugDe, slugUnico, ligaPublica } from './vitrinaDatos.js';
+export {
+  PRECIO_MINIMO, TIPOS_DE_VENTA, VENTANA_MAXIMA, VENTANAS, CONTENIDOS, ETIQUETA_DE_CONTENIDO, esSuelto, precioMinimoDe, tipoDeCobroDe, textoDeContenido, slugDe, slugUnico, ligaPublica,
+} from './vitrinaDatos.js';
 
 /** ¿Ya se puede cobrar en Training Lab? Hasta que Stripe esté conectado es que no: se publica y el botón de comprar dice «Pronto». */
 export async function leeVentasAbiertas() {
@@ -52,8 +54,34 @@ export async function programaParaVender(programaGuardadoId) {
   };
 }
 
+/**
+ * Lo que se va a vender, leído de «Mis planes»: `item` es `{ id, tipo }` con `tipo` programa, rutina, workout o clase. Devuelve lo que llena la ficha (nombre, descripción, foto)
+ * y lo que hace falta para armarla (`contenido`, `kind`, y la duración si es una clase). Una rutina, un workout o una clase viven en `routine_templates`; un programa en `programas_guardados`.
+ */
+export async function fuenteParaVender(item) {
+  const tipo = item?.tipo ?? 'programa';
+  if (tipo === 'programa') {
+    const p = await programaParaVender(item.id);
+    return p ? { ...p, contenido: 'programa', duracionClase: null } : null;
+  }
+  const { data, error } = await supabase.from('routine_templates').select('id, name, descripcion, data, resumen, kind').eq('id', item.id).maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const duracion = Number(data.data?.clase?.duracion);
+  return {
+    id: data.id,
+    nombre: data.name,
+    descripcion: data.descripcion ?? '',
+    foto: typeof data.data?.foto === 'string' ? data.data.foto : '',
+    kind: 'weekly',
+    contenido: tipo,
+    duracionClase: tipo === 'clase' && Number.isFinite(duracion) && duracion > 0 ? duracion : null,
+    fases: [],
+  };
+}
+
 const CAMPOS_EDITABLES = [
-  'programa_guardado_id', 'slug', 'titulo', 'descripcion', 'objetivo', 'nivel', 'deportes', 'edades', 'sexo', 'equipo', 'foto_url', 'video_url', 'tipo', 'precio_mxn',
+  'programa_guardado_id', 'contenido', 'plantilla_id', 'slug', 'titulo', 'descripcion', 'objetivo', 'nivel', 'deportes', 'edades', 'sexo', 'equipo', 'foto_url', 'video_url', 'tipo', 'precio_mxn',
   'ventana_semanas', 'chat', 'tecnica',
 ];
 const solo = (obj) => Object.fromEntries(CAMPOS_EDITABLES.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));

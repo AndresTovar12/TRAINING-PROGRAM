@@ -36,6 +36,16 @@ const json = (cuerpo: unknown, estado: number, origen: string | null) =>
 
 const VIVAS = ['activa', 'gracia', 'vencida', 'por_armar']
 
+// Un workout o una clase SUELTOS se publican «el lunes» (así los guarda `publicar_plan`). Quien los compra no tiene por qué esperar al lunes: se le acomodan el día en que los compró, para
+// que salgan en «Hoy» de inmediato. Con «Cambiar día» los mueve a donde quiera. Los días se llaman como en la app (con acento).
+const DIAS_DE_LA_SEMANA = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+const diaDeLaFecha = (iso: string) => DIAS_DE_LA_SEMANA[new Date(`${String(iso).slice(0, 10)}T12:00:00Z`).getUTCDay()]
+// deno-lint-ignore no-explicit-any
+function alDiaDeLaCompra(data: any, iso: string) {
+  const dia = diaDeLaFecha(iso)
+  for (const fase of data?.phases ?? []) for (const semana of fase?.weekData ?? []) for (const d of semana?.days ?? []) d.day = dia
+}
+
 Deno.serve(async (req) => {
   const origen = req.headers.get('Origin')
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cabeceras(origen) })
@@ -59,7 +69,7 @@ Deno.serve(async (req) => {
     const planesIds = [...new Set(compras.map((c) => c.vitrina_plan_id))]
     const coachesIds = [...new Set(compras.map((c) => c.coach_id))]
     const [{ data: planes, error: e1 }, { data: coaches, error: e2 }] = await Promise.all([
-      bd.from('vitrina_planes').select('id, titulo, chat, tecnica, ventana_semanas').in('id', planesIds),
+      bd.from('vitrina_planes').select('id, titulo, chat, tecnica, ventana_semanas, contenido').in('id', planesIds),
       bd.from('profiles').select('id, username, full_name, avatar_url, profesion').in('id', coachesIds),
     ])
     if (e1 || e2) throw e1 ?? e2
@@ -81,6 +91,7 @@ Deno.serve(async (req) => {
             data: version.data, inicio: c.inicio ?? hoy, faseDeEntrada: c.fase_de_entrada, semanaDeEntrada: c.semana_de_entrada,
             ventanaSemanas: Math.min(4, Math.max(1, Number(plan?.ventana_semanas) || 4)), estado: c.estado, hoy,
           })
+          if (plan?.contenido === 'workout' || plan?.contenido === 'clase') alDiaDeLaCompra(r.data, c.inicio ?? hoy)
           programa = { title: version.titulo, data: r.data, cursorInicial: r.cursorInicial, resumen: r.resumen }
         }
       }
