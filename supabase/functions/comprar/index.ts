@@ -2,7 +2,7 @@
  * Empieza una compra: crea la compra «pendiente» y la página de pago de Stripe (Checkout), y devuelve su dirección para mandar ahí al comprador.
  *
  * Quién compra: una cuenta de ATLETA con sesión. A quién: un coach que ya puede cobrar (en la etapa 1, solo el dueño; después, el que tenga su cuenta de Stripe lista).
- * Qué: un plan PUBLICADO de su vitrina, por una fase por la que el coach permitió entrar. El precio sale de la base, nunca de lo que mande el navegador.
+ * Qué: un plan PUBLICADO de su vitrina, entrando por la fase y la semana que el comprador eligió en la hoja del programa (cualquiera del plan; por defecto la primera). El precio sale de la base, nunca de lo que mande el navegador.
  *
  * El dinero: Stripe cobra en la cuenta de Training Lab y el reparto lo hace `stripe-webhook` (ver docs/superpowers/specs/2026-10-10-monetizacion-design.md, sección 3).
  * Sin las llaves de Stripe (`STRIPE_SECRET_KEY`) contesta que la compra aún no está disponible: no falla de golpe.
@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
   if (errSesion || !sesion?.user) return json({ error: 'Tu sesión expiró. Vuelve a entrar.' }, 401, origen)
   const uid = sesion.user.id
 
-  let p: { usuario?: string; slug?: string; fase_de_entrada?: string | null }
+  let p: { usuario?: string; slug?: string; fase_de_entrada?: string | null; semana_de_entrada?: number | null }
   try { p = await req.json() } catch { return json({ error: 'Datos inválidos.' }, 400, origen) }
   const usuario = String(p.usuario ?? '').toLowerCase().trim()
   const slug = String(p.slug ?? '').toLowerCase().trim()
@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
 
     const { data: coach } = await bd.from('profiles').select('id, is_owner, is_active').eq('username', usuario).eq('role', 'admin').maybeSingle()
     if (!coach || coach.is_active === false) return json({ error: 'Este plan ya no está disponible.' }, 404, origen)
-    const { data: plan } = await bd.from('vitrina_planes').select('id, coach_id, titulo, tipo, precio_mxn, fases_de_entrada, version_n, estado').eq('coach_id', coach.id).eq('slug', slug).eq('estado', 'publicado').maybeSingle()
+    const { data: plan } = await bd.from('vitrina_planes').select('id, coach_id, titulo, tipo, precio_mxn, version_n, estado').eq('coach_id', coach.id).eq('slug', slug).eq('estado', 'publicado').maybeSingle()
     if (!plan) return json({ error: 'Este plan ya no está disponible.' }, 404, origen)
     if (plan.tipo === 'personalizado') return json({ error: 'Los planes personalizados todavía no se pueden comprar.' }, 400, origen)
 
@@ -70,16 +70,24 @@ Deno.serve(async (req) => {
       if (!cuenta?.cobros_ok || !cuenta?.depositos_ok) return json({ error: 'Este coach todavía no puede cobrar.' }, 403, origen)
     }
 
-    // Por qué fase entra: una de las que el coach permitió (o ninguna si el plan es de una sola semana que se repite).
+    // Por dónde entra: la fase y la semana que eligió (cualquiera del plan, incluso a la mitad de una fase). Sin elegir, la primera. Un plan de una sola semana que se repite no tiene dónde elegir.
     const { data: version } = await bd.from('vitrina_versiones').select('data').eq('vitrina_plan_id', plan.id).eq('n', plan.version_n).maybeSingle()
     if (!version) return json({ error: 'Este plan ya no está disponible.' }, 404, origen)
-    const fases: { id?: string }[] = Array.isArray(version.data?.phases) ? version.data.phases : []
+    const fases: { id?: string; weekData?: { num?: number }[] }[] = Array.isArray(version.data?.phases) ? version.data.phases : []
     const semanal = version.data?.kind === 'weekly'
-    const permitidas: string[] = Array.isArray(plan.fases_de_entrada) ? plan.fases_de_entrada : []
     let fase: string | null = null
+    let semana: number | null = null
     if (!semanal && fases.length) {
-      fase = p.fase_de_entrada && permitidas.includes(p.fase_de_entrada) ? p.fase_de_entrada : (permitidas[0] ?? fases[0]?.id ?? null)
-      if (p.fase_de_entrada && !permitidas.includes(p.fase_de_entrada)) return json({ error: 'Por esa fase no se puede entrar.' }, 400, origen)
+      const destino = p.fase_de_entrada ? fases.find((f) => f.id === p.fase_de_entrada) : fases[0]
+      if (!destino) return json({ error: 'Esa semana no existe en el plan.' }, 400, origen)
+      const semanas = Array.isArray(destino.weekData) ? destino.weekData : []
+      fase = destino.id ?? null
+      if (p.semana_de_entrada != null) {
+        if (!semanas.some((w) => w?.num === Number(p.semana_de_entrada))) return json({ error: 'Esa semana no existe en el plan.' }, 400, origen)
+        semana = Number(p.semana_de_entrada)
+      } else {
+        semana = semanas[0]?.num ?? null
+      }
     }
 
     const { data: previas } = await bd.from('compras').select('id, estado, stripe_customer_id').eq('atleta_id', uid).eq('vitrina_plan_id', plan.id)
@@ -95,7 +103,7 @@ Deno.serve(async (req) => {
 
     const { data: compra, error: errCompra } = await bd.from('compras').insert({
       vitrina_plan_id: plan.id, atleta_id: uid, coach_id: coach.id, tipo: plan.tipo, estado: 'pendiente', precio_mxn: plan.precio_mxn,
-      fase_de_entrada: fase, version_n: plan.version_n, stripe_customer_id: cliente,
+      fase_de_entrada: fase, semana_de_entrada: semana, version_n: plan.version_n, stripe_customer_id: cliente,
     }).select('id').single()
     if (errCompra) throw errCompra
 

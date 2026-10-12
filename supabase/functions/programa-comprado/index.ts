@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
 
   try {
     const { data: compras, error } = await bd.from('compras')
-      .select('id, vitrina_plan_id, coach_id, tipo, estado, inicio, fase_de_entrada, version_n, periodo_hasta, gracia_hasta, entrega_limite')
+      .select('id, vitrina_plan_id, coach_id, tipo, estado, inicio, fase_de_entrada, semana_de_entrada, version_n, periodo_hasta, gracia_hasta, entrega_limite')
       .eq('atleta_id', atletaId).in('estado', VIVAS).order('creada_en')
     if (error) throw error
     if (!compras?.length) return json({ compras: [] }, 200, origen)
@@ -77,7 +77,9 @@ Deno.serve(async (req) => {
         if (e3) throw e3
         if (version) {
           const r = recortaPrograma({
-            data: version.data, inicio: c.inicio ?? hoy, faseDeEntrada: c.fase_de_entrada, ventanaSemanas: plan?.ventana_semanas ?? 4, estado: c.estado, hoy,
+            // El comprador ve a lo más UN MES hacia adelante (el coach puede bajarlo, nunca subirlo): el tope también se pone aquí, por si alguna fila trajera más.
+            data: version.data, inicio: c.inicio ?? hoy, faseDeEntrada: c.fase_de_entrada, semanaDeEntrada: c.semana_de_entrada,
+            ventanaSemanas: Math.min(4, Math.max(1, Number(plan?.ventana_semanas) || 4)), estado: c.estado, hoy,
           })
           programa = { title: version.titulo, data: r.data, cursorInicial: r.cursorInicial, resumen: r.resumen }
         }

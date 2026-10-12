@@ -7,7 +7,7 @@
    · La semana en que va se cuenta con el calendario desde el día de la compra (`inicio`), igual que la app (`cursorAlDia` de training-utils: una semana ISO = una semana del plan).
      Se cuenta con la fecha del SERVIDOR, nunca con la del teléfono (una fecha falsa abriría semanas de más). Va 12 horas atrás para no adelantarse a nadie en ningún huso horario:
      en México la semana siguiente se abre a las 7 de la mañana del lunes, y como la ventana siempre trae al menos una semana de sobra, nadie lo nota.
-   · El comprador entra por la fase que el coach marcó como de entrada: las fases anteriores no existen para él (no se le mandan).
+   · El comprador entra por la fase y la semana que ELIGIÓ al comprar (cualquiera, incluso a la mitad de una fase; Andrés, 12 oct 2026): lo anterior no existe para él (no se le manda).
    · Un plan semanal (una sola semana que se repite) no se recorta; solo se cierra si la compra ya no está al día.
    · Con la compra vencida, cancelada o reembolsada todo queda cerrado (nombres y nada más): conserva su historial de lo que anotó, no el plan.
 
@@ -54,15 +54,22 @@ const semanaCerrada = (semana) => ({
 /**
  * Recorta el programa de una compra.
  *   data: lo publicado (`{ kind, estructura, phases, foto, ciencia }`) · inicio: el día de la compra · faseDeEntrada: id de la fase por donde entró
+ *   semanaDeEntrada: el número de la semana de esa fase donde empieza (null = la primera; las anteriores de esa fase tampoco se le mandan)
  *   ventanaSemanas: semanas visibles hacia adelante (null = todas) · estado: el de la compra · hoy: 'AAAA-MM-DD' (por defecto, el del servidor)
  * Devuelve `{ data, cursorInicial, resumen }`: el programa ya recortado, dónde empieza el puntero del atleta y unos números para la pantalla.
  */
-export function recortaPrograma({ data, inicio, faseDeEntrada = null, ventanaSemanas = 4, estado = 'activa', hoy = hoyDelServidor() }) {
+export function recortaPrograma({ data, inicio, faseDeEntrada = null, semanaDeEntrada = null, ventanaSemanas = 4, estado = 'activa', hoy = hoyDelServidor() }) {
   const base = copia(data) ?? {};
   const semanal = base.kind === 'weekly';
   const todas = Array.isArray(base.phases) ? base.phases : [];
   const entrada = semanal ? 0 : Math.max(0, todas.findIndex((f) => f?.id === faseDeEntrada));
-  const fases = semanal ? todas : todas.slice(entrada);
+  let fases = semanal ? todas : todas.slice(entrada);
+  // A la mitad de una fase: las semanas de esa fase que quedan antes de la que eligió no existen para él.
+  if (!semanal && semanaDeEntrada != null && fases[0]) {
+    const semanas = Array.isArray(fases[0].weekData) ? fases[0].weekData : [];
+    const desde = semanas.findIndex((w) => w?.num === Number(semanaDeEntrada));
+    if (desde > 0) fases = [{ ...fases[0], weekData: semanas.slice(desde) }, ...fases.slice(1)];
+  }
 
   const secuencia = [];
   fases.forEach((f, i) => (f?.weekData ?? []).forEach((_, j) => secuencia.push([i, j])));

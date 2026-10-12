@@ -1,11 +1,16 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Check, Dumbbell, Loader2, MessageCircle, ShieldCheck, Video } from 'lucide-react';
-import { LT, FONT, DAY_FULL, NUM_STYLE } from '@/lib/theme';
+import { ArrowLeft, CalendarDays, Check, Dumbbell, Loader2, MessageCircle, ShieldCheck, Video } from 'lucide-react';
+import { LT, FONT, NUM_STYLE } from '@/lib/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import AuthScreen from '@/features/auth/AuthScreen';
 import { iniciaCompra, leePerfilPublico, leePlanPublico } from '@/lib/tiendaApi';
 import { oficioCorto } from '@/lib/theme';
 import { chipsDeParaQuien } from '@/lib/paraQuien';
+import { ligaExterna } from '@/lib/videos';
+import NavegadorDelPlan from '@/components/NavegadorDelPlan';
+import {
+  entradaDeCorrido, primeraEntrada, resumenDeEntrada, semanaSugerida, semanasDeMeses, semanasHastaFecha, totalDeSemanas,
+} from '@/lib/entradaAlPlan';
 
 /* LA TIENDA PÚBLICA: la página de un coach y la de cada plan que vende (monetización, 11 oct 2026).
 
@@ -125,40 +130,94 @@ const Bloque = ({ titulo, children }) => (
   </div>
 );
 
-function SemanaDeMuestra({ semana }) {
-  const dias = Array.isArray(semana?.days) ? semana.days : [];
-  if (!dias.length) return null;
+const semanasTexto = (n) => `${n} ${n === 1 ? 'semana' : 'semanas'}`;
+
+/* El video con que el coach presenta su plan: una liga de YouTube o Vimeo se incrusta; un archivo nuestro se reproduce con los controles de siempre. */
+function VideoDelCoach({ url }) {
+  const externa = ligaExterna(url);
+  const caja = { width: '100%', aspectRatio: '16 / 9', borderRadius: 20, overflow: 'hidden', background: '#0E1015', border: 'none', display: 'block' };
+  if (externa?.embed) return <iframe title="Video del plan" src={externa.embed} allow="fullscreen; picture-in-picture" allowFullScreen style={caja} />;
+  if (externa) return <a href={externa.abrir} target="_blank" rel="noreferrer" style={{ ...botonAzul(false), textDecoration: 'none' }}>Ver el video</a>;
+  return <video src={url} controls playsInline preload="metadata" style={caja} />;
+}
+
+/* Cuántos días de entrenamiento trae una semana típica: lo más común entre las semanas de la hoja. */
+function diasPorSemana(hoja) {
+  const cuentas = new Map();
+  (hoja ?? []).forEach((f) => (f.weekData ?? []).forEach((w) => {
+    const n = (w.days ?? []).filter((d) => d.cat !== 'off').length;
+    cuentas.set(n, (cuentas.get(n) ?? 0) + 1);
+  }));
+  let mejor = 0;
+  let veces = 0;
+  cuentas.forEach((v, n) => { if (v > veces && n > 0) { mejor = n; veces = v; } });
+  return mejor;
+}
+
+const opcionDeTiempo = (activa) => ({
+  minHeight: 40, padding: '0 13px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
+  border: `1.5px solid ${activa ? LT.blue : LT.border}`, background: activa ? LT.blueSoft : LT.surface, color: activa ? LT.blue : LT.text2, touchAction: 'manipulation',
+});
+
+/* «¿Cuánto tiempo tienes?»: ayuda para quien no tiene tiempo de todo el plan. Dice cuántos meses o la fecha de su competencia y le marca en qué semana le conviene entrar para que el programa
+   termine cuando se le acaba el tiempo. Puede ignorarla y escoger a mano en la hoja. */
+function CuantoTiempoTienes({ fases, alSugerir }) {
+  const [modo, setModo] = useState('todo'); // 'todo' | 'meses' | 'fecha'
+  const [meses, setMeses] = useState(6);
+  const [fecha, setFecha] = useState('');
+  const total = totalDeSemanas(fases);
+  const disponibles = modo === 'meses' ? semanasDeMeses(meses) : modo === 'fecha' ? semanasHastaFecha(fecha) : 0;
+  const sugerida = semanaSugerida(total, disponibles);
+  const cambia = (nuevo, m = meses, f = fecha) => {
+    setModo(nuevo);
+    const d = nuevo === 'meses' ? semanasDeMeses(m) : nuevo === 'fecha' ? semanasHastaFecha(f) : 0;
+    alSugerir(semanaSugerida(total, d));
+  };
   return (
-    <Bloque titulo="Una semana de muestra">
-      {dias.map((d, i) => {
-        const ejercicios = (Array.isArray(d.exercises) ? d.exercises : []).filter((e) => !e?.isNote && e?.name);
-        const descanso = d.cat === 'off' || ejercicios.length === 0;
-        return (
-          <div key={`${d.day}-${i}`} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-            <span style={{ width: 78, flexShrink: 0, fontSize: 13.5, fontWeight: 800, color: LT.text2 }}>{DAY_FULL[d.day] ?? d.day}</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              {descanso ? (
-                <span style={{ fontSize: 14.5, fontWeight: 600, color: LT.text3 }}>Descanso</span>
-              ) : (
-                <>
-                  {d.name && <div style={{ fontSize: 14.5, fontWeight: 800 }}>{d.name}</div>}
-                  <div style={{ fontSize: 13.5, fontWeight: 500, color: LT.text2, lineHeight: 1.45 }}>
-                    {ejercicios.slice(0, 5).map((e) => e.name).join(' · ')}{ejercicios.length > 5 ? ` · y ${ejercicios.length - 5} más` : ''}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </Bloque>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ fontSize: 14.5, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}><CalendarDays size={17} color={LT.blue} /> ¿Cuánto tiempo tienes?</div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button type="button" onClick={() => cambia('todo')} aria-pressed={modo === 'todo'} style={opcionDeTiempo(modo === 'todo')}>Todo el plan</button>
+        <button type="button" onClick={() => cambia('meses')} aria-pressed={modo === 'meses'} style={opcionDeTiempo(modo === 'meses')}>Unos meses</button>
+        <button type="button" onClick={() => cambia('fecha')} aria-pressed={modo === 'fecha'} style={opcionDeTiempo(modo === 'fecha')}>Mi competencia</button>
+      </div>
+      {modo === 'meses' && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14.5, fontWeight: 700 }}>
+          Tengo
+          <input
+            type="number" inputMode="numeric" min={1} max={36} value={meses} aria-label="Meses que tienes"
+            onChange={(e) => { const m = Math.max(1, Math.min(36, Number(e.target.value) || 1)); setMeses(m); cambia('meses', m); }}
+            style={{ width: 72, minHeight: 44, borderRadius: 12, border: `1.5px solid ${LT.border}`, padding: '0 10px', fontFamily: FONT, fontSize: 16, fontWeight: 800, textAlign: 'center', background: LT.surface }}
+          />
+          {meses === 1 ? 'mes' : 'meses'}
+        </label>
+      )}
+      {modo === 'fecha' && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14.5, fontWeight: 700, flexWrap: 'wrap' }}>
+          Es el
+          <input
+            type="date" value={fecha} aria-label="Fecha de tu competencia"
+            onChange={(e) => { setFecha(e.target.value); cambia('fecha', meses, e.target.value); }}
+            style={{ minHeight: 44, borderRadius: 12, border: `1.5px solid ${LT.border}`, padding: '0 10px', fontFamily: FONT, fontSize: 16, fontWeight: 700, background: LT.surface }}
+          />
+        </label>
+      )}
+      {modo !== 'todo' && disponibles > 0 && (
+        <div style={{ fontSize: 14, fontWeight: 600, color: LT.text2, lineHeight: 1.45 }}>
+          {sugerida === 1
+            ? `Te alcanza para todo el plan (${semanasTexto(total)}). Empiezas en la semana 1.`
+            : `Para terminar a tiempo te conviene entrar en la semana ${sugerida} de ${total}. Ya te la marcamos; puedes escoger otra.`}
+        </div>
+      )}
+    </div>
   );
 }
 
 function PaginaDelPlan({ usuario, slug, alVolver }) {
   const { loading, user, profile } = useAuth();
   const [plan, setPlan] = useState(undefined);
-  const [fase, setFase] = useState(null);
+  const [entrada, setEntrada] = useState(null); // { faseId, semana }: dónde empieza quien compra
+  const [claveDeHoja, setClaveDeHoja] = useState(0); // al sugerir una semana, la hoja se vuelve a abrir en ella
   const [entrando, setEntrando] = useState(false);
   const [comprando, setComprando] = useState(false);
   const [error, setError] = useState(null);
@@ -166,7 +225,7 @@ function PaginaDelPlan({ usuario, slug, alVolver }) {
   useEffect(() => {
     let vivo = true;
     leePlanPublico(usuario, slug)
-      .then((p) => { if (vivo) { setPlan(p); setFase(p?.fases?.find((f) => f.entrada)?.id ?? null); } })
+      .then((p) => { if (vivo) { setPlan(p); setEntrada(primeraEntrada(p?.hoja)); } })
       .catch(() => { if (vivo) setPlan(null); });
     return () => { vivo = false; };
   }, [usuario, slug]);
@@ -176,15 +235,20 @@ function PaginaDelPlan({ usuario, slug, alVolver }) {
   if (plan === undefined) return <Marco alVolver={alVolver}><div role="status" style={{ display: 'flex', justifyContent: 'center', padding: 48, color: LT.text2 }}><Loader2 size={22} className="spin" /></div></Marco>;
   if (plan === null) return <Aviso titulo="Este plan ya no está disponible" texto="Puede que su coach lo haya retirado." boton="Ver al coach" alTocar={alVolver} />;
 
-  const entradas = plan.fases.filter((f) => f.entrada);
+  const hoja = plan.hoja ?? [];
+  const semanal = plan.kind === 'weekly';
+  const total = totalDeSemanas(hoja);
+  const resumen = !semanal && entrada ? resumenDeEntrada(hoja, entrada.faseId, entrada.semana) : null;
+  const dias = diasPorSemana(hoja);
   const esCoach = profile?.role === 'admin';
+  const sugiere = (n) => { setEntrada(entradaDeCorrido(hoja, n)); setClaveDeHoja((c) => c + 1); };
   const compra = async () => {
     if (!user) { setEntrando(true); return; }
     if (esCoach) { setError('Para comprar necesitas una cuenta de atleta.'); return; }
     setComprando(true);
     setError(null);
     try {
-      window.location.assign(await iniciaCompra({ usuario, slug, faseDeEntrada: fase }));
+      window.location.assign(await iniciaCompra({ usuario, slug, faseDeEntrada: entrada?.faseId ?? null, semanaDeEntrada: entrada?.semana ?? null }));
     } catch (e) {
       setError(e?.message ?? 'No se pudo empezar la compra.');
       setComprando(false);
@@ -203,50 +267,40 @@ function PaginaDelPlan({ usuario, slug, alVolver }) {
             {chipsDeParaQuien(plan).map((c) => <Chip key={c}>{c}</Chip>)}
           </div>
         )}
+        {plan.video && <VideoDelCoach url={plan.video} />}
         {plan.descripcion && <div style={{ fontSize: 15.5, fontWeight: 500, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{plan.descripcion}</div>}
         {(plan.para_quien || plan.objetivo) && (
-          <Bloque titulo="Para quién es">
+          <Bloque titulo="Objetivo">
             {plan.para_quien && <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.45 }}>{plan.para_quien}</div>}
-            {plan.objetivo && <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.45 }}><span style={{ color: LT.text2 }}>Objetivo: </span>{plan.objetivo}</div>}
+            {plan.objetivo && <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.45 }}>{plan.objetivo}</div>}
           </Bloque>
         )}
 
-        {plan.kind !== 'weekly' && plan.fases.length > 0 && (
-          <Bloque titulo={`El plan · ${plan.fases.reduce((s, f) => s + f.semanas, 0)} semanas`}>
-            {plan.fases.map((f) => (
-              <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: 700 }}>{f.nombre}</span>
-                <span style={{ fontSize: 13.5, fontWeight: 700, color: LT.text2, ...NUM_STYLE }}>{f.semanas} sem</span>
-              </div>
-            ))}
-          </Bloque>
-        )}
-
-        <SemanaDeMuestra semana={plan.muestra} />
-
-        {(plan.chat || plan.tecnica) && (
+        {(plan.chat || plan.tecnica || total > 0) && (
           <Bloque titulo="Incluye">
+            {total > 0 && !semanal && <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 15, fontWeight: 700 }}><CalendarDays size={18} color={LT.blue} /> {semanasTexto(total)} de entrenamiento{dias ? `, ${dias} ${dias === 1 ? 'día' : 'días'} por semana` : ''}</div>}
+            {total > 0 && semanal && dias > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 15, fontWeight: 700 }}><CalendarDays size={18} color={LT.blue} /> Una rutina de {dias} {dias === 1 ? 'día' : 'días'} por semana que se repite</div>}
             {plan.chat && <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 15, fontWeight: 700 }}><MessageCircle size={18} color={LT.blue} /> Chat con tu coach</div>}
             {plan.tecnica && <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 15, fontWeight: 700 }}><Video size={18} color={LT.blue} /> Revisión de tu técnica por video</div>}
           </Bloque>
         )}
 
-        {plan.kind !== 'weekly' && entradas.length > 1 && (
-          <Bloque titulo="¿Por dónde empiezas?">
-            {entradas.map((f) => {
-              const marcada = fase === f.id;
-              return (
-                <button
-                  key={f.id} type="button" role="radio" aria-checked={marcada} onClick={() => setFase(f.id)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 48, padding: '0 14px', borderRadius: 14, cursor: 'pointer', textAlign: 'left', fontFamily: FONT, fontSize: 15, fontWeight: 700, color: LT.text, border: `2px solid ${marcada ? LT.blue : LT.border}`, background: marcada ? LT.blueSoft : LT.surface }}
-                >
-                  <span style={{ width: 20, height: 20, borderRadius: 10, border: `2px solid ${marcada ? LT.blue : LT.borderHi}`, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-                    {marcada && <span style={{ width: 10, height: 10, borderRadius: 5, background: LT.blue }} />}
-                  </span>
-                  {f.nombre}
-                </button>
-              );
-            })}
+        {/* La hoja del programa, igual a la que ve el atleta, SIN ejercicios: fases, semanas y el nombre de la sesión de cada día. Quien compra toca la semana donde empieza. */}
+        {hoja.length > 0 && (
+          <Bloque titulo={semanal ? 'La rutina' : `El programa · ${semanasTexto(total)}`}>
+            {!semanal && total > 1 && <CuantoTiempoTienes fases={hoja} alSugerir={sugiere} />}
+            {resumen && (
+              <div style={{ fontSize: 14.5, fontWeight: 800, color: LT.blue, lineHeight: 1.4 }}>
+                {resumen.desdeElPrincipio
+                  ? `Empiezas en la semana 1 y haces las ${resumen.total}.`
+                  : `Empiezas en la semana ${resumen.semana} de ${resumen.total} (mes ${resumen.mes} de ${resumen.meses}) y te quedan ${semanasTexto(resumen.restantes)}.`}
+              </div>
+            )}
+            {!semanal && total > 1 && <div style={{ fontSize: 13.5, fontWeight: 600, color: LT.text2 }}>Toca la semana donde quieres empezar.</div>}
+            <NavegadorDelPlan
+              key={claveDeHoja} fases={hoja} kind={plan.kind} estructura={plan.estructura} quien="tu"
+              {...(!semanal && entrada ? { entrada: { ...entrada, alElegir: (faseId, semana) => setEntrada({ faseId, semana }) }, abrirEn: { faseId: entrada.faseId, semana: entrada.semana } } : null)}
+            />
           </Bloque>
         )}
 

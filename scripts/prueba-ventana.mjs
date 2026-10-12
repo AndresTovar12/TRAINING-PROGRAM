@@ -45,6 +45,24 @@ assert.deepEqual(cerrada.days, [{ day: 'Lun', bloqueada: true }, { day: 'Mié', 
 assert.equal(r.data.phases[1].name, 'Fuerza', 'el nombre de la fase sí se ve');
 assert.equal(r.data.foto, 'https://x/foto.jpg', 'lo demás del plan (foto) no se toca');
 
+/* ---- Entra a la mitad de una fase (12 oct 2026): la semana 3 de la fase 2 ---- */
+r = recortaPrograma({ data: plan, inicio: '2026-10-15', faseDeEntrada: 'f2', semanaDeEntrada: 3, ventanaSemanas: 2, hoy: '2026-10-15' });
+assert.deepEqual(r.data.phases.map((f) => f.id), ['f2'], 'la fase anterior no existe para él');
+assert.deepEqual(r.data.phases[0].weekData.map((w) => w.num), [3, 4, 5, 6], 'las semanas 1 y 2 de esa fase tampoco');
+assert.deepEqual(semanasVisibles(r), ['f2-3', 'f2-4', 'f2-5'], 'la semana en que entra y 2 hacia adelante');
+for (const n of [1, 2]) assert.ok(!JSON.stringify(r.data).includes(`X-f2-${n}"`), 'ni una pista de lo que quedó antes de su entrada');
+assert.ok(!sale(r, 'f2', 6), 'la 6 sigue cerrada');
+assert.deepEqual(r.cursorInicial, { phaseId: 'f2', weekNum: 3, dayIdx: 0, fijadoEn: '2026-W42' }, 'el puntero arranca en su semana');
+assert.equal(r.resumen.semanasTotales, 4);
+r = recortaPrograma({ data: plan, inicio: '2026-10-15', faseDeEntrada: 'f2', semanaDeEntrada: 3, ventanaSemanas: 4, hoy: '2026-11-05' });
+assert.equal(r.resumen.semanaActual, 4, 'tres semanas después va en la 4.ª desde que entró');
+r = recortaPrograma({ data: plan, inicio: '2026-10-15', faseDeEntrada: 'f2', semanaDeEntrada: 1, ventanaSemanas: 4, hoy: '2026-10-15' });
+assert.equal(r.data.phases[0].weekData.length, 6, 'entrar por la semana 1 es entrar por el principio de la fase');
+r = recortaPrograma({ data: plan, inicio: '2026-10-15', faseDeEntrada: 'f2', semanaDeEntrada: 99, ventanaSemanas: 4, hoy: '2026-10-15' });
+assert.equal(r.data.phases[0].weekData.length, 6, 'una semana que no existe se trata como el principio de la fase');
+r = recortaPrograma({ data: plan, inicio: '2026-10-15', faseDeEntrada: 'f1', semanaDeEntrada: 4, ventanaSemanas: 4, hoy: '2026-10-15' });
+assert.deepEqual(r.data.phases.map((f) => [f.id, f.weekData.length]), [['f1', 1], ['f2', 6]], 'entrar por la última semana de una fase deja esa y las fases que siguen');
+
 /* ---- Pasaron 3 semanas: la ventana corre ---- */
 r = recortaPrograma({ data: plan, inicio: '2026-10-15', faseDeEntrada: 'f1', ventanaSemanas: 4, hoy: '2026-11-05' });
 assert.equal(r.resumen.semanaActual, 4);

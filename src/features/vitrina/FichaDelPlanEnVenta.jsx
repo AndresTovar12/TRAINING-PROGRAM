@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Layers, Loader2 } from 'lucide-react';
+import { Check, Layers, Loader2, Trash2, Video } from 'lucide-react';
 import { T, KP, FONT } from '@/lib/theme';
 import Ventana from '@/features/misplanes/Ventana';
 import SelectorDeMisPlanes from '@/features/misplanes/SelectorDeMisPlanes';
 import CampoDeFoto from '@/features/admin/CampoDeFoto';
+import { HojaDeClase } from '@/features/admin/ClaseDeLaSesion';
+import { ligaExterna } from '@/lib/videos';
 import { botonBlanco, botonPrincipal, campo, etiquetaChica } from '@/features/misplanes/estilos';
 import { PRECIO_MINIMO, TIPOS_DE_VENTA, VENTANAS, VENTANA_MAXIMA, guardaPlanEnVenta, programaParaVender, publicaPlan, slugUnico } from '@/lib/vitrinaApi';
 import { DEPORTES, EDADES, EQUIPOS, NIVELES, SEXOS, marcadosValidos } from '@/lib/paraQuien';
@@ -84,6 +86,7 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
     titulo: plan?.titulo ?? '',
     descripcion: plan?.descripcion ?? '',
     foto_url: plan?.foto_url ?? '',
+    video_url: plan?.video_url ?? '',
     objetivo: plan?.objetivo ?? '',
     nivel: plan?.nivel ?? 'todos',
     deportes: Array.isArray(plan?.deportes) ? plan.deportes : [],
@@ -99,6 +102,7 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
   const [programa, setPrograma] = useState(null);
   const [cargandoPrograma, setCargandoPrograma] = useState(!!plan?.programa_guardado_id);
   const [eligiendo, setEligiendo] = useState(false);
+  const [eligiendoVideo, setEligiendoVideo] = useState(false);
   const [guardando, setGuardando] = useState(null); // 'borrador' | 'publicar'
   const [error, setError] = useState(null);
   const pon = (campos) => setF((prev) => ({ ...prev, ...campos }));
@@ -158,6 +162,7 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
         descripcion: f.descripcion.trim() || null,
         objetivo: f.objetivo.trim() || null,
         foto_url: f.foto_url || null,
+        video_url: f.video_url || null,
         nivel: f.nivel || null,
         deportes: marcadosValidos(DEPORTES, f.deportes),
         edades: marcadosValidos(EDADES, f.edades),
@@ -218,6 +223,21 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
           <Campo etiqueta="Foto del plan">
             <CampoDeFoto valor={f.foto_url} onCambia={(url) => pon({ foto_url: url })} />
           </Campo>
+          <Campo etiqueta="Video presentando el plan (opcional)">
+            {f.video_url ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 11, border: `1.5px solid ${T.border}`, background: T.bg2 }}>
+                <Video size={18} color={T.accent} />
+                <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 700, color: T.text }}>{ligaExterna(f.video_url)?.de ?? 'Video subido'}</span>
+                <button type="button" onClick={() => setEligiendoVideo(true)} style={{ ...botonBlanco(), minHeight: 36, padding: '0 12px', fontSize: 13 }}>Cambiar</button>
+                <button
+                  type="button" onClick={() => pon({ video_url: '' })} aria-label="Quitar el video"
+                  style={{ width: 36, height: 36, borderRadius: 11, border: 'none', cursor: 'pointer', background: KP.dangerSoft, color: KP.danger, display: 'grid', placeItems: 'center' }}
+                ><Trash2 size={16} /></button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setEligiendoVideo(true)} style={{ ...botonBlanco(true), justifyContent: 'center', minHeight: 46 }}><Video size={16} /> Agregar video</button>
+            )}
+          </Campo>
 
           <Titulo>Para quién es</Titulo>
           <Opciones etiqueta="Deporte o disciplina" opciones={DEPORTES} valor={f.deportes} alCambiar={(v) => pon({ deportes: v })} multiple />
@@ -253,6 +273,7 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
           )}
         </div>
       </Ventana>
+      {eligiendoVideo && <HojaDeClase titulo="Video del plan" conMias={false} onCerrar={() => setEligiendoVideo(false)} onElige={(c) => { setEligiendoVideo(false); pon({ video_url: c.url }); }} />}
       {eligiendo && <SelectorDeMisPlanes tipos={['programa']} titulo="El plan que vendes" onElegir={eligeUnPlan} onCerrar={() => setEligiendo(false)} />}
     </>
   );
