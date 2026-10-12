@@ -1,0 +1,74 @@
+/* LOS WIDGETS DE HOME PARA QUIEN ENTRENA POR SU CUENTA (12 oct 2026). Misma familia que el cartel «Hoy te toca» y la tarjeta de Salud: esquinas de 22 px, degradados con un oscurecido
+   abajo (para que el texto blanco pase 4.5:1), sombra teñida del propio color, ícono grande a medio tapar como marca de agua y un toque que se hunde (scale .98).
+   Se apagan los movimientos con `prefers-reduced-motion`. Todo lo tocable mide ≥ 44 px. */
+
+.tl-w-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.tl-w-grid > .tl-w:last-child:nth-child(odd) { grid-column: 1 / -1; min-height: 112px; }
+
+.tl-w {
+  position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; gap: 18px;
+  min-height: 166px; padding: 14px; border: 0; border-radius: 22px; text-align: left; color: #fff; font-family: inherit; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation; user-select: none;
+  background: var(--w-fondo); box-shadow: 0 12px 24px var(--w-sombra), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+.tl-w::before { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--w-luz, radial-gradient(circle at 88% 8%, rgba(255, 255, 255, 0.26), transparent 46%)); }
+.tl-w::after { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(to top, rgba(8, 10, 30, 0.34), transparent 62%); }
+.tl-w:active { transform: scale(0.98); box-shadow: 0 6px 14px var(--w-sombra), inset 0 1px 0 rgba(255, 255, 255, 0.2); }
+.tl-w:focus-visible { outline: 3px solid #1E40E0; outline-offset: 3px; }
+
+.tl-w[data-tono='tinta'] { --w-fondo: linear-gradient(160deg, #262C5C 0%, #151A3A 58%, #0B0E24 100%); --w-sombra: rgba(12, 16, 52, 0.4); --w-luz: radial-gradient(circle at 92% 0%, rgba(96, 130, 255, 0.34), transparent 52%); }
+.tl-w[data-tono='violeta'] { --w-fondo: linear-gradient(150deg, #7A5CFF 0%, #5A3AE8 52%, #3D22B3 100%); --w-sombra: rgba(70, 42, 200, 0.36); }
+.tl-w[data-tono='menta'] { --w-fondo: linear-gradient(150deg, #00A87A 0%, #008A62 54%, #00694A 100%); --w-sombra: rgba(0, 110, 78, 0.34); }
+.tl-w[data-tono='coral'] { --w-fondo: linear-gradient(140deg, #FF8A5C 0%, #F2555A 52%, #DD4A92 100%); --w-sombra: rgba(221, 74, 146, 0.32); }
+.tl-w[data-tono='azul'] { --w-fondo: linear-gradient(165deg, #1c3ad6 0%, #142a9e 52%, #0c1a66 100%); --w-sombra: rgba(14, 30, 120, 0.4); }
+.tl-w[data-tono='claro'] {
+  --w-fondo: #fff; --w-sombra: rgba(17, 19, 24, 0.07); --w-luz: none; color: #111318; box-shadow: 0 1px 4px rgba(17, 19, 24, 0.07), inset 0 0 0 1.5px #E3E6EE;
+}
+.tl-w[data-tono='claro']::after { display: none; }
+.tl-w[data-tono='claro'] .tl-w-ic { background: #E8ECFD; color: #1E40E0; box-shadow: none; }
+.tl-w[data-tono='claro'] .tl-w-marca { color: #1E40E0; opacity: 0.08; }
+.tl-w[data-tono='claro'] .tl-w-flecha { color: #8A93A6; }
+
+.tl-w-cab { display: flex; align-items: flex-start; justify-content: space-between; width: 100%; }
+.tl-w-ic { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; background: rgba(255, 255, 255, 0.18); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28); }
+.tl-w-ic svg { width: 22px; height: 22px; }
+.tl-w-flecha { width: 20px; height: 20px; opacity: 0.8; flex: none; }
+.tl-w-marca { position: absolute; right: -16px; bottom: -20px; width: 116px; height: 116px; opacity: 0.14; stroke-width: 1.3; transform: rotate(-10deg); z-index: -1; pointer-events: none; }
+.tl-w-tit { font-size: 19px; font-weight: 800; letter-spacing: -0.3px; line-height: 1.1; text-wrap: balance; }
+.tl-w-sub { margin-top: 3px; font-size: 13.5px; font-weight: 600; line-height: 1.3; opacity: 0.92; }
+.tl-w[data-tono='claro'] .tl-w-sub { color: #5A6376; opacity: 1; }
+
+/* La mini activity card que asoma arriba a la derecha del widget oscuro: un cartelito inclinado con sus tres números, para que se entienda qué es sin explicarlo. */
+.tl-w-mini {
+  position: absolute; top: 10px; right: 12px; width: 76px; padding: 7px 6px 6px; border-radius: 13px; transform: rotate(6deg); text-align: center;
+  background: linear-gradient(170deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.06)); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.24), 0 8px 16px rgba(4, 6, 30, 0.35);
+  display: flex; flex-direction: column; align-items: center; gap: 3px; pointer-events: none;
+}
+.tl-w-mini svg { width: 15px; height: 15px; opacity: 0.95; }
+.tl-w-mini > span { display: block; line-height: 1.1; white-space: nowrap; }
+.tl-w-mini b { font-size: 12px; font-weight: 800; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.tl-w-mini small { font-size: 8px; font-weight: 700; opacity: 0.72; margin-left: 2px; }
+.tl-w-mini em { font-style: normal; font-size: 7px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; opacity: 0.8; }
+.tl-w-mini i { font-style: normal; font-size: 7.5px; font-weight: 800; letter-spacing: 1.6px; opacity: 0.85; margin-top: 1px; }
+
+/* El cartel «Entrenar»: los siete días de la semana, abajo a la izquierda (se rellenan los que ya entrenó). */
+.tl-w-semana { display: flex; align-items: center; gap: 5px; }
+.tl-w-dia { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 800; background: rgba(255, 255, 255, 0.14); color: rgba(255, 255, 255, 0.86); }
+.tl-w-dia.hecho { background: #fff; color: var(--tc, #1E40E0); box-shadow: 0 2px 8px rgba(4, 12, 70, 0.3); }
+.tl-w-dia.hoy { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.78); }
+.tl-w-dia.hecho.hoy { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.78), 0 2px 8px rgba(4, 12, 70, 0.3); }
+
+/* La tira de «Entrenar» cuando ya tiene plan (el cartel grande es el de su plan). */
+.tl-w.tira { flex-direction: row; align-items: center; min-height: 0; padding: 12px 14px; gap: 14px; }
+.tl-w.tira .tl-w-ic { width: 46px; height: 46px; }
+.tl-w.tira .tl-w-texto { flex: 1; min-width: 0; }
+.tl-w.tira .tl-w-play { width: 46px; height: 46px; border-radius: 50%; background: #fff; color: #1E40E0; display: grid; place-items: center; flex: none; box-shadow: 0 8px 16px rgba(4, 12, 70, 0.4); }
+.tl-w.tira .tl-w-play svg { width: 20px; height: 20px; fill: currentColor; margin-left: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tl-w, .tl-w:active { transition: none; }
+  .tl-w:active { transform: none; }
+  .tl-hoy-disco { animation: none; }
+  .tl-hoy-play::after { animation: none; }
+}

@@ -6,6 +6,7 @@ import {
 } from '../src/lib/entrenoLibre.js';
 import { DEPORTES } from '../src/lib/metricas/deportes.js';
 import { datosDelResumen, lineaDeEntreno } from '../src/lib/resumenLibre.js';
+import { deporteDelCartel, haceCuanto, resumenDeLaSemana, textoDeLaSemana } from '../src/lib/semanaLibre.js';
 
 let n = 0;
 const prueba = (nombre, f) => { f(); n += 1; console.log(`  ✓ ${nombre}`); };
@@ -120,6 +121,48 @@ prueba('la línea de cada fila de «Tus entrenos»', () => {
   assert.equal(lineaDeEntreno({ duracion_s: 2520, distancia_m: 8200 }), '42 min · 8.2 km');
   assert.equal(lineaDeEntreno({ duracion_s: 2520 }), '42 min');
   assert.equal(lineaDeEntreno({}), '');
+});
+
+console.log('El cartel «Entrenar»: la semana');
+// 12 oct 2026 es lunes; se prueba con esa semana (lunes 12 a domingo 18) y con el día de hoy fijo.
+const HOY = '2026-10-14'; // miércoles
+const en = (dia, extra = {}) => ({ inicio: `${dia}T15:00:00Z`, desfase_min: -360, duracion_s: 1800, distancia_m: 5000, deporte: 'correr', ...extra });
+prueba('siete días de lunes a domingo, con hoy marcado', () => {
+  const r = resumenDeLaSemana([], HOY);
+  assert.deepEqual(r.dias.map((d) => d.dia), ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17', '2026-10-18']);
+  assert.deepEqual(r.dias.map((d) => d.esHoy), [false, false, true, false, false, false, false]);
+  assert.equal(r.entrenos, 0);
+});
+prueba('cuenta entrenos, tiempo y distancia de ESTA semana y marca los días con entreno', () => {
+  const r = resumenDeLaSemana([en('2026-10-12'), en('2026-10-14', { duracion_s: 3600, distancia_m: 10000 }), en('2026-10-05')], HOY);
+  assert.equal(r.entrenos, 2, 'el de la semana pasada no cuenta');
+  assert.equal(r.duracion_s, 5400);
+  assert.equal(r.distancia_m, 15000);
+  assert.deepEqual(r.dias.map((d) => d.entreno), [true, false, true, false, false, false, false]);
+});
+prueba('un entreno de la noche cuenta en SU día local, no en el de UTC', () => {
+  // 22:30 del martes en México (UTC-6) = 04:30 UTC del miércoles
+  const r = resumenDeLaSemana([{ inicio: '2026-10-14T04:30:00Z', desfase_min: -360, duracion_s: 600 }], HOY);
+  assert.deepEqual(r.dias.map((d) => d.entreno), [false, true, false, false, false, false, false]);
+});
+prueba('el texto de la semana', () => {
+  assert.equal(textoDeLaSemana(resumenDeLaSemana([], HOY)), 'Sin entrenos esta semana');
+  assert.equal(textoDeLaSemana(resumenDeLaSemana([en('2026-10-12')], HOY)), '1 entreno · 30 min');
+  assert.equal(textoDeLaSemana(resumenDeLaSemana([en('2026-10-12'), en('2026-10-13', { duracion_s: 4200 })], HOY)), '2 entrenos · 1 h 40 min');
+});
+prueba('con qué deporte arranca el cartel', () => {
+  assert.equal(deporteDelCartel([{ deporte: 'natacion' }, { deporte: 'correr' }]), 'natacion');
+  assert.equal(deporteDelCartel([{ deporte: 'fuerza' }]), 'correr', 'un deporte que no se hace aquí no cuenta');
+  assert.equal(deporteDelCartel([]), 'correr');
+  assert.equal(deporteDelCartel(null), 'correr');
+});
+prueba('«hoy», «ayer», «hace 3 días», «hace 2 semanas»', () => {
+  assert.equal(haceCuanto(en('2026-10-14'), HOY), 'hoy');
+  assert.equal(haceCuanto(en('2026-10-13'), HOY), 'ayer');
+  assert.equal(haceCuanto(en('2026-10-11'), HOY), 'hace 3 días');
+  assert.equal(haceCuanto(en('2026-09-30'), HOY), 'hace 2 semanas');
+  assert.equal(haceCuanto(en('2026-07-01'), HOY), 'hace más de un mes');
+  assert.equal(haceCuanto(null, HOY), '');
 });
 
 console.log(`\n${n} pruebas, todas bien.`);

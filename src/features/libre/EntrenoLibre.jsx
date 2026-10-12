@@ -1,63 +1,84 @@
-import { useState } from 'react';
-import { Play, Timer } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Compass, Dumbbell, Play, Timer } from 'lucide-react';
 import HojaFlotante from '@/components/HojaFlotante';
-import { LT, FONT, NUM_STYLE } from '@/lib/theme';
+import { LT, FONT } from '@/lib/theme';
 import { usePlan } from '@/contexts/PlanContext';
 import TarjetaDeExplorar from '@/features/explorar/TarjetaDeExplorar';
 import { relojDeCronometro } from '@/lib/entrenoLibre';
 import { nombreDelDeporte } from '@/lib/metricas/deportes';
+import { deporteDelCartel, resumenDeLaSemana, textoDeLaSemana } from '@/lib/semanaLibre';
+import { ICONOS } from '@/features/metricas/tonos';
+import HeroDeEntrenar from './HeroDeEntrenar';
 import HojaDeDemos from './HojaDeDemos';
 import OpcionesDeEntrenar from './OpcionesDeEntrenar';
 import PantallaDelCronometro from './PantallaDelCronometro';
 import ResumenLibre from './ResumenLibre';
 import TusEntrenos from './TusEntrenos';
+import Widget from './Widget';
+import WidgetDeActivityCard from './WidgetDeActivityCard';
 import { useDemos } from './useDemos';
 import { useCronometroLibre, useEntrenosRecientes } from './useEntrenoLibre';
-import { botonGrande } from './estilosLibre';
 
 /* EL ENTRENO LIBRE, armado (12 oct 2026): lo que ve alguien en Home o en la pestaña Entrenar para entrenar por su cuenta, tenga o no un plan.
-     · un botón grande «Entrenar» que abre la hoja con los deportes (o, con `enLinea`, las opciones puestas directo: pestaña Entrenar)
-     · si hay un cronómetro corriendo, una tarjeta «Entreno en curso» que lo reabre (el cronómetro sigue aunque se cierre la hoja)
-     · «Tus entrenos»: lo que ya hizo, y de ahí se vuelve a sacar la activity card
-   «Demo workout»: sale solo si hay workouts de demostración; al elegir uno se abre como el workout de hoy (`abreDemo`) y `alIrAHome` (si se da) lleva a Home, donde está su botón de empezar.
-   Ver `lib/entrenoLibre.js`. */
+     · `variante="completa"` (sin plan): el cartel «Entrenar» (su semana, su último entreno, play), una cuadrícula de widgets (Activity card, Explorar, Demo workout y los que se le pasen
+       de hijos: Salud, 1RM…) y «Tus entrenos».
+     · `variante="compacta"` (con plan): una tira azul «Entrenar» y «Tus entrenos»; el cartel grande de Home ya es el de su plan.
+     · `enLinea` (pestaña Entrenar): las opciones puestas directo, y «Tus entrenos».
+   El cronómetro vive en `localStorage` y sigue aunque se cierre la hoja: el cartel pasa a «Entreno en curso». «Demo workout» sale solo si hay demos; al elegir uno se abre como el workout de hoy
+   (`abreDemo`) y `alIrAHome` (si se da) lleva a Home. Ver `lib/entrenoLibre.js` y `lib/semanaLibre.js`. */
 
 // El aviso de Explorar al cerrar la activity card sale una vez por visita (dura lo que la pestaña del navegador).
 const yaSeLeOfrecio = () => { try { return sessionStorage.getItem('tl:explorar-ofrecido') === '1'; } catch { return false; } };
 const marcaOfrecido = () => { try { sessionStorage.setItem('tl:explorar-ofrecido', '1'); } catch { /* sin almacenamiento: puede salir otra vez */ } };
 
-export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = false, alIrAHome = null, conEmpujon = false, alIrAExplorar = null }) {
+export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = false, variante = 'completa', alIrAHome = null, conEmpujon = false, alIrAExplorar = null, children = null }) {
   const crono = useCronometroLibre(userId);
-  const { filas, recarga } = useEntrenosRecientes(userId);
+  const { filas, recarga } = useEntrenosRecientes(userId, 40);
   const { abreDemo } = usePlan();
   const demos = useDemos(userId);
-  const [hoja, setHoja] = useState(null); // null | 'elegir' | 'demos' | 'cronometro' | 'empujon' | { resumen: fila }
+  const [hoja, setHoja] = useState(null); // null | 'elegir' | 'demos' | 'cronometro' | 'empujon' | { resumen: fila, tarjeta?: boolean }
   const alDemo = demos?.length ? () => setHoja('demos') : null;
-
-  const elige = (deporte) => { crono.inicia(deporte); setHoja('cronometro'); };
   const enCurso = !!crono.cronometro;
+  const semana = useMemo(() => resumenDeLaSemana(filas ?? []), [filas]);
+  const ultimo = filas?.[0] ?? null;
+  const deporte = enCurso ? crono.cronometro.deporte : deporteDelCartel(filas);
+  const elige = (d) => { crono.inicia(d); setHoja('cronometro'); };
+  const abreElCartel = () => setHoja(enCurso ? 'cronometro' : 'elegir');
+  const abreLaTarjeta = () => setHoja(ultimo ? { resumen: ultimo, tarjeta: true } : 'elegir');
+  const conExplorar = conEmpujon && !!alIrAExplorar;
+  const IconoDeporte = ICONOS[deporte] ?? Timer;
 
   return (
     <>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18, fontFamily: FONT }}>
-        {enCurso ? (
+        {enLinea ? (
+          enCurso
+            ? <HeroDeEntrenar deporte={deporte} semana={semana} ultimo={ultimo} enCurso segundos={crono.segundos} alAbrir={abreElCartel} />
+            : <OpcionesDeEntrenar alElegir={elige} alDemo={alDemo} />
+        ) : variante === 'compacta' ? (
           <button
-            type="button" onClick={() => setHoja('cronometro')} className="kp-press"
-            style={{ display: 'flex', alignItems: 'center', gap: 14, width: '100%', textAlign: 'left', cursor: 'pointer', fontFamily: FONT, background: LT.surface, border: `2px solid ${LT.blue}`, borderRadius: 20, padding: '14px 16px' }}
+            type="button" onClick={abreElCartel} className="tl-w tira" data-tono="azul"
+            aria-label={enCurso ? `Seguir tu entreno de ${nombreDelDeporte(deporte)}` : 'Entrenar: elegir un deporte'}
           >
-            <span style={{ width: 46, height: 46, borderRadius: 15, background: LT.blueSoft, color: LT.blue, display: 'grid', placeItems: 'center', flexShrink: 0 }}><Timer size={23} /></span>
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: 'block', fontSize: 13, fontWeight: 800, color: LT.blue, textTransform: 'uppercase', letterSpacing: 0.6 }}>Entreno en curso</span>
-              <span style={{ display: 'block', fontSize: 19, fontWeight: 800, color: LT.text, marginTop: 2 }}>{nombreDelDeporte(crono.cronometro.deporte)} · <span style={NUM_STYLE}>{relojDeCronometro(crono.segundos)}</span></span>
+            <span className="tl-w-ic" aria-hidden="true"><IconoDeporte /></span>
+            <span className="tl-w-texto">
+              <span className="tl-w-tit" style={{ display: 'block' }}>{enCurso ? `${nombreDelDeporte(deporte)} · ${relojDeCronometro(crono.segundos)}` : 'Entrenar'}</span>
+              <span className="tl-w-sub" style={{ display: 'block' }}>{enCurso ? 'Entreno en curso · toca para seguir' : textoDeLaSemana(semana)}</span>
             </span>
-            <span style={{ fontSize: 15, fontWeight: 800, color: LT.blue }}>Seguir</span>
+            <span className="tl-w-play" aria-hidden="true">{enCurso ? <Timer /> : <Play />}</span>
           </button>
-        ) : enLinea ? (
-          <OpcionesDeEntrenar alElegir={elige} alDemo={alDemo} />
         ) : (
-          <button type="button" onClick={() => setHoja('elegir')} className="kp-press" style={botonGrande()}><Play size={21} fill="currentColor" /> Entrenar</button>
+          <>
+            <HeroDeEntrenar deporte={deporte} semana={semana} ultimo={ultimo} enCurso={enCurso} segundos={crono.segundos} alAbrir={abreElCartel} />
+            <div className="tl-w-grid">
+              <WidgetDeActivityCard ultimo={ultimo} alTocar={abreLaTarjeta} />
+              {conExplorar && <Widget tono="violeta" Icono={Compass} titulo="Explorar" sub="Planes de coaches" alTocar={alIrAExplorar} />}
+              {alDemo && <Widget tono="menta" Icono={Dumbbell} titulo="Demo workout" sub="Mira cómo se inicia" alTocar={alDemo} />}
+              {children}
+            </div>
+          </>
         )}
-        <TusEntrenos filas={filas} alAbrir={(fila) => setHoja({ resumen: fila })} />
+        <TusEntrenos filas={filas?.slice(0, 6)} alAbrir={(fila) => setHoja({ resumen: fila })} />
       </div>
 
       {hoja === 'elegir' && (
@@ -76,7 +97,7 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
       )}
       {hoja?.resumen && (
         <ResumenLibre
-          fila={hoja.resumen} unidadPeso={unidadPeso} alCerrar={() => setHoja(null)}
+          fila={hoja.resumen} unidadPeso={unidadPeso} alCerrar={() => setHoja(null)} empiezaEnTarjeta={!!hoja.tarjeta}
           // Al cerrar la activity card, una sola vez por visita y solo a quien no tiene plan ni entrenador: «¿Quieres un plan hecho por un coach?».
           alCerrarTarjeta={conEmpujon && alIrAExplorar && !yaSeLeOfrecio() ? () => { marcaOfrecido(); setHoja({ ...hoja, empujon: true }); } : undefined}
         />

@@ -22,8 +22,8 @@ const Dato = ({ valor, etiqueta }) => (
   </div>
 );
 
-export default function ResumenLibre({ fila, unidadPeso = 'kg', alCerrar, alCerrarTarjeta }) {
-  const [verTarjeta, setVerTarjeta] = useState(false);
+export default function ResumenLibre({ fila, unidadPeso = 'kg', alCerrar, alCerrarTarjeta, empiezaEnTarjeta = false }) {
+  const [verTarjeta, setVerTarjeta] = useState(empiezaEnTarjeta); // desde el widget «Activity card» de Home se abre directo en la tarjeta
   const sellos = useMemo(() => sellosDeActividad({ fila, series: null, sesion: null, unidadPeso }).sellos, [fila, unidadPeso]);
   const nombre = fila.titulo || nombreDelDeporte(fila.deporte);
 
