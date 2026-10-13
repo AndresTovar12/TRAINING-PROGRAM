@@ -10,7 +10,8 @@ import { botonBlanco, botonPrincipal, campo, etiquetaChica } from '@/features/mi
 import {
   ETIQUETA_DE_CONTENIDO, TIPOS_DE_VENTA, VENTANAS, VENTANA_MAXIMA, cuentaMisClases, esBiblioteca, esSuelto, fuenteParaVender, guardaPlanEnVenta, precioMinimoDe, publicaPlan, slugUnico, tipoDeCobroDe,
 } from '@/lib/vitrinaApi';
-import { DEPORTES, EDADES, EQUIPOS, NIVELES, SEXOS, marcadosValidos } from '@/lib/paraQuien';
+import { DEPORTES, EQUIPOS, NIVELES, SEXOS, edadesValidas, marcadosValidos } from '@/lib/paraQuien';
+import EdadesDelPlan from './EdadesDelPlan';
 
 /* LA FICHA DE UN PLAN EN VENTA: lo que el coach llena para venderlo.
 
@@ -191,7 +192,7 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
         video_url: f.video_url || null,
         nivel: f.nivel || null,
         deportes: marcadosValidos(DEPORTES, f.deportes),
-        edades: marcadosValidos(EDADES, f.edades),
+        edades: edadesValidas(f.edades),
         equipo: marcadosValidos(EQUIPOS, f.equipo),
         precio_mxn: precio,
         tipo: tipoDeCobroDe(f.contenido, f.tipo),
@@ -281,7 +282,7 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
 
           <Titulo>Para quién es</Titulo>
           <Opciones etiqueta="Deporte o disciplina" opciones={DEPORTES} valor={f.deportes} alCambiar={(v) => pon({ deportes: v })} multiple />
-          <Opciones etiqueta="Edades" opciones={EDADES} valor={f.edades} alCambiar={(v) => pon({ edades: v })} multiple nota="Sin marcar: todas las edades." />
+          <EdadesDelPlan valor={f.edades} alCambiar={(v) => pon({ edades: v })} />
           <Opciones etiqueta="Sexo" opciones={SEXOS} valor={f.sexo} alCambiar={(v) => pon({ sexo: v })} />
           <Opciones etiqueta="Equipo que necesita" opciones={EQUIPOS} valor={f.equipo} alCambiar={(v) => pon({ equipo: v })} multiple />
           <Opciones etiqueta="Nivel" opciones={NIVELES} valor={f.nivel} alCambiar={(v) => pon({ nivel: v })} />
