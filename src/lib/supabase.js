@@ -3,13 +3,15 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    'Faltan variables de entorno de Supabase. Copia .env.example a .env y rellena los valores.'
-  )
-}
+// La interfaz también debe poder renderizarse en previews donde Vite aún no
+// recibió las variables. Las operaciones reales siguen usando las variables
+// inyectadas por Vercel cuando están disponibles.
+export const supabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey)
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'sb_publishable_placeholder',
+  {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
