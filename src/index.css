@@ -80,7 +80,10 @@ html {
 body {
   margin: 0;
   font-family: var(--font-sans);
-  background: var(--color-bg);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(30, 64, 224, 0.08), transparent 28rem),
+    radial-gradient(circle at 92% 12%, rgba(0, 163, 114, 0.06), transparent 24rem),
+    var(--color-bg);
   color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -158,8 +161,25 @@ body {
     transform 0.12s cubic-bezier(0.22, 1, 0.36, 1),
     box-shadow 0.18s ease;
 }
+.kp-press:hover {
+  transform: translateY(-1px);
+}
 .kp-press:active {
   transform: scale(0.975);
+}
+
+/* Tratamiento de maqueta: las opciones se sienten seleccionables sin competir con el contenido. */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 3px solid rgba(30, 64, 224, 0.24);
+  outline-offset: 3px;
+}
+
+@media (hover: hover) {
+  button:not(:disabled):hover {
+    filter: brightness(1.015);
+  }
 }
 
 /* Skeleton shimmer para estados de carga (mejor que un spinner largo) */

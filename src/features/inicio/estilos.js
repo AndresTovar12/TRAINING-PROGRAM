@@ -31,10 +31,11 @@ export const enlace = {
 
 /** Una opción de lista (una por renglón). `puesta` = elegida. */
 export const opcion = (puesta) => ({
-  display: 'flex', alignItems: 'center', gap: 13, width: '100%', minHeight: 64, padding: '10px 14px 10px 12px',
-  borderRadius: 18, border: `1.5px solid ${puesta ? KP.blue : KP.lineHi}`, background: puesta ? KP.blueSoft : KP.surface,
-  boxShadow: puesta ? '0 0 0 4px rgba(30,64,224,0.08)' : 'none', textAlign: 'left', cursor: 'pointer',
-  fontFamily: FONT, fontSize: 16, fontWeight: 700, color: KP.ink, transition: 'border-color .12s, background .12s',
+  display: 'flex', alignItems: 'center', gap: 13, width: '100%', minHeight: 72, padding: '11px 15px 11px 12px',
+  borderRadius: 20, border: `1.5px solid ${puesta ? KP.blue : KP.lineHi}`, background: puesta ? KP.blueSoft : KP.surface,
+  boxShadow: puesta ? '0 0 0 4px rgba(30,64,224,0.08), 0 8px 20px rgba(30,64,224,0.08)' : KP.shCard,
+  textAlign: 'left', cursor: 'pointer',
+  fontFamily: FONT, fontSize: 16, fontWeight: 700, color: KP.ink, transition: 'border-color .16s, background .16s, transform .16s, box-shadow .16s',
   touchAction: 'manipulation',
 });
 
