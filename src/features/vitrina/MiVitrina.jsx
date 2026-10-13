@@ -6,6 +6,7 @@ import { useConfirmacion } from '@/components/Confirmacion';
 import { botonBlanco, botonPrincipal } from '@/features/misplanes/estilos';
 import FichaDelPlanEnVenta from '@/features/vitrina/FichaDelPlanEnVenta';
 import { ETIQUETA_DE_CONTENIDO, leeVentasAbiertas, ligaPublica, listaMiVitrina, retiraPlan } from '@/lib/vitrinaApi';
+import { chipsDeParaQuien } from '@/lib/paraQuien';
 
 /* MI VITRINA: los planes que un coach pone a la venta (nombre que decidió Andrés, 10 oct 2026; antes se llamaba «menú»).
 
@@ -34,6 +35,11 @@ function Tarjeta({ plan, usuario, alEditar, alRetirar }) {
           <div style={{ fontSize: 14, fontWeight: 700, color: T.text2, marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
             {plan.contenido && plan.contenido !== 'programa' ? `${ETIQUETA_DE_CONTENIDO[plan.contenido]} · ` : ''}{pesos(plan.precio_mxn)}{plan.tipo === 'pago_unico' ? '' : ' al mes'} · {plan.suscriptores}{' '}
             {plan.tipo === 'pago_unico' ? (plan.suscriptores === 1 ? 'compra' : 'compras') : (plan.suscriptores === 1 ? 'suscriptor' : 'suscriptores')}
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+            {chipsDeParaQuien(plan, { siempreEdad: true }).map((c) => (
+              <span key={c} style={{ padding: '3px 10px', borderRadius: 999, background: T.accentBg, color: T.accent, fontSize: 12.5, fontWeight: 800 }}>{c}</span>
+            ))}
           </div>
         </div>
         <span style={{ padding: '3px 10px', borderRadius: 999, background: e.fondo, color: e.tinta, fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap' }}>{e.texto}</span>

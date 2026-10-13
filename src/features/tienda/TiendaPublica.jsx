@@ -74,6 +74,7 @@ function PaginaDelCoach({ usuario, alElegir }) {
             <div style={{ padding: p.foto ? '0 16px 16px' : 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.25 }}>{p.titulo}</div>
               {p.descripcion && <div style={{ fontSize: 14, fontWeight: 500, color: LT.text2, lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.descripcion}</div>}
+              {chipsDeParaQuien(p).length > 0 && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>{chipsDeParaQuien(p).slice(0, 4).map((c) => <Chip key={c}>{c}</Chip>)}</div>}
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4, ...NUM_STYLE }}>
                 <span style={{ fontSize: 20, fontWeight: 800, color: LT.blue }}>{pesos(p.precio)}</span>
                 <span style={{ fontSize: 13.5, fontWeight: 700, color: LT.text2 }}>{[TIPO[p.tipo], textoDeContenido(p)].filter(Boolean).join(' · ')}</span>
@@ -243,12 +244,10 @@ function PaginaDelPlan({ usuario, slug, alVolver }) {
         {plan.foto && <img src={plan.foto} alt="" style={{ width: '100%', maxHeight: 260, objectFit: 'cover', borderRadius: 20 }} />}
         <div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1.15, letterSpacing: -0.4, overflowWrap: 'anywhere' }}>{plan.titulo}</div>
         <CabezaDelCoach coach={plan.coach} />
-        {(plan.nivel || chipsDeParaQuien(plan).length > 0) && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {plan.nivel && <Chip>{{ principiante: 'Principiante', intermedio: 'Intermedio', avanzado: 'Avanzado', todos: 'Todos los niveles' }[plan.nivel] ?? plan.nivel}</Chip>}
-            {chipsDeParaQuien(plan).map((c) => <Chip key={c}>{c}</Chip>)}
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {plan.nivel && <Chip>{{ principiante: 'Principiante', intermedio: 'Intermedio', avanzado: 'Avanzado', todos: 'Todos los niveles' }[plan.nivel] ?? plan.nivel}</Chip>}
+          {chipsDeParaQuien(plan, { siempreEdad: true }).map((c) => <Chip key={c}>{c}</Chip>)}
+        </div>
         {plan.video && <VideoDelCoach url={plan.video} />}
         {plan.descripcion && <div style={{ fontSize: 15.5, fontWeight: 500, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{plan.descripcion}</div>}
         {(plan.para_quien || plan.objetivo) && (
