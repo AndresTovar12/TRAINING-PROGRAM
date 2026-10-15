@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import {
-  Dumbbell, Users, Library, Shield, PanelLeftClose, PanelLeft, Eye, X, Sparkles, FolderOpen, MessageCircle, Store,
+  Dumbbell, Users, Library, Shield, PanelLeftClose, PanelLeft, Eye, X, Sparkles, FolderOpen, MessageCircle, Store, FlaskConical,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMensajes } from '@/contexts/MensajesContext';
@@ -11,6 +11,7 @@ import { T, FONT, KP, oficioCorto } from '@/lib/theme';
 import AthletesPanel from '@/features/admin/AthletesPanel';
 import ExercisesPanel from '@/features/admin/ExercisesPanel';
 import CoachesPanel from '@/features/admin/CoachesPanel';
+import CuentasDePrueba from '@/features/admin/CuentasDePrueba';
 import MisPlanesPanel from '@/features/misplanes/MisPlanesPanel';
 import MiVitrina from '@/features/vitrina/MiVitrina';
 import VistaComoAtleta from '@/features/admin/VistaComoAtleta';
@@ -89,6 +90,8 @@ export default function AdminApp({ onAbrirPerfil }) {
        !viendoComo`), pero la pestaña seguía ahí y eso basta para que la
        simulación deje de parecerse a lo que ve el coach de verdad. */
     ...(isMaster && !viendoComo ? [{ id: 'coaches', label: 'Profesionales', icon: Shield }] : []),
+    // Cuentas de prueba (14 oct 2026): solo el dueño; crea, enseña la contraseña y borra cuentas zz_… para probar.
+    ...(isMaster && !viendoComo ? [{ id: 'pruebas', label: 'Cuentas de prueba', icon: FlaskConical }] : []),
     /* Conectar con la IA: en la compu vive aquí, en el menú lateral. En el
        teléfono NO va en la navegación (decisión de Andrés): va en "Mi perfil". */
     ...(isDesktop && !viendoComo ? [{ id: 'ia', label: 'Conectar con IA', icon: Sparkles }] : []),
@@ -146,6 +149,7 @@ export default function AdminApp({ onAbrirPerfil }) {
       {tab === 'misplanes' && !viendoComo && <MisPlanesPanel />}
       {tab === 'vitrina' && !viendoComo && <MiVitrina />}
       {tab === 'coaches' && isMaster && !viendoComo && <CoachesPanel onVerComo={entrarComo} />}
+      {tab === 'pruebas' && isMaster && !viendoComo && <CuentasDePrueba onVerComoCoach={entrarComo} onVerComoAtleta={entrarComoAtleta} />}
       {tab === 'ia' && isDesktop && !viendoComo && <ConectarIA />}
     </>
   );

@@ -759,7 +759,7 @@ export async function resumenDatosAtleta(athleteId) {
  *
  * Andrés, 18 sep 2026: "lo de la sesión expirada aparece siempre".
  */
-async function tokenDeAhora() {
+export async function tokenDeAhora() {
   const { data } = await supabase.auth.getSession();
   const sesion = data?.session;
   if (!sesion?.access_token) {
