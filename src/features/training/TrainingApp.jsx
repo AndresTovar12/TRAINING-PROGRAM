@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useIsDesktop, useIsWide } from '@/lib/useViewport';
-import { T, FONT, NUM_STYLE, LT, tipoDeSesion, KP, eyebrow, UI } from '@/lib/theme';
+import { T, FONT, NUM_STYLE, LT, tipoDeSesion, KP, UI } from '@/lib/theme';
 import { usePlan, ComoPrograma } from '@/contexts/PlanContext';
 import { usePerfilDeLaVista } from '@/contexts/VistaContext';
 import { useRecuperacionReciente } from '@/lib/useRecuperacionReciente';
@@ -37,11 +37,11 @@ import { FiltroDeAutor, EtiquetaDeAutor } from '@/features/training/EquipoDelAtl
 import AvisoDeInvitacion from '@/features/training/AvisoDeInvitacion';
 import { HojaDeBiblioteca, TarjetaDeBiblioteca } from '@/features/training/BibliotecaDeClases';
 import EntrenoLibre from '@/features/libre/EntrenoLibre';
-import TiraDeSemana from '@/features/training/home/TiraDeSemana';
+import TiraDeSemana, { BotonDeDia, fechaDeLaSemana } from '@/features/training/home/TiraDeSemana';
 import { HoyTeToca, HoyTeTocaEquipo, HoyDescansas } from '@/features/training/home/HoyTeToca';
 import { CuadroDeSalud, CuadroDePrograma, CuadroBlanco } from '@/features/training/home/Cuadros';
 import Saludo from '@/features/training/home/Saludo';
-import { Grupo, Fila, IconoDeFila } from '@/components/ui';
+import { Boton, Grupo, Fila, IconoDeFila, TarjetaHeroe, Deslizador, EntradaNumero, Pastilla } from '@/components/ui';
 
 const Explorar = lazy(() => import('@/features/explorar/Explorar'));
 import {
@@ -102,43 +102,6 @@ const Sin1RM = ({ children }) => {
   const { salud } = usePalabras();
   return salud ? null : children;
 };
-
-// Nombres completos SOLO para mostrar en compu. Lo que guarda el plan sigue
-// siendo 'Lun', 'Mar'… igual que en el editor del entrenador.
-const Caption = ({ children, color = T.text3, style }) => (
-  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.4, color, ...style }}>{children}</div>
-);
-const Card = ({ children, style, onClick, active }) => {
-  const [hover, setHover] = useState(false);
-  return (
-    <div onClick={onClick}
-      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-      style={{
-        background: T.bg2,
-        border: `1px solid ${active ? T.accent + '55' : KP.line}`,
-        borderRadius: KP.rCard, padding: 18, cursor: onClick ? 'pointer' : 'default',
-        boxShadow: (hover && onClick) ? KP.shRaise : KP.shCard,
-        transition: 'box-shadow 0.18s, border-color 0.15s, transform 0.12s cubic-bezier(0.22,1,0.36,1)',
-        transform: (hover && onClick) ? 'translateY(-2px)' : 'none',
-        ...style,
-      }}>{children}</div>
-  );
-};
-const Input = ({ value, onChange, placeholder, type = 'text', style, suffix }) => (
-  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-    <input type={type} value={value ?? ''} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-      style={{
-        background: T.bg, border: `1.5px solid ${KP.line}`, borderRadius: KP.rBtn,
-        padding: '11px 14px', paddingRight: suffix ? 42 : 14, color: T.text, fontSize: 15,
-        fontFamily: FONT, width: '100%', outline: 'none', transition: 'border-color 0.15s, box-shadow 0.15s',
-        boxSizing: 'border-box', ...NUM_STYLE, ...style,
-      }}
-      onFocus={e => { e.target.style.borderColor = T.accent; e.target.style.boxShadow = '0 0 0 4px rgba(30,64,224,0.10)'; }}
-      onBlur={e => { e.target.style.borderColor = KP.line; e.target.style.boxShadow = 'none'; }}
-    />
-    {suffix && <span style={{ position: 'absolute', right: 14, color: T.text3, fontSize: 12, fontWeight: 600, pointerEvents: 'none' }}>{suffix}</span>}
-  </div>
-);
 
 /* La llave con la que se guarda un día del plan. En un plan por fases, cada día
    del plan tiene la suya. En una rutina que se repite, cada semana del
@@ -872,7 +835,7 @@ const HojaDelPrograma = ({
           y semanas, así que se abren por separado. */}
       {aparte.length > 0 && (
         <div style={{ marginTop: 22 }}>
-          <div style={{ ...eyebrow(LT.text3), marginBottom: 9 }}>Programas aparte</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: LT.text, margin: '0 4px 9px' }}>Programas aparte</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {aparte.map((p) => (
               <button
@@ -1416,7 +1379,7 @@ const WeekDetail = ({
       {/* SIN LA LÍNEA GRIS bajo el título. Aquí iba «Esta semana · 1/5 días» (y «Semana 3 de 8 · …»). Andrés, 9 oct 2026: «letritas grises que no
           sirven de nada»; dónde va en el programa lo dice la hoja del programa y los días hechos, la tira de abajo. */}
       <h1 style={{
-        fontSize: 21, fontWeight: 800, color: LT.text, margin: '0 0 14px',
+        fontSize: 26, fontWeight: 800, color: LT.text, margin: '4px 0 14px',
         lineHeight: 1.15, letterSpacing: -0.4, paddingRight: 52,
       }}>
         {hermanas.length > 2 ? `${hermanas.length} sesiones` : (agrupadas ? 'Doble sesión' : selectedDayName)}
@@ -1440,8 +1403,9 @@ const WeekDetail = ({
           porque el atleta piensa en "el 17", no en "el miércoles".
 
           Salen los SIETE días, no solo los que entrena: así se ve de un vistazo
-          cuántos descansos hay. Los días sin sesión no se pueden tocar. */}
-      <div style={{ display: 'flex', marginBottom: 14, borderBottom: `1px solid ${LT.border}`, paddingBottom: 2 }}>
+          cuántos descansos hay. Los días sin sesión no se pueden tocar.
+          Reestructura visual (15 oct 2026): es la misma pieza que la tira de Home (`BotonDeDia`). */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
         {diasDeEstaSemana().map(({ clave, numero, esHoy }) => {
           const cuales = week.days.map((d, idx) => ({ d, idx })).filter((x) => x.d.day === clave);
           const primero = cuales[0];
@@ -1454,50 +1418,12 @@ const WeekDetail = ({
           const descanso = hay && cuales.every((x) => esDescanso(x.d));
 
           return (
-            <button
-              key={clave}
-              type="button"
-              disabled={!hay}
-              onClick={() => hay && setSelectedIdx(primero.idx)}
-              style={{
-                flex: 1, minWidth: 0, border: 'none', background: 'transparent',
-                cursor: hay ? 'pointer' : 'default', fontFamily: FONT,
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
-                padding: '2px 0 9px',
-              }}
-            >
-              <span style={{
-                fontSize: 11, fontWeight: seleccionado ? 800 : 600,
-                color: seleccionado ? LT.blue : (esHoy ? LT.text2 : LT.text3),
-              }}>
-                {clave}
-              </span>
-              <span style={{
-                width: 27, height: 27, borderRadius: 14, display: 'grid', placeItems: 'center',
-                background: seleccionado ? LT.blue : 'transparent',
-                fontSize: 13.5, fontWeight: seleccionado || esHoy ? 800 : 600,
-                color: seleccionado ? '#fff' : (hay ? LT.text : LT.text4),
-                border: !seleccionado && esHoy ? `1.5px solid ${LT.borderHi}` : '1.5px solid transparent',
-                ...NUM_STYLE,
-              }}>
-                {numero}
-              </span>
-              {/* La marca de abajo: hecha, pendiente, o nada si no entrena. */}
-              <span style={{ display: 'grid', placeItems: 'center', width: 12, height: 10 }}>
-                {hecho ? (
-                  <Check size={11} strokeWidth={3.5} style={{ color: LT.mint }} />
-                ) : hay && !descanso ? (
-                  <span
-                    title={empezada ? 'La dejaste empezada' : undefined}
-                    style={{
-                      width: 5, height: 5, borderRadius: 3,
-                      background: seleccionado ? LT.blue : dcat.c,
-                      boxShadow: empezada && !seleccionado ? `0 0 0 2.5px ${LT.blue}44` : 'none',
-                    }}
-                  />
-                ) : null}
-              </span>
-            </button>
+            <BotonDeDia
+              key={clave} corto={clave} numero={numero} puesto={seleccionado} esHoy={esHoy} deshabilitado={!hay}
+              hecho={hecho} empezada={empezada} puntos={hay && !descanso ? [dcat.c] : []}
+              onClick={() => setSelectedIdx(primero.idx)}
+              etiqueta={`${clave} ${numero}${esHoy ? ', hoy' : ''}${!hay ? ': sin sesión' : hecho ? ': hecha' : ''}`}
+            />
           );
         })}
       </div>
@@ -1724,7 +1650,7 @@ const PlanUnificado = ({
   return (
     <div style={{ padding: '14px 18px 110px', background: LT.bg, minHeight: '100svh', fontFamily: FONT }}>
       <h1 style={{
-        fontSize: 21, fontWeight: 800, color: LT.text, margin: '0 0 14px',
+        fontSize: 26, fontWeight: 800, color: LT.text, margin: '4px 0 14px',
         lineHeight: 1.15, letterSpacing: -0.4, paddingRight: 52,
       }}>
         {titulo}
@@ -1733,7 +1659,7 @@ const PlanUnificado = ({
       <FiltroDeAutor autores={autores} filtro={filtro} onFiltro={onFiltro} style={{ marginBottom: 12 }} />
 
       {/* La tira de la semana: cada punto es de un color, el de quien puso esa sesión. */}
-      <div style={{ display: 'flex', marginBottom: 16, borderBottom: `1px solid ${LT.border}`, paddingBottom: 2 }}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
         {dias.map((d) => {
           const fs = visibles(d);
           const hay = fs.length > 0;
@@ -1742,42 +1668,11 @@ const PlanUnificado = ({
           const descanso = hay && fs.every((f) => f.descanso);
           const colores = [...new Set(fs.filter((f) => !f.descanso).map((f) => f.programa.color ?? LT.blue))].slice(0, 3);
           return (
-            <button
-              key={d.clave}
-              type="button"
-              disabled={!hay}
-              onClick={() => hay && setClave(d.clave)}
-              style={{
-                flex: 1, minWidth: 0, border: 'none', background: 'transparent',
-                cursor: hay ? 'pointer' : 'default', fontFamily: FONT,
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
-                padding: '2px 0 9px',
-              }}
-            >
-              <span style={{
-                fontSize: 11, fontWeight: seleccionado ? 800 : 600,
-                color: seleccionado ? LT.blue : (d.esHoy ? LT.text2 : LT.text3),
-              }}>
-                {d.clave}
-              </span>
-              <span style={{
-                width: 27, height: 27, borderRadius: 14, display: 'grid', placeItems: 'center',
-                background: seleccionado ? LT.blue : 'transparent',
-                fontSize: 13.5, fontWeight: seleccionado || d.esHoy ? 800 : 600,
-                color: seleccionado ? '#fff' : (hay ? LT.text : LT.text4),
-                border: !seleccionado && d.esHoy ? `1.5px solid ${LT.borderHi}` : '1.5px solid transparent',
-                ...NUM_STYLE,
-              }}>
-                {d.numero}
-              </span>
-              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, height: 10, minWidth: 12 }}>
-                {hecho ? (
-                  <Check size={11} strokeWidth={3.5} style={{ color: LT.mint }} />
-                ) : hay && !descanso ? colores.map((c) => (
-                  <span key={c} style={{ width: 5, height: 5, borderRadius: 3, background: c }} />
-                )) : null}
-              </span>
-            </button>
+            <BotonDeDia
+              key={d.clave} corto={d.clave} numero={d.numero} puesto={seleccionado} esHoy={d.esHoy} deshabilitado={!hay}
+              hecho={hecho} puntos={hay && !descanso ? colores : []} onClick={() => setClave(d.clave)}
+              etiqueta={`${d.clave} ${d.numero}${d.esHoy ? ', hoy' : ''}${!hay ? ': sin sesión' : hecho ? ': hecha' : ''}`}
+            />
           );
         })}
       </div>
@@ -1838,157 +1733,119 @@ const PlanUnificado = ({
 };
 
 // Modal selector de cursor: tap fase → semanas, tap semana → días, tap día → selecciona y cierra
+/* «CAMBIAR DÍA»: escoger qué sesión se hace hoy. Reestructura visual (15 oct 2026): hoja como las de `components/ui` (abajo en el teléfono,
+   al centro en la compu). Cada fase es un renglón que se abre; adentro, las semanas en una tira de botones y los días como lista
+   (palomita si ya está hecho, «Actual» el de hoy). Lo que hace no cambió: tocar un día lo elige. */
 const CursorSelector = ({ current, sessionsData, onSelect, onClose }) => {
   const idDeSesion = useIdDeSesion();
   const { phases: PLAN } = usePlan();
+  const esCompu = useIsDesktop();
   const [expandedPhase, setExpandedPhase] = useState(current?.phaseId || null);
-  const [expandedWeek, setExpandedWeek] = useState(current ? `${current.phaseId}-w${current.weekNum}` : null);
+  const [semanaPorFase, setSemanaPorFase] = useState(current ? { [current.phaseId]: current.weekNum } : {});
+
+  useEffect(() => {
+    const tecla = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', tecla);
+    return () => document.removeEventListener('keydown', tecla);
+  }, [onClose]);
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
-      zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-    }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{
-        background: T.bg, width: '100%', maxWidth: 600, maxHeight: '85vh',
-        borderRadius: '24px 24px 0 0', display: 'flex', flexDirection: 'column',
-        border: `1px solid ${T.border}`, borderBottom: 'none',
-      }}>
-        {/* Handle */}
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 6px' }}>
-          <div style={{ width: 36, height: 4, borderRadius: 2, background: T.text4 }} />
-        </div>
-        {/* Header */}
-        <div style={{
-          padding: '8px 20px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          borderBottom: `1px solid ${T.border}`,
-        }}>
-          <div>
-            <Caption color={T.accent}>Cambiar sesión actual</Caption>
-          </div>
-          <button onClick={onClose} style={{
-            background: T.bg3, border: 'none', width: 32, height: 32, borderRadius: '50%',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(17,19,24,0.42)', zIndex: 3000, fontFamily: FONT,
+      display: 'flex', alignItems: esCompu ? 'center' : 'flex-end', justifyContent: 'center', padding: esCompu ? 24 : 0,
+    }}>
+      <div
+        role="dialog" aria-modal="true" aria-label="Cambiar día" onClick={e => e.stopPropagation()}
+        className={esCompu ? 'animate-fade-in' : 'animate-sheet'}
+        style={{
+          background: UI.fondo, width: '100%', maxWidth: esCompu ? 520 : 640, maxHeight: esCompu ? '82vh' : '86svh',
+          borderRadius: esCompu ? 24 : '24px 24px 0 0', display: 'flex', flexDirection: 'column', boxShadow: KP.shPop,
+        }}
+      >
+        {!esCompu && <div aria-hidden="true" style={{ width: 40, height: 5, borderRadius: 99, background: '#D4D7DE', margin: '8px auto 0' }} />}
+        <div style={{ padding: '14px 20px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+          <h2 style={{ margin: 0, fontSize: 21, fontWeight: 800, color: T.text }}>¿Qué sesión haces hoy?</h2>
+          <button type="button" onClick={onClose} aria-label="Cerrar" style={{
+            background: UI.relleno, border: 'none', width: 34, height: 34, borderRadius: 11, display: 'grid', placeItems: 'center', cursor: 'pointer', color: KP.ink2,
           }}>
-            <X size={16} style={{ color: T.text2 }} />
+            <X size={18} />
           </button>
         </div>
-        {/* Lista */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 12px 24px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '4px 16px max(20px, env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 10 }}>
           {PLAN.map(phase => {
-            const phaseExpanded = expandedPhase === phase.id;
+            const abierta = expandedPhase === phase.id;
+            const semanas = phase.weekData ?? [];
+            const numSemana = semanaPorFase[phase.id] ?? semanas[0]?.num;
+            const week = semanas.find((w) => w.num === numSemana) ?? semanas[0];
             return (
-              <div key={phase.id} style={{ marginBottom: 6 }}>
+              <div key={phase.id} style={{ background: UI.tarjeta, borderRadius: UI.rGrupo, boxShadow: UI.sombraGrupo, overflow: 'hidden' }}>
                 <button
-                  onClick={() => setExpandedPhase(p => p === phase.id ? null : phase.id)}
+                  type="button" onClick={() => setExpandedPhase(p => p === phase.id ? null : phase.id)} aria-expanded={abierta}
+                  className="ui-fila"
                   style={{
-                    width: '100%', background: phaseExpanded ? T.bg2 : 'transparent',
-                    border: `1px solid ${phaseExpanded ? phase.color + '40' : T.border}`,
-                    borderRadius: 12, padding: '14px 16px',
-                    display: 'flex', alignItems: 'center', gap: 12,
-                    cursor: 'pointer', fontFamily: FONT, textAlign: 'left',
-                    borderLeft: `4px solid ${phase.color}`,
+                    width: '100%', background: 'transparent', border: 'none', minHeight: UI.altoFila, padding: '12px 16px',
+                    display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', fontFamily: FONT, textAlign: 'left',
                   }}
                 >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                      <Caption color={phase.color}>Fase {phase.num}</Caption>
-                    </div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: T.text, lineHeight: 1.2 }}>{phase.fullName}</div>
-                    <div style={{ fontSize: 11, color: T.text3, marginTop: 2 }}>{phase.duration}</div>
-                  </div>
-                  {phaseExpanded ? <ChevronUp size={16} style={{ color: T.text3 }} /> : <ChevronDown size={16} style={{ color: T.text3 }} />}
+                  <span aria-hidden="true" style={{ width: 12, height: 12, borderRadius: 4, background: phase.color, flexShrink: 0 }} />
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: 16, fontWeight: 700, color: T.text, lineHeight: 1.25 }}>
+                      {/* Si la fase se llama «Fase 2», no se dice dos veces. */}
+                      {/^fase\s*\d+$/i.test((phase.fullName || phase.name || '').trim()) ? `Fase ${phase.num}` : `Fase ${phase.num} · ${phase.fullName || phase.name}`}
+                    </span>
+                    {phase.duration && <span style={{ display: 'block', fontSize: 13, color: KP.ink2, marginTop: 2 }}>{phase.duration}</span>}
+                  </span>
+                  <ChevronDown size={18} style={{ color: KP.ink3, flexShrink: 0, transform: abierta ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
                 </button>
 
-                {phaseExpanded && (
-                  <div style={{ paddingLeft: 14, paddingTop: 8, paddingBottom: 4 }}>
-                    {phase.weekData.map(week => {
-                      const weekKey = `${phase.id}-w${week.num}`;
-                      const weekExpanded = expandedWeek === weekKey;
-                      // Un plan comprado: una semana que aún no se ve llega cerrada (sin ejercicios) y no se abre.
-                      if (week.bloqueada) {
-                        return (
-                          <div key={week.num} style={{ marginBottom: 4 }}>
-                            <div
+                {abierta && week && (
+                  <div style={{ padding: '2px 0 6px' }}>
+                    {semanas.length > 1 && (
+                      <div role="radiogroup" aria-label="Semana" className="sin-barra" style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '4px 16px 10px' }}>
+                        {semanas.map((w) => {
+                          const puesta = w.num === week.num;
+                          return (
+                            <button
+                              key={w.num} type="button" role="radio" aria-checked={puesta} disabled={w.bloqueada}
+                              onClick={() => setSemanaPorFase((m) => ({ ...m, [phase.id]: w.num }))}
                               style={{
-                                width: '100%', background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 14px',
-                                display: 'flex', alignItems: 'center', gap: 10, opacity: 0.6, fontFamily: FONT,
+                                flex: '0 0 auto', minHeight: 38, padding: '0 14px', borderRadius: 11, border: 'none', cursor: w.bloqueada ? 'default' : 'pointer',
+                                fontFamily: FONT, fontSize: 14, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6,
+                                background: puesta ? KP.blue : UI.relleno, color: puesta ? '#fff' : w.bloqueada ? KP.ink3 : KP.ink,
                               }}
                             >
-                              <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, color: T.text }}>
-                                {phase.mode === 'microcycle' ? 'Microciclo' : `Sem ${week.num}`}
-                              </div>
-                              <Lock size={14} style={{ color: T.text3 }} />
-                            </div>
-                          </div>
-                        );
-                      }
-                      // Un día con dos entradas (mañana y tarde) cuenta UNA vez y va hecho cuando lo están las dos.
-                      const entrenables = juntaPorDia(enOrdenDeSemana(week.days)).filter(({ day }) => !esDescanso(day));
-                      const completedCount = entrenables
-                        .filter(({ hermanas }) => hermanas.every(({ idx }) => sessionsData[idDeSesion(phase.id, week.num, idx)]?.completed)).length;
+                              {phase.mode === 'microcycle' ? 'Microciclo' : `Sem ${w.num}`}{w.bloqueada && <Lock size={12} />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {week.bloqueada ? (
+                      <div style={{ padding: '10px 16px 12px', fontSize: 14, color: KP.ink2, display: 'flex', alignItems: 'center', gap: 8 }}><Lock size={15} /> Esta semana aún no está disponible.</div>
+                    ) : juntaPorDia(enOrdenDeSemana(week.days)).map(({ day, idx, hermanas }) => {
+                      const isDone = hermanas.every((h) => !!sessionsData[idDeSesion(phase.id, week.num, h.idx)]?.completed);
+                      const isCurrent = current && current.phaseId === phase.id && current.weekNum === week.num
+                        && hermanas.some((h) => current.dayIdx === h.idx);
+                      const cat = tipoDeSesion(day);
+                      // Dos entradas el mismo día (mañana y tarde) dicen sus dos sesiones.
+                      const dayName = hermanas.length > 1
+                        ? textoDeSesiones(sesionesDelTitulo(hermanas.map((h) => h.day)))
+                        : (sinDuracion(day.name || '') || textoDeSesiones(sesionesDelTitulo(day)) || day.day);
                       return (
-                        <div key={week.num} style={{ marginBottom: 4 }}>
-                          <button
-                            onClick={() => setExpandedWeek(w => w === weekKey ? null : weekKey)}
-                            style={{
-                              width: '100%', background: weekExpanded ? T.bg3 : T.bg2,
-                              border: `1px solid ${T.border}`,
-                              borderRadius: 10, padding: '10px 14px',
-                              display: 'flex', alignItems: 'center', gap: 10,
-                              cursor: 'pointer', fontFamily: FONT, textAlign: 'left',
-                            }}
-                          >
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 2 }}>
-                                {phase.mode === 'microcycle' ? 'Microciclo' : `Sem ${week.num}`}
-                              </div>
-                              <div style={{ fontSize: 11, color: T.text3, ...NUM_STYLE }}>
-                                {completedCount}/{entrenables.length} completadas · {week.label || ''}
-                              </div>
-                            </div>
-                            {weekExpanded ? <ChevronUp size={14} style={{ color: T.text3 }} /> : <ChevronDown size={14} style={{ color: T.text3 }} />}
-                          </button>
-                          {weekExpanded && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '6px 0 4px 12px' }}>
-                              {juntaPorDia(enOrdenDeSemana(week.days)).map(({ day, idx, hermanas }) => {
-                                const isDone = hermanas.every((h) => !!sessionsData[idDeSesion(phase.id, week.num, h.idx)]?.completed);
-                                const isCurrent = current && current.phaseId === phase.id && current.weekNum === week.num
-                                  && hermanas.some((h) => current.dayIdx === h.idx);
-                                const cat = tipoDeSesion(day);
-                                // Dos entradas el mismo día (mañana y tarde) dicen sus dos sesiones.
-                                const dayName = hermanas.length > 1
-                                  ? textoDeSesiones(sesionesDelTitulo(hermanas.map((h) => h.day)))
-                                  : (sinDuracion(day.name || '') || textoDeSesiones(sesionesDelTitulo(day)) || day.day);
-                                return (
-                                  <button
-                                    key={idx}
-                                    onClick={() => onSelect(phase.id, week.num, idx)}
-                                    style={{
-                                      background: isCurrent ? T.accentBg : T.bg2,
-                                      border: `1px solid ${isCurrent ? T.accent : T.border}`,
-                                      borderRadius: 8, padding: '10px 12px',
-                                      display: 'flex', alignItems: 'center', gap: 10,
-                                      cursor: 'pointer', fontFamily: FONT, textAlign: 'left',
-                                      width: '100%',
-                                    }}
-                                  >
-                                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: cat.c, flexShrink: 0 }} />
-                                    <span style={{ fontSize: 12, fontWeight: 700, color: T.text2, minWidth: 28 }}>{day.day}</span>
-                                    <span style={{
-                                      flex: 1, minWidth: 0, fontSize: 13,
-                                      color: isCurrent ? T.text : T.text2,
-                                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                                    }}>{dayName}</span>
-                                    {isDone && <Check size={13} style={{ color: T.accent }} strokeWidth={3} />}
-                                    {isCurrent && <span style={{ fontSize: 9, fontWeight: 800, color: T.accent, letterSpacing: 0.5 }}>ACTUAL</span>}
-                                    {hermanas.length > 1 && <span style={{ fontSize: 9, fontWeight: 800, color: T.warning }}>2X</span>}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
+                        <button
+                          key={idx} type="button" onClick={() => onSelect(phase.id, week.num, idx)} className="ui-fila" aria-current={isCurrent ? 'true' : undefined}
+                          style={{
+                            width: '100%', minHeight: 52, padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer',
+                            fontFamily: FONT, textAlign: 'left', border: 'none', background: isCurrent ? KP.blueSoft : 'transparent',
+                          }}
+                        >
+                          <span aria-hidden="true" style={{ width: 9, height: 9, borderRadius: '50%', background: cat.c, flexShrink: 0 }} />
+                          <span style={{ fontSize: 14, fontWeight: 700, color: KP.ink2, minWidth: 34 }}>{day.day}</span>
+                          <span style={{ flex: 1, minWidth: 0, fontSize: 15.5, fontWeight: 600, color: T.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{dayName}</span>
+                          {hermanas.length > 1 && <Pastilla tono="aviso">2×</Pastilla>}
+                          {isDone && <Check size={17} style={{ color: KP.mint, flexShrink: 0 }} strokeWidth={3} aria-label="Hecha" />}
+                          {isCurrent && <Pastilla tono="lleno">Actual</Pastilla>}
+                        </button>
                       );
                     })}
                   </div>
@@ -2005,7 +1862,7 @@ const CursorSelector = ({ current, sessionsData, onSelect, onClose }) => {
 const HomeView = ({
   sessionsData, wellness, reloj, oneRMs = {}, fechasRM = {}, onStartSession, onGoTab, onAbrirHoja, onVerPrograma, cursor, onChangeCursor,
   hayEquipo = false, conAutor = false, entradas = [], autores = [], filtro = null, onFiltro, onAbrirEntrada, resumenDeEquipo = null,
-  altasDeEquipo = [],
+  altasDeEquipo = [], entradasDe = null,
 }) => {
   // Tablet o más: la tarjeta de hoy a la izquierda y los cuadros a la derecha (reestructura visual, 15 oct 2026).
   const esAncha = useIsWide();
@@ -2022,8 +1879,18 @@ const HomeView = ({
   const [avisosVistos, setAvisosVistos] = useStorage('ui:avisos-vistos', {});
   const aceptaAviso = (clave) => setAvisosVistos((prev) => ({ ...prev, [clave]: new Date().toISOString() }));
   const displayName = profile?.full_name || profile?.username || 'Atleta';
-  // Lo que toca HOY según el calendario del dispositivo (no según lo marcado).
-  const next = useMemo(() => sessionForToday(PLAN, kind, cursor), [PLAN, kind, cursor]);
+  /* EL DÍA QUE SE MIRA (15 oct 2026). Andrés: «si pusimos los días de la semana en home, que cuando el atleta le pique vea su
+     home de ese día». Tocar un día de la tira cambia lo que dice la tarjeta azul; `null` = hoy. Solo cambia lo que se ENSEÑA:
+     la fase, la semana y «Cambiar día» (que es «hoy hago este otro») siguen siendo de hoy. */
+  const posHoy = (new Date().getDay() + 6) % 7;
+  const [posVista, setPosVista] = useState(null);
+  const pos = posVista ?? posHoy;
+  const esHoyVista = pos === posHoy;
+  const fechaVista = useMemo(() => (esHoyVista ? new Date() : fechaDeLaSemana(pos)), [pos, esHoyVista]);
+  const cuando = { hoy: esHoyVista, fecha: fechaVista };
+  // Lo que toca ese día según el calendario del dispositivo (no según lo marcado).
+  const next = useMemo(() => sessionForToday(PLAN, kind, cursor, fechaVista), [PLAN, kind, cursor, fechaVista]);
+  const entradasVista = useMemo(() => (esHoyVista || !entradasDe ? entradas : entradasDe(fechaVista)), [esHoyVista, entradasDe, entradas, fechaVista]);
   const semanaPropia = useMemo(() => weekOverview(PLAN, kind, cursor), [PLAN, kind, cursor]);
   // Con equipo, «Tu semana» cuenta lo de todos (y respeta el filtro).
   const week = hayEquipo && resumenDeEquipo ? resumenDeEquipo : semanaPropia;
@@ -2122,9 +1989,12 @@ const HomeView = ({
   const descanso = (
     <HoyDescansas
       /* Si el coach puso descanso, se dice descanso: "no tienes rutina asignada" suena a que algo falta, y no falta nada. */
-      titulo={week.days.find((d) => d.isToday)?.descanso ? 'Hoy descansas' : 'Hoy no te toca entrenar'}
-      siguiente={week.next ? `Sigue: ${weekdayLabel(week.next.key)}${nombreDeSemana(week.next) ? ` · ${nombreDeSemana(week.next)}` : ''}` : null}
-      vacia={t('Aún no hay entrenamientos en tu semana.')}
+      titulo={esHoyVista
+        ? (week.days[pos]?.descanso ? 'Hoy descansas' : 'Hoy no te toca entrenar')
+        : `${weekdayLabel(week.days[pos]?.key).replace(/^./, (c) => c.toUpperCase())}: ${week.days[pos]?.descanso ? 'descanso' : 'sin sesión'}`}
+      siguiente={esHoyVista && week.next ? `Sigue: ${weekdayLabel(week.next.key)}${nombreDeSemana(week.next) ? ` · ${nombreDeSemana(week.next)}` : ''}` : null}
+      vacia={esHoyVista ? t('Aún no hay entrenamientos en tu semana.') : null}
+      cuando={cuando}
       boton={t('Ver mi plan')}
       onVerPlan={() => onGoTab('plan')}
     />
@@ -2171,15 +2041,18 @@ const HomeView = ({
         padding: '16px 18px 0', maxWidth: 1180, margin: '0 auto', alignItems: 'start',
       }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
-          <TiraDeSemana dias={week.days} />
+          <TiraDeSemana dias={week.days} elegido={pos} onElegir={(i) => setPosVista(i === posHoy ? null : i)} />
+          {!esHoyVista && (
+            <Boton tipo="texto" chico onClick={() => setPosVista(null)} estilo={{ alignSelf: 'flex-start', marginTop: -4 }}>← Volver a hoy</Boton>
+          )}
           {/* CON EQUIPO la sesión de hoy es UNA tarjeta con lo de todos, cada cosa con el nombre de quien la puso
               (Andrés, 1 oct 2026). Sin equipo, la de un programa. */}
           {hayEquipo && <FiltroDeAutor autores={autores} filtro={filtro} onFiltro={onFiltro} />}
           {hayEquipo ? (
-            entradas.length > 0 ? (
+            entradasVista.length > 0 ? (
               <HoyTeTocaEquipo
-                entradas={entradas} onAbrir={onAbrirEntrada} conAutor={conAutor}
-                onCambiarDia={kind !== 'weekly' && !filtro ? onChangeCursor : undefined}
+                entradas={entradasVista} onAbrir={onAbrirEntrada} conAutor={conAutor} cuando={cuando}
+                onCambiarDia={esHoyVista && kind !== 'weekly' && !filtro ? onChangeCursor : undefined}
               />
             ) : descanso
           ) : next ? (
@@ -2187,8 +2060,10 @@ const HomeView = ({
               sesiones={sesionesDeLaTarjeta}
               completada={cursorCompleted}
               onAbrir={() => onStartSession(next.phase, next.week, next.dayIdx)}
-              /* En una rutina que se repite el día lo decide el calendario, no un puntero: el selector se abría, se elegía un día y no pasaba nada. */
-              onCambiarDia={kind !== 'weekly' ? onChangeCursor : undefined}
+              cuando={cuando}
+              /* En una rutina que se repite el día lo decide el calendario, no un puntero: el selector se abría, se elegía un día y no pasaba nada.
+                 Mirando otro día tampoco sale: «Cambiar día» es «hoy hago este otro». */
+              onCambiarDia={esHoyVista && kind !== 'weekly' ? onChangeCursor : undefined}
             />
           ) : descanso}
         </div>
@@ -2227,23 +2102,6 @@ const HomeView = ({
   );
 };
 
-const Slider = ({ label, hint, value, onChange, max = 10, color = T.accent }) => (
-  <div style={{ marginBottom: 16 }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-      <div>
-        <div style={{ fontSize: 14, color: T.text, fontWeight: 500 }}>{label}</div>
-        {hint && <div style={{ fontSize: 11, color: T.text3, marginTop: 1 }}>{hint}</div>}
-      </div>
-      <span style={{ fontSize: 18, fontWeight: 800, color: value == null ? T.text3 : color, ...NUM_STYLE }}>{value ?? '—'}</span>
-    </div>
-    <input type="range" min="0" max={max} value={value || 0}
-      onChange={e => onChange(parseInt(e.target.value))}
-      aria-label={label}
-      style={{ width: '100%', accentColor: color, cursor: 'pointer' }}
-    />
-  </div>
-);
-
 const COLOR_DEL_TONO = { verde: LT.mint, ambar: T.warning, rojo: T.danger, neutro: T.text3 };
 
 /* Cómo se dice el estado de UNA medida del reloj frente a lo normal del atleta (ver `resumenDeRecuperacion`). */
@@ -2256,30 +2114,22 @@ const ESTADO_DE_MEDIDA = {
 
 /** Una medida que dejó el reloj: el valor más reciente, cómo va la semana y lo normal del atleta. Solo se lee: no se escribe. */
 const FilaDelReloj = ({ nombre, icono: Icono, medida, reciente }) => {
-  const [texto, color] = ESTADO_DE_MEDIDA[medida.estado] ?? ESTADO_DE_MEDIDA['sin-datos'];
+  const [texto] = ESTADO_DE_MEDIDA[medida.estado] ?? ESTADO_DE_MEDIDA['sin-datos'];
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderTop: `1px solid ${KP.line}` }}>
-      <span style={{ width: 34, height: 34, borderRadius: 11, background: T.bg3, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-        <Icono size={17} style={{ color: T.text2 }} />
-      </span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{nombre}</div>
-        <div style={{ fontSize: 12, color, fontWeight: 600, marginTop: 1 }}>{texto}</div>
-      </div>
-      <div style={{ textAlign: 'right', flexShrink: 0 }}>
-        <div style={{ fontSize: 20, fontWeight: 800, color: T.text, ...NUM_STYLE }}>
-          {reciente ? reciente.valor : '—'}<span style={{ fontSize: 12, fontWeight: 700, color: T.text3, marginLeft: 3 }}>{medida.unidad}</span>
-        </div>
-        {medida.base !== null && <div style={{ fontSize: 11, color: T.text3, ...NUM_STYLE }}>Normal: {medida.base} {medida.unidad}</div>}
-      </div>
-    </div>
+    <Fila
+      izquierda={<IconoDeFila color={KP.ink2} fondo={UI.relleno}><Icono size={18} /></IconoDeFila>}
+      texto={nombre}
+      detalle={`${texto}${medida.base !== null ? ` · normal: ${medida.base} ${medida.unidad}` : ''}`}
+      valor={reciente ? `${reciente.valor} ${medida.unidad}` : '—'} valorTono="neutro"
+    />
   );
 };
 
 /* SALUD DIARIA. Andrés, 10 oct 2026: «si el atleta tiene reloj, las dos casillas se llenan con eso; si no tiene, que la app no las pida». El pulso en reposo,
    la variabilidad cardiaca (HRV) y el sueño se leen de lo que importó el reloj (`useRecuperacionReciente`). Lo ÚNICO que el atleta anota es el dolor muscular
    (con pacientes de un fisio: «dolor o molestia», porque puede venir de cualquier parte). Motivación, fatiga y el sueño anotado se quitaron: al coach no le
-   servían. Lo viejo que ya estaba guardado en `wr:wellness` se queda en la cuenta, sin usarse. */
+   servían. Lo viejo que ya estaba guardado en `wr:wellness` se queda en la cuenta, sin usarse.
+   Reestructura visual (15 oct 2026): tarjeta azul arriba con el veredicto, el reloj y el dolor como listas agrupadas, el dolor con el deslizador nuevo. */
 const WellnessView = ({ wellness, setWellness, reloj, enHoja = false }) => {
   const { salud } = usePalabras();
   const { perfil, userId, soloLectura } = usePerfilDeLaVista();
@@ -2298,101 +2148,64 @@ const WellnessView = ({ wellness, setWellness, reloj, enHoja = false }) => {
   const atleta = { id: userId, full_name: perfil?.full_name, username: perfil?.username, unidad_peso: perfil?.unidad_peso };
 
   return (
-    <div style={{ paddingBottom: enHoja ? 0 : 100, margin: enHoja ? '0 -20px' : 0 }}>
-      <div style={{ padding: enHoja ? '6px 20px 20px' : '20px 20px 24px' }}>
-        <Caption color={T.text3} style={{ marginBottom: 6 }}>Salud diaria</Caption>
-        {lectura ? (
-          <>
-            <h1 style={{ fontSize: 30, fontWeight: 800, color: T.text, margin: 0, lineHeight: 1.05, letterSpacing: -0.8, display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span aria-hidden="true" style={{ width: 12, height: 12, borderRadius: '50%', background: COLOR_DEL_TONO[lectura.tono] ?? T.text3, flexShrink: 0 }} />
-              {lectura.titulo}
-            </h1>
-            <div style={{ fontSize: 14, color: T.text2, marginTop: 8, lineHeight: 1.45 }}>{lectura.detalle}</div>
-          </>
-        ) : (
-          <h1 style={{ fontSize: 32, fontWeight: 800, color: T.text, margin: 0, lineHeight: 1.05, letterSpacing: -0.8 }}>¿Cómo estás hoy?</h1>
-        )}
-      </div>
+    <div style={{ paddingBottom: enHoja ? 0 : 100, display: 'flex', flexDirection: 'column', gap: 18, fontFamily: FONT, ...(enHoja ? null : { padding: '20px 18px 100px' }) }}>
+      <TarjetaHeroe
+        etiqueta={lectura ? 'Tu recuperación' : 'Salud de hoy'}
+        titulo={lectura ? lectura.titulo : '¿Cómo estás hoy?'}
+        detalle={lectura ? lectura.detalle : null}
+        accion={lectura ? <span aria-hidden="true" style={{ display: 'block', width: 14, height: 14, borderRadius: '50%', background: COLOR_DEL_TONO[lectura.tono] ?? '#fff', boxShadow: '0 0 0 3px rgba(255,255,255,0.3)' }} /> : null}
+      />
 
-      <div style={{ padding: '0 20px' }}>
-        {hayReloj && (
-          <Card style={{ marginBottom: 14, paddingBottom: soloLectura ? 6 : 18 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <Activity size={14} style={{ color: T.text3 }} />
-              <Caption>Lo que midió tu reloj</Caption>
-            </div>
-            <FilaDelReloj nombre="Pulso en reposo" icono={HeartPulse} medida={resumen.reposo} reciente={recientes.reposo} />
-            <FilaDelReloj nombre="Variabilidad cardiaca" icono={Activity} medida={resumen.hrv} reciente={recientes.hrv} />
-            <FilaDelReloj nombre="Sueño" icono={Moon} medida={resumen.sueno} reciente={recientes.sueno} />
-            {!soloLectura && (
-              <button type="button" onClick={() => setMetricas('recuperacion')} className="kp-press"
-                style={{
-                  marginTop: 6, width: '100%', padding: '12px 14px', borderRadius: KP.rBtn, border: `1.5px solid ${LT.blue}`, background: T.bg2, color: LT.blue,
-                  fontFamily: FONT, fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                }}>
-                Ver mi recuperación <ChevronRight size={15} />
-              </button>
-            )}
-          </Card>
-        )}
-
-        {!hayReloj && !soloLectura && (
-          <Card style={{ marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ width: 38, height: 38, borderRadius: 12, background: LT.blueSoft, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-                <HeartPulse size={19} style={{ color: LT.blue }} />
-              </span>
-              <div style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: T.text, lineHeight: 1.35 }}>
-                Con tu reloj, tu pulso en reposo, tu variabilidad cardiaca y tu sueño se llenan solos.
-              </div>
-            </div>
-            <button type="button" onClick={() => setMetricas('importar')} className="kp-press"
-              style={{
-                marginTop: 14, width: '100%', padding: '12px 14px', borderRadius: KP.rBtn, border: `1.5px solid ${LT.blue}`, background: T.bg2, color: LT.blue,
-                fontFamily: FONT, fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              }}>
-              <Upload size={16} /> Importar entrenos del reloj
-            </button>
-          </Card>
-        )}
-
-        <Card style={{ marginBottom: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-            <Calendar size={14} style={{ color: T.text3 }} />
-            <input type="date" value={date} onChange={e => e.target.value && setDate(e.target.value)} aria-label="Día que anotas"
-              style={{ background: T.bg3, border: `1px solid ${T.border}`, borderRadius: 8, color: T.text, padding: '6px 10px', fontFamily: FONT, fontSize: 13, outline: 'none' }} />
-          </div>
-          <Slider label={nombreDelDolor}
-            hint={salud ? 'De cualquier parte del cuerpo · 0 nada · 10 muy fuerte' : 'Qué tan adolorido estás de los músculos · 0 nada · 10 muy fuerte'}
-            value={dayData.soreness} onChange={v => updateDay('soreness', v)} color={T.danger} />
-          {dayData.soreness == null && (
-            <button type="button" onClick={() => updateDay('soreness', 0)} className="kp-press"
-              style={{
-                padding: '9px 14px', borderRadius: 999, border: 'none', background: LT.blueSoft, color: LT.blue,
-                fontFamily: FONT, fontSize: 13, fontWeight: 700, cursor: 'pointer',
-              }}>
-              {salud ? 'Sin molestia' : 'Sin dolor'}
-            </button>
+      <Grupo titulo={nombreDelDolor} pie={salud ? 'De cualquier parte del cuerpo.' : 'Qué tan adolorido estás de los músculos.'}>
+        <Fila
+          texto="Día"
+          derecha={(
+            <input
+              type="date" value={date} onChange={e => e.target.value && setDate(e.target.value)} aria-label="Día que anotas" disabled={soloLectura}
+              style={{ border: 'none', background: 'transparent', color: KP.blue, fontFamily: FONT, fontSize: 15.5, fontWeight: 600, textAlign: 'right', outline: 'none' }}
+            />
           )}
-        </Card>
+        />
+        <div className="ui-fila" style={{ padding: '14px 16px 16px' }}>
+          <Deslizador
+            etiqueta={dayData.soreness == null ? 'Sin anotar' : dayData.soreness === 0 ? (salud ? 'Sin molestia' : 'Sin dolor') : 'Hoy'}
+            valor={dayData.soreness ?? null} onCambio={v => !soloLectura && updateDay('soreness', v)} color={T.danger} extremos={['0 nada', '10 muy fuerte']}
+          />
+          {dayData.soreness == null && !soloLectura && (
+            <Boton tipo="secundario" chico onClick={() => updateDay('soreness', 0)} estilo={{ marginTop: 12 }}>{salud ? 'Sin molestia' : 'Sin dolor'}</Boton>
+          )}
+        </div>
+      </Grupo>
 
-        {chartData.length >= 2 && (
-          <Card style={{ marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-              <TrendingUp size={14} style={{ color: T.text3 }} />
-              <Caption>{nombreDelDolor} · últimos 14 días</Caption>
-            </div>
-            <ResponsiveContainer width="100%" height={160}>
+      {hayReloj && (
+        <Grupo titulo="Lo que midió tu reloj">
+          <FilaDelReloj nombre="Pulso en reposo" icono={HeartPulse} medida={resumen.reposo} reciente={recientes.reposo} />
+          <FilaDelReloj nombre="Variabilidad cardiaca" icono={Activity} medida={resumen.hrv} reciente={recientes.hrv} />
+          <FilaDelReloj nombre="Sueño" icono={Moon} medida={resumen.sueno} reciente={recientes.sueno} />
+          {!soloLectura && <Fila texto="Ver mi recuperación" tono="enlace" onClick={() => setMetricas('recuperacion')} />}
+        </Grupo>
+      )}
+
+      {!hayReloj && !soloLectura && (
+        <Grupo titulo="Tu reloj" pie="Con tu reloj, tu pulso en reposo, tu variabilidad cardiaca y tu sueño se llenan solos.">
+          <Fila izquierda={<IconoDeFila><Upload size={18} /></IconoDeFila>} texto="Importar entrenos del reloj" tono="enlace" onClick={() => setMetricas('importar')} />
+        </Grupo>
+      )}
+
+      {chartData.length >= 2 && (
+        <Grupo titulo="Últimos 14 días">
+          <div style={{ padding: '14px 10px 8px 0' }}>
+            <ResponsiveContainer width="100%" height={170}>
               <LineChart data={chartData}>
-                <XAxis dataKey="date" tick={{ fill: T.text3, fontSize: 10 }} axisLine={{ stroke: T.border }} tickLine={{ stroke: T.border }} />
-                <YAxis domain={[0, 10]} tick={{ fill: T.text3, fontSize: 10 }} axisLine={{ stroke: T.border }} tickLine={{ stroke: T.border }} />
-                <Tooltip contentStyle={{ background: T.bg3, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12 }} />
-                <Line type="monotone" dataKey="dolor" stroke={T.danger} strokeWidth={2.5} dot={{ fill: T.danger, r: 3 }} name={nombreDelDolor} />
+                <XAxis dataKey="date" tick={{ fill: KP.ink3, fontSize: 11 }} axisLine={{ stroke: UI.hilo }} tickLine={false} />
+                <YAxis domain={[0, 10]} tick={{ fill: KP.ink3, fontSize: 11 }} axisLine={false} tickLine={false} width={32} />
+                <Tooltip contentStyle={{ background: '#fff', border: 'none', borderRadius: 12, fontSize: 13, boxShadow: KP.shPop }} />
+                <Line type="monotone" dataKey="dolor" stroke={T.danger} strokeWidth={3} dot={{ fill: T.danger, r: 3.5 }} name={nombreDelDolor} />
               </LineChart>
             </ResponsiveContainer>
-          </Card>
-        )}
-      </div>
+          </div>
+        </Grupo>
+      )}
 
       {metricas && <AbreMetricas atleta={atleta} esAtleta abrirEn={metricas} onCerrar={() => setMetricas(null)} />}
     </div>
@@ -2402,6 +2215,8 @@ const WellnessView = ({ wellness, setWellness, reloj, enHoja = false }) => {
 // Los mismos 9 levantamientos que usa el cálculo de kilos por porcentaje (ver `lib/cargaPorcentaje.js`).
 const ONE_RM_LIFTS = LEVANTAMIENTOS;
 
+/* 1RM. Reestructura visual (15 oct 2026): la calculadora como dos filas con su número, el resultado en la tarjeta azul y los
+   máximos guardados en una lista agrupada, cada uno con su casilla a la derecha. */
 const OneRMView = ({ oneRMs, ponRM, enHoja = false }) => {
   const { perfil: profile } = usePerfilDeLaVista();
   const unidad = profile?.unidad_peso || 'kg';
@@ -2413,58 +2228,32 @@ const OneRMView = ({ oneRMs, ponRM, enHoja = false }) => {
   const result = useMemo(() => calc1RM(calc.weight, calc.reps), [calc]);
 
   return (
-    <div style={{ paddingBottom: enHoja ? 0 : 100, margin: enHoja ? '0 -20px' : 0 }}>
-      <div style={{ padding: enHoja ? '6px 20px 20px' : '20px 20px 24px' }}>
-        {/* En la hoja, el título «1RM» ya lo dice la cabecera: no se repite. */}
-        {!enHoja && <Caption color={T.text3} style={{ marginBottom: 6 }}>Tus máximos</Caption>}
-        {!enHoja && <h1 style={{ fontSize: 36, fontWeight: 800, color: T.text, margin: 0, lineHeight: 1.05, letterSpacing: -1 }}>1RM</h1>}
-        <div style={{ marginTop: enHoja ? 0 : 8, fontSize: 14, color: T.text2 }}>El plan usa estos para calcular las cargas.</div>
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18, fontFamily: FONT, ...(enHoja ? null : { padding: '20px 18px 100px' }) }}>
+      {/* En la hoja, el título «1RM» ya lo dice la cabecera: no se repite. */}
+      {!enHoja && <h1 style={{ fontSize: 32, fontWeight: 800, color: T.text, margin: 0, letterSpacing: -0.8 }}>1RM</h1>}
 
-      <div style={{ padding: '0 20px' }}>
-        <Card style={{ marginBottom: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <Calculator size={14} style={{ color: T.accent }} />
-            <Caption color={T.text2}>Calculadora</Caption>
-          </div>
-          <div style={{ fontSize: 12, color: T.text3, marginBottom: 14, lineHeight: 1.5 }}>
-            Peso usado y repeticiones cerca del fallo. Te da el 1RM estimado.
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
-            <Input value={calc.weight} onChange={v => setCalc(c => ({ ...c, weight: v }))} placeholder="Peso" type="number" suffix={u} />
-            <Input value={calc.reps} onChange={v => setCalc(c => ({ ...c, reps: v }))} placeholder="Reps" type="number" suffix="reps" />
-          </div>
-          {result && (
-            <div style={{ padding: 18, background: T.accentBg, borderRadius: 14, border: `1px solid rgba(30, 64, 224, 0.15)` }}>
-              <Caption color={T.accentDk} style={{ marginBottom: 4 }}>1RM estimado</Caption>
-              <div style={{ fontSize: 44, fontWeight: 800, color: T.accent, lineHeight: 1, letterSpacing: -1, ...NUM_STYLE }}>
-                {result.avg}<span style={{ fontSize: 16, color: T.accentDk, fontWeight: 500 }}> {u}</span>
-              </div>
-              <div style={{ marginTop: 8, fontSize: 11, color: T.text3, ...NUM_STYLE }}>
-                Brzycki {result.brzycki} {u} · Epley {result.epley} {u}
-              </div>
-            </div>
-          )}
-        </Card>
+      <Grupo titulo="Calculadora" pie="Peso que usaste y repeticiones cerca del fallo.">
+        <Fila texto="Peso" derecha={<EntradaNumero etiqueta="Peso usado" unidad={u} valor={calc.weight} onCambio={v => setCalc(c => ({ ...c, weight: v }))} ancho={110} />} />
+        <Fila texto="Repeticiones" derecha={<EntradaNumero etiqueta="Repeticiones" unidad="reps" valor={calc.reps} onCambio={v => setCalc(c => ({ ...c, reps: v }))} ancho={110} />} />
+      </Grupo>
+      {result && (
+        <TarjetaHeroe etiqueta="1RM estimado" titulo={`${result.avg} ${u}`} detalle={`Brzycki ${result.brzycki} ${u} · Epley ${result.epley} ${u}`} />
+      )}
 
-        <Caption style={{ marginBottom: 12, marginTop: 24 }}>Tus 1RM guardados</Caption>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {ONE_RM_LIFTS.map(lift => (
-            <div key={lift.key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: T.bg2, borderRadius: 10, border: `1px solid ${T.border}` }}>
-              <div style={{ flex: 1, fontSize: 14, fontWeight: 600, color: T.text }}>{lift.nombre}</div>
-              <Input value={oneRMs[lift.key] == null ? '' : desdeKilos(oneRMs[lift.key], unidad)}
-                onChange={v => ponRM(lift.key, v ? aKilos(v, unidad) : null)}
-                placeholder="—" type="number" suffix={u}
-                style={{ width: 110, textAlign: 'right', padding: '8px 14px', fontSize: 14 }} />
-            </div>
-          ))}
-        </div>
-
-        <div style={{ marginTop: 20, padding: 14, background: T.bg2, borderRadius: 10, border: `1px solid ${T.border}`, fontSize: 12, color: T.text2, lineHeight: 1.6 }}>
-          <strong style={{ color: T.text }}>Recalibra al inicio de cada fase.</strong> Si tu fuerza subió en F3, reevalúa antes de F4. Para tests, usa submáximo (3-5 reps cerca del fallo) y deja que la fórmula lo estime.
-        </div>
-      </div>
+      <Grupo titulo="Tus 1RM guardados" pie="El plan usa estos para calcular tus cargas. Recalíbralos al empezar cada fase.">
+        {ONE_RM_LIFTS.map(lift => (
+          <Fila
+            key={lift.key} texto={lift.nombre}
+            derecha={(
+              <EntradaNumero
+                etiqueta={`1RM de ${lift.nombre}`} unidad={u} ancho={110}
+                valor={oneRMs[lift.key] == null ? '' : desdeKilos(oneRMs[lift.key], unidad)}
+                onCambio={v => ponRM(lift.key, v ? aKilos(v, unidad) : null)}
+              />
+            )}
+          />
+        ))}
+      </Grupo>
     </div>
   );
 };
@@ -2904,6 +2693,7 @@ export default function TrainingApp() {
       hayEquipo={hayEquipo}
       conAutor={autores.length > 1}
       entradas={entradasHoy}
+      entradasDe={(fecha) => entradasDeHoy(programas, store, fecha).filter((e) => !filtroVigente || autorDe(e.programa) === filtroVigente)}
       autores={autores}
       filtro={filtroVigente}
       onFiltro={setFiltro}

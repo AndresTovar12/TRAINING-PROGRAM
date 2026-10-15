@@ -31,10 +31,12 @@ const TarjetaDeSesion = ({ aspecto, hecha, abierta, onAlternar, nombre, detalle,
   // Con el color del tipo (el 99 % de los casos). Terminada, o con un color que no se puede aclarar, la tarjeta es blanca.
   const conTinte = !hecha && !!fondo;
   return (
+    /* Reestructura visual (15 oct 2026): sin borde, esquinas de 22 px y sombra suave, como las tarjetas de `components/ui`. Conserva el color
+       del tipo de sesión (Andrés, 9 oct) en el fondo clarito y en el cuadro del ícono. */
     <div style={{
-      marginBottom: 12, borderRadius: 18, overflow: 'hidden', boxShadow: KP.shCard,
+      marginBottom: 12, borderRadius: 22, overflow: 'hidden', boxShadow: '0 2px 10px rgba(17,19,24,0.06)',
       background: conTinte ? `${fondo}, ${LT.surface}` : LT.surface,
-      border: `1.5px solid ${hecha ? `${LT.mint}55` : (conTinte ? borde : LT.border)}`,
+      outline: hecha ? `1.5px solid ${LT.mint}55` : (conTinte ? `1px solid ${borde}` : 'none'), outlineOffset: -1,
     }}>
       {/* Solo el ENCABEZADO se pinta de verde al terminar: si se pintara toda
           la tarjeta, la lista de ejercicios de adentro quedaría sobre verde. */}
@@ -44,12 +46,12 @@ const TarjetaDeSesion = ({ aspecto, hecha, abierta, onAlternar, nombre, detalle,
         className="kp-press"
         onClick={onAlternar}
         style={{
-          width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '13px 14px',
+          width: '100%', display: 'flex', alignItems: 'center', gap: 13, padding: '14px 16px',
           background: hecha ? KP.mintSoft : 'transparent', border: 'none', cursor: 'pointer', fontFamily: FONT, textAlign: 'left',
         }}
       >
         <span style={{
-          width: 46, height: 46, borderRadius: 14, flexShrink: 0, display: 'grid', placeItems: 'center',
+          width: 52, height: 52, borderRadius: 16, flexShrink: 0, display: 'grid', placeItems: 'center',
           background: hecha ? LT.mint : (mosaico ?? LT.surface2), color: hecha ? '#fff' : (tinta ?? color ?? LT.text2),
         }}>
           {hecha ? <Check size={22} strokeWidth={3} /> : <Icono size={22} />}
@@ -60,12 +62,12 @@ const TarjetaDeSesion = ({ aspecto, hecha, abierta, onAlternar, nombre, detalle,
               <EtiquetaDeAutor programa={autor} tamano={11.5} />
             </span>
           )}
-          <span style={{ display: 'block', fontSize: 15.5, fontWeight: 800, color: LT.text, lineHeight: 1.2, overflowWrap: 'anywhere' }}>
+          <span style={{ display: 'block', fontSize: 18, fontWeight: 800, color: LT.text, lineHeight: 1.2, letterSpacing: -0.2, overflowWrap: 'anywhere' }}>
             {nombre}
           </span>
           <span style={{
             display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '3px 8px', marginTop: 5,
-            fontSize: 12.5, fontWeight: 600, color: LT.text2, ...NUM_STYLE,
+            fontSize: 13.5, fontWeight: 600, color: LT.text2, ...NUM_STYLE,
           }}>
             {/* Terminada, «Terminada» ocupa el lugar de los datos: el ícono
                 verde ya dice que va hecha y así el encabezado no crece. */}
@@ -77,8 +79,8 @@ const TarjetaDeSesion = ({ aspecto, hecha, abierta, onAlternar, nombre, detalle,
           </span>
         </span>
         <span aria-hidden="true" style={{
-          width: 32, height: 32, borderRadius: 16, flexShrink: 0, display: 'grid', placeItems: 'center',
-          background: hecha ? '#fff' : (conTinte ? 'rgba(255,255,255,0.7)' : LT.surface2), color: LT.text2,
+          width: 36, height: 36, borderRadius: 12, flexShrink: 0, display: 'grid', placeItems: 'center',
+          background: hecha ? '#fff' : (conTinte ? 'rgba(255,255,255,0.75)' : '#EBEDF1'), color: LT.text2,
           transform: abierta ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s',
         }}>
           <ChevronDown size={18} />

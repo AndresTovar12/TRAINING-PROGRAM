@@ -5,6 +5,7 @@ import { aImagenWeb } from '@/lib/imagen';
 import { cargaFuentes, dibujaEnPantalla, exportaSello, limitaCorrimiento, MARCO, piezaEn, piezasDelSello } from '@/lib/sello/dibuja';
 import { imagenDeIcono } from '@/lib/sello/icono';
 import { Boton } from '@/features/metricas/Piezas';
+import { Segmentado } from '@/components/ui';
 
 /* EL EDITOR DEL SELLO: la vista previa del sello encima de una foto o de un fondo transparente, y los botones para sacarlo de la app.
 
@@ -207,17 +208,6 @@ export default function EditorDelSello({ sellos, Icono }) {
     if (lienzo.current) lienzo.current.style.cursor = 'grab';
   };
 
-  const segmento = (valor, texto) => (
-    <button
-      key={valor} type="button" aria-pressed={fondo === valor} onClick={() => alFondo(valor)} className="kp-press"
-      style={{
-        flex: 1, minHeight: 44, borderRadius: 12, cursor: 'pointer', fontFamily: FONT, fontSize: 14.5, fontWeight: 800, touchAction: 'manipulation',
-        border: `1.5px solid ${fondo === valor ? LT.blue : LT.borderHi}`, background: fondo === valor ? LT.blue : LT.surface, color: fondo === valor ? '#fff' : LT.text,
-      }}
-    >
-      {texto}
-    </button>
-  );
   const sinImagen = faltaFoto || !fuentes || !iconoListo;
 
   return (
@@ -245,10 +235,12 @@ export default function EditorDelSello({ sellos, Icono }) {
       </div>
       <input ref={selector} type="file" accept="image/*" onChange={eligeFoto} hidden />
 
-      <div style={{ display: 'flex', gap: 8, width: 'min(100%, 420px)', margin: '0 auto' }}>
-        {segmento('nada', 'Sin fondo')}
-        {segmento('foto', 'Con foto')}
-        {foto && <Boton icono={ImagePlus} onClick={pideFoto}>Cambiar</Boton>}
+      {/* Fondo: una de dos, a la vista (reestructura visual, 15 oct 2026: el segmentado de `components/ui`). */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: 'min(100%, 420px)', margin: '0 auto' }}>
+        <div style={{ flex: 1 }}>
+          <Segmentado etiqueta="Fondo" valor={fondo} onCambio={alFondo} opciones={[{ valor: 'nada', texto: 'Sin fondo' }, { valor: 'foto', texto: 'Con foto' }]} />
+        </div>
+        {foto && <Boton icono={ImagePlus} onClick={pideFoto} pequeno>Cambiar</Boton>}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8, width: 'min(100%, 520px)', margin: '0 auto' }}>

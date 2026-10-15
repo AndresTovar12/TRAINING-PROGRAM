@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Check, Loader2 } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { usePerfilDeLaVista } from '@/contexts/VistaContext';
 import { nombresDelEquipo, aceptarInvitacionDeEquipo } from '@/lib/api';
-import { FONT, KP, LT, oficioCorto } from '@/lib/theme';
+import { FONT, LT, oficioCorto } from '@/lib/theme';
+import { Avatar, Boton } from '@/components/ui';
 import { nombreCorto } from '@/lib/programas';
 
 /* «Juan, fisioterapeuta, quiere atenderte. Podrá ver tu plan de entrenamiento y
@@ -59,34 +60,18 @@ export default function AvisoDeInvitacion() {
     guardaOcultas(userId, nuevas);
   };
 
+  // Reestructura visual (15 oct 2026): tarjeta blanca con la persona (su avatar de iniciales) y los dos botones de `components/ui`.
   return (
-    <div role="region" aria-label="Invitación al equipo" style={{ margin: '0 18px 12px', background: LT.surface, borderRadius: 18, padding: '14px 15px', border: `1.5px solid ${LT.blueSoft}` }}>
-      <div style={{ fontSize: 14.5, fontWeight: 700, color: LT.text, lineHeight: 1.45 }}>
-        {nombre}{oficio ? `, ${oficio.toLowerCase()},` : ''} quiere atenderte. Podrá ver tu plan de entrenamiento y cómo vas. ¿Aceptas?
+    <div role="region" aria-label="Invitación al equipo" style={{ margin: '12px 18px 0', background: '#fff', borderRadius: 20, padding: 16, boxShadow: '0 2px 10px rgba(17,19,24,0.06)', fontFamily: FONT }}>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+        <Avatar nombre={p.full_name || p.username} tamano={44} />
+        <div style={{ fontSize: 15.5, fontWeight: 600, color: LT.text, lineHeight: 1.45 }}>
+          <b>{nombre}</b>{oficio ? `, ${oficio.toLowerCase()},` : ''} quiere atenderte. Podrá ver tu plan de entrenamiento y cómo vas. ¿Aceptas?
+        </div>
       </div>
-      <div style={{ display: 'flex', gap: 8, marginTop: 11 }}>
-        <button
-          type="button"
-          onClick={aceptar}
-          disabled={ocupado === p.profesional_id}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontFamily: FONT, fontSize: 14,
-            fontWeight: 800, border: 'none', borderRadius: 12, padding: '11px 18px', color: '#fff',
-            background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, touchAction: 'manipulation',
-          }}
-        >
-          {ocupado === p.profesional_id ? <Loader2 size={15} className="spin" /> : <Check size={15} strokeWidth={3} />} Aceptar
-        </button>
-        <button
-          type="button"
-          onClick={ahoraNo}
-          style={{
-            cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 700, borderRadius: 12, padding: '11px 16px',
-            border: `1.5px solid ${LT.border}`, background: LT.surface, color: LT.text2, touchAction: 'manipulation',
-          }}
-        >
-          Ahora no
-        </button>
+      <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+        <Boton tipo="secundario" chico onClick={ahoraNo} estilo={{ flex: 1 }}>Ahora no</Boton>
+        <Boton chico icono={Check} cargando={ocupado === p.profesional_id} onClick={aceptar} estilo={{ flex: 1 }}>Aceptar</Boton>
       </div>
     </div>
   );

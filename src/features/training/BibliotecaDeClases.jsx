@@ -4,7 +4,8 @@ import HojaFlotante from '@/components/HojaFlotante';
 import TarjetaDeClase from '@/features/training/TarjetaDeClase';
 import { duracionTexto } from '@/lib/clases';
 import { plural } from '@/lib/plural';
-import { LT, FONT, NUM_STYLE } from '@/lib/theme';
+import { LT, FONT } from '@/lib/theme';
+import { Grupo, Fila, IconoDeFila } from '@/components/ui';
 
 /* LA BIBLIOTECA DE CLASES, del lado de quien la compró («todas mis clases», 12 oct 2026; ver `docs/sql/2026-10-12-biblioteca-de-clases.sql`).
 
@@ -14,28 +15,17 @@ import { LT, FONT, NUM_STYLE } from '@/lib/theme';
 
 const vigente = (b) => b.estado === 'activa' || b.estado === 'gracia';
 
-/** La tarjeta de la portada: «Biblioteca de {coach} · 24 clases · Ver». */
+/** La tarjeta de la portada: «Biblioteca de {coach} · 24 clases ›». Reestructura visual (15 oct 2026): un renglón de lista agrupada. */
 export function TarjetaDeBiblioteca({ biblioteca, onAbrir }) {
   const n = biblioteca.clases.length;
   return (
-    <button
-      type="button" onClick={onAbrir} className="kp-press"
-      style={{
-        width: '100%', textAlign: 'left', cursor: 'pointer', fontFamily: FONT, background: LT.surface, borderRadius: 22, padding: 16,
-        border: `1.5px solid ${LT.blueSoft}`, display: 'flex', alignItems: 'center', gap: 14,
-      }}
-    >
-      <span style={{ width: 52, height: 52, borderRadius: '50%', background: LT.blueSoft, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: LT.blue }}>
-        <Library size={22} />
-      </span>
-      <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: 'block', fontSize: 16.5, fontWeight: 800, color: LT.text, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{biblioteca.titulo}</span>
-        <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: LT.text2, marginTop: 3 }}>
-          {vigente(biblioteca) ? plural(n, 'clase', 'clases') : 'Membresía vencida'}
-        </span>
-      </span>
-      <span style={{ fontSize: 14, fontWeight: 800, color: LT.blue }}>{vigente(biblioteca) ? 'Ver' : 'Renovar'}</span>
-    </button>
+    <Grupo>
+      <Fila
+        izquierda={<IconoDeFila><Library size={19} /></IconoDeFila>} texto={biblioteca.titulo}
+        detalle={vigente(biblioteca) ? plural(n, 'clase', 'clases') : 'Membresía vencida'}
+        valor={vigente(biblioteca) ? null : 'Renovar'} onClick={onAbrir}
+      />
+    </Grupo>
   );
 }
 
@@ -64,27 +54,20 @@ export function HojaDeBiblioteca({ biblioteca, onCerrar }) {
           <div style={{ fontSize: 17, fontWeight: 800, color: LT.text }}>Tu membresía venció</div>
           <div style={{ fontSize: 14.5, fontWeight: 600, color: LT.text2, lineHeight: 1.5, margin: '8px auto 0', maxWidth: 320 }}>Para volver a ver las clases, renuévala desde la página de {quien || 'tu instructora'}.</div>
           {v?.usuario && (
-            <a href={`/@${v.usuario}`} style={{ display: 'inline-block', marginTop: 18, padding: '12px 22px', borderRadius: 14, background: LT.blue, color: '#fff', fontWeight: 800, fontSize: 15, textDecoration: 'none' }}>Ir a su página</a>
+            <a href={`/@${v.usuario}`} style={{ display: 'inline-flex', alignItems: 'center', minHeight: 50, marginTop: 18, padding: '0 22px', borderRadius: 16, background: LT.blue, color: '#fff', fontWeight: 700, fontSize: 16, textDecoration: 'none' }}>Ir a su página</a>
           )}
         </div>
       ) : biblioteca.clases.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '28px 12px', fontFamily: FONT, fontSize: 15, fontWeight: 600, color: LT.text2 }}>Todavía no hay clases. Aparecerán aquí en cuanto {quien || 'tu instructora'} las agregue.</div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontFamily: FONT }}>
-          {biblioteca.clases.map((c) => {
-            const dura = duracionTexto(c.clase?.duracion);
-            return (
-              <button
-                key={c.id} type="button" onClick={() => setAbierta(c)} className="kp-press"
-                style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', cursor: 'pointer', fontFamily: FONT, background: LT.surface, border: `1.5px solid ${LT.border}`, borderRadius: 16, padding: '12px 14px', minHeight: 56 }}
-              >
-                <span style={{ width: 38, height: 38, borderRadius: '50%', background: LT.blueSoft, color: LT.blue, display: 'grid', placeItems: 'center', flexShrink: 0 }}><Play size={17} fill="currentColor" /></span>
-                <span style={{ flex: 1, minWidth: 0, fontSize: 15.5, fontWeight: 800, color: LT.text, lineHeight: 1.3, overflowWrap: 'anywhere' }}>{c.nombre}</span>
-                {dura && <span style={{ fontSize: 13.5, fontWeight: 700, color: LT.text2, whiteSpace: 'nowrap', ...NUM_STYLE }}>{dura}</span>}
-              </button>
-            );
-          })}
-        </div>
+        <Grupo>
+          {biblioteca.clases.map((c) => (
+            <Fila
+              key={c.id} izquierda={<IconoDeFila><Play size={16} fill="currentColor" /></IconoDeFila>} texto={c.nombre}
+              valor={duracionTexto(c.clase?.duracion) || null} valorTono="neutro" onClick={() => setAbierta(c)}
+            />
+          ))}
+        </Grupo>
       )}
     </HojaFlotante>
   );

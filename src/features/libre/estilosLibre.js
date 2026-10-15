@@ -1,16 +1,17 @@
-import { LT, FONT } from '@/lib/theme';
+import { LT, FONT, KP, UI } from '@/lib/theme';
 
-/* Los estilos que comparten las pantallas del entreno libre. */
+/* Los estilos que comparten las pantallas del entreno libre. Desde el 15 oct 2026 (reestructura visual) son los mismos botones
+   que `components/ui/Boton`: azul lleno para LA acción y gris claro para la otra. */
 
 export const botonGrande = (apagado = false) => ({
-  width: '100%', minHeight: 58, borderRadius: 18, border: 'none', cursor: apagado ? 'default' : 'pointer', fontFamily: FONT, fontSize: 17, fontWeight: 800, color: '#fff',
-  background: `linear-gradient(135deg, ${LT.blue}, ${LT.blueDk})`, boxShadow: '0 6px 16px rgba(30,64,224,0.28)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+  width: '100%', minHeight: 56, borderRadius: UI.rBoton, border: 'none', cursor: apagado ? 'default' : 'pointer', fontFamily: FONT, fontSize: 17, fontWeight: 700, color: '#fff',
+  background: KP.blue, boxShadow: '0 8px 20px rgba(30,64,224,0.22)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 10,
   opacity: apagado ? 0.6 : 1, touchAction: 'manipulation',
 });
 
 export const botonBlancoGrande = (apagado = false) => ({
-  width: '100%', minHeight: 54, borderRadius: 16, border: `1.5px solid ${LT.blue}`, cursor: apagado ? 'default' : 'pointer', fontFamily: FONT, fontSize: 16, fontWeight: 800, color: LT.blue,
-  background: LT.surface, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9, opacity: apagado ? 0.6 : 1, touchAction: 'manipulation',
+  width: '100%', minHeight: 54, borderRadius: UI.rBoton, border: 'none', cursor: apagado ? 'default' : 'pointer', fontFamily: FONT, fontSize: 16, fontWeight: 700, color: KP.ink,
+  background: UI.relleno, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9, opacity: apagado ? 0.6 : 1, touchAction: 'manipulation',
 });
 
-export const tarjetaBlanca = { background: LT.surface, borderRadius: 20, padding: 16, boxShadow: '0 1px 4px rgba(17,19,24,0.06)' };
+export const tarjetaBlanca = { background: LT.surface, borderRadius: UI.rGrupo, padding: 16, boxShadow: UI.sombraGrupo };

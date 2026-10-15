@@ -168,3 +168,43 @@ export function Avatar({ nombre = '', foto, tamano = 44 }) {
     </span>
   );
 }
+
+/**
+ * Un valor en una escala (dolor 0 a 10). El número va grande a la derecha del nombre y la barra se llena del color
+ * que se le dé. Sin valor todavía (`null`), la barra va vacía y el número dice «—».
+ */
+export function Deslizador({ valor, onCambio, min = 0, max = 10, etiqueta, color = KP.blue, extremos }) {
+  const pct = valor == null ? 0 : ((valor - min) / (max - min)) * 100;
+  return (
+    <div style={{ fontFamily: FONT }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+        <span style={{ fontSize: 15.5, fontWeight: 600, color: KP.ink }}>{etiqueta}</span>
+        <span style={{ fontSize: 26, fontWeight: 800, color: valor == null ? KP.ink3 : color, ...NUM_STYLE }}>{valor ?? '—'}<span style={{ fontSize: 14, color: KP.ink3, fontWeight: 700 }}> / {max}</span></span>
+      </div>
+      <input
+        type="range" min={min} max={max} step={1} value={valor ?? min} aria-label={etiqueta} className="ui-deslizador"
+        onChange={(e) => onCambio?.(Number(e.target.value))}
+        style={{ '--relleno': color, '--pct': `${pct}%`, width: '100%', marginTop: 12 }}
+      />
+      {extremos && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, fontWeight: 600, color: KP.ink2, marginTop: 4 }}>
+          <span>{extremos[0]}</span><span>{extremos[1]}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** La casilla de un número que va a la derecha de una Fila («Back Squat ...... [140] kg»). Vacía dice «—». */
+export function EntradaNumero({ valor, onCambio, unidad, etiqueta, ancho = 92, marcador = '—', deshabilitada = false }) {
+  return (
+    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 40, padding: '0 10px', borderRadius: 11, background: UI.relleno, fontFamily: FONT, flexShrink: 0 }}>
+      <input
+        type="number" inputMode="decimal" value={valor ?? ''} placeholder={marcador} aria-label={etiqueta} disabled={deshabilitada} className="ui-numero"
+        onChange={(e) => onCambio?.(e.target.value)}
+        style={{ width: ancho - 40, border: 'none', outline: 'none', background: 'transparent', textAlign: 'right', fontFamily: FONT, fontSize: 16, fontWeight: 700, color: KP.ink, ...NUM_STYLE }}
+      />
+      {unidad && <span style={{ fontSize: 13, fontWeight: 700, color: KP.ink3 }}>{unidad}</span>}
+    </label>
+  );
+}
