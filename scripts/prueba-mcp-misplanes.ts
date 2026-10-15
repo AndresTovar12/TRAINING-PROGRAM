@@ -4,61 +4,10 @@
 import { herramientasDeMisPlanes } from '../supabase/functions/mcp/misplanes.ts'
 import { herramientasDelCoach } from '../supabase/functions/mcp/coach.ts'
 import { llaveDeNombre } from '../supabase/functions/mcp/util.ts'
+import { baseEnMemoria, cierto, igual } from './mcp-prueba-comun.ts'
 
-const igual = (a: unknown, b: unknown, msg: string) => {
-  const x = JSON.stringify(a)
-  const y = JSON.stringify(b)
-  if (x !== y) throw new Error(`${msg}\n   esperaba ${y}\n   salió    ${x}`)
-}
-const cierto = (v: unknown, msg: string) => { if (!v) throw new Error(msg) }
 let n = 0
 const ok = (nombre: string) => { n += 1; console.log(`OK    ${nombre}`) }
-
-/* ---------------- Una base en memoria ---------------- */
-const MEMORIA = ['routine_templates', 'programas_guardados', 'carpetas_planes', 'plans', 'user_app_state']
-function baseEnMemoria(tablas: Record<string, any[]>) {
-  const datos: Record<string, any[]> = {}
-  for (const k of Object.keys(tablas)) datos[k] = structuredClone(tablas[k])
-  const planesActualizados: any[] = []
-  let contador = 0
-  const db = {
-    rpc: async (nombre: string) => ({ data: nombre === 'master_id' ? 'master-1' : null, error: null }),
-    from: (tabla: string) => {
-      const filas = () => (datos[tabla] ??= [])
-      const real = MEMORIA.includes(tabla)
-      let op: 'select' | 'insert' | 'update' | 'delete' = 'select'
-      let carga: any = null
-      const filtros: ((r: any) => boolean)[] = []
-      const afectadas = () => filas().filter((r) => filtros.every((f) => f(r)))
-      const ejecutar = async () => {
-        if (op === 'update' && tabla === 'plans') planesActualizados.push({ tabla, cambios: carga })
-        if (!real) return { data: filas(), error: null }
-        if (op === 'insert') {
-          const fila = { id: `id-nuevo-${++contador}`, created_at: '2026-10-13', updated_at: '2026-10-13', ...structuredClone(carga) }
-          filas().push(fila)
-          return { data: [fila], error: null }
-        }
-        if (op === 'update') { const a = afectadas(); a.forEach((r) => Object.assign(r, structuredClone(carga))); return { data: a, error: null } }
-        if (op === 'delete') { const a = afectadas(); datos[tabla] = filas().filter((r) => !a.includes(r)); return { data: a, error: null } }
-        return { data: afectadas().map((r) => structuredClone(r)), error: null }
-      }
-      const q: any = {
-        select: () => q, order: () => q, neq: () => q,
-        eq: (c: string, v: unknown) => { if (real) filtros.push((r) => (r[c] ?? null) === (v ?? null)); return q },
-        in: (c: string, vs: unknown[]) => { if (real) filtros.push((r) => vs.includes(r[c])); return q },
-        is: (c: string, v: unknown) => { if (real) filtros.push((r) => (r[c] ?? null) === v); return q },
-        insert: (c: any) => { op = 'insert'; carga = c; return q },
-        update: (c: any) => { op = 'update'; carga = c; return q },
-        delete: () => { op = 'delete'; return q },
-        single: async () => { const r = await ejecutar(); return r.data[0] ? { data: r.data[0], error: null } : { data: null, error: { message: 'no hay filas' } } },
-        maybeSingle: async () => { const r = await ejecutar(); return { data: r.data[0] ?? null, error: null } },
-        then: (ok: any, no: any) => ejecutar().then(ok, no),
-      }
-      return q
-    },
-  }
-  return { db, datos, planesActualizados }
-}
 
 /* ---------------- Catálogo mínimo y atleta ---------------- */
 const fila = (name: string, equipment: string | null, cat: string, musculos: string[]) => ({

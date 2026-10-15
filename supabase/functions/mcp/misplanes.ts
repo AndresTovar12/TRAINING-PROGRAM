@@ -30,9 +30,9 @@ import {
  * Cada profesional ve y toca solo lo suyo: lo impone la base (RLS), igual que en la app.
  */
 
-type Tipo = 'programa' | 'rutina' | 'workout' | 'clase'
+export type Tipo = 'programa' | 'rutina' | 'workout' | 'clase'
 type Tabla = 'routine_templates' | 'programas_guardados'
-interface Item { id: string; tabla: Tabla; tipo: Tipo; nombre: string; descripcion: string; origen: string; carpetaId: string | null; resumen: any; demo: boolean; actualizado: string | null }
+export interface Item { id: string; tabla: Tabla; tipo: Tipo; nombre: string; descripcion: string; origen: string; carpetaId: string | null; resumen: any; demo: boolean; actualizado: string | null }
 
 const TIPOS = ['programa', 'rutina', 'workout', 'clase'] as const
 const TIPO = z.enum(TIPOS)
@@ -62,7 +62,7 @@ const comoItem = (fila: any, tabla: Tabla): Item => ({
 const COLUMNAS = 'id, name, descripcion, origen, carpeta_id, resumen, created_at, updated_at'
 
 /** Todas las carpetas y todo lo guardado de quien llama (sin el contenido de cada cosa). */
-async function leerMisPlanes(quien: Quien) {
+export async function leerMisPlanes(quien: Quien) {
   const [car, pla, pro] = await Promise.all([
     quien.db.from('carpetas_planes').select('*').eq('owner_id', quien.id),
     quien.db.from('routine_templates').select(`${COLUMNAS}, kind, demo`).eq('created_by', quien.id),
@@ -125,7 +125,7 @@ function buscarCarpeta(carpetas: any[], ref: string | null | undefined): any | n
 }
 
 /** Una cosa guardada por su id o su nombre. Si hay varias con ese nombre, pide cuál. */
-function buscarItem(items: Item[], carpetas: any[], ref: string, tipo?: Tipo): Item {
+export function buscarItem(items: Item[], carpetas: any[], ref: string, tipo?: Tipo): Item {
   const r = String(ref ?? '').trim()
   const lista = tipo ? items.filter((i) => i.tipo === tipo) : items
   const porId = lista.find((i) => i.id === r)

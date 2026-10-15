@@ -9,6 +9,7 @@ import { herramientasComunes } from './comunes.ts'
 import { herramientasDelAtleta } from './atleta.ts'
 import { herramientasDelCoach } from './coach.ts'
 import { herramientasDeMisPlanes } from './misplanes.ts'
+import { herramientasDeMiVitrina } from './misvitrina.ts'
 import { herramientasDelAdmin } from './admin.ts'
 
 /**
@@ -99,7 +100,7 @@ function instrucciones(quien: Quien) {
       p('Antes de cambiar un plan, léelo con ver_plan_de_atleta. Los cambios de plan se aplican al momento y siempre se pueden deshacer (ver_historial_del_plan, deshacer_cambio_del_plan).'),
       p('Al terminar un cambio, di en una o dos líneas qué cambió y a quién.'),
       'Borrar pide confirmación: antes de borrar, di qué se va a borrar.',
-      p('«Mis planes» es tu catálogo, con carpetas: programas (por fases), rutinas semanales, workouts (un día) y clases (un workout con video). Se ve con ver_mis_planes y abrir_de_mis_planes; se guarda con guardar_en_mis_planes (del plan de un atleta, o armado desde cero); se ordena con cambiar_en_mis_planes, duplicar_en_mis_planes, borrar_de_mis_planes y las carpetas (crear_carpeta, cambiar_carpeta, borrar_carpeta). Para dárselo a uno o varios atletas: asignar_de_mis_planes; para hacerle a UN atleta un plan copiando otro (o parte de él, con filtro de tipos de sesión) en un solo paso: copiar_plan_a_atleta. Antes de asignar o reemplazar un plan, confirma con la persona a quién y qué. Lo guardado es una COPIA: no es el plan de ningún atleta y cambiarlo no mueve lo que alguien ya recibió.'),
+      p('«Mis planes» es tu catálogo, con carpetas: programas (por fases), rutinas semanales, workouts (un día) y clases (un workout con video). Se ve con ver_mis_planes y abrir_de_mis_planes; se guarda con guardar_en_mis_planes (del plan de un atleta, o armado desde cero); se ordena con cambiar_en_mis_planes, duplicar_en_mis_planes, borrar_de_mis_planes y las carpetas (crear_carpeta, cambiar_carpeta, borrar_carpeta). Para dárselo a uno o varios atletas: asignar_de_mis_planes; para hacerle a UN atleta un plan copiando otro (o parte de él, con filtro de tipos de sesión) en un solo paso: copiar_plan_a_atleta. Antes de asignar o reemplazar un plan, confirma con la persona a quién y qué. «Mi vitrina» es donde pones planes a la VENTA (ver_mi_vitrina, guardar_en_vitrina, publicar_en_vitrina, retirar_de_vitrina, borrar_borrador_de_vitrina): un borrador lo armas libremente, pero PUBLICAR, RETIRAR y cambiar un plan que ya está a la venta tocan dinero y lo que ve el público: antes enséñale a la persona qué va a pasar y espera su sí (las herramientas tampoco lo hacen sin confirmado: true). Nunca inventes un precio: pregúntalo. Lo guardado es una COPIA: no es el plan de ningún atleta y cambiarlo no mueve lo que alguien ya recibió.'),
       'Para ligar un ejercicio a su ficha con video, escribe su nombre exacto del repertorio (búscalo con buscar_ejercicios).',
       p('La «Ciencia» de un plan es opcional: el porqué de cómo está armado, en recuadros que el atleta lee en Home. Solo la escribes si te la piden o te la dan; no la inventes. Se lee con ver_ciencia_del_plan y se cambia con editar_ciencia (o con "ciencia" en crear_plan).'),
       p('Un atleta puede tener un equipo: su coach principal y otros profesionales (un fisio, por ejemplo), cada uno con SU programa. Los programas de todos se leen juntos (cada cosa dice "de" quién es; con "de" pides uno solo), pero cada quien cambia solo el suyo.')
@@ -164,6 +165,7 @@ export async function manejar(req: Request): Promise<Response> {
   } else {
     herramientasDelCoach(server, quien)
     herramientasDeMisPlanes(server, quien)
+    herramientasDeMiVitrina(server, quien)
     if (quien.rol === 'master') herramientasDelAdmin(server, quien)
   }
 
