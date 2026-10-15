@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   X, Camera, Loader2, Check, Shield, User as UserIcon, Users, Sparkles, AtSign, IdCard, Trash2,
-  Library, Calendar, Map, ChevronRight, HeartPulse,
+  Library, Calendar, Map, ChevronRight, HeartPulse, KeyRound,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
@@ -11,8 +11,7 @@ import { T, FONT, KP } from '@/lib/theme';
 import ConectarIA from '@/features/ia/ConectarIA';
 import MiEquipo from '@/features/profile/MiEquipo';
 import MisEjercicios from '@/features/profile/MisEjercicios';
-import CambiarContrasena from '@/features/profile/CambiarContrasena';
-import CorreoDeLaCuenta from '@/features/profile/CorreoDeLaCuenta';
+import ConfiguracionDeCuenta from '@/features/profile/ConfiguracionDeCuenta';
 import TarjetaDeMisMetricas from '@/features/metricas/TarjetaDeMisMetricas';
 import SelectorOficio from '@/components/SelectorOficio';
 import SelectorDisciplinas from '@/components/SelectorDisciplinas';
@@ -56,6 +55,7 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
      Llegando desde «Conectar con IA» del menú de la cuenta se abre directo la de la IA. */
   const secciones = [
     { id: 'perfil', texto: 'Perfil', Icono: UserIcon },
+    { id: 'cuenta', texto: 'Cuenta', Icono: KeyRound },
     ...(!isAdmin ? [{ id: 'equipo', texto: 'Mi equipo', Icono: Users }, { id: 'metricas', texto: 'Mis métricas', Icono: HeartPulse }] : []),
     // El master no: los ejercicios de Training Lab SON los suyos.
     ...(isAdmin && !isMaster ? [{ id: 'ejercicios', texto: 'Mis ejercicios', Icono: Library }] : []),
@@ -201,14 +201,14 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
       </header>
 
       <nav aria-label="Secciones de Mi perfil" style={{ flexShrink: 0, padding: '12px 18px 0' }}>
-        <div role="tablist" style={{ maxWidth: 560, margin: '0 auto', display: 'flex', gap: 4, padding: 4, background: T.bg3, borderRadius: 16 }}>
+        <div role="tablist" style={{ maxWidth: 560, margin: '0 auto', display: 'flex', gap: 4, padding: 4, background: T.bg3, borderRadius: 16, overflowX: 'auto', scrollbarWidth: 'none' }}>
           {secciones.map(({ id, texto, Icono }) => {
             const activa = seccion === id;
             return (
               <button
                 key={id} type="button" role="tab" aria-selected={activa} onClick={() => setSeccion(id)}
                 style={{
-                  flex: 1, minHeight: 46, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                  flex: '1 0 auto', minHeight: 46, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
                   padding: '6px 8px', borderRadius: 12, border: 'none', cursor: 'pointer', fontFamily: FONT,
                   fontSize: 13.5, fontWeight: 800, lineHeight: 1.15, textAlign: 'center',
                   background: activa ? T.bg2 : 'transparent', color: activa ? T.accent : T.text2,
@@ -309,8 +309,7 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
             </div>
           </label>
 
-          {/* El correo: «Sin correo» si es inventado, y se pone o cambia con un código (ver `CorreoDeLaCuenta`). */}
-          <CorreoDeLaCuenta />
+
 
           {/* Lo del coach: a qué se dedica (decide las palabras de la app), qué entrena (ordena lo que ve primero, nunca
               esconde nada) y si trabaja con más profesionales. Es lo mismo que contestó en el inicio. */}
@@ -418,8 +417,6 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
             <ChevronRight size={17} color={T.text3} />
           </button>
 
-          {/* Su contraseña: se cambia aquí (antes solo se podía por SQL). */}
-          <CambiarContrasena />
 
           {err && (
             <div style={{ background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 12, padding: '11px 15px', fontWeight: 700, fontSize: 13.5 }}>
@@ -428,6 +425,9 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
           )}
 
           </>}
+
+          {/* La cuenta en sí: correo, contraseña, sesiones, descargar sus datos y eliminarla (ver `ConfiguracionDeCuenta`). */}
+          {seccion === 'cuenta' && <ConfiguracionDeCuenta />}
 
           {/* Un atleta decide quién más lo atiende (fisio…). Los profesionales no lo tienen. */}
           {seccion === 'equipo' && !isAdmin && <MiEquipo />}
