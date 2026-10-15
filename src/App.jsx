@@ -21,6 +21,7 @@ import { rutaDeTienda } from '@/lib/tiendaApi';
 
 // La tienda pública (`/@usuario`, `/@usuario/plan`): la ve cualquiera, con o sin cuenta. Va aparte para que quien solo usa la app no la baje.
 const TiendaPublica = lazy(() => import('@/features/tienda/TiendaPublica'));
+const Catalogo = lazy(() => import('@/features/catalogo/Catalogo'));
 import { FONT, KP } from '@/lib/theme';
 
 function Splash({ label = 'Cargando…' }) {
@@ -433,6 +434,9 @@ export default function App() {
      camino de siempre y, al terminarlo, la dirección sigue siendo la del plan: ahí se retoma la compra. */
   // Abrió el enlace de «¿Olvidaste tu contraseña?»: antes que cualquier otra pantalla, escoge la nueva.
   if (recuperando && user) return <NuevaContrasena />;
+
+  // Las piezas de la reestructura visual, para aprobarlas (ver `features/catalogo/Catalogo.jsx`). Sin cuenta: no lee ni guarda nada.
+  if (window.location.pathname === '/catalogo') return <Suspense fallback={<Splash />}><Catalogo /></Suspense>;
 
   const tienda = rutaDeTienda(window.location.pathname);
   // La de «Listo» (después de pagar) se ve SIEMPRE: quien compró sin cuenta la estrena ahí con su inicio pendiente, y ese inicio no debe taparle cómo abrir o instalar la app.
