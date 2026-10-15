@@ -41,6 +41,22 @@ Dirección nueva: `https://videos.<dominio>` (subdominio del dominio comprado).
 13. Stripe: `SITIO_URL` ya sirve para las páginas de pago. El webhook no cambia (apunta a Supabase).
 14. Una semana después, con todo en orden: Cloudflare → R2 → **Public Development URL → Disable** (apaga `r2.dev`).
 
+### 5. Mudar la app de Vercel a Cloudflare — **Yo + Tú** (decidido 14 oct 2026)
+Andrés: «mañana que compre el dominio hacemos eso de mudarlo a Cloudflare». Vercel Pro cuesta 20 dólares al mes y es obligatorio al vender; en Cloudflare servir la app es gratis (verificar ese día que sus términos permiten uso comercial en el plan gratis). Si se hace, el paso 4 (dominio en Vercel) se reemplaza por esto:
+
+15. Cloudflare → **Workers & Pages** → crear el proyecto desde el repo `AndresTovar12/TRAINING-PROGRAM` (rama `main`): construir con `npm run build`, salida `dist`, y como app de una sola página (lo que no es archivo va a `index.html`; hoy lo hace la última regla de `rewrites` en `vercel.json`).
+16. Variables de la construcción: las mismas `VITE_*` que tiene Vercel (Supabase y `VITE_MEDIOS_URL`).
+17. Las cabeceras de seguridad de `vercel.json` (CSP con `videos.<dominio>` en `connect-src`, `X-Frame-Options`, `Permissions-Policy`, HSTS, COOP, y el caché largo de `/assets/`) pasan a un `public/_headers`.
+18. La liga del conector: `vercel.json` reenvía `/mcp` y `/.well-known/oauth-*` a la función `mcp` de Supabase. En Cloudflare eso lo hace un Worker chico (cabe en el plan gratis). Secreto `APP_URL` = `https://app.<dominio>` en la función `mcp` (de ahí salen `MCP_URL` y los metadatos OAuth) y volver a desplegarla. Las IAs ya conectadas se vuelven a conectar con la liga nueva.
+19. Dominio `app.<dominio>` en el proyecto de Cloudflare (en vez de Vercel).
+20. Probar en el dominio: entrar (correo y Google), registrarse, abrir un ejercicio con video, subir uno, la página pública de un plan y su botón de comprar, «Listo» tras pagar, y el conector (401 sin permiso, metadatos 200, una herramienta).
+21. Vercel se queda una semana como respaldo, en el plan gratis. Con todo en orden, se apaga.
+
+### 6. Cómo se publica la app en Cloudflare (hecho 15 oct 2026; `app.traininglabapp.com`)
+- **A mano** (hoy): en el worktree limpio, con el `.env` copiado: `npm run build && npx wrangler@latest deploy`. La redirección de `traininglabapp.com` y `www` es otro Worker que casi nunca cambia: `npx wrangler@latest deploy -c cloudflare/wrangler-redirect.jsonc`.
+- **Automático con GitHub** (Workers Builds; lo conecta ÉL en el panel, porque autorizar a Cloudflare en GitHub solo lo puede dar el dueño): Workers & Pages → `training-lab-app` → Settings → Builds → Connect → GitHub → repo `AndresTovar12/TRAINING-PROGRAM`, rama `main`. Campos: *Build command* `npm ci && npm run build`; *Deploy command* `npx wrangler deploy`; *Root directory* vacío (`/`); *Variables*: `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` (los valores están en su `.env`). El nombre del Worker en el panel y el `name` de `wrangler.jsonc` (`training-lab-app`) tienen que coincidir.
+- `wrangler.jsonc` vive en la RAÍZ (lo espera Workers Builds); el código del reenvío del conector y de la redirección, en `cloudflare/`. Las cabeceras de seguridad están en `public/_headers` y deben ser iguales a las de `vercel.json`.
+
 ## Si algo sale mal
 
 - Los videos no cargan en el dominio nuevo → casi siempre falta el **CORS del bucket** (paso 3) o el `connect-src` (paso 7).

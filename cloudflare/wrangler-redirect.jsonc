@@ -1,4 +1,4 @@
-// Redirige `traininglabapp.com` y `www.traininglabapp.com` a la app. Se publica con:  cd cloudflare && npx wrangler@latest deploy -c wrangler-redirect.jsonc
+// Redirige `traininglabapp.com` y `www.traininglabapp.com` a la app. Se publica con:  npx wrangler@latest deploy -c cloudflare/wrangler-redirect.jsonc
 {
   "name": "training-lab-redirect",
   "main": "worker-redirect.js",

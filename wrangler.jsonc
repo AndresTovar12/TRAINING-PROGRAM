@@ -1,0 +1,18 @@
+// La app de Training Lab en Cloudflare: los archivos de `dist/` (se arman con `npm run build`) + el reenvío del conector de IA (`cloudflare/worker-app.js`).
+// Va en la RAÍZ del repositorio a propósito: así lo espera la conexión con GitHub de Cloudflare (Workers Builds), que compara el nombre de este archivo con el del panel.
+// Se publica con:  npm run build && npx wrangler@latest deploy   (o solo, cada vez que se sube un cambio, si está conectado a GitHub). Ver docs/dominio.md, sección 5.
+{
+  "name": "training-lab-app",
+  "main": "cloudflare/worker-app.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./dist",
+    // Lo que no es un archivo (por ejemplo /entrenar) se contesta con index.html: la app decide qué pantalla enseñar.
+    "not_found_handling": "single-page-application",
+    // Solo estas direcciones pasan por el programa; todo lo demás son archivos gratis y sin límite.
+    "run_worker_first": ["/mcp", "/mcp/*", "/.well-known/oauth-*"]
+  },
+  "routes": [{ "pattern": "app.traininglabapp.com", "custom_domain": true }]
+}
