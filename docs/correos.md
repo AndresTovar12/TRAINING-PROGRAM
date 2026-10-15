@@ -17,8 +17,9 @@ Quien se registra sin correo, o llega por la liga de un coach, recibe uno invent
 ## Hecho
 - «¿Olvidaste tu contraseña?» en Entrar → correo con enlace → «Pon una contraseña nueva» (`features/auth/NuevaContrasena.jsx`); enlace vencido avisa. Mismo mensaje exista o no el correo (nadie averigua quién está registrado).
 
+- **Mi perfil → Correo** (`features/profile/CorreoDeLaCuenta.jsx` + función `correo-de-la-cuenta` + tabla `codigos_de_correo`): «Sin correo» en vez del inventado; «Agregar»/«Cambiar» pide el correo y la contraseña actual, manda un código de 6 dígitos (15 min, 5 intentos, 1 por minuto; se guarda su huella SHA-256, no el número) y al confirmarlo pone el correo. No usa `updateUser({email})` de Supabase porque pediría confirmar también en el correo VIEJO (el inventado no lo recibe nadie). Quien entró solo con Google no lo cambia aquí. El correo sale por la API de Resend (`enviarCorreo`, único lugar a cambiar si se pasa a SES) con el secreto `RESEND_API_KEY` o `SMTP_PASSWORD`; sin secreto contesta «todavía no está configurado».
+
 ## Falta
-- **Poner un correo real a las cuentas que se crearon sin uno** (Mi perfil → «Correo para recuperar tu cuenta»). `updateUser({email})` de Supabase pediría confirmar en el correo VIEJO (inventado, que nadie recibe): hace falta una función de servidor que verifique el correo nuevo con un código.
 - **Acceso por correo para quien compra sin cuenta** (día de Stripe): `stripe-webhook` manda un enlace de contraseña con `generateLink({type:'recovery'})`.
 - Bienvenida y recibo (el recibo lo puede mandar Stripe solo).
 - Cloudflare Email Routing (lo configura ÉL; el token de wrangler no alcanza).
