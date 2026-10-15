@@ -128,10 +128,19 @@ Mismas tablas que la app (`src/lib/misPlanes.js`, `misPlanesDatos.js` → copiad
 | `duplicar_en_mis_planes`, `borrar_de_mis_planes` | Copia con «(copia)»; borrar (no se recupera). |
 | `crear_carpeta`, `cambiar_carpeta`, `borrar_carpeta` | Hasta 5 niveles; no repite una carpeta; al borrar, lo de adentro SUBE un nivel (nada se pierde). |
 
+**Tanda 2 — darle lo guardado a los atletas (14 oct 2026):**
+
+| Herramienta | Qué hace |
+|---|---|
+| `asignar_de_mis_planes` | Le da una COPIA a uno o varios atletas, como el «Asignar» de la app (`src/lib/asignar.js`). Programa o rutina: se vuelve su plan (ids de fase nuevos, foto y ciencia incluidas) y REEMPLAZA el que tuviera; si alguien ya tiene plan y no viene `reemplazar: true`, no asigna a NADIE y dice quiénes (la rutina vacía cuenta como «sin plan»). Workout o clase: va en un `dia` de la semana en que va HOY cada atleta (con `fase` y `semana`, en esa), agregando o con `si_hay_sesion: "reemplazar"`; quien no tiene plan se salta. Primero se encuentra a TODOS; si uno no existe, no se toca a nadie. Cada atleta va por separado: si a uno le falla, los demás siguen. |
+| `copiar_plan_a_atleta` | Crea o reemplaza el plan de UN atleta copiando otro, en un paso y sin pasar por Mis planes: `desde_atleta` o `desde_mis_planes`, con `fases_elegidas` y `solo_tipos`/`sin_tipos`. |
+
+«La semana en que va hoy» usa el mismo puntero que la app del atleta (`wr:cursor`, `dondeVa`). Reemplazar un plan no pierde nada: la base guarda la versión anterior (`deshacer_cambio_del_plan`).
+Falta: vitrina (tanda 3) y mensajes y métricas del reloj (tanda 4).
+
 Cosas a saber: una cosa guardada se pide por nombre o por id (`id` si hay dos con el mismo nombre; la herramienta lo pide); una carpeta, por nombre o ruta
 («Fútbol › Fuerza»), y `"sin carpeta"` es arriba de todo. La IA no puede crear una CLASE (no sube videos): solo guarda la que ya viene en el día de un atleta.
-`armarFasesDeLaIA` (en `coach.ts`) arma las fases para `crear_plan` y para guardar sin atleta. **Falta (siguientes tandas):** dar lo guardado a uno o varios atletas, crear un
-plan copiando fases de otro, la vitrina, los mensajes y las métricas del reloj.
+`armarFasesDeLaIA` (en `coach.ts`) arma las fases para `crear_plan` y para guardar sin atleta. **Falta (siguientes tandas):** la vitrina, los mensajes y las métricas del reloj.
 
 Prueba: `scripts/prueba-mcp-misplanes.ts` (desde esta carpeta: `deno run -A --config deno.json ../../../scripts/prueba-mcp-misplanes.ts`), con una base en memoria que guarda y borra.
 

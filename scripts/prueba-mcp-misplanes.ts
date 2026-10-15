@@ -15,7 +15,7 @@ let n = 0
 const ok = (nombre: string) => { n += 1; console.log(`OK    ${nombre}`) }
 
 /* ---------------- Una base en memoria ---------------- */
-const MEMORIA = ['routine_templates', 'programas_guardados', 'carpetas_planes']
+const MEMORIA = ['routine_templates', 'programas_guardados', 'carpetas_planes', 'plans', 'user_app_state']
 function baseEnMemoria(tablas: Record<string, any[]>) {
   const datos: Record<string, any[]> = {}
   for (const k of Object.keys(tablas)) datos[k] = structuredClone(tablas[k])
@@ -31,10 +31,8 @@ function baseEnMemoria(tablas: Record<string, any[]>) {
       const filtros: ((r: any) => boolean)[] = []
       const afectadas = () => filas().filter((r) => filtros.every((f) => f(r)))
       const ejecutar = async () => {
-        if (!real) {
-          if (op === 'update') planesActualizados.push({ tabla, cambios: carga })
-          return { data: filas(), error: null }
-        }
+        if (op === 'update' && tabla === 'plans') planesActualizados.push({ tabla, cambios: carga })
+        if (!real) return { data: filas(), error: null }
         if (op === 'insert') {
           const fila = { id: `id-nuevo-${++contador}`, created_at: '2026-10-13', updated_at: '2026-10-13', ...structuredClone(carga) }
           filas().push(fila)
@@ -42,7 +40,7 @@ function baseEnMemoria(tablas: Record<string, any[]>) {
         }
         if (op === 'update') { const a = afectadas(); a.forEach((r) => Object.assign(r, structuredClone(carga))); return { data: a, error: null } }
         if (op === 'delete') { const a = afectadas(); datos[tabla] = filas().filter((r) => !a.includes(r)); return { data: a, error: null } }
-        return { data: afectadas(), error: null }
+        return { data: afectadas().map((r) => structuredClone(r)), error: null }
       }
       const q: any = {
         select: () => q, order: () => q, neq: () => q,
@@ -70,6 +68,7 @@ const fila = (name: string, equipment: string | null, cat: string, musculos: str
 const EJERCICIOS = [fila('Back Squat', 'Barra', 'Fuerza', ['Cuádriceps']), fila('Bicep Curl', 'Mancuerna', 'Hipertrofia', ['Bíceps']), fila('Pull Ups', 'Barra', 'Fuerza', ['Espalda'])]
 const CATEGORIAS = [{ id: 'c-fuerza', name: 'Fuerza', slug: 'fuerza', created_by: null }, { id: 'c-hipertrofia', name: 'Hipertrofia', slug: 'hipertrofia', created_by: null }]
 const ATLETA = { id: 'atleta-1', username: 'zz_atleta', full_name: 'Atleta Prueba', role: 'user', is_owner: false, coach_id: 'master-1', is_active: true, unidad_peso: 'kg', genero: null, email: null, created_at: '2026-01-01', perfil_completo: true, alta_en: null }
+const OTRO = (n: number, usuario: string, nombre: string) => ({ ...ATLETA, id: `atleta-${n}`, username: usuario, full_name: nombre })
 const ex = (name: string, id?: string) => ({ name, ...(id ? { exercise_id: id } : {}), sets: '3', reps: '5' })
 const dia = (day: string, name: string, cat: string, ejercicios = [ex('Back Squat', 'id-backsquat')], extra: any = {}) => ({ day, name, cat, exercises: ejercicios, ...extra })
 const semana = (num: number, days: any[]) => ({ num, label: '', load: '', days })
@@ -322,6 +321,134 @@ const SEMBRADO = () => ({ carpetas_planes: CARPETAS, routine_templates: PLANTILL
   await c.tools.borrar_carpeta({ carpeta: 'Fútbol' })
   igual([c.datos.carpetas_planes.find((x: any) => x.id === 'car-fz').parent_id, c.datos.programas_guardados.length], [null, 1], 'una carpeta de arriba: su subcarpeta pasa a «Sin carpeta» y nada se pierde')
   ok('carpetas: crear (sin repetir, hasta 5 niveles), renombrar, mover con reglas y borrar subiendo lo de adentro')
+}
+
+
+/* ======================= asignar_de_mis_planes ======================= */
+const ATLETAS = [ATLETA, OTRO(2, 'zz_dos', 'Dos Prueba'), OTRO(3, 'zz_tres', 'Tres Prueba'), OTRO(4, 'zz_cuatro', 'Cuatro Prueba')]
+const planDe = (n: number, base: any = PLAN_POR_FASES()) => ({ ...base, id: `plan-a${n}`, user_id: `atleta-${n}`, title: `Plan de ${n}` })
+const fantasma = () => ({ id: 'plan-a4', user_id: 'atleta-4', title: 'Vacío', status: 'active', updated_at: '2026-01-01', profesional_id: null, data: { kind: 'weekly', phases: [{ id: 'p-v', num: 1, name: 'Rutina semanal', weekData: [semana(1, [])] }] } })
+const mundo = (extra: Record<string, any[]> = {}) => armar({
+  ...SEMBRADO(), profiles: ATLETAS,
+  plans: [planDe(1), planDe(2), fantasma()],
+  // «Dos» va en la fase 2 (Potencia): su puntero lo dice.
+  user_app_state: [{ user_id: 'atleta-2', data: { 'wr:cursor': { phaseId: 'p-2', weekNum: 1, dayIdx: 0 } } }],
+  ...extra,
+})
+const planDeAtleta = (m: any, n: number) => m.datos.plans.find((p: any) => p.user_id === `atleta-${n}`)
+const idsDeFases = (plan: any) => plan.data.phases.map((f: any) => f.id)
+
+{
+  const m = mundo()
+  // Quien no tiene plan: se crea.
+  const nuevo = sc(await m.tools.asignar_de_mis_planes({ item: 'Fuerza 8 semanas', atletas: ['zz_tres'] }))
+  igual([nuevo.listo, nuevo.asignado, nuevo.resultados[0].estado], [true, '1 de 1', 'ok'], 'un programa a quien no tiene plan')
+  const p3 = planDeAtleta(m, 3)
+  igual([p3.title, p3.status, p3.profesional_id, p3.created_by, p3.data.kind, p3.data.foto, p3.data.ciencia.length], ['Fuerza 8 semanas', 'active', null, 'master-1', 'periodized', '/fotos/plan.jpg', 1], 'queda como plan activo, con el nombre, su foto y su ciencia')
+  cierto(idsDeFases(p3).every((id: string) => !['p-1', 'p-2'].includes(id)), 'las fases traen ids nuevos (lo que anota el atleta no se mezcla con otra entrega)')
+  igual(p3.data.phases.map((f: any) => f.weeks), [2, 1], 'y la duración al día')
+
+  // Quien ya tiene plan: no se asigna a NADIE sin permiso de reemplazar.
+  const antes = JSON.stringify(m.datos.plans)
+  const sinPermiso = sc(await m.tools.asignar_de_mis_planes({ item: 'Fuerza 8 semanas', atletas: ['zz_atleta', 'zz_cuatro'] }))
+  igual([sinPermiso.asignado, sinPermiso.motivo, sinPermiso.ya_tienen_plan], [false, 'ya_tienen_plan', ['Atleta Prueba: "Plan de 1"']], 'si alguien ya tiene plan: no asigna a nadie y dice quién')
+  igual(sinPermiso.sin_plan, ['Cuatro Prueba'], 'una rutina vacía cuenta como «sin plan»')
+  igual(JSON.stringify(m.datos.plans), antes, 'y no escribió nada')
+  const con = sc(await m.tools.asignar_de_mis_planes({ item: 'Fuerza 8 semanas', atletas: ['zz_atleta', 'zz_cuatro'], reemplazar: true, titulo: 'Fuerza de octubre' }))
+  igual([con.listo, con.asignado, con.resultados.map((r: any) => r.estado)], [true, '2 de 2', ['ok', 'ok']], 'con «reemplazar» sí')
+  igual([planDeAtleta(m, 1).title, planDeAtleta(m, 1).data.phases.length, planDeAtleta(m, 4).data.kind], ['Fuerza de octubre', 2, 'periodized'], 'reemplaza lo que había, con el título que se dio (también la rutina vacía)')
+  cierto(/historial/.test(con.resultados[0].reemplazo) && con.resultados[1].reemplazo === undefined, 'avisa que el anterior quedó en el historial, menos de la rutina vacía')
+  igual(m.datos.plans.filter((p: any) => p.user_id === 'atleta-1').length, 1, 'sigue habiendo UN plan activo por atleta')
+
+  // Una rutina.
+  const r = sc(await mundo().tools.asignar_de_mis_planes({ item: 'Semana base', atletas: ['zz_tres'] }))
+  igual(r.resultados[0].estado, 'ok', 'una rutina semanal también')
+  const m2 = mundo()
+  await m2.tools.asignar_de_mis_planes({ item: 'Semana base', atletas: ['zz_tres'] })
+  igual([planDeAtleta(m2, 3).data.kind, planDeAtleta(m2, 3).data.estructura, planDeAtleta(m2, 3).data.phases[0].weekData[0].days.length], ['weekly', 'rutina', 2], 'queda como rutina que se repite')
+
+  // Hay que encontrar a TODOS antes de tocar a alguien.
+  const m3 = mundo()
+  const a3 = JSON.stringify(m3.datos.plans)
+  cierto(/No encontré a/.test(await falla(m3.tools.asignar_de_mis_planes({ item: 'Fuerza 8 semanas', atletas: ['zz_tres', 'zz_nadie'], reemplazar: true }))), 'si uno de los nombres no existe, avisa')
+  igual(JSON.stringify(m3.datos.plans), a3, 'y no se asignó a ninguno de los otros')
+  ok('asignar_de_mis_planes: programa y rutina (a uno o varios, sin reemplazar sin permiso, ids nuevos, historial)')
+}
+
+{
+  const m = mundo()
+  // Un workout: en la semana en que va HOY cada quien.
+  const r = sc(await m.tools.asignar_de_mis_planes({ item: 'Piernas A', atletas: ['zz_atleta', 'zz_dos', 'zz_tres'], dia: 'miércoles' }))
+  igual(r.resultados.map((x: any) => x.estado), ['ok', 'ok', 'sin_plan'], 'quien no tiene plan se salta y los demás siguen')
+  igual([r.resultados[0].en, r.resultados[1].en], ['Fuerza · semana 1 · Miércoles', 'Potencia · semana 1 · Miércoles'], 'cada quien en la semana en que va')
+  const diasDe = (n: number, f: number, w: number) => planDeAtleta(m, n).data.phases[f].weekData[w].days
+  igual(diasDe(1, 0, 0).map((d: any) => d.day), ['Lun', 'Mar', 'Jue', 'Vie', 'Mié'], 'se agrega al final de la semana, sin mover lo que había')
+  const nuevo = diasDe(1, 0, 0).at(-1)
+  igual([nuevo.name, nuevo.cat, nuevo.exercises.length], ['Piernas', 'gym', 1], 'con la sesión y sus ejercicios')
+  igual(diasDe(2, 1, 0).map((d: any) => d.day), ['Lun', 'Mié'], 'el de «Dos», en su fase 2')
+  igual(diasDe(2, 0, 0).length, 4, 'y su fase 1 no se tocó')
+
+  // Si el día ya tiene sesión: agregar (por defecto) o reemplazar la primera.
+  const lunes = sc(await m.tools.asignar_de_mis_planes({ item: 'Piernas A', atletas: ['zz_atleta'], dia: 'lunes' }))
+  cierto(/ya tenía sesión/.test(lunes.resultados[0].nota), 'avisa que ese día ya tenía sesión')
+  igual(diasDe(1, 0, 0).filter((d: any) => d.day === 'Lun').length, 2, 'por defecto se AGREGA como otra')
+  const m2 = mundo()
+  const un = sc(await m2.tools.asignar_de_mis_planes({ item: 'Piernas A', atletas: ['zz_atleta'], dia: 'lunes', si_hay_sesion: 'reemplazar' }))
+  const lun = planDeAtleta(m2, 1).data.phases[0].weekData[0].days.filter((d: any) => d.day === 'Lun')
+  igual([un.resultados[0].estado, lun.length, lun[0].exercises[0].name], ['ok', 1, 'Back Squat'], 'con «reemplazar» ocupa el lugar de la primera, sin dejar dos')
+
+  // Fase y semana elegidas.
+  const m3 = mundo()
+  const dos = sc(await m3.tools.asignar_de_mis_planes({ item: 'Piernas A', atletas: ['zz_atleta'], dia: 'sábado', fase: 'Fuerza', semana: 2 }))
+  igual([dos.resultados[0].en, planDeAtleta(m3, 1).data.phases[0].weekData[1].days.at(-1).day], ['Fuerza · semana 2 · Sábado', 'Sáb'], 'con fase y semana, en esa')
+
+  // Una clase viaja con su video.
+  const m4 = mundo()
+  await m4.tools.asignar_de_mis_planes({ item: 'Vinyasa 45', atletas: ['zz_atleta'], dia: 'viernes' })
+  igual(planDeAtleta(m4, 1).data.phases[0].weekData[0].days.at(-1).clase, CLASE, 'una clase llega con su video')
+
+  cierto(/En qué día/i.test(await falla(m.tools.asignar_de_mis_planes({ item: 'Piernas A', atletas: ['zz_atleta'] }))), 'un workout sin día: pregunta')
+  igual(planDeAtleta(m, 3), undefined, 'quien no tiene plan sigue sin plan (un workout no le crea uno)')
+  ok('asignar_de_mis_planes: workout y clase en la semana de cada quien, agregar o reemplazar, fase y semana, sin plan')
+}
+
+/* ======================= copiar_plan_a_atleta ======================= */
+{
+  const m = mundo()
+  const r = sc(await m.tools.copiar_plan_a_atleta({ atleta: 'zz_tres', titulo: 'Fuerza Emiliano', desde_atleta: 'zz_atleta', fases_elegidas: ['Fuerza'], solo_tipos: ['gym'] }))
+  igual([r.listo, r.plan, r.copiado_de, r.tamano], [true, 'Fuerza Emiliano', 'Del plan de Atleta Prueba', '1 fase(s), 2 semana(s)'], 'copia UNA fase del plan de otro atleta')
+  const p3 = planDeAtleta(m, 3)
+  igual([p3.title, p3.user_id, p3.status], ['Fuerza Emiliano', 'atleta-3', 'active'], 'queda como plan del destino')
+  igual([...new Set(p3.data.phases.flatMap((f: any) => f.weekData.flatMap((w: any) => w.days.map((d: any) => d.cat))))], ['gym'], 'solo con sesiones de gimnasio')
+  igual(r.sesiones_quitadas, '3 sesión(es) no entraron a la copia por el filtro de tipos.', 'dice cuántas quitó')
+  igual(p3.data.ciencia, [], 'sin la ciencia del plan entero (era de todo el plan, no de una fase)')
+  igual(planDeAtleta(m, 1).data.phases.length, 2, 'el plan de origen no se tocó')
+  cierto(!idsDeFases(p3).includes('p-1'), 'fases con ids nuevos')
+
+  // Ya tiene plan.
+  const antes = JSON.stringify(m.datos.plans)
+  const ya = sc(await m.tools.copiar_plan_a_atleta({ atleta: 'zz_dos', titulo: 'X', desde_atleta: 'zz_atleta' }))
+  igual([ya.asignado, ya.motivo], [false, 'ya_tiene_plan'], 'si el destino ya tiene plan: no copia')
+  igual(JSON.stringify(m.datos.plans), antes, 'y no escribió nada')
+  const rem = sc(await m.tools.copiar_plan_a_atleta({ atleta: 'zz_dos', titulo: 'Para Dos', desde_atleta: 'zz_atleta', fases_elegidas: ['Potencia'], reemplazar: true }))
+  igual([rem.listo, planDeAtleta(m, 2).title, planDeAtleta(m, 2).data.phases.length], [true, 'Para Dos', 1], 'con «reemplazar» sí')
+  cierto(/historial/.test(rem.reemplazo), 'y avisa del historial')
+
+  // De Mis planes.
+  const m2 = mundo()
+  const mp = sc(await m2.tools.copiar_plan_a_atleta({ atleta: 'zz_tres', titulo: 'De mi catálogo', desde_mis_planes: 'Fuerza 8 semanas', sin_tipos: ['correr', 'neural'] }))
+  igual([mp.listo, mp.copiado_de, mp.tamano], [true, 'De Mis planes: Fuerza 8 semanas', '2 fase(s), 3 semana(s)'], 'copia un programa guardado')
+  igual(mp.sesiones_quitadas, '3 sesión(es) no entraron a la copia por el filtro de tipos.', 'con el filtro')
+  igual(JSON.stringify(m2.datos.programas_guardados[0].data).includes('correr'), true, 'y lo guardado en Mis planes no se tocó')
+  const rt = sc(await mundo().tools.copiar_plan_a_atleta({ atleta: 'zz_tres', titulo: 'Rutina copiada', desde_mis_planes: 'Semana base' }))
+  igual(rt.tamano, 'rutina que se repite', 'una rutina guardada')
+  cierto(/asignar_de_mis_planes/.test(await falla(mundo().tools.copiar_plan_a_atleta({ atleta: 'zz_tres', titulo: 'X', desde_mis_planes: 'Piernas A' }))), 'un workout no se copia como plan: manda a asignar_de_mis_planes')
+
+  cierto(/UNO/.test(await falla(m.tools.copiar_plan_a_atleta({ atleta: 'zz_tres', titulo: 'X' }))), 'sin fuente: avisa')
+  cierto(/UNO/.test(await falla(m.tools.copiar_plan_a_atleta({ atleta: 'zz_tres', titulo: 'X', desde_atleta: 'zz_atleta', desde_mis_planes: 'Semana base' }))), 'con dos fuentes: avisa')
+  cierto(/misma persona/.test(await falla(m.tools.copiar_plan_a_atleta({ atleta: 'zz_atleta', titulo: 'X', desde_atleta: 'zz_atleta', reemplazar: true }))), 'de uno a sí mismo: avisa')
+  cierto(/Falta el título/.test(await falla(m.tools.copiar_plan_a_atleta({ atleta: 'zz_tres', titulo: ' ', desde_atleta: 'zz_atleta' }))), 'sin título: avisa')
+  ok('copiar_plan_a_atleta: de otro atleta o de Mis planes, fases elegidas, filtro de tipos, reemplazo con permiso')
 }
 
 console.log(`\nTodo bien: ${n} grupos de pruebas de Mis planes`)

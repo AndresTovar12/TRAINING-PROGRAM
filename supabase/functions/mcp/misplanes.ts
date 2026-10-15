@@ -2,17 +2,19 @@
 import type { McpServer } from 'npm:@modelcontextprotocol/sdk@1.30.1/server/mcp.js'
 import { z } from 'npm:zod@^4.1.13'
 import type { Quien } from './sesion.ts'
-import { Aviso, diaDesdeTexto, nombreDe, respuesta, seguro, sinAcentos, mismoTexto } from './util.ts'
+import { Aviso, diaDesdeTexto, fechaDelAtleta, nombreDe, NOMBRE_DIA, respuesta, seguro, sinAcentos, mismoTexto, buscarPersona } from './util.ts'
 import {
   armarFasesDeLaIA, avisosDeRespuestas, BORRA, CIENCIA, ESCRIBE, ESTRUCTURA_OK, FASE, FASES, planDe, SESION_CON_DIA, SIN_CANTIDAD_OK, SIN_FICHA_OK, SOLO_LEER,
 } from './coach.ts'
 import {
-  buscarFase, buscarSemana, describirDia, describirSemana, diaDesdeEntrada, fasesDe, normalizar, repertorioVisible, tipoDePlan,
+  buscarFase, buscarSemana, describirDia, describirSemana, diaDesdeEntrada, fasesDe, guardarFases, normalizar, planQueEdito, repertorioVisible, tipoDePlan,
 } from './plan.ts'
 import { anotarDia, exigirRespuestas, nuevaRevision } from './preguntas.ts'
 import { claseDe } from './app/clases.js'
+import { dondeVa } from './app/training-utils.js'
+import { cursorDe, estadoDe } from './atleta.ts'
 import {
-  cabeCarpetaEn, descendientesDe, diasDeWorkout, ETIQUETA_DE_TIPO, planDeRutina, programaDePlan, puedeMoverCarpeta, resumenDe, rutinaDePlan, rutinaDeSemana,
+  cabeCarpetaEn, descendientesDe, diasDeWorkout, esDeUnDia, ETIQUETA_DE_TIPO, planDePrograma, planDeRutina, programaDePlan, puedeMoverCarpeta, resumenDe, rutinaDePlan, rutinaDeSemana,
   textoDeResumen, textoDeRuta, workoutDeSesiones,
 } from './app/misPlanesDatos.js'
 
@@ -152,6 +154,126 @@ function filtrarDias(dias: any[], solo?: string[], sin?: string[]) {
 
 const sesionesReales = (fases: any[]) => fases.reduce((n, f) => n + (f.weekData ?? []).reduce((m: number, w: any) => m + (w.days ?? []).length, 0), 0)
 
+/** Quita de las fases (ya copiadas) las sesiones que el filtro no deja; devuelve cuántas quitó. */
+function filtrarFases(fases: any[], solo?: string[], sin?: string[]) {
+  let quitadas = 0
+  for (const f of fases) {
+    for (const w of f.weekData ?? []) {
+      const r = filtrarDias(w.days ?? [], solo, sin)
+      quitadas += r.quitadas
+      w.days = r.quedan
+    }
+  }
+  return quitadas
+}
+
+/** Un plan sin ninguna sesión (una rutina que se quedó vacía) cuenta como «sin plan»: se le puede dar uno sin preguntar (igual que la app, `esProgramaFantasma`). */
+const sinSesiones = (plan: any) => !fasesDe(plan).some((f) => (f.weekData ?? []).some((w: any) => (w.days ?? []).some((d: any) => d.cat !== 'off')))
+const esFantasma = (plan: any) => plan?.data?.kind === 'weekly' && sinSesiones(plan)
+
+interface Copia { tipo: Tipo; data: any; origen: string; quitadas: number }
+interface Filtros { fases_elegidas?: string[]; fase?: string; semana?: number; dia?: string; solo_tipos?: string[]; sin_tipos?: string[] }
+
+/** Una copia de lo que hay en el plan de un atleta (todo, algunas fases, una semana o un día), con el filtro de tipos. No escribe nada. */
+async function copiaDelPlanDeAtleta(quien: Quien, desde: string, f: Filtros, de?: string | null): Promise<Copia & { persona: any }> {
+  const { persona, plan } = await planDe(quien, desde, de)
+  const origen = `Del plan de ${nombreDe(persona)}`
+  const todas = fasesDe(plan)
+  if (!todas.length) throw new Aviso('Ese plan no tiene fases.')
+  const semanaDe = (fase: any) => fase.weekData[buscarSemana(fase, f.semana ?? (fase.weekData.length === 1 ? fase.weekData[0].num : undefined))]
+  if (f.dia) {
+    const fase = todas[buscarFase(plan, f.fase)]
+    const w = semanaDe(fase)
+    const clave = diaDesdeTexto(f.dia)
+    const delDia = structuredClone((w.days ?? []).filter((d: any) => d.day === clave))
+    if (!delDia.length) throw new Aviso(`Ese día no tiene sesión en la semana ${w.num}.`)
+    const r = filtrarDias(delDia, f.solo_tipos, f.sin_tipos)
+    if (!r.quedan.length) throw new Aviso('Con ese filtro no queda ninguna sesión en ese día.')
+    const data = workoutDeSesiones(r.quedan)
+    return { persona, tipo: claseDe(data) ? 'clase' : 'workout', data, origen, quitadas: r.quitadas }
+  }
+  if (f.semana !== undefined) {
+    const fase = todas[buscarFase(plan, f.fase)]
+    const w = semanaDe(fase)
+    const r = filtrarDias(structuredClone(w.days ?? []), f.solo_tipos, f.sin_tipos)
+    return { persona, tipo: 'rutina', data: { ...rutinaDeSemana({ days: r.quedan }) }, origen, quitadas: r.quitadas }
+  }
+  if (tipoDePlan(plan) === 'weekly') {
+    const r = filtrarDias(structuredClone(todas[0]?.weekData?.[0]?.days ?? []), f.solo_tipos, f.sin_tipos)
+    return { persona, tipo: 'rutina', data: rutinaDePlan({ phases: [{ weekData: [{ days: r.quedan }] }], foto: plan.data?.foto, ciencia: plan.data?.ciencia }), origen, quitadas: r.quitadas }
+  }
+  const elegidas = f.fases_elegidas?.length
+    ? [...new Set(f.fases_elegidas.map((x: string) => buscarFase(plan, x)))].sort((p: any, q: any) => p - q).map((i: any) => todas[i])
+    : todas
+  const copia = structuredClone(elegidas)
+  const quitadas = filtrarFases(copia, f.solo_tipos, f.sin_tipos)
+  if (!sesionesReales(copia)) throw new Aviso('Con ese filtro no queda ninguna sesión.')
+  const delPlan: any = plan.data ?? {}
+  const data = programaDePlan({ kind: delPlan.kind, estructura: delPlan.estructura, phases: copia, foto: delPlan.foto, ciencia: f.fases_elegidas?.length ? undefined : delPlan.ciencia })
+  return { persona, tipo: 'programa', data, origen, quitadas }
+}
+
+/** Lo que dice un plan en palabras: «2 fase(s), 3 semana(s)». */
+const tamanoDe = (fases: any[]) => `${fases.length} fase(s), ${fases.reduce((n, f) => n + (f.weekData ?? []).length, 0)} semana(s)`
+
+/**
+ * Le deja un plan armado (`plan` = lo que devuelven `planDePrograma` y `planDeRutina`, con ids de fase nuevos) a UN atleta: sobre el que ya tenía con este profesional, o como el primero.
+ * Igual que `asignarPlan` de la app: la foto y la ciencia son del plan que se entrega. La versión anterior la guarda sola la base (se recupera con deshacer_cambio_del_plan).
+ */
+async function entregarPlan(quien: Quien, o: { persona: any; previo: any | null; profesionalId: string | null; titulo: string; plan: any }) {
+  const data = { kind: o.plan.kind, estructura: o.plan.estructura, phases: normalizar(o.plan.phases), foto: o.plan.foto ?? '', ciencia: o.plan.ciencia ?? [] }
+  if (o.previo) {
+    const { data: fila, error } = await quien.db.from('plans').update({ title: o.titulo, data, updated_at: new Date().toISOString() }).eq('id', o.previo.id).select('id').maybeSingle()
+    if (error) throw new Error(error.message)
+    if (!fila) throw new Aviso('No tienes permiso para cambiar el plan de esta persona.')
+    return
+  }
+  const { error } = await quien.db.from('plans').insert({ user_id: o.persona.id, profesional_id: o.profesionalId, title: o.titulo, status: 'active', data, created_by: quien.id })
+  if (error) {
+    if (/row-level security|permission/i.test(error.message)) throw new Aviso(`No puedes darle un plan a ${nombreDe(o.persona)}: no es tu atleta.`)
+    throw new Error(error.message)
+  }
+}
+
+/**
+ * Pone un workout (o una clase) en un día del plan de un atleta. Sin fase ni semana, en la semana en que va HOY (con el puntero de su app).
+ * `modo`: 'agregar' (otra sesión ese día) o 'reemplazar' (el lugar de la PRIMERA de ese día; las demás se quedan). Nunca mueve ni quita lo que ya tenía: lo que anota el atleta
+ * se guarda por la posición de cada sesión (igual que `ponerWorkoutEnPlan` de la app).
+ */
+async function ponerWorkoutEnElPlan(quien: Quien, persona: any, plan: any, o: { data: any; nombre: string; dia: string; modo: string; fase?: string; semana?: number }) {
+  const fases = structuredClone(fasesDe(plan))
+  const kind = tipoDePlan(plan)
+  let fIdx = 0
+  let sIdx = 0
+  if ((o.fase !== undefined && o.fase !== '') || o.semana !== undefined) {
+    fIdx = buscarFase(plan, o.fase)
+    sIdx = buscarSemana(fases[fIdx], o.semana ?? (fases[fIdx].weekData.length === 1 ? fases[fIdx].weekData[0].num : undefined))
+  } else if (kind !== 'weekly') {
+    const estado = await estadoDe(quien, persona.id)
+    const aqui = dondeVa(fases, kind, cursorDe(estado, { profesionalId: plan.profesional_id ?? null }), fechaDelAtleta().date)
+    if (aqui) {
+      fIdx = Math.max(0, fases.findIndex((f: any) => f.id === aqui.faseId))
+      sIdx = Math.max(0, (fases[fIdx].weekData ?? []).findIndex((w: any) => w.num === aqui.semana))
+    }
+  }
+  const semana = fases[fIdx]?.weekData?.[sIdx]
+  if (!semana) throw new Aviso('Ese plan no tiene esa semana.')
+  const clave = diaDesdeTexto(o.dia)
+  const nuevas = diasDeWorkout(o.data, clave, o.nombre)
+  const dias = [...(semana.days ?? [])]
+  const primera = dias.findIndex((d: any) => d.day === clave)
+  const habia = dias.some((d: any) => d.day === clave && d.cat !== 'off')
+  if (o.modo === 'reemplazar' && primera >= 0) {
+    dias[primera] = nuevas[0]
+    dias.push(...nuevas.slice(1))
+  } else {
+    dias.push(...nuevas)
+  }
+  semana.days = dias
+  await guardarFases(quien, plan, fases)
+  return { en: `${fases[fIdx].name} · semana ${semana.num} · ${NOMBRE_DIA[clave]}`, habia }
+}
+
 export function herramientasDeMisPlanes(server: McpServer, quien: Quien) {
   const esMaster = quien.rol === 'master'
   const PARAM_DE = esMaster
@@ -256,7 +378,7 @@ export function herramientasDeMisPlanes(server: McpServer, quien: Quien) {
       'Guarda algo NUEVO en Mis planes (una copia: no cambia ningún plan de ningún atleta). Dos caminos:',
       '(1) Del plan de un atleta: manda "desde_atleta". Sin más, guarda su plan entero como PROGRAMA (o como rutina si es una rutina semanal); con "fases_elegidas", solo esas fases; con "fase" + "semana", UNA semana como rutina; con "fase" + "semana" + "dia", ese día como workout (o clase, si trae video). Con "solo_tipos" o "sin_tipos" (ej.: solo "gym", o sin "correr") se quedan o se quitan las sesiones de ese tipo en la copia.',
       '(2) Armarlo desde cero, sin atleta: manda "tipo" (programa, rutina o workout) y su contenido igual que en crear_plan ("fases" para un programa, "sesiones" para una rutina o un workout). Cada ejercicio va con su nombre EXACTO del catálogo (búscalo antes con buscar_ejercicios); si falta algo (un ejercicio que no está en el catálogo, la cantidad, el "por lado", confirmar las biseries) NO guarda y te devuelve las preguntas para que se las hagas a la persona TODAS JUNTAS.',
-      'Una clase con video no se puede crear aquí (la IA no sube videos): solo se guarda una que ya viene en el día de un atleta. Para darle lo guardado a un atleta aún no hay herramienta aparte: usa crear_plan o aplicar_plantilla.',
+      'Una clase con video no se puede crear aquí (la IA no sube videos): solo se guarda una que ya viene en el día de un atleta. Para dárselo a uno o varios atletas: asignar_de_mis_planes.',
     ].join(' '),
     inputSchema: {
       nombre: z.string().describe('Cómo se llamará en Mis planes.'),
@@ -297,51 +419,11 @@ export function herramientasDeMisPlanes(server: McpServer, quien: Quien) {
 
     if (desde_atleta) {
       /* ---- Camino 1: del plan de un atleta ---- */
-      const { persona, plan } = await planDe(quien, desde_atleta, de)
-      origen = `Del plan de ${nombreDe(persona)}`
-      const todas = fasesDe(plan)
-      if (!todas.length) throw new Aviso('Ese plan no tiene fases.')
-      const semanaDe = (f: any) => f.weekData[buscarSemana(f, semana ?? (f.weekData.length === 1 ? f.weekData[0].num : undefined))]
-      if (dia) {
-        const f = todas[buscarFase(plan, fase)]
-        const w = semanaDe(f)
-        const clave = diaDesdeTexto(dia)
-        const delDia = structuredClone((w.days ?? []).filter((d: any) => d.day === clave))
-        if (!delDia.length) throw new Aviso(`Ese día no tiene sesión en la semana ${w.num}.`)
-        const r = filtrarDias(delDia, solo_tipos, sin_tipos)
-        quitadas = r.quitadas
-        if (!r.quedan.length) throw new Aviso('Con ese filtro no queda ninguna sesión en ese día.')
-        data = workoutDeSesiones(r.quedan)
-        tipoFinal = claseDe(data) ? 'clase' : 'workout'
-      } else if (semana !== undefined) {
-        const f = todas[buscarFase(plan, fase)]
-        const w = semanaDe(f)
-        const r = filtrarDias(structuredClone(w.days ?? []), solo_tipos, sin_tipos)
-        quitadas = r.quitadas
-        data = { ...rutinaDeSemana({ days: r.quedan }) }
-        tipoFinal = 'rutina'
-      } else if (tipoDePlan(plan) === 'weekly') {
-        const r = filtrarDias(structuredClone(todas[0]?.weekData?.[0]?.days ?? []), solo_tipos, sin_tipos)
-        quitadas = r.quitadas
-        data = rutinaDePlan({ phases: [{ weekData: [{ days: r.quedan }] }], foto: plan.data?.foto, ciencia: plan.data?.ciencia })
-        tipoFinal = 'rutina'
-      } else {
-        const elegidas = fases_elegidas?.length
-          ? [...new Set(fases_elegidas.map((x: string) => buscarFase(plan, x)))].sort((p: any, q: any) => p - q).map((i: any) => todas[i])
-          : todas
-        const copia = structuredClone(elegidas)
-        for (const f of copia) {
-          for (const w of f.weekData ?? []) {
-            const r = filtrarDias(w.days ?? [], solo_tipos, sin_tipos)
-            quitadas += r.quitadas
-            w.days = r.quedan
-          }
-        }
-        if (!sesionesReales(copia)) throw new Aviso('Con ese filtro no queda ninguna sesión.')
-        const delPlan: any = plan.data ?? {}
-        data = programaDePlan({ kind: delPlan.kind, estructura: delPlan.estructura, phases: copia, foto: delPlan.foto, ciencia: fases_elegidas?.length ? undefined : delPlan.ciencia })
-        tipoFinal = 'programa'
-      }
+      const c = await copiaDelPlanDeAtleta(quien, desde_atleta, { fases_elegidas, fase, semana, dia, solo_tipos, sin_tipos }, de)
+      tipoFinal = c.tipo
+      data = c.data
+      origen = c.origen
+      quitadas = c.quitadas
     } else {
       /* ---- Camino 2: armarlo desde cero ---- */
       if (!tipo) throw new Aviso('Di qué armas: "tipo" programa, rutina o workout.')
@@ -480,6 +562,174 @@ export function herramientasDeMisPlanes(server: McpServer, quien: Quien) {
     if (error) throw new Error(error.message)
     if (!data?.length) throw new Aviso('No tienes permiso para borrar esto.')
     return respuesta({ listo: true, borrado: { tipo: it.tipo, nombre: it.nombre, carpeta: rutaTexto(carpetas, it.carpetaId) } })
+  }))
+
+  /* ================================================================ */
+  /* DARLE A LOS ATLETAS (tanda 2)                                       */
+  /* ================================================================ */
+
+  server.registerTool('asignar_de_mis_planes', {
+    title: 'Dar algo de Mis planes a uno o varios atletas',
+    description: [
+      'Le da una COPIA de algo guardado en Mis planes a uno o varios atletas (cambiar Mis planes después no mueve lo que ya recibieron, ni al revés). Confirma con la persona a quiénes se lo das antes de llamar.',
+      'Un PROGRAMA o una RUTINA se vuelve el plan del atleta, empieza en su semana 1 y REEMPLAZA el que tuviera con este profesional: si alguno ya tiene plan y no mandas "reemplazar": true, NO se asigna a nadie y te devuelve quiénes ya tienen plan, para que se lo preguntes a la persona (el plan anterior queda en el historial y se recupera con deshacer_cambio_del_plan).',
+      'Un WORKOUT o una CLASE se pone en un día de la semana de su plan ("dia" es obligatorio): por defecto en la semana en que va HOY cada atleta ("fase" y "semana" eligen una en concreto); si ese día ya tiene sesión, se AGREGA como otra, o con "si_hay_sesion": "reemplazar" ocupa el lugar de la primera. Quien no tiene plan se salta y se te dice.',
+      'Cada atleta se procesa por separado: si a uno le falla, los demás siguen.',
+    ].join(' '),
+    inputSchema: {
+      item: z.string().describe('El nombre o el id de lo guardado (ver_mis_planes).'),
+      tipo: TIPO.optional().describe('Para distinguir dos cosas con el mismo nombre.'),
+      atletas: z.array(z.string()).min(1).describe('Los atletas: su usuario (@juan), su nombre o su id. Uno o varios.'),
+      titulo: z.string().optional().describe('Programa o rutina: cómo se llamará el plan del atleta. Sin esto, el nombre de lo guardado.'),
+      reemplazar: z.boolean().optional().describe('Programa o rutina: true para reemplazar el plan que ya tengan (solo después de preguntarle a la persona).'),
+      dia: z.string().optional().describe('Workout o clase: el día de la semana (lunes … domingo). Obligatorio para ellos.'),
+      si_hay_sesion: z.enum(['agregar', 'reemplazar']).optional().describe('Workout o clase: qué hacer si ese día ya tiene sesión. "agregar" si no se dice.'),
+      fase: FASE.describe('Workout o clase: la fase en que se pone. Sin esto, la semana en que va hoy cada atleta.'),
+      semana: z.coerce.number().optional().describe('Workout o clase: el número de semana. Sin esto, la semana en que va hoy cada atleta.'),
+      ...PARAM_DE,
+    },
+    annotations: { ...ESCRIBE, destructiveHint: true },
+  }, seguro(async ({ item, tipo, atletas, titulo, reemplazar, dia, si_hay_sesion, fase, semana, de }: any) => {
+    const { carpetas, items } = await leerMisPlanes(quien)
+    const it = buscarItem(items, carpetas, item, tipo)
+    const unDia = esDeUnDia(it.tipo)
+    if (unDia && !dia) throw new Aviso('¿En qué día de la semana va? Manda "dia" (lunes … domingo).')
+    if (unDia) diaDesdeTexto(dia)
+    const { data: fila, error } = await quien.db.from(it.tabla).select('data').eq('id', it.id).single()
+    if (error) throw new Error(error.message)
+    const contenido = fila?.data ?? {}
+
+    // Primero se encuentra a TODOS: si uno no existe o hay duda de quién es, no se toca a nadie.
+    const personas: any[] = []
+    for (const ref of [...new Set(atletas.map((x: string) => String(x).trim()).filter(Boolean))] as string[]) personas.push(await buscarPersona(quien, ref))
+    const unicas = [...new Map(personas.map((x) => [x.id, x])).values()]
+    const programas = await Promise.all(unicas.map(async (persona) => ({ persona, ...(await planQueEdito(quien, persona, de)) })))
+
+    if (!unDia) {
+      const ya = programas.filter((x) => x.plan && !esFantasma(x.plan))
+      if (ya.length && !reemplazar) {
+        return respuesta({
+          asignado: false,
+          motivo: 'ya_tienen_plan',
+          ya_tienen_plan: ya.map((x) => `${nombreDe(x.persona)}: "${x.plan!.title}"`),
+          sin_plan: programas.filter((x) => !ya.includes(x)).map((x) => nombreDe(x.persona)),
+          pista: 'No se asignó a nadie. Pregúntale a la persona si quiere REEMPLAZAR el plan de quienes ya tienen uno (el anterior queda en el historial y se recupera). Si sí, vuelve a llamar con reemplazar: true; si no, quita a esos atletas de la lista.',
+        })
+      }
+    }
+
+    const nombrePlan = String(titulo ?? '').trim() || it.nombre
+    const resultados: any[] = []
+    for (const x of programas) {
+      const quienEs = nombreDe(x.persona)
+      try {
+        if (unDia) {
+          if (!x.plan || esFantasma(x.plan) || !fasesDe(x.plan).length) { resultados.push({ atleta: quienEs, estado: 'sin_plan', mensaje: 'No tiene plan todavía: créale uno (crear_plan o esta misma herramienta con un programa) y vuelve a ponerle el workout.' }); continue }
+          const r = await ponerWorkoutEnElPlan(quien, x.persona, x.plan, { data: contenido, nombre: it.nombre, dia, modo: si_hay_sesion ?? 'agregar', fase, semana })
+          resultados.push({ atleta: quienEs, estado: 'ok', en: r.en, ...(r.habia ? { nota: si_hay_sesion === 'reemplazar' ? 'Ocupó el lugar de la primera sesión de ese día.' : 'Ese día ya tenía sesión: quedó como otra.' } : {}) })
+        } else {
+          const plan = it.tipo === 'programa' ? planDePrograma(contenido) : planDeRutina(contenido)
+          // Se mira ANTES de escribir qué había: después, el plan ya es el nuevo.
+          const anterior = x.plan && !esFantasma(x.plan) ? x.plan.title : null
+          await entregarPlan(quien, { persona: x.persona, previo: x.plan, profesionalId: x.profesionalId, titulo: nombrePlan, plan })
+          resultados.push({ atleta: quienEs, estado: 'ok', ...(anterior ? { reemplazo: `Su plan anterior "${anterior}" quedó en el historial.` } : {}) })
+        }
+      } catch (e) {
+        resultados.push({ atleta: quienEs, estado: 'error', mensaje: e instanceof Error ? e.message : 'No se pudo' })
+      }
+    }
+    const bien = resultados.filter((r) => r.estado === 'ok').length
+    return respuesta({
+      listo: bien === resultados.length,
+      asignado: `${bien} de ${resultados.length}`,
+      que: { tipo: it.tipo, nombre: it.nombre, ...(unDia ? { dia: NOMBRE_DIA[diaDesdeTexto(dia)] } : { como: nombrePlan }) },
+      resultados,
+      ...(bien ? { mensaje: 'Ya lo ven en su app.' } : {}),
+    })
+  }))
+
+  server.registerTool('copiar_plan_a_atleta', {
+    title: 'Crear el plan de un atleta copiando otro plan',
+    description: [
+      'Crea (o reemplaza) el plan de UN atleta copiando todo o parte de otro plan, en un solo paso y sin pasar por Mis planes. La fuente es el plan de otro atleta ("desde_atleta") o un programa o una rutina guardados ("desde_mis_planes").',
+      'Con "fases_elegidas" copias solo esas fases; con "solo_tipos" o "sin_tipos" se quedan o se quitan las sesiones de ese tipo en la copia (ej.: "hazle uno igual a esa fase de fuerza, sin los workouts de velocidad" = fases_elegidas ["Fuerza"] y sin_tipos ["correr"], o solo_tipos ["gym"]).',
+      'Si el atleta ya tiene plan y no mandas "reemplazar": true, no hace nada y te lo dice (el plan anterior queda en el historial). Es una copia: no cambia el plan de origen.',
+    ].join(' '),
+    inputSchema: {
+      atleta: z.string().describe('El atleta que recibe el plan: su usuario (@juan), su nombre o su id.'),
+      titulo: z.string().describe('Cómo se llamará el plan nuevo.'),
+      desde_atleta: z.string().optional().describe('Copiar del plan de este atleta.'),
+      desde_mis_planes: z.string().optional().describe('Copiar de un programa o una rutina guardados en Mis planes (nombre o id).'),
+      fases_elegidas: z.array(z.coerce.string()).optional().describe('Solo estas fases (números o nombres). Sin esto, todas.'),
+      solo_tipos: z.array(z.string()).optional().describe('Conserva solo las sesiones de estos tipos (ej.: ["gym"]).'),
+      sin_tipos: z.array(z.string()).optional().describe('Quita las sesiones de estos tipos (ej.: ["correr", "neural"]).'),
+      reemplazar: z.boolean().optional().describe('true para reemplazar el plan que ya tenga (solo después de preguntarle a la persona).'),
+      ...(esMaster ? { de_origen: z.string().optional().describe('Solo con desde_atleta: de qué profesional es el programa que se copia. Sin esto, el del coach principal.') } : {}),
+      ...PARAM_DE,
+    },
+    annotations: { ...ESCRIBE, destructiveHint: true },
+  }, seguro(async ({ atleta, titulo, desde_atleta, desde_mis_planes, fases_elegidas, solo_tipos, sin_tipos, reemplazar, de_origen, de }: any) => {
+    if (!String(titulo ?? '').trim()) throw new Aviso('Falta el título del plan nuevo.')
+    if (!!desde_atleta === !!desde_mis_planes) throw new Aviso('Di de dónde se copia, UNO: "desde_atleta" (el plan de otro atleta) o "desde_mis_planes" (algo guardado).')
+    const persona = await buscarPersona(quien, atleta)
+    const programa = await planQueEdito(quien, persona, de)
+    if (programa.plan && !esFantasma(programa.plan) && !reemplazar) {
+      return respuesta({
+        asignado: false,
+        motivo: 'ya_tiene_plan',
+        ya_tiene: `${nombreDe(persona)} ya tiene el plan "${programa.plan.title}".`,
+        pista: 'No se copió nada. Pregúntale a la persona si quiere REEMPLAZARLO (el anterior queda en el historial y se recupera). Si sí, vuelve a llamar con reemplazar: true.',
+      })
+    }
+
+    let plan: any
+    let quitadas = 0
+    let origen: string
+    if (desde_atleta) {
+      const c = await copiaDelPlanDeAtleta(quien, desde_atleta, { fases_elegidas, solo_tipos, sin_tipos }, de_origen)
+      if (c.persona.id === persona.id && String(de_origen ?? '') === String(de ?? '')) {
+        throw new Aviso('El origen y el destino son la misma persona: no hay nada que copiar.')
+      }
+      if (c.tipo === 'workout' || c.tipo === 'clase') throw new Aviso('De un atleta se copia un programa o una rutina; para un workout suelto usa guardar_en_mis_planes y luego asignar_de_mis_planes.')
+      plan = c.tipo === 'programa' ? planDePrograma(c.data) : planDeRutina(c.data)
+      quitadas = c.quitadas
+      origen = c.origen
+    } else {
+      const { carpetas, items } = await leerMisPlanes(quien)
+      const it = buscarItem(items, carpetas, desde_mis_planes)
+      if (it.tipo !== 'programa' && it.tipo !== 'rutina') throw new Aviso(`"${it.nombre}" es ${ETIQUETA_DE_TIPO[it.tipo].toLowerCase()}: aquí se copia un programa o una rutina. Un workout o una clase se pone con asignar_de_mis_planes.`)
+      const { data: fila, error } = await quien.db.from(it.tabla).select('data').eq('id', it.id).single()
+      if (error) throw new Error(error.message)
+      const data = structuredClone(fila?.data ?? {})
+      if (it.tipo === 'rutina') {
+        const r = filtrarDias(data.days ?? [], solo_tipos, sin_tipos)
+        quitadas = r.quitadas
+        plan = planDeRutina({ ...data, days: r.quedan })
+      } else {
+        const fases: any[] = Array.isArray(data.phases) ? data.phases : []
+        const simulado: any = { data: { kind: data.kind ?? 'periodized', phases: fases } }
+        const elegidas = fases_elegidas?.length
+          ? [...new Set(fases_elegidas.map((x: string) => buscarFase(simulado, x)))].sort((p: any, q: any) => p - q).map((i: any) => fases[i])
+          : fases
+        quitadas = filtrarFases(elegidas, solo_tipos, sin_tipos)
+        if (!sesionesReales(elegidas)) throw new Aviso('Con ese filtro no queda ninguna sesión.')
+        plan = planDePrograma({ ...data, phases: elegidas, ciencia: fases_elegidas?.length ? undefined : data.ciencia })
+      }
+      origen = `De Mis planes: ${it.nombre}`
+    }
+    const anterior = programa.plan && !esFantasma(programa.plan) ? programa.plan.title : null
+    await entregarPlan(quien, { persona, previo: programa.plan, profesionalId: programa.profesionalId, titulo: String(titulo).trim(), plan })
+    return respuesta({
+      listo: true,
+      atleta: nombreDe(persona),
+      ...(programa.profesionalId ? { programa: programa.de } : {}),
+      plan: String(titulo).trim(),
+      copiado_de: origen,
+      tamano: plan.kind === 'weekly' ? 'rutina que se repite' : tamanoDe(plan.phases),
+      ...(quitadas ? { sesiones_quitadas: `${quitadas} sesión(es) no entraron a la copia por el filtro de tipos.` } : {}),
+      ...(anterior ? { reemplazo: `El plan anterior "${anterior}" quedó en el historial.` } : {}),
+      mensaje: `Ya lo ve ${nombreDe(persona)} en su app.`,
+    })
   }))
 
   /* ================================================================ */
