@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import AuthScreen, { Field } from '@/features/auth/AuthScreen';
 import HojaFlotante from '@/components/HojaFlotante';
 import { iniciaCompra, leePerfilPublico, leePlanPublico } from '@/lib/tiendaApi';
+import { rutaDeTienda } from '@/lib/rutas';
 import { oficioCorto } from '@/lib/theme';
 import { chipsDeParaQuien } from '@/lib/paraQuien';
 import { esBiblioteca, esSuelto, textoDeContenido } from '@/lib/vitrinaDatos';
@@ -381,8 +382,8 @@ export default function TiendaPublica({ ruta }) {
   };
   useEffect(() => {
     const alRetroceder = () => {
-      const m = window.location.pathname.match(/^\/@[a-z0-9_]+\/([a-z0-9-]+)\/?$/i);
-      setSlug(m ? m[1].toLowerCase() : null);
+      const r = rutaDeTienda(window.location.pathname);
+      setSlug(r?.tipo === 'plan' ? r.slug : null);
     };
     window.addEventListener('popstate', alRetroceder);
     return () => window.removeEventListener('popstate', alRetroceder);

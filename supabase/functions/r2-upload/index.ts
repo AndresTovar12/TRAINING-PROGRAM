@@ -19,19 +19,19 @@ import { AwsClient } from 'npm:aws4fetch@1.0.20'
 // La direccion publica NO es secreta: es justamente la que abren los atletas
 // para ver los videos. Por eso puede vivir en el codigo.
 //
-// CUANDO HAYA DOMINIO: se pone el secreto `R2_PUBLIC_URL` (por ejemplo
-// `https://videos.midominio.com`) y los archivos NUEVOS salen con esa direccion,
-// sin tocar el codigo. La anterior (`r2.dev`) sigue reconocida: `sellar` y la
-// limpieza trabajan con la RUTA del archivo (`videos/<id>.mp4`), no con el host.
-// Ver docs/dominio.md.
+// DOMINIO PROPIO (15 oct 2026): los archivos NUEVOS salen con `https://videos.traininglabapp.com`.
+// El secreto `R2_PUBLIC_URL`, si existe, manda sobre esa (sirve para volver atras sin tocar el codigo).
+// La anterior (`r2.dev`) sigue reconocida: `sellar` y la limpieza trabajan con la RUTA del archivo
+// (`videos/<id>.mp4`), no con el host. Ver docs/dominio.md.
 const PUBLICA_ANTERIOR = 'https://pub-4a3ae85521d744b5abf16550ea171189.r2.dev'
-const PUBLICA = (Deno.env.get('R2_PUBLIC_URL') ?? '').trim().replace(/\/+$/, '') || PUBLICA_ANTERIOR
-const HOSTS_PROPIOS = [PUBLICA, PUBLICA_ANTERIOR]
+const PUBLICA_PROPIA = 'https://videos.traininglabapp.com'
+const PUBLICA = (Deno.env.get('R2_PUBLIC_URL') ?? '').trim().replace(/\/+$/, '') || PUBLICA_PROPIA
+const HOSTS_PROPIOS = [...new Set([PUBLICA, PUBLICA_PROPIA, PUBLICA_ANTERIOR])]
 const RUTA_EN_URL = /((?:videos|covers|media)\/[A-Za-z0-9._-]+)$/
 
-// Con dominio propio, la app deja de vivir en `*.vercel.app`: se agrega por
-// secreto (`SITIO_URL` y, si hay mas de uno, `ORIGENES_EXTRA` separados por coma).
-const ORIGENES_PROPIOS = [Deno.env.get('SITIO_URL'), ...(Deno.env.get('ORIGENES_EXTRA') ?? '').split(',')]
+// Con dominio propio, la app deja de vivir solo en `*.vercel.app`: `https://app.traininglabapp.com` va en el codigo y,
+// si hace falta otra, por secreto (`SITIO_URL` y, si hay mas de una, `ORIGENES_EXTRA` separadas por coma).
+const ORIGENES_PROPIOS = ['https://app.traininglabapp.com', Deno.env.get('SITIO_URL'), ...(Deno.env.get('ORIGENES_EXTRA') ?? '').split(',')]
   .map((o) => (o ?? '').trim().replace(/\/+$/, ''))
   .filter(Boolean)
 

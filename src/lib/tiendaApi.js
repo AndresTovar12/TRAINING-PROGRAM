@@ -6,17 +6,8 @@ import { supabase } from '@/lib/supabase';
    devuelven lo que el coach quiso enseñar: la ficha y la HOJA del programa (fases, semanas y el nombre de la sesión de cada día). Nunca un ejercicio. Comprar lo hace la Edge Function
    `comprar` (Stripe Checkout). */
 
-/**
- * Las direcciones que son de la tienda: `/@usuario`, `/@usuario/plan` y las dos de regreso del pago. Cualquier otra, null (la app de siempre).
- * El usuario puede llevar letras, números y guion bajo; el plan, letras, números y guiones.
- */
-export function rutaDeTienda(pathname) {
-  const m = String(pathname ?? '').match(/^\/@([a-z0-9_]+)(?:\/([a-z0-9-]+))?\/?$/i);
-  if (m) return m[2] ? { tipo: 'plan', usuario: m[1].toLowerCase(), slug: m[2].toLowerCase() } : { tipo: 'coach', usuario: m[1].toLowerCase(), slug: null };
-  if (pathname === '/compra/lista') return { tipo: 'lista' };
-  if (pathname === '/compra/cancelada') return { tipo: 'cancelada' };
-  return null;
-}
+// Las direcciones de la tienda (`/@usuario/plan`) se reconocen en `lib/rutas.js` (puro, con su prueba): ahí también se decodifica el `%40` que pone Cloudflare.
+export { rutaDeTienda, rutaDecodificada } from '@/lib/rutas';
 
 /** Un coach y sus planes publicados; null si no existe o no vende nada. */
 export async function leePerfilPublico(usuario) {
