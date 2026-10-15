@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  X, Camera, Loader2, Check, Shield, User as UserIcon, Users, Sparkles, AtSign, Mail, IdCard, Trash2,
+  X, Camera, Loader2, Check, Shield, User as UserIcon, Users, Sparkles, AtSign, IdCard, Trash2,
   Library, Calendar, Map, ChevronRight, HeartPulse,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -12,6 +12,7 @@ import ConectarIA from '@/features/ia/ConectarIA';
 import MiEquipo from '@/features/profile/MiEquipo';
 import MisEjercicios from '@/features/profile/MisEjercicios';
 import CambiarContrasena from '@/features/profile/CambiarContrasena';
+import CorreoDeLaCuenta from '@/features/profile/CorreoDeLaCuenta';
 import TarjetaDeMisMetricas from '@/features/metricas/TarjetaDeMisMetricas';
 import SelectorOficio from '@/components/SelectorOficio';
 import SelectorDisciplinas from '@/components/SelectorDisciplinas';
@@ -308,14 +309,8 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
             </div>
           </label>
 
-          {/* Email (solo lectura) */}
-          <label style={{ display: 'block' }}>
-            <div style={{ ...label, marginBottom: 7 }}>Correo</div>
-            <div style={{ ...inputWrap, background: T.bg3, opacity: 0.85 }}>
-              <Mail size={18} color={T.text3} style={{ flexShrink: 0 }} />
-              <input value={profile?.email || user?.email || '—'} readOnly disabled style={{ ...inputStyle, color: T.text2 }} />
-            </div>
-          </label>
+          {/* El correo: «Sin correo» si es inventado, y se pone o cambia con un código (ver `CorreoDeLaCuenta`). */}
+          <CorreoDeLaCuenta />
 
           {/* Lo del coach: a qué se dedica (decide las palabras de la app), qué entrena (ordena lo que ve primero, nunca
               esconde nada) y si trabaja con más profesionales. Es lo mismo que contestó en el inicio. */}
