@@ -11,8 +11,16 @@ const SIGNUP_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/signup`;
 const LOGIN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/login`;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+/* EL ENLACE DE «OLVIDÉ MI CONTRASEÑA» (15 oct 2026). Supabase manda a la persona de vuelta a la app con `#…type=recovery` (enlace bueno) o `#error=…&error_code=otp_expired`
+   (vencido o ya usado). Se lee AQUÍ, al cargar el archivo: el cliente de Supabase borra esa parte de la dirección en cuanto la procesa. */
+const HASH = typeof window !== 'undefined' ? window.location.hash : '';
+const ENLACE_DE_RECUPERACION = /[#&]type=recovery\b/.test(HASH);
+const ENLACE_VENCIDO = /[#&]error_code=otp_expired\b/.test(HASH);
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
+  // Entró por el enlace de recuperar contraseña: lo único que se le enseña es «Pon una contraseña nueva» (ver `features/auth/NuevaContrasena.jsx`).
+  const [recuperando, setRecuperando] = useState(ENLACE_DE_RECUPERACION);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -24,7 +32,8 @@ export function AuthProvider({ children }) {
       setSession(data.session ?? null);
       setLoading(false);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((evento, sess) => {
+      if (evento === 'PASSWORD_RECOVERY') setRecuperando(true);
       setSession(sess ?? null);
     });
     return () => {
@@ -205,6 +214,25 @@ export function AuthProvider({ children }) {
     setProfile(data ?? null);
   }, [session?.user?.id]);
 
+  /** Pide el enlace para poner una contraseña nueva. NO dice si el correo existe (`AVISO_ENLACE_ENVIADO` es el mismo siempre). Regresa `{ error }`. */
+  const pedirRecuperacion = useCallback(async (correo) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(String(correo ?? '').trim(), { redirectTo: `${window.location.origin}/` });
+    return { error };
+  }, []);
+
+  /** Ya con el enlace abierto: pone la contraseña nueva y deja entrar. Regresa `{ error }`. */
+  const ponerContrasenaNueva = useCallback(async (nueva) => {
+    const { error } = await supabase.auth.updateUser({ password: nueva });
+    if (!error) setRecuperando(false);
+    return { error };
+  }, []);
+
+  /** «Mejor no»: se sale de la pantalla de contraseña nueva y se cierra esa sesión de recuperación. */
+  const cancelarRecuperacion = useCallback(async () => {
+    setRecuperando(false);
+    await supabase.auth.signOut();
+  }, []);
+
   const value = useMemo(
     () => ({
       session,
@@ -220,8 +248,13 @@ export function AuthProvider({ children }) {
       googleDisponible: import.meta.env.VITE_GOOGLE_LOGIN === '1',
       updateProfile,
       refreshProfile,
+      recuperando,
+      enlaceVencido: ENLACE_VENCIDO,
+      pedirRecuperacion,
+      ponerContrasenaNueva,
+      cancelarRecuperacion,
     }),
-    [session, profile, loading, signIn, signUp, signOut, entrarConGoogle, updateProfile, refreshProfile],
+    [session, profile, loading, signIn, signUp, signOut, entrarConGoogle, updateProfile, refreshProfile, recuperando, pedirRecuperacion, ponerContrasenaNueva, cancelarRecuperacion],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

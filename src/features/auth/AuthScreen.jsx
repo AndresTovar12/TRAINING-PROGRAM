@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Dumbbell, User, Lock, Loader2, ArrowRight, Eye, EyeOff, UserPlus } from 'lucide-react';
+import { Dumbbell, User, Lock, Loader2, ArrowRight, Eye, EyeOff, UserPlus, Mail } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import BotonGoogle from '@/components/BotonGoogle';
 import { FONT, KP } from '@/lib/theme';
+import { AVISO_ENLACE_ENVIADO, AVISO_SIN_CORREO, correoValido, esCorreoInventado } from '@/lib/correos';
 
 export function Field({ icon: Icon, label, hint, ...props }) {
   const [focus, setFocus] = useState(false);
@@ -78,11 +79,32 @@ export function Field({ icon: Icon, label, hint, ...props }) {
  * pantalla. Aquí ya no vive ningún formulario de registro.
  */
 export default function AuthScreen({ onVolver, onCrearCuenta, aviso }) {
-  const { signIn } = useAuth();
+  const { signIn, pedirRecuperacion, enlaceVencido } = useAuth();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  // «¿Olvidaste tu contraseña?»: en vez de entrar, se pide el correo para mandarle el enlace.
+  const [olvide, setOlvide] = useState(false);
+  const [correo, setCorreo] = useState('');
+  const [enviado, setEnviado] = useState('');
+
+  async function pideEnlace(e) {
+    e.preventDefault();
+    if (busy) return;
+    setError('');
+    setEnviado('');
+    if (!correoValido(correo)) { setError('Escribe tu correo completo, por ejemplo nombre@gmail.com.'); return; }
+    // Las cuentas creadas sin correo tienen uno inventado que nadie recibe: ahí no se manda nada.
+    if (esCorreoInventado(correo)) { setError(AVISO_SIN_CORREO); return; }
+    setBusy(true);
+    const { error: err } = await pedirRecuperacion(correo);
+    setBusy(false);
+    // Un fallo de verdad (sin red, demasiados intentos) se dice; que el correo no exista NO se dice nunca.
+    if (err && /rate|limit|seconds|many/i.test(err.message)) { setError('Ya pediste un enlace hace poco. Espera un minuto y vuelve a intentarlo.'); return; }
+    if (err && /fetch|network/i.test(err.message)) { setError('No se pudo conectar. Revisa tu internet e inténtalo de nuevo.'); return; }
+    setEnviado(AVISO_ENLACE_ENVIADO);
+  }
 
   async function onSubmit(e) {
     e.preventDefault();
@@ -150,9 +172,48 @@ export default function AuthScreen({ onVolver, onCrearCuenta, aviso }) {
             <div style={{ fontSize: 25, fontWeight: 800, letterSpacing: -0.6, color: KP.ink }}>
               Training<span style={{ color: KP.blue }}> Lab</span>
             </div>
-            <div style={{ fontSize: 14, fontWeight: 500, color: KP.ink2, marginTop: 5 }}>Inicia sesión para entrenar</div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: KP.ink2, marginTop: 5 }}>
+              {olvide ? 'Te mandamos un enlace para entrar' : 'Inicia sesión para entrenar'}
+            </div>
           </div>
 
+          {enlaceVencido && !olvide && (
+            <div role="alert" style={{ marginBottom: 14, padding: '11px 14px', borderRadius: 12, background: KP.blueSoft, color: KP.blueDk, fontSize: 13.5, fontWeight: 700, lineHeight: 1.45 }}>
+              Ese enlace ya venció o ya se usó. Toca «¿Olvidaste tu contraseña?» para pedir uno nuevo.
+            </div>
+          )}
+
+          {olvide ? (
+            <form onSubmit={pideEnlace} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <Field
+                icon={Mail} label="Tu correo" placeholder="nombre@gmail.com" type="email" autoComplete="email" inputMode="email"
+                value={correo} onChange={(e) => setCorreo(e.target.value)} autoFocus
+              />
+              {error && (
+                <div role="alert" style={{ background: KP.dangerSoft, color: KP.danger, borderRadius: 12, padding: '11px 14px', fontSize: 13.5, fontWeight: 600 }}>{error}</div>
+              )}
+              {enviado && (
+                <div role="status" style={{ background: KP.blueSoft, color: KP.blueDk, borderRadius: 12, padding: '11px 14px', fontSize: 13.5, fontWeight: 600, lineHeight: 1.45 }}>{enviado}</div>
+              )}
+              <button
+                type="submit" disabled={busy} className="kp-press"
+                style={{
+                  marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '15px 0', borderRadius: KP.rBtn, border: 'none',
+                  cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1, background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`,
+                  color: '#fff', fontFamily: FONT, fontSize: 15.5, fontWeight: 700, boxShadow: KP.shBtn,
+                }}
+              >
+                {busy ? <Loader2 size={18} className="spin" /> : <>Mandarme el enlace <ArrowRight size={18} /></>}
+              </button>
+              <button
+                type="button" onClick={() => { setOlvide(false); setError(''); setEnviado(''); }}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 700, color: KP.ink2, padding: '6px 0' }}
+              >
+                ← Volver a entrar
+              </button>
+            </form>
+          ) : (
+          <>
           <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <Field
               icon={User}
@@ -171,6 +232,12 @@ export default function AuthScreen({ onVolver, onCrearCuenta, aviso }) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
+            <button
+              type="button" onClick={() => { setOlvide(true); setError(''); setCorreo(identifier.includes('@') ? identifier : ''); }}
+              style={{ alignSelf: 'flex-end', marginTop: -4, border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: KP.blue, padding: '2px 0' }}
+            >
+              ¿Olvidaste tu contraseña?
+            </button>
 
             {error && (
               <div
@@ -222,6 +289,8 @@ export default function AuthScreen({ onVolver, onCrearCuenta, aviso }) {
                 <UserPlus size={17} /> Crear cuenta
               </button>
             </div>
+          )}
+          </>
           )}
         </div>
       </div>
