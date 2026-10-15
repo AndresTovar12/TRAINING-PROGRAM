@@ -45,17 +45,19 @@ export function FiltroDeAutor({ autores, filtro, onFiltro, style }) {
   ];
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, ...style }}>
-      <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 700, color: LT.text3 }}>Ver</span>
+      {/* Reestructura visual (15 oct 2026): el botón del filtro en gris claro, como el resto de los controles; sigue siendo una lista
+          (Andrés, 2 oct: con 4 profesionales un control de tamaño fijo, no una fila que crece). */}
+      <span style={{ fontFamily: FONT, fontSize: 14, fontWeight: 600, color: LT.text2 }}>Ver</span>
       <ListaDesplegable
         valor={activo ? activo.id : 'todo'}
         onCambio={(v) => onFiltro(v === 'todo' ? null : v)}
         opciones={opciones}
         etiqueta="Ver lo de"
         estilo={{
-          width: 'auto', minHeight: 34, padding: '5px 10px 5px 12px', borderRadius: 999, gap: 7,
-          fontSize: 13, fontWeight: 800, color: LT.text,
-          background: activo ? `${activo.color}14` : LT.surface,
-          border: `1.5px solid ${activo ? `${activo.color}66` : LT.border}`,
+          width: 'auto', minHeight: 38, padding: '6px 12px 6px 14px', borderRadius: 12, gap: 7,
+          fontSize: 14.5, fontWeight: 700, color: LT.text,
+          background: activo ? `${activo.color}1F` : '#EBEDF1',
+          border: 'none',
         }}
       />
     </div>

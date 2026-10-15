@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Activity, ChevronDown, Loader2 } from 'lucide-react';
-import { LT, KP, FONT, NUM_STYLE, eyebrow } from '@/lib/theme';
+import { LT, KP, FONT, NUM_STYLE, UI } from '@/lib/theme';
 import { COLOR_DE_DEPORTE, ICONOS, TONOS } from './tonos';
 
-/* Las piezas chicas que comparten todas las pantallas de métricas: tarjeta, dato grande, insignia de estado, pestañas, sección con ayuda, vacío. */
+/* Las piezas chicas que comparten todas las pantallas de métricas: tarjeta, dato grande, insignia de estado, pestañas, sección con ayuda, vacío.
+   Reestructura visual (15 oct 2026): tarjeta sin borde como los grupos de `components/ui`, título de sección en negro (ya no la etiqueta gris en
+   mayúsculas) y los botones iguales a `components/ui/Boton`. */
 
 /** El cuadrito con el ícono de un deporte, en su color. */
 export function MosaicoDeDeporte({ deporte, size = 40 }) {
@@ -19,7 +21,7 @@ export function MosaicoDeDeporte({ deporte, size = 40 }) {
 /** Una tarjeta blanca (la de siempre del sistema Kinetic). */
 export function Tarjeta({ children, style, relleno = 16, ...resto }) {
   return (
-    <div {...resto} style={{ background: KP.surface, border: `1px solid ${KP.line}`, borderRadius: 20, boxShadow: KP.shCard, padding: relleno, ...style }}>
+    <div {...resto} style={{ background: KP.surface, borderRadius: UI.rGrupo, boxShadow: UI.sombraGrupo, padding: relleno, ...style }}>
       {children}
     </div>
   );
@@ -93,7 +95,7 @@ export function Seccion({ titulo, ayuda, derecha, children, style }) {
   return (
     <section style={{ marginTop: 22, ...style }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-        <h3 style={{ margin: 0, flex: 1, minWidth: 0, ...eyebrow(LT.text2), fontSize: 12 }}>{titulo}</h3>
+        <h3 style={{ margin: '0 4px', flex: 1, minWidth: 0, fontSize: 16, fontWeight: 700, color: LT.text }}>{titulo}</h3>
         {derecha}
         {ayuda && (
           <button
@@ -141,10 +143,10 @@ export function Boton({ children, onClick, principal = false, icono: Icono, disa
     <button
       type={type} onClick={onClick} disabled={disabled} className="kp-press"
       style={{
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: pequeno ? 40 : 48, padding: pequeno ? '0 14px' : '0 18px', borderRadius: 14, cursor: disabled ? 'default' : 'pointer',
-        fontFamily: FONT, fontSize: pequeno ? 14 : 15.5, fontWeight: 800, width: ancho ? '100%' : undefined, touchAction: 'manipulation', opacity: disabled ? 0.55 : 1,
-        border: principal ? 'none' : `1.5px solid ${LT.borderHi}`, color: principal ? '#fff' : LT.text,
-        background: principal ? `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})` : LT.surface, boxShadow: principal ? KP.shBtn : 'none',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: pequeno ? 40 : 50, padding: pequeno ? '0 14px' : '0 20px', borderRadius: pequeno ? 12 : UI.rBoton, cursor: disabled ? 'default' : 'pointer',
+        fontFamily: FONT, fontSize: pequeno ? 14.5 : 16, fontWeight: 700, width: ancho ? '100%' : undefined, touchAction: 'manipulation', opacity: disabled ? 0.5 : 1,
+        border: 'none', color: principal ? '#fff' : LT.text,
+        background: principal ? KP.blue : UI.relleno, boxShadow: principal ? '0 8px 20px rgba(30,64,224,0.22)' : 'none',
       }}
     >
       {Icono && <Icono size={pequeno ? 16 : 18} />}{children}

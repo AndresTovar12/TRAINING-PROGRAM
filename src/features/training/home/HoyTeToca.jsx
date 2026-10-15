@@ -16,18 +16,21 @@ import { etiquetaDePrograma } from '@/lib/programas';
  */
 
 const NUMEROS = ['', 'una', 'dos', 'tres', 'cuatro'];
-const etiquetaDeHoy = (n, hechas) => {
+/* `cuando`: qué día enseña la tarjeta. Por defecto hoy; al tocar otro día en la tira de la semana, ese
+   ({ fecha: Date, hoy: false }) y se dice «El viernes te toca». */
+const etiquetaDeHoy = (n, hechas, cuando) => {
   if (hechas) return n > 1 ? 'Completadas' : 'Completada';
-  return n > 1 ? `Hoy te tocan ${NUMEROS[n] ?? n}` : 'Hoy te toca';
+  const quien = cuando?.hoy === false ? `El ${cuando.fecha.toLocaleDateString('es-MX', { weekday: 'long' })}` : 'Hoy';
+  return n > 1 ? `${quien} te tocan ${NUMEROS[n] ?? n}` : `${quien} te toca`;
 };
 
-function fechaDeHoy() {
-  const t = new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric' });
+function textoDeFecha(fecha = new Date()) {
+  const t = fecha.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric' });
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
 /** El marco azul de la tarjeta de hoy (también lo usa «Entrenar» de quien no tiene plan, `HeroDeEntrenar`). */
-export function Marco({ etiqueta, punto = '#FFB547', children, estilo }) {
+export function Marco({ etiqueta, punto = '#FFB547', fecha, children, estilo }) {
   return (
     <article style={{
       position: 'relative', overflow: 'hidden', borderRadius: 26, padding: '18px 18px 18px', color: '#fff', fontFamily: FONT,
@@ -38,7 +41,7 @@ export function Marco({ etiqueta, punto = '#FFB547', children, estilo }) {
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '7px 13px', borderRadius: 999, background: 'rgba(255,255,255,0.14)', fontSize: 14, fontWeight: 700 }}>
           <i aria-hidden="true" style={{ width: 9, height: 9, borderRadius: '50%', background: punto }} />{etiqueta}
         </span>
-        <span style={{ fontSize: 14, fontWeight: 600, opacity: 0.82 }}>{fechaDeHoy()}</span>
+        <span style={{ fontSize: 14, fontWeight: 600, opacity: 0.82 }}>{textoDeFecha(fecha)}</span>
       </div>
       {children}
     </article>
@@ -85,9 +88,9 @@ export const botonBlanco = {
  * mañana y tarde). `completada`: el día ya está hecho («Empezar» pasa a «Ver detalle»). Sin `onCambiarDia` no sale
  * ese botón (en una rutina que se repite el día lo decide el calendario).
  */
-export function HoyTeToca({ sesiones, completada = false, onAbrir, onCambiarDia, estilo }) {
+export function HoyTeToca({ sesiones, completada = false, onAbrir, onCambiarDia, cuando, estilo }) {
   return (
-    <Marco etiqueta={etiquetaDeHoy(sesiones.length, completada)} punto={completada ? '#7CF0C5' : '#FFB547'} estilo={estilo}>
+    <Marco etiqueta={etiquetaDeHoy(sesiones.length, completada, cuando)} punto={completada ? '#7CF0C5' : '#FFB547'} fecha={cuando?.fecha} estilo={estilo}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 18 }}>
         {sesiones.map((s, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
@@ -118,11 +121,11 @@ export function HoyTeToca({ sesiones, completada = false, onAbrir, onCambiarDia,
  * quien la puso (Andrés, 1 oct 2026: «el programa es un todo; la autoría es etiqueta»).
  * `entradas`: las de `entradasDeHoy` ({ programa, day, dayIdx, partes: [{ nombre, ejercicios, minutos, hecha }] }).
  */
-export function HoyTeTocaEquipo({ entradas, onAbrir, onCambiarDia, conAutor = true, estilo }) {
+export function HoyTeTocaEquipo({ entradas, onAbrir, onCambiarDia, conAutor = true, cuando, estilo }) {
   const filas = entradas.flatMap((e) => e.partes.map((p) => ({ e, p })));
   const todas = filas.length > 0 && filas.every(({ p }) => p.hecha);
   return (
-    <Marco etiqueta={etiquetaDeHoy(filas.length, todas)} punto={todas ? '#7CF0C5' : '#FFB547'} estilo={estilo}>
+    <Marco etiqueta={etiquetaDeHoy(filas.length, todas, cuando)} punto={todas ? '#7CF0C5' : '#FFB547'} fecha={cuando?.fecha} estilo={estilo}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 16 }}>
         {filas.map(({ e, p }) => {
           const meta = [p.ejercicios ? `${p.ejercicios} ${p.ejercicios === 1 ? 'ejercicio' : 'ejercicios'}` : null, p.minutos || null].filter(Boolean);
@@ -168,16 +171,16 @@ export function HoyTeTocaEquipo({ entradas, onAbrir, onCambiarDia, conAutor = tr
  * Hoy no entrena: la misma tarjeta, en calma. Dice qué sigue y lleva a su plan.
  * `siguiente`: «Sigue: viernes · Lower Strength», o null (entonces sale `vacia`).
  */
-export function HoyDescansas({ titulo, siguiente, vacia, boton, onVerPlan, estilo }) {
+export function HoyDescansas({ titulo, siguiente, vacia, boton, onVerPlan, cuando, estilo }) {
   return (
-    <Marco etiqueta="Descanso" punto="#9DB4FF" estilo={estilo}>
+    <Marco etiqueta="Descanso" punto="#9DB4FF" fecha={cuando?.fecha} estilo={estilo}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 18 }}>
         <span aria-hidden="true" style={{ width: 58, height: 58, borderRadius: 18, display: 'grid', placeItems: 'center', background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.18)', flexShrink: 0 }}>
           <Moon size={26} />
         </span>
         <div style={{ minWidth: 0 }}>
           <h3 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.15 }}>{titulo}</h3>
-          <span style={{ display: 'block', fontSize: 14, fontWeight: 600, opacity: 0.85, marginTop: 3 }}>{siguiente ?? vacia}</span>
+          {(siguiente ?? vacia) && <span style={{ display: 'block', fontSize: 14, fontWeight: 600, opacity: 0.85, marginTop: 3 }}>{siguiente ?? vacia}</span>}
         </div>
       </div>
       <button type="button" className="kp-press" onClick={onVerPlan} style={{ ...botonBlanco, width: '100%', marginTop: 20 }}>

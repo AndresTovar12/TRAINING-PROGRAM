@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, X } from 'lucide-react';
 import { useIsDesktop } from '@/lib/useViewport';
-import { LT, FONT, KP, NUM_STYLE } from '@/lib/theme';
+import { LT, FONT, KP, NUM_STYLE, UI } from '@/lib/theme';
 
 /**
  * Lo que envuelve al programa cuando se abre encima de la pantalla.
@@ -51,27 +51,27 @@ export default function HojaFlotante({ titulo, subtitulo, onCerrar, pie = null, 
   const cabecera = (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
-      padding: esCompu ? '18px 18px 12px' : 'calc(12px + env(safe-area-inset-top)) 14px 12px',
-      borderBottom: esCompu ? 'none' : `1px solid ${LT.border}`,
-      background: esCompu ? 'transparent' : LT.bg,
+      // Reestructura visual (15 oct 2026): sin raya abajo, flecha en un cuadro gris y título grande, como «Mi perfil» en las capturas de Andrés.
+      padding: esCompu ? '20px 20px 12px' : 'calc(12px + env(safe-area-inset-top)) 16px 10px',
+      background: esCompu ? 'transparent' : UI.fondo,
     }}>
       {!esCompu && (
         <button
           type="button" onClick={onCerrar} aria-label="Volver"
           style={{
-            width: 38, height: 38, borderRadius: 12, flexShrink: 0, border: `1px solid ${LT.border}`,
-            background: LT.surface, color: LT.text, cursor: 'pointer', display: 'grid', placeItems: 'center',
+            width: 42, height: 42, borderRadius: 13, flexShrink: 0, border: 'none',
+            background: UI.relleno, color: LT.text, cursor: 'pointer', display: 'grid', placeItems: 'center',
           }}
         >
           <ChevronLeft size={20} />
         </button>
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: esCompu ? 19 : 17, fontWeight: 800, color: LT.text, letterSpacing: -0.3 }}>
+        <div style={{ fontSize: esCompu ? 23 : 22, fontWeight: 800, color: LT.text, letterSpacing: -0.4, lineHeight: 1.15 }}>
           {titulo}
         </div>
         {subtitulo && (
-          <div style={{ fontSize: 12.5, fontWeight: 600, color: LT.text3, marginTop: 2, ...NUM_STYLE }}>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: LT.text2, marginTop: 2, ...NUM_STYLE }}>
             {subtitulo}
           </div>
         )}
@@ -80,8 +80,8 @@ export default function HojaFlotante({ titulo, subtitulo, onCerrar, pie = null, 
         <button
           type="button" onClick={onCerrar} aria-label="Cerrar"
           style={{
-            width: 32, height: 32, borderRadius: 16, flexShrink: 0, border: 'none', cursor: 'pointer',
-            background: LT.surface2, color: LT.text2, display: 'grid', placeItems: 'center',
+            width: 36, height: 36, borderRadius: 12, flexShrink: 0, border: 'none', cursor: 'pointer',
+            background: UI.relleno, color: LT.text2, display: 'grid', placeItems: 'center',
           }}
         >
           <X size={17} />
@@ -94,10 +94,10 @@ export default function HojaFlotante({ titulo, subtitulo, onCerrar, pie = null, 
     <div data-hoja-cuerpo style={{
       flex: 1, minHeight: 0, overflowY: 'auto',
       // Con un pie fijo abajo, el margen de seguridad del iPhone lo pone el pie; el cuerpo no lo repite.
-      padding: esCompu ? (pie ? '0 18px 14px' : '0 18px 20px') : (pie ? '14px 14px 14px' : '14px 14px calc(24px + env(safe-area-inset-bottom))'),
+      padding: esCompu ? (pie ? '4px 20px 14px' : '4px 20px 22px') : (pie ? '10px 16px 14px' : '10px 16px calc(24px + env(safe-area-inset-bottom))'),
       // El relleno del cuerpo, a la mano de lo que va adentro: una barra pegada arriba o abajo (`position: sticky`) lo estira con margen negativo para llegar hasta el borde de la hoja.
-      '--hoja-px': esCompu ? '18px' : '14px',
-      '--hoja-pt': esCompu ? '0px' : '14px',
+      '--hoja-px': esCompu ? '20px' : '16px',
+      '--hoja-pt': esCompu ? '4px' : '10px',
       '--hoja-pb': esCompu ? (pie ? '14px' : '20px') : (pie ? '14px' : 'calc(24px + env(safe-area-inset-bottom))'),
     }}>
       {children}
@@ -107,7 +107,7 @@ export default function HojaFlotante({ titulo, subtitulo, onCerrar, pie = null, 
   // `pie`: lo que se queda fijo abajo mientras el cuerpo se desplaza (el botón de «Guardar» de un formulario largo).
   const pieFijo = pie && (
     <div style={{
-      flexShrink: 0, borderTop: `1px solid ${LT.border}`, background: LT.bg,
+      flexShrink: 0, borderTop: `1px solid ${UI.hilo}`, background: UI.fondo,
       padding: esCompu ? '12px 18px 16px' : '12px 14px calc(12px + env(safe-area-inset-bottom))',
     }}>
       {pie}
@@ -121,7 +121,7 @@ export default function HojaFlotante({ titulo, subtitulo, onCerrar, pie = null, 
         className="animate-fade-in"
         style={{
           position: 'fixed', top: 0, left: 0, right: 0, height: '100dvh', zIndex: 3000,
-          background: LT.bg, display: 'flex', flexDirection: 'column', fontFamily: FONT,
+          background: UI.fondo, display: 'flex', flexDirection: 'column', fontFamily: FONT,
         }}
       >
         {cabecera}
@@ -146,7 +146,7 @@ export default function HojaFlotante({ titulo, subtitulo, onCerrar, pie = null, 
         className="animate-fade-in"
         style={{
           width: '100%', maxWidth: ancho, maxHeight: 'min(86vh, 900px)',
-          background: LT.bg, borderRadius: 22, boxShadow: KP.shPop,
+          background: UI.fondo, borderRadius: 24, boxShadow: KP.shPop,
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
         }}
       >

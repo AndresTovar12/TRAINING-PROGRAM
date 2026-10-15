@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
-import { T, FONT, KP, NUM_STYLE } from '@/lib/theme';
+import { T, FONT, KP, NUM_STYLE, UI } from '@/lib/theme';
 import { usePlan } from '@/contexts/PlanContext';
 import { bloquesDeTexto, normalizaCiencia, programasConCiencia } from '@/lib/ciencia';
 import { etiquetaDePrograma } from '@/lib/programas';
@@ -15,13 +15,12 @@ import { etiquetaDePrograma } from '@/lib/programas';
  * juntan aquí, cada una bajo el nombre de quien la escribió. Con un solo programa no se dice de quién es.
  */
 
-const estiloTexto = { fontSize: 13.5, color: T.text2, lineHeight: 1.7 };
+/* Reestructura visual (15 oct 2026): letra más grande y legible, subtítulos en negro (ya no la etiqueta gris en mayúsculas) y recuadros
+   como las tarjetas blancas de `components/ui` (sin borde). */
+const estiloTexto = { fontSize: 15, color: KP.ink2, lineHeight: 1.6 };
 
 const Subtitulo = ({ children }) => (
-  <div style={{
-    fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.4, color: T.text3,
-    margin: '14px 0 6px',
-  }}>{children}</div>
+  <div style={{ fontSize: 15, fontWeight: 700, color: T.text, margin: '16px 0 6px' }}>{children}</div>
 );
 
 /** El texto de un recuadro: párrafos, viñetas, subtítulos y tablas de «nombre | valor | nota». */
@@ -42,13 +41,13 @@ export function TextoDeCiencia({ texto }) {
           return (
             <div key={i} style={{ margin: '0 0 10px' }}>
               {b.filas.map((f, k) => (
-                <div key={k} style={{ display: 'flex', gap: 12, padding: '10px 0', borderTop: k > 0 ? `1px solid ${T.border}` : 'none' }}>
+                <div key={k} style={{ display: 'flex', gap: 12, padding: '11px 0', borderTop: k > 0 ? `1px solid ${UI.hilo}` : 'none' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginBottom: f.nota ? 2 : 0 }}>{f.nombre}</div>
-                    {f.nota && <div style={{ fontSize: 12, color: T.text3 }}>{f.nota}</div>}
+                    <div style={{ fontSize: 15, fontWeight: 600, color: T.text, marginBottom: f.nota ? 2 : 0 }}>{f.nombre}</div>
+                    {f.nota && <div style={{ fontSize: 13, color: KP.ink2 }}>{f.nota}</div>}
                   </div>
                   {f.valor && (
-                    <div style={{ fontSize: 13, fontWeight: 700, color: T.accent, alignSelf: 'flex-start', textAlign: 'right', ...NUM_STYLE }}>{f.valor}</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: T.accent, alignSelf: 'flex-start', textAlign: 'right', ...NUM_STYLE }}>{f.valor}</div>
                   )}
                 </div>
               ))}
@@ -65,24 +64,24 @@ export function TextoDeCiencia({ texto }) {
 export function Recuadro({ titulo, texto, abierto = false }) {
   const [open, setOpen] = useState(abierto);
   return (
-    <div style={{
-      background: T.bg2, border: `1px solid ${KP.line}`, borderRadius: 20, overflow: 'hidden', boxShadow: KP.shCard,
-    }}>
+    <div style={{ background: UI.tarjeta, borderRadius: UI.rGrupo, overflow: 'hidden', boxShadow: UI.sombraGrupo }}>
       <button
         type="button" onClick={() => setOpen(!open)} aria-expanded={open}
         style={{
-          width: '100%', padding: '15px 18px', background: 'transparent', border: 'none', color: T.text,
+          width: '100%', minHeight: UI.altoFila, padding: '14px 16px', background: 'transparent', border: 'none', color: T.text,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
-          cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 700, textAlign: 'left',
+          cursor: 'pointer', fontFamily: FONT, fontSize: 16, fontWeight: 700, textAlign: 'left',
         }}
       >
         <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-          <Sparkles size={14} style={{ color: T.accent, flexShrink: 0 }} />
+          <span aria-hidden="true" style={{ width: 32, height: 32, borderRadius: 10, background: KP.violetSoft, color: KP.violet, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+            <Sparkles size={16} />
+          </span>
           <span style={{ minWidth: 0 }}>{titulo || 'Sin título'}</span>
         </span>
-        {open ? <ChevronUp size={16} style={{ color: T.text3, flexShrink: 0 }} /> : <ChevronDown size={16} style={{ color: T.text3, flexShrink: 0 }} />}
+        {open ? <ChevronUp size={18} style={{ color: KP.ink3, flexShrink: 0 }} /> : <ChevronDown size={18} style={{ color: KP.ink3, flexShrink: 0 }} />}
       </button>
-      {open && <div style={{ padding: '0 18px 18px' }}><TextoDeCiencia texto={texto} /></div>}
+      {open && <div style={{ padding: '0 16px 16px 58px' }}><TextoDeCiencia texto={texto} /></div>}
     </div>
   );
 }
@@ -96,14 +95,14 @@ function DeUnPrograma({ ciencia, phases, estructura }) {
   const conFases = estructura === 'fases';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {delPlan.map((r, i) => <Recuadro key={r.id} titulo={r.titulo} texto={r.texto} abierto={i === 0} />)}
       {porFase.map(({ fase, recuadros }) => (
         <div key={fase.id} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {conFases && (
             <div style={{
-              fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.4, color: T.text3,
-              margin: delPlan.length || porFase[0]?.fase !== fase ? '12px 2px 0' : '0 2px',
+              fontSize: 16, fontWeight: 700, color: T.text,
+              margin: delPlan.length || porFase[0]?.fase !== fase ? '14px 4px 0' : '0 4px',
             }}>
               {fase.name}
             </div>

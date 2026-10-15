@@ -117,11 +117,12 @@ export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, on
         <button
           type="button" onClick={abre} className="kp-press"
           style={{
-            flex: 1, minWidth: 0, minHeight: 54, borderRadius: 18, cursor: 'pointer', fontFamily: FONT, fontSize: 17, fontWeight: 800,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, touchAction: 'manipulation',
+            // Reestructura visual (15 oct 2026): el botón principal de `components/ui` (azul lleno); «Continuar» en gris claro con letras azules.
+            flex: 1, minWidth: 0, minHeight: 56, borderRadius: 16, cursor: 'pointer', fontFamily: FONT, fontSize: 17, fontWeight: 700,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, touchAction: 'manipulation', border: 'none',
             ...(continuando
-              ? { border: `2px solid ${LT.blue}`, background: LT.surface, color: LT.blue }
-              : { border: 'none', background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, color: '#fff', boxShadow: KP.shBtn }),
+              ? { background: '#EBEDF1', color: LT.blue }
+              : { background: KP.blue, color: '#fff', boxShadow: '0 8px 20px rgba(30,64,224,0.22)' }),
           }}
         >
           <Play size={continuando ? 17 : 18} fill={continuando ? 'none' : '#fff'} />
@@ -135,7 +136,7 @@ export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, on
           <button
             type="button" onClick={quita} className="kp-press" aria-label={palabras.quitarAria}
             style={{
-              width: 54, minHeight: 54, flexShrink: 0, borderRadius: 18, border: `1.5px solid ${LT.borderHi}`, background: LT.surface, color: LT.text2, cursor: 'pointer',
+              width: 56, minHeight: 56, flexShrink: 0, borderRadius: 16, border: 'none', background: '#EBEDF1', color: LT.text2, cursor: 'pointer',
               display: 'grid', placeItems: 'center', touchAction: 'manipulation',
             }}
           >
