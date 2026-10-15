@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   X, Camera, Loader2, Check, Shield, User as UserIcon, Users, Sparkles, AtSign, IdCard, Trash2,
-  Library, Calendar, Map, ChevronRight, HeartPulse, KeyRound,
+  Library, Calendar, Map, ChevronRight, HeartPulse, KeyRound, ShoppingBag, Wallet, Watch, Bell,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
@@ -12,6 +12,10 @@ import ConectarIA from '@/features/ia/ConectarIA';
 import MiEquipo from '@/features/profile/MiEquipo';
 import MisEjercicios from '@/features/profile/MisEjercicios';
 import ConfiguracionDeCuenta from '@/features/profile/ConfiguracionDeCuenta';
+import MisCompras from '@/features/profile/MisCompras';
+import MisCobros from '@/features/profile/MisCobros';
+import MisDispositivos from '@/features/profile/MisDispositivos';
+import MisAvisos from '@/features/profile/MisAvisos';
 import TarjetaDeMisMetricas from '@/features/metricas/TarjetaDeMisMetricas';
 import SelectorOficio from '@/components/SelectorOficio';
 import SelectorDisciplinas from '@/components/SelectorDisciplinas';
@@ -56,6 +60,11 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
   const secciones = [
     { id: 'perfil', texto: 'Perfil', Icono: UserIcon },
     { id: 'cuenta', texto: 'Cuenta', Icono: KeyRound },
+    // Lo que compró (atleta) o lo que cobra (profesional; el dueño no: vende al 0 %).
+    ...(!isAdmin ? [{ id: 'compras', texto: 'Compras', Icono: ShoppingBag }] : []),
+    ...(isAdmin && !isMaster ? [{ id: 'cobros', texto: 'Cobros', Icono: Wallet }] : []),
+    { id: 'dispositivos', texto: 'Dispositivos', Icono: Watch },
+    { id: 'avisos', texto: 'Avisos', Icono: Bell },
     ...(!isAdmin ? [{ id: 'equipo', texto: 'Mi equipo', Icono: Users }, { id: 'metricas', texto: 'Mis métricas', Icono: HeartPulse }] : []),
     // El master no: los ejercicios de Training Lab SON los suyos.
     ...(isAdmin && !isMaster ? [{ id: 'ejercicios', texto: 'Mis ejercicios', Icono: Library }] : []),
@@ -428,6 +437,11 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
 
           {/* La cuenta en sí: correo, contraseña, sesiones, descargar sus datos y eliminarla (ver `ConfiguracionDeCuenta`). */}
           {seccion === 'cuenta' && <ConfiguracionDeCuenta />}
+
+          {seccion === 'compras' && !isAdmin && <MisCompras />}
+          {seccion === 'cobros' && isAdmin && !isMaster && <MisCobros />}
+          {seccion === 'dispositivos' && <MisDispositivos onIrAMetricas={!isAdmin ? () => setSeccion('metricas') : null} />}
+          {seccion === 'avisos' && <MisAvisos />}
 
           {/* Un atleta decide quién más lo atiende (fisio…). Los profesionales no lo tienen. */}
           {seccion === 'equipo' && !isAdmin && <MiEquipo />}
