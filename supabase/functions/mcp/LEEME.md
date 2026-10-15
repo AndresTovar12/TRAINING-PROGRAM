@@ -26,6 +26,7 @@ Vercel pasa esa dirección a esta función (ver `rewrites` en `vercel.json`).
   según el rol (atleta / coach / administrador).
 - `atleta.ts`, `coach.ts`, `admin.ts`, `comunes.ts` — las herramientas.
 - `misplanes.ts` — «Mis planes»: el catálogo del profesional (ver la sección de abajo). Lo reciben coach y administrador.
+- `misvitrina.ts` — «Mi vitrina»: planes a la venta, con confirmación para lo que toca dinero o es público.
 - `plan.ts` — leer y escribir planes con la forma exacta de la app, y de quién
   es cada programa (ver «Equipo por atleta»).
 - `app/` — COPIAS de `src/lib` (misma cuenta de "qué me toca hoy" que la app, y
@@ -136,13 +137,29 @@ Mismas tablas que la app (`src/lib/misPlanes.js`, `misPlanesDatos.js` → copiad
 | `copiar_plan_a_atleta` | Crea o reemplaza el plan de UN atleta copiando otro, en un paso y sin pasar por Mis planes: `desde_atleta` o `desde_mis_planes`, con `fases_elegidas` y `solo_tipos`/`sin_tipos`. |
 
 «La semana en que va hoy» usa el mismo puntero que la app del atleta (`wr:cursor`, `dondeVa`). Reemplazar un plan no pierde nada: la base guarda la versión anterior (`deshacer_cambio_del_plan`).
-Falta: vitrina (tanda 3) y mensajes y métricas del reloj (tanda 4).
+Falta: mensajes y métricas del reloj (tanda 4).
 
 Cosas a saber: una cosa guardada se pide por nombre o por id (`id` si hay dos con el mismo nombre; la herramienta lo pide); una carpeta, por nombre o ruta
 («Fútbol › Fuerza»), y `"sin carpeta"` es arriba de todo. La IA no puede crear una CLASE (no sube videos): solo guarda la que ya viene en el día de un atleta.
-`armarFasesDeLaIA` (en `coach.ts`) arma las fases para `crear_plan` y para guardar sin atleta. **Falta (siguientes tandas):** la vitrina, los mensajes y las métricas del reloj.
+`armarFasesDeLaIA` (en `coach.ts`) arma las fases para `crear_plan` y para guardar sin atleta. **Falta (siguientes tandas):** los mensajes y las métricas del reloj.
 
 Prueba: `scripts/prueba-mcp-misplanes.ts` (desde esta carpeta: `deno run -A --config deno.json ../../../scripts/prueba-mcp-misplanes.ts`), con una base en memoria que guarda y borra.
+
+## Mi vitrina (14 oct 2026, tanda 3)
+
+Donde un profesional pone planes a la VENTA (`src/lib/vitrinaApi.js`, `FichaDelPlanEnVenta.jsx`; tablas `vitrina_planes` y `vitrina_versiones`). Archivo: `misvitrina.ts`.
+`app/vitrinaDatos.js`, `paraQuien.js` y `oficios.js` son copias (precios mínimos, tipo de cobro, liga, edades, deportes y equipo: las mismas reglas que la ficha de la app).
+
+| Herramienta | Qué hace |
+|---|---|
+| `ver_mi_vitrina` | Tus planes con estado, qué vendes, precio, para quién es, suscriptores y liga pública; dice si los cobros ya están abiertos. |
+| `guardar_en_vitrina` | Arma la ficha. Uno NUEVO (`desde` = algo de Mis planes, o `biblioteca: true`, más `precio_mxn`) nace BORRADOR: nadie lo ve. Cambia uno existente con `plan`. Reglas de la app: mínimo $500 (programa y rutina) o $100 (workout, clase, biblioteca); workout y clase = pago único y sin chat ni técnica; biblioteca = membresía; ventana de 1 a 4 semanas; la liga se decide una vez. No sube foto ni video. |
+| `publicar_en_vitrina` | Lo vuelve público (RPC `publicar_plan`: copia lo de Mis planes como versión nueva). |
+| `retirar_de_vitrina`, `borrar_borrador_de_vitrina` | Retirar (quien ya paga lo conserva) · borrar solo lo que NUNCA se publicó. |
+
+**Confirmación de verdad (no solo en el texto):** `publicar_en_vitrina`, `retirar_de_vitrina` y cambiar la ficha de un plan que YA está publicado (su precio o su nombre se ven al momento, porque la página pública lee la ficha viva) no hacen nada sin `confirmado: true`: sin él devuelven `{ motivo: 'falta_confirmacion', va_a_pasar | cambiaria }` para que la IA se lo enseñe a la persona. Un borrador se arma y se cambia libremente. La IA no inventa el precio: lo pregunta.
+
+Prueba: `scripts/prueba-mcp-vitrina.ts` (base en memoria compartida: `scripts/mcp-prueba-comun.ts`).
 
 ## Clases en video (13 oct 2026)
 
