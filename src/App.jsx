@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, lazy, Suspense } from 'react';
-import { Dumbbell, Loader2, Lock, LogOut, Shield, Sparkles, User as UserIcon, UserCog, RefreshCw } from 'lucide-react';
+import { ChevronRight, Dumbbell, Loader2, Lock, LogOut, Sparkles, UserCog, RefreshCw } from 'lucide-react';
 import { useNewVersion } from '@/lib/useNewVersion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsDesktop } from '@/lib/useViewport';
@@ -75,105 +75,81 @@ function AccountMenu({ perfil, onPerfil }) {
   }, []);
 
   const name = profile?.full_name || profile?.username || user?.email || 'Cuenta';
-  const initial = (name[0] || 'U').toUpperCase();
+  const iniciales = name.trim().split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join('').toUpperCase() || 'U';
+  const grande = !isAdmin;
   const avatar = profile?.avatar_url;
 
   return (
     <>
     <div ref={ref} style={{ position: 'fixed', top: 'calc(16px + var(--aviso-vista, 0px))', right: 16, zIndex: 1000, fontFamily: FONT }}>
+      {/* REESTRUCTURA VISUAL (15 oct 2026): las iniciales en un cuadro azul claro, como en las capturas de Andrés. Para el atleta mide
+          52 px y queda a la altura del saludo de Home; el panel del coach conserva el de 42 px hasta que le toque su cambio. */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label="Cuenta"
+        aria-expanded={open}
         className="kp-press"
         style={{
-          width: 42, height: 42, borderRadius: 13, overflow: 'hidden', border: `1px solid ${KP.line}`,
-          background: KP.surface, cursor: 'pointer', display: 'grid', placeItems: 'center',
-          fontWeight: 800, color: KP.blue, fontSize: 15, padding: 0,
-          boxShadow: KP.shCard,
+          width: grande ? 52 : 42, height: grande ? 52 : 42, borderRadius: grande ? 16 : 13, overflow: 'hidden', border: 'none',
+          background: KP.blueSoft, cursor: 'pointer', display: 'grid', placeItems: 'center',
+          fontWeight: 800, color: KP.blue, fontSize: grande ? 17 : 15, padding: 0, boxShadow: '0 4px 14px rgba(30,64,224,0.12)',
+          marginTop: grande ? 6 : 0,
         }}
       >
-        {avatar ? (
-          <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-        ) : (
-          initial
-        )}
+        {avatar ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : iniciales}
       </button>
       {open && (
         <div
           className="animate-fade-in"
           style={{
-            position: 'absolute', top: 50, right: 0, minWidth: 236, background: KP.surface,
-            borderRadius: 18, border: `1px solid ${KP.line}`, padding: 8,
-            boxShadow: KP.shPop,
+            position: 'absolute', top: grande ? 66 : 50, right: 0, width: 288, maxWidth: 'calc(100vw - 32px)', background: KP.surface,
+            borderRadius: 20, padding: 8, boxShadow: KP.shPop,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '8px 10px 12px' }}>
-            <div
-              style={{
-                width: 40, height: 40, borderRadius: 12, overflow: 'hidden', flexShrink: 0,
-                background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`,
-                display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 800, fontSize: 15,
-              }}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 10px 12px' }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: 14, overflow: 'hidden', flexShrink: 0, background: KP.blueSoft,
+              display: 'grid', placeItems: 'center', color: KP.blue, fontWeight: 800, fontSize: 15,
+            }}
             >
-              {avatar ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initial}
+              {avatar ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : iniciales}
             </div>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 700, color: KP.ink, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
-              <div
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 5,
-                  fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8,
-                  color: isAdmin ? KP.blue : KP.ink2,
-                  background: isAdmin ? KP.blueSoft : KP.bg, borderRadius: 8,
-                  padding: '3px 8px',
-                }}
-              >
-                {isAdmin ? <Shield size={11} /> : <UserIcon size={11} />}
-                {isAdmin ? 'Admin' : t('Atleta')}
+              <div style={{ fontWeight: 700, color: KP.ink, fontSize: 15.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
+              <div style={{ fontSize: 13, color: KP.ink2, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {profile?.username ? `@${profile.username} · ` : ''}{isAdmin ? 'coach' : t('atleta')}
               </div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => { setProfileOpen(true); setOpen(false); }}
-            className="kp-press"
-            style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '11px 12px',
-              borderRadius: 12, border: 'none', background: KP.bg, cursor: 'pointer',
-              fontFamily: FONT, fontSize: 14, fontWeight: 600, color: KP.ink, textAlign: 'left',
-              marginBottom: 4,
-            }}
-          >
-            <UserCog size={16} color={KP.blue} /> Mi perfil
-          </button>
-          {/* Atajo a "Conectar con IA", que vive en Mi perfil. Andrés: "a los
-              atletas no les pusiste cómo conectarse"; al fondo de Mi perfil no
-              se encontraba. Abre Mi perfil justo ahí. */}
-          <button
-            type="button"
-            onClick={() => { setProfileOpen('ia'); setOpen(false); }}
-            className="kp-press"
-            style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '11px 12px',
-              borderRadius: 12, border: 'none', background: KP.bg, cursor: 'pointer',
-              fontFamily: FONT, fontSize: 14, fontWeight: 600, color: KP.ink, textAlign: 'left',
-              marginBottom: 4,
-            }}
-          >
-            <Sparkles size={16} color={KP.blue} /> Conectar con IA
-          </button>
+          {[
+            { texto: 'Mi perfil', Icono: UserCog, accion: () => setProfileOpen(true), puesta: true },
+            /* Atajo a "Conectar con IA", que vive en Mi perfil. Andrés: "a los atletas no les pusiste cómo conectarse";
+               al fondo de Mi perfil no se encontraba. Abre Mi perfil justo ahí. */
+            { texto: 'Conectar con IA', Icono: Sparkles, accion: () => setProfileOpen('ia') },
+          ].map(({ texto, Icono, accion, puesta }) => (
+            <button
+              key={texto} type="button" onClick={() => { accion(); setOpen(false); }} className="kp-press"
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '13px 12px', marginBottom: 2,
+                borderRadius: 14, border: 'none', background: puesta ? KP.blueSoft : 'transparent', cursor: 'pointer',
+                fontFamily: FONT, fontSize: 15.5, fontWeight: 600, color: puesta ? KP.blue : KP.ink, textAlign: 'left',
+              }}
+            >
+              <Icono size={18} color={puesta ? KP.blue : KP.ink} /> <span style={{ flex: 1 }}>{texto}</span> <ChevronRight size={16} color={KP.ink3} />
+            </button>
+          ))}
           <button
             type="button"
             onClick={signOut}
             className="kp-press"
             style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '11px 12px',
-              borderRadius: 12, border: 'none', background: KP.dangerSoft, cursor: 'pointer',
-              fontFamily: FONT, fontSize: 14, fontWeight: 600, color: KP.danger, textAlign: 'left',
+              width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '13px 12px',
+              borderRadius: 14, border: 'none', background: 'transparent', cursor: 'pointer',
+              fontFamily: FONT, fontSize: 15.5, fontWeight: 600, color: KP.danger, textAlign: 'left',
             }}
           >
-            <LogOut size={16} /> Cerrar sesión
+            <LogOut size={18} /> Cerrar sesión
           </button>
         </div>
       )}

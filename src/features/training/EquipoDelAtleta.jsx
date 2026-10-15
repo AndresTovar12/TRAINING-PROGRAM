@@ -1,10 +1,6 @@
-import { CalendarDays, Check, Clock, ListChecks, Play } from 'lucide-react';
 import { FONT, LT } from '@/lib/theme';
-import { plural } from '@/lib/plural';
 import { etiquetaDePrograma } from '@/lib/programas';
-import { aspectoDelTipo } from '@/lib/aspectoDelTipo';
 import ListaDesplegable from '@/components/ListaDesplegable';
-import { CartelDeHoy } from '@/features/training/TarjetaDeHoy';
 
 /* Lo que ve un atleta que tiene EQUIPO: su coach principal y, además, alguien
    más (un fisio…) que le puso sesiones. Sin equipo nada de esto sale y la app es
@@ -66,71 +62,3 @@ export function FiltroDeAutor({ autores, filtro, onFiltro, style }) {
   );
 }
 
-/**
- * «Hoy te toca», con TODAS las sesiones de hoy en una sola tarjeta. Una fila por
- * SESIÓN, no por persona: el doble del coach (AM y PM) y la del fisio van en la misma
- * lista, y cada fila dice de quién es con una etiqueta chica (Andrés, 2 oct 2026:
- * «el programa es un todo… no que la app se la pase separándolo»).
- * Tocar una lleva a «Plan», a ese día.
- *
- * Desde el 9 oct 2026 tiene el mismo cartel que la tarjeta de un solo programa (ver `TarjetaDeHoy`): el color de cada
- * tipo de sesión tiñe el resplandor y cada fila es de vidrio, con el ícono de su tipo y un play redondo. `style`: el lugar
- * que ocupa en la fila de Home (junto a la foto, o sola).
- */
-export function TarjetaDeHoyDeTodos({ entradas, onAbrir, onCambiarDia, conAutor = true, style }) {
-  const filas = entradas.flatMap((e) => e.partes.map((p) => ({ e, p })));
-  const todas = filas.length > 0 && filas.every(({ p }) => p.hecha);
-  return (
-    <CartelDeHoy
-      colores={filas.map(({ e }) => aspectoDelTipo(e.day).color)} etiqueta={todas ? 'Completadas' : 'Hoy te toca'} style={style}
-    >
-      <h3 className="tl-hoy-tit" style={{ marginTop: 14 }}>
-        {filas.length === 1 ? '1 sesión' : `${filas.length} sesiones`}
-      </h3>
-
-      <div style={{ marginTop: 14 }}>
-        {filas.map(({ e, p }) => {
-          const { Icono } = aspectoDelTipo(e.day);
-          const datos = [
-            p.ejercicios ? { Icono: ListChecks, texto: plural(p.ejercicios, 'ejercicio', 'ejercicios') } : null,
-            p.minutos ? { Icono: Clock, texto: p.minutos } : null,
-          ].filter(Boolean);
-          return (
-            <button
-              key={`${e.programa.id}-${e.dayIdx}-${p.bloque ?? 'dia'}`}
-              type="button"
-              onClick={() => onAbrir(e)}
-              className="tl-hoy-fila"
-            >
-              <span className="tl-hoy-fila-ic" aria-hidden="true"><Icono /></span>
-              <span className="tl-hoy-fila-tx">
-                {conAutor && (
-                  <span className="tl-hoy-fila-au" style={{ '--au': e.programa.color ?? LT.blue }}>
-                    <i aria-hidden="true" />{etiquetaDePrograma(e.programa)}
-                  </span>
-                )}
-                <span className="tl-hoy-fila-nm">{p.nombre}</span>
-                {datos.length > 0 && (
-                  <span className="tl-hoy-fila-dt">
-                    {datos.map(({ Icono, texto }) => <span key={texto}><Icono aria-hidden="true" />{texto}</span>)}
-                  </span>
-                )}
-              </span>
-              {p.hecha ? (
-                <span className="tl-hoy-fila-go ok" role="img" aria-label="Terminada"><Check /></span>
-              ) : (
-                <span className="tl-hoy-fila-go" aria-hidden="true"><Play /></span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {onCambiarDia && (
-        <button type="button" onClick={onCambiarDia} className="tl-hoy-aparte">
-          <CalendarDays aria-hidden="true" />Cambiar día
-        </button>
-      )}
-    </CartelDeHoy>
-  );
-}
