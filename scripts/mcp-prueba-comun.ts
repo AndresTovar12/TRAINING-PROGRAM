@@ -34,6 +34,8 @@ export function baseEnMemoria(
       let op: 'select' | 'insert' | 'update' | 'delete' = 'select'
       let carga: any = null
       const filtros: ((r: any) => boolean)[] = []
+      let orden: { c: string; asc: boolean } | null = null
+      let tope: number | null = null
       const afectadas = () => filas().filter((r) => filtros.every((f) => f(r)))
       const ejecutar = async () => {
         if (op === 'update' && tabla === 'plans') planesActualizados.push({ tabla, cambios: carga })
@@ -46,10 +48,18 @@ export function baseEnMemoria(
         }
         if (op === 'update') { const a = afectadas(); a.forEach((r) => Object.assign(r, structuredClone(carga))); return { data: a.map((r) => structuredClone(r)), error: null } }
         if (op === 'delete') { const a = afectadas(); datos[tabla] = filas().filter((r) => !a.includes(r)); return { data: a, error: null } }
-        return { data: afectadas().map((r) => structuredClone(r)), error: null }
+        let lista = afectadas()
+        if (orden) lista = [...lista].sort((a, b) => ((a[orden!.c] ?? '') < (b[orden!.c] ?? '') ? -1 : (a[orden!.c] ?? '') > (b[orden!.c] ?? '') ? 1 : 0) * (orden!.asc ? 1 : -1))
+        if (tope !== null) lista = lista.slice(0, tope)
+        return { data: lista.map((r) => structuredClone(r)), error: null }
       }
       const q: any = {
-        select: () => q, order: () => q, neq: () => q, limit: () => q, filter: () => q,
+        select: () => q, neq: () => q, filter: () => q, range: () => q,
+        order: (c: string, o: any = {}) => { orden = { c, asc: o?.ascending !== false }; return q },
+        limit: (k: number) => { tope = k; return q },
+        gte: (c: string, v: any) => { if (real) filtros.push((r) => (r[c] ?? '') >= v); return q },
+        lte: (c: string, v: any) => { if (real) filtros.push((r) => (r[c] ?? '') <= v); return q },
+        lt: (c: string, v: any) => { if (real) filtros.push((r) => (r[c] ?? '') < v); return q },
         eq: (c: string, v: unknown) => { if (real) filtros.push((r) => (r[c] ?? null) === (v ?? null)); return q },
         in: (c: string, vs: unknown[]) => { if (real) filtros.push((r) => vs.includes(r[c])); return q },
         is: (c: string, v: unknown) => { if (real) filtros.push((r) => (r[c] ?? null) === v); return q },

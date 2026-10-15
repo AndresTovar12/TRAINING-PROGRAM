@@ -18,12 +18,13 @@
  *   node scripts/compartir-con-mcp.mjs            copia
  *   node scripts/compartir-con-mcp.mjs --revisar  solo compara
  */
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
-const ARCHIVOS = ['training-utils.js', 'medidas.js', 'theme.js', 'unidades.js', 'plural.js', 'palabras.js', 'formatos.js', 'porVuelta.js', 'lapsos.js', 'muscles.js', 'ciencia.js', 'clases.js', 'misPlanesDatos.js', 'vitrinaDatos.js', 'paraQuien.js', 'oficios.js'];
+const ARCHIVOS = ['training-utils.js', 'medidas.js', 'theme.js', 'unidades.js', 'plural.js', 'palabras.js', 'formatos.js', 'porVuelta.js', 'lapsos.js', 'muscles.js', 'ciencia.js', 'clases.js', 'misPlanesDatos.js', 'vitrinaDatos.js', 'paraQuien.js', 'oficios.js',
+  'metricas/forma.js', 'metricas/derivados.js', 'metricas/deportes.js', 'metricas/formato.js'];
 const destino = join(raiz, 'supabase/functions/mcp/app');
 const soloRevisar = process.argv.includes('--revisar');
 
@@ -39,6 +40,7 @@ for (const nombre of ARCHIVOS) {
     console.error(`✗ supabase/functions/mcp/app/${nombre} ya no es igual a src/lib/${nombre}`);
     malos += 1;
   } else {
+    mkdirSync(dirname(copia), { recursive: true });
     writeFileSync(copia, original);
     console.log(`copiado ${nombre}`);
   }

@@ -27,6 +27,7 @@ Vercel pasa esa dirección a esta función (ver `rewrites` en `vercel.json`).
 - `atleta.ts`, `coach.ts`, `admin.ts`, `comunes.ts` — las herramientas.
 - `misplanes.ts` — «Mis planes»: el catálogo del profesional (ver la sección de abajo). Lo reciben coach y administrador.
 - `misvitrina.ts` — «Mi vitrina»: planes a la venta, con confirmación para lo que toca dinero o es público.
+- `mensajes.ts`, `metricas.ts` — los mensajes con los atletas (mandar pide confirmación) y las métricas del reloj (solo lectura).
 - `plan.ts` — leer y escribir planes con la forma exacta de la app, y de quién
   es cada programa (ver «Equipo por atleta»).
 - `app/` — COPIAS de `src/lib` (misma cuenta de "qué me toca hoy" que la app, y
@@ -137,7 +138,7 @@ Mismas tablas que la app (`src/lib/misPlanes.js`, `misPlanesDatos.js` → copiad
 | `copiar_plan_a_atleta` | Crea o reemplaza el plan de UN atleta copiando otro, en un paso y sin pasar por Mis planes: `desde_atleta` o `desde_mis_planes`, con `fases_elegidas` y `solo_tipos`/`sin_tipos`. |
 
 «La semana en que va hoy» usa el mismo puntero que la app del atleta (`wr:cursor`, `dondeVa`). Reemplazar un plan no pierde nada: la base guarda la versión anterior (`deshacer_cambio_del_plan`).
-Falta: mensajes y métricas del reloj (tanda 4).
+
 
 Cosas a saber: una cosa guardada se pide por nombre o por id (`id` si hay dos con el mismo nombre; la herramienta lo pide); una carpeta, por nombre o ruta
 («Fútbol › Fuerza»), y `"sin carpeta"` es arriba de todo. La IA no puede crear una CLASE (no sube videos): solo guarda la que ya viene en el día de un atleta.
@@ -160,6 +161,34 @@ Donde un profesional pone planes a la VENTA (`src/lib/vitrinaApi.js`, `FichaDelP
 **Confirmación de verdad (no solo en el texto):** `publicar_en_vitrina`, `retirar_de_vitrina` y cambiar la ficha de un plan que YA está publicado (su precio o su nombre se ven al momento, porque la página pública lee la ficha viva) no hacen nada sin `confirmado: true`: sin él devuelven `{ motivo: 'falta_confirmacion', va_a_pasar | cambiaria }` para que la IA se lo enseñe a la persona. Un borrador se arma y se cambia libremente. La IA no inventa el precio: lo pregunta.
 
 Prueba: `scripts/prueba-mcp-vitrina.ts` (base en memoria compartida: `scripts/mcp-prueba-comun.ts`).
+
+## Mensajes y métricas del reloj (14 oct 2026, tanda 4)
+
+**Mensajes** (`mensajes.ts`; `src/lib/mensajesApi.js`, `docs/sql/2026-10-10-mensajes.sql`). Una conversación es el PAR (atleta, profesional); quien llama es siempre el profesional.
+
+| Herramienta | Qué hace |
+|---|---|
+| `ver_bandeja_de_mensajes` | Tus conversaciones (función `bandeja`): lo último, lo sin leer y las técnicas por revisar. |
+| `leer_conversacion` | Los mensajes (30 por defecto, `antes` para ir atrás). Las fotos, videos y notas de voz solo se MENCIONAN (ni su dirección); una técnica trae su ejercicio y su estado. **Leer NO marca «visto»**: el atleta no tiene por qué creer que su coach lo leyó. |
+| `enviar_mensaje` | Solo texto (≤ 4000). Sin `confirmado: true` devuelve el mensaje exacto; revisa `puede_escribir` también antes de enseñar la vista previa. |
+| `ver_tecnicas_por_revisar`, `responder_tecnica` | Los videos de una serie sin contestar; contestar `correcta` o `corregir` (con texto) por la función `responder_tecnica` de la base. Sin `confirmado` no manda nada. La IA no ve el video: solo si la persona ya lo vio. |
+
+No incluye borrar mensajes, mandar archivos ni la marca de segundo en el video.
+
+**Métricas del reloj** (`metricas.ts`; `src/features/metricas/`). Solo LECTURA. Los cálculos son los de la app: `derivaDelAtleta` y compañía se copian a `app/metricas/` (`compartir-con-mcp` ahora copia subcarpetas), así la IA dice los mismos números que ve el coach.
+
+| Herramienta | Qué hace |
+|---|---|
+| `ver_metricas_de_atleta` | Condición, fatiga y forma con su lectura, la rampa, 8 semanas, esta semana contra la pasada, zonas de 4 semanas, recuperación contra lo normal DE ESE atleta y los últimos 5 entrenos. |
+| `ver_entrenos_de_atleta`, `abrir_entreno_de_atleta` | La lista (filtros de fecha y deporte; ritmo en min/km o velocidad en km/h según el deporte) y el detalle de uno (zonas en %, vueltas). Sin gráficas segundo a segundo. |
+| `ver_recuperacion_de_atleta` | Pulso en reposo, HRV, sueño, pasos, VO2 y peso, día por día. |
+
+**Demo workouts** (`marcar_demo_workout`, en `misplanes.ts`): solo el dueño (para otro coach la herramienta ni existe), solo un workout; es PÚBLICO, así que pide `confirmado: true`.
+
+**Confirmación de verdad:** además de `publicar_en_vitrina` y compañía, `enviar_mensaje`, `responder_tecnica` y `marcar_demo_workout` no hacen nada sin `confirmado: true`.
+
+Pruebas: `prueba-mcp-mensajes.ts` (4 grupos), `prueba-mcp-metricas.ts` (4 grupos) y el grupo del demo en `prueba-mcp-misplanes.ts`.
+**Falta:** nada de la lista de paridad de 14 oct (ver «Mis planes», «Mi vitrina» y esta sección). Fuera a propósito: importar entrenos, la pestaña Fuerza, escribir los umbrales de pulso del atleta, la ciencia de planes de otros.
 
 ## Clases en video (13 oct 2026)
 
