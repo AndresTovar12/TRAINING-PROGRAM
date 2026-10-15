@@ -63,10 +63,10 @@ for (const nombre of ARCHIVOS) {
   }
 }
 
-/* Las ayudas de Stripe (`stripe.js`) viven en las tres funciones que hablan con Stripe, idénticas: `comprar` es la original y `stripe-webhook` y `reembolsar` llevan copia. */
+/* Las ayudas de Stripe (`stripe.js`) viven en las funciones que hablan con Stripe, idénticas: `comprar` es la original y `stripe-webhook`, `reembolsar` y `mi-dinero` llevan copia. */
 {
   const original = readFileSync(join(raiz, 'supabase/functions/comprar/stripe.js'), 'utf8');
-  for (const funcion of ['stripe-webhook', 'reembolsar']) {
+  for (const funcion of ['stripe-webhook', 'reembolsar', 'mi-dinero']) {
     const copia = join(raiz, `supabase/functions/${funcion}/stripe.js`);
     const igual = existsSync(copia) && readFileSync(copia, 'utf8') === original;
     if (igual) continue;
