@@ -34,3 +34,6 @@ dist-ssr
 
 # Datos temporales de configuración de R2 (borrar al terminar)
 DATOS-R2.txt
+
+# Valores para pegar en los paneles (copia local, no se sube)
+cloudflare/variables-para-copiar.txt
