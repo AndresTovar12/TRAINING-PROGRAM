@@ -19,6 +19,9 @@ import SesionesSobreElPrograma from '@/features/admin/SesionesSobreElPrograma';
 import CambiosDelPlan from '@/features/admin/CambiosDelPlan';
 import NotasDeConsulta from '@/features/admin/NotasDeConsulta';
 import AgregarAtleta from '@/features/admin/AgregarAtleta';
+import SinLugares from '@/features/admin/SinLugares';
+import { useLugares } from '@/features/admin/useLugares';
+import { etiquetaDeLugares, sinLugares } from '@/lib/limiteDeAtletas';
 import { AgregarAlEquipo, AvisosDelCoach, FilaDeEquipo, GrupoPlegable } from '@/features/admin/EquipoDeAtleta';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
@@ -1459,9 +1462,13 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta, onIrA, onAb
 
   // Alta de atletas por el coach: el diálogo, y los que aún no han activado.
   const [agregando, setAgregando] = useState(false);
+  const [sinLugaresAbierto, setSinLugaresAbierto] = useState(false);
   const [sinActivar, setSinActivar] = useState({}); // id de atleta -> token
   // Sube de uno en uno para volver a leer la lista cuando algo la cambia.
   const [recarga, setRecarga] = useState(0);
+  // Cuántos atletas a mano puede agregar todavía (`null` = aún no se sabe: el servidor decide al agregar).
+  const lugares = useLugares(recarga);
+  const abrirAgregar = () => (sinLugares(lugares) ? setSinLugaresAbierto(true) : setAgregando(true));
 
   useEffect(() => {
     let cancelled = false;
@@ -1708,7 +1715,7 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta, onIrA, onAb
         {/* Alguien se unió al equipo de un atleta suyo: se lo dice su coach principal. */}
         <AvisosDelCoach avisos={avisos} onEntendido={avisoEntendido} />
         {!viendoComo && !isMaster && (
-          <PrimerosPasos clave={recarga} onAgregar={() => setAgregando(true)} onIrA={onIrA} onAbrirPerfil={onAbrirPerfil} compu={isDesktop} />
+          <PrimerosPasos clave={recarga} onAgregar={abrirAgregar} onIrA={onIrA} onAbrirPerfil={onAbrirPerfil} compu={isDesktop} />
         )}
         {modoTabla && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginBottom: 16 }}>
@@ -1726,7 +1733,7 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta, onIrA, onAb
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
           <button
             type="button"
-            onClick={() => setAgregando(true)}
+            onClick={abrirAgregar}
             className="kp-press"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 8,
@@ -1738,6 +1745,14 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta, onIrA, onAb
           >
             <UserPlus size={18} /> {t('Agregar atleta')}
           </button>
+          {etiquetaDeLugares(lugares) && (
+            <span
+              title={t('Atletas que has agregado a mano')}
+              style={{ fontSize: 13, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: sinLugares(lugares) ? T.danger : T.text2 }}
+            >
+              {etiquetaDeLugares(lugares)}
+            </span>
+          )}
           {/* La otra forma de sumar a alguien: que se registre él y pegue este
               código. Va al lado del botón porque es el mismo momento — 'quiero
               un atleta más' — solo que el trabajo lo hace la otra persona. */}
@@ -1909,12 +1924,16 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta, onIrA, onAb
       {agregando && (
         <AgregarAtleta
           onCerrar={() => setAgregando(false)}
+          /* Si otro lugar se llenó mientras escribía, se cierra el formulario y se cuenta qué sigue. */
+          onSinLugares={() => { setAgregando(false); setRecarga((n) => n + 1); setSinLugaresAbierto(true); }}
           /* Se vuelve a leer la lista en vez de meter la fila a mano: el
              resumen trae cuentas y fechas que solo sabe el servidor, y una
              fila inventada aquí se vería distinta a las demás. */
           onCreado={() => setRecarga((n) => n + 1)}
         />
       )}
+
+      {sinLugaresAbierto && <SinLugares lugares={lugares} onCerrar={() => setSinLugaresAbierto(false)} onIrA={onIrA} />}
 
       <style>{`
         .spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}

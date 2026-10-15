@@ -102,9 +102,9 @@ async function activa(c: Obj, cambios: Obj = {}, nombreDelComprador: string | nu
 async function registraPago(c: Obj, { bruto, cobro, factura }: { bruto: number; cobro: string | null; factura: string | null }) {
   const busca = cobro ? bd.from('pagos').select('id').eq('stripe_charge_id', cobro) : factura ? bd.from('pagos').select('id').eq('stripe_invoice_id', factura) : null
   if (busca) { const { data: ya } = await busca.maybeSingle(); if (ya) return }
-  const { data: coach } = await bd.from('profiles').select('is_owner').eq('id', c.coach_id).maybeSingle()
+  const { data: coach } = await bd.from('profiles').select('is_owner, comision_especial').eq('id', c.coach_id).maybeSingle()
   const esDueno = !!coach?.is_owner
-  const r = repartoDeUnCobro({ bruto, tasa: tasaDeComision({ esDueno }) })
+  const r = repartoDeUnCobro({ bruto, tasa: tasaDeComision({ esDueno, comisionEspecial: coach?.comision_especial }) })
   let transferencia: string | null = null
   if (!esDueno && r.parte_coach_centavos > 0 && cobro) {
     const { data: cuenta } = await bd.from('cuentas_stripe').select('acct_id').eq('coach_id', c.coach_id).maybeSingle()

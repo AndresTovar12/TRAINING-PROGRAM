@@ -7,8 +7,13 @@
 export const VERSION_DE_API = '2024-06-20';
 export const MONEDA = 'mxn';
 
-/** La comisión de la app (Andrés, 11 oct 2026): 20 % base. El dueño vende al 0 %. Los escalones por volumen entran en la etapa 4. */
-export const tasaDeComision = ({ esDueno }) => (esDueno ? 0 : 0.2);
+/** La comisión de la app (Andrés, 11 oct 2026): 20 % base. El dueño vende al 0 %. Los escalones por volumen entran en la etapa 4.
+ *  Un profesional puede tener una COMISIÓN ESPECIAL puesta por el dueño (14 oct 2026; fracción de 0 a 1, p. ej. 0.1 = 10 %): gana sobre la base. */
+export const tasaDeComision = ({ esDueno, comisionEspecial = null }) => {
+  if (esDueno) return 0;
+  const especial = comisionEspecial === null || comisionEspecial === undefined || comisionEspecial === '' ? NaN : Number(comisionEspecial);
+  return Number.isFinite(especial) && especial >= 0 && especial <= 1 ? especial : 0.2;
+};
 
 /** Cómo se reparte UN cobro. Todo en centavos enteros para que no se pierda ni se invente un centavo: la comisión se redondea y lo demás es del coach. */
 export function repartoDeUnCobro({ bruto, tasa }) {

@@ -124,6 +124,9 @@ export async function llamarFuncion(quien: Quien, nombre: string, cuerpo: unknow
   }).catch(() => null)
   if (!res) throw new Error('No se pudo contactar al servidor de Training Lab.')
   const datos = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(datos?.error || `La operación falló (error ${res.status}).`)
+  if (!res.ok) {
+    // `codigo` deja que cada herramienta reconozca un caso concreto (p. ej. LIMITE_DE_ATLETAS) sin leer el texto.
+    throw Object.assign(new Error(datos?.error || `La operación falló (error ${res.status}).`), { codigo: datos?.codigo as string | undefined })
+  }
   return datos
 }

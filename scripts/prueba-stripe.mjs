@@ -13,6 +13,13 @@ const raro = repartoDeUnCobro({ bruto: 599.99, tasa: 0.15 });
 assert.equal(Math.round((raro.comision_app + raro.parte_coach) * 100), 59999, 'comisión + parte del coach = lo que pagó, sin perder ni inventar un centavo');
 assert.equal(tasaDeComision({ esDueno: true }), 0);
 assert.equal(tasaDeComision({ esDueno: false }), 0.2);
+// Comisión especial puesta por el dueño: gana sobre la base; el dueño sigue en 0; lo inválido cae a la base.
+assert.equal(tasaDeComision({ esDueno: false, comisionEspecial: 0.1 }), 0.1);
+assert.equal(tasaDeComision({ esDueno: false, comisionEspecial: '0.15' }), 0.15);
+assert.equal(tasaDeComision({ esDueno: false, comisionEspecial: 0 }), 0);
+assert.equal(tasaDeComision({ esDueno: false, comisionEspecial: null }), 0.2);
+assert.equal(tasaDeComision({ esDueno: false, comisionEspecial: 1.5 }), 0.2);
+assert.equal(tasaDeComision({ esDueno: true, comisionEspecial: 0.5 }), 0);
 
 /* ---- El formulario como lo pide Stripe ---- */
 assert.equal(

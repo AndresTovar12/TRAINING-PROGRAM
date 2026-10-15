@@ -12,6 +12,7 @@ import { problemaDeContrasena } from '@/lib/contrasena';
 import { useConfirmacion } from '@/components/Confirmacion';
 import ListaDesplegable from '@/components/ListaDesplegable';
 import ContrasenaNueva from '@/features/admin/ContrasenaNueva';
+import PoderesDelProfesional from '@/features/admin/PoderesDelProfesional';
 import { plural } from '@/lib/plural';
 import { useIsWide } from '@/lib/useViewport';
 import { T, FONT, KP } from '@/lib/theme';
@@ -483,6 +484,9 @@ function FichaCoach({ coach, atletas, otrosCoaches, master, onCerrar, onVerComo,
           <CalendarDays size={14} /> Su cuenta es del {desde}
         </div>
       )}
+
+      {/* Tope de atletas, comisión y suspender la vitrina: solo el dueño (14 oct 2026). */}
+      <PoderesDelProfesional coach={coach} onCambiado={onCambiado} />
 
       {/* LO QUE PUEDE HACER EL ADMIN, de menor a mayor daño.
           Andrés, 20 sep 2026: "no puedo eliminar coaches, y opciones así; a
