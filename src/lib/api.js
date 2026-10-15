@@ -3,6 +3,7 @@ import { esperadasEstaSemana } from '@/lib/comoVa';
 import { conIndice } from '@/lib/indiceDeVideo';
 import { TOPE_POR_ARCHIVO_MB, avisoSiEsMuyGrande } from '@/lib/espacio';
 import { anotaEspacio } from '@/lib/espacioApi';
+import { ErrorDeLimite, comoErrorDeLimite } from '@/lib/limiteDeAtletas';
 
 const AVATAR_BUCKET = 'avatars';
 
@@ -1279,7 +1280,7 @@ export async function completarMiPerfil({ usuario, tipo, nombre, profesion, coac
     p_coach_usuario: coachUsuario || null,
     p_genero: genero || null,
   });
-  if (error) throw error;
+  if (error) throw comoErrorDeLimite(error);
   return data;
 }
 
@@ -1310,7 +1311,11 @@ export async function invitarAtleta({ nombre, apellido }) {
 
   if (!res) throw new Error('No se pudo contactar al servidor. Revisa tu conexión.');
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body?.error || `No se pudo agregar al atleta (error ${res.status}).`);
+  if (!res.ok) {
+    // Los 5 atletas gratis ya se llenaron: la pantalla cuenta las dos salidas (que compren, o pagar más lugares).
+    if (body?.codigo === 'LIMITE_DE_ATLETAS') throw new ErrorDeLimite(body.error, body);
+    throw new Error(body?.error || `No se pudo agregar al atleta (error ${res.status}).`);
+  }
   return body; // { token, atleta_id, usuario, full_name }
 }
 
@@ -1375,7 +1380,8 @@ export const activarInvitacion = ({ token, username, password, email, genero, no
  * ------------------------------------------------------------------------ */
 async function llamar(nombre, args = {}) {
   const { data, error } = await supabase.rpc(nombre, args);
-  if (error) throw error;
+  // Estas funciones las usa el ATLETA: si el profesional ya llenó sus lugares, lo que ve es un aviso suyo.
+  if (error) throw comoErrorDeLimite(error);
   return data;
 }
 

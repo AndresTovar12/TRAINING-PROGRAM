@@ -1163,11 +1163,24 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
 
   server.registerTool('agregar_atleta', {
     title: 'Agregar un atleta',
-    description: 'Agrega un atleta con su nombre y apellido (sin correo) y devuelve su link de invitación. Desde ya aparece en tu lista y se le puede armar el plan; él o ella elige su usuario y contraseña al abrir el link. El link no caduca.',
+    description: 'Agrega un atleta con su nombre y apellido (sin correo) y devuelve su link de invitación. Desde ya aparece en tu lista y se le puede armar el plan; él o ella elige su usuario y contraseña al abrir el link. El link no caduca. Cada profesional puede agregar 5 atletas gratis a mano (quien compra un plan no cuenta); al llegar al tope devuelve `sin_lugares` y hay que explicarle las dos salidas.',
     inputSchema: { nombre: z.string(), apellido: z.string() },
     annotations: ESCRIBE,
   }, seguro(async ({ nombre, apellido }: any) => {
-    const r = await llamarFuncion(quien, 'invitar-atleta', { nombre, apellido })
+    let r: any
+    try {
+      r = await llamarFuncion(quien, 'invitar-atleta', { nombre, apellido })
+    } catch (e: any) {
+      // Cada profesional nuevo puede agregar 5 atletas gratis a mano; después hay dos caminos. Se le explican a la persona, no se reintenta.
+      if (e?.codigo === 'LIMITE_DE_ATLETAS') {
+        return respuesta({
+          listo: false,
+          sin_lugares: true,
+          mensaje: 'Ya agregaste todos tus atletas gratis. Para agregar más hay dos caminos: (1) que compren un programa tuyo (quien compra no cuenta entre tus atletas), o (2) pagar derechos para tener más lugares, desde la app en «Mis atletas» → «Agregar atleta». Cuéntaselo así a la persona; no hay otra forma de agregarlo.',
+        })
+      }
+      throw e
+    }
     return respuesta({
       listo: true,
       atleta: r.full_name ?? `${nombre} ${apellido}`,

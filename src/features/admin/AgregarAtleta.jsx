@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Check, Copy, Loader2, QrCode, Share2, UserPlus, X } from 'lucide-react';
 import { invitarAtleta, ligaDeInvitacion } from '@/lib/api';
+import { ErrorDeLimite } from '@/lib/limiteDeAtletas';
 import MostrarQR from '@/features/admin/MostrarQR';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { T, FONT, KP } from '@/lib/theme';
@@ -17,7 +18,7 @@ import { T, FONT, KP } from '@/lib/theme';
  * Dos campos y un botón. El correo es cosa del cliente, no del coach: él no
  * tiene por qué saberlo ni tener que preguntárselo antes de poder trabajar.
  */
-export default function AgregarAtleta({ onCerrar, onCreado }) {
+export default function AgregarAtleta({ onCerrar, onCreado, onSinLugares }) {
   const { t } = usePalabras();
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
@@ -41,7 +42,9 @@ export default function AgregarAtleta({ onCerrar, onCreado }) {
       // en la lista aunque el coach todavía no cierre esta ventana.
       onCreado?.(r);
     } catch (err) {
-      setError(err.message);
+      // Se llenaron los lugares gratis: no es un error de captura, es otro camino (comprar o pagar lugares).
+      if (err instanceof ErrorDeLimite && onSinLugares) onSinLugares(err);
+      else setError(err.message);
     } finally {
       setCreando(false);
     }

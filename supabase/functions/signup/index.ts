@@ -58,6 +58,24 @@ function textoDeError(e: unknown): string {
 
 const USERNAME_RE = /^[a-zA-Z0-9_.]{3,30}$/
 
+/**
+ * ¿Ese profesional ya llenó los atletas que puede agregar? Se revisa ANTES de
+ * crear la cuenta para no dejar un atleta a medias. La base también lo impide
+ * con un disparador (`cuida_limite_de_atletas`).
+ */
+async function profesionalLleno(
+  admin: ReturnType<typeof createClient>,
+  profesional: string,
+): Promise<boolean> {
+  const { data: limite } = await admin.rpc('limite_de_atletas', { p: profesional })
+  if (typeof limite !== 'number' || limite < 0) return false
+  const { data: usados } = await admin.rpc('atletas_a_mano', { p: profesional })
+  return (typeof usados === 'number' ? usados : 0) >= limite
+}
+
+const AVISO_LLENO =
+  'Este entrenador ya no puede recibir más atletas por ahora. Avísale, o crea tu cuenta sin entrenador y únete después.'
+
 Deno.serve(async (req) => {
   const origin = req.headers.get('Origin')
 
@@ -163,6 +181,9 @@ Deno.serve(async (req) => {
       return json({ error: `No encontramos ningún entrenador con "${coachRef}"` }, 400, origin)
     }
     coachId = encontrado as string
+    if (await profesionalLleno(admin, coachId)) {
+      return json({ error: AVISO_LLENO, codigo: 'PROFESIONAL_LLENO' }, 409, origin)
+    }
   }
 
   // Crear usuario confirmado (sin email de verificación)
@@ -207,6 +228,11 @@ Deno.serve(async (req) => {
       .eq('id', userId)
     if (errPerfil) {
       console.error('update profiles falló:', textoDeError(errPerfil))
+      if (/LIMITE_DE_ATLETAS/.test(textoDeError(errPerfil))) {
+        // Otro atleta llenó el último lugar justo ahora: se deshace el alta.
+        await admin.auth.admin.deleteUser(userId).catch(() => {})
+        return json({ error: AVISO_LLENO, codigo: 'PROFESIONAL_LLENO' }, 409, origin)
+      }
       return json({ error: `Se creó la cuenta pero falló su perfil: ${textoDeError(errPerfil)}` }, 400, origin)
     }
   }

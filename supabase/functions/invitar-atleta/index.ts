@@ -63,6 +63,32 @@ function textoDeError(e: unknown): string {
   return String(e)
 }
 
+/**
+ * ¿El profesional ya llenó sus lugares gratis? Devuelve {limite, usados} si sí.
+ * La base también lo impide con un disparador (`cuida_limite_de_atletas`); esto
+ * es para avisar ANTES de crear la cuenta y no dejar un atleta a medias.
+ * Los atletas que COMPRAN un plan no cuentan: solo los que se agregan a mano.
+ */
+async function lugaresLlenos(
+  admin: ReturnType<typeof createClient>,
+  profesional: string,
+): Promise<{ limite: number; usados: number } | null> {
+  const { data: limite } = await admin.rpc('limite_de_atletas', { p: profesional })
+  if (typeof limite !== 'number' || limite < 0) return null
+  const { data: usados } = await admin.rpc('atletas_a_mano', { p: profesional })
+  const u = typeof usados === 'number' ? usados : 0
+  return u >= limite ? { limite, usados: u } : null
+}
+
+/** Texto fijo que suelta el disparador de la base: LIMITE_DE_ATLETAS|<límite>|<usados>. */
+function limiteDeError(e: unknown): { limite: number; usados: number } | null {
+  const m = /LIMITE_DE_ATLETAS\|(\d+)\|(\d+)/.exec(textoDeError(e))
+  return m ? { limite: Number(m[1]), usados: Number(m[2]) } : null
+}
+
+const AVISO_LIMITE =
+  'Ya agregaste todos tus atletas gratis. Para agregar más: que compren un programa tuyo, o paga derechos para tener más lugares.'
+
 /** Texto aleatorio para el token y para la contraseña de mientras. */
 function alAzar(bytes: number): string {
   const b = new Uint8Array(bytes)
@@ -128,6 +154,9 @@ Deno.serve(async (req) => {
     return json({ error: 'Solo un coach con la cuenta activa puede agregar atletas' }, 403, origin)
   }
 
+  const lleno = await lugaresLlenos(admin, quienPide)
+  if (lleno) return json({ error: AVISO_LIMITE, codigo: 'LIMITE_DE_ATLETAS', ...lleno }, 409, origin)
+
   const nombreCompleto = [nombre, apellido].filter(Boolean).join(' ')
   const usuario = usuarioProvisional(nombre, apellido)
 
@@ -163,6 +192,9 @@ Deno.serve(async (req) => {
     // Sin perfil correcto, el atleta quedaría suelto y sin coach. Se deshace
     // el alta entera en vez de dejar basura a medias.
     await admin.auth.admin.deleteUser(atletaId).catch(() => {})
+    // Otra pestaña pudo llenar el último lugar entre la revisión y aquí.
+    const tope = limiteDeError(errPerfil)
+    if (tope) return json({ error: AVISO_LIMITE, codigo: 'LIMITE_DE_ATLETAS', ...tope }, 409, origin)
     return json({ error: `No se pudo enlazar el atleta: ${textoDeError(errPerfil)}` }, 400, origin)
   }
 

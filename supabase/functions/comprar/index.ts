@@ -87,8 +87,9 @@ Deno.serve(async (req) => {
       if ((delCorreo ?? 0) >= 5 || (deTodos ?? 0) >= 300) return json({ error: 'Demasiados intentos. Espera unos minutos y vuelve a probar.', codigo: 'muchos_intentos' }, 429, origen)
     }
 
-    const { data: coach } = await bd.from('profiles').select('id, is_owner, is_active').eq('username', usuario).eq('role', 'admin').maybeSingle()
-    if (!coach || coach.is_active === false) return json({ error: 'Este plan ya no está disponible.' }, 404, origen)
+    const { data: coach } = await bd.from('profiles').select('id, is_owner, is_active, vitrina_suspendida').eq('username', usuario).eq('role', 'admin').maybeSingle()
+    // Vitrina suspendida por el dueño: no se vende (14 oct 2026).
+    if (!coach || coach.is_active === false || coach.vitrina_suspendida) return json({ error: 'Este plan ya no está disponible.' }, 404, origen)
     const { data: plan } = await bd.from('vitrina_planes').select('id, coach_id, titulo, tipo, precio_mxn, version_n, estado').eq('coach_id', coach.id).eq('slug', slug).eq('estado', 'publicado').maybeSingle()
     if (!plan) return json({ error: 'Este plan ya no está disponible.' }, 404, origen)
     if (plan.tipo === 'personalizado') return json({ error: 'Los planes personalizados todavía no se pueden comprar.' }, 400, origen)
