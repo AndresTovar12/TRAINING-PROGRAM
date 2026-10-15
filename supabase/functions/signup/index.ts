@@ -141,7 +141,7 @@ Deno.serve(async (req) => {
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return json({ error: 'Correo inválido' }, 400, origin)
   }
-  if (!email) email = `${username.toLowerCase()}@traininglab.app`
+  if (!email) email = `${username.toLowerCase()}@sin-correo.traininglabapp.com`
 
   const isCoach = accountType === 'coach'
 

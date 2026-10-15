@@ -186,7 +186,7 @@ Deno.serve(async (req) => {
   // Sin correo propio se deja uno de relleno, igual que en `signup`. Sirve
   // para que la cuenta tenga la forma que espera el sistema de acceso; para
   // recuperar la contraseña no vale, y por eso la pantalla se lo advierte.
-  const correoFinal = email || `${username.toLowerCase()}@traininglab.app`
+  const correoFinal = email || `${username.toLowerCase()}@sin-correo.traininglabapp.com`
 
   const { error: errAuth } = await admin.auth.admin.updateUserById(atleta.id, {
     email: correoFinal,

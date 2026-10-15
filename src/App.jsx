@@ -8,6 +8,7 @@ import { AppStateProvider } from '@/contexts/AppStateContext';
 import { PalabrasProvider, usePalabras } from '@/contexts/PalabrasContext';
 import { PlanProvider } from '@/contexts/PlanContext';
 import AuthScreen from '@/features/auth/AuthScreen';
+import NuevaContrasena from '@/features/auth/NuevaContrasena';
 import ActivarInvitacion from '@/features/auth/ActivarInvitacion';
 import UnirseAlEquipo from '@/features/auth/UnirseAlEquipo';
 import Inicio from '@/features/inicio/Inicio';
@@ -375,7 +376,7 @@ function InvitacionConSesion({ onSalir }) {
 }
 
 export default function App() {
-  const { loading, user, profile } = useAuth();
+  const { loading, user, profile, recuperando } = useAuth();
   // Mi perfil del coach: lo abre el menú de la cuenta y también su panel (ver `AccountMenu`).
   const [perfilDelCoach, setPerfilDelCoach] = useState(false);
 
@@ -430,6 +431,9 @@ export default function App() {
 
   /* Las páginas de venta (`/@usuario`, `/@usuario/plan`, y las dos de regreso del pago) las ve cualquiera, sin cuenta. Con cuenta a medio crear (le falta el inicio) se sigue el
      camino de siempre y, al terminarlo, la dirección sigue siendo la del plan: ahí se retoma la compra. */
+  // Abrió el enlace de «¿Olvidaste tu contraseña?»: antes que cualquier otra pantalla, escoge la nueva.
+  if (recuperando && user) return <NuevaContrasena />;
+
   const tienda = rutaDeTienda(window.location.pathname);
   // La de «Listo» (después de pagar) se ve SIEMPRE: quien compró sin cuenta la estrena ahí con su inicio pendiente, y ese inicio no debe taparle cómo abrir o instalar la app.
   if (tienda && (tienda.tipo === 'lista' || loading || !user || (profile && profile.perfil_completo !== false && !profile.inicio_paso))) {

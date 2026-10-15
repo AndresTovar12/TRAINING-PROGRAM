@@ -161,10 +161,12 @@ Deno.serve(async (req) => {
   const nombreCompleto = [nombre, apellido].filter(Boolean).join(' ')
   const usuario = usuarioProvisional(nombre, apellido)
 
-  // Correo de relleno. `@traininglab.app` es el mismo dominio inventado que ya
-  // usa `signup`, y el trozo al azar evita chocar con otro atleta del mismo
-  // nombre. Se reemplaza por el de verdad si el atleta decide dar uno.
-  const correoRelleno = `pendiente.${alAzar(8).toLowerCase()}@traininglab.app`
+  // Correo de relleno. `@sin-correo.traininglabapp.com` es un subdominio NUESTRO y SIN
+  // buzón: nadie puede recibir ahí (antes se usaba `traininglab.app`, que es de otra
+  // persona: con «recuperar contraseña» sus enlaces le habrían llegado a ella). El trozo
+  // al azar evita chocar con otro atleta del mismo nombre. Se reemplaza por el de verdad
+  // si el atleta decide dar uno.
+  const correoRelleno = `pendiente.${alAzar(8).toLowerCase()}@sin-correo.traininglabapp.com`
 
   const { data: creado, error: errCrear } = await admin.auth.admin.createUser({
     email: correoRelleno,
