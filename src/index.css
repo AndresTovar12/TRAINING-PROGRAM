@@ -411,3 +411,11 @@ body {
   .tl-descanso { padding: 22px; }
   .tl-descanso-ver { display: inline-flex; width: auto; }
 }
+
+/* Reestructura visual (15 oct 2026): el hilo entre renglones de un Grupo (`components/ui/Grupo.jsx`).
+   Empieza a 16 px del borde, como en iOS, y la primera fila no lo lleva: lo pone el selector de hermanos. */
+.ui-fila + .ui-fila { position: relative; }
+.ui-fila + .ui-fila::before { content: ''; position: absolute; top: 0; left: 16px; right: 0; height: 1px; background: #ECEEF2; }
+button.ui-fila:hover { background: #F7F8FB; }
+button.ui-fila:active { background: #F0F2F6; }
+button.ui-fila:focus-visible { outline: 2px solid #1E40E0; outline-offset: -2px; }

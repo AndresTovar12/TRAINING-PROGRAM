@@ -126,7 +126,29 @@ const kpCard = (extra = {}) => ({
   ...extra,
 });
 
+/* ============================================================
+   REESTRUCTURA VISUAL (15 oct 2026) — lo que comparten las piezas de `components/ui/`.
+   Viene de las 43 capturas de Andrés en «REESTRUCTURA VISUAL»: mismo azul de siempre, pero en
+   degradado hacia marino para lo que resume una pantalla, listas agrupadas blancas sobre gris claro,
+   títulos de grupo en negro (ya no la etiqueta gris en mayúsculas) y botones altos.
+   ============================================================ */
+const UI = {
+  // El degradado de la tarjeta que resume una pantalla y de la barra lateral.
+  azul: 'linear-gradient(140deg, #2448E8 0%, #1733B8 48%, #0D1A66 100%)',
+  azulVertical: 'linear-gradient(180deg, #1E40E0 0%, #1530A8 55%, #0C1A5E 100%)',
+  azulSombra: '0 14px 32px rgba(23,51,184,0.26)',
+  // Superficies y hilos
+  fondo: '#F2F3F7',
+  tarjeta: '#FFFFFF',
+  relleno: '#EBEDF1', // botón secundario, buscador, fondo del segmentado
+  hilo: '#ECEEF2',
+  // Medidas
+  rTarjeta: 20, rGrupo: 18, rBoton: 16, rCampo: 14, rPastilla: 8,
+  altoBoton: 52, altoFila: 56,
+  sombraGrupo: '0 1px 2px rgba(17,19,24,0.04)',
+};
+
 export {
   T, FONT, NUM_STYLE, LT, PHASE_COLORS, DAY_FULL, CAT_COLORS, tipoDeSesion, COLORES_TIPO, oficioCorto,
-  KP, SPACE, ACCENTS, eyebrow, kpCard,
+  KP, SPACE, ACCENTS, eyebrow, kpCard, UI,
 };
