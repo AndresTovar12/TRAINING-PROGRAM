@@ -1,51 +1,43 @@
-import { Activity, Flame, History, Play, Timer } from 'lucide-react';
-import { CartelDeHoy } from '@/features/training/TarjetaDeHoy';
+import { Play, Timer } from 'lucide-react';
+import { Marco, botonBlanco } from '@/features/training/home/HoyTeToca';
 import { relojDeCronometro } from '@/lib/entrenoLibre';
 import { nombreDelDeporte } from '@/lib/metricas/deportes';
 import { haceCuanto, textoDeLaSemana } from '@/lib/semanaLibre';
 import { distanciaTexto } from '@/lib/metricas/formato';
-import { COLOR_DE_DEPORTE, ICONOS } from '@/features/metricas/tonos';
-import './widgets.css';
+import { NUM_STYLE } from '@/lib/theme';
 
-/* EL CARTEL «ENTRENAR» (12 oct 2026): lo primero que ve en Home quien no tiene plan. Es el mismo cartel de «Hoy te toca» (azul, con el resplandor teñido del deporte y el play redondo),
-   pero cuenta SU semana: los siete días con los que ya entrenó, cuántos entrenos y cuánto tiempo, y cuál fue el último. Tocar cualquier parte abre la hoja de deportes; con un cronómetro
-   corriendo, el cartel pasa a «Entreno en curso» con el tiempo y el play se vuelve «Seguir». */
+/* LA TARJETA AZUL «ENTRENAR» (12 oct 2026; forma nueva el 15 oct, reestructura visual): lo primero que ve en Home quien no tiene plan. Cuenta SU semana —los siete días con
+   los que ya entrenó, cuántos entrenos y cuál fue el último— y lleva a la hoja de deportes con «Empezar». Quien todavía no ha entrenado nunca lee «Entrena hoy, aunque no
+   tengas plan». Con un cronómetro corriendo pasa a «Entreno en curso» con el tiempo, y el botón dice «Seguir». */
 
 const LETRAS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 const DIAS_LARGOS = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
 
 export default function HeroDeEntrenar({ deporte, semana, ultimo, enCurso = false, segundos = 0, alAbrir }) {
-  const Icono = ICONOS[deporte] ?? Activity;
-  const color = COLOR_DE_DEPORTE[deporte] ?? '#7A8191';
   const hechos = semana.dias.map((d, i) => (d.entreno ? DIAS_LARGOS[i] : null)).filter(Boolean);
-  const abre = (e) => { e?.stopPropagation?.(); alAbrir(); };
-
+  const titulo = enCurso ? <>{nombreDelDeporte(deporte)} · <span style={NUM_STYLE}>{relojDeCronometro(segundos)}</span></> : ultimo ? 'Entrenar' : 'Entrena hoy, aunque no tengas plan';
+  const detalle = enCurso ? 'Tu entreno sigue contando'
+    : ultimo ? [textoDeLaSemana(semana), `Último: ${nombreDelDeporte(ultimo.deporte)}${ultimo.distancia_m >= 100 ? ` · ${distanciaTexto(ultimo.distancia_m)}` : ''} · ${haceCuanto(ultimo)}`].join(' · ')
+      : 'Correr, bici, nadar o caminar: la app lleva tu tiempo y tu distancia.';
   return (
-    <CartelDeHoy colores={[color]} etiqueta={enCurso ? 'Entreno en curso' : 'Listo para entrenar'} onClick={alAbrir}>
-      <div className="tl-hoy-escena">
-        <div className="tl-hoy-discos"><span className="tl-hoy-disco" aria-hidden="true"><Icono /></span></div>
-      </div>
-      <div>
-        <h3 className="tl-hoy-tit">{enCurso ? <>{nombreDelDeporte(deporte)} · <span style={{ fontVariantNumeric: 'tabular-nums' }}>{relojDeCronometro(segundos)}</span></> : 'Entrenar'}</h3>
-        <div className="tl-hoy-meta">
-          {enCurso
-            ? <span><Timer aria-hidden="true" />Toca para seguir</span>
-            : (
-              <>
-                <span><Flame aria-hidden="true" />{textoDeLaSemana(semana)}</span>
-                {ultimo && <span><History aria-hidden="true" />Último: {nombreDelDeporte(ultimo.deporte)}{ultimo.distancia_m >= 100 ? ` · ${distanciaTexto(ultimo.distancia_m)}` : ''} · {haceCuanto(ultimo)}</span>}
-              </>
-            )}
+    <Marco etiqueta={enCurso ? 'Entreno en curso' : 'Entrenar'} punto={enCurso ? '#7CF0C5' : '#FFB547'}>
+      <h3 style={{ margin: '16px 0 0', fontSize: 28, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.12 }}>{titulo}</h3>
+      <p style={{ margin: '6px 0 0', fontSize: 14.5, fontWeight: 600, opacity: 0.85, lineHeight: 1.4 }}>{detalle}</p>
+      {ultimo && !enCurso && (
+        <div role="img" aria-label={hechos.length ? `Esta semana entrenaste ${hechos.join(', ')}` : 'Esta semana todavía no has entrenado'} style={{ display: 'flex', gap: 6, marginTop: 14 }}>
+          {semana.dias.map((d, i) => (
+            <span key={d.dia} aria-hidden="true" style={{
+              width: 30, height: 30, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800,
+              background: d.entreno ? '#fff' : 'rgba(255,255,255,0.14)', color: d.entreno ? '#1E40E0' : 'rgba(255,255,255,0.86)',
+              boxShadow: d.esHoy ? '0 0 0 2px rgba(255,255,255,0.8)' : 'none',
+            }}
+            >{LETRAS[i]}</span>
+          ))}
         </div>
-      </div>
-      <div className="tl-hoy-abajo" style={{ '--tc': color }}>
-        <div className="tl-w-semana" role="img" aria-label={hechos.length ? `Esta semana entrenaste ${hechos.join(', ')}` : 'Esta semana todavía no has entrenado'}>
-          {semana.dias.map((d, i) => <span key={d.dia} className={`tl-w-dia${d.entreno ? ' hecho' : ''}${d.esHoy ? ' hoy' : ''}`} aria-hidden="true">{LETRAS[i]}</span>)}
-        </div>
-        <button type="button" className={`tl-hoy-big${enCurso ? ' ver' : ''}`} aria-label={enCurso ? 'Seguir el entreno' : 'Elegir un deporte y entrenar'} onClick={abre}>
-          <span className="tl-hoy-play">{enCurso ? <Timer aria-hidden="true" /> : <Play aria-hidden="true" />}</span>
-        </button>
-      </div>
-    </CartelDeHoy>
+      )}
+      <button type="button" className="kp-press" onClick={alAbrir} style={{ ...botonBlanco, width: '100%', marginTop: 18 }}>
+        {enCurso ? <><Timer size={18} aria-hidden="true" />Seguir</> : <><Play size={18} fill="currentColor" aria-hidden="true" />Empezar</>}
+      </button>
+    </Marco>
   );
 }

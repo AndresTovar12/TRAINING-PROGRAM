@@ -9,13 +9,13 @@ import {
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useIsDesktop, useIsWide } from '@/lib/useViewport';
-import { T, FONT, NUM_STYLE, LT, tipoDeSesion, KP, eyebrow } from '@/lib/theme';
+import { T, FONT, NUM_STYLE, LT, tipoDeSesion, KP, eyebrow, UI } from '@/lib/theme';
 import { usePlan, ComoPrograma } from '@/contexts/PlanContext';
 import { usePerfilDeLaVista } from '@/contexts/VistaContext';
 import { useRecuperacionReciente } from '@/lib/useRecuperacionReciente';
 import AbreMetricas from '@/features/metricas/AbreMetricas';
 import {
-  sessionIdFor, calc1RM, today, greeting, isLoadedExercise,
+  sessionIdFor, calc1RM, today, isLoadedExercise,
   resolveCursor, defaultCursor, isValidCursor, findPreviousWeight, historialDePeso,
   formatIntensity,
   sessionForToday, weekOverview, weekdayToday, weekdayLabel,
@@ -25,8 +25,7 @@ import {
 } from '@/lib/training-utils';
 import HojaFlotante from '@/components/HojaFlotante';
 import CienciaDelPlan from '@/features/training/CienciaDelPlan';
-import { TarjetaDeSalud, TarjetaDeFoto, CintaDeCiencia } from '@/features/training/TarjetasDeHome';
-import { TarjetaDeHoy, TarjetaDeDescanso } from '@/features/training/TarjetaDeHoy';
+import { CintaDeCiencia } from '@/features/training/TarjetasDeHome';
 import { programasConCiencia } from '@/lib/ciencia';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
 import { aKilos, desdeKilos, etiquetaUnidad } from '@/lib/unidades';
@@ -34,11 +33,15 @@ import { maximoParaHome, useUnRM } from '@/lib/unRM';
 import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
 import { useAppState, useStorage } from '@/contexts/AppStateContext';
 import { altaReciente } from '@/lib/comoVa';
-import { FiltroDeAutor, EtiquetaDeAutor, TarjetaDeHoyDeTodos } from '@/features/training/EquipoDelAtleta';
+import { FiltroDeAutor, EtiquetaDeAutor } from '@/features/training/EquipoDelAtleta';
 import AvisoDeInvitacion from '@/features/training/AvisoDeInvitacion';
 import { HojaDeBiblioteca, TarjetaDeBiblioteca } from '@/features/training/BibliotecaDeClases';
 import EntrenoLibre from '@/features/libre/EntrenoLibre';
-import Widget from '@/features/libre/Widget';
+import TiraDeSemana from '@/features/training/home/TiraDeSemana';
+import { HoyTeToca, HoyTeTocaEquipo, HoyDescansas } from '@/features/training/home/HoyTeToca';
+import { CuadroDeSalud, CuadroDePrograma, CuadroBlanco } from '@/features/training/home/Cuadros';
+import Saludo from '@/features/training/home/Saludo';
+import { Grupo, Fila, IconoDeFila } from '@/components/ui';
 
 const Explorar = lazy(() => import('@/features/explorar/Explorar'));
 import {
@@ -1999,61 +2002,14 @@ const CursorSelector = ({ current, sessionsData, onSelect, onClose }) => {
   );
 };
 
-const initialsFrom = (name) => {
-  const parts = (name || '').trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return 'U';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-};
-
-/**
- * La fila de 1RM en Home: el molde de «Mi plan · Ver» (ícono redondo, título, lo que dice y «Ver ›»).
- * Andrés, 7 oct 2026: «el de 1RM está bien como está, porque es una calculadora». Salud y Ciencia tienen lo suyo
- * en `TarjetasDeHome`.
- */
-const FilaDeUnRM = ({ valor, boton, onClick }) => (
-  <button
-    type="button" onClick={onClick} className="kp-press"
-    style={{
-      width: '100%', textAlign: 'left', cursor: 'pointer', fontFamily: FONT, background: LT.surface, borderRadius: 22,
-      padding: 16, border: `1.5px solid ${LT.blueSoft}`, display: 'flex', alignItems: 'center', gap: 14,
-    }}
-  >
-    <span style={{
-      width: 52, height: 52, borderRadius: '50%', background: LT.blueSoft, color: LT.blue,
-      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-    }}><Calculator size={22} /></span>
-    <span style={{ flex: 1, minWidth: 0 }}>
-      <span style={{ display: 'block', fontSize: 17, fontWeight: 700, color: LT.text }}>1RM</span>
-      <span style={{ display: 'block', fontSize: 12, color: LT.text2, marginTop: 1, overflowWrap: 'anywhere', ...NUM_STYLE }}>{valor}</span>
-    </span>
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0,
-      background: LT.blueSoft, color: LT.blue, borderRadius: 999,
-      padding: '8px 11px 8px 13px', fontSize: 13, fontWeight: 800,
-    }}>
-      {boton} <ChevronRight size={15} />
-    </span>
-  </button>
-);
-
 const HomeView = ({
   sessionsData, wellness, reloj, oneRMs = {}, fechasRM = {}, onStartSession, onGoTab, onAbrirHoja, onVerPrograma, cursor, onChangeCursor,
   hayEquipo = false, conAutor = false, entradas = [], autores = [], filtro = null, onFiltro, onAbrirEntrada, resumenDeEquipo = null,
   altasDeEquipo = [],
 }) => {
-  /* LAS PROPORCIONES EN COMPU. Andrés, 18 sep 2026: "en teléfono no hay ningún
-     problema con HOME, pero en computadora las proporciones están un poco
-     raras para los atletas nada más". El diagnóstico, medido en 1440 px: los
-     botones son de ancho completo porque en un teléfono eso es lo correcto, y
-     aquí "Ver mi plan" acababa midiendo 980 px de ancho por 44 de alto. Una
-     banda, no un botón. En compu se les pone tope y se dejan a la izquierda,
-     que es donde empieza el texto de su tarjeta. */
-  const esCompu = useIsDesktop();
-  // Tablet o más: la tarjeta de hoy y la foto van lado a lado. En un celular la de hoy toma todo el ancho y la foto baja a una banda.
+  // Tablet o más: la tarjeta de hoy a la izquierda y los cuadros a la derecha (reestructura visual, 15 oct 2026).
   const esAncha = useIsWide();
   const { t, coach, salud } = usePalabras();
-  const tope = esCompu ? { maxWidth: 260 } : null;
   const { phases: PLAN, planMeta, kind, estructura, programas, bibliotecas, demoActiva } = usePlan();
   // "Varias semanas": las tarjetas dicen la semana de corrido, no la fase.
   const deCorrido = estructura === 'semanas';
@@ -2100,16 +2056,12 @@ const HomeView = ({
     return { exercises: n, duration: n ? (minutosDelNombre(d.name || '') || '~55 min') : tipo };
   }, [next, entradasDelDia]);
 
-  const { text: greetText } = greeting();
   /* LA FOTO DE LA TARJETA: la de la fase de hoy; si no tiene, la del plan; si tampoco, la tarjeta oscura. Con equipo puede
      no tocar sesión del coach principal hoy (`next` vacío) y aun así hay una fase en la que va: se usa esa. */
   const faseDeHoy = next?.phase ?? PLAN.find((f) => f.id === cursor?.phaseId) ?? PLAN[0] ?? null;
   const fotoDeHome = faseDeHoy ? (faseDeHoy.image || planMeta?.foto || '') : '';
-  const etiquetaFoto = kind === 'weekly' ? 'Tu rutina'
-    : deCorrido ? (next ? semanaDe(next) : (planMeta?.title || 'Tu programa')) : `Fase ${faseDeHoy?.num ?? ''}`;
   const tituloFoto = kind === 'weekly' ? (planMeta?.title || 'Rutina semanal')
     : deCorrido ? (planMeta?.title || 'Tu programa') : (faseDeHoy?.name ?? '');
-  const botonFoto = kind === 'weekly' ? 'Ver rutina' : 'Ver programa';
   // Lo de 1RM: el máximo que guardó más recientemente (los de antes no tienen fecha: el más pesado), en su unidad.
   const unidadPeso = profile?.unidad_peso || 'kg';
   const mejorRM = useMemo(() => maximoParaHome(oneRMs, fechasRM, LEVANTAMIENTOS), [oneRMs, fechasRM]);
@@ -2122,18 +2074,6 @@ const HomeView = ({
      Strength» (Andrés, 29 sep 2026). Ver `lib/sesiones.js`. */
   const sesionesDeHoy = next ? sesionesDelTitulo(entradasDelDia.length > 1 ? entradasDelDia.map((h) => h.day) : next.day) : [];
   const sessionTitle = next ? (sinDuracion(next.day.name || '') || textoDeSesiones(sesionesDeHoy) || next.day.day) : '';
-
-  /* La tarjeta de hoy en un celular toma todo el ancho (antes compartía la fila con la foto y le tocaba media pantalla: el nombre se
-     partía en tres renglones); en tablet o compu va lado a lado con la foto. Sola, en compu, no se estira por toda la pantalla. */
-  const lugarDeHoy = esAncha ? { flex: '1 1 0' } : { width: '100%' };
-  const lugarSola = { width: '100%', ...(esCompu ? { maxWidth: 560 } : null) };
-  const filaDeHoy = { display: 'flex', flexDirection: esAncha ? 'row' : 'column', gap: 12, padding: '0 18px 12px' };
-  const fotoDeHoy = (
-    <TarjetaDeFoto
-      foto={fotoDeHome} etiqueta={etiquetaFoto} titulo={tituloFoto} boton={botonFoto} onAbrir={onVerPrograma} banda={!esAncha}
-      style={esAncha ? { flex: '1 1 0', minWidth: 0 } : { flex: 'none', minHeight: 150 }}
-    />
-  );
 
   /* Las sesiones de la tarjeta de hoy, una por una, cada una con el aspecto de su tipo (ícono y color). Un día con dos entradas
      (mañana y tarde) es UN día con dos sesiones. */
@@ -2156,48 +2096,43 @@ const HomeView = ({
     !sessionMeta.agrupadas && next?.sesionesHoy > 1 ? { texto: `${next.sesionesHoy} sesiones hoy` } : null,
   ].filter(Boolean);
 
-  /* Sin sesión hoy. Antes esta tarjeta REEMPLAZABA el tablero entero: quien descansaba perdía de vista su bienestar, su semana y su
-     programa, y la app parecía otra. Ahora solo ocupa el lugar de la sesión; lo de abajo se queda. La tira de días tampoco se repite
-     aquí: ya está en "Tu semana". */
-  const sinSesionHoy = (
-    <div style={{ padding: '0 18px 12px' }}>
-      <TarjetaDeDescanso
-        /* Si el coach puso descanso, se dice descanso: "no tienes rutina asignada" suena a que algo falta, y no falta nada. */
-        titulo={week.days.find((d) => d.isToday)?.descanso ? 'Hoy descansas' : 'Hoy no te toca entrenar'}
-        siguiente={week.next ? `Sigue: ${weekdayLabel(week.next.key)}${nombreDeSemana(week.next) ? ` · ${nombreDeSemana(week.next)}` : ''}` : null}
-        vacia={t('Aún no hay entrenamientos en tu semana.')}
-        boton={t('Ver mi plan')}
-        onVerPlan={() => onGoTab('plan')}
-        style={lugarSola}
-      />
-    </div>
+  /* REESTRUCTURA VISUAL (15 oct 2026): Home con la forma de las capturas de Andrés. Arriba el saludo y la tira de la semana;
+     la tarjeta azul «Hoy te toca»; cuatro cuadros (Salud, la fase, Entrenar libre, Activity card); 1RM y Ciencia abajo.
+     En tablet o compu, la tarjeta de hoy a la izquierda y los cuadros a la derecha. Lo que hacía cada cosa no cambió:
+     solo su forma. «Plan · Ver» y la foto de la fase son ahora el cuadro de la fase (con la foto de fondo si la tiene). */
+  const tipoHoy = next ? tipoDeSesion(next.day).label : '';
+  const sesionesDeLaTarjeta = next
+    ? (entradasDelDia.length > 1
+      ? entradasDelDia.map((h, i) => {
+        const n = (h.day.exercises || []).filter((e) => !e.isNote).length;
+        return {
+          day: h.day, nombre: sesionesDelCartel[i]?.nombre,
+          meta: [tipoDeSesion(h.day).label, n ? plural(n, 'ejercicio', 'ejercicios') : null, minutosDelNombre(h.day.name || '') || null].filter(Boolean),
+        };
+      })
+      : [{ day: next.day, nombre: sessionTitle, meta: [tipoHoy, ...metaDelCartel.map((m) => m.texto).filter((x) => x !== tipoHoy)] }])
+    : [];
+  const posicionDeFase = faseDeHoy ? PLAN.findIndex((f) => f.id === faseDeHoy.id) : -1;
+  const etiquetaDeFase = kind === 'weekly' ? 'Tu rutina' : deCorrido ? 'Tu programa' : `Fase ${faseDeHoy?.num ?? ''}`;
+  const subDeFase = kind === 'weekly' || !next ? null
+    : deCorrido ? semanaDe(next)
+      : next.phase.mode === 'microcycle' ? 'Microciclo' : `Semana ${next.week.num} de ${next.phase.weeks}`;
+  const conLibre = !soloLectura && atletaId && !demoActiva;
+
+  const descanso = (
+    <HoyDescansas
+      /* Si el coach puso descanso, se dice descanso: "no tienes rutina asignada" suena a que algo falta, y no falta nada. */
+      titulo={week.days.find((d) => d.isToday)?.descanso ? 'Hoy descansas' : 'Hoy no te toca entrenar'}
+      siguiente={week.next ? `Sigue: ${weekdayLabel(week.next.key)}${nombreDeSemana(week.next) ? ` · ${nombreDeSemana(week.next)}` : ''}` : null}
+      vacia={t('Aún no hay entrenamientos en tu semana.')}
+      boton={t('Ver mi plan')}
+      onVerPlan={() => onGoTab('plan')}
+    />
   );
 
   return (
-    <div style={{ paddingBottom: 100, background: LT.bg, minHeight: '100svh', fontFamily: FONT }}>
-      {/* Header de perfil — paddingRight reserva espacio para el botón de cuenta fijo */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '24px 68px 14px 18px' }}>
-        <div style={{
-          width: 56, height: 56, borderRadius: '50%', overflow: 'hidden',
-          background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`,
-          display: 'flex', alignItems: 'center',
-          justifyContent: 'center', fontWeight: 800, color: '#fff', fontSize: 18, flexShrink: 0,
-          boxShadow: KP.shBtn,
-        }}>
-          {profile?.avatar_url
-            ? <img src={profile.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : initialsFrom(displayName)}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={eyebrow(KP.blue)}>{greetText}</div>
-          <div style={{ fontSize: 'clamp(20px, 5.6vw, 24px)', fontWeight: 800, color: LT.text, lineHeight: 1.12, letterSpacing: -0.4, marginTop: 6, overflowWrap: 'anywhere' }}>{displayName}</div>
-          {next && kind !== 'weekly' && (
-            <div style={{ fontSize: 12.5, color: LT.text2, fontWeight: 600, marginTop: 5 }}>
-              Fase {next.phase.num} · {next.phase.mode === 'microcycle' ? 'Microciclo' : `Semana ${next.week.num} de ${next.phase.weeks}`}
-            </div>
-          )}
-        </div>
-      </div>
+    <div style={{ paddingBottom: 110, background: UI.fondo, minHeight: '100svh', fontFamily: FONT }}>
+      <Saludo nombre={displayName} />
 
       {/* Alguien quiere atenderlo: se lo pregunta la portada (solo si hay una pendiente). */}
       <AvisoDeInvitacion />
@@ -2205,7 +2140,7 @@ const HomeView = ({
       {/* Un profesional de su equipo le dio de alta: se lo dice la portada durante 7 días. */}
       {estadoListo && altasDeEquipo.filter((p) => !avisosVistos[`alta:${p.id}`]).map((p) => (
         <div key={p.id} style={{
-          margin: '0 18px 12px', background: KP.mintSoft, borderRadius: 16, padding: '13px 15px',
+          margin: '12px 18px 0', background: KP.mintSoft, borderRadius: 16, padding: '13px 15px',
           display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
         }}>
           <Check size={18} color={KP.mint} strokeWidth={3} style={{ flexShrink: 0 }} />
@@ -2220,7 +2155,7 @@ const HomeView = ({
           sigue en «Programa», solo para consultar: no se bloquea nada. */}
       {estadoListo && altaReciente(profile?.alta_en) && !avisosVistos[`alta:perfil:${profile.alta_en}`] && (
         <div style={{
-          margin: '0 18px 12px', background: KP.mintSoft, borderRadius: 16, padding: '13px 15px',
+          margin: '12px 18px 0', background: KP.mintSoft, borderRadius: 16, padding: '13px 15px',
           display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
         }}>
           <Check size={18} color={KP.mint} strokeWidth={3} style={{ flexShrink: 0 }} />
@@ -2231,173 +2166,63 @@ const HomeView = ({
         </div>
       )}
 
-      {/* CON EQUIPO la sesión de hoy es UNA tarjeta con lo de todos, cada cosa con el
-          nombre de quien la puso (Andrés, 1 oct 2026). Sin equipo, la de siempre. */}
-      {hayEquipo ? (
-        <>
-          <FiltroDeAutor autores={autores} filtro={filtro} onFiltro={onFiltro} style={{ padding: '0 18px 12px' }} />
-          {entradas.length > 0 ? (
-            /* Con una foto que enseñar, la tarjeta de todos y la foto van juntas (en celular, una debajo de la otra).
-               Es la foto del programa en que va el atleta (el de su coach principal); sin foto, la tarjeta sola como siempre. */
-            <div style={fotoDeHome ? filaDeHoy : { padding: '0 18px 12px' }}>
-              <TarjetaDeHoyDeTodos
-                entradas={entradas}
-                onAbrir={onAbrirEntrada}
+      <div style={{
+        display: 'grid', gridTemplateColumns: esAncha ? 'minmax(0, 1.08fr) minmax(0, 1fr)' : 'minmax(0, 1fr)', gap: esAncha ? 20 : 16,
+        padding: '16px 18px 0', maxWidth: 1180, margin: '0 auto', alignItems: 'start',
+      }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
+          <TiraDeSemana dias={week.days} />
+          {/* CON EQUIPO la sesión de hoy es UNA tarjeta con lo de todos, cada cosa con el nombre de quien la puso
+              (Andrés, 1 oct 2026). Sin equipo, la de un programa. */}
+          {hayEquipo && <FiltroDeAutor autores={autores} filtro={filtro} onFiltro={onFiltro} />}
+          {hayEquipo ? (
+            entradas.length > 0 ? (
+              <HoyTeTocaEquipo
+                entradas={entradas} onAbrir={onAbrirEntrada} conAutor={conAutor}
                 onCambiarDia={kind !== 'weekly' && !filtro ? onChangeCursor : undefined}
-                conAutor={conAutor}
-                style={fotoDeHome ? lugarDeHoy : lugarSola}
               />
-              {fotoDeHome && fotoDeHoy}
-            </div>
-          ) : sinSesionHoy}
-        </>
-      ) : next ? (
-        /* La tarjeta de hoy y la foto de la fase. Desde el 7 oct 2026 la foto ya NO abre la sesión de hoy (eso lo hace la tarjeta de hoy y
-           la pestaña «Entrenar»): abre el programa completo, y por eso el botón «Mi plan · Ver» de más abajo ya no sale cuando está. */
-        <div style={filaDeHoy}>
-          <TarjetaDeHoy
-            sesiones={sesionesDelCartel}
-            completada={cursorCompleted}
-            meta={metaDelCartel}
-            onAbrir={() => onStartSession(next.phase, next.week, next.dayIdx)}
-            /* En una rutina que se repite el día lo decide el calendario, no un puntero: el selector se abría, se elegía un día y no pasaba nada. */
-            onCambiarDia={kind !== 'weekly' ? onChangeCursor : undefined}
-            style={lugarDeHoy}
-          />
-          {fotoDeHoy}
+            ) : descanso
+          ) : next ? (
+            <HoyTeToca
+              sesiones={sesionesDeLaTarjeta}
+              completada={cursorCompleted}
+              onAbrir={() => onStartSession(next.phase, next.week, next.dayIdx)}
+              /* En una rutina que se repite el día lo decide el calendario, no un puntero: el selector se abría, se elegía un día y no pasaba nada. */
+              onCambiarDia={kind !== 'weekly' ? onChangeCursor : undefined}
+            />
+          ) : descanso}
         </div>
-      ) : sinSesionHoy}
 
-      {/* Row: salud + progreso. En compu van lado a lado; en un celular «Tu semana» baja a su propia línea: sus siete
-          días necesitan ~290 px y la mitad de un celular da ~130 (Andrés, 7 oct 2026: «el viernes no alcanza a estar en
-          la misma línea»). `flex: 1 1 0` con `minWidth` hace las dos cosas: parten iguales cuando caben, y se acomodan
-          en filas cuando no. */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: '0 18px 12px' }}>
-        {/* Salud (antes «Estado hoy»: ahí también se va a conectar el Apple Watch). Ver `TarjetasDeHome`. */}
-        <TarjetaDeSalud
-          dolor={wellness[today()]?.soreness ?? null} reloj={reloj} salud={salud} onAbrir={() => onAbrirHoja('wellness')} tope={tope}
-        />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+            {/* Salud (ahí también se conecta el reloj): dolor del día o lo que midió el reloj. */}
+            <CuadroDeSalud dolor={wellness[today()]?.soreness ?? null} reloj={reloj} salud={salud} onAbrir={() => onAbrirHoja('wellness')} />
+            {/* La puerta al programa completo, con la foto de la fase de fondo si la tiene. */}
+            {faseDeHoy && (
+              <CuadroDePrograma
+                etiqueta={etiquetaDeFase} titulo={tituloFoto || planMeta?.title || t('Mi plan')} sub={subDeFase} foto={fotoDeHome}
+                fases={kind === 'weekly' || deCorrido ? 0 : PLAN.length} actual={posicionDeFase >= 0 ? posicionDeFase : null}
+                onAbrir={onVerPrograma}
+              />
+            )}
+            {/* Entrenar por su cuenta y su activity card. Quien mira la app de otra persona no los ve. */}
+            {conLibre && <EntrenoLibre userId={atletaId} unidadPeso={unidadPeso} variante="cuadros" />}
+          </div>
 
-        {/* Tu semana: qué días entrenas, cuál es hoy y qué sigue */}
-        <div style={{ flex: '1 1 0', minWidth: 290, background: LT.surface, borderRadius: 22, padding: 20 }}>
-          <div style={{ fontSize: 14, color: LT.text2 }}>Tu semana</div>
-          <div style={{ fontSize: 13, color: LT.text, marginTop: 6 }}>
-            {week.trainingDays} {t(`${week.trainingDays === 1 ? 'día' : 'días'} de entrenamiento`)}
-          </div>
-          <div style={{ display: 'flex', gap: 4, marginTop: 14, flexWrap: 'wrap' }}>
-            {week.days.map((d) => (
-              <div
-                key={d.key}
-                title={nombreDeSemana(d) || 'Descanso'}
-                style={{
-                  flex: '1 1 0', minWidth: 26, textAlign: 'center', borderRadius: 8,
-                  padding: '7px 2px', fontSize: 10.5, fontWeight: 800,
-                  background: d.isToday ? LT.blue : d.hasSession ? LT.blueSoft : LT.surface2,
-                  color: d.isToday ? '#fff' : d.hasSession ? LT.blue : LT.text3,
-                  border: d.isToday ? 'none' : `1px solid ${d.hasSession ? 'transparent' : LT.border}`,
-                }}
-              >
-                {d.key[0]}
-              </div>
-            ))}
-          </div>
-          <div style={{ fontSize: 11, color: LT.text3, marginTop: 10, lineHeight: 1.4 }}>
-            {week.next
-              ? `Siguiente: ${weekdayLabel(week.next.key)}${nombreDeSemana(week.next) ? ` · ${nombreDeSemana(week.next)}` : ''}`
-              : t('Sin entrenamientos esta semana')}
-          </div>
+          {/* 1RM no sale a un paciente de fisio; Ciencia, solo si el plan la trae (cada plan trae la suya; ver `lib/ciencia.js`). */}
+          {con1RM && (
+            <Grupo>
+              <Fila
+                izquierda={<IconoDeFila><Calculator size={18} /></IconoDeFila>} texto="1RM" onClick={() => onAbrirHoja('oneRM')}
+                valor={mejorRM ? `${mejorRM.nombre} ${desdeKilos(mejorRM.kg, unidadPeso)} ${etiquetaUnidad(unidadPeso)}` : 'Anotar'}
+              />
+            </Grupo>
+          )}
+          {conCiencia && <CintaDeCiencia onAbrir={() => onAbrirHoja('science')} />}
+          {/* Las bibliotecas de clases que compró («todas mis clases»): una tarjeta por biblioteca. */}
+          {bibliotecas.map((b) => <TarjetaDeBiblioteca key={b.id} biblioteca={b} onAbrir={() => onAbrirHoja(`biblioteca:${b.id}`)} />)}
         </div>
       </div>
-
-      {/* 1RM (una fila) y Ciencia (una cinta de una línea): se abren como hoja encima. 1RM no sale a un paciente de fisio,
-          y Ciencia no sale si el plan no tiene (cada plan trae la suya; ver `lib/ciencia.js`). */}
-      {con1RM && (
-        <div style={{ padding: '0 18px 12px' }}>
-          <FilaDeUnRM
-            onClick={() => onAbrirHoja('oneRM')}
-            valor={mejorRM ? `${mejorRM.nombre} ${desdeKilos(mejorRM.kg, unidadPeso)} ${etiquetaUnidad(unidadPeso)}` : 'Sin datos'}
-            boton={mejorRM ? 'Ver' : 'Anotar'}
-          />
-        </div>
-      )}
-      {conCiencia && (
-        <div style={{ padding: '0 18px 12px' }}>
-          <CintaDeCiencia onAbrir={() => onAbrirHoja('science')} />
-        </div>
-      )}
-      {/* Las bibliotecas de clases que compró («todas mis clases»): una tarjeta por biblioteca. */}
-      {bibliotecas.map((b) => (
-        <div key={b.id} style={{ padding: '0 18px 12px' }}>
-          <TarjetaDeBiblioteca biblioteca={b} onAbrir={() => onAbrirHoja(`biblioteca:${b.id}`)} />
-        </div>
-      ))}
-
-      {/* Info del plan. Con la tarjeta de foto de arriba, esa ya es la puerta al programa; este botón solo sale
-          cuando no está (con equipo, o un día sin sesión). */}
-      {!(next && !hayEquipo) && (
-      <div style={{ padding: '0 18px 20px' }}>
-        {/* Esta tarjeta es la puerta al programa completo, y tiene que
-            fijar el nivel a mano. Antes solo cambiaba de pestaña, así que
-            te dejaba en la última pantalla que hubieras visto de "Plan" —
-            normalmente tu propio workout, que es justo lo contrario de lo
-            que promete. Con la pestaña "Plan" apuntando ahora a tu semana,
-            esta es la única forma de ver las fases sin pasar por ahí. */}
-        {/* ES UN BOTÓN Y TIENE QUE PARECERLO. Andrés, 18 sep 2026: "acabo de ver
-            que sí hay un botón para eso en home, pero creo que podrías
-            visualmente mejorarlo un poco para que resalte un poquito más de
-            que es un botón". Era una tarjeta blanca igual a las de alrededor,
-            con una flechita gris: nada la distinguía de la información que
-            solo se lee.
-
-            Y era un `div` con onClick, que además de no parecer botón no lo
-            era: con el teclado no se alcanzaba y un lector de pantalla no lo
-            anunciaba. Ahora es un <button> de verdad, con borde y con la
-            acción escrita en azul a la derecha. */}
-        <button
-          type="button"
-          onClick={onVerPrograma}
-          className="kp-press"
-          style={{
-            width: '100%', textAlign: 'left', cursor: 'pointer', fontFamily: FONT,
-            background: LT.surface, borderRadius: 22, padding: 16,
-            border: `1.5px solid ${LT.blueSoft}`,
-            display: 'flex', alignItems: 'center', gap: 14,
-          }}
-        >
-          <span style={{
-            width: 52, height: 52, borderRadius: '50%', background: LT.blueSoft,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            color: LT.blue,
-          }}><Dumbbell size={22} /></span>
-          <span style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ display: 'block', fontSize: 17, fontWeight: 700, color: LT.text }}>
-              {planMeta?.title || t('Mi plan')}
-            </span>
-            <span style={{ display: 'block', fontSize: 12, color: LT.text2, marginTop: 1 }}>
-              {kind === 'weekly'
-                ? `Rutina semanal · ${week.trainingDays} ${week.trainingDays === 1 ? 'día' : 'días'}`
-                : deCorrido
-                  ? pluralS(semanasDelPlan(PLAN), 'semana')
-                  : `${pluralS(PLAN.length, 'fase')} · ${pluralS(semanasDelPlan(PLAN), 'semana')}`}
-            </span>
-          </span>
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0,
-            background: LT.blueSoft, color: LT.blue, borderRadius: 999,
-            padding: '8px 11px 8px 13px', fontSize: 13, fontWeight: 800,
-          }}>
-            Ver <ChevronRight size={15} />
-          </span>
-        </button>
-      </div>
-      )}
-
-      {/* Entrenar por su cuenta (correr, bici, nadar…): el plan va arriba y esto abajo (Andrés, 12 oct 2026). Quien mira la app de otra persona no lo ve. */}
-      {!soloLectura && atletaId && !demoActiva && (
-        <div style={{ padding: '0 18px 28px' }}>
-          <EntrenoLibre userId={atletaId} unidadPeso={unidadPeso} variante="compacta" />
-        </div>
-      )}
     </div>
   );
 };
@@ -2738,7 +2563,9 @@ const NoPlanState = ({ onAbrirHoja, alIrAExplorar }) => {
   const conLibre = !soloLectura && !!userId;
   const sinEntrenador = !coach && programas.length === 0; // sin entrenador y sin ningún plan: a ellos se les empuja hacia Explorar
   return (
-  <div style={{ padding: '84px 20px 120px', maxWidth: 560, margin: '0 auto' }}>
+  <div style={{ background: UI.fondo, minHeight: '100svh' }}>
+  <Saludo nombre={perfil?.full_name || perfil?.username} />
+  <div style={{ padding: '16px 18px 120px', maxWidth: 560, margin: '0 auto' }}>
     {bibliotecas.length > 0 && (
       // Quien compró una biblioteca de clases no espera un plan: lo que tiene son sus clases.
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 18 }}>
@@ -2753,10 +2580,11 @@ const NoPlanState = ({ onAbrirHoja, alIrAExplorar }) => {
     )}
     {conLibre ? (
       // Sin plan, Home son widgets (12 oct 2026): el cartel «Entrenar», Activity card, Explorar, Demo workout, Salud y 1RM, y «Tus entrenos».
-      <EntrenoLibre userId={userId} unidadPeso={perfil?.unidad_peso || 'kg'} conEmpujon={sinEntrenador} alIrAExplorar={alIrAExplorar}>
-        <Widget tono="coral" Icono={Heart} titulo="Salud" sub="Cómo te sientes hoy" alTocar={() => onAbrirHoja('wellness')} />
-        <Sin1RM><Widget tono="claro" Icono={Calculator} titulo="1RM" sub="Calcula tu máximo" alTocar={() => onAbrirHoja('oneRM')} /></Sin1RM>
-      </EntrenoLibre>
+      <EntrenoLibre
+        userId={userId} unidadPeso={perfil?.unidad_peso || 'kg'} conEmpujon={sinEntrenador} alIrAExplorar={alIrAExplorar}
+        cuadros={<CuadroDeSalud dolor={null} onAbrir={() => onAbrirHoja('wellness')} />}
+        chicos={<Sin1RM><CuadroBlanco Icono={Calculator} titulo="1RM" color="#00A372" fondo="#E3F6EF" onClick={() => onAbrirHoja('oneRM')} /></Sin1RM>}
+      />
     ) : (
       <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
         <button type="button" onClick={() => onAbrirHoja('wellness')} className="kp-press"
@@ -2784,6 +2612,7 @@ const NoPlanState = ({ onAbrirHoja, alIrAExplorar }) => {
         <Palabra>¿Tienes el código de un entrenador? Ponlo en Mi perfil → Mi equipo.</Palabra>
       </div>
     )}
+  </div>
   </div>
   );
 };

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Compass, Dumbbell, Play, Timer } from 'lucide-react';
+import { Play, Share2, Timer } from 'lucide-react';
 import HojaFlotante from '@/components/HojaFlotante';
 import { LT, FONT } from '@/lib/theme';
 import { usePlan } from '@/contexts/PlanContext';
@@ -7,22 +7,21 @@ import TarjetaDeExplorar from '@/features/explorar/TarjetaDeExplorar';
 import { relojDeCronometro } from '@/lib/entrenoLibre';
 import { nombreDelDeporte } from '@/lib/metricas/deportes';
 import { deporteDelCartel, resumenDeLaSemana, textoDeLaSemana } from '@/lib/semanaLibre';
-import { ICONOS } from '@/features/metricas/tonos';
 import HeroDeEntrenar from './HeroDeEntrenar';
 import HojaDeDemos from './HojaDeDemos';
 import OpcionesDeEntrenar from './OpcionesDeEntrenar';
 import PantallaDelCronometro from './PantallaDelCronometro';
 import ResumenLibre from './ResumenLibre';
 import TusEntrenos from './TusEntrenos';
-import Widget from './Widget';
-import WidgetDeActivityCard from './WidgetDeActivityCard';
 import { useDemos } from './useDemos';
 import { useCronometroLibre, useEntrenosRecientes } from './useEntrenoLibre';
+import { Cuadro, CuadroBlanco, PlayChico } from '@/features/training/home/Cuadros';
 
 /* EL ENTRENO LIBRE, armado (12 oct 2026): lo que ve alguien en Home o en la pestaña Entrenar para entrenar por su cuenta, tenga o no un plan.
-     · `variante="completa"` (sin plan): el cartel «Entrenar» (su semana, su último entreno, play), una cuadrícula de widgets (Activity card, Explorar, Demo workout y los que se le pasen
-       de hijos: Salud, 1RM…) y «Tus entrenos».
-     · `variante="compacta"` (con plan): una tira azul «Entrenar» y «Tus entrenos»; el cartel grande de Home ya es el de su plan.
+     · `variante="completa"` (sin plan): la tarjeta azul «Entrenar» (su semana, su último entreno, «Empezar»), la de Explorar, los cuadros de color (`cuadros`, p. ej. Salud,
+       y Activity card), los blancos chicos (Demo workout y `chicos`, p. ej. 1RM) y «Tus entrenos» (reestructura visual, 15 oct 2026).
+     · `variante="cuadros"` (Home con plan, reestructura visual del 15 oct 2026): solo dos cuadros, «Entrenar libre» y «Activity card», para ir en la cuadrícula de Home junto a Salud
+       y la fase. «Tus entrenos» queda en la pestaña Entrenar.
      · `enLinea` (pestaña Entrenar): las opciones puestas directo, y «Tus entrenos».
    El cronómetro vive en `localStorage` y sigue aunque se cierre la hoja: el cartel pasa a «Entreno en curso». «Demo workout» sale solo si hay demos; al elegir uno se abre como el workout de hoy
    (`abreDemo`) y `alIrAHome` (si se da) lleva a Home. Ver `lib/entrenoLibre.js` y `lib/semanaLibre.js`. */
@@ -31,7 +30,7 @@ import { useCronometroLibre, useEntrenosRecientes } from './useEntrenoLibre';
 const yaSeLeOfrecio = () => { try { return sessionStorage.getItem('tl:explorar-ofrecido') === '1'; } catch { return false; } };
 const marcaOfrecido = () => { try { sessionStorage.setItem('tl:explorar-ofrecido', '1'); } catch { /* sin almacenamiento: puede salir otra vez */ } };
 
-export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = false, variante = 'completa', alIrAHome = null, conEmpujon = false, alIrAExplorar = null, children = null }) {
+export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = false, variante = 'completa', alIrAHome = null, conEmpujon = false, alIrAExplorar = null, cuadros = null, chicos = null }) {
   const crono = useCronometroLibre(userId);
   const { filas, recarga } = useEntrenosRecientes(userId, 40);
   const { abreDemo } = usePlan();
@@ -46,41 +45,9 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
   const abreElCartel = () => setHoja(enCurso ? 'cronometro' : 'elegir');
   const abreLaTarjeta = () => setHoja(ultimo ? { resumen: ultimo, tarjeta: true } : 'elegir');
   const conExplorar = conEmpujon && !!alIrAExplorar;
-  const IconoDeporte = ICONOS[deporte] ?? Timer;
 
-  return (
+  const hojas = (
     <>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 18, fontFamily: FONT }}>
-        {enLinea ? (
-          enCurso
-            ? <HeroDeEntrenar deporte={deporte} semana={semana} ultimo={ultimo} enCurso segundos={crono.segundos} alAbrir={abreElCartel} />
-            : <OpcionesDeEntrenar alElegir={elige} alDemo={alDemo} />
-        ) : variante === 'compacta' ? (
-          <button
-            type="button" onClick={abreElCartel} className="tl-w tira" data-tono="azul"
-            aria-label={enCurso ? `Seguir tu entreno de ${nombreDelDeporte(deporte)}` : 'Entrenar: elegir un deporte'}
-          >
-            <span className="tl-w-ic" aria-hidden="true"><IconoDeporte /></span>
-            <span className="tl-w-texto">
-              <span className="tl-w-tit" style={{ display: 'block' }}>{enCurso ? `${nombreDelDeporte(deporte)} · ${relojDeCronometro(crono.segundos)}` : 'Entrenar'}</span>
-              <span className="tl-w-sub" style={{ display: 'block' }}>{enCurso ? 'Entreno en curso · toca para seguir' : textoDeLaSemana(semana)}</span>
-            </span>
-            <span className="tl-w-play" aria-hidden="true">{enCurso ? <Timer /> : <Play />}</span>
-          </button>
-        ) : (
-          <>
-            <HeroDeEntrenar deporte={deporte} semana={semana} ultimo={ultimo} enCurso={enCurso} segundos={crono.segundos} alAbrir={abreElCartel} />
-            <div className="tl-w-grid">
-              <WidgetDeActivityCard ultimo={ultimo} alTocar={abreLaTarjeta} />
-              {conExplorar && <Widget tono="violeta" Icono={Compass} titulo="Explorar" sub="Planes de coaches" alTocar={alIrAExplorar} />}
-              {alDemo && <Widget tono="menta" Icono={Dumbbell} titulo="Demo workout" sub="Mira cómo se inicia" alTocar={alDemo} />}
-              {children}
-            </div>
-          </>
-        )}
-        <TusEntrenos filas={filas?.slice(0, 6)} alAbrir={(fila) => setHoja({ resumen: fila })} />
-      </div>
-
       {hoja === 'elegir' && (
         <HojaFlotante titulo="Entrenar" onCerrar={() => setHoja(null)}>
           <OpcionesDeEntrenar alElegir={elige} alDemo={alDemo} />
@@ -110,6 +77,60 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
           </div>
         </HojaFlotante>
       )}
+    </>
+  );
+
+  if (variante === 'cuadros') {
+    return (
+      <>
+        <Cuadro
+          tono="azul" Icono={Timer} etiqueta="Entrenar libre" onClick={abreElCartel} accion={<PlayChico Icono={enCurso ? Timer : Play} />}
+          // El número solo, grande: con el play al lado no cabe «Sin entrenos» en un cuadro de 165 px.
+          titulo={enCurso ? relojDeCronometro(crono.segundos) : String(semana.entrenos)}
+          sub={enCurso ? `${nombreDelDeporte(deporte)} en curso` : `${semana.entrenos === 1 ? 'entreno' : 'entrenos'} esta semana`}
+          etiquetaAccesible={enCurso ? `Seguir tu entreno de ${nombreDelDeporte(deporte)}` : `Entrenar libre: ${textoDeLaSemana(semana)}`}
+        />
+        <Cuadro
+          tono="tinta" Icono={Share2} etiqueta="Activity card" onClick={abreLaTarjeta}
+          titulo={ultimo ? relojDeCronometro(ultimo.duracion_s) : '0:00'} sub={ultimo ? 'Último entreno' : 'Tu primer entreno'}
+          etiquetaAccesible={ultimo ? 'Abrir la activity card de tu último entreno' : 'Activity card: entrena y sácala para tus historias'}
+        />
+        {hojas}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 18, fontFamily: FONT }}>
+        {enLinea ? (
+          enCurso
+            ? <HeroDeEntrenar deporte={deporte} semana={semana} ultimo={ultimo} enCurso segundos={crono.segundos} alAbrir={abreElCartel} />
+            : <OpcionesDeEntrenar alElegir={elige} alDemo={alDemo} />
+        ) : (
+          <>
+            <HeroDeEntrenar deporte={deporte} semana={semana} ultimo={ultimo} enCurso={enCurso} segundos={crono.segundos} alAbrir={abreElCartel} />
+            {conExplorar && <TarjetaDeExplorar alTocar={alIrAExplorar} />}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+              {cuadros}
+              <Cuadro
+                tono="tinta" Icono={Share2} etiqueta="Activity card" onClick={abreLaTarjeta}
+                titulo={ultimo ? relojDeCronometro(ultimo.duracion_s) : '0:00'} sub={ultimo ? 'Último entreno' : 'Tu primer entreno'}
+                etiquetaAccesible={ultimo ? 'Abrir la activity card de tu último entreno' : 'Activity card: entrena y sácala para tus historias'}
+              />
+            </div>
+            {(alDemo || chicos) && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+                {alDemo && <CuadroBlanco Icono={Play} titulo="Demo workout" color="#7C5CFF" fondo="#EFEBFF" onClick={alDemo} />}
+                {chicos}
+              </div>
+            )}
+          </>
+        )}
+        <TusEntrenos filas={filas?.slice(0, 6)} alAbrir={(fila) => setHoja({ resumen: fila })} />
+      </div>
+
+      {hojas}
     </>
   );
 }
