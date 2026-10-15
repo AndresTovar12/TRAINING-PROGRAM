@@ -51,3 +51,11 @@ export function separaCompras(lista) {
   const arr = Array.isArray(lista) ? lista : [];
   return { vigentes: arr.filter((c) => vivas.includes(c.estado)), historial: arr.filter((c) => !vivas.includes(c.estado)) };
 }
+
+/** El próximo cobro de sus membresías que se renuevan (la que vence primero): `{ fecha: 'ISO', monto }`, o null si nada se va a cobrar. */
+export function proximoCobro(lista) {
+  const renuevan = (Array.isArray(lista) ? lista : [])
+    .filter((c) => c?.estado === 'activa' && c?.tipo === 'membresia' && !c?.cancelada_en && c?.periodo_hasta)
+    .sort((a, b) => new Date(a.periodo_hasta) - new Date(b.periodo_hasta));
+  return renuevan.length ? { fecha: renuevan[0].periodo_hasta, monto: Number(renuevan[0].precio_mxn) || 0 } : null;
+}

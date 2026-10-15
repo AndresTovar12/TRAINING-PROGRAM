@@ -1,27 +1,20 @@
 import { useState } from 'react';
-import { Mail, KeyRound, Loader2, Check } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { esCorreoInventado, correoValido } from '@/lib/correos';
 import { confirmaCodigoDeCorreo, pideCodigoDeCorreo } from '@/lib/correoDeLaCuentaApi';
-import { T, FONT, KP } from '@/lib/theme';
+import { FONT, KP } from '@/lib/theme';
+import HojaFlotante from '@/components/HojaFlotante';
+import { Boton, Campo, Fila } from '@/components/ui';
+import { Aviso } from '@/features/profile/piezas';
 
 /* EL CORREO DE LA CUENTA en Mi perfil (15 oct 2026). Andrés: que cada quien pueda poner o cambiar su correo.
 
-   Quien se creó sin correo tiene uno inventado que nadie recibe: aquí se ve «Sin correo» y el botón «Agregar correo». Se escribe el correo y la contraseña
-   actual, llega un código de 6 números a ese correo, se escribe aquí, y queda puesto. Desde ahí sirve «¿Olvidaste tu contraseña?».
-   Quien entró solo con Google ve su correo de Google y no lo cambia aquí. */
-
-const label = { fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 };
-const caja = { display: 'flex', alignItems: 'center', gap: 10, background: T.bg2, borderRadius: 12, padding: '0 13px', border: `1.5px solid ${T.border}` };
-const campo = { flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 16, fontWeight: 500, color: T.text, padding: '13px 0', minWidth: 0 };
-const botonAzul = (apagado) => ({
-  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 44, padding: '0 18px', borderRadius: 12, border: 'none',
-  background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, color: '#fff', fontFamily: FONT, fontSize: 14.5, fontWeight: 800,
-  cursor: apagado ? 'default' : 'pointer', opacity: apagado ? 0.6 : 1, boxShadow: KP.shBtn,
-});
-const botonBlanco = { minHeight: 40, padding: '0 14px', borderRadius: 11, border: `1.5px solid ${KP.blue}`, background: T.bg2, color: KP.blue, fontFamily: FONT, fontSize: 13.5, fontWeight: 800, cursor: 'pointer', flexShrink: 0 };
-const enlace = { border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: T.text2, padding: '6px 2px' };
+   Quien se creó sin correo tiene uno inventado que nadie recibe: aquí se ve «Sin correo». Se escribe el correo y la contraseña actual, llega un código de
+   6 números a ese correo, se escribe aquí, y queda puesto. Desde ahí sirve «¿Olvidaste tu contraseña?». Quien entró solo con Google ve su correo de Google
+   y no lo cambia aquí.
+   Reestructura visual (15 oct 2026): un renglón «Correo ..... andres@correo.com ›» que abre una hoja con los dos pasos. */
 
 export default function CorreoDeLaCuenta() {
   const { user, refreshProfile } = useAuth();
@@ -80,81 +73,48 @@ export default function CorreoDeLaCuenta() {
   }
 
   return (
-    <div>
-      <div style={{ ...label, marginBottom: 7 }}>Correo</div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ ...caja, flex: 1, background: T.bg3, opacity: 0.9 }}>
-          <Mail size={18} color={T.text3} style={{ flexShrink: 0 }} />
-          <span style={{ ...campo, color: sinCorreo ? T.text3 : T.text2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {sinCorreo ? 'Sin correo' : actual}
-          </span>
-        </div>
-        {!soloGoogle && !paso && (
-          <button type="button" style={botonBlanco} onClick={() => { setPaso('pedir'); setListo(''); setError(''); }}>
-            {sinCorreo ? 'Agregar' : 'Cambiar'}
-          </button>
-        )}
-      </div>
+    <>
+      <Fila
+        texto="Correo" valor={listo || (sinCorreo ? 'Sin correo' : actual)} valorTono={sinCorreo && !listo ? 'neutro' : 'azul'}
+        detalle={soloGoogle ? 'Es el de tu cuenta de Google.' : sinCorreo && !listo ? 'Agrégalo para recuperar tu contraseña si la olvidas.' : null}
+        onClick={soloGoogle ? undefined : () => { setPaso('pedir'); setListo(''); setError(''); }}
+      />
 
-      {sinCorreo && !paso && !listo && (
-        <div style={{ fontSize: 12.5, color: T.text2, fontWeight: 600, marginTop: 7, lineHeight: 1.45 }}>
-          Agrégalo para poder recuperar tu contraseña si la olvidas.
-        </div>
-      )}
-      {soloGoogle && (
-        <div style={{ fontSize: 12.5, color: T.text3, fontWeight: 600, marginTop: 7 }}>Es el de tu cuenta de Google.</div>
+      {paso && (
+        <HojaFlotante titulo={sinCorreo ? 'Agregar correo' : 'Cambiar correo'} onCerrar={cierra} ancho={460}>
+          {paso === 'pedir' && (
+            <form onSubmit={pide} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12, fontFamily: FONT }}>
+              <Campo
+                etiqueta={sinCorreo ? 'Tu correo' : 'Correo nuevo'} tipo="email" grande={false} valor={correo} onCambio={setCorreo} marcador="nombre@gmail.com"
+                inputMode="email" autoComplete="email" autoCapitalize="none" spellCheck={false} autoFocus
+              />
+              <Campo etiqueta="Tu contraseña actual" tipo="password" grande={false} valor={contrasena} onCambio={setContrasena} autoComplete="current-password" />
+              {error && <Aviso tono="malo" role="alert">{error}</Aviso>}
+              <Boton ancho type="submit" cargando={busy}>Mandarme el código</Boton>
+            </form>
+          )}
+          {paso === 'codigo' && (
+            <form onSubmit={confirma} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12, fontFamily: FONT }}>
+              <p style={{ margin: '0 4px', fontSize: 15, fontWeight: 500, color: KP.ink, lineHeight: 1.5 }}>
+                Te mandamos un código de 6 números a <b>{correo.trim()}</b>. Revisa también spam.
+              </p>
+              <Campo
+                etiqueta="Código" valor={codigo} onCambio={(v) => setCodigo(v.replace(/\D/g, '').slice(0, 6))} marcador="000000"
+                inputMode="numeric" autoComplete="one-time-code" maxLength={6} autoFocus
+                style={{ display: 'block', width: '100%', border: 'none', outline: 'none', background: 'transparent', padding: 0, marginTop: 3, fontFamily: FONT, fontSize: 28, fontWeight: 800, letterSpacing: 10, color: KP.ink, fontVariantNumeric: 'tabular-nums' }}
+              />
+              {error && <Aviso tono="malo" role="alert">{error}</Aviso>}
+              <Boton ancho type="submit" cargando={busy} deshabilitado={codigo.length !== 6}>Confirmar</Boton>
+              <Boton tipo="secundario" ancho onClick={() => { setPaso('pedir'); setError(''); }}>Mandar otro</Boton>
+            </form>
+          )}
+        </HojaFlotante>
       )}
       {listo && (
-        <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 9, fontSize: 13.5, fontWeight: 700, color: KP.mint }}>
-          <Check size={16} strokeWidth={3} /> Listo: tu correo es {listo}
+        <div role="status" className="ui-fila" style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '0 16px 12px', fontSize: 13.5, fontWeight: 700, color: KP.mint }}>
+          <Check size={16} strokeWidth={3} /> Listo: ya quedó tu correo
         </div>
       )}
-
-      {paso === 'pedir' && (
-        <form onSubmit={pide} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12, padding: 14, borderRadius: 14, border: `1.5px solid ${T.border}`, background: T.bg }}>
-          <label style={{ display: 'block' }}>
-            <div style={{ ...label, marginBottom: 7 }}>{sinCorreo ? 'Tu correo' : 'Correo nuevo'}</div>
-            <div style={caja}>
-              <Mail size={18} color={T.text3} style={{ flexShrink: 0 }} />
-              <input type="email" inputMode="email" autoComplete="email" autoCapitalize="none" spellCheck={false} placeholder="nombre@gmail.com"
-                value={correo} onChange={(e) => setCorreo(e.target.value)} autoFocus style={campo} />
-            </div>
-          </label>
-          <label style={{ display: 'block' }}>
-            <div style={{ ...label, marginBottom: 7 }}>Tu contraseña actual</div>
-            <div style={caja}>
-              <KeyRound size={18} color={T.text3} style={{ flexShrink: 0 }} />
-              <input type="password" autoComplete="current-password" value={contrasena} onChange={(e) => setContrasena(e.target.value)} style={campo} />
-            </div>
-          </label>
-          {error && <div role="alert" style={{ background: KP.dangerSoft, color: KP.danger, borderRadius: 11, padding: '10px 12px', fontSize: 13, fontWeight: 600 }}>{error}</div>}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <button type="submit" disabled={busy} style={botonAzul(busy)}>{busy ? <Loader2 size={16} className="spin" /> : null} Mandarme el código</button>
-            <button type="button" onClick={cierra} style={enlace}>Cancelar</button>
-          </div>
-        </form>
-      )}
-
-      {paso === 'codigo' && (
-        <form onSubmit={confirma} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12, padding: 14, borderRadius: 14, border: `1.5px solid ${T.border}`, background: T.bg }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: T.text, lineHeight: 1.45 }}>
-            Te mandamos un código de 6 números a <b>{correo.trim()}</b>. Revisa también spam.
-          </div>
-          <div style={caja}>
-            <input
-              aria-label="Código de 6 números" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="000000" autoFocus
-              value={codigo} onChange={(e) => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              style={{ ...campo, fontSize: 24, fontWeight: 800, letterSpacing: 8, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}
-            />
-          </div>
-          {error && <div role="alert" style={{ background: KP.dangerSoft, color: KP.danger, borderRadius: 11, padding: '10px 12px', fontSize: 13, fontWeight: 600 }}>{error}</div>}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <button type="submit" disabled={busy || codigo.length !== 6} style={botonAzul(busy || codigo.length !== 6)}>{busy ? <Loader2 size={16} className="spin" /> : null} Confirmar</button>
-            <button type="button" onClick={() => { setPaso('pedir'); setError(''); }} style={enlace}>Mandar otro</button>
-            <button type="button" onClick={cierra} style={enlace}>Cancelar</button>
-          </div>
-        </form>
-      )}
-    </div>
+    </>
   );
 }

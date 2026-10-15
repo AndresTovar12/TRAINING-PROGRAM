@@ -1,13 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  X, Camera, Loader2, Check, Shield, User as UserIcon, Users, Sparkles, AtSign, IdCard, Trash2,
-  Library, Calendar, Map, ChevronRight, HeartPulse, KeyRound, ShoppingBag, Wallet, Watch, Bell,
+  X, Loader2, User as UserIcon, Users, Sparkles, Library, ChevronLeft, ChevronRight, HeartPulse, KeyRound, ShoppingBag, Wallet, Watch, Bell,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { uploadAvatar, isUsernameAvailable } from '@/lib/api';
 import { esImagen, optimizaImagen } from '@/lib/imagen';
-import { T, FONT, KP } from '@/lib/theme';
+import { T, FONT, KP, UI, eyebrow, oficioCorto } from '@/lib/theme';
+import { useIsDesktop } from '@/lib/useViewport';
+import { esCorreoInventado } from '@/lib/correos';
+import { useAviso } from '@/components/AvisoPasajero';
+import HojaFlotante from '@/components/HojaFlotante';
+import {
+  Boton, BotonEnAzul, Campo, Fila, FilaElegir, Grupo, Interruptor, Pestanas, PestanasLaterales, TarjetaHeroe,
+} from '@/components/ui';
 import ConectarIA from '@/features/ia/ConectarIA';
 import MiEquipo from '@/features/profile/MiEquipo';
 import MisEjercicios from '@/features/profile/MisEjercicios';
@@ -29,24 +35,6 @@ function initialsFrom(name) {
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
-
-const label = { fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 };
-const inputWrap = {
-  display: 'flex', alignItems: 'center', gap: 10, background: T.bg2, borderRadius: 12,
-  padding: '0 13px', border: `1.5px solid ${T.border}`,
-};
-const inputStyle = {
-  flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT,
-  fontSize: 15, fontWeight: 500, color: T.text, padding: '13px 0', minWidth: 0,
-};
-// Dos o tres opciones en fila, de las que solo una está puesta (kilos/libras, hombre/mujer, equipo/solo yo).
-const opcion = (activo) => ({
-  flex: 1, padding: '13px 8px', borderRadius: 12, cursor: 'pointer',
-  border: `1.5px solid ${activo ? T.accent : T.border}`,
-  background: activo ? T.accentBg : T.bg2,
-  color: activo ? T.accent : T.text2,
-  fontFamily: FONT, fontSize: 14, fontWeight: 700,
-});
 
 /* Lo mismo que se contesta en el inicio se cambia aquí (Andrés, 8 oct 2026: ninguna respuesta del inicio es definitiva).
    El coach: a qué se dedica, qué entrena y si trabaja en equipo. El atleta: su fecha de nacimiento. Y los dos pueden ver
@@ -86,25 +74,17 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
   const [recorrido, setRecorrido] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState('');
-  const [ok, setOk] = useState(false);
+  const [hoja, setHoja] = useState(null); // null | 'usuario' | 'oficio' | 'disciplinas'
+  const [copiado, setCopiado] = useState(false);
+  const { avisa, trabajando } = useAviso();
+  const { signOut } = useAuth();
+  const { coach } = usePalabras();
+  const esCompu = useIsDesktop();
   const [nameStatus, setNameStatus] = useState('idle'); // idle|checking|free|taken|invalid|self
   const fileRef = useRef(null);
 
   const origName = profile?.full_name || '';
   const origUser = profile?.username || '';
-  const origAvatar = profile?.avatar_url || '';
-  const origUnidad = profile?.unidad_peso || 'kg';
-  const origGenero = profile?.genero || '';
-  const origProfesion = profile?.profesion || '';
-  const origDisciplinas = (profile?.disciplinas || []).join(',');
-  const origEquipo = !!profile?.trabaja_en_equipo;
-  const origNacimiento = profile?.fecha_nacimiento || '';
-  const dirty = fullName !== origName || username !== origUser || avatarUrl !== origAvatar
-    || unidad !== origUnidad || genero !== origGenero
-    || (isAdmin && (profesion !== origProfesion || disciplinas.join(',') !== origDisciplinas || equipo !== origEquipo))
-    || (!isAdmin && nacimiento !== origNacimiento);
-
   // Chequeo de disponibilidad del username (debounced)
   useEffect(() => {
     const u = username.trim();
@@ -123,47 +103,47 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    if (!esImagen(file)) { setErr('Elige una imagen'); return; }
-    setErr('');
+    if (!esImagen(file)) { avisa('Elige una imagen'); return; }
     setUploading(true);
     try {
       // El formato que sea (el HEIC del iPhone incluido), y achicada: el almacén solo recibe JPG, PNG o WebP de hasta
       // 5 MB, y un avatar no necesita más de 1600 px. El límite se mide sobre lo que de verdad se sube, no sobre lo
       // que se eligió: una foto de 8 MB del carrete cabe sobrada una vez achicada.
       const { archivo: listo } = await optimizaImagen(file);
-      if (listo.size > 5 * 1024 * 1024) { setErr('La imagen no debe pasar de 5 MB'); return; }
+      if (listo.size > 5 * 1024 * 1024) { avisa('La imagen no debe pasar de 5 MB'); return; }
       const url = await uploadAvatar(listo, user.id);
       setAvatarUrl(url);
+      await guarda({ avatar_url: url }, 'Foto guardada');
     } catch (e2) {
-      setErr(e2.message || 'No se pudo subir la foto');
+      avisa(e2.message || 'No se pudo subir la foto');
     } finally {
       setUploading(false);
     }
   }
 
-  async function onSave() {
-    setErr('');
-    setOk(false);
-    const u = username.trim();
-    if (!USERNAME_RE.test(u)) { setErr('El usuario debe tener 3-30 caracteres (letras, números, _ o .)'); return; }
-    if (nameStatus === 'taken') { setErr('Ese nombre de usuario ya está en uso'); return; }
-    setSaving(true);
-    const { error } = await updateProfile({
-      full_name: fullName.trim() || null,
-      username: u,
-      avatar_url: avatarUrl || null,
-      unidad_peso: unidad,
-      genero: genero || null,
-      // Lo del coach y lo del atleta van por separado: cada quien manda solo lo suyo.
-      ...(isAdmin
-        ? { profesion: profesion.trim() || null, disciplinas, trabaja_en_equipo: equipo }
-        : { fecha_nacimiento: nacimiento || null }),
-    });
-    setSaving(false);
-    if (error) { setErr(error.message); return; }
-    setOk(true);
-    setTimeout(() => setOk(false), 2200);
+  /* Cada dato se guarda al cambiarlo, con su aviso abajo («Guardado»). Si falla, el aviso dice por qué. */
+  async function guarda(cambios, listo = 'Guardado') {
+    try {
+      await trabajando('Guardando…', async () => {
+        const { error } = await updateProfile(cambios);
+        if (error) throw error;
+      }, listo);
+    } catch (e) {
+      avisa(e?.message || 'No se pudo guardar');
+    }
   }
+  const guardaNombre = () => { if (fullName.trim() !== origName) guarda({ full_name: fullName.trim() || null }); };
+  async function guardaUsuario() {
+    const u = username.trim();
+    if (!USERNAME_RE.test(u) || nameStatus !== 'free') return;
+    setSaving(true);
+    await guarda({ username: u });
+    setSaving(false);
+    setHoja(null);
+  }
+  const copiaCodigo = async () => {
+    try { await navigator.clipboard.writeText(profile?.codigo_coach || ''); setCopiado(true); setTimeout(() => setCopiado(false), 1800); } catch { /* sin portapapeles: se lee en pantalla */ }
+  };
 
   const nameHint = {
     checking: { text: 'Comprobando…', color: T.text3 },
@@ -175,289 +155,190 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
   }[nameStatus];
 
   const displayName = fullName || username || 'Tu perfil';
+  const nombreCoach = (coach?.full_name || '').trim();
+  const correoVisible = esCorreoInventado(user?.email) ? 'Sin correo' : (user?.email || 'Sin correo');
+  const fechaTexto = nacimiento ? new Date(`${nacimiento}T12:00:00`).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+
+  /* REESTRUCTURA VISUAL (15 oct 2026), como «Mi perfil» de las capturas de Andrés. Cada dato es un renglón con su valor y se guarda al
+     cambiarlo (sin el botón «Guardar» de arriba, que era fácil de olvidar). En el teléfono, las secciones son pestañas subrayadas; en la
+     compu, un menú a la izquierda. */
+  const perfil = (
+    <>
+      {/* La foto: cuadro azul claro con las iniciales, o la foto. Se sube y se guarda sola. */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+        <button
+          type="button" onClick={() => fileRef.current?.click()} aria-label={avatarUrl ? 'Cambiar foto' : 'Subir foto'} className="kp-press"
+          style={{ position: 'relative', width: 116, height: 116, borderRadius: 34, overflow: 'hidden', border: 'none', padding: 0, cursor: 'pointer', background: KP.blueSoft, color: KP.blue, fontFamily: FONT, fontSize: 40, fontWeight: 800, display: 'grid', placeItems: 'center' }}
+        >
+          {avatarUrl ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initialsFrom(displayName)}
+          {uploading && <span style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'grid', placeItems: 'center' }}><Loader2 size={26} color="#fff" className="spin" /></span>}
+        </button>
+        <div style={{ display: 'flex', gap: 16 }}>
+          <Boton tipo="texto" chico onClick={() => fileRef.current?.click()}>{avatarUrl ? 'Cambiar foto' : 'Subir foto'}</Boton>
+          {avatarUrl && <Boton tipo="texto" chico estilo={{ color: KP.ink2 }} onClick={() => { setAvatarUrl(''); guarda({ avatar_url: null }, 'Foto quitada'); }}>Quitar</Boton>}
+        </div>
+        <input ref={fileRef} type="file" accept="image/*" onChange={onPickFile} style={{ display: 'none' }} />
+      </div>
+
+      <Campo etiqueta="Nombre" valor={fullName} onCambio={setFullName} marcador="Tu nombre" onBlur={guardaNombre} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
+
+      <Grupo>
+        <Fila texto="Usuario" valor={`@${origUser}`} onClick={() => { setUsername(origUser); setHoja('usuario'); }} />
+        <Fila texto="Correo" valor={correoVisible} valorTono={correoVisible === 'Sin correo' ? 'neutro' : 'azul'} onClick={() => setSeccion('cuenta')} />
+        {isAdmin && <Fila texto="Oficio" valor={oficioCorto(profesion) || 'Elegir'} valorTono={profesion ? 'azul' : 'neutro'} onClick={() => setHoja('oficio')} />}
+        {isAdmin && <Fila texto="Disciplinas" valor={disciplinas.length ? disciplinas.join(', ') : 'Elegir'} valorTono={disciplinas.length ? 'azul' : 'neutro'} onClick={() => setHoja('disciplinas')} />}
+        <FilaElegir
+          texto="Unidad de peso" titulo="Peso en" valor={unidad}
+          opciones={[{ valor: 'kg', texto: 'kg', detalle: 'Kilos' }, { valor: 'lb', texto: 'lb', detalle: 'Libras' }]}
+          onCambio={(v) => { setUnidad(v); guarda({ unidad_peso: v }); }}
+        />
+        {/* Sexo: por dentro sirve para UNA sola cosa (si un ejercicio tiene grabada la versión de hombre y la de mujer, mostrar la que
+            corresponde). A la persona NO se le dice para qué sirve (Andrés, 6 oct 2026: «que ni siquiera se enteren»). */}
+        <FilaElegir
+          texto="Sexo" valor={genero}
+          opciones={[{ valor: 'h', texto: 'Hombre' }, { valor: 'm', texto: 'Mujer' }, { valor: '', texto: 'Prefiero no decir' }]}
+          onCambio={(v) => { setGenero(v); guarda({ genero: v || null }); }}
+        />
+        {/* Fecha de nacimiento del atleta: para sus zonas de esfuerzo y para que su entrenador sepa su edad. */}
+        {!isAdmin && (
+          <Fila
+            texto="Fecha de nacimiento"
+            derecha={(
+              <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 15.5, fontWeight: 600, color: nacimiento ? KP.blue : KP.ink3 }}>{fechaTexto || 'Elegir'}</span>
+                <ChevronRight size={18} color={KP.ink3} />
+                <input
+                  type="date" value={nacimiento} aria-label="Fecha de nacimiento" max={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => { setNacimiento(e.target.value); guarda({ fecha_nacimiento: e.target.value || null }); }}
+                  style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
+                />
+              </span>
+            )}
+          />
+        )}
+        {isAdmin && (
+          <Fila texto="Trabajo con más profesionales" derecha={<Interruptor activo={equipo} etiqueta="Trabajo con más profesionales" onCambio={(v) => { setEquipo(v); guarda({ trabaja_en_equipo: v }); }} />} />
+        )}
+      </Grupo>
+
+      {/* El atleta: su coach, y de ahí a su equipo. El coach: su código, el que el atleta pega al registrarse. */}
+      {!isAdmin && nombreCoach && (
+        <TarjetaHeroe etiqueta={tr('Tu coach')} titulo={nombreCoach} accion={<BotonEnAzul onClick={() => setSeccion('equipo')}>Mi equipo</BotonEnAzul>} />
+      )}
+      {isAdmin && profile?.codigo_coach && (
+        <TarjetaHeroe
+          etiqueta={tr('Tu código de coach')} titulo={<span style={{ letterSpacing: 2 }}>{profile.codigo_coach}</span>}
+          accion={<BotonEnAzul onClick={copiaCodigo}>{copiado ? 'Copiado' : 'Copiar'}</BotonEnAzul>}
+        />
+      )}
+
+      {/* El recorrido del inicio, otra vez: qué hace cada parte de la app. */}
+      <Grupo>
+        <Fila texto="Ver el recorrido otra vez" onClick={() => setRecorrido(true)} />
+      </Grupo>
+
+      <button type="button" onClick={signOut} className="kp-press" style={{ alignSelf: 'center', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 16, fontWeight: 700, color: KP.danger, padding: '10px 18px' }}>
+        Cerrar sesión
+      </button>
+    </>
+  );
+
+  const contenido = (
+    <>
+      {seccion === 'perfil' && perfil}
+
+      {/* La cuenta en sí: correo, contraseña, sesiones, descargar sus datos y eliminarla (ver `ConfiguracionDeCuenta`). */}
+      {seccion === 'cuenta' && <ConfiguracionDeCuenta />}
+
+      {seccion === 'compras' && !isAdmin && <MisCompras />}
+      {seccion === 'cobros' && isAdmin && !isMaster && <MisCobros />}
+      {seccion === 'dispositivos' && <MisDispositivos onIrAMetricas={!isAdmin ? () => setSeccion('metricas') : null} />}
+      {seccion === 'avisos' && <MisAvisos />}
+
+      {/* Un atleta decide quién más lo atiende (fisio…). Los profesionales no lo tienen. */}
+      {seccion === 'equipo' && !isAdmin && <MiEquipo />}
+
+      {/* Las métricas de su reloj: pulso, ritmo, carga y recuperación. Las ve él y quien lo atiende. */}
+      {seccion === 'metricas' && !isAdmin && <TarjetaDeMisMetricas atleta={{ id: user.id, full_name: profile?.full_name, username: profile?.username, unidad_peso: profile?.unidad_peso }} />}
+
+      {/* El coach: los ejercicios de Training Lab prendidos o apagados, volver al original, borrar todo lo suyo. */}
+      {seccion === 'ejercicios' && isAdmin && !isMaster && <MisEjercicios />}
+
+      {/* En el teléfono es el ÚNICO sitio de esto: no va en la navegación (decisión de Andrés). En la compu el coach también lo tiene
+          en el menú lateral; el atleta, solo aquí. */}
+      {seccion === 'ia' && <ConectarIA enPerfil />}
+    </>
+  );
+
+  const pestanas = secciones.map(({ id, texto }) => ({ id, texto }));
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: T.bg, fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
-      <header
-        style={{
-          background: 'rgba(255,255,255,0.86)', backdropFilter: 'saturate(180%) blur(16px)',
-          borderBottom: `1px solid ${T.border}`, padding: '13px 18px',
-          display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
-        }}
-      >
-        <div style={{ flex: 1, fontSize: 16, fontWeight: 800, color: T.text }}>Mi perfil</div>
-        {seccion === 'perfil' && <button
-          type="button" onClick={onSave} disabled={saving || !dirty || nameStatus === 'taken' || nameStatus === 'invalid'}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 18px', borderRadius: 12,
-            border: 'none', cursor: (saving || !dirty) ? 'default' : 'pointer',
-            background: dirty && nameStatus !== 'taken' && nameStatus !== 'invalid' ? `linear-gradient(135deg, ${T.accent}, ${T.accentDk})` : T.bg3,
-            color: dirty && nameStatus !== 'taken' && nameStatus !== 'invalid' ? '#fff' : T.text3,
-            fontFamily: FONT, fontSize: 14, fontWeight: 800,
-            boxShadow: dirty ? KP.shBtn : 'none', opacity: saving ? 0.75 : 1,
-          }}
-        >
-          {saving ? <Loader2 size={15} className="spin" /> : ok ? <Check size={15} /> : <Check size={15} />}
-          {ok ? 'Guardado' : 'Guardar'}
-        </button>}
-        <button
-          type="button" onClick={onClose} aria-label="Cerrar"
-          style={{ width: 36, height: 36, borderRadius: 11, border: `1px solid ${T.border}`, cursor: 'pointer', background: T.bg2, color: T.text2, display: 'grid', placeItems: 'center', flexShrink: 0 }}
-        >
-          <X size={17} />
-        </button>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: UI.fondo, fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
+      <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: esCompu ? '22px 28px 14px' : 'calc(12px + env(safe-area-inset-top)) 16px 8px', flexShrink: 0 }}>
+        {!esCompu && (
+          <button type="button" onClick={onClose} aria-label="Volver" style={{ width: 42, height: 42, borderRadius: 13, border: 'none', background: UI.relleno, color: T.text, cursor: 'pointer', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+            <ChevronLeft size={21} />
+          </button>
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {esCompu && <div style={eyebrow(KP.blue)}>{displayName}</div>}
+          <h1 style={{ margin: esCompu ? '6px 0 0' : 0, fontSize: esCompu ? 30 : 26, fontWeight: 800, color: T.text, letterSpacing: -0.5 }}>Mi perfil</h1>
+        </div>
+        {esCompu && (
+          <button type="button" onClick={onClose} aria-label="Cerrar" style={{ width: 40, height: 40, borderRadius: 13, border: 'none', background: UI.relleno, color: KP.ink2, cursor: 'pointer', display: 'grid', placeItems: 'center' }}>
+            <X size={19} />
+          </button>
+        )}
       </header>
 
-      <nav aria-label="Secciones de Mi perfil" style={{ flexShrink: 0, padding: '12px 18px 0' }}>
-        <div role="tablist" style={{ maxWidth: 560, margin: '0 auto', display: 'flex', gap: 4, padding: 4, background: T.bg3, borderRadius: 16, overflowX: 'auto', scrollbarWidth: 'none' }}>
-          {secciones.map(({ id, texto, Icono }) => {
-            const activa = seccion === id;
-            return (
-              <button
-                key={id} type="button" role="tab" aria-selected={activa} onClick={() => setSeccion(id)}
-                style={{
-                  flex: '1 0 auto', minHeight: 46, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                  padding: '6px 8px', borderRadius: 12, border: 'none', cursor: 'pointer', fontFamily: FONT,
-                  fontSize: 13.5, fontWeight: 800, lineHeight: 1.15, textAlign: 'center',
-                  background: activa ? T.bg2 : 'transparent', color: activa ? T.accent : T.text2,
-                  boxShadow: activa ? KP.shCard : 'none',
-                }}
-              >
-                <Icono size={16} strokeWidth={2.4} style={{ flexShrink: 0 }} /> {texto}
-              </button>
-            );
-          })}
-        </div>
-      </nav>
+      {!esCompu && <Pestanas pestanas={pestanas} activa={seccion} onCambio={setSeccion} etiqueta="Secciones de Mi perfil" />}
 
-      <main style={{ flex: 1, overflowY: 'auto', padding: '22px 18px 60px' }}>
-        <div style={{ maxWidth: seccion === 'ia' ? 820 : 460, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 22 }}>
-          {seccion === 'perfil' && <>
-          {/* Avatar */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-            <div style={{ position: 'relative' }}>
-              <div
-                style={{
-                  width: 112, height: 112, borderRadius: '50%', overflow: 'hidden',
-                  background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`,
-                  display: 'grid', placeItems: 'center', color: '#fff', fontSize: 40, fontWeight: 800,
-                  boxShadow: KP.shBtn,
-                }}
-              >
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                ) : (
-                  initialsFrom(displayName)
-                )}
-                {uploading && (
-                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'grid', placeItems: 'center', borderRadius: '50%' }}>
-                    <Loader2 size={26} color="#fff" className="spin" />
-                  </div>
-                )}
-              </div>
-              <button
-                type="button" onClick={() => fileRef.current?.click()} aria-label="Cambiar foto"
-                style={{
-                  position: 'absolute', bottom: 2, right: 2, width: 36, height: 36, borderRadius: '50%',
-                  border: `3px solid ${T.bg}`, background: T.accent, color: '#fff', cursor: 'pointer',
-                  display: 'grid', placeItems: 'center', boxShadow: KP.shCard,
-                }}
-              >
-                <Camera size={16} />
-              </button>
-            </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button
-                type="button" onClick={() => fileRef.current?.click()}
-                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.accent, fontFamily: FONT, fontSize: 13.5, fontWeight: 700 }}
-              >
-                {avatarUrl ? 'Cambiar foto' : 'Subir foto'}
-              </button>
-              {avatarUrl && (
-                <button
-                  type="button" onClick={() => setAvatarUrl('')}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: T.text3, fontFamily: FONT, fontSize: 13.5, fontWeight: 700 }}
-                >
-                  <Trash2 size={13} /> Quitar
-                </button>
-              )}
-            </div>
-            <input ref={fileRef} type="file" accept="image/*" onChange={onPickFile} style={{ display: 'none' }} />
-          </div>
-
-          {/* Nombre completo */}
-          <label style={{ display: 'block' }}>
-            <div style={{ ...label, marginBottom: 7 }}>Nombre completo</div>
-            <div style={inputWrap}>
-              <IdCard size={18} color={T.text3} style={{ flexShrink: 0 }} />
-              <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Tu nombre" style={inputStyle} />
-            </div>
-          </label>
-
-          {/* Username */}
-          <label style={{ display: 'block' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 7 }}>
-              <span style={label}>Nombre de usuario</span>
-              {nameHint && <span style={{ fontSize: 11.5, fontWeight: 700, color: nameHint.color }}>{nameHint.text}</span>}
-            </div>
-            <div style={{ ...inputWrap, borderColor: nameStatus === 'taken' ? T.danger : T.border }}>
-              <AtSign size={18} color={T.text3} style={{ flexShrink: 0 }} />
-              <input
-                value={username}
-                onChange={(e) => setUsername(e.target.value.replace(/\s/g, ''))}
-                placeholder="tu_usuario"
-                autoCapitalize="none" spellCheck={false}
-                style={inputStyle}
-              />
-              {nameStatus === 'checking' && <Loader2 size={15} className="spin" color={T.text3} />}
-              {nameStatus === 'free' && <Check size={16} color="#00A372" />}
-            </div>
-            <div style={{ fontSize: 12, color: T.text3, marginTop: 6, lineHeight: 1.4 }}>
-              {tr('Con este nombre inicias sesión. Cambiarlo no afecta tu plan ni tu progreso.')}
-            </div>
-          </label>
-
-
-
-          {/* Lo del coach: a qué se dedica (decide las palabras de la app), qué entrena (ordena lo que ve primero, nunca
-              esconde nada) y si trabaja con más profesionales. Es lo mismo que contestó en el inicio. */}
-          {isAdmin && (
-            <>
-              <SelectorOficio value={profesion} onChange={setProfesion} etiqueta="A qué te dedicas" />
-
-              <div>
-                <div style={{ ...label, marginBottom: 8 }}>Qué entrenas</div>
-                <SelectorDisciplinas value={disciplinas} onChange={setDisciplinas} />
-                <div style={{ fontSize: 12, color: T.text3, marginTop: 8, fontWeight: 600, lineHeight: 1.45 }}>
-                  Ordena lo que ves primero. Nunca esconde nada.
-                </div>
-              </div>
-
-              <div>
-                <div style={{ ...label, marginBottom: 7 }}>Trabajo con más profesionales</div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button type="button" onClick={() => setEquipo(true)} style={opcion(equipo)}>Sí, somos un equipo</button>
-                  <button type="button" onClick={() => setEquipo(false)} style={opcion(!equipo)}>Por ahora, solo yo</button>
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Unidad de peso.
-              Solo cambia como se VEN los pesos: por dentro siempre se guardan
-              en kilos. Por eso cambiar de unidad no toca ni un dato del
-              historial —los mismos numeros salen expresados de otra forma. */}
-          <div>
-            <div style={{ ...label, marginBottom: 7 }}>Peso en</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {[['kg', 'Kilos'], ['lb', 'Libras']].map(([valor, texto]) => (
-                <button key={valor} type="button" onClick={() => setUnidad(valor)} style={{ ...opcion(unidad === valor), padding: '13px 12px', fontSize: 14.5 }}>
-                  {texto} <span style={{ opacity: 0.7, fontWeight: 600 }}>({valor})</span>
-                </button>
-              ))}
-            </div>
-            <div style={{ fontSize: 12, color: T.text3, marginTop: 7, fontWeight: 600, lineHeight: 1.45 }}>
-              Cambia cómo ves los pesos. Tu historial no se toca.
-            </div>
-          </div>
-
-          {/* Sexo.
-              Por dentro sirve para UNA sola cosa: si un ejercicio tiene grabada la version
-              de hombre y la de mujer, mostrar la que corresponde. Se puede dejar en blanco
-              («Prefiero no decir») y entonces se ve la version general. A la persona NO se
-              le dice para que sirve (Andrés, 6 oct 2026: «que ni siquiera se enteren»). */}
-          <div>
-            <div style={{ ...label, marginBottom: 7 }}>Sexo</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {[['h', 'Hombre'], ['m', 'Mujer'], ['', 'Prefiero no decir']].map(([valor, texto]) => (
-                <button key={valor || 'sin'} type="button" onClick={() => setGenero(valor)} style={opcion(genero === valor)}>
-                  {texto}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Fecha de nacimiento del atleta: para sus zonas de esfuerzo y para que su entrenador sepa su edad. */}
-          {!isAdmin && (
-            <label style={{ display: 'block' }}>
-              <div style={{ ...label, marginBottom: 7 }}>Fecha de nacimiento</div>
-              <div style={inputWrap}>
-                <Calendar size={18} color={T.text3} style={{ flexShrink: 0 }} />
-                <input
-                  type="date" value={nacimiento} onChange={(e) => setNacimiento(e.target.value)}
-                  max={new Date().toISOString().slice(0, 10)} style={inputStyle}
-                />
-              </div>
-            </label>
-          )}
-
-          {/* Rol */}
-          <div>
-            <div style={{ ...label, marginBottom: 7 }}>Tipo de cuenta</div>
-            <span
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 800,
-                textTransform: 'uppercase', letterSpacing: 0.6,
-                color: isAdmin ? T.accent : T.text2, background: isAdmin ? T.accentBg : T.bg3,
-                borderRadius: 9, padding: '7px 12px',
-              }}
-            >
-              {isAdmin ? <Shield size={13} /> : <UserIcon size={13} />}
-              {isAdmin ? tr('Entrenador (Admin)') : tr('Atleta')}
-            </span>
-          </div>
-
-          {/* El recorrido del inicio, otra vez: qué hace cada parte de la app. */}
-          <button
-            type="button"
-            onClick={() => setRecorrido(true)}
-            className="kp-press"
-            style={{
-              display: 'flex', alignItems: 'center', gap: 12, width: '100%', minHeight: 56, padding: '0 14px', borderRadius: 14,
-              border: `1.5px solid ${KP.lineHi}`, background: T.bg2, cursor: 'pointer', fontFamily: FONT, textAlign: 'left',
-              touchAction: 'manipulation',
-            }}
-          >
-            <span style={{ width: 34, height: 34, borderRadius: 10, display: 'grid', placeItems: 'center', background: KP.blueSoft, color: KP.blue, flexShrink: 0 }}>
-              <Map size={18} />
-            </span>
-            <span style={{ flex: 1, fontSize: 14.5, fontWeight: 800, color: T.text }}>Ver el recorrido otra vez</span>
-            <ChevronRight size={17} color={T.text3} />
-          </button>
-
-
-          {err && (
-            <div style={{ background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 12, padding: '11px 15px', fontWeight: 700, fontSize: 13.5 }}>
-              {err}
+      <main style={{ flex: 1, overflowY: 'auto', padding: esCompu ? '8px 28px 60px' : '20px 16px 60px' }}>
+        <div style={esCompu
+          ? { maxWidth: 1060, margin: '0 auto', display: 'grid', gridTemplateColumns: '240px minmax(0, 1fr)', gap: 32, alignItems: 'start' }
+          : { maxWidth: 560, margin: '0 auto' }}
+        >
+          {esCompu && (
+            <div style={{ position: 'sticky', top: 0 }}>
+              <PestanasLaterales pestanas={pestanas} activa={seccion} onCambio={setSeccion} etiqueta="Secciones de Mi perfil" />
             </div>
           )}
-
-          </>}
-
-          {/* La cuenta en sí: correo, contraseña, sesiones, descargar sus datos y eliminarla (ver `ConfiguracionDeCuenta`). */}
-          {seccion === 'cuenta' && <ConfiguracionDeCuenta />}
-
-          {seccion === 'compras' && !isAdmin && <MisCompras />}
-          {seccion === 'cobros' && isAdmin && !isMaster && <MisCobros />}
-          {seccion === 'dispositivos' && <MisDispositivos onIrAMetricas={!isAdmin ? () => setSeccion('metricas') : null} />}
-          {seccion === 'avisos' && <MisAvisos />}
-
-          {/* Un atleta decide quién más lo atiende (fisio…). Los profesionales no lo tienen. */}
-          {seccion === 'equipo' && !isAdmin && <MiEquipo />}
-
-          {/* Las métricas de su reloj: pulso, ritmo, carga y recuperación. Las ve él y quien lo atiende. */}
-          {seccion === 'metricas' && !isAdmin && <TarjetaDeMisMetricas atleta={{ id: user.id, full_name: profile?.full_name, username: profile?.username, unidad_peso: profile?.unidad_peso }} />}
-
-          {/* El coach: los ejercicios de Training Lab prendidos o apagados, volver al original, borrar todo lo suyo. */}
-          {seccion === 'ejercicios' && isAdmin && !isMaster && <MisEjercicios />}
-
-          {/* En el teléfono es el ÚNICO sitio de esto: no va en la navegación
-              (decisión de Andrés). En la compu el coach también lo tiene en el
-              menú lateral; el atleta, solo aquí. */}
-          {seccion === 'ia' && <ConectarIA enPerfil />}
+          <div style={{ maxWidth: seccion === 'ia' ? 820 : 640, width: '100%', display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {contenido}
+          </div>
         </div>
       </main>
+
+      {/* El nombre de usuario: con él se inicia sesión; se comprueba que esté libre antes de guardarlo. */}
+      {hoja === 'usuario' && (
+        <HojaFlotante titulo="Nombre de usuario" onCerrar={() => setHoja(null)} ancho={460}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Campo
+              etiqueta="Usuario" valor={username} onCambio={(v) => setUsername(v.replace(/\s/g, ''))} marcador="tu_usuario"
+              autoCapitalize="none" spellCheck={false} autoFocus
+            />
+            <div style={{ minHeight: 20, margin: '0 6px', fontSize: 13.5, fontWeight: 600, color: nameHint?.color ?? KP.ink2 }}>
+              {nameHint?.text ?? tr('Con este nombre inicias sesión. Cambiarlo no afecta tu plan ni tu progreso.')}
+            </div>
+            <Boton ancho deshabilitado={nameStatus !== 'free'} cargando={saving} onClick={guardaUsuario}>Guardar</Boton>
+          </div>
+        </HojaFlotante>
+      )}
+      {hoja === 'oficio' && (
+        <HojaFlotante titulo="A qué te dedicas" onCerrar={() => setHoja(null)} ancho={520}
+          pie={<Boton ancho onClick={() => { guarda({ profesion: profesion.trim() || null }); setHoja(null); }}>Listo</Boton>}
+        >
+          <SelectorOficio value={profesion} onChange={setProfesion} etiqueta="" />
+        </HojaFlotante>
+      )}
+      {hoja === 'disciplinas' && (
+        <HojaFlotante titulo="Qué entrenas" onCerrar={() => setHoja(null)} ancho={520}
+          pie={<Boton ancho onClick={() => { guarda({ disciplinas }); setHoja(null); }}>Listo</Boton>}
+        >
+          <SelectorDisciplinas value={disciplinas} onChange={setDisciplinas} />
+          <p style={{ margin: '12px 4px 0', fontSize: 13.5, color: KP.ink2 }}>Ordena lo que ves primero. Nunca esconde nada.</p>
+        </HojaFlotante>
+      )}
 
       {recorrido && <RecorridoOtraVez onCerrar={() => setRecorrido(false)} />}
 
