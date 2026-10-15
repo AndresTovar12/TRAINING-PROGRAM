@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { problemaDeContrasena } from '@/lib/contrasena';
 import { useConfirmacion } from '@/components/Confirmacion';
 import ListaDesplegable from '@/components/ListaDesplegable';
+import ContrasenaNueva from '@/features/admin/ContrasenaNueva';
 import { plural } from '@/lib/plural';
 import { useIsWide } from '@/lib/useViewport';
 import { T, FONT, KP } from '@/lib/theme';
@@ -514,6 +515,15 @@ function FichaCoach({ coach, atletas, otrosCoaches, master, onCerrar, onVerComo,
             {guardando ? <Loader2 size={16} className="spin" /> : <Power size={16} />}
             <span style={{ flex: 1, minWidth: 0 }}>{activo ? 'Desactivar cuenta' : 'Reactivar cuenta'}</span>
           </button>
+
+          <ContrasenaNueva
+            cuenta={coach}
+            estilo={{
+              display: 'flex', alignItems: 'center', gap: 10, minHeight: 48, padding: '0 14px',
+              border: `1.5px solid ${T.border}`, borderRadius: 13, background: T.bg2, cursor: 'pointer',
+              fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text2, textAlign: 'left',
+            }}
+          />
 
           <button
             type="button"
