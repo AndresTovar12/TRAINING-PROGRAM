@@ -40,12 +40,12 @@ const PLAN_SEMANAL = () => ({
 })
 const CLASE = { url: 'https://videos.ejemplo/vinyasa.mp4', duracion: 2700 }
 
-function armar(tablas: Record<string, any[]> = {}) {
+function armar(tablas: Record<string, any[]> = {}, o: { rpcs?: Record<string, (args: any, datos: Record<string, any[]>) => any>; rol?: string } = {}) {
   const { db, datos, planesActualizados } = baseEnMemoria({
     exercises: EJERCICIOS, exercise_categories: CATEGORIAS, exercise_overrides: [], grupos_musculares: [], profiles: [ATLETA],
     carpetas_planes: [], routine_templates: [], programas_guardados: [], ...tablas,
-  })
-  const quien: any = { id: 'master-1', usuario: 'andres', nombre: 'Andrés', rol: 'master', salud: false, unidad: 'kg', db }
+  }, { rpcs: o.rpcs })
+  const quien: any = { id: 'master-1', usuario: 'andres', nombre: 'Andrés', rol: o.rol ?? 'master', salud: false, unidad: 'kg', db }
   const tools: Record<string, (a: any) => Promise<any>> = {}
   const server: any = { registerTool: (nombre: string, _def: unknown, fn: (a: any) => Promise<any>) => { tools[nombre] = fn } }
   herramientasDelCoach(server, quien)
@@ -398,6 +398,26 @@ const idsDeFases = (plan: any) => plan.data.phases.map((f: any) => f.id)
   cierto(/misma persona/.test(await falla(m.tools.copiar_plan_a_atleta({ atleta: 'zz_atleta', titulo: 'X', desde_atleta: 'zz_atleta', reemplazar: true }))), 'de uno a sí mismo: avisa')
   cierto(/Falta el título/.test(await falla(m.tools.copiar_plan_a_atleta({ atleta: 'zz_tres', titulo: ' ', desde_atleta: 'zz_atleta' }))), 'sin título: avisa')
   ok('copiar_plan_a_atleta: de otro atleta o de Mis planes, fases elegidas, filtro de tipos, reemplazo con permiso')
+}
+
+/* ======================= marcar_demo_workout (solo el dueño) ======================= */
+{
+  const llamadas: any[] = []
+  const rpcs = { marcar_demo: ({ p_id, p_demo }: any, d: any) => { llamadas.push([p_id, p_demo]); d.routine_templates.find((t: any) => t.id === p_id).demo = p_demo; return null } }
+  const { tools, datos } = armar(SEMBRADO(), { rpcs })
+  const vista = sc(await tools.marcar_demo_workout({ item: 'Piernas A' }))
+  igual([vista.listo, vista.motivo, llamadas.length], [false, 'falta_confirmacion', 0], 'sin confirmado no lo marca')
+  cierto(/cualquier persona con cuenta/.test(vista.va_a_pasar), 'y dice que será público')
+  const r = sc(await tools.marcar_demo_workout({ item: 'Piernas A', confirmado: true }))
+  igual([r.listo, r.demo, llamadas, datos.routine_templates.find((t: any) => t.id === 't-w').demo], [true, true, [['t-w', true]], true], 'con confirmado, lo marca por la función de la base')
+  igual(sc(await tools.ver_mis_planes({ texto: 'Piernas' })).planes[0].demo, true, 'y sale con demo: true en ver_mis_planes')
+  cierto(/ya está marcado/.test(sc(await tools.marcar_demo_workout({ item: 'Piernas A', confirmado: true })).sin_cambio), 'marcarlo otra vez: no hace nada')
+  const q = sc(await tools.marcar_demo_workout({ item: 'Piernas A', demo: false, confirmado: true }))
+  igual([q.demo, llamadas.at(-1)], [false, ['t-w', false]], 'se desmarca')
+  cierto(/No encontré/.test(await falla(tools.marcar_demo_workout({ item: 'Vinyasa 45', confirmado: true }))), 'una clase no es un workout: no se marca')
+  // Solo el dueño: para un coach la herramienta ni existe.
+  igual(typeof armar(SEMBRADO(), { rol: 'coach' }).tools.marcar_demo_workout, 'undefined', 'a un coach que no es el dueño no se le da la herramienta')
+  ok('marcar_demo_workout: solo el dueño, nada sin confirmado, marca y desmarca, solo workouts')
 }
 
 console.log(`\nTodo bien: ${n} grupos de pruebas de Mis planes`)

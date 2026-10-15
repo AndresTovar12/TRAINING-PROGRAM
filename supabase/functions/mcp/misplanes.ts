@@ -733,6 +733,41 @@ export function herramientasDeMisPlanes(server: McpServer, quien: Quien) {
   }))
 
   /* ================================================================ */
+  /* DEMO WORKOUTS (solo el dueño de la app)                              */
+  /* ================================================================ */
+
+  if (esMaster) {
+    server.registerTool('marcar_demo_workout', {
+      title: 'Marcar un workout como demostración',
+      description: 'Marca (o desmarca) un WORKOUT tuyo de Mis planes como DEMOSTRACIÓN: cualquier persona con cuenta lo ve en «Demo workout», dentro de Entrenar, y puede hacerlo. Solo el dueño de la app puede, solo un workout (no una clase) y es PÚBLICO: sin "confirmado": true NO lo marca y te devuelve lo que pasaría; pregúntale antes a la persona. Los que ya están marcados salen en ver_mis_planes con demo: true.',
+      inputSchema: {
+        item: z.string().describe('El nombre o el id del workout (ver_mis_planes con tipo workout).'),
+        demo: z.boolean().optional().describe('true para marcarlo (por defecto); false para quitarle la marca.'),
+        confirmado: z.boolean().optional().describe('Solo después de preguntarle a la persona y que diga que sí.'),
+      },
+      annotations: { ...ESCRIBE, destructiveHint: true },
+    }, seguro(async ({ item, demo, confirmado }: any) => {
+      const { carpetas, items } = await leerMisPlanes(quien)
+      const it = buscarItem(items, carpetas, item, 'workout')
+      const marcar = demo !== false
+      if (it.demo === marcar) return respuesta({ listo: true, sin_cambio: `«${it.nombre}» ya ${marcar ? 'está marcado' : 'no está marcado'} como demostración.` })
+      if (!confirmado) {
+        return respuesta({
+          listo: false,
+          motivo: 'falta_confirmacion',
+          va_a_pasar: marcar
+            ? `«${it.nombre}» quedará como DEMOSTRACIÓN: cualquier persona con cuenta de Training Lab lo verá en «Demo workout» (dentro de Entrenar) y podrá hacerlo.`
+            : `«${it.nombre}» dejará de ser una demostración: ya no saldrá en «Demo workout» de nadie.`,
+          pista: 'Pregúntale a la persona. Si dice que sí, vuelve a llamar con confirmado: true.',
+        })
+      }
+      const { error } = await quien.db.rpc('marcar_demo', { p_id: it.id, p_demo: marcar })
+      if (error) throw new Aviso(error.message)
+      return respuesta({ listo: true, workout: it.nombre, demo: marcar })
+    }))
+  }
+
+  /* ================================================================ */
   /* CARPETAS                                                           */
   /* ================================================================ */
 
