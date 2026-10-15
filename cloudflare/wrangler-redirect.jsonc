@@ -1,0 +1,12 @@
+// Redirige `traininglabapp.com` y `www.traininglabapp.com` a la app. Se publica con:  cd cloudflare && npx wrangler@latest deploy -c wrangler-redirect.jsonc
+{
+  "name": "training-lab-redirect",
+  "main": "worker-redirect.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    { "pattern": "traininglabapp.com", "custom_domain": true },
+    { "pattern": "www.traininglabapp.com", "custom_domain": true }
+  ]
+}
