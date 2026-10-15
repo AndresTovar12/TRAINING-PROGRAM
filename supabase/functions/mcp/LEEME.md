@@ -25,6 +25,7 @@ Vercel pasa esa dirección a esta función (ver `rewrites` en `vercel.json`).
 - `servidor.ts` — recibe la petición, revisa el permiso y arma las herramientas
   según el rol (atleta / coach / administrador).
 - `atleta.ts`, `coach.ts`, `admin.ts`, `comunes.ts` — las herramientas.
+- `misplanes.ts` — «Mis planes»: el catálogo del profesional (ver la sección de abajo). Lo reciben coach y administrador.
 - `plan.ts` — leer y escribir planes con la forma exacta de la app, y de quién
   es cada programa (ver «Equipo por atleta»).
 - `app/` — COPIAS de `src/lib` (misma cuenta de "qué me toca hoy" que la app, y
@@ -110,6 +111,29 @@ texto (`lib/ciencia.js`, copiado a `app/ciencia.js`) que el atleta lee en la tar
   8000 caracteres, es un aviso (no se acorta en silencio).
 - `guardarFases` conserva todo lo demás de `plans.data` (`...plan.data`): cualquier herramienta que reescriba las fases deja
   la foto y la ciencia como estaban. Lo único que arma `data` desde cero es `crear_plan`.
+
+## Mis planes (13 oct 2026)
+
+Andrés vio a ChatGPT decir «el conector no puede guardar un plan progresivo en Mis planes»: la IA tiene que poder lo que hace la app. «Mis planes» es el catálogo de
+cada profesional: **programas** (por fases), **rutinas** semanales, **workouts** (un día) y **clases** (un workout con video), en carpetas. Lo guardado es una COPIA.
+Mismas tablas que la app (`src/lib/misPlanes.js`, `misPlanesDatos.js` → copiado a `app/`): programa → `programas_guardados`; rutina (kind `week`) y workout/clase
+(kind `day`) → `routine_templates`; carpetas → `carpetas_planes`. La base (RLS) hace que cada quien toque solo lo suyo.
+
+| Herramienta | Qué hace |
+|---|---|
+| `ver_mis_planes` | La lista, con tipo, carpeta y resumen; filtra por tipo, carpeta (con subcarpetas) o texto. |
+| `abrir_de_mis_planes` | Lo de dentro, de a poco: programa → fases → semanas → días → ejercicios (`fase`, `semana`, `dia`). |
+| `guardar_en_mis_planes` | (1) Del plan de un atleta: programa entero, `fases_elegidas`, una `semana` (rutina) o un `dia` (workout/clase), con `solo_tipos`/`sin_tipos`. (2) Armado desde cero (`tipo` + `fases`/`sesiones`), con las mismas preguntas que `crear_plan` (no guarda hasta que se contestan). |
+| `cambiar_en_mis_planes` | Nombre, descripción, carpeta (mover no toca la fecha de «cambiado», igual que la app). |
+| `duplicar_en_mis_planes`, `borrar_de_mis_planes` | Copia con «(copia)»; borrar (no se recupera). |
+| `crear_carpeta`, `cambiar_carpeta`, `borrar_carpeta` | Hasta 5 niveles; no repite una carpeta; al borrar, lo de adentro SUBE un nivel (nada se pierde). |
+
+Cosas a saber: una cosa guardada se pide por nombre o por id (`id` si hay dos con el mismo nombre; la herramienta lo pide); una carpeta, por nombre o ruta
+(«Fútbol › Fuerza»), y `"sin carpeta"` es arriba de todo. La IA no puede crear una CLASE (no sube videos): solo guarda la que ya viene en el día de un atleta.
+`armarFasesDeLaIA` (en `coach.ts`) arma las fases para `crear_plan` y para guardar sin atleta. **Falta (siguientes tandas):** dar lo guardado a uno o varios atletas, crear un
+plan copiando fases de otro, la vitrina, los mensajes y las métricas del reloj.
+
+Prueba: `scripts/prueba-mcp-misplanes.ts` (desde esta carpeta: `deno run -A --config deno.json ../../../scripts/prueba-mcp-misplanes.ts`), con una base en memoria que guarda y borra.
 
 ## Clases en video (13 oct 2026)
 

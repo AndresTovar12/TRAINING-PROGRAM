@@ -23,22 +23,22 @@ import { desdeKilos } from './app/unidades.js'
 import { COLORES_TIPO } from './app/theme.js'
 import { claseDe } from './app/clases.js'
 
-const SOLO_LEER = { readOnlyHint: true, destructiveHint: false, openWorldHint: false } as const
-const ESCRIBE = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } as const
-const BORRA = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false } as const
+export const SOLO_LEER = { readOnlyHint: true, destructiveHint: false, openWorldHint: false } as const
+export const ESCRIBE = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } as const
+export const BORRA = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false } as const
 
 /* ------------------------------------------------------------------ */
 /* Esquemas que repiten varias herramientas                            */
 /* ------------------------------------------------------------------ */
 
-const ATLETA = z.string().describe('El atleta: su usuario (@juan), su nombre o su id.')
-const SIN_FICHA_OK = z.array(z.string()).optional()
+export const ATLETA = z.string().describe('El atleta: su usuario (@juan), su nombre o su id.')
+export const SIN_FICHA_OK = z.array(z.string()).optional()
   .describe('Solo después de preguntar: nombres de ejercicios que la persona confirmó que van TAL CUAL, sin ficha del catálogo (o que ya vienen de un plan que existe). Sin esto, un ejercicio que no está en el catálogo con su nombre exacto no se guarda: la herramienta te dice qué preguntar.')
-const SIN_CANTIDAD_OK = z.array(z.string()).optional()
+export const SIN_CANTIDAD_OK = z.array(z.string()).optional()
   .describe('Solo después de preguntar: nombres de ejercicios que la persona dijo que van SIN repeticiones ni tiempo. Sin esto, un ejercicio sin "cantidad" no se guarda: la herramienta te dice qué preguntar.')
-const ESTRUCTURA_OK = z.boolean().optional()
+export const ESTRUCTURA_OK = z.boolean().optional()
   .describe('true cuando la persona ya confirmó cómo armaste las biseries, triseries o circuitos (o ya los había pedido explícitamente). Sin esto, la primera vez la herramienta te devuelve la rutina armada para que se la enseñes y no guarda.')
-const FASE = z.coerce.string().optional()
+export const FASE = z.coerce.string().optional()
   .describe('La fase: su número (1, 2…) o su nombre. En una rutina que se repite no hace falta.')
 
 /* La «Ciencia» de un plan: el porqué de cómo está armado, en recuadros que el atleta lee en Home (ver `lib/ciencia.js`). */
@@ -46,7 +46,7 @@ const RECUADRO = z.object({
   titulo: z.string().describe('Título corto del recuadro (hasta 120 caracteres).'),
   texto: z.string().describe('El texto (hasta 8000 caracteres). Una línea en blanco separa párrafos; "- " al inicio de línea hace una viñeta; "## " un subtítulo; "nombre | valor | nota" una fila de tabla.'),
 })
-const CIENCIA = z.array(RECUADRO).optional()
+export const CIENCIA = z.array(RECUADRO).optional()
   .describe('Opcional: la «Ciencia» (el porqué del plan), en recuadros de título y texto. Solo si la persona la pidió o te la dio; no la inventes. Sin esto, el plan simplemente no lleva ciencia.')
 
 /* El formato de un Set con reloj: lo que corre son los PASOS (una lista de tramos que se repite); el id
@@ -93,13 +93,27 @@ const EJERCICIO = z.object({
   formato: FORMATO.optional().describe('Formato con reloj de ESTE grupo (o del ejercicio si va solo): AMRAP, EMOM, Tabata, intervalos, fartlek… Basta ponerlo en UN ejercicio del grupo y vale para todos. Sustituye a "series". Si el día ya lo traía (ver_plan_de_atleta), mándalo igual o se pierde.'),
 })
 
-const SESION = {
+export const SESION = {
   nombre: z.string().optional().describe('Nombre de la sesión, ej.: "Tren inferior — fuerza".'),
   tipo: z.string().optional().describe('gym, neural, recovery, cancha, tests, equipo, correr, bici, natación, yoga, movilidad, terapia, clase, off (descanso), o uno propio.'),
   ejercicios: z.array(EJERCICIO).optional(),
   quitar_clase: z.boolean().optional().describe('Solo en editar_dia, y solo si la sesión traía una clase en video (clase_en_video al leer el día) y la persona pidió quitarla. Si no lo mandas, la clase se queda.'),
 }
-const SESION_CON_DIA = z.object({ dia: z.string().describe('lunes … domingo'), ...SESION })
+export const SESION_CON_DIA = z.object({ dia: z.string().describe('lunes … domingo'), ...SESION })
+
+export const FASES = z.array(z.object({
+  nombre: z.string(),
+  subtitulo: z.string().optional(),
+  enfoque: z.string().optional().describe('El enfoque en una línea.'),
+  objetivo: z.string().optional(),
+  color: z.string().optional().describe('Color en hex, ej. #3DD9A0.'),
+  ciencia: CIENCIA,
+  semanas: z.array(z.object({
+    nombre: z.string().optional(),
+    carga: z.string().optional().describe('Ej.: "4×10 al 65% · RIR 3".'),
+    sesiones: z.array(SESION_CON_DIA),
+  })).min(1),
+})).optional().describe('Solo para "fases".')
 
 /* ------------------------------------------------------------------ */
 /* Ayudas                                                              */
@@ -110,7 +124,7 @@ const SESION_CON_DIA = z.object({ dia: z.string().describe('lunes … domingo'),
  * `programa` viene solo si es el de un profesional del equipo: así el master,
  * que puede elegir con `de`, ve en la respuesta cuál cambió.
  */
-async function planDe(quien: Quien, ref: string, de?: string | null): Promise<{ persona: Persona; plan: Plan; programa: { programa?: string } }> {
+export async function planDe(quien: Quien, ref: string, de?: string | null): Promise<{ persona: Persona; plan: Plan; programa: { programa?: string } }> {
   const persona = await buscarPersona(quien, ref)
   const r = await planQueEdito(quien, persona, de)
   if (!r.plan) {
@@ -149,7 +163,7 @@ function programaParaLeer(quien: Quien, persona: Persona, programas: Programa[],
 const SIN_PROGRAMA = { plan: null, profesionalId: null, de: '', rol: 'coach', nombre: '', usuario: '', esPrincipal: true, altaEn: null } as unknown as Programa
 
 /** Arma los días de una semana a partir de sesiones con su día; lo que falta preguntar queda anotado en `rev`. */
-function diasDesde(sesiones: any[], repertorio: any[], rev: Revision, donde = '') {
+export function diasDesde(sesiones: any[], repertorio: any[], rev: Revision, donde = '') {
   return (sesiones ?? []).map((s) => {
     const clave = diaDesdeTexto(s.dia)
     const armado = diaDesdeEntrada(clave, s as SesionEntrada, repertorio)
@@ -179,7 +193,7 @@ const avisoSinFicha = (sinFicha: Set<string>) => (sinFicha.size
   : {})
 
 /** Lo que se guardó sin ficha o sin cantidad porque la persona lo confirmó: se le dice. */
-const avisosDeRespuestas = (r: { sinFicha: string[]; sinCantidad: string[] }) => ({
+export const avisosDeRespuestas = (r: { sinFicha: string[]; sinCantidad: string[] }) => ({
   ...avisoSinFicha(new Set(r.sinFicha)),
   ...(r.sinCantidad.length ? { sin_cantidad: r.sinCantidad, nota_sin_cantidad: 'Estos ejercicios se guardaron sin repeticiones ni tiempo, como la persona dijo.' } : {}),
 })
@@ -187,6 +201,36 @@ const avisosDeRespuestas = (r: { sinFicha: string[]; sinCantidad: string[] }) =>
 /** Para LEER: solo el programa de un profesional del equipo del atleta. */
 const DE_LEER = z.string().optional()
   .describe('Si el atleta tiene un equipo (su coach y otros profesionales, como un fisio), cada uno con su programa: de cuál, con su nombre, "coach" o "fisio". Sin esto, todos juntos.')
+
+/**
+ * Arma las fases que manda la IA: "rutina" (una semana que se repite) o "fases" (cada una con sus semanas). Lo que falta preguntar queda anotado en `rev`.
+ * Lo usan `crear_plan` (el plan de un atleta) y `guardar_en_mis_planes` (lo que se guarda sin atleta).
+ */
+export function armarFasesDeLaIA(
+  entrada: { tipo: 'rutina' | 'fases'; sesiones?: any[]; fases?: any[]; ciencia?: any[] },
+  repertorio: any[],
+  rev: Revision,
+) {
+  // La ciencia se valida ANTES de armar nada: un recuadro vacío o demasiado largo es un aviso para la IA.
+  const cienciaNueva = recuadrosDeLaIA(entrada.ciencia, 'todo el plan')
+  let nuevas: any[]
+  if (entrada.tipo === 'rutina') {
+    if (!entrada.sesiones?.length) throw new Aviso('Para una rutina manda "sesiones", cada una con su día.')
+    const base = faseNueva(1, { nombre: 'Rutina semanal' })
+    base.weekData = [{ ...semanaNueva(1), days: diasDesde(entrada.sesiones, repertorio, rev) }]
+    nuevas = [base]
+  } else {
+    if (!entrada.fases?.length) throw new Aviso('Para un programa por fases manda "fases", cada una con sus semanas.')
+    nuevas = entrada.fases.map((f: any, i: number) => {
+      const fase: any = faseNueva(i + 1, f)
+      fase.weekData = f.semanas.map((w: any, j: number) => ({ ...semanaNueva(j + 1, w), days: diasDesde(w.sesiones, repertorio, rev, `${f.nombre} · semana ${j + 1} · `) }))
+      const deLaFase = recuadrosDeLaIA(f.ciencia, `la fase ${f.nombre}`)
+      if (deLaFase.length) fase.ciencia = deLaFase
+      return fase
+    })
+  }
+  return { nuevas, cienciaNueva }
+}
 
 export function herramientasDelCoach(server: McpServer, quien: Quien) {
   const esMaster = quien.rol === 'master'
@@ -602,19 +646,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       tipo: z.enum(['rutina', 'fases']),
       sesiones: z.array(SESION_CON_DIA).optional().describe('Solo para "rutina": las sesiones de la semana que se repite.'),
       ciencia: CIENCIA,
-      fases: z.array(z.object({
-        nombre: z.string(),
-        subtitulo: z.string().optional(),
-        enfoque: z.string().optional().describe('El enfoque en una línea.'),
-        objetivo: z.string().optional(),
-        color: z.string().optional().describe('Color en hex, ej. #3DD9A0.'),
-        ciencia: CIENCIA,
-        semanas: z.array(z.object({
-          nombre: z.string().optional(),
-          carga: z.string().optional().describe('Ej.: "4×10 al 65% · RIR 3".'),
-          sesiones: z.array(SESION_CON_DIA),
-        })).min(1),
-      })).optional().describe('Solo para "fases".'),
+      fases: FASES,
       reemplazar: z.boolean().optional().describe('true para reemplazar el plan que ya tiene.'),
       sin_ficha_ok: SIN_FICHA_OK,
       sin_cantidad_ok: SIN_CANTIDAD_OK,
@@ -626,24 +658,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     const persona = await buscarPersona(quien, atleta)
     const repertorio = await repertorioVisible(quien)
     const rev = nuevaRevision()
-    // La ciencia se valida ANTES de armar nada: un recuadro vacío o demasiado largo es un aviso para la IA.
-    const cienciaNueva = recuadrosDeLaIA(ciencia, 'todo el plan')
-    let nuevas: any[]
-    if (tipo === 'rutina') {
-      if (!sesiones?.length) throw new Aviso('Para una rutina manda "sesiones", cada una con su día.')
-      const base = faseNueva(1, { nombre: 'Rutina semanal' })
-      base.weekData = [{ ...semanaNueva(1), days: diasDesde(sesiones, repertorio, rev) }]
-      nuevas = [base]
-    } else {
-      if (!fases?.length) throw new Aviso('Para un programa por fases manda "fases", cada una con sus semanas.')
-      nuevas = fases.map((f: any, i: number) => {
-        const fase: any = faseNueva(i + 1, f)
-        fase.weekData = f.semanas.map((w: any, j: number) => ({ ...semanaNueva(j + 1, w), days: diasDesde(w.sesiones, repertorio, rev, `${f.nombre} · semana ${j + 1} · `) }))
-        const deLaFase = recuadrosDeLaIA(f.ciencia, `la fase ${f.nombre}`)
-        if (deLaFase.length) fase.ciencia = deLaFase
-        return fase
-      })
-    }
+    const { nuevas, cienciaNueva } = armarFasesDeLaIA({ tipo, sesiones, fases, ciencia }, repertorio, rev)
     const kind = tipo === 'rutina' ? 'weekly' : 'periodized'
     // El programa de ESTA persona con este atleta: su coach principal, el principal; un profesional del equipo, el suyo.
     const { plan: existente, profesionalId, de: deProfesional } = await planQueEdito(quien, persona, de)
@@ -1053,7 +1068,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
 
   server.registerTool('guardar_plantilla', {
     title: 'Guardar un día o una semana como plantilla',
-    description: 'Guarda como plantilla, para reusarla con otros atletas, la sesión de un día (tipo "dia") o una semana entera (tipo "semana") del plan de un atleta.',
+    description: 'Atajo para guardar como plantilla la sesión de un día (tipo "dia") o una semana entera (tipo "semana") del plan de un atleta. Para guardar un programa por fases, elegir carpeta o armar algo sin atleta, usa guardar_en_mis_planes (Mis planes).',
     inputSchema: {
       nombre: z.string().describe('Nombre de la plantilla.'),
       tipo: z.enum(['dia', 'semana']),
