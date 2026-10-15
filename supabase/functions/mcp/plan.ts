@@ -14,6 +14,7 @@ import { lapsosDe, parcheDeLapsos, aLapsos, comoEjercicio, MAX_LAPSOS } from './
 import { limpiaFormato, resumenDeFormato, textoDeResultado } from './app/formatos.js'
 import { CAT_COLORS, tipoDeSesion } from './app/theme.js'
 import { MAX_TEXTO, MAX_TITULO, normalizaCiencia, nuevoRecuadro } from './app/ciencia.js'
+import { claseDe, duracionTexto } from './app/clases.js'
 
 /**
  * Leer y escribir planes con la MISMA forma que usa la app.
@@ -370,6 +371,8 @@ export function describirDia(fase: any, semana: any, diaIdx: number, registro?: 
     sesion: nombreDelDia(dia),
     tipo: tipoDeSesion(dia).label,
     descanso: esDescanso(dia),
+    // Una sesión puede traer una clase en video arriba de sus ejercicios (`src/lib/clases.js`). editar_dia la conserva; la IA solo la quita si se lo piden.
+    ...(claseDe(dia) ? { clase_en_video: duracionTexto(claseDe(dia).duracion) || 'sí (sin duración conocida)' } : {}),
     ejercicios,
     ...(registro?.formatos && Object.keys(registro.formatos).length ? {
       // Lo que anotó el atleta de cada Set con formato; la llave es la `n` de su primer ejercicio.

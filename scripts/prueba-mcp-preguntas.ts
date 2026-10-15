@@ -709,4 +709,43 @@ const revisaDia = (ejercicios: any[], titulo = 'Sábado') => {
   ok('ciencia del plan: editar_ciencia, ver_ciencia_del_plan y crear_plan con ciencia')
 }
 
+/* ---- Clases en video (13 oct 2026): editar un día no se lleva la clase; se ve al leer, se guarda y se aplica como plantilla ---- */
+{
+  const CLASE = { url: 'https://videos.ejemplo/vinyasa.mp4', duracion: 2700 }
+  const conClase = () => {
+    const p: any = PLAN_FALSO()
+    p.data.phases[0].weekData[0].days = [{ day: 'Mar', name: 'Vinyasa', cat: 'clase', exercises: [], clase: { ...CLASE } }, ...p.data.phases[0].weekData[0].days]
+    return p
+  }
+  const diaGuardado = (act: any[], i: number, clave: string) => act[i].cambios.data.phases[0].weekData[0].days.find((d: any) => d.day === clave)
+
+  // Leer el día dice que trae clase.
+  const lee = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [conClase()] })
+  const visto: any = await lee.tools.ver_plan_de_atleta({ atleta: 'zz_atleta', semana: 1 })
+  cierto(JSON.stringify(visto.structuredContent).includes('clase_en_video'), 'ver_plan_de_atleta enseña la clase en video')
+
+  // Reescribir el día (con otro nombre o agregando ejercicios) conserva la clase.
+  const { tools, actualizados } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [conClase()] })
+  const r1: any = await tools.editar_dia({ atleta: 'zz_atleta', dia: 'martes', sesiones: [{ nombre: 'Vinyasa', tipo: 'clase', ejercicios: [{ nombre: 'Back Squat', series: 3, cantidad: 5 }] }] })
+  igual(r1.structuredContent.listo, true, 'se guarda')
+  igual(diaGuardado(actualizados, 0, 'Mar').clase, CLASE, 'la clase se queda al reescribir el día')
+  cierto(String(r1.structuredContent.ahora).includes('clase en video'), 'y la respuesta lo dice')
+  const r2: any = await tools.editar_dia({ atleta: 'zz_atleta', dia: 'martes', sesiones: [{ nombre: 'Otro nombre', ejercicios: [{ nombre: 'Back Squat', series: 3, cantidad: 5 }] }] })
+  igual([r2.structuredContent.listo, diaGuardado(actualizados, 1, 'Mar').clase], [true, CLASE], 'con otro nombre, la del mismo lugar')
+  // Solo se va si lo piden.
+  const r3: any = await tools.editar_dia({ atleta: 'zz_atleta', dia: 'martes', sesiones: [{ nombre: 'Vinyasa', quitar_clase: true, ejercicios: [{ nombre: 'Back Squat', series: 3, cantidad: 5 }] }] })
+  igual([r3.structuredContent.listo, diaGuardado(actualizados, 2, 'Mar').clase], [true, undefined], 'quitar_clase la quita')
+  // Un día sin clase sigue sin clase.
+  await tools.editar_dia({ atleta: 'zz_atleta', dia: 'lunes', sesiones: [{ nombre: 'Fuerza', ejercicios: [{ nombre: 'Back Squat', series: 3, cantidad: 5 }] }] })
+  igual(diaGuardado(actualizados, 3, 'Lun').clase, undefined, 'un día sin clase no gana una')
+
+  // Guardar el día como plantilla: va con su clase y Mis planes la lista como «Clase».
+  const pl = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [conClase()] })
+  const g: any = await pl.tools.guardar_plantilla({ atleta: 'zz_atleta', nombre: 'Vinyasa 45', tipo: 'dia', dia: 'martes', semana: 1 })
+  cierto(!g.isError, `guardar_plantilla funciona (${JSON.stringify(g.structuredContent ?? g.content)})`)
+  const fila = pl.insertados.find((x: any) => x.tabla === 'routine_templates')?.fila
+  igual([fila?.data?.clase, fila?.resumen?.clase, fila?.resumen?.duracion], [CLASE, true, 2700], 'la plantilla lleva la clase y su resumen la marca como Clase')
+  ok('clases en video: se ven, se conservan al editar, se quitan solo si lo piden y viajan en las plantillas')
+}
+
 console.log(`\nTodo bien: ${n} grupos de pruebas`)

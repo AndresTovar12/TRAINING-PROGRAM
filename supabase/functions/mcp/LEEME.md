@@ -111,6 +111,18 @@ texto (`lib/ciencia.js`, copiado a `app/ciencia.js`) que el atleta lee en la tar
 - `guardarFases` conserva todo lo demás de `plans.data` (`...plan.data`): cualquier herramienta que reescriba las fases deja
   la foto y la ciencia como estaban. Lo único que arma `data` desde cero es `crear_plan`.
 
+## Clases en video (13 oct 2026)
+
+Una sesión puede traer una clase en video arriba de sus ejercicios: `sesion.clase = { url, duracion?, inicio?, fin? }` (`src/lib/clases.js`, copiado a `app/clases.js`).
+La IA no sube videos, así que la clase nunca viaja en lo que manda; el conector la cuida:
+
+- **Al leer** (`ver_plan_de_atleta`, `ver_dia_de_atleta`): el día dice `clase_en_video` (la duración, si se sabe).
+- **`editar_dia`**: cada sesión nueva hereda la clase de la que ya estaba (la del mismo nombre, o la que ocupaba ese lugar). Solo se va con `quitar_clase: true`.
+- **`guardar_plantilla`** (día): la plantilla lleva la clase y su `resumen` la marca como «Clase», igual que cuando la guarda la app; así sale en Mis planes y en la biblioteca de clases.
+- **`aplicar_plantilla`** (día): el día recibe la clase de la plantilla.
+
+Prueba: el grupo «clases en video» de `scripts/prueba-mcp-preguntas.ts`.
+
 ## Publicar
 
 Con la CLI de Supabase:
