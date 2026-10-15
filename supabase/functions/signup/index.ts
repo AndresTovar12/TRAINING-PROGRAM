@@ -5,6 +5,7 @@ const DEFAULT_ORIGINS = [
   'http://localhost:5173',
   'http://localhost:4173',
   'http://127.0.0.1:5173',
+  'https://app.traininglabapp.com',  // dominio propio (15 oct 2026); la de Vercel sigue valiendo por el patrón .vercel.app
 ]
 const envOrigins = (Deno.env.get('ALLOWED_ORIGINS') ?? '')
   .split(',')

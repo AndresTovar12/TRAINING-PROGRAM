@@ -16,7 +16,7 @@ Dirección nueva: `https://videos.<dominio>` (subdominio del dominio comprado).
 
 ## Pasos
 
-### 1. Dominio y Cloudflare — **Tú**
+### 1. Dominio y Cloudflare — **Tú** (✅ 15 oct 2026: dominio `traininglabapp.com` comprado; `videos.traininglabapp.com` conectado al bucket `training-lab-media` y su CORS ya incluye `https://app.traininglabapp.com`, hecho con `wrangler`)
 1. Comprar el dominio. Lo más simple: **Cloudflare Registrar** (precio de costo, y el dominio ya queda en Cloudflare). Si se compra en otro lado, agregarlo a Cloudflare y cambiar los *nameservers*.
 2. Cloudflare → **R2** → el bucket → **Settings → Custom Domains → Add** → `videos.<dominio>`. Cloudflare crea el registro solo. Esperar a que diga *Active*.
 3. En el mismo bucket, **CORS policy**: agregar el origen de la app (`https://app.<dominio>`, o el que se use) con los mismos métodos y cabeceras que ya tiene el de `*.vercel.app` (`PUT` y `GET`/`HEAD` con `Range`).
@@ -29,7 +29,7 @@ Dirección nueva: `https://videos.<dominio>` (subdominio del dominio comprado).
    - `ORIGENES_EXTRA` = otros orígenes permitidos, separados por coma (por ejemplo `https://www.<dominio>`)
 6. Vercel → Environment Variables: `VITE_MEDIOS_URL` = `https://videos.<dominio>`.
 7. `vercel.json`: agregar `https://videos.<dominio>` al `connect-src` de la política de seguridad (el video se reproduce con `media-src https:`, pero la app también lo lee con `fetch`). Publicar.
-8. **Funciones que aún solo aceptan `*.vercel.app` y `localhost`** (hay que agregarles `SITIO_URL`/`ORIGENES_EXTRA`, igual que ya tienen `r2-upload`, `comprar` y `reembolsar`, y redesplegarlas): `signup`, `login`, `activar-invitacion`, `invitar-atleta`, `admin-delete-user`, `programa-comprado`. Sin esto la app abre en el dominio pero no deja entrar ni registrarse.
+8. **Funciones que aún solo aceptan `*.vercel.app` y `localhost`** (hay que agregarles `SITIO_URL`/`ORIGENES_EXTRA`, igual que ya tienen `r2-upload`, `comprar` y `reembolsar`, y redesplegarlas): `signup`, `login`, `activar-invitacion`, `invitar-atleta`, `admin-delete-user`, `programa-comprado`. Sin esto la app abre en el dominio pero no deja entrar ni registrarse. ✅ **HECHO 15 oct 2026**: las 7 (y `restablecer-contrasena`, que no estaba en la lista) llevan `https://app.traininglabapp.com` directo en el código y ya están desplegadas; la dirección de Vercel sigue valiendo.
 
 ### 3. Pasar lo guardado — **Yo**
 9. Comprobar que `https://videos.<dominio>/videos/<un-id>.mp4` responde 200 y que `r2-upload` ya da direcciones nuevas.
