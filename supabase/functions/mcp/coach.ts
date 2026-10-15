@@ -21,6 +21,7 @@ import { dondeVa, historialDePeso } from './app/training-utils.js'
 import { gruposConPropios } from './app/muscles.js'
 import { desdeKilos } from './app/unidades.js'
 import { COLORES_TIPO } from './app/theme.js'
+import { claseDe } from './app/clases.js'
 
 const SOLO_LEER = { readOnlyHint: true, destructiveHint: false, openWorldHint: false } as const
 const ESCRIBE = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } as const
@@ -96,6 +97,7 @@ const SESION = {
   nombre: z.string().optional().describe('Nombre de la sesión, ej.: "Tren inferior — fuerza".'),
   tipo: z.string().optional().describe('gym, neural, recovery, cancha, tests, equipo, correr, bici, natación, yoga, movilidad, terapia, clase, off (descanso), o uno propio.'),
   ejercicios: z.array(EJERCICIO).optional(),
+  quitar_clase: z.boolean().optional().describe('Solo en editar_dia, y solo si la sesión traía una clase en video (clase_en_video al leer el día) y la persona pidió quitarla. Si no lo mandas, la clase se queda.'),
 }
 const SESION_CON_DIA = z.object({ dia: z.string().describe('lunes … domingo'), ...SESION })
 
@@ -728,9 +730,13 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     const clave: Dia = diaDesdeTexto(dia)
     const repertorio = await repertorioVisible(quien)
     const rev = nuevaRevision()
-    const nuevos = sesiones.map((s: any) => {
+    // La clase en video de una sesión no viaja en lo que manda la IA: se toma de la sesión que ya estaba (la del mismo nombre, o la que ocupaba ese lugar).
+    const antes = (fases[fIdx].weekData[sIdx]?.days ?? []).filter((d: any) => d.day === clave)
+    const nuevos = sesiones.map((s: any, i: number) => {
       const armado = diaDesdeEntrada(clave, s, repertorio)
       anotarDia(rev, `${NOMBRE_DIA[clave]}${s.nombre ? ` · ${s.nombre}` : ''}`, armado)
+      const previa = antes.find((d: any) => s.nombre && d.name && mismoTexto(d.name, s.nombre)) ?? antes[i]
+      if (claseDe(previa) && s.quitar_clase !== true) (armado.dia as any).clase = structuredClone(previa.clase)
       return armado.dia
     })
     // Leer un día y reescribirlo no debe volver a discutir lo que el plan ya tenía; lo nuevo que falte, sí se pregunta, todo junto.
@@ -751,7 +757,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       atleta: nombreDe(persona),
       ...programa,
       cambio: `${fases[fIdx].name} · semana ${w.num} · ${NOMBRE_DIA[clave]}`,
-      ahora: nuevos.length ? nuevos.map((d: any) => `${d.name} (${d.exercises.filter((e: any) => !e.isNote).length} ejercicios)`) : 'sin sesión',
+      ahora: nuevos.length ? nuevos.map((d: any) => `${d.name} (${claseDe(d) ? 'clase en video + ' : ''}${d.exercises.filter((e: any) => !e.isNote).length} ejercicios)`) : 'sin sesión',
       ...avisosDeRespuestas(aceptado),
       deshacer: 'Si no quedó bien: deshacer_cambio_del_plan.',
     })
@@ -1070,9 +1076,17 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       if (!dia) throw new Aviso('Para guardar un día, di cuál.')
       const d = w.days.find((x: any) => x.day === diaDesdeTexto(dia))
       if (!d) throw new Aviso(`Ese día no tiene sesión en la semana ${w.num}.`)
-      data = { name: d.name, cat: d.cat, catNombre: d.catNombre ?? null, catColor: d.catColor ?? null, catIcono: d.catIcono ?? null, exercises: structuredClone(d.exercises ?? []) }
+      data = {
+        name: d.name, cat: d.cat, catNombre: d.catNombre ?? null, catColor: d.catColor ?? null, catIcono: d.catIcono ?? null, exercises: structuredClone(d.exercises ?? []),
+        ...(claseDe(d) ? { clase: structuredClone(d.clase) } : {}),
+      }
     }
-    const { error } = await quien.db.from('routine_templates').insert({ name: nombre, kind: tipo === 'semana' ? 'week' : 'day', data, created_by: quien.id })
+    // Un día con clase en video se guarda como «Clase» en Mis planes: la lista lo sabe por el resumen, igual que cuando la guarda la app (`resumenDe` en src/lib/misPlanesDatos.js).
+    const clase = tipo === 'semana' ? null : claseDe(data)
+    const resumen = clase
+      ? { sesiones: 1, ejercicios: (data.exercises ?? []).filter((e: any) => !e?.isNote).length, clase: true, ...(clase.duracion ? { duracion: clase.duracion } : {}) }
+      : undefined
+    const { error } = await quien.db.from('routine_templates').insert({ name: nombre, kind: tipo === 'semana' ? 'week' : 'day', data, created_by: quien.id, ...(resumen ? { resumen } : {}) })
     if (error) throw new Error(error.message)
     return respuesta({ listo: true, plantilla: nombre, tipo })
   }))
@@ -1103,7 +1117,11 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     } else {
       if (!dia) throw new Aviso('Es una plantilla de día: di en qué día va.')
       const clave = diaDesdeTexto(dia)
-      const nuevo = { day: clave, name: t.data?.name || t.name, cat: t.data?.cat || 'gym', catNombre: t.data?.catNombre ?? null, catColor: t.data?.catColor ?? null, catIcono: t.data?.catIcono ?? null, exercises: structuredClone(t.data?.exercises ?? []) }
+      const nuevo = {
+        day: clave, name: t.data?.name || t.name, cat: t.data?.cat || 'gym', catNombre: t.data?.catNombre ?? null, catColor: t.data?.catColor ?? null, catIcono: t.data?.catIcono ?? null,
+        exercises: structuredClone(t.data?.exercises ?? []),
+        ...(claseDe(t.data) ? { clase: structuredClone(t.data.clase) } : {}),
+      }
       w.days = agregar ? [...w.days, nuevo] : [...w.days.filter((d: any) => d.day !== clave), nuevo]
     }
     await guardarFases(quien, plan, fases)
