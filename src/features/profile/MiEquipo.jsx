@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Loader2, Plus, UserMinus, Users, X } from 'lucide-react';
+import { Check, Loader2, UserMinus, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { useConfirmacion } from '@/components/Confirmacion';
@@ -7,55 +7,17 @@ import {
   nombresDelEquipo, profesionalPorReferencia, agregarAMiEquipo, quitarDeMiEquipo,
   aceptarInvitacionDeEquipo, rechazarInvitacionDeEquipo,
 } from '@/lib/api';
-import { T, FONT, KP, oficioCorto } from '@/lib/theme';
+import { FONT, KP, oficioCorto } from '@/lib/theme';
+import { useAviso } from '@/components/AvisoPasajero';
+import HojaFlotante from '@/components/HojaFlotante';
+import { Avatar, Boton, Campo, Fila, Grupo, TarjetaHeroe } from '@/components/ui';
+import { Aviso } from '@/features/profile/piezas';
 
 /* «Mi equipo»: quién atiende a este atleta. Su coach principal (no se quita desde
    aquí) y los profesionales de su equipo, que ÉL decide: acepta o rechaza las
    invitaciones, quita a quien ya no quiere y agrega a alguien con su código o
    @usuario. Quitar no borra nada: esa persona deja de verlo al instante y, si
    la vuelve a agregar, todo regresa. */
-
-const iniciales = (nombre) => {
-  const partes = String(nombre ?? '').trim().split(/\s+/).filter(Boolean);
-  if (!partes.length) return '?';
-  return (partes.length === 1 ? partes[0].slice(0, 2) : partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
-};
-
-function Persona({ persona, detalle, children }) {
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 12, background: T.bg2, border: `1px solid ${T.border}`,
-      borderRadius: 14, padding: '11px 13px',
-    }}>
-      <span style={{
-        width: 40, height: 40, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center',
-        background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, color: '#fff', fontWeight: 800, fontSize: 14,
-        overflow: 'hidden',
-      }}>
-        {persona.avatar_url
-          ? <img src={persona.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          : iniciales(persona.full_name || persona.username)}
-      </span>
-      <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: 'block', fontSize: 15, fontWeight: 800, color: T.text, overflowWrap: 'anywhere' }}>
-          {persona.full_name || persona.username}
-        </span>
-        <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: T.text2 }}>
-          {[oficioCorto(persona.profesion), detalle].filter(Boolean).join(' · ')}
-        </span>
-      </span>
-      {children}
-    </div>
-  );
-}
-
-const boton = (tono) => ({
-  display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5,
-  fontWeight: 800, borderRadius: 11, padding: '9px 13px', touchAction: 'manipulation',
-  border: tono === 'principal' ? 'none' : `1.5px solid ${tono === 'peligro' ? '#F1B7B7' : T.border}`,
-  background: tono === 'principal' ? T.accent : T.bg2,
-  color: tono === 'principal' ? '#fff' : (tono === 'peligro' ? T.danger : T.text2),
-});
 
 export default function MiEquipo() {
   const { user, refreshProfile } = useAuth();
@@ -67,7 +29,10 @@ export default function MiEquipo() {
   const [ref, setRef] = useState('');
   const [buscando, setBuscando] = useState(false);
   const [encontrado, setEncontrado] = useState(null);
-  const [aviso, setAviso] = useState('');
+  const [agregando, setAgregando] = useState(false);
+  const [abierta, setAbierta] = useState(null); // la persona cuya hoja está abierta
+  const { avisa } = useAviso();
+  const setAviso = (m) => { if (m) avisa(m); };
 
   const yo = user?.id;
   const cargar = useCallback(async () => {
@@ -142,6 +107,7 @@ export default function MiEquipo() {
       setAviso(r?.tipo === 'principal' ? `Listo: ${nombre} ahora es tu coach.` : `Listo: ${nombre} ya está en tu equipo.`);
       setEncontrado(null);
       setRef('');
+      setAgregando(false);
       if (r?.tipo === 'principal') await refreshProfile?.();
       await cargar();
     } catch (e) {
@@ -155,103 +121,86 @@ export default function MiEquipo() {
   const activos = (equipo ?? []).filter((p) => !p.es_principal && p.estado === 'activo');
   const pendientes = (equipo ?? []).filter((p) => !p.es_principal && p.estado === 'pendiente');
 
+  const oficioDe = (p) => oficioCorto(p.profesion) || null;
+  const cierraAgregar = () => { setAgregando(false); setEncontrado(null); setRef(''); setError(''); };
+
+  /* Reestructura visual (15 oct 2026), como «Mi equipo» de las capturas: su coach en la tarjeta azul, quien más lo atiende en «También te ven»
+     (tocar a alguien abre su hoja con «Quitar»), las invitaciones con Aceptar/Rechazar y «Agregar con un código» en su hoja. */
+  if (equipo === null) return <div style={{ display: 'grid', placeItems: 'center', padding: 30 }}><Loader2 size={22} className="spin" color={KP.ink2} /></div>;
   return (
-    <section aria-label="Mi equipo">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <Users size={16} color={T.text3} />
-        <span style={{ fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Mi equipo</span>
-      </div>
-
-      {equipo === null ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: T.text2, fontWeight: 600, fontSize: 14 }}>
-          <Loader2 size={15} className="spin" /> Cargando…
-        </div>
+    <>
+      {error && !agregando && <Aviso tono="malo" role="alert">{error}</Aviso>}
+      {principal ? (
+        <TarjetaHeroe etiqueta={t('Tu coach principal')} titulo={principal.full_name || principal.username} detalle={[oficioDe(principal), t('te arma el plan')].filter(Boolean).join(' · ')} />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {principal ? (
-            <Persona persona={principal} detalle={t('Coach principal')} />
-          ) : (
-            <div style={{ fontSize: 13.5, color: T.text2, fontWeight: 600 }}>Aún no tienes coach.</div>
-          )}
-
-          {pendientes.map((p) => (
-            <Persona key={p.profesional_id} persona={p} detalle="quiere atenderte">
-              <span style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                <button type="button" disabled={ocupado === p.profesional_id} style={boton('principal')}
-                  onClick={() => hacer(p.profesional_id, () => aceptarInvitacionDeEquipo(p.profesional_id), `${p.full_name || 'Esa persona'} ya está en tu equipo.`)}>
-                  <Check size={15} /> Aceptar
-                </button>
-                <button type="button" disabled={ocupado === p.profesional_id} style={boton()} aria-label={`Rechazar a ${p.full_name || p.username}`}
-                  onClick={() => hacer(p.profesional_id, () => rechazarInvitacionDeEquipo(p.profesional_id))}>
-                  <X size={15} />
-                </button>
-              </span>
-            </Persona>
-          ))}
-
-          {activos.map((p) => (
-            <Persona key={p.profesional_id} persona={p} detalle={p.alta_en ? 'te dio de alta' : null}>
-              <button type="button" disabled={ocupado === p.profesional_id} style={boton('peligro')} onClick={() => quitar(p)}>
-                <UserMinus size={15} /> Quitar
-              </button>
-            </Persona>
-          ))}
-
-          {/* Agregar: blanco, borde sólido y azul (el estilo de «agregar» de la app). */}
-          <form onSubmit={buscar} style={{ marginTop: 6 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 600, color: T.text2, marginBottom: 7, lineHeight: 1.45 }}>
-              ¿Alguien más te atiende (un fisio, por ejemplo)? Escribe su código o @usuario.
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                value={ref}
-                onChange={(e) => { setRef(e.target.value); setEncontrado(null); setError(''); }}
-                placeholder="Código o @usuario"
-                aria-label="Código o usuario"
-                autoCapitalize="none"
-                spellCheck={false}
-                style={{
-                  flex: 1, minWidth: 0, border: `1.5px solid ${T.border}`, borderRadius: 12, padding: '12px 13px',
-                  fontFamily: FONT, fontSize: 16, fontWeight: 500, color: T.text, background: T.bg2, outline: 'none',
-                }}
-              />
-              <button
-                type="submit"
-                disabled={buscando || !ref.trim()}
-                className="kp-press"
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontFamily: FONT,
-                  fontSize: 14, fontWeight: 800, borderRadius: 12, padding: '0 16px',
-                  border: `1.5px solid ${T.accent}`, background: T.bg2, color: T.accent,
-                  opacity: buscando || !ref.trim() ? 0.55 : 1,
-                }}
-              >
-                {buscando ? <Loader2 size={15} className="spin" /> : <Plus size={16} />} Buscar
-              </button>
-            </div>
-          </form>
-
-          {encontrado && (
-            <div style={{ background: T.accentBg, borderRadius: 14, padding: 13 }}>
-              <div style={{ fontSize: 14.5, fontWeight: 800, color: T.text, overflowWrap: 'anywhere' }}>
-                {encontrado.full_name} {encontrado.profesion ? <span style={{ fontWeight: 600, color: T.text2 }}>· {oficioCorto(encontrado.profesion)}</span> : null}
-              </div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: T.text2, marginTop: 4, lineHeight: 1.45 }}>
-                Podrá ver tu plan de entrenamiento y cómo vas. Tú decides: puedes quitarlo cuando quieras.
-              </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                <button type="button" onClick={agregar} disabled={ocupado === 'agregando'} style={boton('principal')}>
-                  {ocupado === 'agregando' ? <Loader2 size={15} className="spin" /> : <Check size={15} />} Agregar a mi equipo
-                </button>
-                <button type="button" onClick={() => setEncontrado(null)} style={boton()}>Cancelar</button>
-              </div>
-            </div>
-          )}
-
-          {aviso && <div role="status" style={{ fontSize: 13.5, fontWeight: 700, color: '#00805A' }}>{aviso}</div>}
-          {error && <div role="alert" style={{ fontSize: 13.5, fontWeight: 700, color: T.danger }}>{error}</div>}
-        </div>
+        <Grupo><Fila texto={t('Aún no tienes coach')} detalle="Agrégalo con su código" onClick={() => setAgregando(true)} /></Grupo>
       )}
-    </section>
+
+      {pendientes.length > 0 && (
+        <Grupo titulo="Quieren atenderte">
+          {pendientes.map((p) => (
+            <Fila
+              key={p.profesional_id} izquierda={<Avatar nombre={p.full_name || p.username} foto={p.avatar_url} tamano={40} />}
+              texto={p.full_name || p.username} detalle={oficioDe(p)}
+              derecha={(
+                <span style={{ display: 'flex', gap: 6 }}>
+                  <Boton tipo="secundario" chico icono={X} aria-label={`Rechazar a ${p.full_name || p.username}`} deshabilitado={ocupado === p.profesional_id}
+                    onClick={() => hacer(p.profesional_id, () => rechazarInvitacionDeEquipo(p.profesional_id))} />
+                  <Boton chico cargando={ocupado === p.profesional_id}
+                    onClick={() => hacer(p.profesional_id, () => aceptarInvitacionDeEquipo(p.profesional_id), `${p.full_name || 'Esa persona'} ya está en tu equipo`)}>Aceptar</Boton>
+                </span>
+              )}
+            />
+          ))}
+        </Grupo>
+      )}
+
+      {activos.length > 0 && (
+        <Grupo titulo="También te ven">
+          {activos.map((p) => (
+            <Fila
+              key={p.profesional_id} izquierda={<Avatar nombre={p.full_name || p.username} foto={p.avatar_url} tamano={40} />}
+              texto={p.full_name || p.username} detalle={[oficioDe(p), p.alta_en ? 'te dio de alta' : null].filter(Boolean).join(' · ') || null}
+              onClick={() => setAbierta(p)}
+            />
+          ))}
+        </Grupo>
+      )}
+
+      <Grupo>
+        <Fila texto="Agregar con un código" tono="enlace" detalle="El código o @usuario de tu coach o fisio" onClick={() => setAgregando(true)} />
+      </Grupo>
+
+      {abierta && (
+        <HojaFlotante titulo={abierta.full_name || abierta.username} subtitulo={oficioDe(abierta) ?? undefined} onCerrar={() => setAbierta(null)} ancho={440}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, fontFamily: FONT }}>
+            <p style={{ margin: '0 6px', fontSize: 15, color: KP.ink2, lineHeight: 1.5 }}>Ve tu plan de entrenamiento y cómo vas. Si lo quitas no se borra nada: si lo vuelves a agregar, todo regresa.</p>
+            <Boton tipo="peligro" ancho icono={UserMinus} cargando={ocupado === abierta.profesional_id} onClick={async () => { await quitar(abierta); setAbierta(null); }}>Quitar de mi equipo</Boton>
+          </div>
+        </HojaFlotante>
+      )}
+
+      {agregando && (
+        <HojaFlotante titulo="Agregar con un código" onCerrar={cierraAgregar} ancho={460}>
+          <form onSubmit={buscar} style={{ display: 'flex', flexDirection: 'column', gap: 12, fontFamily: FONT }}>
+            <Campo
+              etiqueta="Código o @usuario" valor={ref} onCambio={(v) => { setRef(v); setEncontrado(null); setError(''); }} marcador="AT-4821 o @usuario"
+              autoCapitalize="none" spellCheck={false} autoFocus
+            />
+            {!encontrado && <Boton ancho type="submit" cargando={buscando} deshabilitado={!ref.trim()}>Buscar</Boton>}
+            {error && <Aviso tono="malo" role="alert">{error}</Aviso>}
+            {encontrado && (
+              <>
+                <Grupo>
+                  <Fila izquierda={<Avatar nombre={encontrado.full_name} tamano={40} />} texto={encontrado.full_name} detalle={oficioDe(encontrado)} />
+                </Grupo>
+                <p style={{ margin: '0 6px', fontSize: 14.5, color: KP.ink2, lineHeight: 1.45 }}>Podrá ver tu plan de entrenamiento y cómo vas. Tú decides: puedes quitarlo cuando quieras.</p>
+                <Boton ancho icono={Check} cargando={ocupado === 'agregando'} onClick={async () => { await agregar(); }}>Agregar a mi equipo</Boton>
+              </>
+            )}
+          </form>
+        </HojaFlotante>
+      )}
+    </>
   );
 }

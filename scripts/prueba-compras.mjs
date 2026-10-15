@@ -30,4 +30,18 @@ assert.equal(dentroDeLaGarantia({ ...base, primer_pago_en: null }, ahora), false
 const { vigentes, historial } = separaCompras([base, { ...base, estado: 'vencida' }, { ...base, estado: 'reembolsada' }, { ...base, estado: 'por_armar' }]);
 assert.deepEqual([vigentes.length, historial.length], [2, 2]);
 assert.deepEqual(separaCompras(null), { vigentes: [], historial: [] });
+// El próximo cobro: la membresía que se renueva primero; las canceladas o de pago único no cuentan.
+{
+  const { proximoCobro } = await import('../src/lib/compras.js');
+  assert.equal(proximoCobro([]), null);
+  assert.equal(proximoCobro([{ estado: 'activa', tipo: 'membresia', cancelada_en: '2026-10-01', periodo_hasta: '2026-11-01', precio_mxn: 500 }]), null, 'cancelada: no se cobra');
+  assert.deepEqual(
+    proximoCobro([
+      { estado: 'activa', tipo: 'membresia', periodo_hasta: '2026-12-01', precio_mxn: 900 },
+      { estado: 'activa', tipo: 'membresia', periodo_hasta: '2026-11-01', precio_mxn: 890 },
+      { estado: 'activa', tipo: 'unico', periodo_hasta: '2026-10-20', precio_mxn: 100 },
+    ]),
+    { fecha: '2026-11-01', monto: 890 },
+  );
+}
 console.log('✓ compras: todo bien');

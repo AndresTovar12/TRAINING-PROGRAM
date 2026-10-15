@@ -5,7 +5,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useIsDesktop } from '@/lib/useViewport';
-import { FONT, KP } from '@/lib/theme';
+import { FONT, KP, UI } from '@/lib/theme';
+import { Boton, Fila, Grupo } from '@/components/ui';
 import { CONECTORES, TERMINALES, pasosDe } from '@/features/ia/guiasIA';
 import { MarcaIA, Pantalla } from '@/features/ia/Maquetas';
 import { agrupaConexiones } from '@/features/ia/conexiones';
@@ -39,11 +40,12 @@ function leeGuardado() {
 function Accion({ accion, principal }) {
   const [listo, setListo] = useState(false);
   const estilo = {
-    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 46,
-    padding: '0 18px', borderRadius: 14, cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 800,
-    textDecoration: 'none', border: principal ? 'none' : `1.5px solid ${KP.lineHi}`,
-    background: principal ? `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})` : KP.surface,
-    color: principal ? '#fff' : KP.ink, boxShadow: principal ? KP.shBtn : 'none',
+    // Reestructura visual (15 oct 2026): los botones de `components/ui` (azul lleno o gris claro).
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48,
+    padding: '0 18px', borderRadius: 16, cursor: 'pointer', fontFamily: FONT, fontSize: 15.5, fontWeight: 700,
+    textDecoration: 'none', border: 'none',
+    background: principal ? KP.blue : UI.relleno,
+    color: principal ? '#fff' : KP.ink, boxShadow: principal ? '0 8px 20px rgba(30,64,224,0.22)' : 'none',
   };
   if (accion.tipo === 'abrir') {
     return (
@@ -84,7 +86,7 @@ function Guia({ app, esCompu, rol }) {
         // «Abrir ChatGPT / Claude» no sirve desde el celular: los pasos se hacen en la compu.
         const acciones = (p.acciones ?? []).filter((a) => esCompu || a.tipo !== 'abrir');
         return (
-          <div key={p.titulo} style={{ background: KP.surface, border: `1px solid ${KP.line}`, borderRadius: 22, padding: esCompu ? 22 : 16, boxShadow: KP.shCard }}>
+          <div key={p.titulo} style={{ background: KP.surface, borderRadius: 22, padding: esCompu ? 22 : 16, boxShadow: '0 2px 10px rgba(17,19,24,0.06)' }}>
             {/* Texto y dibujo lado a lado si caben (cada uno de 300 px o más); si no, uno sobre otro. */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 290px), 1fr))', gap: esCompu ? 26 : 16, alignItems: 'center' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -117,21 +119,22 @@ function Guia({ app, esCompu, rol }) {
   );
 }
 
+/* Elegir la IA: una de dos o tres, todas a la vista, como el segmentado de `components/ui` pero con su logo. */
 function SelectorDeApp({ opciones, elegida, onElegir }) {
   return (
-    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+    <div role="radiogroup" aria-label="Tu IA" style={{ display: 'flex', gap: 3, padding: 4, borderRadius: 16, background: UI.relleno }}>
       {opciones.map((o) => {
         const activa = o.id === elegida;
         return (
           <button
-            key={o.id} type="button" onClick={() => onElegir(o.id)} aria-pressed={activa} className="kp-press"
+            key={o.id} type="button" role="radio" aria-checked={activa} onClick={() => onElegir(o.id)}
             style={{
-              flex: '1 1 0', minWidth: 118, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9,
-              minHeight: 54, padding: '0 14px', borderRadius: 16, cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 800,
-              border: `2px solid ${activa ? KP.blue : KP.line}`, background: activa ? KP.blueSoft : KP.surface, color: KP.ink,
+              flex: '1 1 0', minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              minHeight: 50, padding: '0 10px', borderRadius: 12, cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: activa ? 800 : 600,
+              border: 'none', background: activa ? '#fff' : 'transparent', color: activa ? KP.ink : KP.ink2, boxShadow: activa ? '0 1px 4px rgba(17,19,24,0.12)' : 'none',
             }}
           >
-            <MarcaIA app={o.id} size={28} /> {o.nombre}
+            <MarcaIA app={o.id} size={26} /> {o.nombre}
           </button>
         );
       })}
@@ -191,32 +194,17 @@ function IAsConectadas() {
   if (conexiones === 'no') return null;
 
   return (
-    <div style={{ background: KP.surface, border: `1px solid ${KP.line}`, borderRadius: 22, padding: 18, boxShadow: KP.shCard }}>
-      <div style={{ fontSize: 12, fontWeight: 800, color: KP.ink3, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 }}>Tus IAs conectadas</div>
-      {conexiones === null && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: KP.ink3, fontSize: 14 }}><Loader2 size={15} className="spin" /> Revisando…</div>
-      )}
-      {Array.isArray(conexiones) && conexiones.length === 0 && (
-        <div style={{ fontSize: 14.5, color: KP.ink2, fontWeight: 500 }}>Todavía no has conectado ninguna.</div>
-      )}
+    <Grupo titulo="Tus IAs conectadas">
+      {conexiones === null && <Fila texto="Revisando…" derecha={<Loader2 size={17} className="spin" color={KP.ink3} />} />}
+      {Array.isArray(conexiones) && conexiones.length === 0 && <Fila texto="Todavía no has conectado ninguna" valorTono="neutro" />}
       {Array.isArray(conexiones) && conexiones.map((c) => (
-        <div key={c.familia} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 0', borderTop: `1px solid ${KP.line}` }}>
-          <MarcaIA app={c.familia} size={34} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: KP.ink }}>{c.nombre}</div>
-            <div style={{ fontSize: 12.5, fontWeight: 600, color: KP.ink3 }}>
-              {c.desde ? `Conectada desde el ${new Date(c.desde).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })}` : 'Conectada'}
-            </div>
-          </div>
-          <button type="button" onClick={() => desconectar(c)} style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 38, padding: '0 12px', borderRadius: 11,
-            border: `1.5px solid ${KP.line}`, background: KP.surface, cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 700, color: KP.danger,
-          }}>
-            <Unplug size={14} /> Desconectar
-          </button>
-        </div>
+        <Fila
+          key={c.familia} izquierda={<MarcaIA app={c.familia} size={36} />} texto={c.nombre}
+          detalle={c.desde ? `Conectada desde el ${new Date(c.desde).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })}` : 'Conectada'}
+          derecha={<Boton tipo="peligro" chico icono={Unplug} onClick={() => desconectar(c)}>Desconectar</Boton>}
+        />
       ))}
-    </div>
+    </Grupo>
   );
 }
 
@@ -249,7 +237,7 @@ export default function ConectarIA({ enPerfil = false }) {
       {/* LO QUE SE GANA, antes que los pasos: sin esto, es una lista de clics sin porqué. Solo el título y un ejemplo: más texto saturaba (Andrés, 6 oct 2026). */}
       <div style={{
         borderRadius: 24, padding: esCompu ? 26 : 20, color: '#fff', position: 'relative', overflow: 'hidden',
-        background: `linear-gradient(145deg, ${KP.blue} 0%, ${KP.blueDk} 100%)`,
+        background: UI.azul, boxShadow: UI.azulSombra,
         display: esCompu ? 'grid' : 'flex', gridTemplateColumns: '1fr 1fr', flexDirection: 'column', gap: 18, alignItems: 'center',
       }}>
         <div>
@@ -269,6 +257,9 @@ export default function ConectarIA({ enPerfil = false }) {
         </div>
       </div>
 
+      {/* Lo que ya está conectado va arriba de los pasos (reestructura visual, 15 oct 2026): primero cómo está, luego cómo conectar otra. */}
+      <IAsConectadas />
+
       {/* LAS DOS VERTIENTES. Solo para quien arma planes: las terminales no son para el atleta. */}
       {!esAtleta && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -282,7 +273,7 @@ export default function ConectarIA({ enPerfil = false }) {
                 key={id} type="button" onClick={() => elegirRama(id)} aria-pressed={activa} className="kp-press"
                 style={{
                   textAlign: 'left', padding: 16, borderRadius: 20, cursor: 'pointer', fontFamily: FONT,
-                  border: `2px solid ${activa ? KP.blue : KP.line}`, background: activa ? KP.blueSoft : KP.surface,
+                  border: 'none', boxShadow: activa ? `inset 0 0 0 2px ${KP.blue}` : '0 2px 10px rgba(17,19,24,0.06)', background: KP.surface,
                   display: 'flex', flexDirection: 'column', gap: 8,
                 }}
               >
@@ -299,7 +290,7 @@ export default function ConectarIA({ enPerfil = false }) {
       )}
 
       <div>
-        <div style={{ fontSize: 12, fontWeight: 800, color: KP.ink3, textTransform: 'uppercase', letterSpacing: 0.6, margin: '4px 0 10px' }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: KP.ink, margin: '4px 4px 8px' }}>
           {rama === 'mcp' ? 'Elige tu herramienta' : 'Elige tu IA'}
         </div>
         <SelectorDeApp opciones={opciones} elegida={appValida} onElegir={setApp} />
@@ -313,8 +304,6 @@ export default function ConectarIA({ enPerfil = false }) {
 
       {!esCompu && rama === 'conectores' && <AvisoCompu />}
       <Guia key={`${appValida}-${esCompu}`} app={appValida} esCompu={esCompu} rol={rol} />
-
-      <IAsConectadas />
 
       <style>{`
         .spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Check, Loader2, RotateCcw, Trash2, Video } from 'lucide-react';
+import { Loader2, RotateCcw, Trash2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { borrarMiRepertorio, borrarTodasMisVersiones, contarMiRepertorio } from '@/lib/api';
 import { plural } from '@/lib/plural';
-import { T, FONT, KP } from '@/lib/theme';
+import { KP } from '@/lib/theme';
+import { useAviso } from '@/components/AvisoPasajero';
+import { Fila, Grupo, IconoDeFila, Interruptor } from '@/components/ui';
 
 /**
  * «Mis ejercicios», en Mi perfil: lo que el inicio promete que siempre se puede (Andrés, 8 oct 2026: «siempre va a poder
@@ -17,65 +19,24 @@ import { T, FONT, KP } from '@/lib/theme';
  * Los dos borrados preguntan con números («¿Borrar 14 ejercicios…?»), no en abstracto.
  */
 
-const tarjeta = (peligro) => ({
-  background: T.bg2, border: `1.5px solid ${peligro ? '#F1B7B7' : T.border}`, borderRadius: 18, padding: '14px 16px',
-  display: 'flex', flexDirection: 'column', gap: 10,
-});
-const cuadro = (fondo, color) => ({
-  width: 38, height: 38, borderRadius: 11, display: 'grid', placeItems: 'center', flexShrink: 0, background: fondo, color,
-});
-const titulo = { fontSize: 15.5, fontWeight: 800, color: T.text };
-const texto = { fontSize: 13.5, fontWeight: 500, color: T.text2, lineHeight: 1.45 };
-const boton = (tono, apagado) => ({
-  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 44, padding: '0 16px',
-  borderRadius: 12, cursor: apagado ? 'default' : 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 800,
-  touchAction: 'manipulation', opacity: apagado ? 0.5 : 1,
-  border: `1.5px solid ${tono === 'peligro' ? '#F1B7B7' : KP.lineHi}`, background: T.bg2,
-  color: tono === 'peligro' ? T.danger : T.accent,
-});
-
-function Interruptor({ puesto, onChange, ocupado, etiqueta }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={puesto}
-      aria-label={etiqueta}
-      disabled={ocupado}
-      onClick={() => onChange(!puesto)}
-      style={{
-        width: 52, height: 32, borderRadius: 999, border: 'none', padding: 0, cursor: ocupado ? 'default' : 'pointer', flexShrink: 0,
-        background: puesto ? T.accent : KP.lineHi, position: 'relative', transition: 'background .15s', touchAction: 'manipulation',
-      }}
-    >
-      <span style={{
-        position: 'absolute', top: 3, left: puesto ? 23 : 3, width: 26, height: 26, borderRadius: '50%', background: '#fff',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.25)', transition: 'left .15s', display: 'grid', placeItems: 'center', color: T.accent,
-      }}>
-        {ocupado ? <Loader2 size={14} className="spin" /> : puesto && <Check size={14} strokeWidth={3} />}
-      </span>
-    </button>
-  );
-}
-
 export default function MisEjercicios() {
   const { profile, updateProfile } = useAuth();
   const pregunta = useConfirmacion();
   const [cuentas, setCuentas] = useState(null); // { ejercicios, categorias, grupos, tipos, versiones } | null = cargando
   const [ocupado, setOcupado] = useState(''); // '' | 'base' | 'versiones' | 'todo'
-  const [err, setErr] = useState('');
-  const [hecho, setHecho] = useState('');
+  const { avisa: aviso } = useAviso();
+  const setErr = (m) => { if (m) aviso(m); };
 
   const recontar = () => contarMiRepertorio().then(setCuentas).catch((e) => setErr(e.message || 'No se pudo cargar'));
   useEffect(() => { recontar(); }, []);
 
-  const avisa = (msg) => { setHecho(msg); setTimeout(() => setHecho(''), 2600); };
+  const avisa = (msg) => aviso(msg);
 
   async function cambiarBase(puesto) {
-    setErr(''); setOcupado('base');
+    setOcupado('base');
     const { error } = await updateProfile({ repertorio_base: puesto });
     setOcupado('');
-    if (error) setErr(error.message);
+    if (error) setErr(error.message); else avisa(puesto ? 'Ejercicios de Training Lab prendidos' : 'Ejercicios de Training Lab apagados');
   }
 
   async function volverAlOriginal() {
@@ -86,7 +47,7 @@ export default function MisEjercicios() {
       confirmar: 'Sí, volver',
     });
     if (!ok) return;
-    setErr(''); setOcupado('versiones');
+    setOcupado('versiones');
     try {
       await borrarTodasMisVersiones();
       await recontar();
@@ -113,7 +74,7 @@ export default function MisEjercicios() {
       peligro: true,
     });
     if (!ok) return;
-    setErr(''); setOcupado('todo');
+    setOcupado('todo');
     try {
       await borrarMiRepertorio();
       await recontar();
@@ -134,59 +95,33 @@ export default function MisEjercicios() {
       : 'Todavía no tienes nada tuyo.')
     : 'Contando…';
 
+  /* Reestructura visual (15 oct 2026), como «Mis ejercicios» de las capturas: un grupo con el interruptor de los de Training Lab y lo que tiene suyo,
+     y los dos borrados (volver al original, borrar todo lo mío) como renglones que preguntan antes. */
   return (
     <>
-      <div style={tarjeta(false)}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={cuadro(KP.blueSoft, KP.blue)}><Video size={19} /></span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={titulo}>Ejercicios de Training Lab</div>
-            <div style={texto}>118 ejercicios de gym con video. Apagados, solo ves los tuyos; nada se borra.</div>
-          </div>
-          <Interruptor puesto={base} onChange={cambiarBase} ocupado={ocupado === 'base'} etiqueta="Ejercicios de Training Lab" />
-        </div>
-      </div>
+      <Grupo pie="Si lo apagas, tu lista empieza vacía y solo salen los que tú agregues. Nada se borra.">
+        <Fila
+          texto="Ejercicios de Training Lab" detalle="Listos para usar en tus planes, con video"
+          derecha={ocupado === 'base' ? <Loader2 size={18} className="spin" color={KP.ink2} /> : <Interruptor activo={base} onCambio={cambiarBase} etiqueta="Ejercicios de Training Lab" />}
+        />
+        <Fila texto="Mis ejercicios" valor={cuentas ? String(c.ejercicios || 0) : '…'} valorTono="neutro" />
+        <Fila texto="Mis categorías" valor={cuentas ? String(c.categorias || 0) : '…'} valorTono="neutro" />
+        <Fila texto="Mis grupos musculares" valor={cuentas ? String(c.grupos || 0) : '…'} valorTono="neutro" />
+      </Grupo>
 
-      <div style={tarjeta(false)}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={cuadro(KP.blueSoft, KP.blue)}><RotateCcw size={19} /></span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={titulo}>Volver al original</div>
-            <div style={texto}>
-              {cuentas
-                ? (c.versiones ? `Cambiaste ${plural(c.versiones, 'ejercicio', 'ejercicios')} de Training Lab a tu manera.` : 'No has cambiado ningún ejercicio de Training Lab.')
-                : 'Contando…'}
-            </div>
-          </div>
-        </div>
-        <button type="button" onClick={volverAlOriginal} disabled={!c.versiones || !!ocupado} style={boton('normal', !c.versiones || !!ocupado)}>
-          {ocupado === 'versiones' ? <Loader2 size={16} className="spin" /> : <RotateCcw size={16} />} Volver al original
-        </button>
-      </div>
-
-      <div style={tarjeta(true)}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={cuadro('rgba(220,38,38,0.08)', T.danger)}><Trash2 size={19} /></span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={titulo}>Borrar todos mis ejercicios</div>
-            <div style={texto}>{resumenMio}</div>
-          </div>
-        </div>
-        <button type="button" onClick={borrarTodo} disabled={!hayMio || !!ocupado} style={boton('peligro', !hayMio || !!ocupado)}>
-          {ocupado === 'todo' ? <Loader2 size={16} className="spin" /> : <Trash2 size={16} />} Borrar todo lo mío
-        </button>
-      </div>
-
-      {hecho && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: KP.mintSoft, color: KP.mint, borderRadius: 12, padding: '11px 15px', fontWeight: 700, fontSize: 13.5 }}>
-          <Check size={16} strokeWidth={3} /> {hecho}
-        </div>
-      )}
-      {err && (
-        <div style={{ background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 12, padding: '11px 15px', fontWeight: 700, fontSize: 13.5 }}>
-          {err}
-        </div>
-      )}
+      <Grupo titulo="Volver a empezar">
+        <Fila
+          izquierda={<IconoDeFila><RotateCcw size={18} /></IconoDeFila>} texto="Volver al original"
+          detalle={cuentas ? (c.versiones ? `Cambiaste ${plural(c.versiones, 'ejercicio', 'ejercicios')} de Training Lab` : 'No has cambiado ninguno') : 'Contando…'}
+          derecha={ocupado === 'versiones' ? <Loader2 size={18} className="spin" color={KP.ink2} /> : undefined}
+          onClick={volverAlOriginal} deshabilitada={!c.versiones || !!ocupado}
+        />
+        <Fila
+          izquierda={<IconoDeFila color={KP.danger} fondo={KP.dangerSoft}><Trash2 size={18} /></IconoDeFila>} texto="Borrar todo lo mío" tono="peligro"
+          detalle={resumenMio} derecha={ocupado === 'todo' ? <Loader2 size={18} className="spin" color={KP.ink2} /> : undefined}
+          onClick={borrarTodo} deshabilitada={!hayMio || !!ocupado}
+        />
+      </Grupo>
     </>
   );
 }
