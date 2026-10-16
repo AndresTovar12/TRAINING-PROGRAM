@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useEffect } from 'react';
 import { FONT, KP, UI } from '@/lib/theme';
 
 /* Las piezas para moverse por la app (reestructura visual, 15 oct 2026).
@@ -166,8 +166,23 @@ export function CabeceraConBanda({ saludo, fecha, avatar, titulo, detalle, accio
 }
 
 /**
- * Si la pantalla va debajo de una `CabeceraConBanda` (coach en el teléfono), el título ya está en la tarjeta blanca de la banda:
- * cada panel lo lee con `useEnBanda()` y no repite el suyo (sí deja sus botones: «Poner algo en venta», «+ Crear»…).
+ * Si la pantalla va debajo de una cabecera (la banda azul del coach en el teléfono, o el encabezado blanco en la compu), el título ya
+ * está ahí: cada panel lo lee con `useEnBanda()` y no repite el suyo. El valor es `{ ponCabecera }` (verdadero) o `false`.
  */
 export const EnBanda = createContext(false);
 export const useEnBanda = () => useContext(EnBanda);
+
+/**
+ * Para que una sección mande a la cabecera su detalle («Tu repertorio · 214 ejercicios») y su botón («+ Agregar»), como en las
+ * capturas de Andrés. `crea()` devuelve `{ detalle, accion }`; se vuelve a llamar cuando cambian `deps`. Al salir de la sección se limpia.
+ */
+export function useCabeceraDeSeccion(crea, deps) {
+  const banda = useContext(EnBanda);
+  const pon = banda?.ponCabecera;
+  useEffect(() => {
+    if (!pon) return undefined;
+    pon(crea());
+    return () => pon(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pon, ...deps]);
+}

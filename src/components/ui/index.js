@@ -5,4 +5,4 @@ export { default as TarjetaHeroe, BotonEnAzul } from '@/components/ui/TarjetaHer
 export { Grupo, Fila, IconoDeFila } from '@/components/ui/Grupo';
 export { default as HojaDeOpciones, FilaElegir, BotonElegir } from '@/components/ui/HojaDeOpciones';
 export { Interruptor, Segmentado, Pasos, Pastilla, Campo, Buscador, Avatar, Deslizador, EntradaNumero } from '@/components/ui/Controles';
-export { Pestanas, PestanasLaterales, BarraInferior, BarraLateral, CabeceraConBanda, EnBanda, useEnBanda } from '@/components/ui/Navegacion';
+export { Pestanas, PestanasLaterales, BarraInferior, BarraLateral, CabeceraConBanda, EnBanda, useEnBanda, useCabeceraDeSeccion } from '@/components/ui/Navegacion';
