@@ -736,19 +736,20 @@ function FilaDeLaLista({ fila, n, miniatura, conLinea, onElegir }) {
     <button
       type="button" disabled={hecho} onClick={() => onElegir(fila.clave)} aria-current={toca ? 'step' : undefined}
       style={{
-        width: '100%', display: 'flex', alignItems: 'center', gap: 11, padding: '9px 12px', border: 'none', borderTop: conLinea ? `1px solid ${LT.border}` : 'none',
-        background: toca ? LT.blueSoft : 'transparent', textAlign: 'left', fontFamily: FONT, cursor: hecho ? 'default' : 'pointer', touchAction: 'manipulation',
+        width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', border: 'none', borderTop: conLinea ? '1px solid #ECEEF2' : 'none',
+        background: 'transparent', textAlign: 'left', fontFamily: FONT, cursor: hecho ? 'default' : 'pointer', touchAction: 'manipulation', opacity: hecho ? 0.55 : 1,
       }}
     >
       <span
         aria-hidden="true"
         style={{
-          position: 'relative', width: 44, height: 44, borderRadius: 11, flexShrink: 0, overflow: 'hidden', display: 'grid', placeItems: 'center',
-          fontSize: 14, fontWeight: 800, color: hecho ? '#fff' : LT.text3, background: hecho ? LT.mint : (miniatura ? '#0E1015' : LT.blueSoft),
+          position: 'relative', width: 48, height: 48, borderRadius: 13, flexShrink: 0, overflow: 'visible', display: 'grid', placeItems: 'center',
+          fontSize: 14, fontWeight: 800, color: LT.text3, background: miniatura ? '#1B1D24' : '#EEF0F4',
         }}
       >
-        {hecho && <Check size={18} strokeWidth={3} />}
-        {!hecho && miniatura && (
+        {/* Reestructura visual (16 oct 2026), como «Tu entreno» de las capturas: lo hecho conserva su miniatura, apagada, con la palomita verde encima. */}
+        {hecho && <span style={{ position: 'absolute', right: -5, bottom: -5, width: 22, height: 22, borderRadius: 11, background: LT.mint, color: '#fff', display: 'grid', placeItems: 'center', border: '2px solid #fff', zIndex: 1 }}><Check size={12} strokeWidth={3.5} /></span>}
+        {miniatura && (
           <>
             {miniatura.nodo}
             {miniatura.conVideo && (
@@ -758,10 +759,10 @@ function FilaDeLaLista({ fila, n, miniatura, conLinea, onElegir }) {
             )}
           </>
         )}
-        {!hecho && !miniatura && n}
+        {!miniatura && n}
       </span>
       <span style={{ minWidth: 0, flex: 1 }}>
-        <span style={{ display: 'block', fontSize: 14.5, fontWeight: 700, color: toca ? LT.blue : LT.text, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{fila.nombre}</span>
+        <span style={{ display: 'block', fontSize: 15.5, fontWeight: 700, color: LT.text, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{fila.nombre}</span>
         {(fila.pastillas.length > 0 || fila.estado === 'saltado') && (
           <span style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 5 }}>
             {fila.pastillas.map((x, i) => <Pastillita key={i} fuerte={x.fuerte}>{x.texto}</Pastillita>)}
@@ -769,7 +770,9 @@ function FilaDeLaLista({ fila, n, miniatura, conLinea, onElegir }) {
           </span>
         )}
       </span>
-      {!hecho && <ChevronRight size={18} color={LT.text3} style={{ flexShrink: 0 }} />}
+      {toca
+        ? <span style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 800, letterSpacing: 0.6, color: '#fff', background: LT.blue, padding: '4px 8px', borderRadius: 7 }}>AHORA</span>
+        : !hecho && <ChevronRight size={18} color={LT.text3} style={{ flexShrink: 0 }} />}
     </button>
   );
 }
@@ -799,14 +802,14 @@ export function HojaDeLista({ tarjetas, miniaturaDe, palabras, onElegir, onTermi
           <section
             key={ti}
             style={{
-              border: `1.5px solid ${t.esActual ? LT.blue : LT.border}`, borderRadius: 18, background: LT.surface, marginBottom: 10, overflow: 'hidden',
-              boxShadow: t.esActual ? '0 0 0 3px rgba(30,64,224,0.12)' : 'none',
+              border: 'none', borderRadius: 20, background: LT.surface, marginBottom: 10, overflow: 'hidden',
+              boxShadow: '0 1px 2px rgba(17,19,24,0.04)',
             }}
           >
             {conEncabezado && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '11px 13px 9px' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                  {t.titulo && <b style={{ fontSize: 15, fontWeight: 800, color: LT.text, whiteSpace: 'nowrap' }}>{t.titulo}</b>}
+                  {t.titulo && <b style={{ fontSize: 14.5, fontWeight: 800, color: LT.blue, whiteSpace: 'nowrap' }}>{t.titulo}</b>}
                   {t.etiqueta && <Pastillita fuerte>{t.etiqueta}</Pastillita>}
                 </span>
                 {derecha}
@@ -819,7 +822,9 @@ export function HojaDeLista({ tarjetas, miniaturaDe, palabras, onElegir, onTermi
         );
       })}
       <div style={{ marginTop: 14 }}><BotonGrande onClick={onCerrar}>Seguir</BotonGrande></div>
-      <div style={{ textAlign: 'center', marginTop: 2 }}><BotonDeTexto onClick={onTerminar}>{palabras.listaTerminar}</BotonDeTexto></div>
+      <div style={{ textAlign: 'center', marginTop: 6 }}>
+        <button type="button" onClick={onTerminar} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 15.5, fontWeight: 700, color: LT.danger, padding: '10px 14px', touchAction: 'manipulation' }}>{palabras.listaTerminar}</button>
+      </div>
     </Hoja>
   );
 }
@@ -834,7 +839,7 @@ function CampoDeCambiar({ rotulo, planeado, valor, paso, decimal, onCambio }) {
     onCambio(String(Math.max(0, Math.round((sigue + d * paso) * 100) / 100)));
   };
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px 12px', background: LT.surface, border: `1.5px solid ${LT.border}`, borderRadius: 18, padding: '12px 14px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px 12px', background: LT.surface, borderRadius: 20, padding: '14px 16px', boxShadow: '0 1px 2px rgba(17,19,24,0.04)' }}>
       <div style={{ minWidth: 0, flex: '1 1 110px' }}>
         <div style={{ fontSize: 17, fontWeight: 800, color: LT.text }}>{rotulo}</div>
       </div>
