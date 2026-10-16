@@ -1110,7 +1110,7 @@ function CuerpoDeSets({
             <Fragment key={bi}>
             <div
               {...arrastrable({ lista: `${uid}:sets`, etiqueta: `Set ${setIdx}`, alMover: (de, a) => writeBlocks((bs) => mueveEn(bs, de, a)) })}
-              style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 16, padding: 14 }}
+              style={{ background: T.bg, borderRadius: 20, padding: 14 }}
             >
               <EncabezadoDelSet
                 numero={setIdx} bloque={b} etiquetaDeTipo={tag}
