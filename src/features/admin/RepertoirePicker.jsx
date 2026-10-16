@@ -168,7 +168,7 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
             </button>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 12, padding: '0 13px', marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, background: '#EBEDF1', border: 'none', borderRadius: 12, padding: '0 13px', marginBottom: 10 }}>
             <Search size={16} color={T.text3} />
             <input
               value={query}
@@ -425,7 +425,7 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
         >
           <button
             type="button" onClick={onClose}
-            style={{ padding: '12px 18px', borderRadius: 12, border: `1.5px solid ${T.border}`, background: T.bg2, cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text2 }}
+            style={{ padding: '12px 18px', borderRadius: 12, border: 'none', background: '#EBEDF1', cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text2 }}
           >
             Cancelar
           </button>

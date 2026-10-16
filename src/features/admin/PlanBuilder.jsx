@@ -177,9 +177,9 @@ const normalize = (phases) => phases.map((p) => (p.mode === 'microcycle' ? p : {
 /* ------------------------------------------------------------------ */
 
 const inputStyle = {
-  border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '10px 12px', width: '100%',
+  border: 'none', borderRadius: 11, padding: '10px 12px', width: '100%',
   fontFamily: FONT, fontSize: 14, fontWeight: 500, color: T.text, outline: 'none',
-  background: T.bg2, boxSizing: 'border-box',
+  background: '#EBEDF1', boxSizing: 'border-box',
 };
 
 export function Field({ label, children, grow }) {
@@ -241,7 +241,7 @@ function ExerciseCard({
      mejor callar que inventarle un dato de entrenamiento. */
   const campoDescanso = <CampoDescanso ex={ex} onPatch={onPatch} estiloInput={estiloCampo} />;
   return (
-    <div {...arrastre} style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden', minWidth: 0 }}>
+    <div {...arrastre} style={{ background: T.bg2, border: 'none', boxShadow: '0 1px 2px rgba(17,19,24,0.04)', borderRadius: 14, overflow: 'hidden', minWidth: 0 }}>
       <div style={{ position: 'relative', height: 110, width: '100%', background: '#0E1015' }}>
         <Portada
           foto={rep?.cover_image_url}
@@ -452,7 +452,7 @@ function ExerciseRow({
   const completo = (orden) => (angosta ? { flex: '1 1 100%', minWidth: 0, order: orden } : null);
   return (
     <div {...arrastre} style={{
-      background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 12,
+      background: T.bg2, border: 'none', boxShadow: '0 1px 2px rgba(17,19,24,0.04)', borderRadius: 12,
       padding: '11px 12px', fontFamily: FONT,
     }}>
       {/* El nombre manda: ocupa su propia línea, con lo de mover y quitar al
@@ -619,7 +619,7 @@ function CrearEjercicioRapido({ categorias, onCancelar, onCreado, duenoId, maste
         className="animate-fade-in"
         style={{
           width: '100%', maxWidth: 440, background: T.bg2, borderRadius: 20,
-          border: `1px solid ${T.border}`, padding: 20, boxShadow: KP.shPop,
+          border: 'none', padding: 20, boxShadow: KP.shPop,
           maxHeight: '88svh', overflowY: 'auto',
         }}
       >
@@ -703,8 +703,8 @@ function CrearEjercicioRapido({ categorias, onCancelar, onCreado, duenoId, maste
             <button
               type="button" onClick={onCancelar} disabled={guardando}
               style={{
-                flex: 1, padding: '13px 16px', borderRadius: 12, border: `1.5px solid ${T.border}`,
-                background: T.bg2, color: T.text, cursor: 'pointer', fontFamily: FONT,
+                flex: 1, padding: '13px 16px', borderRadius: 12, border: 'none',
+                background: '#EBEDF1', color: T.text, cursor: 'pointer', fontFamily: FONT,
                 fontSize: 14.5, fontWeight: 700,
               }}
             >
@@ -817,7 +817,7 @@ function MediaParaEsteAtleta({ ejercicio, atleta, onCerrar }) {
     >
       <div className="animate-fade-in" style={{
         width: '100%', maxWidth: 420, background: T.bg2, borderRadius: 20,
-        border: `1px solid ${T.border}`, padding: 20, boxShadow: KP.shPop,
+        border: 'none', padding: 20, boxShadow: KP.shPop,
         maxHeight: '88svh', overflowY: 'auto',
       }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11, marginBottom: 15 }}>
@@ -1241,8 +1241,8 @@ function CuerpoDeSets({
                 key={texto} type="button" className="kp-press" onClick={al}
                 style={{
                   minHeight: esCompu ? 40 : 46, padding: esCompu ? '0 16px' : undefined, display: 'flex', alignItems: 'center',
-                  justifyContent: 'center', gap: 7, borderRadius: esCompu ? 12 : 14, border: `1.5px solid ${T.border}`,
-                  background: T.bg2, cursor: 'pointer', fontFamily: FONT, fontSize: esCompu ? 13.5 : 14, fontWeight: 700, color: T.text2,
+                  justifyContent: 'center', gap: 7, borderRadius: esCompu ? 12 : 14, border: 'none',
+                  background: '#EBEDF1', cursor: 'pointer', fontFamily: FONT, fontSize: esCompu ? 13.5 : 14, fontWeight: 700, color: T.text2,
                 }}
               >
                 <Icono size={16} /> {texto}
@@ -1426,7 +1426,7 @@ export function HojaAcciones({ acciones, onClose }) {
           type="button" onClick={onClose}
           style={{
             width: '100%', minHeight: 50, marginTop: 8, borderRadius: 14,
-            border: `1.5px solid ${T.border}`, background: T.bg2, cursor: 'pointer',
+            border: 'none', background: '#EBEDF1', cursor: 'pointer',
             fontFamily: FONT, fontSize: 15, fontWeight: 700, color: T.text2,
           }}
         >
@@ -1509,7 +1509,7 @@ function HojaFormas({ actual, onElegir, onClose }) {
           type="button" onClick={onClose}
           style={{
             width: '100%', minHeight: 50, marginTop: 4, borderRadius: 14,
-            border: `1.5px solid ${T.border}`, background: T.bg2, cursor: 'pointer',
+            border: 'none', background: '#EBEDF1', cursor: 'pointer',
             fontFamily: FONT, fontSize: 15, fontWeight: 700, color: T.text2,
           }}
         >
@@ -1715,7 +1715,7 @@ function DayHeader({
             onClick={(e) => setMenu({ ancla: e.currentTarget })}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 7, flexShrink: 0, marginLeft: 'auto', cursor: 'pointer',
-              border: `1.5px solid ${T.border}`, background: T.bg2, color: T.text, fontFamily: FONT, fontWeight: 700,
+              border: 'none', background: '#EBEDF1', color: T.text, fontFamily: FONT, fontWeight: 700,
               fontSize: 13, padding: '8px 12px', borderRadius: 999,
             }}
           >
@@ -1760,7 +1760,7 @@ function DivisorDeLaGuia({ ancho, min, max, borde }) {
 function TiraDeDias({ dias, elegido, onElegir }) {
   return (
     <div role="group" aria-label="Días de la semana" style={{
-      display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4, background: T.bg2, border: `1px solid ${T.border}`,
+      display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4, background: T.bg2, border: 'none', boxShadow: '0 1px 2px rgba(17,19,24,0.04)',
       borderRadius: 13, padding: 4, marginBottom: 14,
     }}>
       {WEEKDAYS.map((clave) => {
@@ -2594,8 +2594,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
             key={opt.title} type="button" onClick={opt.onClick}
             style={{
               display: 'flex', gap: 14, alignItems: 'center', textAlign: 'left', cursor: 'pointer',
-              background: T.bg2, border: `1.5px solid ${T.border}`, borderRadius: 18, padding: 18,
-              fontFamily: FONT, boxShadow: KP.shCard,
+              background: T.bg2, border: 'none', boxShadow: '0 1px 2px rgba(17,19,24,0.04)', borderRadius: 18, padding: 18,
+              fontFamily: FONT, 
             }}
           >
             <span style={{ width: 46, height: 46, borderRadius: 14, background: T.accentBg, color: T.accent, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
@@ -2612,8 +2612,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
           type="button" onClick={() => setModal({ type: 'desde-plan' })}
           style={{
             display: 'flex', gap: 14, alignItems: 'center', textAlign: 'left', cursor: 'pointer',
-            background: T.bg2, border: `1.5px solid ${T.border}`, borderRadius: 18, padding: 18,
-            fontFamily: FONT, boxShadow: KP.shCard,
+            background: T.bg2, border: 'none', boxShadow: '0 1px 2px rgba(17,19,24,0.04)', borderRadius: 18, padding: 18,
+            fontFamily: FONT, 
           }}
         >
           <span style={{ width: 46, height: 46, borderRadius: 14, background: T.accentBg, color: T.accent, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
@@ -2863,7 +2863,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
                     className="kp-press"
                     style={{
                       flex: '1 1 220px', minHeight: 46, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                      borderRadius: 14, border: `1.5px solid ${T.border}`, background: T.bg2, cursor: 'pointer',
+                      borderRadius: 14, border: 'none', background: '#EBEDF1', cursor: 'pointer',
                       boxShadow: KP.shCard, fontFamily: FONT, fontSize: 14, fontWeight: 800, color: T.accent,
                     }}>
                     <Plus size={16} /> Agregar otra sesión
@@ -2960,7 +2960,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         }}
       >
         <button type="button" onClick={goBack}
-          style={{ width: 36, height: 36, borderRadius: 11, border: `1px solid ${T.border}`, cursor: 'pointer', background: T.bg2, color: T.text, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+          style={{ width: 36, height: 36, borderRadius: 11, border: 'none', cursor: 'pointer', background: '#EBEDF1', color: T.text, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
           <ArrowLeft size={17} />
         </button>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -2971,7 +2971,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         </div>
         {botonGuardar}
         <button type="button" onClick={handleClose} aria-label="Cerrar"
-          style={{ width: 36, height: 36, borderRadius: 11, border: `1px solid ${T.border}`, cursor: 'pointer', background: T.bg2, color: T.text2, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+          style={{ width: 36, height: 36, borderRadius: 11, border: 'none', cursor: 'pointer', background: '#EBEDF1', color: T.text2, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
           <X size={17} />
         </button>
       </header>
