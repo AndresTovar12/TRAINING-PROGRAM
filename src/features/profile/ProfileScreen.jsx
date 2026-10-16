@@ -12,7 +12,7 @@ import { esCorreoInventado } from '@/lib/correos';
 import { useAviso } from '@/components/AvisoPasajero';
 import HojaFlotante from '@/components/HojaFlotante';
 import {
-  Boton, BotonEnAzul, Campo, Fila, FilaElegir, Grupo, Interruptor, Pestanas, PestanasLaterales, TarjetaHeroe,
+  Boton, BotonEnAzul, Campo, Fila, FilaElegir, Grupo, IconoDeFila, Interruptor, PestanasLaterales, TarjetaHeroe,
 } from '@/components/ui';
 import ConectarIA from '@/features/ia/ConectarIA';
 import MiEquipo from '@/features/profile/MiEquipo';
@@ -58,7 +58,10 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
     ...(isAdmin && !isMaster ? [{ id: 'ejercicios', texto: 'Mis ejercicios', Icono: Library }] : []),
     { id: 'ia', texto: 'Inteligencia artificial', Icono: Sparkles },
   ];
-  const [seccion, setSeccion] = useState(enfoque === 'ia' ? 'ia' : 'perfil');
+  /* EN EL TELÉFONO, UNA LISTA (Andrés, 15 oct 2026: las pestañas de arriba «se deslizan hacia la derecha… está medio confuso»; eligió la lista
+     de secciones, como Ajustes del iPhone). `null` = la lista; tocar una entra y la flecha regresa. En la compu no hay lista: el menú de la
+     izquierda siempre se ve y abre en «Perfil». */
+  const [seccion, setSeccion] = useState(enfoque === 'ia' ? 'ia' : null);
   // `tr` y no `t`: arriba hay un `t` de temporizador.
   const { t: tr } = usePalabras();
 
@@ -160,8 +163,45 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
   const fechaTexto = nacimiento ? new Date(`${nacimiento}T12:00:00`).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
 
   /* REESTRUCTURA VISUAL (15 oct 2026), como «Mi perfil» de las capturas de Andrés. Cada dato es un renglón con su valor y se guarda al
-     cambiarlo (sin el botón «Guardar» de arriba, que era fácil de olvidar). En el teléfono, las secciones son pestañas subrayadas; en la
-     compu, un menú a la izquierda. */
+     cambiarlo (sin el botón «Guardar» de arriba, que era fácil de olvidar). En el teléfono, las secciones son una lista que entra y sale;
+     en la compu, un menú a la izquierda. */
+  const cerrarSesion = (
+    <button type="button" onClick={signOut} className="kp-press" style={{ alignSelf: 'center', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 16, fontWeight: 700, color: KP.danger, padding: '10px 18px' }}>
+      Cerrar sesión
+    </button>
+  );
+  const actual = seccion ?? (esCompu ? 'perfil' : null);
+  const textoDe = (id) => (id === 'perfil' ? 'Mis datos' : secciones.find((x) => x.id === id)?.texto ?? 'Mi perfil');
+  const filaDe = (id) => {
+    const x = secciones.find((y) => y.id === id);
+    if (!x) return null;
+    return <Fila key={id} izquierda={<IconoDeFila><x.Icono size={18} /></IconoDeFila>} texto={x.texto} onClick={() => setSeccion(id)} />;
+  };
+
+  /* La lista del teléfono: arriba la foto y el nombre; luego las secciones en dos grupos (lo de la cuenta, y lo del entreno y la IA). */
+  const menu = (
+    <>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '4px 0 6px' }}>
+        <button
+          type="button" onClick={() => setSeccion('perfil')} aria-label="Mis datos" className="kp-press"
+          style={{ width: 96, height: 96, borderRadius: 30, overflow: 'hidden', border: 'none', padding: 0, cursor: 'pointer', background: KP.blueSoft, color: KP.blue, fontFamily: FONT, fontSize: 34, fontWeight: 800, display: 'grid', placeItems: 'center' }}
+        >
+          {avatarUrl ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initialsFrom(displayName)}
+        </button>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 21, fontWeight: 800, color: T.text }}>{displayName}</div>
+          {origUser && <div style={{ fontSize: 14.5, fontWeight: 600, color: KP.ink2, marginTop: 2 }}>@{origUser}</div>}
+        </div>
+      </div>
+      <Grupo>
+        <Fila izquierda={<IconoDeFila><UserIcon size={18} /></IconoDeFila>} texto="Mis datos" detalle="Nombre, usuario, foto y más" onClick={() => setSeccion('perfil')} />
+      </Grupo>
+      <Grupo>{['cuenta', 'compras', 'cobros', 'dispositivos', 'avisos'].map(filaDe)}</Grupo>
+      <Grupo>{['equipo', 'metricas', 'ejercicios', 'ia'].map(filaDe)}</Grupo>
+      {cerrarSesion}
+    </>
+  );
+
   const perfil = (
     <>
       {/* La foto: cuadro azul claro con las iniciales, o la foto. Se sube y se guarda sola. */}
@@ -177,7 +217,6 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
           <Boton tipo="texto" chico onClick={() => fileRef.current?.click()}>{avatarUrl ? 'Cambiar foto' : 'Subir foto'}</Boton>
           {avatarUrl && <Boton tipo="texto" chico estilo={{ color: KP.ink2 }} onClick={() => { setAvatarUrl(''); guarda({ avatar_url: null }, 'Foto quitada'); }}>Quitar</Boton>}
         </div>
-        <input ref={fileRef} type="file" accept="image/*" onChange={onPickFile} style={{ display: 'none' }} />
       </div>
 
       <Campo etiqueta="Nombre" valor={fullName} onCambio={setFullName} marcador="Tu nombre" onBlur={guardaNombre} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
@@ -237,36 +276,36 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
         <Fila texto="Ver el recorrido otra vez" onClick={() => setRecorrido(true)} />
       </Grupo>
 
-      <button type="button" onClick={signOut} className="kp-press" style={{ alignSelf: 'center', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 16, fontWeight: 700, color: KP.danger, padding: '10px 18px' }}>
-        Cerrar sesión
-      </button>
+      {/* En el teléfono «Cerrar sesión» va al final de la lista de secciones; aquí, solo en la compu. */}
+      {esCompu && cerrarSesion}
     </>
   );
 
   const contenido = (
     <>
-      {seccion === 'perfil' && perfil}
+      {actual === null && menu}
+      {actual === 'perfil' && perfil}
 
       {/* La cuenta en sí: correo, contraseña, sesiones, descargar sus datos y eliminarla (ver `ConfiguracionDeCuenta`). */}
-      {seccion === 'cuenta' && <ConfiguracionDeCuenta />}
+      {actual === 'cuenta' && <ConfiguracionDeCuenta />}
 
-      {seccion === 'compras' && !isAdmin && <MisCompras />}
-      {seccion === 'cobros' && isAdmin && !isMaster && <MisCobros />}
-      {seccion === 'dispositivos' && <MisDispositivos onIrAMetricas={!isAdmin ? () => setSeccion('metricas') : null} />}
-      {seccion === 'avisos' && <MisAvisos />}
+      {actual === 'compras' && !isAdmin && <MisCompras />}
+      {actual === 'cobros' && isAdmin && !isMaster && <MisCobros />}
+      {actual === 'dispositivos' && <MisDispositivos onIrAMetricas={!isAdmin ? () => setSeccion('metricas') : null} />}
+      {actual === 'avisos' && <MisAvisos />}
 
       {/* Un atleta decide quién más lo atiende (fisio…). Los profesionales no lo tienen. */}
-      {seccion === 'equipo' && !isAdmin && <MiEquipo />}
+      {actual === 'equipo' && !isAdmin && <MiEquipo />}
 
       {/* Las métricas de su reloj: pulso, ritmo, carga y recuperación. Las ve él y quien lo atiende. */}
-      {seccion === 'metricas' && !isAdmin && <TarjetaDeMisMetricas atleta={{ id: user.id, full_name: profile?.full_name, username: profile?.username, unidad_peso: profile?.unidad_peso }} />}
+      {actual === 'metricas' && !isAdmin && <TarjetaDeMisMetricas atleta={{ id: user.id, full_name: profile?.full_name, username: profile?.username, unidad_peso: profile?.unidad_peso }} />}
 
       {/* El coach: los ejercicios de Training Lab prendidos o apagados, volver al original, borrar todo lo suyo. */}
-      {seccion === 'ejercicios' && isAdmin && !isMaster && <MisEjercicios />}
+      {actual === 'ejercicios' && isAdmin && !isMaster && <MisEjercicios />}
 
       {/* En el teléfono es el ÚNICO sitio de esto: no va en la navegación (decisión de Andrés). En la compu el coach también lo tiene
           en el menú lateral; el atleta, solo aquí. */}
-      {seccion === 'ia' && <ConectarIA enPerfil />}
+      {actual === 'ia' && <ConectarIA enPerfil />}
     </>
   );
 
@@ -276,13 +315,18 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
     <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: UI.fondo, fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: esCompu ? '22px 28px 14px' : 'calc(12px + env(safe-area-inset-top)) 16px 8px', flexShrink: 0 }}>
         {!esCompu && (
-          <button type="button" onClick={onClose} aria-label="Volver" style={{ width: 42, height: 42, borderRadius: 13, border: 'none', background: UI.relleno, color: T.text, cursor: 'pointer', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+          <button
+            type="button" onClick={actual ? () => setSeccion(null) : onClose} aria-label={actual ? 'Volver a Mi perfil' : 'Volver'}
+            style={{ width: 42, height: 42, borderRadius: 13, border: 'none', background: UI.relleno, color: T.text, cursor: 'pointer', display: 'grid', placeItems: 'center', flexShrink: 0 }}
+          >
             <ChevronLeft size={21} />
           </button>
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
           {esCompu && <div style={eyebrow(KP.blue)}>{displayName}</div>}
-          <h1 style={{ margin: esCompu ? '6px 0 0' : 0, fontSize: esCompu ? 30 : 26, fontWeight: 800, color: T.text, letterSpacing: -0.5 }}>Mi perfil</h1>
+          <h1 style={{ margin: esCompu ? '6px 0 0' : 0, fontSize: esCompu ? 30 : 26, fontWeight: 800, color: T.text, letterSpacing: -0.5 }}>
+            {esCompu || !actual ? 'Mi perfil' : textoDe(actual)}
+          </h1>
         </div>
         {esCompu && (
           <button type="button" onClick={onClose} aria-label="Cerrar" style={{ width: 40, height: 40, borderRadius: 13, border: 'none', background: UI.relleno, color: KP.ink2, cursor: 'pointer', display: 'grid', placeItems: 'center' }}>
@@ -291,19 +335,19 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
         )}
       </header>
 
-      {!esCompu && <Pestanas pestanas={pestanas} activa={seccion} onCambio={setSeccion} etiqueta="Secciones de Mi perfil" />}
-
-      <main style={{ flex: 1, overflowY: 'auto', padding: esCompu ? '8px 28px 60px' : '20px 16px 60px' }}>
+      {/* Al cambiar de sección se vuelve a montar y empieza arriba (si no, abría donde se quedó el desplazamiento de la anterior). */}
+      <main key={actual ?? 'lista'} style={{ flex: 1, overflowY: 'auto', padding: esCompu ? '8px 28px 60px' : '12px 16px 60px' }}>
+        <input ref={fileRef} type="file" accept="image/*" onChange={onPickFile} style={{ display: 'none' }} />
         <div style={esCompu
           ? { maxWidth: 1060, margin: '0 auto', display: 'grid', gridTemplateColumns: '240px minmax(0, 1fr)', gap: 32, alignItems: 'start' }
           : { maxWidth: 560, margin: '0 auto' }}
         >
           {esCompu && (
             <div style={{ position: 'sticky', top: 0 }}>
-              <PestanasLaterales pestanas={pestanas} activa={seccion} onCambio={setSeccion} etiqueta="Secciones de Mi perfil" />
+              <PestanasLaterales pestanas={pestanas} activa={actual} onCambio={setSeccion} etiqueta="Secciones de Mi perfil" />
             </div>
           )}
-          <div style={{ maxWidth: seccion === 'ia' ? 820 : 640, width: '100%', display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ maxWidth: actual === 'ia' ? 820 : 640, width: '100%', display: 'flex', flexDirection: 'column', gap: 20 }}>
             {contenido}
           </div>
         </div>
