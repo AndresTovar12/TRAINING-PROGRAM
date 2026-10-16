@@ -3,7 +3,7 @@ import {
   Loader2, Plus, Trash2, X, ChevronRight, ChevronLeft, Pencil,
   CalendarClock, User as UserIcon, Shield, ClipboardList,
   UserMinus, Power, AlertTriangle, Eye, ChevronDown, ChevronUp, UserPlus,
-  Check, Copy, Share2, CircleCheck, RotateCcw, CalendarPlus, FolderOpen, ListChecks, HeartPulse,
+  Check, Copy, Share2, CircleCheck, RotateCcw, CalendarPlus, FolderOpen, ListChecks, HeartPulse, MessageCircle,
 } from 'lucide-react';
 import {
   getProgramas, getSesionesPegadas, deletePlan, getAthleteState, listAthletesOverview, listCoaches, setAthleteCoach,
@@ -29,9 +29,9 @@ import { useConfirmacion } from '@/components/Confirmacion';
 import AbreMetricas from '@/features/metricas/AbreMetricas';
 import { useIsDesktop } from '@/lib/useViewport';
 import { T, FONT, KP, UI } from '@/lib/theme';
-import { Avatar as Iniciales, Buscador, Pastilla } from '@/components/ui';
+import { Avatar as Iniciales, Buscador, Fila, Grupo, IconoDeFila, Pastilla } from '@/components/ui';
 import { plural, pluralS } from '@/lib/plural';
-import { esDescanso, dondeVa, sessionIdFor, estructuraDelPlan } from '@/lib/training-utils';
+import { esDescanso, dondeVa, sessionIdFor, estructuraDelPlan, semanaDelAtleta } from '@/lib/training-utils';
 import { colorDePrograma, esProgramaFantasma, nombreCorto, rolDeProfesion } from '@/lib/programas';
 import { fasesConPegadas, reglasDe } from '@/lib/pegadas';
 import AsignarAlAtleta from '@/features/misplanes/AsignarAlAtleta';
@@ -822,7 +822,7 @@ function HojaDelPlanDeAtleta({ athlete, programas, equipoDe, state, inicialId, o
   );
 }
 
-function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile, onReassigned, onAltaCambiada, onEliminado, onVerComoAtleta, tokenInvitacion, onEquipoCambiado }) {
+function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile, onReassigned, onAltaCambiada, onEliminado, onVerComoAtleta, tokenInvitacion, onEquipoCambiado, onIrA }) {
   const esCompu = useIsDesktop();
   const pregunta = useConfirmacion();
   const { t, salud } = usePalabras();
@@ -980,6 +980,12 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
     return Object.values(sessions).filter((s) => s?.completed).length;
   }, [state, sufijo]);
 
+  // Su semana, día por día, para la página de la ficha en la compu.
+  const semana = useMemo(
+    () => semanaDelAtleta(plan?.data?.phases ?? [], plan?.data?.kind === 'weekly' ? 'weekly' : 'periodized', state?.data?.[`wr:cursor${sufijo}`], state?.data?.[`wr:sessions${sufijo}`] ?? {}),
+    [plan, state, sufijo],
+  );
+
   // El dolor que anota en «Bienestar» y cuántas sesiones lleva esta semana.
   const dolor = resumenDeDolor(state?.data?.['wr:wellness']);
   const estaSemana = hechasEstaSemana(
@@ -996,10 +1002,8 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
 
      Así queda: las tres acciones arriba, grandes y sin adornos, y lo demás
      plegado. "Aunque sume clics lo hace más eficiente y más intuitivo" —él. */
-  const acciones = (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-      {/* El master elige de quién es el programa que edita (solo si hay más de uno). */}
-      {isMaster && programas.length > 1 && (
+  // El master elige de quién es el programa que edita (solo si hay más de uno).
+  const pestanasDePrograma = isMaster && programas.length > 1 ? (
         <div role="tablist" aria-label="Programa que editas" style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
           {programas.map((p) => {
             const activa = (p.profesional_id ?? null) === (programaElegido ?? null);
@@ -1021,7 +1025,11 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
             );
           })}
         </div>
-      )}
+  ) : null;
+
+  const acciones = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+      {pestanasDePrograma}
       {puedePegar && (
         <AccionFicha
           icon={CalendarPlus}
@@ -1048,14 +1056,6 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           onClick={() => setAsignando(true)}
         />
       )}
-      {asignando && !loading && (
-        <AsignarAlAtleta
-          atleta={athlete}
-          clave={miClave}
-          onAsignado={(fila) => { if (fila) setPlan(fila); }}
-          onCerrar={() => setAsignando(false)}
-        />
-      )}
       {programasVisibles.length > 0 && (
         <AccionFicha
           icon={ClipboardList}
@@ -1064,6 +1064,46 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
             ? `${tamano} · ${plural(totalSessions, 'sesión', 'sesiones')}`
             : (programasVisibles.length > 1 ? 'Los programas de su equipo, solo para leer' : 'Solo para leer')}
           onClick={() => setVerPlan(true)}
+        />
+      )}
+      {!soloNotas && (
+        <AccionFicha
+          icon={HeartPulse}
+          titulo="Métricas del reloj"
+          detalle="Pulso, ritmo, carga y recuperación"
+          onClick={() => setVerMetricas(true)}
+        />
+      )}
+      {onVerComoAtleta && (
+        <AccionFicha
+          icon={Eye}
+          titulo={t('Entrar como el atleta')}
+          detalle="Su app tal cual la ve él. Nada se guarda."
+          onClick={() => onVerComoAtleta(athlete)}
+        />
+      )}
+      {atiendoYoAEstePaciente && (
+        <AccionFicha
+          icon={athlete.alta_en ? RotateCcw : CircleCheck}
+          titulo={athlete.alta_en ? 'Reabrir' : 'Dar de alta'}
+          detalle={athlete.alta_en
+            ? `Dado de alta el ${new Date(athlete.alta_en).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })}`
+            : 'Su programa y su historial se quedan'}
+          onClick={onCambiarAlta}
+        />
+      )}
+    </div>
+  );
+
+  // Lo que se abre desde las acciones (igual en el teléfono que en la compu).
+  const ventanas = (
+    <>
+      {asignando && !loading && (
+        <AsignarAlAtleta
+          atleta={athlete}
+          clave={miClave}
+          onAsignado={(fila) => { if (fila) setPlan(fila); }}
+          onCerrar={() => setAsignando(false)}
         />
       )}
       {verPlan && programasVisibles.length > 0 && (
@@ -1092,34 +1132,62 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           onClose={() => setPegando(false)}
         />
       )}
-      {!soloNotas && (
-        <AccionFicha
-          icon={HeartPulse}
-          titulo="Métricas del reloj"
-          detalle="Pulso, ritmo, carga y recuperación"
-          onClick={() => setVerMetricas(true)}
-        />
-      )}
       {verMetricas && <AbreMetricas atleta={athlete} onCerrar={() => setVerMetricas(false)} />}
-      {onVerComoAtleta && (
-        <AccionFicha
-          icon={Eye}
-          titulo={t('Entrar como el atleta')}
-          detalle="Su app tal cual la ve él. Nada se guarda."
-          onClick={() => onVerComoAtleta(athlete)}
+    </>
+  );
+
+  const cuentaYZona = (
+      <SeccionFicha titulo="Administrar cuenta" abierta={seccion === 'cuenta'} onToggle={() => setSeccion((s) => (s === 'cuenta' ? null : 'cuenta'))}>
+        {isMaster && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, background: T.bg, borderRadius: 12, padding: '11px 14px', flexWrap: 'wrap' }}>
+            <Shield size={16} color={T.accent} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: T.text2 }}>Coach:</span>
+            <div style={{ flex: 1, minWidth: 140 }}>
+              <ListaDesplegable
+                etiqueta="Coach del atleta"
+                valor={athlete.coach_id || ''}
+                onCambio={onChangeCoach}
+                deshabilitado={savingCoach}
+                estilo={{ borderRadius: 10, padding: '8px 10px', fontSize: 13.5 }}
+                opciones={[
+                  { valor: '', etiqueta: 'Sin coach (libre)' },
+                  ...(masterProfile ? [{
+                    valor: masterProfile.id,
+                    etiqueta: `Yo — ${masterProfile.full_name || masterProfile.username}`,
+                    nota: 'master',
+                  }] : []),
+                  ...coaches.map((c) => ({
+                    valor: c.id, etiqueta: c.full_name || c.username, nota: `@${c.username}`,
+                  })),
+                ]}
+              />
+            </div>
+            {savingCoach && <Loader2 size={15} className="spin" color={T.text3} />}
+          </div>
+        )}
+
+        {plan && (
+          <button
+            type="button"
+            onClick={onDeletePlan}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8, padding: '0 16px', minHeight: 44, borderRadius: 12,
+              border: 'none', cursor: 'pointer', background: KP.dangerSoft, color: T.danger,
+              fontFamily: FONT, fontSize: 13.5, fontWeight: 700, marginBottom: 12,
+            }}
+          >
+            <Trash2 size={15} /> {t('Eliminar el plan')}
+          </button>
+        )}
+
+        <ZonaAdministracion
+          athlete={athlete}
+          isMaster={isMaster}
+          soyElCoach={!!masterProfile?.id && athlete.coach_id === masterProfile.id}
+          onCambiado={(row) => onReassigned?.(row)}
+          onEliminado={onEliminado}
         />
-      )}
-      {atiendoYoAEstePaciente && (
-        <AccionFicha
-          icon={athlete.alta_en ? RotateCcw : CircleCheck}
-          titulo={athlete.alta_en ? 'Reabrir' : 'Dar de alta'}
-          detalle={athlete.alta_en
-            ? `Dado de alta el ${new Date(athlete.alta_en).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })}`
-            : 'Su programa y su historial se quedan'}
-          onClick={onCambiarAlta}
-        />
-      )}
-    </div>
+      </SeccionFicha>
   );
 
   const encabezado = (
@@ -1177,6 +1245,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           <Loader2 size={16} className="spin" /> Cargando…
         </div>
       ) : acciones}
+      {ventanas}
 
       {/* Arriba del todo y sin plegar: cuando un coach acaba de dar de alta a
           alguien, el link es justo lo que viene a buscar. Escondido en una
@@ -1260,81 +1329,171 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
         />
       )}
 
-      {/* La cuenta la administra su coach principal (o el master), no quien está en su equipo. */}
-      {!deEquipo && (
-      <SeccionFicha titulo="Administrar cuenta" abierta={seccion === 'cuenta'} onToggle={() => setSeccion((s) => (s === 'cuenta' ? null : 'cuenta'))}>
-        {isMaster && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, background: T.bg, borderRadius: 12, padding: '11px 14px', flexWrap: 'wrap' }}>
-            <Shield size={16} color={T.accent} />
-            <span style={{ fontSize: 13, fontWeight: 700, color: T.text2 }}>Coach:</span>
-            <div style={{ flex: 1, minWidth: 140 }}>
-              <ListaDesplegable
-                etiqueta="Coach del atleta"
-                valor={athlete.coach_id || ''}
-                onCambio={onChangeCoach}
-                deshabilitado={savingCoach}
-                estilo={{ borderRadius: 10, padding: '8px 10px', fontSize: 13.5 }}
-                opciones={[
-                  { valor: '', etiqueta: 'Sin coach (libre)' },
-                  ...(masterProfile ? [{
-                    valor: masterProfile.id,
-                    etiqueta: `Yo — ${masterProfile.full_name || masterProfile.username}`,
-                    nota: 'master',
-                  }] : []),
-                  ...coaches.map((c) => ({
-                    valor: c.id, etiqueta: c.full_name || c.username, nota: `@${c.username}`,
-                  })),
-                ]}
-              />
-            </div>
-            {savingCoach && <Loader2 size={15} className="spin" color={T.text3} />}
-          </div>
-        )}
-
-        {plan && (
-          <button
-            type="button"
-            onClick={onDeletePlan}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8, padding: '0 16px', minHeight: 44, borderRadius: 12,
-              border: 'none', cursor: 'pointer', background: KP.dangerSoft, color: T.danger,
-              fontFamily: FONT, fontSize: 13.5, fontWeight: 700, marginBottom: 12,
-            }}
-          >
-            <Trash2 size={15} /> {t('Eliminar el plan')}
-          </button>
-        )}
-
-        <ZonaAdministracion
-          athlete={athlete}
-          isMaster={isMaster}
-          soyElCoach={!!masterProfile?.id && athlete.coach_id === masterProfile.id}
-          onCambiado={(row) => onReassigned?.(row)}
-          onEliminado={onEliminado}
-        />
-      </SeccionFicha>
-      )}
+      {!deEquipo && cuentaYZona}
     </>
   );
 
-  /* En computadora la ficha flota centrada encima de la lista, no como un panel
-     pegado al costado. Petición de Andrés: "sería mucho mejor que fuera una
-     card flotante, en lugar de que se despliegue así de un costado". */
-  return esCompu ? (
-    <div
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 900, display: 'grid', placeItems: 'center',
-        padding: 24, background: 'rgba(17, 19, 24, 0.42)',
-      }}
-    >
-      <div style={{
-        width: '100%', maxWidth: 560, maxHeight: '88vh', overflowY: 'auto',
-        background: UI.fondo, borderRadius: 24,
-        padding: 24, boxShadow: KP.shPop,
-      }}>
-        {soloNotas ? cuerpoSoloNotas : cuerpo}
+  /* EN LA COMPU, UNA PÁGINA (reestructura visual, 16 oct 2026, como «Coach · Computadora · Atleta» de las capturas de Andrés): arriba
+     «‹ Mis atletas», «Mensaje» y «Editar el plan»; a la izquierda quién es, su plan con la barra de avance, tres cifras de la semana y
+     «Esta semana» día por día; a la derecha las Acciones y, debajo, lo que antes iba plegado (cambios, notas, equipo, cuenta). Antes era
+     una tarjeta flotante encima de la lista. */
+  const semanaGlobal = semana ? phases.slice(0, semana.faseIdx).reduce((n, f) => n + (f.weekData?.length || 0), 0) + semana.semanaIdx + 1 : 0;
+  const tipoDePlan = estructura === 'rutina' ? 'Rutina semanal' : estructura === 'semanas' ? pluralS(totalWeeks, 'semana') : `Por fases · ${pluralS(phases.length, 'fase')}`;
+  const ESTADO_DEL_DIA = {
+    hecha: ['Hecha', KP.mint], saltada: ['Saltada', KP.danger], hoy: ['Hoy', KP.blue], viene: ['', KP.ink3], descanso: ['', KP.ink3], nada: ['', KP.ink3],
+  };
+  const cifra = (valor, texto, color) => (
+    <div style={{ background: UI.tarjeta, borderRadius: UI.rGrupo, boxShadow: UI.sombraGrupo, padding: '14px 16px', minWidth: 0 }}>
+      <div style={{ fontSize: 26, fontWeight: 800, color, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{valor}</div>
+      <div style={{ fontSize: 13.5, fontWeight: 500, color: KP.ink2, marginTop: 3 }}>{texto}</div>
+    </div>
+  );
+  const botonArriba = (primario) => ({
+    display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 46, padding: '0 18px', borderRadius: UI.rBoton, border: 'none', cursor: 'pointer',
+    fontFamily: FONT, fontSize: 15, fontWeight: 700, background: primario ? KP.blue : UI.relleno, color: primario ? '#fff' : KP.ink,
+    boxShadow: primario ? '0 8px 18px rgba(30,64,224,0.22)' : 'none',
+  });
+  const mandarMensaje = onIrA && !soloNotas ? () => onIrA('messages', { atletaId: athlete.id }) : null;
+  const paginaCompu = soloNotas ? (
+    <div style={{ maxWidth: 640, display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <button type="button" onClick={onClose} style={{ ...botonArriba(false), alignSelf: 'flex-start' }}><ChevronLeft size={17} /> {t('Mis atletas')}</button>
+      <div style={{ background: UI.tarjeta, borderRadius: 24, padding: 22, boxShadow: UI.sombraGrupo }}>{cuerpoSoloNotas}</div>
+    </div>
+  ) : (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18, fontFamily: FONT }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" onClick={onClose} style={botonArriba(false)}><ChevronLeft size={17} /> {t('Mis atletas')}</button>
+        <span style={{ flex: 1 }} />
+        {mandarMensaje && <button type="button" onClick={mandarMensaje} style={botonArriba(false)}>Mensaje</button>}
+        <button type="button" onClick={() => setBuilding(true)} style={botonArriba(true)}>
+          {propio ? (planReal ? 'Editar mi programa' : 'Crear mi programa') : t(planReal ? 'Editar el plan' : 'Crear el plan')}
+        </button>
       </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) minmax(300px, 1fr)', gap: 22, alignItems: 'start' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <Iniciales nombre={athlete.full_name || athlete.username} foto={athlete.avatar_url} tamano={68} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: -0.5, color: KP.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{athlete.full_name || athlete.username}</div>
+              <div style={{ fontSize: 14.5, fontWeight: 500, color: KP.ink2 }}>
+                {[athlete.perfil_completo === false ? 'Todavía no elige usuario' : athlete.username ? `@${athlete.username}` : null, last].filter(Boolean).join(' · ')}
+              </div>
+            </div>
+          </div>
+
+          {tokenInvitacion && <LinkPendiente token={tokenInvitacion} />}
+
+          {loading ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: KP.ink2, padding: '12px 0', fontWeight: 600 }}><Loader2 size={16} className="spin" /> Cargando…</div>
+          ) : planReal ? (
+            <button
+              type="button" onClick={() => setVerPlan(true)}
+              style={{ textAlign: 'left', border: 'none', cursor: 'pointer', fontFamily: FONT, color: '#fff', background: UI.azul, borderRadius: 24, padding: '18px 20px', boxShadow: UI.azulSombra, display: 'flex', flexDirection: 'column', gap: 12 }}
+            >
+              <span>
+                <span style={{ display: 'block', fontSize: 13.5, fontWeight: 500, opacity: 0.82 }}>{tipoDePlan}</span>
+                <span style={{ display: 'block', fontSize: 24, fontWeight: 800, letterSpacing: -0.3, marginTop: 2 }}>{planReal.title || t('Plan')}</span>
+              </span>
+              {estructura !== 'rutina' && totalWeeks > 0 && (
+                <span style={{ display: 'block', height: 7, borderRadius: 4, background: 'rgba(255,255,255,0.25)', overflow: 'hidden' }}>
+                  <span style={{ display: 'block', height: '100%', width: `${Math.min(100, Math.round((semanaGlobal / totalWeeks) * 100))}%`, background: '#fff', borderRadius: 4 }} />
+                </span>
+              )}
+              <span style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13.5, fontWeight: 500, opacity: 0.86 }}>
+                <span>{semana && estructura !== 'rutina' ? `${estructura === 'fases' ? `Fase ${semana.faseIdx + 1} · ` : ''}sem ${semana.semanaIdx + 1}/${semana.semanasDeLaFase}` : 'Se repite cada semana'}</span>
+                <span>{semana ? `${plural(semana.tocan, 'sesión', 'sesiones')} esta semana` : ''}</span>
+              </span>
+            </button>
+          ) : (
+            <div style={{ background: UI.tarjeta, borderRadius: 24, padding: '22px 20px', boxShadow: UI.sombraGrupo, display: 'flex', alignItems: 'center', gap: 14 }}>
+              <span style={{ flex: 1, fontSize: 17, fontWeight: 700, color: KP.ink }}>{t('Todavía no tiene plan')}</span>
+              <button type="button" onClick={() => setBuilding(true)} style={botonArriba(true)}>{t('Crear el plan')}</button>
+            </div>
+          )}
+
+          {semana && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+              {cifra(`${semana.hechas}/${semana.tocan}`, 'Semana', KP.blue)}
+              {cifra(semana.saltadas, semana.saltadas === 1 ? 'Saltada' : 'Saltadas', semana.saltadas > 0 ? KP.danger : KP.ink)}
+              {salud
+                ? cifra(dolor ? dolor.ultimo.valor : '—', 'Dolor', dolor && dolor.ultimo.valor >= 5 ? KP.danger : KP.mint)
+                : cifra(last || '—', 'Última vez', KP.ink)}
+            </div>
+          )}
+
+          {semana && (
+            <>
+              <div style={{ fontSize: 17, fontWeight: 800, color: KP.ink, margin: '6px 2px -2px' }}>Esta semana</div>
+              <Grupo>
+                {semana.dias.map((d) => {
+                  const [texto, color] = ESTADO_DEL_DIA[d.estado];
+                  return (
+                    <div key={d.clave} className="ui-fila" style={{ display: 'flex', alignItems: 'center', gap: 14, minHeight: 54, padding: '8px 16px' }}>
+                      <span style={{ width: 34, fontSize: 13.5, fontWeight: 600, color: d.esHoy ? KP.blue : KP.ink3, flexShrink: 0 }}>{d.clave}</span>
+                      <span style={{ flex: 1, minWidth: 0, fontSize: 15.5, fontWeight: 500, color: d.nombre ? KP.ink : KP.ink3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {d.nombre || (d.estado === 'descanso' ? 'Descanso' : 'Sin sesión')}
+                      </span>
+                      {texto && d.estado !== 'descanso' && <span style={{ fontSize: 13.5, fontWeight: 700, color, flexShrink: 0 }}>{texto}</span>}
+                    </div>
+                  );
+                })}
+              </Grupo>
+            </>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+          <div style={{ fontSize: 17, fontWeight: 800, color: KP.ink, margin: '4px 2px -2px' }}>Acciones</div>
+          {pestanasDePrograma}
+          <Grupo>
+            {puedePegar && (
+              <Fila izquierda={<IconoDeFila><CalendarPlus size={18} /></IconoDeFila>} texto="Agregar sesión al programa del coach"
+                detalle={reglasDe(miFilaPegadas).length ? `Tienes ${plural(reglasDe(miFilaPegadas).length, 'sesión pegada', 'sesiones pegadas')}` : 'Queda pegada a un día de su programa'}
+                onClick={() => setPegando(true)} />
+            )}
+            <Fila izquierda={<IconoDeFila><FolderOpen size={18} /></IconoDeFila>} texto="Asignar de Mis planes" detalle="Un programa, una rutina o un workout que ya guardaste" onClick={() => setAsignando(true)} />
+            {programasVisibles.length > 0 && (
+              <Fila izquierda={<IconoDeFila><ClipboardList size={18} /></IconoDeFila>} texto={t('Ver el plan')}
+                detalle={planReal ? `${tamano} · ${plural(totalSessions, 'sesión', 'sesiones')}` : 'Solo para leer'} onClick={() => setVerPlan(true)} />
+            )}
+            <Fila izquierda={<IconoDeFila><HeartPulse size={18} /></IconoDeFila>} texto="Métricas del reloj" detalle="Pulso, ritmo, carga y recuperación" onClick={() => setVerMetricas(true)} />
+            {onVerComoAtleta && (
+              <Fila izquierda={<IconoDeFila><Eye size={18} /></IconoDeFila>} texto={t('Entrar como el atleta')} detalle="Su app tal cual la ve. Nada se guarda." onClick={() => onVerComoAtleta(athlete)} />
+            )}
+            {mandarMensaje && (
+              <Fila izquierda={<IconoDeFila><MessageCircle size={18} /></IconoDeFila>} texto="Mensaje" detalle="Abre su conversación" onClick={mandarMensaje} />
+            )}
+            {atiendoYoAEstePaciente && (
+              <Fila izquierda={<IconoDeFila>{athlete.alta_en ? <RotateCcw size={18} /> : <CircleCheck size={18} />}</IconoDeFila>}
+                texto={athlete.alta_en ? 'Reabrir' : 'Dar de alta'}
+                detalle={athlete.alta_en ? `Dado de alta el ${new Date(athlete.alta_en).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })}` : 'Su programa y su historial se quedan'}
+                onClick={onCambiarAlta} />
+            )}
+          </Grupo>
+          {/* Lo que antes iba plegado en la ficha: aquí abajo, igual de plegado. */}
+          {!loading && (
+            <CambiosDelPlan
+              atleta={athlete} plan={plan} onCambio={setPlan} profesionalId={miClave} Seccion={SeccionFicha}
+              abierta={seccion === 'cambios'} onToggle={() => setSeccion((x) => (x === 'cambios' ? null : 'cambios'))}
+            />
+          )}
+          {atiendoYoAEstePaciente && (
+            <NotasDeConsulta atleta={athlete} Seccion={SeccionFicha} abierta={seccion === 'notas'} onToggle={() => setSeccion((x) => (x === 'notas' ? null : 'notas'))} />
+          )}
+          {!deEquipo && (athlete.coach_id === profile?.id || isMaster) && (
+            <AgregarAlEquipo atleta={athlete} Seccion={SeccionFicha} abierta={seccion === 'equipo'} onToggle={() => setSeccion((x) => (x === 'equipo' ? null : 'equipo'))} onInvitado={onEquipoCambiado} />
+          )}
+          {!deEquipo && cuentaYZona}
+        </div>
+      </div>
+      {ventanas}
+    </div>
+  );
+
+  return esCompu ? (
+    <div style={{ gridColumn: '1 / -1' }}>
+      {paginaCompu}
       {building && !loading && (
         <PlanBuilder
           athlete={athlete}
@@ -1652,7 +1811,8 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta, onIrA, onAb
      tarjetas. En tableta la ficha sí va al lado, y ahí siguen las dos
      columnas. */
   const twoCol = selected && !narrow && !isDesktop;
-  const showList = !(narrow && selected);
+  // En la compu la ficha es una PÁGINA (reestructura visual, 16 oct 2026): mientras se mira, la lista se esconde; «‹ Mis atletas» regresa.
+  const showList = !(selected && (narrow || isDesktop));
   // Tabla cuando hay ancho de verdad. Con la ficha al lado (tableta) la lista
   // se encoge a ~280px y ahí una tabla no se lee: van tarjetas.
   const modoTabla = isDesktop;
@@ -1921,6 +2081,7 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta, onIrA, onAb
         <AthleteDetail
           key={selected.id}
           athlete={selected}
+          onIrA={onIrA}
           onVerComoAtleta={onVerComoAtleta}
           isMaster={isMaster}
           coaches={coaches}

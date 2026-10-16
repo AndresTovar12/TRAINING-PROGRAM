@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Loader2, MessageCircle } from 'lucide-react';
 import { T, KP, FONT } from '@/lib/theme';
 import { useIsDesktop } from '@/lib/useViewport';
@@ -14,12 +14,18 @@ import { useEnBanda } from '@/components/ui';
    En la computadora la lista va a la izquierda y la conversación a la derecha, a la vez; en el teléfono, la lista y, al tocar una persona, la conversación a pantalla
    completa. Cada profesional ve solo SUS conversaciones: la del atleta con su coach y la del mismo atleta con su fisio son dos distintas. */
 
-export default function MensajesDelCoach() {
+export default function MensajesDelCoach({ abrirAtleta = null, alAbrirlo }) {
   const enBanda = useEnBanda();
   const { uid, filas, cargando, error } = useMensajes();
   const esCompu = useIsDesktop();
   const [abierta, setAbierta] = useState(null);
   const suyas = useMemo(() => filas.filter((f) => !f.soy_atleta), [filas]);
+  // Llegó desde «Mensaje» en la ficha de un atleta: se abre su conversación en cuanto está en la lista.
+  useEffect(() => {
+    if (!abrirAtleta) return;
+    const f = suyas.find((x) => x.atleta_id === abrirAtleta);
+    if (f) { setAbierta(llaveDe(f)); alAbrirlo?.(); } else if (!cargando) alAbrirlo?.();
+  }, [abrirAtleta, suyas, cargando, alAbrirlo]);
   const fila = abierta ? suyas.find((f) => llaveDe(f) === abierta) : null;
 
   if (cargando && suyas.length === 0) {
