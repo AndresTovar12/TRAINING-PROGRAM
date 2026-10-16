@@ -13,12 +13,15 @@
     "check": "node scripts/compartir-con-mcp.mjs --revisar && node scripts/prueba-ventana.mjs && node scripts/prueba-stripe.mjs && node scripts/prueba-compras.mjs && node scripts/prueba-espacio.mjs && node scripts/prueba-clases.mjs && node scripts/prueba-vitrina.mjs && node scripts/prueba-entrada.mjs && node scripts/prueba-compra-sin-cuenta.mjs && node scripts/prueba-entreno-libre.mjs && node scripts/prueba-explorar.mjs && node scripts/prueba-cuentas-de-prueba.mjs && node scripts/prueba-limite-de-atletas.mjs && node scripts/prueba-rutas.mjs && node scripts/prueba-correos.mjs && npm run build && npm run lint && npm run smoke"
   },
   "dependencies": {
+    "@protomaps/basemaps": "5.7.2",
     "@supabase/supabase-js": "^2.108.1",
     "fflate": "^0.8.3",
     "fit-file-parser": "^6.1.2",
     "heic-to": "^1.6.5",
     "lucide-react": "^1.17.0",
+    "maplibre-gl": "6.11.2",
     "mediabunny": "^1.61.0",
+    "pmtiles": "4.5.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "recharts": "^3.8.1",
