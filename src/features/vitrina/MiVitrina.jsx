@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Copy, Eye, Loader2, Pencil, Plus, Store, Undo2 } from 'lucide-react';
-import { T, KP, FONT } from '@/lib/theme';
+import { Check, Loader2, Plus, Store } from 'lucide-react';
+import { T, KP, FONT, UI } from '@/lib/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConfirmacion } from '@/components/Confirmacion';
-import { botonBlanco, botonPrincipal } from '@/features/misplanes/estilos';
+import { botonPrincipal } from '@/features/misplanes/estilos';
 import FichaDelPlanEnVenta from '@/features/vitrina/FichaDelPlanEnVenta';
 import { ETIQUETA_DE_CONTENIDO, leeVentasAbiertas, ligaPublica, listaMiVitrina, retiraPlan } from '@/lib/vitrinaApi';
 import { chipsDeParaQuien } from '@/lib/paraQuien';
-import { useEnBanda } from '@/components/ui';
+import { useCabeceraDeSeccion, useEnBanda } from '@/components/ui';
 
 /* MI VITRINA: los planes que un coach pone a la venta (nombre que decidió Andrés, 10 oct 2026; antes se llamaba «menú»).
 
@@ -21,6 +21,8 @@ const ESTADOS = {
 };
 const pesos = (n) => `$${Number(n).toLocaleString('es-MX')}`;
 
+/* Reestructura visual (16 oct 2026), como «Mi vitrina» de las capturas de Andrés: la foto del plan arriba con su estado encima; abajo el
+   nombre, qué es, el precio grande y las ventas; la liga con «Copiar» (solo publicado) y tres botones iguales: Editar · Ver página · Retirar. */
 function Tarjeta({ plan, usuario, alEditar, alRetirar }) {
   const [copiado, setCopiado] = useState(false);
   const e = ESTADOS[plan.estado] ?? ESTADOS.borrador;
@@ -28,39 +30,43 @@ function Tarjeta({ plan, usuario, alEditar, alRetirar }) {
   const copia = async () => {
     try { await navigator.clipboard.writeText(liga); setCopiado(true); setTimeout(() => setCopiado(false), 1800); } catch { /* sin permiso: se puede seleccionar a mano */ }
   };
+  const ventas = plan.suscriptores ?? 0;
+  const publicado = plan.estado === 'publicado';
+  const boton = { flex: 1, minHeight: 46, borderRadius: 14, border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', whiteSpace: 'nowrap' };
   return (
-    <div style={{ background: KP.surface, borderRadius: 20, boxShadow: '0 1px 2px rgba(17,19,24,0.04)', padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 17, fontWeight: 800, color: T.text, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{plan.titulo}</div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: T.text2, marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
-            {plan.contenido && plan.contenido !== 'programa' ? `${ETIQUETA_DE_CONTENIDO[plan.contenido]} · ` : ''}{pesos(plan.precio_mxn)}{plan.tipo === 'pago_unico' ? '' : ' al mes'} · {plan.suscriptores}{' '}
-            {plan.tipo === 'pago_unico' ? (plan.suscriptores === 1 ? 'compra' : 'compras') : (plan.suscriptores === 1 ? 'suscriptor' : 'suscriptores')}
-          </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-            {chipsDeParaQuien(plan, { siempreEdad: true }).map((c) => (
-              <span key={c} style={{ padding: '3px 10px', borderRadius: 999, background: T.accentBg, color: T.accent, fontSize: 12.5, fontWeight: 800 }}>{c}</span>
-            ))}
-          </div>
-        </div>
-        <span style={{ padding: '3px 10px', borderRadius: 999, background: e.fondo, color: e.tinta, fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap' }}>{e.texto}</span>
+    <div style={{ background: UI.tarjeta, borderRadius: 22, boxShadow: UI.sombraGrupo, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ position: 'relative', aspectRatio: '16 / 9', background: plan.foto_url ? '#1B1D24' : 'linear-gradient(135deg, #EEF1FE, #EFEBFF)' }}>
+        {plan.foto_url && <img src={plan.foto_url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
+        <span style={{ position: 'absolute', top: 12, left: 12, padding: '4px 10px', borderRadius: 8, background: e.fondo, color: e.tinta, fontSize: 13, fontWeight: 700 }}>{e.texto}</span>
       </div>
-      {plan.estado === 'publicado' && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ flex: 1, minWidth: 0, padding: '9px 12px', borderRadius: 11, background: T.bg2, fontSize: 13, fontWeight: 600, color: T.text2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{liga}</div>
-          <button type="button" onClick={copia} style={{ ...botonBlanco(true), minHeight: 40 }} aria-label="Copiar la liga">
-            {copiado ? <Check size={16} /> : <Copy size={16} />} {copiado ? 'Copiada' : 'Copiar'}
-          </button>
+      <div style={{ padding: '14px 16px 16px', display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: KP.ink, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{plan.titulo}</div>
+          <div style={{ fontSize: 14, fontWeight: 500, color: KP.ink2, marginTop: 3 }}>
+            {[ETIQUETA_DE_CONTENIDO[plan.contenido ?? 'programa'], ...chipsDeParaQuien(plan).slice(0, 2)].filter(Boolean).join(' · ')}
+          </div>
         </div>
-      )}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <button type="button" onClick={() => alEditar(plan)} style={{ ...botonBlanco(false), minHeight: 40 }}><Pencil size={15} /> Editar</button>
-        {plan.estado === 'publicado' && (
-          <a href={ligaPublica(usuario, plan.slug)} target="_blank" rel="noreferrer" style={{ ...botonBlanco(false), minHeight: 40, textDecoration: 'none' }}><Eye size={15} /> Ver página</a>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+          <span style={{ fontSize: 24, fontWeight: 800, color: KP.ink, fontVariantNumeric: 'tabular-nums' }}>
+            {pesos(plan.precio_mxn)}{plan.tipo === 'pago_unico' ? '' : <span style={{ fontSize: 15, fontWeight: 600, color: KP.ink2 }}> / mes</span>}
+          </span>
+          <span style={{ fontSize: 14, fontWeight: 500, color: KP.ink2 }}>
+            {ventas === 0 ? 'Sin ventas' : `${ventas} ${plan.tipo === 'pago_unico' ? (ventas === 1 ? 'venta' : 'ventas') : (ventas === 1 ? 'suscrito' : 'suscritos')}`}
+          </span>
+        </div>
+        {publicado && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0, padding: '10px 12px', borderRadius: 12, background: UI.relleno, fontSize: 13, fontWeight: 500, color: KP.ink2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', userSelect: 'all' }}>{liga.replace(/^https?:\/\//, '')}</div>
+            <button type="button" onClick={copia} style={{ minHeight: 40, padding: '0 14px', borderRadius: 12, border: 'none', cursor: 'pointer', background: KP.blueSoft, color: KP.blue, fontFamily: FONT, fontSize: 14, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }} aria-label="Copiar la liga">
+              {copiado ? <Check size={15} /> : null}{copiado ? 'Copiada' : 'Copiar'}
+            </button>
+          </div>
         )}
-        {plan.estado === 'publicado' && (
-          <button type="button" onClick={() => alRetirar(plan)} style={{ ...botonBlanco(false), minHeight: 40 }}><Undo2 size={15} /> Retirar</button>
-        )}
+        <div style={{ display: 'flex', gap: 8, marginTop: 'auto' }}>
+          <button type="button" onClick={() => alEditar(plan)} style={{ ...boton, background: UI.relleno, color: KP.ink }}>Editar</button>
+          {publicado && <a href={liga} target="_blank" rel="noreferrer" style={{ ...boton, background: UI.relleno, color: KP.ink }}>Ver página</a>}
+          {publicado && <button type="button" onClick={() => alRetirar(plan)} style={{ ...boton, background: KP.dangerSoft, color: KP.danger }}>Retirar</button>}
+        </div>
       </div>
     </div>
   );
@@ -82,6 +88,27 @@ export default function MiVitrina() {
   }, []);
   useEffect(() => { carga(); }, [carga]);
 
+  /* La cabecera: «3 planes · 41 ventas» y «Copiar la liga» de tu página, como en la captura. */
+  const [paginaCopiada, setPaginaCopiada] = useState(false);
+  useCabeceraDeSeccion(() => {
+    if (!planes) return { detalle: null, accion: null };
+    const n = planes.length;
+    const vendidos = planes.reduce((t, p) => t + (p.suscriptores ?? 0), 0);
+    const ligaDeTuPagina = ligaPublica(usuario, '').replace(/\/$/, '');
+    return {
+      detalle: `${n} ${n === 1 ? 'plan' : 'planes'} · ${vendidos} ${vendidos === 1 ? 'venta' : 'ventas'}`,
+      accion: usuario ? (
+        <button
+          type="button"
+          onClick={async () => { try { await navigator.clipboard.writeText(ligaDeTuPagina); setPaginaCopiada(true); setTimeout(() => setPaginaCopiada(false), 1800); } catch { /* sin permiso */ } }}
+          style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 700, color: KP.blue, padding: '8px 4px', flexShrink: 0, whiteSpace: 'nowrap' }}
+        >
+          {paginaCopiada ? 'Liga copiada' : 'Copiar la liga'}
+        </button>
+      ) : null,
+    };
+  }, [planes, usuario, paginaCopiada]);
+
   const retira = async (plan) => {
     const va = await pregunta({
       titulo: '¿Retirar este plan?', detalle: 'Deja de mostrarse en tu página. Quien ya lo paga lo conserva hasta que deje de pagar.', confirmar: 'Sí, retirarlo', peligro: true,
@@ -91,11 +118,9 @@ export default function MiVitrina() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 820, margin: '0 auto', fontFamily: FONT }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ flex: 1, minWidth: 0, fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: -0.4 }}>{enBanda ? '' : 'Mi vitrina'}</div>
-        <button type="button" onClick={() => setEditando(null)} style={botonPrincipal(false)}><Plus size={17} /> Poner algo en venta</button>
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, fontFamily: FONT }}>
+      {!enBanda && <div style={{ fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: -0.4 }}>Mi vitrina</div>}
+      <button type="button" onClick={() => setEditando(null)} style={{ ...botonPrincipal(false), width: '100%', minHeight: 52, fontSize: 16 }}><Plus size={18} /> Poner algo en venta</button>
       {error && <div role="alert" style={{ padding: '10px 14px', borderRadius: 12, background: KP.dangerSoft, color: KP.danger, fontSize: 14, fontWeight: 700 }}>{error}</div>}
       {!ventas && (
         <div role="status" style={{ padding: '10px 14px', borderRadius: 12, background: KP.amberSoft, color: KP.amber, fontSize: 14, fontWeight: 700, lineHeight: 1.4 }}>
@@ -112,7 +137,9 @@ export default function MiVitrina() {
           <button type="button" onClick={() => setEditando(null)} style={{ ...botonPrincipal(false), marginTop: 18 }}><Plus size={17} /> Poner algo en venta</button>
         </div>
       ) : (
-        planes.map((p) => <Tarjeta key={p.id} plan={p} usuario={usuario} alEditar={setEditando} alRetirar={retira} />)
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: 16 }}>
+          {planes.map((p) => <Tarjeta key={p.id} plan={p} usuario={usuario} alEditar={setEditando} alRetirar={retira} />)}
+        </div>
       )}
       {editando !== undefined && (
         <FichaDelPlanEnVenta
