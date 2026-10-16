@@ -65,7 +65,7 @@ function ExerciseCard({ ex, onClick, base, conVideoExtra }) {
       type="button"
       onClick={onClick}
       style={{
-        textAlign: 'left', border: `1px solid ${T.border}`, background: T.bg2, borderRadius: 20,
+        textAlign: 'left', border: 'none', background: T.bg2, borderRadius: 20,
         overflow: 'hidden', cursor: 'pointer', fontFamily: FONT, padding: 0,
         boxShadow: KP.shCard, transition: 'box-shadow .18s, transform .12s cubic-bezier(0.22,1,0.36,1)',
         display: 'flex', flexDirection: 'column', alignItems: 'stretch', width: '100%',
@@ -270,8 +270,8 @@ function ExerciseRow({ ex, base, abierto, onAbrir, onMedia, onEditar, conVideoEx
     <div>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
-        background: T.bg2, border: `1px solid ${abierto ? T.accent : T.border}`, borderRadius: abierto ? '13px 13px 0 0' : 13,
-        padding: '8px 9px', boxShadow: abierto ? '0 0 0 3px rgba(30,64,224,0.12)' : KP.shCard,
+        background: T.bg2, border: `1px solid ${abierto ? T.accent : 'transparent'}`, borderRadius: abierto ? '18px 18px 0 0' : 18,
+        padding: '10px 10px', boxShadow: abierto ? '0 0 0 3px rgba(30,64,224,0.12)' : '0 1px 2px rgba(17,19,24,0.04)',
         position: 'relative', zIndex: abierto ? 1 : 0,
       }}>
         <button
@@ -1380,8 +1380,8 @@ export default function ExercisesPanel({ viendoComo }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
         <div
           style={{
-            flex: '1 1 240px', display: 'flex', alignItems: 'center', gap: 10, background: T.bg2,
-            border: `1px solid ${T.border}`, borderRadius: 12, padding: '0 14px',
+            flex: '1 1 240px', display: 'flex', alignItems: 'center', gap: 10, background: '#EBEDF1',
+            border: 'none', borderRadius: 14, padding: '0 14px', minHeight: 48,
           }}
         >
           <Search size={17} color={T.text3} />

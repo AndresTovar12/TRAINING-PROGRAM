@@ -15,7 +15,9 @@ import ContrasenaNueva from '@/features/admin/ContrasenaNueva';
 import PoderesDelProfesional from '@/features/admin/PoderesDelProfesional';
 import { plural } from '@/lib/plural';
 import { useIsWide } from '@/lib/useViewport';
-import { T, FONT, KP } from '@/lib/theme';
+import { T, FONT, KP, UI } from '@/lib/theme';
+import { Avatar as Iniciales, useEnBanda } from '@/components/ui';
+import { botonBlanco, botonPrincipal, tarjetaDePanel } from '@/features/misplanes/estilos';
 
 const USERNAME_RE = /^[a-zA-Z0-9_.]{3,30}$/;
 
@@ -596,6 +598,7 @@ function FichaCoach({ coach, atletas, otrosCoaches, master, onCerrar, onVerComo,
 }
 
 export default function CoachesPanel({ onVerComo }) {
+  const enBanda = useEnBanda();
   const esAncho = useIsWide();
   const { profile } = useAuth();
   const [coaches, setCoaches] = useState([]);
@@ -634,13 +637,13 @@ export default function CoachesPanel({ onVerComo }) {
     <div style={{ maxWidth: 720, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: T.text }}>Profesionales</div>
-          <div style={{ fontSize: 13, color: T.text2, fontWeight: 500, marginTop: 2 }}>
+          {!enBanda && <div style={{ fontSize: 20, fontWeight: 800, color: T.text }}>Profesionales</div>}
+          <div style={{ fontSize: 14.5, color: T.text2, fontWeight: 600, marginTop: 2 }}>
             {coaches.length} profesional{coaches.length !== 1 ? 'es' : ''} · {unassigned} atleta{unassigned !== 1 ? 's' : ''} sin asignar
           </div>
         </div>
         <button type="button" onClick={() => setCreating(true)}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 18px', borderRadius: 12, border: 'none', cursor: 'pointer', background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff', fontFamily: FONT, fontSize: 14.5, fontWeight: 700, boxShadow: KP.shBtn }}>
+          style={botonPrincipal(false)}>
           <Plus size={18} /> Crear coach
         </button>
       </div>
@@ -669,8 +672,7 @@ export default function CoachesPanel({ onVerComo }) {
               display: 'flex', flexDirection: esAncho ? 'row' : 'column',
               alignItems: esAncho ? 'center' : 'stretch',
               gap: esAncho ? 13 : 12,
-              background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 16,
-              padding: '14px 16px', boxShadow: KP.shCard,
+              ...tarjetaDePanel, padding: '14px 16px',
             }}>
               {/* TOCAR AL COACH ABRE SU FICHA.
                   Andrés, 20 sep 2026: "no pasa nada si le pico al coach... el
@@ -688,7 +690,7 @@ export default function CoachesPanel({ onVerComo }) {
                   fontFamily: FONT, textAlign: 'left', padding: 0,
                 }}
               >
-                <Avatar name={c.full_name || c.username} url={c.avatar_url} />
+                <Iniciales nombre={c.full_name || c.username} foto={c.avatar_url} tamano={46} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 15, fontWeight: 800, color: T.text, display: 'flex', alignItems: 'center', gap: 7 }}>
                     {/* `minWidth: 0` en el padre y nada de `nowrap` aquí: el
@@ -702,7 +704,7 @@ export default function CoachesPanel({ onVerComo }) {
               </button>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13.5, fontWeight: 700, color: T.text2, background: T.bg, borderRadius: 10, padding: '8px 12px', flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13.5, fontWeight: 700, color: T.text2, background: UI.relleno, borderRadius: 10, padding: '8px 12px', flexShrink: 0 }}>
                   <Users size={15} color={T.text3} /> {countByCoach[c.id] || 0}
                 </div>
                 {/* Entrar a ver lo suyo. Es un filtro, no un cambio de cuenta:
@@ -712,13 +714,7 @@ export default function CoachesPanel({ onVerComo }) {
                   type="button"
                   onClick={() => onVerComo?.(c)}
                   title={`Ver el perfil de ${c.full_name || c.username}`}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                    flex: esAncho ? '0 0 auto' : 1,
-                    minHeight: 38, padding: '0 13px', borderRadius: 10, cursor: 'pointer',
-                    border: `1.5px solid ${T.border}`, background: T.bg2, color: T.text2,
-                    fontFamily: FONT, fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
-                  }}
+                  style={{ ...botonBlanco(true), flex: esAncho ? '0 0 auto' : 1, whiteSpace: 'nowrap' }}
                 >
                   <Eye size={15} /> Ver como
                 </button>

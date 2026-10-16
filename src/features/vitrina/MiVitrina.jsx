@@ -29,7 +29,7 @@ function Tarjeta({ plan, usuario, alEditar, alRetirar }) {
     try { await navigator.clipboard.writeText(liga); setCopiado(true); setTimeout(() => setCopiado(false), 1800); } catch { /* sin permiso: se puede seleccionar a mano */ }
   };
   return (
-    <div style={{ background: KP.surface, borderRadius: 16, boxShadow: KP.shCard, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ background: KP.surface, borderRadius: 20, boxShadow: '0 1px 2px rgba(17,19,24,0.04)', padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 17, fontWeight: 800, color: T.text, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{plan.titulo}</div>

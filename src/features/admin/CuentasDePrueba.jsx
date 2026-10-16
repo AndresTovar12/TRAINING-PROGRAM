@@ -51,7 +51,7 @@ const Dato = ({ etiqueta, children, copia }) => (
 function Fila({ cuenta, nueva, ocupado, onVerComo, onNuevaClave, onBorrar }) {
   const nombre = cuenta.full_name || cuenta.username;
   return (
-    <div style={{ background: KP.surface, borderRadius: 16, boxShadow: KP.shCard, padding: 16, display: 'flex', flexDirection: 'column', gap: 12, outline: nueva ? `2px solid ${KP.mint}` : 'none' }}>
+    <div style={{ background: KP.surface, borderRadius: 20, boxShadow: '0 1px 2px rgba(17,19,24,0.04)', padding: 16, display: 'flex', flexDirection: 'column', gap: 12, outline: nueva ? `2px solid ${KP.mint}` : 'none' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ fontSize: 16.5, fontWeight: 800, color: T.text, overflowWrap: 'anywhere' }}>{nombre}</div>
         <span style={{ padding: '3px 10px', borderRadius: 999, background: T.accentBg, color: T.accent, fontSize: 12, fontWeight: 800 }}>
@@ -162,7 +162,7 @@ export default function CuentasDePrueba({ onVerComoCoach, onVerComoAtleta }) {
         </div>
       </div>
 
-      <div style={{ background: KP.surface, borderRadius: 16, boxShadow: KP.shCard, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ background: KP.surface, borderRadius: 20, boxShadow: '0 1px 2px rgba(17,19,24,0.04)', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={etiquetaChica}>Crear una cuenta de prueba</div>
         <div role="radiogroup" aria-label="Tipo de cuenta" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {TIPOS_DE_PRUEBA.map((t) => (

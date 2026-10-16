@@ -1,33 +1,37 @@
 import { Dumbbell, Layers, PlayCircle, Repeat } from 'lucide-react';
-import { T, FONT, KP } from '@/lib/theme';
+import { T, FONT, KP, UI } from '@/lib/theme';
 
-/* Estilos de «Mis planes». Mismas medidas y colores que el editor de planes, para que no se
-   sienta otra app: campos de 11 px de radio, botones con degradado azul, nada de contornos
-   punteados (Andrés, 28 sep 2026: «haces mucho ese estilo de botones, no me gusta»). */
+/* Estilos de «Mis planes», que también usan Mi vitrina, Monetización, Cuentas de prueba y otros paneles del profesional.
+   Reestructura visual (15 oct 2026): las mismas piezas que `components/ui` — campos grises rellenos sin borde, el botón principal
+   azul lleno y el secundario blanco con un hilo fino (nada de contornos gruesos ni punteados; Andrés, 28 sep: «no me gusta»). */
 
 export const campo = {
-  border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '10px 12px', width: '100%',
-  fontFamily: FONT, fontSize: 14, fontWeight: 500, color: T.text, outline: 'none',
-  background: T.bg2, boxSizing: 'border-box',
+  border: 'none', borderRadius: UI.rCampo, padding: '12px 14px', width: '100%',
+  fontFamily: FONT, fontSize: 16, fontWeight: 500, color: T.text, outline: 'none',
+  background: UI.relleno, boxSizing: 'border-box',
 };
 
 export const botonPrincipal = (deshabilitado) => ({
-  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 42, padding: '0 18px',
-  borderRadius: 11, border: 'none', cursor: deshabilitado ? 'default' : 'pointer',
-  background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff',
-  fontFamily: FONT, fontSize: 14, fontWeight: 800, boxShadow: KP.shBtn, opacity: deshabilitado ? 0.5 : 1, flexShrink: 0,
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 44, padding: '0 18px',
+  borderRadius: UI.rCampo, border: 'none', cursor: deshabilitado ? 'default' : 'pointer',
+  background: KP.blue, color: '#fff',
+  fontFamily: FONT, fontSize: 14.5, fontWeight: 700, boxShadow: deshabilitado ? 'none' : '0 6px 16px rgba(30,64,224,0.22)', opacity: deshabilitado ? 0.5 : 1, flexShrink: 0,
 });
 
-// Blanco con borde sólido: lo secundario, y lo de «agregar» (azul).
+// Blanco con un hilo fino: lo secundario; en azul lo de «agregar».
 export const botonBlanco = (azul = false, deshabilitado = false) => ({
-  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 42, padding: '0 16px',
-  borderRadius: 11, border: `1.5px solid ${azul ? T.accent : T.border}`, background: T.bg2, cursor: deshabilitado ? 'default' : 'pointer',
-  fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: azul ? T.accent : T.text2, opacity: deshabilitado ? 0.5 : 1, flexShrink: 0,
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 44, padding: '0 16px',
+  borderRadius: UI.rCampo, border: `1px solid ${azul ? 'rgba(30,64,224,0.35)' : '#E3E6EC'}`, background: '#fff', cursor: deshabilitado ? 'default' : 'pointer',
+  fontFamily: FONT, fontSize: 14, fontWeight: 700, color: azul ? KP.blue : KP.ink, opacity: deshabilitado ? 0.5 : 1, flexShrink: 0,
+  boxShadow: UI.sombraGrupo,
 });
 
 export const etiquetaChica = {
-  fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6,
+  fontSize: 13, fontWeight: 700, color: KP.ink2,
 };
+
+/** La tarjeta blanca de los paneles (sin borde; la separa del fondo gris una sombra suave). */
+export const tarjetaDePanel = { background: UI.tarjeta, borderRadius: UI.rTarjeta, boxShadow: UI.sombraGrupo };
 
 // Cada tipo, con su color: el que se ve en la lista y en los selectores.
 export const COLOR_DE_TIPO = { workout: KP.amber, rutina: KP.violet, programa: T.accent, clase: KP.mint };
