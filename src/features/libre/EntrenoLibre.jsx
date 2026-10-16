@@ -12,6 +12,7 @@ import HeroDeEntrenar from './HeroDeEntrenar';
 import HojaDeDemos from './HojaDeDemos';
 import OpcionesDeEntrenar from './OpcionesDeEntrenar';
 import PantallaDelCronometro from './PantallaDelCronometro';
+import PantallaDeCarrera from './PantallaDeCarrera';
 import ResumenLibre from './ResumenLibre';
 import TusEntrenos from './TusEntrenos';
 import { useDemos } from './useDemos';
@@ -26,6 +27,15 @@ import { Cuadro, CuadroBlanco, PlayChico } from '@/features/training/home/Cuadro
      · `enLinea` (pestaña Entrenar): las opciones puestas directo, y «Tus entrenos».
    El cronómetro vive en `localStorage` y sigue aunque se cierre la hoja: el cartel pasa a «Entreno en curso». «Demo workout» sale solo si hay demos; al elegir uno se abre como el workout de hoy
    (`abreDemo`) y `alIrAHome` (si se da) lleva a Home. Ver `lib/entrenoLibre.js` y `lib/semanaLibre.js`. */
+
+// «8.2 km · ayer»: la última salida del mismo deporte, para «Antes de salir».
+function ultimaSalida(filas, deporte) {
+  const f = (filas ?? []).find((x) => x.deporte === deporte && x.distancia_m > 0);
+  if (!f) return null;
+  const dias = Math.round((new Date().setHours(12, 0, 0, 0) - new Date(f.inicio).setHours(12, 0, 0, 0)) / 86400000);
+  const cuando = dias <= 0 ? 'hoy' : dias === 1 ? 'ayer' : `hace ${dias} días`;
+  return `${(f.distancia_m / 1000).toFixed(1)} km · ${cuando}`;
+}
 
 // El aviso de Explorar al cerrar la activity card sale una vez por visita (dura lo que la pestaña del navegador).
 const yaSeLeOfrecio = () => { try { return sessionStorage.getItem('tl:explorar-ofrecido') === '1'; } catch { return false; } };
@@ -62,7 +72,17 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
       {hoja === 'demos' && demos?.length > 0 && (
         <HojaDeDemos demos={demos} alCerrar={() => setHoja(null)} alElegir={(d) => { abreDemo(d); setHoja(null); alIrAHome?.(); }} />
       )}
-      {hoja === 'cronometro' && (enCurso || pendiente) && (
+      {/* Con GPS (correr, caminar, bici, senderismo): la carrera a pantalla completa. Sin GPS: el cronómetro de siempre. */}
+      {hoja === 'cronometro' && ((pendiente && !enCurso) || (enCurso && crono.cronometro.gps)) && (
+        <PantallaDeCarrera
+          userId={userId} crono={crono} pendiente={enCurso ? null : pendiente} ultimo={ultimaSalida(filas, pendiente ?? crono.cronometro?.deporte)}
+          alEmpezar={({ gps }) => { crono.inicia(pendiente, { gps }); setPendiente(null); }}
+          alMinimizar={() => { setPendiente(null); setHoja(null); }}
+          alCambiarDeporte={() => { setPendiente(null); setHoja('elegir'); }}
+          alGuardado={(fila) => { recarga(); setHoja({ resumen: fila }); }}
+        />
+      )}
+      {hoja === 'cronometro' && enCurso && !crono.cronometro.gps && (
         <PantallaDelCronometro
           userId={userId} crono={crono} pendiente={enCurso ? null : pendiente}
           alEmpezar={({ gps }) => { crono.inicia(pendiente, { gps }); setPendiente(null); }}
