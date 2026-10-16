@@ -38,7 +38,7 @@ const MARCAS = [
   // Texto que se pasa a mayúsculas al pintarlo: `{tipo.toUpperCase()}`.
   ['mayúsculas', /\{[^{}]*\.toUpperCase\(\)\s*\}/],
   // Texto escrito en mayúsculas a mano («EDITANDO», «POR FASES»). Las siglas (AMRAP, EMOM, RPE, GPS…) no cuentan.
-  ['mayúsculas', /(?:texto=|>\s*|[(:,?]\s*|(?<![=!])=\s*)['"`]?(?!(?:AMRAP|EMOM|TABATA|RPE|RIR|GPS|HRV|PDF|CSV|URL|MXN|USD|HIIT|FTP|VO2|ZZ|QA|SAT|RFC|CURP|CLABE|HEIC|JPEG|PNG|MP4|IA|OK|OFF|ID|POST|GET|PUT|PATCH|DELETE|AAAA|HEAD)\b)[A-ZÁÉÍÓÚÑ]{4,}(?:[ ·-][A-ZÁÉÍÓÚÑ]{2,})*['"`<]/],
+  ['mayúsculas', /(?:texto=|>\s*|[(:,?]\s*|(?<![=!])=\s*)['"`]?(?!(?:AMRAP|EMOM|TABATA|RPE|RIR|GPS|HRV|PDF|CSV|URL|MXN|USD|HIIT|FTP|VO2|ZZ|QA|SAT|RFC|CURP|CLABE|HEIC|JPEG|PNG|MP4|IA|OK|OFF|ID|POST|GET|PUT|PATCH|DELETE|AAAA|HEAD)\b)(?:[A-ZÁÉÍÓÚÑ]{4,}(?:[ ·-][A-ZÁÉÍÓÚÑ]{2,})*|[A-ZÁÉÍÓÚÑ]{2,}(?:[ ·-][A-ZÁÉÍÓÚÑ]{2,})+)['"`<]/],
 ];
 
 const archivos = [];

@@ -88,7 +88,7 @@ export default function SelectorCategoria({
           { titulo: 'Tuyas', opciones: mias.map((c) => ({
             valor: c.id, etiqueta: c.name, color: c.color, alBorrar: () => borrar(c),
           })) },
-          { titulo: 'DE LA APP', opciones: deLaApp.map((c) => ({
+          { titulo: 'De la app', opciones: deLaApp.map((c) => ({
             valor: c.id, etiqueta: c.name, color: c.color,
           })) },
         ]}

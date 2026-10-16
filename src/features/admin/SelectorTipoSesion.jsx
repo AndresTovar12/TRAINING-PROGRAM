@@ -120,7 +120,7 @@ export default function SelectorTipoSesion({ day, onPatch, coachId, puedeCrear =
     background: activo ? T.accentBg : 'transparent', textAlign: 'left',
     fontFamily: FONT, fontSize: 14.5, fontWeight: 600, color: T.text,
   });
-  const encabezado = { fontSize: 10.5, fontWeight: 800, letterSpacing: 0.8, color: T.text3, padding: '8px 10px 4px' };
+  const encabezado = { fontSize: 12.5, fontWeight: 700, color: T.text2, padding: '8px 10px 4px' };
 
   return (
     <div ref={caja} style={{ position: 'relative' }}>
@@ -167,7 +167,7 @@ export default function SelectorTipoSesion({ day, onPatch, coachId, puedeCrear =
             <div ref={lista} onScroll={miraSiHayMas} style={{ maxHeight: 330, overflowY: 'auto', padding: 7 }}>
               {propios.length > 0 && (
                 <>
-                  <div style={encabezado}>LOS TUYOS</div>
+                  <div style={encabezado}>Los tuyos</div>
                   {propios.map((m) => {
                     const activo = day?.cat === 'otro' && day?.catNombre === m.nombre;
                     return (
@@ -181,7 +181,7 @@ export default function SelectorTipoSesion({ day, onPatch, coachId, puedeCrear =
                 </>
               )}
 
-              <div style={encabezado}>DE LA APP</div>
+              <div style={encabezado}>De la app</div>
               {base.map((b) => {
                 const activo = day?.cat === b.slug;
                 return (

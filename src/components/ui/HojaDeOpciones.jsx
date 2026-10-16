@@ -49,7 +49,8 @@ export default function HojaDeOpciones({ abierta, titulo, opciones = [], valor, 
   return createPortal(
     <div
       onMouseDown={onCerrar}
-      style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(17,19,24,0.42)', display: 'flex', alignItems: compu ? 'center' : 'flex-end', justifyContent: 'center', padding: compu ? 24 : 0, fontFamily: FONT }}
+      // 7000: por encima de cualquier ventana desde la que se abra (ver la lista de `ListaDesplegable`).
+      style={{ position: 'fixed', inset: 0, zIndex: 7000, background: 'rgba(17,19,24,0.42)', display: 'flex', alignItems: compu ? 'center' : 'flex-end', justifyContent: 'center', padding: compu ? 24 : 0, fontFamily: FONT }}
     >
       <div
         ref={caja}
