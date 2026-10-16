@@ -8,7 +8,7 @@ import {
   dondeVa, esDescanso, isLoadedExercise, sesionQueRepite, sessionIdFor,
   enOrdenDeSemana,
 } from './app/training-utils.js'
-import { textoMeta, leeCantidad, MEDIDAS, esCluster } from './app/medidas.js'
+import { textoMeta, leeCantidad, MEDIDAS, esCluster, descansoEnTiempo } from './app/medidas.js'
 import { vueltasDe, ejercicioDeVuelta, parcheDeVueltas, rondasDe } from './app/porVuelta.js'
 import { lapsosDe, parcheDeLapsos, aLapsos, comoEjercicio, MAX_LAPSOS } from './app/lapsos.js'
 import { limpiaFormato, resumenDeFormato, textoDeResultado } from './app/formatos.js'
@@ -635,8 +635,9 @@ export function diaDesdeEntrada(
       }
       if (e.unidad !== 'reps') ex.unidad = e.unidad
     }
-    if (e.descanso) ex.descanso = e.descanso
-    if (e.descanso_set && String(e.descanso_set).trim()) ex.descansoSet = String(e.descanso_set).trim()
+    // El descanso va como UN tiempo («90 seg»): una frase («30 segundos antes del siguiente ejercicio») no se puede contar hacia atrás en el entreno.
+    if (e.descanso) ex.descanso = descansoEnTiempo(e.descanso)
+    if (e.descanso_set && String(e.descanso_set).trim()) ex.descansoSet = descansoEnTiempo(e.descanso_set)
     if (e.entre_bloques && String(e.entre_bloques).trim()) {
       if (ex.unidad !== 'cluster' && !esCluster(String(ex.reps ?? ''))) throw new Aviso(`"${ex.name}": "entre_bloques" solo va con un cluster (unidad "cluster" y cantidad como "2+2+2").`)
       ex.entreBloques = String(e.entre_bloques).trim()
@@ -718,7 +719,7 @@ export function diaDesdeEntrada(
       // Un número solo toma la unidad del ejercicio; si el texto ya dice «800 m», manda lo que dice.
       const unidad = l?.unidad ?? (/^[\d.,\s\-–]*$/.test(texto) ? (ex.unidad as string | undefined) : undefined)
       const leida = leeCantidad({ reps: texto, unidad })
-      return { reps: leida.libre ? texto : leida.cantidad, unidad: leida.unidad, intensity: String(l?.intensidad ?? '').trim(), descanso: String(l?.descanso ?? '').trim() }
+      return { reps: leida.libre ? texto : leida.cantidad, unidad: leida.unidad, intensity: String(l?.intensidad ?? '').trim(), descanso: descansoEnTiempo(l?.descanso) }
     })
     Object.assign(ex, parcheDeLapsos(filas))
     delete ex.porVuelta
