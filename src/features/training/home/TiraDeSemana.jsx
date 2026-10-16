@@ -1,5 +1,5 @@
-import { useRef } from 'react';
-import { Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { Check } from 'lucide-react';
 import { FONT, KP, NUM_STYLE, UI } from '@/lib/theme';
 
 /**
@@ -53,78 +53,79 @@ export function BotonDeDia({ corto, numero, puesto = false, esHoy = false, punto
   );
 }
 
+/** Los siete botones de una semana. `dias`: los de `weekOverview` (o su versión de equipo). `elegido`: la posición (0 = lunes) o null. */
+function SieteDias({ dias, elegido, fecha, onElegir }) {
+  const numeros = numerosDeLaSemana(fecha);
+  return dias.map((d, i) => {
+    const dice = d.hasSession ? `${d.sesiones} ${d.sesiones === 1 ? 'sesión' : 'sesiones'}${d.name ? `: ${d.name}` : ''}` : d.descanso ? 'descanso' : 'sin sesión';
+    return (
+      <BotonDeDia
+        key={d.key} corto={d.key} numero={numeros[i]} puesto={i === elegido} esHoy={d.isToday}
+        puntos={Array.from({ length: Math.min(d.sesiones || 0, 3) }, () => null)} onClick={() => onElegir?.(i)}
+        etiqueta={`${LARGOS[d.key] ?? d.key} ${numeros[i]}${d.isToday ? ', hoy' : ''}: ${dice}`}
+      />
+    );
+  });
+}
+
 /**
  * La tira de Home: cada día se toca (Andrés, 15 oct: «que cuando el atleta le pique vea su home de ese día») y la tarjeta azul enseña lo
  * de ese día. `dias`: los de `weekOverview` (o su versión de equipo). `elegido`: la posición (0 = lunes). `onElegir(posición)`.
  *
- * SE DESLIZA (Andrés, 16 oct 2026: «da la impresión de que se puede deslizar, y no funciona»): con `onDeslizar(+1 | -1)` un dedo hacia la
- * izquierda pide la semana que viene y hacia la derecha la anterior. `fecha`: un día de la semana que se enseña (por defecto, esta).
- * `animar`: de qué lado entra la semana nueva (1 = desde la derecha, -1 = desde la izquierda, 0 = sin animación).
+ * SE DESLIZA CON EL DEDO (Andrés, 16 oct 2026: «da la impresión de que se puede deslizar… el deslizamiento no acompaña el dedo»). Con
+ * `semanas` ([{ fecha, dias }], esta semana primero) la tira es un carrusel: cada semana es una página del ancho de la tira y el
+ * desplazamiento es el NATIVO del teléfono (sigue al dedo, con inercia y con el «imán» que la deja en una semana entera). Al quedarse quieta
+ * en otra página avisa con `onSemana(n)`. `semana`: la que se mira (también la mueve desde fuera, p. ej. «Volver a hoy»).
+ * Sin `semanas`, es la tira de siempre, de una sola semana.
  */
-export default function TiraDeSemana({ dias = [], elegido, onElegir, onDeslizar, fecha, animar = 0 }) {
-  const numeros = numerosDeLaSemana(fecha);
-  const dedo = useRef(null);
-  const alTocar = (e) => { const t = e.touches[0]; dedo.current = { x: t.clientX, y: t.clientY }; };
-  const alSoltar = (e) => {
-    const ini = dedo.current; dedo.current = null;
-    if (!ini || !onDeslizar) return;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - ini.x; const dy = t.clientY - ini.y;
-    // Un deslizón claro y más horizontal que vertical: así el scroll de la pantalla y un toque normal no lo disparan.
-    if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.5) onDeslizar(dx < 0 ? 1 : -1);
+export default function TiraDeSemana({ dias = [], elegido, onElegir, semanas = null, semana = 0, onSemana }) {
+  const caja = useRef(null);
+  const quieta = useRef(null);
+  const paginas = semanas?.length > 1 ? semanas : null;
+
+  // Si la semana cambia desde fuera («Volver a hoy»), la tira va a ella.
+  useEffect(() => {
+    const el = caja.current;
+    if (!el || !paginas) return;
+    const destino = semana * el.clientWidth;
+    if (Math.abs(el.scrollLeft - destino) > 2) el.scrollTo({ left: destino, behavior: 'smooth' });
+  }, [semana, paginas]);
+
+  if (!paginas) {
+    return (
+      <div role="group" aria-label="Tu semana" style={{ display: 'flex', gap: 4 }}>
+        <SieteDias dias={dias} elegido={elegido} onElegir={onElegir} />
+      </div>
+    );
+  }
+
+  // Cuando deja de moverse, ¿en qué semana quedó?
+  const alMover = () => {
+    clearTimeout(quieta.current);
+    quieta.current = setTimeout(() => {
+      const el = caja.current;
+      if (!el) return;
+      const n = Math.round(el.scrollLeft / el.clientWidth);
+      if (n !== semana) onSemana?.(n);
+    }, 90);
   };
+
   return (
     <div
-      role="group" aria-label="Tu semana" className={animar > 0 ? 'tl-entra-der' : animar < 0 ? 'tl-entra-izq' : undefined}
-      key={fecha ? fecha.toDateString() : 'hoy'}
-      onTouchStart={onDeslizar ? alTocar : undefined} onTouchEnd={onDeslizar ? alSoltar : undefined}
-      style={{ display: 'flex', gap: 4, touchAction: 'pan-y' }}
-    >
-      {dias.map((d, i) => {
-        const dice = d.hasSession ? `${d.sesiones} ${d.sesiones === 1 ? 'sesión' : 'sesiones'}${d.name ? `: ${d.name}` : ''}` : d.descanso ? 'descanso' : 'sin sesión';
-        return (
-          <BotonDeDia
-            key={d.key} corto={d.key} numero={numeros[i]} puesto={i === elegido} esHoy={d.isToday}
-            puntos={Array.from({ length: Math.min(d.sesiones || 0, 3) }, () => null)} onClick={() => onElegir?.(i)}
-            etiqueta={`${LARGOS[d.key] ?? d.key} ${numeros[i]}${d.isToday ? ', hoy' : ''}: ${dice}`}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
-const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-
-/**
- * El renglón de arriba de la tira cuando el plan tiene más semanas por delante: «‹  La semana que viene · Fase 4 · Sem 3  ›».
- * Dice qué semana se está mirando (la tira por sí sola no lo dice) y deja pasar de semana con un toque, no solo con el dedo.
- * `semana`: 0 = esta, 1 = la que viene… `hasta`: la última a la que se puede llegar. `donde`: dónde cae el plan esa semana.
- */
-export function EtiquetaDeSemana({ semana, hasta, fecha, donde, onIr }) {
-  const lunes = fechaDeLaSemana(0, fecha ?? new Date());
-  const domingo = fechaDeLaSemana(6, fecha ?? new Date());
-  const rango = `${lunes.getDate()} ${MESES[lunes.getMonth()]} – ${domingo.getDate()} ${MESES[domingo.getMonth()]}`;
-  const nombre = semana === 0 ? 'Esta semana' : semana === 1 ? 'La semana que viene' : `Dentro de ${semana} semanas`;
-  const flecha = (activa, Icono, etiqueta, a) => (
-    <button
-      type="button" onClick={activa ? () => onIr(a) : undefined} disabled={!activa} aria-label={etiqueta} className={activa ? 'kp-press' : undefined}
+      ref={caja} onScroll={alMover} className="sin-barra" aria-label="Tus semanas"
       style={{
-        width: 34, height: 34, borderRadius: 12, border: 'none', display: 'grid', placeItems: 'center', flexShrink: 0, fontFamily: FONT,
-        background: activa ? UI.relleno : 'transparent', color: activa ? KP.ink : '#C2C7D0', cursor: activa ? 'pointer' : 'default',
+        display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory', overscrollBehaviorX: 'contain',
+        WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none',
       }}
     >
-      <Icono size={19} strokeWidth={2.4} />
-    </button>
-  );
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: FONT }}>
-      {flecha(semana > 0, ChevronLeft, 'Semana anterior', semana - 1)}
-      <div style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: KP.ink }}>{nombre}</div>
-        <div style={{ fontSize: 12.5, fontWeight: 600, color: KP.ink2, marginTop: 1 }}>{[rango, semana > 0 ? donde : null].filter(Boolean).join(' · ')}</div>
-      </div>
-      {flecha(semana < hasta, ChevronRight, 'Semana siguiente', semana + 1)}
+      {paginas.map((p, n) => (
+        <div
+          key={n} role="group" aria-label={n === 0 ? 'Esta semana' : `Semana ${n + 1}`}
+          style={{ flex: '0 0 100%', minWidth: 0, display: 'flex', gap: 4, scrollSnapAlign: 'start', scrollSnapStop: 'always' }}
+        >
+          <SieteDias dias={p.dias} elegido={n === semana ? elegido : null} fecha={p.fecha} onElegir={(i) => { if (n !== semana) onSemana?.(n); onElegir?.(i); }} />
+        </div>
+      ))}
     </div>
   );
 }

@@ -37,7 +37,7 @@ import { FiltroDeAutor, EtiquetaDeAutor } from '@/features/training/EquipoDelAtl
 import AvisoDeInvitacion from '@/features/training/AvisoDeInvitacion';
 import { HojaDeBiblioteca, TarjetaDeBiblioteca } from '@/features/training/BibliotecaDeClases';
 import EntrenoLibre from '@/features/libre/EntrenoLibre';
-import TiraDeSemana, { BotonDeDia, EtiquetaDeSemana, fechaDeLaSemana } from '@/features/training/home/TiraDeSemana';
+import TiraDeSemana, { BotonDeDia, fechaDeLaSemana } from '@/features/training/home/TiraDeSemana';
 import { HoyTeToca, HoyTeTocaEquipo, HoyDescansas, HoyEnPausa } from '@/features/training/home/HoyTeToca';
 import { textoDeSemana } from '@/lib/vaEn';
 import { useMoverMiPlan, ReglasDeMiPlan, ControlesDeMiPlan, MoverAquiAtleta, AvisoDelCoach } from '@/features/training/MoverMiPlan';
@@ -1766,7 +1766,6 @@ const HomeView = ({
   const posHoy = (new Date().getDay() + 6) % 7;
   const [posVista, setPosVista] = useState(null);
   const [semanaVista, setSemanaVista] = useState(0);   // 0 = esta semana, 1 = la que viene…
-  const [sentido, setSentido] = useState(0);           // hacia dónde se deslizó la última vez (anima la entrada)
   const pos = posVista ?? posHoy;
   const esHoyVista = semanaVista === 0 && pos === posHoy;
   // Hasta dónde se puede mirar: las semanas que le quedan al plan. Una rutina que se repite es siempre la misma semana.
@@ -1774,13 +1773,7 @@ const HomeView = ({
   const fechaBase = useMemo(() => { const d = new Date(); d.setDate(d.getDate() + semanaVista * 7); return d; }, [semanaVista]);
   const fechaVista = useMemo(() => (esHoyVista ? new Date() : fechaDeLaSemana(pos, fechaBase)), [pos, esHoyVista, fechaBase]);
   const cuando = { hoy: esHoyVista, fecha: fechaVista };
-  const irASemana = (n) => {
-    const destino = Math.max(0, Math.min(semanasPorVer, n));
-    if (destino === semanaVista) return;
-    setSentido(destino > semanaVista ? 1 : -1);
-    setSemanaVista(destino);
-  };
-  const volverAHoy = () => { setSemanaVista(0); setPosVista(null); setSentido(-1); };
+  const volverAHoy = () => { setSemanaVista(0); setPosVista(null); };
   // El plan, puesto en la semana que se mira (el calendario ya contado); en esta semana es el puntero de siempre.
   const cursorVista = useMemo(() => (semanaVista ? cursorAlDia(PLAN, cursor, fechaBase) : cursor), [PLAN, cursor, fechaBase, semanaVista]);
   // Lo que toca ese día según el calendario del dispositivo (no según lo marcado).
@@ -1798,8 +1791,15 @@ const HomeView = ({
     return r ? { ...r, days: r.days.map((d) => ({ ...d, isToday: false })) } : null;
   }, [hayEquipo, semanaVista, resumenDeEquipo, resumenDe, fechaBase]);
   const week = hayEquipo && resumenVista ? resumenVista : semanaPropia;
-  // «Semana que viene · Fase 4 · Sem 3»: dónde caerá el plan esa semana.
-  const textoDeLaSemanaVista = cursorVista && PLAN?.length ? textoDeSemana({ phases: PLAN, kind, estructura }, cursorVista.phaseId, cursorVista.weekNum) : '';
+  /* Las páginas del carrusel de la tira: esta semana y las que le quedan al plan, cada una con sus siete días (el plan contado hasta
+     esa fecha). La que se mira usa los datos de arriba; las demás se calculan aquí, porque al deslizar se ven antes de soltar el dedo. */
+  const semanasDeLaTira = useMemo(() => Array.from({ length: semanasPorVer + 1 }, (_, n) => {
+    const fecha = new Date(); fecha.setDate(fecha.getDate() + n * 7);
+    if (n === semanaVista) return { fecha, dias: week.days };
+    const r = hayEquipo ? resumenDe?.(fecha) : weekOverview(PLAN, kind, n ? cursorAlDia(PLAN, cursor, fecha) : cursor, fecha);
+    const dias = r?.days ?? week.days;
+    return { fecha, dias: n ? dias.map((d) => ({ ...d, isToday: false })) : dias };
+  }), [semanasPorVer, semanaVista, week, hayEquipo, resumenDe, PLAN, kind, cursor]);
   // Un día con dos entradas se dice «2 sesiones», no «Fuerza + Movilidad»: así no
   // se lee como una sola (Andrés, 29 sep 2026).
   const nombreDeSemana = (d) => (d.sesiones > 1 ? `${d.sesiones} sesiones` : sinDuracion(d.name || ''));
@@ -1958,10 +1958,9 @@ const HomeView = ({
         padding: '16px 18px 0', maxWidth: 1180, margin: '0 auto', alignItems: 'start',
       }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
-          {semanasPorVer > 0 && <EtiquetaDeSemana semana={semanaVista} hasta={semanasPorVer} fecha={fechaBase} donde={textoDeLaSemanaVista} onIr={irASemana} />}
           <TiraDeSemana
             dias={week.days} elegido={pos} onElegir={(i) => setPosVista(i === posHoy ? null : i)}
-            fecha={fechaBase} animar={sentido} onDeslizar={semanasPorVer > 0 ? (d) => irASemana(semanaVista + d) : undefined}
+            semanas={semanasDeLaTira} semana={semanaVista} onSemana={setSemanaVista}
           />
           {!esHoyVista && (
             <Boton tipo="texto" chico onClick={volverAHoy} estilo={{ alignSelf: 'flex-start', marginTop: -4 }}>← Volver a hoy</Boton>
