@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Bell, BellOff, Check, ChevronLeft, ChevronRight, List, Minus, Pencil, Play, Plus, Share2, Timer, Video, X } from 'lucide-react';
-import { LT, KP, FONT, NUM_STYLE } from '@/lib/theme';
+import { LT, KP, FONT, NUM_STYLE, UI } from '@/lib/theme';
 import { textoDeResultado } from '@/lib/formatos';
 import { relojDe } from '@/lib/entrenoDatos';
 
@@ -27,7 +27,7 @@ import { relojDe } from '@/lib/entrenoDatos';
 /* ------------------------------------------------------------------ */
 
 const redondo = {
-  width: 38, height: 38, borderRadius: '50%', border: `1px solid ${LT.border}`, cursor: 'pointer', background: LT.surface,
+  width: 40, height: 40, borderRadius: 13, border: 'none', cursor: 'pointer', background: LT.surface, boxShadow: '0 2px 8px rgba(17,19,24,0.08)',
   color: LT.text, display: 'grid', placeItems: 'center', flexShrink: 0, touchAction: 'manipulation',
 };
 
@@ -40,9 +40,11 @@ function BotonGrande({ children, onClick, variante = 'azul', disabled = false })
     justifyContent: 'center', gap: 10, fontFamily: FONT, fontSize: 18, fontWeight: 800, touchAction: 'manipulation',
   };
   const estilos = {
-    azul: { border: 'none', color: '#fff', background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, boxShadow: KP.shBtn },
+    azul: { border: 'none', color: '#fff', background: KP.blue, boxShadow: '0 8px 20px rgba(30,64,224,0.22)' },
+    // Reestructura visual (15 oct 2026), como «Fuerza» en las capturas de Andrés: «Listo» en tinta oscura con la palomita del color del tipo.
+    oscuro: { border: 'none', color: '#fff', background: '#15171E', boxShadow: '0 10px 24px rgba(17,19,24,0.22)' },
     verde: { border: 'none', color: '#fff', background: LT.mint, boxShadow: '0 8px 22px rgba(0,163,114,0.24)' },
-    borde: { border: `2px solid ${LT.blue}`, color: LT.blue, background: LT.surface, minHeight: 54, fontSize: 16.5 },
+    borde: { border: 'none', color: LT.blue, background: LT.surface, minHeight: 54, fontSize: 16.5, boxShadow: '0 2px 10px rgba(17,19,24,0.07)' },
   };
   return (
     <button type="button" onClick={onClick} disabled={disabled} className="kp-press" style={{ ...base, ...estilos[variante] }}>
@@ -63,8 +65,9 @@ function BotonSecundario({ children, onClick, disabled = false, ancho = false })
       style={{
         flex: ancho ? undefined : 1, width: ancho ? '100%' : undefined, minWidth: 0, minHeight: 50, borderRadius: 16, cursor: disabled ? 'default' : 'pointer',
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '0 10px', fontFamily: FONT, fontSize: 15.5, fontWeight: 800,
-        touchAction: 'manipulation', border: `1.5px solid ${disabled ? LT.border : LT.borderHi}`, background: LT.surface,
-        color: disabled ? LT.text3 : LT.text, opacity: disabled ? 0.65 : 1,
+        // Blanco y sin borde sobre el fondo teñido (reestructura visual, 15 oct 2026); siguen siendo botones enteros, no texto suelto (Andrés, 9 oct: «muy escondidos»).
+        touchAction: 'manipulation', border: 'none', background: LT.surface, boxShadow: disabled ? 'none' : '0 2px 10px rgba(17,19,24,0.07)',
+        color: disabled ? LT.text3 : LT.text, opacity: disabled ? 0.6 : 1,
       }}
     >
       {children}
@@ -98,7 +101,7 @@ function BotonDeTecnica({ activa, etiqueta, onClick, enviada = false }) {
       <button
         type="button" onClick={onClick} aria-label={enviada ? `${etiqueta} (ya mandaste una)` : etiqueta} className="kp-press"
         style={{
-          width: 50, minHeight: 50, flexShrink: 0, borderRadius: 16, border: `1.5px solid ${enviada ? LT.mint : LT.borderHi}`, background: LT.surface, color: enviada ? LT.mint : LT.text,
+          width: 50, minHeight: 50, flexShrink: 0, borderRadius: 16, border: enviada ? `1.5px solid ${LT.mint}` : 'none', boxShadow: '0 2px 10px rgba(17,19,24,0.07)', background: LT.surface, color: enviada ? LT.mint : LT.text,
           cursor: 'pointer', display: 'grid', placeItems: 'center', touchAction: 'manipulation', position: 'relative',
         }}
       >
@@ -179,40 +182,42 @@ export function SerieDelSet({ puntos }) {
  * Cerrar, el avance por Sets, el tiempo que llevas y «Ver todo». Sin `onLista` (la versión básica de la web) no sale «Ver todo»; sin `tiempo`
  * (todavía no inicia, o pasaron muchas horas) no sale el tiempo. Cerrar sale directo: el avance ya está guardado y «Continuar entreno» lo retoma.
  */
-export function BarraDelEntreno({ segmentos, fondo, palabras, tiempo, onCerrar, onLista }) {
+/**
+ * La barra de arriba. Reestructura visual (15 oct 2026), como «Fuerza» en las capturas de Andrés: la ✕ para salir, «≡ Workout» (la lista de la sesión, solo en la app
+ * completa) en el color del tipo, los segmentos del avance en ese color y el tiempo que llevas.
+ */
+export function BarraDelEntreno({ segmentos, fondo, palabras, tiempo, onCerrar, onLista, color = LT.blue }) {
   return (
     <div style={{ position: 'sticky', top: 0, zIndex: 5, background: fondo, padding: 'calc(10px + env(safe-area-inset-top)) 0 8px' }}>
       <div style={{ ...COLUMNA, padding: '0 18px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button type="button" onClick={onCerrar} aria-label={palabras.salirAria} style={redondo}><X size={20} /></button>
+          {onLista && (
+            <button
+              type="button" onClick={onLista} className="kp-press" aria-label="Ver la lista de tu entreno"
+              style={{
+                height: 40, padding: '0 14px 0 11px', borderRadius: 13, border: 'none', background: color, color: '#fff', cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 7, flexShrink: 0, fontFamily: FONT, fontSize: 14.5, fontWeight: 700, touchAction: 'manipulation',
+                boxShadow: '0 6px 14px rgba(17,19,24,0.14)',
+              }}
+            >
+              <List size={17} /> Workout
+            </button>
+          )}
           <div style={{ flex: 1, display: 'flex', gap: 5 }} aria-hidden="true">
             {segmentos.map((f, i) => (
               <span key={i} style={{ flex: 1, height: 5, borderRadius: 3, background: 'rgba(17,19,24,0.1)', overflow: 'hidden' }}>
-                <span style={{ display: 'block', height: '100%', width: `${Math.round(f * 100)}%`, background: LT.text, borderRadius: 3, transition: 'width 0.25s' }} />
+                <span style={{ display: 'block', height: '100%', width: `${Math.round(f * 100)}%`, background: color, borderRadius: 3, transition: 'width 0.25s' }} />
               </span>
             ))}
           </div>
           {tiempo && (
             <span
               role="timer" aria-label={`Llevas ${tiempo}`}
-              style={{
-                height: 38, padding: '0 13px 0 11px', borderRadius: 999, border: `1px solid ${LT.border}`, background: LT.surface, color: LT.text, flexShrink: 0,
-                display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: FONT, fontSize: 15, fontWeight: 800, ...NUM_STYLE,
-              }}
+              style={{ flexShrink: 0, fontFamily: FONT, fontSize: 16, fontWeight: 800, color: LT.text, ...NUM_STYLE }}
             >
-              <Timer size={17} color={LT.blue} /> {tiempo}
+              {tiempo}
             </span>
-          )}
-          {onLista && (
-            <button
-              type="button" onClick={onLista} className="kp-press"
-              style={{
-                height: 38, padding: '0 14px 0 11px', borderRadius: 999, border: `1px solid ${LT.border}`, background: LT.surface, color: LT.blue, cursor: 'pointer',
-                display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0, fontFamily: FONT, fontSize: 13.5, fontWeight: 800, touchAction: 'manipulation',
-              }}
-            >
-              <List size={17} /> Ver todo
-            </button>
           )}
         </div>
       </div>
@@ -229,7 +234,7 @@ export function BarraDelEntreno({ segmentos, fondo, palabras, tiempo, onCerrar, 
 function Cifra({ valor, etiqueta, destacado = false, texto = false }) {
   return (
     <div className="cifra" style={{
-      flex: 1, minWidth: 0, background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: '8px 8px 7px', textAlign: 'center',
+      flex: 1, minWidth: 0, background: LT.surface, borderRadius: 18, padding: '8px 8px 7px', textAlign: 'center', boxShadow: '0 2px 10px rgba(17,19,24,0.06)',
       display: 'flex', flexDirection: 'column', justifyContent: 'center',
     }}>
       <div
@@ -251,8 +256,11 @@ function Cifra({ valor, etiqueta, destacado = false, texto = false }) {
  * Y NADA MÁS. Andrés (10 oct 2026) quitó «Luego» y «Descanso»: «solo estorba y satura». Lo bonito sale de la jerarquía, no de más texto: lo que toca es lo más
  * fuerte (letra azul y fila sombreada), lo que sigue se apaga y lo que ya hiciste lleva su palomita.
  */
-function TarjetaDeLaSerie({ resumen }) {
+function TarjetaDeLaSerie({ resumen, color = null }) {
   const { etiqueta, numero, total, puntos, par } = resumen;
+  /* Reestructura visual (15 oct 2026), como «Fuerza» en las capturas: la tarjeta va del COLOR del tipo de sesión (morado en Gym) con letra blanca, y lo que toca
+     en un renglón blanco. Sin color (un tipo propio con un color raro), blanca como antes. */
+  const enColor = !!color;
   const cuenta = numero !== null && total > 1;
   // Un ejercicio que se repite (sin par): la tarjeta es solo el contador, y se centra para no quedar con un hueco abajo.
   const sola = !par;
@@ -260,7 +268,8 @@ function TarjetaDeLaSerie({ resumen }) {
     <div
       role="group" aria-label={[etiqueta, cuenta ? `serie ${numero} de ${total}` : null].filter(Boolean).join(', ')}
       style={{
-        flex: 1, minWidth: 0, background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: '12px 12px 10px',
+        flex: 1, minWidth: 0, background: enColor ? color : LT.surface, borderRadius: 20, padding: '12px 12px 10px',
+        boxShadow: enColor ? '0 10px 22px rgba(17,19,24,0.16)' : '0 2px 10px rgba(17,19,24,0.06)',
         display: 'flex', flexDirection: 'column', justifyContent: sola ? 'center' : 'flex-start', gap: 10,
       }}
     >
@@ -268,18 +277,20 @@ function TarjetaDeLaSerie({ resumen }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px 8px' }}>
           {cuenta && (
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, ...NUM_STYLE }}>
-              <span style={{ fontSize: 15, fontWeight: 700, color: LT.text2 }}>Serie</span>
-              <span style={{ fontSize: sola ? 34 : 26, fontWeight: 800, letterSpacing: -0.8, lineHeight: 1, color: LT.blue }}>{numero}</span>
-              <span style={{ fontSize: 15, fontWeight: 700, color: LT.text2 }}>de {total}</span>
+              <span style={{ fontSize: 15, fontWeight: 700, color: enColor ? 'rgba(255,255,255,0.85)' : LT.text2 }}>Serie</span>
+              <span style={{ fontSize: sola ? 34 : 26, fontWeight: 800, letterSpacing: -0.8, lineHeight: 1, color: enColor ? '#fff' : LT.blue }}>{numero}</span>
+              <span style={{ fontSize: 15, fontWeight: 700, color: enColor ? 'rgba(255,255,255,0.85)' : LT.text2 }}>de {total}</span>
             </div>
           )}
-          {etiqueta && <Etiqueta chica={cuenta}>{etiqueta}</Etiqueta>}
+          {etiqueta && (enColor
+            ? <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: '#fff', background: 'rgba(255,255,255,0.18)', padding: '4px 8px', borderRadius: 8 }}>{etiqueta}</span>
+            : <Etiqueta chica={cuenta}>{etiqueta}</Etiqueta>)}
         </div>
       )}
-      {cuenta && <BarraDeSeries puntos={puntos} />}
+      {cuenta && <BarraDeSeries puntos={puntos} enColor={enColor} />}
       {par && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, margin: '0 -6px -2px' }}>
-          {par.map((l) => <FilaDelPar key={l.letra} {...l} />)}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, margin: '0 -4px -2px' }}>
+          {par.map((l) => <FilaDelPar key={l.letra} {...l} color={enColor ? color : null} />)}
         </div>
       )}
     </div>
@@ -287,13 +298,14 @@ function TarjetaDeLaSerie({ resumen }) {
 }
 
 // La barrita de las series: una pieza por serie. La que va, azul fuerte; las hechas, azul suave; las que faltan, vacías. Con muchas series, una sola barra.
-function BarraDeSeries({ puntos }) {
-  const pista = 'rgba(17,19,24,0.1)';
+function BarraDeSeries({ puntos, enColor = false }) {
+  const pista = enColor ? 'rgba(255,255,255,0.25)' : 'rgba(17,19,24,0.1)';
+  const lleno = enColor ? '#fff' : LT.blue;
   if (puntos.length > 12) {
     const hechas = puntos.filter((p) => p.estado !== 'pendiente').length;
     return (
       <div aria-hidden="true" style={{ height: 5, borderRadius: 3, background: pista, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${Math.round((hechas / puntos.length) * 100)}%`, background: LT.blue, borderRadius: 3 }} />
+        <div style={{ height: '100%', width: `${Math.round((hechas / puntos.length) * 100)}%`, background: lleno, borderRadius: 3 }} />
       </div>
     );
   }
@@ -303,7 +315,7 @@ function BarraDeSeries({ puntos }) {
         <span
           key={i}
           style={{
-            flex: 1, height: 5, borderRadius: 3, background: p.estado === 'pendiente' ? pista : LT.blue, opacity: p.estado === 'hecha' ? 0.4 : 1,
+            flex: 1, height: 5, borderRadius: 3, background: p.estado === 'pendiente' ? pista : lleno, opacity: p.estado === 'hecha' ? 0.45 : 1,
             transition: 'opacity 0.25s, background 0.25s',
           }}
         />
@@ -313,22 +325,27 @@ function BarraDeSeries({ puntos }) {
 }
 
 // Un ejercicio del par (A, B…): el que toca, con su letra en azul y la fila sombreada; el que ya hiciste, con su palomita; el que falta, apagado.
-function FilaDelPar({ letra, nombre, estado }) {
+function FilaDelPar({ letra, nombre, estado, color = null }) {
   const toca = estado === 'actual';
   const hecho = estado === 'hecho';
-  const insignia = toca
-    ? { background: LT.blue, color: '#fff' }
-    : (hecho ? { background: KP.mintSoft, color: LT.mint } : { background: LT.surface, border: `1.5px solid ${LT.borderHi}`, color: LT.text2 });
+  // En la tarjeta de color: lo que toca en un renglón blanco con su letra del color; lo demás, sobre el color, en blanco translúcido.
+  const insignia = color
+    ? (toca ? { background: color, color: '#fff' } : hecho ? { background: 'rgba(255,255,255,0.9)', color } : { background: 'rgba(255,255,255,0.2)', color: '#fff' })
+    : toca
+      ? { background: LT.blue, color: '#fff' }
+      : (hecho ? { background: KP.mintSoft, color: LT.mint } : { background: LT.surface, border: `1.5px solid ${LT.borderHi}`, color: LT.text2 });
+  const fondoFila = color ? (toca ? '#fff' : 'rgba(255,255,255,0.12)') : (toca ? LT.blueSoft : 'transparent');
+  const tinta = color ? (toca ? LT.text : '#fff') : (toca ? LT.text : LT.text2);
   return (
     <div
       aria-current={toca ? 'step' : undefined}
-      style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, padding: '5px 8px 5px 6px', borderRadius: 11, background: toca ? LT.blueSoft : 'transparent' }}
+      style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, padding: '7px 8px 7px 7px', borderRadius: 12, background: fondoFila }}
     >
       <span style={{ width: 22, height: 22, borderRadius: 7, flexShrink: 0, boxSizing: 'border-box', display: 'grid', placeItems: 'center', fontSize: 12.5, fontWeight: 800, ...insignia }}>
         {hecho ? <Check size={13} strokeWidth={3.2} aria-label="Hecho" /> : letra}
       </span>
       <span style={{
-        minWidth: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 14.5, fontWeight: toca ? 800 : 600, color: toca ? LT.text : LT.text2,
+        minWidth: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 14.5, fontWeight: toca ? 800 : 600, color: tinta,
       }}>
         {nombre}
       </span>
@@ -346,7 +363,7 @@ function CronometroDelPaso({ segundos, cuenta, onEmpezar, onQuitar }) {
       <button
         type="button" onClick={onEmpezar} className="kp-press"
         style={{
-          width: '100%', minHeight: 50, borderRadius: 16, border: `1.5px solid ${LT.borderHi}`, background: LT.surface, color: LT.text, cursor: 'pointer',
+          width: '100%', minHeight: 50, borderRadius: 16, border: 'none', boxShadow: '0 2px 10px rgba(17,19,24,0.07)', background: LT.surface, color: LT.text, cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontFamily: FONT, fontSize: 15.5, fontWeight: 800, touchAction: 'manipulation',
         }}
       >
@@ -374,7 +391,7 @@ function CronometroDelPaso({ segundos, cuenta, onEmpezar, onQuitar }) {
  */
 export function PantallaDePaso({
   paso, video, cifras, anotado, sigue, resumen, cronometro, etiquetaDeCambiar, puedeAnterior, tecnica,
-  onListo, onCambiar, onSaltar, onAnterior,
+  onListo, onCambiar, onSaltar, onAnterior, color = null,
 }) {
   const nota = [paso.nota, paso.cue].filter(Boolean);
   const hayCronometro = paso.tipo === 'ejercicio' && paso.termina?.por === 'tiempo' && cronometro;
@@ -406,7 +423,7 @@ export function PantallaDePaso({
           {/* La serie explicada a la izquierda y las cifras APILADAS a la derecha (la mitad de espacio que antes). Sin serie que explicar, las cifras van en una fila. */}
           {(resumen || cifras.length > 0) && (
             <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, marginBottom: 14 }}>
-              {resumen && <TarjetaDeLaSerie resumen={resumen} />}
+              {resumen && <TarjetaDeLaSerie resumen={resumen} color={color} />}
               {cifras.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: resumen ? 'column' : 'row', gap: 8, flex: resumen ? '0 0 38%' : 1, minWidth: 0 }}>
                   {cifras.map((c, i) => <Cifra key={i} {...c} />)}
@@ -427,7 +444,9 @@ export function PantallaDePaso({
       </div>
       <div style={{ flexShrink: 0, padding: '10px 0 calc(10px + env(safe-area-inset-bottom))' }}>
         <div style={{ ...COLUMNA, padding: '0 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <BotonGrande onClick={onListo}><Check size={22} strokeWidth={3} /> Listo</BotonGrande>
+          <BotonGrande variante="oscuro" onClick={onListo}>
+            <span aria-hidden="true" style={{ width: 30, height: 30, borderRadius: '50%', background: color || LT.blue, display: 'grid', placeItems: 'center' }}><Check size={18} strokeWidth={3} /></span> Listo
+          </BotonGrande>
           {/* «Cambiar» a secas no decía QUÉ: ahora dice qué se puede cambiar («Cambiar reps o kilos»). */}
           {etiquetaDeCambiar && <BotonSecundario ancho onClick={onCambiar}><Pencil size={17} /> {etiquetaDeCambiar}</BotonSecundario>}
           <div style={{ display: 'flex', gap: 10 }}>
@@ -450,7 +469,7 @@ export function PantallaDePaso({
  * (`RelojDelBloque`), que es la pantalla protagonista mientras dura. Aquí solo se dice qué es, con qué ejercicios (y, en lapsos, qué lapsos),
  * y se abre el reloj o se anota el resultado a mano.
  */
-export function PantallaDeReloj({ paso, detalle, resultado, puedeAnterior, tecnica, enMarcha = false, onIniciar, onAnotar, onListo, onSaltar, onAnterior }) {
+export function PantallaDeReloj({ paso, detalle, resultado, puedeAnterior, tecnica, enMarcha = false, onIniciar, onAnotar, onListo, onSaltar, onAnterior, color = null }) {
   const conLapsos = !!paso.deLapsos;
   return (
     <>
@@ -499,7 +518,9 @@ export function PantallaDeReloj({ paso, detalle, resultado, puedeAnterior, tecni
               el Set en «Ver todo», al retomar el entreno o al cancelar la cuenta; el botón arranca ya (o sigue, si el reloj iba a medias). */}
           {resultado ? (
             <>
-              <BotonGrande onClick={onListo}><Check size={22} strokeWidth={3} /> Listo</BotonGrande>
+              <BotonGrande variante="oscuro" onClick={onListo}>
+                <span aria-hidden="true" style={{ width: 30, height: 30, borderRadius: '50%', background: color || LT.blue, display: 'grid', placeItems: 'center' }}><Check size={18} strokeWidth={3} /></span> Listo
+              </BotonGrande>
               <BotonSecundario ancho onClick={onAnotar}><Pencil size={17} /> Cambiar el resultado</BotonSecundario>
             </>
           ) : (
@@ -532,7 +553,7 @@ export function PantallaDeReloj({ paso, detalle, resultado, puedeAnterior, tecni
  * `video` y se VE aquí, en la tarjeta de «Sigue»: Andrés (10 oct 2026): «que mientras está el atleta en descanso pueda ver el video del ejercicio que sigue».
  * Sin video, «Sigue» es la tarjeta de siempre, abajo junto a los botones. Sin frases que expliquen el botón: el botón ya dice «Seguir».
  */
-export function PantallaDeDescanso({ descanso, siguiente, video, sonido, puedeAnterior, onSeguir, onMas, onAnterior, onSonido }) {
+export function PantallaDeDescanso({ descanso, siguiente, video, sonido, puedeAnterior, onSeguir, onMas, onAnterior, onSonido, color = null }) {
   const { paso } = descanso;
   const conCuenta = descanso.restan !== null;
   const conVideo = !!siguiente && !!video;
@@ -562,7 +583,7 @@ export function PantallaDeDescanso({ descanso, siguiente, video, sonido, puedeAn
                 {grande}
               </div>
               <div style={{ height: 6, borderRadius: 3, background: 'rgba(17,19,24,0.12)', margin: '0 28px', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${Math.round((descanso.vencido ? 1 : avance) * 100)}%`, background: LT.blue, borderRadius: 3, transition: 'width 0.25s linear' }} />
+                <div style={{ height: '100%', width: `${Math.round((descanso.vencido ? 1 : avance) * 100)}%`, background: color || LT.blue, borderRadius: 3, transition: 'width 0.25s linear' }} />
               </div>
               {paso.segMax && <div style={{ marginTop: 14, fontSize: 13.5, fontWeight: 700, color: LT.text3, ...NUM_STYLE }}>Puedes llegar hasta {relojDe(paso.segMax + descanso.extra)}</div>}
             </>
@@ -570,7 +591,7 @@ export function PantallaDeDescanso({ descanso, siguiente, video, sonido, puedeAn
             <div style={{ fontSize: 34, fontWeight: 800, letterSpacing: -0.6, lineHeight: 1.15, color: LT.text, margin: '14px 0 0', overflowWrap: 'anywhere' }}>{paso.texto}</div>
           )}
           {conVideo && (
-            <div style={{ marginTop: 18, textAlign: 'left', background: LT.surface, border: `1.5px solid ${LT.border}`, borderRadius: 22, padding: 8 }}>
+            <div style={{ marginTop: 18, textAlign: 'left', background: LT.surface, borderRadius: 22, padding: 8, boxShadow: '0 2px 10px rgba(17,19,24,0.07)' }}>
               {video}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 6px 4px' }}>{datosDelSiguiente}</div>
             </div>
@@ -581,7 +602,7 @@ export function PantallaDeDescanso({ descanso, siguiente, video, sonido, puedeAn
         <div style={{ ...COLUMNA, padding: '0 18px' }}>
           {siguiente && !conVideo && (
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 12, background: LT.surface, border: `1.5px solid ${LT.border}`, borderRadius: 18, padding: '12px 14px', marginBottom: 12,
+              display: 'flex', alignItems: 'center', gap: 12, background: LT.surface, borderRadius: 18, padding: '12px 14px', marginBottom: 12, boxShadow: '0 2px 10px rgba(17,19,24,0.07)',
             }}>
               {datosDelSiguiente}
             </div>
@@ -592,7 +613,7 @@ export function PantallaDeDescanso({ descanso, siguiente, video, sonido, puedeAn
               <button
                 type="button" onClick={onMas} className="kp-press"
                 style={{
-                  minWidth: 84, borderRadius: 18, border: `1.5px solid ${LT.borderHi}`, background: LT.surface, color: LT.text, cursor: 'pointer',
+                  minWidth: 84, borderRadius: 18, border: 'none', boxShadow: '0 2px 10px rgba(17,19,24,0.07)', background: LT.surface, color: LT.text, cursor: 'pointer',
                   fontFamily: FONT, fontSize: 16, fontWeight: 800, touchAction: 'manipulation',
                 }}
               >
@@ -638,7 +659,7 @@ export function PantallaDeFin({ resumen, notas, palabras, onNotas, onTerminar, o
           <textarea
             id="entreno-notas" value={notas} onChange={(e) => onNotas(e.target.value)} rows={4}
             style={{
-              width: '100%', boxSizing: 'border-box', border: `1.5px solid ${LT.border}`, borderRadius: 16, background: LT.surface, padding: '14px 16px',
+              width: '100%', boxSizing: 'border-box', border: 'none', boxShadow: '0 2px 10px rgba(17,19,24,0.07)', borderRadius: 16, background: LT.surface, padding: '14px 16px',
               fontFamily: FONT, fontSize: 16, color: LT.text, resize: 'none', outline: 'none', textAlign: 'left',
             }}
           />
@@ -668,7 +689,7 @@ function Hoja({ etiqueta, titulo, subtitulo, icono, conCierre = false, onCerrar,
       <div
         onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label={etiqueta} className="animate-sheet"
         style={{
-          width: '100%', maxWidth: 520, background: LT.bg, borderRadius: '22px 22px 0 0', fontFamily: FONT, boxSizing: 'border-box',
+          width: '100%', maxWidth: 520, background: UI.fondo, borderRadius: '24px 24px 0 0', fontFamily: FONT, boxSizing: 'border-box',
           padding: '10px 18px calc(16px + env(safe-area-inset-bottom))', maxHeight: '92svh', overflowY: 'auto',
         }}
       >

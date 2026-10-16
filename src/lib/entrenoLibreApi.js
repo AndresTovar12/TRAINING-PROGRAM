@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { construyeActividad } from '@/lib/metricas/construye';
+import { construyeActividad, preparaEntreno } from '@/lib/metricas/construye';
 import { umbralesDe } from '@/lib/metricasApi';
 import { entrenoLibre } from '@/lib/entrenoLibre';
 
@@ -12,12 +12,19 @@ const nuevoId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Mat
  * Guarda un entreno libre y devuelve su fila. La carga se estima por deporte y duración («≈»): sin pulso no hay otra forma. Si el mismo entreno ya estaba (mismo inicio y duración:
  * un doble toque en «Guardar»), devuelve el que ya existía en vez de fallar.
  */
-export async function guardaEntrenoLibre({ atletaId, deporte, inicioMs, duracionS, distanciaM = null }) {
-  const prep = entrenoLibre({ deporte, inicioMs, duracionS, distanciaM });
+export async function guardaEntrenoLibre({ atletaId, deporte, inicioMs, duracionS, distanciaM = null, muestras = null }) {
+  // Con ruta del GPS (ver `lib/ubicacion.js`), las muestras pasan por el mismo motor que lee los relojes: distancia, ritmo, kilómetros y la ruta para el mapa.
+  const conRuta = Array.isArray(muestras) && muestras.length >= 2;
+  const base = entrenoLibre({ deporte, inicioMs, duracionS, distanciaM });
+  const prep = conRuta ? preparaEntreno({ ...base, muestras }) : base;
   const { umbrales, genero } = await umbralesDe(atletaId);
-  const { fila } = construyeActividad(prep, { umbrales, genero, desfaseMin: -new Date(inicioMs).getTimezoneOffset(), conSeries: false, origen: 'manual' });
+  const { fila, series } = construyeActividad(prep, { umbrales, genero, desfaseMin: -new Date(inicioMs).getTimezoneOffset(), conSeries: conRuta, origen: 'manual' });
   const { data, error } = await supabase.from('actividades').insert({ ...fila, id: nuevoId(), atleta_id: atletaId, subido_por: atletaId }).select('*').single();
-  if (!error) return data;
+  if (!error) {
+    // La ruta es un extra: si no se guarda, el entreno ya quedó (con su distancia y sus kilómetros).
+    if (series) await supabase.from('actividad_series').insert({ actividad_id: data.id, atleta_id: atletaId, series }).then(() => {}, () => {});
+    return data;
+  }
   if (error.code === '23505') {
     const { data: ya, error: e2 } = await supabase.from('actividades').select('*').eq('atleta_id', atletaId).eq('origen_clave', fila.origen_clave).maybeSingle();
     if (!e2 && ya) return ya;

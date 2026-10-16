@@ -56,7 +56,7 @@ export function aspectoDelTipo(day) {
   // Un tipo propio solo cuenta como tal con nombre (así lo resuelve `tipoDeSesion`): sin él es Gym y lleva su pesa.
   const propio = day?.cat === 'otro' && !!(day?.catNombre || '').trim();
   const Icono = propio ? iconoPropio(day.catIcono ?? null, label) : (ICONO_DEL_TIPO[day?.cat] ?? Dumbbell);
-  if (!ES_HEX.test(c || '')) return { Icono, color: c || null, fondo: null, borde: null, mosaico: null, tinta: null };
+  if (!ES_HEX.test(c || '')) return { Icono, color: c || null, fondo: null, borde: null, mosaico: null, tinta: null, fuerte: null };
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
   const velo = (a) => `rgba(${r},${g},${b},${a})`;
   return {
@@ -66,5 +66,17 @@ export function aspectoDelTipo(day) {
     borde: velo(0.34),
     mosaico: velo(0.2),
     tinta: `rgb(${Math.round(r * 0.62)},${Math.round(g * 0.62)},${Math.round(b * 0.62)})`,
+    fuerte: colorFuerte(r, g, b),
   };
+}
+
+/** El color del tipo oscurecido lo justo para que la letra BLANCA encima se lea (contraste ≥ 4.5 con blanco): el morado de Gym casi no cambia,
+ *  el verde de Recovery o el naranja de Neural bajan de tono. Lo usan las tarjetas llenas de color (la serie en el modo entreno). */
+function colorFuerte(r, g, b) {
+  const canal = (v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
+  const luz = (k) => 0.2126 * canal(r * k) + 0.7152 * canal(g * k) + 0.0722 * canal(b * k);
+  let k = 1;
+  while (k > 0.3 && luz(k) > 0.183) k -= 0.04;
+  const hex = (v) => Math.round(v * k).toString(16).padStart(2, '0');
+  return `#${hex(r)}${hex(g)}${hex(b)}`;
 }
