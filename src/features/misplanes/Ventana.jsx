@@ -57,7 +57,7 @@ export default function Ventana({ titulo, subtitulo, onCerrar, ancho = 480, pie,
         {pie && (
           <div style={{
             flexShrink: 0, display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap',
-            padding: '12px 18px calc(14px + env(safe-area-inset-bottom))', borderTop: `1px solid ${T.border}`, background: T.bg,
+            padding: '12px 18px calc(14px + env(safe-area-inset-bottom))', borderTop: '1px solid #ECEEF2', background: T.bg,
           }}>
             {pie}
           </div>

@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Layers, Loader2, Trash2, Video } from 'lucide-react';
-import { T, KP, FONT } from '@/lib/theme';
+import { Check, ChevronRight, Layers, Loader2, Plus, Trash2, Video } from 'lucide-react';
+import { T, KP, FONT, UI } from '@/lib/theme';
+import { Fila, FilaElegir, Interruptor as Switch, Segmentado } from '@/components/ui';
+import HojaFlotante from '@/components/HojaFlotante';
 import Ventana from '@/features/misplanes/Ventana';
 import SelectorDeMisPlanes from '@/features/misplanes/SelectorDeMisPlanes';
 import CampoDeFoto from '@/features/admin/CampoDeFoto';
 import { HojaDeClase } from '@/features/admin/ClaseDeLaSesion';
 import { ligaExterna } from '@/lib/videos';
-import { botonBlanco, botonPrincipal, campo, etiquetaChica } from '@/features/misplanes/estilos';
+import { botonBlanco, botonPrincipal } from '@/features/misplanes/estilos';
 import {
   ETIQUETA_DE_CONTENIDO, TIPOS_DE_VENTA, VENTANAS, VENTANA_MAXIMA, cuentaMisClases, esBiblioteca, esSuelto, fuenteParaVender, guardaPlanEnVenta, precioMinimoDe, publicaPlan, slugUnico, tipoDeCobroDe,
 } from '@/lib/vitrinaApi';
-import { DEPORTES, EQUIPOS, NIVELES, SEXOS, edadesValidas, marcadosValidos } from '@/lib/paraQuien';
+import { DEPORTES, EQUIPOS, NIVELES, SEXOS, edadesValidas, marcadosValidos, textoDeEdades } from '@/lib/paraQuien';
 import EdadesDelPlan from './EdadesDelPlan';
 
 /* LA FICHA DE UN PLAN EN VENTA: lo que el coach llena para venderlo.
@@ -24,63 +26,23 @@ import EdadesDelPlan from './EdadesDelPlan';
 
    `plan`: la fila existente (o null si es nuevo). `slugsOcupados`: las ligas que ya usan los otros planes de este coach. `alCerrar(guardado?)`: se cerró; si trae el plan, se guardó o publicó. */
 
-const Campo = ({ etiqueta, children }) => (
-  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-    <span style={etiquetaChica}>{etiqueta}</span>
+const Titulo = ({ children }) => <div style={{ fontSize: 17, fontWeight: 800, color: T.text, margin: '8px 2px -4px' }}>{children}</div>;
+
+/* Reestructura visual (16 oct 2026), como «Poner a la venta» de las capturas de Andrés: cada dato en su tarjeta blanca (la etiqueta chica arriba,
+   lo escrito grande), «Para quién es» en renglones con su lista (Disciplina ...... Football ›), «Membresía | Pago único», el precio grande y
+   «Qué incluye» con interruptores. Los datos y cómo se guardan no cambian. */
+const tarjeta = { background: UI.tarjeta, borderRadius: UI.rGrupo, boxShadow: UI.sombraGrupo };
+const Escrito = ({ etiqueta, children }) => (
+  <label style={{ ...tarjeta, display: 'block', padding: '12px 16px' }}>
+    <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: KP.ink2 }}>{etiqueta}</span>
     {children}
   </label>
 );
-
-// Las opciones de una pregunta: una (`multiple` false) o varias. Cada una es un botón del tamaño de un dedo.
-function Opciones({ etiqueta, opciones, valor, alCambiar, multiple = false, nota }) {
-  const marcada = (id) => (multiple ? valor.includes(id) : valor === id);
-  const toca = (id) => {
-    if (!multiple) { alCambiar(id); return; }
-    alCambiar(valor.includes(id) ? valor.filter((x) => x !== id) : [...valor, id]);
-  };
-  return (
-    <div role={multiple ? 'group' : 'radiogroup'} aria-label={etiqueta} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span style={etiquetaChica}>{etiqueta}</span>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-        {opciones.map((o) => {
-          const on = marcada(o.id);
-          return (
-            <button
-              key={o.id} type="button" role={multiple ? 'checkbox' : 'radio'} aria-checked={on} onClick={() => toca(o.id)}
-              style={{
-                minHeight: 40, padding: '0 13px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6,
-                border: `1.5px solid ${on ? T.accent : T.border}`, background: on ? T.accentBg : T.bg2, color: on ? T.accent : T.text2,
-              }}
-            >
-              {on && <Check size={14} strokeWidth={3.2} />}{o.nombre}
-            </button>
-          );
-        })}
-      </div>
-      {nota && <span style={{ fontSize: 12.5, fontWeight: 600, color: T.text3 }}>{nota}</span>}
-    </div>
-  );
-}
-
-const Interruptor = ({ activo, alCambiar, etiqueta }) => (
-  <button
-    type="button" role="switch" aria-checked={activo} onClick={() => alCambiar(!activo)}
-    style={{
-      display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 46, padding: '0 12px', borderRadius: 11, cursor: 'pointer', textAlign: 'left',
-      border: `1.5px solid ${activo ? T.accent : T.border}`, background: activo ? T.accentBg : T.bg2, fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text,
-    }}
-  >
-    <span style={{ flex: 1 }}>{etiqueta}</span>
-    <span
-      aria-hidden="true"
-      style={{ width: 40, height: 24, borderRadius: 12, background: activo ? T.accent : T.border, position: 'relative', flexShrink: 0, transition: 'background .15s' }}
-    >
-      <span style={{ position: 'absolute', top: 3, left: activo ? 19 : 3, width: 18, height: 18, borderRadius: 9, background: '#fff', transition: 'left .15s' }} />
-    </span>
-  </button>
-);
-
-const Titulo = ({ children }) => <div style={{ fontSize: 15, fontWeight: 800, color: T.text, marginTop: 4 }}>{children}</div>;
+const sinCaja = { width: '100%', boxSizing: 'border-box', border: 'none', outline: 'none', background: 'transparent', padding: '4px 0 0', fontFamily: FONT, color: KP.ink };
+const Grupo = ({ children }) => <div style={{ ...tarjeta, overflow: 'hidden' }}>{children}</div>;
+// Un renglón que abre algo propio (las edades, que llevan su rango a mano).
+const Renglon = ({ texto, valor, onClick }) => <Fila texto={texto} valor={valor} onClick={onClick} />;
+const aOpciones = (lista) => lista.map((o) => ({ valor: o.id, texto: o.nombre }));
 
 export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar }) {
   const nuevo = !plan;
@@ -111,6 +73,7 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
   const [nClases, setNClases] = useState(null); // cuántas clases hay en Mis planes (para la biblioteca); null = todavía no se sabe
   const [eligiendoVideo, setEligiendoVideo] = useState(false);
   const [guardando, setGuardando] = useState(null); // 'borrador' | 'publicar'
+  const [viendoEdades, setViendoEdades] = useState(false);
   const [error, setError] = useState(null);
   const pon = (campos) => setF((prev) => ({ ...prev, ...campos }));
 
@@ -216,108 +179,139 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
       <Ventana
         titulo={nuevo ? 'Poner a la venta' : 'Lo que vendes'} onCerrar={() => alCerrar()} ancho={560}
         pie={(
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
             {error && <div role="alert" style={{ padding: '9px 12px', borderRadius: 11, background: KP.dangerSoft, color: KP.danger, fontSize: 13.5, fontWeight: 700 }}>{error}</div>}
             <div style={{ display: 'flex', gap: 10 }}>
-              <button type="button" onClick={() => guarda(false)} disabled={!!guardando} style={{ ...botonBlanco(false, !!guardando), flex: 1, whiteSpace: 'nowrap' }}>
+              <button type="button" onClick={() => guarda(false)} disabled={!!guardando} style={{ ...botonBlanco(false, !!guardando), flex: 1, minHeight: 52, whiteSpace: 'nowrap', border: 'none', background: UI.relleno, boxShadow: 'none', fontSize: 16 }}>
                 {guardando === 'borrador' ? <Loader2 size={16} className="spin" /> : null} Guardar
               </button>
-              <button type="button" onClick={() => guarda(true)} disabled={!!guardando} style={{ ...botonPrincipal(!!guardando), flex: 1.6, whiteSpace: 'nowrap' }}>
+              <button type="button" onClick={() => guarda(true)} disabled={!!guardando} style={{ ...botonPrincipal(!!guardando), flex: 1.6, minHeight: 52, whiteSpace: 'nowrap', fontSize: 16 }}>
                 {guardando === 'publicar' ? <Loader2 size={16} className="spin" /> : <Check size={17} strokeWidth={3} />} {publicado ? 'Publicar cambios' : 'Publicar'}
               </button>
             </div>
           </div>
         )}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <Campo etiqueta="Lo que vendes">
-            <button
-              type="button" onClick={() => setEligiendo(true)}
-              style={{ ...campo, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', textAlign: 'left', fontWeight: 700, minHeight: 46 }}
-            >
-              <Layers size={17} color={T.accent} />
-              <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {biblioteca
-                  ? `Todas mis clases${nClases != null ? ` · ${nClases} ${nClases === 1 ? 'clase' : 'clases'}` : ''}`
-                  : cargandoPrograma ? 'Cargando…' : (programa?.nombre ?? (fuenteId || f.programa_guardado_id || f.plantilla_id ? 'Plan de Mis planes' : 'Escoger de Mis planes'))}
-              </span>
-              <span style={{ color: T.accent, fontSize: 13, fontWeight: 800 }}>{biblioteca || f.programa_guardado_id || f.plantilla_id ? `${ETIQUETA_DE_CONTENIDO[f.contenido] ?? ''} · Cambiar` : 'Escoger'}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <button
+            type="button" onClick={() => setEligiendo(true)}
+            style={{ ...tarjeta, display: 'flex', alignItems: 'center', gap: 10, minHeight: 58, padding: '10px 16px', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: FONT }}
+          >
+            <span style={{ fontSize: 15.5, fontWeight: 600, color: KP.ink, flexShrink: 0 }}>Lo que vendes</span>
+            <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 15.5, fontWeight: 600, color: KP.blue, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {biblioteca
+                ? `Todas mis clases${nClases != null ? ` · ${nClases} ${nClases === 1 ? 'clase' : 'clases'}` : ''}`
+                : cargandoPrograma ? 'Cargando…'
+                  : programa?.nombre ? `${programa.nombre} · ${ETIQUETA_DE_CONTENIDO[f.contenido] ?? ''}`
+                    : (fuenteId || f.programa_guardado_id || f.plantilla_id ? 'Plan de Mis planes' : 'Escoger de Mis planes')}
+            </span>
+            <ChevronRight size={17} color="#C3C8D2" style={{ flexShrink: 0 }} />
+          </button>
+          {!biblioteca && (
+            <button type="button" onClick={aBiblioteca} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 700, color: KP.blue, padding: '0 4px', textAlign: 'left', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Layers size={15} /> O vende todas tus clases, como una biblioteca
             </button>
-            {!biblioteca && (
-              <button type="button" onClick={aBiblioteca} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, color: T.accent, padding: '8px 2px 0', textAlign: 'left' }}>
-                O vende todas tus clases a la vez, como una biblioteca
-              </button>
-            )}
-            {biblioteca && (
-              <div style={{ fontSize: 13.5, fontWeight: 600, color: T.text2, lineHeight: 1.45, paddingTop: 8 }}>
-                Quien se suscribe ve todas las clases que tengas en Mis planes. Las que agregues después se suman solas.
-              </div>
-            )}
-          </Campo>
+          )}
+          {biblioteca && (
+            <div style={{ fontSize: 14, fontWeight: 500, color: KP.ink2, lineHeight: 1.45, padding: '0 4px' }}>
+              Quien se suscribe ve todas las clases que tengas en Mis planes. Las que agregues después se suman solas.
+            </div>
+          )}
 
-          <Campo etiqueta="Nombre">
-            <input value={f.titulo} maxLength={120} placeholder="Por ejemplo: Velocidad para receptores" style={campo} onChange={(e) => pon({ titulo: e.target.value })} />
-          </Campo>
-          <Campo etiqueta="Descripción">
-            <textarea value={f.descripcion} maxLength={4000} rows={4} placeholder="Qué incluye y cómo se entrena" style={{ ...campo, resize: 'vertical' }} onChange={(e) => pon({ descripcion: e.target.value })} />
-          </Campo>
-          <Campo etiqueta="Foto del plan">
-            <CampoDeFoto valor={f.foto_url} onCambia={(url) => pon({ foto_url: url })} />
-          </Campo>
-          <Campo etiqueta="Video presentando el plan (opcional)">
+          <Escrito etiqueta="Nombre del plan">
+            <input value={f.titulo} maxLength={120} placeholder="Velocidad para receptores" aria-label="Nombre del plan" style={{ ...sinCaja, fontSize: 21, fontWeight: 800 }} onChange={(e) => pon({ titulo: e.target.value })} />
+          </Escrito>
+          <Escrito etiqueta="Descripción">
+            <textarea value={f.descripcion} maxLength={4000} rows={3} placeholder="Qué incluye y cómo se entrena" aria-label="Descripción" style={{ ...sinCaja, fontSize: 16, fontWeight: 500, lineHeight: 1.45, resize: 'vertical' }} onChange={(e) => pon({ descripcion: e.target.value })} />
+          </Escrito>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div style={{ ...tarjeta, padding: 8, minWidth: 0 }}>
+              <CampoDeFoto valor={f.foto_url} onCambia={(url) => pon({ foto_url: url })} />
+              <div style={{ fontSize: 13, fontWeight: 600, color: KP.ink2, padding: '6px 4px 2px' }}>Foto del plan</div>
+            </div>
             {f.video_url ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 11, border: `1.5px solid ${T.border}`, background: T.bg2 }}>
-                <Video size={18} color={T.accent} />
-                <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 700, color: T.text }}>{ligaExterna(f.video_url)?.de ?? 'Video subido'}</span>
-                <button type="button" onClick={() => setEligiendoVideo(true)} style={{ ...botonBlanco(), minHeight: 36, padding: '0 12px', fontSize: 13 }}>Cambiar</button>
-                <button
-                  type="button" onClick={() => pon({ video_url: '' })} aria-label="Quitar el video"
-                  style={{ width: 36, height: 36, borderRadius: 11, border: 'none', cursor: 'pointer', background: KP.dangerSoft, color: KP.danger, display: 'grid', placeItems: 'center' }}
-                ><Trash2 size={16} /></button>
+              <div style={{ ...tarjeta, padding: 12, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14.5, fontWeight: 700, color: KP.ink }}><Video size={17} color={KP.blue} /> {ligaExterna(f.video_url)?.de ?? 'Video subido'}</span>
+                <div style={{ display: 'flex', gap: 6, marginTop: 'auto' }}>
+                  <button type="button" onClick={() => setEligiendoVideo(true)} style={{ ...botonBlanco(), flex: 1, minHeight: 38, padding: '0 10px', fontSize: 13 }}>Cambiar</button>
+                  <button type="button" onClick={() => pon({ video_url: '' })} aria-label="Quitar el video" style={{ width: 38, height: 38, borderRadius: 11, border: 'none', cursor: 'pointer', background: KP.dangerSoft, color: KP.danger, display: 'grid', placeItems: 'center' }}><Trash2 size={16} /></button>
+                </div>
               </div>
             ) : (
-              <button type="button" onClick={() => setEligiendoVideo(true)} style={{ ...botonBlanco(true), justifyContent: 'center', minHeight: 46 }}><Video size={16} /> Agregar video</button>
+              <button type="button" onClick={() => setEligiendoVideo(true)} style={{ ...tarjeta, border: 'none', cursor: 'pointer', fontFamily: FONT, padding: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, minWidth: 0 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 15, fontWeight: 700, color: KP.blue }}><Plus size={16} /> Agregar video</span>
+                <span style={{ fontSize: 12.5, fontWeight: 500, color: KP.ink2, textAlign: 'center' }}>Presentando el plan · opcional</span>
+              </button>
             )}
-          </Campo>
+          </div>
 
           <Titulo>Para quién es</Titulo>
-          <Opciones etiqueta="Deporte o disciplina" opciones={DEPORTES} valor={f.deportes} alCambiar={(v) => pon({ deportes: v })} multiple />
-          <EdadesDelPlan valor={f.edades} alCambiar={(v) => pon({ edades: v })} />
-          <Opciones etiqueta="Sexo" opciones={SEXOS} valor={f.sexo} alCambiar={(v) => pon({ sexo: v })} />
-          <Opciones etiqueta="Equipo que necesita" opciones={EQUIPOS} valor={f.equipo} alCambiar={(v) => pon({ equipo: v })} multiple />
-          <Opciones etiqueta="Nivel" opciones={NIVELES} valor={f.nivel} alCambiar={(v) => pon({ nivel: v })} />
-          <Campo etiqueta="Objetivo">
-            <input value={f.objetivo} maxLength={500} placeholder="Llegar fuerte a la temporada" style={campo} onChange={(e) => pon({ objetivo: e.target.value })} />
-          </Campo>
+          <Grupo>
+            <FilaElegir texto="Disciplina" titulo="Deporte o disciplina" opciones={aOpciones(DEPORTES)} valor={f.deportes} multiple marcador="Todas" onCambio={(v) => pon({ deportes: v })} />
+            <Renglon texto="Edades" valor={textoDeEdades(f.edades) || 'Todas las edades'} onClick={() => setViendoEdades(true)} />
+            <FilaElegir texto="Sexo" opciones={aOpciones(SEXOS)} valor={f.sexo} onCambio={(v) => pon({ sexo: v })} />
+            <FilaElegir texto="Equipo" titulo="Equipo que necesita" opciones={aOpciones(EQUIPOS)} valor={f.equipo} multiple marcador="Cualquiera" onCambio={(v) => pon({ equipo: v })} />
+            <FilaElegir texto="Nivel" opciones={aOpciones(NIVELES)} valor={f.nivel} onCambio={(v) => pon({ nivel: v })} />
+          </Grupo>
+          <Escrito etiqueta="Objetivo">
+            <input value={f.objetivo} maxLength={500} placeholder="Llegar fuerte a la temporada" aria-label="Objetivo" style={{ ...sinCaja, fontSize: 16, fontWeight: 600 }} onChange={(e) => pon({ objetivo: e.target.value })} />
+          </Escrito>
 
           <Titulo>Cuánto cuesta</Titulo>
-          {!esSuelto(f.contenido) && !biblioteca && <Opciones etiqueta="Cómo se cobra" opciones={TIPOS_DE_VENTA} valor={f.tipo} alCambiar={(v) => pon({ tipo: v })} />}
-          <Campo etiqueta={tipoDeCobroDe(f.contenido, f.tipo) === 'pago_unico' ? 'Precio (pesos)' : 'Precio al mes (pesos)'}>
-            <input
-              value={f.precio_mxn} inputMode="numeric" placeholder={`${precioMinimoDe(f.contenido)} o más`} style={campo}
-              onChange={(e) => pon({ precio_mxn: e.target.value.replace(/\D/g, '') })}
-            />
-          </Campo>
+          <div style={{ ...tarjeta, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {!esSuelto(f.contenido) && !biblioteca && (
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: KP.ink2, marginBottom: 8 }}>Cómo se cobra</div>
+                <Segmentado etiqueta="Cómo se cobra" valor={f.tipo} onCambio={(v) => pon({ tipo: v })} opciones={TIPOS_DE_VENTA.map((o) => ({ valor: o.id, texto: o.nombre }))} />
+              </div>
+            )}
+            <label style={{ display: 'block' }}>
+              <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: KP.ink2 }}>{tipoDeCobroDe(f.contenido, f.tipo) === 'pago_unico' ? 'Precio' : 'Precio al mes'}</span>
+              <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                <span style={{ fontSize: 32, fontWeight: 800, color: KP.blue }}>$</span>
+                <input
+                  value={f.precio_mxn} inputMode="numeric" placeholder={String(precioMinimoDe(f.contenido))} aria-label="Precio en pesos"
+                  style={{ ...sinCaja, flex: 1, minWidth: 0, fontSize: 34, fontWeight: 800, fontVariantNumeric: 'tabular-nums', padding: 0 }}
+                  onChange={(e) => pon({ precio_mxn: e.target.value.replace(/\D/g, '') })}
+                />
+                <span style={{ fontSize: 14, fontWeight: 600, color: KP.ink2 }}>MXN</span>
+              </span>
+              <span style={{ display: 'block', fontSize: 13, fontWeight: 500, color: KP.ink2, marginTop: 2 }}>Mínimo ${precioMinimoDe(f.contenido)}</span>
+            </label>
+          </div>
 
           {!esSuelto(f.contenido) && !biblioteca && (
             <>
               <Titulo>Qué incluye</Titulo>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10 }}>
-                <Interruptor activo={f.chat} alCambiar={(v) => pon({ chat: v })} etiqueta="Chat con el coach" />
-                <Interruptor activo={f.tecnica} alCambiar={(v) => pon({ tecnica: v })} etiqueta="Técnica por video" />
-              </div>
+              <Grupo>
+                {[['chat', 'Chat con el coach'], ['tecnica', 'Técnica por video']].map(([clave, texto]) => (
+                  <div key={clave} className="ui-fila" style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 56, padding: '8px 16px' }}>
+                    <span style={{ flex: 1, fontSize: 15.5, fontWeight: 600, color: KP.ink }}>{texto}</span>
+                    <Switch activo={f[clave]} onCambio={(v) => pon({ [clave]: v })} etiqueta={texto} />
+                  </div>
+                ))}
+              </Grupo>
             </>
           )}
 
           {f.contenido === 'programa' && programa?.kind !== 'weekly' && (
-            <Opciones
-              etiqueta="Cuánto ve el comprador hacia adelante"
-              opciones={VENTANAS.map((v) => ({ id: v.valor, nombre: v.nombre }))} valor={f.ventana_semanas} alCambiar={(v) => pon({ ventana_semanas: v })}
-              nota="Lo demás lo ve borroso, con candado."
-            />
+            <Grupo>
+              <FilaElegir
+                texto="Ve hacia adelante" titulo="Cuánto ve el comprador hacia adelante"
+                opciones={VENTANAS.map((v) => ({ valor: v.valor, texto: v.nombre }))} valor={f.ventana_semanas} onCambio={(v) => pon({ ventana_semanas: v })}
+              />
+            </Grupo>
           )}
         </div>
       </Ventana>
+      {viendoEdades && (
+        <HojaFlotante titulo="Edades" onCerrar={() => setViendoEdades(false)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <EdadesDelPlan valor={f.edades} alCambiar={(v) => pon({ edades: v })} sinTitulo />
+            <button type="button" onClick={() => setViendoEdades(false)} style={{ ...botonPrincipal(false), width: '100%', minHeight: 50 }}>Listo</button>
+          </div>
+        </HojaFlotante>
+      )}
       {eligiendoVideo && <HojaDeClase titulo="Video del plan" conMias={false} onCerrar={() => setEligiendoVideo(false)} onElige={(c) => { setEligiendoVideo(false); pon({ video_url: c.url }); }} />}
       {eligiendo && <SelectorDeMisPlanes tipos={['programa', 'rutina', 'workout', 'clase']} titulo="Lo que vendes" onElegir={eligeUnPlan} onCerrar={() => setEligiendo(false)} />}
     </>

@@ -21,7 +21,7 @@ const numero = {
   fontFamily: FONT, fontSize: 16, fontWeight: 700, outline: 'none', padding: '0 6px',
 };
 
-export default function EdadesDelPlan({ valor, alCambiar }) {
+export default function EdadesDelPlan({ valor, alCambiar, sinTitulo = false }) {
   const [de, setDe] = useState('');
   const [hasta, setHasta] = useState('');
   const [aviso, setAviso] = useState('');
@@ -42,7 +42,7 @@ export default function EdadesDelPlan({ valor, alCambiar }) {
 
   return (
     <div role="group" aria-label="Edades" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span style={etiquetaChica}>Edades</span>
+      {!sinTitulo && <span style={etiquetaChica}>Edades</span>}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
         {EDADES.map((o) => {
           const on = marcados.includes(o.id);
