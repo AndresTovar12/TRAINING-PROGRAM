@@ -260,10 +260,3 @@ button.ui-fila:focus-visible { outline: 2px solid #1E40E0; outline-offset: -2px;
 /* Los números de `EntradaNumero` sin las flechitas del navegador: se escribe con el teclado numérico, y las flechas ocupaban la mitad de la casilla. */
 .ui-numero { -moz-appearance: textfield; appearance: textfield; }
 .ui-numero::-webkit-outer-spin-button, .ui-numero::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-
-/* La tira de la semana de Home entra deslizando del lado al que se movió (16 oct 2026). */
-@keyframes tl-entra-der { from { opacity: 0; transform: translateX(26px); } to { opacity: 1; transform: none; } }
-@keyframes tl-entra-izq { from { opacity: 0; transform: translateX(-26px); } to { opacity: 1; transform: none; } }
-.tl-entra-der { animation: tl-entra-der .22s ease-out; }
-.tl-entra-izq { animation: tl-entra-izq .22s ease-out; }
-@media (prefers-reduced-motion: reduce) { .tl-entra-der, .tl-entra-izq { animation: none; } }
