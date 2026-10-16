@@ -71,17 +71,21 @@ export function useMoverMiPlan({ plan, cursor, setCursor, soloLectura }) {
 /** Las tres reglas, una sola vez («Entendido» y no vuelven). `aceptada` / `onEntendido` los pone quien lo usa (se guardan con `ui:avisos-vistos`). */
 export function ReglasDeMiPlan({ aceptada, onEntendido }) {
   if (aceptada) return null;
-  const regla = (n, texto) => (
+  // Cada regla: una frase corta en negritas (lo que hay que cachar) y debajo una línea que dice qué hacer.
+  const regla = (n, titulo, texto) => (
     <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
       <span style={{ width: 22, height: 22, borderRadius: 11, background: KP.blue, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 12.5, fontWeight: 800, flexShrink: 0, marginTop: 1 }}>{n}</span>
-      <span style={{ fontSize: 14.5, fontWeight: 600, color: KP.ink, lineHeight: 1.4 }}>{texto}</span>
+      <span style={{ fontSize: 14.5, fontWeight: 500, color: KP.ink2, lineHeight: 1.4 }}>
+        <b style={{ display: 'block', fontSize: 15.5, fontWeight: 800, color: KP.ink }}>{titulo}</b>
+        {texto}
+      </span>
     </div>
   );
   return (
     <div style={{ background: KP.blueSoft, borderRadius: UI.rGrupo, padding: 14, marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 10, fontFamily: FONT }}>
-      {regla(1, 'Tu plan avanza solo, una semana del plan por semana del calendario.')}
-      {regla(2, 'Hoy puedes hacer cualquier sesión. Agregarla a hoy no mueve tu plan.')}
-      {regla(3, '«Mover mi plan» sí cambia dónde vas. Te pregunta antes.')}
+      {regla(1, 'Avanzas solo', 'Cada semana pasas a la siguiente, sin que hagas nada.')}
+      {regla(2, 'Hoy haz la sesión que quieras', 'Entrenar otra sesión no cambia dónde vas.')}
+      {regla(3, '¿Te atrasaste o te lesionaste?', 'Toca «Mover mi plan» y sigues desde la semana que elijas.')}
       <BotonEntendido color={KP.blue} onClick={onEntendido} style={{ alignSelf: 'flex-end' }} />
     </div>
   );

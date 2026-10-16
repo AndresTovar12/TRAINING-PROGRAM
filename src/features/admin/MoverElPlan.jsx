@@ -126,16 +126,20 @@ export function useMoverPlan({ athlete, plan, clave, state, alCambiar }) {
 export function ReglasDelPlan({ nombre }) {
   const { listo, visto, marcar } = useAvisosVistos();
   if (!listo || visto('plan:reglas-del-coach')) return null;
-  const regla = (n, texto) => (
+  // Cada regla: una frase corta en negritas y debajo qué hacer (mismo molde que las del atleta).
+  const regla = (n, titulo, texto) => (
     <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
       <span style={{ width: 22, height: 22, borderRadius: 11, background: KP.blue, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 12.5, fontWeight: 800, flexShrink: 0, marginTop: 1 }}>{n}</span>
-      <span style={{ fontSize: 14.5, fontWeight: 600, color: KP.ink, lineHeight: 1.4 }}>{texto}</span>
+      <span style={{ fontSize: 14.5, fontWeight: 500, color: KP.ink2, lineHeight: 1.4 }}>
+        <b style={{ display: 'block', fontSize: 15.5, fontWeight: 800, color: KP.ink }}>{titulo}</b>
+        {texto}
+      </span>
     </div>
   );
   return (
     <div style={{ background: KP.blueSoft, borderRadius: UI.rGrupo, padding: 14, marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 10, fontFamily: FONT }}>
-      {regla(1, 'El plan avanza solo, una semana del plan por semana del calendario.')}
-      {regla(2, <>«Mover» cambia dónde va {nombre}. «Editar este día» cambia qué hace ese día.</>)}
+      {regla(1, `${nombre} avanza solo`, 'Cada semana pasa a la siguiente, sin que hagas nada.')}
+      {regla(2, 'Mover y editar son distintos', <>«Mover» cambia en qué semana va {nombre}. «Editar este día» cambia lo que hace ese día.</>)}
       <BotonEntendido color={KP.blue} onClick={() => marcar('plan:reglas-del-coach')} style={{ alignSelf: 'flex-end' }} />
     </div>
   );
