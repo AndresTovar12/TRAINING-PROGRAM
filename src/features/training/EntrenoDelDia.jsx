@@ -289,7 +289,10 @@ export default function EntrenoDelDia({
   const detalleDelReloj = (p) => (p.deLapsos ? (p.rondas > 1 ? `${p.rondas} rondas` : '') : FORMATOS[vistaDe(p.formato)]?.detalle);
 
   /* ---------- Qué se dibuja ---------- */
-  const fondo = enDescanso && aspecto?.fondo ? `${aspecto.fondo}, ${LT.bg}` : LT.bg;
+  /* El fondo va teñido del color del tipo en TODA la sesión (reestructura visual, 15 oct 2026: «Fuerza» morado clarito, «Cardio» rojo clarito, como en las
+     capturas de Andrés); antes solo en el descanso. */
+  const fondo = aspecto?.fondo ? `${aspecto.fondo}, ${LT.bg}` : LT.bg;
+  const colorDelTipo = aspecto?.fuerte ?? null; // oscurecido lo justo para la letra blanca encima
   const segmentos = segmentosDeAvance(plan, vista.estados);
   /* El tiempo que llevas: arriba, en una pastilla, y al final en el resumen. Lo quitamos del paso (9 oct, mañana: «letritas grises») y esa noche
      Andrés lo extrañó: «en ningún momento puedo ver cuánto tiempo llevo entrenando». Pasadas muchas horas (retomar al día siguiente) no se dice. */
@@ -343,7 +346,7 @@ export default function EntrenoDelDia({
     pantalla = (
       <PantallaDeDescanso
         descanso={vista.descanso} siguiente={siguienteDeDescanso} video={videoDe(exDe(vista.siguiente), mediosDelSiguiente, { enCarta: true, altoMaximo: '30vh' })} sonido={sonido}
-        puedeAnterior={vista.puedeAnterior} onSeguir={seguirDelDescanso} onMas={masDescanso} onAnterior={anterior} onSonido={alternaSonido}
+        puedeAnterior={vista.puedeAnterior} onSeguir={seguirDelDescanso} onMas={masDescanso} onAnterior={anterior} onSonido={alternaSonido} color={colorDelTipo}
       />
     );
   } else if (paso.tipo === 'reloj') {
@@ -352,7 +355,7 @@ export default function EntrenoDelDia({
         paso={paso} detalle={detalleDelReloj(paso)} resultado={resultadoDelReloj} puedeAnterior={vista.puedeAnterior || mirandoOtro}
         enMarcha={relojAMedias(`${userId}:${sesionId}:${paso.claveFormato}`)}
         onIniciar={() => { preparaAudio(); setReloj(true); }} onAnotar={() => setAnotando(true)} onListo={() => listo()}
-        onSaltar={saltar} onAnterior={anterior} tecnica={tecnicaDelPaso}
+        onSaltar={saltar} onAnterior={anterior} tecnica={tecnicaDelPaso} color={colorDelTipo}
       />
     );
   } else {
@@ -366,7 +369,7 @@ export default function EntrenoDelDia({
         ) : null}
         etiquetaDeCambiar={textoDeCambiar} puedeAnterior={vista.puedeAnterior || mirandoOtro}
         onListo={() => listo()} onCambiar={() => setHoja('cambiar')} onSaltar={saltar} onAnterior={anterior}
-        tecnica={tecnicaDelPaso}
+        tecnica={tecnicaDelPaso} color={colorDelTipo}
       />
     );
   }
@@ -387,7 +390,7 @@ export default function EntrenoDelDia({
     >
       {!mostrarFin && (
         <BarraDelEntreno
-          segmentos={segmentos} fondo={fondo} palabras={palabras} tiempo={tiempo || null}
+          segmentos={segmentos} fondo={fondo} palabras={palabras} tiempo={tiempo || null} color={colorDelTipo ?? undefined}
           onCerrar={alCerrar} onLista={completo ? () => { setLlegando(false); setHoja('lista'); } : undefined}
         />
       )}

@@ -5,6 +5,7 @@ import { LT, FONT } from '@/lib/theme';
 import { usePlan } from '@/contexts/PlanContext';
 import TarjetaDeExplorar from '@/features/explorar/TarjetaDeExplorar';
 import { relojDeCronometro } from '@/lib/entrenoLibre';
+import { fuenteDeUbicacion, usaGps } from '@/lib/ubicacion';
 import { nombreDelDeporte } from '@/lib/metricas/deportes';
 import { deporteDelCartel, resumenDeLaSemana, textoDeLaSemana } from '@/lib/semanaLibre';
 import HeroDeEntrenar from './HeroDeEntrenar';
@@ -41,7 +42,12 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
   const semana = useMemo(() => resumenDeLaSemana(filas ?? []), [filas]);
   const ultimo = filas?.[0] ?? null;
   const deporte = enCurso ? crono.cronometro.deporte : deporteDelCartel(filas);
-  const elige = (d) => { crono.inicia(d); setHoja('cronometro'); };
+  // Correr, caminar y bici pasan antes por «Antes de salir» (la señal del GPS); los demás arrancan ya. Ver `PantallaDelCronometro`.
+  const [pendiente, setPendiente] = useState(null);
+  const elige = (d) => {
+    if (usaGps(d) && fuenteDeUbicacion().disponible()) { setPendiente(d); setHoja('cronometro'); return; }
+    crono.inicia(d); setHoja('cronometro');
+  };
   const abreElCartel = () => setHoja(enCurso ? 'cronometro' : 'elegir');
   const abreLaTarjeta = () => setHoja(ultimo ? { resumen: ultimo, tarjeta: true } : 'elegir');
   const conExplorar = conEmpujon && !!alIrAExplorar;
@@ -56,9 +62,11 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
       {hoja === 'demos' && demos?.length > 0 && (
         <HojaDeDemos demos={demos} alCerrar={() => setHoja(null)} alElegir={(d) => { abreDemo(d); setHoja(null); alIrAHome?.(); }} />
       )}
-      {hoja === 'cronometro' && enCurso && (
+      {hoja === 'cronometro' && (enCurso || pendiente) && (
         <PantallaDelCronometro
-          userId={userId} crono={crono} alMinimizar={() => setHoja(null)}
+          userId={userId} crono={crono} pendiente={enCurso ? null : pendiente}
+          alEmpezar={({ gps }) => { crono.inicia(pendiente, { gps }); setPendiente(null); }}
+          alMinimizar={() => { setPendiente(null); setHoja(null); }}
           alGuardado={(fila) => { recarga(); setHoja({ resumen: fila }); }}
         />
       )}
