@@ -55,7 +55,7 @@ export function coachesParaMostrar(coaches, { texto = '', deporte = null, favori
 
 /** Los planes de varios coaches en una sola tira (con quién los vende), los más baratos de cada coach primero no: se respeta el orden de los coaches y el de sus planes. */
 export function planesDeLosCoaches(coaches, tope = 12) {
-  return (coaches ?? []).flatMap((c) => (c.planes ?? []).map((p) => ({ ...p, coach: { usuario: c.usuario, nombre: c.nombre } }))).slice(0, tope);
+  return (coaches ?? []).flatMap((c) => (c.planes ?? []).map((p) => ({ ...p, coach: { usuario: c.usuario, nombre: c.nombre, foto: c.foto ?? null } }))).slice(0, tope);
 }
 
 /** «desde $500» (o «$500» si es un solo plan). */

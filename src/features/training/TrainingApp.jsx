@@ -712,8 +712,8 @@ const LightCollapsible = ({ title, icon: Icon, color, children, defaultOpen = fa
         width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: FONT,
         display: 'flex', alignItems: 'center', gap: 8, padding: '15px 18px', textAlign: 'left',
       }}>
-        {Icon && <Icon size={14} style={{ color: color || LT.blue }} />}
-        <span style={{ flex: 1, fontSize: 14, fontWeight: 700, color: LT.text }}>{title}</span>
+        {Icon && <Icon size={17} style={{ color: color || LT.blue }} />}
+        <span style={{ flex: 1, fontSize: 16, fontWeight: 700, color: LT.text }}>{title}</span>
         {open ? <ChevronUp size={16} style={{ color: LT.text3 }} /> : <ChevronDown size={16} style={{ color: LT.text3 }} />}
       </button>
       {open && <div style={{ padding: '0 18px 18px' }}>{children}</div>}
@@ -1255,9 +1255,10 @@ const CuerpoDelDia = ({
           Pasaba en los dos días OFF del plan de Andrés, porque el plan llega con
           `exercises: []` y un arreglo vacío cuenta como "tiene ejercicios". */}
       {quiere('notasDelDia') && selectedDay.notes && selectedDay.exercises && !descansoPuro && (
-        <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
-          <div style={{ fontSize: 11, color: LT.text3, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>Notas del día</div>
-          <ul style={{ listStyleType: 'disc', margin: 0, paddingLeft: 18, color: LT.text2, fontSize: 13, lineHeight: 1.7 }}>
+        // Reestructura visual (15 oct 2026): título en negro (ya no la etiqueta gris en mayúsculas), tarjeta sin borde y letra más grande.
+        <div style={{ background: LT.surface, borderRadius: 18, padding: 16, marginBottom: 14, boxShadow: UI.sombraGrupo }}>
+          <div style={{ fontSize: 16, color: LT.text, fontWeight: 700, marginBottom: 8 }}>Notas del día</div>
+          <ul style={{ listStyleType: 'disc', margin: 0, paddingLeft: 18, color: LT.text2, fontSize: 15, lineHeight: 1.6 }}>
             {selectedDay.notes.map((n, i) => <li key={i}>{n}</li>)}
           </ul>
         </div>
@@ -1265,10 +1266,10 @@ const CuerpoDelDia = ({
 
       {/* Notas del usuario */}
       {quiere('tusNotas') && (
-        <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
+        <div style={{ background: LT.surface, borderRadius: 18, padding: 16, marginBottom: 14, boxShadow: UI.sombraGrupo }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <Edit3 size={12} style={{ color: LT.text3 }} />
-            <span style={{ fontSize: 11, color: LT.text3, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>Tus notas</span>
+            <Edit3 size={15} style={{ color: LT.text2 }} />
+            <span style={{ fontSize: 16, color: LT.text, fontWeight: 700 }}>Tus notas</span>
           </div>
           <textarea
             value={sessionData.notes || ''}
@@ -1276,12 +1277,12 @@ const CuerpoDelDia = ({
             placeholder="Cómo te sentiste, ajustes, observaciones..."
             rows={3}
             style={{
-              width: '100%', background: LT.bg, border: `1px solid ${LT.border}`,
-              borderRadius: 10, padding: 12, color: LT.text, fontFamily: FONT, fontSize: 13,
+              width: '100%', background: UI.relleno, border: '1.5px solid transparent',
+              borderRadius: 14, padding: 12, color: LT.text, fontFamily: FONT, fontSize: 16,
               outline: 'none', resize: 'vertical', boxSizing: 'border-box',
             }}
             onFocus={e => e.target.style.borderColor = LT.blue}
-            onBlur={e => e.target.style.borderColor = LT.border}
+            onBlur={e => e.target.style.borderColor = 'transparent'}
           />
         </div>
       )}
@@ -2303,20 +2304,18 @@ const BottomNav = ({ active, onChange, conMensajes = true, conExplorar = true })
         const Icon = item.icon;
         const isActive = active === item.id;
         return (
-          <button key={item.id} onClick={() => onChange(item.id)} className="kp-press" style={{
+          /* Reestructura visual (15 oct 2026), como la barra de las capturas de Andrés: ícono y nombre, la elegida en azul, sin píldora detrás. */
+          <button key={item.id} type="button" onClick={() => onChange(item.id)} aria-current={isActive ? 'page' : undefined} className="kp-press" style={{
             background: 'transparent', border: 'none', cursor: 'pointer',
-            padding: '4px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
-            color: isActive ? T.accent : T.text3, fontFamily: FONT,
-            transition: 'color 0.15s', minWidth: 56,
+            padding: esCompu ? '4px 14px' : '4px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+            color: isActive ? KP.blue : KP.ink3, fontFamily: FONT,
+            transition: 'color 0.15s', minWidth: 60, flex: esCompu ? undefined : 1, touchAction: 'manipulation',
           }}>
-            <span style={{
-              position: 'relative', display: 'grid', placeItems: 'center', width: 44, height: 30, borderRadius: 999,
-              background: isActive ? KP.blueSoft : 'transparent', transition: 'background 0.18s',
-            }}>
-              <Icon size={20} strokeWidth={isActive ? 2.5 : 1.9} />
-              {item.id === 'messages' && <NumeroRojo n={sinLeer} tam={17} style={{ position: 'absolute', top: -4, right: 2, border: '2px solid #fff', minWidth: 21, height: 21 }} />}
+            <span style={{ position: 'relative', display: 'grid', placeItems: 'center', height: 28 }}>
+              <Icon size={24} strokeWidth={isActive ? 2.3 : 1.8} />
+              {item.id === 'messages' && <NumeroRojo n={sinLeer} tam={17} style={{ position: 'absolute', top: -5, right: -11, border: '2px solid #fff', minWidth: 21, height: 21 }} />}
             </span>
-            <span style={{ fontSize: 10.5, fontWeight: isActive ? 700 : 600, letterSpacing: 0.3 }}>{item.label}</span>
+            <span style={{ fontSize: 11.5, fontWeight: isActive ? 700 : 600 }}>{item.label}</span>
           </button>
         );
       })}

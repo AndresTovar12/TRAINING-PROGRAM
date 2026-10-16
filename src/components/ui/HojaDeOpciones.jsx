@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Plus, X } from 'lucide-react';
+import { Check, ChevronDown, Plus, X } from 'lucide-react';
 import { useIsDesktop } from '@/lib/useViewport';
 import { FONT, KP, UI } from '@/lib/theme';
 import Boton from '@/components/ui/Boton';
@@ -136,6 +136,36 @@ export function FilaElegir({ texto, titulo, opciones, valor, multiple = false, o
       <HojaDeOpciones
         abierta={abierta} titulo={titulo ?? texto} opciones={opciones} valor={valor} multiple={multiple}
         onCambio={onCambio} onCerrar={() => setAbierta(false)} acciones={acciones}
+      />
+    </>
+  );
+}
+
+/**
+ * Un filtro compacto que abre la HojaDeOpciones: «Disciplina  Football ▾». Va en barras de filtros, donde no cabe un renglón entero
+ * (Explorar, el repertorio de ejercicios). Reemplaza las fichas que se deslizan de lado (Andrés, 15 oct: deslizar de lado «está medio confuso»).
+ */
+export function BotonElegir({ etiqueta, titulo, opciones, valor, onCambio, multiple = false, marcador = 'Todas' }) {
+  const [abierta, setAbierta] = useState(false);
+  const nombres = (multiple ? (Array.isArray(valor) ? valor : []) : [valor])
+    .map((v) => opciones.find((o) => o.valor === v)?.texto)
+    .filter(Boolean);
+  return (
+    <>
+      <button
+        type="button" onClick={() => setAbierta(true)} className="kp-press" aria-haspopup="dialog"
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8, minHeight: 44, padding: '0 12px 0 14px', borderRadius: UI.rCampo, border: 'none',
+          background: UI.relleno, cursor: 'pointer', fontFamily: FONT, fontSize: 15, maxWidth: '100%', touchAction: 'manipulation',
+        }}
+      >
+        {etiqueta && <span style={{ fontWeight: 600, color: KP.ink2 }}>{etiqueta}</span>}
+        <span style={{ fontWeight: 700, color: KP.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombres.length ? nombres.join(', ') : marcador}</span>
+        <ChevronDown size={17} color={KP.ink2} style={{ flexShrink: 0 }} />
+      </button>
+      <HojaDeOpciones
+        abierta={abierta} titulo={titulo ?? etiqueta} opciones={opciones} valor={valor} multiple={multiple}
+        onCambio={onCambio} onCerrar={() => setAbierta(false)}
       />
     </>
   );

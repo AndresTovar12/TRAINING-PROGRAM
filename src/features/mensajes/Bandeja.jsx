@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Search } from 'lucide-react';
 import { T, KP, FONT } from '@/lib/theme';
-import { Avatar, NumeroRojo } from '@/features/mensajes/piezas';
+import { NumeroRojo } from '@/features/mensajes/piezas';
+import { Avatar as AvatarDeColor, Buscador, Pastilla, Segmentado } from '@/components/ui';
 import { cuandoTexto, llaveDe, vistaPrevia } from '@/features/mensajes/formato';
 
 /* LA LISTA DE CONVERSACIONES: una fila por persona con quien se puede hablar, la más reciente arriba.
@@ -21,29 +21,27 @@ function Fila({ f, uid, abierta, etiqueta, alAbrir }) {
       type="button" onClick={() => alAbrir(f)} className="kp-press"
       aria-label={`${f.otro_nombre}${f.sin_leer ? `, ${f.sin_leer} sin leer` : ''}`}
       style={{
-        width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', cursor: 'pointer', textAlign: 'left', fontFamily: FONT, touchAction: 'manipulation',
-        border: `1px solid ${abierta ? `${T.accent}55` : KP.line}`, borderRadius: 18, background: abierta ? T.accentBg : KP.surface,
+        width: '100%', display: 'flex', alignItems: 'center', gap: 13, padding: '14px 16px', cursor: 'pointer', textAlign: 'left', fontFamily: FONT, touchAction: 'manipulation',
+        border: 'none', borderRadius: 20, background: abierta ? T.accentBg : KP.surface, boxShadow: abierta ? `inset 0 0 0 1.5px ${T.accent}55` : '0 2px 10px rgba(17,19,24,0.05)',
       }}
     >
-      <Avatar nombre={f.otro_nombre} url={f.otro_avatar} tam={48} />
+      <AvatarDeColor nombre={f.otro_nombre} foto={f.otro_avatar} tamano={52} />
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-          <span style={{ flex: 1, minWidth: 0, fontSize: 15.5, fontWeight: 800, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.otro_nombre}</span>
+          <span style={{ flex: 1, minWidth: 0, fontSize: 17, fontWeight: 700, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.otro_nombre}</span>
           <span style={{ flexShrink: 0, fontSize: 12, fontWeight: 700, color: f.sin_leer ? KP.danger : T.text3, fontVariantNumeric: 'tabular-nums' }}>{cuandoTexto(f.ultimo_en)}</span>
         </span>
         {etiqueta && <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: T.accent, marginTop: 1 }}>{etiqueta}</span>}
         <span style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
           <span style={{
-            flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: f.sin_leer ? 700 : 500, color: f.sin_leer ? T.text : T.text2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            flex: 1, minWidth: 0, fontSize: 14.5, fontWeight: f.sin_leer ? 700 : 500, color: f.sin_leer ? T.text : T.text2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             fontStyle: f.ultimo_borrado ? 'italic' : 'normal',
           }}
           >
             {previa || (f.activa ? 'Escribe el primer mensaje' : '')}
           </span>
           {f.por_revisar > 0 && (
-            <span style={{ flexShrink: 0, padding: '2px 8px', borderRadius: 999, background: KP.blueSoft, color: T.accent, fontSize: 11.5, fontWeight: 800 }}>
-              {f.por_revisar === 1 ? '1 por revisar' : `${f.por_revisar} por revisar`}
-            </span>
+            <Pastilla tono="azul">{f.por_revisar === 1 ? '1 por revisar' : `${f.por_revisar} por revisar`}</Pastilla>
           )}
           <NumeroRojo n={f.sin_leer} />
         </span>
@@ -71,36 +69,20 @@ export default function Bandeja({ filas, uid, abierta = null, alAbrir, conFiltro
     por_revisar: filas.filter((f) => f.por_revisar > 0).length,
   }), [filas]);
 
-  const chip = (id, texto, n) => (
-    <button
-      key={id} type="button" aria-pressed={filtro === id} onClick={() => setFiltro(id)} className="kp-press"
-      style={{
-        minHeight: 38, padding: '0 14px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 6, touchAction: 'manipulation',
-        border: `1.5px solid ${filtro === id ? T.accent : T.borderHi}`, background: filtro === id ? T.accent : KP.surface, color: filtro === id ? '#fff' : T.text,
-      }}
-    >
-      {texto}{n > 0 && <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.85 }}>{n}</span>}
-    </button>
-  );
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {conFiltros && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 2 }}>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {chip('todas', 'Todas', 0)}
-            {chip('sin_leer', 'Sin leer', totales.sin_leer)}
-            {chip('por_revisar', 'Por revisar', totales.por_revisar)}
-          </div>
-          {filas.length > MUCHAS && (
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 44, padding: '0 14px', borderRadius: 14, background: KP.surface, border: `1.5px solid ${T.border}` }}>
-              <Search size={17} color={T.text3} aria-hidden="true" />
-              <input
-                type="search" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar persona" aria-label="Buscar persona"
-                style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 16, color: T.text }}
-              />
-            </label>
-          )}
+          {/* Reestructura visual (15 oct 2026): una de tres a la vista (el segmentado de `components/ui`) y el buscador gris. */}
+          <Segmentado
+            etiqueta="Ver" valor={filtro} onCambio={setFiltro}
+            opciones={[
+              { valor: 'todas', texto: 'Todas' },
+              { valor: 'sin_leer', texto: totales.sin_leer ? `Sin leer · ${totales.sin_leer}` : 'Sin leer' },
+              { valor: 'por_revisar', texto: totales.por_revisar ? `Por revisar · ${totales.por_revisar}` : 'Por revisar' },
+            ]}
+          />
+          {filas.length > MUCHAS && <Buscador valor={busca} onCambio={setBusca} marcador="Buscar persona" />}
         </div>
       )}
       {visibles.map((f) => <Fila key={llaveDe(f)} f={f} uid={uid} abierta={abierta === llaveDe(f)} etiqueta={etiquetaDe(f)} alAbrir={alAbrir} />)}
