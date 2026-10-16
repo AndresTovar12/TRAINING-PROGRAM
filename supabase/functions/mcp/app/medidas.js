@@ -356,6 +356,23 @@ export function leeDescanso(ex) {
   return { unidad: null, cantidad: crudo };
 }
 
+/**
+ * Un descanso escrito como FRASE → solo su tiempo: «30 segundos antes del siguiente ejercicio» → «30 seg»; «descansa 90 s entre series» → «90 seg»;
+ * «2-3 minutos» → «2-3 min». Si ya es solo el tiempo («90 seg», «1:30»), o no trae un tiempo claro («Recuperación total»), se devuelve tal cual.
+ *
+ * Existe porque la IA conectada (ChatGPT, Claude) escribía el descanso como una frase: el modo entreno solo cuenta hacia atrás un descanso que es
+ * UN tiempo, y una frase se quedaba esperando «Seguir» sin cuenta (Andrés, 16 oct 2026: «hice una prueba y no los contó»). El conector lo limpia
+ * antes de guardar y el modo entreno lo lee así también, para que los planes que ya se guardaron con frase funcionen.
+ */
+export function descansoEnTiempo(texto) {
+  const crudo = String(texto ?? '').trim();
+  if (!crudo || leeDescanso({ descanso: crudo }).unidad || /^\d+:\d{2}$/.test(crudo)) return crudo;
+  const m = crudo.match(new RegExp(`(?:^|[^\\d:.,])${RANGO}\\s*(segundos?|segs?|s|minutos?|mins?)(?![a-záéíóúñ])`, 'i'));
+  if (!m) return crudo;
+  const unidad = /^m/i.test(m[2]) ? 'min' : 'seg';
+  return componeDescanso(unidad, m[1].replace(/\s/g, '').replace('–', '-'));
+}
+
 /** La unidad de un descanso que quizá está a medio escribir («60- seg» → 'seg'). Solo para el campo del editor. */
 export function unidadDeDescansoAlEscribir(texto) {
   const t = String(texto ?? '').trim();
