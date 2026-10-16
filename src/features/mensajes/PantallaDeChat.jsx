@@ -28,7 +28,7 @@ export default function PantallaDeChat({ children }) {
   useCuerpoQuieto();
   const { alto, arriba } = useZonaVisible();
   return createPortal(
-    <div style={{ position: 'fixed', top: arriba, left: 0, right: 0, height: alto, zIndex: 200, background: T.bg, fontFamily: FONT, display: 'flex', justifyContent: 'center' }}>
+    <div style={{ position: 'fixed', top: arriba, left: 0, right: 0, height: alto, zIndex: 1100, background: T.bg, fontFamily: FONT, display: 'flex', justifyContent: 'center' }}>
       <div style={{ width: '100%', maxWidth: 680, height: '100%', background: T.bg, boxShadow: '0 0 0 1px rgba(17,19,24,0.06)' }}>{children}</div>
     </div>,
     document.body,

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Check, ChevronLeft, Flag, Loader2 } from 'lucide-react';
-import { T, KP, FONT } from '@/lib/theme';
+import { T, KP, FONT, UI } from '@/lib/theme';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useMensajes } from '@/contexts/MensajesContext';
 import { eliminaMensaje, leeMensajes, leeTecnicas, mandaArchivo, mandaTexto, marcaVistos, POR_PAGINA, respondeTecnica, urlsFirmadas } from '@/lib/mensajesApi';
@@ -323,7 +323,7 @@ export default function Conversacion({ fila, uid, etiqueta = null, onVolver = nu
   });
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: T.bg, fontFamily: FONT }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: UI.fondo, fontFamily: FONT }}>
       <div
         style={{
           display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, // En pantalla completa el botón de la cuenta (fijo arriba a la derecha) queda por encima: se le deja su hueco.
@@ -334,7 +334,7 @@ export default function Conversacion({ fila, uid, etiqueta = null, onVolver = nu
         {onVolver && (
           <button
             type="button" onClick={onVolver} aria-label="Volver a los mensajes" className="kp-press"
-            style={{ width: 40, height: 40, borderRadius: 14, border: 'none', background: T.bg3, color: T.text, cursor: 'pointer', display: 'grid', placeItems: 'center', flexShrink: 0, touchAction: 'manipulation' }}
+            style={{ width: 42, height: 42, borderRadius: 13, border: 'none', background: UI.relleno, color: T.text, cursor: 'pointer', display: 'grid', placeItems: 'center', flexShrink: 0, touchAction: 'manipulation' }}
           >
             <ChevronLeft size={22} />
           </button>
@@ -356,7 +356,7 @@ export default function Conversacion({ fila, uid, etiqueta = null, onVolver = nu
         {!cargando && hayMas && (
           <button
             type="button" onClick={traeAnteriores} disabled={trayendo} className="kp-press"
-            style={{ alignSelf: 'center', minHeight: 38, padding: '0 16px', borderRadius: 12, border: `1.5px solid ${T.borderHi}`, background: KP.surface, color: T.text, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800 }}
+            style={{ alignSelf: 'center', minHeight: 40, padding: '0 16px', borderRadius: 12, border: 'none', background: UI.relleno, color: T.text, cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 700 }}
           >
             {trayendo ? 'Trayendo…' : 'Ver anteriores'}
           </button>

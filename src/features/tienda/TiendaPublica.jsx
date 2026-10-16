@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
 import { CalendarDays, Check, Dumbbell, Loader2, Mail, MessageCircle, ShieldCheck, Video } from 'lucide-react';
-import { LT, FONT, NUM_STYLE } from '@/lib/theme';
+import { LT, FONT, NUM_STYLE, UI } from '@/lib/theme';
+import { Avatar, Boton, BotonElegir, BotonEnAzul, Pastilla, Segmentado } from '@/components/ui';
+import TarjetaDePlan from '@/features/explorar/TarjetaDePlan';
 import { useAuth } from '@/contexts/AuthContext';
 import AuthScreen, { Field } from '@/features/auth/AuthScreen';
 import HojaFlotante from '@/components/HojaFlotante';
 import { iniciaCompra, leePerfilPublico, leePlanPublico } from '@/lib/tiendaApi';
 import { rutaDeTienda } from '@/lib/rutas';
+import { useIsDesktop } from '@/lib/useViewport';
 import { oficioCorto } from '@/lib/theme';
 import { chipsDeParaQuien } from '@/lib/paraQuien';
-import { esBiblioteca, esSuelto, textoDeContenido } from '@/lib/vitrinaDatos';
+import { ETIQUETA_DE_CONTENIDO, esBiblioteca, esSuelto } from '@/lib/vitrinaDatos';
 import { duracionTexto } from '@/lib/clases';
 import { ligaExterna } from '@/lib/videos';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
@@ -30,28 +33,36 @@ import {
 const pesos = (n) => `$${Number(n).toLocaleString('es-MX')}`;
 const TIPO = { membresia: 'al mes', pago_unico: 'pago único' };
 
-const Avatar = ({ foto, nombre, tam = 56 }) => (
-  <span style={{ width: tam, height: tam, borderRadius: tam * 0.34, overflow: 'hidden', background: LT.blueSoft, color: LT.blue, display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: tam * 0.38, flexShrink: 0 }}>
-    {foto ? <img src={foto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : String(nombre ?? '?').trim().slice(0, 1).toUpperCase()}
-  </span>
+const CabezaDelCoach = ({ coach, alVerPerfil }) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+    <Avatar foto={coach.foto} nombre={coach.nombre} tamano={48} />
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ fontSize: 17, fontWeight: 800, lineHeight: 1.2, overflowWrap: 'anywhere' }}>{coach.nombre}</div>
+      {oficioCorto(coach.profesion) && <div style={{ fontSize: 14, fontWeight: 600, color: LT.text2, marginTop: 2 }}>{oficioCorto(coach.profesion)}</div>}
+    </div>
+    {alVerPerfil && <Boton tipo="texto" chico onClick={alVerPerfil}>Ver perfil</Boton>}
+  </div>
 );
 
-function CabezaDelCoach({ coach }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-      <Avatar foto={coach.foto} nombre={coach.nombre} />
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 19, fontWeight: 800, lineHeight: 1.2, overflowWrap: 'anywhere' }}>{coach.nombre}</div>
-        {oficioCorto(coach.profesion) && <div style={{ fontSize: 14, fontWeight: 700, color: LT.blue, marginTop: 2 }}>{oficioCorto(coach.profesion)}</div>}
-      </div>
-    </div>
-  );
+/* Compartir la página: el menú de compartir del teléfono; si no hay, se copia la liga. */
+async function compartir(titulo) {
+  const url = window.location.href;
+  try {
+    if (navigator.share) await navigator.share({ title: titulo, url });
+    else { await navigator.clipboard.writeText(url); return 'copiada'; }
+  } catch { /* lo canceló */ }
+  return null;
 }
 
 /* ------------------------------ La página de un coach ------------------------------ */
 
+/* Reestructura visual (15 oct 2026), como la página del coach en las capturas de Andrés: su tarjeta azul (foto, nombre, oficio, lo que escribió, cuántos planes y
+   «Compartir») y sus planes en tarjetas con foto y precio. Si vende de varias clases (programas, rutinas, clases…), se filtran con «Ver». */
 function PaginaDelCoach({ usuario, alElegir }) {
+  const esCompu = useIsDesktop();
   const [datos, setDatos] = useState(undefined); // undefined = cargando · null = no existe
+  const [tipo, setTipo] = useState('todo');
+  const [copiada, setCopiada] = useState(false);
   useEffect(() => {
     let vivo = true;
     leePerfilPublico(usuario).then((d) => { if (vivo) setDatos(d); }).catch(() => { if (vivo) setDatos(null); });
@@ -60,29 +71,40 @@ function PaginaDelCoach({ usuario, alElegir }) {
 
   if (datos === undefined) return <Marco><div role="status" style={{ display: 'flex', justifyContent: 'center', padding: 48, color: LT.text2 }}><Loader2 size={22} className="spin" /></div></Marco>;
   if (datos === null) return <Aviso titulo="Esta página no existe" texto="Revisa la liga que te mandaron." boton="Ir a Training Lab" alTocar={() => { window.location.assign('/'); }} />;
+  const planes = datos.planes ?? [];
+  const tipos = [...new Set(planes.map((p) => p.contenido ?? 'programa'))];
+  const vistos = tipo === 'todo' ? planes : planes.filter((p) => (p.contenido ?? 'programa') === tipo);
+  const opciones = [{ valor: 'todo', texto: `Todo (${planes.length})` }, ...tipos.map((t) => ({ valor: t, texto: `${ETIQUETA_DE_CONTENIDO[t] ?? t} (${planes.filter((p) => (p.contenido ?? 'programa') === t).length})` }))];
   return (
-    <Marco>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <CabezaDelCoach coach={datos} />
-        {datos.bio && <div style={{ fontSize: 15.5, fontWeight: 500, lineHeight: 1.5, color: LT.text, whiteSpace: 'pre-wrap' }}>{datos.bio}</div>}
-        <div style={{ fontSize: 13, fontWeight: 800, color: LT.text3, textTransform: 'uppercase', letterSpacing: 0.7, marginTop: 6 }}>Planes</div>
-        {datos.planes.map((p) => (
-          <button
-            key={p.slug} type="button" onClick={() => alElegir(p.slug)}
-            style={{ display: 'flex', flexDirection: 'column', gap: 10, textAlign: 'left', width: '100%', padding: 0, border: 'none', borderRadius: 20, background: LT.surface, cursor: 'pointer', overflow: 'hidden', fontFamily: FONT, boxShadow: '0 1px 4px rgba(17,19,24,0.06)' }}
-          >
-            {p.foto && <img src={p.foto} alt="" style={{ width: '100%', height: 150, objectFit: 'cover' }} />}
-            <div style={{ padding: p.foto ? '0 16px 16px' : 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.25 }}>{p.titulo}</div>
-              {p.descripcion && <div style={{ fontSize: 14, fontWeight: 500, color: LT.text2, lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.descripcion}</div>}
-              {chipsDeParaQuien(p).length > 0 && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>{chipsDeParaQuien(p).slice(0, 4).map((c) => <Chip key={c}>{c}</Chip>)}</div>}
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4, ...NUM_STYLE }}>
-                <span style={{ fontSize: 20, fontWeight: 800, color: LT.blue }}>{pesos(p.precio)}</span>
-                <span style={{ fontSize: 13.5, fontWeight: 700, color: LT.text2 }}>{[TIPO[p.tipo], textoDeContenido(p)].filter(Boolean).join(' · ')}</span>
-              </div>
+    <Marco ancho={1080}>
+      <div style={esCompu ? { display: 'grid', gridTemplateColumns: '340px minmax(0, 1fr)', gap: 24, alignItems: 'start' } : { display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div style={{ position: esCompu ? 'sticky' : 'static', top: 20, background: UI.azul, color: '#fff', borderRadius: 26, padding: 22, boxShadow: UI.azulSombra, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <Avatar foto={datos.foto} nombre={datos.nombre} tamano={76} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1.15, letterSpacing: -0.4, overflowWrap: 'anywhere' }}>{datos.nombre}</div>
+              {oficioCorto(datos.profesion) && <div style={{ fontSize: 15, fontWeight: 600, opacity: 0.85, marginTop: 3 }}>{oficioCorto(datos.profesion)}</div>}
             </div>
-          </button>
-        ))}
+          </div>
+          {datos.bio && <div style={{ fontSize: 15.5, fontWeight: 500, lineHeight: 1.5, opacity: 0.92, whiteSpace: 'pre-wrap' }}>{datos.bio}</div>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ padding: '10px 14px', borderRadius: 14, background: 'rgba(255,255,255,0.14)', ...NUM_STYLE }}>
+              <span style={{ fontSize: 22, fontWeight: 800 }}>{planes.length}</span>
+              <span style={{ fontSize: 13.5, fontWeight: 600, opacity: 0.85 }}> {planes.length === 1 ? 'plan' : 'planes'}</span>
+            </span>
+            <span style={{ flex: 1 }} />
+            <BotonEnAzul onClick={async () => { if (await compartir(datos.nombre) === 'copiada') { setCopiada(true); setTimeout(() => setCopiada(false), 1800); } }}>
+              {copiada ? 'Liga copiada' : 'Compartir'}
+            </BotonEnAzul>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
+          {tipos.length > 1 && <div style={{ alignSelf: 'flex-start' }}><BotonElegir etiqueta="Ver" titulo="Ver" valor={tipo} opciones={opciones} onCambio={setTipo} /></div>}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))', gap: 16 }}>
+            {vistos.map((p) => <TarjetaDePlan key={p.slug} p={p} conCoach={false} onClick={() => alElegir(p.slug)} />)}
+          </div>
+        </div>
       </div>
     </Marco>
   );
@@ -90,11 +112,21 @@ function PaginaDelCoach({ usuario, alElegir }) {
 
 /* ------------------------------ La página de un plan ------------------------------ */
 
-const Chip = ({ children }) => <span style={{ padding: '5px 11px', borderRadius: 999, background: LT.blueSoft, color: LT.blue, fontSize: 13, fontWeight: 800 }}>{children}</span>;
+const Chip = ({ children }) => <Pastilla tono="azul">{children}</Pastilla>;
 const Bloque = ({ titulo, children }) => (
-  <div style={{ background: LT.surface, borderRadius: 20, padding: 16, boxShadow: '0 1px 4px rgba(17,19,24,0.06)', display: 'flex', flexDirection: 'column', gap: 10 }}>
-    <div style={{ fontSize: 12.5, fontWeight: 800, color: LT.text3, textTransform: 'uppercase', letterSpacing: 0.7 }}>{titulo}</div>
-    {children}
+  <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <h3 style={{ margin: '0 4px', fontSize: 16, fontWeight: 700, color: LT.text }}>{titulo}</h3>
+    <div style={{ background: UI.tarjeta, borderRadius: UI.rGrupo, padding: 16, boxShadow: UI.sombraGrupo, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {children}
+    </div>
+  </section>
+);
+
+/* Un dato del plan en su cuadrito («48 semanas / duración»), como en las capturas. */
+const DatoChico = ({ valor, etiqueta }) => (
+  <div style={{ background: UI.tarjeta, borderRadius: 16, padding: '12px 14px', boxShadow: UI.sombraGrupo }}>
+    <div style={{ fontSize: 18, fontWeight: 800, color: LT.text, ...NUM_STYLE }}>{valor}</div>
+    <div style={{ fontSize: 13, fontWeight: 600, color: LT.text2, marginTop: 1 }}>{etiqueta}</div>
   </div>
 );
 
@@ -122,11 +154,6 @@ function diasPorSemana(hoja) {
   return mejor;
 }
 
-const opcionDeTiempo = (activa) => ({
-  minHeight: 40, padding: '0 13px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
-  border: `1.5px solid ${activa ? LT.blue : LT.border}`, background: activa ? LT.blueSoft : LT.surface, color: activa ? LT.blue : LT.text2, touchAction: 'manipulation',
-});
-
 /* «¿Cuánto tiempo tienes?»: ayuda para quien no tiene tiempo de todo el plan. Dice cuántos meses o la fecha de su competencia y le marca en qué semana le conviene entrar para que el programa
    termine cuando se le acaba el tiempo. Puede ignorarla y escoger a mano en la hoja. */
 function CuantoTiempoTienes({ fases, alSugerir }) {
@@ -143,19 +170,19 @@ function CuantoTiempoTienes({ fases, alSugerir }) {
   };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ fontSize: 14.5, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}><CalendarDays size={17} color={LT.blue} /> ¿Cuánto tiempo tienes?</div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <button type="button" onClick={() => cambia('todo')} aria-pressed={modo === 'todo'} style={opcionDeTiempo(modo === 'todo')}>Todo el plan</button>
-        <button type="button" onClick={() => cambia('meses')} aria-pressed={modo === 'meses'} style={opcionDeTiempo(modo === 'meses')}>Unos meses</button>
-        <button type="button" onClick={() => cambia('fecha')} aria-pressed={modo === 'fecha'} style={opcionDeTiempo(modo === 'fecha')}>Mi competencia</button>
-      </div>
+      <div style={{ fontSize: 15.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}><CalendarDays size={18} color={LT.blue} /> ¿Cuánto tiempo tienes?</div>
+      {/* Una de tres, a la vista (reestructura visual, 15 oct 2026: el segmentado de `components/ui`). */}
+      <Segmentado
+        etiqueta="Cuánto tiempo tienes" chico valor={modo} onCambio={(v) => cambia(v)}
+        opciones={[{ valor: 'todo', texto: 'Todo' }, { valor: 'meses', texto: 'Unos meses' }, { valor: 'fecha', texto: 'Competencia' }]}
+      />
       {modo === 'meses' && (
         <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14.5, fontWeight: 700 }}>
           Tengo
           <input
             type="number" inputMode="numeric" min={1} max={36} value={meses} aria-label="Meses que tienes"
             onChange={(e) => { const m = Math.max(1, Math.min(36, Number(e.target.value) || 1)); setMeses(m); cambia('meses', m); }}
-            style={{ width: 72, minHeight: 44, borderRadius: 12, border: `1.5px solid ${LT.border}`, padding: '0 10px', fontFamily: FONT, fontSize: 16, fontWeight: 800, textAlign: 'center', background: LT.surface }}
+            style={{ width: 72, minHeight: 44, borderRadius: 12, border: 'none', padding: '0 10px', fontFamily: FONT, fontSize: 16, fontWeight: 800, textAlign: 'center', background: UI.relleno }}
           />
           {meses === 1 ? 'mes' : 'meses'}
         </label>
@@ -166,7 +193,7 @@ function CuantoTiempoTienes({ fases, alSugerir }) {
           <input
             type="date" value={fecha} aria-label="Fecha de tu competencia"
             onChange={(e) => { setFecha(e.target.value); cambia('fecha', meses, e.target.value); }}
-            style={{ minHeight: 44, borderRadius: 12, border: `1.5px solid ${LT.border}`, padding: '0 10px', fontFamily: FONT, fontSize: 16, fontWeight: 700, background: LT.surface }}
+            style={{ minHeight: 44, borderRadius: 12, border: 'none', padding: '0 10px', fontFamily: FONT, fontSize: 16, fontWeight: 700, background: UI.relleno }}
           />
         </label>
       )}
@@ -183,6 +210,7 @@ function CuantoTiempoTienes({ fases, alSugerir }) {
 
 function PaginaDelPlan({ usuario, slug, alVolver }) {
   const { loading, user, profile } = useAuth();
+  const esCompu = useIsDesktop();
   const [plan, setPlan] = useState(undefined);
   const [entrada, setEntrada] = useState(null); // { faseId, semana }: dónde empieza quien compra
   const [claveDeHoja, setClaveDeHoja] = useState(0); // al sugerir una semana, la hoja se vuelve a abrir en ella
@@ -233,6 +261,22 @@ function PaginaDelPlan({ usuario, slug, alVolver }) {
     if (!user) { setError(null); setPideCorreo(true); return; }
     empieza();
   };
+  // En la compu el precio va grande arriba del botón: el botón ya no lo repite.
+  const precioEnBoton = esCompu ? '' : ` · ${pesos(plan.precio)} ${TIPO[plan.tipo] ?? ''}`;
+  const botonDeCompra = (
+    <>
+      {error && !pideCorreo && <div role="alert" style={{ padding: '10px 12px', borderRadius: 12, background: '#FDECEC', color: LT.danger, fontSize: 14, fontWeight: 700 }}>{error}</div>}
+      {plan.ventas === false ? (
+        // Mientras Stripe no esté conectado (o este coach no tenga su cuenta de cobro lista) se puede ver y compartir, pero no comprar.
+        <button type="button" disabled style={botonAzul(true)}>Pronto podrás comprarlo{precioEnBoton}</button>
+      ) : (
+        <button type="button" onClick={compra} disabled={comprando || loading} style={botonAzul(comprando || loading)}>
+          {comprando ? <Loader2 size={20} className="spin" /> : <Check size={20} strokeWidth={3} />}
+          {esCompu ? 'Comprar el plan' : `Comprar${precioEnBoton}`}
+        </button>
+      )}
+    </>
+  );
   const enviaCorreo = (e) => {
     e.preventDefault();
     if (!correoValido(correo)) { setError('Escribe un correo válido.'); return; }
@@ -240,17 +284,28 @@ function PaginaDelPlan({ usuario, slug, alVolver }) {
   };
 
   return (
-    <Marco alVolver={alVolver}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 96 }}>
-        {plan.foto && <img src={plan.foto} alt="" style={{ width: '100%', maxHeight: 260, objectFit: 'cover', borderRadius: 20 }} />}
-        <div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1.15, letterSpacing: -0.4, overflowWrap: 'anywhere' }}>{plan.titulo}</div>
-        <CabezaDelCoach coach={plan.coach} />
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {plan.nivel && <Chip>{{ principiante: 'Principiante', intermedio: 'Intermedio', avanzado: 'Avanzado', todos: 'Todos los niveles' }[plan.nivel] ?? plan.nivel}</Chip>}
-          {chipsDeParaQuien(plan, { siempreEdad: true }).map((c) => <Chip key={c}>{c}</Chip>)}
-        </div>
+    /* Reestructura visual (15 oct 2026), como la página del plan en las capturas de Andrés: la foto grande, quién lo vende con «Ver perfil», el nombre, los datos en
+       cuadritos (duración, nivel), lo que incluye y el programa. En la compu el precio y «Comprar» van en una tarjeta a la derecha; en el teléfono, abajo fijos. */
+    <Marco alVolver={alVolver} ancho={esCompu ? 1080 : 640}>
+      <div style={esCompu ? { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 340px', gap: 28, alignItems: 'start' } : undefined}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingBottom: esCompu ? 20 : 96 }}>
+        {plan.foto && <img src={plan.foto} alt="" style={{ width: '100%', aspectRatio: esCompu ? '21 / 9' : '16 / 10', objectFit: 'cover', borderRadius: 24, display: 'block' }} />}
+        <CabezaDelCoach coach={plan.coach} alVerPerfil={alVolver} />
+        <div style={{ fontSize: esCompu ? 36 : 28, fontWeight: 800, lineHeight: 1.12, letterSpacing: -0.6, overflowWrap: 'anywhere' }}>{plan.titulo}</div>
+        {plan.descripcion && <div style={{ fontSize: 16, fontWeight: 500, lineHeight: 1.55, color: LT.text2, whiteSpace: 'pre-wrap' }}>{plan.descripcion}</div>}
+        {(total > 0 && !semanal) || plan.nivel ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
+            {total > 0 && !semanal && <DatoChico valor={semanasTexto(total)} etiqueta="duración" />}
+            {semanal && dias > 0 && <DatoChico valor={`${dias} ${dias === 1 ? 'día' : 'días'}`} etiqueta="por semana" />}
+            {plan.nivel && <DatoChico valor={{ principiante: 'Principiante', intermedio: 'Intermedio', avanzado: 'Avanzado', todos: 'Todos' }[plan.nivel] ?? plan.nivel} etiqueta="nivel" />}
+          </div>
+        ) : null}
+        {chipsDeParaQuien(plan, { siempreEdad: true }).length > 0 && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {chipsDeParaQuien(plan, { siempreEdad: true }).map((c) => <Chip key={c}>{c}</Chip>)}
+          </div>
+        )}
         {plan.video && <VideoDelCoach url={plan.video} />}
-        {plan.descripcion && <div style={{ fontSize: 15.5, fontWeight: 500, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{plan.descripcion}</div>}
         {(plan.para_quien || plan.objetivo) && (
           <Bloque titulo="Objetivo">
             {plan.para_quien && <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.45 }}>{plan.para_quien}</div>}
@@ -317,25 +372,29 @@ function PaginaDelPlan({ usuario, slug, alVolver }) {
         </div>
       </div>
 
+      {esCompu ? (
+        <aside style={{ position: 'sticky', top: 20, background: UI.tarjeta, borderRadius: 24, padding: 22, boxShadow: '0 2px 12px rgba(17,19,24,0.07)', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <div style={{ fontSize: 36, fontWeight: 800, letterSpacing: -0.8, ...NUM_STYLE }}>{pesos(plan.precio)}</div>
+            <div style={{ fontSize: 15, fontWeight: 500, color: LT.text2, marginTop: 2 }}>{plan.tipo === 'membresia' ? 'al mes · cancelas cuando quieras' : 'pago único · acceso para siempre'}</div>
+          </div>
+          {botonDeCompra}
+        </aside>
+      ) : null}
+      </div>
+
+      {!esCompu && (
       <div
         style={{
-          position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 20, background: 'rgba(244,245,248,0.94)', backdropFilter: 'blur(10px)', borderTop: `1px solid ${LT.border}`,
+          position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 20, background: 'rgba(242,243,247,0.94)', backdropFilter: 'blur(10px)', borderTop: `1px solid ${UI.hilo}`,
           padding: '12px 16px calc(12px + env(safe-area-inset-bottom))',
         }}
       >
         <div style={{ maxWidth: 640, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {error && !pideCorreo && <div role="alert" style={{ padding: '9px 12px', borderRadius: 12, background: '#FDECEC', color: LT.danger, fontSize: 14, fontWeight: 700 }}>{error}</div>}
-          {plan.ventas === false ? (
-            // Mientras Stripe no esté conectado (o este coach no tenga su cuenta de cobro lista) se puede ver y compartir, pero no comprar.
-            <button type="button" disabled style={botonAzul(true)}>Pronto podrás comprarlo · {pesos(plan.precio)} {TIPO[plan.tipo] ?? ''}</button>
-          ) : (
-            <button type="button" onClick={compra} disabled={comprando || loading} style={botonAzul(comprando || loading)}>
-              {comprando ? <Loader2 size={20} className="spin" /> : <Check size={20} strokeWidth={3} />}
-              Comprar · {pesos(plan.precio)} {TIPO[plan.tipo] ?? ''}
-            </button>
-          )}
+          {botonDeCompra}
         </div>
       </div>
+      )}
 
       {pideCorreo && !user && (
         <HojaFlotante titulo="Comprar" subtitulo={`${plan.titulo} · ${pesos(plan.precio)} ${TIPO[plan.tipo] ?? ''}`} onCerrar={() => { setPideCorreo(false); setError(null); }} ancho={460}>

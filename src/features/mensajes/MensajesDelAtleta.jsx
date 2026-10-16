@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Loader2, MessageCircle } from 'lucide-react';
-import { T, FONT, oficioCorto } from '@/lib/theme';
+import { T, FONT, KP, oficioCorto } from '@/lib/theme';
 import { usePerfilDeLaVista } from '@/contexts/VistaContext';
 import { useMensajes } from '@/contexts/MensajesContext';
 import Bandeja from '@/features/mensajes/Bandeja';
@@ -16,7 +16,7 @@ import PantallaDeChat from '@/features/mensajes/PantallaDeChat';
 function Mensaje({ icono: Icono = MessageCircle, titulo, texto }) {
   return (
     <div style={{ padding: '72px 24px 120px', maxWidth: 560, margin: '0 auto', textAlign: 'center' }}>
-      <div style={{ width: 76, height: 76, borderRadius: 24, background: T.accentBg, color: T.accent, display: 'grid', placeItems: 'center', margin: '0 auto 20px' }}>
+      <div style={{ width: 76, height: 76, borderRadius: 24, background: KP.blueSoft, color: KP.blue, display: 'grid', placeItems: 'center', margin: '0 auto 20px' }}>
         <Icono size={34} />
       </div>
       <div style={{ fontSize: 21, fontWeight: 800, color: T.text, letterSpacing: -0.3 }}>{titulo}</div>
@@ -44,7 +44,7 @@ export default function MensajesDelAtleta() {
 
   return (
     <div style={{ padding: '24px 16px 130px', maxWidth: 560, margin: '0 auto', fontFamily: FONT }}>
-      <h1 style={{ margin: '0 4px 16px', fontSize: 28, fontWeight: 800, letterSpacing: -0.6, color: T.text }}>Mensajes</h1>
+      <h1 style={{ margin: '0 4px 16px', paddingRight: 60, fontSize: 30, fontWeight: 800, letterSpacing: -0.6, color: T.text }}>Mensajes</h1>
       <Bandeja filas={mias} uid={uid} abierta={abierta} alAbrir={(f) => setAbierta(llaveDe(f))} etiquetaDe={etiquetaDe} />
       {fila && (
         <PantallaDeChat>
