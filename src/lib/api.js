@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { esperadasEstaSemana } from '@/lib/comoVa';
+import { dondeVaEnTexto } from '@/lib/vaEn';
 import { conIndice } from '@/lib/indiceDeVideo';
 import { TOPE_POR_ARCHIVO_MB, avisoSiEsMuyGrande } from '@/lib/espacio';
 import { anotaEspacio } from '@/lib/espacioApi';
@@ -588,15 +589,24 @@ export async function listAthletesOverview(opciones = {}) {
   const seenByUser = new Map();
   (stateRes.data ?? []).forEach((s) => seenByUser.set(s.user_id, s.updated_at));
 
+  /* Dónde va cada uno (su puntero) sale de `estado_resumido`, que ya sabe de quién es el programa que mira cada profesional. Va aparte y sin
+     tumbar la carga: si falla, la lista se enseña igual, sin «Va en». */
+  const estados = await estadoResumido((profilesRes.data ?? []).filter((p) => p.role !== 'admin').map((p) => p.id)).catch(() => []);
+  const estadoDe = new Map(estados.map((e) => [e.user_id, e]));
+
   const filas = (profilesRes.data ?? []).map((p) => {
     const plan = planDeFila(p);
     const phases = plan?.data?.phases ?? [];
     // Una rutina semanal sin ninguna sesión es un programa fantasma (ver `esProgramaFantasma`): «Sin plan».
     const fantasma = plan?.data?.kind === 'weekly'
       && !phases.some((ph) => (ph.weekData ?? []).some((w) => (w.days ?? []).some((d) => d?.cat !== 'off')));
+    const puntero = estadoDe.get(p.id)?.puntero ?? null;
+    // El master ve atletas de otros coaches: `estado_resumido` le da el puntero de SU programa, no el de ellos. Ahí no se afirma nada.
+    const punteroDeEsteAtleta = !opciones.esMaster || p.coach_id === opciones.yo;
+    const hayPlan = !!plan && !fantasma;
     return {
       ...p,
-      plan: plan && !fantasma
+      plan: hayPlan
         ? {
             title: plan.title,
             kind: plan.data?.kind === 'weekly' ? 'weekly' : 'periodized',
@@ -604,21 +614,14 @@ export async function listAthletesOverview(opciones = {}) {
             weeks: phases.reduce((s, ph) => s + (ph.weekData?.length || 0), 0),
           }
         : null,
+      // Dónde va («Fase 2 · Sem 3») y si su plan está en pausa: lo que la lista del coach enseña en «Va en».
+      vaEn: hayPlan && punteroDeEsteAtleta ? dondeVaEnTexto(plan.data, puntero) : null,
+      enPausa: hayPlan && punteroDeEsteAtleta && !!puntero?.pausa,
       lastSeen: seenByUser.get(p.id) ?? null,
     };
   });
   if (!opciones.conEstado) return filas;
 
-  /* Va aparte y sin tumbar la carga: si esta consulta falla, la lista se
-     enseña igual y solo se pierde la línea de dolor. Sin línea, no con una
-     línea que diga «Sin dolor anotado» de alguien que sí lo anotó. */
-  let estados;
-  try {
-    estados = await estadoResumido(filas.filter((p) => p.role !== 'admin').map((p) => p.id));
-  } catch {
-    return filas;
-  }
-  const estadoDe = new Map(estados.map((e) => [e.user_id, e]));
   return filas.map((p) => {
     const e = estadoDe.get(p.id);
     const data = planDeFila(p)?.data;
@@ -906,6 +909,17 @@ export async function promoteToCoach(userId) {
     .single();
   if (error) throw error;
   return data;
+}
+
+/**
+ * El coach mueve o pausa el plan de su atleta: escribe SOLO su puntero (`wr:cursor`, o `wr:cursor@<profesional>` si es el programa de un
+ * profesional del equipo). Va por una función de la base que comprueba que de verdad lo atiende y no deja tocar nada más del estado del
+ * atleta. `cursor` es el puntero ya completo (ver `moverPlanA`, `pausarPlan`, `reanudarPlan` en `training-utils`); el aviso «Tu coach movió
+ * tu plan» viaja dentro (`aviso`) y el atleta lo acepta con «Entendido».
+ */
+export async function moverPlanDeAtleta(atletaId, clave, cursor) {
+  const { error } = await supabase.rpc('mover_plan_de_atleta', { p_atleta: atletaId, p_clave: clave, p_cursor: cursor });
+  if (error) throw error;
 }
 
 export async function getAthleteState(userId) {
