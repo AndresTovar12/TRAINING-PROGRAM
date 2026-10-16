@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import {
-  Dumbbell, Users, Library, Shield, PanelLeftClose, PanelLeft, Eye, X, Sparkles, FolderOpen, MessageCircle, Store, FlaskConical, Coins, Menu,
+  Users, Library, Shield, PanelLeftClose, PanelLeft, Eye, X, Sparkles, FolderOpen, MessageCircle, Store, FlaskConical, Coins, Menu,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMensajes } from '@/contexts/MensajesContext';
@@ -18,10 +18,9 @@ import MiVitrina from '@/features/vitrina/MiVitrina';
 import VistaComoAtleta from '@/features/admin/VistaComoAtleta';
 import ConectarIA from '@/features/ia/ConectarIA';
 import MensajesDelCoach from '@/features/mensajes/MensajesDelCoach';
-import { NumeroRojo } from '@/features/mensajes/piezas';
-import { BarraInferior, CabeceraConBanda, EnBanda, Fila, Grupo, IconoDeFila } from '@/components/ui';
+import { BarraInferior, BarraLateral, CabeceraConBanda, EnBanda, Fila, Grupo, IconoDeFila } from '@/components/ui';
 
-const SIDEBAR_W = 232;
+const SIDEBAR_W = 248;
 
 export default function AdminApp({ onAbrirPerfil }) {
   const { profile } = useAuth();
@@ -212,110 +211,53 @@ export default function AdminApp({ onAbrirPerfil }) {
     );
   }
 
-  /* ---------------------- Computadora: menú lateral fijo --------------------- */
+  /* ---------------------- Computadora: barra lateral azul --------------------------
+     Reestructura visual (15 oct 2026), como «Coach · Computadora» de las capturas: la barra lateral azul con la persona arriba,
+     las secciones y, abajo, su código de coach. Arriba del contenido, el encabezado blanco con el nombre de la sección.
+     Se puede seguir ocultando la barra (el botón de la izquierda del encabezado) para trabajar a lo ancho, como antes. */
+  const tituloCompu = TABS.find((x) => x.id === tab)?.label ?? '';
+  const codigo = profile?.codigo_coach;
   return (
     <>
     {vistaDeAtleta}
-    <div style={{ minHeight: '100svh', background: T.bg, fontFamily: FONT, display: viendoAtleta ? 'none' : 'flex' }}>
-      {/* Menú lateral */}
+    <div style={{ minHeight: '100svh', background: UI.fondo, fontFamily: FONT, display: viendoAtleta ? 'none' : 'flex' }}>
       {menuOpen && (
-        <aside
-          style={{
-            width: SIDEBAR_W, flexShrink: 0, background: T.bg2, borderRight: `1px solid ${T.border}`,
-            position: 'sticky', top: 0, height: '100svh', display: 'flex', flexDirection: 'column',
-            padding: '16px 12px',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '0 6px 18px' }}>
-            <Brand />
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 14.5, fontWeight: 800, letterSpacing: -0.2, color: T.text }}>Training Lab</div>
-              <div style={{ fontSize: 11.5, fontWeight: 600, color: T.text3 }}>{isMaster ? 'Master' : (oficioCorto(profile?.profesion) || 'Coach')}</div>
-            </div>
-          </div>
-
-          <nav style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {TABS.map(({ id, label, icon: Icon, numero }) => {
-              const active = tab === id;
-              return (
-                <button
-                  key={id} type="button" onClick={() => setTab(id)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
-                    borderRadius: 10, cursor: 'pointer', textAlign: 'left', width: '100%',
-                    border: 'none', borderLeft: `3px solid ${active ? T.accent : 'transparent'}`,
-                    background: active ? T.accentBg : 'transparent',
-                    color: active ? T.accent : T.text2,
-                    fontFamily: FONT, fontSize: 14, fontWeight: active ? 800 : 600,
-                  }}
-                >
-                  <Icon size={17} /> {label}<NumeroRojo n={numero} tam={18} style={{ marginLeft: 'auto' }} />
-                </button>
-              );
-            })}
-          </nav>
-
-          <div style={{ flex: 1 }} />
-
-          <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div
-              style={{
-                width: 32, height: 32, borderRadius: 10, overflow: 'hidden', flexShrink: 0,
-                background: T.accentBg, color: T.accent, display: 'grid', placeItems: 'center',
-                fontWeight: 800, fontSize: 13,
-              }}
-            >
-              {profile?.avatar_url
-                ? <img src={profile.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : (profile?.full_name?.[0] || 'A').toUpperCase()}
-            </div>
-            <div style={{ minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {profile?.full_name || 'Cuenta'}
-            </div>
-          </div>
-        </aside>
+        <div style={{ position: 'sticky', top: 0, height: '100svh', flexShrink: 0, display: 'flex' }}>
+          <BarraLateral
+            subtitulo={`Training Lab · ${isMaster ? 'Dueño' : (oficioCorto(profile?.profesion) || 'Coach')}`}
+            marca={profile?.full_name || profile?.username || 'Training Lab'}
+            secciones={TABS.map((x) => ({ id: x.id, texto: x.label, Icono: x.icon, aviso: x.numero }))}
+            activa={tab} onCambio={setTab} ancho={SIDEBAR_W}
+            pie={codigo && !viendoComo ? (
+              <>
+                <div style={{ fontSize: 12.5, fontWeight: 600, opacity: 0.8 }}>Tu código de coach</div>
+                <div style={{ fontSize: 21, fontWeight: 800, letterSpacing: 1.5, marginTop: 2 }}>{codigo}</div>
+              </>
+            ) : null}
+          />
+        </div>
       )}
 
-      {/* Zona de trabajo */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <header
           style={{
-            position: 'sticky', top: 0, zIndex: 40, background: 'rgba(255,255,255,0.86)',
-            backdropFilter: 'saturate(180%) blur(16px)', borderBottom: `1px solid ${T.border}`,
-            padding: '12px 24px', display: 'flex', alignItems: 'center', gap: 12,
+            position: 'sticky', top: 0, zIndex: 40, background: 'rgba(255,255,255,0.92)',
+            backdropFilter: 'saturate(180%) blur(16px)', borderBottom: `1px solid ${UI.hilo}`,
+            padding: '14px 96px 14px 20px', display: 'flex', alignItems: 'center', gap: 14, minHeight: 76, boxSizing: 'border-box',
           }}
         >
           <button
-            type="button"
-            onClick={() => setMenuOpen((v) => !v)}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8, border: 'none', cursor: 'pointer',
-              background: 'transparent', color: T.accent, fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
-              padding: '6px 4px',
-            }}
+            type="button" onClick={() => setMenuOpen((v) => !v)} aria-label={menuOpen ? 'Ocultar menú' : 'Mostrar menú'} title={menuOpen ? 'Ocultar menú' : 'Mostrar menú'}
+            style={{ width: 40, height: 40, borderRadius: 12, border: 'none', cursor: 'pointer', background: UI.relleno, color: KP.ink2, display: 'grid', placeItems: 'center', flexShrink: 0 }}
           >
-            {menuOpen ? <PanelLeftClose size={17} /> : <PanelLeft size={17} />}
-            {menuOpen ? 'Ocultar menú' : 'Mostrar menú'}
+            {menuOpen ? <PanelLeftClose size={18} /> : <PanelLeft size={18} />}
           </button>
-          <span style={{ flex: 1 }} />
+          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: -0.5, color: KP.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tituloCompu}</h1>
         </header>
 
-        <main style={{ flex: 1, padding: '24px 24px 60px', minWidth: 0 }}>{content}</main>
+        <main style={{ flex: 1, padding: '24px 24px 60px', minWidth: 0 }}><EnBanda.Provider value>{content}</EnBanda.Provider></main>
       </div>
     </div>
     </>
-  );
-}
-
-function Brand() {
-  return (
-    <div
-      style={{
-        width: 38, height: 38, borderRadius: 12, display: 'grid', placeItems: 'center', flexShrink: 0,
-        background: `linear-gradient(140deg, ${T.accent}, ${T.accentDk})`, boxShadow: KP.shBtn,
-      }}
-    >
-      <Dumbbell size={20} color="#fff" strokeWidth={2.4} />
-    </div>
   );
 }

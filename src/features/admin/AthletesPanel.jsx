@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Loader2, Search, Plus, Trash2, X, ChevronRight, ChevronLeft, Pencil,
-  CalendarClock, User as UserIcon, Shield, ClipboardList, Users,
+  Loader2, Plus, Trash2, X, ChevronRight, ChevronLeft, Pencil,
+  CalendarClock, User as UserIcon, Shield, ClipboardList,
   UserMinus, Power, AlertTriangle, Eye, ChevronDown, ChevronUp, UserPlus,
   Check, Copy, Share2, CircleCheck, RotateCcw, CalendarPlus, FolderOpen, ListChecks, HeartPulse,
 } from 'lucide-react';
@@ -83,10 +83,10 @@ function haceCorto(iso, ahora) {
 }
 
 /** Una cifra de arriba de la lista del teléfono («5 Activos»); en rosa si es algo por atender («1 Sin plan»). */
-function CifraDeLista({ valor, texto, alerta = false }) {
+function CifraDeLista({ valor, texto, alerta = false, grande = false }) {
   return (
-    <div style={{ background: alerta ? KP.dangerSoft : UI.tarjeta, borderRadius: 18, padding: '12px 14px', boxShadow: alerta ? 'none' : UI.sombraGrupo, minWidth: 0, fontFamily: FONT }}>
-      <div style={{ fontSize: 26, fontWeight: 800, color: KP.ink, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>{valor}</div>
+    <div style={{ background: alerta ? KP.dangerSoft : UI.tarjeta, borderRadius: grande ? UI.rTarjeta : 18, padding: grande ? '18px 20px' : '12px 14px', boxShadow: alerta ? 'none' : UI.sombraGrupo, minWidth: 0, fontFamily: FONT }}>
+      <div style={{ fontSize: grande ? 32 : 26, fontWeight: 800, color: KP.ink, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>{valor}</div>
       <div style={{ fontSize: 13.5, fontWeight: 600, color: alerta ? KP.danger : KP.ink2, marginTop: 2, lineHeight: 1.25, overflowWrap: 'break-word' }}>{texto}</div>
     </div>
   );
@@ -118,35 +118,15 @@ function Avatar({ name, size = 40, url }) {
 // sin obligar a desplazarse para llegar a los controles de abajo.
 const POR_PAGINA = 15;
 
+// Reestructura visual (15 oct 2026): encabezados en letra normal gris (no mayúsculas) y líneas finas, como la tabla de las capturas.
 const TH = {
-  textAlign: 'left', padding: '10px 14px', fontSize: 11, fontWeight: 800,
-  color: T.text3, textTransform: 'uppercase', letterSpacing: 0.7,
-  borderBottom: `1px solid ${T.border}`, whiteSpace: 'nowrap',
+  textAlign: 'left', padding: '14px 16px', fontSize: 13, fontWeight: 600,
+  color: T.text2, borderBottom: '1px solid #ECEEF2', whiteSpace: 'nowrap',
 };
 const TD = {
-  padding: '11px 14px', borderBottom: `1px solid ${T.border}`,
+  padding: '13px 16px', borderBottom: '1px solid #ECEEF2',
   fontSize: 14, color: T.text, verticalAlign: 'middle',
 };
-
-function StatCard({ icon, label, value, tono }) {
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 11, background: T.bg2,
-      border: `1px solid ${T.border}`, borderRadius: 14, padding: '13px 15px',
-      boxShadow: KP.shCard, minWidth: 0,
-    }}>
-      <span style={{
-        width: 34, height: 34, borderRadius: 11, flexShrink: 0, display: 'grid', placeItems: 'center',
-        background: tono === 'alerta' ? 'rgba(220,38,38,0.09)' : T.accentBg,
-        color: tono === 'alerta' ? T.danger : T.accent,
-      }}>{icon}</span>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 19, fontWeight: 800, color: T.text, lineHeight: 1.1 }}>{value}</div>
-        <div style={{ fontSize: 12, color: T.text2, fontWeight: 600, marginTop: 1 }}>{label}</div>
-      </div>
-    </div>
-  );
-}
 
 /** Celda del plan: titulo + de que tipo es + cuanto mide. */
 function PlanCell({ plan }) {
@@ -329,11 +309,11 @@ function AthletesTable({ rows, coaches, isMaster, selectedId, onPick, ahora, eti
   const cols = 4 + (isMaster ? 1 : 0) + (salud ? 1 : 0);
 
   return (
-    <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 16, boxShadow: KP.shCard, overflow: 'hidden' }}>
+    <div style={{ background: UI.tarjeta, borderRadius: UI.rTarjeta, boxShadow: UI.sombraGrupo, overflow: 'hidden' }}>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: FONT }}>
           <thead>
-            <tr style={{ background: T.bg }}>
+            <tr>
               <th style={TH}>{t('Atleta')}</th>
               <th style={TH}>{t('Plan')}</th>
               {salud && <th style={TH}>Cómo va</th>}
@@ -359,12 +339,13 @@ function AthletesTable({ rows, coaches, isMaster, selectedId, onPick, ahora, eti
                 >
                   <td style={TD}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
-                      <Avatar name={a.full_name || a.username} url={a.avatar_url} size={34} />
+                      <Iniciales nombre={a.full_name || a.username} foto={a.avatar_url} tamano={40} />
                       <div style={{ minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
                           <span style={{ fontWeight: 700, fontSize: 14, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {a.full_name || a.username}
                           </span>
+                          {!a.plan && a.role !== 'admin' && <Pastilla tono="malo">{t('Sin plan')}</Pastilla>}
                           {a.is_active === false && <Pausada />}
                           {a.perfil_completo === false && <SinTerminar />}
                         </div>
@@ -1418,7 +1399,7 @@ function PrimerosPasos({ clave, onAgregar, onIrA, onAbrirPerfil, compu }) {
   return (
     <section
       aria-label="Primeros pasos"
-      style={{ background: T.bg2, border: `1.5px solid ${KP.lineHi}`, borderRadius: 18, padding: '14px 14px 6px', marginBottom: 16, boxShadow: KP.shCard }}
+      style={{ background: UI.tarjeta, borderRadius: UI.rTarjeta, padding: '14px 14px 6px', marginBottom: 16, boxShadow: UI.sombraGrupo }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
         <span style={{ width: 34, height: 34, borderRadius: 10, display: 'grid', placeItems: 'center', background: KP.blueSoft, color: KP.blue, flexShrink: 0 }}>
@@ -1753,10 +1734,10 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta, onIrA, onAb
           </div>
         )}
         {modoTabla && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginBottom: 16 }}>
-            <StatCard icon={<Users size={17} />} label={t('Atletas')} value={metricas.total} />
-            <StatCard icon={<ClipboardList size={17} />} label={t('Sin plan')} value={metricas.sinPlan} tono={metricas.sinPlan > 0 ? 'alerta' : undefined} />
-            <StatCard icon={<CalendarClock size={17} />} label="Activos (7 días)" value={metricas.activos} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 14, marginBottom: 16 }}>
+            <CifraDeLista valor={metricas.total} texto={t('Atletas')} grande />
+            <CifraDeLista valor={metricas.activos} texto="Activos (7 días)" grande />
+            <CifraDeLista valor={metricas.sinPlan} texto={t('Sin plan')} alerta={metricas.sinPlan > 0} grande />
           </div>
         )}
         {/* Dar de alta a un cliente sin esperar a que se registre. Va antes
@@ -1797,9 +1778,9 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta, onIrA, onAb
             className="kp-press"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 8,
-              padding: '12px 18px', borderRadius: 999, border: 'none', cursor: 'pointer',
-              background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, color: '#fff',
-              fontFamily: FONT, fontSize: 14.5, fontWeight: 700, boxShadow: KP.shBtn,
+              minHeight: 48, padding: '0 20px', borderRadius: UI.rBoton, border: 'none', cursor: 'pointer',
+              background: KP.blue, color: '#fff',
+              fontFamily: FONT, fontSize: 15, fontWeight: 700, boxShadow: '0 8px 18px rgba(30,64,224,0.22)',
               touchAction: 'manipulation',
             }}
           >
@@ -1820,15 +1801,11 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta, onIrA, onAb
           </div>
         )}
 
-        {modoTabla && <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 12, padding: '0 14px', marginBottom: 16 }}>
-          <Search size={17} color={T.text3} />
-          <input
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPagina(1); }}
-            placeholder={t('Buscar atleta…')}
-            style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 16, fontWeight: 500, color: T.text, padding: '12px 0' }}
-          />
-        </div>}
+        {modoTabla && (
+          <div style={{ marginBottom: 16 }}>
+            <Buscador valor={search} onCambio={(v) => { setSearch(v); setPagina(1); }} marcador={t('Buscar atleta…')} />
+          </div>
+        )}
 
         {err && (
           <div style={{ background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 12, padding: '12px 16px', fontWeight: 600, marginBottom: 16 }}>{err}</div>
