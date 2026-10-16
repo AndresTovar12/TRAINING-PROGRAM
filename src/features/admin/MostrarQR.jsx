@@ -38,8 +38,8 @@ export default function MostrarQR({ liga, nombre, onCerrar }) {
         data-qr
         onMouseDown={(e) => e.stopPropagation()}
         style={{
-          width: 'min(78vw, 340px)', height: 'min(78vw, 340px)', background: '#fff', borderRadius: 12,
-          border: `1px solid ${T.border}`, padding: 8, boxShadow: KP.shCard, boxSizing: 'content-box',
+          width: 'min(78vw, 340px)', height: 'min(78vw, 340px)', background: '#fff', borderRadius: 20,
+          padding: 14, boxShadow: '0 14px 32px rgba(17,19,24,0.12)', boxSizing: 'content-box',
         }}
         dangerouslySetInnerHTML={{ __html: svg }}
       />

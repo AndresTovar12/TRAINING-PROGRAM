@@ -41,7 +41,7 @@ import TiraDeSemana, { BotonDeDia, fechaDeLaSemana } from '@/features/training/h
 import { HoyTeToca, HoyTeTocaEquipo, HoyDescansas } from '@/features/training/home/HoyTeToca';
 import { CuadroDeSalud, CuadroDePrograma, CuadroBlanco } from '@/features/training/home/Cuadros';
 import Saludo from '@/features/training/home/Saludo';
-import { Boton, Grupo, Fila, IconoDeFila, TarjetaHeroe, Deslizador, EntradaNumero, Pastilla } from '@/components/ui';
+import { Boton, Grupo, Fila, IconoDeFila, TarjetaHeroe, Deslizador, EntradaNumero, Pastilla, BarraLateral } from '@/components/ui';
 
 const Explorar = lazy(() => import('@/features/explorar/Explorar'));
 import {
@@ -2268,6 +2268,8 @@ const OneRMView = ({ oneRMs, ponRM, enHoja = false }) => {
  * perdidos en el centro, y el cursor no tiene el problema del pulgar. Ahi se
  * convierte en una barra flotante centrada, del ancho de su contenido.
  */
+/* En la computadora la navegación es la barra lateral azul (reestructura visual, 15 oct 2026, como «Home · Computadora» de las capturas de Andrés):
+   aquí no se dibuja nada y `BarraLateralDelAtleta` usa los mismos botones. */
 const BottomNav = ({ active, onChange, conMensajes = true, conExplorar = true }) => {
   const esCompu = useIsDesktop();
   const { salud } = usePalabras();
@@ -2275,6 +2277,7 @@ const BottomNav = ({ active, onChange, conMensajes = true, conExplorar = true })
   /* Tres botones (Andrés, 7 oct 2026). «Home» es lo que antes se llamaba «Hoy». «Entrenar» es lo que antes se
      llamaba «Plan»: abre la sesión de hoy (lo que tocaba ya lo decía la tarjeta azul de Home, y «Plan» sonaba a
      otra cosa); a un paciente de un fisio le dice «Sesión». Bienestar, 1RM y Ciencia viven dentro de Home. */
+  if (esCompu) return null;
   /* Y «Explorar» (12 oct 2026): los coaches con planes a la venta. «Mensajes» sale solo cuando hay con quién hablar (entrenador, equipo o un plan con chat): quien entra por su cuenta ve
      Home · Entrenar · Explorar. */
   const items = [
@@ -2319,6 +2322,27 @@ const BottomNav = ({ active, onChange, conMensajes = true, conExplorar = true })
           </button>
         );
       })}
+    </div>
+  );
+};
+
+/** La barra lateral azul del atleta en la computadora: los mismos botones que la barra de abajo del teléfono. */
+const BarraLateralDelAtleta = ({ active, onChange, conMensajes = true, conExplorar = true }) => {
+  const { salud } = usePalabras();
+  const { sinLeer } = useMensajes();
+  const { profile } = useAuth();
+  const secciones = [
+    { id: 'home', texto: 'Home', Icono: HomeIcon },
+    { id: 'plan', texto: salud ? 'Sesión' : 'Entrenar', Icono: Dumbbell },
+    ...(conMensajes ? [{ id: 'messages', texto: 'Mensajes', Icono: MessageCircle, aviso: sinLeer }] : []),
+    ...(conExplorar ? [{ id: 'explore', texto: 'Explorar', Icono: Compass }] : []),
+  ];
+  return (
+    <div style={{ position: 'sticky', top: 0, height: 'calc(100svh - var(--aviso-vista, 0px))', flexShrink: 0, display: 'flex' }}>
+      <BarraLateral
+        subtitulo="Training Lab" marca={profile?.full_name || profile?.username || 'Tu cuenta'}
+        secciones={secciones} activa={active} onCambio={onChange} ancho={236}
+      />
     </div>
   );
 };
@@ -2774,14 +2798,17 @@ export default function TrainingApp() {
   return (
     <div style={{
       minHeight: 'calc(100svh - var(--aviso-vista, 0px))', background: T.bg, color: T.text,
-      fontFamily: FONT,
+      fontFamily: FONT, display: esCompu ? 'flex' : 'block',
       WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
     }}>
+      {esCompu && <BarraLateralDelAtleta active={tab} onChange={vasA} conMensajes={conMensajes} conExplorar={conExplorar} />}
+      <div style={esCompu ? { flex: 1, minWidth: 0 } : undefined}>
       {/* En compu el contenido se centra y deja de estirarse hasta 1272px. Una
           tarjeta de ese ancho obliga a barrer la pantalla con los ojos de una
           orilla a la otra para leer una linea. 980 es ancho de lectura. */}
       <div style={esCompu ? { maxWidth: 980, margin: '0 auto', width: '100%' } : undefined}>
         {content}
+      </div>
       </div>
       <BottomNav active={tab} onChange={vasA} conMensajes={conMensajes} conExplorar={conExplorar} />
       {/* Bienestar, 1RM y Ciencia ya no son pestañas: se abren como hoja encima, con su flecha para volver. */}

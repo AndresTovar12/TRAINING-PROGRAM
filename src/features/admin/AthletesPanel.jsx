@@ -247,8 +247,8 @@ function LinkPendiente({ token }) {
 
   return (
     <div style={{
-      background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 13,
-      padding: '12px 13px', marginBottom: 14,
+      background: UI.tarjeta, boxShadow: '0 1px 2px rgba(17,19,24,0.04)', borderRadius: UI.rGrupo,
+      padding: '14px 15px', marginBottom: 14,
     }}>
       <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text, marginBottom: 4 }}>
         Todavía no ha entrado
@@ -283,8 +283,8 @@ function LinkPendiente({ token }) {
             type="button"
             onClick={compartir}
             style={{
-              flex: 1, minHeight: 38, borderRadius: 9, cursor: 'pointer',
-              border: `1.5px solid ${T.border}`, background: T.bg, color: T.text,
+              flex: 1, minHeight: 42, borderRadius: 12, cursor: 'pointer',
+              border: 'none', background: UI.relleno, color: T.text,
               fontFamily: FONT, fontSize: 13, fontWeight: 700, touchAction: 'manipulation',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
             }}
@@ -452,8 +452,8 @@ function ConfirmarBorrado({ athlete, onCancelar, onConfirmado }) {
       <div
         className="animate-fade-in"
         style={{
-          width: '100%', maxWidth: 420, background: T.bg2, borderRadius: 20,
-          border: `1px solid ${T.border}`, padding: 22, boxShadow: KP.shPop,
+          width: '100%', maxWidth: 420, background: UI.fondo, borderRadius: 24,
+          padding: 22, boxShadow: KP.shPop,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 14 }}>
@@ -508,9 +508,9 @@ function ConfirmarBorrado({ athlete, onCancelar, onConfirmado }) {
           spellCheck={false}
           placeholder={athlete.username}
           style={{
-            width: '100%', boxSizing: 'border-box', border: `1.5px solid ${T.border}`,
-            borderRadius: 11, padding: '12px 13px', fontFamily: FONT, fontSize: 16,
-            fontWeight: 600, color: T.text, background: T.bg, outline: 'none',
+            width: '100%', boxSizing: 'border-box', border: 'none',
+            borderRadius: UI.rCampo, padding: '14px 14px', fontFamily: FONT, fontSize: 16,
+            fontWeight: 600, color: T.text, background: UI.relleno, outline: 'none',
           }}
         />
 
@@ -526,8 +526,8 @@ function ConfirmarBorrado({ athlete, onCancelar, onConfirmado }) {
             onClick={onCancelar}
             disabled={borrando}
             style={{
-              flex: 1, padding: '13px 16px', borderRadius: 12, border: `1.5px solid ${T.border}`,
-              background: T.bg2, color: T.text, cursor: borrando ? 'default' : 'pointer',
+              flex: 1, minHeight: 50, padding: '0 16px', borderRadius: UI.rBoton, border: 'none',
+              background: UI.relleno, color: T.text, cursor: borrando ? 'default' : 'pointer',
               fontFamily: FONT, fontSize: 14.5, fontWeight: 700,
             }}
           >
@@ -577,8 +577,8 @@ function ZonaAdministracion({ athlete, isMaster, soyElCoach, onCambiado, onElimi
 
   const btn = (extra = {}) => ({
     display: 'inline-flex', alignItems: 'center', gap: 7, padding: '11px 15px',
-    borderRadius: 11, border: `1px solid ${T.border}`, background: T.bg2,
-    color: T.text2, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
+    borderRadius: 12, border: 'none', background: UI.relleno,
+    color: T.text, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
     ...extra,
   });
 
@@ -657,9 +657,9 @@ function AccionFicha({ icon: Icon, titulo, detalle, onClick, primaria, abierto }
       style={{
         width: '100%', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
         padding: '14px 15px', borderRadius: 14, cursor: 'pointer', fontFamily: FONT,
-        border: primaria ? 'none' : `1.5px solid ${T.border}`,
-        background: primaria ? `linear-gradient(135deg, ${T.accent}, ${T.accentDk})` : T.bg2,
-        boxShadow: primaria ? KP.shBtn : 'none',
+        border: 'none',
+        background: primaria ? KP.blue : UI.tarjeta,
+        boxShadow: primaria ? '0 8px 20px rgba(30,64,224,0.22)' : '0 1px 2px rgba(17,19,24,0.04)',
       }}
     >
       <span style={{
@@ -1296,8 +1296,8 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
             type="button"
             onClick={onDeletePlan}
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 15px', borderRadius: 11,
-              border: `1px solid ${T.border}`, cursor: 'pointer', background: T.bg2, color: T.danger,
+              display: 'inline-flex', alignItems: 'center', gap: 8, padding: '0 16px', minHeight: 44, borderRadius: 12,
+              border: 'none', cursor: 'pointer', background: KP.dangerSoft, color: T.danger,
               fontFamily: FONT, fontSize: 13.5, fontWeight: 700, marginBottom: 12,
             }}
           >
@@ -1330,7 +1330,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
     >
       <div style={{
         width: '100%', maxWidth: 560, maxHeight: '88vh', overflowY: 'auto',
-        background: T.bg2, border: `1px solid ${T.border}`, borderRadius: KP.rCard,
+        background: UI.fondo, borderRadius: 24,
         padding: 24, boxShadow: KP.shPop,
       }}>
         {soloNotas ? cuerpoSoloNotas : cuerpo}
@@ -1350,7 +1350,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
       )}
     </div>
   ) : (
-    <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: KP.rCard, padding: 22, boxShadow: KP.shCard }}>
+    <div style={{ background: UI.fondo, borderRadius: 24, padding: 22, boxShadow: KP.shCard }}>
       {soloNotas ? cuerpoSoloNotas : cuerpo}
 
       {building && !loading && (

@@ -4,7 +4,7 @@ import { invitarAtleta, ligaDeInvitacion } from '@/lib/api';
 import { ErrorDeLimite } from '@/lib/limiteDeAtletas';
 import MostrarQR from '@/features/admin/MostrarQR';
 import { usePalabras } from '@/contexts/PalabrasContext';
-import { T, FONT, KP } from '@/lib/theme';
+import { T, FONT, KP, UI } from '@/lib/theme';
 
 /**
  * Dar de alta a un cliente sin esperar a que se registre.
@@ -78,18 +78,15 @@ export default function AgregarAtleta({ onCerrar, onCreado, onSinLugares }) {
 
   const campo = (etiqueta, valor, set, props = {}) => (
     <label style={{ display: 'block' }}>
-      <span style={{
-        display: 'block', fontSize: 11, fontWeight: 800, letterSpacing: 0.7,
-        textTransform: 'uppercase', color: T.text3, marginBottom: 6,
-      }}>
+      <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600, color: KP.ink2, marginBottom: 6 }}>
         {etiqueta}
       </span>
       <input
         value={valor}
         onChange={(e) => set(e.target.value)}
         style={{
-          width: '100%', boxSizing: 'border-box', border: `1.5px solid ${T.border}`,
-          borderRadius: 11, padding: '12px 13px', background: T.bg2, outline: 'none',
+          width: '100%', boxSizing: 'border-box', border: 'none',
+          borderRadius: UI.rCampo, padding: '14px 14px', background: UI.relleno, outline: 'none',
           fontFamily: FONT, fontSize: 16, fontWeight: 600, color: T.text,
         }}
         {...props}
@@ -111,28 +108,28 @@ export default function AgregarAtleta({ onCerrar, onCreado, onSinLugares }) {
         onMouseDown={(e) => e.stopPropagation()}
         className="animate-fade-in"
         style={{
-          width: '100%', maxWidth: 420, background: T.bg, borderRadius: 22,
-          border: `1px solid ${T.border}`, boxShadow: KP.shPop, fontFamily: FONT,
+          width: '100%', maxWidth: 420, background: UI.fondo, borderRadius: 24,
+          boxShadow: KP.shPop, fontFamily: FONT,
           padding: '20px 20px 18px', maxHeight: '88svh', overflowY: 'auto',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
-              width: 36, height: 36, borderRadius: 11, flexShrink: 0, display: 'grid', placeItems: 'center',
-              background: T.accentBg, color: T.accent,
+              width: 40, height: 40, borderRadius: 13, flexShrink: 0, display: 'grid', placeItems: 'center',
+              background: KP.blueSoft, color: KP.blue,
             }}>
               <UserPlus size={19} />
             </div>
-            <div style={{ fontSize: 16.5, fontWeight: 800, color: T.text }}>
+            <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: -0.3, color: T.text }}>
               {t(listo ? 'Listo, ya es tu atleta' : 'Agregar atleta')}
             </div>
           </div>
           <button
             type="button" onClick={onCerrar} aria-label="Cerrar"
-            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.text2, padding: 4 }}
+            style={{ border: 'none', background: UI.relleno, cursor: 'pointer', color: KP.ink2, width: 34, height: 34, borderRadius: 11, display: 'grid', placeItems: 'center', flexShrink: 0 }}
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
@@ -158,11 +155,11 @@ export default function AgregarAtleta({ onCerrar, onCreado, onSinLugares }) {
               type="submit"
               disabled={creando || !nombre.trim()}
               style={{
-                marginTop: 2, width: '100%', padding: '14px 18px', borderRadius: 999, border: 'none',
-                background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, color: '#fff',
+                marginTop: 2, width: '100%', minHeight: UI.altoBoton, padding: '0 18px', borderRadius: UI.rBoton, border: 'none',
+                background: KP.blue, color: '#fff',
                 cursor: creando || !nombre.trim() ? 'default' : 'pointer',
                 opacity: creando || !nombre.trim() ? 0.55 : 1,
-                fontFamily: FONT, fontSize: 15, fontWeight: 800, boxShadow: KP.shBtn,
+                fontFamily: FONT, fontSize: 16, fontWeight: 700, boxShadow: '0 8px 20px rgba(30,64,224,0.22)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9,
                 touchAction: 'manipulation',
               }}
@@ -181,8 +178,8 @@ export default function AgregarAtleta({ onCerrar, onCreado, onSinLugares }) {
             {/* A la vista y seleccionable: si el portapapeles falla —Safari es
                 quisquilloso— todavía se puede copiar a mano. */}
             <div style={{
-              background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 12,
-              padding: '11px 13px', fontSize: 12.5, fontWeight: 600, color: T.text2,
+              background: UI.tarjeta, borderRadius: UI.rCampo,
+              padding: '13px 14px', fontSize: 13.5, fontWeight: 600, color: T.text2,
               wordBreak: 'break-all', lineHeight: 1.5, userSelect: 'all',
             }}>
               {liga}
@@ -193,10 +190,9 @@ export default function AgregarAtleta({ onCerrar, onCreado, onSinLugares }) {
                 type="button"
                 onClick={copiar}
                 style={{
-                  flex: 1, minHeight: 46, borderRadius: 999, cursor: 'pointer',
-                  border: `1.5px solid ${copiado ? T.accent : T.border}`,
-                  background: copiado ? T.accentBg : T.bg2, color: copiado ? T.accent : T.text,
-                  fontFamily: FONT, fontSize: 14.5, fontWeight: 800, touchAction: 'manipulation',
+                  flex: 1, minHeight: 50, borderRadius: UI.rBoton, cursor: 'pointer', border: 'none',
+                  background: copiado ? KP.blueSoft : UI.relleno, color: copiado ? KP.blue : T.text,
+                  fontFamily: FONT, fontSize: 15, fontWeight: 700, touchAction: 'manipulation',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                 }}
               >
@@ -208,9 +204,9 @@ export default function AgregarAtleta({ onCerrar, onCreado, onSinLugares }) {
                   type="button"
                   onClick={compartir}
                   style={{
-                    flex: 1, minHeight: 46, borderRadius: 999, border: 'none', cursor: 'pointer',
-                    background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, color: '#fff',
-                    fontFamily: FONT, fontSize: 14.5, fontWeight: 800, boxShadow: KP.shBtn,
+                    flex: 1, minHeight: 50, borderRadius: UI.rBoton, border: 'none', cursor: 'pointer',
+                    background: KP.blue, color: '#fff',
+                    fontFamily: FONT, fontSize: 15, fontWeight: 700, boxShadow: '0 8px 20px rgba(30,64,224,0.22)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                     touchAction: 'manipulation',
                   }}
@@ -228,9 +224,9 @@ export default function AgregarAtleta({ onCerrar, onCreado, onSinLugares }) {
               onClick={() => setVerQR(true)}
               className="kp-press"
               style={{
-                width: '100%', minHeight: 46, borderRadius: 999, cursor: 'pointer',
-                border: `1.5px solid ${T.accent}`, background: T.bg2, color: T.accent,
-                fontFamily: FONT, fontSize: 14.5, fontWeight: 800, touchAction: 'manipulation',
+                width: '100%', minHeight: 50, borderRadius: UI.rBoton, cursor: 'pointer',
+                border: 'none', background: UI.tarjeta, color: KP.blue, boxShadow: UI.sombraGrupo,
+                fontFamily: FONT, fontSize: 15, fontWeight: 700, touchAction: 'manipulation',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               }}
             >
@@ -245,9 +241,9 @@ export default function AgregarAtleta({ onCerrar, onCreado, onSinLugares }) {
               type="button"
               onClick={onCerrar}
               style={{
-                width: '100%', minHeight: 44, borderRadius: 999, cursor: 'pointer',
-                border: `1.5px solid ${T.border}`, background: 'transparent', color: T.text,
-                fontFamily: FONT, fontSize: 14.5, fontWeight: 700, touchAction: 'manipulation',
+                width: '100%', minHeight: 50, borderRadius: UI.rBoton, cursor: 'pointer',
+                border: 'none', background: UI.relleno, color: T.text,
+                fontFamily: FONT, fontSize: 15, fontWeight: 700, touchAction: 'manipulation',
               }}
             >
               Terminar

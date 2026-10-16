@@ -171,7 +171,7 @@ export default function AsignarDialog({ item, onCerrar }) {
                 : r.estado === 'saltado' ? 'Lo saltaste.'
                   : `No se pudo: ${r.mensaje || 'error'}`;
             return (
-              <div key={r.atleta.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 12, padding: '10px 12px' }}>
+              <div key={r.atleta.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, background: T.bg2, boxShadow: '0 1px 2px rgba(17,19,24,0.04)', borderRadius: 14, padding: '12px 14px' }}>
                 {bien ? <CircleCheck size={18} color={T.accent} style={{ flexShrink: 0, marginTop: 1 }} /> : <AlertTriangle size={18} color={T.warning} style={{ flexShrink: 0, marginTop: 1 }} />}
                 <span style={{ flex: 1, minWidth: 0, fontFamily: FONT }}>
                   <span style={{ display: 'block', fontSize: 14, fontWeight: 800, color: T.text, overflowWrap: 'anywhere' }}>{r.atleta.full_name || r.atleta.username}</span>
@@ -255,8 +255,8 @@ export default function AsignarDialog({ item, onCerrar }) {
                 <label
                   key={a.id}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 11, cursor: 'pointer', padding: '10px 12px', background: T.bg2,
-                    border: `1.5px solid ${elegidos.has(a.id) ? T.accent : T.border}`, borderRadius: 12,
+                    display: 'flex', alignItems: 'center', gap: 11, cursor: 'pointer', padding: '12px 14px', background: T.bg2,
+                    border: `1.5px solid ${elegidos.has(a.id) ? T.accent : 'transparent'}`, boxShadow: '0 1px 2px rgba(17,19,24,0.04)', borderRadius: 16,
                   }}
                 >
                   <input type="checkbox" checked={elegidos.has(a.id)} onChange={() => alternar(a.id)} style={{ width: 19, height: 19, accentColor: T.accent, flexShrink: 0 }} />
@@ -284,7 +284,7 @@ export default function AsignarDialog({ item, onCerrar }) {
         )}
 
         {esWorkout && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 14, padding: '12px 14px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, background: T.bg2, boxShadow: '0 1px 2px rgba(17,19,24,0.04)', borderRadius: 16, padding: '14px 16px' }}>
             <div style={{ fontSize: 13.5, fontWeight: 800, color: T.text }}>¿Cómo se pone?</div>
             {[
               ['semana', 'El mismo día de la semana, en la semana en que va cada uno hoy'],
@@ -304,7 +304,7 @@ export default function AsignarDialog({ item, onCerrar }) {
                       key={clave} type="button" onClick={() => setDia(clave)} aria-label={nombre} aria-pressed={dia === clave}
                       style={{
                         padding: '9px 0', borderRadius: 10, cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 800,
-                        border: `1.5px solid ${dia === clave ? T.accent : T.border}`, background: dia === clave ? T.accentBg : T.bg2,
+                        border: 'none', background: dia === clave ? T.accentBg : '#EBEDF1',
                         color: dia === clave ? T.accent : T.text2,
                       }}
                     >

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Store, Users, X } from 'lucide-react';
 import { usePalabras } from '@/contexts/PalabrasContext';
-import { T, FONT, KP } from '@/lib/theme';
+import { T, FONT, KP, UI } from '@/lib/theme';
 import { botonPrincipal, botonBlanco } from '@/features/misplanes/estilos';
 import { atletasGratisDeFabrica, paquetesDeLugares } from '@/lib/lugaresApi';
 import { paquetesQueAmplian, pesos, tituloSinLugares } from '@/lib/limiteDeAtletas';
@@ -14,7 +14,7 @@ import { paquetesQueAmplian, pesos, tituloSinLugares } from '@/lib/limiteDeAtlet
 const PAGO_ABIERTO = false;
 
 const opcion = {
-  background: T.bg2, border: `1.5px solid ${T.border}`, borderRadius: 14, padding: '14px 14px 15px',
+  background: UI.tarjeta, boxShadow: UI.sombraGrupo, borderRadius: UI.rGrupo, padding: '16px 16px 17px',
 };
 
 export default function SinLugares({ lugares, onCerrar, onIrA }) {
@@ -52,7 +52,7 @@ export default function SinLugares({ lugares, onCerrar, onIrA }) {
         onMouseDown={(e) => e.stopPropagation()}
         className="animate-fade-in"
         style={{
-          width: '100%', maxWidth: 440, background: T.bg, borderRadius: 22, border: `1px solid ${T.border}`,
+          width: '100%', maxWidth: 440, background: UI.fondo, borderRadius: 24,
           boxShadow: KP.shPop, fontFamily: FONT, padding: '20px 20px 18px', maxHeight: '88svh', overflowY: 'auto',
         }}
       >
@@ -95,8 +95,8 @@ export default function SinLugares({ lugares, onCerrar, onIrA }) {
                         key={p.id} type="button" role="radio" aria-checked={activo} onClick={() => setElegido(p.id)}
                         style={{
                           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, minHeight: 46, padding: '0 14px',
-                          borderRadius: 11, cursor: 'pointer', fontFamily: FONT, fontSize: 14.5, fontWeight: 800, textAlign: 'left',
-                          border: `1.5px solid ${activo ? T.accent : T.border}`, background: activo ? T.accentBg : T.bg, color: activo ? T.accent : T.text,
+                          borderRadius: UI.rCampo, cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 700, textAlign: 'left',
+                          border: 'none', background: activo ? KP.blueSoft : UI.relleno, color: activo ? KP.blue : T.text,
                         }}
                       >
                         <span>{t(p.nombre)}</span>
