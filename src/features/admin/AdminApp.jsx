@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Users, Library, Shield, PanelLeftClose, PanelLeft, Eye, X, Sparkles, FolderOpen, MessageCircle, Store, FlaskConical, Coins, Menu,
 } from 'lucide-react';
@@ -66,6 +66,12 @@ export default function AdminApp({ onAbrirPerfil }) {
      la misma ficha, con el mismo filtro y a la misma altura, en vez de empezar
      de cero desde la lista. */
   const [viendoAtleta, setViendoAtleta] = useState(null); // perfil del atleta | null
+  // Mi perfil se abre dentro del marco y deja ver esta barra: se le dice cuánto mide (ver ProfileScreen).
+  useEffect(() => {
+    const raiz = document.documentElement.style;
+    raiz.setProperty('--ancho-barra-lateral', isDesktop && menuOpen && !viendoAtleta ? `${SIDEBAR_W}px` : '0px');
+    return () => raiz.removeProperty('--ancho-barra-lateral');
+  }, [isDesktop, menuOpen, viendoAtleta]);
   const alturaDelPanel = useRef(0);
   const entrarComoAtleta = (atleta) => {
     alturaDelPanel.current = window.scrollY;

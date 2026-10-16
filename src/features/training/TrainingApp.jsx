@@ -2329,6 +2329,12 @@ const BottomNav = ({ active, onChange, conMensajes = true, conExplorar = true })
 /** La barra lateral azul del atleta en la computadora: los mismos botones que la barra de abajo del teléfono. */
 const BarraLateralDelAtleta = ({ active, onChange, conMensajes = true, conExplorar = true }) => {
   const { salud } = usePalabras();
+  // Mi perfil se abre dentro del marco y deja ver esta barra (ver ProfileScreen).
+  useEffect(() => {
+    const raiz = document.documentElement.style;
+    raiz.setProperty('--ancho-barra-lateral', '236px');
+    return () => raiz.removeProperty('--ancho-barra-lateral');
+  }, []);
   const { sinLeer } = useMensajes();
   const { profile } = useAuth();
   const secciones = [
