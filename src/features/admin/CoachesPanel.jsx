@@ -61,25 +61,25 @@ function CreateCoachModal({ onClose, onCreated }) {
 
   const field = (icon, label, node) => (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text2 }}>{label}</span>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9, background: T.bg2, border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '0 12px' }}>
+      <span style={{ fontSize: 13.5, fontWeight: 600, color: KP.ink2 }}>{label}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, background: UI.relleno, borderRadius: UI.rCampo, padding: '0 14px' }}>
         {icon}{node}
       </div>
     </label>
   );
-  const bare = { flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 14, fontWeight: 500, color: T.text, padding: '11px 0', minWidth: 0 };
+  const bare = { flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 16, fontWeight: 500, color: T.text, padding: '14px 0', minWidth: 0 };
 
   return (
     <div onMouseDown={onClose}
       style={{ position: 'fixed', inset: 0, zIndex: 2600, background: 'rgba(17,19,24,0.5)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 16 }}>
       <div onMouseDown={(e) => e.stopPropagation()} className="animate-fade-in"
-        style={{ width: '100%', maxWidth: 440, background: T.bg, borderRadius: 22, fontFamily: FONT, boxShadow: KP.shPop, overflow: 'hidden' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', background: T.bg2, borderBottom: `1px solid ${T.border}` }}>
-          <div style={{ fontSize: 17, fontWeight: 800, color: T.text, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <UserPlus size={18} color={T.accent} /> Nuevo coach
+        style={{ width: '100%', maxWidth: 440, background: UI.fondo, borderRadius: 24, fontFamily: FONT, boxShadow: KP.shPop, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 22px 4px' }}>
+          <div style={{ fontSize: 21, fontWeight: 800, letterSpacing: -0.3, color: T.text, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ width: 40, height: 40, borderRadius: 13, background: KP.blueSoft, color: KP.blue, display: 'grid', placeItems: 'center' }}><UserPlus size={19} /></span> Nuevo coach
           </div>
-          <button type="button" onClick={onClose} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.text2, padding: 4 }}>
-            <X size={20} />
+          <button type="button" onClick={onClose} aria-label="Cerrar" style={{ border: 'none', background: UI.relleno, cursor: 'pointer', color: KP.ink2, width: 34, height: 34, borderRadius: 11, display: 'grid', placeItems: 'center' }}>
+            <X size={18} />
           </button>
         </div>
         <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -99,10 +99,9 @@ function CreateCoachModal({ onClose, onCreated }) {
           </div>
           {err && <div style={{ background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 11, padding: '11px 14px', fontSize: 13.5, fontWeight: 600 }}>{err}</div>}
         </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '16px 22px', background: T.bg2, borderTop: `1px solid ${T.border}` }}>
-          <button type="button" onClick={onClose} style={{ padding: '12px 18px', borderRadius: 12, border: `1.5px solid ${T.border}`, background: T.bg2, cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text2 }}>Cancelar</button>
-          <button type="button" onClick={onSave} disabled={busy}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 22px', borderRadius: 12, border: 'none', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1, background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff', fontFamily: FONT, fontSize: 14.5, fontWeight: 700, boxShadow: KP.shBtn }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '4px 22px 22px' }}>
+          <button type="button" onClick={onClose} style={botonBlanco(false)}>Cancelar</button>
+          <button type="button" onClick={onSave} disabled={busy} style={{ ...botonPrincipal(busy), opacity: busy ? 0.7 : 1 }}>
             {busy ? <Loader2 size={16} className="spin" /> : <Check size={16} />} Crear coach
           </button>
         </div>
@@ -199,8 +198,8 @@ function BorrarCoach({ coach, otrosCoaches, master, onCancelar, onHecho }) {
     >
       <div className="animate-fade-in" style={{
         width: '100%', maxWidth: 440, maxHeight: '88svh', overflowY: 'auto',
-        background: T.bg2, borderRadius: 20, border: `1px solid ${T.border}`,
-        padding: 20, boxShadow: KP.shPop,
+        background: UI.fondo, borderRadius: 24,
+        padding: 22, boxShadow: KP.shPop,
       }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11, marginBottom: 14 }}>
           <span style={{
@@ -343,8 +342,8 @@ function BorrarCoach({ coach, otrosCoaches, master, onCancelar, onHecho }) {
                 onClick={onCancelar}
                 disabled={borrando}
                 style={{
-                  flex: 1, minHeight: 46, borderRadius: 12, border: `1.5px solid ${T.border}`,
-                  background: T.bg2, cursor: borrando ? 'default' : 'pointer',
+                  flex: 1, minHeight: 46, borderRadius: 12, border: "none", background: UI.relleno,
+                  cursor: borrando ? 'default' : 'pointer',
                   fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text2,
                 }}
               >
@@ -498,7 +497,7 @@ function FichaCoach({ coach, atletas, otrosCoaches, master, onCerrar, onVerComo,
           Desactivar va primero y en gris; eliminar va en rojo y al final. El
           orden no es decorativo: los admins se equivocan de clic, la gente
           vuelve, y desactivar deshace lo que eliminar no. */}
-      <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${T.border}` }}>
+      <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid #ECEEF2" }}>
         <div style={{
           fontSize: 11, fontWeight: 800, letterSpacing: 0.7, textTransform: 'uppercase',
           color: T.text3, marginBottom: 10,
@@ -513,7 +512,7 @@ function FichaCoach({ coach, atletas, otrosCoaches, master, onCerrar, onVerComo,
             disabled={guardando}
             style={{
               display: 'flex', alignItems: 'center', gap: 10, minHeight: 48, padding: '0 14px',
-              border: `1.5px solid ${T.border}`, borderRadius: 13, background: T.bg2,
+              border: "none", borderRadius: UI.rBoton, background: UI.tarjeta, boxShadow: UI.sombraGrupo,
               cursor: guardando ? 'default' : 'pointer', opacity: guardando ? 0.6 : 1,
               fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text2, textAlign: 'left',
             }}
@@ -526,7 +525,7 @@ function FichaCoach({ coach, atletas, otrosCoaches, master, onCerrar, onVerComo,
             cuenta={coach}
             estilo={{
               display: 'flex', alignItems: 'center', gap: 10, minHeight: 48, padding: '0 14px',
-              border: `1.5px solid ${T.border}`, borderRadius: 13, background: T.bg2, cursor: 'pointer',
+              border: "none", borderRadius: UI.rBoton, background: UI.tarjeta, boxShadow: UI.sombraGrupo, cursor: 'pointer',
               fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text2, textAlign: 'left',
             }}
           />
@@ -576,8 +575,8 @@ function FichaCoach({ coach, atletas, otrosCoaches, master, onCerrar, onVerComo,
       <div style={{
         width: '100%', maxWidth: esAncho ? 520 : 'none',
         maxHeight: esAncho ? '88vh' : '92svh', overflowY: 'auto',
-        background: T.bg2, border: `1px solid ${T.border}`,
-        borderRadius: esAncho ? KP.rCard : '22px 22px 0 0',
+        background: UI.fondo,
+        borderRadius: esAncho ? 24 : '24px 24px 0 0',
         padding: esAncho ? 24 : '22px 20px calc(24px + env(safe-area-inset-bottom))',
         boxShadow: KP.shPop,
       }}>

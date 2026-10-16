@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, KP, UI } from '@/lib/theme';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { listNotasConsulta, crearNotaConsulta, editarNotaConsulta, borrarNotaConsulta } from '@/lib/api';
 
@@ -87,8 +87,8 @@ export default function NotasDeConsulta({ atleta, Seccion, abierta, onToggle, pu
           onClick={() => setRedactando({ fecha: hoyLocal(), texto: '' })}
           className="kp-press"
           style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 15px', borderRadius: 12,
-            border: `1.5px solid ${T.accent}`, background: T.bg2, color: T.accent, cursor: 'pointer',
+            display: 'inline-flex', alignItems: 'center', gap: 8, padding: '0 16px', minHeight: 44, borderRadius: UI.rCampo,
+            border: 'none', background: KP.blueSoft, color: KP.blue, cursor: 'pointer',
             fontFamily: FONT, fontSize: 13.5, fontWeight: 800, marginBottom: 12,
           }}
         >
@@ -97,13 +97,13 @@ export default function NotasDeConsulta({ atleta, Seccion, abierta, onToggle, pu
       )}
 
       {redactando && (
-        <div style={{ background: T.bg, borderRadius: 12, padding: 12, marginBottom: 12 }}>
+        <div style={{ background: UI.tarjeta, boxShadow: UI.sombraGrupo, borderRadius: UI.rGrupo, padding: 14, marginBottom: 12 }}>
           <input
             type="date"
             aria-label="Fecha de la consulta"
             value={redactando.fecha}
             onChange={(e) => setRedactando({ ...redactando, fecha: e.target.value })}
-            style={{ border: `1.5px solid ${T.border}`, borderRadius: 10, padding: '8px 10px', fontFamily: FONT, fontSize: 16, marginBottom: 8, background: T.bg2 }}
+            style={{ border: 'none', borderRadius: UI.rCampo, padding: '10px 12px', fontFamily: FONT, fontSize: 16, marginBottom: 8, background: UI.relleno }}
           />
           <textarea
             aria-label="Nota de consulta"
@@ -113,7 +113,7 @@ export default function NotasDeConsulta({ atleta, Seccion, abierta, onToggle, pu
             rows={4}
             maxLength={5000}
             autoFocus
-            style={{ width: '100%', boxSizing: 'border-box', border: `1.5px solid ${T.border}`, borderRadius: 10, padding: 10, fontFamily: FONT, fontSize: 16, background: T.bg2, resize: 'vertical' }}
+            style={{ width: '100%', boxSizing: 'border-box', border: 'none', borderRadius: UI.rCampo, padding: 12, fontFamily: FONT, fontSize: 16, background: UI.relleno, resize: 'vertical' }}
           />
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
             <button
@@ -121,8 +121,8 @@ export default function NotasDeConsulta({ atleta, Seccion, abierta, onToggle, pu
               onClick={guardar}
               disabled={guardando || !redactando.texto.trim()}
               style={{
-                flex: 1, minHeight: 42, borderRadius: 11, border: 'none', cursor: 'pointer', color: '#fff',
-                background: T.accent, fontFamily: FONT, fontSize: 14, fontWeight: 800,
+                flex: 1, minHeight: 46, borderRadius: UI.rCampo, border: 'none', cursor: 'pointer', color: '#fff',
+                background: KP.blue, fontFamily: FONT, fontSize: 14, fontWeight: 800,
                 opacity: guardando || !redactando.texto.trim() ? 0.55 : 1,
               }}
             >
@@ -131,7 +131,7 @@ export default function NotasDeConsulta({ atleta, Seccion, abierta, onToggle, pu
             <button
               type="button"
               onClick={() => { setRedactando(null); setError(''); }}
-              style={{ minHeight: 42, padding: '0 14px', borderRadius: 11, border: `1.5px solid ${T.border}`, background: T.bg2, color: T.text2, cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 700 }}
+              style={{ minHeight: 46, padding: '0 16px', borderRadius: UI.rCampo, border: 'none', background: UI.relleno, color: T.text, cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 700 }}
             >
               Cancelar
             </button>
@@ -147,7 +147,7 @@ export default function NotasDeConsulta({ atleta, Seccion, abierta, onToggle, pu
         </div>
       ) : (
         notas.map((n) => (
-          <div key={n.id} style={{ borderTop: `1px solid ${T.border}`, padding: '10px 0', display: 'flex', gap: 10 }}>
+          <div key={n.id} style={{ borderTop: '1px solid #ECEEF2', padding: '12px 0', display: 'flex', gap: 10 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text2 }}>
                 {cortaLa(n.fecha)}{n.editada_en ? ' · editada' : ''}

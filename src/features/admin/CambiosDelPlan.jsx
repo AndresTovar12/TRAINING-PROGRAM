@@ -142,7 +142,7 @@ export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abiert
   const filas = verTodos ? versiones : sinAceptar;
 
   const boton = {
-    display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 36, padding: '0 13px', borderRadius: 10,
+    display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 38, padding: '0 14px', borderRadius: 12,
     border: 'none', cursor: trabajando ? 'default' : 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 800,
     opacity: trabajando ? 0.6 : 1, flexShrink: 0,
   };
@@ -172,7 +172,7 @@ export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abiert
       <Seccion titulo={t('Cambios del plan')} abierta={abierta} onToggle={onToggle}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {avisosListos && filas.length === 0 && (
-            <div style={{ fontSize: 13, fontWeight: 600, color: T.text2, padding: '9px 0', borderBottom: `1px solid ${T.border}` }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: T.text2, padding: '12px 0', borderBottom: '1px solid #ECEEF2' }}>
               Nada por revisar.
             </div>
           )}
@@ -182,8 +182,8 @@ export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abiert
               <div
                 key={v.id}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '9px 0',
-                  borderBottom: `1px solid ${T.border}`, opacity: aceptada ? 0.6 : 1,
+                  display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '12px 0',
+                  borderBottom: '1px solid #ECEEF2', opacity: aceptada ? 0.6 : 1,
                 }}
               >
                 <div style={{ flex: '1 1 150px', minWidth: 0 }}>
@@ -194,7 +194,7 @@ export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abiert
                     {[autorDe(v), hace(v.creada_en, ahora)].filter(Boolean).join(' · ')}
                   </div>
                 </div>
-                <button type="button" disabled={trabajando} onClick={() => regresar(v)} style={{ ...boton, background: T.bg2, color: T.text2, border: `1px solid ${T.border}` }}>
+                <button type="button" disabled={trabajando} onClick={() => regresar(v)} style={{ ...boton, background: '#EBEDF1', color: '#111318' }}>
                   <RotateCcw size={14} /> Regresar
                 </button>
                 {!aceptada && <BotonEntendido color={T.accent} onClick={() => aceptarAviso(claveDe(v))} />}
