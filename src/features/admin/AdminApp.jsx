@@ -36,6 +36,9 @@ export default function AdminApp({ onAbrirPerfil }) {
   const [menuOpen, setMenuOpen] = useState(true);
   // Lo que cada sección manda a su cabecera: el detalle bajo el título y su botón (ver `useCabeceraDeSeccion`).
   const [cabecera, ponCabecera] = useState(null);
+  // «Mensaje» desde la ficha de un atleta: va a Mensajes con su conversación abierta.
+  const [chatDe, setChatDe] = useState(null);
+  const irA = (id, extra) => { if (id === 'messages' && extra?.atletaId) setChatDe(extra.atletaId); setTab(id); };
   const banda = useMemo(() => ({ ponCabecera }), []);
 
   /* "Ver como" un coach: el master mira SUS atletas y SU repertorio, sin salir
@@ -149,8 +152,8 @@ export default function AdminApp({ onAbrirPerfil }) {
         </div>
       )}
 
-      {tab === 'messages' && !viendoComo && <MensajesDelCoach />}
-      {tab === 'athletes' && <AthletesPanel viendoComo={viendoComo} onVerComoAtleta={entrarComoAtleta} onIrA={setTab} onAbrirPerfil={onAbrirPerfil} />}
+      {tab === 'messages' && !viendoComo && <MensajesDelCoach abrirAtleta={chatDe} alAbrirlo={() => setChatDe(null)} />}
+      {tab === 'athletes' && <AthletesPanel viendoComo={viendoComo} onVerComoAtleta={entrarComoAtleta} onIrA={irA} onAbrirPerfil={onAbrirPerfil} />}
       {tab === 'exercises' && <ExercisesPanel viendoComo={viendoComo} />}
       {tab === 'misplanes' && !viendoComo && <MisPlanesPanel />}
       {tab === 'vitrina' && !viendoComo && <MiVitrina />}
