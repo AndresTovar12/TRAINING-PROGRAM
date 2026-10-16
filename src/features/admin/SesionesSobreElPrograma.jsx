@@ -127,7 +127,7 @@ function BloqueRepetir({
     );
   };
   return (
-    <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 18, padding: 16, marginTop: 12, boxShadow: KP.shCard }}>
+    <div style={{ background: T.bg2, border: 'none', boxShadow: '0 1px 2px rgba(17,19,24,0.04)', borderRadius: 18, padding: 16, marginTop: 12 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 16, fontWeight: 800, color: T.text }}>
         <Repeat size={17} color={T.accent} /> Repetir
       </div>
@@ -176,7 +176,7 @@ function BloqueRepetir({
                   value={fecha}
                   onChange={(e) => onFecha(e.target.value)}
                   style={{
-                    padding: '9px 11px', borderRadius: 10, border: `1.5px solid ${T.border}`, background: T.bg,
+                    padding: '9px 11px', borderRadius: 10, border: 'none', background: '#EBEDF1',
                     fontFamily: FONT, fontSize: 16, color: T.text,
                   }}
                 />
@@ -195,7 +195,7 @@ function BloqueRepetir({
       )}
 
       <div style={{
-        marginTop: 16, padding: '11px 13px', borderRadius: 12, background: T.bg, border: `1px solid ${T.border}`,
+        marginTop: 16, padding: '11px 13px', borderRadius: 12, background: '#EBEDF1', border: 'none',
         fontSize: 14, fontWeight: 800, color: T.text,
       }}>
         {resumen}
@@ -287,7 +287,7 @@ function TarjetaDeMiSesion({
       />
 
       {(regla.omitir ?? []).length > 0 && (
-        <div style={{ marginTop: 12, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 14, padding: '12px 14px' }}>
+        <div style={{ marginTop: 12, background: T.bg2, border: 'none', boxShadow: '0 1px 2px rgba(17,19,24,0.04)', borderRadius: 14, padding: '12px 14px' }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: T.text, marginBottom: 8 }}>Semanas que saltaste</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {regla.omitir.map((o) => (
@@ -552,7 +552,7 @@ export default function SesionesSobreElPrograma({
       <div style={{ marginBottom: 14 }}>
         <Field label={semanal ? 'Rutina del coach' : 'Programa del coach'}>
           <div style={{
-            display: 'flex', alignItems: 'center', gap: 9, border: `1.5px solid ${T.border}`, borderRadius: 11,
+            display: 'flex', alignItems: 'center', gap: 9, border: 'none', borderRadius: 11,
             padding: '10px 12px', background: T.bg3, fontFamily: FONT, fontSize: 14, fontWeight: 600, color: T.text2,
           }}>
             <Lock size={14} style={{ flexShrink: 0 }} />
@@ -668,13 +668,13 @@ export default function SesionesSobreElPrograma({
       </div>
 
       {!w ? (
-        <div style={{ background: T.bg2, border: `1.5px solid ${T.border}`, borderRadius: 20, padding: '40px 24px', textAlign: 'center' }}>
+        <div style={{ background: T.bg2, border: 'none', boxShadow: '0 1px 2px rgba(17,19,24,0.04)', borderRadius: 20, padding: '40px 24px', textAlign: 'center' }}>
           <div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>Esta fase todavía no tiene semanas</div>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {!hayAlgo && (
-            <div style={{ background: T.bg2, border: `1.5px solid ${T.border}`, borderRadius: 20, padding: '52px 24px', textAlign: 'center' }}>
+            <div style={{ background: T.bg2, border: 'none', boxShadow: '0 1px 2px rgba(17,19,24,0.04)', borderRadius: 20, padding: '52px 24px', textAlign: 'center' }}>
               <div style={{ width: 70, height: 70, borderRadius: 22, background: T.accentBg, color: T.accent, display: 'grid', placeItems: 'center', margin: '0 auto 16px' }}>
                 <CalendarDays size={30} />
               </div>
@@ -782,7 +782,7 @@ export default function SesionesSobreElPrograma({
           type="button"
           onClick={volver}
           aria-label="Volver"
-          style={{ width: 36, height: 36, borderRadius: 11, border: `1px solid ${T.border}`, cursor: 'pointer', background: T.bg2, color: T.text, display: 'grid', placeItems: 'center', flexShrink: 0 }}
+          style={{ width: 36, height: 36, borderRadius: 11, border: 'none', cursor: 'pointer', background: '#EBEDF1', color: T.text, display: 'grid', placeItems: 'center', flexShrink: 0 }}
         >
           <ArrowLeft size={17} />
         </button>
@@ -814,7 +814,7 @@ export default function SesionesSobreElPrograma({
           type="button"
           onClick={cierra}
           aria-label="Cerrar"
-          style={{ width: 36, height: 36, borderRadius: 11, border: `1px solid ${T.border}`, cursor: 'pointer', background: T.bg2, color: T.text2, display: 'grid', placeItems: 'center', flexShrink: 0 }}
+          style={{ width: 36, height: 36, borderRadius: 11, border: 'none', cursor: 'pointer', background: '#EBEDF1', color: T.text2, display: 'grid', placeItems: 'center', flexShrink: 0 }}
         >
           <X size={17} />
         </button>
