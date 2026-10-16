@@ -7,6 +7,7 @@ import { botonBlanco, botonPrincipal } from '@/features/misplanes/estilos';
 import FichaDelPlanEnVenta from '@/features/vitrina/FichaDelPlanEnVenta';
 import { ETIQUETA_DE_CONTENIDO, leeVentasAbiertas, ligaPublica, listaMiVitrina, retiraPlan } from '@/lib/vitrinaApi';
 import { chipsDeParaQuien } from '@/lib/paraQuien';
+import { useEnBanda } from '@/components/ui';
 
 /* MI VITRINA: los planes que un coach pone a la venta (nombre que decidió Andrés, 10 oct 2026; antes se llamaba «menú»).
 
@@ -66,6 +67,7 @@ function Tarjeta({ plan, usuario, alEditar, alRetirar }) {
 }
 
 export default function MiVitrina() {
+  const enBanda = useEnBanda();
   const { profile } = useAuth();
   const pregunta = useConfirmacion();
   const usuario = profile?.username ?? '';
@@ -91,7 +93,7 @@ export default function MiVitrina() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 820, margin: '0 auto', fontFamily: FONT }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ flex: 1, minWidth: 0, fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: -0.4 }}>Mi vitrina</div>
+        <div style={{ flex: 1, minWidth: 0, fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: -0.4 }}>{enBanda ? '' : 'Mi vitrina'}</div>
         <button type="button" onClick={() => setEditando(null)} style={botonPrincipal(false)}><Plus size={17} /> Poner algo en venta</button>
       </div>
       {error && <div role="alert" style={{ padding: '10px 14px', borderRadius: 12, background: KP.dangerSoft, color: KP.danger, fontSize: 14, fontWeight: 700 }}>{error}</div>}

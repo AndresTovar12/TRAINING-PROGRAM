@@ -76,14 +76,14 @@ function AccountMenu({ perfil, onPerfil }) {
 
   const name = profile?.full_name || profile?.username || user?.email || 'Cuenta';
   const iniciales = name.trim().split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join('').toUpperCase() || 'U';
-  const grande = !isAdmin;
+  const grande = true; // desde el paso 6 (coach en el teléfono) también el coach: cae sobre su banda azul
   const avatar = profile?.avatar_url;
 
   return (
     <>
     <div ref={ref} style={{ position: 'fixed', top: 'calc(16px + var(--aviso-vista, 0px))', right: 16, zIndex: 1000, fontFamily: FONT }}>
-      {/* REESTRUCTURA VISUAL (15 oct 2026): las iniciales en un cuadro azul claro, como en las capturas de Andrés. Para el atleta mide
-          52 px y queda a la altura del saludo de Home; el panel del coach conserva el de 42 px hasta que le toque su cambio. */}
+      {/* REESTRUCTURA VISUAL (15 oct 2026): las iniciales en un cuadro azul claro de 52 px, como en las capturas de Andrés. Al atleta le
+          queda a la altura del saludo de Home; al coach en el teléfono, sobre su banda azul. */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

@@ -1,3 +1,4 @@
+import { createContext, useContext } from 'react';
 import { FONT, KP, UI } from '@/lib/theme';
 
 /* Las piezas para moverse por la app (reestructura visual, 15 oct 2026).
@@ -163,3 +164,10 @@ export function CabeceraConBanda({ saludo, fecha, avatar, titulo, detalle, accio
     </header>
   );
 }
+
+/**
+ * Si la pantalla va debajo de una `CabeceraConBanda` (coach en el teléfono), el título ya está en la tarjeta blanca de la banda:
+ * cada panel lo lee con `useEnBanda()` y no repite el suyo (sí deja sus botones: «Poner algo en venta», «+ Crear»…).
+ */
+export const EnBanda = createContext(false);
+export const useEnBanda = () => useContext(EnBanda);

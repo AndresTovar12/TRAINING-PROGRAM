@@ -7,6 +7,7 @@ import Bandeja from '@/features/mensajes/Bandeja';
 import { llaveDe } from '@/features/mensajes/formato';
 import Conversacion from '@/features/mensajes/Conversacion';
 import PantallaDeChat from '@/features/mensajes/PantallaDeChat';
+import { useEnBanda } from '@/components/ui';
 
 /* «MENSAJES» del profesional (una pestaña del panel): sus atletas, la más reciente arriba, con «Sin leer» y «Por revisar».
 
@@ -14,6 +15,7 @@ import PantallaDeChat from '@/features/mensajes/PantallaDeChat';
    completa. Cada profesional ve solo SUS conversaciones: la del atleta con su coach y la del mismo atleta con su fisio son dos distintas. */
 
 export default function MensajesDelCoach() {
+  const enBanda = useEnBanda();
   const { uid, filas, cargando, error } = useMensajes();
   const esCompu = useIsDesktop();
   const [abierta, setAbierta] = useState(null);
@@ -30,7 +32,8 @@ export default function MensajesDelCoach() {
       vacio="Cuando tengas atletas, aquí hablarás con ellos."
     />
   );
-  const titulo = <h1 style={{ margin: '0 0 16px', fontSize: 26, fontWeight: 800, letterSpacing: -0.5, color: T.text }}>Mensajes</h1>;
+  // Bajo la banda azul del teléfono el título ya está en su tarjeta blanca.
+  const titulo = enBanda ? null : <h1 style={{ margin: '0 0 16px', fontSize: 26, fontWeight: 800, letterSpacing: -0.5, color: T.text }}>Mensajes</h1>;
   const fallo = error && suyas.length === 0 && (
     <div role="alert" style={{ padding: '10px 12px', borderRadius: 12, background: KP.dangerSoft, color: KP.danger, fontSize: 13.5, fontWeight: 700, marginBottom: 12 }}>{error}</div>
   );

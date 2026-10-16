@@ -30,6 +30,7 @@ import FiltroDeTipo from '@/features/misplanes/FiltroDeTipo';
 import { useMoverCosas } from '@/features/misplanes/useMoverCosas';
 import { botonBlanco, botonPrincipal, campo } from '@/features/misplanes/estilos';
 import { T, FONT } from '@/lib/theme';
+import { useEnBanda } from '@/components/ui';
 
 const textoVacio = (texto) => (
   <div style={{ textAlign: 'center', padding: '30px 16px', color: T.text3, fontWeight: 600, fontSize: 13.5, lineHeight: 1.5 }}>{texto}</div>
@@ -45,6 +46,7 @@ const textoVacio = (texto) => (
  * o TRAE lo que ya existe. Una carpeta puede tener carpetas adentro: se nota en «Nueva subcarpeta» y en el árbol.
  */
 export default function MisPlanesPanel() {
+  const enBanda = useEnBanda();
   const pregunta = useConfirmacion();
   const { t } = usePalabras();
   const { trabajando } = useAviso();
@@ -323,7 +325,7 @@ export default function MisPlanesPanel() {
             </button>
           )}
           <div style={{ flex: 1, minWidth: 0, fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: -0.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {enCarpeta ? carpetaActual.nombre : 'Mis planes'}
+            {enCarpeta ? carpetaActual.nombre : (enBanda ? '' : 'Mis planes')}
           </div>
           <button
             type="button" onClick={() => setDialogo({ tipo: 'carpeta-nueva' })} disabled={!carpetaOk}

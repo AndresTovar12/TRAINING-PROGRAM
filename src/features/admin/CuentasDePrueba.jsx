@@ -6,6 +6,7 @@ import { useConfirmacion } from '@/components/Confirmacion';
 import { listCoaches } from '@/lib/api';
 import { TIPOS_DE_PRUEBA } from '@/lib/cuentasDePrueba';
 import { borraCuentaDePrueba, creaCuentaDePrueba, listaCuentasDePrueba, restableceContrasena } from '@/lib/cuentasDePruebaApi';
+import { useEnBanda } from '@/components/ui';
 
 /* CUENTAS DE PRUEBA (14 oct 2026), solo para el dueño.
 
@@ -84,6 +85,7 @@ function Fila({ cuenta, nueva, ocupado, onVerComo, onNuevaClave, onBorrar }) {
 }
 
 export default function CuentasDePrueba({ onVerComoCoach, onVerComoAtleta }) {
+  const enBanda = useEnBanda();
   const pregunta = useConfirmacion();
   const [cuentas, setCuentas] = useState(null);
   const [coaches, setCoaches] = useState([]);
@@ -155,7 +157,7 @@ export default function CuentasDePrueba({ onVerComoCoach, onVerComoAtleta }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{ width: 44, height: 44, borderRadius: 14, background: T.accentBg, color: T.accent, display: 'grid', placeItems: 'center' }}><FlaskConical size={22} /></div>
         <div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: -0.3 }}>Cuentas de prueba</div>
+          {!enBanda && <div style={{ fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: -0.3 }}>Cuentas de prueba</div>}
           <div style={{ fontSize: 13.5, fontWeight: 600, color: T.text2, marginTop: 2 }}>Solo estas muestran su contraseña. Las de personas reales nunca se pueden ver.</div>
         </div>
       </div>
