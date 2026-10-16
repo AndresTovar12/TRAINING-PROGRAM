@@ -1,4 +1,4 @@
-import { CalendarDays, Check, ChevronRight, Moon, Play } from 'lucide-react';
+import { Check, ChevronRight, Moon, Pause, Play, Plus } from 'lucide-react';
 import { FONT, NUM_STYLE, UI } from '@/lib/theme';
 import { aspectoDelTipo } from '@/lib/aspectoDelTipo';
 import { etiquetaDePrograma } from '@/lib/programas';
@@ -9,10 +9,10 @@ import { etiquetaDePrograma } from '@/lib/programas';
  *
  *   · Arriba: «● Hoy te toca» (o «Hoy te tocan dos», «Completada») y la fecha.
  *   · Cada sesión en su renglón: el ícono de su tipo en un cuadro, el nombre grande y debajo «● Tipo · 4 ejercicios · 60 min».
- *   · Abajo dos botones: «Cambiar día» (transparente) y «Empezar» (blanco, el que importa).
+ *   · Abajo «Empezar» (blanco). Ya no hay «Cambiar día» (16 oct 2026): el plan se mueve desde «Vas en», y una sesión de otro día se suma con «Agregar a hoy».
  *
- * Tres variantes en este archivo: la de un solo programa (`HoyTeToca`), la de un equipo de profesionales
- * (`HoyTeTocaEquipo`: cada sesión abre la suya y dice de quién es) y el día sin sesión (`HoyDescansas`).
+ * Variantes en este archivo: la de un solo programa (`HoyTeToca`), la de un equipo de profesionales
+ * (`HoyTeTocaEquipo`: cada sesión abre la suya y dice de quién es), el día sin sesión (`HoyDescansas`) y el plan en pausa (`HoyEnPausa`).
  */
 
 const NUMEROS = ['', 'una', 'dos', 'tres', 'cuatro'];
@@ -78,6 +78,11 @@ export const botonTransparente = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 54, padding: '0 18px', borderRadius: 18,
   border: 'none', background: 'rgba(255,255,255,0.16)', color: '#fff', fontFamily: FONT, fontSize: 15.5, fontWeight: 700, cursor: 'pointer',
 };
+// El botón redondo de «empezar» de una sesión que tiene el suyo.
+const botonRedondo = {
+  width: 46, height: 46, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center', border: 'none', cursor: 'pointer',
+  background: '#fff', color: '#1E40E0',
+};
 export const botonBlanco = {
   flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 54, borderRadius: 18, border: 'none',
   background: '#fff', color: '#1E40E0', fontFamily: FONT, fontSize: 17, fontWeight: 800, cursor: 'pointer', boxShadow: '0 10px 22px rgba(4,12,70,0.28)',
@@ -85,33 +90,46 @@ export const botonBlanco = {
 
 /**
  * Un programa. `sesiones`: [{ day, nombre, meta: ['Neural', '4 ejercicios', '60 min'] }] (una o las dos de un día con
- * mañana y tarde). `completada`: el día ya está hecho («Empezar» pasa a «Ver detalle»). Sin `onCambiarDia` no sale
- * ese botón (en una rutina que se repite el día lo decide el calendario).
+ * mañana y tarde). `completada`: el día ya está hecho («Empezar» pasa a «Ver detalle»).
+ *
+ * Una sesión puede traer su propio `onAbrir` (las que se SUMARON a hoy desde otro día: cada una abre la suya, con su botón redondo de
+ * empezar y la marca «Agregada hoy») y `onAgregar` (al mirar otro día: «Agregar a hoy», que la suma a la lista de hoy sin mover el plan).
  */
-export function HoyTeToca({ sesiones, completada = false, onAbrir, onCambiarDia, cuando, estilo }) {
+export function HoyTeToca({ sesiones, completada = false, onAbrir, cuando, estilo }) {
+  const conBotonPropio = sesiones.some((s) => s.onAbrir);
   return (
     <Marco etiqueta={etiquetaDeHoy(sesiones.length, completada, cuando)} punto={completada ? '#7CF0C5' : '#FFB547'} fecha={cuando?.fecha} estilo={estilo}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 18 }}>
         {sesiones.map((s, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
-            <IconoDeSesion day={s.day} hecha={completada} />
-            <div style={{ minWidth: 0 }}>
-              <h3 style={{ margin: 0, fontSize: sesiones.length > 1 ? 24 : 28, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.12, overflowWrap: 'anywhere' }}>{s.nombre}</h3>
-              <Meta color={aspectoDelTipo(s.day).color} partes={s.meta ?? []} />
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
+              <IconoDeSesion day={s.day} hecha={completada || !!s.hecha} />
+              <div style={{ minWidth: 0, flex: 1 }}>
+                {s.agregada && <span style={{ display: 'inline-block', fontSize: 12.5, fontWeight: 700, padding: '2px 9px', borderRadius: 8, background: 'rgba(255,255,255,0.18)', marginBottom: 4 }}>Agregada hoy</span>}
+                <h3 style={{ margin: 0, fontSize: sesiones.length > 1 ? 24 : 28, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.12, overflowWrap: 'anywhere' }}>{s.nombre}</h3>
+                <Meta color={aspectoDelTipo(s.day).color} partes={s.meta ?? []} />
+              </div>
+              {s.onAbrir && (
+                <button type="button" className="kp-press" onClick={s.onAbrir} aria-label={`Empezar ${s.nombre}`} style={botonRedondo}>
+                  <Play size={17} fill="currentColor" style={{ marginLeft: 2 }} />
+                </button>
+              )}
             </div>
+            {s.onAgregar && (
+              <button type="button" className="kp-press" onClick={s.onAgregar} style={{ ...botonTransparente, minHeight: 44, alignSelf: 'flex-start', fontSize: 14.5 }}>
+                <Plus size={17} aria-hidden="true" />Agregar a hoy
+              </button>
+            )}
           </div>
         ))}
       </div>
-      <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-        {onCambiarDia && (
-          <button type="button" className="kp-press" onClick={onCambiarDia} style={botonTransparente}>
-            <CalendarDays size={18} aria-hidden="true" />Cambiar día
+      {!conBotonPropio && onAbrir && (
+        <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+          <button type="button" className="kp-press" onClick={onAbrir} style={botonBlanco}>
+            {completada ? <>Ver detalle <ChevronRight size={19} aria-hidden="true" /></> : <><Play size={18} fill="currentColor" aria-hidden="true" />Empezar</>}
           </button>
-        )}
-        <button type="button" className="kp-press" onClick={onAbrir} style={botonBlanco}>
-          {completada ? <>Ver detalle <ChevronRight size={19} aria-hidden="true" /></> : <><Play size={18} fill="currentColor" aria-hidden="true" />Empezar</>}
-        </button>
-      </div>
+        </div>
+      )}
     </Marco>
   );
 }
@@ -121,7 +139,7 @@ export function HoyTeToca({ sesiones, completada = false, onAbrir, onCambiarDia,
  * quien la puso (Andrés, 1 oct 2026: «el programa es un todo; la autoría es etiqueta»).
  * `entradas`: las de `entradasDeHoy` ({ programa, day, dayIdx, partes: [{ nombre, ejercicios, minutos, hecha }] }).
  */
-export function HoyTeTocaEquipo({ entradas, onAbrir, onCambiarDia, conAutor = true, cuando, estilo }) {
+export function HoyTeTocaEquipo({ entradas, onAbrir, onAgregar, conAutor = true, cuando, estilo }) {
   const filas = entradas.flatMap((e) => e.partes.map((p) => ({ e, p })));
   const todas = filas.length > 0 && filas.every(({ p }) => p.hecha);
   return (
@@ -130,8 +148,9 @@ export function HoyTeTocaEquipo({ entradas, onAbrir, onCambiarDia, conAutor = tr
         {filas.map(({ e, p }) => {
           const meta = [p.ejercicios ? `${p.ejercicios} ${p.ejercicios === 1 ? 'ejercicio' : 'ejercicios'}` : null, p.minutos || null].filter(Boolean);
           return (
+            <div key={`${e.programa.id}-${e.dayIdx}-${p.bloque ?? 'dia'}`} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <button
-              key={`${e.programa.id}-${e.dayIdx}-${p.bloque ?? 'dia'}`} type="button" onClick={() => onAbrir(e)} className="kp-press"
+              type="button" onClick={() => onAbrir(e)} className="kp-press"
               style={{
                 display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', padding: 12, borderRadius: 20, cursor: 'pointer',
                 background: 'rgba(255,255,255,0.14)', border: 'none', color: '#fff', fontFamily: FONT,
@@ -139,6 +158,7 @@ export function HoyTeTocaEquipo({ entradas, onAbrir, onCambiarDia, conAutor = tr
             >
               <IconoDeSesion day={e.day} hecha={p.hecha} chico />
               <span style={{ flex: 1, minWidth: 0 }}>
+                {e.agregada && <span style={{ display: 'inline-block', fontSize: 12.5, fontWeight: 700, padding: '2px 9px', borderRadius: 8, background: 'rgba(255,255,255,0.18)', marginBottom: 4 }}>Agregada hoy</span>}
                 {conAutor && (
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 700, opacity: 0.9 }}>
                     <i aria-hidden="true" style={{ width: 8, height: 8, borderRadius: '50%', background: e.programa.color ?? '#fff' }} />{etiquetaDePrograma(e.programa)}
@@ -155,14 +175,15 @@ export function HoyTeTocaEquipo({ entradas, onAbrir, onCambiarDia, conAutor = tr
                 {p.hecha ? <Check size={20} strokeWidth={3} /> : <Play size={17} fill="currentColor" style={{ marginLeft: 2 }} />}
               </span>
             </button>
+            {onAgregar && !e.programa.sigueA && !e.agregada && (
+              <button type="button" className="kp-press" onClick={() => onAgregar(e)} style={{ ...botonTransparente, minHeight: 44, alignSelf: 'flex-start', fontSize: 14.5 }}>
+                <Plus size={17} aria-hidden="true" />Agregar a hoy
+              </button>
+            )}
+            </div>
           );
         })}
       </div>
-      {onCambiarDia && (
-        <button type="button" className="kp-press" onClick={onCambiarDia} style={{ ...botonTransparente, width: '100%', marginTop: 14 }}>
-          <CalendarDays size={18} aria-hidden="true" />Cambiar día
-        </button>
-      )}
     </Marco>
   );
 }
@@ -186,6 +207,31 @@ export function HoyDescansas({ titulo, siguiente, vacia, boton, onVerPlan, cuand
       <button type="button" className="kp-press" onClick={onVerPlan} style={{ ...botonBlanco, width: '100%', marginTop: 20 }}>
         {boton} <ChevronRight size={19} aria-hidden="true" />
       </button>
+    </Marco>
+  );
+}
+
+/**
+ * El plan está en pausa (lo pausó el atleta o su coach): hoy no toca nada de él. Dice dónde se quedó y deja reanudar.
+ * `onReanudar` va solo si quien mira puede (un coach que mira la app de su atleta no lo reanuda por él).
+ */
+export function HoyEnPausa({ texto, onReanudar, cuando, estilo }) {
+  return (
+    <Marco etiqueta="Plan en pausa" punto="#FFD27A" fecha={cuando?.fecha} estilo={estilo}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 18 }}>
+        <span aria-hidden="true" style={{ width: 58, height: 58, borderRadius: 18, display: 'grid', placeItems: 'center', background: 'rgba(255,255,255,0.14)', border: 'none', flexShrink: 0 }}>
+          <Pause size={26} />
+        </span>
+        <div style={{ minWidth: 0 }}>
+          <h3 style={{ margin: 0, fontSize: 24, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.15 }}>Tu plan está en pausa</h3>
+          <span style={{ display: 'block', fontSize: 14, fontWeight: 600, opacity: 0.85, marginTop: 3 }}>Te espera {texto}</span>
+        </div>
+      </div>
+      {onReanudar && (
+        <button type="button" className="kp-press" onClick={onReanudar} style={{ ...botonBlanco, width: '100%', marginTop: 20 }}>
+          <Play size={18} fill="currentColor" aria-hidden="true" />Reanudar plan
+        </button>
+      )}
     </Marco>
   );
 }

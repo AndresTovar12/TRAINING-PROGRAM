@@ -1,6 +1,6 @@
 import {
   cursorAlDia, defaultCursor, isValidCursor, resolveCursor, sessionForToday, sessionIdFor,
-  esDescanso, diasDeEstaSemana,
+  esDescanso, diasDeEstaSemana, agregadasDeHoy,
 } from '@/lib/training-utils';
 import { minutosDelNombre, sesionQueRepite, sesionesDelTitulo, sinDuracion, textoDeSesiones } from '@/lib/sesiones';
 import { esDeSalud } from '@/lib/palabras';
@@ -55,13 +55,17 @@ export function escribeRegistro(setStore, programa, id, actualiza) {
   });
 }
 
+/** La llave donde vive el puntero de un programa: `wr:cursor` o `wr:cursor@<profesional>`. */
+export const claveDeCursor = (programa) => claveDeRegistro('wr:cursor', programa);
+
 /** El puntero de un programa, puesto al día con el calendario. NO lo guarda. */
 export function cursorDePrograma(programa, store, hoy = new Date()) {
   // Lo pegado va donde va el coach: misma fase y misma semana.
   if (programa?.sigueA) {
     const delCoach = cursorDePrograma(programa.sigueA, store, hoy);
     return delCoach
-      ? { phaseId: delCoach.phaseId, weekNum: delCoach.weekNum, dayIdx: 0, fijadoEn: delCoach.fijadoEn }
+      // La pausa del coach también pausa lo pegado a su programa.
+      ? { phaseId: delCoach.phaseId, weekNum: delCoach.weekNum, dayIdx: 0, fijadoEn: delCoach.fijadoEn, ...(delCoach.pausa ? { pausa: delCoach.pausa } : null) }
       : null;
   }
   const guardado = store?.[claveDeRegistro('wr:cursor', programa)];
@@ -208,14 +212,42 @@ export function autoresDe(programas) {
  */
 export function sesionesDeHoy(programa, store, hoy = new Date()) {
   if (!programa?.hasPlan) return [];
-  const unica = sesionDeHoy(programa, store, hoy);
-  if (!unica) return [];
   const registros = registrosDe(programa, store);
   const comoEntrada = (s) => ({
     programa, phase: s.phase, week: s.week, dayIdx: s.dayIdx, day: s.day, id: s.id,
     hecha: s.hecha, titulo: s.titulo, ejercicios: s.ejercicios, minutos: s.minutos,
     partes: partesDelDia(s, registros[s.id]),
   });
+  const delDia = sesionesDelDia(programa, store, hoy, registros, comoEntrada);
+  // Lo que el atleta SUMÓ a hoy desde otro día («Agregar a hoy»): de cada programa, solo ese día. No mueve el plan.
+  const ya = new Set(delDia.map((e) => e.id));
+  // Lo pegado al programa del coach (`sigueA`) no tiene puntero propio: no se le suma nada por su cuenta.
+  const cursorDeHoy = !programa.sigueA && programa.kind !== 'weekly' ? cursorDePrograma(programa, store, hoy) : null;
+  const agregadas = cursorDeHoy && !cursorDeHoy.pausa
+    ? agregadasDeHoy(cursorDeHoy, hoy).map(({ phaseId, weekNum, dayIdx }) => {
+      const phase = (programa.phases ?? []).find((f) => f.id === phaseId);
+      const week = phase?.weekData?.find((w) => w.num === weekNum);
+      const day = week?.days?.[dayIdx];
+      if (!day || esDescanso(day)) return null;
+      const id = sessionIdFor(programa.kind, phase.id, week.num, dayIdx, hoy);
+      if (ya.has(id)) return null;
+      const sesion = { phase, week, dayIdx, day };
+      return {
+        ...comoEntrada({
+          ...sesion, id, hecha: !!registros[id]?.completed,
+          titulo: textoDeSesiones(sesionesDelTitulo(day)) || day.day, ...datosDeSesion(sesion),
+        }),
+        agregada: true,
+      };
+    }).filter(Boolean)
+    : [];
+  return [...delDia, ...agregadas];
+}
+
+// Las sesiones que toca hoy según el calendario (sin lo agregado a mano).
+function sesionesDelDia(programa, store, hoy, registros, comoEntrada) {
+  const unica = sesionDeHoy(programa, store, hoy);
+  if (!unica) return [];
   if (unica.elegido || (unica.sesionesHoy ?? 1) <= 1) return [comoEntrada(unica)];
   const { phase, week } = ubicacion(programa, cursorDePrograma(programa, store, hoy));
   const clave = claveDelDia(unica.day);
