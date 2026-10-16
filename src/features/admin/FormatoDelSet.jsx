@@ -13,7 +13,7 @@ import {
   segundosTotales, expande, pasoDeEscala, textoDeTiempo,
 } from '@/lib/formatos';
 import { perderiaLapsos, perderiaVueltas } from '@/lib/lapsos';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, UI } from '@/lib/theme';
 
 /**
  * El formato de un Set en el editor: AMRAP, EMOM, Tabata, Fartlek… (ver `lib/formatos.js`).
@@ -53,7 +53,8 @@ const ESTILO_SIN_FORMATO = {
   padding: '0 11px', fontFamily: FONT, fontSize: 12.5, fontWeight: 800, color: T.accent,
 };
 const ESTILO_CON_FORMATO = {
-  width: 'auto', border: 'none', background: T.accentBg, minHeight: 0, gap: 6, borderRadius: 999,
+  // Azul suave SÓLIDO (no translúcido): va sobre la banda azul de la cabecera del Set y ahí lo translúcido desaparece.
+  width: 'auto', border: 'none', background: '#EEF2FF', minHeight: 0, gap: 6, borderRadius: 999,
   padding: '7px 12px', fontFamily: FONT, fontSize: 13, fontWeight: 800, color: T.accent,
 };
 
@@ -71,7 +72,7 @@ const CAPSULA = (conFormato) => ({
   display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', rowGap: 2, borderRadius: 18, boxSizing: 'border-box',
   minHeight: 34, padding: '2px 10px 2px 0', maxWidth: '100%',
   ...(conFormato
-    ? { border: 'none', background: T.accentBg }
+    ? { border: 'none', background: '#EEF2FF' }
     : { border: `1.5px solid ${T.accent}`, background: '#fff' }),
 });
 
@@ -195,8 +196,13 @@ export function EncabezadoDelSet({
 
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
-        <span style={{ fontSize: 14.5, fontWeight: 800, color: T.text }}>Set {numero}</span>
+      {/* Reestructura visual (15 oct 2026), como el editor de las capturas de Andrés: la cabecera del Set es una banda azul de lado a lado
+          de la tarjeta (sale de su relleno de 14 con márgenes negativos). Los controles siguen siendo los mismos, en sus pastillas claras. */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '-14px -14px 12px', padding: '12px 14px',
+        background: UI.azul, borderRadius: '20px 20px 0 0',
+      }}>
+        <span style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>Set {numero}</span>
         {formato ? (
           <ListaDesplegable
             etiqueta="Formato del set" valor={vista} onCambio={elige} opciones={opciones}
@@ -205,7 +211,7 @@ export function EncabezadoDelSet({
         ) : (
           <>
             {etiquetaDeTipo && (
-              <span style={{ fontSize: 10.5, fontWeight: 800, color: T.accent, background: T.accentBg, padding: '3px 9px', borderRadius: 8, letterSpacing: 0.4 }}>
+              <span style={{ fontSize: 10.5, fontWeight: 800, color: '#fff', background: 'rgba(255,255,255,0.18)', padding: '3px 9px', borderRadius: 8, letterSpacing: 0.4 }}>
                 {etiquetaDeTipo.toUpperCase()}
               </span>
             )}
@@ -240,11 +246,14 @@ export function EncabezadoDelSet({
           </>
         )}
         <span style={{ flex: 1 }} />
-        <Pill icon={Plus} primary onClick={onAgregar}>Agregar ejercicio</Pill>
-        {/* Subir y bajar solo si quien lo usa no deja arrastrar el Set. */}
-        {onSubir && <IconBtn icon={ChevronUp} onClick={onSubir} disabled={!puedeSubir} />}
-        {onBajar && <IconBtn icon={ChevronDown} onClick={onBajar} disabled={!puedeBajar} />}
-        <IconBtn icon={Trash2} danger onClick={onEliminar} />
+        <span style={{ display: 'inline-flex', background: '#fff', borderRadius: 999 }}><Pill icon={Plus} primary onClick={onAgregar}>Agregar ejercicio</Pill></span>
+        {/* Los íconos en una pastilla blanca: sobre el azul, el bote rojo solo no se leería. */}
+        <span style={{ display: 'inline-flex', alignItems: 'center', background: '#fff', borderRadius: 12 }}>
+          {/* Subir y bajar solo si quien lo usa no deja arrastrar el Set. */}
+          {onSubir && <IconBtn icon={ChevronUp} onClick={onSubir} disabled={!puedeSubir} />}
+          {onBajar && <IconBtn icon={ChevronDown} onClick={onBajar} disabled={!puedeBajar} />}
+          <IconBtn icon={Trash2} danger onClick={onEliminar} />
+        </span>
       </div>
 
       {formato && (
