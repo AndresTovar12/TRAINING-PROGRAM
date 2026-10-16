@@ -119,6 +119,19 @@ function lugarDelPlan(guardado, fases) {
   return { pi: guardado.pi, wi, dia, editandoDiaTel: guardado.tel === true && hayDia };
 }
 
+/* Abrir el editor justo en una semana y un día que el coach pidió desde afuera («Editar este día» en la ficha del atleta). Mismo molde que
+   `lugarDelPlan`: `{ pi, wi, dia, editandoDiaTel }`, o `null` si esa fase o semana ya no existe. */
+function lugarPedido(abrirEn, fases) {
+  if (!abrirEn) return null;
+  const pi = fases.findIndex((f) => f.id === abrirEn.faseId);
+  if (pi < 0) return null;
+  const wi = (fases[pi].weekData ?? []).findIndex((w) => w.num === abrirEn.semana);
+  if (wi < 0) return null;
+  const semana = fases[pi].weekData[wi];
+  const dia = diaParaSemana(semana, abrirEn.dia);
+  return { pi, wi, dia, editandoDiaTel: (semana.days ?? []).some((d) => d.day === dia) };
+}
+
 // El número de semana es fijo (num); `label` es solo el título opcional.
 // Ignora labels heredados que sean literalmente "Semana N" para no duplicar.
 const weekSubtitle = (w) => {
@@ -1775,7 +1788,7 @@ function TiraDeDias({ dias, elegido, onElegir }) {
   );
 }
 
-export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDeleted, profesionalId = null, catalogo = null }) {
+export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDeleted, profesionalId = null, catalogo = null, abrirEn = null }) {
   const esCompu = useIsDesktop();
   const pregunta = useConfirmacion();
   const { avisa, trabajando } = useAviso();
@@ -1827,6 +1840,9 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
      atleta, como siempre. Lo guardado se comprueba contra el plan de ahora: si
      se borró la fase o la semana, no se usa. */
   const [restaurado] = useState(() => {
+    // Si se pidió abrir en un día concreto («Editar este día»), eso manda sobre cualquier lugar guardado.
+    const pedido = isNew ? null : lugarPedido(abrirEn, planRow?.data?.phases ?? []);
+    if (pedido) return pedido;
     if (isNew || !athlete?.id || !esArranque()) return null;
     return lugarDelPlan(leeLugar(user?.id, `plan.${athlete.id}${sufijo}`), planRow?.data?.phases ?? []);
   });

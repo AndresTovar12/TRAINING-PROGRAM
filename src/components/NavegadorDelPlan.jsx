@@ -96,7 +96,7 @@ export function TituloDelRenglon({ dias, color, peso = 700, minimo, extras }) {
  */
 export default function NavegadorDelPlan({
   fases, kind, estructura: estructuraDada, aqui: aquiDado, viendo, hecha, alTocarDia, abrirEn, detalleDia,
-  contenidoDia, quien = 'tu', editor, pegadasDe, alTocarPegada, entrada,
+  contenidoDia, quien = 'tu', editor, pegadasDe, alTocarPegada, entrada, pieDeSemana,
 }) {
   const estructura = estructuraDada ?? (kind === 'weekly' ? 'rutina' : 'fases');
   const deCorrido = estructura === 'semanas';
@@ -419,6 +419,8 @@ export default function NavegadorDelPlan({
                   );
                 })}
             </div>
+            {/* Lo que cada quien le pone al pie de la semana que mira: el atleta, «Mover mi plan aquí»; su coach, «Mover a X a esta semana». */}
+            {pieDeSemana && semana && !editor && pieDeSemana(f, semana)}
           </div>
         );
       })}

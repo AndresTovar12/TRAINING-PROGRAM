@@ -41,6 +41,7 @@ import DentroDelDia from '@/features/admin/DentroDelDia';
 import ListaDesplegable from '@/components/ListaDesplegable';
 import CodigoDeCoach from '@/components/CodigoDeCoach';
 import BotonEntendido from '@/components/BotonEntendido';
+import { useMoverPlan, ReglasDelPlan, ControlesDelPlan, MoverAquiBoton, EditarEsteDiaBoton } from '@/features/admin/MoverElPlan';
 import { useAvisosVistos } from '@/lib/useAvisosVistos';
 import { esArranque, guardaLugar, leeLugar } from '@/lib/lugar';
 import { useLugar, useScrollLugar } from '@/lib/useLugar';
@@ -83,11 +84,11 @@ function haceCorto(iso, ahora) {
 }
 
 /** Una cifra de arriba de la lista del teléfono («5 Activos»); en rosa si es algo por atender («1 Sin plan»). */
-function CifraDeLista({ valor, texto, alerta = false, grande = false }) {
+function CifraDeLista({ valor, texto, alerta = false, grande = false, pausa = false }) {
   return (
-    <div style={{ background: alerta ? KP.dangerSoft : UI.tarjeta, borderRadius: grande ? UI.rTarjeta : 18, padding: grande ? '18px 20px' : '12px 14px', boxShadow: alerta ? 'none' : UI.sombraGrupo, minWidth: 0, fontFamily: FONT }}>
+    <div style={{ background: alerta ? KP.dangerSoft : pausa ? KP.amberSoft : UI.tarjeta, borderRadius: grande ? UI.rTarjeta : 18, padding: grande ? '18px 20px' : '12px 14px', boxShadow: alerta || pausa ? 'none' : UI.sombraGrupo, minWidth: 0, fontFamily: FONT }}>
       <div style={{ fontSize: grande ? 32 : 26, fontWeight: 800, color: KP.ink, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>{valor}</div>
-      <div style={{ fontSize: 13.5, fontWeight: 600, color: alerta ? KP.danger : KP.ink2, marginTop: 2, lineHeight: 1.25, overflowWrap: 'break-word' }}>{texto}</div>
+      <div style={{ fontSize: 13.5, fontWeight: 600, color: alerta ? KP.danger : pausa ? KP.amber : KP.ink2, marginTop: 2, lineHeight: 1.25, overflowWrap: 'break-word' }}>{texto}</div>
     </div>
   );
 }
@@ -306,7 +307,7 @@ function AthletesTable({ rows, coaches, isMaster, selectedId, onPick, ahora, eti
   };
   // La columna "Coach" solo tiene sentido en la cuenta master: un coach viendo
   // a sus propios atletas leeria su nombre repetido en cada fila.
-  const cols = 4 + (isMaster ? 1 : 0) + (salud ? 1 : 0);
+  const cols = 5 + (isMaster ? 1 : 0) + (salud ? 1 : 0);
 
   return (
     <div style={{ background: UI.tarjeta, borderRadius: UI.rTarjeta, boxShadow: UI.sombraGrupo, overflow: 'hidden' }}>
@@ -316,6 +317,7 @@ function AthletesTable({ rows, coaches, isMaster, selectedId, onPick, ahora, eti
             <tr>
               <th style={TH}>{t('Atleta')}</th>
               <th style={TH}>{t('Plan')}</th>
+              <th style={TH}>Va en</th>
               {salud && <th style={TH}>Cómo va</th>}
               <th style={TH}>Última actividad</th>
               {isMaster && <th style={TH}>Coach</th>}
@@ -357,6 +359,13 @@ function AthletesTable({ rows, coaches, isMaster, selectedId, onPick, ahora, eti
                     </div>
                   </td>
                   <td style={TD}><PlanCell plan={a.plan} /></td>
+                  <td style={{ ...TD, fontSize: 13.5, fontWeight: 600, color: a.vaEn ? T.text : T.text3, whiteSpace: 'nowrap' }}>
+                    {a.vaEn ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                        {a.vaEn}{a.enPausa && <Pastilla tono="aviso">En pausa</Pastilla>}
+                      </span>
+                    ) : '—'}
+                  </td>
                   {salud && (
                     <td style={{ ...TD, fontSize: 13.5, fontWeight: 600, color: T.text2 }}>
                       {a.resumen ? lineaDeLista(a.resumen, new Date(ahora)) : '—'}
@@ -730,7 +739,7 @@ function etiquetaDelPrograma(programa, equipoDe, athlete) {
  * "AQUÍ VAS", porque quien mira es su profesional; y tocar un día lo abre en el sitio
  * para ver sus ejercicios, porque no lo va a entrenar.
  */
-function HojaDelPlanDeAtleta({ athlete, programas, equipoDe, state, inicialId, onCerrar, pegadas = [] }) {
+function HojaDelPlanDeAtleta({ athlete, programas, equipoDe, state, inicialId, onCerrar, pegadas = [], mover = null, planMovibleId = null, onEditarDia = null }) {
   const { t } = usePalabras();
   const [verId, setVerId] = useState(inicialId ?? programas[0]?.id);
   const visto = programas.find((p) => p.id === verId) ?? programas[0];
@@ -763,6 +772,8 @@ function HojaDelPlanDeAtleta({ athlete, programas, equipoDe, state, inicialId, o
     })));
   } : undefined;
   const etiquetaDe = (p) => etiquetaDelPrograma(p, equipoDe, athlete);
+  // Mover, pausar y editar un día solo valen en el programa que este profesional escribe (los demás, solo para leer).
+  const mp = mover && visto.id === planMovibleId ? mover : null;
   const fases = visto.data?.phases ?? [];
   const sufijo = visto.profesional_id ? `@${visto.profesional_id}` : '';
   const estructura = estructuraDelPlan(visto.data);
@@ -799,6 +810,8 @@ function HojaDelPlanDeAtleta({ athlete, programas, equipoDe, state, inicialId, o
           })}
         </div>
       )}
+      {mp && <ReglasDelPlan nombre={mp.nombre} />}
+      <ControlesDelPlan mp={mp} />
       <NavegadorDelPlan
         key={visto.id}
         fases={fases}
@@ -806,6 +819,7 @@ function HojaDelPlanDeAtleta({ athlete, programas, equipoDe, state, inicialId, o
         estructura={estructura}
         quien="atleta"
         aqui={dondeVa(fases, visto.data?.kind, state?.data?.[`wr:cursor${sufijo}`])}
+        pieDeSemana={mp ? (f, semana) => <MoverAquiBoton mp={mp} faseId={f.id} semana={semana.num} /> : undefined}
         hecha={(faseId, semana, dia) => !!state?.data?.[`wr:sessions${sufijo}`]?.[
           sessionIdFor(visto.data?.kind, faseId, semana, dia)]?.completed}
         detalleDia={(f, semana, idx) => {
@@ -815,7 +829,12 @@ function HojaDelPlanDeAtleta({ athlete, programas, equipoDe, state, inicialId, o
             <span style={{ fontSize: 11.5, fontWeight: 700, color: T.text3, flexShrink: 0 }}>{n}</span>
           ) : null;
         }}
-        contenidoDia={(f, semana, idx) => <DentroDelDia day={semana.days[idx]} />}
+        contenidoDia={(f, semana, idx) => (
+          <>
+            <DentroDelDia day={semana.days[idx]} />
+            {mp && onEditarDia && <div style={{ marginTop: 8 }}><EditarEsteDiaBoton onClick={() => onEditarDia(f.id, semana.num, semana.days[idx].day)} /></div>}
+          </>
+        )}
         pegadasDe={pegadasDe}
       />
     </HojaFlotante>
@@ -986,6 +1005,16 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
     [plan, state, sufijo],
   );
 
+  /* Mover, pausar y «una semana atrás» (ver `MoverElPlan.jsx`). `null` en una rutina que se repite o sin programa. Tras escribir, la ficha se
+     pone al día sola: el puntero nuevo entra al estado que ya tiene cargado. */
+  const mover = useMoverPlan({
+    athlete, plan: planReal, clave: `wr:cursor${sufijo}`, state,
+    alCambiar: (clave, c) => setState((s) => ({ ...(s ?? {}), data: { ...(s?.data ?? {}), [clave]: c } })),
+  });
+  // «Editar este día»: el editor se abre justo en esa semana y ese día.
+  const [editarEn, setEditarEn] = useState(null);
+  const editarDia = (faseId, semanaNum, dia) => { setEditarEn({ faseId, semana: semanaNum, dia }); setVerPlan(false); setBuilding(true); };
+
   // El dolor que anota en «Bienestar» y cuántas sesiones lleva esta semana.
   const dolor = resumenDeDolor(state?.data?.['wr:wellness']);
   const estaSemana = hechasEstaSemana(
@@ -1061,7 +1090,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           icon={ClipboardList}
           titulo={t('Ver el plan')}
           detalle={planReal
-            ? `${tamano} · ${plural(totalSessions, 'sesión', 'sesiones')}`
+            ? (mover ? `Va en ${mover.textoActual}${mover.enPausa ? ' · En pausa' : ''}` : `${tamano} · ${plural(totalSessions, 'sesión', 'sesiones')}`)
             : (programasVisibles.length > 1 ? 'Los programas de su equipo, solo para leer' : 'Solo para leer')}
           onClick={() => setVerPlan(true)}
         />
@@ -1114,6 +1143,9 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           state={state}
           inicialId={planReal?.id}
           pegadas={filasPegadas}
+          mover={mover}
+          planMovibleId={planReal?.id}
+          onEditarDia={editarDia}
           onCerrar={() => setVerPlan(false)}
         />
       )}
@@ -1392,7 +1424,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
               style={{ textAlign: 'left', border: 'none', cursor: 'pointer', fontFamily: FONT, color: '#fff', background: UI.azul, borderRadius: 24, padding: '18px 20px', boxShadow: UI.azulSombra, display: 'flex', flexDirection: 'column', gap: 12 }}
             >
               <span>
-                <span style={{ display: 'block', fontSize: 13.5, fontWeight: 500, opacity: 0.82 }}>{tipoDePlan}</span>
+                <span style={{ display: 'block', fontSize: 13.5, fontWeight: 500, opacity: 0.82 }}>{tipoDePlan}{mover?.enPausa ? ' · En pausa' : ''}</span>
                 <span style={{ display: 'block', fontSize: 24, fontWeight: 800, letterSpacing: -0.3, marginTop: 2 }}>{planReal.title || t('Plan')}</span>
               </span>
               {estructura !== 'rutina' && totalWeeks > 0 && (
@@ -1455,7 +1487,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
             <Fila izquierda={<IconoDeFila><FolderOpen size={18} /></IconoDeFila>} texto="Asignar de Mis planes" detalle="Un programa, una rutina o un workout que ya guardaste" onClick={() => setAsignando(true)} />
             {programasVisibles.length > 0 && (
               <Fila izquierda={<IconoDeFila><ClipboardList size={18} /></IconoDeFila>} texto={t('Ver el plan')}
-                detalle={planReal ? `${tamano} · ${plural(totalSessions, 'sesión', 'sesiones')}` : 'Solo para leer'} onClick={() => setVerPlan(true)} />
+                detalle={planReal ? (mover ? `Va en ${mover.textoActual}${mover.enPausa ? ' · En pausa' : ''} · mover o pausar` : `${tamano} · ${plural(totalSessions, 'sesión', 'sesiones')}`) : 'Solo para leer'} onClick={() => setVerPlan(true)} />
             )}
             <Fila izquierda={<IconoDeFila><HeartPulse size={18} /></IconoDeFila>} texto="Métricas del reloj" detalle="Pulso, ritmo, carga y recuperación" onClick={() => setVerMetricas(true)} />
             {onVerComoAtleta && (
@@ -1499,7 +1531,8 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           athlete={athlete}
           planRow={plan}
           profesionalId={miClave}
-          onClose={() => setBuilding(false)}
+          abrirEn={editarEn}
+          onClose={() => { setBuilding(false); setEditarEn(null); }}
           // Guardar NO cierra el editor (Andrés, 27 sep 2026: "prefiero que me
           // deje ahí para ver cómo quedó"); solo se refresca la ficha de atrás.
           onSaved={(row) => setPlan(row)}
@@ -1517,7 +1550,8 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           athlete={athlete}
           planRow={plan}
           profesionalId={miClave}
-          onClose={() => setBuilding(false)}
+          abrirEn={editarEn}
+          onClose={() => { setBuilding(false); setEditarEn(null); }}
           // Guardar NO cierra el editor (Andrés, 27 sep 2026: "prefiero que me
           // deje ahí para ver cómo quedó"); solo se refresca la ficha de atrás.
           onSaved={(row) => setPlan(row)}
@@ -1727,6 +1761,7 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta, onIrA, onAb
     return {
       total: base.length,
       sinPlan: base.filter((a) => !a.plan).length,
+      enPausa: base.filter((a) => a.enPausa).length,
       activos: base.filter((a) => a.lastSeen && new Date(a.lastSeen).getTime() >= hace7dias).length,
     };
   }, [athletes, cargadoEn, viendoComo, salud]);
@@ -1863,6 +1898,11 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta, onIrA, onAb
           <div style={{ fontSize: 14, color: KP.ink2, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {a.plan?.title ? a.plan.title : <Arroba fila={a} />}
           </div>
+          {a.vaEn && (
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: KP.ink2, marginTop: 3, display: 'flex', alignItems: 'center', gap: 6 }}>
+              Va en {a.vaEn}{a.enPausa && <Pastilla tono="aviso">En pausa</Pastilla>}
+            </div>
+          )}
           {etiquetasDeEquipo.get(a.id) && (
             <div style={{ fontSize: 12.5, fontWeight: 700, color: T.accent, marginTop: 2 }}>{etiquetasDeEquipo.get(a.id).join(' · ')}</div>
           )}
@@ -1887,17 +1927,19 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta, onIrA, onAb
           <PrimerosPasos clave={recarga} onAgregar={abrirAgregar} onIrA={onIrA} onAbrirPerfil={onAbrirPerfil} compu={isDesktop} />
         )}
         {!modoTabla && !selected && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, marginBottom: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${metricas.enPausa > 0 ? 4 : 3}, minmax(0, 1fr))`, gap: 10, marginBottom: 14 }}>
             <CifraDeLista valor={metricas.total} texto={t('Atletas')} />
             <CifraDeLista valor={metricas.activos} texto="Activos" />
             <CifraDeLista valor={metricas.sinPlan} texto={t('Sin plan')} alerta={metricas.sinPlan > 0} />
+            {metricas.enPausa > 0 && <CifraDeLista valor={metricas.enPausa} texto="En pausa" pausa />}
           </div>
         )}
         {modoTabla && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 14, marginBottom: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${metricas.enPausa > 0 ? 4 : 3}, minmax(0, 1fr))`, gap: 14, marginBottom: 16 }}>
             <CifraDeLista valor={metricas.total} texto={t('Atletas')} grande />
             <CifraDeLista valor={metricas.activos} texto="Activos (7 días)" grande />
             <CifraDeLista valor={metricas.sinPlan} texto={t('Sin plan')} alerta={metricas.sinPlan > 0} grande />
+            {metricas.enPausa > 0 && <CifraDeLista valor={metricas.enPausa} texto="En pausa" pausa grande />}
           </div>
         )}
         {/* Dar de alta a un cliente sin esperar a que se registre. Va antes
