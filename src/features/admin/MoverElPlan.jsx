@@ -7,7 +7,7 @@ import { useAviso } from '@/components/AvisoPasajero';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAvisosVistos } from '@/lib/useAvisosVistos';
 import { moverPlanDeAtleta } from '@/lib/api';
-import { nombreCorto } from '@/lib/programas';
+import { nombreCorto, rolDeProfesion } from '@/lib/programas';
 import { textoDeSemana } from '@/lib/vaEn';
 import { FONT, KP, UI, tipoDeSesion } from '@/lib/theme';
 import {
@@ -60,6 +60,8 @@ export function useMoverPlan({ athlete, plan, clave, state, alCambiar }) {
   // Lo que el atleta vería hoy (el calendario ya contado), aunque su teléfono todavía no lo haya guardado.
   const actual = cursorAlDia(fases, base);
   const nombre = nombreCorto(athlete.full_name || athlete.username) || 'este atleta';
+  // «Tu coach» o «Tu fisio», según el oficio de quien mueve el plan.
+  const rol = rolDeProfesion(profile?.profesion);
   const textoActual = textoDeSemana(plan.data, actual.phaseId, actual.weekNum);
   const enPausa = estaEnPausa(actual);
   const atras = semanaDeAtras(fases, actual);
@@ -85,30 +87,30 @@ export function useMoverPlan({ athlete, plan, clave, state, alCambiar }) {
     const si = await pregunta({
       titulo: `¿Mover a ${nombre} a ${destino}?`,
       detalle: `Ahora va en ${textoActual}. Hoy ${weekdayLabel(weekdayToday())} le tocará: ${hoy ?? 'descanso'}. Cada semana sigue su día del calendario, así que nada se desfasa. `
-        + 'Al abrir la app verá «Tu coach movió tu plan» con un botón Entendido.',
+        + `Al abrir la app verá «Tu ${rol} movió tu plan» con un botón Entendido.`,
       confirmar: `Mover a ${nombre}`,
     });
     if (!si) return;
     await aplica(moverPlanA(fases, actual, faseId, semana), {
-      texto: 'Tu coach movió tu plan', detalle: `Ahora vas en ${destino}.`, listo: `Moviste a ${nombre} a ${destino}.`,
+      texto: `Tu ${rol} movió tu plan`, detalle: `Ahora vas en ${destino}.`, listo: `Moviste a ${nombre} a ${destino}.`,
     });
   }
 
   async function pausar() {
     const si = await pregunta({
       titulo: `¿Pausar el plan de ${nombre}?`,
-      detalle: `Se queda en ${textoActual} hasta que lo reanudes. No se salta ninguna semana. Al abrir la app verá «Tu coach pausó tu plan» con un botón Entendido.`,
+      detalle: `Se queda en ${textoActual} hasta que lo reanudes. No se salta ninguna semana. Al abrir la app verá «Tu ${rol} pausó tu plan» con un botón Entendido.`,
       confirmar: 'Pausar plan',
     });
     if (!si) return;
     await aplica(pausarPlan(actual), {
-      texto: 'Tu coach pausó tu plan', detalle: `Se queda en ${textoActual} hasta que lo reanude.`, listo: `Plan de ${nombre} en pausa.`,
+      texto: `Tu ${rol} pausó tu plan`, detalle: `Se queda en ${textoActual} hasta que lo reanude.`, listo: `Plan de ${nombre} en pausa.`,
     });
   }
 
   async function reanudar() {
     await aplica(reanudarPlan(actual), {
-      texto: 'Tu coach reanudó tu plan', detalle: `Sigues en ${textoActual}.`, listo: `Plan de ${nombre} reanudado.`,
+      texto: `Tu ${rol} reanudó tu plan`, detalle: `Sigues en ${textoActual}.`, listo: `Plan de ${nombre} reanudado.`,
     });
   }
 

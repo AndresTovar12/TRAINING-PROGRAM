@@ -170,6 +170,8 @@ const isoWeekKey = (date = new Date()) => {
  */
 const cursorAlDia = (plan, cursor, hoy = new Date()) => {
   if (!isValidCursor(plan, cursor)) return cursor;
+  // En pausa el plan no avanza: se queda donde está hasta que se reanude (ver `reanudarPlan`).
+  if (cursor.pausa) return cursor;
   const semanaHoy = isoWeekKey(hoy);
   if (!cursor.fijadoEn) return { ...cursor, fijadoEn: semanaHoy };
   if (cursor.fijadoEn === semanaHoy) return cursor;
@@ -195,8 +197,63 @@ const cursorAlDia = (plan, cursor, hoy = new Date()) => {
 
   const destino = plan[fase].weekData[semana];
   const dia = Math.min(cursor.dayIdx, Math.max(0, (destino.days?.length ?? 1) - 1));
-  return { phaseId: plan[fase].id, weekNum: destino.num, dayIdx: dia, fijadoEn: semanaHoy };
+  // Lo marcado «solo hoy» (día elegido, sesiones agregadas) ya no vale; el aviso del coach sí se queda hasta que se acepte.
+  return { ...(cursor.aviso ? { aviso: cursor.aviso } : null), phaseId: plan[fase].id, weekNum: destino.num, dayIdx: dia, fijadoEn: semanaHoy };
 };
+
+/* ------------------------- Mover y pausar el plan -------------------------
+   Andrés, 16 oct 2026: «ni yo que soy el dueño sé cómo decir "este atleta se lastimó, regresa una semana"». Tres cosas distintas, cada una
+   con su botón (simulación v3 aprobada):
+     · Mover el plan  → cambia DÓNDE VA (fase y semana). El día sale siempre del calendario. Lo hace el atleta o su coach.
+     · Pausar         → el plan deja de avanzar; reanudar lo suelta desde la misma semana.
+     · Agregar a hoy  → suma una sesión a lo de hoy; no mueve nada y caduca esta noche.
+   Todo vive en el puntero (`wr:cursor`): `pausa` ('2026-10-16', el día que se pausó) y `agregadas` ({ el, items }). */
+
+// Todas las semanas del plan en orden: [{ faseId, semana }].
+const semanasEnOrden = (plan) => (plan ?? []).flatMap((f) => (f.weekData ?? []).map((w) => ({ faseId: f.id, semana: w.num, bloqueada: !!w.bloqueada })));
+
+/** La semana anterior a donde va el atleta (para «Una semana atrás»), o null si ya está en la primera. */
+const semanaDeAtras = (plan, cursor) => {
+  const lista = semanasEnOrden(plan);
+  const i = lista.findIndex((x) => x.faseId === cursor?.phaseId && x.semana === cursor?.weekNum);
+  return i > 0 ? lista[i - 1] : null;
+};
+
+/** El puntero ya movido a otra fase y semana, y vuelto a sellar con la semana de hoy (desde ahí avanza solo). Conserva la pausa y el aviso. */
+const moverPlanA = (plan, cursor, faseId, semana, hoy = new Date()) => {
+  const f = (plan ?? []).find((x) => x.id === faseId);
+  const w = f?.weekData?.find((x) => x.num === semana);
+  if (!w) return cursor;
+  const { diaElegidoEl, agregadas, ...resto } = cursor ?? {};
+  void diaElegidoEl; void agregadas;
+  const dia = Math.min(cursor?.dayIdx ?? 0, Math.max(0, (w.days?.length ?? 1) - 1));
+  return { ...resto, phaseId: faseId, weekNum: semana, dayIdx: dia, fijadoEn: isoWeekKey(hoy) };
+};
+
+const pausarPlan = (cursor, hoy = new Date()) => ({ ...cursor, pausa: claveDeDia(hoy) });
+const reanudarPlan = (cursor, hoy = new Date()) => {
+  const { pausa, ...resto } = cursor ?? {};
+  void pausa;
+  return { ...resto, fijadoEn: isoWeekKey(hoy) };
+};
+const estaEnPausa = (cursor) => !!cursor?.pausa;
+
+/** Suma una sesión (fase, semana, posición) a lo de hoy. Vale solo el día de hoy. */
+const agregarAHoy = (cursor, item, hoy = new Date()) => {
+  const el = claveDeDia(hoy);
+  const vigentes = cursor?.agregadas?.el === el ? cursor.agregadas.items : [];
+  const ya = vigentes.some((x) => x.phaseId === item.phaseId && x.weekNum === item.weekNum && x.dayIdx === item.dayIdx);
+  return { ...cursor, agregadas: { el, items: ya ? vigentes : [...vigentes, item] } };
+};
+const quitarDeHoy = (cursor, item) => {
+  if (!cursor?.agregadas) return cursor;
+  const items = cursor.agregadas.items.filter((x) => !(x.phaseId === item.phaseId && x.weekNum === item.weekNum && x.dayIdx === item.dayIdx));
+  const { agregadas, ...resto } = cursor;
+  void agregadas;
+  return items.length ? { ...resto, agregadas: { el: cursor.agregadas.el, items } } : resto;
+};
+/** Lo que se agregó a hoy: [{ phaseId, weekNum, dayIdx }]; vacío si lo agregado es de otro día. */
+const agregadasDeHoy = (cursor, hoy = new Date()) => (cursor?.agregadas?.el === claveDeDia(hoy) ? cursor.agregadas.items : []);
 
 /** Cuántas semanas de calendario van de una clave ISO a otra. */
 const semanasEntre = (desde, hasta) => {
@@ -261,6 +318,7 @@ const enOrdenDeSemana = (days = []) => days
   .sort((a, b) => (ORDEN_DIAS[a.day?.day] ?? 9) - (ORDEN_DIAS[b.day?.day] ?? 9) || a.idx - b.idx);
 
 const sessionForToday = (plan, kind, cursor, date = new Date()) => {
+  if (cursor?.pausa) return null; // plan en pausa: hoy no toca nada de él
   const wd = weekdayToday(date);
   const { phase, week, items } = daysOfCurrentWeek(plan, kind, cursor);
   if (!phase || !week) return null;
@@ -832,4 +890,5 @@ export {
   weekdayToday, weekdayLabel, isoWeekKey, weeklySessionId, sessionIdFor,
   sessionForToday, weekOverview, esDescanso, enOrdenDeSemana, diasDeEstaSemana,
   sesionQueRepite, sinDuracion, claveDeDia, dondeVa, semanaDelAtleta,
+  semanasEnOrden, semanaDeAtras, moverPlanA, pausarPlan, reanudarPlan, estaEnPausa, agregarAHoy, quitarDeHoy, agregadasDeHoy,
 };
