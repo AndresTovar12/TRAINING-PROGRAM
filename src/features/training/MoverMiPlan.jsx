@@ -84,7 +84,7 @@ export function ReglasDeMiPlan({ aceptada, onEntendido }) {
   return (
     <div style={{ background: KP.blueSoft, borderRadius: UI.rGrupo, padding: 14, marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 10, fontFamily: FONT }}>
       {regla(1, 'Avanzas solo', 'Cada semana pasas a la siguiente, sin que hagas nada.')}
-      {regla(2, 'Hoy haz la sesión que quieras', 'Entrenar otra sesión no cambia dónde vas.')}
+      {regla(2, 'Hoy haz la sesión que quieras', 'Toca otro día en la tira y dale play: tu plan no se mueve.')}
       {regla(3, '¿Te atrasaste o te lesionaste?', 'Toca «Mover mi plan» y sigues desde la semana que elijas.')}
       <BotonEntendido color={KP.blue} onClick={onEntendido} style={{ alignSelf: 'flex-end' }} />
     </div>

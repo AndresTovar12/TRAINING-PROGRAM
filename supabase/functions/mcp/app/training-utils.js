@@ -206,8 +206,8 @@ const cursorAlDia = (plan, cursor, hoy = new Date()) => {
    con su botón (simulación v3 aprobada):
      · Mover el plan  → cambia DÓNDE VA (fase y semana). El día sale siempre del calendario. Lo hace el atleta o su coach.
      · Pausar         → el plan deja de avanzar; reanudar lo suelta desde la misma semana.
-     · Agregar a hoy  → suma una sesión a lo de hoy; no mueve nada y caduca esta noche.
-   Todo vive en el puntero (`wr:cursor`): `pausa` ('2026-10-16', el día que se pausó) y `agregadas` ({ el, items }). */
+   Todo vive en el puntero (`wr:cursor`): `pausa` ('2026-10-16', el día que se pausó) y el `aviso` del coach.
+   (Hubo un «Agregar a hoy»; se quitó el mismo día: entrenar una sesión de otro día es darle play ahí, sin botón de más.) */
 
 // Todas las semanas del plan en orden: [{ faseId, semana }].
 const semanasEnOrden = (plan) => (plan ?? []).flatMap((f) => (f.weekData ?? []).map((w) => ({ faseId: f.id, semana: w.num, bloqueada: !!w.bloqueada })));
@@ -238,22 +238,12 @@ const reanudarPlan = (cursor, hoy = new Date()) => {
 };
 const estaEnPausa = (cursor) => !!cursor?.pausa;
 
-/** Suma una sesión (fase, semana, posición) a lo de hoy. Vale solo el día de hoy. */
-const agregarAHoy = (cursor, item, hoy = new Date()) => {
-  const el = claveDeDia(hoy);
-  const vigentes = cursor?.agregadas?.el === el ? cursor.agregadas.items : [];
-  const ya = vigentes.some((x) => x.phaseId === item.phaseId && x.weekNum === item.weekNum && x.dayIdx === item.dayIdx);
-  return { ...cursor, agregadas: { el, items: ya ? vigentes : [...vigentes, item] } };
+/** Cuántas semanas le quedan al plan después de la semana donde va (para saber hasta dónde se puede mirar hacia adelante). */
+const semanasPorDelante = (plan, cursor) => {
+  const lista = semanasEnOrden(plan);
+  const i = lista.findIndex((x) => x.faseId === cursor?.phaseId && x.semana === cursor?.weekNum);
+  return i < 0 ? 0 : lista.length - 1 - i;
 };
-const quitarDeHoy = (cursor, item) => {
-  if (!cursor?.agregadas) return cursor;
-  const items = cursor.agregadas.items.filter((x) => !(x.phaseId === item.phaseId && x.weekNum === item.weekNum && x.dayIdx === item.dayIdx));
-  const { agregadas, ...resto } = cursor;
-  void agregadas;
-  return items.length ? { ...resto, agregadas: { el: cursor.agregadas.el, items } } : resto;
-};
-/** Lo que se agregó a hoy: [{ phaseId, weekNum, dayIdx }]; vacío si lo agregado es de otro día. */
-const agregadasDeHoy = (cursor, hoy = new Date()) => (cursor?.agregadas?.el === claveDeDia(hoy) ? cursor.agregadas.items : []);
 
 /** Cuántas semanas de calendario van de una clave ISO a otra. */
 const semanasEntre = (desde, hasta) => {
@@ -890,5 +880,5 @@ export {
   weekdayToday, weekdayLabel, isoWeekKey, weeklySessionId, sessionIdFor,
   sessionForToday, weekOverview, esDescanso, enOrdenDeSemana, diasDeEstaSemana,
   sesionQueRepite, sinDuracion, claveDeDia, dondeVa, semanaDelAtleta,
-  semanasEnOrden, semanaDeAtras, moverPlanA, pausarPlan, reanudarPlan, estaEnPausa, agregarAHoy, quitarDeHoy, agregadasDeHoy,
+  semanasEnOrden, semanaDeAtras, moverPlanA, pausarPlan, reanudarPlan, estaEnPausa, semanasPorDelante,
 };

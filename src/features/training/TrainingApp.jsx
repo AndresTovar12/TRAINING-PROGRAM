@@ -20,7 +20,7 @@ import {
   formatIntensity,
   sessionForToday, weekOverview, weekdayToday, weekdayLabel,
   cursorAlDia, isoWeekKey, esDescanso, enOrdenDeSemana,
-  diasDeEstaSemana, dondeVa, agregarAHoy, estaEnPausa,
+  diasDeEstaSemana, dondeVa, estaEnPausa, semanasPorDelante,
   semanaGlobal, semanasDelPlan,
 } from '@/lib/training-utils';
 import HojaFlotante from '@/components/HojaFlotante';
@@ -37,7 +37,7 @@ import { FiltroDeAutor, EtiquetaDeAutor } from '@/features/training/EquipoDelAtl
 import AvisoDeInvitacion from '@/features/training/AvisoDeInvitacion';
 import { HojaDeBiblioteca, TarjetaDeBiblioteca } from '@/features/training/BibliotecaDeClases';
 import EntrenoLibre from '@/features/libre/EntrenoLibre';
-import TiraDeSemana, { BotonDeDia, fechaDeLaSemana } from '@/features/training/home/TiraDeSemana';
+import TiraDeSemana, { BotonDeDia, EtiquetaDeSemana, fechaDeLaSemana } from '@/features/training/home/TiraDeSemana';
 import { HoyTeToca, HoyTeTocaEquipo, HoyDescansas, HoyEnPausa } from '@/features/training/home/HoyTeToca';
 import { textoDeSemana } from '@/lib/vaEn';
 import { useMoverMiPlan, ReglasDeMiPlan, ControlesDeMiPlan, MoverAquiAtleta, AvisoDelCoach } from '@/features/training/MoverMiPlan';
@@ -1325,7 +1325,7 @@ const CuerpoDelDia = ({
 
 const WeekDetail = ({
   phase, week, dayIdx, onVerPrograma, sessionsData, updateSession, oneRMs, activeSessionId,
-  miDia, onVolverAMiDia, onAgregarAHoy, onDiaVisto,
+  miDia, onVolverAMiDia, onDiaVisto,
 }) => {
   const idDeSesion = useIdDeSesion();
   const { estructura, phases: PLAN } = usePlan();
@@ -1493,20 +1493,6 @@ const WeekDetail = ({
                 }}
               >
                 Volver a mi día
-              </button>
-            )}
-            {/* «Agregar a hoy» suma las sesiones de este día a lo de hoy; no mueve el plan (16 oct 2026: ya no hay «Hacer este día»). */}
-            {onAgregarAHoy && (
-              <button
-                type="button"
-                onClick={() => onAgregarAHoy(hermanas.map((h) => ({ phaseId: phase.id, weekNum: week.num, dayIdx: h.idx })))}
-                style={{
-                  padding: '9px 13px', borderRadius: 11, cursor: 'pointer', touchAction: 'manipulation',
-                  border: 'none', background: LT.blue, color: '#fff',
-                  fontFamily: FONT, fontSize: 13, fontWeight: 800,
-                }}
-              >
-                Agregar a hoy
               </button>
             )}
           </div>
@@ -1754,9 +1740,9 @@ const PlanUnificado = ({
 
 const HomeView = ({
   sessionsData, wellness, reloj, oneRMs = {}, fechasRM = {}, onStartSession, onGoTab, onAbrirHoja, onVerPrograma, cursor,
-  onAgregarAHoy, onAbrirAgregada, agregadasHoy = [], onReanudar, avisosDelCoach = [], onAceptarAviso, textoDeDonde = '',
+  onReanudar, avisosDelCoach = [], onAceptarAviso, textoDeDonde = '',
   hayEquipo = false, conAutor = false, entradas = [], autores = [], filtro = null, onFiltro, onAbrirEntrada, resumenDeEquipo = null,
-  altasDeEquipo = [], entradasDe = null,
+  altasDeEquipo = [], entradasDe = null, resumenDe = null,
 }) => {
   // Tablet o más: la tarjeta de hoy a la izquierda y los cuadros a la derecha (reestructura visual, 15 oct 2026).
   const esAncha = useIsWide();
@@ -1775,19 +1761,45 @@ const HomeView = ({
   const displayName = profile?.full_name || profile?.username || 'Atleta';
   /* EL DÍA QUE SE MIRA (15 oct 2026). Andrés: «si pusimos los días de la semana en home, que cuando el atleta le pique vea su
      home de ese día». Tocar un día de la tira cambia lo que dice la tarjeta azul; `null` = hoy. Solo cambia lo que se ENSEÑA:
-     la fase y la semana siguen siendo de hoy. Ahí, cada sesión trae «Agregar a hoy» (la suma a lo de hoy sin mover el plan). */
+     la fase y la semana siguen siendo de hoy. Y la tira se DESLIZA (16 oct 2026): hacia la izquierda enseña las semanas que vienen del
+     plan, día por día; hacia la derecha regresa. Entrenar un día de otra semana es darle play ahí: no mueve el plan. */
   const posHoy = (new Date().getDay() + 6) % 7;
   const [posVista, setPosVista] = useState(null);
+  const [semanaVista, setSemanaVista] = useState(0);   // 0 = esta semana, 1 = la que viene…
+  const [sentido, setSentido] = useState(0);           // hacia dónde se deslizó la última vez (anima la entrada)
   const pos = posVista ?? posHoy;
-  const esHoyVista = pos === posHoy;
-  const fechaVista = useMemo(() => (esHoyVista ? new Date() : fechaDeLaSemana(pos)), [pos, esHoyVista]);
+  const esHoyVista = semanaVista === 0 && pos === posHoy;
+  // Hasta dónde se puede mirar: las semanas que le quedan al plan. Una rutina que se repite es siempre la misma semana.
+  const semanasPorVer = kind === 'weekly' || !cursor ? 0 : semanasPorDelante(PLAN, cursor);
+  const fechaBase = useMemo(() => { const d = new Date(); d.setDate(d.getDate() + semanaVista * 7); return d; }, [semanaVista]);
+  const fechaVista = useMemo(() => (esHoyVista ? new Date() : fechaDeLaSemana(pos, fechaBase)), [pos, esHoyVista, fechaBase]);
   const cuando = { hoy: esHoyVista, fecha: fechaVista };
+  const irASemana = (n) => {
+    const destino = Math.max(0, Math.min(semanasPorVer, n));
+    if (destino === semanaVista) return;
+    setSentido(destino > semanaVista ? 1 : -1);
+    setSemanaVista(destino);
+  };
+  const volverAHoy = () => { setSemanaVista(0); setPosVista(null); setSentido(-1); };
+  // El plan, puesto en la semana que se mira (el calendario ya contado); en esta semana es el puntero de siempre.
+  const cursorVista = useMemo(() => (semanaVista ? cursorAlDia(PLAN, cursor, fechaBase) : cursor), [PLAN, cursor, fechaBase, semanaVista]);
   // Lo que toca ese día según el calendario del dispositivo (no según lo marcado).
-  const next = useMemo(() => sessionForToday(PLAN, kind, cursor, fechaVista), [PLAN, kind, cursor, fechaVista]);
+  const next = useMemo(() => sessionForToday(PLAN, kind, cursorVista, fechaVista), [PLAN, kind, cursorVista, fechaVista]);
   const entradasVista = useMemo(() => (esHoyVista || !entradasDe ? entradas : entradasDe(fechaVista)), [esHoyVista, entradasDe, entradas, fechaVista]);
-  const semanaPropia = useMemo(() => weekOverview(PLAN, kind, cursor), [PLAN, kind, cursor]);
+  const semanaPropia = useMemo(() => {
+    const w = weekOverview(PLAN, kind, cursorVista, fechaBase);
+    return semanaVista ? { ...w, days: w.days.map((d) => ({ ...d, isToday: false })) } : w;
+  }, [PLAN, kind, cursorVista, fechaBase, semanaVista]);
   // Con equipo, «Tu semana» cuenta lo de todos (y respeta el filtro).
-  const week = hayEquipo && resumenDeEquipo ? resumenDeEquipo : semanaPropia;
+  const resumenVista = useMemo(() => {
+    if (!hayEquipo) return null;
+    if (!semanaVista) return resumenDeEquipo;
+    const r = resumenDe?.(fechaBase);
+    return r ? { ...r, days: r.days.map((d) => ({ ...d, isToday: false })) } : null;
+  }, [hayEquipo, semanaVista, resumenDeEquipo, resumenDe, fechaBase]);
+  const week = hayEquipo && resumenVista ? resumenVista : semanaPropia;
+  // «Semana que viene · Fase 4 · Sem 3»: dónde caerá el plan esa semana.
+  const textoDeLaSemanaVista = cursorVista && PLAN?.length ? textoDeSemana({ phases: PLAN, kind, estructura }, cursorVista.phaseId, cursorVista.weekNum) : '';
   // Un día con dos entradas se dice «2 sesiones», no «Fuerza + Movilidad»: así no
   // se lee como una sola (Andrés, 29 sep 2026).
   const nombreDeSemana = (d) => (d.sesiones > 1 ? `${d.sesiones} sesiones` : sinDuracion(d.name || ''));
@@ -1873,23 +1885,8 @@ const HomeView = ({
       })
       : [{ day: next.day, nombre: sessionTitle, meta: [tipoHoy, ...metaDelCartel.map((m) => m.texto).filter((x) => x !== tipoHoy)] }])
     : [];
-  // «Agregar a hoy»: al mirar OTRO día, cada sesión puede sumarse a lo de hoy (solo en un programa que avanza y sin el plan en pausa).
-  const puedeAgregar = !esHoyVista && !!next && kind !== 'weekly' && !cursor?.pausa && !soloLectura && !!onAgregarAHoy;
-  const itemsDeEseDia = next ? (entradasDelDia.length ? entradasDelDia : [{ idx: next.dayIdx }]).map((h) => ({ phaseId: next.phase.id, weekNum: next.week.num, dayIdx: h.idx })) : [];
-  const sesionesConAgregar = sesionesDeLaTarjeta.map((s, i) => (puedeAgregar
-    ? { ...s, onAgregar: () => onAgregarAHoy(itemsDeEseDia.length === sesionesDeLaTarjeta.length ? [itemsDeEseDia[i]] : itemsDeEseDia) }
-    : s));
-  // Lo que ya se sumó a hoy (de otros días): cada una con su botón de empezar.
-  const sesionesAgregadas = esHoyVista ? agregadasHoy.map((e) => ({
-    day: e.day, nombre: e.titulo, agregada: true, hecha: e.hecha, onAbrir: () => onAbrirAgregada?.(e),
-    meta: [tipoDeSesion(e.day).label, e.ejercicios ? plural(e.ejercicios, 'ejercicio', 'ejercicios') : null].filter(Boolean),
-  })) : [];
-  // Con sesiones sumadas de otros días, cada una (también las de hoy) lleva su propio botón de empezar.
-  const abrirLaDeHoy = next ? () => onStartSession(next.phase, next.week, next.dayIdx) : undefined;
-  const sesionesHoyTodas = [
-    ...sesionesConAgregar.map((s) => (sesionesAgregadas.length ? { ...s, onAbrir: abrirLaDeHoy } : s)),
-    ...sesionesAgregadas,
-  ];
+  // Dar play a una sesión de otro día (o de otra semana) la abre ahí mismo: se hace y se marca en SU día; el plan no se mueve.
+  const abrirLaDeHoy = next ? () => onStartSession(next.phase, next.week, next.dayIdx, !esHoyVista) : undefined;
   const enPausa = !!cursor?.pausa;
   const posicionDeFase = faseDeHoy ? PLAN.findIndex((f) => f.id === faseDeHoy.id) : -1;
   const etiquetaDeFase = kind === 'weekly' ? 'Tu rutina' : deCorrido ? 'Tu programa' : `Fase ${faseDeHoy?.num ?? ''}`;
@@ -1961,9 +1958,13 @@ const HomeView = ({
         padding: '16px 18px 0', maxWidth: 1180, margin: '0 auto', alignItems: 'start',
       }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
-          <TiraDeSemana dias={week.days} elegido={pos} onElegir={(i) => setPosVista(i === posHoy ? null : i)} />
+          {semanasPorVer > 0 && <EtiquetaDeSemana semana={semanaVista} hasta={semanasPorVer} fecha={fechaBase} donde={textoDeLaSemanaVista} onIr={irASemana} />}
+          <TiraDeSemana
+            dias={week.days} elegido={pos} onElegir={(i) => setPosVista(i === posHoy ? null : i)}
+            fecha={fechaBase} animar={sentido} onDeslizar={semanasPorVer > 0 ? (d) => irASemana(semanaVista + d) : undefined}
+          />
           {!esHoyVista && (
-            <Boton tipo="texto" chico onClick={() => setPosVista(null)} estilo={{ alignSelf: 'flex-start', marginTop: -4 }}>← Volver a hoy</Boton>
+            <Boton tipo="texto" chico onClick={volverAHoy} estilo={{ alignSelf: 'flex-start', marginTop: -4 }}>← Volver a hoy</Boton>
           )}
           {/* CON EQUIPO la sesión de hoy es UNA tarjeta con lo de todos, cada cosa con el nombre de quien la puso
               (Andrés, 1 oct 2026). Sin equipo, la de un programa. */}
@@ -1972,16 +1973,14 @@ const HomeView = ({
           {hayEquipo ? (
             entradasVista.length > 0 ? (
               <HoyTeTocaEquipo
-                entradas={entradasVista} onAbrir={onAbrirEntrada} conAutor={conAutor} cuando={cuando}
-                onAgregar={!esHoyVista && !soloLectura && onAgregarAHoy
-                  ? (e) => onAgregarAHoy([{ phaseId: e.phase.id, weekNum: e.week.num, dayIdx: e.dayIdx }], e.programa) : undefined}
+                entradas={entradasVista} onAbrir={(e) => onAbrirEntrada(e, esHoyVista ? null : fechaVista)} conAutor={conAutor} cuando={cuando}
               />
             ) : (enPausa ? null : descanso)
-          ) : enPausa ? null : sesionesHoyTodas.length > 0 ? (
+          ) : enPausa ? null : sesionesDeLaTarjeta.length > 0 ? (
             <HoyTeToca
-              sesiones={sesionesHoyTodas}
-              completada={cursorCompleted && sesionesAgregadas.length === 0}
-              onAbrir={sesionesAgregadas.length === 0 ? abrirLaDeHoy : undefined}
+              sesiones={sesionesDeLaTarjeta}
+              completada={cursorCompleted}
+              onAbrir={abrirLaDeHoy}
               cuando={cuando}
             />
           ) : descanso}
@@ -2489,13 +2488,6 @@ export default function TrainingApp() {
      día a lo de hoy sin tocar dónde vas. */
   const mp = useMoverMiPlan({ plan: { phases: PLAN, kind, estructura }, cursor, setCursor, soloLectura: !!soloLectura || !!programaActivo?.sobre });
   const textoDeDonde = cursor && PLAN?.length ? textoDeSemana({ phases: PLAN, kind, estructura }, cursor.phaseId, cursor.weekNum) : '';
-  // Cada sesión agregada se guarda por posición (fase, semana, día): sumar de nuevo la misma no la repite.
-  // Va en el puntero del programa de donde sale la sesión (con equipo, cada profesional tiene el suyo).
-  const agregaAHoy = useCallback((items, programa = programaActivo) => {
-    if (soloLectura || !programa || programa.sigueA) return;
-    const clave = claveDeCursor(programa);
-    setStore((prev) => ({ ...prev, [clave]: items.reduce((c, item) => agregarAHoy(c, item), cursorDePrograma(programa, prev)) }));
-  }, [programaActivo, setStore, soloLectura]);
   // Los avisos que su coach (o su fisio) dejó al mover o pausar un programa: uno por programa, cada uno en el puntero del suyo.
   const avisosDeProgramas = useMemo(() => programas
     .filter((p) => !p.sigueA && !p.sobre)
@@ -2537,10 +2529,15 @@ export default function TrainingApp() {
   }, [cursorSession, kind, PLAN]);
 
   // From Home or anywhere: jump directly to the week view (selected day handled internally)
-  // No recibe el día a propósito: la vista de semana ya resalta el que toca.
-  const startSession = (phase, week) => {
+  // El día solo se pasa al abrir una sesión de OTRO día o de otra semana (`conDia`): hoy la vista de semana ya resalta el que toca.
+  const startSession = (phase, week, dayIdx, conDia = false) => {
     setTab('plan');
-    setView({ level: 'week', phase, week });
+    setView({ level: 'week', phase, week, ...(conDia ? { dayIdx } : null) });
+  };
+  // La semana del plan (la del coach) que cae en una fecha futura: para abrir ahí una sesión que se vio en la tira de Home.
+  const vistaEnFecha = (fecha) => {
+    const r = resolveCursor(PLAN, cursorAlDia(PLAN, cursor, fecha));
+    return r ? { level: 'week', phase: r.phase, week: r.week } : vistaDelPlan();
   };
   /* Cambiar de pestaña desde el tablero. La pestaña "Plan" además coloca la
      vista: sin esto, "Ver mi plan" te dejaba donde estuviera `view`, que recién
@@ -2563,11 +2560,13 @@ export default function TrainingApp() {
   const entradasHoy = useMemo(() => (hayEquipo
     ? entradasDeHoy(programas, store).filter((e) => !filtroVigente || autorDe(e.programa) === filtroVigente)
     : []), [hayEquipo, programas, store, filtroVigente]);
-  // Lo que se SUMÓ a hoy desde otros días («Agregar a hoy»). Con equipo ya viene dentro de `entradasHoy`.
-  const agregadasHoy = useMemo(() => (hayEquipo ? [] : entradasDeHoy(programas, store).filter((e) => e.agregada)), [hayEquipo, programas, store]);
   // «Tu semana» de la portada, con lo de todos.
   const resumenDeEquipo = useMemo(() => (hayEquipo
     ? resumenDeLaSemana(semanaUnificada(programas, store), filtroVigente)
+    : null), [hayEquipo, programas, store, filtroVigente]);
+  // La misma tarjeta para otra semana (al deslizar la tira de Home): cada programa se ubica por su puntero contado hasta esa fecha.
+  const resumenDe = useCallback((fecha) => (hayEquipo
+    ? resumenDeLaSemana(semanaUnificada(programas, store, { hoy: fecha }), filtroVigente)
     : null), [hayEquipo, programas, store, filtroVigente]);
   const altasDeEquipo = useMemo(() => programas.filter((p) => altaReciente(p.altaEn)), [programas]);
 
@@ -2653,12 +2652,6 @@ export default function TrainingApp() {
       onAbrirHoja={setHoja}
       onVerPrograma={() => setProgramaAbierto(true)}
       cursor={cursor}
-      onAgregarAHoy={agregaAHoy}
-      agregadasHoy={agregadasHoy}
-      onAbrirAgregada={(e) => {
-        setTab('plan');
-        setView((v) => ({ level: 'week', phase: e.phase, week: e.week, dayIdx: e.dayIdx, salto: (v.salto ?? 0) + 1 }));
-      }}
       onReanudar={reanudaMiPlan}
       avisosDelCoach={avisosDeProgramas}
       onAceptarAviso={aceptaAvisoDelCoach}
@@ -2671,12 +2664,13 @@ export default function TrainingApp() {
       filtro={filtroVigente}
       onFiltro={setFiltro}
       resumenDeEquipo={resumenDeEquipo}
+      resumenDe={resumenDe}
       altasDeEquipo={altasDeEquipo}
-      // Tocar una sesión de hoy abre «Plan» en ese día, con lo de todos.
-      onAbrirEntrada={(e) => {
+      // Tocar una sesión de hoy abre «Plan» en ese día, con lo de todos. De otra semana (la tira se desliza): en ESA semana.
+      onAbrirEntrada={(e, fecha) => {
         setTab('plan');
         setView((v) => ({
-          ...vistaDelPlan(), dia: normalizaDia(e.day.day), foco: `${e.programa.id}-${e.dayIdx}`, salto: (v.salto ?? 0) + 1,
+          ...(fecha ? vistaEnFecha(fecha) : vistaDelPlan()), dia: normalizaDia(e.day.day), foco: `${e.programa.id}-${e.dayIdx}`, salto: (v.salto ?? 0) + 1,
         }));
       }} />;
   } else if (tab === 'plan') {
@@ -2710,7 +2704,6 @@ export default function TrainingApp() {
           activeSessionId={activeSessionId}
           miDia={miDia}
           onDiaVisto={setDiaVisto}
-          onAgregarAHoy={kind !== 'weekly' && !cursor?.pausa && !soloLectura ? (items) => agregaAHoy(items) : undefined}
           onVolverAMiDia={() => miDia && setView((v) => ({
             level: 'week', phase: miDia.phase, week: miDia.week, dayIdx: miDia.dayIdx, salto: (v.salto ?? 0) + 1,
           }))} />

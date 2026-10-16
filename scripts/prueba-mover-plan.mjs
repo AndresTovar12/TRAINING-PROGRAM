@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {
   cursorAlDia, isoWeekKey, sessionForToday, moverPlanA, pausarPlan, reanudarPlan, estaEnPausa, semanaDeAtras,
-  agregarAHoy, quitarDeHoy, agregadasDeHoy, claveDeDia, dondeVa,
+  semanasPorDelante, claveDeDia, dondeVa,
 } from '../src/lib/training-utils.js';
 
 const dia = (d, name) => ({ day: d, name, cat: 'gym' });
@@ -46,7 +46,7 @@ assert.deepEqual(dondeVa(plan, 'periodized', movido, hoy), { faseId: 'f2', seman
 const conCosas = { ...pausarPlan(avanzado, hoy), aviso: { id: 'x' }, diaElegidoEl: claveDeDia(hoy), agregadas: { el: claveDeDia(hoy), items: [{ phaseId: 'f1', weekNum: 1, dayIdx: 0 }] } };
 const m2 = moverPlanA(plan, conCosas, 'f1', 1, hoy);
 assert.equal(m2.pausa, claveDeDia(hoy)); assert.deepEqual(m2.aviso, { id: 'x' });
-assert.equal('diaElegidoEl' in m2, false); assert.equal('agregadas' in m2, false);
+assert.equal('diaElegidoEl' in m2, false); assert.equal('agregadas' in m2, false); // restos de antes: se limpian
 // Una semana que no existe no mueve nada.
 assert.equal(moverPlanA(plan, avanzado, 'f9', 1, hoy), avanzado);
 
@@ -58,11 +58,7 @@ assert.equal(semanaDeAtras(plan, { phaseId: 'f1', weekNum: 1 }), null);
 const conAviso = { ...viejo, aviso: { id: 'a1', texto: 'Tu coach movió tu plan' } };
 assert.deepEqual(cursorAlDia(plan, conAviso, hoy).aviso, conAviso.aviso);
 
-// Agregar a hoy: se suma, no se repite, caduca mañana y se puede quitar.
-const item = { phaseId: 'f1', weekNum: 2, dayIdx: 1 };
-let c = agregarAHoy(avanzado, item, hoy);
-c = agregarAHoy(c, item, hoy);
-assert.equal(agregadasDeHoy(c, hoy).length, 1);
-assert.equal(agregadasDeHoy(c, new Date(2026, 9, 17, 9)).length, 0);
-assert.equal('agregadas' in quitarDeHoy(c, item), false);
+// Cuántas semanas le quedan al plan por delante.
+assert.equal(semanasPorDelante(plan, { phaseId: 'f1', weekNum: 1 }), 4);
+assert.equal(semanasPorDelante(plan, { phaseId: 'f2', weekNum: 3 }), 0);
 console.log('prueba-mover-plan: todo bien');

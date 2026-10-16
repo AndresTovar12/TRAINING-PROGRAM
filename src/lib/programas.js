@@ -1,6 +1,6 @@
 import {
   cursorAlDia, defaultCursor, isValidCursor, resolveCursor, sessionForToday, sessionIdFor,
-  esDescanso, diasDeEstaSemana, agregadasDeHoy,
+  esDescanso, diasDeEstaSemana,
 } from '@/lib/training-utils';
 import { minutosDelNombre, sesionQueRepite, sesionesDelTitulo, sinDuracion, textoDeSesiones } from '@/lib/sesiones';
 import { esDeSalud } from '@/lib/palabras';
@@ -218,33 +218,10 @@ export function sesionesDeHoy(programa, store, hoy = new Date()) {
     hecha: s.hecha, titulo: s.titulo, ejercicios: s.ejercicios, minutos: s.minutos,
     partes: partesDelDia(s, registros[s.id]),
   });
-  const delDia = sesionesDelDia(programa, store, hoy, registros, comoEntrada);
-  // Lo que el atleta SUMÓ a hoy desde otro día («Agregar a hoy»): de cada programa, solo ese día. No mueve el plan.
-  const ya = new Set(delDia.map((e) => e.id));
-  // Lo pegado al programa del coach (`sigueA`) no tiene puntero propio: no se le suma nada por su cuenta.
-  const cursorDeHoy = !programa.sigueA && programa.kind !== 'weekly' ? cursorDePrograma(programa, store, hoy) : null;
-  const agregadas = cursorDeHoy && !cursorDeHoy.pausa
-    ? agregadasDeHoy(cursorDeHoy, hoy).map(({ phaseId, weekNum, dayIdx }) => {
-      const phase = (programa.phases ?? []).find((f) => f.id === phaseId);
-      const week = phase?.weekData?.find((w) => w.num === weekNum);
-      const day = week?.days?.[dayIdx];
-      if (!day || esDescanso(day)) return null;
-      const id = sessionIdFor(programa.kind, phase.id, week.num, dayIdx, hoy);
-      if (ya.has(id)) return null;
-      const sesion = { phase, week, dayIdx, day };
-      return {
-        ...comoEntrada({
-          ...sesion, id, hecha: !!registros[id]?.completed,
-          titulo: textoDeSesiones(sesionesDelTitulo(day)) || day.day, ...datosDeSesion(sesion),
-        }),
-        agregada: true,
-      };
-    }).filter(Boolean)
-    : [];
-  return [...delDia, ...agregadas];
+  return sesionesDelDia(programa, store, hoy, registros, comoEntrada);
 }
 
-// Las sesiones que toca hoy según el calendario (sin lo agregado a mano).
+// Las sesiones que toca hoy según el calendario.
 function sesionesDelDia(programa, store, hoy, registros, comoEntrada) {
   const unica = sesionDeHoy(programa, store, hoy);
   if (!unica) return [];
