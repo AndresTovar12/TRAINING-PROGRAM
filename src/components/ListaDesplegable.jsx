@@ -478,7 +478,9 @@ export default function ListaDesplegable({
           aria-multiselectable={multiple || undefined}
           onKeyDown={teclas}
           style={{
-            position: 'fixed', zIndex: 3000,
+            /* Por encima de CUALQUIER ventana (16 oct 2026). La lista se monta aparte, al final de la página: con 3000 quedaba detrás de las
+               ventanas de 5000+ (el «Ejercicio nuevo» del editor del plan, 5200) y el coach no podía elegir la categoría. */
+            position: 'fixed', zIndex: 7000,
             left: sitio.left, width: Math.max(sitio.ancho, anchoMinimo),
             top: sitio.top, bottom: sitio.bottom,
             background: T.bg2, border: 'none', borderRadius: 14,

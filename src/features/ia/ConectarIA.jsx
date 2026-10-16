@@ -251,7 +251,7 @@ export default function ConectarIA({ enPerfil = false }) {
             {conversacion[0]}
           </div>
           <div style={{ alignSelf: 'flex-start', maxWidth: '92%', background: '#fff', color: KP.ink, borderRadius: '16px 16px 16px 4px', padding: '10px 13px', fontSize: 14, fontWeight: 500, lineHeight: 1.45, boxShadow: '0 8px 20px rgba(10,20,80,0.25)' }}>
-            <div style={{ fontSize: 10.5, fontWeight: 800, color: KP.blue, letterSpacing: 0.4, marginBottom: 3 }}>CON TRAINING LAB</div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: KP.blue, marginBottom: 3 }}>Con Training Lab</div>
             {conversacion[1]}
           </div>
         </div>
