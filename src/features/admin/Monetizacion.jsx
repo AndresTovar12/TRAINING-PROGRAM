@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Check, Loader2, Plus, Trash2 } from 'lucide-react';
 import { T, KP, FONT } from '@/lib/theme';
-import { botonBlanco, botonPrincipal, campo, etiquetaChica } from '@/features/misplanes/estilos';
+import { botonBlanco, botonPrincipal, campo, etiquetaChica, tarjetaDePanel } from '@/features/misplanes/estilos';
+import { Interruptor } from '@/components/ui';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { ajustesDeMonetizacion, borraPaquete, guardaAjuste, guardaPaquete, todosLosPaquetes } from '@/lib/lugaresApi';
 
@@ -10,8 +11,8 @@ import { ajustesDeMonetizacion, borraPaquete, guardaAjuste, guardaPaquete, todos
    - Los paquetes de lugares que se pueden comprar cuando se llena ese tope.
    - Si las ventas están abiertas. */
 
-const tarjeta = { background: T.bg2, border: `1.5px solid ${T.border}`, borderRadius: 16, padding: '16px 16px 18px' };
-const titulo = { fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 12 };
+const tarjeta = { ...tarjetaDePanel, padding: '18px 18px 20px' };
+const titulo = { fontSize: 17, fontWeight: 800, color: T.text, marginBottom: 12 };
 
 function Aviso({ texto }) {
   return texto ? (
@@ -92,7 +93,7 @@ function FilaDePaquete({ paquete, onCambiado, onBorrado }) {
   }
 
   return (
-    <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 12, marginTop: 12 }}>
+    <div style={{ borderTop: '1px solid #ECEEF2', paddingTop: 14, marginTop: 14 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10 }}>
         <label><span style={etiquetaChica}>Nombre</span><input value={nombre} onChange={(e) => setNombre(e.target.value)} style={{ ...campo, fontSize: 16, marginTop: 4 }} /></label>
         <label><span style={etiquetaChica}>Atletas en total</span><input inputMode="numeric" value={atletas} onChange={(e) => setAtletas(e.target.value)} style={{ ...campo, fontSize: 16, marginTop: 4 }} /></label>
@@ -193,14 +194,15 @@ export default function Monetizacion() {
       </div>
 
       <div style={tarjeta}>
-        <div style={titulo}>Ventas</div>
-        <button
-          type="button" role="switch" aria-checked={ajustes.ventas_abiertas} onClick={cambiaVentas} disabled={cambiandoVentas}
-          style={{ ...botonBlanco(ajustes.ventas_abiertas), color: ajustes.ventas_abiertas ? KP.mint : T.text2, borderColor: ajustes.ventas_abiertas ? KP.mint : T.border }}
-        >
-          {cambiandoVentas ? <Loader2 size={16} className="spin" /> : null}
-          {ajustes.ventas_abiertas ? 'Ventas abiertas' : 'Ventas cerradas'}
-        </button>
+        {/* Un interruptor (reestructura visual): abierto/cerrado es un sí o no. Igual pide confirmación antes de cambiar. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ ...titulo, marginBottom: 2 }}>Ventas</div>
+            <div style={{ fontSize: 14.5, fontWeight: 700, color: ajustes.ventas_abiertas ? KP.mint : T.text2 }}>{ajustes.ventas_abiertas ? 'Abiertas' : 'Cerradas'}</div>
+          </div>
+          {cambiandoVentas && <Loader2 size={18} className="spin" color={T.text2} />}
+          <Interruptor activo={ajustes.ventas_abiertas} onCambio={cambiaVentas} etiqueta="Ventas abiertas" deshabilitado={cambiandoVentas} />
+        </div>
       </div>
 
       <Aviso texto={err} />

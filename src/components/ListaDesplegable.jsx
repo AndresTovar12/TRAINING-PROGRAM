@@ -400,8 +400,9 @@ export default function ListaDesplegable({
         aria-label={etiqueta}
         style={{
           width: '100%', display: 'flex', alignItems: 'center', gap: 9,
-          border: `1.5px solid ${abierto ? T.accent : T.border}`, borderRadius: 11,
-          padding: '11px 13px', background: T.bg2, boxSizing: 'border-box',
+          // Reestructura visual (15 oct 2026): blanca sin contorno (una sombra suave); el contorno azul solo mientras está abierta.
+          border: `1.5px solid ${abierto ? T.accent : 'transparent'}`, borderRadius: 14, boxShadow: '0 1px 2px rgba(17,19,24,0.05)',
+          padding: '12px 14px', background: T.bg2, boxSizing: 'border-box',
           cursor: deshabilitado ? 'default' : 'pointer', opacity: deshabilitado ? 0.6 : 1,
           touchAction: 'manipulation',
           fontFamily: FONT, fontSize: 14, fontWeight: 600, color: elegida ? T.text : T.text3,
