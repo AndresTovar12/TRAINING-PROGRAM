@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { esInstructor } from '@/lib/palabras';
 import Ventana from '@/features/misplanes/Ventana';
 import { COLOR_DE_TIPO, FONDO_DE_TIPO, ICONO_DE_TIPO } from '@/features/misplanes/estilos';
-import { T, FONT, KP } from '@/lib/theme';
+import { T, FONT, UI } from '@/lib/theme';
 
 /* Lo que se puede crear, con las mismas palabras y los mismos íconos que ya ve el coach cuando arma el plan de
    un atleta («Una rutina que se repite», «Varias semanas que avanzan» con el rayo, «Programa por fases») y un
@@ -23,11 +23,11 @@ function Tarjeta({ Icono, color, fondo, titulo, desc, onClick }) {
     <button
       type="button" onClick={onClick}
       style={{
-        display: 'flex', gap: 14, alignItems: 'center', textAlign: 'left', cursor: 'pointer', background: T.bg2,
-        border: `1.5px solid ${T.border}`, borderRadius: 18, padding: 16, fontFamily: FONT, boxShadow: KP.shCard,
+        display: 'flex', gap: 14, alignItems: 'center', textAlign: 'left', cursor: 'pointer', background: 'transparent',
+        border: 'none', padding: '14px 16px', fontFamily: FONT, width: '100%',
       }}
     >
-      <span style={{ width: 46, height: 46, borderRadius: 14, background: fondo, color, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+      <span style={{ width: 42, height: 42, borderRadius: 12, background: fondo, color, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
         <Icono size={22} />
       </span>
       <span style={{ flex: 1, minWidth: 0 }}>
@@ -40,7 +40,7 @@ function Tarjeta({ Icono, color, fondo, titulo, desc, onClick }) {
 }
 
 /**
- * El Centro de creación: lo que se abre con «+ Crear» en Mis planes. Cinco tarjetas grandes (la «Clase» va primero para quien da clases); la que se elige
+ * El Centro de creación: lo que se abre con «+ Crear» en Mis planes. Cinco renglones en una lista agrupada (la «Clase» va primero para quien da clases); la que se elige
  * abre el MISMO editor de siempre, sin atleta (Andrés, 2 oct 2026).
  *
  * Dentro de una carpeta el botón es «+ Agregar» (`agregar`): el título dice a qué carpeta se agrega y, si viene
@@ -58,23 +58,23 @@ export default function CentroDeCreacion({ carpetaTexto, agregar = false, onEleg
       onCerrar={onCerrar}
       ancho={520}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 4 }}>
+      {/* Una lista agrupada (una tarjeta, renglones con hilo), como «Entrenar» y Mi perfil: reestructura visual, 16 oct 2026. */}
+      <div className="grupo-renglones" style={{ display: 'flex', flexDirection: 'column', marginTop: 4, background: T.bg2, borderRadius: UI.rGrupo, boxShadow: UI.sombraGrupo, overflow: 'hidden' }}>
         {opciones.map((o) => (
           <Tarjeta
             key={o.forma} Icono={o.icono ?? ICONO_DE_TIPO[o.tipo]} color={COLOR_DE_TIPO[o.tipo]} fondo={FONDO_DE_TIPO[o.tipo]}
             titulo={o.titulo} desc={t(o.desc)} onClick={() => onElegir(o.forma)}
           />
         ))}
-        {onTraer && (
-          <>
-            <div aria-hidden="true" style={{ height: 1, background: T.border, margin: '4px 2px' }} />
-            <Tarjeta
-              Icono={FolderInput} color={T.text2} fondo={T.bg3} titulo="Traer algo que ya tengo"
-              desc="Lo que ya guardaste, de otras carpetas o sueltas." onClick={onTraer}
-            />
-          </>
-        )}
       </div>
+      {onTraer && (
+        <div style={{ marginTop: 12, background: T.bg2, borderRadius: UI.rGrupo, boxShadow: UI.sombraGrupo, overflow: 'hidden' }}>
+          <Tarjeta
+            Icono={FolderInput} color={T.text2} fondo={T.bg3} titulo="Traer algo que ya tengo"
+            desc="Lo que ya guardaste, de otras carpetas o sueltas." onClick={onTraer}
+          />
+        </div>
+      )}
     </Ventana>
   );
 }

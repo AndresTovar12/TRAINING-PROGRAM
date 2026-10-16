@@ -90,7 +90,7 @@ export default function Redactor({ alTexto, alArchivo, alVoz, alError, ocupado =
           onChange={(e) => { setTexto(e.target.value); ajustaAlto(); }}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && esCompu) { e.preventDefault(); envia(); } }}
           style={{
-            flex: 1, minWidth: 0, resize: 'none', border: `1.5px solid ${T.border}`, borderRadius: 20, background: T.bg, padding: '11px 15px', fontFamily: FONT, fontSize: 16, lineHeight: 1.35,
+            flex: 1, minWidth: 0, resize: 'none', border: 'none', borderRadius: 20, background: T.bg, padding: '11px 15px', fontFamily: FONT, fontSize: 16, lineHeight: 1.35,
             color: T.text, outline: 'none', maxHeight: 132,
           }}
         />

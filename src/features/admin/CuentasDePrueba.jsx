@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Check, Copy, Eye, FlaskConical, KeyRound, Loader2, Plus, Trash2 } from 'lucide-react';
-import { T, KP, FONT } from '@/lib/theme';
+import { T, KP, FONT, UI } from '@/lib/theme';
 import { botonBlanco, botonPrincipal, campo, etiquetaChica } from '@/features/misplanes/estilos';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { listCoaches } from '@/lib/api';
@@ -16,7 +16,7 @@ import { useEnBanda } from '@/components/ui';
 
 const chip = (activa) => ({
   minHeight: 40, padding: '0 16px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 800,
-  border: `1.5px solid ${activa ? T.accent : T.border}`, background: activa ? T.accentBg : T.bg2, color: activa ? T.accent : T.text2,
+  border: 'none', background: activa ? T.accentBg : UI.relleno, color: activa ? T.accent : T.text2,
 });
 
 function Copiar({ texto, etiqueta }) {
@@ -31,7 +31,7 @@ function Copiar({ texto, etiqueta }) {
   return (
     <button
       type="button" onClick={copia} aria-label={`Copiar ${etiqueta}`}
-      style={{ width: 40, height: 40, borderRadius: 11, border: `1.5px solid ${T.border}`, background: T.bg2, color: listo ? KP.mint : T.text2, cursor: 'pointer', display: 'grid', placeItems: 'center', flexShrink: 0 }}
+      style={{ width: 40, height: 40, borderRadius: 11, border: 'none', background: UI.relleno, color: listo ? KP.mint : T.text2, cursor: 'pointer', display: 'grid', placeItems: 'center', flexShrink: 0 }}
     >
       {listo ? <Check size={16} strokeWidth={3} /> : <Copy size={16} />}
     </button>
@@ -51,7 +51,7 @@ const Dato = ({ etiqueta, children, copia }) => (
 function Fila({ cuenta, nueva, ocupado, onVerComo, onNuevaClave, onBorrar }) {
   const nombre = cuenta.full_name || cuenta.username;
   return (
-    <div style={{ background: KP.surface, borderRadius: 20, boxShadow: '0 1px 2px rgba(17,19,24,0.04)', padding: 16, display: 'flex', flexDirection: 'column', gap: 12, outline: nueva ? `2px solid ${KP.mint}` : 'none' }}>
+    <div style={{ background: KP.surface, borderRadius: 20, boxShadow: '0 1px 2px rgba(17,19,24,0.04)', padding: 16, display: 'flex', flexDirection: 'column', gap: 12, outline: nueva ? `2px solid ${KP.mint}` : 'none' /* estilo-ok: la cuenta recién creada */ }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ fontSize: 16.5, fontWeight: 800, color: T.text, overflowWrap: 'anywhere' }}>{nombre}</div>
         <span style={{ padding: '3px 10px', borderRadius: 999, background: T.accentBg, color: T.accent, fontSize: 12, fontWeight: 800 }}>

@@ -21,7 +21,7 @@ export default function EspacioDeVideos({ activo = true }) {
     <div
       role="group"
       aria-label={`Espacio de videos: ${e.texto}`}
-      style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 12, padding: '10px 14px', marginBottom: 16 }}
+      style={{ background: T.bg2, border: 'none', borderRadius: 12, padding: '10px 14px', marginBottom: 16 }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, fontFamily: FONT }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 800, color: T.text }}>

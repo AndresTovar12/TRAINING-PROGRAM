@@ -150,7 +150,7 @@ function TablaDeVueltas({ vueltas, deporte }) {
   const rapido = Math.min(...ritmos);
   const lento = Math.max(...ritmos);
   const celda = { fontSize: 14, fontWeight: 700, color: LT.text, ...NUM_STYLE };
-  const cabecera = { fontSize: 11, fontWeight: 700, color: LT.text3, letterSpacing: 0.5, textTransform: 'uppercase' };
+  const cabecera = { fontSize: 13, fontWeight: 700, color: LT.text2, };
   return (
     <div role="table" aria-label="Vueltas" style={{ display: 'flex', flexDirection: 'column' }}>
       <div role="row" style={{ display: 'grid', gridTemplateColumns: '34px 1fr 64px 1.3fr 52px', gap: 8, padding: '0 0 8px', borderBottom: `1px solid ${KP.line}` }}>
@@ -297,7 +297,7 @@ export default function DetalleDeEntreno({ actividad, sesion = null, unidadPeso 
           {sellos.length > 0 && (
             <button
               type="button" onClick={() => setVerSello(true)} className="kp-press"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 12, border: `1.5px solid ${LT.blue}`, background: LT.surface, cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 800, color: LT.blue, touchAction: 'manipulation' }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 12, border: 'none', background: KP.blueSoft, cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 800, color: LT.blue, touchAction: 'manipulation' }}
             >
               <Share2 size={15} /> Activity card
             </button>

@@ -22,7 +22,7 @@ import { rutaDeTienda } from '@/lib/tiendaApi';
 // La tienda pública (`/@usuario`, `/@usuario/plan`): la ve cualquiera, con o sin cuenta. Va aparte para que quien solo usa la app no la baje.
 const TiendaPublica = lazy(() => import('@/features/tienda/TiendaPublica'));
 const Catalogo = lazy(() => import('@/features/catalogo/Catalogo'));
-import { FONT, KP } from '@/lib/theme';
+import { FONT, KP, UI } from '@/lib/theme';
 
 function Splash({ label = 'Cargando…' }) {
   return (
@@ -38,7 +38,7 @@ function Splash({ label = 'Cargando…' }) {
         className="kp-pulse"
         style={{
           width: 60, height: 60, borderRadius: 18, display: 'grid', placeItems: 'center',
-          background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`,
+          background: KP.blue,
           boxShadow: KP.shBtn,
         }}
       >
@@ -169,7 +169,7 @@ function UpdateBanner() {
       style={{
         position: 'fixed', left: 12, right: 12, bottom: 'calc(12px + env(safe-area-inset-bottom))',
         zIndex: 4000, display: 'flex', alignItems: 'center', gap: 12,
-        background: KP.surface, border: `1px solid ${KP.line}`, borderRadius: 16,
+        background: KP.surface, border: 'none', borderRadius: 16,
         padding: '12px 14px', boxShadow: KP.shPop, fontFamily: FONT,
         maxWidth: 520, marginInline: 'auto',
       }}
@@ -187,7 +187,7 @@ function UpdateBanner() {
         className="kp-press"
         style={{
           flexShrink: 0, border: 'none', cursor: 'pointer', borderRadius: 12, padding: '11px 16px',
-          background: `linear-gradient(135deg, ${KP.blue}, ${KP.blueDk})`, color: '#fff',
+          background: KP.blue, color: '#fff',
           fontFamily: FONT, fontSize: 14, fontWeight: 800, boxShadow: KP.shBtn,
         }}
       >
@@ -240,8 +240,8 @@ function CuentaDesactivada() {
         className="kp-press"
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 4,
-          padding: '13px 22px', borderRadius: 999, border: `1.5px solid ${KP.line}`,
-          background: KP.surface, color: KP.ink, cursor: 'pointer',
+          padding: '13px 22px', borderRadius: 999, border: 'none',
+          background: UI.relleno, color: KP.ink, cursor: 'pointer',
           fontFamily: FONT, fontSize: 15, fontWeight: 700,
         }}
       >
@@ -330,7 +330,7 @@ function InvitacionConSesion({ onSalir }) {
           className="kp-press"
           style={{
             padding: '14px 22px', borderRadius: 999, border: 'none',
-            background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, color: '#fff',
+            background: KP.blue, color: '#fff',
             cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 800, boxShadow: KP.shBtn,
           }}
         >
@@ -340,8 +340,8 @@ function InvitacionConSesion({ onSalir }) {
           type="button"
           onClick={onSalir}
           style={{
-            padding: '13px 22px', borderRadius: 999, border: `1.5px solid ${KP.line}`,
-            background: KP.surface, color: KP.ink, cursor: 'pointer',
+            padding: '13px 22px', borderRadius: 999, border: 'none',
+            background: UI.relleno, color: KP.ink, cursor: 'pointer',
             fontFamily: FONT, fontSize: 15, fontWeight: 700,
           }}
         >

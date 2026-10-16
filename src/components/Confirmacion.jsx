@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
-import { FONT, KP } from '@/lib/theme';
+import { FONT, KP, UI } from '@/lib/theme';
 
 /**
  * El "¿seguro?" de la app, en vez del `window.confirm` del navegador.
@@ -89,7 +89,7 @@ export function ConfirmacionProvider({ children }) {
             className="animate-fade-in"
             style={{
               width: '100%', maxWidth: 380, background: KP.surface, borderRadius: 20,
-              border: `1px solid ${KP.line}`, boxShadow: KP.shPop, padding: 22,
+              border: 'none', boxShadow: KP.shPop, padding: 22,
               display: 'flex', flexDirection: 'column', gap: 14,
             }}
           >
@@ -123,7 +123,7 @@ export function ConfirmacionProvider({ children }) {
                 className="kp-press"
                 style={{
                   flex: 1, padding: '13px 14px', borderRadius: 13, cursor: 'pointer',
-                  border: `1.5px solid ${KP.line}`, background: KP.surface, color: KP.ink,
+                  border: 'none', background: UI.relleno, color: KP.ink,
                   fontFamily: FONT, fontSize: 14.5, fontWeight: 700,
                 }}
               >

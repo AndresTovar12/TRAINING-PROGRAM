@@ -25,7 +25,7 @@ import GrabadoraDeVideo from '@/features/admin/GrabadoraDeVideo';
 import { recortaImagen } from '@/features/admin/recorte';
 import { useCoarsePointer } from '@/lib/useViewport';
 import Portada from '@/components/Portada';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, UI } from '@/lib/theme';
 
 export default function MediaUpload({
   // `icon` lo siguen pasando los llamadores. Ya no se pinta —lo reemplazo la
@@ -348,8 +348,8 @@ export default function MediaUpload({
                 flex: 1, minWidth: 0,
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                 gap: 6, minHeight: 44, padding: '0 10px', borderRadius: 11,
-                border: `1.5px solid ${T.border}`,
-                background: T.bg2, cursor: busy ? 'default' : 'pointer',
+                border: 'none',
+                background: UI.relleno, cursor: busy ? 'default' : 'pointer',
                 fontFamily: FONT, fontSize: 13, fontWeight: 700, color: T.text2, whiteSpace: 'nowrap',
               }}
             >
@@ -363,7 +363,7 @@ export default function MediaUpload({
             disabled={busy}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 7, padding: '10px 14px',
-              borderRadius: 11, border: `1.5px solid ${T.border}`, background: T.bg2, cursor: 'pointer',
+              borderRadius: 11, border: 'none', background: UI.relleno, cursor: 'pointer',
               fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: T.text, whiteSpace: 'nowrap',
             }}
           >
@@ -401,7 +401,7 @@ export default function MediaUpload({
           ruedita de 15px dentro del boton, y un video de 80 MB por datos
           moviles se veia igual que si la app no hubiera hecho nada. */}
       {busy && archivo && (
-        <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 11, padding: '10px 12px' }}>
+        <div style={{ background: T.bg, border: 'none', borderRadius: 11, padding: '10px 12px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 12.5, fontWeight: 700, color: T.text }}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{archivo.nombre}</span>
             <span style={{ flexShrink: 0, color: T.accent }}>{avance}%</span>
@@ -502,7 +502,7 @@ export function PreguntaDeVideo({ nombre, onElige, onCancelar }) {
               key={id} type="button" onClick={() => onElige(id)} className="kp-press"
               style={{
                 minHeight: 84, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 7,
-                borderRadius: 16, border: `1.5px solid ${T.border}`, background: T.bg2, cursor: 'pointer', fontFamily: FONT,
+                borderRadius: 16, border: 'none', background: UI.relleno, cursor: 'pointer', fontFamily: FONT,
                 color: T.text, touchAction: 'manipulation',
               }}
             >

@@ -38,7 +38,7 @@ export default function SelectorOficio({ value, onChange, etiqueta = '¿A qué t
 
   return (
     <div ref={caja} style={{ position: 'relative' }}>
-      <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', color: KP.ink3, marginBottom: 8 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: KP.ink2, marginBottom: 8 }}>
         {etiqueta}
       </div>
       <button
@@ -47,7 +47,7 @@ export default function SelectorOficio({ value, onChange, etiqueta = '¿A qué t
         style={{
           width: '100%', display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left',
           minHeight: 52, padding: '0 14px', borderRadius: KP.rField, cursor: 'pointer',
-          border: `1.5px solid ${KP.line}`, background: KP.bg, fontFamily: FONT,
+          border: 'none', background: KP.bg, fontFamily: FONT,
           fontSize: 15, fontWeight: 600, color: value ? KP.ink : KP.ink3,
         }}
       >
@@ -63,7 +63,7 @@ export default function SelectorOficio({ value, onChange, etiqueta = '¿A qué t
           className="animate-fade-in"
           style={{
             position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 40,
-            background: KP.surface, border: `1px solid ${KP.line}`, borderRadius: 16,
+            background: KP.surface, border: 'none', borderRadius: 16,
             boxShadow: KP.shPop, padding: 7,
           }}
         >

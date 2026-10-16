@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Check, Copy, QrCode } from 'lucide-react';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, UI } from '@/lib/theme';
 import { ligaParaUnirse } from '@/lib/api';
 import MostrarQR from '@/features/admin/MostrarQR';
 
@@ -47,14 +47,14 @@ export default function CodigoDeCoach({ codigo, estilo, nombre }) {
     <div
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 10,
-        background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 12,
+        background: T.bg2, border: 'none', borderRadius: 12,
         padding: '8px 9px 8px 13px',
       }}
     >
       <div style={{ minWidth: 0 }}>
         <div style={{
-          fontSize: 10.5, fontWeight: 800, letterSpacing: 0.6,
-          textTransform: 'uppercase', color: T.text3, lineHeight: 1.2,
+          fontSize: 13, fontWeight: 700,
+          color: T.text2, lineHeight: 1.2,
         }}>
           Tu código
         </div>
@@ -74,8 +74,8 @@ export default function CodigoDeCoach({ codigo, estilo, nombre }) {
         style={{
           display: 'grid', placeItems: 'center', width: 36, minHeight: 36, flexShrink: 0,
           borderRadius: 9, cursor: 'pointer', touchAction: 'manipulation',
-          border: `1.5px solid ${copiado ? T.accent : T.border}`,
-          background: copiado ? T.accentBg : T.bg,
+          border: 'none',
+          background: copiado ? T.accentBg : UI.relleno,
           color: copiado ? T.accent : T.text2,
         }}
       >
@@ -88,7 +88,7 @@ export default function CodigoDeCoach({ codigo, estilo, nombre }) {
       aria-label="Mostrar QR de mi código"
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 14px',
-        background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 12, cursor: 'pointer',
+        background: UI.relleno, border: 'none', borderRadius: 12, cursor: 'pointer',
         touchAction: 'manipulation', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, color: T.text,
       }}
     >

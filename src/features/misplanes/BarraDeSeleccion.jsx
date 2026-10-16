@@ -19,7 +19,7 @@ export default function BarraDeSeleccion({ onMover, onEliminar }) {
         className="animate-fade-in"
         style={{
           pointerEvents: 'auto', display: 'flex', gap: 8, width: 'min(460px, 100%)', background: T.bg2,
-          border: `1px solid ${T.border}`, borderRadius: 18, padding: 8, boxShadow: KP.shPop,
+          border: 'none', borderRadius: 18, padding: 8, boxShadow: KP.shPop,
         }}
       >
         <button type="button" onClick={onMover} style={{ ...botonPrincipal(false), flex: 1 }}>
@@ -27,7 +27,7 @@ export default function BarraDeSeleccion({ onMover, onEliminar }) {
         </button>
         <button
           type="button" onClick={onEliminar}
-          style={{ ...botonBlanco(), flex: 1, color: T.danger, borderColor: 'rgba(220,38,38,0.4)' }}
+          style={{ ...botonBlanco(), flex: 1, color: T.danger, background: KP.dangerSoft }}
         >
           <Trash2 size={16} /> Eliminar
         </button>

@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { ArrowLeft, X, PanelLeftClose, PanelLeft, Save, Ellipsis, ChevronDown, Undo2, Redo2 } from 'lucide-react';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, UI } from '@/lib/theme';
 
 /**
  * La barra de arriba del editor en la compu (en el celular el editor trae la suya).
@@ -23,7 +23,7 @@ import { T, FONT } from '@/lib/theme';
  */
 const cuadrado = {
   width: 36, height: 36, borderRadius: 11, flexShrink: 0, cursor: 'pointer', display: 'grid', placeItems: 'center',
-  border: `1px solid ${T.border}`, background: T.bg2, color: T.text, fontFamily: FONT,
+  border: 'none', background: UI.relleno, color: T.text, fontFamily: FONT,
 };
 
 /**
@@ -36,7 +36,7 @@ export function BotonesDeHistorial({ puedeDeshacer, puedeRehacer, onDeshacer, on
     <button
       type="button" onClick={onClick} disabled={!activo} aria-label={etiqueta} title={`${etiqueta} (${atajo})`}
       style={{
-        ...cuadrado, border: '1px solid transparent', background: 'transparent', color: activo ? T.text2 : T.borderHi,
+        ...cuadrado, border: 'none', background: 'transparent', color: activo ? T.text2 : T.borderHi,
         cursor: activo ? 'pointer' : 'default',
       }}
     >
@@ -62,8 +62,8 @@ function BotonDelPrograma({ icono: Icono, children, color = T.text2, colorIcono 
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0, whiteSpace: 'nowrap', cursor: activo ? 'pointer' : 'default',
         padding: '5px 6px', borderRadius: 9, fontFamily: FONT, fontSize: 11.5, fontWeight: 700, color: c,
-        border: `1px solid ${rojo ? (encima ? 'rgba(220,38,38,0.45)' : 'rgba(220,38,38,0.28)') : (encima && activo ? T.borderHi : T.border)}`,
-        background: encima && activo ? (rojo ? 'rgba(220,38,38,0.08)' : (color === T.accent ? T.accentBg : T.bg)) : T.bg2,
+        border: 'none',
+        background: rojo ? 'rgba(220,38,38,0.08)' : (encima && activo ? (color === T.accent ? T.accentBg : '#E2E5EB') : UI.relleno),
       }}
     >
       <Icono size={12} color={rojo ? T.danger : colorIcono} />
@@ -133,7 +133,7 @@ export default function EditorBarra({
   });
 
   const rotulo = {
-    fontSize: 10.5, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 3,
+    fontSize: 13, fontWeight: 700, color: T.text2, marginBottom: 3,
     whiteSpace: 'nowrap',
   };
 
@@ -157,11 +157,11 @@ export default function EditorBarra({
               value={titulo} onChange={(e) => onTitulo(e.target.value)} aria-label={rotuloTitulo}
               style={{
                 width: '100%', boxSizing: 'border-box', margin: 0, padding: '6px 11px', borderRadius: 11, outline: 'none',
-                border: `1px solid ${T.border}`, background: T.bg2, color: T.text, fontFamily: FONT, fontSize: 14, fontWeight: 600,
+                border: 'none', background: UI.relleno, color: T.text, fontFamily: FONT, fontSize: 14, fontWeight: 600,
                 textOverflow: 'ellipsis',
               }}
-              onFocus={(e) => { e.target.style.borderColor = T.accent; }}
-              onBlur={(e) => { e.target.style.borderColor = T.border; }}
+              onFocus={(e) => { /* estilo-ok: aro de foco al escribir */ e.target.style.boxShadow = `inset 0 0 0 1.5px ${T.accent}`; }}
+              onBlur={(e) => { e.target.style.boxShadow = 'none'; }}
             />
           </label>
         )}
@@ -169,7 +169,7 @@ export default function EditorBarra({
           type="button" onClick={onAlternarGuia} aria-label={guiaOculta ? 'Mostrar la guía' : 'Ocultar la guía'}
           title={`${guiaOculta ? 'Mostrar la guía' : 'Ocultar la guía'} (Ctrl+B)`}
           style={{
-            ...cuadrado, border: '1px solid transparent', background: guiaOculta ? T.accentBg : 'transparent', color: T.accent,
+            ...cuadrado, border: 'none', background: guiaOculta ? T.accentBg : 'transparent', color: T.accent,
           }}
         >
           {guiaOculta ? <PanelLeft size={18} /> : <PanelLeftClose size={18} />}

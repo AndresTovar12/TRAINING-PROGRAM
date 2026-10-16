@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { LT, KP, FONT, NUM_STYLE, eyebrow } from '@/lib/theme';
+import { LT, KP, FONT, NUM_STYLE, eyebrow, UI } from '@/lib/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { guardaUmbrales, recalculaTodo } from '@/lib/metricasApi';
 import { ZONAS, limitesDeZonas } from '@/lib/metricas/calculos';
@@ -19,7 +19,7 @@ function Campo({ id, titulo, ayuda, valor, onChange, sugerido, origen, minimo, m
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <input
           id={id} type="number" inputMode="numeric" min={minimo} max={maximo} value={valor} placeholder={String(sugerido)} onChange={(e) => onChange(e.target.value)}
-          style={{ width: 120, height: 48, borderRadius: 14, border: `1.5px solid ${LT.borderHi}`, background: LT.surface, padding: '0 14px', fontFamily: FONT, fontSize: 18, fontWeight: 800, color: LT.text, ...NUM_STYLE }}
+          style={{ width: 120, height: 48, borderRadius: 14, border: 'none', background: UI.relleno, padding: '0 14px', fontFamily: FONT, fontSize: 18, fontWeight: 800, color: LT.text, ...NUM_STYLE }}
         />
         <span style={{ fontSize: 13.5, fontWeight: 600, color: LT.text2 }}>lpm</span>
       </div>

@@ -89,7 +89,7 @@ export function BarraInferior({ secciones, activa, onCambio, variante = 'atleta'
             <span style={{ position: 'relative', display: 'grid' }}>
               <Icono size={22} strokeWidth={puesta ? 2.3 : 1.9} />
               {aviso > 0 && (
-                <span style={{ position: 'absolute', top: -6, right: -10, minWidth: 18, height: 18, padding: '0 5px', borderRadius: 99, background: KP.danger, color: '#fff', fontSize: 11, fontWeight: 800, display: 'grid', placeItems: 'center', border: `2px solid ${coach ? '#1733B8' : '#fff'}` }}>
+                <span style={{ /* estilo-ok: aro blanco del globito de avisos */ position: 'absolute', top: -6, right: -10, minWidth: 18, height: 18, padding: '0 5px', borderRadius: 99, background: KP.danger, color: '#fff', fontSize: 11, fontWeight: 800, display: 'grid', placeItems: 'center', border: `2px solid ${coach ? '#1733B8' : '#fff'}` }}>
                   {aviso > 99 ? '99+' : aviso}
                 </span>
               )}
@@ -151,7 +151,7 @@ export function CabeceraConBanda({ saludo, fecha, avatar, titulo, detalle, accio
       <div style={{ background: UI.azul, color: '#fff', padding: 'calc(18px + env(safe-area-inset-top)) 20px 52px', borderRadius: '0 0 28px 28px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ minWidth: 0 }}>
-            {fecha && <div style={{ fontSize: 12.5, fontWeight: 800, letterSpacing: 1.2, textTransform: 'uppercase', opacity: 0.8 }}>{fecha}</div>}
+            {fecha && <div style={{ fontSize: 13, fontWeight: 700, opacity: 0.8 }}>{fecha}</div>}
             <div style={{ fontSize: 25, fontWeight: 800, letterSpacing: -0.4 }}>{saludo}</div>
           </div>
           {avatar}

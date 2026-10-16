@@ -10,10 +10,10 @@ import { separaFoto } from '@/lib/fotoConFoco';
  * Los colores son los de siempre en Home (coral para Salud, azules para el plan, tinta para la activity card).
  */
 const TONOS = {
-  coral: { fondo: 'linear-gradient(150deg, #FF8E5E 0%, #F2555A 55%, #DD4A92 100%)', sombra: 'rgba(221,74,146,0.28)' },
-  cielo: { fondo: 'linear-gradient(160deg, #6AA8FF 0%, #3B7BF5 50%, #1E4FE0 100%)', sombra: 'rgba(30,79,224,0.28)' },
-  azul: { fondo: 'linear-gradient(160deg, #2448E8 0%, #1733B8 55%, #0D1A66 100%)', sombra: 'rgba(14,30,120,0.32)' },
-  tinta: { fondo: 'linear-gradient(165deg, #2B3263 0%, #171C3E 58%, #0B0E24 100%)', sombra: 'rgba(12,16,52,0.34)' },
+  coral: { /* estilo-ok: cuadros de color de Home (capturas aprobadas) */ fondo: 'linear-gradient(150deg, #FF8E5E 0%, #F2555A 55%, #DD4A92 100%)', sombra: 'rgba(221,74,146,0.28)' },
+  cielo: { /* estilo-ok: cuadros de color de Home (capturas aprobadas) */ fondo: 'linear-gradient(160deg, #6AA8FF 0%, #3B7BF5 50%, #1E4FE0 100%)', sombra: 'rgba(30,79,224,0.28)' },
+  azul: { /* estilo-ok: cuadros de color de Home (capturas aprobadas) */ fondo: 'linear-gradient(160deg, #2448E8 0%, #1733B8 55%, #0D1A66 100%)', sombra: 'rgba(14,30,120,0.32)' },
+  tinta: { /* estilo-ok: cuadros de color de Home (capturas aprobadas) */ fondo: 'linear-gradient(165deg, #2B3263 0%, #171C3E 58%, #0B0E24 100%)', sombra: 'rgba(12,16,52,0.34)' },
 };
 
 /* `accion` va abajo a la derecha, junto a lo grande (el play de «Entrenar libre»): arriba, en un cuadro de 165 px de ancho, no le dejaba
@@ -33,7 +33,7 @@ export function Cuadro({ tono = 'azul', Icono, etiqueta, titulo, sub, onClick, a
       {url && (
         <>
           <img src={url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: `${x}% ${y}%`, zIndex: -2 }} />
-          <span aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: -1, background: 'linear-gradient(180deg, rgba(8,14,50,0.45) 0%, rgba(8,14,50,0.15) 40%, rgba(8,14,50,0.82) 100%)' }} />
+          <span aria-hidden="true" style={{ /* estilo-ok: velo para leer sobre la foto */ position: 'absolute', inset: 0, zIndex: -1, background: 'linear-gradient(180deg, rgba(8,14,50,0.45) 0%, rgba(8,14,50,0.15) 40%, rgba(8,14,50,0.82) 100%)' }} />
         </>
       )}
       {!url && <span aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: -1, background: 'radial-gradient(circle at 85% 8%, rgba(255,255,255,0.24), transparent 48%)' }} />}

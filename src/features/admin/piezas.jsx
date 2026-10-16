@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, UI } from '@/lib/theme';
 
 /* Las piezas chicas del editor de planes: botón de icono, pastilla de acción y contador con − y +.
    Viven aquí y no dentro de `PlanBuilder` para que las usen también las piezas que se le añaden
@@ -23,7 +23,7 @@ export function IconBtn({ icon: Icon, onClick, danger, disabled, title, sobreFot
       className={sobreFoto ? 'kp-accion' : 'kp-ico kp-accion'}
       style={{
         width: 30, height: 30, borderRadius: 999, cursor: disabled ? 'default' : 'pointer',
-        border: sobreFoto ? `1px solid ${T.border}` : 'none',
+        border: 'none',
         background: sobreFoto ? T.bg2 : 'transparent',
         color: danger ? T.danger : T.text3, display: 'grid', placeItems: 'center',
         opacity: disabled ? 0.3 : 1, flexShrink: 0,
@@ -85,8 +85,8 @@ export function Contador({
 }) {
   const [borrador, setBorrador] = useState(null);
   const btn = (apagado) => ({
-    width: 28, height: 28, borderRadius: 8, border: `1px solid ${T.border}`, cursor: apagado ? 'default' : 'pointer',
-    background: T.bg2, color: T.text, display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 15,
+    width: 28, height: 28, borderRadius: 8, border: 'none', cursor: apagado ? 'default' : 'pointer',
+    background: UI.relleno, color: T.text, display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 15,
     fontFamily: FONT, opacity: apagado ? 0.4 : 1, flexShrink: 0,
   });
   return (

@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react';
 import { Aperture, Asterisk, Check, Dumbbell, Lock, MousePointerClick, Plus, SquareTerminal } from 'lucide-react';
-import { FONT, KP } from '@/lib/theme';
+import { FONT, KP, UI } from '@/lib/theme';
 
 /**
  * Las pantallas que la persona va a ver al conectar su IA, dibujadas en
@@ -89,7 +89,7 @@ export function Marco({ tipo, direccion, resaltaDireccion, children }) {
     return (
       <div style={{
         width: '100%', maxWidth: 420, borderRadius: 14, overflow: 'visible', background: KP.surface,
-        border: `1px solid ${KP.lineHi}`, boxShadow: '0 14px 34px rgba(17,19,24,.10)',
+        border: 'none', boxShadow: '0 14px 34px rgba(17,19,24,.10)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderBottom: `1px solid ${KP.line}`, background: '#F7F8FA', borderRadius: '14px 14px 0 0' }}>
           <span style={{ display: 'flex', gap: 4 }}>
@@ -125,8 +125,8 @@ export function Marco({ tipo, direccion, resaltaDireccion, children }) {
 /* ------------------------------------------------------------------ */
 
 const campo = (resaltado) => ({
-  border: `1.5px solid ${resaltado ? KP.blue : KP.lineHi}`, borderRadius: 8, padding: '6px 8px',
-  fontSize: 10.5, fontWeight: 600, color: KP.ink, background: KP.surface, overflow: 'hidden',
+  border: 'none', borderRadius: 8, padding: '6px 8px',
+  fontSize: 10.5, fontWeight: 600, color: KP.ink, background: resaltado ? KP.blueSoft : KP.surface, overflow: 'hidden',
   textOverflow: 'ellipsis', whiteSpace: 'nowrap',
 });
 const etiqueta = { fontSize: 9.5, fontWeight: 700, color: KP.ink3, margin: '0 0 3px' };
@@ -152,7 +152,7 @@ const itemLateral = (texto, activo) => (
 const opcionDeMenu = (texto, activa) => (
   <div style={{
     fontSize: 10, fontWeight: activa ? 800 : 600, color: KP.ink, padding: '5px 8px', borderRadius: 6,
-    border: `1.5px solid ${activa ? KP.blue : 'transparent'}`, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+    border: 'none', background: activa ? KP.blueSoft : UI.relleno, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
   }}>{texto}</div>
 );
 const botonNegro = (texto, extra = {}) => (
@@ -214,7 +214,7 @@ function ClaudeConectores({ resalta }) {
         <Toca activo={resalta === 'agregar'}>{botonNegro('+ Agregar')}</Toca>
       </div>
       {resalta === 'personalizado' ? (
-        <div style={{ marginTop: 10, marginLeft: 'auto', width: 'fit-content', maxWidth: '100%', background: KP.surface, border: `1px solid ${KP.line}`, borderRadius: 10, padding: 5, boxShadow: '0 8px 20px rgba(17,19,24,.12)' }}>
+        <div style={{ marginTop: 10, marginLeft: 'auto', width: 'fit-content', maxWidth: '100%', background: KP.surface, border: 'none', borderRadius: 10, padding: 5, boxShadow: '0 8px 20px rgba(17,19,24,.12)' }}>
           <Toca activo etiqueta="Esta opción">{opcionDeMenu('Agregar conector personalizado', true)}</Toca>
         </div>
       ) : (
@@ -241,7 +241,7 @@ function ClaudeFormulario({ resalta }) {
     </div>
   );
   return (
-    <div style={{ background: KP.surface, borderRadius: 12, border: `1px solid ${KP.line}`, padding: 11, boxShadow: '0 8px 20px rgba(17,19,24,.08)' }}>
+    <div style={{ background: KP.surface, borderRadius: 12, border: 'none', padding: 11, boxShadow: '0 8px 20px rgba(17,19,24,.08)' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6, marginBottom: 9 }}>
         <span style={{ fontSize: 12, fontWeight: 800, color: KP.ink }}>Agregar conector personalizado</span>
         <span style={{ fontSize: 9, fontWeight: 700, color: KP.ink3, whiteSpace: 'nowrap' }}>Paso {paso2 ? 2 : 1} de 2</span>
@@ -295,7 +295,7 @@ function ChatGPTComplementos({ resalta }) {
         {menuAbierto ? (
           <div style={{
             marginTop: 10, background: KP.surface,
-            border: `1px solid ${KP.line}`, borderRadius: 10, padding: 5, boxShadow: '0 8px 20px rgba(17,19,24,.12)',
+            border: 'none', borderRadius: 10, padding: 5, boxShadow: '0 8px 20px rgba(17,19,24,.12)',
           }}>
             {opcionDeMenu('Crear complemento')}
             {opcionDeMenu('Subir archivo comprimido del complemento')}
@@ -372,9 +372,9 @@ function Permiso({ app }) {
   const enCompu = useContext(EnCompu);
   const nombre = app === 'chatgpt' ? 'ChatGPT' : 'Claude';
   return (
-    <div style={{ background: KP.surface, borderRadius: 14, border: `1px solid ${KP.line}`, padding: 12, boxShadow: '0 8px 22px rgba(17,19,24,.08)' }}>
+    <div style={{ background: KP.surface, borderRadius: 14, border: 'none', padding: 12, boxShadow: '0 8px 22px rgba(17,19,24,.08)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 9 }}>
-        <span style={{ width: 20, height: 20, borderRadius: 6, background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, display: 'grid', placeItems: 'center' }}>
+        <span style={{ width: 20, height: 20, borderRadius: 6, background: KP.blue, display: 'grid', placeItems: 'center' }}>
           <Dumbbell size={11} color="#fff" strokeWidth={2.6} />
         </span>
         <span style={{ fontSize: 10.5, fontWeight: 800, color: KP.ink }}>Training Lab</span>
@@ -387,9 +387,9 @@ function Permiso({ app }) {
       ))}
       <div style={{ marginTop: 11 }}>
         <Toca activo etiqueta={enCompu ? 'Clic en Permitir' : 'Toca Permitir'}>
-          <div style={{ textAlign: 'center', borderRadius: 99, padding: '7px 0', fontSize: 11, fontWeight: 800, color: '#fff', background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})` }}>Permitir</div>
+          <div style={{ textAlign: 'center', borderRadius: 99, padding: '7px 0', fontSize: 11, fontWeight: 800, color: '#fff', background: KP.blue }}>Permitir</div>
         </Toca>
-        <div style={{ textAlign: 'center', borderRadius: 99, padding: '6px 0', marginTop: 5, fontSize: 10.5, fontWeight: 700, color: KP.ink, border: `1px solid ${KP.line}` }}>No permitir</div>
+        <div style={{ textAlign: 'center', borderRadius: 99, padding: '6px 0', marginTop: 5, fontSize: 10.5, fontWeight: 700, color: KP.ink, border: 'none' }}>No permitir</div>
       </div>
     </div>
   );
@@ -410,11 +410,11 @@ function Chat({ app, resalta, rol }) {
       <div style={{ maxWidth: '88%', fontSize: 10.5, fontWeight: 500, color: KP.ink, lineHeight: 1.45 }}>{respuesta}</div>
       <div style={{ flex: 1 }} />
       {/* El menú "+" abierto, con Training Lab. */}
-      <div style={{ background: KP.surface, border: `1px solid ${KP.line}`, borderRadius: 10, padding: 7, boxShadow: '0 8px 18px rgba(17,19,24,.10)', width: '78%' }}>
+      <div style={{ background: KP.surface, border: 'none', borderRadius: 10, padding: 7, boxShadow: '0 8px 18px rgba(17,19,24,.10)', width: '78%' }}>
         <div style={{ fontSize: 8.5, fontWeight: 800, color: KP.ink3, marginBottom: 4 }}>{app === 'chatgpt' ? 'COMPLEMENTOS' : 'CONECTORES'}</div>
         <Toca activo={resalta === 'interruptor' || resalta === 'app'} etiqueta={app === 'chatgpt' ? 'Elígelo' : 'Actívalo'}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 5px', borderRadius: 7, border: `1.5px solid ${KP.blue}` }}>
-            <span style={{ width: 15, height: 15, borderRadius: 4, background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, display: 'grid', placeItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 5px', borderRadius: 7, border: 'none' }}>
+            <span style={{ width: 15, height: 15, borderRadius: 4, background: KP.blue, display: 'grid', placeItems: 'center' }}>
               <Dumbbell size={8} color="#fff" strokeWidth={2.8} />
             </span>
             <span style={{ flex: 1, fontSize: 10, fontWeight: 700, color: KP.ink }}>Training Lab</span>
@@ -422,8 +422,8 @@ function Chat({ app, resalta, rol }) {
           </div>
         </Toca>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, border: `1px solid ${KP.lineHi}`, borderRadius: 99, padding: '4px 5px 4px 4px' }}>
-        <span style={{ width: 18, height: 18, borderRadius: 9, border: `1px solid ${KP.lineHi}`, display: 'grid', placeItems: 'center' }}><Plus size={10} strokeWidth={2.8} color={KP.ink} /></span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', borderRadius: 99, padding: '4px 5px 4px 4px' }}>
+        <span style={{ width: 18, height: 18, borderRadius: 9, border: 'none', display: 'grid', placeItems: 'center' }}><Plus size={10} strokeWidth={2.8} color={KP.ink} /></span>
         <span style={{ fontSize: 9.5, color: app === 'chatgpt' ? KP.ink : KP.ink3, fontWeight: 600 }}>{app === 'chatgpt' ? '@' : 'Escribe…'}</span>
       </div>
     </div>

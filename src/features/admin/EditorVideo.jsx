@@ -526,7 +526,7 @@ export default function EditorVideo({
                   style={{
                     position: 'absolute', top: 0, bottom: 0, zIndex: 2, pointerEvents: 'none', boxSizing: 'border-box',
                     left: x(desde), width: `calc(${MANIJA * 2}px + (100% - ${MANIJA * 2}px) * ${duracion ? (hasta - desde) / duracion : 1})`,
-                    border: `2.5px solid ${AMARILLO}`, borderRadius: 8,
+                    border: `2.5px solid ${AMARILLO}`, /* estilo-ok: marco del recorte */ borderRadius: 8,
                   }}
                 />
               )}

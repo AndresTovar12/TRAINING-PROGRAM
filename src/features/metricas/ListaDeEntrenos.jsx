@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Activity, ChevronRight, Flame, HeartPulse, ListChecks, Route, Timer, Watch } from 'lucide-react';
-import { LT, KP, FONT, NUM_STYLE } from '@/lib/theme';
+import { LT, KP, FONT, NUM_STYLE, UI } from '@/lib/theme';
 import { nombreDelDeporte } from '@/lib/metricas/deportes';
 import { diaLocal, lunesDe, sumaDias } from '@/lib/metricas/forma';
 import { distanciaTexto, duracionTexto, fechaCorta, horaTexto, rangoDeSemana } from '@/lib/metricas/formato';
@@ -37,7 +37,7 @@ export function FilaDeSesion({ s, alAbrir, conFecha = true }) {
       aria-label={`${a.titulo}, ${fechaCorta(a.inicio, a.desfase_min)}, ${stats.map((x) => x.texto).join(', ')}`}
       style={{
         width: '100%', display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) auto', columnGap: 12, rowGap: 8, alignItems: 'center', padding: '12px 14px',
-        border: `1px solid ${KP.line}`, borderRadius: 16, background: KP.surface, cursor: 'pointer', textAlign: 'left', fontFamily: FONT, touchAction: 'manipulation',
+        border: 'none', borderRadius: 16, background: UI.relleno, cursor: 'pointer', textAlign: 'left', fontFamily: FONT, touchAction: 'manipulation',
       }}
     >
       <MosaicoDeDeporte deporte={a.deporte} size={44} />
@@ -75,7 +75,7 @@ export function FilaDeEntreno({ a, alAbrir, conFecha = true }) {
       aria-label={`${titulo}, ${fechaCorta(a.inicio, a.desfase_min)}, ${stats.map((s) => s.texto).join(', ')}`}
       style={{
         width: '100%', display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) auto auto', columnGap: 12, rowGap: 8, alignItems: 'center', padding: '12px 14px',
-        border: `1px solid ${KP.line}`, borderRadius: 16, background: KP.surface, cursor: 'pointer', textAlign: 'left', fontFamily: FONT, touchAction: 'manipulation',
+        border: 'none', borderRadius: 16, background: UI.relleno, cursor: 'pointer', textAlign: 'left', fontFamily: FONT, touchAction: 'manipulation',
       }}
     >
       <MosaicoDeDeporte deporte={a.deporte} size={44} />
@@ -92,7 +92,7 @@ export function FilaDeEntreno({ a, alAbrir, conFecha = true }) {
           style={{ textAlign: 'center', padding: '6px 10px', borderRadius: 12, background: KP.blueSoft, color: LT.blue, fontWeight: 800, lineHeight: 1.1, ...NUM_STYLE }}
         >
           <span style={{ display: 'block', fontSize: 16 }}>{a.carga_metodo === 'estimada' ? '≈' : ''}{Math.round(a.carga)}</span>
-          <span style={{ display: 'block', fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3 }}>CARGA</span>
+          <span style={{ display: 'block', fontSize: 12, fontWeight: 700 }}>Carga</span>
         </span>
       ) : <span />}
       <ChevronRight size={18} color={LT.text3} />
@@ -169,7 +169,7 @@ export default function ListaDeEntrenos({ d, hoy, alAbrir, alImportar, puedeImpo
               key={r.id} type="button" aria-pressed={rango === r.id} onClick={() => setRango(r.id)}
               style={{
                 minHeight: 36, padding: '0 13px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, touchAction: 'manipulation',
-                border: `1.5px solid ${rango === r.id ? LT.blue : LT.borderHi}`, background: rango === r.id ? LT.blue : LT.surface, color: rango === r.id ? '#fff' : LT.text,
+                border: 'none', background: rango === r.id ? LT.blue : UI.relleno, color: rango === r.id ? '#fff' : LT.text,
               }}
             >
               {r.titulo}

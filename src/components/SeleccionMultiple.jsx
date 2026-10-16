@@ -1,5 +1,5 @@
 import { Check } from 'lucide-react';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, UI } from '@/lib/theme';
 
 /**
  * Varias opciones a la vista, cada una se prende o se apaga con un toque.
@@ -30,8 +30,8 @@ export default function SeleccionMultiple({ opciones, elegidas = [], onCambio, v
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 36, padding: '0 12px',
               borderRadius: 999, cursor: 'pointer', touchAction: 'manipulation',
-              border: `1.5px solid ${si ? T.accent : T.border}`,
-              background: si ? T.accentBg : T.bg2, color: si ? T.accent : T.text2,
+              border: 'none',
+              background: si ? T.accentBg : UI.relleno, color: si ? T.accent : T.text2,
               fontFamily: FONT, fontSize: 13.5, fontWeight: si ? 800 : 600,
             }}
           >

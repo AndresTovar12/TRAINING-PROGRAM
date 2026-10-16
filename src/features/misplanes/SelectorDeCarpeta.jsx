@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ChevronRight, Folder, FolderPlus, Loader2 } from 'lucide-react';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, UI } from '@/lib/theme';
 import {
   cabeCarpetaEn, descendientesDe, hijasDe, puedeMoverCarpeta, rutaDeCarpeta, textoDeRuta,
 } from '@/lib/misPlanesDatos';
@@ -78,7 +78,7 @@ export default function SelectorDeCarpeta({ carpetas, valor, onCambio, excluirId
             key={c.id} type="button" onClick={() => entrar(c.id)}
             style={{
               display: 'flex', alignItems: 'center', gap: 11, textAlign: 'left', cursor: 'pointer', padding: '10px 12px',
-              background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 12, fontFamily: FONT,
+              background: UI.relleno, border: 'none', borderRadius: 12, fontFamily: FONT,
             }}
           >
             <Folder size={17} color={T.text2} />

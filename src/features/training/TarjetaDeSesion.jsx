@@ -36,7 +36,7 @@ const TarjetaDeSesion = ({ aspecto, hecha, abierta, onAlternar, nombre, detalle,
     <div style={{
       marginBottom: 12, borderRadius: 22, overflow: 'hidden', boxShadow: '0 2px 10px rgba(17,19,24,0.06)',
       background: conTinte ? `${fondo}, ${LT.surface}` : LT.surface,
-      outline: hecha ? `1.5px solid ${LT.mint}55` : (conTinte ? `1px solid ${borde}` : 'none'), outlineOffset: -1,
+      outline: 'none',
     }}>
       {/* Solo el ENCABEZADO se pinta de verde al terminar: si se pintara toda
           la tarjeta, la lista de ejercicios de adentro quedaría sobre verde. */}

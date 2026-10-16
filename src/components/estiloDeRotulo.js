@@ -9,7 +9,7 @@ export const estiloDeRotulo = (compacto) => ({
   width: 'auto', border: 'none', background: 'transparent',
   minHeight: 0, gap: 4, borderRadius: 6,
   padding: compacto ? '0 0 3px' : '0 0 5px',
-  fontFamily: FONT, fontSize: compacto ? 10 : 11, fontWeight: 800,
-  letterSpacing: compacto ? 0.5 : 0.6, textTransform: 'uppercase',
+  // Letra normal, no mayúsculas (reestructura visual, 16 oct 2026).
+  fontFamily: FONT, fontSize: compacto ? 12 : 13, fontWeight: 700,
   color: T.accent,
 });

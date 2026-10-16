@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Plus, Timer } from 'lucide-react';
 import { Contador } from '@/features/admin/piezas';
 import { leeDescanso, componeDescanso } from '@/lib/medidas';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, KP } from '@/lib/theme';
 
 /**
  * El descanso ENTRE dos Sets: lo que se descansa al terminar un Set, antes de empezar el siguiente.
@@ -21,7 +21,7 @@ const DESCANSO_NUEVO = '2 min';
 const botonChico = {
   display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 28, padding: '0 11px', borderRadius: 999,
   cursor: 'pointer', fontFamily: FONT, fontSize: 12.5, fontWeight: 800, touchAction: 'manipulation', flexShrink: 0,
-  border: `1.5px solid ${T.accent}`, background: '#fff', color: T.accent,
+  border: 'none', background: KP.blueSoft, color: T.accent,
 };
 
 // El menú pegado al chip. Se cierra tocando fuera o con Escape.
@@ -80,7 +80,7 @@ function MenuDelDescanso({ ancla, numero, valor, onCambio, onCerrar }) {
       data-menu-descanso-set role="dialog" aria-label="El descanso entre Sets"
       style={{
         position: 'fixed', zIndex: 2900, top: sitio.top, left: sitio.left, width: 280, boxSizing: 'border-box', background: T.bg2,
-        border: `1px solid ${T.border}`, borderRadius: 14, padding: '10px 12px 8px', fontFamily: FONT,
+        border: 'none', borderRadius: 14, padding: '10px 12px 8px', fontFamily: FONT,
         boxShadow: '0 16px 44px rgba(17,19,24,0.16)',
       }}
     >
@@ -94,7 +94,7 @@ function MenuDelDescanso({ ancla, numero, valor, onCambio, onCerrar }) {
             onMenos={() => pon(leido.unidad, Math.max(paso, n - paso))} menosApagado={n <= paso}
             onMas={() => pon(leido.unidad, n + paso)}
           />
-          <span style={{ display: 'inline-flex', borderRadius: 10, border: `1.5px solid ${T.border}`, overflow: 'hidden' }}>
+          <span style={{ display: 'inline-flex', borderRadius: 10, border: 'none', overflow: 'hidden' }}>
             {segmento('seg', 'seg')}{segmento('min', 'min')}
           </span>
         </div>
@@ -103,7 +103,7 @@ function MenuDelDescanso({ ancla, numero, valor, onCambio, onCerrar }) {
         <input
           value={valor} onChange={(e) => onCambio(e.target.value)} aria-label="Descanso entre Sets"
           style={{
-            width: '100%', boxSizing: 'border-box', border: `1.5px solid ${T.border}`, borderRadius: 10, padding: '8px 10px',
+            width: '100%', boxSizing: 'border-box', border: 'none', borderRadius: 10, padding: '8px 10px',
             fontFamily: FONT, fontSize: 14, fontWeight: 600, color: T.text, background: T.bg, outline: 'none',
           }}
         />

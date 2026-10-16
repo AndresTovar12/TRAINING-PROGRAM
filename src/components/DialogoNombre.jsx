@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2 } from 'lucide-react';
-import { FONT, KP } from '@/lib/theme';
+import { FONT, KP, UI } from '@/lib/theme';
 
 /**
  * Pide un nombre y crea algo con él: una categoría, un grupo muscular.
@@ -57,7 +57,7 @@ export default function DialogoNombre({
         className="animate-fade-in"
         style={{
           width: '100%', maxWidth: 380, background: KP.surface, borderRadius: 20,
-          border: `1px solid ${KP.line}`, boxShadow: KP.shPop, padding: 22,
+          border: 'none', boxShadow: KP.shPop, padding: 22,
           display: 'flex', flexDirection: 'column', gap: 14,
         }}
       >
@@ -80,7 +80,7 @@ export default function DialogoNombre({
           maxLength={40}
           style={{
             width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12,
-            border: `1.5px solid ${err ? KP.danger : KP.line}`, background: KP.bg, outline: 'none',
+            border: 'none', boxShadow: err ? `inset 0 0 0 1.5px ${KP.danger}` : 'none', /* estilo-ok: aro rojo del error */ background: UI.relleno, outline: 'none',
             // 16 px: por debajo, el iPhone acerca la pantalla al escribir.
             fontFamily: FONT, fontSize: 16, fontWeight: 600, color: KP.ink,
           }}
@@ -95,7 +95,7 @@ export default function DialogoNombre({
             className="kp-press"
             style={{
               flex: 1, padding: '13px 14px', borderRadius: 13, cursor: guardando ? 'default' : 'pointer',
-              border: `1.5px solid ${KP.line}`, background: KP.surface, color: KP.ink,
+              border: 'none', background: UI.relleno, color: KP.ink,
               fontFamily: FONT, fontSize: 14.5, fontWeight: 700,
             }}
           >

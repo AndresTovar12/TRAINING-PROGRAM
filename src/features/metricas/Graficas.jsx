@@ -307,7 +307,7 @@ export function RutaEnMapa({ lat, lon, alto = 200 }) {
   const ini = pts[0];
   const fin = pts[pts.length - 1];
   return (
-    <div ref={ref} style={{ width: '100%', height: alto, borderRadius: 16, background: 'linear-gradient(160deg, #EEF2FB, #F6F8FC)', border: `1px solid ${LT.border}`, overflow: 'hidden' }}>
+    <div ref={ref} style={{ width: '100%', height: alto, borderRadius: 16, background: '#F2F4FA', border: 'none', overflow: 'hidden' }}>
       {ancho > 0 && (
         <svg width={ancho} height={alto} role="img" aria-label="Ruta del entreno" style={{ display: 'block' }}>
           <path d={camino(pts)} fill="none" stroke="#fff" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />

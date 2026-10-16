@@ -5,7 +5,7 @@ import { avisoDeLiga, ligaExterna } from '@/lib/videos';
 import { EJEMPLO, esExplicacion, explicacionesPrimero } from '@/lib/proposito';
 import Portada from '@/components/Portada';
 import IconoExplicacion from '@/components/IconoExplicacion';
-import { T, FONT, KP } from '@/lib/theme';
+import { T, FONT, KP, UI } from '@/lib/theme';
 
 /**
  * Las fotos y los videos de un ejercicio que TODAVÍA NO EXISTE.
@@ -122,7 +122,7 @@ export default function MediaAlCrear({ nuevos, onNuevos }) {
              gusta" (Andrés, 28 sep 2026). */
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 46,
-            border: `1.5px solid ${T.border}`, background: T.bg2, borderRadius: 14, cursor: 'pointer',
+            border: 'none', background: T.bg2, borderRadius: 14, cursor: 'pointer',
             boxShadow: KP.shCard, fontFamily: FONT, fontSize: 13.5, fontWeight: 800, color: T.accent,
           }}
         >
@@ -162,7 +162,7 @@ function Ficha({ item, abierto, onAbrir, onAQuien, abiertoTipo, onAbrirTipo, onQ
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', gap: 9,
-      background: T.bg, border: `1px solid ${T.border}`, borderRadius: 14, padding: 9,
+      background: T.bg, border: 'none', borderRadius: 14, padding: 9,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{
@@ -192,8 +192,8 @@ function Ficha({ item, abierto, onAbrir, onAQuien, abiertoTipo, onAbrirTipo, onQ
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 5,
                 minHeight: 26, padding: '0 9px 0 10px', borderRadius: 999, cursor: 'pointer',
-                border: `1px solid ${item.genero ? T.accent : T.borderHi}`,
-                background: item.genero ? T.accentBg : T.bg2,
+                border: 'none',
+                background: item.genero ? T.accentBg : UI.relleno,
                 color: item.genero ? T.accent : T.text2,
                 fontFamily: FONT, fontSize: 11.5, fontWeight: 700,
               }}
@@ -232,7 +232,7 @@ function Ficha({ item, abierto, onAbrir, onAQuien, abiertoTipo, onAbrirTipo, onQ
                 style={{
                   flex: 1, minHeight: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                   borderRadius: 11, cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 800,
-                  border: `1.5px solid ${aqui ? T.accent : T.border}`, background: aqui ? T.accentBg : T.bg2,
+                  border: 'none', background: aqui ? T.accentBg : UI.relleno,
                   color: aqui ? T.accent : T.text2,
                 }}
               >

@@ -11,7 +11,7 @@ import { esDeUnDia, planDePrograma, planDeRutina, textoDeResumen } from '@/lib/m
 import Ventana from '@/features/misplanes/Ventana';
 import ElegirDiaDelAtleta from '@/features/misplanes/ElegirDiaDelAtleta';
 import { botonBlanco, botonPrincipal, campo } from '@/features/misplanes/estilos';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, KP } from '@/lib/theme';
 
 const DIAS = [['Lun', 'Lunes'], ['Mar', 'Martes'], ['Mié', 'Miércoles'], ['Jue', 'Jueves'], ['Vie', 'Viernes'], ['Sáb', 'Sábado'], ['Dom', 'Domingo']];
 
@@ -255,8 +255,8 @@ export default function AsignarDialog({ item, onCerrar }) {
                 <label
                   key={a.id}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 11, cursor: 'pointer', padding: '12px 14px', background: T.bg2,
-                    border: `1.5px solid ${elegidos.has(a.id) ? T.accent : 'transparent'}`, boxShadow: '0 1px 2px rgba(17,19,24,0.04)', borderRadius: 16,
+                    display: 'flex', alignItems: 'center', gap: 11, cursor: 'pointer', padding: '12px 14px', background: elegidos.has(a.id) ? KP.blueSoft : T.bg2,
+                    border: 'none', boxShadow: '0 1px 2px rgba(17,19,24,0.04)', borderRadius: 16,
                   }}
                 >
                   <input type="checkbox" checked={elegidos.has(a.id)} onChange={() => alternar(a.id)} style={{ width: 19, height: 19, accentColor: T.accent, flexShrink: 0 }} />

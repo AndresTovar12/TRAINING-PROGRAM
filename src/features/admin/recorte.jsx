@@ -137,7 +137,7 @@ export function CapaRecorte({ crop, onAgarrar, agarrado = null }) {
           position: 'absolute',
           left: `${crop.x * 100}%`, top: `${crop.y * 100}%`,
           width: `${crop.w * 100}%`, height: `${crop.h * 100}%`,
-          border: '1px solid rgba(255,255,255,.92)', boxSizing: 'border-box', cursor: 'move', touchAction: 'none',
+          border: '1px solid rgba(255,255,255,.92)', /* estilo-ok: marco del recorte */ boxSizing: 'border-box', cursor: 'move', touchAction: 'none',
         }}
       >
         {/* La cuadrícula de tercios: ayuda a encuadrar y solo estorba si se queda siempre. */}
@@ -222,7 +222,7 @@ export function BotonesFormato({ crop, medidas, rectanguloDe, onElegir }) {
           >
             <span style={{
               width: cajaW, height: cajaH, borderRadius: 2.5,
-              border: `2px solid ${activo ? '#fff' : 'rgba(255,255,255,.5)'}`,
+              border: `2px solid ${activo ? '#fff' : 'rgba(255,255,255,.5)'}`, /* estilo-ok: agarradera del recorte */
             }} />
           </button>
         );

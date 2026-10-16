@@ -78,7 +78,7 @@ export default function DentroDelDia({ day }) {
             style={{ marginTop: aireDe(bi), ...(varios ? { borderLeft: `2px solid ${color}66`, paddingLeft: 12, marginLeft: -1 } : null) }}
           >
             {etiqueta && (
-              <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color, padding: '0 0 3px 16px' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color, padding: '0 0 3px 16px' }}>
                 {etiqueta}
               </div>
             )}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
-import { LT, FONT } from '@/lib/theme';
+import { LT, FONT, UI } from '@/lib/theme';
 
 /**
  * Los recuadros de «Ciencia» de un plan, escritos por quien lo arma (Andrés, 7 oct 2026: «lo que dice en Ciencia es
@@ -27,10 +27,10 @@ const ESTILOS = `
 `;
 
 const rotulo = {
-  fontSize: 11, fontWeight: 800, color: LT.text3, textTransform: 'uppercase', letterSpacing: 0.9, margin: '0 2px 8px',
+  fontSize: 13, fontWeight: 700, color: LT.text2, margin: '0 2px 8px',
 };
 const campo = {
-  width: '100%', boxSizing: 'border-box', border: `1.5px solid ${LT.border}`, borderRadius: 11, background: LT.surface,
+  width: '100%', boxSizing: 'border-box', border: 'none', borderRadius: 11, background: UI.relleno,
   fontFamily: FONT, color: LT.text, outline: 'none',
 };
 
@@ -52,7 +52,7 @@ function BotonIcono({ icono: Icono, etiqueta, onClick, desactivado = false, peli
 
 function Tarjeta({ r, i, total, abierto, onAbrir, onCambiar, onMover, onQuitar }) {
   return (
-    <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 14, overflow: 'hidden' }}>
+    <div style={{ background: LT.surface, border: 'none', borderRadius: 14, overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '2px 6px 2px 4px' }}>
         <button
           type="button" onClick={onAbrir} aria-expanded={abierto}
@@ -120,7 +120,7 @@ export default function EditorDeCiencia({ grupos, fases, onAgregar, onCambiar, o
               type="button" onClick={() => agrega(g.clave)}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%', padding: '11px 13px',
-                borderRadius: 13, cursor: 'pointer', fontFamily: FONT, border: `1.5px solid ${LT.border}`, background: LT.surface,
+                borderRadius: 13, cursor: 'pointer', fontFamily: FONT, border: 'none', background: UI.relleno,
                 fontSize: 13.5, fontWeight: 800, color: LT.blue, touchAction: 'manipulation',
               }}
             >

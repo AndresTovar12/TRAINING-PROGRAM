@@ -13,7 +13,7 @@ import {
   segundosTotales, expande, pasoDeEscala, textoDeTiempo,
 } from '@/lib/formatos';
 import { perderiaLapsos, perderiaVueltas } from '@/lib/lapsos';
-import { T, FONT, UI } from '@/lib/theme';
+import { T, FONT, UI, KP } from '@/lib/theme';
 
 /**
  * El formato de un Set en el editor: AMRAP, EMOM, Tabata, Fartlek… (ver `lib/formatos.js`).
@@ -49,7 +49,7 @@ const hayQueTurnar = (nEjercicios) => nEjercicios >= 2;
    que sí lo lleva (él mismo, horas después: «ahí no quiero que tenga un reloj, pero en las demás opciones sí»).
    Con un formato elegido es la pastilla azul, con su relojito. */
 const ESTILO_SIN_FORMATO = {
-  width: 'auto', border: `1.5px solid ${T.accent}`, background: '#fff', minHeight: 30, gap: 6, borderRadius: 999,
+  width: 'auto', border: 'none', background: KP.blueSoft, minHeight: 30, gap: 6, borderRadius: 999,
   padding: '0 11px', fontFamily: FONT, fontSize: 12.5, fontWeight: 800, color: T.accent,
 };
 const ESTILO_CON_FORMATO = {
@@ -73,7 +73,7 @@ const CAPSULA = (conFormato) => ({
   minHeight: 34, padding: '2px 10px 2px 0', maxWidth: '100%',
   ...(conFormato
     ? { border: 'none', background: '#EEF2FF' }
-    : { border: `1.5px solid ${T.accent}`, background: '#fff' }),
+    : { border: 'none', background: KP.blueSoft }),
 });
 
 // Botón blanco con borde sólido azul: lo que no es la acción principal pero se busca a simple vista.
@@ -84,7 +84,7 @@ function BotonBlanco({ icon: Icon, children, onClick, expandido }) {
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 32, padding: '0 13px', borderRadius: 999,
         cursor: 'pointer', fontFamily: FONT, fontSize: 12.5, fontWeight: 800, flexShrink: 0,
-        border: `1.5px solid ${T.accent}`, background: '#fff', color: T.accent, touchAction: 'manipulation',
+        border: 'none', background: KP.blueSoft, color: T.accent, touchAction: 'manipulation',
       }}
     >
       {Icon && <Icon size={14} strokeWidth={2.6} />} {children}
@@ -211,8 +211,8 @@ export function EncabezadoDelSet({
         ) : (
           <>
             {etiquetaDeTipo && (
-              <span style={{ fontSize: 10.5, fontWeight: 800, color: '#fff', background: 'rgba(255,255,255,0.18)', padding: '3px 9px', borderRadius: 8, letterSpacing: 0.4 }}>
-                {etiquetaDeTipo.toUpperCase()}
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: '#fff', background: 'rgba(255,255,255,0.18)', padding: '3px 9px', borderRadius: 8 }}>
+                {etiquetaDeTipo.charAt(0).toUpperCase() + etiquetaDeTipo.slice(1)}
               </span>
             )}
             {sinSeries ? (
@@ -372,8 +372,8 @@ function FranjaDeFormato({ formato, nEjercicios, onCambio, onTramos }) {
 }
 
 const CAMPO_DE_TEXTO = {
-  border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '9px 12px', fontFamily: FONT, fontSize: 14, fontWeight: 600,
-  color: T.text, outline: 'none', background: T.bg2, boxSizing: 'border-box', width: '100%',
+  border: 'none', borderRadius: 11, padding: '9px 12px', fontFamily: FONT, fontSize: 14, fontWeight: 600,
+  color: T.text, outline: 'none', background: UI.relleno, boxSizing: 'border-box', width: '100%',
 };
 
 /**
@@ -391,7 +391,7 @@ function VentanaDeTramos({ titulo, formato, nEjercicios, onCambio, onCerrar }) {
   const plan = expande(g, nEjercicios);
 
   const segmentado = (valor, opciones, alCambiar) => (
-    <span style={{ display: 'inline-flex', borderRadius: 10, border: `1.5px solid ${T.border}`, overflow: 'hidden', flexShrink: 0 }}>
+    <span style={{ display: 'inline-flex', borderRadius: 10, border: 'none', overflow: 'hidden', flexShrink: 0 }}>
       {opciones.map(([v, texto]) => (
         <button
           key={v} type="button" onClick={() => alCambiar(v)} aria-pressed={valor === v}
@@ -425,7 +425,7 @@ function VentanaDeTramos({ titulo, formato, nEjercicios, onCambio, onCerrar }) {
               key={i}
               style={{
                 display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px 10px', background: T.bg2,
-                border: `1px solid ${T.border}`, borderRadius: 12, padding: '9px 10px',
+                border: 'none', borderRadius: 12, padding: '9px 10px',
               }}
             >
               <span style={{ width: 20, fontSize: 12.5, fontWeight: 800, color: T.text3, textAlign: 'center' }}>{i + 1}</span>
@@ -482,10 +482,10 @@ function VentanaDeTramos({ titulo, formato, nEjercicios, onCambio, onCerrar }) {
         <div>
           <div style={{ display: 'flex', gap: 2, height: 16 }}>
             {plan.map((t) => (t.seg === null
-              ? <i key={t.n} style={{ flex: 45, border: `1.5px dashed ${T.accent}`, borderRadius: 3, minWidth: 3 }} />
+              ? <i key={t.n} style={{ flex: 45, border: `1.5px dashed ${T.accent}`, /* estilo-ok: tramo de descanso en la línea del tiempo */ borderRadius: 3, minWidth: 3 }} />
               : <i key={t.n} style={{
                 flex: t.seg, borderRadius: 3, minWidth: 3,
-                background: t.tipo === 'trabajo' ? T.accent : T.bg2, border: t.tipo === 'trabajo' ? 'none' : `1px solid ${T.borderHi}`,
+                background: t.tipo === 'trabajo' ? T.accent : T.bg2, border: t.tipo === 'trabajo' ? 'none' : `1px solid ${T.borderHi}`, /* estilo-ok: tramo de descanso en la línea del tiempo */
               }}
               />))}
           </div>

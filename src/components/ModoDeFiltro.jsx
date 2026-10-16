@@ -99,7 +99,7 @@ export default function ModoDeFiltro({ modo, onCambio, nombres, verbo }) {
         aria-label="Cómo combinar lo marcado"
         style={{
           display: 'flex', gap: 2, padding: 3, borderRadius: 11,
-          background: T.bgInteract, border: `1px solid ${T.border}`,
+          background: T.bgInteract, border: 'none',
         }}
       >
         {boton('cualquiera', 'Cualquiera')}

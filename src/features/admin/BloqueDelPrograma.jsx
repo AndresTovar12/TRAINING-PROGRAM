@@ -1,5 +1,5 @@
 import { ChevronDown, Ellipsis, Save } from 'lucide-react';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, UI } from '@/lib/theme';
 
 /**
  * Lo del programa entero, arriba de la guía en el CELULAR (en la compu esto vive en la barra de arriba: ver
@@ -40,7 +40,7 @@ export default function BloqueDelPrograma({ titulo, rotuloTitulo, onTitulo, prog
       <style>{ESTILOS}</style>
       <label style={{ display: 'block' }}>
         <span style={{
-          display: 'block', fontSize: 10.5, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6,
+          display: 'block', fontSize: 13, fontWeight: 700, color: T.text2,
           marginBottom: 4, whiteSpace: 'nowrap',
         }}>
           {rotuloTitulo}
@@ -48,11 +48,11 @@ export default function BloqueDelPrograma({ titulo, rotuloTitulo, onTitulo, prog
         <input
           value={titulo} onChange={(e) => onTitulo(e.target.value)} aria-label={rotuloTitulo}
           style={{
-            border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '10px 12px', width: '100%', boxSizing: 'border-box',
-            fontFamily: FONT, fontSize: 15, fontWeight: 800, color: T.text, outline: 'none', background: T.bg2,
+            border: 'none', borderRadius: 11, padding: '10px 12px', width: '100%', boxSizing: 'border-box',
+            fontFamily: FONT, fontSize: 15, fontWeight: 800, color: T.text, outline: 'none', background: UI.relleno,
           }}
-          onFocus={(e) => { e.target.style.borderColor = T.accent; }}
-          onBlur={(e) => { e.target.style.borderColor = T.border; }}
+          onFocus={(e) => { /* estilo-ok: aro de foco al escribir */ e.target.style.boxShadow = `inset 0 0 0 1.5px ${T.accent}`; }}
+          onBlur={(e) => { e.target.style.boxShadow = 'none'; }}
         />
       </label>
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 700, color: T.text2, padding: '4px 2px 0' }}>

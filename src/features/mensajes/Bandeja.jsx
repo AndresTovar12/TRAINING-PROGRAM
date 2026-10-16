@@ -22,7 +22,7 @@ function Fila({ f, uid, abierta, etiqueta, alAbrir }) {
       aria-label={`${f.otro_nombre}${f.sin_leer ? `, ${f.sin_leer} sin leer` : ''}`}
       style={{
         width: '100%', display: 'flex', alignItems: 'center', gap: 13, padding: '14px 16px', cursor: 'pointer', textAlign: 'left', fontFamily: FONT, touchAction: 'manipulation',
-        border: 'none', borderRadius: 20, background: abierta ? T.accentBg : KP.surface, boxShadow: abierta ? `inset 0 0 0 1.5px ${T.accent}55` : '0 2px 10px rgba(17,19,24,0.05)',
+        border: 'none', borderRadius: 20, background: abierta ? T.accentBg : KP.surface, boxShadow: abierta ? 'none' : '0 2px 10px rgba(17,19,24,0.05)',
       }}
     >
       <AvatarDeColor nombre={f.otro_nombre} foto={f.otro_avatar} tamano={52} />

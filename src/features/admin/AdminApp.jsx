@@ -123,7 +123,7 @@ export default function AdminApp({ onAbrirPerfil }) {
       {viendoComo && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16,
-          background: T.accentBg, border: `1.5px solid ${T.accent}44`,
+          background: T.accentBg, border: 'none',
           borderRadius: 13, padding: '11px 14px',
         }}>
           <Eye size={17} color={T.accent} style={{ flexShrink: 0 }} />

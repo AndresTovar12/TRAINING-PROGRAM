@@ -108,7 +108,7 @@ function Marca({ puesta, cuadrada }) {
   return (
     <span aria-hidden="true" style={{
       width: 26, height: 26, borderRadius: cuadrada ? 8 : '50%', flexShrink: 0, display: 'grid', placeItems: 'center',
-      background: puesta ? KP.blue : 'transparent', border: puesta ? 'none' : '2px solid #CDD1D9', color: '#fff',
+      background: puesta ? KP.blue : 'transparent', border: puesta ? 'none' : '2px solid #CDD1D9', /* estilo-ok: círculo de elegir */ color: '#fff',
     }}
     >
       {puesta && <Check size={16} strokeWidth={3} />}

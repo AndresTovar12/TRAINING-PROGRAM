@@ -105,7 +105,7 @@ body {
 ::-webkit-scrollbar-thumb {
   background: var(--color-line-hi);
   border-radius: 8px;
-  border: 2px solid var(--color-bg);
+  border: 2px solid var(--color-bg); /* estilo-ok: margen de la barra de desplazamiento */
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -172,7 +172,7 @@ body {
   }
 }
 .kp-skeleton {
-  background: linear-gradient(
+  background: linear-gradient( /* estilo-ok: brillo del esqueleto mientras carga */
     90deg,
     #edeff3 25%,
     #f6f7fa 37%,
@@ -245,17 +245,17 @@ button.ui-fila:hover { background: #F7F8FB; }
 .grupo-renglones > * + * { position: relative; }
 .grupo-renglones > * + *::before { content: ''; position: absolute; top: 0; left: 16px; right: 0; height: 1px; background: #ECEEF2; z-index: 1; }
 button.ui-fila:active { background: #F0F2F6; }
-button.ui-fila:focus-visible { outline: 2px solid #1E40E0; outline-offset: -2px; }
+button.ui-fila:focus-visible { outline: 2px solid #1E40E0; outline-offset: -2px; } /* estilo-ok: anillo de foco del teclado */
 
 /* El deslizador de la reestructura visual (`Deslizador` en components/ui/Controles.jsx): barra gruesa que se llena del color
    que se le pasa (`--relleno`) hasta el valor (`--pct`), y una bolita blanca grande para el dedo. */
 .ui-deslizador { -webkit-appearance: none; appearance: none; height: 28px; background: transparent; cursor: pointer; }
-.ui-deslizador::-webkit-slider-runnable-track { height: 8px; border-radius: 99px; background: linear-gradient(to right, var(--relleno) 0 var(--pct), #E3E5EA var(--pct) 100%); }
+.ui-deslizador::-webkit-slider-runnable-track { /* estilo-ok: relleno del deslizador */ height: 8px; border-radius: 99px; background: linear-gradient(to right, var(--relleno) 0 var(--pct), #E3E5EA var(--pct) 100%); }
 .ui-deslizador::-moz-range-track { height: 8px; border-radius: 99px; background: #E3E5EA; }
 .ui-deslizador::-moz-range-progress { height: 8px; border-radius: 99px; background: var(--relleno); }
 .ui-deslizador::-webkit-slider-thumb { -webkit-appearance: none; width: 28px; height: 28px; margin-top: -10px; border-radius: 50%; background: #fff; box-shadow: 0 2px 8px rgba(17,19,24,0.25); border: none; }
 .ui-deslizador::-moz-range-thumb { width: 28px; height: 28px; border-radius: 50%; background: #fff; box-shadow: 0 2px 8px rgba(17,19,24,0.25); border: none; }
-.ui-deslizador:focus-visible { outline: 2px solid #1E40E0; outline-offset: 4px; border-radius: 99px; }
+.ui-deslizador:focus-visible { outline: 2px solid #1E40E0; outline-offset: 4px; border-radius: 99px; } /* estilo-ok: anillo de foco del teclado */
 
 /* Los números de `EntradaNumero` sin las flechitas del navegador: se escribe con el teclado numérico, y las flechas ocupaban la mitad de la casilla. */
 .ui-numero { -moz-appearance: textfield; appearance: textfield; }

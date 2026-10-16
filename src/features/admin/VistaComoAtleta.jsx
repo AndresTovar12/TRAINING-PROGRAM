@@ -35,7 +35,7 @@ export default function VistaComoAtleta({ atleta, onSalir }) {
         style={{
           position: 'fixed', top: 0, left: 0, right: 0, height: ALTO_AVISO, zIndex: 1200,
           display: 'flex', alignItems: 'center', gap: 10, padding: '0 16px',
-          background: `linear-gradient(135deg, ${KP.blue}, ${KP.blueDk})`, color: '#fff',
+          background: KP.blue, color: '#fff',
           boxShadow: '0 2px 12px rgba(17,19,24,0.18)', fontFamily: FONT,
         }}
       >

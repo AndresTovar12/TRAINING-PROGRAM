@@ -19,7 +19,7 @@ import { TIPO_FIJO } from '@/features/admin/useTiposDeSesion';
  *   · DE LA APP: «Quitar» sin confirmación pero con «Deshacer», y se guardan en «Quitados» para volver a ponerlos cuando quiera. «OFF» no se quita.
  */
 
-const etiqueta = { fontSize: 11, fontWeight: 800, letterSpacing: 0.9, textTransform: 'uppercase', color: LT.text3 };
+const etiqueta = { fontSize: 13, fontWeight: 700, color: LT.text2 };
 
 function Cabecera({ texto, cuenta, accion }) {
   return (
@@ -32,7 +32,7 @@ function Cabecera({ texto, cuenta, accion }) {
 }
 
 function Caja({ children }) {
-  return <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 18, overflow: 'hidden' }}>{children}</div>;
+  return <div style={{ background: LT.surface, border: 'none', borderRadius: 18, overflow: 'hidden' }}>{children}</div>;
 }
 
 function Fila({ aspecto, nombre, resaltada = false, primera = false, children }) {
@@ -113,7 +113,7 @@ export default function HojaTiposDeSesion({ propios, base, baseQuitada, nuevoId 
         type="button" onClick={onNuevo} className="kp-press"
         style={{
           width: '100%', minHeight: 52, border: 'none', borderRadius: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9,
-          background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, boxShadow: KP.shBtn, color: '#fff', fontFamily: FONT, fontSize: 16, fontWeight: 800,
+          background: KP.blue, boxShadow: KP.shBtn, color: '#fff', fontFamily: FONT, fontSize: 16, fontWeight: 800,
           touchAction: 'manipulation',
         }}
       >

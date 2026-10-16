@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Info } from 'lucide-react';
-import { LT, KP, FONT, NUM_STYLE, eyebrow } from '@/lib/theme';
+import { LT, KP, FONT, NUM_STYLE, eyebrow, UI } from '@/lib/theme';
 import { diaCorto } from '@/lib/metricas/formato';
 import { diasEntre, sumaDias } from '@/lib/metricas/forma';
 import { GraficaDeLinea } from './Graficas';
@@ -68,7 +68,7 @@ export default function CargaYForma({ d }) {
 
   return (
     <div>
-      <Tarjeta style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', borderColor: `${t.c}33`, background: `linear-gradient(135deg, ${t.soft}, ${KP.surface} 70%)` }}>
+      <Tarjeta style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', background: t.soft }}>
         <div style={{ minWidth: 0, flex: '1 1 260px' }}>
           <div style={eyebrow(LT.text2)}>Forma de hoy</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '8px 0 6px', flexWrap: 'wrap' }}>
@@ -100,7 +100,7 @@ export default function CargaYForma({ d }) {
             key={r.id} type="button" aria-pressed={rango === r.id} onClick={() => setRango(r.id)}
             style={{
               minHeight: 36, padding: '0 13px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, touchAction: 'manipulation',
-              border: `1.5px solid ${rango === r.id ? LT.blue : LT.borderHi}`, background: rango === r.id ? LT.blue : LT.surface, color: rango === r.id ? '#fff' : LT.text,
+              border: 'none', background: rango === r.id ? LT.blue : UI.relleno, color: rango === r.id ? '#fff' : LT.text,
             }}
           >
             {r.titulo}

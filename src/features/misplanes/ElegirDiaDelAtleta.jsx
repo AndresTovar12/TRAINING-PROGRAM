@@ -108,7 +108,7 @@ export default function ElegirDiaDelAtleta({ atleta, clave = null, data, nombre,
       />
 
       {dia && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 14, padding: '12px 14px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, background: T.bg2, border: 'none', borderRadius: 14, padding: '12px 14px' }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: T.text, lineHeight: 1.45 }}>
             Se pone el {NOMBRE_DIA[dia] ?? dia}, en la semana {semana?.num} de {fases[faseIdx]?.name || t('su plan')}.
           </div>

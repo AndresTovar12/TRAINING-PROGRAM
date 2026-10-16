@@ -62,7 +62,7 @@ export function aspectoDelTipo(day) {
   return {
     Icono,
     color: c,
-    fondo: `linear-gradient(${velo(0.09)}, ${velo(0.09)})`,
+    fondo: `linear-gradient(${velo(0.09)}, ${velo(0.09)})`, /* estilo-ok: fondo teñido del modo entreno (capturas aprobadas) */
     borde: velo(0.34),
     mosaico: velo(0.2),
     tinta: `rgb(${Math.round(r * 0.62)},${Math.round(g * 0.62)},${Math.round(b * 0.62)})`,

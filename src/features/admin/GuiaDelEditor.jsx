@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, CopyPlus, CornerUpLeft, Plus, Trash2 } from 'lucide-react';
-import { LT, KP, FONT, NUM_STYLE, tipoDeSesion } from '@/lib/theme';
+import { LT, KP, FONT, NUM_STYLE, tipoDeSesion, UI } from '@/lib/theme';
 import { esDescanso } from '@/lib/training-utils';
 import { pluralS } from '@/lib/plural';
 import { useIsDesktop } from '@/lib/useViewport';
@@ -37,11 +37,9 @@ import { posicionDeFoto, separaFoto } from '@/lib/fotoConFoco';
  * fases, y sin encabezado de fase.
  */
 const ESTILOS = `
-.tl-enlinea:hover{border-color:${LT.borderHi} !important;background:${LT.surface} !important}
-.tl-enlinea:focus{border-color:${LT.blue} !important;background:${LT.surface} !important;text-overflow:clip}
-@media (hover:none){.tl-enlinea{border-color:${LT.border} !important;background:${LT.surface} !important}}
-.tl-fila:hover{border-color:${LT.borderHi} !important}
-.tl-fila.tl-azul,.tl-fila.tl-azul:hover{border-color:${LT.blue} !important}
+.tl-enlinea:hover{background:${LT.surface2} !important}
+.tl-enlinea:focus{background:${LT.surface2} !important;text-overflow:clip}
+@media (hover:none){.tl-enlinea{background:${LT.surface2} !important}}
 .tl-ic:hover{background:${LT.surface2} !important;color:${LT.text2} !important}
 .tl-ic.tl-borra:hover{background:rgba(220,38,38,0.08) !important;color:${LT.danger} !important}
 .tl-boton:hover{background:${LT.surface2} !important}
@@ -49,7 +47,7 @@ const ESTILOS = `
 
 // El texto que se escribe EN su lugar (nombre de la fase, título de la semana): sin caja hasta que lo tocas.
 const enLinea = {
-  border: '1.5px solid transparent', background: 'transparent', borderRadius: 9, padding: '4px 7px', marginLeft: -7,
+  border: 'none', background: 'transparent', borderRadius: 9, padding: '4px 7px', marginLeft: -7,
   fontFamily: FONT, fontWeight: 800, color: LT.text, outline: 'none', minWidth: 0, textOverflow: 'ellipsis',
   cursor: 'text', boxSizing: 'border-box',
 };
@@ -57,7 +55,7 @@ const enLinea = {
 function Pastilla({ texto, fuerte = true }) {
   return (
     <span style={{
-      fontSize: 10, fontWeight: 800, letterSpacing: 0.3, flexShrink: 0, padding: '3px 7px', borderRadius: 6,
+      fontSize: 12, fontWeight: 700, flexShrink: 0, padding: '3px 8px', borderRadius: 8,
       color: fuerte ? LT.blue : LT.text2, background: fuerte ? LT.blueSoft : LT.surface2,
     }}>
       {texto}
@@ -87,7 +85,7 @@ function FilaDeFase({ f, esDeAqui, editando, textoAqui, onAbrir, arrastre }) {
       type="button" className={`tl-fila${esDeAqui ? ' tl-azul' : ''}`} aria-expanded={false} onClick={onAbrir} {...arrastre}
       style={{
         display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '12px 13px',
-        background: LT.surface, borderRadius: 13, cursor: 'pointer', border: `1px solid ${esDeAqui ? LT.blue : LT.border}`,
+        background: esDeAqui ? LT.blueSoft : LT.surface, borderRadius: 13, cursor: 'pointer', border: 'none',
         fontFamily: FONT, minWidth: 0,
       }}
     >
@@ -96,7 +94,7 @@ function FilaDeFase({ f, esDeAqui, editando, textoAqui, onAbrir, arrastre }) {
         {f.name}
       </span>
       {esDeAqui && <Pastilla texto={textoAqui} />}
-      {editando && <Pastilla texto="EDITANDO" />}
+      {editando && <Pastilla texto="Editando" />}
       <span style={{ fontSize: 11.5, fontWeight: 700, color: LT.text3, flexShrink: 0, ...NUM_STYLE }}>
         {pluralS(f.weekData?.length || 0, 'sem')}
       </span>
@@ -114,8 +112,7 @@ function DiaEnLaGuia({ clave, sesiones, elegido, suyo, textoAqui, onElegir }) {
       type="button" className={`tl-fila${elegido ? ' tl-azul' : ''}`} onClick={onElegir} aria-pressed={elegido}
       style={{
         display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', borderRadius: 11, cursor: 'pointer',
-        fontFamily: FONT, padding: elegido ? '9.5px 10.5px' : '10px 11px', background: elegido ? LT.blueSoft : LT.bg,
-        border: `${elegido ? 1.5 : 1}px ${vacio && !elegido ? 'dashed' : 'solid'} ${elegido ? LT.blue : LT.border}`,
+        fontFamily: FONT, padding: '10px 11px', background: elegido ? LT.blueSoft : LT.bg, border: 'none',
       }}
     >
       <span style={{ width: 32, fontSize: 11, fontWeight: 800, color: elegido ? LT.blue : LT.text3, flexShrink: 0 }}>{clave}</span>
@@ -127,14 +124,14 @@ function DiaEnLaGuia({ clave, sesiones, elegido, suyo, textoAqui, onElegir }) {
         ? <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 600, color: LT.text3 }}>Sin sesión</span>
         : <TituloDelRenglon dias={sesiones} color={LT.text} />}
       {suyo && <Pastilla texto={textoAqui} fuerte={!elegido} />}
-      {elegido && <Pastilla texto="EDITANDO" />}
+      {elegido && <Pastilla texto="Editando" />}
     </button>
   );
 }
 
 export default function GuiaDelEditor({
   fases, estructura, aqui, faseEditada, semanaEditada, diaElegido, abiertas, vistas, colores, tituloDeSemana,
-  acciones, textoAqui = 'AQUÍ VA',
+  acciones, textoAqui = 'Aquí va',
 }) {
   const esCompu = useIsDesktop();
   // El selector de color abierto: { i, ancla } (la fase y el botón al que se pega).
@@ -158,7 +155,7 @@ export default function GuiaDelEditor({
   // Si se anda editando otra fase u otra semana, un atajo para volver a la del atleta: sin él, en un programa
   // de 9 fases hay que acordarse de dónde era.
   const lejosDeAqui = !!aqui && (lista[faseEditada]?.id !== aqui.faseId || semanaEditada !== aqui.semana);
-  const textoIr = textoAqui === 'AQUÍ VAS' ? 'Ir a donde vas' : 'Ir a donde va';
+  const textoIr = textoAqui === 'Aquí vas' ? 'Ir a donde vas' : 'Ir a donde va';
 
   const tarjetaDe = (f, i) => {
     const s = semanaDe(f, i);
@@ -176,8 +173,8 @@ export default function GuiaDelEditor({
       <div
         key={f.id} {...(esRutina || deCorrido ? null : arrastreDe(f))}
         style={{
-          background: LT.surface, borderRadius: 16, padding: deAqui ? 13 : 14, display: 'flex', flexDirection: 'column', gap: 11,
-          border: `${deAqui ? 2 : 1}px solid ${deAqui ? LT.blue : LT.border}`,
+          background: LT.surface, borderRadius: 16, padding: 14, display: 'flex', flexDirection: 'column', gap: 11,
+          border: 'none', boxShadow: UI.sombraGrupo,
         }}
       >
         {/* En una rutina que se repite no hay fase que nombrar, y en «varias semanas» tampoco: se ven como semanas. */}
@@ -190,7 +187,7 @@ export default function GuiaDelEditor({
               aria-haspopup="menu" aria-label="Color y foto de la fase" title="Color y foto"
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0, cursor: 'pointer',
-                border: `1.5px solid ${LT.border}`, background: LT.surface, borderRadius: 999,
+                border: 'none', background: UI.relleno, borderRadius: 999,
                 padding: f.image ? '3px 7px 3px 4px' : '6px 7px 6px 9px', touchAction: 'manipulation',
               }}
             >
@@ -231,11 +228,11 @@ export default function GuiaDelEditor({
               return (
                 <button
                   key={`${ff.id}-${w.num}`} type="button" onClick={() => acciones.elegirSemana(fi, w.num)}
-                  aria-label={`Semana ${numero}${suya ? (textoAqui === 'AQUÍ VAS' ? ', donde vas' : ', donde va') : ''}`}
+                  aria-label={`Semana ${numero}${suya ? (textoAqui === 'Aquí vas' ? ', donde vas' : ', donde va') : ''}`}
                   style={{
                     position: 'relative', minWidth: 38, padding: '7px 0', borderRadius: 10, cursor: 'pointer',
-                    border: `${suya && !vista ? 2 : 1}px solid ${vista || suya ? LT.blue : LT.border}`,
-                    background: vista ? LT.blue : LT.surface2, color: vista ? '#fff' : (suya ? LT.blue : LT.text3),
+                    border: 'none',
+                    background: vista ? LT.blue : (suya ? LT.blueSoft : LT.surface2), color: vista ? '#fff' : (suya ? LT.blue : LT.text3),
                     fontFamily: FONT, fontSize: 13, fontWeight: 800, ...NUM_STYLE,
                   }}
                 >
@@ -256,7 +253,7 @@ export default function GuiaDelEditor({
               /* Azul clarito y sin contorno punteado: «haces mucho ese estilo de botones, no me gusta»
                  (Andrés, 28 sep 2026). Se distingue de las semanas, que son blancas. */
               style={{
-                minWidth: 38, padding: '6px 0', borderRadius: 10, cursor: 'pointer', border: '1.5px solid transparent',
+                minWidth: 38, padding: '6px 0', borderRadius: 10, cursor: 'pointer', border: 'none',
                 background: LT.blueSoft, color: LT.blue, display: 'grid', placeItems: 'center',
               }}
             >
@@ -268,7 +265,7 @@ export default function GuiaDelEditor({
                 aria-haspopup="menu" aria-label={`Opciones de la semana ${deCorrido ? fichas.findIndex((x) => x.ff.id === f.id && x.w.num === s.num) + 1 : s.num}`}
                 style={{
                   marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 7, flexShrink: 0, cursor: 'pointer',
-                  border: `1.5px solid ${LT.border}`, background: LT.surface, color: LT.text, borderRadius: 999,
+                  border: 'none', background: UI.relleno, color: LT.text, borderRadius: 999,
                   padding: '6px 9px', fontFamily: FONT, fontSize: 12.5, fontWeight: 700,
                 }}
               >
@@ -335,7 +332,7 @@ export default function GuiaDelEditor({
           /* Sin contorno punteado: «haces mucho ese estilo de botones, no me gusta» (Andrés, 28 sep 2026). */
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%', padding: '11px 13px',
-            borderRadius: 13, cursor: 'pointer', fontFamily: FONT, border: `1.5px solid ${LT.border}`, background: LT.surface,
+            borderRadius: 13, cursor: 'pointer', fontFamily: FONT, border: 'none', background: LT.surface,
             boxShadow: KP.shCard, fontSize: 13.5, fontWeight: 800, color: LT.blue,
           }}
         >
@@ -358,7 +355,7 @@ export default function GuiaDelEditor({
                 onClick={() => { acciones.colorFase(color.i, c); setColor(null); }}
                 style={{
                   width: esCompu ? 30 : 44, height: esCompu ? 30 : 44, borderRadius: 10, cursor: 'pointer', padding: 0, background: c,
-                  border: `3px solid ${c === lista[color.i].color ? LT.text : 'transparent'}`,
+                  border: `3px solid ${c === lista[color.i].color ? LT.text : 'transparent'}`, /* estilo-ok: anillo del color elegido */
                 }}
               />
             ))}

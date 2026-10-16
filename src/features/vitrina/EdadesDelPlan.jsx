@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Check, Plus, X } from 'lucide-react';
-import { T, KP, FONT } from '@/lib/theme';
+import { T, KP, FONT, UI } from '@/lib/theme';
 import { botonBlanco, etiquetaChica } from '@/features/misplanes/estilos';
 import { EDADES, edadesValidas, idDeRango, nombreDeEdad, problemaDeRango } from '@/lib/paraQuien';
 
@@ -13,11 +13,11 @@ import { EDADES, edadesValidas, idDeRango, nombreDeEdad, problemaDeRango } from 
 
 const chip = (on) => ({
   minHeight: 40, padding: '0 13px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6,
-  border: `1.5px solid ${on ? T.accent : T.border}`, background: on ? T.accentBg : T.bg2, color: on ? T.accent : T.text2,
+  border: 'none', background: on ? T.accentBg : UI.relleno, color: on ? T.accent : T.text2,
 });
 
 const numero = {
-  width: 68, minHeight: 44, borderRadius: 11, border: `1.5px solid ${T.border}`, background: T.bg2, color: T.text, boxSizing: 'border-box', textAlign: 'center',
+  width: 68, minHeight: 44, borderRadius: 11, border: 'none', background: UI.relleno, color: T.text, boxSizing: 'border-box', textAlign: 'center',
   fontFamily: FONT, fontSize: 16, fontWeight: 700, outline: 'none', padding: '0 6px',
 };
 

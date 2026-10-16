@@ -63,7 +63,7 @@ import MediaUpload from '@/features/admin/MediaUpload';
 import MediaAlCrear from '@/features/admin/MediaAlCrear';
 import { DosBotonesDeGrabar, FilaDeTres, PanelDeLiga, PastillaDeProposito, SelectorDeProposito } from '@/features/admin/AgregarMedia';
 import IconoExplicacion from '@/components/IconoExplicacion';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, UI } from '@/lib/theme';
 import { avisoDeLiga, ligaExterna } from '@/lib/videos';
 import { EJEMPLO, EXPLICACION, esExplicacion } from '@/lib/proposito';
 import Portada from '@/components/Portada';
@@ -398,7 +398,7 @@ export default function MediaDelEjercicio({
   const pastillaDeGrupo = (suyo) => ({
     display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 26, padding: '0 9px 0 10px', borderRadius: 999, cursor: 'pointer',
     fontFamily: FONT, fontSize: 11.5, fontWeight: 700,
-    border: `1px solid ${suyo ? T.accent : T.borderHi}`, background: suyo ? T.accentBg : T.bg2, color: suyo ? T.accent : T.text2,
+    border: 'none', background: suyo ? T.accentBg : UI.relleno, color: suyo ? T.accent : T.text2,
   });
 
   const lista_ = visibles.map((m) => {
@@ -410,7 +410,7 @@ export default function MediaDelEjercicio({
     return (
       <div key={m.id} style={{
         display: 'flex', flexDirection: 'column', gap: 8,
-        background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 12, padding: 8,
+        background: T.bg2, border: 'none', borderRadius: 12, padding: 8,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <Miniatura url={m.url} esVideo={esVideo} desde={m.recorte_inicio} hasta={m.recorte_fin} explicacion={explicacion} />
@@ -503,8 +503,8 @@ export default function MediaDelEjercicio({
                   onClick={() => (aqui ? setMoviendo(null) : mover(m, o.g))}
                   style={{
                     flex: 1, minHeight: 36, borderRadius: 9, cursor: 'pointer',
-                    border: `1.5px solid ${aqui ? T.accent : T.border}`,
-                    background: aqui ? T.accent : T.bg2,
+                    border: 'none',
+                    background: aqui ? T.accent : UI.relleno,
                     color: aqui ? '#fff' : T.text2,
                     fontFamily: FONT, fontSize: 12.5, fontWeight: 700,
                   }}
@@ -538,7 +538,7 @@ export default function MediaDelEjercicio({
                   style={{
                     flex: 1, minWidth: 0, minHeight: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                     borderRadius: 11, cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 700, touchAction: 'manipulation',
-                    border: `1.5px solid ${activo ? T.accent : T.border}`, background: activo ? T.accentBg : T.bg2, color: activo ? T.accent : T.text2,
+                    border: 'none', background: activo ? T.accentBg : UI.relleno, color: activo ? T.accent : T.text2,
                   }}
                 >
                   <Icono size={15} /> {corto}

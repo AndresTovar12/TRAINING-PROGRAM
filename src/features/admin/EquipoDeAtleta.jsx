@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ChevronRight, ChevronUp, Check, Loader2, UserPlus } from 'lucide-react';
 import { invitarAlEquipo } from '@/lib/api';
-import { T, FONT, KP } from '@/lib/theme';
+import { T, FONT, KP, UI } from '@/lib/theme';
 import { textoDeAviso } from '@/lib/programas';
 
 /* Lo del EQUIPO de un atleta en los paneles de los profesionales: agregar a
@@ -19,7 +19,7 @@ export function AvisosDelCoach({ avisos, onEntendido }) {
           role="status"
           style={{
             display: 'flex', alignItems: 'center', gap: 12, background: T.bg2, borderRadius: 14, padding: '12px 14px',
-            border: `1.5px solid ${KP.blueSoft}`, flexWrap: 'wrap',
+            border: 'none', boxShadow: UI.sombraGrupo, flexWrap: 'wrap',
           }}
         >
           <span style={{ flex: '1 1 200px', fontSize: 14, fontWeight: 700, color: T.text, lineHeight: 1.4 }}>{textoDeAviso(a)}</span>
@@ -28,7 +28,7 @@ export function AvisosDelCoach({ avisos, onEntendido }) {
             onClick={() => onEntendido(a)}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800,
-              border: `1.5px solid ${T.accent}`, background: T.bg2, color: T.accent, borderRadius: 11, padding: '8px 14px',
+              border: 'none', background: KP.blueSoft, color: T.accent, borderRadius: 11, padding: '8px 14px',
             }}
           >
             <Check size={15} strokeWidth={3} /> Entendido
@@ -74,8 +74,8 @@ export function FilaDeEquipo({ nombre, detalle, onClick }) {
     </>
   );
   const estilo = {
-    display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', width: '100%', background: T.bg2, borderRadius: 14,
-    padding: '12px 14px', border: `1px solid ${T.border}`, fontFamily: FONT,
+    display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', width: '100%', background: UI.relleno, borderRadius: 14,
+    padding: '12px 14px', border: 'none', fontFamily: FONT,
   };
   return onClick
     ? <button type="button" onClick={onClick} style={{ ...estilo, cursor: 'pointer' }}>{cuerpo}</button>
@@ -126,8 +126,8 @@ export function AgregarAlEquipo({ atleta, Seccion, abierta, onToggle, onInvitado
           autoCapitalize="none"
           spellCheck={false}
           style={{
-            flex: 1, minWidth: 0, border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '11px 12px', fontFamily: FONT,
-            fontSize: 16, fontWeight: 500, color: T.text, background: T.bg2, outline: 'none',
+            flex: 1, minWidth: 0, border: 'none', borderRadius: 11, padding: '11px 12px', fontFamily: FONT,
+            fontSize: 16, fontWeight: 500, color: T.text, background: UI.relleno, outline: 'none',
           }}
         />
         <button
@@ -136,7 +136,7 @@ export function AgregarAlEquipo({ atleta, Seccion, abierta, onToggle, onInvitado
           className="kp-press"
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 800,
-            borderRadius: 11, padding: '0 15px', border: `1.5px solid ${T.accent}`, background: T.bg2, color: T.accent,
+            borderRadius: 11, padding: '0 15px', border: 'none', background: KP.blueSoft, color: T.accent,
             opacity: ocupado || !ref.trim() ? 0.55 : 1,
           }}
         >

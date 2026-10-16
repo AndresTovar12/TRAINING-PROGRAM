@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Flag, Loader2, Mic, Send, Video, X } from 'lucide-react';
 import HojaFlotante from '@/components/HojaFlotante';
-import { T, KP, FONT } from '@/lib/theme';
+import { T, KP, FONT, UI } from '@/lib/theme';
 import { respondeTecnica, subeArchivo, mimeBase } from '@/lib/mensajesApi';
 import { preparaArchivo } from '@/features/mensajes/adjuntos';
 import { puedeGrabarVoz, useGrabadoraDeVoz } from '@/features/mensajes/useGrabadoraDeVoz';
@@ -74,7 +74,7 @@ export default function CorregirTecnica({ t, url, alListo, alCerrar }) {
 
   const boton = (activo) => ({
     minHeight: 46, padding: '0 14px', borderRadius: 14, cursor: 'pointer', fontFamily: FONT, fontSize: 14.5, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 7, touchAction: 'manipulation',
-    border: `1.5px solid ${activo ? T.accent : T.borderHi}`, background: activo ? T.accentBg : KP.surface, color: activo ? T.accent : T.text,
+    border: 'none', background: activo ? T.accentBg : UI.relleno, color: activo ? T.accent : T.text,
   });
 
   return (
@@ -98,7 +98,7 @@ export default function CorregirTecnica({ t, url, alListo, alCerrar }) {
 
         <textarea
           value={texto} onChange={(e) => setTexto(e.target.value)} rows={4} maxLength={4000} placeholder="Qué corregir" aria-label="Qué corregir"
-          style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', border: `1.5px solid ${T.border}`, borderRadius: 16, background: KP.surface, padding: '13px 15px', fontFamily: FONT, fontSize: 16, lineHeight: 1.4, color: T.text, outline: 'none' }}
+          style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', border: 'none', borderRadius: 16, background: UI.relleno, padding: '13px 15px', fontFamily: FONT, fontSize: 16, lineHeight: 1.4, color: T.text, outline: 'none' }}
         />
 
         {archivo ? (
@@ -130,7 +130,7 @@ export default function CorregirTecnica({ t, url, alListo, alCerrar }) {
 
         <button
           type="button" onClick={manda} disabled={!hayAlgo || enviando} className="kp-press"
-          style={{ minHeight: 54, borderRadius: 18, border: 'none', cursor: hayAlgo && !enviando ? 'pointer' : 'default', fontFamily: FONT, fontSize: 16.5, fontWeight: 800, color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9, background: hayAlgo ? `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})` : T.borderHi, boxShadow: hayAlgo ? KP.shBtn : 'none', touchAction: 'manipulation' }}
+          style={{ minHeight: 54, borderRadius: 18, border: 'none', cursor: hayAlgo && !enviando ? 'pointer' : 'default', fontFamily: FONT, fontSize: 16.5, fontWeight: 800, color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9, background: hayAlgo ? KP.blue : T.borderHi, boxShadow: hayAlgo ? KP.shBtn : 'none', touchAction: 'manipulation' }}
         >
           {enviando ? <><Loader2 size={19} className="spin" /> Mandando…</> : <><Send size={19} /> Mandar corrección</>}
         </button>

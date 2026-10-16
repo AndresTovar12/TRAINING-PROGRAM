@@ -81,7 +81,7 @@ export default function EncuadreDeFoto({ valor, onCambia, onCerrar }) {
             aria-hidden="true"
             style={{
               position: 'absolute', left: `${punto.x}%`, top: `${punto.y}%`, width: 34, height: 34, marginLeft: -17, marginTop: -17,
-              borderRadius: '50%', border: '3px solid #fff', boxShadow: '0 0 0 1.5px rgba(0,0,0,0.35), 0 2px 10px rgba(0,0,0,0.45)',
+              borderRadius: '50%', border: '3px solid #fff', /* estilo-ok: agarradera del encuadre */ boxShadow: '0 0 0 1.5px rgba(0,0,0,0.35), 0 2px 10px rgba(0,0,0,0.45)',
               pointerEvents: 'none', display: 'grid', placeItems: 'center',
             }}
           >
@@ -104,7 +104,7 @@ export default function EncuadreDeFoto({ valor, onCambia, onCerrar }) {
         </div>
 
         <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-          <button type="button" onClick={centrar} style={{ ...boton, border: `1.5px solid ${LT.border}`, background: LT.surface, color: LT.text }}>
+          <button type="button" onClick={centrar} style={{ ...boton, border: 'none', background: LT.surface, color: LT.text }}>
             Centrar
           </button>
           <button type="button" onClick={onCerrar} style={{ ...boton, border: 'none', background: LT.blue, color: '#fff' }}>

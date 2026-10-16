@@ -5,7 +5,7 @@ import { IconoSvg } from '@/components/IconoDeTipo';
 import { buscaIconos, ICONO_NEUTRO, normaliza, sugiereIcono } from '@/lib/iconosDeTipo';
 import { useCatalogoDeIconos } from '@/lib/useCatalogoDeIconos';
 import { useIsDesktop } from '@/lib/useViewport';
-import { COLORES_TIPO, FONT, KP, LT } from '@/lib/theme';
+import { COLORES_TIPO, FONT, KP, LT, UI } from '@/lib/theme';
 
 /**
  * «Tipo nuevo»: nombre, color e ÍCONO, con una vista previa de cómo saldrá en «Hoy te toca».
@@ -28,13 +28,13 @@ const resplandor = (hex) => `radial-gradient(circle at 74% 30%, ${rgba(hex, 0.62
 
 // Una sombra suave arriba o abajo cuando hay más por desplazar (el truco de `background-attachment: local`: sin JavaScript ni medir nada).
 const SOMBRAS_DE_SCROLL = [
-  `linear-gradient(${LT.bg} 30%, rgba(244,245,248,0)) top / 100% 22px no-repeat local`,
-  `linear-gradient(rgba(244,245,248,0), ${LT.bg} 70%) bottom / 100% 22px no-repeat local`,
+  `linear-gradient(${LT.bg} 30%, rgba(244,245,248,0)) top / 100% 22px no-repeat local`, /* estilo-ok: sombra de desplazamiento */
+  `linear-gradient(rgba(244,245,248,0), ${LT.bg} 70%) bottom / 100% 22px no-repeat local`, /* estilo-ok: sombra de desplazamiento */
   'radial-gradient(farthest-side at 50% 0, rgba(17,19,24,0.14), rgba(17,19,24,0)) top / 100% 9px no-repeat scroll',
   'radial-gradient(farthest-side at 50% 100%, rgba(17,19,24,0.14), rgba(17,19,24,0)) bottom / 100% 9px no-repeat scroll',
 ].join(', ');
 
-const rotulo = { fontSize: 12, fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase', color: LT.text3 };
+const rotulo = { fontSize: 13, fontWeight: 700, color: LT.text2 };
 
 export default function HojaTipoNuevo({ propios, conUso, onGuardar, onCerrar }) {
   const esCompu = useIsDesktop();
@@ -81,7 +81,7 @@ export default function HojaTipoNuevo({ propios, conUso, onGuardar, onCerrar }) 
         style={{
           width: '100%', minHeight: 54, border: 'none', borderRadius: 16, cursor: limpio && !guardando ? 'pointer' : 'default', display: 'flex', alignItems: 'center',
           justifyContent: 'center', gap: 9, fontFamily: FONT, fontSize: 16.5, fontWeight: 800, touchAction: 'manipulation',
-          ...(limpio ? { background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, boxShadow: KP.shBtn, color: '#fff' } : { background: LT.surface2, color: LT.text3 }),
+          ...(limpio ? { background: KP.blue, boxShadow: KP.shBtn, color: '#fff' } : { background: LT.surface2, color: LT.text3 }),
         }}
       >
         {guardando && <Loader2 size={18} className="spin" />} {conUso ? 'Guardar y usar' : 'Guardar'}
@@ -96,7 +96,7 @@ export default function HojaTipoNuevo({ propios, conUso, onGuardar, onCerrar }) 
         <div
           style={{
             position: 'relative', overflow: 'hidden', isolation: 'isolate', borderRadius: 22, padding: '10px 14px 13px', color: '#fff', display: 'flex', flexDirection: 'column', gap: 9,
-            background: 'linear-gradient(165deg, #1c3ad6 0%, #142a9e 52%, #0c1a66 100%)', boxShadow: '0 12px 26px rgba(14,30,120,0.28), inset 0 1px 0 rgba(255,255,255,0.18)', flexShrink: 0,
+            background: UI.azul, boxShadow: '0 12px 26px rgba(14,30,120,0.28), inset 0 1px 0 rgba(255,255,255,0.18)', flexShrink: 0,
           }}
         >
           <span aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: -1, pointerEvents: 'none', background: resplandor(color), transition: 'background 0.25s' }} />
@@ -107,9 +107,9 @@ export default function HojaTipoNuevo({ propios, conUso, onGuardar, onCerrar }) 
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <span
               aria-hidden="true"
-              style={{ position: 'relative', width: 60, height: 60, flexShrink: 0, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.3)' }}
+              style={{ position: 'relative', width: 60, height: 60, flexShrink: 0, borderRadius: '50%', /* estilo-ok: aro del ícono sobre la tarjeta azul */ display: 'grid', placeItems: 'center', background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.3)' }}
             >
-              <span style={{ position: 'absolute', inset: -8, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.16)' }} />
+              <span style={{ position: 'absolute', inset: -8, borderRadius: '50%', /* estilo-ok: aro del ícono sobre la tarjeta azul */ border: '1px solid rgba(255,255,255,0.16)' }} />
               {dibujo ? <IconoSvg svg={dibujo.svg} size={27} strokeWidth={1.8} /> : <Tag size={27} strokeWidth={1.8} />}
             </span>
             <input
@@ -129,7 +129,7 @@ export default function HojaTipoNuevo({ propios, conUso, onGuardar, onCerrar }) 
                 key={c} type="button" onClick={() => setColor(c)} aria-label={`Color ${c}`} aria-pressed={c === color}
                 style={{
                   width: 30, height: 30, flex: 'none', padding: 0, borderRadius: '50%', cursor: 'pointer', background: c, display: 'grid', placeItems: 'center', touchAction: 'manipulation',
-                  border: c === color ? `2.5px solid ${LT.text}` : '2.5px solid transparent', boxSizing: 'border-box',
+                  border: c === color ? `2.5px solid ${LT.text}` : '2.5px solid transparent', /* estilo-ok: anillo del color elegido */ boxSizing: 'border-box',
                 }}
               >
                 {c === color && <Check size={14} color="#fff" strokeWidth={3.4} />}
@@ -147,19 +147,19 @@ export default function HojaTipoNuevo({ propios, conUso, onGuardar, onCerrar }) 
             <Search size={18} color={LT.text3} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
             <input
               type="search" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} autoComplete="off" placeholder="Buscar: boxeo, pelota, nadar…" aria-label="Buscar un ícono"
-              style={{ width: '100%', height: 46, boxSizing: 'border-box', padding: '0 14px 0 40px', border: `1.5px solid ${LT.border}`, borderRadius: 14, background: LT.surface, fontFamily: FONT, fontSize: 16, fontWeight: 600, color: LT.text, outline: 'none' }}
+              style={{ width: '100%', height: 46, boxSizing: 'border-box', padding: '0 14px 0 40px', border: 'none', borderRadius: 14, background: UI.relleno, fontFamily: FONT, fontSize: 16, fontWeight: 600, color: LT.text, outline: 'none' }}
             />
           </div>
           <div
             role="group" aria-label="Categorías de íconos"
-            style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none', padding: '2px 0', flexShrink: 0, WebkitMaskImage: 'linear-gradient(to right, #000 90%, transparent)', maskImage: 'linear-gradient(to right, #000 90%, transparent)' }}
+            style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none', padding: '2px 0', flexShrink: 0, /* estilo-ok: desvanecido de la tira que se desliza */ WebkitMaskImage: 'linear-gradient(to right, #000 90%, transparent)', maskImage: 'linear-gradient(to right, #000 90%, transparent)' }}
           >
             {[{ id: 'todos', nombre: 'Todos' }, ...(catalogo?.categorias ?? [])].map((c) => (
               <button
                 key={c.id} type="button" onClick={() => setCategoria(c.id)} aria-pressed={categoria === c.id}
                 style={{
                   flex: 'none', minHeight: 36, padding: '0 14px', borderRadius: 999, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: FONT, fontSize: 13.5, fontWeight: 700, touchAction: 'manipulation',
-                  ...(categoria === c.id ? { background: LT.text, border: `1.5px solid ${LT.text}`, color: '#fff' } : { background: LT.surface, border: `1.5px solid ${LT.border}`, color: LT.text2 }),
+                  ...(categoria === c.id ? { background: LT.text, border: 'none', color: '#fff' } : { background: UI.relleno, border: 'none', color: LT.text2 }),
                 }}
               >
                 {c.nombre}
@@ -186,7 +186,7 @@ export default function HojaTipoNuevo({ propios, conUso, onGuardar, onCerrar }) 
                   key={ic.id} type="button" onClick={() => setElegido(ic.id)} title={ic.nombre} aria-label={ic.nombre} aria-pressed={puesto}
                   style={{
                     position: 'relative', aspectRatio: '1', padding: 0, borderRadius: 14, cursor: 'pointer', display: 'grid', placeItems: 'center', touchAction: 'manipulation',
-                    border: `1.5px solid ${puesto ? LT.blue : LT.border}`, background: puesto ? LT.blueSoft : LT.surface, color: puesto ? LT.blue : LT.text,
+                    border: 'none', background: puesto ? LT.blueSoft : UI.relleno, color: puesto ? LT.blue : LT.text,
                   }}
                 >
                   <IconoSvg svg={ic.svg} size={24} />

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Check, FolderOpen, Loader2 } from 'lucide-react';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, UI } from '@/lib/theme';
 import { ETIQUETA_DE_TIPO, textoDeRuta } from '@/lib/misPlanesDatos';
 import { crearCarpeta } from '@/lib/misPlanes';
 import { useMisPlanes } from '@/lib/useMisPlanes';
@@ -129,7 +129,7 @@ export default function DialogoGuardar({
                   type="button" onClick={() => setEligiendo(true)} disabled={cargando}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', cursor: cargando ? 'default' : 'pointer', padding: '10px 12px',
-                    background: T.bg2, border: `1.5px solid ${T.border}`, borderRadius: 11, fontFamily: FONT,
+                    background: UI.relleno, border: 'none', borderRadius: 11, fontFamily: FONT,
                   }}
                 >
                   <FolderOpen size={17} color={T.text2} />

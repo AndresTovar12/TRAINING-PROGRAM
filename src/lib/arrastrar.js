@@ -36,7 +36,7 @@ const ESTILOS = `
 [data-arrastre] button,[data-arrastre] select,[data-arrastre] label,[data-arrastre] a,[data-arrastre] [role="button"]{cursor:pointer}
 body.tl-arrastrando,body.tl-arrastrando *{cursor:grabbing !important;user-select:none !important;-webkit-user-select:none !important}
 .tl-suelto{opacity:.35 !important;background:#E8ECFD !important}
-.tl-fantasma{position:fixed;left:0;top:0;z-index:6200;pointer-events:none;display:flex;align-items:center;max-width:360px;padding:9px 14px;background:#fff;border:1.5px solid #1E40E0;border-radius:12px;box-shadow:0 16px 44px rgba(17,19,24,0.13);font:800 14px Inter,-apple-system,system-ui,sans-serif;color:#111318;transform:rotate(-.6deg)}
+/* estilo-ok: el renglón que se arrastra */ .tl-fantasma{position:fixed;left:0;top:0;z-index:6200;pointer-events:none;display:flex;align-items:center;max-width:360px;padding:9px 14px;background:#fff;border:1.5px solid #1E40E0;border-radius:12px;box-shadow:0 16px 44px rgba(17,19,24,0.13);font:800 14px Inter,-apple-system,system-ui,sans-serif;color:#111318;transform:rotate(-.6deg)}
 .tl-fantasma span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tl-linea-ins{position:fixed;z-index:6190;pointer-events:none;background:#1E40E0;border-radius:2px;box-shadow:0 0 0 3px rgba(30,64,224,0.16)}
 `;

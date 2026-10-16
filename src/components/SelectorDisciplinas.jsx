@@ -1,6 +1,6 @@
 import { Check } from 'lucide-react';
 import { DISCIPLINAS } from '@/lib/oficios';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, UI } from '@/lib/theme';
 
 /**
  * Qué entrena el coach, como pastillas que se prenden y apagan (en el inicio son renglones grandes; en Mi perfil, que es un
@@ -26,7 +26,7 @@ export default function SelectorDisciplinas({ value = [], onChange }) {
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 38, padding: '0 13px', borderRadius: 999,
               cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 700, touchAction: 'manipulation',
-              border: `1.5px solid ${p ? T.accent : T.border}`, background: p ? T.accentBg : T.bg2, color: p ? T.accent : T.text2,
+              border: 'none', background: p ? T.accentBg : UI.relleno, color: p ? T.accent : T.text2,
             }}
           >
             {p && <Check size={14} strokeWidth={3} />}{d.nombre}

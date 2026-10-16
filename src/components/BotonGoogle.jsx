@@ -1,5 +1,5 @@
 import { useAuth } from '@/contexts/AuthContext';
-import { FONT, KP } from '@/lib/theme';
+import { FONT, KP, UI } from '@/lib/theme';
 
 /**
  * «Continuar con Google», con su «o» de arriba si se pide (`conO`).
@@ -30,7 +30,7 @@ export default function BotonGoogle({ antes, conO = false, style }) {
         className="kp-press"
         style={{
           width: '100%', minHeight: 50, borderRadius: KP.rBtn,
-          border: `1.5px solid ${KP.line}`, background: KP.surface, cursor: 'pointer',
+          border: 'none', background: UI.relleno, cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
           fontFamily: FONT, fontSize: 15, fontWeight: 700, color: KP.ink, touchAction: 'manipulation',
           ...style,

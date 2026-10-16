@@ -38,7 +38,7 @@ import { HistorialContext, enVentanaFlotante, useHistorial, useHistorialDelEdito
 import { mueveEn, propsDeArrastre } from '@/lib/arrastrar';
 import { PlegadasContext, usePlegadas } from '@/lib/usePlegadas';
 import { useGuiaAncha } from '@/lib/useGuiaAncha';
-import { T, FONT, KP, tipoDeSesion } from '@/lib/theme';
+import { T, FONT, KP, tipoDeSesion, UI } from '@/lib/theme';
 import { CeldaDeReps, CeldaDeCarga, DebajoDeRepsYCarga } from '@/components/RepsYCarga';
 import CampoDescanso from '@/components/CampoDescanso';
 import { useRepsYCarga } from '@/lib/useRepsYCarga';
@@ -185,7 +185,7 @@ const inputStyle = {
 export function Field({ label, children, grow }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: grow ? 1 : undefined, minWidth: 0 }}>
-      <span style={{ fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 700, color: T.text2 }}>{label}</span>
       {children}
     </label>
   );
@@ -366,10 +366,8 @@ function BotonCarga({ ex, onPatch }) {
         background: efectivo ? T.accentBg : T.bg3,
         color: efectivo ? T.accent : T.text2,
         fontFamily: FONT, fontSize: 12, fontWeight: 700,
-        /* "Sugerido por la app" se dice con el borde punteado, no bajándole la
-           opacidad: un gris claro al 75% sobre blanco no lo lee nadie, y
-           encima parecía desactivado cuando sí se puede tocar. */
-        border: explicito ? '1px solid transparent' : `1px dashed ${efectivo ? T.accent : T.borderHi}`,
+        /* Sin contorno punteado (reestructura visual, 16 oct 2026): lo sugerido y lo elegido se ven igual; el `title` dice cuál es. */
+        border: 'none',
       }}
     >
       <Scale size={12} />
@@ -403,8 +401,8 @@ const ANCHO_CARGA = 100;
 function RotuloCampo({ children }) {
   return (
     <span style={{
-      display: 'block', fontSize: 10.5, fontWeight: 800, color: T.text3,
-      textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4, whiteSpace: 'nowrap',
+      display: 'block', fontSize: 13, fontWeight: 700, color: T.text2,
+      marginBottom: 4, whiteSpace: 'nowrap',
     }}>
       {children}
     </span>
@@ -681,8 +679,8 @@ function CrearEjercicioRapido({ categorias, onCancelar, onCreado, duenoId, maste
                   key={String(v)} type="button" onClick={() => setLlevaPeso(v)}
                   style={{
                     flex: 1, padding: '11px 10px', borderRadius: 12, cursor: 'pointer',
-                    border: `1.5px solid ${llevaPeso === v ? T.accent : T.border}`,
-                    background: llevaPeso === v ? T.accentBg : T.bg2,
+                    border: 'none',
+                    background: llevaPeso === v ? T.accentBg : UI.relleno,
                     color: llevaPeso === v ? T.accent : T.text2,
                     fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
                   }}
@@ -714,7 +712,7 @@ function CrearEjercicioRapido({ categorias, onCancelar, onCreado, duenoId, maste
               type="button" onClick={guardar} disabled={guardando || !nombre.trim()}
               style={{
                 flex: 1, padding: '13px 16px', borderRadius: 12, border: 'none',
-                background: nombre.trim() && !guardando ? `linear-gradient(135deg, ${T.accent}, ${T.accentDk})` : T.bg3,
+                background: nombre.trim() && !guardando ? T.accent : T.bg3,
                 color: nombre.trim() && !guardando ? '#fff' : T.text3,
                 cursor: nombre.trim() && !guardando ? 'pointer' : 'default',
                 fontFamily: FONT, fontSize: 14.5, fontWeight: 800,
@@ -898,8 +896,8 @@ function RanuraMedia({
           subidor— y el estado se comía un renglón entero él solo. */}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 9 }}>
         <span style={{
-          fontSize: 11, fontWeight: 800, color: T.text3, letterSpacing: 0.6,
-          textTransform: 'uppercase', flexShrink: 0,
+          fontSize: 13, fontWeight: 700, color: T.text2,
+          flexShrink: 0,
         }}>
           {titulo}
         </span>
@@ -1223,7 +1221,7 @@ function CuerpoDeSets({
             style={{
               width: '100%', maxWidth: esCompu && nSets === 0 ? 320 : undefined, minHeight: 52, display: 'flex', alignItems: 'center',
               justifyContent: 'center', gap: 9, borderRadius: 16, border: 'none', cursor: 'pointer',
-              background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff',
+              background: T.accent, color: '#fff',
               fontFamily: FONT, fontSize: 16, fontWeight: 800, boxShadow: KP.shBtn,
             }}
           >
@@ -1326,7 +1324,7 @@ function SessionEditorInterno({
   const quitarLaClase = () => quita({ aviso: 'Se quitó la clase', pregunta: { titulo: '¿Quitar la clase de esta sesión?', detalle: 'El video se queda en tu espacio y en Mis planes si lo guardaste.', confirmar: 'Sí, quitarla' } }, () => onPatch({ clase: undefined }));
 
   return (
-    <div {...arrastre} style={tarjetaDeSesion(day)}>
+    <div {...arrastre} style={TARJETA_DE_SESION}>
       <DayHeader
         day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog}
         onClear={onClear} nSets={descanso ? null : nSets} conVista={!descanso} vistaFuera={vistaFuera} soloLectura={soloLectura}
@@ -1480,8 +1478,8 @@ function HojaFormas({ actual, onElegir, onClose }) {
               style={{
                 display: 'flex', gap: 12, alignItems: 'center', width: '100%', textAlign: 'left',
                 padding: 12, borderRadius: 14, marginBottom: 7, fontFamily: FONT,
-                border: `1.5px solid ${es ? T.accent : T.border}`,
-                background: es ? T.accentBg : T.bg2, cursor: es ? 'default' : 'pointer',
+                border: 'none',
+                background: es ? T.accentBg : UI.relleno, cursor: es ? 'default' : 'pointer',
               }}
             >
               <span style={{
@@ -1520,17 +1518,10 @@ function HojaFormas({ actual, onElegir, onClose }) {
   );
 }
 
-/* El color del tipo de la sesión, muy clarito, de fondo de toda la tarjeta (Andrés, 5 oct 2026: «que la card tuviera
-   en un tono muy clarito el color de ese tipo de entrenamiento»; fondo al 9 % y borde al 32 %). Un color propio que
-   no sea #RRGGBB se queda con la tarjeta blanca de siempre. */
-const rgbDe = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(',');
-function tarjetaDeSesion(day) {
-  const c = tipoDeSesion(day).c;
-  const base = { borderRadius: 18, padding: 16, boxShadow: KP.shCard };
-  if (!/^#[0-9a-f]{6}$/i.test(c || '')) return { ...base, background: T.bg2, border: `1px solid ${T.border}` };
-  const rgb = rgbDe(c);
-  return { ...base, background: `linear-gradient(rgba(${rgb},0.09), rgba(${rgb},0.09)), ${T.bg2}`, border: `1px solid rgba(${rgb},0.32)` };
-}
+/* La tarjeta de UNA sesión en el editor: blanca, sin contorno, sobre el gris de la página. Andrés (5 oct 2026) la había pedido teñida con el
+   color de su tipo; con la reestructura visual (16 oct 2026: «la card que lo engloba está sumamente diferente») el color se queda solo en el
+   cuadrito del tipo, como en el resto de la app. */
+const TARJETA_DE_SESION = { borderRadius: 20, padding: 16, background: T.bg2, boxShadow: UI.sombraGrupo };
 
 /* PLEGAR un workout (todos lo traen; en el programa vienen plegados por default): botón blanco con borde y la flechita azul,
    para que se vea (Andrés, 5 oct 2026: «el botoncito para desplegar casi no se ve»). Plegado deja solo la cabecera y su resumen. */
@@ -1541,7 +1532,7 @@ function BotonDePlegar({ plegada, onClick }) {
       aria-label={plegada ? 'Desplegar el workout' : 'Plegar el workout'} title={plegada ? 'Desplegar' : 'Plegar'}
       style={{
         width: 34, height: 34, borderRadius: 10, flexShrink: 0, cursor: 'pointer', display: 'grid', placeItems: 'center',
-        border: `1px solid ${T.borderHi}`, background: T.bg2, color: T.accent, touchAction: 'manipulation',
+        border: 'none', background: UI.relleno, color: T.accent, touchAction: 'manipulation',
       }}
     >
       {plegada ? <ChevronRight size={17} /> : <ChevronDown size={17} />}
@@ -2538,7 +2529,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 18px', borderRadius: 12,
         border: 'none', cursor: saving || !dirty ? 'default' : 'pointer',
-        background: dirty ? `linear-gradient(135deg, ${T.accent}, ${T.accentDk})` : T.bg3,
+        background: dirty ? T.accent : T.bg3,
         // Recién guardado, en verde: se lee como "listo", no como botón apagado.
         color: dirty ? '#fff' : (haGuardado ? KP.mint : T.text3), fontFamily: FONT, fontSize: 14, fontWeight: 800,
         boxShadow: dirty ? KP.shBtn : 'none', opacity: saving ? 0.75 : 1, flexShrink: 0,
@@ -2595,7 +2586,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
             style={{
               display: 'flex', gap: 14, alignItems: 'center', textAlign: 'left', cursor: 'pointer',
               background: T.bg2, border: 'none', boxShadow: '0 1px 2px rgba(17,19,24,0.04)', borderRadius: 18, padding: 18,
-              fontFamily: FONT, 
+              fontFamily: FONT,
             }}
           >
             <span style={{ width: 46, height: 46, borderRadius: 14, background: T.accentBg, color: T.accent, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
@@ -2613,7 +2604,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
           style={{
             display: 'flex', gap: 14, alignItems: 'center', textAlign: 'left', cursor: 'pointer',
             background: T.bg2, border: 'none', boxShadow: '0 1px 2px rgba(17,19,24,0.04)', borderRadius: 18, padding: 18,
-            fontFamily: FONT, 
+            fontFamily: FONT,
           }}
         >
           <span style={{ width: 46, height: 46, borderRadius: 14, background: T.accentBg, color: T.accent, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
@@ -2638,8 +2629,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
               <button key={n} type="button" onClick={() => setWizWeeks(n)}
                 style={{
                   width: 52, padding: '11px 0', borderRadius: 11, cursor: 'pointer',
-                  border: `1.5px solid ${wizWeeks === n ? T.accent : T.border}`,
-                  background: wizWeeks === n ? T.accentBg : T.bg2, color: wizWeeks === n ? T.accent : T.text2,
+                  border: 'none',
+                  background: wizWeeks === n ? T.accentBg : UI.relleno, color: wizWeeks === n ? T.accent : T.text2,
                   fontFamily: FONT, fontSize: 14, fontWeight: 800,
                 }}>
                 {n}
@@ -2656,8 +2647,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
                   onClick={() => setWizDays((prev) => (active ? prev.filter((x) => x !== d) : [...prev, d]))}
                   style={{
                     minWidth: 52, padding: esCompu ? '11px 15px' : '11px 12px', borderRadius: 11, cursor: 'pointer',
-                    border: `1.5px solid ${active ? T.accent : T.border}`,
-                    background: active ? T.accentBg : T.bg2, color: active ? T.accent : T.text2,
+                    border: 'none',
+                    background: active ? T.accentBg : UI.relleno, color: active ? T.accent : T.text2,
                     fontFamily: FONT, fontSize: 13, fontWeight: 800,
                   }}>
                   {esCompu ? NOMBRE_DIA[d] : d}
@@ -2670,7 +2661,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
           type="button" onClick={generateQuickPlan} disabled={wizDays.length === 0}
           style={{
             padding: '14px 20px', borderRadius: 13, border: 'none', cursor: wizDays.length ? 'pointer' : 'default',
-            background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff',
+            background: T.accent, color: '#fff',
             fontFamily: FONT, fontSize: 15, fontWeight: 800, boxShadow: KP.shBtn, opacity: wizDays.length ? 1 : 0.5,
           }}
         >
@@ -2774,7 +2765,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         )}
 
         {!w ? (
-          <div style={{ background: T.bg2, border: `1.5px dashed ${T.borderHi}`, borderRadius: 20, padding: '40px 24px', textAlign: 'center' }}>
+          <div style={{ background: T.bg2, border: 'none', borderRadius: 20, padding: '40px 24px', textAlign: 'center' }}>
             <div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>Esta fase todavía no tiene semanas</div>
             <div style={{ marginTop: 14 }}>
               <Pill primary icon={Plus} onClick={() => agregarSemana(nav.pi)}>Agregar semana</Pill>
@@ -2784,7 +2775,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
           <>
             {/* Sesiones del día activo */}
             {daysOfWeekday.length === 0 ? (
-              <div style={{ background: T.bg2, border: `1.5px dashed ${T.borderHi}`, borderRadius: 20, padding: '52px 24px', textAlign: 'center' }}>
+              <div style={{ background: T.bg2, border: 'none', borderRadius: 20, padding: '52px 24px', textAlign: 'center' }}>
                 <div style={{ width: 70, height: 70, borderRadius: 22, background: T.accentBg, color: T.accent, display: 'grid', placeItems: 'center', margin: '0 auto 16px' }}>
                   <CalendarDays size={30} />
                 </div>
@@ -2792,7 +2783,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20, flexWrap: 'wrap' }}>
                   <button type="button"
                     onClick={() => agregaAlFinal([newDay(activeWeekday)])}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 20px', borderRadius: 12, border: 'none', cursor: 'pointer', background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff', fontFamily: FONT, fontSize: 14, fontWeight: 800, boxShadow: KP.shBtn }}>
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 20px', borderRadius: 12, border: 'none', cursor: 'pointer', background: T.accent, color: '#fff', fontFamily: FONT, fontSize: 14, fontWeight: 800, boxShadow: KP.shBtn }}>
                     <Plus size={16} /> Agregar sesión
                   </button>
                   <Pill icon={FolderOpen} onClick={() => setModal({ type: 'tpl-day', payload: { di: null } })}>Usar workout</Pill>

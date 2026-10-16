@@ -125,7 +125,7 @@ function TarjetaDeClase({ clase, onCambiar, onQuitar }) {
     <div
       style={{
         display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: 10, borderRadius: 16, background: T.bg2,
-        border: `1.5px solid ${T.border}`, boxShadow: KP.shCard,
+        border: 'none', boxShadow: KP.shCard,
       }}
     >
       <MiniaturaDeClase url={clase.url} />
@@ -166,7 +166,7 @@ export default function ClaseDeLaSesion({ clase, pedir = false, onClase, onQuita
   }
   if (!pedir) return null;
   return (
-    <div style={{ marginTop: 12, padding: 14, borderRadius: 16, background: T.bg2, border: `1.5px solid ${T.border}`, boxShadow: KP.shCard, fontFamily: FONT }}>
+    <div style={{ marginTop: 12, padding: 14, borderRadius: 16, background: T.bg2, border: 'none', boxShadow: KP.shCard, fontFamily: FONT }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 10 }}>
         <PlayCircle size={18} color={KP.mint} /> Video de la clase
       </div>

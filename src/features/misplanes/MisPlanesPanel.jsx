@@ -29,7 +29,7 @@ import { VacioDeCarpeta, VacioDeMisPlanes } from '@/features/misplanes/EstadosVa
 import FiltroDeTipo from '@/features/misplanes/FiltroDeTipo';
 import { useMoverCosas } from '@/features/misplanes/useMoverCosas';
 import { botonBlanco, botonPrincipal, campo } from '@/features/misplanes/estilos';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, UI } from '@/lib/theme';
 import { useEnBanda } from '@/components/ui';
 
 const textoVacio = (texto) => (
@@ -319,7 +319,7 @@ export default function MisPlanesPanel() {
           {enCarpeta && (
             <button
               type="button" onClick={() => setNivel(carpetaActual.parent_id ?? null)} aria-label="Subir un nivel" title="Subir un nivel"
-              style={{ width: 38, height: 38, borderRadius: 11, border: `1.5px solid ${T.border}`, background: T.bg2, color: T.text, cursor: 'pointer', display: 'grid', placeItems: 'center', flexShrink: 0 }}
+              style={{ width: 38, height: 38, borderRadius: 11, border: 'none', background: UI.relleno, color: T.text, cursor: 'pointer', display: 'grid', placeItems: 'center', flexShrink: 0 }}
             >
               <ChevronLeft size={19} />
             </button>

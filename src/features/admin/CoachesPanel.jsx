@@ -269,13 +269,13 @@ function BorrarCoach({ coach, otrosCoaches, master, onCancelar, onHecho }) {
                         style={{
                           display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 13px',
                           borderRadius: 13, cursor: 'pointer', textAlign: 'left', fontFamily: FONT,
-                          border: `1.5px solid ${puesto ? T.accent : T.border}`,
-                          background: puesto ? T.accentBg : T.bg2,
+                          border: 'none',
+                          background: puesto ? T.accentBg : UI.relleno,
                         }}
                       >
                         <span style={{
                           width: 17, height: 17, borderRadius: '50%', flexShrink: 0, marginTop: 1,
-                          border: `2px solid ${puesto ? T.accent : T.borderHi}`,
+                          border: `2px solid ${puesto ? T.accent : T.borderHi}`, /* estilo-ok: círculo de elegir */
                           background: puesto ? T.accent : 'transparent',
                           display: 'grid', placeItems: 'center',
                         }}>
@@ -321,8 +321,8 @@ function BorrarCoach({ coach, otrosCoaches, master, onCancelar, onHecho }) {
                 autoCorrect="off"
                 style={{
                   width: '100%', boxSizing: 'border-box', minHeight: 46, padding: '0 13px',
-                  border: `1.5px solid ${puede ? T.danger : T.border}`, borderRadius: 12,
-                  background: T.bg2, fontFamily: FONT, fontSize: 15, fontWeight: 600, color: T.text,
+                  border: 'none', boxShadow: puede ? `inset 0 0 0 1.5px ${T.danger}` : 'none', /* estilo-ok: aro rojo: la palabra de borrar ya está bien escrita */ borderRadius: 12,
+                  background: UI.relleno, fontFamily: FONT, fontSize: 15, fontWeight: 600, color: T.text,
                 }}
               />
             </div>
@@ -434,7 +434,7 @@ function FichaCoach({ coach, atletas, otrosCoaches, master, onCerrar, onVerComo,
         style={{
           width: '100%', display: 'flex', alignItems: 'center', gap: 11, marginBottom: 16,
           border: 'none', borderRadius: 14, padding: '14px 16px', cursor: 'pointer',
-          background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff',
+          background: T.accent, color: '#fff',
           fontFamily: FONT, fontSize: 15, fontWeight: 700, textAlign: 'left', boxShadow: KP.shBtn,
         }}
       >
@@ -447,7 +447,7 @@ function FichaCoach({ coach, atletas, otrosCoaches, master, onCerrar, onVerComo,
         </span>
       </button>
 
-      <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.7, textTransform: 'uppercase', color: T.text3, marginBottom: 9 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: T.text2, marginBottom: 9 }}>
         Sus atletas ({atletas.length})
       </div>
       {atletas.length === 0 ? (
@@ -499,8 +499,8 @@ function FichaCoach({ coach, atletas, otrosCoaches, master, onCerrar, onVerComo,
           vuelve, y desactivar deshace lo que eliminar no. */}
       <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid #ECEEF2" }}>
         <div style={{
-          fontSize: 11, fontWeight: 800, letterSpacing: 0.7, textTransform: 'uppercase',
-          color: T.text3, marginBottom: 10,
+          fontSize: 13, fontWeight: 700,
+          color: T.text2, marginBottom: 10,
         }}>
           Administrar cuenta
         </div>
@@ -650,7 +650,7 @@ export default function CoachesPanel({ onVerComo }) {
       {err && <div style={{ background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 12, padding: '12px 16px', fontWeight: 600, marginBottom: 16 }}>{err}</div>}
 
       {coaches.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '52px 20px', color: T.text3, background: T.bg2, border: `1.5px dashed ${T.borderHi}`, borderRadius: 20 }}>
+        <div style={{ textAlign: 'center', padding: '52px 20px', color: T.text3, background: T.bg2, border: 'none', borderRadius: 20 }}>
           <Shield size={38} style={{ opacity: 0.4 }} />
           <div style={{ marginTop: 12, fontWeight: 700, color: T.text, fontSize: 15 }}>Aún no hay profesionales</div>
           <div style={{ marginTop: 6, fontWeight: 500, color: T.text2, fontSize: 13.5, lineHeight: 1.5 }}>

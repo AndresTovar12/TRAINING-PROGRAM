@@ -241,7 +241,7 @@ export default function ConectarIA({ enPerfil = false }) {
         display: esCompu ? 'grid' : 'flex', gridTemplateColumns: '1fr 1fr', flexDirection: 'column', gap: 18, alignItems: 'center',
       }}>
         <div>
-          <div style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase', opacity: 0.75 }}>Conectar con tu IA</div>
+          <div style={{ fontSize: 13, fontWeight: 700, opacity: 0.75 }}>Conectar con tu IA</div>
           <h2 style={{ fontSize: esCompu ? 28 : 23, fontWeight: 800, margin: '6px 0 6px', letterSpacing: -0.5, lineHeight: 1.12, textWrap: 'balance' }}>
             {esAtleta ? 'Tu entrenamiento, en tu IA' : 'Tu equipo, en tu IA'}
           </h2>
@@ -273,7 +273,7 @@ export default function ConectarIA({ enPerfil = false }) {
                 key={id} type="button" onClick={() => elegirRama(id)} aria-pressed={activa} className="kp-press"
                 style={{
                   textAlign: 'left', padding: 16, borderRadius: 20, cursor: 'pointer', fontFamily: FONT,
-                  border: 'none', boxShadow: activa ? `inset 0 0 0 2px ${KP.blue}` : '0 2px 10px rgba(17,19,24,0.06)', background: KP.surface,
+                  border: 'none', boxShadow: '0 1px 2px rgba(17,19,24,0.04)', background: activa ? KP.blueSoft : KP.surface,
                   display: 'flex', flexDirection: 'column', gap: 8,
                 }}
               >
@@ -307,7 +307,7 @@ export default function ConectarIA({ enPerfil = false }) {
 
       <style>{`
         .spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
-        .tl-toca::after{content:"";position:absolute;inset:-4px;border-radius:12px;border:2px solid ${KP.blue};animation:tl-late 1.6s ease-out infinite;pointer-events:none}
+        /* estilo-ok: pulso que señala dónde tocar */ .tl-toca::after{content:"";position:absolute;inset:-4px;border-radius:12px;border:2px solid ${KP.blue};animation:tl-late 1.6s ease-out infinite;pointer-events:none}
         @keyframes tl-late{0%{opacity:.9;transform:scale(1)}100%{opacity:0;transform:scale(1.08)}}
         @media (prefers-reduced-motion: reduce){.tl-toca::after{animation:none;opacity:.6}}
       `}</style>
