@@ -1,13 +1,13 @@
 import { useRef, useState } from 'react';
 import {
-  Dumbbell, Users, Library, Shield, PanelLeftClose, PanelLeft, Eye, X, Sparkles, FolderOpen, MessageCircle, Store, FlaskConical, Coins,
+  Dumbbell, Users, Library, Shield, PanelLeftClose, PanelLeft, Eye, X, Sparkles, FolderOpen, MessageCircle, Store, FlaskConical, Coins, Menu,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMensajes } from '@/contexts/MensajesContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { useIsDesktop } from '@/lib/useViewport';
 import { useLugar } from '@/lib/useLugar';
-import { T, FONT, KP, oficioCorto } from '@/lib/theme';
+import { T, FONT, KP, UI, oficioCorto } from '@/lib/theme';
 import AthletesPanel from '@/features/admin/AthletesPanel';
 import ExercisesPanel from '@/features/admin/ExercisesPanel';
 import CoachesPanel from '@/features/admin/CoachesPanel';
@@ -19,6 +19,7 @@ import VistaComoAtleta from '@/features/admin/VistaComoAtleta';
 import ConectarIA from '@/features/ia/ConectarIA';
 import MensajesDelCoach from '@/features/mensajes/MensajesDelCoach';
 import { NumeroRojo } from '@/features/mensajes/piezas';
+import { BarraInferior, CabeceraConBanda, EnBanda, Fila, Grupo, IconoDeFila } from '@/components/ui';
 
 const SIDEBAR_W = 232;
 
@@ -99,7 +100,7 @@ export default function AdminApp({ onAbrirPerfil }) {
        teléfono NO va en la navegación (decisión de Andrés): va en "Mi perfil". */
     ...(isDesktop && !viendoComo ? [{ id: 'ia', label: 'Conectar con IA', icon: Sparkles }] : []),
   ];
-  const tab = TABS.some((t) => t.id === tabGuardada) ? tabGuardada : 'athletes';
+  const tab = TABS.some((t) => t.id === tabGuardada) ? tabGuardada : (tabGuardada === 'mas' && !isDesktop ? 'mas' : 'athletes');
 
   const entrarComo = (coach) => {
     setViendoComo({ id: coach.id, nombre: coach.full_name || coach.username });
@@ -162,55 +163,50 @@ export default function AdminApp({ onAbrirPerfil }) {
     <VistaComoAtleta key={viendoAtleta.id} atleta={viendoAtleta} onSalir={salirDeAtleta} />
   );
 
-  /* ------------------------- Teléfono: pestañas arriba ------------------------ */
+  /* ------------------------- Teléfono: banda azul y barra de abajo ------------------------
+     Reestructura visual (15 oct 2026), como «Coach · Teléfono» de las capturas de Andrés: arriba la banda azul con el saludo y la
+     tarjeta blanca con el nombre de la sección; abajo la barra azul. Ya no hay pestañas que se deslizan de lado (Andrés: «medio confuso»).
+     La barra lleva cinco como mucho: el coach ve Atletas · Mensajes · Ejercicios · Planes · Vitrina. El dueño tiene además lo de
+     administrar, así que su quinta es «Más» (Mi vitrina, Profesionales, Cuentas de prueba, Monetización), como la de Ajustes del iPhone. */
   if (!isDesktop) {
+    const CORTOS = { athletes: t('Atletas'), messages: 'Mensajes', exercises: 'Ejercicios', misplanes: 'Planes', vitrina: 'Vitrina' };
+    const EN_BARRA = ['athletes', 'messages', 'exercises', 'misplanes', 'vitrina'];
+    const deMas = isMaster ? TABS.filter((x) => !EN_BARRA.slice(0, 4).includes(x.id)) : [];
+    const enBarra = TABS.filter((x) => (isMaster ? EN_BARRA.slice(0, 4) : EN_BARRA).includes(x.id));
+    const secciones = [
+      ...enBarra.map((x) => ({ id: x.id, texto: CORTOS[x.id] ?? x.label, Icono: x.icon, aviso: x.numero })),
+      ...(deMas.length ? [{ id: 'mas', texto: 'Más', Icono: Menu }] : []),
+    ];
+    const enMas = deMas.some((x) => x.id === tab) || (tabGuardada === 'mas' && deMas.length > 0);
+    const activa = enMas ? 'mas' : tab;
+    const mirandoMas = tabGuardada === 'mas' && deMas.length > 0;
+    const titulo = mirandoMas ? 'Más' : (TABS.find((x) => x.id === tab)?.label ?? '');
+    const detalle = !mirandoMas && tab === 'messages' && sinLeer > 0 ? `${sinLeer} sin leer` : null;
+    const hoy = new Date().toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric' }).replace('.', '');
+    const nombre = (profile?.full_name || profile?.username || '').trim().split(/\s+/)[0];
     return (
       <>
       {vistaDeAtleta}
-      <div style={{ minHeight: '100svh', background: T.bg, fontFamily: FONT, ...(viendoAtleta ? { display: 'none' } : {}) }}>
-        <header
-          style={{
-            position: 'sticky', top: 0, zIndex: 50, background: 'rgba(255,255,255,0.82)',
-            backdropFilter: 'saturate(180%) blur(16px)', borderBottom: `1px solid ${T.border}`,
-          }}
-        >
-          {/* El botón de cuenta va fijo arriba a la derecha: se le deja su hueco (68) y un
-              oficio largo («Fisioterapeuta deportivo») baja a un segundo renglón en vez de
-              quedar escondido debajo de él. */}
-          <div style={{ padding: '14px 68px 14px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
-            <Brand />
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: -0.3, color: T.text, lineHeight: 1.2 }}>
-                Training Lab · {isMaster ? 'Master' : (oficioCorto(profile?.profesion) || 'Coach')}
-              </div>
-              <div style={{ fontSize: 12.5, fontWeight: 500, color: T.text2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {profile?.full_name || (isMaster ? 'Administrador' : 'Entrenador')}
-              </div>
-            </div>
-          </div>
-          <div style={{ padding: '0 20px', overflowX: 'auto' }}>
-            <div style={{ display: 'flex', gap: 4 }}>
-              {TABS.map(({ id, label, icon: Icon, numero }) => {
-                const active = tab === id;
-                return (
-                  <button
-                    key={id} type="button" onClick={() => setTab(id)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px',
-                      border: 'none', background: 'transparent', cursor: 'pointer', whiteSpace: 'nowrap',
-                      fontFamily: FONT, fontSize: 14.5, fontWeight: 700,
-                      color: active ? T.accent : T.text2,
-                      borderBottom: `2.5px solid ${active ? T.accent : 'transparent'}`,
-                    }}
-                  >
-                    <Icon size={17} /> {label}<NumeroRojo n={numero} tam={18} />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </header>
-        <main style={{ padding: '20px 16px 80px' }}>{content}</main>
+      <div style={{ minHeight: '100svh', background: UI.fondo, fontFamily: FONT, ...(viendoAtleta ? { display: 'none' } : {}) }}>
+        {/* El botón de la cuenta (fijo arriba a la derecha, ver App) cae sobre la banda: se le deja su hueco. */}
+        <CabeceraConBanda
+          fecha={`Hoy, ${hoy}`} saludo={nombre ? `¡Hola, ${nombre}!` : '¡Hola!'} titulo={titulo} detalle={detalle}
+          avatar={<span aria-hidden="true" style={{ width: 52, height: 52, flexShrink: 0 }} />}
+        />
+        <main style={{ padding: '18px 16px calc(116px + env(safe-area-inset-bottom))' }}>
+          {mirandoMas ? (
+            <Grupo>
+              {deMas.map((x) => (
+                <Fila key={x.id} izquierda={<IconoDeFila><x.icon size={18} /></IconoDeFila>} texto={x.label} onClick={() => setTab(x.id)} />
+              ))}
+            </Grupo>
+          ) : (
+            <EnBanda.Provider value>{content}</EnBanda.Provider>
+          )}
+        </main>
+        <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 60 }}>
+          <BarraInferior variante="coach" secciones={secciones} activa={activa} onCambio={(id) => { setTab(id); window.scrollTo(0, 0); }} />
+        </div>
       </div>
       </>
     );

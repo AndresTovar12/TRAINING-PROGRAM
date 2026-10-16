@@ -28,7 +28,8 @@ import { usePalabras } from '@/contexts/PalabrasContext';
 import { useConfirmacion } from '@/components/Confirmacion';
 import AbreMetricas from '@/features/metricas/AbreMetricas';
 import { useIsDesktop } from '@/lib/useViewport';
-import { T, FONT, KP } from '@/lib/theme';
+import { T, FONT, KP, UI } from '@/lib/theme';
+import { Avatar as Iniciales, Buscador, Pastilla } from '@/components/ui';
 import { plural, pluralS } from '@/lib/plural';
 import { esDescanso, dondeVa, sessionIdFor, estructuraDelPlan } from '@/lib/training-utils';
 import { colorDePrograma, esProgramaFantasma, nombreCorto, rolDeProfesion } from '@/lib/programas';
@@ -68,6 +69,27 @@ function timeAgo(iso) {
   const m = Math.floor(diff / 60000);
   if (m > 0) return `hace ${m} min`;
   return 'recién';
+}
+
+/** «Hoy», «2 h», «Ayer», «4 días»: cuándo entró, en corto (la tarjeta del teléfono). */
+function haceCorto(iso, ahora) {
+  if (!iso) return null;
+  const diff = ahora - new Date(iso).getTime();
+  const h = Math.floor(diff / 3600000);
+  if (h < 1) return 'Hoy';
+  if (h < 24) return `${h} h`;
+  const d = Math.floor(diff / 86400000);
+  return d <= 1 ? 'Ayer' : `${d} días`;
+}
+
+/** Una cifra de arriba de la lista del teléfono («5 Activos»); en rosa si es algo por atender («1 Sin plan»). */
+function CifraDeLista({ valor, texto, alerta = false }) {
+  return (
+    <div style={{ background: alerta ? KP.dangerSoft : UI.tarjeta, borderRadius: 18, padding: '12px 14px', boxShadow: alerta ? 'none' : UI.sombraGrupo, minWidth: 0, fontFamily: FONT }}>
+      <div style={{ fontSize: 26, fontWeight: 800, color: KP.ink, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>{valor}</div>
+      <div style={{ fontSize: 13.5, fontWeight: 600, color: alerta ? KP.danger : KP.ink2, marginTop: 2, lineHeight: 1.25, overflowWrap: 'break-word' }}>{texto}</div>
+    </div>
+  );
 }
 
 function Avatar({ name, size = 40, url }) {
@@ -1668,42 +1690,48 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta, onIrA, onAb
 
   // Una tarjeta de la lista del teléfono. Es una función y no un componente
   // porque la comparten la lista de siempre y el grupo de dados de alta.
+  /* Reestructura visual (15 oct 2026), como «Mis atletas» del coach en el teléfono: tarjeta blanca sin borde, iniciales de color,
+     el plan (o «Sin plan» en rosa) y, a la derecha, cuándo entró por última vez. */
   const tarjetaDe = (a) => {
     const active = selected?.id === a.id;
     const isAdmin = a.role === 'admin';
+    const visto = haceCorto(a.lastSeen, cargadoEn);
     return (
       <button
         key={a.id}
         type="button"
         onClick={() => setSelected(a)}
+        className="kp-press"
         style={{
-          display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderRadius: 16, cursor: 'pointer',
-          border: `1.5px solid ${active ? T.accent : T.border}`, background: T.bg2, fontFamily: FONT, textAlign: 'left',
-          boxShadow: active ? KP.shRaise : KP.shCard, opacity: a.is_active === false ? 0.6 : 1,
-          transition: 'border-color .15s, box-shadow .15s, transform .12s',
+          display: 'flex', alignItems: 'center', gap: 12, padding: '14px 14px', borderRadius: UI.rTarjeta, cursor: 'pointer',
+          border: 'none', outline: active ? `2px solid ${KP.blue}` : 'none', background: UI.tarjeta, fontFamily: FONT, textAlign: 'left',
+          boxShadow: UI.sombraGrupo, opacity: a.is_active === false ? 0.6 : 1, width: '100%',
         }}
       >
-        <Avatar name={a.full_name || a.username} url={a.avatar_url} />
+        <Iniciales nombre={a.full_name || a.username} foto={a.avatar_url} tamano={48} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 700, color: T.text, fontSize: 14.5, display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+          <div style={{ fontWeight: 700, color: KP.ink, fontSize: 16.5, display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {a.full_name || a.username}
             </span>
             {isAdmin && <Shield size={13} color={T.accent} style={{ flexShrink: 0 }} />}
+            {!a.plan && !isAdmin && <Pastilla tono="malo">{t('Sin plan')}</Pastilla>}
             {a.is_active === false && <Pausada />}
             {a.perfil_completo === false && <SinTerminar />}
           </div>
-          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><Arroba fila={a} /></div>
+          <div style={{ fontSize: 14, color: KP.ink2, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {a.plan?.title ? a.plan.title : <Arroba fila={a} />}
+          </div>
           {etiquetasDeEquipo.get(a.id) && (
-            <div style={{ fontSize: 12, fontWeight: 700, color: T.accent, marginTop: 2 }}>{etiquetasDeEquipo.get(a.id).join(' · ')}</div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: T.accent, marginTop: 2 }}>{etiquetasDeEquipo.get(a.id).join(' · ')}</div>
           )}
           {salud && a.resumen && (
-            <div style={{ fontSize: 12, fontWeight: 600, color: T.text2, marginTop: 3 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: T.text2, marginTop: 3 }}>
               {lineaDeLista(a.resumen, new Date(cargadoEn))}
             </div>
           )}
         </div>
-        <ChevronRight size={18} color={T.text3} />
+        {visto && <span style={{ alignSelf: 'flex-start', flexShrink: 0, fontSize: 13, fontWeight: 600, color: KP.ink3, marginTop: 2 }}>{visto}</span>}
       </button>
     );
   };
@@ -1717,6 +1745,13 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta, onIrA, onAb
         {!viendoComo && !isMaster && (
           <PrimerosPasos clave={recarga} onAgregar={abrirAgregar} onIrA={onIrA} onAbrirPerfil={onAbrirPerfil} compu={isDesktop} />
         )}
+        {!modoTabla && !selected && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, marginBottom: 14 }}>
+            <CifraDeLista valor={metricas.total} texto={t('Atletas')} />
+            <CifraDeLista valor={metricas.activos} texto="Activos" />
+            <CifraDeLista valor={metricas.sinPlan} texto={t('Sin plan')} alerta={metricas.sinPlan > 0} />
+          </div>
+        )}
         {modoTabla && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginBottom: 16 }}>
             <StatCard icon={<Users size={17} />} label={t('Atletas')} value={metricas.total} />
@@ -1729,7 +1764,32 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta, onIrA, onAb
             vacía, y buscar en una lista vacía no sirve de nada.
             Viendo la cuenta de otro coach no aparece: el atleta quedaría a
             nombre de quien mira, no del coach. */}
-        {!viendoComo && (
+        {!modoTabla && (
+          /* En el teléfono: el buscador y, pegado, el «+» azul para agregar (como en las capturas). El contador de lugares y el código
+             de coach van debajo, chicos: son el mismo momento («quiero un atleta más»). */
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <Buscador valor={search} onCambio={(v) => { setSearch(v); setPagina(1); }} marcador={t('Buscar atleta')} estilo={{ flex: 1 }} />
+              {!viendoComo && (
+                <button
+                  type="button" onClick={abrirAgregar} className="kp-press" aria-label={t('Agregar atleta')}
+                  style={{ width: 48, height: 48, borderRadius: UI.rCampo, border: 'none', background: KP.blue, color: '#fff', display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0, boxShadow: '0 8px 18px rgba(30,64,224,0.25)' }}
+                >
+                  <Plus size={22} strokeWidth={2.4} />
+                </button>
+              )}
+            </div>
+            {!viendoComo && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
+                {etiquetaDeLugares(lugares) && (
+                  <span style={{ fontSize: 13, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: sinLugares(lugares) ? T.danger : T.text2 }}>{etiquetaDeLugares(lugares)}</span>
+                )}
+                <CodigoDeCoach codigo={profile?.codigo_coach} nombre={profile?.full_name} />
+              </div>
+            )}
+          </>
+        )}
+        {modoTabla && !viendoComo && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
           <button
             type="button"
@@ -1760,7 +1820,7 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta, onIrA, onAb
           </div>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 12, padding: '0 14px', marginBottom: 16 }}>
+        {modoTabla && <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 12, padding: '0 14px', marginBottom: 16 }}>
           <Search size={17} color={T.text3} />
           <input
             value={search}
@@ -1768,7 +1828,7 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta, onIrA, onAb
             placeholder={t('Buscar atleta…')}
             style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 16, fontWeight: 500, color: T.text, padding: '12px 0' }}
           />
-        </div>
+        </div>}
 
         {err && (
           <div style={{ background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 12, padding: '12px 16px', fontWeight: 600, marginBottom: 16 }}>{err}</div>
