@@ -118,7 +118,10 @@ export function BarraLateral({ marca = 'Training Lab', subtitulo, secciones, act
           const puesta = id === activa;
           return (
             <button
-              key={id} type="button" onClick={() => onCambio?.(id)} aria-current={puesta ? 'page' : undefined}
+              key={id} type="button"
+              // Tocar la barra con Mi perfil abierto (que se abre dentro del marco) lo cierra y lleva a esa sección.
+              onClick={() => { window.dispatchEvent(new Event('tl:cerrar-perfil')); onCambio?.(id); }}
+              aria-current={puesta ? 'page' : undefined}
               style={{
                 display: 'flex', alignItems: 'center', gap: 11, padding: '11px 12px', borderRadius: 13, border: 'none', cursor: 'pointer',
                 fontFamily: FONT, fontSize: 15, fontWeight: puesta ? 700 : 600, textAlign: 'left',

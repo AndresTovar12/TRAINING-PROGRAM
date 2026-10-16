@@ -62,6 +62,14 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
      de secciones, como Ajustes del iPhone). `null` = la lista; tocar una entra y la flecha regresa. En la compu no hay lista: el menú de la
      izquierda siempre se ve y abre en «Perfil». */
   const [seccion, setSeccion] = useState(enfoque === 'ia' ? 'ia' : null);
+  // En la compu Mi perfil deja ver la barra lateral: tocarla lo cierra (ver `BarraLateral`).
+  const cierra = useRef(onClose);
+  useEffect(() => { cierra.current = onClose; });
+  useEffect(() => {
+    const alAviso = () => cierra.current?.();
+    window.addEventListener('tl:cerrar-perfil', alAviso);
+    return () => window.removeEventListener('tl:cerrar-perfil', alAviso);
+  }, []);
   // `tr` y no `t`: arriba hay un `t` de temporizador.
   const { t: tr } = usePalabras();
 
@@ -312,7 +320,9 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
   const pestanas = secciones.map(({ id, texto }) => ({ id, texto }));
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: UI.fondo, fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
+    /* En la compu se abre DENTRO del marco: deja ver la barra lateral azul (reestructura visual, 16 oct 2026, como «Mi perfil · Computadora»
+       de las capturas). Quien dibuja la barra pone su ancho en `--ancho-barra-lateral`; tocar la barra cierra Mi perfil. */
+    <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: esCompu ? 'var(--ancho-barra-lateral, 0px)' : 0, zIndex: 3000, background: UI.fondo, fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: esCompu ? '22px 28px 14px' : 'calc(12px + env(safe-area-inset-top)) 16px 8px', flexShrink: 0 }}>
         {!esCompu && (
           <button
