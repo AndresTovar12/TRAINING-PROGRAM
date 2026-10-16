@@ -241,6 +241,9 @@ body {
 .ui-fila + .ui-fila { position: relative; }
 .ui-fila + .ui-fila::before { content: ''; position: absolute; top: 0; left: 16px; right: 0; height: 1px; background: #ECEEF2; }
 button.ui-fila:hover { background: #F7F8FB; }
+/* Renglones envueltos (listas en forma de renglón dentro de un grupo blanco): un hilo fino entre cada uno. */
+.grupo-renglones > * + * { position: relative; }
+.grupo-renglones > * + *::before { content: ''; position: absolute; top: 0; left: 16px; right: 0; height: 1px; background: #ECEEF2; z-index: 1; }
 button.ui-fila:active { background: #F0F2F6; }
 button.ui-fila:focus-visible { outline: 2px solid #1E40E0; outline-offset: -2px; }
 

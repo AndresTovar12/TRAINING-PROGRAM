@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown, Plus, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { useCoarsePointer } from '@/lib/useViewport';
 import { T, FONT } from '@/lib/theme';
 
@@ -56,6 +56,7 @@ export default function ListaDesplegable({
   icono: Icono,
   anchoMinimo = 200,
   colorFlecha = T.text3,
+  rotulo = null,
 }) {
   const dedos = useCoarsePointer();
   const caja = useRef(null);
@@ -390,6 +391,38 @@ export default function ListaDesplegable({
 
   return (
     <div ref={caja} style={{ position: 'relative' }}>
+      {/* RENGLÓN (`rotulo`), reestructura visual 16 oct 2026: «Categoría ....... Fuerza ›», como los renglones de las capturas de
+          Andrés. Va dentro de un grupo blanco; la lista que abre es la misma. */}
+      {rotulo ? (
+        <button
+          type="button"
+          onClick={() => { if (!deshabilitado) { if (abierto) cerrar(); else abre(); } }}
+          onKeyDown={teclas}
+          disabled={deshabilitado}
+          aria-haspopup="listbox"
+          aria-expanded={abierto}
+          aria-label={etiqueta ?? rotulo}
+          className="ui-fila"
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 10, minHeight: 56, padding: '10px 16px', border: 'none',
+            background: abierto ? '#F5F7FF' : 'transparent', cursor: deshabilitado ? 'default' : 'pointer', opacity: deshabilitado ? 0.6 : 1,
+            touchAction: 'manipulation', fontFamily: FONT, textAlign: 'left', boxSizing: 'border-box',
+          }}
+        >
+          <span style={{ fontSize: 15.5, fontWeight: 500, color: T.text2, flexShrink: 0 }}>{rotulo}</span>
+          <span style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 7 }}>
+            {(marcadas.length > 1 ? marcadas : elegida ? [elegida] : []).filter((o) => o.color).slice(0, 3).map((o) => (
+              <span key={o.valor} style={{ width: 9, height: 9, borderRadius: 5, background: o.color, flexShrink: 0 }} />
+            ))}
+            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 15.5, fontWeight: 600, color: elegida || marcadas.length ? T.accent : T.text3 }}>
+              {marcadas.length > 1
+                ? marcadas.map((o) => o.corta ?? o.etiqueta).join(', ')
+                : elegida ? (elegida.corta ?? elegida.etiqueta) : marcador}
+            </span>
+          </span>
+          <ChevronRight size={17} color="#C3C8D2" style={{ flexShrink: 0 }} />
+        </button>
+      ) : (
       <button
         type="button"
         onClick={() => { if (!deshabilitado) { if (abierto) cerrar(); else abre(); } }}
@@ -434,6 +467,7 @@ export default function ListaDesplegable({
           style={{ flexShrink: 0, transform: abierto ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}
         />
       </button>
+      )}
 
       {abierto && sitio && createPortal(
         <div

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Users, Library, Shield, PanelLeftClose, PanelLeft, Eye, X, Sparkles, FolderOpen, MessageCircle, Store, FlaskConical, Coins, Menu,
 } from 'lucide-react';
@@ -34,6 +34,9 @@ export default function AdminApp({ onAbrirPerfil }) {
   // las que de verdad hay.
   const [tabGuardada, setTab] = useLugar('admin.tab', 'athletes', (t) => typeof t === 'string');
   const [menuOpen, setMenuOpen] = useState(true);
+  // Lo que cada sección manda a su cabecera: el detalle bajo el título y su botón (ver `useCabeceraDeSeccion`).
+  const [cabecera, ponCabecera] = useState(null);
+  const banda = useMemo(() => ({ ponCabecera }), []);
 
   /* "Ver como" un coach: el master mira SUS atletas y SU repertorio, sin salir
      de su propia sesión.
@@ -180,7 +183,7 @@ export default function AdminApp({ onAbrirPerfil }) {
     const activa = enMas ? 'mas' : tab;
     const mirandoMas = tabGuardada === 'mas' && deMas.length > 0;
     const titulo = mirandoMas ? 'Más' : (TABS.find((x) => x.id === tab)?.label ?? '');
-    const detalle = !mirandoMas && tab === 'messages' && sinLeer > 0 ? `${sinLeer} sin leer` : null;
+    const detalle = mirandoMas ? null : (cabecera?.detalle ?? (tab === 'messages' && sinLeer > 0 ? `${sinLeer} sin leer` : null));
     const hoy = new Date().toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric' }).replace('.', '');
     const nombre = (profile?.full_name || profile?.username || '').trim().split(/\s+/)[0];
     return (
@@ -189,7 +192,7 @@ export default function AdminApp({ onAbrirPerfil }) {
       <div style={{ minHeight: '100svh', background: UI.fondo, fontFamily: FONT, ...(viendoAtleta ? { display: 'none' } : {}) }}>
         {/* El botón de la cuenta (fijo arriba a la derecha, ver App) cae sobre la banda: se le deja su hueco. */}
         <CabeceraConBanda
-          fecha={`Hoy, ${hoy}`} saludo={nombre ? `¡Hola, ${nombre}!` : '¡Hola!'} titulo={titulo} detalle={detalle}
+          fecha={`Hoy, ${hoy}`} saludo={nombre ? `¡Hola, ${nombre}!` : '¡Hola!'} titulo={titulo} detalle={detalle} accion={mirandoMas ? null : cabecera?.accion}
           avatar={<span aria-hidden="true" style={{ width: 52, height: 52, flexShrink: 0 }} />}
         />
         <main style={{ padding: '18px 16px calc(116px + env(safe-area-inset-bottom))' }}>
@@ -200,7 +203,7 @@ export default function AdminApp({ onAbrirPerfil }) {
               ))}
             </Grupo>
           ) : (
-            <EnBanda.Provider value>{content}</EnBanda.Provider>
+            <EnBanda.Provider value={banda}>{content}</EnBanda.Provider>
           )}
         </main>
         <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 60 }}>
@@ -252,10 +255,14 @@ export default function AdminApp({ onAbrirPerfil }) {
           >
             {menuOpen ? <PanelLeftClose size={18} /> : <PanelLeft size={18} />}
           </button>
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: -0.5, color: KP.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tituloCompu}</h1>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: -0.5, color: KP.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tituloCompu}</h1>
+            {cabecera?.detalle && <div style={{ fontSize: 14, fontWeight: 500, color: KP.ink2, marginTop: 1 }}>{cabecera.detalle}</div>}
+          </div>
+          {cabecera?.accion}
         </header>
 
-        <main style={{ flex: 1, padding: '24px 24px 60px', minWidth: 0 }}><EnBanda.Provider value>{content}</EnBanda.Provider></main>
+        <main style={{ flex: 1, padding: '24px 24px 60px', minWidth: 0 }}><EnBanda.Provider value={banda}>{content}</EnBanda.Provider></main>
       </div>
     </div>
     </>

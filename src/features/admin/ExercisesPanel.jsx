@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Plus, Minus, Search, X, Trash2, Loader2, Video, Dumbbell,
-  Copy, RotateCcw, Pencil, ChevronDown, } from 'lucide-react';
+  Copy, RotateCcw, Pencil, ChevronDown, ChevronLeft, Play, } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
-import { useIsWide } from '@/lib/useViewport';
+import { useIsDesktop, useIsWide } from '@/lib/useViewport';
 import {
   listCategories, listExercises, createExercise, updateExercise, deleteExercise,
   getMasterId, tagRepertoire, duplicateExercise,
@@ -27,7 +27,8 @@ import { useLugar, useScrollLugar } from '@/lib/useLugar';
 import ModoDeFiltro, { MODOS, MODO_POR_DEFECTO, NombresUnidos } from '@/components/ModoDeFiltro';
 import DialogoNombre from '@/components/DialogoNombre';
 import { esExplicacion } from '@/lib/proposito';
-import { T, FONT, KP } from '@/lib/theme';
+import { T, FONT, KP, UI } from '@/lib/theme';
+import { useCabeceraDeSeccion, useEnBanda } from '@/components/ui';
 import Portada from '@/components/Portada';
 import { useConfirmacion } from '@/components/Confirmacion';
 
@@ -177,7 +178,7 @@ const empty = {
 // (recomendado), luego el detalle fino ya usado en el repertorio.
 // "Agregar grupo" crea uno que sale también en los filtros; reemplaza al
 // "Otro…" de antes, que escribía un músculo suelto que ningún filtro veía.
-function MuscleSelect({ value, onChange, options, grupos, onAgregarGrupo, alBorrarGrupo }) {
+function MuscleSelect({ value, onChange, options, grupos, onAgregarGrupo, alBorrarGrupo, rotulo = null }) {
   const groupLabels = useMemo(() => grupos.map((g) => g.label), [grupos]);
   const fineOpts = useMemo(() => {
     const s = new Set([...(options || []), ...FINE_MUSCLES].filter(Boolean));
@@ -187,9 +188,10 @@ function MuscleSelect({ value, onChange, options, grupos, onAgregarGrupo, alBorr
   }, [options, value, groupLabels]);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span style={ROTULO}>Grupo muscular</span>
+      {!rotulo && <span style={ROTULO}>Grupo muscular</span>}
       <ListaDesplegable
         etiqueta="Grupo muscular"
+        rotulo={rotulo}
         valor={value || ''}
         onCambio={onChange}
         marcador="Selecciona…"
@@ -266,22 +268,24 @@ function ExerciseRow({ ex, base, abierto, onAbrir, onMedia, onEditar, conVideoEx
      eso no ayuda mucho al momento de estar en el campo de batalla») y rechazó dejarla igual o quitarla; de tres opciones eligió
      esta: el dedo no se mueve y el nombre queda a la vista. Son dos pantallas DISTINTAS (cada una abre con lo que viniste a hacer
      y se llama como el botón), no la misma con otro título. La camarita de la derecha sigue yendo directo a «Grabar o subir». */
+  /* Reestructura visual (16 oct 2026), como «Ejercicios» de las capturas de Andrés: UNA tarjeta; al abrirse se marca en azul y sus dos
+     botones van lado a lado dentro de ella. Una pastilla dice de quién es: «Mío», «Mi versión» o «Base». */
+  const dueño = ex.esMiVersion ? ['Mi versión', '#EFEBFF', '#6A4BE0'] : base ? ['Base', UI.relleno, KP.ink2] : ['Mío', KP.blueSoft, KP.blue];
   return (
-    <div>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        background: T.bg2, border: `1px solid ${abierto ? T.accent : 'transparent'}`, borderRadius: abierto ? '18px 18px 0 0' : 18,
-        padding: '10px 10px', boxShadow: abierto ? '0 0 0 3px rgba(30,64,224,0.12)' : '0 1px 2px rgba(17,19,24,0.04)',
-        position: 'relative', zIndex: abierto ? 1 : 0,
-      }}>
+    <div style={{
+      background: UI.tarjeta, borderRadius: 20, padding: 10,
+      border: `2px solid ${abierto ? KP.blue : 'transparent'}`, boxShadow: abierto ? '0 8px 22px rgba(30,64,224,0.12)' : UI.sombraGrupo,
+      display: 'flex', flexDirection: 'column', gap: 10,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <button
           type="button"
           onClick={onAbrir}
           aria-expanded={abierto}
           style={{
-            flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10,
+            flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 12,
             background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
-            fontFamily: FONT, textAlign: 'left', minHeight: 44,
+            fontFamily: FONT, textAlign: 'left', minHeight: 56,
           }}
         >
           <Portada
@@ -290,77 +294,62 @@ function ExerciseRow({ ex, base, abierto, onAbrir, onMedia, onEditar, conVideoEx
             desde={ex.recorte_inicio}
             hasta={ex.recorte_fin}
             style={{
-              width: 44, height: 44, borderRadius: 10, flexShrink: 0,
-              background: `${color}14`,
+              width: 58, height: 58, borderRadius: 14, flexShrink: 0,
+              background: tieneVideo ? '#1B1D24' : `${color}14`,
             }}
           >
-            <Dumbbell size={19} color={`${color}AA`} />
+            {tieneVideo ? <Play size={18} color="#fff" fill="#fff" /> : <Dumbbell size={21} color={`${color}AA`} />}
           </Portada>
 
           <span style={{ minWidth: 0, flex: 1 }}>
-            <span style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              fontSize: 13.5, fontWeight: 700, color: T.text,
-            }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {ex.name}
-              </span>
-              {ex.esMiVersion && (
-                <Pencil size={11} color={T.accent} style={{ flexShrink: 0 }} />
-              )}
+            <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 16, fontWeight: 700, color: KP.ink }}>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ex.name}</span>
+              <span style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 700, padding: '2px 7px', borderRadius: 7, background: dueño[1], color: dueño[2] }}>{dueño[0]}</span>
             </span>
             <span style={{
-              display: 'block', fontSize: 11.5, color: T.text3, fontWeight: 600,
-              marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              display: 'block', fontSize: 13.5, color: KP.ink2, fontWeight: 500,
+              marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
-              {[ex.category?.name, ex.equipment, (ex.muscle_primary || []).join(' · ')]
-                .filter(Boolean).join(' · ') || (base ? 'Base' : '—')}
+              {[ex.category?.name, ex.equipment, (ex.muscle_primary || []).join(' · ')].filter(Boolean).join(' · ') || '—'}
             </span>
           </span>
         </button>
 
-        {/* El que le falta video se marca en ámbar. Es la única forma de ver de un
-            vistazo cuáles faltan sin abrirlos uno por uno. */}
+        {/* El que le falta video se marca en ámbar: es la única forma de ver de un vistazo cuáles faltan sin abrirlos uno por uno. */}
         <button
           type="button"
           onClick={onMedia}
           aria-label={tieneVideo ? `Ver o cambiar el video de ${ex.name}` : `Falta video en ${ex.name}: grabarlo`}
           style={{
-            width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+            width: 46, height: 46, borderRadius: 14, flexShrink: 0, border: 'none',
             display: 'grid', placeItems: 'center', cursor: 'pointer',
-            border: `1px solid ${tieneVideo ? T.border : T.warning}`,
-            background: tieneVideo ? T.bg2 : 'rgba(224,123,0,0.10)',
-            color: tieneVideo ? T.text2 : T.warning,
+            background: tieneVideo ? UI.relleno : KP.amberSoft,
+            color: tieneVideo ? KP.ink : KP.amber,
           }}
         >
-          <Video size={16} />
+          <Video size={19} />
         </button>
       </div>
 
       {abierto && (
-        <div style={{
-          display: 'flex', flexDirection: 'column', gap: 6, background: T.bg2, border: `1.5px solid ${T.accent}`, borderTop: 'none',
-          borderRadius: '0 0 14px 14px', padding: '8px 8px 9px', marginTop: -1,
-        }}>
+        <div style={{ display: 'flex', gap: 8 }}>
           <button
             type="button" onClick={onMedia} className="kp-press"
             style={{
-              minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, border: 'none', borderRadius: 11,
-              background: T.accent, color: '#fff', cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 800, touchAction: 'manipulation',
+              flex: 1, minHeight: 50, border: 'none', borderRadius: UI.rBoton, background: KP.blue, color: '#fff', cursor: 'pointer',
+              fontFamily: FONT, fontSize: 15, fontWeight: 700, touchAction: 'manipulation',
             }}
           >
-            <Video size={17} /> Grabar o subir
+            Grabar o subir
           </button>
           <button
             type="button" onClick={onEditar} className="kp-press"
             style={{
-              minHeight: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, border: `1.5px solid ${T.border}`,
-              borderRadius: 11, background: T.bg2, color: T.text2, cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 700,
-              touchAction: 'manipulation',
+              flex: 1, minHeight: 50, border: 'none', borderRadius: UI.rBoton, background: UI.relleno, color: KP.ink, cursor: 'pointer',
+              fontFamily: FONT, fontSize: 15, fontWeight: 700, touchAction: 'manipulation',
             }}
           >
-            <Pencil size={14} /> Editar el ejercicio
+            Editar el ejercicio
           </button>
         </div>
       )}
@@ -386,6 +375,8 @@ function ExerciseEditor({
   const [modo, setModo] = useState(foco === 'media' ? 'media' : 'datos');
   const [conDatos, setConDatos] = useState(false);   // en «Grabar o subir»: los datos desplegados
   const raiz = useRef(null);
+  // En el teléfono es una pantalla completa con su flecha (como la captura «Editar ejercicio»); en la compu, la ventana de siempre.
+  const esCompu = useIsDesktop();
   const [enfocaOtro, setEnfocaOtro] = useState(false);   // el campo de «Otro» toma el cursor solo si se acaba de elegir
   useEffect(() => { raiz.current?.scrollTo?.({ top: 0 }); }, [modo]);
   const { user } = useAuth();
@@ -577,27 +568,33 @@ function ExerciseEditor({
       ref={raiz}
       onMouseDown={onClose}
       style={{
-        position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(17,19,24,0.45)',
-        backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-        padding: '40px 16px', overflowY: 'auto',
+        position: 'fixed', inset: 0, zIndex: 2000, background: esCompu ? 'rgba(17,19,24,0.45)' : UI.fondo,
+        backdropFilter: esCompu ? 'blur(4px)' : undefined, display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+        padding: esCompu ? '40px 16px' : 0, overflowY: 'auto',
       }}
     >
       <div
         onMouseDown={(e) => e.stopPropagation()}
         className="animate-fade-in"
         style={{
-          width: '100%', maxWidth: 560, background: T.bg, borderRadius: 24, fontFamily: FONT,
-          boxShadow: KP.shPop, overflow: 'hidden',
+          width: '100%', maxWidth: esCompu ? 560 : 'none', background: UI.fondo, borderRadius: esCompu ? 24 : 0, fontFamily: FONT,
+          boxShadow: esCompu ? KP.shPop : 'none', overflow: esCompu ? 'hidden' : 'visible', minHeight: esCompu ? undefined : '100svh',
+          display: 'flex', flexDirection: 'column',
         }}
       >
         <div
           style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '18px 22px', background: T.bg2, borderBottom: `1px solid ${T.border}`,
+            display: 'flex', alignItems: 'center', gap: 12,
+            padding: esCompu ? '18px 22px 6px' : 'calc(14px + env(safe-area-inset-top)) 16px 6px',
           }}
         >
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 17, fontWeight: 800, color: T.text, display: 'flex', alignItems: 'center', gap: 8 }}>
+          {!esCompu && (
+            <button type="button" onClick={onClose} aria-label="Volver" style={{ width: 42, height: 42, borderRadius: 13, border: 'none', background: UI.relleno, color: KP.ink, display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0 }}>
+              <ChevronLeft size={20} />
+            </button>
+          )}
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: esCompu ? 21 : 22, fontWeight: 800, letterSpacing: -0.3, color: T.text, display: 'flex', alignItems: 'center', gap: 8 }}>
               {!exercise ? 'Nuevo ejercicio'
                 : modo === 'media' ? 'Grabar o subir'
                 : esAjeno ? <><Pencil size={16} color={T.accent} /> Mi versión</>
@@ -610,16 +607,19 @@ function ExerciseEditor({
               </div>
             )}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.text2, padding: 4 }}
-          >
-            <X size={22} />
-          </button>
+          {esCompu && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Cerrar"
+              style={{ border: 'none', background: UI.relleno, cursor: 'pointer', color: KP.ink2, width: 34, height: 34, borderRadius: 11, display: 'grid', placeItems: 'center', flexShrink: 0 }}
+            >
+              <X size={18} />
+            </button>
+          )}
         </div>
 
-        <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ padding: esCompu ? '12px 22px 22px' : '12px 16px 22px', display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
           {/* Andrés, 17 sep 2026: "ese mensaje está algo de más; sería más fácil
               poner algo que ayude a volver a la versión original, porque no vi
               de qué manera le ofrecemos esa opción al coach".
@@ -671,8 +671,16 @@ function ExerciseEditor({
               orden NO es el mismo al crear que al editar y moverlos como
               bloques de JSX es la forma de equivocarse. */}
           {(() => {
+            /* Reestructura visual (16 oct 2026), como «Editar ejercicio» de las capturas de Andrés: el nombre en su tarjeta, los datos en
+               RENGLONES dentro de un grupo blanco (Categoría ...... Fuerza ›) y las notas en su tarjeta. Las listas que abren son las mismas. */
             const campoNombre = (
-              <Input key="nombre" grande label="Nombre" value={form.name} onChange={(e) => set('name', e.target.value)} />
+              <label key="nombre" style={{ display: 'block', background: UI.tarjeta, borderRadius: UI.rGrupo, padding: '12px 16px', boxShadow: UI.sombraGrupo }}>
+                <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: KP.ink2 }}>Nombre del ejercicio</span>
+                <input
+                  value={form.name} onChange={(e) => set('name', e.target.value)} aria-label="Nombre del ejercicio"
+                  style={{ width: '100%', boxSizing: 'border-box', border: 'none', outline: 'none', background: 'transparent', padding: '4px 0 0', fontFamily: FONT, fontSize: 21, fontWeight: 800, color: KP.ink }}
+                />
+              </label>
             );
             /* PRINCIPAL Y SECUNDARIAS. Andrés, 28 sep 2026: un "jumping lunge"
                es principalmente Potencia, pero también Pliometría; saltar la
@@ -692,50 +700,49 @@ function ExerciseEditor({
             /* LISTAS Y NO PASTILLAS. Andrés, 7 oct 2026: «el formato de seleccionar categorías secundarias como stickers está
                horrible», y «antes de escoger una secundaria me ofrece agregar una nueva, el orden está mal». Las secundarias son
                una lista desplegable con casillas (la misma de los filtros de arriba) y «Crear categoría nueva» va DESPUÉS. */
-            const campoCategoria = (
-              <div key="cat" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={ROTULO}>Categoría</span>
-                  <SelectorCategoria
-                    categorias={categories}
-                    value={form.category_id}
-                    onChange={poneCategoria}
-                    onCreada={onCategoriaCreada}
-                    onBorrada={onCategoriaBorrada}
-                    duenoId={duenoId}
-                    masterId={masterId}
-                    puedeCrear={puedeCrearCategoria}
-                    sinCrear
-                  />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={ROTULO}>Categorías secundarias</span>
-                  <ListaDesplegable
-                    multiple
-                    etiqueta="Categorías secundarias"
-                    marcador="Seleccionar…"
-                    valor={(form.categorias_secundarias || []).filter((id) => opcionesCatSec.some((o) => o.valor === id))}
-                    onCambio={(v) => set('categorias_secundarias', v)}
-                    opciones={opcionesCatSec}
-                  />
-                  <CrearCategoria
-                    categorias={categories}
-                    onChange={poneCategoria}
-                    onCreada={onCategoriaCreada}
-                    duenoId={duenoId}
-                    masterId={masterId}
-                    puedeCrear={puedeCrearCategoria}
-                  />
-                </div>
-              </div>
+            const renglonesCategoria = [
+              <SelectorCategoria
+                key="cat"
+                rotulo="Categoría"
+                categorias={categories}
+                value={form.category_id}
+                onChange={poneCategoria}
+                onCreada={onCategoriaCreada}
+                onBorrada={onCategoriaBorrada}
+                duenoId={duenoId}
+                masterId={masterId}
+                puedeCrear={puedeCrearCategoria}
+                sinCrear
+              />,
+              <ListaDesplegable
+                key="catsec"
+                multiple
+                rotulo="Secundarias"
+                etiqueta="Categorías secundarias"
+                marcador="Ninguna"
+                valor={(form.categorias_secundarias || []).filter((id) => opcionesCatSec.some((o) => o.valor === id))}
+                onCambio={(v) => set('categorias_secundarias', v)}
+                opciones={opcionesCatSec}
+              />,
+            ];
+            const crearCategoria = (
+              <CrearCategoria
+                key="crearcat"
+                categorias={categories}
+                onChange={poneCategoria}
+                onCreada={onCategoriaCreada}
+                duenoId={duenoId}
+                masterId={masterId}
+                puedeCrear={puedeCrearCategoria}
+              />
             );
             /* EL EQUIPO, EN LISTA. Andrés, 7 oct 2026: «para "equipo" quiero que sea una lista desplegable» con Peso corporal,
                Barra, Mancuerna, Kettlebell, Máquina, Liga y «Otro (y aquí te dé la opción de escribir)». */
             const equipoDeLista = EQUIPOS.find((x) => x.toLowerCase() === (form.equipment || '').trim().toLowerCase()) ?? '';
             const campoEquipo = (
-              <div key="equipo" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span style={ROTULO}>Equipo</span>
+              <div key="equipo">
                 <ListaDesplegable
+                  rotulo="Equipo"
                   etiqueta="Equipo"
                   marcador="Selecciona…"
                   valor={equipoOtro ? 'Otro' : equipoDeLista}
@@ -749,9 +756,10 @@ function ExerciseEditor({
                     aria-label="Escribe cuál equipo"
                     autoFocus={enfocaOtro}
                     // 16 px: por debajo, el iPhone acerca la pantalla al escribir.
+                    placeholder="¿Cuál?"
                     style={{
-                      border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '11px 13px', fontFamily: FONT, fontSize: 16,
-                      fontWeight: 600, color: T.text, outline: 'none', background: T.bg2, width: '100%', boxSizing: 'border-box',
+                      border: 'none', borderRadius: UI.rCampo, padding: '12px 14px', fontFamily: FONT, fontSize: 16, margin: '0 12px 12px',
+                      fontWeight: 600, color: T.text, outline: 'none', background: UI.relleno, width: 'calc(100% - 24px)', boxSizing: 'border-box',
                     }}
                   />
                 )}
@@ -788,8 +796,9 @@ function ExerciseEditor({
               set('muscle_secondary', siguiente);
             };
             const campoMusculo = (
-              <div key="musc" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div key="musc" className="grupo-renglones">
                 <MuscleSelect
+                  rotulo="Músculo"
                   value={form.muscle_primary}
                   // Lo que se vuelve principal sale de secundarios: no puede
                   // ser las dos cosas.
@@ -803,12 +812,12 @@ function ExerciseEditor({
                   onAgregarGrupo={puedeCrearGrupo ? () => setCreandoGrupo(true) : undefined}
                   alBorrarGrupo={borrarGrupo}
                 />
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={ROTULO}>Grupos secundarios</span>
+                <div>
                   <ListaDesplegable
                     multiple
+                    rotulo="Secundarios"
                     etiqueta="Grupos secundarios"
-                    marcador="Seleccionar…"
+                    marcador="Ninguno"
                     valor={[...elegidasMus]}
                     onCambio={cambiaMusSec}
                     opciones={opcionesMusSec}
@@ -817,16 +826,17 @@ function ExerciseEditor({
               </div>
             );
             const campoNotas = (
-              <label key="notas" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span style={ROTULO}>Notas</span>
+              <label key="notas" style={{ display: 'block', background: UI.tarjeta, borderRadius: UI.rGrupo, padding: '12px 16px', boxShadow: UI.sombraGrupo }}>
+                <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: KP.ink2 }}>Notas para el atleta</span>
                 <textarea
                   value={form.description}
                   onChange={(e) => set('description', e.target.value)}
                   rows={3}
+                  placeholder="Cómo se hace bien, en qué fijarse…"
                   style={{
-                    border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '11px 13px',
-                    fontFamily: FONT, fontSize: 14, fontWeight: 500, color: T.text, outline: 'none',
-                    resize: 'vertical', background: T.bg2,
+                    width: '100%', boxSizing: 'border-box', border: 'none', padding: '6px 0 0',
+                    fontFamily: FONT, fontSize: 16, fontWeight: 500, color: T.text, outline: 'none',
+                    resize: 'vertical', background: 'transparent', lineHeight: 1.45,
                   }}
                 />
               </label>
@@ -871,6 +881,17 @@ function ExerciseEditor({
               />
             );
 
+            const grupoDeDatos = (
+              <div key="datos" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div className="grupo-renglones" style={{ background: UI.tarjeta, borderRadius: UI.rGrupo, boxShadow: UI.sombraGrupo, overflow: 'hidden' }}>
+                  {renglonesCategoria}
+                  {campoMusculo}
+                  {campoEquipo}
+                </div>
+                {crearCategoria}
+              </div>
+            );
+
             // «Editar también los datos»: lo MENOS importante de «Grabar o subir», al final, y con cara de botón (no gris y escondido).
             const tarjetaDeDatos = (
               <button
@@ -902,9 +923,7 @@ function ExerciseEditor({
                     <>
                       <div style={{ height: 1, background: T.border }} />
                       {campoNombre}
-                      {campoCategoria}
-                      {campoMusculo}
-                      {campoEquipo}
+                      {grupoDeDatos}
                       {campoNotas}
                     </>
                   ) : tarjetaDeDatos}
@@ -973,9 +992,7 @@ function ExerciseEditor({
                   </button>
                   {detalles && (
                     <>
-                      {campoCategoria}
-                      {campoMusculo}
-                      {campoEquipo}
+                      {grupoDeDatos}
                       {campoNotas}
                       {campoLiga}
                     </>
@@ -988,9 +1005,7 @@ function ExerciseEditor({
             return (
               <>
                 {campoNombre}
-                {campoCategoria}
-                {campoMusculo}
-                {campoEquipo}
+                {grupoDeDatos}
                 {campoNotas}
                 {campoLiga}
                 <div style={{ height: 1, background: T.border }} />
@@ -1034,8 +1049,9 @@ function ExerciseEditor({
 
         <div
           style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-            padding: '16px 22px', background: T.bg2, borderTop: `1px solid ${T.border}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+            padding: esCompu ? '0 22px 22px' : '12px 16px calc(14px + env(safe-area-inset-bottom))',
+            ...(esCompu ? {} : { position: 'sticky', bottom: 0, background: 'rgba(242,243,247,0.94)', backdropFilter: 'blur(14px)' }),
           }}
         >
           {/* LA IZQUIERDA depende de la pantalla. En «Grabar o subir» no hay nada: ahí solo se graba y se guarda (Andrés, 7 oct 2026:
@@ -1052,8 +1068,8 @@ function ExerciseEditor({
                 catch (e) { setErr(e.message || 'Error al duplicar'); setDupBusy(false); }
               }}
               style={{
-                display: 'inline-flex', alignItems: 'center', gap: 7, padding: '11px 16px', borderRadius: 12,
-                border: `1.5px solid ${T.border}`, background: T.bg2, color: T.text2,
+                display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 52, padding: '0 16px', borderRadius: UI.rBoton,
+                border: 'none', background: UI.relleno, color: KP.ink,
                 cursor: dupBusy ? 'default' : 'pointer',
                 fontFamily: FONT, fontSize: 14, fontWeight: 700,
               }}
@@ -1066,8 +1082,8 @@ function ExerciseEditor({
               onClick={onDelete}
               disabled={busy}
               style={{
-                display: 'inline-flex', alignItems: 'center', gap: 7, padding: '11px 16px', borderRadius: 12,
-                border: 'none', background: 'rgba(220,38,38,0.08)', color: T.danger, cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 52, padding: '0 16px', borderRadius: UI.rBoton,
+                border: 'none', background: KP.dangerSoft, color: T.danger, cursor: 'pointer',
                 fontFamily: FONT, fontSize: 14, fontWeight: 700,
               }}
             >
@@ -1079,14 +1095,14 @@ function ExerciseEditor({
             onClick={onSave}
             disabled={busy}
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 22px', borderRadius: 12,
-              border: 'none', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1,
-              background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff',
-              fontFamily: FONT, fontSize: 14.5, fontWeight: 700, boxShadow: KP.shBtn,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 52, padding: '0 22px', borderRadius: UI.rBoton,
+              border: 'none', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1, flex: esCompu ? undefined : 1,
+              background: KP.blue, color: '#fff',
+              fontFamily: FONT, fontSize: 16, fontWeight: 700, boxShadow: '0 8px 20px rgba(30,64,224,0.22)',
             }}
           >
             {busy && <Loader2 size={16} className="spin" />}
-            {esAjeno ? 'Guardar mi versión' : exercise ? 'Guardar cambios' : 'Crear ejercicio'}
+            {esAjeno ? 'Guardar' : exercise ? 'Guardar cambios' : 'Crear ejercicio'}
           </button>
         </div>
       </div>
@@ -1233,6 +1249,21 @@ export default function ExercisesPanel({ viendoComo }) {
     return tagged.filter((e) => (e.isBase && !sinBase) || e.isMine);
   }, [exercises, overrides, categories, masterId, dueño, sinBase]);
 
+  /* La cabecera de la sección (reestructura visual, 16 oct 2026, como la captura de Andrés): «Tu repertorio · 214 ejercicios» y
+     «+ Agregar» junto al título. */
+  const enBanda = useEnBanda();
+  useCabeceraDeSeccion(() => ({
+    detalle: loading ? null : `Tu repertorio · ${visible.length} ${visible.length === 1 ? 'ejercicio' : 'ejercicios'}`,
+    accion: (
+      <button
+        type="button" onClick={() => setEditing({ new: true })} className="kp-press"
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 44, padding: '0 16px', borderRadius: UI.rCampo, border: 'none', cursor: 'pointer', background: KP.blue, color: '#fff', fontFamily: FONT, fontSize: 15, fontWeight: 700, flexShrink: 0, boxShadow: '0 6px 16px rgba(30,64,224,0.22)' }}
+      >
+        <Plus size={17} /> Agregar
+      </button>
+    ),
+  }), [loading, visible.length]);
+
   // Músculos finos presentes en el repertorio (para el detalle del editor)
   const muscles = useMemo(() => {
     const s = new Set();
@@ -1376,11 +1407,13 @@ export default function ExercisesPanel({ viendoComo }) {
 
   return (
     <div>
+      {/* El espacio de videos del coach (no sale para el dueño ni mirando la cuenta de otro). */}
+      <EspacioDeVideos activo={!viendoComo} />
       {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
         <div
           style={{
-            flex: '1 1 240px', display: 'flex', alignItems: 'center', gap: 10, background: '#EBEDF1',
+            flex: '1 1 0', minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, background: '#EBEDF1',
             border: 'none', borderRadius: 14, padding: '0 14px', minHeight: 48,
           }}
         >
@@ -1392,7 +1425,7 @@ export default function ExercisesPanel({ viendoComo }) {
             style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 16, fontWeight: 500, color: T.text, padding: '12px 0' }}
           />
         </div>
-        <button
+        {!enBanda && <button
           type="button"
           onClick={() => setEditing({ new: true })}
           style={{
@@ -1402,16 +1435,15 @@ export default function ExercisesPanel({ viendoComo }) {
           }}
         >
           <Plus size={18} /> Agregar ejercicio
-        </button>
+        </button>}
+        {/* Lista o tarjetas: junto al buscador, para que los dos filtros quepan lado a lado. */}
+        <InterruptorVista vista={enTarjetas ? 'tarjetas' : 'lista'} onCambio={eligeVista} />
       </div>
 
-      {/* El espacio de videos del coach (no sale para el dueño ni mirando la cuenta de otro). */}
-      <EspacioDeVideos activo={!viendoComo} />
 
       {/* Filtros: categoría y grupo muscular (listas desplegables) */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 22, flexWrap: 'wrap' }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 200px', minWidth: 0 }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Categoría</span>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 10, marginBottom: 18 }}>
+        <label style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           <ListaDesplegable
             etiqueta="Filtrar por categoría"
             multiple
@@ -1439,8 +1471,7 @@ export default function ExercisesPanel({ viendoComo }) {
             ]}
           />
         </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 200px', minWidth: 0 }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Grupo muscular</span>
+        <label style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           <ListaDesplegable
             etiqueta="Filtrar por grupo muscular"
             multiple
@@ -1464,11 +1495,6 @@ export default function ExercisesPanel({ viendoComo }) {
             ]}
           />
         </label>
-        {/* Alineado abajo para que quede a la altura de las dos listas, no de
-            sus rótulos. */}
-        <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 1 }}>
-          <InterruptorVista vista={enTarjetas ? 'tarjetas' : 'lista'} onCambio={eligeVista} />
-        </div>
       </div>
 
       {err && (

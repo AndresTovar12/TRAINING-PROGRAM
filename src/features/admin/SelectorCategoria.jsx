@@ -33,7 +33,7 @@ import { T, FONT } from '@/lib/theme';
 
 export default function SelectorCategoria({
   categorias = [], value, onChange, onCreada, onBorrada,
-  duenoId, masterId, sinCategoria = false, puedeCrear = true, estilo, sinCrear = false,
+  duenoId, masterId, sinCategoria = false, puedeCrear = true, estilo, sinCrear = false, rotulo = null,
 }) {
   const pregunta = useConfirmacion();
   const [err, setErr] = useState('');
@@ -82,6 +82,7 @@ export default function SelectorCategoria({
         onCambio={onChange}
         marcador={sinCategoria ? 'Sin categoría' : 'Selecciona…'}
         estilo={estilo}
+        rotulo={rotulo}
         grupos={[
           ...(sinCategoria ? [{ titulo: '', opciones: [{ valor: '', etiqueta: 'Sin categoría' }] }] : []),
           { titulo: 'TUYAS', opciones: mias.map((c) => ({
