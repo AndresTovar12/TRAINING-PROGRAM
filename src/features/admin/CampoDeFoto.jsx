@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Crop, ImagePlus, Loader2 } from 'lucide-react';
-import { LT, FONT } from '@/lib/theme';
+import { LT, FONT, UI } from '@/lib/theme';
 import { esImagen, optimizaImagen } from '@/lib/imagen';
 import { uploadExerciseMedia } from '@/lib/api';
 import { posicionDeFoto, separaFoto } from '@/lib/fotoConFoco';
@@ -22,7 +22,7 @@ import EncuadreDeFoto from '@/features/admin/EncuadreDeFoto';
  */
 const boton = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, cursor: 'pointer', fontFamily: FONT,
-  border: `1.5px solid ${LT.border}`, background: LT.surface, borderRadius: 12, padding: '10px 13px',
+  border: 'none', background: UI.relleno, borderRadius: 12, padding: '10px 13px',
   fontSize: 13.5, fontWeight: 800, touchAction: 'manipulation',
 };
 

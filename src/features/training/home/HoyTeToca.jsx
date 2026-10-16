@@ -55,7 +55,7 @@ function IconoDeSesion({ day, hecha = false, chico = false }) {
   return (
     <span aria-hidden="true" style={{
       width: lado, height: lado, borderRadius: chico ? 14 : 18, flexShrink: 0, display: 'grid', placeItems: 'center',
-      background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.18)', color: hecha ? '#7CF0C5' : (color || '#fff'),
+      background: 'rgba(255,255,255,0.14)', border: 'none', color: hecha ? '#7CF0C5' : (color || '#fff'),
     }}
     >
       {hecha ? <Check size={chico ? 22 : 26} strokeWidth={2.6} /> : <Icono size={chico ? 22 : 26} strokeWidth={1.9} />}
@@ -76,7 +76,7 @@ function Meta({ color, partes }) {
 
 export const botonTransparente = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 54, padding: '0 18px', borderRadius: 18,
-  border: '1.5px solid rgba(255,255,255,0.28)', background: 'rgba(255,255,255,0.08)', color: '#fff', fontFamily: FONT, fontSize: 15.5, fontWeight: 700, cursor: 'pointer',
+  border: 'none', background: 'rgba(255,255,255,0.16)', color: '#fff', fontFamily: FONT, fontSize: 15.5, fontWeight: 700, cursor: 'pointer',
 };
 export const botonBlanco = {
   flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 54, borderRadius: 18, border: 'none',
@@ -134,7 +134,7 @@ export function HoyTeTocaEquipo({ entradas, onAbrir, onCambiarDia, conAutor = tr
               key={`${e.programa.id}-${e.dayIdx}-${p.bloque ?? 'dia'}`} type="button" onClick={() => onAbrir(e)} className="kp-press"
               style={{
                 display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', padding: 12, borderRadius: 20, cursor: 'pointer',
-                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.16)', color: '#fff', fontFamily: FONT,
+                background: 'rgba(255,255,255,0.14)', border: 'none', color: '#fff', fontFamily: FONT,
               }}
             >
               <IconoDeSesion day={e.day} hecha={p.hecha} chico />
@@ -175,7 +175,7 @@ export function HoyDescansas({ titulo, siguiente, vacia, boton, onVerPlan, cuand
   return (
     <Marco etiqueta="Descanso" punto="#9DB4FF" fecha={cuando?.fecha} estilo={estilo}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 18 }}>
-        <span aria-hidden="true" style={{ width: 58, height: 58, borderRadius: 18, display: 'grid', placeItems: 'center', background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.18)', flexShrink: 0 }}>
+        <span aria-hidden="true" style={{ width: 58, height: 58, borderRadius: 18, display: 'grid', placeItems: 'center', background: 'rgba(255,255,255,0.14)', border: 'none', flexShrink: 0 }}>
           <Moon size={26} />
         </span>
         <div style={{ minWidth: 0 }}>

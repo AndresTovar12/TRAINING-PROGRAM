@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Pause, Play, Plus, Minus, Volume2, VolumeX, X } from 'lucide-react';
-import { LT, FONT, NUM_STYLE } from '@/lib/theme';
+import { LT, FONT, NUM_STYLE, UI } from '@/lib/theme';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { expande, etiquetaDeTramo, relojTexto, textoDeTiempo, vistaDe } from '@/lib/formatos';
 import {
@@ -80,8 +80,8 @@ function BotonChico({ children, onClick, peligro = false }) {
     <button
       type="button" onClick={onClick}
       style={{
-        flex: 1, minHeight: 46, borderRadius: 14, cursor: 'pointer', background: LT.surface,
-        border: `1.5px solid ${LT.borderHi}`, color: peligro ? LT.danger : LT.text, display: 'flex', alignItems: 'center',
+        flex: 1, minHeight: 46, borderRadius: 14, cursor: 'pointer', background: UI.relleno,
+        border: 'none', color: peligro ? LT.danger : LT.text, display: 'flex', alignItems: 'center',
         justifyContent: 'center', gap: 7, fontFamily: FONT, fontSize: 15, fontWeight: 700, touchAction: 'manipulation',
       }}
     >
@@ -237,7 +237,7 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
             <button
               type="button" onClick={cierra} aria-label="Cerrar el reloj"
               style={{
-                width: 38, height: 38, borderRadius: '50%', border: `1px solid ${LT.border}`, cursor: 'pointer', background: LT.surface,
+                width: 38, height: 38, borderRadius: '50%', border: 'none', cursor: 'pointer', background: UI.relleno,
                 color: LT.text, display: 'grid', placeItems: 'center', flexShrink: 0,
               }}
             >
@@ -250,7 +250,7 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
             <button
               type="button" onClick={alternaSonido} aria-label={sonido ? 'Quitar el sonido' : 'Poner el sonido'}
               style={{
-                width: 38, height: 38, borderRadius: '50%', border: `1px solid ${LT.border}`, cursor: 'pointer', background: LT.surface,
+                width: 38, height: 38, borderRadius: '50%', border: 'none', cursor: 'pointer', background: UI.relleno,
                 color: sonido ? LT.blue : LT.text3, display: 'grid', placeItems: 'center', flexShrink: 0,
               }}
             >
@@ -288,7 +288,7 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
           {/* ---------- Las rondas (AMRAP): lo que más se toca ---------- */}
           {cuentaRondas && (
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 12, border: `1.5px solid ${LT.border}`, borderRadius: 18, background: LT.surface,
+              display: 'flex', alignItems: 'center', gap: 12, border: 'none', borderRadius: 18, background: LT.surface,
               padding: '12px 14px', margin: '14px 0 4px',
             }}>
               <div style={{ minWidth: 0, flex: 1 }}>
@@ -298,7 +298,7 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
               <button
                 type="button" onClick={() => setEst((e) => sumaRonda(e, -1))} aria-label="Quitar una ronda" disabled={v.rondas === 0}
                 style={{
-                  width: 46, height: 46, borderRadius: '50%', border: `1.5px solid ${LT.borderHi}`, background: 'transparent', color: LT.text2,
+                  width: 46, height: 46, borderRadius: '50%', border: 'none', background: 'transparent', color: LT.text2,
                   display: 'grid', placeItems: 'center', cursor: 'pointer', opacity: v.rondas === 0 ? 0.35 : 1, touchAction: 'manipulation',
                 }}
               >
@@ -325,7 +325,7 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
                   key={i}
                   style={{
                     display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, padding: '10px 13px', borderRadius: 12,
-                    background: toca ? LT.blueSoft : LT.surface, border: `1px solid ${toca ? LT.blue : LT.border}`,
+                    background: toca ? LT.blueSoft : UI.relleno, border: 'none',
                   }}
                 >
                   <span style={{ fontSize: 15, fontWeight: toca ? 800 : 700, color: toca ? LT.blue : LT.text, overflowWrap: 'anywhere' }}>{ex.name}</span>

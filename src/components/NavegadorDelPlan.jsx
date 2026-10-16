@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Check, ChevronRight, CornerUpLeft, Lock } from 'lucide-react';
-import { LT, FONT, NUM_STYLE, tipoDeSesion } from '@/lib/theme';
+import { LT, FONT, NUM_STYLE, tipoDeSesion, UI } from '@/lib/theme';
 import { esDescanso, enOrdenDeSemana } from '@/lib/training-utils';
 import { sesionesDelTitulo, textoDeSesiones, juntaPorDia } from '@/lib/sesiones';
 import EtiquetasDeSesion from '@/components/EtiquetasDeSesion';
@@ -104,7 +104,7 @@ export default function NavegadorDelPlan({
   const aqui = entrada ? { faseId: entrada.faseId, semana: entrada.semana, dia: null } : aquiDado;
   /* `quien`: el atleta lee "AQUÍ VAS"; el coach, que mira el plan de otro,
      "AQUÍ VA". Misma marca, dicha a quien la lee. */
-  const textoAqui = entrada ? 'EMPIEZAS AQUÍ' : (quien === 'tu' ? 'AQUÍ VAS' : 'AQUÍ VA');
+  const textoAqui = entrada ? 'Empiezas aquí' : (quien === 'tu' ? 'Aquí vas' : 'Aquí va');
   const textoIr = entrada ? 'Ir a donde empiezas' : (quien === 'tu' ? 'Ir a donde vas' : 'Ir a donde va');
 
   /* MODO EDITOR DE SOLO LECTURA (`editor`). Es para navegar un programa AJENO: fases,
@@ -203,8 +203,8 @@ export default function NavegadorDelPlan({
               }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
-                padding: '12px 13px', background: LT.surface, borderRadius: 13, cursor: 'pointer',
-                border: `1px solid ${faseDeAqui ? LT.blue : LT.border}`,
+                padding: '12px 13px', background: faseDeAqui ? LT.blueSoft : LT.surface, borderRadius: 13, cursor: 'pointer',
+                border: 'none',
                 fontFamily: FONT, opacity: terminada && !faseDeAqui ? 0.68 : 1,
                 minWidth: 0,
               }}
@@ -239,7 +239,7 @@ export default function NavegadorDelPlan({
             key={f.id}
             style={{
               background: LT.surface, borderRadius: 16, padding: 14,
-              border: `${tarjetaDeAqui ? 2 : 1}px solid ${tarjetaDeAqui ? LT.blue : LT.border}`,
+              border: 'none', boxShadow: UI.sombraGrupo,
               display: 'flex', flexDirection: 'column', gap: 11,
             }}
           >
@@ -276,8 +276,8 @@ export default function NavegadorDelPlan({
                       style={{
                         position: 'relative', minWidth: 38, padding: '7px 0', borderRadius: 10, cursor: cerrada ? 'default' : 'pointer',
                         opacity: cerrada ? 0.55 : 1,
-                        border: `${suya && !elegida ? 2 : 1}px solid ${elegida || suya ? LT.blue : LT.border}`,
-                        background: elegida ? LT.blue : LT.surface2,
+                        border: 'none',
+                        background: elegida ? LT.blue : (suya ? LT.blueSoft : LT.surface2),
                         color: elegida ? '#fff' : (suya ? LT.blue : LT.text3),
                         fontFamily: FONT, fontSize: 13, fontWeight: 800, ...NUM_STYLE,
                       }}
@@ -319,7 +319,7 @@ export default function NavegadorDelPlan({
                         display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
                         padding: '10px 11px', borderRadius: 11, cursor: 'pointer', fontFamily: FONT,
                         background: elegido ? LT.blueSoft : LT.bg,
-                        border: `${elegido ? 1.5 : 1}px ${vacio && !elegido ? 'dashed' : 'solid'} ${elegido ? LT.blue : LT.border}`,
+                        border: 'none',
                         // El renglón lleva más marcas (candado, «tuya»): baja de línea antes de apretar el título.
                         flexWrap: 'wrap', rowGap: 6,
                       }}
@@ -357,7 +357,7 @@ export default function NavegadorDelPlan({
                     );
                     const estiloSuelta = {
                       display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
-                      padding: '10px 11px', borderRadius: 11, fontFamily: FONT, background: LT.bg, border: `1px solid ${LT.border}`,
+                      padding: '10px 11px', borderRadius: 11, fontFamily: FONT, background: LT.bg, border: 'none',
                     };
                     return alTocarPegada ? (
                       <button
@@ -396,8 +396,8 @@ export default function NavegadorDelPlan({
                         style={{
                           display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
                           padding: '10px 11px', borderRadius: 11, cursor: 'pointer', fontFamily: FONT,
-                          background: suyo ? LT.blueSoft : LT.bg,
-                          border: `${suyo || mirando ? 1.5 : 1}px solid ${suyo ? LT.blue : (mirando ? LT.text2 : LT.border)}`,
+                          background: suyo ? LT.blueSoft : (mirando ? LT.surface2 : LT.bg),
+                          border: 'none',
                         }}
                       >
                         <span style={{ width: 32, fontSize: 11, fontWeight: 800, color: suyo ? LT.blue : LT.text3, flexShrink: 0 }}>
@@ -407,7 +407,7 @@ export default function NavegadorDelPlan({
                         <TituloDelRenglon dias={hermanas.map((h) => h.day)} extras={extras} color={descanso && !soloDeOtros ? LT.text3 : LT.text} />
                         {detalleDia?.(f, semana, idx)}
                         {suyo && pastilla(textoAqui, true)}
-                        {mirando && pastilla('VIENDO', false)}
+                        {mirando && pastilla('Viendo', false)}
                         {lista && <Check size={14} strokeWidth={3} style={{ color: LT.mint, flexShrink: 0 }} />}
                       </button>
                       {abiertoAqui && (
@@ -435,7 +435,7 @@ function SemanaCerrada({ dias }) {
       {(dias ?? []).map((d, i) => (
         <div
           key={`${d.day}-${i}`} aria-label={`${d.day}: aún no disponible`}
-          style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 11px', borderRadius: 11, fontFamily: FONT, background: LT.bg, border: `1px solid ${LT.border}` }}
+          style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 11px', borderRadius: 11, fontFamily: FONT, background: LT.bg, border: 'none' }}
         >
           <span style={{ width: 32, fontSize: 11, fontWeight: 800, color: LT.text3, flexShrink: 0 }}>{d.day}</span>
           <span aria-hidden="true" style={{ flex: 1, height: 11, borderRadius: 6, background: LT.border, filter: 'blur(3px)', maxWidth: 190 }} />

@@ -13,7 +13,7 @@ import {
 import { conLasMiasPrimero } from '@/lib/categorias';
 import { SessionEditor, Field } from '@/features/admin/PlanBuilder';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
-import { T, FONT, KP } from '@/lib/theme';
+import { T, FONT, KP, UI } from '@/lib/theme';
 import { estructuraDelPlan, isoWeekKey, semanaGlobal, semanasDelPlan, semanasEntre } from '@/lib/training-utils';
 import {
   DIAS_SEMANA, esHuerfana, fasesConPegadas, nombreLargoDeDia, nuevaRegla, reglasDe, semanasDelPrograma,
@@ -62,12 +62,12 @@ const reglaVacia = (r) => !(r.sesion?.exercises ?? []).some((e) => !e.isNote || 
 const botonBlanco = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 40, padding: '0 14px',
   borderRadius: 12, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, touchAction: 'manipulation',
-  background: T.bg2, border: `1.5px solid ${T.accent}`, color: T.accent,
+  background: KP.blueSoft, border: 'none', color: T.accent,
 };
 
 const chip = (activo) => ({
   padding: '8px 14px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800,
-  border: `1.5px solid ${activo ? T.accent : T.border}`, background: activo ? T.accent : T.bg2,
+  border: 'none', background: activo ? T.accent : UI.relleno,
   color: activo ? '#fff' : T.text, whiteSpace: 'nowrap', touchAction: 'manipulation',
 });
 
@@ -97,7 +97,7 @@ function BloqueRepetir({
       <div
         key={valor}
         style={{
-          border: `1.5px solid ${activa ? T.accent : T.border}`, background: activa ? T.accentBg : T.bg2,
+          border: 'none', background: activa ? T.accentBg : UI.relleno,
           borderRadius: 13, overflow: 'hidden',
         }}
       >
@@ -113,7 +113,7 @@ function BloqueRepetir({
         >
           <span style={{
             width: 18, height: 18, borderRadius: 9, flexShrink: 0, marginTop: 1,
-            border: `2px solid ${activa ? T.accent : T.borderHi}`, display: 'grid', placeItems: 'center',
+            border: `2px solid ${activa ? T.accent : T.borderHi}`, /* estilo-ok: círculo de elegir */ display: 'grid', placeItems: 'center',
           }}>
             {activa && <span style={{ width: 8, height: 8, borderRadius: 4, background: T.accent }} />}
           </span>
@@ -145,7 +145,7 @@ function BloqueRepetir({
               onClick={() => alternaDia(d)}
               style={{
                 width: 42, height: 42, borderRadius: 12, cursor: 'pointer', fontFamily: FONT, fontSize: 14.5, fontWeight: 800,
-                border: `1.5px solid ${activo ? T.accent : T.border}`, background: activo ? T.accent : T.bg2,
+                border: 'none', background: activo ? T.accent : UI.relleno,
                 color: activo ? '#fff' : T.text, touchAction: 'manipulation',
               }}
             >
@@ -312,7 +312,7 @@ function TarjetaDeMiSesion({
             <SkipForward size={15} /> No poner esta semana
           </button>
         )}
-        <button type="button" onClick={onQuitar} style={{ ...botonBlanco, borderColor: T.danger, color: T.danger }}>
+        <button type="button" onClick={onQuitar} style={{ ...botonBlanco, background: KP.dangerSoft, color: T.danger }}>
           <Trash2 size={15} /> Quitarla de todo el programa
         </button>
       </div>
@@ -595,7 +595,7 @@ export default function SesionesSobreElPrograma({
 
       {reglas.length > 0 && (
         <div style={{ marginTop: 22 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.text2, marginBottom: 8 }}>
             Mis sesiones ({reglas.length})
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
@@ -605,8 +605,8 @@ export default function SesionesSobreElPrograma({
                 <div
                   key={r.id}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 6, background: T.bg2, borderRadius: 13,
-                    border: `1.5px solid ${huerfana ? T.danger : T.border}`, padding: '4px 6px 4px 4px',
+                    display: 'flex', alignItems: 'center', gap: 6, background: huerfana ? KP.dangerSoft : UI.relleno, borderRadius: 13,
+                    border: 'none', padding: '4px 6px 4px 4px',
                   }}
                 >
                   <button
@@ -634,7 +634,7 @@ export default function SesionesSobreElPrograma({
                       type="button"
                       onClick={() => quitaRegla(r)}
                       aria-label={`Quitar ${r.nombre}`}
-                      style={{ ...botonBlanco, minHeight: 34, padding: '0 10px', borderColor: T.danger, color: T.danger }}
+                      style={{ ...botonBlanco, minHeight: 34, padding: '0 10px', background: KP.dangerSoft, color: T.danger }}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -730,7 +730,7 @@ export default function SesionesSobreElPrograma({
               className="kp-press"
               style={{
                 flex: '1 1 220px', minHeight: 46, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                borderRadius: 14, border: `1.5px solid ${T.accent}`, background: T.bg2, cursor: 'pointer',
+                borderRadius: 14, border: 'none', background: KP.blueSoft, cursor: 'pointer',
                 boxShadow: KP.shCard, fontFamily: FONT, fontSize: 14, fontWeight: 800, color: T.accent,
               }}
             >
@@ -801,7 +801,7 @@ export default function SesionesSobreElPrograma({
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 18px', borderRadius: 12,
             border: 'none', cursor: guardando || !dirty ? 'default' : 'pointer',
-            background: dirty ? `linear-gradient(135deg, ${T.accent}, ${T.accentDk})` : T.bg3,
+            background: dirty ? T.accent : T.bg3,
             // Recién guardado, en verde: se lee como «listo», no como botón apagado.
             color: dirty ? '#fff' : (haGuardado ? KP.mint : T.text3), fontFamily: FONT, fontSize: 14, fontWeight: 800,
             boxShadow: dirty ? KP.shBtn : 'none', opacity: guardando ? 0.75 : 1, flexShrink: 0,

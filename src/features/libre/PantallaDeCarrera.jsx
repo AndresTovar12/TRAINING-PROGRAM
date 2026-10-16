@@ -21,8 +21,8 @@ import { useSenalGps } from './useEntrenoLibre';
    La fuente de los puntos es intercambiable (`lib/ubicacion.js`): hoy el navegador, en la app de la tienda el teléfono o el reloj. */
 
 const C = { fondo: '#0F1220', tarjeta: '#1A1E2E', tarjeta2: '#232838', texto: '#FFFFFF', texto2: 'rgba(255,255,255,0.62)', rojo: '#FF5A5F', azul: '#2F6BFF', verde: '#22C38E' };
-const CORAL = 'linear-gradient(135deg, #FF8A5B 0%, #F0506E 100%)';
-const AZUL = 'linear-gradient(135deg, #2448E8 0%, #1733B8 60%, #0D1A66 100%)';
+const CORAL = 'linear-gradient(135deg, #FF8A5B 0%, #F0506E 100%)'; /* estilo-ok: pantallas oscuras de la carrera (capturas aprobadas) */
+const AZUL = 'linear-gradient(135deg, #2448E8 0%, #1733B8 60%, #0D1A66 100%)'; /* estilo-ok: pantallas oscuras de la carrera (capturas aprobadas) */
 
 const nombreDeLaSalida = (deporte, inicioMs) => {
   const h = new Date(inicioMs).getHours();
@@ -101,7 +101,7 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, ult
           <div aria-hidden="true" style={{ width: 40, height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.25)', margin: '0 auto 12px' }} />
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
             <div>
-              <div style={{ fontSize: 12.5, fontWeight: 800, letterSpacing: 1.2, color: C.rojo }}>ENTRENO LIBRE</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: C.rojo }}>Entreno libre</div>
               <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: -0.4 }}>{nombreDelDeporte(deporte)}</div>
             </div>
             {ultimo && <div style={{ fontSize: 13.5, fontWeight: 500, color: C.texto2, textAlign: 'right' }}>Último: {ultimo}</div>}
@@ -141,7 +141,7 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, ult
         <div style={{ flex: 1, overflowY: 'auto', background: '#F2F3F7', color: '#111318' }}>
           <MapaDeCarrera muestras={resumen.muestras ?? muestras} sigue={false} alto={300} redondo={false} />
           <div style={{ margin: '-48px 16px 0', position: 'relative', background: '#fff', borderRadius: 24, padding: '16px 18px 18px', boxShadow: '0 14px 34px rgba(17,19,24,0.12)' }}>
-            <div style={{ fontSize: 12.5, fontWeight: 800, letterSpacing: 1, color: C.rojo, textTransform: 'uppercase' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.rojo, }}>
               Hoy · {fecha.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' })}
             </div>
             <div style={{ fontSize: 25, fontWeight: 800, letterSpacing: -0.5, marginTop: 2 }}>{nombreDeLaSalida(resumen.deporte, resumen.inicioMs)}</div>
@@ -238,7 +238,7 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, ult
         <button type="button" onClick={alMinimizar} aria-label="Cerrar" style={{ ...redondo, visibility: 'hidden' }}><X size={20} /></button>
       </div>
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 18px 0', gap: 6 }}>
-        <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: 1.5, color: C.rojo }}>TIEMPO</div>
+        <div style={{ fontSize: 15, fontWeight: 800, color: C.rojo }}>Tiempo</div>
         <div role="timer" aria-label="Tiempo" style={{ fontSize: 66, fontWeight: 800, letterSpacing: -2, lineHeight: 1, color: pausado ? C.texto2 : C.rojo, ...NUM_STYLE }}>{relojDeCronometro(segundos)}</div>
         <div style={{ fontSize: 112, fontWeight: 800, letterSpacing: -4, lineHeight: 1, marginTop: 28, ...NUM_STYLE }}>{km.toFixed(2)}</div>
         <div style={{ fontSize: 15, fontWeight: 600, color: C.texto2 }}>Kilómetros</div>

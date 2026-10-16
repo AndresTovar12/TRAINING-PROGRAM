@@ -3,7 +3,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import ListaDesplegable from '@/components/ListaDesplegable';
 import { estiloDeRotulo } from '@/components/estiloDeRotulo';
 import { MEDIDAS, CARGAS, GRUPOS_DE_CARGA, medida as uni } from '@/lib/medidas';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, UI, KP } from '@/lib/theme';
 
 /**
  * Las casillas de reps y de carga de un ejercicio en el editor, con sus vueltas y su «Por lado».
@@ -207,9 +207,8 @@ export function DebajoDeRepsYCarga({ rc, estiloInput, compacto = false, columnas
             title="Reps y carga distintas en cada vuelta"
             style={{
               ...botonChico,
-              // Blanco con borde azul: un botón de los suyos. Relleno cuando este ejercicio ya cambia por vuelta.
-              border: `1.5px solid ${rc.hayVueltas ? 'transparent' : T.accent}`,
-              background: rc.hayVueltas ? T.accentBg : '#fff', color: T.accent,
+              // Azul suave como los demás botones de agregar (reestructura visual, 16 oct 2026); más marcado cuando ya cambia por vuelta.
+              border: 'none', background: rc.hayVueltas ? T.accentBg : KP.blueSoft, color: T.accent,
             }}
           >
             Por vuelta {rc.desplegado ? <ChevronUp size={13} strokeWidth={2.6} /> : <ChevronDown size={13} strokeWidth={2.6} />}
@@ -218,7 +217,7 @@ export function DebajoDeRepsYCarga({ rc, estiloInput, compacto = false, columnas
         {rc.desplegado && rc.hayVueltas && (
           <button
             type="button" className="kp-accion" onClick={rc.dejarIguales}
-            style={{ ...botonChico, border: `1.5px solid ${T.borderHi}`, background: '#fff', color: T.text2 }}
+            style={{ ...botonChico, border: 'none', background: UI.relleno, color: T.text2 }}
           >
             Dejar todas iguales
           </button>

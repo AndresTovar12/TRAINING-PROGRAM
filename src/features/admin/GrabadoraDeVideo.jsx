@@ -599,7 +599,7 @@ export default function GrabadoraDeVideo({ onListo, onCancelar, onSinCamara, pro
           aria-label={grabando ? 'Parar de grabar' : 'Grabar'}
           style={{
             width: 78, height: 78, borderRadius: '50%', cursor: 'pointer',
-            border: '5px solid rgba(255,255,255,0.85)', background: 'transparent',
+            border: '5px solid rgba(255,255,255,0.85)', /* estilo-ok: aro del botón de grabar */ background: 'transparent',
             display: 'grid', placeItems: 'center', opacity: velo ? 0.4 : 1,
           }}
         >

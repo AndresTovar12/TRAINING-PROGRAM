@@ -780,6 +780,49 @@ const semanaGlobal = (plan, faseId, semanaNum) => {
 };
 
 
+/**
+ * La semana de un atleta vista por su coach (ficha del atleta, reestructura visual 16 oct 2026): dónde va y, día por día, qué le toca
+ * y cómo va: 'hecha' (todas las sesiones de ese día marcadas), 'saltada' (día pasado con sesión sin marcar), 'hoy', 'viene' (día que
+ * todavía no llega), 'descanso' (el coach puso OFF) o 'nada'. Cuenta también las hechas, las que tocan y las saltadas.
+ * `sesiones` es el mapa `wr:sessions` del atleta; `puntero`, su `wr:cursor`. Puro: se prueba sin abrir la app.
+ */
+const semanaDelAtleta = (plan, kind, puntero, sesiones = {}, hoy = new Date()) => {
+  if (!plan?.length) return null;
+  const base = isValidCursor(plan, puntero) ? puntero : defaultCursor(plan);
+  const cursor = cursorAlDia(plan, base, hoy);
+  const { phase, week, items } = daysOfCurrentWeek(plan, kind, cursor);
+  if (!phase || !week) return null;
+  const orden = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+  const posHoy = orden.indexOf(weekdayToday(hoy));
+  const lunes = new Date(hoy); lunes.setHours(12, 0, 0, 0); lunes.setDate(lunes.getDate() - posHoy);
+  const dias = orden.map((clave, pos) => {
+    const todas = items.filter(({ day }) => day.day === clave || (clave === 'Mié' && day.day === 'Mie') || (clave === 'Sáb' && day.day === 'Sab'));
+    const reales = todas.filter(({ day }) => !esDescanso(day));
+    const fecha = new Date(lunes); fecha.setDate(lunes.getDate() + pos);
+    const hechas = reales.filter(({ dayIdx }) => !!sesiones?.[sessionIdFor(kind, phase.id, week.num, dayIdx, fecha)]?.completed).length;
+    let estado = 'nada';
+    if (reales.length) {
+      if (hechas === reales.length) estado = 'hecha';
+      else if (pos < posHoy) estado = 'saltada';
+      else if (pos === posHoy) estado = 'hoy';
+      else estado = 'viene';
+    } else if (todas.length) estado = 'descanso';
+    return {
+      clave, esHoy: pos === posHoy, estado, sesiones: reales.length, hechas,
+      nombre: reales.map(({ day }) => sinDuracion(day.name || '')).filter(Boolean).join(' + ') || null,
+    };
+  });
+  const faseIdx = plan.findIndex((f) => f.id === phase.id);
+  const semanaIdx = phase.weekData.findIndex((w) => w.num === week.num);
+  return {
+    faseIdx, fase: phase, semana: week, semanaIdx, semanasDeLaFase: phase.weekData.length,
+    dias,
+    hechas: dias.reduce((n, d) => n + d.hechas, 0),
+    tocan: dias.reduce((n, d) => n + d.sesiones, 0),
+    saltadas: dias.filter((d) => d.estado === 'saltada').length,
+  };
+};
+
 export {
   ESTRUCTURAS, estructuraDelPlan, kindDeEstructura, semanasDelPlan, semanaGlobal,
   sessionId, calc1RM, today, greeting, isLoadedExercise, isValidCursor,
@@ -788,5 +831,5 @@ export {
   totalProgress, getWeekLoad, formatIntensity, inferRest, getPattern, getMuscles,
   weekdayToday, weekdayLabel, isoWeekKey, weeklySessionId, sessionIdFor,
   sessionForToday, weekOverview, esDescanso, enOrdenDeSemana, diasDeEstaSemana,
-  sesionQueRepite, sinDuracion, claveDeDia, dondeVa,
+  sesionQueRepite, sinDuracion, claveDeDia, dondeVa, semanaDelAtleta,
 };

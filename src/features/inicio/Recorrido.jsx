@@ -17,7 +17,7 @@ import { botonPrimario, enlace, subtitulo, titulo } from '@/features/inicio/esti
  */
 
 const fila = {
-  display: 'flex', alignItems: 'center', gap: 10, background: '#fff', border: `1px solid ${KP.line}`, borderRadius: 14,
+  display: 'flex', alignItems: 'center', gap: 10, background: '#fff', border: 'none', borderRadius: 14,
   padding: '10px 12px', fontSize: 14, fontWeight: 700, color: KP.ink, boxShadow: '0 6px 16px rgba(17,19,24,0.06)',
   fontFamily: FONT,
 };
@@ -27,12 +27,12 @@ const avatar = (fondo = KP.blueSoft, color = KP.blue) => ({
 });
 const chico = { display: 'block', fontSize: 12, color: KP.ink2, fontWeight: 600, marginTop: 1 };
 const pastilla = {
-  display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', border: `1px solid ${KP.line}`,
+  display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', border: 'none',
   borderRadius: 999, padding: '6px 12px', fontSize: 12.5, fontWeight: 800, color: KP.blue, fontFamily: FONT,
 };
 const punto = (color) => ({ width: 9, height: 9, borderRadius: 99, background: color, flexShrink: 0 });
 const burbuja = (mia) => ({
-  background: mia ? KP.blue : '#fff', color: mia ? '#fff' : KP.ink, border: mia ? 'none' : `1px solid ${KP.line}`,
+  background: mia ? KP.blue : '#fff', color: mia ? '#fff' : KP.ink, border: 'none',
   borderRadius: mia ? '16px 16px 4px 16px' : '16px 16px 16px 4px', padding: '10px 12px', fontSize: 13, fontWeight: 600,
   maxWidth: '88%', alignSelf: mia ? 'flex-end' : 'flex-start', lineHeight: 1.4,
 });
@@ -61,7 +61,7 @@ const Planes = () => (
 const Grabar = () => (
   <>
     <div style={{
-      width: 140, height: 200, borderRadius: 26, border: '6px solid #141720', background: '#0E1015', margin: '0 auto',
+      width: 140, height: 200, borderRadius: 26, border: '6px solid #141720', /* estilo-ok: marco del teléfono del recorrido */ background: '#0E1015', margin: '0 auto',
       display: 'grid', placeItems: 'center', color: '#fff', position: 'relative',
     }}>
       <span style={{ position: 'absolute', top: 10, left: 12, display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 800 }}>
@@ -153,7 +153,7 @@ export default function Recorrido({ rol = 'coach', conEquipo = false, onTerminar
         key={p.titulo}
         className="animate-fade-in"
         style={{
-          borderRadius: 22, background: 'linear-gradient(160deg, #E8ECFD, #F4F5F8)', border: `1px solid ${KP.line}`,
+          borderRadius: 22, background: '#ECEFFC', border: 'none',
           padding: 18, minHeight: 250, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 10,
           margin: '14px 0 18px',
         }}

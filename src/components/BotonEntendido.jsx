@@ -18,7 +18,7 @@ export default function BotonEntendido({ onClick, color, style }) {
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 36, padding: '0 13px', borderRadius: 10,
         cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 800, flexShrink: 0,
-        border: `1.5px solid ${color}`, background: '#fff', color, touchAction: 'manipulation', ...style,
+        border: 'none', background: `${color}14`, color, touchAction: 'manipulation', ...style,
       }}
     >
       <Check size={15} strokeWidth={3} /> Entendido

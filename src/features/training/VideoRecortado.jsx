@@ -161,7 +161,7 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef,
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 7, margin: '9px 0 0 12px',
             padding: '7px 12px', borderRadius: 999, background: '#FFFFFF',
-            border: `1px solid ${T.border}`,
+            border: 'none',
             fontFamily: FONT, fontSize: 13, fontWeight: 800, color: T.accent, textDecoration: 'none',
           }}
         >

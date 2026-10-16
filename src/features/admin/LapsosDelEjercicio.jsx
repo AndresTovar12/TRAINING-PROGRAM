@@ -8,7 +8,7 @@ import { IconBtn } from '@/features/admin/piezas';
 import { useRepsYCarga } from '@/lib/useRepsYCarga';
 import { tipoDeCargaAlEscribir, esDistancia } from '@/lib/medidas';
 import { lapsosDe, parcheDeLapsos, comoEjercicio, MAX_LAPSOS } from '@/lib/lapsos';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, KP } from '@/lib/theme';
 
 /**
  * Los lapsos de UN ejercicio dentro de un Set en «Lapsos personalizados»: filas numeradas, una por lapso, con lo
@@ -29,7 +29,7 @@ const frase = { fontSize: 12.5, fontWeight: 700, color: T.text2, fontFamily: FON
 const botonChico = {
   display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 28, padding: '0 11px', borderRadius: 999,
   cursor: 'pointer', fontFamily: FONT, fontSize: 12.5, fontWeight: 800, touchAction: 'manipulation', flexShrink: 0,
-  border: `1.5px solid ${T.accent}`, background: '#fff', color: T.accent,
+  border: 'none', background: KP.blueSoft, color: T.accent,
 };
 
 // Una fila: el número del lapso y sus tres casillas. Es un fragmento de la rejilla de arriba: cada pieza es una celda.

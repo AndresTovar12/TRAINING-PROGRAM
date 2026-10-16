@@ -104,6 +104,7 @@ function EliminarCuenta() {
             {r && !bloqueada && (
               <>
                 {r.tiene_contrasena && <Campo etiqueta="Tu contraseña" tipo="password" grande={false} valor={contrasena} onCambio={setContrasena} autoComplete="current-password" />}
+                {/* estilo-ok: ELIMINAR es la palabra que se teclea para confirmar */}
                 <Campo etiqueta="Para confirmar, escribe ELIMINAR" grande={false} valor={confirmacion} onCambio={setConfirmacion} marcador="ELIMINAR" autoCapitalize="characters" autoCorrect="off" spellCheck={false} />
               </>
             )}

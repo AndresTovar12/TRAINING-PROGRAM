@@ -47,7 +47,7 @@ export default function ResumenLibre({ fila, unidadPeso = 'kg', alCerrar, alCerr
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <MosaicoDeDeporte deporte={fila.deporte} size={44} />
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', color: KP.blue, ...NUM_STYLE }}>{fechaLarga(fila.inicio, fila.desfase_min)} · {horaTexto(fila.inicio, fila.desfase_min)}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: KP.blue, ...NUM_STYLE }}>{fechaLarga(fila.inicio, fila.desfase_min)} · {horaTexto(fila.inicio, fila.desfase_min)}</div>
                 <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: -0.5, color: LT.text, marginTop: 2, overflowWrap: 'break-word' }}>{nombre}</div>
               </div>
             </div>

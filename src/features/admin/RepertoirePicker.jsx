@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search, X, Check, Dumbbell, Trash2 } from 'lucide-react';
 import { useMedia } from '@/lib/useViewport';
-import { T, FONT, KP } from '@/lib/theme';
+import { T, FONT, KP, UI } from '@/lib/theme';
 import { gruposConPropios } from '@/lib/muscles';
 import { listCategories, listMuscleGroups } from '@/lib/api';
 import { coincidencia, pasaFiltros } from '@/lib/buscarEjercicio';
@@ -135,8 +135,8 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
   };
 
   const selStyle = (active) => ({
-    flexShrink: 0, border: `1.5px solid ${active ? T.accent : T.border}`, cursor: 'pointer',
-    background: active ? T.accentBg : T.bg2, color: active ? T.accent : T.text2,
+    flexShrink: 0, border: 'none', cursor: 'pointer',
+    background: active ? T.accentBg : UI.relleno, color: active ? T.accent : T.text2,
     borderRadius: 10, padding: '7px 12px', fontFamily: FONT, fontSize: 12.5, fontWeight: 700,
   });
 
@@ -296,14 +296,14 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
                       type="button"
                       onClick={() => toggle(ex)}
                       style={enFilas ? {
-                        textAlign: 'left', border: `1.5px solid ${sel ? T.accent : T.border}`, cursor: 'pointer',
-                        background: sel ? T.accentBg : T.bg2, borderRadius: 11, padding: '7px 11px 7px 7px',
+                        textAlign: 'left', border: 'none', cursor: 'pointer',
+                        background: sel ? T.accentBg : UI.relleno, borderRadius: 11, padding: '7px 11px 7px 7px',
                         fontFamily: FONT, width: '100%', display: 'flex', alignItems: 'center', gap: 11,
-                        transition: 'border-color .12s, background .12s',
+                        transition: 'background .12s',
                       } : {
-                        textAlign: 'left', border: `2px solid ${sel ? T.accent : T.border}`, cursor: 'pointer',
+                        textAlign: 'left', border: 'none', cursor: 'pointer',
                         background: T.bg2, borderRadius: 14, padding: 0, overflow: 'hidden', fontFamily: FONT,
-                        boxShadow: sel ? KP.shRaise : KP.shCard, transition: 'border-color .12s, box-shadow .12s',
+                        boxShadow: sel ? KP.shRaise : KP.shCard, transition: 'box-shadow .12s',
                         display: 'flex', flexDirection: 'column', alignItems: 'stretch', width: '100%',
                       }}
                     >
@@ -331,7 +331,7 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
                           </span>
                           <span style={{
                             width: 22, height: 22, borderRadius: 7, flexShrink: 0, display: 'grid', placeItems: 'center',
-                            border: sel ? 'none' : `1.5px solid ${T.borderHi}`, background: sel ? T.accent : 'transparent', color: '#fff',
+                            border: sel ? 'none' : `1.5px solid ${T.borderHi}`, /* estilo-ok: casilla de marcar */ background: sel ? T.accent : 'transparent', color: '#fff',
                           }}>
                             {sel && <Check size={13} />}
                           </span>
@@ -351,7 +351,7 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
                         <span
                           style={{
                             position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: 9,
-                            display: 'grid', placeItems: 'center', border: sel ? 'none' : '1.5px solid rgba(255,255,255,0.75)',
+                            display: 'grid', placeItems: 'center', border: sel ? 'none' : '1.5px solid rgba(255,255,255,0.75)', /* estilo-ok: casilla de marcar sobre la foto */
                             background: sel ? T.accent : 'rgba(0,0,0,0.35)', color: '#fff',
                             backdropFilter: 'blur(4px)', transition: 'background .12s',
                           }}
@@ -387,7 +387,7 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
                 display: esCompu ? 'flex' : 'none', flexDirection: 'column',
               }}
             >
-              <div style={{ padding: '14px 14px 8px', fontSize: 12, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+              <div style={{ padding: '14px 14px 8px', fontSize: 13, fontWeight: 700, color: T.text2 }}>
                 Elegidos ({picked.length})
               </div>
               <div style={{ flex: 1, overflowY: 'auto', padding: '0 10px 90px' }}>
@@ -436,7 +436,7 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 22px', borderRadius: 12,
               border: 'none', cursor: picked.length ? 'pointer' : 'default', opacity: picked.length ? 1 : 0.5,
-              background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`, color: '#fff',
+              background: T.accent, color: '#fff',
               fontFamily: FONT, fontSize: 14.5, fontWeight: 800, boxShadow: KP.shBtn,
             }}
           >

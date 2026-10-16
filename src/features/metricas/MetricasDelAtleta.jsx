@@ -135,7 +135,7 @@ function Contenido({ atleta, esAtleta, abrirEn, onCerrar }) {
   return (
     <HojaFlotante titulo={esAtleta ? 'Mis métricas' : `Métricas · ${nombre}`} subtitulo={subtitulo} onCerrar={onCerrar} ancho={1080}>
       <div ref={contenido} style={{ color: LT.text, background: 'transparent' }}>
-        {m.cargando && hayDatos && <div role="status" style={{ position: 'sticky', top: 0, height: 3, background: `linear-gradient(90deg, ${KP.blue}, transparent)`, borderRadius: 2, marginBottom: 6 }} />}
+        {m.cargando && hayDatos && <div role="status" style={{ /* estilo-ok: barrita de carga */ position: 'sticky', top: 0, height: 3, background: `linear-gradient(90deg, ${KP.blue}, transparent)`, borderRadius: 2, marginBottom: 6 }} />}
         {cuerpo}
       </div>
     </HojaFlotante>

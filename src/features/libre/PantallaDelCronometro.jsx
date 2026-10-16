@@ -111,7 +111,7 @@ export default function PantallaDelCronometro({ userId, crono, pendiente = null,
             style={{ display: 'flex', flexDirection: 'column', gap: 16, width: '100%' }}
           >
             <div style={{ textAlign: 'center', fontSize: 22, fontWeight: 800, color: LT.text }}>¿Cuánto fue?</div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10, background: LT.surface, border: `1.5px solid ${LT.border}`, borderRadius: 18, padding: '0 18px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, background: UI.relleno, border: 'none', borderRadius: 18, padding: '0 18px' }}>
               <input
                 value={distancia} onChange={(e) => setDistancia(e.target.value)} inputMode="decimal" autoFocus placeholder="0" aria-label={`Distancia en ${unidad === 'm' ? 'metros' : 'kilómetros'}`}
                 style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 34, fontWeight: 800, color: LT.text, padding: '14px 0', ...NUM_STYLE }}

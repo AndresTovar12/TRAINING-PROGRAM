@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Folder, Search } from 'lucide-react';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, UI, KP } from '@/lib/theme';
 import {
   ETIQUETA_DE_TIPO, TIPOS, carpetasQueSePuedenTraer, claveDeCarpeta, claveDeItem, coincide, porNombre, textoDeResumen, textoDeRuta,
 } from '@/lib/misPlanesDatos';
@@ -57,8 +57,8 @@ export default function TraerAqui({ carpetaId, carpetas, items, alTraer, onCerra
     <label
       key={clave}
       style={{
-        display: 'flex', alignItems: 'center', gap: 11, cursor: 'pointer', padding: '9px 12px', background: T.bg2,
-        border: `1.5px solid ${elegidos.has(clave) ? T.accent : T.border}`, borderRadius: 12,
+        display: 'flex', alignItems: 'center', gap: 11, cursor: 'pointer', padding: '9px 12px', background: elegidos.has(clave) ? KP.blueSoft : UI.relleno,
+        border: 'none', borderRadius: 12,
       }}
     >
       <input type="checkbox" checked={elegidos.has(clave)} onChange={() => alternar(clave)} style={{ width: 19, height: 19, accentColor: T.accent, flexShrink: 0 }} />

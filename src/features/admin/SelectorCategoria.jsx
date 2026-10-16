@@ -29,7 +29,7 @@ import { categoriasDeLaApp, categoriasMias, crearCategoriaPropia } from '@/lib/c
 import { useConfirmacion } from '@/components/Confirmacion';
 import ListaDesplegable from '@/components/ListaDesplegable';
 import { plural } from '@/lib/plural';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, UI } from '@/lib/theme';
 
 export default function SelectorCategoria({
   categorias = [], value, onChange, onCreada, onBorrada,
@@ -85,7 +85,7 @@ export default function SelectorCategoria({
         rotulo={rotulo}
         grupos={[
           ...(sinCategoria ? [{ titulo: '', opciones: [{ valor: '', etiqueta: 'Sin categoría' }] }] : []),
-          { titulo: 'TUYAS', opciones: mias.map((c) => ({
+          { titulo: 'Tuyas', opciones: mias.map((c) => ({
             valor: c.id, etiqueta: c.name, color: c.color, alBorrar: () => borrar(c),
           })) },
           { titulo: 'DE LA APP', opciones: deLaApp.map((c) => ({
@@ -135,8 +135,8 @@ export function CrearCategoria({ categorias = [], onChange, onCreada, duenoId, m
   }
 
   const campo = {
-    border: `1.5px solid ${T.border}`, borderRadius: 11, padding: '11px 13px', width: '100%',
-    fontFamily: FONT, fontSize: 15, fontWeight: 600, color: T.text, background: T.bg2,
+    border: 'none', borderRadius: 11, padding: '11px 13px', width: '100%',
+    fontFamily: FONT, fontSize: 15, fontWeight: 600, color: T.text, background: UI.relleno,
     outline: 'none', boxSizing: 'border-box', ...estilo,
   };
 
@@ -166,7 +166,7 @@ export function CrearCategoria({ categorias = [], onChange, onCreada, duenoId, m
       {creando && (
         <div style={{
           display: 'flex', flexDirection: 'column', gap: 8, padding: 10,
-          border: `1px solid ${T.border}`, borderRadius: 12, background: T.bg,
+          border: 'none', borderRadius: 12, background: T.bg,
         }}>
           <input
             value={nombre}
@@ -193,8 +193,8 @@ export function CrearCategoria({ categorias = [], onChange, onCreada, duenoId, m
             <button
               type="button" onClick={() => { setCreando(false); setNombre(''); setErr(''); }}
               style={{
-                minHeight: 42, padding: '0 14px', borderRadius: 11, border: `1.5px solid ${T.border}`,
-                background: T.bg2, color: T.text2, cursor: 'pointer',
+                minHeight: 42, padding: '0 14px', borderRadius: 11, border: 'none',
+                background: UI.relleno, color: T.text2, cursor: 'pointer',
                 fontFamily: FONT, fontSize: 14, fontWeight: 700,
                 display: 'inline-flex', alignItems: 'center', gap: 5,
               }}

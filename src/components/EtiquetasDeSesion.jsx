@@ -53,7 +53,7 @@ export default function EtiquetasDeSesion({ sesiones, envolver = false, tamano =
               padding: '3px 11px',
               borderRadius: envolver || s.autor ? 14 : KP.rPill,
               background: tinte ? `${tinte}14` : KP.surfaceMuted,
-              border: `1px solid ${tinte ? `${tinte}55` : KP.lineHi}`,
+              border: 'none',
               color: KP.ink,
               fontFamily: FONT, fontSize: tamano, fontWeight: 700, lineHeight: 1.25,
             }}

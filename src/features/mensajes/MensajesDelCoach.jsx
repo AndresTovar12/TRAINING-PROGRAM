@@ -61,7 +61,7 @@ export default function MensajesDelCoach({ abrirAtleta = null, alAbrirlo }) {
       {titulo}{fallo}
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 380px) minmax(0, 1fr)', gap: 18, alignItems: 'start' }}>
         <div style={{ maxHeight: 'calc(100svh - 130px)', overflowY: 'auto', paddingBottom: 12 }}>{lista}</div>
-        <div style={{ height: 'calc(100svh - 130px)', borderRadius: 22, overflow: 'hidden', border: `1px solid ${KP.line}`, boxShadow: KP.shCard, background: T.bg }}>
+        <div style={{ height: 'calc(100svh - 130px)', borderRadius: 22, overflow: 'hidden', border: 'none', boxShadow: KP.shCard, background: T.bg }}>
           {fila ? (
             <Conversacion key={abierta} fila={fila} uid={uid} />
           ) : (

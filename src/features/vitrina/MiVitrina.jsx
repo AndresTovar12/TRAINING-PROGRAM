@@ -35,7 +35,7 @@ function Tarjeta({ plan, usuario, alEditar, alRetirar }) {
   const boton = { flex: 1, minHeight: 46, borderRadius: 14, border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', whiteSpace: 'nowrap' };
   return (
     <div style={{ background: UI.tarjeta, borderRadius: 22, boxShadow: UI.sombraGrupo, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ position: 'relative', aspectRatio: '16 / 9', background: plan.foto_url ? '#1B1D24' : 'linear-gradient(135deg, #EEF1FE, #EFEBFF)' }}>
+      <div style={{ position: 'relative', aspectRatio: '16 / 9', background: plan.foto_url ? '#1B1D24' : '#ECEFFC' }}>
         {plan.foto_url && <img src={plan.foto_url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
         <span style={{ position: 'absolute', top: 12, left: 12, padding: '4px 10px', borderRadius: 8, background: e.fondo, color: e.tinta, fontSize: 13, fontWeight: 700 }}>{e.texto}</span>
       </div>

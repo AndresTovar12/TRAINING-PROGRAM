@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Check, Dumbbell, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { FONT, KP } from '@/lib/theme';
+import { FONT, KP, UI } from '@/lib/theme';
 import { queHaceLaIA } from '@/features/ia/queHaceLaIA';
 
 /**
@@ -103,13 +103,13 @@ export default function PermisoIA({ authorizationId, onTerminar }) {
     }}>
       <div className="animate-fade-in" style={{
         width: '100%', maxWidth: 420, background: KP.surface, borderRadius: 28,
-        padding: '30px 26px 24px', border: `1px solid ${KP.line}`,
+        padding: '30px 26px 24px', border: 'none',
         boxShadow: '0 24px 60px rgba(17,19,24,0.10), 0 4px 14px rgba(17,19,24,0.05)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 22 }}>
           <div style={{
             width: 38, height: 38, borderRadius: 12, display: 'grid', placeItems: 'center',
-            background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`,
+            background: KP.blue,
           }}>
             <Dumbbell size={19} color="#fff" strokeWidth={2.4} />
           </div>
@@ -144,8 +144,8 @@ export default function PermisoIA({ authorizationId, onTerminar }) {
               <button type="button" onClick={cambiarDeCuenta} style={enlace}>¿No eres tú?</button>
             </p>
 
-            <div style={{ background: KP.surfaceMuted, border: `1px solid ${KP.line}`, borderRadius: 18, padding: '14px 16px', marginBottom: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: KP.ink3, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 }}>
+            <div style={{ background: KP.surfaceMuted, border: 'none', borderRadius: 18, padding: '14px 16px', marginBottom: 14 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: KP.ink2, marginBottom: 10 }}>
                 Podrá
               </div>
               {puede.map((p) => (
@@ -185,13 +185,13 @@ export default function PermisoIA({ authorizationId, onTerminar }) {
 
 const botonPrincipal = {
   width: '100%', padding: '14px 22px', borderRadius: 999, border: 'none', cursor: 'pointer',
-  background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, color: '#fff',
+  background: KP.blue, color: '#fff',
   fontFamily: FONT, fontSize: 15.5, fontWeight: 800, boxShadow: KP.shBtn,
 };
 
 const botonSecundario = {
-  width: '100%', padding: '13px 22px', borderRadius: 999, border: `1.5px solid ${KP.line}`,
-  background: KP.surface, color: KP.ink, cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 700,
+  width: '100%', padding: '13px 22px', borderRadius: 999, border: 'none',
+  background: UI.relleno, color: KP.ink, cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 700,
 };
 
 const enlace = {

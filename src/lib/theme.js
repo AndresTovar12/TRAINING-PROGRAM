@@ -95,8 +95,9 @@ const KP = {
   // Radii
   rChip: 10, rBtn: 14, rField: 16, rCard: 22, rPill: 999,
   // Sombras: muy suaves y planas (el sello Kinetic)
-  shCard: '0 4px 20px rgba(17,19,24,0.04)',
-  shRaise: '0 10px 30px rgba(17,19,24,0.07)',
+  // Reestructura visual (16 oct 2026): la sombra de tarjeta es la mínima de los grupos; «levantada» apenas más.
+  shCard: '0 1px 2px rgba(17,19,24,0.04)',
+  shRaise: '0 4px 14px rgba(17,19,24,0.08)',
   shBtn: '0 8px 22px rgba(30,64,224,0.24)',
   shPop: '0 16px 44px rgba(17,19,24,0.13)',
 };
@@ -113,16 +114,15 @@ const ACCENTS = {
   danger: { c: KP.danger, soft: KP.dangerSoft },
 };
 
-// Etiqueta superior (kicker): mayúsculas, tracking, gris
-const eyebrow = (color = KP.ink3) => ({
-  fontSize: 11, fontWeight: 700, letterSpacing: 1.4,
-  textTransform: 'uppercase', color, lineHeight: 1,
+// Etiqueta superior. Reestructura visual (16 oct 2026): ya no va en mayúsculas grises con espaciado, sino en letra normal y
+// seminegrita, como los títulos de grupo de `components/ui`.
+const eyebrow = (color = KP.ink2) => ({
+  fontSize: 13.5, fontWeight: 700, color, lineHeight: 1.2,
 });
 
-// Tarjeta base Kinetic
+// Tarjeta base: blanca, sin contorno, con la sombra mínima de los grupos (reestructura visual, 16 oct 2026).
 const kpCard = (extra = {}) => ({
-  background: KP.surface, borderRadius: KP.rCard,
-  border: `1px solid ${KP.line}`, boxShadow: KP.shCard,
+  background: KP.surface, borderRadius: 20, boxShadow: '0 1px 2px rgba(17,19,24,0.04)',
   ...extra,
 });
 

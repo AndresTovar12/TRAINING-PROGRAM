@@ -66,7 +66,7 @@ export default function TarjetaDeTecnica({ m, t, soyAtleta, url, alFallar, alCor
             </button>
             <button
               type="button" onClick={() => alCorregir(t)} disabled={ocupado} className="kp-press"
-              style={{ flex: '1 1 132px', minHeight: 46, padding: '0 8px', whiteSpace: 'nowrap', borderRadius: 14, border: `1.5px solid ${T.accent}`, background: KP.surface, color: T.accent, cursor: 'pointer', fontFamily: FONT, fontSize: 14.5, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, touchAction: 'manipulation' }}
+              style={{ flex: '1 1 132px', minHeight: 46, padding: '0 8px', whiteSpace: 'nowrap', borderRadius: 14, border: 'none', background: KP.blueSoft, color: T.accent, cursor: 'pointer', fontFamily: FONT, fontSize: 14.5, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, touchAction: 'manipulation' }}
             >
               <Pencil size={16} /> Corregir
             </button>
@@ -75,7 +75,7 @@ export default function TarjetaDeTecnica({ m, t, soyAtleta, url, alFallar, alCor
         {soyAtleta && !porRevisar && alOtroIntento && (
           <button
             type="button" onClick={() => alOtroIntento(t)} className="kp-press"
-            style={{ minHeight: 44, borderRadius: 14, border: `1.5px solid ${T.accent}`, background: KP.surface, color: T.accent, cursor: 'pointer', fontFamily: FONT, fontSize: 14.5, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, touchAction: 'manipulation' }}
+            style={{ minHeight: 44, borderRadius: 14, border: 'none', background: KP.blueSoft, color: T.accent, cursor: 'pointer', fontFamily: FONT, fontSize: 14.5, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, touchAction: 'manipulation' }}
           >
             <RotateCcw size={16} /> Mandar otro intento
           </button>

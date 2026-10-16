@@ -3,7 +3,7 @@ import { Check, ChevronDown, Plus, SlidersHorizontal } from 'lucide-react';
 import { useAviso } from '@/components/AvisoPasajero';
 import { aspectoDelTipo } from '@/lib/aspectoDelTipo';
 import { cargaCatalogo } from '@/lib/iconosDeTipo';
-import { FONT, T, tipoDeSesion } from '@/lib/theme';
+import { FONT, T, tipoDeSesion, UI } from '@/lib/theme';
 import HojaTipoNuevo from '@/features/admin/HojaTipoNuevo';
 import HojaTiposDeSesion from '@/features/admin/HojaTiposDeSesion';
 import MosaicoDeTipo from '@/features/admin/MosaicoDeTipo';
@@ -128,8 +128,8 @@ export default function SelectorTipoSesion({ day, onPatch, coachId, puedeCrear =
         type="button" onClick={abre} aria-haspopup="true" aria-expanded={abierto}
         style={{
           width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-          padding: '8px 12px 8px 8px', borderRadius: 12, border: `1.5px solid ${T.border}`,
-          background: T.bg2, cursor: 'pointer', fontFamily: FONT, fontSize: 14,
+          padding: '8px 12px 8px 8px', borderRadius: 12, border: 'none',
+          background: UI.relleno, cursor: 'pointer', fontFamily: FONT, fontSize: 14,
           fontWeight: 700, color: T.text, textAlign: 'left',
         }}
       >
@@ -149,7 +149,7 @@ export default function SelectorTipoSesion({ day, onPatch, coachId, puedeCrear =
           onClick={(e) => e.preventDefault()}
           style={{
             position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 60,
-            background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 16,
+            background: T.bg2, border: 'none', borderRadius: 16,
             boxShadow: '0 16px 44px rgba(17,19,24,0.16)',
             /* Ya no hace scroll este, sino la lista de adentro: así los botones de
                crear y administrar se quedan pegados abajo, siempre a la vista. */
@@ -199,7 +199,7 @@ export default function SelectorTipoSesion({ day, onPatch, coachId, puedeCrear =
                 aria-hidden="true"
                 style={{
                   position: 'absolute', left: 1, right: 1, bottom: 0, height: 30,
-                  background: `linear-gradient(to top, ${T.bg2}, ${T.bg2}00)`,
+                  background: `linear-gradient(to top, ${T.bg2}, ${T.bg2}00)`, /* estilo-ok: desvanecido al pie de la lista que se desplaza */
                   pointerEvents: 'none',
                 }}
               />

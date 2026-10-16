@@ -48,8 +48,8 @@ function Burbuja({ m, mio, ultimoMio, elegido, url, tecnica, alElegir, alElimina
         aria-label={mio && !borrado ? 'Tu mensaje: toca para ver opciones' : undefined}
         style={{
           display: 'block', textAlign: 'left', fontFamily: FONT, fontSize: 15.5, lineHeight: 1.4, padding: esTecnica ? 0 : (archivo ? '4px 4px 6px' : '9px 13px 7px'), cursor: mio && !borrado ? 'pointer' : 'default', touchAction: 'manipulation',
-          border: borrado ? `1px solid ${T.border}` : 'none', borderRadius: 18, borderBottomRightRadius: mio ? 6 : 18, borderBottomLeftRadius: mio ? 18 : 6,
-          background: borrado ? 'transparent' : (mio && !esTecnica ? T.accent : KP.surface), color: borrado ? T.text3 : (esTecnica ? T.text : color),
+          border: 'none', borderRadius: 18, borderBottomRightRadius: mio ? 6 : 18, borderBottomLeftRadius: mio ? 18 : 6,
+          background: borrado ? UI.relleno : (mio && !esTecnica ? T.accent : KP.surface), color: borrado ? T.text3 : (esTecnica ? T.text : color),
           boxShadow: !borrado && (!mio || esTecnica) ? KP.shCard : 'none', maxWidth: '100%', width: esTecnica ? '100%' : undefined, boxSizing: 'border-box', outline: 'none',
         }}
       >
@@ -94,7 +94,7 @@ function Burbuja({ m, mio, ultimoMio, elegido, url, tecnica, alElegir, alElimina
       {elegido && (
         <button
           type="button" onClick={() => alEliminar(m)} className="kp-press"
-          style={{ marginTop: 6, minHeight: 36, padding: '0 14px', borderRadius: 12, border: `1.5px solid ${KP.danger}`, background: KP.surface, color: KP.danger, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, touchAction: 'manipulation' }}
+          style={{ marginTop: 6, minHeight: 36, padding: '0 14px', borderRadius: 12, border: 'none', background: KP.dangerSoft, color: KP.danger, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, touchAction: 'manipulation' }}
         >
           Eliminar
         </button>

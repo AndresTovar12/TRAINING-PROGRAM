@@ -17,12 +17,12 @@ import { Camera, Images, Link as LinkIcon, Video, ChevronDown, Check } from 'luc
 import MediaUpload from '@/features/admin/MediaUpload';
 import IconoExplicacion from '@/components/IconoExplicacion';
 import { EJEMPLO, EXPLICACION, nombreDeProposito } from '@/lib/proposito';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, UI, KP } from '@/lib/theme';
 
 const chico = {
   flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center',
   justifyContent: 'center', gap: 6, minHeight: 66, padding: '0 6px', borderRadius: 15,
-  border: `1px solid ${T.border}`, background: T.bg2, cursor: 'pointer', fontFamily: FONT,
+  border: 'none', background: UI.relleno, cursor: 'pointer', fontFamily: FONT,
 };
 const textoChico = { fontSize: 12, fontWeight: 700, color: T.text, whiteSpace: 'nowrap' };
 
@@ -58,7 +58,7 @@ export function DosBotonesDeGrabar({ onAjustes, compacto = false }) {
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: compacto ? 6 : 9,
             minHeight: compacto ? 84 : 122, padding: compacto ? '10px 6px' : '14px 8px', border: 'none', borderRadius: compacto ? 16 : 20,
             cursor: busy ? 'default' : 'pointer', fontFamily: FONT, opacity: busy ? 0.75 : 1, textAlign: 'center',
-            background: `linear-gradient(150deg, ${T.accent}, ${T.accentDk})`, color: '#fff',
+            background: T.accent, color: '#fff',
             boxShadow: arrastrando === proposito ? '0 0 0 4px rgba(30,64,224,0.35), 0 10px 22px rgba(30,64,224,0.26)' : '0 10px 22px rgba(30,64,224,0.26)',
             transform: arrastrando === proposito ? 'scale(1.02)' : 'none', transition: 'box-shadow .15s, transform .15s',
             touchAction: 'manipulation',
@@ -127,7 +127,7 @@ export function FilaDeTres({ onAjustes, onLiga }) {
 export function PanelDeLiga({ onGuarda, onCancela, error }) {
   const [texto, setTexto] = useState('');
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 9, background: T.bg2, border: `1.5px solid ${T.accent}`, borderRadius: 16, padding: 12 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 9, background: KP.blueSoft, border: 'none', borderRadius: 16, padding: 12 }}>
       <input
         autoFocus
         value={texto}
@@ -136,7 +136,7 @@ export function PanelDeLiga({ onGuarda, onCancela, error }) {
         aria-label="Liga del video"
         // 16 px: por debajo, el iPhone acerca la pantalla al escribir.
         style={{
-          minHeight: 44, boxSizing: 'border-box', padding: '0 13px', borderRadius: 12, border: `1.5px solid ${T.border}`,
+          minHeight: 44, boxSizing: 'border-box', padding: '0 13px', borderRadius: 12, border: 'none',
           background: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 600, color: T.text, outline: 'none',
         }}
       />
@@ -166,7 +166,7 @@ export function SelectorDeProposito({ valor, onCambia }) {
             style={{
               minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, cursor: 'pointer',
               fontFamily: FONT, fontSize: 14, fontWeight: 800, touchAction: 'manipulation',
-              border: `1.5px solid ${puesto ? T.accent : T.border}`, background: puesto ? T.accentBg : T.bg2, color: puesto ? T.accent : T.text,
+              border: 'none', background: puesto ? T.accentBg : UI.relleno, color: puesto ? T.accent : T.text,
             }}
           >
             {puesto ? <Check size={16} strokeWidth={3} /> : <Icono size={17} />} {nombreDeProposito(id)}
@@ -187,7 +187,7 @@ export function PastillaDeProposito({ valor, abierta, onToggle }) {
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 26, padding: '0 9px 0 10px', borderRadius: 999, cursor: 'pointer',
         fontFamily: FONT, fontSize: 11.5, fontWeight: 700,
-        border: `1px solid ${explicacion ? T.accent : T.borderHi}`, background: explicacion ? T.accentBg : T.bg2,
+        border: 'none', background: explicacion ? T.accentBg : UI.relleno,
         color: explicacion ? T.accent : T.text2,
       }}
     >

@@ -18,12 +18,11 @@ export const botonPrincipal = (deshabilitado) => ({
   fontFamily: FONT, fontSize: 14.5, fontWeight: 700, boxShadow: deshabilitado ? 'none' : '0 6px 16px rgba(30,64,224,0.22)', opacity: deshabilitado ? 0.5 : 1, flexShrink: 0,
 });
 
-// Blanco con un hilo fino: lo secundario; en azul lo de «agregar».
+// Lo secundario: gris claro lleno (como `Boton tipo="secundario"`); en azul suave lo de «agregar». Sin contorno (16 oct 2026).
 export const botonBlanco = (azul = false, deshabilitado = false) => ({
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 44, padding: '0 16px',
-  borderRadius: UI.rCampo, border: `1px solid ${azul ? 'rgba(30,64,224,0.35)' : '#E3E6EC'}`, background: '#fff', cursor: deshabilitado ? 'default' : 'pointer',
+  borderRadius: UI.rCampo, border: 'none', background: azul ? KP.blueSoft : UI.relleno, cursor: deshabilitado ? 'default' : 'pointer',
   fontFamily: FONT, fontSize: 14, fontWeight: 700, color: azul ? KP.blue : KP.ink, opacity: deshabilitado ? 0.5 : 1, flexShrink: 0,
-  boxShadow: UI.sombraGrupo,
 });
 
 export const etiquetaChica = {

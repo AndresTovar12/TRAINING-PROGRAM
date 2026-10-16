@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Check, ChevronLeft, Timer, Minus, Plus } from 'lucide-react';
-import { LT, FONT, NUM_STYLE } from '@/lib/theme';
+import { LT, FONT, NUM_STYLE, UI } from '@/lib/theme';
 import { videosParaAtleta, portadaParaAtleta } from '@/lib/videos';
 import TarjetaDeVideo from '@/features/training/TarjetaDeVideo';
 import { aKilos, desdeKilos, pesoTexto, etiquetaUnidad } from '@/lib/unidades';
@@ -164,8 +164,8 @@ export default function FichaEjercicio({
   const circulo = (relleno) => ({
     width: 46, height: 46, borderRadius: '50%', flexShrink: 0, cursor: 'pointer',
     display: 'grid', placeItems: 'center', fontFamily: FONT,
-    border: relleno ? 'none' : `1.5px solid ${LT.borderHi}`,
-    background: relleno ? LT.blue : 'transparent',
+    border: 'none',
+    background: relleno ? LT.blue : LT.surface2,
     color: relleno ? '#fff' : LT.text2,
   });
 
@@ -190,8 +190,8 @@ export default function FichaEjercicio({
             <button
               type="button" onClick={onCerrar} aria-label="Volver"
               style={{
-                width: 38, height: 38, borderRadius: '50%', border: `1px solid ${LT.border}`, cursor: 'pointer',
-                background: LT.surface, color: LT.text, display: 'grid', placeItems: 'center',
+                width: 38, height: 38, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                background: UI.relleno, color: LT.text, display: 'grid', placeItems: 'center',
               }}
             >
               <ChevronLeft size={22} />
@@ -293,8 +293,8 @@ export default function FichaEjercicio({
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 38, padding: '0 14px', borderRadius: 999,
                     cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 800, touchAction: 'manipulation', ...NUM_STYLE,
-                    border: `1.5px solid ${elegida ? LT.blue : LT.borderHi}`,
-                    background: elegida ? LT.blue : LT.surface, color: elegida ? '#fff' : LT.text2,
+                    border: 'none',
+                    background: elegida ? LT.blue : UI.relleno, color: elegida ? '#fff' : LT.text2,
                   }}
                 >
                   Vuelta {j + 1}{hecha && <Check size={14} strokeWidth={3} />}
@@ -306,7 +306,7 @@ export default function FichaEjercicio({
 
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-          border: `1.5px solid ${LT.border}`, borderRadius: 18, padding: '16px 16px',
+          border: 'none', borderRadius: 18, padding: '16px 16px',
           background: LT.surface, marginBottom: conPeso ? 10 : 0,
         }}>
           <div style={{ minWidth: 0 }}>
@@ -357,7 +357,7 @@ export default function FichaEjercicio({
           <>
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-              border: `1.5px solid ${LT.border}`, borderRadius: 18, padding: '16px 16px',
+              border: 'none', borderRadius: 18, padding: '16px 16px',
               background: LT.surface,
             }}>
               <div style={{ minWidth: 0 }}>
@@ -412,7 +412,7 @@ export default function FichaEjercicio({
             onClick={quedanVueltas ? () => setVuelta(iv + 1) : esUltimo ? onCerrar : onSiguiente}
             style={{
               width: '100%', minHeight: 58, borderRadius: 18, border: 'none', cursor: 'pointer', color: '#fff', fontFamily: FONT, fontSize: 17, fontWeight: 800,
-              background: `linear-gradient(140deg, ${LT.blue}, ${LT.blueDk})`, boxShadow: '0 8px 22px rgba(30,64,224,0.24)', touchAction: 'manipulation',
+              background: LT.blue, boxShadow: '0 8px 22px rgba(30,64,224,0.24)', touchAction: 'manipulation',
             }}
           >
             {quedanVueltas ? 'Siguiente vuelta' : 'Seguir'}
@@ -435,7 +435,7 @@ function PedirUnRM({ carga, unidad, onGuardar }) {
   const n = parseFloat(valor.replace(',', '.'));
   const valido = Number.isFinite(n) && n > 0;
   return (
-    <div style={{ marginTop: 11, border: `1.5px solid ${LT.border}`, borderRadius: 16, background: LT.surface, padding: '12px 14px' }}>
+    <div style={{ marginTop: 11, border: 'none', borderRadius: 16, background: LT.surface, padding: '12px 14px' }}>
       <div style={{ fontSize: 14, fontWeight: 700, color: LT.text, lineHeight: 1.4 }}>
         Pide {textoDePorcentaje(carga.porcentaje)} de tu 1RM de {carga.lift.nombre}. Anótalo una vez y aquí verás cuántos {unidad === 'lb' ? 'libras' : 'kilos'} son.
       </div>
@@ -444,7 +444,7 @@ function PedirUnRM({ carga, unidad, onGuardar }) {
           value={valor} inputMode="decimal" placeholder={`Tu 1RM (${etiquetaUnidad(unidad)})`} aria-label={`Tu 1RM de ${carga.lift.nombre}`}
           onChange={(e) => setValor(e.target.value)}
           style={{
-            flex: 1, minWidth: 0, border: `1.5px solid ${LT.border}`, borderRadius: 12, padding: '10px 12px', fontFamily: FONT,
+            flex: 1, minWidth: 0, border: 'none', borderRadius: 12, padding: '10px 12px', fontFamily: FONT,
             fontSize: 16, fontWeight: 700, color: LT.text, outline: 'none', background: LT.bg, ...NUM_STYLE,
           }}
         />

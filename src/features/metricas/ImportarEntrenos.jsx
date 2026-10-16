@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { CircleAlert, CircleCheck, ChevronDown, FileUp, Loader2, Watch, X } from 'lucide-react';
-import { LT, KP, FONT, NUM_STYLE, eyebrow } from '@/lib/theme';
+import { LT, KP, FONT, NUM_STYLE, eyebrow, UI } from '@/lib/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { guardaImportacion } from '@/lib/metricasApi';
 import { separaRepetidos } from '@/lib/metricas/construye';
@@ -47,7 +47,7 @@ function Barra({ avance, texto }) {
   return (
     <div>
       <div role="progressbar" aria-valuenow={Math.round(avance * 100)} aria-valuemin={0} aria-valuemax={100} aria-label={texto} style={{ height: 10, borderRadius: 5, background: LT.surface2, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${Math.max(2, Math.round(avance * 100))}%`, borderRadius: 5, background: `linear-gradient(90deg, ${KP.blue}, ${KP.blueDk})`, transition: 'width 0.2s' }} />
+        <div style={{ height: '100%', width: `${Math.max(2, Math.round(avance * 100))}%`, borderRadius: 5, background: KP.blue, transition: 'width 0.2s' }} />
       </div>
       <div style={{ marginTop: 8, fontSize: 13.5, fontWeight: 600, color: LT.text2, ...NUM_STYLE }}>{texto}</div>
     </div>
@@ -194,7 +194,7 @@ export default function ImportarEntrenos({ atletaId, actividades, esAtleta, alTe
         {nuevos.slice(0, 6).length > 0 && (
           <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
             {nuevos.slice(0, 6).map((e) => (
-              <div key={`${e.inicio}-${e.duracion_s}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 14, background: LT.surface, border: `1px solid ${KP.line}` }}>
+              <div key={`${e.inicio}-${e.duracion_s}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 14, background: LT.surface, border: 'none' }}>
                 <MosaicoDeDeporte deporte={e.deporte} size={34} />
                 <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 700, color: LT.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.titulo || nombreDelDeporte(e.deporte)}</span>
                 <span style={{ fontSize: 12.5, fontWeight: 600, color: LT.text2, ...NUM_STYLE }}>{fechaCorta(e.inicio, e.desfase_min ?? -new Date().getTimezoneOffset())} · {duracionTexto(e.duracion_s)}{e.distancia_m >= 100 ? ` · ${distanciaTexto(e.distancia_m)}` : ''}</span>
@@ -228,7 +228,7 @@ export default function ImportarEntrenos({ atletaId, actividades, esAtleta, alTe
       <div
         onDragOver={(e) => { e.preventDefault(); setArrastrando(true); }} onDragLeave={() => setArrastrando(false)}
         onDrop={(e) => { e.preventDefault(); setArrastrando(false); agrega(e.dataTransfer.files); }}
-        style={{ marginTop: 6, padding: '26px 18px', borderRadius: 20, textAlign: 'center', border: `2px dashed ${arrastrando ? LT.blue : LT.borderHi}`, background: arrastrando ? KP.blueSoft : LT.surface }}
+        style={{ marginTop: 6, padding: '26px 18px', borderRadius: 20, textAlign: 'center', /* estilo-ok: la caja donde se sueltan los archivos */ border: `2px dashed ${arrastrando ? LT.blue : LT.borderHi}`, background: arrastrando ? KP.blueSoft : LT.surface }}
       >
         <span style={{ width: 52, height: 52, borderRadius: 17, display: 'inline-grid', placeItems: 'center', background: KP.blueSoft, color: LT.blue, marginBottom: 12 }}><Watch size={26} /></span>
         <div style={{ fontSize: 17, fontWeight: 800, color: LT.text, marginBottom: 6 }}>{esAtleta ? 'Trae tus entrenos del reloj' : 'Trae los entrenos de su reloj'}</div>
@@ -243,7 +243,7 @@ export default function ImportarEntrenos({ atletaId, actividades, esAtleta, alTe
         <div style={{ marginTop: 14 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {archivos.map((f) => (
-              <div key={`${f.name}:${f.size}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 14, background: LT.surface, border: `1px solid ${KP.line}` }}>
+              <div key={`${f.name}:${f.size}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 14, background: UI.relleno, border: 'none' }}>
                 <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 700, color: LT.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
                 <span style={{ fontSize: 12.5, fontWeight: 600, color: LT.text3, ...NUM_STYLE }}>{pesoTexto(f.size)}</span>
                 <button type="button" aria-label={`Quitar ${f.name}`} onClick={() => setArchivos((a) => a.filter((x) => x !== f))} style={{ width: 28, height: 28, borderRadius: 14, border: 'none', background: LT.surface2, color: LT.text2, cursor: 'pointer', display: 'grid', placeItems: 'center' }}><X size={14} /></button>
@@ -257,7 +257,7 @@ export default function ImportarEntrenos({ atletaId, actividades, esAtleta, alTe
                 {ALCANCES.map((a) => (
                   <button
                     key={a.id} type="button" aria-pressed={alcance === a.id} onClick={() => setAlcance(a.id)}
-                    style={{ minHeight: 38, padding: '0 14px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, touchAction: 'manipulation', border: `1.5px solid ${alcance === a.id ? LT.blue : LT.borderHi}`, background: alcance === a.id ? LT.blue : LT.surface, color: alcance === a.id ? '#fff' : LT.text }}
+                    style={{ minHeight: 38, padding: '0 14px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, touchAction: 'manipulation', border: 'none', background: alcance === a.id ? LT.blue : UI.relleno, color: alcance === a.id ? '#fff' : LT.text }}
                   >
                     {a.titulo}
                   </button>

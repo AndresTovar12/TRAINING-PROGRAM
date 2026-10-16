@@ -200,7 +200,7 @@ export function Puntos({ videos, activo, onIr, abajo = 12, arriba = null, claro 
               /* La EXPLICACIÓN es un anillo azul (relleno cuando es la que se ve): se distingue de los ejemplos sin leer nada. */
               <span style={{
                 width: i === activo ? 18 : 9, height: 9, borderRadius: 999, boxSizing: 'border-box',
-                border: `2px solid ${claro ? LT.blue : '#fff'}`,
+                border: `2px solid ${claro ? LT.blue : '#fff'}`, // estilo-ok: el anillo ES la señal de «explicación»
                 background: i === activo ? (claro ? LT.blue : '#fff') : 'transparent',
                 transition: 'width .2s, background .2s',
               }} />

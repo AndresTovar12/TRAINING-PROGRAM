@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { FolderOpen, Folder, FolderPlus, Search } from 'lucide-react';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, UI } from '@/lib/theme';
 import {
   arbolDeCarpetas, cabeCarpetaEn, coincide, puedenMoverseCarpetas, textoDeRuta,
 } from '@/lib/misPlanesDatos';
@@ -44,7 +44,7 @@ export default function DestinoDeMover({ titulo, cosas, carpetas, alElegir, crea
           title={noCabe && !aqui ? 'Ahí no cabe: quedaría dentro de sí misma o pasaría del límite de niveles.' : undefined}
           style={{
             flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 11, textAlign: 'left', padding: '10px 12px',
-            cursor: apagada ? 'default' : 'pointer', background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 12,
+            cursor: apagada ? 'default' : 'pointer', background: UI.relleno, border: 'none', borderRadius: 12,
             fontFamily: FONT, opacity: noCabe && !aqui ? 0.45 : 1,
           }}
         >

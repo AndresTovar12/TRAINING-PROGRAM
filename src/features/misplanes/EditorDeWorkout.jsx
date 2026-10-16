@@ -18,7 +18,7 @@ import { sesionesDeWorkout, workoutDeSesiones } from '@/lib/misPlanesDatos';
 import { esClase as traeClase, sesionDeClase } from '@/lib/clases';
 import DialogoGuardar from '@/features/misplanes/DialogoGuardar';
 import { campo, etiquetaChica } from '@/features/misplanes/estilos';
-import { T, FONT, KP } from '@/lib/theme';
+import { T, FONT, KP, UI } from '@/lib/theme';
 
 const clone = (o) => structuredClone(o);
 const sesionNueva = () => ({ day: 'Lun', name: 'Sesión', cat: 'gym', exercises: [] });
@@ -184,7 +184,7 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
       >
         <button
           type="button" onClick={cerrar} aria-label="Volver"
-          style={{ width: 36, height: 36, borderRadius: 11, border: `1px solid ${T.border}`, cursor: 'pointer', background: T.bg2, color: T.text, display: 'grid', placeItems: 'center', flexShrink: 0 }}
+          style={{ width: 36, height: 36, borderRadius: 11, border: 'none', cursor: 'pointer', background: UI.relleno, color: T.text, display: 'grid', placeItems: 'center', flexShrink: 0 }}
         >
           <ArrowLeft size={17} />
         </button>
@@ -206,7 +206,7 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 8, padding: esAncha ? '11px 18px' : '11px 13px', borderRadius: 12, border: 'none',
             cursor: guardando || (!dirty && fila) ? 'default' : 'pointer',
-            background: dirty || !fila ? `linear-gradient(135deg, ${T.accent}, ${T.accentDk})` : T.bg3,
+            background: dirty || !fila ? T.accent : T.bg3,
             color: dirty || !fila ? '#fff' : (haGuardado ? KP.mint : T.text3), fontFamily: FONT, fontSize: 14, fontWeight: 800,
             boxShadow: dirty || !fila ? KP.shBtn : 'none', opacity: guardando ? 0.75 : 1, flexShrink: 0,
           }}
@@ -216,7 +216,7 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
         </button>
         <button
           type="button" onClick={cerrar} aria-label="Cerrar"
-          style={{ width: 36, height: 36, borderRadius: 11, border: `1px solid ${T.border}`, cursor: 'pointer', background: T.bg2, color: T.text2, display: 'grid', placeItems: 'center', flexShrink: 0 }}
+          style={{ width: 36, height: 36, borderRadius: 11, border: 'none', cursor: 'pointer', background: UI.relleno, color: T.text2, display: 'grid', placeItems: 'center', flexShrink: 0 }}
         >
           <X size={17} />
         </button>
@@ -261,7 +261,7 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
             type="button" onClick={() => cambia((prev) => [...prev, sesionNueva()])} className="kp-press"
             style={{
               minHeight: 46, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14,
-              border: `1.5px solid ${T.border}`, background: T.bg2, cursor: 'pointer', boxShadow: KP.shCard,
+              border: 'none', background: T.bg2, cursor: 'pointer', boxShadow: KP.shCard,
               fontFamily: FONT, fontSize: 14, fontWeight: 800, color: T.accent,
             }}
           >

@@ -343,7 +343,7 @@ export default function ListaDesplegable({
           {conCasilla && (
             <span aria-hidden="true" style={{
               width: 18, height: 18, borderRadius: 5, flexShrink: 0, display: 'grid', placeItems: 'center',
-              border: `1.5px solid ${puesta ? T.accent : T.borderHi}`, background: puesta ? T.accent : T.bg2,
+              border: `1.5px solid ${puesta ? T.accent : T.borderHi}`, /* estilo-ok: casilla de marcar */ background: puesta ? T.accent : T.bg2,
             }}>
               {puesta && <Check size={12} strokeWidth={3.2} color="#fff" />}
             </span>
@@ -434,7 +434,7 @@ export default function ListaDesplegable({
         style={{
           width: '100%', display: 'flex', alignItems: 'center', gap: 9,
           // Reestructura visual (15 oct 2026): blanca sin contorno (una sombra suave); el contorno azul solo mientras está abierta.
-          border: `1.5px solid ${abierto ? T.accent : 'transparent'}`, borderRadius: 14, boxShadow: '0 1px 2px rgba(17,19,24,0.05)',
+          border: 'none', borderRadius: 14, boxShadow: '0 1px 2px rgba(17,19,24,0.05)',
           padding: '12px 14px', background: T.bg2, boxSizing: 'border-box',
           cursor: deshabilitado ? 'default' : 'pointer', opacity: deshabilitado ? 0.6 : 1,
           touchAction: 'manipulation',
@@ -481,7 +481,7 @@ export default function ListaDesplegable({
             position: 'fixed', zIndex: 3000,
             left: sitio.left, width: Math.max(sitio.ancho, anchoMinimo),
             top: sitio.top, bottom: sitio.bottom,
-            background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 14,
+            background: T.bg2, border: 'none', borderRadius: 14,
             boxShadow: '0 16px 44px rgba(17,19,24,0.16)',
             /* El scroll lo hace la lista, no esta caja: así el pie —"crear
                uno nuevo"— se queda pegado abajo y no al final del scroll,
@@ -516,7 +516,7 @@ export default function ListaDesplegable({
                 aria-hidden="true"
                 style={{
                   position: 'absolute', left: 1, right: 1, bottom: 0, height: 30,
-                  background: `linear-gradient(to top, ${T.bg2}, ${T.bg2}00)`,
+                  background: `linear-gradient(to top, ${T.bg2}, ${T.bg2}00)`, /* estilo-ok: desvanecido al pie de la lista que se desplaza */
                   pointerEvents: 'none',
                 }}
               />

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Check, Loader2, Store } from 'lucide-react';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, UI } from '@/lib/theme';
 import { botonPrincipal, campo, etiquetaChica } from '@/features/misplanes/estilos';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { guardaPoderes, lugaresDe } from '@/lib/lugaresApi';
@@ -14,7 +14,7 @@ import { COMISION_BASE_PORCIENTO, comisionATexto, comisionParaGuardar, etiquetaD
 
 const chip = (activo) => ({
   minHeight: 40, padding: '0 14px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800,
-  border: `1.5px solid ${activo ? T.accent : T.border}`, background: activo ? T.accentBg : T.bg2, color: activo ? T.accent : T.text2,
+  border: 'none', background: activo ? T.accentBg : UI.relleno, color: activo ? T.accent : T.text2,
 });
 
 const fila = { display: 'flex', flexDirection: 'column', gap: 8 };
@@ -124,7 +124,7 @@ export default function PoderesDelProfesional({ coach, onCambiado }) {
           type="button" onClick={cambiaVitrina} disabled={suspendiendo}
           style={{
             display: 'flex', alignItems: 'center', gap: 10, minHeight: 48, padding: '0 14px', borderRadius: 13, textAlign: 'left',
-            border: `1.5px solid ${suspendida ? T.warning : T.border}`, background: suspendida ? 'rgba(245,158,11,0.10)' : T.bg2,
+            border: 'none', background: suspendida ? 'rgba(245,158,11,0.10)' : UI.relleno,
             cursor: suspendiendo ? 'default' : 'pointer', opacity: suspendiendo ? 0.6 : 1,
             fontFamily: FONT, fontSize: 14, fontWeight: 700, color: suspendida ? T.warning : T.text2,
           }}

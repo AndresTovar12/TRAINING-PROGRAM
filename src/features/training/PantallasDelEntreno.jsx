@@ -101,7 +101,7 @@ function BotonDeTecnica({ activa, etiqueta, onClick, enviada = false }) {
       <button
         type="button" onClick={onClick} aria-label={enviada ? `${etiqueta} (ya mandaste una)` : etiqueta} className="kp-press"
         style={{
-          width: 50, minHeight: 50, flexShrink: 0, borderRadius: 16, border: enviada ? `1.5px solid ${LT.mint}` : 'none', boxShadow: '0 2px 10px rgba(17,19,24,0.07)', background: LT.surface, color: enviada ? LT.mint : LT.text,
+          width: 50, minHeight: 50, flexShrink: 0, borderRadius: 16, border: 'none', boxShadow: '0 2px 10px rgba(17,19,24,0.07)', background: LT.surface, color: enviada ? LT.mint : LT.text,
           cursor: 'pointer', display: 'grid', placeItems: 'center', touchAction: 'manipulation', position: 'relative',
         }}
       >
@@ -146,8 +146,8 @@ function Pastilla({ children, fuerte = false }) {
 function Etiqueta({ children, suave = false, chica = false }) {
   return (
     <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 6, padding: chica ? '3px 7px' : '4px 9px', borderRadius: 7, fontSize: chica ? 10.5 : 11.5, fontWeight: 800,
-      letterSpacing: chica ? 0.4 : 0.5, textTransform: 'uppercase', whiteSpace: 'nowrap', background: suave ? LT.surface2 : LT.blueSoft, color: suave ? LT.text2 : LT.blue,
+      display: 'inline-flex', alignItems: 'center', gap: 6, padding: chica ? '3px 7px' : '4px 9px', borderRadius: 7, fontSize: chica ? 11.5 : 12.5, fontWeight: 700,
+      whiteSpace: 'nowrap', background: suave ? LT.surface2 : LT.blueSoft, color: suave ? LT.text2 : LT.blue,
     }}>
       {children}
     </span>
@@ -283,7 +283,7 @@ function TarjetaDeLaSerie({ resumen, color = null }) {
             </div>
           )}
           {etiqueta && (enColor
-            ? <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: '#fff', background: 'rgba(255,255,255,0.18)', padding: '4px 8px', borderRadius: 8 }}>{etiqueta}</span>
+            ? <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', background: 'rgba(255,255,255,0.18)', padding: '4px 8px', borderRadius: 8 }}>{etiqueta}</span>
             : <Etiqueta chica={cuenta}>{etiqueta}</Etiqueta>)}
         </div>
       )}
@@ -333,7 +333,7 @@ function FilaDelPar({ letra, nombre, estado, color = null }) {
     ? (toca ? { background: color, color: '#fff' } : hecho ? { background: 'rgba(255,255,255,0.9)', color } : { background: 'rgba(255,255,255,0.2)', color: '#fff' })
     : toca
       ? { background: LT.blue, color: '#fff' }
-      : (hecho ? { background: KP.mintSoft, color: LT.mint } : { background: LT.surface, border: `1.5px solid ${LT.borderHi}`, color: LT.text2 });
+      : (hecho ? { background: KP.mintSoft, color: LT.mint } : { background: LT.surface, border: 'none', color: LT.text2 });
   const fondoFila = color ? (toca ? '#fff' : 'rgba(255,255,255,0.12)') : (toca ? LT.blueSoft : 'transparent');
   const tinta = color ? (toca ? LT.text : '#fff') : (toca ? LT.text : LT.text2);
   return (
@@ -372,7 +372,7 @@ function CronometroDelPaso({ segundos, cuenta, onEmpezar, onQuitar }) {
     );
   }
   return (
-    <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 18, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div style={{ background: LT.surface, border: 'none', borderRadius: 18, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12.5, fontWeight: 700, color: cuenta.vencido ? LT.mint : LT.text2 }}>{cuenta.vencido ? 'Tiempo cumplido' : 'Cronómetro'}</div>
         <div role="timer" style={{ fontSize: 46, fontWeight: 800, lineHeight: 1.05, letterSpacing: -1, color: cuenta.vencido ? LT.mint : LT.text, ...NUM_STYLE }}>
@@ -401,7 +401,7 @@ export function PantallaDePaso({
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
         <div style={{ ...COLUMNA, padding: '0 18px 18px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: solo ? 'center' : 'flex-start' }}>
           {paso.encabezado && (
-            <div style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', color: LT.text3, marginTop: 14, textAlign: solo ? 'center' : 'left' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: LT.text2, marginTop: 14, textAlign: solo ? 'center' : 'left' }}>
               {paso.encabezado}
             </div>
           )}
@@ -476,12 +476,12 @@ export function PantallaDeReloj({ paso, detalle, resultado, puedeAnterior, tecni
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <div style={{ ...COLUMNA, padding: '0 18px 18px' }}>
           {paso.encabezado && (
-            <div style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', color: LT.text3, marginTop: 14 }}>{paso.encabezado}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: LT.text2, marginTop: 14 }}>{paso.encabezado}</div>
           )}
           <div style={{ marginTop: 12 }}><Etiqueta>Con reloj</Etiqueta></div>
           <h1 style={{ margin: '12px 0 8px', fontSize: 30, fontWeight: 800, letterSpacing: -0.7, lineHeight: 1.1, color: LT.text, overflowWrap: 'anywhere' }}>{paso.resumen}</h1>
           {detalle && <p style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 500, color: LT.text2, lineHeight: 1.45 }}>{detalle}</p>}
-          <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 18, padding: '4px 16px', marginTop: detalle ? 0 : 12 }}>
+          <div style={{ background: LT.surface, border: 'none', borderRadius: 18, padding: '4px 16px', marginTop: detalle ? 0 : 12 }}>
             {paso.miembros.map((m, i) => (
               <div key={m.idx} style={{ padding: '13px 0', borderTop: i > 0 ? `1px solid ${LT.border}` : 'none' }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
@@ -565,7 +565,7 @@ export function PantallaDeDescanso({ descanso, siguiente, video, sonido, puedeAn
   const datosDelSiguiente = siguiente && (
     <>
       <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color: LT.text3 }}>Sigue</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: LT.text2 }}>Sigue</div>
         <div style={{ fontSize: 17, fontWeight: 800, color: LT.text, overflowWrap: 'anywhere', lineHeight: 1.2, marginTop: 2 }}>{siguiente.nombre}</div>
         {siguiente.detalle && <div style={{ fontSize: 13, fontWeight: 600, color: LT.text2, marginTop: 3, ...NUM_STYLE }}>{siguiente.detalle}</div>}
       </div>
@@ -712,7 +712,7 @@ function Hoja({ etiqueta, titulo, subtitulo, icono, conCierre = false, onCerrar,
 
 const circulo = (relleno) => ({
   width: 46, height: 46, borderRadius: '50%', flexShrink: 0, cursor: 'pointer', display: 'grid', placeItems: 'center', fontFamily: FONT,
-  touchAction: 'manipulation', border: relleno ? 'none' : `1.5px solid ${LT.borderHi}`, background: relleno ? LT.blue : 'transparent',
+  touchAction: 'manipulation', border: 'none', background: relleno ? LT.blue : LT.surface2,
   color: relleno ? '#fff' : LT.text2,
 });
 
@@ -748,7 +748,7 @@ function FilaDeLaLista({ fila, n, miniatura, conLinea, onElegir }) {
         }}
       >
         {/* Reestructura visual (16 oct 2026), como «Tu entreno» de las capturas: lo hecho conserva su miniatura, apagada, con la palomita verde encima. */}
-        {hecho && <span style={{ position: 'absolute', right: -5, bottom: -5, width: 22, height: 22, borderRadius: 11, background: LT.mint, color: '#fff', display: 'grid', placeItems: 'center', border: '2px solid #fff', zIndex: 1 }}><Check size={12} strokeWidth={3.5} /></span>}
+        {hecho && <span style={{ /* estilo-ok: aro del palomeo */ position: 'absolute', right: -5, bottom: -5, width: 22, height: 22, borderRadius: 11, background: LT.mint, color: '#fff', display: 'grid', placeItems: 'center', border: '2px solid #fff', zIndex: 1 }}><Check size={12} strokeWidth={3.5} /></span>}
         {miniatura && (
           <>
             {miniatura.nodo}
@@ -771,7 +771,7 @@ function FilaDeLaLista({ fila, n, miniatura, conLinea, onElegir }) {
         )}
       </span>
       {toca
-        ? <span style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 800, letterSpacing: 0.6, color: '#fff', background: LT.blue, padding: '4px 8px', borderRadius: 7 }}>AHORA</span>
+        ? <span style={{ flexShrink: 0, fontSize: 12, fontWeight: 700, color: '#fff', background: LT.blue, padding: '4px 8px', borderRadius: 8 }}>Ahora</span>
         : !hecho && <ChevronRight size={18} color={LT.text3} style={{ flexShrink: 0 }} />}
     </button>
   );

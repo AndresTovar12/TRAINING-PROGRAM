@@ -146,7 +146,7 @@ function TarjetaProgreso({ nombre, historial, unidad, onCerrar }) {
       >
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 0.7, textTransform: 'uppercase', color: LT.text3 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: LT.text2 }}>
               Tu progreso
             </div>
             <div style={{ fontSize: 17, fontWeight: 800, color: LT.text, lineHeight: 1.25, marginTop: 3, overflowWrap: 'anywhere' }}>
@@ -173,11 +173,11 @@ function TarjetaProgreso({ nombre, historial, unidad, onCerrar }) {
           <>
             <div style={{ display: 'flex', gap: 9, marginBottom: 15 }}>
               <div style={{ flex: 1, background: LT.bg, borderRadius: 13, padding: '11px 13px' }}>
-                <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color: LT.text3 }}>Último</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: LT.text2 }}>Último</div>
                 <div style={{ fontSize: 19, fontWeight: 800, color: LT.text, marginTop: 3, ...NUM_STYLE }}>{ultimo} <span style={{ fontSize: 12, color: LT.text3 }}>{u}</span></div>
               </div>
               <div style={{ flex: 1, background: LT.bg, borderRadius: 13, padding: '11px 13px' }}>
-                <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color: LT.text3 }}>Tu máximo</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: LT.text2 }}>Tu máximo</div>
                 <div style={{ fontSize: 19, fontWeight: 800, color: LT.text, marginTop: 3, ...NUM_STYLE }}>{max} <span style={{ fontSize: 12, color: LT.text3 }}>{u}</span></div>
               </div>
             </div>
@@ -206,7 +206,7 @@ function TarjetaProgreso({ nombre, historial, unidad, onCerrar }) {
                     <Tooltip
                       formatter={(v) => [`${v} ${u}`, 'Peso']}
                       labelFormatter={(i) => `Vez ${i}`}
-                      contentStyle={{ borderRadius: 10, border: `1px solid ${LT.border}`, fontSize: 12, fontFamily: FONT }}
+                      contentStyle={{ borderRadius: 10, border: 'none', fontSize: 12, fontFamily: FONT }}
                     />
                     <Line type="monotone" dataKey="peso" stroke={LT.blue} strokeWidth={2.5} dot={{ r: 3, fill: LT.blue }} />
                   </LineChart>
@@ -214,7 +214,7 @@ function TarjetaProgreso({ nombre, historial, unidad, onCerrar }) {
               </div>
             )}
 
-            <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: LT.text3, marginBottom: 7 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: LT.text2, marginBottom: 7 }}>
               Cada vez que lo hiciste
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -296,7 +296,7 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phas
       <div style={{
         margin: '8px 0', padding: '10px 14px',
         background: LT.blueSoft, borderRadius: 10,
-        fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase',
+        fontSize: 13, fontWeight: 700,
         color: LT.blue,
       }}>{ex.text}</div>
     );
@@ -505,7 +505,7 @@ const SetGroup = ({
     return (
       <div style={{
         margin: '4px 0 12px', padding: '10px 14px', background: LT.blueSoft, borderRadius: 10,
-        fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', color: LT.blue,
+        fontSize: 13, fontWeight: 700, color: LT.blue,
       }}>{group.ex.text}</div>
     );
   }
@@ -621,7 +621,7 @@ const SetGroup = ({
               type="button" onClick={() => setAnotando(true)}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 42, padding: '0 15px', borderRadius: 13,
-                cursor: 'pointer', background: '#fff', border: `1.5px solid ${LT.blue}`, color: LT.blue, fontFamily: FONT,
+                cursor: 'pointer', background: KP.blueSoft, border: 'none', color: LT.blue, fontFamily: FONT,
                 fontSize: 14.5, fontWeight: 800, touchAction: 'manipulation',
               }}
             >
@@ -633,7 +633,7 @@ const SetGroup = ({
       )}
 
       <div style={{
-        background: LT.surface, border: `1px solid ${LT.border}`,
+        background: LT.surface, border: 'none',
         borderRadius: 16, overflow: 'hidden',
       }}>
         {group.exercises.map(({ ex, idx }, i) => (
@@ -727,7 +727,7 @@ const LightScienceList = ({ sections }) => (
       <div key={s.key}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
           {s.icon && <s.icon size={13} style={{ color: s.color }} />}
-          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', color: s.color }}>{s.label}</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: s.color }}>{s.label}</span>
         </div>
         <ul style={{ margin: 0, paddingLeft: 0, listStyle: 'none' }}>
           {(Array.isArray(s.content) ? s.content : [s.content]).map((item, i) => {
@@ -846,7 +846,7 @@ const HojaDelPrograma = ({
                 style={{
                   display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', cursor: 'pointer',
                   fontFamily: FONT, background: LT.surface, borderRadius: 14, padding: '12px 14px',
-                  border: `1.5px solid ${(p.color ?? LT.blue)}44`,
+                  border: 'none', boxShadow: UI.sombraGrupo,
                 }}
               >
                 <span aria-hidden="true" style={{ width: 5, alignSelf: 'stretch', borderRadius: 5, background: p.color ?? LT.blue, flexShrink: 0 }} />
@@ -887,7 +887,7 @@ const BotonDelSello = ({ onSello, alto = 50 }) => (
     type="button" onClick={onSello} className="kp-press"
     style={{
       minHeight: alto, padding: '0 14px', borderRadius: 14, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-      border: `1.5px solid ${LT.blue}`, background: LT.surface, color: LT.blue, fontFamily: FONT, fontSize: 13.5, fontWeight: 800, touchAction: 'manipulation',
+      border: 'none', background: KP.blueSoft, color: LT.blue, fontFamily: FONT, fontSize: 13.5, fontWeight: 800, touchAction: 'manipulation',
     }}
   >
     <Share2 size={16} /> Activity card
@@ -909,7 +909,7 @@ const TerminarSesion = ({ hecha, onAlternar, onSello }) => (hecha ? (
       onClick={onAlternar}
       style={{
         minHeight: 50, padding: '0 14px', borderRadius: 14, cursor: 'pointer',
-        border: `1.5px solid ${LT.border}`, background: LT.surface, color: LT.text2,
+        border: 'none', background: UI.relleno, color: LT.text2,
         fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
       }}
     >
@@ -925,7 +925,7 @@ const TerminarSesion = ({ hecha, onAlternar, onSello }) => (hecha ? (
       width: '100%', minHeight: 50, marginTop: 14, borderRadius: 14, border: 'none',
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9,
       cursor: 'pointer', fontFamily: FONT, fontSize: 14.5, fontWeight: 800, color: '#fff',
-      background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, boxShadow: KP.shBtn,
+      background: KP.blue, boxShadow: KP.shBtn,
     }}
   >
     <Check size={18} strokeWidth={3} /> Marcar sesión como terminada
@@ -1093,7 +1093,7 @@ const CuerpoDelDia = ({
       {quiere('sesiones') && descansoPuro && (() => {
         const lineas = [...(selectedDay.notes || []), ...notasDelDia.map((n) => n.text)];
         return (
-          <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: 18, marginBottom: 14 }}>
+          <div style={{ background: LT.surface, border: 'none', borderRadius: 16, padding: 18, marginBottom: 14 }}>
             <div style={{ fontSize: 17, fontWeight: 800, color: LT.text }}>Día de descanso</div>
             {lineas.length > 0 ? (
               <ul style={{ listStyleType: 'disc', margin: '10px 0 0', paddingLeft: 18, color: LT.text, fontSize: 14, lineHeight: 1.65 }}>
@@ -1152,7 +1152,7 @@ const CuerpoDelDia = ({
           <>
             {tarjetaDeClase}
             {botonDelEntreno()}
-            <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: '14px 16px', marginBottom: 14 }}>
+            <div style={{ background: LT.surface, border: 'none', borderRadius: 16, padding: '14px 16px', marginBottom: 14 }}>
               {lista}
             </div>
           </>
@@ -1179,7 +1179,7 @@ const CuerpoDelDia = ({
       })()}
 
       {quiere('sesiones') && selectedDay.notes && !selectedDay.exercises && !descansoPuro && (
-        <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
+        <div style={{ background: LT.surface, border: 'none', borderRadius: 16, padding: 16, marginBottom: 14 }}>
           <ul style={{ listStyleType: 'disc', margin: 0, paddingLeft: 18, color: LT.text2, fontSize: 14, lineHeight: 1.7 }}>
             {selectedDay.notes.map((n, i) => <li key={i}>{n}</li>)}
           </ul>
@@ -1227,7 +1227,7 @@ const CuerpoDelDia = ({
               onClick={toggleComplete}
               style={{
                 minHeight: 52, padding: '0 14px', borderRadius: 14, cursor: 'pointer',
-                border: `1.5px solid ${LT.border}`, background: LT.surface, color: LT.text2,
+                border: 'none', background: UI.relleno, color: LT.text2,
                 fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
               }}
             >
@@ -1243,7 +1243,7 @@ const CuerpoDelDia = ({
               width: '100%', minHeight: 52, marginBottom: 14, borderRadius: 14, border: 'none',
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9,
               cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 800, color: '#fff',
-              background: `linear-gradient(140deg, ${KP.blue}, ${KP.blueDk})`, boxShadow: KP.shBtn,
+              background: KP.blue, boxShadow: KP.shBtn,
             }}
           >
             <Check size={18} strokeWidth={3} /> Marcar sesión como terminada
@@ -1277,12 +1277,12 @@ const CuerpoDelDia = ({
             placeholder="Cómo te sentiste, ajustes, observaciones..."
             rows={3}
             style={{
-              width: '100%', background: UI.relleno, border: '1.5px solid transparent',
+              width: '100%', background: UI.relleno, border: 'none',
               borderRadius: 14, padding: 12, color: LT.text, fontFamily: FONT, fontSize: 16,
               outline: 'none', resize: 'vertical', boxSizing: 'border-box',
             }}
-            onFocus={e => e.target.style.borderColor = LT.blue}
-            onBlur={e => e.target.style.borderColor = 'transparent'}
+            onFocus={e => { /* estilo-ok: aro de foco al escribir */ e.target.style.boxShadow = `inset 0 0 0 1.5px ${LT.blue}`; }}
+            onBlur={e => { e.target.style.boxShadow = 'none'; }}
           />
         </div>
       )}
@@ -1443,7 +1443,7 @@ const WeekDetail = ({
         && miDia.week.num === week.num && hermanas.some((h) => h.idx === miDia.dayIdx)) && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
-          background: LT.surface, border: `1.5px solid ${LT.borderHi}`, borderRadius: 14,
+          background: LT.surface, border: 'none', borderRadius: 14,
           padding: '11px 13px', marginBottom: 14,
         }}>
           <div style={{ flex: '1 1 180px', minWidth: 0 }}>
@@ -1474,7 +1474,7 @@ const WeekDetail = ({
                 onClick={onVolverAMiDia}
                 style={{
                   padding: '9px 13px', borderRadius: 11, cursor: 'pointer', touchAction: 'manipulation',
-                  border: `1.5px solid ${LT.border}`, background: LT.bg, color: LT.text,
+                  border: 'none', background: LT.bg, color: LT.text,
                   fontFamily: FONT, fontSize: 13, fontWeight: 800,
                 }}
               >
@@ -1679,7 +1679,7 @@ const PlanUnificado = ({
       </div>
 
       {fuentes.length === 0 ? (
-        <div style={{ background: LT.surface, border: `1px solid ${LT.border}`, borderRadius: 16, padding: 18, marginBottom: 14 }}>
+        <div style={{ background: LT.surface, border: 'none', borderRadius: 16, padding: 18, marginBottom: 14 }}>
           <div style={{ fontSize: 16, fontWeight: 800, color: LT.text }}>
             {filtro ? 'Ese día no hay nada de esta persona' : 'Sin sesión este día'}
           </div>
@@ -2294,7 +2294,7 @@ const BottomNav = ({ active, onChange, conMensajes = true, conExplorar = true })
       display: 'flex',
       ...(esCompu ? {
         bottom: 22, left: '50%', transform: 'translateX(-50%)',
-        border: `1px solid ${KP.line}`, borderRadius: 999,
+        border: 'none', borderRadius: 999,
         padding: '8px 10px', gap: 4, boxShadow: KP.shPop,
       } : {
         bottom: 0, left: 0, right: 0,
@@ -2316,7 +2316,7 @@ const BottomNav = ({ active, onChange, conMensajes = true, conExplorar = true })
           }}>
             <span style={{ position: 'relative', display: 'grid', placeItems: 'center', height: 28 }}>
               <Icon size={24} strokeWidth={isActive ? 2.3 : 1.8} />
-              {item.id === 'messages' && <NumeroRojo n={sinLeer} tam={17} style={{ position: 'absolute', top: -5, right: -11, border: '2px solid #fff', minWidth: 21, height: 21 }} />}
+              {item.id === 'messages' && <NumeroRojo n={sinLeer} tam={17} style={{ /* estilo-ok: aro blanco del globito de avisos */ position: 'absolute', top: -5, right: -11, border: '2px solid #fff', minWidth: 21, height: 21 }} />}
             </span>
             <span style={{ fontSize: 11.5, fontWeight: isActive ? 700 : 600 }}>{item.label}</span>
           </button>
@@ -2358,7 +2358,7 @@ const PlanLoadingState = () => (
   <div style={{ padding: '28px 20px 120px', maxWidth: 560, margin: '0 auto' }}>
     {[0, 1, 2].map((i) => (
       <div key={i} style={{
-        background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 18,
+        background: T.bg2, border: 'none', borderRadius: 18,
         padding: 18, marginBottom: 14,
       }}>
         <div className="kp-skeleton" style={{ width: '45%', height: 16, marginBottom: 12, borderRadius: 6 }} />
@@ -2407,8 +2407,8 @@ const NoPlanState = ({ onAbrirHoja, alIrAExplorar }) => {
       <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
         <button type="button" onClick={() => onAbrirHoja('wellness')} className="kp-press"
           style={{
-            padding: '12px 18px', borderRadius: 13, border: `1.5px solid ${T.border}`, cursor: 'pointer',
-            background: T.bg2, fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text,
+            padding: '12px 18px', borderRadius: 13, border: 'none', cursor: 'pointer',
+            background: UI.relleno, fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text,
             display: 'inline-flex', alignItems: 'center', gap: 8,
           }}>
           <Heart size={16} color={T.accent} /> Registrar salud
@@ -2416,8 +2416,8 @@ const NoPlanState = ({ onAbrirHoja, alIrAExplorar }) => {
         <Sin1RM>
           <button type="button" onClick={() => onAbrirHoja('oneRM')} className="kp-press"
             style={{
-              padding: '12px 18px', borderRadius: 13, border: `1.5px solid ${T.border}`, cursor: 'pointer',
-              background: T.bg2, fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text,
+              padding: '12px 18px', borderRadius: 13, border: 'none', cursor: 'pointer',
+              background: UI.relleno, fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text,
               display: 'inline-flex', alignItems: 'center', gap: 8,
             }}>
             <Calculator size={16} color={T.accent} /> Calcular 1RM
@@ -2782,7 +2782,7 @@ export default function TrainingApp() {
               onClick={() => cambiarPrograma(null)}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontFamily: FONT,
-                background: LT.surface, border: `1.5px solid ${LT.border}`, borderRadius: 999,
+                background: UI.relleno, border: 'none', borderRadius: 999,
                 padding: '8px 13px 8px 9px', fontSize: 13.5, fontWeight: 800, color: LT.blue, touchAction: 'manipulation',
               }}
             >

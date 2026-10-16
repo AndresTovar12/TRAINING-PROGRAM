@@ -23,7 +23,7 @@ export default function RecorridoOtraVez({ onCerrar }) {
         className="animate-fade-in"
         style={compu
           ? {
-            width: '100%', maxWidth: 560, background: KP.surface, borderRadius: 26, border: `1px solid ${KP.line}`,
+            width: '100%', maxWidth: 560, background: KP.surface, borderRadius: 26, border: 'none',
             boxShadow: '0 24px 60px rgba(17,19,24,0.10)', padding: '22px 30px 26px', display: 'flex', flexDirection: 'column',
             minHeight: 540, position: 'relative',
           }

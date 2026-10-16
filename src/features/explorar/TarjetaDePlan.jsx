@@ -19,7 +19,7 @@ export default function TarjetaDePlan({ p, href, onClick, conCoach = true }) {
         boxShadow: '0 2px 10px rgba(17,19,24,0.06)', fontFamily: FONT, minWidth: 0, border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', width: '100%',
       }}
     >
-      <div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', background: 'linear-gradient(135deg, #E8EEFF, #EFEBFF)' }}>
+      <div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', background: '#ECEFFC' }}>
         {p.foto && <img src={p.foto} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
         {insignia && <span style={{ position: 'absolute', top: 12, left: 12, padding: '4px 10px', borderRadius: 9, background: '#fff', fontSize: 13, fontWeight: 700, color: KP.ink }}>{insignia}</span>}
       </div>

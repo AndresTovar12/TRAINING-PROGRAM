@@ -105,7 +105,7 @@ function ExerciseCard({ ex, onClick, base, conVideoExtra }) {
               display: 'inline-flex', alignItems: 'center', gap: 4, backdropFilter: 'blur(4px)',
             }}
           >
-            {ex.esMiVersion ? <><Pencil size={10} /> MI VERSIÓN</> : 'BASE'}
+            {ex.esMiVersion ? <><Pencil size={10} /> Mi versión</> : 'Base'}
           </span>
         )}
         {hasVideo && (
@@ -151,12 +151,12 @@ function Input({ label, grande = false, ...props }) {
       <input
         {...props}
         style={{
-          border: `1.5px solid ${T.border}`, borderRadius: grande ? 12 : 11, padding: grande ? '12px 13px' : '11px 13px',
-          fontFamily: FONT, fontSize: grande ? 17 : 14, fontWeight: grande ? 700 : 500, color: T.text, outline: 'none', background: T.bg2,
+          border: 'none', borderRadius: grande ? 12 : 11, padding: grande ? '12px 13px' : '11px 13px',
+          fontFamily: FONT, fontSize: grande ? 17 : 14, fontWeight: grande ? 700 : 500, color: T.text, outline: 'none', background: UI.relleno,
           ...props.style,
         }}
-        onFocus={(e) => { e.target.style.borderColor = T.accent; }}
-        onBlur={(e) => { e.target.style.borderColor = T.border; }}
+        onFocus={(e) => { /* estilo-ok: aro de foco al escribir */ e.target.style.boxShadow = `inset 0 0 0 1.5px ${T.accent}`; }}
+        onBlur={(e) => { e.target.style.boxShadow = 'none'; }}
       />
     </label>
   );
@@ -201,12 +201,12 @@ function MuscleSelect({ value, onChange, options, grupos, onAgregarGrupo, alBorr
             ...(onAgregarGrupo ? [{ accion: onAgregarGrupo, etiqueta: 'Agregar grupo' }] : []),
           ] },
           // Los tuyos llevan bote de basura, como las categorías.
-          { titulo: 'GRUPOS', opciones: grupos.map((g) => ({
+          { titulo: 'Grupos', opciones: grupos.map((g) => ({
             valor: g.label,
             etiqueta: g.label,
             ...(g.mio && alBorrarGrupo ? { alBorrar: () => alBorrarGrupo(g) } : {}),
           })) },
-          { titulo: 'DETALLE', opciones: fineOpts.map((m) => ({ valor: m, etiqueta: m })) },
+          { titulo: 'Detalle', opciones: fineOpts.map((m) => ({ valor: m, etiqueta: m })) },
         ]}
       />
     </div>
@@ -274,7 +274,7 @@ function ExerciseRow({ ex, base, abierto, onAbrir, onMedia, onEditar, conVideoEx
   return (
     <div style={{
       background: UI.tarjeta, borderRadius: 20, padding: 10,
-      border: `2px solid ${abierto ? KP.blue : 'transparent'}`, boxShadow: abierto ? '0 8px 22px rgba(30,64,224,0.12)' : UI.sombraGrupo,
+      border: 'none', boxShadow: abierto ? '0 8px 22px rgba(30,64,224,0.12)' : UI.sombraGrupo,
       display: 'flex', flexDirection: 'column', gap: 10,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -898,7 +898,7 @@ function ExerciseEditor({
                 key="det" type="button" onClick={() => setConDatos(true)} className="kp-press"
                 style={{
                   display: 'flex', alignItems: 'center', gap: 12, minHeight: 60, padding: '10px 14px 10px 12px', width: '100%',
-                  border: `1.5px solid ${T.borderHi}`, background: T.bg2, borderRadius: 14, boxShadow: KP.shCard, cursor: 'pointer',
+                  border: 'none', background: T.bg2, borderRadius: 14, boxShadow: KP.shCard, cursor: 'pointer',
                   fontFamily: FONT, textAlign: 'left',
                 }}
               >
@@ -951,7 +951,7 @@ function ExerciseEditor({
                     className="kp-press"
                     style={{
                       display: 'flex', alignItems: 'center', gap: 12, minHeight: 64, padding: '10px 14px 10px 12px',
-                      border: `1.5px solid ${detalles ? T.accent : T.borderHi}`, background: T.bg2, borderRadius: 14,
+                      border: 'none', background: detalles ? KP.blueSoft : T.bg2, borderRadius: 14,
                       boxShadow: KP.shCard, cursor: 'pointer', fontFamily: FONT, textAlign: 'left',
                     }}
                   >
@@ -1013,7 +1013,7 @@ function ExerciseEditor({
                 <button
                   type="button" onClick={() => setModo('media')} className="kp-press"
                   style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 44, border: `1.5px solid ${T.border}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 44, border: 'none',
                     background: T.bg2, borderRadius: 12, boxShadow: KP.shCard, cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 800, color: T.accent,
                   }}
                 >
@@ -1430,7 +1430,7 @@ export default function ExercisesPanel({ viendoComo }) {
           onClick={() => setEditing({ new: true })}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 18px', borderRadius: 12,
-            border: 'none', cursor: 'pointer', background: `linear-gradient(135deg, ${T.accent}, ${T.accentDk})`,
+            border: 'none', cursor: 'pointer', background: T.accent,
             color: '#fff', fontFamily: FONT, fontSize: 14.5, fontWeight: 700, boxShadow: KP.shBtn,
           }}
         >

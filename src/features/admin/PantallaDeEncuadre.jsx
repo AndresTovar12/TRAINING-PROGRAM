@@ -164,7 +164,7 @@ export default function PantallaDeEncuadre({
           type="button" onClick={onCancelar} disabled={ocupado} aria-label="Cancelar"
           style={{
             width: 52, height: 52, borderRadius: '50%', cursor: 'pointer', color: '#fff',
-            border: '1.5px solid rgba(255,255,255,.28)', background: 'rgba(20,20,20,.7)',
+            border: 'none', background: 'rgba(40,40,40,.8)',
             display: 'grid', placeItems: 'center', opacity: ocupado ? 0.4 : 1,
           }}
         >

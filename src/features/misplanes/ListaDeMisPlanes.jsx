@@ -36,7 +36,7 @@ function Casilla({ marcada }) {
       aria-hidden="true"
       style={{
         width: 22, height: 22, borderRadius: 7, flexShrink: 0, display: 'grid', placeItems: 'center', color: '#fff',
-        border: `2px solid ${marcada ? T.accent : T.borderHi}`, background: marcada ? T.accent : T.bg2,
+        border: `2px solid ${marcada ? T.accent : T.borderHi}`, /* estilo-ok: casilla de marcar */ background: marcada ? T.accent : T.bg2,
       }}
     >
       {marcada && <Check size={14} strokeWidth={3} />}
@@ -84,7 +84,7 @@ export default function ListaDeMisPlanes({
   // El borde y el fondo de una tarjeta marcada.
   const marco = (marcada) => ({
     // Reestructura visual (15 oct 2026): sin borde (la separa una sombra suave); el contorno azul solo marca lo elegido.
-    background: marcada ? T.accentBg : T.bg2, border: marcada ? `1.5px solid ${T.accent}` : '1.5px solid transparent', boxShadow: '0 1px 2px rgba(17,19,24,0.04)',
+    background: marcada ? T.accentBg : T.bg2, border: 'none', boxShadow: '0 1px 2px rgba(17,19,24,0.04)',
   });
 
   return (

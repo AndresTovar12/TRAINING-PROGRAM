@@ -142,7 +142,7 @@ function PlanCell({ plan }) {
         {plan.title || t('Plan sin título')}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
-        <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, color: T.accent, background: T.accentBg, borderRadius: 6, padding: '2px 6px' }}>{etiqueta}</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: T.accent, background: T.accentBg, borderRadius: 6, padding: '2px 6px' }}>{etiqueta}</span>
         <span style={{ fontSize: 12, color: T.text2, fontWeight: 500 }}>{detalle}</span>
       </div>
     </div>
@@ -170,8 +170,8 @@ function BotonPagina({ icon: Icon, etiqueta, onClick, disabled, derecha }) {
 function Pausada() {
   return (
     <span style={{
-      flexShrink: 0, fontSize: 10, fontWeight: 800, textTransform: 'uppercase',
-      letterSpacing: 0.5, color: T.warning, background: 'rgba(224,123,0,0.12)',
+      flexShrink: 0, fontSize: 12, fontWeight: 700,
+      color: T.warning, background: 'rgba(224,123,0,0.12)',
       borderRadius: 6, padding: '2px 6px',
     }}>
       Pausada
@@ -194,8 +194,8 @@ function Pausada() {
 function SinTerminar() {
   return (
     <span style={{
-      flexShrink: 0, fontSize: 10, fontWeight: 800, textTransform: 'uppercase',
-      letterSpacing: 0.5, color: T.text2, background: T.bg3,
+      flexShrink: 0, fontSize: 12, fontWeight: 700,
+      color: T.text2, background: T.bg3,
       borderRadius: 6, padding: '2px 6px',
     }}>
       Sin terminar
@@ -269,8 +269,8 @@ function LinkPendiente({ token }) {
           onClick={copiar}
           style={{
             flex: 1, minHeight: 38, borderRadius: 9, cursor: 'pointer',
-            border: `1.5px solid ${copiado ? T.accent : T.border}`,
-            background: copiado ? T.accentBg : T.bg, color: copiado ? T.accent : T.text,
+            border: 'none',
+            background: copiado ? T.accentBg : UI.relleno, color: copiado ? T.accent : T.text,
             fontFamily: FONT, fontSize: 13, fontWeight: 700, touchAction: 'manipulation',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
           }}
@@ -474,7 +474,7 @@ function ConfirmarBorrado({ athlete, onCancelar, onConfirmado }) {
           </div>
         ) : (
           <div style={{ background: T.bg, borderRadius: 13, padding: '13px 15px', marginBottom: 14 }}>
-            <div style={{ fontSize: 11, fontWeight: 800, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.text2, marginBottom: 8 }}>
               Se borra para siempre
             </div>
             {lineas.length === 0 ? (
@@ -789,7 +789,7 @@ function HojaDelPlanDeAtleta({ athlete, programas, equipoDe, state, inicialId, o
                 onClick={() => setVerId(p.id)}
                 style={{
                   padding: '8px 14px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800,
-                  border: `1.5px solid ${activa ? T.accent : T.border}`, background: activa ? T.accent : T.bg2,
+                  border: 'none', background: activa ? T.accent : UI.relleno,
                   color: activa ? '#fff' : T.text, whiteSpace: 'nowrap',
                 }}
               >
@@ -1016,7 +1016,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
                 onClick={() => setProgramaElegido(p.profesional_id ?? null)}
                 style={{
                   padding: '8px 14px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800,
-                  border: `1.5px solid ${activa ? T.accent : T.border}`, background: activa ? T.accent : T.bg2,
+                  border: 'none', background: activa ? T.accent : UI.relleno,
                   color: activa ? '#fff' : T.text, whiteSpace: 'nowrap',
                 }}
               >
@@ -1269,13 +1269,13 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
       <SeccionFicha titulo="Cómo va" abierta={seccion === 'como-va'} onToggle={() => setSeccion((s) => (s === 'como-va' ? null : 'como-va'))}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
           <div style={{ flex: '1 1 140px', background: T.bg, borderRadius: 12, padding: '12px 14px' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Última actividad</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.text2 }}>Última actividad</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5, fontWeight: 700, color: T.text, fontSize: 14 }}>
               <CalendarClock size={15} color={T.text2} /> {last || 'Sin registros'}
             </div>
           </div>
           <div style={{ flex: '1 1 140px', background: T.bg, borderRadius: 12, padding: '12px 14px' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Sesiones completadas</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.text2 }}>Sesiones completadas</div>
             <div style={{ marginTop: 5, fontWeight: 800, color: T.accent, fontSize: 18 }}>
               {completed ?? '—'}{completed != null && totalSessions ? ` / ${totalSessions}` : ''}
             </div>
@@ -1283,7 +1283,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           {/* El dolor es de fisios (Andrés, 7 oct 2026: «no me parece muy necesario para los coaches, para los fisios sí»). */}
           {salud && (
             <div style={{ flex: '1 1 140px', background: T.bg, borderRadius: 12, padding: '12px 14px' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Dolor</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.text2 }}>Dolor</div>
               <div style={{ marginTop: 5, fontWeight: 700, color: T.text, fontSize: 14, lineHeight: 1.3 }}>
                 {textoDeDolor(dolor)}
               </div>
@@ -1296,7 +1296,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           )}
           {/* Sin la casilla de Dolor quedan tres: la última ocupa todo el ancho en vez de quedarse a media fila. */}
           <div style={{ flex: '1 1 140px', background: T.bg, borderRadius: 12, padding: '12px 14px', ...(salud ? null : { gridColumn: '1 / -1' }) }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.6 }}>Esta semana</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.text2 }}>Esta semana</div>
             <div style={{ marginTop: 5, fontWeight: 800, color: T.accent, fontSize: 18 }}>
               {estaSemana}{sesionesDeLaSemana > 0 ? ` / ${sesionesDeLaSemana}` : ''}
             </div>
@@ -1585,7 +1585,7 @@ function PrimerosPasos({ clave, onAgregar, onIrA, onAbrirPerfil, compu }) {
           >
             <span style={{
               width: 24, height: 24, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center', color: '#fff',
-              border: `2px solid ${ok ? KP.mint : KP.lineHi}`, background: ok ? KP.mint : 'transparent',
+              border: `2px solid ${ok ? KP.mint : KP.lineHi}`, /* estilo-ok: casilla de paso hecho */ background: ok ? KP.mint : 'transparent',
             }}>
               {ok && <Check size={14} strokeWidth={3} />}
             </span>
@@ -1845,7 +1845,7 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta, onIrA, onAb
         className="kp-press"
         style={{
           display: 'flex', alignItems: 'center', gap: 12, padding: '14px 14px', borderRadius: UI.rTarjeta, cursor: 'pointer',
-          border: 'none', outline: active ? `2px solid ${KP.blue}` : 'none', background: UI.tarjeta, fontFamily: FONT, textAlign: 'left',
+          border: 'none', outline: active ? `2px solid ${KP.blue}` : 'none', /* estilo-ok: el atleta abierto, en la lista de la compu */ background: UI.tarjeta, fontFamily: FONT, textAlign: 'left',
           boxShadow: UI.sombraGrupo, opacity: a.is_active === false ? 0.6 : 1, width: '100%',
         }}
       >

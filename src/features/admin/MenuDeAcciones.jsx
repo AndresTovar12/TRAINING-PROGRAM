@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { T, FONT, KP } from '@/lib/theme';
+import { T, FONT, KP, UI } from '@/lib/theme';
 import { useIsDesktop } from '@/lib/useViewport';
 
 /**
@@ -97,7 +97,7 @@ export function MenuEmergente({ ancla, titulo, etiqueta, tituloSoloEnCelular = f
         style={esCompu
           ? {
             position: 'fixed', top: 0, left: 0, visibility: 'hidden', minWidth: 232, maxWidth: 'calc(100% - 16px)',
-            background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 14, boxShadow: KP.shPop, padding: 6,
+            background: T.bg2, border: 'none', borderRadius: 14, boxShadow: KP.shPop, padding: 6,
             fontFamily: FONT, boxSizing: 'border-box',
           }
           : {
@@ -123,8 +123,8 @@ export function MenuEmergente({ ancla, titulo, etiqueta, tituloSoloEnCelular = f
           <button
             type="button" onClick={cierra}
             style={{
-              width: '100%', minHeight: 50, marginTop: 8, borderRadius: 14, border: `1.5px solid ${T.border}`,
-              background: T.bg2, cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 700, color: T.text2,
+              width: '100%', minHeight: 50, marginTop: 8, borderRadius: 14, border: 'none',
+              background: UI.relleno, cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 700, color: T.text2,
             }}
           >
             Cancelar

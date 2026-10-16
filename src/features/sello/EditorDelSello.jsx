@@ -56,7 +56,7 @@ function Miniatura({ sello, icono, activa, alElegir }) {
       type="button" onClick={alElegir} aria-pressed={activa} aria-label={`Activity card de ${sello.titulo.toLowerCase()}`} className="kp-press"
       style={{
         flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '10px 8px 12px', borderRadius: 18, cursor: 'pointer', fontFamily: FONT,
-        border: `2px solid ${activa ? LT.blue : LT.border}`, background: LT.surface, touchAction: 'manipulation',
+        border: 'none', background: activa ? LT.blueSoft : LT.surface, touchAction: 'manipulation',
       }}
     >
       <span style={{ width: 84, aspectRatio: '9 / 16', borderRadius: 12, overflow: 'hidden', background: DAMERO, position: 'relative' }}>

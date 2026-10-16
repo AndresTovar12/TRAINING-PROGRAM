@@ -42,7 +42,7 @@ export default function InterruptorVista({ vista, onCambio, estilo }) {
     <div
       style={{
         display: 'inline-flex', gap: 2, padding: 3, borderRadius: 12,
-        background: T.bgInteract, border: `1px solid ${T.border}`,
+        background: T.bgInteract, border: 'none',
         flexShrink: 0, ...estilo,
       }}
     >

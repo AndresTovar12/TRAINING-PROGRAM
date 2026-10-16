@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Moon } from 'lucide-react';
-import { LT, KP, FONT, NUM_STYLE, eyebrow } from '@/lib/theme';
+import { LT, KP, FONT, NUM_STYLE, eyebrow, UI } from '@/lib/theme';
 import { diaCorto } from '@/lib/metricas/formato';
 import { diasEntre, sumaDias } from '@/lib/metricas/forma';
 import { BarrasApiladas, GraficaDeLinea } from './Graficas';
@@ -81,7 +81,7 @@ export default function Recuperacion({ d, recuperacion, hoy }) {
 
   return (
     <div>
-      <Tarjeta style={{ borderColor: `${t.c}33`, background: `linear-gradient(135deg, ${t.soft}, ${KP.surface} 70%)` }}>
+      <Tarjeta style={{ background: t.soft }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
           <div style={eyebrow(LT.text2)}>Recuperación de hoy</div>
           <Insignia tono={r.veredicto.tono}>{r.veredicto.titulo}</Insignia>
@@ -100,7 +100,7 @@ export default function Recuperacion({ d, recuperacion, hoy }) {
             key={x.id} type="button" aria-pressed={rango === x.id} onClick={() => setRango(x.id)}
             style={{
               minHeight: 36, padding: '0 13px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, touchAction: 'manipulation',
-              border: `1.5px solid ${rango === x.id ? LT.blue : LT.borderHi}`, background: rango === x.id ? LT.blue : LT.surface, color: rango === x.id ? '#fff' : LT.text,
+              border: 'none', background: rango === x.id ? LT.blue : UI.relleno, color: rango === x.id ? '#fff' : LT.text,
             }}
           >
             {x.titulo}

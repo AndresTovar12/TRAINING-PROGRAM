@@ -39,7 +39,7 @@ function Boton({ children, onClick, principal = false, disabled = false, ancho =
       style={{
         width: ancho ? '100%' : undefined, minHeight: 54, padding: '0 20px', borderRadius: 18, cursor: disabled ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9,
         fontFamily: FONT, fontSize: 16.5, fontWeight: 800, touchAction: 'manipulation', opacity: disabled ? 0.6 : 1,
-        border: principal ? 'none' : '1.5px solid rgba(255,255,255,0.28)', background: principal ? T.accent : 'transparent', color: '#fff',
+        border: 'none', background: principal ? T.accent : 'rgba(255,255,255,0.16)', color: '#fff',
       }}
     >
       {children}

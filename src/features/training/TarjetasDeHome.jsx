@@ -22,7 +22,7 @@ export function CintaDeCiencia({ onAbrir }) {
       type="button" onClick={onAbrir} className="kp-press"
       style={{
         display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', cursor: 'pointer', fontFamily: FONT,
-        background: KP.violetSoft, border: `1px solid ${BORDE_LAVANDA}`, borderRadius: 18, padding: '11px 14px',
+        background: KP.violetSoft, border: 'none', borderRadius: 18, padding: '11px 14px',
       }}
     >
       <style>{ESTILOS}</style>

@@ -1,7 +1,7 @@
 import ListaDesplegable from '@/components/ListaDesplegable';
 import { PLURAL_DE_TIPO } from '@/lib/misPlanesDatos';
 import { COLOR_DE_TIPO, FONDO_DE_TIPO } from '@/features/misplanes/estilos';
-import { T, FONT } from '@/lib/theme';
+import { T, FONT, UI } from '@/lib/theme';
 
 // En el botón, el nombre corto; en la lista, el entero.
 const CORTO = { workout: 'Workouts', rutina: 'Rutinas', programa: 'Programas', clase: 'Clases' };
@@ -31,7 +31,7 @@ export default function FiltroDeTipo({ tipos, valor, onCambio }) {
         etiqueta="Ver qué clase de cosas"
         estilo={{
           width: 'auto', minHeight: 42, padding: '0 11px 0 13px', borderRadius: 11, gap: 8, fontSize: 13.5, fontWeight: 800,
-          color: T.text, background: color ? FONDO_DE_TIPO[valor] : T.bg2, border: `1.5px solid ${color ? `${color}66` : T.border}`,
+          color: T.text, background: color ? FONDO_DE_TIPO[valor] : UI.relleno, border: 'none',
         }}
       />
     </div>

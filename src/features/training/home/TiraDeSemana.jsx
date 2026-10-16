@@ -36,7 +36,7 @@ export function BotonDeDia({ corto, numero, puesto = false, esHoy = false, punto
       style={{
         flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '9px 0 8px', borderRadius: 16,
         border: 'none', fontFamily: FONT, touchAction: 'manipulation', cursor: deshabilitado ? 'default' : 'pointer',
-        background: puesto ? UI.azul : 'transparent', color, boxShadow: puesto ? UI.azulSombra : esHoy ? `inset 0 0 0 2px ${KP.blue}` : 'none',
+        background: puesto ? UI.azul : 'transparent', color, boxShadow: puesto ? UI.azulSombra : esHoy ? `inset 0 0 0 2px ${KP.blue}` : 'none', /* estilo-ok: aro de «hoy» en la tira de días (pieza aprobada) */
       }}
     >
       <span style={{ fontSize: 12.5, fontWeight: 600, color: puesto ? 'rgba(255,255,255,0.85)' : esHoy ? KP.blue : deshabilitado ? '#C2C7D0' : KP.ink2 }}>{corto}</span>

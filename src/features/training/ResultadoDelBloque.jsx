@@ -19,7 +19,7 @@ import { limpiaResultado, relojTexto } from '@/lib/formatos';
 const circulo = (relleno) => ({
   width: 46, height: 46, borderRadius: '50%', flexShrink: 0, cursor: 'pointer', display: 'grid', placeItems: 'center',
   fontFamily: FONT, touchAction: 'manipulation',
-  border: relleno ? 'none' : `1.5px solid ${LT.borderHi}`, background: relleno ? LT.blue : 'transparent', color: relleno ? '#fff' : LT.text2,
+  border: 'none', background: relleno ? LT.blue : LT.surface2, color: relleno ? '#fff' : LT.text2,
 });
 
 const num = (t) => {
@@ -35,7 +35,7 @@ function NumeroGrande({ etiqueta, detalle, valor, onCambio, paso = 1, unidad, de
   };
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, border: `1.5px solid ${LT.border}`,
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, border: 'none',
       borderRadius: 18, padding: '14px 16px', background: LT.surface,
     }}>
       <div style={{ minWidth: 0 }}>
@@ -103,7 +103,7 @@ export default function ResultadoDelBloque({
     ),
     tiempo: (
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, border: `1.5px solid ${LT.border}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, border: 'none',
         borderRadius: 18, padding: '14px 16px', background: LT.surface,
       }}>
         <div style={{ fontSize: 16, fontWeight: 800, color: LT.text }}>Tiempo</div>
@@ -114,7 +114,7 @@ export default function ResultadoDelBloque({
                 type="text" inputMode="numeric" value={v} placeholder="0" aria-label={etiqueta === 'min' ? 'Minutos' : 'Segundos'}
                 onChange={(e) => set(e.target.value.replace(/\D/g, '').slice(0, 3))}
                 style={{
-                  width: 58, border: `1.5px solid ${LT.border}`, borderRadius: 12, background: LT.bg, textAlign: 'center',
+                  width: 58, border: 'none', borderRadius: 12, background: LT.bg, textAlign: 'center',
                   fontSize: 27, fontWeight: 800, outline: 'none', fontFamily: FONT, padding: '6px 0', color: LT.text, ...NUM_STYLE,
                 }}
               />
