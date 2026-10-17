@@ -1532,6 +1532,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           planRow={plan}
           profesionalId={miClave}
           abrirEn={editarEn}
+          mover={mover}
           onClose={() => { setBuilding(false); setEditarEn(null); }}
           // Guardar NO cierra el editor (Andrés, 27 sep 2026: "prefiero que me
           // deje ahí para ver cómo quedó"); solo se refresca la ficha de atrás.
@@ -1551,6 +1552,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
           planRow={plan}
           profesionalId={miClave}
           abrirEn={editarEn}
+          mover={mover}
           onClose={() => { setBuilding(false); setEditarEn(null); }}
           // Guardar NO cierra el editor (Andrés, 27 sep 2026: "prefiero que me
           // deje ahí para ver cómo quedó"); solo se refresca la ficha de atrás.

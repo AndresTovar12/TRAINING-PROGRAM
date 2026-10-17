@@ -1788,7 +1788,7 @@ function TiraDeDias({ dias, elegido, onElegir }) {
   );
 }
 
-export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDeleted, profesionalId = null, catalogo = null, abrirEn = null }) {
+export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDeleted, profesionalId = null, catalogo = null, abrirEn = null, mover = null }) {
   const esCompu = useIsDesktop();
   const pregunta = useConfirmacion();
   const { avisa, trabajando } = useAviso();
@@ -2330,7 +2330,15 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
       ? phases[i].weekData.find((x) => x.num === aquiAtleta.semana)?.days?.[aquiAtleta.dia]?.day : null;
     if (suDia) setActiveWeekday(suDia);
   };
+  /* «Mover a X a esta semana» desde el editor (16 oct 2026: quien abre el editor para mover a un atleta de semana lo busca aquí). Solo si esa semana ya
+     está en el plan GUARDADO: el puntero del atleta no puede apuntar a una semana que todavía no existe. */
+  const semanaDeLaGuia = phases[nav.pi]?.weekData?.[weekIdx]?.num;
+  const moverAqui = mover && semanaDeLaGuia != null
+    && planRow?.data?.phases?.find((f) => f.id === phases[nav.pi].id)?.weekData?.some((x) => x.num === semanaDeLaGuia)
+    ? { nombre: mover.nombre, alMover: () => mover.mover(phases[nav.pi].id, semanaDeLaGuia) }
+    : null;
   const accionesDeLaGuia = {
+    moverAqui,
     abrir: (i) => { yaNavego.current = true; abreFaseEnGuia(phases[i].id); },
     cerrar: (i) => cierraFaseEnGuia(phases[i].id),
     elegirSemana: (i, num) => editaEn(i, num),
