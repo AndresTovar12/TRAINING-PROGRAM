@@ -76,6 +76,13 @@ export function sesionesGuiadas(estado) {
       // Los nombres de las sesiones traen la duración estimada («Lower Strength · ~75 min»): aquí no sirve, el tiempo real está en la sesión.
       const nombre = typeof registro.entreno?.nombre === 'string' ? registro.entreno.nombre.replace(/\s*·\s*~.*$/, '').trim() : '';
       salida.push({ id, almacen, nombre: nombre || null, registro, ...tramo });
+      // Las veces ANTERIORES que se hizo esta misma sesión (el atleta la repitió: ver `archivaLoHecho`): cada una es un entreno más.
+      (Array.isArray(registro.anteriores) ? registro.anteriores : []).forEach((previo, i) => {
+        const t = tramoDeLaSesion(previo);
+        if (!t) return;
+        const n = typeof previo?.entreno?.nombre === 'string' ? previo.entreno.nombre.replace(/\s*·\s*~.*$/, '').trim() : '';
+        salida.push({ id: `${id}#${i + 1}`, almacen, nombre: n || null, registro: previo, ...t });
+      });
     });
   });
   return salida.sort((a, b) => a.inicio - b.inicio);
