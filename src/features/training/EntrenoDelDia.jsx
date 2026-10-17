@@ -391,7 +391,7 @@ export default function EntrenoDelDia({
       {!mostrarFin && (
         <BarraDelEntreno
           segmentos={segmentos} fondo={fondo} palabras={palabras} tiempo={tiempo || null} color={colorDelTipo ?? undefined}
-          onCerrar={alCerrar} onLista={completo ? () => { setLlegando(false); setHoja('lista'); } : undefined}
+          onLista={() => { setLlegando(false); setHoja('lista'); }}
         />
       )}
       {pantalla}
@@ -401,6 +401,7 @@ export default function EntrenoDelDia({
           tarjetas={tarjetasDeLaLista(plan, vista.estados, queToca?.clave ?? null, { kilosDe, resultadoDe })} miniaturaDe={miniaturaDeFila} palabras={palabras}
           onElegir={(clave) => { setLlegando(false); setEnfoque(clave); setHoja(null); }}
           onTerminar={() => { setHoja(null); setVerFin(true); }}
+          onSalir={alCerrar}
           onCerrar={() => setHoja(null)}
         />
       )}

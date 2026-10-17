@@ -179,19 +179,16 @@ export function SerieDelSet({ puntos }) {
 /* ------------------------------------------------------------------ */
 
 /**
- * Cerrar, el avance por Sets, el tiempo que llevas y «Ver todo». Sin `onLista` (la versión básica de la web) no sale «Ver todo»; sin `tiempo`
- * (todavía no inicia, o pasaron muchas horas) no sale el tiempo. Cerrar sale directo: el avance ya está guardado y «Continuar entreno» lo retoma.
+ * La barra de arriba, como «Fuerza» en las capturas de Andrés (reestructura visual): «≡ Workout» en el color del tipo, los segmentos del avance en ese color y el
+ * tiempo que llevas. SIN la ✕ (16 oct 2026: «no arreglaste la x como venía en la carpeta»): en la captura no hay una; «Workout» abre «Tu entreno» y ahí están
+ * «Seguir», «Terminar entreno» y «Salir y seguir después» (el avance ya está guardado y «Continuar entreno» lo retoma). Sin `tiempo` (todavía no inicia, o pasaron
+ * muchas horas) no sale el tiempo.
  */
-/**
- * La barra de arriba. Reestructura visual (15 oct 2026), como «Fuerza» en las capturas de Andrés: la ✕ para salir, «≡ Workout» (la lista de la sesión, solo en la app
- * completa) en el color del tipo, los segmentos del avance en ese color y el tiempo que llevas.
- */
-export function BarraDelEntreno({ segmentos, fondo, palabras, tiempo, onCerrar, onLista, color = LT.blue }) {
+export function BarraDelEntreno({ segmentos, fondo, palabras, tiempo, onLista, color = LT.blue }) {
   return (
     <div style={{ position: 'sticky', top: 0, zIndex: 5, background: fondo, padding: 'calc(10px + env(safe-area-inset-top)) 0 8px' }}>
       <div style={{ ...COLUMNA, padding: '0 18px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button type="button" onClick={onCerrar} aria-label={palabras.salirAria} style={redondo}><X size={20} /></button>
           {onLista && (
             <button
               type="button" onClick={onLista} className="kp-press" aria-label="Ver la lista de tu entreno"
@@ -784,7 +781,7 @@ function FilaDeLaLista({ fila, n, miniatura, conLinea, onElegir }) {
  *
  * `tarjetas` viene de `tarjetasDeLaLista`; `miniaturaDe(fila)` dice la foto o el video de ese ejercicio (`{ nodo, conVideo }`) o `null`.
  */
-export function HojaDeLista({ tarjetas, miniaturaDe, palabras, onElegir, onTerminar, onCerrar }) {
+export function HojaDeLista({ tarjetas, miniaturaDe, palabras, onElegir, onTerminar, onSalir, onCerrar }) {
   return (
     <Hoja etiqueta={palabras.listaTitulo} titulo={palabras.listaTitulo} conCierre onCerrar={onCerrar}>
       {tarjetas.map((t, ti) => {
@@ -825,6 +822,11 @@ export function HojaDeLista({ tarjetas, miniaturaDe, palabras, onElegir, onTermi
       <div style={{ textAlign: 'center', marginTop: 6 }}>
         <button type="button" onClick={onTerminar} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 15.5, fontWeight: 700, color: LT.danger, padding: '10px 14px', touchAction: 'manipulation' }}>{palabras.listaTerminar}</button>
       </div>
+      {onSalir && (
+        <div style={{ textAlign: 'center' }}>
+          <button type="button" onClick={onSalir} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 600, color: LT.text2, padding: '8px 14px', touchAction: 'manipulation' }}>{palabras.listaSalir}</button>
+        </div>
+      )}
     </Hoja>
   );
 }
