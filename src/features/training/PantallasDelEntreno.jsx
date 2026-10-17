@@ -54,7 +54,7 @@ function BotonGrande({ children, onClick, variante = 'azul', disabled = false })
 }
 
 /**
- * Un botón de los que NO son lo principal pero tienen que verse («Anterior», «Saltar», «Cambiar reps o kilos»): borde y letra firmes, con lo que
+ * Un botón de los que NO son lo principal pero tienen que verse («Anterior», «Saltar», «Anotar resultados»): borde y letra firmes, con lo que
  * hace escrito. Andrés (9 oct 2026): los de texto suelto de abajo «están muy escondidos, ni me había percatado de que estaban».
  * `ancho`: ocupa toda la línea; si no, comparte la fila con su vecino a partes iguales.
  */
@@ -444,7 +444,7 @@ export function PantallaDePaso({
           <BotonGrande variante="oscuro" onClick={onListo}>
             <span aria-hidden="true" style={{ width: 30, height: 30, borderRadius: '50%', background: color || LT.blue, display: 'grid', placeItems: 'center' }}><Check size={18} strokeWidth={3} /></span> Listo
           </BotonGrande>
-          {/* «Cambiar» a secas no decía QUÉ: ahora dice qué se puede cambiar («Cambiar reps o kilos»). */}
+          {/* «Anotar resultados»: lo que se hace ahí (antes «Cambiar reps o kilos»). */}
           {etiquetaDeCambiar && <BotonSecundario ancho onClick={onCambiar}><Pencil size={17} /> {etiquetaDeCambiar}</BotonSecundario>}
           <div style={{ display: 'flex', gap: 10 }}>
             <BotonSecundario onClick={onAnterior} disabled={!puedeAnterior}><ChevronLeft size={18} /> Anterior</BotonSecundario>
