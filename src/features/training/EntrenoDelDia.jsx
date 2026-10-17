@@ -314,13 +314,9 @@ export default function EntrenoDelDia({
     planeado: { reps: cantidadPlaneada(paso) ?? '', kg: kilosDelPaso ? String(kilosDelPaso.numero) : '' },
   } : null;
 
-  /* Qué dice el botón de ajustar lo hecho: «Cambiar» a secas no decía QUÉ (Andrés, 9 oct 2026: «¿cambiar qué?»). Con lo planeado se «cambia»; sin
-     nada planeado se «anota»; y siempre se dice qué: reps, kilos, tiempo… */
-  const textoDeCambiar = cambiar
-    ? (cambiar.planeado.reps || cambiar.planeado.kg
-      ? `Cambiar ${camposCambiar.map((c) => (c.clave === 'kg' ? 'kilos' : c.rotulo.toLowerCase())).join(' o ')}`
-      : `Anotar ${camposCambiar.map((c) => (c.clave === 'kg' ? 'kilos' : c.rotulo.toLowerCase())).join(' y ')}`)
-    : null;
+  /* Qué dice el botón de ajustar lo hecho. Era «Cambiar reps o kilos» (9 oct 2026: «¿cambiar qué?»); Andrés, 16 oct 2026: «cambia el botón de "cambiar reps" por
+     "anotar resultados"». Es lo que se hace ahí: anotar lo que salió, sea reps, kilos o tiempo. */
+  const textoDeCambiar = cambiar ? 'Anotar resultados' : null;
 
   const resumenDeFin = [
     { valor: tiempo || '—', etiqueta: 'Tiempo' },
