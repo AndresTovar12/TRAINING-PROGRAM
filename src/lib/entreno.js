@@ -1,4 +1,4 @@
-import { leeCantidad, leeCarga, leeDescanso, descansoEnTiempo, textoMeta } from './medidas.js';
+import { leeCantidad, leeCarga, leeDescanso, descansoEnTiempo, esSinDescanso, textoMeta } from './medidas.js';
 import { formatoDeMiembros, nombreDeFormato, resumenDeFormato, segundosTotales } from './formatos.js';
 import { comoEjercicio, cuantoDeLapso, hayLapsos, lapsoDeLinea, lapsosDe, tramosDeLapsos } from './lapsos.js';
 import { ejercicioDeVuelta, vueltasDe } from './porVuelta.js';
@@ -157,7 +157,7 @@ function metaDe(e) {
  */
 function lecturaDeDescanso(escrito) {
   const crudo = texto(escrito);
-  if (!crudo) return null;
+  if (!crudo || esSinDescanso(crudo)) return null;
   // Una frase como «30 segundos antes del siguiente ejercicio» cuenta como 30 s (se enseña tal cual la escribió el coach).
   const d = leeDescanso({ descanso: descansoEnTiempo(crudo) });
   let r = null;

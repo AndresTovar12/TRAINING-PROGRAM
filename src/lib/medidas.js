@@ -364,6 +364,15 @@ export function leeDescanso(ex) {
  * UN tiempo, y una frase se quedaba esperando «Seguir» sin cuenta (Andrés, 16 oct 2026: «hice una prueba y no los contó»). El conector lo limpia
  * antes de guardar y el modo entreno lo lee así también, para que los planes que ya se guardaron con frase funcionen.
  */
+/**
+ * ¿El descanso dice que NO se descansa? «Sin pausa, pasa al siguiente ejercicio», «Sin descanso», «0», «Ninguno». En el plan de Andrés hay 42 así (16 oct 2026):
+ * el modo entreno los convertía en un paso de descanso que se quedaba esperando «Seguir», justo lo contrario de lo que pedían.
+ */
+export function esSinDescanso(texto) {
+  const t = String(texto ?? '').trim();
+  return /^(sin\s+(pausa|descanso)|ninguno|nada)\b/i.test(t) || /^(no|0+\s*(s|seg|segundos?|min|minutos?)?)$/i.test(t);
+}
+
 export function descansoEnTiempo(texto) {
   const crudo = String(texto ?? '').trim();
   if (!crudo || leeDescanso({ descanso: crudo }).unidad || /^\d+:\d{2}$/.test(crudo)) return crudo;
