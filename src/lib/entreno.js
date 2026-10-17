@@ -637,6 +637,21 @@ export function reabreEntreno(entreno) {
  * sesión con la guía. Los pasos hechos se borran; lo que se anotó en la lista de ejercicios no se toca. Un entreno a medias (nunca terminado) se
  * queda como está, para «Continuar»; y quien lo quitó con la ✕ (`oculto`) sigue sin verlo.
  */
+/**
+ * Lo que ya se había hecho de una sesión terminada, guardado antes de empezarla de nuevo: `{ anteriores: [...los de antes, este] }`, o `{}` si no hay nada
+ * que guardar (una sesión marcada «terminada» sin haberse entrenado no deja huella). Cada uno trae cuándo se terminó, su entreno guiado, lo que el atleta anotó y
+ * los relojes de sus Sets. Tope de 20: el más viejo se cae.
+ */
+export function archivaLoHecho(registro) {
+  const hecho = registro?.entreno && Object.keys(registro.entreno).length > 0;
+  if (!registro?.completedAt && !hecho) return {};
+  const huella = { completedAt: registro.completedAt ?? null };
+  if (registro.entreno) huella.entreno = registro.entreno;
+  if (registro.exercises) huella.exercises = registro.exercises;
+  if (registro.formatos) huella.formatos = registro.formatos;
+  return { anteriores: [...(Array.isArray(registro.anteriores) ? registro.anteriores : []), huella].slice(-20) };
+}
+
 export function reiniciaSiTerminado(entreno) {
   const av = leeAvance(entreno);
   if (av.fin === null) return entreno;
