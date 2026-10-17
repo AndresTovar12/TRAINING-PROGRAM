@@ -1,6 +1,6 @@
 /* El descanso escrito como frase cuenta como tiempo: `node scripts/prueba-descanso-en-frase.mjs`. */
 import assert from 'node:assert/strict';
-import { descansoEnTiempo, leeDescanso } from '../src/lib/medidas.js';
+import { descansoEnTiempo, leeDescanso, esSinDescanso } from '../src/lib/medidas.js';
 import { pasosDeLaSesion } from '../src/lib/entreno.js';
 
 // Frases → solo el tiempo
@@ -26,4 +26,19 @@ const plan = pasosDeLaSesion(dia);
 const descansos = plan.pasos.filter((p) => p.tipo === 'descanso');
 assert.ok(descansos.length > 0, 'debe haber pasos de descanso');
 assert.ok(descansos.every((p) => p.seg === 30), `los descansos deben contar 30 s: ${descansos.map((p) => p.seg).join(',')}`);
+// «Sin pausa» no es un descanso: no hay paso de descanso (antes se quedaba esperando «Seguir»)
+for (const t of ['Sin pausa, pasa al siguiente ejercicio', 'Sin descanso', '0', '0 seg', 'Ninguno', 'no']) assert.equal(esSinDescanso(t), true, `«${t}» es sin descanso`);
+for (const t of ['0:30', '90 seg', 'Recuperación total', 'Nordic', '3-4 min (completa)']) assert.equal(esSinDescanso(t), false, `«${t}» SÍ es descanso`);
+const sinPausa = pasosDeLaSesion({ day: 'Lun', cat: 'gym', name: 'S', exercises: [
+  { name: 'A', sets: '3', reps: '10', descanso: 'Sin pausa, pasa al siguiente ejercicio', set: 1 },
+  { name: 'B', sets: '3', reps: '10', descanso: '3-4 min entre vueltas del bloque', set: 1 },
+] });
+const ds = sinPausa.pasos.filter((p) => p.tipo === 'descanso');
+assert.ok(ds.length > 0 && ds.every((p) => p.seg === 180), `solo los descansos de B, de 3 min: ${ds.map((p) => p.seg).join(',')}`);
+// Los valores reales del plan de Andrés (16 oct 2026): qué cuenta y qué espera «Seguir»
+const reales = { '2 min': 120, '90 seg': 90, '3 min': 180, '2-3 min': 120, '3-5 min': 180, '3-4 min (completa)': 180, '60-90 seg entre series': 60, '3-4 min entre vueltas del bloque': 180 };
+for (const [t, seg] of Object.entries(reales)) {
+  const p = pasosDeLaSesion({ day: 'Lun', cat: 'gym', name: 'S', exercises: [{ name: 'A', sets: '2', reps: '5', descanso: t }] }).pasos.find((x) => x.tipo === 'descanso');
+  assert.equal(p?.seg, seg, `«${t}» cuenta ${seg} s`);
+}
 console.log('prueba-descanso-en-frase: todo bien');

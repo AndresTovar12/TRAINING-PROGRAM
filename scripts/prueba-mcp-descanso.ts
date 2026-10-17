@@ -15,6 +15,7 @@ const { dia } = diaDesdeEntrada('Mié', {
     { nombre: 'Back Squat', series: 3, cantidad: 10, descanso: '30 segundos antes del siguiente ejercicio' },
     { nombre: 'Forward Lunges', series: 3, cantidad: 10, descanso: 'Descansa 90 s entre series', descanso_set: '2 minutos al terminar' },
     { nombre: 'Plancha', series: 3, cantidad: 30, unidad: 'seg', descanso: 'Recuperación total' },
+    { nombre: 'Remo', series: 3, cantidad: 12, descanso: 'Sin pausa, pasa al siguiente ejercicio' },
     { nombre: 'Correr', series: 2, unidad: 'm', lapsos: [{ cantidad: 400, descanso: '1 minuto de pausa' }, { cantidad: 200, descanso: '45 seg' }] },
   ],
 }, [])
@@ -23,5 +24,6 @@ igual(ex[0].descanso, '30 seg', 'la frase queda como el tiempo')
 igual(ex[1].descanso, '90 seg', 'otra frase, otro tiempo')
 igual(ex[1].descansoSet, '2 min', 'el descanso del Set también')
 igual(ex[2].descanso, 'Recuperación total', 'lo que no trae un tiempo claro no se toca')
-igual(ex[3].lapsos.map((l: any) => l.descanso), ['1 min', '45 seg'], 'los lapsos también')
+igual(ex[3].descanso, undefined, '«Sin pausa» no se guarda como descanso')
+igual(ex[4].lapsos.map((l: any) => l.descanso), ['1 min', '45 seg'], 'los lapsos también')
 console.log('prueba-mcp-descanso: todo bien')
