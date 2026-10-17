@@ -165,7 +165,13 @@ async function atiende(evento: Obj) {
       const c = await buscaCompra({ compraId: compraIdDeFactura(o), suscripcion })
       if (!c) return
       await activa(c, { stripe_customer_id: idDe(o.customer) ?? c.stripe_customer_id, stripe_subscription_id: suscripcion ?? c.stripe_subscription_id, periodo_hasta: aFecha(finDePeriodoDeFactura(o)) }, o.customer_name ?? null)
-      if ((o.amount_paid ?? 0) > 0) await registraPago(c, { bruto: o.amount_paid / 100, cobro: cobroDeFactura(o), factura: o.id })
+      if ((o.amount_paid ?? 0) > 0) {
+        // El webhook entrega la factura con la versión de API de la cuenta (2026+), que ya no trae `charge`. Sin el cobro no hay reembolso de 7 días ni reparto al coach:
+        // si falta, se pide la factura con la versión fija de `stripe.js` (2024-06-20), que sí lo trae.
+        let cobro = cobroDeFactura(o)
+        if (!cobro && o.id && clave()) cobro = cobroDeFactura(await llamaStripe(clave(), 'GET', `/v1/invoices/${o.id}`))
+        await registraPago(c, { bruto: o.amount_paid / 100, cobro, factura: o.id })
+      }
       return
     }
     case 'invoice.payment_failed': {
