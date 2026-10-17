@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, CopyPlus, CornerUpLeft, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, CopyPlus, CornerUpLeft, Pin, Plus, Trash2 } from 'lucide-react';
 import { LT, KP, FONT, NUM_STYLE, tipoDeSesion, UI } from '@/lib/theme';
 import { esDescanso } from '@/lib/training-utils';
+import { Boton } from '@/components/ui';
 import { pluralS } from '@/lib/plural';
 import { useIsDesktop } from '@/lib/useViewport';
 import { propsDeArrastre } from '@/lib/arrastrar';
@@ -303,15 +304,21 @@ export default function GuiaDelEditor({
       <style>{ESTILOS}</style>
 
       {lejosDeAqui && (
-        <button
-          type="button" onClick={acciones.volverAqui}
-          style={{
-            alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent',
-            cursor: 'pointer', padding: '2px 2px 4px', fontFamily: FONT, fontSize: 13, fontWeight: 800, color: LT.blue,
-          }}
-        >
-          <CornerUpLeft size={15} /> {textoIr}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <button
+            type="button" onClick={acciones.volverAqui}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent',
+              cursor: 'pointer', padding: '2px 2px 4px', fontFamily: FONT, fontSize: 13, fontWeight: 800, color: LT.blue,
+            }}
+          >
+            <CornerUpLeft size={15} /> {textoIr}
+          </button>
+          {/* «Mover a X a esta semana»: cambia DÓNDE VA el atleta (no el plan). Va aquí porque quien abre el editor para mover a alguien de semana busca justo esto. */}
+          {acciones.moverAqui && (
+            <Boton tipo="secundario" chico icono={Pin} onClick={acciones.moverAqui.alMover}>Mover a {acciones.moverAqui.nombre} a esta semana</Boton>
+          )}
+        </div>
       )}
 
       {lista.map((f, i) => {
