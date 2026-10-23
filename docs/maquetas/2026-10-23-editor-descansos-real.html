@@ -1,0 +1,103 @@
+<title>Descansos en el editor real</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Concepto: capturas reales lado a lado (hoy | nueva). Nada dibujado: la página solo encuadra y explica. */
+:root{
+  --bg:#F3F4F9; --card:#FFFFFF; --ink:#12142B; --ink2:#555A75; --ink3:#8A8FA8; --line:#E3E5EF;
+  --blue:#2B3BDD; --blue-soft:#E7E9FC; --mint:#17996A; --mint-soft:#DDF3EA; --amber:#B8730A; --red:#D8343A; --red-soft:#FCE4E5;
+  --f-d:'Archivo','Arial Black',system-ui,sans-serif; --f-b:'Figtree',system-ui,sans-serif; --f-m:'JetBrains Mono',ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0E1022;--card:#181B35;--ink:#F0F1FA;--ink2:#AEB2CD;--ink3:#7C81A0;--line:#2A2E52;--blue:#7C8BFF;--blue-soft:#232860;--mint:#4DD6A0;--mint-soft:#143D32;--amber:#FFC25A;--red:#FF7A80;--red-soft:#4A1F24;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0E1022;--card:#181B35;--ink:#F0F1FA;--ink2:#AEB2CD;--ink3:#7C81A0;--line:#2A2E52;--blue:#7C8BFF;--blue-soft:#232860;--mint:#4DD6A0;--mint-soft:#143D32;--amber:#FFC25A;--red:#FF7A80;--red-soft:#4A1F24;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-b);font-size:16px;line-height:1.55;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0}
+.wrap{max-width:1120px;margin:0 auto;padding:28px 0 80px}
+h1,h2,h3{font-family:var(--f-d);text-wrap:balance;margin:0}
+h1{font-size:clamp(30px,5.5vw,50px);line-height:1.04;font-weight:900;letter-spacing:-1.3px}
+h2{font-size:clamp(23px,3.4vw,31px);font-weight:900;letter-spacing:-.6px;line-height:1.1}
+p{margin:0}
+.et{font-family:var(--f-m);font-size:11.5px;letter-spacing:.9px;text-transform:uppercase;color:var(--ink3);font-weight:700}
+.lead{font-size:17.5px;color:var(--ink2);max-width:66ch}
+section{margin-top:52px}
+.cab{display:flex;flex-direction:column;gap:9px;margin-bottom:18px}
+.chip{display:inline-flex;align-items:center;font-family:var(--f-m);font-size:11px;font-weight:700;letter-spacing:.4px;padding:4px 10px;border-radius:99px;text-transform:uppercase}
+.chip.r{background:var(--red-soft);color:var(--red)}.chip.m{background:var(--mint-soft);color:var(--mint)}
+.sel{display:inline-flex;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:5px;margin-top:6px;width:fit-content}
+.sel button{font:700 14px var(--f-b);border:0;background:transparent;color:var(--ink2);padding:10px 16px;border-radius:12px;cursor:pointer;min-height:44px}
+.sel button[aria-pressed="true"]{background:var(--blue);color:#fff}
+.sel button:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+.mapa3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:760px){.mapa3{grid-template-columns:1fr}}
+.d{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px}
+.d b{display:block;font-family:var(--f-d);font-size:16px;margin-bottom:3px}
+.d span{color:var(--ink2);font-size:14.5px}
+.par{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
+.par.tel{grid-template-columns:repeat(2,minmax(0,360px));justify-content:center}
+.uno{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
+.uno.tel{grid-template-columns:minmax(0,360px);justify-content:center}
+@media (max-width:760px){.par,.par.tel{grid-template-columns:1fr}}
+.cap{display:flex;flex-direction:column;gap:10px;min-width:0}
+.cap .top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.cap .top span{font-size:14px;color:var(--ink2)}
+.marco{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:10px;overflow:hidden}
+.marco img{display:block;width:100%;height:auto;border-radius:12px}
+.fin{margin-top:34px;padding:20px 22px;background:var(--blue);color:#fff;border-radius:22px;font-size:17px;font-weight:600}
+</style>
+
+<div class="wrap">
+<header style="display:flex;flex-direction:column;gap:14px">
+  <span class="et">Training Lab · 23 oct 2026 · Capturas del editor real</span>
+  <h1>Los descansos, con su nombre</h1>
+  <p class="lead">Capturas del editor de verdad, con una sesión de ejemplo. «Hoy» es lo que está en tu app. «Nueva» es la forma que elegiste: sin recuadro aparte ni rayitas entre tarjetas. Todavía no está publicada.</p>
+  <div class="mapa3">
+    <div class="d"><b>Entre ejercicios</b><span>«Descanso después», junto a reps y carga de cada ejercicio, menos el último.</span></div>
+    <div class="d"><b>Entre vueltas</b><span>En la cabecera, junto a «Se repite 3 veces».</span></div>
+    <div class="d"><b>Después del grupo</b><span>La rayita entre dos grupos, como siempre.</span></div>
+  </div>
+  <div class="sel" role="group" aria-label="Pantalla">
+    <button type="button" data-v="telefono" aria-pressed="true">Teléfono</button>
+    <button type="button" data-v="compu" aria-pressed="false">Compu</button>
+  </div>
+</header>
+
+<section>
+  <div class="cab"><span class="et">1 · Tri-serie</span><h2>Back Squat, Walking Lunges, Leg Extension · 3 vueltas</h2></div>
+  <div class="par" data-lado>
+    <div class="cap"><div class="top"><span class="chip r">Hoy</span><span>Los descansos en un recuadro abajo, que parece fuera del grupo.</span></div><div class="marco"><img data-img="hoy-{v}-set2" alt="Editor de hoy: tri-serie con el recuadro Descansos al final"></div></div>
+    <div class="cap"><div class="top"><span class="chip m">Nueva</span><span>«1 min entre vueltas» arriba; «Descanso después» junto a reps y carga; el último dice que su descanso está arriba.</span></div><div class="marco"><img data-img="nueva-{v}-set2" alt="Editor nuevo: el descanso entre vueltas en la cabecera y rayitas con el descanso entre cada ejercicio"></div></div>
+  </div>
+</section>
+
+<section>
+  <div class="cab"><span class="et">2 · Grupo con lapsos</span><h2>Correr 800 · 400 · 200 m · 3 vueltas</h2>
+  <p class="lead">Cada lapso conserva su descanso en su fila. El del último lapso es el de entre vueltas: ahora va arriba, en la cabecera, y la fila lo dice.</p></div>
+  <div class="par" data-lado>
+    <div class="cap"><div class="top"><span class="chip r">Hoy</span><span>El «2 min» del lapso 3 es, sin avisar, el descanso entre vueltas.</span></div><div class="marco"><img data-img="hoy-{v}-set1" alt="Editor de hoy: grupo de lapsos con el descanso de cada lapso"></div></div>
+    <div class="cap"><div class="top"><span class="chip m">Nueva</span><span>«2 min entre vueltas» arriba; el lapso 3 dice que su descanso está arriba.</span></div><div class="marco"><img data-img="nueva-{v}-set1" alt="Editor nuevo: grupo de lapsos con el descanso entre vueltas en la cabecera"></div></div>
+  </div>
+</section>
+
+<section>
+  <div class="cab"><span class="et">3 · Un solo ejercicio y un grupo recién creado</span><h2>Así se ven los demás casos</h2>
+  <p class="lead">Con un solo ejercicio se dice «entre series». Un grupo nuevo nace sin descansos: solo los botones «+», y la app no inventa ninguno.</p></div>
+  <div class="uno" data-solo><div class="cap"><div class="top"><span class="chip m">Nueva</span><span>Plancha, 3 series: «30 seg entre series».</span></div><div class="marco"><img data-img="nueva-{v}-set3" alt="Editor nuevo: un ejercicio con descanso entre series en la cabecera"></div></div></div>
+  <div class="uno" data-solo style="margin-top:18px"><div class="cap"><div class="top"><span class="chip m">Nueva</span><span>Bi-serie recién armada: «+ Descanso entre vueltas» arriba y la casilla «Descanso después» vacía.</span></div><div class="marco"><img data-img="nueva-{v}-set4" alt="Editor nuevo: grupo recién creado con los botones para agregar descansos"></div></div></div>
+</section>
+
+<div class="fin">¿Así sí? Si te gusta, lo publico. No cambia ningún dato guardado: solo dónde y cómo se ve cada descanso en el editor.</div>
+</div>
+
+<script>
+(function(){
+  var imgs=document.querySelectorAll('img[data-img]');
+  function pinta(v){
+    imgs.forEach(function(im){ im.src='editor-descansos/'+im.getAttribute('data-img').replace('{v}',v)+'.webp'; });
+    document.querySelectorAll('[data-lado]').forEach(function(x){ x.className = v==='telefono' ? 'par tel' : 'par'; });
+    document.querySelectorAll('[data-solo]').forEach(function(x){ x.className = v==='telefono' ? 'uno tel' : 'uno'; });
+  }
+  var bs=document.querySelectorAll('.sel button');
+  bs.forEach(function(b){ b.addEventListener('click',function(){ bs.forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false')}); pinta(b.getAttribute('data-v')); }); });
+  pinta('telefono');
+})();
+</script>

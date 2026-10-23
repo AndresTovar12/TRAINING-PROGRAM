@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bell, BellOff, Check, ChevronLeft, ChevronRight, List, Minus, Pencil, Play, Plus, Share2, Timer, Video, X } from 'lucide-react';
+import { Bell, BellOff, Check, ChevronLeft, ChevronRight, List, MapPin, Minus, Pencil, Play, Plus, Share2, Timer, Video, X } from 'lucide-react';
 import { LT, KP, FONT, NUM_STYLE, UI } from '@/lib/theme';
 import { textoDeResultado } from '@/lib/formatos';
 import { relojDe } from '@/lib/entrenoDatos';
@@ -388,7 +388,7 @@ function CronometroDelPaso({ segundos, cuenta, onEmpezar, onQuitar }) {
  */
 export function PantallaDePaso({
   paso, video, cifras, anotado, sigue, resumen, cronometro, etiquetaDeCambiar, puedeAnterior, tecnica,
-  onListo, onCambiar, onSaltar, onAnterior, color = null,
+  onListo, onCambiar, onSaltar, onAnterior, color = null, onUsarGps = null,
 }) {
   const nota = [paso.nota, paso.cue].filter(Boolean);
   const hayCronometro = paso.tipo === 'ejercicio' && paso.termina?.por === 'tiempo' && cronometro;
@@ -446,6 +446,8 @@ export function PantallaDePaso({
           </BotonGrande>
           {/* «Anotar resultados»: lo que se hace ahí (antes «Cambiar reps o kilos»). */}
           {etiquetaDeCambiar && <BotonSecundario ancho onClick={onCambiar}><Pencil size={17} /> {etiquetaDeCambiar}</BotonSecundario>}
+          {/* Un paso de 200 m o más que se hace sin mapa (eligió «Sin GPS» o cerró el mapa): se puede volver a él. */}
+          {onUsarGps && <BotonSecundario ancho onClick={onUsarGps}><MapPin size={17} /> Usar el mapa (GPS)</BotonSecundario>}
           <div style={{ display: 'flex', gap: 10 }}>
             <BotonSecundario onClick={onAnterior} disabled={!puedeAnterior}><ChevronLeft size={18} /> Anterior</BotonSecundario>
             <BotonSecundario onClick={onSaltar}>Saltar <ChevronRight size={18} /></BotonSecundario>
@@ -923,6 +925,19 @@ export function HojaDeCambiar({ campos, planeado, inicial, unidadDePeso, resumen
       </div>
       <div style={{ marginTop: 18 }}><BotonGrande onClick={guarda}>Guardar y seguir</BotonGrande></div>
       <div style={{ textAlign: 'center', marginTop: 2 }}><BotonDeTexto onClick={onCerrar}>Cancelar</BotonDeTexto></div>
+    </Hoja>
+  );
+}
+
+/**
+ * «¿Guardamos tu recorrido?» (23 oct 2026): se pregunta UNA vez, al abrir el primer entreno guiado en este teléfono. Con «Sí», el entreno guarda por dónde te mueves
+ * para que tu activity card pueda llevar la línea (ver `useRecorrido`). «Ahora no» no rompe nada: los pasos de 200 m o más siguen ofreciendo el mapa.
+ */
+export function HojaDelRecorrido({ onSi, onNo }) {
+  return (
+    <Hoja etiqueta="Tu recorrido" titulo="¿Guardamos tu recorrido?" subtitulo="Mientras entrenas, la app guarda por dónde te moviste. Sirve para que tu activity card pueda llevar la línea de tu recorrido. Nadie lo ve si tú no lo compartes." icono={<MapPin size={25} />} onCerrar={onNo}>
+      <BotonGrande onClick={onSi}>Sí, guardar</BotonGrande>
+      <div style={{ textAlign: 'center', marginTop: 2 }}><BotonDeTexto onClick={onNo}>Ahora no</BotonDeTexto></div>
     </Hoja>
   );
 }
