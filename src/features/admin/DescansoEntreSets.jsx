@@ -142,7 +142,7 @@ export default function DescansoEntreSets({ numero, valor, onCambio, soloLectura
             cursor: soloLectura ? 'default' : 'pointer', touchAction: 'manipulation',
           }}
         >
-          <Timer size={13} strokeWidth={2.6} /> {String(valor).trim()}
+          <Timer size={13} strokeWidth={2.6} /> {String(valor).trim()} después del Set {numero}
         </button>
       ) : (
         <span ref={chip} style={{ display: 'inline-flex' }}>
@@ -150,7 +150,7 @@ export default function DescansoEntreSets({ numero, valor, onCambio, soloLectura
             type="button" data-chip-descanso-set className="kp-accion" style={botonChico}
             onClick={() => { onCambio(DESCANSO_NUEVO); setAbierto(true); }}
           >
-            <Plus size={13} strokeWidth={2.8} /> Descanso
+            <Plus size={13} strokeWidth={2.8} /> Descanso después del Set {numero}
           </button>
         </span>
       )}

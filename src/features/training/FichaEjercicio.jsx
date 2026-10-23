@@ -40,7 +40,7 @@ import { usePalabras } from '@/contexts/PalabrasContext';
 export default function FichaEjercicio({
   ex, exData, onUpdate, sessionsData, sessionKey, kind, oneRMs, plan,
   repertoire, medias, perfil,
-  posicion, total, sinDescanso = false,
+  posicion, total, sinDescanso = false, momento = null,
   onCerrar, onSiguiente,
 }) {
   const unidad = perfil?.unidad_peso || 'kg';
@@ -271,7 +271,7 @@ export default function FichaEjercicio({
               display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, background: LT.surface2,
               fontSize: 13, fontWeight: 700, color: LT.text2, ...NUM_STYLE,
             }}>
-              <Timer size={15} style={{ flexShrink: 0 }} /> Descanso {descanso}
+              <Timer size={15} style={{ flexShrink: 0 }} /> Descanso {descanso}{momento ? ` · ${momento}` : ''}
             </span>
           </div>
         )}

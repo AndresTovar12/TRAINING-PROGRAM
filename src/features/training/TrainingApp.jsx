@@ -265,7 +265,7 @@ function Chip({ children, fuerte }) {
   );
 }
 
-const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phaseColor, onAbrirFicha, oneRMs, sinDescanso = false }) => {
+const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phaseColor, onAbrirFicha, oneRMs, sinDescanso = false, momento = null }) => {
   const { phases: PLAN, resolveExercise, medias, kind } = usePlan();
   const { perfil: profile } = usePerfilDeLaVista();
   const { salud } = usePalabras();
@@ -329,7 +329,8 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phas
      no existe. Petición de Andrés, y es lo correcto — un hueco vacío se lee
      como un fallo de la app. */
   // «descanso 150 seg», no «150 seg» suelto: junto a «5 reps» una cifra sin nombre se lee como lo que dura el ejercicio.
-  const descansoChip = rest ? `descanso ${rest}` : null;
+  // Y a qué momento se refiere: «27 seg · entre ejercicios», «1 min · entre vueltas» (23 oct 2026: antes decía solo «descanso 1 min» y no se sabía de cuál).
+  const descansoChip = rest ? `descanso ${rest}${momento ? ` · ${momento}` : ''}` : null;
   const chips = (vueltas ? [descansoChip] : lapsos ? [] : [textoMeta(ex), cargaQueDecir(ex) || null, descansoChip]).filter(Boolean);
   const kilos = vueltas || lapsos ? null : kilosDe(ex);
   // Lo que se enseña renglón por renglón: las vueltas distintas o los lapsos, cada uno con lo suyo.
@@ -519,6 +520,9 @@ const SetGroup = ({
   // La misma palabra que el editor: Bi-serie (2), Tri-serie (3), Circuito (4 o más).
   const typeLabel = setTag(count);
   const rondas = group.exercises[0].ex.sets;
+  // A qué momento corresponde el descanso de cada ejercicio de este Set: entre ejercicios, entre vueltas (el último) o entre series (un solo ejercicio).
+  const seRepite = Math.max(1, ...(String(rondas ?? '').match(/\d+/g) ?? []).map(Number)) > 1;
+  const momentoDelDescanso = (i) => (count > 1 ? (i < count - 1 ? 'entre ejercicios' : (seRepite ? 'entre vueltas' : null)) : (seRepite ? 'entre series' : null));
 
   /* UN SET CON FORMATO (AMRAP, EMOM, Tabata…): el formato reemplaza el «Se repite N veces». Lo que
      anota el atleta de todo el Set va en `formatos[<llave del Set>]`, y la llave es la del primer
@@ -646,6 +650,7 @@ const SetGroup = ({
               ex={ex} idx={idx} num={i + 1} phaseColor={phaseColor}
               sessionData={sessionData} sessionKey={sessionKey} sessionsData={sessionsData}
               onAbrirFicha={() => setFichaEn(i)} oneRMs={oneRMs} sinDescanso={!!formato}
+              momento={momentoDelDescanso(i)}
             />
           </div>
         ))}
@@ -668,6 +673,7 @@ const SetGroup = ({
             medias={medias}
             perfil={profile}
             sinDescanso={!!formato}
+            momento={momentoDelDescanso(fichaEn)}
             posicion={fichaEn + 1}
             total={group.exercises.length}
             onCerrar={() => setFichaEn(null)}
@@ -697,7 +703,7 @@ const SetGroup = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '14px 3px -6px', color: LT.text2 }}>
           <span aria-hidden="true" style={{ flex: 1, height: 1, background: LT.border }} />
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, ...NUM_STYLE }}>
-            <Timer size={14} /> Descansa {descansoSet}
+            <Timer size={14} /> Descansa {descansoSet} antes del siguiente Set
           </span>
           <span aria-hidden="true" style={{ flex: 1, height: 1, background: LT.border }} />
         </div>
