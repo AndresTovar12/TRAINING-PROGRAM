@@ -1,0 +1,373 @@
+<title>Plan de los dos PDFs</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800;900&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Concepto: una sola página que se lee de arriba abajo: dónde estamos → qué dicen los PDFs → cómo queda → qué decides. Azul de la app como ancla, ámbar para descansos. */
+:root{
+  --bg:#F3F4F9; --card:#FFFFFF; --ink:#12142B; --ink2:#555A75; --ink3:#8A8FA8; --line:#E3E5EF;
+  --blue:#2B3BDD; --blue-soft:#E7E9FC; --mint:#17996A; --mint-soft:#DDF3EA; --amber:#C77A00; --amber-soft:#FFF0D2;
+  --lila:#6C4FD1; --lila-soft:#ECE7FB; --red:#D8343A; --red-soft:#FCE4E5; --screen:#F1F2F7; --night:#14172E;
+  --f-d:'Archivo','Arial Black',system-ui,sans-serif; --f-b:'Figtree',system-ui,sans-serif; --f-m:'JetBrains Mono',ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0E1022; --card:#181B35; --ink:#F0F1FA; --ink2:#AEB2CD; --ink3:#7C81A0; --line:#2A2E52;
+  --blue:#7C8BFF; --blue-soft:#232860; --mint:#4DD6A0; --mint-soft:#143D32; --amber:#FFC25A; --amber-soft:#403012; --lila:#A995F5; --lila-soft:#2D2656;
+  --red:#FF7A80; --red-soft:#4A1F24; --screen:#222645; --night:#0A0B18; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1022; --card:#181B35; --ink:#F0F1FA; --ink2:#AEB2CD; --ink3:#7C81A0; --line:#2A2E52;
+  --blue:#7C8BFF; --blue-soft:#232860; --mint:#4DD6A0; --mint-soft:#143D32; --amber:#FFC25A; --amber-soft:#403012; --lila:#A995F5; --lila-soft:#2D2656;
+  --red:#FF7A80; --red-soft:#4A1F24; --screen:#222645; --night:#0A0B18; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-b);font-size:16px;line-height:1.55;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0}
+.wrap{max-width:1040px;margin:0 auto;padding:28px 0 80px}
+h1,h2,h3{font-family:var(--f-d);text-wrap:balance;margin:0}
+h1{font-size:clamp(34px,6vw,56px);line-height:1.02;font-weight:900;letter-spacing:-1.5px}
+h2{font-size:clamp(26px,4vw,36px);font-weight:900;letter-spacing:-.8px;line-height:1.08}
+h3{font-size:19px;font-weight:800;letter-spacing:-.3px}
+p{margin:0}
+.et{font-family:var(--f-m);font-size:11.5px;letter-spacing:.9px;text-transform:uppercase;color:var(--ink3);font-weight:700}
+.lead{font-size:18px;color:var(--ink2);max-width:62ch}
+section{margin-top:64px}
+.cab{display:flex;flex-direction:column;gap:10px;margin-bottom:24px}
+.cab .lead{margin-top:2px}
+.card{background:var(--card);border-radius:22px;padding:22px;border:1px solid var(--line)}
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr))}
+.chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--f-m);font-size:11px;font-weight:700;letter-spacing:.4px;padding:4px 10px;border-radius:99px;background:var(--blue-soft);color:var(--blue);text-transform:uppercase}
+.chip.m{background:var(--mint-soft);color:var(--mint)} .chip.a{background:var(--amber-soft);color:var(--amber)} .chip.r{background:var(--red-soft);color:var(--red)} .chip.l{background:var(--lila-soft);color:var(--lila)}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.hero{padding:30px 0 6px;display:flex;flex-direction:column;gap:16px}
+
+/* 1 mapa de paradas */
+.ruta{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-top:6px}
+.par{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 14px 16px;display:flex;flex-direction:column;gap:6px;position:relative}
+.par b{font-family:var(--f-d);font-size:15px;line-height:1.15}
+.par small{color:var(--ink3);font-size:12.5px}
+.par .n{font-family:var(--f-d);font-weight:900;font-size:26px;line-height:1;color:var(--ink3)}
+.par.act{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-soft)}
+.par.act .n{color:var(--blue)}
+.barra{height:7px;border-radius:9px;background:var(--line);overflow:hidden;margin-top:4px}
+.barra i{display:block;height:100%;background:var(--blue);border-radius:9px}
+.pausa{margin-top:14px;border:2px dashed var(--amber);background:var(--amber-soft);border-radius:18px;padding:14px 18px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.pausa b{color:var(--amber)}
+@media (max-width:760px){.ruta{grid-template-columns:1fr 1fr}.par:last-child{grid-column:1/-1}}
+
+/* 2 los dos problemas */
+.dos{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:16px}
+.dos .card h3{margin:10px 0 8px}
+.dos ul{margin:12px 0 0;padding-left:20px;color:var(--ink2);font-size:15px}
+.dos li{margin:5px 0}
+
+/* teléfono */
+.tel{width:262px;max-width:100%;background:var(--night);border-radius:34px;padding:9px;margin:0 auto;box-shadow:0 14px 34px rgba(18,20,43,.22)}
+.pan{background:#F1F2F7;border-radius:26px;min-height:420px;padding:14px 12px;display:flex;flex-direction:column;gap:10px;font-size:13px;overflow:hidden;color:#12142B}
+.pan *{color:inherit}
+.pan .cap{font-family:var(--f-m);font-size:9.5px;letter-spacing:.8px;text-transform:uppercase;color:#7C81A0;font-weight:700;display:block}
+.cart{background:linear-gradient(145deg,#2B3BDD,#1A24A8);color:#fff!important;border-radius:20px;padding:13px}
+.cart *{color:#fff}
+.cart .l1{display:flex;justify-content:space-between;font-size:11px;font-weight:600;opacity:.9}
+.cart .nom{font-family:var(--f-d);font-size:22px;font-weight:900;margin:10px 0 2px;letter-spacing:-.4px}
+.cart .met{font-size:11px;opacity:.85}
+.bt{margin-top:11px;background:#fff;color:#2B3BDD!important;border-radius:14px;padding:11px;text-align:center;font-weight:800;font-size:14px;display:flex;justify-content:center;gap:7px;align-items:center}
+.bt.dk{background:#2B3BDD;color:#fff!important}
+.bt.gr{background:#17996A;color:#fff!important}
+.bt.gs{background:#E6E8F1;color:#2B3BDD!important}
+.bt.sm{font-size:12px;padding:9px}
+.fila{background:#fff;border-radius:14px;padding:9px 11px;display:flex;gap:9px;align-items:center}
+.fila .ph{width:34px;height:34px;border-radius:9px;background:#2A2F55;flex:none}
+.fila b{font-size:12.5px}
+.fila small{display:block;color:#7C81A0;font-size:10.5px}
+.rj{display:flex;gap:7px}.rj>*{flex:1}
+.tx{color:#D8343A!important;font-weight:700;text-align:center;font-size:12.5px;padding:4px}
+.tg{color:#555A75!important;font-weight:600;text-align:center;font-size:12px;padding:3px}
+.dest{outline:3px solid #FFC25A;outline-offset:2px;border-radius:14px}
+.tag{position:absolute}
+
+/* selector de estados */
+.sel{display:inline-flex;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:5px;gap:4px;flex-wrap:wrap}
+.sel button{font:700 14px var(--f-b);border:0;background:transparent;color:var(--ink2);padding:10px 16px;border-radius:12px;cursor:pointer;min-height:44px}
+.sel button[aria-pressed="true"]{background:var(--blue);color:#fff}
+.sel button:focus-visible,.pill:focus-visible,input:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+.estado{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,262px),1fr));gap:24px;margin-top:22px;align-items:start}
+.estado .col{display:flex;flex-direction:column;gap:12px;align-items:center}
+.estado .nota{font-size:14.5px;color:var(--ink2);text-align:center;max-width:34ch}
+.estado .nota b{color:var(--ink)}
+.antes{margin-top:22px;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px}
+.antes .card h3{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.antes ul{margin:10px 0 0;padding-left:19px;color:var(--ink2);font-size:15px}
+.antes li{margin:5px 0}
+.ya{color:var(--mint);font-weight:700}
+
+/* huecos */
+.hue{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:14px}
+.hue .card{padding:18px}
+.hue .card .h{display:flex;gap:10px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+.hue .card p{font-size:14.5px;color:var(--ink2)}
+.hue .card p b{color:var(--ink)}
+.hue .card .fix{margin-top:9px;padding:10px 12px;background:var(--mint-soft);border-radius:12px;color:var(--ink);font-size:14px}
+.hue .card .fix b{color:var(--mint)}
+
+/* GPS */
+.gps{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:22px;margin-top:20px;align-items:start}
+.slide{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+.slide input{width:100%;accent-color:var(--blue);min-height:32px}
+.slide .val{font-family:var(--f-d);font-size:34px;font-weight:900}
+.mapa{height:120px;border-radius:14px;background:#1C2238;position:relative;overflow:hidden}
+.mapa svg{position:absolute;inset:0;width:100%;height:100%}
+.gr{font-family:var(--f-d);font-weight:900;font-size:30px;line-height:1;letter-spacing:-.6px}
+.gr small{font:600 11px var(--f-b);color:#7C81A0;margin-left:4px}
+.prog{height:6px;background:#DDE0EE;border-radius:9px;overflow:hidden;margin:7px 0 8px}.prog i{display:block;height:100%;background:#2B3BDD}
+.dim{opacity:.38;filter:grayscale(.6);transition:opacity .2s}
+
+/* descansos */
+.lab{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:12px}
+.in{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:7px}
+.in label{font-family:var(--f-m);font-size:11px;letter-spacing:.6px;font-weight:700;text-transform:uppercase}
+.in .c1{color:var(--lila)}.in .c2{color:var(--amber)}.in .c3{color:var(--red)}
+.in input{font:800 26px var(--f-d);width:100%;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:12px;padding:9px 12px;min-height:50px}
+.in small{color:var(--ink3);font-size:12.5px}
+.tl{margin-top:20px;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:20px;overflow-x:auto}
+.set{display:flex;align-items:center;gap:6px;min-width:max-content;flex-wrap:nowrap}
+.ej{background:var(--blue-soft);color:var(--blue);border-radius:11px;padding:8px 11px;font-weight:800;font-size:13px;white-space:nowrap}
+.gp{border-radius:9px;padding:6px 9px;font-family:var(--f-m);font-size:11px;font-weight:700;white-space:nowrap}
+.gp.e1{background:var(--lila-soft);color:var(--lila)}.gp.e2{background:var(--amber-soft);color:var(--amber)}.gp.e3{background:var(--red-soft);color:var(--red)}
+.gp.z{opacity:.4;text-decoration:line-through}
+.vu{font-family:var(--f-m);font-size:10.5px;color:var(--ink3);font-weight:700;letter-spacing:.5px;writing-mode:vertical-rl;transform:rotate(180deg)}
+.fr{margin-top:14px;padding:14px 16px;border-radius:14px;background:var(--bg);font-size:15px;color:var(--ink2)}
+.fr b{color:var(--ink)}
+.edit{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:18px}
+.edit .tit{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.cf{display:flex;gap:7px;flex-wrap:wrap}
+.cf span{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:8px 11px;font-size:13px;color:var(--ink3);flex:1 1 92px}
+.cf span b{display:block;font-size:10.5px;font-family:var(--f-m);color:var(--blue);letter-spacing:.4px;text-transform:uppercase}
+.cf.vac span{border-style:dashed}
+.blq{margin-top:10px;border:2px solid var(--lila);border-radius:16px;padding:12px;background:var(--lila-soft)}
+.blq .rr{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid color-mix(in srgb,var(--lila) 25%,transparent);font-size:14px;font-weight:600}
+.blq .rr:last-child{border:0}
+.blq .rr i{font-style:normal;font-family:var(--f-m);font-weight:700;font-size:12px}
+
+/* decisiones */
+.dec{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,450px),1fr));gap:14px}
+.dec .card{display:flex;gap:16px}
+.dec .num{font-family:var(--f-d);font-weight:900;font-size:40px;line-height:1;color:var(--blue);flex:none}
+.dec p{font-size:15px;color:var(--ink2);margin-top:6px}
+.dec .rec{margin-top:10px;font-size:14px;background:var(--mint-soft);color:var(--ink);padding:9px 12px;border-radius:12px}
+.dec .rec b{color:var(--mint)}
+.orden{margin-top:22px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.orden .p{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 15px;font-weight:700;font-size:14px}
+.orden .s{color:var(--ink3);font-size:20px}
+.fin{margin-top:36px;padding:22px 24px;background:var(--blue);color:#fff;border-radius:22px;font-size:17px;font-weight:600}
+.fin b{font-family:var(--f-d)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+<header class="hero">
+  <span class="et">Training Lab · 23 oct 2026 · Para decidir, sin construir todavía</span>
+  <h1>Los dos PDFs, explicados y ordenados</h1>
+  <p class="lead">Estabas perdido porque mezclé tres cosas: la auditoría, tus dos PDFs y las preguntas. Aquí van separadas y en orden. Nada de esto está construido todavía.</p>
+</header>
+
+<section>
+  <div class="cab"><span class="et">Paso 0 · Dónde estamos</span><h2>Esto es una pausa, no un cambio de rumbo</h2></div>
+  <div class="ruta">
+    <div class="par act"><span class="n">1</span><b>Atleta</b><small>31 de 37 arreglados · quedan 6</small><div class="barra"><i style="width:84%"></i></div></div>
+    <div class="par"><span class="n">2</span><b>Coach y fisio</b><small>18 puntos</small></div>
+    <div class="par"><span class="n">3</span><b>Comprador sin cuenta</b><small>8 puntos</small></div>
+    <div class="par"><span class="n">4</span><b>Editor</b><small>14 puntos · aquí cae lo de descansos</small></div>
+    <div class="par"><span class="n">5</span><b>Dueño</b><small>11 puntos</small></div>
+  </div>
+  <div class="pausa"><span class="chip a">Pausa</span><div><b>Ahora:</b> tus dos PDFs (botones del entreno y descansos del editor). Primero lo piensas y decides tú; después construimos; después regresamos a la parada 1 y seguimos hasta la 5.</div></div>
+</section>
+
+<section>
+  <div class="cab"><span class="et">Paso 1 · Qué dicen los PDFs</span><h2>Dos quejas, una sola causa</h2>
+  <p class="lead">En los dos casos, nadie le dice a la persona en qué punto está. No es un problema de color o de botones feos: es de cómo está pensado.</p></div>
+  <div class="dos">
+    <div class="card"><span class="chip">PDF 1 · Atleta</span><h3>Los botones del entreno no se entienden</h3>
+      <p style="color:var(--ink2)">«Empezar» no empieza. «Continuar» no dice si el tiempo corre. La ✕ hace desaparecer el botón para siempre. Hay varios «terminar».</p>
+      <ul><li>El atleta no sabe si el entreno sigue vivo.</li><li>No sabe qué pasa al picar cada botón.</li><li>El cardio por metros no enseña mapa.</li><li>Los intervalos no enseñan el video del ejercicio.</li></ul></div>
+    <div class="card"><span class="chip l">PDF 2 · Coach</span><h3>Los descansos del editor confunden</h3>
+      <p style="color:var(--ink2)">Un coach no entiende cuál es el descanso entre ejercicios, cuál entre vueltas y cuál entre Sets. Hay dos cajitas con el mismo nombre para tres momentos distintos.</p>
+      <ul><li>El descanso del último ejercicio es, a escondidas, el de entre vueltas.</li><li>El de la última vuelta se ignora.</li><li>Tiene que ser coherente con AMRAP, intervalos y lapsos.</li></ul></div>
+  </div>
+  <div class="card" style="margin-top:16px"><span class="chip m">¿Estaba en la auditoría?</span>
+    <p style="margin-top:10px;color:var(--ink2)">Solo en parte. <b style="color:var(--ink)">p154</b> (la ✕) coincide. <b style="color:var(--ink)">p34, p35, p24, p25, p39</b> ya los arreglé hoy y ayudan, pero no tocan el fondo. El resto es nuevo: la auditoría revisó que las cosas funcionaran, no si estaban bien pensadas.</p></div>
+</section>
+
+<section>
+  <div class="cab"><span class="et">Paso 2 · Bloque A · Botones del entreno</span><h2>Una sesión, tres estados, siempre iguales</h2>
+  <p class="lead">Hoy cada pantalla cuenta una historia distinta. Propongo que la sesión tenga solo tres estados y que se vean igual en Home y en la tarjeta del día. Toca cada uno.</p></div>
+  <div class="sel" role="group" aria-label="Estado de la sesión">
+    <button type="button" class="pill" data-e="0" aria-pressed="true">1 · Sin empezar</button>
+    <button type="button" class="pill" data-e="1" aria-pressed="false">2 · En curso</button>
+    <button type="button" class="pill" data-e="2" aria-pressed="false">3 · Terminada</button>
+  </div>
+  <div class="estado" id="estado"></div>
+
+  <div class="antes">
+    <div class="card"><h3><span class="chip r">Hoy</span> Lo que confunde</h3>
+      <ul><li>«Empezar» en Home solo abre la lista del día.</li><li>«Salir y seguir después» no pausa nada: el tiempo sigue corriendo y no se ve.</li><li>La ✕ quita «Continuar» para siempre, y «Deshacer» no la regresa.</li><li>«Marcar sesión como terminada» y «Terminar entreno» no hacen lo mismo y se parecen.</li></ul></div>
+    <div class="card"><h3><span class="chip m">Propuesta</span> Lo que cambia</h3>
+      <ul><li>«Empezar» abre el entreno, no la lista.</li><li>«Seguir» muestra el tiempo vivo y los pasos hechos.</li><li><b>Se quita la ✕.</b> Para no usar la guía, terminas desde la lista.</li><li>Un solo «Terminar sesión», con el mismo resumen venga de donde venga.</li><li>«Salir y seguir después» pasa a «Salir». Sin rojo en nada que no borre cosas.</li></ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="cab"><span class="et">Paso 3 · Bloque A · Los huecos que encontré al revisar</span><h2>Seis detalles que mi primera propuesta no cubría</h2>
+  <p class="lead">Revisé mi propia idea contra cómo se usa de verdad. Dos eran serios.</p></div>
+  <div class="hue">
+    <div class="card"><div class="h"><span class="chip r">Serio</span><h3>Se perdían las notas del coach</h3></div>
+      <p>Hoy las notas del día y el video de la clase viven en la lista, no en el entreno. Si «Empezar» salta la lista, el atleta no las ve.</p>
+      <div class="fix"><b>Arreglo:</b> una pantalla «Antes de empezar», solo si hay notas o clase. Si no hay, va directo al paso 1.</div></div>
+    <div class="card"><div class="h"><span class="chip r">Serio</span><h3>El reloj contaba desde que abrías</h3></div>
+      <p>La hora de inicio se guarda al abrir el entreno. Lo abres a las 7, lo haces a las 9, y sale «2 horas».</p>
+      <div class="fix"><b>Arreglo:</b> «en curso» empieza con el primer «Listo». Abrir y cerrar sin hacer nada no cuenta. Pasadas 6 h sin terminar, no se muestra tiempo.</div></div>
+    <div class="card"><div class="h"><span class="chip a">Menor</span><h3>Tres botones «Terminar»</h3></div>
+      <p>El del reloj de un Set, «Terminar entreno» y «Terminar sesión» son cosas distintas con casi el mismo nombre.</p>
+      <div class="fix"><b>Arreglo:</b> el del reloj pasa a «Parar». Los otros dos se juntan en «Terminar sesión».</div></div>
+    <div class="card"><div class="h"><span class="chip a">Menor</span><h3>Video en AMRAP</h3></div>
+      <p>En intervalos el reloj sabe qué ejercicio toca. En un AMRAP no: cada quien va a su ritmo.</p>
+      <div class="fix"><b>Arreglo:</b> si se sabe cuál toca, video chico arriba. Si no, la lista trae una miniatura por ejercicio y se toca para verla.</div></div>
+    <div class="card"><div class="h"><span class="chip a">Menor</span><h3>Descansos: yo inventaba valores</h3></div>
+      <p>Propuse que un Set nuevo naciera con 1 min y 2 min. Eso es meterle descansos al coach, que la app nunca hace.</p>
+      <div class="fix"><b>Arreglo:</b> los tres renglones nacen vacíos. Al tocar uno, propone un valor como hoy la píldora.</div></div>
+    <div class="card"><div class="h"><span class="chip a">Menor</span><h3>Dos mapas distintos</h3></div>
+      <p>El Sprint de 400 m y el «Correr 3 × 1 km» viven en pantallas diferentes del código.</p>
+      <div class="fix"><b>Arreglo:</b> una sola pantalla de paso con GPS que usan los dos. Tiempo y distancia se anotan solos.</div></div>
+  </div>
+</section>
+
+<section>
+  <div class="cab"><span class="et">Paso 4 · Bloque A · El mapa dentro del entreno</span><h2>¿Cuándo sí lleva mapa y cuándo no?</h2>
+  <p class="lead">Tu duda era el brinco de 2 m contra el sprint de 400 m. Mueve la distancia y mira cuál pantalla le tocaría.</p></div>
+  <div class="slide"><div class="top"><span class="et">Distancia que pide el coach</span><span class="val"><span id="dv">400</span> m</span></div>
+    <input id="dist" type="range" min="2" max="1000" step="2" value="400" aria-label="Distancia en metros">
+    <p style="color:var(--ink2);font-size:14.5px" id="dtxt"></p></div>
+  <div class="gps">
+    <div id="gA"><div class="tel"><div class="pan">
+      <span class="cap">Paso con GPS · serie 1 de 4</span>
+      <div style="font-family:var(--f-d);font-weight:900;font-size:21px;letter-spacing:-.4px">Sprint</div>
+      <div class="mapa"><svg viewBox="0 0 240 120" preserveAspectRatio="none"><path d="M-10 92 C40 88 60 56 100 58 S170 92 210 64 S250 36 270 40" fill="none" stroke="#FF5A5F" stroke-width="5" stroke-linecap="round"/><circle cx="200" cy="66" r="6" fill="#2B8CFF" stroke="#fff" stroke-width="2"/></svg></div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end"><div class="gr">188<small>m para llegar</small></div><div class="gr" style="font-size:24px">0:41</div></div>
+      <div class="prog"><i style="width:53%"></i></div>
+      <div style="display:flex;gap:16px;font-size:11.5px;font-weight:700"><span>2:58 <span style="color:#7C81A0;font-weight:500">/km</span></span><span>Z5 <span style="color:#7C81A0;font-weight:500">pulso</span></span></div>
+      <div class="bt dk sm" style="margin-top:auto">Listo</div><div class="tg">Sin GPS</div>
+    </div></div><p class="nota" style="text-align:center;color:var(--ink2);font-size:14.5px;margin-top:10px"><b style="color:var(--ink)">Con mapa.</b> Termina solo al llegar. «Sin GPS» para pista techada o caminadora.</p></div>
+    <div id="gB"><div class="tel"><div class="pan">
+      <span class="cap">Paso normal · serie 1 de 3</span>
+      <div style="font-family:var(--f-d);font-weight:900;font-size:21px;letter-spacing:-.4px">Broad jump</div>
+      <div style="display:flex;gap:8px"><div class="fila" style="flex:1;flex-direction:column;align-items:flex-start"><b style="font-size:20px;font-family:var(--f-d)">2 m</b><small>distancia</small></div><div class="fila" style="flex:1;flex-direction:column;align-items:flex-start"><b style="font-size:20px;font-family:var(--f-d)">3</b><small>series</small></div></div>
+      <div class="fila"><div class="ph"></div><div><b>Video del ejercicio</b><small>toca para verlo</small></div></div>
+      <div class="bt dk sm" style="margin-top:auto">Listo</div><div class="bt sm" style="background:#fff">Anotar resultados</div>
+    </div></div><p class="nota" style="text-align:center;color:var(--ink2);font-size:14.5px;margin-top:10px"><b style="color:var(--ink)">Sin mapa.</b> El GPS del teléfono se equivoca 5 a 10 m: en distancias cortas estorbaría.</p></div>
+  </div>
+  <p style="margin-top:18px;color:var(--ink2);font-size:15px">Qué queda fuera: el pulso en vivo y que siga con el teléfono bloqueado son de la app descargable. Para el mapa con calles hay que subir el archivo de México a Cloudflare (es el p4 de la auditoría, unos $133 al mes que ya están en tu Excel).</p>
+</section>
+
+<section>
+  <div class="cab"><span class="et">Paso 5 · Bloque B · Descansos del editor</span><h2>Tres momentos, tres nombres, tres colores</h2>
+  <p class="lead">Un Set de tres ejercicios que se repite 3 veces tiene tres tipos de descanso. Hoy el editor solo muestra dos cajitas. Cambia los números y mira cómo lo vería el atleta.</p></div>
+  <div class="lab">
+    <div class="in"><label class="c1" for="r1">Entre ejercicios</label><input id="r1" type="number" min="0" max="600" value="0"><small>segundos · de A a B y de B a C</small></div>
+    <div class="in"><label class="c2" for="r2">Entre vueltas</label><input id="r2" type="number" min="0" max="600" value="60"><small>segundos · de C a la A de la siguiente vuelta</small></div>
+    <div class="in"><label class="c3" for="r3">Después del Set</label><input id="r3" type="number" min="0" max="900" value="120"><small>segundos · antes del Set 2</small></div>
+  </div>
+  <div class="tl"><div class="set" id="tl"></div></div>
+  <div class="fr" id="fr"></div>
+
+  <div class="antes" style="margin-top:28px">
+    <div class="edit"><span class="chip r">Hoy en el editor</span>
+      <div class="tit" style="margin-top:12px"><b>Tri-serie</b><span style="color:var(--ink3);font-size:13px">se repite 3 veces</span></div>
+      <div class="cf"><span><b>Reps</b>8-10</span><span><b>Carga</b>—</span><span><b>Descanso · min</b>vacío</span></div>
+      <div class="cf" style="margin-top:7px"><span><b>Reps</b>8-10</span><span><b>Carga</b>—</span><span><b>Descanso · min</b>vacío</span></div>
+      <div class="cf" style="margin-top:7px"><span><b>Reps</b>8-10</span><span><b>Carga</b>—</span><span style="border-color:var(--red);color:var(--ink)"><b style="color:var(--red)">Descanso · min</b>1 ← ¿de qué?</span></div>
+      <p style="margin-top:10px;font-size:14px;color:var(--ink2)">Ese «1» del último ejercicio es, sin avisar, el descanso entre vueltas. Y en la última vuelta se ignora.</p></div>
+    <div class="edit"><span class="chip m">Propuesta</span>
+      <div class="tit" style="margin-top:12px"><b>Tri-serie</b><span style="color:var(--ink3);font-size:13px">se repite 3 veces</span></div>
+      <div class="cf vac"><span><b>Reps</b>8-10</span><span><b>Carga</b>—</span></div>
+      <div class="cf vac" style="margin-top:7px"><span><b>Reps</b>8-10</span><span><b>Carga</b>—</span></div>
+      <div class="cf vac" style="margin-top:7px"><span><b>Reps</b>8-10</span><span><b>Carga</b>—</span></div>
+      <div class="blq"><div class="rr"><span>Entre ejercicios</span><i style="color:var(--lila)">+ agregar</i></div><div class="rr"><span>Entre vueltas</span><i style="color:var(--amber)">1 min</i></div><div class="rr"><span>Después del Set</span><i style="color:var(--red)">2 min</i></div></div>
+      <p style="margin-top:10px;font-size:14px;color:var(--ink2)">Una lista plegada, «Distinto por ejercicio», sirve para quien quiere 30 s tras el A y 60 s tras el B.</p></div>
+  </div>
+
+  <div class="hue" style="margin-top:18px">
+    <div class="card"><div class="h"><span class="chip">AMRAP · Tabata · Intervalos</span></div><p>Aquí no se muestra «entre ejercicios» ni «entre vueltas»: el reloj lo marca. Solo queda «Después del Set».</p></div>
+    <div class="card"><div class="h"><span class="chip">Lapsos</span></div><p>Cada lapso conserva su descanso. También aparece «Entre vueltas», que hoy tiene el mismo truco escondido.</p></div>
+    <div class="card"><div class="h"><span class="chip">Set de un solo ejercicio</span></div><p>Solo «Entre series» y «Después del Set». «Entre vueltas» no aparece si el Set no se repite.</p></div>
+    <div class="card"><div class="h"><span class="chip m">Planes ya guardados</span></div><p>No cambia ningún dato. Los tres renglones escriben en los campos de siempre. Si un plan viejo trae descansos distintos, el renglón dice «Varía».</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="cab"><span class="et">Paso 6 · Lo que necesito de ti</span><h2>Cuatro decisiones</h2>
+  <p class="lead">Con un «sí a todo» o con la que quieras cambiar, me basta.</p></div>
+  <div class="dec">
+    <div class="card"><span class="num">1</span><div><h3>Umbral del mapa</h3><p>Pasos de 200 m o más se hacen con mapa y GPS. Menos de eso, paso normal. Siempre hay «Sin GPS».</p><div class="rec"><b>Recomiendo:</b> 200 m. Los sprints de 100 y 150 m quedan sin mapa.</div></div></div>
+    <div class="card"><span class="num">2</span><div><h3>¿Pausa en el entreno?</h3><p>El tiempo corre real y se ve en Home. Un Set de correr conserva su propia pausa.</p><div class="rec"><b>Recomiendo:</b> sin pausa en gimnasio. Una pausa fingida ensucia el tiempo total.</div></div></div>
+    <div class="card"><span class="num">3</span><div><h3>Descansos del editor</h3><p>Tres renglones por Set, vacíos al nacer, con «Distinto por ejercicio» plegado.</p><div class="rec"><b>Recomiendo:</b> así, sin valores inventados.</div></div></div>
+    <div class="card"><span class="num">4</span><div><h3>Orden de trabajo</h3><p>Primero A y B directo, con capturas al final. El paso con mapa va antes en maqueta interactiva.</p><div class="rec"><b>Recomiendo:</b> así, porque el mapa es lo único que dudas.</div></div></div>
+  </div>
+  <div class="orden" aria-label="Orden propuesto">
+    <span class="p">Tu OK</span><span class="s">→</span><span class="p">Maqueta del paso con mapa</span><span class="s">→</span><span class="p">Construir A y B</span><span class="s">→</span><span class="p">Capturas para ti</span><span class="s">→</span><span class="p" style="border-color:var(--blue);color:var(--blue)">Regresamos a la parada 1</span>
+  </div>
+  <div class="fin"><b>Solo falta tu respuesta:</b> ¿va con las cuatro recomendaciones, o cuál cambias?</div>
+</section>
+</div>
+
+<script>
+(function(){
+  /* Paso 2: tres estados de la sesión */
+  var E=[
+    {home:'<div class="cart"><div class="l1"><span>● Hoy te toca</span><span>Vie 23</span></div><div class="nom">Sesión</div><div class="met">Gym · 6 ejercicios · ~55 min</div><div class="bt dest">▶ Empezar</div></div>',
+     dia:'<div class="bt dk dest" style="margin-top:0">▶ Iniciar entreno</div><div class="fila"><div class="ph"></div><div><b>Back Squat</b><small>Se repite 3 veces</small></div></div><div class="fila"><div class="ph"></div><div><b>Row</b><small>8-10 reps</small></div></div><div class="bt gs sm">✓ Terminar sesión</div>',
+     n1:'<b>Home dice «Empezar».</b> Toca y entras directo al paso 1. El nombre de la tarjeta abre la lista.',n2:'<b>Nada corre todavía.</b> El reloj empieza con tu primer «Listo», no al abrir.'},
+    {home:'<div class="cart"><div class="l1"><span>● Entreno en curso</span><span>Vie 23</span></div><div class="nom">Sesión</div><div class="met">3 de 12 pasos · 14:32</div><div class="bt dest">▶ Seguir</div></div>',
+     dia:'<div class="bt dk dest" style="margin-top:0">▶ Seguir · 14:32 · 3 de 12</div><div class="fila"><div class="ph"></div><div><b>Back Squat</b><small>Hoy: 1 de 3 vueltas</small></div></div><div class="fila"><div class="ph"></div><div><b>Row</b><small>8-10 reps</small></div></div><div class="bt gs sm">✓ Terminar sesión</div>',
+     n1:'<b>El botón dice la verdad:</b> cuánto llevas, cuántos pasos y que el tiempo sigue.',n2:'<b>No hay ✕.</b> Si ya no quieres la guía, tocas «Terminar sesión» desde la lista.'},
+    {home:'<div class="cart" style="background:linear-gradient(145deg,#17996A,#0E7452)"><div class="l1"><span>● Terminada</span><span>Vie 23</span></div><div class="nom">Sesión</div><div class="met">24:14 · 12 hechos · 4 series</div><div class="bt dest">Ver detalle ›</div></div>',
+     dia:'<div class="bt gr dest" style="margin-top:0">✓ Sesión terminada</div><div class="rj"><div class="bt gs sm">Activity card</div><div class="bt gs sm">Deshacer</div></div><div class="fila"><div class="ph"></div><div><b>Back Squat</b><small>3 vueltas · hecho</small></div></div>',
+     n1:'<b>Un solo resumen</b> venga de donde venga: tiempo, hechos, series, notas y activity card.',n2:'<b>«Deshacer» regresa a «Sin empezar»</b> y te deja iniciar otra vez, como hoy.'}
+  ];
+  var cont=document.getElementById('estado');
+  function pinta(i){
+    var e=E[i];
+    cont.innerHTML='<div class="col"><span class="et">Home</span><div class="tel"><div class="pan"><span class="cap">Hoy</span>'+e.home+'<div class="fila"><div class="ph" style="background:#2B3BDD"></div><div><b>Tu semana</b><small>L M X J V S D</small></div></div></div></div><p class="nota">'+e.n1+'</p></div>'+
+      '<div class="col"><span class="et">Tarjeta del día</span><div class="tel"><div class="pan"><span class="cap">Sesión · Gym</span>'+e.dia+'</div></div><p class="nota">'+e.n2+'</p></div>';
+  }
+  var bs=document.querySelectorAll('.pill');
+  for(var k=0;k<bs.length;k++){bs[k].addEventListener('click',function(){
+    for(var j=0;j<bs.length;j++)bs[j].setAttribute('aria-pressed',bs[j]===this?'true':'false');
+    pinta(+this.getAttribute('data-e'));});}
+  pinta(0);
+
+  /* Paso 4: umbral de 200 m */
+  var d=document.getElementById('dist'),dv=document.getElementById('dv'),dt=document.getElementById('dtxt'),gA=document.getElementById('gA'),gB=document.getElementById('gB');
+  function dibujaD(){
+    var m=+d.value;dv.textContent=m;
+    var con=m>=200;
+    gA.className=con?'':'dim';gB.className=con?'dim':'';
+    dt.textContent=con?'Desde 200 m, el paso lleva mapa y se mide con GPS.':'Menos de 200 m, un paso normal: el GPS del teléfono no es tan preciso.';
+  }
+  d.addEventListener('input',dibujaD);dibujaD();
+
+  /* Paso 5: descansos */
+  var r1=document.getElementById('r1'),r2=document.getElementById('r2'),r3=document.getElementById('r3'),tl=document.getElementById('tl'),fr=document.getElementById('fr');
+  function t(s){s=Math.max(0,Math.round(+s||0));if(!s)return 'sin descanso';return s>=60&&s%60===0?(s/60)+' min':(s>=60?Math.floor(s/60)+' min '+(s%60)+' s':s+' s')}
+  function gp(c,s){return '<span class="gp '+c+(s>0?'':' z')+'">'+(s>0?t(s):'0')+'</span>'}
+  function dibujaR(){
+    var a=+r1.value||0,b=+r2.value||0,c=+r3.value||0,h='';
+    for(var v=1;v<=3;v++){
+      h+='<span class="vu">VUELTA '+v+'</span><span class="ej">A</span>'+gp('e1',a)+'<span class="ej">B</span>'+gp('e1',a)+'<span class="ej">C</span>';
+      h+=v<3?gp('e2',b):gp('e3',c);
+    }
+    h+='<span class="ej" style="background:var(--bg);color:var(--ink3)">Set 2…</span>';
+    tl.innerHTML=h;
+    var total=a*2*3+b*2+c;
+    fr.innerHTML='<b>El atleta descansará:</b> '+t(a)+' entre ejercicios · '+t(b)+' entre vueltas · '+t(c)+' antes del Set 2. En total, <b>'+t(total)+'</b> de descanso dentro de este Set.';
+  }
+  [r1,r2,r3].forEach(function(x){x.addEventListener('input',dibujaR)});dibujaR();
+})();
+</script>

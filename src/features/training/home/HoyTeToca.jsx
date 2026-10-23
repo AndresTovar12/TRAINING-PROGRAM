@@ -85,24 +85,35 @@ export const botonBlanco = {
  * mañana y tarde). `completada`: el día ya está hecho («Empezar» pasa a «Ver detalle»).
  */
 export function HoyTeToca({ sesiones, completada = false, enMarcha = false, onAbrir, cuando, estilo }) {
+  // Con dos sesiones el día, cada una lleva SU botón y su estado: la de la mañana puede estar terminada y la de la tarde sin empezar.
+  const cadaUna = sesiones.length > 1 && sesiones.every((s) => typeof s.onAbrir === 'function');
+  const todas = cadaUna ? sesiones.every((s) => s.hecha) : completada;
+  const textoDe = (hecha, curso) => (hecha ? <>Ver detalle <ChevronRight size={19} aria-hidden="true" /></> : <><Play size={18} fill="currentColor" aria-hidden="true" />{curso ? 'Seguir' : 'Empezar'}</>);
   return (
-    <Marco etiqueta={etiquetaDeHoy(sesiones.length, completada, cuando)} punto={completada ? '#7CF0C5' : '#FFB547'} fecha={cuando?.fecha} estilo={estilo}>
+    <Marco etiqueta={etiquetaDeHoy(sesiones.length, todas, cuando)} punto={todas ? '#7CF0C5' : '#FFB547'} fecha={cuando?.fecha} estilo={estilo}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 18 }}>
         {sesiones.map((s, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
-            <IconoDeSesion day={s.day} hecha={completada} />
-            <div style={{ minWidth: 0 }}>
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0, flexWrap: cadaUna ? 'wrap' : 'nowrap' }}>
+            <IconoDeSesion day={s.day} hecha={cadaUna ? s.hecha : completada} />
+            <div style={{ minWidth: 0, flex: 1 }}>
               <h3 style={{ margin: 0, fontSize: sesiones.length > 1 ? 24 : 28, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.12, overflowWrap: 'anywhere' }}>{s.nombre}</h3>
               <Meta color={aspectoDelTipo(s.day).color} partes={s.meta ?? []} />
             </div>
+            {cadaUna && (
+              <button type="button" className="kp-press" onClick={s.onAbrir} style={{ ...botonBlanco, flex: '0 0 auto', minHeight: 46, padding: '0 16px', fontSize: 15 }}>
+                {textoDe(s.hecha, s.enMarcha)}
+              </button>
+            )}
           </div>
         ))}
       </div>
-      <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-        <button type="button" className="kp-press" onClick={onAbrir} style={botonBlanco}>
-          {completada ? <>Ver detalle <ChevronRight size={19} aria-hidden="true" /></> : <><Play size={18} fill="currentColor" aria-hidden="true" />{enMarcha ? 'Seguir' : 'Empezar'}</>}
-        </button>
-      </div>
+      {!cadaUna && (
+        <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+          <button type="button" className="kp-press" onClick={onAbrir} style={botonBlanco}>
+            {textoDe(completada, enMarcha)}
+          </button>
+        </div>
+      )}
     </Marco>
   );
 }

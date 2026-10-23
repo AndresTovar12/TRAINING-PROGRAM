@@ -458,6 +458,40 @@ export function PantallaDePaso({
 }
 
 /* ------------------------------------------------------------------ */
+/* Antes de empezar                                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * «Antes de empezar» (23 oct 2026): lo que el coach dejó dicho para TODA la sesión (sus notas y la clase) vive en la lista del día, no en el entreno; como «Empezar» ya abre
+ * el entreno directo, esta pantalla sale primero, SOLO si hay algo que decir. Sin notas ni clase, el entreno arranca en el paso 1 como siempre.
+ */
+export function PantallaAntesDeEmpezar({ nombre, notas, clase, onEmpezar, onSalir }) {
+  return (
+    <>
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ ...COLUMNA, padding: '8px 18px 18px' }}>
+          <Etiqueta suave>Antes de empezar</Etiqueta>
+          <h1 style={{ margin: '12px 0 14px', fontSize: 30, fontWeight: 800, letterSpacing: -0.7, lineHeight: 1.1, color: LT.text, overflowWrap: 'anywhere' }}>{nombre}</h1>
+          {clase}
+          {notas.length > 0 && (
+            <div style={{ background: LT.surface, borderRadius: 18, padding: '14px 16px', boxShadow: '0 1px 2px rgba(17,19,24,0.04)' }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: LT.text2, marginBottom: 8 }}>Notas del coach</div>
+              {notas.map((n, i) => <p key={i} style={{ margin: i ? '10px 0 0' : 0, fontSize: 17, lineHeight: 1.5, fontWeight: 500, color: LT.text }}>{n}</p>)}
+            </div>
+          )}
+        </div>
+      </div>
+      <div style={{ flexShrink: 0, padding: '10px 0 calc(10px + env(safe-area-inset-bottom))' }}>
+        <div style={{ ...COLUMNA, padding: '0 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <BotonGrande onClick={onEmpezar}><Play size={20} fill="#fff" /> Empezar</BotonGrande>
+          <BotonDeTexto onClick={onSalir}>Salir</BotonDeTexto>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Un Set con reloj                                                    */
 /* ------------------------------------------------------------------ */
 
