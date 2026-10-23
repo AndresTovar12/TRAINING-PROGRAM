@@ -831,9 +831,10 @@ const HojaDelPrograma = ({
         estructura={estructura}
         aqui={aqui}
         viendo={viendo}
-        pieDeSemana={mp ? (f, semana) => (
+        // Una semana que la ventana del plan comprado aún no abre (`bloqueada`) no ofrece «Mover mi plan aquí»: si no, quien compró un mes se podía mover a la semana 40 y vaciar la ventana.
+        pieDeSemana={mp ? (f, semana) => (semana.bloqueada ? null : (
           <MoverAquiAtleta mp={mp} faseId={f.id} semana={semana.num} numero={estructura === 'semanas' ? semanaGlobal(PLAN, f.id, semana.num) : semana.num} />
-        ) : undefined}
+        )) : undefined}
         // Se abre en lo que se está mirando, con las dos marcas a la vista:
         // "AQUÍ VAS" en tu día y "VIENDO" en el otro.
         abrirEn={viendo ?? aqui}
