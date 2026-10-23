@@ -66,23 +66,24 @@ const adivinaSiLlevaCarga = (ex) => {
   if (intensity === 'bw' || intensity.includes('bajo') || intensity === 'máximo' || intensity === 'maximo') return false;
   return true;
 };
-// Validar que un cursor apunte a una sesión existente
+/* Validar que un cursor apunte a una semana que existe.
+   Antes también exigía que existiera el DÍA (`week.days[dayIdx]`). Una semana sin sesiones, o un coach que borra una sesión de la semana en curso, dejaba la marca «inválida» y la app
+   regresaba al atleta a Fase 1 · Semana 1 sin avisar (auditoría 23 oct 2026: «semana sin días», «el plan nunca arranca solo»). Lo que dice dónde va el atleta es la fase y la semana;
+   el día sale del calendario. Si el día ya no existe, `cursorAlDia` lo acota. */
 const isValidCursor = (plan, cursor) => {
   if (!plan?.length || !cursor) return false;
   const phase = plan.find(p => p.id === cursor.phaseId);
   if (!phase) return false;
-  const week = phase.weekData.find(w => w.num === cursor.weekNum);
-  if (!week) return false;
-  return !!week.days[cursor.dayIdx];
+  return !!phase.weekData?.some(w => w.num === cursor.weekNum);
 };
 
-// Resolver cursor a la sesión completa
+// Resolver cursor a la sesión completa. Si la semana no tiene ese día, `day` e `id` van en null (la semana sí se resuelve).
 const resolveCursor = (plan, cursor) => {
   if (!isValidCursor(plan, cursor)) return null;
   const phase = plan.find(p => p.id === cursor.phaseId);
   const week = phase.weekData.find(w => w.num === cursor.weekNum);
-  const day = week.days[cursor.dayIdx];
-  return { phase, week, dayIdx: cursor.dayIdx, day, id: sessionId(phase.id, week.num, cursor.dayIdx) };
+  const day = week.days?.[cursor.dayIdx] ?? null;
+  return { phase, week, dayIdx: cursor.dayIdx, day, id: day ? sessionId(phase.id, week.num, cursor.dayIdx) : null };
 };
 
 // Avanzar cursor: siguiente día no completado a partir de la posición actual (siguiente día del cursor)
@@ -170,6 +171,9 @@ const isoWeekKey = (date = new Date()) => {
  */
 const cursorAlDia = (plan, cursor, hoy = new Date()) => {
   if (!isValidCursor(plan, cursor)) return cursor;
+  // Si el coach borró sesiones de esa semana y el día guardado ya no existe, se acota al último que queda (la semana no cambia).
+  const diasDeLaSemana = plan.find((f) => f.id === cursor.phaseId).weekData.find((w) => w.num === cursor.weekNum).days?.length ?? 0;
+  if ((cursor.dayIdx ?? 0) > Math.max(0, diasDeLaSemana - 1)) cursor = { ...cursor, dayIdx: Math.max(0, diasDeLaSemana - 1) };
   // En pausa el plan no avanza: se queda donde está hasta que se reanude (ver `reanudarPlan`).
   if (cursor.pausa) return cursor;
   const semanaHoy = isoWeekKey(hoy);
@@ -224,6 +228,7 @@ const moverPlanA = (plan, cursor, faseId, semana, hoy = new Date()) => {
   const f = (plan ?? []).find((x) => x.id === faseId);
   const w = f?.weekData?.find((x) => x.num === semana);
   if (!w) return cursor;
+  if (w.bloqueada) return cursor; // semana que la ventana del plan comprado aún no abre: no se puede ir ahí
   const { diaElegidoEl, agregadas, ...resto } = cursor ?? {};
   void diaElegidoEl; void agregadas;
   const dia = Math.min(cursor?.dayIdx ?? 0, Math.max(0, (w.days?.length ?? 1) - 1));
