@@ -12,6 +12,7 @@ import { IconBtn, Pill } from '@/features/admin/piezas';
 import { AvisoDeFormatos, EncabezadoDelSet } from '@/features/admin/FormatoDelSet';
 import LapsosDelEjercicio, { PorLadoDelEjercicio } from '@/features/admin/LapsosDelEjercicio';
 import DescansoEntreSets from '@/features/admin/DescansoEntreSets';
+import DescansosDelSet, { descansoComun } from '@/features/admin/DescansosDelSet';
 import { traeLapsos } from '@/lib/lapsos';
 import { parseBlocks, serializeBlocks, setTag } from '@/lib/setsDeUnaSesion';
 import { esProgramaFantasma } from '@/lib/programas';
@@ -1073,6 +1074,8 @@ function CuerpoDeSets({
   const [pickerCtx, setPickerCtx] = useState(null);
   // El Set donde se acaba de elegir «Lapsos personalizados»: ahí una burbuja señala el «+ Lapso» hasta que se acepte o se toque en otro lado.
   const [burbujaEn, setBurbujaEn] = useState(null);
+  // Los Sets donde se pidió «Distinto por ejercicio» (cada ejercicio enseña su casilla de descanso). Un Set cuyo plan ya trae descansos distintos se abre solo.
+  const [distintoEn, setDistintoEn] = useState({});
   const blocks = useMemo(() => parseBlocks(exercises), [exercises]);
   const nSets = blocks.filter((b) => b.type === 'set').length;
   // Cada lista de este cuerpo (los Sets, los ejercicios de cada Set) se identifica con su id.
@@ -1117,6 +1120,7 @@ function CuerpoDeSets({
           const tag = setTag(b.members.length);
           // La raya con el descanso entre este Set y el siguiente: solo hay raya si viene otro Set después.
           const hayOtroSet = blocks.slice(bi + 1).some((x) => x.type === 'set');
+          const distintoAbierto = distintoEn[bi] ?? (!b.formato && !b.lapsos && b.members.length > 1 && descansoComun(b.members.slice(0, -1)) === null);
           return (
             <Fragment key={bi}>
             <div
@@ -1152,8 +1156,9 @@ function CuerpoDeSets({
                   // La burbuja del «+ Lapso» va en el primer ejercicio del Set donde se acaba de elegir el formato.
                   burbuja: !soloLectura && b.lapsos && burbujaEn === bi && mi === 0,
                   onCerrarBurbuja: () => setBurbujaEn(null),
-                  // Con un reloj de formato, el descanso lo marca el reloj y la línea no trae su casilla.
-                  sinDescanso: !!b.formato,
+                  /* El descanso ya no es una casilla por ejercicio: vive en el bloque «Descansos» del Set (ver `DescansosDelSet`). La casilla de cada ejercicio solo sale con
+                     «Distinto por ejercicio», y no en el último (el suyo es el «Entre vueltas»). Con un reloj de formato lo marca el reloj; con lapsos, cada lapso. */
+                  sinDescanso: !!b.formato || b.lapsos || !distintoAbierto || mi === b.members.length - 1,
                   onVideoAtleta: setMediaDe,
                   onPatch: (patch) => writeBlocks((bs) => bs.map((x, k) => (k === bi
                     ? { ...x, members: x.members.map((mm, kk) => (kk === mi ? { ...mm, ...patch } : mm)) }
@@ -1194,6 +1199,14 @@ function CuerpoDeSets({
                   </div>
                 );
               })()}
+              {!b.formato && !b.lapsos && (
+                <DescansosDelSet
+                  miembros={b.members} rondas={b.rounds} hayOtroSet={hayOtroSet} soloLectura={soloLectura} despues={b.descansoDespues}
+                  distintoAbierto={distintoAbierto} onDistinto={(v) => setDistintoEn((d) => ({ ...d, [bi]: v }))}
+                  onEntreEjercicios={(v) => writeBlocks((bs) => bs.map((x, k) => (k === bi ? { ...x, members: x.members.map((m, kk) => (kk < x.members.length - 1 ? { ...m, descanso: v } : m)) } : x)))}
+                  onEntreVueltas={(v) => writeBlocks((bs) => bs.map((x, k) => (k === bi ? { ...x, members: x.members.map((m, kk) => (kk === x.members.length - 1 ? { ...m, descanso: v } : m)) } : x)))}
+                />
+              )}
             </div>
             {hayOtroSet && (
               <DescansoEntreSets
