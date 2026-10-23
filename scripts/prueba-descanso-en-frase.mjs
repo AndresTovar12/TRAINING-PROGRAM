@@ -42,3 +42,19 @@ for (const [t, seg] of Object.entries(reales)) {
   assert.equal(p?.seg, seg, `«${t}» cuenta ${seg} s`);
 }
 console.log('prueba-descanso-en-frase: todo bien');
+
+// Otras formas de escribir el tiempo (auditoría 23 oct 2026): comillas, minutos y segundos, horas, un número suelto
+for (const [t, esperado] of Object.entries({ "45''": '45 seg', "1'30''": '90 seg', "1'30": '90 seg', '120': '120 seg', '3': '3 min', '1 h': '60 min' })) {
+  assert.equal(descansoEnTiempo(t), esperado, `«${t}» debe leerse ${esperado}`);
+}
+for (const t of ['No descansar', 'Ninguna', 'N/A', 'n/a', '-', '—']) assert.equal(esSinDescanso(t), true, `«${t}» es sin descanso`);
+for (const t of ["45''", '120', '1 h', 'No recuperar a medias']) assert.equal(esSinDescanso(t), false, `«${t}» SÍ es descanso`);
+{
+  const r = pasosDeLaSesion({ day: 'Lun', cat: 'gym', name: 'S', exercises: [
+    { name: 'A', sets: '3', reps: '15.', descanso: "45''", set: 1 },
+    { name: 'B', sets: '3', reps: '10', descanso: 'No descansar', set: 1 },
+  ] });
+  const dd = r.pasos.filter((p) => p.tipo === 'descanso');
+  assert.ok(dd.length > 0 && dd.every((p) => p.seg === 45), `solo los descansos de A, de 45 s: ${dd.map((p) => p.seg).join(',')}`);
+}
+console.log('prueba-descanso-en-frase: también las otras formas');

@@ -318,7 +318,12 @@ export function exDataTrasListo({ paso, exData, kgPlaneados = null, conPeso = fa
   const reps = !vacio(real?.reps) ? String(real.reps) : (vacio(hay.repsHechas) ? cantidadPlaneada(paso) : null);
   const peso = !conPeso ? null : (!vacio(real?.kg) ? String(real.kg) : (vacio(hay.weight) ? kgPlaneados : null));
   const dato = {};
-  if (!vacio(reps)) dato.repsHechas = String(reps);
+  if (!vacio(reps)) {
+    dato.repsHechas = String(reps);
+    // Segundos, metros o calorías se anotan en el mismo campo: se guarda de qué eran para no decir «30 reps» de una plancha de 30 seg.
+    const unidad = paso.termina?.unidad;
+    if (unidad && unidad !== 'reps' && unidad !== 'cluster') dato.unidadHecha = unidad;
+  }
   if (!vacio(peso)) dato.weight = String(peso);
   if (!Object.keys(dato).length) return null;
   return variasVueltas ? conVueltaAnotada(exData, i, dato) : { ...exData, ...dato };

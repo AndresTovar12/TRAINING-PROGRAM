@@ -6,6 +6,7 @@ import { ZONAS, limitesDeZonas, zonaDe } from '@/lib/metricas/calculos';
 import { DEPORTES, nombreDelDeporte } from '@/lib/metricas/deportes';
 import { borraActividad, getActividad, getSeries } from '@/lib/metricasApi';
 import { filasPorSerie } from '@/lib/metricas/porSerie';
+import { textoDeHecho } from '@/lib/medidas';
 import { sellosDeActividad, sellosDeSesionGuiada } from '@/lib/sello/datos';
 import {
   distanciaTexto, duracionTexto, fechaLarga, horaTexto, relojTexto, ritmoTexto, velocidadTexto,
@@ -194,7 +195,7 @@ function SeriesDeFuerza({ sets }) {
       {series.map((s, i) => (
         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: `1px solid ${KP.line}`, fontSize: 14, fontWeight: 700, color: LT.text, ...NUM_STYLE }}>
           <span style={{ width: 28, color: LT.text2 }}>{i + 1}</span>
-          <span style={{ flex: 1 }}>{s.reps ? `${s.reps} reps` : '—'}{s.kg ? ` × ${s.kg} kg` : ''}</span>
+          <span style={{ flex: 1 }}>{s.reps ? textoDeHecho(s.reps, s.unidad) : '—'}{s.kg ? ` × ${s.kg} kg` : ''}</span>
           <span style={{ color: LT.text2, fontWeight: 600 }}>{s.dur ? duracionTexto(s.dur) : ''}</span>
         </div>
       ))}

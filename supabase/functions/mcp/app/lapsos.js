@@ -195,10 +195,10 @@ export function descansoDeLapsoEnSegundos(lapso) {
   return seg > 0 ? seg : null;
 }
 
-/** Cuántas veces se repite el Set, para el reloj: un número claro, o una vez. */
+/** Cuántas veces se repite el Set, para el reloj: un número claro, de un rango «4-6» las que sí o sí se hacen (4; las demás son opcionales, igual que en el modo entreno), o una vez. */
 const rondasDelReloj = (rondas) => {
-  const t = String(rondas ?? '').trim();
-  const n = /^\d+$/.test(t) ? parseInt(t, 10) : 1;
+  const m = /^(\d+)(?:\s*[-–]\s*(\d+))?$/.exec(String(rondas ?? '').trim());
+  const n = m ? Math.min(parseInt(m[1], 10), m[2] ? parseInt(m[2], 10) : Infinity) : 1;
   return Math.min(MAX_RONDAS, Math.max(1, n));
 };
 

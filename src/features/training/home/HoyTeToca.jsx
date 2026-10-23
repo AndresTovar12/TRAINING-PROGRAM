@@ -84,7 +84,7 @@ export const botonBlanco = {
  * Un programa. `sesiones`: [{ day, nombre, meta: ['Neural', '4 ejercicios', '60 min'] }] (una o las dos de un día con
  * mañana y tarde). `completada`: el día ya está hecho («Empezar» pasa a «Ver detalle»).
  */
-export function HoyTeToca({ sesiones, completada = false, onAbrir, cuando, estilo }) {
+export function HoyTeToca({ sesiones, completada = false, enMarcha = false, onAbrir, cuando, estilo }) {
   return (
     <Marco etiqueta={etiquetaDeHoy(sesiones.length, completada, cuando)} punto={completada ? '#7CF0C5' : '#FFB547'} fecha={cuando?.fecha} estilo={estilo}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 18 }}>
@@ -100,7 +100,7 @@ export function HoyTeToca({ sesiones, completada = false, onAbrir, cuando, estil
       </div>
       <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
         <button type="button" className="kp-press" onClick={onAbrir} style={botonBlanco}>
-          {completada ? <>Ver detalle <ChevronRight size={19} aria-hidden="true" /></> : <><Play size={18} fill="currentColor" aria-hidden="true" />Empezar</>}
+          {completada ? <>Ver detalle <ChevronRight size={19} aria-hidden="true" /></> : <><Play size={18} fill="currentColor" aria-hidden="true" />{enMarcha ? 'Seguir' : 'Empezar'}</>}
         </button>
       </div>
     </Marco>

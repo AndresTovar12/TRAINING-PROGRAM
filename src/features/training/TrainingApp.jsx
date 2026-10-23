@@ -67,7 +67,7 @@ import {
 import { setTag, groupIntoSets } from '@/lib/setsDeUnaSesion';
 import { aspectoDelTipo } from '@/lib/aspectoDelTipo';
 import { plural, pluralS, rondasQueDecir } from '@/lib/plural';
-import { textoMeta, cargaEnSuUnidad } from '@/lib/medidas';
+import { textoMeta, textoDeHecho, cargaEnSuUnidad } from '@/lib/medidas';
 import {
   formatoDeMiembros, expande, resumenDeFormato, textoDeResultado, tramosDeTrabajo,
 } from '@/lib/formatos';
@@ -345,7 +345,7 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phas
   const anotado = (vueltas
     ? [hechas ? `${hechas} de ${vueltas.length} vueltas` : null, exData.weight ? `${desdeKilos(exData.weight, unidad)} ${u}` : null]
     : [
-      exData.repsHechas ? `${exData.repsHechas} ${exData.repsHechas === '1' ? 'rep' : 'reps'}` : null,
+      textoDeHecho(exData.repsHechas, exData.unidadHecha),
       exData.weight ? `${desdeKilos(exData.weight, unidad)} ${u}` : null,
     ]).filter(Boolean).join(' · ');
 
@@ -1037,7 +1037,8 @@ const CuerpoDelDia = ({
   const toggleComplete = () => updateSession(selectedId, prev => ({
     ...prev, completed: !prev?.completed,
     completedAt: !prev?.completed ? new Date().toISOString() : null,
-    ...(prev?.completed ? { entreno: reiniciaSiTerminado(prev?.entreno), ...archivaLoHecho(prev) } : null),
+    // Un entreno guiado a medias sigue vivo tras «Deshacer»: no se archiva (si no, cada «Terminar» y «Deshacer» dejaba otra copia del mismo entreno).
+    ...(prev?.completed ? { entreno: reiniciaSiTerminado(prev?.entreno), ...(prev?.entreno && reiniciaSiTerminado(prev.entreno) === prev.entreno ? null : archivaLoHecho(prev)) } : null),
   }));
   /* «Iniciar entreno»: abre el MODO ENTRENO de esta sesión (ver `BotonDelEntreno`). Una sesión que dice «repite el martes» se entrena con
      los ejercicios del martes (`ejercicios`), pero lo que se anota queda en SU lugar. */
@@ -1892,6 +1893,8 @@ const HomeView = ({
     : [];
   // Dar play a una sesión de otro día (o de otra semana) la abre ahí mismo: se hace y se marca en SU día; el plan no se mueve.
   const abrirLaDeHoy = next ? () => onStartSession(next.phase, next.week, next.dayIdx, !esHoyVista) : undefined;
+  // Un entreno guiado a medias (tiene pasos hechos y la sesión no está terminada): la tarjeta dice «Seguir», no «Empezar».
+  const entrenoEnMarcha = !!next && !cursorCompleted && Object.keys(sessionsData[next.id]?.entreno?.hechos ?? {}).length > 0 && !sessionsData[next.id]?.entreno?.oculto;
   const enPausa = !!cursor?.pausa;
   const posicionDeFase = faseDeHoy ? PLAN.findIndex((f) => f.id === faseDeHoy.id) : -1;
   const etiquetaDeFase = kind === 'weekly' ? 'Tu rutina' : deCorrido ? 'Tu programa' : `Fase ${faseDeHoy?.num ?? ''}`;
@@ -1989,7 +1992,7 @@ const HomeView = ({
           ) : enPausa ? null : sesionesDeLaTarjeta.length > 0 ? (
             <HoyTeToca
               sesiones={sesionesDeLaTarjeta}
-              completada={cursorCompleted}
+              completada={cursorCompleted} enMarcha={entrenoEnMarcha}
               onAbrir={abrirLaDeHoy}
               cuando={cuando}
             />

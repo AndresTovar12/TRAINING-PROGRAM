@@ -5,6 +5,7 @@ import { desdeKilos, etiquetaUnidad } from '@/lib/unidades';
 import { TEXTO_DE_FUENTE } from '@/lib/metricas/porSerie';
 import { duracionTexto, relojTexto, ritmoTexto } from '@/lib/metricas/formato';
 import { Seccion, Tarjeta } from './Piezas';
+import { textoDeHecho } from '@/lib/medidas';
 
 /* «POR SERIE»: cada serie, lapso o set de un entreno guiado, con lo que importa de cada uno. Se arma en `lib/metricas/porSerie.js`; aquí solo se dibuja.
 
@@ -42,7 +43,7 @@ const Dato = ({ icono: Icono, titulo, color = LT.text3, children }) => (
 function textoDeCarga(f, unidadPeso) {
   const partes = [];
   if (f.kg !== null && f.kg !== undefined) partes.push(`${desdeKilos(f.kg, unidadPeso)} ${etiquetaUnidad(unidadPeso)}`);
-  if (f.reps) partes.push(`${f.reps} ${f.reps === '1' ? 'rep' : 'reps'}`);
+  if (f.reps) partes.push(textoDeHecho(f.reps, f.unidad));
   return partes.join(' × ');
 }
 

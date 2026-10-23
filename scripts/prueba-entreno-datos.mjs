@@ -299,7 +299,8 @@ const lower = {
   // Un ejercicio de una sola vuelta se anota a secas, sin `vueltas`.
   const plancha = plan.pasos.find((p) => p.nombre === 'Plancha lateral');
   const unica = pasosDeLaSesion({ cat: 'gym', exercises: [ex('Plancha', { reps: '30', unidad: 'seg' })] }).pasos[0];
-  assert.deepEqual(exDataTrasListo({ paso: unica, exData: { notaVieja: 1 } }), { notaVieja: 1, repsHechas: '30' });
+  // Y se guarda que eran segundos, para no decir «30 reps» de una plancha.
+  assert.deepEqual(exDataTrasListo({ paso: unica, exData: { notaVieja: 1 } }), { notaVieja: 1, repsHechas: '30', unidadHecha: 'seg' });
   assert.equal(plancha.vueltas, 2);
   // Un nombre solo no anota nada (ni un registro vacío).
   const nombre = pasosDeLaSesion({ cat: 'gym', exercises: [ex('Sentadilla')] }).pasos[0];
