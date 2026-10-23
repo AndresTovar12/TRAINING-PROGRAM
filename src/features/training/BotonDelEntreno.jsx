@@ -74,7 +74,8 @@ export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, on
   }, [autor, programaActivo, perfil?.coach_id, coach]);
   const [abierto, setAbierto] = useState(false);
   // Home pidió abrir el entreno de esta sesión («Empezar»): se lee una sola vez, al montar.
-  const [abrirYa] = useState(() => recogeEntrenoPendiente(sesionId));
+  // Se apaga en cuanto se usa: si no, al cerrar el entreno se volvería a abrir solo.
+  const [abrirYa, setAbrirYa] = useState(() => recogeEntrenoPendiente(sesionId));
   const [intento, setIntento] = useState(0);
   const [fallo, setFallo] = useState(false);
   // Una sesión que dice «repite el martes» se entrena con los ejercicios del martes (`ejercicios`); lo que se anota queda en SU lugar.
@@ -118,7 +119,7 @@ export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, on
   };
   return (
     <>
-      {abrirYa && !abierto && !fallo && <AbreAlAparecer alAparecer={abre} />}
+      {abrirYa && <AbreAlAparecer alAparecer={() => { setAbrirYa(false); abre(); }} />}
       <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
         <button
           type="button" onClick={abre} className="kp-press"

@@ -854,7 +854,7 @@ export function HojaDeLista({ tarjetas, miniaturaDe, palabras, onElegir, onTermi
       })}
       <div style={{ marginTop: 14 }}><BotonGrande onClick={onCerrar}>Seguir</BotonGrande></div>
       <div style={{ textAlign: 'center', marginTop: 6 }}>
-        <button type="button" onClick={onTerminar} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 15.5, fontWeight: 700, color: LT.danger, padding: '10px 14px', touchAction: 'manipulation' }}>{palabras.listaTerminar}</button>
+        <button type="button" onClick={onTerminar} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 15.5, fontWeight: 800, color: LT.blue, padding: '10px 14px', touchAction: 'manipulation' }}>{palabras.listaTerminar}</button>
       </div>
       {onSalir && (
         <div style={{ textAlign: 'center' }}>
