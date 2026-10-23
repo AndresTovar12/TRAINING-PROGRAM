@@ -122,7 +122,7 @@ function leeTexto(crudo, unidadPuesta) {
   const cola = resto.trim().toLowerCase();
 
   // Un número solo son repeticiones: es lo que la app ha supuesto siempre.
-  if (!cola) return { cantidad: numero.replace(/\s/g, ''), unidad: 'reps', libre: false };
+  if (!cola || cola === '.') return { cantidad: numero.replace(/\s/g, ''), unidad: 'reps', libre: false };
 
   for (const [id, formas] of ESCRITURAS) {
     for (const forma of formas) {
@@ -150,6 +150,17 @@ export function textoMeta(ex) {
   }
   if (id === 'reps') return `${cantidad === '1' ? '1 rep' : `${cantidad} reps`}${lado}`;
   return `${cantidad} ${medida(id).corta}${lado}`;
+}
+
+/**
+ * Lo que anotó el atleta, dicho con la unidad de lo que hizo: «30 seg» de una plancha, «400 m», «12 cal», «8 reps». `unidad` es la de lo
+ * hecho (`unidadHecha` del registro); sin ella o si es de repeticiones, «reps» como siempre.
+ */
+export function textoDeHecho(cantidad, unidad) {
+  const c = String(cantidad ?? '').trim();
+  if (!c) return null;
+  if (!unidad || unidad === 'reps' || unidad === 'cluster' || !PORID[unidad]) return c === '1' ? '1 rep' : `${c} reps`;
+  return `${c} ${medida(unidad).corta}`;
 }
 
 /** El número solo, sin rango, para cuentas. `null` si no hay uno limpio. */
@@ -370,12 +381,28 @@ export function leeDescanso(ex) {
  */
 export function esSinDescanso(texto) {
   const t = String(texto ?? '').trim();
-  return /^(sin\s+(pausa|descanso)|ninguno|nada)\b/i.test(t) || /^(no|0+\s*(s|seg|segundos?|min|minutos?)?)$/i.test(t);
+  return /^(sin\s+(pausa|descanso)|ning[uú]n[oa]?|nada)\b/i.test(t)
+    || /^(no(\s+descansar?)?|n\/?a|[-–—]|0+\s*(s|seg|segundos?|min|minutos?)?)\.?$/i.test(t);
+}
+
+/* Otras formas de escribir un tiempo de descanso, llevadas a «N seg» / «N min»: «45''», «1'30''», «1 h» y un número suelto («120» son
+   segundos; de uno a nueve, minutos: «3»). Lo que no encaja se devuelve `null` y sigue el camino de siempre. */
+function descansoEnOtraForma(crudo) {
+  let m = crudo.match(/^(\d+)\s*['′]\s*(\d{1,2})\s*(?:''|["″′]{1,2})?$/);
+  if (m) return `${parseInt(m[1], 10) * 60 + parseInt(m[2], 10)} seg`;
+  m = crudo.match(new RegExp(`^${RANGO}\\s*(?:''|["″]|′′)\\.?$`));
+  if (m) return `${m[1].replace(/\s/g, '').replace('–', '-')} seg`;
+  m = crudo.match(/^(\d+(?:[.,]\d+)?)\s*(?:h|hr|hrs|horas?)\.?$/i);
+  if (m) return `${Math.round(parseFloat(m[1].replace(',', '.')) * 60)} min`;
+  m = crudo.match(/^\d+$/);
+  return m ? `${crudo} ${parseInt(crudo, 10) >= 10 ? 'seg' : 'min'}` : null;
 }
 
 export function descansoEnTiempo(texto) {
   const crudo = String(texto ?? '').trim();
   if (!crudo || leeDescanso({ descanso: crudo }).unidad || /^\d+:\d{2}$/.test(crudo)) return crudo;
+  const otra = descansoEnOtraForma(crudo);
+  if (otra) return otra;
   const m = crudo.match(new RegExp(`(?:^|[^\\d:.,])${RANGO}\\s*(segundos?|segs?|s|minutos?|mins?)(?![a-záéíóúñ])`, 'i'));
   if (!m) return crudo;
   const unidad = /^m/i.test(m[2]) ? 'min' : 'seg';

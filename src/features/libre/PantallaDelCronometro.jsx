@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useConfirmacion } from '@/components/Confirmacion';
 import { Loader2, MapPin, Pause, Play, Square } from 'lucide-react';
 import HojaFlotante from '@/components/HojaFlotante';
 import { LT, FONT, KP, NUM_STYLE, UI } from '@/lib/theme';
@@ -29,6 +30,7 @@ export default function PantallaDelCronometro({ userId, crono, pendiente = null,
   const conGps = !pendiente && !!cronometro?.gps;
   const vivo = useMemo(() => (conGps ? enVivo(muestras) : null), [conGps, muestras]);
   const senal = useSenalGps(!!pendiente);
+  const pregunta = useConfirmacion();
 
   const terminar = () => {
     const t = crono.termina();
@@ -37,6 +39,14 @@ export default function PantallaDelCronometro({ userId, crono, pendiente = null,
     // Con lo que midió el GPS ya no se pregunta la distancia; si casi no midió (sin señal), se pregunta como siempre.
     if (conGps && (vivo?.distanciaM ?? 0) >= 100) { guardar(null); return; }
     if (unidad) setFase('distancia'); else guardar(null);
+  };
+
+  // Descartar un entreno que ya pasó del mínimo: se pregunta, porque ya no se recupera.
+  const descartar = async () => {
+    const si = await pregunta({ titulo: '¿Descartar este entreno?', detalle: 'No se guardará y no se puede recuperar.', confirmar: 'Descartar', peligro: true });
+    if (!si) return;
+    crono.descarta();
+    alMinimizar();
   };
 
   async function guardar(texto) {
@@ -121,13 +131,14 @@ export default function PantallaDelCronometro({ userId, crono, pendiente = null,
             {error && <div role="alert" style={{ padding: '9px 12px', borderRadius: 12, background: '#FDECEC', color: LT.danger, fontSize: 14, fontWeight: 700 }}>{error}</div>}
             <button type="submit" className="kp-press" style={botonGrande()}>Guardar</button>
             <button type="button" onClick={() => guardar(null)} className="kp-press" style={botonBlancoGrande()}>Sin distancia</button>
+            <button type="button" onClick={descartar} className="kp-press" style={botonBlancoGrande()}>Descartar entreno</button>
           </form>
         )}
 
         {fase === 'muy_corto' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14, width: '100%', textAlign: 'center' }}>
             <div style={{ fontSize: 19, fontWeight: 800, color: LT.text }}>Fue muy corto para guardarlo</div>
-            <button type="button" onClick={() => setFase('corre')} className="kp-press" style={botonGrande()}>Seguir entrenando</button>
+            <button type="button" onClick={() => { if (pausado) crono.reanuda(); setFase('corre'); }} className="kp-press" style={botonGrande()}>Seguir entrenando</button>
             <button type="button" onClick={() => { crono.descarta(); alMinimizar(); }} className="kp-press" style={botonBlancoGrande()}>Descartar</button>
           </div>
         )}

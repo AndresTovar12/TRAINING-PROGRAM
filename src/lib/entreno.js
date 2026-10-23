@@ -1,4 +1,5 @@
 import { leeCantidad, leeCarga, leeDescanso, descansoEnTiempo, esSinDescanso, textoMeta } from './medidas.js';
+import { porcentajeDe } from './cargaPorcentaje.js';
 import { formatoDeMiembros, nombreDeFormato, resumenDeFormato, segundosTotales } from './formatos.js';
 import { comoEjercicio, cuantoDeLapso, hayLapsos, lapsoDeLinea, lapsosDe, tramosDeLapsos } from './lapsos.js';
 import { ejercicioDeVuelta, vueltasDe } from './porVuelta.js';
@@ -146,7 +147,11 @@ function metaDe(e) {
   const crudo = texto(e?.intensity);
   if (!crudo) return null;
   const { tipo, cantidad } = leeCarga(e);
-  if (!tipo) return { tipo: 'texto', texto: crudo };
+  if (!tipo) {
+    // «65% (front)» o «70% / RPE 8»: trae un porcentaje del 1RM aunque diga algo más. La lista del día ya lo lleva a kilos; aquí también.
+    const pct = porcentajeDe(crudo);
+    return pct ? { tipo: 'pct', texto: crudo, min: pct.min, max: pct.max } : { tipo: 'texto', texto: crudo };
+  }
   const r = tipo === 'ritmo' || tipo === 'nado' ? rangoDeTiempo(cantidad) : rangoDe(cantidad);
   return { tipo, texto: crudo, ...(r ?? null) };
 }

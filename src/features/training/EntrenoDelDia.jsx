@@ -9,6 +9,7 @@ import { cargaPorPorcentaje } from '@/lib/cargaPorcentaje';
 import { aKilos, desdeKilos, etiquetaUnidad } from '@/lib/unidades';
 import { FORMATOS, textoDeResultado, tramosDeTrabajo, vistaDe } from '@/lib/formatos';
 import { anotadoEnVuelta } from '@/lib/porVuelta';
+import { textoDeHecho } from '@/lib/medidas';
 import { palabrasDelEntreno } from '@/lib/entrenoPalabras';
 import { FUNCIONES } from '@/lib/funciones';
 import { relojAMedias } from '@/lib/relojGuardado';
@@ -81,7 +82,7 @@ export default function EntrenoDelDia({
   const [hoja, setHoja] = useState(null);
   const [verFin, setVerFin] = useState(false);
   // El sello para redes, desde el final del entreno.
-  const [sello, setSello] = useState(false);
+  const [sello, setSello] = useState(false); // la hora en que se abrió, o `false`
   // La técnica que se está grabando (el paso, congelado al tocar la cámara) y la última que se mandó de cada paso: `{ [clave]: idDeLaTécnica }`.
   const [grabandoTecnica, setGrabandoTecnica] = useState(null);
   const [tecnicasMandadas, setTecnicasMandadas] = useState({});
@@ -154,7 +155,7 @@ export default function EntrenoDelDia({
     const exData = registro?.exercises?.[p.idx];
     const hay = p.vueltas > 1 ? anotadoEnVuelta(exData, p.vuelta - 1) : (exData ?? {});
     return [
-      hay.repsHechas ? `${hay.repsHechas} ${hay.repsHechas === '1' ? 'rep' : 'reps'}` : null,
+      textoDeHecho(hay.repsHechas, hay.unidadHecha),
       hay.weight ? `${desdeKilos(hay.weight, unidadDePeso)} ${etiquetaUnidad(unidadDePeso)}` : null,
     ].filter(Boolean).join(' · ');
   };
@@ -180,6 +181,13 @@ export default function EntrenoDelDia({
   /* ---------- Las acciones: cada una escribe en el registro al instante ---------- */
   const escribe = (cambio) => onRegistro(cambio);
 
+  // Lo que ya quedó anotado de un paso (de esta vuelta): `{ repsHechas, weight }`, o `{}`.
+  const guardadoDe = (p) => {
+    if (!p || p.tipo !== 'ejercicio' || p.lapsos > 1) return {};
+    const exData = registro?.exercises?.[p.idx];
+    return (p.vueltas > 1 ? anotadoEnVuelta(exData, p.vuelta - 1) : exData) ?? {};
+  };
+
   const listo = (real) => {
     const t = Date.now();
     setAhora(t);
@@ -192,6 +200,15 @@ export default function EntrenoDelDia({
     const clave = enfocado && objetivo === enfocado ? enfocado.clave : undefined;
     const kilos = kilosDe(objetivo);
     const ex = exDe(objetivo);
+    /* Volver con «Anterior» y dar «Listo» sin tocar nada deja lo que ya estaba anotado; pero la marca tiene que decir que es de él, no «lo del
+       plan»: si lo anotado difiere de lo planeado, viaja en la marca igual que cuando lo escribió. */
+    if (objetivo.tipo === 'ejercicio' && real?.reps === undefined && real?.kg === undefined) {
+      const g = guardadoDe(objetivo);
+      const extra = {};
+      if (g.repsHechas !== undefined && String(g.repsHechas).trim() !== '' && String(g.repsHechas) !== String(cantidadPlaneada(objetivo) ?? '')) extra.reps = String(g.repsHechas);
+      if (g.weight !== undefined && String(g.weight).trim() !== '' && String(g.weight) !== String(kilos?.kg ?? '')) extra.kg = String(g.weight);
+      if (Object.keys(extra).length) real = { ...(real ?? {}), ...extra };
+    }
     escribe((prev) => {
       const siguiente = { ...prev, entreno: marcaListo(plan, prev?.entreno, t, real, clave) };
       if (objetivo.tipo !== 'ejercicio') return siguiente;
@@ -309,6 +326,12 @@ export default function EntrenoDelDia({
 
   const kilosDelPaso = kilosDe(paso);
   const camposCambiar = paso && paso.tipo === 'ejercicio' ? camposDeCambiar(paso, { conPeso: conPeso(paso) }) : [];
+  // «Anotar resultados» arranca en lo que ya se anotó de este paso; solo lo que aún no tiene nada arranca en lo planeado.
+  const anotadoYa = guardadoDe(paso);
+  const loAnotado = {
+    ...(String(anotadoYa.repsHechas ?? '').trim() !== '' ? { reps: String(anotadoYa.repsHechas) } : null),
+    ...(String(anotadoYa.weight ?? '').trim() !== '' ? { kg: String(desdeKilos(anotadoYa.weight, unidadDePeso)) } : null),
+  };
   const cambiar = camposCambiar.length > 0 ? {
     campos: camposCambiar,
     planeado: { reps: cantidadPlaneada(paso) ?? '', kg: kilosDelPaso ? String(kilosDelPaso.numero) : '' },
@@ -335,7 +358,7 @@ export default function EntrenoDelDia({
       <PantallaDeFin
         resumen={resumenDeFin} notas={registro?.notes ?? ''} yaTerminada={!!registro?.completed} palabras={palabras}
         onNotas={(notes) => escribe((prev) => ({ ...prev, notes }))}
-        onTerminar={terminarSesion} onVolver={volverAlEntreno} onSello={() => setSello(true)}
+        onTerminar={terminarSesion} onVolver={volverAlEntreno} onSello={() => setSello(Date.now())}
       />
     );
   } else if (enDescanso) {
@@ -403,7 +426,7 @@ export default function EntrenoDelDia({
       )}
       {hoja === 'cambiar' && cambiar && (
         <HojaDeCambiar
-          campos={cambiar.campos} planeado={cambiar.planeado} inicial={{}} unidadDePeso={etiquetaUnidad(unidadDePeso)}
+          campos={cambiar.campos} planeado={cambiar.planeado} inicial={loAnotado} unidadDePeso={etiquetaUnidad(unidadDePeso)}
           resumen={textoDeLoPlaneado(paso, kilosDelPaso)}
           onGuardar={(tocado) => {
             setHoja(null);
@@ -431,7 +454,9 @@ export default function EntrenoDelDia({
       {sello && (
         <Suspense fallback={null}>
           <HojaDelSello
-            atletaId={userId} registro={registro} sesionId={sesionId} nombre={dia.name || ''} Icono={aspecto?.Icono} unidadPeso={unidadDePeso}
+            atletaId={userId} sesionId={sesionId} nombre={dia.name || ''} Icono={aspecto?.Icono} unidadPeso={unidadDePeso}
+            // Antes de «Terminar» el entreno no tiene hora de fin: el resumen cuenta hasta ahora, así que la activity card también (si no, decía 1:04 contra 2:55).
+            registro={registro?.entreno && registro.entreno.fin == null ? { ...registro, entreno: { ...registro.entreno, fin: sello } } : registro}
             onCerrar={() => setSello(false)}
           />
         </Suspense>

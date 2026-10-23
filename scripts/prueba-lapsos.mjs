@@ -129,9 +129,9 @@ const correr = {
   // El descanso tras el último lapso de todo no se cuenta.
   const sola = tramosDeLapsos([{ name: 'Remo', ...parcheDeLapsos([{ reps: '500', unidad: 'm', intensity: '', descanso: '2 min' }]) }], '1');
   assert.deepEqual(sola.map((x) => x.tipo), ['trabajo'], 'sin descanso al final');
-  // Sin series o con un rango, una ronda.
+  // Sin series, una ronda; con un rango «4-6», las 4 que sí o sí se hacen (las otras son opcionales, como en el modo entreno).
   assert.equal(tramosDeLapsos([c], null).filter((x) => x.tipo === 'trabajo').length, 2);
-  assert.equal(tramosDeLapsos([c], '4-6').filter((x) => x.tipo === 'trabajo').length, 2);
+  assert.equal(tramosDeLapsos([c], '4-6').filter((x) => x.tipo === 'trabajo').length, 8);
   // Un ejercicio normal dentro de un Set de lapsos corre como un lapso.
   assert.equal(tramosDeLapsos([{ name: 'Salto', reps: '30', unidad: 'seg' }], '1')[0].seg, 30);
 }

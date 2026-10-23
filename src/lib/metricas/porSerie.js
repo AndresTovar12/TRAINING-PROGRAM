@@ -204,6 +204,7 @@ export function filasPorSerie(sesion, { actividad = null, series = null } = {}) 
 
   const filas = [];
   const descansos = [];
+  const sinDescansos = !marcas.some((m) => m.clave.startsWith('d.'));
 
   marcas.forEach((m, i) => {
     const previa = marcas[i - 1] ?? null;
@@ -268,7 +269,8 @@ export function filasPorSerie(sesion, { actividad = null, series = null } = {}) 
       return;
     }
     // La ventana de la serie: del descanso anterior (o del paso anterior) a su «Listo». Solo es limpia si lo anterior fue un descanso.
-    const limpia = !!previa && dePrevia('d.');
+    // Sin ningún descanso escrito en la sesión, las series van una tras otra: la ventana de cada una es del «Listo» anterior al suyo (si no, jamás habría pulso por serie).
+    const limpia = !!previa && (dePrevia('d.') || (sinDescansos && /^\d+\.\d+\.\d+$/.test(previa.clave)));
     const desde = previa ? previa.t : (finito(e.inicio) ? e.inicio : m.t);
     const duro = m.t - desde;
     const durS = limpia && duro > 0 && duro / 1000 <= HASTA_UN_DESCANSO_LARGO_S ? Math.round(duro / 1000) : null;
@@ -283,7 +285,7 @@ export function filasPorSerie(sesion, { actividad = null, series = null } = {}) 
     const fc = durS !== null ? pulso(desde, m.t) : null;
     const fila = {
       clave: m.clave, tipo: 'serie', nombre: m.n || `Ejercicio ${Number(idx) + 1}`, vuelta: Number(vuelta), lapso: Number(lapso), orden: m.t, durS,
-      kg, reps: reps === null ? null : String(reps), fuente: cambio ? 'escrito' : (kg !== null || reps !== null ? 'plan' : null),
+      kg, reps: reps === null ? null : String(reps), unidad: hay(dato?.unidadHecha) ? String(dato.unidadHecha) : null, fuente: cambio ? 'escrito' : (kg !== null || reps !== null ? 'plan' : null),
       segEscritos: hay(m.seg) ? numero(m.seg) : null,
       fc, descanso: null, tecnica: typeof m.tecnica === 'string' ? m.tecnica : null,
     };
