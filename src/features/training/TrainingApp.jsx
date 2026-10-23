@@ -520,9 +520,9 @@ const SetGroup = ({
   // La misma palabra que el editor: Bi-serie (2), Tri-serie (3), Circuito (4 o más).
   const typeLabel = setTag(count);
   const rondas = group.exercises[0].ex.sets;
-  // A qué momento corresponde el descanso de cada ejercicio de este Set: entre ejercicios, entre vueltas (el último) o entre series (un solo ejercicio).
+  // A qué momento corresponde el descanso de cada ejercicio de este Set: entre ejercicios, o entre vueltas (el último, o el único). Los mismos nombres del editor.
   const seRepite = Math.max(1, ...(String(rondas ?? '').match(/\d+/g) ?? []).map(Number)) > 1;
-  const momentoDelDescanso = (i) => (count > 1 ? (i < count - 1 ? 'entre ejercicios' : (seRepite ? 'entre vueltas' : null)) : (seRepite ? 'entre series' : null));
+  const momentoDelDescanso = (i) => (count > 1 ? (i < count - 1 ? 'entre ejercicios' : (seRepite ? 'entre vueltas' : null)) : (seRepite ? 'entre vueltas' : null));
 
   /* UN SET CON FORMATO (AMRAP, EMOM, Tabata…): el formato reemplaza el «Se repite N veces». Lo que
      anota el atleta de todo el Set va en `formatos[<llave del Set>]`, y la llave es la del primer
@@ -1041,14 +1041,18 @@ const CuerpoDelDia = ({
   /* «Deshacer» también empieza de nuevo el entreno guiado si ya estaba terminado (ver `reiniciaSiTerminado`). Y lo que ya se había hecho NO se pierde
      (16 oct 2026: una sesión se guarda por su lugar en el plan, no por la fecha; si se hacía otra vez —el viernes que ya se hizo el jueves— lo anterior se
      borraba): se guarda en `anteriores`, y el coach lo ve como un entreno más. */
-  const toggleComplete = () => updateSession(selectedId, prev => ({
-    ...prev, completed: !prev?.completed,
-    completedAt: !prev?.completed ? new Date().toISOString() : null,
-    // «Terminar sesión» es UNA sola cosa, la toques donde la toques: si había un entreno guiado empezado, también se cierra.
-    ...(!prev?.completed && prev?.entreno ? { entreno: terminaEntreno(prev.entreno, Date.now()) } : null),
-    // Un entreno guiado a medias sigue vivo tras «Deshacer»: no se archiva (si no, cada «Terminar» y «Deshacer» dejaba otra copia del mismo entreno).
-    ...(prev?.completed ? { entreno: reiniciaSiTerminado(prev?.entreno), ...(prev?.entreno && reiniciaSiTerminado(prev.entreno) === prev.entreno ? null : archivaLoHecho(prev)) } : null),
-  }));
+  const toggleComplete = () => updateSession(selectedId, (prev) => {
+    if (!prev?.completed) {
+      // «Terminar sesión» es UNA sola cosa, la toques donde la toques: si había un entreno guiado empezado, también se cierra.
+      return { ...prev, completed: true, completedAt: new Date().toISOString(), ...(prev?.entreno ? { entreno: terminaEntreno(prev.entreno, Date.now()) } : null) };
+    }
+    /* «DESHACER» DEJA LA SESIÓN EN BLANCO (Andrés, 23 oct 2026): antes reiniciaba el entreno guiado pero dejaba los resultados de los relojes y lo anotado, y al
+       volver a hacerla un reloj ya hecho no arrancaba («Resultado: Hecho» y «Listo» sobre algo que no hizo esa vez). Lo de la vez anterior no se pierde: pasa a
+       `anteriores` (el coach lo ve como un entreno más) y la sesión arranca de cero. Las notas se quedan: son de la persona, no un resultado. */
+    const { exercises: _e, formatos: _f, ruta: _r, entreno: _en, ...resto } = prev;
+    void _e; void _f; void _r; void _en;
+    return { ...resto, completed: false, completedAt: null, ...archivaLoHecho(prev) };
+  });
   /* «Iniciar entreno»: abre el MODO ENTRENO de esta sesión (ver `BotonDelEntreno`). Una sesión que dice «repite el martes» se entrena con
      los ejercicios del martes (`ejercicios`), pero lo que se anota queda en SU lugar. */
   const botonDelEntreno = (ejercicios) => (

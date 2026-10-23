@@ -654,6 +654,7 @@ export function archivaLoHecho(registro) {
   if (registro.entreno) huella.entreno = registro.entreno;
   if (registro.exercises) huella.exercises = registro.exercises;
   if (registro.formatos) huella.formatos = registro.formatos;
+  if (registro.ruta) huella.ruta = registro.ruta;
   return { anteriores: [...(Array.isArray(registro.anteriores) ? registro.anteriores : []), huella].slice(-20) };
 }
 

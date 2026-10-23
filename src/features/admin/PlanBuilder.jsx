@@ -252,7 +252,7 @@ function ExerciseCard({
      nombre del ejercicio y se lo enseñaba al atleta como si fuera una
      indicación suya. Si aquí se deja vacío, al atleta no le aparece nada:
      mejor callar que inventarle un dato de entrenamiento. */
-  const campoDescanso = <CampoDescanso ex={ex} onPatch={onPatch} estiloInput={estiloCampo} nombre="Descanso después" />;
+  const campoDescanso = <CampoDescanso ex={ex} onPatch={onPatch} estiloInput={estiloCampo} nombre="Descanso entre ejercicios" />;
   return (
     <div {...arrastre} style={{ background: T.bg2, border: 'none', boxShadow: '0 1px 2px rgba(17,19,24,0.04)', borderRadius: 14, overflow: 'hidden', minWidth: 0 }}>
       <div style={{ position: 'relative', height: 110, width: '100%', background: '#0E1015' }}>
@@ -528,13 +528,13 @@ function ExerciseRow({
             )}
             {/* En un Set con reloj (AMRAP, EMOM, Tabata…) el descanso lo marca el reloj: no hay casilla (un solo lugar para cada dato). */}
             {!sinDescanso && (
-              <div style={fluido(1) ?? { width: 178 }}>
-                <CampoDescanso ex={ex} onPatch={onPatch} compacto estiloInput={inputFila} nombre="Descanso después" />
+              <div style={fluido(1) ?? { width: 214 }}>
+                <CampoDescanso ex={ex} onPatch={onPatch} compacto estiloInput={inputFila} nombre="Descanso entre ejercicios" />
               </div>
             )}
             {/* El último ejercicio no lleva casilla: su descanso es el de «entre vueltas», en la cabecera del Set. */}
             {notaDescanso && (
-              <div style={{ ...(fluido(1) ?? { width: 178 }), ...NOTA_DE_DESCANSO, alignSelf: 'center', paddingTop: 14 }}>Descanso: «entre vueltas», arriba ↑</div>
+              <div style={{ ...(fluido(1) ?? { width: 214 }), ...NOTA_DE_DESCANSO, alignSelf: 'center', paddingTop: 14 }}>Descanso: «entre vueltas», arriba ↑</div>
             )}
           </>
         )}
@@ -1125,7 +1125,7 @@ function CuerpoDeSets({
           const tag = setTag(b.members.length);
           // La raya con el descanso entre este Set y el siguiente: solo hay raya si viene otro Set después.
           const hayOtroSet = blocks.slice(bi + 1).some((x) => x.type === 'set');
-          /* LOS DESCANSOS DEL SET (23 oct 2026): entre ejercicios, «Descanso después» junto a reps y carga de cada ejercicio (menos el último); entre vueltas, en la
+          /* LOS DESCANSOS DEL SET (23 oct 2026): entre ejercicios, «Descanso entre ejercicios» junto a reps y carga de cada ejercicio (menos el último); entre vueltas, en la
              cabecera junto a «Se repite»; después del Set, en la raya entre Sets. Se guardan donde siempre: `descanso` de cada ejercicio (el del último es el de entre vueltas; en lapsos, el de
              su último lapso) y `descansoSet` del último. Con un reloj de formato (AMRAP, EMOM…) los marca el reloj: no hay chips. */
           const ultimo = b.members[b.members.length - 1];
@@ -1169,7 +1169,7 @@ function CuerpoDeSets({
                   // La burbuja del «+ Lapso» va en el primer ejercicio del Set donde se acaba de elegir el formato.
                   burbuja: !soloLectura && b.lapsos && burbujaEn === bi && mi === 0,
                   onCerrarBurbuja: () => setBurbujaEn(null),
-                  /* «Descanso después» junto a reps y carga en todos menos el ÚLTIMO (Andrés, 23 oct 2026, al ver las capturas: la raya entre tarjetas no le gustó).
+                  /* «Descanso entre ejercicios» junto a reps y carga en todos menos el ÚLTIMO (Andrés, 23 oct 2026, al ver las capturas: la raya entre tarjetas no le gustó).
                      El del último es el de entre vueltas: va en la cabecera, y su fila lo dice. Con reloj de formato no hay casillas; en lapsos, cada lapso trae la suya. */
                   sinDescanso: !!b.formato || !!b.lapsos || mi === b.members.length - 1,
                   notaDescanso: !b.formato && !b.lapsos && repite && mi === b.members.length - 1,
