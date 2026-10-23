@@ -14,6 +14,7 @@ import {
 } from '@/lib/formatos';
 import { perderiaLapsos, perderiaVueltas } from '@/lib/lapsos';
 import { T, FONT, UI, KP } from '@/lib/theme';
+import { ChipDeDescanso } from '@/features/admin/DescansoEntreSets';
 
 /**
  * El formato de un Set en el editor: AMRAP, EMOM, Tabata, Fartlek… (ver `lib/formatos.js`).
@@ -117,6 +118,7 @@ export function AvisoDeFormatos() {
  */
 export function EncabezadoDelSet({
   numero, bloque, etiquetaDeTipo, onCambio, onAgregar, onSubir, onBajar, onEliminar, puedeSubir, puedeBajar, onLapsos,
+  descansoVueltas = '', onDescansoVueltas = null,
 }) {
   const pregunta = useConfirmacion();
   // En la compu la cápsula cabe en un renglón y lleva la rayita; en el teléfono las veces bajan de renglón, sin rayita.
@@ -135,6 +137,8 @@ export function EncabezadoDelSet({
   const seriesTexto = String(bloque.rounds ?? '');
   const esNumero = /^\d+$/.test(seriesTexto.trim());
   const nSeries = esNumero ? parseInt(seriesTexto, 10) : 0;
+  // ¿Se repite? Un número mayor que 1 o un rango («4-6»).
+  const seRepite = Math.max(0, ...(seriesTexto.match(/\d+/g) ?? []).map(Number)) > 1;
 
   const pon = (f) => onCambio({ formato: f, lapsos: false, rounds: String(f.vueltas) });
 
@@ -242,6 +246,16 @@ export function EncabezadoDelSet({
                   <span style={{ ...frase, marginLeft: 6, flexShrink: 0 }}>{nSeries === 1 ? 'vez' : 'veces'}</span>
                 </span>
               </span>
+            )}
+            {/* EL DESCANSO ENTRE VUELTAS va pegado a «Se repite N veces»: es parte de repetir (23 oct 2026, «cada descanso donde pasa»). Se guarda donde
+                siempre: en el último ejercicio (o en su último lapso), que es lo que lee el modo entreno. Un Set que no se repite no tiene vueltas. */}
+            {onDescansoVueltas && !sinSeries && seRepite && (
+              <ChipDeDescanso
+                sobreAzul valor={descansoVueltas} onCambio={onDescansoVueltas} nuevo="1 min"
+                titulo={nEjercicios > 1 || lapsos ? 'Al terminar la vuelta, antes de repetir el Set' : 'Al terminar cada serie, antes de la siguiente'}
+                textoAgregar={nEjercicios > 1 || lapsos ? 'Descanso entre vueltas' : 'Descanso entre series'}
+                textoValor={(v) => `${v} entre ${nEjercicios > 1 || lapsos ? 'vueltas' : 'series'}`}
+              />
             )}
           </>
         )}

@@ -25,7 +25,7 @@ const botonChico = {
 };
 
 // El menú pegado al chip. Se cierra tocando fuera o con Escape.
-function MenuDelDescanso({ ancla, numero, valor, onCambio, onCerrar }) {
+function MenuDelDescanso({ ancla, titulo, valor, onCambio, onCerrar }) {
   const [sitio, setSitio] = useState(null);
   const cierra = useRef(onCerrar);
   useEffect(() => { cierra.current = onCerrar; }, [onCerrar]);
@@ -77,7 +77,7 @@ function MenuDelDescanso({ ancla, numero, valor, onCambio, onCerrar }) {
 
   return createPortal(
     <div
-      data-menu-descanso-set role="dialog" aria-label="El descanso entre Sets"
+      data-menu-descanso-set role="dialog" aria-label={titulo}
       style={{
         position: 'fixed', zIndex: 2900, top: sitio.top, left: sitio.left, width: 280, boxSizing: 'border-box', background: T.bg2,
         border: 'none', borderRadius: 14, padding: '10px 12px 8px', fontFamily: FONT,
@@ -85,7 +85,7 @@ function MenuDelDescanso({ ancla, numero, valor, onCambio, onCerrar }) {
       }}
     >
       <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text2, padding: '2px 2px 9px' }}>
-        Después del Set {numero}, antes del siguiente
+        {titulo}
       </div>
       {numerico ? (
         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
@@ -101,7 +101,7 @@ function MenuDelDescanso({ ancla, numero, valor, onCambio, onCerrar }) {
       ) : (
         // Un texto que no es un número («Recuperación total») se respeta y se edita como texto.
         <input
-          value={valor} onChange={(e) => onCambio(e.target.value)} aria-label="Descanso entre Sets"
+          value={valor} onChange={(e) => onCambio(e.target.value)} aria-label={titulo}
           style={{
             width: '100%', boxSizing: 'border-box', border: 'none', borderRadius: 10, padding: '8px 10px',
             fontFamily: FONT, fontSize: 14, fontWeight: 600, color: T.text, background: T.bg, outline: 'none',
@@ -120,46 +120,63 @@ function MenuDelDescanso({ ancla, numero, valor, onCambio, onCerrar }) {
 }
 
 /**
+ * EL CHIP DE UN DESCANSO, donde pasa (23 oct 2026, PDF «Editor descansos» y su respuesta a la maqueta: «cada descanso donde pasa»): «⏱ 1 min entre vueltas» en la cabecera del Set,
+ * «⏱ 2 min después del Set 1» en la raya entre Sets. Sin descanso, «+ …» lo pone con `nuevo`
+ * y abre el menú (− +, seg o min, «Quitar el descanso»). `sobreAzul`: va en la banda azul de la cabecera (pastilla blanca). En solo lectura solo informa.
+ */
+export function ChipDeDescanso({ valor, onCambio, soloLectura = false, textoValor, textoAgregar, nuevo = DESCANSO_NUEVO, titulo, sobreAzul = false }) {
+  const [abierto, setAbierto] = useState(false);
+  const chip = useRef(null);
+  const hay = !!String(valor ?? '').trim();
+  if (!hay && soloLectura) return null;
+  const v = String(valor ?? '').trim();
+  return (
+    <>
+      {hay ? (
+        <button
+          ref={chip} type="button" data-chip-descanso-set className="kp-accion" disabled={soloLectura}
+          onClick={() => setAbierto((a) => !a)} aria-expanded={abierto} title={titulo}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5, border: 'none', background: sobreAzul ? '#fff' : T.accentBg, color: T.accent,
+            borderRadius: 999, padding: '5px 12px', fontFamily: FONT, fontSize: 12.5, fontWeight: 800, minHeight: 28,
+            cursor: soloLectura ? 'default' : 'pointer', touchAction: 'manipulation', flexShrink: 0,
+          }}
+        >
+          <Timer size={13} strokeWidth={2.6} /> {textoValor(v)}
+        </button>
+      ) : (
+        <span ref={chip} style={{ display: 'inline-flex' }}>
+          <button
+            type="button" data-chip-descanso-set className="kp-accion" style={sobreAzul ? { ...botonChico, background: 'rgba(255,255,255,0.18)', color: '#fff' } : botonChico}
+            onClick={() => { onCambio(nuevo); setAbierto(true); }}
+          >
+            <Plus size={13} strokeWidth={2.8} /> {textoAgregar}
+          </button>
+        </span>
+      )}
+      {abierto && hay && !soloLectura && (
+        <MenuDelDescanso ancla={chip} titulo={titulo} valor={v} onCambio={onCambio} onCerrar={() => setAbierto(false)} />
+      )}
+    </>
+  );
+}
+
+/**
  * La raya entre un Set y el siguiente. `valor`: el descanso («2 min») o vacío. En solo lectura no cambia nada: sin descanso
  * no se dibuja, y con descanso el chip solo informa.
  */
 export default function DescansoEntreSets({ numero, valor, onCambio, soloLectura = false }) {
-  const [abierto, setAbierto] = useState(false);
-  const chip = useRef(null);
   const hay = !!String(valor ?? '').trim();
   if (!hay && soloLectura) return null;
   const raya = <span aria-hidden="true" style={{ flex: 1, height: 1, background: T.borderHi }} />;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 2px' }}>
       {raya}
-      {hay ? (
-        <button
-          ref={chip} type="button" data-chip-descanso-set className="kp-accion" disabled={soloLectura}
-          onClick={() => setAbierto((a) => !a)} aria-expanded={abierto} title="El descanso entre este Set y el siguiente"
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 5, border: 'none', background: T.accentBg, color: T.accent,
-            borderRadius: 999, padding: '5px 12px', fontFamily: FONT, fontSize: 12.5, fontWeight: 800,
-            cursor: soloLectura ? 'default' : 'pointer', touchAction: 'manipulation',
-          }}
-        >
-          <Timer size={13} strokeWidth={2.6} /> {String(valor).trim()} después del Set {numero}
-        </button>
-      ) : (
-        <span ref={chip} style={{ display: 'inline-flex' }}>
-          <button
-            type="button" data-chip-descanso-set className="kp-accion" style={botonChico}
-            onClick={() => { onCambio(DESCANSO_NUEVO); setAbierto(true); }}
-          >
-            <Plus size={13} strokeWidth={2.8} /> Descanso después del Set {numero}
-          </button>
-        </span>
-      )}
+      <ChipDeDescanso
+        valor={valor} onCambio={onCambio} soloLectura={soloLectura} titulo={`Después del Set ${numero}, antes del siguiente`}
+        textoAgregar={`Descanso después del Set ${numero}`} textoValor={(v) => `${v} después del Set ${numero}`}
+      />
       {raya}
-      {abierto && hay && !soloLectura && (
-        <MenuDelDescanso
-          ancla={chip} numero={numero} valor={String(valor).trim()} onCambio={onCambio} onCerrar={() => setAbierto(false)}
-        />
-      )}
     </div>
   );
 }

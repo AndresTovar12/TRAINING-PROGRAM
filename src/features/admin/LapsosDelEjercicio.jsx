@@ -33,7 +33,7 @@ const botonChico = {
 };
 
 // Una fila: el número del lapso y sus tres casillas. Es un fragmento de la rejilla de arriba: cada pieza es una celda.
-function FilaDeLapso({ ex, lapso, k, tipoPrevio, onCambio, onQuitar, puedeQuitar, estiloInput, angosta }) {
+function FilaDeLapso({ ex, lapso, k, tipoPrevio, onCambio, onQuitar, puedeQuitar, estiloInput, angosta, descansoAparte = false }) {
   const comoEj = comoEjercicio(ex, lapso);
   const rc = useRepsYCarga({
     ex: comoEj,
@@ -52,7 +52,10 @@ function FilaDeLapso({ ex, lapso, k, tipoPrevio, onCambio, onQuitar, puedeQuitar
       {angosta && <IconBtn icon={Trash2} danger onClick={onQuitar} disabled={!puedeQuitar} title="Quitar el lapso" />}
       {/* Hasta el final de la fila (también bajo la papelera): con «2 / 4» la última columna quedaba libre y el número del lapso siguiente se metía ahí. */}
       <div style={angosta ? { gridColumn: '2 / -1' } : undefined}>
-        <CampoDescanso ex={comoEj} onPatch={onCambio} compacto estiloInput={estiloInput} />
+        {/* El descanso del ÚLTIMO lapso del último ejercicio es el de «entre vueltas»: se pone en la cabecera del Set, junto a «Se repite». Si el Set no se repite, no hay vueltas. */}
+        {descansoAparte
+          ? <div style={{ ...frase, fontWeight: 600, color: T.text3, padding: '0 0 9px', lineHeight: 1.3 }}>{descansoAparte === 'arriba' ? 'Descanso: «entre vueltas», arriba ↑' : 'Último lapso: sin descanso'}</div>
+          : <CampoDescanso ex={comoEj} onPatch={onCambio} compacto estiloInput={estiloInput} />}
       </div>
       {!angosta && <IconBtn icon={Trash2} danger onClick={onQuitar} disabled={!puedeQuitar} title="Quitar el lapso" />}
     </>
@@ -125,7 +128,7 @@ function BurbujaDeLapsos({ ancla, onCerrar }) {
  * `columnasCompu`: la rejilla de la compu (número, reps, carga, descanso, papelera); en el teléfono y en las tarjetas
  * (`angosta`) son dos columnas y el descanso baja a su renglón. `burbuja`: si se señala el «+ Lapso» de este ejercicio.
  */
-export default function LapsosDelEjercicio({ ex, onPatch, estiloInput, angosta, columnasCompu, burbuja = false, onCerrarBurbuja }) {
+export default function LapsosDelEjercicio({ ex, onPatch, estiloInput, angosta, columnasCompu, burbuja = false, onCerrarBurbuja, descansoFinalAparte = false }) {
   const lapsos = lapsosDe(ex) ?? [];
   const ancla = useRef(null);
   const guarda = (nuevos) => onPatch(parcheDeLapsos(nuevos));
@@ -150,6 +153,7 @@ export default function LapsosDelEjercicio({ ex, onPatch, estiloInput, angosta, 
             // Con la casilla vacía, la carga arranca en lo del lapso de arriba; el primero, en Ritmo si lo suyo es una distancia.
             tipoPrevio={(k > 0 ? tipoDeCargaAlEscribir(lapsos[k - 1].intensity) : null) ?? (esDistancia(l.unidad) ? 'ritmo' : null)}
             onCambio={(p) => cambia(k, p)} onQuitar={() => quita(k)} puedeQuitar={lapsos.length > 1}
+            descansoAparte={k === lapsos.length - 1 ? descansoFinalAparte : false}
           />
         ))}
       </div>
