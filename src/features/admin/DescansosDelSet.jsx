@@ -27,7 +27,7 @@ export const seRepite = (rondas) => {
   return !!n && Math.max(...n.map(Number)) > 1;
 };
 
-const estiloCaja = { background: T.bg2, border: 'none', borderRadius: 10, fontFamily: FONT, fontSize: 13, color: T.text, padding: 0 };
+const estiloCaja = { background: T.bg, border: 'none', borderRadius: 10, fontFamily: FONT, fontSize: 13, color: T.text, padding: 0 };
 
 function Renglon({ color, titulo, ayuda, valor, onPatch, soloLectura }) {
   return (
