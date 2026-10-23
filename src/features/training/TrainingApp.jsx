@@ -20,7 +20,7 @@ import {
   formatIntensity,
   sessionForToday, weekOverview, weekdayToday, weekdayLabel,
   cursorAlDia, isoWeekKey, esDescanso, enOrdenDeSemana,
-  diasDeEstaSemana, dondeVa, estaEnPausa, semanasPorDelante,
+  diasDeEstaSemana, dondeVa, estaEnPausa, semanasPorDelante, reanudarPlan,
   semanaGlobal, semanasDelPlan,
 } from '@/lib/training-utils';
 import HojaFlotante from '@/components/HojaFlotante';
@@ -32,6 +32,7 @@ import { aKilos, desdeKilos, etiquetaUnidad } from '@/lib/unidades';
 import { maximoParaHome, useUnRM } from '@/lib/unRM';
 import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
 import { useAppState, useStorage } from '@/contexts/AppStateContext';
+import { useDiaDeHoy } from '@/lib/useDiaDeHoy';
 import { altaReciente } from '@/lib/comoVa';
 import { FiltroDeAutor, EtiquetaDeAutor } from '@/features/training/EquipoDelAtleta';
 import AvisoDeInvitacion from '@/features/training/AvisoDeInvitacion';
@@ -1743,7 +1744,7 @@ const PlanUnificado = ({
 
 const HomeView = ({
   sessionsData, wellness, reloj, oneRMs = {}, fechasRM = {}, onStartSession, onGoTab, onAbrirHoja, onVerPrograma, cursor,
-  onReanudar, avisosDelCoach = [], onAceptarAviso, textoDeDonde = '',
+  onReanudar, semanasDelEquipo = 0, pausadosAparte = [], onReanudarPrograma, avisosDelCoach = [], onAceptarAviso, textoDeDonde = '',
   hayEquipo = false, conAutor = false, entradas = [], autores = [], filtro = null, onFiltro, onAbrirEntrada, resumenDeEquipo = null,
   altasDeEquipo = [], entradasDe = null, resumenDe = null,
 }) => {
@@ -1766,14 +1767,15 @@ const HomeView = ({
      home de ese día». Tocar un día de la tira cambia lo que dice la tarjeta azul; `null` = hoy. Solo cambia lo que se ENSEÑA:
      la fase y la semana siguen siendo de hoy. Y la tira se DESLIZA (16 oct 2026): hacia la izquierda enseña las semanas que vienen del
      plan, día por día; hacia la derecha regresa. Entrenar un día de otra semana es darle play ahí: no mueve el plan. */
-  const posHoy = (new Date().getDay() + 6) % 7;
+  const hoy = useDiaDeHoy();
+  const posHoy = (hoy.getDay() + 6) % 7;
   const [posVista, setPosVista] = useState(null);
   const [semanaVista, setSemanaVista] = useState(0);   // 0 = esta semana, 1 = la que viene…
   const pos = posVista ?? posHoy;
   const esHoyVista = semanaVista === 0 && pos === posHoy;
   // Hasta dónde se puede mirar: las semanas que le quedan al plan. Una rutina que se repite es siempre la misma semana.
-  const semanasPorVer = kind === 'weekly' || !cursor ? 0 : semanasPorDelante(PLAN, cursor);
-  const fechaBase = useMemo(() => { const d = new Date(); d.setDate(d.getDate() + semanaVista * 7); return d; }, [semanaVista]);
+  const semanasPorVer = Math.max(kind === 'weekly' || !cursor ? 0 : semanasPorDelante(PLAN, cursor), hayEquipo ? semanasDelEquipo : 0);
+  const fechaBase = useMemo(() => { const d = new Date(hoy); d.setDate(d.getDate() + semanaVista * 7); return d; }, [semanaVista, hoy]);
   const fechaVista = useMemo(() => (esHoyVista ? new Date() : fechaDeLaSemana(pos, fechaBase)), [pos, esHoyVista, fechaBase]);
   const cuando = { hoy: esHoyVista, fecha: fechaVista };
   const volverAHoy = () => { setSemanaVista(0); setPosVista(null); };
@@ -1797,12 +1799,12 @@ const HomeView = ({
   /* Las páginas del carrusel de la tira: esta semana y las que le quedan al plan, cada una con sus siete días (el plan contado hasta
      esa fecha). La que se mira usa los datos de arriba; las demás se calculan aquí, porque al deslizar se ven antes de soltar el dedo. */
   const semanasDeLaTira = useMemo(() => Array.from({ length: semanasPorVer + 1 }, (_, n) => {
-    const fecha = new Date(); fecha.setDate(fecha.getDate() + n * 7);
+    const fecha = new Date(hoy); fecha.setDate(fecha.getDate() + n * 7);
     if (n === semanaVista) return { fecha, dias: week.days };
     const r = hayEquipo ? resumenDe?.(fecha) : weekOverview(PLAN, kind, n ? cursorAlDia(PLAN, cursor, fecha) : cursor, fecha);
     const dias = r?.days ?? week.days;
     return { fecha, dias: n ? dias.map((d) => ({ ...d, isToday: false })) : dias };
-  }), [semanasPorVer, semanaVista, week, hayEquipo, resumenDe, PLAN, kind, cursor]);
+  }), [semanasPorVer, semanaVista, week, hayEquipo, resumenDe, PLAN, kind, cursor, hoy]);
   // Un día con dos entradas se dice «2 sesiones», no «Fuerza + Movilidad»: así no
   // se lee como una sola (Andrés, 29 sep 2026).
   const nombreDeSemana = (d) => (d.sesiones > 1 ? `${d.sesiones} sesiones` : sinDuracion(d.name || ''));
@@ -1972,6 +1974,12 @@ const HomeView = ({
               (Andrés, 1 oct 2026). Sin equipo, la de un programa. */}
           {hayEquipo && <FiltroDeAutor autores={autores} filtro={filtro} onFiltro={onFiltro} />}
           {enPausa && <HoyEnPausa texto={textoDeDonde} onReanudar={soloLectura ? undefined : onReanudar} cuando={cuando} />}
+          {pausadosAparte.map(({ programa, texto }) => (
+            <HoyEnPausa
+              key={programa.id} texto={texto} etiqueta={etiquetaDePrograma(programa)} cuando={cuando}
+              onReanudar={soloLectura ? undefined : () => onReanudarPrograma(programa)}
+            />
+          ))}
           {hayEquipo ? (
             entradasVista.length > 0 ? (
               <HoyTeTocaEquipo
@@ -2433,7 +2441,9 @@ export default function TrainingApp() {
     },
     [PLAN, storedCursor, cursorInicialDeCompra],
   );
-  const cursor = useMemo(() => cursorAlDia(PLAN, cursorBase), [PLAN, cursorBase]);
+  // Con la app abierta pasa la medianoche: lo que se cuenta con la fecha de hoy se vuelve a contar.
+  const hoy = useDiaDeHoy();
+  const cursor = useMemo(() => cursorAlDia(PLAN, cursorBase, hoy), [PLAN, cursorBase, hoy]);
 
   /* Lo que el calendario adelanta se guarda, para que la próxima vez se cuente
      desde aquí y no desde el sello viejo. Va en un efecto y no en el useMemo
@@ -2456,7 +2466,7 @@ export default function TrainingApp() {
 
      Ahora las dos preguntan lo mismo: `sessionForToday`, que usa el calendario
      y, si hoy elegiste otro día, ese. */
-  const miDia = useMemo(() => sessionForToday(PLAN, kind, cursor), [PLAN, kind, cursor]);
+  const miDia = useMemo(() => sessionForToday(PLAN, kind, cursor, hoy), [PLAN, kind, cursor, hoy]);
   const activeSessionId = miDia?.id;
 
   // Dónde va el atleta, para marcarlo en la hoja. La misma función que usa su
@@ -2488,7 +2498,17 @@ export default function TrainingApp() {
   /* MOVER, PAUSAR Y SUMAR A HOY (16 oct 2026, ver `MoverMiPlan.jsx`). Reemplaza a «Cambiar día» y «Hacer este día», que mezclaban
      «hoy hago otra cosa» con «me muevo de semana». Mover y pausar viven en la hoja «Vas en» (`mp`); «Agregar a hoy» suma una sesión de otro
      día a lo de hoy sin tocar dónde vas. */
-  const mp = useMoverMiPlan({ plan: { phases: PLAN, kind, estructura }, cursor, setCursor, soloLectura: !!soloLectura || !!programaActivo?.sobre });
+  /* Al mover el plan, «Entrenar» se va con él: si la vista se quedara en la semana de antes, enseñaría la semana vieja y sin las sesiones
+     que el fisio o la compra tienen en la nueva. Se pone en la semana a la que se movió. */
+  const moverElPuntero = useCallback((nuevo) => {
+    setCursor(nuevo);
+    const r = resolveCursor(PLAN, nuevo);
+    if (r && (nuevo.phaseId !== cursor?.phaseId || nuevo.weekNum !== cursor?.weekNum)) {
+      setView({ level: 'week', phase: r.phase, week: r.week });
+      setDiaVisto(null);
+    }
+  }, [setCursor, PLAN, cursor?.phaseId, cursor?.weekNum]);
+  const mp = useMoverMiPlan({ plan: { phases: PLAN, kind, estructura }, cursor, setCursor: moverElPuntero, soloLectura: !!soloLectura || !!programaActivo?.sobre });
   const textoDeDonde = cursor && PLAN?.length ? textoDeSemana({ phases: PLAN, kind, estructura }, cursor.phaseId, cursor.weekNum) : '';
   // Los avisos que su coach (o su fisio) dejó al mover o pausar un programa: uno por programa, cada uno en el puntero del suyo.
   const avisosDeProgramas = useMemo(() => programas
@@ -2503,6 +2523,25 @@ export default function TrainingApp() {
     return { ...prev, [clave]: resto };
   }), [setStore]);
   const reanudaMiPlan = useCallback(() => mp?.reanudar(), [mp]);
+  // Los otros programas (el del fisio, uno comprado) que están en pausa mientras el que mira el atleta no lo está: Home los avisa uno por uno, cada uno con su «Reanudar».
+  const pausadosAparte = useMemo(() => programas
+    .filter((p) => p.hasPlan && !p.altaEn && !p.sigueA && !p.sobre && p.id !== programaActivo?.id)
+    .map((p) => ({ programa: p, cursor: cursorDePrograma(p, store) }))
+    .filter((x) => x.cursor?.pausa)
+    .map(({ programa, cursor: c }) => ({ programa, texto: textoDeSemana({ phases: programa.phases, kind: programa.kind, estructura: programa.estructura }, c.phaseId, c.weekNum) })),
+  [programas, store, programaActivo?.id]);
+  // Hasta dónde se puede deslizar la tira con equipo: las semanas que le quedan al programa que más lejos llega (el del coach, el del fisio o el comprado).
+  const semanasDelEquipo = useMemo(() => programas
+    .filter((p) => p.hasPlan && !p.altaEn && p.kind !== 'weekly')
+    .reduce((mas, p) => {
+      const c = cursorDePrograma(p, store, hoy);
+      return c ? Math.max(mas, semanasPorDelante(p.phases, c)) : mas;
+    }, 0), [programas, store, hoy]);
+  const reanudaPrograma = useCallback((programa) => setStore((prev) => {
+    const clave = claveDeCursor(programa);
+    const actual = cursorDePrograma(programa, prev);
+    return actual ? { ...prev, [clave]: reanudarPlan(actual) } : prev;
+  }), [setStore]);
 
   /* Tocar "Plan" te deja en TU semana, no en la lista de las 9 fases.
      Andrés: "cuando le pico a Plan todavía tengo que escoger la fase y luego
@@ -2560,12 +2599,12 @@ export default function TrainingApp() {
   // Lo que toca HOY, de todos juntos (el programa del coach, lo que otros le pegaron
   // y los programas aparte), ya con el filtro puesto.
   const entradasHoy = useMemo(() => (hayEquipo
-    ? entradasDeHoy(programas, store).filter((e) => !filtroVigente || autorDe(e.programa) === filtroVigente)
-    : []), [hayEquipo, programas, store, filtroVigente]);
+    ? entradasDeHoy(programas, store, hoy).filter((e) => !filtroVigente || autorDe(e.programa) === filtroVigente)
+    : []), [hayEquipo, programas, store, filtroVigente, hoy]);
   // «Tu semana» de la portada, con lo de todos.
   const resumenDeEquipo = useMemo(() => (hayEquipo
-    ? resumenDeLaSemana(semanaUnificada(programas, store), filtroVigente)
-    : null), [hayEquipo, programas, store, filtroVigente]);
+    ? resumenDeLaSemana(semanaUnificada(programas, store, { hoy }), filtroVigente)
+    : null), [hayEquipo, programas, store, filtroVigente, hoy]);
   // La misma tarjeta para otra semana (al deslizar la tira de Home): cada programa se ubica por su puntero contado hasta esa fecha.
   const resumenDe = useCallback((fecha) => (hayEquipo
     ? resumenDeLaSemana(semanaUnificada(programas, store, { hoy: fecha }), filtroVigente)
@@ -2655,6 +2694,7 @@ export default function TrainingApp() {
       onVerPrograma={() => setProgramaAbierto(true)}
       cursor={cursor}
       onReanudar={reanudaMiPlan}
+      pausadosAparte={pausadosAparte} onReanudarPrograma={reanudaPrograma} semanasDelEquipo={semanasDelEquipo}
       avisosDelCoach={avisosDeProgramas}
       onAceptarAviso={aceptaAvisoDelCoach}
       textoDeDonde={textoDeDonde}
