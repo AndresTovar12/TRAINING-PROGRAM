@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Pause, Play, Plus, Minus, Volume2, VolumeX, X } from 'lucide-react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Check, ChevronDown, Pause, Play, Plus, Minus, Volume2, VolumeX, X } from 'lucide-react';
 import { LT, FONT, NUM_STYLE, UI } from '@/lib/theme';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { expande, etiquetaDeTramo, relojTexto, textoDeTiempo, vistaDe } from '@/lib/formatos';
@@ -97,6 +97,8 @@ function BotonChico({ children, onClick, peligro = false }) {
 export default function RelojDelBloque({ formato, plan: planDado = null, ejercicios, serie, clave, resumen, empezarYa = false, conCuenta = false, onGuardar, onCerrar, videoDe = null, miniaturaDe = null }) {
   const pregunta = useConfirmacion();
   const nEj = ejercicios.length;
+  // El ejercicio cuyo video se abrió tocándolo en la lista (`null` = ninguno).
+  const [verEj, setVerEj] = useState(null);
   // Los tramos de lapsos se guardan como texto para que su identidad no cambie con cada dibujo de la pantalla de arriba.
   const claveDelPlan = useMemo(() => (planDado ? JSON.stringify(planDado) : null), [planDado]);
   const plan = useMemo(() => (claveDelPlan ? JSON.parse(claveDelPlan) : expande(formato, nEj)), [claveDelPlan, formato, nEj]);
@@ -260,12 +262,16 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
 
           {/* ---------- El reloj ---------- */}
           <div style={{ textAlign: 'center', padding: '22px 0 8px' }}>
+            {/* «En pausa» se nota de lejos (23 oct 2026, Andrés vio un 00:13 grande y no supo si corría): franja ámbar arriba y el número apagado, como la carrera libre. */}
+            {v.fase === 'pausa' && (
+              <div role="status" style={{ display: 'inline-block', marginBottom: 8, padding: '5px 14px', borderRadius: 99, background: 'rgba(255,176,32,0.18)', color: '#B86400', fontSize: 14, fontWeight: 800 }}>En pausa</div>
+            )}
             <div style={{ fontSize: 17, fontWeight: 800, color: v.fase === 'fin' ? LT.mint : color, minHeight: 24, letterSpacing: 0.2 }}>{rotulo}</div>
             <div
               aria-live="off" role="timer"
               style={{
                 fontSize: preparando ? 132 : (grande.length > 5 ? 70 : 96), fontWeight: 800, lineHeight: 1.05, letterSpacing: -2,
-                color: v.fase === 'fin' ? LT.text : color, ...NUM_STYLE,
+                color: v.fase === 'fin' ? LT.text : (v.fase === 'pausa' ? LT.text3 : color), ...NUM_STYLE,
               }}
             >
               {grande}
@@ -323,12 +329,18 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, margin: '16px 0 24px' }}>
             {ejercicios.map(({ ex }, i) => {
               const toca = quien === i;
+              // Tocar un ejercicio abre su video (si tiene y no es el que ya está arriba): sirve para verlo cuando se hacen todos juntos y no hay «el que toca».
+              const nodoVideo = videoDe && verEj === i && !toca ? videoDe(ex) : null;
+              const conVideo = !!videoDe && !!miniaturaDe && !!miniaturaDe(ex) && !toca;
               return (
+                <Fragment key={i}>
                 <div
-                  key={i}
+                  role={conVideo ? 'button' : undefined} tabIndex={conVideo ? 0 : undefined} aria-expanded={conVideo ? verEj === i : undefined}
+                  onClick={conVideo ? () => setVerEj((a) => (a === i ? null : i)) : undefined}
+                  onKeyDown={conVideo ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setVerEj((a) => (a === i ? null : i)); } } : undefined}
                   style={{
-                    display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, padding: '10px 13px', borderRadius: 12,
-                    background: toca ? LT.blueSoft : UI.relleno, border: 'none',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 13px', borderRadius: 12,
+                    background: toca ? LT.blueSoft : UI.relleno, border: 'none', cursor: conVideo ? 'pointer' : 'default',
                   }}
                 >
                   <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
@@ -337,8 +349,11 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
                   </span>
                   <span style={{ fontSize: 13, fontWeight: 700, color: toca ? LT.blue : LT.text3, flexShrink: 0, ...NUM_STYLE }}>
                     {(lapsosDe(ex)?.length ?? 0) > 1 ? `${lapsosDe(ex).length} lapsos` : textoMeta(ex)}
+                    {conVideo && <ChevronDown size={15} aria-hidden="true" style={{ marginLeft: 6, verticalAlign: '-3px', transform: verEj === i ? 'rotate(180deg)' : 'none' }} />}
                   </span>
                 </div>
+                {nodoVideo && <div style={{ marginBottom: 4 }}>{nodoVideo}</div>}
+                </Fragment>
               );
             })}
           </div>
