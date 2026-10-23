@@ -7,7 +7,7 @@ import {
   getMasterId, listExerciseOverrides, aplicarOverrides,
 } from '@/lib/api';
 import { leeMisCompras } from '@/lib/comprasApi';
-import { estructuraDelPlan } from '@/lib/training-utils';
+import { estructuraDelPlan, expandeMicrociclos } from '@/lib/training-utils';
 import { adaptadorDeRegistros, fasesConPegadas, reglasDe } from '@/lib/pegadas';
 import { colorDePrograma, tieneSesiones } from '@/lib/programas';
 import { conNombreDeSuFicha } from '@/lib/nombreDeLaFicha';
@@ -34,7 +34,7 @@ const arr = (x) => (Array.isArray(x) ? x : []);
  */
 function normalizePlan(phases) {
   if (!Array.isArray(phases)) return null;
-  return phases.map((p, pi) => {
+  return expandeMicrociclos(phases.map((p, pi) => {
     const weekData = arr(p?.weekData).map((w, wi) => {
       const days = arr(w?.days).map((d) => ({
         ...d,
@@ -68,7 +68,7 @@ function normalizePlan(phases) {
       advance: arr(p?.advance),
       weekData,
     };
-  });
+  }));
 }
 
 /**

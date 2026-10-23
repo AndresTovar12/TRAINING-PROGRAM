@@ -324,6 +324,13 @@ export default function DetalleDeEntreno({ actividad, sesion = null, unidadPeso 
         </div>
       </div>
 
+      {/* Lo que el atleta escribió al terminar («Notas para tu coach» / «Tus notas»): hasta hoy no se veía en ningún lado. */}
+      {String(sesion?.registro?.notes ?? '').trim() && (
+        <Seccion titulo="Nota del entreno" style={{ marginTop: 0, marginBottom: 14 }}>
+          <Tarjeta relleno={14}><div style={{ fontSize: 15, fontWeight: 500, color: LT.text, lineHeight: 1.45, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{String(sesion.registro.notes).trim()}</div></Tarjeta>
+        </Seccion>
+      )}
+
       {estado.error && <div role="alert" style={{ padding: '10px 12px', borderRadius: 12, background: KP.dangerSoft, color: KP.danger, fontSize: 13.5, fontWeight: 700, marginBottom: 12 }}>{estado.error}</div>}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(128px, 1fr))', gap: 10 }}>

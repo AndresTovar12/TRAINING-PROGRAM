@@ -1,6 +1,6 @@
 /* Una semana sin sesiones NO debe regresar al atleta a Fase 1 · Semana 1 ni impedir que el plan avance (auditoría 23 oct 2026: hallazgos «semana sin días»,
    «el plan nunca arranca solo» y «el coach borra una sesión y el atleta regresa al inicio»). */
-import { cursorAlDia, isValidCursor, resolveCursor, defaultCursor, moverPlanA } from '../src/lib/training-utils.js';
+import { cursorAlDia, isValidCursor, resolveCursor, defaultCursor, moverPlanA, semanasDelPlan, semanasPorDelante } from '../src/lib/training-utils.js';
 
 let fallas = 0;
 const igual = (t, a, b) => {
@@ -46,6 +46,19 @@ const conVentana = [{ id: 'f1', weekData: [{ num: 1, days: [{}] }, { num: 2, day
 const aqui = { phaseId: 'f1', weekNum: 1, dayIdx: 0, fijadoEn: sem };
 igual('«Mover mi plan» a una semana bloqueada no mueve nada', moverPlanA(conVentana, aqui, 'f1', 2, hoy), aqui);
 igual('a una semana abierta sí', moverPlanA([{ id: 'f1', weekData: [{ num: 1, days: [{}] }, { num: 2, days: [{}] }] }], aqui, 'f1', 2, hoy).weekNum, 2);
+
+// MICROCICLO: una semana modelo que se repite `weeks` veces cuenta como esas semanas (Camp = 4, Temporada = 11 en el plan de Andrés).
+const micro = [
+  { id: 'camp', mode: 'microcycle', weeks: 4, weekData: [{ num: 1, days: [{}, {}] }] },
+  { id: 'temp', mode: 'microcycle', weeks: 3, weekData: [{ num: 1, days: [{}] }] },
+];
+igual('el microciclo cuenta todas sus semanas', semanasDelPlan(micro), 7);
+igual('la semana 3 de un microciclo existe', isValidCursor(micro, { phaseId: 'camp', weekNum: 3, dayIdx: 0 }), true);
+igual('la 5 no (solo son 4)', isValidCursor(micro, { phaseId: 'camp', weekNum: 5, dayIdx: 0 }), false);
+const m0 = { phaseId: 'camp', weekNum: 1, dayIdx: 0, fijadoEn: sem };
+igual('una semana después sigue en el microciclo, semana 2', cursorAlDia(micro, m0, new Date(hoy.getTime() + 7 * 86400000)), { phaseId: 'camp', weekNum: 2, dayIdx: 0, fijadoEn: semMas(1) });
+igual('a las 4 semanas pasa a la siguiente fase', cursorAlDia(micro, m0, new Date(hoy.getTime() + 28 * 86400000)), { phaseId: 'temp', weekNum: 1, dayIdx: 0, fijadoEn: semMas(4) });
+igual('semanas que le quedan al plan desde la primera', semanasPorDelante(micro, m0), 6);
 
 if (fallas) { console.error(`\n${fallas} prueba(s) fallaron`); process.exit(1); }
 console.log('\nprueba-semana-vacia: todo bien');

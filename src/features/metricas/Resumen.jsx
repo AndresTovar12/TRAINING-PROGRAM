@@ -64,7 +64,7 @@ function SemanaEnBarras({ dias }) {
   );
 }
 
-function TarjetaDeSemana({ d, alIrA }) {
+function TarjetaDeSemana({ d, alIrA, esAtleta }) {
   const s = d.estaSemana;
   const p = d.semanaPasada;
   const cambio = variacionTexto(d.cambios.carga);
@@ -91,7 +91,7 @@ function TarjetaDeSemana({ d, alIrA }) {
           <SemanaEnBarras dias={d.diasDeLaSemana} />
         </>
       )}
-      <button type="button" onClick={() => alIrA('entrenos')} style={enlace}>Ver sus entrenos <ArrowRight size={14} /></button>
+      <button type="button" onClick={() => alIrA('entrenos')} style={enlace}>{esAtleta ? 'Ver mis entrenos' : 'Ver sus entrenos'} <ArrowRight size={14} /></button>
     </Tarjeta>
   );
 }
@@ -209,12 +209,12 @@ function ZonasDeLasUltimas4({ d, umbrales }) {
   );
 }
 
-export default function Resumen({ d, umbrales, alAbrir, alIrA }) {
+export default function Resumen({ d, umbrales, alAbrir, alIrA, esAtleta = false }) {
   return (
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(270px, 1fr))', gap: 12 }}>
         {d.estado && <TarjetaDeForma d={d} alIrA={alIrA} />}
-        <TarjetaDeSemana d={d} alIrA={alIrA} />
+        <TarjetaDeSemana d={d} alIrA={alIrA} esAtleta={esAtleta} />
         <TarjetaDeRecuperacion d={d} alIrA={alIrA} />
       </div>
       <Seccion titulo="Las últimas 12 semanas" ayuda="Cada barra es una semana (lunes a domingo). En «Tiempo» los colores dicen cuánto de ese tiempo fue fácil, medio o duro según su pulso. «Carga» suma lo que costó cada entreno: una hora justo en su umbral vale 100 puntos.">

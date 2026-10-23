@@ -1900,7 +1900,7 @@ const HomeView = ({
   const etiquetaDeFase = kind === 'weekly' ? 'Tu rutina' : deCorrido ? 'Tu programa' : `Fase ${faseDeHoy?.num ?? ''}`;
   const subDeFase = kind === 'weekly' || !next ? null
     : deCorrido ? semanaDe(next)
-      : next.phase.mode === 'microcycle' ? 'Microciclo' : `Semana ${next.week.num} de ${next.phase.weeks}`;
+      : `Semana ${next.week.num} de ${next.phase.weeks}`;
   const conLibre = !soloLectura && atletaId && !demoActiva;
 
   const descanso = (

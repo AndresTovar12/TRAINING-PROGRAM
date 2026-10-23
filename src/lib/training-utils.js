@@ -12,7 +12,8 @@ const calc1RM = (weight, reps) => {
   const epley = w * (1 + r / 30);
   return { brzycki: Math.round(brzycki * 10) / 10, epley: Math.round(epley * 10) / 10, avg: Math.round((brzycki + epley) / 2 * 10) / 10 };
 };
-const today = () => new Date().toISOString().split('T')[0];
+// El día de HOY en la hora del teléfono (no la de Greenwich: de 6 de la tarde a medianoche en México «hoy» ya era mañana y el dolor del día se guardaba en otro día).
+const today = () => claveDeDia();
 const greeting = () => {
   const h = new Date().getHours();
   if (h < 12) return { text: 'Buenos días', icon: Sunrise };
@@ -66,11 +67,25 @@ const adivinaSiLlevaCarga = (ex) => {
   if (intensity === 'bw' || intensity.includes('bajo') || intensity === 'máximo' || intensity === 'maximo') return false;
   return true;
 };
+/* UN MICROCICLO es una fase con UNA semana modelo en `weekData` y `weeks` que dice cuántas veces se repite (en el plan de Andrés, Camp son 4 semanas y Temporada 11).
+   Para el calendario son `weeks` semanas de verdad: cada una con su número, así lo que anota el atleta en la semana 3 no pisa lo de la 1. Auditoría 23 oct 2026: «las
+   fases tipo microciclo no se repiten». Todas las cuentas del puntero pasan por aquí; el editor sigue viendo la semana modelo. Si nada es un microciclo devuelve el mismo plan. */
+const expandeMicrociclos = (plan) => {
+  if (!Array.isArray(plan) || !plan.some((f) => f?.mode === 'microcycle' && Array.isArray(f.weekData) && f.weekData.length === 1 && Number(f.weeks) > 1)) return plan;
+  return plan.map((f) => {
+    if (!(f?.mode === 'microcycle' && Array.isArray(f.weekData) && f.weekData.length === 1 && Number(f.weeks) > 1)) return f;
+    const [modelo] = f.weekData;
+    const base = Number.isFinite(modelo.num) ? modelo.num : 1;
+    return { ...f, weekData: Array.from({ length: Math.min(Number(f.weeks), 60) }, (_, i) => ({ ...modelo, num: base + i })) };
+  });
+};
+
 /* Validar que un cursor apunte a una semana que existe.
    Antes también exigía que existiera el DÍA (`week.days[dayIdx]`). Una semana sin sesiones, o un coach que borra una sesión de la semana en curso, dejaba la marca «inválida» y la app
    regresaba al atleta a Fase 1 · Semana 1 sin avisar (auditoría 23 oct 2026: «semana sin días», «el plan nunca arranca solo»). Lo que dice dónde va el atleta es la fase y la semana;
    el día sale del calendario. Si el día ya no existe, `cursorAlDia` lo acota. */
 const isValidCursor = (plan, cursor) => {
+  plan = expandeMicrociclos(plan);
   if (!plan?.length || !cursor) return false;
   const phase = plan.find(p => p.id === cursor.phaseId);
   if (!phase) return false;
@@ -79,6 +94,7 @@ const isValidCursor = (plan, cursor) => {
 
 // Resolver cursor a la sesión completa. Si la semana no tiene ese día, `day` e `id` van en null (la semana sí se resuelve).
 const resolveCursor = (plan, cursor) => {
+  plan = expandeMicrociclos(plan);
   if (!isValidCursor(plan, cursor)) return null;
   const phase = plan.find(p => p.id === cursor.phaseId);
   const week = phase.weekData.find(w => w.num === cursor.weekNum);
@@ -88,6 +104,7 @@ const resolveCursor = (plan, cursor) => {
 
 // Avanzar cursor: siguiente día no completado a partir de la posición actual (siguiente día del cursor)
 const advanceCursor = (plan, cursor, sessionsData) => {
+  plan = expandeMicrociclos(plan);
   if (!isValidCursor(plan, cursor)) return null;
   let passed = false;
   for (const phase of plan) {
@@ -170,6 +187,7 @@ const isoWeekKey = (date = new Date()) => {
  * semanas más adelante por un dato que faltaba.
  */
 const cursorAlDia = (plan, cursor, hoy = new Date()) => {
+  plan = expandeMicrociclos(plan);
   if (!isValidCursor(plan, cursor)) return cursor;
   // Si el coach borró sesiones de esa semana y el día guardado ya no existe, se acota al último que queda (la semana no cambia).
   const diasDeLaSemana = plan.find((f) => f.id === cursor.phaseId).weekData.find((w) => w.num === cursor.weekNum).days?.length ?? 0;
@@ -214,7 +232,7 @@ const cursorAlDia = (plan, cursor, hoy = new Date()) => {
    (Hubo un «Agregar a hoy»; se quitó el mismo día: entrenar una sesión de otro día es darle play ahí, sin botón de más.) */
 
 // Todas las semanas del plan en orden: [{ faseId, semana }].
-const semanasEnOrden = (plan) => (plan ?? []).flatMap((f) => (f.weekData ?? []).map((w) => ({ faseId: f.id, semana: w.num, bloqueada: !!w.bloqueada })));
+const semanasEnOrden = (plan) => (expandeMicrociclos(plan) ?? []).flatMap((f) => (f.weekData ?? []).map((w) => ({ faseId: f.id, semana: w.num, bloqueada: !!w.bloqueada })));
 
 /** La semana anterior a donde va el atleta (para «Una semana atrás»), o null si ya está en la primera. */
 const semanaDeAtras = (plan, cursor) => {
@@ -225,7 +243,7 @@ const semanaDeAtras = (plan, cursor) => {
 
 /** El puntero ya movido a otra fase y semana, y vuelto a sellar con la semana de hoy (desde ahí avanza solo). Conserva la pausa y el aviso. */
 const moverPlanA = (plan, cursor, faseId, semana, hoy = new Date()) => {
-  const f = (plan ?? []).find((x) => x.id === faseId);
+  const f = (expandeMicrociclos(plan) ?? []).find((x) => x.id === faseId);
   const w = f?.weekData?.find((x) => x.num === semana);
   if (!w) return cursor;
   if (w.bloqueada) return cursor; // semana que la ventana del plan comprado aún no abre: no se puede ir ahí
@@ -278,7 +296,7 @@ const sessionIdFor = (kind, phaseId, weekNum, dayIdx, date = new Date()) => (
 
 // Todos los días de la semana en curso, con su índice real dentro de week.days
 const daysOfCurrentWeek = (plan, kind, cursor) => {
-  const phases = plan ?? [];
+  const phases = expandeMicrociclos(plan) ?? [];
   if (phases.length === 0) return { phase: null, week: null, items: [] };
   let phase = phases[0];
   let week = phase?.weekData?.[0] ?? null;
@@ -820,10 +838,10 @@ const kindDeEstructura = (estructura) => (estructura === 'rutina' ? 'weekly' : '
    aunque por dentro el plan venga de varias fases (al pasar un programa por
    fases a semanas NO se juntan los datos: así el atleta no pierde dónde va ni
    lo que anotó, que se guarda por fase y semana). */
-const semanasDelPlan = (plan) => (plan ?? []).reduce((s, f) => s + (f.weekData?.length || 0), 0);
+const semanasDelPlan = (plan) => (expandeMicrociclos(plan) ?? []).reduce((s, f) => s + (f.weekData?.length || 0), 0);
 const semanaGlobal = (plan, faseId, semanaNum) => {
   let n = 0;
-  for (const f of plan ?? []) {
+  for (const f of expandeMicrociclos(plan) ?? []) {
     for (const w of f.weekData ?? []) {
       n += 1;
       if (f.id === faseId && w.num === semanaNum) return n;
@@ -885,5 +903,5 @@ export {
   weekdayToday, weekdayLabel, isoWeekKey, weeklySessionId, sessionIdFor,
   sessionForToday, weekOverview, esDescanso, enOrdenDeSemana, diasDeEstaSemana,
   sesionQueRepite, sinDuracion, claveDeDia, dondeVa, semanaDelAtleta,
-  semanasEnOrden, semanaDeAtras, moverPlanA, pausarPlan, reanudarPlan, estaEnPausa, semanasPorDelante,
+  semanasEnOrden, semanaDeAtras, moverPlanA, pausarPlan, reanudarPlan, estaEnPausa, semanasPorDelante, expandeMicrociclos,
 };
