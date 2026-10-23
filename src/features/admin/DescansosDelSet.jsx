@@ -27,7 +27,8 @@ export const seRepite = (rondas) => {
   return !!n && Math.max(...n.map(Number)) > 1;
 };
 
-const estiloCaja = { background: T.bg, border: 'none', borderRadius: 10, fontFamily: FONT, fontSize: 13, color: T.text, padding: 0 };
+// Igual que las casillas de la fila del ejercicio (reps, carga): su relleno es el que les da altura; con 0 la casilla salía aplastada.
+const estiloCaja = { background: T.bg, border: 'none', borderRadius: 9, fontFamily: FONT, fontSize: 13, color: T.text, padding: '7px 9px' };
 
 function Renglon({ color, titulo, ayuda, valor, onPatch, soloLectura }) {
   return (
