@@ -117,5 +117,11 @@ export function sellosDeSesionGuiada({ registro, inicio, fin, unidadPeso = 'kg' 
   const t = tiempoDelSello(Number.isFinite(inicio) && Number.isFinite(fin) ? (fin - inicio) / 1000 : null);
   if (t) filas.push(t);
   filas.push(...filasDeLoGuiado(registro, unidadPeso));
-  return { sellos: filas.length ? [{ id: 'general', titulo: 'General', filas: filas.slice(0, 3), ruta: null }] : [] };
+  if (!filas.length) return { sellos: [] };
+  const sellos = [{ id: 'general', titulo: 'General', filas: filas.slice(0, 3), ruta: null }];
+  /* CON TU RECORRIDO (23 oct 2026): si el entreno guardó por dónde se movió (`registro.ruta`, ver `lib/recorrido.js`), un sello más con la línea, aunque
+     nunca haya salido un mapa (Andrés: «por mero morbo… subirlo de forma aesthetic»). Va SEGUNDO: la línea nunca se pone sola, se elige. Completa, sin recortar. */
+  const ruta = rutaDeSeries({ ruta: registro?.ruta });
+  if (ruta) sellos.push({ id: 'ruta', titulo: 'Con tu recorrido', filas: filas.slice(0, 3), ruta });
+  return { sellos };
 }

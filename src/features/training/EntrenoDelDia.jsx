@@ -14,7 +14,7 @@ import { palabrasDelEntreno } from '@/lib/entrenoPalabras';
 import { FUNCIONES } from '@/lib/funciones';
 import { relojAMedias } from '@/lib/relojGuardado';
 import {
-  cuentaDe, empiezaPaso, marcaListo, masDescanso as sumaDescanso, pasosDeLaSesion, quitaCronometro, saltaPaso, terminaEntreno, vistaDelEntreno, vuelveAtras,
+  cuentaDe, empiezaPaso, iniciaEntreno, marcaListo, masDescanso as sumaDescanso, pasosDeLaSesion, quitaCronometro, saltaPaso, terminaEntreno, vistaDelEntreno, vuelveAtras,
 } from '@/lib/entreno';
 import {
   camposDeCambiar, cantidadPlaneada, cifrasDelPaso, exDataTrasListo, puntosDeVueltas, resumenDeLaSerie, segmentosDeAvance, tarjetasDeLaLista, textoDeLoPlaneado,
@@ -25,9 +25,13 @@ import RelojDelBloque from '@/features/training/RelojDelBloque';
 import ResultadoDelBloque from '@/features/training/ResultadoDelBloque';
 import TarjetaDeVideo from '@/features/training/TarjetaDeVideo';
 import TarjetaDeClase from '@/features/training/TarjetaDeClase';
+import PasoConGps from '@/features/training/PasoConGps';
+import { useRecorrido } from '@/features/training/useRecorrido';
+import { cantidadEnUnidad, esPasoConGps, metrosDelPaso } from '@/lib/recorrido';
+import { fuenteDeUbicacion } from '@/lib/ubicacion';
 import { claseDe } from '@/lib/clases';
 import {
-  BarraDelEntreno, CronometroDelPaso, HojaDeCambiar, HojaDeLista, HojaDeTecnica, PantallaAntesDeEmpezar, PantallaDeDescanso, PantallaDeFin, PantallaDePaso,
+  BarraDelEntreno, CronometroDelPaso, HojaDeCambiar, HojaDeLista, HojaDelRecorrido, HojaDeTecnica, PantallaAntesDeEmpezar, PantallaDeDescanso, PantallaDeFin, PantallaDePaso,
   PantallaDeReloj,
 } from '@/features/training/PantallasDelEntreno';
 
@@ -63,6 +67,8 @@ const GrabaTecnica = lazy(() => import('@/features/mensajes/GrabaTecnica'));
 
 // La misma preferencia que el reloj de un Set: quien silenció uno, silenció los dos.
 const LLAVE_DEL_SONIDO = 'tl:reloj:sonido';
+// Los ejercicios para los que se eligió «Sin GPS» (pista techada, caminadora): se recuerdan en este teléfono.
+const LLAVE_SIN_GPS = 'tl:sin-gps';
 const leeSonido = () => {
   try { return window.localStorage.getItem(LLAVE_DEL_SONIDO) !== 'no'; } catch { return true; }
 };
@@ -98,6 +104,13 @@ export default function EntrenoDelDia({
   // «Antes de empezar»: las notas de la sesión y su clase, solo si hay y todavía no se ha hecho nada.
   const notasDeLaSesion = useMemo(() => (Array.isArray(dia.notes) ? dia.notes : []).map((n) => String(n ?? '').trim()).filter(Boolean), [dia]);
   const claseDeLaSesion = claseDe(dia);
+  // EL GPS (23 oct 2026, ver `lib/recorrido.js`): el recorrido en silencio (si dijo que sí), y los pasos de 200 m o más con mapa. `cerradoGps`: el paso en
+  // que cerró el mapa (se ve el paso normal); `sinGps`: los ejercicios para los que eligió «Sin GPS» (se recuerda en este teléfono); `medidoGps`: lo que midió el
+  // GPS cuando pidió anotarlo a mano (arranca ahí).
+  const recorrido = useRecorrido({ sesionId, rutaGuardada: registro?.ruta });
+  const [cerradoGps, setCerradoGps] = useState(null);
+  const [sinGps, setSinGps] = useState(() => { try { return JSON.parse(window.localStorage.getItem(LLAVE_SIN_GPS) ?? '{}') ?? {}; } catch { return {}; } });
+  const [medidoGps, setMedidoGps] = useState(null);
   const [antes, setAntes] = useState(() => (notasDeLaSesion.length > 0 || !!claseDeLaSesion) && !(entreno?.inicio) && Object.keys(entreno?.hechos ?? {}).length === 0 && Object.keys(entreno?.saltados ?? {}).length === 0);
 
   const vista = vistaDelEntreno(plan, entreno, ahora);
@@ -276,12 +289,20 @@ export default function EntrenoDelDia({
   };
   const terminarSesion = () => {
     const t = Date.now();
+    const ruta = recorrido.ruta();
     escribe((prev) => ({
       ...prev,
+      ...(ruta ? { ruta } : null),
       entreno: terminaEntreno(prev?.entreno, t),
       completed: true,
       completedAt: prev?.completed && prev?.completedAt ? prev.completedAt : new Date(t).toISOString(),
     }));
+    alCerrar();
+  };
+  // Salir sin terminar: la línea del recorrido también se pasa a la sesión (así no depende solo de este teléfono).
+  const cerrar = () => {
+    const ruta = recorrido.ruta();
+    if (ruta) escribe((prev) => ({ ...prev, ruta }));
     alCerrar();
   };
   // La cámara de «grabar técnica» (también en la web): sale si la función está prendida y hay a quién mandársela (quien puso el ejercicio); apagada, solo explica que viene.
@@ -364,7 +385,7 @@ export default function EntrenoDelDia({
       <PantallaAntesDeEmpezar
         nombre={sinDuracion(dia.name || '') || 'Tu sesión'} notas={notasDeLaSesion}
         clase={claseDeLaSesion ? <TarjetaDeClase clase={claseDeLaSesion} nombre={dia.name || ''} /> : null}
-        onEmpezar={() => { preparaAudio(); setAntes(false); }} onSalir={alCerrar}
+        onEmpezar={() => { preparaAudio(); setAntes(false); }} onSalir={cerrar}
       />
     );
   } else if (mostrarFin) {
@@ -403,6 +424,12 @@ export default function EntrenoDelDia({
         etiquetaDeCambiar={textoDeCambiar} puedeAnterior={vista.puedeAnterior || mirandoOtro}
         onListo={() => listo()} onCambiar={() => setHoja('cambiar')} onSaltar={saltar} onAnterior={anterior}
         tecnica={tecnicaDelPaso} color={colorDelTipo}
+        onUsarGps={esPasoConGps(paso) && fuenteDeUbicacion().disponible() && (cerradoGps === paso.clave || sinGps[paso.nombre]) ? () => {
+          setCerradoGps(null);
+          const { [paso.nombre]: _quitado, ...resto } = sinGps;
+          setSinGps(resto);
+          try { window.localStorage.setItem(LLAVE_SIN_GPS, JSON.stringify(resto)); } catch { /* sin almacenamiento */ }
+        } : null}
       />
     );
   }
@@ -414,6 +441,12 @@ export default function EntrenoDelDia({
   // El reloj se abre SOLO cuando se llegó avanzando a un Set con reloj que no tiene resultado, y la persona no lo cerró ya.
   const relojSolo = llegando && paso?.tipo === 'reloj' && !mirandoOtro && !resultadoDelReloj && !mostrarFin && !anotando && cerradoEn !== paso.claveFormato;
   const cierraReloj = () => { setReloj(false); setCerradoEn(paso?.claveFormato ?? null); };
+  // ¿El paso que toca va con mapa? 200 m o más, el teléfono tiene GPS, no lo cerró y no eligió «Sin GPS» para ese ejercicio. En la pantalla del final o en
+  // «Antes de empezar», no.
+  const conGps = !antes && !mostrarFin && !enDescanso && !!paso && esPasoConGps(paso) && fuenteDeUbicacion().disponible()
+    && cerradoGps !== paso.clave && !sinGps[paso.nombre]
+    // Mientras no contesta «¿Guardamos tu recorrido?», el mapa espera: si no, la pregunta quedaría tapada debajo.
+    && (recorrido.permiso !== null || !recorrido.disponible);
 
   return createPortal(
     <div
@@ -429,18 +462,39 @@ export default function EntrenoDelDia({
       )}
       {pantalla}
 
+      {/* El paso con GPS encima del paso normal (que queda debajo para «Sin GPS» o al cerrar el mapa). */}
+      {conGps && (
+        <PasoConGps
+          key={paso.clave} paso={paso} meta={metrosDelPaso(paso)} carga={paso.meta?.texto ?? ''}
+          onTermina={({ metros, seg }) => {
+            // Si el sprint fue lo primero del entreno, el entreno empezó cuando arrancó el sprint (no al marcarlo): si no, el tiempo total no lo contaría.
+            escribe((prev) => ({ ...prev, entreno: iniciaEntreno(prev?.entreno, Date.now() - seg * 1000, plan) }));
+            listo({ reps: cantidadEnUnidad(metros, paso.termina.unidad), seg });
+          }}
+          onSinGps={() => {
+            const nuevo = { ...sinGps, [paso.nombre]: true };
+            setSinGps(nuevo);
+            try { window.localStorage.setItem(LLAVE_SIN_GPS, JSON.stringify(nuevo)); } catch { /* sin almacenamiento: vale por ahora */ }
+          }}
+          onAnotar={({ metros }) => { setMedidoGps({ clave: paso.clave, reps: cantidadEnUnidad(metros, paso.termina.unidad) }); setCerradoGps(paso.clave); setHoja('cambiar'); }}
+          onCerrar={() => setCerradoGps(paso.clave)}
+        />
+      )}
+      {/* «¿Guardamos tu recorrido?»: una sola vez por teléfono, al abrir el primer entreno guiado. */}
+      {recorrido.disponible && recorrido.permiso === null && <HojaDelRecorrido onSi={() => recorrido.decide('si')} onNo={() => recorrido.decide('no')} />}
+
       {hoja === 'lista' && (
         <HojaDeLista
           tarjetas={tarjetasDeLaLista(plan, vista.estados, queToca?.clave ?? null, { kilosDe, resultadoDe })} miniaturaDe={miniaturaDeFila} palabras={palabras}
           onElegir={(clave) => { setLlegando(false); setEnfoque(clave); setHoja(null); }}
           onTerminar={() => { setHoja(null); setVerFin(true); }}
-          onSalir={alCerrar}
+          onSalir={cerrar}
           onCerrar={() => setHoja(null)}
         />
       )}
       {hoja === 'cambiar' && cambiar && (
         <HojaDeCambiar
-          campos={cambiar.campos} planeado={cambiar.planeado} inicial={loAnotado} unidadDePeso={etiquetaUnidad(unidadDePeso)}
+          campos={cambiar.campos} planeado={cambiar.planeado} inicial={medidoGps && medidoGps.clave === paso?.clave ? { ...loAnotado, reps: medidoGps.reps } : loAnotado} unidadDePeso={etiquetaUnidad(unidadDePeso)}
           resumen={textoDeLoPlaneado(paso, kilosDelPaso)}
           onGuardar={(tocado) => {
             setHoja(null);

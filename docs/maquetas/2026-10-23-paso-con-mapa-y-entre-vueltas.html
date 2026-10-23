@@ -1,0 +1,245 @@
+<title>Mapa en el entreno y lapsos</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800;900&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Concepto: dos maquetas tocables en una página. Arriba, el paso con mapa en cinco estados; abajo, el renglón «Entre vueltas» de los lapsos. Mismo lenguaje que la página anterior. */
+:root{
+  --bg:#F3F4F9; --card:#FFFFFF; --ink:#12142B; --ink2:#555A75; --ink3:#8A8FA8; --line:#E3E5EF;
+  --blue:#2B3BDD; --blue-soft:#E7E9FC; --mint:#17996A; --mint-soft:#DDF3EA; --amber:#C77A00; --amber-soft:#FFF0D2;
+  --lila:#6C4FD1; --lila-soft:#ECE7FB; --red:#D8343A; --red-soft:#FCE4E5; --night:#14172E;
+  --f-d:'Archivo','Arial Black',system-ui,sans-serif; --f-b:'Figtree',system-ui,sans-serif; --f-m:'JetBrains Mono',ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0E1022; --card:#181B35; --ink:#F0F1FA; --ink2:#AEB2CD; --ink3:#7C81A0; --line:#2A2E52;
+  --blue:#7C8BFF; --blue-soft:#232860; --mint:#4DD6A0; --mint-soft:#143D32; --amber:#FFC25A; --amber-soft:#403012; --lila:#A995F5; --lila-soft:#2D2656;
+  --red:#FF7A80; --red-soft:#4A1F24; --night:#0A0B18; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1022; --card:#181B35; --ink:#F0F1FA; --ink2:#AEB2CD; --ink3:#7C81A0; --line:#2A2E52;
+  --blue:#7C8BFF; --blue-soft:#232860; --mint:#4DD6A0; --mint-soft:#143D32; --amber:#FFC25A; --amber-soft:#403012; --lila:#A995F5; --lila-soft:#2D2656;
+  --red:#FF7A80; --red-soft:#4A1F24; --night:#0A0B18; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-b);font-size:16px;line-height:1.55;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0}
+.wrap{max-width:1040px;margin:0 auto;padding:28px 0 80px}
+h1,h2,h3{font-family:var(--f-d);text-wrap:balance;margin:0}
+h1{font-size:clamp(32px,6vw,54px);line-height:1.03;font-weight:900;letter-spacing:-1.4px}
+h2{font-size:clamp(25px,4vw,34px);font-weight:900;letter-spacing:-.8px;line-height:1.1}
+h3{font-size:18px;font-weight:800;letter-spacing:-.3px}
+p{margin:0}
+.et{font-family:var(--f-m);font-size:11.5px;letter-spacing:.9px;text-transform:uppercase;color:var(--ink3);font-weight:700}
+.lead{font-size:18px;color:var(--ink2);max-width:62ch}
+section{margin-top:60px}
+.cab{display:flex;flex-direction:column;gap:10px;margin-bottom:22px}
+.card{background:var(--card);border-radius:22px;padding:20px;border:1px solid var(--line)}
+.chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--f-m);font-size:11px;font-weight:700;letter-spacing:.4px;padding:4px 10px;border-radius:99px;background:var(--blue-soft);color:var(--blue);text-transform:uppercase}
+.chip.m{background:var(--mint-soft);color:var(--mint)}.chip.a{background:var(--amber-soft);color:var(--amber)}.chip.r{background:var(--red-soft);color:var(--red)}.chip.l{background:var(--lila-soft);color:var(--lila)}
+.hero{padding:26px 0 0;display:flex;flex-direction:column;gap:14px}
+.ayuda{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px 18px;display:grid;gap:8px;font-size:15px;color:var(--ink2)}
+.ayuda b{color:var(--ink)}
+
+/* selector */
+.sel{display:flex;flex-wrap:wrap;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:6px;width:fit-content;max-width:100%}
+.sel button{font:700 14px var(--f-b);border:0;background:transparent;color:var(--ink2);padding:10px 14px;border-radius:12px;cursor:pointer;min-height:44px;text-align:left}
+.sel button[aria-pressed="true"]{background:var(--blue);color:#fff}
+.sel button:focus-visible,input:focus-visible,.tg:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+
+/* escenario: teléfono + explicación */
+.esc{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:28px;margin-top:20px;align-items:start}
+@media (max-width:760px){.esc{grid-template-columns:1fr}}
+.tel{width:276px;max-width:100%;background:var(--night);border-radius:36px;padding:9px;margin:0 auto;box-shadow:0 14px 34px rgba(18,20,43,.24)}
+.pan{background:#F1F2F7;border-radius:28px;height:560px;padding:12px 12px 14px;display:flex;flex-direction:column;gap:9px;font-size:13px;overflow:hidden;color:#12142B}
+.pan *{color:inherit}
+.barra{display:flex;align-items:center;gap:7px}
+.barra .wk{background:#2B3BDD;color:#fff!important;border-radius:11px;padding:6px 10px;font-weight:800;font-size:12px}
+.barra .sg{flex:1;display:flex;gap:3px}.barra .sg i{flex:1;height:4px;border-radius:4px;background:#D4D7E6}.barra .sg i.on{background:#2B3BDD}
+.barra .tm{font-weight:800;font-size:13px}
+.ti{font-family:var(--f-d);font-weight:900;font-size:24px;letter-spacing:-.5px;line-height:1.05}
+.cifs{display:flex;gap:8px}
+.cif{flex:1;background:#fff;border-radius:14px;padding:9px 10px;display:flex;flex-direction:column}
+.cif b{font-family:var(--f-d);font-size:21px;font-weight:900;line-height:1}
+.cif small{color:#7C81A0!important;font-size:10.5px;font-weight:600;margin-top:3px}
+.mapa{border-radius:16px;background:#1C2238;position:relative;overflow:hidden;height:150px;flex:none}
+.mapa svg{position:absolute;inset:0;width:100%;height:100%}
+.mapa .gpsc{position:absolute;left:9px;top:9px;background:rgba(255,255,255,.14);border-radius:99px;padding:4px 9px;font-size:10.5px;font-weight:800;color:#fff!important;display:flex;gap:5px;align-items:center}
+.mapa .gpsc i{width:7px;height:7px;border-radius:50%;background:#4DD6A0}
+.mapa .gpsc.mal i{background:#FFC25A}
+.gr{font-family:var(--f-d);font-weight:900;font-size:34px;line-height:1;letter-spacing:-.8px}
+.gr small{font:600 11px var(--f-b);color:#7C81A0!important;margin-left:5px}
+.fl{display:flex;justify-content:space-between;align-items:flex-end}
+.prog{height:7px;background:#DDE0EE;border-radius:9px;overflow:hidden}.prog i{display:block;height:100%;background:#2B3BDD}
+.rt{display:flex;gap:10px}.rt div{flex:1;background:#fff;border-radius:12px;padding:8px 10px}.rt b{font-family:var(--f-d);font-size:17px;display:block;line-height:1.1}.rt span{font-size:10px;color:#7C81A0!important;font-weight:600}
+.rt .ok b{color:#17996A!important}
+.aviso{border-radius:12px;padding:9px 11px;font-size:11.5px;font-weight:600;line-height:1.35}
+.aviso.am{background:#FFF0D2}.aviso.vd{background:#DDF3EA}.aviso.gr2{background:#E6E8F1}
+.btn{border-radius:15px;padding:12px;text-align:center;font-weight:800;font-size:14px;display:flex;justify-content:center;gap:7px;align-items:center}
+.btn.oscuro{background:#14172E;color:#fff!important}.btn.azul{background:#2B3BDD;color:#fff!important}
+.btn.blanco{background:#fff}.btn.sm{padding:9px;font-size:12.5px}
+.btn.oscuro *,.btn.azul *{color:#fff!important}
+.btn.verde{background:#17996A;color:#fff!important}
+.fila2{display:flex;gap:8px}.fila2>*{flex:1}
+.pie{margin-top:auto;display:flex;flex-direction:column;gap:7px}
+.cuenta{font-family:var(--f-d);font-weight:900;font-size:74px;text-align:center;color:#2B3BDD!important;line-height:1}
+.exp{display:flex;flex-direction:column;gap:12px}
+.exp .card{padding:16px 18px}
+.exp .card h3{margin-bottom:6px}
+.exp .card p,.exp .card li{color:var(--ink2);font-size:15px}
+.exp ul{margin:6px 0 0;padding-left:19px}
+.exp li{margin:4px 0}
+.nativa{font-family:var(--f-m);font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--lila);background:var(--lila-soft);padding:3px 8px;border-radius:99px;margin-left:6px;white-space:nowrap}
+
+/* editor lapsos */
+.ed{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr));gap:16px;margin-top:18px;align-items:start}
+.edit{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:16px}
+.edit .tit{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.lp{display:grid;grid-template-columns:22px 1fr 1fr 1fr;gap:6px;align-items:end;padding:6px 0}
+.lp .n{font-family:var(--f-m);font-size:12px;color:var(--ink3);padding-bottom:9px;font-weight:700}
+.cj{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:7px 9px;font-size:13px;min-height:38px}
+.cj b{display:block;font-family:var(--f-m);font-size:9.5px;letter-spacing:.4px;text-transform:uppercase;color:var(--blue);margin-bottom:1px}
+.cj.rojo{border-color:var(--red)}.cj.rojo b{color:var(--red)}
+.cj.vac{border-style:dashed;color:var(--ink3)}
+.blq{margin-top:10px;border:2px solid var(--lila);border-radius:16px;padding:6px 12px 8px;background:var(--lila-soft)}
+.rr{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid color-mix(in srgb,var(--lila) 22%,transparent);font-size:14px;font-weight:600;flex-wrap:wrap}
+.rr:last-child{border:0}
+.rr small{display:block;color:var(--ink3);font-weight:500;font-size:12px}
+.rr i{font-style:normal;font-family:var(--f-m);font-weight:700;font-size:12px}
+.nota-r{margin-top:10px;font-size:14px;color:var(--ink2)}
+.lab{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:10px;margin-top:18px}
+.in{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:6px}
+.in label{font-family:var(--f-m);font-size:11px;letter-spacing:.5px;font-weight:700;text-transform:uppercase}
+.in input{font:800 24px var(--f-d);width:100%;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:12px;padding:8px 12px;min-height:48px}
+.in small{color:var(--ink3);font-size:12px}
+.tl{margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:18px;overflow-x:auto}
+.set{display:flex;align-items:center;gap:6px;min-width:max-content}
+.lap{background:var(--blue-soft);color:var(--blue);border-radius:11px;padding:7px 10px;font-weight:800;font-size:12.5px;white-space:nowrap}
+.gp{border-radius:9px;padding:6px 9px;font-family:var(--f-m);font-size:11px;font-weight:700;white-space:nowrap}
+.gp.e1{background:var(--amber-soft);color:var(--amber)}.gp.e2{background:var(--lila-soft);color:var(--lila)}.gp.e3{background:var(--red-soft);color:var(--red)}.gp.z{opacity:.4;text-decoration:line-through}
+.vu{font-family:var(--f-m);font-size:10.5px;color:var(--ink3);font-weight:700;letter-spacing:.5px;writing-mode:vertical-rl;transform:rotate(180deg)}
+.fr{margin-top:12px;padding:13px 15px;border-radius:14px;background:var(--card);border:1px solid var(--line);font-size:15px;color:var(--ink2)}
+.fr b{color:var(--ink)}
+.dec{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:14px;margin-top:6px}
+.dec .card{display:flex;gap:14px}.dec .num{font-family:var(--f-d);font-weight:900;font-size:36px;line-height:1;color:var(--blue)}
+.dec p{font-size:15px;color:var(--ink2);margin-top:5px}
+.rec{margin-top:9px;font-size:14px;background:var(--mint-soft);color:var(--ink);padding:9px 12px;border-radius:12px}.rec b{color:var(--mint)}
+.fin{margin-top:30px;padding:20px 22px;background:var(--blue);color:#fff;border-radius:22px;font-size:17px;font-weight:600}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+<header class="hero">
+  <span class="et">Training Lab · 23 oct 2026 · Maqueta, nada construido</span>
+  <h1>Los dos cambios que faltan de tus PDFs</h1>
+  <p class="lead">El paso con mapa dentro del entreno, y el renglón «Entre vueltas» para los grupos con lapsos. Los dos son tocables. Todo es un dibujo para decidir: todavía no existe en la app.</p>
+  <div class="ayuda"><span><b>Cambio 1 · Entreno:</b> un paso de 200 m o más (un sprint, un 400, una vuelta a la pista) se hace con mapa y GPS.</span><span><b>Cambio 2 · Editor:</b> en un grupo con lapsos, «Entre vueltas» deja de estar escondido en el último lapso.</span></div>
+</header>
+
+<section>
+  <div class="cab"><span class="et">Cambio 1 · Entreno</span><h2>El paso con mapa, en cinco momentos</h2>
+  <p class="lead">Es una sola pantalla para dos casos: un paso suelto (Sprint 400 m × 4) y un grupo con reloj (Correr 3 × 1 km). Toca cada momento.</p></div>
+  <div class="sel" role="group" aria-label="Momento del paso">
+    <button type="button" data-e="0" aria-pressed="true">1 · Antes de salir</button>
+    <button type="button" data-e="1" aria-pressed="false">2 · Corriendo</button>
+    <button type="button" data-e="2" aria-pressed="false">3 · Llegó a la meta</button>
+    <button type="button" data-e="3" aria-pressed="false">4 · Se pierde el GPS</button>
+    <button type="button" data-e="4" aria-pressed="false">5 · Grupo con reloj</button>
+  </div>
+  <div class="esc"><div id="tel"></div><div class="exp" id="exp"></div></div>
+</section>
+
+<section>
+  <div class="cab"><span class="et">Cambio 2 · Editor</span><h2>«Entre vueltas» en los grupos con lapsos</h2>
+  <p class="lead">Hoy, el descanso del último lapso es, sin avisar, el descanso entre vueltas. Cambia los números y mira cómo lo vería el atleta.</p></div>
+  <div class="ed">
+    <div class="edit"><span class="chip r">Hoy</span>
+      <div class="tit" style="margin-top:10px"><b>Intervalos</b><span style="color:var(--ink3);font-size:13px">se repite 3 veces</span></div>
+      <div class="lp"><span class="n">1</span><div class="cj"><b>Reps</b>800 m</div><div class="cj"><b>Carga</b>4:34 min/km</div><div class="cj"><b>Descanso</b>60 s</div></div>
+      <div class="lp"><span class="n">2</span><div class="cj"><b>Reps</b>400 m</div><div class="cj"><b>Carga</b>4:10 min/km</div><div class="cj"><b>Descanso</b>90 s</div></div>
+      <div class="lp"><span class="n">3</span><div class="cj"><b>Reps</b>200 m</div><div class="cj"><b>Carga</b>3:40 min/km</div><div class="cj rojo"><b>Descanso</b>2 min ← ¿de qué?</div></div>
+      <p class="nota-r">Ese «2 min» del último lapso es el descanso entre vueltas. Nada lo dice, y en la última vuelta se ignora.</p></div>
+    <div class="edit"><span class="chip m">Propuesta</span>
+      <div class="tit" style="margin-top:10px"><b>Intervalos</b><span style="color:var(--ink3);font-size:13px">se repite 3 veces</span></div>
+      <div class="lp"><span class="n">1</span><div class="cj"><b>Reps</b>800 m</div><div class="cj"><b>Carga</b>4:34 min/km</div><div class="cj"><b>Descanso tras este</b>60 s</div></div>
+      <div class="lp"><span class="n">2</span><div class="cj"><b>Reps</b>400 m</div><div class="cj"><b>Carga</b>4:10 min/km</div><div class="cj"><b>Descanso tras este</b>90 s</div></div>
+      <div class="lp"><span class="n">3</span><div class="cj"><b>Reps</b>200 m</div><div class="cj"><b>Carga</b>3:40 min/km</div><div class="cj vac"><b>Descanso</b>ver abajo ↓</div></div>
+      <div class="blq"><div class="rr"><span>Entre vueltas<small>Al terminar el último lapso, antes de repetir.</small></span><i style="color:var(--lila)">2 min</i></div><div class="rr"><span>Después del Set<small>Se pone en la raya entre Sets.</small></span><i style="color:var(--red)">3 min</i></div></div>
+      <p class="nota-r">El último lapso ya no lleva casilla propia: su descanso es «Entre vueltas», con nombre.</p></div>
+  </div>
+  <div class="lab">
+    <div class="in"><label style="color:var(--amber)" for="a1">Tras el lapso 1</label><input id="a1" type="number" min="0" max="600" value="60"><small>segundos</small></div>
+    <div class="in"><label style="color:var(--amber)" for="a2">Tras el lapso 2</label><input id="a2" type="number" min="0" max="600" value="90"><small>segundos</small></div>
+    <div class="in"><label style="color:var(--lila)" for="a3">Entre vueltas</label><input id="a3" type="number" min="0" max="900" value="120"><small>segundos · tras el lapso 3</small></div>
+    <div class="in"><label style="color:var(--red)" for="a4">Después del Set</label><input id="a4" type="number" min="0" max="900" value="180"><small>segundos · antes del Set 2</small></div>
+  </div>
+  <div class="tl"><div class="set" id="tl"></div></div>
+  <div class="fr" id="fr"></div>
+  <div class="ayuda" style="margin-top:14px">
+    <span><b>Con varios ejercicios en lapsos:</b> «Entre ejercicios» es el descanso tras el último lapso de cada ejercicio menos el último; «Entre vueltas», el del último lapso del último ejercicio.</span>
+    <span><b>No cambia ningún dato guardado:</b> sigue siendo el descanso del último lapso. Solo cambia cómo se ve y cómo se llama en el editor.</span>
+  </div>
+</section>
+
+<section>
+  <div class="cab"><span class="et">Lo que necesito de ti</span><h2>Cuatro decisiones</h2></div>
+  <div class="dec">
+    <div class="card"><span class="num">1</span><div><h3>Que termine solo</h3><p>El paso con mapa se da por hecho al llegar a la distancia, con el tiempo y el ritmo que midió el GPS. «Listo» sigue ahí por si falla.</p><div class="rec"><b>Recomiendo:</b> sí, termina solo y pasa al descanso.</div></div></div>
+    <div class="card"><span class="num">2</span><div><h3>Si se pierde el GPS</h3><p>Se avisa, se conserva lo recorrido y tú eliges: esperar, terminar con lo que llevo o anotarlo a mano.</p><div class="rec"><b>Recomiendo:</b> así, sin decidir por el atleta.</div></div></div>
+    <div class="card"><span class="num">3</span><div><h3>Pausa en el paso suelto</h3><p>El sprint suelto no lleva pausa. El grupo con reloj (Correr 3 × 1 km) sí la trae, como hoy.</p><div class="rec"><b>Recomiendo:</b> así. Una pausa en un sprint ensucia el ritmo.</div></div></div>
+    <div class="card"><span class="num">4</span><div><h3>Renglón «Entre vueltas» en lapsos</h3><p>El último lapso pierde su casilla y el bloque «Descansos» trae «Entre vueltas».</p><div class="rec"><b>Recomiendo:</b> así, igual que en los demás grupos.</div></div></div>
+  </div>
+  <div class="fin"><b>Antes de construir el mapa</b> hay que subir el mapa de México a Cloudflare (unos $133 al mes, ya en tu Excel). Sin eso, el paso dibuja la ruta sola sobre fondo oscuro, sin calles.</div>
+</section>
+</div>
+
+<script>
+(function(){
+  var RUTA='<path d="M-10 120 C30 112 50 80 92 82 S160 118 200 92 S250 60 290 66" fill="none" stroke="#FF5A5F" stroke-width="5" stroke-linecap="round"/>';
+  var CALLES='<g stroke="#2A3150" stroke-width="3" fill="none"><path d="M0 40 L300 30"/><path d="M0 100 L300 150"/><path d="M60 0 L90 160"/><path d="M180 0 L170 160"/><path d="M240 0 L260 160"/></g>';
+  function mapa(pt,estado){
+    var chip=estado==='mal'?'<div class="gpsc mal"><i></i>GPS débil</div>':(estado==='no'?'':'<div class="gpsc"><i></i>GPS listo</div>');
+    return '<div class="mapa"><svg viewBox="0 0 300 150" preserveAspectRatio="xMidYMid slice">'+CALLES+(pt?RUTA:'')+(pt?'<circle cx="'+pt+'" cy="'+(pt>200?78:90)+'" r="7" fill="#2B8CFF" stroke="#fff" stroke-width="3"/>':'<circle cx="150" cy="78" r="8" fill="#2B8CFF" stroke="#fff" stroke-width="3"/>')+'</svg>'+chip+'</div>';
+  }
+  var barra=function(n){var s='';for(var i=0;i<4;i++)s+='<i class="'+(i<n?'on':'')+'"></i>';return '<div class="barra"><span class="wk">≡ Workout</span><span class="sg">'+s+'</span><span class="tm">'+(arguments[1]||'21:29')+'</span></div>'};
+  var E=[
+   {t:'Antes de salir',
+    pan:barra(1,'0:00')+'<div class="ti">Sprint</div><div class="cifs"><div class="cif"><b>400 m</b><small>distancia</small></div><div class="cif"><b>100%</b><small>intensidad</small></div></div>'+mapa(0)+'<div class="aviso vd">GPS listo. Sal cuando quieras: el paso empieza al darle «Empezar».</div><div class="pie"><div class="btn oscuro">▶ Empezar</div><div class="btn blanco sm">Sin GPS · anotar a mano</div><div class="fila2"><div class="btn blanco sm">‹ Anterior</div><div class="btn blanco sm">Saltar ›</div></div></div>',
+    exp:['<h3>Qué ve</h3><ul><li>El mapa con tu punto azul y si el GPS ya tiene señal.</li><li>La distancia y la intensidad que pidió el coach, grandes.</li><li>«Empezar» abre la cuenta 3, 2, 1 y arranca la medición.</li></ul>','<h3>«Sin GPS»</h3><p>Para pista techada, caminadora o cuando no quieres permiso de ubicación. El paso se vuelve normal: «Listo» y «Anotar resultados». Se recuerda para ese ejercicio.</p>','<h3>Qué no cambia</h3><p>Si el paso mide menos de 200 m (un broad jump, un drill de conos) esta pantalla ni aparece: sale el paso normal de hoy.</p>']},
+   {t:'Corriendo',
+    pan:barra(1,'21:48')+'<div class="ti">Sprint</div>'+mapa(190)+'<div class="fl"><div class="gr">188<small>m para llegar</small></div><div class="gr" style="font-size:26px">0:41</div></div><div class="prog"><i style="width:53%"></i></div><div class="rt"><div><b>2:58</b><span>ritmo /km</span></div><div class="ok"><b>100%</b><span>meta cumpliéndose</span></div></div><div class="pie"><div class="btn oscuro">■ Parar aquí</div><div class="tg" style="text-align:center;font-size:11.5px;color:#7C81A0">Termina solo al llegar a los 400 m</div></div>',
+    exp:['<h3>Qué ve</h3><ul><li>Cuánto falta (lo grande), el tiempo y la barra de avance.</li><li>El ritmo en vivo contra lo que pidió el coach.</li><li>Su ruta dibujada sobre las calles.</li></ul>','<h3>Qué guarda<span class="nativa">pulso: capa nativa</span></h3><p>Distancia, tiempo y ritmo reales del GPS, como resultado de ese paso. Sin «Anotar resultados» a mano.</p>','<h3>Sin pausa</h3><p>Un sprint no se pausa. «Parar aquí» lo da por terminado con lo recorrido. <span class="nativa">pantalla bloqueada: capa nativa</span></p>']},
+   {t:'Llegó a la meta',
+    pan:barra(2,'22:31')+'<div style="text-align:center;margin-top:10px"><div style="width:64px;height:64px;border-radius:50%;background:#17996A;margin:0 auto;display:grid;place-items:center;color:#fff!important;font-size:30px;font-weight:900"><span style="color:#fff!important">✓</span></div></div><div class="ti" style="text-align:center">Sprint 1 de 4</div><div class="cifs"><div class="cif"><b>400 m</b><small>recorridos</small></div><div class="cif"><b>1:12</b><small>tiempo</small></div></div><div class="rt"><div class="ok"><b>3:00</b><span>ritmo /km</span></div><div><b>+4 s</b><span>vs serie anterior</span></div></div><div class="pie"><div class="btn oscuro">Siguiente: descanso 42 s ›</div><div class="btn blanco sm">Cambiar el resultado</div></div>',
+    exp:['<h3>Qué pasa</h3><ul><li>Al llegar a los 400 m, el paso se marca hecho solo y se ve el resultado.</li><li>Con «Siguiente» empieza el descanso de 42 s que escribió el coach.</li></ul>','<h3>Si el GPS midió mal</h3><p>«Cambiar el resultado» abre las mismas casillas de «Anotar resultados»: distancia y tiempo, con lo medido como punto de partida. Queda marcado «Lo escribió a mano».</p>','<h3>Qué ve el coach</h3><p>En «Por serie», cada sprint con su tiempo, ritmo y la ruta. Lo medido por el GPS dice «Lo midió la app».</p>']},
+   {t:'Se pierde el GPS',
+    pan:barra(1,'21:50')+'<div class="ti">Sprint</div>'+mapa(160,'mal')+'<div class="aviso am"><b>Perdimos la señal.</b> Llevas unos 210 m de 400. Lo recorrido se guardó.</div><div class="pie"><div class="btn oscuro">Seguir esperando la señal</div><div class="btn blanco sm">Terminar con lo que llevo</div><div class="btn blanco sm">Anotar a mano</div></div>',
+    exp:['<h3>Qué pasa</h3><ul><li>Pasan 5 segundos sin señal y sale el aviso. No se borra nada.</li><li>El atleta elige: esperar, terminar con lo recorrido o escribir el resultado.</li></ul>','<h3>Si niega el permiso de ubicación</h3><p>Desde «Antes de salir» ya sale «Sin GPS» como opción principal, y el paso se hace normal.</p>','<h3>Por qué no decide la app</h3><p>Un túnel de 10 segundos no debería arruinar el sprint, y a veces sí. Dejarlo a la persona evita ambos errores.</p>']},
+   {t:'Grupo con reloj',
+    pan:barra(2,'24:05')+'<div class="ti" style="font-size:20px">Serie 2 · Correr</div><div class="aviso gr2" style="font-weight:700">Lapso 2 de 3 · 1 km · 4:50 min/km</div>'+mapa(190)+'<div class="fl"><div class="gr">0.51<small>de 1 km</small></div><div class="gr" style="font-size:26px">2:48</div></div><div class="prog"><i style="width:51%"></i></div><div class="rt"><div class="ok"><b>5:29</b><span>ritmo · meta 5:30</span></div><div><b>Sigue</b><span>correr · 1 km</span></div></div><div class="pie"><div class="btn oscuro">❚❚ Pausa</div><div class="fila2"><div class="btn blanco sm">Parar</div><div class="btn blanco sm">Saltar lapso</div></div></div>',
+    exp:['<h3>La misma pantalla</h3><p>El paso suelto y el grupo con reloj comparten el mapa, la distancia que falta y el ritmo contra la meta. Cambia lo de arriba: «Lapso 2 de 3».</p>','<h3>Qué sí tiene</h3><ul><li><b>Pausa</b>, como el reloj de hoy: correr se detiene en un semáforo.</li><li>Termina cada lapso al llegar a su distancia y pasa al descanso que sigue.</li></ul>','<h3>Lo que ya existe</h3><p>El reloj de lapsos de hoy ya cuenta lapsos, ritmos y descansos. Este cambio le agrega el mapa y la medición por GPS.</p>']}
+  ];
+  var tel=document.getElementById('tel'),exp=document.getElementById('exp');
+  function pinta(i){
+    var e=E[i];
+    tel.innerHTML='<div class="tel"><div class="pan">'+e.pan+'</div></div>';
+    exp.innerHTML=e.exp.map(function(x){return '<div class="card">'+x+'</div>'}).join('');
+  }
+  var bs=document.querySelectorAll('.sel button');
+  for(var k=0;k<bs.length;k++){bs[k].addEventListener('click',function(){
+    for(var j=0;j<bs.length;j++)bs[j].setAttribute('aria-pressed',bs[j]===this?'true':'false');
+    pinta(+this.getAttribute('data-e'));});}
+  pinta(0);
+
+  /* lapsos */
+  var a1=document.getElementById('a1'),a2=document.getElementById('a2'),a3=document.getElementById('a3'),a4=document.getElementById('a4'),tl=document.getElementById('tl'),fr=document.getElementById('fr');
+  function t(s){s=Math.max(0,Math.round(+s||0));if(!s)return 'sin descanso';return s>=60&&s%60===0?(s/60)+' min':(s>=60?Math.floor(s/60)+' min '+(s%60)+' s':s+' s')}
+  function gp(c,s){return '<span class="gp '+c+(s>0?'':' z')+'">'+(s>0?t(s):'0')+'</span>'}
+  function dibuja(){
+    var x=+a1.value||0,y=+a2.value||0,z=+a3.value||0,w=+a4.value||0,h='';
+    for(var v=1;v<=3;v++){
+      h+='<span class="vu">VUELTA '+v+'</span><span class="lap">800 m</span>'+gp('e1',x)+'<span class="lap">400 m</span>'+gp('e1',y)+'<span class="lap">200 m</span>'+(v<3?gp('e2',z):gp('e3',w));
+    }
+    h+='<span class="lap" style="background:var(--bg);color:var(--ink3)">Set 2…</span>';
+    tl.innerHTML=h;
+    var total=(x+y)*3+z*2+w;
+    fr.innerHTML='<b>El atleta descansará:</b> '+t(x)+' tras el lapso 1 · '+t(y)+' tras el 2 · '+t(z)+' entre vueltas · '+t(w)+' antes del Set 2. En total, <b>'+t(total)+'</b> dentro de este Set.';
+  }
+  [a1,a2,a3,a4].forEach(function(n){n.addEventListener('input',dibuja)});dibuja();
+})();
+</script>
