@@ -4,7 +4,7 @@ import { LT, FONT } from '@/lib/theme';
 import { useCuerpoQuieto } from '@/lib/useCuerpoQuieto';
 import { usePantallaEncendida } from '@/lib/pantallaEncendida';
 import { preparaAudio, pitido } from '@/lib/pitidos';
-import { isLoadedExercise } from '@/lib/training-utils';
+import { isLoadedExercise, sinDuracion } from '@/lib/training-utils';
 import { cargaPorPorcentaje } from '@/lib/cargaPorcentaje';
 import { aKilos, desdeKilos, etiquetaUnidad } from '@/lib/unidades';
 import { FORMATOS, textoDeResultado, tramosDeTrabajo, vistaDe } from '@/lib/formatos';
@@ -24,8 +24,10 @@ import Portada from '@/components/Portada';
 import RelojDelBloque from '@/features/training/RelojDelBloque';
 import ResultadoDelBloque from '@/features/training/ResultadoDelBloque';
 import TarjetaDeVideo from '@/features/training/TarjetaDeVideo';
+import TarjetaDeClase from '@/features/training/TarjetaDeClase';
+import { claseDe } from '@/lib/clases';
 import {
-  BarraDelEntreno, CronometroDelPaso, HojaDeCambiar, HojaDeLista, HojaDeTecnica, PantallaDeDescanso, PantallaDeFin, PantallaDePaso,
+  BarraDelEntreno, CronometroDelPaso, HojaDeCambiar, HojaDeLista, HojaDeTecnica, PantallaAntesDeEmpezar, PantallaDeDescanso, PantallaDeFin, PantallaDePaso,
   PantallaDeReloj,
 } from '@/features/training/PantallasDelEntreno';
 
@@ -93,6 +95,10 @@ export default function EntrenoDelDia({
   const [cerradoEn, setCerradoEn] = useState(null);
   const [anotando, setAnotando] = useState(false);
   const [sonido, setSonido] = useState(leeSonido);
+  // «Antes de empezar»: las notas de la sesión y su clase, solo si hay y todavía no se ha hecho nada.
+  const notasDeLaSesion = useMemo(() => (Array.isArray(dia.notes) ? dia.notes : []).map((n) => String(n ?? '').trim()).filter(Boolean), [dia]);
+  const claseDeLaSesion = claseDe(dia);
+  const [antes, setAntes] = useState(() => (notasDeLaSesion.length > 0 || !!claseDeLaSesion) && !(entreno?.inicio) && Object.keys(entreno?.hechos ?? {}).length === 0 && Object.keys(entreno?.saltados ?? {}).length === 0);
 
   const vista = vistaDelEntreno(plan, entreno, ahora);
   const enfocado = enfoque ? plan.pasos.find((p) => p.clave === enfoque && p.tipo !== 'descanso') : null;
@@ -353,7 +359,15 @@ export default function EntrenoDelDia({
   if (sinPasos) return null;
 
   let pantalla;
-  if (mostrarFin) {
+  if (antes && !mostrarFin) {
+    pantalla = (
+      <PantallaAntesDeEmpezar
+        nombre={sinDuracion(dia.name || '') || 'Tu sesión'} notas={notasDeLaSesion}
+        clase={claseDeLaSesion ? <TarjetaDeClase clase={claseDeLaSesion} nombre={dia.name || ''} /> : null}
+        onEmpezar={() => { preparaAudio(); setAntes(false); }} onSalir={alCerrar}
+      />
+    );
+  } else if (mostrarFin) {
     pantalla = (
       <PantallaDeFin
         resumen={resumenDeFin} notas={registro?.notes ?? ''} yaTerminada={!!registro?.completed} palabras={palabras}
@@ -462,11 +476,13 @@ export default function EntrenoDelDia({
         </Suspense>
       )}
 
-      {(reloj || relojSolo) && paso?.tipo === 'reloj' && (
+      {!antes && (reloj || relojSolo) && paso?.tipo === 'reloj' && (
         <RelojDelBloque
           key={paso.claveFormato}
           formato={paso.formato} plan={paso.tramos ?? null} ejercicios={ejerciciosDelReloj} serie={paso.serie} resumen={nombreDelReloj}
           clave={`${userId}:${sesionId}:${paso.claveFormato}`} empezarYa={reloj} conCuenta={!reloj} onGuardar={guardaResultado} onCerrar={cierraReloj}
+          videoDe={(ex) => videoDe(ex, medios?.(ex) ?? null, { altoMaximo: '24vh' })}
+          miniaturaDe={(ex) => { const m = medios?.(ex); return m && (m.portada || m.videos?.[0]) ? <Portada foto={m.portada} video={m.videos?.[0]?.url} desde={m.videos?.[0]?.inicio} hasta={m.videos?.[0]?.fin} style={{ position: 'absolute', inset: 0 }} /> : null; }}
         />
       )}
       {anotando && paso?.tipo === 'reloj' && (

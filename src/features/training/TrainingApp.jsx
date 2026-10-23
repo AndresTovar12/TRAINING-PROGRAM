@@ -33,6 +33,7 @@ import { maximoParaHome, useUnRM } from '@/lib/unRM';
 import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
 import { useAppState, useStorage } from '@/contexts/AppStateContext';
 import { useDiaDeHoy } from '@/lib/useDiaDeHoy';
+import { pideAbrirEntreno } from '@/lib/entrenoPendiente';
 import { altaReciente } from '@/lib/comoVa';
 import { FiltroDeAutor, EtiquetaDeAutor } from '@/features/training/EquipoDelAtleta';
 import AvisoDeInvitacion from '@/features/training/AvisoDeInvitacion';
@@ -56,7 +57,7 @@ import TarjetaDeSesion from '@/features/training/TarjetaDeSesion';
 import BotonDelEntreno from '@/features/training/BotonDelEntreno';
 import TarjetaDeClase from '@/features/training/TarjetaDeClase';
 import { claseDe, duracionTexto } from '@/lib/clases';
-import { reiniciaSiTerminado, archivaLoHecho } from '@/lib/entreno';
+import { reiniciaSiTerminado, archivaLoHecho, terminaEntreno } from '@/lib/entreno';
 import { relojAMedias } from '@/lib/relojGuardado';
 import Portada from '@/components/Portada';
 import BotonEntendido from '@/components/BotonEntendido';
@@ -1037,6 +1038,8 @@ const CuerpoDelDia = ({
   const toggleComplete = () => updateSession(selectedId, prev => ({
     ...prev, completed: !prev?.completed,
     completedAt: !prev?.completed ? new Date().toISOString() : null,
+    // «Terminar sesión» es UNA sola cosa, la toques donde la toques: si había un entreno guiado empezado, también se cierra.
+    ...(!prev?.completed && prev?.entreno ? { entreno: terminaEntreno(prev.entreno, Date.now()) } : null),
     // Un entreno guiado a medias sigue vivo tras «Deshacer»: no se archiva (si no, cada «Terminar» y «Deshacer» dejaba otra copia del mismo entreno).
     ...(prev?.completed ? { entreno: reiniciaSiTerminado(prev?.entreno), ...(prev?.entreno && reiniciaSiTerminado(prev.entreno) === prev.entreno ? null : archivaLoHecho(prev)) } : null),
   }));
@@ -1884,17 +1887,24 @@ const HomeView = ({
     ? (entradasDelDia.length > 1
       ? entradasDelDia.map((h, i) => {
         const n = (h.day.exercises || []).filter((e) => !e.isNote).length;
+        // Cada sesión del día es suya: su propio estado (sin empezar, en curso o terminada) y su propio botón.
+        const id = sessionIdFor(kind, next.phase.id, next.week.num, h.idx);
+        const reg = sessionsData[id];
         return {
           day: h.day, nombre: sesionesDelCartel[i]?.nombre,
           meta: [tipoDeSesion(h.day).label, n ? plural(n, 'ejercicio', 'ejercicios') : null, minutosDelNombre(h.day.name || '') || null].filter(Boolean),
+          hecha: !!reg?.completed,
+          enMarcha: !reg?.completed && Object.keys(reg?.entreno?.hechos ?? {}).length > 0,
+          onAbrir: () => { pideAbrirEntreno(id); onStartSession(next.phase, next.week, h.idx, true); },
         };
       })
       : [{ day: next.day, nombre: sessionTitle, meta: [tipoHoy, ...metaDelCartel.map((m) => m.texto).filter((x) => x !== tipoHoy)] }])
     : [];
   // Dar play a una sesión de otro día (o de otra semana) la abre ahí mismo: se hace y se marca en SU día; el plan no se mueve.
-  const abrirLaDeHoy = next ? () => onStartSession(next.phase, next.week, next.dayIdx, !esHoyVista) : undefined;
+  // «Empezar» abre el ENTRENO de esa sesión (si hoy toca otro día, ese día): el botón de la sesión lo recoge al aparecer.
+  const abrirLaDeHoy = next ? () => { pideAbrirEntreno(next.id); onStartSession(next.phase, next.week, next.dayIdx, !esHoyVista); } : undefined;
   // Un entreno guiado a medias (tiene pasos hechos y la sesión no está terminada): la tarjeta dice «Seguir», no «Empezar».
-  const entrenoEnMarcha = !!next && !cursorCompleted && Object.keys(sessionsData[next.id]?.entreno?.hechos ?? {}).length > 0 && !sessionsData[next.id]?.entreno?.oculto;
+  const entrenoEnMarcha = !!next && !cursorCompleted && Object.keys(sessionsData[next.id]?.entreno?.hechos ?? {}).length > 0;
   const enPausa = !!cursor?.pausa;
   const posicionDeFase = faseDeHoy ? PLAN.findIndex((f) => f.id === faseDeHoy.id) : -1;
   const etiquetaDeFase = kind === 'weekly' ? 'Tu rutina' : deCorrido ? 'Tu programa' : `Fase ${faseDeHoy?.num ?? ''}`;
@@ -2713,6 +2723,7 @@ export default function TrainingApp() {
       altasDeEquipo={altasDeEquipo}
       // Tocar una sesión de hoy abre «Plan» en ese día, con lo de todos. De otra semana (la tira se desliza): en ESA semana.
       onAbrirEntrada={(e, fecha) => {
+        pideAbrirEntreno(e.id); // «Empezar» de esa sesión abre su entreno (si la llave coincide; si no, solo queda el día abierto)
         setTab('plan');
         setView((v) => ({
           ...(fecha ? vistaEnFecha(fecha) : vistaDelPlan()), dia: normalizaDia(e.day.day), foco: `${e.programa.id}-${e.dayIdx}`, salto: (v.salto ?? 0) + 1,

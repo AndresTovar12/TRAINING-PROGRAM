@@ -94,7 +94,7 @@ function BotonChico({ children, onClick, peligro = false }) {
  * `plan`: los tramos ya armados, para un Set en «Lapsos personalizados» (ver `tramosDeLapsos` en `lib/lapsos.js`); sin él,
  * salen del formato. Con lapsos, `formato` solo trae lo que el resultado necesita (`anota`).
  */
-export default function RelojDelBloque({ formato, plan: planDado = null, ejercicios, serie, clave, resumen, empezarYa = false, conCuenta = false, onGuardar, onCerrar }) {
+export default function RelojDelBloque({ formato, plan: planDado = null, ejercicios, serie, clave, resumen, empezarYa = false, conCuenta = false, onGuardar, onCerrar, videoDe = null, miniaturaDe = null }) {
   const pregunta = useConfirmacion();
   const nEj = ejercicios.length;
   // Los tramos de lapsos se guardan como texto para que su identidad no cambie con cada dibujo de la pantalla de arriba.
@@ -178,7 +178,7 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
   const pausar = () => accion((e, t) => pausa(e, t));
   const hecho = () => accion((e, t) => listo(e, plan, t, tope));
   const terminar = async () => {
-    if (await pregunta({ titulo: '¿Terminar ahora?', detalle: 'Lo que llevas hasta aquí cuenta como tu resultado.', confirmar: 'Sí, terminar' })) {
+    if (await pregunta({ titulo: '¿Parar el reloj?', detalle: 'Lo que llevas hasta aquí cuenta como tu resultado.', confirmar: 'Sí, parar' })) {
       accion((e, t) => termina(e, plan, t, tope));
     }
   };
@@ -316,6 +316,9 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
             </div>
           )}
 
+          {/* El video (o la foto) del ejercicio que toca, cuando se sabe cuál es (intervalos, EMOM, lapsos): 23 oct 2026, «los intervalos se ven sin el video del ejercicio». */}
+          {videoDe && quien !== null && ejercicios[quien] && (() => { const nodo = videoDe(ejercicios[quien].ex); return nodo ? <div style={{ marginTop: 14 }}>{nodo}</div> : null; })()}
+
           {/* ---------- Los ejercicios ---------- */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, margin: '16px 0 24px' }}>
             {ejercicios.map(({ ex }, i) => {
@@ -328,7 +331,10 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
                     background: toca ? LT.blueSoft : UI.relleno, border: 'none',
                   }}
                 >
-                  <span style={{ fontSize: 15, fontWeight: toca ? 800 : 700, color: toca ? LT.blue : LT.text, overflowWrap: 'anywhere' }}>{ex.name}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                    {miniaturaDe && (() => { const m = miniaturaDe(ex); return m ? <span aria-hidden="true" style={{ position: 'relative', width: 36, height: 36, borderRadius: 9, overflow: 'hidden', flexShrink: 0, background: '#1B1D24' }}>{m}</span> : null; })()}
+                    <span style={{ fontSize: 15, fontWeight: toca ? 800 : 700, color: toca ? LT.blue : LT.text, overflowWrap: 'anywhere' }}>{ex.name}</span>
+                  </span>
                   <span style={{ fontSize: 13, fontWeight: 700, color: toca ? LT.blue : LT.text3, flexShrink: 0, ...NUM_STYLE }}>
                     {(lapsosDe(ex)?.length ?? 0) > 1 ? `${lapsosDe(ex).length} lapsos` : textoMeta(ex)}
                   </span>
@@ -352,7 +358,7 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
                   <BotonGrande onClick={hecho}><Check size={22} strokeWidth={3} /> {id === 'lapsos' ? 'Lapso listo' : 'Listo'}</BotonGrande>
                   <div style={{ display: 'flex', gap: 10 }}>
                     <BotonChico onClick={pausar}><Pause size={17} /> Pausa</BotonChico>
-                    <BotonChico onClick={terminar}>Terminar</BotonChico>
+                    <BotonChico onClick={terminar}>Parar</BotonChico>
                   </div>
                 </>
               )
@@ -360,7 +366,7 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
                 <>
                   <BotonGrande onClick={pausar} color={LT.text}><Pause size={22} fill="#fff" /> Pausa</BotonGrande>
                   <div style={{ display: 'flex', gap: 10 }}>
-                    <BotonChico onClick={terminar}>Terminar</BotonChico>
+                    <BotonChico onClick={terminar}>Parar</BotonChico>
                   </div>
                 </>
               ))}
@@ -368,7 +374,7 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
               <>
                 <BotonGrande onClick={empieza}><Play size={22} fill="#fff" /> Seguir</BotonGrande>
                 <div style={{ display: 'flex', gap: 10 }}>
-                  <BotonChico onClick={terminar}>Terminar</BotonChico>
+                  <BotonChico onClick={terminar}>Parar</BotonChico>
                   <BotonChico onClick={reiniciar} peligro>Empezar de nuevo</BotonChico>
                 </div>
               </>

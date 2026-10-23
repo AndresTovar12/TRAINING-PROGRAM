@@ -1,12 +1,13 @@
-import { Component, useCallback, useMemo, useState } from 'react';
-import { Play, X } from 'lucide-react';
+import { Component, useCallback, useEffect, useMemo, useState } from 'react';
+import { Play } from 'lucide-react';
 import { LT, KP, FONT, NUM_STYLE } from '@/lib/theme';
 import { usePlan } from '@/contexts/PlanContext';
 import { usePerfilDeLaVista } from '@/contexts/VistaContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
-import { iniciaEntreno, ocultaEntreno, pasosDeLaSesion, vistaDelEntreno } from '@/lib/entreno';
-import { useConfirmacion } from '@/components/Confirmacion';
+import { pasosDeLaSesion, vistaDelEntreno } from '@/lib/entreno';
+import { tiempoTotal } from '@/lib/entrenoDatos';
+import { recogeEntrenoPendiente } from '@/lib/entrenoPendiente';
 import { palabrasDelEntreno } from '@/lib/entrenoPalabras';
 import { preparaAudio } from '@/lib/pitidos';
 import EntrenoDelDia from '@/features/training/EntrenoDelDia';
@@ -35,15 +36,21 @@ class LimiteDelEntreno extends Component {
   }
 }
 
+// Al aparecer, abre el entreno (una vez): lo usa «Empezar» de Home.
+function AbreAlAparecer({ alAparecer }) {
+  useEffect(() => { alAparecer(); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- solo al aparecer
+  return null;
+}
+
 /**
- * El botón de la sesión que abre el MODO ENTRENO: «Iniciar entreno» (azul), «Continuar entreno 3 de 12» (con borde, cuando ya hay pasos hechos, y una ✕ para quitarlo) o nada.
+ * El botón de la sesión que abre el MODO ENTRENO, según el ESTADO de ESA sesión (cada sesión del día tiene el suyo): «Iniciar entreno» (sin empezar), «Seguir · 14:32 · 3 de 12»
+ * (en curso: tiempo vivo y pasos hechos) o nada (terminada).
  *
  * Va arriba de la lista de ejercicios del día, dentro de su tarjeta. No sale si no hay nada que entrenar (un descanso), si la sesión ya
  * está terminada (ya dice «Terminada»), ni cuando alguien mira el plan de otra persona en solo lectura.
  *
- * Tampoco vuelve: (1) si el entreno ya se dio por terminado, ni siquiera después de «Deshacer» la sesión (Andrés, 9 oct 2026: «si le pico
- * deshacer me vuelve a activar el botón de continuar entreno»); (2) si el atleta lo quitó con la ✕ («tampoco puedo hacer que desaparezca»).
- * Quitarlo no borra nada: lo anotado se queda en la lista de ejercicios.
+ * Ya NO hay ✕ (23 oct 2026, PDF «Botones de interacción en el entreno»: quitaba el botón para siempre y nada lo explicaba). Quien no quiere la guía termina la sesión desde
+ * la lista. Una sesión que ya traía `oculto` de antes vuelve a ofrecer «Seguir». «En curso» empieza con el primer «Listo», no al abrir: abrir y cerrar sin hacer nada no cuenta.
  *
  * Es el único sitio que habla con los contextos de la app (el plan, el perfil de quien se mira, las palabras): `EntrenoDelDia` recibe todo
  * por propiedades, para poder probarse solo.
@@ -52,7 +59,6 @@ export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, on
   const { resolveExercise, medias, programaActivo } = usePlan();
   const { perfil, soloLectura, userId } = usePerfilDeLaVista();
   const { salud, coach } = usePalabras();
-  const pregunta = useConfirmacion();
   /* A quién le llega la técnica que grabe el atleta: a quien puso ESTE ejercicio en el plan. `autor` es el programa de quien puso esta sesión (su coach, o un
      profesional de su equipo con su programa o sus sesiones pegadas); si la pantalla no lo trae, el programa que se está viendo. Sin dueño (un atleta sin coach)
      no hay a quién y la cámara no sale. */
@@ -67,6 +73,8 @@ export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, on
     return { id, nombre };
   }, [autor, programaActivo, perfil?.coach_id, coach]);
   const [abierto, setAbierto] = useState(false);
+  // Home pidió abrir el entreno de esta sesión («Empezar»): se lee una sola vez, al montar.
+  const [abrirYa] = useState(() => recogeEntrenoPendiente(sesionId));
   const [intento, setIntento] = useState(0);
   const [fallo, setFallo] = useState(false);
   // Una sesión que dice «repite el martes» se entrena con los ejercicios del martes (`ejercicios`); lo que se anota queda en SU lugar.
@@ -74,6 +82,15 @@ export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, on
   const plan = useMemo(() => {
     try { return pasosDeLaSesion(diaDeEntreno); } catch (error) { console.error('[entreno] no se pudo armar la sesión:', error); return null; }
   }, [diaDeEntreno]);
+
+  // El tiempo del entreno en curso se ve vivo en el botón: un tic por segundo, solo mientras hay entreno empezado y sin terminar.
+  const [ahora, setAhora] = useState(() => Date.now());
+  const enCursoSinFin = !!registro?.entreno?.inicio && registro.entreno.fin == null && !registro?.completed;
+  useEffect(() => {
+    if (!enCursoSinFin) return undefined;
+    const id = setInterval(() => setAhora(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [enCursoSinFin]);
 
   // La foto y los videos que le tocan a ESTA persona (uno solo para ella, de su género, o el general): ver `FichaEjercicio`.
   const medios = useCallback((ex) => {
@@ -86,33 +103,22 @@ export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, on
   const palabras = palabrasDelEntreno(salud);
 
   // Aquí la hora no importa: solo se mira si ya empezó y cuántos pasos van.
-  const vista = vistaDelEntreno(plan, registro?.entreno, 0);
-  // Ya se dio por terminado, o el atleta lo quitó: no hay nada que iniciar ni que continuar (si lo está mirando abierto, sigue abierto).
-  if (!abierto && (vista.estado === 'fin' || vista.oculto)) return null;
+  const vista = vistaDelEntreno(plan, registro?.entreno, ahora);
+  // Ya se dio por terminado: no hay nada que iniciar ni que continuar (si lo está mirando abierto, sigue abierto).
+  if (!abierto && vista.estado === 'fin') return null;
   const empezado = vista.estado !== 'sin';
   // «Continuar» solo cuando ya hay algo hecho: abrir el entreno y cerrarlo sin tocar un paso no es «Continuar entreno 0 de 7», es empezar.
   const continuando = empezado && vista.hechos + vista.saltados > 0;
   const abre = () => {
     // El audio solo se despierta con un toque de la persona; con el reloj arrancando solo, este es el toque.
     preparaAudio();
-    // La hora de inicio se guarda una sola vez.
-    onRegistro((prev) => ({ ...prev, entreno: iniciaEntreno(prev?.entreno, Date.now(), plan) }));
     setFallo(false);
     setIntento((n) => n + 1);
     setAbierto(true);
   };
-  const quita = async () => {
-    const va = await pregunta({
-      titulo: palabras.quitarTitulo,
-      detalle: 'Lo que ya anotaste se queda en la lista. Terminas la sesión desde ahí.',
-      confirmar: 'Sí, quitarlo',
-      peligro: true,
-    });
-    if (va) onRegistro((prev) => ({ ...prev, entreno: ocultaEntreno(prev?.entreno) }));
-  };
-
   return (
     <>
+      {abrirYa && !abierto && !fallo && <AbreAlAparecer alAparecer={abre} />}
       <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
         <button
           type="button" onClick={abre} className="kp-press"
@@ -127,22 +133,12 @@ export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, on
         >
           <Play size={continuando ? 17 : 18} fill={continuando ? 'none' : '#fff'} />
           {continuando ? palabras.continuar : palabras.iniciar}
-          {continuando && plan.total > 0 && (
-            <span style={{ fontSize: 13.5, fontWeight: 800, opacity: 0.85, ...NUM_STYLE }}>{Math.min(vista.hechos, plan.total)} de {plan.total}</span>
+          {continuando && (
+            <span style={{ fontSize: 13.5, fontWeight: 800, opacity: 0.85, ...NUM_STYLE }}>
+              {[tiempoTotal(vista.transcurrido), plan.total > 0 ? `${Math.min(vista.hechos, plan.total)} de ${plan.total}` : null].filter(Boolean).join(' · ')}
+            </span>
           )}
         </button>
-        {/* Quitar el entreno guiado: solo junto a «Continuar» (ahí estorba si el atleta prefirió terminar con la lista); «Iniciar entreno» va solo. */}
-        {continuando && (
-          <button
-            type="button" onClick={quita} className="kp-press" aria-label={palabras.quitarAria}
-            style={{
-              width: 56, minHeight: 56, flexShrink: 0, borderRadius: 16, border: 'none', background: '#EBEDF1', color: LT.text2, cursor: 'pointer',
-              display: 'grid', placeItems: 'center', touchAction: 'manipulation',
-            }}
-          >
-            <X size={20} />
-          </button>
-        )}
       </div>
       {fallo && (
         <div role="status" style={{ margin: '-6px 3px 14px', fontSize: 13.5, fontWeight: 600, color: LT.text2, lineHeight: 1.4 }}>
