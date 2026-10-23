@@ -252,9 +252,8 @@ export function EncabezadoDelSet({
             {onDescansoVueltas && !sinSeries && seRepite && (
               <ChipDeDescanso
                 sobreAzul valor={descansoVueltas} onCambio={onDescansoVueltas} nuevo="1 min"
-                titulo={nEjercicios > 1 || lapsos ? 'Al terminar la vuelta, antes de repetir el Set' : 'Al terminar cada serie, antes de la siguiente'}
-                textoAgregar={nEjercicios > 1 || lapsos ? 'Descanso entre vueltas' : 'Descanso entre series'}
-                textoValor={(v) => `${v} entre ${nEjercicios > 1 || lapsos ? 'vueltas' : 'series'}`}
+                // Siempre «vueltas», también con un solo ejercicio: «serie» se confundía con el siguiente Set (Andrés, 23 oct 2026).
+                titulo="Al terminar la vuelta, antes de repetir el Set" textoAgregar="Descanso entre vueltas" textoValor={(v) => `${v} entre vueltas`}
               />
             )}
           </>
