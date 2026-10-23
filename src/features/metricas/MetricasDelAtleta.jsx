@@ -50,7 +50,9 @@ function Contenido({ atleta, esAtleta, abrirEn, onCerrar }) {
     return lectura ? { ...m.d, recuperacion: { ...m.d.recuperacion, veredicto: { ...m.d.recuperacion.veredicto, detalle: lectura.detalle } } } : m.d;
   }, [m.d, esAtleta]);
 
-  const subtitulo = m.cargando && !hayDatos ? '' : `${m.actividades.length} ${m.actividades.length === 1 ? 'entreno' : 'entrenos'}${m.d.estaSemana?.duracion_s ? ` · esta semana ${duracionTexto(m.d.estaSemana.duracion_s)}` : ''}`;
+  // Los de la lista: los del reloj y también las sesiones guiadas sin reloj (si no, la cabecera decía «0 entrenos» sobre una lista de 5).
+  const totalDeEntrenos = m.actividades.length + m.sesionesSinReloj.length;
+  const subtitulo = m.cargando && !hayDatos ? '' : `${totalDeEntrenos} ${totalDeEntrenos === 1 ? 'entreno' : 'entrenos'}${m.d.estaSemana?.duracion_s ? ` · esta semana ${duracionTexto(m.d.estaSemana.duracion_s)}` : ''}`;
   const botonDeImportar = (
     <Boton principal icono={Upload} onClick={() => setPanel('importar')}>Importar entrenos</Boton>
   );
@@ -79,7 +81,7 @@ function Contenido({ atleta, esAtleta, abrirEn, onCerrar }) {
           />
         )}
         {panel === 'umbrales' && m.umbrales && (
-          <UmbralesDelAtleta atletaId={atleta.id} umbrales={m.umbrales} escritos={m.escritos} alGuardar={() => { m.recarga(); setPanel(null); }} alCancelar={() => setPanel(null)} />
+          <UmbralesDelAtleta esAtleta={esAtleta} atletaId={atleta.id} umbrales={m.umbrales} escritos={m.escritos} alGuardar={() => { m.recarga(); setPanel(null); }} alCancelar={() => setPanel(null)} />
         )}
       </div>
     );
@@ -122,7 +124,7 @@ function Contenido({ atleta, esAtleta, abrirEn, onCerrar }) {
         </div>
         {acciones}
         <div style={{ marginTop: 16 }}>
-          {vista === 'resumen' && <Resumen d={d} umbrales={m.umbrales} alAbrir={setDetalle} alIrA={setVista} />}
+          {vista === 'resumen' && <Resumen d={d} umbrales={m.umbrales} alAbrir={setDetalle} alIrA={setVista} esAtleta={esAtleta} />}
           {vista === 'entrenos' && <ListaDeEntrenos d={m.d} hoy={m.hoy} alAbrir={setDetalle} puedeImportar alImportar={botonDeImportar} sesiones={m.sesionesSinReloj} />}
           {vista === 'carga' && <CargaYForma d={m.d} />}
           {vista === 'recuperacion' && <Recuperacion d={d} recuperacion={m.recuperacion} hoy={m.hoy} />}

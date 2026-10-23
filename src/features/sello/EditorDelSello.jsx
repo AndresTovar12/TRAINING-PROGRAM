@@ -147,7 +147,10 @@ export default function EditorDelSello({ sellos, Icono }) {
       const texto = await tarea();
       if (texto) setAviso({ tipo: 'ok', texto });
     } catch (e) {
-      if (e?.name !== 'AbortError') setAviso({ tipo: 'error', texto: e?.message || `No se pudo ${nombre}.` });
+      if (e?.name === 'AbortError') return;
+      // Sin permiso del navegador el error viene en inglés y técnico: se dice en claro y se ofrece lo que sí funciona.
+      const sinPermiso = e?.name === 'NotAllowedError' || e?.name === 'SecurityError';
+      setAviso({ tipo: 'error', texto: sinPermiso ? `El navegador no dejó ${nombre}. Prueba con «Guardar imagen».` : (/[áéíóúñ¿]|^(El|La|No) /.test(e?.message ?? '') ? e.message : `No se pudo ${nombre}.`) });
     } finally {
       setOcupado(false);
     }

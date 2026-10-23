@@ -30,8 +30,10 @@ function Campo({ id, titulo, ayuda, valor, onChange, sugerido, origen, minimo, m
   );
 }
 
-export default function UmbralesDelAtleta({ atletaId, umbrales, escritos, alGuardar, alCancelar }) {
+export default function UmbralesDelAtleta({ esAtleta = false, atletaId, umbrales, escritos, alGuardar, alCancelar }) {
   const { user } = useAuth();
+  // Cuando lo abre el propio atleta, los textos hablan con él («se te ha visto», «tu edad»), no de él.
+  const voz = (t) => (esAtleta ? t.replace(/se le ha/g, 'se te ha').replace(/\bsus\b/g, 'tus').replace(/\bsu\b/g, 'tu') : t);
   const [max, setMax] = useState(escritos?.fc_max ? String(escritos.fc_max) : '');
   const [reposo, setReposo] = useState(escritos?.fc_reposo ? String(escritos.fc_reposo) : '');
   const [umbral, setUmbral] = useState(escritos?.fc_umbral ? String(escritos.fc_umbral) : '');
@@ -69,9 +71,9 @@ export default function UmbralesDelAtleta({ atletaId, umbrales, escritos, alGuar
       <div style={{ fontSize: 14.5, lineHeight: 1.5, fontWeight: 500, color: LT.text, margin: '8px 0 18px' }}>
         Con estos tres números se pintan las zonas y se calcula la carga de cada entreno. Déjalos vacíos para que se estimen solos; escríbelos si se los midieron.
       </div>
-      <Campo id="fc-max" titulo="Pulso máximo" valor={max} onChange={setMax} sugerido={umbrales.fc_max} origen={ORIGEN[umbrales.metodo.fc_max]} minimo={100} maximo={250} ayuda="El más alto que ha llegado a tener, en una prueba de esfuerzo o en una carrera." />
-      <Campo id="fc-reposo" titulo="Pulso en reposo" valor={reposo} onChange={setReposo} sugerido={umbrales.fc_reposo} origen={ORIGEN[umbrales.metodo.fc_reposo]} minimo={25} maximo={120} ayuda="El pulso al despertar, antes de levantarse." />
-      <Campo id="fc-umbral" titulo="Pulso de umbral" valor={umbral} onChange={setUmbral} sugerido={umbrales.fc_umbral} origen={ORIGEN[umbrales.metodo.fc_umbral]} minimo={80} maximo={230} ayuda="El pulso más alto que puede sostener casi una hora (se mide con una prueba de 30 min a tope)." />
+      <Campo id="fc-max" titulo="Pulso máximo" valor={max} onChange={setMax} sugerido={umbrales.fc_max} origen={voz(ORIGEN[umbrales.metodo.fc_max])} minimo={100} maximo={250} ayuda="El más alto que ha llegado a tener, en una prueba de esfuerzo o en una carrera." />
+      <Campo id="fc-reposo" titulo="Pulso en reposo" valor={reposo} onChange={setReposo} sugerido={umbrales.fc_reposo} origen={voz(ORIGEN[umbrales.metodo.fc_reposo])} minimo={25} maximo={120} ayuda="El pulso al despertar, antes de levantarse." />
+      <Campo id="fc-umbral" titulo="Pulso de umbral" valor={umbral} onChange={setUmbral} sugerido={umbrales.fc_umbral} origen={voz(ORIGEN[umbrales.metodo.fc_umbral])} minimo={80} maximo={230} ayuda="El pulso más alto que puede sostener casi una hora (se mide con una prueba de 30 min a tope)." />
 
       <div style={{ ...eyebrow(LT.text2), margin: '4px 0 8px' }}>Así quedan las zonas</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18 }}>

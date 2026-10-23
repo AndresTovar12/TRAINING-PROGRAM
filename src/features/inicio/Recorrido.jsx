@@ -105,7 +105,7 @@ const Entrenar = () => (
 );
 const Salud = () => (
   <>
-    <div style={fila}><span style={avatar('#FDECEC', '#F2555A')}><Heart size={16} /></span><div>Hoy<small style={chico}>Sueño 7 h · Energía 4/5 · Sin dolor</small></div></div>
+    <div style={fila}><span style={avatar('#FDECEC', '#F2555A')}><Heart size={16} /></span><div>Hoy<small style={chico}>Dolor muscular: ninguno</small></div></div>
     <div style={burbuja(false)}>Buen trabajo ayer. Hoy baja el peso 5 % en el squat.</div>
   </>
 );
