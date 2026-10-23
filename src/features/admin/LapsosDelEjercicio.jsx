@@ -50,7 +50,8 @@ function FilaDeLapso({ ex, lapso, k, tipoPrevio, onCambio, onQuitar, puedeQuitar
       <CeldaDeCarga rc={rc} compacto estiloInput={estiloInput} />
       {/* En el teléfono el descanso baja a su renglón y la papelera se queda arriba, en la última columna. */}
       {angosta && <IconBtn icon={Trash2} danger onClick={onQuitar} disabled={!puedeQuitar} title="Quitar el lapso" />}
-      <div style={angosta ? { gridColumn: '2 / 4' } : undefined}>
+      {/* Hasta el final de la fila (también bajo la papelera): con «2 / 4» la última columna quedaba libre y el número del lapso siguiente se metía ahí. */}
+      <div style={angosta ? { gridColumn: '2 / -1' } : undefined}>
         <CampoDescanso ex={comoEj} onPatch={onCambio} compacto estiloInput={estiloInput} />
       </div>
       {!angosta && <IconBtn icon={Trash2} danger onClick={onQuitar} disabled={!puedeQuitar} title="Quitar el lapso" />}
