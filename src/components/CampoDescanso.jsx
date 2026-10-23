@@ -40,7 +40,7 @@ const recuerda = (unidad) => {
 const soloNumero = (texto) => texto.replace(/[^\d.,\-–]/g, '');
 const sinRayaSuelta = (texto) => texto.replace(/^[-–.,]+|[-–.,]+$/g, '');
 
-export default function CampoDescanso({ ex, onPatch, estiloInput, compacto = false, ancho }) {
+export default function CampoDescanso({ ex, onPatch, estiloInput, compacto = false, ancho, nombre = 'Descanso' }) {
   const pregunta = useConfirmacion();
   // Lo elegido en la lista durante esta visita: `null` mientras no se toque.
   const [elegida, setElegida] = useState(null);
@@ -78,8 +78,8 @@ export default function CampoDescanso({ ex, onPatch, estiloInput, compacto = fal
   };
 
   const opciones = [
-    ...DESCANSOS.map((d) => ({ valor: d.id, etiqueta: d.etiqueta, corta: `Descanso · ${d.corta}` })),
-    { valor: 'libre', etiqueta: 'Texto libre', corta: 'Descanso', detalle: 'Escribe lo que quieras: «Recuperación total»' },
+    ...DESCANSOS.map((d) => ({ valor: d.id, etiqueta: d.etiqueta, corta: `${nombre} · ${d.corta}` })),
+    { valor: 'libre', etiqueta: 'Texto libre', corta: nombre, detalle: 'Escribe lo que quieras: «Recuperación total»' },
   ];
 
   // Mismo reparto que las demás casillas: el borde en la caja, el espaciado en el input de dentro.

@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { pasosDeLaSesion } from '../src/lib/entreno.js';
 
-// Los dos helpers del editor son JSX-free, pero viven en un .jsx: se repiten aquí las reglas que fijan.
+// Las dos reglas del editor (un descanso común a varios ejercicios, y si el Set se repite), escritas aquí para fijarlas.
 const texto = (x) => String(x ?? '').trim();
 const descansoComun = (m) => { const d = m.map((x) => texto(x.descanso)); return d.every((v) => v === d[0]) ? (d[0] ?? '') : null; };
 const seRepite = (r) => { const n = texto(r).match(/\d+/g); return !!n && Math.max(...n.map(Number)) > 1; };
