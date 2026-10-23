@@ -180,7 +180,7 @@ export function HoyDescansas({ titulo, siguiente, vacia, boton, onVerPlan, cuand
  * El plan está en pausa (lo pausó el atleta o su coach): hoy no toca nada de él. Dice dónde se quedó y deja reanudar.
  * `onReanudar` va solo si quien mira puede (un coach que mira la app de su atleta no lo reanuda por él).
  */
-export function HoyEnPausa({ texto, onReanudar, cuando, estilo }) {
+export function HoyEnPausa({ texto, onReanudar, cuando, estilo, etiqueta }) {
   return (
     <Marco etiqueta="Plan en pausa" punto="#FFD27A" fecha={cuando?.fecha} estilo={estilo}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 18 }}>
@@ -188,7 +188,7 @@ export function HoyEnPausa({ texto, onReanudar, cuando, estilo }) {
           <Pause size={26} />
         </span>
         <div style={{ minWidth: 0 }}>
-          <h3 style={{ margin: 0, fontSize: 24, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.15 }}>Tu plan está en pausa</h3>
+          <h3 style={{ margin: 0, fontSize: 24, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.15 }}>{etiqueta ? `${etiqueta}: en pausa` : 'Tu plan está en pausa'}</h3>
           <span style={{ display: 'block', fontSize: 14, fontWeight: 600, opacity: 0.85, marginTop: 3 }}>Te espera {texto}</span>
         </div>
       </div>
