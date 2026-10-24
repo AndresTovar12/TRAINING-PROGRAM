@@ -20,7 +20,7 @@ export default defineConfig([
   // `supabase/functions/mcp/app` son copias exactas de src/lib para el
   // servidor de la IA (ver scripts/compartir-con-mcp.mjs): los originales ya
   // se revisan, y revisarlas dos veces duplicaría cada aviso.
-  globalIgnores(['dist', 'supabase/functions/mcp/app']),
+  globalIgnores(['dist', 'supabase/functions/mcp/app', 'ios']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [

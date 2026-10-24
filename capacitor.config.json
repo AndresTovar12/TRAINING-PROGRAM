@@ -1,0 +1,9 @@
+{
+  "appId": "com.traininglabapp.app",
+  "appName": "Training Lab",
+  "webDir": "dist",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#F2F3F7"
+  }
+}

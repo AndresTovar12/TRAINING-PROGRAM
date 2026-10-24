@@ -1,0 +1,74 @@
+# Compila la app de iPhone en la nube y la sube a TestFlight.
+# Se dispara a mano: GitHub → Actions → «iOS a TestFlight» → Run workflow.
+# Necesita 3 secretos del repositorio (Settings → Secrets and variables → Actions):
+#   ASC_KEY_ID      el «Key ID» de la llave de App Store Connect
+#   ASC_ISSUER_ID   el «Issuer ID» (arriba de la lista de llaves)
+#   ASC_KEY_P8      TODO el texto del archivo AuthKey_XXXX.p8 (con las líneas BEGIN/END)
+# Los dos VITE_… son públicos (viajan dentro de cualquier app web); los secretos de verdad son solo los tres de arriba.
+name: iOS a TestFlight
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ios-testflight
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      VITE_SUPABASE_URL: https://ozwqqzrkgunrgxxwxmop.supabase.co
+      VITE_SUPABASE_ANON_KEY: sb_publishable_ApSlA6PxKg9WVuGYSVRk4Q_11D379x_
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Xcode más nuevo
+        run: |
+          NUEVO=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$NUEVO/Contents/Developer"
+          xcodebuild -version
+
+      - name: Instalar y construir la web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Pasar la web al proyecto de iPhone
+        run: npx cap sync ios
+
+      - name: Guardar la llave de App Store Connect
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/asc"
+          printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey_${{ secrets.ASC_KEY_ID }}.p8"
+
+      - name: Compilar (archive)
+        run: |
+          xcodebuild archive \
+            -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_${{ secrets.ASC_KEY_ID }}.p8" \
+            -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
+            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}" \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }}
+
+      - name: Firmar y subir a TestFlight
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportOptionsPlist ios/ci/ExportOptions.plist \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_${{ secrets.ASC_KEY_ID }}.p8" \
+            -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
+            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}"
