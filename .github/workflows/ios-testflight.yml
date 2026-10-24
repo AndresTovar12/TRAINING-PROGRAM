@@ -1,10 +1,9 @@
 # Compila la app de iPhone en la nube y la sube a TestFlight.
 # Se dispara a mano: GitHub → Actions → «iOS a TestFlight» → Run workflow.
-# Necesita 3 secretos del repositorio (Settings → Secrets and variables → Actions):
-#   ASC_KEY_ID      el «Key ID» de la llave de App Store Connect
-#   ASC_ISSUER_ID   el «Issuer ID» (arriba de la lista de llaves)
-#   ASC_KEY_P8      TODO el texto del archivo AuthKey_XXXX.p8 (con las líneas BEGIN/END)
-# Los dos VITE_… son públicos (viajan dentro de cualquier app web); los secretos de verdad son solo los tres de arriba.
+# Necesita UN secreto del repositorio (Settings → Secrets and variables → Actions):
+#   ASC_KEY_P8      TODO el texto del archivo AuthKey_ANLLBDRPU8.p8 (con las líneas BEGIN/END)
+# El Key ID y el Issuer ID de la llave «GITHUB ACCESS» NO son secretos (van abajo, en `env`); lo secreto es solo el archivo .p8.
+# Los dos VITE_… también son públicos (viajan dentro de cualquier app web).
 name: iOS a TestFlight
 
 on:
@@ -19,6 +18,8 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 60
     env:
+      ASC_KEY_ID: ANLLBDRPU8
+      ASC_ISSUER_ID: f7faf1b1-4d15-4b90-aa92-678ce284f1b0
       VITE_SUPABASE_URL: https://ozwqqzrkgunrgxxwxmop.supabase.co
       VITE_SUPABASE_ANON_KEY: sb_publishable_ApSlA6PxKg9WVuGYSVRk4Q_11D379x_
     steps:
@@ -48,7 +49,7 @@ jobs:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
         run: |
           mkdir -p "$RUNNER_TEMP/asc"
-          printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey_${{ secrets.ASC_KEY_ID }}.p8"
+          printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey_${{ env.ASC_KEY_ID }}.p8"
 
       - name: Compilar (archive)
         run: |
@@ -57,9 +58,9 @@ jobs:
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/App.xcarchive" \
             -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_${{ secrets.ASC_KEY_ID }}.p8" \
-            -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
-            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}" \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_${{ env.ASC_KEY_ID }}.p8" \
+            -authenticationKeyID "${{ env.ASC_KEY_ID }}" \
+            -authenticationKeyIssuerID "${{ env.ASC_ISSUER_ID }}" \
             CURRENT_PROJECT_VERSION=${{ github.run_number }}
 
       - name: Firmar y subir a TestFlight
@@ -69,6 +70,6 @@ jobs:
             -exportOptionsPlist ios/ci/ExportOptions.plist \
             -exportPath "$RUNNER_TEMP/export" \
             -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_${{ secrets.ASC_KEY_ID }}.p8" \
-            -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
-            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}"
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_${{ env.ASC_KEY_ID }}.p8" \
+            -authenticationKeyID "${{ env.ASC_KEY_ID }}" \
+            -authenticationKeyIssuerID "${{ env.ASC_ISSUER_ID }}"
