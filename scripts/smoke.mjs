@@ -11,10 +11,9 @@
  * Uso:  node scripts/smoke.mjs            → contra el servidor local
  *       BASE_URL=https://... node ...     → contra producción
  *
- * Las contraseñas de las cuentas NO están en el código (el repositorio es
- * público): van en el archivo `.env` (git no lo sube) o en el entorno, como
- * SMOKE_PASSWORD y SMOKE_COACH_PASSWORD. Sin ellas, el script se detiene al
- * empezar y lo dice.
+ * Entra con las cuentas de PRUEBA zz_qa_fisio y zz_qa_pac. La contraseña NO está en
+ * el código (el repositorio es público): va en el archivo `.env` (git no lo sube) o
+ * en el entorno, como SMOKE_PASSWORD. Sin ella, el script se detiene al empezar y lo dice.
  */
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
@@ -107,20 +106,18 @@ function leeSecreto(nombre) {
     return undefined;
   }
 }
+// Las cuentas de PRUEBA `zz_qa_*` (23 oct 2026): comparten una sola contraseña, la de `SMOKE_PASSWORD` en `.env`. Ya no se usan las cuentas reales (andrestovar_admin, andrestovar,
+// coach_prueba): la prueba de humo no tiene por qué tener esas contraseñas ni tocar esos datos.
 const PASSWORD = leeSecreto('SMOKE_PASSWORD');
-const PASSWORD_COACH = leeSecreto('SMOKE_COACH_PASSWORD');
-if (!PASSWORD || !PASSWORD_COACH) {
-  console.error('✗ Faltan las contraseñas de la prueba de humo. Ya no están en el código: el repositorio es público.');
-  console.error('  Ponlas en el archivo .env (git no lo sube) o en el entorno:');
-  console.error('    SMOKE_PASSWORD=…        (andrestovar_admin y andrestovar)');
-  console.error('    SMOKE_COACH_PASSWORD=…  (coach_prueba)');
+if (!PASSWORD) {
+  console.error('✗ Falta la contraseña de las cuentas de prueba zz_qa_*. No está en el código: el repositorio es público.');
+  console.error('  Ponla en el archivo .env (git no lo sube) o en el entorno:  SMOKE_PASSWORD=…');
   process.exit(1);
 }
 
 const ACCOUNTS = [
-  { user: 'andrestovar_admin', rol: 'master', esAdmin: true },
-  { user: 'coach_prueba', rol: 'coach', esAdmin: true, password: PASSWORD_COACH },
-  { user: 'andrestovar', rol: 'atleta', esAdmin: false },
+  { user: 'zz_qa_fisio', rol: 'fisio', esAdmin: true },
+  { user: 'zz_qa_pac', rol: 'atleta', esAdmin: false },
 ];
 
 const PANTALLAS = {
