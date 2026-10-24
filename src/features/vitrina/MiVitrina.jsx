@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { botonPrincipal } from '@/features/misplanes/estilos';
 import FichaDelPlanEnVenta from '@/features/vitrina/FichaDelPlanEnVenta';
+import { cobrosDeMiCuenta } from '@/lib/miDineroApi';
 import { ETIQUETA_DE_CONTENIDO, leeVentasAbiertas, ligaPublica, listaMiVitrina, retiraPlan } from '@/lib/vitrinaApi';
 import { chipsDeParaQuien } from '@/lib/paraQuien';
 import { useCabeceraDeSeccion, useEnBanda } from '@/components/ui';
@@ -82,6 +83,12 @@ export default function MiVitrina() {
   const [editando, setEditando] = useState(undefined); // undefined = cerrada · null = plan nuevo · fila = editar
   const [ventas, setVentas] = useState(true); // ¿ya se puede cobrar? (hasta saberlo, no se asusta a nadie con el aviso)
   useEffect(() => { leeVentasAbiertas().then(setVentas).catch(() => {}); }, []);
+  // ¿Su cuenta de cobro (Stripe) está lista? Sin ella el plan sale «Publicado» pero nadie lo puede comprar ni aparece en Explorar, y nadie se lo decía (auditoría p50).
+  // `null` = todavía no se sabe (o no se pudo leer): en ese caso no se asusta a nadie.
+  const [cuentaLista, setCuentaLista] = useState(null);
+  useEffect(() => {
+    cobrosDeMiCuenta().then((r) => setCuentaLista(!!(r?.cuenta?.onboarding_completo && r?.cuenta?.cobros_ok && r?.cuenta?.depositos_ok))).catch(() => {});
+  }, []);
 
   const carga = useCallback(async () => {
     try { setPlanes(await listaMiVitrina()); setError(null); } catch (e) { setError(e?.message ?? 'No se pudo cargar tu vitrina.'); setPlanes((p) => p ?? []); }
@@ -125,6 +132,11 @@ export default function MiVitrina() {
       {!ventas && (
         <div role="status" style={{ padding: '10px 14px', borderRadius: 12, background: KP.amberSoft, color: KP.amber, fontSize: 14, fontWeight: 700, lineHeight: 1.4 }}>
           Los cobros se abren pronto. Publica tus planes desde ya: el botón de comprar dirá «Pronto» hasta entonces.
+        </div>
+      )}
+      {ventas && cuentaLista === false && planes?.some((p) => p.estado === 'publicado') && (
+        <div role="status" style={{ padding: '10px 14px', borderRadius: 12, background: KP.amberSoft, color: KP.amber, fontSize: 14, fontWeight: 700, lineHeight: 1.4 }}>
+          Tus planes están publicados, pero todavía nadie puede comprarlos ni aparecen en Explorar: falta conectar tu cuenta de cobro. Búscala en Mi perfil → Cobros.
         </div>
       )}
       {planes === null ? (
