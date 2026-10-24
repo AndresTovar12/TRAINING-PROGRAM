@@ -180,7 +180,9 @@ async function esperaContenido(page, timeout = 15000) {
 async function revisaForma(page, ctx, ancho) {
   const esperadoCompu = ancho >= 1024;
   const visto = await page.evaluate(() => ({
-    sidebar: !!document.querySelector('aside'),
+    // La barra lateral azul es un <nav aria-label="Secciones"> desde la reestructura visual (15 oct 2026); antes era un <aside>.
+    // En el teléfono el coach también tiene un <nav aria-label="Secciones"> (la barra de ABAJO): solo cuenta como menú lateral si es angosto y alto.
+    sidebar: !!document.querySelector('aside') || [...document.querySelectorAll('nav[aria-label="Secciones"]')].some((n) => { const r = n.getBoundingClientRect(); return r.width < 320 && r.height > 400; }),
     tabla: !!document.querySelector('table'),
   }));
 
