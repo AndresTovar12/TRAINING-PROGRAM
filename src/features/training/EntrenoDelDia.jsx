@@ -5,6 +5,7 @@ import { useCuerpoQuieto } from '@/lib/useCuerpoQuieto';
 import { usePantallaEncendida } from '@/lib/pantallaEncendida';
 import { avisaCuandoTermine, quitaAviso, vibra, AVISO_DE_DESCANSO, AVISO_DE_CRONOMETRO } from '@/lib/avisosNativos';
 import { muestraEnPantallaBloqueada, quitaDePantallaBloqueada } from '@/lib/pantallaBloqueada';
+import { enviaAlReloj, escuchaReloj, terminaEnReloj } from '@/lib/relojApple';
 import { preparaAudio, pitido } from '@/lib/pitidos';
 import { isLoadedExercise, sinDuracion } from '@/lib/training-utils';
 import { cargaPorPorcentaje } from '@/lib/cargaPorcentaje';
@@ -176,22 +177,28 @@ export default function EntrenoDelDia({
   useEffect(() => {
     if (!hayEntreno || !paso) return;
     const nombre = plan?.nombre || dia?.name || 'Entreno';
+    let datos = null;
     if (enDescanso) {
-      muestraEnPantallaBloqueada({
+      datos = {
         nombre, tipo: 'descanso', titulo: 'Descanso', detalle: siguienteNombre ? `Sigue: ${siguienteNombre}` : '',
         ...(finDelDescanso ? { finMs: finDelDescanso } : { inicioMs: entreno.inicio }),
-      });
+      };
     } else if (paso.tipo === 'ejercicio') {
-      muestraEnPantallaBloqueada({
+      datos = {
         nombre, tipo: 'trabajo', titulo: nombreDePaso, detalle: serieTexto,
         ...(finDeLaCuenta ? { finMs: finDeLaCuenta } : { inicioMs: entreno.inicio }),
-      });
+      };
     }
+    if (!datos) return;
+    muestraEnPantallaBloqueada(datos);
+    // El reloj recibe lo mismo, más el deporte (para medir el pulso con el tipo de entreno correcto).
+    enviaAlReloj({ ...datos, deporte: plan?.deporte ?? 'otro' });
     // Solo cuando cambia algo de lo que se ve; el resto (el entreno entero, el plan) cambia en cada tic y no debe mandar una actualización por segundo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hayEntreno, enDescanso, claveDePaso, nombreDePaso, serieTexto, siguienteNombre, finDelDescanso, finDeLaCuenta]);
-  useEffect(() => { if (!hayEntreno) quitaDePantallaBloqueada(); }, [hayEntreno]);
-  useEffect(() => () => { quitaDePantallaBloqueada(); }, []);
+  useEffect(() => { if (!hayEntreno) { quitaDePantallaBloqueada(); terminaEnReloj(); } }, [hayEntreno]);
+  useEffect(() => () => { quitaDePantallaBloqueada(); terminaEnReloj(); }, []);
+
 
   /* ---------- Lo que se sabe de un paso ---------- */
   const exDe = useCallback((p) => (p && p.idx !== undefined ? dia.exercises[p.idx] : null), [dia]);
@@ -306,6 +313,14 @@ export default function EntrenoDelDia({
     setVerFin(false);
   };
   const seguirDelDescanso = () => { preparaAudio(); listo(); };
+
+  /* Lo que llega del Apple Watch: el pulso en vivo, y «Listo» / «Siguiente» tocados en la muñeca. Las funciones cambian en cada dibujo; se guardan en una referencia para que
+     el oyente (que se arma una sola vez) siempre llame a la de ahora. */
+  const [pulsoDelReloj, setPulsoDelReloj] = useState(null);
+  const accionesDelReloj = useRef({});
+  useEffect(() => { accionesDelReloj.current = { listo: () => listo(), siguiente: () => saltar() }; });
+  useEffect(() => escuchaReloj({ alAccion: (a) => accionesDelReloj.current[a]?.(), alPulso: setPulsoDelReloj }), []);
+
   /* UN DESCANSO QUE LLEGA A CERO TERMINA SOLO: el pitido avisa y la app pasa a lo que sigue (un instante después, para que se oiga). Andrés (9 oct 2026,
      «Experiencia de workout 2.0»): el «+0:09» que seguía contando de más «podría perder el punto de que la app guíe en el entrenamiento y podría ser
      redundante con el botón de +30 s». «Seguir» lo adelanta; «+30 s» lo alarga antes de que acabe. Un descanso escrito con palabras no cuenta: espera «Seguir». */
@@ -526,7 +541,7 @@ export default function EntrenoDelDia({
       {/* El paso con GPS (200 m o más) ocupa el lugar del paso normal, con la barra «Workout» arriba; «Sin GPS» o cerrar el mapa devuelve el paso normal. */}
       {conGps ? (
         <PasoConGps
-          key={paso.clave} paso={paso} meta={metrosDelPaso(paso)} carga={paso.meta?.texto ?? ''} color={colorDelTipo ?? undefined} siguiente={siguienteDeGps}
+          key={paso.clave} paso={paso} meta={metrosDelPaso(paso)} carga={paso.meta?.texto ?? ''} color={colorDelTipo ?? undefined} siguiente={siguienteDeGps} pulso={pulsoDelReloj}
           onTermina={({ metros, seg, fin }) => {
             // Si el sprint fue lo primero del entreno, el entreno empezó cuando arrancó el sprint (no al marcarlo): si no, el tiempo total no lo contaría.
             escribe((prev) => ({ ...prev, entreno: iniciaEntreno(prev?.entreno, fin - seg * 1000, plan) }));
