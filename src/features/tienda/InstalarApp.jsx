@@ -38,7 +38,8 @@ function useAvisoDeInstalacion() {
 export default function InstalarApp({ correo }) {
   const { plataforma, navegadorInterno } = useMemo(() => plataformaDeInstalacion({
     userAgent: navigator.userAgent,
-    standalone: !!(window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true),
+    // Dentro de la app de iPhone (Capacitor) ya está instalada: no hay nada que instalar.
+    standalone: !!(window.Capacitor?.isNativePlatform?.() || window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true),
     maxTouchPoints: navigator.maxTouchPoints,
   }), []);
   const { puedeInstalar, instala, instalada } = useAvisoDeInstalacion();

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { LT, FONT } from '@/lib/theme';
 import { useCuerpoQuieto } from '@/lib/useCuerpoQuieto';
 import { usePantallaEncendida } from '@/lib/pantallaEncendida';
+import { avisaCuandoTermine, quitaAviso, vibra, AVISO_DE_DESCANSO, AVISO_DE_CRONOMETRO } from '@/lib/avisosNativos';
 import { preparaAudio, pitido } from '@/lib/pitidos';
 import { isLoadedExercise, sinDuracion } from '@/lib/training-utils';
 import { cargaPorPorcentaje } from '@/lib/cargaPorcentaje';
@@ -142,9 +143,29 @@ export default function EntrenoDelDia({
       ? { clave: vista.descanso.paso.clave, vencido: vista.descanso.vencido }
       : (cuenta ? { clave: `c.${paso.clave}`, vencido: cuenta.vencido } : null);
     const p = previo.current;
-    if (ahoraMismo && sonido && ahoraMismo.clave === p.clave && ahoraMismo.vencido && !p.vencido) pitido('fin');
+    if (ahoraMismo && ahoraMismo.clave === p.clave && ahoraMismo.vencido && !p.vencido) {
+      if (sonido) pitido('fin');
+      vibra('fin');
+    }
     previo.current = ahoraMismo ?? { clave: null, vencido: false };
   });
+
+  /* Con el teléfono bloqueado el JavaScript se congela y nada de lo de arriba suena: se deja un AVISO del teléfono para la hora exacta en que termina el descanso (o el
+     cronómetro del paso), y se quita si el atleta avanza antes. En la web no hace nada. */
+  const finDelDescanso = enDescanso && vista.descanso && !vista.descanso.vencido ? vista.descanso.fin : null;
+  const siguienteNombre = vista.siguiente?.nombre ?? '';
+  useEffect(() => {
+    if (!finDelDescanso) { quitaAviso(AVISO_DE_DESCANSO); return undefined; }
+    avisaCuandoTermine({ id: AVISO_DE_DESCANSO, fin: finDelDescanso, cuerpo: siguienteNombre ? `Terminó el descanso. Sigue: ${siguienteNombre}` : 'Terminó el descanso.' });
+    return () => { quitaAviso(AVISO_DE_DESCANSO); };
+  }, [finDelDescanso, siguienteNombre]);
+  const finDeLaCuenta = cuenta && !cuenta.vencido ? cuenta.fin : null;
+  const nombreDelPaso = paso?.nombre ?? '';
+  useEffect(() => {
+    if (!finDeLaCuenta) { quitaAviso(AVISO_DE_CRONOMETRO); return undefined; }
+    avisaCuandoTermine({ id: AVISO_DE_CRONOMETRO, fin: finDeLaCuenta, cuerpo: nombreDelPaso ? `Se acabó el tiempo de ${nombreDelPaso}.` : 'Se acabó el tiempo.' });
+    return () => { quitaAviso(AVISO_DE_CRONOMETRO); };
+  }, [finDeLaCuenta, nombreDelPaso]);
 
   /* ---------- Lo que se sabe de un paso ---------- */
   const exDe = useCallback((p) => (p && p.idx !== undefined ? dia.exercises[p.idx] : null), [dia]);
@@ -208,6 +229,7 @@ export default function EntrenoDelDia({
   };
 
   const listo = (real) => {
+    vibra('listo');
     const t = Date.now();
     setAhora(t);
     preparaAudio();

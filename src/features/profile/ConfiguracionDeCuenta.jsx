@@ -42,8 +42,8 @@ function MisDatos() {
     try {
       await trabajando('Preparando tus datos…', async () => {
         const datos = await misDatos();
-        descargaComoArchivo(datos, `mis-datos-training-lab-${new Date().toISOString().slice(0, 10)}.json`);
-      }, 'Listo: se descargó el archivo');
+        await descargaComoArchivo(datos, `mis-datos-training-lab-${new Date().toISOString().slice(0, 10)}.json`);
+      }, 'Listo: tus datos están en el archivo');
     } catch (e) {
       avisa(e.message || 'No se pudo descargar.');
     }

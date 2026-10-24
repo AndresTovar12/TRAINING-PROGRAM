@@ -1,3 +1,4 @@
+import { vibra } from './avisosNativos.js';
 /**
  * ARRASTRAR PARA CAMBIAR DE ORDEN (fases, Sets, ejercicios, workouts), sin librerías.
  *
@@ -89,7 +90,7 @@ function arranca() {
   if (arr.espera) { clearTimeout(arr.espera); arr.espera = null; }
   arr.vivo = true;
   try { window.getSelection().removeAllRanges(); } catch { /* sin selección que quitar */ }
-  if (arr.tactil && navigator.vibrate) { try { navigator.vibrate(12); } catch { /* sin vibración */ } }
+  if (arr.tactil) vibra('toque');
   try { arr.item.setPointerCapture?.(arr.id); } catch { /* el puntero ya no existe */ }
   document.body.classList.add('tl-arrastrando');
   arr.item.classList.add('tl-suelto');
