@@ -9,7 +9,7 @@
 	<key>signingStyle</key>
 	<string>automatic</string>
 	<key>destination</key>
-	<string>upload</string>
+	<string>export</string>
 	<key>uploadSymbols</key>
 	<true/>
 </dict>

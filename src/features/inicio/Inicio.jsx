@@ -6,6 +6,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsWide } from '@/lib/useViewport';
 import BotonGoogle from '@/components/BotonGoogle';
+import BotonApple from '@/components/BotonApple';
 import { supabase } from '@/lib/supabase';
 import { agregarAMiEquipo, completarMiPerfil, profesionalPorReferencia } from '@/lib/api';
 import { DISCIPLINAS, OFICIOS_DEL_INICIO, convieneRepertorioBase, nombreDeDisciplina } from '@/lib/oficios';
@@ -145,7 +146,7 @@ function Garantia({ children }) {
 /* `codigo`: el código de equipo de un link `?unirse=` (en 'nuevo' ya se usa al crear la cuenta; en 'google' y 'retomar' llega
    puesto en la pregunta del código). `onCodigoUsado` avisa cuando ya se usó, para que la app no vuelva a pedirlo. */
 export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigoUsado }) {
-  const { profile, signUp, updateProfile, refreshProfile, googleDisponible } = useAuth();
+  const { profile, signUp, updateProfile, refreshProfile, googleDisponible, appleDisponible } = useAuth();
   const compu = useIsWide();
 
   // Con Google: si ya había contestado el tipo antes de salir, se aplica solo (ver el efecto de abajo).
@@ -380,8 +381,8 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
     );
     // Quien llegó con «Crear cuenta» también puede seguir con Google desde aquí; lo del tipo se lo pregunta al volver
     // (salvo que ya viniera elegido, como con un link de equipo).
-    if (modo === 'nuevo' && googleDisponible) {
-      pie = <BotonGoogle conO antes={() => guardaTipoPendiente(tipo)} style={botonSecundario} />;
+    if (modo === 'nuevo' && (googleDisponible || appleDisponible)) {
+      pie = (<><BotonGoogle conO antes={() => guardaTipoPendiente(tipo)} style={botonSecundario} /><BotonApple conO antes={() => guardaTipoPendiente(tipo)} style={botonSecundario} /></>);
     }
   } else if (paso === 'cuenta') {
     const valido = USERNAME_RE.test(usuario.trim()) && !problemaDeContrasena(clave, { usuario: usuario.trim() });
@@ -423,6 +424,7 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
         {continuar(sigue, 'Continuar', !valido)}
         {/* La otra manera de crear la cuenta: ya contestó el tipo, así que viaja con él y al volver no se le repite. */}
         <BotonGoogle conO antes={() => guardaTipoPendiente(tipo)} style={botonSecundario} />
+        <BotonApple conO antes={() => guardaTipoPendiente(tipo)} style={botonSecundario} />
       </>
     );
   } else if (paso === 'correo') {

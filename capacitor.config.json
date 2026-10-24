@@ -13,6 +13,14 @@
     },
     "Keyboard": {
       "resize": "native"
+    },
+    "SocialLogin": {
+      "providers": {
+        "google": false,
+        "facebook": false,
+        "apple": true,
+        "twitter": false
+      }
     }
   }
 }

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Dumbbell, User, Lock, Loader2, ArrowRight, Eye, EyeOff, UserPlus, Mail } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import BotonGoogle from '@/components/BotonGoogle';
+import BotonApple from '@/components/BotonApple';
 import { FONT, KP } from '@/lib/theme';
 import { AVISO_ENLACE_ENVIADO, AVISO_SIN_CORREO, correoValido, esCorreoInventado } from '@/lib/correos';
 
@@ -271,6 +272,7 @@ export default function AuthScreen({ onVolver, onCrearCuenta, aviso }) {
 
           {/* Entrar con Google (el mismo botón también está dentro de «Crear cuenta»; ver `components/BotonGoogle.jsx`). */}
           <BotonGoogle conO />
+          <BotonApple conO />
 
           {/* La puerta a crear la cuenta. Blanca y con borde, no gris: es un botón de verdad, aunque sea el segundo. */}
           {onCrearCuenta && (

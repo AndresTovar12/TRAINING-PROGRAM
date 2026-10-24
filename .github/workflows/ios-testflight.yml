@@ -71,7 +71,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} 2>&1 | tee -a "$RUNNER_TEMP/build.log"
 
-      - name: Firmar y subir a TestFlight
+      - name: Firmar (crea el .ipa)
         run: |
           set -o pipefail
           xcodebuild -exportArchive \
@@ -83,6 +83,26 @@ jobs:
             -authenticationKeyID "${{ env.ASC_KEY_ID }}" \
             -authenticationKeyIssuerID "${{ env.ASC_ISSUER_ID }}" 2>&1 | tee -a "$RUNNER_TEMP/build.log"
 
+      - name: Qué permisos quedaron en la app firmada (diagnóstico)
+        run: |
+          set -o pipefail
+          {
+            cd "$RUNNER_TEMP/export" && ls -la
+            rm -rf "$RUNNER_TEMP/ipa" && mkdir -p "$RUNNER_TEMP/ipa" && unzip -q -o App.ipa -d "$RUNNER_TEMP/ipa"
+            echo "=== PERMISOS FIRMADOS ==="
+            codesign -d --entitlements :- "$RUNNER_TEMP/ipa/Payload/App.app" 2>&1 | head -60
+            echo "=== PERFIL DE APROBACIÓN: permisos ==="
+            security cms -D -i "$RUNNER_TEMP/ipa/Payload/App.app/embedded.mobileprovision" | plutil -extract Entitlements xml1 -o - - | head -60
+          } 2>&1 | tee -a "$RUNNER_TEMP/build.log"
+
+      - name: Subir a TestFlight
+        run: |
+          set -o pipefail
+          mkdir -p ~/.private_keys
+          cp "$RUNNER_TEMP/asc/AuthKey_${{ env.ASC_KEY_ID }}.p8" ~/.private_keys/
+          xcrun altool --upload-app -f "$RUNNER_TEMP/export/App.ipa" -t ios \
+            --apiKey "${{ env.ASC_KEY_ID }}" --apiIssuer "${{ env.ASC_ISSUER_ID }}" 2>&1 | tee -a "$RUNNER_TEMP/build.log"
+
       - name: Publicar el resultado (rama ios-logs)
         if: always()
         run: |
@@ -91,7 +111,7 @@ jobs:
           echo "corrida=${{ github.run_number }} commit=${{ github.sha }} resultado=${{ job.status }}" > estado.txt
           touch "$RUNNER_TEMP/build.log"
           tail -n 400 "$RUNNER_TEMP/build.log" > fin.log
-          grep -nE "error:|\*\* .* FAILED|Provisioning|entitlement" "$RUNNER_TEMP/build.log" | head -80 > errores.txt || true
+          grep -nE "error:|\*\* .* FAILED|Provisioning|entitlement|PERMISOS|applesignin|healthkit|associated-domains" "$RUNNER_TEMP/build.log" | head -80 > errores.txt || true
           git add -A
           git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -q -m "iOS corrida ${{ github.run_number }}: ${{ job.status }}"
           git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" ios-logs

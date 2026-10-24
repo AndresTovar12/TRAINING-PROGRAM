@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Download, Loader2, Trash2 } from 'lucide-react';
+import { Download, LifeBuoy, Loader2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import CorreoDeLaCuenta from '@/features/profile/CorreoDeLaCuenta';
 import CambiarContrasena from '@/features/profile/CambiarContrasena';
@@ -34,6 +34,17 @@ function Sesiones() {
     }
   }
   return <Fila texto="Cerrar sesión en los demás aparatos" detalle="Si dejaste tu cuenta abierta en otro lado" onClick={cierraLasDemas} />;
+}
+
+/* El contacto de soporte tiene que estar a la vista (Apple lo exige): un toque abre el correo. */
+export const CORREO_DE_SOPORTE = 'soporte@traininglabapp.com';
+function Soporte() {
+  return (
+    <Fila
+      izquierda={<IconoDeFila><LifeBuoy size={18} /></IconoDeFila>} texto="Contactar a soporte" detalle={CORREO_DE_SOPORTE}
+      onClick={() => { window.location.href = `mailto:${CORREO_DE_SOPORTE}?subject=${encodeURIComponent('Training Lab: ayuda')}`; }}
+    />
+  );
 }
 
 function MisDatos() {
@@ -129,6 +140,9 @@ export default function ConfiguracionDeCuenta() {
       </Grupo>
       <Grupo titulo="Seguridad">
         <Sesiones />
+      </Grupo>
+      <Grupo titulo="Ayuda">
+        <Soporte />
       </Grupo>
       <Grupo titulo="Tus datos">
         <MisDatos />
