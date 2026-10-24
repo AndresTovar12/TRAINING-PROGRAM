@@ -44,6 +44,9 @@ function hace(fecha, ahora) {
   return d === 1 ? 'ayer' : `hace ${d} días`;
 }
 
+// «22 oct, 3:40 p. m.»: de cuándo es el plan que se guardó en esa versión (auditoría p68: todas las filas se leían igual y «Regresar» era a ciegas).
+const cuandoEra = (f) => (f ? new Date(f).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }).replace('.', '') : '');
+
 export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abierta, onToggle, profesionalId = null }) {
   const pregunta = useConfirmacion();
   const { t } = usePalabras();
@@ -68,13 +71,13 @@ export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abiert
     // profesional (ver `lib/pegadas.js`): sus versiones no son cambios del programa.
     let consulta = supabase
       .from('plan_versiones')
-      .select('id, title, creada_en, cambiada_por, cliente_ia, motivo')
+      .select('id, title, creada_en, version_de, cambiada_por, cliente_ia, motivo')
       .eq('user_id', atleta.id)
       .neq('status', 'draft');
     consulta = profesionalId ? consulta.eq('profesional_id', profesionalId) : consulta.is('profesional_id', null);
     const { data } = await consulta
       .order('creada_en', { ascending: false })
-      .limit(15);
+      .limit(30);
     const filas = data ?? [];
     const ids = [...new Set(filas.map((v) => v.cambiada_por).filter(Boolean))];
     let gente = {};
@@ -197,6 +200,12 @@ export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abiert
                   <div style={{ fontSize: 12.5, fontWeight: 600, color: T.text3 }}>
                     {[autorDe(v), hace(v.creada_en, ahora)].filter(Boolean).join(' · ')}
                   </div>
+                  {/* Qué plan es: su título y de cuándo era. Así se distingue una versión de otra antes de regresar a ciegas. */}
+                  {(v.title || v.version_de) && (
+                    <div style={{ fontSize: 12.5, fontWeight: 600, color: T.text3 }}>
+                      {[v.title && `«${v.title}»`, v.version_de && `como estaba el ${cuandoEra(v.version_de)}`].filter(Boolean).join(' · ')}
+                    </div>
+                  )}
                 </div>
                 <button type="button" disabled={trabajando} onClick={() => regresar(v)} style={{ ...boton, background: '#EBEDF1', color: '#111318' }}>
                   <RotateCcw size={14} /> Regresar
@@ -217,6 +226,10 @@ export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abiert
             {verTodos ? 'Esconder los que ya vi' : `Ver todos (${versiones.length})`}
           </button>
         )}
+        {/* La base guarda las últimas 30 versiones por plan y borra la más vieja al pasarse (auditoría p120): se dice, no se hace en silencio. */}
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: T.text3, padding: '10px 2px 0' }}>
+          Se guardan las últimas 30 versiones; al pasarse, la más vieja se borra sola.
+        </div>
         {error && <div style={{ color: T.danger, fontSize: 13, fontWeight: 700, marginTop: 10 }}>{error}</div>}
       </Seccion>
     </>

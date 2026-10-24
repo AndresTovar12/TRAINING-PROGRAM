@@ -119,7 +119,10 @@ export default function CuentasDePrueba({ onVerComoCoach, onVerComoAtleta }) {
   const verComo = (c) => (c.tipo === 'atleta' ? onVerComoAtleta?.(c) : onVerComoCoach?.(c));
 
   const nuevaClave = async (c) => {
-    const va = await pregunta({ titulo: `¿Contraseña nueva para ${c.full_name || c.username}?`, detalle: 'La que tiene ahora deja de servir. La nueva se guarda aquí para que no se te olvide.', confirmar: 'Sí, ponerla' });
+    const va = await pregunta({ titulo: `¿Contraseña nueva para ${c.full_name || c.username}?`, detalle: c.contrasena
+        ? 'La que tiene ahora deja de servir. La nueva se guarda aquí para que no se te olvide.'
+        : 'Nadie guardó la contraseña de esta cuenta: seguramente se creó fuera de este panel (pruebas automáticas). Con la nueva, cualquier prueba o script que entre con la de antes deja de poder entrar.',
+      confirmar: 'Sí, ponerla' });
     if (!va) return;
     setOcupado((o) => ({ ...o, [c.id]: 'clave' }));
     aviso('');

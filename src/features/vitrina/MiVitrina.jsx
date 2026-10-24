@@ -6,7 +6,7 @@ import { useConfirmacion } from '@/components/Confirmacion';
 import { botonPrincipal } from '@/features/misplanes/estilos';
 import FichaDelPlanEnVenta from '@/features/vitrina/FichaDelPlanEnVenta';
 import { cobrosDeMiCuenta } from '@/lib/miDineroApi';
-import { ETIQUETA_DE_CONTENIDO, leeVentasAbiertas, ligaPublica, listaMiVitrina, retiraPlan } from '@/lib/vitrinaApi';
+import { ETIQUETA_DE_CONTENIDO, leeVentasAbiertas, ligaPublica, listaMiVitrina, retiraPlan, borraBorrador } from '@/lib/vitrinaApi';
 import { chipsDeParaQuien } from '@/lib/paraQuien';
 import { useCabeceraDeSeccion, useEnBanda } from '@/components/ui';
 
@@ -24,7 +24,7 @@ const pesos = (n) => `$${Number(n).toLocaleString('es-MX')}`;
 
 /* Reestructura visual (16 oct 2026), como «Mi vitrina» de las capturas de Andrés: la foto del plan arriba con su estado encima; abajo el
    nombre, qué es, el precio grande y las ventas; la liga con «Copiar» (solo publicado) y tres botones iguales: Editar · Ver página · Retirar. */
-function Tarjeta({ plan, usuario, alEditar, alRetirar }) {
+function Tarjeta({ plan, usuario, alEditar, alRetirar, alBorrar }) {
   const [copiado, setCopiado] = useState(false);
   const e = ESTADOS[plan.estado] ?? ESTADOS.borrador;
   const liga = ligaPublica(usuario, plan.slug);
@@ -67,6 +67,7 @@ function Tarjeta({ plan, usuario, alEditar, alRetirar }) {
           <button type="button" onClick={() => alEditar(plan)} style={{ ...boton, background: UI.relleno, color: KP.ink }}>Editar</button>
           {publicado && <a href={liga} target="_blank" rel="noreferrer" style={{ ...boton, background: UI.relleno, color: KP.ink }}>Ver página</a>}
           {publicado && <button type="button" onClick={() => alRetirar(plan)} style={{ ...boton, background: KP.dangerSoft, color: KP.danger }}>Retirar</button>}
+          {plan.estado === 'borrador' && !plan.version_n && <button type="button" onClick={() => alBorrar(plan)} style={{ ...boton, background: KP.dangerSoft, color: KP.danger }}>Borrar</button>}
         </div>
       </div>
     </div>
@@ -124,6 +125,15 @@ export default function MiVitrina() {
     try { await retiraPlan(plan.id); await carga(); } catch (e) { setError(e?.message ?? 'No se pudo retirar.'); }
   };
 
+  // Un borrador (nunca se publicó) se puede borrar: no tiene suscriptores que lo conserven (auditoría p69).
+  const borra = async (plan) => {
+    const va = await pregunta({
+      titulo: '¿Borrar este borrador?', detalle: 'Nunca se publicó, así que nadie lo ve ni lo paga. No se puede deshacer.', confirmar: 'Sí, borrarlo', peligro: true,
+    });
+    if (!va) return;
+    try { await borraBorrador(plan.id); await carga(); } catch (e) { setError(e?.message ?? 'No se pudo borrar.'); }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, fontFamily: FONT }}>
       {!enBanda && <div style={{ fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: -0.4 }}>Mi vitrina</div>}
@@ -150,7 +160,7 @@ export default function MiVitrina() {
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: 16 }}>
-          {planes.map((p) => <Tarjeta key={p.id} plan={p} usuario={usuario} alEditar={setEditando} alRetirar={retira} />)}
+          {planes.map((p) => <Tarjeta key={p.id} plan={p} usuario={usuario} alEditar={setEditando} alRetirar={retira} alBorrar={borra} />)}
         </div>
       )}
       {editando !== undefined && (

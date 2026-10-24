@@ -1,3 +1,4 @@
+/* global HTMLRewriter */
 /* El único código que corre en Cloudflare para la app (`app.traininglabapp.com`).
 
    La app en sí (pantallas, imágenes, código) son archivos estáticos: Cloudflare los sirve gratis y sin límite, sin pasar por aquí. Este programa SOLO se usa para el conector de IA:
@@ -24,7 +25,7 @@ export function destinoDe(ruta) {
 
 /** `/@usuario` o `/@usuario/plan` → `{ usuario, slug }` (`slug` nulo en la página del coach), o `null`. */
 export function tiendaDe(ruta) {
-  let r = ruta;
+  let r;
   try { r = decodeURIComponent(ruta); } catch { /* una dirección rota no es de la tienda */ return null; }
   const m = r.match(/^\/@([a-z0-9_]+)(?:\/([a-z0-9-]+))?\/?$/i);
   return m ? { usuario: m[1].toLowerCase(), slug: m[2] ? m[2].toLowerCase() : null } : null;

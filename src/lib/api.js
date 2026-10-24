@@ -860,20 +860,25 @@ export async function eliminarAtletaDefinitivo(athleteId, opciones = {}) {
  * para poder decirlo con números en vez de en abstracto.
  */
 export async function resumenDatosCoach(coachId) {
+  /* Si una cuenta falla se lanza el error: antes se contaba como 0 y el aviso de borrar decía «0 atletas» con números falsos (auditoría p123). */
   const cuenta = async (tabla, columna) => {
-    const { count } = await supabase
-      .from(tabla).select('id', { count: 'exact', head: true }).eq(columna, coachId);
+    const { count, error } = await supabase
+      .from(tabla).select('*', { count: 'exact', head: true }).eq(columna, coachId);
+    if (error) throw new Error(error.message);
     return count ?? 0;
   };
-  const [atletas, ejercicios, medios, tipos, categorias, plantillas] = await Promise.all([
+  const [atletas, ejercicios, medios, tipos, categorias, plantillas, vitrina, compras, enEquipos] = await Promise.all([
     cuenta('profiles', 'coach_id'),
     cuenta('exercises', 'created_by'),
     cuenta('exercise_media', 'created_by'),
     cuenta('session_types', 'coach_id'),
     cuenta('exercise_categories', 'created_by'),
     cuenta('routine_templates', 'created_by'),
+    cuenta('vitrina_planes', 'coach_id'),
+    cuenta('compras', 'coach_id'),
+    cuenta('equipo', 'profesional_id'),
   ]);
-  return { atletas, ejercicios, medios, tipos, categorias, plantillas };
+  return { atletas, ejercicios, medios, tipos, categorias, plantillas, vitrina, compras, enEquipos };
 }
 
 /* ------------------------------- Coaches ------------------------------ */

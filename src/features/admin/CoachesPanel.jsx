@@ -7,6 +7,7 @@ import {
   listCoaches, listAthletes, createCoachAccount,
   setAtletaActivo, eliminarAtletaDefinitivo, resumenDatosCoach,
 } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { problemaDeContrasena } from '@/lib/contrasena';
 import { useConfirmacion } from '@/components/Confirmacion';
@@ -149,15 +150,21 @@ function BorrarCoach({ coach, otrosCoaches, master, onCancelar, onHecho }) {
   const [borrando, setBorrando] = useState(false);
   const [err, setErr] = useState('');
 
+  // Si no se pudo leer qué deja atrás, NO se enseña un «0 atletas» inventado: se dice y se deja reintentar (auditoría p123).
+  const [intento, setIntento] = useState(0);
   useEffect(() => {
     let vivo = true;
     resumenDatosCoach(coach.id)
       .then((r) => { if (vivo) setResumen(r); })
-      .catch(() => { if (vivo) setResumen({}); });
+      .catch(() => { if (vivo) setResumen({ falla: true }); });
     return () => { vivo = false; };
-  }, [coach.id]);
+  }, [coach.id, intento]);
+  const reintenta = () => { setResumen(null); setIntento((n) => n + 1); };
 
-  const puede = escrito.trim().toLowerCase() === (coach.username || '').toLowerCase();
+  /* Un coach que ya vendió: sus compras son de otras personas que pagaron. Borrarlo las borraría con él (y la base lo rechaza a medio camino, ya con sus
+     atletas movidos), así que no se ofrece: se desactiva (auditoría p121). */
+  const hayVentas = (resumen?.compras ?? 0) > 0;
+  const puede = !resumen?.falla && !hayVentas && escrito.trim().toLowerCase() === (coach.username || '').toLowerCase();
 
   async function borrar() {
     setBorrando(true);
@@ -178,6 +185,8 @@ function BorrarCoach({ coach, otrosCoaches, master, onCancelar, onHecho }) {
     [resumen.tipos, 'tipo de sesión suyo', 'tipos de sesión suyos'],
     [resumen.categorias, 'categoría suya', 'categorías suyas'],
     [resumen.plantillas, 'plantilla suya', 'plantillas suyas'],
+    [resumen.vitrina, 'plan suyo en la vitrina', 'planes suyos en la vitrina'],
+    [resumen.enEquipos, 'atleta que lo tiene en su equipo (lo pierde)', 'atletas que lo tienen en su equipo (lo pierden)'],
   ].filter(([n]) => n > 0) : [];
 
   const destinos = [
@@ -221,6 +230,16 @@ function BorrarCoach({ coach, otrosCoaches, master, onCancelar, onHecho }) {
         {!resumen ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: T.text3, fontSize: 13, fontWeight: 600 }}>
             <Loader2 size={14} className="spin" /> Viendo qué deja atrás…
+          </div>
+        ) : resumen.falla ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div role="alert" style={{ background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 11, padding: '10px 12px', fontSize: 13, fontWeight: 700, lineHeight: 1.45 }}>
+              No se pudo ver qué deja atrás {nombre} (falló la conexión). Sin eso no se puede borrar con seguridad.
+            </div>
+            <div style={{ display: 'flex', gap: 9 }}>
+              <button type="button" onClick={onCancelar} style={{ flex: 1, minHeight: 46, borderRadius: 12, border: 'none', background: UI.relleno, cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text2 }}>Cancelar</button>
+              <button type="button" onClick={reintenta} style={{ flex: 1, minHeight: 46, borderRadius: 12, border: 'none', background: T.accent, color: '#fff', cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 800 }}>Reintentar</button>
+            </div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -293,6 +312,14 @@ function BorrarCoach({ coach, otrosCoaches, master, onCancelar, onHecho }) {
                     );
                   })}
                 </div>
+              </div>
+            )}
+
+            {hayVentas && (
+              <div role="alert" style={{ background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 11, padding: '10px 12px', fontSize: 13, fontWeight: 700, lineHeight: 1.5 }}>
+                {nombre} ya vendió: tiene {plural(resumen.compras, 'compra', 'compras')} de personas que pagaron
+                {resumen.vitrina > 0 ? ` y ${plural(resumen.vitrina, 'plan', 'planes')} en su vitrina` : ''}. Eliminarlo las borraría con él.
+                Mejor desactívalo (no se borra nada y se deshace) desde su ficha.
               </div>
             )}
 
@@ -606,21 +633,41 @@ export default function CoachesPanel({ onVerComo }) {
   const [err, setErr] = useState('');
   const [creating, setCreating] = useState(false);
   const [ficha, setFicha] = useState(null); // el coach cuya ficha está abierta
+  // A quién atiende cada profesional ADEMÁS de sus atletas directos: por equipo (el atleta lo agregó) o porque le compró un programa. Sin esto un fisio que atiende
+  // a dos personas decía «0 atletas» (auditoría p74). Va aparte y sin tumbar la carga.
+  const [atencion, setAtencion] = useState([]);
 
   const load = () => {
     setLoading(true);
-    Promise.all([listCoaches(), listAthletes()])
-      .then(([c, a]) => { setCoaches(c); setAthletes(a); })
+    Promise.all([
+      listCoaches(), listAthletes(),
+      Promise.all([
+        supabase.from('equipo').select('atleta_id, profesional_id').eq('estado', 'activo'),
+        supabase.from('compras').select('atleta_id, coach_id').in('estado', ['activa', 'gracia', 'por_armar']),
+      ]).then(([eq, co]) => [
+        ...(eq.data ?? []).map((r) => ({ atleta: r.atleta_id, profesional: r.profesional_id })),
+        ...(co.data ?? []).map((r) => ({ atleta: r.atleta_id, profesional: r.coach_id })),
+      ]).catch(() => []),
+    ])
+      .then(([c, a, extra]) => { setCoaches(c); setAthletes(a); setAtencion(extra); })
       .catch((e) => setErr(e.message || 'Error al cargar'))
       .finally(() => setLoading(false));
   };
   useEffect(() => { load(); }, []);
 
-  const countByCoach = useMemo(() => {
+  // Los atletas de cada profesional, sin repetir: los suyos directos + los que lo tienen en su equipo + los que le compraron.
+  const atletasPorProfesional = useMemo(() => {
+    const porId = new Map(athletes.map((a) => [a.id, a]));
     const m = {};
-    athletes.forEach((a) => { if (a.coach_id) m[a.coach_id] = (m[a.coach_id] || 0) + 1; });
-    return m;
-  }, [athletes]);
+    const mete = (pro, a) => { if (pro && a) (m[pro] ??= new Map()).set(a.id, a); };
+    athletes.forEach((a) => mete(a.coach_id, a));
+    atencion.forEach((r) => mete(r.profesional, porId.get(r.atleta)));
+    return Object.fromEntries(Object.entries(m).map(([k, v]) => [k, [...v.values()]]));
+  }, [athletes, atencion]);
+  const countByCoach = useMemo(
+    () => Object.fromEntries(Object.entries(atletasPorProfesional).map(([k, v]) => [k, v.length])),
+    [atletasPorProfesional],
+  );
 
   const unassigned = useMemo(() => athletes.filter((a) => a.role !== 'admin' && !a.coach_id).length, [athletes]);
 
@@ -726,7 +773,7 @@ export default function CoachesPanel({ onVerComo }) {
       {ficha && (
         <FichaCoach
           coach={ficha}
-          atletas={athletes.filter((a) => a.coach_id === ficha.id)}
+          atletas={atletasPorProfesional[ficha.id] ?? []}
           otrosCoaches={coaches.filter((c) => c.id !== ficha.id)}
           master={profile}
           onCerrar={() => setFicha(null)}

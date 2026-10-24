@@ -191,10 +191,12 @@ export default function EditorBarra({
         >
           <BotonDelPrograma
             icono={programa.forma.icon} onClick={programa.puedeCambiar ? programa.onCambiar : undefined}
-            titulo={programa.puedeCambiar ? 'Cambiar la forma del programa' : undefined}
+            titulo={programa.puedeCambiar ? 'Cambiar la forma del programa' : 'La forma se escoge al crearlo en Mis planes y ya no cambia: para otra forma, crea un plan nuevo.'}
           >
             <span>{programa.forma.corto}</span>
-            {programa.puedeCambiar && <b style={{ color: T.accent, fontWeight: 800 }}>Cambiar</b>}
+            {programa.puedeCambiar
+              ? <b style={{ color: T.accent, fontWeight: 800 }}>Cambiar</b>
+              : <b style={{ color: T.text3, fontWeight: 700 }}>Fija</b>}
           </BotonDelPrograma>
           {programa.onUsar && (
             <BotonDelPrograma icono={programa.iconoUsar} onClick={programa.onUsar} titulo={programa.tituloUsar}>

@@ -378,6 +378,12 @@ function FranjaDeFormato({ formato, nEjercicios, onCambio, onTramos }) {
               Un ejercicio distinto en cada tramo
             </label>
           )}
+          {/* Con turnos, cada ejercicio corre su propia pasada: el tiempo del Set se multiplica. Se dice (auditoría p71: 11 min pasaban a 22 sin avisar). */}
+          {hayQueTurnar(nEjercicios) && formato.turnan && total !== null && (
+            <span style={{ ...frase, fontWeight: 600, color: T.text2 }}>
+              Cada uno de los {nEjercicios} ejercicios corre su pasada: el Set dura {textoDeTiempo(total)} en total.
+            </span>
+          )}
         </div>
       )}
     </div>

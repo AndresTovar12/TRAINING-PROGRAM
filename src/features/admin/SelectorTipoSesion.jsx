@@ -90,11 +90,15 @@ export default function SelectorTipoSesion({ day, onPatch, coachId, puedeCrear =
   const eligeBase = (slug) => {
     // Se limpian el nombre, el color y el ícono propios: si se quedan, vuelven a salir
     // en cuanto alguien toque `cat` sin pasar por aquí.
-    onPatch({ cat: slug, catNombre: null, catColor: null, catIcono: null });
+    /* Un día de descanso no se llama «Sesión» (auditoría p67): si todavía trae el nombre de relleno, se llama «Descanso»; y al revés. */
+    const nombre = String(day?.name ?? '').trim();
+    const nombreNuevo = slug === 'off' && (!nombre || nombre === 'Sesión') ? { name: 'Descanso' }
+      : slug !== 'off' && nombre === 'Descanso' ? { name: 'Sesión' } : null;
+    onPatch({ cat: slug, catNombre: null, catColor: null, catIcono: null, ...nombreNuevo });
     cierra();
   };
   const eligeMio = (t) => {
-    onPatch({ cat: 'otro', catNombre: t.nombre, catColor: t.color, catIcono: t.icono ?? null });
+    onPatch({ cat: 'otro', catNombre: t.nombre, catColor: t.color, catIcono: t.icono ?? null, ...(String(day?.name ?? '').trim() === 'Descanso' ? { name: 'Sesión' } : null) });
     cierra();
   };
 

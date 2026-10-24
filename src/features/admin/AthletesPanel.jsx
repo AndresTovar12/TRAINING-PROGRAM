@@ -6,7 +6,7 @@ import {
   Check, Copy, Share2, CircleCheck, RotateCcw, CalendarPlus, FolderOpen, ListChecks, HeartPulse, MessageCircle,
 } from 'lucide-react';
 import {
-  getProgramas, getSesionesPegadas, deletePlan, getAthleteState, listAthletesOverview, listCoaches, setAthleteCoach,
+  getProgramas, getSesionesPegadas, deletePlan, getAthleteState, listAthletesOverview, listCoaches, setAthleteCoach, promoteToCoach,
   quitarAtletaDeMiLista, setAtletaActivo, resumenDatosAtleta, eliminarAtletaDefinitivo,
   invitacionesPendientes, ligaDeInvitacion, cambiarAlta, cambiarAltaDeEquipo, nombresDelEquipo,
   listEquipo, equiposDeMisAtletas, marcarAvisoVisto, primerosPasos,
@@ -958,8 +958,30 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
     try {
       const row = await setAthleteCoach(athlete.id, coachId || null);
       onReassigned?.(row);
-    } catch { /* noop */ }
+    } catch (e) {
+      // Antes regresaba al valor anterior sin decir nada (auditoría p76).
+      avisa(`No se pudo cambiar el coach: ${e?.message || 'intenta otra vez'}`);
+    }
     finally { setSavingCoach(false); }
+  }
+
+  // «Hacer coach»: solo el dueño. Antes solo se podía desde el conector de IA (auditoría p77).
+  async function onHacerCoach() {
+    const nombre = athlete.full_name || athlete.username;
+    const si = await pregunta({
+      titulo: `¿Hacer coach a ${nombre}?`,
+      detalle: 'Deja de ser atleta y de tener coach propio: pasa a entrenar a otros. Lo que ya tenía de atleta (su plan y sus registros) se conserva. Se puede desactivar, pero no volver a atleta desde aquí.',
+      confirmar: 'Sí, hacerlo coach',
+    });
+    if (!si) return;
+    setSavingCoach(true);
+    try {
+      const row = await promoteToCoach(athlete.id);
+      onReassigned?.(row);
+      avisa(`${nombre} ahora es coach.`);
+    } catch (e) {
+      avisa(`No se pudo hacer coach: ${e?.message || 'intenta otra vez'}`);
+    } finally { setSavingCoach(false); }
   }
 
   useEffect(() => {
@@ -1222,6 +1244,14 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
               />
             </div>
             {savingCoach && <Loader2 size={15} className="spin" color={T.text3} />}
+            {athlete.role !== 'admin' && (
+              <button
+                type="button" onClick={onHacerCoach} disabled={savingCoach}
+                style={{ border: 'none', background: 'transparent', color: T.accent, fontFamily: FONT, fontSize: 13, fontWeight: 800, padding: '4px 6px', borderRadius: 8, cursor: savingCoach ? 'default' : 'pointer', marginLeft: 'auto' }}
+              >
+                Hacer coach
+              </button>
+            )}
           </div>
         )}
 

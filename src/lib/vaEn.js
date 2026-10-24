@@ -10,7 +10,10 @@ export function textoDeSemana(data, faseId, semana) {
   if (estructura === 'rutina') return 'Se repite';
   if (estructura === 'semanas') return `Semana ${semanaGlobal(fases, faseId, semana) ?? semana}`;
   const i = fases.findIndex((f) => f.id === faseId);
-  return `Fase ${i + 1} · Sem ${semana}`;
+  /* El nombre que el coach le puso a la fase (recortado para que quepa en la columna «Va en»); sin nombre, su posición (auditoría p66). */
+  const nombre = (fases[i]?.name ?? '').trim();
+  const corto = nombre.length > 22 ? `${nombre.slice(0, 21).trimEnd()}…` : nombre;
+  return `${corto || `Fase ${i + 1}`} · Sem ${semana}`;
 }
 
 /** La semana donde va ahora, con el calendario ya contado; `null` si el plan no tiene fases. */

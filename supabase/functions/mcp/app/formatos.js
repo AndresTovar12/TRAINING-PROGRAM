@@ -326,6 +326,16 @@ export function etiquetaDeTramo(t) {
 export function resumenDeFormato(f, nEjercicios = 1) {
   const g = limpiaFormato(f);
   if (!g) return '';
+  const base = resumenBase(g, nEjercicios);
+  // Con turnos cada ejercicio corre su propia pasada y el tiempo se multiplica: la línea lo dice (auditoría p71: decía «AMRAP · 11 min» y duraba 22).
+  if (g.turnan && nEjercicios > 1 && vistaDe(g) !== 'custom') {
+    const total = segundosTotales(g, nEjercicios);
+    if (total) return `${base} · ${textoDeTiempo(total)} en total`;
+  }
+  return base;
+}
+
+function resumenBase(g, nEjercicios) {
   const id = vistaDe(g);
   const p = g.pasos;
   const t = (i) => (p[i].seg === null ? '«Listo»' : textoDeTiempo(p[i].seg));

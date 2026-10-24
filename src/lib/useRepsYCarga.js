@@ -58,7 +58,8 @@ export function useRepsYCarga({ ex, onPatch, rondas = null, abiertoDeEntrada = f
   const repsDe = (j) => {
     const texto = String((j === null ? ex?.reps : filas[j].reps) ?? '');
     const l = lee(texto);
-    return { valor: l.libre ? texto : l.cantidad, libre: l.libre };
+    // Un «2+» a medias (se está tecleando un cluster) se enseña tal cual: `leeCantidad` se quedaba con el «2» y el «+» desaparecía, así que «2+2+2» quedaba «222» (auditoría p6).
+    return { valor: l.libre || texto.includes('+') ? texto : l.cantidad, libre: l.libre };
   };
 
   // Guarda `cambios` en la vuelta `j`, o en todas a la vez si es la casilla única.

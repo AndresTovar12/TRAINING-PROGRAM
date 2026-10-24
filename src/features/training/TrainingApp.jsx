@@ -298,6 +298,8 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phas
   }, [PLAN, ex.name, ex.isNote, sessionsData, kind]);
 
   if (ex.isNote) {
+    // Una nota que el coach dejó en blanco no se enseña: era un recuadro azul sin texto (auditoría p73).
+    if (!String(ex.text ?? '').trim()) return null;
     return (
       <div style={{
         margin: '8px 0', padding: '10px 14px',
@@ -509,6 +511,7 @@ const SetGroup = ({
   const { phases: planCompleto, resolveExercise, medias, kind } = usePlan();
   const { perfil: profile, soloLectura, userId } = usePerfilDeLaVista();
   if (group.isNote) {
+    if (!String(group.ex?.text ?? '').trim()) return null;
     return (
       <div style={{
         margin: '4px 0 12px', padding: '10px 14px', background: LT.blueSoft, borderRadius: 10,

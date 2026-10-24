@@ -37,19 +37,27 @@ export function herramientasDelAdmin(server: McpServer, quien: Quien) {
     inputSchema: {},
     annotations: SOLO_LEER,
   }, seguro(async () => {
-    const [coaches, atletas] = await Promise.all([
+    const [coaches, atletas, enEquipo, compras] = await Promise.all([
       quien.db.from('profiles').select('id, username, full_name, profesion, codigo_coach, is_active, created_at').eq('role', 'admin').eq('is_owner', false).order('full_name'),
-      quien.db.from('profiles').select('coach_id').eq('role', 'user'),
+      quien.db.from('profiles').select('id, coach_id').eq('role', 'user'),
+      quien.db.from('equipo').select('atleta_id, profesional_id').eq('estado', 'activo'),
+      quien.db.from('compras').select('atleta_id, coach_id').in('estado', ['activa', 'gracia', 'por_armar']),
     ])
     if (coaches.error) throw new Error(coaches.error.message)
+    // Directos (su coach principal) + los que lo tienen en su equipo + los que le compraron: sin repetir. Antes solo contaba los directos y un fisio que atiende a dos personas decía «0 atletas» (auditoría p74).
     const cuenta = new Map<string, number>()
-    ;(atletas.data ?? []).forEach((a: any) => { if (a.coach_id) cuenta.set(a.coach_id, (cuenta.get(a.coach_id) ?? 0) + 1) })
+    const total = new Map<string, Set<string>>()
+    const mete = (pro: string | null, atleta: string | null) => { if (pro && atleta) { if (!total.has(pro)) total.set(pro, new Set()); total.get(pro)!.add(atleta) } }
+    ;(atletas.data ?? []).forEach((a: any) => { if (a.coach_id) { cuenta.set(a.coach_id, (cuenta.get(a.coach_id) ?? 0) + 1); mete(a.coach_id, a.id) } })
+    ;(enEquipo.data ?? []).forEach((r: any) => mete(r.profesional_id, r.atleta_id))
+    ;(compras.data ?? []).forEach((r: any) => mete(r.coach_id, r.atleta_id))
     return respuesta({
       coaches: (coaches.data ?? []).map((c: any) => ({
         nombre: c.full_name || c.username,
         usuario: c.username,
         ...(c.profesion ? { oficio: c.profesion } : {}),
-        atletas: cuenta.get(c.id) ?? 0,
+        atletas: total.get(c.id)?.size ?? 0,
+        atletas_directos: cuenta.get(c.id) ?? 0,
         ...(c.codigo_coach ? { codigo: c.codigo_coach } : {}),
         activo: c.is_active,
         desde: c.created_at,
@@ -69,18 +77,27 @@ export function herramientasDelAdmin(server: McpServer, quien: Quien) {
       const { count } = await quien.db.from(tabla).select('id', { count: 'exact', head: true }).eq(columna, c.id)
       return count ?? 0
     }
-    const [{ data: atletas }, ejercicios, categorias, tipos, plantillas] = await Promise.all([
-      quien.db.from('profiles').select('username, full_name, is_active').eq('coach_id', c.id).order('full_name'),
+    const [{ data: atletas }, ejercicios, categorias, tipos, plantillas, enEquipo, compras] = await Promise.all([
+      quien.db.from('profiles').select('id, username, full_name, is_active').eq('coach_id', c.id).order('full_name'),
       cuenta('exercises', 'created_by'),
       cuenta('exercise_categories', 'created_by'),
       cuenta('session_types', 'coach_id'),
       cuenta('routine_templates', 'created_by'),
+      quien.db.from('equipo').select('atleta_id').eq('profesional_id', c.id).eq('estado', 'activo'),
+      quien.db.from('compras').select('atleta_id').eq('coach_id', c.id).in('estado', ['activa', 'gracia', 'por_armar']),
     ])
+    // Además de sus atletas directos: quienes lo tienen en su equipo o le compraron un programa (auditoría p74).
+    const directos = new Set((atletas ?? []).map((a: any) => a.id))
+    const otros = [...new Set([...(enEquipo.data ?? []), ...(compras.data ?? [])].map((r: any) => r.atleta_id).filter((id: string) => id && !directos.has(id)))]
+    const { data: gente } = otros.length
+      ? await quien.db.from('profiles').select('username, full_name, is_active').in('id', otros)
+      : { data: [] as any[] }
     return respuesta({
       nombre: nombreDe(c),
       usuario: c.username,
       activo: c.is_active,
       atletas: (atletas ?? []).map((a: any) => ({ nombre: a.full_name || a.username, usuario: a.username, activo: a.is_active })),
+      ...(gente?.length ? { tambien_atiende_por_equipo_o_compra: gente.map((a: any) => ({ nombre: a.full_name || a.username, usuario: a.username, activo: a.is_active })) } : {}),
       creado: { ejercicios, categorias, tipos_de_sesion: tipos, plantillas },
     })
   }))
@@ -140,7 +157,21 @@ export function herramientasDelAdmin(server: McpServer, quien: Quien) {
       const destino = ref === 'ninguno' ? null : ref === 'yo' ? quien.id : (await buscarCoach(quien, atletas_a)).id
       opciones = { atletasA: destino, ejerciciosA: ejercicios_a }
     }
-    await llamarFuncion(quien, 'admin-delete-user', { id: p.id, ...opciones })
+    if (esCoach) {
+      // Un coach que ya vendió: sus compras son de personas que pagaron y borrarlo las borraría con él (y la base lo rechaza a medio camino). Se desactiva (auditoría p121).
+      const { count } = await quien.db.from('compras').select('*', { count: 'exact', head: true }).eq('coach_id', p.id)
+      if ((count ?? 0) > 0) throw new Aviso(`${nombreDe(p)} ya vendió: tiene ${count} compra(s) de personas que pagaron. Eliminarlo las borraría con él. Mejor desactívalo con activar_o_desactivar_cuenta.`)
+    }
+    try {
+      await llamarFuncion(quien, 'admin-delete-user', { id: p.id, ...opciones })
+    } catch (e: any) {
+      // Una cuenta con planes falla en la base («Database error deleting user»: cada plan guarda una versión a nombre de una persona que ya no existe). Lo mismo que hace la app:
+      // se borran sus planes con la cuenta todavía viva y se reintenta UNA vez (auditoría p75).
+      if (!/^No se pudo eliminar:/.test(e?.message ?? '')) throw e
+      const { error } = await quien.db.from('plans').delete().eq('user_id', p.id)
+      if (error) throw e
+      await llamarFuncion(quien, 'admin-delete-user', { id: p.id, ...opciones })
+    }
     return respuesta({ listo: true, eliminada: nombreDe(p), tipo: esCoach ? 'coach' : 'atleta' })
   }))
 
