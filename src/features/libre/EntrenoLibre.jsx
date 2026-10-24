@@ -29,6 +29,7 @@ import { Cuadro, CuadroBlanco, PlayChico } from '@/features/training/home/Cuadro
      · `variante="cuadros"` (Home con plan, reestructura visual del 15 oct 2026): solo dos cuadros, «Entrenar libre» y «Activity card», para ir en la cuadrícula de Home junto a Salud
        y la fase. «Tus entrenos» queda en la pestaña Entrenar.
      · `enLinea` (pestaña Entrenar): las opciones puestas directo, y «Tus entrenos».
+     · `variante="historial"` (Home con plan, 23 oct 2026): solo «Tus entrenos», lo que registró por su cuenta (auditoría p29).
      · `variante="punto"` (23 oct 2026, Activity Tracker): lo que abre el punto ● del centro de la barra: directo «listo para empezar» con la última actividad
        (mapa e «Iniciar», estilo Aura); el botón de la izquierda cambia de actividad (`ElegirActividad`: lista por grupos, buscador y «Crear la mía»). No dibuja nada más;
        al cerrarse llama a `alCerrar`. «Empezar» de la tarjeta azul de Home hace lo mismo.
@@ -144,6 +145,16 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
   );
 
   if (enPunto) return hojas;
+
+  // Solo «Tus entrenos» (Home con plan): lo que registró por su cuenta, abajo de lo del plan. Sin entrenos libres no dibuja nada.
+  if (variante === 'historial') {
+    return (
+      <>
+        <TusEntrenos filas={filas?.slice(0, 4)} propias={propias} alAbrir={(fila) => setHoja({ resumen: fila })} />
+        {hojas}
+      </>
+    );
+  }
 
   if (variante === 'cuadros') {
     return (

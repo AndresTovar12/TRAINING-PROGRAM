@@ -57,6 +57,22 @@ function Splash({ label = 'Cargando…' }) {
   );
 }
 
+/* «Cargando tu perfil…»: si no llega (mala señal), no se queda girando para siempre: tras varios intentos dice qué pasó y deja reintentar o salir (auditoría p43). */
+function CargandoPerfil() {
+  const { perfilFalla, reintentaPerfil, signOut } = useAuth();
+  if (!perfilFalla) return <Splash label="Cargando tu perfil…" />;
+  const boton = { width: '100%', minHeight: 50, borderRadius: 16, border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 16, fontWeight: 800, touchAction: 'manipulation' };
+  return (
+    <div style={{ minHeight: '100svh', display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center', justifyContent: 'center', padding: 24, fontFamily: FONT, background: '#f4f5f8', textAlign: 'center' }}>
+      <div role="alert" style={{ maxWidth: 340, fontSize: 17, fontWeight: 700, color: KP.ink, lineHeight: 1.4 }}>No pudimos cargar tu perfil. Revisa tu señal e inténtalo otra vez.</div>
+      <div style={{ width: '100%', maxWidth: 340, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <button type="button" onClick={reintentaPerfil} style={{ ...boton, background: KP.blue, color: '#fff' }}>Reintentar</button>
+        <button type="button" onClick={signOut} style={{ ...boton, background: '#e9ebf0', color: KP.ink }}>Salir</button>
+      </div>
+    </div>
+  );
+}
+
 function AccountMenu({ perfil, onPerfil }) {
   const { profile, user, isAdmin, signOut } = useAuth();
   const { t } = usePalabras();
@@ -67,6 +83,23 @@ function AccountMenu({ perfil, onPerfil }) {
   const profileOpen = onPerfil ? perfil : perfilLocal;
   const setProfileOpen = onPerfil || setPerfilLocal;
   const ref = useRef(null);
+
+  /* El botón es fijo arriba a la derecha: al bajar por la página se quedaba ENCIMA de los ▶ de las sesiones y de las filas de ejercicios y los tapaba (auditoría p33).
+     Ahora se esconde cuando se baja y vuelve al subir (o al estar arriba), como la barra del navegador. Con el menú abierto no se esconde. */
+  const [escondido, setEscondido] = useState(false);
+  useEffect(() => {
+    let previo = window.scrollY;
+    const alMover = () => {
+      const y = window.scrollY;
+      if (y < 60) setEscondido(false);
+      else if (y > previo + 6) setEscondido(true);
+      else if (y < previo - 6) setEscondido(false);
+      previo = y;
+    };
+    window.addEventListener('scroll', alMover, { passive: true });
+    return () => window.removeEventListener('scroll', alMover);
+  }, []);
+  const seEsconde = escondido && !open;
 
   useEffect(() => {
     const onClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -81,7 +114,7 @@ function AccountMenu({ perfil, onPerfil }) {
 
   return (
     <>
-    <div ref={ref} style={{ position: 'fixed', top: 'calc(16px + var(--aviso-vista, 0px))', right: 16, zIndex: 1000, fontFamily: FONT }}>
+    <div ref={ref} style={{ position: 'fixed', top: 'calc(16px + var(--aviso-vista, 0px))', right: 16, zIndex: 1000, fontFamily: FONT, opacity: seEsconde ? 0 : 1, pointerEvents: seEsconde ? 'none' : 'auto', transform: seEsconde ? 'translateY(-8px)' : 'none', transition: 'opacity .18s, transform .18s' }}>
       {/* REESTRUCTURA VISUAL (15 oct 2026): las iniciales en un cuadro azul claro de 52 px, como en las capturas de Andrés. Al atleta le
           queda a la altura del saludo de Home; al coach en el teléfono, sobre su banda azul. */}
       <button
@@ -433,7 +466,7 @@ export default function App() {
   if (permisoIA) {
     if (loading) return <Splash />;
     if (!user) return <AuthScreen aviso="Para conectar tu IA, entra a tu cuenta de Training Lab." />;
-    if (!profile) return <Splash label="Cargando tu perfil…" />;
+    if (!profile) return <CargandoPerfil />;
     if (profile.is_active === false) return <CuentaDesactivada />;
     if (profile.perfil_completo === false) return <Inicio key="google" modo="google" codigo={unirse || ''} onCodigoUsado={cierraUnirse} />;
     return <PermisoIA authorizationId={permisoIA} onTerminar={cierraPermiso} />;
@@ -441,7 +474,7 @@ export default function App() {
 
   if (loading) return <Splash />;
   if (!user) return <><Entrada codigo={unirse} onCodigoUsado={cierraUnirse} /><UpdateBanner /></>;
-  if (!profile) return <Splash label="Cargando tu perfil…" />;
+  if (!profile) return <CargandoPerfil />;
 
   // Cuenta pausada por el administrador. Va ANTES de elegir app: si no, el
   // atleta entraria a su rutina y solo fallarian las consultas, una por una.

@@ -23,6 +23,9 @@ export function AuthProvider({ children }) {
   const [recuperando, setRecuperando] = useState(ENLACE_DE_RECUPERACION);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  // El perfil no pudo cargarse tras varios intentos (señal mala, o la cuenta no tiene perfil): la pantalla de carga deja de girar sola y ofrece reintentar o salir (auditoría p43).
+  const [perfilFalla, setPerfilFalla] = useState(false);
+  const [intentoPerfil, setIntentoPerfil] = useState(0);
 
   // Bootstrap session + subscribe to auth changes
   useEffect(() => {
@@ -42,26 +45,36 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  // Load profile whenever the authenticated user changes
+  /* Carga el perfil cada vez que cambia quien entró. Con mala señal ANTES se quedaba en «Cargando tu perfil…» para siempre, sin reintentar ni dar salida (auditoría p43, 17 oct
+     2026). Ahora reintenta solo (3 veces, esperando 2 y 4 s) y, si no se logra, avisa (`perfilFalla`) para que la pantalla deje reintentar o salir. */
   useEffect(() => {
     let cancelled = false;
     const uid = session?.user?.id;
     if (!uid) {
       setProfile(null);
-      return;
+      setPerfilFalla(false);
+      return undefined;
     }
+    setPerfilFalla(false);
     (async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', uid)
-        .maybeSingle();
-      if (!cancelled) setProfile(data ?? null);
+      for (let intento = 0; intento < 3 && !cancelled; intento += 1) {
+        if (intento > 0) await new Promise((r) => { setTimeout(r, intento * 2000); });
+        if (cancelled) return;
+        try {
+          const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
+          if (cancelled) return;
+          if (!error && data) { setProfile(data); return; }
+        } catch { /* sin señal: se reintenta */ }
+      }
+      if (!cancelled) setPerfilFalla(true);
     })();
     return () => {
       cancelled = true;
     };
-  }, [session?.user?.id]);
+  }, [session?.user?.id, intentoPerfil]);
+
+  /** «Reintentar» de la pantalla de carga del perfil. */
+  const reintentaPerfil = useCallback(() => setIntentoPerfil((n) => n + 1), []);
 
   // Login with username OR email + password
   /**
@@ -241,6 +254,8 @@ export function AuthProvider({ children }) {
       role: profile?.role ?? null,
       isAdmin: profile?.role === 'admin',
       loading,
+      perfilFalla,
+      reintentaPerfil,
       signIn,
       signUp,
       signOut,
@@ -254,7 +269,7 @@ export function AuthProvider({ children }) {
       ponerContrasenaNueva,
       cancelarRecuperacion,
     }),
-    [session, profile, loading, signIn, signUp, signOut, entrarConGoogle, updateProfile, refreshProfile, recuperando, pedirRecuperacion, ponerContrasenaNueva, cancelarRecuperacion],
+    [session, profile, loading, perfilFalla, reintentaPerfil, signIn, signUp, signOut, entrarConGoogle, updateProfile, refreshProfile, recuperando, pedirRecuperacion, ponerContrasenaNueva, cancelarRecuperacion],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

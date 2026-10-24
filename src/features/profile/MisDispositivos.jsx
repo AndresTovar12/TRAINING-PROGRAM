@@ -60,7 +60,10 @@ export default function MisDispositivos({ onIrAMetricas }) {
               detalle={c ? (c.estado === 'error' ? 'Con error: vuelve a conectarlo' : `Conectado${ultima}`) : p.detalle}
               derecha={busy === p.id
                 ? <Loader2 size={20} className="spin" color={KP.ink2} />
-                : <Interruptor activo={!!c} etiqueta={p.nombre} onCambio={(v) => (v ? conecta(p) : desconecta(p))} />}
+                : (c || p.disponible
+                  ? <Interruptor activo={!!c} etiqueta={p.nombre} onCambio={(v) => (v ? conecta(p) : desconecta(p))} />
+                  // Un interruptor que se prende y se apaga solo diciendo «pronto» parecía roto (auditoría p112): mientras no exista la conexión, se dice «Pronto» y nada más.
+                  : <span style={{ padding: '5px 12px', borderRadius: 99, background: '#EBEDF1', color: KP.ink2, fontSize: 13, fontWeight: 800 }}>Pronto</span>)}
             />
           );
         })}

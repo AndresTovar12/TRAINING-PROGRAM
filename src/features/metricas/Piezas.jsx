@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Activity, ChevronDown, Loader2 } from 'lucide-react';
 import { LT, KP, FONT, NUM_STYLE, UI } from '@/lib/theme';
 import { COLOR_DE_DEPORTE, ICONOS, TONOS } from './tonos';
@@ -67,8 +67,23 @@ export function Insignia({ tono = 'neutro', children, icono: Icono }) {
 
 /** Las pestañas de arriba (Resumen · Entrenos · Carga · Recuperación). Una sola fila que se desplaza si no cabe. */
 export function Pestanas({ items, valor, onChange, etiqueta }) {
+  // Con 5 pestañas en un teléfono la última queda fuera de la pantalla y nada dice que se puede deslizar (auditoría p110): la elegida se centra sola y, si hay más a un lado, un degradado lo avisa.
+  const caja = useRef(null);
+  const [mas, setMas] = useState({ izq: false, der: false });
+  const mide = () => {
+    const el = caja.current;
+    if (el) setMas({ izq: el.scrollLeft > 4, der: el.scrollLeft + el.clientWidth < el.scrollWidth - 4 });
+  };
+  useEffect(() => {
+    mide();
+    const el = caja.current;
+    el?.querySelector('[aria-selected="true"]')?.scrollIntoView?.({ inline: 'center', block: 'nearest' });
+  }, [valor, items.length]);
+  // estilo-ok: el degradado es la señal de «hay más pestañas hacia este lado» (no decoración)
+  const aviso = (lado) => ({ position: 'absolute', top: 0, bottom: 0, [lado]: 0, width: 26, pointerEvents: 'none', borderRadius: 14, background: `linear-gradient(to ${lado === 'right' ? 'left' : 'right'}, ${LT.surface2} 30%, rgba(237,239,243,0))` });
   return (
-    <div role="tablist" aria-label={etiqueta} style={{ display: 'flex', gap: 4, padding: 4, background: LT.surface2, borderRadius: 14, overflowX: 'auto', scrollbarWidth: 'none' }}>
+    <div style={{ position: 'relative' }}>
+    <div ref={caja} onScroll={mide} role="tablist" aria-label={etiqueta} style={{ display: 'flex', gap: 4, padding: 4, background: LT.surface2, borderRadius: 14, overflowX: 'auto', scrollbarWidth: 'none' }}>
       {items.map((it) => {
         const activa = it.id === valor;
         return (
@@ -83,6 +98,9 @@ export function Pestanas({ items, valor, onChange, etiqueta }) {
           </button>
         );
       })}
+    </div>
+    {mas.izq && <span aria-hidden="true" style={aviso('left')} />}
+    {mas.der && <span aria-hidden="true" style={aviso('right')} />}
     </div>
   );
 }

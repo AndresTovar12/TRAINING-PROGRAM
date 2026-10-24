@@ -987,7 +987,7 @@ const tarjetasDelDia = (day) => {
  */
 const CuerpoDelDia = ({
   phase, week, dayIdx: selectedIdx, sessionsData, updateSession, oneRMs,
-  partes, entarjetas = false, abiertasPorDefecto, autor = null,
+  partes, entarjetas = false, abiertasPorDefecto, autor = null, tituloDelPrograma = null,
 }) => {
   const { t } = usePalabras();
   const idDeSesion = useIdDeSesion();
@@ -1335,13 +1335,13 @@ const CuerpoDelDia = ({
       )}
 
       {(quiere('ciencia') || quiere('cienciaDelDia')) && selectedDay.workoutScience && (
-        <LightCollapsible title="Por qué este workout" icon={Sparkles} color={LT.mint}>
+        <LightCollapsible title={tituloDelPrograma ? `Por qué este workout · ${tituloDelPrograma}` : 'Por qué este workout'} icon={Sparkles} color={LT.mint}>
           <LightWorkoutScience science={selectedDay.workoutScience} />
         </LightCollapsible>
       )}
 
       {(quiere('ciencia') || quiere('cienciaDeLaSemana')) && week.weekScience && (
-        <LightCollapsible title="Por qué esta semana" icon={BookOpen} color={LT.text2}>
+        <LightCollapsible title={tituloDelPrograma ? `Por qué esta semana · ${tituloDelPrograma}` : 'Por qué esta semana'} icon={BookOpen} color={LT.text2}>
           <LightWeekScience science={week.weekScience} />
         </LightCollapsible>
       )}
@@ -1599,7 +1599,7 @@ const WeekDetail = ({
  * `partes` dice cuál pieza dibuja (ver `CuerpoDelDia`). No hay un bloque por persona: las
  * sesiones de todos van juntas, y lo demás sale una sola vez, hasta abajo.
  */
-const FuenteDelDia = ({ fuente, store, setStore, oneRMs, partes, autor, abiertas }) => {
+const FuenteDelDia = ({ fuente, store, setStore, oneRMs, partes, autor, abiertas, titulo = null }) => {
   const { programa, phase, week, idx } = fuente;
   const sessionsData = useMemo(() => registrosDe(programa, store), [programa, store]);
   const updateSession = useCallback(
@@ -1610,7 +1610,7 @@ const FuenteDelDia = ({ fuente, store, setStore, oneRMs, partes, autor, abiertas
     <CuerpoDelDia
       phase={phase} week={week} dayIdx={idx}
       sessionsData={sessionsData} updateSession={updateSession} oneRMs={oneRMs}
-      partes={partes} entarjetas abiertasPorDefecto={abiertas} autor={autor}
+      partes={partes} entarjetas abiertasPorDefecto={abiertas} autor={autor} tituloDelPrograma={titulo}
     />
   );
   return (
@@ -1657,7 +1657,17 @@ const PlanUnificado = ({
 
   const dia = dias.find((d) => d.clave === clave) ?? dias[0];
   const fuentes = visibles(dia);
+  /* «Tus notas» es UNA sola por día (la del primer programa), pero la nota que se escribe al terminar un entreno queda en la sesión que se entrenó: si era la del fisio o la de un programa comprado,
+     «Tus notas» salía vacía y lo que se escribía ahí caía en la sesión del coach (auditoría p24). Si alguna sesión del día ya tiene nota, ahí vive «Tus notas». */
+  const fuenteDeNotas = dia.fuentes.find((f) => {
+    const reg = registrosDe(f.programa, store)[sessionIdFor(f.programa.kind, f.phase.id, f.week.num, f.idx)];
+    return !!String(reg?.notes ?? '').trim();
+  }) ?? dia.fuentes[0];
   const conAutor = autores.length > 1;
+  /* Dos programas de la MISMA persona el mismo día (uno asignado y otro comprado a su fisio) se veían idénticos y con dos «Por qué esta semana» sin decir de cuál (auditoría p111):
+     cuando eso pasa, la etiqueta de cada sesión y cada explicación llevan además el nombre del programa. */
+  const dePrograma = (f) => fuentes.filter((g) => g.programa.id !== f.programa.id && autorDe(g.programa) === autorDe(f.programa)).length > 0;
+  const autorDeLaTarjeta = (f) => (conAutor || dePrograma(f) ? (dePrograma(f) ? { ...f.programa, mostrarTitulo: true } : f.programa) : null);
   /* Cuántas tarjetas trae el día: un doble trae una por turno; un descanso, ninguna.
      Con UNA sola se abre sola; con varias salen cerradas, como en un doble, para que
      se vea de un vistazo todo lo que toca. */
@@ -1720,7 +1730,7 @@ const PlanUnificado = ({
             <FuenteDelDia
               key={`s-${f.programa.id}-${f.phase.id}-${f.week.num}-${f.idx}`}
               fuente={f} store={store} setStore={setStore} oneRMs={oneRMs}
-              partes={['sesiones']} autor={conAutor ? f.programa : null}
+              partes={['sesiones']} autor={autorDeLaTarjeta(f)}
               abiertas={totalTarjetas <= 1 || foco === `${f.programa.id}-${f.idx}`}
             />
           ))}
@@ -1734,12 +1744,12 @@ const PlanUnificado = ({
               primer programa del día (el del coach), aunque el filtro lo deje fuera. */}
           <FuenteDelDia
             key={`t-${clave}`}
-            fuente={dia.fuentes[0]} store={store} setStore={setStore} oneRMs={oneRMs} partes={['tusNotas']}
+            fuente={fuenteDeNotas} store={store} setStore={setStore} oneRMs={oneRMs} partes={['tusNotas']}
           />
           {fuentes.map((f) => (
             <FuenteDelDia
               key={`c-${f.programa.id}-${f.phase.id}-${f.week.num}-${f.idx}`}
-              fuente={f} store={store} setStore={setStore} oneRMs={oneRMs} partes={['ciencia']}
+              fuente={f} store={store} setStore={setStore} oneRMs={oneRMs} partes={['ciencia']} titulo={dePrograma(f) ? f.programa.title : null}
             />
           ))}
         </>
@@ -2054,6 +2064,8 @@ const HomeView = ({
             </Grupo>
           )}
           {conCiencia && <CintaDeCiencia onAbrir={() => onAbrirHoja('science')} />}
+          {/* Lo que registró por su cuenta (correr, pádel…): con plan solo vivía en Mi perfil → Mis métricas (auditoría p29). Sin nada registrado no sale. */}
+          {conLibre && <EntrenoLibre userId={atletaId} unidadPeso={unidadPeso} variante="historial" />}
           {/* Las bibliotecas de clases que compró («todas mis clases»): una tarjeta por biblioteca. */}
           {bibliotecas.map((b) => <TarjetaDeBiblioteca key={b.id} biblioteca={b} onAbrir={() => onAbrirHoja(`biblioteca:${b.id}`)} />)}
         </div>

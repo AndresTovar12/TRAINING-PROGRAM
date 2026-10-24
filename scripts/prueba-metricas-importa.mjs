@@ -189,6 +189,8 @@ const tcx = (inicioIso, minutos) => `<TrainingCenterDatabase><Activities><Activi
   assert.equal(esElMismo(e('2026-10-01T14:00:00Z', 1800), e('2026-10-01T16:00:00Z', 1800)), false);
   assert.equal(esElMismo(e('2026-10-01T14:00:00Z', 3600), e('2026-10-01T14:45:00Z', 3600)), false, 'solo se encima el 25 %');
   assert.equal(esElMismo(e('2026-10-01T14:00:00Z', 3600), e('2026-10-01T14:10:00Z', 1200)), true, 'uno contenido en otro (el corto está entero dentro)');
+  assert.equal(esElMismo(e('2026-10-01T14:00:00Z', 840), e('2026-10-01T14:05:00Z', 35)), false, 'p36: una natación de 35 s dentro de una carrera de 14 min NO es la misma');
+  assert.equal(esElMismo(e('2026-10-01T14:05:00Z', 35), e('2026-10-01T14:00:00Z', 840)), false, 'en cualquier orden');
   const nuevos = [
     { fila: { inicio: '2026-10-01T14:00:00.000Z', duracion_s: 1800, fc_media: null } },
     { fila: { inicio: '2026-10-01T14:00:10.000Z', duracion_s: 1795, fc_media: 150 } },

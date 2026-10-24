@@ -148,10 +148,13 @@ const ventanaDe = (e) => {
 /**
  * ¿Son el mismo entreno? Sí si se encima el 70 % o más del más corto: el reloj y Strava lo guardan con segundos de diferencia en su inicio y en su
  * duración. `a` y `b` son filas (o preparados) con `inicio` y `duracion_s`.
+ * Pero uno que dura menos del 20 % del otro NO es «el mismo» (auditoría p36: una natación de 35 s que cayó dentro de una carrera de 14 minutos hacía que la carrera se
+ * descartara como «ya estaba»). Un recorte de Strava es de la mitad o un tercio, no de una veinteava parte.
  */
 export function esElMismo(a, b) {
   const [a0, a1] = ventanaDe(a);
   const [b0, b1] = ventanaDe(b);
+  if (Math.min(a1 - a0, b1 - b0) < 0.2 * Math.max(a1 - a0, b1 - b0)) return false;
   const encima = Math.min(a1, b1) - Math.max(a0, b0);
   if (encima <= 0) return false;
   return encima / Math.min(a1 - a0, b1 - b0) >= 0.7;

@@ -62,10 +62,13 @@ export function analisisDeFuerza(sesiones, { hoy, desfaseMin } = {}) {
 
   // Esta semana y la pasada hasta el mismo día.
   const lunesPasado = sumaDias(lunesHoy, -7);
-  const actual = entre(lunesHoy, hoy);
+  // Toda LA SEMANA, no solo hasta `hoy`: la gráfica de abajo cuenta la semana entera, y un entreno con la fecha un día adelantada (zona horaria) dejaba «0 kg levantados» sobre una
+  // barra que sí lo mostraba (auditoría p27). Un entreno futuro de verdad no existe, así que no hay nada que cuidar.
+  const finDeSemana = sumaDias(lunesHoy, 6);
+  const actual = entre(lunesHoy, finDeSemana);
   const anterior = entre(lunesPasado, sumaDias(hoy, -7));
   const sesDe = (desde, hasta) => [...sesionesPorDia.values()].filter((s) => s.dia >= desde && s.dia <= hasta);
-  const dActual = sesDe(lunesHoy, hoy);
+  const dActual = sesDe(lunesHoy, finDeSemana);
   const ta = totales(actual);
   const tp = totales(anterior);
   const semana = {
