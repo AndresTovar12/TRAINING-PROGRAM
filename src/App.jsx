@@ -18,6 +18,7 @@ import AdminApp from '@/features/admin/AdminApp';
 import ProfileScreen from '@/features/profile/ProfileScreen';
 import PermisoIA from '@/features/ia/PermisoIA';
 import { rutaDeTienda } from '@/lib/tiendaApi';
+import { rutaDecodificada } from '@/lib/rutas';
 
 // La tienda pública (`/@usuario`, `/@usuario/plan`): la ve cualquiera, con o sin cuenta. Va aparte para que quien solo usa la app no la baje.
 const TiendaPublica = lazy(() => import('@/features/tienda/TiendaPublica'));
@@ -447,7 +448,8 @@ export default function App() {
   // Las piezas de la reestructura visual, para aprobarlas (ver `features/catalogo/Catalogo.jsx`). Sin cuenta: no lee ni guarda nada.
   if (window.location.pathname === '/catalogo') return <Suspense fallback={<Splash />}><Catalogo /></Suspense>;
 
-  const tienda = rutaDeTienda(window.location.pathname);
+  // `/@algo` que no es una dirección válida de la tienda: se le dice, en vez de dejarlo caer en la pantalla de entrar.
+  const tienda = rutaDeTienda(window.location.pathname) ?? (/^\/@/.test(rutaDecodificada(window.location.pathname)) ? { tipo: 'invalida' } : null);
   // La de «Listo» (después de pagar) se ve SIEMPRE: quien compró sin cuenta la estrena ahí con su inicio pendiente, y ese inicio no debe taparle cómo abrir o instalar la app.
   if (tienda && (tienda.tipo === 'lista' || loading || !user || (profile && profile.perfil_completo !== false && !profile.inicio_paso))) {
     return <Suspense fallback={<Splash />}><TiendaPublica ruta={tienda} /></Suspense>;

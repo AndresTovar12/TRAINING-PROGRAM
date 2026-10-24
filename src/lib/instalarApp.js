@@ -9,7 +9,8 @@
    interno). Ahí no se puede instalar nada: hay que abrirlo en Safari/Chrome. Se detecta para decírselo en vez de dar pasos que no existen.
    Puro: se le pasan los datos del navegador, sin tocar `window`. */
 
-const NAVEGADOR_INTERNO = /Instagram|FBAN|FBAV|FB_IAB|FBIOS|TikTok|musical_ly|Snapchat|Line\/|MicroMessenger|Twitter/i;
+// Threads se presenta como «Barcelona»; el navegador de YouTube, como «YouTube» (auditoría p118: ahí «Compartir → Agregar a pantalla de inicio» no existe).
+const NAVEGADOR_INTERNO = /Instagram|FBAN|FBAV|FB_IAB|FBIOS|TikTok|musical_ly|Snapchat|Line\/|MicroMessenger|Twitter|Threads|Barcelona|YouTube|LinkedInApp|Pinterest|Messenger|WhatsApp/i;
 
 /**
  * { plataforma: 'instalada' | 'ios' | 'android' | 'escritorio', navegadorInterno: boolean }

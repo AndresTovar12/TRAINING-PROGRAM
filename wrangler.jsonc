@@ -12,7 +12,9 @@
     // Lo que no es un archivo (por ejemplo /entrenar) se contesta con index.html: la app decide qué pantalla enseñar.
     "not_found_handling": "single-page-application",
     // Solo estas direcciones pasan por el programa; todo lo demás son archivos gratis y sin límite.
-    "run_worker_first": ["/mcp", "/mcp/*", "/.well-known/oauth-*"]
+    // Y las ligas de la tienda (`/@usuario`, `/@usuario/plan`): ahí se le pone a la página la tarjetita para compartir (ver `cloudflare/worker-app.js`).
+    "run_worker_first": ["/mcp", "/mcp/*", "/.well-known/oauth-*", "/@*"],
+    "binding": "ASSETS"
   },
   "routes": [{ "pattern": "app.traininglabapp.com", "custom_domain": true }]
 }
