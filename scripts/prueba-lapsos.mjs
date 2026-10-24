@@ -125,6 +125,12 @@ const correr = {
   assert.equal(plan[2].texto, '2 min');
   assert.deepEqual(plan.map((x) => x.n), [...plan.keys()], 'numerados en orden');
   assert.equal(plan[4].ejercicio, 1, 'el Thruster es el ejercicio 1');
+  // Los metros que pide cada lapso (para el GPS): 800 m, nada en un tiempo, nada en reps.
+  assert.deepEqual(plan.filter((x) => x.tipo === 'trabajo').slice(0, 3).map((x) => x.metros), [800, null, null], 'metros solo en lapsos por distancia');
+  const km = tramosDeLapsos([{ name: 'Correr', sets: '3', ...parcheDeLapsos([{ reps: '1', unidad: 'km', intensity: '', descanso: '90 seg' }]) }], '3');
+  assert.deepEqual(km.filter((x) => x.tipo === 'trabajo').map((x) => x.metros), [1000, 1000, 1000], '1 km son 1000 m');
+  const rango = tramosDeLapsos([{ name: 'Tempo', ...parcheDeLapsos([{ reps: '400-600', unidad: 'm', intensity: '', descanso: '' }]) }], '1');
+  assert.equal(rango[0].metros, 400, 'de un rango, el menor');
   assert.equal(plan[0].de, 2, 'Correr tiene 2 lapsos');
   // El descanso tras el último lapso de todo no se cuenta.
   const sola = tramosDeLapsos([{ name: 'Remo', ...parcheDeLapsos([{ reps: '500', unidad: 'm', intensity: '', descanso: '2 min' }]) }], '1');

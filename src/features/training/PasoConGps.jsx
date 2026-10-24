@@ -15,7 +15,19 @@ import { useSenalGps } from '@/features/libre/useEntrenoLibre';
      2. Corriendo: tiempo en rojo, «188 m para llegar», el ritmo y la barra. SIN pausa (un sprint no se pausa): «Mantén para parar» lo termina con lo recorrido.
      3. Al llegar a la meta termina SOLO y enseña el resultado; «Seguir» lo marca hecho y pasa al descanso. Si el GPS midió mal, «Cambiar el resultado».
      4. Sin señal 5 segundos: aviso en ámbar y que elija la persona (esperar, terminar con lo que lleva o anotarlo a mano). No se borra nada.
-   `paso`: el del entreno (nombre, serie). `meta`: los metros. `carga`: lo que pide además («100%»). Lo que se manda al terminar: `onTermina({ metros, seg })`. */
+   `paso`: el del entreno (nombre, serie; `serieTexto` si quien lo usa tiene su propio «Lapso 2 de 3»). `meta`: los metros. `carga`: lo que pide además («100%»).
+   Lo que se manda al terminar: `onTermina({ metros, seg })`. Sin `onAnotar` no se ofrece «Cambiar el resultado» ni «Anotar a mano» (en un lapso no hay a dónde anotarlo).
+
+   QUE LA APP GUÍE (23 oct 2026, Andrés: «pareciera que el humano está guiando el workout en lugar de que la app»). La regla: la app avanza sola cuando PUEDE saber que
+   algo terminó (se llegó a la meta, se acabó el descanso); la persona solo toca cuando únicamente ella lo sabe. Por eso:
+     · `arrancaSolo`: se llegó AVANZANDO (acabó el descanso o el paso anterior): en cuanto el GPS está listo corre el 3, 2, 1 y sale, sin otro «Iniciar».
+       Si el GPS tarda, el botón «Iniciar» sigue ahí; nunca se espera una señal que no llega.
+     · `sinCuenta`: quien lo usa ya dio su propio aviso (el reloj de lapsos cuenta 3, 2, 1 al terminar el descanso): sale corriendo en el instante en que se abre.
+     · `sigueSolo`: al llegar a la meta se enseña el resultado `segResultado` segundos y pasa solo a lo que sigue. «Seguir» lo adelanta; «Cambiar el resultado» lo detiene.
+       Con `segResultado={0}` no se enseña nada y pasa al instante: así en los kilómetros seguidos de unos lapsos, donde la persona sigue corriendo y el siguiente ya
+       tiene que estar midiendo. */
+
+const SEGUNDOS_DEL_RESULTADO = 4; // lo que se ve el resultado de un sprint antes de pasar solo al descanso
 
 const C = { fondo: '#0F1220', texto: '#FFFFFF', texto2: 'rgba(255,255,255,0.62)', rojo: '#FF5A5F', verde: '#22C38E', ambar: '#FFB547' };
 const CORAL = 'linear-gradient(135deg, #FF8A5B 0%, #F0506E 100%)'; /* estilo-ok: la misma carrera oscura del registro libre (PantallaDeCarrera) */
@@ -49,21 +61,39 @@ function BotonMantener({ texto, sub, alCompletar }) {
   );
 }
 
-export default function PasoConGps({ paso, meta, carga = '', onTermina, onSinGps, onAnotar, onCerrar }) {
-  const [fase, setFase] = useState('antes'); // antes | cuenta | corriendo | llego
+export default function PasoConGps({ paso, meta, carga = '', arrancaSolo = false, sigueSolo = true, segResultado = SEGUNDOS_DEL_RESULTADO, sinCuenta = false, onTermina, onSinGps, onAnotar, onCerrar }) {
+  const [fase, setFase] = useState(sinCuenta ? 'corriendo' : 'antes'); // antes | cuenta | corriendo | llego
   const [cuenta, setCuenta] = useState(3);
-  const [desde, setDesde] = useState(null);
+  const [desde, setDesde] = useState(() => (sinCuenta ? Date.now() : null));
   const [ahora, setAhora] = useState(() => Date.now());
   const [muestras, setMuestras] = useState([]);
   const [final, setFinal] = useState(null); // { metros, seg }
   const [esperando, setEsperando] = useState(false); // eligió «seguir esperando» la señal
-  const [ultimoPunto, setUltimoPunto] = useState(NaN); // la hora del último punto bueno del GPS
-  const senal = useSenalGps(fase === 'antes');
+  const [ultimoPunto, setUltimoPunto] = useState(() => (sinCuenta ? Date.now() : NaN)); // la hora del último punto bueno del GPS
+  // Con `sinCuenta` (los lapsos) no hay pantalla de «antes», pero igual se oye la señal mientras no llega el primer punto: si no hay permiso, no se espera nada.
+  const senal = useSenalGps(fase === 'antes' || (sinCuenta && fase === 'corriendo' && muestras.length === 0));
+  useEffect(() => {
+    if (sinCuenta && (senal === 'negado' || senal === 'no_hay')) onCerrar();
+  }, [sinCuenta, senal, onCerrar]);
   const vivo = useMemo(() => enVivo(muestras), [muestras]);
   const seg = desde ? Math.max(0, (((final ? desde + final.seg * 1000 : ahora)) - desde) / 1000) : 0;
   const avance = avanceDelPaso(vivo.distanciaM, meta);
   const perdido = fase === 'corriendo' && !esperando && sinSenal(ultimoPunto, ahora);
-  const serie = paso.vueltas > 1 ? `Serie ${paso.vuelta} de ${paso.vueltas}` : null;
+  const serie = paso.serieTexto ?? (paso.vueltas > 1 ? `Serie ${paso.vuelta} de ${paso.vueltas}` : null);
+
+  // Se llegó avanzando: en cuanto el GPS está listo, empieza solo la cuenta. Con otra señal (buscando, negado…) no hace nada: se queda el botón.
+  useEffect(() => {
+    if (fase === 'antes' && arrancaSolo && senal === 'lista') { setCuenta(3); setFase('cuenta'); }
+  }, [fase, arrancaSolo, senal]);
+
+  // Llegó a la meta: se ve el resultado unos segundos y sigue solo. Se guarda la función de hoy para que el temporizador no se reinicie en cada dibujo.
+  const alTerminar = useRef(onTermina);
+  useEffect(() => { alTerminar.current = onTermina; });
+  useEffect(() => {
+    if (fase !== 'llego' || !final || !sigueSolo) return undefined;
+    const t = setTimeout(() => alTerminar.current(final), segResultado * 1000);
+    return () => clearTimeout(t);
+  }, [fase, final, sigueSolo, segResultado]);
 
   // La cuenta 3, 2, 1 antes de salir: nadie arranca en el mismo instante en que toca el botón.
   useEffect(() => {
@@ -115,6 +145,7 @@ export default function PasoConGps({ paso, meta, carga = '', onTermina, onSinGps
   const metaTexto = [`${meta} m`, carga].filter(Boolean).join(' · ');
 
   /* 4 · LLEGÓ */
+  if (fase === 'llego' && final && sigueSolo && segResultado === 0) return null; // pasa al instante (ver arriba)
   if (fase === 'llego' && final) {
     const ritmo = final.metros > 0 ? (final.seg / final.metros) * 1000 : null;
     return pantalla(
@@ -130,8 +161,11 @@ export default function PasoConGps({ paso, meta, carga = '', onTermina, onSinGps
           </div>
         </div>
         <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 16px calc(14px + env(safe-area-inset-bottom))' }}>
-          <button type="button" onClick={() => onTermina(final)} style={botonGrande(AZUL)}>Seguir</button>
-          <button type="button" onClick={() => onAnotar(final)} style={botonGrande('rgba(255,255,255,0.1)', { minHeight: 48, fontSize: 15 })}>Cambiar el resultado</button>
+          <button type="button" onClick={() => onTermina(final)} style={{ position: 'relative', overflow: 'hidden', ...botonGrande(AZUL) }}>
+            {sigueSolo && <span aria-hidden="true" className="gps-sigue" style={{ position: 'absolute', left: 0, bottom: 0, height: 4, background: 'rgba(255,255,255,0.55)', animation: `gps-sigue ${segResultado}s linear forwards` }} />}
+            Seguir
+          </button>
+          {onAnotar && <button type="button" onClick={() => onAnotar(final)} style={botonGrande('rgba(255,255,255,0.1)', { minHeight: 48, fontSize: 15 })}>Cambiar el resultado</button>}
         </div>
       </>,
     );
@@ -175,7 +209,9 @@ export default function PasoConGps({ paso, meta, carga = '', onTermina, onSinGps
                 <>
                   <button type="button" onClick={() => setEsperando(true)} style={botonGrande(AZUL, { minHeight: 52, fontSize: 16 })}>Seguir esperando la señal</button>
                   <button type="button" onClick={() => termina(vivo.distanciaM)} style={botonGrande('rgba(255,255,255,0.1)', { minHeight: 48, fontSize: 15 })}>Terminar con lo que llevo</button>
-                  <button type="button" onClick={() => onAnotar({ metros: vivo.distanciaM, seg: Math.round(seg) })} style={botonGrande('rgba(255,255,255,0.1)', { minHeight: 48, fontSize: 15 })}>Anotar a mano</button>
+                  {onAnotar
+                    ? <button type="button" onClick={() => onAnotar({ metros: vivo.distanciaM, seg: Math.round(seg) })} style={botonGrande('rgba(255,255,255,0.1)', { minHeight: 48, fontSize: 15 })}>Anotar a mano</button>
+                    : <button type="button" onClick={onCerrar} style={botonGrande('rgba(255,255,255,0.1)', { minHeight: 48, fontSize: 15 })}>Seguir sin mapa</button>}
                 </>
               ) : (
                 <BotonMantener texto="Mantén para parar" sub={`termina solo a los ${meta} m`} alCompletar={() => termina(vivo.distanciaM)} />
@@ -204,6 +240,7 @@ export default function PasoConGps({ paso, meta, carga = '', onTermina, onSinGps
         <div style={{ fontSize: 14, fontWeight: 800, color: C.rojo }}>{serie ?? 'Lo pidió tu coach'}</div>
         <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: -0.4 }}>{paso.nombre}</div>
         <div style={{ fontSize: 15, fontWeight: 600, color: C.texto2, marginTop: 2, ...NUM_STYLE }}>{metaTexto}</div>
+        {arrancaSolo && !sinGps && <div style={{ fontSize: 13, fontWeight: 600, color: C.texto2, marginTop: 6 }}>Sales solo en cuanto el GPS esté listo.</div>}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 10, marginTop: 16 }}>
           <span />
           <button

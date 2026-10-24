@@ -137,6 +137,12 @@ body {
   }
 }
 
+/* La barrita de «Seguir» en el paso con GPS: se llena mientras la app espera para pasar sola. */
+@keyframes gps-sigue {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
 /* Entrada escalonada de listas/tarjetas (Kinetic) */
 @keyframes kp-rise {
   from {

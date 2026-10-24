@@ -185,6 +185,20 @@ export function segundosDeLapso(ex, lapso) {
   return seg > 0 ? seg : null;
 }
 
+const METROS_POR = { m: 1, km: 1000, yd: 0.9144 };
+
+/**
+ * Cuántos metros pide un lapso, o `null` si no pide distancia (tiempo, reps, calorías). De un rango («400-600 m») el menor: se da por hecho a los 400.
+ * Con esto el reloj sabe qué lapsos se pueden medir con el GPS (los de 200 m o más; el umbral vive en `lib/recorrido.js`).
+ */
+export function metrosDeLapso(ex, lapso) {
+  const l = leeCantidad(comoEjercicio(ex, lapso));
+  const por = METROS_POR[l.unidad];
+  if (l.libre || !por) return null;
+  const n = numeroPrimero(l.cantidad);
+  return n !== null && n > 0 ? Math.round(n * por) : null;
+}
+
 /** Cuántos segundos descansa tras un lapso (de un rango, el primer número); `null` si no dice o no es un tiempo. */
 export function descansoDeLapsoEnSegundos(lapso) {
   const d = leeDescanso({ descanso: lapso?.descanso });
@@ -224,7 +238,7 @@ export function tramosDeLapsos(miembros, rondas) {
         if (salida.length >= MAX_TRAMOS) return;
         salida.push({
           n: salida.length, tipo: 'trabajo', seg: segundosDeLapso(ex, l), etiqueta: ex.name ?? '', vuelta: v,
-          ejercicio: e, lapso: k, de: laps.length, texto: cuantoDeLapso(ex, l) ?? '', carga: l.intensity,
+          ejercicio: e, lapso: k, de: laps.length, texto: cuantoDeLapso(ex, l) ?? '', carga: l.intensity, metros: metrosDeLapso(ex, l),
         });
         const d = descansoDeLapsoEnSegundos(l);
         if (d !== null && salida.length < MAX_TRAMOS) {

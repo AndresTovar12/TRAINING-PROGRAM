@@ -2,10 +2,12 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, Pause, Play, Plus, Minus, Volume2, VolumeX, X } from 'lucide-react';
 import { LT, FONT, NUM_STYLE, UI } from '@/lib/theme';
 import { useConfirmacion } from '@/components/Confirmacion';
-import { expande, etiquetaDeTramo, relojTexto, textoDeTiempo, vistaDe } from '@/lib/formatos';
+import { expande, etiquetaDeTramo, limpiaResultado, relojTexto, textoDeTiempo, vistaDe } from '@/lib/formatos';
 import {
-  nuevoReloj, inicia, pausa, avanza, listo, termina, sumaRonda, vista, sugerido as sugeridoDe,
+  nuevoReloj, inicia, pausa, avanza, listo, listoConTiempo, termina, sumaRonda, vista, sugerido as sugeridoDe,
 } from '@/lib/relojDeFormato';
+import { METROS_PARA_GPS } from '@/lib/recorrido';
+import PasoConGps from '@/features/training/PasoConGps';
 import { leeRelojGuardado, guardaReloj, borraReloj } from '@/lib/relojGuardado';
 import { preparaAudio, pitido } from '@/lib/pitidos';
 import { usePantallaEncendida } from '@/lib/pantallaEncendida';
@@ -93,8 +95,17 @@ function BotonChico({ children, onClick, peligro = false }) {
 /**
  * `plan`: los tramos ya armados, para un Set en «Lapsos personalizados» (ver `tramosDeLapsos` en `lib/lapsos.js`); sin él,
  * salen del formato. Con lapsos, `formato` solo trae lo que el resultado necesita (`anota`).
+ *
+ * QUE LA APP GUÍE (23 oct 2026). Dos cosas, las dos con la misma regla: la app avanza sola cuando puede saber que algo terminó.
+ *   · `conGps`: un lapso por DISTANCIA de 200 m o más (un 1 km) se corre con la misma pantalla de mapa del sprint (`PasoConGps`) y termina solo al llegar a la
+ *     meta; el descanso de después y el lapso siguiente ya corrían solos. Sin GPS, o si la persona elige «Sin GPS» (`sinGps[nombre]`, `alElegirSinGps`), el lapso
+ *     sigue esperando su «Lapso listo»: la app nunca espera una señal que no llega.
+ *   · Al acabar, si el reloj ya sabe el resultado entero (un formato que no anota nada; unos lapsos que se completaron todos), lo guarda y se cierra solo, sin
+ *     preguntar «¿Marcar como hecho?». Si falta algo que solo la persona sabe (las rondas de un AMRAP, cuántos intervalos de un EMOM salieron), sí se pregunta.
  */
-export default function RelojDelBloque({ formato, plan: planDado = null, ejercicios, serie, clave, resumen, empezarYa = false, conCuenta = false, onGuardar, onCerrar, videoDe = null, miniaturaDe = null }) {
+const SEG_DEL_FIN = 1.6; // lo que se ve el «Terminaste» antes de cerrar solo
+
+export default function RelojDelBloque({ formato, plan: planDado = null, ejercicios, serie, clave, resumen, empezarYa = false, conCuenta = false, conGps = false, sinGps = null, alElegirSinGps = null, onGuardar, onCerrar, videoDe = null, miniaturaDe = null }) {
   const pregunta = useConfirmacion();
   const nEj = ejercicios.length;
   // El ejercicio cuyo video se abrió tocándolo en la lista (`null` = ninguno).
@@ -115,6 +126,8 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
   });
   const [ahora, setAhora] = useState(() => Date.now());
   const [sonido, setSonido] = useState(leeSonido);
+  // Los lapsos en los que cerró el mapa (se sigue con «Lapso listo»), por número de tramo.
+  const [gpsCerrado, setGpsCerrado] = useState(() => new Set());
   // `conCuenta`: solo con el reloj en cero. Uno que ya iba (pausado) vuelve a donde estaba, sin cuenta.
   const [preparaHasta, setPreparaHasta] = useState(() => (conCuenta && est.fase === 'listo' ? Date.now() + SEG_DE_CUENTA * 1000 : null));
 
@@ -179,6 +192,7 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
   const empieza = () => { preparaAudio(); accion((e, t) => inicia(e, t)); };
   const pausar = () => accion((e, t) => pausa(e, t));
   const hecho = () => accion((e, t) => listo(e, plan, t, tope));
+  const hechoConTiempo = (seg) => accion((e, t) => listoConTiempo(e, plan, t, seg, tope));
   const terminar = async () => {
     if (await pregunta({ titulo: '¿Parar el reloj?', detalle: 'Lo que llevas hasta aquí cuenta como tu resultado.', confirmar: 'Sí, parar' })) {
       accion((e, t) => termina(e, plan, t, tope));
@@ -204,10 +218,33 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
     try { window.localStorage.setItem(LLAVE_DEL_SONIDO, nuevo ? 'si' : 'no'); } catch { /* sin almacenamiento */ }
   };
 
+  // Al acabar: si el reloj ya lo sabe todo, guarda y cierra solo (ver arriba). Un ref guarda la función de hoy para que el temporizador no se reinicie en cada dibujo.
+  const sabeTodo = v.fase === 'fin' && (formato.anota === 'nada' || (id === 'lapsos' && formato.anota === 'cumplido' && v.motivo === 'completo'));
+  const guardaSolo = useRef(null);
+  useEffect(() => {
+    guardaSolo.current = () => {
+      const sug = sugeridoDe(est, plan);
+      borraReloj(clave);
+      onGuardar(limpiaResultado({
+        anota: formato.anota, valor: formato.anota === 'cumplido' ? sug.completados : null, extra: null, seg: sug.seg,
+        tramos: sug.tramos, ventanas: sug.ventanas, lapsos: sug.lapsos, de: sug.de, en: new Date().toISOString(),
+      }));
+      onCerrar();
+    };
+  });
+  useEffect(() => {
+    if (!sabeTodo) return undefined;
+    const t = setTimeout(() => guardaSolo.current(), SEG_DEL_FIN * 1000);
+    return () => clearTimeout(t);
+  }, [sabeTodo]);
+
   const { tramo, proximo } = v;
   const enCurso = v.fase === 'corriendo' || v.fase === 'pausa';
   const abierto = !!tramo && tramo.seg === null;
   const color = tramo?.tipo === 'descanso' ? LT.warning : LT.blue;
+  // ¿Este lapso va con mapa? Corriendo, de trabajo, por distancia de 200 m o más, con GPS, sin que haya elegido «Sin GPS» ni cerrado el mapa.
+  const gpsDelLapso = conGps && v.fase === 'corriendo' && !preparando && tramo?.tipo === 'trabajo' && tramo.seg === null && tramo.metros >= METROS_PARA_GPS
+    && !sinGps?.[tramo.etiqueta] && !gpsCerrado.has(est.i);
 
   let grande = '00:00';
   if (v.fase === 'fin') grande = relojTexto(v.totalSeg);
@@ -398,7 +435,19 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
         </div>
       )}
 
-      {v.fase === 'fin' && (
+      {/* El lapso por distancia con mapa, encima del reloj (que sigue debajo contando: es el que guarda el tiempo y pasa al descanso). */}
+      {gpsDelLapso && (
+        <PasoConGps
+          key={`${clave}:${est.i}`}
+          paso={{ clave: `${clave}:${est.i}`, nombre: tramo.etiqueta, serieTexto: textoDeAvance(id, formato, v, nEj, rondas) || null }}
+          meta={tramo.metros} carga={formatIntensity(tramo.carga)} sinCuenta segResultado={0}
+          onTermina={({ seg }) => hechoConTiempo(seg)}
+          onSinGps={() => { alElegirSinGps?.(tramo.etiqueta); setGpsCerrado((c) => new Set(c).add(est.i)); }}
+          onCerrar={() => setGpsCerrado((c) => new Set(c).add(est.i))}
+        />
+      )}
+
+      {v.fase === 'fin' && !sabeTodo && (
         <ResultadoDelBloque
           formato={formato} sugerido={sugeridoDe(est, plan)} resumen={resumen} textoDeCerrar="No guardar" cierraAlTocarFuera={false}
           onGuardar={(r) => { borraReloj(clave); onGuardar(r); onCerrar(); }}
