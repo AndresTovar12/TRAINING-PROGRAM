@@ -86,10 +86,10 @@ export function useCronometroLibre(userId) {
     cronometro,
     segundos: segundosDe(cronometro, ahora),
     muestras,
-    // `actividad`: la que eligió (`lib/actividades.js`): su nombre y emoji se ven mientras corre y se guardan como título del entreno.
+    // `actividad`: la que eligió (`lib/actividades.js`): su nombre e ícono se ven mientras corre y se guardan como título del entreno.
     inicia: (deporte, { gps = false, actividad = null } = {}) => {
       cambiaRuta([]);
-      cambia({ ...cronometroNuevo(deporte), ...(gps ? { gps: true } : {}), ...(actividad ? { actividad: { id: actividad.id, nombre: actividad.nombre, emoji: actividad.emoji, gps: !!actividad.gps } } : {}) });
+      cambia({ ...cronometroNuevo(deporte), ...(gps ? { gps: true } : {}), ...(actividad ? { actividad: { id: actividad.id, nombre: actividad.nombre, icono: actividad.icono, color: actividad.color, gps: !!actividad.gps } } : {}) });
     },
     pausa: () => cambia(pausar(cronometro)),
     reanuda: () => cambia(reanudar(cronometro)),

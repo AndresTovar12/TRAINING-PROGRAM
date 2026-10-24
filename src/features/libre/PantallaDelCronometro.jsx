@@ -11,6 +11,7 @@ import { MosaicoDeDeporte } from '@/features/metricas/Piezas';
 import { Fila, Grupo, Pastilla, Segmentado } from '@/components/ui';
 import { useSenalGps } from './useEntrenoLibre';
 import { botonBlancoGrande, botonGrande } from './estilosLibre';
+import IconoDeActividad from './IconoDeActividad';
 
 /* LA PANTALLA DEL CRONÓMETRO (entreno libre): el tiempo grande, «Pausar» y «Terminar». Al terminar pregunta la distancia (se puede dejar vacía) y guarda. Cerrar la hoja NO termina el
    entreno: el cronómetro sigue (vive en `useCronometroLibre`) y Home lo muestra como «Entreno en curso». Ver `lib/entrenoLibre.js`.
@@ -25,7 +26,7 @@ export default function PantallaDelCronometro({ userId, crono, pendiente = null,
   const [error, setError] = useState(null);
   const [vista, setVista] = useState('datos');
   const deporte = pendiente ?? cronometro?.deporte ?? 'correr';
-  // La actividad que eligió (`lib/actividades.js`): su nombre y emoji. Una propia sin mapa no pide distancia.
+  // La actividad que eligió (`lib/actividades.js`): su nombre e ícono. Una propia sin mapa no pide distancia.
   const actividad = cronometro?.actividad ?? null;
   const nombre = actividad?.nombre ?? nombreDelDeporte(deporte);
   const unidad = actividad && actividad.id !== deporte && !actividad.gps ? null : unidadDeDistancia(deporte);
@@ -98,9 +99,7 @@ export default function PantallaDelCronometro({ userId, crono, pendiente = null,
   return (
     <HojaFlotante titulo={nombre} onCerrar={alMinimizar}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 22, padding: '18px 0 8px', fontFamily: FONT }}>
-        {!conGps && (actividad?.emoji
-          ? <span aria-hidden="true" style={{ width: 64, height: 64, borderRadius: 20, background: UI.relleno, display: 'grid', placeItems: 'center', fontSize: 34 }}>{actividad.emoji}</span>
-          : <MosaicoDeDeporte deporte={deporte} size={64} />)}
+        {!conGps && (actividad?.icono ? <IconoDeActividad actividad={actividad} size={64} /> : <MosaicoDeDeporte deporte={deporte} size={64} />)}
 
         {(fase === 'corre' || fase === 'guardando') && (
           <>
