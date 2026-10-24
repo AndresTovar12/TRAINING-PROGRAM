@@ -43,6 +43,7 @@ import CodigoDeCoach from '@/components/CodigoDeCoach';
 import BotonEntendido from '@/components/BotonEntendido';
 import { useMoverPlan, ReglasDelPlan, ControlesDelPlan, MoverAquiBoton, EditarEsteDiaBoton } from '@/features/admin/MoverElPlan';
 import { useAvisosVistos } from '@/lib/useAvisosVistos';
+import { useAviso } from '@/components/AvisoPasajero';
 import { esArranque, guardaLugar, leeLugar } from '@/lib/lugar';
 import { useLugar, useScrollLugar } from '@/lib/useLugar';
 
@@ -130,9 +131,9 @@ const TD = {
 };
 
 /** Celda del plan: titulo + de que tipo es + cuanto mide. */
-function PlanCell({ plan }) {
+function PlanCell({ plan, conCompra = false }) {
   const { t } = usePalabras();
-  if (!plan) return <span style={{ fontSize: 13.5, color: T.text3, fontWeight: 600 }}>{t('Sin plan')}</span>;
+  if (!plan) return <span style={{ fontSize: 13.5, color: T.text3, fontWeight: 600 }}>{conCompra ? t('Plan comprado') : t('Sin plan')}</span>;
   const etiqueta = plan.kind === 'weekly' ? 'Semanal' : 'Por fases';
   const detalle = plan.kind === 'weekly'
     ? `${plan.weeks} semana${plan.weeks === 1 ? '' : 's'}`
@@ -347,7 +348,7 @@ function AthletesTable({ rows, coaches, isMaster, selectedId, onPick, ahora, eti
                           <span style={{ fontWeight: 700, fontSize: 14, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {a.full_name || a.username}
                           </span>
-                          {!a.plan && a.role !== 'admin' && <Pastilla tono="malo">{t('Sin plan')}</Pastilla>}
+                          {!a.plan && a.role !== 'admin' && (a.conCompra ? <Pastilla>{t('Plan comprado')}</Pastilla> : <Pastilla tono="malo">{t('Sin plan')}</Pastilla>)}
                           {a.is_active === false && <Pausada />}
                           {a.perfil_completo === false && <SinTerminar />}
                         </div>
@@ -358,7 +359,7 @@ function AthletesTable({ rows, coaches, isMaster, selectedId, onPick, ahora, eti
                       </div>
                     </div>
                   </td>
-                  <td style={TD}><PlanCell plan={a.plan} /></td>
+                  <td style={TD}><PlanCell plan={a.plan} conCompra={a.conCompra} /></td>
                   <td style={{ ...TD, fontSize: 13.5, fontWeight: 600, color: a.vaEn ? T.text : T.text3, whiteSpace: 'nowrap' }}>
                     {a.vaEn ? (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
@@ -703,6 +704,15 @@ function AccionFicha({ icon: Icon, titulo, detalle, onClick, primaria, abierto }
 
 /** Lo que NO es una acción: se pliega para que no estorbe. */
 function SeccionFicha({ titulo, abierta, onToggle, children }) {
+  // Sin `onToggle` la sección es fija (la ficha de quien ya no atiende solo enseña las notas): ni flecha ni botón que no hace nada (auditoría p47).
+  if (!onToggle) {
+    return (
+      <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 4 }}>
+        <div style={{ padding: '12px 2px', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, color: T.text2 }}>{titulo}</div>
+        <div style={{ paddingBottom: 14 }}>{children}</div>
+      </div>
+    );
+  }
   return (
     <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 4 }}>
       <button
@@ -844,6 +854,7 @@ function HojaDelPlanDeAtleta({ athlete, programas, equipoDe, state, inicialId, o
 function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile, onReassigned, onAltaCambiada, onEliminado, onVerComoAtleta, tokenInvitacion, onEquipoCambiado, onIrA }) {
   const esCompu = useIsDesktop();
   const pregunta = useConfirmacion();
+  const { avisa } = useAviso();
   const { t, salud } = usePalabras();
   const { profile } = useAuth();
   const [programas, setProgramas] = useState([]); // planes activos: el del coach principal y los del equipo
@@ -901,8 +912,10 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
      elimine desde los tres puntos del editor. */
   const planReal = plan && !esProgramaFantasma(plan.data) ? plan : null;
   const programasVisibles = programas.filter((p) => !esProgramaFantasma(p.data));
+  // Al «Regresar» a una versión, la fila activa puede ser OTRA (otro id) del mismo profesional: si solo se quitaba la del mismo id, la vieja se quedaba y la ficha seguía enseñándola
+  // hasta salir y volver (auditoría p54). Hay un solo programa activo por profesional, así que se reemplaza el de esa persona.
   const setPlan = (fila) => setProgramas((prev) => (fila
-    ? [...prev.filter((p) => p.id !== fila.id), fila]
+    ? [...prev.filter((p) => p.id !== fila.id && (p.profesional_id ?? null) !== (fila.profesional_id ?? null)), fila]
     : prev.filter((p) => (p.profesional_id ?? null) !== miClave)));
   // Sus registros de ESTE programa: `wr:sessions@<profesional>` si no es el del coach principal.
   const sufijo = miClave ? `@${miClave}` : '';
@@ -974,8 +987,13 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
       peligro: true,
     });
     if (!va) return;
-    await deletePlan(plan.id);
-    setPlan(null);
+    try {
+      await deletePlan(plan.id);
+      setPlan(null);
+    } catch (e) {
+      // Sin esto, si la base rechazaba el borrado o se caía la red no pasaba nada visible y el plan seguía ahí (auditoría p45).
+      avisa(e?.message || 'No se pudo eliminar el plan. Revisa tu conexión e inténtalo otra vez.');
+    }
   }
 
   const last = timeAgo(state?.updated_at);
@@ -1264,7 +1282,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
         Ya no atiendes a esta persona: quitó a quien la atendía de su equipo. Conservas tus notas de consulta.
         Si te vuelve a agregar, todo regresa.
       </p>
-      <NotasDeConsulta atleta={athlete} Seccion={SeccionFicha} abierta onToggle={() => {}} puedeCrear={false} />
+      <NotasDeConsulta atleta={athlete} Seccion={SeccionFicha} abierta onToggle={null} puedeCrear={false} />
     </>
   );
 
@@ -1893,7 +1911,7 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta, onIrA, onAb
               {a.full_name || a.username}
             </span>
             {isAdmin && <Shield size={13} color={T.accent} style={{ flexShrink: 0 }} />}
-            {!a.plan && !isAdmin && <Pastilla tono="malo">{t('Sin plan')}</Pastilla>}
+            {!a.plan && !isAdmin && (a.conCompra ? <Pastilla>{t('Plan comprado')}</Pastilla> : <Pastilla tono="malo">{t('Sin plan')}</Pastilla>)}
             {a.is_active === false && <Pausada />}
             {a.perfil_completo === false && <SinTerminar />}
           </div>

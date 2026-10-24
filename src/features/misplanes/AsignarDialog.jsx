@@ -190,7 +190,7 @@ export default function AsignarDialog({ item, onCerrar }) {
   /* ---- Trabajando ---- */
   if (fase === 'trabajando') {
     return (
-      <Ventana titulo={titulo} onCerrar={() => {}}>
+      <Ventana titulo={titulo} onCerrar={null}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: T.text2, fontWeight: 700, padding: '18px 4px' }}>
           <Loader2 size={18} className="spin" /> Asignando… {avance.hechos} de {avance.total}
         </div>
