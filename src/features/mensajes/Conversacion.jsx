@@ -1,9 +1,10 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Check, ChevronLeft, Flag, Loader2 } from 'lucide-react';
+import { Ban, Check, ChevronLeft, Flag, Loader2 } from 'lucide-react';
 import { T, KP, FONT, UI } from '@/lib/theme';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useMensajes } from '@/contexts/MensajesContext';
-import { eliminaMensaje, leeMensajes, leeTecnicas, mandaArchivo, mandaTexto, marcaVistos, POR_PAGINA, respondeTecnica, urlsFirmadas } from '@/lib/mensajesApi';
+import { bloqueaConversacion, eliminaMensaje, leeMensajes, leeTecnicas, mandaArchivo, mandaTexto, marcaVistos, POR_PAGINA, reportaMensaje, respondeTecnica, urlsFirmadas, yoBloqueo } from '@/lib/mensajesApi';
+import { useAviso } from '@/components/AvisoPasajero';
 import { Avatar } from '@/features/mensajes/piezas';
 import Adjunto from '@/features/mensajes/Adjunto';
 import Redactor from '@/features/mensajes/Redactor';
@@ -32,7 +33,7 @@ const esVeredicto = (m) => m.tipo === 'correccion' && m.texto === 'Técnica corr
 /** El archivo de una corrección es una nota de voz o un video: se dibuja con el mismo `Adjunto` de los mensajes sueltos, según su tipo de archivo. */
 const comoAdjunto = (m) => ({ ...m, tipo: String(m.adjunto?.mime ?? '').startsWith('audio') ? 'voz' : 'video' });
 
-function Burbuja({ m, mio, ultimoMio, elegido, url, tecnica, alElegir, alEliminar, alFallar, alSaltar, acciones }) {
+function Burbuja({ m, mio, ultimoMio, elegido, url, tecnica, alElegir, alEliminar, alReportar, alFallar, alSaltar, acciones }) {
   const borrado = !!m.eliminado_en;
   const esTecnica = m.tipo === 'tecnica' && !borrado;
   const correccion = m.tipo === 'correccion' && !borrado;
@@ -42,12 +43,12 @@ function Burbuja({ m, mio, ultimoMio, elegido, url, tecnica, alElegir, alElimina
   return (
     <div style={{ alignSelf: mio ? 'flex-end' : 'flex-start', maxWidth: esTecnica ? undefined : 'min(82%, 520px)', width: esTecnica ? 'min(320px, 92%)' : undefined, display: 'flex', flexDirection: 'column', alignItems: mio ? 'flex-end' : 'flex-start' }}>
       <div
-        role={mio && !borrado ? 'button' : undefined} tabIndex={mio && !borrado ? 0 : undefined}
-        onClick={mio && !borrado ? (e) => { if (!e.target.closest('video, audio, button, img')) alElegir(m.id); } : undefined}
-        onKeyDown={mio && !borrado ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); alElegir(m.id); } } : undefined}
-        aria-label={mio && !borrado ? 'Tu mensaje: toca para ver opciones' : undefined}
+        role={!borrado ? 'button' : undefined} tabIndex={!borrado ? 0 : undefined}
+        onClick={!borrado ? (e) => { if (!e.target.closest('video, audio, button, img')) alElegir(m.id); } : undefined}
+        onKeyDown={!borrado ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); alElegir(m.id); } } : undefined}
+        aria-label={!borrado ? (mio ? 'Tu mensaje: toca para ver opciones' : 'Mensaje: toca para reportarlo') : undefined}
         style={{
-          display: 'block', textAlign: 'left', fontFamily: FONT, fontSize: 15.5, lineHeight: 1.4, padding: esTecnica ? 0 : (archivo ? '4px 4px 6px' : '9px 13px 7px'), cursor: mio && !borrado ? 'pointer' : 'default', touchAction: 'manipulation',
+          display: 'block', textAlign: 'left', fontFamily: FONT, fontSize: 15.5, lineHeight: 1.4, padding: esTecnica ? 0 : (archivo ? '4px 4px 6px' : '9px 13px 7px'), cursor: !borrado ? 'pointer' : 'default', touchAction: 'manipulation',
           border: 'none', borderRadius: 18, borderBottomRightRadius: mio ? 6 : 18, borderBottomLeftRadius: mio ? 18 : 6,
           background: borrado ? UI.relleno : (mio && !esTecnica ? T.accent : KP.surface), color: borrado ? T.text3 : (esTecnica ? T.text : color),
           boxShadow: !borrado && (!mio || esTecnica) ? KP.shCard : 'none', maxWidth: '100%', width: esTecnica ? '100%' : undefined, boxSizing: 'border-box', outline: 'none',
@@ -93,10 +94,10 @@ function Burbuja({ m, mio, ultimoMio, elegido, url, tecnica, alElegir, alElimina
       </div>
       {elegido && (
         <button
-          type="button" onClick={() => alEliminar(m)} className="kp-press"
+          type="button" onClick={() => (mio ? alEliminar(m) : alReportar(m))} className="kp-press"
           style={{ marginTop: 6, minHeight: 36, padding: '0 14px', borderRadius: 12, border: 'none', background: KP.dangerSoft, color: KP.danger, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, touchAction: 'manipulation' }}
         >
-          Eliminar
+          {mio ? 'Eliminar' : 'Reportar este mensaje'}
         </button>
       )}
       {mio && ultimoMio && !borrado && (
@@ -124,6 +125,8 @@ export default function Conversacion({ fila, uid, etiqueta = null, onVolver = nu
   const [tic, setTic] = useState(0); // sube cuando YO hice un cambio (corregir, otro intento): vuelve a leer sin esperar la conexión en vivo
   const [corrigiendo, setCorrigiendo] = useState(null); // la técnica que el profesional está corrigiendo
   const [otroIntento, setOtroIntento] = useState(null); // la técnica de la que el atleta manda otro intento
+  const { avisa } = useAviso();
+  const [bloqueada, setBloqueada] = useState(false); // ¿yo tengo bloqueada a la otra persona?
   const zona = useRef(null);
   const renovadas = useRef(new Set());
   const cantidad = useRef(POR_PAGINA);
@@ -153,6 +156,13 @@ export default function Conversacion({ fila, uid, etiqueta = null, onVolver = nu
     })();
     return () => { vivo = false; };
   }, [a, p, uid, version, tic, recarga]);
+
+  // ¿Tengo bloqueada a la otra persona? Se vuelve a leer al abrir y cuando yo cambio algo.
+  useEffect(() => {
+    let vivo = true;
+    yoBloqueo(a, p).then((v) => { if (vivo) setBloqueada(v); }).catch(() => {});
+    return () => { vivo = false; };
+  }, [a, p, tic]);
 
   // Baja al último mensaje cuando llega uno (si se estaba viendo lo más nuevo, o si lo mandé yo); al traer los anteriores se queda donde estaba.
   useLayoutEffect(() => {
@@ -223,7 +233,7 @@ export default function Conversacion({ fila, uid, etiqueta = null, onVolver = nu
     try {
       agrega(await mandaTexto({ atletaId: a, profesionalId: p, autorId: uid, texto }));
     } catch (e) {
-      setError(e?.message ?? 'No se pudo mandar el mensaje');
+      setError(/BLOQUEADO/.test(String(e?.message)) ? 'Esta conversación está bloqueada.' : (e?.message ?? 'No se pudo mandar el mensaje'));
       throw e;
     } finally {
       setOcupado(false);
@@ -295,6 +305,40 @@ export default function Conversacion({ fila, uid, etiqueta = null, onVolver = nu
     }
   }
 
+  // Reportar un mensaje del otro lado (Apple lo exige para contenido de usuarios) y, si quiere, bloquear a esa persona.
+  async function reporta(m) {
+    const va = await pregunta({ titulo: '¿Reportar este mensaje?', detalle: 'Lo revisa el administrador de Training Lab. La otra persona no se entera.', confirmar: 'Reportar', peligro: true });
+    if (!va) return;
+    setElegido(null);
+    try {
+      await reportaMensaje(m.id);
+      avisa('Gracias. Lo vamos a revisar.');
+    } catch (e) {
+      setError(e?.message ?? 'No se pudo mandar el reporte');
+      return;
+    }
+    if (!bloqueada) {
+      const tambien = await pregunta({ titulo: `¿Bloquear a ${fila.otro_nombre}?`, detalle: 'Ya no podrán mandarse mensajes. Puedes desbloquear cuando quieras.', confirmar: 'Sí, bloquear', peligro: true });
+      if (tambien) await cambiaBloqueo(true);
+    }
+  }
+
+  async function cambiaBloqueo(bloquear) {
+    try {
+      await bloqueaConversacion(a, p, bloquear);
+      setBloqueada(bloquear);
+      avisa(bloquear ? 'Bloqueaste esta conversación.' : 'Desbloqueaste esta conversación.');
+    } catch (e) {
+      setError(e?.message ?? 'No se pudo cambiar el bloqueo');
+    }
+  }
+
+  async function pideBloquear() {
+    if (bloqueada) { await cambiaBloqueo(false); return; }
+    const va = await pregunta({ titulo: `¿Bloquear a ${fila.otro_nombre}?`, detalle: 'Ya no podrán mandarse mensajes. Puedes desbloquear cuando quieras.', confirmar: 'Sí, bloquear', peligro: true });
+    if (va) await cambiaBloqueo(true);
+  }
+
   // Lo que se puede hacer con una tarjeta de técnica: el profesional la marca o la corrige; el atleta manda otro intento. Con la conversación cerrada, nada.
   const soyAtleta = uid === a;
   const acciones = {
@@ -317,7 +361,7 @@ export default function Conversacion({ fila, uid, etiqueta = null, onVolver = nu
       <Burbuja
         key={m.id} m={m} mio={m.autor_id === uid} ultimoMio={m.id === ultimoMioId} elegido={elegido === m.id} url={m.adjunto?.ruta ? urls.get(m.adjunto.ruta) ?? null : null} alFallar={alFallar}
         tecnica={m.tecnica_id ? tecnicas.get(m.tecnica_id) ?? null : null} alSaltar={saltaAlSegundo} acciones={acciones}
-        alElegir={(id) => setElegido((prev) => (prev === id ? null : id))} alEliminar={elimina}
+        alElegir={(id) => setElegido((prev) => (prev === id ? null : id))} alEliminar={elimina} alReportar={reporta}
       />,
     );
   });
@@ -344,6 +388,12 @@ export default function Conversacion({ fila, uid, etiqueta = null, onVolver = nu
           <div style={{ fontSize: 16, fontWeight: 800, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fila.otro_nombre}</div>
           {etiqueta && <div style={{ fontSize: 12.5, fontWeight: 700, color: T.accent }}>{etiqueta}</div>}
         </div>
+        <button
+          type="button" onClick={pideBloquear} className="kp-press" aria-label={bloqueada ? 'Desbloquear esta conversación' : 'Bloquear esta conversación'}
+          style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 38, padding: '0 12px', borderRadius: 12, border: 'none', background: UI.relleno, color: bloqueada ? T.accent : T.text2, cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, flexShrink: 0, touchAction: 'manipulation' }}
+        >
+          <Ban size={15} /> {bloqueada ? 'Desbloquear' : 'Bloquear'}
+        </button>
       </div>
 
       <div
@@ -371,7 +421,11 @@ export default function Conversacion({ fila, uid, etiqueta = null, onVolver = nu
 
       {error && <div role="alert" style={{ margin: '0 14px 8px', padding: '9px 12px', borderRadius: 12, background: KP.dangerSoft, color: KP.danger, fontSize: 13.5, fontWeight: 700 }}>{error}</div>}
 
-      {fila.activa ? (
+      {fila.activa && bloqueada ? (
+        <div style={{ flexShrink: 0, padding: '14px 16px calc(14px + env(safe-area-inset-bottom))', background: KP.surface, borderTop: `1px solid ${KP.line}`, textAlign: 'center', fontSize: 14, fontWeight: 700, color: T.text2 }}>
+          Bloqueaste esta conversación. Toca «Desbloquear» arriba para volver a escribir.
+        </div>
+      ) : fila.activa ? (
         <Redactor alTexto={envia} alArchivo={enviaArchivo} alVoz={enviaVoz} alError={setError} ocupado={ocupado} subiendo={subiendo} />
       ) : (
         <div style={{ flexShrink: 0, padding: '14px 16px calc(14px + env(safe-area-inset-bottom))', background: KP.surface, borderTop: `1px solid ${KP.line}`, textAlign: 'center', fontSize: 14, fontWeight: 700, color: T.text2 }}>

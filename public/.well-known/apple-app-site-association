@@ -1,0 +1,17 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["UQ99Q69ULQ.com.traininglabapp.app"],
+        "components": [
+          { "/": "/mcp*", "exclude": true },
+          { "/": "/.well-known/*", "exclude": true },
+          { "/": "/*" }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["UQ99Q69ULQ.com.traininglabapp.app"]
+  }
+}

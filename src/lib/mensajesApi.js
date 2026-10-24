@@ -58,6 +58,35 @@ export async function eliminaMensaje(id) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Reportar y bloquear (requisito de Apple para contenido de usuarios). Bloquear y desbloquear son eventos nuevos: nunca se borra ni se actualiza nada. */
+
+/** Reporta un mensaje al administrador de Training Lab. Guarda una copia del texto por si luego se borra. */
+export async function reportaMensaje(mensajeId, motivo = null) {
+  const { error } = await supabase.rpc('reportar_mensaje', { p_mensaje: mensajeId, p_motivo: motivo });
+  if (error) throw error;
+}
+
+/** ¿Yo tengo bloqueada a la otra persona en esta conversación? */
+export async function yoBloqueo(atletaId, profesionalId) {
+  const { data, error } = await supabase.rpc('yo_bloqueo', { p_atleta: atletaId, p_profesional: profesionalId });
+  if (error) throw error;
+  return !!data;
+}
+
+/** Bloquea (`true`) o desbloquea (`false`). Con un bloqueo vigente, nadie manda mensajes nuevos en esa conversación. */
+export async function bloqueaConversacion(atletaId, profesionalId, bloquear) {
+  const { error } = await supabase.from('mensajes_bloqueos').insert({ atleta_id: atletaId, profesional_id: profesionalId, bloqueado: !!bloquear });
+  if (error) throw error;
+}
+
+/** Los reportes (solo los ve el dueño; cada quien ve los suyos). Los más nuevos primero. */
+export async function leeReportes(limite = 100) {
+  const { data, error } = await supabase.from('mensajes_reportes').select('*').order('creado_en', { ascending: false }).limit(limite);
+  if (error) throw error;
+  return data ?? [];
+}
+
+/* ------------------------------------------------------------------ */
 /* Archivos: foto, video y nota de voz                                 */
 /* ------------------------------------------------------------------ */
 

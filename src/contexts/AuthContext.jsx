@@ -195,6 +195,25 @@ export function AuthProvider({ children }) {
     return { error: null };
   }, []);
 
+  /* «Continuar con Apple» (24 oct 2026): SOLO dentro de la app de iPhone, con el sistema de Apple (Face ID, «Ocultar mi correo»). Apple da una identidad (idToken) y
+     Supabase la cambia por una sesión. Necesita que el proveedor Apple esté encendido en Supabase (Authentication → Providers → Apple, con el Bundle ID
+     `com.traininglabapp.app` en «Client IDs»). Si la cuenta no existe se crea, igual que con Google: `handle_new_user` le arma el perfil y la bienvenida pregunta lo demás. */
+  const entrarConApple = useCallback(async () => {
+    try {
+      const { SocialLogin } = await import('@capgo/capacitor-social-login');
+      await SocialLogin.initialize({ apple: { clientId: 'com.traininglabapp.app' } });
+      const { result } = await SocialLogin.login({ provider: 'apple', options: { scopes: ['email', 'name'] } });
+      if (!result?.idToken) return { error: { message: 'Apple no mandó la identidad. Inténtalo otra vez.' } };
+      const { error } = await supabase.auth.signInWithIdToken({ provider: 'apple', token: result.idToken });
+      if (error) return { error: { message: 'No se pudo entrar con Apple. Revisa que el proveedor esté encendido.' } };
+      return { error: null };
+    } catch (e) {
+      // Cerrar la hoja de Apple sin elegir no es un error.
+      if (/cancel/i.test(String(e?.message ?? e))) return { error: null, cancelado: true };
+      return { error: { message: 'No se pudo abrir la entrada con Apple.' } };
+    }
+  }, []);
+
   // Cierra SOLO esta sesión. Sin `scope`, Supabase cierra TODAS las del usuario
   // ("global"), y eso incluye los permisos que dio a su IA (ChatGPT, Claude,
   // Codex, Hermes): el 26 sep 2026 Andrés cerró sesión en la compu y a su
@@ -264,6 +283,8 @@ export function AuthProvider({ children }) {
       signUp,
       signOut,
       entrarConGoogle,
+      entrarConApple,
+      appleDisponible: !!window.Capacitor?.isNativePlatform?.(),
       googleDisponible: import.meta.env.VITE_GOOGLE_LOGIN === '1',
       updateProfile,
       refreshProfile,
@@ -273,7 +294,7 @@ export function AuthProvider({ children }) {
       ponerContrasenaNueva,
       cancelarRecuperacion,
     }),
-    [session, profile, loading, perfilFalla, reintentaPerfil, signIn, signUp, signOut, entrarConGoogle, updateProfile, refreshProfile, recuperando, pedirRecuperacion, ponerContrasenaNueva, cancelarRecuperacion],
+    [session, profile, loading, perfilFalla, reintentaPerfil, signIn, signUp, signOut, entrarConGoogle, entrarConApple, updateProfile, refreshProfile, recuperando, pedirRecuperacion, ponerContrasenaNueva, cancelarRecuperacion],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
