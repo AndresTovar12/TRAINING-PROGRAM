@@ -24,7 +24,8 @@ const pagina = (args.find((a) => a.startsWith('--pagina=')) ?? '--pagina=/').sli
 const sinVentana = args.includes('--sin-ventana'); // solo para pruebas automáticas
 const duracionDePrueba = Number((args.find((a) => a.startsWith('--prueba=')) ?? '').slice(9)) || 0;
 
-const servidor = spawn('npx', ['vite', '--port', String(PUERTO), '--strictPort'], { stdio: ['ignore', 'pipe', 'pipe'], cwd: process.cwd() });
+// Vite directo con node (no con `npx`): así `servidor.kill()` sí lo cierra y no deja el puerto ocupado.
+const servidor = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--port', String(PUERTO), '--strictPort'], { stdio: ['ignore', 'pipe', 'pipe'], cwd: process.cwd() });
 const listo = new Promise((resolve, reject) => {
   const alVer = (d) => { if (String(d).includes('Local:')) resolve(); };
   servidor.stdout.on('data', alVer);
