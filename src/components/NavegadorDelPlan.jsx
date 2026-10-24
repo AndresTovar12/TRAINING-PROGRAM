@@ -53,6 +53,12 @@ export function TituloDelRenglon({ dias, color, peso = 700, minimo, extras }) {
   );
 }
 
+/** El renglón de un día: un botón si se puede tocar para algo; si no, un renglón a secas (sin cursor de mano ni semántica de botón). */
+function FilaDelDia({ interactiva, style, children, ...resto }) {
+  if (!interactiva) return <div style={style}>{children}</div>;
+  return <button type="button" style={{ ...style, cursor: 'pointer', border: 'none' }} {...resto}>{children}</button>;
+}
+
 /**
  * LA forma de ver un plan en esta app. Solo hay una.
  *
@@ -386,8 +392,9 @@ export default function NavegadorDelPlan({
                   const soloDeOtros = descanso && !!extras?.length;
                   return (
                     <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <button
-                        type="button"
+                      {/* Sin nada que abrir (la página pública de un plan: los días llegan sin ejercicios) el renglón NO es botón: se veía como uno y tocarlo no hacía nada (auditoría p60). */}
+                      <FilaDelDia
+                        interactiva={!!contenidoDia || !!alTocarDia}
                         aria-expanded={contenidoDia ? abiertoAqui : undefined}
                         onClick={() => {
                           if (contenidoDia) setDiaAbierto(abiertoAqui ? null : clave);
@@ -395,7 +402,7 @@ export default function NavegadorDelPlan({
                         }}
                         style={{
                           display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
-                          padding: '10px 11px', borderRadius: 11, cursor: 'pointer', fontFamily: FONT,
+                          padding: '10px 11px', borderRadius: 11, fontFamily: FONT,
                           background: suyo ? LT.blueSoft : (mirando ? LT.surface2 : LT.bg),
                           border: 'none',
                         }}
@@ -409,7 +416,7 @@ export default function NavegadorDelPlan({
                         {suyo && pastilla(textoAqui, true)}
                         {mirando && pastilla('Viendo', false)}
                         {lista && <Check size={14} strokeWidth={3} style={{ color: LT.mint, flexShrink: 0 }} />}
-                      </button>
+                      </FilaDelDia>
                       {abiertoAqui && (
                         <div style={{ padding: '2px 4px 6px 42px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                           {hermanas.map((h) => <div key={h.idx}>{contenidoDia(f, semana, h.idx)}</div>)}

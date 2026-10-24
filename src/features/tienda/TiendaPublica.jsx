@@ -163,6 +163,12 @@ function CuantoTiempoTienes({ fases, alSugerir }) {
   const total = totalDeSemanas(fases);
   const disponibles = modo === 'meses' ? semanasDeMeses(meses) : modo === 'fecha' ? semanasHastaFecha(fecha) : 0;
   const sugerida = semanaSugerida(total, disponibles);
+  // La hoja de abajo numera las semanas por fase («3»), no de corrido: decir «la semana 24 de 35» y marcar «3» confundía (auditoría p61). Se dice con las dos cuentas.
+  const entrada = entradaDeCorrido(fases, sugerida);
+  const fase = (fases ?? []).find((f) => f.id === entrada?.faseId);
+  const dondeEntrar = fase && (fases?.length ?? 0) > 1
+    ? `la semana ${entrada.semana} de «${fase.name || 'esa fase'}» (la ${sugerida} de ${total} contando todo el plan)`
+    : `la semana ${sugerida} de ${total}`;
   const cambia = (nuevo, m = meses, f = fecha) => {
     setModo(nuevo);
     const d = nuevo === 'meses' ? semanasDeMeses(m) : nuevo === 'fecha' ? semanasHastaFecha(f) : 0;
@@ -197,11 +203,16 @@ function CuantoTiempoTienes({ fases, alSugerir }) {
           />
         </label>
       )}
+      {modo === 'fecha' && fecha && disponibles <= 0 && (
+        <div role="alert" style={{ fontSize: 14, fontWeight: 600, color: LT.warning, lineHeight: 1.45 }}>
+          Esa fecha ya pasó o es dentro de menos de una semana. Escoge la fecha de tu competencia.
+        </div>
+      )}
       {modo !== 'todo' && disponibles > 0 && (
         <div style={{ fontSize: 14, fontWeight: 600, color: LT.text2, lineHeight: 1.45 }}>
           {sugerida === 1
             ? `Te alcanza para todo el plan (${semanasTexto(total)}). Empiezas en la semana 1.`
-            : `Para terminar a tiempo te conviene entrar en la semana ${sugerida} de ${total}. Ya te la marcamos; puedes escoger otra.`}
+            : `Para terminar a tiempo te conviene entrar en ${dondeEntrar}. Ya te la marcamos; puedes escoger otra.`}
         </div>
       )}
     </div>
@@ -448,6 +459,8 @@ export default function TiendaPublica({ ruta }) {
     return () => window.removeEventListener('popstate', alRetroceder);
   }, []);
 
+  // Una dirección que empieza con @ pero no cuadra (una barra de más, un tramo de más): antes caía en la pantalla de entrar sin explicar nada (auditoría p117).
+  if (ruta.tipo === 'invalida') return <Aviso titulo="No encontramos esa liga" texto="Parece que le falta o le sobra algo. Pídele a quien te la mandó que te la comparta otra vez." boton="Ir a Training Lab" alTocar={() => window.location.assign('/')} />;
   if (ruta.tipo === 'lista') return <CompraLista />;
   if (ruta.tipo === 'cancelada') return <Cancelada />;
   return slug ? <PaginaDelPlan usuario={ruta.usuario} slug={slug} alVolver={vuelve} /> : <PaginaDelCoach usuario={ruta.usuario} alElegir={abrePlan} />;

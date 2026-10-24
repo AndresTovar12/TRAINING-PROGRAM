@@ -1,6 +1,6 @@
 import { FONT, KP, NUM_STYLE, UI } from '@/lib/theme';
 import { textoDeContenido, ETIQUETA_DE_CONTENIDO } from '@/lib/vitrinaDatos';
-import { Avatar, Boton } from '@/components/ui';
+import { Avatar } from '@/components/ui';
 
 /* LA TARJETA DE UN PLAN A LA VENTA (reestructura visual, 15 oct 2026), como las de «Explorar» y la página del coach en las capturas de Andrés: la foto arriba con qué es
    («Programa», «Rutina», «Clase»…), quién lo vende, el nombre, de qué se trata y abajo el precio con «Ver plan». La usan Explorar y la página pública del coach.
@@ -35,7 +35,8 @@ export default function TarjetaDePlan({ p, href, onClick, conCoach = true }) {
           <span style={{ fontSize: 22, fontWeight: 800, ...NUM_STYLE }}>
             {pesos(p.precio)}<span style={{ fontSize: 13.5, fontWeight: 600, color: KP.ink2 }}>{p.tipo === 'membresia' ? ' / mes' : ''}</span>
           </span>
-          <Boton chico tabIndex={-1} estilo={{ pointerEvents: 'none' }}>Ver plan</Boton>
+          {/* Con la misma cara que el botón, pero NO un botón: la tarjeta entera ya es la liga o el botón, y uno dentro de otro es HTML inválido (auditoría p116). */}
+          <span aria-hidden="true" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minHeight: 40, padding: '0 14px', borderRadius: 12, background: KP.blue, color: '#fff', fontSize: 14.5, fontWeight: 700, boxShadow: '0 8px 20px rgba(30,64,224,0.22)', whiteSpace: 'nowrap' }}>Ver plan</span>
         </span>
       </div>
     </Caja>

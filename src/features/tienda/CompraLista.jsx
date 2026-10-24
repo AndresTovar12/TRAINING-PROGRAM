@@ -124,6 +124,7 @@ export default function CompraLista() {
             {!user && datos.correo && (
               <div style={{ fontSize: 14.5, fontWeight: 600, color: LT.text2, lineHeight: 1.45, textAlign: 'center', fontFamily: FONT }}>
                 Entra con <b style={{ color: LT.text }}>{datos.correo}</b> y tu contraseña para ver tu plan.
+                {' '}¿Todavía no pusiste una? En «Entrar» toca «¿Olvidaste tu contraseña?» y te mandamos un enlace a ese correo para crearla.
               </div>
             )}
             <InstalarApp correo={datos.correo} />
