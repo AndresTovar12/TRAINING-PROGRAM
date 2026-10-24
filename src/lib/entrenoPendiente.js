@@ -9,6 +9,11 @@ export function pideAbrirEntreno(sesionId) {
   pendiente = sesionId ? { sesionId, hasta: Date.now() + VIGENCIA_MS } : null;
 }
 
+/** ¿Hay un aviso vigente para esta sesión? (sin consumirlo): una tarjeta cerrada lo usa para abrirse y dejar que su botón lo recoja. */
+export function hayEntrenoPendiente(sesionId) {
+  return !!pendiente && pendiente.sesionId === sesionId && Date.now() <= pendiente.hasta;
+}
+
 /** ¿Home pidió abrir el entreno de ESTA sesión? Si sí, lo consume (solo una vez). */
 export function recogeEntrenoPendiente(sesionId) {
   if (!pendiente || pendiente.sesionId !== sesionId || Date.now() > pendiente.hasta) return false;
