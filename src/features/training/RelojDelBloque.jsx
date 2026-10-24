@@ -6,7 +6,7 @@ import { expande, etiquetaDeTramo, limpiaResultado, relojTexto, textoDeTiempo, v
 import {
   nuevoReloj, inicia, pausa, avanza, listo, listoConTiempo, termina, sumaRonda, vista, sugerido as sugeridoDe,
 } from '@/lib/relojDeFormato';
-import { METROS_PARA_GPS } from '@/lib/recorrido';
+import { METROS_PARA_GPS, pedidoEnUnaLinea } from '@/lib/recorrido';
 import PasoConGps from '@/features/training/PasoConGps';
 import { leeRelojGuardado, guardaReloj, borraReloj } from '@/lib/relojGuardado';
 import { preparaAudio, pitido } from '@/lib/pitidos';
@@ -105,7 +105,7 @@ function BotonChico({ children, onClick, peligro = false }) {
  */
 const SEG_DEL_FIN = 1.6; // lo que se ve el «Terminaste» antes de cerrar solo
 
-export default function RelojDelBloque({ formato, plan: planDado = null, ejercicios, serie, clave, resumen, empezarYa = false, conCuenta = false, conGps = false, sinGps = null, alElegirSinGps = null, onGuardar, onCerrar, videoDe = null, miniaturaDe = null }) {
+export default function RelojDelBloque({ formato, plan: planDado = null, ejercicios, serie, clave, resumen, empezarYa = false, conCuenta = false, conGps = false, sinGps = null, alElegirSinGps = null, colorDelTipo = null, fondo = null, onGuardar, onCerrar, videoDe = null, miniaturaDe = null }) {
   const pregunta = useConfirmacion();
   const nEj = ejercicios.length;
   // El ejercicio cuyo video se abrió tocándolo en la lista (`null` = ninguno).
@@ -242,6 +242,8 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
   const enCurso = v.fase === 'corriendo' || v.fase === 'pausa';
   const abierto = !!tramo && tramo.seg === null;
   const color = tramo?.tipo === 'descanso' ? LT.warning : LT.blue;
+  // «Siguiente: …» de la pantalla con mapa: el descanso que sigue o el lapso que viene, con lo que pide.
+  const siguienteDelLapso = !proximo ? null : (proximo.tipo === 'descanso' ? `Descanso ${textoDeTiempo(proximo.seg)}` : [proximo.etiqueta && proximo.etiqueta !== tramo?.etiqueta ? proximo.etiqueta : null, pedidoEnUnaLinea(proximo.texto || '', proximo.carga ?? '')].filter(Boolean).join(' · '));
   // ¿Este lapso va con mapa? Corriendo, de trabajo, por distancia de 200 m o más, con GPS, sin que haya elegido «Sin GPS» ni cerrado el mapa.
   const gpsDelLapso = conGps && v.fase === 'corriendo' && !preparando && tramo?.tipo === 'trabajo' && tramo.seg === null && tramo.metros >= METROS_PARA_GPS
     && !sinGps?.[tramo.etiqueta] && !gpsCerrado.has(est.i);
@@ -435,16 +437,24 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
         </div>
       )}
 
-      {/* El lapso por distancia con mapa, encima del reloj (que sigue debajo contando: es el que guarda el tiempo y pasa al descanso). */}
+      {/* El lapso por distancia con mapa, encima del reloj (que sigue debajo contando: es el que guarda el tiempo y pasa al descanso). Misma pantalla del sprint. */}
       {gpsDelLapso && (
-        <PasoConGps
-          key={`${clave}:${est.i}`}
-          paso={{ clave: `${clave}:${est.i}`, nombre: tramo.etiqueta, serieTexto: textoDeAvance(id, formato, v, nEj, rondas) || null }}
-          meta={tramo.metros} carga={formatIntensity(tramo.carga)} sinCuenta segResultado={0}
-          onTermina={({ seg }) => hechoConTiempo(seg)}
-          onSinGps={() => { alElegirSinGps?.(tramo.etiqueta); setGpsCerrado((c) => new Set(c).add(est.i)); }}
-          onCerrar={() => setGpsCerrado((c) => new Set(c).add(est.i))}
-        />
+        <div style={{ position: 'fixed', inset: 0, zIndex: 3050, background: fondo ?? LT.bg, display: 'flex', flexDirection: 'column', fontFamily: FONT }}>
+          <PasoConGps
+            key={`${clave}:${est.i}`}
+            paso={{ clave: `${clave}:${est.i}`, nombre: tramo.etiqueta, serieTexto: textoDeAvance(id, formato, v, nEj, rondas) || tramo.etiqueta, vuelta: tramo.lapso + 1, vueltas: tramo.de }}
+            meta={tramo.metros} carga={tramo.carga ?? ''} sinCuenta segResultado={0} color={colorDelTipo ?? undefined} siguiente={siguienteDelLapso}
+            cabecera={(
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: 'calc(10px + env(safe-area-inset-top)) 18px 6px', maxWidth: 520, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+                <span style={{ fontSize: 15, fontWeight: 800, color: LT.text }}>Serie {serie}</span>
+                <span role="timer" style={{ fontSize: 16, fontWeight: 800, color: LT.text, ...NUM_STYLE }}>{relojTexto(v.totalSeg + v.transcurridoSeg)}</span>
+              </div>
+            )}
+            onTermina={({ seg }) => hechoConTiempo(seg)}
+            onSinGps={() => { alElegirSinGps?.(tramo.etiqueta); setGpsCerrado((c) => new Set(c).add(est.i)); }}
+            onCerrar={() => setGpsCerrado((c) => new Set(c).add(est.i))}
+          />
+        </div>
       )}
 
       {v.fase === 'fin' && !sabeTodo && (
