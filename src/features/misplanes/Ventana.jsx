@@ -46,12 +46,15 @@ export default function Ventana({ titulo, subtitulo, onCerrar, ancho = 480, pie,
             <div style={{ fontSize: 17, fontWeight: 800, color: T.text, letterSpacing: -0.2, overflowWrap: 'anywhere' }}>{titulo}</div>
             {subtitulo && <div style={{ fontSize: 13, color: T.text2, fontWeight: 600, marginTop: 2, lineHeight: 1.4 }}>{subtitulo}</div>}
           </div>
-          <button
-            type="button" onClick={onCerrar} aria-label="Cerrar"
-            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.text2, padding: 4, flexShrink: 0 }}
-          >
-            <X size={20} />
-          </button>
+          {/* Sin `onCerrar` (mientras trabaja, p. ej. «Asignando…») no hay X: una que se ve normal y no responde parece rota (auditoría p46). */}
+          {onCerrar && (
+            <button
+              type="button" onClick={onCerrar} aria-label="Cerrar"
+              style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: T.text2, padding: 4, flexShrink: 0 }}
+            >
+              <X size={20} />
+            </button>
+          )}
         </div>
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 18px 16px' }}>{children}</div>
         {pie && (

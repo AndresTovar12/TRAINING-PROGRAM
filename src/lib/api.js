@@ -594,6 +594,14 @@ export async function listAthletesOverview(opciones = {}) {
   const estados = await estadoResumido((profilesRes.data ?? []).filter((p) => p.role !== 'admin').map((p) => p.id)).catch(() => []);
   const estadoDe = new Map(estados.map((e) => [e.user_id, e]));
 
+  // Los que COMPRARON un programa (y la compra sigue viva) no son «Sin plan»: su programa es el comprado, que no cuelga del plan del coach (auditoría p55). Va aparte y sin
+  // tumbar la carga: si no se puede leer, la lista sale igual.
+  const compradores = new Set();
+  try {
+    const { data: compras } = await supabase.from('compras').select('atleta_id, estado').in('estado', ['activa', 'gracia', 'por_armar']);
+    (compras ?? []).forEach((c) => { if (c.atleta_id) compradores.add(c.atleta_id); });
+  } catch { /* sin eso, «Sin plan» como antes */ }
+
   const filas = (profilesRes.data ?? []).map((p) => {
     const plan = planDeFila(p);
     const phases = plan?.data?.phases ?? [];
@@ -618,6 +626,7 @@ export async function listAthletesOverview(opciones = {}) {
       vaEn: hayPlan && punteroDeEsteAtleta ? dondeVaEnTexto(plan.data, puntero) : null,
       enPausa: hayPlan && punteroDeEsteAtleta && !!puntero?.pausa,
       lastSeen: seenByUser.get(p.id) ?? null,
+      conCompra: compradores.has(p.id),
     };
   });
   if (!opciones.conEstado) return filas;
@@ -1044,8 +1053,10 @@ export async function updatePlan(planId, { title, phases, kind, estructura, foto
 }
 
 export async function deletePlan(planId) {
-  const { error } = await supabase.from('plans').delete().eq('id', planId);
+  // `.select()` para saber si de verdad se borró: cuando la base no deja (un fisio frente al plan del coach) no da error, solo no borra nada (auditoría p45).
+  const { data, error } = await supabase.from('plans').delete().eq('id', planId).select('id');
   if (error) throw error;
+  if (!data?.length) throw new Error('No se pudo eliminar este plan: es de otra persona o ya no existe.');
 }
 
 /* ---------------------------- Sesiones pegadas ---------------------------- */

@@ -6,6 +6,7 @@ import { useConfirmacion } from '@/components/Confirmacion';
 import BotonEntendido from '@/components/BotonEntendido';
 import { useAvisosVistos } from '@/lib/useAvisosVistos';
 import { usePalabras } from '@/contexts/PalabrasContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { T, FONT, KP } from '@/lib/theme';
 
 /**
@@ -46,7 +47,10 @@ function hace(fecha, ahora) {
 export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abierta, onToggle, profesionalId = null }) {
   const pregunta = useConfirmacion();
   const { t } = usePalabras();
-  const { listo: avisosListos, visto: avisoVisto, marcar: aceptarAviso } = useAvisosVistos();
+  const { listo: avisosListos, visto: avisoVistoDe, marcar: aceptarAviso } = useAvisosVistos();
+  const { user } = useAuth();
+  // Un cambio que hizo la propia persona que mira no necesita su «Entendido» (auditoría p57: el fisio tenía que aceptar una por una las 13 versiones que él mismo hizo).
+  const avisoVisto = (clave, v = null) => avisoVistoDe(clave) || (!!v && !!user?.id && v.cambiada_por === user.id);
   const [versiones, setVersiones] = useState([]);
   const [nombres, setNombres] = useState({});
   const [trabajando, setTrabajando] = useState(false);
@@ -132,12 +136,12 @@ export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abiert
   const planBorrado = !plan && ultima?.motivo === 'borrado';
   // Cada cambio es un aviso distinto: aceptar este no esconde el que venga después.
   const claveDelAviso = ultima ? claveDe(ultima) : null;
-  const hayAviso = (avisoIA || planBorrado) && avisosListos && !avisoVisto(claveDelAviso);
+  const hayAviso = (avisoIA || planBorrado) && avisosListos && !avisoVisto(claveDelAviso, ultima);
 
   if (!versiones.length) return null;
 
   // Hasta saber qué se aceptó no se enseña ninguna fila: una ya aceptada aparecería un instante y se iría.
-  const sinAceptar = avisosListos ? versiones.filter((v) => !avisoVisto(claveDe(v))) : [];
+  const sinAceptar = avisosListos ? versiones.filter((v) => !avisoVisto(claveDe(v), v)) : [];
   const yaAceptadas = avisosListos ? versiones.length - sinAceptar.length : 0;
   const filas = verTodos ? versiones : sinAceptar;
 
@@ -177,7 +181,7 @@ export default function CambiosDelPlan({ atleta, plan, onCambio, Seccion, abiert
             </div>
           )}
           {filas.map((v) => {
-            const aceptada = avisoVisto(claveDe(v));
+            const aceptada = avisoVisto(claveDe(v), v);
             return (
               <div
                 key={v.id}
