@@ -1,25 +1,42 @@
 import { useEffect } from 'react';
+import { Capacitor } from '@capacitor/core';
+
+/**
+ * Pide que la pantalla no se apague y devuelve cómo soltarla. Dentro de la app de iPhone usa el plugin nativo (la Wake Lock del navegador no existe en
+ * todas las versiones del WebView); en la web, la Wake Lock API, que el navegador suelta sola al pasar la pestaña a segundo plano.
+ * `sigue()` regresa `false` si no se pudo pedir.
+ */
+export async function pideQueNoSeApague() {
+  try {
+    if (Capacitor.isNativePlatform()) {
+      const { KeepAwake } = await import('@capacitor-community/keep-awake');
+      await KeepAwake.keepAwake();
+      return { suelta: () => { KeepAwake.allowSleep().catch(() => {}); }, nativo: true };
+    }
+    if (typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
+      const candado = await navigator.wakeLock.request('screen');
+      return { suelta: () => { candado.release().catch(() => {}); }, nativo: false };
+    }
+  } catch {
+    // Puede negarse (poca batería, pestaña oculta): no es un error de la app.
+  }
+  return null;
+}
 
 /**
  * Que la pantalla no se apague mientras `activa` sea verdad (el reloj corriendo).
  *
- * Un reloj de entrenamiento que se oscurece a los 30 segundos obliga a tocar la pantalla con las
- * manos llenas de magnesio. Usa la Wake Lock API, que el navegador suelta solo cuando la pestaña
- * pasa a segundo plano; por eso se pide de nuevo al volver. Donde no existe (navegadores viejos),
- * no hace nada y el reloj sigue siendo exacto: se calcula con la hora, no con la pantalla.
+ * Un reloj de entrenamiento que se oscurece a los 30 segundos obliga a tocar la pantalla con las manos llenas de magnesio. En la web el navegador suelta el
+ * candado al ocultar la pestaña, por eso se pide de nuevo al volver. Donde no existe, no hace nada y el reloj sigue siendo exacto: se calcula con la hora.
  */
 export function usePantallaEncendida(activa) {
   useEffect(() => {
-    if (!activa || !('wakeLock' in navigator)) return undefined;
+    if (!activa) return undefined;
     let candado = null;
     let vigente = true;
     const pide = async () => {
-      try {
-        const nuevo = await navigator.wakeLock.request('screen');
-        if (vigente) candado = nuevo; else nuevo.release();
-      } catch {
-        // El navegador lo puede negar (poca batería, pestaña oculta): no es un error de la app.
-      }
+      const nuevo = await pideQueNoSeApague();
+      if (vigente) { candado?.suelta(); candado = nuevo; } else nuevo?.suelta();
     };
     pide();
     const alVolver = () => { if (document.visibilityState === 'visible') pide(); };
@@ -27,7 +44,7 @@ export function usePantallaEncendida(activa) {
     return () => {
       vigente = false;
       document.removeEventListener('visibilitychange', alVolver);
-      candado?.release().catch(() => {});
+      candado?.suelta();
     };
   }, [activa]);
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { agregaPunto, fuenteDeUbicacion } from '@/lib/ubicacion';
+import { pideQueNoSeApague } from '@/lib/pantallaEncendida';
 import {
   cronometroNuevo, cronometroVigente, pausa as pausar, reanuda as reanudar, segundosDe,
 } from '@/lib/entrenoLibre';
@@ -70,7 +71,8 @@ export function useCronometroLibre(userId) {
     if (!fuente.disponible()) return undefined;
     // La pantalla encendida: sin ella el navegador deja de dar puntos. Si el navegador no sabe, sigue igual.
     let candado = null;
-    navigator.wakeLock?.request?.('screen').then((c) => { candado = c; }, () => {});
+    let vigente = true;
+    pideQueNoSeApague().then((c) => { if (vigente) candado = c; else c?.suelta(); });
     const parar = fuente.sigue((p) => {
       setMuestras((m) => {
         const nuevas = agregaPunto(m, p, segundosDe(vivo.current));
@@ -78,7 +80,7 @@ export function useCronometroLibre(userId) {
         return nuevas;
       });
     }, () => {});
-    return () => { parar(); candado?.release?.().catch(() => {}); };
+    return () => { vigente = false; parar(); candado?.suelta(); };
   }, [conGps, userId]);
   const cambiaRuta = useCallback((r) => { setMuestras(r); if (userId) escribeRuta(userId, r); }, [userId]);
 
