@@ -83,16 +83,20 @@ async function leeTienda(tienda) {
 }
 
 async function conVistaPrevia(peticion, env, tienda) {
-  const pagina = await env.ASSETS.fetch(new Request(`${new URL(peticion.url).origin}/index.html`, peticion));
+  // Se pide `/` y no `/index.html`: pedir `/index.html` hace que Cloudflare conteste con una REDIRECCIÓN a `/` (y las ligas compartidas caían en el inicio).
+  // Si por lo que sea no llega una página buena, se sirve lo de siempre (la página de la liga tal cual, como antes de este programa).
+  const delSitio = () => env.ASSETS.fetch(peticion);
   try {
+    const pagina = await env.ASSETS.fetch(new Request(`${new URL(peticion.url).origin}/`, { method: 'GET', headers: peticion.headers }));
+    if (!pagina.ok || pagina.redirected) return delSitio();
     const v = vistaPreviaDe(await leeTienda(tienda), tienda);
-    if (!v || !pagina.ok) return pagina;
+    if (!v) return pagina;
     return new HTMLRewriter()
       .on('title', { element(e) { e.setInnerContent(v.titulo); } })
       .on('head', { element(e) { e.append(etiquetasDe(v), { html: true }); } })
       .transform(pagina);
   } catch {
-    return env.ASSETS.fetch(new Request(`${new URL(peticion.url).origin}/index.html`, peticion)); // sin base o sin red: la página de siempre
+    return delSitio(); // sin base o sin red: la página de siempre
   }
 }
 
