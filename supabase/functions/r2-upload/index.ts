@@ -36,7 +36,7 @@ const ORIGENES_PROPIOS = ['https://app.traininglabapp.com', Deno.env.get('SITIO_
   .filter(Boolean)
 
 const DEFAULT_ORIGINS = [
-  'http://localhost:5173',
+  'http://localhost:5173', 'capacitor://localhost', /* app de iPhone (Capacitor) */
   'http://localhost:4173',
   'http://127.0.0.1:5173',
 ]

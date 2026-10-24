@@ -13,7 +13,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { llamaStripe } from './stripe.js'
 
-const ORIGENES = ['http://localhost:5173', 'http://localhost:4173', 'http://127.0.0.1:5173', 'https://app.traininglabapp.com']
+const ORIGENES = ['http://localhost:5173', 'capacitor://localhost' /* app de iPhone (Capacitor) */, 'http://localhost:4173', 'http://127.0.0.1:5173', 'https://app.traininglabapp.com']
 const SITIO = (Deno.env.get('SITIO_URL') ?? 'https://app.traininglabapp.com').replace(/\/$/, '')
 const permitido = (origen: string | null) => {
   if (!origen) return SITIO

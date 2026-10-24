@@ -15,7 +15,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { hoyDelServidor, recortaPrograma } from './ventana.js'
 
-const ORIGENES = ['http://localhost:5173', 'http://localhost:4173', 'http://127.0.0.1:5173', 'https://app.traininglabapp.com'] // + dominio propio (15 oct 2026)
+const ORIGENES = ['http://localhost:5173', 'capacitor://localhost' /* app de iPhone (Capacitor) */, 'http://localhost:4173', 'http://127.0.0.1:5173', 'https://app.traininglabapp.com'] // + dominio propio (15 oct 2026)
 
 function cabeceras(origen: string | null): Record<string, string> {
   let permitido = ORIGENES[0]

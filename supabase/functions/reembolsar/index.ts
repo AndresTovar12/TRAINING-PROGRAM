@@ -9,7 +9,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { llamaStripe } from './stripe.js'
 
 const DIAS_DE_GARANTIA = 7
-const ORIGENES = ['http://localhost:5173', 'http://localhost:4173', 'http://127.0.0.1:5173']
+const ORIGENES = ['http://localhost:5173', 'capacitor://localhost' /* app de iPhone (Capacitor) */, 'http://localhost:4173', 'http://127.0.0.1:5173']
 const SITIO = (Deno.env.get('SITIO_URL') ?? 'https://training-program-kappa.vercel.app').replace(/\/$/, '')
 const permitido = (origen: string | null) => {
   if (!origen) return SITIO

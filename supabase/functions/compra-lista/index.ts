@@ -15,7 +15,7 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
-const ORIGENES = ['http://localhost:5173', 'http://localhost:4173', 'http://127.0.0.1:5173']
+const ORIGENES = ['http://localhost:5173', 'capacitor://localhost' /* app de iPhone (Capacitor) */, 'http://localhost:4173', 'http://127.0.0.1:5173']
 const SITIO = (Deno.env.get('SITIO_URL') ?? 'https://training-program-kappa.vercel.app').replace(/\/$/, '')
 const SESION_RE = /^cs_(test|live)_[A-Za-z0-9]{8,200}$/
 const VENTANA_MS = 48 * 3600 * 1000
