@@ -1,3 +1,4 @@
+import { entregaArchivo } from '@/lib/entregaArchivo';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, Download, ImagePlus, Share2 } from 'lucide-react';
 import { LT, KP, FONT } from '@/lib/theme';
@@ -29,16 +30,7 @@ const puedeCompartir = () => {
 };
 const puedeCopiar = () => !!(navigator.clipboard && typeof navigator.clipboard.write === 'function' && typeof window.ClipboardItem === 'function');
 
-function descarga(archivo) {
-  const url = URL.createObjectURL(archivo);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = archivo.name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
-}
+const descarga = (archivo) => entregaArchivo(archivo, archivo.name);
 
 async function leeLaFoto(archivo) {
   const lista = await aImagenWeb(archivo);
@@ -156,7 +148,7 @@ export default function EditorDelSello({ sellos, Icono }) {
     }
   }
   const compartir = () => haz('compartir la imagen', async () => { await navigator.share({ files: [await obtenArchivo()] }); return null; });
-  const guardar = () => haz('guardar la imagen', async () => { descarga(await obtenArchivo()); return 'Imagen guardada.'; });
+  const guardar = () => haz('guardar la imagen', async () => { await descarga(await obtenArchivo()); return 'Imagen lista.'; });
   const copiar = () => haz('copiar la imagen', async () => {
     await navigator.clipboard.write([new window.ClipboardItem({ 'image/png': obtenArchivo() })]);
     return 'Copiada. Pégala en tu historia.';

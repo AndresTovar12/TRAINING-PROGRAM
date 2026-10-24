@@ -1,3 +1,4 @@
+import { entregaArchivo } from '@/lib/entregaArchivo';
 import { tokenDeAhora } from '@/lib/api';
 
 /* LO QUE UNA PERSONA PUEDE HACER CON SU CUENTA (15 oct 2026): ver qué se llevaría borrarla, descargar sus datos y eliminarla. Ver `supabase/functions/mi-cuenta`. */
@@ -23,14 +24,5 @@ export const misDatos = () => llama({ accion: 'exportar' });
 /** Borra la cuenta DEFINITIVAMENTE. `confirmacion` debe ser «ELIMINAR»; `contrasena` si la cuenta tiene una. */
 export const eliminaMiCuenta = ({ confirmacion, contrasena }) => llama({ accion: 'eliminar', confirmacion, contrasena });
 
-/** Baja un objeto como archivo `.json` (sin pasar por ningún servidor). */
-export function descargaComoArchivo(objeto, nombre) {
-  const url = URL.createObjectURL(new Blob([JSON.stringify(objeto, null, 2)], { type: 'application/json' }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = nombre;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
+/** Entrega un objeto como archivo `.json` (sin pasar por ningún servidor): se baja en la web y se comparte en la app del iPhone. */
+export const descargaComoArchivo = (objeto, nombre) => entregaArchivo(new Blob([JSON.stringify(objeto, null, 2)], { type: 'application/json' }), nombre);
