@@ -71,6 +71,14 @@ jobs:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} 2>&1 | tee -a "$RUNNER_TEMP/build.log"
 
+      - name: Poner los permisos en la app antes de firmarla
+        # Compilar sin firmar pierde los permisos (Salud, Apple, links): Xcode los toma de la firma que ya trae la app. Se le pone una firma provisional con
+        # los permisos y el paso siguiente la cambia por la de distribución, conservándolos.
+        run: |
+          APP="$RUNNER_TEMP/App.xcarchive/Products/Applications/App.app"
+          codesign --force --sign - --entitlements ios/App/App/App.entitlements "$APP" 2>&1 | tee -a "$RUNNER_TEMP/build.log"
+          codesign -d --entitlements :- "$APP" 2>&1 | head -30 | tee -a "$RUNNER_TEMP/build.log"
+
       - name: Firmar (crea el .ipa)
         run: |
           set -o pipefail
