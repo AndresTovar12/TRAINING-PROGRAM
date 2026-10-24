@@ -16,7 +16,7 @@ import { useSenalGps } from '@/features/libre/useEntrenoLibre';
      3. Al llegar a la meta termina SOLO y enseña el resultado; «Seguir» lo marca hecho y pasa al descanso. Si el GPS midió mal, «Cambiar el resultado».
      4. Sin señal 5 segundos: aviso en ámbar y que elija la persona (esperar, terminar con lo que lleva o anotarlo a mano). No se borra nada.
    `paso`: el del entreno (nombre, serie; `serieTexto` si quien lo usa tiene su propio «Lapso 2 de 3»). `meta`: los metros. `carga`: lo que pide además («100%»).
-   Lo que se manda al terminar: `onTermina({ metros, seg })`. Sin `onAnotar` no se ofrece «Cambiar el resultado» ni «Anotar a mano» (en un lapso no hay a dónde anotarlo).
+   Lo que se manda al terminar: `onTermina({ metros, seg, fin })` (`fin`: la hora en que llegó, no la de cuando se toca «Seguir»). Sin `onAnotar` no se ofrece «Cambiar el resultado» ni «Anotar a mano» (en un lapso no hay a dónde anotarlo).
 
    QUE LA APP GUÍE (23 oct 2026, Andrés: «pareciera que el humano está guiando el workout en lugar de que la app»). La regla: la app avanza sola cuando PUEDE saber que
    algo terminó (se llegó a la meta, se acabó el descanso); la persona solo toca cuando únicamente ella lo sabe. Por eso:
@@ -125,7 +125,7 @@ export default function PasoConGps({ paso, meta, carga = '', arrancaSolo = false
   }, [fase, desde]);
 
   // Llegó a la meta: termina solo.
-  const termina = (metros) => { setFinal({ metros: Math.round(metros), seg: Math.max(1, Math.round((Date.now() - desde) / 1000)) }); setFase('llego'); };
+  const termina = (metros) => { const fin = Date.now(); setFinal({ metros: Math.round(metros), seg: Math.max(1, Math.round((fin - desde) / 1000)), fin }); setFase('llego'); };
   useEffect(() => {
     if (fase === 'corriendo' && avance.llego) termina(vivo.distanciaM);
   });

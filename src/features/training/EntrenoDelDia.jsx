@@ -290,6 +290,7 @@ export default function EntrenoDelDia({
   const terminarSesion = () => {
     const t = Date.now();
     const ruta = recorrido.ruta();
+    recorrido.limpia();
     escribe((prev) => ({
       ...prev,
       ...(ruta ? { ruta } : null),
@@ -475,9 +476,9 @@ export default function EntrenoDelDia({
       {conGps && (
         <PasoConGps
           key={paso.clave} paso={paso} meta={metrosDelPaso(paso)} carga={paso.meta?.texto ?? ''}
-          onTermina={({ metros, seg }) => {
+          onTermina={({ metros, seg, fin }) => {
             // Si el sprint fue lo primero del entreno, el entreno empezó cuando arrancó el sprint (no al marcarlo): si no, el tiempo total no lo contaría.
-            escribe((prev) => ({ ...prev, entreno: iniciaEntreno(prev?.entreno, Date.now() - seg * 1000, plan) }));
+            escribe((prev) => ({ ...prev, entreno: iniciaEntreno(prev?.entreno, fin - seg * 1000, plan) }));
             listo({ reps: cantidadEnUnidad(metros, paso.termina.unidad), seg });
           }}
           arrancaSolo={llegando}

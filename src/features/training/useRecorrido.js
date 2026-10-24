@@ -18,6 +18,7 @@ export function useRecorrido({ sesionId, rutaGuardada }) {
   const disponible = fuente.disponible();
   const [permiso, setPermiso] = useState(() => { const v = lee(LLAVE_DEL_PERMISO); return v === 'si' || v === 'no' ? v : null; });
   const muestras = useRef(null);
+  const terminado = useRef(false);
   if (muestras.current === null) {
     let previas;
     try { previas = JSON.parse(lee(llaveDeSesion(sesionId)) ?? '[]'); } catch { previas = []; }
@@ -30,7 +31,7 @@ export function useRecorrido({ sesionId, rutaGuardada }) {
     const base = Date.now() - ((muestras.current.at(-1)?.t ?? -2) + 2) * 1000;
     return fuente.sigue((p) => {
       const nuevas = agregaPunto(muestras.current, p, (Date.now() - base) / 1000);
-      if (nuevas === muestras.current) return;
+      if (terminado.current || nuevas === muestras.current) return;
       muestras.current = nuevas;
       escribe(llaveDeSesion(sesionId), JSON.stringify(nuevas));
     }, () => {});
@@ -38,5 +39,8 @@ export function useRecorrido({ sesionId, rutaGuardada }) {
 
   const decide = useCallback((v) => { escribe(LLAVE_DEL_PERMISO, v); setPermiso(v); }, []);
   const ruta = useCallback(() => rutaParaGuardar(muestras.current), []);
-  return { permiso, disponible, decide, ruta };
+  // Al TERMINAR la sesión la línea ya vive en ella (`registro.ruta`): se borra la copia de este teléfono. Si no, al «Deshacer» y volver a hacer la sesión
+  // (misma llave) la línea de la vez anterior reaparecía y se mezclaba con la nueva.
+  const limpia = useCallback(() => { terminado.current = true; muestras.current = []; escribe(llaveDeSesion(sesionId), null); }, [sesionId]);
+  return { permiso, disponible, decide, ruta, limpia };
 }
