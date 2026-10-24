@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, Upload, Watch } from 'lucide-react';
+import { Loader2, RefreshCw, Upload, Watch } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { guardaImportacion } from '@/lib/metricasApi';
+import { conectaSalud, leeSalud, marcaSincronizada, olvidaSalud, saludDisponible, ultimaSincronizacion } from '@/lib/saludDelTelefono';
 import { PROVEEDORES, conectaDispositivo, desconectaDispositivo, leeMisDispositivos } from '@/lib/dispositivos';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useAviso } from '@/components/AvisoPasajero';
@@ -15,7 +18,10 @@ const LETRA = { apple_salud: null, garmin: ['G', '#1E40E0', '#E8EEFF'], whoop: [
 export default function MisDispositivos({ onIrAMetricas }) {
   const pregunta = useConfirmacion();
   const { avisa } = useAviso();
+  const { user } = useAuth();
   const [conectados, setConectados] = useState(undefined);
+  const [aviso, setAviso] = useState(''); // lo que va leyendo Apple Salud mientras trabaja
+  const [salud, setSalud] = useState(() => ultimaSincronizacion()); // cuándo se leyó Apple Salud por última vez (solo en este teléfono)
   const [busy, setBusy] = useState('');
 
   const lee = useCallback(async () => {
@@ -23,7 +29,27 @@ export default function MisDispositivos({ onIrAMetricas }) {
   }, []);
   useEffect(() => { lee(); }, [lee]);
 
+  /* Apple Salud (24 oct 2026): se pide el permiso, se leen los últimos 30 días y se guardan con el mismo camino que un archivo importado. Corre en el teléfono: no hay servidor de por medio. */
+  async function sincronizaSalud(primera = false) {
+    setBusy('apple_salud');
+    try {
+      if (primera) await conectaSalud();
+      const resultado = await leeSalud({ dias: primera ? 60 : 14, alAvance: setAviso });
+      setAviso('Guardando…');
+      const r = await guardaImportacion({ atletaId: user.id, subidoPor: user.id, resultado, desfaseMin: -new Date().getTimezoneOffset() });
+      marcaSincronizada();
+      setSalud(ultimaSincronizacion());
+      avisa(r.nuevos ? `Apple Salud: ${r.nuevos} entrenos nuevos` : 'Apple Salud al día');
+    } catch (e) {
+      avisa(e?.message || 'No se pudo leer Apple Salud');
+    } finally {
+      setAviso('');
+      setBusy('');
+    }
+  }
+
   async function conecta(p) {
+    if (p.id === 'apple_salud' && saludDisponible()) { await sincronizaSalud(true); return; }
     setBusy(p.id);
     try {
       const { url } = (await conectaDispositivo(p.id)) ?? {};
@@ -36,6 +62,11 @@ export default function MisDispositivos({ onIrAMetricas }) {
   }
 
   async function desconecta(p) {
+    if (p.id === 'apple_salud') {
+      const va = await pregunta({ titulo: '¿Dejar de leer Apple Salud?', detalle: 'Lo que ya guardamos se queda. Para quitar el permiso por completo: Ajustes del iPhone → Salud → Acceso a datos y dispositivos → Training Lab.', confirmar: 'Sí, dejar de leer', peligro: true });
+      if (!va) return;
+      olvidaSalud(); setSalud(null); avisa('Apple Salud desconectado'); return;
+    }
     const va = await pregunta({ titulo: `¿Desconectar ${p.nombre}?`, detalle: 'Deja de traer tus datos. Lo que ya guardamos se queda; puedes volver a conectarlo cuando quieras.', confirmar: 'Sí, desconectar', peligro: true });
     if (!va) return;
     setBusy(p.id);
@@ -43,7 +74,7 @@ export default function MisDispositivos({ onIrAMetricas }) {
   }
 
   if (conectados === undefined) return <div style={{ display: 'grid', placeItems: 'center', padding: 30 }}><Loader2 size={22} className="spin" color={KP.ink2} /></div>;
-  const estaConectado = (id) => conectados.find((c) => c.proveedor === id);
+  const estaConectado = (id) => (id === 'apple_salud' && salud ? { proveedor: id, estado: 'ok', ultima_sincronizacion: new Date(salud).toISOString() } : conectados.find((c) => c.proveedor === id));
 
   return (
     <>
@@ -68,6 +99,14 @@ export default function MisDispositivos({ onIrAMetricas }) {
           );
         })}
       </Grupo>
+      {salud && saludDisponible() && (
+        <Grupo>
+          <Fila
+            izquierda={<IconoDeFila><RefreshCw size={18} /></IconoDeFila>} texto={busy === 'apple_salud' && aviso ? aviso : 'Sincronizar Apple Salud ahora'}
+            detalle="Trae lo último de tu reloj" onClick={busy === 'apple_salud' ? undefined : () => sincronizaSalud(false)}
+          />
+        </Grupo>
+      )}
       {onIrAMetricas && (
         <Grupo titulo="Mientras tanto">
           <Fila izquierda={<IconoDeFila><Upload size={18} /></IconoDeFila>} texto="Importar un archivo de entreno" detalle="El que te baja tu reloj o tu app" onClick={onIrAMetricas} />

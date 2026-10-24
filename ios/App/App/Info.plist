@@ -38,6 +38,10 @@
 	<array>
 		<string>location</string>
 	</array>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Training Lab lee tus entrenos, tu pulso, tu variabilidad cardiaca y tu sueño de Apple Salud para mostrarte tu recuperación y compartirlo con tu coach cuando tú lo decidas.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Training Lab guarda en Apple Salud los entrenos que haces con la app.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

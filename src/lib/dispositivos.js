@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
    Para encender uno: poner `disponible: true` aquí y escribir su función de conexión (ver `lib/wearables.js`, el contrato común de cada proveedor). */
 
 export const PROVEEDORES = [
-  { id: 'apple_salud', nombre: 'Apple Salud y Apple Watch', detalle: 'Pulso, sueño y los entrenos de tu reloj.', donde: 'telefono', disponible: false },
+  { id: 'apple_salud', nombre: 'Apple Salud y Apple Watch', detalle: 'Pulso, sueño y los entrenos de tu reloj.', donde: 'telefono', disponible: typeof window !== 'undefined' && !!window.Capacitor?.isNativePlatform?.() },
   { id: 'garmin', nombre: 'Garmin', detalle: 'Tus actividades y tu recuperación de Garmin Connect.', donde: 'aqui', disponible: false },
   { id: 'whoop', nombre: 'Whoop', detalle: 'Tu recuperación, esfuerzo y sueño.', donde: 'aqui', disponible: false },
   { id: 'strava', nombre: 'Strava', detalle: 'Tus carreras, rodadas y nados.', donde: 'aqui', disponible: false },
