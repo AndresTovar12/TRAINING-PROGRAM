@@ -5,9 +5,11 @@ import { LT, FONT } from '@/lib/theme';
 import { usePlan } from '@/contexts/PlanContext';
 import TarjetaDeExplorar from '@/features/explorar/TarjetaDeExplorar';
 import { relojDeCronometro } from '@/lib/entrenoLibre';
-import { fuenteDeUbicacion, usaGps } from '@/lib/ubicacion';
 import { nombreDelDeporte } from '@/lib/metricas/deportes';
 import { deporteDelCartel, resumenDeLaSemana, textoDeLaSemana } from '@/lib/semanaLibre';
+import { actividadDeDeporte, actividadDeEntreno, propiasDe } from '@/lib/actividades';
+import { useStorage } from '@/contexts/AppStateContext';
+import ElegirActividad from './ElegirActividad';
 import HeroDeEntrenar from './HeroDeEntrenar';
 import HojaDeDemos from './HojaDeDemos';
 import OpcionesDeEntrenar from './OpcionesDeEntrenar';
@@ -25,6 +27,9 @@ import { Cuadro, CuadroBlanco, PlayChico } from '@/features/training/home/Cuadro
      · `variante="cuadros"` (Home con plan, reestructura visual del 15 oct 2026): solo dos cuadros, «Entrenar libre» y «Activity card», para ir en la cuadrícula de Home junto a Salud
        y la fase. «Tus entrenos» queda en la pestaña Entrenar.
      · `enLinea` (pestaña Entrenar): las opciones puestas directo, y «Tus entrenos».
+     · `variante="punto"` (23 oct 2026, Activity Tracker): lo que abre el punto ● del centro de la barra: directo «listo para empezar» con la última actividad
+       (mapa e «Iniciar», estilo Aura); el botón de la izquierda cambia de actividad (`ElegirActividad`: lista por grupos, buscador y «Crear la mía»). No dibuja nada más;
+       al cerrarse llama a `alCerrar`. «Empezar» de la tarjeta azul de Home hace lo mismo.
    El cronómetro vive en `localStorage` y sigue aunque se cierre la hoja: el cartel pasa a «Entreno en curso». «Demo workout» sale solo si hay demos; al elegir uno se abre como el workout de hoy
    (`abreDemo`) y `alIrAHome` (si se da) lleva a Home. Ver `lib/entrenoLibre.js` y `lib/semanaLibre.js`. */
 
@@ -41,33 +46,49 @@ function ultimaSalida(filas, deporte) {
 const yaSeLeOfrecio = () => { try { return sessionStorage.getItem('tl:explorar-ofrecido') === '1'; } catch { return false; } };
 const marcaOfrecido = () => { try { sessionStorage.setItem('tl:explorar-ofrecido', '1'); } catch { /* sin almacenamiento: puede salir otra vez */ } };
 
-export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = false, variante = 'completa', alIrAHome = null, conEmpujon = false, alIrAExplorar = null, cuadros = null, chicos = null }) {
+export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = false, variante = 'completa', alIrAHome = null, conEmpujon = false, alIrAExplorar = null, cuadros = null, chicos = null, alCerrar = null }) {
   const crono = useCronometroLibre(userId);
   const { filas, recarga } = useEntrenosRecientes(userId, 40);
   const { abreDemo } = usePlan();
   const demos = useDemos(userId);
-  const [hoja, setHoja] = useState(null); // null | 'elegir' | 'demos' | 'cronometro' | 'empujon' | { resumen: fila, tarjeta?: boolean }
+  const [propiasGuardadas, setPropias] = useStorage('actividades:propias', []);
+  const propias = useMemo(() => propiasDe(propiasGuardadas), [propiasGuardadas]);
+  const enPunto = variante === 'punto';
+  // El punto ● abre directo «listo para empezar» (o el entreno que va, si hay uno corriendo).
+  const [hoja, setHoja] = useState(() => (enPunto ? 'cronometro' : null)); // null | 'elegir' | 'demos' | 'cronometro' | 'empujon' | { resumen: fila, tarjeta?: boolean }
   const alDemo = demos?.length ? () => setHoja('demos') : null;
   const enCurso = !!crono.cronometro;
   const semana = useMemo(() => resumenDeLaSemana(filas ?? []), [filas]);
   const ultimo = filas?.[0] ?? null;
   const deporte = enCurso ? crono.cronometro.deporte : deporteDelCartel(filas);
-  // Correr, caminar y bici pasan antes por «Antes de salir» (la señal del GPS); los demás arrancan ya. Ver `PantallaDelCronometro`.
-  const [pendiente, setPendiente] = useState(null);
-  const elige = (d) => {
-    if (usaGps(d) && fuenteDeUbicacion().disponible()) { setPendiente(d); setHoja('cronometro'); return; }
-    crono.inicia(d); setHoja('cronometro');
-  };
-  const abreElCartel = () => setHoja(enCurso ? 'cronometro' : 'elegir');
+  /* LA ACTIVIDAD que va a hacer (`lib/actividades.js`): antes de arrancar todas pasan por «listo para empezar» (`PantallaDeCarrera`): con mapa, el mapa y la señal del GPS;
+     sin mapa, la hora en grande. `pendiente` es esa actividad mientras no arranca. De entrada, la última que hizo (o Correr). */
+  const ultimaActividad = () => actividadDeEntreno(filas?.[0], propias) ?? actividadDeDeporte('correr');
+  const [pendiente, setPendiente] = useState(() => (enPunto && !enCurso ? actividadDeDeporte('correr') : null));
+  const [eligioAMano, setEligioAMano] = useState(false);
+  // Al cargar sus entrenos, el punto arranca con su última actividad (si no la cambió ya él).
+  const ultimaId = filas ? actividadDeEntreno(filas[0], propias)?.id : null;
+  const [ultimaVista, setUltimaVista] = useState(null);
+  if (enPunto && !enCurso && !eligioAMano && ultimaId && ultimaId !== ultimaVista && pendiente) {
+    setUltimaVista(ultimaId);
+    setPendiente(ultimaActividad());
+  }
+  const elige = (act) => { setEligioAMano(true); setPendiente(act); setHoja('cronometro'); };
+  const eligeDeporte = (d) => elige(actividadDeDeporte(d));
+  // Cerrar del todo. En el punto, avisa para que la barra lo quite.
+  const cierra = () => { setPendiente(null); setHoja(null); if (enPunto) alCerrar?.(); };
+  const abreElCartel = () => { if (!enCurso) setPendiente(ultimaActividad()); setHoja('cronometro'); };
   const abreLaTarjeta = () => setHoja(ultimo ? { resumen: ultimo, tarjeta: true } : 'elegir');
   const conExplorar = conEmpujon && !!alIrAExplorar;
 
   const hojas = (
     <>
       {hoja === 'elegir' && (
-        <HojaFlotante titulo="Entrenar" onCerrar={() => setHoja(null)}>
-          <OpcionesDeEntrenar alElegir={elige} alDemo={alDemo} />
-        </HojaFlotante>
+        <ElegirActividad
+          filas={filas ?? []} propias={propias} alElegir={elige}
+          alCrear={(act) => { setPropias((prev) => [act, ...propiasDe(prev)].slice(0, 30)); elige(act); }}
+          alCerrar={() => (pendiente ? setHoja('cronometro') : cierra())}
+        />
       )}
       {hoja === 'demos' && demos?.length > 0 && (
         <HojaDeDemos demos={demos} alCerrar={() => setHoja(null)} alElegir={(d) => { abreDemo(d); setHoja(null); alIrAHome?.(); }} />
@@ -75,38 +96,41 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
       {/* Con GPS (correr, caminar, bici, senderismo): la carrera a pantalla completa. Sin GPS: el cronómetro de siempre. */}
       {hoja === 'cronometro' && ((pendiente && !enCurso) || (enCurso && crono.cronometro.gps)) && (
         <PantallaDeCarrera
-          userId={userId} crono={crono} pendiente={enCurso ? null : pendiente} ultimo={ultimaSalida(filas, pendiente ?? crono.cronometro?.deporte)}
-          alEmpezar={({ gps }) => { crono.inicia(pendiente, { gps }); setPendiente(null); }}
-          alMinimizar={() => { setPendiente(null); setHoja(null); }}
-          alCambiarDeporte={() => { setPendiente(null); setHoja('elegir'); }}
+          userId={userId} crono={crono} pendiente={enCurso ? null : pendiente?.deporte ?? null} actividad={enCurso ? null : pendiente}
+          ultimo={ultimaSalida(filas, pendiente?.deporte ?? crono.cronometro?.deporte)}
+          alEmpezar={({ gps }) => { crono.inicia(pendiente.deporte, { gps, actividad: pendiente }); setPendiente(null); }}
+          alMinimizar={cierra}
+          alCambiarDeporte={() => setHoja('elegir')}
           alGuardado={(fila) => { recarga(); setHoja({ resumen: fila }); }}
         />
       )}
       {hoja === 'cronometro' && enCurso && !crono.cronometro.gps && (
         <PantallaDelCronometro
-          userId={userId} crono={crono} pendiente={enCurso ? null : pendiente}
-          alEmpezar={({ gps }) => { crono.inicia(pendiente, { gps }); setPendiente(null); }}
-          alMinimizar={() => { setPendiente(null); setHoja(null); }}
+          userId={userId} crono={crono} pendiente={null}
+          alEmpezar={() => {}}
+          alMinimizar={cierra}
           alGuardado={(fila) => { recarga(); setHoja({ resumen: fila }); }}
         />
       )}
       {hoja?.resumen && (
         <ResumenLibre
-          fila={hoja.resumen} unidadPeso={unidadPeso} alCerrar={() => setHoja(null)} empiezaEnTarjeta={!!hoja.tarjeta}
+          fila={hoja.resumen} unidadPeso={unidadPeso} alCerrar={cierra} empiezaEnTarjeta={!!hoja.tarjeta}
           // Al cerrar la activity card, una sola vez por visita y solo a quien no tiene plan ni entrenador: «¿Quieres un plan hecho por un coach?».
           alCerrarTarjeta={conEmpujon && alIrAExplorar && !yaSeLeOfrecio() ? () => { marcaOfrecido(); setHoja({ ...hoja, empujon: true }); } : undefined}
         />
       )}
       {hoja?.resumen && hoja.empujon && (
-        <HojaFlotante titulo="Explorar" onCerrar={() => setHoja(null)}>
+        <HojaFlotante titulo="Explorar" onCerrar={cierra}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <TarjetaDeExplorar alTocar={() => { setHoja(null); alIrAExplorar(); }} />
-            <button type="button" onClick={() => setHoja(null)} className="kp-press" style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 800, color: LT.text2, padding: '10px 0' }}>Ahora no</button>
+            <TarjetaDeExplorar alTocar={() => { cierra(); alIrAExplorar(); }} />
+            <button type="button" onClick={cierra} className="kp-press" style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 800, color: LT.text2, padding: '10px 0' }}>Ahora no</button>
           </div>
         </HojaFlotante>
       )}
     </>
   );
+
+  if (enPunto) return hojas;
 
   if (variante === 'cuadros') {
     return (
@@ -134,7 +158,7 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
         {enLinea ? (
           enCurso
             ? <HeroDeEntrenar deporte={deporte} semana={semana} ultimo={ultimo} enCurso segundos={crono.segundos} alAbrir={abreElCartel} />
-            : <OpcionesDeEntrenar alElegir={elige} alDemo={alDemo} />
+            : <OpcionesDeEntrenar alElegir={eligeDeporte} alDemo={alDemo} alTodas={() => setHoja('elegir')} />
         ) : (
           <>
             <HeroDeEntrenar deporte={deporte} semana={semana} ultimo={ultimo} enCurso={enCurso} segundos={crono.segundos} alAbrir={abreElCartel} />

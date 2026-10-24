@@ -12,10 +12,10 @@ const nuevoId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Mat
  * Guarda un entreno libre y devuelve su fila. La carga se estima por deporte y duración («≈»): sin pulso no hay otra forma. Si el mismo entreno ya estaba (mismo inicio y duración:
  * un doble toque en «Guardar»), devuelve el que ya existía en vez de fallar.
  */
-export async function guardaEntrenoLibre({ atletaId, deporte, inicioMs, duracionS, distanciaM = null, muestras = null }) {
+export async function guardaEntrenoLibre({ atletaId, deporte, inicioMs, duracionS, distanciaM = null, muestras = null, titulo = null, llevaDistancia = null }) {
   // Con ruta del GPS (ver `lib/ubicacion.js`), las muestras pasan por el mismo motor que lee los relojes: distancia, ritmo, kilómetros y la ruta para el mapa.
   const conRuta = Array.isArray(muestras) && muestras.length >= 2;
-  const base = entrenoLibre({ deporte, inicioMs, duracionS, distanciaM });
+  const base = entrenoLibre({ deporte, inicioMs, duracionS, distanciaM, titulo, llevaDistancia });
   const prep = conRuta ? preparaEntreno({ ...base, muestras }) : base;
   const { umbrales, genero } = await umbralesDe(atletaId);
   const { fila, series } = construyeActividad(prep, { umbrales, genero, desfaseMin: -new Date(inicioMs).getTimezoneOffset(), conSeries: conRuta, origen: 'manual' });

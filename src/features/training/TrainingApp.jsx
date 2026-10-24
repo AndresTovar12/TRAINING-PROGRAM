@@ -5,7 +5,7 @@ import {
   Clock, Sparkles, Info, Dumbbell, Heart, Play, CalendarDays, ListChecks,
   Home as HomeIcon,
   Repeat, Eye, Layers, List, Scale, LineChart as LineChartIcon,
-  MessageCircle, Timer, HeartPulse, Moon, Upload, Activity, Share2, Compass,
+  MessageCircle, Timer, HeartPulse, Moon, Upload, Activity, Share2, Compass, CircleDot,
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useIsDesktop, useIsWide } from '@/lib/useViewport';
@@ -2229,7 +2229,23 @@ const OneRMView = ({ oneRMs, ponRM, enHoja = false }) => {
  */
 /* En la computadora la navegación es la barra lateral azul (reestructura visual, 15 oct 2026, como «Home · Computadora» de las capturas de Andrés):
    aquí no se dibuja nada y `BarraLateralDelAtleta` usa los mismos botones. */
-const BottomNav = ({ active, onChange, conMensajes = true, conExplorar = true }) => {
+// EL PUNTO ● DEL CENTRO (23 oct 2026, Activity Tracker): registrar una actividad por su cuenta, tenga o no plan («Entrenar» es su plan; el punto, lo que hace aparte).
+// Es el punto azul de T•LAB: grande, al centro, un poco más arriba que los demás.
+function BotonDelPunto({ onClick, esCompu = false }) {
+  return (
+    <button
+      type="button" onClick={onClick} aria-label="Registrar una actividad" className="kp-press"
+      style={{ flex: esCompu ? undefined : 1, minWidth: 60, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: FONT, color: KP.blue, touchAction: 'manipulation', padding: 0 }}
+    >
+      <span aria-hidden="true" style={{ width: 54, height: 54, marginTop: -18, borderRadius: '50%', background: KP.blue, display: 'grid', placeItems: 'center', boxShadow: '0 0 0 4px #fff, 0 8px 20px rgba(30,64,224,0.35)' }}>
+        <span style={{ width: 16, height: 16, borderRadius: '50%', background: '#fff' }} />
+      </span>
+      <span style={{ fontSize: 11.5, fontWeight: 700 }}>Registrar</span>
+    </button>
+  );
+}
+
+const BottomNav = ({ active, onChange, conMensajes = true, conExplorar = true, conEntrenar = true, onRegistrar = null }) => {
   const esCompu = useIsDesktop();
   const { salud } = usePalabras();
   const { sinLeer } = useMensajes();
@@ -2239,9 +2255,11 @@ const BottomNav = ({ active, onChange, conMensajes = true, conExplorar = true })
   if (esCompu) return null;
   /* Y «Explorar» (12 oct 2026): los coaches con planes a la venta. «Mensajes» sale solo cuando hay con quién hablar (entrenador, equipo o un plan con chat): quien entra por su cuenta ve
      Home · Entrenar · Explorar. */
+  /* El punto ● va en medio (Activity Tracker, maqueta v4): sin plan, Home · ● · Explorar (el punto ya hace lo de «Entrenar»); con plan, Home · Entrenar · ● · Mensajes · Explorar. */
   const items = [
     { id: 'home', label: 'Home', icon: HomeIcon },
-    { id: 'plan', label: salud ? 'Sesión' : 'Entrenar', icon: Dumbbell },
+    ...(conEntrenar ? [{ id: 'plan', label: salud ? 'Sesión' : 'Entrenar', icon: Dumbbell }] : []),
+    ...(onRegistrar ? [{ id: 'punto' }] : []),
     ...(conMensajes ? [{ id: 'messages', label: 'Mensajes', icon: MessageCircle }] : []),
     ...(conExplorar ? [{ id: 'explore', label: 'Explorar', icon: Compass }] : []),
   ];
@@ -2263,6 +2281,7 @@ const BottomNav = ({ active, onChange, conMensajes = true, conExplorar = true })
       }),
     }}>
       {items.map(item => {
+        if (item.id === 'punto') return <BotonDelPunto key="punto" onClick={onRegistrar} />;
         const Icon = item.icon;
         const isActive = active === item.id;
         return (
@@ -2286,7 +2305,7 @@ const BottomNav = ({ active, onChange, conMensajes = true, conExplorar = true })
 };
 
 /** La barra lateral azul del atleta en la computadora: los mismos botones que la barra de abajo del teléfono. */
-const BarraLateralDelAtleta = ({ active, onChange, conMensajes = true, conExplorar = true }) => {
+const BarraLateralDelAtleta = ({ active, onChange, conMensajes = true, conExplorar = true, conEntrenar = true, onRegistrar = null }) => {
   const { salud } = usePalabras();
   // Mi perfil se abre dentro del marco y deja ver esta barra (ver ProfileScreen).
   useEffect(() => {
@@ -2298,7 +2317,8 @@ const BarraLateralDelAtleta = ({ active, onChange, conMensajes = true, conExplor
   const { profile } = useAuth();
   const secciones = [
     { id: 'home', texto: 'Home', Icono: HomeIcon },
-    { id: 'plan', texto: salud ? 'Sesión' : 'Entrenar', Icono: Dumbbell },
+    ...(conEntrenar ? [{ id: 'plan', texto: salud ? 'Sesión' : 'Entrenar', Icono: Dumbbell }] : []),
+    ...(onRegistrar ? [{ id: 'punto', texto: 'Registrar', Icono: CircleDot }] : []),
     ...(conMensajes ? [{ id: 'messages', texto: 'Mensajes', Icono: MessageCircle, aviso: sinLeer }] : []),
     ...(conExplorar ? [{ id: 'explore', texto: 'Explorar', Icono: Compass }] : []),
   ];
@@ -2306,7 +2326,7 @@ const BarraLateralDelAtleta = ({ active, onChange, conMensajes = true, conExplor
     <div style={{ position: 'sticky', top: 0, height: 'calc(100svh - var(--aviso-vista, 0px))', flexShrink: 0, display: 'flex' }}>
       <BarraLateral
         subtitulo="Training Lab" marca={profile?.full_name || profile?.username || 'Tu cuenta'}
-        secciones={secciones} activa={active} onCambio={onChange} ancho={236}
+        secciones={secciones} activa={active} onCambio={(id) => (id === 'punto' ? onRegistrar?.() : onChange(id))} ancho={236}
       />
     </div>
   );
@@ -2439,6 +2459,9 @@ export default function TrainingApp() {
   // «Mensajes» solo con quién hablar; «Explorar» no se enseña al coach que mira la app de un atleta.
   const conMensajes = miraAjeno || filasDeMensajes.length > 0 || !!miPerfil?.coach_id || (cargandoMensajes && tab === 'messages');
   const conExplorar = !miraAjeno;
+  // El punto ● (registrar algo por su cuenta) es de quien entró: no del coach que mira la app de un atleta.
+  const puedeRegistrar = !miraAjeno && !!user?.id;
+  const [registrando, setRegistrando] = useState(false);
   useEffect(() => {
     if ((tab === 'messages' && !conMensajes && !cargandoMensajes) || (tab === 'explore' && !conExplorar)) setTab('home');
   }, [tab, conMensajes, conExplorar, cargandoMensajes, setTab]);
@@ -2710,6 +2733,8 @@ export default function TrainingApp() {
     !planLoading && (tab !== 'plan' || (!!view.week && diaVisto != null)),
   );
 
+  // Sin plan no hay pestaña «Entrenar»: el punto ● ya hace eso (si se llega a ella por un lugar guardado, sigue mostrando lo de siempre).
+  const conEntrenar = hasPlan || hayEquipo || planLoading || miraAjeno || !puedeRegistrar;
   let content;
   if (planLoading && (tab === 'home' || tab === 'plan')) {
     content = <PlanLoadingState />;
@@ -2820,7 +2845,7 @@ export default function TrainingApp() {
       fontFamily: FONT, display: esCompu ? 'flex' : 'block',
       WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
     }}>
-      {esCompu && <BarraLateralDelAtleta active={tab} onChange={vasA} conMensajes={conMensajes} conExplorar={conExplorar} />}
+      {esCompu && <BarraLateralDelAtleta active={tab} onChange={vasA} conMensajes={conMensajes} conExplorar={conExplorar} conEntrenar={conEntrenar} onRegistrar={puedeRegistrar ? () => setRegistrando(true) : null} />}
       <div style={esCompu ? { flex: 1, minWidth: 0 } : undefined}>
       {/* En compu el contenido se centra y deja de estirarse hasta 1272px. Una
           tarjeta de ese ancho obliga a barrer la pantalla con los ojos de una
@@ -2829,7 +2854,9 @@ export default function TrainingApp() {
         {content}
       </div>
       </div>
-      <BottomNav active={tab} onChange={vasA} conMensajes={conMensajes} conExplorar={conExplorar} />
+      <BottomNav active={tab} onChange={vasA} conMensajes={conMensajes} conExplorar={conExplorar} conEntrenar={conEntrenar} onRegistrar={puedeRegistrar ? () => setRegistrando(true) : null} />
+      {/* El punto ●: «listo para empezar» con su última actividad (ver `EntrenoLibre`, variante «punto»). */}
+      {registrando && puedeRegistrar && <EntrenoLibre userId={user.id} unidadPeso={miPerfil?.unidad_peso || 'kg'} variante="punto" alCerrar={() => setRegistrando(false)} />}
       {/* Bienestar, 1RM y Ciencia ya no son pestañas: se abren como hoja encima, con su flecha para volver. */}
       {/* Mientras se hace un demo workout, un aviso para salir de la demo (12 oct 2026): sin él, la app se vería como la de alguien con un solo workout y no habría cómo volver. */}
       {demoActiva && (

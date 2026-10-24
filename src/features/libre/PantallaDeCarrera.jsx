@@ -1,12 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Loader2, Map as MapaIcono, Pause, Play, Repeat, Square, X } from 'lucide-react';
+import { ChevronDown, Loader2, Map as MapaIcono, Pause, Play, Square, Watch, X } from 'lucide-react';
 import { FONT, NUM_STYLE } from '@/lib/theme';
 import { MINIMO_DE_SEGUNDOS, relojDeCronometro } from '@/lib/entrenoLibre';
 import { guardaEntrenoLibre } from '@/lib/entrenoLibreApi';
 import { nombreDelDeporte } from '@/lib/metricas/deportes';
 import { enVivo, textoDeRitmo } from '@/lib/ubicacion';
 import { useConfirmacion } from '@/components/Confirmacion';
+import { useAviso } from '@/components/AvisoPasajero';
 import MapaDeCarrera from './MapaDeCarrera';
 import { useSenalGps } from './useEntrenoLibre';
 
@@ -24,24 +25,46 @@ const C = { fondo: '#0F1220', tarjeta: '#1A1E2E', tarjeta2: '#232838', texto: '#
 const CORAL = 'linear-gradient(135deg, #FF8A5B 0%, #F0506E 100%)'; /* estilo-ok: pantallas oscuras de la carrera (capturas aprobadas) */
 const AZUL = 'linear-gradient(135deg, #2448E8 0%, #1733B8 60%, #0D1A66 100%)'; /* estilo-ok: pantallas oscuras de la carrera (capturas aprobadas) */
 
-const nombreDeLaSalida = (deporte, inicioMs) => {
+const nombreDeLaSalida = (deporte, inicioMs, actividad = null) => {
   const h = new Date(inicioMs).getHours();
   const momento = h < 12 ? 'de la mañana' : h < 19 ? 'de la tarde' : 'de la noche';
-  const que = { correr: 'Carrera', caminar: 'Caminata', bici: 'Rodada', senderismo: 'Caminata' }[deporte] ?? nombreDelDeporte(deporte);
+  // Una actividad con nombre propio (trail, patines, una que creó) se llama por su nombre; las de siempre, como antes («Carrera de la mañana»).
+  const propio = actividad && actividad.id !== deporte ? actividad.nombre : null;
+  const que = propio ?? { correr: 'Carrera', caminar: 'Caminata', bici: 'Rodada', senderismo: 'Caminata' }[deporte] ?? nombreDelDeporte(deporte);
   return `${que} ${momento}`;
 };
 
-export default function PantallaDeCarrera({ userId, crono, pendiente = null, ultimo = null, alEmpezar, alMinimizar, alCambiarDeporte, alGuardado }) {
+// La hora de ahora, en grande, para «listo para empezar» sin mapa (gimnasio, pádel…), como el «Entreno» de Aura.
+const horaDeAhora = () => {
+  const [hora, ...resto] = new Date().toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' }).split(/\s+/);
+  return { hora, sufijo: resto.join(' ') }; // «10:49» en grande y «p.m.» chico (junto no cabe en un teléfono)
+};
+
+/* `actividad`: la que eligió (`lib/actividades.js`; desde el 23 oct 2026, Activity Tracker): su nombre y su emoji se ven aquí, y si NO lleva mapa (gimnasio, pádel) «listo
+   para empezar» enseña la hora en grande en vez del mapa y arranca el cronómetro sin GPS. Con mapa, «Iniciar» espera a que el GPS esté listo (en Aura los primeros
+   segundos daban ritmos absurdos); «Sin GPS» sigue ahí por si la señal no llega. */
+export default function PantallaDeCarrera({ userId, crono, pendiente = null, actividad = null, ultimo = null, alEmpezar, alMinimizar, alCambiarDeporte, alGuardado }) {
   const { cronometro, segundos, muestras } = crono;
   const pregunta = useConfirmacion();
+  const { avisa } = useAviso();
   const deporte = pendiente ?? cronometro?.deporte ?? 'correr';
+  const act = actividad ?? cronometro?.actividad ?? null;
+  const nombre = act?.nombre ?? nombreDelDeporte(deporte);
+  const conMapa = act ? !!act.gps : true;
   const enBici = deporte === 'bici';
   const pausado = cronometro?.pausadoEn != null;
   const [vista, setVista] = useState('numeros'); // numeros | mapa
   const [resumen, setResumen] = useState(null); // lo que dio `crono.termina()` al tocar Terminar
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState(null);
-  const senal = useSenalGps(!!pendiente);
+  const senal = useSenalGps(!!pendiente && conMapa);
+  // Sin mapa, «listo para empezar» enseña la hora: que avance sola.
+  const [, setTic] = useState(0);
+  useEffect(() => {
+    if (!pendiente || conMapa) return undefined;
+    const id = setInterval(() => setTic((t) => t + 1), 15000);
+    return () => clearInterval(id);
+  }, [pendiente, conMapa]);
   const vivo = useMemo(() => enVivo(muestras), [muestras]);
   const km = vivo.distanciaM / 1000;
   const promedio = km > 0.05 ? segundos / km : null;
@@ -57,7 +80,10 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, ult
   const guardar = async () => {
     setGuardando(true); setError(null);
     try {
-      const fila = await guardaEntrenoLibre({ atletaId: userId, deporte: resumen.deporte, inicioMs: resumen.inicioMs, duracionS: resumen.duracionS, distanciaM: null, muestras: resumen.muestras });
+      const fila = await guardaEntrenoLibre({
+        atletaId: userId, deporte: resumen.deporte, inicioMs: resumen.inicioMs, duracionS: resumen.duracionS, distanciaM: null, muestras: resumen.muestras,
+        titulo: resumen.actividad?.nombre ?? null, llevaDistancia: resumen.actividad ? !!resumen.actividad.gps : null,
+      });
       crono.descarta();
       alGuardado(fila);
     } catch (e) {
@@ -71,7 +97,7 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, ult
   };
 
   const pantalla = (hijos) => createPortal(
-    <div role="dialog" aria-modal="true" aria-label={nombreDelDeporte(deporte)} style={{ position: 'fixed', inset: 0, zIndex: 3200, background: C.fondo, color: C.texto, fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
+    <div role="dialog" aria-modal="true" aria-label={nombre} style={{ position: 'fixed', inset: 0, zIndex: 3200, background: C.fondo, color: C.texto, fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
       {hijos}
     </div>,
     document.body,
@@ -82,43 +108,64 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, ult
   });
   const redondo = { width: 44, height: 44, borderRadius: 14, border: 'none', background: 'rgba(255,255,255,0.12)', color: '#fff', display: 'grid', placeItems: 'center', cursor: 'pointer', backdropFilter: 'blur(10px)' };
 
-  /* 1 · ANTES DE SALIR */
+  /* 1 · ANTES DE SALIR («listo para empezar»: lo que abre el punto ● de la barra) */
   if (pendiente) {
     const lista = senal === 'lista';
     const sinGps = senal === 'no_hay' || senal === 'negado';
+    const esperandoGps = conMapa && senal === 'buscando';
     const textoSenal = { lista: 'GPS listo', buscando: 'Buscando GPS…', negado: 'Sin permiso de ubicación', sin_senal: 'Sin señal de GPS', no_hay: 'Sin GPS' }[senal];
+    const lado = { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', color: '#fff', cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 600, minWidth: 0 };
     return pantalla(
       <>
-        <div style={{ position: 'absolute', inset: 0 }}><MapaDeCarrera muestras={[]} alto="100%" redondo={false} puntoAzul /></div>
+        {conMapa
+          ? <div style={{ position: 'absolute', inset: 0 }}><MapaDeCarrera muestras={[]} alto="100%" redondo={false} puntoAzul /></div>
+          : (
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, paddingBottom: 160 }}>
+              <span style={{ fontSize: 13.5, fontWeight: 700, color: C.texto2 }}>Hora actual</span>
+              <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8 }}>
+                <span style={{ fontSize: 88, fontWeight: 800, letterSpacing: -3, lineHeight: 1, ...NUM_STYLE }}>{horaDeAhora().hora}</span>
+                <span style={{ fontSize: 22, fontWeight: 700, color: C.texto2 }}>{horaDeAhora().sufijo}</span>
+              </span>
+              <span style={{ fontSize: 13.5, fontWeight: 600, color: C.texto2 }}>Sin reloj: la app lleva tu tiempo</span>
+            </div>
+          )}
         <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'calc(14px + env(safe-area-inset-top)) 16px 0' }}>
           <button type="button" onClick={alMinimizar} aria-label="Cerrar" style={redondo}><ChevronDown size={22} /></button>
-          <span role="status" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 99, background: lista ? 'rgba(34,195,142,0.18)' : 'rgba(255,255,255,0.12)', color: lista ? C.verde : '#fff', fontSize: 14, fontWeight: 700, backdropFilter: 'blur(10px)' }}>
-            {senal === 'buscando' ? <Loader2 size={15} className="spin" /> : <span style={{ width: 8, height: 8, borderRadius: 4, background: lista ? C.verde : '#fff' }} />} {textoSenal}
-          </span>
+          {conMapa && (
+            <span role="status" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 99, background: lista ? 'rgba(34,195,142,0.18)' : 'rgba(255,255,255,0.12)', color: lista ? C.verde : '#fff', fontSize: 14, fontWeight: 700, backdropFilter: 'blur(10px)' }}>
+              {senal === 'buscando' ? <Loader2 size={15} className="spin" /> : <span style={{ width: 8, height: 8, borderRadius: 4, background: lista ? C.verde : '#fff' }} />} {textoSenal}
+            </span>
+          )}
         </div>
         <div style={{ flex: 1 }} />
         <div style={{ position: 'relative', margin: '0 12px calc(12px + env(safe-area-inset-bottom))', borderRadius: 28, padding: '10px 18px 20px', background: 'rgba(28,32,48,0.88)', backdropFilter: 'blur(16px)' }}>
           <div aria-hidden="true" style={{ width: 40, height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.25)', margin: '0 auto 12px' }} />
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
-            <div>
+            <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 800, color: C.rojo }}>Entreno libre</div>
-              <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: -0.4 }}>{nombreDelDeporte(deporte)}</div>
+              <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: -0.4, overflowWrap: 'anywhere' }}>{nombre}</div>
             </div>
             {ultimo && <div style={{ fontSize: 13.5, fontWeight: 500, color: C.texto2, textAlign: 'right' }}>Último: {ultimo}</div>}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 10, marginTop: 16 }}>
-            <button type="button" onClick={alCambiarDeporte} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', color: '#fff', cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 600 }}>
-              <span style={{ ...redondo, width: 52, height: 52, borderRadius: 26, color: C.rojo }}><Repeat size={20} /></span> Deporte
+            {/* Cambiar de actividad: el emoji de la que va (detalle de la maqueta v4, estilo Aura). */}
+            <button type="button" onClick={alCambiarDeporte} aria-label={`Cambiar de actividad (ahora: ${nombre})`} style={lado}>
+              <span aria-hidden="true" style={{ ...redondo, width: 52, height: 52, borderRadius: 26, fontSize: 24 }}>{act?.emoji ?? '🏃'}</span> Cambiar
             </button>
             <button
-              type="button" onClick={() => alEmpezar({ gps: !sinGps })} aria-label="Iniciar"
-              style={{ width: 112, height: 112, borderRadius: 56, border: 'none', background: CORAL, color: '#fff', cursor: 'pointer', fontFamily: FONT, fontSize: 21, fontWeight: 800, boxShadow: '0 14px 34px rgba(240,80,110,0.45)', touchAction: 'manipulation' }}
+              type="button" onClick={() => alEmpezar({ gps: conMapa && !sinGps })} disabled={esperandoGps} aria-label="Iniciar"
+              style={{ width: 112, height: 112, borderRadius: 56, border: 'none', background: esperandoGps ? 'rgba(255,255,255,0.14)' : CORAL, color: '#fff', cursor: esperandoGps ? 'default' : 'pointer', fontFamily: FONT, fontSize: esperandoGps ? 17 : 21, fontWeight: 800, boxShadow: esperandoGps ? 'none' : '0 14px 34px rgba(240,80,110,0.45)', touchAction: 'manipulation' }}
             >
-              Iniciar
+              {esperandoGps ? 'GPS…' : 'Iniciar'}
             </button>
-            {!sinGps ? (
-              <button type="button" onClick={() => alEmpezar({ gps: false })} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', color: '#fff', cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 600 }}>
+            {conMapa && !sinGps ? (
+              <button type="button" onClick={() => alEmpezar({ gps: false })} style={lado}>
                 <span style={{ ...redondo, width: 52, height: 52, borderRadius: 26 }}><MapaIcono size={20} /></span> Sin GPS
+              </button>
+            ) : !conMapa ? (
+              // Conectar el reloj es de la app de la tienda (capa nativa): aquí solo lo dice.
+              <button type="button" onClick={() => avisa('Con la app descargable, tu Apple Watch manda el pulso y las calorías mientras entrenas')} style={lado}>
+                <span style={{ ...redondo, width: 52, height: 52, borderRadius: 26 }}><Watch size={20} /></span> Conectar reloj
               </button>
             ) : <span />}
           </div>
@@ -144,7 +191,7 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, ult
             <div style={{ fontSize: 13, fontWeight: 700, color: C.rojo, }}>
               Hoy · {fecha.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' })}
             </div>
-            <div style={{ fontSize: 25, fontWeight: 800, letterSpacing: -0.5, marginTop: 2 }}>{nombreDeLaSalida(resumen.deporte, resumen.inicioMs)}</div>
+            <div style={{ fontSize: 25, fontWeight: 800, letterSpacing: -0.5, marginTop: 2 }}>{nombreDeLaSalida(resumen.deporte, resumen.inicioMs, resumen.actividad)}</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, marginTop: 14 }}>
               {[[kmR.toFixed(2), 'km'], [relojDeCronometro(resumen.duracionS), 'tiempo'], [enBici ? velocidad(ritmo) : textoDeRitmo(ritmo), enBici ? 'km/h' : 'min/km']].map(([v, t]) => (
                 <div key={t}><div style={{ fontSize: 26, fontWeight: 800, ...NUM_STYLE }}>{v}</div><div style={{ fontSize: 12.5, fontWeight: 600, color: '#5B616E' }}>{t}</div></div>
@@ -216,7 +263,7 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, ult
         <div style={{ flex: 1 }} />
         <div style={{ position: 'relative', margin: '0 12px', borderRadius: 24, padding: '14px 18px 16px', background: 'rgba(28,32,48,0.88)', backdropFilter: 'blur(16px)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5, fontWeight: 600, color: C.texto2 }}>
-            <span>{pausado ? 'En pausa' : nombreDelDeporte(deporte)}</span>
+            <span>{pausado ? 'En pausa' : nombre}</span>
             {ultimoKm && <span style={{ color: '#8FA9FF' }}>Km {ultimoKm.n} · {enBici ? velocidad(ultimoKm.dur) : textoDeRitmo(ultimoKm.dur)}</span>}
           </div>
           <div style={{ textAlign: 'center', fontSize: 52, fontWeight: 800, letterSpacing: -1.5, color: pausado ? C.texto2 : C.rojo, ...NUM_STYLE }}>{relojDeCronometro(segundos)}</div>

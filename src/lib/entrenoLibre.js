@@ -7,7 +7,7 @@
    Este archivo es lo PURO (sin red ni pantalla): qué deportes salen, el cronómetro (con pausas), cómo se entiende lo que escribe la persona y cómo se arma el entreno para guardarlo.
    Se prueba con `scripts/prueba-entreno-libre.mjs`. */
 
-import { DEPORTES } from './metricas/deportes.js';
+import { DEPORTES, esDeporte } from './metricas/deportes.js';
 
 /** Los deportes que salen primero en la hoja «Entrenar» (en este orden) y los que van en «Más deportes». Todos son ids de `DEPORTES`. */
 export const DEPORTES_RAPIDOS = ['correr', 'bici', 'natacion', 'caminar'];
@@ -58,7 +58,8 @@ export function relojDeCronometro(segundos) {
 }
 
 /** ¿Un cronómetro guardado todavía sirve? Uno de hace más de 24 horas se da por olvidado (alguien lo dejó corriendo y se fue). */
-export const cronometroVigente = (c, ahora = Date.now()) => !!c && Number.isFinite(c.inicio) && esDeporteLibre(c.deporte) && ahora - c.inicio < 24 * 3600 * 1000;
+// Cualquier deporte de las métricas vale: desde el 23 oct 2026 se registra cualquier actividad (pádel = «raqueta», una propia = «otro»; ver `lib/actividades.js`).
+export const cronometroVigente = (c, ahora = Date.now()) => !!c && Number.isFinite(c.inicio) && esDeporte(c.deporte) && ahora - c.inicio < 24 * 3600 * 1000;
 
 /** Un entreno de menos de 30 segundos no vale la pena guardarlo (se tocó «Terminar» sin querer). */
 export const MINIMO_DE_SEGUNDOS = 30;
@@ -66,11 +67,13 @@ export const MINIMO_DE_SEGUNDOS = 30;
 /**
  * El entreno listo para `construyeActividad` (ver `lib/metricas/construye.js`): lo que midió la app sola, que es el tiempo y la distancia que la persona dijo.
  * `inicioMs`: cuándo arrancó. `duracionS`: tiempo sin pausas. El pulso y las calorías NO se inventan: sin reloj no hay.
+ * `titulo`: el nombre de la actividad que eligió («Pádel», «Waterpolo»); sin él, el del deporte. `llevaDistancia`: la actividad se mueve de un lugar a otro (una propia
+ * con mapa, como unos patines, aunque su deporte de métricas sea «otro»); sin él, lo dice el deporte.
  */
-export function entrenoLibre({ deporte, inicioMs, duracionS, distanciaM = null }) {
-  const d = esDeporteLibre(deporte) ? deporte : 'otro';
+export function entrenoLibre({ deporte, inicioMs, duracionS, distanciaM = null, titulo = null, llevaDistancia = null }) {
+  const d = esDeporte(deporte) ? deporte : 'otro';
   const duracion = Math.max(1, Math.round(duracionS));
-  const conDistancia = !!DEPORTES[d]?.distancia && distanciaM > 0;
+  const conDistancia = (llevaDistancia ?? !!DEPORTES[d]?.distancia) && distanciaM > 0;
   return {
     inicio: inicioMs,
     fin: inicioMs + duracion * 1000,
@@ -78,7 +81,7 @@ export function entrenoLibre({ deporte, inicioMs, duracionS, distanciaM = null }
     duracion_s: duracion,
     movimiento_s: conDistancia ? duracion : null,
     distancia_m: conDistancia ? Math.round(distanciaM) : null,
-    titulo: DEPORTES[d].nombre,
+    titulo: String(titulo ?? '').trim().slice(0, 40) || DEPORTES[d].nombre,
     formato: 'app',
     dispositivo: null,
   };

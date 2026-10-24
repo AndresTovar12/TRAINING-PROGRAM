@@ -78,7 +78,8 @@ prueba('un cronómetro guardado de hace más de un día se da por olvidado', () 
   const ahora = 10 * 24 * 3600 * 1000;
   assert.equal(cronometroVigente(cronometroNuevo('correr', ahora - 3600 * 1000), ahora), true);
   assert.equal(cronometroVigente(cronometroNuevo('correr', ahora - 25 * 3600 * 1000), ahora), false);
-  assert.equal(cronometroVigente({ deporte: 'fuerza', inicio: ahora }, ahora), false);
+  assert.equal(cronometroVigente({ deporte: 'fuerza', inicio: ahora }, ahora), true, 'desde el 23 oct se registra cualquier actividad (gimnasio = fuerza)');
+  assert.equal(cronometroVigente({ deporte: 'ajedrez', inicio: ahora }, ahora), false, 'un deporte que no existe no');
   assert.equal(cronometroVigente(null, ahora), false);
 });
 
@@ -99,6 +100,14 @@ prueba('sin distancia no se inventa ninguna', () => {
 });
 prueba('un deporte que no es de la hoja se guarda como «otro»', () => {
   assert.equal(entrenoLibre({ deporte: 'ajedrez', inicioMs: 0, duracionS: 100 }).deporte, 'otro');
+});
+prueba('una actividad con nombre propio: se guarda su nombre y, si se mueve de un lugar a otro, su distancia', () => {
+  const p = entrenoLibre({ deporte: 'raqueta', inicioMs: 0, duracionS: 3600, titulo: 'Pádel' });
+  assert.equal(p.deporte, 'raqueta');
+  assert.equal(p.titulo, 'Pádel');
+  const pat = entrenoLibre({ deporte: 'otro', inicioMs: 0, duracionS: 1200, distanciaM: 6000, titulo: 'Patines', llevaDistancia: true });
+  assert.equal(pat.distancia_m, 6000, 'una propia con mapa guarda su distancia aunque sea «otro»');
+  assert.equal(entrenoLibre({ deporte: 'otro', inicioMs: 0, duracionS: 1200, distanciaM: 6000 }).distancia_m, null, 'sin decir que se mueve, «otro» no lleva distancia');
 });
 
 console.log('Textos del resumen');
