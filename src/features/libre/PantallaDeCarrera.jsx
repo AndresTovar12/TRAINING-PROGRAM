@@ -9,6 +9,8 @@ import { enVivo, textoDeRitmo } from '@/lib/ubicacion';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useAviso } from '@/components/AvisoPasajero';
 import MapaDeCarrera from './MapaDeCarrera';
+import IconoDeActividad from './IconoDeActividad';
+import { actividadDeDeporte } from '@/lib/actividades';
 import { useSenalGps } from './useEntrenoLibre';
 
 /* LA CARRERA CON GPS A PANTALLA COMPLETA (reestructura visual, 16 oct 2026), como «Workout · Carrera» de las capturas de Andrés:
@@ -40,7 +42,7 @@ const horaDeAhora = () => {
   return { hora, sufijo: resto.join(' ') }; // «10:49» en grande y «p.m.» chico (junto no cabe en un teléfono)
 };
 
-/* `actividad`: la que eligió (`lib/actividades.js`; desde el 23 oct 2026, Activity Tracker): su nombre y su emoji se ven aquí, y si NO lleva mapa (gimnasio, pádel) «listo
+/* `actividad`: la que eligió (`lib/actividades.js`; desde el 23 oct 2026, Activity Tracker): su nombre y su ícono se ven aquí, y si NO lleva mapa (gimnasio, pádel) «listo
    para empezar» enseña la hora en grande en vez del mapa y arranca el cronómetro sin GPS. Con mapa, «Iniciar» espera a que el GPS esté listo (en Aura los primeros
    segundos daban ritmos absurdos); «Sin GPS» sigue ahí por si la señal no llega. */
 export default function PantallaDeCarrera({ userId, crono, pendiente = null, actividad = null, ultimo = null, alEmpezar, alMinimizar, alCambiarDeporte, alGuardado }) {
@@ -148,9 +150,9 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
             {ultimo && <div style={{ fontSize: 13.5, fontWeight: 500, color: C.texto2, textAlign: 'right' }}>Último: {ultimo}</div>}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 10, marginTop: 16 }}>
-            {/* Cambiar de actividad: el emoji de la que va (detalle de la maqueta v4, estilo Aura). */}
+            {/* Cambiar de actividad: el ícono de la que va (detalle de la maqueta v4, estilo Aura). */}
             <button type="button" onClick={alCambiarDeporte} aria-label={`Cambiar de actividad (ahora: ${nombre})`} style={lado}>
-              <span aria-hidden="true" style={{ ...redondo, width: 52, height: 52, borderRadius: 26, fontSize: 24 }}>{act?.emoji ?? '🏃'}</span> Cambiar
+              <IconoDeActividad actividad={act ?? actividadDeDeporte(deporte)} size={52} oscuro /> Cambiar
             </button>
             <button
               type="button" onClick={() => alEmpezar({ gps: conMapa && !sinGps })} disabled={esperandoGps} aria-label="Iniciar"

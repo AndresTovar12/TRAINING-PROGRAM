@@ -1,6 +1,8 @@
 /* Las actividades que se pueden registrar (src/lib/actividades.js): el catálogo, crear la propia, el buscador y «Tus actividades». `node scripts/prueba-actividades.mjs`. */
 import assert from 'node:assert/strict';
 import { DEPORTES } from '../src/lib/metricas/deportes.js';
+import { ICONOS } from '../src/lib/iconosDeTipo.datos.js';
+const ICONOS_DEL_CATALOGO = new Set(ICONOS.map((i) => i.id));
 import {
   CATALOGO, GRUPOS_DE_ACTIVIDADES, creaActividad, propiasDe, actividadPorId, actividadDeDeporte, actividadDeEntreno, buscaActividades, hayConNombre, tusActividades, MAX_NOMBRE,
 } from '../src/lib/actividades.js';
@@ -8,17 +10,22 @@ import {
 // El catálogo: ids únicos y cada deporte existe en las métricas.
 assert.equal(new Set(CATALOGO.map((x) => x.id)).size, CATALOGO.length, 'ids únicos');
 CATALOGO.forEach((x) => assert.ok(DEPORTES[x.deporte], `${x.id}: su deporte existe`));
+CATALOGO.forEach((x) => assert.ok(ICONOS_DEL_CATALOGO.has(x.icono), `${x.id}: su ícono «${x.icono}» existe en el catálogo`));
 assert.ok(GRUPOS_DE_ACTIVIDADES.length >= 6);
 assert.equal(actividadPorId('correr').gps, true, 'correr lleva mapa');
 assert.equal(actividadPorId('padel').gps, false, 'pádel no');
 assert.equal(actividadPorId('padel').deporte, 'raqueta');
 
 // Crear la propia
-const w = creaActividad({ nombre: '  waterpolo ', emoji: '🤽', gps: false }, [], 1000);
+const w = creaActividad({ nombre: '  waterpolo ', icono: 'polo-acuatico', color: '#3AA0F5', gps: false }, [], 1000);
 assert.equal(w.yaExistia, false);
 assert.equal(w.actividad.nombre, 'Waterpolo', 'con mayúscula y sin espacios de más');
 assert.equal(w.actividad.deporte, 'otro');
 assert.ok(w.actividad.id.startsWith('p-'));
+assert.equal(w.actividad.icono, 'polo-acuatico');
+assert.equal(w.actividad.color, '#3AA0F5');
+assert.equal(creaActividad({ nombre: 'Algo', icono: '<script>', color: 'rojo' }, []).actividad.icono, 'etiqueta', 'un ícono raro cae en el neutro');
+assert.equal(creaActividad({ nombre: 'Algo', color: 'rojo' }, []).actividad.color, '#5DA0FF', 'un color raro cae en el de entrada');
 assert.equal(creaActividad({ nombre: '   ' }, []), null, 'sin nombre no se crea');
 assert.equal(creaActividad({ nombre: 'padel' }, []).actividad.id, 'padel', 'si ya existe (sin acentos), se usa esa');
 assert.equal(creaActividad({ nombre: 'WATERPOLO' }, [w.actividad]).actividad.id, w.actividad.id, 'tampoco se repite una propia');
