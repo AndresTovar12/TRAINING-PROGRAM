@@ -25,7 +25,10 @@ export default function PantallaDelCronometro({ userId, crono, pendiente = null,
   const [error, setError] = useState(null);
   const [vista, setVista] = useState('datos');
   const deporte = pendiente ?? cronometro?.deporte ?? 'correr';
-  const unidad = unidadDeDistancia(deporte);
+  // La actividad que eligió (`lib/actividades.js`): su nombre y emoji. Una propia sin mapa no pide distancia.
+  const actividad = cronometro?.actividad ?? null;
+  const nombre = actividad?.nombre ?? nombreDelDeporte(deporte);
+  const unidad = actividad && actividad.id !== deporte && !actividad.gps ? null : unidadDeDistancia(deporte);
   const pausado = cronometro?.pausadoEn != null;
   const conGps = !pendiente && !!cronometro?.gps;
   const vivo = useMemo(() => (conGps ? enVivo(muestras) : null), [conGps, muestras]);
@@ -56,7 +59,8 @@ export default function PantallaDelCronometro({ userId, crono, pendiente = null,
     setError(null);
     try {
       const fila = await guardaEntrenoLibre({
-        atletaId: userId, deporte: t.deporte, inicioMs: t.inicioMs, duracionS: t.duracionS, distanciaM: distanciaEnMetros(texto, t.deporte), muestras: t.muestras,
+        atletaId: userId, deporte: t.deporte, inicioMs: t.inicioMs, duracionS: t.duracionS, distanciaM: unidad ? distanciaEnMetros(texto, t.deporte) : null, muestras: t.muestras,
+        titulo: t.actividad?.nombre ?? null, llevaDistancia: t.actividad ? (!!t.actividad.gps || !!unidad) : null,
       });
       crono.descarta();
       alGuardado(fila);
@@ -92,9 +96,11 @@ export default function PantallaDelCronometro({ userId, crono, pendiente = null,
   }
 
   return (
-    <HojaFlotante titulo={nombreDelDeporte(deporte)} onCerrar={alMinimizar}>
+    <HojaFlotante titulo={nombre} onCerrar={alMinimizar}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 22, padding: '18px 0 8px', fontFamily: FONT }}>
-        {!conGps && <MosaicoDeDeporte deporte={deporte} size={64} />}
+        {!conGps && (actividad?.emoji
+          ? <span aria-hidden="true" style={{ width: 64, height: 64, borderRadius: 20, background: UI.relleno, display: 'grid', placeItems: 'center', fontSize: 34 }}>{actividad.emoji}</span>
+          : <MosaicoDeDeporte deporte={deporte} size={64} />)}
 
         {(fase === 'corre' || fase === 'guardando') && (
           <>
