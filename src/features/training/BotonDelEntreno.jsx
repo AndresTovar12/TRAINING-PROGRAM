@@ -99,6 +99,10 @@ export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, on
     return { portada: portadaParaAtleta(repertorio, medias, perfil), videos: videosParaAtleta(repertorio, medias, perfil) };
   }, [resolveExercise, medias, perfil]);
 
+  // Si el botón no se va a mostrar (sesión ya terminada, solo lectura), el aviso de «Empezar» no se queda esperando: si no, al «Deshacer» el entreno se abriría solo.
+  const sinBoton = soloLectura || !plan || plan.pasos.length === 0 || !!registro?.completed || (!abierto && registro?.entreno?.fin != null);
+  useEffect(() => { if (abrirYa && sinBoton) setAbrirYa(false); }, [abrirYa, sinBoton]);
+
   if (soloLectura || !plan || plan.pasos.length === 0 || registro?.completed) return null;
 
   const palabras = palabrasDelEntreno(salud);

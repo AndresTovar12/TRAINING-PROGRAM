@@ -505,12 +505,13 @@ export default function EntrenoDelDia({
           resumen={textoDeLoPlaneado(paso, kilosDelPaso)}
           onGuardar={(tocado) => {
             setHoja(null);
+            setMedidoGps(null);
             const real = {};
             if (tocado.reps !== undefined && tocado.reps !== '') real.reps = tocado.reps;
             if (tocado.kg !== undefined && tocado.kg !== '') real.kg = String(aKilos(tocado.kg, unidadDePeso));
             listo(Object.keys(real).length ? real : undefined);
           }}
-          onCerrar={() => setHoja(null)}
+          onCerrar={() => { setHoja(null); setMedidoGps(null); }}
         />
       )}
       {hoja === 'tecnica' && <HojaDeTecnica palabras={palabras} onCerrar={() => setHoja(null)} />}
@@ -531,7 +532,7 @@ export default function EntrenoDelDia({
           <HojaDelSello
             atletaId={userId} sesionId={sesionId} nombre={dia.name || ''} Icono={aspecto?.Icono} unidadPeso={unidadDePeso}
             // Antes de «Terminar» el entreno no tiene hora de fin: el resumen cuenta hasta ahora, así que la activity card también (si no, decía 1:04 contra 2:55).
-            registro={registro?.entreno && registro.entreno.fin == null ? { ...registro, entreno: { ...registro.entreno, fin: sello } } : registro}
+            registro={{ ...registro, ...(recorrido.ruta() ? { ruta: recorrido.ruta() } : null), ...(registro?.entreno && registro.entreno.fin == null ? { entreno: { ...registro.entreno, fin: sello } } : null) }}
             onCerrar={() => setSello(false)}
           />
         </Suspense>

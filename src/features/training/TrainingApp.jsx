@@ -33,7 +33,9 @@ import { maximoParaHome, useUnRM } from '@/lib/unRM';
 import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
 import { useAppState, useStorage } from '@/contexts/AppStateContext';
 import { useDiaDeHoy } from '@/lib/useDiaDeHoy';
-import { pideAbrirEntreno } from '@/lib/entrenoPendiente';
+import { pideAbrirEntreno, hayEntrenoPendiente } from '@/lib/entrenoPendiente';
+import { borraRecorrido } from '@/features/training/useRecorrido';
+import { preparaAudio } from '@/lib/pitidos';
 import { altaReciente } from '@/lib/comoVa';
 import { FiltroDeAutor, EtiquetaDeAutor } from '@/features/training/EquipoDelAtleta';
 import AvisoDeInvitacion from '@/features/training/AvisoDeInvitacion';
@@ -57,7 +59,7 @@ import TarjetaDeSesion from '@/features/training/TarjetaDeSesion';
 import BotonDelEntreno from '@/features/training/BotonDelEntreno';
 import TarjetaDeClase from '@/features/training/TarjetaDeClase';
 import { claseDe, duracionTexto } from '@/lib/clases';
-import { reiniciaSiTerminado, archivaLoHecho, terminaEntreno } from '@/lib/entreno';
+import { archivaLoHecho, terminaEntreno } from '@/lib/entreno';
 import { relojAMedias } from '@/lib/relojGuardado';
 import Portada from '@/components/Portada';
 import BotonEntendido from '@/components/BotonEntendido';
@@ -1014,6 +1016,10 @@ const CuerpoDelDia = ({
      `entarjetas`, un día de una sola sesión sigue como siempre, con su botón de terminar al final. */
   const porTarjeta = entarjetas;
   const abiertaSola = abiertasPorDefecto ?? true;
+  // «Empezar» de Home en un día con varias sesiones: la tarjeta de esa sesión sale cerrada y su botón del entreno no existiría para recoger el aviso. Se abre sola.
+  useEffect(() => {
+    if (hayEntrenoPendiente(selectedId)) setOpenBlocks((p) => (p.dia === undefined ? { ...p, dia: true } : p));
+  }, [selectedId]);
   /* Sesiones que no son de gimnasio. Probado armando una semana como coach:
      una sesión de velocidad, de recovery o de cancha se escribe con NOTAS
      ("Sprint 6 x 30 yd", "Foam roller 10 min"), porque no son ejercicios del
@@ -1041,18 +1047,21 @@ const CuerpoDelDia = ({
   /* «Deshacer» también empieza de nuevo el entreno guiado si ya estaba terminado (ver `reiniciaSiTerminado`). Y lo que ya se había hecho NO se pierde
      (16 oct 2026: una sesión se guarda por su lugar en el plan, no por la fecha; si se hacía otra vez —el viernes que ya se hizo el jueves— lo anterior se
      borraba): se guarda en `anteriores`, y el coach lo ve como un entreno más. */
-  const toggleComplete = () => updateSession(selectedId, (prev) => {
-    if (!prev?.completed) {
-      // «Terminar sesión» es UNA sola cosa, la toques donde la toques: si había un entreno guiado empezado, también se cierra.
-      return { ...prev, completed: true, completedAt: new Date().toISOString(), ...(prev?.entreno ? { entreno: terminaEntreno(prev.entreno, Date.now()) } : null) };
-    }
-    /* «DESHACER» DEJA LA SESIÓN EN BLANCO (Andrés, 23 oct 2026): antes reiniciaba el entreno guiado pero dejaba los resultados de los relojes y lo anotado, y al
-       volver a hacerla un reloj ya hecho no arrancaba («Resultado: Hecho» y «Listo» sobre algo que no hizo esa vez). Lo de la vez anterior no se pierde: pasa a
-       `anteriores` (el coach lo ve como un entreno más) y la sesión arranca de cero. Las notas se quedan: son de la persona, no un resultado. */
-    const { exercises: _e, formatos: _f, ruta: _r, entreno: _en, ...resto } = prev;
-    void _e; void _f; void _r; void _en;
-    return { ...resto, completed: false, completedAt: null, ...archivaLoHecho(prev) };
-  });
+  const toggleComplete = () => {
+    borraRecorrido(selectedId); // la línea ya vive en la sesión (o se descarta): la copia de este teléfono no debe reaparecer al volver a hacerla
+    updateSession(selectedId, (prev) => {
+      if (!prev?.completed) {
+        // «Terminar sesión» es UNA sola cosa, la toques donde la toques: si había un entreno guiado empezado, también se cierra.
+        return { ...prev, completed: true, completedAt: new Date().toISOString(), ...(prev?.entreno ? { entreno: terminaEntreno(prev.entreno, Date.now()) } : null) };
+      }
+      /* «DESHACER» DEJA LA SESIÓN EN BLANCO (Andrés, 23 oct 2026): antes reiniciaba el entreno guiado pero dejaba los resultados de los relojes y lo anotado, y al
+         volver a hacerla un reloj ya hecho no arrancaba («Resultado: Hecho» y «Listo» sobre algo que no hizo esa vez). Lo de la vez anterior no se pierde: pasa a
+         `anteriores` (el coach lo ve como un entreno más) y la sesión arranca de cero. Las notas se quedan: son de la persona, no un resultado. */
+      const { exercises: _e, formatos: _f, ruta: _r, entreno: _en, ...resto } = prev;
+      void _e; void _f; void _r; void _en;
+      return { ...resto, completed: false, completedAt: null, ...archivaLoHecho(prev) };
+    });
+  };
   /* «Iniciar entreno»: abre el MODO ENTRENO de esta sesión (ver `BotonDelEntreno`). Una sesión que dice «repite el martes» se entrena con
      los ejercicios del martes (`ejercicios`), pero lo que se anota queda en SU lugar. */
   const botonDelEntreno = (ejercicios) => (
@@ -1905,14 +1914,14 @@ const HomeView = ({
           meta: [tipoDeSesion(h.day).label, n ? plural(n, 'ejercicio', 'ejercicios') : null, minutosDelNombre(h.day.name || '') || null].filter(Boolean),
           hecha: !!reg?.completed,
           enMarcha: !reg?.completed && Object.keys(reg?.entreno?.hechos ?? {}).length > 0,
-          onAbrir: () => { pideAbrirEntreno(id); onStartSession(next.phase, next.week, h.idx, true); },
+          onAbrir: () => { preparaAudio(); pideAbrirEntreno(id); onStartSession(next.phase, next.week, h.idx, true); },
         };
       })
       : [{ day: next.day, nombre: sessionTitle, meta: [tipoHoy, ...metaDelCartel.map((m) => m.texto).filter((x) => x !== tipoHoy)] }])
     : [];
   // Dar play a una sesión de otro día (o de otra semana) la abre ahí mismo: se hace y se marca en SU día; el plan no se mueve.
   // «Empezar» abre el ENTRENO de esa sesión (si hoy toca otro día, ese día): el botón de la sesión lo recoge al aparecer.
-  const abrirLaDeHoy = next ? () => { pideAbrirEntreno(next.id); onStartSession(next.phase, next.week, next.dayIdx, !esHoyVista); } : undefined;
+  const abrirLaDeHoy = next ? () => { preparaAudio(); pideAbrirEntreno(sessionIdFor(kind, next.phase.id, next.week.num, next.dayIdx)); onStartSession(next.phase, next.week, next.dayIdx, !esHoyVista); } : undefined;
   // Un entreno guiado a medias (tiene pasos hechos y la sesión no está terminada): la tarjeta dice «Seguir», no «Empezar».
   const entrenoEnMarcha = !!next && !cursorCompleted && Object.keys(sessionsData[next.id]?.entreno?.hechos ?? {}).length > 0;
   const enPausa = !!cursor?.pausa;
@@ -2733,6 +2742,7 @@ export default function TrainingApp() {
       altasDeEquipo={altasDeEquipo}
       // Tocar una sesión de hoy abre «Plan» en ese día, con lo de todos. De otra semana (la tira se desliza): en ESA semana.
       onAbrirEntrada={(e, fecha) => {
+        preparaAudio();
         pideAbrirEntreno(e.id); // «Empezar» de esa sesión abre su entreno (si la llave coincide; si no, solo queda el día abierto)
         setTab('plan');
         setView((v) => ({

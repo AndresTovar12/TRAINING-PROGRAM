@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { agregaPunto, fuenteDeUbicacion } from '@/lib/ubicacion';
+import { agregaPunto, enVivo, fuenteDeUbicacion } from '@/lib/ubicacion';
 import { muestrasDeRuta, rutaParaGuardar } from '@/lib/recorrido';
 
 /* EL RECORRIDO DEL ENTRENO, EN SILENCIO (23 oct 2026, ver `lib/recorrido.js`). Si la persona dijo que sí (se pregunta una vez, por teléfono: `tl:recorrido`),
@@ -12,6 +12,12 @@ const LLAVE_DEL_PERMISO = 'tl:recorrido';
 const llaveDeSesion = (sesionId) => `tl:recorrido:${sesionId}`;
 const lee = (k) => { try { return window.localStorage.getItem(k); } catch { return null; } };
 const escribe = (k, v) => { try { if (v === null) window.localStorage.removeItem(k); else window.localStorage.setItem(k, v); } catch { /* sin almacenamiento: vale mientras dure la pantalla */ } };
+
+// Menos de esto de recorrido no es un recorrido: es la deriva del GPS en un gimnasio (la línea sería un garabato). No se guarda.
+const METROS_MINIMOS = 150;
+
+/** Borra la copia de este teléfono (la sesión se terminó o se deshizo). Se puede llamar sin que el entreno esté abierto. */
+export const borraRecorrido = (sesionId) => escribe(llaveDeSesion(sesionId), null);
 
 export function useRecorrido({ sesionId, rutaGuardada }) {
   const fuente = fuenteDeUbicacion();
@@ -38,9 +44,9 @@ export function useRecorrido({ sesionId, rutaGuardada }) {
   }, [permiso, disponible, fuente, sesionId]);
 
   const decide = useCallback((v) => { escribe(LLAVE_DEL_PERMISO, v); setPermiso(v); }, []);
-  const ruta = useCallback(() => rutaParaGuardar(muestras.current), []);
+  const ruta = useCallback(() => (enVivo(muestras.current).distanciaM >= METROS_MINIMOS ? rutaParaGuardar(muestras.current) : null), []);
   // Al TERMINAR la sesión la línea ya vive en ella (`registro.ruta`): se borra la copia de este teléfono. Si no, al «Deshacer» y volver a hacer la sesión
   // (misma llave) la línea de la vez anterior reaparecía y se mezclaba con la nueva.
-  const limpia = useCallback(() => { terminado.current = true; muestras.current = []; escribe(llaveDeSesion(sesionId), null); }, [sesionId]);
+  const limpia = useCallback(() => { terminado.current = true; muestras.current = []; borraRecorrido(sesionId); }, [sesionId]);
   return { permiso, disponible, decide, ruta, limpia };
 }
