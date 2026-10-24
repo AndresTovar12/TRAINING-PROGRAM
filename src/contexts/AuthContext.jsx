@@ -127,6 +127,10 @@ export function AuthProvider({ children }) {
 
   // Register via Edge Function (creates a confirmed user), then auto sign-in
   const signUp = useCallback(async ({ username, email, password, fullName, accountType, coachUsername, genero, profesion, inicioPaso }) => {
+    // «zz_…» es el prefijo de las cuentas de prueba del dueño (sale en su panel con «Contraseña nueva» y «Borrar»): una persona real no lo puede escoger (auditoría p124).
+    if (/^zz_/i.test(String(username ?? '').trim())) {
+      return { error: { message: 'Ese usuario está reservado. Escoge otro.' } };
+    }
     let res;
     try {
       res = await fetch(SIGNUP_URL, {

@@ -122,11 +122,15 @@ Deno.serve(async (req) => {
   // Solo coaches y master suben al repertorio. Un atleta no.
   const { data: perfil } = await admin
     .from('profiles')
-    .select('role')
+    .select('role, is_active')
     .eq('id', usuario.user.id)
     .maybeSingle()
   if (!perfil || perfil.role !== 'admin') {
     return json({ error: 'Tu cuenta no tiene permiso para subir al repertorio.' }, 403, origin)
+  }
+  // Una cuenta que el dueño pausó no puede seguir ocupando espacio con la sesión que ya tenía abierta (auditoría p127).
+  if (perfil.is_active === false) {
+    return json({ error: 'Tu cuenta está pausada. Habla con el administrador.' }, 403, origin)
   }
 
   // --- Que quiere subir ---------------------------------------------------

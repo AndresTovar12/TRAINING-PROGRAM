@@ -58,6 +58,9 @@ export default function BloqueDelPrograma({ titulo, rotuloTitulo, onTitulo, prog
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 700, color: T.text2, padding: '4px 2px 0' }}>
         <Forma size={14} color={T.accent} />
         <span>{programa.forma.corto}</span>
+        {!programa.puedeCambiar && (
+          <span style={{ color: T.text3, fontWeight: 600 }} title="La forma se escoge al crearlo en Mis planes y ya no cambia: para otra forma, crea un plan nuevo.">· fija, se escoge al crear</span>
+        )}
         {programa.puedeCambiar && (
           <button
             type="button" onClick={programa.onCambiar}

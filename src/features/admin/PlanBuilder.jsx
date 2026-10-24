@@ -234,6 +234,8 @@ const nombreDeLaLinea = (ex, rep) => (ex.exercise_id && rep?.id === ex.exercise_
    y, en cuanto se escribe en ella, todo pasa a `notes` y `cue` queda vacío: no se pierde nada y a quien no se toca no se le
    reescribe nada. */
 const textoDeDescripcion = (ex) => [ex?.notes, ex?.cue].map((x) => String(x ?? '').trim()).filter(Boolean).join(' · ');
+// Lo que enseña la casilla: con SOLO `notes` va tal cual (sin recortar), porque al teclear «Baja » el espacio de al final se recortaba y las palabras se pegaban («Bajacontrolado3seg», auditoría p7).
+const valorDeDescripcion = (ex) => (String(ex?.cue ?? '').trim() ? textoDeDescripcion(ex) : String(ex?.notes ?? ''));
 const alEscribirDescripcion = (onPatch) => (e) => onPatch({ notes: e.target.value, cue: '' });
 
 /* ------------------------------------------------------------------ */
@@ -307,7 +309,7 @@ function ExerciseCard({
         {!traeLapsos(ex) && notaDescanso && <div style={{ marginTop: 8, ...NOTA_DE_DESCANSO }}>Descanso: «entre vueltas», arriba ↑</div>}
         <div style={{ marginTop: 8 }}>
           <Field label="Descripción">
-            <input value={textoDeDescripcion(ex)} onChange={alEscribirDescripcion(onPatch)} style={estiloCampo} />
+            <input value={valorDeDescripcion(ex)} onChange={alEscribirDescripcion(onPatch)} style={estiloCampo} />
           </Field>
         </div>
         <div style={{ marginTop: 9, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -544,7 +546,7 @@ function ExerciseRow({
           <div style={completo(3) ?? { flex: '1 1 140px', minWidth: 110 }}>
             <RotuloCampo>Descripción</RotuloCampo>
             <input
-              value={textoDeDescripcion(ex)} autoFocus={descripcionAbierta}
+              value={valorDeDescripcion(ex)} autoFocus={descripcionAbierta}
               onChange={(e) => { setDescripcionAbierta(true); onPatch({ notes: e.target.value, cue: '' }); }}
               style={inputFila}
             />
@@ -2025,10 +2027,17 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
       });
     return () => { vivo = false; };
   }, [athlete?.id, isNew, planRow, sufijo]);
-  const aquiAtleta = useMemo(
-    () => (cursorAtleta === undefined ? null : dondeVa(phases, kind, cursorAtleta)),
-    [phases, kind, cursorAtleta],
-  );
+  /* Si el coach acaba de mover al atleta («Mover a… a esta semana»), el puntero que se leyó al abrir ya es viejo: manda el que acaba de
+     guardar `mover` (auditoría p65). Sin día: tras mover, el día de hoy lo decide el calendario. */
+  const aquiAtleta = useMemo(() => {
+    if (cursorAtleta === undefined) return null;
+    const leido = dondeVa(phases, kind, cursorAtleta);
+    const nuevo = mover?.aqui;
+    if (nuevo && leido && (nuevo.faseId !== leido.faseId || nuevo.semana !== leido.semana)) {
+      return phases.some((f) => f.id === nuevo.faseId) ? { faseId: nuevo.faseId, semana: nuevo.semana, dia: null } : leido;
+    }
+    return leido;
+  }, [phases, kind, cursorAtleta, mover?.aqui?.faseId, mover?.aqui?.semana]);
   /* Las fases abiertas de la guía y la semana que se ve en cada una (ver `useFasesAbiertas`). Lo que se edita
      ahora es la fase `nav.pi` y su semana `weekIdx`. */
   const faseEditada = nav.level === 'phase' ? phases[nav.pi] : null;
@@ -2316,12 +2325,17 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
   const nombreSemana = (ph, wk, fallback) => weekName({ ...wk, num: numeroDeSemana(ph, wk, fallback) }, fallback);
   const duplicarSemana = () => {
     const wi = semanaAbierta();
+    /* La copia va AL FINAL de la fase, con el número que sigue. Antes se metía junto a la original con el número «que sigue» (1, 3, 2): las semanas quedaban en desorden, se
+       guardaban así y el atleta, que avanza por posición, después de la 1 caía en la «3» (auditoría p63). Renumerar las de en medio movería los registros de lo que el atleta ya
+       hizo (van por número de semana), así que se deja el orden limpio y la copia al final. */
+    const nueva = (phases[nav.pi]?.weekData?.length ?? 0);
     patchPhase(nav.pi, (ph) => {
       const c = clone(ph.weekData[wi]);
       c.num = nextWeekNum(ph); // conserva el título; solo cambia el número
-      return { weekData: [...ph.weekData.slice(0, wi + 1), c, ...ph.weekData.slice(wi + 1)] };
+      return { weekData: [...ph.weekData, c] };
     });
-    setWeekIdx(wi + 1);
+    setWeekIdx(nueva);
+    avisaConDeshacer(`Semana duplicada: la copia quedó al final de la fase (semana ${nueva + 1})`);
   };
   // Las otras semanas pierden lo que tengan y quedan igual que esta: se hace de inmediato y se avisa con «Deshacer».
   const copiarSemanaATodas = () => {
@@ -2896,7 +2910,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
                       plegadas.quitaLugar(`${p.id}:${w.num}:`, di);
                       avisaConDeshacer(`Se eliminó «${d.name || d.day}»`);
                     }}
-                    onCopy={() => setClipboard(clone(d))}
+                    onCopy={() => { setClipboard(clone(d)); avisa(`Copiaste «${d.name || d.day}». Ve a otro día y toca «Pegar rutina».`); }}
                     onClear={() => {
                       alDia({ exercises: [] });
                       avisaConDeshacer('Sesión vaciada');

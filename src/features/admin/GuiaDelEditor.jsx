@@ -286,6 +286,11 @@ export default function GuiaDelEditor({
           />
         )}
 
+        {/* Sin día que marcar (la semana está vacía o hoy descansa) «Aquí va» se queda en la semana (auditoría p64). */}
+        {aqui && delAtleta && aqui.semana === s?.num && aqui.dia == null && (
+          <div><Pastilla texto={`${textoAqui} · esta semana`} /></div>
+        )}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
           {DIAS_SEMANA.map((clave) => (
             <DiaEnLaGuia

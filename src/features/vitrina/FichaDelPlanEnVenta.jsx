@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronRight, Layers, Loader2, Plus, Trash2, Video } from 'lucide-react';
 import { T, KP, FONT, UI } from '@/lib/theme';
 import { Fila, FilaElegir, Interruptor as Switch, Segmentado } from '@/components/ui';
@@ -138,16 +138,20 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
     return lista;
   }, [f, precio, biblioteca, nClases]);
 
+  /* Si «Publicar» guarda el borrador y la publicación falla (p. ej. sin cuenta de cobro), el borrador ya existe: el siguiente intento lo actualiza en vez
+     de crear otro igual, y al cerrar la lista se pone al día para que se vea (auditoría p69). */
+  const borradorCreado = useRef(null);
   const guarda = async (publicar) => {
     if (problemas.length) { setError(problemas[0]); return; }
     setGuardando(publicar ? 'publicar' : 'borrador');
     setError(null);
+    let seGuardo = false;
     try {
       let guardado = await guardaPlanEnVenta({
-        id: plan?.id ?? null,
+        id: plan?.id ?? borradorCreado.current?.id ?? null,
         ...f,
         // La liga se decide una sola vez, al crear el plan.
-        slug: plan?.slug ?? slugUnico(f.titulo, slugsOcupados),
+        slug: plan?.slug ?? borradorCreado.current?.slug ?? slugUnico(f.titulo, slugsOcupados),
         titulo: f.titulo.trim(),
         descripcion: f.descripcion.trim() || null,
         objetivo: f.objetivo.trim() || null,
@@ -162,13 +166,15 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
         ...(esSuelto(f.contenido) || biblioteca ? { chat: false, tecnica: false } : null),
         ventana_semanas: Math.min(VENTANA_MAXIMA, Math.max(1, Number(f.ventana_semanas) || VENTANA_MAXIMA)),
       });
+      borradorCreado.current = guardado;
+      seGuardo = true;
       if (publicar) {
         const version = await publicaPlan(guardado.id);
         guardado = { ...guardado, estado: 'publicado', version_n: version };
       }
       alCerrar(guardado);
     } catch (e) {
-      setError(e?.message ?? 'No se pudo guardar.');
+      setError(seGuardo ? `Se guardó como borrador, pero no se pudo publicar: ${e?.message ?? 'intenta otra vez'}` : (e?.message ?? 'No se pudo guardar.'));
       setGuardando(null);
     }
   };
@@ -177,7 +183,7 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
   return (
     <>
       <Ventana
-        titulo={nuevo ? 'Poner a la venta' : 'Lo que vendes'} onCerrar={() => alCerrar()} ancho={560}
+        titulo={nuevo ? 'Poner a la venta' : 'Lo que vendes'} onCerrar={() => alCerrar(borradorCreado.current ?? undefined)} ancho={560}
         pie={(
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
             {error && <div role="alert" style={{ padding: '9px 12px', borderRadius: 11, background: KP.dangerSoft, color: KP.danger, fontSize: 13.5, fontWeight: 700 }}>{error}</div>}
