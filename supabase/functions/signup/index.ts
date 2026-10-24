@@ -2,7 +2,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 // Orígenes permitidos (CORS). Se puede sobreescribir con ALLOWED_ORIGINS (coma-separado).
 const DEFAULT_ORIGINS = [
-  'http://localhost:5173',
+  'http://localhost:5173', 'capacitor://localhost', /* app de iPhone (Capacitor) */
   'http://localhost:4173',
   'http://127.0.0.1:5173',
   'https://app.traininglabapp.com',  // dominio propio (15 oct 2026); la de Vercel sigue valiendo por el patrón .vercel.app

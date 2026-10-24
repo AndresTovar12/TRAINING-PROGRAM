@@ -13,7 +13,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { MONEDA, llamaStripe } from './stripe.js'
 
-const ORIGENES = ['http://localhost:5173', 'http://localhost:4173', 'http://127.0.0.1:5173']
+const ORIGENES = ['http://localhost:5173', 'capacitor://localhost' /* app de iPhone (Capacitor) */, 'http://localhost:4173', 'http://127.0.0.1:5173']
 const CORREO_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 const SITIO = (Deno.env.get('SITIO_URL') ?? 'https://training-program-kappa.vercel.app').replace(/\/$/, '')
 

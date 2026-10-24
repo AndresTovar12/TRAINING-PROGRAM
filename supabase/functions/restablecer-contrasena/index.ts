@@ -13,7 +13,7 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
-const DEFAULT_ORIGINS = ['http://localhost:5173', 'http://localhost:4173', 'http://127.0.0.1:5173', 'https://app.traininglabapp.com'] // + dominio propio (15 oct 2026)
+const DEFAULT_ORIGINS = ['http://localhost:5173', 'capacitor://localhost' /* app de iPhone (Capacitor) */, 'http://localhost:4173', 'http://127.0.0.1:5173', 'https://app.traininglabapp.com'] // + dominio propio (15 oct 2026)
 
 function corsHeaders(origin: string | null): Record<string, string> {
   let allow = DEFAULT_ORIGINS[0]
