@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Loader2, Map as MapaIcono, Pause, Play, Square, Watch, X } from 'lucide-react';
 import { FONT, NUM_STYLE } from '@/lib/theme';
@@ -6,6 +6,8 @@ import { MINIMO_DE_SEGUNDOS, relojDeCronometro } from '@/lib/entrenoLibre';
 import { guardaEntrenoLibre } from '@/lib/entrenoLibreApi';
 import { nombreDelDeporte } from '@/lib/metricas/deportes';
 import { enVivo, textoDeRitmo } from '@/lib/ubicacion';
+import { muestraEnPantallaBloqueada, quitaDePantallaBloqueada } from '@/lib/pantallaBloqueada';
+import { enviaAlReloj, terminaEnReloj } from '@/lib/relojApple';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useAviso } from '@/components/AvisoPasajero';
 import MapaDeCarrera from './MapaDeCarrera';
@@ -72,6 +74,31 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
   const promedio = km > 0.05 ? segundos / km : null;
   const ultimoKm = vivo.kms.at(-1) ?? null;
   const velocidad = (s) => (s > 0 ? (3600 / s).toFixed(1) : '—');
+
+  /* La pantalla bloqueada, la isla dinámica y el Apple Watch: tiempo, distancia y ritmo. Con el GPS del teléfono corriendo, la app sigue despierta aunque se bloquee la pantalla, así que se
+     actualiza cada 10 s (el cronómetro avanza solo, con la hora de inicio). Pausa y reanudar se mandan al instante. */
+  const vivos = useRef({});
+  useEffect(() => { vivos.current = { km, ritmo: vivo.ritmoSKm, segundos, nombre, deporte, enBici }; });
+  const corriendoLibre = !!cronometro && !resumen;
+  useEffect(() => {
+    if (!corriendoLibre) { quitaDePantallaBloqueada(); terminaEnReloj(); return undefined; }
+    const publica = () => {
+      const v = vivos.current;
+      const ritmoTxt = v.enBici ? `${v.ritmo > 0 ? (3600 / v.ritmo).toFixed(1) : '—'} km/h` : `${textoDeRitmo(v.ritmo)} /km`;
+      const datos = {
+        nombre: v.nombre, titulo: v.nombre, tipo: pausado ? 'pausa' : 'cardio',
+        detalle: pausado ? 'En pausa' : `${v.km.toFixed(2)} km · ${ritmoTxt}`,
+        distancia: `${v.km.toFixed(2)} km`, ritmo: ritmoTxt,
+        ...(pausado ? {} : { inicioMs: Math.round(Date.now() - v.segundos * 1000) }),
+      };
+      muestraEnPantallaBloqueada(datos);
+      enviaAlReloj({ ...datos, deporte: v.deporte });
+    };
+    publica();
+    const id = setInterval(publica, 10000);
+    return () => clearInterval(id);
+  }, [corriendoLibre, pausado]);
+  useEffect(() => () => { quitaDePantallaBloqueada(); terminaEnReloj(); }, []);
 
   const terminar = () => {
     const t = crono.termina();
