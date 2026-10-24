@@ -1,8 +1,8 @@
 /* «EMPEZAR» DESDE HOME ABRE EL ENTRENO (23 oct 2026, PDF «Botones de interacción en el entreno»: «el botón de empezar no empieza el entreno, te lleva a ver lo que tienes en el día»).
    Home navega al día y, ya ahí, el botón de la sesión (`BotonDelEntreno`) tiene que abrirse solo. Es un aviso de un solo uso entre las dos pantallas: Home dice QUÉ sesión
-   (`pideAbrirEntreno`) y el botón de esa sesión lo recoge al aparecer (`recogeEntrenoPendiente`). Caduca a los 4 segundos: si la sesión nunca aparece (otro programa, otra
+   (`pideAbrirEntreno`) y el botón de esa sesión lo recoge al aparecer (`recogeEntrenoPendiente`). Caduca a los 8 segundos: si la sesión nunca aparece (otro programa, otra
    semana), no se abre nada por sorpresa más tarde. */
-const VIGENCIA_MS = 4000;
+const VIGENCIA_MS = 8000; // con un teléfono lento o la pantalla del plan aún cargando, 4 s no alcanzaban
 let pendiente = null;
 
 export function pideAbrirEntreno(sesionId) {
