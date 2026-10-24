@@ -17,7 +17,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { webkit, devices } from 'playwright';
 
-const PUERTO = 5175;
+// 5173: el puerto que el servidor de la app (las funciones de Supabase, p. ej. «login») acepta desde la computadora. Con otro, «Entrar» falla.
+const PUERTO = 5173;
 const args = process.argv.slice(2);
 const sinGps = args.includes('--sin-gps');
 const pagina = (args.find((a) => a.startsWith('--pagina=')) ?? '--pagina=/').slice('--pagina='.length);
@@ -29,7 +30,7 @@ const servidor = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--po
 const listo = new Promise((resolve, reject) => {
   const alVer = (d) => { if (String(d).includes('Local:')) resolve(); };
   servidor.stdout.on('data', alVer);
-  servidor.stderr.on('data', (d) => { if (String(d).includes('already in use')) reject(new Error(`El puerto ${PUERTO} ya está ocupado: cierra el otro «npm run iphone».`)); });
+  servidor.stderr.on('data', (d) => { if (String(d).includes('already in use')) reject(new Error(`El puerto ${PUERTO} ya está ocupado: cierra el otro «npm run iphone» o «npm run dev».`)); });
   servidor.on('exit', (c) => reject(new Error(`El servidor se cerró (${c}).`)));
 });
 const cierraTodo = () => { try { servidor.kill(); } catch { /* ya cerrado */ } };
