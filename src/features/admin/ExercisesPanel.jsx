@@ -12,7 +12,6 @@ import {
   addExerciseMedia, listMuscleGroups, createMuscleGroup, deleteMuscleGroup, listIdsConVideoExtra,
 } from '@/lib/api';
 import MediaDelEjercicio from '@/features/admin/MediaDelEjercicio';
-import EspacioDeVideos from '@/features/admin/EspacioDeVideos';
 import { completaPortadas } from '@/lib/posters';
 import SelectorCategoria, { CrearCategoria } from '@/features/admin/SelectorCategoria';
 import ListaDesplegable from '@/components/ListaDesplegable';
@@ -1407,8 +1406,8 @@ export default function ExercisesPanel({ viendoComo }) {
 
   return (
     <div>
-      {/* El espacio de videos del coach (no sale para el dueño ni mirando la cuenta de otro). */}
-      <EspacioDeVideos activo={!viendoComo} />
+      {/* Sin barra de «Espacio de videos» (Andrés, 12 oct 2026: «los coaches ni se enteren ni sepan nada del almacenamiento»; auditoría p51). El tope sigue en la base y, si un
+          video no cabe, el aviso sale en el botón de subir; la cuenta del espacio es solo del dueño. `EspacioDeVideos` queda por si se vuelve a necesitar. */}
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
         <div

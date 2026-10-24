@@ -566,6 +566,7 @@ function ConfirmarBorrado({ athlete, onCancelar, onConfirmado }) {
 
 function ZonaAdministracion({ athlete, isMaster, soyElCoach, onCambiado, onEliminado }) {
   const { t } = usePalabras();
+  const pregunta = useConfirmacion();
   const activo = athlete.is_active !== false;
   const [ocupado, setOcupado] = useState('');
   const [err, setErr] = useState('');
@@ -601,7 +602,15 @@ function ZonaAdministracion({ athlete, isMaster, soyElCoach, onCambiado, onElimi
           <button
             type="button"
             disabled={!!ocupado}
-            onClick={() => correr('quitar', () => quitarAtletaDeMiLista(athlete.id))}
+            onClick={async () => {
+              // Sin preguntar se ejecutaba a la primera (auditoría p114): quitarlo corta la relación, aunque nada se borre.
+              const va = await pregunta({
+                titulo: `¿Quitar a ${athlete.full_name || athlete.username} de tu lista?`,
+                detalle: 'Deja de ser tu atleta: ya no ves su plan ni sus métricas. No se borra nada de lo que ya hizo, y si te vuelve a agregar, todo regresa.',
+                confirmar: 'Sí, quitarlo', peligro: true,
+              });
+              if (va) correr('quitar', () => quitarAtletaDeMiLista(athlete.id));
+            }}
             style={btn()}
           >
             {ocupado === 'quitar' ? <Loader2 size={14} className="spin" /> : <UserMinus size={14} />}
