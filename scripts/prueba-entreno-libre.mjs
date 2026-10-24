@@ -5,7 +5,7 @@ import {
   relojDeCronometro, segundosDe, unidadDeDistancia,
 } from '../src/lib/entrenoLibre.js';
 import { DEPORTES } from '../src/lib/metricas/deportes.js';
-import { datosDelResumen, lineaDeEntreno } from '../src/lib/resumenLibre.js';
+import { datosDelResumen, lineaDeEntreno, recordDe } from '../src/lib/resumenLibre.js';
 import { deporteDelCartel, haceCuanto, resumenDeLaSemana, textoDeLaSemana } from '../src/lib/semanaLibre.js';
 
 let n = 0;
@@ -108,6 +108,17 @@ prueba('una actividad con nombre propio: se guarda su nombre y, si se mueve de u
   const pat = entrenoLibre({ deporte: 'otro', inicioMs: 0, duracionS: 1200, distanciaM: 6000, titulo: 'Patines', llevaDistancia: true });
   assert.equal(pat.distancia_m, 6000, 'una propia con mapa guarda su distancia aunque sea «otro»');
   assert.equal(entrenoLibre({ deporte: 'otro', inicioMs: 0, duracionS: 1200, distanciaM: 6000 }).distancia_m, null, 'sin decir que se mueve, «otro» no lleva distancia');
+});
+
+console.log('Récords');
+prueba('la primera vez, la distancia más larga, el ritmo más rápido y el entreno más largo', () => {
+  const vieja = { id: 'a', deporte: 'correr', titulo: 'Correr', distancia_m: 5000, duracion_s: 1800, metricas: { ritmo_medio_s_km: 360 } };
+  assert.equal(recordDe({ id: 'b', deporte: 'raqueta', titulo: 'Pádel', duracion_s: 3600 }, [vieja]).tipo, 'primera');
+  assert.equal(recordDe({ id: 'b', deporte: 'correr', titulo: 'Correr', distancia_m: 6000, duracion_s: 1700, metricas: {} }, [vieja]).tipo, 'distancia');
+  assert.equal(recordDe({ id: 'b', deporte: 'correr', titulo: 'Correr', distancia_m: 4000, duracion_s: 1300, metricas: { ritmo_medio_s_km: 325 } }, [vieja]).tipo, 'ritmo');
+  assert.equal(recordDe({ id: 'b', deporte: 'correr', titulo: 'Correr', distancia_m: 4000, duracion_s: 2000, metricas: { ritmo_medio_s_km: 500 } }, [vieja]).tipo, 'tiempo');
+  assert.equal(recordDe({ id: 'b', deporte: 'correr', titulo: 'Correr', distancia_m: 3000, duracion_s: 1000, metricas: { ritmo_medio_s_km: 400 } }, [vieja]), null, 'sin récord no se dice nada');
+  assert.equal(recordDe({ id: 'a', deporte: 'correr', titulo: 'Correr', distancia_m: 9000 }, [vieja]).tipo, 'primera', 'no se compara consigo mismo');
 });
 
 console.log('Textos del resumen');

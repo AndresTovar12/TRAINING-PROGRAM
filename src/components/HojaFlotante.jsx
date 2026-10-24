@@ -23,7 +23,8 @@ import { LT, FONT, KP, NUM_STYLE, UI } from '@/lib/theme';
  * `transform` o un `overflow` de cualquier antepasado la encerraría o la
  * recortaría. Ya pasó con la cámara y con las listas desplegables.
  */
-export default function HojaFlotante({ titulo, subtitulo, onCerrar, pie = null, ancho = 580, children }) {
+// `capa`: la altura (zIndex) por si se abre encima de otra pantalla completa que ya va más arriba (la página de una actividad).
+export default function HojaFlotante({ titulo, subtitulo, onCerrar, pie = null, ancho = 580, capa = 3000, children }) {
   const esCompu = useIsDesktop();
 
   useEffect(() => {
@@ -120,7 +121,7 @@ export default function HojaFlotante({ titulo, subtitulo, onCerrar, pie = null, 
         role="dialog" aria-modal="true" aria-label={titulo}
         className="animate-fade-in"
         style={{
-          position: 'fixed', top: 0, left: 0, right: 0, height: '100dvh', zIndex: 3000,
+          position: 'fixed', top: 0, left: 0, right: 0, height: '100dvh', zIndex: capa,
           background: UI.fondo, display: 'flex', flexDirection: 'column', fontFamily: FONT,
         }}
       >
@@ -136,7 +137,7 @@ export default function HojaFlotante({ titulo, subtitulo, onCerrar, pie = null, 
     <div
       onClick={(e) => { if (e.target === e.currentTarget) onCerrar(); }}
       style={{
-        position: 'fixed', inset: 0, zIndex: 3000, display: 'flex',
+        position: 'fixed', inset: 0, zIndex: capa, display: 'flex',
         alignItems: 'center', justifyContent: 'center', padding: 24,
         background: 'rgba(17,19,24,0.45)', fontFamily: FONT,
       }}

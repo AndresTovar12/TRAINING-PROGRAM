@@ -10,6 +10,8 @@ import { deporteDelCartel, resumenDeLaSemana, textoDeLaSemana } from '@/lib/sema
 import { actividadDeDeporte, actividadDeEntreno, propiasDe } from '@/lib/actividades';
 import { useStorage } from '@/contexts/AppStateContext';
 import ElegirActividad from './ElegirActividad';
+import CelebracionLibre from './CelebracionLibre';
+import { recordDe } from '@/lib/resumenLibre';
 import HeroDeEntrenar from './HeroDeEntrenar';
 import HojaDeDemos from './HojaDeDemos';
 import OpcionesDeEntrenar from './OpcionesDeEntrenar';
@@ -77,6 +79,13 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
   const eligeDeporte = (d) => elige(actividadDeDeporte(d));
   // Cerrar del todo. En el punto, avisa para que la barra lo quite.
   const cierra = () => { setPendiente(null); setHoja(null); if (enPunto) alCerrar?.(); };
+  /* AL GUARDAR (Activity Tracker, paso 3): la celebración corta (con el récord si lo rompió, contra sus entrenos de antes), luego se abre sola la activity card y, al cerrarla,
+     queda la página de la actividad. El récord se cuenta con la lista de ANTES de recargarla. */
+  const alGuardar = (fila, extra = {}) => {
+    const record = recordDe(fila, filas ?? []);
+    recarga();
+    setHoja({ resumen: fila, celebrar: true, tarjeta: true, muestras: extra.muestras ?? null, actividad: extra.actividad ?? null, record });
+  };
   const abreElCartel = () => { if (!enCurso) setPendiente(ultimaActividad()); setHoja('cronometro'); };
   const abreLaTarjeta = () => setHoja(ultimo ? { resumen: ultimo, tarjeta: true } : 'elegir');
   const conExplorar = conEmpujon && !!alIrAExplorar;
@@ -101,7 +110,7 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
           alEmpezar={({ gps }) => { crono.inicia(pendiente.deporte, { gps, actividad: pendiente }); setPendiente(null); }}
           alMinimizar={cierra}
           alCambiarDeporte={() => setHoja('elegir')}
-          alGuardado={(fila) => { recarga(); setHoja({ resumen: fila }); }}
+          alGuardado={alGuardar}
         />
       )}
       {hoja === 'cronometro' && enCurso && !crono.cronometro.gps && (
@@ -109,18 +118,22 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
           userId={userId} crono={crono} pendiente={null}
           alEmpezar={() => {}}
           alMinimizar={cierra}
-          alGuardado={(fila) => { recarga(); setHoja({ resumen: fila }); }}
+          alGuardado={alGuardar}
         />
       )}
-      {hoja?.resumen && (
+      {hoja?.resumen && hoja.celebrar && (
+        <CelebracionLibre fila={hoja.resumen} muestras={hoja.muestras} actividad={hoja.actividad} record={hoja.record} alTerminar={() => setHoja({ ...hoja, celebrar: false })} />
+      )}
+      {hoja?.resumen && !hoja.celebrar && (
         <ResumenLibre
           fila={hoja.resumen} unidadPeso={unidadPeso} alCerrar={cierra} empiezaEnTarjeta={!!hoja.tarjeta}
+          muestras={hoja.muestras ?? null} record={hoja.record ?? null} actividad={hoja.actividad ?? null}
           // Al cerrar la activity card, una sola vez por visita y solo a quien no tiene plan ni entrenador: «¿Quieres un plan hecho por un coach?».
           alCerrarTarjeta={conEmpujon && alIrAExplorar && !yaSeLeOfrecio() ? () => { marcaOfrecido(); setHoja({ ...hoja, empujon: true }); } : undefined}
         />
       )}
       {hoja?.resumen && hoja.empujon && (
-        <HojaFlotante titulo="Explorar" onCerrar={cierra}>
+        <HojaFlotante titulo="Explorar" onCerrar={cierra} capa={3250}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <TarjetaDeExplorar alTocar={() => { cierra(); alIrAExplorar(); }} />
             <button type="button" onClick={cierra} className="kp-press" style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 800, color: LT.text2, padding: '10px 0' }}>Ahora no</button>
@@ -179,7 +192,7 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
             )}
           </>
         )}
-        <TusEntrenos filas={filas?.slice(0, 6)} alAbrir={(fila) => setHoja({ resumen: fila })} />
+        <TusEntrenos filas={filas?.slice(0, 6)} propias={propias} alAbrir={(fila) => setHoja({ resumen: fila })} />
       </div>
 
       {hojas}
