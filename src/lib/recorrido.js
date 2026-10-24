@@ -62,3 +62,42 @@ export function cantidadEnUnidad(metros, unidad = 'm') {
   const v = (Number(metros) || 0) / k;
   return String(k === 1 ? Math.round(v) : Math.round(v * 100) / 100);
 }
+
+/**
+ * El ritmo que pidió el coach, en segundos por kilómetro: «4:30 min/km» o un rango «4:25-4:35 min/km». `{ min, max }` (min = el más rápido), o `null` si lo que
+ * pidió no es un ritmo («100% intensidad»). Un ritmo suelto se acepta con 5 segundos de margen a cada lado, como en el diseño del coach (4:30 → 4:25–4:35).
+ */
+const MARGEN_DE_RITMO = 5;
+export function ritmoObjetivo(texto) {
+  const m = /(\d{1,2}):(\d{2})(?:\s*[-–]\s*(\d{1,2}):(\d{2}))?\s*min\s*\/\s*km/i.exec(String(texto ?? ''));
+  if (!m) return null;
+  const a = Number(m[1]) * 60 + Number(m[2]);
+  const b = m[3] !== undefined ? Number(m[3]) * 60 + Number(m[4]) : a;
+  const min = Math.min(a, b); const max = Math.max(a, b);
+  return min === max ? { min: min - MARGEN_DE_RITMO, max: max + MARGEN_DE_RITMO } : { min, max };
+}
+
+/**
+ * Cómo va el ritmo de ahora contra lo que pidió el coach: `estado` ('bien' | 'rapido' | 'lento'), `pos` (0 = lento … 1 = rápido, para el marcador del medidor) y
+ * `zona` (de dónde a dónde va lo bueno en ese mismo eje). `null` sin ritmo medido o sin objetivo.
+ */
+export function estadoDeRitmo(sKm, objetivo) {
+  if (!(sKm > 0) || !objetivo) return null;
+  const ancho = Math.max(objetivo.max - objetivo.min, 10);
+  const lento = objetivo.max + ancho * 0.75;
+  const rapido = objetivo.min - ancho * 0.75;
+  const eje = lento - rapido;
+  const en = (v) => Math.min(1, Math.max(0, (lento - v) / eje));
+  return {
+    estado: sKm < objetivo.min ? 'rapido' : (sKm > objetivo.max ? 'lento' : 'bien'),
+    pos: en(sKm),
+    zona: [en(objetivo.max), en(objetivo.min)],
+  };
+}
+
+/** Lo que pide un paso en una línea, como la dice el coach: «400 m a 4:30 min/km» (un ritmo va con «a»; otra carga, con «·»). */
+export function pedidoEnUnaLinea(cantidad, carga) {
+  const c = String(carga ?? '').trim();
+  if (!c) return String(cantidad ?? '');
+  return `${cantidad} ${ritmoObjetivo(c) ? 'a' : '·'} ${c}`.trim();
+}

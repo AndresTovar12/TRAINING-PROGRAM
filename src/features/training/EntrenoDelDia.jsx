@@ -27,7 +27,7 @@ import TarjetaDeVideo from '@/features/training/TarjetaDeVideo';
 import TarjetaDeClase from '@/features/training/TarjetaDeClase';
 import PasoConGps from '@/features/training/PasoConGps';
 import { useRecorrido } from '@/features/training/useRecorrido';
-import { cantidadEnUnidad, esPasoConGps, metrosDelPaso } from '@/lib/recorrido';
+import { cantidadEnUnidad, esPasoConGps, metrosDelPaso, pedidoEnUnaLinea } from '@/lib/recorrido';
 import { fuenteDeUbicacion } from '@/lib/ubicacion';
 import { claseDe } from '@/lib/clases';
 import {
@@ -455,6 +455,11 @@ export default function EntrenoDelDia({
     setSinGps(nuevo);
     try { window.localStorage.setItem(LLAVE_SIN_GPS, JSON.stringify(nuevo)); } catch { /* sin almacenamiento: vale por ahora */ }
   };
+  // «Siguiente: …» de la pantalla con mapa: el descanso que sigue, o el siguiente ejercicio con lo que pide («400 m a 4:25 min/km»).
+  const sigPasoGps = paso?.i != null ? plan.pasos[paso.i + 1] : null;
+  const siguienteDeGps = !sigPasoGps ? null : (sigPasoGps.tipo === 'descanso'
+    ? `Descanso${sigPasoGps.texto ? ` ${sigPasoGps.texto}` : ''}`
+    : [sigPasoGps.nombre === paso.nombre ? null : sigPasoGps.nombre, pedidoEnUnaLinea(sigPasoGps.texto || '', sigPasoGps.meta?.texto ?? '')].filter(Boolean).join(' · '));
   // Los lapsos por distancia del reloj también llevan mapa; mismas condiciones que el paso (el teléfono tiene GPS y ya contestó «¿Guardamos tu recorrido?»).
   const gpsEnElReloj = fuenteDeUbicacion().disponible() && (recorrido.permiso !== null || !recorrido.disponible);
 
@@ -470,12 +475,10 @@ export default function EntrenoDelDia({
           onLista={() => { setLlegando(false); setHoja('lista'); }}
         />
       )}
-      {pantalla}
-
-      {/* El paso con GPS encima del paso normal (que queda debajo para «Sin GPS» o al cerrar el mapa). */}
-      {conGps && (
+      {/* El paso con GPS (200 m o más) ocupa el lugar del paso normal, con la barra «Workout» arriba; «Sin GPS» o cerrar el mapa devuelve el paso normal. */}
+      {conGps ? (
         <PasoConGps
-          key={paso.clave} paso={paso} meta={metrosDelPaso(paso)} carga={paso.meta?.texto ?? ''}
+          key={paso.clave} paso={paso} meta={metrosDelPaso(paso)} carga={paso.meta?.texto ?? ''} color={colorDelTipo ?? undefined} siguiente={siguienteDeGps}
           onTermina={({ metros, seg, fin }) => {
             // Si el sprint fue lo primero del entreno, el entreno empezó cuando arrancó el sprint (no al marcarlo): si no, el tiempo total no lo contaría.
             escribe((prev) => ({ ...prev, entreno: iniciaEntreno(prev?.entreno, fin - seg * 1000, plan) }));
@@ -486,7 +489,7 @@ export default function EntrenoDelDia({
           onAnotar={({ metros }) => { setMedidoGps({ clave: paso.clave, reps: cantidadEnUnidad(metros, paso.termina.unidad) }); setCerradoGps(paso.clave); setHoja('cambiar'); }}
           onCerrar={() => setCerradoGps(paso.clave)}
         />
-      )}
+      ) : pantalla}
       {/* «¿Guardamos tu recorrido?»: una sola vez por teléfono, al abrir el primer entreno guiado. */}
       {recorrido.disponible && recorrido.permiso === null && <HojaDelRecorrido onSi={() => recorrido.decide('si')} onNo={() => recorrido.decide('no')} />}
 
@@ -543,7 +546,7 @@ export default function EntrenoDelDia({
           key={paso.claveFormato}
           formato={paso.formato} plan={paso.tramos ?? null} ejercicios={ejerciciosDelReloj} serie={paso.serie} resumen={nombreDelReloj}
           clave={`${userId}:${sesionId}:${paso.claveFormato}`} empezarYa={reloj} conCuenta={!reloj} onGuardar={guardaResultado} onCerrar={cierraReloj}
-          conGps={gpsEnElReloj} sinGps={sinGps} alElegirSinGps={eligeSinGps}
+          conGps={gpsEnElReloj} sinGps={sinGps} alElegirSinGps={eligeSinGps} colorDelTipo={colorDelTipo ?? undefined} fondo={fondo}
           videoDe={(ex) => videoDe(ex, medios?.(ex) ?? null, { altoMaximo: '24vh' })}
           miniaturaDe={(ex) => { const m = medios?.(ex); return m && (m.portada || m.videos?.[0]) ? <Portada foto={m.portada} video={m.videos?.[0]?.url} desde={m.videos?.[0]?.inicio} hasta={m.videos?.[0]?.fin} style={{ position: 'absolute', inset: 0 }} /> : null; }}
         />
