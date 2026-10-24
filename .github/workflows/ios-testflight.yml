@@ -59,6 +59,12 @@ jobs:
           mkdir -p "$RUNNER_TEMP/asc"
           printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey_${{ env.ASC_KEY_ID }}.p8"
 
+      - name: Agregar la extensión de pantalla bloqueada al proyecto
+        run: |
+          set -o pipefail
+          ruby -e 'require "xcodeproj"' 2>/dev/null || sudo gem install xcodeproj --no-document
+          ruby ios/ci/agrega_extensiones.rb 2>&1 | tee -a "$RUNNER_TEMP/build.log"
+
       - name: Compilar (archive, sin firmar)
         # Sin firmar a propósito: firmar la versión de pruebas exige tener un iPhone registrado en la cuenta, y para TestFlight no hace falta.
         # La firma de distribución la pone el paso siguiente (exportArchive).

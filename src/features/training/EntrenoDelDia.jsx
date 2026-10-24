@@ -4,6 +4,7 @@ import { LT, FONT } from '@/lib/theme';
 import { useCuerpoQuieto } from '@/lib/useCuerpoQuieto';
 import { usePantallaEncendida } from '@/lib/pantallaEncendida';
 import { avisaCuandoTermine, quitaAviso, vibra, AVISO_DE_DESCANSO, AVISO_DE_CRONOMETRO } from '@/lib/avisosNativos';
+import { muestraEnPantallaBloqueada, quitaDePantallaBloqueada } from '@/lib/pantallaBloqueada';
 import { preparaAudio, pitido } from '@/lib/pitidos';
 import { isLoadedExercise, sinDuracion } from '@/lib/training-utils';
 import { cargaPorPorcentaje } from '@/lib/cargaPorcentaje';
@@ -166,6 +167,31 @@ export default function EntrenoDelDia({
     avisaCuandoTermine({ id: AVISO_DE_CRONOMETRO, fin: finDeLaCuenta, cuerpo: nombreDelPaso ? `Se acabó el tiempo de ${nombreDelPaso}.` : 'Se acabó el tiempo.' });
     return () => { quitaAviso(AVISO_DE_CRONOMETRO); };
   }, [finDeLaCuenta, nombreDelPaso]);
+  /* La pantalla bloqueada y la isla dinámica (Live Activity): lo que toca ahora y cuánto falta. Se actualiza solo al cambiar de paso o de descanso; los tiempos son horas y el
+     teléfono los cuenta. Al cerrar el entreno o terminarlo, se quita. */
+  const hayEntreno = !!entreno?.inicio && !mostrarFin;
+  const nombreDePaso = paso?.nombre ?? '';
+  const claveDePaso = paso?.clave ?? '';
+  const serieTexto = paso?.vueltas > 1 ? `Serie ${paso.vuelta} de ${paso.vueltas}` : '';
+  useEffect(() => {
+    if (!hayEntreno || !paso) return;
+    const nombre = plan?.nombre || dia?.name || 'Entreno';
+    if (enDescanso) {
+      muestraEnPantallaBloqueada({
+        nombre, tipo: 'descanso', titulo: 'Descanso', detalle: siguienteNombre ? `Sigue: ${siguienteNombre}` : '',
+        ...(finDelDescanso ? { finMs: finDelDescanso } : { inicioMs: entreno.inicio }),
+      });
+    } else if (paso.tipo === 'ejercicio') {
+      muestraEnPantallaBloqueada({
+        nombre, tipo: 'trabajo', titulo: nombreDePaso, detalle: serieTexto,
+        ...(finDeLaCuenta ? { finMs: finDeLaCuenta } : { inicioMs: entreno.inicio }),
+      });
+    }
+    // Solo cuando cambia algo de lo que se ve; el resto (el entreno entero, el plan) cambia en cada tic y no debe mandar una actualización por segundo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hayEntreno, enDescanso, claveDePaso, nombreDePaso, serieTexto, siguienteNombre, finDelDescanso, finDeLaCuenta]);
+  useEffect(() => { if (!hayEntreno) quitaDePantallaBloqueada(); }, [hayEntreno]);
+  useEffect(() => () => { quitaDePantallaBloqueada(); }, []);
 
   /* ---------- Lo que se sabe de un paso ---------- */
   const exDe = useCallback((p) => (p && p.idx !== undefined ? dia.exercises[p.idx] : null), [dia]);
