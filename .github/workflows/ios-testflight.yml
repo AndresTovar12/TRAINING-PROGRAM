@@ -1,5 +1,6 @@
 # Compila la app de iPhone en la nube y la sube a TestFlight.
-# Se dispara a mano: GitHub → Actions → «iOS a TestFlight» → Run workflow.
+# Se dispara de dos formas: a mano (GitHub → Actions → «iOS a TestFlight» → Run workflow) o al subir cambios a la rama `ios-build`.
+# Al terminar (bien o mal) publica el resultado y el final del registro en la rama `ios-logs`, para poder leerlo sin entrar a GitHub.
 # Necesita UN secreto del repositorio (Settings → Secrets and variables → Actions):
 #   ASC_KEY_P8      TODO el texto del archivo AuthKey_ANLLBDRPU8.p8 (con las líneas BEGIN/END)
 # El Key ID y el Issuer ID de la llave «GITHUB ACCESS» NO son secretos (van abajo, en `env`); lo secreto es solo el archivo .p8.
@@ -8,6 +9,11 @@ name: iOS a TestFlight
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ios-build]
+
+permissions:
+  contents: write
 
 concurrency:
   group: ios-testflight
@@ -38,11 +44,13 @@ jobs:
 
       - name: Instalar y construir la web
         run: |
-          npm ci
-          npm run build
+          set -o pipefail
+          { npm ci && npm run build; } 2>&1 | tee -a "$RUNNER_TEMP/build.log"
 
       - name: Pasar la web al proyecto de iPhone
-        run: npx cap sync ios
+        run: |
+          set -o pipefail
+          npx cap sync ios 2>&1 | tee -a "$RUNNER_TEMP/build.log"
 
       - name: Guardar la llave de App Store Connect
         env:
@@ -55,15 +63,17 @@ jobs:
         # Sin firmar a propósito: firmar la versión de pruebas exige tener un iPhone registrado en la cuenta, y para TestFlight no hace falta.
         # La firma de distribución la pone el paso siguiente (exportArchive).
         run: |
+          set -o pipefail
           xcodebuild archive \
             -project ios/App/App.xcodeproj -scheme App -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/App.xcarchive" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
-            CURRENT_PROJECT_VERSION=${{ github.run_number }}
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} 2>&1 | tee -a "$RUNNER_TEMP/build.log"
 
       - name: Firmar y subir a TestFlight
         run: |
+          set -o pipefail
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/App.xcarchive" \
             -exportOptionsPlist ios/ci/ExportOptions.plist \
@@ -71,4 +81,17 @@ jobs:
             -allowProvisioningUpdates \
             -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_${{ env.ASC_KEY_ID }}.p8" \
             -authenticationKeyID "${{ env.ASC_KEY_ID }}" \
-            -authenticationKeyIssuerID "${{ env.ASC_ISSUER_ID }}"
+            -authenticationKeyIssuerID "${{ env.ASC_ISSUER_ID }}" 2>&1 | tee -a "$RUNNER_TEMP/build.log"
+
+      - name: Publicar el resultado (rama ios-logs)
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/pub" && cd "$RUNNER_TEMP/pub"
+          git init -q && git checkout -q -b ios-logs
+          echo "corrida=${{ github.run_number }} commit=${{ github.sha }} resultado=${{ job.status }}" > estado.txt
+          touch "$RUNNER_TEMP/build.log"
+          tail -n 400 "$RUNNER_TEMP/build.log" > fin.log
+          grep -nE "error:|\*\* .* FAILED|Provisioning|entitlement" "$RUNNER_TEMP/build.log" | head -80 > errores.txt || true
+          git add -A
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -q -m "iOS corrida ${{ github.run_number }}: ${{ job.status }}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" ios-logs
