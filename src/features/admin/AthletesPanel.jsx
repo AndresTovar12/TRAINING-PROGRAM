@@ -1471,7 +1471,13 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
             </div>
           )}
 
-          {semana && (
+          {/* Con el plan en pausa el atleta NO avanza: la ficha no marca «hoy», ni cuenta «saltadas», ni «0/4 esta semana» como si siguiera (auditoría p48). */}
+          {semana && mover?.enPausa && (
+            <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 10, background: KP.blueSoft, color: KP.ink, borderRadius: UI.rGrupo, padding: '14px 16px', fontSize: 14.5, fontWeight: 700, lineHeight: 1.4 }}>
+              Plan en pausa: no avanza ni cuenta sesiones saltadas hasta que lo reanudes.
+            </div>
+          )}
+          {semana && !mover?.enPausa && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
               {cifra(`${semana.hechas}/${semana.tocan}`, 'Semana', KP.blue)}
               {cifra(semana.saltadas, semana.saltadas === 1 ? 'Saltada' : 'Saltadas', semana.saltadas > 0 ? KP.danger : KP.ink)}
@@ -1481,7 +1487,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
             </div>
           )}
 
-          {semana && (
+          {semana && !mover?.enPausa && (
             <>
               <div style={{ fontSize: 17, fontWeight: 800, color: KP.ink, margin: '6px 2px -2px' }}>Esta semana</div>
               <Grupo>

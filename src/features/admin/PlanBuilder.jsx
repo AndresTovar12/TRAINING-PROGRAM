@@ -1373,6 +1373,11 @@ function SessionEditorInterno({
       {!estaPlegada && soloLectura && clase && <ClaseDeLaSesion clase={clase} onClase={() => {}} onQuitar={() => {}} />}
       {agregandoClase && <HojaDeClase onCerrar={() => setAgregandoClase(false)} onElige={(nueva) => { setAgregandoClase(false); onPatch({ clase: nueva }); }} />}
 
+      {/* Las NOTAS DEL DÍA (las que escribe la IA o vienen de un plan): el atleta las lee y antes el editor no las enseñaba, así que una sesión de puro texto parecía vacía (auditoría p53). */}
+      {!estaPlegada && Array.isArray(day.notes) && day.notes.some((n) => String(n ?? '').trim()) && (
+        <NotasDelDiaEditables notas={day.notes} soloLectura={soloLectura} onCambio={(notes) => onPatch({ notes })} />
+      )}
+
       {/* Plegado: solo la cabecera y cuánto trae. En la compu la cabecera ya dice cuántos sets son: no se repite. */}
       {estaPlegada && (
         <div style={{ margin: '8px 0 0 42px', fontSize: 12.5, fontWeight: 600, color: T.text2 }}>
@@ -1388,6 +1393,29 @@ function SessionEditorInterno({
           onCategoriaCreada={onCategoriaCreada} onCategoriaBorrada={onCategoriaBorrada} soloLectura={soloLectura} descanso={descanso}
         />
       )}
+    </div>
+  );
+}
+
+/** Las notas del día de una sesión, una por renglón. Se guardan al salir del cuadro (así escribir no reescribe el programa en cada letra). */
+function NotasDelDiaEditables({ notas, soloLectura, onCambio }) {
+  const guardado = notas.map((n) => String(n ?? '')).join('\n');
+  const [texto, setTexto] = useState(guardado);
+  const [previo, setPrevio] = useState(guardado);
+  // Si llegan otras notas de fuera (otra versión del plan), se ponen al día.
+  if (guardado !== previo) { setPrevio(guardado); setTexto(guardado); }
+  return (
+    <div style={{ marginTop: 10 }} {...enLectura(soloLectura)}>
+      <Field label="Notas del día (las lee tu atleta, una por renglón)">
+        <textarea
+          value={texto} onChange={(e) => setTexto(e.target.value)} rows={Math.min(8, Math.max(2, texto.split('\n').length))}
+          onBlur={() => {
+            const lista = texto.split('\n').map((x) => x.trim()).filter(Boolean);
+            if (lista.join('\n') !== guardado) onCambio(lista);
+          }}
+          style={{ ...inputStyle, resize: 'vertical', fontFamily: FONT, lineHeight: 1.45 }}
+        />
+      </Field>
     </div>
   );
 }
