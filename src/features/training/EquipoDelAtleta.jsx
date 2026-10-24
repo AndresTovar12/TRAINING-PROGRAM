@@ -11,7 +11,7 @@ import ListaDesplegable from '@/components/ListaDesplegable';
    visual, sino por lo que representa»—; las sesiones de todos van juntas, cada
    una dice de quién viene, y un filtro deja ver solo lo de uno si se quiere. */
 
-/** «● Beto · coach»: de quién viene algo, con su color. */
+/** «● Beto · coach»: de quién viene algo, con su color. Con `programa.mostrarTitulo` (dos programas de la MISMA persona en el mismo día) dice también cuál: «● Beto · coach · Plan 10K». */
 export function EtiquetaDeAutor({ programa, tamano = 12, style }) {
   const color = programa?.color ?? LT.blue;
   return (
@@ -20,7 +20,7 @@ export function EtiquetaDeAutor({ programa, tamano = 12, style }) {
       fontSize: tamano, fontWeight: 800, color, ...style,
     }}>
       <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
-      {etiquetaDePrograma(programa)}
+      {etiquetaDePrograma(programa)}{programa?.mostrarTitulo && programa?.title ? ` · ${programa.title}` : ''}
     </span>
   );
 }
