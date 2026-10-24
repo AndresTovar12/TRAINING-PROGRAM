@@ -22,7 +22,7 @@ import { rutaDeTienda } from '@/lib/tiendaApi';
 // La tienda pública (`/@usuario`, `/@usuario/plan`): la ve cualquiera, con o sin cuenta. Va aparte para que quien solo usa la app no la baje.
 const TiendaPublica = lazy(() => import('@/features/tienda/TiendaPublica'));
 const Catalogo = lazy(() => import('@/features/catalogo/Catalogo'));
-import { FONT, KP, UI } from '@/lib/theme';
+import { FONT, KP, UI, oficioCorto } from '@/lib/theme';
 
 function Splash({ label = 'Cargando…' }) {
   return (
@@ -151,7 +151,7 @@ function AccountMenu({ perfil, onPerfil }) {
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 700, color: KP.ink, fontSize: 15.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
               <div style={{ fontSize: 13, color: KP.ink2, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {profile?.username ? `@${profile.username} · ` : ''}{isAdmin ? 'coach' : t('atleta')}
+                {profile?.username ? `@${profile.username} · ` : ''}{isAdmin ? (oficioCorto(profile?.profesion)?.toLowerCase() || 'coach') : t('atleta')}
               </div>
             </div>
           </div>

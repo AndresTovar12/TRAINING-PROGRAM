@@ -1699,6 +1699,8 @@ function DayHeader({
           {puedeUsar && !puedeGuardar && <Pill icon={FolderOpen} onClick={() => onApplyCatalog()}>Usar workout</Pill>}
           {!puedeUsar && puedeGuardar && <Pill icon={Save} onClick={(e) => onSaveToCatalog(e.currentTarget)}>Guardar workout</Pill>}
           {onAgregarClase && destacarClase && <Pill icon={PlayCircle} onClick={() => onAgregarClase()}>Clase</Pill>}
+          {/* Sin «Mis planes ▾» (una sesión vacía no ofrece guardar), la clase no tenía dónde estar: solo salía cuando ya había un Set (auditoría p59). Va directa. */}
+          {onAgregarClase && !destacarClase && !(puedeUsar && puedeGuardar) && <Pill icon={PlayCircle} onClick={() => onAgregarClase()}>Agregar clase</Pill>}
           {onCopy && <Pill icon={Copy} onClick={() => onCopy()}>Copiar</Pill>}
           {onClear && <Pill icon={Eraser} onClick={() => onClear()}>Limpiar</Pill>}
           {onTurno && <Pill icon={Sun} onClick={(e) => setMenuTurno({ ancla: e.currentTarget })}>AM / PM <ChevronDown size={13} /></Pill>}

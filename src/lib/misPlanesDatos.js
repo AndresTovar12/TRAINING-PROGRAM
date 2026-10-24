@@ -69,8 +69,13 @@ export function workoutDeSesiones(sesiones) {
 
 /** De un workout guardado a las entradas que se ponen en un día de la semana (`dia`: 'Lun'…). */
 export function diasDeWorkout(data, dia, nombreDelItem = '') {
-  return sesionesDeWorkout(data).map((s) => {
-    const d = { ...clone(s), day: dia, name: s.name || nombreDelItem || 'Sesión', cat: s.cat || 'gym' };
+  // «Sesión» a secas es el nombre que trae una sesión nueva del editor: no es un nombre. Si el workout tiene el suyo, ese gana (auditoría p56: salían todos como «Sesión»).
+  const sinNombre = (n) => !String(n ?? '').trim() || /^sesi[oó]n$/i.test(String(n).trim());
+  return sesionesDeWorkout(data).map((s, i) => {
+    const propio = sinNombre(s.name) ? '' : s.name;
+    // Con varias sesiones, la primera se llama como el workout y las demás llevan su número para distinguirlas.
+    const delItem = nombreDelItem ? (i === 0 ? nombreDelItem : `${nombreDelItem} ${i + 1}`) : '';
+    const d = { ...clone(s), day: dia, name: propio || delItem || 'Sesión', cat: s.cat || 'gym' };
     if (!Array.isArray(d.exercises)) d.exercises = [];
     return d;
   });
