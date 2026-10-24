@@ -10,7 +10,7 @@ import {
   relojTexto, pasoDeEscala, textoDeResultado, limpiaResultado, MAX_TRAMOS,
 } from '../src/lib/formatos.js';
 import {
-  nuevoReloj, inicia, pausa, avanza, listo, termina, sumaRonda, vista, sugerido, reanuda,
+  nuevoReloj, inicia, pausa, avanza, listo, listoConTiempo, termina, sumaRonda, vista, sugerido, reanuda,
 } from '../src/lib/relojDeFormato.js';
 
 const SEG = 1000;
@@ -273,6 +273,19 @@ const ve = (c, est, seg) => vista(est, c.plan, T0 + seg * SEG, c.tope);
   assert.deepEqual(resto, { seg: 400, rondas: 0, tramos: [100, 130, 170], completados: 3, de: 3 });
   assert.deepEqual(ventanas, [[T0, T0 + 100 * SEG], [T0 + 100 * SEG, T0 + 230 * SEG], [T0 + 230 * SEG, T0 + 400 * SEG]], 'cada «Listo» cierra una ventana y abre la siguiente');
   assert.deepEqual(lapsos.map((l) => [l.tipo, l.vuelta]), [['trabajo', 1], ['trabajo', 2], ['trabajo', 3]], 'la huella de cada tramo hecho');
+}
+
+// «Listo» con el tiempo que midió el GPS: el tramo dura lo que midió, no lo que marcó el reloj (que contó también el 3, 2, 1).
+{
+  const c = corre({ ...pt, vueltas: 2 });
+  let e = arranca(c);
+  e = listoConTiempo(e, c.plan, T0 + 100 * SEG, 94, c.tope);
+  assert.deepEqual([e.i, e.hechos, e.antes], [1, [94], 94 * SEG], 'el tramo duró 94 s');
+  assert.deepEqual(e.ventanas, [[T0 + 6 * SEG, T0 + 100 * SEG]], 'su ventana termina ahora y dura 94 s');
+  assert.equal(e.desde, T0 + 100 * SEG, 'el siguiente empieza ahora');
+  e = listoConTiempo(e, c.plan, T0 + 200 * SEG, 90, c.tope);
+  assert.equal(e.fase, 'fin');
+  assert.deepEqual(e.hechos, [94, 90]);
 }
 
 // Con tope: corta en medio de un tramo y el total es el tope.

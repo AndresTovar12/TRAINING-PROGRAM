@@ -92,6 +92,21 @@ export function listo(est, plan, ahora, tope = null) {
   return sig.i >= plan.length ? terminado(sig, 'completo', sig.antes) : sig;
 }
 
+/**
+ * «Listo» con el tiempo que midió otra cosa (el GPS de un lapso por distancia): el tramo duró `seg`, no lo que marca el reloj (que contó también el 3, 2, 1 de
+ * antes de salir). El siguiente tramo arranca ahora, igual que con `listo`.
+ */
+export function listoConTiempo(est, plan, ahora, seg, tope = null) {
+  const e = avanza(est, plan, ahora, tope);
+  if (e.fase !== 'corriendo' || !plan[e.i]) return e;
+  const ms = Math.max(0, Math.round(seg)) * 1000;
+  const sig = {
+    ...e, antes: e.antes + ms, hechos: [...e.hechos, Math.round(seg)], ventanas: [...e.ventanas, [ahora - ms, ahora]],
+    i: e.i + 1, corrido: 0, desde: ahora, tramoDesde: ahora,
+  };
+  return sig.i >= plan.length ? terminado(sig, 'completo', sig.antes) : sig;
+}
+
 /** «Terminar»: parar antes de tiempo. Lo que corrió del tramo en curso cuenta para el total. */
 export function termina(est, plan, ahora, tope = null) {
   const e = avanza(est, plan, ahora, tope);

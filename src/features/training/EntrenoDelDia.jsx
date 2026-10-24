@@ -448,6 +448,15 @@ export default function EntrenoDelDia({
     // Mientras no contesta «¿Guardamos tu recorrido?», el mapa espera: si no, la pregunta quedaría tapada debajo.
     && (recorrido.permiso !== null || !recorrido.disponible);
 
+  // «Sin GPS» para un ejercicio: se recuerda en este teléfono. Lo usan el sprint y los lapsos por distancia del reloj.
+  const eligeSinGps = (nombre) => {
+    const nuevo = { ...sinGps, [nombre]: true };
+    setSinGps(nuevo);
+    try { window.localStorage.setItem(LLAVE_SIN_GPS, JSON.stringify(nuevo)); } catch { /* sin almacenamiento: vale por ahora */ }
+  };
+  // Los lapsos por distancia del reloj también llevan mapa; mismas condiciones que el paso (el teléfono tiene GPS y ya contestó «¿Guardamos tu recorrido?»).
+  const gpsEnElReloj = fuenteDeUbicacion().disponible() && (recorrido.permiso !== null || !recorrido.disponible);
+
   return createPortal(
     <div
       style={{
@@ -471,11 +480,8 @@ export default function EntrenoDelDia({
             escribe((prev) => ({ ...prev, entreno: iniciaEntreno(prev?.entreno, Date.now() - seg * 1000, plan) }));
             listo({ reps: cantidadEnUnidad(metros, paso.termina.unidad), seg });
           }}
-          onSinGps={() => {
-            const nuevo = { ...sinGps, [paso.nombre]: true };
-            setSinGps(nuevo);
-            try { window.localStorage.setItem(LLAVE_SIN_GPS, JSON.stringify(nuevo)); } catch { /* sin almacenamiento: vale por ahora */ }
-          }}
+          arrancaSolo={llegando}
+          onSinGps={() => eligeSinGps(paso.nombre)}
           onAnotar={({ metros }) => { setMedidoGps({ clave: paso.clave, reps: cantidadEnUnidad(metros, paso.termina.unidad) }); setCerradoGps(paso.clave); setHoja('cambiar'); }}
           onCerrar={() => setCerradoGps(paso.clave)}
         />
@@ -535,6 +541,7 @@ export default function EntrenoDelDia({
           key={paso.claveFormato}
           formato={paso.formato} plan={paso.tramos ?? null} ejercicios={ejerciciosDelReloj} serie={paso.serie} resumen={nombreDelReloj}
           clave={`${userId}:${sesionId}:${paso.claveFormato}`} empezarYa={reloj} conCuenta={!reloj} onGuardar={guardaResultado} onCerrar={cierraReloj}
+          conGps={gpsEnElReloj} sinGps={sinGps} alElegirSinGps={eligeSinGps}
           videoDe={(ex) => videoDe(ex, medios?.(ex) ?? null, { altoMaximo: '24vh' })}
           miniaturaDe={(ex) => { const m = medios?.(ex); return m && (m.portada || m.videos?.[0]) ? <Portada foto={m.portada} video={m.videos?.[0]?.url} desde={m.videos?.[0]?.inicio} hasta={m.videos?.[0]?.fin} style={{ position: 'absolute', inset: 0 }} /> : null; }}
         />
