@@ -87,7 +87,7 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
         titulo: resumen.actividad?.nombre ?? null, llevaDistancia: resumen.actividad ? !!resumen.actividad.gps : null,
       });
       crono.descarta();
-      alGuardado(fila);
+      alGuardado(fila, { muestras: resumen.muestras, actividad: resumen.actividad });
     } catch (e) {
       setError(e?.message ?? 'No se pudo guardar. Revisa tu conexión e inténtalo otra vez.');
       setGuardando(false);

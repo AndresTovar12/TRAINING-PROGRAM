@@ -64,7 +64,7 @@ export default function PantallaDelCronometro({ userId, crono, pendiente = null,
         titulo: t.actividad?.nombre ?? null, llevaDistancia: t.actividad ? (!!t.actividad.gps || !!unidad) : null,
       });
       crono.descarta();
-      alGuardado(fila);
+      alGuardado(fila, { muestras: t.muestras, actividad: t.actividad });
     } catch (e) {
       setError(e?.message ?? 'No se pudo guardar. Revisa tu conexión e inténtalo otra vez.');
       setFase(unidad ? 'distancia' : 'corre');

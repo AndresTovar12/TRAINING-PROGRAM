@@ -35,7 +35,7 @@ export async function guardaEntrenoLibre({ atletaId, deporte, inicioMs, duracion
 /** Los últimos `n` entrenos de quien entró, del más nuevo al más viejo (los suyos de cualquier origen: libres, del reloj o importados). */
 export async function entrenosRecientes(atletaId, n = 6) {
   const { data, error } = await supabase.from('actividades')
-    .select('id,atleta_id,origen,deporte,titulo,inicio,fin,desfase_min,duracion_s,movimiento_s,distancia_m,fc_media,fc_max,kcal_activas,kcal_totales,desnivel_pos_m,cadencia_media,potencia_media,carga,carga_metodo,metricas')
+    .select('id,atleta_id,origen,deporte,titulo,inicio,fin,desfase_min,duracion_s,movimiento_s,distancia_m,fc_media,fc_max,kcal_activas,kcal_totales,desnivel_pos_m,cadencia_media,potencia_media,carga,carga_metodo,metricas,vueltas')
     .eq('atleta_id', atletaId).order('inicio', { ascending: false }).limit(n);
   if (error) throw error;
   return data ?? [];
