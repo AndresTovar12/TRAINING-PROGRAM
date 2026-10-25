@@ -24,6 +24,11 @@ export default function MapaDeCarrera({ muestras, sigue = true, interactivo = fa
   );
 }
 
+/** La última ubicación conocida (la guarda `useUbicacionActual`): el mapa abre ahí y no en el Zócalo. */
+function ubicacionGuardada() {
+  try { const g = JSON.parse(localStorage.getItem('tl:ultima-ubicacion') ?? 'null'); return g && typeof g.lat === 'number' ? [g.lon, g.lat] : null; } catch { return null; }
+}
+
 const coordenadas = (muestras) => (muestras ?? []).filter((m) => typeof m.lat === 'number' && typeof m.lon === 'number').map((m) => [m.lon, m.lat]);
 
 function ConCalles({ muestras, sigue, interactivo, puntoAzul, alFallar }) {
@@ -50,7 +55,7 @@ function ConCalles({ muestras, sigue, interactivo, puntoAzul, alFallar }) {
         if (!window.__pmtilesListo) { maplibregl.addProtocol('pmtiles', new Protocol().tile); window.__pmtilesListo = true; }
         // Las capas oscuras de Protomaps SIN letreros: los nombres de calles piden fuentes de otro sitio, y corriendo no hacen falta.
         const capas = base.layers('calles', base.namedFlavor('dark'), { lang: 'es' }).filter((c) => c.type !== 'symbol');
-        const inicio = ultimos.current.at(-1) ?? [-99.13, 19.43];
+        const inicio = ultimos.current.at(-1) ?? ubicacionGuardada() ?? [-99.13, 19.43];
         instancia = new maplibregl.Map({
           container: caja.current,
           style: { version: 8, sources: { calles: { type: 'vector', url: `pmtiles://${URL_DEL_MAPA}`, attribution: '© OpenStreetMap' } }, layers: capas },

@@ -13,7 +13,7 @@ import { useAviso } from '@/components/AvisoPasajero';
 import MapaDeCarrera from './MapaDeCarrera';
 import IconoDeActividad from './IconoDeActividad';
 import { actividadDeDeporte } from '@/lib/actividades';
-import { useSenalGps } from './useEntrenoLibre';
+import { useSenalGps, useUbicacionActual } from './useEntrenoLibre';
 
 /* LA CARRERA CON GPS A PANTALLA COMPLETA (reestructura visual, 16 oct 2026), como «Workout · Carrera» de las capturas de Andrés:
      1. Antes de salir: el mapa, «GPS listo» y el botón redondo «Iniciar».
@@ -62,6 +62,7 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState(null);
   const senal = useSenalGps(!!pendiente && conMapa);
+  const aqui = useUbicacionActual(!!pendiente && conMapa);
   // Sin mapa, «listo para empezar» enseña la hora: que avance sola.
   const [, setTic] = useState(0);
   useEffect(() => {
@@ -147,7 +148,7 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
     return pantalla(
       <>
         {conMapa
-          ? <div style={{ position: 'absolute', inset: 0 }}><MapaDeCarrera muestras={[]} alto="100%" redondo={false} puntoAzul /></div>
+          ? <div style={{ position: 'absolute', inset: 0 }}><MapaDeCarrera muestras={aqui ? [aqui] : []} alto="100%" redondo={false} puntoAzul /></div>
           : (
             <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, paddingBottom: 160 }}>
               <span style={{ fontSize: 13.5, fontWeight: 700, color: C.texto2 }}>Hora actual</span>

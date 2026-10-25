@@ -43,6 +43,30 @@ export function useSenalGps(activo) {
   return hay ? estado : 'no_hay';
 }
 
+const LLAVE_UBICACION = 'tl:ultima-ubicacion';
+
+/**
+ * DÓNDE ESTÁS ahora, para centrar el mapa ANTES de salir (y no en el Zócalo). Arranca con la última ubicación conocida (guardada) y la va afinando con el GPS.
+ * Devuelve `{ lat, lon }` o `null` si nunca se supo.
+ */
+export function useUbicacionActual(activo) {
+  const [punto, setPunto] = useState(() => {
+    try { const g = JSON.parse(localStorage.getItem(LLAVE_UBICACION) ?? 'null'); return g && typeof g.lat === 'number' ? g : null; } catch { return null; }
+  });
+  const fuente = fuenteDeUbicacion();
+  const hay = fuente.disponible();
+  useEffect(() => {
+    if (!activo || !hay) return undefined;
+    return fuente.sigue((p) => {
+      if (!(p.precision <= 100)) return;
+      const nuevo = { lat: p.lat, lon: p.lon };
+      setPunto(nuevo);
+      try { localStorage.setItem(LLAVE_UBICACION, JSON.stringify(nuevo)); } catch { /* sin almacenamiento: solo se pierde el «último lugar» */ }
+    }, () => {});
+  }, [activo, hay, fuente]);
+  return punto;
+}
+
 /** El cronómetro de quien entró: `{ cronometro, segundos, inicia, pausa, reanuda, termina, descarta }`. `termina()` devuelve lo que hace falta para guardar y lo deja listo para borrarse con `descarta()`. */
 export function useCronometroLibre(userId) {
   const [cronometro, setCronometro] = useState(() => (userId ? lee(userId) : null)); // (si cambia la persona, la app se vuelve a armar: no hace falta volver a leer)
