@@ -12,7 +12,8 @@
     "smoke": "node scripts/smoke.mjs",
     "estilo": "node scripts/revisa-estilo.mjs",
     "prueba:tarjeta-hoy": "node scripts/prueba-tarjeta-hoy.mjs",
-    "check": "node scripts/compartir-con-mcp.mjs --revisar && node scripts/revisa-estilo.mjs && node scripts/prueba-ventana.mjs && node scripts/prueba-semana-vacia.mjs && node scripts/prueba-stripe.mjs && node scripts/prueba-compras.mjs && node scripts/prueba-espacio.mjs && node scripts/prueba-clases.mjs && node scripts/prueba-vitrina.mjs && node scripts/prueba-entrada.mjs && node scripts/prueba-compra-sin-cuenta.mjs && node scripts/prueba-entreno-libre.mjs && node scripts/prueba-explorar.mjs && node scripts/prueba-cuentas-de-prueba.mjs && node scripts/prueba-limite-de-atletas.mjs && node scripts/prueba-rutas.mjs && node scripts/prueba-descanso-en-frase.mjs && node scripts/prueba-descansos-del-set.mjs && node scripts/prueba-recorrido.mjs && node scripts/prueba-actividades.mjs && node scripts/prueba-vista-previa.mjs && node scripts/prueba-metricas-importa.mjs && node scripts/prueba-repetir-sesion.mjs && node scripts/prueba-correos.mjs && npm run build && npm run lint && npm run smoke"
+    "check": "node scripts/compartir-con-mcp.mjs --revisar && node scripts/revisa-estilo.mjs && node scripts/prueba-ventana.mjs && node scripts/prueba-semana-vacia.mjs && node scripts/prueba-stripe.mjs && node scripts/prueba-compras.mjs && node scripts/prueba-espacio.mjs && node scripts/prueba-clases.mjs && node scripts/prueba-vitrina.mjs && node scripts/prueba-entrada.mjs && node scripts/prueba-compra-sin-cuenta.mjs && node scripts/prueba-entreno-libre.mjs && node scripts/prueba-explorar.mjs && node scripts/prueba-cuentas-de-prueba.mjs && node scripts/prueba-limite-de-atletas.mjs && node scripts/prueba-rutas.mjs && node scripts/prueba-descanso-en-frase.mjs && node scripts/prueba-descansos-del-set.mjs && node scripts/prueba-recorrido.mjs && node scripts/prueba-actividades.mjs && node scripts/prueba-vista-previa.mjs && node scripts/prueba-metricas-importa.mjs && node scripts/prueba-repetir-sesion.mjs && node scripts/prueba-correos.mjs && npm run build && npm run lint && npm run smoke",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@capacitor-community/keep-awake": "^8.0.1",
@@ -57,6 +58,7 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
     "oxlint": "1.83.0",
+    "patch-package": "8.0.1",
     "playwright": "^1.62.1",
     "tailwindcss": "^4.3.0",
     "vite": "^8.0.12"
