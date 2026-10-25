@@ -1,6 +1,7 @@
 import Foundation
 import Capacitor
 import WatchConnectivity
+import HealthKit
 
 /// El puente entre la web (JavaScript) y el Apple Watch: manda al reloj lo que toca y avisa a la web lo que el reloj mide o lo que se toca en su pantalla.
 /// En la web: `lib/relojApple.js`. La app del reloj: `TrainingLabWatch`.
@@ -13,6 +14,33 @@ public class EntrenoWatchPlugin: CAPPlugin, CAPBridgedPlugin, WCSessionDelegate 
         CAPPluginMethod(name: "envia", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "termina", returnType: CAPPluginReturnPromise)
     ]
+
+    private let almacen = HKHealthStore()
+    private var relojAbierto = false
+
+    /// Pide al reloj que abra su app y empiece a medir (así el pulso fluye sin tener que abrirla a mano). Solo una vez por entreno.
+    private func abreElReloj(deporte: String?) {
+        guard !relojAbierto, WCSession.isSupported(), WCSession.default.isWatchAppInstalled, HKHealthStore.isHealthDataAvailable() else { return }
+        relojAbierto = true
+        let config = HKWorkoutConfiguration()
+        switch deporte {
+        case "correr": config.activityType = .running; config.locationType = .outdoor
+        case "caminar": config.activityType = .walking; config.locationType = .outdoor
+        case "bici": config.activityType = .cycling; config.locationType = .outdoor
+        case "natacion": config.activityType = .swimming; config.locationType = .indoor
+        case "remo": config.activityType = .rowing; config.locationType = .indoor
+        case "fuerza": config.activityType = .traditionalStrengthTraining; config.locationType = .indoor
+        case "hiit": config.activityType = .highIntensityIntervalTraining; config.locationType = .indoor
+        case "yoga": config.activityType = .yoga; config.locationType = .indoor
+        case "funcional": config.activityType = .functionalStrengthTraining; config.locationType = .indoor
+        default: config.activityType = .other; config.locationType = .indoor
+        }
+        if #available(iOS 17.0, *) {
+            almacen.startWatchApp(with: config) { _, _ in }
+        } else {
+            almacen.startWatchApp(toHandle: config) { _, _ in }
+        }
+    }
 
     override public func load() {
         guard WCSession.isSupported() else { return }
@@ -44,10 +72,12 @@ public class EntrenoWatchPlugin: CAPPlugin, CAPBridgedPlugin, WCSessionDelegate 
             if let v = call.getDouble(clave) { datos[clave] = v }
         }
         manda(datos)
+        abreElReloj(deporte: datos["deporte"] as? String)
         call.resolve()
     }
 
     @objc func termina(_ call: CAPPluginCall) {
+        relojAbierto = false
         manda(["orden": "fin"])
         call.resolve()
     }
