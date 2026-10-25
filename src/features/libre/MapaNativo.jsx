@@ -52,6 +52,9 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
   const [siguiendo, setSiguiendo] = useState(true); // la cámara va siguiendo al corredor (si arrastró el mapa con el dedo, no)
   const [en3d, setEn3d] = useState(true);
   const [foto, setFoto] = useState(null);
+  const [diag, setDiag] = useState([]); // DIAGNÓSTICO TEMPORAL (25 oct 2026): lo que pasa por dentro, visible en pantalla
+  const anotaRef = useRef(() => {});
+  anotaRef.current = (txt) => { if (pantallaCompleta) setDiag((d) => [`${new Date().toLocaleTimeString('es-MX', { hour12: false })} ${txt}`, ...d].slice(0, 9)); };
   const [alturaPanel, setAlturaPanel] = useState(0); // los botones redondos van justo arriba del panel de abajo
   const acciones = useRef({});
   const dato = useRef({ puntos, sigue });
@@ -98,10 +101,13 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
     const sigueAlCorredor = async (donde, primera) => {
       const rumbo = rumboDeRuta(dato.current.puntos);
       if (rumbo != null && e.en3d) e.rumbo = rumbo;
-      await e.mapa.setCamera({
-        coordinate: donde, zoom: ZOOM_SIGUE, angle: e.en3d ? ANGULO_3D : 0, bearing: e.en3d ? e.rumbo : 0,
-        animate: !primera, animationDuration: 900,
-      });
+      try {
+        await e.mapa.setCamera({
+          coordinate: donde, zoom: ZOOM_SIGUE, angle: e.en3d ? ANGULO_3D : 0, bearing: e.en3d ? e.rumbo : 0,
+          animate: !primera, animationDuration: 900,
+        });
+        anotaRef.current(`cámara OK ${donde.lat.toFixed(4)},${donde.lng.toFixed(4)} rumbo ${Math.round(e.rumbo)}`);
+      } catch (err) { anotaRef.current(`cámara ERROR: ${String(err?.message ?? err).slice(0, 60)}`); throw err; }
     };
 
     const mueveCamara = async (ruta, sigueAhora, primera) => {
@@ -195,6 +201,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
       if (!e.vivo) { mapa.destroy().catch(() => {}); return; }
       e.mapa = mapa;
       e.LatLngBounds = LatLngBounds;
+      anotaRef.current('mapa nativo creado');
       try { await mapa.enableCurrentLocation(true); } catch (err) { console.warn('Mapa nativo (punto azul):', err); }
       if (!e.vivo) return;
       // Pantalla completa: el margen de abajo es TODO el panel, para que el logo y «Legal» de Apple queden arriba del panel (Apple exige que se vean).
@@ -205,14 +212,17 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
       if (interactivo) {
         try {
           await mapa.setOnCameraMoveStartedListener((d) => {
+            anotaRef.current(`mapa se movió (dedo: ${d?.isGesture ? 'sí' : 'no'}) siguiendo=${e.siguiendo}`);
             if (!d?.isGesture || !e.siguiendo) return;
             e.siguiendo = false;
             setSiguiendo(false);
           });
-        } catch (err) { console.warn('Mapa nativo (arrastre):', err); }
+          anotaRef.current('escucha de arrastre: lista');
+        } catch (err) { console.warn('Mapa nativo (arrastre):', err); anotaRef.current(`escucha de arrastre ERROR: ${String(err?.message ?? err).slice(0, 50)}`); }
       }
       acciones.current = {
         alterna3D: async () => {
+          anotaRef.current('TOCASTE 2D/3D');
           e.en3d = !e.en3d;
           setEn3d(e.en3d);
           try {
@@ -221,10 +231,12 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
           } catch (err) { console.warn('Mapa nativo (2D/3D):', err); }
         },
         recentra: async () => {
+          anotaRef.current(`TOCASTE la flecha (siguiendo=${e.siguiendo})`);
           // Vuelve a seguir al corredor: la cámara va a su último punto ya, sin esperar al siguiente punto del GPS.
           e.siguiendo = true;
           setSiguiendo(true);
           const donde = dato.current.puntos.at(-1) ?? (e.conocido ? e.centroInicial : null);
+          if (!donde) anotaRef.current('flecha: no hay ubicación a dónde volver');
           try { if (donde) await sigueAlCorredor(donde, false); } catch (err) { console.warn('Mapa nativo (volver):', err); }
         },
       };
@@ -299,13 +311,18 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
     <div style={{ position: 'relative', height: alto, borderRadius: redondo ? 20 : 0, overflow: 'hidden', background: pantallaCompleta && activo ? 'transparent' : '#1B1F2E' }}>
       <div ref={caja} style={{ position: 'absolute', inset: 0 }} />
       {foto && <img src={foto} alt="Tu ruta en el mapa" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
+      {pantallaCompleta && activo && diag.length > 0 && (
+        <pre aria-hidden="true" style={{ position: 'absolute', zIndex: 9, left: 8, top: 'calc(env(safe-area-inset-top) + 64px)', margin: 0, maxWidth: '62%', padding: '6px 8px', borderRadius: 8, background: 'rgba(0,0,0,0.72)', color: '#9AF7B8', fontSize: 10, lineHeight: 1.35, whiteSpace: 'pre-wrap', pointerEvents: 'none' }}>
+          {`DIAGNÓSTICO (temporal)\n${diag.join('\n')}`}
+        </pre>
+      )}
       {pantallaCompleta && activo && (
         // Los dos botones redondos de la derecha (como Aura), justo arriba del panel de abajo (no arriba: ahí sale la brújula del mapa).
         // `zIndex`: el degradado del panel de abajo sube por encima de esta zona y, aunque se vea transparente, se quedaba con el toque de la flecha (25 oct 2026).
         <div style={{ position: 'absolute', zIndex: 5, right: 14, bottom: alturaPanel + 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <button type="button" data-map-overlay onClick={() => acciones.current.alterna3D?.()} aria-label={en3d ? 'Ver el mapa en 2D' : 'Ver el mapa en 3D'} style={botonDelMapa}>{en3d ? '2D' : '3D'}</button>
+          <button type="button" data-map-overlay onPointerDown={() => anotaRef.current('dedo sobre 2D/3D (pointerdown)')} onClick={() => acciones.current.alterna3D?.()} aria-label={en3d ? 'Ver el mapa en 2D' : 'Ver el mapa en 3D'} style={botonDelMapa}>{en3d ? '2D' : '3D'}</button>
           {interactivo && <button
-            type="button" data-map-overlay onClick={() => acciones.current.recentra?.()} aria-label={siguiendo ? 'Siguiendo tu ubicación' : 'Volver a mi ubicación'} aria-pressed={siguiendo}
+            type="button" data-map-overlay onPointerDown={() => anotaRef.current('dedo sobre la flecha (pointerdown)')} onClick={() => acciones.current.recentra?.()} aria-label={siguiendo ? 'Siguiendo tu ubicación' : 'Volver a mi ubicación'} aria-pressed={siguiendo}
             // Como Apple Maps: flecha RELLENA mientras te sigue; VACÍA cuando moviste el mapa (tócala para volver a ti).
             style={{ ...botonDelMapa, color: siguiendo ? '#4F8BFF' : '#FFFFFF' }}
           >
