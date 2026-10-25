@@ -152,7 +152,7 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
     return pantalla(
       <>
         {conMapa
-          ? <div style={{ position: 'absolute', inset: 0 }}><MapaDeCarrera muestras={aqui ? [aqui] : []} alto="100%" redondo={false} puntoAzul pantallaCompleta /></div>
+          ? <div style={{ position: 'absolute', inset: 0 }}><MapaDeCarrera muestras={aqui ? [aqui] : []} alto="100%" redondo={false} puntoAzul pantallaCompleta interactivo /></div>
           : (
             <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, paddingBottom: 160 }}>
               <span style={{ fontSize: 13.5, fontWeight: 700, color: C.texto2 }}>Hora actual</span>

@@ -1,3 +1,17 @@
+diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMaps.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMaps.swift
+index 4b86a6b..ca0c218 100644
+--- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMaps.swift
++++ b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMaps.swift
+@@ -296,6 +296,9 @@ public class Map: NSObject, UIGestureRecognizerDelegate {
+                 self.targetView = webView
+                 self.mapView.isHidden = !self.isMapVisible
+             } else {
++            // Training Lab (parche): los mapas en un rectángulo de la página van con las esquinas redondeadas de su tarjeta (el CSS no recorta una vista nativa).
++            self.mapView.layer.cornerRadius = 20
++            self.mapView.layer.masksToBounds = true
+             self.targetView = self.getTargetContainer(refWidth: self.config.width, refHeight: self.config.height)
+             if let target = self.targetView {
+                 target.tag = Map.mapTag
 diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ControlsBridge.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ControlsBridge.swift
 index 78c628f..8130199 100644
 --- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ControlsBridge.swift
