@@ -37,7 +37,7 @@ await prueba('primero la ruta, luego lo guardado, y solo sin nada todo México (
   assert.deepEqual(inicioDelMapa(ruta, { lat: 9, lng: 9 }), { centro: { lat: 3, lng: 4 }, zoom: ZOOM_INICIAL, conocido: true });
   assert.deepEqual(inicioDelMapa([], { lat: 9, lng: 8 }), { centro: { lat: 9, lng: 8 }, zoom: ZOOM_INICIAL, conocido: true });
   assert.equal(inicioDelMapa(ruta, null, ZOOM_SIGUE).zoom, ZOOM_SIGUE, 'siguiendo al corredor abre más cerca');
-  assert.ok(ZOOM_SIGUE >= 17 && ZOOM_SIGUE <= 18 && ANGULO_3D === 45);
+  assert.ok(ZOOM_SIGUE >= 18 && ZOOM_SIGUE <= 19.5 && ANGULO_3D === 45);
   const nada = inicioDelMapa([], null);
   assert.deepEqual(nada, { centro: CENTRO_SIN_DATOS, zoom: ZOOM_SIN_DATOS, conocido: false });
   assert.notDeepEqual(nada.centro, { lat: 19.43, lng: -99.13 });

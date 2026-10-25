@@ -8,9 +8,9 @@ import { Capacitor } from '@capacitor/core';
 
 export const COLOR_RUTA = '#FF5A5F';
 export const GROSOR_RUTA = 5;
-export const ZOOM_INICIAL = 16;
+export const ZOOM_INICIAL = 17.5;
 /** Al seguir al corredor el mapa se acerca más y se inclina en 3D (como Aura); en el resumen se ve plano y encuadrado. */
-export const ZOOM_SIGUE = 17.5;
+export const ZOOM_SIGUE = 18.8; // 25 oct 2026: a 17.5 el punto se veía «muy lejos» en el iPhone de Andrés (se cuentan ~150 m de ancho de pantalla)
 export const ANGULO_3D = 45;
 /** Sin ninguna ubicación conocida: todo México, no una calle al azar del Zócalo. */
 export const CENTRO_SIN_DATOS = { lat: 23.6, lng: -102.5 };
