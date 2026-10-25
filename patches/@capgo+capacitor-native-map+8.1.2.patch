@@ -57,6 +57,19 @@ index 4b86a6b..20edb9a 100644
              mapView.setRegion(region, animated: animate)
          } else if coordinate != nil {
              mapView.setCenter(center, animated: animate)
+diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMapsPlugin.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMapsPlugin.swift
+index 4b47502..76f6977 100644
+--- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMapsPlugin.swift
++++ b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMapsPlugin.swift
+@@ -14,6 +14,8 @@ public class NativeMapPlugin: CAPPlugin, CAPBridgedPlugin, MKMapViewDelegate {
+     public let identifier = "NativeMapPlugin"
+     public let jsName = "NativeMap"
+     public let pluginMethods: [CAPPluginMethod] = [
++        CAPPluginMethod(name: "startHeading", returnType: CAPPluginReturnPromise),
++        CAPPluginMethod(name: "stopHeading", returnType: CAPPluginReturnPromise),
+         CAPPluginMethod(name: "create", returnType: CAPPluginReturnPromise),
+         CAPPluginMethod(name: "destroy", returnType: CAPPluginReturnPromise),
+         CAPPluginMethod(name: "setCamera", returnType: CAPPluginReturnPromise),
 diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ControlsBridge.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ControlsBridge.swift
 index 78c628f..8130199 100644
 --- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ControlsBridge.swift
@@ -108,6 +121,45 @@ index 5d27c04..311fee0 100644
          }
      }
  
+diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
+index b88c508..ae6b59e 100644
+--- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
++++ b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
+@@ -52,6 +52,34 @@ extension NativeMapPlugin: CLLocationManagerDelegate {
+         }
+     }
+ 
++    // MARK: Brújula del teléfono (parche de Training Lab)
++    // Hacia dónde apunta el iPhone, para girar el mapa como Apple Maps, Strava y Aura. Se avisa a la página con el evento `onHeading` (grados desde el norte).
++
++    @objc func startHeading(_ call: CAPPluginCall) {
++        guard CLLocationManager.headingAvailable() else { call.resolve(["disponible": false]); return }
++        DispatchQueue.main.async {
++            let manager = self.ensureLocationManager()
++            manager.headingFilter = 2
++            manager.headingOrientation = .portrait
++            manager.startUpdatingHeading()
++            call.resolve(["disponible": true])
++        }
++    }
++
++    @objc func stopHeading(_ call: CAPPluginCall) {
++        DispatchQueue.main.async {
++            self.ensureLocationManager().stopUpdatingHeading()
++            call.resolve()
++        }
++    }
++
++    public func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
++        // Una precisión negativa quiere decir que la brújula no está calibrada: no se usa.
++        guard newHeading.headingAccuracy >= 0 else { return }
++        let rumbo = newHeading.trueHeading >= 0 ? newHeading.trueHeading : newHeading.magneticHeading
++        notifyListeners("onHeading", data: ["heading": rumbo, "accuracy": newHeading.headingAccuracy])
++    }
++
+     public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+         guard let call = pendingPermissionCall,
+               manager.authorizationStatus != .notDetermined else {
 diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ViewHelpers.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ViewHelpers.swift
 index 7348e3b..205a983 100644
 --- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ViewHelpers.swift
