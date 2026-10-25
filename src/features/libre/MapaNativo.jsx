@@ -31,9 +31,16 @@ const fila = creaFila();
 let dueno = null;
 let contador = 0;
 
+/* La clase que esconde la app de abajo (#root) mientras un mapa a pantalla completa está a la vista. Se lleva la cuenta de QUIÉN la pidió: la clase solo está
+   puesta mientras haya al menos un mapa vivo que la pidió. Antes era un interruptor suelto y un mapa que se cerraba a medio arrancar la dejaba puesta: la app de
+   abajo se quedaba escondida y con ella el aviso «¿Descartar esta salida?» (vive en #root), así que «Descartar» parecía no hacer nada. */
 const CLASE_PANTALLA = 'mapa-nativo-pantalla';
-const ponClase = () => { try { document.documentElement.classList.add(CLASE_PANTALLA); } catch { /* sin documento */ } };
-const quitaClase = () => { try { document.documentElement.classList.remove(CLASE_PANTALLA); } catch { /* sin documento */ } };
+const conClase = new Set();
+const pintaClase = () => { try { document.documentElement.classList.toggle(CLASE_PANTALLA, conClase.size > 0); } catch { /* sin documento */ } };
+const ponClase = (quien) => { conClase.add(quien); pintaClase(); };
+const quitaClase = (quien) => { conClase.delete(quien); pintaClase(); };
+/** Por si acaso: una pantalla SIN mapa grande (el resumen) se asegura de que la app de abajo se vea. */
+export const limpiaPantallaDeMapa = () => { conClase.clear(); pintaClase(); };
 
 const textoGuardado = () => { try { return localStorage.getItem('tl:ultima-ubicacion'); } catch { return null; } };
 
@@ -245,9 +252,24 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
         },
       };
       e.listo = true;
-      if (pantallaCompleta) { ponClase(); setAlturaPanel(reservaDelPanel()); setActivo(true); }
+      if (!e.vivo) return; // se cerró mientras arrancaba: no se esconde nada
+      if (pantallaCompleta) { ponClase(id); setAlturaPanel(reservaDelPanel()); setActivo(true); }
       await aplica(true);
       if (comoFoto && e.vivo) await vuelveFoto();
+      else if (!pantallaCompleta && e.vivo) await compruebaMontado();
+    };
+
+    /* Un mapa en un rectángulo se monta buscando por dentro la vista que WebKit crea para su elemento; si no la encuentra, el plugin avisa «listo» igual y queda
+       un cuadro oscuro. Una foto de prueba lo delata (sin montarse, el mapa no tiene tamaño y la foto falla): en ese caso, el mapa de siempre. */
+    const compruebaMontado = async () => {
+      await new Promise((res) => { setTimeout(res, 1200); });
+      if (!e.vivo || !e.mapa) return;
+      try {
+        await conTiempoLimite(puenteDelMapa().takeSnapshot({ id }), 4000, 'el mapa chico no respondió');
+      } catch (err) {
+        console.warn('Mapa nativo (rectángulo sin montar):', err);
+        if (e.vivo) fallar.current?.('fallo');
+      }
     };
 
     /* EL RESUMEN SE VUELVE FOTO. Un mapa vivo dentro de una página que se desplaza se queda con el dedo (no deja bajar la página si empiezas encima de él) y
@@ -265,7 +287,10 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
         e.mapa = null;
         fila(async () => { try { await mapa?.destroy(); } catch { /* ya no estaba */ } elemento?.remove(); }).catch(() => {});
         if (dueno === ficha) dueno = null; // con la foto puesta ya no ocupa el mapa nativo: otra pantalla lo puede usar
-      } catch (err) { console.warn('Mapa nativo (foto del resumen):', err); }
+      } catch (err) {
+        console.warn('Mapa nativo (foto del resumen):', err);
+        if (e.vivo) fallar.current?.('fallo'); // sin foto el mapa chico quedó vacío: mejor el mapa de siempre que un cuadro oscuro
+      }
     };
 
     fila(arranca).catch((err) => {
@@ -280,7 +305,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
       empuja.current = null;
       acciones.current = {};
       if (dueno === ficha) dueno = null;
-      quitaClase();
+      quitaClase(id);
       // Destruir va en la fila, detrás de cualquier creación en camino (que al terminar verá que ya no vive y se tira sola).
       fila(async () => {
         const { mapa, elemento } = e;

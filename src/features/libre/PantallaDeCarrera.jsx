@@ -15,6 +15,7 @@ import IconoDeActividad from './IconoDeActividad';
 import { actividadDeDeporte } from '@/lib/actividades';
 import { useSenalGps, useUbicacionActual } from './useEntrenoLibre';
 import { usaMapaNativo } from '@/lib/mapaNativo';
+import { limpiaPantallaDeMapa } from './MapaNativo';
 import { useBarraDeEstadoClara } from '@/lib/barraDeEstado';
 
 /* LA CARRERA CON GPS A PANTALLA COMPLETA (reestructura visual, 16 oct 2026), como «Workout · Carrera» de las capturas de Andrés:
@@ -65,6 +66,8 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState(null);
   useBarraDeEstadoClara(!resumen); // todas las pantallas de la carrera son oscuras menos el resumen: la hora y la batería en letras claras
+  // En el resumen no hay mapa grande: la app de abajo (donde viven los avisos como «¿Descartar esta salida?») tiene que verse sí o sí.
+  useEffect(() => { if (resumen) limpiaPantallaDeMapa(); }, [resumen]);
   const senal = useSenalGps(!!pendiente && conMapa);
   const aqui = useUbicacionActual(!!pendiente && conMapa);
   // Sin mapa, «listo para empezar» enseña la hora: que avance sola.
