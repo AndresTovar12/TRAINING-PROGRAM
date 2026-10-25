@@ -117,6 +117,10 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
         // Sin puntos todavía (antes de salir), la última ubicación conocida; sin nada, no se mueve.
         const donde = ruta.at(-1) ?? (e.conocido ? e.centroInicial : null);
         if (!donde) return;
+        // El GPS tiembla unos metros aunque estés quieto: si el corredor no se movió de verdad desde la última vez que se centró, la cámara se queda quieta
+        // (antes se re-centraba CADA segundo y el mapa nunca estaba quieto).
+        if (!primera && !e.necesitaZoom && e.ultimoCentro && metrosEntre(e.ultimoCentro, donde) < 5) return;
+        e.ultimoCentro = donde;
         // Sin ubicación al abrir el mapa estaba en todo México: al llegar la primera, se acerca de golpe (sin animar desde tan lejos).
         await sigueAlCorredor(donde, primera || e.necesitaZoom);
         e.necesitaZoom = false;
@@ -239,6 +243,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
           setSiguiendo(true);
           const donde = dato.current.puntos.at(-1) ?? (e.conocido ? e.centroInicial : null);
           if (!donde) anotaRef.current('flecha: no hay ubicación a dónde volver');
+          e.ultimoCentro = donde;
           try { if (donde) await sigueAlCorredor(donde, false); } catch (err) { console.warn('Mapa nativo (volver):', err); }
           // Lo que importa: ¿el mapa de verdad quedó sobre ti? Se mide el centro real del mapa antes y después (y contra tu punto de GPS).
           setTimeout(async () => {
