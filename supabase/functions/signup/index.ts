@@ -59,6 +59,13 @@ function textoDeError(e: unknown): string {
 
 const USERNAME_RE = /^[a-zA-Z0-9_.]{3,30}$/
 
+// Los correos que la app inventa para quien se registra sin correo (nadie los recibe). Igual que `src/lib/correos.js`.
+const DOMINIOS_SIN_BUZON = ['sin-correo.traininglabapp.com', 'traininglab.app']
+const esCorreoInterno = (c: string) => {
+  const d = c.slice(c.lastIndexOf('@') + 1).toLowerCase()
+  return DOMINIOS_SIN_BUZON.some((x) => d === x || d.endsWith(`.${x}`))
+}
+
 /**
  * ¿Ese profesional ya llenó los atletas que puede agregar? Se revisa ANTES de
  * crear la cuenta para no dejar un atleta a medias. La base también lo impide
@@ -141,8 +148,6 @@ Deno.serve(async (req) => {
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return json({ error: 'Correo inválido' }, 400, origin)
   }
-  if (!email) email = `${username.toLowerCase()}@sin-correo.traininglabapp.com`
-
   const isCoach = accountType === 'coach'
 
   // OJO: el rol que guarda la base es 'admin' o 'user'. NO 'athlete'.
@@ -158,6 +163,36 @@ Deno.serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     { auth: { autoRefreshToken: false, persistSession: false } },
   )
+
+  /* EL CORREO QUE ESCRIBE QUIEN SE REGISTRA NO SE DA POR BUENO (lote 1 de seguridad, 25 oct 2026).
+
+     Antes se creaba la cuenta con ese correo YA CONFIRMADO. Cualquiera podia registrarse con el correo de otra
+     persona: la dejaba sin poder usar su propio correo y, si esa persona entraba despues con Google o Apple,
+     el sistema juntaba las dos cuentas y quien se registro primero conservaba la contraseña (secuestro previo).
+
+     Ahora el correo escrito NO se usa como correo de la cuenta hasta probar que es de quien se registra: la cuenta
+     nace con su correo interno `usuario@sin-correo.traininglabapp.com` (se entra con el usuario, igual que
+     quien se registra sin correo) y el correo escrito viaja de vuelta como `correo_pendiente`. La app manda
+     enseguida el codigo de 6 numeros (funcion `correo-de-la-cuenta`) y, con el codigo, queda puesto y confirmado de verdad.
+     Excepcion: si quien llama es el DUEÑO con su sesion (el panel "crear coach"), el correo se acepta tal cual. */
+  let confiable = false
+  const portador = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim()
+  if (portador && portador !== (Deno.env.get('SUPABASE_ANON_KEY') ?? '')) {
+    const { data: quien } = await admin.auth.getUser(portador)
+    if (quien?.user) {
+      const { data: pf } = await admin.from('profiles').select('is_owner, is_active').eq('id', quien.user.id).maybeSingle()
+      confiable = pf?.is_owner === true && pf?.is_active !== false
+    }
+  }
+  const correoInterno = `${username.toLowerCase()}@sin-correo.traininglabapp.com`
+  let correoPendiente: string | null = null
+  if (!email || (!confiable && esCorreoInterno(email))) {
+    // Sin correo, o uno de los internos escrito a mano (no se deja: reservaria el correo interno de otro usuario).
+    email = correoInterno
+  } else if (!confiable) {
+    correoPendiente = email
+    email = correoInterno
+  }
 
   // Username único
   const { data: taken } = await admin
@@ -187,12 +222,12 @@ Deno.serve(async (req) => {
     }
   }
 
-  // Crear usuario confirmado (sin email de verificación)
+  // Crear usuario (su correo de la cuenta ya es de verdad suyo o es el interno; ver arriba).
   const { data, error } = await admin.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
-    user_metadata: { username, full_name: fullName, role },
+    user_metadata: { username, full_name: fullName, role, ...(correoPendiente ? { correo_pendiente: correoPendiente } : {}) },
   })
 
   if (error) {
@@ -238,5 +273,5 @@ Deno.serve(async (req) => {
     }
   }
 
-  return json({ ok: true, user_id: userId, email, role, coach_id: coachId }, 200, origin)
+  return json({ ok: true, user_id: userId, email, role, coach_id: coachId, correo_pendiente: correoPendiente }, 200, origin)
 })

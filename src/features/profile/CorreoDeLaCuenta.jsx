@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Check } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { esCorreoInventado, correoValido } from '@/lib/correos';
+import { esCorreoInventado, correoValido, correoPorConfirmar, olvidaCorreoPorConfirmar } from '@/lib/correos';
 import { confirmaCodigoDeCorreo, pideCodigoDeCorreo } from '@/lib/correoDeLaCuentaApi';
 import { FONT, KP } from '@/lib/theme';
 import HojaFlotante from '@/components/HojaFlotante';
@@ -22,9 +22,11 @@ export default function CorreoDeLaCuenta() {
   const soloGoogle = !proveedores.includes('email');
   const actual = user?.email ?? '';
   const sinCorreo = !actual || esCorreoInventado(actual);
+  // El correo con el que se registró y que aún no confirma con el código (ver `supabase/functions/signup`). Solo cuenta mientras la cuenta siga sin correo.
+  const porConfirmar = sinCorreo ? correoPorConfirmar() : '';
 
   const [paso, setPaso] = useState(null); // null | 'pedir' | 'codigo'
-  const [correo, setCorreo] = useState('');
+  const [correo, setCorreo] = useState(porConfirmar);
   const [contrasena, setContrasena] = useState('');
   const [codigo, setCodigo] = useState('');
   const [busy, setBusy] = useState(false);
@@ -63,6 +65,7 @@ export default function CorreoDeLaCuenta() {
       await supabase.auth.refreshSession().catch(() => {});
       await refreshProfile?.();
       setListo(r.correo);
+      olvidaCorreoPorConfirmar();
       cierra();
     } catch (err) {
       setError(err.message);
@@ -76,8 +79,8 @@ export default function CorreoDeLaCuenta() {
     <>
       <Fila
         texto="Correo" valor={listo || (sinCorreo ? 'Sin correo' : actual)} valorTono={sinCorreo && !listo ? 'neutro' : 'azul'}
-        detalle={soloGoogle ? 'Es el de tu cuenta de Google.' : sinCorreo && !listo ? 'Agrégalo para recuperar tu contraseña si la olvidas.' : null}
-        onClick={soloGoogle ? undefined : () => { setPaso('pedir'); setListo(''); setError(''); }}
+        detalle={soloGoogle ? 'Es el de tu cuenta de Google.' : sinCorreo && !listo && porConfirmar ? `Falta confirmar ${porConfirmar}: toca y escribe el código que te mandamos.` : sinCorreo && !listo ? 'Agrégalo para recuperar tu contraseña si la olvidas.' : null}
+        onClick={soloGoogle ? undefined : () => { setPaso(porConfirmar ? 'codigo' : 'pedir'); if (porConfirmar) setCorreo(porConfirmar); setListo(''); setError(''); setCodigo(''); }}
       />
 
       {paso && (
