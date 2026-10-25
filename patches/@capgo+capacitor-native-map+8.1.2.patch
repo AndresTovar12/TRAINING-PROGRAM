@@ -58,15 +58,16 @@ index 4b86a6b..20edb9a 100644
          } else if coordinate != nil {
              mapView.setCenter(center, animated: animate)
 diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMapsPlugin.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMapsPlugin.swift
-index 4b47502..76f6977 100644
+index 4b47502..d840138 100644
 --- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMapsPlugin.swift
 +++ b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMapsPlugin.swift
-@@ -14,6 +14,8 @@ public class NativeMapPlugin: CAPPlugin, CAPBridgedPlugin, MKMapViewDelegate {
+@@ -14,6 +14,9 @@ public class NativeMapPlugin: CAPPlugin, CAPBridgedPlugin, MKMapViewDelegate {
      public let identifier = "NativeMapPlugin"
      public let jsName = "NativeMap"
      public let pluginMethods: [CAPPluginMethod] = [
 +        CAPPluginMethod(name: "startHeading", returnType: CAPPluginReturnPromise),
 +        CAPPluginMethod(name: "stopHeading", returnType: CAPPluginReturnPromise),
++        CAPPluginMethod(name: "setHeadingFollow", returnType: CAPPluginReturnPromise),
          CAPPluginMethod(name: "create", returnType: CAPPluginReturnPromise),
          CAPPluginMethod(name: "destroy", returnType: CAPPluginReturnPromise),
          CAPPluginMethod(name: "setCamera", returnType: CAPPluginReturnPromise),
@@ -122,10 +123,19 @@ index 5d27c04..311fee0 100644
      }
  
 diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
-index b88c508..ae6b59e 100644
+index b88c508..0146133 100644
 --- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
 +++ b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
-@@ -52,6 +52,34 @@ extension NativeMapPlugin: CLLocationManagerDelegate {
+@@ -1,6 +1,8 @@
+ import Foundation
+ import Capacitor
+ import CoreLocation
++import MapKit
++import UIKit
+ 
+ // MARK: - Location permission
+ //
+@@ -52,6 +54,66 @@ extension NativeMapPlugin: CLLocationManagerDelegate {
          }
      }
  
@@ -150,11 +160,43 @@ index b88c508..ae6b59e 100644
 +        }
 +    }
 +
++    /// Qué mapas giran SOLOS con la brújula (los pide la página con `setHeadingFollow`) y el último rumbo suavizado.
++    enum HeadingFollow {
++        static var ids = Set<String>()
++        static var suavizado: Double?
++    }
++
++    @objc func setHeadingFollow(_ call: CAPPluginCall) {
++        guard let id = call.getString("id") else { call.reject("id requerido"); return }
++        let activo = call.getBool("enabled", true)
++        DispatchQueue.main.async {
++            if activo { HeadingFollow.ids.insert(id) } else { HeadingFollow.ids.remove(id) }
++            call.resolve()
++        }
++    }
++
 +    public func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
 +        // Una precisión negativa quiere decir que la brújula no está calibrada: no se usa.
 +        guard newHeading.headingAccuracy >= 0 else { return }
-+        let rumbo = newHeading.trueHeading >= 0 ? newHeading.trueHeading : newHeading.magneticHeading
-+        notifyListeners("onHeading", data: ["heading": rumbo, "accuracy": newHeading.headingAccuracy])
++        let nuevo = newHeading.trueHeading >= 0 ? newHeading.trueHeading : newHeading.magneticHeading
++        // Se suaviza por el camino corto (355° → 5° no da la vuelta entera).
++        var suave = nuevo
++        if let previo = HeadingFollow.suavizado {
++            var diferencia = nuevo - previo
++            while diferencia > 180 { diferencia -= 360 }
++            while diferencia < -180 { diferencia += 360 }
++            suave = (previo + 0.4 * diferencia + 360).truncatingRemainder(dividingBy: 360)
++        }
++        HeadingFollow.suavizado = suave
++        // El giro lo hace el iPhone mismo, de forma continua (animación corta que arranca desde donde va): así no se siente a tirones como al pedirlo desde la página.
++        for id in HeadingFollow.ids {
++            guard let map = maps[id], let camara = map.mapView.camera.copy() as? MKMapCamera else { continue }
++            camara.heading = suave
++            UIView.animate(withDuration: 0.3, delay: 0, options: [.beginFromCurrentState, .curveLinear, .allowUserInteraction]) {
++                map.mapView.camera = camara
++            }
++        }
++        notifyListeners("onHeading", data: ["heading": suave, "accuracy": newHeading.headingAccuracy])
 +    }
 +
      public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {

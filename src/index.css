@@ -338,3 +338,6 @@ button.ui-fila:focus-visible { outline: 2px solid #1E40E0; outline-offset: -2px;
 .maplibregl-map .maplibregl-ctrl-attrib a {
   color: #fff;
 }
+
+/* Velo del selector de tipo de mapa: entra rápido, se queda y se desvanece. */
+@keyframes tl-velo { 0% { opacity: 0 } 15% { opacity: 1 } 75% { opacity: 1 } 100% { opacity: 0 } }

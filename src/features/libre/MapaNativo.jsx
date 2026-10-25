@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import { Compass, Layers, Navigation } from 'lucide-react';
+import { Compass, Layers, Loader2, Navigation } from 'lucide-react';
 import {
-  metrosEntre, suavizaRumbo, ANGULO_3D, COLOR_RUTA, ESPERA_MAXIMA_MS, GROSOR_RUTA, ZOOM_INICIAL, ZOOM_SIGUE,
+  metrosEntre, ANGULO_3D, COLOR_RUTA, ESPERA_MAXIMA_MS, GROSOR_RUTA, ZOOM_INICIAL, ZOOM_SIGUE,
   adelgazaRuta, claveDeRuta, rumboDeRuta, ponClase, quitaClase, conTiempoLimite, creaFila, encuadre, inicioDelMapa, planDeEnvio, puntosDeMuestras, ubicacionGuardada,
 } from '@/lib/mapaNativo';
 
@@ -57,12 +57,14 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
   const puntos = useMemo(() => puntosDeMuestras(muestras), [muestras]);
   const [activo, setActivo] = useState(false);
   const [siguiendo, setSiguiendo] = useState(true); // la cámara va siguiendo al corredor (si arrastró el mapa con el dedo, no)
-  const [en3d, setEn3d] = useState(true);
+  const [en3d, setEn3d] = useState(false); // por defecto el mapa sale PLANO (2D); el 3D es una opción
   const [foto, setFoto] = useState(null);
   const [norteArriba, setNorteArriba] = useState(false); // false: el mapa gira hacia donde apunta el iPhone (como Apple Maps, Strava y Aura)
   const [rumboVisible, setRumboVisible] = useState(0); // para girar el ícono de la brújula
   const [tipoDeMapa, setTipoDeMapa] = useState(() => { try { return localStorage.getItem('tl:tipo-de-mapa') || 'Normal'; } catch { return 'Normal'; } });
   const [abierto, setAbierto] = useState(false); // el selector de tipo de mapa
+  const [cargandoTipo, setCargandoTipo] = useState(false); // velo mientras Apple baja las imágenes del tipo de mapa nuevo
+  const [centroPunto, setCentroPunto] = useState(null); // dónde cae en pantalla el punto del corredor (para dibujarle el cono de dirección)
   const [alturaPanel, setAlturaPanel] = useState(0); // los botones redondos van justo arriba del panel de abajo
   const acciones = useRef({});
   const dato = useRef({ puntos, sigue });
@@ -85,9 +87,8 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
     const e = {
       vivo: true, mapa: null, LatLngBounds: null, elemento: null, listo: false, ids: [], ultimoEnvioMs: 0, claveEnviada: null, reloj: null, ocupado: false, otraVez: false, necesitaZoom: false,
       // `siguiendo`: la cámara va con el corredor (hasta que mueva el mapa con el dedo). `en3d`: inclinado 45°. `rumbo`: hacia dónde va (el mapa gira con él).
-      siguiendo: true, en3d: dato.current.sigue, conocido: false, rumbo: 0, brujula: null, norteArriba: false, ultimoGiroMs: 0,
+      siguiendo: true, en3d: false, conocido: false, rumbo: 0, brujula: null, norteArriba: false, ultimoGiroMs: 0,
     };
-    setEn3d(e.en3d);
 
     const dibujaRuta = async (ruta) => {
       const { mapa } = e;
@@ -214,23 +215,22 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
       try { await mapa.enableCurrentLocation(true); } catch (err) { console.warn('Mapa nativo (punto azul):', err); }
       if (!e.vivo) return;
       // El tipo de mapa que eligió la última vez (estándar, satelital o híbrido).
-      if (tipoDeMapa !== 'Normal') { try { await mapa.setMapType(modulo.MapType[tipoDeMapa]); } catch (err) { console.warn('Mapa nativo (tipo de mapa):', err); } }
-      // LA BRÚJULA: el mapa gira hacia donde apunta el iPhone. Se suaviza y se aplica como mucho 4 veces por segundo.
+      if (tipoDeMapa !== 'Normal') { try { await mapa.setMapType(modulo.MapType[tipoDeMapa]); if (tipoDeMapa === 'Hybrid') await puenteDelMapa().setPointsOfInterestEnabled({ id, enabled: true }); } catch (err) { console.warn('Mapa nativo (tipo de mapa):', err); } }
+      // LA BRÚJULA: el mapa gira hacia donde apunta el iPhone. El giro lo hace el iPhone mismo, de forma continua y suavizada (`setHeadingFollow`, parche del plugin);
+      // la página solo se entera del rumbo para dibujar el cono del punto y para las cámaras que ella misma pone.
       if (pantallaCompleta && dato.current.sigue) {
         try {
           const puente = puenteDelMapa();
           e.escuchaBrujula = await puente.addListener('onHeading', (d) => {
-            if (!e.vivo || !e.listo || typeof d?.heading !== 'number') return;
-            e.brujula = suavizaRumbo(e.brujula, d.heading);
-            if (e.norteArriba || !e.siguiendo) return;
-            const ahora = Date.now();
-            if (ahora - e.ultimoGiroMs < 250) return;
-            e.ultimoGiroMs = ahora;
-            e.rumbo = e.brujula;
-            setRumboVisible(e.rumbo);
-            e.mapa.setCamera({ bearing: e.rumbo, animate: true, animationDuration: 250 }).catch(() => {});
+            if (!e.vivo || typeof d?.heading !== 'number') return;
+            e.brujula = d.heading;
+            if (e.norteArriba || !e.siguiendo) { e.rumbo = e.norteArriba ? 0 : e.rumbo; setRumboVisible(d.heading); return; }
+            e.rumbo = d.heading;
+            setRumboVisible(d.heading);
           });
-          await puente.startHeading();
+          e.puente = puente;
+          const { disponible } = await puente.startHeading();
+          if (disponible !== false) await puente.setHeadingFollow({ id, enabled: true });
         } catch (err) { console.warn('Mapa nativo (brújula):', err); }
       }
       // Pantalla completa: el margen de abajo es TODO el panel, para que el logo y «Legal» de Apple queden arriba del panel (Apple exige que se vean).
@@ -244,6 +244,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
             if (!d?.isGesture || !e.siguiendo) return;
             e.siguiendo = false;
             setSiguiendo(false);
+            e.puente?.setHeadingFollow({ id, enabled: false }).catch(() => {}); // con el mapa movido a mano, deja de girar solo
           });
         } catch (err) { console.warn('Mapa nativo (arrastre):', err); }
       }
@@ -260,19 +261,30 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
           e.norteArriba = !e.norteArriba;
           setNorteArriba(e.norteArriba);
           e.rumbo = e.norteArriba ? 0 : (e.brujula ?? e.rumbo);
-          setRumboVisible(e.rumbo);
-          try { await e.mapa.setCamera({ bearing: e.rumbo, animate: true, animationDuration: 400 }); } catch (err) { console.warn('Mapa nativo (norte):', err); }
+          try {
+            // Con el norte arriba el giro automático se apaga (y la cámara va al norte); si no, vuelve a girar con la brújula.
+            await e.puente?.setHeadingFollow({ id, enabled: !e.norteArriba });
+            if (e.norteArriba) await e.mapa.setCamera({ bearing: 0, animate: true, animationDuration: 400 });
+          } catch (err) { console.warn('Mapa nativo (norte):', err); }
         },
         poneTipo: async (tipo) => {
           setTipoDeMapa(tipo);
           setAbierto(false);
+          // Apple deja el mapa vacío un momento mientras baja las imágenes: un velo con indicador de carga para que no parezca un error.
+          setCargandoTipo(true);
+          setTimeout(() => setCargandoTipo(false), 1600);
           try { localStorage.setItem('tl:tipo-de-mapa', tipo); } catch { /* sin almacenamiento: solo se olvida la elección */ }
-          try { await e.mapa.setMapType(modulo.MapType[tipo]); } catch (err) { console.warn('Mapa nativo (tipo de mapa):', err); }
+          try {
+            await e.mapa.setMapType(modulo.MapType[tipo]);
+            // El híbrido lleva los nombres de lugares y calles encima (por eso se nota distinto del satelital); los otros, el mapa limpio.
+            await puenteDelMapa().setPointsOfInterestEnabled({ id, enabled: tipo === 'Hybrid' });
+          } catch (err) { console.warn('Mapa nativo (tipo de mapa):', err); }
         },
         recentra: async () => {
           // Vuelve a seguir al corredor: la cámara va a su último punto ya, sin esperar al siguiente punto del GPS.
           e.siguiendo = true;
           setSiguiendo(true);
+          if (!e.norteArriba) e.puente?.setHeadingFollow({ id, enabled: true }).catch(() => {});
           const donde = dato.current.puntos.at(-1) ?? (e.conocido ? e.centroInicial : null);
           e.ultimoCentro = donde;
           try { if (donde) await sigueAlCorredor(donde, false); } catch (err) { console.warn('Mapa nativo (volver):', err); }
@@ -280,7 +292,11 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
       };
       e.listo = true;
       if (!e.vivo) return; // se cerró mientras arrancaba: no se esconde nada
-      if (pantallaCompleta) { ponClase(id); setAlturaPanel(reservaDelPanel()); setActivo(true); }
+      if (pantallaCompleta) {
+        ponClase(id); setAlturaPanel(reservaDelPanel()); setActivo(true);
+        const m = margenesDelMapa();
+        setCentroPunto({ x: window.innerWidth / 2, y: m.top + (window.innerHeight - m.top - m.bottom) / 2 });
+      }
       await aplica(true);
       if (comoFoto && e.vivo) await vuelveFoto();
       else if (!pantallaCompleta && e.vivo) await compruebaMontado();
@@ -334,7 +350,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
       e.vivo = false;
       clearTimeout(e.reloj);
       e.escuchaBrujula?.remove?.();
-      if (e.escuchaBrujula) puenteDelMapa().stopHeading().catch(() => {});
+      if (e.escuchaBrujula) { puenteDelMapa().setHeadingFollow({ id, enabled: false }).catch(() => {}); puenteDelMapa().stopHeading().catch(() => {}); }
       empuja.current = null;
       acciones.current = {};
       if (dueno === ficha) dueno = null;
@@ -355,6 +371,18 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
     <div style={{ position: 'relative', height: alto, borderRadius: redondo ? 20 : 0, overflow: 'hidden', background: pantallaCompleta && activo ? 'transparent' : '#1B1F2E' }}>
       <div ref={caja} style={{ position: 'absolute', inset: 0 }} />
       {foto && <img src={foto} alt="Tu ruta en el mapa" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
+      {pantallaCompleta && activo && cargandoTipo && (
+        <div aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: 3, display: 'grid', placeItems: 'center', background: 'rgba(15,18,32,0.55)', backdropFilter: 'blur(6px)', pointerEvents: 'none', color: '#fff', animation: 'tl-velo 1600ms ease both' }}>
+          <Loader2 size={30} className="spin" />
+        </div>
+      )}
+      {pantallaCompleta && activo && siguiendo && centroPunto && (
+        // El CONO de dirección del punto azul: hacia dónde mira el iPhone. Con el mapa girando con la brújula apunta siempre hacia arriba; con el norte arriba, hacia donde mires.
+        <svg aria-hidden="true" width="84" height="84" viewBox="0 0 84 84" style={{ position: 'absolute', zIndex: 2, left: centroPunto.x - 42, top: centroPunto.y - 42, pointerEvents: 'none', transform: `rotate(${norteArriba ? rumboVisible : 0}deg)`, transition: 'transform 250ms linear' }}>
+          <defs><linearGradient id="tl-cono" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stopColor="#2F6BFF" stopOpacity="0.55" /><stop offset="1" stopColor="#2F6BFF" stopOpacity="0" /></linearGradient></defs>
+          <path d="M42 42 L14 0 L70 0 Z" fill="url(#tl-cono)" />
+        </svg>
+      )}
       {pantallaCompleta && activo && (
         // Los botones redondos de la derecha, justo arriba del panel de abajo (no arriba: ahí sale la brújula del mapa).
         // `zIndex`: el degradado del panel de abajo sube por encima de esta zona y, aunque se vea transparente, se quedaba con el toque de la flecha (25 oct 2026).
