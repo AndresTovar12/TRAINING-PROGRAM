@@ -156,3 +156,9 @@ export const ponClase = (quien) => { conClase.add(quien); pintaClase(); };
 export const quitaClase = (quien) => { conClase.delete(quien); pintaClase(); };
 /** Por si acaso: una pantalla SIN mapa grande (el resumen) se asegura de que la app de abajo se vea. */
 export const limpiaPantallaDeMapa = () => { conClase.clear(); pintaClase(); };
+
+/** La diferencia más corta entre dos rumbos (grados): de -180 a 180. */
+export const diferenciaDeRumbo = (a, b) => (((b - a + 540) % 360) + 360) % 360 - 180;
+
+/** Suaviza la brújula: se acerca al valor nuevo una fracción `k` por vez, por el camino corto (355° → 5° no da la vuelta entera). Sin valor previo, el nuevo. */
+export const suavizaRumbo = (actual, nuevo, k = 0.35) => (actual == null ? nuevo : (actual + k * diferenciaDeRumbo(actual, nuevo) + 360) % 360);

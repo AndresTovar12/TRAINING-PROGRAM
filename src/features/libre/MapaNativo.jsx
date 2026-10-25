@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import { Navigation } from 'lucide-react';
+import { Compass, Layers, Navigation } from 'lucide-react';
 import {
-  metrosEntre, ANGULO_3D, COLOR_RUTA, ESPERA_MAXIMA_MS, GROSOR_RUTA, ZOOM_INICIAL, ZOOM_SIGUE,
+  metrosEntre, suavizaRumbo, ANGULO_3D, COLOR_RUTA, ESPERA_MAXIMA_MS, GROSOR_RUTA, ZOOM_INICIAL, ZOOM_SIGUE,
   adelgazaRuta, claveDeRuta, rumboDeRuta, ponClase, quitaClase, conTiempoLimite, creaFila, encuadre, inicioDelMapa, planDeEnvio, puntosDeMuestras, ubicacionGuardada,
 } from '@/lib/mapaNativo';
 
@@ -59,6 +59,10 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
   const [siguiendo, setSiguiendo] = useState(true); // la cámara va siguiendo al corredor (si arrastró el mapa con el dedo, no)
   const [en3d, setEn3d] = useState(true);
   const [foto, setFoto] = useState(null);
+  const [norteArriba, setNorteArriba] = useState(false); // false: el mapa gira hacia donde apunta el iPhone (como Apple Maps, Strava y Aura)
+  const [rumboVisible, setRumboVisible] = useState(0); // para girar el ícono de la brújula
+  const [tipoDeMapa, setTipoDeMapa] = useState(() => { try { return localStorage.getItem('tl:tipo-de-mapa') || 'Normal'; } catch { return 'Normal'; } });
+  const [abierto, setAbierto] = useState(false); // el selector de tipo de mapa
   const [alturaPanel, setAlturaPanel] = useState(0); // los botones redondos van justo arriba del panel de abajo
   const acciones = useRef({});
   const dato = useRef({ puntos, sigue });
@@ -81,7 +85,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
     const e = {
       vivo: true, mapa: null, LatLngBounds: null, elemento: null, listo: false, ids: [], ultimoEnvioMs: 0, claveEnviada: null, reloj: null, ocupado: false, otraVez: false, necesitaZoom: false,
       // `siguiendo`: la cámara va con el corredor (hasta que mueva el mapa con el dedo). `en3d`: inclinado 45°. `rumbo`: hacia dónde va (el mapa gira con él).
-      siguiendo: true, en3d: dato.current.sigue, conocido: false, rumbo: 0,
+      siguiendo: true, en3d: dato.current.sigue, conocido: false, rumbo: 0, brujula: null, norteArriba: false, ultimoGiroMs: 0,
     };
     setEn3d(e.en3d);
 
@@ -103,10 +107,11 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
        GPS (como mucho una vez por segundo) se pone la cámara: centrada en el corredor, al zoom fijo, inclinada en 3D y girada hacia donde va. El punto azul es el
        de Apple (`enableCurrentLocation`). Si el usuario mueve el mapa con el dedo, se deja de seguir; la flecha lo regresa. */
     const sigueAlCorredor = async (donde, primera) => {
-      const rumbo = rumboDeRuta(dato.current.puntos);
-      if (rumbo != null && e.en3d) e.rumbo = rumbo;
+      // Hacia dónde mira el mapa: la brújula del iPhone (si la hay y no se pidió «norte arriba»); si no, la dirección de la ruta.
+      if (e.norteArriba) e.rumbo = 0;
+      else if (e.brujula == null) { const rumbo = rumboDeRuta(dato.current.puntos); if (rumbo != null) e.rumbo = rumbo; }
       await e.mapa.setCamera({
-        coordinate: donde, zoom: ZOOM_SIGUE, angle: e.en3d ? ANGULO_3D : 0, bearing: e.en3d ? e.rumbo : 0,
+        coordinate: donde, zoom: ZOOM_SIGUE, angle: e.en3d ? ANGULO_3D : 0, bearing: e.rumbo,
         animate: !primera, animationDuration: 900,
       });
     };
@@ -189,7 +194,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
           zoom: inicio.zoom,
           ...(pantallaCompleta ? { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight } : {}),
           // Como Aura: edificios en 3D y brújula, pero sin letreros de negocios. Sin gestos cuando no es interactivo para no robar el scroll.
-          mapType: 'standard', colorScheme: ESQUEMA, showsPointsOfInterest: false, showsCompass: true, showsBuildings: true, showsScale: false, showsTraffic: false,
+          mapType: 'standard', colorScheme: ESQUEMA, showsPointsOfInterest: false, showsCompass: !(pantallaCompleta && dato.current.sigue), showsBuildings: true, showsScale: false, showsTraffic: false,
           gestures: { scroll: interactivo, zoom: interactivo, rotate: false, pitch: false },
         },
       }, () => avisaListo());
@@ -208,6 +213,26 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
       e.LatLngBounds = LatLngBounds;
       try { await mapa.enableCurrentLocation(true); } catch (err) { console.warn('Mapa nativo (punto azul):', err); }
       if (!e.vivo) return;
+      // El tipo de mapa que eligió la última vez (estándar, satelital o híbrido).
+      if (tipoDeMapa !== 'Normal') { try { await mapa.setMapType(modulo.MapType[tipoDeMapa]); } catch (err) { console.warn('Mapa nativo (tipo de mapa):', err); } }
+      // LA BRÚJULA: el mapa gira hacia donde apunta el iPhone. Se suaviza y se aplica como mucho 4 veces por segundo.
+      if (pantallaCompleta && dato.current.sigue) {
+        try {
+          const puente = puenteDelMapa();
+          e.escuchaBrujula = await puente.addListener('onHeading', (d) => {
+            if (!e.vivo || !e.listo || typeof d?.heading !== 'number') return;
+            e.brujula = suavizaRumbo(e.brujula, d.heading);
+            if (e.norteArriba || !e.siguiendo) return;
+            const ahora = Date.now();
+            if (ahora - e.ultimoGiroMs < 250) return;
+            e.ultimoGiroMs = ahora;
+            e.rumbo = e.brujula;
+            setRumboVisible(e.rumbo);
+            e.mapa.setCamera({ bearing: e.rumbo, animate: true, animationDuration: 250 }).catch(() => {});
+          });
+          await puente.startHeading();
+        } catch (err) { console.warn('Mapa nativo (brújula):', err); }
+      }
       // Pantalla completa: el margen de abajo es TODO el panel, para que el logo y «Legal» de Apple queden arriba del panel (Apple exige que se vean).
       if (pantallaCompleta) {
         try { await mapa.setPadding(dato.current.sigue ? margenesDelMapa() : { top: 0, left: 0, right: 0, bottom: reservaDelPanel() }); } catch (err) { console.warn('Mapa nativo (márgenes):', err); }
@@ -227,9 +252,22 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
           e.en3d = !e.en3d;
           setEn3d(e.en3d);
           try {
-            if (!e.en3d) e.rumbo = 0; // en 2D, con el norte arriba
-            await e.mapa.setCamera({ angle: e.en3d ? ANGULO_3D : 0, bearing: e.en3d ? e.rumbo : 0, animate: true, animationDuration: 500 });
+            // 3D = inclinado 45° (se ven los edificios en volumen); 2D = visto desde arriba. El giro hacia donde mira el iPhone se queda en los dos.
+            await e.mapa.setCamera({ angle: e.en3d ? ANGULO_3D : 0, bearing: e.rumbo, animate: true, animationDuration: 500 });
           } catch (err) { console.warn('Mapa nativo (2D/3D):', err); }
+        },
+        alternaNorte: async () => {
+          e.norteArriba = !e.norteArriba;
+          setNorteArriba(e.norteArriba);
+          e.rumbo = e.norteArriba ? 0 : (e.brujula ?? e.rumbo);
+          setRumboVisible(e.rumbo);
+          try { await e.mapa.setCamera({ bearing: e.rumbo, animate: true, animationDuration: 400 }); } catch (err) { console.warn('Mapa nativo (norte):', err); }
+        },
+        poneTipo: async (tipo) => {
+          setTipoDeMapa(tipo);
+          setAbierto(false);
+          try { localStorage.setItem('tl:tipo-de-mapa', tipo); } catch { /* sin almacenamiento: solo se olvida la elección */ }
+          try { await e.mapa.setMapType(modulo.MapType[tipo]); } catch (err) { console.warn('Mapa nativo (tipo de mapa):', err); }
         },
         recentra: async () => {
           // Vuelve a seguir al corredor: la cámara va a su último punto ya, sin esperar al siguiente punto del GPS.
@@ -295,6 +333,8 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
     return () => {
       e.vivo = false;
       clearTimeout(e.reloj);
+      e.escuchaBrujula?.remove?.();
+      if (e.escuchaBrujula) puenteDelMapa().stopHeading().catch(() => {});
       empuja.current = null;
       acciones.current = {};
       if (dueno === ficha) dueno = null;
@@ -316,10 +356,39 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
       <div ref={caja} style={{ position: 'absolute', inset: 0 }} />
       {foto && <img src={foto} alt="Tu ruta en el mapa" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
       {pantallaCompleta && activo && (
-        // Los dos botones redondos de la derecha (como Aura), justo arriba del panel de abajo (no arriba: ahí sale la brújula del mapa).
+        // Los botones redondos de la derecha, justo arriba del panel de abajo (no arriba: ahí sale la brújula del mapa).
         // `zIndex`: el degradado del panel de abajo sube por encima de esta zona y, aunque se vea transparente, se quedaba con el toque de la flecha (25 oct 2026).
-        <div style={{ position: 'absolute', zIndex: 5, right: 14, bottom: alturaPanel + 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <button type="button" data-map-overlay onClick={() => acciones.current.alterna3D?.()} aria-label={en3d ? 'Ver el mapa en 2D' : 'Ver el mapa en 3D'} style={botonDelMapa}>{en3d ? '2D' : '3D'}</button>
+        <div style={{ position: 'absolute', zIndex: 5, right: 14, bottom: alturaPanel + 16, display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
+          {abierto && (
+            <div data-map-overlay role="menu" aria-label="Tipo de mapa" style={{ position: 'absolute', right: 58, bottom: 0, display: 'flex', flexDirection: 'column', gap: 6, padding: 8, borderRadius: 18, background: 'rgba(28,32,48,0.94)', backdropFilter: 'blur(14px)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
+              {[['Normal', 'Estándar'], ['Satellite', 'Satelital'], ['Hybrid', 'Híbrido']].map(([tipo, nombre]) => (
+                <button
+                  key={tipo} type="button" role="menuitemradio" aria-checked={tipoDeMapa === tipo} data-map-overlay onClick={() => acciones.current.poneTipo?.(tipo)}
+                  style={{ border: 'none', borderRadius: 12, padding: '10px 16px', background: tipoDeMapa === tipo ? '#2F6BFF' : 'rgba(255,255,255,0.08)', color: '#fff', fontFamily: 'inherit', fontSize: 14, fontWeight: 700, cursor: 'pointer', textAlign: 'left', whiteSpace: 'nowrap', touchAction: 'manipulation' }}
+                >
+                  {nombre}
+                </button>
+              ))}
+            </div>
+          )}
+          <button type="button" data-map-overlay onClick={() => setAbierto((v) => !v)} aria-label="Tipo de mapa: estándar, satelital o híbrido" aria-expanded={abierto} style={{ ...botonDelMapa, color: abierto ? '#4F8BFF' : '#fff' }}>
+            <Layers size={20} />
+          </button>
+          {/* Dice el modo EN EL QUE ESTÁS (3D = inclinado, con los edificios en volumen; 2D = visto desde arriba). Tocarlo cambia al otro. */}
+          <button
+            type="button" data-map-overlay onClick={() => acciones.current.alterna3D?.()} aria-pressed={en3d}
+            aria-label={en3d ? 'Vista 3D inclinada. Tocar para ver el mapa plano en 2D' : 'Vista 2D plana. Tocar para inclinar el mapa en 3D'} style={{ ...botonDelMapa, color: en3d ? '#4F8BFF' : '#fff' }}
+          >
+            {en3d ? '3D' : '2D'}
+          </button>
+          {/* Brújula: el mapa gira hacia donde mira el iPhone; tocarla lo deja con el norte arriba (y otra vez para volver a girar). La aguja marca dónde queda el norte. */}
+          <button
+            type="button" data-map-overlay onClick={() => acciones.current.alternaNorte?.()} aria-pressed={!norteArriba}
+            aria-label={norteArriba ? 'Norte arriba. Tocar para que el mapa gire hacia donde miras' : 'El mapa gira hacia donde miras. Tocar para dejar el norte arriba'}
+            style={{ ...botonDelMapa, color: norteArriba ? '#fff' : '#4F8BFF' }}
+          >
+            <Compass size={22} style={{ transform: `rotate(${-rumboVisible}deg)`, transition: 'transform 200ms linear' }} />
+          </button>
           {interactivo && <button
             type="button" data-map-overlay onClick={() => acciones.current.recentra?.()} aria-label={siguiendo ? 'Siguiendo tu ubicación' : 'Volver a mi ubicación'} aria-pressed={siguiendo}
             // Como Apple Maps: flecha RELLENA mientras te sigue; VACÍA cuando moviste el mapa (tócala para volver a ti).

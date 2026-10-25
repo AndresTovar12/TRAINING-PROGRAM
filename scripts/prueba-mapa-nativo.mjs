@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {
   ANGULO_3D, CENTRO_SIN_DATOS, MAX_PUNTOS_RUTA, MINIMO_ENCUADRE_GRADOS, ZOOM_INICIAL, ZOOM_SIGUE, ZOOM_SIN_DATOS,
-  adelgazaRuta, metrosEntre, rumboDeRuta, centroConReserva, claveDeRuta, conTiempoLimite, creaFila, encuadre, inicioDelMapa, planDeEnvio, puntosDeMuestras, ubicacionGuardada, usaMapaNativo,
+  adelgazaRuta, metrosEntre, rumboDeRuta, diferenciaDeRumbo, suavizaRumbo, centroConReserva, claveDeRuta, conTiempoLimite, creaFila, encuadre, inicioDelMapa, planDeEnvio, puntosDeMuestras, ubicacionGuardada, usaMapaNativo,
 } from '../src/lib/mapaNativo.js';
 
 let n = 0;
@@ -131,6 +131,16 @@ await prueba('el rumbo sale de la dirección de la carrera y se ignora el temblo
   assert.equal(rumboDeRuta([base, { lat: base.lat + 0.00002, lng: base.lng }]), null, '2 m no es moverse');
   assert.equal(rumboDeRuta([]), null);
   assert.equal(rumboDeRuta([base]), null);
+});
+
+await prueba('la brújula se suaviza por el camino corto', () => {
+  assert.equal(diferenciaDeRumbo(350, 10), 20);
+  assert.equal(diferenciaDeRumbo(10, 350), -20);
+  assert.equal(diferenciaDeRumbo(90, 90), 0);
+  assert.equal(suavizaRumbo(null, 123), 123);
+  assert.ok(Math.abs(suavizaRumbo(350, 10, 0.5) - 0) < 1e-9, '350→10 pasa por 0, no por 180');
+  assert.ok(Math.abs(suavizaRumbo(10, 350, 0.5) - 0) < 1e-9);
+  assert.ok(suavizaRumbo(0, 90, 0.35) > 0 && suavizaRumbo(0, 90, 0.35) < 90);
 });
 
 console.log(`\n${n} pruebas del mapa nativo: bien`);
