@@ -28,6 +28,7 @@
     "@capacitor/status-bar": "^8.0.4",
     "@capgo/background-geolocation": "^8.4.14",
     "@capgo/capacitor-health": "^8.11.12",
+    "@capgo/capacitor-native-map": "8.1.2",
     "@capgo/capacitor-social-login": "^8.7.5",
     "@protomaps/basemaps": "5.7.2",
     "@supabase/supabase-js": "^2.108.1",
