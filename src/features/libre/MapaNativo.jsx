@@ -3,7 +3,7 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Navigation } from 'lucide-react';
 import {
   ANGULO_3D, COLOR_RUTA, ESPERA_MAXIMA_MS, GROSOR_RUTA, ZOOM_INICIAL, ZOOM_SIGUE,
-  adelgazaRuta, centroConReserva, claveDeRuta, conTiempoLimite, creaFila, encuadre, inicioDelMapa, planDeEnvio, puntosDeMuestras, ubicacionGuardada,
+  adelgazaRuta, claveDeRuta, rumboDeRuta, ponClase, quitaClase, conTiempoLimite, creaFila, encuadre, inicioDelMapa, planDeEnvio, puntosDeMuestras, ubicacionGuardada,
 } from '@/lib/mapaNativo';
 
 /* EL MAPA DE APPLE DENTRO DE LA APP DE IPHONE (25 oct 2026). Andrés: el mapa dibujado por la página «se siente feo, como web». Este es el mapa de verdad del
@@ -18,11 +18,9 @@ import {
    · Mapa en un rectángulo (resumen, mini, tarjeta de un paso): el mapa se monta EN la página, justo en el rectángulo (`element`), y la sigue al moverse. Encima de ese
      rectángulo no debe haber nada de la página: el mapa nativo se pinta sobre ella.
 
-   COMO EN AURA (ampliación del 25 oct): al seguir al corredor a pantalla completa el mapa se inclina en 3D (edificios), con zoom 17.5 y el punto azul CON CONO de
-   dirección: eso lo da MapKit con el modo de seguimiento `followWithHeading` (el mapa gira con el rumbo del teléfono). Si el usuario arrastra el mapa, MapKit deja de
-   seguir; aquí se avisa con el botón de la flecha (se enciende en coral) y al tocarlo vuelve a seguir. Aparte hay un botón 2D/3D. Ambos son HTML flotando a la derecha.
-   Cuando MapKit sigue al usuario, la cámara la lleva MapKit (no `setCamera`); el panel de abajo se descuenta con `setPadding` (MapKit centra al usuario dentro de los
-   márgenes del mapa). Embebidos (rectángulo) siguen al último punto de la ruta con `setCamera`, sin girar.
+   LA CÁMARA (25 oct, tras probarlo en el iPhone): la mueve este código con cada punto del GPS (`sigueAlCorredor`): zoom fijo, 3D a 45° y girada hacia donde va
+   el corredor. NO se usa el seguimiento automático de MapKit: ponía su propia distancia y peleaba con todo. Si el usuario mueve el mapa con el dedo se deja de
+   seguir (la flecha se vacía) y al tocarla vuelve. Botones 2D/3D y flecha: HTML flotando a la derecha, arriba del panel.
 
    Un solo mapa nativo a la vez (`dueno`): crear y destruir van en fila (`fila`), porque React en desarrollo monta, desmonta y vuelve a montar enseguida. */
 
@@ -31,16 +29,7 @@ const fila = creaFila();
 let dueno = null;
 let contador = 0;
 
-/* La clase que esconde la app de abajo (#root) mientras un mapa a pantalla completa está a la vista. Se lleva la cuenta de QUIÉN la pidió: la clase solo está
-   puesta mientras haya al menos un mapa vivo que la pidió. Antes era un interruptor suelto y un mapa que se cerraba a medio arrancar la dejaba puesta: la app de
-   abajo se quedaba escondida y con ella el aviso «¿Descartar esta salida?» (vive en #root), así que «Descartar» parecía no hacer nada. */
-const CLASE_PANTALLA = 'mapa-nativo-pantalla';
-const conClase = new Set();
-const pintaClase = () => { try { document.documentElement.classList.toggle(CLASE_PANTALLA, conClase.size > 0); } catch { /* sin documento */ } };
-const ponClase = (quien) => { conClase.add(quien); pintaClase(); };
-const quitaClase = (quien) => { conClase.delete(quien); pintaClase(); };
-/** Por si acaso: una pantalla SIN mapa grande (el resumen) se asegura de que la app de abajo se vea. */
-export const limpiaPantallaDeMapa = () => { conClase.clear(); pintaClase(); };
+
 
 const textoGuardado = () => { try { return localStorage.getItem('tl:ultima-ubicacion'); } catch { return null; } };
 
@@ -51,9 +40,6 @@ const puenteDelMapa = () => Capacitor.Plugins?.NativeMap ?? registerPlugin('Nati
 
 const botonDelMapa = { width: 48, height: 48, borderRadius: 24, border: 'none', background: 'rgba(28,32,48,0.88)', color: '#fff', display: 'grid', placeItems: 'center', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 800, touchAction: 'manipulation', backdropFilter: 'blur(10px)', boxShadow: '0 4px 14px rgba(0,0,0,0.35)' };
 
-/** Distancia (metros) e inclinación de la cámara mientras MapKit sigue al corredor. Más cerca en 3D, como se ve en la calle. */
-const camaraAlSeguir = (en3d) => (en3d ? { distance: 380, pitch: 45 } : { distance: 520, pitch: 0 });
-
 const reservaDelPanel = () => {
   const panel = document.querySelector('[data-mapa-panel]');
   return panel ? Math.max(0, Math.round(window.innerHeight - panel.getBoundingClientRect().top)) : 0;
@@ -63,7 +49,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
   const caja = useRef(null);
   const puntos = useMemo(() => puntosDeMuestras(muestras), [muestras]);
   const [activo, setActivo] = useState(false);
-  const [siguiendo, setSiguiendo] = useState(true); // MapKit va siguiendo al usuario (si lo arrastró a mano, no)
+  const [siguiendo, setSiguiendo] = useState(true); // la cámara va siguiendo al corredor (si arrastró el mapa con el dedo, no)
   const [en3d, setEn3d] = useState(true);
   const [foto, setFoto] = useState(null);
   const [alturaPanel, setAlturaPanel] = useState(0); // los botones redondos van justo arriba del panel de abajo
@@ -87,8 +73,8 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
     const comoFoto = !pantallaCompleta && !dato.current.sigue && !interactivo;
     const e = {
       vivo: true, mapa: null, LatLngBounds: null, elemento: null, listo: false, ids: [], ultimoEnvioMs: 0, claveEnviada: null, reloj: null, ocupado: false, otraVez: false, necesitaZoom: false,
-      // `rastreo`: MapKit sigue al usuario con rumbo (pantalla completa que sigue). `en3d`: inclinado 45°.
-      rastreo: pantallaCompleta && dato.current.sigue, en3d: dato.current.sigue, conocido: false,
+      // `siguiendo`: la cámara va con el corredor (hasta que mueva el mapa con el dedo). `en3d`: inclinado 45°. `rumbo`: hacia dónde va (el mapa gira con él).
+      siguiendo: true, en3d: dato.current.sigue, conocido: false, rumbo: 0,
     };
     setEn3d(e.en3d);
 
@@ -105,44 +91,33 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
       if (viejos.length) await mapa.removePolylines(viejos);
     };
 
-    // El mapa ocupa toda la pantalla pero el panel de abajo tapa una parte: se centra al corredor en lo que queda libre.
-    const centroLibre = async (ultimo) => {
-      const reserva = pantallaCompleta ? reservaDelPanel() : 0;
-      if (reserva <= 0) return ultimo;
-      try {
-        const b = await e.mapa.getMapBounds();
-        return centroConReserva(ultimo, { gradosVisibles: b.northeast.lat - b.southwest.lat, alturaPt: window.innerHeight, reservaPt: reserva });
-      } catch { return ultimo; }
-    };
-
-    // Empieza (o vuelve a empezar) el seguimiento de MapKit: acerca, inclina y le pide seguir al usuario con rumbo (el punto azul con cono).
-    const empiezaARastrear = async (primera) => {
-      const { mapa } = e;
-      // El margen de abajo es TODO el panel: así el logo y «Legal» de Apple quedan arriba del panel (Apple exige que se vean). Para que el punto no se vaya
-      // arriba (con solo el margen de abajo quedaba a un tercio de la pantalla) se pone también un margen arriba: el centro queda casi a media pantalla.
-      const reserva = reservaDelPanel();
-      await mapa.setPadding({ top: Math.round(reserva * 0.7), left: 0, right: 0, bottom: reserva });
-      const donde = dato.current.puntos.at(-1) ?? (e.conocido ? e.centroInicial : null);
-      if (donde) await mapa.setCamera({ coordinate: donde, zoom: ZOOM_SIGUE, angle: e.en3d ? ANGULO_3D : 0, animate: !primera });
-      // MapKit, al seguir, pone su propia distancia (se veía muy lejos) y la cámara plana: se le piden la distancia y la inclinación (parche del plugin).
-      await puenteDelMapa().setUserTrackingMode({ id, mode: 'followWithHeading', ...camaraAlSeguir(e.en3d) });
-      e.siguiendo = true;
-      setSiguiendo(true);
+    /* LA CÁMARA LA LLEVA ESTE CÓDIGO, NO MAPKIT (25 oct 2026). El seguimiento automático de MapKit («followWithHeading») ponía su propia distancia, aplanaba el 3D y
+       peleaba con cualquier ajuste: el mapa se veía lejos, se acercaba y se alejaba solo, y el botón de la flecha no sabía si seguía o no. Ahora, con cada punto del
+       GPS (como mucho una vez por segundo) se pone la cámara: centrada en el corredor, al zoom fijo, inclinada en 3D y girada hacia donde va. El punto azul es el
+       de Apple (`enableCurrentLocation`). Si el usuario mueve el mapa con el dedo, se deja de seguir; la flecha lo regresa. */
+    const sigueAlCorredor = async (donde, primera) => {
+      const rumbo = rumboDeRuta(dato.current.puntos);
+      if (rumbo != null && e.en3d) e.rumbo = rumbo;
+      await e.mapa.setCamera({
+        coordinate: donde, zoom: ZOOM_SIGUE, angle: e.en3d ? ANGULO_3D : 0, bearing: e.en3d ? e.rumbo : 0,
+        animate: !primera, animationDuration: 900,
+      });
     };
 
     const mueveCamara = async (ruta, sigueAhora, primera) => {
       const { mapa } = e;
-      if (e.rastreo) return; // la cámara la lleva MapKit
-      const ultimo = ruta.at(-1);
-      if (!ultimo) return;
       if (sigueAhora) {
-        const coordinate = await centroLibre(ultimo);
-        const acerca = primera || e.necesitaZoom;
-        // Sin ubicación al abrir el mapa estaba en todo México: al llegar la primera, se acerca de golpe.
-        await mapa.setCamera({ coordinate, ...(acerca ? { zoom: ZOOM_SIGUE, angle: e.en3d ? ANGULO_3D : 0 } : {}), animate: !acerca, animationDuration: 600 });
+        if (!e.siguiendo) return; // movió el mapa con el dedo: la cámara se queda donde la dejó
+        // Sin puntos todavía (antes de salir), la última ubicación conocida; sin nada, no se mueve.
+        const donde = ruta.at(-1) ?? (e.conocido ? e.centroInicial : null);
+        if (!donde) return;
+        // Sin ubicación al abrir el mapa estaba en todo México: al llegar la primera, se acerca de golpe (sin animar desde tan lejos).
+        await sigueAlCorredor(donde, primera || e.necesitaZoom);
         e.necesitaZoom = false;
         return;
       }
+      const ultimo = ruta.at(-1);
+      if (!ultimo) return;
       const enc = encuadre(ruta);
       if (enc.tipo === 'punto') { await mapa.setCamera({ coordinate: enc.centro, zoom: ZOOM_INICIAL, angle: 0, animate: false }); return; }
       await mapa.setCamera({ angle: 0, animate: false }); // el resumen se ve plano
@@ -222,53 +197,35 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
       e.LatLngBounds = LatLngBounds;
       try { await mapa.enableCurrentLocation(true); } catch (err) { console.warn('Mapa nativo (punto azul):', err); }
       if (!e.vivo) return;
-      // Si el usuario arrastra el mapa, MapKit deja de seguirlo: se ve en el botón de la flecha.
+      // Pantalla completa: el margen de abajo es TODO el panel, para que el logo y «Legal» de Apple queden arriba del panel (Apple exige que se vean).
+      if (pantallaCompleta) {
+        try { await mapa.setPadding({ top: 0, left: 0, right: 0, bottom: reservaDelPanel() }); } catch (err) { console.warn('Mapa nativo (márgenes):', err); }
+      }
+      // Si el usuario mueve el mapa con el dedo (arrastrar o pellizcar), se deja de seguir y la flecha se vacía. Lo que mueve este código no cuenta (no es gesto).
       if (interactivo) {
         try {
           await mapa.setOnCameraMoveStartedListener((d) => {
-            if (!d?.isGesture || !e.rastreo || !e.siguiendo) return;
+            if (!d?.isGesture || !e.siguiendo) return;
             e.siguiendo = false;
             setSiguiendo(false);
-            // Deja de seguir del todo y quita el rango de distancia, para que el dedo pueda alejar o acercar libre. La flecha lo vuelve a seguir.
-            puenteDelMapa().setUserTrackingMode({ id, mode: 'none' }).catch(() => {});
           });
         } catch (err) { console.warn('Mapa nativo (arrastre):', err); }
-      }
-      if (e.rastreo) {
-        try { await empiezaARastrear(true); } catch (err) { console.warn('Mapa nativo (seguir con rumbo):', err); e.rastreo = false; }
-      }
-      // Si MapKit deja de seguir por su cuenta (no por un dedo), el botón de la flecha también se entera (parche del plugin: `onUserTrackingModeChange`).
-      if (e.rastreo && e.vivo) {
-        try {
-          e.escuchaModo = await puenteDelMapa().addListener('onUserTrackingModeChange', (d) => {
-            if (!e.vivo || d?.mapId !== id) return;
-            const sigueAhora = d.mode !== 'none';
-            if (sigueAhora === e.siguiendo) return;
-            e.siguiendo = sigueAhora;
-            setSiguiendo(sigueAhora);
-            if (!sigueAhora) puenteDelMapa().setUserTrackingMode({ id, mode: 'none' }).catch(() => {}); // quita el rango de distancia
-          });
-        } catch (err) { console.warn('Mapa nativo (aviso de seguimiento):', err); }
       }
       acciones.current = {
         alterna3D: async () => {
           e.en3d = !e.en3d;
           setEn3d(e.en3d);
           try {
-            // Siguiendo al usuario, el cambio va por el modo de seguir (si no, MapKit dejaría de seguir); sin seguir, por la cámara.
-            if (e.rastreo && e.siguiendo) await puenteDelMapa().setUserTrackingMode({ id, mode: 'followWithHeading', ...camaraAlSeguir(e.en3d) });
-            else await e.mapa.setCamera({ angle: e.en3d ? ANGULO_3D : 0, animate: true });
+            if (!e.en3d) e.rumbo = 0; // en 2D, con el norte arriba
+            await e.mapa.setCamera({ angle: e.en3d ? ANGULO_3D : 0, bearing: e.en3d ? e.rumbo : 0, animate: true, animationDuration: 500 });
           } catch (err) { console.warn('Mapa nativo (2D/3D):', err); }
         },
         recentra: async () => {
-          try {
-            if (e.rastreo) { await empiezaARastrear(false); return; }
-            // Sin el seguimiento de MapKit (no arrancó): al menos se va a tu último punto conocido.
-            const donde = dato.current.puntos.at(-1) ?? (e.conocido ? e.centroInicial : null);
-            if (donde) await e.mapa.setCamera({ coordinate: donde, zoom: ZOOM_SIGUE, angle: e.en3d ? ANGULO_3D : 0, animate: true });
-            e.siguiendo = true;
-            setSiguiendo(true);
-          } catch (err) { console.warn('Mapa nativo (volver):', err); }
+          // Vuelve a seguir al corredor: la cámara va a su último punto ya, sin esperar al siguiente punto del GPS.
+          e.siguiendo = true;
+          setSiguiendo(true);
+          const donde = dato.current.puntos.at(-1) ?? (e.conocido ? e.centroInicial : null);
+          try { if (donde) await sigueAlCorredor(donde, false); } catch (err) { console.warn('Mapa nativo (volver):', err); }
         },
       };
       e.listo = true;
@@ -322,7 +279,6 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
     return () => {
       e.vivo = false;
       clearTimeout(e.reloj);
-      e.escuchaModo?.remove?.();
       empuja.current = null;
       acciones.current = {};
       if (dueno === ficha) dueno = null;

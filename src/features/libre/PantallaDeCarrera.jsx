@@ -14,8 +14,7 @@ import MapaDeCarrera from './MapaDeCarrera';
 import IconoDeActividad from './IconoDeActividad';
 import { actividadDeDeporte } from '@/lib/actividades';
 import { useSenalGps, useUbicacionActual } from './useEntrenoLibre';
-import { usaMapaNativo } from '@/lib/mapaNativo';
-import { limpiaPantallaDeMapa } from './MapaNativo';
+import { limpiaPantallaDeMapa, usaMapaNativo } from '@/lib/mapaNativo';
 import { useBarraDeEstadoClara } from '@/lib/barraDeEstado';
 
 /* LA CARRERA CON GPS A PANTALLA COMPLETA (reestructura visual, 16 oct 2026), como «Workout · Carrera» de las capturas de Andrés:
