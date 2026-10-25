@@ -24,7 +24,8 @@ const DEFAULT_ORIGINS = [
   'http://localhost:5173', 'capacitor://localhost', /* app de iPhone (Capacitor) */
   'http://localhost:4173',
   'http://127.0.0.1:5173',
-  'https://app.traininglabapp.com',  // dominio propio (15 oct 2026); la de Vercel sigue valiendo por el patrón .vercel.app
+  'https://app.traininglabapp.com',  // dominio propio (15 oct 2026)
+  'https://training-program-kappa.vercel.app', // despliegue anterior en Vercel (mismo dueño); ya NO vale cualquier *.vercel.app
 ]
 const envOrigins = (Deno.env.get('ALLOWED_ORIGINS') ?? '')
   .split(',')
@@ -34,7 +35,7 @@ const ALLOWED = new Set([...DEFAULT_ORIGINS, ...envOrigins])
 
 function corsHeaders(origin: string | null): Record<string, string> {
   const allow =
-    origin && (ALLOWED.has(origin) || /\.vercel\.app$/.test(new URL(origin).hostname))
+    origin && ALLOWED.has(origin)
       ? origin
       : DEFAULT_ORIGINS[0]
   return {

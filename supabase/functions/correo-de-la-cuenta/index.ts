@@ -25,11 +25,22 @@ const DEFAULT_ORIGINS = [
   'https://app.traininglabapp.com',
 ]
 
+// Lista cerrada de sitios propios (lote 1 de seguridad, oct 2026): YA NO vale cualquier *.vercel.app.
+// Se suman, si existen, los secretos SITIO_URL, ALLOWED_ORIGINS y ORIGENES_EXTRA (separados por coma).
+const ORIGENES_PROPIOS = new Set<string>([
+  'http://localhost:5173', 'capacitor://localhost' /* app de iPhone (Capacitor) */, 'http://localhost:4173', 'http://127.0.0.1:5173',
+  'https://app.traininglabapp.com',
+  'https://training-program-kappa.vercel.app', // despliegue anterior en Vercel (mismo dueño); quitar cuando se apague
+  ...[Deno.env.get('SITIO_URL'), ...(Deno.env.get('ALLOWED_ORIGINS') ?? '').split(','), ...(Deno.env.get('ORIGENES_EXTRA') ?? '').split(',')]
+    .map((o) => (o ?? '').trim().replace(/\/+$/, ''))
+    .filter(Boolean),
+])
+
 function corsHeaders(origin: string | null): Record<string, string> {
   let allow = DEFAULT_ORIGINS[0]
   if (origin) {
     try {
-      if (DEFAULT_ORIGINS.includes(origin) || /\.vercel\.app$/.test(new URL(origin).hostname)) allow = origin
+      if (ORIGENES_PROPIOS.has(origin)) allow = origin
     } catch { /* origen malformado */ }
   }
   return {
