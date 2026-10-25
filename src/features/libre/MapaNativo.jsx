@@ -44,6 +44,9 @@ const puenteDelMapa = () => Capacitor.Plugins?.NativeMap ?? registerPlugin('Nati
 
 const botonDelMapa = { width: 48, height: 48, borderRadius: 24, border: 'none', background: 'rgba(28,32,48,0.88)', color: '#fff', display: 'grid', placeItems: 'center', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 800, touchAction: 'manipulation', backdropFilter: 'blur(10px)', boxShadow: '0 4px 14px rgba(0,0,0,0.35)' };
 
+/** Distancia (metros) e inclinación de la cámara mientras MapKit sigue al corredor. Más cerca en 3D, como se ve en la calle. */
+const camaraAlSeguir = (en3d) => (en3d ? { distance: 380, pitch: 45 } : { distance: 520, pitch: 0 });
+
 const reservaDelPanel = () => {
   const panel = document.querySelector('[data-mapa-panel]');
   return panel ? Math.max(0, Math.round(window.innerHeight - panel.getBoundingClientRect().top)) : 0;
@@ -104,10 +107,12 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
     // Empieza (o vuelve a empezar) el seguimiento de MapKit: acerca, inclina y le pide seguir al usuario con rumbo (el punto azul con cono).
     const empiezaARastrear = async (primera) => {
       const { mapa } = e;
-      await mapa.setPadding({ top: 0, left: 0, right: 0, bottom: reservaDelPanel() });
+      // Solo una parte del panel se descuenta: con todo el panel el punto quedaba muy arriba (a un tercio de la pantalla). Así queda cerca del centro.
+      await mapa.setPadding({ top: 0, left: 0, right: 0, bottom: Math.round(reservaDelPanel() * 0.3) });
       const donde = dato.current.puntos.at(-1) ?? (e.conocido ? e.centroInicial : null);
       if (donde) await mapa.setCamera({ coordinate: donde, zoom: ZOOM_SIGUE, angle: e.en3d ? ANGULO_3D : 0, animate: !primera });
-      await puenteDelMapa().setUserTrackingMode({ id, mode: 'followWithHeading' });
+      // MapKit, al seguir, pone su propia distancia (se veía muy lejos) y la cámara plana: se le piden la distancia y la inclinación (parche del plugin).
+      await puenteDelMapa().setUserTrackingMode({ id, mode: 'followWithHeading', ...camaraAlSeguir(e.en3d) });
       e.siguiendo = true;
       setSiguiendo(true);
     };
@@ -221,7 +226,11 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
         alterna3D: async () => {
           e.en3d = !e.en3d;
           setEn3d(e.en3d);
-          try { await e.mapa.setCamera({ angle: e.en3d ? ANGULO_3D : 0, animate: true }); } catch (err) { console.warn('Mapa nativo (2D/3D):', err); }
+          try {
+            // Siguiendo al usuario, el cambio va por el modo de seguir (si no, MapKit dejaría de seguir); sin seguir, por la cámara.
+            if (e.rastreo && e.siguiendo) await puenteDelMapa().setUserTrackingMode({ id, mode: 'followWithHeading', ...camaraAlSeguir(e.en3d) });
+            else await e.mapa.setCamera({ angle: e.en3d ? ANGULO_3D : 0, animate: true });
+          } catch (err) { console.warn('Mapa nativo (2D/3D):', err); }
         },
         recentra: async () => {
           try { if (e.rastreo) await empiezaARastrear(false); } catch (err) { console.warn('Mapa nativo (volver):', err); }

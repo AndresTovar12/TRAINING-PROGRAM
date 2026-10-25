@@ -1,0 +1,69 @@
+diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ControlsBridge.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ControlsBridge.swift
+index 78c628f..8130199 100644
+--- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ControlsBridge.swift
++++ b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ControlsBridge.swift
+@@ -14,7 +14,7 @@ extension NativeMapPlugin {
+             call.reject("map not found", PluginError.mapNotFound)
+             return
+         }
+-        map.setUserTrackingMode(call.getString("mode") ?? "none")
++        map.setUserTrackingMode(call.getString("mode") ?? "none", distance: call.getDouble("distance"), pitch: call.getDouble("pitch"))
+         call.resolve()
+     }
+ 
+diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/MapControls.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/MapControls.swift
+index 5d27c04..b7f6ae4 100644
+--- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/MapControls.swift
++++ b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/MapControls.swift
+@@ -14,13 +14,25 @@ extension Map {
+ 
+     /// Follow the user's location (and optionally heading). A non-`none` mode turns
+     /// the user-location dot on; the host app still needs location permission.
+-    func setUserTrackingMode(_ mode: String) {
++    func setUserTrackingMode(_ mode: String, distance: Double? = nil, pitch: Double? = nil) {
+         DispatchQueue.main.async {
+             let tracking = Map.userTrackingMode(from: mode)
+             if tracking != .none {
+                 self.mapView.showsUserLocation = true
+             }
+             self.mapView.setUserTrackingMode(tracking, animated: true)
++            // Training Lab (parche): al seguir al usuario MapKit pone su propia distancia y la cámara plana. Si se pidió una distancia
++            // o inclinación, se aplican después de que MapKit tome el control, sin dejar de seguir.
++            guard tracking != .none, distance != nil || pitch != nil else { return }
++            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
++                guard let camara = self.mapView.camera.copy() as? MKMapCamera else { return }
++                if let d = distance, d > 0 { camara.centerCoordinateDistance = d }
++                if let p = pitch { camara.pitch = CGFloat(max(0, min(p, 60))) }
++                self.mapView.setCamera(camara, animated: true)
++                if self.mapView.userTrackingMode != tracking {
++                    self.mapView.setUserTrackingMode(tracking, animated: false)
++                }
++            }
+         }
+     }
+ 
+diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ViewHelpers.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ViewHelpers.swift
+index 7348e3b..205a983 100644
+--- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ViewHelpers.swift
++++ b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ViewHelpers.swift
+@@ -55,14 +55,16 @@ private func shouldPassTouchThroughToMap(
+     if hitView is UIControl {
+         return false
+     }
+-    let name = String(describing: type(of: hitView))
+-    if name.contains("WKContentView") {
+-        return plugin.shouldRouteTouchToMap(at: point, in: webView)
+-    }
+     if let childScrollClass = NSClassFromString("WKChildScrollView"),
+        hitView.isKind(of: childScrollClass) {
+         return true
+     }
++    // Training Lab (parche): cualquier vista DENTRO del WebView (WKContentView, pero también las capas compuestas
++    // `WKCompositingView` que WebKit crea para elementos `position: fixed`, con desenfoque o transformaciones) se decide con los
++    // rectángulos que publica la página. Antes solo se miraba WKContentView y todo lo compuesto se mandaba al mapa: ningún botón respondía.
++    if hitView.isDescendant(of: webView) {
++        return plugin.shouldRouteTouchToMap(at: point, in: webView)
++    }
+     if hitView is UIScrollView {
+         return true
+     }
