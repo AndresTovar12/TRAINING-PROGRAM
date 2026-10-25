@@ -2865,7 +2865,9 @@ export default function TrainingApp() {
       {/* En compu el contenido se centra y deja de estirarse hasta 1272px. Una
           tarjeta de ese ancho obliga a barrer la pantalla con los ojos de una
           orilla a la otra para leer una linea. 980 es ancho de lectura. */}
-      <div style={esCompu ? { maxWidth: 980, margin: '0 auto', width: '100%' } : undefined}>
+      {/* En la app del iPhone la página llega hasta debajo de la hora y la isla (`viewport-fit=cover`, ver `lib/nativo.js`): Inicio, Entrenar y Mensajes dejan ese
+          espacio arriba. Explorar ya lo trae en su propio relleno (`PiezasDeTienda`), así que ahí no se suma. En la web `env()` vale 0 y no cambia nada. */}
+      <div style={esCompu ? { maxWidth: 980, margin: '0 auto', width: '100%' } : (tab === 'explore' ? undefined : { paddingTop: 'env(safe-area-inset-top)' })}>
         {content}
       </div>
       </div>
