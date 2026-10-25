@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Loader2 } from 'lucide-react';
+import { AlertTriangle, Check, Loader2 } from 'lucide-react';
 import { FONT, KP } from '@/lib/theme';
 
 /**
@@ -19,17 +19,24 @@ import { FONT, KP } from '@/lib/theme';
  *
  * `trabajando` devuelve lo que devuelva `hacer` y, si falla, quita el aviso y deja pasar el error para
  * que quien llama lo escriba donde corresponde. Sin proveedor no hace nada y `hacer` corre igual.
+ *
+ * EL AVISO DE FALLA (lote 1 de seguridad, 25 oct 2026): para lo que NO se pudo guardar y que no tiene una pantalla donde escribir el error
+ * (hoy, el guardado automático de todo lo del atleta: `AppStateContext`). A diferencia del aviso de arriba NO se va solo: se queda hasta que
+ * se resuelva (`quitaFalla()`) o la persona lo cierre con «Entendido» (vuelve a salir si el problema se repite).
+ *   falla('No se guardó. Reintentar', { accion: { texto: 'Reintentar', alTocar: () => guardarOtraVez() } });
+ *   quitaFalla();
  */
 
 const Ctx = createContext(null);
 
-const SIN_PROVEEDOR = { avisa: () => {}, trabajando: (_texto, hacer) => hacer() };
+const SIN_PROVEEDOR = { avisa: () => {}, trabajando: (_texto, hacer) => hacer(), falla: () => {}, quitaFalla: () => {} };
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const useAviso = () => useContext(Ctx) ?? SIN_PROVEEDOR;
 
 export function AvisoProvider({ children }) {
   const [aviso, setAviso] = useState(null); // { texto, ocupado }
+  const [fallo, setFallo] = useState(null); // { texto, accion } — el aviso de falla, que no se va solo
   const reloj = useRef(null);
 
   const quita = useCallback(() => {
@@ -59,9 +66,12 @@ export function AvisoProvider({ children }) {
     }
   }, [avisa, quita]);
 
+  const falla = useCallback((texto, { accion = null } = {}) => setFallo({ texto, accion }), []);
+  const quitaFalla = useCallback(() => setFallo(null), []);
+
   useEffect(() => () => clearTimeout(reloj.current), []);
 
-  const valor = useMemo(() => ({ avisa, trabajando }), [avisa, trabajando]);
+  const valor = useMemo(() => ({ avisa, trabajando, falla, quitaFalla }), [avisa, trabajando, falla, quitaFalla]);
 
   return (
     <Ctx.Provider value={valor}>
@@ -97,6 +107,42 @@ export function AvisoProvider({ children }) {
                 {aviso.accion.texto}
               </button>
             )}
+          </div>
+        </div>,
+        document.body,
+      )}
+      {fallo && createPortal(
+        <div
+          role="alert"
+          style={{
+            position: 'fixed', left: 0, right: 0, bottom: 'calc(78px + env(safe-area-inset-bottom))', zIndex: 6101,
+            display: 'flex', justifyContent: 'center', padding: '0 16px', pointerEvents: 'none',
+          }}
+        >
+          <div
+            className="animate-fade-in"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 9, maxWidth: '100%', padding: '11px 14px 11px 17px', borderRadius: 999,
+              background: 'rgba(17,19,24,0.96)', color: '#fff', fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
+              boxShadow: KP.shPop, pointerEvents: 'auto',
+            }}
+          >
+            <AlertTriangle size={16} color="#FF8A7A" style={{ flexShrink: 0 }} />
+            <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{fallo.texto}</span>
+            {fallo.accion && (
+              <button
+                type="button" onClick={() => fallo.accion.alTocar()}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#8FA8FF', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, padding: '2px 4px', flexShrink: 0 }}
+              >
+                {fallo.accion.texto}
+              </button>
+            )}
+            <button
+              type="button" onClick={quitaFalla}
+              style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, padding: '2px 4px', flexShrink: 0 }}
+            >
+              Entendido
+            </button>
           </div>
         </div>,
         document.body,
