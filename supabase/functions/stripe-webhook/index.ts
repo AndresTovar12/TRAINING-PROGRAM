@@ -2,7 +2,8 @@
  * Atiende los avisos de Stripe: es quien ACTIVA una compra cuando el pago de verdad se hizo, y quien reparte el dinero.
  *
  * Seguridad: solo se atiende lo que viene firmado por Stripe con el secreto de ESTE webhook (`STRIPE_WEBHOOK_SECRET`); lo demás se rechaza. Por eso no lleva JWT. Cada evento se atiende
- * UNA vez (tabla `stripe_eventos`): si Stripe lo repite, se ignora. Si algo falla a medias, se contesta 500 y Stripe vuelve a mandarlo.
+ * UNA vez (tabla `stripe_eventos`): si Stripe lo repite, se ignora. Si algo falla a medias, se anota el error en los registros y se contesta 500: Stripe vuelve a mandarlo hasta ~3 días.
+ * Un aviso queda `pendiente` mientras se atiende; si la función se cae a medias (sin llegar al 500), el siguiente intento de Stripe lo retoma (lote 1 de seguridad, 25 oct 2026).
  *
  * Qué hace con cada aviso (ver docs/superpowers/specs/2026-10-10-monetizacion-design.md, secciones 3 y 8):
  *   checkout.session.completed → la compra pasa a «activa» (arranca ese día y la base crea el vínculo con el coach) y, si fue pago único, se anota el cobro.
@@ -36,11 +37,13 @@ const clave = () => (Deno.env.get('STRIPE_SECRET_KEY') ?? '').trim()
 
 async function buscaCompra({ compraId, suscripcion }: { compraId?: string | null; suscripcion?: string | null }) {
   if (compraId) {
-    const { data } = await bd.from('compras').select('*').eq('id', compraId).maybeSingle()
+    const { data, error } = await bd.from('compras').select('*').eq('id', compraId).maybeSingle()
+    if (error) throw error // un fallo de la base NO es «no existe»: se contesta 500 para que Stripe reintente
     if (data) return data
   }
   if (suscripcion) {
-    const { data } = await bd.from('compras').select('*').eq('stripe_subscription_id', suscripcion).maybeSingle()
+    const { data, error } = await bd.from('compras').select('*').eq('stripe_subscription_id', suscripcion).maybeSingle()
+    if (error) throw error
     if (data) return data
   }
   return null
@@ -57,7 +60,8 @@ async function aseguraCuenta(c: Obj, nombre: string | null): Promise<{ id: strin
   const correo = String(c.correo_comprador ?? '').trim().toLowerCase()
   if (!correo) throw new Error(`La compra ${c.id} no tiene atleta ni correo.`)
   const buscar = async () => {
-    const { data } = await bd.rpc('usuario_por_correo', { p_correo: correo })
+    const { data, error } = await bd.rpc('usuario_por_correo', { p_correo: correo })
+    if (error) throw error
     return Array.isArray(data) ? data[0] : data
   }
   const revisa = (u: Obj) => {
@@ -101,13 +105,15 @@ async function activa(c: Obj, cambios: Obj = {}, nombreDelComprador: string | nu
 /** Anota UN cobro en el libro de pagos y le manda al coach su parte. Un mismo cobro o factura se atiende una sola vez. */
 async function registraPago(c: Obj, { bruto, cobro, factura }: { bruto: number; cobro: string | null; factura: string | null }) {
   const busca = cobro ? bd.from('pagos').select('id').eq('stripe_charge_id', cobro) : factura ? bd.from('pagos').select('id').eq('stripe_invoice_id', factura) : null
-  if (busca) { const { data: ya } = await busca.maybeSingle(); if (ya) return }
-  const { data: coach } = await bd.from('profiles').select('is_owner, comision_especial').eq('id', c.coach_id).maybeSingle()
+  if (busca) { const { data: ya, error: errYa } = await busca.maybeSingle(); if (errYa) throw errYa; if (ya) return }
+  const { data: coach, error: errCoach } = await bd.from('profiles').select('is_owner, comision_especial').eq('id', c.coach_id).maybeSingle()
+  if (errCoach) throw errCoach
   const esDueno = !!coach?.is_owner
   const r = repartoDeUnCobro({ bruto, tasa: tasaDeComision({ esDueno, comisionEspecial: coach?.comision_especial }) })
   let transferencia: string | null = null
   if (!esDueno && r.parte_coach_centavos > 0 && cobro) {
-    const { data: cuenta } = await bd.from('cuentas_stripe').select('acct_id').eq('coach_id', c.coach_id).maybeSingle()
+    const { data: cuenta, error: errCuenta } = await bd.from('cuentas_stripe').select('acct_id').eq('coach_id', c.coach_id).maybeSingle()
+    if (errCuenta) throw errCuenta
     if (cuenta?.acct_id) {
       // `source_transaction`: la transferencia sale de ESTE cobro y puede hacerse de inmediato aunque el dinero aún no esté disponible (en México tarda unos 3 días).
       const t = await llamaStripe(clave(), 'POST', '/v1/transfers', {
@@ -125,8 +131,9 @@ async function registraPago(c: Obj, { bruto, cobro, factura }: { bruto: number; 
 
 /** Le quita al coach lo que se le había mandado de un cobro (reembolso o contracargo). */
 async function reviertePago(cobro: string, estado: 'reembolsado' | 'contracargo') {
-  const { data: pago } = await bd.from('pagos').select('id, compra_id, transfer_coach_id, parte_coach').eq('stripe_charge_id', cobro).maybeSingle()
-  if (!pago) return null
+  const { data: pago, error: errPago } = await bd.from('pagos').select('id, compra_id, transfer_coach_id, parte_coach').eq('stripe_charge_id', cobro).maybeSingle()
+  if (errPago) throw errPago
+  if (!pago) { console.error(`stripe-webhook: no hay pago anotado para el cobro ${cobro} (${estado}); no hay nada que revertir.`); return null }
   if (pago.transfer_coach_id) {
     try {
       await llamaStripe(clave(), 'POST', `/v1/transfers/${pago.transfer_coach_id}/reversals`, { amount: Math.round(Number(pago.parte_coach) * 100) }, { idempotencia: `rev_${cobro}` })
@@ -135,8 +142,15 @@ async function reviertePago(cobro: string, estado: 'reembolsado' | 'contracargo'
       if (!/already been (fully )?reversed/i.test(String((e as Error).message))) throw e
     }
   }
-  await bd.from('pagos').update({ estado }).eq('id', pago.id)
+  const { error: errEstado } = await bd.from('pagos').update({ estado }).eq('id', pago.id)
+  if (errEstado) throw errEstado
   return pago
+}
+
+/** Cambia una compra y NO se traga el error: si la base falla, el aviso se reintenta. */
+async function actualizaCompra(id: string, cambios: Obj) {
+  const { error } = await bd.from('compras').update(cambios).eq('id', id)
+  if (error) throw error
 }
 
 async function atiende(evento: Obj) {
@@ -144,7 +158,11 @@ async function atiende(evento: Obj) {
   switch (evento.type) {
     case 'checkout.session.completed': {
       const c = await buscaCompra({ compraId: compraIdDeSesion(o) })
-      if (!c) return
+      // Entró dinero y no hay compra: puede ser que la base aún no la muestre. Se pide reintento en vez de perder el pago en silencio.
+      if (!c) {
+        if (!compraIdDeSesion(o)) { console.error(`stripe-webhook: checkout.session.completed ${evento.id} sin id de compra (no es de la app); se ignora`); return }
+        throw new Error(`checkout.session.completed ${evento.id}: no se encontró la compra ${compraIdDeSesion(o)}`)
+      }
       if (o.payment_status && o.payment_status !== 'paid' && o.payment_status !== 'no_payment_required') return // pago aplazado: se espera al aviso del cobro
       const suscripcion = idDe(o.subscription)
       let periodoHasta: string | null = null
@@ -163,7 +181,8 @@ async function atiende(evento: Obj) {
     case 'invoice.paid': {
       const suscripcion = suscripcionDeFactura(o)
       const c = await buscaCompra({ compraId: compraIdDeFactura(o), suscripcion })
-      if (!c) return
+      // La factura puede llegar antes que el aviso de la compra: se reintenta (Stripe espera cada vez más) en vez de perder el cobro.
+      if (!c) throw new Error(`invoice.paid ${evento.id}: todavía no se encuentra la compra (suscripción ${suscripcion ?? 'sin id'})`)
       await activa(c, { stripe_customer_id: idDe(o.customer) ?? c.stripe_customer_id, stripe_subscription_id: suscripcion ?? c.stripe_subscription_id, periodo_hasta: aFecha(finDePeriodoDeFactura(o)) }, o.customer_name ?? null)
       if ((o.amount_paid ?? 0) > 0) {
         // El webhook entrega la factura con la versión de API de la cuenta (2026+), que ya no trae `charge`. Sin el cobro no hay reembolso de 7 días ni reparto al coach:
@@ -176,35 +195,37 @@ async function atiende(evento: Obj) {
     }
     case 'invoice.payment_failed': {
       const c = await buscaCompra({ compraId: compraIdDeFactura(o), suscripcion: suscripcionDeFactura(o) })
-      if (!c || !['activa', 'gracia'].includes(c.estado)) return
+      if (!c) { console.error(`stripe-webhook: ${evento.type} ${evento.id} sin compra conocida`); return }
+      if (!['activa', 'gracia'].includes(c.estado)) return
       const limite = new Date(Date.now() + DIAS_DE_GRACIA * 24 * 3600 * 1000).toISOString()
-      await bd.from('compras').update({ estado: 'gracia', gracia_hasta: c.gracia_hasta ?? limite, actualizada_en: ahora().toISOString() }).eq('id', c.id)
+      await actualizaCompra(c.id, { estado: 'gracia', gracia_hasta: c.gracia_hasta ?? limite, actualizada_en: ahora().toISOString() })
       return
     }
     case 'customer.subscription.updated': {
       const c = await buscaCompra({ compraId: o.metadata?.compra_id, suscripcion: o.id })
-      if (!c) return
-      await bd.from('compras').update({
+      if (!c) { console.error(`stripe-webhook: ${evento.type} ${evento.id} sin compra conocida`); return }
+      await actualizaCompra(c.id, {
         cancelada_en: o.cancel_at_period_end ? (c.cancelada_en ?? ahora().toISOString()) : null,
         periodo_hasta: aFecha(finDePeriodoDeSuscripcion(o)) ?? c.periodo_hasta, actualizada_en: ahora().toISOString(),
-      }).eq('id', c.id)
+      })
       return
     }
     case 'customer.subscription.deleted': {
       const c = await buscaCompra({ compraId: o.metadata?.compra_id, suscripcion: o.id })
-      if (!c || c.estado === 'reembolsada') return
-      await bd.from('compras').update({ estado: 'vencida', cancelada_en: c.cancelada_en ?? ahora().toISOString(), actualizada_en: ahora().toISOString() }).eq('id', c.id)
+      if (!c) { console.error(`stripe-webhook: ${evento.type} ${evento.id} sin compra conocida`); return }
+      if (c.estado === 'reembolsada') return
+      await actualizaCompra(c.id, { estado: 'vencida', cancelada_en: c.cancelada_en ?? ahora().toISOString(), actualizada_en: ahora().toISOString() })
       return
     }
     case 'charge.refunded': {
       const pago = await reviertePago(o.id, 'reembolsado')
       // Un reembolso completo cierra la compra; uno parcial deja el plan como estaba.
-      if (pago && o.refunded === true) await bd.from('compras').update({ estado: 'reembolsada', actualizada_en: ahora().toISOString() }).eq('id', pago.compra_id)
+      if (pago && o.refunded === true) await actualizaCompra(pago.compra_id, { estado: 'reembolsada', actualizada_en: ahora().toISOString() })
       return
     }
     case 'charge.dispute.created': {
       const pago = await reviertePago(idDe(o.charge)!, 'contracargo')
-      if (pago) await bd.from('compras').update({ estado: 'vencida', actualizada_en: ahora().toISOString() }).eq('id', pago.compra_id)
+      if (pago) await actualizaCompra(pago.compra_id, { estado: 'vencida', actualizada_en: ahora().toISOString() })
       return
     }
     default:
@@ -221,16 +242,42 @@ Deno.serve(async (req) => {
   let evento: Obj
   try { evento = JSON.parse(cuerpo) } catch { return responde('JSON inválido', 400) }
 
-  // Cada evento se atiende una sola vez: si ya está anotado, Stripe lo repitió.
-  const { error: errEvento } = await bd.from('stripe_eventos').insert({ id: evento.id, tipo: evento.type })
-  if (errEvento) return errEvento.code === '23505' ? responde('Ya atendido') : responde('No se pudo anotar el evento', 500)
+  if (!evento?.id || !evento?.type) return responde('Aviso sin id', 400)
+
+  /* Cada evento se atiende una sola vez. Se anota como `pendiente` ANTES de atenderlo y se suelta al terminar:
+       · ya atendido (pendiente = false)  → Stripe lo repitió: se contesta 200 sin hacer nada (nunca se duplica una compra ni un pago).
+       · pendiente y reciente (< 5 min)   → otra entrega del mismo aviso lo está atendiendo ahora: 503, Stripe reintenta más tarde.
+       · pendiente y viejo                → la función se cayó a medias: se retoma. Lo que hace es seguro de repetir (cada cobro y cada transferencia llevan su llave única). */
+  const { error: errEvento } = await bd.from('stripe_eventos').insert({ id: evento.id, tipo: evento.type, pendiente: true })
+  if (errEvento) {
+    if (errEvento.code !== '23505') {
+      console.error('stripe-webhook: no se pudo anotar el evento', evento.id, errEvento.message)
+      return responde('No se pudo anotar el evento', 500)
+    }
+    const { data: previo, error: errPrevio } = await bd.from('stripe_eventos').select('pendiente, recibido_en').eq('id', evento.id).maybeSingle()
+    if (errPrevio) {
+      console.error('stripe-webhook: no se pudo leer el evento anotado', evento.id, errPrevio.message)
+      return responde('No se pudo revisar el evento', 500)
+    }
+    if (!previo || previo.pendiente !== true) return responde('Ya atendido')
+    if (Date.now() - new Date(previo.recibido_en).getTime() < 5 * 60_000) return responde('Se está atendiendo', 503)
+    // Se retoma: se renueva la hora para que ninguna otra entrega lo tome a la vez.
+    const { error: errRetoma } = await bd.from('stripe_eventos').update({ recibido_en: new Date().toISOString() }).eq('id', evento.id).eq('pendiente', true).eq('recibido_en', previo.recibido_en)
+    if (errRetoma) { console.error('stripe-webhook: no se pudo retomar', evento.id, errRetoma.message); return responde('No se pudo retomar el evento', 500) }
+  }
 
   try {
     await atiende(evento)
+    const { error: errFin } = await bd.from('stripe_eventos').update({ pendiente: false }).eq('id', evento.id)
+    // Si esto falla el aviso ya se atendió; se deja pendiente y, al repetirse, se retoma sin duplicar nada. Se avisa en el registro.
+    if (errFin) console.error('stripe-webhook: atendido pero no se pudo soltar el aviso', evento.id, errFin.message)
     return responde('ok')
   } catch (e) {
-    // Si falló a medias, se borra la anotación para que cuando Stripe lo reintente se atienda completo.
-    await bd.from('stripe_eventos').delete().eq('id', evento.id)
-    return responde(e instanceof Error ? e.message : 'Error', 500)
+    const mensaje = e instanceof Error ? e.message : (typeof e === 'object' && e && 'message' in e ? String((e as { message: unknown }).message) : String(e))
+    console.error(`stripe-webhook: falló ${evento.type} ${evento.id}:`, mensaje)
+    // Se suelta la anotación para que cuando Stripe lo reintente se atienda completo.
+    const { error: errBorra } = await bd.from('stripe_eventos').delete().eq('id', evento.id)
+    if (errBorra) console.error('stripe-webhook: tampoco se pudo borrar la anotación', evento.id, errBorra.message) // queda pendiente: se retoma en 5 min
+    return responde(mensaje, 500)
   }
 })
