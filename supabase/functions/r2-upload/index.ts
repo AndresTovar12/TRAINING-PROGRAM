@@ -76,6 +76,10 @@ const CARPETAS_OK = new Set(['covers', 'videos', 'media'])
 // Una clase de una hora en 1080p pesa ~3.5 GB; en 4K ~11 GB, y esa no cabe en un solo
 // envio. El tope vive tambien en la app (`LIMITE_MEDIA_MB`) para avisar antes de subir.
 const TOPE_POR_ARCHIVO_BYTES = 4800 * 1048576
+// Fotos y portadas: 100 MB sobran (la app las deja en pocos MB).
+const TOPE_IMAGEN_BYTES = 100 * 1048576
+// Cuanto dura valido el permiso para empezar la subida (un video de 5 GB por datos tarda horas; el limite de R2 mira solo el inicio).
+const SEGUNDOS_DE_PERMISO = 6 * 3600
 
 const gb = (b: number) => `${(Math.round((b / 1e9) * 10) / 10).toLocaleString('es-MX')} GB`
 
@@ -217,13 +221,29 @@ Deno.serve(async (req) => {
    * Aqui se mira ANTES de dar el permiso, para que nadie suba 3 GB y se entere
    * al final de que no cabian. Solo se frena un VIDEO: una foto pesa unos KB y
    * nunca debe quedarse sin subir por esto (ni las portadas automaticas).
-   * `bytes` lo declara la app; si no llega (una app vieja) se anota 0 y se deja
-   * pasar: esto cuida el costo, no es una puerta de seguridad. */
+   * `bytes` lo declara la app, pero el servidor NO se fia de el: lo firma como `Content-Length`
+   * dentro del permiso (ver «Firmar el permiso»), y Cloudflare rechaza (403) cualquier subida cuyo
+   * tamaño real sea distinto. Asi, lo que se anota aqui es lo maximo que puede entrar, y declarar
+   * poco para subir mucho ya no funciona (probado contra R2 el 25 oct 2026: firmado 10, enviado 20 o 5 = 403). */
   const bytes = Number.isFinite(Number(p.bytes)) && Number(p.bytes) > 0 ? Math.floor(Number(p.bytes)) : 0
+  if (bytes <= 0) {
+    return json({
+      codigo: 'falta_tamano',
+      error: 'No pudimos saber cuánto pesa el archivo. Actualiza la app e inténtalo otra vez.',
+    }, 400, origin)
+  }
   if (bytes > TOPE_POR_ARCHIVO_BYTES) {
     return json({
       codigo: 'archivo_muy_grande',
       error: `Este archivo pesa ${gb(bytes)} y el máximo por archivo es ${gb(TOPE_POR_ARCHIVO_BYTES)} (una clase de ~80 minutos en 1080p). Grábala en 1080p o divídela en dos partes.`,
+    }, 413, origin)
+  }
+  // Una foto pesa unos KB (la app la comprime antes de subirla). Sin este tope, alguien podria subir un "PNG" de 4 GB
+  // y quedarse sin pasar por el aviso de espacio, que solo mira videos.
+  if (!tipo.startsWith('video/') && bytes > TOPE_IMAGEN_BYTES) {
+    return json({
+      codigo: 'archivo_muy_grande',
+      error: `Esta imagen pesa ${gb(bytes)} y el máximo para fotos es ${gb(TOPE_IMAGEN_BYTES)}.`,
     }, 413, origin)
   }
   const { data: antes, error: errEspacio } = await admin.rpc('espacio_del_coach', { p_coach: usuario.user.id })
@@ -244,10 +264,12 @@ Deno.serve(async (req) => {
   // --- Firmar el permiso --------------------------------------------------
   const aws = clienteR2()
 
-  const destino = `https://${accountId}.r2.cloudflarestorage.com/${bucket}/${ruta}`
+  // `content-length` va FIRMADO con el tamaño declarado: R2 rechaza la subida si el cuerpo real mide otra cosa.
+  // (`allHeaders: true` es lo que lo mete en la firma; `content-type` no se firma porque no se manda aqui.)
+  const destino = `https://${accountId}.r2.cloudflarestorage.com/${bucket}/${ruta}?X-Amz-Expires=${SEGUNDOS_DE_PERMISO}`
   const firmada = await aws.sign(
     new Request(destino, { method: 'PUT' }),
-    { aws: { signQuery: true, allHeaders: false }, headers: {} },
+    { aws: { signQuery: true, allHeaders: true }, headers: { 'content-length': String(bytes) } },
   )
 
   return json({
