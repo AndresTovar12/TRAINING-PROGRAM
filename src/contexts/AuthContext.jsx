@@ -195,10 +195,17 @@ export function AuthProvider({ children }) {
     return { error: null };
   }, []);
 
-  /* «Continuar con Apple» (24 oct 2026): SOLO dentro de la app de iPhone, con el sistema de Apple (Face ID, «Ocultar mi correo»). Apple da una identidad (idToken) y
-     Supabase la cambia por una sesión. Necesita que el proveedor Apple esté encendido en Supabase (Authentication → Providers → Apple, con el Bundle ID
+  /* «Continuar con Apple» (24 oct 2026). Dos puertas:
+       · App de iPhone: con el sistema de Apple (Face ID, «Ocultar mi correo»). Apple da una identidad (idToken) y Supabase la cambia por una sesión.
+       · Web: ventana de Apple y regreso a la página (OAuth). Usa el Services ID `com.traininglabapp.web` y una clave secreta que CADUCA a los 6 meses
+         (`scripts/apple-secreto.py`; se renueva sola cada 3 meses). Si caduca, solo falla esta puerta: la del iPhone y las demás entradas siguen. Necesita que el proveedor Apple esté encendido en Supabase (Authentication → Providers → Apple, con el Bundle ID
      `com.traininglabapp.app` en «Client IDs»). Si la cuenta no existe se crea, igual que con Google: `handle_new_user` le arma el perfil y la bienvenida pregunta lo demás. */
   const entrarConApple = useCallback(async () => {
+    if (!window.Capacitor?.isNativePlatform?.()) {
+      const { error } = await supabase.auth.signInWithOAuth({ provider: 'apple', options: { redirectTo: window.location.origin } });
+      if (error) return { error: { message: 'No se pudo abrir la entrada con Apple.' } };
+      return { error: null };
+    }
     try {
       const { SocialLogin } = await import('@capgo/capacitor-social-login');
       await SocialLogin.initialize({ apple: { clientId: 'com.traininglabapp.app' } });
@@ -284,7 +291,7 @@ export function AuthProvider({ children }) {
       signOut,
       entrarConGoogle,
       entrarConApple,
-      appleDisponible: !!window.Capacitor?.isNativePlatform?.(),
+      appleDisponible: true,
       googleDisponible: import.meta.env.VITE_GOOGLE_LOGIN === '1',
       updateProfile,
       refreshProfile,

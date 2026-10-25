@@ -3,7 +3,7 @@ import { useAviso } from '@/components/AvisoPasajero';
 import { FONT, KP } from '@/lib/theme';
 
 /**
- * «Continuar con Apple» (24 oct 2026). Solo se dibuja dentro de la app de iPhone: es el sistema de Apple y no existe en la web. Apple lo exige cuando la app ofrece otra
+ * «Continuar con Apple» (24 oct 2026). Sale en la app de iPhone (sistema de Apple) y en la web (ventana de Apple). Apple lo exige cuando la app ofrece otra
  * entrada con una cuenta externa (Google); Andrés prefiere ofrecerlo en vez de quitar Google. Sigue las reglas de Apple para su botón: negro, texto blanco, su logo.
  *
  * Va junto a `BotonGoogle` y acepta las mismas propiedades. El «o» de arriba lo dibuja Google si está encendido; si no, lo dibuja este botón.
