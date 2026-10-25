@@ -239,6 +239,26 @@ body {
 }
 .cifra-texto-chica { font-size: 17px; line-height: 1.15; letter-spacing: -0.3px; overflow-wrap: anywhere; }
 
+/* EL NOMBRE MANDA (24 oct 2026, tarjeta «Hoy te toca» y cuadros de Home). Andrés: «no importa qué tan largo sea el nombre del workout ni cuántos haya; nunca puede
+   salir mal el nombre». Reglas, de la más importante a la última:
+     1. El nombre tiene SIEMPRE el ancho completo de su columna: nada (botón, ícono de acción) se le pone al lado.
+     2. Una palabra NO se parte a media letra mientras quepa. La letra se achica sola según el ancho real de la columna (`cqw`) y la palabra más larga (`--em`,
+        su ancho estimado en «em»); recién cuando ni al mínimo (15 px) cabe, se parte donde haga falta (`overflow-wrap: break-word`, nunca `anywhere`).
+     3. Tope de líneas (`--lineas`) con «…», y el nombre completo siempre queda en `title` / `aria-label`.
+   `--fs` es el tamaño máximo según el largo y la cantidad de sesiones (lo pone `nombreDeSesion.js` y `TextoDelNombre.jsx`). La primera declaración es la de respaldo para quien no entienda `cqw`.
+   Candado: `npm run prueba:tarjeta-hoy` (scripts/prueba-tarjeta-hoy.mjs). */
+.nombre-caja { container-type: inline-size; min-width: 0; display: block; }
+.nombre-texto {
+  margin: 0; padding-block: 0.08em; margin-block: -0.08em; font-weight: 800; letter-spacing: -0.5px; line-height: 1.16;
+  font-size: var(--fs, 24px);
+  font-size: max(15px, min(var(--fs, 24px), calc(100cqw / var(--em, 1))));
+  overflow-wrap: break-word; word-break: normal; hyphens: manual; text-wrap: balance;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--lineas, 3); line-clamp: var(--lineas, 3); overflow: hidden;
+}
+/* Textos de apoyo de una tarjeta (la fecha, «Sigue: viernes · …», la etiqueta): se parten por palabras, nunca desbordan y no dejan una letra sola. */
+.texto-largo { overflow-wrap: break-word; hyphens: manual; text-wrap: pretty; min-width: 0; }
+.texto-corto { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: break-word; hyphens: manual; min-width: 0; }
+
 /* En un teléfono muy angosto la palabra «Pronto» de la cámara del entreno se esconde: queda el ícono y la fila de abajo cabe. */
 @media (max-width: 359px) { .pronto-texto { display: none; } }
 

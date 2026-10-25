@@ -1,6 +1,8 @@
 import { HeartPulse, Layers } from 'lucide-react';
 import { FONT, NUM_STYLE } from '@/lib/theme';
 import { separaFoto } from '@/lib/fotoConFoco';
+import { NombreDeSesion } from '@/features/training/home/TextoDelNombre';
+import { pegaSeparadores } from '@/features/training/home/nombreDeSesion';
 
 /**
  * Los cuadros de Home (reestructura visual, 15 oct 2026): Salud, la fase, Entrenar libre y Activity card, de dos
@@ -16,6 +18,9 @@ const TONOS = {
   tinta: { /* estilo-ok: cuadros de color de Home (capturas aprobadas) */ fondo: 'linear-gradient(165deg, #2B3263 0%, #171C3E 58%, #0B0E24 100%)', sombra: 'rgba(12,16,52,0.34)' },
 };
 
+/* EL NOMBRE MANDA (24 oct 2026): el título de un cuadro es a veces el nombre de un plan o de una fase, de cualquier largo, en una columna de ~105 px (320 px de
+   pantalla, dos cuadros por renglón). Por eso la letra se achica sola según el ancho y la palabra más larga, y se corta a 3 líneas con «…» (ver
+   `nombreDeSesion.js` y `TextoDelNombre.jsx`); la etiqueta y la línea de abajo se parten por palabras y nunca desbordan. Candado: `npm run prueba:tarjeta-hoy`. */
 /* `accion` va abajo a la derecha, junto a lo grande (el play de «Entrenar libre»): arriba, en un cuadro de 165 px de ancho, no le dejaba
    lugar al nombre. */
 export function Cuadro({ tono = 'azul', Icono, etiqueta, titulo, sub, onClick, accion, abajo, foto, etiquetaAccesible }) {
@@ -41,12 +46,12 @@ export function Cuadro({ tono = 'azul', Icono, etiqueta, titulo, sub, onClick, a
         <span aria-hidden="true" style={{ width: 40, height: 40, borderRadius: 13, display: 'grid', placeItems: 'center', background: 'rgba(255,255,255,0.18)', flexShrink: 0 }}>
           <Icono size={20} />
         </span>
-        <span style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: 600, lineHeight: 1.2 }}>{etiqueta}</span>
+        <span className="texto-corto" title={typeof etiqueta === 'string' ? etiqueta : undefined} style={{ flex: 1, fontSize: 15, fontWeight: 600, lineHeight: 1.2 }}>{etiqueta}</span>
       </span>
       <span style={{ display: 'flex', alignItems: 'flex-end', gap: 8, marginTop: 18, width: '100%' }}>
         <span style={{ display: 'block', flex: 1, minWidth: 0 }}>
-          <span style={{ display: 'block', fontSize: 21, fontWeight: 800, letterSpacing: -0.4, lineHeight: 1.12, overflowWrap: 'break-word', ...NUM_STYLE }}>{titulo}</span>
-          {sub && <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600, opacity: 0.88, marginTop: 3 }}>{sub}</span>}
+          <NombreDeSesion texto={titulo} en="span" tamanos={[21, 19, 17, 16]} umbrales={[12, 20, 32]} estilo={{ letterSpacing: -0.4, ...NUM_STYLE }} />
+          {sub && <span className="texto-corto" title={typeof sub === 'string' ? sub : undefined} style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.3, opacity: 0.88, marginTop: 3 }}>{pegaSeparadores(sub)}</span>}
           {abajo}
         </span>
         {accion}
@@ -125,8 +130,8 @@ export function CuadroBlanco({ Icono, titulo, sub, color = '#1E40E0', fondo = '#
         <Icono size={21} />
       </span>
       <span style={{ minWidth: 0 }}>
-        <span style={{ display: 'block', fontSize: 16, fontWeight: 700, color: '#111318', lineHeight: 1.2 }}>{titulo}</span>
-        {sub && <span style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#5B616E', marginTop: 2 }}>{sub}</span>}
+        <span className="texto-corto" style={{ fontSize: 16, fontWeight: 700, color: '#111318', lineHeight: 1.2 }}>{titulo}</span>
+        {sub && <span className="texto-corto" style={{ fontSize: 13, fontWeight: 500, color: '#5B616E', marginTop: 2 }}>{sub}</span>}
       </span>
     </button>
   );
