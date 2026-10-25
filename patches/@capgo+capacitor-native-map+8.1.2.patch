@@ -23,7 +23,7 @@ index 049cd86..4fdf87b 100644
      /// no-op zoom clamps that would otherwise leave `isAdjustingRegion` set).
      static func regionsAreEqual(_ lhs: MKCoordinateRegion, _ rhs: MKCoordinateRegion) -> Bool {
 diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMaps.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMaps.swift
-index 4b86a6b..ca0c218 100644
+index 4b86a6b..20edb9a 100644
 --- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMaps.swift
 +++ b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMaps.swift
 @@ -296,6 +296,9 @@ public class Map: NSObject, UIGestureRecognizerDelegate {
@@ -36,6 +36,27 @@ index 4b86a6b..ca0c218 100644
              self.targetView = self.getTargetContainer(refWidth: self.config.width, refHeight: self.config.height)
              if let target = self.targetView {
                  target.tag = Map.mapTag
+@@ -379,6 +382,20 @@ public class Map: NSObject, UIGestureRecognizerDelegate {
+             let latDelta = min(lonDelta * (height / max(width, 1)), 180.0)
+             let span = MKCoordinateSpan(latitudeDelta: latDelta, longitudeDelta: lonDelta)
+             let region = mapView.regionThatFits(MKCoordinateRegion(center: center, span: span))
++            // Training Lab (parche): con giro o inclinación, la cámara destino se arma de UNA vez. Antes se movía la región con animación y enseguida se copiaba
++            // `mapView.camera` (que aún estaba en el lugar VIEJO) para poner el giro: esa segunda orden cancelaba el movimiento y la cámara nunca llegaba
++            // (el botón «volver a mi ubicación» no hacía nada con animación).
++            if bearing != nil || pitch != nil {
++                let anterior = mapView.camera.copy() as? MKMapCamera
++                mapView.setRegion(region, animated: false)
++                if let destino = mapView.camera.copy() as? MKMapCamera {
++                    if let bearing = bearing { destino.heading = bearing }
++                    if let pitch = pitch { destino.pitch = CGFloat(max(0, pitch)) }
++                    if animate, let anterior = anterior { mapView.setCamera(anterior, animated: false) }
++                    mapView.setCamera(destino, animated: animate)
++                }
++                return
++            }
+             mapView.setRegion(region, animated: animate)
+         } else if coordinate != nil {
+             mapView.setCenter(center, animated: animate)
 diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ControlsBridge.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ControlsBridge.swift
 index 78c628f..8130199 100644
 --- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ControlsBridge.swift
