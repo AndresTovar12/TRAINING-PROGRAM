@@ -120,3 +120,39 @@ export function creaFila() {
     return mia;
   };
 }
+
+/** Distancia aproximada en metros entre dos puntos `{lat, lng}` (suficiente para unos cuantos metros de carrera). */
+export function metrosEntre(a, b) {
+  const rad = Math.PI / 180;
+  const x = (b.lng - a.lng) * rad * Math.cos(((a.lat + b.lat) / 2) * rad);
+  const y = (b.lat - a.lat) * rad;
+  return Math.sqrt(x * x + y * y) * 6371000;
+}
+
+/** Hacia dónde va el corredor (grados desde el norte, en el sentido del reloj): del último punto que quede al menos a `minimoM` metros, al último. Parado o sin
+    ruta: `null` (el mapa se queda como está). Con esto el mapa gira con la dirección de la carrera, sin depender del seguimiento de MapKit. */
+export function rumboDeRuta(puntos, minimoM = 8) {
+  const ultimo = puntos.at(-1);
+  if (!ultimo) return null;
+  for (let i = puntos.length - 2; i >= 0; i -= 1) {
+    const p = puntos[i];
+    if (metrosEntre(p, ultimo) >= minimoM) {
+      const rad = Math.PI / 180;
+      const y = Math.sin((ultimo.lng - p.lng) * rad) * Math.cos(ultimo.lat * rad);
+      const x = Math.cos(p.lat * rad) * Math.sin(ultimo.lat * rad) - Math.sin(p.lat * rad) * Math.cos(ultimo.lat * rad) * Math.cos((ultimo.lng - p.lng) * rad);
+      return (Math.atan2(y, x) / rad + 360) % 360;
+    }
+  }
+  return null;
+}
+
+/* La clase que esconde la app de abajo (#root) mientras un mapa a pantalla completa está a la vista. Se lleva la cuenta de QUIÉN la pidió: la clase solo está
+   puesta mientras haya al menos un mapa vivo que la pidió. Antes era un interruptor suelto y un mapa que se cerraba a medio arrancar la dejaba puesta: la app de
+   abajo se quedaba escondida y con ella el aviso «¿Descartar esta salida?» (vive en #root), así que «Descartar» parecía no hacer nada. */
+const CLASE_PANTALLA = 'mapa-nativo-pantalla';
+const conClase = new Set();
+const pintaClase = () => { try { document.documentElement.classList.toggle(CLASE_PANTALLA, conClase.size > 0); } catch { /* sin documento */ } };
+export const ponClase = (quien) => { conClase.add(quien); pintaClase(); };
+export const quitaClase = (quien) => { conClase.delete(quien); pintaClase(); };
+/** Por si acaso: una pantalla SIN mapa grande (el resumen) se asegura de que la app de abajo se vea. */
+export const limpiaPantallaDeMapa = () => { conClase.clear(); pintaClase(); };

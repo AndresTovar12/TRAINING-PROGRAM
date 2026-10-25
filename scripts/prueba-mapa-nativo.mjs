@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {
   ANGULO_3D, CENTRO_SIN_DATOS, MAX_PUNTOS_RUTA, MINIMO_ENCUADRE_GRADOS, ZOOM_INICIAL, ZOOM_SIGUE, ZOOM_SIN_DATOS,
-  adelgazaRuta, centroConReserva, claveDeRuta, conTiempoLimite, creaFila, encuadre, inicioDelMapa, planDeEnvio, puntosDeMuestras, ubicacionGuardada, usaMapaNativo,
+  adelgazaRuta, metrosEntre, rumboDeRuta, centroConReserva, claveDeRuta, conTiempoLimite, creaFila, encuadre, inicioDelMapa, planDeEnvio, puntosDeMuestras, ubicacionGuardada, usaMapaNativo,
 } from '../src/lib/mapaNativo.js';
 
 let n = 0;
@@ -120,5 +120,17 @@ await prueba('la fila no junta dos operaciones y una que falla no la detiene', a
   assert.deepEqual(log, ['crear1:inicio', 'crear1:fin', 'destruir1:inicio', 'destruir1:fin', 'crear2:inicio', 'crear2:fin']);
 });
 await prueba('fuera de la app (aquí, node) no se usa el mapa nativo', () => { assert.equal(usaMapaNativo(), false); });
+
+await prueba('el rumbo sale de la dirección de la carrera y se ignora el temblor de estar parado', () => {
+  const base = { lat: 21.16, lng: -86.85 };
+  const norte = { lat: base.lat + 0.0005, lng: base.lng }; // ~55 m al norte
+  const este = { lat: base.lat, lng: base.lng + 0.0005 };
+  assert.ok(Math.abs(metrosEntre(base, norte) - 55.6) < 1.5);
+  assert.ok(Math.abs(rumboDeRuta([base, norte]) - 0) < 1, 'hacia el norte = 0°');
+  assert.ok(Math.abs(rumboDeRuta([base, este]) - 90) < 1, 'hacia el este = 90°');
+  assert.equal(rumboDeRuta([base, { lat: base.lat + 0.00002, lng: base.lng }]), null, '2 m no es moverse');
+  assert.equal(rumboDeRuta([]), null);
+  assert.equal(rumboDeRuta([base]), null);
+});
 
 console.log(`\n${n} pruebas del mapa nativo: bien`);
