@@ -15,18 +15,23 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
-const ORIGENES = ['http://localhost:5173', 'capacitor://localhost' /* app de iPhone (Capacitor) */, 'http://localhost:4173', 'http://127.0.0.1:5173']
-const SITIO = (Deno.env.get('SITIO_URL') ?? 'https://training-program-kappa.vercel.app').replace(/\/$/, '')
+// Lista cerrada de sitios propios (lote 1 de seguridad, oct 2026): YA NO vale cualquier *.vercel.app.
+// Se suman, si existen, los secretos SITIO_URL, ALLOWED_ORIGINS y ORIGENES_EXTRA (separados por coma).
+const ORIGENES_PROPIOS = new Set<string>([
+  'http://localhost:5173', 'capacitor://localhost' /* app de iPhone (Capacitor) */, 'http://localhost:4173', 'http://127.0.0.1:5173',
+  'https://app.traininglabapp.com',
+  'https://training-program-kappa.vercel.app', // despliegue anterior en Vercel (mismo dueño); quitar cuando se apague
+  ...[Deno.env.get('SITIO_URL'), ...(Deno.env.get('ALLOWED_ORIGINS') ?? '').split(','), ...(Deno.env.get('ORIGENES_EXTRA') ?? '').split(',')]
+    .map((o) => (o ?? '').trim().replace(/\/+$/, ''))
+    .filter(Boolean),
+])
+const SITIO = (Deno.env.get('SITIO_URL') ?? 'https://app.traininglabapp.com').replace(/\/+$/, '')
 const SESION_RE = /^cs_(test|live)_[A-Za-z0-9]{8,200}$/
 const VENTANA_MS = 48 * 3600 * 1000
 
 const permitido = (origen: string | null) => {
   if (!origen) return SITIO
-  try {
-    const h = new URL(origen).hostname
-    if (ORIGENES.includes(origen) || /\.vercel\.app$/.test(h) || origen === SITIO) return origen
-  } catch { /* origen malformado */ }
-  return SITIO
+  return ORIGENES_PROPIOS.has(origen) ? origen : SITIO
 }
 const cabeceras = (origen: string | null): Record<string, string> => ({
   'Access-Control-Allow-Origin': permitido(origen),

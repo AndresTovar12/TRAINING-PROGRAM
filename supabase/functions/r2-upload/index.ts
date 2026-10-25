@@ -29,9 +29,10 @@ const PUBLICA = (Deno.env.get('R2_PUBLIC_URL') ?? '').trim().replace(/\/+$/, '')
 const HOSTS_PROPIOS = [...new Set([PUBLICA, PUBLICA_PROPIA, PUBLICA_ANTERIOR])]
 const RUTA_EN_URL = /((?:videos|covers|media)\/[A-Za-z0-9._-]+)$/
 
-// Con dominio propio, la app deja de vivir solo en `*.vercel.app`: `https://app.traininglabapp.com` va en el codigo y,
-// si hace falta otra, por secreto (`SITIO_URL` y, si hay mas de una, `ORIGENES_EXTRA` separadas por coma).
-const ORIGENES_PROPIOS = ['https://app.traininglabapp.com', Deno.env.get('SITIO_URL'), ...(Deno.env.get('ORIGENES_EXTRA') ?? '').split(',')]
+// Lista cerrada de sitios propios (lote 1 de seguridad, oct 2026): YA NO vale cualquier `*.vercel.app`.
+// `https://app.traininglabapp.com` va en el codigo y, si hace falta otra, por secreto
+// (`SITIO_URL`, `ALLOWED_ORIGINS` o `ORIGENES_EXTRA`, separadas por coma).
+const ORIGENES_PROPIOS = ['https://app.traininglabapp.com', 'https://training-program-kappa.vercel.app' /* despliegue anterior, mismo dueño */, Deno.env.get('SITIO_URL'), ...(Deno.env.get('ALLOWED_ORIGINS') ?? '').split(','), ...(Deno.env.get('ORIGENES_EXTRA') ?? '').split(',')]
   .map((o) => (o ?? '').trim().replace(/\/+$/, ''))
   .filter(Boolean)
 
@@ -44,11 +45,7 @@ const DEFAULT_ORIGINS = [
 function corsHeaders(origin: string | null): Record<string, string> {
   let allow = DEFAULT_ORIGINS[0]
   if (origin) {
-    try {
-      if (DEFAULT_ORIGINS.includes(origin) || ORIGENES_PROPIOS.includes(origin) || /\.vercel\.app$/.test(new URL(origin).hostname)) {
-        allow = origin
-      }
-    } catch { /* origin malformado */ }
+    if (DEFAULT_ORIGINS.includes(origin) || ORIGENES_PROPIOS.includes(origin)) allow = origin
   }
   return {
     'Access-Control-Allow-Origin': allow,

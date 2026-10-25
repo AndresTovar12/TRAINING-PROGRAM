@@ -13,17 +13,27 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { MONEDA, llamaStripe } from './stripe.js'
 
-const ORIGENES = ['http://localhost:5173', 'capacitor://localhost' /* app de iPhone (Capacitor) */, 'http://localhost:4173', 'http://127.0.0.1:5173']
 const CORREO_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
-const SITIO = (Deno.env.get('SITIO_URL') ?? 'https://training-program-kappa.vercel.app').replace(/\/$/, '')
+// Lista cerrada de sitios propios (lote 1 de seguridad, oct 2026): YA NO vale cualquier *.vercel.app.
+// Se suman, si existen, los secretos SITIO_URL, ALLOWED_ORIGINS y ORIGENES_EXTRA (separados por coma).
+const ORIGENES_PROPIOS = new Set<string>([
+  'http://localhost:5173', 'capacitor://localhost' /* app de iPhone (Capacitor) */, 'http://localhost:4173', 'http://127.0.0.1:5173',
+  'https://app.traininglabapp.com',
+  'https://training-program-kappa.vercel.app', // despliegue anterior en Vercel (mismo dueño); quitar cuando se apague
+  ...[Deno.env.get('SITIO_URL'), ...(Deno.env.get('ALLOWED_ORIGINS') ?? '').split(','), ...(Deno.env.get('ORIGENES_EXTRA') ?? '').split(',')]
+    .map((o) => (o ?? '').trim().replace(/\/+$/, ''))
+    .filter(Boolean),
+])
+const SITIO = (Deno.env.get('SITIO_URL') ?? 'https://app.traininglabapp.com').replace(/\/+$/, '')
 
 const permitido = (origen: string | null) => {
   if (!origen) return SITIO
-  try {
-    const h = new URL(origen).hostname
-    if (ORIGENES.includes(origen) || /\.vercel\.app$/.test(h) || origen === SITIO) return origen
-  } catch { /* origen malformado */ }
-  return SITIO
+  return ORIGENES_PROPIOS.has(origen) ? origen : SITIO
+}
+/** A dónde regresa Stripe: solo un sitio web propio de la lista cerrada (nunca el valor crudo del cliente; la app de iPhone vuelve al sitio principal). */
+const sitioDeRegreso = (origen: string | null) => {
+  const o = permitido(origen)
+  return /^https?:\/\//.test(o) ? o : SITIO
 }
 
 const cabeceras = (origen: string | null): Record<string, string> => ({
@@ -139,7 +149,7 @@ Deno.serve(async (req) => {
     }).select('id').single()
     if (errCompra) throw errCompra
 
-    const sitio = permitido(origen)
+    const sitio = sitioDeRegreso(origen)
     const membresia = plan.tipo === 'membresia'
     const sesionStripe = await llamaStripe(clave, 'POST', '/v1/checkout/sessions', {
       mode: membresia ? 'subscription' : 'payment',

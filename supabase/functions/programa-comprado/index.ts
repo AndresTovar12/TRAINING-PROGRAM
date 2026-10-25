@@ -17,11 +17,22 @@ import { hoyDelServidor, recortaPrograma } from './ventana.js'
 
 const ORIGENES = ['http://localhost:5173', 'capacitor://localhost' /* app de iPhone (Capacitor) */, 'http://localhost:4173', 'http://127.0.0.1:5173', 'https://app.traininglabapp.com'] // + dominio propio (15 oct 2026)
 
+// Lista cerrada de sitios propios (lote 1 de seguridad, oct 2026): YA NO vale cualquier *.vercel.app.
+// Se suman, si existen, los secretos SITIO_URL, ALLOWED_ORIGINS y ORIGENES_EXTRA (separados por coma).
+const ORIGENES_PROPIOS = new Set<string>([
+  'http://localhost:5173', 'capacitor://localhost' /* app de iPhone (Capacitor) */, 'http://localhost:4173', 'http://127.0.0.1:5173',
+  'https://app.traininglabapp.com',
+  'https://training-program-kappa.vercel.app', // despliegue anterior en Vercel (mismo dueño); quitar cuando se apague
+  ...[Deno.env.get('SITIO_URL'), ...(Deno.env.get('ALLOWED_ORIGINS') ?? '').split(','), ...(Deno.env.get('ORIGENES_EXTRA') ?? '').split(',')]
+    .map((o) => (o ?? '').trim().replace(/\/+$/, ''))
+    .filter(Boolean),
+])
+
 function cabeceras(origen: string | null): Record<string, string> {
   let permitido = ORIGENES[0]
   if (origen) {
     try {
-      if (ORIGENES.includes(origen) || /\.vercel\.app$/.test(new URL(origen).hostname)) permitido = origen
+      if (ORIGENES_PROPIOS.has(origen)) permitido = origen
     } catch { /* origen malformado */ }
   }
   return {

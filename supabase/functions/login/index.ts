@@ -35,7 +35,8 @@ const DEFAULT_ORIGINS = [
   'http://localhost:5173', 'capacitor://localhost', /* app de iPhone (Capacitor) */
   'http://localhost:4173',
   'http://127.0.0.1:5173',
-  'https://app.traininglabapp.com',  // dominio propio (15 oct 2026); la de Vercel sigue valiendo por el patrón .vercel.app
+  'https://app.traininglabapp.com',  // dominio propio (15 oct 2026)
+  'https://training-program-kappa.vercel.app', // despliegue anterior en Vercel (mismo dueño); ya NO vale cualquier *.vercel.app
 ]
 
 const envOrigins = (Deno.env.get('ALLOWED_ORIGINS') ?? '')
@@ -45,22 +46,10 @@ const envOrigins = (Deno.env.get('ALLOWED_ORIGINS') ?? '')
 
 const ALLOWED = new Set([...DEFAULT_ORIGINS, ...envOrigins])
 
-/**
- * El `try` no es decorativo: los navegadores mandan `Origin: null` de verdad
- * (un iframe con sandbox, un archivo abierto desde el disco), y `new URL('null')`
- * revienta. Sin esto, la función entera respondía 500 SIN cabeceras CORS y el
- * navegador enseñaba un error de CORS en vez del real.
- */
+/** Lista cerrada: solo los sitios propios (y los de ALLOWED_ORIGINS). Cualquier otro origen recibe el principal. */
 function origenQueSePermite(origin: string | null) {
   if (!origin) return DEFAULT_ORIGINS[0]
-
-  if (ALLOWED.has(origin)) return origin
-
-  try {
-    return new URL(origin).hostname.endsWith('.vercel.app') ? origin : DEFAULT_ORIGINS[0]
-  } catch {
-    return DEFAULT_ORIGINS[0]
-  }
+  return ALLOWED.has(origin) ? origin : DEFAULT_ORIGINS[0]
 }
 
 function corsHeaders(origin: string | null) {
