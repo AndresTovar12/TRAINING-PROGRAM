@@ -301,7 +301,8 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
       {foto && <img src={foto} alt="Tu ruta en el mapa" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
       {pantallaCompleta && activo && (
         // Los dos botones redondos de la derecha (como Aura), justo arriba del panel de abajo (no arriba: ahí sale la brújula del mapa).
-        <div style={{ position: 'absolute', right: 14, bottom: alturaPanel + 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        // `zIndex`: el degradado del panel de abajo sube por encima de esta zona y, aunque se vea transparente, se quedaba con el toque de la flecha (25 oct 2026).
+        <div style={{ position: 'absolute', zIndex: 5, right: 14, bottom: alturaPanel + 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <button type="button" data-map-overlay onClick={() => acciones.current.alterna3D?.()} aria-label={en3d ? 'Ver el mapa en 2D' : 'Ver el mapa en 3D'} style={botonDelMapa}>{en3d ? '2D' : '3D'}</button>
           {interactivo && <button
             type="button" data-map-overlay onClick={() => acciones.current.recentra?.()} aria-label={siguiendo ? 'Siguiendo tu ubicación' : 'Volver a mi ubicación'} aria-pressed={siguiendo}
