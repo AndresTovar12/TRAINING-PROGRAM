@@ -47,7 +47,8 @@ jobs:
           SECRETO=$(python3 scripts/apple-secreto.py "$RUNNER_TEMP/clave.p8" "$APPLE_KEY_ID" "$APPLE_TEAM_ID" "$APPLE_SERVICES_ID" 2>"$RUNNER_TEMP/err.txt") || { tail -n 3 "$RUNNER_TEMP/err.txt" >> "$D"; falla "no se pudo fabricar la clave (¿el texto del .p8 está completo?)"; }
           echo "::add-mask::$SECRETO"
           rm -f "$RUNNER_TEMP/clave.p8"
-          CUERPO=$(python3 -c 'import json,sys; print(json.dumps({"external_apple_secret": sys.argv[1]}))' "$SECRETO")
+          # Client IDs: la WEB va primero (Supabase usa el primero para el OAuth de la página); la app del iPhone acepta cualquiera de los dos.
+          CUERPO=$(python3 -c 'import json,sys; print(json.dumps({"external_apple_secret": sys.argv[1], "external_apple_client_id": "com.traininglabapp.web,com.traininglabapp.app"}))' "$SECRETO")
           CODIGO=$(curl -sS -o "$RUNNER_TEMP/respuesta.json" -w '%{http_code}' -X PATCH \
             "https://api.supabase.com/v1/projects/${SUPABASE_REF}/config/auth" \
             -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" -H 'Content-Type: application/json' -d "$CUERPO") || falla "no se pudo hablar con Supabase"
