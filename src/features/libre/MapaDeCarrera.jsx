@@ -40,9 +40,12 @@ function ConCalles({ muestras, sigue, interactivo, puntoAzul, alFallar }) {
     let instancia = null;
     (async () => {
       try {
-        const [{ default: maplibregl }, { Protocol }, base] = await Promise.all([
+        // maplibre-gl se fijó en la 5.24: la 6 sacó su trabajador (worker) a un archivo aparte que Vite no empaqueta y el mapa se quedaba sin dibujar (24 oct 2026).
+        // La 5 lo trae adentro. `mod.default ?? mod` funciona con las dos formas de exportar.
+        const [mod, { Protocol }, base] = await Promise.all([
           import('maplibre-gl'), import('pmtiles'), import('@protomaps/basemaps'), import('maplibre-gl/dist/maplibre-gl.css'),
         ]);
+        const maplibregl = mod.default ?? mod;
         if (!vivo || !caja.current) return;
         if (!window.__pmtilesListo) { maplibregl.addProtocol('pmtiles', new Protocol().tile); window.__pmtilesListo = true; }
         // Las capas oscuras de Protomaps SIN letreros: los nombres de calles piden fuentes de otro sitio, y corriendo no hacen falta.
@@ -64,7 +67,8 @@ function ConCalles({ muestras, sigue, interactivo, puntoAzul, alFallar }) {
           mapa.current = instancia;
           pinta(instancia, ultimos.current, sigue);
         });
-      } catch {
+      } catch (e) {
+        console.error('Mapa con calles:', e);
         if (vivo) alFallar();
       }
     })();
