@@ -4,6 +4,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { usePerfilDeLaVista } from '@/contexts/VistaContext';
 import { diferencia, aplicarParche } from '@/lib/estadoPorPartes';
+import { useAviso } from '@/components/AvisoPasajero';
 
 /**
  * Loads the per-user `user_app_state.data` jsonb blob once, holds it in memory,
@@ -23,15 +24,27 @@ import { diferencia, aplicarParche } from '@/lib/estadoPorPartes';
  *
  * Y al volver a la app se relee de la base: si mientras tanto la IA anotó
  * algo, se ve sin recargar la página.
+ *
+ * NUNCA EN SILENCIO (lote 1 de seguridad, 25 oct 2026). Antes, si el guardado fallaba (sin señal, servidor caído) solo quedaba una línea en la
+ * consola y la persona seguía creyendo que su entreno estaba guardado. Ahora:
+ *   · un guardado que falla avisa «No se guardó. Reintentar» (aviso fijo, ver `AvisoPasajero`), y se reintenta solo (a los 4, 10, 30 y luego cada
+ *     60 segundos, y en cuanto vuelve el internet). Lo que no se guardó sigue en memoria: no se pierde mientras la app esté abierta.
+ *   · si NO se pudo leer lo que ya había en la base, se avisa y NO se guarda nada hasta lograr leerlo: guardar encima de un estado vacío
+ *     borraría lo que la persona tenía.
  */
 const AppStateContext = createContext(null);
 
 const SAVE_DEBOUNCE_MS = 600;
+// Esperas antes de reintentar un guardado que falló; la última se repite.
+const ESPERAS_DE_REINTENTO_MS = [4000, 10000, 30000, 60000];
 
 export function AppStateProvider({ children }) {
   const { userId, soloLectura } = usePerfilDeLaVista();
   const [store, setStore] = useState({});
   const [loaded, setLoaded] = useState(false);
+  const { falla, quitaFalla } = useAviso();
+  // Sube cada vez que hay que volver a intentar leer la base tras un fallo de lectura.
+  const [intentoDeLectura, setIntentoDeLectura] = useState(0);
 
   /* Lo último que se sabe que tiene la base, y de quién es. Los parches se
      calculan contra esto. Los tres cambian juntos al cargar a una persona:
@@ -42,44 +55,101 @@ export function AppStateProvider({ children }) {
   // Los guardados van en fila, uno detrás del otro: dos a la vez podrían
   // llegar desordenados y el viejo quedar encima del nuevo.
   const cola = useRef(Promise.resolve());
+  // No se pudo leer la base: mientras sea así, no se guarda nada (ver arriba).
+  const lecturaFallida = useRef(false);
+  const fallos = useRef(0);
+  const relojDeReintento = useRef(null);
+  // `guardarAhora` se usa dentro de sí mismo (para reintentar): por eso se llega a ella por un ref.
+  const guardarRef = useRef(() => {});
 
   const guardarAhora = useCallback(() => {
     cola.current = cola.current.then(async () => {
       const usuario = deQuien.current;
+      if (!usuario || lecturaFallida.current) return;
       const parche = diferencia(enLaBase.current, ultimoStore.current);
-      if (!usuario || parche === undefined) return;
-      const { error } = await supabase.rpc('mezclar_mi_estado', { p_usuario: usuario, p_cambios: parche });
-      if (error) {
-        console.error('user_app_state save error', error.message);
+      if (parche === undefined) {
+        // No hay nada pendiente: si había un aviso de falla, ya no aplica.
+        if (fallos.current > 0) { fallos.current = 0; clearTimeout(relojDeReintento.current); quitaFalla(); }
         return;
       }
+      let error;
+      try {
+        ({ error } = await supabase.rpc('mezclar_mi_estado', { p_usuario: usuario, p_cambios: parche }));
+      } catch (e) {
+        error = e instanceof Error ? e : new Error(String(e));
+      }
+      if (error) {
+        console.error('user_app_state save error', error.message);
+        if (deQuien.current !== usuario) return;
+        fallos.current += 1;
+        falla('No se guardó. Reintentar', { accion: { texto: 'Reintentar', alTocar: () => guardarRef.current() } });
+        clearTimeout(relojDeReintento.current);
+        relojDeReintento.current = setTimeout(() => guardarRef.current(), ESPERAS_DE_REINTENTO_MS[Math.min(fallos.current - 1, ESPERAS_DE_REINTENTO_MS.length - 1)]);
+        return;
+      }
+      if (fallos.current > 0) { fallos.current = 0; clearTimeout(relojDeReintento.current); quitaFalla(); }
       // Sobre lo que se sabía, no un reemplazo: si mientras tanto se releyó
       // la base, esto sigue siendo cierto.
       if (deQuien.current === usuario) enLaBase.current = aplicarParche(enLaBase.current, parche);
     });
     return cola.current;
+  }, [falla, quitaFalla]);
+
+  useEffect(() => { guardarRef.current = guardarAhora; }, [guardarAhora]);
+
+  // Al volver el internet se intenta de una vez, sin esperar el siguiente reintento.
+  useEffect(() => {
+    const alVolver = () => { if (fallos.current > 0) guardarRef.current(); };
+    window.addEventListener('online', alVolver);
+    return () => { window.removeEventListener('online', alVolver); clearTimeout(relojDeReintento.current); };
   }, []);
 
   // Load the blob whenever the user changes
   useEffect(() => {
     let cancelled = false;
     setLoaded(false);
+    // Otra persona (o la misma, otra vez): se olvida lo que había pendiente de la anterior.
+    fallos.current = 0;
+    clearTimeout(relojDeReintento.current);
+    quitaFalla();
 
     if (!userId) {
       enLaBase.current = {};
       deQuien.current = null;
+      lecturaFallida.current = false;
       setStore({});
       setLoaded(true);
       return;
     }
 
     (async () => {
-      const { data } = await supabase
-        .from('user_app_state')
-        .select('data')
-        .eq('user_id', userId)
-        .maybeSingle();
+      // Se intenta 3 veces antes de rendirse: una señal mala suele volver en unos segundos.
+      let respuesta = null;
+      for (let intento = 1; intento <= 3; intento += 1) {
+        try {
+          respuesta = await supabase.from('user_app_state').select('data').eq('user_id', userId).maybeSingle();
+        } catch (e) {
+          respuesta = { data: null, error: e instanceof Error ? e : new Error(String(e)) };
+        }
+        if (!respuesta.error || cancelled) break;
+        await new Promise((listo) => { setTimeout(listo, 1500 * intento); });
+        if (cancelled) return;
+      }
       if (cancelled) return;
+      if (respuesta?.error) {
+        // No se sabe qué hay en la base: se deja la app abierta (vacía) pero SIN guardar nada hasta lograr leer, para no pisar lo que la persona ya tenía.
+        console.error('user_app_state load error', respuesta.error.message);
+        lecturaFallida.current = true;
+        enLaBase.current = {};
+        deQuien.current = userId;
+        setStore({});
+        setLoaded(true);
+        falla('No se pudieron cargar tus datos. Reintentar', { accion: { texto: 'Reintentar', alTocar: () => setIntentoDeLectura((n) => n + 1) } });
+        return;
+      }
+      lecturaFallida.current = false;
+      quitaFalla();
+      const data = respuesta?.data;
       const fresco = data?.data && typeof data.data === 'object' ? data.data : {};
       enLaBase.current = fresco;
       deQuien.current = userId;
@@ -90,7 +160,7 @@ export function AppStateProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, intentoDeLectura, falla, quitaFalla]);
 
   // Debounced persistence: solo lo que cambió
   useEffect(() => {
