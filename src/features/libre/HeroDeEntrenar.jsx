@@ -21,8 +21,8 @@ export default function HeroDeEntrenar({ deporte, semana, ultimo, enCurso = fals
       : 'Correr, bici, nadar o caminar: la app lleva tu tiempo y tu distancia.';
   return (
     <Marco etiqueta={enCurso ? 'Entreno en curso' : 'Entrenar'} punto={enCurso ? '#7CF0C5' : '#FFB547'}>
-      <h3 style={{ margin: '16px 0 0', fontSize: 28, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.12 }}>{titulo}</h3>
-      <p style={{ margin: '6px 0 0', fontSize: 14.5, fontWeight: 600, opacity: 0.85, lineHeight: 1.4 }}>{detalle}</p>
+      <h3 className="texto-largo" style={{ margin: '16px 0 0', fontSize: 28, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.12 }}>{titulo}</h3>
+      <p className="texto-largo" style={{ margin: '6px 0 0', fontSize: 14.5, fontWeight: 600, opacity: 0.85, lineHeight: 1.4 }}>{detalle}</p>
       {ultimo && !enCurso && (
         <div role="img" aria-label={hechos.length ? `Esta semana entrenaste ${hechos.join(', ')}` : 'Esta semana todavía no has entrenado'} style={{ display: 'flex', gap: 6, marginTop: 14 }}>
           {semana.dias.map((d, i) => (
