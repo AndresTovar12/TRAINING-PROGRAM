@@ -35,10 +35,9 @@ public class EntrenoWatchPlugin: CAPPlugin, CAPBridgedPlugin, WCSessionDelegate 
         case "funcional": config.activityType = .functionalStrengthTraining; config.locationType = .indoor
         default: config.activityType = .other; config.locationType = .indoor
         }
+        // Antes del iPhone con iOS 17 esta llamada no existe: ahí el reloj se abre a mano (el pulso fluye cuando abres la app del reloj).
         if #available(iOS 17.0, *) {
             almacen.startWatchApp(with: config) { _, _ in }
-        } else {
-            almacen.startWatchApp(toHandle: config) { _, _ in }
         }
     }
 
