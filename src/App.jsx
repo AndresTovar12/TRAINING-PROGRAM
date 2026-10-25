@@ -115,7 +115,7 @@ function AccountMenu({ perfil, onPerfil }) {
 
   return (
     <>
-    <div ref={ref} style={{ position: 'fixed', top: 'calc(16px + var(--aviso-vista, 0px))', right: 16, zIndex: 1000, fontFamily: FONT, opacity: seEsconde ? 0 : 1, pointerEvents: seEsconde ? 'none' : 'auto', transform: seEsconde ? 'translateY(-8px)' : 'none', transition: 'opacity .18s, transform .18s' }}>
+    <div ref={ref} style={{ position: 'fixed', top: 'calc(16px + env(safe-area-inset-top) + var(--aviso-vista, 0px))', right: 16, zIndex: 1000, fontFamily: FONT, opacity: seEsconde ? 0 : 1, pointerEvents: seEsconde ? 'none' : 'auto', transform: seEsconde ? 'translateY(-8px)' : 'none', transition: 'opacity .18s, transform .18s' }}>
       {/* REESTRUCTURA VISUAL (15 oct 2026): las iniciales en un cuadro azul claro de 52 px, como en las capturas de Andrés. Al atleta le
           queda a la altura del saludo de Home; al coach en el teléfono, sobre su banda azul. */}
       <button
