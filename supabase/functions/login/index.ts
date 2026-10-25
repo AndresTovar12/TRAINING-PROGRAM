@@ -75,7 +75,36 @@ function json(body: Respuesta, status: number, origin: string | null) {
 // confirmed" o "Request rate limit reached" solo le salen a quien existe.
 const INCORRECTO = 'Usuario o contraseña incorrectos'
 const DEMASIADOS = 'Demasiados intentos. Espera un momento y vuelve a intentarlo.'
+const BLOQUEADO = 'Demasiados intentos fallidos. Espera 15 minutos y vuelve a intentarlo, o usa «Olvidé mi contraseña».'
 const SERVIDOR = 'No se pudo entrar. Inténtalo de nuevo en un momento.'
+
+/* FRENO A LOS INTENTOS FALLIDOS (lote 1 de seguridad, 25 oct 2026).
+   Supabase Auth cuenta los intentos por la IP de ESTA funcion, o sea, de todos a la vez: pocos intentos de alguien
+   pueden dejar sin entrar a los demas. Aqui se cuenta por cuenta y por conexion, solo los intentos que FALLAN:
+     · misma cuenta desde la misma conexion: 8 en 15 min  (quien olvido su clave se frena solo a si mismo),
+     · misma conexion, cualquier cuenta:     60 en 15 min (quien prueba muchas cuentas),
+     · misma cuenta, desde cualquier lado:   40 en 15 min (red de seguridad contra un ataque repartido; un atacante no puede
+       dejar fuera a nadie con unos cuantos intentos).
+   La IP sale de `cf-connecting-ip` (la pone Cloudflare; el cliente no la puede cambiar). Si el libro falla, no se bloquea a nadie. */
+const VENTANA_FALLOS_S = 15 * 60
+function ipDe(req: Request): string {
+  const cf = (req.headers.get('cf-connecting-ip') ?? '').trim()
+  if (cf) return cf
+  return (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || 'sin-ip'
+}
+// deno-lint-ignore no-explicit-any
+async function fallosEn(bd: any, ambito: string, clave: string): Promise<number> {
+  const desde = new Date(Date.now() - VENTANA_FALLOS_S * 1000).toISOString()
+  const { count, error } = await bd.from('frenos_de_uso').select('id', { count: 'exact', head: true }).eq('ambito', ambito).eq('clave', clave).gte('creado_en', desde)
+  if (error) { console.error('frenos_de_uso (contar):', error.message); return 0 }
+  return count ?? 0
+}
+// deno-lint-ignore no-explicit-any
+async function anotaFallo(bd: any, claves: [string, string][]) {
+  const { error } = await bd.from('frenos_de_uso').insert(claves.map(([ambito, clave]) => ({ ambito, clave })))
+  if (error) console.error('frenos_de_uso (anotar):', error.message)
+  if (Math.random() < 0.02) await bd.from('frenos_de_uso').delete().lt('creado_en', new Date(Date.now() - 24 * 3600 * 1000).toISOString())
+}
 
 Deno.serve(async (req) => {
   const origin = req.headers.get('origin')
@@ -110,11 +139,18 @@ Deno.serve(async (req) => {
     return json({ error: 'Configuración incompleta. Avísale al administrador.' }, 500, origin)
   }
 
+  // 0. Freno a los intentos fallidos (ver arriba). Se mira ANTES de gastar una llamada a Supabase Auth.
+  const frenos = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } })
+  const ip = ipDe(req)
+  const idMin = identificador.toLowerCase().slice(0, 120)
+  const [fIdIp, fIp, fId] = await Promise.all([fallosEn(frenos, 'login_id_ip', `${idMin}|${ip}`), fallosEn(frenos, 'login_ip', ip), fallosEn(frenos, 'login_id', idMin)])
+  if (fIdIp >= 8 || fIp >= 60 || fId >= 40) return json({ error: BLOQUEADO }, 429, origin)
+
   // 1. Usuario → correo. Con permisos de servicio, y el correo se queda aquí.
   let email = identificador
 
   if (!identificador.includes('@')) {
-    const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } })
+    const admin = frenos
     const { data, error } = await admin.rpc('email_for_login', { identifier: identificador })
 
     if (error) {
@@ -123,7 +159,10 @@ Deno.serve(async (req) => {
       return json({ error: SERVIDOR }, 500, origin)
     }
 
-    if (!data) return json({ error: INCORRECTO }, 400, origin)
+    if (!data) {
+      await anotaFallo(frenos, [['login_id_ip', `${idMin}|${ip}`], ['login_ip', ip], ['login_id', idMin]])
+      return json({ error: INCORRECTO }, 400, origin)
+    }
 
     email = String(data)
   }
@@ -155,6 +194,7 @@ Deno.serve(async (req) => {
 
     if (r.status >= 500) return json({ error: SERVIDOR }, 502, origin)
 
+    await anotaFallo(frenos, [['login_id_ip', `${idMin}|${ip}`], ['login_ip', ip], ['login_id', idMin]])
     return json({ error: INCORRECTO }, 400, origin)
   }
 

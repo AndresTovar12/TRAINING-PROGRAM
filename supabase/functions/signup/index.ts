@@ -85,6 +85,34 @@ async function profesionalLleno(
 const AVISO_LLENO =
   'Este entrenador ya no puede recibir más atletas por ahora. Avísale, o crea tu cuenta sin entrenador y únete después.'
 
+/* FRENOS (lote 1 de seguridad, 25 oct 2026). Antes habia UN tope global (300 por hora) que cualquiera podia agotar para dejar sin comprar a todos.
+   Ahora se cuenta por IP y por identificador (correo o cuenta) en `frenos_de_uso`, y cada quien se topa solo con lo suyo.
+   La IP sale de `cf-connecting-ip`: la pone Cloudflare (delante de Supabase) y el cliente no la puede cambiar (probado: mandarla falsa da 403, y
+   `x-forwarded-for` se reescribe). Si el libro falla, NO se bloquea a nadie (mejor dejar pasar que dejar sin entrar al atleta legitimo). */
+function ipDe(req: Request): string {
+  const cf = (req.headers.get('cf-connecting-ip') ?? '').trim()
+  if (cf) return cf
+  return (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || 'sin-ip'
+}
+
+// deno-lint-ignore no-explicit-any
+async function pasaElFreno(bd: any, ambito: string, clave: string, limite: number, segundos = 3600): Promise<boolean> {
+  try {
+    const desde = new Date(Date.now() - segundos * 1000).toISOString()
+    const { count, error } = await bd.from('frenos_de_uso').select('id', { count: 'exact', head: true }).eq('ambito', ambito).eq('clave', clave).gte('creado_en', desde)
+    if (error) { console.error('frenos_de_uso (contar):', error.message); return true }
+    if ((count ?? 0) >= limite) return false
+    const { error: errInsert } = await bd.from('frenos_de_uso').insert({ ambito, clave })
+    if (errInsert) console.error('frenos_de_uso (anotar):', errInsert.message)
+    // De vez en cuando se tiran las filas de hace mas de un dia, para que el libro no crezca sin fin.
+    if (Math.random() < 0.02) await bd.from('frenos_de_uso').delete().lt('creado_en', new Date(Date.now() - 24 * 3600 * 1000).toISOString())
+    return true
+  } catch (e) {
+    console.error('frenos_de_uso:', e instanceof Error ? e.message : e)
+    return true
+  }
+}
+
 Deno.serve(async (req) => {
   const origin = req.headers.get('Origin')
 
@@ -193,6 +221,12 @@ Deno.serve(async (req) => {
   } else if (!confiable) {
     correoPendiente = email
     email = correoInterno
+  }
+
+  // Freno por conexión (IP): 30 cuentas nuevas por hora. Alcanza para un gimnasio entero con un solo wifi y frena a quien crea cuentas en masa.
+  // El dueño creando coaches con su sesión no cuenta.
+  if (!confiable && !(await pasaElFreno(admin, 'signup_ip', ipDe(req), 30))) {
+    return json({ error: 'Se crearon muchas cuentas desde esta conexión. Espera un rato e inténtalo de nuevo.', codigo: 'MUCHOS_INTENTOS' }, 429, origin)
   }
 
   // Username único
