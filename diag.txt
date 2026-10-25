@@ -1,0 +1,4 @@
+largo APPLE_P8_TEXTO=257 · largo SUPABASE_ACCESS_TOKEN=44
+Supabase contestó: 200
+Apple sigue encendido; Client IDs: com.traininglabapp.web,com.traininglabapp.app
+TODO BIEN
