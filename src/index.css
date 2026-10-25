@@ -91,6 +91,38 @@ body {
   min-height: 100svh;
 }
 
+/* ============================================================
+   MAPA NATIVO DE APPLE A PANTALLA COMPLETA (iPhone, 25 oct 2026)
+   El mapa de Apple va DETRÁS de la página (plugin `native-map`, modo `toBack`) y la página se vuelve transparente encima.
+   La clase `mapa-nativo-pantalla` la pone `features/libre/MapaNativo.jsx` en <html> SOLO mientras ese mapa está listo, y la quita al cerrar o si cae
+   al mapa de siempre; con la clase quitada todo vuelve a verse como antes.
+   Aparte, el plugin pone `native-map-to-back` en <html> y <body> mientras el mapa existe.
+   ============================================================ */
+
+/* 1 · La página no pinta fondo propio: se ve el mapa que está detrás. */
+html.native-map-to-back,
+body.native-map-to-back {
+  background: transparent !important;
+}
+
+/* 2 · La app de abajo (#root) se esconde para que no se vea entre el mapa y la pantalla. `visibility` y no `display`: no pierde su lugar ni su estado, y
+   el plugin deja de contarla como zona que recibe toques. Las pantallas completas viven en un portal en <body>, fuera de #root, y no se esconden. */
+html.mapa-nativo-pantalla #root {
+  visibility: hidden;
+}
+
+/* 3 · La pantalla completa (portal con `data-mapa-portal`) deja su fondo opaco y se ve el mapa. Lo que lleva fondo propio (paneles, botones) se queda como está
+   y recibe los toques; las zonas transparentes los pasan al mapa. `!important` porque el color del fondo viene en el atributo `style` del portal. */
+html.mapa-nativo-pantalla [data-mapa-portal] {
+  background: transparent !important;
+}
+
+/* 4 · Un contenedor de la pantalla que NO tiene fondo ni es botón pero debe quedarse con los toques (que no lleguen al mapa) lleva `data-map-overlay`: el plugin lo
+   reconoce por ese atributo. Aquí solo se asegura de que reciba los toques aunque su padre los desactive. */
+[data-map-overlay] {
+  pointer-events: auto;
+}
+
 /* Tabular numbers para pesos, %, series */
 .tnum {
   font-feature-settings: 'tnum' 1;
@@ -286,3 +318,23 @@ button.ui-fila:focus-visible { outline: 2px solid #1E40E0; outline-offset: -2px;
 /* Los números de `EntradaNumero` sin las flechitas del navegador: se escribe con el teclado numérico, y las flechas ocupaban la mitad de la casilla. */
 .ui-numero { -moz-appearance: textfield; appearance: textfield; }
 .ui-numero::-webkit-outer-spin-button, .ui-numero::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* La atribución del mapa de calles (MapLibre): chiquita y translúcida, que no estorbe. Se pide para el respaldo; el mapa de Apple pone la suya. */
+.maplibregl-map .maplibregl-ctrl-attrib.maplibregl-compact,
+.maplibregl-map .maplibregl-ctrl-attrib {
+  font-size: 9px;
+  line-height: 1.2;
+  background: transparent;
+  opacity: 0.55;
+}
+.maplibregl-map .maplibregl-ctrl-attrib.maplibregl-compact {
+  min-height: 18px;
+  margin: 0 4px 4px 0;
+}
+.maplibregl-map .maplibregl-ctrl-attrib-button {
+  width: 18px;
+  height: 18px;
+}
+.maplibregl-map .maplibregl-ctrl-attrib a {
+  color: #fff;
+}

@@ -244,10 +244,13 @@ export default function PasoConGps({
   );
 
   const bolitaDeGps = (perdido || senal === 'sin_senal') ? AMBAR : '#22C38E';
+  // El chip «GPS» va DEBAJO del mapa y no encima: el mapa nativo de Apple se pinta sobre la página y taparía lo que esté en su rectángulo.
   const mapita = (
-    <div style={{ position: 'relative', height: 150, borderRadius: 20, overflow: 'hidden', background: '#1A1F33' }}>
-      <MapaDeCarrera muestras={muestras.length || !aqui ? muestras : [aqui]} sigue={fase !== 'llego'} alto="100%" redondo={false} puntoAzul />
-      <span style={{ position: 'absolute', left: 10, bottom: 8, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 99, background: 'rgba(15,18,32,0.7)', color: BLANCO, fontSize: 12, fontWeight: 700 }}>
+    <div>
+      <div style={{ position: 'relative', height: 150, borderRadius: 20, overflow: 'hidden', background: '#1A1F33' }}>
+        <MapaDeCarrera muestras={muestras.length || !aqui ? muestras : [aqui]} sigue={fase !== 'llego'} alto="100%" redondo={false} puntoAzul />
+      </div>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 8, padding: '3px 9px', borderRadius: 99, background: 'rgba(15,18,32,0.7)', color: BLANCO, fontSize: 12, fontWeight: 700 }}>
         <MapPin size={12} /> GPS
         <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: 3, background: bolitaDeGps }} />
       </span>

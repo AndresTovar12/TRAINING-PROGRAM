@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { trazoDeRuta } from '@/lib/ubicacion';
+import { usaMapaNativo } from '@/lib/mapaNativo';
+import MapaNativo from './MapaNativo';
 
 /* EL MAPA DE LA CARRERA (16 oct 2026). Andrés eligió mapa CON CALLES; su costo es fijo y mínimo: el archivo (México + EE. UU., 10 GB, zoom 14) vive en R2 y casi cabe en el cupo gratis (24 oct 2026).
 
@@ -8,12 +10,41 @@ import { trazoDeRuta } from '@/lib/ubicacion';
    dibuja la ruta sola sobre fondo oscuro: la carrera nunca se queda sin mapa.
 
    `muestras`: los puntos de la ruta (ver `lib/ubicacion.js`). `sigue`: centrar en el último punto (corriendo) en vez de encuadrar toda la
-   ruta (resumen). `interactivo`: se puede mover con el dedo. `alto`: en px o '100%'. */
+   ruta (resumen). `interactivo`: se puede mover con el dedo. `alto`: en px o '100%'.
+
+   ESTE ARCHIVO ES EL DESPACHADOR (25 oct 2026). En la app de iPhone intenta primero el mapa de Apple (`MapaNativo.jsx`); si no existe el plugin, no se crea o no
+   avisa que está listo en ~4 s, vuelve solo a este mapa de abajo (MapLibre), que es también el de la web. `pantallaCompleta`: el mapa ocupa toda la pantalla y la
+   interfaz va encima (solo lo usa el mapa nativo; el de abajo no lo necesita). */
 
 const URL_DEL_MAPA = import.meta.env.VITE_MAPA_URL || '';
 const COLOR_RUTA = '#FF5A5F';
+const AZUL_YO = '#2F6BFF';
 
-export default function MapaDeCarrera({ muestras, sigue = true, interactivo = false, alto = 220, redondo = true, puntoAzul = false }) {
+/* Las calles de Protomaps «dark» salían gris oscuro sobre casi negro y no se leían (comparado con Aura, 25 oct 2026). Se parte de ese mismo tema y se suben el
+   contraste: las calles principales más claras y con borde oscuro, los edificios con relleno visible y el agua y los parques con algo de color. */
+const COLORES_CON_CONTRASTE = {
+  earth: '#262c3d', background: '#262c3d', water: '#1b3b63', park_a: '#1f4234', park_b: '#1b3a2d', wood_a: '#1f3a2f', wood_b: '#1f3a2f',
+  industrial: '#2b3144', school: '#2d3347', hospital: '#2f3347', pedestrian: '#2d3448', buildings: '#434d6b',
+  minor_service: '#566079', minor_service_casing: '#141826', minor_a: '#6a748f', minor_b: '#5d6783', minor_casing: '#141826', other: '#566079',
+  link: '#8089a3', link_casing: '#141826', major: '#a3abc2', major_casing_early: '#141826', major_casing_late: '#141826', highway: '#d3d8e6', highway_casing_early: '#141826', highway_casing_late: '#141826',
+  bridges_other: '#566079', bridges_minor: '#6a748f', bridges_link: '#8089a3', bridges_major: '#a3abc2', bridges_highway: '#d3d8e6',
+  bridges_other_casing: '#141826', bridges_minor_casing: '#141826', bridges_link_casing: '#141826', bridges_major_casing: '#141826', bridges_highway_casing: '#141826',
+  tunnel_other: '#3a4258', tunnel_minor: '#3a4258', tunnel_link: '#3a4258', tunnel_major: '#3a4258', tunnel_highway: '#3a4258',
+};
+
+/* Si el mapa nativo falla una vez, no se vuelve a intentar en esta sesión: cada intento perdería hasta 4 s en cada pantalla. */
+let nativoRoto = false;
+
+export default function MapaDeCarrera(props) {
+  const [motor, setMotor] = useState(() => (usaMapaNativo() && !nativoRoto ? 'nativo' : 'web'));
+  if (motor === 'nativo') {
+    // Que otro mapa nativo ya esté abierto ('ocupado') no es un fallo del plugin: solo este usa el de siempre.
+    return <MapaNativo {...props} alFallar={(razon) => { if (razon !== 'ocupado') nativoRoto = true; setMotor('web'); }} />;
+  }
+  return <MapaWeb {...props} />;
+}
+
+function MapaWeb({ muestras, sigue = true, interactivo = false, alto = 220, redondo = true, puntoAzul = false }) {
   const [conCalles, setConCalles] = useState(!!URL_DEL_MAPA);
   return (
     <div style={{ position: 'relative', height: alto, borderRadius: redondo ? 20 : 0, overflow: 'hidden', background: '#1B1F2E' }}>
@@ -54,7 +85,7 @@ function ConCalles({ muestras, sigue, interactivo, puntoAzul, alFallar }) {
         if (!vivo || !caja.current) return;
         if (!window.__pmtilesListo) { maplibregl.addProtocol('pmtiles', new Protocol().tile); window.__pmtilesListo = true; }
         // Las capas oscuras de Protomaps SIN letreros: los nombres de calles piden fuentes de otro sitio, y corriendo no hacen falta.
-        const capas = base.layers('calles', base.namedFlavor('dark'), { lang: 'es' }).filter((c) => c.type !== 'symbol');
+        const capas = base.layers('calles', { ...base.namedFlavor('dark'), ...COLORES_CON_CONTRASTE }, { lang: 'es' }).filter((c) => c.type !== 'symbol');
         const inicio = ultimos.current.at(-1) ?? ubicacionGuardada() ?? [-99.13, 19.43];
         instancia = new maplibregl.Map({
           container: caja.current,
@@ -67,8 +98,11 @@ function ConCalles({ muestras, sigue, interactivo, puntoAzul, alFallar }) {
           instancia.addSource('ruta', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: ultimos.current } } });
           instancia.addLayer({ id: 'ruta', type: 'line', source: 'ruta', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': COLOR_RUTA, 'line-width': 5 } });
           instancia.addSource('yo', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+          // El punto con halo (un círculo grande y transparente alrededor), como el punto azul del teléfono.
+          const colorYo = puntoAzul ? AZUL_YO : COLOR_RUTA;
+          instancia.addLayer({ id: 'yo-halo', type: 'circle', source: 'yo', paint: { 'circle-radius': 18, 'circle-color': colorYo, 'circle-opacity': 0.25 } });
           instancia.addLayer({ id: 'yo-borde', type: 'circle', source: 'yo', paint: { 'circle-radius': 9, 'circle-color': '#fff' } });
-          instancia.addLayer({ id: 'yo', type: 'circle', source: 'yo', paint: { 'circle-radius': 6, 'circle-color': puntoAzul ? '#2F6BFF' : COLOR_RUTA } });
+          instancia.addLayer({ id: 'yo', type: 'circle', source: 'yo', paint: { 'circle-radius': 6, 'circle-color': colorYo } });
           mapa.current = instancia;
           pinta(instancia, ultimos.current, sigue);
         });

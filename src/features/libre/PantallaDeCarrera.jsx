@@ -14,6 +14,8 @@ import MapaDeCarrera from './MapaDeCarrera';
 import IconoDeActividad from './IconoDeActividad';
 import { actividadDeDeporte } from '@/lib/actividades';
 import { useSenalGps, useUbicacionActual } from './useEntrenoLibre';
+import { usaMapaNativo } from '@/lib/mapaNativo';
+import { useBarraDeEstadoClara } from '@/lib/barraDeEstado';
 
 /* LA CARRERA CON GPS A PANTALLA COMPLETA (reestructura visual, 16 oct 2026), como «Workout · Carrera» de las capturas de Andrés:
      1. Antes de salir: el mapa, «GPS listo» y el botón redondo «Iniciar».
@@ -27,6 +29,7 @@ import { useSenalGps, useUbicacionActual } from './useEntrenoLibre';
 
 const C = { fondo: '#0F1220', tarjeta: '#1A1E2E', tarjeta2: '#232838', texto: '#FFFFFF', texto2: 'rgba(255,255,255,0.62)', rojo: '#FF5A5F', azul: '#2F6BFF', verde: '#22C38E' };
 const CORAL = 'linear-gradient(135deg, #FF8A5B 0%, #F0506E 100%)'; /* estilo-ok: pantallas oscuras de la carrera (capturas aprobadas) */
+const SOBRE_EL_MAPA = 'linear-gradient(to top, rgba(15,18,32,0.85) 0%, rgba(15,18,32,0.85) 52%, rgba(15,18,32,0) 100%)'; /* estilo-ok: degradado transparente que sube desde abajo para ver el mapa entero (ampliación del 25 oct 2026, como Aura) */
 const AZUL = 'linear-gradient(135deg, #2448E8 0%, #1733B8 60%, #0D1A66 100%)'; /* estilo-ok: pantallas oscuras de la carrera (capturas aprobadas) */
 
 const nombreDeLaSalida = (deporte, inicioMs, actividad = null) => {
@@ -61,6 +64,7 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
   const [resumen, setResumen] = useState(null); // lo que dio `crono.termina()` al tocar Terminar
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState(null);
+  useBarraDeEstadoClara(!resumen); // todas las pantallas de la carrera son oscuras menos el resumen: la hora y la batería en letras claras
   const senal = useSenalGps(!!pendiente && conMapa);
   const aqui = useUbicacionActual(!!pendiente && conMapa);
   // Sin mapa, «listo para empezar» enseña la hora: que avance sola.
@@ -127,7 +131,7 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
   };
 
   const pantalla = (hijos) => createPortal(
-    <div role="dialog" aria-modal="true" aria-label={nombre} style={{ position: 'fixed', inset: 0, zIndex: 3200, background: C.fondo, color: C.texto, fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
+    <div role="dialog" aria-modal="true" aria-label={nombre} data-mapa-portal style={{ position: 'fixed', inset: 0, zIndex: 3200, background: C.fondo, color: C.texto, fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
       {hijos}
     </div>,
     document.body,
@@ -148,7 +152,7 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
     return pantalla(
       <>
         {conMapa
-          ? <div style={{ position: 'absolute', inset: 0 }}><MapaDeCarrera muestras={aqui ? [aqui] : []} alto="100%" redondo={false} puntoAzul /></div>
+          ? <div style={{ position: 'absolute', inset: 0 }}><MapaDeCarrera muestras={aqui ? [aqui] : []} alto="100%" redondo={false} puntoAzul pantallaCompleta /></div>
           : (
             <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, paddingBottom: 160 }}>
               <span style={{ fontSize: 13.5, fontWeight: 700, color: C.texto2 }}>Hora actual</span>
@@ -162,42 +166,43 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
         <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'calc(14px + env(safe-area-inset-top)) 16px 0' }}>
           <button type="button" onClick={alMinimizar} aria-label="Cerrar" style={redondo}><ChevronDown size={22} /></button>
           {conMapa && (
-            <span role="status" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 99, background: lista ? 'rgba(34,195,142,0.18)' : 'rgba(255,255,255,0.12)', color: lista ? C.verde : '#fff', fontSize: 14, fontWeight: 700, backdropFilter: 'blur(10px)' }}>
+            <span role="status" data-map-overlay style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 99, background: lista ? 'rgba(34,195,142,0.18)' : 'rgba(255,255,255,0.12)', color: lista ? C.verde : '#fff', fontSize: 14, fontWeight: 700, backdropFilter: 'blur(10px)' }}>
               {senal === 'buscando' ? <Loader2 size={15} className="spin" /> : <span style={{ width: 8, height: 8, borderRadius: 4, background: lista ? C.verde : '#fff' }} />} {textoSenal}
             </span>
           )}
         </div>
         <div style={{ flex: 1 }} />
-        <div style={{ position: 'relative', margin: '0 12px calc(12px + env(safe-area-inset-bottom))', borderRadius: 28, padding: '10px 18px 20px', background: 'rgba(28,32,48,0.88)', backdropFilter: 'blur(16px)' }}>
-          <div aria-hidden="true" style={{ width: 40, height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.25)', margin: '0 auto 12px' }} />
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 800, color: C.rojo }}>Entreno libre</div>
-              <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: -0.4, overflowWrap: 'anywhere' }}>{nombre}</div>
+        {/* Abajo no hay tarjeta sólida: un degradado que sube desde el fondo (transparente arriba, ~85 % del color oscuro abajo) deja ver el mapa entero, estilo Aura.
+            `data-mapa-panel` va en el contenido (no en el degradado) para que el mapa descuente solo lo que de verdad tapan los botones. */}
+        <div style={{ position: 'relative', padding: '56px 12px calc(14px + env(safe-area-inset-bottom))', background: SOBRE_EL_MAPA }}>
+          <div data-map-overlay data-mapa-panel style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, textAlign: 'center', maxWidth: '100%' }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: C.rojo }}>Entreno libre</div>
+              <div style={{ fontSize: 19, fontWeight: 800, letterSpacing: -0.2, overflowWrap: 'anywhere' }}>{nombre}</div>
+              {ultimo && <div style={{ fontSize: 13, fontWeight: 500, color: C.texto2 }}>Último: {ultimo}</div>}
             </div>
-            {ultimo && <div style={{ fontSize: 13.5, fontWeight: 500, color: C.texto2, textAlign: 'right' }}>Último: {ultimo}</div>}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 10, marginTop: 16 }}>
-            {/* Cambiar de actividad: el ícono de la que va (detalle de la maqueta v4, estilo Aura). */}
-            <button type="button" onClick={alCambiarDeporte} aria-label={`Cambiar de actividad (ahora: ${nombre})`} style={lado}>
-              <IconoDeActividad actividad={act ?? actividadDeDeporte(deporte)} size={52} oscuro /> Cambiar
-            </button>
-            <button
-              type="button" onClick={() => alEmpezar({ gps: conMapa && !sinGps })} disabled={esperandoGps} aria-label="Iniciar"
-              style={{ width: 112, height: 112, borderRadius: 56, border: 'none', background: esperandoGps ? 'rgba(255,255,255,0.14)' : CORAL, color: '#fff', cursor: esperandoGps ? 'default' : 'pointer', fontFamily: FONT, fontSize: esperandoGps ? 17 : 21, fontWeight: 800, boxShadow: esperandoGps ? 'none' : '0 14px 34px rgba(240,80,110,0.45)', touchAction: 'manipulation' }}
-            >
-              {esperandoGps ? 'GPS…' : 'Iniciar'}
-            </button>
-            {conMapa && !sinGps ? (
-              <button type="button" onClick={() => alEmpezar({ gps: false })} style={lado}>
-                <span style={{ ...redondo, width: 52, height: 52, borderRadius: 26 }}><MapaIcono size={20} /></span> Sin GPS
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 10, marginTop: 14, width: '100%', maxWidth: 420 }}>
+              {/* Cambiar de actividad: el ícono de la que va (detalle de la maqueta v4, estilo Aura). */}
+              <button type="button" onClick={alCambiarDeporte} aria-label={`Cambiar de actividad (ahora: ${nombre})`} style={lado}>
+                <IconoDeActividad actividad={act ?? actividadDeDeporte(deporte)} size={52} oscuro /> Cambiar
               </button>
-            ) : !conMapa ? (
-              // Conectar el reloj es de la app de la tienda (capa nativa): aquí solo lo dice.
-              <button type="button" onClick={() => avisa('Con la app descargable, tu Apple Watch manda el pulso y las calorías mientras entrenas')} style={lado}>
-                <span style={{ ...redondo, width: 52, height: 52, borderRadius: 26 }}><Watch size={20} /></span> Conectar reloj
+              <button
+                type="button" onClick={() => alEmpezar({ gps: conMapa && !sinGps })} disabled={esperandoGps} aria-label="Iniciar"
+                style={{ width: 112, height: 112, borderRadius: 56, border: 'none', background: esperandoGps ? 'rgba(255,255,255,0.14)' : CORAL, color: '#fff', cursor: esperandoGps ? 'default' : 'pointer', fontFamily: FONT, fontSize: esperandoGps ? 17 : 21, fontWeight: 800, boxShadow: esperandoGps ? '0 0 0 6px rgba(255,255,255,0.08)' : '0 0 0 6px rgba(255,138,91,0.28), 0 14px 34px rgba(240,80,110,0.45)', touchAction: 'manipulation' }}
+              >
+                {esperandoGps ? 'GPS…' : 'Iniciar'}
               </button>
-            ) : <span />}
+              {conMapa && !sinGps ? (
+                <button type="button" onClick={() => alEmpezar({ gps: false })} style={lado}>
+                  <span style={{ ...redondo, width: 52, height: 52, borderRadius: 26 }}><MapaIcono size={20} /></span> Sin GPS
+                </button>
+              ) : !conMapa ? (
+                // Conectar el reloj es de la app de la tienda (capa nativa): aquí solo lo dice.
+                <button type="button" onClick={() => avisa('Con la app descargable, tu Apple Watch manda el pulso y las calorías mientras entrenas')} style={lado}>
+                  <span style={{ ...redondo, width: 52, height: 52, borderRadius: 26 }}><Watch size={20} /></span> Conectar reloj
+                </button>
+              ) : <span />}
+            </div>
           </div>
         </div>
       </>,
@@ -217,7 +222,7 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
       <>
         <div style={{ flex: 1, overflowY: 'auto', background: '#F2F3F7', color: '#111318' }}>
           <MapaDeCarrera muestras={resumen.muestras ?? muestras} sigue={false} alto={300} redondo={false} />
-          <div style={{ margin: '-48px 16px 0', position: 'relative', background: '#fff', borderRadius: 24, padding: '16px 18px 18px', boxShadow: '0 14px 34px rgba(17,19,24,0.12)' }}>
+          <div style={{ margin: usaMapaNativo() ? '14px 16px 0' : '-48px 16px 0', position: 'relative', background: '#fff', borderRadius: 24, padding: '16px 18px 18px', boxShadow: '0 14px 34px rgba(17,19,24,0.12)' }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: C.rojo, }}>
               Hoy · {fecha.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' })}
             </div>
@@ -285,13 +290,13 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
   if (vista === 'mapa') {
     return pantalla(
       <>
-        <div style={{ position: 'absolute', inset: 0 }}><MapaDeCarrera muestras={muestras} alto="100%" redondo={false} interactivo /></div>
+        <div style={{ position: 'absolute', inset: 0 }}><MapaDeCarrera muestras={muestras} alto="100%" redondo={false} interactivo pantallaCompleta /></div>
         <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', padding: 'calc(14px + env(safe-area-inset-top)) 16px 0' }}>
           <button type="button" onClick={alMinimizar} aria-label="Minimizar" style={redondo}><ChevronDown size={22} /></button>
           <button type="button" onClick={() => setVista('numeros')} style={{ ...redondo, width: 'auto', padding: '0 14px', fontFamily: FONT, fontSize: 14, fontWeight: 700 }}>Números</button>
         </div>
         <div style={{ flex: 1 }} />
-        <div style={{ position: 'relative', margin: '0 12px', borderRadius: 24, padding: '14px 18px 16px', background: 'rgba(28,32,48,0.88)', backdropFilter: 'blur(16px)' }}>
+        <div data-map-overlay data-mapa-panel style={{ position: 'relative', margin: '0 12px', borderRadius: 24, padding: '14px 18px 16px', background: 'rgba(28,32,48,0.88)', backdropFilter: 'blur(16px)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5, fontWeight: 600, color: C.texto2 }}>
             <span>{pausado ? 'En pausa' : nombre}</span>
             {ultimoKm && <span style={{ color: '#8FA9FF' }}>Km {ultimoKm.n} · {enBici ? velocidad(ultimoKm.dur) : textoDeRitmo(ultimoKm.dur)}</span>}
@@ -323,9 +328,12 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
           <div><div style={{ fontSize: 38, fontWeight: 800, ...NUM_STYLE }}>{ritmoActual}</div><div style={{ fontSize: 13, color: C.texto2 }}>{enBici ? 'Velocidad km/h' : 'Ritmo actual /km'}</div></div>
           <div style={{ borderLeft: '1px solid rgba(255,255,255,0.12)' }}><div style={{ fontSize: 38, fontWeight: 800, ...NUM_STYLE }}>{ritmoPromedio}</div><div style={{ fontSize: 13, color: C.texto2 }}>Promedio {unidadRitmo}</div></div>
         </div>
-        <div style={{ position: 'relative', width: '100%', maxWidth: 520, marginTop: 24 }}>
+        <div style={{ width: '100%', maxWidth: 520, marginTop: 24 }}>
           <MapaDeCarrera muestras={muestras} alto={170} />
-          <button type="button" onClick={() => setVista('mapa')} style={{ position: 'absolute', top: 10, right: 10, border: 'none', borderRadius: 10, padding: '6px 10px', background: 'rgba(15,18,32,0.75)', color: '#fff', fontFamily: FONT, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>Ver mapa</button>
+          {/* «Ver mapa» va DEBAJO del mapa, no encima: el mapa nativo se pinta sobre la página y taparía cualquier botón que esté en su rectángulo. */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+            <button type="button" onClick={() => setVista('mapa')} style={{ border: 'none', borderRadius: 10, padding: '8px 14px', background: 'rgba(255,255,255,0.12)', color: '#fff', fontFamily: FONT, fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }}>Ver mapa</button>
+          </div>
         </div>
       </div>
       <div style={{ padding: '14px 16px calc(14px + env(safe-area-inset-bottom))' }}>{botones}</div>
