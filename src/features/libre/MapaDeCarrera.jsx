@@ -32,14 +32,16 @@ const COLORES_CON_CONTRASTE = {
   tunnel_other: '#3a4258', tunnel_minor: '#3a4258', tunnel_link: '#3a4258', tunnel_major: '#3a4258', tunnel_highway: '#3a4258',
 };
 
-/* Si el mapa nativo falla una vez, no se vuelve a intentar en esta sesión: cada intento perdería hasta 4 s en cada pantalla. */
-let nativoRoto = false;
+/* Si el mapa nativo falla, no se vuelve a intentar en esta sesión (cada intento perdería hasta 4 s), PERO por separado: que falle un mapa chico en un rectángulo
+   (montarse en la página es lo delicado) no debe quitarle el mapa de Apple a la pantalla completa de la carrera, y al revés. */
+const roto = { pantalla: false, rectangulo: false };
 
 export default function MapaDeCarrera(props) {
-  const [motor, setMotor] = useState(() => (usaMapaNativo() && !nativoRoto ? 'nativo' : 'web'));
+  const modo = props.pantallaCompleta ? 'pantalla' : 'rectangulo';
+  const [motor, setMotor] = useState(() => (usaMapaNativo() && !roto[modo] ? 'nativo' : 'web'));
   if (motor === 'nativo') {
-    // Que otro mapa nativo ya esté abierto ('ocupado') no es un fallo del plugin: solo este usa el de siempre.
-    return <MapaNativo {...props} alFallar={(razon) => { if (razon !== 'ocupado') nativoRoto = true; setMotor('web'); }} />;
+    // Que otro mapa nativo ya esté abierto ('ocupado') o que el rectángulo aún no tenga tamaño ('sin-tamano') no es un fallo del plugin: solo este usa el de siempre.
+    return <MapaNativo {...props} alFallar={(razon) => { if (razon === 'fallo') roto[modo] = true; setMotor('web'); }} />;
   }
   return <MapaWeb {...props} />;
 }

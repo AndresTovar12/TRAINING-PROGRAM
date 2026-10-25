@@ -58,6 +58,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
   const [activo, setActivo] = useState(false);
   const [siguiendo, setSiguiendo] = useState(true); // MapKit va siguiendo al usuario (si lo arrastró a mano, no)
   const [en3d, setEn3d] = useState(true);
+  const [foto, setFoto] = useState(null);
   const acciones = useRef({});
   const dato = useRef({ puntos, sigue });
   const empuja = useRef(null);
@@ -74,6 +75,8 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
     const id = `tl-mapa-${++contador}`;
     const limite = Date.now() + ESPERA_MAXIMA_MS;
     const restante = () => Math.max(250, limite - Date.now());
+    // El resumen (ni pantalla completa, ni sigue, ni se mueve) se enseña como foto fija del mapa de Apple.
+    const comoFoto = !pantallaCompleta && !dato.current.sigue && !interactivo;
     const e = {
       vivo: true, mapa: null, LatLngBounds: null, elemento: null, listo: false, ids: [], ultimoEnvioMs: 0, claveEnviada: null, reloj: null, ocupado: false, otraVez: false, necesitaZoom: false,
       // `rastreo`: MapKit sigue al usuario con rumbo (pantalla completa que sigue). `en3d`: inclinado 45°.
@@ -173,7 +176,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
         Object.assign(e.elemento.style, { display: 'block', position: 'absolute', top: '0', left: '0', width: '100%', height: '100%' });
         caja.current.appendChild(e.elemento);
         const r = e.elemento.getBoundingClientRect();
-        if (r.width < 2 || r.height < 2) throw new Error('el rectángulo del mapa no tiene tamaño');
+        if (r.width < 2 || r.height < 2) { const err = new Error('el rectángulo del mapa no tiene tamaño'); err.razon = 'sin-tamano'; throw err; }
       }
       const inicio = inicioDelMapa(dato.current.puntos, ubicacionGuardada(textoGuardado()), dato.current.sigue ? ZOOM_SIGUE : ZOOM_INICIAL);
       e.necesitaZoom = !inicio.conocido;
@@ -239,12 +242,31 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
       e.listo = true;
       if (pantallaCompleta) { ponClase(); setActivo(true); }
       await aplica(true);
+      if (comoFoto && e.vivo) await vuelveFoto();
+    };
+
+    /* EL RESUMEN SE VUELVE FOTO. Un mapa vivo dentro de una página que se desplaza se queda con el dedo (no deja bajar la página si empiezas encima de él) y
+       no respeta las esquinas de la tarjeta. El resumen no se mueve: se le toma una foto al mapa ya encuadrado, se enseña como imagen y el mapa nativo se cierra.
+       Si la foto falla, se queda el mapa vivo. */
+    const vuelveFoto = async () => {
+      await new Promise((res) => { setTimeout(res, 900); }); // que terminen de llegar las calles
+      if (!e.vivo || !e.mapa) return;
+      try {
+        const { image } = await conTiempoLimite(puenteDelMapa().takeSnapshot({ id }), 4000, 'la foto del mapa tardó demasiado');
+        if (!e.vivo || !image) return;
+        setFoto(image);
+        e.listo = false;
+        const { mapa, elemento } = e;
+        e.mapa = null;
+        fila(async () => { try { await mapa?.destroy(); } catch { /* ya no estaba */ } elemento?.remove(); }).catch(() => {});
+        if (dueno === ficha) dueno = null; // con la foto puesta ya no ocupa el mapa nativo: otra pantalla lo puede usar
+      } catch (err) { console.warn('Mapa nativo (foto del resumen):', err); }
     };
 
     fila(arranca).catch((err) => {
       if (!e.vivo) return;
       console.warn('Mapa nativo no disponible, uso el de siempre:', err);
-      fallar.current?.('fallo');
+      fallar.current?.(err?.razon ?? 'fallo');
     });
 
     return () => {
@@ -269,16 +291,17 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
   return (
     <div style={{ position: 'relative', height: alto, borderRadius: redondo ? 20 : 0, overflow: 'hidden', background: pantallaCompleta && activo ? 'transparent' : '#1B1F2E' }}>
       <div ref={caja} style={{ position: 'absolute', inset: 0 }} />
+      {foto && <img src={foto} alt="Tu ruta en el mapa" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
       {pantallaCompleta && activo && (
         // Los dos botones redondos de la derecha (como Aura). Bajo la brújula del mapa, que sale arriba a la derecha cuando el mapa gira.
         <div style={{ position: 'absolute', right: 14, top: 'calc(env(safe-area-inset-top) + 130px)', display: 'flex', flexDirection: 'column', gap: 10 }}>
           <button type="button" data-map-overlay onClick={() => acciones.current.alterna3D?.()} aria-label={en3d ? 'Ver el mapa en 2D' : 'Ver el mapa en 3D'} style={botonDelMapa}>{en3d ? '2D' : '3D'}</button>
-          <button
+          {interactivo && <button
             type="button" data-map-overlay onClick={() => acciones.current.recentra?.()} aria-label="Volver a mi ubicación"
             style={{ ...botonDelMapa, color: siguiendo ? 'rgba(255,255,255,0.55)' : '#FF8A5B' }}
           >
             <Navigation size={20} fill={siguiendo ? 'none' : 'currentColor'} />
-          </button>
+          </button>}
         </div>
       )}
     </div>
