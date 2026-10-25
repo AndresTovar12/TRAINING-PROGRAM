@@ -5,7 +5,7 @@ import { agregaPunto, enVivo, fuenteDeUbicacion, textoDeRitmo } from '@/lib/ubic
 import { avanceDelPaso, estadoDeRitmo, pedidoEnUnaLinea, ritmoObjetivo, sinSenal } from '@/lib/recorrido';
 import { relojDeCronometro } from '@/lib/entrenoLibre';
 import MapaDeCarrera from '@/features/libre/MapaDeCarrera';
-import { useSenalGps } from '@/features/libre/useEntrenoLibre';
+import { useSenalGps, useUbicacionActual } from '@/features/libre/useEntrenoLibre';
 
 /* EL CARDIO DEL PLAN, CON GPS (23 oct 2026). Un paso de 200 m o más (un sprint, un kilómetro, ver `lib/recorrido.js`) se hace con esta pantalla: la de la captura
    «Cardio» de la reestructura visual (`REESTRUCTURA VISUAL/USUARIO:ATLETA/TELEFONO/WORKOUT`). Andrés eligió ESTA y no la oscura del registro libre: «ayuda más a una persona
@@ -119,6 +119,7 @@ export default function PasoConGps({
   const pausa = useRef({ desde: null, acum: 0 }); // lo mismo, para el GPS (que no debe volver a suscribirse en cada pausa)
   // Con `sinCuenta` (los lapsos) no hay pantalla de «antes», pero igual se oye la señal mientras no llega el primer punto: si no hay permiso, no se espera nada.
   const senal = useSenalGps(fase === 'antes' || (sinCuenta && fase === 'corriendo' && muestras.length === 0));
+  const aqui = useUbicacionActual(fase === 'antes');
   useEffect(() => {
     if (sinCuenta && (senal === 'negado' || senal === 'no_hay')) onCerrar();
   }, [sinCuenta, senal, onCerrar]);
@@ -245,7 +246,7 @@ export default function PasoConGps({
   const bolitaDeGps = (perdido || senal === 'sin_senal') ? AMBAR : '#22C38E';
   const mapita = (
     <div style={{ position: 'relative', height: 150, borderRadius: 20, overflow: 'hidden', background: '#1A1F33' }}>
-      <MapaDeCarrera muestras={muestras} sigue={fase !== 'llego'} alto="100%" redondo={false} puntoAzul />
+      <MapaDeCarrera muestras={muestras.length || !aqui ? muestras : [aqui]} sigue={fase !== 'llego'} alto="100%" redondo={false} puntoAzul />
       <span style={{ position: 'absolute', left: 10, bottom: 8, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 99, background: 'rgba(15,18,32,0.7)', color: BLANCO, fontSize: 12, fontWeight: 700 }}>
         <MapPin size={12} /> GPS
         <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: 3, background: bolitaDeGps }} />

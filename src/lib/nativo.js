@@ -13,37 +13,67 @@ import { usaFuenteDeUbicacion } from './ubicacion.js';
 
 export const enLaApp = () => Capacitor.isNativePlatform();
 
-/** El GPS del teléfono. A diferencia del del navegador, sigue mandando puntos con la pantalla apagada (necesita el permiso «Siempre» y el modo de fondo «location» del Info.plist). */
+/* El GPS del teléfono, COMPARTIDO.
+   El plugin nativo solo atiende UNA escucha a la vez, pero en la app la piden varias pantallas (la señal de «antes de salir», la ruta del entreno, cada sprint, el mapa). Con una escucha
+   por pantalla, cada una al abrirse reiniciaba el GPS (arranque en frío) y al cerrarse podía apagar la de otra. Aquí hay UNA sola escucha viva y todas se cuelgan de ella:
+   · se enciende con la primera pantalla que la pide y se apaga unos segundos DESPUÉS de que la última la suelta (así el paso de «antes» a «corriendo» no la reinicia);
+   · a quien llega le entrega al instante el último punto si es reciente: «dónde estoy» sale sin esperar. */
+const GRACIA_MS = 8000;
+const PUNTO_VIGENTE_MS = 20000;
+const escuchas = new Set();
+let ultimo = null; // { punto, en }
+let encendido = false;
+let apagar = null;
+let plugin = null;
+
+const aTodas = (f) => { for (const e of [...escuchas]) { try { f(e); } catch { /* una pantalla que falla no apaga a las demás */ } } };
+
+async function enciende() {
+  if (encendido) return;
+  encendido = true;
+  try {
+    plugin ??= (await import('@capgo/background-geolocation')).BackgroundGeolocation;
+    await plugin.start(
+      { backgroundTitle: 'Training Lab', backgroundMessage: 'Midiendo tu entreno', requestPermissions: true, stale: false, distanceFilter: 0 },
+      (p, error) => {
+        if (error) { aTodas((e) => e.alError?.(error.code === 'NOT_AUTHORIZED' ? 'negado' : 'sin_senal')); return; }
+        if (!p) return;
+        const punto = {
+          lat: p.latitude, lon: p.longitude, precision: p.accuracy,
+          ...(typeof p.altitude === 'number' ? { alt: p.altitude } : {}),
+        };
+        ultimo = { punto, en: Date.now() };
+        aTodas((e) => e.alPunto(punto));
+      },
+    );
+  } catch {
+    encendido = false;
+    aTodas((e) => e.alError?.('sin_senal'));
+  }
+}
+
+function programaApagado() {
+  clearTimeout(apagar);
+  apagar = setTimeout(() => {
+    if (escuchas.size > 0 || !encendido) return;
+    encendido = false;
+    plugin?.stop?.().catch?.(() => {});
+  }, GRACIA_MS);
+}
+
 const fuenteDelTelefono = {
   nombre: 'telefono',
   segundoPlano: true,
   disponible: () => true,
   sigue(alPunto, alError) {
-    let vivo = true;
-    import('@capgo/background-geolocation').then(({ BackgroundGeolocation }) => {
-      if (!vivo) return;
-      BackgroundGeolocation.start(
-        {
-          backgroundTitle: 'Training Lab',
-          backgroundMessage: 'Midiendo tu entreno',
-          requestPermissions: true,
-          stale: false,
-          distanceFilter: 0,
-        },
-        (p, error) => {
-          if (!vivo) return;
-          if (error) { alError?.(error.code === 'NOT_AUTHORIZED' ? 'negado' : 'sin_senal'); return; }
-          if (!p) return;
-          alPunto({
-            lat: p.latitude, lon: p.longitude, precision: p.accuracy,
-            ...(typeof p.altitude === 'number' ? { alt: p.altitude } : {}),
-          });
-        },
-      ).catch(() => { if (vivo) alError?.('sin_senal'); });
-    }).catch(() => { if (vivo) alError?.('sin_senal'); });
+    const yo = { alPunto, alError };
+    escuchas.add(yo);
+    clearTimeout(apagar);
+    if (ultimo && Date.now() - ultimo.en < PUNTO_VIGENTE_MS) Promise.resolve().then(() => { if (escuchas.has(yo)) alPunto(ultimo.punto); });
+    enciende();
     return () => {
-      vivo = false;
-      import('@capgo/background-geolocation').then(({ BackgroundGeolocation }) => BackgroundGeolocation.stop()).catch(() => {});
+      escuchas.delete(yo);
+      if (escuchas.size === 0) programaApagado();
     };
   },
 };
