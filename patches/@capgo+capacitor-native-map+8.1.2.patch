@@ -26,10 +26,10 @@ index 78c628f..8130199 100644
      }
  
 diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/MapControls.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/MapControls.swift
-index 5d27c04..b7f6ae4 100644
+index 5d27c04..311fee0 100644
 --- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/MapControls.swift
 +++ b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/MapControls.swift
-@@ -14,13 +14,25 @@ extension Map {
+@@ -14,13 +14,32 @@ extension Map {
  
      /// Follow the user's location (and optionally heading). A non-`none` mode turns
      /// the user-location dot on; the host app still needs location permission.
@@ -37,17 +37,24 @@ index 5d27c04..b7f6ae4 100644
 +    func setUserTrackingMode(_ mode: String, distance: Double? = nil, pitch: Double? = nil) {
          DispatchQueue.main.async {
              let tracking = Map.userTrackingMode(from: mode)
++            // Training Lab (parche): al seguir al usuario MapKit pone SU distancia (lejos) y pelea con cualquier cámara que se le ponga encima (el mapa
++            // se acercaba y se volvía a alejar). En vez de pelear, se le pone un RANGO de distancia que MapKit respeta mientras sigue. Sin seguir, sin rango.
++            if tracking == .none {
++                self.mapView.cameraZoomRange = nil
++            } else if let d = distance, d > 0,
++                      let rango = MKMapView.CameraZoomRange(minCenterCoordinateDistance: d * 0.7, maxCenterCoordinateDistance: d * 1.4) {
++                self.mapView.setCameraZoomRange(rango, animated: false)
++            }
              if tracking != .none {
                  self.mapView.showsUserLocation = true
              }
              self.mapView.setUserTrackingMode(tracking, animated: true)
-+            // Training Lab (parche): al seguir al usuario MapKit pone su propia distancia y la cámara plana. Si se pidió una distancia
-+            // o inclinación, se aplican después de que MapKit tome el control, sin dejar de seguir.
-+            guard tracking != .none, distance != nil || pitch != nil else { return }
-+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
++            // La inclinación (3D) se aplica cuando MapKit ya tomó la cámara, sin dejar de seguir.
++            guard tracking != .none, let p = pitch else { return }
++            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
 +                guard let camara = self.mapView.camera.copy() as? MKMapCamera else { return }
++                camara.pitch = CGFloat(max(0, min(p, 60)))
 +                if let d = distance, d > 0 { camara.centerCoordinateDistance = d }
-+                if let p = pitch { camara.pitch = CGFloat(max(0, min(p, 60))) }
 +                self.mapView.setCamera(camara, animated: true)
 +                if self.mapView.userTrackingMode != tracking {
 +                    self.mapView.setUserTrackingMode(tracking, animated: false)

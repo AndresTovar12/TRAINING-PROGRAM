@@ -59,6 +59,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
   const [siguiendo, setSiguiendo] = useState(true); // MapKit va siguiendo al usuario (si lo arrastró a mano, no)
   const [en3d, setEn3d] = useState(true);
   const [foto, setFoto] = useState(null);
+  const [alturaPanel, setAlturaPanel] = useState(0); // los botones redondos van justo arriba del panel de abajo
   const acciones = useRef({});
   const dato = useRef({ puntos, sigue });
   const empuja = useRef(null);
@@ -110,8 +111,10 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
     // Empieza (o vuelve a empezar) el seguimiento de MapKit: acerca, inclina y le pide seguir al usuario con rumbo (el punto azul con cono).
     const empiezaARastrear = async (primera) => {
       const { mapa } = e;
-      // Solo una parte del panel se descuenta: con todo el panel el punto quedaba muy arriba (a un tercio de la pantalla). Así queda cerca del centro.
-      await mapa.setPadding({ top: 0, left: 0, right: 0, bottom: Math.round(reservaDelPanel() * 0.3) });
+      // El margen de abajo es TODO el panel: así el logo y «Legal» de Apple quedan arriba del panel (Apple exige que se vean). Para que el punto no se vaya
+      // arriba (con solo el margen de abajo quedaba a un tercio de la pantalla) se pone también un margen arriba: el centro queda casi a media pantalla.
+      const reserva = reservaDelPanel();
+      await mapa.setPadding({ top: Math.round(reserva * 0.7), left: 0, right: 0, bottom: reserva });
       const donde = dato.current.puntos.at(-1) ?? (e.conocido ? e.centroInicial : null);
       if (donde) await mapa.setCamera({ coordinate: donde, zoom: ZOOM_SIGUE, angle: e.en3d ? ANGULO_3D : 0, animate: !primera });
       // MapKit, al seguir, pone su propia distancia (se veía muy lejos) y la cámara plana: se le piden la distancia y la inclinación (parche del plugin).
@@ -219,6 +222,8 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
             if (!d?.isGesture || !e.rastreo || !e.siguiendo) return;
             e.siguiendo = false;
             setSiguiendo(false);
+            // Deja de seguir del todo y quita el rango de distancia, para que el dedo pueda alejar o acercar libre. La flecha lo vuelve a seguir.
+            puenteDelMapa().setUserTrackingMode({ id, mode: 'none' }).catch(() => {});
           });
         } catch (err) { console.warn('Mapa nativo (arrastre):', err); }
       }
@@ -240,7 +245,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
         },
       };
       e.listo = true;
-      if (pantallaCompleta) { ponClase(); setActivo(true); }
+      if (pantallaCompleta) { ponClase(); setAlturaPanel(reservaDelPanel()); setActivo(true); }
       await aplica(true);
       if (comoFoto && e.vivo) await vuelveFoto();
     };
@@ -293,8 +298,8 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
       <div ref={caja} style={{ position: 'absolute', inset: 0 }} />
       {foto && <img src={foto} alt="Tu ruta en el mapa" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
       {pantallaCompleta && activo && (
-        // Los dos botones redondos de la derecha (como Aura). Bajo la brújula del mapa, que sale arriba a la derecha cuando el mapa gira.
-        <div style={{ position: 'absolute', right: 14, top: 'calc(env(safe-area-inset-top) + 130px)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        // Los dos botones redondos de la derecha (como Aura), justo arriba del panel de abajo (no arriba: ahí sale la brújula del mapa).
+        <div style={{ position: 'absolute', right: 14, bottom: alturaPanel + 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <button type="button" data-map-overlay onClick={() => acciones.current.alterna3D?.()} aria-label={en3d ? 'Ver el mapa en 2D' : 'Ver el mapa en 3D'} style={botonDelMapa}>{en3d ? '2D' : '3D'}</button>
           {interactivo && <button
             type="button" data-map-overlay onClick={() => acciones.current.recentra?.()} aria-label="Volver a mi ubicación"
