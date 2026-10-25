@@ -432,7 +432,7 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
     cuerpo = (
       <>
         <h1 style={titulo(compu)}>¿Tu correo?</h1>
-        <p style={subtitulo}>Sirve para entrar y para recuperar tu contraseña. Se puede dejar para después.</p>
+        <p style={subtitulo}>Sirve para recuperar tu contraseña. Te mandamos un código para confirmar que es tuyo. Se puede dejar para después.</p>
         <Campo id="ini-correo" label="Correo" icono={Mail} tipo="email" value={correo} onChange={setCorreo} extra={{ autoCapitalize: 'none', autoCorrect: 'off', autoComplete: 'email', inputMode: 'email' }} />
         {Error}
       </>

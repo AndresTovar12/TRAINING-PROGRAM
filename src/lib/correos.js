@@ -24,3 +24,17 @@ export const AVISO_SIN_CORREO = 'Esa cuenta se creó sin correo, así que no hay
 
 /** Lo que se dice SIEMPRE tras pedir el enlace, exista o no la cuenta (así nadie averigua qué correos están registrados). */
 export const AVISO_ENLACE_ENVIADO = 'Si ese correo tiene una cuenta, en unos minutos te llega un enlace para poner una contraseña nueva. Revisa también la carpeta de spam.';
+
+/* EL CORREO QUE FALTA CONFIRMAR (lote 1 de seguridad, 25 oct 2026).
+   Quien se registra con un correo no lo tiene como correo de la cuenta hasta teclear el código de 6 números que le llega (ver `supabase/functions/signup`).
+   Mientras tanto se recuerda aquí, solo en este aparato, para que Mi perfil → Correo retome en el paso del código. Todo va en try/catch: sin almacenamiento no pasa nada, solo se vuelve a escribir. */
+const LLAVE_CORREO_POR_CONFIRMAR = 'tl:correo-por-confirmar';
+export function guardaCorreoPorConfirmar(correo) {
+  try { localStorage.setItem(LLAVE_CORREO_POR_CONFIRMAR, String(correo ?? '').trim().toLowerCase()); } catch { /* sin almacenamiento */ }
+}
+export function correoPorConfirmar() {
+  try { return localStorage.getItem(LLAVE_CORREO_POR_CONFIRMAR) || ''; } catch { return ''; }
+}
+export function olvidaCorreoPorConfirmar() {
+  try { localStorage.removeItem(LLAVE_CORREO_POR_CONFIRMAR); } catch { /* sin almacenamiento */ }
+}

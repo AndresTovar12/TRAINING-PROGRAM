@@ -4,6 +4,8 @@ import {
 import { supabase } from '@/lib/supabase';
 import { updateProfile as apiUpdateProfile } from '@/lib/api';
 import { olvidaLugar } from '@/lib/lugar';
+import { pideCodigoDeCorreo } from '@/lib/correoDeLaCuentaApi';
+import { guardaCorreoPorConfirmar } from '@/lib/correos';
 
 const AuthContext = createContext(null);
 
@@ -174,7 +176,13 @@ export function AuthProvider({ children }) {
       email: loginEmail,
       password,
     });
-    return { error: error ? { message: error.message } : null };
+    // El correo que escribió NO queda como correo de la cuenta hasta probar que es suyo (lote 1 de seguridad, 25 oct 2026): el servidor
+    // devuelve `correo_pendiente`, aquí se le manda el código de 6 números y se deja apuntado para que Mi perfil → Correo lo retome.
+    if (!error && body?.correo_pendiente) {
+      guardaCorreoPorConfirmar(body.correo_pendiente);
+      pideCodigoDeCorreo(body.correo_pendiente, password).catch(() => { /* Mi perfil → Correo permite pedirlo otra vez */ });
+    }
+    return { error: error ? { message: error.message } : null, correoPendiente: error ? null : (body?.correo_pendiente ?? null) };
   }, []);
 
   /* Entrar con Google.

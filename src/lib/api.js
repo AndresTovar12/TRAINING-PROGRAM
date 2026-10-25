@@ -898,9 +898,11 @@ export async function listCoaches() {
 export async function createCoachAccount({ username, fullName, email, password }) {
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/signup`;
   const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  // Con la sesión del dueño (no con la llave pública): así el servidor sabe que el correo del coach lo avala el dueño y lo deja puesto sin pedir código.
+  const token = await tokenDeAhora().catch(() => key);
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` },
+    headers: { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${token || key}` },
     body: JSON.stringify({
       username, full_name: fullName || undefined, email: email || undefined,
       password, account_type: 'coach',
