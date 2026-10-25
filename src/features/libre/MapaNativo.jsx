@@ -237,6 +237,19 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
       if (e.rastreo) {
         try { await empiezaARastrear(true); } catch (err) { console.warn('Mapa nativo (seguir con rumbo):', err); e.rastreo = false; }
       }
+      // Si MapKit deja de seguir por su cuenta (no por un dedo), el botón de la flecha también se entera (parche del plugin: `onUserTrackingModeChange`).
+      if (e.rastreo && e.vivo) {
+        try {
+          e.escuchaModo = await puenteDelMapa().addListener('onUserTrackingModeChange', (d) => {
+            if (!e.vivo || d?.mapId !== id) return;
+            const sigueAhora = d.mode !== 'none';
+            if (sigueAhora === e.siguiendo) return;
+            e.siguiendo = sigueAhora;
+            setSiguiendo(sigueAhora);
+            if (!sigueAhora) puenteDelMapa().setUserTrackingMode({ id, mode: 'none' }).catch(() => {}); // quita el rango de distancia
+          });
+        } catch (err) { console.warn('Mapa nativo (aviso de seguimiento):', err); }
+      }
       acciones.current = {
         alterna3D: async () => {
           e.en3d = !e.en3d;
@@ -248,7 +261,14 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
           } catch (err) { console.warn('Mapa nativo (2D/3D):', err); }
         },
         recentra: async () => {
-          try { if (e.rastreo) await empiezaARastrear(false); } catch (err) { console.warn('Mapa nativo (volver):', err); }
+          try {
+            if (e.rastreo) { await empiezaARastrear(false); return; }
+            // Sin el seguimiento de MapKit (no arrancó): al menos se va a tu último punto conocido.
+            const donde = dato.current.puntos.at(-1) ?? (e.conocido ? e.centroInicial : null);
+            if (donde) await e.mapa.setCamera({ coordinate: donde, zoom: ZOOM_SIGUE, angle: e.en3d ? ANGULO_3D : 0, animate: true });
+            e.siguiendo = true;
+            setSiguiendo(true);
+          } catch (err) { console.warn('Mapa nativo (volver):', err); }
         },
       };
       e.listo = true;
@@ -302,6 +322,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
     return () => {
       e.vivo = false;
       clearTimeout(e.reloj);
+      e.escuchaModo?.remove?.();
       empuja.current = null;
       acciones.current = {};
       if (dueno === ficha) dueno = null;
@@ -327,10 +348,11 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
         <div style={{ position: 'absolute', right: 14, bottom: alturaPanel + 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <button type="button" data-map-overlay onClick={() => acciones.current.alterna3D?.()} aria-label={en3d ? 'Ver el mapa en 2D' : 'Ver el mapa en 3D'} style={botonDelMapa}>{en3d ? '2D' : '3D'}</button>
           {interactivo && <button
-            type="button" data-map-overlay onClick={() => acciones.current.recentra?.()} aria-label="Volver a mi ubicación"
-            style={{ ...botonDelMapa, color: siguiendo ? 'rgba(255,255,255,0.55)' : '#FF8A5B' }}
+            type="button" data-map-overlay onClick={() => acciones.current.recentra?.()} aria-label={siguiendo ? 'Siguiendo tu ubicación' : 'Volver a mi ubicación'} aria-pressed={siguiendo}
+            // Como Apple Maps: flecha RELLENA mientras te sigue; VACÍA cuando moviste el mapa (tócala para volver a ti).
+            style={{ ...botonDelMapa, color: siguiendo ? '#4F8BFF' : '#FFFFFF' }}
           >
-            <Navigation size={20} fill={siguiendo ? 'none' : 'currentColor'} />
+            <Navigation size={20} fill={siguiendo ? 'currentColor' : 'none'} />
           </button>}
         </div>
       )}
