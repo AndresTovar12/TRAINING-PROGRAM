@@ -1,0 +1,129 @@
+# Recorta el mapa del mundo de Protomaps a México + Estados Unidos y lo sube a Cloudflare R2 (bucket `training-lab-media`, carpeta `mapa/`).
+# Se corre a mano: GitHub → Actions → «Mapa con calles (México y EE. UU.)» → Run workflow.
+#   modo = medir  (por omisión): NO baja ni sube nada; solo calcula cuánto pesaría el recorte y cuántos tiles tendría.
+#   modo = subir : recorta de verdad y sube el archivo a R2.
+# También se dispara al subir cambios a la rama `mapa-medir` (mide) o `mapa-subir` (recorta y sube), para no tener que entrar a GitHub.
+# Necesita tres secretos del repositorio (Settings → Secrets and variables → Actions): R2_ACCOUNT_ID, R2_MAPA_ACCESS_KEY_ID, R2_MAPA_SECRET_ACCESS_KEY.
+# La herramienta `pmtiles` (go-pmtiles) es la oficial y de código abierto de Protomaps: https://github.com/protomaps/go-pmtiles
+name: Mapa con calles (México y EE. UU.)
+
+on:
+  push:
+    branches: [mapa-medir, mapa-subir]
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: 'medir = solo calcular el tamaño · subir = recortar y subir a R2'
+        type: choice
+        options: [medir, subir]
+        default: medir
+      zoom_maximo:
+        description: 'Zoom máximo del recorte (14 = calles y edificios; 12 pesa mucho menos)'
+        default: '14'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mapa-pmtiles
+  cancel-in-progress: false
+
+jobs:
+  mapa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      MODO: ${{ inputs.modo || (github.ref_name == 'mapa-subir' && 'subir') || 'medir' }}
+      ZOOM: ${{ inputs.zoom_maximo || '14' }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_MAPA_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_MAPA_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      # R2 no entiende las sumas de verificación nuevas del AWS CLI: se piden solo cuando son obligatorias.
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+      R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+      BUCKET: training-lab-media
+      DESTINO: mapa/mexico-eeuu.pmtiles
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Liberar espacio en el disco del servidor
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache/CodeQL || true
+          df -h /
+
+      - name: Bajar la herramienta pmtiles (oficial de Protomaps)
+        run: |
+          set -euo pipefail
+          VERSION=$(curl -fsSL https://api.github.com/repos/protomaps/go-pmtiles/releases/latest | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"].lstrip("v"))')
+          echo "go-pmtiles $VERSION"
+          curl -fsSL -o pmtiles.tgz "https://github.com/protomaps/go-pmtiles/releases/download/v${VERSION}/go-pmtiles_${VERSION}_Linux_x86_64.tar.gz"
+          mkdir -p herramienta && tar -xzf pmtiles.tgz -C herramienta
+          ./herramienta/pmtiles version
+
+      - name: Buscar el mapa del mundo más reciente
+        run: |
+          set -euo pipefail
+          for i in $(seq 0 14); do
+            DIA=$(date -u -d "-$i day" +%Y%m%d)
+            if curl -fsI "https://build.protomaps.com/${DIA}.pmtiles" >/dev/null 2>&1; then
+              echo "FUENTE=https://build.protomaps.com/${DIA}.pmtiles" >> "$GITHUB_ENV"
+              echo "Mapa del mundo: ${DIA}"
+              exit 0
+            fi
+          done
+          echo "No se encontró un mapa reciente en build.protomaps.com" >&2
+          exit 1
+
+      - name: Dibujar la zona (México + EE. UU. con Alaska y Hawái, sin encimar rectángulos)
+        run: |
+          python3 - <<'PY'
+          import json
+          # [oeste, sur, este, norte]
+          cajas = {
+            'Mexico':              [-118.5, 14.3, -86.5, 32.0],
+            'EEUU continental':    [-125.0, 32.0, -66.9, 49.5],
+            'Florida y costa':     [-86.5, 24.4, -79.5, 32.0],
+            'Alaska':              [-170.0, 51.0, -129.0, 71.5],
+            'Hawai':               [-161.0, 18.8, -154.5, 22.4],
+          }
+          def anillo(c):
+              o, s, e, n = c
+              return [[o, s], [e, s], [e, n], [o, n], [o, s]]
+          geo = {"type": "Feature", "properties": {}, "geometry": {"type": "MultiPolygon", "coordinates": [[anillo(c)] for c in cajas.values()]}}
+          json.dump(geo, open('zona.geojson', 'w'))
+          PY
+
+      - name: Medir cuánto pesaría (sin bajar ni subir nada)
+        if: ${{ env.MODO == 'medir' }}
+        run: |
+          set -euo pipefail
+          ./herramienta/pmtiles extract "$FUENTE" mexico-eeuu.pmtiles --region=zona.geojson --maxzoom=${ZOOM} --dry-run 2>&1 | tee medida.txt
+          {
+            echo "## Medida del mapa (zoom máximo ${ZOOM})"
+            echo
+            echo '```'
+            tail -n 15 medida.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Recortar el mapa
+        if: ${{ env.MODO == 'subir' }}
+        run: |
+          set -euo pipefail
+          ./herramienta/pmtiles extract "$FUENTE" mexico-eeuu.pmtiles --region=zona.geojson --maxzoom=${ZOOM}
+          ls -lh mexico-eeuu.pmtiles
+          ./herramienta/pmtiles show mexico-eeuu.pmtiles | head -25
+          df -h /
+
+      - name: Subir a R2
+        if: ${{ env.MODO == 'subir' }}
+        run: |
+          set -euo pipefail
+          aws s3 cp mexico-eeuu.pmtiles "s3://${BUCKET}/${DESTINO}" --endpoint-url "$R2_ENDPOINT" --content-type application/octet-stream --only-show-errors
+          aws s3 ls "s3://${BUCKET}/mapa/" --endpoint-url "$R2_ENDPOINT" --human-readable
+          {
+            echo "## Mapa subido"
+            echo
+            echo "Dirección pública: https://videos.traininglabapp.com/${DESTINO}"
+          } >> "$GITHUB_STEP_SUMMARY"
