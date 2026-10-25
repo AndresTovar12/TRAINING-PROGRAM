@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Navigation } from 'lucide-react';
 import {
-  ANGULO_3D, COLOR_RUTA, ESPERA_MAXIMA_MS, GROSOR_RUTA, ZOOM_INICIAL, ZOOM_SIGUE,
+  metrosEntre, ANGULO_3D, COLOR_RUTA, ESPERA_MAXIMA_MS, GROSOR_RUTA, ZOOM_INICIAL, ZOOM_SIGUE,
   adelgazaRuta, claveDeRuta, rumboDeRuta, ponClase, quitaClase, conTiempoLimite, creaFila, encuadre, inicioDelMapa, planDeEnvio, puntosDeMuestras, ubicacionGuardada,
 } from '@/lib/mapaNativo';
 
@@ -232,12 +232,21 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
         },
         recentra: async () => {
           anotaRef.current(`TOCASTE la flecha (siguiendo=${e.siguiendo})`);
+          const centroDelMapa = async () => { try { const b = await e.mapa.getMapBounds(); return b?.center ?? null; } catch { return null; } };
+          const antes = await centroDelMapa();
           // Vuelve a seguir al corredor: la cámara va a su último punto ya, sin esperar al siguiente punto del GPS.
           e.siguiendo = true;
           setSiguiendo(true);
           const donde = dato.current.puntos.at(-1) ?? (e.conocido ? e.centroInicial : null);
           if (!donde) anotaRef.current('flecha: no hay ubicación a dónde volver');
           try { if (donde) await sigueAlCorredor(donde, false); } catch (err) { console.warn('Mapa nativo (volver):', err); }
+          // Lo que importa: ¿el mapa de verdad quedó sobre ti? Se mide el centro real del mapa antes y después (y contra tu punto de GPS).
+          setTimeout(async () => {
+            const despues = await centroDelMapa();
+            if (!despues || !donde) { anotaRef.current('flecha: no pude medir el centro del mapa'); return; }
+            const yo = { lat: donde.lat, lng: donde.lng };
+            anotaRef.current(`flecha: centro del mapa a ${antes ? Math.round(metrosEntre(antes, yo)) : '?'} m de ti ANTES → ${Math.round(metrosEntre(despues, yo))} m DESPUÉS`);
+          }, 1300);
         },
       };
       e.listo = true;
