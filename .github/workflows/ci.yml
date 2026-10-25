@@ -1,0 +1,41 @@
+# Revisión automática: en cada push o pull request a `main` instala, revisa el código (lint), lo compila (build)
+# y corre las pruebas rápidas que no necesitan navegador ni internet (`npm run pruebas`).
+# No usa ningún secreto. NO incluye `npm run smoke` (necesita las contraseñas de las cuentas de prueba).
+name: Revisión
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: revision-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  revisar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Pruebas rápidas (sin navegador)
+        run: npm run pruebas
