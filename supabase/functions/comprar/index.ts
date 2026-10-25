@@ -46,6 +46,34 @@ const cabeceras = (origen: string | null): Record<string, string> => ({
 const json = (cuerpo: unknown, estado: number, origen: string | null) =>
   new Response(JSON.stringify(cuerpo), { status: estado, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cabeceras(origen) } })
 
+/* FRENOS (lote 1 de seguridad, 25 oct 2026). Antes habia UN tope global (300 por hora) que cualquiera podia agotar para dejar sin comprar a todos.
+   Ahora se cuenta por IP y por identificador (correo o cuenta) en `frenos_de_uso`, y cada quien se topa solo con lo suyo.
+   La IP sale de `cf-connecting-ip`: la pone Cloudflare (delante de Supabase) y el cliente no la puede cambiar (probado: mandarla falsa da 403, y
+   `x-forwarded-for` se reescribe). Si el libro falla, NO se bloquea a nadie (mejor dejar pasar que dejar sin entrar al atleta legitimo). */
+function ipDe(req: Request): string {
+  const cf = (req.headers.get('cf-connecting-ip') ?? '').trim()
+  if (cf) return cf
+  return (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || 'sin-ip'
+}
+
+// deno-lint-ignore no-explicit-any
+async function pasaElFreno(bd: any, ambito: string, clave: string, limite: number, segundos = 3600): Promise<boolean> {
+  try {
+    const desde = new Date(Date.now() - segundos * 1000).toISOString()
+    const { count, error } = await bd.from('frenos_de_uso').select('id', { count: 'exact', head: true }).eq('ambito', ambito).eq('clave', clave).gte('creado_en', desde)
+    if (error) { console.error('frenos_de_uso (contar):', error.message); return true }
+    if ((count ?? 0) >= limite) return false
+    const { error: errInsert } = await bd.from('frenos_de_uso').insert({ ambito, clave })
+    if (errInsert) console.error('frenos_de_uso (anotar):', errInsert.message)
+    // De vez en cuando se tiran las filas de hace mas de un dia, para que el libro no crezca sin fin.
+    if (Math.random() < 0.02) await bd.from('frenos_de_uso').delete().lt('creado_en', new Date(Date.now() - 24 * 3600 * 1000).toISOString())
+    return true
+  } catch (e) {
+    console.error('frenos_de_uso:', e instanceof Error ? e.message : e)
+    return true
+  }
+}
+
 Deno.serve(async (req) => {
   const origen = req.headers.get('Origin')
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cabeceras(origen) })
@@ -78,6 +106,8 @@ Deno.serve(async (req) => {
       comprador = data
       if (!comprador || comprador.is_active === false) return json({ error: 'Tu cuenta no puede comprar.' }, 403, origen)
       if (comprador.role !== 'user') return json({ error: 'Para comprar necesitas una cuenta de atleta.' }, 403, origen)
+      // Con cuenta, el freno es por cuenta (40 por hora), no por conexión: un gimnasio con un solo wifi no se estorba entre sí.
+      if (!(await pasaElFreno(bd, 'comprar_usuario', uid, 40))) return json({ error: 'Hiciste muchos intentos de compra seguidos. Espera una hora e inténtalo de nuevo.', codigo: 'muchos_intentos' }, 429, origen)
     } else {
       correo = String(p.correo ?? '').trim().toLowerCase()
       if (!CORREO_RE.test(correo) || correo.length > 254) return json({ error: 'Escribe un correo válido.', codigo: 'correo_invalido' }, 400, origen)
@@ -88,13 +118,18 @@ Deno.serve(async (req) => {
         if (existente.role !== 'user') return json({ error: 'Ese correo es de una cuenta de coach. Usa otro correo para comprar.', codigo: 'correo_de_coach' }, 409, origen)
         return json({ error: 'Ya tienes cuenta con este correo. Entra para comprar.', codigo: 'tiene_cuenta' }, 409, origen)
       }
-      // Freno: nadie sin cuenta puede abrir compras sin fin (cada una es una fila y una página de pago de Stripe).
+      // Frenos: nadie sin cuenta puede abrir compras sin fin (cada una es una fila y una página de pago de Stripe).
+      //   · 5 compras abiertas por correo por hora (cuenta las filas de `compras`),
+      //   · 30 intentos por conexión (IP) por hora: así quien abuse solo se frena a sí mismo,
+      //   · un tope global alto (1,000 por hora) como última red de seguridad del gasto, ya no como freno de todos.
       const hace1h = new Date(Date.now() - 3600 * 1000).toISOString()
       const [{ count: delCorreo }, { count: deTodos }] = await Promise.all([
         bd.from('compras').select('id', { count: 'exact', head: true }).is('atleta_id', null).eq('correo_comprador', correo).gte('creada_en', hace1h),
         bd.from('compras').select('id', { count: 'exact', head: true }).is('atleta_id', null).gte('creada_en', hace1h),
       ])
-      if ((delCorreo ?? 0) >= 5 || (deTodos ?? 0) >= 300) return json({ error: 'Demasiados intentos. Espera unos minutos y vuelve a probar.', codigo: 'muchos_intentos' }, 429, origen)
+      if ((delCorreo ?? 0) >= 5) return json({ error: 'Ya abriste varias compras con este correo en la última hora. Termina la que tienes abierta o espera un rato.', codigo: 'muchos_intentos' }, 429, origen)
+      if (!(await pasaElFreno(bd, 'comprar_ip', ipDe(req), 30))) return json({ error: 'Se hicieron muchos intentos de compra desde esta conexión. Espera una hora e inténtalo de nuevo.', codigo: 'muchos_intentos' }, 429, origen)
+      if ((deTodos ?? 0) >= 1000) return json({ error: 'Hay muchas compras en este momento. Espera unos minutos y vuelve a probar.', codigo: 'muchos_intentos' }, 429, origen)
     }
 
     const { data: coach } = await bd.from('profiles').select('id, is_owner, is_active, vitrina_suspendida').eq('username', usuario).eq('role', 'admin').maybeSingle()
