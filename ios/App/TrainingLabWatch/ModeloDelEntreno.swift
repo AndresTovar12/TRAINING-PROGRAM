@@ -6,6 +6,12 @@ import WatchKit
 
 /// Lo que sabe el reloj del entreno: lo que le manda el iPhone (qué toca, cuánto falta) y el pulso que mide él mismo.
 final class ModeloDelEntreno: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSessionDelegate, HKLiveWorkoutBuilderDelegate {
+    /// Una sola instancia para toda la app: la usan la pantalla y el delegado que recibe el arranque desde el iPhone.
+    static let compartido = ModeloDelEntreno()
+
+    /// Si el iPhone deja de avisar tanto tiempo (se cerró la app, se apagó), el reloj cierra solo el entreno para no gastar batería midiendo para nadie.
+    private static let sinNoticiasMax: TimeInterval = 45 * 60
+    private var ultimaNoticia = Date()
     // Lo que se ve
     @Published var activo = false
     @Published var titulo = "Training Lab"
@@ -35,6 +41,7 @@ final class ModeloDelEntreno: NSObject, ObservableObject, WCSessionDelegate, HKW
 
     private func recibe(_ datos: [String: Any]) {
         DispatchQueue.main.async {
+            self.ultimaNoticia = Date()
             let orden = datos["orden"] as? String ?? "estado"
             if orden == "fin" { self.terminaTodo(); return }
             self.titulo = datos["titulo"] as? String ?? self.titulo
@@ -61,6 +68,7 @@ final class ModeloDelEntreno: NSObject, ObservableObject, WCSessionDelegate, HKW
 
     /// Una vibración en la muñeca cuando se acaba el descanso o el tiempo del paso.
     private func cadaSegundo() {
+        if activo, Date().timeIntervalSince(ultimaNoticia) > Self.sinNoticiasMax { terminaTodo(); return }
         guard let fin = finMs else { hapticoDe = nil; return }
         if Date().timeIntervalSince1970 * 1000 >= fin, hapticoDe != fin {
             hapticoDe = fin
@@ -86,18 +94,34 @@ final class ModeloDelEntreno: NSObject, ObservableObject, WCSessionDelegate, HKW
     }
 
     private func empiezaEntreno(deporte: String) {
-        let lee: Set<HKObjectType> = [HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned)]
-        let escribe: Set<HKSampleType> = [HKObjectType.workoutType()]
-        almacen.requestAuthorization(toShare: escribe, read: lee) { ok, _ in
-            guard ok else { return }
-            DispatchQueue.main.async { self.arranca(deporte: deporte) }
-        }
-    }
-
-    private func arranca(deporte: String) {
         let config = HKWorkoutConfiguration()
         config.activityType = tipoDeApple(deporte)
         config.locationType = (deporte == "correr" || deporte == "caminar" || deporte == "bici") ? .outdoor : .indoor
+        empiezaEntreno(config: config)
+    }
+
+    /// El iPhone abrió la app del reloj para empezar un entreno (`HKHealthStore.startWatchApp`): se arranca con la configuración que mandó.
+    func arrancaDesdeElTelefono(_ config: HKWorkoutConfiguration) {
+        DispatchQueue.main.async {
+            self.ultimaNoticia = Date()
+            self.activo = true
+            self.empiezaEntreno(config: config)
+        }
+    }
+
+    private func empiezaEntreno(config: HKWorkoutConfiguration) {
+        // Para guardar el entreno con su pulso y calorías en Apple Salud hay que pedir también el permiso de ESCRIBIR esos datos.
+        let lee: Set<HKObjectType> = [HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned)]
+        let escribe: Set<HKSampleType> = [HKObjectType.workoutType(), HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned)]
+        almacen.requestAuthorization(toShare: escribe, read: lee) { ok, _ in
+            guard ok else { return }
+            DispatchQueue.main.async { self.arranca(config: config) }
+        }
+    }
+
+    private func arranca(config: HKWorkoutConfiguration) {
+        // Ya hay un entreno midiéndose (o terminando de guardarse): no se empieza otro encima.
+        guard sesion == nil else { return }
         do {
             let s = try HKWorkoutSession(healthStore: almacen, configuration: config)
             let c = s.associatedWorkoutBuilder()
@@ -110,6 +134,7 @@ final class ModeloDelEntreno: NSObject, ObservableObject, WCSessionDelegate, HKW
             s.startActivity(with: inicio)
             c.beginCollection(withStart: inicio) { _, _ in }
         } catch {
+            print("Reloj: no se pudo empezar el entreno: \(error.localizedDescription)")
             sesion = nil
             constructor = nil
         }
@@ -136,7 +161,9 @@ final class ModeloDelEntreno: NSObject, ObservableObject, WCSessionDelegate, HKW
         }
     }
 
-    func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {}
+    func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
+        print("Reloj: falló el entreno: \(error.localizedDescription)")
+    }
 
     func workoutBuilderDidCollectEvent(_ workoutBuilder: HKLiveWorkoutBuilder) {}
 

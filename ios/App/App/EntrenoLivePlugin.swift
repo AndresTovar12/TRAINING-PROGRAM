@@ -16,6 +16,12 @@ public class EntrenoLivePlugin: CAPPlugin, CAPBridgedPlugin {
 
     private var actual: Any?
 
+    /// Al abrir la app no puede haber un entreno en marcha: si quedó una tarjeta de antes (la app se cerró a la fuerza), se quita para que no se quede «entrenando» horas.
+    override public func load() {
+        guard #available(iOS 16.2, *) else { return }
+        Task { for vieja in Activity<EntrenoAtributos>.activities { await vieja.end(nil, dismissalPolicy: .immediate) } }
+    }
+
     @available(iOS 16.2, *)
     private func estado(_ call: CAPPluginCall) -> EntrenoAtributos.ContentState {
         EntrenoAtributos.ContentState(
