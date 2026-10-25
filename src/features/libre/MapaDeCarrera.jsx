@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { trazoDeRuta } from '@/lib/ubicacion';
 
-/* EL MAPA DE LA CARRERA (16 oct 2026). Andrés eligió mapa CON CALLES; su costo ya está en el Excel «Costos y margen» (unos $133 pesos al mes, fijo).
+/* EL MAPA DE LA CARRERA (16 oct 2026). Andrés eligió mapa CON CALLES; su costo es fijo y mínimo: el archivo (México + EE. UU., 10 GB, zoom 14) vive en R2 y casi cabe en el cupo gratis (24 oct 2026).
 
    Las calles salen de un mapa propio guardado en Cloudflare (Protomaps: datos de OpenStreetMap en un solo archivo `.pmtiles`), sin otra
    empresa cobrando por cada carrera. La dirección del archivo va en `VITE_MAPA_URL`. Mientras no esté, o si algo falla al cargarlo, se
