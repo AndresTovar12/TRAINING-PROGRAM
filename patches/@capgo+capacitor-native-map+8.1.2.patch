@@ -1,3 +1,27 @@
+diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CameraEvents.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CameraEvents.swift
+index 049cd86..4fdf87b 100644
+--- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CameraEvents.swift
++++ b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CameraEvents.swift
+@@ -23,6 +23,19 @@ extension NativeMapPlugin {
+         ])
+     }
+ 
++    /// Training Lab (parche): avisa a la página cuando MapKit deja de seguir al usuario (o vuelve a seguirlo) por su cuenta, para que el botón de «volver a
++    /// mi ubicación» diga la verdad.
++    public func mapView(_ mapView: MKMapView, didChange mode: MKUserTrackingMode, animated: Bool) {
++        guard let map = findMap(for: mapView) else { return }
++        let nombre: String
++        switch mode {
++        case .followWithHeading: nombre = "followWithHeading"
++        case .follow: nombre = "follow"
++        default: nombre = "none"
++        }
++        notifyListeners("onUserTrackingModeChange", data: ["mapId": map.id, "mode": nombre])
++    }
++
+     /// Compares two regions for equality within a small epsilon (used to detect
+     /// no-op zoom clamps that would otherwise leave `isAdjustingRegion` set).
+     static func regionsAreEqual(_ lhs: MKCoordinateRegion, _ rhs: MKCoordinateRegion) -> Bool {
 diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMaps.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMaps.swift
 index 4b86a6b..ca0c218 100644
 --- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMaps.swift
