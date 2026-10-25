@@ -22,7 +22,7 @@ on:
         default: '14'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: mapa-pmtiles
@@ -106,6 +106,16 @@ jobs:
             tail -n 15 medida.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publicar la medida (rama mapa-logs, para leerla sin entrar a GitHub)
+        if: ${{ always() && env.MODO == 'medir' }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/pub" && cd "$RUNNER_TEMP/pub"
+          git init -q && git checkout -q -b mapa-logs
+          cp "$GITHUB_WORKSPACE/medida.txt" . 2>/dev/null || echo "sin medida" > medida.txt
+          git add -A
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -q -m "medida del mapa"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" mapa-logs
 
       - name: Recortar el mapa
         if: ${{ env.MODO == 'subir' }}
