@@ -102,3 +102,19 @@ export function recortaPrograma({ data, inicio, faseDeEntrada = null, semanaDeEn
     },
   };
 }
+
+/**
+ * Cuándo termina el plan de una compra, en segundos desde 1970 (como los pide Stripe), o `null` si no tiene fin.
+ * Es el lunes de la semana en que la compra empezó + las semanas que le tocan (las de la fase por donde entró en adelante) = el final de su última semana.
+ * Lo usa `mi-cuenta` al borrarse la cuenta de un coach: a cada comprador se le cobra hasta aquí y ya (Andrés, 26 oct 2026). Un plan semanal (se repite) o sin datos no tiene fin.
+ */
+export function finDelPlan({ data, inicio, faseDeEntrada = null, semanaDeEntrada = null, hoy = hoyDelServidor() }) {
+  if (!data) return null;
+  const r = recortaPrograma({ data, inicio: inicio ?? hoy, faseDeEntrada, semanaDeEntrada, ventanaSemanas: null, estado: 'activa', hoy });
+  const semanas = r.resumen.semanasTotales;
+  if (r.resumen.kind === 'weekly' || !semanas) return null;
+  const fin = lunesDe(comoFecha(inicio ?? hoy));
+  fin.setUTCDate(fin.getUTCDate() + semanas * 7);
+  fin.setUTCHours(12, 0, 0, 0);
+  return Math.floor(fin.getTime() / 1000);
+}

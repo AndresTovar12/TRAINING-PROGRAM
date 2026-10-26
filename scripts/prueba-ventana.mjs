@@ -1,7 +1,7 @@
 /* Pruebas de la ventana de un plan comprado: `node scripts/prueba-ventana.mjs`. Planes inventados, sin base de datos ni red.
    Lo que más importa: que de lo que NO se ve no salga ni un ejercicio (se busca la marca de cada ejercicio en el texto del resultado). */
 import assert from 'node:assert/strict';
-import { recortaPrograma, claveSemanaIso, semanasTranscurridas, hoyDelServidor } from '../src/lib/ventana.js';
+import { recortaPrograma, claveSemanaIso, semanasTranscurridas, hoyDelServidor, finDelPlan } from '../src/lib/ventana.js';
 import { isoWeekKey, cursorAlDia } from '../src/lib/training-utils.js';
 
 /* Un plan inventado: fase f1 de 4 semanas y fase f2 de 6. Cada ejercicio lleva su marca: `X-<fase>-<semana>`. */
@@ -124,5 +124,22 @@ assert.deepEqual(r.data.phases, []);
 assert.equal(r.cursorInicial, null);
 r = recortaPrograma({ data: null, inicio: '2026-10-15', hoy: '2026-10-15' });
 assert.deepEqual(r.data.phases, []);
+
+/* ---- Cuándo termina el plan de una compra (cobro de un coach que borra su cuenta) ---- */
+const dia = (s) => new Date(s * 1000).toISOString().slice(0, 10);
+// Compró un jueves (2026-10-15) y entró por la primera fase: 4 + 6 = 10 semanas desde el lunes 12 → termina al llegar el lunes 21 dic (final de la última semana).
+assert.equal(dia(finDelPlan({ data: plan, inicio: '2026-10-15', hoy: '2026-10-16' })), '2026-12-21', 'plan completo: 10 semanas desde su lunes');
+// Entró por la segunda fase: solo le tocan 6 semanas.
+assert.equal(dia(finDelPlan({ data: plan, inicio: '2026-10-15', faseDeEntrada: 'f2', hoy: '2026-10-16' })), '2026-11-23', 'por la fase 2: 6 semanas');
+// Entró a la mitad de una fase: de la semana 3 de la fase 1 en adelante = 2 + 6 = 8 semanas.
+assert.equal(dia(finDelPlan({ data: plan, inicio: '2026-10-15', faseDeEntrada: 'f1', semanaDeEntrada: 3, hoy: '2026-10-16' })), '2026-12-07', 'a mitad de fase: 8 semanas');
+// El mismo resultado, compre el día que compre esa semana (lunes o domingo).
+assert.equal(finDelPlan({ data: plan, inicio: '2026-10-12', hoy: '2026-10-16' }), finDelPlan({ data: plan, inicio: '2026-10-18', hoy: '2026-10-18' }), 'misma semana, mismo fin');
+// Sin fin: plan semanal (se repite), sin datos, o sin semanas.
+assert.equal(finDelPlan({ data: semanal, inicio: '2026-10-15', hoy: '2026-10-16' }), null, 'semanal: sin fin');
+assert.equal(finDelPlan({ data: null, inicio: '2026-10-15', hoy: '2026-10-16' }), null, 'sin datos: sin fin');
+assert.equal(finDelPlan({ data: { kind: 'periodized', phases: [] }, inicio: '2026-10-15', hoy: '2026-10-16' }), null, 'sin semanas: sin fin');
+// El cálculo no depende de lo cerrado/vencido y no cambia el plan.
+assert.deepEqual(plan.phases[1].weekData[1].days[0].exercises, [{ name: 'X-f2-2' }], 'finDelPlan no modifica el plan');
 
 console.log('✓ ventana: todo bien');

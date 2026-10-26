@@ -48,25 +48,27 @@ for (const nombre of ARCHIVOS) {
 
 /* La ventana de un plan comprado (`lib/ventana.js`) la usa también la Edge Function `programa-comprado`, que es la que recorta el plan ANTES de mandarlo. Copia exacta:
    si la app y el servidor recortaran distinto, el atleta vería menos (o más) de lo que el coach decidió. */
+/* `mi-cuenta` la lleva también (26 oct 2026): al borrar la cuenta de un coach calcula en qué semana termina cada plan vendido para cerrar el cobro ahí. */
 {
   const original = readFileSync(join(raiz, 'src/lib/ventana.js'), 'utf8');
-  const copia = join(raiz, 'supabase/functions/programa-comprado/ventana.js');
-  const igual = existsSync(copia) && readFileSync(copia, 'utf8') === original;
-  if (!igual) {
+  for (const funcion of ['programa-comprado', 'mi-cuenta']) {
+    const copia = join(raiz, `supabase/functions/${funcion}/ventana.js`);
+    const igual = existsSync(copia) && readFileSync(copia, 'utf8') === original;
+    if (igual) continue;
     if (soloRevisar) {
-      console.error('✗ supabase/functions/programa-comprado/ventana.js ya no es igual a src/lib/ventana.js');
+      console.error(`✗ supabase/functions/${funcion}/ventana.js ya no es igual a src/lib/ventana.js`);
       malos += 1;
     } else {
       writeFileSync(copia, original);
-      console.log('copiado ventana.js (programa-comprado)');
+      console.log(`copiado ventana.js (${funcion})`);
     }
   }
 }
 
-/* Las ayudas de Stripe (`stripe.js`) viven en las funciones que hablan con Stripe, idénticas: `comprar` es la original y `stripe-webhook`, `reembolsar` y `mi-dinero` llevan copia. */
+/* Las ayudas de Stripe (`stripe.js`) viven en las funciones que hablan con Stripe, idénticas: `comprar` es la original y `stripe-webhook`, `reembolsar`, `mi-dinero` y `mi-cuenta` llevan copia. */
 {
   const original = readFileSync(join(raiz, 'supabase/functions/comprar/stripe.js'), 'utf8');
-  for (const funcion of ['stripe-webhook', 'reembolsar', 'mi-dinero']) {
+  for (const funcion of ['stripe-webhook', 'reembolsar', 'mi-dinero', 'mi-cuenta']) {
     const copia = join(raiz, `supabase/functions/${funcion}/stripe.js`);
     const igual = existsSync(copia) && readFileSync(copia, 'utf8') === original;
     if (igual) continue;

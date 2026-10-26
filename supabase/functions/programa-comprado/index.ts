@@ -80,10 +80,11 @@ Deno.serve(async (req) => {
     if (!compras?.length) return json({ compras: [] }, 200, origen)
 
     const planesIds = [...new Set(compras.map((c) => c.vitrina_plan_id))]
-    const coachesIds = [...new Set(compras.map((c) => c.coach_id))]
+    // Un coach que borró su cuenta deja `coach_id` vacío: sus compradores siguen con su plan (el nombre y la foto del coach se guardaron en el plan en venta).
+    const coachesIds = [...new Set(compras.map((c) => c.coach_id).filter(Boolean))]
     const [{ data: planes, error: e1 }, { data: coaches, error: e2 }] = await Promise.all([
-      bd.from('vitrina_planes').select('id, titulo, chat, tecnica, ventana_semanas, contenido').in('id', planesIds),
-      bd.from('profiles').select('id, username, full_name, avatar_url, profesion').in('id', coachesIds),
+      bd.from('vitrina_planes').select('id, titulo, chat, tecnica, ventana_semanas, contenido, coach_nombre, coach_foto, biblioteca_congelada').in('id', planesIds),
+      coachesIds.length ? bd.from('profiles').select('id, username, full_name, avatar_url, profesion').in('id', coachesIds) : Promise.resolve({ data: [], error: null }),
     ])
     if (e1 || e2) throw e1 ?? e2
     const planDe = new Map((planes ?? []).map((p) => [p.id, p]))
@@ -93,16 +94,22 @@ Deno.serve(async (req) => {
     const salida = []
     for (const c of compras) {
       const plan = planDe.get(c.vitrina_plan_id)
-      const coach = coachDe.get(c.coach_id)
+      const coach = c.coach_id ? coachDe.get(c.coach_id) : null
+      const sinCoach = !c.coach_id
       let programa = null
       let biblioteca = null
       if (plan?.contenido === 'biblioteca') {
         const vigente = c.estado === 'activa' || c.estado === 'gracia'
-        const { data: filas, error: e4 } = vigente
+        // Sin coach (borró su cuenta) la biblioteca queda como estaba ese día: las clases que se guardaron al borrarse.
+        const { data: filas, error: e4 } = sinCoach
+          ? { data: [], error: null }
+          : vigente
           ? await bd.from('routine_templates').select('id, name, descripcion, data').eq('created_by', c.coach_id).eq('kind', 'day').filter('resumen->>clase', 'eq', 'true').order('name')
           : { data: [], error: null }
         if (e4) throw e4
-        biblioteca = { clases: (filas ?? []).filter((f) => f.data?.clase?.url).map((f) => ({ id: f.id, nombre: f.name, descripcion: f.descripcion ?? '', clase: f.data.clase })) }
+        biblioteca = sinCoach
+          ? { clases: vigente && Array.isArray(plan?.biblioteca_congelada) ? plan.biblioteca_congelada : [] }
+          : { clases: (filas ?? []).filter((f) => f.data?.clase?.url).map((f) => ({ id: f.id, nombre: f.name, descripcion: f.descripcion ?? '', clase: f.data.clase })) }
       } else if (c.estado !== 'por_armar') {
         const { data: version, error: e3 } = await bd.from('vitrina_versiones').select('titulo, data').eq('vitrina_plan_id', c.vitrina_plan_id).eq('n', c.version_n).maybeSingle()
         if (e3) throw e3
@@ -126,10 +133,12 @@ Deno.serve(async (req) => {
         gracia_hasta: c.gracia_hasta,
         entrega_limite: c.entrega_limite,
         titulo: plan?.titulo ?? programa?.title ?? 'Plan',
-        chat: !!plan?.chat,
-        tecnica: !!plan?.tecnica,
+        chat: !!plan?.chat && !sinCoach,
+        tecnica: !!plan?.tecnica && !sinCoach,
         ventana_semanas: plan?.ventana_semanas ?? null,
-        vendedor: coach ? { id: coach.id, usuario: coach.username, nombre: coach.full_name, foto: coach.avatar_url, profesion: coach.profesion } : null,
+        vendedor: coach
+          ? { id: coach.id, usuario: coach.username, nombre: coach.full_name, foto: coach.avatar_url, profesion: coach.profesion }
+          : sinCoach && plan?.coach_nombre ? { id: null, usuario: null, nombre: plan.coach_nombre, foto: plan.coach_foto ?? null, profesion: null } : null,
         programa,
         biblioteca,
       })

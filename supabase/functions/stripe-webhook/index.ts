@@ -106,6 +106,15 @@ async function activa(c: Obj, cambios: Obj = {}, nombreDelComprador: string | nu
 async function registraPago(c: Obj, { bruto, cobro, factura }: { bruto: number; cobro: string | null; factura: string | null }) {
   const busca = cobro ? bd.from('pagos').select('id').eq('stripe_charge_id', cobro) : factura ? bd.from('pagos').select('id').eq('stripe_invoice_id', factura) : null
   if (busca) { const { data: ya, error: errYa } = await busca.maybeSingle(); if (errYa) throw errYa; if (ya) return }
+  // El coach borró su cuenta (26 oct 2026): sus compradores siguen con su plan y se les cobra hasta el final del plan; ese dinero se queda en la plataforma (no hay a quién depositarle).
+  if (!c.coach_id) {
+    const { error: errSin } = await bd.from('pagos').insert({
+      compra_id: c.id, coach_id: null, stripe_charge_id: cobro, stripe_invoice_id: factura, bruto: Number(bruto), tasa: 1,
+      comision_app: Number(bruto), parte_coach: 0, transfer_coach_id: null, estado: 'cobrado',
+    })
+    if (errSin && errSin.code !== '23505') throw errSin
+    return
+  }
   const { data: coach, error: errCoach } = await bd.from('profiles').select('is_owner, comision_especial').eq('id', c.coach_id).maybeSingle()
   if (errCoach) throw errCoach
   const esDueno = !!coach?.is_owner
