@@ -3,6 +3,7 @@ import {
 } from 'react';
 import { supabase } from '@/lib/supabase';
 import { updateProfile as apiUpdateProfile } from '@/lib/api';
+import { COLUMNAS_PERFIL } from '@/lib/perfilColumnas';
 import { olvidaLugar } from '@/lib/lugar';
 import { pideCodigoDeCorreo } from '@/lib/correoDeLaCuentaApi';
 import { guardaCorreoPorConfirmar } from '@/lib/correos';
@@ -63,7 +64,7 @@ export function AuthProvider({ children }) {
         if (intento > 0) await new Promise((r) => { setTimeout(r, intento * 2000); });
         if (cancelled) return;
         try {
-          const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
+          const { data, error } = await supabase.from('profiles').select(COLUMNAS_PERFIL).eq('id', uid).maybeSingle();
           if (cancelled) return;
           if (!error && data) { setProfile(data); return; }
         } catch { /* sin señal: se reintenta */ }
@@ -259,7 +260,7 @@ export function AuthProvider({ children }) {
     if (!uid) return;
     const { data } = await supabase
       .from('profiles')
-      .select('*')
+      .select(COLUMNAS_PERFIL)
       .eq('id', uid)
       .maybeSingle();
     setProfile(data ?? null);

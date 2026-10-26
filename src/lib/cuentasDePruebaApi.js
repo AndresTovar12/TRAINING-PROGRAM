@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { COLUMNAS_PERFIL } from '@/lib/perfilColumnas';
 import { eliminarAtletaDefinitivo, tokenDeAhora } from '@/lib/api';
 import { esDePrueba, generaContrasena, nombreDePrueba, siguienteUsuario, tipoDeCuenta } from '@/lib/cuentasDePrueba';
 
@@ -10,7 +11,7 @@ const URL_FUNCIONES = () => `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 /** Las cuentas de prueba (usuario `zz_…`) con su contraseña, la más nueva primero. `contrasena` es `null` si nadie la guardó (se le puede poner una nueva). */
 export async function listaCuentasDePrueba() {
   const [perfiles, claves] = await Promise.all([
-    supabase.from('profiles').select('*').ilike('username', 'zz_%').order('created_at', { ascending: false }),
+    supabase.from('profiles').select(COLUMNAS_PERFIL).ilike('username', 'zz\\_%').order('created_at', { ascending: false }),
     supabase.from('cuentas_de_prueba').select('user_id, contrasena'),
   ]);
   if (perfiles.error) throw perfiles.error;
@@ -29,7 +30,8 @@ export async function creaCuentaDePrueba({ tipo, coach = '', usuariosQueYaHay = 
   const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
   const res = await fetch(`${URL_FUNCIONES()}/signup`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` },
+    // Con la sesión del dueño: `signup` solo deja registrar un «zz_…» a quien llama con ella (p124).
+    headers: { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${(await tokenDeAhora().catch(() => null)) || key}` },
     body: JSON.stringify({
       username: usuario,
       full_name: nombreDePrueba(usuario),

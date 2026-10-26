@@ -5,6 +5,8 @@ import { conIndice } from '@/lib/indiceDeVideo';
 import { TOPE_POR_ARCHIVO_MB, avisoSiEsMuyGrande } from '@/lib/espacio';
 import { anotaEspacio } from '@/lib/espacioApi';
 import { ErrorDeLimite, comoErrorDeLimite } from '@/lib/limiteDeAtletas';
+import { COLUMNAS_PERFIL } from '@/lib/perfilColumnas';
+import { escapaLike } from '@/lib/escapaLike';
 
 const AVATAR_BUCKET = 'avatars';
 
@@ -40,7 +42,7 @@ export async function updateProfile(id, patch) {
     .from('profiles')
     .update({ ...patch, updated_at: new Date().toISOString() })
     .eq('id', id)
-    .select('*')
+    .select(COLUMNAS_PERFIL)
     .single();
   if (error) {
     if (error.code === '23505' || /duplicate|unique/i.test(error.message)) {
@@ -56,7 +58,7 @@ export async function isUsernameAvailable(username, excludeId) {
   const { data, error } = await supabase
     .from('profiles')
     .select('id')
-    .ilike('username', username)
+    .ilike('username', escapaLike(username))
     .neq('id', excludeId)
     .maybeSingle();
   if (error) return true; // ante duda, deja que el guardado valide
@@ -546,7 +548,7 @@ export async function deleteExerciseMedia(id) {
 export async function listAthletes() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('*')
+    .select(COLUMNAS_PERFIL)
     .order('created_at');
   if (error) throw error;
   return data ?? [];
@@ -569,7 +571,7 @@ export async function estadoResumido(ids) {
 // `yo` y `esMaster` dicen quién mira, para enseñar el programa que le toca.
 export async function listAthletesOverview(opciones = {}) {
   const [profilesRes, plansRes, stateRes] = await Promise.all([
-    supabase.from('profiles').select('*').order('created_at'),
+    supabase.from('profiles').select(COLUMNAS_PERFIL).order('created_at'),
     supabase.from('plans').select('user_id, profesional_id, title, data, updated_at').eq('status', 'active'),
     supabase.from('user_app_state').select('user_id, updated_at'),
   ]);
@@ -651,7 +653,7 @@ export async function setAthleteCoach(athleteId, coachId) {
     .from('profiles')
     .update({ coach_id: coachId })
     .eq('id', athleteId)
-    .select('*')
+    .select(COLUMNAS_PERFIL)
     .single();
   if (error) throw error;
   return data;
@@ -735,7 +737,7 @@ export async function setAtletaActivo(athleteId, activo) {
     .from('profiles')
     .update({ is_active: activo })
     .eq('id', athleteId)
-    .select('*')
+    .select(COLUMNAS_PERFIL)
     .single();
   if (error) {
     if (/administrador/i.test(error.message)) {
@@ -885,7 +887,7 @@ export async function resumenDatosCoach(coachId) {
 export async function listCoaches() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('*')
+    .select(COLUMNAS_PERFIL)
     .eq('role', 'admin')
     .eq('is_owner', false)
     .order('full_name');
@@ -921,7 +923,7 @@ export async function promoteToCoach(userId) {
     .from('profiles')
     .update({ role: 'admin', coach_id: null })
     .eq('id', userId)
-    .select('*')
+    .select(COLUMNAS_PERFIL)
     .single();
   if (error) throw error;
   return data;
