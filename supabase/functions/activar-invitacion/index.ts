@@ -66,6 +66,8 @@ function textoDeError(e: unknown): string {
 }
 
 const USERNAME_RE = /^[a-zA-Z0-9_.]{3,30}$/
+// En un patrón de LIKE el «_» vale «cualquier letra» y el «%» «cualquier cosa»: para buscar un usuario EXACTO se escapan (p142). Igual que `src/lib/escapaLike.js`.
+const escapaLike = (t: string) => t.replace(/[\\%_]/g, '\\$&')
 const CADUCO = 'Este link ya no sirve. Pídele uno nuevo a tu entrenador.'
 
 Deno.serve(async (req) => {
@@ -179,7 +181,7 @@ Deno.serve(async (req) => {
   const { data: tomado } = await admin
     .from('profiles')
     .select('id')
-    .ilike('username', username)
+    .ilike('username', escapaLike(username))
     .neq('id', atleta.id)
     .maybeSingle()
   if (tomado) return json({ error: 'Ese nombre de usuario ya está en uso' }, 409, origin)
