@@ -18,7 +18,7 @@ import {
 import { anotarDia, equiposMasUsados, exigirRespuestas, nuevaRevision, preguntaDeDatos, type Revision } from './preguntas.ts'
 import { cursorDe, estadoDe, registrosDe, ubicarDia, ubicarEnTodos } from './atleta.ts'
 import { repertorioConFicha } from './comunes.ts'
-import { dondeVa, historialDePeso } from './app/training-utils.js'
+import { cursorAlDia, defaultCursor, dondeVa, estaEnPausa, historialDePeso, isValidCursor, moverPlanA, pausarPlan, reanudarPlan } from './app/training-utils.js'
 import { gruposConPropios } from './app/muscles.js'
 import { desdeKilos } from './app/unidades.js'
 import { COLORES_TIPO } from './app/theme.js'
@@ -1207,6 +1207,144 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       return respuesta({ listo: true, atleta: nombreDe(persona), mensaje: 'Ya no está en tu lista. Su cuenta y su historial siguen intactos.' })
     }))
   }
+
+  /* ================================================================ */
+  /* PAUSAR, REANUDAR Y MOVER EL PLAN (p79, 26 oct 2026)                  */
+  /* ================================================================ */
+
+  const CONFIRMA_EQUIPO = z.boolean().optional().describe('Solo después de enseñarle a la persona lo que va a pasar y que diga que sí. Sin esto no hace nada y te devuelve lo que pasaría.')
+
+  /** El puntero del atleta en el programa que ESTA persona cambia, puesto al día igual que la app (`MoverElPlan`). */
+  async function punteroDelAtleta(atleta: string, de?: string | null) {
+    const persona = await buscarPersona(quien, atleta)
+    const r = await planQueEdito(quien, persona, de)
+    if (!r.plan) throw new Aviso(`${nombreDe(persona)} todavía no tiene plan${r.profesionalId === null ? '' : r.profesionalId === quien.id ? ' tuyo' : ` de ${r.de}`}.`)
+    const fases = fasesDe(r.plan)
+    if (tipoDePlan(r.plan) === 'weekly') throw new Aviso('Es una rutina que se repite cada semana: no tiene fases ni semanas donde moverla o pausarla.')
+    const estado = await estadoDe(quien, persona.id)
+    const clave = claveDeRegistro('wr:cursor', r.profesionalId)
+    const guardado = estado[clave]
+    const base = isValidCursor(fases, guardado) ? guardado : defaultCursor(fases)
+    const actual = cursorAlDia(fases, base)
+    const dondeEsta = (c: any) => {
+      const f = fases.find((x: any) => x.id === c.phaseId)
+      return `${f?.name ?? 'su fase'}, semana ${c.weekNum}`
+    }
+    return { persona, r, fases, clave, actual, dondeEsta }
+  }
+
+  const ROL_DE_QUIEN_MUEVE = () => `Tu ${quien.salud ? 'fisio' : 'coach'}`
+
+  async function guardaPuntero(persona: Persona, clave: string, cursor: any, texto: string, detalle: string) {
+    const el = new Date().toISOString()
+    const conAviso = { ...cursor, aviso: { id: el, texto, detalle, de: quien.nombre || null, el } }
+    const { error } = await quien.db.rpc('mover_plan_de_atleta', { p_atleta: persona.id, p_clave: clave, p_cursor: conAviso })
+    if (error) throw new Aviso(error.message)
+  }
+
+  const DE_PROGRAMA = z.string().optional().describe('Solo si el atleta tiene programas de varios profesionales: de cuál (nombre, "coach" o "fisio"). Sin esto, el tuyo.')
+
+  server.registerTool('pausar_plan_de_atleta', {
+    title: 'Pausar el plan de un atleta',
+    description: 'Pausa el plan de un atleta: se queda en la semana donde va hasta que lo reanudes (no se salta ninguna). El atleta ve «Tu coach pausó tu plan» con un botón Entendido. Sin "confirmado": true no hace nada y te devuelve lo que pasaría.',
+    inputSchema: { atleta: ATLETA, de: DE_PROGRAMA, confirmado: CONFIRMA_EQUIPO },
+    annotations: ESCRIBE,
+  }, seguro(async ({ atleta, de, confirmado }: any) => {
+    const { persona, clave, actual, dondeEsta } = await punteroDelAtleta(atleta, de)
+    if (estaEnPausa(actual)) throw new Aviso(`El plan de ${nombreDe(persona)} ya está en pausa (desde el ${actual.pausa}).`)
+    if (confirmado !== true) {
+      return respuesta({ hecho: false, motivo: 'falta_confirmacion', va_a_pasar: `Se pausará el plan de ${nombreDe(persona)}: se queda en ${dondeEsta(actual)} hasta que lo reanudes. Verá un aviso «${ROL_DE_QUIEN_MUEVE()} pausó tu plan».`, pista: 'Enséñale esto a la persona. Si dice que sí, vuelve a llamar con confirmado: true.' })
+    }
+    await guardaPuntero(persona, clave, pausarPlan(actual), `${ROL_DE_QUIEN_MUEVE()} pausó tu plan`, `Se queda en ${dondeEsta(actual)} hasta que lo reanude.`)
+    return respuesta({ listo: true, atleta: nombreDe(persona), en_pausa: true, se_queda_en: dondeEsta(actual) })
+  }))
+
+  server.registerTool('reanudar_plan_de_atleta', {
+    title: 'Reanudar el plan de un atleta',
+    description: 'Reanuda el plan pausado de un atleta: sigue desde la misma semana, sin saltarse ninguna. El atleta ve «Tu coach reanudó tu plan». Sin "confirmado": true no hace nada y te devuelve lo que pasaría.',
+    inputSchema: { atleta: ATLETA, de: DE_PROGRAMA, confirmado: CONFIRMA_EQUIPO },
+    annotations: ESCRIBE,
+  }, seguro(async ({ atleta, de, confirmado }: any) => {
+    const { persona, clave, actual, dondeEsta } = await punteroDelAtleta(atleta, de)
+    if (!estaEnPausa(actual)) throw new Aviso(`El plan de ${nombreDe(persona)} no está en pausa.`)
+    if (confirmado !== true) {
+      return respuesta({ hecho: false, motivo: 'falta_confirmacion', va_a_pasar: `Se reanudará el plan de ${nombreDe(persona)}: sigue en ${dondeEsta(actual)}. Verá un aviso «${ROL_DE_QUIEN_MUEVE()} reanudó tu plan».`, pista: 'Enséñale esto a la persona. Si dice que sí, vuelve a llamar con confirmado: true.' })
+    }
+    await guardaPuntero(persona, clave, reanudarPlan(actual), `${ROL_DE_QUIEN_MUEVE()} reanudó tu plan`, `Sigues en ${dondeEsta(actual)}.`)
+    return respuesta({ listo: true, atleta: nombreDe(persona), en_pausa: false, sigue_en: dondeEsta(actual) })
+  }))
+
+  server.registerTool('mover_plan_de_atleta_a', {
+    title: 'Mover a un atleta a otra fase y semana de su plan',
+    description: 'Cambia DÓNDE VA un atleta en su plan (por ejemplo «se lastimó, regresa una semana»). No cambia lo que hace cada día; el día sale del calendario. Conserva la pausa si la tenía. El atleta ve «Tu coach movió tu plan». Sin "confirmado": true no hace nada y te devuelve lo que pasaría.',
+    inputSchema: { atleta: ATLETA, fase: FASE, semana: z.coerce.number().optional().describe('Número de la semana dentro de esa fase.'), de: DE_PROGRAMA, confirmado: CONFIRMA_EQUIPO },
+    annotations: ESCRIBE,
+  }, seguro(async ({ atleta, fase, semana, de, confirmado }: any) => {
+    const { persona, r, fases, clave, actual, dondeEsta } = await punteroDelAtleta(atleta, de)
+    const f = fases[buscarFase(r.plan!, fase)]
+    const w = f.weekData[buscarSemana(f, semana)]
+    if (w.bloqueada) throw new Aviso('Esa semana todavía no se abre (es de un plan comprado y la ventana aún no llega).')
+    const destino = `${f.name}, semana ${w.num}`
+    if (f.id === actual.phaseId && w.num === actual.weekNum) throw new Aviso(`${nombreDe(persona)} ya va en ${destino}.`)
+    if (confirmado !== true) {
+      return respuesta({ hecho: false, motivo: 'falta_confirmacion', va_a_pasar: `Se moverá a ${nombreDe(persona)} de ${dondeEsta(actual)} a ${destino}. Verá un aviso «${ROL_DE_QUIEN_MUEVE()} movió tu plan».`, pista: 'Enséñale esto a la persona. Si dice que sí, vuelve a llamar con confirmado: true.' })
+    }
+    await guardaPuntero(persona, clave, moverPlanA(fases, actual, f.id, w.num), `${ROL_DE_QUIEN_MUEVE()} movió tu plan`, `Ahora vas en ${destino}.`)
+    return respuesta({ listo: true, atleta: nombreDe(persona), va_en: destino })
+  }))
+
+  /* ================================================================ */
+  /* EQUIPO Y ALTA (p82, 26 oct 2026)                                    */
+  /* ================================================================ */
+
+  server.registerTool('invitar_al_equipo_de_un_atleta', {
+    title: 'Invitar a un profesional al equipo de un atleta',
+    description: 'Invita a otro profesional (un fisio, un nutriólogo, otro coach…) al equipo de un atleta TUYO. Queda PENDIENTE hasta que el profesional acepta; el atleta lo ve en su equipo. Sin "confirmado": true no invita a nadie y te devuelve lo que pasaría: enséñaselo a la persona y pregúntale.',
+    inputSchema: { atleta: ATLETA, profesional: z.string().describe('Su usuario (@beto) o su código de invitación.'), confirmado: CONFIRMA_EQUIPO },
+    annotations: ESCRIBE,
+  }, seguro(async ({ atleta, profesional, confirmado }: any) => {
+    const persona = await buscarPersona(quien, atleta)
+    const ref = String(profesional ?? '').trim()
+    if (!ref) throw new Aviso('Di a quién invitas: su usuario o su código.')
+    if (confirmado !== true) {
+      return respuesta({
+        invitado: false, motivo: 'falta_confirmacion',
+        va_a_pasar: `Se invitará a "${ref}" al equipo de ${nombreDe(persona)}. Queda pendiente hasta que acepte; entonces verá a ${nombreDe(persona)} en su lista.`,
+        pista: 'Enséñale esto a la persona. Si dice que sí, vuelve a llamar con confirmado: true.',
+      })
+    }
+    const { data, error } = await quien.db.rpc('invitar_al_equipo', { p_atleta: persona.id, p_ref: ref })
+    if (error) throw new Aviso(error.message)
+    return respuesta({ listo: true, atleta: nombreDe(persona), invitado: ref, estado: 'pendiente: falta que acepte', ...(data && typeof data === 'object' ? { detalle: data } : {}) })
+  }))
+
+  server.registerTool('dar_de_alta', {
+    title: 'Dar de alta (o reabrir) a un atleta o paciente',
+    description: 'Da de ALTA a un atleta o paciente que ya terminó con tu atención: tu programa deja de mandarle sesiones (queda para consultar) y nada se borra. Con alta=false lo REABRES. Sirve para tu atleta o para alguien de quien eres parte del equipo. Sin "confirmado": true no hace nada y te devuelve lo que pasaría.',
+    inputSchema: { atleta: ATLETA, alta: z.boolean().optional().describe('true (por defecto) para dar de alta; false para reabrir.'), confirmado: CONFIRMA_EQUIPO },
+    annotations: ESCRIBE,
+  }, seguro(async ({ atleta, alta, confirmado }: any) => {
+    const persona = await buscarPersona(quien, atleta)
+    const dar = alta !== false
+    if (confirmado !== true) {
+      return respuesta({
+        hecho: false, motivo: 'falta_confirmacion',
+        va_a_pasar: dar
+          ? `Se dará de ALTA a ${nombreDe(persona)}: tu programa dejará de mandarle sesiones (queda solo para consultar). No se borra nada y lo puedes reabrir.`
+          : `Se REABRIRÁ a ${nombreDe(persona)}: tu programa vuelve a mandarle sesiones.`,
+        pista: 'Enséñale esto a la persona. Si dice que sí, vuelve a llamar con confirmado: true.',
+      })
+    }
+    // El coach principal usa `cambiar_alta`; un profesional del equipo, `cambiar_alta_de_equipo` (la base solo deja a quien de verdad lo atiende).
+    const miembros = await equipoDe(quien, persona.id)
+    const yo = miembros.find((m) => m.profesionalId === quien.id)
+    const funcion = yo && !yo.esPrincipal ? 'cambiar_alta_de_equipo' : 'cambiar_alta'
+    const { data, error } = await quien.db.rpc(funcion, { p_atleta: persona.id, p_alta: dar })
+    if (error) throw new Aviso(error.message)
+    // `cambiar_alta` devuelve la fila del perfil (con `alta_en`); `cambiar_alta_de_equipo`, la fecha.
+    const cuando = typeof data === 'string' ? data : (data as any)?.alta_en ?? null
+    return respuesta({ listo: true, atleta: nombreDe(persona), alta: dar, ...(dar && cuando ? { dada_de_alta_el: String(cuando).slice(0, 10) } : {}), mensaje: dar ? 'Listo: tu programa ya no le manda sesiones, pero lo puedes consultar.' : 'Listo: lo reabriste.' })
+  }))
 
   /* ================================================================ */
   /* REPERTORIO                                                         */

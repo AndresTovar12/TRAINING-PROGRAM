@@ -458,6 +458,7 @@ export function resumenDelPlan(plan: Plan, cursor: any, fecha: Date) {
   }
   return {
     titulo: plan.title,
+    ...(cursor?.pausa ? { en_pausa: true, pausado_desde: cursor.pausa, nota_de_pausa: 'El plan está EN PAUSA: no avanza hasta que el coach lo reanude, así que no manda sesión nueva.' } : {}),
     tipo: kind === 'weekly' ? 'rutina que se repite cada semana' : 'programa por fases',
     fases: fases.map((f, i) => ({
       n: i + 1,
