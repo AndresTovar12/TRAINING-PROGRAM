@@ -104,6 +104,20 @@ const correoDelCodigo = (codigo: string) => ({
   </div></body></html>`,
 })
 
+/* Comprobar la contraseña con /auth/v1/token ABRE una sesión de verdad que nadie cerraba (auditoría p134: 384 sesiones acumuladas).
+   Se cierra enseguida, SOLO esa (`scope=local`: no toca las demás sesiones de la persona). Si no se puede cerrar, no es motivo para fallar. */
+async function cierraLaSesionDeLaPrueba(urlSb: string, prueba: Response) {
+  try {
+    const t = (await prueba.clone().json())?.access_token
+    if (typeof t !== 'string' || !t) return
+    await fetch(`${urlSb}/auth/v1/logout?scope=local`, {
+      method: 'POST',
+      headers: { apikey: Deno.env.get('SUPABASE_ANON_KEY') ?? '', Authorization: `Bearer ${t}` },
+      signal: AbortSignal.timeout(5_000),
+    })
+  } catch { /* se queda como estaba */ }
+}
+
 Deno.serve(async (req) => {
   const origin = req.headers.get('Origin')
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders(origin) })
@@ -144,6 +158,7 @@ Deno.serve(async (req) => {
     if (!prueba) return json({ error: 'No se pudo comprobar tu contraseña. Inténtalo de nuevo.' }, 502, origin)
     if (prueba.status === 429) return json({ error: 'Demasiados intentos. Espera un momento.' }, 429, origin)
     if (!prueba.ok) return json({ error: 'La contraseña actual no es correcta.', codigo: 'CONTRASENA_MAL' }, 400, origin)
+    await cierraLaSesionDeLaPrueba(URL_SB, prueba)
 
     const { data: ocupado } = await admin.rpc('usuario_por_correo', { p_correo: correo })
     if (Array.isArray(ocupado) && ocupado.length && ocupado[0].id !== usuario.id) {
