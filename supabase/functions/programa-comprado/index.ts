@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
     // Un coach que borró su cuenta deja `coach_id` vacío: sus compradores siguen con su plan (el nombre y la foto del coach se guardaron en el plan en venta).
     const coachesIds = [...new Set(compras.map((c) => c.coach_id).filter(Boolean))]
     const [{ data: planes, error: e1 }, { data: coaches, error: e2 }] = await Promise.all([
-      bd.from('vitrina_planes').select('id, titulo, chat, tecnica, ventana_semanas, contenido, coach_nombre, coach_foto, biblioteca_congelada').in('id', planesIds),
+      bd.from('vitrina_planes').select('id, slug, titulo, chat, tecnica, ventana_semanas, contenido, coach_nombre, coach_foto, biblioteca_congelada').in('id', planesIds),
       coachesIds.length ? bd.from('profiles').select('id, username, full_name, avatar_url, profesion').in('id', coachesIds) : Promise.resolve({ data: [], error: null }),
     ])
     if (e1 || e2) throw e1 ?? e2
@@ -126,6 +126,7 @@ Deno.serve(async (req) => {
       salida.push({
         compra_id: c.id,
         vitrina_plan_id: c.vitrina_plan_id,
+        slug: plan?.slug ?? null, // para «Renovar»: la página del plan (p10)
         estado: c.estado,
         tipo: c.tipo,
         inicio: c.inicio,
