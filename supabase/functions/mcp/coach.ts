@@ -21,7 +21,8 @@ import { repertorioConFicha } from './comunes.ts'
 import { cursorAlDia, defaultCursor, dondeVa, estaEnPausa, historialDePeso, isValidCursor, moverPlanA, pausarPlan, reanudarPlan } from './app/training-utils.js'
 import { gruposConPropios } from './app/muscles.js'
 import { desdeKilos } from './app/unidades.js'
-import { COLORES_TIPO } from './app/theme.js'
+import { CAT_COLORS, COLORES_TIPO } from './app/theme.js'
+import { cargaCatalogo, sugiereIcono } from './app/iconosDeTipo.js'
 import { claseDe } from './app/clases.js'
 
 export const SOLO_LEER = { readOnlyHint: true, destructiveHint: false, openWorldHint: false } as const
@@ -566,21 +567,32 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     annotations: SOLO_LEER,
   }, seguro(async () => {
     const { data: masterId } = await quien.db.rpc('master_id')
-    const [cats, tipos, plantillas, grupos, repertorio] = await Promise.all([
+    const [cats, tipos, plantillas, grupos, repertorio, estadoCoach] = await Promise.all([
       quien.db.from('exercise_categories').select('id, name, created_by').order('sort_order'),
       quien.db.from('session_types').select('nombre, color').eq('coach_id', quien.id).order('nombre'),
       quien.db.from('routine_templates').select('id, name, kind, updated_at').eq('created_by', quien.id).order('updated_at', { ascending: false }),
       gruposMusculares(),
       repertorioVisible(quien),
+      estadoDe(quien, quien.id),
     ])
+    // Quien ve las categorías de todos (el dueño) necesita saber de quién es cada una (p80).
+    const ajenas = [...new Set((cats.data ?? []).map((c: any) => c.created_by).filter((id: string | null) => id && id !== quien.id && id !== masterId))] as string[]
+    const nombresDe = new Map<string, string>()
+    if (esMaster && ajenas.length) {
+      const { data: perfiles } = await quien.db.from('profiles').select('id, full_name, username').in('id', ajenas)
+      for (const x of perfiles ?? []) nombresDe.set(x.id, x.full_name || x.username)
+    }
     return respuesta({
       categorias: (cats.data ?? [])
         .filter((c: any) => esMaster || !c.created_by || c.created_by === masterId || c.created_by === quien.id)
-        .map((c: any) => ({ nombre: c.name, propia: c.created_by === quien.id })),
+        .map((c: any) => ({ nombre: c.name, propia: c.created_by === quien.id, ...(esMaster && nombresDe.has(c.created_by) ? { de: nombresDe.get(c.created_by) } : {}) })),
       grupos_musculares: grupos,
       equipos_mas_usados: equiposMasUsados(repertorio),
       tipos_de_sesion_propios: tipos.data ?? [],
-      tipos_de_sesion_de_la_app: ['Gym', 'Neural', 'Recovery', 'Cancha', 'Tests', 'Equipo', 'Correr', 'Bici', 'Natación', 'Yoga', 'Movilidad', 'Terapia', 'Clase', 'OFF'],
+      // Los que el coach quitó en la app (`ui:tipos-quitados`) ya no se ofrecen; «OFF» no se quita nunca (p81).
+      tipos_de_sesion_de_la_app: Object.entries(CAT_COLORS as Record<string, { label: string }>)
+        .filter(([slug]) => slug === 'off' || !(Array.isArray(estadoCoach['ui:tipos-quitados']) ? estadoCoach['ui:tipos-quitados'] : []).includes(slug))
+        .map(([, v]) => v.label),
       plantillas: (plantillas.data ?? []).map((p: any) => ({ id: p.id, nombre: p.name, tipo: p.kind === 'week' ? 'semana' : 'dia' })),
     })
   }))
@@ -1354,13 +1366,15 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
   async function categoriasVisibles() {
     const { data } = await quien.db.from('exercise_categories').select('id, name, slug, created_by').order('sort_order')
     const { data: masterId } = await quien.db.rpc('master_id')
-    return (data ?? []).filter((c: any) => esMaster || !c.created_by || c.created_by === masterId || c.created_by === quien.id) as { id: string; name: string; slug: string }[]
+    return (data ?? []).filter((c: any) => esMaster || !c.created_by || c.created_by === masterId || c.created_by === quien.id) as { id: string; name: string; slug: string; created_by?: string | null }[]
   }
 
   async function categoriaPorNombre(nombre?: string) {
     if (!nombre) return null
     const visibles = await categoriasVisibles()
-    const c = visibles.find((x) => mismoTexto(x.name, nombre) || mismoTexto(x.slug, nombre))
+    // Si hay varias con ese nombre (el dueño ve las de todos), la PROPIA primero, luego la de la app, y solo al final cualquiera (p80).
+    const iguales = visibles.filter((x) => mismoTexto(x.name, nombre) || mismoTexto(x.slug, nombre)) as any[]
+    const c = iguales.find((x) => x.created_by === quien.id) ?? iguales.find((x) => !x.created_by) ?? iguales[0]
     if (!c) throw new Aviso(`No existe la categoría "${nombre}". Las que hay: ${[...new Set(visibles.map((x) => x.name))].join(', ')}. Puedes crear una con crear_categoria.`)
     return c.id
   }
@@ -1535,9 +1549,13 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     annotations: ESCRIBE,
   }, seguro(async ({ nombre, color }: any) => {
     const { count } = await quien.db.from('session_types').select('id', { count: 'exact', head: true }).eq('coach_id', quien.id)
+    // Con ícono, igual que en la app: el que mejor le va al nombre («Boxeo» → boxeo); si nada se parece, la etiqueta neutra (null).
+    const catalogo = await cargaCatalogo().catch(() => null)
+    const icono = catalogo ? sugiereIcono(catalogo, nombre) : null
     const { error } = await quien.db.from('session_types').insert({
       nombre: nombre.trim(),
       color: color || COLORES_TIPO[(count ?? 0) % COLORES_TIPO.length],
+      icono,
       coach_id: quien.id,
     })
     if (error) throw new Error(error.message)

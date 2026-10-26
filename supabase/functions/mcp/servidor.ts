@@ -177,8 +177,18 @@ export async function manejar(req: Request): Promise<Response> {
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
   })
+  // Casi 1 de cada 10 llamadas de ChatGPT y Claude fallaba sin dejar rastro (p129, 26 oct 2026): ahora el transporte anota por qué en los registros del servidor.
+  transport.onerror = (e: unknown) => console.error('mcp: error del transporte', e instanceof Error ? e.message : e)
+  const inicio = Date.now()
   await server.connect(transport)
-  const res = await transport.handleRequest(req)
+  let res: Response
+  try {
+    res = await transport.handleRequest(req)
+  } catch (e) {
+    console.error(`mcp: la llamada falló a los ${Date.now() - inicio} ms (${quien.rol})`, e instanceof Error ? e.stack ?? e.message : e)
+    return json({ error: 'server_error', error_description: 'No se pudo atender la petición. Intenta de nuevo.' }, 500)
+  }
+  if (res.status >= 500) console.error(`mcp: respondió ${res.status} a los ${Date.now() - inicio} ms (${quien.rol})`)
   const headers = new Headers(res.headers)
   for (const [k, v] of Object.entries(CORS)) headers.set(k, v)
   return new Response(res.body, { status: res.status, headers })
