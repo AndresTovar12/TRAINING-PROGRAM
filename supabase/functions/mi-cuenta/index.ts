@@ -60,6 +60,8 @@ function json(body: unknown, status: number, origin: string | null) {
 }
 
 const VIVAS = ['activa', 'gracia']
+// Para cerrar cobros se miran también las vencidas y por armar: Stripe puede seguir reintentando una suscripción cuya compra ya marcó «vencida» (el aviso llegó tarde).
+const CON_COBRO = ['activa', 'gracia', 'vencida', 'por_armar']
 
 /* Comprobar la contraseña con /auth/v1/token ABRE una sesión de verdad que nadie cerraba (auditoría p134: 384 sesiones acumuladas).
    Se cierra enseguida, SOLO esa (`scope=local`: no toca las demás sesiones de la persona). Si no se puede cerrar, no es motivo para fallar. */
@@ -185,7 +187,7 @@ Deno.serve(async (req) => {
     const suscripcionesDeCompras = async (columna: 'atleta_id' | 'coach_id') => {
       const { data, error } = await bd.from('compras')
         .select('id, vitrina_plan_id, tipo, inicio, fase_de_entrada, semana_de_entrada, version_n, stripe_subscription_id')
-        .eq(columna, yo).in('estado', VIVAS).not('stripe_subscription_id', 'is', null)
+        .eq(columna, yo).in('estado', CON_COBRO).not('stripe_subscription_id', 'is', null)
       if (error) throw error
       return data ?? []
     }

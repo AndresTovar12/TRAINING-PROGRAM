@@ -124,6 +124,12 @@ Deno.serve(async (req) => {
   if (ventas) {
     return json({ error: `Esa cuenta ya vendió (${ventas} compra${ventas === 1 ? '' : 's'}). Desde aquí no se borra: desactívala, o que ella misma elimine su cuenta desde Mi perfil (ahí se cierran los cobros de sus compradores).` }, 409, origin)
   }
+  // Lo mismo si es COMPRADOR con una suscripción viva: borrarla desde aquí la dejaría cobrando. `mi-cuenta` la cancela cuando la persona elimina su propia cuenta.
+  const { count: suscritas } = await admin.from('compras').select('id', { count: 'exact', head: true })
+    .eq('atleta_id', objetivo).in('estado', ['activa', 'gracia', 'vencida', 'por_armar']).not('stripe_subscription_id', 'is', null)
+  if (suscritas) {
+    return json({ error: 'Esa cuenta tiene una membresía con cobro automático. Desde aquí no se borra: que ella misma elimine su cuenta desde Mi perfil (ahí se cancela el cobro).' }, 409, origin)
+  }
 
   /* ANTES DE BORRAR: COLOCAR LO QUE DEJA ATRÁS.
    *

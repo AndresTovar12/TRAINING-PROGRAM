@@ -145,7 +145,8 @@ function VideoDelCoach({ url }) {
 function diasPorSemana(hoja) {
   const cuentas = new Map();
   (hoja ?? []).forEach((f) => (f.weekData ?? []).forEach((w) => {
-    const n = (w.days ?? []).filter((d) => d.cat !== 'off').length;
+    // Dos sesiones el mismo día son UN día de entrenamiento (antes un plan de 5 días con dobles decía «8 días por semana»; p15).
+    const n = new Set((w.days ?? []).filter((d) => d.cat !== 'off').map((d) => d.day)).size;
     cuentas.set(n, (cuentas.get(n) ?? 0) + 1);
   }));
   let mejor = 0;
