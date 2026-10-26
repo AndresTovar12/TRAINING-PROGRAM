@@ -145,7 +145,7 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
       onMouseDown={onClose}
       style={{
         position: 'fixed', inset: 0, zIndex: 2600, background: 'rgba(17,19,24,0.5)',
-        backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
       }}
     >
       <div
@@ -353,7 +353,7 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
                             position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: 9,
                             display: 'grid', placeItems: 'center', border: sel ? 'none' : '1.5px solid rgba(255,255,255,0.75)', /* estilo-ok: casilla de marcar sobre la foto */
                             background: sel ? T.accent : 'rgba(0,0,0,0.35)', color: '#fff',
-                            backdropFilter: 'blur(4px)', transition: 'background .12s',
+                            backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', transition: 'background .12s',
                           }}
                         >
                           {sel && <Check size={14} />}
@@ -419,7 +419,7 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
         <div
           style={{
             position: 'absolute', left: 0, right: 0, bottom: 0, padding: '14px 18px',
-            background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(12px)', borderTop: `1px solid ${T.border}`,
+            background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderTop: `1px solid ${T.border}`,
             display: 'flex', justifyContent: 'flex-end', gap: 10,
           }}
         >

@@ -398,7 +398,7 @@ function PaginaDelPlan({ usuario, slug, alVolver }) {
       {!esCompu && (
       <div
         style={{
-          position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 20, background: 'rgba(242,243,247,0.94)', backdropFilter: 'blur(10px)', borderTop: `1px solid ${UI.hilo}`,
+          position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 20, background: 'rgba(242,243,247,0.94)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', borderTop: `1px solid ${UI.hilo}`,
           padding: '12px 16px calc(12px + env(safe-area-inset-bottom))',
         }}
       >

@@ -16,7 +16,7 @@ export default function BotonEntendido({ onClick, color, style }) {
       type="button"
       onClick={onClick}
       style={{
-        display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 36, padding: '0 13px', borderRadius: 10,
+        display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 44, padding: '0 14px', borderRadius: 10,
         cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 800, flexShrink: 0,
         border: 'none', background: `${color}14`, color, touchAction: 'manipulation', ...style,
       }}

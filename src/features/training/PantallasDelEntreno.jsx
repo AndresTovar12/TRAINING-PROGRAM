@@ -122,7 +122,7 @@ function BotonDeTecnica({ activa, etiqueta, onClick, enviada = false }) {
       {!activa && (
         <span
           className="pronto-texto"
-          style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 0.3, padding: '3px 7px', borderRadius: 7, background: LT.surface2, color: LT.text2 }}
+          style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: 0.3, padding: '3px 7px', borderRadius: 7, background: LT.surface2, color: LT.text2 }}
         >
           Pronto
         </span>

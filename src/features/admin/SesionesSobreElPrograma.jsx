@@ -264,7 +264,7 @@ function TarjetaDeMiSesion({
     <div style={{ marginBottom: 6 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 2px 8px' }}>
         <span style={{
-          fontSize: 10.5, fontWeight: 800, letterSpacing: 0.5, color: T.accent, background: T.accentBg,
+          fontSize: 11.5, fontWeight: 800, letterSpacing: 0.5, color: T.accent, background: T.accentBg,
           borderRadius: 6, padding: '3px 8px',
         }}>
           TUYA
@@ -529,12 +529,12 @@ export default function SesionesSobreElPrograma({
       <>
         {delCoach && <Lock size={12} color={T.text3} style={{ flexShrink: 0 }} />}
         {deOtro && (
-          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.3, color: T.text2, background: T.bg3, borderRadius: 6, padding: '3px 7px', flexShrink: 0 }}>
+          <span style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: 0.3, color: T.text2, background: T.bg3, borderRadius: 6, padding: '3px 7px', flexShrink: 0 }}>
             OTRO
           </span>
         )}
         {mios && (
-          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.3, color: T.accent, background: T.accentBg, borderRadius: 6, padding: '3px 7px', flexShrink: 0 }}>
+          <span style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: 0.3, color: T.accent, background: T.accentBg, borderRadius: 6, padding: '3px 7px', flexShrink: 0 }}>
             TUYA
           </span>
         )}
@@ -773,7 +773,7 @@ export default function SesionesSobreElPrograma({
     <div style={{ position: 'fixed', inset: 0, zIndex: 2400, background: T.bg, fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
       <header
         style={{
-          background: 'rgba(255,255,255,0.86)', backdropFilter: 'saturate(180%) blur(16px)',
+          background: 'rgba(255,255,255,0.86)', backdropFilter: 'saturate(180%) blur(16px)', WebkitBackdropFilter: 'saturate(180%) blur(16px)',
           borderBottom: `1px solid ${T.border}`, padding: '13px 18px',
           display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
         }}

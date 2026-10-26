@@ -17,7 +17,7 @@ export function preparaAudio() {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtx) return;
     audio = audio ?? new AudioCtx();
-    if (audio.state === 'suspended') audio.resume();
+    if (audio.state === 'suspended') audio.resume()?.catch?.(() => { /* modo silencio, llamada u otra app con el audio: el reloj sigue, sin pitidos (p153) */ });
   } catch {
     audio = null;
   }

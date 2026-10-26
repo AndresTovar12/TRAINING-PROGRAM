@@ -185,7 +185,7 @@ export default function ListaDeMisPlanes({
                 <span style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '3px 8px' }}>
                   <span style={{ fontSize: 14.5, fontWeight: 800, color: T.text, overflowWrap: 'anywhere' }}>{item.nombre}</span>
                   {item.origen && (
-                    <span style={{ fontSize: 10.5, fontWeight: 800, color: T.text2, background: T.bg3, borderRadius: 6, padding: '2px 7px', letterSpacing: 0.2 }}>
+                    <span style={{ fontSize: 11.5, fontWeight: 800, color: T.text2, background: T.bg3, borderRadius: 6, padding: '2px 7px', letterSpacing: 0.2 }}>
                       {item.origen}
                     </span>
                   )}

@@ -38,7 +38,7 @@ const textoGuardado = () => { try { return localStorage.getItem('tl:ultima-ubica
    (el mismo plugin ya registrado, sin registrarlo dos veces). */
 const puenteDelMapa = () => Capacitor.Plugins?.NativeMap ?? registerPlugin('NativeMap');
 
-const botonDelMapa = { width: 48, height: 48, borderRadius: 24, border: 'none', background: 'rgba(28,32,48,0.88)', color: '#fff', display: 'grid', placeItems: 'center', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 800, touchAction: 'manipulation', backdropFilter: 'blur(10px)', boxShadow: '0 4px 14px rgba(0,0,0,0.35)' };
+const botonDelMapa = { width: 48, height: 48, borderRadius: 24, border: 'none', background: 'rgba(28,32,48,0.88)', color: '#fff', display: 'grid', placeItems: 'center', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 800, touchAction: 'manipulation', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', boxShadow: '0 4px 14px rgba(0,0,0,0.35)' };
 
 /** Los márgenes del mapa a pantalla completa: abajo TODO el panel (el logo y «Legal» de Apple quedan arriba de él) y arriba lo justo para que el punto del corredor
     caiga cerca del centro de la pantalla y no a un tercio (con solo el margen de abajo, el punto salía muy arriba). */
@@ -372,7 +372,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
       <div ref={caja} style={{ position: 'absolute', inset: 0 }} />
       {foto && <img src={foto} alt="Tu ruta en el mapa" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
       {pantallaCompleta && activo && cargandoTipo && (
-        <div aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: 3, display: 'grid', placeItems: 'center', background: 'rgba(15,18,32,0.55)', backdropFilter: 'blur(6px)', pointerEvents: 'none', color: '#fff', animation: 'tl-velo 1600ms ease both' }}>
+        <div aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: 3, display: 'grid', placeItems: 'center', background: 'rgba(15,18,32,0.55)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', pointerEvents: 'none', color: '#fff', animation: 'tl-velo 1600ms ease both' }}>
           <Loader2 size={30} className="spin" />
         </div>
       )}
@@ -388,7 +388,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
         // `zIndex`: el degradado del panel de abajo sube por encima de esta zona y, aunque se vea transparente, se quedaba con el toque de la flecha (25 oct 2026).
         <div style={{ position: 'absolute', zIndex: 5, right: 14, bottom: alturaPanel + 16, display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
           {abierto && (
-            <div data-map-overlay role="menu" aria-label="Tipo de mapa" style={{ position: 'absolute', right: 58, bottom: 0, display: 'flex', flexDirection: 'column', gap: 6, padding: 8, borderRadius: 18, background: 'rgba(28,32,48,0.94)', backdropFilter: 'blur(14px)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
+            <div data-map-overlay role="menu" aria-label="Tipo de mapa" style={{ position: 'absolute', right: 58, bottom: 0, display: 'flex', flexDirection: 'column', gap: 6, padding: 8, borderRadius: 18, background: 'rgba(28,32,48,0.94)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
               {[['Normal', 'Estándar'], ['Satellite', 'Satelital'], ['Hybrid', 'Híbrido']].map(([tipo, nombre]) => (
                 <button
                   key={tipo} type="button" role="menuitemradio" aria-checked={tipoDeMapa === tipo} data-map-overlay onClick={() => acciones.current.poneTipo?.(tipo)}

@@ -100,8 +100,8 @@ function ExerciseCard({ ex, onClick, base, conVideoExtra }) {
             style={{
               position: 'absolute', top: 8, left: 8,
               background: ex.esMiVersion ? T.accent : 'rgba(17,19,24,0.72)', color: '#fff',
-              borderRadius: 7, padding: '3px 8px', fontSize: 10.5, fontWeight: 800, letterSpacing: 0.3,
-              display: 'inline-flex', alignItems: 'center', gap: 4, backdropFilter: 'blur(4px)',
+              borderRadius: 7, padding: '3px 8px', fontSize: 11.5, fontWeight: 800, letterSpacing: 0.3,
+              display: 'inline-flex', alignItems: 'center', gap: 4, backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
             }}
           >
             {ex.esMiVersion ? <><Pencil size={10} /> Mi versión</> : 'Base'}
@@ -111,7 +111,7 @@ function ExerciseCard({ ex, onClick, base, conVideoExtra }) {
           <span
             style={{
               position: 'absolute', top: 8, right: 8, background: 'rgba(17,19,24,0.75)', color: '#fff',
-              borderRadius: 7, padding: '3px 7px', fontSize: 10.5, fontWeight: 700,
+              borderRadius: 7, padding: '3px 7px', fontSize: 11.5, fontWeight: 700,
               display: 'inline-flex', alignItems: 'center', gap: 4,
             }}
           >
@@ -568,7 +568,7 @@ function ExerciseEditor({
       onMouseDown={onClose}
       style={{
         position: 'fixed', inset: 0, zIndex: 2000, background: esCompu ? 'rgba(17,19,24,0.45)' : UI.fondo,
-        backdropFilter: esCompu ? 'blur(4px)' : undefined, display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+        backdropFilter: esCompu ? 'blur(4px)' : undefined, WebkitBackdropFilter: esCompu ? 'blur(4px)' : undefined, display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
         padding: esCompu ? '40px 16px' : 0, overflowY: 'auto',
       }}
     >
@@ -1050,7 +1050,7 @@ function ExerciseEditor({
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
             padding: esCompu ? '0 22px 22px' : '12px 16px calc(14px + env(safe-area-inset-bottom))',
-            ...(esCompu ? {} : { position: 'sticky', bottom: 0, background: 'rgba(242,243,247,0.94)', backdropFilter: 'blur(14px)' }),
+            ...(esCompu ? {} : { position: 'sticky', bottom: 0, background: 'rgba(242,243,247,0.94)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }),
           }}
         >
           {/* LA IZQUIERDA depende de la pantalla. En «Grabar o subir» no hay nada: ahí solo se graba y se guarda (Andrés, 7 oct 2026:

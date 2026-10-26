@@ -258,7 +258,7 @@ export default function AdminApp({ onAbrirPerfil }) {
         <header
           style={{
             position: 'sticky', top: 0, zIndex: 40, background: 'rgba(255,255,255,0.92)',
-            backdropFilter: 'saturate(180%) blur(16px)', borderBottom: `1px solid ${UI.hilo}`,
+            backdropFilter: 'saturate(180%) blur(16px)', WebkitBackdropFilter: 'saturate(180%) blur(16px)', borderBottom: `1px solid ${UI.hilo}`,
             padding: '14px 96px 14px 20px', display: 'flex', alignItems: 'center', gap: 14, minHeight: 76, boxSizing: 'border-box',
           }}
         >

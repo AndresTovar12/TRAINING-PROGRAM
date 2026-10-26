@@ -44,7 +44,7 @@ export default function SinLugares({ lugares, onCerrar, onIrA }) {
       onMouseDown={onCerrar}
       style={{
         position: 'fixed', inset: 0, zIndex: 2700, background: 'rgba(17,19,24,0.5)',
-        backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18,
+        backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18,
       }}
     >
       <div

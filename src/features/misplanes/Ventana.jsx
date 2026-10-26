@@ -26,7 +26,7 @@ export default function Ventana({ titulo, subtitulo, onCerrar, ancho = 480, pie,
     <div
       onMouseDown={onCerrar}
       style={{
-        position: 'fixed', inset: 0, zIndex: 2800, background: 'rgba(17,19,24,0.5)', backdropFilter: 'blur(4px)',
+        position: 'fixed', inset: 0, zIndex: 2800, background: 'rgba(17,19,24,0.5)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
         display: 'grid', placeItems: esCompu ? 'center' : 'end center', padding: esCompu ? 16 : 0,
       }}
     >
