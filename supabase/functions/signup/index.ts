@@ -60,6 +60,9 @@ function textoDeError(e: unknown): string {
 
 const USERNAME_RE = /^[a-zA-Z0-9_.]{3,30}$/
 
+// En un patrón de LIKE el «_» vale «cualquier letra» y el «%» «cualquier cosa»: para buscar un usuario EXACTO se escapan (p142). Igual que `src/lib/escapaLike.js`.
+const escapaLike = (t: string) => t.replace(/[\\%_]/g, '\\$&')
+
 // Los correos que la app inventa para quien se registra sin correo (nadie los recibe). Igual que `src/lib/correos.js`.
 const DOMINIOS_SIN_BUZON = ['sin-correo.traininglabapp.com', 'traininglab.app']
 const esCorreoInterno = (c: string) => {
@@ -213,6 +216,11 @@ Deno.serve(async (req) => {
       confiable = pf?.is_owner === true && pf?.is_active !== false
     }
   }
+  /* «zz_…» es el prefijo de las cuentas de prueba del dueño (aparecen en su panel con la contraseña a la vista). Antes solo la app lo
+     negaba: llamando directo a esta función cualquiera podía registrar un «zz_…» (ETAPA 2, p124). Ahora solo el dueño, con su sesión. */
+  if (/^zz_/i.test(username) && !confiable) {
+    return json({ error: 'Ese nombre de usuario no está disponible' }, 400, origin)
+  }
   const correoInterno = `${username.toLowerCase()}@sin-correo.traininglabapp.com`
   let correoPendiente: string | null = null
   if (!email || (!confiable && esCorreoInterno(email))) {
@@ -233,7 +241,7 @@ Deno.serve(async (req) => {
   const { data: taken } = await admin
     .from('profiles')
     .select('id')
-    .ilike('username', username)
+    .ilike('username', escapaLike(username))
     .maybeSingle()
   if (taken) {
     return json({ error: 'Ese nombre de usuario ya está en uso' }, 409, origin)
@@ -267,8 +275,8 @@ Deno.serve(async (req) => {
 
   if (error) {
     const crudo = textoDeError(error)
-    // Queda en los registros del servidor para poder diagnosticar despues.
-    console.error('createUser falló:', crudo, JSON.stringify({ username, email, role }))
+    // Queda en los registros del servidor para poder diagnosticar despues. SIN el correo (dato personal): el usuario y el tipo bastan (p136).
+    console.error('createUser falló:', crudo, JSON.stringify({ username, role }))
 
     let msg = crudo
     if (/already been registered|exists|duplicate/i.test(crudo)) {
@@ -283,8 +291,8 @@ Deno.serve(async (req) => {
 
   const userId = data.user?.id
 
-  // El trigger handle_new_user ya creó el profile con el role del metadata.
-  // Reafirmamos role + coach_id (y is_owner=false; el master se marca a mano en DB).
+  // El trigger handle_new_user crea SIEMPRE el profile como 'user' (25 oct 2026, p131: ya no toma el rol del metadato que manda el cliente).
+  // Aquí, con la llave de servicio, se sube a 'admin' si es coach y se fija coach_id (y is_owner=false; el master se marca a mano en DB).
   if (userId) {
     const { error: errPerfil } = await admin
       .from('profiles')
