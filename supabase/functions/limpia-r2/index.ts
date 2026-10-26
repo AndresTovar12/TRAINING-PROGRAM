@@ -23,7 +23,8 @@
  *   · el barrido no borra si lo «sin usar» es más de la mitad de lo que hay, y borra como mucho 50 por vuelta;
  *   · `{ "probar": true }` solo cuenta y enseña la lista, sin borrar.
  *
- * Sin contraseña (verify_jwt apagado), como `limpia-mensajes`: solo quita lo que no aparece en ningún lado, así que llamarla de más no puede dañar nada.
+ * Sin contraseña de Supabase (verify_jwt apagado) porque la llama la base desde sus disparadores. El modo «al instante» solo quita lo que no aparece en ningún lado, así que llamarlo de más
+ * no daña nada. Lo demás (barrido, `probar`) pide la llave `LIMPIEZA_LLAVE` (encabezado `x-limpieza-llave`).
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { AwsClient } from 'npm:aws4fetch@1.0.20'
@@ -95,6 +96,13 @@ Deno.serve(async (req) => {
       if (Array.isArray(b?.rutas)) rutasPedidas = [...new Set(b.rutas.map((r: unknown) => String(r).match(RUTA)?.[1]).filter(Boolean) as string[])].slice(0, MAX_RUTAS_INSTANTE)
     } catch { /* sin cuerpo */ }
   }
+
+  // p144 (26 oct 2026): sin llave solo se atiende lo que manda la base al instante (sus disparadores no llevan llave y solo borran lo que no aparece en ningún lado).
+  // Contar, enseñar la lista y el barrido exigen la llave `LIMPIEZA_LLAVE` en el encabezado `x-limpieza-llave`: antes cualquiera podía pedir el inventario de archivos.
+  const llave = (Deno.env.get('LIMPIEZA_LLAVE') ?? '').trim()
+  const dada = (req.headers.get('x-limpieza-llave') ?? '').trim()
+  const conLlave = llave.length >= 16 && dada.length === llave.length && dada === llave
+  if ((probar || rutasPedidas.length === 0) && !conLlave) return responde({ error: 'Falta la llave de limpieza.' }, 401)
 
   const bd = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
   const accountId = (Deno.env.get('R2_ACCOUNT_ID') ?? '').trim()

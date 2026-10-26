@@ -65,16 +65,20 @@ Deno.serve(async (req) => {
     {
       const { data: carpetas, error } = await bd.storage.from(BUCKET).list('', { limit: 1000 })
       if (error) throw error
-      const atletas = (carpetas ?? []).filter((c) => !c.id).map((c) => c.name)
+      const ES_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i // una carpeta con otro nombre haría fallar la consulta de abajo
+      const atletas = (carpetas ?? []).filter((c) => !c.id && ES_UUID.test(c.name)).map((c) => c.name)
       if (atletas.length) {
-        const { data: vivos } = await bd.from('profiles').select('id').in('id', atletas)
+        // Si esta consulta falla, `vivos` llega vacío y TODAS las carpetas parecerían de cuentas borradas: se borrarían los archivos de todos los chats (p143). Por eso se revisa el error.
+        const { data: vivos, error: errVivos } = await bd.from('profiles').select('id').in('id', atletas)
+        if (errVivos) throw new Error(`huérfanos: no se pudo saber qué cuentas existen (${errVivos.message}); no se borra nada`)
         const existen = new Set((vivos ?? []).map((p) => p.id))
         for (const atleta of atletas) {
           const { data: hijas } = await bd.storage.from(BUCKET).list(atleta, { limit: 1000 })
-          const profesionales = (hijas ?? []).filter((c) => !c.id).map((c) => c.name)
+          const profesionales = (hijas ?? []).filter((c) => !c.id && ES_UUID.test(c.name)).map((c) => c.name)
           let vivosPro = new Set<string>()
           if (existen.has(atleta) && profesionales.length) {
-            const { data: pr } = await bd.from('profiles').select('id').in('id', profesionales)
+            const { data: pr, error: errPro } = await bd.from('profiles').select('id').in('id', profesionales)
+            if (errPro) throw new Error(`huérfanos: no se pudo saber qué profesionales existen (${errPro.message}); no se borra nada`)
             vivosPro = new Set((pr ?? []).map((p) => p.id))
           }
           for (const pro of profesionales) {
