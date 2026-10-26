@@ -162,6 +162,14 @@ async function actualizaCompra(id: string, cambios: Obj) {
   if (error) throw error
 }
 
+/** Una compra ANÓNIMA (la persona borró su cuenta; solo se conserva por sus pagos) únicamente puede estar «cancelada»: la base no admite otro estado sin atleta. Con atleta, se cambia el estado. */
+async function cierraSiHayAtleta(compraId: string, estado: string) {
+  const { data: c, error } = await bd.from('compras').select('atleta_id').eq('id', compraId).maybeSingle()
+  if (error) throw error
+  if (!c?.atleta_id) return
+  await actualizaCompra(compraId, { estado, actualizada_en: ahora().toISOString() })
+}
+
 async function atiende(evento: Obj) {
   const o: Obj = evento.data?.object ?? {}
   switch (evento.type) {
@@ -222,19 +230,19 @@ async function atiende(evento: Obj) {
     case 'customer.subscription.deleted': {
       const c = await buscaCompra({ compraId: o.metadata?.compra_id, suscripcion: o.id })
       if (!c) { console.error(`stripe-webhook: ${evento.type} ${evento.id} sin compra conocida`); return }
-      if (c.estado === 'reembolsada') return
+      if (c.estado === 'reembolsada' || !c.atleta_id) return // anónima: ya quedó cancelada al borrarse la cuenta
       await actualizaCompra(c.id, { estado: 'vencida', cancelada_en: c.cancelada_en ?? ahora().toISOString(), actualizada_en: ahora().toISOString() })
       return
     }
     case 'charge.refunded': {
       const pago = await reviertePago(o.id, 'reembolsado')
       // Un reembolso completo cierra la compra; uno parcial deja el plan como estaba.
-      if (pago && o.refunded === true) await actualizaCompra(pago.compra_id, { estado: 'reembolsada', actualizada_en: ahora().toISOString() })
+      if (pago && o.refunded === true) await cierraSiHayAtleta(pago.compra_id, 'reembolsada')
       return
     }
     case 'charge.dispute.created': {
       const pago = await reviertePago(idDe(o.charge)!, 'contracargo')
-      if (pago) await actualizaCompra(pago.compra_id, { estado: 'vencida', actualizada_en: ahora().toISOString() })
+      if (pago) await cierraSiHayAtleta(pago.compra_id, 'vencida')
       return
     }
     default:
