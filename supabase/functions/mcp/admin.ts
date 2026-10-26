@@ -158,9 +158,9 @@ export function herramientasDelAdmin(server: McpServer, quien: Quien) {
       opciones = { atletasA: destino, ejerciciosA: ejercicios_a }
     }
     if (esCoach) {
-      // Un coach que ya vendió: sus compras son de personas que pagaron y borrarlo las borraría con él (y la base lo rechaza a medio camino). Se desactiva (auditoría p121).
+      // Un coach que ya vendió: sus compras son de personas que pagaron y desde aquí no se cierran sus cobros (eso lo hace `mi-cuenta` cuando la persona borra su propia cuenta). Se desactiva (auditoría p121).
       const { count } = await quien.db.from('compras').select('*', { count: 'exact', head: true }).eq('coach_id', p.id)
-      if ((count ?? 0) > 0) throw new Aviso(`${nombreDe(p)} ya vendió: tiene ${count} compra(s) de personas que pagaron. Eliminarlo las borraría con él. Mejor desactívalo con activar_o_desactivar_cuenta.`)
+      if ((count ?? 0) > 0) throw new Aviso(`${nombreDe(p)} ya vendió: tiene ${count} compra(s) de personas que pagaron. Desde aquí no se elimina: desactívalo con activar_o_desactivar_cuenta, o que él mismo elimine su cuenta desde Mi perfil (ahí se cierran los cobros de sus compradores).`)
     }
     try {
       await llamarFuncion(quien, 'admin-delete-user', { id: p.id, ...opciones })

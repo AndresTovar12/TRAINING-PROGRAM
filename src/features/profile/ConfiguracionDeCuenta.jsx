@@ -77,7 +77,8 @@ function EliminarCuenta() {
     return () => { vivo = false; };
   }, [abierto, r]);
 
-  const bloqueada = r && (r.es_dueno || r.membresias_activas > 0 || r.compradores_activos > 0);
+  // A nadie se le niega borrar su cuenta (26 oct 2026): solo el dueño no puede. Con compras activas el servidor cierra los cobros por su cuenta.
+  const bloqueada = r && r.es_dueno;
   const puede = r && !bloqueada && confirmacion.trim().toUpperCase() === 'ELIMINAR' && (!r.tiene_contrasena || contrasena) && !busy;
 
   async function elimina(e) {
@@ -110,8 +111,16 @@ function EliminarCuenta() {
               </Aviso>
             )}
             {r?.es_dueno && <Aviso tono="malo">La cuenta del administrador no se elimina desde aquí.</Aviso>}
-            {r?.membresias_activas > 0 && <Aviso tono="malo">Tienes una membresía activa. Cancélala antes de eliminar tu cuenta (Mi perfil → Compras); si no sabes cómo, escríbenos a contacto@traininglabapp.com.</Aviso>}
-            {r?.compradores_activos > 0 && <Aviso tono="malo">Tienes compradores con una membresía activa. No se puede eliminar tu cuenta hasta que terminen o se cancelen; escríbenos a contacto@traininglabapp.com.</Aviso>}
+            {r?.membresias_activas > 0 && !bloqueada && (
+              <Aviso tono="azul">
+                {r.membresias_activas === 1 ? 'Tu membresía activa se cancela' : `Tus ${r.membresias_activas} membresías activas se cancelan`} al eliminar tu cuenta. No se reembolsa lo que ya pagaste.
+              </Aviso>
+            )}
+            {r?.compradores_activos > 0 && !bloqueada && (
+              <Aviso tono="azul">
+                {r.compradores_activos === 1 ? 'Tu comprador activo conserva su plan' : `Tus ${r.compradores_activos} compradores activos conservan su plan`} hasta que termine, y no se les cobra más después de su última semana. Tú dejas de recibir esos pagos.
+              </Aviso>
+            )}
             {r && !bloqueada && (
               <>
                 {r.tiene_contrasena && <Campo etiqueta="Tu contraseña" tipo="password" grande={false} valor={contrasena} onCambio={setContrasena} autoComplete="current-password" />}

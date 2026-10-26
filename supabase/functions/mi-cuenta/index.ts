@@ -1,4 +1,6 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { llamaStripe } from './stripe.js'
+import { finDelPlan, hoyDelServidor } from './ventana.js'
 
 /**
  * Lo que cada persona puede hacer con SU cuenta desde la app (15 oct 2026): ver qué se llevaría borrarla, descargar sus datos y eliminarla.
@@ -10,10 +12,15 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
  *   { accion: 'exportar' }                               → todos sus datos en un JSON para descargar.
  *   { accion: 'eliminar', confirmacion: 'ELIMINAR', contrasena? } → borra la cuenta DEFINITIVAMENTE.
  *
- * LO QUE IMPIDE BORRAR: ser el dueño; tener una membresía comprada que sigue activa (primero se cancela) y, siendo profesional, tener compradores con membresía activa.
- * Se pide la contraseña (si la cuenta tiene una) Y escribir ELIMINAR: una sesión olvidada abierta no basta.
+ * LO ÚNICO QUE IMPIDE BORRAR: ser el dueño. A nadie se le niega borrar su cuenta (Andrés, 26 oct 2026). Se pide la contraseña (si la cuenta tiene una) Y escribir ELIMINAR:
+ * una sesión olvidada abierta no basta.
  *
- * QUÉ SE LLEVA: la persona, sus planes, sus sesiones marcadas, sus mensajes y sus compras. Si es profesional: sus ejercicios y plantillas, y sus atletas se quedan SIN coach
+ * SUS COMPRAS COMO COMPRADOR: la suscripción en Stripe se cancela al momento (sin reembolso) y las compras se van con la cuenta.
+ * SUS COMPRADORES SI ES COACH: NADIE PIERDE LO QUE COMPRÓ. El plan en venta se queda (retirado: ya no se vende) con el nombre y la foto del coach guardados; las compras siguen;
+ * y a cada membresía con cobro automático se le pone en Stripe `cancel_at` = el final de la última semana de SU plan (el cobro se cierra ahí; sin reembolsos). Ver
+ * docs/superpowers/specs/2026-10-26-borrar-cuenta-con-compradores.md. Antes de tocar nada se cierran los cobros en Stripe: si Stripe falla, no se borra nada.
+ *
+ * QUÉ SE LLEVA: la persona, sus planes, sus sesiones marcadas, sus mensajes y sus compras como comprador. Si es profesional: sus ejercicios y plantillas, y sus atletas se quedan SIN coach
  * (sus cuentas y sus planes siguen intactos). Ver el mismo trato en `admin-delete-user`.
  * TRAMPA CONOCIDA (docs en la memoria del proyecto): borrar una cuenta con planes falla si los planes caen en cascada (el historial intenta guardar la versión de una persona
  * que ya no existe); por eso los planes se borran ANTES, con la cuenta todavía viva.
@@ -66,6 +73,21 @@ async function cierraLaSesionDeLaPrueba(urlSb: string, prueba: Response) {
       signal: AbortSignal.timeout(5_000),
     })
   } catch { /* se queda como estaba */ }
+}
+
+/** Una suscripción que Stripe ya no tiene (o ya cerró) no es un fallo: lo que se quería ya está hecho. */
+// deno-lint-ignore no-explicit-any
+const yaTerminada = (e: any) => e?.estado === 404 || e?.stripe?.code === 'resource_missing' || /cancell?ed/i.test(String(e?.message ?? ''))
+
+/** Cancela una suscripción ya, sin reembolso. */
+async function cancelaYa(clave: string, suscripcion: string) {
+  try { await llamaStripe(clave, 'DELETE', `/v1/subscriptions/${suscripcion}`) } catch (e) { if (!yaTerminada(e)) throw e }
+}
+
+/** Cierra el cobro de una suscripción: en `fin` (segundos) si hay una fecha futura; si no, al terminar el periodo ya pagado. Sin prorrateos ni reembolsos. */
+async function cierraElCobro(clave: string, suscripcion: string, fin: number | null) {
+  const datos = fin && fin > Math.floor(Date.now() / 1000) + 3600 ? { cancel_at: fin, proration_behavior: 'none' } : { cancel_at_period_end: true }
+  try { await llamaStripe(clave, 'POST', `/v1/subscriptions/${suscripcion}`, datos) } catch (e) { if (!yaTerminada(e)) throw e }
 }
 
 Deno.serve(async (req) => {
@@ -158,15 +180,68 @@ Deno.serve(async (req) => {
       await cierraLaSesionDeLaPrueba(URL_SB, prueba)
     }
 
-    if (await cuenta('compras', 'atleta_id') > 0) {
-      return json({ error: 'Tienes una membresía activa. Cancélala antes de eliminar tu cuenta; si no sabes cómo, escríbenos a contacto@traininglabapp.com.', codigo: 'MEMBRESIA_ACTIVA' }, 409, origin)
+    // 1) LOS COBROS PRIMERO. Si Stripe no contesta, no se borra nada: la persona puede reintentar y no queda una suscripción cobrando a una cuenta que ya no existe.
+    const clave = (Deno.env.get('STRIPE_SECRET_KEY') ?? '').trim()
+    const suscripcionesDeCompras = async (columna: 'atleta_id' | 'coach_id') => {
+      const { data, error } = await bd.from('compras')
+        .select('id, vitrina_plan_id, tipo, inicio, fase_de_entrada, semana_de_entrada, version_n, stripe_subscription_id')
+        .eq(columna, yo).in('estado', VIVAS).not('stripe_subscription_id', 'is', null)
+      if (error) throw error
+      return data ?? []
     }
-    if (esCoach && await cuenta('compras', 'coach_id') > 0) {
-      return json({ error: 'Tienes compradores con una membresía activa. No se puede eliminar tu cuenta hasta que terminen o se cancelen; escríbenos a contacto@traininglabapp.com.', codigo: 'COMPRADORES_ACTIVOS' }, 409, origin)
+    try {
+      // Como comprador: se cancela ya y no se reembolsa (la cuenta se va, el acceso también).
+      const mias = await suscripcionesDeCompras('atleta_id')
+      if (mias.length && !clave) throw new Error('SIN_STRIPE')
+      for (const c of mias) await cancelaYa(clave, c.stripe_subscription_id)
+
+      // Como coach: cada comprador sigue con su plan y se le cobra hasta el final de SU plan.
+      if (esCoach) {
+        const vendidas = await suscripcionesDeCompras('coach_id')
+        if (vendidas.length && !clave) throw new Error('SIN_STRIPE')
+        const hoy = hoyDelServidor()
+        for (const c of vendidas) {
+          let fin: number | null = null
+          if (c.tipo === 'membresia') {
+            const { data: version } = await bd.from('vitrina_versiones').select('data').eq('vitrina_plan_id', c.vitrina_plan_id).eq('n', c.version_n).maybeSingle()
+            fin = finDelPlan({ data: version?.data, inicio: c.inicio, faseDeEntrada: c.fase_de_entrada, semanaDeEntrada: c.semana_de_entrada, hoy })
+          }
+          await cierraElCobro(clave, c.stripe_subscription_id, fin)
+        }
+      }
+    } catch (e) {
+      console.error('mi-cuenta: cerrar los cobros falló:', e instanceof Error ? e.message : e)
+      return json({ error: 'No se pudieron cerrar tus cobros en Stripe, así que no se borró nada. Inténtalo de nuevo en un momento; si sigue igual escríbenos a contacto@traininglabapp.com.', codigo: 'COBROS_NO_CERRADOS' }, 502, origin)
     }
 
-    // Un profesional: sus atletas se quedan sin coach (sus cuentas y planes siguen) y lo suyo se va con él.
+    // 2) Un profesional: sus planes en venta con compradores se quedan (retirados, con su nombre y foto guardados), sus atletas se quedan sin coach y lo suyo se va con él.
     if (esCoach) {
+      const { data: misPlanes, error: errMisPlanes } = await bd.from('vitrina_planes').select('id, contenido').eq('coach_id', yo)
+      if (errMisPlanes) return json({ error: 'No se pudo eliminar tu cuenta. Inténtalo de nuevo o escríbenos a contacto@traininglabapp.com.' }, 500, origin)
+      const ids = (misPlanes ?? []).map((v) => v.id)
+      if (ids.length) {
+        // Una compra pendiente (pago sin terminar) ya no tiene a quién pagarle.
+        await bd.from('compras').update({ estado: 'cancelada', actualizada_en: new Date().toISOString() }).eq('coach_id', yo).eq('estado', 'pendiente')
+        const { data: conCompras } = await bd.from('compras').select('vitrina_plan_id').in('vitrina_plan_id', ids)
+        const quedan = new Set((conCompras ?? []).map((c) => c.vitrina_plan_id))
+        for (const plan of (misPlanes ?? []).filter((v) => quedan.has(v.id))) {
+          let congelada = null
+          if (plan.contenido === 'biblioteca') {
+            const { data: clases } = await bd.from('routine_templates').select('id, name, descripcion, data').eq('created_by', yo).eq('kind', 'day').filter('resumen->>clase', 'eq', 'true').order('name')
+            congelada = (clases ?? []).filter((f) => f.data?.clase?.url).map((f) => ({ id: f.id, nombre: f.name, descripcion: f.descripcion ?? '', clase: f.data.clase }))
+          }
+          const { error: errPlan } = await bd.from('vitrina_planes').update({
+            coach_nombre: perfil.full_name || perfil.username || null, coach_foto: perfil.avatar_url ?? null, estado: 'retirado', biblioteca_congelada: congelada,
+          }).eq('id', plan.id)
+          if (errPlan) {
+            console.error('mi-cuenta: guardar el plan en venta falló:', errPlan.message)
+            return json({ error: 'No se pudo eliminar tu cuenta. Inténtalo de nuevo o escríbenos a contacto@traininglabapp.com.' }, 500, origin)
+          }
+        }
+        // Los planes en venta que nadie compró no tienen razón de quedarse.
+        const sinCompras = ids.filter((i) => !quedan.has(i))
+        if (sinCompras.length) await bd.from('vitrina_planes').delete().in('id', sinCompras)
+      }
       await bd.from('profiles').update({ coach_id: null }).eq('coach_id', yo)
       await bd.from('exercise_media').delete().eq('created_by', yo)
       await bd.from('exercises').delete().eq('created_by', yo)

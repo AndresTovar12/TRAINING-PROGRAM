@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
 
     const [{ data: plan }, { data: coach }] = await Promise.all([
       bd.from('vitrina_planes').select('titulo').eq('id', c.vitrina_plan_id).maybeSingle(),
-      bd.from('profiles').select('username, full_name').eq('id', c.coach_id).maybeSingle(),
+      c.coach_id ? bd.from('profiles').select('username, full_name').eq('id', c.coach_id).maybeSingle() : Promise.resolve({ data: null }),
     ])
     let correo: string | null = c.correo_comprador ?? null
     let ultimaEntrada: string | null = null

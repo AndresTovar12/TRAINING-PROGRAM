@@ -118,6 +118,13 @@ Deno.serve(async (req) => {
     return json({ error: 'No se puede eliminar una cuenta de administrador.' }, 403, origin)
   }
 
+  /* UN COACH QUE YA VENDIÓ NO SE BORRA DESDE AQUÍ (26 oct 2026). Desde que las compras sobreviven a su coach (migración 04), borrarlo dejaría suscripciones cobrando sin cerrarlas y sin
+     guardar su nombre. Quien cierra los cobros y guarda ese nombre es `mi-cuenta` (la persona borra su propia cuenta); el dueño puede desactivarla (`activar_o_desactivar_cuenta`). */
+  const { count: ventas } = await admin.from('compras').select('id', { count: 'exact', head: true }).eq('coach_id', objetivo)
+  if (ventas) {
+    return json({ error: `Esa cuenta ya vendió (${ventas} compra${ventas === 1 ? '' : 's'}). Desde aquí no se borra: desactívala, o que ella misma elimine su cuenta desde Mi perfil (ahí se cierran los cobros de sus compradores).` }, 409, origin)
+  }
+
   /* ANTES DE BORRAR: COLOCAR LO QUE DEJA ATRÁS.
    *
    * Esto vale sobre todo al borrar un COACH, y es la razón por la que borrar
