@@ -40,6 +40,7 @@ import { altaReciente } from '@/lib/comoVa';
 import { FiltroDeAutor, EtiquetaDeAutor } from '@/features/training/EquipoDelAtleta';
 import AvisoDeInvitacion from '@/features/training/AvisoDeInvitacion';
 import { HojaDeBiblioteca, TarjetaDeBiblioteca } from '@/features/training/BibliotecaDeClases';
+import AvisosDeCompra from '@/features/training/AvisosDeCompra';
 import EntrenoLibre from '@/features/libre/EntrenoLibre';
 import TiraDeSemana, { BotonDeDia, fechaDeLaSemana } from '@/features/training/home/TiraDeSemana';
 import { HoyTeToca, HoyTeTocaEquipo, HoyDescansas, HoyEnPausa } from '@/features/training/home/HoyTeToca';
@@ -1789,7 +1790,7 @@ const HomeView = ({
   // Tablet o más: la tarjeta de hoy a la izquierda y los cuadros a la derecha (reestructura visual, 15 oct 2026).
   const esAncha = useIsWide();
   const { t, coach, salud } = usePalabras();
-  const { phases: PLAN, planMeta, kind, estructura, programas, bibliotecas, demoActiva } = usePlan();
+  const { phases: PLAN, planMeta, kind, estructura, programas, bibliotecas, demoActiva, comprasPorAtender, comprasFallo, reintentaCompras } = usePlan();
   // "Varias semanas": las tarjetas dicen la semana de corrido, no la fase.
   const deCorrido = estructura === 'semanas';
   const semanaDe = (n) => `Semana ${semanaGlobal(PLAN, n.phase.id, n.week.num) ?? n.week.num} de ${semanasDelPlan(PLAN)}`;
@@ -2073,6 +2074,8 @@ const HomeView = ({
           {conLibre && <EntrenoLibre userId={atletaId} unidadPeso={unidadPeso} variante="historial" />}
           {/* Las bibliotecas de clases que compró («todas mis clases»): una tarjeta por biblioteca. */}
           {bibliotecas.map((b) => <TarjetaDeBiblioteca key={b.id} biblioteca={b} onAbrir={() => onAbrirHoja(`biblioteca:${b.id}`)} />)}
+          {/* Un plan comprado que venció, que no se pudo cobrar o que no cargó: se dice, no desaparece (p9, p10). */}
+          <AvisosDeCompra porAtender={comprasPorAtender} fallo={comprasFallo} reintenta={reintentaCompras} />
         </div>
       </div>
     </div>
@@ -2370,7 +2373,7 @@ const PlanLoadingState = () => (
    (ver `features/libre`), «Tus entrenos» y, si compraron una biblioteca de clases, sus clases. Con entrenador y sin plan todavía se les dice que lo está armando. */
 const NoPlanState = ({ onAbrirHoja, alIrAExplorar }) => {
   const { coach } = usePalabras();
-  const { bibliotecas, programas } = usePlan();
+  const { bibliotecas, programas, comprasPorAtender, comprasFallo, reintentaCompras } = usePlan();
   const { perfil, soloLectura, userId } = usePerfilDeLaVista();
   const nombre = (coach?.full_name || '').trim().split(' ')[0];
   const conLibre = !soloLectura && !!userId;
@@ -2379,6 +2382,9 @@ const NoPlanState = ({ onAbrirHoja, alIrAExplorar }) => {
   <div style={{ background: UI.fondo, minHeight: '100svh' }}>
   <Saludo nombre={perfil?.full_name || perfil?.username} />
   <div style={{ padding: '16px 18px 120px', maxWidth: 560, margin: '0 auto' }}>
+    {(comprasPorAtender.length > 0 || comprasFallo) && (
+      <div style={{ marginBottom: 18 }}><AvisosDeCompra porAtender={comprasPorAtender} fallo={comprasFallo} reintenta={reintentaCompras} /></div>
+    )}
     {bibliotecas.length > 0 && (
       // Quien compró una biblioteca de clases no espera un plan: lo que tiene son sus clases.
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 18 }}>

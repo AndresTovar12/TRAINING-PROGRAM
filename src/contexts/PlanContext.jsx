@@ -98,6 +98,7 @@ export function PlanProvider({ children }) {
   const [filasPegadas, setFilasPegadas] = useState([]); // sesiones pegadas: una fila por autor
   const [miembros, setMiembros] = useState(null);      // equipo (nombres); null = no se pidió
   const [comprados, setComprados] = useState([]);       // los planes que COMPRÓ (ya recortados por el servidor); solo de quien entró
+  const [comprasFallo, setComprasFallo] = useState(false); // la lista de compras no pudo bajar (sin señal, servidor caído, sesión cerrada en otro aparato): se avisa en vez de callar (p9)
   const [demo, setDemo] = useState(null);               // un workout de DEMOSTRACIÓN que se está haciendo (mientras dura, es el único «programa»); null = ninguno
   const [planLoading, setPlanLoading] = useState(true);
   const [exercisesBase, setExercisesBase] = useState([]);
@@ -146,9 +147,12 @@ export function PlanProvider({ children }) {
   useEffect(() => {
     let cancelled = false;
     if (!userId || soloLectura) { setComprados([]); return undefined; }
-    leeMisCompras().then((c) => { if (!cancelled) setComprados(c); }).catch(() => {});
+    leeMisCompras().then((c) => { if (!cancelled) { setComprados(c); setComprasFallo(false); } }).catch(() => { if (!cancelled) setComprasFallo(true); });
     return () => { cancelled = true; };
   }, [userId, soloLectura]);
+  const reintentaCompras = useCallback(async () => {
+    try { setComprados(await leeMisCompras()); setComprasFallo(false); } catch { setComprasFallo(true); }
+  }, []);
 
   // Repertorio para media viva (best-effort: si falla, la app sigue sin media)
   useEffect(() => {
@@ -359,6 +363,11 @@ export function PlanProvider({ children }) {
     id: c.compra_id, titulo: c.titulo, estado: c.estado, clases: c.biblioteca.clases ?? [], vendedor: c.vendedor ?? null,
   })), [comprados]);
 
+  /* Los planes comprados que NO están al día (p10): vencidos y en gracia, para decirlo en vez de que desaparezcan. */
+  const comprasPorAtender = useMemo(() => comprados.filter((c) => !c.biblioteca && (c.estado === 'vencida' || c.estado === 'gracia')).map((c) => ({
+    id: c.compra_id, titulo: c.titulo, estado: c.estado, vendedor: c.vendedor ?? null, slug: c.slug ?? null,
+  })), [comprados]);
+
   const activo = programas.find((p) => p.id === activoId) ?? programas[0] ?? null;
   const elegirPrograma = useCallback((planId) => setActivoId(planId), []);
 
@@ -386,6 +395,9 @@ export function PlanProvider({ children }) {
       // Varios programas
       programas,
       bibliotecas,
+      comprasPorAtender,
+      comprasFallo,
+      reintentaCompras,
       demoActiva: demo,
       abreDemo: setDemo,
       cierraDemo: () => setDemo(null),
@@ -393,7 +405,7 @@ export function PlanProvider({ children }) {
       elegirPrograma,
       claveDe,
     }),
-    [activo, programas, bibliotecas, demo, planLoading, exercisesBase, elegirPrograma, claveDe],
+    [activo, programas, bibliotecas, comprasPorAtender, comprasFallo, reintentaCompras, demo, planLoading, exercisesBase, elegirPrograma, claveDe],
   );
 
   return <PlanContext.Provider value={value}>{children}</PlanContext.Provider>;
