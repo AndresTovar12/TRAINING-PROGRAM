@@ -158,6 +158,20 @@ Deno.serve(async (req) => {
       plantillas: esCoach ? await leer('plantillas', 'routine_templates', (q) => q.eq('created_by', yo)) : [],
       programas_guardados: esCoach ? await leer('programas', 'programas_guardados', (q) => q.eq('created_by', yo)) : [],
       vitrina: esCoach ? await leer('vitrina', 'vitrina_planes', (q) => q.eq('coach_id', yo)) : [],
+      // Lo que antes faltaba aunque se prometía «todos tus datos» (p88, 26 oct 2026): entrenos con y sin reloj, recuperación, notas de consulta, invitaciones, umbrales, y lo propio del profesional.
+      actividades: await leer('actividades', 'actividades', (q) => q.eq('atleta_id', yo)),
+      actividad_series: await leer('series de actividades', 'actividad_series', (q) => q.eq('atleta_id', yo)),
+      recuperacion_diaria: await leer('recuperación', 'recuperacion_diaria', (q) => q.eq('atleta_id', yo)),
+      notas_de_consulta: await leer('notas de consulta', 'notas_consulta', (q) => q.or(`atleta_id.eq.${yo},autor_id.eq.${yo}`)),
+      invitaciones: await leer('invitaciones', 'invitaciones', (q) => q.or(`atleta_id.eq.${yo},coach_id.eq.${yo}`)),
+      umbrales: await leer('umbrales', 'umbrales_atleta', (q) => q.eq('atleta_id', yo)),
+      carpetas_de_planes: await leer('carpetas', 'carpetas_planes', (q) => q.eq('owner_id', yo)),
+      tipos_de_sesion: esCoach ? await leer('tipos de sesión', 'session_types', (q) => q.eq('coach_id', yo)) : [],
+      categorias_de_ejercicios: esCoach ? await leer('categorías', 'exercise_categories', (q) => q.eq('created_by', yo)) : [],
+      grupos_musculares: esCoach ? await leer('grupos musculares', 'grupos_musculares', (q) => q.eq('created_by', yo)) : [],
+      ajustes_de_ejercicios: esCoach ? await leer('ajustes de ejercicios', 'exercise_overrides', (q) => q.eq('coach_id', yo)) : [],
+      videos_de_ejercicios: esCoach ? await leer('videos de ejercicios', 'exercise_media', (q) => q.eq('created_by', yo)) : [],
+      pagos_recibidos: esCoach ? await leer('pagos', 'pagos', (q) => q.eq('coach_id', yo)) : [],
       ...(errores.length ? { no_se_pudo_leer: errores } : {}),
     }
     return json(datos, 200, origin)

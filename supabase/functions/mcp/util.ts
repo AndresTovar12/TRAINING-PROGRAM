@@ -27,6 +27,15 @@ export function fallo(mensaje: string) {
 }
 
 /** Un error que se le puede enseñar a la persona tal cual. */
+/** El texto de «confirmado» en las herramientas que BORRAN (auditoría p128, 26 oct 2026). */
+export const TEXTO_CONFIRMADO_BORRAR = 'Solo después de enseñarle a la persona EXACTAMENTE lo que se va a borrar y que diga que sí. Sin esto no borra nada y te devuelve lo que borraría.'
+
+/** Borrar pide confirmación DE VERDAD en el servidor, no solo en el texto de la herramienta: sin `confirmado: true` no se hace nada y se devuelve lo que pasaría (una IA engañada por un texto ajeno no borra sola). */
+export function sinConfirmarBorrado(confirmado: unknown, quePasaria: string) {
+  if (confirmado === true) return null
+  return respuesta({ borrado: false, motivo: 'falta_confirmacion', va_a_pasar: quePasaria, pista: 'Enséñale esto a la persona, tal cual. Si dice que sí, vuelve a llamar con confirmado: true.' })
+}
+
 export class Aviso extends Error {}
 
 /**

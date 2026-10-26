@@ -1,7 +1,8 @@
 // Prueba de CUÁNDO PREGUNTA la IA al usar el conector (7 oct 2026, ejemplos de Andrés): los topes que el
 // conector revisa solo (`preguntas.ts`) y que leer un día y reescribirlo no vuelve a discutir lo ya guardado.
 //
-//   deno run -A scripts/prueba-mcp-preguntas.ts
+//   deno run -A --node-modules-dir=none scripts/prueba-mcp-preguntas.ts
+//   (sin `--node-modules-dir=none`, Deno ve el package.json del proyecto y falla con «Could not find a matching package for npm:@supabase/realtime-js»; p89)
 import { diaDesdeEntrada, firmasDeGrupos, nombresDeEjercicios } from '../supabase/functions/mcp/plan.ts'
 import { NOMBRE_DIA } from '../supabase/functions/mcp/util.ts'
 import { equiposMasUsados, esUnilateral, exigirRespuestas, nuevaRevision, parecidosA, preguntaDeDatos, vistaPrevia, type ItemDeCatalogo, type Renglon, type Revision } from '../supabase/functions/mcp/preguntas.ts'

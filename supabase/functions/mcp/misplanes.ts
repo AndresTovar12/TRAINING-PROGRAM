@@ -2,7 +2,7 @@
 import type { McpServer } from 'npm:@modelcontextprotocol/sdk@1.30.1/server/mcp.js'
 import { z } from 'npm:zod@^4.1.13'
 import type { Quien } from './sesion.ts'
-import { Aviso, diaDesdeTexto, fechaDelAtleta, nombreDe, NOMBRE_DIA, respuesta, seguro, sinAcentos, mismoTexto, buscarPersona } from './util.ts'
+import { Aviso, diaDesdeTexto, fechaDelAtleta, nombreDe, NOMBRE_DIA, respuesta, seguro, sinAcentos, mismoTexto, buscarPersona, sinConfirmarBorrado, TEXTO_CONFIRMADO_BORRAR } from './util.ts'
 import {
   armarFasesDeLaIA, avisosDeRespuestas, BORRA, CIENCIA, ESCRIBE, ESTRUCTURA_OK, FASE, FASES, planDe, SESION_CON_DIA, SIN_CANTIDAD_OK, SIN_FICHA_OK, SOLO_LEER,
 } from './coach.ts'
@@ -553,11 +553,14 @@ export function herramientasDeMisPlanes(server: McpServer, quien: Quien) {
     inputSchema: {
       item: z.string().describe('El nombre o el id de lo guardado.'),
       tipo: TIPO.optional().describe('Para distinguir dos cosas con el mismo nombre.'),
+      confirmado: z.boolean().optional().describe(TEXTO_CONFIRMADO_BORRAR),
     },
     annotations: BORRA,
-  }, seguro(async ({ item, tipo }: any) => {
+  }, seguro(async ({ item, tipo, confirmado }: any) => {
     const { carpetas, items } = await leerMisPlanes(quien)
     const it = buscarItem(items, carpetas, item, tipo)
+    const antes = sinConfirmarBorrado(confirmado, `Se borrará de Mis planes (${it.tipo}) "${it.nombre}" (${rutaTexto(carpetas, it.carpetaId)}). NO se puede recuperar; los planes de atletas donde ya se usó no cambian.`)
+    if (antes) return antes
     const { data, error } = await quien.db.from(it.tabla).delete().eq('id', it.id).select('id')
     if (error) throw new Error(error.message)
     if (!data?.length) throw new Aviso('No tienes permiso para borrar esto.')
@@ -827,12 +830,14 @@ export function herramientasDeMisPlanes(server: McpServer, quien: Quien) {
   server.registerTool('borrar_carpeta', {
     title: 'Borrar una carpeta de Mis planes',
     description: 'Borra una carpeta de Mis planes. Lo que tenía adentro (subcarpetas y cosas guardadas) NO se borra: sube un nivel, a la carpeta de arriba o a «Sin carpeta». Antes de borrar, di qué carpeta se va.',
-    inputSchema: { carpeta: z.string().describe('La carpeta: su nombre, su ruta o su id.') },
+    inputSchema: { carpeta: z.string().describe('La carpeta: su nombre, su ruta o su id.'), confirmado: z.boolean().optional().describe(TEXTO_CONFIRMADO_BORRAR), },
     annotations: BORRA,
-  }, seguro(async ({ carpeta }: any) => {
+  }, seguro(async ({ carpeta, confirmado }: any) => {
     const { carpetas, items } = await leerMisPlanes(quien)
     const c = buscarCarpeta(carpetas, carpeta)
     if (!c) throw new Aviso('Di cuál carpeta (no "sin carpeta").')
+    const antes = sinConfirmarBorrado(confirmado, `Se borrará la carpeta "${textoDeRuta(carpetas, c.id)}". Lo que tiene adentro NO se borra: sube un nivel.`)
+    if (antes) return antes
     const arriba = c.parent_id ?? null
     // Primero sube todo y al final se borra la carpeta: si algo falla a medias, no se pierde nada.
     const subidas = await Promise.all([

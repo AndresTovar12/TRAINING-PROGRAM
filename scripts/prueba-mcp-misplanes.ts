@@ -229,9 +229,12 @@ const SEMBRADO = () => ({ carpetas_planes: CARPETAS, routine_templates: PLANTILL
   const dup2 = sc(await tools.duplicar_en_mis_planes({ item: 'Piernas A', nombre: 'Piernas B', carpeta: 'Yoga' }))
   igual([dup2.copia.carpeta, datos.routine_templates.find((x: any) => x.name === 'Piernas B').kind], ['Yoga', 'day'], 'duplicar un workout lo deja kind day, en la carpeta que digas')
 
-  const bor = sc(await tools.borrar_de_mis_planes({ item: 'Piernas B' }))
+  // Borrar pide confirmación de verdad (p128): sin «confirmado» no borra nada y dice qué borraría.
+  const sinOk = sc(await tools.borrar_de_mis_planes({ item: 'Piernas B' }))
+  igual([sinOk.borrado, sinOk.motivo, datos.routine_templates.some((x: any) => x.name === 'Piernas B')], [false, 'falta_confirmacion', true], 'borrar sin confirmar NO borra')
+  const bor = sc(await tools.borrar_de_mis_planes({ item: 'Piernas B', confirmado: true }))
   igual([bor.listo, bor.borrado.nombre, datos.routine_templates.some((x: any) => x.name === 'Piernas B')], [true, 'Piernas B', false], 'borra')
-  cierto(/No encontré/.test(await falla(tools.borrar_de_mis_planes({ item: 'Piernas B' }))), 'borrar lo que ya no está, avisa')
+  cierto(/No encontré/.test(await falla(tools.borrar_de_mis_planes({ item: 'Piernas B', confirmado: true }))), 'borrar lo que ya no está, avisa')
   ok('cambiar, duplicar y borrar: carpeta, nombre, fechas, copias y borrado')
 }
 
@@ -262,12 +265,14 @@ const SEMBRADO = () => ({ carpetas_planes: CARPETAS, routine_templates: PLANTILL
 
   // Borrar una carpeta: lo de adentro sube un nivel.
   const b = armar(SEMBRADO())
-  const del = sc(await b.tools.borrar_carpeta({ carpeta: 'Fútbol › Fuerza' }))
+  const sinOkC = sc(await b.tools.borrar_carpeta({ carpeta: 'Fútbol › Fuerza' }))
+  igual([sinOkC.borrado, b.datos.carpetas_planes.length], [false, 3], 'borrar una carpeta sin confirmar NO la borra')
+  const del = sc(await b.tools.borrar_carpeta({ carpeta: 'Fútbol › Fuerza', confirmado: true }))
   igual(del.listo, true, 'borra la carpeta')
   igual(b.datos.carpetas_planes.map((c: any) => c.id).sort(), ['car-f', 'car-y'], 'ya no está')
   igual([b.datos.programas_guardados[0].carpeta_id, b.datos.routine_templates.find((t: any) => t.id === 't-w').carpeta_id], ['car-f', 'car-f'], 'lo que tenía adentro subió a la carpeta de arriba, no se borró')
   const c = armar(SEMBRADO())
-  await c.tools.borrar_carpeta({ carpeta: 'Fútbol' })
+  await c.tools.borrar_carpeta({ carpeta: 'Fútbol', confirmado: true })
   igual([c.datos.carpetas_planes.find((x: any) => x.id === 'car-fz').parent_id, c.datos.programas_guardados.length], [null, 1], 'una carpeta de arriba: su subcarpeta pasa a «Sin carpeta» y nada se pierde')
   ok('carpetas: crear (sin repetir, hasta 5 niveles), renombrar, mover con reglas y borrar subiendo lo de adentro')
 }
