@@ -8,7 +8,7 @@ import {
 } from './util.ts'
 import {
   buscarFase, buscarSemana, claveDeRegistro, conEquipo, describirDia, describirSemana, ejerciciosConLlave, elegirPrograma,
-  fasesDe, idDeSesion, planesActivos, resumenDelPlan, tipoDePlan, type Plan, type Programa,
+  fasesDe, idDeSesion, planesActivos, programasComprados, resumenDelPlan, tipoDePlan, type Plan, type Programa,
 } from './plan.ts'
 import {
   cursorAlDia, defaultCursor, findPreviousWeight, historialDePeso, isValidCursor, sessionForToday, today,
@@ -40,10 +40,12 @@ export function cursorDeHoy(fases: any[], guardado: any, fecha: Date) {
  * un profesional del equipo en `wr:sessions@<su id>` y `wr:cursor@<su id>`. Así
  * lo que anota en un programa nunca se mezcla con el de otro.
  */
-export const cursorDe = (estado: Record<string, any>, pr: Pick<Programa, 'profesionalId'>) =>
-  estado[claveDeRegistro('wr:cursor', pr.profesionalId)]
-export const registrosDe = (estado: Record<string, any>, pr: Pick<Programa, 'profesionalId'>) =>
-  estado[claveDeRegistro('wr:sessions', pr.profesionalId)] ?? {}
+// Un plan COMPRADO lleva sus registros en `@compra:<id>` (no en la clave del profesional) y, mientras no haya puntero guardado, empieza donde entró (`cursorBase`).
+export const sufijoDe = (pr: Pick<Programa, 'profesionalId'> & { clave?: string | null }) => pr.clave ?? pr.profesionalId
+export const cursorDe = (estado: Record<string, any>, pr: Pick<Programa, 'profesionalId'> & { clave?: string | null; cursorBase?: any }) =>
+  estado[claveDeRegistro('wr:cursor', sufijoDe(pr))] ?? pr.cursorBase
+export const registrosDe = (estado: Record<string, any>, pr: Pick<Programa, 'profesionalId'> & { clave?: string | null }) =>
+  estado[claveDeRegistro('wr:sessions', sufijoDe(pr))] ?? {}
 
 export interface Ubicacion {
   fase: any
@@ -93,8 +95,8 @@ export function ubicarDia(plan: Plan, cursorGuardado: any, args: { fecha?: strin
 
 /** Los programas del atleta y su estado, de una sola vez. */
 async function programasDe(quien: Quien) {
-  const [programas, estado] = await Promise.all([planesActivos(quien, quien.id), estadoDe(quien, quien.id)])
-  return { programas, estado }
+  const [propios, comprados, estado] = await Promise.all([planesActivos(quien, quien.id), programasComprados(quien), estadoDe(quien, quien.id)])
+  return { programas: [...propios, ...comprados], estado }
 }
 
 /**
@@ -403,7 +405,7 @@ export function herramientasDelAtleta(server: McpServer, quien: Quien) {
     }
 
     const plan = pr.plan
-    const claveSesiones = claveDeRegistro('wr:sessions', pr.profesionalId)
+    const claveSesiones = claveDeRegistro('wr:sessions', sufijoDe(pr))
     const u = ubicarDia(plan, cursorDe(estado, pr), args)
     if (!u.entradas.length) throw new Aviso(`${u.esHoy ? 'Hoy' : `El ${NOMBRE_DIA[u.dia].toLowerCase()}`} ${p('no hay sesión en tu plan')}${rotular ? ` de ${pr.de}` : ''}: no hay dónde anotar.`)
     const registros = registrosDe(estado, pr)
