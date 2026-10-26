@@ -293,7 +293,8 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
                 {[['chat', 'Chat con el coach'], ['tecnica', 'Técnica por video']].map(([clave, texto]) => (
                   <div key={clave} className="ui-fila" style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 56, padding: '8px 16px' }}>
                     <span style={{ flex: 1, fontSize: 15.5, fontWeight: 600, color: KP.ink }}>{texto}</span>
-                    <Switch activo={f[clave]} onCambio={(v) => pon({ [clave]: v })} etiqueta={texto} />
+                    {/* La técnica por video se contesta por el chat (p103): prender una prende la otra y apagar el chat apaga la técnica; si no, el comprador podía escribir y la base lo rechazaba. */}
+                    <Switch activo={f[clave]} onCambio={(v) => pon(clave === 'tecnica' ? { tecnica: v, ...(v ? { chat: true } : {}) } : { chat: v, ...(!v ? { tecnica: false } : {}) })} etiqueta={texto} />
                   </div>
                 ))}
               </Grupo>

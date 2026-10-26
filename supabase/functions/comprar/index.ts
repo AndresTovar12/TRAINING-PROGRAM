@@ -139,6 +139,12 @@ Deno.serve(async (req) => {
     if (!plan) return json({ error: 'Este plan ya no está disponible.' }, 404, origen)
     if (plan.tipo === 'personalizado') return json({ error: 'Los planes personalizados todavía no se pueden comprar.' }, 400, origen)
 
+    // Quien ya tiene el plan lo oye primero (antes decía «este coach todavía no puede cobrar» a quien recompraba; p13).
+    if (uid) {
+      const { data: yaLoTiene } = await bd.from('compras').select('id').eq('atleta_id', uid).eq('vitrina_plan_id', plan.id).in('estado', ['activa', 'gracia', 'por_armar']).limit(1)
+      if (yaLoTiene?.length) return json({ error: 'Ya tienes este plan.' }, 409, origen)
+    }
+
     // Quien vende tiene que poder cobrar: el dueño (la cuenta de Stripe es la de Training Lab) o un coach con su cuenta conectada lista.
     if (!coach.is_owner) {
       const { data: cuenta } = await bd.from('cuentas_stripe').select('cobros_ok, depositos_ok').eq('coach_id', coach.id).maybeSingle()
@@ -162,6 +168,22 @@ Deno.serve(async (req) => {
         semana = Number(p.semana_de_entrada)
       } else {
         semana = semanas[0]?.num ?? null
+      }
+    }
+
+    // La misma persona abrió esta misma compra hace poco (dos pestañas, un doble toque): se le da la MISMA página de pago en vez de abrir otra y cobrarle dos veces (p96).
+    {
+      const hace30min = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+      let abiertas = bd.from('compras').select('id, stripe_checkout_session_id').eq('vitrina_plan_id', plan.id).eq('estado', 'pendiente').not('stripe_checkout_session_id', 'is', null).gte('creada_en', hace30min)
+      abiertas = uid ? abiertas.eq('atleta_id', uid) : abiertas.is('atleta_id', null).eq('correo_comprador', correo)
+      abiertas = fase === null ? abiertas.is('fase_de_entrada', null) : abiertas.eq('fase_de_entrada', fase)
+      abiertas = semana === null ? abiertas.is('semana_de_entrada', null) : abiertas.eq('semana_de_entrada', semana)
+      const { data: yaAbierta } = await abiertas.order('creada_en', { ascending: false }).limit(1)
+      if (yaAbierta?.[0]) {
+        try {
+          const abierta = await llamaStripe(clave, 'GET', `/v1/checkout/sessions/${yaAbierta[0].stripe_checkout_session_id}`)
+          if (abierta?.status === 'open' && abierta?.url) return json({ url: abierta.url }, 200, origen)
+        } catch { /* no se pudo leer la sesión anterior: se abre una compra nueva */ }
       }
     }
 
