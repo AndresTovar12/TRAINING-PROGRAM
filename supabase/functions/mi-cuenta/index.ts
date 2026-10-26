@@ -216,6 +216,26 @@ Deno.serve(async (req) => {
       return json({ error: 'No se pudieron cerrar tus cobros en Stripe, así que no se borró nada. Inténtalo de nuevo en un momento; si sigue igual escríbenos a contacto@traininglabapp.com.', codigo: 'COBROS_NO_CERRADOS' }, 502, origin)
     }
 
+    // 1b) Quien ya PAGÓ algo: el registro de sus pagos se conserva (contabilidad; p101) pero sin sus datos. `pagos.compra_id` impide borrar la compra con la cuenta, así que esa compra queda
+    // cerrada y ANÓNIMA (sin atleta ni correo) en vez de borrarse; las compras sin pagos se van con la cuenta como siempre.
+    {
+      const { data: suyas, error: errSuyas } = await bd.from('compras').select('id').eq('atleta_id', yo)
+      if (errSuyas) return json({ error: 'No se pudo eliminar tu cuenta. Inténtalo de nuevo o escríbenos a contacto@traininglabapp.com.' }, 500, origin)
+      const idsSuyas = (suyas ?? []).map((c) => c.id)
+      if (idsSuyas.length) {
+        const { data: conPagos } = await bd.from('pagos').select('compra_id').in('compra_id', idsSuyas)
+        const conservar = [...new Set((conPagos ?? []).map((x) => x.compra_id))]
+        if (conservar.length) {
+          const ahoraIso = new Date().toISOString()
+          const { error: errAnon } = await bd.from('compras').update({ estado: 'cancelada', atleta_id: null, correo_comprador: null, cancelada_en: ahoraIso, actualizada_en: ahoraIso }).in('id', conservar)
+          if (errAnon) {
+            console.error('mi-cuenta: anonimizar compras pagadas falló:', errAnon.message)
+            return json({ error: 'No se pudo eliminar tu cuenta. Inténtalo de nuevo o escríbenos a contacto@traininglabapp.com.' }, 500, origin)
+          }
+        }
+      }
+    }
+
     // 2) Un profesional: sus planes en venta con compradores se quedan (retirados, con su nombre y foto guardados), sus atletas se quedan sin coach y lo suyo se va con él.
     if (esCoach) {
       const { data: misPlanes, error: errMisPlanes } = await bd.from('vitrina_planes').select('id, contenido').eq('coach_id', yo)

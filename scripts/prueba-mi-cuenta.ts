@@ -125,6 +125,16 @@ const d = stripe().filter((l) => l.metodo === 'DELETE')
 assert.equal(d.length, 1); assert.ok(d[0].url.endsWith('/sub_c1'))
 assert.ok(!stripe().some((l) => l.url.includes('/refunds')), 'sin reembolsos')
 
+/* 3b) Un comprador que YA PAGÓ: el registro de sus pagos se conserva, la compra queda cerrada y anónima (p101); las compras sin pagos no se tocan. */
+nuevoMundo({ pagos: [{ id: 'g1', compra_id: 'c1' }] })
+bd().tablas.compras.push({ id: 'c5', vitrina_plan_id: 'vp1', coach_id: 'coach1', atleta_id: 'atleta1', tipo: 'pago_unico', estado: 'activa', stripe_subscription_id: null })
+r = await pide('tok-atleta')
+assert.equal(r.estado, 200); assert.ok(borro())
+assert.equal(fila('compras', 'c1').atleta_id, null, 'la compra con pagos queda sin atleta'); assert.equal(fila('compras', 'c1').estado, 'cancelada')
+assert.equal(fila('compras', 'c1').correo_comprador, null, 'y sin correo')
+assert.equal(fila('compras', 'c5').atleta_id, 'atleta1', 'la compra sin pagos no se toca (se va con la cuenta)')
+assert.equal(bd().tablas.pagos.length, 1, 'el registro del pago se conserva')
+
 /* 4) El dueño no borra su cuenta desde aquí; sin contraseña no se borra. */
 nuevoMundo()
 assert.equal((await pide('tok-dueno')).estado, 403); assert.ok(!borro())
