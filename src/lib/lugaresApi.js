@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { COLUMNAS_PERFIL } from '@/lib/perfilColumnas';
 
 /* LUGARES PARA AGREGAR ATLETAS, contra la base (14 oct 2026; ver `lib/limiteDeAtletas.js`). */
 
@@ -82,7 +83,7 @@ export async function ajustesDeMonetizacion() {
 export async function guardaPoderes(profesionalId, parche) {
   const permitido = {};
   for (const k of ['limite_atletas', 'comision_especial', 'vitrina_suspendida']) if (k in parche) permitido[k] = parche[k];
-  const { data, error } = await supabase.from('profiles').update(permitido).eq('id', profesionalId).select('*').single();
+  const { data, error } = await supabase.from('profiles').update(permitido).eq('id', profesionalId).select(COLUMNAS_PERFIL).single();
   if (error) throw error;
   return data;
 }

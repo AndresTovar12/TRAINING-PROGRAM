@@ -190,14 +190,14 @@ export interface Persona {
   is_active: boolean
   unidad_peso: string | null
   genero: string | null
-  email: string | null
   created_at: string
   perfil_completo: boolean
   /** Cuándo le dio de alta su coach principal (si es su paciente). */
   alta_en: string | null
 }
 
-const CAMPOS_PERSONA = 'id, username, full_name, role, is_owner, coach_id, is_active, unidad_peso, genero, email, created_at, perfil_completo, alta_en'
+// SIN `email` (p140): la base ya no deja leer el correo de otras personas con la sesión de quien llama, y la IA no lo necesita.
+const CAMPOS_PERSONA = 'id, username, full_name, role, is_owner, coach_id, is_active, unidad_peso, genero, created_at, perfil_completo, alta_en'
 
 /**
  * Encuentra a un atleta por id, usuario o nombre, ENTRE LOS QUE ESTA PERSONA
