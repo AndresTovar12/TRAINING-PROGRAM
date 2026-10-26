@@ -53,7 +53,7 @@ export function BotonEnAzul({ children, onClick }) {
       className="kp-press"
       style={{
         border: 'none', borderRadius: 12, padding: '9px 14px', background: 'rgba(255,255,255,0.16)', color: '#fff',
-        fontFamily: FONT, fontSize: 14, fontWeight: 700, cursor: 'pointer', backdropFilter: 'blur(6px)', whiteSpace: 'nowrap',
+        fontFamily: FONT, fontSize: 14, fontWeight: 700, cursor: 'pointer', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', whiteSpace: 'nowrap',
       }}
     >
       {children}

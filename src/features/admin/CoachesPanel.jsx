@@ -72,7 +72,7 @@ function CreateCoachModal({ onClose, onCreated }) {
 
   return (
     <div onMouseDown={onClose}
-      style={{ position: 'fixed', inset: 0, zIndex: 2600, background: 'rgba(17,19,24,0.5)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 16 }}>
+      style={{ position: 'fixed', inset: 0, zIndex: 2600, background: 'rgba(17,19,24,0.5)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 16 }}>
       <div onMouseDown={(e) => e.stopPropagation()} className="animate-fade-in"
         style={{ width: '100%', maxWidth: 440, background: UI.fondo, borderRadius: 24, fontFamily: FONT, boxShadow: KP.shPop, overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 22px 4px' }}>

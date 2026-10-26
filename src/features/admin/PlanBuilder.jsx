@@ -1608,7 +1608,7 @@ function BotonDePlegar({ plegada, onClick }) {
 function InsigniaDeTurno({ turno }) {
   return (
     <span style={{
-      fontSize: 10.5, fontWeight: 800, color: '#fff', borderRadius: 6, padding: '3px 7px', letterSpacing: 0.4, flexShrink: 0,
+      fontSize: 11.5, fontWeight: 800, color: '#fff', borderRadius: 6, padding: '3px 7px', letterSpacing: 0.4, flexShrink: 0,
       background: turno === 'PM' ? T.accent : '#D97706',
     }}>
       {turno}
@@ -3034,7 +3034,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
       ) : (
       <header
         style={{
-          background: 'rgba(255,255,255,0.86)', backdropFilter: 'saturate(180%) blur(16px)',
+          background: 'rgba(255,255,255,0.86)', backdropFilter: 'saturate(180%) blur(16px)', WebkitBackdropFilter: 'saturate(180%) blur(16px)',
           borderBottom: `1px solid ${T.border}`, padding: '13px 18px',
           display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
         }}

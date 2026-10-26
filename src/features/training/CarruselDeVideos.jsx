@@ -150,7 +150,7 @@ export function EtiquetaDeVideo({ video, style }) {
       position: 'absolute', top: 12, right: 12, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 11px',
       borderRadius: 999, fontFamily: FONT, fontSize: 11.5, fontWeight: 800, pointerEvents: 'none',
       background: explicacion ? '#FFFFFF' : 'rgba(8,10,14,0.55)', color: explicacion ? LT.blue : '#fff',
-      backdropFilter: explicacion ? undefined : 'blur(4px)', boxShadow: explicacion ? '0 2px 8px rgba(8,10,14,0.22)' : undefined,
+      backdropFilter: explicacion ? undefined : 'blur(4px)', WebkitBackdropFilter: explicacion ? undefined : 'blur(4px)', boxShadow: explicacion ? '0 2px 8px rgba(8,10,14,0.22)' : undefined,
       ...style,
     }}>
       {explicacion && <IconoExplicacion size={13} color={LT.blue} />}
@@ -180,7 +180,7 @@ export function Puntos({ videos, activo, onIr, abajo = 12, arriba = null, claro 
       <span style={{
         display: 'flex', alignItems: 'center', gap: 2, padding: '0 6px', borderRadius: 999,
         background: claro ? 'rgba(17,19,24,0.10)' : 'rgba(8,10,14,0.42)',
-        backdropFilter: 'blur(4px)', pointerEvents: 'auto',
+        backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', pointerEvents: 'auto',
       }}>
         {videos.map((v, i) => (
           <button

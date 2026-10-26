@@ -470,6 +470,8 @@ const ExerciseRow = ({ ex, idx, num, sessionData, sessionKey, sessionsData, phas
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0, flexShrink: 0, marginLeft: 'auto',
             border: 'none', background: 'transparent', padding: 0, cursor: 'pointer',
+            // Al dedo (p90): 44 px de alto sin mover nada (el margen negativo devuelve el espacio).
+            minHeight: 44, marginBlock: -14,
             fontFamily: FONT, fontSize: 12, fontWeight: 700, color: LT.blue, ...NUM_STYLE,
           }}
         >
@@ -576,7 +578,7 @@ const SetGroup = ({
           )}
           {!formato && typeLabel && (
             <span style={{
-              fontSize: 10, fontWeight: 800, color: LT.blue, background: LT.blueSoft,
+              fontSize: 11.5, fontWeight: 800, color: LT.blue, background: LT.blueSoft,
               padding: '2px 8px', borderRadius: 6, letterSpacing: 0.3, flexShrink: 0,
             }}>
               {typeLabel}
@@ -1581,8 +1583,8 @@ const WeekDetail = ({
           type="button"
           onClick={onVerPrograma}
           style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 4,
-            border: 'none', background: 'transparent', cursor: 'pointer', padding: '6px 2px',
+            display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: -10, marginBottom: -12,
+            border: 'none', background: 'transparent', cursor: 'pointer', padding: '6px 2px', minHeight: 44, // al dedo (p90)
             fontFamily: FONT, fontSize: 12.5, fontWeight: 700, color: LT.blue,
           }}
         >
@@ -1763,8 +1765,8 @@ const PlanUnificado = ({
           type="button"
           onClick={onVerPrograma}
           style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 4,
-            border: 'none', background: 'transparent', cursor: 'pointer', padding: '6px 2px',
+            display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: -10, marginBottom: -12,
+            border: 'none', background: 'transparent', cursor: 'pointer', padding: '6px 2px', minHeight: 44, // al dedo (p90)
             fontFamily: FONT, fontSize: 12.5, fontWeight: 700, color: LT.blue,
           }}
         >
@@ -2281,8 +2283,7 @@ const BottomNav = ({ active, onChange, conMensajes = true, conExplorar = true, c
   return (
     <div style={{
       position: 'fixed', zIndex: 100,
-      background: 'rgba(255, 255, 255, 0.92)', backdropFilter: 'blur(20px)',
-      WebkitBackdropFilter: 'blur(20px)',
+      background: 'rgba(255, 255, 255, 0.92)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
       display: 'flex',
       ...(esCompu ? {
         bottom: 22, left: '50%', transform: 'translateX(-50%)',

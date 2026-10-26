@@ -178,7 +178,7 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
     <div ref={raizRef} style={{ position: 'fixed', inset: 0, zIndex: 2400, background: T.bg, fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
       <header
         style={{
-          background: 'rgba(255,255,255,0.86)', backdropFilter: 'saturate(180%) blur(16px)', borderBottom: `1px solid ${T.border}`,
+          background: 'rgba(255,255,255,0.86)', backdropFilter: 'saturate(180%) blur(16px)', WebkitBackdropFilter: 'saturate(180%) blur(16px)', borderBottom: `1px solid ${T.border}`,
           padding: esAncha ? '13px 18px' : '13px 12px', display: 'flex', alignItems: 'center', gap: esAncha ? 12 : 8, flexShrink: 0,
         }}
       >

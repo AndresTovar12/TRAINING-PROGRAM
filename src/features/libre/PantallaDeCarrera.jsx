@@ -142,7 +142,7 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
     width: '100%', minHeight: 58, borderRadius: 20, border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 18, fontWeight: 700, color: '#fff',
     background: fondo, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 10, touchAction: 'manipulation', ...extra,
   });
-  const redondo = { width: 44, height: 44, borderRadius: 14, border: 'none', background: 'rgba(255,255,255,0.12)', color: '#fff', display: 'grid', placeItems: 'center', cursor: 'pointer', backdropFilter: 'blur(10px)' };
+  const redondo = { width: 44, height: 44, borderRadius: 14, border: 'none', background: 'rgba(255,255,255,0.12)', color: '#fff', display: 'grid', placeItems: 'center', cursor: 'pointer', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' };
 
   /* 1 · ANTES DE SALIR («listo para empezar»: lo que abre el punto ● de la barra) */
   if (pendiente) {
@@ -168,7 +168,7 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
         <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'calc(14px + env(safe-area-inset-top)) 16px 0' }}>
           <button type="button" onClick={alMinimizar} aria-label="Cerrar" style={redondo}><ChevronDown size={22} /></button>
           {conMapa && (
-            <span role="status" data-map-overlay style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 99, background: lista ? 'rgba(34,195,142,0.18)' : 'rgba(255,255,255,0.12)', color: lista ? C.verde : '#fff', fontSize: 14, fontWeight: 700, backdropFilter: 'blur(10px)' }}>
+            <span role="status" data-map-overlay style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 99, background: lista ? 'rgba(34,195,142,0.18)' : 'rgba(255,255,255,0.12)', color: lista ? C.verde : '#fff', fontSize: 14, fontWeight: 700, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}>
               {senal === 'buscando' ? <Loader2 size={15} className="spin" /> : <span style={{ width: 8, height: 8, borderRadius: 4, background: lista ? C.verde : '#fff' }} />} {textoSenal}
             </span>
           )}
@@ -298,7 +298,7 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
           <button type="button" onClick={() => setVista('numeros')} style={{ ...redondo, width: 'auto', padding: '0 14px', fontFamily: FONT, fontSize: 14, fontWeight: 700 }}>Números</button>
         </div>
         <div style={{ flex: 1 }} />
-        <div data-map-overlay data-mapa-panel style={{ position: 'relative', margin: '0 12px', borderRadius: 24, padding: '14px 18px 16px', background: 'rgba(28,32,48,0.88)', backdropFilter: 'blur(16px)' }}>
+        <div data-map-overlay data-mapa-panel style={{ position: 'relative', margin: '0 12px', borderRadius: 24, padding: '14px 18px 16px', background: 'rgba(28,32,48,0.88)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5, fontWeight: 600, color: C.texto2 }}>
             <span>{pausado ? 'En pausa' : nombre}</span>
             {ultimoKm && <span style={{ color: '#8FA9FF' }}>Km {ultimoKm.n} · {enBici ? velocidad(ultimoKm.dur) : textoDeRitmo(ultimoKm.dur)}</span>}

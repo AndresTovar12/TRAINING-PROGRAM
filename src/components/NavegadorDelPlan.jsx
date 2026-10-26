@@ -167,7 +167,7 @@ export default function NavegadorDelPlan({
 
   const pastilla = (texto, fuerte) => (
     <span style={{
-      fontSize: 10, fontWeight: 800, letterSpacing: 0.3, flexShrink: 0,
+      fontSize: 11.5, fontWeight: 800, letterSpacing: 0.3, flexShrink: 0,
       padding: '3px 7px', borderRadius: 6,
       color: fuerte ? LT.blue : LT.text2,
       background: fuerte ? LT.blueSoft : LT.surface2,

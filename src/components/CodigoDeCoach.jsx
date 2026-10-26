@@ -72,7 +72,7 @@ export default function CodigoDeCoach({ codigo, estilo, nombre }) {
         aria-label={copiado ? 'Código copiado' : 'Copiar mi código'}
         title="Copiar"
         style={{
-          display: 'grid', placeItems: 'center', width: 36, minHeight: 36, flexShrink: 0,
+          display: 'grid', placeItems: 'center', width: 44, minHeight: 44, flexShrink: 0,
           borderRadius: 9, cursor: 'pointer', touchAction: 'manipulation',
           border: 'none',
           background: copiado ? T.accentBg : UI.relleno,

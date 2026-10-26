@@ -54,7 +54,7 @@ export function FiltroDeAutor({ autores, filtro, onFiltro, style }) {
         opciones={opciones}
         etiqueta="Ver lo de"
         estilo={{
-          width: 'auto', minHeight: 38, padding: '6px 12px 6px 14px', borderRadius: 12, gap: 7,
+          width: 'auto', minHeight: 44, padding: '6px 12px 6px 14px', borderRadius: 12, gap: 7,
           fontSize: 14.5, fontWeight: 700, color: LT.text,
           background: activo ? `${activo.color}1F` : '#EBEDF1',
           border: 'none',

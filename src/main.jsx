@@ -7,10 +7,12 @@ import { MensajesProvider } from '@/contexts/MensajesContext'
 import { ConfirmacionProvider } from '@/components/Confirmacion'
 import { AvisoProvider } from '@/components/AvisoPasajero'
 import { iniciaNativo } from '@/lib/nativo'
+import { iniciaSinZoomAlEscribir } from '@/lib/sinZoomAlEscribir'
 import LimiteDeError from '@/components/LimiteDeError'
 
 // Dentro de la app de iPhone: barra de estado, GPS del teléfono, links que abren la app… (en la web no hace nada).
 iniciaNativo()
+iniciaSinZoomAlEscribir() // el iPhone no hace zoom al tocar un campo con letra chica (p92)
 
 /* Se publicó una versión nueva con la app abierta: las piezas viejas ya no existen en el servidor y Vite avisa con este evento cuando una no baja. Se recarga UNA vez para
    traer la versión nueva sin que la persona haga nada (p86). El seguro evita un bucle si el fallo fuera otro (sin internet): la segunda vez se deja que `LimiteDeError` avise. */

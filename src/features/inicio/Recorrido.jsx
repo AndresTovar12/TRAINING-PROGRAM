@@ -64,7 +64,7 @@ const Grabar = () => (
       width: 140, height: 200, borderRadius: 26, border: '6px solid #141720', /* estilo-ok: marco del teléfono del recorrido */ background: '#0E1015', margin: '0 auto',
       display: 'grid', placeItems: 'center', color: '#fff', position: 'relative',
     }}>
-      <span style={{ position: 'absolute', top: 10, left: 12, display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 800 }}>
+      <span style={{ position: 'absolute', top: 10, left: 12, display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 800 }}>
         <i style={{ width: 8, height: 8, borderRadius: 99, background: '#F2555A' }} /> REC 0:08
       </span>
       <Play size={34} fill="#fff" />

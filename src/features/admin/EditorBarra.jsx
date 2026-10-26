@@ -83,7 +83,7 @@ export function BarraDelCelular({ enDia, titulo, onVolver, onCerrar, derecha }) 
   return (
     <header
       style={{
-        background: 'rgba(255,255,255,0.92)', backdropFilter: 'saturate(180%) blur(16px)', borderBottom: `1px solid ${T.border}`,
+        background: 'rgba(255,255,255,0.92)', backdropFilter: 'saturate(180%) blur(16px)', WebkitBackdropFilter: 'saturate(180%) blur(16px)', borderBottom: `1px solid ${T.border}`,
         padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, fontFamily: FONT,
       }}
     >
@@ -141,7 +141,7 @@ export default function EditorBarra({
     <header
       ref={barra}
       style={{
-        background: 'rgba(255,255,255,0.92)', backdropFilter: 'saturate(180%) blur(16px)', borderBottom: `1px solid ${T.border}`,
+        background: 'rgba(255,255,255,0.92)', backdropFilter: 'saturate(180%) blur(16px)', WebkitBackdropFilter: 'saturate(180%) blur(16px)', borderBottom: `1px solid ${T.border}`,
         padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, fontFamily: FONT,
         flexWrap: dosFilas ? 'wrap' : 'nowrap', rowGap: 4,
       }}
