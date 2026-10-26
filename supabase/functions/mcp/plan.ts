@@ -1,5 +1,5 @@
 // deno-lint-ignore-file no-explicit-any
-import type { Quien } from './sesion.ts'
+import { llamarFuncion, type Quien } from './sesion.ts'
 import {
   Aviso, type Dia, NOMBRE_DIA, type Persona, mismoNombre, mismoTexto, nombreCorto, nombreDe, rolDeOficio, sinAcentos,
 } from './util.ts'
@@ -121,6 +121,10 @@ export interface Programa {
   esPrincipal: boolean
   /** Si el profesional lo dio de alta: ese programa ya no manda sesiones, solo se consulta. */
   altaEn: string | null
+  /** Un plan COMPRADO (p2, 26 oct 2026): sus registros van en `wr:sessions@compra:<id>` y `wr:cursor@compra:<id>`, no en la clave del profesional; trae su puntero de entrada (`cursorBase`). */
+  clave?: string | null
+  cursorBase?: any
+  compra?: { id: string; estado: string; tipo: string; periodoHasta: string | null }
 }
 
 /**
@@ -154,6 +158,36 @@ export async function planesActivos(quien: Quien, userId: string, equipo?: Miemb
     })
   }
   return lista.sort((a, b) => Number(b.esPrincipal) - Number(a.esPrincipal) || a.de.localeCompare(b.de))
+}
+
+/**
+ * Los planes que COMPRÓ esta persona (p2, 26 oct 2026), como programas más. Salen de la función `programa-comprado`, que es quien los recorta a lo que puede ver (la ventana de un mes):
+ * lo que no se ve llega CERRADO (sin ejercicios), igual que en la app. Solo los vigentes (activa o en gracia) y con fases: una biblioteca de clases no es un programa, una vencida no manda sesiones.
+ * Si la función no contesta, no se rompe nada: simplemente no hay compras que mostrar.
+ */
+export async function programasComprados(quien: Quien): Promise<Programa[]> {
+  let compras: any[] = []
+  try {
+    const r = await llamarFuncion(quien, 'programa-comprado', {})
+    compras = Array.isArray(r?.compras) ? r.compras : []
+  } catch {
+    return []
+  }
+  return compras
+    .filter((c) => c?.programa?.data && !c.biblioteca && ['activa', 'gracia'].includes(c.estado))
+    .map((c): Programa => {
+      const v = c.vendedor ?? {}
+      const nombre = v.nombre || v.usuario || ''
+      return {
+        plan: {
+          id: `compra:${c.compra_id}`, user_id: quien.id, title: c.titulo ?? c.programa.title ?? 'Plan comprado', status: 'active',
+          data: c.programa.data, updated_at: new Date().toISOString(), profesional_id: v.id ?? null,
+        } as Plan,
+        profesionalId: v.id ?? null, clave: `compra:${c.compra_id}`, cursorBase: c.programa.cursorInicial ?? null,
+        compra: { id: c.compra_id, estado: c.estado, tipo: c.tipo, periodoHasta: c.periodo_hasta ?? null },
+        de: etiquetaDe(nombre, 'coach'), rol: 'coach', nombre, usuario: v.usuario ?? '', esPrincipal: false, altaEn: null,
+      }
+    })
 }
 
 /** ¿Tiene más de un programa, o el suyo es de un profesional del equipo? Entonces cada cosa dice de quién es. */
