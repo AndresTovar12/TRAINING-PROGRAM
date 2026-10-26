@@ -4,6 +4,11 @@
     ".claude/**",
     "dist/**",
     "scripts/**",
+    "docs/**",
+    "supabase/functions/mcp/app/**",
+    "supabase/functions/*/ventana.js",
+    "supabase/functions/*/stripe.js",
+    "qa-*",
     "tools/oxlint/anti-slop/**"
   ],
   "jsPlugins": [
