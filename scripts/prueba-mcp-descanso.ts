@@ -1,7 +1,7 @@
 // Prueba de que el conector de IA guarda el descanso como UN tiempo, aunque la IA lo escriba como frase: el modo entreno solo cuenta hacia atrás
 // un tiempo («30 seg»), no «30 segundos antes del siguiente ejercicio» (Andrés, 16 oct 2026: «hice una prueba y no los contó»).
 //
-//   deno run -A scripts/prueba-mcp-descanso.ts
+//   deno run -A --node-modules-dir=none scripts/prueba-mcp-descanso.ts
 import { diaDesdeEntrada } from '../supabase/functions/mcp/plan.ts'
 
 const igual = (a: unknown, b: unknown, msg: string) => {

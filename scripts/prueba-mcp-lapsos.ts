@@ -1,7 +1,7 @@
 // Prueba de que el conector de IA conoce los lapsos de un ejercicio: los LEE (ver_plan_de_atleta) y los ESCRIBE
 // (crear_plan, editar_dia) sin perderlos al reemplazar una sesión, y que las cargas nuevas pasan tal cual.
 //
-//   deno run -A scripts/prueba-mcp-lapsos.ts
+//   deno run -A --node-modules-dir=none scripts/prueba-mcp-lapsos.ts
 import { diaDesdeEntrada, describirEjercicio } from '../supabase/functions/mcp/plan.ts'
 import { Aviso } from '../supabase/functions/mcp/util.ts'
 

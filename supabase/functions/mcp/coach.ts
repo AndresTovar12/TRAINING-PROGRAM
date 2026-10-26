@@ -6,6 +6,7 @@ import { llamarFuncion, type Quien } from './sesion.ts'
 import {
   Aviso, buscarPersona, diaDesdeTexto, fechaDelAtleta, fechaLarga, mismoNombre, mismoTexto, NOMBRE_DIA, nombreCorto, nombreDe, palabrasDe,
   respuesta, rolDeOficio, seguro, sinAcentos, type Dia, type Persona,
+  sinConfirmarBorrado, TEXTO_CONFIRMADO_BORRAR,
 } from './util.ts'
 import {
   buscarFase, buscarSemana, cambiarRecuadros, cienciaDeFase, cienciaDelPlan, conEquipo, cuantosRecuadros, describirDia, describirSemana, diaDesdeEntrada,
@@ -1052,10 +1053,12 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
   server.registerTool('borrar_plan', {
     title: 'Borrar el plan de un atleta',
     description: 'Borra el plan activo de un atleta. Sus registros (pesos, sesiones hechas) no se borran. El plan queda en el historial y se puede recuperar con deshacer_cambio_del_plan.',
-    inputSchema: { atleta: ATLETA, ...PARAM_DE },
+    inputSchema: { atleta: ATLETA, ...PARAM_DE, confirmado: z.boolean().optional().describe(TEXTO_CONFIRMADO_BORRAR), },
     annotations: BORRA,
-  }, seguro(async ({ atleta, de }: any) => {
+  }, seguro(async ({ atleta, de, confirmado }: any) => {
     const { persona, plan, programa } = await planDe(quien, atleta, de)
+    const antes = sinConfirmarBorrado(confirmado, `Se borrará el plan "${plan.title}" de ${nombreDe(persona)}. Sus registros (pesos, sesiones hechas) no se borran y el plan queda en el historial (deshacer_cambio_del_plan lo recupera).`)
+    if (antes) return antes
     const { data, error } = await quien.db.from('plans').delete().eq('id', plan.id).select('id')
     if (error) throw new Error(error.message)
     if (!data?.length) throw new Aviso(`No tienes permiso para borrar ${p('este plan')}.`)
@@ -1146,12 +1149,14 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
   server.registerTool('borrar_plantilla', {
     title: 'Borrar una plantilla',
     description: 'Borra una de tus plantillas. Los planes donde ya se usó no cambian.',
-    inputSchema: { plantilla: z.string().describe('Nombre o id.') },
+    inputSchema: { plantilla: z.string().describe('Nombre o id.'), confirmado: z.boolean().optional().describe(TEXTO_CONFIRMADO_BORRAR), },
     annotations: BORRA,
-  }, seguro(async ({ plantilla }: any) => {
+  }, seguro(async ({ plantilla, confirmado }: any) => {
     const { data: todas } = await quien.db.from('routine_templates').select('id, name').eq('created_by', quien.id)
     const t = (todas ?? []).find((x: any) => x.id === plantilla) ?? (todas ?? []).find((x: any) => mismoTexto(x.name, plantilla))
     if (!t) throw new Aviso(`No encontré la plantilla "${plantilla}".`)
+    const antes = sinConfirmarBorrado(confirmado, `Se borrará la plantilla "${t.name}". Los planes donde ya se usó no cambian.`)
+    if (antes) return antes
     const { error } = await quien.db.from('routine_templates').delete().eq('id', t.id)
     if (error) throw new Error(error.message)
     return respuesta({ listo: true, plantilla_borrada: t.name })
@@ -1330,13 +1335,15 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
   server.registerTool('borrar_ejercicio', {
     title: 'Borrar un ejercicio',
     description: esMaster ? 'Borra un ejercicio del repertorio.' : 'Borra un ejercicio tuyo. Los de la app no se pueden borrar.',
-    inputSchema: { ejercicio: z.string().describe('Nombre exacto o id.') },
+    inputSchema: { ejercicio: z.string().describe('Nombre exacto o id.'), confirmado: z.boolean().optional().describe(TEXTO_CONFIRMADO_BORRAR), },
     annotations: BORRA,
-  }, seguro(async ({ ejercicio }: any) => {
+  }, seguro(async ({ ejercicio, confirmado }: any) => {
     const { filas } = await repertorioConFicha(quien)
     const e = filas.find((f) => f.id === ejercicio) ?? filas.find((f) => mismoTexto(f.name, ejercicio))
     if (!e) throw new Aviso(`No encontré "${ejercicio}".`)
     if (e.created_by !== quien.id && !esMaster) throw new Aviso(`"${e.name}" es de la app: no se puede borrar.`)
+    const antes = sinConfirmarBorrado(confirmado, `Se borrará el ejercicio "${e.name}" (y sus videos). No se puede deshacer.`)
+    if (antes) return antes
     const { data, error } = await quien.db.from('exercises').delete().eq('id', e.id).select('id')
     if (error) throw new Error(error.message)
     if (!data?.length) throw new Aviso('No tienes permiso para borrar ese ejercicio.')
@@ -1370,12 +1377,14 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
   server.registerTool('borrar_categoria', {
     title: 'Borrar una categoría',
     description: 'Borra una categoría tuya. Sus ejercicios NO se borran: se quedan sin categoría.',
-    inputSchema: { nombre: z.string() },
+    inputSchema: { nombre: z.string(), confirmado: z.boolean().optional().describe(TEXTO_CONFIRMADO_BORRAR), },
     annotations: BORRA,
-  }, seguro(async ({ nombre }: any) => {
+  }, seguro(async ({ nombre, confirmado }: any) => {
     const { data } = await quien.db.from('exercise_categories').select('id, name, created_by')
     const c = (data ?? []).find((x: any) => mismoTexto(x.name, nombre) && (x.created_by === quien.id || esMaster))
     if (!c) throw new Aviso(`No tienes una categoría "${nombre}" que se pueda borrar.`)
+    const antes = sinConfirmarBorrado(confirmado, `Se borrará la categoría "${c.name}". Sus ejercicios no se borran: se quedan sin categoría.`)
+    if (antes) return antes
     const { error } = await quien.db.from('exercise_categories').delete().eq('id', c.id)
     if (error) throw new Error(error.message)
     return respuesta({ listo: true, categoria_borrada: c.name })
@@ -1400,12 +1409,14 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
   server.registerTool('borrar_tipo_de_sesion', {
     title: 'Borrar un tipo de sesión',
     description: 'Borra un tipo de sesión propio. Las sesiones que ya lo usan no cambian.',
-    inputSchema: { nombre: z.string() },
+    inputSchema: { nombre: z.string(), confirmado: z.boolean().optional().describe(TEXTO_CONFIRMADO_BORRAR), },
     annotations: BORRA,
-  }, seguro(async ({ nombre }: any) => {
+  }, seguro(async ({ nombre, confirmado }: any) => {
     const { data } = await quien.db.from('session_types').select('id, nombre').eq('coach_id', quien.id)
     const t = (data ?? []).find((x: any) => mismoTexto(x.nombre, nombre))
     if (!t) throw new Aviso(`No tienes un tipo de sesión "${nombre}".`)
+    const antes = sinConfirmarBorrado(confirmado, `Se borrará el tipo de sesión "${t.nombre}". Las sesiones que ya lo usan no cambian.`)
+    if (antes) return antes
     const { error } = await quien.db.from('session_types').delete().eq('id', t.id)
     if (error) throw new Error(error.message)
     return respuesta({ listo: true, tipo_borrado: t.nombre })

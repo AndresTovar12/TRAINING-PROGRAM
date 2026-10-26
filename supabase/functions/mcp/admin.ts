@@ -3,7 +3,7 @@ import type { McpServer } from 'npm:@modelcontextprotocol/sdk@1.30.1/server/mcp.
 import { z } from 'npm:zod@^4.1.13'
 import { ANON_KEY, SUPABASE_URL } from './config.ts'
 import { llamarFuncion, type Quien } from './sesion.ts'
-import { Aviso, buscarPersona, nombreDe, respuesta, seguro, sinAcentos, type Persona } from './util.ts'
+import { Aviso, buscarPersona, nombreDe, respuesta, seguro, sinAcentos, sinConfirmarBorrado, TEXTO_CONFIRMADO_BORRAR, type Persona } from './util.ts'
 
 /**
  * Lo que solo puede el administrador (el master, dueño de la app). Andrés,
@@ -144,11 +144,14 @@ export function herramientasDelAdmin(server: McpServer, quien: Quien) {
       persona: z.string().describe('Usuario, nombre o id.'),
       atletas_a: z.string().optional().describe('Solo coach: usuario del coach que recibe a sus atletas, "yo", o "ninguno".'),
       ejercicios_a: z.enum(['master', 'borrar']).optional().describe('Solo coach: "master" para quedarte con sus ejercicios, "borrar" para borrarlos.'),
+      confirmado: z.boolean().optional().describe(TEXTO_CONFIRMADO_BORRAR),
     },
     annotations: BORRA,
-  }, seguro(async ({ persona, atletas_a, ejercicios_a }: any) => {
+  }, seguro(async ({ persona, atletas_a, ejercicios_a, confirmado }: any) => {
     const p = await buscarPersona(quien, persona, false)
     if (p.is_owner) throw new Aviso('La cuenta del administrador no se puede eliminar.')
+    const antes = sinConfirmarBorrado(confirmado, `Se eliminará PARA SIEMPRE la cuenta de ${nombreDe(p)} (${p.role === 'admin' ? 'coach' : 'atleta'}): su acceso, su perfil, su plan, sus sesiones, pesos y bienestar. No se puede deshacer.`)
+    if (antes) return antes
     const esCoach = p.role === 'admin'
     let opciones: Record<string, unknown> = {}
     if (esCoach) {

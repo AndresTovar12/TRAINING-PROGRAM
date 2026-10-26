@@ -1,7 +1,7 @@
 // Prueba de que el conector de IA conoce los formatos de un Set: los LEE (ver_plan_de_atleta) y los
 // ESCRIBE (crear_plan, editar_dia) sin perderlos al reemplazar una sesión.
 //
-//   deno run -A scripts/prueba-mcp-formatos.ts
+//   deno run -A --node-modules-dir=none scripts/prueba-mcp-formatos.ts
 import { diaDesdeEntrada, describirDia, describirEjercicio } from '../supabase/functions/mcp/plan.ts'
 import { Aviso } from '../supabase/functions/mcp/util.ts'
 
