@@ -62,6 +62,13 @@ export default function CambiarContrasena() {
         if (!r) throw new Error('No se pudo comprobar tu contraseña actual. Revisa tu conexión.');
         if (r.status === 429) throw new Error('Demasiados intentos. Espera un momento y vuelve a intentarlo.');
         if (!r.ok) throw new Error('Tu contraseña actual no es correcta.');
+        /* Comprobarla abrió una sesión de verdad que nadie cerraba (p134). Se cierra SOLO esa (`scope=local`), no la de esta persona. */
+        const sesionDeLaPrueba = await r.json().catch(() => null);
+        if (sesionDeLaPrueba?.access_token) {
+          fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/logout?scope=local`, {
+            method: 'POST', headers: { apikey: ANON_KEY, Authorization: `Bearer ${sesionDeLaPrueba.access_token}` },
+          }).catch(() => {});
+        }
       }
       const { error: err } = await supabase.auth.updateUser({ password: nueva });
       if (err) throw err;
