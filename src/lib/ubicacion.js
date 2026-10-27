@@ -71,7 +71,10 @@ export function agregaPunto(muestras, punto, t) {
   if (!punto || typeof punto.lat !== 'number' || typeof punto.lon !== 'number') return muestras;
   const ultima = muestras[muestras.length - 1];
   if (!(punto.precision <= (ultima ? PRECISION_CON_SENAL : PRECISION_MAXIMA))) return muestras;
-  if (ultima && t - ultima.t < CADA) return muestras;
+  // El segundo se guarda ENTERO y hacia abajo (`floor`), y se compara ya entero: con `round` y la resta con decimales, una carrera que arrancaba en la segunda
+  // mitad del segundo perdía uno de cada dos puntos (revisión de Fable 5, 27 oct 2026).
+  const segundo = Math.floor(t);
+  if (ultima && segundo - ultima.t < CADA) return muestras;
   const velGps = typeof punto.vel === 'number' && punto.vel >= 0 ? punto.vel : null;
   let quieto = false;
   if (ultima) {
@@ -81,8 +84,8 @@ export function agregaPunto(muestras, punto, t) {
   }
   // Parado: la muestra se queda en el MISMO lugar que la anterior (cero metros), pero entra: así el tiempo sigue corriendo y el ritmo dice «parado».
   const m = quieto
-    ? { t: Math.round(t), lat: ultima.lat, lon: ultima.lon, ...(typeof ultima.alt === 'number' ? { alt: ultima.alt } : {}) }
-    : { t: Math.round(t), lat: seis(punto.lat), lon: seis(punto.lon) };
+    ? { t: segundo, lat: ultima.lat, lon: ultima.lon, ...(typeof ultima.alt === 'number' ? { alt: ultima.alt } : {}) }
+    : { t: segundo, lat: seis(punto.lat), lon: seis(punto.lon) };
   if (!quieto && typeof punto.alt === 'number') m.alt = Math.round(punto.alt * 10) / 10;
   if (typeof punto.fc === 'number') m.fc = Math.round(punto.fc);
   if (velGps != null) m.vel = Math.round(velGps * 100) / 100;
