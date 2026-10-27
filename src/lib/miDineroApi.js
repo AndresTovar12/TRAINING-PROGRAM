@@ -26,8 +26,6 @@ export async function comprasDeMiCuenta() {
 /** Cancela la renovación de una membresía (el plan sigue hasta el fin del periodo pagado). */
 export const cancelaMembresia = (compraId) => funcion('mi-dinero', { accion: 'cancelar', compra_id: compraId });
 
-/** Pide la devolución del primer cobro (garantía de 7 días). */
-export const pideReembolso = (compraId) => funcion('reembolsar', { compra_id: compraId });
 
 /** Lo de un profesional: su cuenta de cobro, lo que ha vendido y lo que se le deposita. */
 export async function cobrosDeMiCuenta() {

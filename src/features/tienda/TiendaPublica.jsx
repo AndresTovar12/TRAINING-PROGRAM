@@ -379,9 +379,12 @@ function PaginaDelPlan({ usuario, slug, alVolver }) {
           </Bloque>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 600, color: LT.text2, lineHeight: 1.4 }}>
-          <ShieldCheck size={20} color={LT.mint} style={{ flexShrink: 0 }} /> Si no es para ti, en los primeros 7 días te devolvemos tu dinero.
-        </div>
+        {/* Sin garantía de reembolso (Andrés, 26 oct 2026, como OnlyFans): una membresía se cancela cuando quieras y sigue hasta el fin del mes pagado. */}
+        {plan.tipo === 'membresia' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 600, color: LT.text2, lineHeight: 1.4 }}>
+            <ShieldCheck size={20} color={LT.mint} style={{ flexShrink: 0 }} /> Cancelas cuando quieras: sigues con tu plan hasta el fin del mes que pagaste.
+          </div>
+        )}
       </div>
 
       {esCompu ? (

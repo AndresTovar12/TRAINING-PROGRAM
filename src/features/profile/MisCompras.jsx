@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, ShoppingBag } from 'lucide-react';
-import { comprasDeMiCuenta, cancelaMembresia, pideReembolso } from '@/lib/miDineroApi';
-import { diasDeGarantia, estadoDeCompra, proximoCobro, puedeCancelar, separaCompras } from '@/lib/compras';
+import { comprasDeMiCuenta, cancelaMembresia } from '@/lib/miDineroApi';
+import { estadoDeCompra, proximoCobro, puedeCancelar, separaCompras } from '@/lib/compras';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useAviso } from '@/components/AvisoPasajero';
 import HojaFlotante from '@/components/HojaFlotante';
@@ -10,21 +10,20 @@ import { Aviso, pesos } from '@/features/profile/piezas';
 import { FONT, KP } from '@/lib/theme';
 
 /* «COMPRAS» (atleta) en Mi perfil (15 oct 2026). Andrés: «dónde administra un usuario las suscripciones que tiene». Aquí ve lo que compró, hasta cuándo lo tiene pagado,
-   cancela la renovación (el plan sigue hasta el fin del periodo) y, dentro de los 7 días de la primera compra, pide que le devuelvan su dinero.
+   y cancela la renovación (el plan sigue hasta el fin del periodo). Sin reembolsos (Andrés, 26 oct 2026, como OnlyFans): un error de cobro lo devuelve el dueño a mano.
    Reestructura visual (15 oct 2026), como «Compras» de las capturas: tarjeta azul con lo activo y el próximo cobro, cada plan en un renglón (tocarlo abre su hoja con
-   «Cancelar membresía» y «Pedir reembolso») y «Pagos» abajo. */
+   «Cancelar membresía») y «Pagos» abajo. */
 
 const fechaCorta = (iso) => new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }).replace('.', '');
 const quien = (c) => c.vendedor_nombre || c.vendedor_usuario || '';
 const queEs = (c) => (c.tipo === 'membresia' ? 'membresía' : 'pago único');
 
-/** La hoja de UNA compra: su estado, y cancelar o pedir reembolso si se puede. */
+/** La hoja de UNA compra: su estado, y cancelar la renovación si se puede. */
 function HojaDeCompra({ c, onCerrar, onCambio }) {
   const pregunta = useConfirmacion();
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const e = estadoDeCompra(c);
-  const garantia = diasDeGarantia(c);
 
   async function corre(que, accion) {
     setBusy(que); setError('');
@@ -46,14 +45,6 @@ function HojaDeCompra({ c, onCerrar, onCambio }) {
     });
     if (va) await corre('cancelar', () => cancelaMembresia(c.compra_id));
   }
-  async function reembolsa() {
-    const va = await pregunta({
-      titulo: '¿Pedir tu reembolso?',
-      detalle: 'Te devolvemos lo que pagaste y se cierra tu membresía: pierdes el acceso al plan al momento.',
-      confirmar: 'Sí, devolver mi dinero', peligro: true,
-    });
-    if (va) await corre('reembolso', () => pideReembolso(c.compra_id));
-  }
 
   return (
     <HojaFlotante titulo={c.titulo} subtitulo={quien(c) ? `de ${quien(c)}` : undefined} onCerrar={onCerrar} ancho={480}>
@@ -66,12 +57,6 @@ function HojaDeCompra({ c, onCerrar, onCambio }) {
         {e.detalle && <p style={{ margin: '0 6px', fontSize: 14.5, color: KP.ink2, lineHeight: 1.45 }}>{e.detalle}</p>}
         {error && <Aviso tono="malo" role="alert">{error}</Aviso>}
         {puedeCancelar(c) && <Boton tipo="secundario" ancho cargando={busy === 'cancelar'} deshabilitado={!!busy} onClick={cancela}>Cancelar membresía</Boton>}
-        {garantia > 0 && (
-          <>
-            <Boton tipo="peligro" ancho cargando={busy === 'reembolso'} deshabilitado={!!busy} onClick={reembolsa}>Pedir reembolso</Boton>
-            <p style={{ margin: '0 6px', fontSize: 13.5, color: KP.ink2 }}>Te quedan {garantia} día{garantia === 1 ? '' : 's'} de garantía.</p>
-          </>
-        )}
       </div>
     </HojaFlotante>
   );
@@ -113,7 +98,7 @@ export default function MisCompras() {
           <div style={{ textAlign: 'center', padding: '30px 18px', fontFamily: FONT }}>
             <ShoppingBag size={28} color={KP.ink3} />
             <div style={{ fontSize: 17, fontWeight: 800, color: KP.ink, marginTop: 10 }}>Todavía no compras nada</div>
-            <div style={{ fontSize: 14, color: KP.ink2, marginTop: 5, lineHeight: 1.45 }}>Cuando compres un plan, aquí lo ves, cancelas su renovación o pides tu reembolso.</div>
+            <div style={{ fontSize: 14, color: KP.ink2, marginTop: 5, lineHeight: 1.45 }}>Cuando compres un plan, aquí lo ves y cancelas su renovación.</div>
           </div>
         </Grupo>
       ) : (
