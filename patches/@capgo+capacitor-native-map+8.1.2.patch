@@ -58,10 +58,10 @@ index 4b86a6b..20edb9a 100644
          } else if coordinate != nil {
              mapView.setCenter(center, animated: animate)
 diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMapsPlugin.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMapsPlugin.swift
-index 4b47502..325b16b 100644
+index 4b47502..300059f 100644
 --- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMapsPlugin.swift
 +++ b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMapsPlugin.swift
-@@ -14,6 +14,11 @@ public class NativeMapPlugin: CAPPlugin, CAPBridgedPlugin, MKMapViewDelegate {
+@@ -14,6 +14,12 @@ public class NativeMapPlugin: CAPPlugin, CAPBridgedPlugin, MKMapViewDelegate {
      public let identifier = "NativeMapPlugin"
      public let jsName = "NativeMap"
      public let pluginMethods: [CAPPluginMethod] = [
@@ -70,10 +70,11 @@ index 4b47502..325b16b 100644
 +        CAPPluginMethod(name: "setHeadingFollow", returnType: CAPPluginReturnPromise),
 +        CAPPluginMethod(name: "followCamera", returnType: CAPPluginReturnPromise),
 +        CAPPluginMethod(name: "stopFollowCamera", returnType: CAPPluginReturnPromise),
++        CAPPluginMethod(name: "updateRunner", returnType: CAPPluginReturnPromise),
          CAPPluginMethod(name: "create", returnType: CAPPluginReturnPromise),
          CAPPluginMethod(name: "destroy", returnType: CAPPluginReturnPromise),
          CAPPluginMethod(name: "setCamera", returnType: CAPPluginReturnPromise),
-@@ -79,6 +84,13 @@ public class NativeMapPlugin: CAPPlugin, CAPBridgedPlugin, MKMapViewDelegate {
+@@ -79,6 +85,13 @@ public class NativeMapPlugin: CAPPlugin, CAPBridgedPlugin, MKMapViewDelegate {
      var maps = [String: Map]()
      fileprivate let mapsLock = NSLock()
  
@@ -87,7 +88,7 @@ index 4b47502..325b16b 100644
      func toBackMap(containing point: CGPoint, in webView: WKWebView) -> Map? {
          mapsLock.lock()
          let candidates = maps.values.filter { $0.toBack && $0.isMapVisible }
-@@ -193,6 +205,7 @@ public class NativeMapPlugin: CAPPlugin, CAPBridgedPlugin, MKMapViewDelegate {
+@@ -193,6 +206,7 @@ public class NativeMapPlugin: CAPPlugin, CAPBridgedPlugin, MKMapViewDelegate {
                  return
              }
              self.mapsLock.unlock()
@@ -147,7 +148,7 @@ index 5d27c04..311fee0 100644
      }
  
 diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
-index b88c508..77a62f4 100644
+index b88c508..539eaff 100644
 --- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
 +++ b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
 @@ -1,6 +1,8 @@
@@ -159,7 +160,7 @@ index b88c508..77a62f4 100644
  
  // MARK: - Location permission
  //
-@@ -52,6 +54,104 @@ extension NativeMapPlugin: CLLocationManagerDelegate {
+@@ -52,6 +54,130 @@ extension NativeMapPlugin: CLLocationManagerDelegate {
          }
      }
  
@@ -236,12 +237,15 @@ index b88c508..77a62f4 100644
 +        let curso = call.getDouble("course")
 +        // `marcador`: este mapa dibuja SU punto y cono (pantalla completa que sigue); el punto de Apple se esconde mientras sigue.
 +        let marcador = call.getBool("marcador", false)
++        // `accuracy`: el error del GPS en metros; si es grande, el punto lleva un círculo de ese tamaño (se encoge solo conforme mejora la señal).
++        let precision = call.getDouble("accuracy")
 +        DispatchQueue.main.async {
 +            guard let map = self.mapaPorId(id) else { call.reject("map not found"); return }
 +            let seguidor = SeguidorDeCamara.todos[id] ?? SeguidorDeCamara(plugin: self, id: id, mapView: map.mapView)
 +            SeguidorDeCamara.todos[id] = seguidor
 +            if marcador { seguidor.ponMarcador() }
-+            if lat != nil { seguidor.rumboGps = curso }
++            seguidor.retoma() // si el mapa estaba suelto, la cámara regresa al corredor deslizándose desde donde la dejó el dedo
++            if lat != nil { seguidor.rumboGps = curso; seguidor.precisionGps = precision }
 +            if let z = zoom { seguidor.distancia = seguidor.distanciaPara(zoom: z, minZoom: map.config.minZoom, maxZoom: map.config.maxZoom) }
 +            if let p = pitch { seguidor.inclinacion = max(0, min(p, 60)) }
 +            if let h = heading { seguidor.giro = h }
@@ -255,8 +259,31 @@ index b88c508..77a62f4 100644
 +    @objc func stopFollowCamera(_ call: CAPPluginCall) {
 +        guard let id = call.getString("id") else { call.reject("id requerido"); return }
 +        DispatchQueue.main.async {
-+            // Con el mapa suelto (arrastrado con el dedo, o en el resumen) queda el punto de Apple y se quita el propio.
-+            SeguidorDeCamara.todos.removeValue(forKey: id)?.para()
++            guard let seguidor = SeguidorDeCamara.todos[id] else { call.resolve(); return }
++            // El mapa queda suelto (arrastrado o con zoom de los dedos): la cámara deja de seguir, pero el punto y el cono PROPIOS se quedan, pegados a la
++            // posición. Antes aquí se ponía el punto de Apple, que encendía SU GPS en frío y dibujaba un círculo azul enorme (revisión de Fable 5, 27 oct 2026).
++            if seguidor.tieneMarcador { seguidor.suelta() } else { SeguidorDeCamara.todos.removeValue(forKey: id)?.para() }
++            call.resolve()
++        }
++    }
++
++    /// El corredor se movió pero la cámara NO debe seguirlo (mapa suelto o resumen): solo se mueven el punto y el cono.
++    @objc func updateRunner(_ call: CAPPluginCall) {
++        guard let id = call.getString("id"), let lat = call.getDouble("lat"), let lng = call.getDouble("lng") else { call.reject("id, lat y lng requeridos"); return }
++        let curso = call.getDouble("course"), precision = call.getDouble("accuracy")
++        let duracion = max(0, min(call.getDouble("duration") ?? 1, 3))
++        let marcador = call.getBool("marcador", false)
++        DispatchQueue.main.async {
++            guard let map = self.mapaPorId(id) else { call.reject("map not found"); return }
++            let nuevo = SeguidorDeCamara.todos[id] == nil
++            let seguidor = SeguidorDeCamara.todos[id] ?? SeguidorDeCamara(plugin: self, id: id, mapView: map.mapView)
++            SeguidorDeCamara.todos[id] = seguidor
++            if nuevo { seguidor.suelta() }
++            if marcador { seguidor.ponMarcador() }
++            seguidor.rumboGps = curso
++            seguidor.precisionGps = precision
++            seguidor.irA(CLLocationCoordinate2D(latitude: lat, longitude: lng), en: nuevo ? 0 : duracion)
++            seguidor.arranca()
 +            call.resolve()
 +        }
 +    }
@@ -264,7 +291,7 @@ index b88c508..77a62f4 100644
      public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
          guard let call = pendingPermissionCall,
                manager.authorizationStatus != .notDetermined else {
-@@ -62,3 +162,243 @@ extension NativeMapPlugin: CLLocationManagerDelegate {
+@@ -62,3 +188,324 @@ extension NativeMapPlugin: CLLocationManagerDelegate {
          pendingPermissionCall = nil
      }
  }
@@ -295,7 +322,15 @@ index b88c508..77a62f4 100644
 +    private var marcador: VistaDelCorredor?
 +    /// Hacia dónde se mueve según el GPS (grados), solo cuando va rápido; si no, `nil` y el cono usa la brújula.
 +    var rumboGps: Double?
++    /// El error del GPS (metros) del último punto: con más de 15 m el punto lleva su círculo de precisión.
++    var precisionGps: Double?
 +    private var giroDelCono: Double?
++    /// Si la cámara va con el corredor. Suelto (el dedo movió el mapa): el punto y el cono siguen moviéndose, la cámara no.
++    private(set) var siguiendo = true
++    /// Al volver a seguir, la cámara se desliza desde donde la dejó el dedo hasta el corredor (`regresoDesde` → corredor, en 0.8 s).
++    private var regresoDesde: CLLocationCoordinate2D?
++    private var regresoInicio: CFTimeInterval = 0
++    var tieneMarcador: Bool { marcador != nil }
 +
 +    init(plugin: NativeMapPlugin, id: String, mapView: MKMapView) {
 +        self.plugin = plugin
@@ -350,15 +385,30 @@ index b88c508..77a62f4 100644
 +        enlace = e
 +    }
 +
++    /// Se apaga del todo (el mapa se destruye). El punto de Apple NO vuelve: en el mapa grande nunca se usa.
 +    func para() {
 +        enlace?.invalidate()
 +        enlace = nil
-+        // Si dibujaba su propio punto, se quita y vuelve el de Apple (el mapa queda suelto: arrastrado o en el resumen).
-+        if let m = marcador {
-+            m.removeFromSuperview()
-+            marcador = nil
-+            mapView?.showsUserLocation = true
-+        }
++        marcador?.removeFromSuperview()
++        marcador = nil
++    }
++
++    /// La cámara deja de seguir; el punto y el cono siguen vivos.
++    func suelta() {
++        siguiendo = false
++        regresoDesde = nil
++    }
++
++    /// Vuelve a seguir. Si estaba suelto, se toma la cámara tal como la dejó el dedo (centro, zoom, inclinación, giro) y desde ahí se desliza al corredor.
++    func retoma() {
++        guard !siguiendo, let mapa = mapView else { return }
++        let camara = mapa.camera
++        regresoDesde = camara.centerCoordinate
++        regresoInicio = CACurrentMediaTime()
++        distanciaActual = camara.centerCoordinateDistance
++        inclinacionActual = Double(camara.pitch)
++        giroActual = camara.heading
++        siguiendo = true
 +    }
 +
 +    /// El punto y el cono propios, en lugar del punto de Apple (que va con el GPS de Apple y no con el nuestro: quedaban separados).
@@ -379,15 +429,23 @@ index b88c508..77a62f4 100644
 +    }
 +
 +    @objc private func cuadro() {
-+        guard mapView != nil else { para(); SeguidorDeCamara.todos.removeValue(forKey: id); return }
++        guard let mapa = mapView else { para(); SeguidorDeCamara.todos.removeValue(forKey: id); return }
 +        let f = duracion > 0 ? min(1, (CACurrentMediaTime() - inicio) / duracion) : 1
 +        let nuevoCentro = CLLocationCoordinate2D(
 +            latitude: desde.latitude + (hacia.latitude - desde.latitude) * f,
 +            longitude: desde.longitude + (hacia.longitude - desde.longitude) * f
 +        )
++        // Suelto: la cámara es del dedo. Solo el punto y el cono van con el corredor, con el giro que tenga el mapa en ese momento.
++        if !siguiendo {
++            centro = nuevoCentro
++            giroActual = mapa.camera.heading
++            mueveCono()
++            colocaMarcador(en: mapa)
++            return
++        }
 +        // Giro, inclinación y distancia: una fracción por cuadro (a 60 cuadros por segundo, ~0.3 s para llegar casi entero).
 +        let dGiro = SeguidorDeCamara.diferencia(giroActual, giro)
-+        let quieto = f >= 1 && abs(nuevoCentro.latitude - centro.latitude) < 1e-9 && abs(nuevoCentro.longitude - centro.longitude) < 1e-9
++        let quieto = regresoDesde == nil && f >= 1 && abs(nuevoCentro.latitude - centro.latitude) < 1e-9 && abs(nuevoCentro.longitude - centro.longitude) < 1e-9
 +            && abs(dGiro) < 0.05 && abs(inclinacion - inclinacionActual) < 0.05 && abs(distancia - distanciaActual) < 0.05
 +        mueveCono()
 +        if quieto { return }
@@ -400,28 +458,49 @@ index b88c508..77a62f4 100644
 +
 +    private func pinta() {
 +        guard let mapa = mapView else { return }
-+        let camara = MKMapCamera(lookingAtCenter: centro, fromDistance: distanciaActual, pitch: CGFloat(inclinacionActual), heading: giroActual)
++        // Lo que mira la cámara: el corredor; o, mientras regresa de donde la dejó el dedo, un punto entre los dos.
++        var mira = centro
++        if let r = regresoDesde {
++            let g = min(1, (CACurrentMediaTime() - regresoInicio) / 0.8)
++            let suave = g * g * (3 - 2 * g)
++            mira = CLLocationCoordinate2D(latitude: r.latitude + (centro.latitude - r.latitude) * suave, longitude: r.longitude + (centro.longitude - r.longitude) * suave)
++            if g >= 1 { regresoDesde = nil }
++        }
++        let camara = MKMapCamera(lookingAtCenter: mira, fromDistance: distanciaActual, pitch: CGFloat(inclinacionActual), heading: giroActual)
 +        mapa.camera = camara
 +        // El corredor va en medio de lo que NO tapan los márgenes del mapa (el panel de abajo), no en medio de la pantalla: no se sabe si MapKit respeta los
 +        // márgenes con esta cámara, así que se mide. Si el corredor no cayó ahí, se recorre el centro de la cámara lo que haga falta (revisión de Fable 5).
 +        // Si MapKit ya los respeta, no se corrige nada.
 +        let b = mapa.bounds
 +        let m = mapa.layoutMargins
-+        var punto = mapa.convert(centro, toPointTo: mapa)
++        let visto = mapa.convert(mira, toPointTo: mapa)
 +        if b.width > 0, b.height > 0 {
 +            let deseado = CGPoint(x: b.minX + m.left + (b.width - m.left - m.right) / 2, y: b.minY + m.top + (b.height - m.top - m.bottom) / 2)
-+            if hypot(punto.x - deseado.x, punto.y - deseado.y) > 1 {
++            if hypot(visto.x - deseado.x, visto.y - deseado.y) > 1 {
 +                let bajoDeseado = mapa.convert(deseado, toCoordinateFrom: mapa)
 +                camara.centerCoordinate = CLLocationCoordinate2D(
-+                    latitude: centro.latitude + (centro.latitude - bajoDeseado.latitude),
-+                    longitude: centro.longitude + (centro.longitude - bajoDeseado.longitude)
++                    latitude: mira.latitude + (mira.latitude - bajoDeseado.latitude),
++                    longitude: mira.longitude + (mira.longitude - bajoDeseado.longitude)
 +                )
 +                mapa.camera = camara
-+                punto = mapa.convert(centro, toPointTo: mapa)
 +            }
 +        }
 +        // El punto propio va justo donde quedó el corredor, en el mismo cuadro que la cámara: no se separan.
-+        marcador?.center = punto
++        colocaMarcador(en: mapa)
++    }
++
++    /// El punto en el lugar del corredor y, si el GPS anda impreciso (más de 15 m), su círculo de precisión del tamaño real en el mapa.
++    private func colocaMarcador(en mapa: MKMapView) {
++        guard let m = marcador else { return }
++        let punto = mapa.convert(centro, toPointTo: mapa)
++        m.center = punto
++        if let p = precisionGps, p > 15 {
++            let norte = CLLocationCoordinate2D(latitude: centro.latitude + p / 111195, longitude: centro.longitude)
++            let otro = mapa.convert(norte, toPointTo: mapa)
++            m.ponHalo(radio: hypot(otro.x - punto.x, otro.y - punto.y))
++        } else {
++            m.ponHalo(radio: nil)
++        }
 +    }
 +
 +    /// El cono apunta hacia donde va (GPS, si va rápido) o hacia donde mira el iPhone (brújula), visto en la pantalla: menos lo que ya giró el mapa.
@@ -445,6 +524,9 @@ index b88c508..77a62f4 100644
 +    private let formaDelCono = CAShapeLayer()
 +    private let degradado = CAGradientLayer()
 +    private var aberturaActual: Double = -1
++    private let haloFijo = CAShapeLayer()
++    private let haloDePrecision = CAShapeLayer()
++    private var radioDelHalo: CGFloat = -1
 +    private static let lado: CGFloat = 140
 +    private static let azul = UIColor(red: 0.18, green: 0.42, blue: 1.0, alpha: 1)
 +
@@ -463,6 +545,12 @@ index b88c508..77a62f4 100644
 +        degradado.endPoint = CGPoint(x: 1, y: 1)
 +        degradado.mask = formaDelCono
 +        formaDelCono.frame = bounds
++        // El círculo de precisión va detrás de todo; puede salirse del cuadro de la vista (las capas no se recortan).
++        haloDePrecision.fillColor = VistaDelCorredor.azul.withAlphaComponent(0.12).cgColor
++        haloDePrecision.strokeColor = VistaDelCorredor.azul.withAlphaComponent(0.35).cgColor
++        haloDePrecision.lineWidth = 1
++        haloDePrecision.isHidden = true
++        layer.addSublayer(haloDePrecision)
 +        cono.addSublayer(degradado)
 +        layer.addSublayer(cono)
 +
@@ -472,7 +560,9 @@ index b88c508..77a62f4 100644
 +            c.fillColor = color.cgColor
 +            return c
 +        }
-+        layer.addSublayer(circulo(22, VistaDelCorredor.azul.withAlphaComponent(0.18))) // halo
++        haloFijo.path = UIBezierPath(arcCenter: medio, radius: 22, startAngle: 0, endAngle: .pi * 2, clockwise: true).cgPath
++        haloFijo.fillColor = VistaDelCorredor.azul.withAlphaComponent(0.18).cgColor
++        layer.addSublayer(haloFijo) // halo
 +        let aro = circulo(10, .white)
 +        aro.shadowColor = UIColor.black.cgColor
 +        aro.shadowOpacity = 0.3
@@ -484,6 +574,24 @@ index b88c508..77a62f4 100644
 +    }
 +
 +    required init?(coder: NSCoder) { fatalError("no se usa desde un storyboard") }
++
++    /// `nil`: el halo fijo de siempre. Con un radio (en puntos): el círculo de precisión del GPS de ese tamaño, en lugar del halo fijo.
++    func ponHalo(radio: CGFloat?) {
++        CATransaction.begin()
++        CATransaction.setDisableActions(true)
++        if let r = radio, r > 22 {
++            haloFijo.isHidden = true
++            haloDePrecision.isHidden = false
++            if abs(r - radioDelHalo) > 0.5 {
++                radioDelHalo = r
++                haloDePrecision.path = UIBezierPath(arcCenter: CGPoint(x: bounds.midX, y: bounds.midY), radius: r, startAngle: 0, endAngle: .pi * 2, clockwise: true).cgPath
++            }
++        } else {
++            haloFijo.isHidden = false
++            haloDePrecision.isHidden = true
++        }
++        CATransaction.commit()
++    }
 +
 +    /// Gira el cono `grados` (0 = hacia arriba de la pantalla) y lo abre `abertura` grados hacia cada lado.
 +    func ponCono(visible: Bool, grados: Double = 0, abertura: Double = 30) {

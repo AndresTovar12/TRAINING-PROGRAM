@@ -131,6 +131,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
           const curso = donde ? rumboDelGps() : undefined;
           await puenteDelMapa().followCamera({
             id, ...(donde ? { lat: donde.lat, lng: donde.lng } : {}), ...(curso != null ? { course: curso } : {}),
+            ...(typeof donde?.precision === 'number' ? { accuracy: donde.precision } : {}),
             zoom: ZOOM_SIGUE, pitch, heading, duration: duracion, jump: salto, marcador,
           });
           return;
@@ -144,18 +145,35 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
     };
     const sueltaCamara = () => { if (!e.sinSeguidor) puenteDelMapa().stopFollowCamera({ id }).catch(() => {}); };
 
+    /** Con el mapa suelto (lo movió el dedo) o en el resumen: la cámara se queda, pero el punto y el cono propios siguen al corredor. El punto de Apple
+        NUNCA se usa en el mapa grande: encendía su GPS en frío y dibujaba un círculo azul enorme (revisión de Fable 5, 27 oct 2026). */
+    const mueveSoloAlCorredor = (ruta) => {
+      const u = ruta.at(-1);
+      if (!u || e.sinSeguidor) return;
+      const ahora = Date.now();
+      const duracion = Math.min(2, Math.max(0.3, (ahora - (e.ultimoPuntoMs || ahora - 1000)) / 1000));
+      e.ultimoPuntoMs = ahora;
+      const curso = rumboDelGps();
+      puenteDelMapa().updateRunner({
+        id, lat: u.lat, lng: u.lng, duration: duracion, marcador: true,
+        ...(curso != null ? { course: curso } : {}), ...(typeof u.precision === 'number' ? { accuracy: u.precision } : {}),
+      }).catch((err) => console.warn('Mapa nativo (corredor):', err));
+    };
+
     /** Un punto nuevo del GPS: la cámara va hacia él en el tiempo que pasó desde el anterior (así se desliza sin saltos). */
     const siguePunto = (primera = false) => {
       if (!e.vivo || !e.listo) return;
       const { puntos: ruta, sigue: sigueAhora } = dato.current;
-      if (!sigueAhora || !e.siguiendo) return; // en el resumen, o movió el mapa con el dedo
+      if (!sigueAhora || !e.siguiendo) { if (marcador) mueveSoloAlCorredor(ruta); return; } // en el resumen, o movió el mapa con el dedo
       // Sin puntos todavía (antes de salir), la última ubicación conocida; sin nada, no se mueve.
       const donde = ruta.at(-1) ?? (e.conocido ? e.centroInicial : null);
       if (!donde) return;
       // Sin ubicación al abrir, el mapa estaba en todo México: la primera llega de golpe (sin animar desde tan lejos).
       const salto = primera || e.necesitaZoom;
-      // Menos de un metro es el temblor del GPS: no se mueve.
-      if (!salto && e.ultimoCentro && metrosEntre(e.ultimoCentro, donde) < 1) return;
+      // Menos de un metro es el temblor del GPS: no se mueve (salvo que haya cambiado la precisión: el círculo del punto se encoge al mejorar la señal).
+      const mismaPrecision = Math.abs((donde.precision ?? 0) - (e.ultimaPrecision ?? 0)) < 3;
+      if (!salto && e.ultimoCentro && metrosEntre(e.ultimoCentro, donde) < 1 && mismaPrecision) return;
+      e.ultimaPrecision = donde.precision;
       const ahora = Date.now();
       const duracion = salto ? 0 : Math.min(2, Math.max(0.3, (ahora - (e.ultimoPuntoMs || ahora - 1000)) / 1000));
       e.ultimoPuntoMs = ahora;

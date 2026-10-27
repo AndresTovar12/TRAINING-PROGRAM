@@ -32,10 +32,11 @@ export const usaMapaNativo = () => {
 const esNumero = (n) => typeof n === 'number' && Number.isFinite(n);
 
 /** Las muestras de la carrera (`{lat, lon}`, ver `lib/ubicacion.js`) como puntos del mapa (`{lat, lng}`), con la velocidad y el rumbo del GPS si los traen
-    (`vel`, `rumbo`: el cono del corredor apunta con el rumbo cuando va rápido). Lo que no sea una coordenada válida se descarta. */
+    (`vel`, `rumbo`: el cono del corredor apunta con el rumbo cuando va rápido) y su error (`precision`, metros: el círculo de precisión del punto).
+    Lo que no sea una coordenada válida se descarta. */
 export const puntosDeMuestras = (muestras) => (muestras ?? [])
   .filter((m) => m && esNumero(m.lat) && esNumero(m.lon) && Math.abs(m.lat) <= 90 && Math.abs(m.lon) <= 180)
-  .map((m) => ({ lat: m.lat, lng: m.lon, ...(esNumero(m.vel) ? { vel: m.vel } : {}), ...(esNumero(m.rumbo) ? { rumbo: m.rumbo } : {}) }));
+  .map((m) => ({ lat: m.lat, lng: m.lon, ...(esNumero(m.vel) ? { vel: m.vel } : {}), ...(esNumero(m.rumbo) ? { rumbo: m.rumbo } : {}), ...(esNumero(m.pre) ? { precision: m.pre } : {}) }));
 
 /** Deja a lo mucho `max` puntos repartidos parejo, siempre con el primero y el último (el final de la ruta no se pierde). */
 export function adelgazaRuta(puntos, max = MAX_PUNTOS_RUTA) {
