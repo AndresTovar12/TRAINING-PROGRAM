@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import {
-  ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Calendar, Lock,
-  Check, X, Calculator, BookOpen, TrendingUp, Edit3, Target,
-  Clock, Sparkles, Info, Dumbbell, Heart, Play, CalendarDays, ListChecks,
+  ChevronRight, ChevronLeft, Calendar, Lock,
+  Check, X, Calculator, TrendingUp, Edit3,
+  Clock, Dumbbell, Heart, Play, CalendarDays, ListChecks,
   Home as HomeIcon,
-  Repeat, Eye, Layers, List, Scale, LineChart as LineChartIcon,
+  Repeat, Scale, LineChart as LineChartIcon,
   MessageCircle, Timer, HeartPulse, Moon, Upload, Activity, Share2, Compass, CircleDot,
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
@@ -718,76 +718,6 @@ const SetGroup = ({
 };
 
 
-// Colapsable claro
-const LightCollapsible = ({ title, icon: Icon, color, children, defaultOpen = false }) => {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div style={{ background: LT.surface, border: 'none', borderRadius: 18, marginBottom: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(17,19,24,0.05)' }}>
-      <button onClick={() => setOpen(!open)} style={{
-        width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: FONT,
-        display: 'flex', alignItems: 'center', gap: 8, padding: '15px 18px', textAlign: 'left',
-      }}>
-        {Icon && <Icon size={17} style={{ color: color || LT.blue }} />}
-        <span style={{ flex: 1, fontSize: 16, fontWeight: 700, color: LT.text }}>{title}</span>
-        {open ? <ChevronUp size={16} style={{ color: LT.text3 }} /> : <ChevronDown size={16} style={{ color: LT.text3 }} />}
-      </button>
-      {open && <div style={{ padding: '0 18px 18px' }}>{children}</div>}
-    </div>
-  );
-};
-
-const LightScienceList = ({ sections }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-    {sections.map(s => (
-      <div key={s.key}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          {s.icon && <s.icon size={13} style={{ color: s.color }} />}
-          <span style={{ fontSize: 13, fontWeight: 700, color: s.color }}>{s.label}</span>
-        </div>
-        <ul style={{ margin: 0, paddingLeft: 0, listStyle: 'none' }}>
-          {(Array.isArray(s.content) ? s.content : [s.content]).map((item, i) => {
-            const isObj = item && typeof item === 'object';
-            return (
-              <li key={i} style={{ fontSize: 13, color: LT.text2, lineHeight: 1.6, padding: '5px 0 5px 16px', position: 'relative' }}>
-                <span style={{ position: 'absolute', left: 0, top: isObj ? 11 : 12, width: 5, height: 5, borderRadius: '50%', background: s.color, opacity: 0.7 }} />
-                {isObj ? (
-                  <>
-                    <span style={{ display: 'block', fontWeight: 700, color: LT.text, marginBottom: 2 }}>{item.t}</span>
-                    <span style={{ display: 'block' }}>{item.d}</span>
-                  </>
-                ) : item}
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-    ))}
-  </div>
-);
-
-const LightWorkoutScience = ({ science }) => {
-  if (!science) return null;
-  const sections = [
-    { key: 'estructura', label: 'Estructura', icon: Layers, color: '#7C5CFF' },
-    { key: 'seleccion', label: 'Selección de ejercicios', icon: Target, color: LT.blue },
-    { key: 'orden', label: 'Orden del workout', icon: List, color: LT.mint },
-    { key: 'frecuencia', label: 'Frecuencia y recuperación', icon: Clock, color: LT.warning },
-    { key: 'tradeoffs', label: 'Trade-offs considerados', icon: Scale, color: LT.blueDk },
-  ].filter(s => science[s.key]).map(s => ({ ...s, content: science[s.key] }));
-  return <LightScienceList sections={sections} />;
-};
-
-const LightWeekScience = ({ science }) => {
-  if (!science) return null;
-  if (typeof science === 'string') return <div style={{ fontSize: 13, color: LT.text2, lineHeight: 1.7 }}>{science}</div>;
-  const sections = [
-    { key: 'changes', label: 'Cambios', icon: Repeat, color: '#7C5CFF' },
-    { key: 'why', label: 'Por qué', icon: Sparkles, color: LT.mint },
-    { key: 'observe', label: 'Qué observar', icon: Eye, color: LT.warning },
-  ].filter(b => science[b.key]).map(b => ({ ...b, content: science[b.key] }));
-  return <LightScienceList sections={sections} />;
-};
-
 /**
  * El programa completo, abierto encima de la pantalla.
  *
@@ -981,8 +911,8 @@ const tarjetasDelDia = (day) => {
  * (cada uno dentro de su `ComoPrograma`) sin copiar nada.
  *
  * `partes` (solo «Plan» con equipo, y un día con dos entradas) dice cuáles piezas se dibujan:
- * 'sesiones', 'notasDelDia', 'tusNotas' y 'ciencia' (que también se puede pedir en dos pedazos:
- * 'cienciaDelDia' —el porqué del día y del workout— y 'cienciaDeLaSemana'). Sin ella salen todas, como siempre. Con
+ * 'sesiones', 'notasDelDia' y 'tusNotas' (los «Por qué este día / workout / semana» se quitaron con «Ciencia», 26 oct 2026;
+ * los textos siguen guardados en el plan). Sin ella salen todas, como siempre. Con
  * equipo las sesiones de todos van juntas arriba, cada una como una tarjeta
  * (`entarjetas`), y lo demás —las notas y el porqué científico— sale UNA sola vez,
  * hasta abajo, que es lo menos importante (Andrés, 2 oct 2026). `autor`: el
@@ -990,7 +920,7 @@ const tarjetasDelDia = (day) => {
  */
 const CuerpoDelDia = ({
   phase, week, dayIdx: selectedIdx, sessionsData, updateSession, oneRMs,
-  partes, entarjetas = false, abiertasPorDefecto, autor = null, tituloDelPrograma = null,
+  partes, entarjetas = false, abiertasPorDefecto, autor = null,
 }) => {
   const { t } = usePalabras();
   const idDeSesion = useIdDeSesion();
@@ -1331,23 +1261,6 @@ const CuerpoDelDia = ({
         </div>
       )}
 
-      {(quiere('ciencia') || quiere('cienciaDelDia')) && selectedDay.dayScience && (
-        <LightCollapsible title="Por qué este día" icon={Info} color={LT.blue}>
-          <div style={{ fontSize: 13.5, color: LT.text2, lineHeight: 1.7 }}>{selectedDay.dayScience}</div>
-        </LightCollapsible>
-      )}
-
-      {(quiere('ciencia') || quiere('cienciaDelDia')) && selectedDay.workoutScience && (
-        <LightCollapsible title={tituloDelPrograma ? `Por qué este workout · ${tituloDelPrograma}` : 'Por qué este workout'} icon={Sparkles} color={LT.mint}>
-          <LightWorkoutScience science={selectedDay.workoutScience} />
-        </LightCollapsible>
-      )}
-
-      {(quiere('ciencia') || quiere('cienciaDeLaSemana')) && week.weekScience && (
-        <LightCollapsible title={tituloDelPrograma ? `Por qué esta semana · ${tituloDelPrograma}` : 'Por qué esta semana'} icon={BookOpen} color={LT.text2}>
-          <LightWeekScience science={week.weekScience} />
-        </LightCollapsible>
-      )}
 
     </>
   );
@@ -1553,18 +1466,6 @@ const WeekDetail = ({
             sessionsData={sessionsData} updateSession={updateSession} oneRMs={oneRMs}
             partes={['tusNotas']}
           />
-          {hermanas.map(({ idx }) => (
-            <CuerpoDelDia
-              key={`c-${idx}`} phase={phase} week={week} dayIdx={idx}
-              sessionsData={sessionsData} updateSession={updateSession} oneRMs={oneRMs}
-              partes={['cienciaDelDia']}
-            />
-          ))}
-          <CuerpoDelDia
-            phase={phase} week={week} dayIdx={hermanas[0].idx}
-            sessionsData={sessionsData} updateSession={updateSession} oneRMs={oneRMs}
-            partes={['cienciaDeLaSemana']}
-          />
         </>
       ) : (
         <CuerpoDelDia
@@ -1602,7 +1503,7 @@ const WeekDetail = ({
  * `partes` dice cuál pieza dibuja (ver `CuerpoDelDia`). No hay un bloque por persona: las
  * sesiones de todos van juntas, y lo demás sale una sola vez, hasta abajo.
  */
-const FuenteDelDia = ({ fuente, store, setStore, oneRMs, partes, autor, abiertas, titulo = null }) => {
+const FuenteDelDia = ({ fuente, store, setStore, oneRMs, partes, autor, abiertas }) => {
   const { programa, phase, week, idx } = fuente;
   const sessionsData = useMemo(() => registrosDe(programa, store), [programa, store]);
   const updateSession = useCallback(
@@ -1613,7 +1514,7 @@ const FuenteDelDia = ({ fuente, store, setStore, oneRMs, partes, autor, abiertas
     <CuerpoDelDia
       phase={phase} week={week} dayIdx={idx}
       sessionsData={sessionsData} updateSession={updateSession} oneRMs={oneRMs}
-      partes={partes} entarjetas abiertasPorDefecto={abiertas} autor={autor} tituloDelPrograma={titulo}
+      partes={partes} entarjetas abiertasPorDefecto={abiertas} autor={autor}
     />
   );
   return (
@@ -1749,12 +1650,6 @@ const PlanUnificado = ({
             key={`t-${clave}`}
             fuente={fuenteDeNotas} store={store} setStore={setStore} oneRMs={oneRMs} partes={['tusNotas']}
           />
-          {fuentes.map((f) => (
-            <FuenteDelDia
-              key={`c-${f.programa.id}-${f.phase.id}-${f.week.num}-${f.idx}`}
-              fuente={f} store={store} setStore={setStore} oneRMs={oneRMs} partes={['ciencia']} titulo={dePrograma(f) ? f.programa.title : null}
-            />
-          ))}
         </>
       )}
 
