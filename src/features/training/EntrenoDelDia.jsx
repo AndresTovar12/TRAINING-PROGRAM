@@ -30,7 +30,7 @@ import TarjetaDeVideo from '@/features/training/TarjetaDeVideo';
 import TarjetaDeClase from '@/features/training/TarjetaDeClase';
 import PasoConGps from '@/features/training/PasoConGps';
 import { useRecorrido } from '@/features/training/useRecorrido';
-import { cantidadEnUnidad, esPasoConGps, metrosDelPaso, pedidoEnUnaLinea } from '@/lib/recorrido';
+import { cantidadEnUnidad, esPasoConGps, METROS_PARA_GPS, metrosDelPaso, pedidoEnUnaLinea } from '@/lib/recorrido';
 import { fuenteDeUbicacion } from '@/lib/ubicacion';
 import { claseDe } from '@/lib/clases';
 import {
@@ -114,6 +114,18 @@ export default function EntrenoDelDia({
   const [cerradoGps, setCerradoGps] = useState(null);
   const [sinGps, setSinGps] = useState(() => { try { return JSON.parse(window.localStorage.getItem(LLAVE_SIN_GPS) ?? '{}') ?? {}; } catch { return {}; } });
   const [medidoGps, setMedidoGps] = useState(null);
+  /* EL GPS VIVO TODO EL ENTRENO (auditoría del GPS, 27 oct 2026): si la sesión tiene pasos de 200 m o más o lapsos por distancia, se queda una escucha
+     abierta mientras el entreno está abierto. Así el teléfono no apaga el GPS en los descansos ni entre un sprint y otro, y cada uno arranca con señal.
+     Espera a que conteste «¿Guardamos tu recorrido?» (si no, el permiso del GPS taparía la pregunta). Los puntos de esta escucha no se usan. */
+  const sesionConGps = useMemo(() => plan.pasos.some((p) => esPasoConGps(p)
+    || (p.tipo === 'reloj' && p.deLapsos && (p.tramos ?? []).some((t) => t.tipo === 'trabajo' && t.seg == null && Number(t.metros) >= METROS_PARA_GPS))), [plan]);
+  const gpsContestado = recorrido.permiso !== null || !recorrido.disponible;
+  useEffect(() => {
+    if (!sesionConGps || !gpsContestado) return undefined;
+    const fuente = fuenteDeUbicacion();
+    if (!fuente.disponible()) return undefined;
+    return fuente.sigue(() => {}, () => {});
+  }, [sesionConGps, gpsContestado]);
   const [antes, setAntes] = useState(() => (notasDeLaSesion.length > 0 || !!claseDeLaSesion) && !(entreno?.inicio) && Object.keys(entreno?.hechos ?? {}).length === 0 && Object.keys(entreno?.saltados ?? {}).length === 0);
 
   const vista = vistaDelEntreno(plan, entreno, ahora);

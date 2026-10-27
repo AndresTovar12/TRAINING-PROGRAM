@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { agregaPunto, fuenteDeUbicacion } from '@/lib/ubicacion';
+import { LLAVE_ULTIMA_UBICACION, leeUbicacionGuardada } from '@/lib/mapaNativo';
 import { pideQueNoSeApague } from '@/lib/pantallaEncendida';
 import {
   cronometroNuevo, cronometroVigente, pausa as pausar, reanuda as reanudar, segundosDe,
@@ -43,16 +44,12 @@ export function useSenalGps(activo) {
   return hay ? estado : 'no_hay';
 }
 
-const LLAVE_UBICACION = 'tl:ultima-ubicacion';
-
 /**
  * DÓNDE ESTÁS ahora, para centrar el mapa ANTES de salir (y no en el Zócalo). Arranca con la última ubicación conocida (guardada) y la va afinando con el GPS.
  * Devuelve `{ lat, lon }` o `null` si nunca se supo.
  */
 export function useUbicacionActual(activo) {
-  const [punto, setPunto] = useState(() => {
-    try { const g = JSON.parse(localStorage.getItem(LLAVE_UBICACION) ?? 'null'); return g && typeof g.lat === 'number' ? g : null; } catch { return null; }
-  });
+  const [punto, setPunto] = useState(() => { const g = leeUbicacionGuardada(); return g ? { lat: g.lat, lon: g.lng } : null; });
   const fuente = fuenteDeUbicacion();
   const hay = fuente.disponible();
   useEffect(() => {
@@ -61,7 +58,7 @@ export function useUbicacionActual(activo) {
       if (!(p.precision <= 100)) return;
       const nuevo = { lat: p.lat, lon: p.lon };
       setPunto(nuevo);
-      try { localStorage.setItem(LLAVE_UBICACION, JSON.stringify(nuevo)); } catch { /* sin almacenamiento: solo se pierde el «último lugar» */ }
+      try { localStorage.setItem(LLAVE_ULTIMA_UBICACION, JSON.stringify(nuevo)); } catch { /* sin almacenamiento: solo se pierde el «último lugar» */ }
     }, () => {});
   }, [activo, hay, fuente]);
   return punto;
@@ -82,13 +79,14 @@ export function useCronometroLibre(userId) {
 
   const cambia = useCallback((c) => { setCronometro(c); if (userId) escribe(userId, c); setAhora(Date.now()); }, [userId]);
 
-  /* LA RUTA (solo si se empezó con GPS): cada punto de la fuente se vuelve una muestra en el segundo del entreno (sin pausas). En pausa no se escucha.
-     Se guarda en `localStorage` como el cronómetro, para que sobreviva a cerrar la hoja o recargar. Con la pantalla bloqueada el navegador deja de medir;
-     la app instalable trae su fuente con segundo plano (ver `lib/ubicacion.js`). */
+  /* LA RUTA (solo si se empezó con GPS): cada punto de la fuente se vuelve una muestra en el segundo del entreno (sin pausas).
+     En pausa se SIGUE escuchando y los puntos se ignoran (auditoría del GPS, 27 oct 2026): antes se soltaba el GPS, el teléfono lo apagaba y al reanudar se
+     perdían los primeros segundos mientras volvía a encontrar la señal. Se guarda en `localStorage` como el cronómetro, para que sobreviva a cerrar la hoja o
+     recargar. Con la pantalla bloqueada el navegador deja de medir; la app instalable trae su fuente con segundo plano (ver `lib/ubicacion.js`). */
   const [muestras, setMuestras] = useState(() => (userId ? leeRuta(userId) : []));
   const vivo = useRef(cronometro);
   useEffect(() => { vivo.current = cronometro; });
-  const conGps = corre && !!cronometro?.gps;
+  const conGps = !!cronometro?.gps;
   useEffect(() => {
     if (!conGps) return undefined;
     const fuente = fuenteDeUbicacion();
@@ -98,6 +96,7 @@ export function useCronometroLibre(userId) {
     let vigente = true;
     pideQueNoSeApague().then((c) => { if (vigente) candado = c; else c?.suelta(); });
     const parar = fuente.sigue((p) => {
+      if (vivo.current?.pausadoEn != null) return; // en pausa no se mide
       setMuestras((m) => {
         const nuevas = agregaPunto(m, p, segundosDe(vivo.current));
         if (nuevas !== m && userId) escribeRuta(userId, nuevas);

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { trazoDeRuta } from '@/lib/ubicacion';
-import { usaMapaNativo } from '@/lib/mapaNativo';
+import { leeUbicacionGuardada, usaMapaNativo } from '@/lib/mapaNativo';
 import MapaNativo from './MapaNativo';
 
 /* EL MAPA DE LA CARRERA (16 oct 2026). Andrés eligió mapa CON CALLES; su costo es fijo y mínimo: el archivo (México + EE. UU., 10 GB, zoom 14) vive en R2 y casi cabe en el cupo gratis (24 oct 2026).
@@ -13,7 +13,7 @@ import MapaNativo from './MapaNativo';
    ruta (resumen). `interactivo`: se puede mover con el dedo. `alto`: en px o '100%'.
 
    ESTE ARCHIVO ES EL DESPACHADOR (25 oct 2026). En la app de iPhone intenta primero el mapa de Apple (`MapaNativo.jsx`); si no existe el plugin, no se crea o no
-   avisa que está listo en ~4 s, vuelve solo a este mapa de abajo (MapLibre), que es también el de la web. `pantallaCompleta`: el mapa ocupa toda la pantalla y la
+   avisa que está listo en ~8 s, vuelve solo a este mapa de abajo (MapLibre), que es también el de la web. `pantallaCompleta`: el mapa ocupa toda la pantalla y la
    interfaz va encima (solo lo usa el mapa nativo; el de abajo no lo necesita). */
 
 const URL_DEL_MAPA = import.meta.env.VITE_MAPA_URL || '';
@@ -32,16 +32,19 @@ const COLORES_CON_CONTRASTE = {
   tunnel_other: '#3a4258', tunnel_minor: '#3a4258', tunnel_link: '#3a4258', tunnel_major: '#3a4258', tunnel_highway: '#3a4258',
 };
 
-/* Si el mapa nativo falla, no se vuelve a intentar en esta sesión (cada intento perdería hasta 4 s), PERO por separado: que falle un mapa chico en un rectángulo
-   (montarse en la página es lo delicado) no debe quitarle el mapa de Apple a la pantalla completa de la carrera, y al revés. */
-const roto = { pantalla: false, rectangulo: false };
+/* Si el mapa nativo falla, no se vuelve a intentar durante un minuto (cada intento perdería hasta 8 s) y después sí: antes quedaba roto toda la sesión por un
+   solo fallo en frío. Va por separado: que falle un mapa chico en un rectángulo (montarse en la página es lo delicado) no debe quitarle el mapa de Apple a la
+   pantalla completa de la carrera, y al revés. Guarda la hora del fallo. */
+const REINTENTO_MS = 60000;
+const roto = { pantalla: 0, rectangulo: 0 };
+const estaRoto = (modo) => Date.now() - roto[modo] < REINTENTO_MS;
 
 export default function MapaDeCarrera(props) {
   const modo = props.pantallaCompleta ? 'pantalla' : 'rectangulo';
-  const [motor, setMotor] = useState(() => (usaMapaNativo() && !roto[modo] ? 'nativo' : 'web'));
+  const [motor, setMotor] = useState(() => (usaMapaNativo() && !estaRoto(modo) ? 'nativo' : 'web'));
   if (motor === 'nativo') {
     // Que otro mapa nativo ya esté abierto ('ocupado') o que el rectángulo aún no tenga tamaño ('sin-tamano') no es un fallo del plugin: solo este usa el de siempre.
-    return <MapaNativo {...props} alFallar={(razon) => { if (razon === 'fallo') roto[modo] = true; setMotor('web'); }} />;
+    return <MapaNativo {...props} alFallar={(razon) => { if (razon === 'fallo') roto[modo] = Date.now(); setMotor('web'); }} />;
   }
   return <MapaWeb {...props} />;
 }
@@ -57,9 +60,10 @@ function MapaWeb({ muestras, sigue = true, interactivo = false, alto = 220, redo
   );
 }
 
-/** La última ubicación conocida (la guarda `useUbicacionActual`): el mapa abre ahí y no en el Zócalo. */
+/** La última ubicación conocida (la guarda `useUbicacionActual`) como `[lon, lat]` de MapLibre: el mapa abre ahí y no en el Zócalo. */
 function ubicacionGuardada() {
-  try { const g = JSON.parse(localStorage.getItem('tl:ultima-ubicacion') ?? 'null'); return g && typeof g.lat === 'number' ? [g.lon, g.lat] : null; } catch { return null; }
+  const g = leeUbicacionGuardada();
+  return g ? [g.lng, g.lat] : null;
 }
 
 const coordenadas = (muestras) => (muestras ?? []).filter((m) => typeof m.lat === 'number' && typeof m.lon === 'number').map((m) => [m.lon, m.lat]);

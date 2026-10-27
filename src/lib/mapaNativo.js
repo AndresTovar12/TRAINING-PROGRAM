@@ -15,8 +15,8 @@ export const ANGULO_3D = 45;
 /** Sin ninguna ubicación conocida: todo México, no una calle al azar del Zócalo. */
 export const CENTRO_SIN_DATOS = { lat: 23.6, lng: -102.5 };
 export const ZOOM_SIN_DATOS = 5;
-/** Si el mapa nativo no avisa que está listo en este tiempo, se usa el de siempre. */
-export const ESPERA_MAXIMA_MS = 4000;
+/** Si el mapa nativo no avisa que está listo en este tiempo, se usa el de siempre (con 4 s fallaba en frío, la primera vez que se abría). */
+export const ESPERA_MAXIMA_MS = 8000;
 /** La ruta se vuelve a mandar al mapa como mucho una vez por segundo. */
 export const INTERVALO_RUTA_MS = 1000;
 /** Una carrera larga junta miles de puntos; al mapa le basta con unos cientos para dibujar la misma línea. */
@@ -46,13 +46,21 @@ export function adelgazaRuta(puntos, max = MAX_PUNTOS_RUTA) {
   return salida;
 }
 
-/** La última ubicación guardada (`useUbicacionActual` la deja en localStorage) como `{lat, lng}`, o null. Recibe el texto tal cual. */
+/** Dónde se guarda la última ubicación conocida (la deja `useUbicacionActual`). */
+export const LLAVE_ULTIMA_UBICACION = 'tl:ultima-ubicacion';
+
+/** La última ubicación guardada como `{lat, lng}`, o null. Recibe el texto tal cual (puro, para probarse). */
 export function ubicacionGuardada(texto) {
   try {
     const g = JSON.parse(texto ?? 'null');
     return g && esNumero(g.lat) && esNumero(g.lon) ? { lat: g.lat, lng: g.lon } : null;
   } catch { return null; }
 }
+
+/** La última ubicación guardada en este teléfono (`{lat, lng}` o null). La ÚNICA que leen los mapas y el «antes de salir». */
+export const leeUbicacionGuardada = () => {
+  try { return ubicacionGuardada(localStorage.getItem(LLAVE_ULTIMA_UBICACION)); } catch { return null; }
+};
 
 /** Dónde abre el mapa: la última muestra de la ruta, si no la última ubicación conocida, y solo si no hay nada, todo México (con `conocido: false`). */
 export function inicioDelMapa(puntos, guardada, zoom = ZOOM_INICIAL) {
@@ -80,16 +88,6 @@ export function encuadre(puntos, minimo = MINIMO_ENCUADRE_GRADOS) {
     southwest: { lat: centro.lat - mitadLat, lng: centro.lng - mitadLng },
     northeast: { lat: centro.lat + mitadLat, lng: centro.lng + mitadLng },
   };
-}
-
-/** Mueve el centro del mapa hacia el sur para que el corredor quede en la parte que NO tapa el panel de abajo.
-    `gradosVisibles` = cuántos grados de latitud muestra la pantalla de arriba a abajo; `alturaPt` = su alto en puntos; `reservaPt` = lo que tapa el panel.
-    El corredor debe verse en medio de lo que queda libre: eso es `reserva / 2` por encima del centro del mapa. */
-export function centroConReserva(centro, { gradosVisibles, alturaPt, reservaPt }) {
-  if (!centro || !esNumero(gradosVisibles) || !esNumero(alturaPt) || !esNumero(reservaPt)) return centro;
-  if (gradosVisibles <= 0 || alturaPt <= 0 || reservaPt <= 0) return centro;
-  const reserva = Math.min(reservaPt, alturaPt * 0.8); // nunca más del 80 %: un panel enorme no manda al corredor fuera del mapa
-  return { lat: centro.lat - (reserva / 2) * (gradosVisibles / alturaPt), lng: centro.lng };
 }
 
 /** ¿Hay que mandar la ruta al mapa ahora, esperar o nada? `clave` resume lo que se dibuja (cuántos puntos, el último y si sigue al corredor): si no cambió, no hay nada que mandar. */

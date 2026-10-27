@@ -116,7 +116,8 @@ export default function PasoConGps({
   const [esperando, setEsperando] = useState(false); // eligió «seguir esperando» la señal
   const [ultimoPunto, setUltimoPunto] = useState(() => (sinCuenta ? Date.now() : NaN)); // la hora del último punto bueno del GPS
   const [pausadoDesde, setPausadoDesde] = useState(null); // la hora en que se pausó, o `null`
-  const pausa = useRef({ desde: null, acum: 0 }); // lo mismo, para el GPS (que no debe volver a suscribirse en cada pausa)
+  const [pausaAcum, setPausaAcum] = useState(0); // los milisegundos que ya estuvo en pausa (las pausas terminadas)
+  const pausa = useRef({ desde: null, acum: 0 }); // lo mismo, para el GPS (que no debe volver a suscribirse en cada pausa); el dibujo usa el estado, no esto
   // Con `sinCuenta` (los lapsos) no hay pantalla de «antes», pero igual se oye la señal mientras no llega el primer punto: si no hay permiso, no se espera nada.
   const senal = useSenalGps(fase === 'antes' || (sinCuenta && fase === 'corriendo' && muestras.length === 0));
   const aqui = useUbicacionActual(fase === 'antes');
@@ -125,7 +126,7 @@ export default function PasoConGps({
   }, [sinCuenta, senal, onCerrar]);
   const vivo = useMemo(() => enVivo(muestras), [muestras]);
   // El tiempo cuenta lo corrido: lo pausado no suma.
-  const segDe = (hasta) => Math.max(0, (hasta - desde - pausa.current.acum - (pausa.current.desde ? hasta - pausa.current.desde : 0)) / 1000);
+  const segDe = (hasta) => Math.max(0, (hasta - desde - pausaAcum - (pausadoDesde ? hasta - pausadoDesde : 0)) / 1000);
   const seg = desde ? (final ? final.seg : segDe(ahora)) : 0;
   const avance = avanceDelPaso(vivo.distanciaM, meta);
   const perdido = fase === 'corriendo' && !pausadoDesde && !esperando && sinSenal(ultimoPunto, ahora);
@@ -193,6 +194,7 @@ export default function PasoConGps({
     const t = Date.now();
     if (pausa.current.desde) {
       pausa.current = { desde: null, acum: pausa.current.acum + (t - pausa.current.desde) };
+      setPausaAcum(pausa.current.acum);
       setPausadoDesde(null);
       setUltimoPunto(t);
     } else {

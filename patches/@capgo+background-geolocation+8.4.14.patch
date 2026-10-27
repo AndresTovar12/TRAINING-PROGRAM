@@ -1,0 +1,13 @@
+diff --git a/node_modules/@capgo/background-geolocation/ios/Sources/CapgoBackgroundGeolocationPlugin/CapgoCapacitorBackgroundGeolocationPlugin.swift b/node_modules/@capgo/background-geolocation/ios/Sources/CapgoBackgroundGeolocationPlugin/CapgoCapacitorBackgroundGeolocationPlugin.swift
+index f26aeba..c88c426 100644
+--- a/node_modules/@capgo/background-geolocation/ios/Sources/CapgoBackgroundGeolocationPlugin/CapgoCapacitorBackgroundGeolocationPlugin.swift
++++ b/node_modules/@capgo/background-geolocation/ios/Sources/CapgoBackgroundGeolocationPlugin/CapgoCapacitorBackgroundGeolocationPlugin.swift
+@@ -169,6 +169,8 @@ public class BackgroundGeolocation: CAPPlugin, CLLocationManagerDelegate, CAPBri
+         manager.allowsBackgroundLocationUpdates = background
+         manager.showsBackgroundLocationIndicator = background
+         manager.pausesLocationUpdatesAutomatically = false
++        // Training Lab (parche, 27 oct 2026): el GPS se afina para correr, caminar y andar en bici (iOS filtra distinto que para un coche).
++        manager.activityType = .fitness
+     }
+ 
+     private func handlePermissions(_ manager: CLLocationManager, background: Bool) -> Bool {

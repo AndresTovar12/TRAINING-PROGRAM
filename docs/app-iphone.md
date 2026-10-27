@@ -12,6 +12,12 @@ La misma app web va dentro de un envoltorio (Capacitor). Esta Mac no tiene Xcode
 3. GitHub → repositorio → Settings → Secrets and variables → Actions → New repository secret: `ASC_KEY_P8` (todo el texto del archivo `.p8`). El Key ID (`ANLLBDRPU8`) y el Issuer ID ya están en el workflow: no son secretos.
 
 ## Pendiente antes de que la app funcione de verdad dentro del teléfono
-- CORS: dentro de la app el origen de la página es `capacitor://localhost`. Hay que añadirlo en las funciones de Supabase (`login`, `signup`, `mi-cuenta`, `r2-upload`, `comprar`…; unas lo leen del secreto `ALLOWED_ORIGINS`, otras tienen su lista en el código) y en el CORS del bucket de videos en Cloudflare R2.
+- ✅ CORS (hecho, 24-25 oct 2026): las funciones de Supabase aceptan `capacitor://localhost` y el bucket de videos de Cloudflare R2 también.
 - Icono: ahora es el de la web ampliado a 1024 px; conviene uno definitivo.
 - Apple (guía 4.2): una app que es solo una página es rechazada para la tienda; TestFlight interno no la revisa, pero para publicar hay que añadir cosas propias del teléfono (GPS, avisos, Salud).
+
+## Mapa y GPS (27 oct 2026, auditoría del mapa)
+- Parches de plugins en `patches/` (se aplican solos con `postinstall`): `@capgo/capacitor-native-map` (toques, brújula, y la CÁMARA QUE SIGUE AL CORREDOR: `followCamera` / `stopFollowCamera` en `Permissions.swift`, una sola cámara movida cuadro por cuadro; la brújula solo cambia su giro) y `@capgo/background-geolocation` (`activityType = .fitness`).
+- El GPS se apaga 60 s después de que ninguna pantalla lo usa (`GRACIA_MS` en `lib/nativo.js`); el entreno guiado con pasos de 200 m o más lo mantiene vivo todo el entreno.
+- Si el mapa de Apple no está listo en 8 s se usa el mapa de la web; se vuelve a intentar al minuto.
+- Cómo probarlo en el teléfono: correr 2 min con «Ver mapa»: el punto azul nunca sale de la pantalla, se desliza sin saltos y el ritmo varía ±10 s/km a paso constante.

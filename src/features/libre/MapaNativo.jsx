@@ -3,7 +3,7 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Compass, Layers, Loader2, Navigation } from 'lucide-react';
 import {
   metrosEntre, ANGULO_3D, COLOR_RUTA, ESPERA_MAXIMA_MS, GROSOR_RUTA, ZOOM_INICIAL, ZOOM_SIGUE,
-  adelgazaRuta, claveDeRuta, rumboDeRuta, ponClase, quitaClase, conTiempoLimite, creaFila, encuadre, inicioDelMapa, planDeEnvio, puntosDeMuestras, ubicacionGuardada,
+  adelgazaRuta, claveDeRuta, rumboDeRuta, ponClase, quitaClase, conTiempoLimite, creaFila, encuadre, inicioDelMapa, leeUbicacionGuardada, planDeEnvio, puntosDeMuestras,
 } from '@/lib/mapaNativo';
 
 /* EL MAPA DE APPLE DENTRO DE LA APP DE IPHONE (25 oct 2026). Andrés: el mapa dibujado por la página «se siente feo, como web». Este es el mapa de verdad del
@@ -18,9 +18,11 @@ import {
    · Mapa en un rectángulo (resumen, mini, tarjeta de un paso): el mapa se monta EN la página, justo en el rectángulo (`element`), y la sigue al moverse. Encima de ese
      rectángulo no debe haber nada de la página: el mapa nativo se pinta sobre ella.
 
-   LA CÁMARA (25 oct, tras probarlo en el iPhone): la mueve este código con cada punto del GPS (`sigueAlCorredor`): zoom fijo, 3D a 45° y girada hacia donde va
-   el corredor. NO se usa el seguimiento automático de MapKit: ponía su propia distancia y peleaba con todo. Si el usuario mueve el mapa con el dedo se deja de
-   seguir (la flecha se vacía) y al tocarla vuelve. Botones 2D/3D y flecha: HTML flotando a la derecha, arriba del panel.
+   LA CÁMARA (27 oct 2026, auditoría del mapa): la mueve el iPhone con UNA sola cámara (`followCamera`, parche del plugin en Swift): con cada punto del GPS
+   el centro se desliza en línea recta hasta el punto nuevo en el tiempo que hubo entre los dos, y la brújula solo cambia el giro de esa misma cámara. Antes
+   eran dos animaciones peleando (la de la página con cada punto y la de la brújula, que copiaba la cámara con el centro VIEJO): el mapa giraba pero no
+   avanzaba, el punto se salía y luego saltaba. NO se usa el seguimiento automático de MapKit: ya se probó y ponía su propia distancia y peleaba con todo.
+   Si el usuario mueve el mapa con el dedo se deja de seguir (la flecha se vacía) y al tocarla vuelve. Botones 2D/3D y flecha: HTML flotando a la derecha.
 
    Un solo mapa nativo a la vez (`dueno`): crear y destruir van en fila (`fila`), porque React en desarrollo monta, desmonta y vuelve a montar enseguida. */
 
@@ -31,7 +33,6 @@ let contador = 0;
 
 
 
-const textoGuardado = () => { try { return localStorage.getItem('tl:ultima-ubicacion'); } catch { return null; } };
 
 /** Cuánto tapa el panel de abajo (en puntos, desde su borde de arriba hasta el fondo de la pantalla). */
 /* El plugin llama a `registerPlugin('NativeMap')` por dentro; su clase `NativeMap` no trae «seguir al usuario», así que se llama con el puente de bajo nivel
@@ -72,8 +73,9 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
   const fallar = useRef(alFallar);
   useEffect(() => { fallar.current = alFallar; });
 
-  // Lo que cambia (puntos nuevos, seguir o encuadrar) se manda al mapa sin recrearlo y con tope de una vez por segundo.
-  useEffect(() => { dato.current = { puntos, sigue }; empuja.current?.(); }, [puntos, sigue]);
+  const camara = useRef(null);
+  // Lo que cambia (puntos nuevos, seguir o encuadrar) se manda al mapa sin recrearlo: la línea con tope de una vez por segundo; la cámara, con CADA punto.
+  useEffect(() => { dato.current = { puntos, sigue }; empuja.current?.(); camara.current?.(); }, [puntos, sigue]);
 
   useEffect(() => {
     const ficha = {};
@@ -87,7 +89,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
     const e = {
       vivo: true, mapa: null, LatLngBounds: null, elemento: null, listo: false, ids: [], ultimoEnvioMs: 0, claveEnviada: null, reloj: null, ocupado: false, otraVez: false, necesitaZoom: false,
       // `siguiendo`: la cámara va con el corredor (hasta que mueva el mapa con el dedo). `en3d`: inclinado 45°. `rumbo`: hacia dónde va (el mapa gira con él).
-      siguiendo: true, en3d: false, conocido: false, rumbo: 0, brujula: null, norteArriba: false, ultimoGiroMs: 0,
+      siguiendo: true, en3d: false, conocido: false, rumbo: 0, brujula: null, norteArriba: false, ultimoPuntoMs: 0, sinSeguidor: false,
     };
 
     const dibujaRuta = async (ruta) => {
@@ -103,36 +105,57 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
       if (viejos.length) await mapa.removePolylines(viejos);
     };
 
-    /* LA CÁMARA LA LLEVA ESTE CÓDIGO, NO MAPKIT (25 oct 2026). El seguimiento automático de MapKit («followWithHeading») ponía su propia distancia, aplanaba el 3D y
-       peleaba con cualquier ajuste: el mapa se veía lejos, se acercaba y se alejaba solo, y el botón de la flecha no sabía si seguía o no. Ahora, con cada punto del
-       GPS (como mucho una vez por segundo) se pone la cámara: centrada en el corredor, al zoom fijo, inclinada en 3D y girada hacia donde va. El punto azul es el
-       de Apple (`enableCurrentLocation`). Si el usuario mueve el mapa con el dedo, se deja de seguir; la flecha lo regresa. */
-    const sigueAlCorredor = async (donde, primera) => {
-      // Hacia dónde mira el mapa: la brújula del iPhone (si la hay y no se pidió «norte arriba»); si no, la dirección de la ruta.
-      if (e.norteArriba) e.rumbo = 0;
-      else if (e.brujula == null) { const rumbo = rumboDeRuta(dato.current.puntos); if (rumbo != null) e.rumbo = rumbo; }
-      await e.mapa.setCamera({
-        coordinate: donde, zoom: ZOOM_SIGUE, angle: e.en3d ? ANGULO_3D : 0, bearing: e.rumbo,
-        animate: !primera, animationDuration: 900,
-      });
+    /* LA CÁMARA QUE SIGUE AL CORREDOR (27 oct 2026). La mueve el iPhone (`followCamera`, ver el parche en `Permissions.swift`): aquí solo se le dice A DÓNDE
+       y en cuánto tiempo. Hacia dónde mira el mapa: norte arriba si se pidió; si no, la brújula del iPhone (si la hay) o la dirección de la ruta. El punto azul
+       es el de Apple (`enableCurrentLocation`). Si el parche no existiera (una app vieja), se usa la cámara de siempre del plugin. */
+    const rumboDeAhora = () => {
+      if (e.norteArriba) return 0;
+      if (e.brujula != null) return e.brujula;
+      const r = rumboDeRuta(dato.current.puntos);
+      if (r != null) e.rumbo = r;
+      return e.rumbo;
     };
-
-    const mueveCamara = async (ruta, sigueAhora, primera) => {
-      const { mapa } = e;
-      if (sigueAhora) {
-        if (!e.siguiendo) return; // movió el mapa con el dedo: la cámara se queda donde la dejó
-        // Sin puntos todavía (antes de salir), la última ubicación conocida; sin nada, no se mueve.
-        const donde = ruta.at(-1) ?? (e.conocido ? e.centroInicial : null);
-        if (!donde) return;
-        // El GPS tiembla unos metros aunque estés quieto: si el corredor no se movió de verdad desde la última vez que se centró, la cámara se queda quieta
-        // (antes se re-centraba CADA segundo y el mapa nunca estaba quieto).
-        if (!primera && !e.necesitaZoom && e.ultimoCentro && metrosEntre(e.ultimoCentro, donde) < 5) return;
-        e.ultimoCentro = donde;
-        // Sin ubicación al abrir el mapa estaba en todo México: al llegar la primera, se acerca de golpe (sin animar desde tan lejos).
-        await sigueAlCorredor(donde, primera || e.necesitaZoom);
-        e.necesitaZoom = false;
-        return;
+    const ponCamara = async ({ donde = null, salto = false, duracion = 0.8 } = {}) => {
+      const pitch = e.en3d ? ANGULO_3D : 0;
+      const heading = rumboDeAhora();
+      if (!e.sinSeguidor) {
+        try {
+          await puenteDelMapa().followCamera({ id, ...(donde ? { lat: donde.lat, lng: donde.lng } : {}), zoom: ZOOM_SIGUE, pitch, heading, duration: duracion, jump: salto });
+          return;
+        } catch (err) {
+          if (!/not implemented|no implementado|unimplemented/i.test(String(err?.message ?? err))) throw err;
+          e.sinSeguidor = true;
+        }
       }
+      await e.mapa.setCamera({ ...(donde ? { coordinate: donde } : {}), zoom: ZOOM_SIGUE, angle: pitch, bearing: heading, animate: !salto });
+    };
+    const sueltaCamara = () => { if (!e.sinSeguidor) puenteDelMapa().stopFollowCamera({ id }).catch(() => {}); };
+
+    /** Un punto nuevo del GPS: la cámara va hacia él en el tiempo que pasó desde el anterior (así se desliza sin saltos). */
+    const siguePunto = (primera = false) => {
+      if (!e.vivo || !e.listo) return;
+      const { puntos: ruta, sigue: sigueAhora } = dato.current;
+      if (!sigueAhora || !e.siguiendo) return; // en el resumen, o movió el mapa con el dedo
+      // Sin puntos todavía (antes de salir), la última ubicación conocida; sin nada, no se mueve.
+      const donde = ruta.at(-1) ?? (e.conocido ? e.centroInicial : null);
+      if (!donde) return;
+      // Sin ubicación al abrir, el mapa estaba en todo México: la primera llega de golpe (sin animar desde tan lejos).
+      const salto = primera || e.necesitaZoom;
+      // Menos de un metro es el temblor del GPS: no se mueve.
+      if (!salto && e.ultimoCentro && metrosEntre(e.ultimoCentro, donde) < 1) return;
+      const ahora = Date.now();
+      const duracion = salto ? 0 : Math.min(2, Math.max(0.3, (ahora - (e.ultimoPuntoMs || ahora - 1000)) / 1000));
+      e.ultimoPuntoMs = ahora;
+      e.ultimoCentro = donde;
+      e.necesitaZoom = false;
+      ponCamara({ donde, salto, duracion }).catch((err) => console.warn('Mapa nativo (cámara):', err));
+    };
+    camara.current = () => siguePunto(false);
+
+    /** El resumen (no sigue): la ruta entera encuadrada, plana. */
+    const encuadraRuta = async (ruta) => {
+      const { mapa } = e;
+      sueltaCamara();
       const ultimo = ruta.at(-1);
       if (!ultimo) return;
       const enc = encuadre(ruta);
@@ -151,7 +174,9 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
         e.claveEnviada = claveDeRuta(ruta, sigueAhora);
         e.ultimoEnvioMs = Date.now();
         await dibujaRuta(ruta);
-        if (e.vivo) await mueveCamara(ruta, sigueAhora, primera);
+        if (!e.vivo) return;
+        if (!sigueAhora) await encuadraRuta(ruta);
+        else if (primera) siguePunto(true);
       } catch (err) {
         console.warn('Mapa nativo (ruta):', err);
       } finally {
@@ -180,7 +205,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
         const r = e.elemento.getBoundingClientRect();
         if (r.width < 2 || r.height < 2) { const err = new Error('el rectángulo del mapa no tiene tamaño'); err.razon = 'sin-tamano'; throw err; }
       }
-      const inicio = inicioDelMapa(dato.current.puntos, ubicacionGuardada(textoGuardado()), dato.current.sigue ? ZOOM_SIGUE : ZOOM_INICIAL);
+      const inicio = inicioDelMapa(dato.current.puntos, leeUbicacionGuardada(), dato.current.sigue ? ZOOM_SIGUE : ZOOM_INICIAL);
       e.necesitaZoom = !inicio.conocido;
       e.conocido = inicio.conocido;
       e.centroInicial = inicio.centro;
@@ -221,12 +246,16 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
       if (pantallaCompleta && dato.current.sigue) {
         try {
           const puente = puenteDelMapa();
+          // El giro del mapa lo hace el iPhone; aquí solo se guarda el rumbo para el ícono de la brújula y para las órdenes de cámara.
           e.escuchaBrujula = await puente.addListener('onHeading', (d) => {
             if (!e.vivo || typeof d?.heading !== 'number') return;
             e.brujula = d.heading;
-            if (e.norteArriba || !e.siguiendo) { e.rumbo = e.norteArriba ? 0 : e.rumbo; setRumboVisible(d.heading); return; }
-            e.rumbo = d.heading;
             setRumboVisible(d.heading);
+          });
+          // Dónde quedó el corredor en la pantalla (lo mide el iPhone): ahí va el cono de dirección.
+          e.escuchaPunto = await puente.addListener('onFollowPoint', (d) => {
+            if (!e.vivo || d?.mapId !== id || typeof d.x !== 'number' || typeof d.y !== 'number') return;
+            setCentroPunto({ x: d.x, y: d.y });
           });
           e.puente = puente;
           const { disponible } = await puente.startHeading();
@@ -244,6 +273,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
             if (!d?.isGesture || !e.siguiendo) return;
             e.siguiendo = false;
             setSiguiendo(false);
+            sueltaCamara(); // el dedo manda: la cámara deja de seguir al corredor
             e.puente?.setHeadingFollow({ id, enabled: false }).catch(() => {}); // con el mapa movido a mano, deja de girar solo
           });
         } catch (err) { console.warn('Mapa nativo (arrastre):', err); }
@@ -254,17 +284,18 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
           setEn3d(e.en3d);
           try {
             // 3D = inclinado 45° (se ven los edificios en volumen); 2D = visto desde arriba. El giro hacia donde mira el iPhone se queda en los dos.
-            await e.mapa.setCamera({ angle: e.en3d ? ANGULO_3D : 0, bearing: e.rumbo, animate: true, animationDuration: 500 });
+            if (e.siguiendo && dato.current.sigue) await ponCamara();
+            else await e.mapa.setCamera({ angle: e.en3d ? ANGULO_3D : 0, animate: true });
           } catch (err) { console.warn('Mapa nativo (2D/3D):', err); }
         },
         alternaNorte: async () => {
           e.norteArriba = !e.norteArriba;
           setNorteArriba(e.norteArriba);
-          e.rumbo = e.norteArriba ? 0 : (e.brujula ?? e.rumbo);
           try {
             // Con el norte arriba el giro automático se apaga (y la cámara va al norte); si no, vuelve a girar con la brújula.
             await e.puente?.setHeadingFollow({ id, enabled: !e.norteArriba });
-            if (e.norteArriba) await e.mapa.setCamera({ bearing: 0, animate: true, animationDuration: 400 });
+            if (e.siguiendo && dato.current.sigue) await ponCamara();
+            else if (e.norteArriba) await e.mapa.setCamera({ bearing: 0, animate: true });
           } catch (err) { console.warn('Mapa nativo (norte):', err); }
         },
         poneTipo: async (tipo) => {
@@ -287,7 +318,8 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
           if (!e.norteArriba) e.puente?.setHeadingFollow({ id, enabled: true }).catch(() => {});
           const donde = dato.current.puntos.at(-1) ?? (e.conocido ? e.centroInicial : null);
           e.ultimoCentro = donde;
-          try { if (donde) await sigueAlCorredor(donde, false); } catch (err) { console.warn('Mapa nativo (volver):', err); }
+          e.ultimoPuntoMs = Date.now();
+          try { if (donde) await ponCamara({ donde, duracion: 0.8 }); } catch (err) { console.warn('Mapa nativo (volver):', err); }
         },
       };
       e.listo = true;
@@ -350,8 +382,11 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
       e.vivo = false;
       clearTimeout(e.reloj);
       e.escuchaBrujula?.remove?.();
+      e.escuchaPunto?.remove?.();
       if (e.escuchaBrujula) { puenteDelMapa().setHeadingFollow({ id, enabled: false }).catch(() => {}); puenteDelMapa().stopHeading().catch(() => {}); }
+      if (e.listo) sueltaCamara();
       empuja.current = null;
+      camara.current = null;
       acciones.current = {};
       if (dueno === ficha) dueno = null;
       quitaClase(id);

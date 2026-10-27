@@ -83,9 +83,9 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
   const velocidad = (s) => (s > 0 ? (3600 / s).toFixed(1) : '—');
 
   /* La pantalla bloqueada, la isla dinámica y el Apple Watch: tiempo, distancia y ritmo. Con el GPS del teléfono corriendo, la app sigue despierta aunque se bloquee la pantalla, así que se
-     actualiza cada 10 s (el cronómetro avanza solo, con la hora de inicio). Pausa y reanudar se mandan al instante. */
+     actualiza cada 10 s (el cronómetro avanza solo, con la hora de inicio, que no cambia mientras no se pause). Pausa y reanudar se mandan al instante. */
   const vivos = useRef({});
-  useEffect(() => { vivos.current = { km, ritmo: vivo.ritmoSKm, segundos, nombre, deporte, enBici }; });
+  useEffect(() => { vivos.current = { km, ritmo: vivo.ritmoSKm, segundos, nombre, deporte, enBici, cronometro }; });
   const corriendoLibre = !!cronometro && !resumen;
   useEffect(() => {
     if (!corriendoLibre) { quitaDePantallaBloqueada(); terminaEnReloj(); return undefined; }
@@ -96,7 +96,9 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
         nombre: v.nombre, titulo: v.nombre, tipo: pausado ? 'pausa' : 'cardio',
         detalle: pausado ? 'En pausa' : `${v.km.toFixed(2)} km · ${ritmoTxt}`,
         distancia: `${v.km.toFixed(2)} km`, ritmo: ritmoTxt,
-        ...(pausado ? {} : { inicioMs: Math.round(Date.now() - v.segundos * 1000) }),
+        // La hora de inicio FIJA (el inicio real más lo que lleva en pausa): el reloj de la pantalla bloqueada cuenta solo desde ahí. Antes se recalculaba cada
+        // 10 s con los segundos enteros y el reloj brincaba un segundo atrás o adelante.
+        ...(pausado || !v.cronometro ? {} : { inicioMs: v.cronometro.inicio + (v.cronometro.pausas ?? 0) }),
       };
       muestraEnPantallaBloqueada(datos);
       enviaAlReloj({ ...datos, deporte: v.deporte });
