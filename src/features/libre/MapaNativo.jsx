@@ -333,6 +333,9 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
           setTimeout(() => setCargandoTipo(false), 1600);
           try { localStorage.setItem('tl:tipo-de-mapa', tipo); } catch { /* sin almacenamiento: solo se olvida la elección */ }
           try {
+            // Un segundo con la cámara quieta para que Apple alcance a bajar las imágenes del tipo nuevo (corriendo, con la cámara moviéndose sin parar,
+            // el satelital no terminaba de aparecer). El punto y el cono siguen moviéndose.
+            if (!e.sinSeguidor) await puenteDelMapa().pausaCamara({ id, ms: 1000 }).catch(() => {});
             await e.mapa.setMapType(modulo.MapType[tipo]);
             // El híbrido lleva los nombres de lugares y calles encima (por eso se nota distinto del satelital); los otros, el mapa limpio.
             await puenteDelMapa().setPointsOfInterestEnabled({ id, enabled: tipo === 'Hybrid' });

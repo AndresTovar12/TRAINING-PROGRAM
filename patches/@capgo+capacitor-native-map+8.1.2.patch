@@ -58,10 +58,10 @@ index 4b86a6b..20edb9a 100644
          } else if coordinate != nil {
              mapView.setCenter(center, animated: animate)
 diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMapsPlugin.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMapsPlugin.swift
-index 4b47502..300059f 100644
+index 4b47502..874f7b3 100644
 --- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMapsPlugin.swift
 +++ b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMapsPlugin.swift
-@@ -14,6 +14,12 @@ public class NativeMapPlugin: CAPPlugin, CAPBridgedPlugin, MKMapViewDelegate {
+@@ -14,6 +14,13 @@ public class NativeMapPlugin: CAPPlugin, CAPBridgedPlugin, MKMapViewDelegate {
      public let identifier = "NativeMapPlugin"
      public let jsName = "NativeMap"
      public let pluginMethods: [CAPPluginMethod] = [
@@ -71,10 +71,11 @@ index 4b47502..300059f 100644
 +        CAPPluginMethod(name: "followCamera", returnType: CAPPluginReturnPromise),
 +        CAPPluginMethod(name: "stopFollowCamera", returnType: CAPPluginReturnPromise),
 +        CAPPluginMethod(name: "updateRunner", returnType: CAPPluginReturnPromise),
++        CAPPluginMethod(name: "pausaCamara", returnType: CAPPluginReturnPromise),
          CAPPluginMethod(name: "create", returnType: CAPPluginReturnPromise),
          CAPPluginMethod(name: "destroy", returnType: CAPPluginReturnPromise),
          CAPPluginMethod(name: "setCamera", returnType: CAPPluginReturnPromise),
-@@ -79,6 +85,13 @@ public class NativeMapPlugin: CAPPlugin, CAPBridgedPlugin, MKMapViewDelegate {
+@@ -79,6 +86,13 @@ public class NativeMapPlugin: CAPPlugin, CAPBridgedPlugin, MKMapViewDelegate {
      var maps = [String: Map]()
      fileprivate let mapsLock = NSLock()
  
@@ -88,7 +89,7 @@ index 4b47502..300059f 100644
      func toBackMap(containing point: CGPoint, in webView: WKWebView) -> Map? {
          mapsLock.lock()
          let candidates = maps.values.filter { $0.toBack && $0.isMapVisible }
-@@ -193,6 +206,7 @@ public class NativeMapPlugin: CAPPlugin, CAPBridgedPlugin, MKMapViewDelegate {
+@@ -193,6 +207,7 @@ public class NativeMapPlugin: CAPPlugin, CAPBridgedPlugin, MKMapViewDelegate {
                  return
              }
              self.mapsLock.unlock()
@@ -148,7 +149,7 @@ index 5d27c04..311fee0 100644
      }
  
 diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
-index b88c508..539eaff 100644
+index b88c508..ad6b8f8 100644
 --- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
 +++ b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
 @@ -1,6 +1,8 @@
@@ -160,7 +161,7 @@ index b88c508..539eaff 100644
  
  // MARK: - Location permission
  //
-@@ -52,6 +54,130 @@ extension NativeMapPlugin: CLLocationManagerDelegate {
+@@ -52,6 +54,141 @@ extension NativeMapPlugin: CLLocationManagerDelegate {
          }
      }
  
@@ -267,6 +268,17 @@ index b88c508..539eaff 100644
 +        }
 +    }
 +
++    /// Congela las escrituras de la cámara `ms` milisegundos (el punto y el cono siguen moviéndose). Se usa al cambiar el tipo de mapa: con la cámara
++    /// moviéndose sin pausa, MapKit no terminaba de bajar las imágenes de satelital durante la carrera.
++    @objc func pausaCamara(_ call: CAPPluginCall) {
++        guard let id = call.getString("id") else { call.reject("id requerido"); return }
++        let ms = max(0, min(call.getDouble("ms") ?? 1000, 5000))
++        DispatchQueue.main.async {
++            SeguidorDeCamara.todos[id]?.congela(segundos: ms / 1000)
++            call.resolve()
++        }
++    }
++
 +    /// El corredor se movió pero la cámara NO debe seguirlo (mapa suelto o resumen): solo se mueven el punto y el cono.
 +    @objc func updateRunner(_ call: CAPPluginCall) {
 +        guard let id = call.getString("id"), let lat = call.getDouble("lat"), let lng = call.getDouble("lng") else { call.reject("id, lat y lng requeridos"); return }
@@ -291,7 +303,7 @@ index b88c508..539eaff 100644
      public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
          guard let call = pendingPermissionCall,
                manager.authorizationStatus != .notDetermined else {
-@@ -62,3 +188,324 @@ extension NativeMapPlugin: CLLocationManagerDelegate {
+@@ -62,3 +199,349 @@ extension NativeMapPlugin: CLLocationManagerDelegate {
          pendingPermissionCall = nil
      }
  }
@@ -331,6 +343,15 @@ index b88c508..539eaff 100644
 +    private var regresoDesde: CLLocationCoordinate2D?
 +    private var regresoInicio: CFTimeInterval = 0
 +    var tieneMarcador: Bool { marcador != nil }
++    /// Lo último que se escribió en la cámara: se vuelve a escribir solo si cambió algo que se note (medio punto en pantalla, 0.2° de giro o de inclinación,
++    /// 0.5 % de distancia). Escribirla 60 veces por segundo con movimientos de menos de un píxel no dejaba a MapKit terminar de cargar el satelital.
++    private var ultimoPuntoEscrito: CGPoint?
++    private var ultimoGiroEscrito: Double = .nan
++    private var ultimaInclinacionEscrita: Double = .nan
++    private var ultimaDistanciaEscrita: Double = .nan
++    private var congeladoHasta: CFTimeInterval = 0
++
++    func congela(segundos: Double) { congeladoHasta = CACurrentMediaTime() + segundos }
 +
 +    init(plugin: NativeMapPlugin, id: String, mapView: MKMapView) {
 +        self.plugin = plugin
@@ -466,6 +487,18 @@ index b88c508..539eaff 100644
 +            mira = CLLocationCoordinate2D(latitude: r.latitude + (centro.latitude - r.latitude) * suave, longitude: r.longitude + (centro.longitude - r.longitude) * suave)
 +            if g >= 1 { regresoDesde = nil }
 +        }
++        // ¿Hace falta escribir la cámara? No mientras está congelada (cambio de tipo de mapa), ni si nada cambió lo suficiente para verse. El punto se
++        // coloca igual. Mientras regresa de donde la dejó el dedo, siempre.
++        let ahora = CACurrentMediaTime()
++        if regresoDesde == nil {
++            if ahora < congeladoHasta { colocaMarcador(en: mapa); return }
++            let pantalla = mapa.convert(mira, toPointTo: mapa)
++            let poco = ultimoPuntoEscrito.map { hypot(pantalla.x - $0.x, pantalla.y - $0.y) < 0.5 } ?? false
++                && abs(SeguidorDeCamara.diferencia(ultimoGiroEscrito, giroActual)) < 0.2
++                && abs(inclinacionActual - ultimaInclinacionEscrita) < 0.2
++                && abs(distanciaActual - ultimaDistanciaEscrita) < ultimaDistanciaEscrita * 0.005
++            if poco { colocaMarcador(en: mapa); return }
++        }
 +        let camara = MKMapCamera(lookingAtCenter: mira, fromDistance: distanciaActual, pitch: CGFloat(inclinacionActual), heading: giroActual)
 +        mapa.camera = camara
 +        // El corredor va en medio de lo que NO tapan los márgenes del mapa (el panel de abajo), no en medio de la pantalla: no se sabe si MapKit respeta los
@@ -485,6 +518,10 @@ index b88c508..539eaff 100644
 +                mapa.camera = camara
 +            }
 +        }
++        ultimoPuntoEscrito = mapa.convert(mira, toPointTo: mapa)
++        ultimoGiroEscrito = giroActual
++        ultimaInclinacionEscrita = inclinacionActual
++        ultimaDistanciaEscrita = distanciaActual
 +        // El punto propio va justo donde quedó el corredor, en el mismo cuadro que la cámara: no se separan.
 +        colocaMarcador(en: mapa)
 +    }
