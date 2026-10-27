@@ -24,9 +24,6 @@ import {
   semanaGlobal, semanasDelPlan,
 } from '@/lib/training-utils';
 import HojaFlotante from '@/components/HojaFlotante';
-import CienciaDelPlan from '@/features/training/CienciaDelPlan';
-import { CintaDeCiencia } from '@/features/training/TarjetasDeHome';
-import { programasConCiencia } from '@/lib/ciencia';
 import NavegadorDelPlan from '@/components/NavegadorDelPlan';
 import { aKilos, desdeKilos, etiquetaUnidad } from '@/lib/unidades';
 import { maximoParaHome, useUnRM } from '@/lib/unRM';
@@ -93,7 +90,7 @@ import { useLugar, useScrollLugar } from '@/lib/useLugar';
    ya no existe (antes había también 'wellness', 'oneRM' y 'science') dejaría la pantalla en blanco.
 
    Andrés, 7 oct 2026: la barra de abajo pasa de cinco botones a tres (Home · Entrenar · Mensajes). Bienestar,
-   1RM y Ciencia ya no son pestañas: son tarjetas de Home que se abren como hoja encima (`hoja`). Los pacientes
+   1RM ya no son pestañas: son tarjetas de Home que se abren como hoja encima (`hoja`; «Ciencia» se quitó el 26 oct 2026). Los pacientes
    de un fisio no calculan 1RM: eso es de quien levanta pesas (Andrés, 29 sep 2026); sus datos de 1RM, si los
    hubiera, no se borran. */
 const PESTANAS = ['home', 'plan', 'messages', 'explore'];
@@ -1790,7 +1787,7 @@ const HomeView = ({
   // Tablet o más: la tarjeta de hoy a la izquierda y los cuadros a la derecha (reestructura visual, 15 oct 2026).
   const esAncha = useIsWide();
   const { t, coach, salud } = usePalabras();
-  const { phases: PLAN, planMeta, kind, estructura, programas, bibliotecas, demoActiva, comprasPorAtender, comprasFallo, reintentaCompras } = usePlan();
+  const { phases: PLAN, planMeta, kind, estructura, bibliotecas, demoActiva, comprasPorAtender, comprasFallo, reintentaCompras } = usePlan();
   // "Varias semanas": las tarjetas dicen la semana de corrido, no la fase.
   const deCorrido = estructura === 'semanas';
   const semanaDe = (n) => `Semana ${semanaGlobal(PLAN, n.phase.id, n.week.num) ?? n.week.num} de ${semanasDelPlan(PLAN)}`;
@@ -1882,8 +1879,6 @@ const HomeView = ({
   // Lo de 1RM: el máximo que guardó más recientemente (los de antes no tienen fecha: el más pesado), en su unidad.
   const unidadPeso = profile?.unidad_peso || 'kg';
   const mejorRM = useMemo(() => maximoParaHome(oneRMs, fechasRM, LEVANTAMIENTOS), [oneRMs, fechasRM]);
-  // Con equipo cada programa trae su ciencia: la tarjeta sale si CUALQUIERA la tiene, no solo el que está activo.
-  const conCiencia = programasConCiencia(programas).length > 0;
   const con1RM = !salud;
 
   /* El título de hoy. Una sesión: su nombre, sin «· ~70 min» pegado. Dos
@@ -1914,7 +1909,7 @@ const HomeView = ({
   ].filter(Boolean);
 
   /* REESTRUCTURA VISUAL (15 oct 2026): Home con la forma de las capturas de Andrés. Arriba el saludo y la tira de la semana;
-     la tarjeta azul «Hoy te toca»; cuatro cuadros (Salud, la fase, Entrenar libre, Activity card); 1RM y Ciencia abajo.
+     la tarjeta azul «Hoy te toca»; cuatro cuadros (Salud, la fase, Entrenar libre, Activity card); 1RM abajo.
      En tablet o compu, la tarjeta de hoy a la izquierda y los cuadros a la derecha. Lo que hacía cada cosa no cambió:
      solo su forma. «Plan · Ver» y la foto de la fase son ahora el cuadro de la fase (con la foto de fondo si la tiene). */
   const tipoHoy = next ? tipoDeSesion(next.day).label : '';
@@ -2060,7 +2055,7 @@ const HomeView = ({
             {conLibre && <EntrenoLibre userId={atletaId} unidadPeso={unidadPeso} variante="cuadros" />}
           </div>
 
-          {/* 1RM no sale a un paciente de fisio; Ciencia, solo si el plan la trae (cada plan trae la suya; ver `lib/ciencia.js`). */}
+          {/* 1RM no sale a un paciente de fisio. «Ciencia» se quitó de la app (Andrés, 26 oct 2026: nadie la usaba); lo escrito sigue guardado en los planes. */}
           {con1RM && (
             <Grupo>
               <Fila
@@ -2069,7 +2064,6 @@ const HomeView = ({
               />
             </Grupo>
           )}
-          {conCiencia && <CintaDeCiencia onAbrir={() => onAbrirHoja('science')} />}
           {/* Lo que registró por su cuenta (correr, pádel…): con plan solo vivía en Mi perfil → Mis métricas (auditoría p29). Sin nada registrado no sale. */}
           {conLibre && <EntrenoLibre userId={atletaId} unidadPeso={unidadPeso} variante="historial" />}
           {/* Las bibliotecas de clases que compró («todas mis clases»): una tarjeta por biblioteca. */}
@@ -2271,7 +2265,7 @@ const BottomNav = ({ active, onChange, conMensajes = true, conExplorar = true, c
   const { sinLeer } = useMensajes();
   /* Tres botones (Andrés, 7 oct 2026). «Home» es lo que antes se llamaba «Hoy». «Entrenar» es lo que antes se
      llamaba «Plan»: abre la sesión de hoy (lo que tocaba ya lo decía la tarjeta azul de Home, y «Plan» sonaba a
-     otra cosa); a un paciente de un fisio le dice «Sesión». Bienestar, 1RM y Ciencia viven dentro de Home. */
+     otra cosa); a un paciente de un fisio le dice «Sesión». Bienestar y 1RM viven dentro de Home. */
   if (esCompu) return null;
   /* Y «Explorar» (12 oct 2026): los coaches con planes a la venta. «Mensajes» sale solo cuando hay con quién hablar (entrenador, equipo o un plan con chat): quien entra por su cuenta ve
      Home · Entrenar · Explorar. */
@@ -2487,7 +2481,7 @@ export default function TrainingApp() {
   useEffect(() => {
     if ((tab === 'messages' && !conMensajes && !cargandoMensajes) || (tab === 'explore' && !conExplorar)) setTab('home');
   }, [tab, conMensajes, conExplorar, cargandoMensajes, setTab]);
-  // La hoja que está abierta encima de Home: 'wellness' | 'oneRM' | 'science' | null.
+  // La hoja que está abierta encima de Home: 'wellness' | 'oneRM' | null.
   const [hoja, setHoja] = useState(null);
   const [view, setView] = useState({ level: 'week' });
   // Los registros de un programa de EQUIPO van en claves aparte (`wr:sessions@<profesional>`);
@@ -2881,7 +2875,7 @@ export default function TrainingApp() {
       <BottomNav active={tab} onChange={vasA} conMensajes={conMensajes} conExplorar={conExplorar} conEntrenar={conEntrenar} onRegistrar={puedeRegistrar ? () => setRegistrando(true) : null} />
       {/* El punto ●: «listo para empezar» con su última actividad (ver `EntrenoLibre`, variante «punto»). */}
       {registrando && puedeRegistrar && <EntrenoLibre userId={user.id} unidadPeso={miPerfil?.unidad_peso || 'kg'} variante="punto" alCerrar={() => setRegistrando(false)} />}
-      {/* Bienestar, 1RM y Ciencia ya no son pestañas: se abren como hoja encima, con su flecha para volver. */}
+      {/* Bienestar y 1RM ya no son pestañas: se abren como hoja encima, con su flecha para volver. */}
       {/* Mientras se hace un demo workout, un aviso para salir de la demo (12 oct 2026): sin él, la app se vería como la de alguien con un solo workout y no habría cómo volver. */}
       {demoActiva && (
         <div style={{ position: 'fixed', left: 0, right: 0, bottom: 'calc(86px + env(safe-area-inset-bottom))', zIndex: 40, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
@@ -2906,12 +2900,6 @@ export default function TrainingApp() {
       {hoja === 'oneRM' && !salud && (
         <HojaFlotante titulo="1RM" onCerrar={() => setHoja(null)}>
           <OneRMView oneRMs={oneRMs} ponRM={ponRM} enHoja />
-        </HojaFlotante>
-      )}
-      {hoja === 'science' && (
-        // Con un solo programa con ciencia, su nombre; con varios (equipo), cada uno lleva el suyo dentro y aquí no se dice ninguno.
-        <HojaFlotante titulo="Ciencia" subtitulo={programasConCiencia(programas).length === 1 ? programasConCiencia(programas)[0].title : undefined} onCerrar={() => setHoja(null)}>
-          <CienciaDelPlan />
         </HojaFlotante>
       )}
       {programaAbierto && hasPlan && (

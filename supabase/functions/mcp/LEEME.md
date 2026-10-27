@@ -96,7 +96,9 @@ la persona ya dijo no se vuelve a preguntar, y lo que se puede deducir se deduce
 Los parecidos son por letras (el catálogo está casi todo en inglés: «jalón» no encuentra «pull down»); esa
 traducción la hace la IA con `buscar_ejercicios`. Prueba: `scripts/prueba-mcp-preguntas.ts`.
 
-## La ciencia de un plan (7 oct 2026)
+## La ciencia de un plan (7 oct 2026) — QUITADA el 26 oct 2026
+
+**Andrés, 26 oct 2026: «nadie la usa y solo estorba».** Se quitaron `ver_ciencia_del_plan`, `editar_ciencia` y el argumento `ciencia` de `crear_plan`, `guardar_en_mis_planes` y de las fases. Lo que los planes ya traían se conserva en `data.ciencia` (no se muestra ni se borra). Lo de abajo queda como historia.
 
 Antes la pestaña «Ciencia» era texto fijo del programa de Andrés. Ahora es DATO de cada plan: recuadros con título y
 texto (`lib/ciencia.js`, copiado a `app/ciencia.js`) que el atleta lee en la tarjeta «Ciencia» de Home.

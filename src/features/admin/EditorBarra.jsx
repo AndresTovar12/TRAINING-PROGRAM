@@ -17,7 +17,7 @@ import { T, FONT, UI } from '@/lib/theme';
  * título (una ventana muy angosta) bajan a una segunda fila de esta misma barra, con los mismos
  * botones: nunca se juntan en un «Opciones».
  *
- * El último es «Más ▾» (7 oct 2026): lo que no se usa a cada rato —la foto del plan, la ciencia, eliminar el
+ * El último es «Más ▾» (7 oct 2026): lo que no se usa a cada rato —la foto del plan, eliminar el
  * programa— en un solo menú. Antes era un botón rojo de «Eliminar programa», que ocupaba el sitio de lo más
  * peligroso a la vista de todos.
  */
@@ -213,7 +213,7 @@ export default function EditorBarra({
           )}
           {programa.onMas && (
             <BotonDelPrograma
-              icono={Ellipsis} onClick={(e) => programa.onMas(e.currentTarget)} titulo="Foto, ciencia y más del programa"
+              icono={Ellipsis} onClick={(e) => programa.onMas(e.currentTarget)} titulo="Foto y más del programa"
             >
               <span>Más</span>
               <ChevronDown size={12} color={T.text3} />

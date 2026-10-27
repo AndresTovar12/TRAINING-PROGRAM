@@ -126,7 +126,7 @@ const ACCOUNTS = [
 const PANTALLAS = {
   // texto del botón/pestaña a tocar → nombre legible del destino
   admin: [['Atletas', 'lista de atletas'], ['Ejercicios', 'repertorio'], ['Coaches', 'coaches']],
-  atleta: [['Plan', 'plan'], ['Bienestar', 'bienestar'], ['1RM', '1RM'], ['Ciencia', 'ciencia'], ['Hoy', 'inicio']],
+  atleta: [['Plan', 'plan'], ['Bienestar', 'bienestar'], ['1RM', '1RM'], ['Hoy', 'inicio']],
 };
 
 /**

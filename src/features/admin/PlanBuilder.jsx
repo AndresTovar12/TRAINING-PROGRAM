@@ -4,7 +4,7 @@ import {
   ArrowLeft, X, Plus, Trash2, Copy, ChevronRight, ChevronUp, ChevronDown,
   ChevronLeft, Loader2, Check, Layers, Dumbbell, StickyNote, Zap,
   Save, FolderOpen, Clipboard, Eraser, CalendarDays, Repeat, Scale, Video,
-  Image as ImageIcon, ImagePlus, Sparkles, CopyPlus, Sun, Moon, RefreshCw, PlayCircle,
+  Image as ImageIcon, ImagePlus, CopyPlus, Sun, Moon, RefreshCw, PlayCircle,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
@@ -30,8 +30,7 @@ import BloqueDelPrograma from '@/features/admin/BloqueDelPrograma';
 import MenuDeAcciones from '@/features/admin/MenuDeAcciones';
 import CampoDeFoto from '@/features/admin/CampoDeFoto';
 import HojaFlotante from '@/components/HojaFlotante';
-import EditorDeCiencia from '@/features/admin/EditorDeCiencia';
-import { normalizaCiencia, recuadroVacio, cuantosRecuadros } from '@/lib/ciencia';
+import { normalizaCiencia } from '@/lib/ciencia';
 import { useFasesAbiertas } from '@/features/admin/useFasesAbiertas';
 import EditorBarra, { BarraDelCelular, BotonesDeHistorial } from '@/features/admin/EditorBarra';
 import { HistorialContext, enVentanaFlotante, useHistorial, useHistorialDelEditor } from '@/lib/useHistorial';
@@ -1881,8 +1880,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
   const isWeekly = kind === 'weekly';
   /* LA FOTO Y LA CIENCIA DEL PLAN (7 oct 2026). Son del plan entero, no de una fase. `fotoPlan` es la que sale en Home cuando
      la fase de hoy no tiene la suya (y la única en una rutina o en «varias semanas», que no tienen fases que mostrar);
-     `cienciaPlan`, los recuadros de «Ciencia» (ver `lib/ciencia.js`). La foto de cada fase vive en la fase (`image`). Las dos
-     se deshacen con todo lo demás. */
+     `cienciaPlan`, los recuadros de «Ciencia» que el plan ya traía: desde el 26 oct 2026 no se muestran ni se editan, solo se
+     conservan al guardar. La foto de cada fase vive en la fase (`image`). Se deshacen con todo lo demás. */
   const [fotoPlan, setFotoPlan] = useState(() => (enCatalogo ? (catalogo.foto || '') : (planRow?.data?.foto || '')));
   const [cienciaPlan, setCienciaPlan] = useState(() => normalizaCiencia(enCatalogo ? catalogo.ciencia : planRow?.data?.ciencia));
   const [formasAbiertas, setFormasAbiertas] = useState(false);
@@ -2121,31 +2120,6 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
   const touch = (fn) => { hist.registra(); setPhases(fn); };
   const cambiaTitulo = (v) => { hist.registra(); setTitle(v); };
   const cambiaFotoPlan = (v) => { hist.registra(); setFotoPlan(v); };
-  /* LOS RECUADROS DE CIENCIA. Cada grupo es «plan» (los de todo el plan) o el id de una fase (los suyos, que viajan con
-     ella). Todo cambio pasa por el historial como cualquier otro; escribir seguido en un campo cuenta como un solo paso. */
-  const recuadrosDe = (clave) => (clave === 'plan' ? cienciaPlan : (phases.find((f) => f.id === clave)?.ciencia ?? []));
-  const ponRecuadros = (clave, lista) => {
-    if (clave === 'plan') { hist.registra(); setCienciaPlan(lista); return; }
-    touch((ps) => ps.map((f) => (f.id === clave ? { ...f, ciencia: lista } : f)));
-  };
-  const cienciaAgrega = (clave) => {
-    const r = recuadroVacio();
-    ponRecuadros(clave, [...recuadrosDe(clave), r]);
-    return r.id;
-  };
-  const cienciaCambia = (clave, id, patch) => ponRecuadros(clave, recuadrosDe(clave).map((r) => (r.id === id ? { ...r, ...patch } : r)));
-  const cienciaMueve = (clave, id, delta) => {
-    const lista = [...recuadrosDe(clave)];
-    const i = lista.findIndex((r) => r.id === id);
-    const j = i + delta;
-    if (i < 0 || j < 0 || j >= lista.length) return;
-    [lista[i], lista[j]] = [lista[j], lista[i]];
-    ponRecuadros(clave, lista);
-  };
-  const cienciaQuita = (clave, id) => {
-    ponRecuadros(clave, recuadrosDe(clave).filter((r) => r.id !== id));
-    avisaConDeshacer('Recuadro quitado');
-  };
   const patchPhase = (pi, patch) => touch((ps) => ps.map((p, i) => (i === pi ? { ...p, ...(typeof patch === 'function' ? patch(p) : patch) } : p)));
   const patchWeek = (pi, wi, patch) => patchPhase(pi, (p) => ({
     weekData: p.weekData.map((w, j) => (j === wi ? { ...w, ...(typeof patch === 'function' ? patch(w) : patch) } : w)),
@@ -2156,8 +2130,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
 
   /* Lo que va a Mis planes de lo que hay en pantalla: una rutina semanal es una «rutina» (los días de su
      semana) y lo demás un «programa». */
-  /* Los recuadros de ciencia se escriben crudos (con sus espacios y, mientras se teclea, a medias) y se limpian AL GUARDAR:
-     sin título ni texto no hay recuadro, y una fase o un plan sin ninguno no lleva el campo. */
+  /* «Ciencia» ya no se edita ni se muestra (Andrés, 26 oct 2026: nadie la usaba). Lo que un plan ya traía se conserva tal cual al guardar,
+     para no borrar nada: sin título ni texto no hay recuadro, y una fase o un plan sin ninguno no lleva el campo. */
   const cienciaParaGuardar = () => normalizaCiencia(cienciaPlan);
   const sinCienciaVacia = (f) => {
     const { ciencia: cruda, ...resto } = f;
@@ -2648,8 +2622,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     onUsar: isWeekly ? () => setModal({ type: 'tpl-week' }) : (!enCatalogo ? () => setModal({ type: 'desde-plan' }) : undefined),
     textoUsar: isWeekly ? 'Usar rutina' : 'Usar plan', iconoUsar: FolderOpen,
     tituloUsar: isWeekly ? 'Usar una rutina de Mis planes' : 'Usar un programa o una rutina de Mis planes',
-    /* «Más ▾»: lo del programa que no se usa a cada rato (la foto de Home, la ciencia y eliminar) en UN solo botón. Andrés,
-       7 oct 2026: el editor ya está saturado, y la ciencia «no debe ser muy relevante» aquí. */
+    /* «Más ▾»: lo del programa que no se usa a cada rato (la foto de Home y eliminar) en UN solo botón. Andrés,
+       7 oct 2026: el editor ya está saturado. «Ciencia» salió de aquí el 26 oct 2026. */
     onMas: (ancla) => setMenu({ tipo: 'mas', ancla }),
   };
 
@@ -3086,10 +3060,6 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
           titulo={isWeekly ? 'Rutina' : 'Programa'} ancla={menu.ancla} onClose={() => setMenu(null)}
           acciones={[
             { icon: ImagePlus, texto: 'Foto del plan', onClick: () => setModal({ type: 'foto-plan' }) },
-            {
-              icon: Sparkles, onClick: () => setModal({ type: 'ciencia' }),
-              texto: cuantosRecuadros(cienciaPlan, phases) ? `Ciencia del plan · ${cuantosRecuadros(cienciaPlan, phases)}` : 'Ciencia del plan',
-            },
             ...(puedeEliminar ? [{ icon: Trash2, texto: textoEliminar, onClick: () => eliminarPrograma(), peligro: true }] : []),
           ]}
         />
@@ -3249,22 +3219,6 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
             setModal(null);
           }}
         />
-      )}
-      {modal?.type === 'ciencia' && (
-        <HojaFlotante
-          titulo="Ciencia del plan" subtitulo={`El porqué del plan, que ${t('el atleta')} lee en «Ciencia».`} onCerrar={() => setModal(null)}
-        >
-          <EditorDeCiencia
-            grupos={[
-              { clave: 'plan', nombre: estructura === 'fases' ? 'Todo el plan' : null, recuadros: cienciaPlan },
-              ...(estructura === 'fases'
-                ? phases.filter((f) => (f.ciencia ?? []).length > 0).map((f) => ({ clave: f.id, nombre: f.name || 'Fase', recuadros: f.ciencia }))
-                : []),
-            ]}
-            fases={estructura === 'fases' ? phases.map((f) => ({ id: f.id, name: f.name })) : null}
-            onAgregar={cienciaAgrega} onCambiar={cienciaCambia} onMover={cienciaMueve} onQuitar={cienciaQuita}
-          />
-        </HojaFlotante>
       )}
       {modal?.type === 'foto-plan' && (
         <HojaFlotante titulo="Foto del plan" onCerrar={() => setModal(null)}>

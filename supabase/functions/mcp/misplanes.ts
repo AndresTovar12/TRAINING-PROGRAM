@@ -4,7 +4,7 @@ import { z } from 'npm:zod@^4.1.13'
 import type { Quien } from './sesion.ts'
 import { Aviso, diaDesdeTexto, fechaDelAtleta, nombreDe, NOMBRE_DIA, respuesta, seguro, sinAcentos, mismoTexto, buscarPersona, sinConfirmarBorrado, TEXTO_CONFIRMADO_BORRAR } from './util.ts'
 import {
-  armarFasesDeLaIA, avisosDeRespuestas, BORRA, CIENCIA, ESCRIBE, ESTRUCTURA_OK, FASE, FASES, planDe, SESION_CON_DIA, SIN_CANTIDAD_OK, SIN_FICHA_OK, SOLO_LEER,
+  armarFasesDeLaIA, avisosDeRespuestas, BORRA, ESCRIBE, ESTRUCTURA_OK, FASE, FASES, planDe, SESION_CON_DIA, SIN_CANTIDAD_OK, SIN_FICHA_OK, SOLO_LEER,
 } from './coach.ts'
 import {
   buscarFase, buscarSemana, describirDia, describirSemana, diaDesdeEntrada, fasesDe, guardarFases, normalizar, planQueEdito, repertorioVisible, tipoDePlan,
@@ -350,11 +350,9 @@ export function herramientasDeMisPlanes(server: McpServer, quien: Quien) {
       return respuesta({ ...cabecera, ...(dia ? { sesiones: verDia(f, w) } : { dias: describirSemana(w), pista: 'Pide un "dia" para ver sus ejercicios.' }) })
     }
 
-    const ciencia = Array.isArray(data.ciencia) && data.ciencia.length ? { ciencia: `${data.ciencia.length} recuadro(s) del porqué del plan` } : {}
     if (fase === undefined || fase === '') {
       return respuesta({
         ...cabecera,
-        ...ciencia,
         fases: fases.map((f: any, i: number) => ({ n: f.num ?? i + 1, nombre: f.name, semanas: (f.weekData ?? []).length, sesiones: (f.weekData ?? []).reduce((n: number, w: any) => n + (w.days ?? []).filter((d: any) => d.cat !== 'off').length, 0) })),
         pista: 'Pide una "fase" para ver sus semanas, y "semana" y "dia" para bajar al detalle.',
       })
@@ -394,7 +392,6 @@ export function herramientasDeMisPlanes(server: McpServer, quien: Quien) {
       tipo: z.enum(['programa', 'rutina', 'workout']).optional().describe('Camino 2: qué se arma.'),
       sesiones: z.array(SESION_CON_DIA).optional().describe('Camino 2, rutina o workout: las sesiones. En un workout "dia" no importa (se ignora); normalmente una sesión, dos si es mañana y tarde.'),
       fases: FASES,
-      ciencia: CIENCIA,
       sin_ficha_ok: SIN_FICHA_OK,
       sin_cantidad_ok: SIN_CANTIDAD_OK,
       estructura_ok: ESTRUCTURA_OK,
@@ -402,7 +399,7 @@ export function herramientasDeMisPlanes(server: McpServer, quien: Quien) {
     },
     annotations: ESCRIBE,
   }, seguro(async (a: any) => {
-    const { nombre, descripcion, carpeta, desde_atleta, fases_elegidas, fase, semana, dia, solo_tipos, sin_tipos, tipo, sesiones, fases, ciencia, sin_ficha_ok, sin_cantidad_ok, estructura_ok, de } = a
+    const { nombre, descripcion, carpeta, desde_atleta, fases_elegidas, fase, semana, dia, solo_tipos, sin_tipos, tipo, sesiones, fases, sin_ficha_ok, sin_cantidad_ok, estructura_ok, de } = a
     if (!String(nombre ?? '').trim()) throw new Aviso('Falta el nombre con el que se guarda.')
     const armando = !!(tipo || sesiones?.length || fases?.length)
     if (desde_atleta && armando) throw new Aviso('Elige UNO: o guardas algo del plan de un atleta ("desde_atleta"), o lo armas desde cero ("tipo" con "fases" o "sesiones"). No los dos a la vez.')
@@ -441,14 +438,14 @@ export function herramientasDeMisPlanes(server: McpServer, quien: Quien) {
         data = workoutDeSesiones(dias)
         tipoFinal = 'workout'
       } else {
-        const { nuevas, cienciaNueva } = armarFasesDeLaIA({ tipo: tipo === 'rutina' ? 'rutina' : 'fases', sesiones, fases, ciencia }, repertorio, rev)
+        const { nuevas } = armarFasesDeLaIA({ tipo: tipo === 'rutina' ? 'rutina' : 'fases', sesiones, fases }, repertorio, rev)
         aceptado = exigirRespuestas({ revision: rev, catalogo: repertorio, plan: null, respuestas: { sin_ficha_ok, sin_cantidad_ok, estructura_ok } })
         const normales = normalizar(nuevas)
         if (tipo === 'rutina') {
-          data = rutinaDePlan({ phases: normales, ciencia: cienciaNueva })
+          data = rutinaDePlan({ phases: normales, ciencia: undefined })
           tipoFinal = 'rutina'
         } else {
-          data = programaDePlan({ kind: 'periodized', estructura: 'fases', phases: normales, foto: undefined, ciencia: cienciaNueva })
+          data = programaDePlan({ kind: 'periodized', estructura: 'fases', phases: normales, foto: undefined, ciencia: undefined })
           tipoFinal = 'programa'
         }
       }
