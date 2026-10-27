@@ -15,6 +15,7 @@ import { limpiaFormato, resumenDeFormato, textoDeResultado } from './app/formato
 import { CAT_COLORS, tipoDeSesion } from './app/theme.js'
 import { MAX_TEXTO, MAX_TITULO, normalizaCiencia, nuevoRecuadro } from './app/ciencia.js'
 import { claseDe, duracionTexto } from './app/clases.js'
+import { adaptadorDeRegistros, esFilaDePegadas, fasesConPegadas, reglasDe } from './app/pegadas.js'
 
 /**
  * Leer y escribir planes con la MISMA forma que usa la app.
@@ -125,6 +126,12 @@ export interface Programa {
   clave?: string | null
   cursorBase?: any
   compra?: { id: string; estado: string; tipo: string; periodoHasta: string | null }
+  /** Sesiones que un profesional (el fisio) le pegó al programa del coach (p78, 26 oct 2026): mismas fases y semanas que el del coach, cada semana trae solo lo de esa persona. */
+  sobre?: boolean
+  /** El programa al que van pegadas: de él es el puntero (`wr:cursor`); lo pegado no tiene el suyo. */
+  sigueA?: Programa
+  /** Lo que el atleta anota de lo pegado se guarda con llaves estables (la regla y el día); el adaptador las traduce a posición (`vista`) y de vuelta (`llaveEstable`). */
+  adaptador?: { vista: (guardado: any) => Record<string, any>; llaveEstable: (id: string) => string }
 }
 
 /**
@@ -190,6 +197,34 @@ export async function programasComprados(quien: Quien): Promise<Programa[]> {
     })
 }
 
+/**
+ * Las SESIONES PEGADAS al programa del coach (p78, 26 oct 2026), una por profesional del equipo que las haya puesto: lo que el fisio le agrega al atleta sobre el programa en que ya trabaja.
+ * En la app son un programa más (`PlanContext`); aquí igual, para que «¿qué me toca hoy?» las incluya y lo que se anote caiga donde la app lo lee (`wr:sessions@<profesional>:sobre`).
+ * Viven en filas `plans` en borrador (`data.tipo = 'pegadas'`) que ningún otro lector ve; sin programa del coach principal no hay sobre qué pegar, igual que en la app.
+ * Si falla leerlas, no se rompe nada: simplemente no hay pegadas que mostrar.
+ */
+export async function programasSobre(quien: Quien, userId: string, propios: Programa[], equipo: Miembro[]): Promise<Programa[]> {
+  const principal = propios.find((p) => p.esPrincipal)
+  if (!principal) return []
+  const { data, error } = await quien.db.from('plans').select(CAMPOS_PLAN).eq('user_id', userId).eq('status', 'draft')
+  if (error) return []
+  const vigentes = new Map(equipo.filter((m) => !m.esPrincipal && m.estado === 'activo').map((m) => [m.profesionalId, m]))
+  const kind = tipoDePlan(principal.plan)
+  const lista: Programa[] = []
+  for (const fila of (data ?? []) as Plan[]) {
+    const m = fila.profesional_id ? vigentes.get(fila.profesional_id) : null
+    const reglas = reglasDe(fila)
+    if (!m || !esFilaDePegadas(fila) || !reglas.length) continue
+    const fases = fasesConPegadas(reglas, fasesDe(principal.plan), { autorId: m.profesionalId as any, semanal: kind === 'weekly' })
+    lista.push({
+      plan: { id: `${fila.id}:sobre`, user_id: userId, title: 'Sesiones sobre el programa', status: 'active', data: { kind, phases: fases }, updated_at: fila.updated_at, profesional_id: m.profesionalId } as Plan,
+      profesionalId: m.profesionalId, clave: `${m.profesionalId}:sobre`, sobre: true, sigueA: principal, adaptador: adaptadorDeRegistros(fases, kind),
+      de: `${m.de} (sesiones sobre tu programa)`, rol: m.rol, nombre: m.nombre, usuario: m.usuario, esPrincipal: false, altaEn: m.altaEn,
+    })
+  }
+  return lista.sort((a, b) => a.de.localeCompare(b.de))
+}
+
 /** ¿Tiene más de un programa, o el suyo es de un profesional del equipo? Entonces cada cosa dice de quién es. */
 export const conEquipo = (programas: Programa[]) => programas.length > 1 || programas.some((p) => !p.esPrincipal)
 
@@ -222,6 +257,23 @@ export function buscarPorReferencia<T extends Referible>(lista: T[], ref: string
 
 /** De qué programa se habla: uno de los del atleta, por su profesional. */
 export const elegirPrograma = (programas: Programa[], de: string) => buscarPorReferencia(programas, de)
+
+/** Qué cuenta como «lo mismo» al decir de quién: todo lo de un profesional (su programa y lo que pegó) va junto; cada plan comprado va aparte. */
+const grupoDe = (p: Programa) => (p.clave && !p.sobre ? p.clave : `a:${p.profesionalId ?? 'principal'}`)
+
+/**
+ * Lo de quien dice `de`, que puede ser más de un programa: el de un profesional y las sesiones que ese profesional pegó al del coach (p78). La persona se busca igual que siempre
+ * (`elegirPrograma`) entre un candidato por grupo —el programa propio antes que lo pegado—, y se devuelve todo lo de ese grupo.
+ */
+export function elegirProgramas(programas: Programa[], de: string): Programa[] {
+  const porGrupo = new Map<string, Programa>()
+  for (const p of programas) {
+    const ya = porGrupo.get(grupoDe(p))
+    if (!ya || (ya.sobre && !p.sobre)) porGrupo.set(grupoDe(p), p)
+  }
+  const elegido = buscarPorReferencia([...porGrupo.values()], de)
+  return programas.filter((p) => grupoDe(p) === grupoDe(elegido))
+}
 
 /**
  * De quién es el programa de este atleta que ESTA persona lee o cambia por

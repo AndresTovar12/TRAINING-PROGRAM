@@ -7,8 +7,8 @@ import {
   type Dia,
 } from './util.ts'
 import {
-  buscarFase, buscarSemana, claveDeRegistro, conEquipo, describirDia, describirSemana, ejerciciosConLlave, elegirPrograma,
-  fasesDe, idDeSesion, planesActivos, programasComprados, resumenDelPlan, tipoDePlan, type Plan, type Programa,
+  buscarFase, buscarSemana, claveDeRegistro, conEquipo, describirDia, describirSemana, ejerciciosConLlave, elegirProgramas, equipoDe,
+  fasesDe, idDeSesion, planesActivos, programasComprados, programasSobre, resumenDelPlan, tipoDePlan, type Plan, type Programa,
 } from './plan.ts'
 import {
   cursorAlDia, defaultCursor, findPreviousWeight, historialDePeso, isValidCursor, sessionForToday, today,
@@ -42,10 +42,14 @@ export function cursorDeHoy(fases: any[], guardado: any, fecha: Date) {
  */
 // Un plan COMPRADO lleva sus registros en `@compra:<id>` (no en la clave del profesional) y, mientras no haya puntero guardado, empieza donde entró (`cursorBase`).
 export const sufijoDe = (pr: Pick<Programa, 'profesionalId'> & { clave?: string | null }) => pr.clave ?? pr.profesionalId
-export const cursorDe = (estado: Record<string, any>, pr: Pick<Programa, 'profesionalId'> & { clave?: string | null; cursorBase?: any }) =>
-  estado[claveDeRegistro('wr:cursor', sufijoDe(pr))] ?? pr.cursorBase
-export const registrosDe = (estado: Record<string, any>, pr: Pick<Programa, 'profesionalId'> & { clave?: string | null }) =>
-  estado[claveDeRegistro('wr:sessions', sufijoDe(pr))] ?? {}
+// Lo pegado al programa del coach (p78) no tiene puntero propio: va por el del coach. Y lo que el atleta anotó ahí se guarda con llaves estables; `vista` las vuelve de posición, como las pide el resto.
+type Registrable = Pick<Programa, 'profesionalId'> & Partial<Pick<Programa, 'clave' | 'cursorBase' | 'sigueA' | 'adaptador'>>
+export const cursorDe = (estado: Record<string, any>, pr: Registrable): any =>
+  (pr.sigueA ? cursorDe(estado, pr.sigueA) : (estado[claveDeRegistro('wr:cursor', sufijoDe(pr))] ?? pr.cursorBase))
+export const registrosDe = (estado: Record<string, any>, pr: Registrable) => {
+  const guardado = estado[claveDeRegistro('wr:sessions', sufijoDe(pr))] ?? {}
+  return pr.adaptador ? pr.adaptador.vista(guardado) : guardado
+}
 
 export interface Ubicacion {
   fase: any
@@ -95,8 +99,10 @@ export function ubicarDia(plan: Plan, cursorGuardado: any, args: { fecha?: strin
 
 /** Los programas del atleta y su estado, de una sola vez. */
 async function programasDe(quien: Quien) {
-  const [propios, comprados, estado] = await Promise.all([planesActivos(quien, quien.id), programasComprados(quien), estadoDe(quien, quien.id)])
-  return { programas: [...propios, ...comprados], estado }
+  const equipo = await equipoDe(quien, quien.id)
+  const [propios, comprados, estado] = await Promise.all([planesActivos(quien, quien.id, equipo), programasComprados(quien), estadoDe(quien, quien.id)])
+  const pegadas = await programasSobre(quien, quien.id, propios, equipo)
+  return { programas: [...propios, ...pegadas, ...comprados], estado }
 }
 
 /**
@@ -105,7 +111,7 @@ async function programasDe(quien: Quien) {
  * `de`: ese, aunque tenga alta.
  */
 export function programasQueSeVen(programas: Programa[], de?: string) {
-  if (de && String(de).trim()) return { elegidos: [elegirPrograma(programas, de)], dadosDeAlta: [] as Programa[] }
+  if (de && String(de).trim()) return { elegidos: elegirProgramas(programas, de), dadosDeAlta: [] as Programa[] }
   const vigentes = programas.filter((p) => !p.altaEn)
   if (!vigentes.length) return { elegidos: programas, dadosDeAlta: [] as Programa[] }
   return { elegidos: vigentes, dadosDeAlta: programas.filter((p) => p.altaEn) }
@@ -192,13 +198,14 @@ export function herramientasDelAtleta(server: McpServer, quien: Quien) {
       ...resumenDelPlan(pr.plan, cursorDe(estado, pr), hoy.date),
       sesiones_hechas: Object.values(registrosDe(estado, pr)).filter((s: any) => s?.completed).length,
     })
-    if (de || programas.length === 1) {
-      const pr = de ? elegirPrograma(programas, de) : programas[0]
+    const elegidos = de ? elegirProgramas(programas, de) : programas
+    if (elegidos.length === 1) {
+      const pr = elegidos[0]
       return respuesta({ ...(conEquipo(programas) ? { de: pr.de } : {}), ...resumen(pr), hoy: hoy.texto })
     }
     return respuesta({
       hoy: hoy.texto,
-      programas: programas.map((pr) => ({
+      programas: elegidos.map((pr) => ({
         de: pr.de,
         ...(pr.altaEn ? { dado_de_alta_el: fechaLarga(pr.altaEn) } : {}),
         ...resumen(pr),
@@ -297,7 +304,7 @@ export function herramientasDelAtleta(server: McpServer, quien: Quien) {
   }, seguro(async ({ ejercicio, de }: any) => {
     const { programas, estado } = await programasDe(quien)
     const rotular = conEquipo(programas)
-    const seleccion = de ? [elegirPrograma(programas, de)] : programas
+    const seleccion = de ? elegirProgramas(programas, de) : programas
     const u = quien.unidad
     // `desdeKilos` devuelve '' si no hay número; aquí siempre lo hay.
     const enUnidad = (kg: number) => Number(desdeKilos(kg, u))
@@ -380,14 +387,17 @@ export function herramientasDelAtleta(server: McpServer, quien: Quien) {
     // ¿En cuál de sus programas anota? El que diga `de`; si tiene uno solo, ese;
     // si no, el que tenga sesión ese día (y esos ejercicios). Nunca a ciegas:
     // un peso anotado en el programa equivocado no se nota hasta semanas después.
+    const nombrado = de && String(de).trim() ? elegirProgramas(programas, de) : null
     let pr: Programa
-    if (de && String(de).trim()) {
-      pr = elegirPrograma(programas, de)
-    } else if (programas.length === 1) {
+    if (nombrado?.length === 1) {
+      pr = nombrado[0]
+    } else if (!nombrado && programas.length === 1) {
       pr = programas[0]
     } else {
-      const vigentes = programas.filter((x) => !x.altaEn)
-      const conSesion = (vigentes.length ? vigentes : programas).flatMap((x) => {
+      // Sin `de`, los que ya te dieron de alta no mandan sesiones; con `de` que abarca varios (el programa de tu fisio y lo que pegó), entre esos.
+      const posibles = nombrado ?? programas
+      const vigentes = nombrado ? posibles : posibles.filter((x) => !x.altaEn)
+      const conSesion = (vigentes.length ? vigentes : posibles).flatMap((x) => {
         try {
           const ub = ubicarDia(x.plan, cursorDe(estado, x), args)
           return ub.entradas.length ? [{ pr: x, u: ub }] : []
@@ -449,7 +459,9 @@ export function herramientasDelAtleta(server: McpServer, quien: Quien) {
     }
     if (!Object.keys(parche).length) throw new Aviso('No hay nada que anotar: manda al menos un peso, lo que hizo, notas o si terminó.')
 
-    const { error } = await quien.db.rpc('mezclar_mi_estado', { p_usuario: quien.id, p_cambios: { [claveSesiones]: parche } })
+    // Lo pegado se guarda con la llave estable (la regla y el día), no con la posición: así sigue siendo de ese día aunque el fisio agregue o cambie reglas.
+    const cambios = pr.adaptador ? Object.fromEntries(Object.entries(parche).map(([id, v]) => [pr.adaptador!.llaveEstable(id), v])) : parche
+    const { error } = await quien.db.rpc('mezclar_mi_estado', { p_usuario: quien.id, p_cambios: { [claveSesiones]: cambios } })
     if (error) throw new Error(error.message)
     return respuesta({
       listo: true,
