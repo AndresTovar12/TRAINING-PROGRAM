@@ -170,6 +170,55 @@ async function cierraSiHayAtleta(compraId: string, estado: string) {
   await actualizaCompra(compraId, { estado, actualizada_en: ahora().toISOString() })
 }
 
+/* CORREOS DE COMPRAS (A de Andrés, 26 oct 2026): cobro fallido y recibo de cada pago. Salen por Resend, igual que el código de 6 dígitos (`correo-de-la-cuenta`). Respetan «Avisos» de Mi perfil:
+   solo se mandan si «Compras y membresías» y «Por correo» están encendidos (sin fila guardada, los de fábrica: encendidos). UN CORREO QUE FALLA NUNCA TUMBA EL AVISO DE STRIPE: se anota y sigue. */
+const DOMINIOS_SIN_BUZON = ['sin-correo.traininglabapp.com', 'traininglab.app']
+const sinBuzon = (correo: string) => DOMINIOS_SIN_BUZON.some((d) => correo.toLowerCase().endsWith(`@${d}`) || correo.toLowerCase().endsWith(`.${d}`))
+const pesos = (n: number) => `$${Number(n).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`
+const fechaLarga = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Mexico_City' }) : '')
+const escapa = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+function correoConMarca({ titulo, parrafos }: { titulo: string; parrafos: string[] }) {
+  const cuerpo = parrafos.map((x) => `<p style="font-size:15px;line-height:1.5;color:#3d4250;margin:0 0 12px">${escapa(x)}</p>`).join('')
+  return `<!doctype html><html><body style="margin:0;background:#f4f5f8;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111318">
+  <div style="max-width:460px;margin:0 auto;padding:32px 20px">
+    <div style="background:#ffffff;border-radius:20px;padding:32px 28px;border:1px solid #e6e8ee">
+      <div style="font-size:22px;font-weight:800;letter-spacing:-0.4px">Training <span style="color:#1E40E0">Lab</span></div>
+      <p style="font-size:18px;font-weight:800;margin:22px 0 12px">${escapa(titulo)}</p>
+      ${cuerpo}
+      <p style="font-size:13px;line-height:1.5;color:#6b7080;margin:18px 0 0">Puedes apagar estos correos en Mi perfil → Avisos.</p>
+    </div>
+  </div></body></html>`
+}
+
+async function mandaCorreoDeCompra(c: Obj, { asunto, titulo, parrafos }: { asunto: string; titulo: string; parrafos: string[] }) {
+  try {
+    if (!c.atleta_id) return
+    const llave = (Deno.env.get('RESEND_API_KEY') ?? Deno.env.get('SMTP_PASSWORD') ?? '').trim()
+    if (!llave) return
+    const { data: u } = await bd.auth.admin.getUserById(c.atleta_id)
+    const correo = String(u?.user?.email ?? '').trim()
+    if (!correo || sinBuzon(correo)) return
+    const { data: prefs } = await bd.from('preferencias_de_avisos').select('compras, por_correo').eq('user_id', c.atleta_id).maybeSingle()
+    if (prefs && (prefs.compras === false || prefs.por_correo === false)) return
+    const remitente = (Deno.env.get('CORREO_REMITENTE') ?? 'Training Lab <no-reply@traininglabapp.com>').trim()
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${llave}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: remitente, to: [correo], subject: asunto, html: correoConMarca({ titulo, parrafos }), text: `${titulo}\n\n${parrafos.join('\n\n')}\n\nPuedes apagar estos correos en Mi perfil → Avisos.` }),
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (!r.ok) console.error('stripe-webhook: el correo de compra no salió', r.status, (await r.text()).slice(0, 160))
+  } catch (e) {
+    console.error('stripe-webhook: el correo de compra falló:', e instanceof Error ? e.message : e)
+  }
+}
+
+const tituloDelPlan = async (c: Obj) => {
+  const { data } = await bd.from('vitrina_planes').select('titulo').eq('id', c.vitrina_plan_id).maybeSingle()
+  return data?.titulo ?? 'tu plan'
+}
+
 async function atiende(evento: Obj) {
   const o: Obj = evento.data?.object ?? {}
   switch (evento.type) {
@@ -192,6 +241,12 @@ async function atiende(evento: Obj) {
       if (!suscripcion && o.payment_intent && clave()) {
         const pi = await llamaStripe(clave(), 'GET', `/v1/payment_intents/${idDe(o.payment_intent)}`)
         await registraPago(c, { bruto: (o.amount_total ?? 0) / 100, cobro: idDe(pi.latest_charge), factura: null })
+        // También su recibo (un pago único no pasa por `invoice.paid`).
+        const plan = await tituloDelPlan(c)
+        await mandaCorreoDeCompra(c, {
+          asunto: `Recibo de ${plan}`, titulo: 'Recibimos tu pago',
+          parrafos: [`Recibimos tu pago de «${plan}»: ${pesos((o.amount_total ?? 0) / 100)}.`, 'Este correo es tu recibo.'],
+        })
       }
       return
     }
@@ -207,6 +262,19 @@ async function atiende(evento: Obj) {
         let cobro = cobroDeFactura(o)
         if (!cobro && o.id && clave()) cobro = cobroDeFactura(await llamaStripe(clave(), 'GET', `/v1/invoices/${o.id}`))
         await registraPago(c, { bruto: o.amount_paid / 100, cobro, factura: o.id })
+        // El recibo: cada pago que entra, con su monto y hasta cuándo queda pagado. La primera vez dice «compra»; las siguientes, «renovación».
+        const plan = await tituloDelPlan(c)
+        const renovacion = o.billing_reason === 'subscription_cycle'
+        const hasta = aFecha(finDePeriodoDeFactura(o))
+        await mandaCorreoDeCompra(c, {
+          asunto: `${renovacion ? 'Renovamos' : 'Recibo de'} ${plan}`,
+          titulo: renovacion ? 'Renovamos tu membresía' : 'Recibimos tu pago',
+          parrafos: [
+            `${renovacion ? 'Renovamos' : 'Recibimos tu pago de'} «${plan}»: ${pesos(o.amount_paid / 100)}.`,
+            ...(hasta ? [`Queda pagado hasta el ${fechaLarga(hasta)}.`] : []),
+            'Este correo es tu recibo.',
+          ],
+        })
       }
       return
     }
@@ -215,7 +283,20 @@ async function atiende(evento: Obj) {
       if (!c) { console.error(`stripe-webhook: ${evento.type} ${evento.id} sin compra conocida`); return }
       if (!['activa', 'gracia'].includes(c.estado)) return
       const limite = new Date(Date.now() + DIAS_DE_GRACIA * 24 * 3600 * 1000).toISOString()
+      const primerFallo = c.estado === 'activa' // Stripe reintenta el cobro varias veces: el correo sale una sola vez, al primer fallo
       await actualizaCompra(c.id, { estado: 'gracia', gracia_hasta: c.gracia_hasta ?? limite, actualizada_en: ahora().toISOString() })
+      if (primerFallo) {
+        const plan = await tituloDelPlan(c)
+        await mandaCorreoDeCompra(c, {
+          asunto: `No pudimos cobrar tu renovación de ${plan}`,
+          titulo: 'No pudimos cobrar tu renovación',
+          parrafos: [
+            `Intentamos cobrar la renovación de «${plan}» y el banco no lo aceptó.`,
+            `Revisa que tu tarjeta tenga fondos y esté vigente. Stripe volverá a intentarlo en los próximos días; si el pago no pasa, tu membresía vence el ${fechaLarga(c.gracia_hasta ?? limite)} y dejas de ver el plan. Lo que ya anotaste se queda.`,
+            'Puedes revisar el estado en la app: Mi perfil → Compras.',
+          ],
+        })
+      }
       return
     }
     case 'customer.subscription.updated': {
