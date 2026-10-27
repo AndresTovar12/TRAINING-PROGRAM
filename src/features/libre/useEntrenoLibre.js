@@ -57,7 +57,11 @@ export function useUbicacionActual(activo) {
     return fuente.sigue((p) => {
       if (!(p.precision <= 100)) return;
       const nuevo = { lat: p.lat, lon: p.lon };
-      setPunto(nuevo);
+      // `pre`, `vel` y `rumbo` solo viajan al mapa (el círculo de precisión y el cono del punto); al teléfono se guarda solo el lugar.
+      setPunto({
+        ...nuevo, ...(typeof p.precision === 'number' ? { pre: Math.round(p.precision) } : {}),
+        ...(typeof p.vel === 'number' ? { vel: p.vel } : {}), ...(typeof p.rumbo === 'number' ? { rumbo: p.rumbo } : {}),
+      });
       try { localStorage.setItem(LLAVE_ULTIMA_UBICACION, JSON.stringify(nuevo)); } catch { /* sin almacenamiento: solo se pierde el «último lugar» */ }
     }, () => {});
   }, [activo, hay, fuente]);

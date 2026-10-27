@@ -90,6 +90,8 @@ export function agregaPunto(muestras, punto, t) {
   if (typeof punto.fc === 'number') m.fc = Math.round(punto.fc);
   if (velGps != null) m.vel = Math.round(velGps * 100) / 100;
   if (!quieto && typeof punto.rumbo === 'number' && punto.rumbo >= 0) m.rumbo = Math.round(punto.rumbo);
+  // El error del GPS (m): el mapa del iPhone dibuja con él el círculo de precisión del punto mientras la señal es pobre.
+  if (typeof punto.precision === 'number' && punto.precision >= 0) m.pre = Math.round(punto.precision);
   return [...muestras, m];
 }
 
