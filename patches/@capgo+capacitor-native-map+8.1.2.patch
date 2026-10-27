@@ -147,7 +147,7 @@ index 5d27c04..311fee0 100644
      }
  
 diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
-index b88c508..f5bc04b 100644
+index b88c508..77a62f4 100644
 --- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
 +++ b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
 @@ -1,6 +1,8 @@
@@ -427,13 +427,13 @@ index b88c508..f5bc04b 100644
 +    /// El cono apunta hacia donde va (GPS, si va rápido) o hacia donde mira el iPhone (brújula), visto en la pantalla: menos lo que ya giró el mapa.
 +    private func mueveCono() {
 +        guard let m = marcador else { return }
-+        guard let fuente = rumboGps ?? HeadingFollow.suavizado else { m.ponCono(visible: false); return }
++        guard let fuente = rumboGps ?? NativeMapPlugin.HeadingFollow.suavizado else { m.ponCono(visible: false); return }
 +        let objetivo = SeguidorDeCamara.diferencia(0, fuente - giroActual)
 +        let actual = giroDelCono ?? objetivo
 +        let nuevo = actual + SeguidorDeCamara.diferencia(actual, objetivo) * 0.25
 +        giroDelCono = nuevo
 +        // Con el rumbo del GPS el cono es angosto; con la brújula, tan abierto como su error (entre 20° y 50° hacia cada lado).
-+        let abertura = rumboGps != nil ? 20.0 : max(20, min(HeadingFollow.precision ?? 30, 50))
++        let abertura = rumboGps != nil ? 20.0 : max(20, min(NativeMapPlugin.HeadingFollow.precision ?? 30, 50))
 +        m.ponCono(visible: true, grados: nuevo, abertura: abertura)
 +    }
 +}
