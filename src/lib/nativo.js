@@ -16,9 +16,10 @@ export const enLaApp = () => Capacitor.isNativePlatform();
 /* El GPS del teléfono, COMPARTIDO.
    El plugin nativo solo atiende UNA escucha a la vez, pero en la app la piden varias pantallas (la señal de «antes de salir», la ruta del entreno, cada sprint, el mapa). Con una escucha
    por pantalla, cada una al abrirse reiniciaba el GPS (arranque en frío) y al cerrarse podía apagar la de otra. Aquí hay UNA sola escucha viva y todas se cuelgan de ella:
-   · se enciende con la primera pantalla que la pide y se apaga unos segundos DESPUÉS de que la última la suelta (así el paso de «antes» a «corriendo» no la reinicia);
+   · se enciende con la primera pantalla que la pide y se apaga un minuto DESPUÉS de que la última la suelta (así el paso de «antes» a «corriendo», una pausa
+     o un descanso entre sprints no la reinicia: con 8 s, al volver se perdían los primeros segundos mientras el GPS «encontraba» la señal otra vez);
    · a quien llega le entrega al instante el último punto si es reciente: «dónde estoy» sale sin esperar. */
-const GRACIA_MS = 8000;
+const GRACIA_MS = 60000;
 const PUNTO_VIGENTE_MS = 20000;
 const escuchas = new Set();
 let ultimo = null; // { punto, en }
@@ -38,9 +39,12 @@ async function enciende() {
       (p, error) => {
         if (error) { aTodas((e) => e.alError?.(error.code === 'NOT_AUTHORIZED' ? 'negado' : 'sin_senal')); return; }
         if (!p) return;
+        // `vel` (m/s) y `rumbo` (grados) los mide el iPhone: el ritmo de ahora sale de la velocidad, mucho más estable que distancia entre tiempo.
         const punto = {
           lat: p.latitude, lon: p.longitude, precision: p.accuracy,
           ...(typeof p.altitude === 'number' ? { alt: p.altitude } : {}),
+          ...(typeof p.speed === 'number' && p.speed >= 0 ? { vel: p.speed } : {}),
+          ...(typeof p.bearing === 'number' && p.bearing >= 0 ? { rumbo: p.bearing } : {}),
         };
         ultimo = { punto, en: Date.now() };
         aTodas((e) => e.alPunto(punto));
@@ -97,6 +101,9 @@ export async function iniciaNativo() {
 
   // Antes de cualquier `await`: las pantallas de entreno leen la fuente al dibujarse.
   try { usaFuenteDeUbicacion(fuenteDelTelefono); } catch { /* se queda el GPS del navegador */ }
+
+  // El código del mapa de Apple se baja desde ya (en iPhone): así, al abrir un mapa, no se gastan segundos del tiempo de espera en descargarlo.
+  if (Capacitor.getPlatform() === 'ios') import('@capgo/capacitor-native-map').catch(() => {});
 
   try {
     const { StatusBar, Style } = await import('@capacitor/status-bar');

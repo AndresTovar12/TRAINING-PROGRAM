@@ -131,8 +131,8 @@ La lista plana es el **mapa de regreso**: el paso *i* que ejecutó el reloj es `
 
 ## 7. Lo que NO está (a propósito)
 
-- Ninguna app nativa, ni la del reloj. Este documento y `entrenoCanonico.js` son la base, no el adaptador.
-- **GPS y cardio con la pantalla en la mano en la web**: descartado por Andrés. El seguimiento con pantalla bloqueada pide ubicación en segundo plano, que solo existe en la app nativa (y en un reloj, lo lleva el reloj).
+- (Actualizado 27 oct 2026) La app de iPhone YA existe (TestFlight, ver `docs/app-iphone.md`) y trae el GPS del teléfono con pantalla bloqueada (`lib/nativo.js`) y el mapa de Apple (`MapaNativo.jsx`). Este documento y `entrenoCanonico.js` siguen siendo la base de los pasos; el adaptador del reloj es la app TrainingLabWatch.
+- **El GPS en la web** solo mide con la pantalla encendida (el navegador no da ubicación en segundo plano); la carrera con pantalla bloqueada es de la app. Desde el 27 oct 2026: un punto por segundo, el ritmo de ahora sale de la velocidad del GPS (mediana de 10 s), el temblor de alguien parado no suma metros, y en una pausa el GPS sigue encendido (se ignoran los puntos) para no perder segundos al reanudar.
 - Lo que el sensor mide de vuelta (pulso, ruta, ritmo por vuelta) no tiene dónde guardarse todavía. Cuando haya app nativa: probablemente `entreno.sensor` por paso, con la misma regla de objetos por llave.
 - «Grabar técnica para el coach» está apagado (`src/lib/funciones.js`); hoy solo existe su botón con «Pronto» y el campo `tecnica`.
 

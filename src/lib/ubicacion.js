@@ -17,8 +17,14 @@ export const usaGps = (deporte) => CON_GPS.includes(deporte);
 
 /** Un punto con más error que esto (en metros) no se usa: al arrancar, el GPS da puntos a 100 m o más mientras «encuentra» la señal. */
 export const PRECISION_MAXIMA = 30;
-/** Cada cuánto (segundos) se guarda un punto: el GPS da uno por segundo; con uno cada 2 s basta para la ruta y pesa la mitad. */
-const CADA = 2;
+/** Ya con un punto bueno, los siguientes deben ser más precisos (auditoría del GPS, 27 oct 2026): uno de 25-30 m a media carrera suma metros falsos. */
+export const PRECISION_CON_SENAL = 20;
+/** Por debajo de esta velocidad (m/s) se está parado: el punto solo cuenta si se alejó más que su propio error (el temblor del GPS no suma metros). */
+export const VELOCIDAD_PARADO = 0.5;
+/** Cada cuánto (segundos) se guarda un punto: uno por segundo, cada uno que da el GPS. Con uno cada 2 s la cámara del mapa avanzaba a saltos. */
+const CADA = 1;
+/** El ritmo de AHORA: la mediana de la velocidad que da el GPS en estos últimos segundos (la velocidad del teléfono es mucho más estable que distancia/tiempo). */
+const SEGUNDOS_RITMO = 10;
 
 const fuenteDelNavegador = {
   nombre: 'navegador',
@@ -29,9 +35,12 @@ const fuenteDelNavegador = {
       (p) => alPunto({
         lat: p.coords.latitude, lon: p.coords.longitude, precision: p.coords.accuracy,
         ...(typeof p.coords.altitude === 'number' ? { alt: p.coords.altitude } : {}),
+        ...(typeof p.coords.speed === 'number' && p.coords.speed >= 0 ? { vel: p.coords.speed } : {}),
+        ...(typeof p.coords.heading === 'number' && p.coords.heading >= 0 ? { rumbo: p.coords.heading } : {}),
       }),
       (e) => alError?.(e?.code === 1 ? 'negado' : 'sin_senal'),
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 },
+      // `maximumAge`: un punto de hace unos segundos sirve para arrancar (con 0, el navegador espera uno nuevo y el primero tarda).
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 },
     );
     return () => navigator.geolocation.clearWatch(id);
   },
@@ -44,34 +53,69 @@ export const fuenteDeUbicacion = () => fuenteActual ?? fuenteDelNavegador;
 
 const seis = (v) => Math.round(v * 1e6) / 1e6;
 
-/**
- * Suma un punto a las muestras, en el segundo `t` del entreno (sin contar pausas). Devuelve las MISMAS muestras si el punto no sirve
- * (impreciso, o llegó antes de `CADA` segundos del anterior) y unas nuevas si sí.
- */
-export function agregaPunto(muestras, punto, t) {
-  if (!punto || !(punto.precision <= PRECISION_MAXIMA)) return muestras;
-  if (typeof punto.lat !== 'number' || typeof punto.lon !== 'number') return muestras;
-  const ultima = muestras[muestras.length - 1];
-  if (ultima && t - ultima.t < CADA) return muestras;
-  const m = { t: Math.round(t), lat: seis(punto.lat), lon: seis(punto.lon) };
-  if (typeof punto.alt === 'number') m.alt = Math.round(punto.alt * 10) / 10;
-  if (typeof punto.fc === 'number') m.fc = Math.round(punto.fc);
-  return [...muestras, m];
+/** Metros entre dos puntos `{lat, lon}` (en línea recta; para unos cuantos metros sobra). */
+export function metrosEntrePuntos(a, b) {
+  const rad = Math.PI / 180;
+  const x = (b.lon - a.lon) * rad * Math.cos(((a.lat + b.lat) / 2) * rad);
+  const y = (b.lat - a.lat) * rad;
+  return Math.sqrt(x * x + y * y) * 6371000;
 }
 
 /**
+ * Suma un punto a las muestras, en el segundo `t` del entreno (sin contar pausas). Devuelve las MISMAS muestras si el punto no sirve y unas nuevas si sí.
+ * No sirve: impreciso (más de `PRECISION_MAXIMA` m para el primero, de `PRECISION_CON_SENAL` m después) o llegó antes de `CADA` s del anterior.
+ * El temblor de alguien parado (va a menos de `VELOCIDAD_PARADO` y no se alejó más que su propio error) entra en el MISMO lugar que la muestra anterior:
+ * no suma metros. `vel` es la velocidad que da el GPS (m/s); si no la da (algunos navegadores), se calcula con la distancia y el tiempo.
+ */
+export function agregaPunto(muestras, punto, t) {
+  if (!punto || typeof punto.lat !== 'number' || typeof punto.lon !== 'number') return muestras;
+  const ultima = muestras[muestras.length - 1];
+  if (!(punto.precision <= (ultima ? PRECISION_CON_SENAL : PRECISION_MAXIMA))) return muestras;
+  if (ultima && t - ultima.t < CADA) return muestras;
+  const velGps = typeof punto.vel === 'number' && punto.vel >= 0 ? punto.vel : null;
+  let quieto = false;
+  if (ultima) {
+    const d = metrosEntrePuntos(ultima, punto);
+    const vel = velGps ?? d / Math.max(1, t - ultima.t);
+    quieto = vel < VELOCIDAD_PARADO && d < punto.precision;
+  }
+  // Parado: la muestra se queda en el MISMO lugar que la anterior (cero metros), pero entra: así el tiempo sigue corriendo y el ritmo dice «parado».
+  const m = quieto
+    ? { t: Math.round(t), lat: ultima.lat, lon: ultima.lon, ...(typeof ultima.alt === 'number' ? { alt: ultima.alt } : {}) }
+    : { t: Math.round(t), lat: seis(punto.lat), lon: seis(punto.lon) };
+  if (!quieto && typeof punto.alt === 'number') m.alt = Math.round(punto.alt * 10) / 10;
+  if (typeof punto.fc === 'number') m.fc = Math.round(punto.fc);
+  if (velGps != null) m.vel = Math.round(velGps * 100) / 100;
+  return [...muestras, m];
+}
+
+const mediana = (xs) => {
+  const o = [...xs].sort((a, b) => a - b);
+  const k = Math.floor(o.length / 2);
+  return o.length % 2 ? o[k] : (o[k - 1] + o[k]) / 2;
+};
+
+/**
  * Lo que se ve mientras corre: `{ distanciaM, ritmoSKm, kms }`.
- *  - `ritmoSKm`: el ritmo de los últimos ~30 s (segundos por km), `null` si todavía no hay para medirlo o si está parado.
+ *  - `ritmoSKm`: el ritmo de AHORA (segundos por km), `null` si todavía no hay para medirlo o si está parado. Con la velocidad del GPS (el teléfono), la mediana
+ *    de los últimos `SEGUNDOS_RITMO` s; sin ella (la web), la distancia de los últimos ~30 s.
  *  - `kms`: los kilómetros completos `[{ n, dur }]` (el del motor, sin el trozo final).
  */
 export function enVivo(muestras) {
   const m = completaMuestras(muestras).filter((x) => typeof x.dist === 'number');
   if (m.length < 2) return { distanciaM: 0, ritmoSKm: null, kms: [] };
   const ultima = m[m.length - 1];
-  const desde = [...m].reverse().find((x) => ultima.t - x.t >= 30) ?? m[0];
-  const dd = ultima.dist - desde.dist;
-  const dt = ultima.t - desde.t;
-  const ritmoSKm = dd >= 20 && dt > 0 ? Math.round((dt / dd) * 1000) : null;
+  const velocidades = (muestras ?? []).filter((x) => typeof x.vel === 'number' && ultima.t - x.t <= SEGUNDOS_RITMO).map((x) => x.vel);
+  let ritmoSKm;
+  if (velocidades.length >= 3) {
+    const v = mediana(velocidades);
+    ritmoSKm = v >= VELOCIDAD_PARADO ? Math.round(1000 / v) : null;
+  } else {
+    const desde = [...m].reverse().find((x) => ultima.t - x.t >= 30) ?? m[0];
+    const dd = ultima.dist - desde.dist;
+    const dt = ultima.t - desde.t;
+    ritmoSKm = dd >= 20 && dt > 0 ? Math.round((dt / dd) * 1000) : null;
+  }
   const kms = vueltasPorKm(muestras).filter((v) => v.dist >= 990).map((v) => ({ n: v.n, dur: v.dur }));
   return { distanciaM: Math.round(ultima.dist), ritmoSKm, kms };
 }

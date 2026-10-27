@@ -58,19 +58,43 @@ index 4b86a6b..20edb9a 100644
          } else if coordinate != nil {
              mapView.setCenter(center, animated: animate)
 diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMapsPlugin.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMapsPlugin.swift
-index 4b47502..d840138 100644
+index 4b47502..325b16b 100644
 --- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMapsPlugin.swift
 +++ b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/CapacitorAppleMapsPlugin.swift
-@@ -14,6 +14,9 @@ public class NativeMapPlugin: CAPPlugin, CAPBridgedPlugin, MKMapViewDelegate {
+@@ -14,6 +14,11 @@ public class NativeMapPlugin: CAPPlugin, CAPBridgedPlugin, MKMapViewDelegate {
      public let identifier = "NativeMapPlugin"
      public let jsName = "NativeMap"
      public let pluginMethods: [CAPPluginMethod] = [
 +        CAPPluginMethod(name: "startHeading", returnType: CAPPluginReturnPromise),
 +        CAPPluginMethod(name: "stopHeading", returnType: CAPPluginReturnPromise),
 +        CAPPluginMethod(name: "setHeadingFollow", returnType: CAPPluginReturnPromise),
++        CAPPluginMethod(name: "followCamera", returnType: CAPPluginReturnPromise),
++        CAPPluginMethod(name: "stopFollowCamera", returnType: CAPPluginReturnPromise),
          CAPPluginMethod(name: "create", returnType: CAPPluginReturnPromise),
          CAPPluginMethod(name: "destroy", returnType: CAPPluginReturnPromise),
          CAPPluginMethod(name: "setCamera", returnType: CAPPluginReturnPromise),
+@@ -79,6 +84,13 @@ public class NativeMapPlugin: CAPPlugin, CAPBridgedPlugin, MKMapViewDelegate {
+     var maps = [String: Map]()
+     fileprivate let mapsLock = NSLock()
+ 
++    /// Training Lab (parche): el mapa de un id, con el candado (lo usa la cámara que sigue al corredor, en `Permissions.swift`).
++    func mapaPorId(_ id: String) -> Map? {
++        mapsLock.lock()
++        defer { mapsLock.unlock() }
++        return maps[id]
++    }
++
+     func toBackMap(containing point: CGPoint, in webView: WKWebView) -> Map? {
+         mapsLock.lock()
+         let candidates = maps.values.filter { $0.toBack && $0.isMapVisible }
+@@ -193,6 +205,7 @@ public class NativeMapPlugin: CAPPlugin, CAPBridgedPlugin, MKMapViewDelegate {
+                 return
+             }
+             self.mapsLock.unlock()
++            SeguidorDeCamara.todos.removeValue(forKey: id)?.para() // Training Lab (parche): la cámara que lo seguía se apaga con él
+             map.destroy()
+             call.resolve()
+         }
 diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ControlsBridge.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ControlsBridge.swift
 index 78c628f..8130199 100644
 --- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ControlsBridge.swift
@@ -123,7 +147,7 @@ index 5d27c04..311fee0 100644
      }
  
 diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
-index b88c508..0146133 100644
+index b88c508..9971f62 100644
 --- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
 +++ b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
 @@ -1,6 +1,8 @@
@@ -135,7 +159,7 @@ index b88c508..0146133 100644
  
  // MARK: - Location permission
  //
-@@ -52,6 +54,66 @@ extension NativeMapPlugin: CLLocationManagerDelegate {
+@@ -52,6 +54,94 @@ extension NativeMapPlugin: CLLocationManagerDelegate {
          }
      }
  
@@ -188,20 +212,175 @@ index b88c508..0146133 100644
 +            suave = (previo + 0.4 * diferencia + 360).truncatingRemainder(dividingBy: 360)
 +        }
 +        HeadingFollow.suavizado = suave
-+        // El giro lo hace el iPhone mismo, de forma continua (animación corta que arranca desde donde va): así no se siente a tirones como al pedirlo desde la página.
-+        for id in HeadingFollow.ids {
-+            guard let map = maps[id], let camara = map.mapView.camera.copy() as? MKMapCamera else { continue }
-+            camara.heading = suave
-+            UIView.animate(withDuration: 0.3, delay: 0, options: [.beginFromCurrentState, .curveLinear, .allowUserInteraction]) {
-+                map.mapView.camera = camara
-+            }
-+        }
++        // 27 oct 2026: la brújula ya NO toca `mapView.camera` (antes copiaba la cámara con el centro VIEJO y la reasignaba cada 2°: peleaba con el movimiento
++        // y el mapa giraba pero no avanzaba). Solo cambia el giro OBJETIVO de la cámara que sigue al corredor; quien la mueve es `SeguidorDeCamara`.
++        for id in HeadingFollow.ids { SeguidorDeCamara.todos[id]?.giro = suave }
 +        notifyListeners("onHeading", data: ["heading": suave, "accuracy": newHeading.headingAccuracy])
++    }
++
++    // MARK: Cámara que sigue al corredor (parche de Training Lab, 27 oct 2026)
++    // UNA sola cámara por mapa, movida cuadro por cuadro (CADisplayLink): el centro se desliza en línea recta del punto anterior al nuevo en el tiempo que hubo
++    // entre los dos puntos del GPS, y el giro, la inclinación y la distancia se acercan poco a poco a lo que se pidió. Nada más escribe la cámara mientras sigue:
++    // ni la brújula, ni animaciones de UIKit encimadas. Si la persona mueve el mapa con el dedo, la página llama `stopFollowCamera`.
++
++    @objc func followCamera(_ call: CAPPluginCall) {
++        guard let id = call.getString("id") else { call.reject("id requerido"); return }
++        let lat = call.getDouble("lat"), lng = call.getDouble("lng")
++        let zoom = call.getDouble("zoom"), pitch = call.getDouble("pitch"), heading = call.getDouble("heading")
++        let duracion = max(0, min(call.getDouble("duration") ?? 1, 3))
++        let salto = call.getBool("jump", false)
++        DispatchQueue.main.async {
++            guard let map = self.mapaPorId(id) else { call.reject("map not found"); return }
++            let seguidor = SeguidorDeCamara.todos[id] ?? SeguidorDeCamara(plugin: self, id: id, mapView: map.mapView)
++            SeguidorDeCamara.todos[id] = seguidor
++            if let z = zoom { seguidor.distancia = seguidor.distanciaPara(zoom: z, minZoom: map.config.minZoom, maxZoom: map.config.maxZoom) }
++            if let p = pitch { seguidor.inclinacion = max(0, min(p, 60)) }
++            if let h = heading { seguidor.giro = h }
++            if let lat = lat, let lng = lng { seguidor.irA(CLLocationCoordinate2D(latitude: lat, longitude: lng), en: duracion) }
++            if salto { seguidor.llegaYa() }
++            seguidor.arranca()
++            call.resolve()
++        }
++    }
++
++    @objc func stopFollowCamera(_ call: CAPPluginCall) {
++        guard let id = call.getString("id") else { call.reject("id requerido"); return }
++        DispatchQueue.main.async {
++            SeguidorDeCamara.todos.removeValue(forKey: id)?.para()
++            call.resolve()
++        }
 +    }
 +
      public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
          guard let call = pendingPermissionCall,
                manager.authorizationStatus != .notDetermined else {
+@@ -62,3 +152,126 @@ extension NativeMapPlugin: CLLocationManagerDelegate {
+         pendingPermissionCall = nil
+     }
+ }
++
++/// La cámara que sigue al corredor de UN mapa (ver `followCamera`).
++final class SeguidorDeCamara: NSObject {
++    static var todos = [String: SeguidorDeCamara]()
++
++    weak var plugin: NativeMapPlugin?
++    weak var mapView: MKMapView?
++    let id: String
++    private var enlace: CADisplayLink?
++
++    // Lo que se pidió (objetivo) y por dónde va (actual).
++    private var desde: CLLocationCoordinate2D
++    private var hacia: CLLocationCoordinate2D
++    private var centro: CLLocationCoordinate2D
++    private var inicio: CFTimeInterval = 0
++    private var duracion: Double = 0
++    var distancia: Double
++    var inclinacion: Double
++    var giro: Double
++    private var distanciaActual: Double
++    private var inclinacionActual: Double
++    private var giroActual: Double
++    private var distanciaPorZoom = [Double: Double]()
++    private var ultimoPuntoEnviado: CGPoint?
++    private var ultimoAvisoMs: CFTimeInterval = 0
++
++    init(plugin: NativeMapPlugin, id: String, mapView: MKMapView) {
++        self.plugin = plugin
++        self.id = id
++        self.mapView = mapView
++        // Se arranca desde donde está la cámara AHORA (se lee una sola vez, al crearse; después nunca).
++        let camara = mapView.camera
++        desde = camara.centerCoordinate; hacia = camara.centerCoordinate; centro = camara.centerCoordinate
++        distancia = camara.centerCoordinateDistance; distanciaActual = camara.centerCoordinateDistance
++        inclinacion = Double(camara.pitch); inclinacionActual = Double(camara.pitch)
++        giro = camara.heading; giroActual = camara.heading
++        super.init()
++    }
++
++    /// La distancia de cámara que da el mismo encuadre que el `zoom` del plugin (la misma cuenta que `setCamera`), calculada una vez por zoom.
++    func distanciaPara(zoom: Double, minZoom: Double?, maxZoom: Double?) -> Double {
++        if let d = distanciaPorZoom[zoom] { return d }
++        guard let mapa = mapView else { return distancia }
++        let z = clampZoom(zoom, minZoom: minZoom, maxZoom: maxZoom)
++        let ancho = Double(mapa.bounds.width > 0 ? mapa.bounds.width : UIScreen.main.bounds.width)
++        let alto = Double(mapa.bounds.height > 0 ? mapa.bounds.height : UIScreen.main.bounds.height)
++        let lonDelta = min(zoomToLongitudeDelta(z, widthPoints: ancho), 360.0)
++        let span = MKCoordinateSpan(latitudeDelta: min(lonDelta * (alto / max(ancho, 1)), 180.0), longitudeDelta: lonDelta)
++        // Se pone la región sin animar, se lee su distancia y se regresa la cámara: todo en el mismo instante, no se ve.
++        let antes = mapa.camera.copy() as? MKMapCamera
++        mapa.setRegion(mapa.regionThatFits(MKCoordinateRegion(center: centro, span: span)), animated: false)
++        let d = mapa.camera.centerCoordinateDistance
++        if let antes = antes { mapa.setCamera(antes, animated: false) }
++        distanciaPorZoom[zoom] = d
++        return d
++    }
++
++    /// El siguiente punto: el centro se desliza desde donde va AHORA hasta ahí, en `segundos` (el tiempo entre dos puntos del GPS).
++    func irA(_ destino: CLLocationCoordinate2D, en segundos: Double) {
++        desde = centro
++        hacia = destino
++        inicio = CACurrentMediaTime()
++        duracion = segundos
++    }
++
++    /// Todo llega de golpe (al abrir el mapa o desde muy lejos).
++    func llegaYa() {
++        desde = hacia; centro = hacia; duracion = 0
++        distanciaActual = distancia; inclinacionActual = inclinacion; giroActual = giro
++        pinta()
++    }
++
++    func arranca() {
++        guard enlace == nil else { return }
++        let e = CADisplayLink(target: self, selector: #selector(cuadro))
++        e.add(to: .main, forMode: .common)
++        enlace = e
++    }
++
++    func para() {
++        enlace?.invalidate()
++        enlace = nil
++    }
++
++    private static func diferencia(_ a: Double, _ b: Double) -> Double {
++        var d = (b - a).truncatingRemainder(dividingBy: 360)
++        if d > 180 { d -= 360 }
++        if d < -180 { d += 360 }
++        return d
++    }
++
++    @objc private func cuadro() {
++        guard mapView != nil else { para(); SeguidorDeCamara.todos.removeValue(forKey: id); return }
++        let f = duracion > 0 ? min(1, (CACurrentMediaTime() - inicio) / duracion) : 1
++        let nuevoCentro = CLLocationCoordinate2D(
++            latitude: desde.latitude + (hacia.latitude - desde.latitude) * f,
++            longitude: desde.longitude + (hacia.longitude - desde.longitude) * f
++        )
++        // Giro, inclinación y distancia: una fracción por cuadro (a 60 cuadros por segundo, ~0.3 s para llegar casi entero).
++        let dGiro = SeguidorDeCamara.diferencia(giroActual, giro)
++        let quieto = f >= 1 && abs(nuevoCentro.latitude - centro.latitude) < 1e-9 && abs(nuevoCentro.longitude - centro.longitude) < 1e-9
++            && abs(dGiro) < 0.05 && abs(inclinacion - inclinacionActual) < 0.05 && abs(distancia - distanciaActual) < 0.05
++        if quieto { return }
++        centro = nuevoCentro
++        giroActual = (giroActual + dGiro * 0.15 + 360).truncatingRemainder(dividingBy: 360)
++        inclinacionActual += (inclinacion - inclinacionActual) * 0.12
++        distanciaActual += (distancia - distanciaActual) * 0.12
++        pinta()
++    }
++
++    private func pinta() {
++        guard let mapa = mapView else { return }
++        mapa.camera = MKMapCamera(lookingAtCenter: centro, fromDistance: distanciaActual, pitch: CGFloat(inclinacionActual), heading: giroActual)
++        // Dónde quedó el corredor en la pantalla (para el cono de dirección de la página), solo si se movió y como mucho 4 veces por segundo.
++        let ahora = CACurrentMediaTime()
++        guard ahora - ultimoAvisoMs > 0.25 else { return }
++        let punto = mapa.convert(centro, toPointTo: mapa)
++        if let previo = ultimoPuntoEnviado, abs(previo.x - punto.x) < 1.5, abs(previo.y - punto.y) < 1.5 { return }
++        ultimoPuntoEnviado = punto
++        ultimoAvisoMs = ahora
++        plugin?.notifyListeners("onFollowPoint", data: ["mapId": id, "x": Double(punto.x), "y": Double(punto.y)])
++    }
++}
 diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ViewHelpers.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ViewHelpers.swift
 index 7348e3b..205a983 100644
 --- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ViewHelpers.swift

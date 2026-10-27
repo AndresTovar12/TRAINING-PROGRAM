@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {
   ANGULO_3D, CENTRO_SIN_DATOS, MAX_PUNTOS_RUTA, MINIMO_ENCUADRE_GRADOS, ZOOM_INICIAL, ZOOM_SIGUE, ZOOM_SIN_DATOS,
-  adelgazaRuta, metrosEntre, rumboDeRuta, diferenciaDeRumbo, suavizaRumbo, centroConReserva, claveDeRuta, conTiempoLimite, creaFila, encuadre, inicioDelMapa, planDeEnvio, puntosDeMuestras, ubicacionGuardada, usaMapaNativo,
+  adelgazaRuta, metrosEntre, rumboDeRuta, diferenciaDeRumbo, suavizaRumbo, claveDeRuta, conTiempoLimite, creaFila, encuadre, inicioDelMapa, planDeEnvio, puntosDeMuestras, ubicacionGuardada, usaMapaNativo,
 } from '../src/lib/mapaNativo.js';
 
 let n = 0;
@@ -55,22 +55,6 @@ await prueba('sin puntos nada; un punto se centra; varios dan una caja con marge
   assert.deepEqual(larga.southwest, { lat: 21.0, lng: -86.9 });
   assert.ok(Math.abs(larga.northeast.lat - 21.2) < 1e-9 && Math.abs(larga.northeast.lng + 86.7) < 1e-9);
   assert.ok(Math.abs(larga.centro.lat - 21.1) < 1e-9);
-});
-
-console.log('Reserva del panel de abajo');
-await prueba('el centro baja la mitad de lo que tapa el panel', () => {
-  // La pantalla enseña 0.01° en 800 pt; el panel tapa 300 pt → el centro baja 150 pt = 0.001875°.
-  const c = centroConReserva({ lat: 21, lng: -86 }, { gradosVisibles: 0.01, alturaPt: 800, reservaPt: 300 });
-  assert.ok(Math.abs(c.lat - (21 - 0.001875)) < 1e-12);
-  assert.equal(c.lng, -86);
-});
-await prueba('sin reserva o con datos raros no mueve nada; y nunca pasa del 80 % de la pantalla', () => {
-  const base = { lat: 21, lng: -86 };
-  assert.deepEqual(centroConReserva(base, { gradosVisibles: 0.01, alturaPt: 800, reservaPt: 0 }), base);
-  assert.deepEqual(centroConReserva(base, { gradosVisibles: 0, alturaPt: 800, reservaPt: 100 }), base);
-  assert.deepEqual(centroConReserva(base, { gradosVisibles: NaN, alturaPt: 800, reservaPt: 100 }), base);
-  const tope = centroConReserva(base, { gradosVisibles: 0.01, alturaPt: 800, reservaPt: 5000 });
-  assert.ok(Math.abs((21 - tope.lat) - 0.004) < 1e-12, 'tope: 80 % de 800 pt = 640 pt, la mitad = 320 pt = 0.004°');
 });
 
 console.log('Cuándo mandar la ruta');
