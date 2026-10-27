@@ -9,6 +9,7 @@ import { AvisoProvider } from '@/components/AvisoPasajero'
 import { iniciaNativo } from '@/lib/nativo'
 import { iniciaSinZoomAlEscribir } from '@/lib/sinZoomAlEscribir'
 import LimiteDeError from '@/components/LimiteDeError'
+import AvisoDeMudanza from '@/components/AvisoDeMudanza'
 
 // Dentro de la app de iPhone: barra de estado, GPS del teléfono, links que abren la app… (en la web no hace nada).
 iniciaNativo()
@@ -29,6 +30,7 @@ window.addEventListener('vite:preloadError', (evento) => {
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <LimiteDeError>
+      <AvisoDeMudanza />
       <AuthProvider>
         <MensajesProvider>
           <ConfirmacionProvider>
