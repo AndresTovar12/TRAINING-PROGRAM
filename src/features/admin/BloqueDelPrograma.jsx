@@ -8,7 +8,7 @@ import { T, FONT, UI } from '@/lib/theme';
  *   «TÍTULO DEL PLAN» + su casilla · «Programa por fases · Cambiar» · «Guardar plan» y «Más ▾»
  *
  * Los botones son de texto, sin caja: con el dedo no hace falta marcarlos. «Más ▾» (7 oct 2026) abre el menú con
- * lo que no se usa a cada rato: la foto del plan, la ciencia y eliminar el programa (que antes era un botón
+ * lo que no se usa a cada rato: la foto del plan y eliminar el programa (que antes era un botón
  * rojo suelto). Lo recibe de `PlanBuilder` ya resuelto en `programa` (la misma forma que usa la barra de la compu).
  */
 const ESTILOS = `

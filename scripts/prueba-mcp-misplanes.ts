@@ -99,7 +99,7 @@ const SEMBRADO = () => ({ carpetas_planes: CARPETAS, routine_templates: PLANTILL
   const { tools } = armar(SEMBRADO())
   const prog = sc(await tools.abrir_de_mis_planes({ item: 'Fuerza 8 semanas' }))
   igual(prog.fases.map((f: any) => [f.nombre, f.semanas, f.sesiones]), [['Fuerza', 2, 6], ['Potencia', 1, 1]], 'un programa enseña sus fases, sin traer todo')
-  cierto(/1 recuadro/.test(prog.ciencia) && !!prog.pista, 'dice que lleva ciencia y cómo bajar al detalle')
+  cierto(!!prog.pista && prog.ciencia === undefined, 'dice cómo bajar al detalle (y ya no habla de «Ciencia»)')
   const f1 = sc(await tools.abrir_de_mis_planes({ item: 'Fuerza 8 semanas', fase: '1' }))
   igual([f1.fase, f1.semanas.length, f1.semanas[0].dias.length], ['Fuerza', 2, 4], 'con una fase: sus semanas y días')
   const s1 = sc(await tools.abrir_de_mis_planes({ item: 'Fuerza 8 semanas', fase: 'Fuerza', semana: 1 }))
@@ -181,10 +181,10 @@ const SEMBRADO = () => ({ carpetas_planes: CARPETAS, routine_templates: PLANTILL
   igual(rut.guardado.resumen, '2 días · 2 sesiones', 'arma una rutina')
 
   const fases = [{ nombre: 'Base', semanas: [{ sesiones: [sesion] }, { sesiones: [sesion] }] }, { nombre: 'Pico', semanas: [{ sesiones: [sesion] }] }]
-  const prog = sc(await tools.guardar_en_mis_planes({ nombre: 'Programa nuevo', tipo: 'programa', fases, ciencia: [{ titulo: 'Porqué', texto: 'Progresión lineal' }] }))
+  const prog = sc(await tools.guardar_en_mis_planes({ nombre: 'Programa nuevo', tipo: 'programa', fases }))
   igual([prog.guardado.tipo, prog.guardado.resumen], ['programa', '2 fases · 3 semanas · 3 sesiones'], 'arma un programa por fases')
   const pf = datos.programas_guardados.at(-1)
-  igual([pf.data.kind, pf.data.estructura, pf.data.ciencia?.length, pf.kind], ['periodized', 'fases', 1, undefined], 'en programas_guardados, con su ciencia')
+  igual([pf.data.kind, pf.data.estructura, pf.data.ciencia, pf.kind], ['periodized', 'fases', undefined, undefined], 'en programas_guardados')
 
   // Lo que falta se pregunta y NO se guarda.
   const antes = datos.programas_guardados.length + datos.routine_templates.length
