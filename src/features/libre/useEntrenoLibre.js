@@ -3,14 +3,20 @@ import { agregaPunto, fuenteDeUbicacion } from '@/lib/ubicacion';
 import { LLAVE_ULTIMA_UBICACION, leeUbicacionGuardada } from '@/lib/mapaNativo';
 import { pideQueNoSeApague } from '@/lib/pantallaEncendida';
 import {
-  cronometroNuevo, cronometroVigente, pausa as pausar, reanuda as reanudar, segundosDe,
+  cronometroNuevo, cronometroVigente, decidePausaAutomatica, pausa as pausar, reanuda as reanudar, segundosDe,
 } from '@/lib/entrenoLibre';
+import { useStorageOpcional } from '@/contexts/AppStateContext';
+import { vibra } from '@/lib/avisosNativos';
 import { entrenosRecientes } from '@/lib/entrenoLibreApi';
 
 /* El estado del entreno libre. El cronómetro vive en `localStorage` (por persona): así sobrevive a cerrar la hoja, a cambiar de pestaña y a recargar la página; se cuenta con fechas
    (no con «ticks»), así que con la pantalla bloqueada el tiempo sigue corriendo bien. Lo guardado en la base lo piden `entrenosRecientes` y el resumen. */
 
 const llave = (userId) => `tl:entreno-libre:${userId}`;
+/** El ajuste «Pausa automática» (Mi perfil → Dispositivos). Encendido si nunca se tocó. */
+export const LLAVE_PAUSA_AUTOMATICA = 'ajustes:pausa-automatica';
+/** Una pausa de más de esto apaga el GPS (indicador azul y batería); al reanudar vuelve a encenderse y tarda unos segundos en encontrar señal. */
+const PAUSA_LARGA_MS = 5 * 60 * 1000;
 const llaveDeRuta = (userId) => `tl:entreno-libre-ruta:${userId}`;
 
 function lee(userId) {
@@ -85,12 +91,35 @@ export function useCronometroLibre(userId) {
 
   /* LA RUTA (solo si se empezó con GPS): cada punto de la fuente se vuelve una muestra en el segundo del entreno (sin pausas).
      En pausa se SIGUE escuchando y los puntos se ignoran (auditoría del GPS, 27 oct 2026): antes se soltaba el GPS, el teléfono lo apagaba y al reanudar se
-     perdían los primeros segundos mientras volvía a encontrar la señal. Se guarda en `localStorage` como el cronómetro, para que sobreviva a cerrar la hoja o
+     perdían los primeros segundos mientras volvía a encontrar la señal. Pasados 5 min de pausa sí se suelta (ver arriba).
+     PAUSA AUTOMÁTICA (como Strava, `decidePausaAutomatica`): con cada punto se decide si se detuvo o volvió a moverse. La pausa cuenta desde que se detuvo
+     y la vuelta desde que arrancó; vibra en los dos casos. Una pausa manual nunca se quita sola. Se guarda en `localStorage` como el cronómetro, para que sobreviva a cerrar la hoja o
      recargar. Con la pantalla bloqueada el navegador deja de medir; la app instalable trae su fuente con segundo plano (ver `lib/ubicacion.js`). */
   const [muestras, setMuestras] = useState(() => (userId ? leeRuta(userId) : []));
   const vivo = useRef(cronometro);
   useEffect(() => { vivo.current = cronometro; });
-  const conGps = !!cronometro?.gps;
+  const [pausaAutomatica] = useStorageOpcional(LLAVE_PAUSA_AUTOMATICA, true);
+  const conPausaAutomatica = useRef(pausaAutomatica);
+  useEffect(() => { conPausaAutomatica.current = pausaAutomatica; });
+  const lecturas = useRef([]); // lo último que dijo el GPS ({ t, vel, pre }), para decidir la pausa automática
+  const cambiaYa = useRef(cambia);
+  useEffect(() => { cambiaYa.current = cambia; });
+
+  /* UNA PAUSA LARGA APAGA EL GPS. A los 5 min de pausa se suelta el GPS; una pausa automática que dura tanto pasa a ser manual (ya no se reanuda sola:
+     sin GPS no habría cómo saber que volvió a moverse). `dormidoEn` guarda de QUÉ pausa se apagó: al reanudar, el GPS vuelve solo. */
+  const pausadoEn = cronometro?.pausadoEn ?? null;
+  const [dormidoEn, setDormidoEn] = useState(null);
+  useEffect(() => {
+    if (pausadoEn == null) return undefined;
+    const t = setTimeout(() => {
+      const c = vivo.current;
+      if (c?.pausadoEn !== pausadoEn) return;
+      if (c.automatica) { const { automatica: _a, ...manual } = c; vivo.current = manual; cambiaYa.current(manual); }
+      setDormidoEn(pausadoEn);
+    }, Math.max(0, pausadoEn + PAUSA_LARGA_MS - Date.now()));
+    return () => clearTimeout(t);
+  }, [pausadoEn]);
+  const conGps = !!cronometro?.gps && !(pausadoEn != null && dormidoEn === pausadoEn);
   useEffect(() => {
     if (!conGps) return undefined;
     const fuente = fuenteDeUbicacion();
@@ -100,6 +129,30 @@ export function useCronometroLibre(userId) {
     let vigente = true;
     pideQueNoSeApague().then((c) => { if (vigente) candado = c; else c?.suelta(); });
     const parar = fuente.sigue((p) => {
+      const c = vivo.current;
+      if (!c) return;
+      if (conPausaAutomatica.current && typeof p.vel === 'number') {
+        const ahoraS = Date.now() / 1000;
+        lecturas.current = [...lecturas.current.filter((x) => ahoraS - x.t <= 15), { t: ahoraS, vel: p.vel, pre: p.precision }];
+        const estado = c.pausadoEn == null ? 'corriendo' : (c.automatica ? 'pausa' : null);
+        const d = estado ? decidePausaAutomatica(lecturas.current, estado, c.deporte, ahoraS) : null;
+        if (d?.accion === 'pausa') {
+          const nuevo = pausar(c, Math.round(d.desde * 1000), { automatica: true });
+          vivo.current = nuevo;
+          cambiaYa.current(nuevo);
+          // La pausa cuenta desde que se detuvo: lo anotado en esos segundos (parado, sin metros) se quita para que el tiempo de la ruta no vaya hacia atrás.
+          const tope = segundosDe(nuevo);
+          setMuestras((m) => { const r = m.filter((x) => x.t <= tope); if (r.length !== m.length && userId) escribeRuta(userId, r); return r; });
+          vibra('listo');
+          return;
+        }
+        if (d?.accion === 'reanuda') {
+          const nuevo = reanudar(c, Math.round(d.desde * 1000));
+          vivo.current = nuevo;
+          cambiaYa.current(nuevo);
+          vibra('listo');
+        }
+      }
       if (vivo.current?.pausadoEn != null) return; // en pausa no se mide
       setMuestras((m) => {
         const nuevas = agregaPunto(m, p, segundosDe(vivo.current));

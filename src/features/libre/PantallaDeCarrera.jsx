@@ -60,6 +60,8 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
   const conMapa = act ? !!act.gps : true;
   const enBici = deporte === 'bici';
   const pausado = cronometro?.pausadoEn != null;
+  // La pausa que puso la app porque te detuviste (se quita sola al volver a moverte) se nombra distinto de la que pusiste tú.
+  const textoDePausa = cronometro?.automatica ? 'Pausa automática' : 'En pausa';
   const [vista, setVista] = useState('numeros'); // numeros | mapa
   const [resumen, setResumen] = useState(null); // lo que dio `crono.termina()` al tocar Terminar
   const [guardando, setGuardando] = useState(false);
@@ -94,7 +96,7 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
       const ritmoTxt = v.enBici ? `${v.ritmo > 0 ? (3600 / v.ritmo).toFixed(1) : '—'} km/h` : `${textoDeRitmo(v.ritmo)} /km`;
       const datos = {
         nombre: v.nombre, titulo: v.nombre, tipo: pausado ? 'pausa' : 'cardio',
-        detalle: pausado ? 'En pausa' : `${v.km.toFixed(2)} km · ${ritmoTxt}`,
+        detalle: pausado ? (v.cronometro?.automatica ? 'Pausa automática' : 'En pausa') : `${v.km.toFixed(2)} km · ${ritmoTxt}`,
         distancia: `${v.km.toFixed(2)} km`, ritmo: ritmoTxt,
         // La hora de inicio FIJA (el inicio real más lo que lleva en pausa): el reloj de la pantalla bloqueada cuenta solo desde ahí. Antes se recalculaba cada
         // 10 s con los segundos enteros y el reloj brincaba un segundo atrás o adelante.
@@ -106,7 +108,7 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
     publica();
     const id = setInterval(publica, 10000);
     return () => clearInterval(id);
-  }, [corriendoLibre, pausado]);
+  }, [corriendoLibre, pausado, cronometro?.automatica]);
   useEffect(() => () => { quitaDePantallaBloqueada(); terminaEnReloj(); }, []);
 
   const terminar = () => {
@@ -302,7 +304,7 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
         <div style={{ flex: 1 }} />
         <div data-map-overlay data-mapa-panel style={{ position: 'relative', margin: '0 12px', borderRadius: 24, padding: '14px 18px 16px', background: 'rgba(28,32,48,0.88)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5, fontWeight: 600, color: C.texto2 }}>
-            <span>{pausado ? 'En pausa' : nombre}</span>
+            <span>{pausado ? textoDePausa : nombre}</span>
             {ultimoKm && <span style={{ color: '#8FA9FF' }}>Km {ultimoKm.n} · {enBici ? velocidad(ultimoKm.dur) : textoDeRitmo(ultimoKm.dur)}</span>}
           </div>
           <div style={{ textAlign: 'center', fontSize: 52, fontWeight: 800, letterSpacing: -1.5, color: pausado ? C.texto2 : C.rojo, ...NUM_STYLE }}>{relojDeCronometro(segundos)}</div>
@@ -320,7 +322,7 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', padding: 'calc(14px + env(safe-area-inset-top)) 16px 0' }}>
         <button type="button" onClick={alMinimizar} aria-label="Minimizar" style={redondo}><ChevronDown size={22} /></button>
-        {pausado && <span style={{ alignSelf: 'center', fontSize: 14, fontWeight: 800, color: '#FFB547' }}>En pausa</span>}
+        {pausado && <span style={{ alignSelf: 'center', fontSize: 14, fontWeight: 800, color: '#FFB547' }}>{textoDePausa}</span>}
         <button type="button" onClick={alMinimizar} aria-label="Cerrar" style={{ ...redondo, visibility: 'hidden' }}><X size={20} /></button>
       </div>
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 18px 0', gap: 6 }}>

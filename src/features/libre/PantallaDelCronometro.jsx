@@ -105,7 +105,7 @@ export default function PantallaDelCronometro({ userId, crono, pendiente = null,
           <>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 76, fontWeight: 800, letterSpacing: -2, color: pausado ? LT.text3 : LT.text, lineHeight: 1, ...NUM_STYLE }} role="timer" aria-label="Tiempo del entreno">{relojDeCronometro(segundos)}</div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: LT.warning, marginTop: 8, minHeight: 18 }}>{pausado ? 'En pausa' : ''}</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: LT.warning, marginTop: 8, minHeight: 18 }}>{pausado ? (cronometro?.automatica ? 'Pausa automática' : 'En pausa') : ''}</div>
             </div>
             {conGps && <EnVivo deporte={deporte} vivo={vivo} muestras={muestras} vista={vista} setVista={setVista} />}
             {error && <div role="alert" style={{ padding: '9px 12px', borderRadius: 12, background: '#FDECEC', color: LT.danger, fontSize: 14, fontWeight: 700, width: '100%' }}>{error}</div>}
