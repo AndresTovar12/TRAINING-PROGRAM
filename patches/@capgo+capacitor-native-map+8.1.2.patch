@@ -147,7 +147,7 @@ index 5d27c04..311fee0 100644
      }
  
 diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
-index b88c508..9971f62 100644
+index b88c508..758408b 100644
 --- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
 +++ b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
 @@ -1,6 +1,8 @@
@@ -254,7 +254,7 @@ index b88c508..9971f62 100644
      public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
          guard let call = pendingPermissionCall,
                manager.authorizationStatus != .notDetermined else {
-@@ -62,3 +152,126 @@ extension NativeMapPlugin: CLLocationManagerDelegate {
+@@ -62,3 +152,144 @@ extension NativeMapPlugin: CLLocationManagerDelegate {
          pendingPermissionCall = nil
      }
  }
@@ -370,11 +370,29 @@ index b88c508..9971f62 100644
 +
 +    private func pinta() {
 +        guard let mapa = mapView else { return }
-+        mapa.camera = MKMapCamera(lookingAtCenter: centro, fromDistance: distanciaActual, pitch: CGFloat(inclinacionActual), heading: giroActual)
++        let camara = MKMapCamera(lookingAtCenter: centro, fromDistance: distanciaActual, pitch: CGFloat(inclinacionActual), heading: giroActual)
++        mapa.camera = camara
++        // El corredor va en medio de lo que NO tapan los márgenes del mapa (el panel de abajo), no en medio de la pantalla: no se sabe si MapKit respeta los
++        // márgenes con esta cámara, así que se mide. Si el corredor no cayó ahí, se recorre el centro de la cámara lo que haga falta (revisión de Fable 5).
++        // Si MapKit ya los respeta, no se corrige nada.
++        let b = mapa.bounds
++        let m = mapa.layoutMargins
++        var punto = mapa.convert(centro, toPointTo: mapa)
++        if b.width > 0, b.height > 0 {
++            let deseado = CGPoint(x: b.minX + m.left + (b.width - m.left - m.right) / 2, y: b.minY + m.top + (b.height - m.top - m.bottom) / 2)
++            if hypot(punto.x - deseado.x, punto.y - deseado.y) > 1 {
++                let bajoDeseado = mapa.convert(deseado, toCoordinateFrom: mapa)
++                camara.centerCoordinate = CLLocationCoordinate2D(
++                    latitude: centro.latitude + (centro.latitude - bajoDeseado.latitude),
++                    longitude: centro.longitude + (centro.longitude - bajoDeseado.longitude)
++                )
++                mapa.camera = camara
++                punto = mapa.convert(centro, toPointTo: mapa)
++            }
++        }
 +        // Dónde quedó el corredor en la pantalla (para el cono de dirección de la página), solo si se movió y como mucho 4 veces por segundo.
 +        let ahora = CACurrentMediaTime()
 +        guard ahora - ultimoAvisoMs > 0.25 else { return }
-+        let punto = mapa.convert(centro, toPointTo: mapa)
 +        if let previo = ultimoPuntoEnviado, abs(previo.x - punto.x) < 1.5, abs(previo.y - punto.y) < 1.5 { return }
 +        ultimoPuntoEnviado = punto
 +        ultimoAvisoMs = ahora

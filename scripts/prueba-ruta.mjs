@@ -26,6 +26,11 @@ assert.equal(v.kms.length, 1);
 assert.ok(Math.abs(v.kms[0].dur - 300) <= 3, `km 1 en ${v.kms[0].dur}`);
 assert.deepEqual(enVivo([]), { distanciaM: 0, ritmoSKm: null, kms: [] });
 
+// Una carrera que arranca a media segundo (t = s + 0.6): entran TODOS los puntos, uno por segundo (antes entraba uno de cada dos).
+let fase = [];
+for (let s = 0; s < 60; s += 1) fase = agregaPunto(fase, { lat: 19.4 + (s * 3) / metrosPorGradoLat, lon: -99.1, precision: 6, vel: 3 }, s + 0.6);
+assert.equal(fase.length, 60, `a media segundo entran ${fase.length} de 60`);
+
 // Parado con el temblor normal del GPS (±3 m, velocidad ~0): 0 metros, y el ritmo dice «parado».
 const seed = (i) => Math.sin(i * 12.9898) * 43758.5453 % 1;
 let quieto = [];
