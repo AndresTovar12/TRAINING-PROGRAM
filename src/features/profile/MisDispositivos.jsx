@@ -8,6 +8,8 @@ import { useConfirmacion } from '@/components/Confirmacion';
 import { useAviso } from '@/components/AvisoPasajero';
 import { Fila, Grupo, IconoDeFila, Interruptor } from '@/components/ui';
 import { KP } from '@/lib/theme';
+import { useStorageOpcional } from '@/contexts/AppStateContext';
+import { LLAVE_PAUSA_AUTOMATICA } from '@/features/libre/useEntrenoLibre';
 
 /* «DISPOSITIVOS» en Mi perfil (15 oct 2026). Andrés: «dónde administra los dispositivos que tiene conectados: Apple Watch, Garmin, Whoop…». La pantalla ya existe; cada conexión se enciende
    cuando esté hecha (`lib/dispositivos.js`). Desconectar funciona hoy: borra la conexión. Mientras tanto se puede importar un archivo de entreno en «Mis métricas».
@@ -16,6 +18,8 @@ import { KP } from '@/lib/theme';
 const LETRA = { apple_salud: null, garmin: ['G', '#1E40E0', '#E8EEFF'], whoop: ['W', '#C5305C', '#FDE8EE'], strava: ['S', '#C2620A', '#FFF0E1'] };
 
 export default function MisDispositivos({ onIrAMetricas }) {
+  // «Pausa automática» de la carrera libre (27 oct 2026). Se guarda con lo de la persona; en una cuenta de coach no hay dónde, y no sale.
+  const [pausaAutomatica, setPausaAutomatica, conAjustes] = useStorageOpcional(LLAVE_PAUSA_AUTOMATICA, true);
   const pregunta = useConfirmacion();
   const { avisa } = useAviso();
   const { user } = useAuth();
@@ -78,6 +82,11 @@ export default function MisDispositivos({ onIrAMetricas }) {
 
   return (
     <>
+      {conAjustes && (
+        <Grupo titulo="Al entrenar" pie="Correr, caminar o andar en bici con GPS: el cronómetro se pausa solo cuando te detienes y sigue solo al volver a moverte.">
+          <Fila texto="Pausa automática" derecha={<Interruptor activo={pausaAutomatica !== false} etiqueta="Pausa automática" onCambio={(v) => setPausaAutomatica(v)} />} />
+        </Grupo>
+      )}
       <Grupo pie="Lo que mida tu reloj entra a Salud y a tus métricas.">
         {PROVEEDORES.map((p) => {
           const c = estaConectado(p.id);

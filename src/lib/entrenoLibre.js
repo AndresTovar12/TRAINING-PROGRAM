@@ -38,8 +38,53 @@ export function distanciaEnMetros(texto, deporte) {
 
 export const cronometroNuevo = (deporte, ahora = Date.now()) => ({ deporte, inicio: ahora, pausadoEn: null, pausas: 0 });
 export const estaPausado = (c) => c?.pausadoEn != null;
-export const pausa = (c, ahora = Date.now()) => (estaPausado(c) ? c : { ...c, pausadoEn: ahora });
-export const reanuda = (c, ahora = Date.now()) => (estaPausado(c) ? { ...c, pausadoEn: null, pausas: c.pausas + Math.max(0, ahora - c.pausadoEn) } : c);
+/** Pausa. `automatica`: la puso la app porque te detuviste (se ve «Pausa automática» y se quita sola al volver a moverte). */
+export const pausa = (c, ahora = Date.now(), { automatica = false } = {}) => (estaPausado(c) ? c : { ...c, pausadoEn: ahora, ...(automatica ? { automatica: true } : {}) });
+export const reanuda = (c, ahora = Date.now()) => {
+  if (!estaPausado(c)) return c;
+  const { automatica: _a, ...resto } = c;
+  return { ...resto, pausadoEn: null, pausas: c.pausas + Math.max(0, ahora - c.pausadoEn) };
+};
+
+/* PAUSA AUTOMÁTICA (27 oct 2026, como Strava). Con GPS, la carrera libre se pausa sola cuando te detienes y se reanuda sola al volver a moverte.
+   Cuenta la VELOCIDAD que da el GPS del teléfono, solo de lecturas buenas (error ≤ 20 m). Para pausar hay que ir lento N segundos SEGUIDOS; para reanudar,
+   rápido M segundos seguidos: así un paso lento o una lectura rara no la disparan. Sin lecturas en los últimos 5 s no decide nada: perder la señal (un
+   túnel, un puente) NO es estar parado. */
+export const UMBRALES_DE_PAUSA = {
+  correr: { pausa: 0.6, reanuda: 1.0 },
+  caminar: { pausa: 0.6, reanuda: 1.0 },
+  senderismo: { pausa: 0.6, reanuda: 1.0 },
+  bici: { pausa: 1.0, reanuda: 2.0 },
+};
+const SEGUNDOS_PARA_PAUSAR = 3;
+const SEGUNDOS_PARA_REANUDAR = 2;
+const SIN_SENAL_S = 5;
+const HUECO_MAXIMO_S = 2;
+
+/**
+ * ¿Hay que pausar o reanudar? `lecturas`: las últimas del GPS, `{ t, vel, pre }` (t en segundos de reloj). `estado`: 'corriendo' o 'pausa' (una pausa
+ * AUTOMÁTICA: la manual no se reanuda sola). Devuelve `{ accion: 'pausa' | 'reanuda', desde }` (desde: el segundo en que empezó a ir lento o rápido) o `null`.
+ */
+export function decidePausaAutomatica(lecturas, estado, deporte, ahoraS = Date.now() / 1000) {
+  const u = UMBRALES_DE_PAUSA[deporte];
+  if (!u) return null;
+  const buenas = (lecturas ?? []).filter((x) => typeof x?.vel === 'number' && typeof x.pre === 'number' && x.pre <= 20 && typeof x.t === 'number');
+  const ultima = buenas.at(-1);
+  if (!ultima || ahoraS - ultima.t > SIN_SENAL_S) return null;
+  const pausando = estado === 'corriendo';
+  const cumple = pausando ? (x) => x.vel < u.pausa : (x) => x.vel > u.reanuda;
+  const necesita = pausando ? SEGUNDOS_PARA_PAUSAR : SEGUNDOS_PARA_REANUDAR;
+  // De la última hacia atrás, mientras cumpla y sin huecos de señal: ¿cuánto tiempo seguido lleva así?
+  let desde = null;
+  for (let i = buenas.length - 1; i >= 0; i -= 1) {
+    const x = buenas[i];
+    if (!cumple(x)) break;
+    if (desde !== null && desde - x.t > HUECO_MAXIMO_S) break;
+    desde = x.t;
+  }
+  if (desde === null || ultima.t - desde < necesita) return null;
+  return { accion: pausando ? 'pausa' : 'reanuda', desde };
+}
 
 /** Segundos que lleva corriendo (sin contar las pausas). */
 export function segundosDe(c, ahora = Date.now()) {

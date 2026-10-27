@@ -236,3 +236,28 @@ export function useStorage(key, def) {
 
   return [value, setValue];
 }
+
+/**
+ * Como `useStorage`, pero también fuera de `<AppStateProvider>` (la cuenta de un coach no lo tiene): ahí devuelve `[def, () => {}, false]` en vez de fallar.
+ * El tercer valor dice si de verdad se guarda.
+ */
+export function useStorageOpcional(key, def) {
+  const ctx = useContext(AppStateContext);
+  const [defInicial] = useState(def);
+  const store = ctx?.store;
+  const setStore = ctx?.setStore;
+  const value = ctx?.loaded && store && key in store ? store[key] : defInicial;
+  const setValue = useCallback(
+    (nv) => {
+      if (!setStore) return;
+      setStore((prev) => {
+        const prevVal = prev && key in prev ? prev[key] : defInicial;
+        const next = typeof nv === 'function' ? nv(prevVal) : nv;
+        if (next === prevVal) return prev;
+        return { ...prev, [key]: next };
+      });
+    },
+    [key, setStore, defInicial],
+  );
+  return [value, setValue, !!ctx];
+}

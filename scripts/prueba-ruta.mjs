@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { agregaPunto, enVivo, trazoDeRuta, textoDeRitmo, usaGps } from '../src/lib/ubicacion.js';
 import { preparaEntreno, construyeActividad } from '../src/lib/metricas/construye.js';
-import { entrenoLibre } from '../src/lib/entrenoLibre.js';
+import { entrenoLibre, decidePausaAutomatica, cronometroNuevo, pausa, reanuda } from '../src/lib/entrenoLibre.js';
 
 // Una carrera inventada hacia el norte: 1.25 km a 5:00/km (3.333 m/s), un punto por segundo.
 const metrosPorGradoLat = 111195;
@@ -69,5 +69,40 @@ assert.ok(series && JSON.stringify(series).includes('19.4'), 'la ruta va en las 
 // Lo que la persona escribió gana sobre el GPS.
 const prep2 = preparaEntreno({ ...entrenoLibre({ deporte: 'correr', inicioMs: Date.parse('2026-10-15T12:00:00Z'), duracionS: 376, distanciaM: 1500 }), muestras: m });
 assert.equal(construyeActividad(prep2, { umbrales: { fc_max: 190 }, conSeries: true }).fila.distancia_m, 1500);
+
+// PAUSA AUTOMÁTICA: lo que leería la app segundo a segundo (t en segundos de reloj).
+const simula = (velocidades, deporte = 'correr', { sinSenal = [] } = {}) => {
+  let estado = 'corriendo';
+  const lecturas = [];
+  const eventos = [];
+  velocidades.forEach((vel, t) => {
+    if (sinSenal.includes(t)) return;
+    lecturas.push({ t, vel, pre: 6 });
+    const d = decidePausaAutomatica(lecturas.slice(-15), estado, deporte, t);
+    if (d) { eventos.push({ ...d, en: t }); estado = d.accion === 'pausa' ? 'pausa' : 'corriendo'; }
+  });
+  return eventos;
+};
+// Un semáforo de 20 s: corre 30 s, se para 20 s, vuelve a correr.
+const semaforo = simula([...Array(30).fill(3.3), ...Array(20).fill(0.1), ...Array(15).fill(3.3)]);
+assert.equal(semaforo.length, 2, `semáforo: ${JSON.stringify(semaforo)}`);
+assert.deepEqual([semaforo[0].accion, semaforo[0].en - 30], ['pausa', 3], 'pausa a los 3 s de parar');
+assert.deepEqual([semaforo[1].accion, semaforo[1].en - 50], ['reanuda', 2], 'reanuda 2 s después de arrancar');
+assert.equal(semaforo[0].desde, 30, 'la pausa cuenta desde que se paró');
+// Trote lento constante a 1.8 m/s: nunca pausa.
+assert.equal(simula(Array(120).fill(1.8)).length, 0, 'trote lento no pausa');
+// Bici a 1.5 m/s no pausa (su umbral para pausar es 1.0); bici parada sí.
+assert.equal(simula(Array(30).fill(1.5), 'bici').length, 0, 'bici lenta no pausa');
+assert.equal(simula([...Array(10).fill(6), ...Array(10).fill(0.3)], 'bici')[0]?.accion, 'pausa', 'bici parada pausa');
+// Se corta la señal 10 s corriendo: no pausa (sin señal no es estar parado).
+assert.equal(simula(Array(40).fill(3), 'correr', { sinSenal: Array.from({ length: 10 }, (_, i) => 15 + i) }).length, 0, 'corte de señal no pausa');
+// Lecturas imprecisas (25 m) no cuentan.
+assert.equal(decidePausaAutomatica([{ t: 0, vel: 0, pre: 25 }, { t: 1, vel: 0, pre: 25 }, { t: 2, vel: 0, pre: 25 }, { t: 3, vel: 0, pre: 25 }], 'corriendo', 'correr', 3), null);
+// La marca de automática: se pone al pausar así y se quita al reanudar.
+const c0 = cronometroNuevo('correr', 0);
+const cp = pausa(c0, 1000, { automatica: true });
+assert.equal(cp.automatica, true);
+assert.equal(reanuda(cp, 3000).automatica, undefined);
+assert.equal(reanuda(cp, 3000).pausas, 2000);
 
 console.log('prueba-ruta: todo bien');
