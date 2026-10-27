@@ -89,6 +89,7 @@ export function agregaPunto(muestras, punto, t) {
   if (!quieto && typeof punto.alt === 'number') m.alt = Math.round(punto.alt * 10) / 10;
   if (typeof punto.fc === 'number') m.fc = Math.round(punto.fc);
   if (velGps != null) m.vel = Math.round(velGps * 100) / 100;
+  if (!quieto && typeof punto.rumbo === 'number' && punto.rumbo >= 0) m.rumbo = Math.round(punto.rumbo);
   return [...muestras, m];
 }
 
