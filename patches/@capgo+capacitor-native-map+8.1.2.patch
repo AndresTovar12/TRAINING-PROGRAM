@@ -147,7 +147,7 @@ index 5d27c04..311fee0 100644
      }
  
 diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
-index b88c508..758408b 100644
+index b88c508..f5bc04b 100644
 --- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
 +++ b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
 @@ -1,6 +1,8 @@
@@ -159,7 +159,7 @@ index b88c508..758408b 100644
  
  // MARK: - Location permission
  //
-@@ -52,6 +54,94 @@ extension NativeMapPlugin: CLLocationManagerDelegate {
+@@ -52,6 +54,104 @@ extension NativeMapPlugin: CLLocationManagerDelegate {
          }
      }
  
@@ -188,6 +188,8 @@ index b88c508..758408b 100644
 +    enum HeadingFollow {
 +        static var ids = Set<String>()
 +        static var suavizado: Double?
++        /// Qué tan segura está la brújula (grados de error): el cono del corredor se abre más cuanto menos segura.
++        static var precision: Double?
 +    }
 +
 +    @objc func setHeadingFollow(_ call: CAPPluginCall) {
@@ -212,6 +214,7 @@ index b88c508..758408b 100644
 +            suave = (previo + 0.4 * diferencia + 360).truncatingRemainder(dividingBy: 360)
 +        }
 +        HeadingFollow.suavizado = suave
++        HeadingFollow.precision = newHeading.headingAccuracy
 +        // 27 oct 2026: la brújula ya NO toca `mapView.camera` (antes copiaba la cámara con el centro VIEJO y la reasignaba cada 2°: peleaba con el movimiento
 +        // y el mapa giraba pero no avanzaba). Solo cambia el giro OBJETIVO de la cámara que sigue al corredor; quien la mueve es `SeguidorDeCamara`.
 +        for id in HeadingFollow.ids { SeguidorDeCamara.todos[id]?.giro = suave }
@@ -229,10 +232,16 @@ index b88c508..758408b 100644
 +        let zoom = call.getDouble("zoom"), pitch = call.getDouble("pitch"), heading = call.getDouble("heading")
 +        let duracion = max(0, min(call.getDouble("duration") ?? 1, 3))
 +        let salto = call.getBool("jump", false)
++        // `course`: hacia dónde se mueve según el GPS (solo lo manda la página cuando va a más de 2 m/s; parado o lento, el cono usa la brújula).
++        let curso = call.getDouble("course")
++        // `marcador`: este mapa dibuja SU punto y cono (pantalla completa que sigue); el punto de Apple se esconde mientras sigue.
++        let marcador = call.getBool("marcador", false)
 +        DispatchQueue.main.async {
 +            guard let map = self.mapaPorId(id) else { call.reject("map not found"); return }
 +            let seguidor = SeguidorDeCamara.todos[id] ?? SeguidorDeCamara(plugin: self, id: id, mapView: map.mapView)
 +            SeguidorDeCamara.todos[id] = seguidor
++            if marcador { seguidor.ponMarcador() }
++            if lat != nil { seguidor.rumboGps = curso }
 +            if let z = zoom { seguidor.distancia = seguidor.distanciaPara(zoom: z, minZoom: map.config.minZoom, maxZoom: map.config.maxZoom) }
 +            if let p = pitch { seguidor.inclinacion = max(0, min(p, 60)) }
 +            if let h = heading { seguidor.giro = h }
@@ -246,6 +255,7 @@ index b88c508..758408b 100644
 +    @objc func stopFollowCamera(_ call: CAPPluginCall) {
 +        guard let id = call.getString("id") else { call.reject("id requerido"); return }
 +        DispatchQueue.main.async {
++            // Con el mapa suelto (arrastrado con el dedo, o en el resumen) queda el punto de Apple y se quita el propio.
 +            SeguidorDeCamara.todos.removeValue(forKey: id)?.para()
 +            call.resolve()
 +        }
@@ -254,7 +264,7 @@ index b88c508..758408b 100644
      public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
          guard let call = pendingPermissionCall,
                manager.authorizationStatus != .notDetermined else {
-@@ -62,3 +152,144 @@ extension NativeMapPlugin: CLLocationManagerDelegate {
+@@ -62,3 +162,243 @@ extension NativeMapPlugin: CLLocationManagerDelegate {
          pendingPermissionCall = nil
      }
  }
@@ -281,8 +291,11 @@ index b88c508..758408b 100644
 +    private var inclinacionActual: Double
 +    private var giroActual: Double
 +    private var distanciaPorZoom = [Double: Double]()
-+    private var ultimoPuntoEnviado: CGPoint?
-+    private var ultimoAvisoMs: CFTimeInterval = 0
++    /// El punto y el cono del corredor (solo en el mapa de pantalla completa que sigue). Lo mueve este mismo cuadro: van pegados a la cámara.
++    private var marcador: VistaDelCorredor?
++    /// Hacia dónde se mueve según el GPS (grados), solo cuando va rápido; si no, `nil` y el cono usa la brújula.
++    var rumboGps: Double?
++    private var giroDelCono: Double?
 +
 +    init(plugin: NativeMapPlugin, id: String, mapView: MKMapView) {
 +        self.plugin = plugin
@@ -340,6 +353,22 @@ index b88c508..758408b 100644
 +    func para() {
 +        enlace?.invalidate()
 +        enlace = nil
++        // Si dibujaba su propio punto, se quita y vuelve el de Apple (el mapa queda suelto: arrastrado o en el resumen).
++        if let m = marcador {
++            m.removeFromSuperview()
++            marcador = nil
++            mapView?.showsUserLocation = true
++        }
++    }
++
++    /// El punto y el cono propios, en lugar del punto de Apple (que va con el GPS de Apple y no con el nuestro: quedaban separados).
++    func ponMarcador() {
++        guard marcador == nil, let mapa = mapView else { return }
++        mapa.showsUserLocation = false
++        let m = VistaDelCorredor()
++        mapa.addSubview(m)
++        marcador = m
++        m.center = mapa.convert(centro, toPointTo: mapa)
 +    }
 +
 +    private static func diferencia(_ a: Double, _ b: Double) -> Double {
@@ -360,6 +389,7 @@ index b88c508..758408b 100644
 +        let dGiro = SeguidorDeCamara.diferencia(giroActual, giro)
 +        let quieto = f >= 1 && abs(nuevoCentro.latitude - centro.latitude) < 1e-9 && abs(nuevoCentro.longitude - centro.longitude) < 1e-9
 +            && abs(dGiro) < 0.05 && abs(inclinacion - inclinacionActual) < 0.05 && abs(distancia - distanciaActual) < 0.05
++        mueveCono()
 +        if quieto { return }
 +        centro = nuevoCentro
 +        giroActual = (giroActual + dGiro * 0.15 + 360).truncatingRemainder(dividingBy: 360)
@@ -390,13 +420,92 @@ index b88c508..758408b 100644
 +                punto = mapa.convert(centro, toPointTo: mapa)
 +            }
 +        }
-+        // Dónde quedó el corredor en la pantalla (para el cono de dirección de la página), solo si se movió y como mucho 4 veces por segundo.
-+        let ahora = CACurrentMediaTime()
-+        guard ahora - ultimoAvisoMs > 0.25 else { return }
-+        if let previo = ultimoPuntoEnviado, abs(previo.x - punto.x) < 1.5, abs(previo.y - punto.y) < 1.5 { return }
-+        ultimoPuntoEnviado = punto
-+        ultimoAvisoMs = ahora
-+        plugin?.notifyListeners("onFollowPoint", data: ["mapId": id, "x": Double(punto.x), "y": Double(punto.y)])
++        // El punto propio va justo donde quedó el corredor, en el mismo cuadro que la cámara: no se separan.
++        marcador?.center = punto
++    }
++
++    /// El cono apunta hacia donde va (GPS, si va rápido) o hacia donde mira el iPhone (brújula), visto en la pantalla: menos lo que ya giró el mapa.
++    private func mueveCono() {
++        guard let m = marcador else { return }
++        guard let fuente = rumboGps ?? HeadingFollow.suavizado else { m.ponCono(visible: false); return }
++        let objetivo = SeguidorDeCamara.diferencia(0, fuente - giroActual)
++        let actual = giroDelCono ?? objetivo
++        let nuevo = actual + SeguidorDeCamara.diferencia(actual, objetivo) * 0.25
++        giroDelCono = nuevo
++        // Con el rumbo del GPS el cono es angosto; con la brújula, tan abierto como su error (entre 20° y 50° hacia cada lado).
++        let abertura = rumboGps != nil ? 20.0 : max(20, min(HeadingFollow.precision ?? 30, 50))
++        m.ponCono(visible: true, grados: nuevo, abertura: abertura)
++    }
++}
++
++/// El corredor en el mapa (27 oct 2026): halo azul translúcido, aro blanco, punto azul y el cono de dirección con degradado. Una sola pieza nativa, como en
++/// Apple Maps, Google Maps y Strava; no recibe toques (los toques siguen yendo al mapa o a la página).
++final class VistaDelCorredor: UIView {
++    private let cono = CALayer()
++    private let formaDelCono = CAShapeLayer()
++    private let degradado = CAGradientLayer()
++    private var aberturaActual: Double = -1
++    private static let lado: CGFloat = 140
++    private static let azul = UIColor(red: 0.18, green: 0.42, blue: 1.0, alpha: 1)
++
++    init() {
++        super.init(frame: CGRect(x: 0, y: 0, width: VistaDelCorredor.lado, height: VistaDelCorredor.lado))
++        isUserInteractionEnabled = false
++        backgroundColor = .clear
++        let medio = CGPoint(x: bounds.midX, y: bounds.midY)
++
++        // El cono: un degradado azul que se desvanece hacia afuera, recortado con la forma de una rebanada que sale del centro hacia arriba.
++        cono.frame = bounds
++        degradado.frame = bounds
++        degradado.type = .radial
++        degradado.colors = [VistaDelCorredor.azul.withAlphaComponent(0.55).cgColor, VistaDelCorredor.azul.withAlphaComponent(0).cgColor]
++        degradado.startPoint = CGPoint(x: 0.5, y: 0.5)
++        degradado.endPoint = CGPoint(x: 1, y: 1)
++        degradado.mask = formaDelCono
++        formaDelCono.frame = bounds
++        cono.addSublayer(degradado)
++        layer.addSublayer(cono)
++
++        let circulo = { (radio: CGFloat, color: UIColor) -> CAShapeLayer in
++            let c = CAShapeLayer()
++            c.path = UIBezierPath(arcCenter: medio, radius: radio, startAngle: 0, endAngle: .pi * 2, clockwise: true).cgPath
++            c.fillColor = color.cgColor
++            return c
++        }
++        layer.addSublayer(circulo(22, VistaDelCorredor.azul.withAlphaComponent(0.18))) // halo
++        let aro = circulo(10, .white)
++        aro.shadowColor = UIColor.black.cgColor
++        aro.shadowOpacity = 0.3
++        aro.shadowRadius = 3
++        aro.shadowOffset = CGSize(width: 0, height: 1)
++        layer.addSublayer(aro)
++        layer.addSublayer(circulo(7.5, VistaDelCorredor.azul)) // punto
++        ponCono(visible: false)
++    }
++
++    required init?(coder: NSCoder) { fatalError("no se usa desde un storyboard") }
++
++    /// Gira el cono `grados` (0 = hacia arriba de la pantalla) y lo abre `abertura` grados hacia cada lado.
++    func ponCono(visible: Bool, grados: Double = 0, abertura: Double = 30) {
++        CATransaction.begin()
++        CATransaction.setDisableActions(true) // sin animaciones implícitas: lo mueve el cuadro
++        cono.isHidden = !visible
++        if visible {
++            if abs(abertura - aberturaActual) > 1 {
++                aberturaActual = abertura
++                let medio = CGPoint(x: bounds.midX, y: bounds.midY)
++                let radio = bounds.width / 2
++                let arriba = -Double.pi / 2
++                let a = abertura * .pi / 180
++                let ruta = UIBezierPath()
++                ruta.move(to: medio)
++                ruta.addArc(withCenter: medio, radius: radio, startAngle: CGFloat(arriba - a), endAngle: CGFloat(arriba + a), clockwise: true)
++                ruta.close()
++                formaDelCono.path = ruta.cgPath
++            }
++            cono.setAffineTransform(CGAffineTransform(rotationAngle: CGFloat(grados * .pi / 180)))
++        }
++        CATransaction.commit()
 +    }
 +}
 diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ViewHelpers.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/ViewHelpers.swift

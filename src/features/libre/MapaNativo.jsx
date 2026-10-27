@@ -65,7 +65,6 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
   const [tipoDeMapa, setTipoDeMapa] = useState(() => { try { return localStorage.getItem('tl:tipo-de-mapa') || 'Normal'; } catch { return 'Normal'; } });
   const [abierto, setAbierto] = useState(false); // el selector de tipo de mapa
   const [cargandoTipo, setCargandoTipo] = useState(false); // velo mientras Apple baja las imágenes del tipo de mapa nuevo
-  const [centroPunto, setCentroPunto] = useState(null); // dónde cae en pantalla el punto del corredor (para dibujarle el cono de dirección)
   const [alturaPanel, setAlturaPanel] = useState(0); // los botones redondos van justo arriba del panel de abajo
   const acciones = useRef({});
   const dato = useRef({ puntos, sigue });
@@ -99,7 +98,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
         return;
       }
       // Primero la línea nueva y luego se quita la vieja: así no parpadea.
-      const nuevos = await mapa.addPolylines([{ path: adelgazaRuta(ruta), strokeColor: COLOR_RUTA, strokeWeight: GROSOR_RUTA }]);
+      const nuevos = await mapa.addPolylines([{ path: adelgazaRuta(ruta).map(({ lat, lng }) => ({ lat, lng })), strokeColor: COLOR_RUTA, strokeWeight: GROSOR_RUTA }]);
       const viejos = e.ids;
       e.ids = nuevos;
       if (viejos.length) await mapa.removePolylines(viejos);
@@ -107,7 +106,16 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
 
     /* LA CÁMARA QUE SIGUE AL CORREDOR (27 oct 2026). La mueve el iPhone (`followCamera`, ver el parche en `Permissions.swift`): aquí solo se le dice A DÓNDE
        y en cuánto tiempo. Hacia dónde mira el mapa: norte arriba si se pidió; si no, la brújula del iPhone (si la hay) o la dirección de la ruta. El punto azul
-       es el de Apple (`enableCurrentLocation`). Si el parche no existiera (una app vieja), se usa la cámara de siempre del plugin. */
+       y el cono de dirección los dibuja el iPhone en la MISMA pieza que mueve la cámara (`VistaDelCorredor`, parche del plugin): en el mapa de pantalla
+       completa que sigue (`marcador`), con nuestro GPS, pegados y al mismo ritmo. Antes el punto era el de Apple (con SU GPS) y el cono un dibujo de la página
+       colocado 4 veces por segundo: el cono flotaba lejos del punto y giraba mal en las curvas. Con el mapa suelto (arrastrado o en el resumen) y en los mapas
+       chicos queda el punto de Apple. Si el parche no existiera (una app vieja), se usa la cámara de siempre del plugin y el punto de Apple. */
+    const marcador = pantallaCompleta && dato.current.sigue;
+    /** Hacia dónde va según el GPS, solo si va a más de 2 m/s (más lento, el rumbo del GPS baila: el cono usa la brújula). */
+    const rumboDelGps = () => {
+      const u = dato.current.puntos.at(-1);
+      return u && typeof u.rumbo === 'number' && typeof u.vel === 'number' && u.vel > 2 ? u.rumbo : undefined;
+    };
     const rumboDeAhora = () => {
       if (e.norteArriba) return 0;
       if (e.brujula != null) return e.brujula;
@@ -120,11 +128,16 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
       const heading = rumboDeAhora();
       if (!e.sinSeguidor) {
         try {
-          await puenteDelMapa().followCamera({ id, ...(donde ? { lat: donde.lat, lng: donde.lng } : {}), zoom: ZOOM_SIGUE, pitch, heading, duration: duracion, jump: salto });
+          const curso = donde ? rumboDelGps() : undefined;
+          await puenteDelMapa().followCamera({
+            id, ...(donde ? { lat: donde.lat, lng: donde.lng } : {}), ...(curso != null ? { course: curso } : {}),
+            zoom: ZOOM_SIGUE, pitch, heading, duration: duracion, jump: salto, marcador,
+          });
           return;
         } catch (err) {
           if (!/not implemented|no implementado|unimplemented/i.test(String(err?.message ?? err))) throw err;
           e.sinSeguidor = true;
+          e.mapa.enableCurrentLocation(true).catch(() => {}); // sin la pieza propia, al menos el punto de Apple
         }
       }
       await e.mapa.setCamera({ ...(donde ? { coordinate: donde } : {}), zoom: ZOOM_SIGUE, angle: pitch, bearing: heading, animate: !salto });
@@ -237,7 +250,8 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
       if (!e.vivo) { mapa.destroy().catch(() => {}); return; }
       e.mapa = mapa;
       e.LatLngBounds = LatLngBounds;
-      try { await mapa.enableCurrentLocation(true); } catch (err) { console.warn('Mapa nativo (punto azul):', err); }
+      // El punto de Apple, salvo en el mapa grande que sigue: ahí el iPhone dibuja el propio junto con el cono (`marcador`).
+      if (!marcador) { try { await mapa.enableCurrentLocation(true); } catch (err) { console.warn('Mapa nativo (punto azul):', err); } }
       if (!e.vivo) return;
       // El tipo de mapa que eligió la última vez (estándar, satelital o híbrido).
       if (tipoDeMapa !== 'Normal') { try { await mapa.setMapType(modulo.MapType[tipoDeMapa]); if (tipoDeMapa === 'Hybrid') await puenteDelMapa().setPointsOfInterestEnabled({ id, enabled: true }); } catch (err) { console.warn('Mapa nativo (tipo de mapa):', err); } }
@@ -251,11 +265,6 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
             if (!e.vivo || typeof d?.heading !== 'number') return;
             e.brujula = d.heading;
             setRumboVisible(d.heading);
-          });
-          // Dónde quedó el corredor en la pantalla (lo mide el iPhone): ahí va el cono de dirección.
-          e.escuchaPunto = await puente.addListener('onFollowPoint', (d) => {
-            if (!e.vivo || d?.mapId !== id || typeof d.x !== 'number' || typeof d.y !== 'number') return;
-            setCentroPunto({ x: d.x, y: d.y });
           });
           e.puente = puente;
           const { disponible } = await puente.startHeading();
@@ -326,8 +335,6 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
       if (!e.vivo) return; // se cerró mientras arrancaba: no se esconde nada
       if (pantallaCompleta) {
         ponClase(id); setAlturaPanel(reservaDelPanel()); setActivo(true);
-        const m = margenesDelMapa();
-        setCentroPunto({ x: window.innerWidth / 2, y: m.top + (window.innerHeight - m.top - m.bottom) / 2 });
       }
       await aplica(true);
       if (comoFoto && e.vivo) await vuelveFoto();
@@ -382,7 +389,6 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
       e.vivo = false;
       clearTimeout(e.reloj);
       e.escuchaBrujula?.remove?.();
-      e.escuchaPunto?.remove?.();
       if (e.escuchaBrujula) { puenteDelMapa().setHeadingFollow({ id, enabled: false }).catch(() => {}); puenteDelMapa().stopHeading().catch(() => {}); }
       if (e.listo) sueltaCamara();
       empuja.current = null;
@@ -410,13 +416,6 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
         <div aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: 3, display: 'grid', placeItems: 'center', background: 'rgba(15,18,32,0.55)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', pointerEvents: 'none', color: '#fff', animation: 'tl-velo 1600ms ease both' }}>
           <Loader2 size={30} className="spin" />
         </div>
-      )}
-      {pantallaCompleta && activo && siguiendo && centroPunto && (
-        // El CONO de dirección del punto azul: hacia dónde mira el iPhone. Con el mapa girando con la brújula apunta siempre hacia arriba; con el norte arriba, hacia donde mires.
-        <svg aria-hidden="true" width="84" height="84" viewBox="0 0 84 84" style={{ position: 'absolute', zIndex: 2, left: centroPunto.x - 42, top: centroPunto.y - 42, pointerEvents: 'none', transform: `rotate(${norteArriba ? rumboVisible : 0}deg)`, transition: 'transform 250ms linear' }}>
-          <defs><linearGradient id="tl-cono" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stopColor="#2F6BFF" stopOpacity="0.55" /><stop offset="1" stopColor="#2F6BFF" stopOpacity="0" /></linearGradient></defs>
-          <path d="M42 42 L14 0 L70 0 Z" fill="url(#tl-cono)" />
-        </svg>
       )}
       {pantallaCompleta && activo && (
         // Los botones redondos de la derecha, justo arriba del panel de abajo (no arriba: ahí sale la brújula del mapa).
