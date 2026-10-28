@@ -120,6 +120,14 @@ prueba('la primera vez, la distancia más larga, el ritmo más rápido y el entr
   assert.equal(recordDe({ id: 'b', deporte: 'correr', titulo: 'Correr', distancia_m: 3000, duracion_s: 1000, metricas: { ritmo_medio_s_km: 400 } }, [vieja]), null, 'sin récord no se dice nada');
   assert.equal(recordDe({ id: 'a', deporte: 'correr', titulo: 'Correr', distancia_m: 9000 }, [vieja]).tipo, 'primera', 'no se compara consigo mismo');
 });
+prueba('el récord dice su valor, la diferencia contra el mejor anterior y la fecha de ese mejor', () => {
+  const vieja = { id: 'a', deporte: 'correr', titulo: 'Correr', inicio: '2026-10-09T13:00:00Z', desfase_min: -360, distancia_m: 5000, duracion_s: 1800, metricas: { ritmo_medio_s_km: 360 } };
+  const lejos = recordDe({ id: 'b', deporte: 'correr', titulo: 'Correr', distancia_m: 6100, duracion_s: 1700, metricas: {} }, [vieja]);
+  assert.deepEqual([lejos.valor, lejos.diferencia, lejos.fecha], ['6.1 km', '1.1 km más', 'vie 9 oct']);
+  assert.equal(lejos.detalle, '6.1 km · 1.1 km más que el vie 9 oct');
+  const rapido = recordDe({ id: 'b', deporte: 'correr', titulo: 'Correr', distancia_m: 4000, duracion_s: 1300, metricas: { ritmo_medio_s_km: 325 } }, [vieja]);
+  assert.equal(rapido.detalle, '5:25 /km · 35 s/km más rápido que el vie 9 oct');
+});
 
 console.log('Textos del resumen');
 prueba('una carrera con distancia: tiempo, distancia y ritmo', () => {

@@ -5,11 +5,11 @@ import { NombreDeSesion } from '@/features/training/home/TextoDelNombre';
 import { pegaSeparadores } from '@/features/training/home/nombreDeSesion';
 
 /**
- * Los cuadros de Home (reestructura visual, 15 oct 2026): Salud, la fase, Entrenar libre y Activity card, de dos
+ * Los cuadros de Home (reestructura visual, 15 oct 2026): Salud, la fase, Entrenar libre y Stickers, de dos
  * en dos. Cada uno: arriba su ícono en un cuadrito y su nombre; abajo, grande, lo que hoy importa de él
  * («Recuperado», «Fuerza máxima», «2 entrenos», «1:12:40») y una línea debajo. Todo el cuadro se toca.
  *
- * Los colores son los de siempre en Home (coral para Salud, azules para el plan, tinta para la activity card).
+ * Los colores son los de siempre en Home (coral para Salud, azules para el plan, tinta para los stickers).
  */
 const TONOS = {
   coral: { /* estilo-ok: cuadros de color de Home (capturas aprobadas) */ fondo: 'linear-gradient(150deg, #FF8E5E 0%, #F2555A 55%, #DD4A92 100%)', sombra: 'rgba(221,74,146,0.28)' },

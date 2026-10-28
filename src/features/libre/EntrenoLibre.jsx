@@ -25,8 +25,8 @@ import { Cuadro, CuadroBlanco, PlayChico } from '@/features/training/home/Cuadro
 
 /* EL ENTRENO LIBRE, armado (12 oct 2026): lo que ve alguien en Home o en la pestaña Entrenar para entrenar por su cuenta, tenga o no un plan.
      · `variante="completa"` (sin plan): la tarjeta azul «Entrenar» (su semana, su último entreno, «Empezar»), la de Explorar, los cuadros de color (`cuadros`, p. ej. Salud,
-       y Activity card), los blancos chicos (Demo workout y `chicos`, p. ej. 1RM) y «Tus entrenos» (reestructura visual, 15 oct 2026).
-     · `variante="cuadros"` (Home con plan, reestructura visual del 15 oct 2026): solo dos cuadros, «Entrenar libre» y «Activity card», para ir en la cuadrícula de Home junto a Salud
+       y Stickers), los blancos chicos (Demo workout y `chicos`, p. ej. 1RM) y «Tus entrenos» (reestructura visual, 15 oct 2026).
+     · `variante="cuadros"` (Home con plan, reestructura visual del 15 oct 2026): solo dos cuadros, «Entrenar libre» y «Stickers», para ir en la cuadrícula de Home junto a Salud
        y la fase. «Tus entrenos» queda en la pestaña Entrenar.
      · `enLinea` (pestaña Entrenar): las opciones puestas directo, y «Tus entrenos».
      · `variante="historial"` (Home con plan, 23 oct 2026): solo «Tus entrenos», lo que registró por su cuenta (auditoría p29).
@@ -45,20 +45,20 @@ function ultimaSalida(filas, deporte) {
   return `${(f.distancia_m / 1000).toFixed(1)} km · ${cuando}`;
 }
 
-// El aviso de Explorar al cerrar la activity card sale una vez por visita (dura lo que la pestaña del navegador).
+// El aviso de Explorar al cerrar la hoja de stickers sale una vez por visita (dura lo que la pestaña del navegador).
 const yaSeLeOfrecio = () => { try { return sessionStorage.getItem('tl:explorar-ofrecido') === '1'; } catch { return false; } };
 const marcaOfrecido = () => { try { sessionStorage.setItem('tl:explorar-ofrecido', '1'); } catch { /* sin almacenamiento: puede salir otra vez */ } };
 
 export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = false, variante = 'completa', alIrAHome = null, conEmpujon = false, alIrAExplorar = null, cuadros = null, chicos = null, alCerrar = null }) {
   const crono = useCronometroLibre(userId);
   const { filas, recarga } = useEntrenosRecientes(userId, 40);
-  const { abreDemo } = usePlan();
+  const { abreDemo, hasPlan } = usePlan();
   const demos = useDemos(userId);
   const [propiasGuardadas, setPropias] = useStorage('actividades:propias', []);
   const propias = useMemo(() => propiasDe(propiasGuardadas), [propiasGuardadas]);
   const enPunto = variante === 'punto';
   // El punto ● abre directo «listo para empezar» (o el entreno que va, si hay uno corriendo).
-  const [hoja, setHoja] = useState(() => (enPunto ? 'cronometro' : null)); // null | 'elegir' | 'demos' | 'cronometro' | 'empujon' | { resumen: fila, tarjeta?: boolean }
+  const [hoja, setHoja] = useState(() => (enPunto ? 'cronometro' : null)); // null | 'elegir' | 'demos' | 'cronometro' | { resumen: fila, stickers?, recien?, celebrar?, empujon? }
   const alDemo = demos?.length ? () => setHoja('demos') : null;
   const enCurso = !!crono.cronometro;
   const semana = useMemo(() => resumenDeLaSemana(filas ?? []), [filas]);
@@ -80,15 +80,18 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
   const eligeDeporte = (d) => elige(actividadDeDeporte(d));
   // Cerrar del todo. En el punto, avisa para que la barra lo quite.
   const cierra = () => { setPendiente(null); setHoja(null); if (enPunto) alCerrar?.(); };
-  /* AL GUARDAR (Activity Tracker, paso 3): la celebración corta (con el récord si lo rompió, contra sus entrenos de antes), luego se abre sola la activity card y, al cerrarla,
-     queda la página de la actividad. El récord se cuenta con la lista de ANTES de recargarla. */
+  /* AL GUARDAR (Activity Tracker, paso 3; stickers, 28 oct 2026): la celebración corta (con el récord si lo rompió, contra sus entrenos de antes) y luego la página de
+     la actividad con el aviso «Tus stickers están listos». La hoja de stickers NUNCA se abre sola. El récord se cuenta con la lista de ANTES de recargarla, y solo
+     para quien NO tiene plan (decisión 1.11: con plan manda lo programado; ni «Tu ritmo más rápido» ni «Tu distancia más larga» en un entreno libre). */
   const alGuardar = (fila, extra = {}) => {
-    const record = recordDe(fila, filas ?? []);
+    const record = hasPlan ? null : recordDe(fila, filas ?? []);
     recarga();
-    setHoja({ resumen: fila, celebrar: true, tarjeta: true, muestras: extra.muestras ?? null, actividad: extra.actividad ?? null, record });
+    setHoja({ resumen: fila, celebrar: true, recien: true, muestras: extra.muestras ?? null, actividad: extra.actividad ?? null, record });
   };
   const abreElCartel = () => { if (!enCurso) setPendiente(ultimaActividad()); setHoja('cronometro'); };
-  const abreLaTarjeta = () => setHoja(ultimo ? { resumen: ultimo, tarjeta: true } : 'elegir');
+  const abreStickers = () => setHoja(ultimo ? { resumen: ultimo, stickers: true } : 'elegir');
+  const comparte = (fila) => setHoja({ resumen: fila, stickers: true });
+  const creaPropia = (act) => setPropias((prev) => [act, ...propiasDe(prev)].slice(0, 30));
   const conExplorar = conEmpujon && !!alIrAExplorar;
 
   const hojas = (
@@ -96,7 +99,7 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
       {hoja === 'elegir' && (
         <ElegirActividad
           filas={filas ?? []} propias={propias} alElegir={elige}
-          alCrear={(act) => { setPropias((prev) => [act, ...propiasDe(prev)].slice(0, 30)); elige(act); }}
+          alCrear={(act) => { creaPropia(act); elige(act); }}
           alCerrar={() => (pendiente ? setHoja('cronometro') : cierra())}
         />
       )}
@@ -127,10 +130,11 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
       )}
       {hoja?.resumen && !hoja.celebrar && (
         <ResumenLibre
-          fila={hoja.resumen} unidadPeso={unidadPeso} alCerrar={cierra} empiezaEnTarjeta={!!hoja.tarjeta}
+          key={hoja.resumen.id} fila={hoja.resumen} unidadPeso={unidadPeso} alCerrar={cierra} conStickers={!!hoja.stickers} recien={!!hoja.recien}
           muestras={hoja.muestras ?? null} record={hoja.record ?? null} actividad={hoja.actividad ?? null}
-          // Al cerrar la activity card, una sola vez por visita y solo a quien no tiene plan ni entrenador: «¿Quieres un plan hecho por un coach?».
-          alCerrarTarjeta={conEmpujon && alIrAExplorar && !yaSeLeOfrecio() ? () => { marcaOfrecido(); setHoja({ ...hoja, empujon: true }); } : undefined}
+          propias={propias} filas={filas ?? []} alCrearPropia={creaPropia} alCambiar={recarga} alBorrado={recarga}
+          // Al cerrar la hoja de stickers, una sola vez por visita y solo a quien no tiene plan ni entrenador: «¿Quieres un plan hecho por un coach?».
+          alCerrarStickers={conEmpujon && alIrAExplorar && !yaSeLeOfrecio() ? () => { marcaOfrecido(); setHoja({ ...hoja, empujon: true }); } : undefined}
         />
       )}
       {hoja?.resumen && hoja.empujon && (
@@ -150,7 +154,7 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
   if (variante === 'historial') {
     return (
       <>
-        <TusEntrenos filas={filas?.slice(0, 4)} propias={propias} alAbrir={(fila) => setHoja({ resumen: fila })} />
+        <TusEntrenos filas={filas?.slice(0, 4)} propias={propias} alAbrir={(fila) => setHoja({ resumen: fila })} alCompartir={comparte} />
         {hojas}
       </>
     );
@@ -167,9 +171,9 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
           etiquetaAccesible={enCurso ? `Seguir tu entreno de ${nombreDelDeporte(deporte)}` : `Entrenar libre: ${textoDeLaSemana(semana)}`}
         />
         <Cuadro
-          tono="tinta" Icono={Share2} etiqueta="Activity card" onClick={abreLaTarjeta}
+          tono="tinta" Icono={Share2} etiqueta="Stickers" onClick={abreStickers}
           titulo={ultimo ? relojDeCronometro(ultimo.duracion_s) : '0:00'} sub={ultimo ? 'Último entreno' : 'Tu primer entreno'}
-          etiquetaAccesible={ultimo ? 'Abrir la activity card de tu último entreno' : 'Activity card: entrena y sácala para tus historias'}
+          etiquetaAccesible={ultimo ? 'Abrir los stickers de tu último entreno' : 'Stickers: entrena y compártelos en tus historias'}
         />
         {hojas}
       </>
@@ -190,9 +194,9 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
               {cuadros}
               <Cuadro
-                tono="tinta" Icono={Share2} etiqueta="Activity card" onClick={abreLaTarjeta}
+                tono="tinta" Icono={Share2} etiqueta="Stickers" onClick={abreStickers}
                 titulo={ultimo ? relojDeCronometro(ultimo.duracion_s) : '0:00'} sub={ultimo ? 'Último entreno' : 'Tu primer entreno'}
-                etiquetaAccesible={ultimo ? 'Abrir la activity card de tu último entreno' : 'Activity card: entrena y sácala para tus historias'}
+                etiquetaAccesible={ultimo ? 'Abrir los stickers de tu último entreno' : 'Stickers: entrena y compártelos en tus historias'}
               />
             </div>
             {(alDemo || chicos) && (
@@ -203,7 +207,7 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
             )}
           </>
         )}
-        <TusEntrenos filas={filas?.slice(0, 6)} propias={propias} alAbrir={(fila) => setHoja({ resumen: fila })} />
+        <TusEntrenos filas={filas?.slice(0, 6)} propias={propias} alAbrir={(fila) => setHoja({ resumen: fila })} alCompartir={comparte} />
       </div>
 
       {hojas}

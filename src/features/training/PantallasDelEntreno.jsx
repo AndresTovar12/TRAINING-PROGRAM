@@ -673,7 +673,7 @@ export function PantallaDeDescanso({ descanso, siguiente, video, sonido, puedeAn
 /* ------------------------------------------------------------------ */
 
 /** «Entrenamiento terminado»: lo que se hizo, una nota para el coach y «Terminar sesión». El avance ya estaba guardado. */
-export function PantallaDeFin({ resumen, notas, palabras, onNotas, onTerminar, onVolver, onSello, yaTerminada }) {
+export function PantallaDeFin({ resumen, notas, palabras, onNotas, onTerminar, onVolver, onStickers, yaTerminada }) {
   return (
     <>
       <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -685,7 +685,7 @@ export function PantallaDeFin({ resumen, notas, palabras, onNotas, onTerminar, o
           <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
             {resumen.map((c) => <Cifra key={c.etiqueta} {...c} />)}
           </div>
-          {onSello && <div style={{ marginBottom: 18 }}><BotonSecundario ancho onClick={onSello}><Share2 size={18} /> Activity card</BotonSecundario></div>}
+          {onStickers && <div style={{ marginBottom: 18 }}><BotonSecundario ancho onClick={onStickers}><Share2 size={18} /> Compartir stickers</BotonSecundario></div>}
           <label htmlFor="entreno-notas" style={{ display: 'block', textAlign: 'left', fontSize: 15, fontWeight: 800, color: LT.text, margin: '0 2px 8px' }}>
             {palabras.finNotas}
           </label>
@@ -931,11 +931,11 @@ export function HojaDeCambiar({ campos, planeado, inicial, unidadDePeso, resumen
 
 /**
  * «¿Guardamos tu recorrido?» (23 oct 2026): se pregunta UNA vez, al abrir el primer entreno guiado en este teléfono. Con «Sí», el entreno guarda por dónde te mueves
- * para que tu activity card pueda llevar la línea (ver `useRecorrido`). «Ahora no» no rompe nada: los pasos de 200 m o más siguen ofreciendo el mapa.
+ * para que tus stickers puedan llevar la línea (ver `useRecorrido`). «Ahora no» no rompe nada: los pasos de 200 m o más siguen ofreciendo el mapa.
  */
 export function HojaDelRecorrido({ onSi, onNo }) {
   return (
-    <Hoja etiqueta="Tu recorrido" titulo="¿Guardamos tu recorrido?" subtitulo="Mientras entrenas, la app guarda por dónde te moviste. Sirve para que tu activity card pueda llevar la línea de tu recorrido. Nadie lo ve si tú no lo compartes." icono={<MapPin size={25} />} onCerrar={onNo}>
+    <Hoja etiqueta="Tu recorrido" titulo="¿Guardamos tu recorrido?" subtitulo="Mientras entrenas, la app guarda por dónde te moviste. Sirve para que tus stickers puedan llevar la línea de tu recorrido. Nadie lo ve si tú no lo compartes." icono={<MapPin size={25} />} onCerrar={onNo}>
       <BotonGrande onClick={onSi}>Sí, guardar</BotonGrande>
       <div style={{ textAlign: 'center', marginTop: 2 }}><BotonDeTexto onClick={onNo}>Ahora no</BotonDeTexto></div>
     </Hoja>

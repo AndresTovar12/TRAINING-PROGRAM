@@ -6,7 +6,7 @@ import { nombreDelDeporte } from '@/lib/metricas/deportes';
 import { MosaicoDeDeporte } from '@/features/metricas/Piezas';
 import { Grupo, Fila, IconoDeFila } from '@/components/ui';
 
-/* LAS OPCIONES DE «ENTRENAR» (12 oct 2026): qué va a hacer quien no tiene (o no quiere usar) un plan. Prioridad: correr, bici, nadar y caminar, que es para lo que muchos entran (sacar su activity card);
+/* LAS OPCIONES DE «ENTRENAR» (12 oct 2026): qué va a hacer quien no tiene (o no quiere usar) un plan. Prioridad: correr, bici, nadar y caminar, que es para lo que muchos entran (sacar sus stickers);
    «Demo workout» (los workouts de demostración, solo si hay) y «Más deportes». Es la MISMA lista en la hoja que abre el botón «Entrenar» de Home y puesta directo en la pestaña Entrenar.
    Reestructura visual (15 oct 2026): una lista agrupada; «Más deportes» abre los demás en un segundo grupo. */
 

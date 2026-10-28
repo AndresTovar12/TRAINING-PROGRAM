@@ -837,22 +837,22 @@ const HojaDelPrograma = ({
  * se está cuando se acaba, y con la misma cara que el botón del día: azul para
  * marcar, verde cuando ya está. Cada una va dentro de SU tarjeta, así que basta con decir «sesión».
  */
-// El sello para redes de una sesión terminada (ver `features/sello`): la hoja se carga solo cuando se pide.
-const HojaDelSello = lazy(() => import('@/features/sello/HojaDelSello'));
+// Los stickers para redes de una sesión terminada (ver `features/stickers`): la hoja se carga solo cuando se pide.
+const HojaDeSesion = lazy(() => import('@/features/stickers/HojaDeSesion'));
 
-const BotonDelSello = ({ onSello, alto = 50 }) => (
+const BotonDeStickers = ({ onStickers, alto = 50 }) => (
   <button
-    type="button" onClick={onSello} className="kp-press"
+    type="button" onClick={onStickers} className="kp-press"
     style={{
       minHeight: alto, padding: '0 14px', borderRadius: 14, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
       border: 'none', background: KP.blueSoft, color: LT.blue, fontFamily: FONT, fontSize: 13.5, fontWeight: 800, touchAction: 'manipulation',
     }}
   >
-    <Share2 size={16} /> Activity card
+    <Share2 size={16} /> Stickers
   </button>
 );
 
-const TerminarSesion = ({ hecha, onAlternar, onSello }) => (hecha ? (
+const TerminarSesion = ({ hecha, onAlternar, onStickers }) => (hecha ? (
   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
     <div style={{
       flex: 1, minHeight: 50, borderRadius: 14, background: LT.mint, color: '#fff',
@@ -861,7 +861,7 @@ const TerminarSesion = ({ hecha, onAlternar, onSello }) => (hecha ? (
     }}>
       <Check size={18} strokeWidth={3} /> Sesión terminada
     </div>
-    {onSello && <BotonDelSello onSello={onSello} />}
+    {onStickers && <BotonDeStickers onStickers={onStickers} />}
     <button
       type="button"
       onClick={onAlternar}
@@ -939,11 +939,11 @@ const CuerpoDelDia = ({
   const selectedId = idDeSesion(phase.id, week.num, selectedIdx);
   const sessionData = sessionsData[selectedId] || {};
   const selectedCompleted = !!sessionData.completed;
-  /* El sello para redes: solo el propio atleta (no quien mira su plan en solo lectura) y solo de una sesión terminada en la que el entreno guiado
-     midió algo (si se marcó terminada a mano, sin hacer nada en el entreno, no hay con qué armarlo). */
-  const { perfil: perfilDelSello, soloLectura: miraSoloLectura, userId: atletaDelSello } = usePerfilDeLaVista();
-  const [selloAbierto, setSelloAbierto] = useState(false);
-  const puedeSello = !miraSoloLectura && selectedCompleted && !!tramoDeLaSesion(sessionData);
+  /* Los stickers para redes: solo el propio atleta (no quien mira su plan en solo lectura) y solo de una sesión terminada en la que el entreno guiado
+     midió algo (si se marcó terminada a mano, sin hacer nada en el entreno, no hay con qué armarlos). */
+  const { perfil: perfilDeStickers, soloLectura: miraSoloLectura, userId: atletaDeStickers } = usePerfilDeLaVista();
+  const [stickersAbiertos, setStickersAbiertos] = useState(false);
+  const puedeStickers = !miraSoloLectura && selectedCompleted && !!tramoDeLaSesion(sessionData);
   /* Con `entarjetas` la sesión es una tarjeta, aunque este programa traiga una sola: se termina cada una por su lado y
      salen cerradas si hay más de una en el día (lo decide quien arma la pantalla con `abiertasPorDefecto`). Sin
      `entarjetas`, un día de una sola sesión sigue como siempre, con su botón de terminar al final. */
@@ -1019,7 +1019,7 @@ const CuerpoDelDia = ({
         nombre={nombre} detalle={detalle} autor={autor}
       >
         {cuerpo}
-        <TerminarSesion hecha={selectedCompleted} onAlternar={toggleComplete} onSello={puedeSello ? () => setSelloAbierto(true) : null} />
+        <TerminarSesion hecha={selectedCompleted} onAlternar={toggleComplete} onStickers={puedeStickers ? () => setStickersAbiertos(true) : null} />
       </TarjetaDeSesion>
     );
   };
@@ -1029,11 +1029,11 @@ const CuerpoDelDia = ({
 
   return (
     <>
-      {selloAbierto && (
+      {stickersAbiertos && (
         <Suspense fallback={null}>
-          <HojaDelSello
-            atletaId={atletaDelSello} registro={sessionData} sesionId={selectedId} nombre={sinDuracion(selectedDay.name || '')}
-            Icono={aspectoDelTipo(selectedDay).Icono} unidadPeso={perfilDelSello?.unidad_peso || 'kg'} onCerrar={() => setSelloAbierto(false)}
+          <HojaDeSesion
+            atletaId={atletaDeStickers} registro={sessionData} sesionId={selectedId} nombre={sinDuracion(selectedDay.name || '') || 'Tu sesión'}
+            unidadPeso={perfilDeStickers?.unidad_peso || 'kg'} onCerrar={() => setStickersAbiertos(false)}
           />
         </Suspense>
       )}
@@ -1195,7 +1195,7 @@ const CuerpoDelDia = ({
             }}>
               <Check size={18} strokeWidth={3} /> Sesión terminada
             </div>
-            {puedeSello && <BotonDelSello onSello={() => setSelloAbierto(true)} alto={52} />}
+            {puedeStickers && <BotonDeStickers onStickers={() => setStickersAbiertos(true)} alto={52} />}
             <button
               type="button"
               onClick={toggleComplete}
@@ -1804,7 +1804,7 @@ const HomeView = ({
   ].filter(Boolean);
 
   /* REESTRUCTURA VISUAL (15 oct 2026): Home con la forma de las capturas de Andrés. Arriba el saludo y la tira de la semana;
-     la tarjeta azul «Hoy te toca»; cuatro cuadros (Salud, la fase, Entrenar libre, Activity card); 1RM abajo.
+     la tarjeta azul «Hoy te toca»; cuatro cuadros (Salud, la fase, Entrenar libre, Stickers); 1RM abajo.
      En tablet o compu, la tarjeta de hoy a la izquierda y los cuadros a la derecha. Lo que hacía cada cosa no cambió:
      solo su forma. «Plan · Ver» y la foto de la fase son ahora el cuadro de la fase (con la foto de fondo si la tiene). */
   const tipoHoy = next ? tipoDeSesion(next.day).label : '';
@@ -1946,7 +1946,7 @@ const HomeView = ({
                 onAbrir={onVerPrograma}
               />
             )}
-            {/* Entrenar por su cuenta y su activity card. Quien mira la app de otra persona no los ve. */}
+            {/* Entrenar por su cuenta y sus stickers. Quien mira la app de otra persona no los ve. */}
             {conLibre && <EntrenoLibre userId={atletaId} unidadPeso={unidadPeso} variante="cuadros" />}
           </div>
 
@@ -2258,7 +2258,7 @@ const PlanLoadingState = () => (
 
 // Sin plan asignado: misma interfaz, mensaje claro; wellness y 1RM siguen disponibles.
 // Si ya tiene entrenador, se le dice por su nombre (Andrés, 8 oct 2026, maqueta del inicio); si no, dónde ponerle el código.
-/* LO QUE VE QUIEN NO TIENE UN PLAN (12 oct 2026): casi todos los que entran solos vienen a correr, nadar o andar en bici y sacar su activity card. Para ellos Home es el botón «Entrenar»
+/* LO QUE VE QUIEN NO TIENE UN PLAN (12 oct 2026): casi todos los que entran solos vienen a correr, nadar o andar en bici y sacar sus stickers. Para ellos Home es el botón «Entrenar»
    (ver `features/libre`), «Tus entrenos» y, si compraron una biblioteca de clases, sus clases. Con entrenador y sin plan todavía se les dice que lo está armando. */
 const NoPlanState = ({ onAbrirHoja, alIrAExplorar }) => {
   const { coach } = usePalabras();
@@ -2287,7 +2287,7 @@ const NoPlanState = ({ onAbrirHoja, alIrAExplorar }) => {
       </div>
     )}
     {conLibre ? (
-      // Sin plan, Home son widgets (12 oct 2026): el cartel «Entrenar», Activity card, Explorar, Demo workout, Salud y 1RM, y «Tus entrenos».
+      // Sin plan, Home son widgets (12 oct 2026): el cartel «Entrenar», Stickers, Explorar, Demo workout, Salud y 1RM, y «Tus entrenos».
       <EntrenoLibre
         userId={userId} unidadPeso={perfil?.unidad_peso || 'kg'} conEmpujon={sinEntrenador} alIrAExplorar={alIrAExplorar}
         cuadros={<CuadroDeSalud dolor={null} onAbrir={() => onAbrirHoja('wellness')} />}

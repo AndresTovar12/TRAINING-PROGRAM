@@ -1,4 +1,4 @@
-/* La RUTA del sello: de las coordenadas del reloj (`series.ruta`: `lat` y `lon`) a puntos que caben en un cuadro, sin deformarla.
+/* La RUTA de los stickers: de las coordenadas del reloj (`series.ruta`: `lat` y `lon`) a puntos que caben en un cuadro, sin deformarla.
 
    Un grado de longitud mide menos que uno de latitud conforme se aleja del ecuador (cos de la latitud): sin esa corrección una ruta de Monterrey se ve aplastada.
    La ruta se centra y se ajusta al lado que más pida. Un entreno que no se movió (todos los puntos iguales) no tiene forma que dibujar: `null`.

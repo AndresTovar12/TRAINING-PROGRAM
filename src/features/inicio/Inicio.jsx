@@ -565,7 +565,7 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
       </>
     );
   } else if (paso === 'codigo' && !conCodigo && !textoCodigo.trim()) {
-    // «¿Cómo quieres empezar?» (12 oct 2026): dos opciones IGUALES. Quien entrena por su cuenta (correr, nadar, sacar su activity card) no tiene por qué pasar por un código.
+    // «¿Cómo quieres empezar?» (12 oct 2026): dos opciones IGUALES. Quien entrena por su cuenta (correr, nadar, sacar sus stickers) no tiene por qué pasar por un código.
     const o = (t, I, alTocar) => (
       <button type="button" className="kp-press" onClick={alTocar} disabled={ocupado} style={opcion(false)}>
         <span style={cuadroDeIcono()}><I size={22} /></span>
