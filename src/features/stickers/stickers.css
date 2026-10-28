@@ -58,3 +58,56 @@
 .stk .k-ec.e2 { font-variation-settings: 'opsz' 96, 'wdth' 87; font-stretch: 87%; opacity: 0.28; }
 .stk .k-ec .u { font-size: 0.3em; }
 .stk svg { display: block; overflow: visible; }
+
+/* Fase 2 (los 29 restantes; medidas del prototipo). */
+.stk .k-filas { width: 100%; }
+.stk .k-filas .k-fr + .k-fr { margin-top: 10px; }
+.stk .k-frase { font-size: 40px; line-height: 1; white-space: normal; }
+.stk .k-frase .u { font-size: 0.5em; }
+.stk .co { opacity: 0.5; }
+.stk .k-esq { position: relative; height: 240px; width: 100%; display: grid; place-items: center; }
+.stk .k-esq .c { position: absolute; }
+.stk .k-esq .tl { left: 0; top: 0; }
+.stk .k-esq .tr { right: 0; top: 0; text-align: right; }
+.stk .k-esq .bl { left: 0; bottom: 0; }
+.stk .k-esq .br { right: 0; bottom: 0; text-align: right; }
+.stk .k-esq .k-l { margin-top: 4px; }
+.stk .k-lista { margin-top: 14px; width: 100%; }
+.stk .k-lista .k-fr + .k-fr { margin-top: 8px; }
+.stk .k-lista .n { font-weight: 700; font-variation-settings: 'opsz' 20; font-size: 12.5px; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.stk .k-lista .k-v { flex: none; }
+.stk .k-lista .k-v .u { font-size: 0.6em; }
+.stk .k-lista .at { opacity: 0.5; font-size: 0.8em; margin: 0 0.1em; }
+.stk .k-ic { display: inline-flex; flex: none; line-height: 0; }
+.stk .k-fila-ic { display: flex; align-items: center; gap: 12px; width: 100%; }
+.stk .k-tag { display: flex; align-items: center; gap: 8px; }
+.stk .k-nombre { font-size: 30px; line-height: 1; white-space: normal; margin-top: 10px; overflow-wrap: anywhere; }
+
+/* «Con foto»: la foto va debajo del sticker (las tres de ejemplo están dibujadas con degradados; la del carrete es una imagen). */
+.stk-foto { position: absolute; inset: 0; overflow: hidden; }
+.stk-foto img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.stk-foto.atardecer { background: linear-gradient(180deg, #2B2F6B 0%, #B5487A 34%, #F08A4B 52%, #FFC37A 58%, #1E4D7A 59%, #123153 100%); } /* estilo-ok: fotos de ejemplo dibujadas y su velo (prototipo de stickers) */
+.stk-foto.atardecer::after { content: ''; position: absolute; left: 50%; top: 44%; width: 90px; height: 90px; margin-left: -45px; border-radius: 50%; background: radial-gradient(circle, #FFE3A8, #FFB15C 60%, rgba(255, 177, 92, 0) 72%); }
+.stk-foto.pista { background: linear-gradient(180deg, #8EC5E8 0%, #CFE6F3 30%, #B8442E 31%, #C4553B 100%); } /* estilo-ok: fotos de ejemplo dibujadas y su velo (prototipo de stickers) */
+.stk-foto.pista::after { content: ''; position: absolute; left: -30%; right: -30%; top: 31%; bottom: 0; background: repeating-linear-gradient(100deg, transparent 0 46px, rgba(255, 255, 255, 0.8) 46px 49px); transform: perspective(300px) rotateX(48deg); transform-origin: top; } /* estilo-ok: fotos de ejemplo dibujadas y su velo (prototipo de stickers) */
+.stk-foto.gym { background: radial-gradient(ellipse at 50% 18%, #F2B36A 0%, #7A4A26 26%, #1B1410 62%, #0A0807 100%); }
+.stk-vela { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0, 0, 0, 0.05) 45%, rgba(0, 0, 0, 0.4) 100%); } /* estilo-ok: fotos de ejemplo dibujadas y su velo (prototipo de stickers) */
+
+/* «Video»: el Eco que cae y se angosta (900 ms); los ecos aparecen a los 20 y 160 ms; la frase y el wordmark suben a los 760 ms. La ruta se dibuja sola. */
+.stk.k-eco.anima .k-ec.e3 { animation: stk-cae 900ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+.stk.k-eco.anima .k-ec.e1 { animation: stk-queda1 420ms cubic-bezier(0.23, 1, 0.32, 1) 20ms both; }
+.stk.k-eco.anima .k-ec.e2 { animation: stk-queda2 420ms cubic-bezier(0.23, 1, 0.32, 1) 160ms both; }
+.stk.k-eco.anima .k-cap,
+.stk.k-eco.anima .k-wm { animation: stk-sube 420ms cubic-bezier(0.23, 1, 0.32, 1) 760ms both; }
+.stk .stk-trazo { stroke-dasharray: 1; stroke-dashoffset: 1; animation: stk-trazo 2.4s ease-in-out infinite; }
+@keyframes stk-cae { from { transform: translateY(-1.6em); font-variation-settings: 'opsz' 96, 'wdth' 100; } to { transform: none; font-variation-settings: 'opsz' 96, 'wdth' 75; } }
+@keyframes stk-queda1 { from { opacity: 0; } to { opacity: 0.12; } }
+@keyframes stk-queda2 { from { opacity: 0; } to { opacity: 0.28; } }
+@keyframes stk-sube { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes stk-trazo { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .stk.k-eco.anima .k-ec,
+  .stk.k-eco.anima .k-cap,
+  .stk.k-eco.anima .k-wm,
+  .stk .stk-trazo { animation: none; stroke-dashoffset: 0; }
+}

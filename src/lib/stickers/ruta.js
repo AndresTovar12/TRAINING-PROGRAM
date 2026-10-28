@@ -33,3 +33,40 @@ export function ajustaRuta(lat, lon, ancho, alto, margen = 0, maximo = 400) {
   const oy = margen + (libreY - h * escala) / 2;
   return xs.map((x, i) => [ox + (x - x0) * escala, oy + (ys[i] - y0) * escala]);
 }
+
+/** La distancia acumulada (en las unidades del dibujo) hasta cada punto de `pts` (`[[x, y], …]`). */
+export function acumula(pts) {
+  const c = [0];
+  for (let i = 1; i < pts.length; i += 1) c.push(c[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  return c;
+}
+
+/** El trozo de la ruta entre dos fracciones del recorrido (0 a 1): para pintar un kilómetro en el acento («Tu mejor kilómetro») o dibujarla de a poco (Video). */
+export function tramoDe(pts, p0, p1) {
+  const c = acumula(pts);
+  const L = c[c.length - 1];
+  const a = L * Math.max(0, p0);
+  const b = L * Math.min(1, p1);
+  const en = (i, d) => {
+    const f = (d - c[i - 1]) / ((c[i] - c[i - 1]) || 1);
+    return [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f];
+  };
+  const out = [];
+  for (let i = 1; i < pts.length; i += 1) {
+    if (c[i] < a) continue;
+    if (!out.length) out.push(en(i, a));
+    if (c[i] < b) out.push(pts[i]);
+    else { out.push(en(i, b)); break; }
+  }
+  return out;
+}
+
+/** Un perfil de altura (metros, en orden) reducido a `n` puntos para dibujarse: el promedio de cada tramo. */
+export function perfilReducido(alturas, n = 40) {
+  const v = (alturas ?? []).filter((x) => Number.isFinite(x));
+  if (v.length < 2) return null;
+  const k = Math.max(1, Math.floor(v.length / n));
+  const out = [];
+  for (let i = 0; i < v.length; i += k) { const t = v.slice(i, i + k); out.push(t.reduce((s, x) => s + x, 0) / t.length); }
+  return out.length >= 2 ? out : null;
+}

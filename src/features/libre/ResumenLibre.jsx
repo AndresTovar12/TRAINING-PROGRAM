@@ -1,15 +1,17 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, MoreHorizontal, Share2, Trophy } from 'lucide-react';
 import { LT, FONT, NUM_STYLE, KP } from '@/lib/theme';
 import { datosDelResumen } from '@/lib/resumenLibre';
 import { DEPORTES, nombreDelDeporte } from '@/lib/metricas/deportes';
 import { fechaLarga, horaTexto } from '@/lib/metricas/formato';
-import { borraActividad, cambiaActividad, getSeries } from '@/lib/metricasApi';
+import { borraActividad, cambiaActividad, getActividad, getSeries } from '@/lib/metricasApi';
 import { muestrasDeRuta } from '@/lib/recorrido';
 import { textoDeRitmo } from '@/lib/ubicacion';
 import { actividadDeEntreno } from '@/lib/actividades';
 import { entrenoDeActividad } from '@/lib/stickers/ficha';
+import { cargaHistorial } from '@/lib/stickers/carga';
+import { useTipoDeSesion } from '@/features/stickers/useTipoDeSesion';
 import { useConfirmacion } from '@/components/Confirmacion';
 import AvisoDeStickers from '@/features/stickers/AvisoDeStickers';
 import CambiarNombre from '@/features/stickers/CambiarNombre';
@@ -39,6 +41,22 @@ const Dato = ({ valor, etiqueta }) => (
 
 export default function ResumenLibre({ fila: filaInicial, unidadPeso = 'kg', alCerrar, alCerrarStickers, conStickers = false, recien = false, muestras = null, record = null, actividad = null, propias = [], filas = [], alCrearPropia, alCambiar, alBorrado }) {
   const [fila, setFila] = useState(filaInicial);
+  const [cambiada, setCambiada] = useState(false); // ¿cambió la actividad a mano en esta página?
+  const [historial, setHistorial] = useState(null);
+  const tipoDeSesion = useTipoDeSesion();
+  const paraCargar = useRef({ filaInicial, propias, tipoDeSesion });
+  /* Al abrir: el entreno COMPLETO (la lista de «Tus entrenos» no trae las vueltas: sin ellas no hay «Por kilómetro», Parciales, Regla ni Tu mejor kilómetro)
+     y el historial del año (Semana, Mes y Racha de los stickers). Si algo falla, la página sigue con lo que tiene. */
+  useEffect(() => {
+    const { filaInicial: f0, propias: p0, tipoDeSesion: t0 } = paraCargar.current;
+    if (!f0?.id) return undefined;
+    let vivo = true;
+    getActividad(f0.id).then((completa) => {
+      if (vivo && completa) setFila((antes) => ({ ...completa, titulo: antes.titulo, deporte: antes.deporte }));
+    }).catch(() => {});
+    cargaHistorial({ atletaId: f0.atleta_id, inicioMs: Date.parse(f0.inicio), propias: p0, tipoDeSesion: t0 }).then((h) => { if (vivo) setHistorial(h); });
+    return () => { vivo = false; };
+  }, []);
   const [verStickers, setVerStickers] = useState(conStickers);
   const [menu, setMenu] = useState(null); // null | 'opciones' | 'nombre' | 'actividad'
   const [error, setError] = useState(null);
@@ -58,11 +76,11 @@ export default function ResumenLibre({ fila: filaInicial, unidadPeso = 'kg', alC
   }, [muestras, series]);
   const nombre = fila.titulo || nombreDelDeporte(fila.deporte);
   // La actividad elegida a mano en esta página manda sobre la que trajo al guardarse.
-  const act = (fila !== filaInicial ? null : actividad) ?? actividadDeEntreno(fila, propias);
+  const act = (cambiada ? null : actividad) ?? actividadDeEntreno(fila, propias);
   // La ficha de sus stickers: la misma para el aviso y para la hoja (`lib/stickers/ficha.js`).
   const entreno = useMemo(
-    () => entrenoDeActividad({ fila, muestras: ruta, nombre, tipo: act ? { nombre: act.nombre, icono: act.icono } : null, record, unidadPeso }),
-    [fila, ruta, nombre, act, record, unidadPeso],
+    () => entrenoDeActividad({ fila, series, muestras: ruta, nombre, tipo: act ? { nombre: act.nombre, icono: act.icono } : null, record, unidadPeso, historial }),
+    [fila, series, ruta, nombre, act, record, unidadPeso, historial],
   );
   // Se comparan por RITMO (segundos por km), no por lo que duró cada tramo: el último casi nunca es un kilómetro entero y por ser corto parecería el más rápido.
   const kms = (fila.vueltas ?? []).filter((v) => v.tipo === 'km' && v.dur > 0 && v.dist > 0).map((v) => ({ ...v, paso: v.ritmo ?? Math.round((v.dur / v.dist) * 1000) }));
@@ -74,7 +92,11 @@ export default function ResumenLibre({ fila: filaInicial, unidadPeso = 'kg', alC
   const cambia = async (cambios) => {
     setError(null);
     const nueva = await cambiaActividad(fila.id, cambios);
-    if (nueva) { setFila(nueva); alCambiar?.(nueva); }
+    if (nueva) {
+      setFila(nueva);
+      if (cambios.deporte) setCambiada(true);
+      alCambiar?.(nueva);
+    }
   };
   const renombra = async (titulo) => { await cambia({ titulo }); };
   const eligeActividad = async (a) => {

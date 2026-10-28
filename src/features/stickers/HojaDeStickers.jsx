@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Capacitor } from '@capacitor/core';
-import { Check, Pencil } from 'lucide-react';
+import { Check, ImagePlus, Pencil } from 'lucide-react';
 import { FONT } from '@/lib/theme';
 import { ficha as fichaDe } from '@/lib/stickers/ficha';
 import { catalogo, COLORES, LIENZOS } from '@/lib/stickers/catalogo';
 import { entregaArchivo } from '@/lib/entregaArchivo';
+import { aImagenWeb } from '@/lib/imagen';
 import { vibra } from '@/lib/avisosNativos';
 import CambiarNombre from './CambiarNombre';
 import Sticker from './Sticker';
-import { nombreDeArchivo, pngDeSticker } from './exporta';
+import RutaVideo from './RutaVideo';
+import { nombreDeArchivo, pngDeSticker, puedeGrabarVideo, videoDeSticker } from './exporta';
 
 /* LA HOJA DE STICKERS (Andrés, 28 oct 2026; ver docs/stickers.md y el prototipo). Sustituye a la hoja y al editor del sello.
 
@@ -22,7 +24,9 @@ import { nombreDeArchivo, pngDeSticker } from './exporta';
 
    Tocar = copiar (aviso «Copiado. Pégalo en tu historia.» con «Abrir Instagram» y «Guardar», 3.5 s). Mantener 0.6 s = guardar, con un anillo que se llena; si se
    suelta antes, regresa. Mover el dedo más de 10 px = desplazar la lista. Se cierra con «Cerrar» o arrastrando la cabecera hacia abajo (120 px, o rápido).
-   Fase 1: solo la pestaña «Stickers»; «Con foto» y «Video» llegan en la fase 2.
+   Pestañas (fase 2): «Stickers» (todos, sobre damero), «Con foto» (solo los de identidad sobre una foto 9:16: tres de ejemplo o una del carrete, que nunca sale
+   del teléfono; se copia y se guarda la imagen entera, 900 × 1599) y «Video» (el Eco que cae y, si hubo ruta, la ruta que se dibuja: tocar o mantener guarda
+   un video de 3 s). Con «reducir movimiento» la hoja no se desliza y los videos se ven quietos en la hoja.
 
    `entreno`: lo que pide `ficha()` (o `cargar`, una función que lo trae; mientras, se ven mosaicos vacíos). `titulo`: el de la cabecera. `nombre`: el del
    entreno. `alRenombrar(nombre)`: guarda el nombre nuevo (sin ella no hay lápiz). */
@@ -30,6 +34,8 @@ import { nombreDeArchivo, pngDeSticker } from './exporta';
 const FONDO = '#0E1220';
 const TINTA_2 = '#9AA3B8';
 const CAJA_2 = '#1E2436';
+// El video no puede ser transparente: va sobre el fondo de la hoja (el mismo de `exporta.js`).
+const FONDO_VIDEO = '#0E1220';
 const CURVA = 'cubic-bezier(.32,.72,0,1)';
 const ANILLO = 138.23; // 2π · 22
 const MANTENER_MS = 600;
@@ -42,14 +48,16 @@ const DAMERO = {
 const reduceMovimiento = () => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
 const puedeCopiar = () => !!(navigator.clipboard?.write && typeof window.ClipboardItem === 'function');
 
-/** Un mosaico: el sticker achicado para caber centrado, el anillo de «mantener» y la palomita de guardado. */
-function Mosaico({ item, f, color, ancho, alCopiar, alGuardar }) {
+/**
+ * Un mosaico: lo que se va a sacar (`children`, a su tamaño real: 300 × `lienzoH`) achicado para caber centrado, el anillo de «mantener» y la palomita de guardado.
+ * `proporcion`: alto ÷ ancho del mosaico (2/3, o 16/9 en «Con foto»). `fondo`: el damero (transparente) o el color liso del video.
+ */
+function Mosaico({ etiqueta, ancho, proporcion, lienzoH, fondo, alTocar, alMantener, children }) {
   const [presion, setPresion] = useState(0); // 0..1 del anillo
   const [guardado, setGuardado] = useState(false);
   const t = useRef(null);
-  const alto = Math.round((ancho * 2) / 3);
-  const { h } = LIENZOS[item.forma];
-  const k = ancho > 0 ? Math.min(ancho / 300, alto / h) : 0;
+  const alto = Math.round(ancho * proporcion);
+  const k = ancho > 0 ? Math.min(ancho / 300, alto / lienzoH) : 0;
 
   const suelta = () => { setPresion(0); };
   const empieza = (ev) => {
@@ -66,7 +74,7 @@ function Mosaico({ item, f, color, ancho, alCopiar, alGuardar }) {
         setPresion(0);
         setGuardado(true);
         setTimeout(() => setGuardado(false), 1100);
-        alGuardar(item);
+        alMantener();
         return;
       }
       x.raf = requestAnimationFrame(paso);
@@ -85,28 +93,27 @@ function Mosaico({ item, f, color, ancho, alCopiar, alGuardar }) {
     cancelAnimationFrame(x.raf);
     if (x.hecho || x.movido) return;
     suelta();
-    if (performance.now() - x.t0 < ESPERA_ANILLO_MS + MANTENER_MS + 120) alCopiar(item);
+    alTocar();
   };
   const cancela = (ev) => { const x = t.current; if (x && ev.pointerId === x.id) { cancelAnimationFrame(x.raf); t.current = null; suelta(); } };
 
   return (
     <button
-      type="button" aria-label={`Sticker ${item.nombre}. Toca para copiar; mantén presionado para guardar`}
+      type="button" aria-label={etiqueta}
       onPointerDown={empieza} onPointerMove={mueve} onPointerUp={termina} onPointerCancel={cancela}
-      onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); alCopiar(item); } }}
+      onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); alTocar(); } }}
       onContextMenu={(ev) => ev.preventDefault()}
       style={{ position: 'relative', border: 'none', padding: 0, background: 'none', cursor: 'pointer', touchAction: 'pan-y', WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none', display: 'block', width: '100%' }}
     >
       <span
         style={{
-          position: 'relative', display: 'block', width: '100%', height: alto, borderRadius: 16, overflow: 'hidden',
-          ...(color.clara ? DAMERO.claro : DAMERO.oscuro),
+          position: 'relative', display: 'block', width: '100%', height: alto, borderRadius: 16, overflow: 'hidden', ...fondo,
           transform: presion > 0 ? 'scale(.96)' : 'none', transition: `transform .2s ${CURVA}`,
         }}
       >
         {k > 0 && (
-          <span style={{ position: 'absolute', left: (ancho - 300 * k) / 2, top: (alto - h * k) / 2, transform: `scale(${k.toFixed(4)})`, transformOrigin: 'top left', pointerEvents: 'none' }}>
-            <Sticker item={item} f={f} color={color} />
+          <span style={{ position: 'absolute', left: (ancho - 300 * k) / 2, top: (alto - lienzoH * k) / 2, transform: `scale(${k.toFixed(4)})`, transformOrigin: 'top left', pointerEvents: 'none' }}>
+            {children}
           </span>
         )}
         <span
@@ -153,6 +160,11 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
   const [aviso, setAviso] = useState(null); // { texto, error?, acciones? }
   const [renombrando, setRenombrando] = useState(false);
   const [nombreVisto, setNombreVisto] = useState(nombre);
+  const [pestana, setPestana] = useState('stickers'); // 'stickers' | 'foto' | 'video'
+  const [foto, setFoto] = useState({ ejemplo: 'atardecer' }); // la de ejemplo, o { url } del carrete
+  const [vuelta, setVuelta] = useState(0); // para repetir la animación de la pestaña Video
+  const ocupado = useRef(false);
+  const carrete = useRef(null);
   const [galeriaRef, anchoGaleria] = useAncho();
   const hojaRef = useRef(null);
   const veloRef = useRef(null);
@@ -171,6 +183,7 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
   const base = cargar ? cargado : entreno;
   const f = useMemo(() => (base ? fichaDe({ ...base, nombre: nombreVisto || base.nombre }) : null), [base, nombreVisto]);
   const items = useMemo(() => (f ? catalogo(f) : []), [f]);
+  const eco = items.find((x) => x.id === 'eco') ?? null;
   const color = COLORES[colorI];
 
   useEffect(() => {
@@ -189,6 +202,14 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
     return () => document.removeEventListener('keydown', tecla);
   }, [cierra, renombrando]);
   useEffect(() => () => clearTimeout(reloj.current), []);
+  // La foto del carrete vive solo en memoria (un enlace `blob:` local): se suelta al cambiarla o al cerrar.
+  useEffect(() => () => { if (foto.url) URL.revokeObjectURL(foto.url); }, [foto]);
+  // En la pestaña Video la animación se repite cada 3.2 s (con «reducir movimiento», quieta).
+  useEffect(() => {
+    if (pestana !== 'video' || rm) return undefined;
+    const id = setInterval(() => setVuelta((v) => v + 1), 3200);
+    return () => clearInterval(id);
+  }, [pestana, rm]);
 
   const avisa = (a) => {
     clearTimeout(reloj.current);
@@ -196,10 +217,12 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
     reloj.current = setTimeout(() => setAviso(null), a.dura ?? 3500);
   };
 
+  // En «Con foto» se saca la imagen entera (la historia, con la foto debajo); en «Stickers», el sticker solo.
+  const comoSale = (item) => (pestana === 'foto' ? { item, f, color, forma: 'historia', foto } : { item, f, color });
   const guarda = async (item) => {
     vibra('listo');
     try {
-      await entregaArchivo(await pngDeSticker({ item, f, color }), nombreDeArchivo(item));
+      await entregaArchivo(await pngDeSticker(comoSale(item)), nombreDeArchivo(item));
       if (!enApp) avisa({ texto: 'Imagen guardada.' });
     } catch {
       avisa({ texto: 'No se pudo guardar. Inténtalo otra vez.', error: true });
@@ -211,13 +234,42 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
     if (!puedeCopiar()) { falla(); return; }
     try {
       // La promesa va adentro del ClipboardItem: Safari solo deja copiar si `write` se llama en el mismo toque.
-      navigator.clipboard.write([new window.ClipboardItem({ 'image/png': pngDeSticker({ item, f, color }) })])
+      navigator.clipboard.write([new window.ClipboardItem({ 'image/png': pngDeSticker(comoSale(item)) })])
         .then(() => avisa({
           texto: 'Copiado. Pégalo en tu historia.',
           acciones: [...(enApp ? [{ t: 'Abrir Instagram', fn: () => { window.location.href = 'instagram://story-camera'; } }] : []), { t: 'Guardar', fn: () => guarda(item) }],
         }))
         .catch(falla);
     } catch { falla(); }
+  };
+
+  // Un video no se puede copiar: tocar o mantener lo arma (unos segundos) y lo guarda.
+  const guardaVideo = async (clase, item) => {
+    if (ocupado.current) return;
+    if (!puedeGrabarVideo()) { avisa({ texto: 'Este teléfono no pudo armar el video.', error: true }); return; }
+    ocupado.current = true;
+    vibra('listo');
+    avisa({ texto: 'Armando tu video…', dura: 120000 }); // se queda hasta que termine (lo cambia el siguiente aviso)
+    try {
+      const { blob, ext } = await videoDeSticker({ clase, item, f, color });
+      await entregaArchivo(blob, nombreDeArchivo({ id: clase === 'eco' ? 'eco' : 'ruta' }, ext));
+      avisa({ texto: enApp ? 'Video listo.' : 'Video guardado.' });
+    } catch {
+      avisa({ texto: 'No se pudo armar el video. Inténtalo otra vez.', error: true });
+    } finally {
+      ocupado.current = false;
+    }
+  };
+  const eligeDelCarrete = async (ev) => {
+    const archivo = ev.target.files?.[0];
+    ev.target.value = '';
+    if (!archivo) return;
+    try {
+      // HEIC del iPhone incluida: se convierte en el teléfono (`aImagenWeb`). Nada se sube.
+      setFoto({ url: URL.createObjectURL(await aImagenWeb(archivo)) });
+    } catch {
+      avisa({ texto: 'No se pudo abrir esa foto. Prueba con otra.', error: true });
+    }
   };
 
   // Arrastrar la cabecera hacia abajo cierra; hacia arriba resiste.
@@ -272,7 +324,7 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
   const dur = rm ? '0s' : (cerrando ? '.25s' : '.5s');
 
   return createPortal(
-    <div role="presentation" style={{ position: 'fixed', inset: 0, zIndex: capa, fontFamily: FONT }}>
+    <div role="presentation" style={{ position: 'fixed', inset: 0, zIndex: capa, fontFamily: FONT, overflow: 'hidden' }}>
       <div ref={veloRef} onClick={cierra} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.42)', opacity: abierta ? 1 : 0, transition: `opacity .3s ease-out` }} />
       <section
         ref={hojaRef} role="dialog" aria-modal="true" aria-labelledby="stk-titulo"
@@ -301,6 +353,16 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
             </div>
             <button type="button" onClick={cierra} className="kp-press" style={{ flex: 'none', border: 'none', background: CAJA_2, color: '#fff', borderRadius: 999, padding: '9px 15px', fontFamily: FONT, fontSize: 14.5, fontWeight: 700, minHeight: 40, cursor: 'pointer' }}>Cerrar</button>
           </div>
+          <div role="tablist" aria-label="Formato" style={{ display: 'flex', background: CAJA_2, borderRadius: 12, padding: 3, gap: 2, marginTop: 12 }}>
+            {[['stickers', 'Stickers'], ['foto', 'Con foto'], ['video', 'Video']].map(([id, txt]) => (
+              <button
+                key={id} type="button" role="tab" aria-selected={pestana === id} onClick={() => setPestana(id)}
+                style={{ flex: 1, border: 'none', borderRadius: 10, minHeight: 38, fontFamily: FONT, fontSize: 14, fontWeight: 600, cursor: 'pointer', background: pestana === id ? '#EEF0F6' : 'transparent', color: pestana === id ? '#07090F' : TINTA_2 }}
+              >
+                {txt}
+              </button>
+            ))}
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 0 6px' }}>
             {COLORES.map((c, i) => (
               <button
@@ -311,14 +373,65 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
                 }}
               />
             ))}
-            <span style={{ marginLeft: 'auto', fontSize: 12.5, color: TINTA_2, textAlign: 'right', lineHeight: 1.3 }}>Toca para copiar<br />Mantén para guardar</span>
+            <span style={{ marginLeft: 'auto', fontSize: 12.5, color: TINTA_2, textAlign: 'right', lineHeight: 1.3 }}>
+              {pestana === 'video' ? <>Toca para guardar<br />el video</> : <>Toca para copiar<br />Mantén para guardar</>}
+            </span>
           </div>
         </div>
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', padding: '10px 18px calc(24px + env(safe-area-inset-bottom))' }}>
           <div ref={galeriaRef} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap, alignContent: 'start' }}>
-            {f && items.map((item) => (
-              <Mosaico key={item.id} item={item} f={f} color={color} ancho={anchoMosaico} alCopiar={copia} alGuardar={guarda} />
+            {f && pestana === 'stickers' && items.map((item) => (
+              <Mosaico
+                key={item.id} etiqueta={`Sticker ${item.nombre}. Toca para copiar; mantén presionado para guardar`} ancho={anchoMosaico} proporcion={2 / 3}
+                lienzoH={LIENZOS[item.forma].h} fondo={color.clara ? DAMERO.claro : DAMERO.oscuro} alTocar={() => copia(item)} alMantener={() => guarda(item)}
+              >
+                <Sticker item={item} f={f} color={color} />
+              </Mosaico>
             ))}
+            {f && pestana === 'foto' && (
+              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, alignItems: 'center', paddingBottom: 4 }}>
+                {['atardecer', 'pista', 'gym'].map((ej) => (
+                  <button
+                    key={ej} type="button" onClick={() => setFoto({ ejemplo: ej })} aria-pressed={foto.ejemplo === ej} aria-label={`Foto de ejemplo: ${ej}`}
+                    style={{ position: 'relative', border: 'none', width: 46, height: 46, borderRadius: 12, padding: 0, overflow: 'hidden', flex: 'none', cursor: 'pointer', boxShadow: foto.ejemplo === ej ? `0 0 0 2px ${FONDO}, 0 0 0 4px #EEF0F6` : 'none' }}
+                  >
+                    <span className={`stk-foto ${ej}`} />
+                  </button>
+                ))}
+                <button
+                  type="button" onClick={() => carrete.current?.click()} aria-pressed={!!foto.url} aria-label="Elegir una foto del carrete"
+                  style={{ border: 'none', width: 46, height: 46, borderRadius: 12, padding: 0, flex: 'none', cursor: 'pointer', background: CAJA_2, color: '#EEF0F6', display: 'grid', placeItems: 'center', boxShadow: foto.url ? `0 0 0 2px ${FONDO}, 0 0 0 4px #EEF0F6` : 'none' }}
+                >
+                  <ImagePlus size={22} />
+                </button>
+                <input ref={carrete} type="file" accept="image/*" onChange={eligeDelCarrete} style={{ display: 'none' }} />
+                <small style={{ fontSize: 12, color: TINTA_2, marginLeft: 6, lineHeight: 1.3 }}>La foto no sale<br />de tu teléfono</small>
+              </div>
+            )}
+            {f && pestana === 'foto' && items.filter((x) => x.identidad).map((item) => (
+              <Mosaico
+                key={item.id} etiqueta={`Sticker ${item.nombre} con foto. Toca para copiar; mantén presionado para guardar`} ancho={anchoMosaico} proporcion={16 / 9}
+                lienzoH={LIENZOS.historia.h} fondo={{ background: '#1B2030' }} alTocar={() => copia(item)} alMantener={() => guarda(item)}
+              >
+                <Sticker item={item} f={f} color={color} forma="historia" foto={foto} />
+              </Mosaico>
+            ))}
+            {f && pestana === 'video' && eco && (
+              <Mosaico
+                etiqueta="Video del Eco. Toca para guardarlo" ancho={anchoMosaico} proporcion={2 / 3} lienzoH={LIENZOS.alto.h}
+                fondo={{ background: color.clara ? '#FFFFFF' : FONDO_VIDEO }} alTocar={() => guardaVideo('eco', eco)} alMantener={() => guardaVideo('eco', eco)}
+              >
+                <Sticker key={vuelta} item={eco} f={f} color={color} forma="alto" anima={!rm} />
+              </Mosaico>
+            )}
+            {f && pestana === 'video' && f.ruta && (
+              <Mosaico
+                etiqueta="Video de la ruta dibujándose. Toca para guardarlo" ancho={anchoMosaico} proporcion={2 / 3} lienzoH={LIENZOS.alto.h}
+                fondo={{ background: color.clara ? '#FFFFFF' : FONDO_VIDEO }} alTocar={() => guardaVideo('ruta')} alMantener={() => guardaVideo('ruta')}
+              >
+                <RutaVideo f={f} color={color} anima={!rm} />
+              </Mosaico>
+            )}
             {!f && cargado === undefined && Array.from({ length: 4 }, (_, i) => (
               <span key={i} aria-hidden="true" style={{ display: 'block', height: Math.round((anchoMosaico * 2) / 3) || 110, borderRadius: 16, background: '#1B2030' }} />
             ))}
