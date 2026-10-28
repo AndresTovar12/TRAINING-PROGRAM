@@ -80,3 +80,18 @@ function colorFuerte(r, g, b) {
   const hex = (v) => Math.round(v * k).toString(16).padStart(2, '0');
   return `#${hex(r)}${hex(g)}${hex(b)}`;
 }
+
+/* EL TIPO PARA LOS STICKERS (28 oct 2026, decisión 9): el nombre como lo escribió el coach y el ícono del CATÁLOGO (`lib/iconosDeTipo.datos.js`), el mismo
+   dibujo que ve en Configuración. Un tipo propio lleva el que eligió (`catIcono`; sin él, el sticker busca uno por el nombre). Los 14 tipos de la app usan
+   lucide (`ICONO_DEL_TIPO`); aquí va el del catálogo que es el MISMO dibujo de lucide (la bici es de Tabler: lucide no está en el catálogo). */
+const ICONO_DEL_CATALOGO = {
+  gym: 'pesa', speed: 'rayo', recovery: 'corazon-pulso', football: 'gol', tests: 'prueba', team: 'equipo', correr: 'pulso', bici: 'bici', natacion: 'olas',
+  yoga: 'flor', movilidad: 'persona', terapia: 'estetoscopio', clase: 'pizarron', off: 'luna',
+};
+
+/** `{ nombre, icono }` del tipo de una sesión del plan, para la ficha de stickers. */
+export function tipoParaStickers(day) {
+  const { label } = tipoDeSesion(day);
+  const propio = day?.cat === 'otro' && !!(day?.catNombre || '').trim();
+  return { nombre: label, icono: propio ? (day.catIcono ?? null) : (ICONO_DEL_CATALOGO[day?.cat] ?? 'pesa') };
+}

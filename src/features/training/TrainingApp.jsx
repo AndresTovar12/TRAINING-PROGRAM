@@ -66,7 +66,7 @@ import {
   hermanasDelDia, juntaPorDia, sesionQueRepite,
 } from '@/lib/sesiones';
 import { setTag, groupIntoSets } from '@/lib/setsDeUnaSesion';
-import { aspectoDelTipo } from '@/lib/aspectoDelTipo';
+import { aspectoDelTipo, tipoParaStickers } from '@/lib/aspectoDelTipo';
 import { plural, pluralS, rondasQueDecir } from '@/lib/plural';
 import { textoMeta, textoDeHecho, cargaEnSuUnidad } from '@/lib/medidas';
 import {
@@ -943,6 +943,9 @@ const CuerpoDelDia = ({
      midió algo (si se marcó terminada a mano, sin hacer nada en el entreno, no hay con qué armarlos). */
   const { perfil: perfilDeStickers, soloLectura: miraSoloLectura, userId: atletaDeStickers } = usePerfilDeLaVista();
   const [stickersAbiertos, setStickersAbiertos] = useState(false);
+  // «Programmed by» en los stickers: quien hizo esta sesión (en un día con sesiones de varios profesionales, el de su tarjeta).
+  const { programaActivo } = usePlan();
+  const coachDeStickers = autor?.profesionalId ?? programaActivo?.profesionalId ?? null;
   const puedeStickers = !miraSoloLectura && selectedCompleted && !!tramoDeLaSesion(sessionData);
   /* Con `entarjetas` la sesión es una tarjeta, aunque este programa traiga una sola: se termina cada una por su lado y
      salen cerradas si hay más de una en el día (lo decide quien arma la pantalla con `abiertasPorDefecto`). Sin
@@ -1034,6 +1037,7 @@ const CuerpoDelDia = ({
           <HojaDeSesion
             atletaId={atletaDeStickers} registro={sessionData} sesionId={selectedId} nombre={sinDuracion(selectedDay.name || '') || 'Tu sesión'}
             unidadPeso={perfilDeStickers?.unidad_peso || 'kg'} onCerrar={() => setStickersAbiertos(false)}
+            tipo={tipoParaStickers(selectedDay)} coachId={coachDeStickers}
           />
         </Suspense>
       )}

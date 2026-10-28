@@ -417,6 +417,9 @@ export function usePlan() {
   return ctx;
 }
 
+/** El plan si hay un `<PlanProvider>` arriba, o `null` (para piezas que también se usan fuera de la app de entrenamiento, como los stickers en Métricas). */
+export const usePlanOpcional = () => useContext(PlanContext);
+
 /**
  * Pinta a sus hijos como si ESTE programa fuera el activo: sus fases, su manera
  * de resolver un ejercicio (con las versiones y el video de SU profesional) y

@@ -1,4 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { usePlanOpcional } from '@/contexts/PlanContext';
+import { tipoParaStickers } from '@/lib/aspectoDelTipo';
 import { createPortal } from 'react-dom';
 import { LT, FONT } from '@/lib/theme';
 import { useCuerpoQuieto } from '@/lib/useCuerpoQuieto';
@@ -92,8 +94,9 @@ export default function EntrenoDelDia({
   const [enfoque, setEnfoque] = useState(null);
   const [hoja, setHoja] = useState(null);
   const [verFin, setVerFin] = useState(false);
-  // Los stickers para redes, desde el final del entreno.
+  // Los stickers para redes, desde el final del entreno. «Programmed by»: quien hizo el plan.
   const [stickers, setStickers] = useState(false); // la hora en que se abrió, o `false`
+  const coachDelPlan = usePlanOpcional()?.programaActivo?.profesionalId ?? null;
   // La técnica que se está grabando (el paso, congelado al tocar la cámara) y la última que se mandó de cada paso: `{ [clave]: idDeLaTécnica }`.
   const [grabandoTecnica, setGrabandoTecnica] = useState(null);
   const [tecnicasMandadas, setTecnicasMandadas] = useState({});
@@ -609,6 +612,7 @@ export default function EntrenoDelDia({
         <Suspense fallback={null}>
           <HojaDeSesion
             atletaId={userId} sesionId={sesionId} nombre={sinDuracion(dia.name || '') || 'Tu sesión'} unidadPeso={unidadDePeso}
+            tipo={tipoParaStickers(dia)} coachId={coachDelPlan}
             // Antes de «Terminar» el entreno no tiene hora de fin: el resumen cuenta hasta ahora, así que los stickers también (si no, decían 1:04 contra 2:55).
             registro={{ ...registro, ...(recorrido.ruta() ? { ruta: recorrido.ruta() } : null), ...(registro?.entreno && registro.entreno.fin == null ? { entreno: { ...registro.entreno, fin: stickers } } : null) }}
             onCerrar={() => setStickers(false)}

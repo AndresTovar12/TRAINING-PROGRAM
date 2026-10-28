@@ -5,7 +5,7 @@
    no pueden mostrar «Time» las dos). Así sirve para cualquier actividad, incluso las que invente el coach, y nunca sale un «N/A».
 
    Aquí solo están los datos de cada sticker (forma, familia, ranuras); cómo se dibuja vive en `features/stickers/Sticker.jsx`.
-   FASE 1: Titular, Firma, Eco, Grande, Fila y Ruta y dato. El resto (fase 2) entra en este mismo arreglo, en el orden de la tabla de la especificación.
+   Los 35 de la tabla de la especificación (fase 1: 6; fase 2: los otros 29), en su orden. El volumen solo entra en «Lista» y «Columna».
 
    Este archivo no importa nada de la app: lo cargan las pruebas de Node (`scripts/prueba-stickers.mjs`). */
 
@@ -26,18 +26,54 @@ export const COLORES = [
 ];
 
 /**
- * Cada sticker: `id`, `nombre`, `familia` (identidad, firma, eco, datos, tipo), `forma` (ancho | alto), `identidad` (también sale en «Con foto»),
- * `ranuras` ({ nombre: [claves] }), `elige` ([claves, n, mín.]) y `obliga(f)` (lo que no puede faltar).
+ * Cada sticker: `id`, `nombre`, `familia` (identidad, datos, tipo), `forma` (ancho | alto), `identidad` (también sale en «Con foto»),
+ * `ranuras` ({ nombre: [claves] }), `elige` ([claves, n, mín.]) y `obliga(f)` (lo que no puede faltar). El orden es el de la tabla de la especificación.
  */
 export const STICKERS = [
+  // Identidad: la tipografía es la marca.
   { id: 'titular', nombre: 'Titular', familia: 'identidad', forma: 'alto', identidad: true,
     ranuras: { a: ['dist', 'series', 'min'], b: ['tiempo', 'kcal', 'ejercicios'], c: ['ritmo', 'vel', 'fc', 'kcal', 'ejercicios', 'largos'] } },
+  { id: 'titular-pr', nombre: 'Titular · récord', familia: 'identidad', forma: 'alto', identidad: true, obliga: (f) => !!f.record,
+    ranuras: { a: ['dist', 'series', 'min'], b: ['tiempo', 'kcal'] } },
   { id: 'firma', nombre: 'Firma', familia: 'identidad', forma: 'ancho', identidad: true, ranuras: { g: PREF_GRANDE } },
   { id: 'eco', nombre: 'Eco', familia: 'identidad', forma: 'alto', identidad: true, ranuras: { g: PREF_GRANDE } },
+  // Datos: el formato de los datos, con criterio propio.
   { id: 'grande', nombre: 'Grande', familia: 'datos', forma: 'ancho', identidad: true, ranuras: { g: ['dist', 'tiempo', 'kcal'] } },
   { id: 'fila', nombre: 'Fila', familia: 'datos', forma: 'ancho', elige: [PREF, 3] },
+  { id: 'columna', nombre: 'Columna', familia: 'datos', forma: 'alto', elige: [PREF_CON_VOLUMEN, 4, 3] },
+  { id: 'escalera', nombre: 'Escalera', familia: 'datos', forma: 'alto', elige: [PREF, 3] },
+  { id: 'frase', nombre: 'Frase', familia: 'datos', forma: 'alto', obliga: (f) => !!f.datos.min },
   { id: 'ruta-dato', nombre: 'Ruta y dato', familia: 'datos', forma: 'alto', obliga: (f) => !!f.ruta,
     ranuras: { g: ['dist', 'tiempo'] }, elige: [['tiempo', 'ritmo', 'vel', 'kcal', 'fc'], 2, 1] },
+  { id: 'mejor-km', nombre: 'Tu mejor kilómetro', familia: 'datos', forma: 'alto', obliga: (f) => !!f.ruta && !!f.splits },
+  { id: 'esquinas', nombre: 'Esquinas', familia: 'datos', forma: 'alto', obliga: (f) => !!f.ruta, elige: [PREF, 4] },
+  { id: 'parciales', nombre: 'Parciales', familia: 'datos', forma: 'ancho', obliga: (f) => !!f.splits && f.splits.length <= 12, ranuras: { r: ['ritmo'] } },
+  { id: 'seis', nombre: 'Seis', familia: 'datos', forma: 'alto', elige: [PREF, 6, 5] },
+  { id: 'ruta-escrita', nombre: 'Ruta escrita', familia: 'datos', forma: 'alto', obliga: (f) => !!f.ruta, elige: [['dist', 'tiempo', 'ritmo', 'vel'], 3, 2] },
+  { id: 'regla', nombre: 'Regla', familia: 'datos', forma: 'ancho', obliga: (f) => !!f.splits && f.splits.length <= 10, ranuras: { g: ['dist'], t: ['tiempo'] } },
+  { id: 'hora', nombre: 'Hora', familia: 'datos', forma: 'ancho', elige: [['dist', 'series', 'tiempo', 'kcal'], 2, 1] },
+  { id: 'zonas', nombre: 'Zonas', familia: 'datos', forma: 'ancho', obliga: (f) => !!f.zonas },
+  { id: 'elevacion', nombre: 'Elevación', familia: 'datos', forma: 'ancho', ranuras: { g: ['elev'] } },
+  { id: 'record', nombre: 'Récord', familia: 'datos', forma: 'ancho', obliga: (f) => !!f.record },
+  { id: 'largos', nombre: 'Largos', familia: 'datos', forma: 'alto', obliga: (f) => !!f.datos.largos && Number(f.datos.largos.v) <= 100,
+    ranuras: { g: ['dist'], l: ['largos'], p: ['ritmo', 'tiempo'] } },
+  { id: 'partido', nombre: 'Partido', familia: 'datos', forma: 'ancho', obliga: (f) => f.sinDistancia && !!f.datos.min, elige: [['kcal', 'fc', 'tiempo'], 2, 0] },
+  { id: 'lista', nombre: 'Lista', familia: 'datos', forma: 'alto', obliga: (f) => !!f.lista, ranuras: { g: ['volumen', 'series'], s: ['series', 'tiempo'] } },
+  { id: 'semana', nombre: 'Semana', familia: 'datos', forma: 'ancho' },
+  { id: 'mes', nombre: 'Mes', familia: 'datos', forma: 'ancho' },
+  // Tipo: el ícono que eligió el coach (o el de la actividad, en un entreno libre).
+  { id: 'icono-numero', nombre: 'Ícono y número', familia: 'tipo', forma: 'ancho', ranuras: { g: ['tiempo', 'dist', 'series'] } },
+  { id: 'titular-icono', nombre: 'Titular con ícono', familia: 'tipo', forma: 'ancho', elige: [PREF, 3, 2] },
+  { id: 'icono-gigante', nombre: 'Ícono gigante', familia: 'tipo', forma: 'alto', ranuras: { g: ['tiempo', 'dist', 'series'] } },
+  { id: 'cada-serie', nombre: 'Cada serie, un ícono', familia: 'tipo', forma: 'alto', obliga: (f) => !!f.datos.series && Number(f.datos.series.v) <= 40,
+    ranuras: { g: ['series'], s: ['tiempo', 'ejercicios'] } },
+  { id: 'cada-km', nombre: 'Cada kilómetro, un ícono', familia: 'tipo', forma: 'alto',
+    obliga: (f) => !!f.datos.dist && f.datos.dist.u === 'km' && Number(f.datos.dist.v) >= 1 && Number(f.datos.dist.v) <= 25, ranuras: { g: ['dist'] } },
+  { id: 'sello', nombre: 'Sello', familia: 'tipo', forma: 'alto', ranuras: { g: ['dist', 'tiempo', 'series'] } },
+  { id: 'hoy-toco', nombre: 'Lo que tocó hoy', familia: 'tipo', forma: 'alto', obliga: (f) => f.plan, ranuras: { g: ['series', 'tiempo'] } },
+  { id: 'racha', nombre: 'Racha del tipo', familia: 'tipo', forma: 'ancho', obliga: (f) => f.racha >= 2 },
+  { id: 'semana-iconos', nombre: 'Semana con íconos', familia: 'tipo', forma: 'ancho' },
+  { id: 'mes-por-tipo', nombre: 'Mes por tipo', familia: 'tipo', forma: 'ancho' },
 ];
 
 /** Ranuras: `{ nombre: [claves en orden] }`. Devuelve `null` si una ranura se queda vacía. Un mismo dato (por su nombre) no se repite dentro del sticker. */
@@ -105,3 +141,21 @@ export const tituloDeLaHoja = ({ deporte, plan }) => {
   if (deporte === 'correr' || deporte === 'trail') return 'Comparte tu carrera';
   return 'Comparte tu entreno';
 };
+
+/**
+ * LA FRASE (sticker Frase): renglones de trozos `{ t, u?, co? }` (`u`: la unidad, en el acento; `co`: palabra de unión, al 50 %).
+ * «5.00km / in 27:14 / at 5:27/km», fuerza «16sets / in 48:05 / · 5exercises», sin distancia «70min / of padel / · 610kcal».
+ */
+export function fraseLarga(f) {
+  const d = f.datos;
+  const v = (x) => ({ t: x.v, u: x.u || '' });
+  const co = (t) => ({ t, co: true });
+  const p = d.ritmo || d.vel;
+  if (d.dist && d.tiempo && p) return [[v(d.dist)], [co('in'), v(d.tiempo)], [co('at'), v(p)]];
+  if (d.series && d.tiempo) return [[v(d.series)], [co('in'), v(d.tiempo)], ...(d.ejercicios ? [[co('·'), { t: d.ejercicios.v, u: 'exercises' }]] : [])];
+  if (d.dist && d.tiempo) return [[v(d.dist)], [co('in'), v(d.tiempo)]];
+  return [[v(d.min)], [co('of'), { t: f.en.toLowerCase() }], ...(d.kcal ? [[co('·'), v(d.kcal)]] : [])];
+}
+
+/** «1st», «2nd», «11th», «23rd». */
+export const ordinal = (n) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'}`;

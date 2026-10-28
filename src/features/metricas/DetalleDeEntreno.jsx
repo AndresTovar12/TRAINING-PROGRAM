@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, Share2, Trash2 } from 'lucide-react';
 import { LT, KP, FONT, NUM_STYLE } from '@/lib/theme';
 import { useConfirmacion } from '@/components/Confirmacion';
@@ -9,6 +9,10 @@ import { filasPorSerie } from '@/lib/metricas/porSerie';
 import { textoDeHecho } from '@/lib/medidas';
 import { entrenoDeActividad, entrenoDeSesion, ficha } from '@/lib/stickers/ficha';
 import { catalogo, tituloDeLaHoja } from '@/lib/stickers/catalogo';
+import { cargaHistorial, coachDe } from '@/lib/stickers/carga';
+import { actividadDeEntreno } from '@/lib/actividades';
+import { usePlanOpcional } from '@/contexts/PlanContext';
+import { useTipoDeSesion } from '@/features/stickers/useTipoDeSesion';
 import {
   distanciaTexto, duracionTexto, fechaLarga, horaTexto, relojTexto, ritmoTexto, velocidadTexto,
 } from '@/lib/metricas/formato';
@@ -204,7 +208,7 @@ function SeriesDeFuerza({ sets }) {
   );
 }
 
-export default function DetalleDeEntreno({ actividad, sesion = null, unidadPeso = 'kg', conStickers = false, alVolver, puedeBorrar, alBorrado }) {
+export default function DetalleDeEntreno({ actividad, sesion = null, unidadPeso = 'kg', conStickers = false, atletaId = null, alVolver, puedeBorrar, alBorrado }) {
   const pregunta = useConfirmacion();
   const soloApp = actividad.origen === 'app';
   // Una sesión guiada sin reloj no tiene qué pedirle a la base: llega completa (quien lo abre pone `key` por entreno, así que no hay que reiniciar).
@@ -244,13 +248,30 @@ export default function DetalleDeEntreno({ actividad, sesion = null, unidadPeso 
   // Los stickers para redes (solo los ve el propio atleta): con los datos del reloj (más las series y kilos si fue a la vez una sesión guiada), o con lo que
   // midió la app si fue una sesión guiada sin reloj. `null` si no hay ninguno que mostrar.
   const nombreDelEntreno = fila.titulo || (soloApp ? sesion?.nombre : null) || nombreDelDeporte(fila.deporte);
+  // El tipo: el de la sesión del plan si fue una (el que eligió el coach), o el de la actividad.
+  const tipoDeSesion = useTipoDeSesion();
+  const coachId = usePlanOpcional()?.programaActivo?.profesionalId ?? null;
+  const tipo = useMemo(() => {
+    const deSesion = sesion ? tipoDeSesion(sesion.id) : null;
+    if (deSesion) return deSesion;
+    const act = actividadDeEntreno(fila);
+    return act ? { nombre: act.nombre, icono: act.icono } : null;
+  }, [sesion, tipoDeSesion, fila]);
   const entreno = useMemo(() => {
     if (!conStickers || estado.cargando) return null;
     const e = soloApp
-      ? entrenoDeSesion({ registro: sesion?.registro, inicioMs: sesion?.inicio, finMs: sesion?.fin, nombre: nombreDelEntreno, unidadPeso })
-      : entrenoDeActividad({ fila, series: estado.series, registro: sesion?.registro ?? null, nombre: nombreDelEntreno, plan: !!sesion, unidadPeso });
+      ? entrenoDeSesion({ registro: sesion?.registro, inicioMs: sesion?.inicio, finMs: sesion?.fin, nombre: nombreDelEntreno, tipo, unidadPeso, id: sesion?.id ?? null })
+      : entrenoDeActividad({ fila, series: estado.series, registro: sesion?.registro ?? null, nombre: nombreDelEntreno, tipo, plan: !!sesion, unidadPeso });
     return e && catalogo(ficha(e)).length ? e : null;
-  }, [conStickers, estado.cargando, estado.series, soloApp, fila, sesion, unidadPeso, nombreDelEntreno]);
+  }, [conStickers, estado.cargando, estado.series, soloApp, fila, sesion, unidadPeso, nombreDelEntreno, tipo]);
+  // Al abrir la hoja: el historial del año (Semana, Mes, Racha) y, si fue del plan, el @usuario del coach.
+  const cargarStickers = useCallback(async () => {
+    const [historial, coach] = await Promise.all([
+      cargaHistorial({ atletaId: atletaId ?? fila.atleta_id, inicioMs: entreno.inicioMs, tipoDeSesion }),
+      entreno.plan ? coachDe(coachId) : null,
+    ]);
+    return { ...entreno, historial, coach };
+  }, [entreno, atletaId, fila.atleta_id, tipoDeSesion, coachId]);
 
   const tiles = useMemo(() => [
     { valor: duracionTexto(fila.duracion_s), etiqueta: fila.movimiento_s && fila.duracion_s - fila.movimiento_s > 60 ? `de tiempo (${duracionTexto(fila.movimiento_s)} en movimiento)` : 'de tiempo' },
@@ -371,7 +392,7 @@ export default function DetalleDeEntreno({ actividad, sesion = null, unidadPeso 
       )}
       {verStickers && entreno && (
         <Suspense fallback={null}>
-          <HojaDeStickers entreno={entreno} titulo={tituloDeLaHoja({ deporte: fila.deporte, plan: !!sesion })} nombre={nombreDelEntreno} onCerrar={() => setVerStickers(false)} />
+          <HojaDeStickers cargar={cargarStickers} titulo={tituloDeLaHoja({ deporte: fila.deporte, plan: !!sesion })} nombre={nombreDelEntreno} onCerrar={() => setVerStickers(false)} />
         </Suspense>
       )}
     </div>
