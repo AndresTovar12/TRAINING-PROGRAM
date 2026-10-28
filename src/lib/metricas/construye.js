@@ -61,7 +61,7 @@ const muestrasDeSeries = (series) => {
  *   contexto.genero     'm' | 'f' (para la curva de carga)
  *   contexto.desfaseMin cuando el archivo no dice la hora local (casi todos los GPX y TCX): el de la persona
  *   contexto.conSeries  si se guardan las series (pulso, ruta…) o solo el resumen (entrenos viejos de una importación grande)
- *   contexto.origen     'archivo' | 'apple_salud' | …
+ *   contexto.origen     'archivo' | 'apple_salud' | 'healthkit' | …
  * Devuelve `{ fila, series }`; `series` es `null` si no se guardan o si no había muestras que valgan.
  */
 export function construyeActividad(prep, { umbrales, genero = 'm', desfaseMin = 0, conSeries = true, origen = 'archivo' } = {}) {

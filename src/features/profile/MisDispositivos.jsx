@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Loader2, RefreshCw, Upload, Watch } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { guardaImportacion } from '@/lib/metricasApi';
-import { conectaSalud, leeSalud, marcaSincronizada, olvidaSalud, saludDisponible, ultimaSincronizacion } from '@/lib/saludDelTelefono';
+import { conectaSalud, leeSalud, marcaSincronizada, olvidaSalud, PARA_QUE_ES, saludDisponible, ultimaSincronizacion } from '@/lib/saludDelTelefono';
 import { PROVEEDORES, conectaDispositivo, desconectaDispositivo, leeMisDispositivos } from '@/lib/dispositivos';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useAviso } from '@/components/AvisoPasajero';
@@ -53,7 +53,13 @@ export default function MisDispositivos({ onIrAMetricas }) {
   }
 
   async function conecta(p) {
-    if (p.id === 'apple_salud' && saludDisponible()) { await sincronizaSalud(true); return; }
+    /* Apple Watch (fase 3 de los stickers, 28 oct 2026): el permiso de HealthKit se pide SOLO al tocar «Conectar Apple Watch», después de decir para qué es.
+       Si cierra la pregunta, no se le pide nada al iPhone. */
+    if (p.id === 'apple_salud' && saludDisponible()) {
+      const va = await pregunta({ titulo: 'Conectar tu Apple Watch', detalle: PARA_QUE_ES, confirmar: 'Conectar Apple Watch', cancelar: 'Ahora no' });
+      if (va) await sincronizaSalud(true);
+      return;
+    }
     setBusy(p.id);
     try {
       const { url } = (await conectaDispositivo(p.id)) ?? {};

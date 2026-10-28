@@ -37,14 +37,24 @@ Nunca se abre sola al terminar: celebración → página del entreno con el avis
 
 `recordDe` (`src/lib/resumenLibre.js`) solo corre para quien NO tiene plan. Dice el valor, la diferencia contra el mejor anterior y la fecha de ese mejor (`detalle`). La ficha lo pasa al inglés («1.10 km more than your best on Oct 9»). «La primera vez» no cuenta como récord en los stickers (no hay contra qué).
 
-Pendiente: el récord de un workout del plan («Justo lo programado: 4 × 5 con 100 kg», decisión 1.11) necesita comparar lo hecho contra lo programado; todavía no existe, así que en el plan no salen stickers de récord.
+En un workout del plan (`src/lib/stickers/plan.js`, `recordDelPlan`): se compara cada serie hecha contra su paso del plan. Es récord si en un ejercicio igualó los kilos programados en todas sus series y esos kilos son más que lo que había levantado antes en ese ejercicio («Justo lo programado: 4 × 5 con 100 kg»). Si se pasó (más kilos o más reps), no se celebra. Si la sesión va en %, RPE o texto, no hay récord. Sin marca anterior tampoco (no hay contra qué).
+
+«Lo que tocó hoy» dice las series hechas contra las PROGRAMADAS (`seriesProgramadas`): «12/16 sets». Si no se saben (un AMRAP, o desde Mis métricas), solo «12 sets».
 
 ## Fases
 
 1. **Hecha (28 oct 2026):** ficha, motor de ranuras, hoja nueva y 6 stickers: Titular, Firma, Eco, Grande, Fila, Ruta y dato.
 2. **Hecha (28 oct 2026):** los 29 restantes, «Con foto» y «Video». El volumen solo sale en Lista y Columna.
-3. HealthKit en la app nativa.
+3. **Hecha (28 oct 2026):** HealthKit en la app nativa (ver abajo).
 4. Garmin y la ubicación silenciosa.
+
+## El Apple Watch (HealthKit, fase 3)
+
+- Mi perfil → Dispositivos → «Apple Salud y Apple Watch». Al prenderlo sale primero para qué es (`PARA_QUE_ES` en `src/lib/saludDelTelefono.js`) y el botón «Conectar Apple Watch»: solo ahí se pide el permiso de HealthKit. Si dice «Ahora no», no se le pide nada al iPhone.
+- Cada HKWorkout entra como una fila de `actividades` con `origen = 'healthkit'` (`src/lib/metricas/leeHealthKit.js` → `preparaEntreno` → `construyeActividad`): tipo, inicio, fin, duración, distancia y energía activa (las del entreno, o la suma de sus muestras), pulso (media, máxima y zonas), desnivel (HKMetadataKeyElevationAscended) y la ruta (HKWorkoutRoute). Desde ahí la ficha de stickers es la misma.
+- El plugin `@capgo/capacitor-health` no traía la ruta ni el desnivel: se le agregó con `patches/@capgo+capacitor-health+8.11.12.patch` (método `queryWorkoutRoute`, el desnivel en metros y el permiso de la ruta junto con el de los entrenos).
+- Ya conectado, al abrir la app o volver a ella se traen los entrenos nuevos de los últimos 7 días, como mucho cada 30 min (`src/features/profile/SincronizaReloj.jsx`). Nunca pide el permiso ahí.
+- Nada de archivos FIT.
 
 ## Pruebas
 

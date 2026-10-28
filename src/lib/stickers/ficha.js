@@ -177,6 +177,8 @@ export function ficha(entreno) {
     semana: hist.semana,
     mes: hist.mes,
     perfil: perfil.length >= 10 ? perfil : null,
+    // Las series que programó el plan (`lib/stickers/plan.js`), o `null` si no se saben: «Lo que tocó hoy» dice «12/16 sets» o solo «12 sets».
+    programadas: num(e.programadas) > 0 ? e.programadas : null,
   };
 }
 
@@ -216,6 +218,14 @@ function historialDe(e, inicio, tipo) {
  */
 function recordEn(r, datos, en) {
   if (!r || !r.tipo || r.tipo === 'primera') return null;
+  // Un workout del plan: «Justo lo programado» (`recordDelPlan`): 4 × 5 con 100 kg, y su mejor marca de antes.
+  if (r.tipo === 'programado') {
+    const ultima = String(r.ejercicio ?? '').trim().split(/\s+/).pop() || en;
+    const kg = Number.isInteger(r.kg) ? String(r.kg) : Number(r.kg).toFixed(1);
+    const cuanto = r.reps ? `${r.series} × ${r.reps}` : `${r.series} ${r.series === 1 ? 'set' : 'sets'}`;
+    const mas = num(r.difNum) > 0 ? ` · ${Number.isInteger(r.difNum) ? r.difNum : r.difNum.toFixed(1)} kg more than your best` : '';
+    return { titulo: [ultima, 'PR'], en: 'New PR', grande: { k: 'record', v: kg, u: 'kg', l: 'Load' }, det: `${r.ejercicio}, ${cuanto}${mas}` };
+  }
   const cuando = r.antesInicio ? fechaEn(Date.parse(r.antesInicio), r.antesDesfase) : null;
   const contra = cuando ? ` than your best on ${cuando}` : '';
   const base = { titulo: [en, 'PR'] };
@@ -247,10 +257,11 @@ export const splitsDe = (vueltas) => (vueltas ?? [])
  * Un entreno de la tabla `actividades` (libre, del reloj o importado). `fila`: la fila. `series`: sus series (la ruta, si se guardó). `muestras`: la ruta recién
  * medida (`[{lat, lon}]`). `sesion`: el registro de la sesión guiada que se hizo a la vez (series y kilos). `tipo`: `{ nombre, icono }`.
  */
-export function entrenoDeActividad({ fila, series = null, muestras = null, registro = null, tipo = null, nombre = null, plan = false, coach = null, record = null, unidadPeso = 'kg', historial = null }) {
+export function entrenoDeActividad({ fila, series = null, muestras = null, registro = null, tipo = null, nombre = null, plan = false, coach = null, record = null, unidadPeso = 'kg', historial = null, programadas = null }) {
   if (!fila) return null;
   return {
     id: fila.id ?? null,
+    programadas,
     historial,
     perfil: Array.isArray(series?.alt) ? series.alt : null,
     deporte: fila.deporte,
@@ -276,9 +287,10 @@ export function entrenoDeActividad({ fila, series = null, muestras = null, regis
 }
 
 /** Una sesión GUIADA del plan sin reloj: lo que la app midió sola (tiempo de la sesión, series, ejercicios y kilos), más su recorrido si lo guardó. */
-export function entrenoDeSesion({ registro, inicioMs, finMs, tipo = null, nombre = null, deporte = 'fuerza', plan = true, coach = null, unidadPeso = 'kg', id = null, historial = null }) {
+export function entrenoDeSesion({ registro, inicioMs, finMs, tipo = null, nombre = null, deporte = 'fuerza', plan = true, coach = null, unidadPeso = 'kg', id = null, historial = null, programadas = null, record = null }) {
   return {
     id,
+    programadas,
     historial,
     deporte,
     inicioMs,
@@ -292,7 +304,7 @@ export function entrenoDeSesion({ registro, inicioMs, finMs, tipo = null, nombre
     nombreEn: deporte === 'fuerza' ? 'Lift' : null,
     plan,
     coach,
-    record: null,
+    record,
     unidadPeso,
   };
 }

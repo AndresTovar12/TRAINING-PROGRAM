@@ -604,7 +604,8 @@ export default function Contenido({ item, f, color }) {
         <>
           <div className="k-tag"><Icono tipo={f.tipo} size={22} sw={2.2} /><Etiqueta style={{ opacity: 1 }}>{f.tipo.nombre}</Etiqueta></div>
           <div className="k-v k-nombre">{f.nombre}</div>
-          <div style={{ marginTop: 14, width: '100%' }}><Valor d={{ v: r.g.v, u: r.g.k === 'series' ? `/${r.g.v} sets` : r.g.u }} px={46} /></div>
+          {/* Las hechas contra las PROGRAMADAS («12/16 sets»); si no se saben las programadas, solo «12 sets». */}
+          <div style={{ marginTop: 14, width: '100%' }}><Valor d={{ v: r.g.v, u: r.g.k === 'series' ? (f.programadas ? `/${f.programadas} sets` : 'sets') : r.g.u }} px={46} /></div>
           {f.coach && <Etiqueta style={{ marginTop: 6 }}>Programmed by {f.coach}</Etiqueta>}
           <Marca style={{ marginTop: 18 }} />
         </>

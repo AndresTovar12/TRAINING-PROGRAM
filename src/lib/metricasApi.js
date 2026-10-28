@@ -153,9 +153,10 @@ export async function guardaImportacion({ atletaId, subidoPor, resultado, desfas
 
   const limiteSeries = sumaDias(hoy.toISOString().slice(0, 10), -diasConSeries);
   const construidos = nuevos.map((p) => {
-    const apple = p.formato === 'apple_salud';
+    // Lo que leyó la app del iPhone directo de HealthKit es 'healthkit'; el export de Apple Salud (un archivo) es 'apple_salud'.
+    const origen = p.formato === 'healthkit' ? 'healthkit' : p.formato === 'apple_salud' ? 'apple_salud' : 'archivo';
     const { fila, series } = construyeActividad(p, {
-      umbrales, genero, desfaseMin, origen: apple ? 'apple_salud' : 'archivo',
+      umbrales, genero, desfaseMin, origen,
       conSeries: (diaLocal(p.inicio, p.desfase_min ?? desfaseMin) ?? '') >= limiteSeries,
     });
     return { fila: { ...fila, id: nuevoId(), atleta_id: atletaId, subido_por: subidoPor ?? null }, series };

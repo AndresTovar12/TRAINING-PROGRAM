@@ -1,0 +1,136 @@
+diff --git a/node_modules/@capgo/capacitor-health/ios/Sources/HealthPlugin/Health.swift b/node_modules/@capgo/capacitor-health/ios/Sources/HealthPlugin/Health.swift
+index 49fd04f..71b5d65 100644
+--- a/node_modules/@capgo/capacitor-health/ios/Sources/HealthPlugin/Health.swift
++++ b/node_modules/@capgo/capacitor-health/ios/Sources/HealthPlugin/Health.swift
+@@ -1,4 +1,5 @@
+ import Foundation
++import CoreLocation
+ import HealthKit
+ 
+ enum HealthManagerError: LocalizedError {
+@@ -855,6 +856,8 @@ final class Health {
+             // Include workout type if explicitly requested
+             if includeWorkouts {
+                 readObjectTypes.insert(HKObjectType.workoutType())
++                // Training Lab: la ruta GPS de cada entreno (HKWorkoutRoute) va con el permiso de los entrenos.
++                readObjectTypes.insert(HKSeriesType.workoutRoute())
+             }
+             let writeSampleTypes = try sampleTypes(for: writeTypes)
+ 
+@@ -1808,6 +1811,9 @@ final class Health {
+                     metadataDict[key] = stringValue
+                 } else if let numberValue = value as? NSNumber {
+                     metadataDict[key] = numberValue.stringValue
++                } else if let quantity = value as? HKQuantity, quantity.is(compatibleWith: HKUnit.meter()) {
++                    // Training Lab: el desnivel (HKMetadataKeyElevationAscended) viene como cantidad; se manda en metros.
++                    metadataDict[key] = String(quantity.doubleValue(for: HKUnit.meter()))
+                 }
+             }
+             if !metadataDict.isEmpty {
+@@ -1840,3 +1846,67 @@ final class Health {
+         return payload
+     }
+ }
++
++// Training Lab: la RUTA de un entreno (HKWorkoutRoute), punto por punto. `workoutId` es el `platformId` de queryWorkouts (el UUID de HealthKit).
++// Devuelve `{ locations: [{ lat, lon, alt, t (ms), acc }] }`; sin ruta (o sin permiso), una lista vacía.
++extension Health {
++    func queryWorkoutRoute(workoutId: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {
++        guard let uuid = UUID(uuidString: workoutId) else {
++            completion(.success(["locations": []]))
++            return
++        }
++        let buscaEntreno = HKSampleQuery(sampleType: HKObjectType.workoutType(), predicate: HKQuery.predicateForObject(with: uuid), limit: 1, sortDescriptors: nil) { [weak self] _, samples, error in
++            guard let self = self else { return }
++            if let error = error {
++                completion(.failure(error))
++                return
++            }
++            guard let workout = samples?.first as? HKWorkout else {
++                completion(.success(["locations": []]))
++                return
++            }
++            let orden = [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
++            let buscaRutas = HKSampleQuery(sampleType: HKSeriesType.workoutRoute(), predicate: HKQuery.predicateForObjects(from: workout), limit: HKObjectQueryNoLimit, sortDescriptors: orden) { _, rutas, error in
++                if let error = error {
++                    completion(.failure(error))
++                    return
++                }
++                let lista = (rutas as? [HKWorkoutRoute]) ?? []
++                if lista.isEmpty {
++                    completion(.success(["locations": []]))
++                    return
++                }
++                let candado = NSLock()
++                let grupo = DispatchGroup()
++                var porRuta = Array(repeating: [[String: Any]](), count: lista.count)
++                for (i, ruta) in lista.enumerated() {
++                    grupo.enter()
++                    var puntos: [[String: Any]] = []
++                    var terminada = false
++                    let consulta = HKWorkoutRouteQuery(route: ruta) { _, locations, done, error in
++                        if terminada { return }
++                        for l in locations ?? [] {
++                            puntos.append([
++                                "lat": l.coordinate.latitude, "lon": l.coordinate.longitude, "alt": l.altitude,
++                                "t": l.timestamp.timeIntervalSince1970 * 1000, "acc": l.horizontalAccuracy,
++                            ])
++                        }
++                        if done || error != nil {
++                            terminada = true
++                            candado.lock()
++                            porRuta[i] = puntos
++                            candado.unlock()
++                            grupo.leave()
++                        }
++                    }
++                    self.healthStore.execute(consulta)
++                }
++                grupo.notify(queue: DispatchQueue.global()) {
++                    completion(.success(["locations": porRuta.flatMap { $0 }]))
++                }
++            }
++            self.healthStore.execute(buscaRutas)
++        }
++        healthStore.execute(buscaEntreno)
++    }
++}
+diff --git a/node_modules/@capgo/capacitor-health/ios/Sources/HealthPlugin/HealthPlugin.swift b/node_modules/@capgo/capacitor-health/ios/Sources/HealthPlugin/HealthPlugin.swift
+index 236cadb..a48f63c 100644
+--- a/node_modules/@capgo/capacitor-health/ios/Sources/HealthPlugin/HealthPlugin.swift
++++ b/node_modules/@capgo/capacitor-health/ios/Sources/HealthPlugin/HealthPlugin.swift
+@@ -16,7 +16,8 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
+         CAPPluginMethod(name: "openHealthConnectSettings", returnType: CAPPluginReturnPromise),
+         CAPPluginMethod(name: "showPrivacyPolicy", returnType: CAPPluginReturnPromise),
+         CAPPluginMethod(name: "queryWorkouts", returnType: CAPPluginReturnPromise),
+-        CAPPluginMethod(name: "queryAggregated", returnType: CAPPluginReturnPromise)
++        CAPPluginMethod(name: "queryAggregated", returnType: CAPPluginReturnPromise),
++        CAPPluginMethod(name: "queryWorkoutRoute", returnType: CAPPluginReturnPromise)
+     ]
+ 
+     private let implementation = Health()
+@@ -184,6 +185,24 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
+         }
+     }
+ 
++    // Training Lab: la ruta GPS de un entreno (ver `Health.queryWorkoutRoute`).
++    @objc func queryWorkoutRoute(_ call: CAPPluginCall) {
++        guard let workoutId = call.getString("workoutId") else {
++            call.reject("workoutId is required")
++            return
++        }
++        implementation.queryWorkoutRoute(workoutId: workoutId) { result in
++            DispatchQueue.main.async {
++                switch result {
++                case let .success(response):
++                    call.resolve(response)
++                case let .failure(error):
++                    call.reject(error.localizedDescription, nil, error)
++                }
++            }
++        }
++    }
++
+     @objc func queryAggregated(_ call: CAPPluginCall) {
+         guard let dataType = call.getString("dataType") else {
+             call.reject("dataType is required")
