@@ -1,18 +1,30 @@
-/* APPLE SALUD Y APPLE WATCH, leídos desde la app de iPhone (HealthKit). 24 oct 2026.
+/* APPLE SALUD Y APPLE WATCH, leídos desde la app de iPhone (HealthKit). 24 oct 2026; fase 3 de los stickers, 28 oct 2026.
 
    Lo que el Watch (o el iPhone) mide ya vive en Apple Salud: entrenos con su pulso, pulso en reposo, variabilidad (HRV), sueño y pasos. Aquí se LEE todo eso con el permiso de la
    persona, se arma EXACTAMENTE lo mismo que sale de importar el export de Apple Salud (`lib/metricas/leeAppleSalud.js`: entrenos preparados + recuperación diaria) y se guarda con el
    mismo camino (`guardaImportacion`): así las métricas del atleta y las de su coach no se enteran de si vinieron de un archivo o del teléfono. Los entrenos que ya estaban no se repiten.
 
+   CADA ENTRENO DEL RELOJ (HKWorkout) entra como una fila de `actividades` con `origen = 'healthkit'`: su tipo, inicio, fin y duración; su RUTA (HKWorkoutRoute,
+   con un método que se le agregó al plugin: `patches/@capgo+capacitor-health+*.patch`); la distancia y la energía activa (las del entreno o, si no las trae, la
+   suma de sus muestras); el pulso (media, máxima y, con los umbrales del atleta, las zonas) y el desnivel (HKMetadataKeyElevationAscended). Desde ahí, la ficha
+   de los stickers es la misma de cualquier entreno. El reloj entra directo: nada de archivos FIT.
+
+   El permiso se pide SOLO cuando la persona toca «Conectar Apple Watch» (Mi perfil → Dispositivos), después de decirle para qué es.
+
    Solo funciona dentro de la app de iPhone (en la web no hay HealthKit): `saludDisponible()` lo dice. */
 
 import { Capacitor } from '@capacitor/core';
 import { preparaEntreno } from './metricas/construye.js';
+import { entrenoDelReloj } from './metricas/leeHealthKit.js';
 import { deporteDeApple } from './metricas/deportes.js';
 
 export const saludDisponible = () => Capacitor.isNativePlatform();
 
-const LEER = ['heartRate', 'restingHeartRate', 'heartRateVariability', 'sleep', 'steps', 'calories', 'distance', 'vo2Max', 'oxygenSaturation', 'respiratoryRate', 'weight', 'workouts'];
+const LEER = ['heartRate', 'restingHeartRate', 'heartRateVariability', 'sleep', 'steps', 'calories', 'distance', 'distanceCycling', 'vo2Max', 'oxygenSaturation', 'respiratoryRate', 'weight', 'workouts'];
+
+/** Lo que se le dice a la persona ANTES de pedir el permiso (Mi perfil → Dispositivos → «Conectar Apple Watch»). */
+export const PARA_QUE_ES = 'Training Lab va a leer de Apple Salud los entrenos de tu Apple Watch: el tipo, la hora, cuánto duró, la distancia, las calorías, tu pulso (medio, máximo y por zonas), la ruta y el desnivel. Con eso salen tus métricas, las que ve tu coach y tus stickers. También tu pulso en reposo, tu variabilidad y tu sueño, para tu recuperación. Después el iPhone te pregunta dato por dato; puedes quitarlo cuando quieras en Ajustes → Salud.';
+
 
 const plugin = async () => (await import('@capgo/capacitor-health')).Health;
 
@@ -52,32 +64,31 @@ export async function leeSalud({ dias = 30, alAvance = () => {} } = {}) {
   const workouts = await Health.queryWorkouts({ ...rango, limit: 500, ascending: true }).then((r) => r?.workouts ?? [], () => []);
 
   const entrenos = [];
+  const lee = async (dataType, desde, hasta, limit = 3000) => {
+    try { return (await Health.readSamples({ dataType, startDate: desde, endDate: hasta, limit, ascending: true }))?.samples ?? []; } catch { return []; }
+  };
+  const suma = (muestras) => muestras.reduce((t, x) => t + (Number(x.value) || 0), 0);
   for (let i = 0; i < workouts.length; i += 1) {
     const w = workouts[i];
-    alAvance(`Leyendo el pulso de tus entrenos (${i + 1} de ${workouts.length})…`);
-    const inicio = new Date(w.startDate).getTime();
-    const finMs = new Date(w.endDate).getTime();
-    const pulso = await Health.readSamples({ dataType: 'heartRate', startDate: w.startDate, endDate: w.endDate, limit: 8000, ascending: true }).then((r) => r?.samples ?? [], () => []);
-    const muestras = pulso.map((s) => ({ t: (new Date(s.startDate).getTime() - inicio) / 1000, fc: Math.round(s.value) })).filter((m) => m.t >= 0 && m.fc > 30 && m.fc < 240);
-    const fcs = muestras.map((m) => m.fc);
-    const duracion = Math.round(w.duration > 0 ? w.duration : (finMs - inicio) / 1000);
-    entrenos.push(preparaEntreno({
-      formato: 'apple_salud', deporte: deporteDeApple(tipoDeApple(w.workoutType)), deporte_original: tipoDeApple(w.workoutType), titulo: null, dispositivo: w.sourceName ?? null,
-      inicio, fin: finMs, desfase_min: desfase, duracion_s: duracion, movimiento_s: null,
-      distancia_m: w.totalDistance > 0 ? Math.round(w.totalDistance) : null,
-      kcal_activas: w.totalEnergyBurned > 0 ? Math.round(w.totalEnergyBurned) : null,
-      resumen: {
-        fc_media: fcs.length ? Math.round(fcs.reduce((a, b) => a + b, 0) / fcs.length) : null,
-        fc_max: fcs.length ? Math.max(...fcs) : null, fc_min: fcs.length ? Math.min(...fcs) : null, potencia_media: null,
-      },
-      ruta_ref: null, muestras, archivo: 'Apple Salud',
-    }));
+    alAvance(`Leyendo tus entrenos del reloj (${i + 1} de ${workouts.length})…`);
+    const deporte = deporteDeApple(tipoDeApple(w.workoutType));
+    const [pulso, ruta] = await Promise.all([
+      lee('heartRate', w.startDate, w.endDate, 8000),
+      w.platformId ? Health.queryWorkoutRoute({ workoutId: w.platformId }).then((r) => r?.locations ?? [], () => []) : [],
+    ]);
+    // La distancia y la energía activa: las que declaró el entreno; si no trae, la suma de sus muestras en ese rato.
+    let distanciaSumada = null;
+    if (!(w.totalDistance > 0) && ['bici', 'correr', 'caminar', 'senderismo'].includes(deporte)) {
+      distanciaSumada = suma(await lee(deporte === 'bici' ? 'distanceCycling' : 'distance', w.startDate, w.endDate, 5000));
+    }
+    const kcalSumadas = w.totalEnergyBurned > 0 ? null : suma(await lee('calories', w.startDate, w.endDate, 5000));
+    entrenos.push(preparaEntreno(entrenoDelReloj({ w, deporte, deporteOriginal: tipoDeApple(w.workoutType), pulso, ruta, distanciaSumada, kcalSumadas, desfase })));
   }
 
   // Lo de cada día: pulso en reposo, HRV, sueño y pasos.
   alAvance('Leyendo tu recuperación…');
-  const lee = async (dataType, limit = 3000) => { try { return (await Health.readSamples({ dataType, ...rango, limit, ascending: true }))?.samples ?? []; } catch { return []; } };
-  const [reposo, hrv, sueno, pasos] = await Promise.all([lee('restingHeartRate'), lee('heartRateVariability'), lee('sleep', 6000), lee('steps', 20000)]);
+  const delRango = (dataType, limit = 3000) => lee(dataType, rango.startDate, rango.endDate, limit);
+  const [reposo, hrv, sueno, pasos] = await Promise.all([delRango('restingHeartRate'), delRango('heartRateVariability'), delRango('sleep', 6000), delRango('steps', 20000)]);
   const dias_ = new Map();
   const dia = (k) => { if (!dias_.has(k)) dias_.set(k, { reposo: [], hrv: [], sueno: 0, profundo: 0, rem: 0, despierto: 0, tieneSueno: false, tieneProfundo: false, tieneRem: false, tieneDespierto: false, pasos: 0 }); return dias_.get(k); };
   reposo.forEach((s) => dia(diaLocal(new Date(s.startDate).getTime())).reposo.push(s.value));

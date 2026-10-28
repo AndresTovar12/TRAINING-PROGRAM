@@ -1038,6 +1038,8 @@ const CuerpoDelDia = ({
             atletaId={atletaDeStickers} registro={sessionData} sesionId={selectedId} nombre={sinDuracion(selectedDay.name || '') || 'Tu sesión'}
             unidadPeso={perfilDeStickers?.unidad_peso || 'kg'} onCerrar={() => setStickersAbiertos(false)}
             tipo={tipoParaStickers(selectedDay)} coachId={coachDeStickers}
+            // Los ejercicios que se hicieron: los del día que repite, si dice «repite el martes».
+            dia={{ ...selectedDay, exercises: (sesionQueRepite(week, selectedIdx)?.day ?? selectedDay).exercises }}
           />
         </Suspense>
       )}

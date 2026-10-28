@@ -612,7 +612,7 @@ export default function EntrenoDelDia({
         <Suspense fallback={null}>
           <HojaDeSesion
             atletaId={userId} sesionId={sesionId} nombre={sinDuracion(dia.name || '') || 'Tu sesión'} unidadPeso={unidadDePeso}
-            tipo={tipoParaStickers(dia)} coachId={coachDelPlan}
+            tipo={tipoParaStickers(dia)} coachId={coachDelPlan} dia={dia}
             // Antes de «Terminar» el entreno no tiene hora de fin: el resumen cuenta hasta ahora, así que los stickers también (si no, decían 1:04 contra 2:55).
             registro={{ ...registro, ...(recorrido.ruta() ? { ruta: recorrido.ruta() } : null), ...(registro?.entreno && registro.entreno.fin == null ? { entreno: { ...registro.entreno, fin: stickers } } : null) }}
             onCerrar={() => setStickers(false)}

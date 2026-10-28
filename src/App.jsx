@@ -6,6 +6,7 @@ import { useIsDesktop } from '@/lib/useViewport';
 import { cargaPosters } from '@/lib/posters';
 import { AppStateProvider } from '@/contexts/AppStateContext';
 import { PalabrasProvider, usePalabras } from '@/contexts/PalabrasContext';
+import SincronizaReloj from '@/features/profile/SincronizaReloj';
 import { PlanProvider } from '@/contexts/PlanContext';
 import AuthScreen from '@/features/auth/AuthScreen';
 import NuevaContrasena from '@/features/auth/NuevaContrasena';
@@ -510,6 +511,7 @@ export default function App() {
       <AppStateProvider>
         <PlanProvider>
           <TrainingApp />
+          <SincronizaReloj />
           <AccountMenu />
           <UpdateBanner />
         </PlanProvider>

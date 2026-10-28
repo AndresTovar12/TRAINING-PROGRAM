@@ -4,6 +4,9 @@ import assert from 'node:assert/strict';
 import { ficha, entrenoDeActividad, rutaDe } from '../src/lib/stickers/ficha.js';
 import { catalogo, fraseCorta, fraseLarga, tituloDeLaHoja } from '../src/lib/stickers/catalogo.js';
 import { ajustaRuta } from '../src/lib/stickers/ruta.js';
+import { recordDelPlan, seriesProgramadas } from '../src/lib/stickers/plan.js';
+import { entrenoDelReloj } from '../src/lib/metricas/leeHealthKit.js';
+import { construyeActividad, preparaEntreno } from '../src/lib/metricas/construye.js';
 
 const ids = (f) => catalogo(f).map((s) => s.id);
 const base = { inicio: '2026-10-28T13:02:00Z', desfase_min: -360 };
@@ -151,6 +154,55 @@ assert.equal(tituloDeLaHoja({ deporte: 'raqueta' }), 'Comparte tu entreno');
   assert.deepEqual(fraseLarga(carrera).map((r) => r.map((x) => x.t + (x.u ?? '')).join(' ')), ['5.00km', 'in 27:14', 'at 5:27/km']);
   const padel = ficha(entrenoDeActividad({ fila: { ...base, deporte: 'otro', titulo: 'Pádel', duracion_s: 4200, kcal_activas: 610 }, nombre: 'Pádel' }));
   assert.deepEqual(fraseLarga(padel).map((r) => r.map((x) => x.t + (x.u ?? '')).join(' ')), ['1h 10', 'of pádel', '· 610kcal']);
+}
+
+// «Lo que tocó hoy» y el récord del plan: lo hecho contra lo PROGRAMADO.
+{
+  const day = { name: 'Lower A', exercises: [{ name: 'Back squat', sets: '4', reps: '5', intensity: '100 kg' }, { name: 'Plank', sets: '3', reps: '45 seg', intensity: 'RPE 7' }] };
+  assert.equal(seriesProgramadas(day), 7, '4 de sentadilla y 3 de plancha');
+  const marcas = (n, kg) => Object.fromEntries(Array.from({ length: n }, (_, i) => [`0.${i + 1}.0`, { t: 1000 * (i + 1), n: 'Back squat', ...(kg ? { kg } : null) }]));
+  const registro = (h) => ({ entreno: { inicio: 0, hechos: h }, exercises: { 0: { weight: '100', repsHechas: '5' } } });
+  const r = recordDelPlan({ day, registro: registro(marcas(4)), mejorAntes: () => 95 });
+  assert.equal(r.texto, 'Justo lo programado: 4 × 5 con 100 kg');
+  assert.equal(recordDelPlan({ day, registro: registro(marcas(4)), mejorAntes: () => 100 }), null, 'no es su mejor marca');
+  assert.equal(recordDelPlan({ day, registro: registro(marcas(4)), mejorAntes: () => null }), null, 'sin marca de antes no hay contra qué');
+  assert.equal(recordDelPlan({ day, registro: registro(marcas(4, 105)), mejorAntes: () => 95 }), null, 'se pasó de lo programado: no se celebra');
+  assert.equal(recordDelPlan({ day, registro: registro(marcas(3)), mejorAntes: () => 95 }), null, 'le faltó una serie: no igualó');
+  assert.equal(recordDelPlan({ day: { exercises: [{ name: 'Squat', sets: '4', reps: '5', intensity: '80%' }] }, registro: registro(marcas(4)), mejorAntes: () => 95 }), null, 'en %: no hay récord');
+
+  const base2 = { deporte: 'fuerza', inicioMs: Date.parse('2026-10-28T14:00:00Z'), duracionS: 2885, nombre: 'Lower A', plan: true, coach: '@beto' };
+  const hoy = (f) => catalogo(f).find((x) => x.id === 'hoy-toco');
+  const con = ficha({ ...base2, guiado: { series: 12, ejercicios: 2, volumen: 4800, lista: [] }, programadas: 16 });
+  assert.equal(con.programadas, 16);
+  assert.equal(hoy(con).r.g.v, '12');
+  const sin = ficha({ ...base2, guiado: { series: 12, ejercicios: 2, volumen: 4800, lista: [] } });
+  assert.equal(sin.programadas, null, 'sin las programadas: solo «12 sets»');
+  const pr = ficha({ ...base2, guiado: { series: 4, ejercicios: 1, volumen: 2000, lista: [] }, record: r });
+  assert.deepEqual([pr.record.titulo, pr.record.grande.v, pr.record.det], [['squat', 'PR'], '100', 'Back squat, 4 × 5 · 5 kg more than your best']);
+  assert.ok(ids(pr).includes('titular-pr') && ids(pr).includes('record'));
+}
+
+// Un entreno del Apple Watch (HealthKit): con su ruta, su pulso y su desnivel entra como una fila 'healthkit' y da los mismos stickers.
+{
+  const t0 = Date.parse('2026-10-28T13:00:00Z');
+  const w = { startDate: new Date(t0).toISOString(), endDate: new Date(t0 + 1800000).toISOString(), duration: 1800, totalDistance: 5000, totalEnergyBurned: 400, sourceName: 'Apple Watch de Andrés', metadata: { HKElevationAscended: '42.6' } };
+  const ruta = Array.from({ length: 1801 }, (_, i) => ({ t: t0 + i * 1000, lat: 19.4 + (i * 2.78) / 111195, lon: -99.1, alt: 2240 + i * 0.01, acc: i === 900 ? 120 : 5 }));
+  const pulso = Array.from({ length: 360 }, (_, i) => ({ startDate: new Date(t0 + i * 5000).toISOString(), value: 140 + (i % 20) }));
+  const crudo = entrenoDelReloj({ w, deporte: 'correr', deporteOriginal: 'HKWorkoutActivityTypeRunning', pulso, ruta, desfase: -360 });
+  assert.equal(crudo.formato, 'healthkit');
+  assert.equal(crudo.resumen.desnivel_pos_m, 43, 'el desnivel del reloj');
+  assert.equal(crudo.muestras.filter((m) => m.lat).length, 1800, 'el punto con 120 m de error no entra');
+  const { fila, series } = construyeActividad(preparaEntreno(crudo), { umbrales: { fc_max: 190, fc_reposo: 55, fc_umbral: 170, metodo: 'estimado' }, origen: 'healthkit' });
+  assert.equal(fila.origen, 'healthkit');
+  assert.equal(fila.desnivel_pos_m, 43);
+  assert.equal(fila.distancia_m, 5000);
+  assert.ok(fila.zonas_s?.some((z) => z > 0), 'las zonas del pulso');
+  assert.ok(series?.ruta?.lat?.length > 100, 'la ruta se guarda en las series');
+  const f = ficha(entrenoDeActividad({ fila: { ...fila, id: 'hk' }, series }));
+  ['ruta-dato', 'elevacion', 'zonas', 'parciales'].forEach((id) => assert.ok(ids(f).includes(id), id));
+  assert.equal(f.datos.elev.v, '43');
+  // Sin distancia declarada: la suma de las muestras de distancia de ese rato.
+  assert.equal(entrenoDelReloj({ w: { ...w, totalDistance: undefined }, deporte: 'correr', distanciaSumada: 4980.4 }).distancia_m, 4980);
 }
 
 console.log('prueba-stickers: todo bien');

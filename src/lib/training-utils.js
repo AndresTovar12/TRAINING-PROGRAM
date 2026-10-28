@@ -638,13 +638,14 @@ const findPreviousWeight = (plan, sessionsData, exName, { kind = 'periodized', a
  * olvidar cuánto pusiste la vez pasada. Esto es lo otro que pidió Andrés:
  * "saber su progreso", que es una historia, no un dato suelto.
  *
- * Devuelve [{ kilos, cuando, donde }] de lo más viejo a lo más nuevo. `cuando`
+ * Devuelve [{ kilos, cuando, donde, id }] de lo más viejo a lo más nuevo. `cuando`
  * puede venir vacío: las sesiones sin terminar no tienen fecha de cierre, y aun
  * así el peso anotado cuenta.
  */
 const historialDePeso = (plan, sessionsData, exName, kind = 'periodized') => (
   registrosDePeso(plan, sessionsData, exName, kind).registros
-    .map(({ kilos, cuando, donde }) => ({ kilos, cuando, donde }))
+    // `id`: la sesión de donde salió (los stickers lo usan para dejar fuera la de hoy al buscar su mejor marca de antes).
+    .map(({ kilos, cuando, donde, id }) => ({ kilos, cuando, donde, id }))
 );
 
 const totalProgress = (plan, sessionsData) => {

@@ -18,9 +18,9 @@ const dia = (ms) => new Date(ms).toISOString().slice(0, 10);
 
 /**
  * `registro`: lo guardado de la sesión (`sessionsData[id]`). `atletaId`: de quién son los entrenos del reloj. `tipo`: `{ nombre, icono }` del tipo de sesión
- * (el que eligió el coach). `coach`: «@usuario». Devuelve el entreno para `ficha()`, o `null` si en la sesión no se hizo nada que contar.
+ * (el que eligió el coach). `coach`: «@usuario». `programadas` y `record`: lo de `lib/stickers/plan.js`. Devuelve el entreno para `ficha()`, o `null` si en la sesión no se hizo nada que contar.
  */
-export async function cargaEntrenoDeSesion({ atletaId, registro, sesionId, nombre, tipo = null, coach = null, unidadPeso = 'kg' }) {
+export async function cargaEntrenoDeSesion({ atletaId, registro, sesionId, nombre, tipo = null, coach = null, unidadPeso = 'kg', programadas = null, record = null }) {
   const tramo = tramoDeLaSesion(registro);
   if (!tramo) return null;
   const sesion = { id: sesionId, almacen: '', nombre: nombre || null, registro, ...tramo };
@@ -31,10 +31,10 @@ export async function cargaEntrenoDeSesion({ atletaId, registro, sesionId, nombr
     if (id) {
       // El entreno COMPLETO (con sus vueltas: Parciales, Regla y Tu mejor kilómetro).
       const [fila, series] = await Promise.all([getActividad(id), getSeries(id).catch(() => null)]);
-      if (fila) return entrenoDeActividad({ fila, series, registro, tipo, nombre, plan: true, coach, unidadPeso });
+      if (fila) return entrenoDeActividad({ fila, series, registro, tipo, nombre, plan: true, coach, unidadPeso, programadas, record });
     }
   } catch { /* sin el reloj: con lo guiado */ }
-  return entrenoDeSesion({ registro, inicioMs: tramo.inicio, finMs: tramo.fin, tipo, nombre, plan: true, coach, unidadPeso, id: sesionId });
+  return entrenoDeSesion({ registro, inicioMs: tramo.inicio, finMs: tramo.fin, tipo, nombre, plan: true, coach, unidadPeso, id: sesionId, programadas, record });
 }
 
 /** El «@usuario» de un coach, o `null` (sin coach, sin permiso para leerlo o sin red). */
