@@ -8,7 +8,7 @@ import IconoDeActividad from './IconoDeActividad';
 
 /* LA CELEBRACIÓN AL TERMINAR (23 oct 2026, Activity Tracker; maqueta v4, pantalla «Celebración»). Corta: unos 3 segundos (la de Strava dura 9.5 y termina vendiendo la
    suscripción; aquí NO se vende nada). El punto azul de T•LAB llena la pantalla y la ruta se dibuja; sin mapa, salta el ícono de la actividad. Si rompió un récord, se lo
-   dice aquí sin que lo busque. Luego se abre sola su activity card. Un toque la salta.
+   dice aquí sin que lo busque (con su valor y la diferencia: `record.detalle`). Luego, la página del entreno (nunca la hoja de stickers sola). Un toque la salta.
    `fila`: el entreno recién guardado. `muestras`: la ruta (si llevó GPS). `actividad`: la que eligió (para el ícono). `record`: lo de `recordDe`. `alTerminar`. */
 
 const DURA_MS = 3200;
@@ -59,9 +59,10 @@ export default function CelebracionLibre({ fila, muestras = null, actividad = nu
               <Trophy size={18} /> {record.texto}
             </div>
           )}
+          {record?.detalle && <div style={{ animation: 'cele-sube 450ms 1.4s both', fontSize: 14.5, fontWeight: 600, opacity: 0.9, ...NUM_STYLE }}>{record.detalle}</div>}
         </div>
         <div style={{ position: 'absolute', left: 0, right: 0, bottom: 'calc(28px + env(safe-area-inset-bottom))', textAlign: 'center', fontSize: 14.5, fontWeight: 700, opacity: 0.85, animation: 'cele-sube 450ms 1.6s both' }}>
-          Tu activity card está lista para compartir
+          Veamos cómo te fue →
         </div>
       </div>
     </div>,

@@ -23,7 +23,7 @@ import { useBarraDeEstadoClara } from '@/lib/barraDeEstado';
         la vista de mapa grande con los números en una tarjeta. «Pausar».
      3. En pausa: «Seguir» y «Terminar».
      4. Resumen: el mapa con la ruta, el nombre («Carrera de la mañana»), distancia, tiempo y ritmo, y «Por kilómetro» con barras (el
-        más rápido en azul). «Descartar» o «Guardar carrera»; al guardar sigue el resumen de siempre (con la activity card).
+        más rápido en azul). «Descartar» o «Guardar carrera»; al guardar sigue el resumen de siempre (con sus stickers).
    Correr, caminar, bici y senderismo; los demás deportes siguen con el cronómetro de antes (`PantallaDelCronometro`).
    La fuente de los puntos es intercambiable (`lib/ubicacion.js`): hoy el navegador, en la app de la tienda el teléfono o el reloj. */
 

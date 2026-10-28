@@ -3,7 +3,7 @@ import { agregaPunto, enVivo, fuenteDeUbicacion } from '@/lib/ubicacion';
 import { muestrasDeRuta, rutaParaGuardar } from '@/lib/recorrido';
 
 /* EL RECORRIDO DEL ENTRENO, EN SILENCIO (23 oct 2026, ver `lib/recorrido.js`). Si la persona dijo que sí (se pregunta una vez, por teléfono: `tl:recorrido`),
-   mientras el entreno guiado está abierto se guarda por dónde se mueve, para la línea de su activity card. Nada en pantalla lo anuncia (Andrés lo decidió).
+   mientras el entreno guiado está abierto se guarda por dónde se mueve, para la línea de sus stickers. Nada en pantalla lo anuncia (Andrés lo decidió).
    Los puntos se van guardando en este teléfono (por sesión) para no perderlos si se cierra la app; a la sesión (`registro.ruta`) se pasan al salir o al terminar,
    ya adelgazados: escribir cada punto en la base sería una escritura por segundo.
    `permiso`: 'si' | 'no' | null (aún no se pregunta). `disponible`: el teléfono tiene GPS. `ruta()`: la línea lista para guardarse, o `null`. */

@@ -49,6 +49,16 @@ export async function borraActividad(id) {
   if (error) throw error;
 }
 
+/** Cambia el nombre (`titulo`) o la actividad (`deporte` y `titulo`) de un entreno; lo demás (tiempo, ruta, pulso) no se toca. Devuelve la fila ya cambiada. */
+export async function cambiaActividad(id, { titulo, deporte } = {}) {
+  const cambios = {};
+  if (typeof titulo === 'string' && titulo.trim()) cambios.titulo = titulo.replace(/\s+/g, ' ').trim().slice(0, 40);
+  if (typeof deporte === 'string' && deporte) cambios.deporte = deporte;
+  const { data, error } = await supabase.from('actividades').update(cambios).eq('id', id).select('*').maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 /** Los umbrales que escribió el atleta o su coach (pulso máximo, de reposo y de umbral), o `null` si nadie los escribió. */
 export async function getUmbrales(atletaId) {
   const { data, error } = await supabase.from('umbrales_atleta').select('*').eq('atleta_id', atletaId).maybeSingle();

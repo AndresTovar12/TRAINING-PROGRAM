@@ -22,7 +22,7 @@ export const MAX_PUNTOS = 300;
 const cinco = (v) => Math.round(v * 1e5) / 1e5;
 
 /**
- * La ruta lista para guardarse en el entreno (`entreno.ruta`), con la forma que ya usa la activity card (`{ lat: [], lon: [] }`), o `null` si no hay
+ * La ruta lista para guardarse en el entreno (`entreno.ruta`), con la forma que ya usan los stickers (`{ lat: [], lon: [] }`), o `null` si no hay
  * al menos dos puntos. Si son muchos, se toma uno de cada N y SIEMPRE el último (la línea termina donde terminó).
  */
 export function rutaParaGuardar(muestras, max = MAX_PUNTOS) {

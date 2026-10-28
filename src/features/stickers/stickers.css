@@ -1,0 +1,60 @@
+/* LOS STICKERS (28 oct 2026; ver docs/stickers.md y el prototipo de Andrés). Solo Bricolage Grotesque, servida desde la propia app (`public/fonts`): así
+   el sticker exportado lleva la fuente de verdad y funciona sin internet en la app del iPhone. Números y títulos en 800, opsz 96, −0.035em; etiquetas en 700,
+   opsz 20, 13 px. Dos tonos por sticker: la tinta (`--stk-tinta`) y el acento (`--stk-acento`). Fondo transparente siempre. */
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  font-style: normal;
+  font-weight: 500 800;
+  font-stretch: 75% 100%;
+  font-display: swap;
+  src: url('/fonts/bricolage-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  font-style: normal;
+  font-weight: 500 800;
+  font-stretch: 75% 100%;
+  font-display: swap;
+  src: url('/fonts/bricolage-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+.stk {
+  position: relative;
+  width: 300px;
+  color: var(--stk-tinta, #fff);
+  font-family: 'Bricolage Grotesque', 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-variation-settings: 'opsz' 96;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+.stk.ancho { height: 200px; }
+.stk.alto { height: 330px; }
+.stk.historia { height: 533px; }
+.stk .stk-in {
+  position: relative; box-sizing: border-box; width: 100%; height: 100%; padding: 26px;
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: center; text-align: left;
+}
+.stk.sombra .stk-in { filter: drop-shadow(0 1.2px 3.6px rgba(0, 0, 0, 0.42)); }
+
+.stk .k-v { font-weight: 800; font-variation-settings: 'opsz' 96; letter-spacing: -0.035em; line-height: 0.92; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.stk .k-v .u { color: var(--stk-acento); font-size: 0.5em; letter-spacing: 0; margin-left: 0.04em; }
+.stk .k-l { font-weight: 700; font-variation-settings: 'opsz' 20; font-size: 13px; letter-spacing: -0.005em; line-height: 1.2; opacity: 0.75; white-space: nowrap; }
+.stk .k-wm { font-weight: 800; font-variation-settings: 'opsz' 96; letter-spacing: -0.03em; line-height: 1; white-space: nowrap; }
+.stk .k-wm span { color: var(--stk-acento); }
+.stk .k-fr { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; width: 100%; }
+.stk .k-rej { display: grid; column-gap: 10px; width: 100%; }
+.stk .k-rej .k-l { margin-top: 6px; }
+.stk .k-rej > div { min-width: 0; }
+.stk .k-ti { font-weight: 800; font-variation-settings: 'opsz' 96; font-size: 44px; line-height: 0.95; letter-spacing: 0.005em; text-transform: uppercase; white-space: nowrap; margin-left: -0.04em; }
+.stk .k-tr { display: grid; grid-auto-flow: column; justify-content: start; column-gap: 14px; margin-top: 14px; }
+.stk .k-tr .k-l { margin-top: 5px; }
+.stk .k-cap { margin-top: 10px; font-weight: 600; font-variation-settings: 'opsz' 16; font-size: 13px; line-height: 1.25; }
+.stk .k-firma .k-fl { letter-spacing: -0.035em; line-height: 0.96; margin-left: -0.03em; }
+.stk .k-ecos { width: 100%; }
+.stk .k-ec { font-variation-settings: 'opsz' 96, 'wdth' 75; font-stretch: 75%; line-height: 0.8; margin-left: -0.03em; }
+.stk .k-ec.e1 { font-variation-settings: 'opsz' 96, 'wdth' 100; font-stretch: 100%; opacity: 0.12; }
+.stk .k-ec.e2 { font-variation-settings: 'opsz' 96, 'wdth' 87; font-stretch: 87%; opacity: 0.28; }
+.stk .k-ec .u { font-size: 0.3em; }
+.stk svg { display: block; overflow: visible; }

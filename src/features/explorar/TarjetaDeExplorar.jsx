@@ -2,7 +2,7 @@ import { FONT, KP } from '@/lib/theme';
 import Boton from '@/components/ui/Boton';
 
 /* La tarjeta que lleva a Explorar (12 oct 2026; forma nueva el 15 oct, reestructura visual): «Encuentra un plan hecho por un coach» y «Ver planes».
-   Va en Home de quien no tiene plan ni entrenador, y se repite como aviso al cerrar su activity card (una vez por visita). Toda la tarjeta lleva a Explorar. */
+   Va en Home de quien no tiene plan ni entrenador, y se repite como aviso al cerrar sus stickers (una vez por visita). Toda la tarjeta lleva a Explorar. */
 export default function TarjetaDeExplorar({ alTocar }) {
   return (
     <div

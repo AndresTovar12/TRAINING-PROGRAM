@@ -64,8 +64,8 @@ import {
  * kilos) y `salud` que es un paciente (sin 1RM). `sesionId` y `userId` son la llave con la que el reloj de un Set recuerda dónde iba.
  */
 
-// La hoja del sello y la grabadora de técnica se cargan solo cuando se piden (ver `features/sello` y `features/mensajes`).
-const HojaDelSello = lazy(() => import('@/features/sello/HojaDelSello'));
+// La hoja de stickers y la grabadora de técnica se cargan solo cuando se piden (ver `features/stickers` y `features/mensajes`).
+const HojaDeSesion = lazy(() => import('@/features/stickers/HojaDeSesion'));
 const GrabaTecnica = lazy(() => import('@/features/mensajes/GrabaTecnica'));
 
 // La misma preferencia que el reloj de un Set: quien silenció uno, silenció los dos.
@@ -92,8 +92,8 @@ export default function EntrenoDelDia({
   const [enfoque, setEnfoque] = useState(null);
   const [hoja, setHoja] = useState(null);
   const [verFin, setVerFin] = useState(false);
-  // El sello para redes, desde el final del entreno.
-  const [sello, setSello] = useState(false); // la hora en que se abrió, o `false`
+  // Los stickers para redes, desde el final del entreno.
+  const [stickers, setStickers] = useState(false); // la hora en que se abrió, o `false`
   // La técnica que se está grabando (el paso, congelado al tocar la cámara) y la última que se mandó de cada paso: `{ [clave]: idDeLaTécnica }`.
   const [grabandoTecnica, setGrabandoTecnica] = useState(null);
   const [tecnicasMandadas, setTecnicasMandadas] = useState({});
@@ -469,7 +469,7 @@ export default function EntrenoDelDia({
       <PantallaDeFin
         resumen={resumenDeFin} notas={registro?.notes ?? ''} yaTerminada={!!registro?.completed} palabras={palabras}
         onNotas={(notes) => escribe((prev) => ({ ...prev, notes }))}
-        onTerminar={terminarSesion} onVolver={volverAlEntreno} onSello={() => setSello(Date.now())}
+        onTerminar={terminarSesion} onVolver={volverAlEntreno} onStickers={() => setStickers(Date.now())}
       />
     );
   } else if (enDescanso) {
@@ -605,13 +605,13 @@ export default function EntrenoDelDia({
           />
         </Suspense>
       )}
-      {sello && (
+      {stickers && (
         <Suspense fallback={null}>
-          <HojaDelSello
-            atletaId={userId} sesionId={sesionId} nombre={dia.name || ''} Icono={aspecto?.Icono} unidadPeso={unidadDePeso}
-            // Antes de «Terminar» el entreno no tiene hora de fin: el resumen cuenta hasta ahora, así que la activity card también (si no, decía 1:04 contra 2:55).
-            registro={{ ...registro, ...(recorrido.ruta() ? { ruta: recorrido.ruta() } : null), ...(registro?.entreno && registro.entreno.fin == null ? { entreno: { ...registro.entreno, fin: sello } } : null) }}
-            onCerrar={() => setSello(false)}
+          <HojaDeSesion
+            atletaId={userId} sesionId={sesionId} nombre={sinDuracion(dia.name || '') || 'Tu sesión'} unidadPeso={unidadDePeso}
+            // Antes de «Terminar» el entreno no tiene hora de fin: el resumen cuenta hasta ahora, así que los stickers también (si no, decían 1:04 contra 2:55).
+            registro={{ ...registro, ...(recorrido.ruta() ? { ruta: recorrido.ruta() } : null), ...(registro?.entreno && registro.entreno.fin == null ? { entreno: { ...registro.entreno, fin: stickers } } : null) }}
+            onCerrar={() => setStickers(false)}
           />
         </Suspense>
       )}

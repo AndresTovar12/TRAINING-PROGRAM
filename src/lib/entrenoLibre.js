@@ -1,8 +1,8 @@
 /* ENTRENO LIBRE: correr, bici, nadar o caminar SIN tener un plan (12 oct 2026).
 
-   Mucha gente entra a la app solo para sacar su «activity card» para Instagram. Para ellos no hay plan: eligen un deporte, corre un CRONÓMETRO ABIERTO (como un workout de plan), al
+   Mucha gente entra a la app solo para sacar sus stickers para Instagram. Para ellos no hay plan: eligen un deporte, corre un CRONÓMETRO ABIERTO (como un workout de plan), al
    terminar dicen la distancia (si quieren) y sale el resumen con el botón de la tarjeta. Lo que queda es una fila de `actividades` con origen `manual`: el coach la ve en Métricas
-   igual que un entreno del reloj, y la tarjeta se arma con lo que ya sabe armar (`sellosDeActividad`). Sin GPS ni pulso: eso es de la app instalable y del reloj.
+   igual que un entreno del reloj, y sus stickers se arman con la misma ficha (`lib/stickers/ficha.js`). Sin GPS ni pulso: eso es de la app instalable y del reloj.
 
    Este archivo es lo PURO (sin red ni pantalla): qué deportes salen, el cronómetro (con pausas), cómo se entiende lo que escribe la persona y cómo se arma el entreno para guardarlo.
    Se prueba con `scripts/prueba-entreno-libre.mjs`. */
