@@ -80,6 +80,17 @@ Del prototipo de caminos: https://claude.ai/artifact/BFogHsa2GUJGS1Fr332YgD. Nad
 - **Mis métricas, «Últimos entrenos»**: también los workouts del plan, con «Plan» (el ícono del tipo solo en la app del atleta; el coach ve el del deporte).
 - Prueba pura: `node scripts/prueba-entrenos-del-plan.mjs`.
 
+## La página del entreno y los caminos (fase 7, 29 oct 2026)
+
+Prototipo: https://claude.ai/artifact/EFSp16EiF1rVYb5U7emtNE (los seis caminos del panel). Manda sobre la página, la celebración y las listas; el de stickers sigue mandando en la hoja.
+
+- **La regla de los números** (`lib/paginaDelEntreno.js`, probada en `scripts/prueba-pagina-del-entreno.mjs`): un número protagonista con su unidad chica («5.00 km», «16 de 16», «1 h 10 min», «1,500 m»), una frase que dice qué significa (su primera vez, la más larga del mes, la que va en la semana y si fue la más rápida, o una neutra con el dato), dos o tres secundarios (carrera Tiempo y Ritmo; bici Tiempo, Velocidad y Subida; plan Tiempo y Volumen; Pulso medio en rojo si cabe), y el tiempo sin ceros de más («0:07»).
+- **Una sola página** (`features/libre/PaginaDelEntreno.jsx`) para `ResumenLibre` y `ResumenDeSesion`: mapa de 250 px o franja de 200 px del color del tipo, la tarjeta montada encima, el récord en su fila (contra qué se compara), la tarjeta de stickers en abanico, lo del Apple Watch, y las secciones «Por kilómetro», «Tu pulso» (fácil, medio y duro), «Lo que hiciste» y «Tu nota» (se guarda en `notes` de la sesión). Barra con el nombre al bajar; «Compartir» con la flecha hacia arriba.
+- **Un entreno viejo** también dice si fue récord: libre, contra sus entrenos de antes del mismo deporte (`entrenosAnteriores`); del plan, contra lo que levantó ANTES de esa sesión.
+- **Al terminar un workout del plan**: la misma celebración azul que la carrera, luego la página. `PantallaDeFin` ya no lleva «Compartir stickers» ni la nota.
+- **«Tus entrenos»**: «Ver todos» como enlace, pastilla «Plan» azul clarito, plan «cuándo · tiempo · kilos», libres «cuándo · 5.00 km · 5:27 /km», tarjeta cuando no hay nada, las sesiones marcadas a mano, y también al final de Entrenar con plan. Sin el cuadro «Stickers» de Home.
+- **«Ver todos»**: «‹ Home» o «‹ Atrás», «11 entrenos · desde septiembre», filtros por actividad (el plan cuenta como Fuerza), total de cada mes, y la invitación a un plan solo a quien no tiene.
+
 ## La ubicación silenciosa (sección 8b, fase 4)
 
 - La app sigue la ubicación en CUALQUIER entreno: el guiado (`useRecorrido`) y el libre sin mapa (pádel, gimnasio, fútbol: `silencio` en `useCronometroLibre`). El cardio, como siempre.

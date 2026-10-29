@@ -56,6 +56,19 @@ export async function coachDe(coachId) {
   }
 }
 
+/** El coach de un plan, para la página del workout (fase 7): `{ usuario: '@andrestovar', nombre: 'Andrés' }` (el nombre, solo el primero), o `null`. */
+export async function quienProgramo(coachId) {
+  if (!coachId) return null;
+  try {
+    const { data } = await supabase.from('profiles').select('username,full_name').eq('id', coachId).maybeSingle();
+    if (!data) return null;
+    const nombre = String(data.full_name ?? '').trim().split(/\s+/)[0] || null;
+    return { usuario: data.username ? `@${data.username}` : null, nombre };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * EL HISTORIAL DEL AÑO de una persona (para Semana, Mes, Racha del tipo, Semana con íconos y Mes por tipo): sus entrenos de `actividades` (libres, del reloj o
  * importados) y sus sesiones guiadas que no tuvieron reloj. Cada uno: `{ id, inicioMs, desfaseMin, duracionS, distanciaM, tipo: { nombre, icono } }`.

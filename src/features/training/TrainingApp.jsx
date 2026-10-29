@@ -1277,7 +1277,7 @@ const CuerpoDelDia = ({
 
 const WeekDetail = ({
   phase, week, dayIdx, onVerPrograma, sessionsData, updateSession, oneRMs, activeSessionId,
-  miDia, onVolverAMiDia, onDiaVisto,
+  miDia, onVolverAMiDia, onDiaVisto, alFinal = null,
 }) => {
   const idDeSesion = useIdDeSesion();
   const { estructura, phases: PLAN } = usePlan();
@@ -1500,6 +1500,8 @@ const WeekDetail = ({
           <ChevronRight size={14} />
         </button>
       )}
+      {/* «Tus entrenos» (fase 7): lo que ha hecho, abajo del día. */}
+      {alFinal && <div style={{ marginTop: 28 }}>{alFinal}</div>}
     </div>
   );
 };
@@ -2343,7 +2345,7 @@ const EntrenarSinPlan = ({ alIrAHome, alIrAExplorar }) => {
   return (
     <div style={{ padding: '84px 20px 120px', maxWidth: 560, margin: '0 auto' }}>
       <div style={{ fontSize: 24, fontWeight: 800, color: T.text, letterSpacing: -0.4, marginBottom: 16 }}>Entrenar</div>
-      {!soloLectura && userId && <EntrenoLibre userId={userId} unidadPeso={perfil?.unidad_peso || 'kg'} enLinea alIrAHome={alIrAHome} conEmpujon={!coach} alIrAExplorar={alIrAExplorar} />}
+      {!soloLectura && userId && <EntrenoLibre userId={userId} unidadPeso={perfil?.unidad_peso || 'kg'} enLinea alIrAHome={alIrAHome} conEmpujon={!coach} alIrAExplorar={alIrAExplorar} volverA="Atrás" />}
     </div>
   );
 };
@@ -2721,6 +2723,10 @@ export default function TrainingApp() {
         }));
       }} />;
   } else if (tab === 'plan') {
+    // Fase 7 (29 oct 2026): con plan, «Tus entrenos» también al final de Entrenar, como en Home (con «Ver todos», que regresa con «Atrás»).
+    const tusEntrenosEnEntrenar = view.week && puedeRegistrar && !soloLectura && !demoActiva
+      ? <EntrenoLibre userId={user.id} unidadPeso={miPerfil?.unidad_peso || 'kg'} variante="historial" volverA="Atrás" />
+      : null;
     /* Una sola pantalla: el DÍA. Las fases y las semanas ya no son pantallas
        por las que se navega, son una hoja que se abre encima (maqueta A, la
        que eligió Andrés el 18 sep 2026).
@@ -2750,6 +2756,7 @@ export default function TrainingApp() {
           sessionsData={sessionsData} updateSession={updateSession} oneRMs={oneRMs}
           activeSessionId={activeSessionId}
           miDia={miDia}
+          alFinal={tusEntrenosEnEntrenar}
           onDiaVisto={setDiaVisto}
           onVolverAMiDia={() => miDia && setView((v) => ({
             level: 'week', phase: miDia.phase, week: miDia.week, dayIdx: miDia.dayIdx, salto: (v.salto ?? 0) + 1,
@@ -2778,6 +2785,15 @@ export default function TrainingApp() {
           {dia}
         </>
       ) : dia;
+    }
+    // Con equipo, «Tus entrenos» va debajo del día de todos (sin equipo, dentro del día: `alFinal`).
+    if (tusEntrenosEnEntrenar && hayEquipo && programaActivo?.esPrincipal) {
+      content = (
+        <>
+          {content}
+          <div style={{ maxWidth: 560, margin: '0 auto', padding: '0 16px 120px', boxSizing: 'border-box' }}>{tusEntrenosEnEntrenar}</div>
+        </>
+      );
     }
   } else if (tab === 'messages') {
     content = <MensajesDelAtleta />;

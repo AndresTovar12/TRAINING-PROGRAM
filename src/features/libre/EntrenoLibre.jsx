@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Play, Share2, Timer } from 'lucide-react';
+import { Play, Timer } from 'lucide-react';
 import HojaFlotante from '@/components/HojaFlotante';
 import { LT, FONT } from '@/lib/theme';
 import { usePlan } from '@/contexts/PlanContext';
@@ -12,6 +12,7 @@ import { useStorage } from '@/contexts/AppStateContext';
 import ElegirActividad from './ElegirActividad';
 import CelebracionLibre from './CelebracionLibre';
 import { recordDe } from '@/lib/resumenLibre';
+import { filaDelRecord, fraseDeActividad, heroeDeActividad } from '@/lib/paginaDelEntreno';
 import HeroDeEntrenar from './HeroDeEntrenar';
 import HojaDeDemos from './HojaDeDemos';
 import OpcionesDeEntrenar from './OpcionesDeEntrenar';
@@ -26,10 +27,11 @@ import { Cuadro, CuadroBlanco, PlayChico } from '@/features/training/home/Cuadro
 import { abreSesionHecha } from '@/lib/abreSesionHecha';
 
 /* EL ENTRENO LIBRE, armado (12 oct 2026): lo que ve alguien en Home o en la pestaña Entrenar para entrenar por su cuenta, tenga o no un plan.
-     · `variante="completa"` (sin plan): la tarjeta azul «Entrenar» (su semana, su último entreno, «Empezar»), la de Explorar, los cuadros de color (`cuadros`, p. ej. Salud,
-       y Stickers), los blancos chicos (Demo workout y `chicos`, p. ej. 1RM) y «Tus entrenos» (reestructura visual, 15 oct 2026).
-     · `variante="cuadros"` (Home con plan, reestructura visual del 15 oct 2026): solo dos cuadros, «Entrenar libre» y «Stickers», para ir en la cuadrícula de Home junto a Salud
-       y la fase. «Tus entrenos» queda en la pestaña Entrenar.
+     · `variante="completa"` (sin plan): la tarjeta azul «Entrenar» (su semana, su último entreno, «Empezar»), la de Explorar, los cuadros de color (`cuadros`, p. ej. Salud),
+       los blancos chicos (Demo workout y `chicos`, p. ej. 1RM) y «Tus entrenos» (reestructura visual, 15 oct 2026).
+     · `variante="cuadros"` (Home con plan, reestructura visual del 15 oct 2026): el cuadro «Entrenar libre», para ir en la cuadrícula de Home junto a Salud y la fase.
+       Fase 7 (29 oct 2026): el cuadro «Stickers» se quitó (hacía pensar que solo había una tarjeta); los stickers viven en cada entreno de «Tus entrenos».
+     `volverA`: lo que dice el botón de regreso de «Ver todos» («Home», o «Atrás» desde Entrenar).
      · `enLinea` (pestaña Entrenar): las opciones puestas directo, y «Tus entrenos».
      · `variante="historial"` (Home con plan, 23 oct 2026): solo «Tus entrenos» (auditoría p29); desde la fase 6 (29 oct 2026), con los workouts del plan.
      · `variante="punto"` (23 oct 2026, Activity Tracker): lo que abre el punto ● del centro de la barra: directo «listo para empezar» con la última actividad
@@ -48,12 +50,15 @@ function ultimaSalida(filas, deporte) {
 }
 
 // El aviso de Explorar al cerrar la hoja de stickers sale una vez por visita (dura lo que la pestaña del navegador).
+// Cuántos de sus últimos entrenos se leen (la semana, la frase de la página, el récord al guardar).
+const LEIDOS = 40;
+
 const yaSeLeOfrecio = () => { try { return sessionStorage.getItem('tl:explorar-ofrecido') === '1'; } catch { return false; } };
 const marcaOfrecido = () => { try { sessionStorage.setItem('tl:explorar-ofrecido', '1'); } catch { /* sin almacenamiento: puede salir otra vez */ } };
 
-export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = false, variante = 'completa', alIrAHome = null, conEmpujon = false, alIrAExplorar = null, cuadros = null, chicos = null, alCerrar = null }) {
+export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = false, variante = 'completa', alIrAHome = null, conEmpujon = false, alIrAExplorar = null, cuadros = null, chicos = null, alCerrar = null, volverA = 'Home' }) {
   const crono = useCronometroLibre(userId);
-  const { filas, entrenos, recarga } = useEntrenosRecientes(userId, 40);
+  const { filas, entrenos, recarga } = useEntrenosRecientes(userId, LEIDOS);
   const { abreDemo, hasPlan } = usePlan();
   const demos = useDemos(userId);
   const [propiasGuardadas, setPropias] = useStorage('actividades:propias', []);
@@ -91,7 +96,6 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
     setHoja({ resumen: fila, celebrar: true, recien: true, muestras: extra.muestras ?? null, actividad: extra.actividad ?? null, record });
   };
   const abreElCartel = () => { if (!enCurso) setPendiente(ultimaActividad()); setHoja('cronometro'); };
-  const abreStickers = () => setHoja(ultimo ? { resumen: ultimo, stickers: true } : 'elegir');
   const comparte = (fila) => setHoja({ resumen: fila, stickers: true });
   /* Una fila de «Tus entrenos» (fase 6): un workout del plan abre SU página (`PaginaDeSesionGlobal`, también si el reloj lo trajo); lo demás, la del entreno libre. */
   const abreEntreno = (e) => (e.plan ? abreSesionHecha({ almacen: e.plan.s.almacen, id: e.plan.s.id }) : setHoja({ resumen: e.actividad }));
@@ -102,7 +106,13 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
 
   const hojas = (
     <>
-      {verTodos && <HistorialCompleto userId={userId} propias={propias} alAbrir={abreEntreno} alCompartir={comparteEntreno} alCerrar={() => setVerTodos(false)} />}
+      {verTodos && (
+        <HistorialCompleto
+          userId={userId} propias={propias} unidadPeso={unidadPeso} volverA={volverA} alAbrir={abreEntreno} alCompartir={comparteEntreno} alCerrar={() => setVerTodos(false)}
+          // La invitación a un plan, solo a quien no tiene: lleva a Explorar.
+          alQuererPlan={!hasPlan && alIrAExplorar ? () => { setVerTodos(false); alIrAExplorar(); } : null}
+        />
+      )}
       {hoja === 'elegir' && (
         <ElegirActividad
           filas={filas ?? []} propias={propias} alElegir={elige}
@@ -133,13 +143,20 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
         />
       )}
       {hoja?.resumen && hoja.celebrar && (
-        <CelebracionLibre fila={hoja.resumen} muestras={hoja.muestras} actividad={hoja.actividad} record={hoja.record} alTerminar={() => setHoja({ ...hoja, celebrar: false })} />
+        <CelebracionLibre
+          nombre={hoja.resumen.titulo || hoja.actividad?.nombre || nombreDelDeporte(hoja.resumen.deporte)} numero={heroeDeActividad(hoja.resumen)}
+          muestras={hoja.muestras} actividad={hoja.actividad ?? actividadDeEntreno(hoja.resumen, propias)}
+          // Un récord, con contra qué se compara; si no lo hubo pero es su primera vez («Tu primera carrera en Training Lab»), también se celebra.
+          record={filaDelRecord(hoja.record) ?? (() => { const f = fraseDeActividad(hoja.resumen, { otras: filas ?? [], propias }); return f.startsWith('Tu primer') ? { titulo: f.replace(/\.$/, '') } : null; })()}
+          alTerminar={() => setHoja({ ...hoja, celebrar: false })}
+        />
       )}
       {hoja?.resumen && !hoja.celebrar && (
         <ResumenLibre
           key={hoja.resumen.id} fila={hoja.resumen} unidadPeso={unidadPeso} alCerrar={cierra} conStickers={!!hoja.stickers} recien={!!hoja.recien}
           muestras={hoja.muestras ?? null} record={hoja.record ?? null} actividad={hoja.actividad ?? null}
-          propias={propias} filas={filas ?? []} alCrearPropia={creaPropia} alCambiar={recarga} alBorrado={recarga}
+          propias={propias} filas={filas ?? []} desde={filas?.length >= LEIDOS ? Date.parse(filas[filas.length - 1].inicio) : null} conRecord={!hasPlan}
+          alCrearPropia={creaPropia} alCambiar={recarga} alBorrado={recarga}
           // Al cerrar la hoja de stickers, una sola vez por visita y solo a quien no tiene plan ni entrenador: «¿Quieres un plan hecho por un coach?».
           alCerrarStickers={conEmpujon && alIrAExplorar && !yaSeLeOfrecio() ? () => { marcaOfrecido(); setHoja({ ...hoja, empujon: true }); } : undefined}
         />
@@ -161,7 +178,7 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
   if (variante === 'historial') {
     return (
       <>
-        <TusEntrenos entrenos={entrenos?.slice(0, 4)} propias={propias} alAbrir={abreEntreno} alCompartir={comparteEntreno} alVerTodos={() => setVerTodos(true)} />
+        <TusEntrenos entrenos={entrenos?.slice(0, 4)} unidadPeso={unidadPeso} propias={propias} alAbrir={abreEntreno} alCompartir={comparteEntreno} alVerTodos={() => setVerTodos(true)} />
         {hojas}
       </>
     );
@@ -176,11 +193,6 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
           titulo={enCurso ? relojDeCronometro(crono.segundos) : String(semana.entrenos)}
           sub={enCurso ? `${nombreDelDeporte(deporte)} en curso` : `${semana.entrenos === 1 ? 'entreno' : 'entrenos'} esta semana`}
           etiquetaAccesible={enCurso ? `Seguir tu entreno de ${nombreDelDeporte(deporte)}` : `Entrenar libre: ${textoDeLaSemana(semana)}`}
-        />
-        <Cuadro
-          tono="tinta" Icono={Share2} etiqueta="Stickers" onClick={abreStickers}
-          titulo={ultimo ? relojDeCronometro(ultimo.duracion_s) : '0:00'} sub={ultimo ? 'Último entreno' : 'Tu primer entreno'}
-          etiquetaAccesible={ultimo ? 'Abrir los stickers de tu último entreno' : 'Stickers: entrena y compártelos en tus historias'}
         />
         {hojas}
       </>
@@ -198,23 +210,17 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
           <>
             <HeroDeEntrenar deporte={deporte} semana={semana} ultimo={ultimo} enCurso={enCurso} segundos={crono.segundos} alAbrir={abreElCartel} />
             {conExplorar && <TarjetaDeExplorar alTocar={alIrAExplorar} />}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
-              {cuadros}
-              <Cuadro
-                tono="tinta" Icono={Share2} etiqueta="Stickers" onClick={abreStickers}
-                titulo={ultimo ? relojDeCronometro(ultimo.duracion_s) : '0:00'} sub={ultimo ? 'Último entreno' : 'Tu primer entreno'}
-                etiquetaAccesible={ultimo ? 'Abrir los stickers de tu último entreno' : 'Stickers: entrena y compártelos en tus historias'}
-              />
-            </div>
-            {(alDemo || chicos) && (
+            {/* Sin el cuadro «Stickers» (fase 7): el de Salud va con los blancos chicos, en la misma cuadrícula. */}
+            {(cuadros || alDemo || chicos) && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+                {cuadros}
                 {alDemo && <CuadroBlanco Icono={Play} titulo="Demo workout" color="#7C5CFF" fondo="#EFEBFF" onClick={alDemo} />}
                 {chicos}
               </div>
             )}
           </>
         )}
-        <TusEntrenos entrenos={entrenos?.slice(0, 6)} propias={propias} alAbrir={abreEntreno} alCompartir={comparteEntreno} alVerTodos={() => setVerTodos(true)} />
+        <TusEntrenos entrenos={entrenos?.slice(0, 6)} unidadPeso={unidadPeso} propias={propias} alAbrir={abreEntreno} alCompartir={comparteEntreno} alVerTodos={() => setVerTodos(true)} />
       </div>
 
       {hojas}
