@@ -36,7 +36,11 @@ export async function desconectaDispositivo(proveedor) {
     if (error) throw new Error('No se pudo desconectar Garmin. Inténtalo otra vez.');
     return;
   }
-  const { error } = await supabase.from('dispositivos_conectados').delete().eq('proveedor', proveedor);
+  const { data: sesion } = await supabase.auth.getSession();
+  const yo = sesion?.session?.user?.id;
+  if (!yo) throw new Error('Vuelve a entrar a tu cuenta e inténtalo otra vez.');
+  // Nunca borrar sin filtrar por la persona, aunque las reglas de la base ya lo impidan.
+  const { error } = await supabase.from('dispositivos_conectados').delete().eq('user_id', yo).eq('proveedor', proveedor);
   if (error) throw error;
 }
 

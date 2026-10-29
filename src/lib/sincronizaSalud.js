@@ -33,7 +33,7 @@ export async function traeDelReloj({ horas = null } = {}) {
     const desde = Math.max(conectado, Date.now() - (horas ? horas * 3600000 : 7 * DIA_MS));
     const resultado = await leeSalud({ desde });
     const r = await guardaImportacion({ atletaId: userId, subidoPor: userId, resultado, desfaseMin: desfase() });
-    marcaSincronizada();
+    if (!horas) marcaSincronizada(); // solo la de 7 días cuenta para «cada 30 minutos»; la de 3 horas no la retrasa
     const llego = mezclaLlego(conexion.detalle?.llego, resultado.llego);
     await supabase.rpc('marca_sincronizacion_apple', { p_detalle: { llego } }).then(() => {}, () => {});
     ponConexion({ ...relojAhora().conexion, ultima_sincronizacion: new Date().toISOString(), detalle: { ...relojAhora().conexion?.detalle, llego } });
