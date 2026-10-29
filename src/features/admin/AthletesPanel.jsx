@@ -3,7 +3,7 @@ import {
   Loader2, Plus, Trash2, X, ChevronRight, ChevronLeft, Pencil,
   CalendarClock, User as UserIcon, Shield, ClipboardList,
   UserMinus, Power, AlertTriangle, Eye, ChevronDown, ChevronUp, UserPlus,
-  Check, Copy, Share2, CircleCheck, RotateCcw, CalendarPlus, FolderOpen, ListChecks, HeartPulse, MessageCircle,
+  Check, Copy, Share2, CircleCheck, RotateCcw, CalendarPlus, FolderOpen, ListChecks, HeartPulse, MessageCircle, Bell,
 } from 'lucide-react';
 import {
   getProgramas, getSesionesPegadas, deletePlan, getAthleteState, listAthletesOverview, listCoaches, setAthleteCoach, promoteToCoach,
@@ -46,6 +46,7 @@ import { useAvisosVistos } from '@/lib/useAvisosVistos';
 import { useAviso } from '@/components/AvisoPasajero';
 import { esArranque, guardaLugar, leeLugar } from '@/lib/lugar';
 import { useLugar, useScrollLugar } from '@/lib/useLugar';
+import { cuandoDicho, diaDicho, pideConectarReloj, useRelojDelAtleta } from '@/lib/relojConectado';
 
 function useIsNarrow(breakpoint = 880) {
   const [narrow, setNarrow] = useState(
@@ -1105,8 +1106,45 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
         </div>
   ) : null;
 
+  /* EL APPLE WATCH DEL ATLETA (fase 5, 29 oct 2026). El coach ve sus datos del reloj desde que conecta (no hay interruptor). Al conectar, una tarjeta lo dice;
+     el renglón «Métricas del reloj» dice desde cuándo y el último entreno. Si no lo ha conectado, «Pedirle que conecte su reloj»: un mensaje con el botón para
+     conectar, una vez al día. */
+  const relojDelAtleta = useRelojDelAtleta(soloNotas ? null : athlete.id, profile?.id);
+  const [abiertaEn] = useState(() => Date.now());
+  const conexionDelReloj = relojDelAtleta.conexion;
+  const nombreDelAtleta = (athlete.full_name || athlete.username || '').trim().split(/\s+/)[0];
+  const cuandoConecto = conexionDelReloj ? diaDicho(conexionDelReloj.conectado_en) : null;
+  const detalleDelReloj = !relojDelAtleta.listo || soloNotas ? 'Pulso, ritmo, carga y recuperación'
+    : !conexionDelReloj ? 'Todavía no conecta su reloj'
+      : relojDelAtleta.n > 0 ? `Apple Watch · último entreno ${cuandoDicho(relojDelAtleta.ultimo)}`
+        : `Apple Watch conectado ${cuandoConecto === 'hoy' ? 'hoy' : `desde ${cuandoConecto}`} · esperando su primer entreno`;
+  const recienConecto = !!conexionDelReloj && abiertaEn - Date.parse(conexionDelReloj.conectado_en) < 7 * 86400000;
+  const tarjetaDelReloj = recienConecto ? (
+    <article style={{ display: 'grid', gridTemplateColumns: '40px 1fr', gap: 12, alignItems: 'center', background: UI.tarjeta, borderRadius: 20, padding: 14, boxShadow: '0 1px 2px rgba(17,19,24,.04)', fontFamily: FONT, marginBottom: 8 }}>
+      <span style={{ width: 36, height: 36, borderRadius: 11, background: KP.mintSoft, color: KP.mint, display: 'grid', placeItems: 'center' }}><Check size={20} /></span>
+      <span>
+        <b style={{ display: 'block', fontSize: 15, lineHeight: 1.3, color: KP.ink }}>{nombreDelAtleta} conectó su Apple Watch {cuandoConecto}</b>
+        <span style={{ display: 'block', fontSize: 13, color: KP.ink2, marginTop: 2, lineHeight: 1.35 }}>{cuandoConecto === 'hoy' ? 'Desde hoy' : 'Desde ese día'} ves su pulso, su carga y su recuperación en «Métricas del reloj».</span>
+      </span>
+    </article>
+  ) : null;
+  const puedePedirReloj = relojDelAtleta.listo && !conexionDelReloj && !soloNotas && !!onIrA;
+  const pedirReloj = async () => {
+    try {
+      await pideConectarReloj(athlete.id);
+      avisa(`Le mandamos un mensaje a ${nombreDelAtleta} con el botón para conectar.`);
+    } catch (e) {
+      avisa(e.message);
+    }
+    relojDelAtleta.recarga();
+  };
+  const filaPedirReloj = relojDelAtleta.pidioHoy
+    ? { texto: 'Ya se lo pediste hoy', detalle: 'Le llegó un mensaje con el botón para conectar', onClick: undefined }
+    : { texto: 'Pedirle que conecte su reloj', detalle: 'Le llega un mensaje con el botón para conectar', onClick: pedirReloj };
+
   const acciones = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+      {tarjetaDelReloj}
       {pestanasDePrograma}
       {puedePegar && (
         <AccionFicha
@@ -1148,9 +1186,12 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
         <AccionFicha
           icon={HeartPulse}
           titulo="Métricas del reloj"
-          detalle="Pulso, ritmo, carga y recuperación"
+          detalle={detalleDelReloj}
           onClick={() => setVerMetricas(true)}
         />
+      )}
+      {puedePedirReloj && (
+        <AccionFicha icon={Bell} titulo={filaPedirReloj.texto} detalle={filaPedirReloj.detalle} onClick={filaPedirReloj.onClick ?? (() => {})} />
       )}
       {onVerComoAtleta && (
         <AccionFicha
@@ -1540,6 +1581,7 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
           <div style={{ fontSize: 17, fontWeight: 800, color: KP.ink, margin: '4px 2px -2px' }}>Acciones</div>
+          {tarjetaDelReloj}
           {pestanasDePrograma}
           <Grupo>
             {puedePegar && (
@@ -1552,7 +1594,10 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
               <Fila izquierda={<IconoDeFila><ClipboardList size={18} /></IconoDeFila>} texto={t('Ver el plan')}
                 detalle={planReal ? (mover ? `Va en ${mover.textoActual}${mover.enPausa ? ' · En pausa' : ''} · mover o pausar` : `${tamano} · ${plural(totalSessions, 'sesión', 'sesiones')}`) : 'Solo para leer'} onClick={() => setVerPlan(true)} />
             )}
-            <Fila izquierda={<IconoDeFila><HeartPulse size={18} /></IconoDeFila>} texto="Métricas del reloj" detalle="Pulso, ritmo, carga y recuperación" onClick={() => setVerMetricas(true)} />
+            <Fila izquierda={<IconoDeFila><HeartPulse size={18} /></IconoDeFila>} texto="Métricas del reloj" detalle={detalleDelReloj} onClick={() => setVerMetricas(true)} />
+            {puedePedirReloj && (
+              <Fila izquierda={<IconoDeFila><Bell size={18} /></IconoDeFila>} texto={filaPedirReloj.texto} tono={filaPedirReloj.onClick ? 'enlace' : undefined} detalle={filaPedirReloj.detalle} onClick={filaPedirReloj.onClick} />
+            )}
             {onVerComoAtleta && (
               <Fila izquierda={<IconoDeFila><Eye size={18} /></IconoDeFila>} texto={t('Entrar como el atleta')} detalle="Su app tal cual la ve. Nada se guarda." onClick={() => onVerComoAtleta(athlete)} />
             )}

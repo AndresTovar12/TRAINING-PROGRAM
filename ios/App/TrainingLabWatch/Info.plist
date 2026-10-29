@@ -29,7 +29,7 @@
 	<key>WKCompanionAppBundleIdentifier</key>
 	<string>com.traininglabapp.app</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Training Lab lee tu pulso durante el entreno para mostrártelo y compartirlo con tu coach cuando tú lo decidas.</string>
+	<string>Training Lab lee tu pulso durante el entreno para mostrártelo. Tu coach también lo ve.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Training Lab guarda tu entreno en Apple Salud.</string>
 </dict>

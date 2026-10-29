@@ -183,6 +183,23 @@ function ventana(filas, campo, hoy, dias, saltar = 0) {
   return (filas ?? []).filter((f) => f.dia >= desde && f.dia <= hasta && typeof f[campo] === 'number' && f[campo] > 0).map((f) => f[campo]);
 }
 
+/**
+ * La recuperación de cada día junto con la de ANTES de conectar el reloj (fase 5, `recuperacion_previa`): por día manda lo de `diaria`, y lo que le falte sale
+ * de `previa`. Solo para las cuentas («lo normal» de cada medida): ninguna pantalla enseña los días de antes.
+ */
+export function conLoDeAntes(diaria = [], previa = []) {
+  if (!previa?.length) return diaria ?? [];
+  const porDia = new Map(previa.map((f) => [f.dia, { ...f }]));
+  (diaria ?? []).forEach((f) => {
+    const p = porDia.get(f.dia);
+    if (!p) { porDia.set(f.dia, f); return; }
+    const u = { ...p };
+    Object.entries(f).forEach(([k, v]) => { if (v !== null && v !== undefined) u[k] = v; });
+    porDia.set(f.dia, u);
+  });
+  return [...porDia.values()].sort((a, b) => (a.dia < b.dia ? -1 : 1));
+}
+
 /** La mediana del pulso en reposo de los últimos `dias` días: sirve de base para las zonas y la carga. `null` si no hay datos. */
 export const pulsoEnReposoMediano = (filas, { hoy, dias = 30 }) => redondea(mediana(ventana(filas, 'fc_reposo', hoy, dias)), 1);
 
@@ -193,12 +210,14 @@ export const pulsoEnReposoMediano = (filas, { hoy, dias = 30 }) => redondea(medi
  * Lo que se considera «atención»: el pulso en reposo 3 o más latidos por encima de su base; la HRV 10 % o más por debajo de su base; el sueño promedio
  * de menos de 6.5 horas. No es un diagnóstico: es una señal para preguntarle al atleta cómo está.
  */
-export function resumenDeRecuperacion(filas, { hoy }) {
+export function resumenDeRecuperacion(filas, { hoy, previa = [] }) {
+  // «Lo normal» (la base) también cuenta lo de antes de conectar el reloj (`previa`, fase 5); lo último y la semana, solo lo de desde que conectó.
+  const conBase = conLoDeAntes(filas ?? [], previa);
   const medida = (campo, { mejor = 'alto', umbral, texto, unidad, dec = 0, factor = 1, absoluto = false }) => {
     const ultimas = (filas ?? []).filter((f) => typeof f[campo] === 'number' && f[campo] > 0 && f.dia <= hoy).sort((a, b) => (a.dia < b.dia ? 1 : -1));
     const ultimo = ultimas.length ? ultimas[0] : null;
     const sieteV = ventana(filas, campo, hoy, 7).map((v) => v * factor);
-    const baseV = ventana(filas, campo, hoy, 30, 7).map((v) => v * factor);
+    const baseV = ventana(conBase, campo, hoy, 30, 7).map((v) => v * factor);
     const siete = media(sieteV);
     const base = mediana(baseV);
     let estado = 'sin-datos';

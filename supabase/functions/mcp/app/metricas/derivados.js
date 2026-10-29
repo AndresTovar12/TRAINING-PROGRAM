@@ -32,14 +32,22 @@ const suma = (xs, f) => xs.reduce((s, x) => s + (f(x) ?? 0), 0);
  *   ultimos      los 5 entrenos más recientes
  *   conPulso     cuántos de los entrenos de las últimas 4 semanas traen pulso (si son pocos, las zonas y la carga valen menos)
  */
-export function derivaDelAtleta({ actividades, recuperacion, hoy }) {
+export function derivaDelAtleta({ actividades, recuperacion, hoy, previas = null }) {
   const lista = [...(actividades ?? [])].sort((a, b) => (a.inicio < b.inicio ? 1 : -1));
-  const porDia = cargaPorDia(lista);
-  const primerDia = lista.length ? diaLocal(lista[lista.length - 1].inicio, lista[lista.length - 1].desfase_min) : null;
-  const curva = primerDia ? curvaDeForma(porDia, { desde: primerDia, hasta: hoy }) : [];
-  const ultimo = curva[curva.length - 1] ?? null;
+  /* LO DE ANTES DE CONECTAR EL RELOJ (fase 5, `previas`: `{ actividades, recuperacion, desdeDia }`): cuenta para la condición, la fatiga y «lo normal», pero no se
+     enseña. La curva arranca con esas semanas y la gráfica solo pinta desde el día en que conectó (o desde el primer entreno que sí se ve, si es antes). */
+  const deAntes = previas?.actividades ?? [];
+  const porDia = cargaPorDia([...lista, ...deAntes]);
+  const diaDe = (a) => diaLocal(a.inicio, a.desfase_min);
+  const primeroReal = lista.length ? diaDe(lista[lista.length - 1]) : null;
+  const primeroDeAntes = deAntes.length ? deAntes.map(diaDe).filter(Boolean).sort()[0] : null;
+  const primerDia = [primeroReal, primeroDeAntes].filter(Boolean).sort()[0] ?? null;
+  const completa = primerDia ? curvaDeForma(porDia, { desde: primerDia, hasta: hoy }) : [];
+  const visibleDesde = [primeroReal, previas?.desdeDia].filter(Boolean).sort()[0] ?? primerDia;
+  const curva = primeroDeAntes ? completa.filter((p) => p.dia >= visibleDesde) : completa;
+  const ultimo = completa[completa.length - 1] ?? null;
   // La forma «de hoy» es la de hoy ANTES de entrenar (condición y fatiga de ayer); si hoy ya entrenó, igual cuenta lo de ayer.
-  const estado = ultimo ? estadoDeForma(ultimo.tsb, curva[curva.length - 2]?.ctl ?? ultimo.ctl) : null;
+  const estado = ultimo ? estadoDeForma(ultimo.tsb, completa[completa.length - 2]?.ctl ?? ultimo.ctl) : null;
 
   const lunes = lunesDe(hoy);
   const semanas = porSemana(lista, { semanas: 12, hoy });
@@ -49,7 +57,7 @@ export function derivaDelAtleta({ actividades, recuperacion, hoy }) {
   const ultimas4 = lista.filter((a) => diaLocal(a.inicio, a.desfase_min) >= desde28);
   const zonas4 = [0, 0, 0, 0, 0];
   ultimas4.forEach((a) => (a.zonas_s ?? []).forEach((s, i) => { zonas4[i] += s ?? 0; }));
-  const datosDeRecuperacion = resumenDeRecuperacion(recuperacion ?? [], { hoy });
+  const datosDeRecuperacion = resumenDeRecuperacion(recuperacion ?? [], { hoy, previa: previas?.recuperacion ?? [] });
   const deHoy = deLaSemana(lista, lunes);
   const transcurridos = diasEntre(lunes, hoy);                                   // 0 el lunes … 6 el domingo
   // La comparación con la semana pasada es «a esta altura» y SIN contar hoy (hoy puede no haber entrenado todavía y siempre saldría «bajó»): de lunes a ayer
@@ -60,7 +68,7 @@ export function derivaDelAtleta({ actividades, recuperacion, hoy }) {
   deHoy.forEach((a) => { const d = diaLocal(a.inicio, a.desfase_min); sesionesPorDia.set(d, (sesionesPorDia.get(d) ?? 0) + 1); });
 
   return {
-    hoy, lista, curva, forma: ultimo, estado, rampa: rampaDeCondicion(curva),
+    hoy, lista, curva, forma: ultimo, estado, rampa: rampaDeCondicion(completa),
     semanas, estaSemana, semanaPasada,
     semanaEnCurso: transcurridos < 6,
     cambios: {

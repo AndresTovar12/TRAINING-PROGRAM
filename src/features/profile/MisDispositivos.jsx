@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, RefreshCw, Upload, Watch } from 'lucide-react';
+import { Loader2, Upload, Watch } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { guardaImportacion } from '@/lib/metricasApi';
-import { conectaSalud, leeSalud, marcaSincronizada, olvidaSalud, PARA_QUE_ES, saludDisponible, ultimaSincronizacion } from '@/lib/saludDelTelefono';
+import { saludDisponible } from '@/lib/saludDelTelefono';
 import { PROVEEDORES, conectaDispositivo, desconectaDispositivo, garminDisponible, leeMisDispositivos } from '@/lib/dispositivos';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useAviso } from '@/components/AvisoPasajero';
@@ -10,10 +9,18 @@ import { Fila, Grupo, IconoDeFila, Interruptor } from '@/components/ui';
 import { KP } from '@/lib/theme';
 import { useStorageOpcional } from '@/contexts/AppStateContext';
 import { LLAVE_PAUSA_AUTOMATICA } from '@/features/libre/useEntrenoLibre';
+import { abreConectaReloj } from '@/lib/abreConectaReloj';
+import { cuandoDicho, cuentaDelReloj, diaDicho, useReloj } from '@/lib/relojConectado';
+import { ponPruebaDelReloj, pruebaDelReloj } from '@/lib/relojApple';
+import PaginaDelReloj, { pastillaAzul, pastillaGris } from '@/features/reloj/PaginaDelReloj';
+import { HojaDeAyuda } from '@/features/reloj/piezas';
 
 /* «DISPOSITIVOS» en Mi perfil (15 oct 2026). Andrés: «dónde administra los dispositivos que tiene conectados: Apple Watch, Garmin, Whoop…». La pantalla ya existe; cada conexión se enciende
    cuando esté hecha (`lib/dispositivos.js`). Desconectar funciona hoy: borra la conexión. Mientras tanto se puede importar un archivo de entreno en «Mis métricas».
-   Reestructura visual (15 oct 2026), como «Dispositivos» de las capturas: un renglón por servicio con su interruptor. Prenderlo empieza a conectar; apagarlo pregunta y desconecta. */
+   Reestructura visual (15 oct 2026), como «Dispositivos» de las capturas: un renglón por servicio con su interruptor. Prenderlo empieza a conectar; apagarlo pregunta y desconecta.
+   APPLE (fase 5, 29 oct 2026, del prototipo): el interruptor pasa a un botón «Conectar» que abre «Conecta tu Apple Watch»; ya conectado, el renglón dice desde
+   cuándo, cuántos entrenos y el último, y abre la página del reloj. Con la conexión en la cuenta pero sin el permiso de este iPhone: «Conectar aquí». En la
+   web: «En la app del iPhone» (el navegador no puede leer Salud). Solo administradores: «Probar como si tuviera Apple Watch». */
 
 const LETRA = { apple_salud: null, garmin: ['G', '#1E40E0', '#E8EEFF'], whoop: ['W', '#C5305C', '#FDE8EE'], strava: ['S', '#C2620A', '#FFF0E1'] };
 
@@ -22,11 +29,22 @@ export default function MisDispositivos({ onIrAMetricas }) {
   const [pausaAutomatica, setPausaAutomatica, conAjustes] = useStorageOpcional(LLAVE_PAUSA_AUTOMATICA, true);
   const pregunta = useConfirmacion();
   const { avisa } = useAviso();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [conectados, setConectados] = useState(undefined);
-  const [aviso, setAviso] = useState(''); // lo que va leyendo Apple Salud mientras trabaja
-  const [salud, setSalud] = useState(() => ultimaSincronizacion()); // cuándo se leyó Apple Salud por última vez (solo en este teléfono)
   const [busy, setBusy] = useState('');
+  const apple = useReloj();
+  const [verReloj, setVerReloj] = useState(false);
+  const [hojaWeb, setHojaWeb] = useState(false);
+  const [cuenta, setCuenta] = useState({ n: 0, ultimo: null });
+  const [prueba, setPrueba] = useState(() => pruebaDelReloj());
+  const enLaApp = saludDisponible();
+  const desdeApple = apple.conexion?.conectado_en ?? null;
+  const syncApple = apple.conexion?.ultima_sincronizacion ?? null;
+  useEffect(() => {
+    let vivo = true;
+    cuentaDelReloj(user?.id, desdeApple).then((c) => { if (vivo) setCuenta(c); });
+    return () => { vivo = false; };
+  }, [user?.id, desdeApple, syncApple]);
 
   // Garmin se prende cuando el servidor ya tiene sus llaves (fase 4); mientras, «Pronto».
   const [conGarmin, setConGarmin] = useState(false);
@@ -42,33 +60,7 @@ export default function MisDispositivos({ onIrAMetricas }) {
     if (g) avisa(g === 'conectado' ? 'Garmin conectado: tus entrenos nuevos llegan solos' : 'No se pudo conectar Garmin. Inténtalo otra vez.');
   }, [avisa]);
 
-  /* Apple Salud (24 oct 2026): se pide el permiso, se leen los últimos 30 días y se guardan con el mismo camino que un archivo importado. Corre en el teléfono: no hay servidor de por medio. */
-  async function sincronizaSalud(primera = false) {
-    setBusy('apple_salud');
-    try {
-      if (primera) await conectaSalud();
-      const resultado = await leeSalud({ dias: primera ? 60 : 14, alAvance: setAviso });
-      setAviso('Guardando…');
-      const r = await guardaImportacion({ atletaId: user.id, subidoPor: user.id, resultado, desfaseMin: -new Date().getTimezoneOffset() });
-      marcaSincronizada();
-      setSalud(ultimaSincronizacion());
-      avisa(r.nuevos ? `Apple Salud: ${r.nuevos} entrenos nuevos` : 'Apple Salud al día');
-    } catch (e) {
-      avisa(e?.message || 'No se pudo leer Apple Salud');
-    } finally {
-      setAviso('');
-      setBusy('');
-    }
-  }
-
   async function conecta(p) {
-    /* Apple Watch (fase 3 de los stickers, 28 oct 2026): el permiso de HealthKit se pide SOLO al tocar «Conectar Apple Watch», después de decir para qué es.
-       Si cierra la pregunta, no se le pide nada al iPhone. */
-    if (p.id === 'apple_salud' && saludDisponible()) {
-      const va = await pregunta({ titulo: 'Conectar tu Apple Watch', detalle: PARA_QUE_ES, confirmar: 'Conectar Apple Watch', cancelar: 'Ahora no' });
-      if (va) await sincronizaSalud(true);
-      return;
-    }
     setBusy(p.id);
     try {
       const { url } = (await conectaDispositivo(p.id)) ?? {};
@@ -81,19 +73,38 @@ export default function MisDispositivos({ onIrAMetricas }) {
   }
 
   async function desconecta(p) {
-    if (p.id === 'apple_salud') {
-      const va = await pregunta({ titulo: '¿Dejar de leer Apple Salud?', detalle: 'Lo que ya guardamos se queda. Para quitar el permiso por completo: Ajustes del iPhone → Salud → Acceso a datos y dispositivos → Training Lab.', confirmar: 'Sí, dejar de leer', peligro: true });
-      if (!va) return;
-      olvidaSalud(); setSalud(null); avisa('Apple Salud desconectado'); return;
-    }
     const va = await pregunta({ titulo: `¿Desconectar ${p.nombre}?`, detalle: 'Deja de traer tus datos. Lo que ya guardamos se queda; puedes volver a conectarlo cuando quieras.', confirmar: 'Sí, desconectar', peligro: true });
     if (!va) return;
     setBusy(p.id);
     try { await desconectaDispositivo(p.id); await lee(); avisa(`${p.nombre} desconectado`); } catch (e) { avisa(e.message); } finally { setBusy(''); }
   }
 
+  // El renglón de Apple (fase 5): sus cuatro casos, con los textos del prototipo.
+  function filaApple(p) {
+    const izq = <IconoDeFila color={KP.ink} fondo="#EBEDF1"><Watch size={18} /></IconoDeFila>;
+    const c = apple.conexion;
+    if (!enLaApp) {
+      return <Fila key={p.id} izquierda={izq} texto={p.nombre} detalle={c ? `Conectado desde ${diaDicho(c.conectado_en)} en tu iPhone` : p.detalle} derecha={<button type="button" onClick={() => setHojaWeb(true)} className="kp-press" style={pastillaGris}>En la app del iPhone</button>} />;
+    }
+    if (!apple.listo) return <Fila key={p.id} izquierda={izq} texto={p.nombre} detalle={p.detalle} derecha={<Loader2 size={20} className="spin" color={KP.ink2} />} />;
+    if (c && !apple.aqui) {
+      return <Fila key={p.id} izquierda={izq} texto={p.nombre} detalle="Conectado en tu otro iPhone" derecha={<button type="button" onClick={() => abreConectaReloj('dispositivos', { reconectar: true })} className="kp-press" style={pastillaAzul}>Conectar aquí</button>} />;
+    }
+    if (c) {
+      const detalle = (
+        <>
+          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: KP.mint, marginRight: 6, verticalAlign: 1 }} />
+          {`Conectado desde ${diaDicho(c.conectado_en)} · ${cuenta.n > 0 ? `${cuenta.n} entreno${cuenta.n === 1 ? '' : 's'} · último ${cuandoDicho(cuenta.ultimo)}` : 'esperando tu primer entreno'}`}
+        </>
+      );
+      return <Fila key={p.id} izquierda={izq} texto={p.nombre} detalle={detalle} onClick={() => setVerReloj(true)} />;
+    }
+    return <Fila key={p.id} izquierda={izq} texto={p.nombre} detalle={p.detalle} derecha={<button type="button" onClick={() => abreConectaReloj('dispositivos')} className="kp-press" style={pastillaAzul}>Conectar</button>} />;
+  }
+
+  const verPrueba = enLaApp && (!!profile?.is_owner || apple.soyDePrueba);
   if (conectados === undefined) return <div style={{ display: 'grid', placeItems: 'center', padding: 30 }}><Loader2 size={22} className="spin" color={KP.ink2} /></div>;
-  const estaConectado = (id) => (id === 'apple_salud' && salud ? { proveedor: id, estado: 'ok', ultima_sincronizacion: new Date(salud).toISOString() } : conectados.find((c) => c.proveedor === id));
+  const estaConectado = (id) => conectados.find((c) => c.proveedor === id);
 
   return (
     <>
@@ -104,6 +115,7 @@ export default function MisDispositivos({ onIrAMetricas }) {
       )}
       <Grupo pie="Lo que mida tu reloj entra a Salud y a tus métricas.">
         {PROVEEDORES.map((x) => {
+          if (x.id === 'apple_salud') return filaApple(x);
           const p = x.id === 'garmin' ? { ...x, disponible: conGarmin } : x;
           const c = estaConectado(p.id);
           const [letra, color, fondo] = LETRA[p.id] ?? [];
@@ -111,10 +123,9 @@ export default function MisDispositivos({ onIrAMetricas }) {
           return (
             <Fila
               key={p.id}
-              izquierda={letra ? <IconoDeFila color={color} fondo={fondo}>{letra}</IconoDeFila> : <IconoDeFila color={KP.ink} fondo="#EBEDF1"><Watch size={18} /></IconoDeFila>}
+              izquierda={<IconoDeFila color={color} fondo={fondo}>{letra}</IconoDeFila>}
               texto={p.nombre}
-              // Mientras lee (también la primera vez, cuando todavía no está el renglón de «Sincronizar ahora»), el avance: «Leyendo tus entrenos del reloj (12 de 40)…».
-              detalle={busy === p.id && aviso ? aviso : (c ? (c.estado === 'error' ? 'Con error: vuelve a conectarlo' : `Conectado${ultima}`) : p.detalle)}
+              detalle={c ? (c.estado === 'error' ? 'Con error: vuelve a conectarlo' : `Conectado${ultima}`) : p.detalle}
               derecha={busy === p.id
                 ? <Loader2 size={20} className="spin" color={KP.ink2} />
                 : (c || p.disponible
@@ -125,11 +136,11 @@ export default function MisDispositivos({ onIrAMetricas }) {
           );
         })}
       </Grupo>
-      {salud && saludDisponible() && (
-        <Grupo>
+      {verPrueba && (
+        <Grupo titulo="Solo para ti" pie="Lo ves porque eres administrador. Nadie más.">
           <Fila
-            izquierda={<IconoDeFila><RefreshCw size={18} /></IconoDeFila>} texto={busy === 'apple_salud' && aviso ? aviso : 'Sincronizar Apple Salud ahora'}
-            detalle="Trae lo último de tu reloj" onClick={busy === 'apple_salud' ? undefined : () => sincronizaSalud(false)}
+            texto="Probar como si tuviera Apple Watch" detalle="Ves todas las invitaciones y pantallas del reloj, aunque no tengas uno."
+            derecha={<Interruptor activo={prueba} etiqueta="Probar como si tuviera Apple Watch" onCambio={(v) => { ponPruebaDelReloj(v); setPrueba(v); avisa(v ? 'Modo de prueba: la app hace como si tuvieras Apple Watch.' : 'Modo de prueba apagado.'); }} />}
           />
         </Grupo>
       )}
@@ -137,6 +148,13 @@ export default function MisDispositivos({ onIrAMetricas }) {
         <Grupo titulo="Mientras tanto">
           <Fila izquierda={<IconoDeFila><Upload size={18} /></IconoDeFila>} texto="Importar un archivo de entreno" detalle="El que te baja tu reloj o tu app" onClick={onIrAMetricas} />
         </Grupo>
+      )}
+      {verReloj && <PaginaDelReloj alCerrar={() => setVerReloj(false)} />}
+      {hojaWeb && (
+        <HojaDeAyuda
+          titulo="Se conecta en la app del iPhone" onCerrar={() => setHojaWeb(false)}
+          texto="El navegador no puede leer Apple Salud. Abre Training Lab en tu iPhone y conéctalo en Mi perfil, Dispositivos. Lo que llegue también lo ves aquí."
+        />
       )}
     </>
   );

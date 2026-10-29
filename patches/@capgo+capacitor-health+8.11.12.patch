@@ -1,5 +1,5 @@
 diff --git a/node_modules/@capgo/capacitor-health/ios/Sources/HealthPlugin/Health.swift b/node_modules/@capgo/capacitor-health/ios/Sources/HealthPlugin/Health.swift
-index 49fd04f..71b5d65 100644
+index 49fd04f..2aa35bf 100644
 --- a/node_modules/@capgo/capacitor-health/ios/Sources/HealthPlugin/Health.swift
 +++ b/node_modules/@capgo/capacitor-health/ios/Sources/HealthPlugin/Health.swift
 @@ -1,4 +1,5 @@
@@ -8,16 +8,80 @@ index 49fd04f..71b5d65 100644
  import HealthKit
  
  enum HealthManagerError: LocalizedError {
-@@ -855,6 +856,8 @@ final class Health {
+@@ -849,14 +850,20 @@ final class Health {
+         do {
+             // Separate "workouts" from regular health data types
+             let (readTypes, includeWorkouts) = try parseTypesWithWorkouts(readIdentifiers)
+-            let writeTypes = try HealthDataType.parseMany(writeIdentifiers)
++            // Training Lab: «workouts» también se puede pedir para ESCRIBIR (el reloj guarda en Salud el entreno que mide).
++            let (writeTypes, writeWorkouts) = try parseTypesWithWorkouts(writeIdentifiers)
+ 
+             var readObjectTypes = try readAuthorizationObjectTypes(for: readTypes)
              // Include workout type if explicitly requested
              if includeWorkouts {
                  readObjectTypes.insert(HKObjectType.workoutType())
 +                // Training Lab: la ruta GPS de cada entreno (HKWorkoutRoute) va con el permiso de los entrenos.
 +                readObjectTypes.insert(HKSeriesType.workoutRoute())
++            }
++            var writeSampleTypes = try sampleTypes(for: writeTypes)
++            if writeWorkouts {
++                writeSampleTypes.insert(HKObjectType.workoutType())
              }
-             let writeSampleTypes = try sampleTypes(for: writeTypes)
+-            let writeSampleTypes = try sampleTypes(for: writeTypes)
  
-@@ -1808,6 +1811,9 @@ final class Health {
+             healthStore.requestAuthorization(toShare: writeSampleTypes, read: readObjectTypes) { [weak self] success, error in
+                 guard let self = self else { return }
+@@ -867,7 +874,7 @@ final class Health {
+                 }
+ 
+                 if success {
+-                    self.evaluateAuthorizationStatus(readTypes: readTypes, includeWorkouts: includeWorkouts, writeTypes: writeTypes) { result in
++                    self.evaluateAuthorizationStatus(readTypes: readTypes, includeWorkouts: includeWorkouts, writeTypes: writeTypes, writeWorkouts: writeWorkouts) { result in
+                         completion(.success(result))
+                     }
+                 } else {
+@@ -882,9 +889,9 @@ final class Health {
+     func checkAuthorization(readIdentifiers: [String], writeIdentifiers: [String], completion: @escaping (Result<AuthorizationStatusPayload, Error>) -> Void) {
+         do {
+             let (readTypes, includeWorkouts) = try parseTypesWithWorkouts(readIdentifiers)
+-            let writeTypes = try HealthDataType.parseMany(writeIdentifiers)
++            let (writeTypes, writeWorkouts) = try parseTypesWithWorkouts(writeIdentifiers)
+ 
+-            evaluateAuthorizationStatus(readTypes: readTypes, includeWorkouts: includeWorkouts, writeTypes: writeTypes) { payload in
++            evaluateAuthorizationStatus(readTypes: readTypes, includeWorkouts: includeWorkouts, writeTypes: writeTypes, writeWorkouts: writeWorkouts) { payload in
+                 completion(.success(payload))
+             }
+         } catch {
+@@ -1296,15 +1303,25 @@ final class Health {
+         }
+     }
+ 
+-    private func evaluateAuthorizationStatus(readTypes: [HealthDataType], includeWorkouts: Bool, writeTypes: [HealthDataType], completion: @escaping (AuthorizationStatusPayload) -> Void) {
++    private func evaluateAuthorizationStatus(readTypes: [HealthDataType], includeWorkouts: Bool, writeTypes: [HealthDataType], writeWorkouts: Bool = false, completion: @escaping (AuthorizationStatusPayload) -> Void) {
+         let writeStatus = writeAuthorizationStatus(for: writeTypes)
++        var writeAuthorized = writeStatus.authorized.map { $0.rawValue }
++        var writeDenied = writeStatus.denied.map { $0.rawValue }
++        // Training Lab: el permiso de escribir entrenos sí se puede saber (el de leer, no: iOS lo esconde por privacidad).
++        if writeWorkouts {
++            if healthStore.authorizationStatus(for: HKObjectType.workoutType()) == .sharingAuthorized {
++                writeAuthorized.append("workouts")
++            } else {
++                writeDenied.append("workouts")
++            }
++        }
+ 
+         readAuthorizationStatus(for: readTypes, includeWorkouts: includeWorkouts) { readAuthorized, readDenied in
+             let payload = AuthorizationStatusPayload(
+                 readAuthorized: readAuthorized,
+                 readDenied: readDenied,
+-                writeAuthorized: writeStatus.authorized.map { $0.rawValue },
+-                writeDenied: writeStatus.denied.map { $0.rawValue }
++                writeAuthorized: writeAuthorized,
++                writeDenied: writeDenied
+             )
+             completion(payload)
+         }
+@@ -1808,6 +1825,9 @@ final class Health {
                      metadataDict[key] = stringValue
                  } else if let numberValue = value as? NSNumber {
                      metadataDict[key] = numberValue.stringValue
@@ -27,7 +91,7 @@ index 49fd04f..71b5d65 100644
                  }
              }
              if !metadataDict.isEmpty {
-@@ -1840,3 +1846,67 @@ final class Health {
+@@ -1840,3 +1860,67 @@ final class Health {
          return payload
      }
  }

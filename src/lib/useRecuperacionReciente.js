@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { usePerfilDeLaVista } from '@/contexts/VistaContext';
-import { listRecuperacion } from '@/lib/recuperacionApi';
+import { listRecuperacion, listRecuperacionPrevia } from '@/lib/recuperacionApi';
 import { hoyLocal, lecturaParaElAtleta, resumenDeRecuperacion, sumaDias } from '@/lib/metricas/forma';
 
 /* Lo que el reloj dejó de la recuperación del atleta en los últimos 45 días: pulso en reposo, variabilidad cardiaca (HRV) y sueño.
@@ -17,25 +17,27 @@ const DIAS_DE_FRESCURA = 6;
 
 export function useRecuperacionReciente() {
   const { userId } = usePerfilDeLaVista();
-  const [leido, setLeido] = useState({ de: null, filas: [] });
+  const [leido, setLeido] = useState({ de: null, filas: [], previa: [] });
 
   useEffect(() => {
     if (!userId) return undefined;
     let cancelado = false;
-    listRecuperacion(userId, { desdeDia: sumaDias(hoyLocal(), -DIAS_DE_HISTORIAL) })
-      .then((filas) => { if (!cancelado) setLeido({ de: userId, filas }); })
+    // Con lo de antes de conectar el reloj (fase 5): solo cuenta para «lo normal»; `recientes` sigue saliendo de lo de desde que conectó.
+    const desdeDia = sumaDias(hoyLocal(), -DIAS_DE_HISTORIAL);
+    Promise.all([listRecuperacion(userId, { desdeDia }), listRecuperacionPrevia(userId, { desdeDia }).catch(() => [])])
+      .then(([filas, previa]) => { if (!cancelado) setLeido({ de: userId, filas, previa }); })
       // Sin la lectura del reloj la pantalla sigue funcionando con lo que el atleta anota (el dolor): no es un error que se le enseñe.
-      .catch(() => { if (!cancelado) setLeido({ de: userId, filas: [] }); });
+      .catch(() => { if (!cancelado) setLeido({ de: userId, filas: [], previa: [] }); });
     return () => { cancelado = true; };
   }, [userId]);
 
   const listo = leido.de === userId;
   return useMemo(() => {
     const hoy = hoyLocal();
-    const resumen = resumenDeRecuperacion(listo ? leido.filas : [], { hoy });
+    const resumen = resumenDeRecuperacion(listo ? leido.filas : [], { hoy, previa: listo ? leido.previa : [] });
     const desde = sumaDias(hoy, -DIAS_DE_FRESCURA);
     const fresco = (m) => (m.ultimo && m.ultimo.dia >= desde ? m.ultimo : null);
     const recientes = { reposo: fresco(resumen.reposo), hrv: fresco(resumen.hrv), sueno: fresco(resumen.sueno) };
     return { listo, hayReloj: Object.values(recientes).some(Boolean), resumen, lectura: lecturaParaElAtleta(resumen), recientes };
-  }, [listo, leido.filas]);
+  }, [listo, leido.filas, leido.previa]);
 }

@@ -39,7 +39,7 @@
 		<string>location</string>
 	</array>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Training Lab lee de Apple Salud los entrenos de tu Apple Watch (tipo, tiempo, distancia, calorías, pulso, ruta y desnivel), tu pulso en reposo, tu variabilidad y tu sueño, para tus métricas, tus stickers y tu recuperación, y para compartirlo con tu coach cuando tú lo decidas.</string>
+	<string>Training Lab lee de Apple Salud los entrenos de tu Apple Watch (tipo, tiempo, distancia, calorías, pulso, ruta y desnivel), tu pulso en reposo, tu variabilidad y tu sueño, para tus métricas, tus stickers y tu recuperación. Tu coach también los ve.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Training Lab guarda en Apple Salud los entrenos que haces con la app.</string>
 	<key>NSSupportsLiveActivities</key>

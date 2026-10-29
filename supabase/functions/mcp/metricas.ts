@@ -82,15 +82,20 @@ export function herramientasDeMetricas(server: McpServer, quien: Quien) {
   }, seguro(async ({ atleta }: any) => {
     const persona = await buscarPersona(quien, atleta)
     const dia = hoy()
-    const [entrenos, rec] = await Promise.all([
+    // Lo de ANTES de conectar el Apple Watch (fase 5): solo cuenta para condición, fatiga y «lo normal», igual que en la app; no se lista.
+    const [entrenos, rec, prevAct, prevRec, conexion] = await Promise.all([
       entrenosDe(quien, persona.id, { desdeDia: sumaDias(dia, -400) }),
       quien.db.from('recuperacion_diaria').select('*').eq('atleta_id', persona.id).gte('dia', sumaDias(dia, -60)).order('dia', { ascending: true }),
+      quien.db.from('actividades_previas').select('inicio,desfase_min,duracion_s,carga,fc_max').eq('atleta_id', persona.id).order('inicio', { ascending: true }).limit(2000),
+      quien.db.from('recuperacion_previa').select('*').eq('atleta_id', persona.id).gte('dia', sumaDias(dia, -60)).order('dia', { ascending: true }),
+      quien.db.from('dispositivos_conectados').select('conectado_en').eq('user_id', persona.id).eq('proveedor', 'apple_salud').maybeSingle(),
     ])
     if (rec.error) throw new Error(rec.error.message)
-    if (!entrenos.length) {
+    const previas = { actividades: prevAct.data ?? [], recuperacion: prevRec.data ?? [], desdeDia: conexion.data?.conectado_en ? String(conexion.data.conectado_en).slice(0, 10) : null }
+    if (!entrenos.length && !previas.actividades.length) {
       return respuesta({ atleta: nombreDe(persona), hay_datos: false, nota: `${nombreDe(persona)} todavía no tiene entrenos con métricas (de reloj, de archivos o entrenos libres de la app).` })
     }
-    const d = derivaDelAtleta({ actividades: entrenos, recuperacion: rec.data ?? [], hoy: dia })
+    const d = derivaDelAtleta({ actividades: entrenos, recuperacion: rec.data ?? [], hoy: dia, previas: previas as any })
     const sem = (s: any) => s && ({ semana: rangoDeSemana(s.lunes), entrenos: s.sesiones, tiempo: duracionTexto(s.duracion_s), distancia: distanciaTexto(s.distancia_m), carga: s.carga, ...(s.fc_media ? { pulso_medio: s.fc_media } : {}) })
     const zonas = facilMedioDuro(d.zonas4)
     const r = d.recuperacion
