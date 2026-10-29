@@ -13,6 +13,7 @@ import TarjetaDeTecnica from '@/features/mensajes/TarjetaDeTecnica';
 import { diaTexto, horaTexto, reloj } from '@/features/mensajes/formato';
 import { abreConectaReloj } from '@/lib/abreConectaReloj';
 import { useReloj } from '@/lib/relojConectado';
+import { saludDisponible } from '@/lib/saludDelTelefono';
 
 const GrabaTecnica = lazy(() => import('@/features/mensajes/GrabaTecnica'));
 const CorregirTecnica = lazy(() => import('@/features/mensajes/CorregirTecnica'));
@@ -129,14 +130,16 @@ function TarjetaPideReloj({ soyAtleta, coach }) {
       </span>
       {soyAtleta && (conexion
         ? <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, color: '#047857' }}><Check size={18} />Conectado</span>
-        : (
+        : !saludDisponible()
+          ? <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: T.text2, lineHeight: 1.4 }}>Se conecta en la app del iPhone, en Mi perfil, Dispositivos.</span>
+          : (
           <button
             type="button" onClick={() => abreConectaReloj('chat')} className="kp-press"
             style={{ minHeight: 44, borderRadius: 14, border: 'none', background: KP.blue, color: '#fff', fontFamily: FONT, fontSize: 15, fontWeight: 800, cursor: 'pointer', touchAction: 'manipulation' }}
           >
             Conectar Apple Watch
           </button>
-        ))}
+          ))}
     </span>
   );
 }

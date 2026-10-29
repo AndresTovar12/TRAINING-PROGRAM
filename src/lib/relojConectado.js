@@ -86,7 +86,11 @@ export async function conectaEnLaCuenta() {
 
 /** Desconectar: se borra la fila de la cuenta y la marca de este iPhone. El permiso de Salud se queda (eso se quita en la app Salud). */
 export async function desconectaDelReloj() {
-  const { error } = await supabase.from('dispositivos_conectados').delete().eq('proveedor', 'apple_salud');
+  const { data: sesion } = await supabase.auth.getSession();
+  const yo = sesion?.session?.user?.id;
+  if (!yo) throw new Error('sin sesión');
+  // Nunca borrar sin filtrar por la persona, aunque las reglas de la base ya lo impidan.
+  const { error } = await supabase.from('dispositivos_conectados').delete().eq('user_id', yo).eq('proveedor', 'apple_salud');
   if (error) throw error;
   pon(LLAVE_AQUI, null);
   cambia({ conexion: null, aqui: false });
