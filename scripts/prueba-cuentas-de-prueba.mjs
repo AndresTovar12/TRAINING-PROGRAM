@@ -1,6 +1,6 @@
 /* Pruebas de las cuentas de prueba (lo puro): `node scripts/prueba-cuentas-de-prueba.mjs`. Sin red ni base de datos. */
 import assert from 'node:assert/strict';
-import { TIPOS_DE_PRUEBA, esDePrueba, tipoDeCuenta, siguienteUsuario, nombreDePrueba, generaContrasena } from '../src/lib/cuentasDePrueba.js';
+import { TIPOS_DE_PRUEBA, esDePrueba, tipoDeCuenta, siguienteUsuario, nombreDePrueba, generaContrasena, usuarioEscrito, problemaDeContrasenaDePrueba } from '../src/lib/cuentasDePrueba.js';
 import { problemaDeContrasena } from '../src/lib/contrasena.js';
 
 /* ---- Qué es una cuenta de prueba ---- */
@@ -27,6 +27,28 @@ assert.equal(siguienteUsuario('atleta', null), 'zz_prueba_atleta_1');
 assert.equal(nombreDePrueba('zz_prueba_atleta_3'), 'Prueba Atleta 3');
 assert.equal(nombreDePrueba('zz_prueba_fisio_12'), 'Prueba Fisio 12');
 assert.equal(nombreDePrueba('zz_qa_fisio'), 'zz_qa_fisio', 'uno que no es de los de aquí queda con su usuario');
+assert.equal(nombreDePrueba('zz_pac'), 'Prueba pac', 'uno que escogió él');
+assert.equal(nombreDePrueba('zz_mi_atleta'), 'Prueba mi atleta');
+
+/* ---- El usuario que escribe el dueño ---- */
+assert.deepEqual(usuarioEscrito('pac'), { usuario: 'zz_pac' }, 'el zz_ se pone solo');
+assert.deepEqual(usuarioEscrito('  zz_pac '), { usuario: 'zz_pac' }, 'si lo escribe, no se duplica');
+assert.deepEqual(usuarioEscrito('ZZ_Pac2'), { usuario: 'zz_Pac2' });
+assert.deepEqual(usuarioEscrito('a.b_c'), { usuario: 'zz_a.b_c' });
+assert.match(usuarioEscrito('').error, /Escribe un usuario/);
+assert.match(usuarioEscrito('zz_').error, /Escribe un usuario/);
+assert.match(usuarioEscrito('mi usuario').error, /sin espacios/, 'con espacio no');
+assert.match(usuarioEscrito('ñandú').error, /sin espacios/, 'sin acentos ni eñes (la regla de signup)');
+assert.equal(usuarioEscrito('a'.repeat(28)).error?.includes('3 a 30'), true, 'zz_ + 28 pasa de 30');
+assert.deepEqual(usuarioEscrito('a'.repeat(27)), { usuario: `zz_${'a'.repeat(27)}` });
+assert.match(usuarioEscrito('pac', ['ZZ_PAC']).error, /ya existe/, 'repetido, sin importar mayúsculas');
+assert.deepEqual(usuarioEscrito('pac', ['zz_otro', 'andres']), { usuario: 'zz_pac' });
+
+/* ---- La contraseña que escribe el dueño: solo lo del servidor ---- */
+assert.equal(problemaDeContrasenaDePrueba('prueba123'), null);
+assert.equal(problemaDeContrasenaDePrueba('12345678'), null, 'una de juguete sirve: son cuentas de prueba');
+assert.match(problemaDeContrasenaDePrueba('corta'), /al menos 8/);
+assert.match(problemaDeContrasenaDePrueba('x'.repeat(73)), /máximo de 72/);
 
 /* ---- La contraseña ---- */
 const vistas = new Set();

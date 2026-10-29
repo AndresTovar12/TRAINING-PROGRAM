@@ -10,6 +10,8 @@
  *   1. Solo el dueño (`is_owner`) puede llamar.
  *   2. No sirve para la cuenta del propio dueño ni para la de otro dueño (para esas está «Cambiar contraseña» de Mi perfil).
  *   3. La contraseña nueva se genera aquí, en el servidor, con aleatoriedad criptográfica; nadie la escoge ni viaja por otro lado.
+ *      Excepción (29 oct 2026, Andrés: «que yo pueda escoger la contraseña» de sus cuentas de prueba): para una cuenta de PRUEBA (`zz_…`) el dueño puede mandar la suya
+ *      (`contrasena`, de 8 a 72 caracteres). Para una cuenta real, escoger una sigue prohibido: siempre se genera.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
@@ -72,7 +74,7 @@ Deno.serve(async (req) => {
   const { data: yo } = await admin.from('profiles').select('is_owner').eq('id', quienPide).maybeSingle()
   if (!yo?.is_owner) return json({ error: 'Solo el administrador puede restablecer contraseñas.' }, 403, origin)
 
-  let p: { user_id?: string }
+  let p: { user_id?: string; contrasena?: string }
   try { p = await req.json() } catch { return json({ error: 'JSON inválido' }, 400, origin) }
   const objetivo = (p.user_id ?? '').trim()
   if (!objetivo) return json({ error: 'Falta decir a quién.' }, 400, origin)
@@ -83,8 +85,15 @@ Deno.serve(async (req) => {
   if (!perfil) return json({ error: 'Esa cuenta ya no existe.' }, 404, origin)
   if (perfil.is_owner) return json({ error: 'No se puede restablecer la contraseña de otro administrador desde aquí.' }, 403, origin)
 
-  // Candado 3: la contraseña nueva la genera el servidor.
-  const contrasena = generaContrasena()
+  // Candado 3: la contraseña nueva la genera el servidor; solo en una cuenta de prueba el dueño puede escoger la suya.
+  const esDePrueba = /^zz_/i.test(perfil.username ?? '')
+  const escogida = typeof p.contrasena === 'string' && p.contrasena.length > 0 ? p.contrasena : null
+  if (escogida) {
+    if (!esDePrueba) return json({ error: 'Solo en una cuenta de prueba (zz_…) puedes escoger la contraseña. En una real se genera una.' }, 400, origin)
+    if (escogida.length < 8) return json({ error: 'La contraseña debe tener al menos 8 caracteres.' }, 400, origin)
+    if (escogida.length > 72) return json({ error: 'La contraseña no puede pasar de 72 caracteres.' }, 400, origin)
+  }
+  const contrasena = escogida ?? generaContrasena()
   const { error: errPon } = await admin.auth.admin.updateUserById(objetivo, { password: contrasena })
   if (errPon) {
     console.error('updateUserById falló:', errPon.message)
@@ -92,7 +101,6 @@ Deno.serve(async (req) => {
   }
 
   // Una cuenta de prueba (usuario zz_…) guarda la nueva a la vista del dueño; una real, NUNCA.
-  const esDePrueba = /^zz_/i.test(perfil.username ?? '')
   let guardada = false
   if (esDePrueba) {
     const tipo = perfil.role === 'admin' ? (/fisio/i.test(perfil.profesion ?? '') ? 'fisio' : 'coach') : 'atleta'
