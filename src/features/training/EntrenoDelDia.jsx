@@ -1,6 +1,4 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { usePlanOpcional } from '@/contexts/PlanContext';
-import { tipoParaStickers } from '@/lib/aspectoDelTipo';
 import { createPortal } from 'react-dom';
 import { LT, FONT } from '@/lib/theme';
 import { useCuerpoQuieto } from '@/lib/useCuerpoQuieto';
@@ -66,8 +64,7 @@ import {
  * kilos) y `salud` que es un paciente (sin 1RM). `sesionId` y `userId` son la llave con la que el reloj de un Set recuerda dónde iba.
  */
 
-// La hoja de stickers y la grabadora de técnica se cargan solo cuando se piden (ver `features/stickers` y `features/mensajes`).
-const HojaDeSesion = lazy(() => import('@/features/stickers/HojaDeSesion'));
+// La grabadora de técnica se carga solo cuando se pide (ver `features/stickers` y `features/mensajes`).
 const GrabaTecnica = lazy(() => import('@/features/mensajes/GrabaTecnica'));
 
 // La misma preferencia que el reloj de un Set: quien silenció uno, silenció los dos.
@@ -94,9 +91,6 @@ export default function EntrenoDelDia({
   const [enfoque, setEnfoque] = useState(null);
   const [hoja, setHoja] = useState(null);
   const [verFin, setVerFin] = useState(false);
-  // Los stickers para redes, desde el final del entreno. «Programmed by»: quien hizo el plan.
-  const [stickers, setStickers] = useState(false); // la hora en que se abrió, o `false`
-  const coachDelPlan = usePlanOpcional()?.programaActivo?.profesionalId ?? null;
   // La técnica que se está grabando (el paso, congelado al tocar la cámara) y la última que se mandó de cada paso: `{ [clave]: idDeLaTécnica }`.
   const [grabandoTecnica, setGrabandoTecnica] = useState(null);
   const [tecnicasMandadas, setTecnicasMandadas] = useState({});
@@ -472,9 +466,11 @@ export default function EntrenoDelDia({
   } else if (mostrarFin) {
     pantalla = (
       <PantallaDeFin
+        // Fase 7 (29 oct 2026): sin «Compartir stickers» ni la nota: las dos viven en la página del workout, que se abre al terminar («Tu nota», «Compartir»).
+        // Sin esa página (`alTerminado`), la nota se sigue escribiendo aquí.
         resumen={resumenDeFin} notas={registro?.notes ?? ''} yaTerminada={!!registro?.completed} palabras={palabras}
-        onNotas={(notes) => escribe((prev) => ({ ...prev, notes }))}
-        onTerminar={terminarSesion} onVolver={volverAlEntreno} onStickers={() => setStickers(Date.now())}
+        onNotas={alTerminado ? null : (notes) => escribe((prev) => ({ ...prev, notes }))}
+        onTerminar={terminarSesion} onVolver={volverAlEntreno}
       />
     );
   } else if (enDescanso) {
@@ -607,17 +603,6 @@ export default function EntrenoDelDia({
             intentoDe={tecnicasMandadas[grabandoTecnica.clave] ?? null}
             alEnviar={(id) => setTecnicasMandadas((prev) => ({ ...prev, [grabandoTecnica.clave]: id }))}
             alCerrar={() => setGrabandoTecnica(null)}
-          />
-        </Suspense>
-      )}
-      {stickers && (
-        <Suspense fallback={null}>
-          <HojaDeSesion
-            atletaId={userId} sesionId={sesionId} nombre={sinDuracion(dia.name || '') || 'Tu sesión'} unidadPeso={unidadDePeso}
-            tipo={tipoParaStickers(dia)} coachId={coachDelPlan} dia={dia}
-            // Antes de «Terminar» el entreno no tiene hora de fin: el resumen cuenta hasta ahora, así que los stickers también (si no, decían 1:04 contra 2:55).
-            registro={{ ...registro, ...(recorrido.ruta() ? { ruta: recorrido.ruta() } : null), ...(registro?.entreno && registro.entreno.fin == null ? { entreno: { ...registro.entreno, fin: stickers } } : null) }}
-            onCerrar={() => setStickers(false)}
           />
         </Suspense>
       )}

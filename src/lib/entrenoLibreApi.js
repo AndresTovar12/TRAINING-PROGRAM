@@ -46,6 +46,26 @@ export async function entrenosRecientes(atletaId, n = 6) {
   return data ?? [];
 }
 
+/** Sus entrenos de un deporte de ANTES de una hora (para saber si uno viejo fue récord al abrirlo: `recordDe`). Los últimos 500, del más nuevo al más viejo. */
+export async function entrenosAnteriores(atletaId, deporte, antesDe) {
+  const { data, error } = await supabase.from('actividades')
+    .select('id,deporte,titulo,inicio,desfase_min,duracion_s,distancia_m,metricas')
+    .eq('atleta_id', atletaId).eq('deporte', deporte).lt('inicio', antesDe).order('inicio', { ascending: false }).limit(500);
+  if (error) throw error;
+  return data ?? [];
+}
+
+/** Cuántos entrenos tiene en `actividades` y la hora del más viejo (milisegundos): el «11 entrenos · desde septiembre» de «Ver todos». `{ total, primero }`. */
+export async function cuentaDeEntrenos(atletaId) {
+  const [cuenta, viejo] = await Promise.all([
+    supabase.from('actividades').select('id', { count: 'exact', head: true }).eq('atleta_id', atletaId),
+    supabase.from('actividades').select('inicio').eq('atleta_id', atletaId).order('inicio', { ascending: true }).limit(1),
+  ]);
+  if (cuenta.error) throw cuenta.error;
+  const inicio = viejo.data?.[0]?.inicio;
+  return { total: cuenta.count ?? 0, primero: inicio ? Date.parse(inicio) : null };
+}
+
 /** Una página del historial completo («Ver todos»): `n` entrenos a partir del número `desde` (0 = el más nuevo). */
 export async function paginaDeEntrenos(atletaId, desde = 0, n = 50) {
   const { data, error } = await supabase.from('actividades')

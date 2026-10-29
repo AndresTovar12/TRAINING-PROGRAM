@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bell, BellOff, Check, ChevronLeft, ChevronRight, List, MapPin, Minus, Pencil, Play, Plus, Share2, Timer, Video, X } from 'lucide-react';
+import { Bell, BellOff, Check, ChevronLeft, ChevronRight, List, MapPin, Minus, Pencil, Play, Plus, Timer, Video, X } from 'lucide-react';
 import { LT, KP, FONT, NUM_STYLE, UI } from '@/lib/theme';
 import { textoDeResultado } from '@/lib/formatos';
 import { relojDe } from '@/lib/entrenoDatos';
@@ -672,8 +672,9 @@ export function PantallaDeDescanso({ descanso, siguiente, video, sonido, puedeAn
 /* El final                                                            */
 /* ------------------------------------------------------------------ */
 
-/** «Entrenamiento terminado»: lo que se hizo, una nota para el coach y «Terminar sesión». El avance ya estaba guardado. */
-export function PantallaDeFin({ resumen, notas, palabras, onNotas, onTerminar, onVolver, onStickers, yaTerminada }) {
+/** «Entrenamiento terminado»: lo que se hizo, una nota para el coach (solo si `onNotas`: si no, se escribe en la página del workout) y «Terminar sesión».
+ *  El avance ya estaba guardado. */
+export function PantallaDeFin({ resumen, notas, palabras, onNotas, onTerminar, onVolver, yaTerminada }) {
   return (
     <>
       <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -685,17 +686,20 @@ export function PantallaDeFin({ resumen, notas, palabras, onNotas, onTerminar, o
           <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
             {resumen.map((c) => <Cifra key={c.etiqueta} {...c} />)}
           </div>
-          {onStickers && <div style={{ marginBottom: 18 }}><BotonSecundario ancho onClick={onStickers}><Share2 size={18} /> Compartir stickers</BotonSecundario></div>}
-          <label htmlFor="entreno-notas" style={{ display: 'block', textAlign: 'left', fontSize: 15, fontWeight: 800, color: LT.text, margin: '0 2px 8px' }}>
-            {palabras.finNotas}
-          </label>
-          <textarea
-            id="entreno-notas" value={notas} onChange={(e) => onNotas(e.target.value)} rows={4}
-            style={{
-              width: '100%', boxSizing: 'border-box', border: 'none', boxShadow: '0 2px 10px rgba(17,19,24,0.07)', borderRadius: 16, background: LT.surface, padding: '14px 16px',
-              fontFamily: FONT, fontSize: 16, color: LT.text, resize: 'none', outline: 'none', textAlign: 'left',
-            }}
-          />
+          {onNotas && (
+            <>
+              <label htmlFor="entreno-notas" style={{ display: 'block', textAlign: 'left', fontSize: 15, fontWeight: 800, color: LT.text, margin: '0 2px 8px' }}>
+                {palabras.finNotas}
+              </label>
+              <textarea
+                id="entreno-notas" value={notas} onChange={(e) => onNotas(e.target.value)} rows={4}
+                style={{
+                  width: '100%', boxSizing: 'border-box', border: 'none', boxShadow: '0 2px 10px rgba(17,19,24,0.07)', borderRadius: 16, background: LT.surface, padding: '14px 16px',
+                  fontFamily: FONT, fontSize: 16, color: LT.text, resize: 'none', outline: 'none', textAlign: 'left',
+                }}
+              />
+            </>
+          )}
         </div>
       </div>
       <div style={{ flexShrink: 0, padding: '10px 0 calc(10px + env(safe-area-inset-bottom))' }}>

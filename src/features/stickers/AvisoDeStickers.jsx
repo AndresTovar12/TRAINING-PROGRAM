@@ -1,63 +1,44 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { FONT, LT } from '@/lib/theme';
 import { ficha as fichaDe } from '@/lib/stickers/ficha';
-import { catalogo, COLORES } from '@/lib/stickers/catalogo';
-import Sticker from './Sticker';
+import { catalogo } from '@/lib/stickers/catalogo';
+import './stickers.css';
 
-/* EL AVISO EN LA PÁGINA DEL ENTRENO (stickers, sección 6; 28 oct 2026). Solo al venir de terminar: una tarjeta blanca con «Tus stickers están listos»,
-   «N para compartir · toca uno», el chevron y, debajo, dos stickers reales en miniatura (Firma y Grande, en la tinta blanca sobre el fondo de la hoja).
-   Tocarla abre la hoja. Sustituye al cuadro negro con el teléfono en miniatura. `entreno`: lo que pide `ficha()`. */
+/* EL AVISO EN LA PÁGINA DEL ENTRENO (stickers, sección 6; 28 oct 2026). Solo al venir de terminar: una tarjeta blanca con dos stickers en abanico a la izquierda
+   (el negro con el número del entreno y el azul con la marca), «Tus stickers están listos» y «21 diseños con tus números, para tus historias». Tocarla abre la hoja.
+   Fase 7 (29 oct 2026, prototipo de caminos): el abanico sustituye a las dos miniaturas anchas.
+   `entreno`: lo que pide `ficha()` (de ahí sale cuántos diseños hay). `numero`: `{ valor, unidad }`, el número protagonista de la página («5.00 km», «16 sets»). */
 
-const PREFERIDOS = ['firma', 'grande', 'titular', 'fila', 'eco'];
-// Cada mini mide 166 × 111 (el sticker ancho a 0.5533) si cabe; en un teléfono angosto se achican parejo para que entren los dos.
-const ANCHO_MINI = 166;
-const GAP = 8;
+const MARCA = { fontFamily: "'Bricolage Grotesque', 'Inter', system-ui, sans-serif", fontVariationSettings: "'opsz' 96", fontWeight: 800, letterSpacing: '-0.04em' };
+const tarjeta = (estilo) => ({
+  position: 'absolute', top: 4, width: 44, height: 66, borderRadius: 9, display: 'grid', placeItems: 'center', textAlign: 'center', color: '#fff', overflow: 'hidden',
+  boxShadow: '0 6px 14px -5px rgba(17,19,24,0.45)', ...estilo,
+});
 
-export default function AvisoDeStickers({ entreno, alAbrir }) {
-  const f = useMemo(() => (entreno ? fichaDe(entreno) : null), [entreno]);
-  const lista = useMemo(() => (f ? catalogo(f) : []), [f]);
-  const tira = useRef(null);
-  const [anchoTira, setAnchoTira] = useState(0);
-  useLayoutEffect(() => {
-    const el = tira.current;
-    if (!el) return undefined;
-    const mide = () => setAnchoTira(el.clientWidth);
-    mide();
-    if (typeof ResizeObserver !== 'function') return undefined;
-    const ro = new ResizeObserver(mide);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [f]);
-  if (!f || !lista.length) return null;
-  const w = anchoTira > 0 ? Math.min(ANCHO_MINI, (anchoTira - GAP) / 2) : ANCHO_MINI;
-  const alto = (w * 2) / 3;
-  const minis = PREFERIDOS.map((id) => lista.find((x) => x.id === id)).filter(Boolean).slice(0, 2);
+export default function AvisoDeStickers({ entreno, numero = null, alAbrir }) {
+  const total = useMemo(() => { try { return entreno ? catalogo(fichaDe(entreno)).length : 0; } catch { return 0; } }, [entreno]);
+  if (!total) return null;
+  const valor = String(numero?.valor ?? '');
   return (
     <button
       type="button" onClick={alAbrir} className="kp-press"
-      style={{ display: 'block', width: '100%', border: 'none', textAlign: 'left', background: '#fff', color: LT.text, borderRadius: 22, padding: '14px 16px 16px', cursor: 'pointer', fontFamily: FONT, boxShadow: '0 1px 2px rgba(15,18,32,.06)' }}
+      style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', border: 'none', textAlign: 'left', background: '#fff', color: LT.text, borderRadius: 22, padding: '14px 12px 14px 12px', cursor: 'pointer', fontFamily: FONT }}
     >
-      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <span>
-          <b style={{ display: 'block', fontSize: 16, fontWeight: 800, letterSpacing: -0.15 }}>Tus stickers están listos</b>
-          <span style={{ display: 'block', fontSize: 13, color: LT.text2, fontWeight: 600, marginTop: 2 }}>{lista.length} para compartir · toca uno</span>
+      <span aria-hidden="true" style={{ position: 'relative', width: 82, height: 74, flex: 'none' }}>
+        <style>{'@keyframes abanico-1{from{transform:rotate(0) translateX(14px)}}@keyframes abanico-2{from{transform:rotate(0) translateX(-14px)}}@media (prefers-reduced-motion:reduce){.abanico-stk{animation:none!important}}'}</style>
+        <span className="abanico-stk" style={tarjeta({ left: 2, zIndex: 2, background: '#111318', transform: 'rotate(-8deg)', animation: 'abanico-1 .55s cubic-bezier(.23,1,.32,1) .15s both' })}>
+          <span style={{ ...MARCA, fontSize: valor.length > 4 ? 10 : 12, lineHeight: 0.9 }}>{valor}<small style={{ display: 'block', marginTop: 2, fontSize: 7, color: '#9DB4FF' }}>{numero?.unidad}</small></span>
         </span>
-        <ChevronRight size={20} color={LT.text3} style={{ flex: 'none' }} />
+        <span className="abanico-stk" style={tarjeta({ left: 36, background: '#1E40E0', transform: 'rotate(7deg)', placeItems: 'center start', animation: 'abanico-2 .55s cubic-bezier(.23,1,.32,1) .15s both' })}>
+          <span style={{ ...MARCA, fontSize: 7.5, lineHeight: 1.05, textAlign: 'left', marginLeft: 13 }}>Training<br /><span style={{ color: '#9DB4FF' }}>Lab</span></span>
+        </span>
       </span>
-      <span ref={tira} aria-hidden="true" style={{ display: 'flex', gap: GAP, marginTop: 12, overflow: 'hidden' }}>
-        {minis.map((item) => {
-          // Un sticker alto va a la altura del mosaico; uno ancho, a lo ancho.
-          const k = item.forma === 'alto' ? alto / 330 : w / 300;
-          return (
-            <span key={item.id} style={{ position: 'relative', flex: 'none', width: item.forma === 'alto' ? 300 * k : w, height: alto, borderRadius: 12, overflow: 'hidden', background: '#0E1220' }}>
-              <span style={{ position: 'absolute', left: 0, top: 0, transform: `scale(${k.toFixed(4)})`, transformOrigin: 'top left', pointerEvents: 'none' }}>
-                <Sticker item={item} f={f} color={COLORES[0]} />
-              </span>
-            </span>
-          );
-        })}
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <b style={{ display: 'block', fontSize: 16, fontWeight: 800, lineHeight: 1.3, letterSpacing: -0.2, textWrap: 'balance' }}>Tus stickers están listos</b>
+        <span style={{ display: 'block', fontSize: 13.5, color: LT.text2, marginTop: 3, lineHeight: 1.4 }}>{total} diseños con tus números, para tus historias.</span>
       </span>
+      <ChevronRight size={18} color={LT.text3} style={{ flex: 'none' }} />
     </button>
   );
 }

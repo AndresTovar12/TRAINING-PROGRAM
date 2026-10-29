@@ -8,7 +8,7 @@ import {
 import { useEstadoOpcional, useStorageOpcional } from '@/contexts/AppStateContext';
 import { usePlanOpcional } from '@/contexts/PlanContext';
 import { vibra } from '@/lib/avisosNativos';
-import { entrenosRecientes, paginaDeEntrenos } from '@/lib/entrenoLibreApi';
+import { cuentaDeEntrenos, entrenosRecientes, paginaDeEntrenos } from '@/lib/entrenoLibreApi';
 import { mezclaEntrenos, sesionesDelPlan } from '@/lib/entrenosDelPlan';
 import { useRutaEnSilencio } from '@/lib/useRutaEnSilencio';
 import { permisoDelRecorrido } from '@/features/training/useRecorrido';
@@ -268,5 +268,21 @@ export function useHistorialCompleto(userId) {
   const delPlan = useSesionesDelPlan();
   const { filas, hayMas } = paginas;
   const entrenos = useMemo(() => mezclaEntrenos(filas, delPlan, { hasta: hayMas && filas.length ? Date.parse(filas[filas.length - 1].inicio) : (hayMas ? Infinity : null) }), [filas, delPlan, hayMas]);
-  return { entrenos, hayMas, leyendo: paginas.leyendo, error: paginas.error, sigue };
+  /* Cuántos son y desde cuándo («11 entrenos · desde septiembre»). Con todo leído, se cuentan de la lista. Mientras falten páginas: los de la base, más los
+     workouts del plan que no van unidos a un entreno del reloj de los ya leídos (uno muy viejo que el reloj también trajo podría contarse dos veces). */
+  const [cuenta, setCuenta] = useState(null);
+  useEffect(() => {
+    if (!userId) return undefined;
+    let vivo = true;
+    cuentaDeEntrenos(userId).then((c) => { if (vivo) setCuenta(c); }).catch(() => {});
+    return () => { vivo = false; };
+  }, [userId]);
+  const resumen = useMemo(() => {
+    const viejoDelPlan = delPlan.reduce((m, x) => Math.min(m, x.s.inicio), Infinity);
+    if (!hayMas) return { total: entrenos.length, primero: entrenos.length ? entrenos[entrenos.length - 1].ms : null };
+    if (!cuenta) return null;
+    const unidos = mezclaEntrenos(filas, delPlan).filter((e) => e.actividad && e.plan).length;
+    return { total: cuenta.total + delPlan.length - unidos, primero: Math.min(cuenta.primero ?? Infinity, viejoDelPlan) };
+  }, [hayMas, entrenos, cuenta, filas, delPlan]);
+  return { entrenos, hayMas, leyendo: paginas.leyendo, error: paginas.error, sigue, resumen };
 }

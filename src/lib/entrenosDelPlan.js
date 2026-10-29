@@ -8,7 +8,7 @@
      de ahí salen el día (sus ejercicios, su tipo) y a dónde lleva «Ver en mi plan». Si su plan ya no está (se cambió el plan), sale igual, sin día.
 
    Este archivo no importa nada de la app (ni `@/`): lo cargan tal cual las pruebas de Node (`scripts/prueba-entrenos-del-plan.mjs`). */
-import { sesionesGuiadas, uneConActividades } from './metricas/porSerie.js';
+import { sesionesGuiadas, tramoDeLaSesion, uneConActividades } from './metricas/porSerie.js';
 import { sesionQueRepite } from './training-utils.js';
 
 const esObjeto = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
@@ -48,12 +48,30 @@ export function diaDeLaSesion(programa, id) {
 const terminada = (registro) => esObjeto(registro) && !!registro.completedAt;
 
 /**
+ * Las sesiones que se marcaron como hechas A MANO (fase 7, 29 oct 2026): `completedAt` sin nada del entreno guiado. También son un entreno de «Tus entrenos»,
+ * con la hora en que se marcaron y sin tiempo (`manual: true`, `inicio` = `fin`). Las veces anteriores (`anteriores`) igual.
+ */
+function marcadasAMano(estado) {
+  const salida = [];
+  Object.entries(esObjeto(estado) ? estado : {}).forEach(([almacen, sesiones]) => {
+    if (!/^wr:sessions(@|$)/.test(almacen) || !esObjeto(sesiones)) return;
+    Object.entries(sesiones).forEach(([id, registro]) => {
+      [[id, registro], ...(Array.isArray(registro?.anteriores) ? registro.anteriores.map((r, i) => [`${id}#${i + 1}`, r]) : [])].forEach(([llave, r]) => {
+        if (!terminada(r) || tramoDeLaSesion(r)) return;
+        const ms = Date.parse(r.completedAt);
+        if (Number.isFinite(ms)) salida.push({ id: llave, almacen, nombre: null, registro: r, inicio: ms, fin: ms, manual: true });
+      });
+    });
+  });
+  return salida;
+}
+
+/**
  * Las sesiones guiadas TERMINADAS del atleta (`estado`: `user_app_state.data`), cada una con su programa y su día:
  * `[{ s, programa, lugar }]` (`s`: la de `sesionesGuiadas`; `lugar`: lo de `diaDeLaSesion`, o `null`).
  */
 export function sesionesDelPlan(estado, programas = []) {
-  return sesionesGuiadas(estado)
-    .filter((s) => terminada(s.registro))
+  return [...sesionesGuiadas(estado).filter((s) => terminada(s.registro)), ...marcadasAMano(estado)]
     .map((s) => {
       const programa = programaDelAlmacen(programas, s.almacen);
       return { s, programa, lugar: programa ? diaDeLaSesion(programa, s.id) : null };

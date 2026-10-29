@@ -15,8 +15,11 @@ export function useProgramadoDeLaSesion({ dia, registro, sesionId }) {
   const [sesiones] = useStorage(plan?.claveDe ? plan.claveDe('wr:sessions') : 'wr:sessions', {});
   if (!dia) return {};
   const llave = String(sesionId ?? '').split('#')[0];
+  // Lo de ANTES de esta sesión, en el orden del plan (fase 7: al abrir un workout viejo, lo que levantó después no le quita su récord).
   const mejorAntes = (ejercicio) => {
-    const antes = historialDePeso(plan?.phases ?? [], sesiones, ejercicio, plan?.kind).filter((r) => r.id !== llave).map((r) => r.kilos);
+    const todo = historialDePeso(plan?.phases ?? [], sesiones, ejercicio, plan?.kind);
+    const aqui = todo.findIndex((r) => r.id === llave);
+    const antes = (aqui >= 0 ? todo.slice(0, aqui) : todo.filter((r) => r.id !== llave)).map((r) => r.kilos);
     return antes.length ? Math.max(...antes) : null;
   };
   return { programadas: seriesProgramadas(dia), record: recordDelPlan({ day: dia, registro, mejorAntes }) };
