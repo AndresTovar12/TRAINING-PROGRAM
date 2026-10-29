@@ -6,6 +6,7 @@ import { useIsDesktop } from '@/lib/useViewport';
 import { cargaPosters } from '@/lib/posters';
 import { AppStateProvider } from '@/contexts/AppStateContext';
 import { PalabrasProvider, usePalabras } from '@/contexts/PalabrasContext';
+import { AVISO_ABRE_PERFIL } from '@/lib/abrePerfil';
 import SincronizaReloj from '@/features/profile/SincronizaReloj';
 import { PlanProvider } from '@/contexts/PlanContext';
 import AuthScreen from '@/features/auth/AuthScreen';
@@ -85,6 +86,21 @@ function AccountMenu({ perfil, onPerfil }) {
   const profileOpen = onPerfil ? perfil : perfilLocal;
   const setProfileOpen = onPerfil || setPerfilLocal;
   const ref = useRef(null);
+  // «Conecta tu Apple Watch en Mi perfil → Dispositivos» desde cualquier pantalla (`lib/abrePerfil.js`): abre Mi perfil en esa sección.
+  const abreEn = useRef(setProfileOpen);
+  useEffect(() => { abreEn.current = setProfileOpen; });
+  useEffect(() => {
+    const alAviso = (e) => abreEn.current(e.detail?.seccion || true);
+    window.addEventListener(AVISO_ABRE_PERFIL, alAviso);
+    // Al regresar de dar permiso en Garmin (`?garmin=conectado` o `?garmin=error`, ver la función `garmin`): Mi perfil → Dispositivos, que dice cómo salió.
+    const garmin = new URLSearchParams(window.location.search).get('garmin');
+    if (garmin) {
+      try { sessionStorage.setItem('tl:garmin', garmin); } catch { /* sin almacenamiento: solo no sale el aviso */ }
+      window.history.replaceState(null, '', window.location.pathname);
+      abreEn.current('dispositivos');
+    }
+    return () => window.removeEventListener(AVISO_ABRE_PERFIL, alAviso);
+  }, []);
 
   /* El botón es fijo arriba a la derecha: al bajar por la página se quedaba ENCIMA de los ▶ de las sesiones y de las filas de ejercicios y los tapaba (auditoría p33).
      Ahora se esconde cuando se baja y vuelve al subir (o al estar arriba), como la barra del navegador. Con el menú abierto no se esconde. */
@@ -189,7 +205,7 @@ function AccountMenu({ perfil, onPerfil }) {
         </div>
       )}
     </div>
-    {profileOpen && <ProfileScreen enfoque={profileOpen === 'ia' ? 'ia' : null} onClose={() => setProfileOpen(false)} />}
+    {profileOpen && <ProfileScreen enfoque={typeof profileOpen === 'string' ? profileOpen : null} onClose={() => setProfileOpen(false)} />}
     </>
   );
 }

@@ -4,6 +4,7 @@ import { Trophy } from 'lucide-react';
 import { FONT, NUM_STYLE } from '@/lib/theme';
 import { trazoDeRuta } from '@/lib/ubicacion';
 import { datosDelResumen } from '@/lib/resumenLibre';
+import { rutaDe } from '@/lib/stickers/ficha';
 import IconoDeActividad from './IconoDeActividad';
 
 /* LA CELEBRACIÓN AL TERMINAR (23 oct 2026, Activity Tracker; maqueta v4, pantalla «Celebración»). Corta: unos 3 segundos (la de Strava dura 9.5 y termina vendiendo la
@@ -21,7 +22,8 @@ export default function CelebracionLibre({ fila, muestras = null, actividad = nu
     const t = setTimeout(() => terminar.current(), DURA_MS);
     return () => clearTimeout(t);
   }, []);
-  const ruta = Array.isArray(muestras) ? trazoDeRuta(muestras, { ancho: 280, alto: 280, margen: 20 }) : null;
+  // La línea, solo si de verdad hubo recorrido (el umbral de los stickers, `rutaDe`): un pádel en su cancha salta su ícono.
+  const ruta = Array.isArray(muestras) && rutaDe(muestras) ? trazoDeRuta(muestras, { ancho: 280, alto: 280, margen: 20 }) : null;
   const principal = datosDelResumen(fila).find((d) => d.etiqueta === 'distancia') ?? datosDelResumen(fila)[0];
   const nombre = fila.titulo || actividad?.nombre || 'Tu entreno';
 

@@ -18,7 +18,9 @@ export const enLaApp = () => Capacitor.isNativePlatform();
    por pantalla, cada una al abrirse reiniciaba el GPS (arranque en frío) y al cerrarse podía apagar la de otra. Aquí hay UNA sola escucha viva y todas se cuelgan de ella:
    · se enciende con la primera pantalla que la pide y se apaga un minuto DESPUÉS de que la última la suelta (así el paso de «antes» a «corriendo», una pausa
      o un descanso entre sprints no la reinicia: con 8 s, al volver se perdían los primeros segundos mientras el GPS «encontraba» la señal otra vez);
-   · a quien llega le entrega al instante el último punto si es reciente: «dónde estoy» sale sin esperar. */
+   · a quien llega le entrega al instante el último punto si es reciente: «dónde estoy» sale sin esperar;
+   · cada pantalla pide su PRECISIÓN (28 oct 2026, la ruta en silencio de los stickers): 'baja' (un entreno que no es cardio, mientras no te mueves) o 'alta'
+     (cardio, o cuando ya te moviste). El teléfono usa la más alta que alguien pida (`setAccuracy` del parche del plugin): baja cuida la batería. */
 const GRACIA_MS = 60000;
 const PUNTO_VIGENTE_MS = 20000;
 const escuchas = new Set();
@@ -26,6 +28,16 @@ let ultimo = null; // { punto, en }
 let encendido = false;
 let apagar = null;
 let plugin = null;
+let nivelPuesto = null; // 'high' | 'low': el que tiene el GPS ahora
+
+const nivelPedido = () => ([...escuchas].some((e) => e.precision !== 'baja') ? 'high' : 'low');
+function ajustaPrecision() {
+  if (!encendido || !plugin || escuchas.size === 0) return;
+  const nivel = nivelPedido();
+  if (nivel === nivelPuesto) return;
+  nivelPuesto = nivel;
+  plugin.setAccuracy?.({ level: nivel }).catch?.(() => {});
+}
 
 const aTodas = (f) => { for (const e of [...escuchas]) { try { f(e); } catch { /* una pantalla que falla no apaga a las demás */ } } };
 
@@ -34,8 +46,9 @@ async function enciende() {
   encendido = true;
   try {
     plugin ??= (await import('@capgo/background-geolocation')).BackgroundGeolocation;
+    nivelPuesto = nivelPedido();
     await plugin.start(
-      { backgroundTitle: 'Training Lab', backgroundMessage: 'Midiendo tu entreno', requestPermissions: true, stale: false, distanceFilter: 0 },
+      { backgroundTitle: 'Training Lab', backgroundMessage: 'Midiendo tu entreno', requestPermissions: true, stale: false, distanceFilter: 0, accuracy: nivelPuesto },
       (p, error) => {
         if (error) { aTodas((e) => e.alError?.(error.code === 'NOT_AUTHORIZED' ? 'negado' : 'sin_senal')); return; }
         if (!p) return;
@@ -69,16 +82,21 @@ const fuenteDelTelefono = {
   nombre: 'telefono',
   segundoPlano: true,
   disponible: () => true,
-  sigue(alPunto, alError) {
-    const yo = { alPunto, alError };
+  // `precision`: 'alta' (la de siempre) o 'baja'. Lo que devuelve para la escucha y, con `.precision(nivel)`, la cambia sin soltar el GPS.
+  sigue(alPunto, alError, { precision = 'alta' } = {}) {
+    const yo = { alPunto, alError, precision };
     escuchas.add(yo);
     clearTimeout(apagar);
     if (ultimo && Date.now() - ultimo.en < PUNTO_VIGENTE_MS) Promise.resolve().then(() => { if (escuchas.has(yo)) alPunto(ultimo.punto); });
     enciende();
-    return () => {
+    ajustaPrecision();
+    const parar = () => {
       escuchas.delete(yo);
       if (escuchas.size === 0) programaApagado();
+      else ajustaPrecision();
     };
+    parar.precision = (nivel) => { yo.precision = nivel; ajustaPrecision(); };
+    return parar;
   },
 };
 

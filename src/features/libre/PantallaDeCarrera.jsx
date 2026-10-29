@@ -16,6 +16,11 @@ import { actividadDeDeporte } from '@/lib/actividades';
 import { useSenalGps, useUbicacionActual } from './useEntrenoLibre';
 import { limpiaPantallaDeMapa, usaMapaNativo } from '@/lib/mapaNativo';
 import { useBarraDeEstadoClara } from '@/lib/barraDeEstado';
+import { abrePerfil } from '@/lib/abrePerfil';
+import { fuenteDeUbicacion } from '@/lib/ubicacion';
+import { HojaDelRecorrido } from '@/features/training/PantallasDelEntreno';
+import { guardaPermisoDelRecorrido, permisoDelRecorrido } from '@/features/training/useRecorrido';
+import { saludDisponible } from '@/lib/saludDelTelefono';
 
 /* LA CARRERA CON GPS A PANTALLA COMPLETA (reestructura visual, 16 oct 2026), como «Workout · Carrera» de las capturas de Andrés:
      1. Antes de salir: el mapa, «GPS listo» y el botón redondo «Iniciar».
@@ -54,6 +59,20 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
   const { cronometro, segundos, muestras } = crono;
   const pregunta = useConfirmacion();
   const { avisa } = useAviso();
+  /* EMPEZAR. Una actividad sin mapa (pádel, gimnasio) también se sigue en silencio para la línea de los stickers (sección 8b): la primera vez se pregunta UNA vez
+     «¿Guardamos tu recorrido?» (la misma pregunta del entreno guiado) y después ya no. Con «Ahora no» todo funciona igual, sin línea. «Sin GPS» en cardio no se sigue. */
+  const [preguntaRuta, setPreguntaRuta] = useState(null); // lo que se iba a empezar, mientras contesta
+  const empieza = (opciones) => {
+    if (opciones.silencio && fuenteDeUbicacion().disponible() && permisoDelRecorrido() === null) { setPreguntaRuta(opciones); return; }
+    alEmpezar(opciones);
+  };
+  const contesta = (v) => { guardaPermisoDelRecorrido(v); const o = preguntaRuta; setPreguntaRuta(null); alEmpezar(o); };
+  // «Conectar reloj»: en la app del iPhone lleva a Mi perfil → Dispositivos (la carrera se minimiza para que se vea); en la web solo lo dice.
+  const conectaReloj = () => {
+    if (!saludDisponible()) { avisa('Con la app descargable, tu Apple Watch manda el pulso y las calorías mientras entrenas'); return; }
+    alMinimizar?.();
+    abrePerfil('dispositivos');
+  };
   const deporte = pendiente ?? cronometro?.deporte ?? 'correr';
   const act = actividad ?? cronometro?.actividad ?? null;
   const nombre = act?.nombre ?? nombreDelDeporte(deporte);
@@ -193,24 +212,24 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
                 <IconoDeActividad actividad={act ?? actividadDeDeporte(deporte)} size={52} oscuro /> Cambiar
               </button>
               <button
-                type="button" onClick={() => alEmpezar({ gps: conMapa && !sinGps })} disabled={esperandoGps} aria-label="Iniciar"
+                type="button" onClick={() => empieza({ gps: conMapa && !sinGps, silencio: !conMapa })} disabled={esperandoGps} aria-label="Iniciar"
                 style={{ width: 112, height: 112, borderRadius: 56, border: 'none', background: esperandoGps ? 'rgba(255,255,255,0.14)' : CORAL, color: '#fff', cursor: esperandoGps ? 'default' : 'pointer', fontFamily: FONT, fontSize: esperandoGps ? 17 : 21, fontWeight: 800, boxShadow: esperandoGps ? '0 0 0 6px rgba(255,255,255,0.08)' : '0 0 0 6px rgba(255,138,91,0.28), 0 14px 34px rgba(240,80,110,0.45)', touchAction: 'manipulation' }}
               >
                 {esperandoGps ? 'GPS…' : 'Iniciar'}
               </button>
               {conMapa && !sinGps ? (
-                <button type="button" onClick={() => alEmpezar({ gps: false })} style={lado}>
+                <button type="button" onClick={() => empieza({ gps: false })} style={lado}>
                   <span style={{ ...redondo, width: 52, height: 52, borderRadius: 26 }}><MapaIcono size={20} /></span> Sin GPS
                 </button>
               ) : !conMapa ? (
-                // Conectar el reloj es de la app de la tienda (capa nativa): aquí solo lo dice.
-                <button type="button" onClick={() => avisa('Con la app descargable, tu Apple Watch manda el pulso y las calorías mientras entrenas')} style={lado}>
+                <button type="button" onClick={conectaReloj} style={lado}>
                   <span style={{ ...redondo, width: 52, height: 52, borderRadius: 26 }}><Watch size={20} /></span> Conectar reloj
                 </button>
               ) : <span />}
             </div>
           </div>
         </div>
+        {preguntaRuta && <HojaDelRecorrido onSi={() => contesta('si')} onNo={() => contesta('no')} />}
       </>,
     );
   }

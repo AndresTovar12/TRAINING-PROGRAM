@@ -930,12 +930,12 @@ export function HojaDeCambiar({ campos, planeado, inicial, unidadDePeso, resumen
 }
 
 /**
- * «¿Guardamos tu recorrido?» (23 oct 2026): se pregunta UNA vez, al abrir el primer entreno guiado en este teléfono. Con «Sí», el entreno guarda por dónde te mueves
+ * «¿Guardamos tu recorrido?» (23 oct 2026): se pregunta UNA vez, al abrir el primer entreno en este teléfono (guiado, o libre sin mapa: sección 8b). Con «Sí», el entreno guarda por dónde te mueves
  * para que tus stickers puedan llevar la línea (ver `useRecorrido`). «Ahora no» no rompe nada: los pasos de 200 m o más siguen ofreciendo el mapa.
  */
 export function HojaDelRecorrido({ onSi, onNo }) {
   return (
-    <Hoja etiqueta="Tu recorrido" titulo="¿Guardamos tu recorrido?" subtitulo="Mientras entrenas, la app guarda por dónde te moviste. Sirve para que tus stickers puedan llevar la línea de tu recorrido. Nadie lo ve si tú no lo compartes." icono={<MapPin size={25} />} onCerrar={onNo}>
+    <Hoja etiqueta="Tu recorrido" titulo="¿Guardamos tu recorrido?" subtitulo="Mientras entrenas, la app guarda por dónde te moviste, para dibujar tu recorrido en tus stickers. Nadie lo ve si tú no lo compartes. Con la pantalla apagada también: el iPhone te pedirá «Siempre» después." icono={<MapPin size={25} />} onCerrar={onNo}>
       <BotonGrande onClick={onSi}>Sí, guardar</BotonGrande>
       <div style={{ textAlign: 'center', marginTop: 2 }}><BotonDeTexto onClick={onNo}>Ahora no</BotonDeTexto></div>
     </Hoja>

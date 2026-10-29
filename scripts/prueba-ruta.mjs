@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { agregaPunto, enVivo, trazoDeRuta, textoDeRitmo, usaGps } from '../src/lib/ubicacion.js';
 import { preparaEntreno, construyeActividad } from '../src/lib/metricas/construye.js';
 import { entrenoLibre, decidePausaAutomatica, cronometroNuevo, pausa, reanuda } from '../src/lib/entrenoLibre.js';
+import { decidePrecision, silencioNuevo, sinNumerosDeLaRuta, SILENCIO } from '../src/lib/rutaSilenciosa.js';
+import { ficha, entrenoDeActividad } from '../src/lib/stickers/ficha.js';
+import { catalogo } from '../src/lib/stickers/catalogo.js';
 
 // Una carrera inventada hacia el norte: 1.25 km a 5:00/km (3.333 m/s), un punto por segundo.
 const metrosPorGradoLat = 111195;
@@ -104,5 +107,49 @@ const cp = pausa(c0, 1000, { automatica: true });
 assert.equal(cp.automatica, true);
 assert.equal(reanuda(cp, 3000).automatica, undefined);
 assert.equal(reanuda(cp, 3000).pausas, 2000);
+
+// LA RUTA EN SILENCIO (sección 8b): precisión baja hasta que se mueve de verdad, alta mientras se mueve, baja tras 3 min quieto.
+{
+  const norte = (m) => 19.4 + m / 111195;
+  let e = silencioNuevo();
+  e = decidePrecision(e, { lat: norte(0), lon: -99.1, precision: 65 }, 0);
+  assert.equal(e.nivel, 'baja');
+  // El temblor de un punto de 65 m de error (a 60 m del primero) no es moverse.
+  assert.equal(decidePrecision(e, { lat: norte(60), lon: -99.1, precision: 65 }, 5000).nivel, 'baja', 'el temblor no sube la precisión');
+  // A 120 m del primero (más que 1.5 × 65) sí: sube a alta.
+  e = decidePrecision(e, { lat: norte(120), lon: -99.1, precision: 65 }, 10000);
+  assert.equal(e.nivel, 'alta');
+  // Ir a paso de caminata también sube.
+  assert.equal(decidePrecision(silencioNuevo(), { lat: 0, lon: 0, precision: 65 }, 0).ancla !== null, true);
+  assert.equal(decidePrecision({ nivel: 'baja', ancla: { lat: 0, lon: 0 }, movidoEn: null }, { lat: 0, lon: 0, precision: 65, vel: 1.4 }, 1000).nivel, 'alta', 'caminando');
+  // Quieto en alta: sigue alta hasta 3 minutos; después, baja.
+  const quieto = { lat: norte(120), lon: -99.1, precision: 5, vel: 0 };
+  assert.equal(decidePrecision(e, quieto, 10000 + SILENCIO.QUIETO_MS - 1000).nivel, 'alta');
+  assert.equal(decidePrecision(e, quieto, 10000 + SILENCIO.QUIETO_MS).nivel, 'baja');
+}
+
+// Un fútbol con ruta en silencio (2 km dando vueltas por la cancha y el estacionamiento): la línea se guarda, pero NUNCA se vuelve distancia ni ritmo.
+{
+  const muestras = Array.from({ length: 600 }, (_, i) => ({ t: i * 5, lat: 19.4 + (Math.sin(i / 20) * 400) / 111195, lon: -99.1 + (i * 1.5) / 105000 }));
+  const base = entrenoLibre({ deporte: 'futbol', inicioMs: Date.parse('2026-10-28T13:00:00Z'), duracionS: 3000, titulo: 'Fútbol' });
+  const prep = sinNumerosDeLaRuta(preparaEntreno({ ...base, muestras }));
+  const { fila, series } = construyeActividad(prep, { umbrales: { fc_max: 190, fc_reposo: 55, fc_umbral: 170, metodo: 'estimado' }, origen: 'manual' });
+  assert.equal(fila.distancia_m, null, 'sin «Distance»');
+  assert.equal(fila.metricas?.ritmo_medio_s_km ?? null, null, 'sin ritmo');
+  assert.equal(fila.vueltas, null, 'sin kilómetros');
+  assert.ok(series?.ruta?.lat?.length > 50, 'la línea sí se guarda');
+  const f = ficha(entrenoDeActividad({ fila: { ...fila, id: 'fut', duracion_s: 3000, kcal_activas: 700 }, series }));
+  assert.equal(f.datos.dist, undefined);
+  assert.ok(catalogo(f).some((x) => x.id === 'ruta-dato'), 'pero sí sale la línea en Ruta y dato');
+  // Un pádel en su cancha (menos de 300 m de recorrido y a menos de 150 m del inicio): ningún sticker de ruta (prueba de aceptación 11).
+  const cancha = Array.from({ length: 30 }, (_, i) => ({ t: i * 10, lat: 19.4 + ((i % 2) * 8) / 111195, lon: -99.1 }));
+  const padel = construyeActividad(sinNumerosDeLaRuta(preparaEntreno({ ...entrenoLibre({ deporte: 'raqueta', inicioMs: 0, duracionS: 3600, titulo: 'Pádel' }), muestras: cancha })), { umbrales: { fc_max: 190, fc_reposo: 55, fc_umbral: 170, metodo: 'estimado' }, origen: 'manual' });
+  const fp = ficha(entrenoDeActividad({ fila: { ...padel.fila, id: 'pad', duracion_s: 3600 }, series: padel.series }));
+  assert.equal(fp.ruta, null);
+  assert.ok(!catalogo(fp).some((x) => ['ruta-dato', 'mejor-km', 'esquinas', 'ruta-escrita'].includes(x.id)), 'pádel en cancha: sin stickers de ruta');
+  // Sin permiso (sin muestras): todo funciona igual y no hay ruta (prueba de aceptación 12).
+  const sin = construyeActividad(entrenoLibre({ deporte: 'raqueta', inicioMs: 0, duracionS: 3600, titulo: 'Pádel' }), { umbrales: { fc_max: 190, fc_reposo: 55, fc_umbral: 170, metodo: 'estimado' }, origen: 'manual' });
+  assert.equal(ficha(entrenoDeActividad({ fila: { ...sin.fila, id: 'p2' } })).ruta, null);
+}
 
 console.log('prueba-ruta: todo bien');

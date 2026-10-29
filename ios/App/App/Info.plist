@@ -31,9 +31,9 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Training Lab accede a tus fotos y videos para que puedas subirlos a tu plan, a tus mensajes y a tu perfil.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Training Lab usa tu ubicación para medir distancia, ritmo y ruta mientras corres, pedaleas o caminas.</string>
+	<string>Training Lab usa tu ubicación para medir distancia, ritmo y ruta mientras corres, pedaleas o caminas, y para dibujar tu recorrido en tus stickers en cualquier entreno.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Training Lab sigue midiendo distancia, ritmo y ruta aunque bloquees la pantalla mientras corres, pedaleas o caminas.</string>
+	<string>Training Lab sigue tu recorrido aunque bloquees la pantalla: mide distancia, ritmo y ruta mientras corres, pedaleas o caminas, y dibuja tu recorrido en tus stickers en cualquier entreno.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>

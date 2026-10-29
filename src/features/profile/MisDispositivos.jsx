@@ -3,7 +3,7 @@ import { Loader2, RefreshCw, Upload, Watch } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { guardaImportacion } from '@/lib/metricasApi';
 import { conectaSalud, leeSalud, marcaSincronizada, olvidaSalud, PARA_QUE_ES, saludDisponible, ultimaSincronizacion } from '@/lib/saludDelTelefono';
-import { PROVEEDORES, conectaDispositivo, desconectaDispositivo, leeMisDispositivos } from '@/lib/dispositivos';
+import { PROVEEDORES, conectaDispositivo, desconectaDispositivo, garminDisponible, leeMisDispositivos } from '@/lib/dispositivos';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useAviso } from '@/components/AvisoPasajero';
 import { Fila, Grupo, IconoDeFila, Interruptor } from '@/components/ui';
@@ -28,10 +28,19 @@ export default function MisDispositivos({ onIrAMetricas }) {
   const [salud, setSalud] = useState(() => ultimaSincronizacion()); // cuándo se leyó Apple Salud por última vez (solo en este teléfono)
   const [busy, setBusy] = useState('');
 
+  // Garmin se prende cuando el servidor ya tiene sus llaves (fase 4); mientras, «Pronto».
+  const [conGarmin, setConGarmin] = useState(false);
   const lee = useCallback(async () => {
+    garminDisponible().then(setConGarmin);
     try { setConectados(await leeMisDispositivos()); } catch { setConectados([]); }
   }, []);
   useEffect(() => { lee(); }, [lee]);
+  // Recién regresó de Garmin: cómo salió (lo deja el menú de la cuenta al leer `?garmin=` de la dirección).
+  useEffect(() => {
+    let g = null;
+    try { g = sessionStorage.getItem('tl:garmin'); sessionStorage.removeItem('tl:garmin'); } catch { /* sin almacenamiento */ }
+    if (g) avisa(g === 'conectado' ? 'Garmin conectado: tus entrenos nuevos llegan solos' : 'No se pudo conectar Garmin. Inténtalo otra vez.');
+  }, [avisa]);
 
   /* Apple Salud (24 oct 2026): se pide el permiso, se leen los últimos 30 días y se guardan con el mismo camino que un archivo importado. Corre en el teléfono: no hay servidor de por medio. */
   async function sincronizaSalud(primera = false) {
@@ -94,7 +103,8 @@ export default function MisDispositivos({ onIrAMetricas }) {
         </Grupo>
       )}
       <Grupo pie="Lo que mida tu reloj entra a Salud y a tus métricas.">
-        {PROVEEDORES.map((p) => {
+        {PROVEEDORES.map((x) => {
+          const p = x.id === 'garmin' ? { ...x, disponible: conGarmin } : x;
           const c = estaConectado(p.id);
           const [letra, color, fondo] = LETRA[p.id] ?? [];
           const ultima = c?.ultima_sincronizacion ? ` · ${new Date(c.ultima_sincronizacion).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : '';
@@ -103,7 +113,8 @@ export default function MisDispositivos({ onIrAMetricas }) {
               key={p.id}
               izquierda={letra ? <IconoDeFila color={color} fondo={fondo}>{letra}</IconoDeFila> : <IconoDeFila color={KP.ink} fondo="#EBEDF1"><Watch size={18} /></IconoDeFila>}
               texto={p.nombre}
-              detalle={c ? (c.estado === 'error' ? 'Con error: vuelve a conectarlo' : `Conectado${ultima}`) : p.detalle}
+              // Mientras lee (también la primera vez, cuando todavía no está el renglón de «Sincronizar ahora»), el avance: «Leyendo tus entrenos del reloj (12 de 40)…».
+              detalle={busy === p.id && aviso ? aviso : (c ? (c.estado === 'error' ? 'Con error: vuelve a conectarlo' : `Conectado${ultima}`) : p.detalle)}
               derecha={busy === p.id
                 ? <Loader2 size={20} className="spin" color={KP.ink2} />
                 : (c || p.disponible

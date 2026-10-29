@@ -127,7 +127,7 @@ function Contenido({ atleta, esAtleta, abrirEn, onCerrar }) {
           {vista === 'resumen' && <Resumen d={d} umbrales={m.umbrales} alAbrir={setDetalle} alIrA={setVista} esAtleta={esAtleta} />}
           {vista === 'entrenos' && <ListaDeEntrenos d={m.d} hoy={m.hoy} alAbrir={setDetalle} puedeImportar alImportar={botonDeImportar} sesiones={m.sesionesSinReloj} />}
           {vista === 'carga' && <CargaYForma d={m.d} />}
-          {vista === 'recuperacion' && <Recuperacion d={d} recuperacion={m.recuperacion} hoy={m.hoy} />}
+          {vista === 'recuperacion' && <Recuperacion d={d} recuperacion={m.recuperacion} hoy={m.hoy} esAtleta={esAtleta} />}
           {vista === 'fuerza' && <Fuerza a={fuerza} hoy={m.hoy} unidadPeso={unidadPeso} />}
         </div>
       </>

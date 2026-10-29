@@ -8,6 +8,8 @@ import { COLORES_DE_ZONA } from './graficasUtil';
 import { FilaDeEntreno } from './ListaDeEntrenos';
 import { Dato, Insignia, Seccion, Tarjeta, TiempoGrande } from './Piezas';
 import { TONOS } from './tonos';
+import { saludDisponible, TEXTO_CONECTA_RELOJ } from '@/lib/saludDelTelefono';
+import ConectaTuReloj from './ConectaTuReloj';
 import { ZONAS } from '@/lib/metricas/calculos';
 
 /* RESUMEN: lo primero que ve el coach. Tres preguntas, tres tarjetas, en palabras: ¿cómo llega hoy? (la forma), ¿qué hizo esta semana? y ¿está recuperando bien?
@@ -115,7 +117,8 @@ function FilaDeRecuperacion({ m, texto }) {
   );
 }
 
-function TarjetaDeRecuperacion({ d, alIrA }) {
+function TarjetaDeRecuperacion({ d, alIrA, esAtleta = false }) {
+  const conecta = esAtleta && saludDisponible();
   const r = d.recuperacion;
   const sinDatos = r.veredicto.clave === 'sin-datos';
   return (
@@ -126,7 +129,8 @@ function TarjetaDeRecuperacion({ d, alIrA }) {
       </div>
       {sinDatos ? (
         <div style={{ fontSize: 14.5, lineHeight: 1.45, fontWeight: 500, color: LT.text2 }}>
-          Sin pulso en reposo, HRV ni sueño de los últimos días. Se llenan al importar el export de Apple Salud del Apple Watch.
+          {conecta ? `Sin pulso en reposo, HRV ni sueño de los últimos días. ${TEXTO_CONECTA_RELOJ}` : 'Sin pulso en reposo, HRV ni sueño de los últimos días. Se llenan al importar el export de Apple Salud del Apple Watch.'}
+          {conecta && <div style={{ marginTop: 10 }}><ConectaTuReloj /></div>}
         </div>
       ) : (
         <>
@@ -215,7 +219,7 @@ export default function Resumen({ d, umbrales, alAbrir, alIrA, esAtleta = false 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(270px, 1fr))', gap: 12 }}>
         {d.estado && <TarjetaDeForma d={d} alIrA={alIrA} />}
         <TarjetaDeSemana d={d} alIrA={alIrA} esAtleta={esAtleta} />
-        <TarjetaDeRecuperacion d={d} alIrA={alIrA} />
+        <TarjetaDeRecuperacion d={d} alIrA={alIrA} esAtleta={esAtleta} />
       </div>
       <Seccion titulo="Las últimas 12 semanas" ayuda="Cada barra es una semana (lunes a domingo). En «Tiempo» los colores dicen cuánto de ese tiempo fue fácil, medio o duro según su pulso. «Carga» suma lo que costó cada entreno: una hora justo en su umbral vale 100 puntos.">
         <VolumenSemanal d={d} />

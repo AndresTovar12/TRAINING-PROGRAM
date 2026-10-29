@@ -9,7 +9,7 @@ import { borraActividad, cambiaActividad, getActividad, getSeries } from '@/lib/
 import { muestrasDeRuta } from '@/lib/recorrido';
 import { textoDeRitmo } from '@/lib/ubicacion';
 import { actividadDeEntreno } from '@/lib/actividades';
-import { entrenoDeActividad } from '@/lib/stickers/ficha';
+import { entrenoDeActividad, rutaDe } from '@/lib/stickers/ficha';
 import { cargaHistorial } from '@/lib/stickers/carga';
 import { useTipoDeSesion } from '@/features/stickers/useTipoDeSesion';
 import { useConfirmacion } from '@/components/Confirmacion';
@@ -125,7 +125,8 @@ export default function ResumenLibre({ fila: filaInicial, unidadPeso = 'kg', alC
       </div>
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <div style={{ maxWidth: 560, margin: '0 auto', padding: '0 16px calc(96px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {ruta && (
+          {/* El mapa, solo si de verdad hubo recorrido (el mismo umbral de los stickers: un pádel en su cancha no dibuja un garabato). */}
+          {ruta && rutaDe(ruta) && (
             <div style={{ height: 220, borderRadius: 22, overflow: 'hidden', background: '#1A1F33' }}>
               <MapaDeCarrera muestras={ruta} sigue={false} alto="100%" redondo={false} />
             </div>

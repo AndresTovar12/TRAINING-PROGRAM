@@ -46,7 +46,7 @@ En un workout del plan (`src/lib/stickers/plan.js`, `recordDelPlan`): se compara
 1. **Hecha (28 oct 2026):** ficha, motor de ranuras, hoja nueva y 6 stickers: Titular, Firma, Eco, Grande, Fila, Ruta y dato.
 2. **Hecha (28 oct 2026):** los 29 restantes, «Con foto» y «Video». El volumen solo sale en Lista y Columna.
 3. **Hecha (28 oct 2026):** HealthKit en la app nativa (ver abajo).
-4. Garmin y la ubicación silenciosa.
+4. **Hecha (28 oct 2026):** la ubicación silenciosa y Garmin (ver abajo y `docs/garmin.md`).
 
 ## El Apple Watch (HealthKit, fase 3)
 
@@ -55,6 +55,14 @@ En un workout del plan (`src/lib/stickers/plan.js`, `recordDelPlan`): se compara
 - El plugin `@capgo/capacitor-health` no traía la ruta ni el desnivel: se le agregó con `patches/@capgo+capacitor-health+8.11.12.patch` (método `queryWorkoutRoute`, el desnivel en metros y el permiso de la ruta junto con el de los entrenos).
 - Ya conectado, al abrir la app o volver a ella se traen los entrenos nuevos de los últimos 7 días, como mucho cada 30 min (`src/features/profile/SincronizaReloj.jsx`). Nunca pide el permiso ahí.
 - Nada de archivos FIT.
+
+## La ubicación silenciosa (sección 8b, fase 4)
+
+- La app sigue la ubicación en CUALQUIER entreno: el guiado (`useRecorrido`) y el libre sin mapa (pádel, gimnasio, fútbol: `silencio` en `useCronometroLibre`). El cardio, como siempre.
+- Precisión baja (unos 100 m, casi sin batería) hasta que hay movimiento de verdad; entonces alta; tras 3 min quieto, baja otra vez (`src/lib/rutaSilenciosa.js`, `useRutaEnSilencio`). El plugin del GPS se parchó para cambiar la precisión en vivo (`setAccuracy` en `patches/@capgo+background-geolocation+8.4.14.patch`); la escucha compartida (`src/lib/nativo.js`) usa la más alta que alguien pida.
+- Los puntos se guardan como las muestras de un reloj (`{ t, lat, lon, alt? }`). `rutaDe` decide si hay línea (más de 300 m recorridos o a más de 150 m del inicio): un pádel en su cancha no tiene stickers de ruta ni mapa en su página.
+- La ruta en silencio NUNCA se vuelve distancia, ritmo, kilómetros ni desnivel (`sinNumerosDeLaRuta` en `guardaEntrenoLibre`).
+- El permiso: «¿Guardamos tu recorrido?» una sola vez, en el primer entreno (guiado o libre sin mapa), «para dibujar tu recorrido en tus stickers». Después iOS pide «Mientras usas la app» y luego «Siempre» (el plugin escala solo). Con «Ahora no», o si iOS lo niega, todo funciona igual y no hay línea.
 
 ## Pruebas
 

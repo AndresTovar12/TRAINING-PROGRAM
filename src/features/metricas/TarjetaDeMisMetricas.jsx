@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react';
-import { Activity, Upload } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Activity, Upload, Watch } from 'lucide-react';
+import { AVISO_ABRE_PERFIL, abrePerfil } from '@/lib/abrePerfil';
+import { saludDisponible } from '@/lib/saludDelTelefono';
 import AbreMetricas from './AbreMetricas';
 import { useEntrenosRecientes } from '@/features/libre/useEntrenoLibre';
 import { resumenDeLaSemana } from '@/lib/semanaLibre';
@@ -15,6 +17,13 @@ import { Fila, Grupo, IconoDeFila, TarjetaHeroe } from '@/components/ui';
    Solo se monta en la app del atleta, que trae `AppStateProvider` (los 1RM se guardan con `useStorage`). */
 export default function TarjetaDeMisMetricas({ atleta }) {
   const [abierta, setAbierta] = useState(null); // null | 'ver' | 'importar'
+  // Ir a Mi perfil → Dispositivos desde las métricas: se cierran para que se vea.
+  useEffect(() => {
+    const cierra = () => setAbierta(null);
+    window.addEventListener(AVISO_ABRE_PERFIL, cierra);
+    return () => window.removeEventListener(AVISO_ABRE_PERFIL, cierra);
+  }, []);
+  const enLaApp = saludDisponible();
   const { filas } = useEntrenosRecientes(atleta?.id, 40);
   const semana = useMemo(() => resumenDeLaSemana(filas ?? []), [filas]);
   const { oneRMs } = useUnRM();
@@ -49,7 +58,9 @@ export default function TarjetaDeMisMetricas({ atleta }) {
 
       <Grupo pie="Tu coach también las ve, para entrenarte mejor.">
         <Fila izquierda={<IconoDeFila><Activity size={18} /></IconoDeFila>} texto="Ver mis métricas" detalle="Pulso, ritmo, carga y recuperación" onClick={() => setAbierta('ver')} />
-        <Fila izquierda={<IconoDeFila><Upload size={18} /></IconoDeFila>} texto="Importar entrenos" detalle="Del Apple Watch, Garmin, Strava…" onClick={() => setAbierta('importar')} />
+        {/* En la app del iPhone el Apple Watch entra directo (Mi perfil → Dispositivos); importar un archivo queda para lo de otras apps. */}
+        {enLaApp && <Fila izquierda={<IconoDeFila><Watch size={18} /></IconoDeFila>} texto="Conecta tu Apple Watch" detalle="En Mi perfil → Dispositivos" onClick={() => abrePerfil('dispositivos')} />}
+        <Fila izquierda={<IconoDeFila><Upload size={18} /></IconoDeFila>} texto="Importar entrenos" detalle={enLaApp ? 'Un archivo de Garmin, Strava u otra app' : 'Del Apple Watch, Garmin, Strava…'} onClick={() => setAbierta('importar')} />
       </Grupo>
       {abierta && <AbreMetricas atleta={atleta} esAtleta abrirEn={abierta === 'importar' ? 'importar' : null} onCerrar={() => setAbierta(null)} />}
     </>
