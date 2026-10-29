@@ -2,7 +2,7 @@ import {
   planDe, createPlan, updatePlan, getProgramas, getAthleteState,
 } from '@/lib/api';
 import {
-  cursorAlDia, defaultCursor, isValidCursor, estructuraDelPlan,
+  cursorAlDia, reparaCursor, estructuraDelPlan,
 } from '@/lib/training-utils';
 import { esProgramaFantasma } from '@/lib/programas';
 import { diasDeWorkout } from '@/lib/misPlanesDatos';
@@ -36,7 +36,7 @@ export function semanaActual(plan, estadoData, hoy = new Date()) {
   if (plan?.data?.kind === 'weekly') return { faseIdx: 0, semanaIdx: 0 };
   const sufijo = plan?.profesional_id ? `@${plan.profesional_id}` : '';
   const guardado = estadoData?.[`wr:cursor${sufijo}`];
-  const base = isValidCursor(phases, guardado) ? guardado : defaultCursor(phases);
+  const base = reparaCursor(phases, guardado).cursor;
   const cursor = base ? cursorAlDia(phases, base, hoy) : null;
   const faseIdx = Math.max(0, phases.findIndex((f) => f.id === cursor?.phaseId));
   const semanaIdx = Math.max(0, (phases[faseIdx]?.weekData ?? []).findIndex((w) => w.num === cursor?.weekNum));

@@ -11,7 +11,7 @@ import { nombreCorto, rolDeProfesion } from '@/lib/programas';
 import { textoDeSemana } from '@/lib/vaEn';
 import { FONT, KP, UI, tipoDeSesion } from '@/lib/theme';
 import {
-  cursorAlDia, defaultCursor, isValidCursor, estaEnPausa, moverPlanA, pausarPlan, reanudarPlan, semanaDeAtras,
+  cursorAlDia, reparaCursor, selloDelPlan, estaEnPausa, moverPlanA, pausarPlan, reanudarPlan, semanaDeAtras,
   esDescanso, sinDuracion, weekdayToday, weekdayLabel,
 } from '@/lib/training-utils';
 
@@ -56,7 +56,7 @@ export function useMoverPlan({ athlete, plan, clave, state, alCambiar }) {
   if (!plan || kind === 'weekly' || fases.length === 0) return null;
 
   const guardado = state?.data?.[clave];
-  const base = isValidCursor(fases, guardado) ? guardado : defaultCursor(fases);
+  const base = reparaCursor(fases, guardado).cursor;
   // Lo que el atleta vería hoy (el calendario ya contado), aunque su teléfono todavía no lo haya guardado.
   const actual = cursorAlDia(fases, base);
   const nombre = nombreCorto(athlete.full_name || athlete.username) || 'este atleta';
@@ -70,7 +70,8 @@ export function useMoverPlan({ athlete, plan, clave, state, alCambiar }) {
     setOcupado(true);
     try {
       const el = new Date().toISOString();
-      const conAviso = { ...nuevo, aviso: { id: el, texto: aviso.texto, detalle: aviso.detalle, de: profile?.full_name || null, el } };
+      // Con el sello de su plan y el motivo, para el historial de la base (ver `selloDelPlan`).
+      const conAviso = { ...selloDelPlan(fases, nuevo), motivo: 'coach', aviso: { id: el, texto: aviso.texto, detalle: aviso.detalle, de: profile?.full_name || null, el } };
       await moverPlanDeAtleta(athlete.id, clave, conAviso);
       alCambiar(clave, conAviso);
       avisa(aviso.listo);

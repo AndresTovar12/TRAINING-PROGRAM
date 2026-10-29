@@ -1,5 +1,5 @@
 import {
-  cursorAlDia, defaultCursor, isValidCursor, resolveCursor, sessionForToday, sessionIdFor,
+  cursorAlDia, reparaCursor, resolveCursor, sessionForToday, sessionIdFor,
   esDescanso, diasDeEstaSemana,
 } from '@/lib/training-utils';
 import { minutosDelNombre, sesionQueRepite, sesionesDelTitulo, sinDuracion, textoDeSesiones } from '@/lib/sesiones';
@@ -70,8 +70,8 @@ export function cursorDePrograma(programa, store, hoy = new Date()) {
   }
   const guardado = store?.[claveDeRegistro('wr:cursor', programa)];
   // Un plan comprado empieza donde lo dejó la compra (fase de entrada y semana en que se compró); sin eso, el calendario contaría desde el día en que abra la app.
-  const base = isValidCursor(programa.phases, guardado) ? guardado
-    : (isValidCursor(programa.phases, programa.cursorBase) ? programa.cursorBase : defaultCursor(programa.phases));
+  // Si el guardado no cabe en el plan: semana más cercana (mismo plan editado) o el principio (plan nuevo). Ver `reparaCursor`.
+  const base = reparaCursor(programa.phases, guardado, { base: programa.cursorBase }).cursor;
   return cursorAlDia(programa.phases, base, hoy);
 }
 
