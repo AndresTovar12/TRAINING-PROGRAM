@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { construyeActividad, preparaEntreno } from '@/lib/metricas/construye';
 import { umbralesDe } from '@/lib/metricasApi';
 import { entrenoLibre } from '@/lib/entrenoLibre';
+import { sinNumerosDeLaRuta } from '@/lib/rutaSilenciosa';
 
 /* El ENTRENO LIBRE contra la base (ver `lib/entrenoLibre.js`): una fila de `actividades` con origen `manual`. El atleta guarda lo suyo (la base lo permite) y su coach, si tiene,
    lo ve en Métricas como cualquier otro entreno. */
@@ -12,11 +13,13 @@ const nuevoId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Mat
  * Guarda un entreno libre y devuelve su fila. La carga se estima por deporte y duración («≈»): sin pulso no hay otra forma. Si el mismo entreno ya estaba (mismo inicio y duración:
  * un doble toque en «Guardar»), devuelve el que ya existía en vez de fallar.
  */
-export async function guardaEntrenoLibre({ atletaId, deporte, inicioMs, duracionS, distanciaM = null, muestras = null, titulo = null, llevaDistancia = null }) {
+export async function guardaEntrenoLibre({ atletaId, deporte, inicioMs, duracionS, distanciaM = null, muestras = null, titulo = null, llevaDistancia = null, rutaSilenciosa = false }) {
   // Con ruta del GPS (ver `lib/ubicacion.js`), las muestras pasan por el mismo motor que lee los relojes: distancia, ritmo, kilómetros y la ruta para el mapa.
+  // Con la ruta EN SILENCIO de un entreno sin mapa (`rutaSilenciosa`, sección 8b) solo se guarda la línea: nunca distancia, ritmo, kilómetros ni desnivel.
   const conRuta = Array.isArray(muestras) && muestras.length >= 2;
   const base = entrenoLibre({ deporte, inicioMs, duracionS, distanciaM, titulo, llevaDistancia });
-  const prep = conRuta ? preparaEntreno({ ...base, muestras }) : base;
+  const preparado = conRuta ? preparaEntreno({ ...base, muestras }) : base;
+  const prep = conRuta && rutaSilenciosa ? sinNumerosDeLaRuta(preparado) : preparado;
   const { umbrales, genero } = await umbralesDe(atletaId);
   const { fila, series } = construyeActividad(prep, { umbrales, genero, desfaseMin: -new Date(inicioMs).getTimezoneOffset(), conSeries: conRuta, origen: 'manual' });
   const { data, error } = await supabase.from('actividades').insert({ ...fila, id: nuevoId(), atleta_id: atletaId, subido_por: atletaId }).select('*').single();

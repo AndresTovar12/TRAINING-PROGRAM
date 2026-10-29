@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { AVISO_ABRE_PERFIL } from '@/lib/abrePerfil';
 import {
   X, Loader2, User as UserIcon, Users, Sparkles, Library, ChevronLeft, ChevronRight, HeartPulse, KeyRound, ShoppingBag, Wallet, Watch, Bell,
 } from 'lucide-react';
@@ -44,7 +45,7 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
   const isMaster = !!profile?.is_owner;
   /* «Mi perfil» va por secciones, no todo junto (Andrés, 6 oct 2026): tus datos, tu equipo (solo el
      atleta decide quién más lo atiende), tus ejercicios (solo el coach) y la inteligencia artificial.
-     Llegando desde «Conectar con IA» del menú de la cuenta se abre directo la de la IA. */
+     Llegando desde «Conectar con IA» del menú de la cuenta se abre directo la de la IA (`enfoque`); con `abrePerfil('dispositivos')`, en Dispositivos. */
   const secciones = [
     { id: 'perfil', texto: 'Perfil', Icono: UserIcon },
     { id: 'cuenta', texto: 'Cuenta', Icono: KeyRound },
@@ -61,7 +62,13 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
   /* EN EL TELÉFONO, UNA LISTA (Andrés, 15 oct 2026: las pestañas de arriba «se deslizan hacia la derecha… está medio confuso»; eligió la lista
      de secciones, como Ajustes del iPhone). `null` = la lista; tocar una entra y la flecha regresa. En la compu no hay lista: el menú de la
      izquierda siempre se ve y abre en «Perfil». */
-  const [seccion, setSeccion] = useState(enfoque === 'ia' ? 'ia' : null);
+  const [seccion, setSeccion] = useState(() => (secciones.some((x) => x.id === enfoque) ? enfoque : null));
+  // Ya abierto, otra pantalla pide una sección («Conecta tu Apple Watch en Mi perfil → Dispositivos»): entra a ella.
+  useEffect(() => {
+    const alAviso = (e) => { const id = e.detail?.seccion; if (id) setSeccion(id); };
+    window.addEventListener(AVISO_ABRE_PERFIL, alAviso);
+    return () => window.removeEventListener(AVISO_ABRE_PERFIL, alAviso);
+  }, []);
   // En la compu Mi perfil deja ver la barra lateral: tocarla lo cierra (ver `BarraLateral`).
   const cierra = useRef(onClose);
   useEffect(() => { cierra.current = onClose; });

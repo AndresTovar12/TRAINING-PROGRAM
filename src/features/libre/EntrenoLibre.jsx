@@ -111,7 +111,7 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
         <PantallaDeCarrera
           userId={userId} crono={crono} pendiente={enCurso ? null : pendiente?.deporte ?? null} actividad={enCurso ? null : pendiente}
           ultimo={ultimaSalida(filas, pendiente?.deporte ?? crono.cronometro?.deporte)}
-          alEmpezar={({ gps }) => { crono.inicia(pendiente.deporte, { gps, actividad: pendiente }); setPendiente(null); }}
+          alEmpezar={({ gps, silencio }) => { crono.inicia(pendiente.deporte, { gps, silencio, actividad: pendiente }); setPendiente(null); }}
           alMinimizar={cierra}
           alCambiarDeporte={() => setHoja('elegir')}
           alGuardado={alGuardar}

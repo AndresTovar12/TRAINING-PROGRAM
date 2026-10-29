@@ -20,6 +20,9 @@ import { deporteDeApple } from './metricas/deportes.js';
 
 export const saludDisponible = () => Capacitor.isNativePlatform();
 
+/** Lo que se dice dentro de la app del iPhone donde antes se decía «importa el export de Apple Salud». */
+export const TEXTO_CONECTA_RELOJ = 'Conecta tu Apple Watch en Mi perfil → Dispositivos.';
+
 const LEER = ['heartRate', 'restingHeartRate', 'heartRateVariability', 'sleep', 'steps', 'calories', 'distance', 'distanceCycling', 'vo2Max', 'oxygenSaturation', 'respiratoryRate', 'weight', 'workouts'];
 
 /** Lo que se le dice a la persona ANTES de pedir el permiso (Mi perfil → Dispositivos → «Conectar Apple Watch»). */

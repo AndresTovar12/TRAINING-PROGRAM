@@ -1,8 +1,57 @@
 diff --git a/node_modules/@capgo/background-geolocation/ios/Sources/CapgoBackgroundGeolocationPlugin/CapgoCapacitorBackgroundGeolocationPlugin.swift b/node_modules/@capgo/background-geolocation/ios/Sources/CapgoBackgroundGeolocationPlugin/CapgoCapacitorBackgroundGeolocationPlugin.swift
-index f26aeba..c88c426 100644
+index f26aeba..0f0945a 100644
 --- a/node_modules/@capgo/background-geolocation/ios/Sources/CapgoBackgroundGeolocationPlugin/CapgoCapacitorBackgroundGeolocationPlugin.swift
 +++ b/node_modules/@capgo/background-geolocation/ios/Sources/CapgoBackgroundGeolocationPlugin/CapgoCapacitorBackgroundGeolocationPlugin.swift
-@@ -169,6 +169,8 @@ public class BackgroundGeolocation: CAPPlugin, CLLocationManagerDelegate, CAPBri
+@@ -54,7 +54,8 @@ public class BackgroundGeolocation: CAPPlugin, CLLocationManagerDelegate, CAPBri
+         CAPPluginMethod(name: "checkPermissions", returnType: CAPPluginReturnPromise),
+         CAPPluginMethod(name: "requestPermissions", returnType: CAPPluginReturnPromise),
+         CAPPluginMethod(name: "updateHeaders", returnType: CAPPluginReturnPromise),
+-        CAPPluginMethod(name: "getPluginVersion", returnType: CAPPluginReturnPromise)
++        CAPPluginMethod(name: "getPluginVersion", returnType: CAPPluginReturnPromise),
++        CAPPluginMethod(name: "setAccuracy", returnType: CAPPluginReturnPromise)
+     ]
+     private var locationManager: CLLocationManager?
+     private var geofenceLocationManager: CLLocationManager?
+@@ -149,7 +150,15 @@ public class BackgroundGeolocation: CAPPlugin, CLLocationManagerDelegate, CAPBri
+         }
+     }
+ 
+-    private func configureLocationManager(_ manager: CLLocationManager, call: CAPPluginCall, background: Bool) {
++    // Training Lab (parche, 28 oct 2026): precisión baja en los entrenos que no son cardio (la ruta en silencio de los stickers), alta en cuanto hay
++    // movimiento de verdad. `accuracy: "low"` al arrancar, o `setAccuracy({ level })` sin reiniciar el GPS.
++    private var precisionBaja = false
++
++    private func aplicaPrecision(_ manager: CLLocationManager) {
++        if precisionBaja {
++            manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
++            return
++        }
+         let externalPower = [
+             .full,
+             .charging
+@@ -159,6 +168,21 @@ public class BackgroundGeolocation: CAPPlugin, CLLocationManagerDelegate, CAPBri
+                 ? kCLLocationAccuracyBestForNavigation
+                 : kCLLocationAccuracyBest
+         )
++    }
++
++    @objc func setAccuracy(_ call: CAPPluginCall) {
++        DispatchQueue.main.async {
++            self.precisionBaja = call.getString("level") == "low"
++            if let manager = self.locationManager {
++                self.aplicaPrecision(manager)
++            }
++            call.resolve()
++        }
++    }
++
++    private func configureLocationManager(_ manager: CLLocationManager, call: CAPPluginCall, background: Bool) {
++        precisionBaja = call.getString("accuracy") == "low"
++        aplicaPrecision(manager)
+         var distanceFilter = call.getDouble("distanceFilter")
+         // It appears that setting manager.distanceFilter to 0 can prevent
+         // subsequent location updates. See issue #88.
+@@ -169,6 +193,8 @@ public class BackgroundGeolocation: CAPPlugin, CLLocationManagerDelegate, CAPBri
          manager.allowsBackgroundLocationUpdates = background
          manager.showsBackgroundLocationIndicator = background
          manager.pausesLocationUpdatesAutomatically = false

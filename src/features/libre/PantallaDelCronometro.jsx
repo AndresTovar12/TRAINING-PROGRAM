@@ -60,7 +60,7 @@ export default function PantallaDelCronometro({ userId, crono, pendiente = null,
     setError(null);
     try {
       const fila = await guardaEntrenoLibre({
-        atletaId: userId, deporte: t.deporte, inicioMs: t.inicioMs, duracionS: t.duracionS, distanciaM: unidad ? distanciaEnMetros(texto, t.deporte) : null, muestras: t.muestras,
+        atletaId: userId, deporte: t.deporte, inicioMs: t.inicioMs, duracionS: t.duracionS, distanciaM: unidad ? distanciaEnMetros(texto, t.deporte) : null, muestras: t.muestras, rutaSilenciosa: !!t.rutaSilenciosa,
         titulo: t.actividad?.nombre ?? null, llevaDistancia: t.actividad ? (!!t.actividad.gps || !!unidad) : null,
       });
       crono.descarta();

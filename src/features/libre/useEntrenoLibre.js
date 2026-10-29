@@ -8,6 +8,8 @@ import {
 import { useStorageOpcional } from '@/contexts/AppStateContext';
 import { vibra } from '@/lib/avisosNativos';
 import { entrenosRecientes } from '@/lib/entrenoLibreApi';
+import { useRutaEnSilencio } from '@/lib/useRutaEnSilencio';
+import { permisoDelRecorrido } from '@/features/training/useRecorrido';
 
 /* El estado del entreno libre. El cronómetro vive en `localStorage` (por persona): así sobrevive a cerrar la hoja, a cambiar de pestaña y a recargar la página; se cuenta con fechas
    (no con «ticks»), así que con la pantalla bloqueada el tiempo sigue corriendo bien. Lo guardado en la base lo piden `entrenosRecientes` y el resumen. */
@@ -18,6 +20,8 @@ export const LLAVE_PAUSA_AUTOMATICA = 'ajustes:pausa-automatica';
 /** Una pausa de más de esto apaga el GPS (indicador azul y batería); al reanudar vuelve a encenderse y tarda unos segundos en encontrar señal. */
 const PAUSA_LARGA_MS = 5 * 60 * 1000;
 const llaveDeRuta = (userId) => `tl:entreno-libre-ruta:${userId}`;
+// La ruta EN SILENCIO de un entreno sin mapa (pádel, gimnasio, fútbol): aparte de la del GPS, porque nunca se vuelve distancia ni ritmo (sección 8b).
+const llaveDeSilencio = (userId) => `tl:entreno-libre-silencio:${userId}`;
 
 function lee(userId) {
   try {
@@ -28,11 +32,11 @@ function lee(userId) {
 function escribe(userId, c) {
   try { if (c) localStorage.setItem(llave(userId), JSON.stringify(c)); else localStorage.removeItem(llave(userId)); } catch { /* sin almacenamiento: el cronómetro vive solo mientras la pantalla esté abierta */ }
 }
-function leeRuta(userId) {
-  try { const r = JSON.parse(localStorage.getItem(llaveDeRuta(userId)) ?? '[]'); return Array.isArray(r) ? r : []; } catch { return []; }
+function leeRuta(userId, cual = llaveDeRuta) {
+  try { const r = JSON.parse(localStorage.getItem(cual(userId)) ?? '[]'); return Array.isArray(r) ? r : []; } catch { return []; }
 }
-function escribeRuta(userId, r) {
-  try { if (r?.length) localStorage.setItem(llaveDeRuta(userId), JSON.stringify(r)); else localStorage.removeItem(llaveDeRuta(userId)); } catch { /* sin almacenamiento: la ruta vive mientras la pantalla esté abierta */ }
+function escribeRuta(userId, r, cual = llaveDeRuta) {
+  try { if (r?.length) localStorage.setItem(cual(userId), JSON.stringify(r)); else localStorage.removeItem(cual(userId)); } catch { /* sin almacenamiento: la ruta vive mientras la pantalla esté abierta */ }
 }
 
 /**
@@ -164,19 +168,47 @@ export function useCronometroLibre(userId) {
   }, [conGps, userId]);
   const cambiaRuta = useCallback((r) => { setMuestras(r); if (userId) escribeRuta(userId, r); }, [userId]);
 
+  /* LA RUTA EN SILENCIO (sección 8b, 28 oct 2026): un entreno SIN mapa (`silencio`: pádel, gimnasio, fútbol) también guarda por dónde se movió, si la persona
+     dijo que sí a su recorrido (se pregunta una vez, ver `HojaDelRecorrido`). Precisión baja hasta que se mueve de verdad (`useRutaEnSilencio`). En pausa no se mide.
+     Al guardar, la línea va a los stickers de ruta, pero nunca a la distancia ni al ritmo (`rutaSilenciosa` en `guardaEntrenoLibre`). */
+  const [silenciosas, setSilenciosas] = useState(() => (userId ? leeRuta(userId, llaveDeSilencio) : []));
+  const conSilencio = !!cronometro?.silencio && pausadoEn == null && permisoDelRecorrido() === 'si';
+  useRutaEnSilencio(conSilencio, (p) => {
+    const c = vivo.current;
+    if (!c || c.pausadoEn != null) return;
+    setSilenciosas((m) => {
+      const nuevas = agregaPunto(m, p, segundosDe(c));
+      if (nuevas !== m && userId) escribeRuta(userId, nuevas, llaveDeSilencio);
+      return nuevas;
+    });
+  });
+  const cambiaSilencio = useCallback((r) => { setSilenciosas(r); if (userId) escribeRuta(userId, r, llaveDeSilencio); }, [userId]);
+
   return {
     cronometro,
     segundos: segundosDe(cronometro, ahora),
     muestras,
     // `actividad`: la que eligió (`lib/actividades.js`): su nombre e ícono se ven mientras corre y se guardan como título del entreno.
-    inicia: (deporte, { gps = false, actividad = null } = {}) => {
+    // `silencio`: una actividad sin mapa: se sigue en silencio para los stickers de ruta (si dijo que sí a su recorrido).
+    inicia: (deporte, { gps = false, silencio = false, actividad = null } = {}) => {
       cambiaRuta([]);
-      cambia({ ...cronometroNuevo(deporte), ...(gps ? { gps: true } : {}), ...(actividad ? { actividad: { id: actividad.id, nombre: actividad.nombre, icono: actividad.icono, color: actividad.color, gps: !!actividad.gps } } : {}) });
+      cambiaSilencio([]);
+      cambia({
+        ...cronometroNuevo(deporte), ...(gps ? { gps: true } : {}), ...(!gps && silencio ? { silencio: true } : {}),
+        ...(actividad ? { actividad: { id: actividad.id, nombre: actividad.nombre, icono: actividad.icono, color: actividad.color, gps: !!actividad.gps } } : {}),
+      });
     },
     pausa: () => cambia(pausar(cronometro)),
     reanuda: () => cambia(reanudar(cronometro)),
-    termina: () => (cronometro ? { deporte: cronometro.deporte, actividad: cronometro.actividad ?? null, inicioMs: cronometro.inicio, duracionS: segundosDe(cronometro), muestras: cronometro.gps ? muestras : null } : null),
-    descarta: () => { cambiaRuta([]); cambia(null); },
+    termina: () => {
+      if (!cronometro) return null;
+      const enSilencio = !cronometro.gps && silenciosas.length >= 2;
+      return {
+        deporte: cronometro.deporte, actividad: cronometro.actividad ?? null, inicioMs: cronometro.inicio, duracionS: segundosDe(cronometro),
+        muestras: cronometro.gps ? muestras : (enSilencio ? silenciosas : null), rutaSilenciosa: enSilencio,
+      };
+    },
+    descarta: () => { cambiaRuta([]); cambiaSilencio([]); cambia(null); },
   };
 }
 
