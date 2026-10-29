@@ -895,7 +895,67 @@ const semanaDelAtleta = (plan, kind, puntero, sesiones = {}, hoy = new Date()) =
   };
 };
 
+/* ------------------- El marcador recuerda de qué plan es -------------------
+   29 oct 2026. Al atleta Andrés la app lo regresó a «Recuperación · Semana 1» estando en Fuerza: al arrancar no reconoció su marcador
+   (`wr:cursor`) y guardó el primer día del plan encima, sin avisar. Un marcador que no cabe en el plan puede ser tres cosas distintas, y antes
+   las tres terminaban en «semana 1»:
+     · el MISMO plan editado (el coach borró la semana o la fase donde iba) → se va a la semana más cercana que sí existe;
+     · un plan NUEVO (al asignar uno, la fila se reescribe con ids de fase nuevos) → empieza al principio (o donde dejó la compra);
+     · un marcador sin datos de su plan (los de antes de este cambio) → si su fase sigue, se acota a esa fase; si no, se trata como plan nuevo.
+   Para distinguirlas, el marcador guarda las fases del plan en que se puso (`planFases`) y su posición en el plan (`pos`): si al menos una de
+   esas fases sigue en el plan, es el mismo plan. */
+const fasesDelPlan = (plan) => (expandeMicrociclos(plan) ?? []).map((f) => f.id);
+const posicionEnElPlan = (plan, cursor) => semanasEnOrden(plan).findIndex((x) => x.faseId === cursor?.phaseId && x.semana === cursor?.weekNum);
+
+/** El marcador con las fases de su plan y su posición, para reconocerlo después (ver arriba). */
+const selloDelPlan = (plan, cursor) => {
+  if (!cursor || !plan?.length) return cursor;
+  return { ...cursor, planFases: fasesDelPlan(plan), pos: Math.max(0, posicionEnElPlan(plan, cursor)) };
+};
+
+/** ¿Este marcador ya trae el sello de este plan? (Si no, se vuelve a guardar una vez con él.) */
+const tieneSelloDe = (plan, cursor) => Array.isArray(cursor?.planFases) && cursor.planFases.join('|') === fasesDelPlan(plan).join('|')
+  && cursor.pos === Math.max(0, posicionEnElPlan(plan, cursor));
+
+/**
+ * Qué marcador usar con un plan: `{ cursor, motivo }`. `motivo`: null (el guardado sirve), 'nuevo' (no había ninguno), 'reparado' (mismo plan
+ * editado: semana más cercana) o 'plan-nuevo' (otro plan: al principio, o en `base`, donde dejó la compra). NO guarda nada.
+ */
+const reparaCursor = (planCrudo, guardado, { base = null } = {}) => {
+  const plan = expandeMicrociclos(planCrudo);
+  if (!plan?.length) return { cursor: null, motivo: null };
+  if (isValidCursor(plan, guardado)) return { cursor: guardado, motivo: null };
+  const inicio = isValidCursor(plan, base) ? base : defaultCursor(plan);
+  if (!guardado || !guardado.phaseId) return { cursor: inicio, motivo: 'nuevo' };
+  const ids = plan.map((f) => f.id);
+  const fase = plan.find((f) => f.id === guardado.phaseId);
+  const mismoPlan = Array.isArray(guardado.planFases) ? guardado.planFases.some((id) => ids.includes(id)) : !!fase;
+  if (!mismoPlan) return { cursor: inicio, motivo: 'plan-nuevo' };
+  // Lo que el marcador traía y no es la semana: la pausa y el aviso del coach se quedan; el sello de semana también (sigue avanzando desde ahí).
+  const { phaseId, weekNum, pos, planFases, motivo, ...resto } = guardado;
+  void phaseId; void weekNum; void pos; void planFases; void motivo;
+  let destino = null;
+  if (fase?.weekData?.length) {
+    // La fase sigue y su semana no: la semana de esa fase con el número más cercano (la anterior si empatan).
+    destino = fase.weekData.reduce((mejor, w) => {
+      if (!mejor) return w;
+      const d = Math.abs(w.num - guardado.weekNum);
+      const dm = Math.abs(mejor.num - guardado.weekNum);
+      return d < dm || (d === dm && w.num < mejor.num) ? w : mejor;
+    }, null);
+    destino = destino ? { faseId: fase.id, semana: destino.num } : null;
+  }
+  if (!destino) {
+    // La fase ya no está: la misma posición del plan (o la última semana, si el plan quedó más corto).
+    const lista = semanasEnOrden(plan);
+    if (!lista.length) return { cursor: inicio, motivo: 'plan-nuevo' };
+    destino = lista[Math.min(Math.max(0, Number.isInteger(pos) ? pos : 0), lista.length - 1)];
+  }
+  return { cursor: { ...resto, phaseId: destino.faseId, weekNum: destino.semana, dayIdx: guardado.dayIdx ?? 0 }, motivo: 'reparado' };
+};
+
 export {
+  selloDelPlan, tieneSelloDe, reparaCursor,
   ESTRUCTURAS, estructuraDelPlan, kindDeEstructura, semanasDelPlan, semanaGlobal,
   sessionId, calc1RM, today, greeting, isLoadedExercise, isValidCursor,
   resolveCursor, advanceCursor, defaultCursor, cursorAlDia, semanasEntre, findPreviousWeight, historialDePeso,

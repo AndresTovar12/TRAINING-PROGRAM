@@ -1,5 +1,5 @@
 import {
-  cursorAlDia, defaultCursor, isValidCursor, weekOverview,
+  cursorAlDia, reparaCursor, weekOverview,
 } from '@/lib/training-utils';
 
 /* «Cómo va» un paciente: el dolor que anota en «Salud» (0 a 10) y cuántas
@@ -58,7 +58,7 @@ export function hechasEstaSemana(fechas, hoy = new Date()) {
  */
 export function esperadasEstaSemana(fases, kind, puntero, hoy = new Date()) {
   if (!fases?.length) return 0;
-  const base = isValidCursor(fases, puntero) ? puntero : defaultCursor(fases);
+  const base = reparaCursor(fases, puntero).cursor;
   const cursor = cursorAlDia(fases, base, hoy);
   return weekOverview(fases, kind, cursor, hoy).days.reduce((n, d) => n + d.sesiones, 0);
 }

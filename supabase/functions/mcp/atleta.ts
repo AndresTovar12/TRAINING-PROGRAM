@@ -11,7 +11,7 @@ import {
   fasesDe, idDeSesion, planesActivos, programasComprados, programasSobre, resumenDelPlan, tipoDePlan, type Plan, type Programa,
 } from './plan.ts'
 import {
-  cursorAlDia, defaultCursor, findPreviousWeight, historialDePeso, isValidCursor, sessionForToday, today,
+  cursorAlDia, findPreviousWeight, historialDePeso, reparaCursor, sessionForToday, today,
 } from './app/training-utils.js'
 import { aKilos, desdeKilos } from './app/unidades.js'
 
@@ -30,7 +30,7 @@ export async function estadoDe(quien: Quien, userId: string): Promise<Record<str
 
 /** El puntero del atleta puesto al día con el calendario, igual que su app. */
 export function cursorDeHoy(fases: any[], guardado: any, fecha: Date) {
-  const base = isValidCursor(fases, guardado) ? guardado : defaultCursor(fases)
+  const base = reparaCursor(fases, guardado).cursor
   return cursorAlDia(fases, base, fecha)
 }
 

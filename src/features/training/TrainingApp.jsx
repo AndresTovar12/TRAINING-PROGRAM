@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
+import { useAviso } from '@/components/AvisoPasajero';
 import {
   ChevronRight, ChevronLeft, Calendar, Lock,
   Check, X, Calculator, TrendingUp, Edit3,
@@ -16,7 +17,7 @@ import { useRecuperacionReciente } from '@/lib/useRecuperacionReciente';
 import AbreMetricas from '@/features/metricas/AbreMetricas';
 import {
   sessionIdFor, calc1RM, today, isLoadedExercise,
-  resolveCursor, defaultCursor, isValidCursor, findPreviousWeight, historialDePeso,
+  resolveCursor, reparaCursor, selloDelPlan, tieneSelloDe, findPreviousWeight, historialDePeso,
   formatIntensity,
   sessionForToday, weekOverview, weekdayToday, weekdayLabel,
   cursorAlDia, isoWeekKey, esDescanso, enOrdenDeSemana,
@@ -2408,14 +2409,13 @@ export default function TrainingApp() {
 
      Ahora avanza una semana del plan por cada semana de calendario que pasa. */
   const cursorInicialDeCompra = programaActivo?.cursorBase ?? null;
-  const cursorBase = useMemo(
-    () => {
-      if (isValidCursor(PLAN, storedCursor)) return storedCursor;
-      // Un plan comprado empieza donde lo dejó la compra, no el día en que se abre la app.
-      return isValidCursor(PLAN, cursorInicialDeCompra) ? cursorInicialDeCompra : defaultCursor(PLAN);
-    },
+  /* Si el marcador guardado no cabe en el plan (29 oct 2026, ver `reparaCursor`): mismo plan editado → la semana más cercana; plan nuevo → el
+     principio (un plan comprado, donde lo dejó la compra). Antes los dos casos, y cualquier lectura a medias, terminaban en «Fase 1 · Semana 1». */
+  const reparo = useMemo(
+    () => reparaCursor(PLAN, storedCursor, { base: cursorInicialDeCompra }),
     [PLAN, storedCursor, cursorInicialDeCompra],
   );
+  const cursorBase = reparo.cursor;
   // Con la app abierta pasa la medianoche: lo que se cuenta con la fecha de hoy se vuelve a contar.
   const hoy = useDiaDeHoy();
   const cursor = useMemo(() => cursorAlDia(PLAN, cursorBase, hoy), [PLAN, cursorBase, hoy]);
@@ -2423,13 +2423,29 @@ export default function TrainingApp() {
   /* Lo que el calendario adelanta se guarda, para que la próxima vez se cuente
      desde aquí y no desde el sello viejo. Va en un efecto y no en el useMemo
      porque un useMemo que escribe estado se ejecuta dos veces en desarrollo. */
+  /* Además se guarda con el SELLO de su plan (las fases y su posición, ver `selloDelPlan`) y con el `motivo` del cambio, que queda en el historial de
+     la base (`historial_del_marcador`). Nunca con el plan a medio cargar. Y si la app tuvo que moverlo por su cuenta (plan editado o plan nuevo),
+     lo dice con «Deshacer»: deshacer regresa el marcador de antes y, mientras la app siga abierta, no se vuelve a mover solo. */
+  const { avisa } = useAviso();
+  const sinRepararOtraVez = useRef(null);
+  const claveDelCursor = claveDe('wr:cursor');
   useEffect(() => {
-    if (!cursor) return;
+    if (!cursor || planLoading || !PLAN?.length) return;
     const a = storedCursor;
-    const cambio = !a || a.phaseId !== cursor.phaseId || a.weekNum !== cursor.weekNum
-      || a.dayIdx !== cursor.dayIdx || a.fijadoEn !== cursor.fijadoEn;
-    if (cambio) setCursor(cursor);
-  }, [cursor, storedCursor, setCursor]);
+    if (a && sinRepararOtraVez.current === `${claveDelCursor}|${JSON.stringify(a)}`) return;
+    const nuevo = selloDelPlan(PLAN, cursor);
+    const semanaDistinta = !a || a.phaseId !== nuevo.phaseId || a.weekNum !== nuevo.weekNum;
+    const cambio = semanaDistinta || a.dayIdx !== nuevo.dayIdx || a.fijadoEn !== nuevo.fijadoEn || !tieneSelloDe(PLAN, a);
+    if (!cambio) return;
+    const motivo = reparo.motivo ?? (a && semanaDistinta ? 'calendario' : a?.motivo);
+    setCursor(motivo ? { ...nuevo, motivo } : nuevo);
+    if (a && !soloLectura && (reparo.motivo === 'reparado' || reparo.motivo === 'plan-nuevo')) {
+      const donde = textoDeSemana({ phases: PLAN, kind, estructura }, nuevo.phaseId, nuevo.weekNum);
+      avisa(reparo.motivo === 'plan-nuevo' ? `Tienes un plan nuevo: empiezas en ${donde}.` : `Tu plan cambió y tu semana ya no estaba: ahora vas en ${donde}.`, {
+        accion: { texto: 'Deshacer', alTocar: () => { sinRepararOtraVez.current = `${claveDelCursor}|${JSON.stringify(a)}`; setCursor(a); } },
+      });
+    }
+  }, [cursor, storedCursor, setCursor, planLoading, PLAN, reparo.motivo, claveDelCursor, avisa, kind, estructura, soloLectura]);
 
   const cursorSession = useMemo(() => resolveCursor(PLAN, cursor), [PLAN, cursor]);
   // En una rutina que se repite no hay puntero que avance: la sesión activa es la de hoy.

@@ -18,7 +18,7 @@ import {
 import { anotarDia, equiposMasUsados, exigirRespuestas, nuevaRevision, preguntaDeDatos, type Revision } from './preguntas.ts'
 import { cursorDe, estadoDe, registrosDe, ubicarDia, ubicarEnTodos } from './atleta.ts'
 import { repertorioConFicha } from './comunes.ts'
-import { cursorAlDia, defaultCursor, dondeVa, estaEnPausa, historialDePeso, isValidCursor, moverPlanA, pausarPlan, reanudarPlan } from './app/training-utils.js'
+import { cursorAlDia, dondeVa, estaEnPausa, historialDePeso, moverPlanA, reparaCursor, pausarPlan, reanudarPlan } from './app/training-utils.js'
 import { gruposConPropios } from './app/muscles.js'
 import { desdeKilos } from './app/unidades.js'
 import { CAT_COLORS, COLORES_TIPO } from './app/theme.js'
@@ -1139,7 +1139,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     const estado = await estadoDe(quien, persona.id)
     const clave = claveDeRegistro('wr:cursor', r.profesionalId)
     const guardado = estado[clave]
-    const base = isValidCursor(fases, guardado) ? guardado : defaultCursor(fases)
+    const base = reparaCursor(fases, guardado).cursor
     const actual = cursorAlDia(fases, base)
     const dondeEsta = (c: any) => {
       const f = fases.find((x: any) => x.id === c.phaseId)
@@ -1152,7 +1152,8 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
 
   async function guardaPuntero(persona: Persona, clave: string, cursor: any, texto: string, detalle: string) {
     const el = new Date().toISOString()
-    const conAviso = { ...cursor, aviso: { id: el, texto, detalle, de: quien.nombre || null, el } }
+    // `motivo: 'ia'`: queda en el historial de la base (`historial_del_marcador`) que esto lo movió la IA del coach.
+    const conAviso = { ...cursor, motivo: 'ia', aviso: { id: el, texto, detalle, de: quien.nombre || null, el } }
     const { error } = await quien.db.rpc('mover_plan_de_atleta', { p_atleta: persona.id, p_clave: clave, p_cursor: conAviso })
     if (error) throw new Aviso(error.message)
   }

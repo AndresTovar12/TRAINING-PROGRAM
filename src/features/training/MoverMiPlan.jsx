@@ -49,7 +49,7 @@ export function useMoverMiPlan({ plan, cursor, setCursor, soloLectura }) {
           + 'Cada semana sigue su día del calendario, así que nada se desfasa. Desde ahí tu plan avanza solo.',
         confirmar: 'Mover mi plan',
       });
-      if (si) setCursor(moverPlanA(fases, cursor, faseId, semana));
+      if (si) setCursor({ ...moverPlanA(fases, cursor, faseId, semana), motivo: 'atleta' });
     }
     async function pausar() {
       const si = await pregunta({
@@ -57,12 +57,12 @@ export function useMoverMiPlan({ plan, cursor, setCursor, soloLectura }) {
         detalle: `Se queda en ${textoActual} hasta que lo reanudes. No se salta ninguna semana.`,
         confirmar: 'Pausar plan',
       });
-      if (si) setCursor(pausarPlan(cursor));
+      if (si) setCursor({ ...pausarPlan(cursor), motivo: 'atleta' });
     }
     return {
       textoActual, enPausa: estaEnPausa(cursor), pausa: cursor.pausa ?? null, aqui: { faseId: cursor.phaseId, semana: cursor.weekNum },
       atras: atras ? { ...atras, texto: textoDeSemana(plan, atras.faseId, atras.semana) } : null,
-      mover, pausar, reanudar: () => setCursor(reanudarPlan(cursor)),
+      mover, pausar, reanudar: () => setCursor({ ...reanudarPlan(cursor), motivo: 'atleta' }),
       unaSemanaAtras: atras ? () => mover(atras.faseId, atras.semana) : null,
     };
   }, [fases, plan, cursor, setCursor, soloLectura, pregunta]);

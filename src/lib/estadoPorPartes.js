@@ -26,7 +26,19 @@ const esBorrar = (x) => esObjeto(x) && x.__borrar === true && Object.keys(x).len
  * si no cambió nada. Solo toca las llaves que cambiaron: lo que otro haya
  * escrito en llaves que aquí no se tocaron se queda como está.
  */
-export function diferencia(antes, despues) {
+/* EL MARCADOR VA ENTERO (29 oct 2026). `wr:cursor` y `wr:cursor@…` (en qué fase y semana va el atleta) no se mandan por pedazos: si un aparato
+   con datos viejos mandara solo «phaseId», la base lo pegaría sobre la semana de otro marcador y quedaría uno mitad y mitad, que ya no cabe en el plan.
+   Se manda el marcador completo, y las llaves que dejó de tener van con BORRAR. */
+const esMarcador = (k) => /^wr:cursor(@|$)/.test(k);
+function entero(antes, despues) {
+  if (JSON.stringify(antes) === JSON.stringify(despues)) return undefined;
+  if (!esObjeto(antes) || !esObjeto(despues)) return despues;
+  const parche = { ...despues };
+  Object.keys(antes).forEach((k) => { if (despues[k] === undefined) parche[k] = BORRAR; });
+  return parche;
+}
+
+export function diferencia(antes, despues, nivel = 0) {
   if (antes === despues) return undefined;
   if (esObjeto(antes) && esObjeto(despues)) {
     const parche = {};
@@ -45,7 +57,7 @@ export function diferencia(antes, despues) {
         parche[k] = despues[k];
         hay = true;
       } else {
-        const d = diferencia(antes[k], despues[k]);
+        const d = nivel === 0 && esMarcador(k) ? entero(antes[k], despues[k]) : diferencia(antes[k], despues[k], nivel + 1);
         if (d !== undefined) {
           parche[k] = d;
           hay = true;
