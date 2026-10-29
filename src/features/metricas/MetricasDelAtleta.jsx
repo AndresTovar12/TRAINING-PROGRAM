@@ -124,7 +124,7 @@ function Contenido({ atleta, esAtleta, abrirEn, onCerrar }) {
         </div>
         {acciones}
         <div style={{ marginTop: 16 }}>
-          {vista === 'resumen' && <Resumen d={d} umbrales={m.umbrales} alAbrir={setDetalle} alIrA={setVista} esAtleta={esAtleta} />}
+          {vista === 'resumen' && <Resumen d={d} umbrales={m.umbrales} alAbrir={setDetalle} alIrA={setVista} esAtleta={esAtleta} sesiones={m.sesionesSinReloj} sesionDe={m.sesionDe} />}
           {vista === 'entrenos' && <ListaDeEntrenos d={m.d} hoy={m.hoy} alAbrir={setDetalle} puedeImportar alImportar={botonDeImportar} sesiones={m.sesionesSinReloj} />}
           {vista === 'carga' && <CargaYForma d={m.d} />}
           {vista === 'recuperacion' && <Recuperacion d={d} recuperacion={m.recuperacion} hoy={m.hoy} esAtleta={esAtleta} />}

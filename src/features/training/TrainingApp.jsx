@@ -57,6 +57,7 @@ import {
 import FichaEjercicio from '@/features/training/FichaEjercicio';
 import TarjetaDeSesion from '@/features/training/TarjetaDeSesion';
 import BotonDelEntreno from '@/features/training/BotonDelEntreno';
+import PaginaDeSesionGlobal from '@/features/training/PaginaDeSesionGlobal';
 import TarjetaDeClase from '@/features/training/TarjetaDeClase';
 import { claseDe, duracionTexto } from '@/lib/clases';
 import { archivaLoHecho, terminaEntreno } from '@/lib/entreno';
@@ -2566,6 +2567,15 @@ export default function TrainingApp() {
     setTab('plan');
     setView({ level: 'week', phase, week, ...(conDia ? { dayIdx } : null) });
   };
+  /* «Ver en mi plan» de la página de un workout del plan (fase 6): al día de esa sesión en Entrenar, en su programa. `lugar`: lo de `diaDeLaSesion`. */
+  const verEnElPlan = (programa, lugar) => {
+    const vista = { level: 'week', phase: lugar.fase, week: lugar.semana, dayIdx: lugar.dayIdx };
+    setFiltro(null); // un día del coach no se vería si el filtro dejara solo a otra persona
+    setTab('plan');
+    if (programa && !programa.esPrincipal) { cambiarPrograma(programa.id, vista); return; }
+    if (!programaActivo?.esPrincipal) elegirPrograma(null);
+    setView((v) => ({ ...vista, salto: (v.salto ?? 0) + 1 }));
+  };
   // La semana del plan (la del coach) que cae en una fecha futura: para abrir ahí una sesión que se vio en la tira de Home.
   const vistaEnFecha = (fecha) => {
     const r = resolveCursor(PLAN, cursorAlDia(PLAN, cursor, fecha));
@@ -2795,6 +2805,8 @@ export default function TrainingApp() {
       <BottomNav active={tab} onChange={vasA} conMensajes={conMensajes} conExplorar={conExplorar} conEntrenar={conEntrenar} onRegistrar={puedeRegistrar ? () => setRegistrando(true) : null} />
       {/* El punto ●: «listo para empezar» con su última actividad (ver `EntrenoLibre`, variante «punto»). */}
       {registrando && puedeRegistrar && <EntrenoLibre userId={user.id} unidadPeso={miPerfil?.unidad_peso || 'kg'} variante="punto" alCerrar={() => setRegistrando(false)} />}
+      {/* La página de un workout del plan: desde «Tus entrenos», «Ver todos» y al terminarlo (fase 6). */}
+      <PaginaDeSesionGlobal alVerEnElPlan={verEnElPlan} />
       {/* Bienestar y 1RM ya no son pestañas: se abren como hoja encima, con su flecha para volver. */}
       {/* Mientras se hace un demo workout, un aviso para salir de la demo (12 oct 2026): sin él, la app se vería como la de alguien con un solo workout y no habría cómo volver. */}
       {demoActiva && (

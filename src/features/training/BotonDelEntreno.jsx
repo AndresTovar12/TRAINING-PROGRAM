@@ -11,6 +11,7 @@ import { recogeEntrenoPendiente } from '@/lib/entrenoPendiente';
 import { palabrasDelEntreno } from '@/lib/entrenoPalabras';
 import { preparaAudio } from '@/lib/pitidos';
 import EntrenoDelDia from '@/features/training/EntrenoDelDia';
+import { abreSesionHecha } from '@/lib/abreSesionHecha';
 
 /**
  * Si el entreno falla por un dato que nadie previó, NO se lleva la pantalla del día: se cierra y la lista de ejercicios de siempre sigue ahí.
@@ -56,7 +57,7 @@ function AbreAlAparecer({ alAparecer }) {
  * por propiedades, para poder probarse solo.
  */
 export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, onRegistro, onFormato, sesionId, oneRMs, autor = null }) {
-  const { resolveExercise, medias, programaActivo } = usePlan();
+  const { resolveExercise, medias, programaActivo, claveDe } = usePlan();
   const { perfil, soloLectura, userId } = usePerfilDeLaVista();
   const { salud, coach } = usePalabras();
   /* A quién le llega la técnica que grabe el atleta: a quien puso ESTE ejercicio en el plan. `autor` es el programa de quien puso esta sesión (su coach, o un
@@ -155,6 +156,8 @@ export default function BotonDelEntreno({ dia, ejercicios, aspecto, registro, on
           <EntrenoDelDia
             dia={diaDeEntreno} aspecto={aspecto} registro={registro} onRegistro={onRegistro} onFormato={onFormato} sesionId={sesionId} userId={userId}
             unidadDePeso={perfil?.unidad_peso || 'kg'} oneRMs={oneRMs} salud={salud} medios={medios} alCerrar={() => setAbierto(false)} destinoDeTecnica={destinoDeTecnica}
+            // Al terminar, la página del workout (fase 6): la sesión vive en el almacén del programa que se está viendo.
+            alTerminado={() => abreSesionHecha({ almacen: claveDe ? claveDe('wr:sessions') : 'wr:sessions', id: sesionId, recien: true })}
           />
         </LimiteDelEntreno>
       )}

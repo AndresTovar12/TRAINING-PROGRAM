@@ -237,6 +237,12 @@ export function useStorage(key, def) {
   return [value, setValue];
 }
 
+/** Todo lo guardado de la cuenta (`user_app_state.data`), o `null` fuera de `<AppStateProvider>` o mientras no ha cargado. Solo para leer. */
+export function useEstadoOpcional() {
+  const ctx = useContext(AppStateContext);
+  return ctx?.loaded ? ctx.store : null;
+}
+
 /**
  * Como `useStorage`, pero también fuera de `<AppStateProvider>` (la cuenta de un coach no lo tiene): ahí devuelve `[def, () => {}, false]` en vez de fallar.
  * El tercer valor dice si de verdad se guarda.

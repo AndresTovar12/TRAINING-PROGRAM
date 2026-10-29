@@ -79,7 +79,7 @@ const leeSonido = () => {
 };
 
 export default function EntrenoDelDia({
-  dia, aspecto, registro, onRegistro, onFormato, sesionId, userId, unidadDePeso = 'kg', oneRMs, salud = false, medios, alCerrar, destinoDeTecnica = null,
+  dia, aspecto, registro, onRegistro, onFormato, sesionId, userId, unidadDePeso = 'kg', oneRMs, salud = false, medios, alCerrar, alTerminado = null, destinoDeTecnica = null,
 }) {
   // La página de atrás se queda quieta mientras el entreno está abierto (ver `useCuerpoQuieto`).
   useCuerpoQuieto();
@@ -377,6 +377,8 @@ export default function EntrenoDelDia({
       completedAt: prev?.completed && prev?.completedAt ? prev.completedAt : new Date(t).toISOString(),
     }));
     alCerrar();
+    // Fase 6 (29 oct 2026): «Terminar» ya no regresa al plan, lleva a la página de este workout con «Tus stickers están listos».
+    alTerminado?.();
   };
   // Salir sin terminar: la línea del recorrido también se pasa a la sesión (así no depende solo de este teléfono).
   const cerrar = () => {

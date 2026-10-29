@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { agregaPunto, fuenteDeUbicacion } from '@/lib/ubicacion';
 import { LLAVE_ULTIMA_UBICACION, leeUbicacionGuardada } from '@/lib/mapaNativo';
 import { pideQueNoSeApague } from '@/lib/pantallaEncendida';
 import {
   cronometroNuevo, cronometroVigente, decidePausaAutomatica, pausa as pausar, reanuda as reanudar, segundosDe,
 } from '@/lib/entrenoLibre';
-import { useStorageOpcional } from '@/contexts/AppStateContext';
+import { useEstadoOpcional, useStorageOpcional } from '@/contexts/AppStateContext';
+import { usePlanOpcional } from '@/contexts/PlanContext';
 import { vibra } from '@/lib/avisosNativos';
-import { entrenosRecientes } from '@/lib/entrenoLibreApi';
+import { entrenosRecientes, paginaDeEntrenos } from '@/lib/entrenoLibreApi';
+import { mezclaEntrenos, sesionesDelPlan } from '@/lib/entrenosDelPlan';
 import { useRutaEnSilencio } from '@/lib/useRutaEnSilencio';
 import { permisoDelRecorrido } from '@/features/training/useRecorrido';
 
@@ -212,7 +214,17 @@ export function useCronometroLibre(userId) {
   };
 }
 
-/** Los últimos entrenos de quien entró, con `recarga()` para después de guardar uno. */
+/** Las sesiones del plan que terminó quien entró (fase 6): se leen de lo guardado en la cuenta, no de la base. Fuera de la app del atleta, ninguna. */
+export function useSesionesDelPlan() {
+  const estado = useEstadoOpcional();
+  const programas = usePlanOpcional()?.programas;
+  return useMemo(() => (estado ? sesionesDelPlan(estado, programas ?? []) : []), [estado, programas]);
+}
+
+/**
+ * Los últimos entrenos de quien entró, con `recarga()` para después de guardar uno. `filas`: solo los de `actividades` (lo que usan la semana, el récord y
+ * la última actividad). `entrenos`: TODO junto para «Tus entrenos», también los workouts del plan (ver `lib/entrenosDelPlan.js`), lo más nuevo primero.
+ */
 export function useEntrenosRecientes(userId, n = 6) {
   const [filas, setFilas] = useState(null); // null = cargando
   const [vuelta, setVuelta] = useState(0);
@@ -223,5 +235,38 @@ export function useEntrenosRecientes(userId, n = 6) {
     return () => { vivo = false; };
   }, [userId, n, vuelta]);
   const recarga = useCallback(() => setVuelta((v) => v + 1), []);
-  return { filas, recarga };
+  const delPlan = useSesionesDelPlan();
+  // Con la lista llena (`n` leídos), las sesiones más viejas que la última leída podrían ir después de entrenos que no se leyeron: esas no van.
+  const entrenos = useMemo(() => (filas ? mezclaEntrenos(filas, delPlan, { hasta: filas.length >= n ? Date.parse(filas[filas.length - 1].inicio) : null }) : null), [filas, delPlan, n]);
+  return { filas, entrenos, recarga };
+}
+
+const POR_PAGINA = 50;
+
+/** EL HISTORIAL COMPLETO («Ver todos»): por páginas de 50 entrenos de `actividades`, con los workouts del plan metidos en su lugar. `sigue()` lee la siguiente. */
+export function useHistorialCompleto(userId) {
+  const [paginas, setPaginas] = useState({ filas: [], hayMas: true, leyendo: false, error: false });
+  const actual = useRef(paginas);
+  useEffect(() => { actual.current = paginas; });
+  const pidiendo = useRef(false);
+  const sigue = useCallback(() => {
+    const p = actual.current;
+    if (!userId || pidiendo.current || !p.hayMas) return;
+    pidiendo.current = true;
+    setPaginas((q) => ({ ...q, leyendo: true, error: false }));
+    paginaDeEntrenos(userId, p.filas.length, POR_PAGINA)
+      .then((nuevas) => {
+        // Se anota ya (no hasta el siguiente dibujo): si el final de la lista pide otra página antes, ya sabe desde dónde.
+        const siguiente = { filas: [...p.filas, ...nuevas], hayMas: nuevas.length === POR_PAGINA, leyendo: false, error: false };
+        actual.current = siguiente;
+        setPaginas(siguiente);
+      })
+      .catch(() => setPaginas((q) => ({ ...q, leyendo: false, error: true })))
+      .finally(() => { pidiendo.current = false; });
+  }, [userId]);
+  useEffect(() => { sigue(); }, [sigue]);
+  const delPlan = useSesionesDelPlan();
+  const { filas, hayMas } = paginas;
+  const entrenos = useMemo(() => mezclaEntrenos(filas, delPlan, { hasta: hayMas && filas.length ? Date.parse(filas[filas.length - 1].inicio) : (hayMas ? Infinity : null) }), [filas, delPlan, hayMas]);
+  return { entrenos, hayMas, leyendo: paginas.leyendo, error: paginas.error, sigue };
 }
