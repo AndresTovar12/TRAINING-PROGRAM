@@ -21,10 +21,34 @@ export function siguienteUsuario(tipo, usuariosQueYaHay = []) {
   return `zz_prueba_${tipo}_${mayor + 1}`;
 }
 
-/** «Prueba Atleta 3», a partir del usuario. */
+export const PREFIJO_DE_PRUEBA = 'zz_';
+const USUARIO_VALIDO = /^[a-zA-Z0-9_.]{3,30}$/; // la misma regla de `signup`
+
+/**
+ * El usuario que escribió el dueño para una cuenta de prueba (fase 7, 29 oct 2026: «que yo pueda escoger el nombre de usuario»). Lo escrito va SIN el `zz_` (se pone solo:
+ * es lo que hace que la cuenta salga en el panel con su contraseña); si lo escribe, no se duplica. `{ usuario }` o `{ error }`. `yaHay`: los usuarios que existen.
+ */
+export function usuarioEscrito(texto, yaHay = []) {
+  const limpio = String(texto ?? '').trim().replace(/^zz_/i, '');
+  if (!limpio) return { error: 'Escribe un usuario.' };
+  const usuario = `${PREFIJO_DE_PRUEBA}${limpio}`;
+  if (!USUARIO_VALIDO.test(usuario)) return { error: 'Solo letras, números, _ o . (3 a 30 con el zz_), sin espacios.' };
+  if ((yaHay ?? []).some((u) => String(u ?? '').toLowerCase() === usuario.toLowerCase())) return { error: `«${usuario}» ya existe. Escoge otro.` };
+  return { usuario };
+}
+
+/** La contraseña que escribió el dueño para una cuenta de prueba, o el problema en una frase. Aquí solo manda lo del servidor (8 a 72): son cuentas de juguete, que se pueden escribir fácil. */
+export function problemaDeContrasenaDePrueba(texto) {
+  const c = String(texto ?? '');
+  if (c.length < 8) return 'Usa al menos 8 caracteres.';
+  if (c.length > 72) return 'Usa un máximo de 72 caracteres.';
+  return null;
+}
+
+/** «Prueba Atleta 3», a partir del usuario («Prueba pac» si lo escogió él: `zz_pac`). */
 export function nombreDePrueba(usuario) {
   const m = /^zz_prueba_([a-z]+)_(\d+)$/i.exec(String(usuario ?? ''));
-  if (!m) return String(usuario ?? '');
+  if (!m) return esDePrueba(usuario) && !/^zz_qa_/i.test(usuario) ? `Prueba ${String(usuario).slice(PREFIJO_DE_PRUEBA.length).replace(/[_.]+/g, ' ')}` : String(usuario ?? '');
   const tipo = TIPOS_DE_PRUEBA.find((t) => t.id === m[1].toLowerCase())?.nombre ?? m[1];
   return `Prueba ${tipo} ${m[2]}`;
 }

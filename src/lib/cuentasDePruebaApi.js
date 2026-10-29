@@ -21,12 +21,13 @@ export async function listaCuentasDePrueba() {
 }
 
 /**
- * Crea una cuenta de prueba con la función de registro de siempre (`signup`), con un usuario y una contraseña que se escogen solos, y guarda la contraseña a la vista del dueño.
+ * Crea una cuenta de prueba con la función de registro de siempre (`signup`) y guarda la contraseña a la vista del dueño.
+ * `usuario` y `contrasena`: los que escribió el dueño (fase 7, 29 oct 2026; el usuario ya va con su `zz_`: `usuarioEscrito`). Sin ellos, se escogen solos como antes.
  * `tipo`: atleta, coach o fisio. `coach`: solo para un atleta, el usuario o código de su coach (vacío = sin coach). Devuelve la cuenta ya con su contraseña.
  */
-export async function creaCuentaDePrueba({ tipo, coach = '', usuariosQueYaHay = [] }) {
-  const usuario = siguienteUsuario(tipo, usuariosQueYaHay);
-  const contrasena = generaContrasena();
+export async function creaCuentaDePrueba({ tipo, coach = '', usuario: escrito = '', contrasena: escrita = '', usuariosQueYaHay = [] }) {
+  const usuario = escrito || siguienteUsuario(tipo, usuariosQueYaHay);
+  const contrasena = escrita || generaContrasena();
   const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
   const res = await fetch(`${URL_FUNCIONES()}/signup`, {
     method: 'POST',
@@ -49,12 +50,13 @@ export async function creaCuentaDePrueba({ tipo, coach = '', usuariosQueYaHay = 
   return { id: cuerpo.user_id, username: usuario, full_name: nombreDePrueba(usuario), tipo, contrasena };
 }
 
-/** Le pone una contraseña NUEVA a una cuenta (la vieja deja de servir). Si es de prueba, queda guardada a la vista del dueño; si es de una persona real, solo se enseña esta vez. */
-export async function restableceContrasena(userId) {
+/** Le pone una contraseña NUEVA a una cuenta (la vieja deja de servir). Si es de prueba, queda guardada a la vista del dueño; si es de una persona real, solo se enseña esta vez.
+ *  `contrasena`: la que escribió el dueño; solo vale para una cuenta de prueba (`zz_…`), el servidor la rechaza en una real. Sin ella, el servidor genera una. */
+export async function restableceContrasena(userId, contrasena = '') {
   const res = await fetch(`${URL_FUNCIONES()}/restablecer-contrasena`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', apikey: import.meta.env.VITE_SUPABASE_ANON_KEY, Authorization: `Bearer ${await tokenDeAhora()}` },
-    body: JSON.stringify({ user_id: userId }),
+    body: JSON.stringify({ user_id: userId, ...(contrasena ? { contrasena } : null) }),
   }).catch(() => null);
   if (!res) throw new Error('No se pudo contactar al servidor. Revisa tu conexión.');
   const cuerpo = await res.json().catch(() => ({}));
