@@ -70,6 +70,16 @@ Prototipo aprobado: https://claude.ai/artifact/1kttQGTS8apYoeDH2JVcoo (manda sob
 - **Solo administradores**: «Probar como si tuviera Apple Watch» (el dueño y sus cuentas de prueba, `soy_cuenta_de_prueba`). Vale para esa cuenta y solo en la app del iPhone.
 - SQL: `docs/sql/2026-10-29-reloj-fase-5.sql`. Prueba pura: `node scripts/prueba-reloj.mjs`.
 
+## Los caminos del plan (fase 6, 29 oct 2026)
+
+Del prototipo de caminos: https://claude.ai/artifact/BFogHsa2GUJGS1Fr332YgD. Nada nuevo se guarda: un workout del plan sigue viviendo en `wr:sessions` (o `wr:sessions@<clave>`).
+
+- **Un solo historial**: «Tus entrenos» (Home 4, Entrenar 6) mezcla `actividades` con las sesiones guiadas terminadas (`completedAt`), lo más nuevo primero (`src/lib/entrenosDelPlan.js`, `useEntrenosRecientes().entrenos`). Una sesión que el reloj también trajo (`uneConActividades`) sale una vez: la actividad, con el nombre y el tipo de la sesión. Cada fila del plan: ícono del tipo (`tipoParaStickers`), nombre, «cuándo · N series · tiempo» y la pastilla gris «Plan».
+- **La página del workout** (`src/features/training/ResumenDeSesion.jsx`): como la del libre. Números (tiempo, «12/16» series, ejercicios, volumen), récord del plan, la nota del atleta, pulso y ruta si hubo reloj, «Compartir» abajo (`HojaDeSesion`). «···» solo «Ver en mi plan». Se abre con `abreSesionHecha` (fila, ⇪, «Ver todos» y «Terminar» del entreno guiado); la escucha `PaginaDeSesionGlobal`, montada en `TrainingApp`, dentro del programa de la sesión.
+- **«Ver todos»** (`src/features/libre/HistorialCompleto.jsx`): todo, por mes, páginas de 50 al llegar abajo. Las sesiones más viejas que la última actividad leída esperan a su página.
+- **Mis métricas, «Últimos entrenos»**: también los workouts del plan, con «Plan» (el ícono del tipo solo en la app del atleta; el coach ve el del deporte).
+- Prueba pura: `node scripts/prueba-entrenos-del-plan.mjs`.
+
 ## La ubicación silenciosa (sección 8b, fase 4)
 
 - La app sigue la ubicación en CUALQUIER entreno: el guiado (`useRecorrido`) y el libre sin mapa (pádel, gimnasio, fútbol: `silencio` en `useCronometroLibre`). El cardio, como siempre.

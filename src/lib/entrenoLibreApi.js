@@ -36,10 +36,21 @@ export async function guardaEntrenoLibre({ atletaId, deporte, inicioMs, duracion
 }
 
 /** Los últimos `n` entrenos de quien entró, del más nuevo al más viejo (los suyos de cualquier origen: libres, del reloj o importados). */
+const COLUMNAS_DE_LA_LISTA = 'id,atleta_id,origen,deporte,titulo,inicio,fin,desfase_min,duracion_s,movimiento_s,distancia_m,fc_media,fc_max,kcal_activas,kcal_totales,desnivel_pos_m,cadencia_media,potencia_media,carga,carga_metodo,metricas,vueltas';
+
 export async function entrenosRecientes(atletaId, n = 6) {
   const { data, error } = await supabase.from('actividades')
-    .select('id,atleta_id,origen,deporte,titulo,inicio,fin,desfase_min,duracion_s,movimiento_s,distancia_m,fc_media,fc_max,kcal_activas,kcal_totales,desnivel_pos_m,cadencia_media,potencia_media,carga,carga_metodo,metricas,vueltas')
+    .select(COLUMNAS_DE_LA_LISTA)
     .eq('atleta_id', atletaId).order('inicio', { ascending: false }).limit(n);
+  if (error) throw error;
+  return data ?? [];
+}
+
+/** Una página del historial completo («Ver todos»): `n` entrenos a partir del número `desde` (0 = el más nuevo). */
+export async function paginaDeEntrenos(atletaId, desde = 0, n = 50) {
+  const { data, error } = await supabase.from('actividades')
+    .select(COLUMNAS_DE_LA_LISTA)
+    .eq('atleta_id', atletaId).order('inicio', { ascending: false }).range(desde, desde + n - 1);
   if (error) throw error;
   return data ?? [];
 }

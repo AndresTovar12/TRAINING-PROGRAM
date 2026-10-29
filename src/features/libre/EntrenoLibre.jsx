@@ -18,10 +18,12 @@ import OpcionesDeEntrenar from './OpcionesDeEntrenar';
 import PantallaDelCronometro from './PantallaDelCronometro';
 import PantallaDeCarrera from './PantallaDeCarrera';
 import ResumenLibre from './ResumenLibre';
+import HistorialCompleto from './HistorialCompleto';
 import TusEntrenos from './TusEntrenos';
 import { useDemos } from './useDemos';
 import { useCronometroLibre, useEntrenosRecientes } from './useEntrenoLibre';
 import { Cuadro, CuadroBlanco, PlayChico } from '@/features/training/home/Cuadros';
+import { abreSesionHecha } from '@/lib/abreSesionHecha';
 
 /* EL ENTRENO LIBRE, armado (12 oct 2026): lo que ve alguien en Home o en la pestaña Entrenar para entrenar por su cuenta, tenga o no un plan.
      · `variante="completa"` (sin plan): la tarjeta azul «Entrenar» (su semana, su último entreno, «Empezar»), la de Explorar, los cuadros de color (`cuadros`, p. ej. Salud,
@@ -29,7 +31,7 @@ import { Cuadro, CuadroBlanco, PlayChico } from '@/features/training/home/Cuadro
      · `variante="cuadros"` (Home con plan, reestructura visual del 15 oct 2026): solo dos cuadros, «Entrenar libre» y «Stickers», para ir en la cuadrícula de Home junto a Salud
        y la fase. «Tus entrenos» queda en la pestaña Entrenar.
      · `enLinea` (pestaña Entrenar): las opciones puestas directo, y «Tus entrenos».
-     · `variante="historial"` (Home con plan, 23 oct 2026): solo «Tus entrenos», lo que registró por su cuenta (auditoría p29).
+     · `variante="historial"` (Home con plan, 23 oct 2026): solo «Tus entrenos» (auditoría p29); desde la fase 6 (29 oct 2026), con los workouts del plan.
      · `variante="punto"` (23 oct 2026, Activity Tracker): lo que abre el punto ● del centro de la barra: directo «listo para empezar» con la última actividad
        (mapa e «Iniciar», estilo Aura); el botón de la izquierda cambia de actividad (`ElegirActividad`: lista por grupos, buscador y «Crear la mía»). No dibuja nada más;
        al cerrarse llama a `alCerrar`. «Empezar» de la tarjeta azul de Home hace lo mismo.
@@ -51,7 +53,7 @@ const marcaOfrecido = () => { try { sessionStorage.setItem('tl:explorar-ofrecido
 
 export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = false, variante = 'completa', alIrAHome = null, conEmpujon = false, alIrAExplorar = null, cuadros = null, chicos = null, alCerrar = null }) {
   const crono = useCronometroLibre(userId);
-  const { filas, recarga } = useEntrenosRecientes(userId, 40);
+  const { filas, entrenos, recarga } = useEntrenosRecientes(userId, 40);
   const { abreDemo, hasPlan } = usePlan();
   const demos = useDemos(userId);
   const [propiasGuardadas, setPropias] = useStorage('actividades:propias', []);
@@ -91,11 +93,16 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
   const abreElCartel = () => { if (!enCurso) setPendiente(ultimaActividad()); setHoja('cronometro'); };
   const abreStickers = () => setHoja(ultimo ? { resumen: ultimo, stickers: true } : 'elegir');
   const comparte = (fila) => setHoja({ resumen: fila, stickers: true });
+  /* Una fila de «Tus entrenos» (fase 6): un workout del plan abre SU página (`PaginaDeSesionGlobal`, también si el reloj lo trajo); lo demás, la del entreno libre. */
+  const abreEntreno = (e) => (e.plan ? abreSesionHecha({ almacen: e.plan.s.almacen, id: e.plan.s.id }) : setHoja({ resumen: e.actividad }));
+  const comparteEntreno = (e) => (e.plan ? abreSesionHecha({ almacen: e.plan.s.almacen, id: e.plan.s.id, stickers: true }) : comparte(e.actividad));
+  const [verTodos, setVerTodos] = useState(false);
   const creaPropia = (act) => setPropias((prev) => [act, ...propiasDe(prev)].slice(0, 30));
   const conExplorar = conEmpujon && !!alIrAExplorar;
 
   const hojas = (
     <>
+      {verTodos && <HistorialCompleto userId={userId} propias={propias} alAbrir={abreEntreno} alCompartir={comparteEntreno} alCerrar={() => setVerTodos(false)} />}
       {hoja === 'elegir' && (
         <ElegirActividad
           filas={filas ?? []} propias={propias} alElegir={elige}
@@ -150,11 +157,11 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
 
   if (enPunto) return hojas;
 
-  // Solo «Tus entrenos» (Home con plan): lo que registró por su cuenta, abajo de lo del plan. Sin entrenos libres no dibuja nada.
+  // Solo «Tus entrenos» (Home con plan), abajo de lo del plan. Sin entrenos no dibuja nada.
   if (variante === 'historial') {
     return (
       <>
-        <TusEntrenos filas={filas?.slice(0, 4)} propias={propias} alAbrir={(fila) => setHoja({ resumen: fila })} alCompartir={comparte} />
+        <TusEntrenos entrenos={entrenos?.slice(0, 4)} propias={propias} alAbrir={abreEntreno} alCompartir={comparteEntreno} alVerTodos={() => setVerTodos(true)} />
         {hojas}
       </>
     );
@@ -207,7 +214,7 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
             )}
           </>
         )}
-        <TusEntrenos filas={filas?.slice(0, 6)} propias={propias} alAbrir={(fila) => setHoja({ resumen: fila })} alCompartir={comparte} />
+        <TusEntrenos entrenos={entrenos?.slice(0, 6)} propias={propias} alAbrir={abreEntreno} alCompartir={comparteEntreno} alVerTodos={() => setVerTodos(true)} />
       </div>
 
       {hojas}

@@ -5,7 +5,7 @@ import { facilMedioDuro } from '@/lib/metricas/derivados';
 import { diaCorto, distanciaTexto, duracionTexto, rangoDeSemana, variacionTexto } from '@/lib/metricas/formato';
 import { BarrasApiladas, BarraDeZonas, Chispa } from './Graficas';
 import { COLORES_DE_ZONA } from './graficasUtil';
-import { FilaDeEntreno } from './ListaDeEntrenos';
+import { FilaDeEntreno, FilaDeSesion } from './ListaDeEntrenos';
 import { Dato, Insignia, Seccion, Tarjeta, TiempoGrande } from './Piezas';
 import { TONOS } from './tonos';
 import { saludDisponible } from '@/lib/saludDelTelefono';
@@ -214,7 +214,13 @@ function ZonasDeLasUltimas4({ d, umbrales }) {
   );
 }
 
-export default function Resumen({ d, umbrales, alAbrir, alIrA, esAtleta = false }) {
+export default function Resumen({ d, umbrales, alAbrir, alIrA, esAtleta = false, sesiones = [], sesionDe = null }) {
+  /* Los últimos 5 de TODO (fase 6, 29 oct 2026): los del reloj y también los workouts del plan que no tuvieron reloj, lo más nuevo primero. Uno que el reloj
+     trajo y que fue una sesión del plan sale una vez, como entreno del reloj con el nombre de la sesión y la pastilla «Plan». */
+  const ultimos = useMemo(() => [
+    ...d.ultimos.map((a) => ({ clave: a.id, ms: Date.parse(a.inicio), a })),
+    ...(sesiones ?? []).map((s) => ({ clave: `sesion:${s.almacen}:${s.id}`, ms: s.inicio, s })),
+  ].sort((x, y) => y.ms - x.ms).slice(0, 5), [d.ultimos, sesiones]);
   return (
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(270px, 1fr))', gap: 12 }}>
@@ -230,7 +236,9 @@ export default function Resumen({ d, umbrales, alAbrir, alIrA, esAtleta = false 
       </Seccion>
       <Seccion titulo="Últimos entrenos" derecha={<button type="button" onClick={() => alIrA('entrenos')} style={enlace}>Ver todos <ArrowRight size={14} /></button>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {d.ultimos.map((a) => <FilaDeEntreno key={a.id} a={a} alAbrir={alAbrir} />)}
+          {ultimos.map((x) => (x.a
+            ? <FilaDeEntreno key={x.clave} a={x.a} alAbrir={alAbrir} sesion={sesionDe?.get(x.a.id) ?? null} />
+            : <FilaDeSesion key={x.clave} s={x.s} alAbrir={alAbrir} />))}
         </div>
       </Seccion>
     </div>

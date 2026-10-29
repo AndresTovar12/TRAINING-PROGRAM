@@ -8,6 +8,20 @@ import { recordDelPlan, seriesProgramadas } from '@/lib/stickers/plan';
 import HojaDeStickers from './HojaDeStickers';
 import { useTipoDeSesion } from './useTipoDeSesion';
 
+/** Lo PROGRAMADO de una sesión (sin `dia`, nada): `{ programadas, record }`, con los kilos más altos que había levantado en cada ejercicio ANTES de esta sesión,
+ *  en el programa que se está viendo (`ComoPrograma`, si va envuelta). Lo usan esta hoja y la página del workout (`ResumenDeSesion`). */
+export function useProgramadoDeLaSesion({ dia, registro, sesionId }) {
+  const plan = usePlanOpcional();
+  const [sesiones] = useStorage(plan?.claveDe ? plan.claveDe('wr:sessions') : 'wr:sessions', {});
+  if (!dia) return {};
+  const llave = String(sesionId ?? '').split('#')[0];
+  const mejorAntes = (ejercicio) => {
+    const antes = historialDePeso(plan?.phases ?? [], sesiones, ejercicio, plan?.kind).filter((r) => r.id !== llave).map((r) => r.kilos);
+    return antes.length ? Math.max(...antes) : null;
+  };
+  return { programadas: seriesProgramadas(dia), record: recordDelPlan({ day: dia, registro, mejorAntes }) };
+}
+
 /* LA HOJA DE STICKERS de una sesión guiada del plan: la que se abre desde el final del entreno y desde el día en el plan (28 oct 2026; sustituye a HojaDelSello).
    Busca los datos (con reloj o sin él, ver `lib/stickers/carga.js`), el @usuario del coach y el historial del año, y abre la hoja. El nombre es el de la sesión
    del plan: aquí no se renombra (el plan no se toca).
@@ -16,16 +30,9 @@ import { useTipoDeSesion } from './useTipoDeSesion';
    récord «Justo lo programado» (`lib/stickers/plan.js`), comparado contra los kilos que había levantado antes en cada ejercicio.
 
    Lo que llega se lee UNA vez al abrir: mientras la hoja está abierta, el registro del entreno puede seguir cambiando y no hay que volver a buscar el reloj cada vez. */
-export default function HojaDeSesion({ atletaId, registro, sesionId, nombre, dia = null, tipo = null, coachId = null, unidadPeso = 'kg', onCerrar }) {
+export default function HojaDeSesion({ atletaId, registro, sesionId, nombre, dia = null, tipo = null, coachId = null, unidadPeso = 'kg', onCerrar, capa }) {
   const tipoDeSesion = useTipoDeSesion();
-  const plan = usePlanOpcional();
-  const [sesiones] = useStorage(plan?.claveDe ? plan.claveDe('wr:sessions') : 'wr:sessions', {});
-  // Los kilos más altos que había levantado en un ejercicio ANTES de esta sesión.
-  const mejorAntes = (ejercicio) => {
-    const antes = historialDePeso(plan?.phases ?? [], sesiones, ejercicio, plan?.kind).filter((r) => r.id !== sesionId).map((r) => r.kilos);
-    return antes.length ? Math.max(...antes) : null;
-  };
-  const programado = dia ? { programadas: seriesProgramadas(dia), record: recordDelPlan({ day: dia, registro, mejorAntes }) } : {};
+  const programado = useProgramadoDeLaSesion({ dia, registro, sesionId });
   const inicial = useRef({ atletaId, registro, sesionId, nombre, tipo, coachId, unidadPeso, tipoDeSesion, ...programado });
   const cargar = useCallback(async () => {
     const { coachId: id, tipoDeSesion: tipoDe, ...resto } = inicial.current;
@@ -35,5 +42,5 @@ export default function HojaDeSesion({ atletaId, registro, sesionId, nombre, dia
     const historial = await cargaHistorial({ atletaId: resto.atletaId, inicioMs: entreno.inicioMs, tipoDeSesion: tipoDe });
     return { ...entreno, historial };
   }, []);
-  return <HojaDeStickers cargar={cargar} titulo={tituloDeLaHoja({ plan: true })} nombre={nombre} onCerrar={onCerrar} />;
+  return <HojaDeStickers cargar={cargar} titulo={tituloDeLaHoja({ plan: true })} nombre={nombre} onCerrar={onCerrar} {...(capa ? { capa } : null)} />;
 }

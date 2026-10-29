@@ -6,6 +6,10 @@ import { diaLocal, lunesDe, sumaDias } from '@/lib/metricas/forma';
 import { distanciaTexto, duracionTexto, fechaCorta, horaTexto, rangoDeSemana } from '@/lib/metricas/formato';
 import { filasPorSerie } from '@/lib/metricas/porSerie';
 import { EstadoVacio, MosaicoDeDeporte } from './Piezas';
+import { usePlanOpcional } from '@/contexts/PlanContext';
+import { diaDeLaSesion, programaDelAlmacen } from '@/lib/entrenosDelPlan';
+import { PastillaPlan, caraDeLaSesion } from '@/features/libre/TusEntrenos';
+import IconoDeActividad from '@/features/libre/IconoDeActividad';
 
 /* La lista de entrenos, de la semana más nueva a la más vieja, con los totales de cada semana arriba. Un toque abre el detalle.
 
@@ -21,9 +25,24 @@ function comoEntreno(s) {
   };
 }
 
+/**
+ * Cómo se ve una sesión del plan en la lista (fase 6, 29 oct 2026): su nombre en el plan y el ícono del tipo que eligió el coach, como en «Tus entrenos».
+ * Solo donde está el plan (la app del atleta); el coach, que no lo tiene cargado aquí, ve el nombre guardado y el ícono del deporte. `null` sin sesión.
+ */
+function useCaraDelPlan(s) {
+  const programas = usePlanOpcional()?.programas;
+  return useMemo(() => {
+    if (!s) return null;
+    const programa = programaDelAlmacen(programas ?? [], s.almacen);
+    const lugar = programa ? diaDeLaSesion(programa, s.id) : null;
+    return { ...caraDeLaSesion({ s, lugar }), conDia: !!lugar };
+  }, [s, programas]);
+}
+
 /** Lo mismo que `FilaDeEntreno`, para una sesión guiada sin reloj: duración, cuántas series y lapsos hizo, y que no hay pulso. */
 export function FilaDeSesion({ s, alAbrir, conFecha = true }) {
-  const a = comoEntreno(s);
+  const cara = useCaraDelPlan(s);
+  const a = { ...comoEntreno(s), ...(cara?.conDia ? { titulo: cara.nombre } : null) };
   const { resumen } = useMemo(() => filasPorSerie({ registro: s.registro }), [s]);
   const hechos = resumen.series + resumen.lapsos;
   const stats = [
@@ -40,9 +59,9 @@ export function FilaDeSesion({ s, alAbrir, conFecha = true }) {
         border: 'none', borderRadius: 16, background: UI.relleno, cursor: 'pointer', textAlign: 'left', fontFamily: FONT, touchAction: 'manipulation',
       }}
     >
-      <MosaicoDeDeporte deporte={a.deporte} size={44} />
+      {cara?.conDia ? <IconoDeActividad actividad={cara.actividad} size={44} /> : <MosaicoDeDeporte deporte={a.deporte} size={44} />}
       <span style={{ minWidth: 0 }}>
-        <span style={{ display: 'block', fontSize: 15.5, fontWeight: 800, color: LT.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.titulo}</span>
+        <span style={{ display: 'block', fontSize: 15.5, fontWeight: 800, color: LT.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.titulo}<PastillaPlan /></span>
         <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: LT.text2, marginTop: 2, ...NUM_STYLE }}>
           {conFecha ? `${fechaCorta(a.inicio, a.desfase_min)} · ${horaTexto(a.inicio, a.desfase_min)}` : horaTexto(a.inicio, a.desfase_min)} · {a.dispositivo}
         </span>
@@ -59,8 +78,10 @@ export function FilaDeSesion({ s, alAbrir, conFecha = true }) {
   );
 }
 
-/** Un entreno en una fila: ícono del deporte, título, cuándo, y lo principal (tiempo, distancia, pulso o calorías) con su carga. */
-export function FilaDeEntreno({ a, alAbrir, conFecha = true }) {
+/** Un entreno en una fila: ícono del deporte, título, cuándo, y lo principal (tiempo, distancia, pulso o calorías) con su carga.
+ *  `sesion`: la sesión del plan que se hizo a la vez (fase 6): lleva su nombre, el ícono de su tipo y la pastilla «Plan». */
+export function FilaDeEntreno({ a, alAbrir, conFecha = true, sesion = null }) {
+  const cara = useCaraDelPlan(sesion);
   const kcal = a.kcal_activas ?? a.kcal_totales;
   const stats = [
     a.duracion_s > 0 && { Icono: Timer, texto: duracionTexto(a.duracion_s) },
@@ -68,7 +89,7 @@ export function FilaDeEntreno({ a, alAbrir, conFecha = true }) {
     a.fc_media > 0 && { Icono: HeartPulse, texto: `${a.fc_media} lpm` },
     !(a.fc_media > 0) && kcal > 0 && { Icono: Flame, texto: `${Math.round(kcal)} kcal` },
   ].filter(Boolean);
-  const titulo = a.titulo || nombreDelDeporte(a.deporte);
+  const titulo = (cara?.conDia ? cara.nombre : null) || a.titulo || nombreDelDeporte(a.deporte);
   return (
     <button
       type="button" onClick={() => alAbrir(a)} className="kp-press"
@@ -78,9 +99,9 @@ export function FilaDeEntreno({ a, alAbrir, conFecha = true }) {
         border: 'none', borderRadius: 16, background: UI.relleno, cursor: 'pointer', textAlign: 'left', fontFamily: FONT, touchAction: 'manipulation',
       }}
     >
-      <MosaicoDeDeporte deporte={a.deporte} size={44} />
+      {cara?.conDia ? <IconoDeActividad actividad={cara.actividad} size={44} /> : <MosaicoDeDeporte deporte={a.deporte} size={44} />}
       <span style={{ minWidth: 0 }}>
-        <span style={{ display: 'block', fontSize: 15.5, fontWeight: 800, color: LT.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{titulo}</span>
+        <span style={{ display: 'block', fontSize: 15.5, fontWeight: 800, color: LT.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{titulo}{sesion && <PastillaPlan />}</span>
         <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: LT.text2, marginTop: 2, ...NUM_STYLE }}>
           {conFecha ? `${fechaCorta(a.inicio, a.desfase_min)} · ${horaTexto(a.inicio, a.desfase_min)}` : horaTexto(a.inicio, a.desfase_min)}
           {a.dispositivo && <span className="hidden sm:inline">{` · ${a.dispositivo}`}</span>}
