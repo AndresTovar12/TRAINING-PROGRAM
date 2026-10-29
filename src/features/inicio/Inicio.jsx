@@ -22,6 +22,10 @@ import fotoPista from '@/assets/landing/pista.webp';
 import fotoYoga from '@/assets/landing/yoga.webp';
 import fotoAgilidad from '@/assets/landing/agilidad.webp';
 import { MIN_CONTRASENA, problemaDeContrasena } from '@/lib/contrasena';
+import { useReloj } from '@/lib/relojConectado';
+import { saludDisponible } from '@/lib/saludDelTelefono';
+import ConectaReloj, { CuerpoDeConectar } from '@/features/reloj/ConectaReloj';
+import AvisoDelReloj from '@/features/reloj/AvisoDelReloj';
 
 /**
  * El inicio: crear la cuenta y dejar la app armada, una pregunta por pantalla.
@@ -60,7 +64,8 @@ const FOTOS = { fuerza: fotoFuerza, pista: fotoPista, yoga: fotoYoga, agilidad: 
 
 // Todo el camino de cada quien, para la barra de arriba. `listo` y `tour` no cuentan: ya no son preguntas.
 const ORDEN_COACH = ['tipo', 'cuenta', 'correo', 'nombre', 'oficio', 'entrena', 'equipo', 'repertorio', 'listo', 'tour'];
-const ORDEN_ATLETA = ['tipo', 'cuenta', 'correo', 'nombre', 'codigo', 'sexo', 'nacimiento', 'listo', 'tour'];
+// 'reloj' (fase 5, 29 oct 2026): TODOS se enteran de que la app funciona con el Apple Watch; con uno emparejado, ahí mismo lo conectan.
+const ORDEN_ATLETA = ['tipo', 'cuenta', 'correo', 'nombre', 'codigo', 'sexo', 'nacimiento', 'reloj', 'listo', 'tour'];
 const SIN_BARRA = new Set(['listo', 'tour']);
 const ANTES_DE_LA_CUENTA = new Set(['tipo', 'cuenta', 'correo']);
 const USERNAME_RE = /^[a-zA-Z0-9_.]{3,30}$/;
@@ -180,6 +185,9 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
   const [conCodigo, setConCodigo] = useState(false); // «Tengo el código de mi entrenador»: pasa de las dos opciones al campo del código
   const [nac, setNac] = useState(profile?.fecha_nacimiento || '');
   const [coachNombre, setCoachNombre] = useState(null);
+  // El paso del reloj: con un Apple Watch emparejado se conecta aquí (la pantalla de conectar se abre encima); sin reloj, o en la web, solo se cuenta.
+  const { listo: relojListo, reloj, conexion: relojConexion } = useReloj();
+  const [conectandoReloj, setConectandoReloj] = useState(false);
 
   // Al cambiar de pantalla, arriba. En la compu el marco tiene su propio scroll; en el teléfono es la página.
   const conservaError = useRef(false); // al regresar a corregir el usuario o la contraseña, el mensaje viaja con la persona
@@ -643,6 +651,24 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
         <button type="button" onClick={() => guarda({})} disabled={ocupado} style={enlace}>Saltar por ahora</button>
       </>
     );
+  } else if (paso === 'reloj') {
+    if (saludDisponible() && !relojListo) {
+      cuerpo = <div style={{ flex: 1, display: 'grid', placeItems: 'center' }}><Loader2 size={26} className="spin" color={KP.blue} /></div>;
+    } else if (reloj.emparejado) {
+      cuerpo = <CuerpoDeConectar emparejado compu={compu} />;
+      pie = (
+        <>
+          <button type="button" className="kp-press" onClick={() => setConectandoReloj(true)} disabled={ocupado} style={botonPrimario(ocupado)}>
+            {ocupado ? <Loader2 size={18} className="spin" /> : 'Conectar Apple Watch'}
+          </button>
+          <button type="button" onClick={() => guarda({})} disabled={ocupado} style={enlace}>Ahora no</button>
+          {conectandoReloj && <ConectaReloj empezar="pedir" alTerminar={() => { setConectandoReloj(false); guarda({}); }} />}
+        </>
+      );
+    } else {
+      cuerpo = <AvisoDelReloj compu={compu} />;
+      pie = continuar(() => guarda({}));
+    }
   } else if (paso === 'listo') {
     const nom = parteNombre(profile?.full_name).nombre || (esCoach ? 'coach' : '');
     const filas = esCoach
@@ -657,6 +683,8 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
         ['Usuario', `@${profile?.username ?? ''}`],
         ['Entrenador', profile?.coach_id ? (coachNombre || '…') : 'Todavía no'],
         ['Sexo', profile?.genero === 'h' ? 'Hombre' : profile?.genero === 'm' ? 'Mujer' : 'Prefiere no decir'],
+        // Solo con reloj emparejado: si lo conectó en el paso del reloj, o dónde hacerlo después.
+        ...(reloj.emparejado ? [['Reloj', relojConexion ? 'Apple Watch conectado' : 'Después, en Mi perfil', relojConexion ? KP.mint : null]] : []),
       ];
     cuerpo = (
       <>
@@ -670,9 +698,9 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
             : profile?.coach_id ? `${coachNombre || 'Tu entrenador'} ya te ve en su lista y te va a armar tu plan.` : 'Cuando tengas el código de tu entrenador, lo pones en Mi perfil.'}
         </p>
         <div style={{ background: KP.surface, border: `1.5px solid ${KP.lineHi}`, borderRadius: 22, padding: '6px 16px', margin: '6px 0 18px' }}>
-          {filas.map(([k, v], n) => (
+          {filas.map(([k, v, color], n) => (
             <div key={k} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '12px 0', borderTop: n ? `1px solid ${KP.line}` : 'none', fontSize: 15, fontWeight: 600 }}>
-              <span style={{ color: KP.ink2, minWidth: 92 }}>{k}</span><b style={{ fontWeight: 800, overflowWrap: 'anywhere' }}>{v}</b>
+              <span style={{ color: KP.ink2, minWidth: 92 }}>{k}</span><b style={{ fontWeight: 800, overflowWrap: 'anywhere', color: color || undefined }}>{v}</b>
             </div>
           ))}
         </div>
@@ -711,7 +739,7 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
             minHeight: '100svh', background: KP.surface, position: 'relative',
           }}
       >
-        {paso !== 'tour' && cabecera(paso === 'correo' && !correo.trim() ? null : paso === 'nacimiento' ? () => guarda({}) : null)}
+        {paso !== 'tour' && cabecera(paso === 'correo' && !correo.trim() ? null : paso === 'nacimiento' || (paso === 'reloj' && reloj.emparejado) ? () => guarda({}) : null)}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>{cuerpo}</div>
         {pie && <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 18 }}>{pie}</div>}
       </div>

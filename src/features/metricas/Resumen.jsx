@@ -8,8 +8,8 @@ import { COLORES_DE_ZONA } from './graficasUtil';
 import { FilaDeEntreno } from './ListaDeEntrenos';
 import { Dato, Insignia, Seccion, Tarjeta, TiempoGrande } from './Piezas';
 import { TONOS } from './tonos';
-import { saludDisponible, TEXTO_CONECTA_RELOJ } from '@/lib/saludDelTelefono';
-import ConectaTuReloj from './ConectaTuReloj';
+import { saludDisponible } from '@/lib/saludDelTelefono';
+import ConectaTuReloj, { useConectaReloj } from './ConectaTuReloj';
 import { ZONAS } from '@/lib/metricas/calculos';
 
 /* RESUMEN: lo primero que ve el coach. Tres preguntas, tres tarjetas, en palabras: ¿cómo llega hoy? (la forma), ¿qué hizo esta semana? y ¿está recuperando bien?
@@ -118,6 +118,7 @@ function FilaDeRecuperacion({ m, texto }) {
 }
 
 function TarjetaDeRecuperacion({ d, alIrA, esAtleta = false }) {
+  const delReloj = useConectaReloj();
   const conecta = esAtleta && saludDisponible();
   const r = d.recuperacion;
   const sinDatos = r.veredicto.clave === 'sin-datos';
@@ -129,7 +130,7 @@ function TarjetaDeRecuperacion({ d, alIrA, esAtleta = false }) {
       </div>
       {sinDatos ? (
         <div style={{ fontSize: 14.5, lineHeight: 1.45, fontWeight: 500, color: LT.text2 }}>
-          {conecta ? `Sin pulso en reposo, HRV ni sueño de los últimos días. ${TEXTO_CONECTA_RELOJ}` : 'Sin pulso en reposo, HRV ni sueño de los últimos días. Se llenan al importar el export de Apple Salud del Apple Watch.'}
+          {conecta ? `Sin pulso en reposo, HRV ni sueño de los últimos días. ${delReloj.texto}` : 'Sin pulso en reposo, HRV ni sueño de los últimos días. Se llenan al importar el export de Apple Salud del Apple Watch.'}
           {conecta && <div style={{ marginTop: 10 }}><ConectaTuReloj /></div>}
         </div>
       ) : (

@@ -41,6 +41,7 @@ import AvisosDeCompra from '@/features/training/AvisosDeCompra';
 import EntrenoLibre from '@/features/libre/EntrenoLibre';
 import TiraDeSemana, { BotonDeDia, fechaDeLaSemana } from '@/features/training/home/TiraDeSemana';
 import { HoyTeToca, HoyTeTocaEquipo, HoyDescansas, HoyEnPausa } from '@/features/training/home/HoyTeToca';
+import { RelojEnHome } from '@/features/reloj/TarjetasDelReloj';
 import { textoDeSemana } from '@/lib/vaEn';
 import { useMoverMiPlan, ReglasDeMiPlan, ControlesDeMiPlan, MoverAquiAtleta, AvisoDelCoach } from '@/features/training/MoverMiPlan';
 import { CuadroDeSalud, CuadroDePrograma, CuadroBlanco } from '@/features/training/home/Cuadros';
@@ -1938,6 +1939,8 @@ const HomeView = ({
               cuando={cuando}
             />
           ) : descanso}
+          {/* El Apple Watch (fase 5): volver a conectarlo en este iPhone, o la invitación de la primera semana. Quien mira la app de otra persona no la ve. */}
+          {!soloLectura && <RelojEnHome />}
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>

@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { estimaUmbrales } from '@/lib/metricas/calculos';
-import { diaLocal, pulsoEnReposoMediano, pulsoMaximoVisto, sumaDias } from '@/lib/metricas/forma';
-import { construyeActividad, recalculaConUmbrales, separaRepetidos } from '@/lib/metricas/construye';
+import { conLoDeAntes, diaLocal, pulsoEnReposoMediano, pulsoMaximoVisto, sumaDias } from '@/lib/metricas/forma';
+import { construyeActividad, esElMismo, recalculaConUmbrales, separaRepetidos } from '@/lib/metricas/construye';
 import { listRecuperacion } from '@/lib/recuperacionApi';
 
 export { listRecuperacion };
@@ -91,14 +91,16 @@ async function perfilDeMetricas(atletaId) {
 export async function umbralesDe(atletaId, { extra = {} } = {}) {
   const hoy = new Date();
   const hoyDia = hoy.toISOString().slice(0, 10);
-  const [escritos, perfil, recientes, reposos] = await Promise.all([
+  const [escritos, perfil, recientes, reposos, previas] = await Promise.all([
     getUmbrales(atletaId),
     perfilDeMetricas(atletaId),
     listActividades(atletaId, { desdeDia: sumaDias(hoyDia, -180), tope: 1000 }),
     listRecuperacion(atletaId, { desdeDia: sumaDias(hoyDia, -45) }),
+    listPrevias(atletaId),
   ]);
-  const visto = pulsoMaximoVisto([...recientes, ...(extra.actividades ?? [])], { hoy: hoyDia });
-  const reposo = pulsoEnReposoMediano([...reposos, ...(extra.recuperacion ?? [])], { hoy: hoyDia });
+  // Lo de antes de conectar el reloj también cuenta para el pulso máximo visto y el pulso en reposo de siempre (fase 5): las zonas salen igual para el atleta y el coach.
+  const visto = pulsoMaximoVisto([...recientes, ...previas.actividades, ...(extra.actividades ?? [])], { hoy: hoyDia });
+  const reposo = pulsoEnReposoMediano(conLoDeAntes([...reposos, ...(extra.recuperacion ?? [])], previas.recuperacion), { hoy: hoyDia });
   const fechaNacimiento = perfil.fechaNacimiento ?? escritos?.fecha_nacimiento ?? extra.fecha_nacimiento ?? null;
   const genero = perfil.genero ?? escritos?.genero ?? extra.genero ?? 'm';
   const delReloj = {};
@@ -143,13 +145,31 @@ export async function guardaImportacion({ atletaId, subidoPor, resultado, desfas
     const ini = new Date(resultado.entrenos[0].inicio - 2 * 86400000).toISOString();
     const fin = new Date(resultado.entrenos[resultado.entrenos.length - 1].inicio + 2 * 86400000).toISOString();
     for (let desde = 0; desde < 5000; desde += PAGINA) {
-      const { data, error } = await supabase.from('actividades').select('id,inicio,duracion_s').eq('atleta_id', atletaId).gte('inicio', ini).lte('inicio', fin).range(desde, desde + PAGINA - 1);
+      const { data, error } = await supabase.from('actividades').select('id,inicio,duracion_s,fc_media,origen,metricas').eq('atleta_id', atletaId).gte('inicio', ini).lte('inicio', fin).range(desde, desde + PAGINA - 1);
       if (error) throw error;
       existentes.push(...(data ?? []));
       if ((data ?? []).length < PAGINA) break;
     }
   }
   const { nuevos, repetidos } = separaRepetidos(resultado.entrenos, existentes);
+
+  /* EL PULSO DEL RELOJ LLEGA AL ENTRENO QUE YA ESTABA (fase 5, 29 oct 2026). Un entreno hecho en la app con el Apple Watch puesto queda dos veces: el de la
+     app (sin pulso) y el que el reloj guardó en Salud. No se repite: al de la app se le ponen el pulso, las zonas, la carga y las calorías del reloj, con
+     `metricas.pulso_de = 'apple_watch'` («Lo midió tu Apple Watch»). */
+  const enriquecidos = [];
+  for (const r of repetidos) {
+    if (r.formato !== 'healthkit' || !(r.resumen?.fc_media > 0 || r.calculado?.fc_media > 0)) continue;
+    const e = existentes.find((x) => esElMismo(x, r) && !(x.fc_media > 0) && x.origen !== 'healthkit');
+    if (!e) continue;
+    const { fila } = construyeActividad(r, { umbrales, genero, desfaseMin, origen: 'healthkit', conSeries: false });
+    const cambios = {
+      fc_media: fila.fc_media, fc_max: fila.fc_max, fc_min: fila.fc_min, zonas_s: fila.zonas_s, umbrales: fila.umbrales, carga: fila.carga, carga_metodo: fila.carga_metodo,
+      metricas: { ...(e.metricas ?? {}), pulso_de: 'apple_watch' },
+      ...(fila.kcal_activas ? { kcal_activas: fila.kcal_activas } : null),
+    };
+    const { error } = await supabase.from('actividades').update(cambios).eq('id', e.id);
+    if (!error) { enriquecidos.push(e.id); e.fc_media = fila.fc_media; }
+  }
 
   const limiteSeries = sumaDias(hoy.toISOString().slice(0, 10), -diasConSeries);
   const construidos = nuevos.map((p) => {
@@ -198,7 +218,46 @@ export async function guardaImportacion({ atletaId, subidoPor, resultado, desfas
     if (error) throw error;
     avanza(lote.length, 'días de recuperación');
   }
-  return { nuevos: construidos.length, repetidos: repetidos.length, dias: resultado.recuperacion.length, umbrales };
+  return { nuevos: construidos.length, repetidos: repetidos.length, dias: resultado.recuperacion.length, umbrales, enriquecidos, nuevosIds: construidos.map((c) => c.fila.id) };
+}
+
+/**
+ * LO DE ANTES DE CONECTAR EL RELOJ (fase 5): solo resúmenes, en `actividades_previas` y `recuperacion_previa`. Ninguna pantalla los enseña; solo cuentan para la
+ * condición, la fatiga y «lo normal» de la recuperación (`listPrevias`). Lo que ya estaba no se repite.
+ */
+export async function guardaPrevias({ atletaId, entrenos, recuperacion, desfaseMin = 0 }) {
+  const { umbrales, genero } = await umbralesDe(atletaId, { extra: { recuperacion } });
+  const filas = entrenos.map((p) => ({ ...construyeActividad(p, { umbrales, genero, desfaseMin, origen: 'healthkit', conSeries: false }).fila, id: nuevoId(), atleta_id: atletaId, subido_por: atletaId }));
+  for (const lote of enLotes(filas, 100)) {
+    const { error } = await supabase.from('actividades_previas').upsert(lote, { onConflict: 'atleta_id,origen_clave', ignoreDuplicates: true });
+    if (error) throw error;
+  }
+  for (const lote of enLotes(recuperacion, 200)) {
+    const { error } = await supabase.from('recuperacion_previa').upsert(lote.map((r) => ({ ...r, atleta_id: atletaId, actualizada_en: new Date().toISOString() })), { onConflict: 'atleta_id,dia' });
+    if (error) throw error;
+  }
+  return { entrenos: filas.length, dias: recuperacion.length };
+}
+
+/** Lo de antes de conectar, para las cuentas: `{ actividades, recuperacion }` (las columnas que piden la curva de forma y la recuperación). Si falla, vacío. */
+export async function listPrevias(atletaId) {
+  const lee = async (tabla, columnas, orden) => {
+    const filas = [];
+    for (let desde = 0; desde < 5000; desde += PAGINA) {
+      const { data, error } = await supabase.from(tabla).select(columnas).eq('atleta_id', atletaId).order(orden, { ascending: true }).range(desde, desde + PAGINA - 1);
+      if (error) return filas;
+      filas.push(...(data ?? []));
+      if ((data ?? []).length < PAGINA) break;
+    }
+    return filas;
+  };
+  const [actividades, recuperacion, conexion] = await Promise.all([
+    lee('actividades_previas', 'inicio,desfase_min,duracion_s,carga,fc_max', 'inicio'),
+    lee('recuperacion_previa', '*', 'dia'),
+    supabase.from('dispositivos_conectados').select('conectado_en').eq('user_id', atletaId).eq('proveedor', 'apple_salud').maybeSingle().then(({ data }) => data, () => null),
+  ]);
+  const desdeDia = conexion?.conectado_en ? diaLocal(conexion.conectado_en, -new Date().getTimezoneOffset()) : null;
+  return { actividades, recuperacion, desdeDia };
 }
 
 /**

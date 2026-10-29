@@ -47,14 +47,28 @@ En un workout del plan (`src/lib/stickers/plan.js`, `recordDelPlan`): se compara
 2. **Hecha (28 oct 2026):** los 29 restantes, «Con foto» y «Video». El volumen solo sale en Lista y Columna.
 3. **Hecha (28 oct 2026):** HealthKit en la app nativa (ver abajo).
 4. **Hecha (28 oct 2026):** la ubicación silenciosa y Garmin (ver abajo y `docs/garmin.md`).
+5. **Hecha (29 oct 2026):** la experiencia del Apple Watch (ver abajo).
 
 ## El Apple Watch (HealthKit, fase 3)
 
-- Mi perfil → Dispositivos → «Apple Salud y Apple Watch». Al prenderlo sale primero para qué es (`PARA_QUE_ES` en `src/lib/saludDelTelefono.js`) y el botón «Conectar Apple Watch»: solo ahí se pide el permiso de HealthKit. Si dice «Ahora no», no se le pide nada al iPhone.
+- (Fase 5: ahora es la pantalla «Conecta tu Apple Watch», ver abajo.) Solo al tocar «Conectar» se pide el permiso de HealthKit. Si dice «Ahora no», no se le pide nada al iPhone.
 - Cada HKWorkout entra como una fila de `actividades` con `origen = 'healthkit'` (`src/lib/metricas/leeHealthKit.js` → `preparaEntreno` → `construyeActividad`): tipo, inicio, fin, duración, distancia y energía activa (las del entreno, o la suma de sus muestras), pulso (media, máxima y zonas), desnivel (HKMetadataKeyElevationAscended) y la ruta (HKWorkoutRoute). Desde ahí la ficha de stickers es la misma.
 - El plugin `@capgo/capacitor-health` no traía la ruta ni el desnivel: se le agregó con `patches/@capgo+capacitor-health+8.11.12.patch` (método `queryWorkoutRoute`, el desnivel en metros y el permiso de la ruta junto con el de los entrenos).
-- Ya conectado, al abrir la app o volver a ella se traen los entrenos nuevos de los últimos 7 días, como mucho cada 30 min (`src/features/profile/SincronizaReloj.jsx`). Nunca pide el permiso ahí.
+- Ya conectado, al abrir la app o volver a ella se traen los entrenos nuevos de los últimos 7 días (nunca antes de conectar), como mucho cada 30 min (`src/features/profile/SincronizaReloj.jsx`). Nunca pide el permiso ahí.
 - Nada de archivos FIT.
+
+## La experiencia del Apple Watch (fase 5, 29 oct 2026)
+
+Prototipo aprobado: https://claude.ai/artifact/1kttQGTS8apYoeDH2JVcoo (manda sobre el texto). Lo de la fase 3 de arriba cambió así:
+
+- **Un solo «Conectar Apple Watch»** (`src/features/reloj/ConectaReloj.jsx`): pide de una vez leer y ESCRIBIR entrenos, pulso y energía activa (el parche del plugin ahora acepta `workouts` para escribir y lo reporta en `writeAuthorized`/`writeDenied`). El reloj ya no pregunta. «Ahora no» no le pide nada al iPhone.
+- **Cómo se sabe si dijo que no** (`revisaPermiso`): si negó escribir entrenos, o si no se puede leer ni un paso de 60 días → «No pudimos leer nada». «Ya lo encendí» repite solo esas dos revisiones.
+- **La conexión vive en la cuenta**: `dispositivos_conectados` (`apple_salud`, estado `ok`), con `conectado_en` puesto por el servidor (`conecta_apple_salud`, que no cambia la fecha al volver a conectar). El permiso es del teléfono: marca local `salud:permiso-aqui`. Con la fila y sin la marca: «Vuelve a conectar tu Apple Watch». Estado compartido: `src/lib/relojConectado.js`.
+- **Todo cuenta desde que conecta**: `leeSalud({ desde })` nunca lee antes de `conectado_en`. Al terminar un entreno con el reloj, `SincronizaReloj` lee las últimas 3 h a los 8, 20 y 60 s; si el entreno ya estaba (uno de la app), se le pone el pulso del reloj (`metricas.pulso_de = 'apple_watch'`) en vez de repetirlo.
+- **Lo de antes, solo para las cuentas**: hasta 12 meses de resúmenes en `actividades_previas` y `recuperacion_previa` (`leeLoDeAntes` → `guardaPrevias`, una vez por cuenta: `detalle.previas`). Entran a la condición/fatiga/forma (la gráfica pinta solo desde que conectó) y a «lo normal» de la recuperación (la base de 30 días). Ninguna lista, récord ni pantalla los enseña. El conector de IA hace lo mismo.
+- **Dónde se entera**: paso `reloj` del inicio de cuenta (con reloj: conectar; sin reloj o en la web: «Training Lab funciona con tu Apple Watch»), tarjeta de Home la primera semana (y «Vemos que ya tienes Apple Watch» una vez), la página del entreno, Mis métricas, Dispositivos (botón «Conectar», página del reloj; en la web «En la app del iPhone») y el coach («Pedirle que conecte su reloj»: mensaje tipo `reloj`, una vez al día, `pide_conectar_reloj`).
+- **Solo administradores**: «Probar como si tuviera Apple Watch» (el dueño y sus cuentas de prueba, `soy_cuenta_de_prueba`). Vale para esa cuenta y solo en la app del iPhone.
+- SQL: `docs/sql/2026-10-29-reloj-fase-5.sql`. Prueba pura: `node scripts/prueba-reloj.mjs`.
 
 ## La ubicación silenciosa (sección 8b, fase 4)
 

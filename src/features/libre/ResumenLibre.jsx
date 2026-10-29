@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, MoreHorizontal, Share2, Trophy } from 'lucide-react';
+import { ChevronLeft, Loader2, MoreHorizontal, Share2, Trophy, Watch } from 'lucide-react';
 import { LT, FONT, NUM_STYLE, KP } from '@/lib/theme';
 import { datosDelResumen } from '@/lib/resumenLibre';
 import { DEPORTES, nombreDelDeporte } from '@/lib/metricas/deportes';
@@ -20,6 +20,9 @@ import MapaDeCarrera from './MapaDeCarrera';
 import IconoDeActividad from './IconoDeActividad';
 import ElegirActividad from './ElegirActividad';
 import { botonGrande, tarjetaBlanca } from './estilosLibre';
+import { RelojEnEntreno } from '@/features/reloj/TarjetasDelReloj';
+import { AVISO_RELOJ_TRAJO } from '@/lib/relojApple';
+import { useReloj } from '@/lib/relojConectado';
 
 const HojaDeStickers = lazy(() => import('@/features/stickers/HojaDeStickers'));
 
@@ -57,6 +60,20 @@ export default function ResumenLibre({ fila: filaInicial, unidadPeso = 'kg', alC
     cargaHistorial({ atletaId: f0.atleta_id, inicioMs: Date.parse(f0.inicio), propias: p0, tipoDeSesion: t0 }).then((h) => { if (vivo) setHistorial(h); });
     return () => { vivo = false; };
   }, []);
+  /* EL PULSO DEL RELOJ (fase 5, 29 oct 2026). Al terminar un entreno con el Apple Watch, `SincronizaReloj` va por él a Salud (a los 8, 20 y 60 s): mientras,
+     «Trayendo tu pulso del reloj…»; al llegar, este entreno se vuelve a leer y salen su pulso medio, máximo y calorías con «Lo midió tu Apple Watch». */
+  const { conexion: relojConexion, aqui: relojAqui, trayendo } = useReloj();
+  useEffect(() => {
+    if (!fila?.id) return undefined;
+    const alTraer = (e) => {
+      if (!e.detail?.enriquecidos?.includes(fila.id)) return;
+      getActividad(fila.id).then((completa) => { if (completa) setFila((antes) => ({ ...completa, titulo: antes.titulo, deporte: antes.deporte })); }).catch(() => {});
+    };
+    window.addEventListener(AVISO_RELOJ_TRAJO, alTraer);
+    return () => window.removeEventListener(AVISO_RELOJ_TRAJO, alTraer);
+  }, [fila?.id]);
+  const pulsoDelReloj = fila.fc_media > 0 && (fila.metricas?.pulso_de === 'apple_watch' || fila.origen === 'healthkit');
+  const trayendoPulso = recien && trayendo && !!relojConexion && relojAqui && !(fila.fc_media > 0);
   const [verStickers, setVerStickers] = useState(conStickers);
   const [menu, setMenu] = useState(null); // null | 'opciones' | 'nombre' | 'actividad'
   const [error, setError] = useState(null);
@@ -148,11 +165,32 @@ export default function ResumenLibre({ fila: filaInicial, unidadPeso = 'kg', alC
               </>
             )}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: 14, marginTop: 18 }}>
-              {datosDelResumen(fila).map((d) => <Dato key={d.etiqueta} {...d} />)}
+              {datosDelResumen(fila).filter((d) => !(pulsoDelReloj && d.etiqueta === 'pulso medio')).map((d) => <Dato key={d.etiqueta} {...d} />)}
             </div>
           </div>
+          {trayendoPulso && (
+            <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#fff', borderRadius: 18, padding: '14px 16px', fontSize: 14.5, fontWeight: 600, color: LT.text2 }}>
+              <Loader2 size={20} className="spin" color={KP.blue} />Trayendo tu pulso del reloj…
+            </div>
+          )}
+          {pulsoDelReloj && (
+            <div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
+                {[[fila.fc_media, 'lpm', 'Pulso medio', true], [fila.fc_max, 'lpm', 'Pulso máximo', true], [fila.kcal_activas ? Math.round(fila.kcal_activas) : null, 'kcal', 'Calorías', false]].map(([v, u, t, rojo]) => (
+                  <div key={t} style={{ ...tarjetaBlanca, padding: '12px 12px 11px', borderRadius: 18, minWidth: 0 }}>
+                    <b style={{ display: 'block', fontSize: 21, fontWeight: 800, letterSpacing: -0.3, lineHeight: 1.1, whiteSpace: 'nowrap', color: rojo ? '#E5364F' : LT.text, ...NUM_STYLE }}>
+                      {v ? <>{v.toLocaleString('es-MX')}<small style={{ fontSize: 12, fontWeight: 700, marginLeft: 2 }}>{u}</small></> : '—'}
+                    </b>
+                    <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: LT.text2, marginTop: 3 }}>{t}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '10px 4px 0', fontSize: 12.5, fontWeight: 600, color: LT.text2 }}><Watch size={14} />Lo midió tu Apple Watch</div>
+            </div>
+          )}
           {error && <div role="alert" style={{ fontSize: 14, fontWeight: 600, color: '#B42318', padding: '0 4px' }}>{error}</div>}
           {recien && <AvisoDeStickers entreno={entreno} alAbrir={() => setVerStickers(true)} />}
+          {recien && !trayendoPulso && <RelojEnEntreno conPulso={fila.fc_media > 0} />}
           {kms.length > 0 && (
             <div>
               <div style={{ fontSize: 17, fontWeight: 800, color: LT.text, margin: '4px 2px 8px' }}>Por kilómetro</div>

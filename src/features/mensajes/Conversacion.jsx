@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Ban, Check, ChevronLeft, Flag, Loader2 } from 'lucide-react';
+import { Ban, Check, ChevronLeft, Flag, Loader2, Watch } from 'lucide-react';
 import { T, KP, FONT, UI } from '@/lib/theme';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useMensajes } from '@/contexts/MensajesContext';
@@ -11,6 +11,8 @@ import Redactor from '@/features/mensajes/Redactor';
 import { preparaArchivo } from '@/features/mensajes/adjuntos';
 import TarjetaDeTecnica from '@/features/mensajes/TarjetaDeTecnica';
 import { diaTexto, horaTexto, reloj } from '@/features/mensajes/formato';
+import { abreConectaReloj } from '@/lib/abreConectaReloj';
+import { useReloj } from '@/lib/relojConectado';
 
 const GrabaTecnica = lazy(() => import('@/features/mensajes/GrabaTecnica'));
 const CorregirTecnica = lazy(() => import('@/features/mensajes/CorregirTecnica'));
@@ -33,9 +35,10 @@ const esVeredicto = (m) => m.tipo === 'correccion' && m.texto === 'Técnica corr
 /** El archivo de una corrección es una nota de voz o un video: se dibuja con el mismo `Adjunto` de los mensajes sueltos, según su tipo de archivo. */
 const comoAdjunto = (m) => ({ ...m, tipo: String(m.adjunto?.mime ?? '').startsWith('audio') ? 'voz' : 'video' });
 
-function Burbuja({ m, mio, ultimoMio, elegido, url, tecnica, alElegir, alEliminar, alReportar, alFallar, alSaltar, acciones }) {
+function Burbuja({ m, mio, ultimoMio, elegido, url, tecnica, alElegir, alEliminar, alReportar, alFallar, alSaltar, acciones, nombreDelOtro }) {
   const borrado = !!m.eliminado_en;
-  const esTecnica = m.tipo === 'tecnica' && !borrado;
+  // «Pedirle que conecte su reloj» (fase 5): la tarjeta va dibujada como la de técnica, en blanco y a lo ancho.
+  const esTecnica = (m.tipo === 'tecnica' || m.tipo === 'reloj') && !borrado;
   const correccion = m.tipo === 'correccion' && !borrado;
   const veredicto = correccion && esVeredicto(m);
   const archivo = (CON_ARCHIVO.has(m.tipo) || esTecnica || (correccion && !!m.adjunto)) && !borrado;
@@ -55,7 +58,8 @@ function Burbuja({ m, mio, ultimoMio, elegido, url, tecnica, alElegir, alElimina
         }}
       >
         {borrado && <span style={{ fontStyle: 'italic', fontSize: 14.5 }}>Mensaje eliminado</span>}
-        {esTecnica && (
+        {esTecnica && m.tipo === 'reloj' && <TarjetaPideReloj soyAtleta={!mio} coach={mio ? null : nombreDelOtro} />}
+        {esTecnica && m.tipo === 'tecnica' && (
           <TarjetaDeTecnica
             m={m} t={tecnica} soyAtleta={mio} url={url} alFallar={alFallar}
             alCorrecta={acciones.alCorrecta} alCorregir={acciones.alCorregir} alOtroIntento={acciones.alOtroIntento}
@@ -104,6 +108,36 @@ function Burbuja({ m, mio, ultimoMio, elegido, url, tecnica, alElegir, alElimina
         <span style={{ marginTop: 3, fontSize: 11.5, fontWeight: 700, color: m.visto_en ? T.accent : T.text3 }}>{m.visto_en ? 'Visto' : 'Enviado'}</span>
       )}
     </div>
+  );
+}
+
+/**
+ * La tarjeta «Conecta tu Apple Watch» que manda el coach (fase 5). Al atleta, con el botón que abre la pantalla de conectar; si ya lo conectó, «Conectado».
+ * Al coach, la misma tarjeta sin botón.
+ */
+function TarjetaPideReloj({ soyAtleta, coach }) {
+  const { conexion } = useReloj();
+  const nombre = (coach || '').trim().split(/\s+/)[0] || 'Tu coach';
+  return (
+    <span style={{ display: 'grid', gap: 12, padding: 14 }}>
+      <span style={{ display: 'grid', gridTemplateColumns: '40px 1fr', gap: 12, alignItems: 'start' }}>
+        <span style={{ width: 40, height: 40, borderRadius: 12, background: KP.blueSoft, color: KP.blue, display: 'grid', placeItems: 'center' }}><Watch size={20} /></span>
+        <span>
+          <b style={{ display: 'block', fontSize: 15.5, lineHeight: 1.3, color: T.text }}>Conecta tu Apple Watch</b>
+          <span style={{ display: 'block', fontSize: 13.5, color: T.text2, marginTop: 2, lineHeight: 1.4 }}>{soyAtleta ? `${nombre} quiere ver tu pulso y tus entrenos del reloj.` : 'Le llega con el botón para conectar.'}</span>
+        </span>
+      </span>
+      {soyAtleta && (conexion
+        ? <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, color: '#047857' }}><Check size={18} />Conectado</span>
+        : (
+          <button
+            type="button" onClick={() => abreConectaReloj('chat')} className="kp-press"
+            style={{ minHeight: 44, borderRadius: 14, border: 'none', background: KP.blue, color: '#fff', fontFamily: FONT, fontSize: 15, fontWeight: 800, cursor: 'pointer', touchAction: 'manipulation' }}
+          >
+            Conectar Apple Watch
+          </button>
+        ))}
+    </span>
   );
 }
 
@@ -361,7 +395,7 @@ export default function Conversacion({ fila, uid, etiqueta = null, onVolver = nu
       <Burbuja
         key={m.id} m={m} mio={m.autor_id === uid} ultimoMio={m.id === ultimoMioId} elegido={elegido === m.id} url={m.adjunto?.ruta ? urls.get(m.adjunto.ruta) ?? null : null} alFallar={alFallar}
         tecnica={m.tecnica_id ? tecnicas.get(m.tecnica_id) ?? null : null} alSaltar={saltaAlSegundo} acciones={acciones}
-        alElegir={(id) => setElegido((prev) => (prev === id ? null : id))} alEliminar={elimina} alReportar={reporta}
+        alElegir={(id) => setElegido((prev) => (prev === id ? null : id))} alEliminar={elimina} alReportar={reporta} nombreDelOtro={fila.otro_nombre}
       />,
     );
   });

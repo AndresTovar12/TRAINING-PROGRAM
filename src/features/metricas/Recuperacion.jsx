@@ -7,8 +7,8 @@ import { BarrasApiladas, GraficaDeLinea } from './Graficas';
 import { marcasNumericas } from './graficasUtil';
 import { Dato, EstadoVacio, Insignia, Seccion, Tarjeta } from './Piezas';
 import { TONOS } from './tonos';
-import { saludDisponible, TEXTO_CONECTA_RELOJ } from '@/lib/saludDelTelefono';
-import ConectaTuReloj from './ConectaTuReloj';
+import { saludDisponible } from '@/lib/saludDelTelefono';
+import ConectaTuReloj, { useConectaReloj } from './ConectaTuReloj';
 
 /* RECUPERACIÓN: lo que el reloj mide mientras el atleta NO entrena: pulso en reposo, HRV (variabilidad del pulso) y sueño. Cada línea se compara con lo normal de
    ese mismo atleta (su promedio de los 30 días anteriores): lo que importa no es el 52 en sí, sino que HOY esté 6 latidos por encima de su 52. */
@@ -52,6 +52,7 @@ function LineaDiaria({ filas, campo, desde, hasta, color, unidad, banda, factor 
 export default function Recuperacion({ d, recuperacion, hoy, esAtleta = false }) {
   // Dentro de la app del iPhone, el propio atleta conecta su reloj (Mi perfil → Dispositivos); en la web, o para el coach, el export de Apple Salud.
   const conecta = esAtleta && saludDisponible();
+  const delReloj = useConectaReloj();
   const [rango, setRango] = useState(30);
   const desde = sumaDias(hoy, -rango);
   const filas = useMemo(() => recuperacion.filter((f) => f.dia >= desde && f.dia <= hoy), [recuperacion, desde, hoy]);
@@ -63,7 +64,7 @@ export default function Recuperacion({ d, recuperacion, hoy, esAtleta = false })
       <EstadoVacio
         icono={Moon} titulo="Sin datos de recuperación"
         texto={conecta
-          ? `El pulso en reposo, la HRV y el sueño los mide tu Apple Watch mientras no entrenas. ${TEXTO_CONECTA_RELOJ}`
+          ? `El pulso en reposo, la HRV y el sueño los mide tu Apple Watch mientras no entrenas. ${delReloj.texto}`
           : 'El pulso en reposo, la HRV y el sueño los mide el Apple Watch (u otro reloj) mientras no entrena. Se traen al importar el export de Apple Salud: en el iPhone, Salud → tu foto → Exportar todos los datos de salud.'}
       >
         {conecta && <ConectaTuReloj />}

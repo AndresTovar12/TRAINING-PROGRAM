@@ -17,3 +17,12 @@ export async function listRecuperacion(atletaId, { desdeDia = null } = {}) {
   }
   return filas;
 }
+
+/** La recuperación de ANTES de conectar el reloj (fase 5, `recuperacion_previa`) desde `desdeDia`. Solo para «lo normal»: ninguna pantalla la enseña. */
+export async function listRecuperacionPrevia(atletaId, { desdeDia = null } = {}) {
+  let q = supabase.from('recuperacion_previa').select('*').eq('atleta_id', atletaId).order('dia', { ascending: true }).limit(1000);
+  if (desdeDia) q = q.gte('dia', desdeDia);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data ?? [];
+}
