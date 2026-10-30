@@ -2,8 +2,8 @@ import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } fro
 import { useAviso } from '@/components/AvisoPasajero';
 import {
   ChevronRight, ChevronLeft, Calendar, Lock,
-  Check, X, Calculator, TrendingUp, Edit3,
-  Clock, Dumbbell, Heart, Play, CalendarDays, ListChecks,
+  Check, X, Calculator, TrendingUp, Edit3, Layers,
+  Clock, Dumbbell, Heart, Play, CalendarDays,
   Home as HomeIcon,
   Repeat, Scale, LineChart as LineChartIcon,
   MessageCircle, Timer, HeartPulse, Moon, Upload, Activity, Compass, CircleDot,
@@ -44,7 +44,7 @@ import { HoyTeToca, HoyTeTocaEquipo, HoyDescansas, HoyEnPausa } from '@/features
 import { RelojEnHome } from '@/features/reloj/TarjetasDelReloj';
 import { textoDeSemana } from '@/lib/vaEn';
 import { useMoverMiPlan, ReglasDeMiPlan, ControlesDeMiPlan, MoverAquiAtleta, AvisoDelCoach } from '@/features/training/MoverMiPlan';
-import { CuadroDeSalud, CuadroDePrograma, CuadroBlanco } from '@/features/training/home/Cuadros';
+import { CuadroDeSalud, CuadroBlanco, Cuadrito, FranjaDeSalud } from '@/features/training/home/Cuadros';
 import Saludo from '@/features/training/home/Saludo';
 import EmpiezaAqui, { TeEstaArmando } from '@/features/training/home/EmpiezaAqui';
 import { Boton, Grupo, Fila, IconoDeFila, TarjetaHeroe, Deslizador, EntradaNumero, Pastilla, BarraLateral } from '@/components/ui';
@@ -1530,7 +1530,6 @@ const HomeView = ({
   const { phases: PLAN, planMeta, kind, estructura, bibliotecas, demoActiva, comprasPorAtender, comprasFallo, reintentaCompras } = usePlan();
   // "Varias semanas": las tarjetas dicen la semana de corrido, no la fase.
   const deCorrido = estructura === 'semanas';
-  const semanaDe = (n) => `Semana ${semanaGlobal(PLAN, n.phase.id, n.week.num) ?? n.week.num} de ${semanasDelPlan(PLAN)}`;
   const { perfil: profile, soloLectura, userId: atletaId } = usePerfilDeLaVista();
   /* Los avisos que ya aceptó con su «Entendido» (uno por aviso; se guardan con el resto de
      lo suyo). Hasta que cargue lo guardado no se enseña ninguno: uno ya aceptado saldría
@@ -1613,7 +1612,6 @@ const HomeView = ({
   /* LA FOTO DE LA TARJETA: la de la fase de hoy; si no tiene, la del plan; si tampoco, la tarjeta oscura. Con equipo puede
      no tocar sesión del coach principal hoy (`next` vacío) y aun así hay una fase en la que va: se usa esa. */
   const faseDeHoy = next?.phase ?? PLAN.find((f) => f.id === cursor?.phaseId) ?? PLAN[0] ?? null;
-  const fotoDeHome = faseDeHoy ? (faseDeHoy.image || planMeta?.foto || '') : '';
   const tituloFoto = kind === 'weekly' ? (planMeta?.title || 'Rutina semanal')
     : deCorrido ? (planMeta?.title || 'Tu programa') : (faseDeHoy?.name ?? '');
   // Lo de 1RM: el máximo que guardó más recientemente (los de antes no tienen fecha: el más pesado), en su unidad.
@@ -1639,7 +1637,7 @@ const HomeView = ({
   const metaDelCartel = [
     // Solo una rutina que se repite dice aquí el día de la semana, que en ninguna otra parte se menciona.
     diaDeLaRutina ? { Icono: CalendarDays, texto: diaDeLaRutina.charAt(0).toUpperCase() + diaDeLaRutina.slice(1) } : null,
-    sessionMeta.exercises ? { Icono: ListChecks, texto: plural(sessionMeta.exercises, 'ejercicio', 'ejercicios') } : null,
+    // Cuántos ejercicios ya no va en la tarjeta (30 oct 2026, ejemplo de Andrés: menos datos); se ven al abrirla.
     // Sin ejercicios reales la «duración» es el tipo de sesión, no un tiempo: sin reloj.
     sessionMeta.duration ? { Icono: sessionMeta.exercises ? Clock : null, texto: sessionMeta.duration } : null,
     // Una clase dice cuánto dura (si se sabe).
@@ -1656,13 +1654,12 @@ const HomeView = ({
   const sesionesDeLaTarjeta = next
     ? (entradasDelDia.length > 1
       ? entradasDelDia.map((h, i) => {
-        const n = (h.day.exercises || []).filter((e) => !e.isNote).length;
         // Cada sesión del día es suya: su propio estado (sin empezar, en curso o terminada) y su propio botón.
         const id = sessionIdFor(kind, next.phase.id, next.week.num, h.idx);
         const reg = sessionsData[id];
         return {
           day: h.day, nombre: sesionesDelCartel[i]?.nombre,
-          meta: [tipoDeSesion(h.day).label, n ? plural(n, 'ejercicio', 'ejercicios') : null, minutosDelNombre(h.day.name || '') || null].filter(Boolean),
+          meta: [tipoDeSesion(h.day).label, minutosDelNombre(h.day.name || '') || null].filter(Boolean),
           hecha: !!reg?.completed,
           enMarcha: !reg?.completed && Object.keys(reg?.entreno?.hechos ?? {}).length > 0,
           onAbrir: () => { preparaAudio(); pideAbrirEntreno(id); onStartSession(next.phase, next.week, h.idx, true); },
@@ -1676,11 +1673,7 @@ const HomeView = ({
   // Un entreno guiado a medias (tiene pasos hechos y la sesión no está terminada): la tarjeta dice «Seguir», no «Empezar».
   const entrenoEnMarcha = !!next && !cursorCompleted && Object.keys(sessionsData[next.id]?.entreno?.hechos ?? {}).length > 0;
   const enPausa = !!cursor?.pausa;
-  const posicionDeFase = faseDeHoy ? PLAN.findIndex((f) => f.id === faseDeHoy.id) : -1;
   const etiquetaDeFase = kind === 'weekly' ? 'Tu rutina' : deCorrido ? 'Tu programa' : `Fase ${faseDeHoy?.num ?? ''}`;
-  const subDeFase = kind === 'weekly' || !next ? null
-    : deCorrido ? semanaDe(next)
-      : `Semana ${next.week.num} de ${next.phase.weeks}`;
   const conLibre = !soloLectura && atletaId && !demoActiva;
 
   const descanso = (
@@ -1782,30 +1775,31 @@ const HomeView = ({
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+          {/* LOS ATAJOS (30 oct 2026, la «C» que eligió Andrés): Salud en una franja y los demás en cuadritos con la palabra adentro, sin datos.
+              Cada uno abre lo mismo que su cuadro de antes. */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {/* Salud (ahí también se conecta el reloj): dolor del día o lo que midió el reloj. */}
-            <CuadroDeSalud dolor={wellness[today()]?.soreness ?? null} reloj={reloj} salud={salud} onAbrir={() => onAbrirHoja('wellness')} />
-            {/* La puerta al programa completo, con la foto de la fase de fondo si la tiene. */}
-            {faseDeHoy && (
-              <CuadroDePrograma
-                etiqueta={etiquetaDeFase} titulo={tituloFoto || planMeta?.title || t('Mi plan')} sub={subDeFase} foto={fotoDeHome}
-                fases={kind === 'weekly' || deCorrido ? 0 : PLAN.length} actual={posicionDeFase >= 0 ? posicionDeFase : null}
-                onAbrir={onVerPrograma}
-              />
-            )}
-            {/* Entrenar por su cuenta y sus stickers. Quien mira la app de otra persona no los ve. */}
-            {conLibre && <EntrenoLibre userId={atletaId} unidadPeso={unidadPeso} variante="cuadros" />}
+            <FranjaDeSalud dolor={wellness[today()]?.soreness ?? null} reloj={reloj} salud={salud} onAbrir={() => onAbrirHoja('wellness')} />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
+              {/* La puerta al programa completo. */}
+              {faseDeHoy && (
+                <Cuadrito
+                  tono="cielo" Icono={Layers} texto="Programa" onClick={onVerPrograma}
+                  etiquetaAccesible={`${etiquetaDeFase}: ${tituloFoto || planMeta?.title || t('Mi plan')}. Ver el programa`}
+                />
+              )}
+              {/* 1RM no sale a un paciente de fisio. */}
+              {con1RM && (
+                <Cuadrito
+                  tono="violeta" Icono={Calculator} texto="1RM" onClick={() => onAbrirHoja('oneRM')}
+                  etiquetaAccesible={mejorRM ? `1RM: ${mejorRM.nombre} ${desdeKilos(mejorRM.kg, unidadPeso)} ${etiquetaUnidad(unidadPeso)}` : '1RM: anotar'}
+                />
+              )}
+              {/* Entrenar por su cuenta y sus stickers. Quien mira la app de otra persona no los ve. */}
+              {conLibre && <EntrenoLibre userId={atletaId} unidadPeso={unidadPeso} variante="atajos" />}
+            </div>
           </div>
 
-          {/* 1RM no sale a un paciente de fisio. «Ciencia» se quitó de la app (Andrés, 26 oct 2026: nadie la usaba); lo escrito sigue guardado en los planes. */}
-          {con1RM && (
-            <Grupo>
-              <Fila
-                izquierda={<IconoDeFila><Calculator size={18} /></IconoDeFila>} texto="1RM" onClick={() => onAbrirHoja('oneRM')}
-                valor={mejorRM ? `${mejorRM.nombre} ${desdeKilos(mejorRM.kg, unidadPeso)} ${etiquetaUnidad(unidadPeso)}` : 'Anotar'}
-              />
-            </Grupo>
-          )}
           {/* Lo que registró por su cuenta (correr, pádel…): con plan solo vivía en Mi perfil → Mis métricas (auditoría p29). Sin nada registrado no sale. */}
           {conLibre && <EntrenoLibre userId={atletaId} unidadPeso={unidadPeso} variante="historial" />}
           {/* Las bibliotecas de clases que compró («todas mis clases»): una tarjeta por biblioteca. */}

@@ -10,8 +10,9 @@ import { etiquetaDePrograma } from '@/lib/programas';
  * La tarjeta azul «Hoy te toca» de Home (reestructura visual, 15 oct 2026). Sustituye al «cartel» del 9 oct
  * (`TarjetaDeHoy`): mismo trabajo, la forma de las capturas de Andrés.
  *
- *   · Arriba: «● Hoy te toca» (o «Hoy te tocan dos», «Completada») y la fecha.
- *   · Cada sesión en su renglón: el ícono de su tipo en un cuadro, el nombre grande y debajo «● Tipo · 4 ejercicios · 60 min».
+ *   · Hoy no lleva franja de arriba (30 oct 2026, ejemplo de Andrés: menos datos; la fecha ya la dice el saludo). Solo al ver OTRO día de la tira
+ *     sale «● El viernes 23 te toca» con su fecha.
+ *   · Cada sesión en su renglón: el ícono de su tipo en un cuadro, el nombre grande y debajo «● Tipo · 60 min» (sin cuántos ejercicios: 30 oct 2026).
  *   · Abajo «Empezar» (blanco). Ya no hay «Cambiar día» (16 oct 2026): el plan se mueve desde «Vas en», y una sesión de otro día se suma con «Agregar a hoy».
  *
  * EL NOMBRE MANDA (24 oct 2026; Andrés: «nunca puede salir mal el nombre ni esa card», con 1 o con 10 workouts y con cualquier largo). Por eso:
@@ -42,6 +43,7 @@ function textoDeFecha(fecha = new Date()) {
 
 /** El marco azul de la tarjeta de hoy (también lo usa «Entrenar» de quien no tiene plan, `HeroDeEntrenar`). */
 export function Marco({ etiqueta, punto = '#FFB547', fecha, children, estilo }) {
+  // Sin `etiqueta` (la tarjeta de hoy) no hay franja de arriba: ni la pastilla ni la fecha.
   return (
     <article style={{
       position: 'relative', overflow: 'hidden', borderRadius: 26, padding: '18px 18px 18px', color: '#fff', fontFamily: FONT,
@@ -49,12 +51,12 @@ export function Marco({ etiqueta, punto = '#FFB547', fecha, children, estilo }) 
     }}
     >
       {/* Con letra grande del sistema o «El miércoles 23 te tocan tres» la etiqueta y la fecha no caben en un renglón: la fecha baja, no se encima. */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px 10px' }}>
+      {etiqueta && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px 10px' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0, maxWidth: '100%', padding: '7px 13px', borderRadius: 999, background: 'rgba(255,255,255,0.14)', fontSize: 14, fontWeight: 700, lineHeight: 1.25 }}>
           <i aria-hidden="true" style={{ width: 9, height: 9, borderRadius: '50%', background: punto, flexShrink: 0 }} /><span className="texto-largo">{etiqueta}</span>
         </span>
         <span style={{ fontSize: 14, fontWeight: 600, opacity: 0.82, marginLeft: 'auto' }}>{textoDeFecha(fecha)}</span>
-      </div>
+      </div>}
       {children}
     </article>
   );
@@ -148,9 +150,10 @@ export function HoyTeToca({ sesiones, completada = false, enMarcha = false, onAb
   const verbo = (hecha, curso) => (hecha ? 'Ver detalle' : curso ? 'Seguir' : 'Empezar');
   const textoDe = (hecha, curso) => (hecha ? <>Ver detalle <ChevronRight size={19} aria-hidden="true" /></> : <><Play size={18} fill="currentColor" aria-hidden="true" />{curso ? 'Seguir' : 'Empezar'}</>);
   const nombres = sesiones.map((s) => s.nombre ?? '').filter(Boolean).join(', ');
+  const otroDia = cuando?.hoy === false;
   return (
-    <Marco etiqueta={etiquetaDeHoy(sesiones.length, todas, cuando)} punto={todas ? '#7CF0C5' : '#FFB547'} fecha={cuando?.fecha} estilo={estilo}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 18 }}>
+    <Marco etiqueta={otroDia ? etiquetaDeHoy(sesiones.length, todas, cuando) : null} punto={todas ? '#7CF0C5' : '#FFB547'} fecha={cuando?.fecha} estilo={estilo}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: otroDia ? 18 : 0 }}>
         {visibles.map((s, i) => (
           <Fragment key={i}>
             {i > 0 && <Raya />}
@@ -200,11 +203,12 @@ export function HoyTeTocaEquipo({ entradas, onAbrir, conAutor = true, cuando, es
   const todas = filas.length > 0 && filas.every(({ p }) => p.hecha);
   const visibles = abierta ? filas : filas.slice(0, VISIBLES);
   const faltan = filas.length - VISIBLES;
+  const otroDia = cuando?.hoy === false;
   return (
-    <Marco etiqueta={etiquetaDeHoy(filas.length, todas, cuando)} punto={todas ? '#7CF0C5' : '#FFB547'} fecha={cuando?.fecha} estilo={estilo}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 16 }}>
+    <Marco etiqueta={otroDia ? etiquetaDeHoy(filas.length, todas, cuando) : null} punto={todas ? '#7CF0C5' : '#FFB547'} fecha={cuando?.fecha} estilo={estilo}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: otroDia ? 16 : 0 }}>
         {visibles.map(({ e, p }) => {
-          const meta = [p.ejercicios ? `${p.ejercicios} ${p.ejercicios === 1 ? 'ejercicio' : 'ejercicios'}` : null, p.minutos || null].filter(Boolean);
+          const meta = [p.minutos || null].filter(Boolean);
           const autor = conAutor ? etiquetaDePrograma(e.programa) : null;
           return (
             <button
