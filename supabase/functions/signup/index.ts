@@ -164,7 +164,8 @@ Deno.serve(async (req) => {
   // DESPUÉS, pantalla por pantalla. Aquí se deja apuntado cuál es la siguiente para
   // que, si la persona cierra a la mitad, al volver retome donde iba. Lista cerrada:
   // un cliente no puede mandar a la app a una pantalla que no existe.
-  const PASOS = new Set(['nombre', 'oficio', 'entrena', 'equipo', 'repertorio', 'codigo', 'sexo', 'unidad', 'nacimiento', 'listo'])
+  // El inicio nuevo (30 oct 2026): «entrenador» (antes «codigo»), «sobre» (sexo y fecha de nacimiento juntos, antes dos pantallas) y «reloj».
+  const PASOS = new Set(['nombre', 'oficio', 'entrena', 'equipo', 'repertorio', 'entrenador', 'sobre', 'reloj', 'listo'])
   const inicioPaso = PASOS.has(payload.inicio_paso ?? '') ? payload.inicio_paso! : null
 
   if (!USERNAME_RE.test(username)) {
