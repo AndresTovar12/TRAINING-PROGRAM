@@ -15,6 +15,7 @@ import { abreSesionHecha } from '@/lib/abreSesionHecha';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { useAviso } from '@/components/AvisoPasajero';
 import HojaDeAcciones from '@/components/HojaDeAcciones';
+import HojaFlotante from '@/components/HojaFlotante';
 import Boton from '@/components/ui/Boton';
 import EntrenoDelDia from '@/features/training/EntrenoDelDia';
 import { borraRecorrido } from '@/features/training/useRecorrido';
@@ -180,6 +181,13 @@ export function useBotonesDeLaSesion({ dia, ejercicios, aspecto = null, registro
   };
   const verTuEntreno = () => abreSesionHecha({ almacen: claveDe ? claveDe('wr:sessions') : 'wr:sessions', id: sesionId });
 
+  /* LA NOTA ES DE CADA WORKOUT (Andrés, 30 oct 2026): el cuadro «Tus notas» del día no decía de qué sesión era, estorbaba y casi nadie lo usaba. Ahora se
+     escribe al terminar (la página del workout) o desde el «···» de su tarjeta, y si hay una se ve en una línea gris dentro de esa tarjeta. Es el mismo
+     `notes` de la sesión que usaba el cuadro: lo ya escrito no se pierde. */
+  const nota = String(registro?.notes ?? '').trim();
+  const [notaAbierta, setNotaAbierta] = useState(false);
+  const guardaNota = (texto) => onRegistro((prev) => ({ ...prev, notes: texto.trim() }));
+
   /* Las acciones del «···». Cada una escribe en la sesión al instante. La copia del recorrido de este teléfono se borra al terminar o dejar en blanco: si no, al volver a hacer la sesión
      (misma llave) la línea de la vez anterior reaparecería y se mezclaría con la nueva. */
   const terminarAhora = () => {
@@ -217,9 +225,10 @@ export function useBotonesDeLaSesion({ dia, ejercicios, aspecto = null, registro
     onRegistro((prev) => terminaSesion(prev, Date.now()));
   };
 
+  const accionDeNota = { texto: nota ? 'Editar tu nota' : 'Agregar una nota', onClick: () => setNotaAbierta(true) };
   const acciones = estado === 'curso'
-    ? [{ texto: 'Terminar ahora', onClick: terminarAhora }, { texto: 'Empezar de nuevo', onClick: empezarDeNuevo, peligro: true }]
-    : [{ texto: 'Ver tu entreno', onClick: verTuEntreno }, { texto: 'Hacerla otra vez', onClick: hacerlaOtraVez }, { texto: 'Marcar como no hecha', onClick: marcarComoNoHecha, peligro: true }];
+    ? [{ texto: 'Terminar ahora', onClick: terminarAhora }, accionDeNota, { texto: 'Empezar de nuevo', onClick: empezarDeNuevo, peligro: true }]
+    : [{ texto: 'Ver tu entreno', onClick: verTuEntreno }, accionDeNota, { texto: 'Hacerla otra vez', onClick: hacerlaOtraVez }, { texto: 'Marcar como no hecha', onClick: marcarComoNoHecha, peligro: true }];
   const conMenu = conBotones && (estado === 'curso' || estado === 'hecha');
   const abreMenu = () => setMenu(true);
 
@@ -280,8 +289,25 @@ export function useBotonesDeLaSesion({ dia, ejercicios, aspecto = null, registro
     );
   }
 
+  // La nota, en una línea gris dentro de la tarjeta (dos renglones como mucho). Con botones se toca para editarla.
+  if (nota) {
+    const linea = (
+      <button
+        type="button" onClick={conBotones ? () => setNotaAbierta(true) : undefined} disabled={!conBotones} aria-label={`Tu nota: ${nota}`}
+        style={{
+          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', width: '100%', textAlign: 'left', border: 'none', background: 'transparent',
+          padding: '0 3px', margin: '0 0 14px', fontFamily: FONT, fontSize: 14, lineHeight: 1.45, color: LT.text2, cursor: conBotones ? 'pointer' : 'default', touchAction: 'manipulation',
+        }}
+      >
+        <b style={{ fontWeight: 700, color: LT.text }}>Tu nota: </b>{nota}
+      </button>
+    );
+    boton = boton ? <>{boton}{linea}</> : linea;
+  }
+
   const hojas = (
     <>
+      {notaAbierta && <HojaDeLaNota nota={nota} alGuardar={guardaNota} alCerrar={() => setNotaAbierta(false)} />}
       {abrirYa && !sinBoton && <AbreAlAparecer alAparecer={() => { setAbrirYa(false); abre(); }} />}
       {fallo && (
         <div role="status" style={{ margin: '0 3px 14px', fontSize: 13.5, fontWeight: 600, color: LT.text2, lineHeight: 1.4 }}>
@@ -303,4 +329,21 @@ export function useBotonesDeLaSesion({ dia, ejercicios, aspecto = null, registro
   );
 
   return { estado, boton, conMenu, abreMenu, hojas, puedeMarcarHecha: !!activo && !soloLectura && estado === 'sin', marcarComoHecha };
+}
+
+/** La hoja para escribir la nota de ESTE workout (desde el «···» de su tarjeta o tocando su línea). Se guarda con «Guardar»; vacía, la nota se quita. */
+function HojaDeLaNota({ nota, alGuardar, alCerrar }) {
+  const [texto, setTexto] = useState(nota);
+  return (
+    <HojaFlotante
+      titulo="Tu nota" subtitulo="Cómo te sentiste, qué ajustarías. La ve quien te entrena." onCerrar={alCerrar}
+      pie={<Boton ancho onClick={() => { alGuardar(texto); alCerrar(); }}>Guardar</Boton>}
+    >
+      <textarea
+        aria-label="Tu nota" value={texto} onChange={(e) => setTexto(e.target.value)} rows={4} autoFocus
+        placeholder="Cómo te sentiste, qué ajustarías…"
+        style={{ display: 'block', width: '100%', boxSizing: 'border-box', border: 'none', borderRadius: 14, background: UI.relleno, padding: '12px 14px', fontFamily: FONT, fontSize: 16, lineHeight: 1.45, color: LT.text, resize: 'none', outline: 'none' }}
+      />
+    </HojaFlotante>
+  );
 }

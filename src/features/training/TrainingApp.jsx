@@ -853,7 +853,7 @@ const tarjetasDelDia = (day) => {
  * (cada uno dentro de su `ComoPrograma`) sin copiar nada.
  *
  * `partes` (solo «Plan» con equipo, y un día con dos entradas) dice cuáles piezas se dibujan:
- * 'sesiones', 'notasDelDia' y 'tusNotas' (los «Por qué este día / workout / semana» se quitaron con «Ciencia», 26 oct 2026;
+ * 'sesiones' y 'notasDelDia' («Tus notas» del día se quitó el 30 oct 2026: la nota es de cada workout, ver `BotonDelEntreno`; los «Por qué este día / workout / semana» se quitaron con «Ciencia», 26 oct 2026;
  * los textos siguen guardados en el plan). Sin ella salen todas, como siempre. Con
  * equipo las sesiones de todos van juntas arriba, cada una como una tarjeta
  * (`entarjetas`), y lo demás —las notas y el porqué científico— sale UNA sola vez,
@@ -914,7 +914,6 @@ const CuerpoDelDia = ({
     if (resultado) resto[clave] = resultado; else delete resto[clave];
     return { ...prev, formatos: resto };
   });
-  const updateNotes = (notes) => updateSession(selectedId, prev => ({ ...prev, notes }));
   /* LOS BOTONES DE LA SESIÓN (29 oct 2026): un botón grande por estado, arriba de la lista de ejercicios, y lo que borra o reinicia en el «···» (ver `useBotonesDeLaSesion`).
      Antes eran cuatro cosas que se podían tocar por error a la vista: un bloque verde «Sesión terminada», «Stickers», «Deshacer» y un azul «Marcar sesión como terminada». Una sesión que dice
      «repite el martes» se entrena con los ejercicios del martes (`ejercicios`), pero lo que se anota queda en SU lugar. */
@@ -1081,28 +1080,6 @@ const CuerpoDelDia = ({
         </div>
       )}
 
-      {/* Notas del usuario */}
-      {quiere('tusNotas') && (
-        <div style={{ background: LT.surface, borderRadius: 18, padding: 16, marginBottom: 14, boxShadow: UI.sombraGrupo }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <Edit3 size={15} style={{ color: LT.text2 }} />
-            <span style={{ fontSize: 16, color: LT.text, fontWeight: 700 }}>Tus notas</span>
-          </div>
-          <textarea
-            value={sessionData.notes || ''}
-            onChange={e => updateNotes(e.target.value)}
-            placeholder="Cómo te sentiste, ajustes, observaciones..."
-            rows={3}
-            style={{
-              width: '100%', background: UI.relleno, border: 'none',
-              borderRadius: 14, padding: 12, color: LT.text, fontFamily: FONT, fontSize: 16,
-              outline: 'none', resize: 'vertical', boxSizing: 'border-box',
-            }}
-            onFocus={e => { /* estilo-ok: aro de foco al escribir */ e.target.style.boxShadow = `inset 0 0 0 1.5px ${LT.blue}`; }}
-            onBlur={e => { e.target.style.boxShadow = 'none'; }}
-          />
-        </div>
-      )}
 
 
     </>
@@ -1303,12 +1280,6 @@ const WeekDetail = ({
               partes={['notasDelDia']}
             />
           ))}
-          {/* Lo que anota el atleta del día es UNO solo: va con la primera sesión. */}
-          <CuerpoDelDia
-            phase={phase} week={week} dayIdx={hermanas[0].idx}
-            sessionsData={sessionsData} updateSession={updateSession} oneRMs={oneRMs}
-            partes={['tusNotas']}
-          />
         </>
       ) : (
         <CuerpoDelDia
@@ -1406,12 +1377,6 @@ const PlanUnificado = ({
 
   const dia = dias.find((d) => d.clave === clave) ?? dias[0];
   const fuentes = visibles(dia);
-  /* «Tus notas» es UNA sola por día (la del primer programa), pero la nota que se escribe al terminar un entreno queda en la sesión que se entrenó: si era la del fisio o la de un programa comprado,
-     «Tus notas» salía vacía y lo que se escribía ahí caía en la sesión del coach (auditoría p24). Si alguna sesión del día ya tiene nota, ahí vive «Tus notas». */
-  const fuenteDeNotas = dia.fuentes.find((f) => {
-    const reg = registrosDe(f.programa, store)[sessionIdFor(f.programa.kind, f.phase.id, f.week.num, f.idx)];
-    return !!String(reg?.notes ?? '').trim();
-  }) ?? dia.fuentes[0];
   const conAutor = autores.length > 1;
   /* Dos programas de la MISMA persona el mismo día (uno asignado y otro comprado a su fisio) se veían idénticos y con dos «Por qué esta semana» sin decir de cuál (auditoría p111):
      cuando eso pasa, la etiqueta de cada sesión y cada explicación llevan además el nombre del programa. */
@@ -1489,12 +1454,6 @@ const PlanUnificado = ({
               fuente={f} store={store} setStore={setStore} oneRMs={oneRMs} partes={['notasDelDia']}
             />
           ))}
-          {/* Lo que anota el atleta del día es UNO solo, no uno por persona: va con el
-              primer programa del día (el del coach), aunque el filtro lo deje fuera. */}
-          <FuenteDelDia
-            key={`t-${clave}`}
-            fuente={fuenteDeNotas} store={store} setStore={setStore} oneRMs={oneRMs} partes={['tusNotas']}
-          />
         </>
       )}
 
