@@ -124,6 +124,22 @@ y reinicia `npm run dev`.
 
 ---
 
+## Google en la app de iPhone (30 oct 2026)
+
+En la app del iPhone NO se usa la página de Google: Google bloquea su entrada dentro de una app (`disallowed_useragent`) y no regresa a
+`capacitor://localhost`. Se usa la hoja de Google del propio iPhone (complemento `@capgo/capacitor-social-login`, igual que Apple), que da una
+identidad (`idToken`) y Supabase la cambia por una sesión (`signInWithIdToken`), con un *nonce* (Google guarda su huella SHA-256 y Supabase la compara).
+
+Lo que se configuró (proyecto de Google Cloud `training-lab-web`, ya **En producción**):
+1. Un cliente OAuth tipo **iOS** («Training Lab iPhone», paquete `com.traininglabapp.app`). Su ID va en `src/contexts/AuthContext.jsx`
+   (`GOOGLE_IOS_CLIENT_ID`) y, al revés (`com.googleusercontent.apps.…`), en `ios/App/App/Info.plist` (`CFBundleURLSchemes`).
+2. El ID del cliente **web** va como `iOSServerClientId`: es a quién va dirigida la identidad, y es el que Supabase ya acepta.
+3. `capacitor.config.json` → `SocialLogin.providers.google: true` (con `false` el complemento no trae Google Sign-In).
+4. En la app del iPhone el botón sale siempre (`googleDisponible`); en la web sigue dependiendo de `VITE_GOOGLE_LOGIN`.
+
+Si Supabase rechaza la identidad («Unacceptable audience»): en Authentication → Providers → Google, en **Client IDs**, agregar también el ID del
+cliente iOS, separado por coma.
+
 ## La puerta (inicio nuevo, 30 oct 2026)
 
 En el teléfono, la primera pantalla de quien no tiene sesión es **la puerta**
