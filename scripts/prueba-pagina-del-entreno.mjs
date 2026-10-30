@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import {
   cuandoCorto, cuandoFue, lineaDeActividad, ejerciciosDeLaSesion, filaDelRecord, filaDelRecordDelPlan, filtroDe, filtrosDe, fraseDeActividad, heroeDeActividad,
-  numerosDeSesion, secundariosDeActividad, subtituloDelHistorial, tiempoCorto, tiempoGrande, tiempoTotal, tituloDelMes, totalDelMes, zonasSimples,
+  lineaDeLaSesionHecha, numerosDeSesion, secundariosDeActividad, subtituloDelHistorial, tiempoCorto, tiempoGrande, tiempoTotal, tituloDelMes, totalDelMes, zonasSimples,
 } from '../src/lib/paginaDelEntreno.js';
 import { recordDelPlan } from '../src/lib/stickers/plan.js';
 import { sesionesDelPlan } from '../src/lib/entrenosDelPlan.js';
@@ -113,6 +113,18 @@ const carrera = (id, dia, km, seg, extra = {}) => ({ id, deporte: 'correr', titu
 
   const r = recordDelPlan({ day, registro, mejorAntes: () => 95 });
   assert.deepEqual(filaDelRecordDelPlan(r), { titulo: 'Récord en Back squat: 100 kg × 5', sub: 'Justo lo programado: 4 × 5 con 100 kg. Antes levantabas 95 kg.' });
+}
+
+/* ---- La línea de «Ver tu entreno» en la tarjeta de la sesión del día ---- */
+{
+  const marcas = (n, ini) => Object.fromEntries(Array.from({ length: n }, (_, i) => [`0.${i + 1}.0`, { t: ini + (i + 1) * 3 * 60000, n: 'Back Squat' }]));
+  const ini = Date.parse('2026-10-29T14:55:00Z');
+  // Con el entreno guiado: tiempo y series.
+  assert.equal(lineaDeLaSesionHecha({ completed: true, entreno: { inicio: ini, fin: ini + 50 * 60000, hechos: marcas(16, ini) } }), '50 min · 16 series');
+  assert.equal(lineaDeLaSesionHecha({ completed: true, entreno: { inicio: ini, fin: ini + 50 * 60000, hechos: marcas(1, ini) } }), '50 min · 1 serie');
+  // Marcada a mano (sin nada del entreno guiado), o sin registro.
+  assert.equal(lineaDeLaSesionHecha({ completed: true, completedAt: '2026-10-29T19:30:00Z' }), 'La marcaste sin registrar los ejercicios');
+  assert.equal(lineaDeLaSesionHecha(undefined), 'La marcaste sin registrar los ejercicios');
 }
 
 /* ---- El pulso en tres ---- */

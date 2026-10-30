@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Loader2, Map as MapaIcono, Pause, Play, Square, Watch, X } from 'lucide-react';
+import { ChevronDown, Loader2, Map as MapaIcono, Pause, Play, Watch, X } from 'lucide-react';
 import { FONT, NUM_STYLE } from '@/lib/theme';
 import { MINIMO_DE_SEGUNDOS, relojDeCronometro } from '@/lib/entrenoLibre';
 import { guardaEntrenoLibre } from '@/lib/entrenoLibreApi';
@@ -18,7 +18,7 @@ import { limpiaPantallaDeMapa, usaMapaNativo } from '@/lib/mapaNativo';
 import { useBarraDeEstadoClara } from '@/lib/barraDeEstado';
 import { abrePerfil } from '@/lib/abrePerfil';
 import { fuenteDeUbicacion } from '@/lib/ubicacion';
-import { HojaDelRecorrido } from '@/features/training/PantallasDelEntreno';
+import { BotonDeMantener, HojaDelRecorrido } from '@/features/training/PantallasDelEntreno';
 import { guardaPermisoDelRecorrido, permisoDelRecorrido } from '@/features/training/useRecorrido';
 import { saludDisponible } from '@/lib/saludDelTelefono';
 
@@ -26,7 +26,7 @@ import { saludDisponible } from '@/lib/saludDelTelefono';
      1. Antes de salir: el mapa, «GPS listo» y el botón redondo «Iniciar».
      2. Corriendo: el tiempo en rojo, los kilómetros enormes, el ritmo actual y el promedio; abajo el mapa chico. «Ver mapa» cambia a
         la vista de mapa grande con los números en una tarjeta. «Pausar».
-     3. En pausa: «Seguir» y «Terminar».
+     3. En pausa: «Seguir» y «Mantén para terminar» (terminar es mantener el botón: botones de la sesión, 29 oct 2026).
      4. Resumen: el mapa con la ruta, el nombre («Carrera de la mañana»), distancia, tiempo y ritmo, y «Por kilómetro» con barras (el
         más rápido en azul). «Descartar» o «Guardar carrera»; al guardar sigue el resumen de siempre (con sus stickers).
    Correr, caminar, bici y senderismo; los demás deportes siguen con el cronómetro de antes (`PantallaDelCronometro`).
@@ -302,8 +302,9 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
   /* 2 y 3 · CORRIENDO (números o mapa) y EN PAUSA */
   const botones = pausado ? (
     <div style={{ display: 'flex', gap: 10 }}>
-      <button type="button" onClick={crono.reanuda} style={botonGrande(AZUL, { flex: 1 })}><Play size={18} fill="#fff" /> Seguir</button>
-      <button type="button" onClick={terminar} style={botonGrande('#D63A4A', { flex: 1 })}><Square size={16} fill="#fff" /> Terminar</button>
+      <button type="button" onClick={crono.reanuda} style={botonGrande(AZUL, { flex: 0.9 })}><Play size={18} fill="#fff" /> Seguir</button>
+      {/* Terminar es MANTENER (botones de la sesión, 29 oct 2026): un toque sin querer, con los guantes o corriendo, no cierra la carrera. Azul que se llena sobre el botón oscuro. */}
+      <BotonDeMantener onTermina={terminar} fondo={C.tarjeta2} relleno={C.azul} alto={58} radio={20} tamano={16} sombra="none" estilo={{ flex: 1.5, width: 'auto' }} />
     </div>
   ) : (
     <button type="button" onClick={crono.pausa} style={botonGrande(AZUL)}><Pause size={20} fill="#fff" /> Pausar</button>

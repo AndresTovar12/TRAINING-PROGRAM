@@ -10,7 +10,8 @@
 import { partesLocales } from './metricas/formato.js';
 import { actividadDeEntreno } from './actividades.js';
 import { pasosDeLaSesion } from './entreno.js';
-import { filasPorSerie } from './metricas/porSerie.js';
+import { filasPorSerie, tramoDeLaSesion } from './metricas/porSerie.js';
+import { seriesHechas } from './entrenosDelPlan.js';
 
 const dos = (n) => String(n).padStart(2, '0');
 const num = (v) => { const n = typeof v === 'number' ? v : parseFloat(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : null; };
@@ -313,6 +314,19 @@ export function filaDelRecordDelPlan(record, { kilos = (kg) => `${kilosTexto(kg)
   const antes = record.difNum > 0 ? record.kg - record.difNum : null;
   const sub = `${record.texto.replace(/con ([\d.]+) kg/, (_, k) => `con ${kilos(Number(k))}`)}.${antes > 0 ? ` Antes levantabas ${kilos(antes)}.` : ''}`;
   return { titulo: `Récord en ${record.ejercicio}: ${kilos(record.kg)}${record.reps ? ` × ${record.reps}` : ''}`, sub };
+}
+
+/**
+ * La segunda línea de «Ver tu entreno» en la tarjeta de la sesión del día (botones de la sesión, 29 oct 2026): «50 min · 16 series», o, si se marcó a mano y el entreno guiado no
+ * registró nada, «La marcaste sin registrar los ejercicios». `registro`: lo guardado de la sesión.
+ */
+export function lineaDeLaSesionHecha(registro) {
+  const SIN_REGISTRO = 'La marcaste sin registrar los ejercicios';
+  const tramo = tramoDeLaSesion(registro);
+  if (!tramo) return SIN_REGISTRO;
+  const seg = Math.round((tramo.fin - tramo.inicio) / 1000);
+  const series = seriesHechas(filasPorSerie({ registro }).resumen);
+  return [seg >= 60 ? tiempoTotal(seg) : null, series > 0 ? `${series} ${series === 1 ? 'serie' : 'series'}` : null].filter(Boolean).join(' · ') || SIN_REGISTRO;
 }
 
 /* ------------------------------------------------------------------ */

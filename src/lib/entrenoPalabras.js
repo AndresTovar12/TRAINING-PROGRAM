@@ -7,28 +7,22 @@
  */
 const NORMAL = {
   iniciar: 'Iniciar entreno',
-  continuar: 'Seguir',
+  continuar: 'Continuar',
   salirAria: 'Salir del entreno',
   listaTitulo: 'Tu entreno',
-  listaTerminar: 'Terminar sesión',
+  listaTerminar: 'Terminar ahora',
   listaSalir: 'Salir',
-  finTitulo: 'Entrenamiento terminado',
-  finNotas: 'Notas para tu coach',
-  finVolver: 'Volver al entreno',
   tecnicaTitulo: 'Grabar técnica para tu coach',
   tecnicaTexto: 'Muy pronto. Vas a grabar esta serie desde aquí y le llegará a tu coach por mensajes, sin salir del entreno.',
 };
 
 const SALUD = {
   iniciar: 'Iniciar ejercicios',
-  continuar: 'Seguir',
+  continuar: 'Continuar',
   salirAria: 'Salir de los ejercicios',
   listaTitulo: 'Tus ejercicios',
-  listaTerminar: 'Terminar sesión',
+  listaTerminar: 'Terminar ahora',
   listaSalir: 'Salir',
-  finTitulo: 'Sesión terminada',
-  finNotas: 'Notas para tu fisio',
-  finVolver: 'Volver a los ejercicios',
   tecnicaTitulo: 'Grabar técnica para tu fisio',
   tecnicaTexto: 'Muy pronto. Vas a grabar este ejercicio desde aquí y le llegará a tu fisio por mensajes, sin salir de los ejercicios.',
 };
