@@ -149,7 +149,7 @@ index 5d27c04..311fee0 100644
      }
  
 diff --git a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
-index b88c508..ad6b8f8 100644
+index b88c508..a1d7136 100644
 --- a/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
 +++ b/node_modules/@capgo/capacitor-native-map/ios/Sources/NativeMapPlugin/Permissions.swift
 @@ -1,6 +1,8 @@
@@ -161,7 +161,7 @@ index b88c508..ad6b8f8 100644
  
  // MARK: - Location permission
  //
-@@ -52,6 +54,141 @@ extension NativeMapPlugin: CLLocationManagerDelegate {
+@@ -52,6 +54,153 @@ extension NativeMapPlugin: CLLocationManagerDelegate {
          }
      }
  
@@ -219,7 +219,13 @@ index b88c508..ad6b8f8 100644
 +        HeadingFollow.precision = newHeading.headingAccuracy
 +        // 27 oct 2026: la brújula ya NO toca `mapView.camera` (antes copiaba la cámara con el centro VIEJO y la reasignaba cada 2°: peleaba con el movimiento
 +        // y el mapa giraba pero no avanzaba). Solo cambia el giro OBJETIVO de la cámara que sigue al corredor; quien la mueve es `SeguidorDeCamara`.
-+        for id in HeadingFollow.ids { SeguidorDeCamara.todos[id]?.giro = suave }
++        // 30 oct 2026: es la ÚNICA mano que gira el mapa (la página ya no manda su rumbo atrasado: daba el tironcito de 2-3° en el carro). Yendo a más de
++        // 2 m/s gira el rumbo del GPS (`followCamera`, como Apple Maps al manejar) y la brújula se calla; lento o parado vuelve la brújula. El cambio entre los dos
++        // se suaviza igual que la brújula (0.4 por lectura) para que no brinque al pasar de 2 m/s.
++        for id in HeadingFollow.ids {
++            guard let seguidor = SeguidorDeCamara.todos[id], seguidor.rumboGps == nil else { continue }
++            seguidor.giro = SeguidorDeCamara.acerca(seguidor.giro, a: suave)
++        }
 +        notifyListeners("onHeading", data: ["heading": suave, "accuracy": newHeading.headingAccuracy])
 +    }
 +
@@ -249,7 +255,13 @@ index b88c508..ad6b8f8 100644
 +            if lat != nil { seguidor.rumboGps = curso; seguidor.precisionGps = precision }
 +            if let z = zoom { seguidor.distancia = seguidor.distanciaPara(zoom: z, minZoom: map.config.minZoom, maxZoom: map.config.maxZoom) }
 +            if let p = pitch { seguidor.inclinacion = max(0, min(p, 60)) }
-+            if let h = heading { seguidor.giro = h }
++            // Si la brújula gira este mapa, el `heading` de la página se IGNORA (30 oct 2026): llegaba atrasado por el puente y peleaba con la brújula. La página
++            // solo manda rumbo con «norte arriba» (ahí `setHeadingFollow` está apagado). Yendo rápido, el rumbo del GPS gira el mapa (ver `didUpdateHeading`).
++            if HeadingFollow.ids.contains(id) {
++                if lat != nil, let c = curso { seguidor.giro = SeguidorDeCamara.acerca(seguidor.giro, a: c) }
++            } else if let h = heading {
++                seguidor.giro = h
++            }
 +            if let lat = lat, let lng = lng { seguidor.irA(CLLocationCoordinate2D(latitude: lat, longitude: lng), en: duracion) }
 +            if salto { seguidor.llegaYa() }
 +            seguidor.arranca()
@@ -303,7 +315,7 @@ index b88c508..ad6b8f8 100644
      public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
          guard let call = pendingPermissionCall,
                manager.authorizationStatus != .notDetermined else {
-@@ -62,3 +199,349 @@ extension NativeMapPlugin: CLLocationManagerDelegate {
+@@ -62,3 +211,354 @@ extension NativeMapPlugin: CLLocationManagerDelegate {
          pendingPermissionCall = nil
      }
  }
@@ -440,6 +452,11 @@ index b88c508..ad6b8f8 100644
 +        mapa.addSubview(m)
 +        marcador = m
 +        m.center = mapa.convert(centro, toPointTo: mapa)
++    }
++
++    /// Un rumbo que se acerca 0.4 hacia otro por el camino corto (355° → 5° no da la vuelta entera): el mismo suavizado de la brújula.
++    static func acerca(_ desde: Double, a hacia: Double) -> Double {
++        (desde + 0.4 * diferencia(desde, hacia) + 360).truncatingRemainder(dividingBy: 360)
 +    }
 +
 +    private static func diferencia(_ a: Double, _ b: Double) -> Double {

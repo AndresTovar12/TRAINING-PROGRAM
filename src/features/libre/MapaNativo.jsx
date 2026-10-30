@@ -88,7 +88,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
     const e = {
       vivo: true, mapa: null, LatLngBounds: null, elemento: null, listo: false, ids: [], ultimoEnvioMs: 0, claveEnviada: null, reloj: null, ocupado: false, otraVez: false, necesitaZoom: false,
       // `siguiendo`: la cámara va con el corredor (hasta que mueva el mapa con el dedo). `en3d`: inclinado 45°. `rumbo`: hacia dónde va (el mapa gira con él).
-      siguiendo: true, en3d: false, conocido: false, rumbo: 0, brujula: null, norteArriba: false, ultimoPuntoMs: 0, sinSeguidor: false,
+      siguiendo: true, en3d: false, conocido: false, rumbo: 0, brujula: null, norteArriba: false, ultimoPuntoMs: 0, sinSeguidor: false, hayBrujula: false, giraConBrujula: false,
     };
 
     const dibujaRuta = async (ruta) => {
@@ -125,14 +125,17 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
     };
     const ponCamara = async ({ donde = null, salto = false, duracion = 0.8 } = {}) => {
       const pitch = e.en3d ? ANGULO_3D : 0;
-      const heading = rumboDeAhora();
+      /* EL GIRO TIENE UNA SOLA MANO (30 oct 2026): si la brújula gira este mapa (`setHeadingFollow`), la página NO manda rumbo: el suyo llegaba atrasado por el
+         puente y, en el carro, el mapa regresaba 2-3° y volvía a avanzar. El iPhone gira con la brújula (o con el rumbo del GPS yendo a más de 2 m/s, ver el
+         parche). La página solo manda rumbo con «norte arriba», sin brújula (mapas chicos) y en el respaldo sin parche (`e.sinSeguidor`). */
+      const heading = e.giraConBrujula && !e.sinSeguidor ? undefined : rumboDeAhora();
       if (!e.sinSeguidor) {
         try {
           const curso = donde ? rumboDelGps() : undefined;
           await puenteDelMapa().followCamera({
             id, ...(donde ? { lat: donde.lat, lng: donde.lng } : {}), ...(curso != null ? { course: curso } : {}),
             ...(typeof donde?.precision === 'number' ? { accuracy: donde.precision } : {}),
-            zoom: ZOOM_SIGUE, pitch, heading, duration: duracion, jump: salto, marcador,
+            zoom: ZOOM_SIGUE, pitch, ...(heading != null ? { heading } : {}), duration: duracion, jump: salto, marcador,
           });
           return;
         } catch (err) {
@@ -286,7 +289,8 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
           });
           e.puente = puente;
           const { disponible } = await puente.startHeading();
-          if (disponible !== false) await puente.setHeadingFollow({ id, enabled: true });
+          e.hayBrujula = disponible !== false;
+          if (e.hayBrujula) { await puente.setHeadingFollow({ id, enabled: true }); e.giraConBrujula = !e.norteArriba; }
         } catch (err) { console.warn('Mapa nativo (brújula):', err); }
       }
       // Pantalla completa: el margen de abajo es TODO el panel, para que el logo y «Legal» de Apple queden arriba del panel (Apple exige que se vean).
@@ -302,6 +306,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
             setSiguiendo(false);
             sueltaCamara(); // el dedo manda: la cámara deja de seguir al corredor
             e.puente?.setHeadingFollow({ id, enabled: false }).catch(() => {}); // con el mapa movido a mano, deja de girar solo
+            e.giraConBrujula = false;
           });
         } catch (err) { console.warn('Mapa nativo (arrastre):', err); }
       }
@@ -321,6 +326,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
           try {
             // Con el norte arriba el giro automático se apaga (y la cámara va al norte); si no, vuelve a girar con la brújula.
             await e.puente?.setHeadingFollow({ id, enabled: !e.norteArriba });
+            e.giraConBrujula = !!e.hayBrujula && !e.norteArriba;
             if (e.siguiendo && dato.current.sigue) await ponCamara();
             else if (e.norteArriba) await e.mapa.setCamera({ bearing: 0, animate: true });
           } catch (err) { console.warn('Mapa nativo (norte):', err); }
@@ -346,6 +352,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
           e.siguiendo = true;
           setSiguiendo(true);
           if (!e.norteArriba) e.puente?.setHeadingFollow({ id, enabled: true }).catch(() => {});
+          e.giraConBrujula = !!e.hayBrujula && !e.norteArriba;
           const donde = dato.current.puntos.at(-1) ?? (e.conocido ? e.centroInicial : null);
           e.ultimoCentro = donde;
           e.ultimoPuntoMs = Date.now();

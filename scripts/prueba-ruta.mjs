@@ -42,6 +42,48 @@ assert.ok(enVivo(quieto).distanciaM <= 1, `parado suma ${enVivo(quieto).distanci
 assert.equal(enVivo(quieto).ritmoSKm, null, 'parado no tiene ritmo');
 assert.equal(quieto.length, 120, 'parado el tiempo sigue contando');
 
+// PARADO EN UN CUARTO 10 MINUTOS (30 oct 2026): bajo techo el GPS deriva despacio (~0.25 m/s) y salta hasta 10 m al cambiar de satélite (~cada 50 s), con un
+// error de 8 a 18 m. Antes, cada salto que se alejaba más que su error sumaba entero (simulado: 200 m quieto). Tres variantes: sin velocidad del iPhone, con
+// velocidad 0 y con velocidad con ruido de 0.3 a 1.4 m/s. Cinco sorteos de cada una; todas deben dar menos de 10 m.
+{
+  const azar = (semilla) => () => { semilla = (semilla + 0x6D2B79F5) | 0; let x = Math.imul(semilla ^ (semilla >>> 15), 1 | semilla); x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x; return ((x ^ (x >>> 14)) >>> 0) / 4294967296; };
+  const enCuarto = (semilla, velocidad) => {
+    const r = azar(semilla);
+    let dx = 0; let dy = 0; let siguienteSalto = 40 + r() * 20;
+    let muestras = [];
+    for (let s = 0; s < 600; s += 1) {
+      const ang = r() * 2 * Math.PI;
+      dx += Math.cos(ang) * 0.25; dy += Math.sin(ang) * 0.25;
+      if (s >= siguienteSalto) { const a2 = r() * 2 * Math.PI; const l = r() * 10; dx += Math.cos(a2) * l; dy += Math.sin(a2) * l; siguienteSalto = s + 40 + r() * 20; }
+      const p = { lat: 19.4 + dy / metrosPorGradoLat, lon: -99.1 + dx / (metrosPorGradoLat * Math.cos(19.4 * Math.PI / 180)), precision: 8 + r() * 10 };
+      if (velocidad === 'cero') p.vel = 0;
+      if (velocidad === 'ruido') p.vel = 0.3 + r() * 1.1;
+      muestras = agregaPunto(muestras, p, s);
+    }
+    return enVivo(muestras).distanciaM;
+  };
+  for (const velocidad of ['sin', 'cero', 'ruido']) {
+    for (let semilla = 1; semilla <= 5; semilla += 1) {
+      const d = enCuarto(semilla * 7919, velocidad);
+      assert.ok(d < 10, `quieto en un cuarto 10 min (velocidad ${velocidad}, sorteo ${semilla}) suma ${d} m`);
+    }
+  }
+}
+
+// Caminando después de estar parado: con el iPhone la distancia arranca en 3 s o menos, sin perder el arranque, y 150 s a 1.4 m/s dan 210 m (con y sin velocidad del iPhone).
+for (const conVel of [true, false]) {
+  let w = [];
+  for (let s = 0; s < 20; s += 1) w = agregaPunto(w, { lat: 19.4 + (seed(s) * 1) / metrosPorGradoLat, lon: -99.1, precision: 5, ...(conVel ? { vel: 0 } : {}) }, s);
+  let arranca = null;
+  for (let k = 1; k <= 150; k += 1) {
+    w = agregaPunto(w, { lat: 19.4 + (k * 1.4) / metrosPorGradoLat, lon: -99.1 + (seed(k) * 0.5) / metrosPorGradoLat, precision: 5, ...(conVel ? { vel: 1.4 } : {}) }, 19 + k);
+    if (arranca === null && enVivo(w).distanciaM > 0) arranca = k;
+  }
+  // Sin velocidad (la web) la ventana de 5 s tarda más en decir «se mueve»: se tolera hasta 8 s; el iPhone da velocidad y arranca en 3.
+  assert.ok(arranca !== null && arranca <= (conVel ? 3 : 8), `caminando (${conVel ? 'con' : 'sin'} velocidad) la distancia arranca a los ${arranca} s`);
+  assert.ok(Math.abs(enVivo(w).distanciaM - 210) <= 6, `caminando 150 s a 1.4 m/s da ${enVivo(w).distanciaM} m`);
+}
+
 // 200 m en línea recta a 4 m/s, con ±1 m de temblor de lado (el del iPhone ya filtrado): 200 ± 5 m, y el ritmo de ahora es el de la velocidad (250 s/km).
 let recta = [];
 for (let s = 0; s <= 50; s += 1) recta = agregaPunto(recta, { lat: 19.4 + (s * 4) / metrosPorGradoLat, lon: -99.1 + seed(s) / metrosPorGradoLat, precision: 6, vel: 4 + seed(s + 3) * 0.2 }, s);
