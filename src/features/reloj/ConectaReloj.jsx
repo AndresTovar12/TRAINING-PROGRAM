@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, Check, ExternalLink, Eye, Heart, Loader2, Watch, X, Zap } from 'lucide-react';
+import { AlertTriangle, BedDouble, Check, ExternalLink, Eye, Heart, Loader2, Watch, X, Zap } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { FONT, KP } from '@/lib/theme';
 import { botonPrimario, botonSecundario, enlace, subtitulo, titulo } from '@/features/inicio/estilos';
@@ -23,9 +23,14 @@ import {
 
    Quien la abre decide qué decir al terminar (`ConectaRelojGlobal`, el inicio de cuenta). `reconectar`: la conexión ya está en la cuenta y falta este
    iPhone (solo se pide el permiso otra vez; la fecha no cambia). `empezar`: 'intro' (la pantalla de arriba) o 'pedir' (el inicio de cuenta ya la enseñó).
-   `alTerminar(como)`: 'conectado' | 'no' (cerró sin conectar). */
+   `alTerminar(como)`: 'conectado' | 'no' (cerró sin conectar). `sinListo`: el inicio de cuenta dice «Apple Watch conectado.» en un aviso y sigue a la siguiente
+   pregunta, así que aquí no se enseña la pantalla «Listo» (sí «Falta un paso», si falta la app del reloj). */
 
-/** Lo de arriba de «Conecta tu Apple Watch» / «Conecta Apple Salud»: dibujo, título, beneficios, la pista de qué tocar y la leyenda. También lo usa el inicio de cuenta. */
+/** Lo de arriba de «Conecta tu Apple Watch» / «Conecta Apple Salud»: dibujo, título, beneficios, la pista de qué tocar y la leyenda. También lo usa el inicio de cuenta.
+
+    SIN APPLE WATCH (inicio nuevo, 30 oct 2026): Salud para todos. Aunque no tenga reloj, Salud trae lo que guardan sus otros aparatos y apps (un anillo, un
+    Garmin, Strava) y su sueño y pulso en reposo. Y una tarjeta oscura con el reloj dibujado le cuenta que la app funciona con Apple Watch, sin venderle nada:
+    si un día tiene uno, entra solo. Antes, sin reloj, el inicio enseñaba una pantalla que solo explicaba el reloj y no conectaba nada. */
 export function CuerpoDeConectar({ emparejado, compu = false }) {
   return (
     <>
@@ -33,10 +38,10 @@ export function CuerpoDeConectar({ emparejado, compu = false }) {
       <div style={{ display: 'grid', placeItems: 'center', margin: '4px 0 6px' }}>
         {emparejado
           ? <RelojDibujado modo="entreno" titulo="Back Squat" tiempo="12:41" detalle="Serie 2 de 4 · 100 kg" pulso={128} />
-          : <div role="img" aria-label="Apple Salud" style={{ width: 112, height: 112, borderRadius: 32, background: '#FDECEF', color: '#E5364F', display: 'grid', placeItems: 'center' }}><Heart size={54} fill="currentColor" /></div>}
+          : <div role="img" aria-label="Apple Salud" style={{ width: 76, height: 76, borderRadius: 22, background: '#FDECEF', color: '#E5364F', display: 'grid', placeItems: 'center' }}><Heart size={40} fill="currentColor" /></div>}
       </div>
       <h1 style={titulo(compu)}>{emparejado ? 'Conecta tu Apple Watch' : 'Conecta Apple Salud'}</h1>
-      <p style={subtitulo}>{emparejado ? 'Lo que haces con tu reloj entra solo a Training Lab.' : 'No vemos un Apple Watch en este iPhone. Igual traemos los entrenos que otras apps guardan en Salud.'}</p>
+      <p style={subtitulo}>{emparejado ? 'Lo que haces con tu reloj entra solo a Training Lab.' : 'No vemos un Apple Watch en este iPhone. Igual traemos lo que guardan en Salud tus otros aparatos y apps.'}</p>
       <Beneficios>
         {emparejado ? (
           <>
@@ -46,12 +51,22 @@ export function CuerpoDeConectar({ emparejado, compu = false }) {
           </>
         ) : (
           <>
-            <Beneficio Icono={Zap} titulo="Desde hoy, tus entrenos entran solos" texto="Los que otras apps guarden en Salud." />
-            <Beneficio Icono={Watch} titulo="Si después compras un Apple Watch" texto="Sus entrenos entran solos, sin volver a conectar nada." />
-            <Beneficio Icono={Eye} titulo="Tu coach ve cómo entrenas" texto="Lo que llegue de Salud también lo ve." />
+            <Beneficio Icono={Zap} titulo="Desde hoy, tus entrenos entran solos" texto="Los de tu anillo, tu Garmin o apps como Strava." />
+            <Beneficio Icono={BedDouble} titulo="Tu sueño y tu pulso en reposo" texto="Para ver cómo te recuperas." />
           </>
         )}
       </Beneficios>
+      {!emparejado && (
+        <div style={{ display: 'flex', gap: 14, alignItems: 'center', borderRadius: 20, background: '#111318', color: '#fff', padding: '12px 16px 12px 12px', margin: '2px 0 14px' }}>
+          <div style={{ flex: 'none', width: 64, height: 104, overflow: 'hidden' }}>
+            <RelojDibujado modo="descanso" titulo="Descanso" tiempo="0:45" detalle="Sigue: Back Squat" pulso={126} escala={0.36} />
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <b style={{ display: 'block', fontSize: 15.5, fontWeight: 800, lineHeight: 1.25 }}>Training Lab funciona con Apple Watch</b>
+            <span style={{ display: 'block', fontSize: 13, lineHeight: 1.4, color: 'rgba(255,255,255,0.75)', marginTop: 3 }}>El descanso en tu muñeca, tu pulso en vivo y «Listo» sin sacar el teléfono. Si un día tienes uno, entra solo.</span>
+          </div>
+        </div>
+      )}
       <Pista>El iPhone te va a preguntar qué compartir. Toca <b style={{ color: KP.ink }}>«Activar todas»</b> y luego <b style={{ color: KP.ink }}>«Permitir»</b>.</Pista>
       <p style={{ fontSize: 12.5, color: KP.ink3, textAlign: 'center', margin: '12px 0 0', lineHeight: 1.4 }}>Lo cambias cuando quieras en la app Salud.</p>
     </>
@@ -61,7 +76,7 @@ export function CuerpoDeConectar({ emparejado, compu = false }) {
 const nombreDe = (perfil) => (perfil?.full_name || '').trim().split(/\s+/)[0] || '';
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export default function ConectaReloj({ reconectar = false, empezar = 'intro', alTerminar }) {
+export default function ConectaReloj({ reconectar = false, empezar = 'intro', sinListo = false, alTerminar }) {
   const { profile } = useAuth();
   const { reloj } = useReloj();
   const emparejado = !!reloj.emparejado;
@@ -92,6 +107,10 @@ export default function ConectaReloj({ reconectar = false, empezar = 'intro', al
       // Lo nuevo y, después, lo de antes (solo para las cuentas), en segundo plano: la persona ya ve «Listo».
       traeDelReloj().catch(() => {}).finally(() => traeLoDeAntes());
       if (reconectar) { termina('conectado'); return; }
+      if (sinListo) {
+        if (emparejado && !reloj.instalada && !reloj.prueba) setPaso('instala'); else termina('conectado');
+        return;
+      }
       setPaso('listo');
     } catch (e) {
       if (!vivo.current) return;

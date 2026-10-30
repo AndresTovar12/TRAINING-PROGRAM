@@ -1,4 +1,6 @@
 import { tokenDeAhora } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
+import { olvidaCorreoPorConfirmar } from '@/lib/correos';
 
 /* Poner o cambiar el correo de la propia cuenta con un código de 6 dígitos (15 oct 2026). Ver `supabase/functions/correo-de-la-cuenta`. */
 
@@ -19,3 +21,13 @@ export const pideCodigoDeCorreo = (correo, contrasena) => llama({ accion: 'pedir
 
 /** Con el código correcto, el correo queda puesto. Devuelve `{ correo }`. */
 export const confirmaCodigoDeCorreo = (codigo) => llama({ accion: 'confirmar', codigo });
+
+/** Confirmar con el código y dejar la app al día: lo usan Mi perfil → Correo y el inicio («Escribe el código»). La sesión guarda el correo viejo, así que se
+    renueva para que toda la app vea el nuevo, y se olvida el correo que faltaba confirmar. Devuelve `{ correo }`; si falla lanza el error de `confirmaCodigoDeCorreo`. */
+export async function confirmaCorreoConCodigo(codigo, { refreshProfile } = {}) {
+  const r = await confirmaCodigoDeCorreo(codigo);
+  await supabase.auth.refreshSession().catch(() => {});
+  await refreshProfile?.();
+  olvidaCorreoPorConfirmar();
+  return r;
+}

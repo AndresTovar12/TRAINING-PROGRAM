@@ -5,6 +5,7 @@ import { FONT, NUM_STYLE } from '@/lib/theme';
 import { trazoDeRuta } from '@/lib/ubicacion';
 import { rutaDe } from '@/lib/stickers/ficha';
 import IconoDeTipo from '@/components/IconoDeTipo';
+import { MOVIMIENTOS_DE_CELEBRACION } from '@/lib/celebracion';
 
 /* LA CELEBRACIÓN AL TERMINAR (23 oct 2026, Activity Tracker; maqueta v4, pantalla «Celebración»). Corta: unos 3 segundos (la de Strava dura 9.5 y termina vendiendo la
    suscripción; aquí NO se vende nada). El punto azul de T•LAB llena la pantalla y la ruta se dibuja; sin mapa, salta el ícono de la actividad. Si rompió un récord, se lo
@@ -31,13 +32,7 @@ export default function CelebracionLibre({ nombre = 'Tu entreno', numero = null,
       role="dialog" aria-modal="true" aria-label={`Terminaste: ${nombre}`} onClick={() => terminar.current()}
       style={{ position: 'fixed', inset: 0, zIndex: 3400, background: '#0F1220', color: '#fff', fontFamily: FONT, overflow: 'hidden', cursor: 'pointer' }}
     >
-      <style>{`
-        @keyframes cele-llena { from { transform: translate(-50%, -50%) scale(0.06); } to { transform: translate(-50%, -50%) scale(1); } }
-        @keyframes cele-trazo { to { stroke-dashoffset: 0; } }
-        @keyframes cele-salta { 0% { transform: scale(0.4); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); } }
-        @keyframes cele-sube { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
-        @media (prefers-reduced-motion: reduce) { .cele * { animation-duration: 1ms !important; animation-delay: 0ms !important; } }
-      `}</style>
+      <style>{MOVIMIENTOS_DE_CELEBRACION}</style>
       <div className="cele" style={{ position: 'absolute', inset: 0 }}>
         {/* El punto azul que llena la pantalla. */}
         <span aria-hidden="true" style={{ position: 'absolute', left: '50%', top: '50%', width: '260vmax', height: '260vmax', borderRadius: '50%', background: AZUL, transform: 'translate(-50%, -50%) scale(0.06)', animation: 'cele-llena 650ms cubic-bezier(.2,.8,.2,1) forwards' }} />

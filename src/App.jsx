@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect, lazy, Suspense } from 'react';
+import { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react';
 import { ChevronRight, Dumbbell, Loader2, Lock, LogOut, Sparkles, UserCog, RefreshCw } from 'lucide-react';
 import { useNewVersion } from '@/lib/useNewVersion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsDesktop } from '@/lib/useViewport';
+import { reclamarInvitacion } from '@/lib/api';
 import { cargaPosters } from '@/lib/posters';
 import { AppStateProvider } from '@/contexts/AppStateContext';
 import { PalabrasProvider, usePalabras } from '@/contexts/PalabrasContext';
@@ -15,6 +16,7 @@ import NuevaContrasena from '@/features/auth/NuevaContrasena';
 import ActivarInvitacion from '@/features/auth/ActivarInvitacion';
 import UnirseAlEquipo from '@/features/auth/UnirseAlEquipo';
 import Inicio from '@/features/inicio/Inicio';
+import { esInvitado, invitacionPendiente, marcaInvitado, olvidaInvitacionPendiente } from '@/features/inicio/marcas';
 import LandingPage from '@/features/landing/LandingPage';
 import TrainingApp from '@/features/training/TrainingApp';
 import AdminApp from '@/features/admin/AdminApp';
@@ -306,45 +308,87 @@ function CuentaDesactivada() {
 /**
  * Puerta de entrada para quien NO tiene sesion.
  *
- * En computadora se muestra primero la pagina de presentacion, porque ahi
- * suele llegar gente que todavia no conoce la app y una pantalla de
- * contraseña sola no le dice nada. En telefono NO: ahi entran los atletas,
- * que ya tienen cuenta y solo quieren su rutina del dia, asi que la pagina
- * de presentacion seria un estorbo entre ellos y su entrenamiento.
+ * En computadora se muestra primero la pagina de presentacion, porque ahi suele llegar gente que todavia no conoce la app y una pantalla de contraseña sola no
+ * le dice nada. Sus «Iniciar sesión» y «Crear cuenta» abren LA PUERTA en una tarjeta centrada. En telefono NO hay presentacion: la primera pantalla es la
+ * puerta (inicio nuevo, 30 oct 2026): Apple, Google, o «Usar usuario y contraseña» → «Entra con tu usuario» → «¿Nueva aquí? Crea tu cuenta».
  */
 function Entrada({ codigo, onCodigoUsado }) {
   const esCompu = useIsDesktop();
-  // Con un link o QR de equipo (`?unirse=`) se salta la presentación: quien llega
-  // ahí viene a entrar o a crear su cuenta con ese código.
-  const [pantalla, setPantalla] = useState(codigo ? 'login' : null); // null | 'login' | 'register'
+  // Con un link o QR de equipo (`?unirse=`) se salta la presentación: quien llega ahí viene a entrar o a crear su cuenta con ese código.
+  const [pantalla, setPantalla] = useState(codigo ? 'puerta' : null); // null (presentación) | 'puerta' | 'usuario' | 'register'
 
   if (esCompu && pantalla === null) {
     return (
       <LandingPage
-        onEntrar={() => setPantalla('login')}
-        onRegistrarse={() => setPantalla('register')}
+        onEntrar={() => setPantalla('puerta')}
+        onRegistrarse={() => setPantalla('puerta')}
       />
     );
   }
-  /* Crear la cuenta: el inicio nuevo, una pregunta por pantalla (ver `features/inicio`). Entrar va primero y esto se
-     abre desde su botón «Crear cuenta» (Andrés, 8 oct 2026). Con un código de equipo, el código ya va puesto. */
+  /* Crear la cuenta con usuario y contraseña: el inicio, una pregunta por pantalla (ver `features/inicio`). Se abre desde «¿Nueva aquí? Crea tu cuenta»; con
+     un código de equipo, el código ya va puesto. Atrás regresa a «Entra con tu usuario», que es de donde salió. */
   if (pantalla === 'register') {
     return (
       <Inicio
         key="nuevo"
         modo="nuevo"
         codigo={codigo || ''}
-        onVolver={() => setPantalla('login')}
+        onVolver={() => setPantalla('usuario')}
         onCodigoUsado={codigo ? onCodigoUsado : undefined}
       />
     );
   }
   return (
     <AuthScreen
+      key={pantalla ?? 'puerta'}
+      empezar={pantalla === 'usuario' ? 'usuario' : 'puerta'}
       onVolver={esCompu && !codigo ? () => setPantalla(null) : undefined}
       onCrearCuenta={() => setPantalla('register')}
       aviso={codigo ? 'Para unirte al equipo, entra a tu cuenta o crea una: el código ya va puesto.' : undefined}
     />
+  );
+}
+
+/**
+ * Volvió de Apple o Google desde el link de invitación (inicio nuevo, 30 oct 2026): esa entrada crea una cuenta nueva, así que aquí se reclama la invitación
+ * (`activar-invitacion`, modo `reclamar`): la cuenta queda con su coach y con lo que él ya le preparó, y el inicio sigue en «Sobre ti». Si no se pudo (la
+ * cuenta ya estaba armada, o el link ya no sirve), se dice por qué y se sigue con su cuenta o se sale.
+ */
+function ReclamaInvitacion({ token, onListo }) {
+  const { signOut, refreshProfile } = useAuth();
+  const [error, setError] = useState('');
+  const pedido = useRef(false);
+  useEffect(() => {
+    if (pedido.current) return;
+    pedido.current = true;
+    reclamarInvitacion(token)
+      .then(async () => {
+        olvidaInvitacionPendiente();
+        marcaInvitado();
+        await refreshProfile();
+        onListo();
+      })
+      .catch((e) => { olvidaInvitacionPendiente(); setError(e.message || 'No se pudo usar la invitación.'); });
+  }, [token, refreshProfile, onListo]);
+
+  if (!error) return <Splash label="Te estamos dejando con tu entrenador…" />;
+  return (
+    <div style={{ minHeight: '100svh', display: 'flex', flexDirection: 'column', gap: 18, alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 28, fontFamily: FONT, background: '#fff' }}>
+      <div style={{ maxWidth: 380 }}>
+        <h1 style={{ fontSize: 21, fontWeight: 800, color: KP.ink, margin: '0 0 8px', letterSpacing: -0.4 }}>No pudimos usar la invitación</h1>
+        <p style={{ fontSize: 15, color: KP.ink2, lineHeight: 1.55, margin: 0, fontWeight: 500 }}>{error}</p>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%', maxWidth: 320 }}>
+        <button type="button" onClick={onListo} className="kp-press"
+          style={{ minHeight: 52, borderRadius: 16, border: 'none', background: KP.blue, color: '#fff', cursor: 'pointer', fontFamily: FONT, fontSize: 15.5, fontWeight: 700 }}>
+          Seguir con esta cuenta
+        </button>
+        <button type="button" onClick={() => { onListo(); signOut(); }}
+          style={{ minHeight: 44, border: 'none', background: 'none', color: KP.ink2, cursor: 'pointer', fontFamily: FONT, fontSize: 14.5, fontWeight: 700 }}>
+          Salir
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -421,10 +465,17 @@ export default function App() {
   const [invitacion, setInvitacion] = useState(
     () => new URLSearchParams(window.location.search).get('invitacion') || null,
   );
-  const cierraInvitacion = () => {
+  const cierraInvitacion = useCallback(() => {
     window.history.replaceState({}, '', window.location.pathname);
     setInvitacion(null);
-  };
+  }, []);
+  /* Con Apple o Google desde el link, la invitación viaja en esta pestaña (`marcas.js`) y se reclama al volver con sesión (ver `ReclamaInvitacion`). Con
+     usuario y contraseña, el inicio ya la usó al crear la cuenta (`marcaInvitado`): con la sesión puesta, el link se limpia solo. */
+  const [, setReclamoVisto] = useState(0); // al terminar el reclamo, la app se vuelve a dibujar (la marca ya se borró)
+  const reclamo = user ? invitacionPendiente() : null;
+  const terminaReclamo = useCallback(() => { setReclamoVisto((n) => n + 1); cierraInvitacion(); }, [cierraInvitacion]);
+  const invitacionUsada = !!(invitacion && user && esInvitado());
+  useEffect(() => { if (invitacionUsada) cierraInvitacion(); }, [invitacionUsada, cierraInvitacion]);
 
   /* El link o QR del código de un profesional llega como `?unirse=CODIGO`. Se
      guarda en esta pestaña (`sessionStorage`) porque antes de poder usarlo hay
@@ -473,7 +524,12 @@ export default function App() {
     return <Suspense fallback={<Splash />}><TiendaPublica ruta={tienda} /></Suspense>;
   }
 
-  if (invitacion) {
+  if (reclamo && !loading) {
+    if (!profile) return <CargandoPerfil />;
+    return <ReclamaInvitacion token={reclamo} onListo={terminaReclamo} />;
+  }
+
+  if (invitacion && !invitacionUsada) {
     if (loading) return <Splash />;
     if (user) return <InvitacionConSesion onSalir={cierraInvitacion} />;
     return <ActivarInvitacion token={invitacion} onSalir={cierraInvitacion} />;

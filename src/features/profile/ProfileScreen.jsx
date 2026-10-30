@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
-import { uploadAvatar, isUsernameAvailable } from '@/lib/api';
+import { uploadAvatar } from '@/lib/api';
 import { esImagen, optimizaImagen } from '@/lib/imagen';
 import { T, FONT, KP, UI, eyebrow, oficioCorto } from '@/lib/theme';
 import { useIsDesktop } from '@/lib/useViewport';
@@ -26,9 +26,7 @@ import MisAvisos from '@/features/profile/MisAvisos';
 import TarjetaDeMisMetricas from '@/features/metricas/TarjetaDeMisMetricas';
 import SelectorOficio from '@/components/SelectorOficio';
 import SelectorDisciplinas from '@/components/SelectorDisciplinas';
-import RecorridoOtraVez from '@/features/inicio/RecorridoOtraVez';
-
-const USERNAME_RE = /^[a-zA-Z0-9_.]{3,30}$/;
+import HojaDeUsuario from '@/features/profile/HojaDeUsuario';
 
 function initialsFrom(name) {
   const parts = (name || '').trim().split(/\s+/).filter(Boolean);
@@ -38,8 +36,8 @@ function initialsFrom(name) {
 }
 
 /* Lo mismo que se contesta en el inicio se cambia aquí (Andrés, 8 oct 2026: ninguna respuesta del inicio es definitiva).
-   El coach: a qué se dedica, qué entrena y si trabaja en equipo. El atleta: su fecha de nacimiento. Y los dos pueden ver
-   el recorrido otra vez. */
+   El coach: a qué se dedica, qué entrena y si trabaja en equipo. El atleta: su fecha de nacimiento. (El recorrido del inicio ya no existe desde el
+   inicio nuevo, 30 oct 2026: el coach empieza en «Primeros pasos» y el atleta en «Empieza aquí».) */
 export default function ProfileScreen({ onClose, enfoque = null }) {
   const { profile, user, isAdmin, updateProfile } = useAuth();
   const isMaster = !!profile?.is_owner;
@@ -81,7 +79,6 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
   const { t: tr } = usePalabras();
 
   const [fullName, setFullName] = useState(profile?.full_name || '');
-  const [username, setUsername] = useState(profile?.username || '');
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url || '');
   const [unidad, setUnidad] = useState(profile?.unidad_peso || 'kg');
   const [genero, setGenero] = useState(profile?.genero || '');
@@ -89,33 +86,17 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
   const [disciplinas, setDisciplinas] = useState(profile?.disciplinas || []);
   const [equipo, setEquipo] = useState(!!profile?.trabaja_en_equipo);
   const [nacimiento, setNacimiento] = useState(profile?.fecha_nacimiento || '');
-  const [recorrido, setRecorrido] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [hoja, setHoja] = useState(null); // null | 'usuario' | 'oficio' | 'disciplinas'
   const [copiado, setCopiado] = useState(false);
   const { avisa, trabajando } = useAviso();
   const { signOut } = useAuth();
   const { coach } = usePalabras();
   const esCompu = useIsDesktop();
-  const [nameStatus, setNameStatus] = useState('idle'); // idle|checking|free|taken|invalid|self
   const fileRef = useRef(null);
 
   const origName = profile?.full_name || '';
   const origUser = profile?.username || '';
-  // Chequeo de disponibilidad del username (debounced)
-  useEffect(() => {
-    const u = username.trim();
-    if (u.toLowerCase() === origUser.toLowerCase()) { setNameStatus('self'); return; }
-    if (!USERNAME_RE.test(u)) { setNameStatus('invalid'); return; }
-    setNameStatus('checking');
-    let cancelled = false;
-    const t = setTimeout(async () => {
-      const free = await isUsernameAvailable(u, user?.id);
-      if (!cancelled) setNameStatus(free ? 'free' : 'taken');
-    }, 400);
-    return () => { cancelled = true; clearTimeout(t); };
-  }, [username, origUser, user?.id]);
 
   async function onPickFile(e) {
     const file = e.target.files?.[0];
@@ -151,28 +132,11 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
     }
   }
   const guardaNombre = () => { if (fullName.trim() !== origName) guarda({ full_name: fullName.trim() || null }); };
-  async function guardaUsuario() {
-    const u = username.trim();
-    if (!USERNAME_RE.test(u) || nameStatus !== 'free') return;
-    setSaving(true);
-    await guarda({ username: u });
-    setSaving(false);
-    setHoja(null);
-  }
   const copiaCodigo = async () => {
     try { await navigator.clipboard.writeText(profile?.codigo_coach || ''); setCopiado(true); setTimeout(() => setCopiado(false), 1800); } catch { /* sin portapapeles: se lee en pantalla */ }
   };
 
-  const nameHint = {
-    checking: { text: 'Comprobando…', color: T.text3 },
-    free: { text: 'Disponible', color: '#00A372' },
-    taken: { text: 'Ya está en uso', color: T.danger },
-    invalid: { text: '3-30 caracteres: letras, números, _ o .', color: T.text3 },
-    self: null,
-    idle: null,
-  }[nameStatus];
-
-  const displayName = fullName || username || 'Tu perfil';
+  const displayName = fullName || origUser || 'Tu perfil';
   const nombreCoach = (coach?.full_name || '').trim();
   const correoVisible = esCorreoInventado(user?.email) ? 'Sin correo' : (user?.email || 'Sin correo');
   const fechaTexto = nacimiento ? new Date(`${nacimiento}T12:00:00`).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
@@ -237,7 +201,7 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
       <Campo etiqueta="Nombre" valor={fullName} onCambio={setFullName} marcador="Tu nombre" onBlur={guardaNombre} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
 
       <Grupo>
-        <Fila texto="Usuario" valor={`@${origUser}`} onClick={() => { setUsername(origUser); setHoja('usuario'); }} />
+        <Fila texto="Usuario" valor={`@${origUser}`} onClick={() => setHoja('usuario')} />
         <Fila texto="Correo" valor={correoVisible} valorTono={correoVisible === 'Sin correo' ? 'neutro' : 'azul'} onClick={() => setSeccion('cuenta')} />
         {isAdmin && <Fila texto="Oficio" valor={oficioCorto(profesion) || 'Elegir'} valorTono={profesion ? 'azul' : 'neutro'} onClick={() => setHoja('oficio')} />}
         {isAdmin && <Fila texto="Disciplinas" valor={disciplinas.length ? disciplinas.join(', ') : 'Elegir'} valorTono={disciplinas.length ? 'azul' : 'neutro'} onClick={() => setHoja('disciplinas')} />}
@@ -285,11 +249,6 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
           accion={<BotonEnAzul onClick={copiaCodigo}>{copiado ? 'Copiado' : 'Copiar'}</BotonEnAzul>}
         />
       )}
-
-      {/* El recorrido del inicio, otra vez: qué hace cada parte de la app. */}
-      <Grupo>
-        <Fila texto="Ver el recorrido otra vez" onClick={() => setRecorrido(true)} />
-      </Grupo>
 
       {/* En el teléfono «Cerrar sesión» va al final de la lista de secciones; aquí, solo en la compu. */}
       {esCompu && cerrarSesion}
@@ -371,20 +330,7 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
       </main>
 
       {/* El nombre de usuario: con él se inicia sesión; se comprueba que esté libre antes de guardarlo. */}
-      {hoja === 'usuario' && (
-        <HojaFlotante titulo="Nombre de usuario" onCerrar={() => setHoja(null)} ancho={460}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <Campo
-              etiqueta="Usuario" valor={username} onCambio={(v) => setUsername(v.replace(/\s/g, ''))} marcador="tu_usuario"
-              autoCapitalize="none" spellCheck={false} autoFocus
-            />
-            <div style={{ minHeight: 20, margin: '0 6px', fontSize: 13.5, fontWeight: 600, color: nameHint?.color ?? KP.ink2 }}>
-              {nameHint?.text ?? tr('Con este nombre inicias sesión. Cambiarlo no afecta tu plan ni tu progreso.')}
-            </div>
-            <Boton ancho deshabilitado={nameStatus !== 'free'} cargando={saving} onClick={guardaUsuario}>Guardar</Boton>
-          </div>
-        </HojaFlotante>
-      )}
+      {hoja === 'usuario' && <HojaDeUsuario onCerrar={() => setHoja(null)} alGuardar={() => { avisa('Guardado'); setHoja(null); }} />}
       {hoja === 'oficio' && (
         <HojaFlotante titulo="A qué te dedicas" onCerrar={() => setHoja(null)} ancho={520}
           pie={<Boton ancho onClick={() => { guarda({ profesion: profesion.trim() || null }); setHoja(null); }}>Listo</Boton>}
@@ -400,8 +346,6 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
           <p style={{ margin: '12px 4px 0', fontSize: 13.5, color: KP.ink2 }}>Ordena lo que ves primero. Nunca esconde nada.</p>
         </HojaFlotante>
       )}
-
-      {recorrido && <RecorridoOtraVez onCerrar={() => setRecorrido(false)} />}
 
       <style>{`.spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>

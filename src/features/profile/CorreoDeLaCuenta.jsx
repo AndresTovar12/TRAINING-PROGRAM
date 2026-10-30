@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { Check } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { esCorreoInventado, correoValido, correoPorConfirmar, olvidaCorreoPorConfirmar } from '@/lib/correos';
-import { confirmaCodigoDeCorreo, pideCodigoDeCorreo } from '@/lib/correoDeLaCuentaApi';
+import { esCorreoInventado, correoValido, correoPorConfirmar } from '@/lib/correos';
+import { confirmaCorreoConCodigo, pideCodigoDeCorreo } from '@/lib/correoDeLaCuentaApi';
 import { FONT, KP } from '@/lib/theme';
 import HojaFlotante from '@/components/HojaFlotante';
 import { Boton, Campo, Fila } from '@/components/ui';
@@ -60,12 +59,9 @@ export default function CorreoDeLaCuenta() {
     if (!/^\d{6}$/.test(codigo)) { setError('El código tiene 6 números.'); return; }
     setBusy(true);
     try {
-      const r = await confirmaCodigoDeCorreo(codigo);
-      // La sesión guarda el correo viejo: se renueva para que toda la app vea el nuevo.
-      await supabase.auth.refreshSession().catch(() => {});
-      await refreshProfile?.();
+      // Lo mismo que «Escribe el código» del inicio (`confirmaCorreoConCodigo`): confirma, renueva la sesión y olvida el correo pendiente.
+      const r = await confirmaCorreoConCodigo(codigo, { refreshProfile });
       setListo(r.correo);
-      olvidaCorreoPorConfirmar();
       cierra();
     } catch (err) {
       setError(err.message);

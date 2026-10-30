@@ -1381,14 +1381,14 @@ export async function invitacionesPendientes() {
   return Object.fromEntries((data ?? []).map((i) => [i.atleta_id, i.token]));
 }
 
-/** Llamada sin sesión: quien abre el link todavía no tiene cuenta. */
-async function invitacion(cuerpo) {
+/** Llamada sin sesión: quien abre el link todavía no tiene cuenta. `token` de sesión: solo para reclamar (ya entró con Apple o Google). */
+async function invitacion(cuerpo, sesion = null) {
   const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/activar-invitacion`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      Authorization: `Bearer ${sesion || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
     },
     body: JSON.stringify(cuerpo),
   }).catch(() => null);
@@ -1405,6 +1405,9 @@ export const verInvitacion = (token) => invitacion({ token, modo: 'ver' });
 /** Termina de crear la cuenta: usuario, contraseña y, si quiere, correo. */
 export const activarInvitacion = ({ token, username, password, email, genero, nombre, apellido }) =>
   invitacion({ token, modo: 'activar', username, password, email, genero, nombre, apellido });
+
+/** Entró con Apple o Google desde el link: la cuenta nueva se queda con su coach y con lo que él ya le preparó (ver `activar-invitacion`, modo `reclamar`). */
+export const reclamarInvitacion = async (token) => invitacion({ token, modo: 'reclamar' }, await tokenDeAhora());
 
 /* -------------------------------- Equipo -------------------------------- *
  * Cada atleta tiene su coach principal y, además, un equipo (fisio, etc.) que

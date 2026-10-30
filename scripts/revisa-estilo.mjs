@@ -10,8 +10,8 @@
 // Cuando una de estas marcas SÍ tiene función (el día elegido, la caja donde se suelta un video, la banda oscura de un Set), se deja
 // con un comentario `estilo-ok: <por qué>` en la misma línea o en la de arriba. Así cada excepción queda escrita y se puede revisar.
 //
-// Fuera de la revisión: landing, entrar/crear cuenta (Andrés pidió no tocarlas todavía), el catálogo de piezas y las maquetas que
-// imitan pantallas de ChatGPT y Claude.
+// Fuera de la revisión: landing, el catálogo de piezas y las maquetas que imitan pantallas de ChatGPT y Claude. Del entrar, solo lo que el inicio nuevo
+// (30 oct 2026) no tocó: `Field` de AuthScreen (lo usan la tienda y otras), la contraseña nueva y unirse al equipo. La puerta y el inicio SÍ se revisan.
 //
 // Uso: node scripts/revisa-estilo.mjs          → falla si hay marcas
 //      node scripts/revisa-estilo.mjs --lista  → solo cuenta por archivo, sin fallar
@@ -22,8 +22,7 @@ import path from 'node:path';
 const RAIZ = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const FUERA = [
   /^src\/features\/landing\//,
-  /^src\/features\/auth\//,
-  /^src\/features\/inicio\/(Inicio\.jsx|estilos\.js)$/, // crear la cuenta
+  /^src\/features\/auth\/(AuthScreen|NuevaContrasena|UnirseAlEquipo)\.jsx$/,
   /^src\/features\/catalogo\//,
   /^src\/features\/ia\/Maquetas\.jsx$/, // dibuja pantallas de ChatGPT y Claude tal como se ven allá
   /^src\/lib\/theme\.js$/,

@@ -145,3 +145,15 @@ node scripts/prueba-entreno.mjs            # los pasos y el avance, con horas in
 node scripts/prueba-entreno-datos.mjs      # lo que se dice de un paso y el registro de siempre
 node scripts/prueba-entreno-canonico.mjs   # el idioma de los relojes
 ```
+
+## 9. Conectar Salud al crear la cuenta (inicio nuevo, 30 oct 2026)
+
+El paso **«reloj»** del inicio (`src/features/inicio/Inicio.jsx`) es para todos los atletas, tengan o no Apple Watch:
+
+- **En la app del iPhone, con Apple Watch emparejado:** «Conecta tu Apple Watch» (`CuerpoDeConectar` con `emparejado`), con «Conectar Apple Watch» y «Ahora no».
+- **En la app del iPhone, sin Apple Watch:** «Conecta Apple Salud». Salud trae lo que guardan sus otros aparatos y apps (un anillo, un Garmin, Strava) y su sueño y pulso en reposo. Una tarjeta oscura con el reloj dibujado le cuenta que la app funciona con Apple Watch: si un día tiene uno, entra solo, sin volver a conectar nada. Antes, sin reloj, el inicio solo enseñaba una pantalla que explicaba el reloj y no conectaba nada.
+- **En la web:** `AvisoDelReloj`, solo cuenta, con «Continuar»; se conecta en la app del iPhone, en Mi perfil → Dispositivos.
+
+«Conectar» abre la hoja de permisos del iPhone (`ConectaReloj` con `empezar="pedir"` y `sinListo`): al dar permiso, un aviso («Apple Watch conectado.» o «Apple Salud conectada.») y la siguiente pantalla, sin la pantalla «Listo» de `ConectaReloj` (sí sale «Falta un paso» si falta la app del reloj). La misma pantalla de «Conecta Apple Salud» es la que abre «Conecta tu Apple Watch» desde Home, Mi perfil o «Empieza aquí».
+
+Prueba en el navegador: `qa-reloj.html?vista=puerta&reloj=si` (o `reloj=no`, o `web=1`), con la App real y una sesión falsa (ver `docs/inicio.md`).

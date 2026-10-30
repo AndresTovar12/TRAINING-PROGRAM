@@ -2031,11 +2031,12 @@ export default function AthletesPanel({ viendoComo, onVerComoAtleta, onIrA, onAb
     <div style={{ display: 'grid', gridTemplateColumns: twoCol ? 'minmax(280px, 1fr) minmax(0, 1.4fr)' : 'minmax(0, 1fr)', gap: 20, alignItems: 'start' }}>
       {showList && (
       <div>
-        {/* Alguien se unió al equipo de un atleta suyo: se lo dice su coach principal. */}
-        <AvisosDelCoach avisos={avisos} onEntendido={avisoEntendido} />
+        {/* «Primeros pasos», lo primero que ve el coach nuevo (inicio nuevo, 30 oct 2026: ya no hay recorrido antes; la bienvenida le dice que aquí lo esperan). */}
         {!viendoComo && !isMaster && (
           <PrimerosPasos clave={recarga} onAgregar={abrirAgregar} onIrA={onIrA} onAbrirPerfil={onAbrirPerfil} compu={isDesktop} />
         )}
+        {/* Alguien se unió al equipo de un atleta suyo: se lo dice su coach principal. */}
+        <AvisosDelCoach avisos={avisos} onEntendido={avisoEntendido} />
         {!modoTabla && !selected && (
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${metricas.enPausa > 0 ? 4 : 3}, minmax(0, 1fr))`, gap: 10, marginBottom: 14 }}>
             <CifraDeLista valor={metricas.total} texto={t('Atletas')} />

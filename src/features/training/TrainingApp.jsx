@@ -46,6 +46,7 @@ import { textoDeSemana } from '@/lib/vaEn';
 import { useMoverMiPlan, ReglasDeMiPlan, ControlesDeMiPlan, MoverAquiAtleta, AvisoDelCoach } from '@/features/training/MoverMiPlan';
 import { CuadroDeSalud, CuadroDePrograma, CuadroBlanco } from '@/features/training/home/Cuadros';
 import Saludo from '@/features/training/home/Saludo';
+import EmpiezaAqui, { TeEstaArmando } from '@/features/training/home/EmpiezaAqui';
 import { Boton, Grupo, Fila, IconoDeFila, TarjetaHeroe, Deslizador, EntradaNumero, Pastilla, BarraLateral } from '@/components/ui';
 
 const Explorar = lazy(() => import('@/features/explorar/Explorar'));
@@ -2105,12 +2106,13 @@ const PlanLoadingState = () => (
 // Sin plan asignado: misma interfaz, mensaje claro; wellness y 1RM siguen disponibles.
 // Si ya tiene entrenador, se le dice por su nombre (Andrés, 8 oct 2026, maqueta del inicio); si no, dónde ponerle el código.
 /* LO QUE VE QUIEN NO TIENE UN PLAN (12 oct 2026): casi todos los que entran solos vienen a correr, nadar o andar en bici y sacar sus stickers. Para ellos Home es el botón «Entrenar»
-   (ver `features/libre`), «Tus entrenos» y, si compraron una biblioteca de clases, sus clases. Con entrenador y sin plan todavía se les dice que lo está armando. */
-const NoPlanState = ({ onAbrirHoja, alIrAExplorar }) => {
+   (ver `features/libre`), «Tus entrenos» y, si compraron una biblioteca de clases, sus clases. Con entrenador y sin plan todavía se les dice que lo está armando.
+   Inicio nuevo (30 oct 2026): arriba, «Empieza aquí» (lo que le falta para dejar su app lista) y, con entrenador, la tarjeta azul «Carlos te está armando tu
+   plan». Reemplazan el recorrido de antes y la línea de abajo «¿Tienes el código de un entrenador?» (ahora es un renglón de «Empieza aquí»). */
+const NoPlanState = ({ onAbrirHoja, alIrAExplorar, onRegistrar, recargaEntrenos = 0 }) => {
   const { coach } = usePalabras();
   const { bibliotecas, programas, comprasPorAtender, comprasFallo, reintentaCompras } = usePlan();
   const { perfil, soloLectura, userId } = usePerfilDeLaVista();
-  const nombre = (coach?.full_name || '').trim().split(' ')[0];
   const conLibre = !soloLectura && !!userId;
   const sinEntrenador = !coach && programas.length === 0; // sin entrenador y sin ningún plan: a ellos se les empuja hacia Explorar
   return (
@@ -2126,10 +2128,10 @@ const NoPlanState = ({ onAbrirHoja, alIrAExplorar }) => {
         {bibliotecas.map((b) => <TarjetaDeBiblioteca key={b.id} biblioteca={b} onAbrir={() => onAbrirHoja(`biblioteca:${b.id}`)} />)}
       </div>
     )}
-    {coach && bibliotecas.length === 0 && (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: T.bg2, borderRadius: 20, padding: 16, marginBottom: 18 }}>
-        <span style={{ width: 48, height: 48, borderRadius: 16, background: T.accentBg, color: T.accent, display: 'grid', placeItems: 'center', flexShrink: 0 }}><Calendar size={24} /></span>
-        <span style={{ fontSize: 16, fontWeight: 800, color: T.text, lineHeight: 1.3 }}><Palabra>{nombre ? `${nombre} está armando tu plan` : 'Tu plan está en camino'}</Palabra></span>
+    {coach && bibliotecas.length === 0 && <div style={{ marginBottom: 12 }}><TeEstaArmando coach={coach} /></div>}
+    {conLibre && bibliotecas.length === 0 && (
+      <div style={{ marginBottom: 18 }}>
+        <EmpiezaAqui perfil={perfil} userId={userId} conCoach={!!coach || !!perfil?.coach_id} onRegistrar={onRegistrar} recarga={recargaEntrenos} />
       </div>
     )}
     {conLibre ? (
@@ -2159,11 +2161,6 @@ const NoPlanState = ({ onAbrirHoja, alIrAExplorar }) => {
             <Calculator size={16} color={T.accent} /> Calcular 1RM
           </button>
         </Sin1RM>
-      </div>
-    )}
-    {!coach && programas.length === 0 && (
-      <div style={{ fontSize: 13.5, fontWeight: 600, color: T.text3, textAlign: 'center', marginTop: 22, lineHeight: 1.5 }}>
-        <Palabra>¿Tienes el código de un entrenador? Ponlo en Mi perfil → Mi equipo.</Palabra>
       </div>
     )}
   </div>
@@ -2219,6 +2216,7 @@ export default function TrainingApp() {
   // El punto ● (registrar algo por su cuenta) es de quien entró: no del coach que mira la app de un atleta.
   const puedeRegistrar = !miraAjeno && !!user?.id;
   const [registrando, setRegistrando] = useState(false);
+  const [vecesRegistrado, setVecesRegistrado] = useState(0); // al cerrar el punto, «Empieza aquí» vuelve a contar los entrenos
   useEffect(() => {
     if ((tab === 'messages' && !conMensajes && !cargandoMensajes) || (tab === 'explore' && !conExplorar)) setTab('home');
   }, [tab, conMensajes, conExplorar, cargandoMensajes, setTab]);
@@ -2522,7 +2520,7 @@ export default function TrainingApp() {
   } else if (!hasPlan && !hayEquipo && tab === 'plan') {
     content = <EntrenarSinPlan alIrAHome={() => vasA('home')} alIrAExplorar={() => vasA('explore')} />;
   } else if (!hasPlan && !hayEquipo && tab === 'home') {
-    content = <NoPlanState onAbrirHoja={setHoja} alIrAExplorar={() => vasA('explore')} />;
+    content = <NoPlanState onAbrirHoja={setHoja} alIrAExplorar={() => vasA('explore')} onRegistrar={puedeRegistrar ? () => setRegistrando(true) : undefined} recargaEntrenos={vecesRegistrado} />;
   } else if (tab === 'home') {
     content = <HomeView sessionsData={sessionsData} wellness={wellness} reloj={reloj}
       oneRMs={oneRMs} fechasRM={fechasRM}
@@ -2653,7 +2651,7 @@ export default function TrainingApp() {
       </div>
       <BottomNav active={tab} onChange={vasA} conMensajes={conMensajes} conExplorar={conExplorar} conEntrenar={conEntrenar} onRegistrar={puedeRegistrar ? () => setRegistrando(true) : null} />
       {/* El punto ●: «listo para empezar» con su última actividad (ver `EntrenoLibre`, variante «punto»). */}
-      {registrando && puedeRegistrar && <EntrenoLibre userId={user.id} unidadPeso={miPerfil?.unidad_peso || 'kg'} variante="punto" alCerrar={() => setRegistrando(false)} />}
+      {registrando && puedeRegistrar && <EntrenoLibre userId={user.id} unidadPeso={miPerfil?.unidad_peso || 'kg'} variante="punto" alCerrar={() => { setRegistrando(false); setVecesRegistrado((n) => n + 1); }} />}
       {/* La página de un workout del plan: desde «Tus entrenos», «Ver todos» y al terminarlo (fase 6). */}
       <PaginaDeSesionGlobal alVerEnElPlan={verEnElPlan} />
       {/* Bienestar y 1RM ya no son pestañas: se abren como hoja encima, con su flecha para volver. */}
