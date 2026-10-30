@@ -61,6 +61,63 @@ function cifraDeCarga(paso) {
 }
 
 /**
+ * Las cifras del paso como `cifrasDelPaso`, y a la de esfuerzo (carga, RIR, RPE, zona…) se le pega qué métrica es (`explica`, con su `min`/`max`) para la hojita de
+ * «¿qué es esto?» (ver `queEsLaCifra`). Un texto libre del coach no se explica.
+ */
+export function cifrasConExplicacion(paso, kilos = null) {
+  const m = paso?.meta;
+  const cifras = cifrasDelPaso(paso, kilos);
+  if (!m || m.tipo === 'kg' || m.tipo === 'texto' || m.min === undefined) return cifras;
+  const etiqueta = ETIQUETA_DE_CARGA[m.tipo] ?? 'carga';
+  return cifras.map((c) => (c.etiqueta === etiqueta && !c.texto && !c.destacado ? { ...c, explica: m.tipo, min: m.min, max: m.max } : c));
+}
+
+/**
+ * QUÉ SIGNIFICA UNA CIFRA DE ESFUERZO (Andrés, 30 oct 2026): la cajita de la carga, el RIR, el RPE, la zona… se toca y una hojita dice qué es, en
+ * palabras de gimnasio y con SU número. `kilos` (los de la cajita de al lado, si salieron de un porcentaje) dice cuánto pesa ese porcentaje.
+ * Devuelve `{ titulo, texto }`, o `null` si la cifra no se explica (las reps, un texto libre del coach).
+ */
+export function queEsLaCifra(c, kilos = null) {
+  if (!c?.explica) return null;
+  const n = c.max ?? c.min;
+  const titulo = `${c.etiqueta === 'carga' ? 'Carga' : c.etiqueta === 'intensidad' ? 'Intensidad' : c.etiqueta === 'zona' ? 'Zona' : c.etiqueta === 'W' ? 'Potencia' : c.etiqueta === '/100 m' ? 'Ritmo de nado' : c.etiqueta === 'min/km' ? 'Ritmo' : c.etiqueta}: ${c.valor}`
+    .replace(/^(RIR|RPE): /, '$1 ');
+  switch (c.explica) {
+    case 'pct':
+      return {
+        titulo,
+        texto: `Es el porcentaje de tu máximo (tu 1RM) en este ejercicio: lo más que puedes levantar una sola vez.${kilos ? ` Con tu máximo, son ${kilos}.` : ' Anota tu máximo y la app te dice cuántos kilos son.'}`,
+      };
+    case 'int':
+      return { titulo, texto: 'Qué tan fuerte tienes que ir, en porcentaje de tu esfuerzo máximo. 100 % es lo más que puedes dar.' };
+    case 'rir':
+      return {
+        titulo,
+        texto: n === 0
+          ? 'Repeticiones en reserva: 0. Haz la serie hasta que ya no puedas hacer ni una repetición más.'
+          : `Repeticiones en reserva. Termina la serie sintiendo que todavía te quedaban ${rango(c.min, c.max)} ${n === 1 ? 'repetición' : 'repeticiones'} más. No llegues al fallo.`,
+      };
+    case 'rpe':
+      return {
+        titulo,
+        texto: `Qué tan pesada se siente la serie, del 1 al 10. 10 es que no podías hacer ni una repetición más.${n >= 6 && n < 10 ? ` En ${sinCeros(n)}, te quedaban unas ${sinCeros(10 - n)} en reserva.` : ''}`,
+      };
+    case 'zona': {
+      const QUE = { 1: 'muy suave, para recuperarte', 2: 'suave: puedes platicar sin ahogarte', 3: 'moderado: hablas con frases cortas', 4: 'fuerte: apenas dices unas palabras', 5: 'lo máximo: no puedes hablar' };
+      return { titulo: `Zona ${rango(c.min, c.max)}`, texto: `El rango de pulso en el que tienes que ir, de Z1 (muy suave) a Z5 (lo máximo).${QUE[Math.round(n)] ? ` Z${Math.round(n)} es ${QUE[Math.round(n)]}.` : ''}` };
+    }
+    case 'ritmo':
+      return { titulo, texto: 'Cuántos minutos tardas en recorrer cada kilómetro. Entre más bajo, más rápido.' };
+    case 'nado':
+      return { titulo, texto: 'Cuánto tardas en nadar cada 100 metros. Entre más bajo, más rápido.' };
+    case 'w':
+      return { titulo, texto: 'La potencia en watts que marca la bici o el remo. Mantén ese número mientras dure.' };
+    default:
+      return null;
+  }
+}
+
+/**
  * Las cifras de un paso, hasta tres, en tarjetas: lo que hay que hacer, la carga y los kilos. `kilos` es lo que el glue calculó
  * de su 1RM o de un peso fijo, ya en SU unidad: `{ valor, unidad, aprox }` (`aprox` si salió de un porcentaje), o `null`.
  * Cada una: `{ valor, etiqueta, destacado?, texto? }` (`texto`: es una palabra, no un número: se dibuja más chica).
