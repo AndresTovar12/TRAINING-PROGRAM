@@ -387,8 +387,9 @@ const lower = {
   assert.deepEqual(Object.keys(salud).sort(), Object.keys(normal).sort(), 'un paciente tiene todos los mismos textos (ninguno se queda sin decir)');
   assert.equal(normal.iniciar, 'Iniciar entreno');
   assert.equal(salud.iniciar, 'Iniciar ejercicios');
-  assert.match(normal.finNotas, /coach/);
-  assert.match(salud.finNotas, /fisio/);
+  assert.equal(normal.continuar, 'Continuar');
+  assert.equal(salud.continuar, 'Continuar');
+  assert.equal(normal.listaTerminar, 'Terminar ahora');
   assert.doesNotMatch(Object.values(salud).join(' '), /entren|coach/i, 'ni «entreno» ni «coach» le llegan a un paciente');
   assert.match(normal.tecnicaTitulo, /Grabar técnica para tu coach/);
   assert.match(salud.tecnicaTitulo, /fisio/);

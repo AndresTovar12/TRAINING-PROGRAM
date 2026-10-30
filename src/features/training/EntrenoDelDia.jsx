@@ -17,8 +17,9 @@ import { palabrasDelEntreno } from '@/lib/entrenoPalabras';
 import { FUNCIONES } from '@/lib/funciones';
 import { relojAMedias } from '@/lib/relojGuardado';
 import {
-  cuentaDe, empiezaPaso, iniciaEntreno, marcaListo, masDescanso as sumaDescanso, pasosDeLaSesion, quitaCronometro, saltaPaso, terminaEntreno, vistaDelEntreno, vuelveAtras,
+  cuentaDe, empiezaPaso, esElUltimoPaso, iniciaEntreno, marcaListo, masDescanso as sumaDescanso, pasosDeLaSesion, quitaCronometro, saltaPaso, terminaEntreno, vistaDelEntreno, vuelveAtras,
 } from '@/lib/entreno';
+import { useAviso } from '@/components/AvisoPasajero';
 import {
   camposDeCambiar, cantidadPlaneada, cifrasDelPaso, exDataTrasListo, puntosDeVueltas, resumenDeLaSerie, segmentosDeAvance, tarjetasDeLaLista, textoDeLoPlaneado,
   tiempoTotal,
@@ -34,7 +35,7 @@ import { cantidadEnUnidad, esPasoConGps, METROS_PARA_GPS, metrosDelPaso, pedidoE
 import { fuenteDeUbicacion } from '@/lib/ubicacion';
 import { claseDe } from '@/lib/clases';
 import {
-  BarraDelEntreno, CronometroDelPaso, HojaDeCambiar, HojaDeLista, HojaDelRecorrido, HojaDeTecnica, PantallaAntesDeEmpezar, PantallaDeDescanso, PantallaDeFin, PantallaDePaso,
+  BarraDelEntreno, CronometroDelPaso, HojaDeCambiar, HojaDeLista, HojaDelRecorrido, HojaDeTecnica, PantallaAntesDeEmpezar, PantallaDeDescanso, PantallaDePaso,
   PantallaDeReloj,
 } from '@/features/training/PantallasDelEntreno';
 
@@ -90,7 +91,7 @@ export default function EntrenoDelDia({
   // Un paso que se tocó en la lista («Tu entreno»): se ve ese en vez del que sigue. `null` = seguir el orden.
   const [enfoque, setEnfoque] = useState(null);
   const [hoja, setHoja] = useState(null);
-  const [verFin, setVerFin] = useState(false);
+  const { avisa } = useAviso();
   // La técnica que se está grabando (el paso, congelado al tocar la cámara) y la última que se mandó de cada paso: `{ [clave]: idDeLaTécnica }`.
   const [grabandoTecnica, setGrabandoTecnica] = useState(null);
   const [tecnicasMandadas, setTecnicasMandadas] = useState({});
@@ -130,7 +131,6 @@ export default function EntrenoDelDia({
   const paso = enfocado && vista.estados[enfocado.i] !== 'hecho' ? enfocado : vista.actual;
   const enDescanso = !!paso && paso.tipo === 'descanso';
   const cuenta = paso && paso.tipo !== 'descanso' ? cuentaDe(paso, entreno, ahora) : null;
-  const mostrarFin = verFin || vista.completo;
   // La foto y los videos se piden UNA vez por paso (no en cada tic del reloj): con una lista nueva cada vez, el video se reiniciaría.
   const mediosDelPaso = useMemo(() => (paso && paso.tipo === 'ejercicio' ? (medios?.(dia.exercises[paso.idx]) ?? null) : null), [paso, medios, dia]);
   const mediosDelSiguiente = useMemo(() => {
@@ -179,7 +179,7 @@ export default function EntrenoDelDia({
   }, [finDeLaCuenta, nombreDelPaso]);
   /* La pantalla bloqueada y la isla dinámica (Live Activity): lo que toca ahora y cuánto falta. Se actualiza solo al cambiar de paso o de descanso; los tiempos son horas y el
      teléfono los cuenta. Al cerrar el entreno o terminarlo, se quita. */
-  const hayEntreno = !!entreno?.inicio && !mostrarFin;
+  const hayEntreno = !!entreno?.inicio && !vista.completo;
   const nombreDePaso = paso?.nombre ?? '';
   const claveDePaso = paso?.clave ?? '';
   const serieTexto = paso?.vueltas > 1 ? `Serie ${paso.vuelta} de ${paso.vueltas}` : '';
@@ -319,7 +319,6 @@ export default function EntrenoDelDia({
     if (mirandoOtro) { setEnfoque(null); return; }
     escribe((prev) => ({ ...prev, entreno: vuelveAtras(plan, prev?.entreno) }));
     setEnfoque(null);
-    setVerFin(false);
   };
   const seguirDelDescanso = () => { preparaAudio(); listo(); };
 
@@ -359,7 +358,12 @@ export default function EntrenoDelDia({
     if (nuevo) preparaAudio();
     try { window.localStorage.setItem(LLAVE_DEL_SONIDO, nuevo ? 'si' : 'no'); } catch { /* sin almacenamiento */ }
   };
+  /* TERMINAR ES UN SOLO PASO (botones de la sesión, 29 oct 2026): ya no hay pantalla de «Entrenamiento terminado» con su «Terminar sesión». En el último paso, «Listo» es «Mantén para
+     terminar» (`terminarManteniendo`), y desde «Ver todo» está «Terminar ahora». Guarda, cierra y abre la página del workout, que pone su celebración (`PaginaDeSesionGlobal`). */
+  const terminando = useRef(false);
   const terminarSesion = () => {
+    if (terminando.current) return;
+    terminando.current = true;
     const t = Date.now();
     const ruta = recorrido.ruta();
     recorrido.limpia();
@@ -374,10 +378,17 @@ export default function EntrenoDelDia({
     // Fase 6 (29 oct 2026): «Terminar» ya no regresa al plan, lleva a la página de este workout con «Tus stickers están listos».
     alTerminado?.();
   };
+  /* Ya no queda ningún paso y la sesión no está terminada: se termina de una vez. Pasa con datos viejos (un entreno que quedó completo antes de este cambio) y cuando lo último
+     que se hizo no fue un «Listo» sino «Saltar» el último paso, «Anotar resultados» o el resultado de un reloj: si no, la pantalla se quedaría sin paso que enseñar. */
+  const yaCompleto = vista.completo && !registro?.completed;
+  useEffect(() => { if (yaCompleto) terminarSesion(); });  // `terminarSesion` se cuida sola de correr una vez
+  // El último paso: marca «Listo» (con lo real que haya) y termina.
+  const terminarManteniendo = (real) => { listo(real); terminarSesion(); };
   // Salir sin terminar: la línea del recorrido también se pasa a la sesión (así no depende solo de este teléfono).
   const cerrar = () => {
     const ruta = recorrido.ruta();
     if (ruta) escribe((prev) => ({ ...prev, ruta }));
+    if (vista.hechos + vista.saltados > 0) avisa('Tu avance se guardó. Sigue cuando quieras.');
     alCerrar();
   };
   // La cámara de «grabar técnica» (también en la web): sale si la función está prendida y hay a quién mandársela (quien puso el ejercicio); apagada, solo explica que viene.
@@ -390,10 +401,9 @@ export default function EntrenoDelDia({
   const tecnicaDelPaso = FUNCIONES.grabarTecnica
     ? (tecnicaActiva && paso ? { activa: true, etiqueta: `Grabar técnica para ${nombreDelDestino}`, onClick: abreTecnica, enviada: !!tecnicasMandadas[paso.clave] } : null)
     : (completo ? { activa: false, etiqueta: palabras.tecnicaTitulo, onClick: abreTecnica } : null);
-  const volverAlEntreno = () => {
-    // Con todo hecho no queda ningún paso al que volver: se regresa al último.
-    if (vista.completo) anterior(); else setVerFin(false);
-  };
+
+  // El último paso que queda (contando los opcionales): ahí «Listo» se termina manteniendo el botón (ver `terminarManteniendo`).
+  const esUltimo = !!paso && esElUltimoPaso(plan, entreno, paso);
 
   /* ---------- Un Set con reloj ---------- */
   const resultadoDelReloj = paso?.tipo === 'reloj' ? (registro?.formatos?.[paso.claveFormato] ?? null) : null;
@@ -443,34 +453,16 @@ export default function EntrenoDelDia({
      "anotar resultados"». Es lo que se hace ahí: anotar lo que salió, sea reps, kilos o tiempo. */
   const textoDeCambiar = cambiar ? 'Anotar resultados' : null;
 
-  const resumenDeFin = [
-    { valor: tiempo || '—', etiqueta: 'Tiempo' },
-    { valor: String(vista.hechos), etiqueta: 'Hechos' },
-    vista.saltados > 0
-      ? { valor: String(vista.saltados), etiqueta: 'Saltados' }
-      : { valor: String(segmentos.filter((f) => f > 0).length), etiqueta: 'Series' },
-  ];
-
-  const sinPasos = !paso && !mostrarFin;
+  const sinPasos = !paso;
   if (sinPasos) return null;
 
   let pantalla;
-  if (antes && !mostrarFin) {
+  if (antes) {
     pantalla = (
       <PantallaAntesDeEmpezar
         nombre={sinDuracion(dia.name || '') || 'Tu sesión'} notas={notasDeLaSesion}
         clase={claseDeLaSesion ? <TarjetaDeClase clase={claseDeLaSesion} nombre={dia.name || ''} /> : null}
         onEmpezar={() => { preparaAudio(); setAntes(false); }} onSalir={cerrar}
-      />
-    );
-  } else if (mostrarFin) {
-    pantalla = (
-      <PantallaDeFin
-        // Fase 7 (29 oct 2026): sin «Compartir stickers» ni la nota: las dos viven en la página del workout, que se abre al terminar («Tu nota», «Compartir»).
-        // Sin esa página (`alTerminado`), la nota se sigue escribiendo aquí.
-        resumen={resumenDeFin} notas={registro?.notes ?? ''} yaTerminada={!!registro?.completed} palabras={palabras}
-        onNotas={alTerminado ? null : (notes) => escribe((prev) => ({ ...prev, notes }))}
-        onTerminar={terminarSesion} onVolver={volverAlEntreno}
       />
     );
   } else if (enDescanso) {
@@ -487,6 +479,7 @@ export default function EntrenoDelDia({
         enMarcha={relojAMedias(`${userId}:${sesionId}:${paso.claveFormato}`)}
         onIniciar={() => { preparaAudio(); setReloj(true); }} onAnotar={() => setAnotando(true)} onListo={() => listo()}
         onSaltar={saltar} onAnterior={anterior} tecnica={tecnicaDelPaso} color={colorDelTipo}
+        esUltimo={esUltimo} onTerminar={() => terminarManteniendo()}
       />
     );
   } else {
@@ -500,7 +493,7 @@ export default function EntrenoDelDia({
         ) : null}
         etiquetaDeCambiar={textoDeCambiar} puedeAnterior={vista.puedeAnterior || mirandoOtro}
         onListo={() => listo()} onCambiar={() => setHoja('cambiar')} onSaltar={saltar} onAnterior={anterior}
-        tecnica={tecnicaDelPaso} color={colorDelTipo}
+        tecnica={tecnicaDelPaso} color={colorDelTipo} esUltimo={esUltimo} onTerminar={() => terminarManteniendo()}
         onUsarGps={esPasoConGps(paso) && fuenteDeUbicacion().disponible() && (cerradoGps === paso.clave || sinGps[paso.nombre]) ? () => {
           setCerradoGps(null);
           const { [paso.nombre]: _quitado, ...resto } = sinGps;
@@ -516,11 +509,11 @@ export default function EntrenoDelDia({
   const tramosDelReloj = paso?.tipo === 'reloj' ? (paso.deLapsos ? paso.tramos.filter((t) => t.tipo === 'trabajo').length : tramosDeTrabajo(paso.formato, paso.miembros.length)) : 0;
   const nombreDelReloj = paso?.deLapsos ? 'Lapsos personalizados' : paso?.resumen;
   // El reloj se abre SOLO cuando se llegó avanzando a un Set con reloj que no tiene resultado, y la persona no lo cerró ya.
-  const relojSolo = llegando && paso?.tipo === 'reloj' && !mirandoOtro && !resultadoDelReloj && !mostrarFin && !anotando && cerradoEn !== paso.claveFormato;
+  const relojSolo = llegando && paso?.tipo === 'reloj' && !mirandoOtro && !resultadoDelReloj && !anotando && cerradoEn !== paso.claveFormato;
   const cierraReloj = () => { setReloj(false); setCerradoEn(paso?.claveFormato ?? null); };
   // ¿El paso que toca va con mapa? 200 m o más, el teléfono tiene GPS, no lo cerró y no eligió «Sin GPS» para ese ejercicio. En la pantalla del final o en
   // «Antes de empezar», no.
-  const conGps = !antes && !mostrarFin && !enDescanso && !!paso && esPasoConGps(paso) && fuenteDeUbicacion().disponible()
+  const conGps = !antes && !enDescanso && !!paso && esPasoConGps(paso) && fuenteDeUbicacion().disponible()
     && cerradoGps !== paso.clave && !sinGps[paso.nombre]
     // Mientras no contesta «¿Guardamos tu recorrido?», el mapa espera: si no, la pregunta quedaría tapada debajo.
     && (recorrido.permiso !== null || !recorrido.disponible);
@@ -545,12 +538,10 @@ export default function EntrenoDelDia({
         position: 'fixed', top: 0, left: 0, right: 0, height: '100dvh', zIndex: 3000, background: fondo, display: 'flex', flexDirection: 'column', fontFamily: FONT,
       }}
     >
-      {!mostrarFin && (
-        <BarraDelEntreno
-          segmentos={segmentos} fondo={fondo} palabras={palabras} tiempo={tiempo || null} color={colorDelTipo ?? undefined}
-          onLista={() => { setLlegando(false); setHoja('lista'); }}
-        />
-      )}
+      <BarraDelEntreno
+        segmentos={segmentos} fondo={fondo} palabras={palabras} tiempo={tiempo || null} color={colorDelTipo ?? undefined}
+        onLista={() => { setLlegando(false); setHoja('lista'); }}
+      />
       {/* El paso con GPS (200 m o más) ocupa el lugar del paso normal, con la barra «Workout» arriba; «Sin GPS» o cerrar el mapa devuelve el paso normal. */}
       {conGps ? (
         <PasoConGps
@@ -573,7 +564,7 @@ export default function EntrenoDelDia({
         <HojaDeLista
           tarjetas={tarjetasDeLaLista(plan, vista.estados, queToca?.clave ?? null, { kilosDe, resultadoDe })} miniaturaDe={miniaturaDeFila} palabras={palabras}
           onElegir={(clave) => { setLlegando(false); setEnfoque(clave); setHoja(null); }}
-          onTerminar={() => { setHoja(null); setVerFin(true); }}
+          onTerminar={terminarSesion}
           onSalir={cerrar}
           onCerrar={() => setHoja(null)}
         />

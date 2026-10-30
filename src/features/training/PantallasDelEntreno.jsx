@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Bell, BellOff, Check, ChevronLeft, ChevronRight, List, MapPin, Minus, Pencil, Play, Plus, Timer, Video, X } from 'lucide-react';
 import { LT, KP, FONT, NUM_STYLE, UI } from '@/lib/theme';
 import { textoDeResultado } from '@/lib/formatos';
 import { relojDe } from '@/lib/entrenoDatos';
+import { useAviso } from '@/components/AvisoPasajero';
 
 /**
  * Las pantallas del modo entreno: lo que se DIBUJA. Qué paso toca, cuándo avisar y qué se guarda lo decide `EntrenoDelDia`; aquí no
@@ -49,6 +50,63 @@ function BotonGrande({ children, onClick, variante = 'azul', disabled = false })
   return (
     <button type="button" onClick={onClick} disabled={disabled} className="kp-press" style={{ ...base, ...estilos[variante] }}>
       {children}
+    </button>
+  );
+}
+
+/**
+ * «Mantén para terminar» (botones de la sesión, 29 oct 2026): terminar un entreno se hace MANTENIENDO el botón, igual en el entreno guiado, la carrera y el cronómetro. Un toque sin querer
+ * no termina nada: una barra azul lo va llenando de izquierda a derecha durante 900 ms y, al llenarse, termina (`onTermina`). Si se suelta antes, la barra vuelve a cero y no pasa nada;
+ * si el toque fue corto (menos de 400 ms) además avisa cómo se hace. Por eso no pregunta nada después: mantener YA es la pregunta.
+ *
+ * Tiene la cara del «Listo» oscuro (sin la palomita). Sin menú de mantener presionado ni selección de texto (en el iPhone, mantener un botón los abre), y `touch-action: none` para que el
+ * dedo quieto no se vuelva un gesto de la página. `fondo`, `relleno`, `alto`, `radio` y `tamano` (de la letra) lo adaptan a las pantallas oscuras de la carrera; `estilo`, a la fila donde va.
+ */
+export function BotonDeMantener({ onTermina, texto = 'Mantén para terminar', fondo = '#15171E', relleno = KP.blue, alto = 60, radio = 18, tamano = 18, sombra = '0 10px 24px rgba(17,19,24,0.22)', disabled = false, estilo = null }) {
+  const { avisa } = useAviso();
+  const [llena, setLlena] = useState(false);
+  const reloj = useRef(null);
+  const desde = useRef(0); // cuándo se empezó a mantener; 0 = nadie lo está tocando
+  const termino = useRef(onTermina);
+  useEffect(() => { termino.current = onTermina; });
+  useEffect(() => () => clearTimeout(reloj.current), []);
+
+  const empieza = (e) => {
+    if (disabled || desde.current || (e.type === 'pointerdown' && e.pointerType === 'mouse' && e.button !== 0)) return;
+    desde.current = performance.now();
+    setLlena(true);
+    reloj.current = setTimeout(() => {
+      reloj.current = null;
+      desde.current = 0;
+      termino.current();
+      // Si la pantalla sigue aquí (algo salió sin terminar), el botón vuelve a estar listo.
+      setLlena(false);
+    }, 900);
+  };
+  const suelta = (e) => {
+    if (!desde.current) return;
+    const duro = performance.now() - desde.current;
+    clearTimeout(reloj.current);
+    reloj.current = null;
+    desde.current = 0;
+    setLlena(false);
+    if (duro < 400 && (e.type === 'pointerup' || e.type === 'keyup')) avisa('Mantén presionado para terminar.');
+  };
+  const tecla = (e) => (e.key === 'Enter' || e.key === ' ') && !e.repeat;
+  return (
+    <button
+      type="button" disabled={disabled} draggable={false}
+      onPointerDown={empieza} onPointerUp={suelta} onPointerLeave={suelta} onPointerCancel={suelta}
+      onKeyDown={(e) => { if (tecla(e)) { e.preventDefault(); empieza(e); } }} onKeyUp={(e) => { if (tecla(e)) suelta(e); }}
+      onContextMenu={(e) => e.preventDefault()}
+      style={{
+        position: 'relative', overflow: 'hidden', width: '100%', minHeight: alto, borderRadius: radio, border: 'none', cursor: disabled ? 'default' : 'pointer', color: '#fff', background: fondo, boxShadow: sombra,
+        fontFamily: FONT, fontSize: tamano, fontWeight: 800, touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none', WebkitTapHighlightColor: 'transparent',
+        opacity: disabled ? 0.6 : 1, ...estilo,
+      }}
+    >
+      <span aria-hidden="true" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: llena ? '100%' : '0%', background: relleno, transition: llena ? 'width 900ms linear' : 'none', pointerEvents: 'none' }} />
+      <span style={{ position: 'relative', pointerEvents: 'none' }}>{texto}</span>
     </button>
   );
 }
@@ -388,7 +446,7 @@ function CronometroDelPaso({ segundos, cuenta, onEmpezar, onQuitar }) {
  */
 export function PantallaDePaso({
   paso, video, cifras, anotado, sigue, resumen, cronometro, etiquetaDeCambiar, puedeAnterior, tecnica,
-  onListo, onCambiar, onSaltar, onAnterior, color = null, onUsarGps = null,
+  onListo, onCambiar, onSaltar, onAnterior, color = null, onUsarGps = null, esUltimo = false, onTerminar = null,
 }) {
   const nota = [paso.nota, paso.cue].filter(Boolean);
   const hayCronometro = paso.tipo === 'ejercicio' && paso.termina?.por === 'tiempo' && cronometro;
@@ -441,9 +499,12 @@ export function PantallaDePaso({
       </div>
       <div style={{ flexShrink: 0, padding: '10px 0 calc(10px + env(safe-area-inset-bottom))' }}>
         <div style={{ ...COLUMNA, padding: '0 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <BotonGrande variante="oscuro" onClick={onListo}>
-            <span aria-hidden="true" style={{ width: 30, height: 30, borderRadius: '50%', background: color || LT.blue, display: 'grid', placeItems: 'center' }}><Check size={18} strokeWidth={3} /></span> Listo
-          </BotonGrande>
+          {/* En el último paso que queda, «Listo» se vuelve «Mantén para terminar»: terminar es un solo paso, sin pantalla de «terminado» ni «Terminar sesión». */}
+          {esUltimo && onTerminar ? <BotonDeMantener onTermina={onTerminar} /> : (
+            <BotonGrande variante="oscuro" onClick={onListo}>
+              <span aria-hidden="true" style={{ width: 30, height: 30, borderRadius: '50%', background: color || LT.blue, display: 'grid', placeItems: 'center' }}><Check size={18} strokeWidth={3} /></span> Listo
+            </BotonGrande>
+          )}
           {/* «Anotar resultados»: lo que se hace ahí (antes «Cambiar reps o kilos»). */}
           {etiquetaDeCambiar && <BotonSecundario ancho onClick={onCambiar}><Pencil size={17} /> {etiquetaDeCambiar}</BotonSecundario>}
           {/* Un paso de 200 m o más que se hace sin mapa (eligió «Sin GPS» o cerró el mapa): se puede volver a él. */}
@@ -502,7 +563,7 @@ export function PantallaAntesDeEmpezar({ nombre, notas, clase, onEmpezar, onSali
  * (`RelojDelBloque`), que es la pantalla protagonista mientras dura. Aquí solo se dice qué es, con qué ejercicios (y, en lapsos, qué lapsos),
  * y se abre el reloj o se anota el resultado a mano.
  */
-export function PantallaDeReloj({ paso, detalle, resultado, puedeAnterior, tecnica, enMarcha = false, onIniciar, onAnotar, onListo, onSaltar, onAnterior, color = null }) {
+export function PantallaDeReloj({ paso, detalle, resultado, puedeAnterior, tecnica, enMarcha = false, onIniciar, onAnotar, onListo, onSaltar, onAnterior, color = null, esUltimo = false, onTerminar = null }) {
   const conLapsos = !!paso.deLapsos;
   return (
     <>
@@ -551,9 +612,11 @@ export function PantallaDeReloj({ paso, detalle, resultado, puedeAnterior, tecni
               el Set en «Ver todo», al retomar el entreno o al cancelar la cuenta; el botón arranca ya (o sigue, si el reloj iba a medias). */}
           {resultado ? (
             <>
-              <BotonGrande variante="oscuro" onClick={onListo}>
-                <span aria-hidden="true" style={{ width: 30, height: 30, borderRadius: '50%', background: color || LT.blue, display: 'grid', placeItems: 'center' }}><Check size={18} strokeWidth={3} /></span> Listo
-              </BotonGrande>
+              {esUltimo && onTerminar ? <BotonDeMantener onTermina={onTerminar} /> : (
+                <BotonGrande variante="oscuro" onClick={onListo}>
+                  <span aria-hidden="true" style={{ width: 30, height: 30, borderRadius: '50%', background: color || LT.blue, display: 'grid', placeItems: 'center' }}><Check size={18} strokeWidth={3} /></span> Listo
+                </BotonGrande>
+              )}
               <BotonSecundario ancho onClick={onAnotar}><Pencil size={17} /> Cambiar el resultado</BotonSecundario>
             </>
           ) : (
@@ -662,50 +725,6 @@ export function PantallaDeDescanso({ descanso, siguiente, video, sonido, puedeAn
               </BotonSecundario>
             )}
           </div>
-        </div>
-      </div>
-    </>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* El final                                                            */
-/* ------------------------------------------------------------------ */
-
-/** «Entrenamiento terminado»: lo que se hizo, una nota para el coach (solo si `onNotas`: si no, se escribe en la página del workout) y «Terminar sesión».
- *  El avance ya estaba guardado. */
-export function PantallaDeFin({ resumen, notas, palabras, onNotas, onTerminar, onVolver, yaTerminada }) {
-  return (
-    <>
-      <div style={{ flex: 1, overflowY: 'auto' }}>
-        <div style={{ ...COLUMNA, padding: '36px 18px 18px', textAlign: 'center' }}>
-          <div style={{ width: 84, height: 84, borderRadius: '50%', background: LT.mint, color: '#fff', display: 'grid', placeItems: 'center', margin: '0 auto 16px' }}>
-            <Check size={44} strokeWidth={3.2} />
-          </div>
-          <h1 style={{ margin: '0 0 20px', fontSize: 30, fontWeight: 800, letterSpacing: -0.7, color: LT.text }}>{palabras.finTitulo}</h1>
-          <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
-            {resumen.map((c) => <Cifra key={c.etiqueta} {...c} />)}
-          </div>
-          {onNotas && (
-            <>
-              <label htmlFor="entreno-notas" style={{ display: 'block', textAlign: 'left', fontSize: 15, fontWeight: 800, color: LT.text, margin: '0 2px 8px' }}>
-                {palabras.finNotas}
-              </label>
-              <textarea
-                id="entreno-notas" value={notas} onChange={(e) => onNotas(e.target.value)} rows={4}
-                style={{
-                  width: '100%', boxSizing: 'border-box', border: 'none', boxShadow: '0 2px 10px rgba(17,19,24,0.07)', borderRadius: 16, background: LT.surface, padding: '14px 16px',
-                  fontFamily: FONT, fontSize: 16, color: LT.text, resize: 'none', outline: 'none', textAlign: 'left',
-                }}
-              />
-            </>
-          )}
-        </div>
-      </div>
-      <div style={{ flexShrink: 0, padding: '10px 0 calc(10px + env(safe-area-inset-bottom))' }}>
-        <div style={{ ...COLUMNA, padding: '0 18px', textAlign: 'center' }}>
-          <BotonGrande variante="verde" onClick={onTerminar}><Check size={21} strokeWidth={3} /> {yaTerminada ? 'Listo' : 'Terminar sesión'}</BotonGrande>
-          <div style={{ marginTop: 10 }}><BotonSecundario ancho onClick={onVolver}><ChevronLeft size={18} /> {palabras.finVolver}</BotonSecundario></div>
         </div>
       </div>
     </>

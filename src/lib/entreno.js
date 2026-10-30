@@ -631,6 +631,44 @@ export function terminaEntreno(entreno, ahora) {
   return aGuardar({ ...av, inicio: av.inicio ?? ahora, fin: av.fin ?? ahora });
 }
 
+/**
+ * ¿Es este el ÚLTIMO paso que queda? (Botones de la sesión, 29 oct 2026: terminar manteniendo, en la última serie.) Cierto cuando `paso` es el único sin marca de todo el
+ * plan, CONTANDO los opcionales («5-6 veces»): al marcarlo, `vistaDelEntreno().completo` sería verdadero. Un descanso nunca lo es (no se termina un entreno en un descanso),
+ * y un paso que se tocó en «Ver todo» y no es el último de los que faltan sigue con «Listo».
+ */
+export function esElUltimoPaso(plan, entreno, paso) {
+  if (!paso || paso.tipo === 'descanso') return false;
+  const av = leeAvance(entreno);
+  const pendientes = (plan?.pasos ?? []).filter((p) => !marcaDe(av, p));
+  return pendientes.length === 1 && pendientes[0].clave === paso.clave;
+}
+
+/**
+ * La sesión terminada: `completed` y la hora (la primera vez; terminar otra vez no la mueve) y, si había entreno guiado, también se da por terminado. Es lo que hacen «Terminar ahora»
+ * y «Marcar como hecha»; el final del entreno guiado hace lo mismo (`EntrenoDelDia`). `ruta`: el recorrido, si lo hubo.
+ */
+export function terminaSesion(registro, ahora, { ruta = null } = {}) {
+  const prev = esObjeto(registro) ? registro : {};
+  return {
+    ...prev,
+    ...(ruta ? { ruta } : null),
+    ...(prev.entreno ? { entreno: terminaEntreno(prev.entreno, ahora) } : null),
+    completed: true,
+    completedAt: prev.completed && prev.completedAt ? prev.completedAt : new Date(ahora).toISOString(),
+  };
+}
+
+/**
+ * La sesión EN BLANCO: sin lo anotado, los relojes de los Sets, el recorrido ni el entreno guiado; se quedan las notas (son de la persona, no un resultado) y lo ya archivado.
+ * `archiva`: lo que había pasa a `anteriores` (ver `archivaLoHecho`): sí al hacerla otra vez o marcarla «no hecha» (el coach lo sigue viendo como un entreno más); no al «Empezar de
+ * nuevo» de un entreno que nunca se terminó, que no deja huella.
+ */
+export function sesionEnBlanco(registro, { archiva = true } = {}) {
+  const { exercises: _e, formatos: _f, ruta: _r, entreno: _en, ...resto } = esObjeto(registro) ? registro : {};
+  void _e; void _f; void _r; void _en;
+  return { ...resto, completed: false, completedAt: null, ...(archiva ? archivaLoHecho(registro) : null) };
+}
+
 /** Deshace el «terminado»: el entreno sigue donde iba. */
 export function reabreEntreno(entreno) {
   return aGuardar({ ...leeAvance(entreno), fin: null });

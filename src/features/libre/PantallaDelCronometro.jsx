@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useConfirmacion } from '@/components/Confirmacion';
-import { Loader2, MapPin, Pause, Play, Square } from 'lucide-react';
+import { Loader2, MapPin, Pause, Play } from 'lucide-react';
 import HojaFlotante from '@/components/HojaFlotante';
 import { LT, FONT, KP, NUM_STYLE, UI } from '@/lib/theme';
 import { MINIMO_DE_SEGUNDOS, distanciaEnMetros, relojDeCronometro, unidadDeDistancia } from '@/lib/entrenoLibre';
@@ -12,8 +12,9 @@ import { Fila, Grupo, Pastilla, Segmentado } from '@/components/ui';
 import { useSenalGps } from './useEntrenoLibre';
 import { botonBlancoGrande, botonGrande } from './estilosLibre';
 import IconoDeActividad from './IconoDeActividad';
+import { BotonDeMantener } from '@/features/training/PantallasDelEntreno';
 
-/* LA PANTALLA DEL CRONÓMETRO (entreno libre): el tiempo grande, «Pausar» y «Terminar». Al terminar pregunta la distancia (se puede dejar vacía) y guarda. Cerrar la hoja NO termina el
+/* LA PANTALLA DEL CRONÓMETRO (entreno libre): el tiempo grande, «Pausar» y «Mantén para terminar» (terminar es mantener el botón). Al terminar pregunta la distancia (se puede dejar vacía) y guarda. Cerrar la hoja NO termina el
    entreno: el cronómetro sigue (vive en `useCronometroLibre`) y Home lo muestra como «Entreno en curso». Ver `lib/entrenoLibre.js`.
    CON GPS (reestructura visual, 15 oct 2026; Andrés: «dejarlo listo para cuando la app descargable esté»): correr, caminar y bici pasan antes por «Antes de salir»
    (la señal del GPS y «Empezar»); corriendo se ven distancia y ritmo, o la ruta dibujada («Datos | Ruta»), y los kilómetros que van. Al terminar, la distancia ya la midió
@@ -113,9 +114,8 @@ export default function PantallaDelCronometro({ userId, crono, pendiente = null,
               <button type="button" onClick={pausado ? crono.reanuda : crono.pausa} disabled={fase === 'guardando'} className="kp-press" style={botonBlancoGrande(fase === 'guardando')}>
                 {pausado ? <><Play size={20} /> Seguir</> : <><Pause size={20} /> Pausar</>}
               </button>
-              <button type="button" onClick={terminar} disabled={fase === 'guardando'} className="kp-press" style={botonGrande(fase === 'guardando')}>
-                {fase === 'guardando' ? <Loader2 size={20} className="spin" /> : <Square size={18} fill="currentColor" />} Terminar
-              </button>
+              {/* Terminar es MANTENER (botones de la sesión, 29 oct 2026): un toque sin querer no cierra el entreno. */}
+              <BotonDeMantener onTermina={terminar} disabled={fase === 'guardando'} texto={fase === 'guardando' ? 'Guardando…' : 'Mantén para terminar'} alto={56} radio={UI.rBoton} tamano={17} sombra="none" />
             </div>
           </>
         )}

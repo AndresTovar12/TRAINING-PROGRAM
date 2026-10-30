@@ -6,7 +6,7 @@ import {
   Clock, Dumbbell, Heart, Play, CalendarDays, ListChecks,
   Home as HomeIcon,
   Repeat, Scale, LineChart as LineChartIcon,
-  MessageCircle, Timer, HeartPulse, Moon, Upload, Activity, Share2, Compass, CircleDot,
+  MessageCircle, Timer, HeartPulse, Moon, Upload, Activity, Compass, CircleDot,
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useIsDesktop, useIsWide } from '@/lib/useViewport';
@@ -32,7 +32,6 @@ import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
 import { useAppState, useStorage } from '@/contexts/AppStateContext';
 import { useDiaDeHoy } from '@/lib/useDiaDeHoy';
 import { pideAbrirEntreno, hayEntrenoPendiente } from '@/lib/entrenoPendiente';
-import { borraRecorrido } from '@/features/training/useRecorrido';
 import { preparaAudio } from '@/lib/pitidos';
 import { altaReciente } from '@/lib/comoVa';
 import { FiltroDeAutor, EtiquetaDeAutor } from '@/features/training/EquipoDelAtleta';
@@ -56,11 +55,10 @@ import {
 } from '@/lib/programas';
 import FichaEjercicio from '@/features/training/FichaEjercicio';
 import TarjetaDeSesion from '@/features/training/TarjetaDeSesion';
-import BotonDelEntreno from '@/features/training/BotonDelEntreno';
+import { MarcarComoHecha, useBotonesDeLaSesion } from '@/features/training/BotonDelEntreno';
 import PaginaDeSesionGlobal from '@/features/training/PaginaDeSesionGlobal';
 import TarjetaDeClase from '@/features/training/TarjetaDeClase';
 import { claseDe, duracionTexto } from '@/lib/clases';
-import { archivaLoHecho, terminaEntreno } from '@/lib/entreno';
 import { relojAMedias } from '@/lib/relojGuardado';
 import Portada from '@/components/Portada';
 import BotonEntendido from '@/components/BotonEntendido';
@@ -69,7 +67,7 @@ import {
   hermanasDelDia, juntaPorDia, sesionQueRepite,
 } from '@/lib/sesiones';
 import { setTag, groupIntoSets } from '@/lib/setsDeUnaSesion';
-import { aspectoDelTipo, tipoParaStickers } from '@/lib/aspectoDelTipo';
+import { aspectoDelTipo } from '@/lib/aspectoDelTipo';
 import { plural, pluralS, rondasQueDecir } from '@/lib/plural';
 import { textoMeta, textoDeHecho, cargaEnSuUnidad } from '@/lib/medidas';
 import {
@@ -81,7 +79,6 @@ import { lapsosDe, comoEjercicio, tramosDeLapsos, hayLapsos } from '@/lib/lapsos
 import RelojDelBloque from '@/features/training/RelojDelBloque';
 import ResultadoDelBloque from '@/features/training/ResultadoDelBloque';
 import { useAuth } from '@/contexts/AuthContext';
-import { tramoDeLaSesion } from '@/lib/metricas/porSerie';
 import { useMensajes } from '@/contexts/MensajesContext';
 import { NumeroRojo } from '@/features/mensajes/piezas';
 import MensajesDelAtleta from '@/features/mensajes/MensajesDelAtleta';
@@ -835,65 +832,6 @@ const HojaDelPrograma = ({
 };
 
 /**
- * CADA SESIÓN SE TERMINA POR SU LADO (Andrés, 29 sep 2026: «cada sesión debería
- * tener su botón de marcar como terminada»). Va al final de la lista, que es donde
- * se está cuando se acaba, y con la misma cara que el botón del día: azul para
- * marcar, verde cuando ya está. Cada una va dentro de SU tarjeta, así que basta con decir «sesión».
- */
-// Los stickers para redes de una sesión terminada (ver `features/stickers`): la hoja se carga solo cuando se pide.
-const HojaDeSesion = lazy(() => import('@/features/stickers/HojaDeSesion'));
-
-const BotonDeStickers = ({ onStickers, alto = 50 }) => (
-  <button
-    type="button" onClick={onStickers} className="kp-press"
-    style={{
-      minHeight: alto, padding: '0 14px', borderRadius: 14, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-      border: 'none', background: KP.blueSoft, color: LT.blue, fontFamily: FONT, fontSize: 13.5, fontWeight: 800, touchAction: 'manipulation',
-    }}
-  >
-    <Share2 size={16} /> Stickers
-  </button>
-);
-
-const TerminarSesion = ({ hecha, onAlternar, onStickers }) => (hecha ? (
-  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
-    <div style={{
-      flex: 1, minHeight: 50, borderRadius: 14, background: LT.mint, color: '#fff',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-      fontFamily: FONT, fontSize: 14.5, fontWeight: 800,
-    }}>
-      <Check size={18} strokeWidth={3} /> Sesión terminada
-    </div>
-    {onStickers && <BotonDeStickers onStickers={onStickers} />}
-    <button
-      type="button"
-      onClick={onAlternar}
-      style={{
-        minHeight: 50, padding: '0 14px', borderRadius: 14, cursor: 'pointer',
-        border: 'none', background: UI.relleno, color: LT.text2,
-        fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
-      }}
-    >
-      Deshacer
-    </button>
-  </div>
-) : (
-  <button
-    type="button"
-    onClick={onAlternar}
-    className="kp-press"
-    style={{
-      width: '100%', minHeight: 50, marginTop: 14, borderRadius: 14, border: 'none',
-      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9,
-      cursor: 'pointer', fontFamily: FONT, fontSize: 14.5, fontWeight: 800, color: '#fff',
-      background: KP.blue, boxShadow: KP.shBtn,
-    }}
-  >
-    <Check size={18} strokeWidth={3} /> Marcar sesión como terminada
-  </button>
-));
-
-/**
  * Cuántas tarjetas de sesión dibuja una entrada en «Plan» con equipo: una si trae ejercicios
  * o notas de sesión, ninguna si es un descanso.
  */
@@ -942,18 +880,11 @@ const CuerpoDelDia = ({
   const selectedId = idDeSesion(phase.id, week.num, selectedIdx);
   const sessionData = sessionsData[selectedId] || {};
   const selectedCompleted = !!sessionData.completed;
-  /* Los stickers para redes: solo el propio atleta (no quien mira su plan en solo lectura) y solo de una sesión terminada en la que el entreno guiado
-     midió algo (si se marcó terminada a mano, sin hacer nada en el entreno, no hay con qué armarlos). */
-  const { perfil: perfilDeStickers, soloLectura: miraSoloLectura, userId: atletaDeStickers } = usePerfilDeLaVista();
-  const [stickersAbiertos, setStickersAbiertos] = useState(false);
-  // «Programmed by» en los stickers: quien hizo esta sesión (en un día con sesiones de varios profesionales, el de su tarjeta).
-  const { programaActivo } = usePlan();
-  const coachDeStickers = autor?.profesionalId ?? programaActivo?.profesionalId ?? null;
-  const puedeStickers = !miraSoloLectura && selectedCompleted && !!tramoDeLaSesion(sessionData);
   /* Con `entarjetas` la sesión es una tarjeta, aunque este programa traiga una sola: se termina cada una por su lado y
      salen cerradas si hay más de una en el día (lo decide quien arma la pantalla con `abiertasPorDefecto`). Sin
      `entarjetas`, un día de una sola sesión sigue como siempre, con su botón de terminar al final. */
   const porTarjeta = entarjetas;
+  // Las sesiones de este día que se pueden terminar, en estado, botones y «···»: ver `useBotonesDeLaSesion`. Solo la pieza de las sesiones los lleva (`quiere('sesiones')`).
   const abiertaSola = abiertasPorDefecto ?? true;
   // «Empezar» de Home en un día con varias sesiones: la tarjeta de esa sesión sale cerrada y su botón del entreno no existiría para recoger el aviso. Se abre sola.
   useEffect(() => {
@@ -983,32 +914,15 @@ const CuerpoDelDia = ({
     return { ...prev, formatos: resto };
   });
   const updateNotes = (notes) => updateSession(selectedId, prev => ({ ...prev, notes }));
-  /* «Deshacer» también empieza de nuevo el entreno guiado si ya estaba terminado (ver `reiniciaSiTerminado`). Y lo que ya se había hecho NO se pierde
-     (16 oct 2026: una sesión se guarda por su lugar en el plan, no por la fecha; si se hacía otra vez —el viernes que ya se hizo el jueves— lo anterior se
-     borraba): se guarda en `anteriores`, y el coach lo ve como un entreno más. */
-  const toggleComplete = () => {
-    borraRecorrido(selectedId); // la línea ya vive en la sesión (o se descarta): la copia de este teléfono no debe reaparecer al volver a hacerla
-    updateSession(selectedId, (prev) => {
-      if (!prev?.completed) {
-        // «Terminar sesión» es UNA sola cosa, la toques donde la toques: si había un entreno guiado empezado, también se cierra.
-        return { ...prev, completed: true, completedAt: new Date().toISOString(), ...(prev?.entreno ? { entreno: terminaEntreno(prev.entreno, Date.now()) } : null) };
-      }
-      /* «DESHACER» DEJA LA SESIÓN EN BLANCO (Andrés, 23 oct 2026): antes reiniciaba el entreno guiado pero dejaba los resultados de los relojes y lo anotado, y al
-         volver a hacerla un reloj ya hecho no arrancaba («Resultado: Hecho» y «Listo» sobre algo que no hizo esa vez). Lo de la vez anterior no se pierde: pasa a
-         `anteriores` (el coach lo ve como un entreno más) y la sesión arranca de cero. Las notas se quedan: son de la persona, no un resultado. */
-      const { exercises: _e, formatos: _f, ruta: _r, entreno: _en, ...resto } = prev;
-      void _e; void _f; void _r; void _en;
-      return { ...resto, completed: false, completedAt: null, ...archivaLoHecho(prev) };
-    });
-  };
-  /* «Iniciar entreno»: abre el MODO ENTRENO de esta sesión (ver `BotonDelEntreno`). Una sesión que dice «repite el martes» se entrena con
-     los ejercicios del martes (`ejercicios`), pero lo que se anota queda en SU lugar. */
-  const botonDelEntreno = (ejercicios) => (
-    <BotonDelEntreno
-      dia={selectedDay} ejercicios={ejercicios} aspecto={aspectoDelTipo(selectedDay)} registro={sessionData}
-      onRegistro={(cambio) => updateSession(selectedId, cambio)} onFormato={setFormato} sesionId={selectedId} oneRMs={oneRMs} autor={autor}
-    />
-  );
+  /* LOS BOTONES DE LA SESIÓN (29 oct 2026): un botón grande por estado, arriba de la lista de ejercicios, y lo que borra o reinicia en el «···» (ver `useBotonesDeLaSesion`).
+     Antes eran cuatro cosas que se podían tocar por error a la vista: un bloque verde «Sesión terminada», «Stickers», «Deshacer» y un azul «Marcar sesión como terminada». Una sesión que dice
+     «repite el martes» se entrena con los ejercicios del martes (`ejercicios`), pero lo que se anota queda en SU lugar. */
+  const control = useBotonesDeLaSesion({
+    dia: selectedDay, ejercicios: soloNotas ? sesionQueRepite(week, selectedIdx)?.day.exercises : undefined, aspecto: aspectoDelTipo(selectedDay),
+    registro: sessionData, onRegistro: (cambio) => updateSession(selectedId, cambio), onFormato: setFormato, sesionId: selectedId, oneRMs, autor,
+    activo: quiere('sesiones'), menuEnLaFila: !porTarjeta,
+  });
+  const botonDelEntreno = () => control.boton;
   /* Con equipo, la sesión de un día de UNA sola sesión también es una tarjeta, igual
      a las de un doble: así la del fisio no queda como un bloque distinto al lado de
      las del coach. Sus datos se guardan igual que siempre (por ejercicio y un solo
@@ -1022,10 +936,11 @@ const CuerpoDelDia = ({
       <TarjetaDeSesion
         aspecto={aspectoDelTipo(selectedDay)} hecha={selectedCompleted} abierta={openBlocks.dia ?? abiertaSola}
         onAlternar={() => setOpenBlocks((p) => ({ ...p, dia: !(p.dia ?? abiertaSola) }))}
+        onMenu={control.conMenu ? control.abreMenu : null}
         nombre={nombre} detalle={detalle} autor={autor}
       >
         {cuerpo}
-        <TerminarSesion hecha={selectedCompleted} onAlternar={toggleComplete} onStickers={puedeStickers ? () => setStickersAbiertos(true) : null} />
+        {control.puedeMarcarHecha && <MarcarComoHecha alMarcar={control.marcarComoHecha} />}
       </TarjetaDeSesion>
     );
   };
@@ -1035,17 +950,7 @@ const CuerpoDelDia = ({
 
   return (
     <>
-      {stickersAbiertos && (
-        <Suspense fallback={null}>
-          <HojaDeSesion
-            atletaId={atletaDeStickers} registro={sessionData} sesionId={selectedId} nombre={sinDuracion(selectedDay.name || '') || 'Tu sesión'}
-            unidadPeso={perfilDeStickers?.unidad_peso || 'kg'} onCerrar={() => setStickersAbiertos(false)}
-            tipo={tipoParaStickers(selectedDay)} coachId={coachDeStickers}
-            // Los ejercicios que se hicieron: los del día que repite, si dice «repite el martes».
-            dia={{ ...selectedDay, exercises: (sesionQueRepite(week, selectedIdx)?.day ?? selectedDay).exercises }}
-          />
-        </Suspense>
-      )}
+      {control.hojas}
       {/* SIN LÍNEA GRIS DE DATOS bajo la tira de días.
           Aquí iba «Gym · 7 ejercicios · 70 min · 75%» (y en un doble, «AM y PM
           abajo»). Andrés, 29 sep 2026: «solo saturan la página, no sirven de
@@ -1053,19 +958,8 @@ const CuerpoDelDia = ({
           ya lo dice la tarjeta de la sesión justo debajo, la intensidad va en
           cada ejercicio, y el tipo lo dice el color de la tira. Ya se había
           encogido una vez, de un bloque de 150 px a una línea (18 sep); ahora
-          desaparece. Solo queda la palomita verde cuando el día está hecho; en
-          un doble no hace falta: cada tarjeta dice si va terminada. */}
-      {quiere('sesiones') && selectedCompleted && !porTarjeta && (
-        <div style={{ padding: '0 3px', marginBottom: 12 }}>
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 4,
-            fontSize: 11.5, color: LT.mint, fontWeight: 800,
-          }}>
-            <Check size={13} strokeWidth={3} /> Terminada
-          </span>
-        </div>
-      )}
-
+          desaparece. (Tampoco queda la palomita verde «Terminada» de arriba: desde el 29 oct 2026 el
+          estado lo dice la pastilla «Hecha · 8:55 a. m.» de la tarjeta.) */}
       {/* Las notas de un descanso pueden venir de dos sitios: renglones de nota
           dentro de `exercises` (lo que escribe el editor de hoy) o la lista
           `notes` del plan original. El plan de Andrés tiene dos días OFF y los
@@ -1169,70 +1063,9 @@ const CuerpoDelDia = ({
         </div>
       )}
 
-      {/* Cerrar la sesión.
-          Va justo DEBAJO DEL ÚLTIMO EJERCICIO, que es donde estás cuando
-          acabaste. Antes había que subir hasta arriba del todo; luego quedó
-          demasiado abajo, detrás de "Notas del día" y "Tus notas" — Andrés:
-          "entiendo que te lo pedí escondido, pero no tanto". Escribir las
-          notas es opcional y va después; terminar la sesión es el cierre
-          natural de la lista.
-
-          Y va discreto a propósito, decisión de Andrés: "mi plan es que ese
-          botón no sea indispensable, para nada". No es el objetivo de la
-          pantalla —entrenar lo es—, así que no compite con nada. Quien lo
-          ignore no pierde nada; quien quiera cerrarla, lo tiene donde acaba. */}
-      {/* EL BOTÓN DE TERMINAR TIENE QUE PARECER BOTÓN.
-          Era blanco con letra gris y borde gris claro: lo mismo que usa la app
-          para lo DESACTIVADO. Andrés: "está muy feo y gris, ni se ve ni parece
-          botón". Tenía razón: aunque no sea indispensable —la semana avanza
-          sola con el calendario—, quien SÍ quiere cerrar su sesión tiene que
-          encontrarlo al primer vistazo.
-
-          Por eso va relleno de azul, con su palomita. Sigue al FINAL de la lista
-          y no arriba: no compite con entrenar, que es a lo que se viene.
-
-          Hecha, se pinta de verde entero —se lee "listo" desde lejos— y
-          "Deshacer" va aparte y chico. Antes estaba pegado al mismo texto
-          ("Sesión terminada · deshacer") y no se distinguía qué parte se tocaba. */}
-      {quiere('sesiones') && selectedDay.exercises && !descansoPuro && !porTarjeta && (
-        selectedCompleted ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-            <div style={{
-              flex: 1, minHeight: 52, borderRadius: 14, background: LT.mint, color: '#fff',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              fontFamily: FONT, fontSize: 15, fontWeight: 800,
-            }}>
-              <Check size={18} strokeWidth={3} /> Sesión terminada
-            </div>
-            {puedeStickers && <BotonDeStickers onStickers={() => setStickersAbiertos(true)} alto={52} />}
-            <button
-              type="button"
-              onClick={toggleComplete}
-              style={{
-                minHeight: 52, padding: '0 14px', borderRadius: 14, cursor: 'pointer',
-                border: 'none', background: UI.relleno, color: LT.text2,
-                fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
-              }}
-            >
-              Deshacer
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={toggleComplete}
-            className="kp-press"
-            style={{
-              width: '100%', minHeight: 52, marginBottom: 14, borderRadius: 14, border: 'none',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9,
-              cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 800, color: '#fff',
-              background: KP.blue, boxShadow: KP.shBtn,
-            }}
-          >
-            <Check size={18} strokeWidth={3} /> Marcar sesión como terminada
-          </button>
-        )
-      )}
+      {/* «Marcar como hecha» va justo DEBAJO DEL ÚLTIMO EJERCICIO, gris y solo con la sesión sin empezar (Andrés, 29 oct 2026: nada que se pueda tocar por error a la vista; quien entrena
+          sin la app lo tiene donde acaba la lista). Es la misma pieza que dentro de una tarjeta (`tarjetaDelDia`). */}
+      {quiere('sesiones') && selectedDay.exercises && !descansoPuro && !porTarjeta && control.puedeMarcarHecha && <MarcarComoHecha alMarcar={control.marcarComoHecha} />}
 
       {/* En un descanso las notas ya van dentro de su tarjeta: aquí se repetían.
           Pasaba en los dos días OFF del plan de Andrés, porque el plan llega con

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Check, ChevronLeft, MoreHorizontal, Trophy, Upload, Watch } from 'lucide-react';
 import { LT, FONT, NUM_STYLE, KP, UI } from '@/lib/theme';
 import IconoDeTipo from '@/components/IconoDeTipo';
+import HojaDeAcciones from '@/components/HojaDeAcciones';
 import '@/features/stickers/stickers.css';
 import MapaDeCarrera from './MapaDeCarrera';
 import { botonGrande } from './estilosLibre';
@@ -183,7 +184,6 @@ export default function PaginaDelEntreno({
   }, []);
   const [menu, setMenu] = useState(false);
   const color = actividad?.color ?? KP.blue;
-  const opcion = { display: 'block', width: '100%', minHeight: 56, border: 'none', background: 'transparent', fontFamily: FONT, fontSize: 17, fontWeight: 600, color: LT.text, cursor: 'pointer' };
 
   return createPortal(
     <div role="dialog" aria-modal="true" aria-label={nombre} style={{ position: 'fixed', inset: 0, zIndex: 3200, background: LT.bg, fontFamily: FONT }}>
@@ -244,19 +244,7 @@ export default function PaginaDelEntreno({
         </div>
       </div>
 
-      {menu && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 3260, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-          <div onClick={() => setMenu(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.42)' }} />
-          <div role="dialog" aria-label="Opciones del entreno" style={{ position: 'relative', display: 'grid', gap: 8, padding: '0 10px calc(10px + env(safe-area-inset-bottom))', ...COLUMNA, boxSizing: 'border-box' }}>
-            <div style={{ background: '#fff', borderRadius: 16, overflow: 'hidden' }}>
-              {opciones.map((o, i) => (
-                <button key={o.texto} type="button" autoFocus={i === 0} onClick={() => { setMenu(false); o.onClick(); }} style={{ ...opcion, borderTop: i ? `1px solid ${UI.hilo}` : 'none', color: o.peligro ? '#D92D20' : LT.text }}>{o.texto}</button>
-              ))}
-            </div>
-            <button type="button" onClick={() => setMenu(false)} style={{ ...opcion, background: '#fff', borderRadius: 16, fontWeight: 700 }}>Cancelar</button>
-          </div>
-        </div>
-      )}
+      {menu && <HojaDeAcciones acciones={opciones} alCerrar={() => setMenu(false)} etiqueta="Opciones del entreno" />}
       {encima}
     </div>,
     document.body,

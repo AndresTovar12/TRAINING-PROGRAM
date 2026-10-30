@@ -50,7 +50,7 @@ export function useRecorrido({ sesionId, rutaGuardada }) {
 
   const decide = useCallback((v) => { guardaPermisoDelRecorrido(v); setPermiso(v); }, []);
   const ruta = useCallback(() => (enVivo(muestras.current).distanciaM >= METROS_MINIMOS ? rutaParaGuardar(muestras.current) : null), []);
-  // Al TERMINAR la sesión la línea ya vive en ella (`registro.ruta`): se borra la copia de este teléfono. Si no, al «Deshacer» y volver a hacer la sesión
+  // Al TERMINAR la sesión la línea ya vive en ella (`registro.ruta`): se borra la copia de este teléfono. Si no, al «Marcar como no hecha» o «Hacerla otra vez» y volver a hacer la sesión
   // (misma llave) la línea de la vez anterior reaparecía y se mezclaba con la nueva.
   const limpia = useCallback(() => { terminado.current = true; muestras.current = []; borraRecorrido(sesionId); }, [sesionId]);
   return { permiso, disponible, decide, ruta, limpia };
