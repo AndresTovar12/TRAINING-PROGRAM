@@ -1,4 +1,4 @@
-import { HeartPulse, Layers } from 'lucide-react';
+import { ChevronRight, HeartPulse, Layers } from 'lucide-react';
 import { FONT, NUM_STYLE } from '@/lib/theme';
 import { separaFoto } from '@/lib/fotoConFoco';
 import { NombreDeSesion } from '@/features/training/home/TextoDelNombre';
@@ -15,6 +15,7 @@ const TONOS = {
   coral: { /* estilo-ok: cuadros de color de Home (capturas aprobadas) */ fondo: 'linear-gradient(150deg, #FF8E5E 0%, #F2555A 55%, #DD4A92 100%)', sombra: 'rgba(221,74,146,0.28)' },
   cielo: { /* estilo-ok: cuadros de color de Home (capturas aprobadas) */ fondo: 'linear-gradient(160deg, #6AA8FF 0%, #3B7BF5 50%, #1E4FE0 100%)', sombra: 'rgba(30,79,224,0.28)' },
   azul: { /* estilo-ok: cuadros de color de Home (capturas aprobadas) */ fondo: 'linear-gradient(160deg, #2448E8 0%, #1733B8 55%, #0D1A66 100%)', sombra: 'rgba(14,30,120,0.32)' },
+  violeta: { /* estilo-ok: el cuadrito de 1RM (ejemplo de Andrés, 30 oct 2026) */ fondo: 'linear-gradient(160deg, #A48BFF 0%, #7C5CFF 55%, #5A3DD8 100%)', sombra: 'rgba(90,61,216,0.26)' },
   tinta: { /* estilo-ok: cuadros de color de Home (capturas aprobadas) */ fondo: 'linear-gradient(165deg, #2B3263 0%, #171C3E 58%, #0B0E24 100%)', sombra: 'rgba(12,16,52,0.34)' },
 };
 
@@ -133,6 +134,47 @@ export function CuadroBlanco({ Icono, titulo, sub, color = '#1E40E0', fondo = '#
         <span className="texto-corto" style={{ fontSize: 16, fontWeight: 700, color: '#111318', lineHeight: 1.2 }}>{titulo}</span>
         {sub && <span className="texto-corto" style={{ fontSize: 13, fontWeight: 500, color: '#5B616E', marginTop: 2 }}>{sub}</span>}
       </span>
+    </button>
+  );
+}
+
+/* LOS ATAJOS DE HOME (30 oct 2026, Andrés eligió la «C» del lienzo): Salud en una franja de color y los demás en cuadritos con la palabra ADENTRO
+   («ningún widget acostumbra tener las palabras afuera»). Ya no llevan datos: el atajo solo dice qué es y abre lo mismo que el cuadro grande de antes. */
+
+/** Salud, la franja de arriba de los atajos. A la derecha, lo de hoy: lo que dijo el reloj, el dolor anotado o «¿Cómo amaneciste?» si aún no hay nada. */
+export function FranjaDeSalud({ dolor, reloj, salud = false, onAbrir }) {
+  const lectura = reloj?.lectura?.titulo ?? (dolor != null ? etiquetaDeDolor(dolor, salud) : '¿Cómo amaneciste?');
+  return (
+    <button
+      type="button" onClick={onAbrir} className="kp-press" aria-label={`Salud: ${lectura}`}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10, width: '100%', minWidth: 0, minHeight: 56, padding: '0 14px 0 16px', border: 'none', borderRadius: 18,
+        background: TONOS.coral.fondo, boxShadow: `0 8px 18px ${TONOS.coral.sombra}`, color: '#fff', fontFamily: FONT, textAlign: 'left', cursor: 'pointer', touchAction: 'manipulation',
+      }}
+    >
+      <HeartPulse size={20} aria-hidden="true" style={{ flexShrink: 0 }} />
+      <span style={{ flex: '1 0 auto', fontSize: 15.5, fontWeight: 700 }}>Salud</span>
+      <span className="texto-corto" style={{ minWidth: 0, fontSize: 14, fontWeight: 600, opacity: 0.9 }}>{lectura}</span>
+      <ChevronRight size={18} aria-hidden="true" style={{ flexShrink: 0 }} />
+    </button>
+  );
+}
+
+/** Un cuadrito: el ícono y la palabra adentro. `aviso`: el punto rojo de arriba, solo cuando el atajo tiene algo nuevo para ti. */
+export function Cuadrito({ tono = 'azul', Icono, texto, onClick, aviso = false, etiquetaAccesible }) {
+  const t = TONOS[tono] ?? TONOS.azul;
+  return (
+    <button
+      type="button" onClick={onClick} className="kp-press" aria-label={etiquetaAccesible ?? texto}
+      style={{
+        position: 'relative', aspectRatio: '1', minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
+        padding: 6, border: 'none', borderRadius: 18, background: t.fondo, boxShadow: `0 8px 18px ${t.sombra}`, color: '#fff', cursor: 'pointer',
+        fontFamily: FONT, fontSize: 12, fontWeight: 700, lineHeight: 1.1, textAlign: 'center', touchAction: 'manipulation', ...NUM_STYLE,
+      }}
+    >
+      <Icono size={24} aria-hidden="true" />
+      <span className="texto-corto" style={{ maxWidth: '100%' }}>{texto}</span>
+      {aviso && <span aria-hidden="true" style={{ position: 'absolute', top: -4, right: -4, width: 16, height: 16, borderRadius: '50%', background: '#FF3D5A', boxShadow: '0 0 0 3px #F2F3F7' }} />}
     </button>
   );
 }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Play, Timer } from 'lucide-react';
+import { Play, Share2, Timer } from 'lucide-react';
 import HojaFlotante from '@/components/HojaFlotante';
 import { LT, FONT } from '@/lib/theme';
 import { usePlan } from '@/contexts/PlanContext';
@@ -23,13 +23,14 @@ import HistorialCompleto from './HistorialCompleto';
 import TusEntrenos from './TusEntrenos';
 import { useDemos } from './useDemos';
 import { useCronometroLibre, useEntrenosRecientes } from './useEntrenoLibre';
-import { Cuadro, CuadroBlanco, PlayChico } from '@/features/training/home/Cuadros';
+import { CuadroBlanco, Cuadrito } from '@/features/training/home/Cuadros';
 import { abreSesionHecha } from '@/lib/abreSesionHecha';
 
 /* EL ENTRENO LIBRE, armado (12 oct 2026): lo que ve alguien en Home o en la pestaña Entrenar para entrenar por su cuenta, tenga o no un plan.
      · `variante="completa"` (sin plan): la tarjeta azul «Entrenar» (su semana, su último entreno, «Empezar»), la de Explorar, los cuadros de color (`cuadros`, p. ej. Salud),
        los blancos chicos (Demo workout y `chicos`, p. ej. 1RM) y «Tus entrenos» (reestructura visual, 15 oct 2026).
-     · `variante="cuadros"` (Home con plan, reestructura visual del 15 oct 2026): el cuadro «Entrenar libre», para ir en la cuadrícula de Home junto a Salud y la fase.
+     · `variante="atajos"` (Home con plan, 30 oct 2026): los cuadritos «Libre» (con el reloj si hay un entreno en curso) y «Stickers» (los del último entreno,
+       con un punto mientras sea de los últimos dos días y no los haya abierto), para la fila de atajos de Home.
        Fase 7 (29 oct 2026): el cuadro «Stickers» se quitó (hacía pensar que solo había una tarjeta); los stickers viven en cada entreno de «Tus entrenos».
      `volverA`: lo que dice el botón de regreso de «Ver todos» («Home», o «Atrás» desde Entrenar).
      · `enLinea` (pestaña Entrenar): las opciones puestas directo, y «Tus entrenos».
@@ -62,6 +63,9 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
   const { abreDemo, hasPlan } = usePlan();
   const demos = useDemos(userId);
   const [propiasGuardadas, setPropias] = useStorage('actividades:propias', []);
+  // El último entreno cuyos stickers ya abrió desde el atajo (`variante="atajos"`): mientras no, el cuadrito lleva su punto.
+  const [stickersVistos, setStickersVistos] = useStorage('ui:stickers-vistos', null);
+  const [ahora] = useState(() => Date.now()); // «los últimos dos días» se cuentan desde que se abrió Home
   const propias = useMemo(() => propiasDe(propiasGuardadas), [propiasGuardadas]);
   const enPunto = variante === 'punto';
   // El punto ● abre directo «listo para empezar» (o el entreno que va, si hay uno corriendo).
@@ -184,16 +188,22 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
     );
   }
 
-  if (variante === 'cuadros') {
+  if (variante === 'atajos') {
+    const ultimoEntreno = entrenos?.[0] ?? null;
+    const nuevos = !!ultimoEntreno && ahora - (ultimoEntreno.ms || 0) < 2 * 86400000 && stickersVistos !== ultimoEntreno.clave;
+    // Sin ningún entreno todavía, «Stickers» abre la lista completa (ahí dice cómo se consiguen).
+    const abreStickers = () => {
+      if (!ultimoEntreno) { setVerTodos(true); return; }
+      setStickersVistos(ultimoEntreno.clave);
+      comparteEntreno(ultimoEntreno);
+    };
     return (
       <>
-        <Cuadro
-          tono="azul" Icono={Timer} etiqueta="Entrenar libre" onClick={abreElCartel} accion={<PlayChico Icono={enCurso ? Timer : Play} />}
-          // El número solo, grande: con el play al lado no cabe «Sin entrenos» en un cuadro de 165 px.
-          titulo={enCurso ? relojDeCronometro(crono.segundos) : String(semana.entrenos)}
-          sub={enCurso ? `${nombreDelDeporte(deporte)} en curso` : `${semana.entrenos === 1 ? 'entreno' : 'entrenos'} esta semana`}
+        <Cuadrito
+          tono="azul" Icono={enCurso ? Timer : Play} texto={enCurso ? relojDeCronometro(crono.segundos) : 'Libre'} onClick={abreElCartel}
           etiquetaAccesible={enCurso ? `Seguir tu entreno de ${nombreDelDeporte(deporte)}` : `Entrenar libre: ${textoDeLaSemana(semana)}`}
         />
+        <Cuadrito tono="tinta" Icono={Share2} texto="Stickers" onClick={abreStickers} aviso={nuevos} etiquetaAccesible={nuevos ? 'Stickers: tienes nuevos' : 'Stickers'} />
         {hojas}
       </>
     );
