@@ -86,5 +86,15 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<!-- «Continuar con Google» (30 oct 2026): el ID del cliente iOS al revés. Sin esto, la hoja de Google no puede regresar a la app. -->
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.482280285445-503dd9vec3lcsitil75gm5c3jp37nudm</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

@@ -13,6 +13,9 @@ const AuthContext = createContext(null);
 const SIGNUP_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/signup`;
 const LOGIN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/login`;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// «Continuar con Google» en la app de iPhone (Google Cloud, proyecto training-lab-web). Son públicos: viajan dentro de la app.
+const GOOGLE_IOS_CLIENT_ID = '482280285445-503dd9vec3lcsitil75gm5c3jp37nudm.apps.googleusercontent.com';
+const GOOGLE_WEB_CLIENT_ID = '482280285445-ahnlv24sralrk5o4usf1ek301joohnd9.apps.googleusercontent.com';
 
 /* EL ENLACE DE «OLVIDÉ MI CONTRASEÑA» (15 oct 2026). Supabase manda a la persona de vuelta a la app con `#…type=recovery` (enlace bueno) o `#error=…&error_code=otp_expired`
    (vencido o ya usado). Se lee AQUÍ, al cargar el archivo: el cliente de Supabase borra esa parte de la dirección en cuanto la procesa. */
@@ -196,6 +199,27 @@ export function AuthProvider({ children }) {
      sin choques ni caracteres raros, migración `usuario_automatico_sin_choques`).
      Quien entre así puede cambiarse el usuario en "Mi perfil". */
   const entrarConGoogle = useCallback(async () => {
+    /* En la app de iPhone (30 oct 2026): la hoja de Google del propio iPhone, no la página web. Google bloquea su entrada dentro de una app
+       («disallowed_useragent») y no regresa a `capacitor://localhost`. Igual que Apple: Google da una identidad (idToken) y Supabase la cambia por una
+       sesión. Va con un «nonce»: Google mete su huella (SHA-256) en la identidad y Supabase la compara con el original, así una identidad robada no sirve.
+       Los dos ID de cliente son públicos (viajan dentro de la app): el del iPhone (la hoja) y el web (a quién va dirigida la identidad, el que Supabase acepta). */
+    if (window.Capacitor?.isNativePlatform?.()) {
+      try {
+        const { SocialLogin } = await import('@capgo/capacitor-social-login');
+        await SocialLogin.initialize({ google: { iOSClientId: GOOGLE_IOS_CLIENT_ID, iOSServerClientId: GOOGLE_WEB_CLIENT_ID, webClientId: GOOGLE_WEB_CLIENT_ID, mode: 'online' } });
+        const nonce = crypto.randomUUID();
+        const huella = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(nonce)))).map((b) => b.toString(16).padStart(2, '0')).join('');
+        const { result } = await SocialLogin.login({ provider: 'google', options: { scopes: ['email', 'profile'], nonce: huella } });
+        if (!result?.idToken) return { error: { message: 'Google no mandó la identidad. Inténtalo otra vez.' } };
+        const { error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: result.idToken, nonce });
+        if (error) return { error: { message: 'No se pudo entrar con Google. Inténtalo otra vez.' } };
+        return { error: null };
+      } catch (e) {
+        // Cerrar la hoja de Google sin elegir no es un error.
+        if (/cancel/i.test(String(e?.message ?? e))) return { error: null, cancelado: true };
+        return { error: { message: 'No se pudo abrir la entrada con Google.' } };
+      }
+    }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: window.location.origin },
@@ -301,7 +325,8 @@ export function AuthProvider({ children }) {
       entrarConGoogle,
       entrarConApple,
       appleDisponible: true,
-      googleDisponible: import.meta.env.VITE_GOOGLE_LOGIN === '1',
+      // En la app de iPhone, siempre (entrada nativa, 30 oct 2026); en la web, cuando `VITE_GOOGLE_LOGIN` vale "1" (ver `docs/entrar-con-google.md`).
+      googleDisponible: !!window.Capacitor?.isNativePlatform?.() || import.meta.env.VITE_GOOGLE_LOGIN === '1',
       updateProfile,
       refreshProfile,
       recuperando,
