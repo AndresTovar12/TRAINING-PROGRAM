@@ -2029,26 +2029,40 @@ const BottomNav = ({ active, onChange, conMensajes = true, conExplorar = true, c
         justifyContent: 'space-around',
       }),
     }}>
-      {items.map(item => {
-        if (item.id === 'punto') return <BotonDelPunto key="punto" onClick={onRegistrar} />;
-        const Icon = item.icon;
-        const isActive = active === item.id;
+      {(() => {
+        const boton = (item) => {
+          const Icon = item.icon;
+          const isActive = active === item.id;
+          return (
+            /* Reestructura visual (15 oct 2026), como la barra de las capturas de Andrés: ícono y nombre, la elegida en azul, sin píldora detrás. */
+            <button key={item.id} type="button" onClick={() => onChange(item.id)} aria-current={isActive ? 'page' : undefined} className="kp-press" style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              padding: esCompu ? '4px 14px' : '4px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+              color: isActive ? KP.blue : KP.ink3, fontFamily: FONT,
+              transition: 'color 0.15s', minWidth: 60, flex: esCompu ? undefined : 1, touchAction: 'manipulation',
+            }}>
+              <span style={{ position: 'relative', display: 'grid', placeItems: 'center', height: 28 }}>
+                <Icon size={24} strokeWidth={isActive ? 2.3 : 1.8} />
+                {item.id === 'messages' && <NumeroRojo n={sinLeer} tam={17} style={{ /* estilo-ok: aro blanco del globito de avisos */ position: 'absolute', top: -5, right: -11, border: '2px solid #fff', minWidth: 21, height: 21 }} />}
+              </span>
+              <span style={{ fontSize: 11.5, fontWeight: isActive ? 700 : 600 }}>{item.label}</span>
+            </button>
+          );
+        };
+        /* El punto ● va SIEMPRE en el centro exacto (Andrés, 30 oct 2026): sin plan y con Mensajes eran 4 botones
+           (Home · ● · Mensajes · Explorar) y el punto quedaba 47 px a la izquierda. Ahora la barra son dos mitades
+           iguales con el punto entre ellas; cada mitad reparte sus botones. */
+        const p = items.findIndex((i) => i.id === 'punto');
+        if (p < 0) return items.map(boton);
+        const mitad = { flex: 1, minWidth: 0, display: 'flex', justifyContent: 'space-around' };
         return (
-          /* Reestructura visual (15 oct 2026), como la barra de las capturas de Andrés: ícono y nombre, la elegida en azul, sin píldora detrás. */
-          <button key={item.id} type="button" onClick={() => onChange(item.id)} aria-current={isActive ? 'page' : undefined} className="kp-press" style={{
-            background: 'transparent', border: 'none', cursor: 'pointer',
-            padding: esCompu ? '4px 14px' : '4px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-            color: isActive ? KP.blue : KP.ink3, fontFamily: FONT,
-            transition: 'color 0.15s', minWidth: 60, flex: esCompu ? undefined : 1, touchAction: 'manipulation',
-          }}>
-            <span style={{ position: 'relative', display: 'grid', placeItems: 'center', height: 28 }}>
-              <Icon size={24} strokeWidth={isActive ? 2.3 : 1.8} />
-              {item.id === 'messages' && <NumeroRojo n={sinLeer} tam={17} style={{ /* estilo-ok: aro blanco del globito de avisos */ position: 'absolute', top: -5, right: -11, border: '2px solid #fff', minWidth: 21, height: 21 }} />}
-            </span>
-            <span style={{ fontSize: 11.5, fontWeight: isActive ? 700 : 600 }}>{item.label}</span>
-          </button>
+          <>
+            <div style={mitad}>{items.slice(0, p).map(boton)}</div>
+            <div style={{ flex: '0 0 76px', display: 'flex' }}><BotonDelPunto onClick={onRegistrar} /></div>
+            <div style={mitad}>{items.slice(p + 1).map(boton)}</div>
+          </>
         );
-      })}
+      })()}
     </div>
   );
 };
