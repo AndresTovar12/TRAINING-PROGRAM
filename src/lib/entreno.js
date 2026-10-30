@@ -43,13 +43,14 @@ import { groupIntoSets, setTag } from './setsDeUnaSesion.js';
  *
  * EL AVANCE (`sesión.entreno`, dentro del registro del atleta, junto a `exercises` y `formatos`):
  *   { v, nombre?, inicio, fin, hechos: { [clave]: { t, n, reps?, kg?, seg?, tecnica? } | { t, p? } (un descanso) }, saltados: { [clave]: { t, n } },
- *     extra: { [clave]: seg }, empezados: { [clave]: hora } }
+ *     extra: { [clave]: seg }, empezados: { [clave]: hora }, pausas?: { [clave]: hora } }
  * `nombre` es el de la sesión cuando arrancó (así el coach la reconoce en sus métricas sin tener que reconstruir el plan); `p` en un descanso es lo
  * que se planeó, en segundos: junto con `t` (cuándo terminó) y el `t` del paso anterior dice cuánto descansó de verdad.
  * `tecnica` es el id del video que el atleta grabó de ESA vuelta para su coach (futuro: ver `lib/funciones.js`); aquí solo se conserva.
  * `extra` son los segundos que se le sumaron a un descanso («+30 s»); `empezados` la hora en que el atleta arrancó el cronómetro
  * OPCIONAL de un paso con tiempo (la plancha de 30 seg, el «2 min a 6:39» de un lapso): igual que el descanso, solo se guarda cuándo
- * empezó, y lo que queda se calcula de ahí. Tampoco avanza solo.
+ * empezó, y lo que queda se calcula de ahí. Tampoco avanza solo. `pausas` (30 oct 2026): un descanso en pausa guarda la hora en que se pausó; mientras
+ * está ahí la cuenta no baja ni avanza sola, y al reanudar lo que duró la pausa se suma a `extra` (ver `pausaDescanso`). Solo se guarda si hay alguna.
  * Son OBJETOS con el paso por llave, nunca listas: la base mezcla los objetos llave por llave a cualquier profundidad y
  * REEMPLAZA las listas enteras (ver `estadoPorPartes.js`); así el teléfono y un reloj pueden marcar pasos distintos sin
  * pisarse.
@@ -437,8 +438,10 @@ export function leeAvance(entreno) {
   if (esObjeto(e.extra)) Object.entries(e.extra).forEach(([k, v]) => { if (Number.isFinite(v) && v > 0) extra[k] = v; });
   const empezados = {};
   if (esObjeto(e.empezados)) Object.entries(e.empezados).forEach(([k, v]) => { if (hora(v) !== null) empezados[k] = v; });
+  const pausas = {};
+  if (esObjeto(e.pausas)) Object.entries(e.pausas).forEach(([k, v]) => { if (hora(v) !== null) pausas[k] = v; });
   const nombre = typeof e.nombre === 'string' ? e.nombre.trim().slice(0, 60) : '';
-  return { nombre: nombre || null, inicio: hora(e.inicio), fin: hora(e.fin), oculto: e.oculto === true, hechos: marcas(e.hechos), saltados: marcas(e.saltados), extra, empezados };
+  return { nombre: nombre || null, inicio: hora(e.inicio), fin: hora(e.fin), oculto: e.oculto === true, hechos: marcas(e.hechos), saltados: marcas(e.saltados), extra, empezados, pausas };
 }
 
 // Lo que se guarda en `sesión.entreno`: sin llaves vacías en `null`, que es lo que la base espera.
@@ -452,6 +455,7 @@ const aGuardar = (av) => ({
   saltados: av.saltados,
   extra: av.extra,
   empezados: av.empezados,
+  ...(Object.keys(av.pausas ?? {}).length ? { pausas: av.pausas } : null),
 });
 
 const nombreCorto = (p) => String(p.nombre ?? '').slice(0, 40);
@@ -607,14 +611,16 @@ export function vuelveAtras(plan, entreno) {
   const saltados = { ...av.saltados };
   const extra = { ...av.extra };
   const empezados = { ...av.empezados };
-  // Hasta el paso en el que se estaba (inclusive): lo que tenía a medias —un cronómetro, un «+30 s»— se deja al irse.
+  const pausas = { ...av.pausas };
+  // Hasta el paso en el que se estaba (inclusive): lo que tenía a medias —un cronómetro, un «+30 s», una pausa— se deja al irse.
   for (let k = j; k <= tope && k < pasos.length; k += 1) {
     delete hechos[pasos[k].clave];
     delete saltados[pasos[k].clave];
     delete extra[pasos[k].clave];
     delete empezados[pasos[k].clave];
+    delete pausas[pasos[k].clave];
   }
-  return aGuardar({ ...av, fin: null, hechos, saltados, extra, empezados });
+  return aGuardar({ ...av, fin: null, hechos, saltados, extra, empezados, pausas });
 }
 
 /** «+30 s» en el descanso actual. Un descanso que solo dice texto no tiene cuenta, así que no se alarga. */
@@ -623,6 +629,22 @@ export function masDescanso(plan, entreno, seg = 30) {
   const { actual } = posicionDe(plan, av);
   if (!actual || actual.tipo !== 'descanso' || actual.seg === null || !(seg > 0)) return aGuardar(av);
   return aGuardar({ ...av, extra: { ...av.extra, [actual.clave]: (av.extra[actual.clave] ?? 0) + Math.round(seg) } });
+}
+
+/**
+ * Pausar o reanudar el descanso actual (el botón grande del centro en el descanso, 30 oct 2026). Pausado, la cuenta se queda donde iba; al reanudar, lo que
+ * duró la pausa se suma a `extra`, así que el descanso termina tantos segundos después. Un descanso que solo dice texto no tiene cuenta y no se pausa.
+ */
+export function pausaDescanso(plan, entreno, ahora) {
+  const av = leeAvance(entreno);
+  const { actual } = posicionDe(plan, av);
+  if (!actual || actual.tipo !== 'descanso' || actual.seg === null) return aGuardar(av);
+  const pausas = { ...av.pausas };
+  const desde = pausas[actual.clave];
+  if (desde === undefined) return aGuardar({ ...av, pausas: { ...pausas, [actual.clave]: ahora } });
+  delete pausas[actual.clave];
+  const duro = Math.max(0, Math.round((ahora - desde) / 1000));
+  return aGuardar({ ...av, pausas, extra: duro > 0 ? { ...av.extra, [actual.clave]: (av.extra[actual.clave] ?? 0) + duro } : av.extra });
 }
 
 /** El atleta dio por terminado el entreno (aunque falten pasos). */
@@ -718,8 +740,9 @@ export function ocultaEntreno(entreno) {
  *   indice        su lugar en `plan.pasos` (-1 si no hay)
  *   siguiente     el próximo paso que NO es descanso (para «Sigue: …»), o `null`
  *   descansoDespues  si el paso actual va seguido de un descanso, ese paso
- *   descanso      si el paso actual ES un descanso: { paso, desde, extra, seg, fin, restan, vencido, pasado }
- *                 (`seg`, `fin` y `restan` son `null` si solo dice texto; `restan` baja de 0 al pasarse y `pasado` cuenta cuánto)
+ *   descanso      si el paso actual ES un descanso: { paso, desde, extra, seg, fin, restan, vencido, pasado, pausado }
+ *                 (`seg`, `fin` y `restan` son `null` si solo dice texto; `restan` baja de 0 al pasarse y `pasado` cuenta cuánto;
+ *                 en pausa, `restan` se queda en lo que faltaba al pausar y `fin` es `null`: no hay hora a la que vaya a acabar)
  *   cuenta        si el paso actual tiene su cronómetro en marcha: ver `cuentaDe`
  *   estados       el estado de cada paso, en el orden de `plan.pasos`: 'hecho' · 'saltado' · 'pendiente' (para la lista de «Tu entreno»)
  *   hechos, saltados, total   cuántos pasos de los que hay que hacer van hechos o saltados, y cuántos son
@@ -753,8 +776,10 @@ export function vistaDelEntreno(plan, entreno, ahora) {
     const extra = av.extra[actual.clave] ?? 0;
     const seg = actual.seg === null ? null : actual.seg + extra;
     const fin = seg === null ? null : desde + seg * 1000;
-    const restan = fin === null ? null : Math.ceil((fin - ahora) / 1000);
-    descanso = { paso: actual, desde, extra, seg, fin, restan, vencido: restan !== null && restan <= 0, pasado: restan !== null && restan < 0 ? -restan : 0 };
+    const pausadoEn = seg === null ? undefined : av.pausas[actual.clave];
+    const pausado = pausadoEn !== undefined;
+    const restan = fin === null ? null : Math.ceil((fin - (pausado ? pausadoEn : ahora)) / 1000);
+    descanso = { paso: actual, desde, extra, seg, fin: pausado ? null : fin, restan, vencido: restan !== null && restan <= 0, pasado: restan !== null && restan < 0 ? -restan : 0, pausado };
   }
 
   let estado = 'sin';
