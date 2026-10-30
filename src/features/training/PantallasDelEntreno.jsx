@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Bell, BellOff, Check, ChevronLeft, ChevronRight, List, MapPin, Minus, Pencil, Play, Plus, Timer, Video, X } from 'lucide-react';
 import { LT, KP, FONT, NUM_STYLE, UI } from '@/lib/theme';
 import { textoDeResultado } from '@/lib/formatos';
 import { relojDe } from '@/lib/entrenoDatos';
+import { acomodaPaso } from '@/lib/acomodoDelPaso';
 import { useAviso } from '@/components/AvisoPasajero';
 
 /**
@@ -62,7 +63,7 @@ function BotonGrande({ children, onClick, variante = 'azul', disabled = false })
  * Tiene la cara del «Listo» oscuro (sin la palomita). Sin menú de mantener presionado ni selección de texto (en el iPhone, mantener un botón los abre), y `touch-action: none` para que el
  * dedo quieto no se vuelva un gesto de la página. `fondo`, `relleno`, `alto`, `radio` y `tamano` (de la letra) lo adaptan a las pantallas oscuras de la carrera; `estilo`, a la fila donde va.
  */
-export function BotonDeMantener({ onTermina, texto = 'Mantén para terminar', fondo = '#15171E', relleno = KP.blue, alto = 60, radio = 18, tamano = 18, sombra = '0 10px 24px rgba(17,19,24,0.22)', disabled = false, estilo = null }) {
+export function BotonDeMantener({ onTermina, etiqueta = null, texto = 'Mantén para terminar', fondo = '#15171E', relleno = KP.blue, alto = 60, radio = 18, tamano = 18, sombra = '0 10px 24px rgba(17,19,24,0.22)', disabled = false, estilo = null }) {
   const { avisa } = useAviso();
   const [llena, setLlena] = useState(false);
   const reloj = useRef(null);
@@ -95,7 +96,7 @@ export function BotonDeMantener({ onTermina, texto = 'Mantén para terminar', fo
   const tecla = (e) => (e.key === 'Enter' || e.key === ' ') && !e.repeat;
   return (
     <button
-      type="button" disabled={disabled} draggable={false}
+      type="button" disabled={disabled} draggable={false} aria-label={etiqueta ?? undefined}
       onPointerDown={empieza} onPointerUp={suelta} onPointerLeave={suelta} onPointerCancel={suelta}
       onKeyDown={(e) => { if (tecla(e)) { e.preventDefault(); empieza(e); } }} onKeyUp={(e) => { if (tecla(e)) suelta(e); }}
       onContextMenu={(e) => e.preventDefault()}
@@ -111,28 +112,6 @@ export function BotonDeMantener({ onTermina, texto = 'Mantén para terminar', fo
   );
 }
 
-/**
- * Un botón de los que NO son lo principal pero tienen que verse («Anterior», «Saltar», «Anotar resultados»): borde y letra firmes, con lo que
- * hace escrito. Andrés (9 oct 2026): los de texto suelto de abajo «están muy escondidos, ni me había percatado de que estaban».
- * `ancho`: ocupa toda la línea; si no, comparte la fila con su vecino a partes iguales.
- */
-function BotonSecundario({ children, onClick, disabled = false, ancho = false }) {
-  return (
-    <button
-      type="button" onClick={onClick} disabled={disabled} className="kp-press"
-      style={{
-        flex: ancho ? undefined : 1, width: ancho ? '100%' : undefined, minWidth: 0, minHeight: 50, borderRadius: 16, cursor: disabled ? 'default' : 'pointer',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '0 10px', fontFamily: FONT, fontSize: 15.5, fontWeight: 800,
-        // Blanco y sin borde sobre el fondo teñido (reestructura visual, 15 oct 2026); siguen siendo botones enteros, no texto suelto (Andrés, 9 oct: «muy escondidos»).
-        touchAction: 'manipulation', border: 'none', background: LT.surface, boxShadow: disabled ? 'none' : '0 2px 10px rgba(17,19,24,0.07)',
-        color: disabled ? LT.text3 : LT.text, opacity: disabled ? 0.6 : 1,
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
 // Un botón de texto (para las hojas: «Cancelar», «Seguir»…).
 function BotonDeTexto({ children, onClick, disabled = false, color = LT.text2 }) {
   return (
@@ -144,47 +123,6 @@ function BotonDeTexto({ children, onClick, disabled = false, color = LT.text2 })
       }}
     >
       {children}
-    </button>
-  );
-}
-
-/**
- * «Grabar técnica para el coach»: la cámara de cada paso. Mientras la función esté apagada (`lib/funciones.js`) lleva su «Pronto», igual que
- * «Mensajes»; en un teléfono muy angosto la palabra se esconde (`.pronto-texto`) y queda el ícono, para que quepa la fila.
- */
-function BotonDeTecnica({ activa, etiqueta, onClick, enviada = false }) {
-  // Prendida: un botón con su borde (como la ✕ de «quitar»): una cámara suelta no se leía como botón. Con ✓ verde si ya mandó la de esta serie.
-  if (activa) {
-    return (
-      <button
-        type="button" onClick={onClick} aria-label={enviada ? `${etiqueta} (ya mandaste una)` : etiqueta} className="kp-press"
-        style={{
-          width: 50, minHeight: 50, flexShrink: 0, borderRadius: 16, border: 'none', boxShadow: '0 2px 10px rgba(17,19,24,0.07)', background: LT.surface, color: enviada ? LT.mint : LT.text,
-          cursor: 'pointer', display: 'grid', placeItems: 'center', touchAction: 'manipulation', position: 'relative',
-        }}
-      >
-        <Video size={20} />
-        {enviada && <span aria-hidden="true" style={{ position: 'absolute', top: -5, right: -5, width: 18, height: 18, borderRadius: '50%', background: LT.mint, color: '#fff', display: 'grid', placeItems: 'center' }}><Check size={11} strokeWidth={3.5} /></span>}
-      </button>
-    );
-  }
-  return (
-    <button
-      type="button" onClick={onClick} aria-label={etiqueta}
-      style={{
-        border: 'none', background: 'transparent', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 4px',
-        color: LT.text2, touchAction: 'manipulation',
-      }}
-    >
-      <Video size={19} />
-      {!activa && (
-        <span
-          className="pronto-texto"
-          style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: 0.3, padding: '3px 7px', borderRadius: 7, background: LT.surface2, color: LT.text2 }}
-        >
-          Pronto
-        </span>
-      )}
     </button>
   );
 }
@@ -284,25 +222,6 @@ export function BarraDelEntreno({ segmentos, fondo, palabras, tiempo, onLista, c
 /* Un ejercicio (o una nota)                                           */
 /* ------------------------------------------------------------------ */
 
-// Una cifra grande con su rótulo debajo: «5 reps», «78% carga», «≈105 kg». El número se achica solo para caber en UNA línea en un teléfono
-// angosto (ver `.cifra-valor` en index.css): «78» arriba y «%» abajo se leería como dos cosas distintas.
-function Cifra({ valor, etiqueta, destacado = false, texto = false }) {
-  return (
-    <div className="cifra" style={{
-      flex: 1, minWidth: 0, background: LT.surface, borderRadius: 18, padding: '8px 8px 7px', textAlign: 'center', boxShadow: '0 2px 10px rgba(17,19,24,0.06)',
-      display: 'flex', flexDirection: 'column', justifyContent: 'center',
-    }}>
-      <div
-        className={texto ? 'cifra-texto-chica' : 'cifra-valor-chica'}
-        style={{ '--n': String(valor).length, fontWeight: 800, color: destacado ? LT.blue : LT.text, ...NUM_STYLE }}
-      >
-        {valor}
-      </div>
-      <div style={{ fontSize: 12, fontWeight: 700, color: LT.text2, marginTop: 2 }}>{etiqueta}</div>
-    </div>
-  );
-}
-
 /**
  * La serie EXPLICADA, junto a las cifras (ver `resumenDeLaSerie`). Andrés, 9 oct 2026: «¿te parece que "Serie 1 de 3" le da una buena noción al usuario del
  * set? Yo no creo». Dice DÓNDE vas, en tres piezas: el número de la serie GRANDE (con su «de 3» y una barrita que se va llenando), lo que es el Set
@@ -331,10 +250,11 @@ function TarjetaDeLaSerie({ resumen, color = null }) {
       {(cuenta || etiqueta) && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px 8px' }}>
           {cuenta && (
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, ...NUM_STYLE }}>
-              <span style={{ fontSize: 15, fontWeight: 700, color: enColor ? 'rgba(255,255,255,0.85)' : LT.text2 }}>Serie</span>
-              <span style={{ fontSize: sola ? 34 : 26, fontWeight: 800, letterSpacing: -0.8, lineHeight: 1, color: enColor ? '#fff' : LT.blue }}>{numero}</span>
-              <span style={{ fontSize: 15, fontWeight: 700, color: enColor ? 'rgba(255,255,255,0.85)' : LT.text2 }}>de {total}</span>
+            <div className="pa-nocorta" style={{ display: 'flex', alignItems: 'baseline', gap: 5, minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap', ...NUM_STYLE }}>
+              {/* Crecen y se achican con el paso (`--k`, ver `lib/acomodoDelPaso.js`); fuera del paso `--k` no existe y valen lo de siempre. */}
+              <span style={{ fontSize: 'calc(15px * min(var(--k, 1), 1.2))', fontWeight: 700, color: enColor ? 'rgba(255,255,255,0.85)' : LT.text2 }}>Serie</span>
+              <span style={{ fontSize: `calc(${sola ? 34 : 26}px * var(--k, 1))`, fontWeight: 800, letterSpacing: -0.8, lineHeight: 1, color: enColor ? '#fff' : LT.blue }}>{numero}</span>
+              <span style={{ fontSize: 'calc(15px * min(var(--k, 1), 1.2))', fontWeight: 700, color: enColor ? 'rgba(255,255,255,0.85)' : LT.text2 }}>de {total}</span>
             </div>
           )}
           {etiqueta && (enColor
@@ -439,6 +359,140 @@ function CronometroDelPaso({ segundos, cuenta, onEmpezar, onQuitar }) {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* La barra redonda de abajo                                           */
+/* ------------------------------------------------------------------ */
+
+// El halo del botón del centro, del color del tipo (un «#RRGGBB» admite su transparencia pegada; otro color, un halo neutro).
+const halo = (c) => (/^#[0-9a-f]{6}$/i.test(c || '') ? `${c}33` : 'rgba(30,64,224,0.2)');
+
+/**
+ * LA BARRA DE ABAJO, UNA SOLA FILA (Andrés, 30 oct 2026, con su captura): cinco botones redondos sin palabras, ‹ Anterior · ✎ Anotar · ✓ Listo · 🎥 Técnica · › Saltar.
+ * Antes eran hasta tres renglones de botones (234 px con el borde del iPhone); ahora ~124. Cada botón dice lo que hace en `aria-label`.
+ * Un lugar que no aplica (sin «Anotar», sin cámara) queda VACÍO y no se mueven los demás: Anterior, el centro y Saltar siempre están donde mismo.
+ * `centro`: el botón grande (`BotonDelCentro`); `aviso`: una línea encima («Mantén ✓ para terminar»); `extra`: un botón de texto encima (el GPS).
+ */
+function BarraRedonda({ izquierda, segundo, centro, cuarto, derecha, aviso = null, extra = null }) {
+  const lugar = (b) => b ?? <span aria-hidden="true" style={{ width: 56, height: 56, flexShrink: 0 }} />;
+  return (
+    <div style={{ flexShrink: 0, padding: '8px 0 calc(12px + env(safe-area-inset-bottom))' }}>
+      <div style={{ ...COLUMNA, padding: '0 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {extra}
+        {aviso && <div style={{ textAlign: 'center', fontSize: 13, fontWeight: 700, color: LT.text2 }}>{aviso}</div>}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          {lugar(izquierda)}{lugar(segundo)}{centro}{lugar(cuarto)}{lugar(derecha)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Un botón redondo blanco de la barra. `color`: el del ícono (los de acción van del color del tipo; las flechas, en tinta).
+function BotonRedondo({ etiqueta, onClick, disabled = false, color = LT.text, children, marca = null }) {
+  return (
+    <button
+      type="button" onClick={onClick} disabled={disabled} aria-label={etiqueta} title={etiqueta} className="kp-press"
+      style={{
+        position: 'relative', width: 56, height: 56, borderRadius: '50%', flexShrink: 0, border: 'none', cursor: disabled ? 'default' : 'pointer', display: 'grid', placeItems: 'center',
+        background: LT.surface, color: disabled ? LT.text3 : color, boxShadow: disabled ? 'none' : '0 6px 16px rgba(17,19,24,0.08)', opacity: disabled ? 0.55 : 1, touchAction: 'manipulation',
+        fontFamily: FONT, fontSize: 15, fontWeight: 800, ...NUM_STYLE,
+      }}
+    >
+      {children}
+      {marca}
+    </button>
+  );
+}
+
+// La cámara de «Grabar técnica» como botón de la barra: con su ✓ verde si ya mandó la de esta serie. Mientras la función no sale, la misma cámara abre la hoja que
+// explica que viene pronto (`onClick` ya lo decide `EntrenoDelDia`).
+function TecnicaRedonda({ tecnica, color }) {
+  if (!tecnica) return null;
+  return (
+    <BotonRedondo
+      etiqueta={tecnica.enviada ? `${tecnica.etiqueta} (ya mandaste una)` : tecnica.etiqueta} onClick={tecnica.onClick} color={tecnica.enviada ? LT.mint : color}
+      marca={tecnica.enviada ? <span aria-hidden="true" style={{ position: 'absolute', top: 2, right: 2, width: 18, height: 18, borderRadius: '50%', background: LT.mint, color: '#fff', display: 'grid', placeItems: 'center' }}><Check size={11} strokeWidth={3.5} /></span> : null}
+    >
+      <Video size={23} />
+    </BotonRedondo>
+  );
+}
+
+/**
+ * El botón grande del centro: «Listo» (✓), «Empezar»/«Seguir» (▶) o, en el último paso, ✓ que se MANTIENE para terminar (con su anillo que se llena; ver `BotonDeMantener`).
+ */
+function BotonDelCentro({ tipo = 'listo', etiqueta, onClick, color = null }) {
+  const c = color || LT.blue;
+  const cara = {
+    width: 74, height: 74, borderRadius: '50%', flexShrink: 0, border: 'none', display: 'grid', placeItems: 'center', color: '#fff', cursor: 'pointer', padding: 0,
+    /* estilo-ok: el botón del centro de la captura de Andrés (30 oct 2026), del color del tipo con su halo */ background: `linear-gradient(160deg, ${c} 0%, ${c} 45%, #15171E 160%)`, boxShadow: `0 0 0 8px ${halo(c)}, 0 14px 30px rgba(17,19,24,0.25)`, touchAction: 'manipulation',
+  };
+  const icono = tipo === 'empezar' ? <Play size={28} fill="#fff" style={{ marginLeft: 3 }} /> : <Check size={34} strokeWidth={3} />;
+  if (tipo === 'mantener') {
+    return (
+      <BotonDeMantener
+        onTermina={onClick} etiqueta={etiqueta || 'Mantén para terminar'} texto={icono} relleno="rgba(255,255,255,0.28)" fondo={cara.background} alto={74} radio={37}
+        sombra={cara.boxShadow} estilo={{ width: 74, minHeight: 74, height: 74, flexShrink: 0, display: 'grid', placeItems: 'center' }}
+      />
+    );
+  }
+  return <button type="button" onClick={onClick} aria-label={etiqueta} title={etiqueta} className="kp-press" style={cara}>{icono}</button>;
+}
+
+/* ------------------------------------------------------------------ */
+/* Las cifras en una tarjeta, y qué significan                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Las cifras del paso en UNA tarjeta blanca con rayitas (antes, una caja con sombra cada una: tres sombras se veían más cargado). La de esfuerzo (carga, RIR,
+ * RPE, zona…) lleva su palabra del color del tipo con un «?» lleno y se toca para saber qué es (`onQueEs`). La primera vez que la persona ve una, un globo
+ * encima le dice que se puede tocar (`globo`). Los kilos van del color del tipo.
+ */
+function TarjetaDeCifras({ cifras, color = null, onQueEs = null, globo = false }) {
+  const c = color || LT.blue;
+  const primera = cifras.findIndex((x) => x.explica);
+  return (
+    <div className="pa-cifras" style={{ background: LT.surface, borderRadius: 16, boxShadow: '0 2px 10px rgba(17,19,24,0.06)' }}>
+      {cifras.map((x, i) => {
+        const explica = !!x.explica && !!onQueEs;
+        const cuerpo = (
+          <>
+            <span className={`pa-num${x.texto ? ' texto' : ''}${x.texto ? '' : ' pa-nocorta'}`} style={{ '--n': String(x.valor).length, color: x.destacado ? c : LT.text, ...NUM_STYLE }}>{x.valor}</span>
+            <span className="pa-rot" style={{ color: explica ? c : LT.text2, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+              {x.etiqueta}
+              {explica && <span aria-hidden="true" style={{ width: 15, height: 15, borderRadius: '50%', background: c, color: '#fff', display: 'inline-grid', placeItems: 'center', fontSize: 10, fontWeight: 800 }}>?</span>}
+            </span>
+            {explica && globo && i === primera && <span className="pa-globo" aria-hidden="true">Toca para saber qué es</span>}
+          </>
+        );
+        return explica ? (
+          <button
+            key={i} type="button" className="pa-cifra kp-press" onClick={() => onQueEs(x)} aria-label={`${x.valor} ${x.etiqueta}. Toca para saber qué es`}
+            style={{ border: 'none', background: 'none', cursor: 'pointer', fontFamily: FONT, color: 'inherit' }}
+          >
+            {cuerpo}
+          </button>
+        ) : <div key={i} className="pa-cifra">{cuerpo}</div>;
+      })}
+    </div>
+  );
+}
+
+/** La hojita de «¿qué es?» de una cifra: su nombre con su número, lo que significa y «Entendido». */
+export function HojaDeQueEs({ titulo, texto, color = null, onCerrar }) {
+  return (
+    <Hoja etiqueta={titulo} titulo={titulo} onCerrar={onCerrar}>
+      <p style={{ margin: '0 0 18px', fontSize: 16, lineHeight: 1.5, fontWeight: 500, color: LT.text }}>{texto}</p>
+      <button
+        type="button" onClick={onCerrar} className="kp-press"
+        style={{ width: '100%', minHeight: 52, borderRadius: 16, border: 'none', cursor: 'pointer', background: color || LT.blue, color: '#fff', fontFamily: FONT, fontSize: 16.5, fontWeight: 800 }}
+      >
+        Entendido
+      </button>
+    </Hoja>
+  );
+}
+
 /**
  * La pantalla de un ejercicio: nombre (con las vueltas en puntos si el Set se repite), video (si el coach lo tiene), las cifras, la nota en
  * texto grande y «Listo». En una bi-serie, arriba, el tipo y el par A/B. Si no trae nada más que el nombre, el nombre se queda solo en el
@@ -447,75 +501,118 @@ function CronometroDelPaso({ segundos, cuenta, onEmpezar, onQuitar }) {
 export function PantallaDePaso({
   paso, video, cifras, anotado, sigue, resumen, cronometro, etiquetaDeCambiar, puedeAnterior, tecnica,
   onListo, onCambiar, onSaltar, onAnterior, color = null, onUsarGps = null, esUltimo = false, onTerminar = null,
+  onQueEs = null, globo = false, notaDe = null,
 }) {
   const nota = [paso.nota, paso.cue].filter(Boolean);
   const hayCronometro = paso.tipo === 'ejercicio' && paso.termina?.por === 'tiempo' && cronometro;
   const solo = !video && !cifras.length && !nota.length && !hayCronometro && !anotado && !resumen && !paso.opcional;
-  return (
-    <>
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ ...COLUMNA, padding: '0 18px 18px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: solo ? 'center' : 'flex-start' }}>
-          {paso.encabezado && (
-            <div style={{ fontSize: 13, fontWeight: 700, color: LT.text2, marginTop: 14, textAlign: solo ? 'center' : 'left' }}>
-              {paso.encabezado}
-            </div>
-          )}
-          {paso.opcional && <div style={{ marginTop: 8 }}><Etiqueta suave>Opcional</Etiqueta></div>}
-          <div style={{ margin: solo ? '0 0 10px' : '14px 0 12px' }}>
-            <h1 style={{
-              margin: 0, fontSize: solo ? 38 : 30, fontWeight: 800, letterSpacing: -0.7, lineHeight: 1.1, color: LT.text,
-              textAlign: solo ? 'center' : 'left', overflowWrap: 'anywhere', textWrap: 'balance',
-            }}>
+  const c = color || LT.blue;
+
+  /* EL ACOMODO (30 oct 2026, ver `lib/acomodoDelPaso.js`): al cambiar de paso, al girar o cambiar de tamaño la pantalla, al saberse la forma del video y al
+     prender el cronómetro, se vuelve a medir el espacio y a repartirlo. Se hace sobre el DOM, sin volver a dibujar. */
+  const desplaza = useRef(null);
+  const pa = useRef(null);
+  const crono = useRef(null);
+  const llave = [paso.clave, cifras.map((x) => x.valor).join('|'), anotado, nota.join('|'), !!resumen, !!video, !!hayCronometro].join('§');
+  useLayoutEffect(() => {
+    if (solo) return undefined;
+    const corre = () => acomodaPaso(desplaza.current, pa.current);
+    corre();
+    const ro = new ResizeObserver(corre);
+    if (desplaza.current) ro.observe(desplaza.current);
+    if (crono.current) ro.observe(crono.current);
+    const mo = new MutationObserver(corre);
+    if (pa.current) mo.observe(pa.current, { attributes: true, attributeFilter: ['data-aspecto'], subtree: true });
+    if (document.fonts?.ready) document.fonts.ready.then(corre).catch(() => {});
+    return () => { ro.disconnect(); mo.disconnect(); };
+  }, [llave, solo]);
+
+  const barra = (
+    <BarraRedonda
+      izquierda={<BotonRedondo etiqueta="Anterior" onClick={onAnterior} disabled={!puedeAnterior}><ChevronLeft size={26} /></BotonRedondo>}
+      segundo={etiquetaDeCambiar ? <BotonRedondo etiqueta={etiquetaDeCambiar} onClick={onCambiar} color={c}><Pencil size={22} /></BotonRedondo> : null}
+      centro={esUltimo && onTerminar
+        ? <BotonDelCentro tipo="mantener" etiqueta="Mantén para terminar" onClick={onTerminar} color={color} />
+        : <BotonDelCentro etiqueta="Listo" onClick={onListo} color={color} />}
+      cuarto={paso.tipo === 'ejercicio' ? <TecnicaRedonda tecnica={tecnica} color={c} /> : null}
+      derecha={<BotonRedondo etiqueta="Saltar" onClick={onSaltar}><ChevronRight size={26} /></BotonRedondo>}
+      // En el último paso que queda, ✓ se MANTIENE para terminar: terminar es un solo paso, sin pantalla de «terminado».
+      aviso={esUltimo && onTerminar ? 'Mantén ✓ para terminar' : null}
+      // Un paso de 200 m o más que se hace sin mapa (eligió «Sin GPS» o cerró el mapa): se puede volver a él.
+      extra={onUsarGps ? <BotonDeTexto onClick={onUsarGps} color={c}><MapPin size={16} /> Usar el mapa (GPS)</BotonDeTexto> : null}
+    />
+  );
+
+  if (solo) {
+    return (
+      <>
+        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ ...COLUMNA, padding: '0 18px 18px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            {paso.encabezado && <div style={{ fontSize: 13, fontWeight: 700, color: LT.text2, textAlign: 'center' }}>{paso.encabezado}</div>}
+            <h1 style={{ margin: '0 0 10px', fontSize: 38, fontWeight: 800, letterSpacing: -0.7, lineHeight: 1.1, color: LT.text, textAlign: 'center', overflowWrap: 'anywhere', textWrap: 'balance' }}>
               {paso.nombre}
             </h1>
+            {sigue && (
+              <div style={{ textAlign: 'center', fontSize: 15, fontWeight: 700, color: LT.text3 }}>
+                Sigue: <b style={{ color: LT.text2 }}>{sigue}</b>
+              </div>
+            )}
           </div>
-          {solo && sigue && (
-            <div style={{ textAlign: 'center', fontSize: 15, fontWeight: 700, color: LT.text3 }}>
-              Sigue: <b style={{ color: LT.text2 }}>{sigue}</b>
+        </div>
+        {barra}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div ref={desplaza} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '12px 0 14px' }}>
+        <div ref={pa} className="pa" data-modo={video ? 'arriba' : 'sin'} style={{ ...COLUMNA, padding: '0 18px', color: LT.text }}>
+          {(paso.encabezado || paso.opcional) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 'calc(-6px * var(--k))' }}>
+              {paso.encabezado && <span style={{ fontSize: 13, fontWeight: 700, color: LT.text2 }}>{paso.encabezado}</span>}
+              {paso.opcional && <Etiqueta suave>Opcional</Etiqueta>}
             </div>
           )}
-          {video && <div style={{ marginBottom: 14 }}>{video}</div>}
-          {/* La serie explicada a la izquierda y las cifras APILADAS a la derecha (la mitad de espacio que antes). Sin serie que explicar, las cifras van en una fila. */}
-          {(resumen || cifras.length > 0) && (
-            <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, marginBottom: 14 }}>
-              {resumen && <TarjetaDeLaSerie resumen={resumen} color={color} />}
-              {cifras.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: resumen ? 'column' : 'row', gap: 8, flex: resumen ? '0 0 38%' : 1, minWidth: 0 }}>
-                  {cifras.map((c, i) => <Cifra key={i} {...c} />)}
+          <h1 className="pa-tit">{paso.nombre}</h1>
+          {(video || resumen || cifras.length > 0) && (
+            <div className="pa-cuerpo">
+              {video && <div className="pa-vid">{video}</div>}
+              {(resumen || cifras.length > 0) && (
+                <div className="pa-der">
+                  {resumen && <div className="pa-serie" style={{ display: 'flex', minWidth: 0 }}><TarjetaDeLaSerie resumen={resumen} color={color} /></div>}
+                  {cifras.length > 0 && <TarjetaDeCifras cifras={cifras} color={color} onQueEs={onQueEs} globo={globo} />}
                 </div>
               )}
             </div>
           )}
-          {hayCronometro && <div style={{ marginBottom: 14 }}>{cronometro}</div>}
+          {hayCronometro && <div ref={crono}>{cronometro}</div>}
           {anotado && (
-            <div style={{ marginBottom: 14 }}>
-              <Pastilla fuerte><Check size={14} strokeWidth={3} /> Hoy: {anotado}</Pastilla>
+            <div><Pastilla fuerte><Check size={14} strokeWidth={3} /> Hoy: {anotado}</Pastilla></div>
+          )}
+          {nota.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {/* De quién es la nota («Nota de Carlos», con su inicial): se lee como algo que te dijo una persona, no como texto de la app. */}
+              {notaDe && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 800, color: c }}>
+                  {notaDe.inicial && (
+                    <span aria-hidden="true" style={{ width: 22, height: 22, borderRadius: '50%', background: halo(c), display: 'grid', placeItems: 'center', fontSize: 11.5, fontWeight: 800 }}>{notaDe.inicial}</span>
+                  )}
+                  {notaDe.texto}
+                </div>
+              )}
+              {nota.map((t, i) => <p key={i} className="pa-nota" style={{ color: '#2E2F3A' }}>{t}</p>)}
+              <button
+                type="button" className="pa-vermas" onClick={() => { if (pa.current) pa.current.dataset.corta = '0'; }}
+                style={{ alignSelf: 'flex-start', border: 'none', background: 'none', padding: '2px 0', cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 800, color: c }}
+              >
+                Ver la nota completa
+              </button>
             </div>
           )}
-          {nota.map((t, i) => (
-            <p key={i} style={{ margin: '0 0 12px', fontSize: 18, lineHeight: 1.5, fontWeight: 500, color: LT.text }}>{t}</p>
-          ))}
         </div>
       </div>
-      <div style={{ flexShrink: 0, padding: '10px 0 calc(10px + env(safe-area-inset-bottom))' }}>
-        <div style={{ ...COLUMNA, padding: '0 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {/* En el último paso que queda, «Listo» se vuelve «Mantén para terminar»: terminar es un solo paso, sin pantalla de «terminado» ni «Terminar sesión». */}
-          {esUltimo && onTerminar ? <BotonDeMantener onTermina={onTerminar} /> : (
-            <BotonGrande variante="oscuro" onClick={onListo}>
-              <span aria-hidden="true" style={{ width: 30, height: 30, borderRadius: '50%', background: color || LT.blue, display: 'grid', placeItems: 'center' }}><Check size={18} strokeWidth={3} /></span> Listo
-            </BotonGrande>
-          )}
-          {/* «Anotar resultados»: lo que se hace ahí (antes «Cambiar reps o kilos»). */}
-          {etiquetaDeCambiar && <BotonSecundario ancho onClick={onCambiar}><Pencil size={17} /> {etiquetaDeCambiar}</BotonSecundario>}
-          {/* Un paso de 200 m o más que se hace sin mapa (eligió «Sin GPS» o cerró el mapa): se puede volver a él. */}
-          {onUsarGps && <BotonSecundario ancho onClick={onUsarGps}><MapPin size={17} /> Usar el mapa (GPS)</BotonSecundario>}
-          <div style={{ display: 'flex', gap: 10 }}>
-            <BotonSecundario onClick={onAnterior} disabled={!puedeAnterior}><ChevronLeft size={18} /> Anterior</BotonSecundario>
-            <BotonSecundario onClick={onSaltar}>Saltar <ChevronRight size={18} /></BotonSecundario>
-            {tecnica && paso.tipo === 'ejercicio' && <BotonDeTecnica {...tecnica} />}
-          </div>
-        </div>
-      </div>
+      {barra}
     </>
   );
 }
@@ -605,33 +702,22 @@ export function PantallaDeReloj({ paso, detalle, resultado, puedeAnterior, tecni
           {paso.nota && <p style={{ margin: '14px 0 0', fontSize: 18, lineHeight: 1.5, fontWeight: 500, color: LT.text }}>{paso.nota}</p>}
         </div>
       </div>
-      <div style={{ flexShrink: 0, padding: '10px 0 calc(10px + env(safe-area-inset-bottom))' }}>
-        <div style={{ ...COLUMNA, padding: '0 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {/* Esta pantalla ya NO es un paso obligado entre «Iniciar entreno» y el reloj (Andrés: «si ya le piqué a iniciar entrenamiento, ¿por qué
-              tengo que picar iniciar reloj?»): al avanzar, `EntrenoDelDia` abre el reloj solo, con su 3, 2, 1. Aquí se llega al volver atrás, al tocar
-              el Set en «Ver todo», al retomar el entreno o al cancelar la cuenta; el botón arranca ya (o sigue, si el reloj iba a medias). */}
-          {resultado ? (
-            <>
-              {esUltimo && onTerminar ? <BotonDeMantener onTermina={onTerminar} /> : (
-                <BotonGrande variante="oscuro" onClick={onListo}>
-                  <span aria-hidden="true" style={{ width: 30, height: 30, borderRadius: '50%', background: color || LT.blue, display: 'grid', placeItems: 'center' }}><Check size={18} strokeWidth={3} /></span> Listo
-                </BotonGrande>
-              )}
-              <BotonSecundario ancho onClick={onAnotar}><Pencil size={17} /> Cambiar el resultado</BotonSecundario>
-            </>
-          ) : (
-            <>
-              <BotonGrande onClick={onIniciar}><Play size={20} fill="#fff" /> {enMarcha ? 'Seguir' : 'Empezar'}</BotonGrande>
-              <BotonSecundario ancho onClick={onAnotar}><Pencil size={17} /> Anotar sin reloj</BotonSecundario>
-            </>
-          )}
-          <div style={{ display: 'flex', gap: 10 }}>
-            <BotonSecundario onClick={onAnterior} disabled={!puedeAnterior}><ChevronLeft size={18} /> Anterior</BotonSecundario>
-            <BotonSecundario onClick={onSaltar}>Saltar <ChevronRight size={18} /></BotonSecundario>
-            {tecnica && <BotonDeTecnica {...tecnica} />}
-          </div>
-        </div>
-      </div>
+      {/* Esta pantalla ya NO es un paso obligado entre «Iniciar entreno» y el reloj (Andrés: «si ya le piqué a iniciar entrenamiento, ¿por qué
+          tengo que picar iniciar reloj?»): al avanzar, `EntrenoDelDia` abre el reloj solo, con su 3, 2, 1. Aquí se llega al volver atrás, al tocar
+          el Set en «Ver todo», al retomar el entreno o al cancelar la cuenta; el botón arranca ya (o sigue, si el reloj iba a medias).
+          La barra redonda (30 oct 2026): sin resultado, ▶ Empezar al centro y ✎ «Anotar sin reloj»; con resultado, ✓ Listo y ✎ «Cambiar el resultado». */}
+      <BarraRedonda
+        izquierda={<BotonRedondo etiqueta="Anterior" onClick={onAnterior} disabled={!puedeAnterior}><ChevronLeft size={26} /></BotonRedondo>}
+        segundo={<BotonRedondo etiqueta={resultado ? 'Cambiar el resultado' : 'Anotar sin reloj'} onClick={onAnotar} color={color || LT.blue}><Pencil size={22} /></BotonRedondo>}
+        centro={!resultado
+          ? <BotonDelCentro tipo="empezar" etiqueta={enMarcha ? 'Seguir el reloj' : 'Empezar el reloj'} onClick={onIniciar} color={color} />
+          : esUltimo && onTerminar
+            ? <BotonDelCentro tipo="mantener" etiqueta="Mantén para terminar" onClick={onTerminar} color={color} />
+            : <BotonDelCentro etiqueta="Listo" onClick={onListo} color={color} />}
+        cuarto={<TecnicaRedonda tecnica={tecnica} color={color || LT.blue} />}
+        derecha={<BotonRedondo etiqueta="Saltar" onClick={onSaltar}><ChevronRight size={26} /></BotonRedondo>}
+        aviso={resultado && esUltimo && onTerminar ? 'Mantén ✓ para terminar' : null}
+      />
     </>
   );
 }
@@ -694,39 +780,27 @@ export function PantallaDeDescanso({ descanso, siguiente, video, sonido, puedeAn
           )}
         </div>
       </div>
-      <div style={{ flexShrink: 0, padding: '10px 0 calc(10px + env(safe-area-inset-bottom))' }}>
-        <div style={{ ...COLUMNA, padding: '0 18px' }}>
-          {siguiente && !conVideo && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 12, background: LT.surface, borderRadius: 18, padding: '12px 14px', marginBottom: 12, boxShadow: '0 2px 10px rgba(17,19,24,0.07)',
-            }}>
-              {datosDelSiguiente}
-            </div>
-          )}
-          <div style={{ display: 'flex', gap: 10 }}>
-            <div style={{ flex: 1 }}><BotonGrande onClick={onSeguir}>Seguir</BotonGrande></div>
-            {conCuenta && (
-              <button
-                type="button" onClick={onMas} className="kp-press"
-                style={{
-                  minWidth: 84, borderRadius: 18, border: 'none', boxShadow: '0 2px 10px rgba(17,19,24,0.07)', background: LT.surface, color: LT.text, cursor: 'pointer',
-                  fontFamily: FONT, fontSize: 16, fontWeight: 800, touchAction: 'manipulation',
-                }}
-              >
-                +30 s
-              </button>
-            )}
-          </div>
-          <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
-            <BotonSecundario onClick={onAnterior} disabled={!puedeAnterior}><ChevronLeft size={18} /> Anterior</BotonSecundario>
-            {conCuenta && (
-              <BotonSecundario onClick={onSonido}>
-                {sonido ? <Bell size={17} /> : <BellOff size={17} />} {sonido ? 'Con aviso' : 'Sin aviso'}
-              </BotonSecundario>
-            )}
+      {/* «Sigue» va arriba de la barra, como siempre; la barra es la redonda (30 oct 2026): ‹ Anterior · 🔔 aviso · ▶ Seguir · +30 s. */}
+      {siguiente && !conVideo && (
+        <div style={{ ...COLUMNA, padding: '0 18px', flexShrink: 0 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 12, background: LT.surface, borderRadius: 18, padding: '12px 14px', boxShadow: '0 2px 10px rgba(17,19,24,0.07)',
+          }}>
+            {datosDelSiguiente}
           </div>
         </div>
-      </div>
+      )}
+      <BarraRedonda
+        izquierda={<BotonRedondo etiqueta="Anterior" onClick={onAnterior} disabled={!puedeAnterior}><ChevronLeft size={26} /></BotonRedondo>}
+        segundo={conCuenta ? (
+          <BotonRedondo etiqueta={sonido ? 'Aviso al terminar: prendido' : 'Aviso al terminar: apagado'} onClick={onSonido} color={sonido ? (color || LT.blue) : LT.text3}>
+            {sonido ? <Bell size={22} /> : <BellOff size={22} />}
+          </BotonRedondo>
+        ) : null}
+        centro={<BotonDelCentro tipo="empezar" etiqueta="Seguir" onClick={onSeguir} color={color} />}
+        cuarto={conCuenta ? <BotonRedondo etiqueta="30 segundos más" onClick={onMas}>+30</BotonRedondo> : null}
+        derecha={null}
+      />
     </>
   );
 }

@@ -21,7 +21,7 @@ import {
 } from '@/lib/entreno';
 import { useAviso } from '@/components/AvisoPasajero';
 import {
-  camposDeCambiar, cantidadPlaneada, cifrasDelPaso, exDataTrasListo, puntosDeVueltas, resumenDeLaSerie, segmentosDeAvance, tarjetasDeLaLista, textoDeLoPlaneado,
+  camposDeCambiar, cantidadPlaneada, cifrasConExplicacion, exDataTrasListo, queEsLaCifra, puntosDeVueltas, resumenDeLaSerie, segmentosDeAvance, tarjetasDeLaLista, textoDeLoPlaneado,
   tiempoTotal,
 } from '@/lib/entrenoDatos';
 import Portada from '@/components/Portada';
@@ -35,7 +35,7 @@ import { cantidadEnUnidad, esPasoConGps, METROS_PARA_GPS, metrosDelPaso, pedidoE
 import { fuenteDeUbicacion } from '@/lib/ubicacion';
 import { claseDe } from '@/lib/clases';
 import {
-  BarraDelEntreno, CronometroDelPaso, HojaDeCambiar, HojaDeLista, HojaDelRecorrido, HojaDeTecnica, PantallaAntesDeEmpezar, PantallaDeDescanso, PantallaDePaso,
+  BarraDelEntreno, CronometroDelPaso, HojaDeCambiar, HojaDeLista, HojaDelRecorrido, HojaDeQueEs, HojaDeTecnica, PantallaAntesDeEmpezar, PantallaDeDescanso, PantallaDePaso,
   PantallaDeReloj,
 } from '@/features/training/PantallasDelEntreno';
 
@@ -72,6 +72,8 @@ const GrabaTecnica = lazy(() => import('@/features/mensajes/GrabaTecnica'));
 const LLAVE_DEL_SONIDO = 'tl:reloj:sonido';
 // Los ejercicios para los que se eligió «Sin GPS» (pista techada, caminadora): se recuerdan en este teléfono.
 const LLAVE_SIN_GPS = 'tl:sin-gps';
+// Que ya abrió una vez «¿qué es?» de una cifra de esfuerzo: el globo de «Toca para saber qué es» ya no sale.
+const LLAVE_QUE_ES = 'tl:que-es-visto';
 const leeSonido = () => {
   try { return window.localStorage.getItem(LLAVE_DEL_SONIDO) !== 'no'; } catch { return true; }
 };
@@ -91,6 +93,10 @@ export default function EntrenoDelDia({
   // Un paso que se tocó en la lista («Tu entreno»): se ve ese en vez del que sigue. `null` = seguir el orden.
   const [enfoque, setEnfoque] = useState(null);
   const [hoja, setHoja] = useState(null);
+  /* «¿QUÉ ES?» (Andrés, 30 oct 2026): la cifra de esfuerzo (carga, RIR, RPE, zona…) se toca y una hojita dice qué significa. La primera vez que alguien ve una en
+     este teléfono, un globo le dice que se puede tocar; al abrir una explicación ya no vuelve a salir. */
+  const [queEs, setQueEs] = useState(null);
+  const [queEsVisto, setQueEsVisto] = useState(() => { try { return window.localStorage.getItem(LLAVE_QUE_ES) === '1'; } catch { return false; } });
   const { avisa } = useAviso();
   // La técnica que se está grabando (el paso, congelado al tocar la cámara) y la última que se mandó de cada paso: `{ [clave]: idDeLaTécnica }`.
   const [grabandoTecnica, setGrabandoTecnica] = useState(null);
@@ -486,7 +492,18 @@ export default function EntrenoDelDia({
     const siguiente = vista.siguiente && vista.siguiente !== paso ? (vista.siguiente.tipo === 'reloj' ? vista.siguiente.resumen : vista.siguiente.nombre) : '';
     pantalla = (
       <PantallaDePaso
-        paso={paso} video={paso.tipo === 'ejercicio' ? videoDe(exDe(paso), mediosDelPaso) : null} cifras={cifrasDelPaso(paso, kilosDelPaso)} anotado={anotadoDe(paso)}
+        // El video toma el alto y el ancho que le da el acomodo del paso (ver `lib/acomodoDelPaso.js`).
+        paso={paso} video={paso.tipo === 'ejercicio' ? videoDe(exDe(paso), mediosDelPaso, { alto: 'var(--vh)', anchoMaximo: 'var(--vid-max, 100%)', sinMargen: true }) : null}
+        cifras={cifrasConExplicacion(paso, kilosDelPaso)} anotado={anotadoDe(paso)}
+        onQueEs={(c) => {
+          setQueEs(queEsLaCifra(c, kilosDelPaso ? `${kilosDelPaso.aprox ? '≈' : ''}${kilosDelPaso.valor} ${kilosDelPaso.unidad}` : null));
+          setQueEsVisto(true);
+          try { window.localStorage.setItem(LLAVE_QUE_ES, '1'); } catch { /* sin almacenamiento: el globo puede volver a salir */ }
+        }}
+        globo={!queEsVisto}
+        notaDe={destinoDeTecnica?.nombre?.trim()
+          ? { texto: `Nota de ${nombreDelDestino}`, inicial: nombreDelDestino.charAt(0).toUpperCase() }
+          : { texto: salud ? 'Nota de tu fisio' : 'Nota de tu coach', inicial: null }}
         sigue={siguiente} resumen={resumenDeLaSerieDelPaso}
         cronometro={completo && paso.termina?.por === 'tiempo' ? (
           <CronometroDelPaso segundos={paso.termina.valor ?? paso.termina.min} cuenta={cuenta} onEmpezar={empezarCronometro} onQuitar={detenerCronometro} />
@@ -585,6 +602,7 @@ export default function EntrenoDelDia({
         />
       )}
       {hoja === 'tecnica' && <HojaDeTecnica palabras={palabras} onCerrar={() => setHoja(null)} />}
+      {queEs && <HojaDeQueEs titulo={queEs.titulo} texto={queEs.texto} color={colorDelTipo} onCerrar={() => setQueEs(null)} />}
       {grabandoTecnica && tecnicaActiva && (
         <Suspense fallback={null}>
           <GrabaTecnica

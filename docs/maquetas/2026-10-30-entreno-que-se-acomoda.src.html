@@ -1,0 +1,406 @@
+<title>Entreno que se acomoda</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Concepto: a la izquierda los controles (qué trae el paso y qué teléfono); a la derecha el teléfono a tamaño real, que se reacomoda solo. */
+:root {
+  --bg: #F4F3FA; --panel: #FFFFFF; --tinta: #16151F; --tinta2: #5D5B6E; --linea: #E3E1EE;
+  --acento: #5B49D6; --acento-suave: #ECE9FC; --ok: #0E8F63;
+  --f-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+  --f-num: ui-rounded, -apple-system, "SF Pro Rounded", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121119; --panel: #1C1B26; --tinta: #F1F0F8; --tinta2: #A3A1B8; --linea: #2E2C3D;
+  --acento: #9C8CFF; --acento-suave: #2A2547; --ok: #4BD49E; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #121119; --panel: #1C1B26; --tinta: #F1F0F8; --tinta2: #A3A1B8; --linea: #2E2C3D;
+  --acento: #9C8CFF; --acento-suave: #2A2547; --ok: #4BD49E; color-scheme: dark }
+body { background: var(--bg); color: var(--tinta); font-family: var(--f-ui); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 20px 28px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.cab h1 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px; text-wrap: balance; }
+.cab p { margin: 6px 0 0; max-width: 62ch; font-size: 15px; line-height: 1.5; color: var(--tinta2); }
+.estudio { display: grid; grid-template-columns: minmax(0, 330px) minmax(0, 1fr); gap: 24px; margin-top: 18px; align-items: start; }
+@media (max-width: 760px) { .estudio { grid-template-columns: minmax(0, 1fr); } }
+.ctl { background: var(--panel); border: 1px solid var(--linea); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.grupo { border: 0; margin: 0; padding: 0; min-width: 0; }
+.grupo legend { padding: 0; font-size: 12px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; color: var(--tinta2); margin-bottom: 7px; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg label { position: relative; }
+.seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.seg span { display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px; border-radius: 10px; background: var(--bg); border: 1px solid var(--linea); font-size: 14px; font-weight: 650; cursor: pointer; }
+.seg input:checked + span { background: var(--acento); border-color: var(--acento); color: #fff; }
+.seg input:focus-visible + span { outline: 2px solid var(--acento); outline-offset: 2px; }
+.lectura { border-top: 1px solid var(--linea); padding-top: 12px; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 13.5px; }
+.lectura dt { color: var(--tinta2); font-weight: 600; }
+.lectura dd { margin: 0; font-weight: 750; font-variant-numeric: tabular-nums; }
+.lectura dd.bien { color: var(--ok); }
+.escenario { min-width: 0; display: flex; justify-content: center; }
+.marco { position: relative; flex: none; }
+.telefono { transform-origin: top left; position: absolute; top: 0; left: 0; border-radius: 44px; overflow: hidden; box-shadow: 0 0 0 10px #0D0C12, 0 30px 60px rgba(13,12,18,0.28); }
+
+/* ---- La pantalla del entreno (el look de la app: claro siempre) ---- */
+.pant { position: relative; background: #EEEDF8; color: #111318; font-family: var(--f-ui); display: flex; flex-direction: column; -webkit-font-smoothing: antialiased; }
+.pant * { box-sizing: border-box; }
+.pant .arriba { flex: none; display: flex; align-items: center; gap: 10px; padding: 0 18px 8px; }
+.wk { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 14px 0 11px; border-radius: 13px; background: #7B61C4; color: #fff; font-size: 14.5px; font-weight: 700; }
+.segs { flex: 1; display: flex; gap: 5px; }
+.segs i { flex: 1; height: 5px; border-radius: 3px; background: rgba(17,19,24,0.1); }
+.segs i.ya { background: #7B61C4; }
+.tiempo { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+#cont { flex: none; overflow: hidden; padding: 0 18px; display: flex; flex-direction: column; }
+#cont.desborda { overflow-y: auto; }
+.enc { font-size: 13px; font-weight: 700; color: #5B616E; }
+.tit { margin: 0; font-weight: 800; letter-spacing: -0.6px; line-height: 1.1; text-wrap: balance; overflow-wrap: anywhere; }
+.vid { position: relative; flex: none; border-radius: 20px; overflow: hidden; background: #1a1a1f; box-shadow: 0 10px 24px rgba(17,19,24,0.14); }
+.vid img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.vid .pl { position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%; background: #fff; color: #1E40E0; display: grid; place-items: center; }
+.vid.mini { border-radius: 12px; box-shadow: none; }
+.vid.mini .pl { width: 26px; height: 26px; margin: -13px 0 0 -13px; }
+.serie { flex: 1; background: #7B61C4; color: #fff; border-radius: 18px; padding: 10px 11px; display: flex; flex-direction: column; justify-content: center; gap: 8px; min-width: 0; }
+.cuenta { overflow: hidden; display: flex; align-items: baseline; gap: 5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cuenta small { font-weight: 700; color: rgba(255,255,255,0.85); }
+.cuenta b { font-weight: 800; letter-spacing: -0.8px; line-height: 1; }
+.tipo { font-size: 11px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; color: rgba(255,255,255,0.85); }
+.barrita { display: flex; gap: 4px; }
+.barrita i { flex: 1; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.25); }
+.barrita i.ya { background: rgba(255,255,255,0.5); }
+.barrita i.va { background: #fff; }
+.par { display: flex; flex-direction: column; gap: 4px; }
+.fila { display: flex; align-items: center; gap: 7px; padding: 5px 7px; border-radius: 10px; background: rgba(255,255,255,0.12); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fila.toca { background: #fff; color: #111318; font-weight: 800; }
+.fila em { font-style: normal; width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; font-size: 11.5px; font-weight: 800; background: rgba(255,255,255,0.2); flex: none; }
+.fila.toca em { background: #7B61C4; color: #fff; }
+.cifras { flex: 1; display: flex; gap: 8px; min-width: 0; }
+.cifras.col { flex-direction: column; }
+.cifra { flex: 1; min-width: 0; background: #fff; border-radius: 15px; padding: 6px 4px 5px; text-align: center; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 2px 10px rgba(17,19,24,0.06); }
+.cifra b { display: block; overflow: hidden; font-weight: 800; line-height: 1.05; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cifra b.az { color: #1E40E0; }
+.cifra small { font-size: 11.5px; font-weight: 700; color: #5B616E; }
+.hoyfue { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: #E3F6EF; color: #00805A; font-size: 13.5px; font-weight: 800; }
+.crono { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; border-radius: 15px; background: #fff; font-weight: 800; box-shadow: 0 2px 10px rgba(17,19,24,0.07); }
+.nota { margin: 0; line-height: 1.45; font-weight: 500; }
+.nota.corta { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.vermas { align-self: flex-start; font-size: 14px; font-weight: 800; color: #5B49D6; }
+.abajo { flex: none; margin-top: auto; padding: 10px 18px 0; }
+.aviso { text-align: center; font-size: 13px; font-weight: 700; color: #5B616E; margin-bottom: 8px; }
+.fila5 { display: flex; align-items: center; justify-content: space-between; }
+.pant button { border: none; font: inherit; padding: 0; margin: 0; cursor: pointer; }
+.cifras.una { background: #fff; border-radius: 16px; gap: 0; box-shadow: 0 2px 10px rgba(17,19,24,0.06); overflow: hidden; }
+.cifras.una .cifra { background: transparent; box-shadow: none; border-radius: 0; }
+.cifras.una .cifra + .cifra { border-top: 1px solid #ECEAF4; }
+.cifra.explica { cursor: pointer; }
+.mej .cifra.explica small { color: #6A4FC0; }
+.preg { display: inline-grid; place-items: center; width: 15px; height: 15px; border-radius: 50%; background: #6A4FC0; color: #fff; font-size: 10px; font-weight: 800; vertical-align: 1px; }
+.globo { position: absolute; z-index: 5; background: #16151F; color: #fff; font-size: 12.5px; font-weight: 700; padding: 7px 10px; border-radius: 10px; white-space: nowrap; box-shadow: 0 8px 18px rgba(17,19,24,0.25); pointer-events: none; }
+.globo::after { content: ""; position: absolute; right: 18px; bottom: -5px; width: 10px; height: 10px; background: #16151F; transform: rotate(45deg); }
+.capa { position: absolute; inset: 0; z-index: 6; background: rgba(17,19,24,0.45); display: flex; align-items: flex-end; }
+.hojita { width: 100%; background: #fff; border-radius: 24px 24px 0 0; padding: 20px 20px 0; }
+.hojita h3 { margin: 0; font-size: 19px; font-weight: 800; }
+.hojita p { margin: 8px 0 16px; font-size: 15.5px; line-height: 1.45; color: #2E2F3A; }
+.hojita button { width: 100%; min-height: 50px; border-radius: 16px; background: #6A4FC0; color: #fff; font-size: 16.5px; font-weight: 800; }
+.info { display: inline-grid; place-items: center; width: 13px; height: 13px; border-radius: 50%; border: 1.3px solid #9A97AE; color: #7D7A92; font-size: 9px; font-weight: 800; font-style: normal; vertical-align: 1px; }
+.mej .cifra b.az { color: #6A4FC0; }
+.mej .vid .pl { color: #6A4FC0; }
+.quien { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 800; color: #6A4FC0; }
+.quien .ini { width: 22px; height: 22px; border-radius: 50%; background: #E6E0FA; color: #6A4FC0; display: grid; place-items: center; font-size: 11.5px; font-weight: 800; }
+.nota.suave { color: #2E2F3A; }
+.rd { width: 56px; height: 56px; border-radius: 50%; background: #fff; display: grid; place-items: center; color: #111318; box-shadow: 0 6px 16px rgba(17,19,24,0.08); }
+.rd.c { color: #5B49D6; }
+.rd.vacio { visibility: hidden; }
+.listo { width: 74px; height: 74px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: linear-gradient(160deg, #7464EE 0%, #4A37C8 60%, #3B28AE 100%); box-shadow: 0 0 0 8px rgba(116,100,238,0.18), 0 14px 30px rgba(74,55,200,0.38); position: relative; }
+.anillo { position: absolute; inset: -8px; border-radius: 50%; background: conic-gradient(#3B28AE 0 35%, transparent 35% 100%); -webkit-mask: radial-gradient(circle, transparent 40px, #000 41px); mask: radial-gradient(circle, transparent 40px, #000 41px); }
+svg.i { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+svg.f { fill: currentColor; stroke: none; }
+@media (prefers-reduced-motion: no-preference) { .pant .vid, .pant .cifra, .pant .serie { transition: width 180ms ease, height 180ms ease; } }
+</style>
+
+<main class="wrap">
+  <header class="cab">
+    <h1>El entreno se acomoda solo</h1>
+    <p>Cambia el teléfono o lo que trae el paso. La app mide el espacio que queda entre las dos barras y elige el tamaño de cada cosa para que todo se vea sin bajar. Si sobra espacio, primero crece el video y luego todo lo demás, también la nota del coach; si falta, se achica en orden.</p>
+  </header>
+
+  <div class="estudio">
+    <aside class="ctl" aria-label="Qué trae el paso">
+      <fieldset class="grupo"><legend>Teléfono</legend><div class="seg">
+        <label><input type="radio" name="tel" id="tel-se" value="se"><span>iPhone SE</span></label>
+        <label><input type="radio" name="tel" id="tel-14" value="14" checked><span>iPhone 14</span></label>
+        <label><input type="radio" name="tel" id="tel-max" value="max"><span>Pro Max</span></label>
+      </div></fieldset>
+      <fieldset class="grupo"><legend>Video</legend><div class="seg">
+        <label><input type="radio" name="vid" id="vid-pie" value="pie" checked><span>De pie</span></label>
+        <label><input type="radio" name="vid" id="vid-ac" value="acostado"><span>Acostado</span></label>
+        <label><input type="radio" name="vid" id="vid-no" value="no"><span>Sin video</span></label>
+      </div></fieldset>
+      <fieldset class="grupo"><legend>Set</legend><div class="seg">
+        <label><input type="radio" name="set" id="set-1" value="uno" checked><span>Un ejercicio</span></label>
+        <label><input type="radio" name="set" id="set-bi" value="bi"><span>Bi-serie</span></label>
+      </div></fieldset>
+      <fieldset class="grupo"><legend>Nota del coach</legend><div class="seg">
+        <label><input type="radio" name="nota" id="nota-no" value="no"><span>Sin nota</span></label>
+        <label><input type="radio" name="nota" id="nota-c" value="corta" checked><span>Corta</span></label>
+        <label><input type="radio" name="nota" id="nota-l" value="larga"><span>Larga</span></label>
+      </div></fieldset>
+      <fieldset class="grupo"><legend>Extras</legend><div class="seg">
+        <label><input type="checkbox" id="x-crono"><span>Cronómetro</span></label>
+        <label><input type="checkbox" id="x-hoy"><span>Ya anotado</span></label>
+        <label><input type="checkbox" id="x-ult"><span>Último paso</span></label>
+        <label><input type="checkbox" id="x-primera" checked><span>Primera vez</span></label>
+      </div></fieldset>
+      <fieldset class="grupo"><legend>Mejoras visuales</legend><div class="seg">
+        <label><input type="radio" name="mej" id="mej-si" value="si" checked><span>Con mejoras</span></label>
+        <label><input type="radio" name="mej" id="mej-no" value="no"><span>Como antes</span></label>
+      </div></fieldset>
+      <dl class="lectura" aria-live="polite">
+        <dt>Espacio</dt><dd id="l-esp">–</dd>
+        <dt>Acomodo</dt><dd id="l-modo">–</dd>
+        <dt>Letra</dt><dd id="l-letra">–</dd>
+        <dt>Video</dt><dd id="l-vid">–</dd>
+        <dt>Sin bajar</dt><dd id="l-ok">–</dd>
+      </dl>
+    </aside>
+
+    <div class="escenario" id="escenario">
+      <div class="marco" id="marco">
+        <div class="telefono" id="telefono">
+          <div class="pant" id="pant">
+            <div class="arriba" id="arriba">
+              <span class="wk"><svg class="i" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h.01M3 18h.01M3 6h.01M8 12h13M8 18h13M8 6h13"></path></svg>Workout</span>
+              <span class="segs" aria-hidden="true"><i class="ya"></i><i></i><i></i><i></i><i></i></span>
+              <span class="tiempo">11:53</span>
+            </div>
+            <div id="cont"></div>
+            <nav class="abajo" id="abajo" aria-label="Controles del entreno"></nav>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+(() => {
+  const PIE = '__VID_PIE__';
+  const ACOSTADO = '__VID_ACOSTADO__';
+  const TELS = {
+    se: { w: 375, h: 667, arriba: 20, abajo: 14, nombre: 'iPhone SE' },
+    '14': { w: 390, h: 844, arriba: 47, abajo: 34, nombre: 'iPhone 14' },
+    max: { w: 430, h: 932, arriba: 59, abajo: 34, nombre: 'iPhone Pro Max' },
+  };
+  /* El tamaño de todo sale de UNA escala: 1 es la letra normal; arriba de 1 crece (si sobra espacio), abajo se achica (si falta). */
+  const R1 = (x) => Math.round(x * 2) / 2;
+  const nivel = (k, extra = 0) => ({
+    t: R1(28 * k), c: R1(25 * k), s: R1(30 * k), g: R1(13 * k + extra), n: R1(17 * k), f: R1(Math.min(16, 14 * k)),
+    nombre: k >= 1.12 ? 'grande' : k >= 0.97 ? 'normal' : k >= 0.86 ? 'compacta' : 'mínima',
+  });
+  const IC = {
+    izq: '<path d="m15 18-6-6 6-6"></path>', der: '<path d="m9 18 6-6-6-6"></path>', check: '<path d="M20 6 9 17l-5-5"></path>',
+    lapiz: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path><path d="M15 5 19 9"></path>',
+    video: '<path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"></path><rect x="2" y="6" width="14" height="12" rx="2"></rect>',
+    play: '<path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"></path>',
+    timer: '<line x1="10" x2="14" y1="2" y2="2"></line><line x1="12" x2="15" y1="14" y2="11"></line><circle cx="12" cy="14" r="8"></circle>',
+  };
+  const svg = (n, t, cls = 'i') => `<svg class="${cls}" width="${t}" height="${t}" viewBox="0 0 24 24" aria-hidden="true">${IC[n]}</svg>`;
+  const $ = (id) => document.getElementById(id);
+  const valor = (name) => document.querySelector(`input[name="${name}"]:checked`).value;
+
+  const PASOS = {
+    uno: { titulo: 'Incline Bench Press', serie: [4, 5], cifras: [['3', 'reps'], ['85%', 'carga'], ['≈80', 'kg', true]], hoy: '3 reps · 80 kg' },
+    bi: { enc: 'Bi-serie 1 · A', titulo: 'Incline DB Press', serie: [2, 4], par: [['A', 'Incline DB Press', true], ['B', 'Chest Supported Row', false]], cifras: [['8', 'reps'], ['RIR 2', 'esfuerzo'], ['22.5', 'kg', true]], hoy: '8 reps · 22.5 kg' },
+  };
+  const NOTAS = {
+    corta: 'Codos a 45° y sube rápido.',
+    larga: 'Baja controlado en 3 segundos y sube rápido. Codos a 45°, escápulas juntas y pies firmes en el piso. Si la última rep sale lenta, quédate con este peso la próxima semana.',
+  };
+
+  function leer() {
+    return { tel: TELS[valor('tel')], vid: valor('vid'), set: valor('set'), nota: valor('nota'), crono: $('x-crono').checked, hoy: $('x-hoy').checked, ult: $('x-ult').checked, mej: valor('mej') === 'si' };
+  }
+
+  function tarjetaSerie(p, N) {
+    const [n, total] = p.serie;
+    const barra = '<div class="barrita" aria-hidden="true">' + Array.from({ length: total }, (_, i) => `<i class="${i < n - 1 ? 'ya' : i === n - 1 ? 'va' : ''}"></i>`).join('') + '</div>';
+    const cuenta = `<div class="cuenta"><small style="font-size:${N.f}px">Serie</small><b style="font-size:${N.s}px">${n}</b><small style="font-size:${N.f}px">de ${total}</small></div>`;
+    const par = p.par ? `<div class="par">${p.par.map(([l, nom, toca]) => `<div class="fila${toca ? ' toca' : ''}" style="font-size:${N.f - 0.5}px"><em>${l}</em>${nom}</div>`).join('')}</div>` : '';
+    return `<div class="serie">${p.par ? '<div class="tipo">Bi-serie</div>' : ''}${cuenta}${barra}${par}</div>`;
+  }
+  // Con mejoras: las 3 cifras en UNA tarjeta con rayitas (una sombra, no tres) y la de esfuerzo con su «i» de que se puede tocar.
+  const SE_EXPLICA = ['carga', 'esfuerzo', 'RIR', 'RPE', 'zona'];
+  function cifras(p, N, col, mej) {
+    const explica = (e) => mej && SE_EXPLICA.includes(e);
+    const info = (e) => explica(e) ? ` <span class="preg" aria-hidden="true">?</span>` : '';
+    return `<div class="cifras${col ? ' col' : ''}${mej ? ' una' : ''}">${p.cifras.map(([v, e, az]) => `<div class="cifra${explica(e) ? ' explica' : ''}"${explica(e) ? ` role="button" tabindex="0" data-que="${e}" aria-label="${v} ${e}. Toca para saber qué es"` : ''}><b class="${az ? 'az' : ''}" style="font-size:${v.length > 4 ? N.c - 4 : N.c}px">${v}</b><small>${e}${info(e)}</small></div>`).join('')}</div>`;
+  }
+  function video(cfg, w, h, mini = false) {
+    const src = cfg.vid === 'acostado' ? ACOSTADO : PIE;
+    return `<div class="vid${mini ? ' mini' : ''}" style="width:${Math.round(w)}px;height:${Math.round(h)}px"><img src="${src}" alt="Video del ejercicio">${mini || cfg.vid === 'acostado' ? `<span class="pl">${svg('play', mini ? 12 : 20, 'f')}</span>` : ''}</div>`;
+  }
+
+  /* Dibuja el paso con un acomodo (`modo`), un escalón de letra y un alto de video. */
+  function dibuja(cfg, N, modo, vh, notaCorta) {
+    const p = PASOS[cfg.set];
+    const W = cfg.tel.w - 36;
+    const g = N.g;
+    let h = '';
+    if (p.enc) h += `<div class="enc" style="margin-top:${g}px">${p.enc}</div>`;
+    const titulo = `<h2 class="tit" style="font-size:${N.t}px">${p.titulo}</h2>`;
+    if (modo === 'mini') {
+      h += `<div style="display:flex;align-items:center;gap:12px;margin-top:${p.enc ? 4 : g}px">${video(cfg, 52, 52, true)}${titulo}</div>`;
+    } else {
+      h += `<div style="margin-top:${p.enc ? 4 : g}px">${titulo}</div>`;
+    }
+    if (modo === 'lado') {
+      const vw = Math.min(vh * 428 / 759, W * 0.62);
+      h += `<div style="display:flex;gap:10px;margin-top:${g}px;height:${Math.round(vh)}px">${video(cfg, vw, vh)}<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">${tarjetaSerie(p, N)}${cifras(p, N, true, cfg.mej)}</div></div>`;
+    } else {
+      if (modo === 'arriba') {
+        const vw = cfg.vid === 'acostado' ? Math.min(W, vh * 16 / 9) : vh * 428 / 759;
+        h += `<div style="display:flex;justify-content:center;margin-top:${g}px">${video(cfg, vw, vh)}</div>`;
+      }
+      // La serie llena todo lo que dejan las cifras: sin hueco a la derecha.
+      h += `<div style="display:flex;gap:10px;margin-top:${g}px;align-items:stretch"><div style="flex:1;min-width:0;display:flex">${tarjetaSerie(p, N)}</div><div style="flex:0 0 36%;display:flex">${cifras(p, N, true, cfg.mej)}</div></div>`;
+    }
+    if (cfg.hoy) h += `<div class="hoyfue" style="margin-top:${g}px">${svg('check', 14)}Hoy: ${p.hoy}</div>`;
+    if (cfg.crono) h += `<div class="crono" style="margin-top:${g}px;font-size:${N.f + 1}px">${svg('timer', 18)}Empezar cronómetro · 0:45</div>`;
+    if (cfg.nota !== 'no') {
+      // Con mejoras: la nota dice de quién es («Nota de Carlos»), con su inicial; la letra un poco más suave para que las cifras manden.
+      if (cfg.mej) h += `<div class="quien" style="margin-top:${g}px"><span class="ini">C</span>Nota de Carlos</div>`;
+      h += `<p class="nota${notaCorta ? ' corta' : ''}${cfg.mej ? ' suave' : ''}" style="margin-top:${cfg.mej ? 6 : g}px;font-size:${N.n}px">${NOTAS[cfg.nota]}</p>`;
+      if (notaCorta) h += `<span class="vermas">Ver la nota completa</span>`;
+    }
+    $('cont').innerHTML = h;
+    $('pant').classList.toggle('mej', !!cfg.mej);
+  }
+
+  function barra(cfg) {
+    const rd = (cls, n, t, et) => `<button type="button" class="rd ${cls}" aria-label="${et}">${svg(n, t)}</button>`;
+    $('abajo').innerHTML = (cfg.ult ? '<div class="aviso">Mantén ✓ para terminar</div>' : '')
+      + '<div class="fila5">' + rd('', 'izq', 24, 'Anterior') + rd('c', 'lapiz', 22, 'Anotar resultados')
+      + `<button type="button" class="listo" aria-label="${cfg.ult ? 'Mantén para terminar' : 'Listo'}">${cfg.ult ? '<span class="anillo"></span>' : ''}${svg('check', 32)}</button>`
+      + rd('c', 'video', 24, 'Grabar técnica') + rd('', 'der', 24, 'Saltar') + '</div>';
+    $('abajo').style.paddingBottom = cfg.tel.abajo + 'px';
+  }
+
+  /* EL ACOMODO. Se mide el espacio entre las dos barras y se reparte en este orden:
+       1. Se elige dónde va el video (de pie: al lado de la serie y las cifras; si no cabe, arriba; acostado: arriba).
+       2. El video crece hasta llenar o hasta su tope.
+       3. Si aún sobra, TODO crece junto: nombre, cifras, serie y la nota del coach (una nota corta sale más grande).
+       4. Lo poco que quede se reparte entre los huecos.
+     Si falta espacio, al revés: la letra se achica (hasta la mínima) con el video en su mínimo; luego el video pasa a miniatura
+     junto al nombre y, al final, la nota larga se corta a 3 renglones con «Ver la nota completa». */
+  function acomoda() {
+    const cfg = leer();
+    const T = cfg.tel;
+    const pant = $('pant');
+    pant.style.width = T.w + 'px';
+    pant.style.height = T.h + 'px';
+    $('arriba').style.paddingTop = T.arriba + 'px';
+    barra(cfg);
+    const cont = $('cont');
+    cont.classList.remove('desborda');
+    const H = T.h - $('arriba').offsetHeight - $('abajo').offsetHeight - 8;
+    cont.style.height = H + 'px';
+    const W = T.w - 36;
+    // Cabe = no se pasa de alto Y nada se corta de lado («Serie 4 de 5», «≈80» en una sola línea).
+    const cabe = () => cont.scrollHeight <= H + 0.5 && [...cont.querySelectorAll('.cuenta, .cifra b')].every((e) => e.scrollWidth <= e.clientWidth + 1);
+    const prueba = (k, modo, vh, extra = 0, corta = false) => { dibuja(cfg, nivel(k, extra), modo, vh, corta); return cabe(); };
+    const maximo = (lo, hi, ok, vueltas = 12) => { for (let i = 0; i < vueltas && hi - lo > 0.01; i++) { const m = (lo + hi) / 2; if (ok(m)) lo = m; else hi = m; } return lo; };
+    const modos = cfg.vid === 'pie' ? ['lado', 'arriba'] : cfg.vid === 'acostado' ? ['arriba'] : ['sin'];
+    const vmin = cfg.vid === 'acostado' ? 120 : 190;
+    // Con espacio de sobra el cuadro del video puede ser un poco más alto que el video: se recorta de los lados (hasta ~11 % de pie, ~15 % acostado).
+    const vmax = (modo) => modo === 'lado' ? Math.min(W * 0.62 * 2, H * 0.7) : cfg.vid === 'acostado' ? Math.min(W * 0.66, H * 0.45) : H * 0.45;
+    const conVideo = (modo) => modo === 'lado' || modo === 'arriba';
+    let r = null;
+    // Con la letra normal: el primer acomodo donde todo cabe.
+    for (const modo of modos) {
+      if (!prueba(1, modo, conVideo(modo) ? vmin : 0)) continue;
+      const vh = conVideo(modo) ? maximo(vmin, Math.max(vmin, vmax(modo)), (v) => prueba(1, modo, v)) : 0;
+      // Sin video no hay nada elástico: la serie, las cifras y la nota pueden crecer más.
+      const k = maximo(1, modo === 'sin' ? 1.8 : 1.4, (x) => prueba(x, modo, vh));
+      const extra = maximo(0, 20, (e) => prueba(k, modo, vh, e), 8);
+      r = { modo, vh, k, extra };
+      break;
+    }
+    // No cabe con la letra normal: la letra baja (hasta 0.74) con el video en su mínimo; gana el acomodo que deja la letra más grande.
+    if (!r) {
+      for (const modo of modos) {
+        const v0 = conVideo(modo) ? vmin : 0;
+        if (!prueba(0.74, modo, v0)) continue;
+        const k = maximo(0.74, 1, (x) => prueba(x, modo, v0));
+        if (!r || k > r.k) r = { modo, vh: v0, k, extra: 0 };
+      }
+      if (r && conVideo(r.modo)) r.vh = maximo(vmin, Math.max(vmin, vmax(r.modo)), (v) => prueba(r.k, r.modo, v));
+    }
+    let corta = false;
+    if (!r) {
+      const modo = cfg.vid === 'no' ? 'sin' : 'mini';
+      if (prueba(0.74, modo, 0)) r = { modo, vh: 0, k: maximo(0.74, 1, (x) => prueba(x, modo, 0)), extra: 0 };
+      else {
+        corta = true;
+        r = { modo, vh: 0, k: 0.74, extra: 0 };
+        if (!prueba(0.74, modo, 0, 0, true)) cont.classList.add('desborda');
+      }
+    }
+    dibuja(cfg, nivel(r.k, r.extra), r.modo, r.vh, corta);
+    const ultimo = cont.lastElementChild;
+    const usado = ultimo ? ultimo.offsetTop + ultimo.offsetHeight - cont.offsetTop : 0;
+    const sobra = Math.max(0, Math.round(H - usado));
+    const NOMBRES = { lado: 'Video al lado', arriba: 'Video arriba', sin: 'Sin video', mini: 'Video en miniatura' };
+    $('l-esp').textContent = `${Math.round(H)} px entre las barras`;
+    $('l-modo').textContent = NOMBRES[r.modo] + (corta ? ' · nota cortada' : '');
+    $('l-letra').textContent = `${nivel(r.k).nombre} (${Math.round(r.k * 100)} %)`;
+    $('l-vid').textContent = r.vh ? `${Math.round(r.vh)} px de alto` : (r.modo === 'mini' ? 'se abre al tocarlo' : '–');
+    const ok = !cont.classList.contains('desborda');
+    $('l-ok').textContent = ok ? `Sí · sobran ${sobra} px` : 'No: hay que bajar';
+    $('l-ok').className = ok ? 'bien' : '';
+    escala(T);
+    ponGlobo(cfg);
+  }
+
+  /* QUÉ SIGNIFICA: la cifra de esfuerzo se toca y abre una hojita. La primera vez que el atleta ve una, un globo le dice que se puede tocar. */
+  const QUE = {
+    carga: ['Carga: 85 %', 'Es el porcentaje de tu máximo (tu 1RM) en este ejercicio. Con tu máximo de 94 kg, el 85 % son ≈80 kg.'],
+    esfuerzo: ['RIR 2', 'Repeticiones en reserva. Termina la serie sintiendo que todavía te quedaban 2 repeticiones más. No llegues al fallo.'],
+  };
+  function ponGlobo(cfg) {
+    const viejo = $('globo');
+    if (viejo) viejo.remove();
+    const c = $('cont').querySelector('.cifra.explica');
+    if (!c || !cfg.mej || !$('x-primera').checked) return;
+    const pant = $('pant');
+    const esc = pant.getBoundingClientRect().width / pant.offsetWidth;
+    const rc = c.getBoundingClientRect(), rp = pant.getBoundingClientRect();
+    const g = document.createElement('div');
+    g.id = 'globo'; g.className = 'globo'; g.textContent = 'Toca para saber qué es';
+    pant.appendChild(g);
+    g.style.right = Math.max(8, (rp.right - rc.right) / esc + 4) + 'px';
+    g.style.top = ((rc.top - rp.top) / esc - g.offsetHeight - 8) + 'px';
+  }
+  function abreQue(que) {
+    const [tit, txt] = QUE[que] ?? [que, ''];
+    $('x-primera').checked = false;
+    if ($('globo')) $('globo').remove();
+    const capa = document.createElement('div');
+    capa.className = 'capa';
+    capa.innerHTML = `<div class="hojita" role="dialog" aria-label="${tit}" style="padding-bottom:${leer().tel.abajo + 16}px"><h3>${tit}</h3><p>${txt}</p><button type="button">Entendido</button></div>`;
+    capa.addEventListener('click', (e) => { if (e.target === capa || e.target.tagName === 'BUTTON') capa.remove(); });
+    $('pant').appendChild(capa);
+  }
+  $('cont').addEventListener('click', (e) => { const c = e.target.closest('.cifra.explica'); if (c) abreQue(c.dataset.que); });
+  $('cont').addEventListener('keydown', (e) => { const c = e.target.closest('.cifra.explica'); if (c && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); abreQue(c.dataset.que); } });
+
+  function escala(T) {
+    const esc = $('escenario');
+    const ancho = esc.clientWidth || T.w;
+    const alto = Math.max(420, Math.min(window.innerHeight - 40, 960));
+    const s = Math.min(1, (ancho - 24) / (T.w + 20), alto / (T.h + 20));
+    $('telefono').style.transform = `translate(10px,10px) scale(${s})`;
+    $('marco').style.width = (T.w + 20) * s + 'px';
+    $('marco').style.height = (T.h + 20) * s + 'px';
+  }
+
+  document.querySelectorAll('.ctl input').forEach((i) => i.addEventListener('change', acomoda));
+  window.addEventListener('resize', () => escala(leer().tel));
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(acomoda);
+  acomoda();
+})();
+</script>

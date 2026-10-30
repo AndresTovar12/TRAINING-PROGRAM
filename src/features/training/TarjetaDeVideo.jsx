@@ -52,8 +52,10 @@ const PISTA = 'desliza-videos';
  *
  * `enCarta` es para cuando el video va DENTRO de otra tarjeta (el descanso: «Sigue» con su video): sin margen de arriba ni sombra propia y con la esquina
  * menos redonda, para que se vea una sola pieza. `altoMaximo` (una medida CSS, por defecto 38vh) es lo más alto que puede ser.
+ * En el entreno que se acomoda solo (30 oct 2026, `lib/acomodoDelPaso.js`) el paso le dice el alto (`alto`, p. ej. `var(--vh)`) y lo más ancho que puede ser
+ * (`anchoMaximo`), sin margen de arriba (`sinMargen`); la tarjeta dice su forma en `data-aspecto` para que el paso sepa si el video es de pie.
  */
-export default function TarjetaDeVideo({ videos, portada, nombre, enCarta = false, altoMaximo = ALTO_MAXIMO }) {
+export default function TarjetaDeVideo({ videos, portada, nombre, enCarta = false, altoMaximo = ALTO_MAXIMO, alto = null, anchoMaximo = '100%', sinMargen = false }) {
   const [reproduciendo, setReproduciendo] = useState(false);
   const [angulo, setAngulo] = useState(0);
   /* LA PISTA «DESLIZA ›» sale en el primer video hasta que esta persona cambie de video una vez, por el medio que sea. Se espera
@@ -94,7 +96,7 @@ export default function TarjetaDeVideo({ videos, portada, nombre, enCarta = fals
   // Un video de fuera se incrusta tal cual (ver `VideoRecortado`): no cabe en la tarjeta.
   if (reproduciendo && externo) {
     return (
-      <div style={{ marginTop: enCarta ? 0 : 14 }}>
+      <div style={{ marginTop: enCarta || sinMargen ? 0 : 14 }}>
         <VideoRecortado video={video} estilo={{ width: '100%', borderRadius: enCarta ? 16 : 20 }} />
         <Puntos videos={videos} activo={angulo} onIr={cambia} enFlujo claro />
       </div>
@@ -102,11 +104,11 @@ export default function TarjetaDeVideo({ videos, portada, nombre, enCarta = fals
   }
 
   return (
-    <div style={{ marginTop: enCarta ? 0 : 14 }}>
-      <div style={{
+    <div style={{ marginTop: enCarta || sinMargen ? 0 : 14 }}>
+      <div data-aspecto={aspecto} style={{
         position: 'relative', overflow: 'hidden', margin: '0 auto', borderRadius: enCarta ? 16 : 20, background: '#0E1015',
         boxShadow: enCarta ? 'none' : '0 8px 24px rgba(17,19,24,0.14)',
-        aspectRatio: `${aspecto}`, width: `min(100%, calc(${altoMaximo} * ${aspecto}))`, maxWidth: 480,
+        aspectRatio: `${aspecto}`, width: alto ? `min(${anchoMaximo}, calc(${alto} * ${aspecto}))` : `min(100%, calc(${altoMaximo} * ${aspecto}))`, maxWidth: 480,
       }}>
         {propio && (reproduciendo || adelanta) && (
           <VideoRecortado
