@@ -1,10 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Bell, BellOff, Check, ChevronLeft, ChevronRight, List, MapPin, Minus, Pencil, Play, Plus, Timer, Video, X } from 'lucide-react';
+import { Bell, BellOff, Check, ChevronLeft, ChevronRight, Flag, List, MapPin, Minus, Pause, Pencil, Play, Plus, Timer, Video, X } from 'lucide-react';
 import { LT, KP, FONT, NUM_STYLE, UI } from '@/lib/theme';
 import { textoDeResultado } from '@/lib/formatos';
 import { relojDe } from '@/lib/entrenoDatos';
 import { acomodaPaso } from '@/lib/acomodoDelPaso';
 import { useAviso } from '@/components/AvisoPasajero';
+import { vibra } from '@/lib/avisosNativos';
 
 /**
  * Las pantallas del modo entreno: lo que se DIBUJA. Qué paso toca, cuándo avisar y qué se guarda lo decide `EntrenoDelDia`; aquí no
@@ -369,21 +370,86 @@ const halo = (c) => (/^#[0-9a-f]{6}$/i.test(c || '') ? `${c}33` : 'rgba(30,64,22
 /**
  * LA BARRA DE ABAJO, UNA SOLA FILA (Andrés, 30 oct 2026, con su captura): cinco botones redondos sin palabras, ‹ Anterior · ✎ Anotar · ✓ Listo · 🎥 Técnica · › Saltar.
  * Antes eran hasta tres renglones de botones (234 px con el borde del iPhone); ahora ~124. Cada botón dice lo que hace en `aria-label`.
- * Un lugar que no aplica (sin «Anotar», sin cámara) queda VACÍO y no se mueven los demás: Anterior, el centro y Saltar siempre están donde mismo.
- * `centro`: el botón grande (`BotonDelCentro`); `aviso`: una línea encima («Mantén ✓ para terminar»); `extra`: un botón de texto encima (el GPS).
+ * LOS CINCO LUGARES SIEMPRE LLENOS (Andrés, 30 oct 2026, con su video): lo que no aplica sale APAGADO en su lugar (la cámara sin coach, el lápiz sin
+ * nada que anotar, la campana y el +30 de un descanso sin cuenta). Antes un lugar vacío debía guardarse, pero `TecnicaRedonda` sin cámara llegaba como
+ * elemento que no dibuja nada, el lugar no se guardaba y el ✓ caía 45 px a la derecha. ‹ siempre es «anterior», › siempre «siguiente».
+ * `centro`: el botón grande (`BotonDelCentro`); `aviso`: una línea encima; `extra`: un botón de texto encima (el GPS).
+ * `terminar`: el último paso. El centro es `CentroDeTerminar` (verde, con bandera, se MANTIENE) y la barra enseña cuánto lleva por FUERA del dedo: una
+ * línea verde de lado a lado arriba de la barra y «Sigue presionando…» en el aviso.
  */
-function BarraRedonda({ izquierda, segundo, centro, cuarto, derecha, aviso = null, extra = null }) {
+function BarraRedonda({ izquierda, segundo, centro, cuarto, derecha, aviso = null, extra = null, terminar = null }) {
+  const [llevado, setLlevado] = useState(0); // 0 a 1 mientras se mantiene «Terminar»
   const lugar = (b) => b ?? <span aria-hidden="true" style={{ width: 56, height: 56, flexShrink: 0 }} />;
+  const textoDelAviso = terminar ? (llevado > 0 ? 'Sigue presionando…' : 'Último ejercicio · mantén la bandera para terminar') : aviso;
   return (
-    <div style={{ flexShrink: 0, padding: '8px 0 calc(12px + env(safe-area-inset-bottom))' }}>
+    <div style={{ position: 'relative', flexShrink: 0, padding: '8px 0 calc(12px + env(safe-area-inset-bottom))' }}>
+      {terminar && <div aria-hidden="true" style={{ position: 'absolute', left: 0, top: 0, height: 4, width: `${llevado * 100}%`, background: LT.mint, pointerEvents: 'none' }} />}
       <div style={{ ...COLUMNA, padding: '0 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
         {extra}
-        {aviso && <div style={{ textAlign: 'center', fontSize: 13, fontWeight: 700, color: LT.text2 }}>{aviso}</div>}
+        {textoDelAviso && <div style={{ textAlign: 'center', fontSize: 13, fontWeight: 700, color: terminar && llevado > 0 ? LT.mint : LT.text2 }}>{textoDelAviso}</div>}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          {lugar(izquierda)}{lugar(segundo)}{centro}{lugar(cuarto)}{lugar(derecha)}
+          {lugar(izquierda)}{lugar(segundo)}
+          {terminar ? <CentroDeTerminar onTermina={terminar} alAvanzar={setLlevado} /> : centro}
+          {lugar(cuarto)}{lugar(derecha)}
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * «Terminar» en el último paso (Andrés, 30 oct 2026): verde y con bandera para que no se confunda con el ✓ de los demás pasos, y se MANTIENE 1 s.
+ * El dedo tapa el botón, así que lo que se llena va POR FUERA: un anillo verde más grande que el dedo (aquí) y la línea de la barra (`alAvanzar`).
+ * Vibra al empezar y al terminar. Soltar antes no hace nada; un toque corto avisa cómo se hace.
+ */
+const DURA_TERMINAR = 1000;
+const VUELTA_DEL_ANILLO = 2 * Math.PI * 48;
+function CentroDeTerminar({ onTermina, alAvanzar }) {
+  const { avisa } = useAviso();
+  const [k, setK] = useState(0);
+  const corre = useRef(null); // { desde, cuadro }
+  const termino = useRef(onTermina);
+  useEffect(() => { termino.current = onTermina; });
+  useEffect(() => () => { if (corre.current) cancelAnimationFrame(corre.current.cuadro); }, []);
+  const pon = (x) => { setK(x); alAvanzar?.(x); };
+  const empieza = (e) => {
+    if (corre.current || (e.type === 'pointerdown' && e.pointerType === 'mouse' && e.button !== 0)) return;
+    vibra('toque');
+    const desde = performance.now();
+    const paso = (t) => {
+      const x = Math.min(1, (t - desde) / DURA_TERMINAR);
+      pon(x);
+      if (x >= 1) { corre.current = null; vibra('fin'); termino.current(); pon(0); return; }
+      corre.current.cuadro = requestAnimationFrame(paso);
+    };
+    corre.current = { desde, cuadro: requestAnimationFrame(paso) };
+  };
+  const suelta = (e) => {
+    if (!corre.current) return;
+    cancelAnimationFrame(corre.current.cuadro);
+    const duro = performance.now() - corre.current.desde;
+    corre.current = null;
+    pon(0);
+    if (duro < 400 && (e.type === 'pointerup' || e.type === 'keyup')) avisa('Mantén presionada la bandera para terminar.');
+  };
+  const tecla = (e) => (e.key === 'Enter' || e.key === ' ') && !e.repeat;
+  return (
+    <button
+      type="button" aria-label="Mantén para terminar el entreno" draggable={false}
+      onPointerDown={empieza} onPointerUp={suelta} onPointerLeave={suelta} onPointerCancel={suelta}
+      onKeyDown={(e) => { if (tecla(e)) { e.preventDefault(); empieza(e); } }} onKeyUp={(e) => { if (tecla(e)) suelta(e); }}
+      onContextMenu={(e) => e.preventDefault()}
+      style={{
+        position: 'relative', width: 74, height: 74, borderRadius: '50%', flexShrink: 0, border: 'none', display: 'grid', placeItems: 'center', color: '#fff', cursor: 'pointer', padding: 0,
+        /* estilo-ok: el centro de «Terminar», verde con su halo (maqueta del 30 oct 2026) */ background: `linear-gradient(160deg, ${LT.mint} 0%, ${LT.mint} 45%, #0B3D24 170%)`, boxShadow: `0 0 0 8px ${halo(LT.mint)}, 0 14px 30px rgba(17,19,24,0.25)`,
+        touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none', WebkitTapHighlightColor: 'transparent',
+      }}
+    >
+      <svg aria-hidden="true" viewBox="0 0 102 102" style={{ position: 'absolute', inset: -14, width: 102, height: 102, pointerEvents: 'none', transform: 'rotate(-90deg)' }}>
+        <circle cx="51" cy="51" r="48" fill="none" stroke={LT.mint} strokeWidth="5" strokeLinecap="round" strokeDasharray={VUELTA_DEL_ANILLO} strokeDashoffset={VUELTA_DEL_ANILLO * (1 - k)} style={{ opacity: k > 0 ? 1 : 0 }} />
+      </svg>
+      <Flag size={30} strokeWidth={2.4} />
+    </button>
   );
 }
 
@@ -407,7 +473,8 @@ function BotonRedondo({ etiqueta, onClick, disabled = false, color = LT.text, ch
 // La cámara de «Grabar técnica» como botón de la barra: con su ✓ verde si ya mandó la de esta serie. Mientras la función no sale, la misma cámara abre la hoja que
 // explica que viene pronto (`onClick` ya lo decide `EntrenoDelDia`).
 function TecnicaRedonda({ tecnica, color }) {
-  if (!tecnica) return null;
+  // Sin a quién mandarla (un workout propio, sin coach) o en un paso que no es ejercicio: la cámara sale APAGADA en su lugar (Andrés, 30 oct 2026).
+  if (!tecnica) return <BotonRedondo etiqueta="Grabar técnica (no disponible aquí)" disabled><Video size={23} /></BotonRedondo>;
   return (
     <BotonRedondo
       etiqueta={tecnica.enviada ? `${tecnica.etiqueta} (ya mandaste una)` : tecnica.etiqueta} onClick={tecnica.onClick} color={tecnica.enviada ? LT.mint : color}
@@ -419,7 +486,7 @@ function TecnicaRedonda({ tecnica, color }) {
 }
 
 /**
- * El botón grande del centro: «Listo» (✓), «Empezar»/«Seguir» (▶) o, en el último paso, ✓ que se MANTIENE para terminar (con su anillo que se llena; ver `BotonDeMantener`).
+ * El botón grande del centro: «Listo» (✓), «Empezar»/«Seguir» (▶) o «Pausar» (⏸, el descanso). El de terminar es `CentroDeTerminar`.
  */
 function BotonDelCentro({ tipo = 'listo', etiqueta, onClick, color = null }) {
   const c = color || LT.blue;
@@ -427,15 +494,9 @@ function BotonDelCentro({ tipo = 'listo', etiqueta, onClick, color = null }) {
     width: 74, height: 74, borderRadius: '50%', flexShrink: 0, border: 'none', display: 'grid', placeItems: 'center', color: '#fff', cursor: 'pointer', padding: 0,
     /* estilo-ok: el botón del centro de la captura de Andrés (30 oct 2026), del color del tipo con su halo */ background: `linear-gradient(160deg, ${c} 0%, ${c} 45%, #15171E 160%)`, boxShadow: `0 0 0 8px ${halo(c)}, 0 14px 30px rgba(17,19,24,0.25)`, touchAction: 'manipulation',
   };
-  const icono = tipo === 'empezar' ? <Play size={28} fill="#fff" style={{ marginLeft: 3 }} /> : <Check size={34} strokeWidth={3} />;
-  if (tipo === 'mantener') {
-    return (
-      <BotonDeMantener
-        onTermina={onClick} etiqueta={etiqueta || 'Mantén para terminar'} texto={icono} relleno="rgba(255,255,255,0.28)" fondo={cara.background} alto={74} radio={37}
-        sombra={cara.boxShadow} estilo={{ width: 74, minHeight: 74, height: 74, flexShrink: 0, display: 'grid', placeItems: 'center' }}
-      />
-    );
-  }
+  const icono = tipo === 'empezar' ? <Play size={28} fill="#fff" style={{ marginLeft: 3 }} />
+    : tipo === 'pausa' ? <Pause size={28} fill="#fff" />
+      : <Check size={34} strokeWidth={3} />;
   return <button type="button" onClick={onClick} aria-label={etiqueta} title={etiqueta} className="kp-press" style={cara}>{icono}</button>;
 }
 
@@ -530,14 +591,12 @@ export function PantallaDePaso({
   const barra = (
     <BarraRedonda
       izquierda={<BotonRedondo etiqueta="Anterior" onClick={onAnterior} disabled={!puedeAnterior}><ChevronLeft size={26} /></BotonRedondo>}
-      segundo={etiquetaDeCambiar ? <BotonRedondo etiqueta={etiquetaDeCambiar} onClick={onCambiar} color={c}><Pencil size={22} /></BotonRedondo> : null}
-      centro={esUltimo && onTerminar
-        ? <BotonDelCentro tipo="mantener" etiqueta="Mantén para terminar" onClick={onTerminar} color={color} />
-        : <BotonDelCentro etiqueta="Listo" onClick={onListo} color={color} />}
-      cuarto={paso.tipo === 'ejercicio' ? <TecnicaRedonda tecnica={tecnica} color={c} /> : null}
+      segundo={<BotonRedondo etiqueta={etiquetaDeCambiar || 'Anotar (no hay nada que anotar aquí)'} onClick={onCambiar} disabled={!etiquetaDeCambiar} color={c}><Pencil size={22} /></BotonRedondo>}
+      centro={<BotonDelCentro etiqueta="Listo" onClick={onListo} color={color} />}
+      cuarto={<TecnicaRedonda tecnica={paso.tipo === 'ejercicio' ? tecnica : null} color={c} />}
       derecha={<BotonRedondo etiqueta="Saltar" onClick={onSaltar}><ChevronRight size={26} /></BotonRedondo>}
-      // En el último paso que queda, ✓ se MANTIENE para terminar: terminar es un solo paso, sin pantalla de «terminado».
-      aviso={esUltimo && onTerminar ? 'Mantén ✓ para terminar' : null}
+      // En el último paso que queda, la bandera verde se MANTIENE para terminar: terminar es un solo paso, sin pantalla de «terminado».
+      terminar={esUltimo && onTerminar ? onTerminar : null}
       // Un paso de 200 m o más que se hace sin mapa (eligió «Sin GPS» o cerró el mapa): se puede volver a él.
       extra={onUsarGps ? <BotonDeTexto onClick={onUsarGps} color={c}><MapPin size={16} /> Usar el mapa (GPS)</BotonDeTexto> : null}
     />
@@ -711,12 +770,10 @@ export function PantallaDeReloj({ paso, detalle, resultado, puedeAnterior, tecni
         segundo={<BotonRedondo etiqueta={resultado ? 'Cambiar el resultado' : 'Anotar sin reloj'} onClick={onAnotar} color={color || LT.blue}><Pencil size={22} /></BotonRedondo>}
         centro={!resultado
           ? <BotonDelCentro tipo="empezar" etiqueta={enMarcha ? 'Seguir el reloj' : 'Empezar el reloj'} onClick={onIniciar} color={color} />
-          : esUltimo && onTerminar
-            ? <BotonDelCentro tipo="mantener" etiqueta="Mantén para terminar" onClick={onTerminar} color={color} />
-            : <BotonDelCentro etiqueta="Listo" onClick={onListo} color={color} />}
+          : <BotonDelCentro etiqueta="Listo" onClick={onListo} color={color} />}
         cuarto={<TecnicaRedonda tecnica={tecnica} color={color || LT.blue} />}
         derecha={<BotonRedondo etiqueta="Saltar" onClick={onSaltar}><ChevronRight size={26} /></BotonRedondo>}
-        aviso={resultado && esUltimo && onTerminar ? 'Mantén ✓ para terminar' : null}
+        terminar={resultado && esUltimo && onTerminar ? onTerminar : null}
       />
     </>
   );
@@ -735,7 +792,7 @@ export function PantallaDeReloj({ paso, detalle, resultado, puedeAnterior, tecni
  * `video` y se VE aquí, en la tarjeta de «Sigue»: Andrés (10 oct 2026): «que mientras está el atleta en descanso pueda ver el video del ejercicio que sigue».
  * Sin video, «Sigue» es la tarjeta de siempre, abajo junto a los botones. Sin frases que expliquen el botón: el botón ya dice «Seguir».
  */
-export function PantallaDeDescanso({ descanso, siguiente, video, sonido, puedeAnterior, onSeguir, onMas, onAnterior, onSonido, color = null }) {
+export function PantallaDeDescanso({ descanso, siguiente, video, sonido, puedeAnterior, onSeguir, onMas, onPausa, onAnterior, onSonido, color = null }) {
   const { paso } = descanso;
   const conCuenta = descanso.restan !== null;
   const conVideo = !!siguiente && !!video;
@@ -761,12 +818,13 @@ export function PantallaDeDescanso({ descanso, siguiente, video, sonido, puedeAn
           <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: -0.2, color: LT.text }}>Descanso</div>
           {conCuenta ? (
             <>
-              <div role="timer" style={{ fontSize: tamano, fontWeight: 800, lineHeight: 1.05, letterSpacing: -3, color: descanso.vencido ? LT.text2 : LT.text, margin: conVideo ? '4px 0 12px' : '8px 0 14px', ...NUM_STYLE }}>
+              <div role="timer" style={{ fontSize: tamano, fontWeight: 800, lineHeight: 1.05, letterSpacing: -3, color: descanso.vencido || descanso.pausado ? LT.text3 : LT.text, margin: conVideo ? '4px 0 12px' : '8px 0 14px', ...NUM_STYLE }}>
                 {grande}
               </div>
               <div style={{ height: 6, borderRadius: 3, background: 'rgba(17,19,24,0.12)', margin: '0 28px', overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${Math.round((descanso.vencido ? 1 : avance) * 100)}%`, background: color || LT.blue, borderRadius: 3, transition: 'width 0.25s linear' }} />
               </div>
+              {descanso.pausado && <div style={{ marginTop: 12, fontSize: 14, fontWeight: 800, color: LT.text2 }}>En pausa</div>}
               {paso.segMax && <div style={{ marginTop: 14, fontSize: 13.5, fontWeight: 700, color: LT.text3, ...NUM_STYLE }}>Puedes llegar hasta {relojDe(paso.segMax + descanso.extra)}</div>}
             </>
           ) : (
@@ -780,7 +838,9 @@ export function PantallaDeDescanso({ descanso, siguiente, video, sonido, puedeAn
           )}
         </div>
       </div>
-      {/* «Sigue» va arriba de la barra, como siempre; la barra es la redonda (30 oct 2026): ‹ Anterior · 🔔 aviso · ▶ Seguir · +30 s. */}
+      {/* «Sigue» va arriba de la barra, como siempre. La barra (30 oct 2026, maqueta «Botones del entreno»): ‹ Anterior · 🔔 aviso · ⏸ Pausar · +30 s · › Saltar
+          descanso. Con cuenta, el centro maneja el reloj (pausa y reanuda); › es «siguiente», igual que en el ejercicio. Sin cuenta (un descanso de texto),
+          el centro es ✓ y la campana y el +30 salen apagados. */}
       {siguiente && !conVideo && (
         <div style={{ ...COLUMNA, padding: '0 18px', flexShrink: 0 }}>
           <div style={{
@@ -792,14 +852,16 @@ export function PantallaDeDescanso({ descanso, siguiente, video, sonido, puedeAn
       )}
       <BarraRedonda
         izquierda={<BotonRedondo etiqueta="Anterior" onClick={onAnterior} disabled={!puedeAnterior}><ChevronLeft size={26} /></BotonRedondo>}
-        segundo={conCuenta ? (
-          <BotonRedondo etiqueta={sonido ? 'Aviso al terminar: prendido' : 'Aviso al terminar: apagado'} onClick={onSonido} color={sonido ? (color || LT.blue) : LT.text3}>
+        segundo={(
+          <BotonRedondo etiqueta={sonido ? 'Aviso al terminar: prendido' : 'Aviso al terminar: apagado'} onClick={onSonido} disabled={!conCuenta} color={sonido ? (color || LT.blue) : LT.text3}>
             {sonido ? <Bell size={22} /> : <BellOff size={22} />}
           </BotonRedondo>
-        ) : null}
-        centro={<BotonDelCentro tipo="empezar" etiqueta="Seguir" onClick={onSeguir} color={color} />}
-        cuarto={conCuenta ? <BotonRedondo etiqueta="30 segundos más" onClick={onMas}>+30</BotonRedondo> : null}
-        derecha={null}
+        )}
+        centro={conCuenta && onPausa
+          ? <BotonDelCentro tipo={descanso.pausado ? 'empezar' : 'pausa'} etiqueta={descanso.pausado ? 'Reanudar el descanso' : 'Pausar el descanso'} onClick={onPausa} color={color} />
+          : <BotonDelCentro etiqueta="Seguir" onClick={onSeguir} color={color} />}
+        cuarto={<BotonRedondo etiqueta="30 segundos más" onClick={onMas} disabled={!conCuenta}>+30</BotonRedondo>}
+        derecha={<BotonRedondo etiqueta="Saltar el descanso" onClick={onSeguir}><ChevronRight size={26} /></BotonRedondo>}
       />
     </>
   );

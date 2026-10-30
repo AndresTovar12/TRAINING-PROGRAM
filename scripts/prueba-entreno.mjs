@@ -4,7 +4,7 @@
 //   node scripts/prueba-entreno.mjs
 import assert from 'node:assert/strict';
 import {
-  MAX_PASOS, FORMATO_DE_LAPSOS, rondasDelSet, deporteDelTipo, pasosDeLaSesion, leeAvance, iniciaEntreno, marcaListo, saltaPaso, vuelveAtras, masDescanso,
+  MAX_PASOS, FORMATO_DE_LAPSOS, rondasDelSet, deporteDelTipo, pasosDeLaSesion, leeAvance, iniciaEntreno, marcaListo, saltaPaso, vuelveAtras, masDescanso, pausaDescanso,
   terminaEntreno, reabreEntreno, ocultaEntreno, reiniciaSiTerminado, vistaDelEntreno, empiezaPaso, quitaCronometro, cuentaDe,
 } from '../src/lib/entreno.js';
 import { ponFormato } from '../src/lib/formatos.js';
@@ -397,6 +397,20 @@ const lower = {
   v = vistaDelEntreno(plan, av, tListo + 150_000);
   assert.deepEqual([v.descanso.seg, v.descanso.extra, v.descanso.restan, v.descanso.vencido], [180, 30, 30, false]);
   assert.equal(masDescanso(plan, masDescanso(plan, av, 30), 30).extra['d.0.1.0'], 90);
+  // Pausa (30 oct 2026): a 30 s de terminar se pausa 20 s; la cuenta se queda en 30, no avanza sola y al reanudar termina 20 s más tarde.
+  {
+    let p = pausaDescanso(plan, av, tListo + 150_000);
+    assert.equal(p.pausas['d.0.1.0'], tListo + 150_000);
+    v = vistaDelEntreno(plan, p, tListo + 400_000);
+    assert.deepEqual([v.descanso.pausado, v.descanso.restan, v.descanso.vencido, v.descanso.fin], [true, 30, false, null]);
+    p = pausaDescanso(plan, p, tListo + 170_000);
+    assert.equal(p.pausas, undefined, 'sin pausas no se guarda la llave');
+    assert.equal(p.extra['d.0.1.0'], 50);
+    v = vistaDelEntreno(plan, p, tListo + 170_000);
+    assert.deepEqual([v.descanso.pausado, v.descanso.restan, v.descanso.fin], [false, 30, tListo + 200_000]);
+    // «Anterior» desde un descanso en pausa se lleva también la pausa.
+    assert.equal(vuelveAtras(plan, pausaDescanso(plan, av, tListo + 150_000)).pausas, undefined);
+  }
   // «Seguir»: el descanso no cuenta como paso hecho.
   av = marcaListo(plan, av, tListo + 170_000);
   v = vistaDelEntreno(plan, av, tListo + 171_000);
@@ -474,7 +488,7 @@ const lower = {
 
 /* ---- Lo que llega de la base puede venir roto ---- */
 {
-  const vacio = { nombre: null, inicio: null, fin: null, oculto: false, hechos: {}, saltados: {}, extra: {}, empezados: {} };
+  const vacio = { nombre: null, inicio: null, fin: null, oculto: false, hechos: {}, saltados: {}, extra: {}, empezados: {}, pausas: {} };
   for (const basura of [undefined, null, 'x', 7, [], { hechos: [] }, { hechos: 'a', saltados: 5, inicio: 'ayer', extra: { a: -1, b: 'x', c: 0 } }]) {
     assert.deepEqual(leeAvance(basura), vacio);
   }

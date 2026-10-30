@@ -17,7 +17,7 @@ import { palabrasDelEntreno } from '@/lib/entrenoPalabras';
 import { FUNCIONES } from '@/lib/funciones';
 import { relojAMedias } from '@/lib/relojGuardado';
 import {
-  cuentaDe, empiezaPaso, esElUltimoPaso, iniciaEntreno, marcaListo, masDescanso as sumaDescanso, pasosDeLaSesion, quitaCronometro, saltaPaso, terminaEntreno, vistaDelEntreno, vuelveAtras,
+  cuentaDe, empiezaPaso, esElUltimoPaso, iniciaEntreno, marcaListo, masDescanso as sumaDescanso, pausaDescanso, pasosDeLaSesion, quitaCronometro, saltaPaso, terminaEntreno, vistaDelEntreno, vuelveAtras,
 } from '@/lib/entreno';
 import { useAviso } from '@/components/AvisoPasajero';
 import {
@@ -347,6 +347,12 @@ export default function EntrenoDelDia({
     return () => clearTimeout(t);
   }, [descansoVencido]);
   const masDescanso = () => escribe((prev) => ({ ...prev, entreno: sumaDescanso(plan, prev?.entreno, 30) }));
+  // El botón grande del descanso pausa y reanuda la cuenta (30 oct 2026); en pausa no avanza sola ni deja aviso del teléfono (su `fin` es `null`).
+  const pausarDescanso = () => {
+    const t = Date.now();
+    setAhora(t);
+    escribe((prev) => ({ ...prev, entreno: pausaDescanso(plan, prev?.entreno, t) }));
+  };
   const empezarCronometro = () => {
     const t = Date.now();
     setAhora(t);
@@ -475,7 +481,7 @@ export default function EntrenoDelDia({
     pantalla = (
       <PantallaDeDescanso
         descanso={vista.descanso} siguiente={siguienteDeDescanso} video={videoDe(exDe(vista.siguiente), mediosDelSiguiente, { enCarta: true, altoMaximo: '30vh' })} sonido={sonido}
-        puedeAnterior={vista.puedeAnterior} onSeguir={seguirDelDescanso} onMas={masDescanso} onAnterior={anterior} onSonido={alternaSonido} color={colorDelTipo}
+        puedeAnterior={vista.puedeAnterior} onSeguir={seguirDelDescanso} onMas={masDescanso} onPausa={pausarDescanso} onAnterior={anterior} onSonido={alternaSonido} color={colorDelTipo}
       />
     );
   } else if (paso.tipo === 'reloj') {
