@@ -254,13 +254,15 @@ async function recorre(browser, cuenta, tamaño) {
   try {
     await page.goto(BASE, { waitUntil: 'networkidle', timeout: 30000 });
 
-    // En computadora la app abre en la pagina de presentacion, no en el
-    // formulario: hay que entrar por "Iniciar sesion". En telefono ese boton
-    // no existe, porque la presentacion no se muestra ahi.
+    // En computadora la app abre en la pagina de presentacion: hay que entrar por "Iniciar sesion". En telefono ese boton no existe. En los dos se llega a
+    // LA PUERTA (inicio nuevo, 30 oct 2026), y el formulario está detrás de «Usar usuario y contraseña».
     if (await page.locator('input[placeholder="tu_usuario"]').count() === 0) {
-      await page.getByRole('button', { name: 'Iniciar sesión' }).first().click().catch(() => {});
+      const presentacion = page.getByRole('button', { name: 'Iniciar sesión' }).first();
+      if (await presentacion.count()) await presentacion.click().catch(() => {});
+      await page.getByRole('button', { name: /usuario y contraseña/ }).first().click({ timeout: 10000 })
+        .catch(() => anota(ctxBase, 'no se encontró «Usar usuario y contraseña» en la puerta'));
       await page.waitForSelector('input[placeholder="tu_usuario"]', { timeout: 10000 })
-        .catch(() => anota(ctxBase, 'no se pudo llegar al formulario desde la presentación'));
+        .catch(() => anota(ctxBase, 'no se pudo llegar al formulario desde la puerta'));
     }
 
     // entrar

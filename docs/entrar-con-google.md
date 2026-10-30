@@ -124,32 +124,61 @@ y reinicia `npm run dev`.
 
 ---
 
-## Qué pasa cuando alguien entra con Google
+## La puerta (inicio nuevo, 30 oct 2026)
 
-Google solo entrega **correo y nombre**. Con eso no alcanza para abrir una
-cuenta aquí: falta el nombre de usuario (es con lo que un atleta encuentra a su
-entrenador) y falta saber si viene a seguir un plan o a crearlos. Así que:
+En el teléfono, la primera pantalla de quien no tiene sesión es **la puerta**
+(`src/features/auth/Puerta.jsx`): un mosaico de fotos que se mueve despacio, la
+marca, «Entrena con propósito.» y tres salidas, en este orden:
 
-1. Supabase crea la cuenta con el correo de Google.
+1. **Continuar con Apple** (negro). Sale siempre.
+2. **Continuar con Google** (blanco, con su orilla fina). Solo si
+   `VITE_GOOGLE_LOGIN` vale `1` (`googleDisponible`). En el iPhone, Google es
+   una fase aparte: hasta entonces la puerta solo enseña Apple.
+3. **Usar usuario y contraseña**: abre «Entra con tu usuario» (el formulario de
+   siempre, con el estilo nuevo). Desde ahí, «¿Nueva aquí? Crea tu cuenta» abre
+   el inicio con usuario y contraseña.
+
+Con Apple o Google se **entra o se crea la cuenta con el mismo botón**. En la
+compu, la página de presentación sigue igual; sus «Iniciar sesión» y «Crear
+cuenta» abren la puerta en una tarjeta centrada.
+
+El link de invitación de un entrenador abre la misma puerta, con quién invitó
+arriba («Carlos Vega te invitó · ya te tiene en su lista») y un tercer botón
+«Crear cuenta con usuario y contraseña». Ver `docs/inicio.md`.
+
+## Qué pasa cuando alguien entra con Google (o Apple)
+
+Google y Apple solo entregan **correo y nombre** (Apple, a veces ni el nombre).
+Con eso no alcanza: falta saber si viene a seguir un plan o a crearlos. Así que:
+
+1. Supabase crea la cuenta con ese correo.
 2. El disparador `handle_new_user` arma un perfil **incompleto**
    (`perfil_completo = false`) y le pone un usuario provisional sacado del
    correo, limpio y sin chocar con uno que exista: si `andres` está tomado,
    queda `andres2`.
-3. La app NO lo deja entrar todavía: le enseña la pantalla **"Hola, …"**, que
-   pregunta lo que falta —qué va a hacer aquí, su oficio si crea planes, su
-   usuario, quién lo entrena y los videos de técnica— y no se puede saltar.
-   Tiene una salida, "Entré con la cuenta equivocada", por si se equivocó de
-   cuenta de Google.
-4. Al terminar, la base guarda todo de una sola vez con `completar_mi_perfil`.
-   Esa función valida el usuario, comprueba que no esté tomado, resuelve al
-   coach por su nombre de usuario y marca el perfil como completo.
+3. La app abre el inicio en modo `google`: «Hola, Mariana.» y **«¿Qué vas a
+   hacer?»** (Entreno / Creo planes). Arriba, en vez de la flecha, **«Salir»**:
+   cierra la sesión y regresa a la puerta («Cerraste sesión. Puedes entrar con
+   otra cuenta.»), por si entró con la cuenta equivocada.
+4. Al contestar, `completar_mi_perfil` guarda el tipo de cuenta (solo corre UNA
+   vez por cuenta) y el inicio sigue con lo que le toca: el atleta, su
+   entrenador, «Sobre ti» y Salud; el coach, su oficio, qué entrena, su equipo
+   y sus ejercicios. Nada se teclea.
+5. En la bienvenida dice «Entras con Google como @usuario · Cambiar»: el
+   usuario provisional se cambia ahí mismo (la hoja de Mi perfil).
 
 **`completar_mi_perfil` solo corre UNA vez por cuenta.** Después, quien cambia
 un rol es el master y nadie más: no es una puerta de atrás para volverse coach.
 
-Quien se registra por el formulario de siempre nunca ve esa pantalla — ese
-formulario ya pregunta todo, así que la función `signup` marca el perfil como
-completo desde el principio.
+**Con invitación**, la cuenta que crean Apple o Google es NUEVA (no la que el
+coach dejó lista). Al volver, la app llama a `activar-invitacion` en modo
+`reclamar`: la cuenta nueva se queda con su coach, con lo que él ya le preparó
+(planes, mensajes, equipo…) y con el nombre que puso el coach si Apple no dio
+uno; la de relleno sale de su lista. Detalle en la función.
+
+Quien se registra con usuario y contraseña nunca pasa por «¿Qué vas a hacer?»
+con sesión: lo contesta antes de crear la cuenta, y la función `signup` marca
+el perfil como completo desde el principio.
 
 ## Si algo falla
 
