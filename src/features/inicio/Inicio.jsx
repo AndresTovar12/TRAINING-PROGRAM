@@ -588,6 +588,8 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
 
   function atras() {
     if (paso === 'entrenador' && conCodigo) { setConCodigo(false); setTextoCodigo(''); setPro(null); setError(''); return; }
+    // En «Escribe el código», atrás = «Cambiar correo»: vuelve al campo con el correo escrito (no se puede saltar el código, pero sí corregir el correo).
+    if (enElCodigo && !cambiando) { setCorreo(enEspera()); setError(''); setCambiando(true); return; }
     if (cambiando) { setCambiando(false); setError(''); return; }
     if (i === 0) { onVolver?.(); return; }
     setI(i - 1);
@@ -598,10 +600,10 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
   const hechos = camino.indexOf(paso);
   const muestraBarra = paso !== 'listo';
   const primeraTrasApple = modo === 'google' && paso === 'tipo';
-  // «Escribe el código» no tiene atrás: no se puede saltar (31 oct 2026). Sí lo tiene «Cambiar correo», que regresa al código.
+  // «Escribe el código» no se puede saltar (31 oct 2026), pero sí regresar: la flecha abre «Cambiar correo» y desde ahí vuelve al código.
   const enElCodigo = paso === 'correo' && modo === 'retomar';
   const atrasEsElCodigo = modo === 'retomar' && pasos[i - 1] === 'correo'; // ya confirmado: no se regresa a escribirlo
-  const puedeAtras = !primeraTrasApple && (enElCodigo ? cambiando
+  const puedeAtras = !primeraTrasApple && (enElCodigo ? true
     : ((i > 0 && !atrasEsElCodigo) || (paso === 'entrenador' && conCodigo) || ((modo === 'nuevo' || modo === 'invitacion') && !!onVolver)));
 
   const cabecera = (saltar = null) => (
