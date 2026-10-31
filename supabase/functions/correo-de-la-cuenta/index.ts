@@ -90,17 +90,42 @@ async function enviarCorreo({ para, asunto, html, texto }: { para: string; asunt
   if (!r.ok) throw new Error(`ENVIO_${r.status}: ${(await r.text()).slice(0, 200)}`)
 }
 
+/* 31 oct 2026: dos Hotmail distintos dieron SCL 5 (No deseado) con autenticación perfecta y BCL 0. Lo único que se mueve hoy
+   es el contenido: el asunto ya NO lleva el código (el «Tu código: 123456» es el asunto de las estafas) y el cuerpo explica
+   quién manda y por qué, en vez de una sola línea con un número. La marca va con Bricolage Grotesque (la letra de la app);
+   Apple Mail la carga, Outlook y Gmail la ignoran y caen en la letra del sistema. Sin imágenes: suben la sospecha. */
+const SITIO = 'https://app.traininglabapp.com'
 const correoDelCodigo = (codigo: string) => ({
-  asunto: `Tu código de Training Lab: ${codigo}`,
-  texto: `Tu código para confirmar este correo en Training Lab es ${codigo}. Vence en ${VIGENCIA_MIN} minutos. Si no lo pediste, ignora este correo.`,
-  html: `<!doctype html><html><body style="margin:0;background:#f4f5f8;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111318">
-  <div style="max-width:440px;margin:0 auto;padding:32px 20px">
+  asunto: 'Confirma tu correo en Training Lab',
+  texto: [
+    'Hola:',
+    '',
+    'Pediste poner este correo en tu cuenta de Training Lab. Para confirmarlo, escribe este código en la app:',
+    '',
+    `    ${codigo}`,
+    '',
+    `El código vence en ${VIGENCIA_MIN} minutos.`,
+    '',
+    'Si no fuiste tú, ignora este correo: nadie puede usar el código sin entrar a tu cuenta.',
+    '',
+    '—',
+    `Training Lab · ${SITIO.replace('https://', '')}`,
+  ].join('\n'),
+  html: `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>@font-face{font-family:'Bricolage Grotesque';font-style:normal;font-weight:800;src:url('${SITIO}/fonts/bricolage-latin.woff2') format('woff2');}</style>
+</head><body style="margin:0;background:#f4f5f8;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111318">
+  <div style="max-width:460px;margin:0 auto;padding:32px 20px">
     <div style="background:#ffffff;border-radius:20px;padding:32px 28px;border:1px solid #e6e8ee">
-      <div style="font-size:22px;font-weight:800;letter-spacing:-0.4px">Training <span style="color:#1E40E0">Lab</span></div>
-      <p style="font-size:15px;line-height:1.5;color:#3d4250;margin:20px 0 8px">Tu código para confirmar este correo:</p>
-      <div style="font-size:36px;font-weight:800;letter-spacing:8px;margin:6px 0 18px">${codigo}</div>
-      <p style="font-size:13.5px;line-height:1.5;color:#6b7080;margin:0">Vence en ${VIGENCIA_MIN} minutos. Si no lo pediste, ignora este correo: nadie puede usarlo sin entrar a tu cuenta.</p>
+      <div style="font-family:'Bricolage Grotesque',-apple-system,Helvetica,Arial,sans-serif;font-size:24px;font-weight:800;letter-spacing:-0.4px">Training <span style="color:#1E40E0">Lab</span></div>
+      <p style="font-size:15px;line-height:1.55;color:#3d4250;margin:22px 0 0">Hola:</p>
+      <p style="font-size:15px;line-height:1.55;color:#3d4250;margin:10px 0 0">Pediste poner este correo en tu cuenta de Training Lab. Para confirmarlo, escribe este código en la app:</p>
+      <div style="font-size:36px;font-weight:800;letter-spacing:8px;margin:18px 0 18px;color:#111318">${codigo}</div>
+      <p style="font-size:14px;line-height:1.55;color:#3d4250;margin:0">El código vence en ${VIGENCIA_MIN} minutos.</p>
+      <p style="font-size:14px;line-height:1.55;color:#6b7080;margin:12px 0 0">Si no fuiste tú, ignora este correo: nadie puede usar el código sin entrar a tu cuenta.</p>
     </div>
+    <p style="font-size:12.5px;line-height:1.5;color:#8a8f9c;text-align:center;margin:18px 0 0">
+      Training Lab · <a href="${SITIO}" style="color:#8a8f9c">${SITIO.replace('https://', '')}</a>
+    </p>
   </div></body></html>`,
 })
 

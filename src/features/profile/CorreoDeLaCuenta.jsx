@@ -95,7 +95,7 @@ export default function CorreoDeLaCuenta() {
           {paso === 'codigo' && (
             <form onSubmit={confirma} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12, fontFamily: FONT }}>
               <p style={{ margin: '0 4px', fontSize: 15, fontWeight: 500, color: KP.ink, lineHeight: 1.5 }}>
-                Te mandamos un código de 6 números a <b>{correo.trim()}</b>. Revisa también spam.
+                Te mandamos un código de 6 números a <b>{correo.trim()}</b>. ¿No llega? Revisa tu carpeta de Correo no deseado.
               </p>
               <Campo
                 etiqueta="Código" valor={codigo} onCambio={(v) => setCodigo(v.replace(/\D/g, '').slice(0, 6))} marcador="000000"
