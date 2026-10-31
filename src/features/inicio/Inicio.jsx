@@ -18,7 +18,7 @@ import {
 } from '@/features/inicio/estilos';
 import { guardaTipoPendiente, leeTipoPendiente, olvidaTipoPendiente } from '@/features/inicio/tipoPendiente';
 import { codigoPendiente, esInvitado, guardaCodigoPendiente, marcaInvitado, olvidaCodigoPendiente } from '@/features/inicio/marcas';
-import { anotaEnvio, contrasenaNueva, envioDelCodigo, olvidaCuentaNueva, oyeEnvio, recuerdaContrasena } from '@/features/inicio/cuentaNueva';
+import { anotaEnvio, contrasenaNueva, correoPorConfirmarDe, envioDelCodigo, marcaCorreoConfirmado, olvidaCuentaNueva, oyeEnvio, recuerdaContrasena } from '@/features/inicio/cuentaNueva';
 import CajasDelCodigo from '@/features/inicio/CajasDelCodigo';
 import Bienvenida from '@/features/inicio/Bienvenida';
 import { DibujoCodigo, DibujoEjercicios, DibujoEquipo, DibujoPunto } from '@/features/inicio/Dibujos';
@@ -86,7 +86,7 @@ const USERNAME_RE = /^[a-zA-Z0-9_.]{3,30}$/;
 /* Los pasos que le faltan a ESTE perfil. Se calcula una vez al montar (ver `key` en App.jsx): si se recalculara en cada pintada, el paso «nombre»
    desaparecería en cuanto se guardara el nombre y el botón de atrás ya no sabría a dónde ir. Con el código del correo recién mandado, «Escribe el código»
    va primero (es la segunda mitad de «¿Tu correo?»). */
-function pasosDe(modo, perfil, esCoach) {
+function pasosDe(modo, perfil, esCoach, usuario) {
   if (modo === 'nuevo') return ['tipo', 'nombre', 'cuenta', 'correo'];
   if (modo === 'invitacion') return ['cuenta', 'correo'];
   if (modo === 'google') return ['tipo'];
@@ -97,7 +97,8 @@ function pasosDe(modo, perfil, esCoach) {
     if (p === 'entrenador' && perfil?.coach_id) return false;               // ya quedó con su entrenador (código o invitación)
     return true;
   });
-  return codigoPendiente() ? ['correo', ...resto] : resto;
+  // «Escribe el código» va primero si la cuenta tiene un correo sin confirmar: lo dice la memoria de esta pestaña O el servidor (`correoPorConfirmarDe`).
+  return codigoPendiente() || correoPorConfirmarDe(usuario) ? ['correo', ...resto] : resto;
 }
 
 /* El camino completo de cada quien, para la barra de arriba: solo cuenta SUS pasos, y la bienvenida no cuenta. */
@@ -196,12 +197,14 @@ const ligaDelCodigo = (apagada) => ({
 
 /** «Escribe el código» (31 oct 2026, maqueta RcFd9dYXoYxzYAinD5eQDB): el código, el aviso de No deseado (bien visible: ahí caen los códigos de un dominio nuevo,
     sobre todo en Hotmail) y «Mandar otro · Cambiar correo». `envio` es cómo va el envío (`cuentaNueva.js`); sin él (la app se recargó), se da por mandado. */
-export function CuerpoDelCodigo({ compu, correo, envio, codigo = '', onCodigo, errorCodigo = '', ocupado = false, espera = 0, onOtro, onCambiar, error = null }) {
+export function CuerpoDelCodigo({ compu, correo, envio, codigo = '', onCodigo, errorCodigo = '', ocupado = false, espera = 0, onOtro, onCambiar, error = null, clave = '', onClave, onMandarConClave }) {
   const mandando = envio?.estado === 'mandando';
   const fallo = envio?.estado === 'fallo';
   const mm = Math.floor(espera / 60);
   const ss = String(espera % 60).padStart(2, '0');
   const otroApagado = ocupado || mandando || espera > 0;
+  // El servidor pide la contraseña para mandar otro código (la cuenta ya tiene más de un día o la pestaña no la recuerda): se escribe aquí, no se queda mudo.
+  const pideClave = fallo && (envio?.codigo === 'FALTA_CONTRASENA' || envio?.codigo === 'CONTRASENA_MAL') && !!onClave;
   return (
     <>
       <h1 style={titulo(compu)}>Escribe el código</h1>
@@ -211,6 +214,14 @@ export function CuerpoDelCodigo({ compu, correo, envio, codigo = '', onCodigo, e
           : <>Te lo mandamos a <b style={{ color: KP.ink }}>{correo}</b>.</>}
       </p>
       {fallo && <p role="alert" style={{ ...estiloError, marginTop: -4 }}>{envio.error}</p>}
+      {pideClave && (
+        <>
+          <Campo id="ini-clave-codigo" label="Tu contraseña" icono={Lock} tipo="password" ojo value={clave} onChange={onClave} extra={{ autoComplete: 'current-password' }} />
+          <button type="button" className="kp-press" onClick={onMandarConClave} disabled={ocupado || !clave} style={{ ...botonPrimario(ocupado, !clave), marginBottom: 14 }}>
+            {ocupado ? <Loader2 size={18} className="spin" /> : 'Mandar código'}
+          </button>
+        </>
+      )}
       <CajasDelCodigo valor={codigo} onCambio={onCodigo ?? (() => {})} error={errorCodigo} deshabilitado={ocupado || fallo || !onCodigo} />
       {ocupado && <div role="status" style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}><Loader2 size={22} className="spin" color={KP.blue} /></div>}
       {!fallo && (
@@ -306,7 +317,9 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
   const [correo, setCorreo] = useState('');
 
   const esCoach = modo === 'nuevo' ? tipo === 'coach' : modo === 'invitacion' ? false : profile?.role === 'admin';
-  const [pasos] = useState(() => pasosDe(modo, profile, profile?.role === 'admin'));
+  const [pasos] = useState(() => pasosDe(modo, profile, profile?.role === 'admin', user));
+  // El correo al que va el código: el último que se tecleó en esta pestaña (por «Cambiar correo») o, si la pestaña no se acuerda, el que el servidor tiene pendiente.
+  const enEspera = () => codigoPendiente() || correoPorConfirmarDe(user);
   const [i, setI] = useState(() => {
     if (pasos[0] === 'correo' && modo === 'retomar') return 0;
     const guardado = PASO_DE_ANTES[profile?.inicio_paso] ?? profile?.inicio_paso;
@@ -343,9 +356,11 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
   const [envio, setEnvio] = useState(() => envioDelCodigo());
   const [espera, setEspera] = useState(() => {
     const estado = envioDelCodigo()?.estado;
-    return modo === 'retomar' && codigoPendiente() && estado !== 'mandando' && estado !== 'fallo' ? 60 : 0;
+    // Solo si el código acaba de salir en esta pestaña. Si la pestaña no sabe (se abrió de nuevo), 0: el servidor ya pone su propia espera entre un código y otro.
+    return modo === 'retomar' && estado === 'mandado' ? 60 : 0;
   });
   const [cambiando, setCambiando] = useState(false);
+  const [claveDelCodigo, setClaveDelCodigo] = useState('');   // pasadas las 24 h (o con la pestaña nueva) el servidor pide la contraseña para mandar otro código
   const [hojaUsuario, setHojaUsuario] = useState(false);
   // El paso del reloj: con un Apple Watch emparejado se conecta el reloj; sin él, Apple Salud. En la web solo se cuenta.
   const { listo: relojListo, reloj, conexion: relojConexion } = useReloj();
@@ -460,7 +475,7 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
     setCodigoCorreo('');
     guardaCodigoPendiente(limpio);
     guardaCorreoPorConfirmar(limpio);
-    const promesa = pideCodigoDeCorreo(limpio, contrasenaNueva() || undefined);
+    const promesa = pideCodigoDeCorreo(limpio, contrasenaNueva() || claveDelCodigo || undefined);
     anotaEnvio(promesa);
     promesa.catch(() => { /* lo dice la pantalla */ });
     return promesa;
@@ -557,13 +572,16 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
     setErrorCodigo('');
     setOcupado(true);
     confirmaCorreoConCodigo(codigoCorreo, { refreshProfile })
-      .then(() => { olvidaCodigoPendiente(); olvidaCuentaNueva(); avisa('Correo confirmado.'); setI((n) => n + 1); })
+      .then(() => { marcaCorreoConfirmado(user?.id); olvidaCodigoPendiente(); olvidaCuentaNueva(); avisa('Correo confirmado.'); setI((n) => n + 1); })
       .catch((e) => { setErrorCodigo(e.message || 'Ese código no sirve. Revísalo e inténtalo otra vez.'); setCodigoCorreo(''); })
       .finally(() => { confirmando.current = false; setOcupado(false); });
-  }, [codigoCorreo, paso, modo, refreshProfile, avisa]);
+  }, [codigoCorreo, paso, modo, refreshProfile, avisa, user?.id]);
 
   async function salir() {
     setOcupado(true);
+    // Lo que la pestaña recuerda es de ESTA cuenta: si se queda, otra persona que entre aquí vería el código de la anterior.
+    olvidaCodigoPendiente();
+    olvidaCuentaNueva();
     await signOut();
     avisa('Cerraste sesión. Puedes entrar con otra cuenta.');
   }
@@ -617,6 +635,10 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
       </div>
       {saltar && (
         <button type="button" onClick={saltar} disabled={ocupado} style={{ ...enlace, width: 'auto', minHeight: 36, padding: '6px 2px' }}>Saltar</button>
+      )}
+      {/* Con sesión siempre se puede salir (31 oct 2026): sin esto, quien no recibe el código no podía ni cambiar de cuenta en este aparato. */}
+      {modo === 'retomar' && !primeraTrasApple && paso !== 'listo' && (
+        <button type="button" onClick={salir} disabled={ocupado} style={{ ...enlace, width: 'auto', minHeight: 36, padding: '6px 2px', color: KP.ink3, fontWeight: 600 }}>Salir</button>
       )}
     </div>
   );
@@ -757,11 +779,13 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
     // La segunda mitad de «¿Tu correo?»: la cuenta ya nació y el código va en camino. No se puede saltar (31 oct 2026).
     cuerpo = (
       <CuerpoDelCodigo
-        compu={compu} correo={codigoPendiente()} envio={envio}
+        compu={compu} correo={enEspera()} envio={envio}
         codigo={codigoCorreo} onCodigo={(v) => { setCodigoCorreo(v); if (v) setErrorCodigo(''); }} errorCodigo={errorCodigo}
         ocupado={ocupado} espera={espera}
-        onOtro={() => { mandaCodigo(codigoPendiente()).then(() => avisa('Te mandamos otro código.'), () => {}); }}
-        onCambiar={() => { setCorreo(codigoPendiente()); setError(''); setCambiando(true); }}
+        onOtro={() => { mandaCodigo(enEspera()).then(() => avisa('Te mandamos otro código.'), () => {}); }}
+        onCambiar={() => { setCorreo(enEspera()); setError(''); setCambiando(true); }}
+        clave={claveDelCodigo} onClave={setClaveDelCodigo}
+        onMandarConClave={() => { mandaCodigo(enEspera()).then(() => { setClaveDelCodigo(''); avisa('Te mandamos otro código.'); }, () => {}); }}
         error={Error}
       />
     );
