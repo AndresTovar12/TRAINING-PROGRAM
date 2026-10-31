@@ -56,7 +56,7 @@ export const UMBRALES_DE_PAUSA = {
   senderismo: { pausa: 0.6, reanuda: 1.0 },
   bici: { pausa: 1.0, reanuda: 2.0 },
 };
-const SEGUNDOS_PARA_PAUSAR = 3;
+const SEGUNDOS_PARA_PAUSAR = 2;
 const SEGUNDOS_PARA_REANUDAR = 2;
 const SIN_SENAL_S = 5;
 const HUECO_MAXIMO_S = 2;

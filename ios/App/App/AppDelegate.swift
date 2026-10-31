@@ -12,6 +12,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // `.playback` los deja sonar siempre, y `.mixWithOthers` no corta la música (Spotify, Apple Music) del atleta.
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
         try? AVAudioSession.sharedInstance().setActive(true)
+        // Al correr el teléfono se sacude, y iOS ofrecía «Deshacer» (agitar para deshacer) en medio del entreno.
+        application.applicationSupportsShakeToEdit = false
         return true
     }
 
