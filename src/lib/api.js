@@ -1395,16 +1395,18 @@ async function invitacion(cuerpo, sesion = null) {
 
   if (!res) throw new Error('No se pudo contactar al servidor. Revisa tu conexión.');
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body?.error || `Algo salió mal (error ${res.status}).`);
+  // El `codigo` (FICHA_VENCIDA, CORREO_OCUPADO…) viaja en el error: el inicio decide con él a qué pantalla regresar.
+  if (!res.ok) throw Object.assign(new Error(body?.error || `Algo salió mal (error ${res.status}).`), { codigo: body?.codigo });
   return body;
 }
 
 /** Quién es el atleta y quién su coach, para saludarlo antes de pedirle nada. */
 export const verInvitacion = (token) => invitacion({ token, modo: 'ver' });
 
-/** Termina de crear la cuenta: usuario, contraseña y, si quiere, correo. */
-export const activarInvitacion = ({ token, username, password, email, genero, nombre, apellido }) =>
-  invitacion({ token, modo: 'activar', username, password, email, genero, nombre, apellido });
+/** Termina de crear la cuenta: usuario, contraseña y correo. `ficha` es la prueba de que ya escribió el código de ese correo (`correo-previo`): con ella la cuenta
+    queda con el correo confirmado. Sin ella (clientes viejos) el correo queda pendiente de confirmar. */
+export const activarInvitacion = ({ token, username, password, email, genero, nombre, apellido, ficha }) =>
+  invitacion({ token, modo: 'activar', username, password, email, genero, nombre, apellido, ...(ficha ? { ficha } : {}) });
 
 /** Entró con Apple o Google desde el link: la cuenta nueva se queda con su coach y con lo que él ya le preparó (ver `activar-invitacion`, modo `reclamar`). */
 export const reclamarInvitacion = async (token) => invitacion({ token, modo: 'reclamar' }, await tokenDeAhora());

@@ -8,17 +8,19 @@ import { useIsWide } from '@/lib/useViewport';
 import { useAviso } from '@/components/AvisoPasajero';
 import { supabase } from '@/lib/supabase';
 import { activarInvitacion, agregarAMiEquipo, completarMiPerfil, profesionalPorReferencia } from '@/lib/api';
+import { confirmaCodigoPrevio, pideCodigoPrevio } from '@/lib/correoPrevioApi';
 import { DISCIPLINAS, OFICIOS_DEL_INICIO } from '@/lib/oficios';
 import { FONT, KP, UI, oficioCorto } from '@/lib/theme';
 import { correoValido, esCorreoInventado, guardaCorreoPorConfirmar, olvidaCorreoPorConfirmar } from '@/lib/correos';
 import { confirmaCorreoConCodigo, pideCodigoDeCorreo } from '@/lib/correoDeLaCuentaApi';
-import { eliminaMiCuenta } from '@/lib/miCuentaApi';
 import {
   GRIS, botonPrimario, cajaDeCampo, cuadroDeIcono, elige as estiloElige, enlace, entrada, error as estiloError, letraChica, opcion, rotulo, subtitulo, titulo,
 } from '@/features/inicio/estilos';
 import { guardaTipoPendiente, leeTipoPendiente, olvidaTipoPendiente } from '@/features/inicio/tipoPendiente';
-import { codigoPendiente, esInvitado, guardaCodigoPendiente, marcaInvitado, olvidaCodigoPendiente } from '@/features/inicio/marcas';
-import { anotaEnvio, contrasenaNueva, correoPorConfirmarDe, envioDelCodigo, marcaCorreoConfirmado, olvidaCuentaNueva, oyeEnvio, recuerdaContrasena } from '@/features/inicio/cuentaNueva';
+import { codigoPendiente, esInvitado, guardaCodigoPendiente, guardaInvitacionPendiente, marcaInvitado, olvidaCodigoPendiente } from '@/features/inicio/marcas';
+import {
+  anotaEnvio, correoPorConfirmarDe, envioDelCodigo, marcaCorreoConfirmado, marcaCuentaNaciendo, olvidaCuentaNaciendo, olvidaCuentaNueva, oyeEnvio,
+} from '@/features/inicio/cuentaNueva';
 import CajasDelCodigo from '@/features/inicio/CajasDelCodigo';
 import Bienvenida from '@/features/inicio/Bienvenida';
 import { DibujoCodigo, DibujoEjercicios, DibujoEquipo, DibujoPunto } from '@/features/inicio/Dibujos';
@@ -42,11 +44,16 @@ import AvisoDelReloj from '@/features/reloj/AvisoDelReloj';
  * El prototipo manda en los textos, el orden y lo que sale en cada pantalla; el código, en colores, letras y piezas (`components/ui`, `lib/theme`). Sus reglas:
  *
  *   · CON APPLE O GOOGLE NO SE TECLEA NADA: nombre y correo salen de la cuenta, el usuario lo propone la base (`handle_new_user`).
- *   · LA CUENTA NACE EN «¿TU CORREO?», con «Mandar código». Lo demás se guarda paso a paso en su perfil, con `inicio_paso`
- *     apuntando a lo que sigue: si cierra a la mitad, al volver retoma ahí (App.jsx vuelve a abrir esto mientras `inicio_paso` no sea null).
+ *   · LA CUENTA NACE DESPUÉS DEL CÓDIGO (31 oct 2026). Nombre → usuario y contraseña → correo → «Escribe el código» pasan SIN cuenta: «Mandar código» solo manda el
+ *     correo (`correo-previo`) y la flecha de atrás regresa libre por todas. Con el código bueno nace la cuenta, ya con el correo confirmado (`signup` o
+ *     `activar-invitacion`, con la «ficha» que entrega el código). De ahí en adelante lo demás se guarda paso a paso en su perfil, con `inicio_paso` apuntando a lo que
+ *     sigue: si cierra a la mitad, al volver retoma ahí (App.jsx vuelve a abrir esto mientras `inicio_paso` no sea null). Si cierra ANTES del código, empieza de cero:
+ *     no hay cuenta ni nada guardado.
  *   · NADIE ENTRA SIN CONFIRMAR SU CORREO (31 oct 2026, maqueta RcFd9dYXoYxzYAinD5eQDB): se quitaron «Crear cuenta sin correo» y «Lo confirmo después».
  *     El nombre va ANTES del usuario y la contraseña, y la contraseña se escribe dos veces. «Escribe el código» trae «Mandar otro», «Cambiar correo» y, abajo,
- *     Apple o Google: si se va por ahí, la cuenta a medias se borra.
+ *     Apple o Google: al no haber cuenta todavía, simplemente se va por ahí.
+ *   · EL CAMINO DE ANTES (la cuenta nacía con «Mandar código» y el código se escribía ya con sesión, `modo === 'retomar'` con el paso `correo`) sigue SOLO para las
+ *     cuentas que nacieron así (clientes viejos de TestFlight y cuentas de prueba, las que traen `correo_pendiente`). Retirarlo cuando los builds nuevos estén instalados.
  *   · SEXO Y FECHA DE NACIMIENTO JUNTOS, en «Sobre ti», y con «Saltar».
  *   · SALUD PARA TODOS: con Apple Watch se conecta el reloj; sin él, Apple Salud (lo que guardan otros aparatos y apps). En la web solo se cuenta.
  *   · LAS PREGUNTAS DE DOS RESPUESTAS (entrenador, equipo, ejercicios) VAN COMO LA CONFIGURACIÓN DEL IPHONE: un dibujo arriba, la pregunta al centro y las
@@ -57,17 +64,17 @@ import AvisoDelReloj from '@/features/reloj/AvisoDelReloj';
  *
  * El camino de cada quien (ver `docs/inicio.md`):
  *   atleta con Apple o Google   tipo → entrenador → sobre → reloj → bienvenida
- *   atleta con usuario          tipo → nombre → cuenta → correo → entrenador → sobre → reloj → bienvenida
- *   coach                       tipo → (nombre → cuenta → correo, solo con usuario) → oficio → entrena → equipo → repertorio → bienvenida
- *   invitación                  (cuenta → correo, solo con usuario) → sobre → reloj → bienvenida
+ *   atleta con usuario          tipo → nombre → cuenta → correo → (código) → entrenador → sobre → reloj → bienvenida
+ *   coach                       tipo → (nombre → cuenta → correo → código, solo con usuario) → oficio → entrena → equipo → repertorio → bienvenida
+ *   invitación                  (cuenta → correo → código, solo con usuario) → sobre → reloj → bienvenida
  *
  * Cuatro modos, según de dónde viene la persona:
- *   'nuevo'       sin sesión, desde «Crea tu cuenta» (o con un link `?unirse=CÓDIGO`, con el código ya puesto): tipo, cuenta y correo.
- *   'invitacion'  sin sesión, desde el link de su entrenador con «Crear cuenta con usuario y contraseña»: cuenta y correo (`invitacion` = `{ token, datos }`).
+ *   'nuevo'       sin sesión, desde «Crea tu cuenta» (o con un link `?unirse=CÓDIGO`, con el código ya puesto): tipo, nombre, cuenta, correo y código.
+ *   'invitacion'  sin sesión, desde el link de su entrenador con «Crear cuenta con usuario y contraseña»: cuenta, correo y código (`invitacion` = `{ token, datos }`).
  *   'google'      con sesión de Apple o Google pero sin tipo de cuenta (`perfil_completo = false`): solo el tipo.
  *   'retomar'     con sesión e `inicio_paso` pendiente: lo que falta, desde donde se quedó.
- * App.jsx le pone `key={modo}`: al cambiar de modo se vuelve a armar con la lista de pasos que le toca. Lo que tiene que cruzar ese cambio (el código del
- * correo, que entró por invitación) va en `marcas.js`.
+ * App.jsx le pone `key={modo}`: al cambiar de modo se vuelve a armar con la lista de pasos que le toca. Lo que tiene que cruzar ese cambio (que entró por
+ * invitación) va en `marcas.js`; mientras llega el perfil de la cuenta recién nacida se ve `CuentaEnCamino`.
  */
 
 const ICONOS = {
@@ -78,7 +85,11 @@ const FOTOS = { fuerza: fotoFuerza, pista: fotoPista, yoga: fotoYoga, agilidad: 
 
 const ORDEN_COACH = ['tipo', 'nombre', 'cuenta', 'correo', 'oficio', 'entrena', 'equipo', 'repertorio', 'listo'];
 const ORDEN_ATLETA = ['tipo', 'nombre', 'cuenta', 'correo', 'entrenador', 'sobre', 'reloj', 'listo'];
-const ANTES_DE_LA_CUENTA = new Set(['tipo', 'cuenta', 'correo']);
+const ANTES_DE_LA_CUENTA = new Set(['tipo', 'cuenta', 'correo', 'verifica']);
+// La ficha del código vale 20 minutos (`correo-previo`/`signup`) y el código 15: pasado eso se pide otro.
+const VIGENCIA_FICHA_MS = 18 * 60_000;
+const VIGENCIA_CODIGO_MS = 14 * 60_000;
+const ahora = () => Date.now();
 // Quien estaba a la mitad del inicio de antes (29 oct 2026) sigue en la pantalla que la reemplazó.
 const PASO_DE_ANTES = { codigo: 'entrenador', sexo: 'sobre', nacimiento: 'sobre', unidad: 'sobre', tour: 'listo' };
 const USERNAME_RE = /^[a-zA-Z0-9_.]{3,30}$/;
@@ -87,8 +98,9 @@ const USERNAME_RE = /^[a-zA-Z0-9_.]{3,30}$/;
    desaparecería en cuanto se guardara el nombre y el botón de atrás ya no sabría a dónde ir. Con el código del correo recién mandado, «Escribe el código»
    va primero (es la segunda mitad de «¿Tu correo?»). */
 function pasosDe(modo, perfil, esCoach, usuario) {
-  if (modo === 'nuevo') return ['tipo', 'nombre', 'cuenta', 'correo'];
-  if (modo === 'invitacion') return ['cuenta', 'correo'];
+  // «verifica» es «Escribe el código»: todavía sin cuenta, así que se regresa libre. La cuenta nace al salir de ahí con el código bueno.
+  if (modo === 'nuevo') return ['tipo', 'nombre', 'cuenta', 'correo', 'verifica'];
+  if (modo === 'invitacion') return ['cuenta', 'correo', 'verifica'];
   if (modo === 'google') return ['tipo'];
   const orden = esCoach ? ORDEN_COACH : ORDEN_ATLETA;
   const resto = orden.filter((p) => {
@@ -173,7 +185,7 @@ function Elige({ Icono: I, children, onClick, ocupado }) {
   );
 }
 
-/* El marco de cada pantalla del inicio: en la compu una tarjeta al centro; en el teléfono la pantalla entera. Lo usan el inicio y `CodigoEnCamino`. */
+/* El marco de cada pantalla del inicio: en la compu una tarjeta al centro; en el teléfono la pantalla entera. Lo usan el inicio y `CuentaEnCamino`. */
 const marcoDeFuera = (compu) => ({
   minHeight: '100svh', display: 'flex', alignItems: compu ? 'flex-start' : 'stretch', justifyContent: 'center',
   padding: compu ? '28px 20px 40px' : 0, fontFamily: FONT, background: compu ? '#F4F5F8' : '#fff',
@@ -242,7 +254,7 @@ export function CuerpoDelCodigo({ compu, correo, envio, codigo = '', onCodigo, e
   );
 }
 
-/** Abajo de «Escribe el código»: si el código no llega, entrar con Apple o Google (la cuenta a medias se borra, ver `entraConOtra`). */
+/** Abajo de «Escribe el código»: si el código no llega, entrar con Apple o Google (ver `entraConOtra`). */
 export function OtraEntrada({ apple, google, ocupado, onApple, onGoogle }) {
   if (!apple && !google) return null;
   const boton = {
@@ -282,16 +294,17 @@ export function OtraEntrada({ apple, google, ocupado, onApple, onGoogle }) {
   );
 }
 
-/** Lo que se ve MIENTRAS la app se rearma al nacer la cuenta (App.jsx, sin perfil todavía): «Escribe el código» mandándose, en vez de la carga con el logo
-    (Andrés, 31 oct 2026: «se ve bastante fea»). Al llegar el perfil la reemplaza el inicio de verdad, con el mismo dibujo. */
-export function CodigoEnCamino() {
+/** Lo que se ve MIENTRAS la app se rearma al nacer la cuenta (App.jsx, sin perfil todavía): «Creando tu cuenta…», en vez de la carga con el logo
+    (Andrés, 31 oct 2026: «se ve bastante fea»). Al llegar el perfil la reemplaza el inicio de verdad. Mismo dibujo que «Preparando tu cuenta…» de Apple y Google. */
+export function CuentaEnCamino() {
   const compu = useIsWide();
   return (
     <div style={marcoDeFuera(compu)}>
       <div style={marcoDeDentro(compu)}>
         <div style={{ minHeight: 40 }} />
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <CuerpoDelCodigo compu={compu} correo={codigoPendiente()} envio={{ estado: 'mandando' }} ocupado={false} />
+        <div role="status" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, textAlign: 'center' }}>
+          <Loader2 size={30} className="spin" color={KP.blue} />
+          <p style={{ ...subtitulo, margin: 0 }}>Creando tu cuenta…</p>
         </div>
       </div>
       <style>{'.spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}'}</style>
@@ -361,6 +374,13 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
   });
   const [cambiando, setCambiando] = useState(false);
   const [claveDelCodigo, setClaveDelCodigo] = useState('');   // pasadas las 24 h (o con la pestaña nueva) el servidor pide la contraseña para mandar otro código
+  // ANTES de la cuenta (31 oct 2026): a qué correo se mandó el último código y cuándo, y la ficha que entregó el código bueno. Solo en memoria de esta pantalla.
+  const ultimoEnvio = useRef(null);   // { correo, en }
+  const fichaRef = useRef(null);      // { correo, ficha, en }
+  const [fichaVista, setFichaVista] = useState(null);   // lo mismo SIN la ficha, para lo que se pinta (leer una ref al pintar no se vale)
+  const ponFicha = (v) => { fichaRef.current = v; setFichaVista(v ? { correo: v.correo, en: v.en } : null); };
+  // Ya llegó el perfil de la cuenta recién nacida: se acaba «Creando tu cuenta…».
+  useEffect(() => { if (modo === 'retomar') olvidaCuentaNaciendo(); }, [modo]);
   const [hojaUsuario, setHojaUsuario] = useState(false);
   // El paso del reloj: con un Apple Watch emparejado se conecta el reloj; sin él, Apple Salud. En la web solo se cuenta.
   const { listo: relojListo, reloj, conexion: relojConexion } = useReloj();
@@ -414,53 +434,141 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
     // Con `inicio_paso` en null, App.jsx abre su app: esto se desmonta solo.
   }
 
-  /* LA CUENTA NACE AQUÍ, con «Mandar código». En cuanto hay sesión, App.jsx arma el inicio otra vez (modo 'retomar'), así que lo que cruza ese cambio se anota
-     ANTES: el correo (`guardaCodigoPendiente`, el inicio nuevo lo lee al montarse y abre «Escribe el código») y el envío del código (`anotaEnvio`, en memoria:
-     mientras la app se rearma, `CodigoEnCamino` ocupa la pantalla en vez de la carga con el logo, y «Escribe el código» dice si salió o por qué no). */
-  async function crearCuenta() {
+  /* ANTES DE LA CUENTA (31 oct 2026). «Mandar código» SOLO manda el correo: todavía no existe ninguna cuenta, así que regresar es libre y nada queda a medias.
+     `correo-previo` comprueba que el usuario y el correo estén libres y manda el código. Con el código bueno entrega una ficha y AHÍ nace la cuenta (`creaCuenta`),
+     ya con el correo confirmado. Mientras llega su perfil, `CuentaEnCamino` ocupa la pantalla en vez de la carga con el logo. */
+  async function mandaPrevio() {
+    const destino = correo.trim().toLowerCase();
+    setError('');
+    // Ya confirmó este mismo correo hace poco (regresó a corregir el usuario o la contraseña): no hace falta otro código, se sigue con la cuenta.
+    if (fichaRef.current?.correo === destino && ahora() - fichaRef.current.en < VIGENCIA_FICHA_MS) { await creaCuenta(); return; }
+    // Ya se le mandó un código a este correo hace poco (regresó y volvió): ese sigue valiendo, no se manda otro.
+    if (ultimoEnvio.current?.correo === destino && ahora() - ultimoEnvio.current.en < VIGENCIA_CODIGO_MS) { setCodigoCorreo(''); setErrorCodigo(''); setI(i + 1); return; }
+    setOcupado(true);
+    try {
+      await pideCodigoPrevio(destino, modo === 'nuevo' ? usuario.trim() : undefined);
+    } catch (e) {
+      setOcupado(false);
+      // El usuario ya existe: se corrige en el paso del usuario, no aquí (donde la persona ya no ve ese campo).
+      if (e?.codigo === 'USUARIO_OCUPADO' && pasos.indexOf('cuenta') >= 0) { conservaError.current = true; setI(pasos.indexOf('cuenta')); }
+      setError(e?.message || 'No se pudo mandar el código.');
+      return;
+    }
+    ultimoEnvio.current = { correo: destino, en: ahora() };
+    ponFicha(null);
+    setCodigoCorreo('');
+    setErrorCodigo('');
+    setEnvio({ estado: 'mandado', error: '' });
+    setEspera(60);
+    setOcupado(false);
+    setI(i + 1);   // «Escribe el código»
+  }
+
+  /* «Mandar otro» en «Escribe el código» (todavía sin cuenta). Si falla, el aviso sale aparte y las cajas siguen abiertas: un código anterior puede seguir valiendo. */
+  async function mandaOtroPrevio() {
+    const destino = correo.trim().toLowerCase();
+    setError('');
+    setErrorCodigo('');
+    setOcupado(true);
+    try {
+      await pideCodigoPrevio(destino, modo === 'nuevo' ? usuario.trim() : undefined);
+      ultimoEnvio.current = { correo: destino, en: ahora() };
+      ponFicha(null);
+      setCodigoCorreo('');
+      setEnvio({ estado: 'mandado', error: '' });
+      setEspera(60);
+      avisa('Te mandamos otro código.');
+    } catch (e) {
+      setError(e?.message || 'No se pudo mandar el código.');
+    }
+    setOcupado(false);
+  }
+
+  /* Con los seis números se confirma solo: el código bueno entrega la ficha y con ella nace la cuenta. Si no sirve, el error en rojo y las cajas vacías. */
+  async function verificaCodigo(codigoEscrito) {
+    const destino = correo.trim().toLowerCase();
+    setErrorCodigo('');
+    setError('');
+    setOcupado(true);
+    let ficha;
+    try {
+      ({ ficha } = await confirmaCodigoPrevio(destino, codigoEscrito));
+    } catch (e) {
+      setErrorCodigo(e?.message || 'Ese código no sirve. Revísalo e inténtalo otra vez.');
+      setCodigoCorreo('');
+      setOcupado(false);
+      return;
+    }
+    ponFicha({ correo: destino, ficha, en: ahora() });
+    await creaCuenta();
+  }
+
+  /* AQUÍ NACE LA CUENTA, con el correo ya confirmado. `signup` (o `activar-invitacion`) comprueba la ficha: sin ella no crea nada. En cuanto hay sesión, App.jsx
+     arma el inicio otra vez (modo 'retomar') y deja «Creando tu cuenta…» hasta que llega el perfil (`marcaCuentaNaciendo`). */
+  async function creaCuenta() {
+    const f = fichaRef.current;
+    if (!f) return;
     setOcupado(true);
     setError('');
-    const email = correo.trim();
-    guardaCodigoPendiente(email);
-    recuerdaContrasena(clave);
-    let suelta = null;
-    anotaEnvio(new Promise((res, rej) => { suelta = { res, rej }; }));
-    const sigueElEnvio = (promesa) => (promesa ?? Promise.reject(new Error('No se pudo mandar el código. Pide otro.'))).then(suelta.res, suelta.rej);
-    const deshaz = (e) => { olvidaCodigoPendiente(); olvidaCuentaNueva(); falloAlCrear(e); };
+    // Lo que una prueba vieja dejó en esta pestaña (el camino de antes) no debe meterle un «Escribe el código» a esta cuenta, que ya nace confirmada.
+    olvidaCodigoPendiente();
+    olvidaCorreoPorConfirmar();
+    marcaCuentaNaciendo();
     if (modo === 'invitacion') {
       try {
         marcaInvitado();
         // Lo demás («Sobre ti», el reloj) se pregunta después: el servidor deja `inicio_paso = 'sobre'`.
-        const r = await activarInvitacion({ token: invitacion?.token, username: usuario.trim(), password: clave, email, nombre: invitacion?.datos?.nombre, apellido: invitacion?.datos?.apellido });
+        const r = await activarInvitacion({ token: invitacion?.token, username: usuario.trim(), password: clave, email: f.correo, ficha: f.ficha, nombre: invitacion?.datos?.nombre, apellido: invitacion?.datos?.apellido });
         const { error: errEntrar } = await signIn(r.username, clave);
         if (errEntrar) throw new Error(errEntrar.message);
-        if (r.correo_pendiente) {
-          guardaCorreoPorConfirmar(r.correo_pendiente);
-          sigueElEnvio(pideCodigoDeCorreo(r.correo_pendiente, clave));
-        } else {
-          olvidaCodigoPendiente();
-          olvidaCuentaNueva();
-        }
       } catch (e) {
-        deshaz(e);
+        falloAlCrear(e);
       }
       return;
     }
-    const { error: e, correoPendiente, envio: envioNuevo } = await signUp({
-      username: usuario.trim(), email, password: clave,
+    const { error: e } = await signUp({
+      username: usuario.trim(), email: f.correo, password: clave, ficha: f.ficha,
       fullName: [nombre.trim(), apellido.trim()].filter(Boolean).join(' '),
       accountType: tipo === 'coach' ? 'coach' : 'athlete',
       coachUsername: tipo === 'atleta' ? codigo : '',
-      // El nombre ya viene: lo que sigue después del código.
+      // El nombre ya viene: lo que sigue es lo de después del código.
       inicioPaso: tipo === 'coach' ? 'oficio' : 'entrenador',
     });
-    if (e) { deshaz(e); return; }
-    if (correoPendiente) sigueElEnvio(envioNuevo); else { olvidaCodigoPendiente(); olvidaCuentaNueva(); }
+    if (e) { falloAlCrear(e); return; }
     // La sesión nueva vuelve a dibujar la app; esta pantalla se va sola. El código de equipo ya se usó.
     onCodigoUsado?.();
   }
 
-  // «Escribe el código» oye cómo va el envío; en cuanto sale (o al abrir la pantalla) arranca la espera de «Mandar otro».
+  function falloAlCrear(e) {
+    olvidaCuentaNaciendo();
+    const m = String(e?.message || 'No se pudo crear la cuenta.');
+    const alPasoDeLaCuenta = pasos.indexOf('cuenta');
+    const alPasoDelCorreo = pasos.indexOf('correo');
+    // La ficha ya no sirve (pasó el tiempo o no era de este correo): se queda en «Escribe el código», con el aviso, para pedir otro.
+    if (e?.codigo === 'FICHA_VENCIDA' || e?.codigo === 'FICHA_INVALIDA') {
+      ponFicha(null);
+      ultimoEnvio.current = null;
+      setCodigoCorreo('');
+      setErrorCodigo(m);
+      setOcupado(false);
+      return;
+    }
+    // Otra cuenta se quedó con ese correo mientras tanto: se corrige en el paso del correo.
+    if (e?.codigo === 'CORREO_OCUPADO' && alPasoDelCorreo >= 0) {
+      ponFicha(null);
+      ultimoEnvio.current = null;
+      conservaError.current = true;
+      setI(alPasoDelCorreo);
+    // Un usuario ocupado o una contraseña que el servidor no acepta se corrigen en el paso del usuario, no aquí (donde la persona ya no ve esos campos).
+    } else if (/usuario|contraseña|password/i.test(m) && !/correo|email/i.test(m) && alPasoDeLaCuenta >= 0) {
+      conservaError.current = true;
+      setI(alPasoDeLaCuenta);
+    }
+    setError(m);
+    setOcupado(false);
+  }
+
+  // «Escribe el código» oye cómo va el envío del camino de antes; en cuanto sale (o al abrir la pantalla) arranca la espera de «Mandar otro».
   useEffect(() => oyeEnvio((v) => { setEnvio(v); if (v?.estado === 'mandado') setEspera(60); }), []);
   useEffect(() => {
     if (espera <= 0) return undefined;
@@ -468,51 +576,35 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
     return () => clearTimeout(t);
   }, [espera]);
 
-  /* «Mandar otro» y «Cambiar correo» (31 oct 2026). Sin la contraseña en memoria (la app se recargó) el servidor igual deja pedirlo: es una cuenta recién nacida. */
+  /* «Mandar otro» y «Cambiar correo» del camino de antes (cuentas que nacieron con el correo pendiente). Sin la contraseña en memoria el servidor igual deja
+     pedirlo a la cuenta recién nacida (primeras 24 h); pasado eso la pantalla la pide (`claveDelCodigo`). */
   function mandaCodigo(destino) {
     const limpio = String(destino ?? '').trim().toLowerCase();
     setErrorCodigo('');
     setCodigoCorreo('');
     guardaCodigoPendiente(limpio);
     guardaCorreoPorConfirmar(limpio);
-    const promesa = pideCodigoDeCorreo(limpio, contrasenaNueva() || claveDelCodigo || undefined);
+    const promesa = pideCodigoDeCorreo(limpio, claveDelCodigo || undefined);
     anotaEnvio(promesa);
     promesa.catch(() => { /* lo dice la pantalla */ });
     return promesa;
   }
 
-  /* «¿Problemas con el código?» → Apple o Google. La cuenta a medias (sin correo confirmado) se borra primero, para que no quede una cuenta que nadie comprobó;
-     luego se sale y se entra con el proveedor. Si se borra pero Apple o Google no abren, queda en la puerta de entrada, sin cuenta a medias.
-     Borrar pide la contraseña (`mi-cuenta`): va la de memoria. Si la app se recargó y ya no está, no se borra y solo se sale: esa cuenta nunca tuvo un correo
-     confirmado, así que no queda nada que alguien pueda usar (solo el usuario apartado). */
+  /* «¿Problemas con el código?» → Apple o Google. Antes de la cuenta no hay nada que borrar: simplemente se va por ahí (la invitación o el tipo de cuenta se
+     recuerdan para cuando regrese). Una cuenta del camino de antes (con sesión) sale primero de esa cuenta, que nunca tuvo un correo confirmado. */
   async function entraConOtra(cual) {
     setOcupado(true);
     setError('');
-    if (contrasenaNueva()) {
-      try {
-        await eliminaMiCuenta({ confirmacion: 'ELIMINAR', contrasena: contrasenaNueva() });
-      } catch (e) {
-        setError(e.message || 'No se pudo cerrar esta cuenta. Inténtalo otra vez.');
-        setOcupado(false);
-        return;
-      }
+    if (modo === 'invitacion') guardaInvitacionPendiente(invitacion?.token);
+    else guardaTipoPendiente(esCoach ? 'coach' : 'atleta'); // al volver de Apple o Google no se le pregunta otra vez qué va a hacer
+    if (modo === 'retomar') {
+      olvidaCodigoPendiente();
+      olvidaCorreoPorConfirmar();
+      olvidaCuentaNueva();
+      await signOut();
     }
-    guardaTipoPendiente(esCoach ? 'coach' : 'atleta'); // al volver de Apple o Google no se le pregunta otra vez qué va a hacer
-    olvidaCodigoPendiente();
-    olvidaCorreoPorConfirmar();
-    olvidaCuentaNueva();
-    await signOut();
     const r = cual === 'apple' ? await entrarConApple() : await entrarConGoogle();
-    if (r?.error) avisa(r.error.message);
-  }
-
-  function falloAlCrear(e) {
-    // Un usuario ocupado o una contraseña que el servidor no acepta se corrigen en el paso del usuario, no aquí (donde la persona ya no ve esos campos).
-    const m = String(e?.message || 'No se pudo crear la cuenta.');
-    const alPasoDeLaCuenta = pasos.indexOf('cuenta');
-    if (/usuario|contraseña|password/i.test(m) && !/correo|email/i.test(m) && alPasoDeLaCuenta >= 0) { conservaError.current = true; setI(alPasoDeLaCuenta); }
-    setError(m);
-    setOcupado(false);
+    if (r?.error) { avisa(r.error.message); setOcupado(false); }
   }
 
   // Con Apple o Google: el tipo de cuenta se guarda de una vez (solo se puede una vez) y se sigue con lo que le toca.
@@ -577,6 +669,14 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
       .finally(() => { confirmando.current = false; setOcupado(false); });
   }, [codigoCorreo, paso, modo, refreshProfile, avisa, user?.id]);
 
+  // «Escribe el código» ANTES de la cuenta: con los seis números se comprueba y, si es el bueno, nace la cuenta (`verificaCodigo`).
+  useEffect(() => {
+    if (paso !== 'verifica' || codigoCorreo.length !== 6 || confirmando.current || fichaRef.current) return;
+    confirmando.current = true;
+    verificaCodigo(codigoCorreo).finally(() => { confirmando.current = false; });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [codigoCorreo, paso]);
+
   async function salir() {
     setOcupado(true);
     // Lo que la pestaña recuerda es de ESTA cuenta: si se queda, otra persona que entre aquí vería el código de la anterior.
@@ -597,7 +697,8 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
 
   /* ---------- la barra de arriba ---------- */
   const camino = caminoDe({ esCoach, social, invitado, pideNombre: pasos.includes('nombre') || (modo === 'google' && !(profile?.full_name || '').trim()) });
-  const hechos = camino.indexOf(paso);
+  // «Escribe el código» es la segunda mitad de «¿Tu correo?»: cuenta como el mismo paso en la barra.
+  const hechos = camino.indexOf(paso === 'verifica' ? 'correo' : paso);
   const muestraBarra = paso !== 'listo';
   const primeraTrasApple = modo === 'google' && paso === 'tipo';
   // «Escribe el código» no se puede saltar (31 oct 2026), pero sí regresar: la flecha abre «Cambiar correo» y desde ahí vuelve al código.
@@ -761,9 +862,12 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
     );
     pie = continuar(sigue, 'Continuar', !valido);
   } else if (paso === 'correo' && (modo !== 'retomar' || cambiando)) {
-    // «¿Tu correo?»: la cuenta nace aquí. Con «Cambiar correo» (ya con la cuenta creada) es la misma pantalla y regresa a «Escribe el código».
+    // «¿Tu correo?»: todavía sin cuenta, «Mandar código» solo manda el correo. Con «Cambiar correo» de una cuenta del camino de antes (ya con sesión) es la misma
+    // pantalla y regresa a «Escribe el código».
     const bien = correoValido(correo) && !esCorreoInventado(correo);
-    const manda = cambiando ? () => { mandaCodigo(correo); setCambiando(false); } : crearCuenta;
+    const manda = cambiando ? () => { mandaCodigo(correo); setCambiando(false); } : mandaPrevio;
+    // Ya confirmó este mismo correo hace poco (regresó a corregir el usuario o la contraseña): lo que sigue es crear la cuenta, no mandar otro código.
+    const yaConfirmo = !cambiando && !!fichaVista && fichaVista.correo === correo.trim().toLowerCase() && ahora() - fichaVista.en < VIGENCIA_FICHA_MS;
     cuerpo = (
       <>
         <h1 style={titulo(compu)}>¿Tu correo?</h1>
@@ -774,8 +878,33 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
     );
     pie = (
       <button type="button" className="kp-press" onClick={manda} disabled={!bien || ocupado} style={botonPrimario(ocupado, !bien)}>
-        {ocupado ? <><Loader2 size={18} className="spin" />Mandando el código…</> : 'Mandar código'}
+        {ocupado ? <><Loader2 size={18} className="spin" />{yaConfirmo ? 'Creando tu cuenta…' : 'Mandando el código…'}</> : yaConfirmo ? 'Crear mi cuenta' : 'Mandar código'}
       </button>
+    );
+  } else if (paso === 'verifica') {
+    // «Escribe el código» ANTES de la cuenta (31 oct 2026): el código se comprueba sin sesión y, con el bueno, nace la cuenta. La flecha de atrás regresa a «¿Tu correo?»
+    // (= «Cambiar correo»). Ya con el código bueno las cajas se cierran: si la cuenta no se pudo crear, «Intentar otra vez» la crea con esa misma prueba.
+    const confirmado = !!fichaVista;
+    cuerpo = (
+      <CuerpoDelCodigo
+        compu={compu} correo={correo.trim().toLowerCase()} envio={envio}
+        codigo={codigoCorreo} onCodigo={confirmado ? undefined : (v) => { setCodigoCorreo(v); if (v) setErrorCodigo(''); }} errorCodigo={errorCodigo}
+        ocupado={ocupado} espera={espera}
+        onOtro={mandaOtroPrevio}
+        onCambiar={() => { setError(''); setErrorCodigo(''); setI(i - 1); }}
+        error={Error}
+      />
+    );
+    pie = (
+      <>
+        {confirmado && error && !ocupado && (
+          <button type="button" className="kp-press" onClick={creaCuenta} style={{ ...botonPrimario(false, false), marginBottom: 14 }}>Intentar otra vez</button>
+        )}
+        <OtraEntrada
+          apple={appleDisponible} google={googleDisponible} ocupado={ocupado}
+          onApple={() => entraConOtra('apple')} onGoogle={() => entraConOtra('google')}
+        />
+      </>
     );
   } else if (paso === 'correo') {
     // La segunda mitad de «¿Tu correo?»: la cuenta ya nació y el código va en camino. No se puede saltar (31 oct 2026).
@@ -1041,7 +1170,7 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
   return (
     <div style={marcoDeFuera(compu)}>
       <div
-        // Al llegar a «Escribe el código» desde `CodigoEnCamino` no se anima: es la misma pantalla que ya estaba.
+        // «Escribe el código» de una cuenta del camino de antes (ya con sesión) no se anima al abrirse: es la misma pantalla que ya estaba.
         key={`${paso}-${conCodigo}-${cambiando}`}
         className={enElCodigo && !cambiando && i === 0 ? undefined : 'animate-fade-in'}
         style={marcoDeDentro(compu)}

@@ -74,6 +74,29 @@ const USERNAME_RE = /^[a-zA-Z0-9_.]{3,30}$/
 const escapaLike = (t: string) => t.replace(/[\\%_]/g, '\\$&')
 const CADUCO = 'Este link ya no sirve. Pídele uno nuevo a tu entrenador.'
 
+/* LA FICHA DEL CORREO (31 oct 2026). `correo-previo` manda el código y lo comprueba SIN cuenta; con el código bueno entrega una ficha de un solo uso y guarda su
+   huella (HMAC-SHA256 con la llave de servicio) en `codigos_previos`. Aquí se comprueba que la ficha sea de ESE correo, que no esté usada y que no tenga más de 20
+   minutos. Es el mismo trozo que en `signup`. */
+const VIGENCIA_FICHA_MS = 20 * 60_000
+async function hmac(texto: string): Promise<string> {
+  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  return Array.from(new Uint8Array(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(texto))), (b) => b.toString(16).padStart(2, '0')).join('')
+}
+function iguales(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  let r = 0
+  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return r === 0
+}
+// deno-lint-ignore no-explicit-any
+async function fichaDelCorreo(admin: any, correo: string, ficha: string): Promise<'ok' | 'no' | 'vencida'> {
+  const { data: f } = await admin.from('codigos_previos').select('ficha_hash, verificado_en, usado_en').eq('correo', correo).maybeSingle()
+  if (!f || !f.ficha_hash || !f.verificado_en || f.usado_en) return 'no'
+  if (!iguales(await hmac(`ficha:${correo}:${ficha}`), String(f.ficha_hash))) return 'no'
+  if (Date.now() - new Date(f.verificado_en).getTime() > VIGENCIA_FICHA_MS) return 'vencida'
+  return 'ok'
+}
+
 Deno.serve(async (req) => {
   const origin = req.headers.get('Origin')
 
@@ -84,6 +107,8 @@ Deno.serve(async (req) => {
     token?: string; modo?: string; username?: string
     password?: string; email?: string; genero?: string
     nombre?: string; apellido?: string
+    // La ficha que entrega `correo-previo` con el código bueno: con ella la cuenta queda con ese correo YA confirmado (31 oct 2026).
+    ficha?: string
   }
   try {
     p = await req.json()
@@ -184,6 +209,25 @@ Deno.serve(async (req) => {
     return json({ error: 'Correo inválido' }, 400, origin)
   }
 
+  /* LA CUENTA QUEDA CON SU CORREO DESPUÉS DEL CÓDIGO (31 oct 2026). Con `ficha`, esta persona ya escribió el código bueno de ESE correo: la cuenta queda con él,
+     ya confirmado. Una ficha que no sirve corta aquí; nunca se cae al camino de abajo (el del correo pendiente, solo para los clientes viejos). */
+  const ficha = String(p.ficha ?? '').trim()
+  let correoVerificado = false
+  if (ficha) {
+    if (!email || /@(sin-correo\.)?traininglab(app\.com|\.app)$/i.test(email)) {
+      return json({ error: 'Falta tu correo confirmado. Vuelve a pedir el código.', codigo: 'FICHA_INVALIDA' }, 400, origin)
+    }
+    const veredicto = await fichaDelCorreo(admin, email, ficha)
+    if (veredicto === 'vencida') return json({ error: 'Pasó mucho tiempo desde que confirmaste tu correo. Pide otro código.', codigo: 'FICHA_VENCIDA' }, 400, origin)
+    if (veredicto !== 'ok') return json({ error: 'No pudimos comprobar tu correo. Pide otro código.', codigo: 'FICHA_INVALIDA' }, 400, origin)
+    // Ninguna otra cuenta lo usa (la de relleno de este atleta tiene uno inventado).
+    const { data: ocupado } = await admin.rpc('usuario_por_correo', { p_correo: email })
+    if (Array.isArray(ocupado) && ocupado.some((o: { id: string }) => o.id !== atleta.id)) {
+      return json({ error: 'Ese correo ya lo usa otra cuenta. Escribe otro, o entra con esa cuenta.', codigo: 'CORREO_OCUPADO' }, 409, origin)
+    }
+    correoVerificado = true
+  }
+
   // Usuario libre. Se excluye el suyo propio: el coach ya le reservó uno al
   // darlo de alta, y si lo deja tal cual no debe chocar consigo mismo.
   const { data: tomado } = await admin
@@ -197,8 +241,8 @@ Deno.serve(async (req) => {
   // La cuenta nace SIEMPRE con su correo interno, igual que en `signup` (lote 1 de seguridad, 25 oct 2026): el correo que escribió
   // no se da por bueno hasta que teclee el código de 6 números. Viaja de vuelta como `correo_pendiente` y la app manda el código
   // enseguida (inicio nuevo, 30 oct 2026: «Escribe el código», en la misma pantalla del correo). Antes se guardaba ya confirmado.
-  const correoFinal = `${username.toLowerCase()}@sin-correo.traininglabapp.com`
-  const correoPendiente = email && !/@(sin-correo\.)?traininglab(app\.com|\.app)$/i.test(email) ? email : null
+  const correoFinal = correoVerificado ? email : `${username.toLowerCase()}@sin-correo.traininglabapp.com`
+  const correoPendiente = !correoVerificado && email && !/@(sin-correo\.)?traininglab(app\.com|\.app)$/i.test(email) ? email : null
 
   const { error: errAuth } = await admin.auth.admin.updateUserById(atleta.id, {
     email: correoFinal,
@@ -226,6 +270,12 @@ Deno.serve(async (req) => {
   }
 
   await admin.from('invitaciones').update({ usada_en: new Date().toISOString() }).eq('token', token)
+
+  // La ficha se gasta hasta aquí (cuenta y perfil listos): si algo falló antes, la persona puede corregir y volver a intentar con la misma, sin otro código.
+  if (correoVerificado) {
+    const { error: errGasta } = await admin.from('codigos_previos').update({ usado_en: new Date().toISOString(), ficha_hash: null }).eq('correo', email)
+    if (errGasta) console.error('codigos_previos (gastar la ficha):', errGasta.message)
+  }
 
   return json({ ok: true, email: correoFinal, username, correo_pendiente: correoPendiente }, 200, origin)
 })
