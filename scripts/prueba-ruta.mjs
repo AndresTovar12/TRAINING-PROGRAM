@@ -131,9 +131,11 @@ const simula = (velocidades, deporte = 'correr', { sinSenal = [] } = {}) => {
 // Un semáforo de 20 s: corre 30 s, se para 20 s, vuelve a correr.
 const semaforo = simula([...Array(30).fill(3.3), ...Array(20).fill(0.1), ...Array(15).fill(3.3)]);
 assert.equal(semaforo.length, 2, `semáforo: ${JSON.stringify(semaforo)}`);
-assert.deepEqual([semaforo[0].accion, semaforo[0].en - 30], ['pausa', 3], 'pausa a los 3 s de parar');
+assert.deepEqual([semaforo[0].accion, semaforo[0].en - 30], ['pausa', 2], 'pausa a los 2 s de parar');
 assert.deepEqual([semaforo[1].accion, semaforo[1].en - 50], ['reanuda', 2], 'reanuda 2 s después de arrancar');
 assert.equal(semaforo[0].desde, 30, 'la pausa cuenta desde que se paró');
+// Una lectura lenta suelta (1 s) a media carrera: no pausa.
+assert.equal(simula([...Array(20).fill(3.3), 0.2, ...Array(20).fill(3.3)]).length, 0, 'un segundo lento no pausa');
 // Trote lento constante a 1.8 m/s: nunca pausa.
 assert.equal(simula(Array(120).fill(1.8)).length, 0, 'trote lento no pausa');
 // Bici a 1.5 m/s no pausa (su umbral para pausar es 1.0); bici parada sí.
