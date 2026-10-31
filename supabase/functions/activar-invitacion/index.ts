@@ -228,6 +228,11 @@ Deno.serve(async (req) => {
     correoVerificado = true
   }
 
+  // El camino antiguo (correo pendiente) se retiró el 31 oct 2026: sin la ficha de un código bueno no se activa nada.
+  if (!correoVerificado) {
+    return json({ error: 'Esta versión de la app ya no puede activar invitaciones. Actualiza la app (o recarga la página) y vuelve a intentarlo.', codigo: 'APP_VIEJA' }, 426, origin)
+  }
+
   // Usuario libre. Se excluye el suyo propio: el coach ya le reservó uno al
   // darlo de alta, y si lo deja tal cual no debe chocar consigo mismo.
   const { data: tomado } = await admin
@@ -238,11 +243,8 @@ Deno.serve(async (req) => {
     .maybeSingle()
   if (tomado) return json({ error: 'Ese nombre de usuario ya está en uso' }, 409, origin)
 
-  // La cuenta nace SIEMPRE con su correo interno, igual que en `signup` (lote 1 de seguridad, 25 oct 2026): el correo que escribió
-  // no se da por bueno hasta que teclee el código de 6 números. Viaja de vuelta como `correo_pendiente` y la app manda el código
-  // enseguida (inicio nuevo, 30 oct 2026: «Escribe el código», en la misma pantalla del correo). Antes se guardaba ya confirmado.
-  const correoFinal = correoVerificado ? email : `${username.toLowerCase()}@sin-correo.traininglabapp.com`
-  const correoPendiente = !correoVerificado && email && !/@(sin-correo\.)?traininglab(app\.com|\.app)$/i.test(email) ? email : null
+  // La cuenta queda con el correo cuyo código ya se comprobó (la ficha de arriba).
+  const correoFinal = email
 
   const { error: errAuth } = await admin.auth.admin.updateUserById(atleta.id, {
     email: correoFinal,
@@ -277,7 +279,7 @@ Deno.serve(async (req) => {
     if (errGasta) console.error('codigos_previos (gastar la ficha):', errGasta.message)
   }
 
-  return json({ ok: true, email: correoFinal, username, correo_pendiente: correoPendiente }, 200, origin)
+  return json({ ok: true, email: correoFinal, username, correo_pendiente: null }, 200, origin)
 })
 
 /* RECLAMAR LA INVITACIÓN CON APPLE O GOOGLE (inicio nuevo, 30 oct 2026). «Entra con Apple o Google y ya quedas con Carlos. Nada que llenar.»

@@ -260,17 +260,13 @@ Deno.serve(async (req) => {
     correoVerificado = true
   }
 
-  /* CAMINO ANTIGUO (sin ficha): solo para los clientes viejos de TestFlight. El correo escrito no se usa hasta teclear el código con la cuenta ya creada.
-     RETIRAR cuando los builds nuevos estén instalados (ver memoria project_inicio_cuenta_y_codigo). */
-  const correoInterno = `${username.toLowerCase()}@sin-correo.traininglabapp.com`
-  let correoPendiente: string | null = null
-  if (!email || (!confiable && esCorreoInterno(email))) {
-    // Sin correo, o uno de los internos escrito a mano (no se deja: reservaria el correo interno de otro usuario).
-    email = correoInterno
-  } else if (!confiable && !correoVerificado) {
-    correoPendiente = email
-    email = correoInterno
+  /* El camino antiguo (cuenta primero, código después) se retiró el 31 oct 2026: nadie crea una cuenta sin la ficha de un código bueno. Solo el dueño (`confiable`)
+     puede crear cuentas sin ella (sus cuentas de prueba y los coaches que da de alta), y esas sí pueden ir sin correo. */
+  if (!confiable && !correoVerificado) {
+    return json({ error: 'Esta versión de la app ya no puede crear cuentas. Actualiza la app (o recarga la página) y vuelve a intentarlo.', codigo: 'APP_VIEJA' }, 426, origin)
   }
+  const correoInterno = `${username.toLowerCase()}@sin-correo.traininglabapp.com`
+  if (!email) email = correoInterno
 
   // Freno por conexión (IP): 30 cuentas nuevas por hora. Alcanza para un gimnasio entero con un solo wifi y frena a quien crea cuentas en masa.
   // El dueño creando coaches con su sesión no cuenta.
@@ -290,8 +286,8 @@ Deno.serve(async (req) => {
 
   // El correo escrito ya es de otra cuenta (31 oct 2026): se dice AQUÍ, antes de crear nada. Antes se creaba la cuenta y el código fallaba en silencio
   // («Ese correo ya lo usa otra cuenta»), y la persona quedaba con una cuenta a medias esperando un código que nunca salió.
-  if (correoPendiente || correoVerificado) {
-    const { data: ocupado } = await admin.rpc('usuario_por_correo', { p_correo: (correoPendiente ?? email) as string })
+  if (correoVerificado) {
+    const { data: ocupado } = await admin.rpc('usuario_por_correo', { p_correo: email as string })
     if (Array.isArray(ocupado) && ocupado.length) {
       return json({ error: 'Ese correo ya lo usa otra cuenta. Escribe otro, o entra con esa cuenta.', codigo: 'CORREO_OCUPADO' }, 409, origin)
     }
@@ -320,7 +316,7 @@ Deno.serve(async (req) => {
     email,
     password,
     email_confirm: true,
-    user_metadata: { username, full_name: fullName, role, ...(correoPendiente ? { correo_pendiente: correoPendiente } : {}) },
+    user_metadata: { username, full_name: fullName, role },
   })
 
   if (error) {
@@ -372,5 +368,5 @@ Deno.serve(async (req) => {
     if (errGasta) console.error('codigos_previos (gastar la ficha):', errGasta.message)
   }
 
-  return json({ ok: true, user_id: userId, email, role, coach_id: coachId, correo_pendiente: correoPendiente }, 200, origin)
+  return json({ ok: true, user_id: userId, email, role, coach_id: coachId, correo_pendiente: null }, 200, origin)
 })
