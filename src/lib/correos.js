@@ -38,3 +38,11 @@ export function correoPorConfirmar() {
 export function olvidaCorreoPorConfirmar() {
   try { localStorage.removeItem(LLAVE_CORREO_POR_CONFIRMAR); } catch { /* sin almacenamiento */ }
 }
+
+/** El correo que la cuenta nueva todavía no confirma, según el SERVIDOR (no la memoria de esta pestaña): la cuenta nació con un correo inventado y quedó anotado
+    en `user_metadata.correo_pendiente` el que escribió. Se acaba solo al confirmar el código, porque entonces el correo de la cuenta deja de ser inventado.
+    Es lo que hace que cerrar la pestaña, cambiar de aparato o limpiar datos NO deje saltarse «Escribe el código» (31 oct 2026). Devuelve '' si no hay nada pendiente. */
+export function correoSinConfirmar(usuario) {
+  const pendiente = String(usuario?.user_metadata?.correo_pendiente ?? '').trim().toLowerCase();
+  return pendiente && esCorreoInventado(usuario?.email) ? pendiente : '';
+}

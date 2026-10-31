@@ -17,7 +17,7 @@ import ActivarInvitacion from '@/features/auth/ActivarInvitacion';
 import UnirseAlEquipo from '@/features/auth/UnirseAlEquipo';
 import Inicio, { CodigoEnCamino } from '@/features/inicio/Inicio';
 import { codigoPendiente, esInvitado, invitacionPendiente, marcaInvitado, olvidaInvitacionPendiente } from '@/features/inicio/marcas';
-import { envioDelCodigo } from '@/features/inicio/cuentaNueva';
+import { correoPorConfirmarDe, envioDelCodigo } from '@/features/inicio/cuentaNueva';
 import LandingPage from '@/features/landing/LandingPage';
 import TrainingApp from '@/features/training/TrainingApp';
 import AdminApp from '@/features/admin/AdminApp';
@@ -563,7 +563,9 @@ export default function App() {
      lo único que se ve. Y quien creó su cuenta y cerró a la mitad de las preguntas retoma donde iba (`inicio_paso`). Las
      dos cosas son el mismo inicio (ver `features/inicio`); la `key` lo vuelve a armar al cambiar de modo. */
   if (profile.perfil_completo === false) return <><Inicio key="google" modo="google" codigo={unirse || ''} onCodigoUsado={cierraUnirse} /><UpdateBanner /></>;
-  if (profile.inicio_paso) return <><Inicio key="retomar" modo="retomar" codigo={unirse || ''} onCodigoUsado={cierraUnirse} /><UpdateBanner /></>;
+  // La puerta también depende del SERVIDOR: una cuenta nueva con el correo sin confirmar no pasa aunque `inicio_paso` ya esté vacío ni aunque esta pestaña no se
+  // acuerde del código (cerró la pestaña, cambió de aparato). Las cuentas viejas no traen `correo_pendiente` y siguen como estaban.
+  if (profile.inicio_paso || correoPorConfirmarDe(user)) return <><Inicio key="retomar" modo="retomar" codigo={unirse || ''} onCodigoUsado={cierraUnirse} /><UpdateBanner /></>;
 
   // Abrió un link o QR de equipo: primero eso (ver `UnirseAlEquipo`), luego su app.
   if (unirse) return <><UnirseAlEquipo codigo={unirse} onTerminar={cierraUnirse} /><UpdateBanner /></>;

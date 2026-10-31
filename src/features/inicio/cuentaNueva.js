@@ -8,7 +8,10 @@
    Si la app se recarga se pierde todo esto, y no pasa nada grave: `correo-de-la-cuenta` deja pedir otro código sin contraseña a la cuenta recién nacida
    (primeras 24 h, mientras siga con su correo inventado), y sin contraseña Apple/Google solo sale sin borrarla (nunca tuvo un correo confirmado). */
 
+import { correoSinConfirmar } from '../../lib/correos.js';
+
 let contrasena = '';
+let confirmadoId = '';
 let envio = null;
 const oyentes = new Set();
 
@@ -22,7 +25,7 @@ export function anotaEnvio(promesa) {
   oyentes.forEach((f) => f(envio));
   promesa.then(
     () => { if (envio === este) { envio = { estado: 'mandado', error: '' }; oyentes.forEach((f) => f(envio)); } },
-    (e) => { if (envio === este) { envio = { estado: 'fallo', error: e?.message || 'No se pudo mandar el código.' }; oyentes.forEach((f) => f(envio)); } },
+    (e) => { if (envio === este) { envio = { estado: 'fallo', error: e?.message || 'No se pudo mandar el código.', ...(e?.codigo ? { codigo: e.codigo } : {}) }; oyentes.forEach((f) => f(envio)); } },
   );
 }
 
@@ -39,3 +42,10 @@ export function olvidaCuentaNueva() {
   envio = null;
   oyentes.forEach((f) => f(envio));
 }
+
+/* «¿Esta cuenta ya confirmó su correo aquí?» Respaldo de `correoSinConfirmar` (que lee la sesión): si la sesión tardara en traer el correo nuevo, quien acaba de
+   escribir el código bueno no se queda atrapado en «Escribe el código». Va por id de cuenta: otra cuenta que entre en esta pestaña no hereda el permiso. */
+export const marcaCorreoConfirmado = (id) => { confirmadoId = String(id ?? ''); };
+
+/** El correo que la cuenta todavía no confirma, o '' (nunca para quien lo acaba de confirmar en esta pestaña). Lo usan la puerta de `App.jsx` y el inicio. */
+export const correoPorConfirmarDe = (usuario) => (usuario?.id && usuario.id === confirmadoId ? '' : correoSinConfirmar(usuario));
