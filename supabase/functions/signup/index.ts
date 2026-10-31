@@ -248,6 +248,15 @@ Deno.serve(async (req) => {
     return json({ error: 'Ese nombre de usuario ya está en uso' }, 409, origin)
   }
 
+  // El correo escrito ya es de otra cuenta (31 oct 2026): se dice AQUÍ, antes de crear nada. Antes se creaba la cuenta y el código fallaba en silencio
+  // («Ese correo ya lo usa otra cuenta»), y la persona quedaba con una cuenta a medias esperando un código que nunca salió.
+  if (correoPendiente) {
+    const { data: ocupado } = await admin.rpc('usuario_por_correo', { p_correo: correoPendiente })
+    if (Array.isArray(ocupado) && ocupado.length) {
+      return json({ error: 'Ese correo ya lo usa otra cuenta. Escribe otro, o entra con esa cuenta.', codigo: 'CORREO_OCUPADO' }, 409, origin)
+    }
+  }
+
   /* Si el atleta dijo con quién entrena, resolverlo.
 
      La búsqueda vive en la base (`coach_por_referencia`) y no aquí, porque hay

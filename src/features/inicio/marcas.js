@@ -3,7 +3,8 @@
    Hace falta porque al nacer la cuenta la app se vuelve a armar: sin sesión el inicio va en modo `nuevo` y con sesión en `retomar` (ver `App.jsx`, la `key`).
    Lo que estaba en pantalla se pierde, y estas tres cosas tienen que llegar al otro lado:
      · CÓDIGO: el correo al que se acaba de mandar el código. «¿Tu correo?» y «Escribe el código» son UNA pantalla en dos momentos; el segundo ya va con la
-       cuenta creada. Se olvida al confirmar o con «Lo confirmo después» (Mi perfil sigue recordando el correo pendiente, con `lib/correos`).
+       cuenta creada. Se olvida al confirmar (Mi perfil sigue recordando el correo pendiente, con `lib/correos`). Lo que no puede ir aquí (el envío del código,
+       la contraseña) cruza en memoria con `cuentaNueva.js`.
      · INVITADO: entró por el link de su entrenador. Su camino no pregunta el tipo, el nombre ni el entrenador, y la barra de arriba lo cuenta así.
      · INVITACIÓN: el link (token) mientras va a Apple o Google y regresa. Al volver con sesión, `App.jsx` la reclama (`activar-invitacion`, modo `reclamar`).
    Todo en try/catch: sin almacenamiento no pasa nada grave (se salta el código, la barra cuenta el camino de siempre, la invitación se vuelve a abrir). */

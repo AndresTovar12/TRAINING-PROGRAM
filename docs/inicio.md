@@ -23,9 +23,9 @@ La barra de arriba cuenta solo los pasos de esa persona; la bienvenida no cuenta
 | Quién | Pasos |
 |---|---|
 | Atleta con Apple o Google | tipo → entrenador → sobre → reloj → bienvenida |
-| Atleta con usuario | tipo → cuenta → correo → nombre → entrenador → sobre → reloj → bienvenida |
+| Atleta con usuario | tipo → nombre → cuenta → correo → entrenador → sobre → reloj → bienvenida |
 | Coach con Apple o Google | tipo → oficio → entrena → equipo → repertorio → bienvenida |
-| Coach con usuario | tipo → cuenta → correo → nombre → oficio → entrena → equipo → repertorio → bienvenida |
+| Coach con usuario | tipo → nombre → cuenta → correo → oficio → entrena → equipo → repertorio → bienvenida |
 | Invitación con Apple o Google | sobre → reloj → bienvenida |
 | Invitación con usuario | cuenta → correo → sobre → reloj → bienvenida |
 | Ya tiene cuenta | «Usar usuario y contraseña» → «Entrar» (dos toques) |
@@ -35,12 +35,11 @@ Si Apple no da el nombre, sale también «¿Cómo te llamas?» después del tipo
 ## Cada pantalla
 
 - **tipo** («¿Qué vas a hacer?»): dos fotos grandes, «Entreno» y «Creo planes». Un toque y sigue. Después de Apple o Google dice «Hola, Mariana.» y arriba lleva **«Salir»** en vez de la flecha (cierra la sesión y vuelve a la puerta).
-- **cuenta**: usuario y contraseña, con lo que falta dicho en vivo.
-- **correo**, una pantalla en dos momentos:
-  1. «¿Tu correo?» con «Mandar código» y «Crear cuenta sin correo». **La cuenta nace aquí** (`signup`, o `activar-invitacion` modo `activar` con invitación). El correo no queda como correo de la cuenta hasta confirmar el código (lote 1 de seguridad).
-  2. «Escribe el código»: seis cajas; con los seis se confirma solo. Si no sirve, error en rojo y cajas vacías. «Lo confirmo después» sigue y lo recuerda en Mi perfil.
-  «Crear cuenta sin correo» pregunta antes en una hoja («Si olvidas tu contraseña, te la da tu entrenador» / al coach: «nos la pides por mensaje»).
-- **nombre** («¿Cómo te llamas?»).
+- **nombre** («¿Cómo te llamas?»): nombre y apellido. Con usuario va ANTES de la cuenta (31 oct 2026): solo se recuerda y viaja a `signup` como `full_name`.
+- **cuenta**: usuario y contraseña, con lo que falta dicho en vivo, y «Confirma tu contraseña» (si no coinciden, no deja seguir).
+- **correo**, una pantalla en dos momentos (31 oct 2026, maqueta https://claude.ai/artifact/RcFd9dYXoYxzYAinD5eQDB). **Nadie entra sin confirmar su correo**: ya no existen «Crear cuenta sin correo» ni «Lo confirmo después».
+  1. «¿Tu correo?» con «Mandar código». **La cuenta nace aquí** (`signup`, o `activar-invitacion` modo `activar` con invitación). Si el correo ya es de otra cuenta, `signup` lo dice antes de crear nada. El botón gira con «Mandando el código…» y, mientras la app se rearma con la sesión nueva, `CodigoEnCamino` enseña «Escribe el código» en vez de la carga con el logo. El correo no queda como correo de la cuenta hasta confirmar el código (lote 1 de seguridad).
+  2. «Escribe el código»: seis cajas; con los seis se confirma solo. Dice si el código salió o por qué no (`features/inicio/cuentaNueva.js`). Recuadro azul «¿No lo ves? Revisa tu carpeta de Correo no deseado o Spam». «Mandar otro» (espera 60 s) · «Cambiar correo» (vuelve a «¿Tu correo?» y regresa). Abajo, «¿Problemas con el código?» con Apple y Google: la cuenta a medias se borra (`mi-cuenta`, `eliminar`, con la contraseña que guarda `cuentaNueva.js` en memoria; si la app se recargó, solo sale) y entra con el proveedor. Sin atrás: no se salta. «Mandar otro» y «Cambiar correo» no piden contraseña: `correo-de-la-cuenta` lo acepta solo en una cuenta de menos de 24 h que sigue con su correo inventado, y la espera de 60 s es por correo (a otro correo, 10 s).
 - **entrenador** («¿Entrenas con un entrenador?»): estilo C. «Sí, tengo su código» abre el campo del código, la tarjeta verde del entrenador encontrado y «Quedar con Carlos»; «No tengo código» regresa. «Entreno por mi cuenta» sigue.
 - **sobre** («Sobre ti»): sexo (Mujer / Hombre / Prefiero no decir) y fecha de nacimiento. «Continuar» se enciende al elegir el sexo; «Saltar» no guarda nada. Guarda `genero` y `fecha_nacimiento`.
 - **reloj**: Apple Watch, Apple Salud o (en la web) solo el aviso. Ver `docs/entreno-y-reloj.md`, sección 9.
