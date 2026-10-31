@@ -1,19 +1,22 @@
 /* Pruebas de lo que cruza en memoria al nacer la cuenta (`features/inicio/cuentaNueva.js`): `node scripts/prueba-cuenta-nueva.mjs`. Sin red. */
 import assert from 'node:assert/strict';
 import {
-  anotaEnvio, contrasenaNueva, correoPorConfirmarDe, envioDelCodigo, marcaCorreoConfirmado, olvidaCuentaNueva, oyeEnvio, recuerdaContrasena,
+  anotaEnvio, correoPorConfirmarDe, cuentaNaciendo, envioDelCodigo, marcaCorreoConfirmado, marcaCuentaNaciendo, olvidaCuentaNaciendo, olvidaCuentaNueva, oyeEnvio,
 } from '../src/features/inicio/cuentaNueva.js';
 import { correoSinConfirmar } from '../src/lib/correos.js';
 
 const espera = () => new Promise((r) => { setTimeout(r, 0); });
 
-// Sin nada anotado: no hay envío (la pantalla lo da por mandado) ni contraseña.
+// Sin nada anotado: no hay envío (la pantalla lo da por mandado) y ninguna cuenta está naciendo.
 assert.equal(envioDelCodigo(), null);
-assert.equal(contrasenaNueva(), '');
+assert.equal(cuentaNaciendo(), false);
 
-// La contraseña vive en memoria y se olvida.
-recuerdaContrasena('entrena2026');
-assert.equal(contrasenaNueva(), 'entrena2026');
+// LA CUENTA NACE DESPUÉS DEL CÓDIGO (31 oct 2026): mientras llega su perfil la app enseña «Creando tu cuenta…» (`cuentaNaciendo`), y se acaba al llegar el perfil
+// o si la creación falla. Ya no se guarda la contraseña en memoria: sin cuenta a medias no hay nada que borrar.
+marcaCuentaNaciendo();
+assert.equal(cuentaNaciendo(), true);
+olvidaCuentaNaciendo();
+assert.equal(cuentaNaciendo(), false);
 
 // Un envío que sale: «mandando» y luego «mandado», y quien oye se entera de los dos.
 const vistos = [];
@@ -39,10 +42,11 @@ viejo({ ok: true });
 await espera();
 assert.equal(envioDelCodigo().estado, 'fallo', 'el viejo no pisa al nuevo');
 
-// Al confirmar se olvida todo, y quien oye se entera.
+// Al confirmar se olvida todo (también la marca de «naciendo»), y quien oye se entera.
+marcaCuentaNaciendo();
 olvidaCuentaNueva();
 assert.equal(envioDelCodigo(), null);
-assert.equal(contrasenaNueva(), '');
+assert.equal(cuentaNaciendo(), false);
 assert.equal(vistos.at(-1), null);
 deja();
 anotaEnvio(Promise.resolve());

@@ -1,22 +1,25 @@
-/* LA CUENTA QUE ACABA DE NACER, mientras escribe el código (inicio nuevo, 31 oct 2026). Solo en MEMORIA: nunca en el almacenamiento del navegador.
+/* LO QUE CRUZA EN MEMORIA AL NACER LA CUENTA (inicio nuevo, 31 oct 2026). Solo en MEMORIA: nunca en el almacenamiento del navegador.
 
-   Al nacer la sesión la app se vuelve a armar (el inicio pasa de modo `nuevo` a `retomar`, ver `App.jsx`) y lo que estaba en pantalla se pierde. Dos cosas
-   tienen que cruzar ese cambio y no pueden ir en `sessionStorage` como `marcas.js`:
-     · ENVÍO: el código se pide justo después de crear la cuenta. «Escribe el código» espera esa respuesta para decir «Mandando…», «Te lo mandamos» o el
-       error de verdad (antes se mandaba a ciegas y la pantalla decía «Te mandamos el código» aunque hubiera fallado).
-     · CONTRASEÑA: para borrar la cuenta a medias si la persona se va con Apple o Google. Vive solo en memoria y se olvida al confirmar el correo.
-   Si la app se recarga se pierde todo esto, y no pasa nada grave: `correo-de-la-cuenta` deja pedir otro código sin contraseña a la cuenta recién nacida
-   (primeras 24 h, mientras siga con su correo inventado), y sin contraseña Apple/Google solo sale sin borrarla (nunca tuvo un correo confirmado). */
+   LA CUENTA NACE DESPUÉS DEL CÓDIGO: «Escribe el código» se comprueba SIN cuenta (`correo-previo`) y recién con el código bueno se crea la cuenta, ya con el
+   correo confirmado. Al nacer la sesión la app se vuelve a armar (el inicio pasa de modo `nuevo` a `retomar`, ver `App.jsx`) y lo que estaba en pantalla se pierde.
+   Mientras llega el perfil se ve «Creando tu cuenta…» (`CuentaEnCamino`) en vez de la carga con el logo («se ve bastante fea»): la marca `cuentaNaciendo` lo dice.
+
+   Lo demás de este archivo es del CAMINO DE ANTES, que sigue para las cuentas que nacieron con el correo pendiente (clientes viejos de TestFlight y las de prueba):
+     · ENVÍO: «Escribe el código» de esa cuenta espera la respuesta del envío para decir «Mandando…», «Te lo mandamos» o el error de verdad.
+     · CONFIRMADO: respaldo de `correoSinConfirmar` si la sesión tardara en traer el correo nuevo.
+   Retirar con ese camino cuando los builds nuevos estén instalados. */
 
 import { correoSinConfirmar } from '../../lib/correos.js';
 
-let contrasena = '';
 let confirmadoId = '';
 let envio = null;
+let naciendo = false;
 const oyentes = new Set();
 
-export const recuerdaContrasena = (c) => { contrasena = String(c ?? ''); };
-export const contrasenaNueva = () => contrasena;
+/** La cuenta se está creando (el código ya salió bueno): mientras llega su perfil, la app enseña «Creando tu cuenta…». */
+export const marcaCuentaNaciendo = () => { naciendo = true; };
+export const cuentaNaciendo = () => naciendo;
+export const olvidaCuentaNaciendo = () => { naciendo = false; };
 
 /** Arranca (o cambia) el envío del código. `promesa` resuelve si salió y falla con el error del servidor. */
 export function anotaEnvio(promesa) {
@@ -38,8 +41,8 @@ export function oyeEnvio(f) {
 }
 
 export function olvidaCuentaNueva() {
-  contrasena = '';
   envio = null;
+  naciendo = false;
   oyentes.forEach((f) => f(envio));
 }
 

@@ -15,9 +15,9 @@ import AuthScreen from '@/features/auth/AuthScreen';
 import NuevaContrasena from '@/features/auth/NuevaContrasena';
 import ActivarInvitacion from '@/features/auth/ActivarInvitacion';
 import UnirseAlEquipo from '@/features/auth/UnirseAlEquipo';
-import Inicio, { CodigoEnCamino } from '@/features/inicio/Inicio';
-import { codigoPendiente, esInvitado, invitacionPendiente, marcaInvitado, olvidaInvitacionPendiente } from '@/features/inicio/marcas';
-import { correoPorConfirmarDe, envioDelCodigo } from '@/features/inicio/cuentaNueva';
+import Inicio, { CuentaEnCamino } from '@/features/inicio/Inicio';
+import { esInvitado, invitacionPendiente, marcaInvitado, olvidaInvitacionPendiente } from '@/features/inicio/marcas';
+import { correoPorConfirmarDe, cuentaNaciendo } from '@/features/inicio/cuentaNueva';
 import LandingPage from '@/features/landing/LandingPage';
 import TrainingApp from '@/features/training/TrainingApp';
 import AdminApp from '@/features/admin/AdminApp';
@@ -551,8 +551,8 @@ export default function App() {
 
   if (loading) return <Splash />;
   if (!user) return <><Entrada codigo={unirse} onCodigoUsado={cierraUnirse} /><UpdateBanner /></>;
-  // La cuenta acaba de nacer con «Mandar código»: mientras llega su perfil se ve «Escribe el código» mandándose, no la carga con el logo (31 oct 2026).
-  if (!profile && !perfilFalla && envioDelCodigo() && codigoPendiente()) return <CodigoEnCamino />;
+  // La cuenta acaba de nacer (el código salió bueno): mientras llega su perfil se ve «Creando tu cuenta…», no la carga con el logo (31 oct 2026).
+  if (!profile && !perfilFalla && cuentaNaciendo()) return <CuentaEnCamino />;
   if (!profile) return <CargandoPerfil />;
 
   // Cuenta pausada por el administrador. Va ANTES de elegir app: si no, el
