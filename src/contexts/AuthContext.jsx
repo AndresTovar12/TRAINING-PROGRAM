@@ -182,11 +182,14 @@ export function AuthProvider({ children }) {
     });
     // El correo que escribió NO queda como correo de la cuenta hasta probar que es suyo (lote 1 de seguridad, 25 oct 2026): el servidor
     // devuelve `correo_pendiente`, aquí se le manda el código de 6 números y se deja apuntado para que Mi perfil → Correo lo retome.
+    // `envio` es la promesa de ese envío: el inicio la sigue para decir si salió o por qué no (31 oct 2026; antes se mandaba a ciegas).
+    let envio = null;
     if (!error && body?.correo_pendiente) {
       guardaCorreoPorConfirmar(body.correo_pendiente);
-      pideCodigoDeCorreo(body.correo_pendiente, password).catch(() => { /* Mi perfil → Correo permite pedirlo otra vez */ });
+      envio = pideCodigoDeCorreo(body.correo_pendiente, password);
+      envio.catch(() => { /* lo enseña «Escribe el código»; Mi perfil → Correo permite pedirlo otra vez */ });
     }
-    return { error: error ? { message: error.message } : null, correoPendiente: error ? null : (body?.correo_pendiente ?? null) };
+    return { error: error ? { message: error.message } : null, correoPendiente: error ? null : (body?.correo_pendiente ?? null), envio };
   }, []);
 
   /* Entrar con Google.

@@ -172,27 +172,34 @@ Deno.serve(async (req) => {
     if (correo === actual) return json({ error: 'Ese ya es el correo de tu cuenta.' }, 400, origin)
 
     // La contraseña actual: así una sesión olvidada abierta en otro teléfono no basta para quedarse con la cuenta.
+    // SALVO la cuenta recién nacida (inicio nuevo, 31 oct 2026): en «Escribe el código», «Mandar otro» y «Cambiar correo» llegan sin la contraseña (la app se
+    // vuelve a armar al nacer la sesión). Solo sus primeras 24 h y solo mientras siga con su correo inventado: ahí no hay correo de verdad que robar.
+    const recienSinCorreo = esInventado(actual) && Date.now() - new Date(usuario.created_at ?? 0).getTime() < 24 * 60 * 60 * 1000
     const contrasena = String(p.contrasena ?? '')
-    if (!contrasena) return json({ error: 'Escribe tu contraseña actual.', codigo: 'FALTA_CONTRASENA' }, 400, origin)
-    const prueba = await fetch(`${URL_SB}/auth/v1/token?grant_type=password`, {
-      method: 'POST',
-      headers: { apikey: Deno.env.get('SUPABASE_ANON_KEY') ?? '', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: actual, password: contrasena }),
-      signal: AbortSignal.timeout(10_000),
-    }).catch(() => null)
-    if (!prueba) return json({ error: 'No se pudo comprobar tu contraseña. Inténtalo de nuevo.' }, 502, origin)
-    if (prueba.status === 429) return json({ error: 'Demasiados intentos. Espera un momento.' }, 429, origin)
-    if (!prueba.ok) return json({ error: 'La contraseña actual no es correcta.', codigo: 'CONTRASENA_MAL' }, 400, origin)
-    await cierraLaSesionDeLaPrueba(URL_SB, prueba)
+    if (!contrasena && !recienSinCorreo) return json({ error: 'Escribe tu contraseña actual.', codigo: 'FALTA_CONTRASENA' }, 400, origin)
+    if (contrasena) {
+      const prueba = await fetch(`${URL_SB}/auth/v1/token?grant_type=password`, {
+        method: 'POST',
+        headers: { apikey: Deno.env.get('SUPABASE_ANON_KEY') ?? '', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: actual, password: contrasena }),
+        signal: AbortSignal.timeout(10_000),
+      }).catch(() => null)
+      if (!prueba) return json({ error: 'No se pudo comprobar tu contraseña. Inténtalo de nuevo.' }, 502, origin)
+      if (prueba.status === 429) return json({ error: 'Demasiados intentos. Espera un momento.' }, 429, origin)
+      if (!prueba.ok) return json({ error: 'La contraseña actual no es correcta.', codigo: 'CONTRASENA_MAL' }, 400, origin)
+      await cierraLaSesionDeLaPrueba(URL_SB, prueba)
+    }
 
     const { data: ocupado } = await admin.rpc('usuario_por_correo', { p_correo: correo })
     if (Array.isArray(ocupado) && ocupado.length && ocupado[0].id !== usuario.id) {
       return json({ error: 'Ese correo ya lo usa otra cuenta.' }, 409, origin)
     }
 
-    const { data: previo } = await admin.from('codigos_de_correo').select('creado_en').eq('user_id', usuario.id).maybeSingle()
-    if (previo && Date.now() - new Date(previo.creado_en).getTime() < ESPERA_SEG * 1000) {
-      return json({ error: 'Ya te mandamos un código hace poco. Espera un minuto para pedir otro.' }, 429, origin)
+    // La espera es por correo: quien se equivocó al escribirlo («Cambiar correo») no tiene que esperar para mandarlo al bueno. Al mismo correo, sí.
+    const { data: previo } = await admin.from('codigos_de_correo').select('creado_en, correo').eq('user_id', usuario.id).maybeSingle()
+    const hace = previo ? Date.now() - new Date(previo.creado_en).getTime() : Infinity
+    if (hace < (previo?.correo === correo ? ESPERA_SEG : 10) * 1000) {
+      return json({ error: previo?.correo === correo ? 'Ya te mandamos un código hace poco. Espera un minuto para pedir otro.' : 'Espera unos segundos para mandarlo a otro correo.' }, 429, origin)
     }
 
     const codigo = codigoAlAzar()

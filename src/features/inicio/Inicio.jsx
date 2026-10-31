@@ -6,19 +6,19 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsWide } from '@/lib/useViewport';
 import { useAviso } from '@/components/AvisoPasajero';
-import HojaFlotante from '@/components/HojaFlotante';
-import { Boton } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { activarInvitacion, agregarAMiEquipo, completarMiPerfil, profesionalPorReferencia } from '@/lib/api';
 import { DISCIPLINAS, OFICIOS_DEL_INICIO } from '@/lib/oficios';
 import { FONT, KP, UI, oficioCorto } from '@/lib/theme';
-import { correoValido, esCorreoInventado, guardaCorreoPorConfirmar } from '@/lib/correos';
+import { correoValido, esCorreoInventado, guardaCorreoPorConfirmar, olvidaCorreoPorConfirmar } from '@/lib/correos';
 import { confirmaCorreoConCodigo, pideCodigoDeCorreo } from '@/lib/correoDeLaCuentaApi';
+import { eliminaMiCuenta } from '@/lib/miCuentaApi';
 import {
   GRIS, botonPrimario, cajaDeCampo, cuadroDeIcono, elige as estiloElige, enlace, entrada, error as estiloError, letraChica, opcion, rotulo, subtitulo, titulo,
 } from '@/features/inicio/estilos';
-import { leeTipoPendiente, olvidaTipoPendiente } from '@/features/inicio/tipoPendiente';
+import { guardaTipoPendiente, leeTipoPendiente, olvidaTipoPendiente } from '@/features/inicio/tipoPendiente';
 import { codigoPendiente, esInvitado, guardaCodigoPendiente, marcaInvitado, olvidaCodigoPendiente } from '@/features/inicio/marcas';
+import { anotaEnvio, contrasenaNueva, envioDelCodigo, olvidaCuentaNueva, oyeEnvio, recuerdaContrasena } from '@/features/inicio/cuentaNueva';
 import CajasDelCodigo from '@/features/inicio/CajasDelCodigo';
 import Bienvenida from '@/features/inicio/Bienvenida';
 import { DibujoCodigo, DibujoEjercicios, DibujoEquipo, DibujoPunto } from '@/features/inicio/Dibujos';
@@ -42,9 +42,11 @@ import AvisoDelReloj from '@/features/reloj/AvisoDelReloj';
  * El prototipo manda en los textos, el orden y lo que sale en cada pantalla; el código, en colores, letras y piezas (`components/ui`, `lib/theme`). Sus reglas:
  *
  *   · CON APPLE O GOOGLE NO SE TECLEA NADA: nombre y correo salen de la cuenta, el usuario lo propone la base (`handle_new_user`).
- *   · LA CUENTA NACE EN «¿TU CORREO?» (con «Mandar código» o «Crear cuenta sin correo»). Lo demás se guarda paso a paso en su perfil, con `inicio_paso`
+ *   · LA CUENTA NACE EN «¿TU CORREO?», con «Mandar código». Lo demás se guarda paso a paso en su perfil, con `inicio_paso`
  *     apuntando a lo que sigue: si cierra a la mitad, al volver retoma ahí (App.jsx vuelve a abrir esto mientras `inicio_paso` no sea null).
- *   · EL CÓDIGO DEL CORREO SE PIDE AHÍ MISMO: la misma pantalla pasa a «Escribe el código», con «Lo confirmo después».
+ *   · NADIE ENTRA SIN CONFIRMAR SU CORREO (31 oct 2026, maqueta RcFd9dYXoYxzYAinD5eQDB): se quitaron «Crear cuenta sin correo» y «Lo confirmo después».
+ *     El nombre va ANTES del usuario y la contraseña, y la contraseña se escribe dos veces. «Escribe el código» trae «Mandar otro», «Cambiar correo» y, abajo,
+ *     Apple o Google: si se va por ahí, la cuenta a medias se borra.
  *   · SEXO Y FECHA DE NACIMIENTO JUNTOS, en «Sobre ti», y con «Saltar».
  *   · SALUD PARA TODOS: con Apple Watch se conecta el reloj; sin él, Apple Salud (lo que guardan otros aparatos y apps). En la web solo se cuenta.
  *   · LAS PREGUNTAS DE DOS RESPUESTAS (entrenador, equipo, ejercicios) VAN COMO LA CONFIGURACIÓN DEL IPHONE: un dibujo arriba, la pregunta al centro y las
@@ -55,8 +57,8 @@ import AvisoDelReloj from '@/features/reloj/AvisoDelReloj';
  *
  * El camino de cada quien (ver `docs/inicio.md`):
  *   atleta con Apple o Google   tipo → entrenador → sobre → reloj → bienvenida
- *   atleta con usuario          tipo → cuenta → correo → nombre → entrenador → sobre → reloj → bienvenida
- *   coach                       tipo → (cuenta → correo → nombre, solo con usuario) → oficio → entrena → equipo → repertorio → bienvenida
+ *   atleta con usuario          tipo → nombre → cuenta → correo → entrenador → sobre → reloj → bienvenida
+ *   coach                       tipo → (nombre → cuenta → correo, solo con usuario) → oficio → entrena → equipo → repertorio → bienvenida
  *   invitación                  (cuenta → correo, solo con usuario) → sobre → reloj → bienvenida
  *
  * Cuatro modos, según de dónde viene la persona:
@@ -74,8 +76,8 @@ const ICONOS = {
 };
 const FOTOS = { fuerza: fotoFuerza, pista: fotoPista, yoga: fotoYoga, agilidad: fotoAgilidad, bosu: fotoBosu };
 
-const ORDEN_COACH = ['tipo', 'cuenta', 'correo', 'nombre', 'oficio', 'entrena', 'equipo', 'repertorio', 'listo'];
-const ORDEN_ATLETA = ['tipo', 'cuenta', 'correo', 'nombre', 'entrenador', 'sobre', 'reloj', 'listo'];
+const ORDEN_COACH = ['tipo', 'nombre', 'cuenta', 'correo', 'oficio', 'entrena', 'equipo', 'repertorio', 'listo'];
+const ORDEN_ATLETA = ['tipo', 'nombre', 'cuenta', 'correo', 'entrenador', 'sobre', 'reloj', 'listo'];
 const ANTES_DE_LA_CUENTA = new Set(['tipo', 'cuenta', 'correo']);
 // Quien estaba a la mitad del inicio de antes (29 oct 2026) sigue en la pantalla que la reemplazó.
 const PASO_DE_ANTES = { codigo: 'entrenador', sexo: 'sobre', nacimiento: 'sobre', unidad: 'sobre', tour: 'listo' };
@@ -85,7 +87,7 @@ const USERNAME_RE = /^[a-zA-Z0-9_.]{3,30}$/;
    desaparecería en cuanto se guardara el nombre y el botón de atrás ya no sabría a dónde ir. Con el código del correo recién mandado, «Escribe el código»
    va primero (es la segunda mitad de «¿Tu correo?»). */
 function pasosDe(modo, perfil, esCoach) {
-  if (modo === 'nuevo') return ['tipo', 'cuenta', 'correo'];
+  if (modo === 'nuevo') return ['tipo', 'nombre', 'cuenta', 'correo'];
   if (modo === 'invitacion') return ['cuenta', 'correo'];
   if (modo === 'google') return ['tipo'];
   const orden = esCoach ? ORDEN_COACH : ORDEN_ATLETA;
@@ -101,7 +103,7 @@ function pasosDe(modo, perfil, esCoach) {
 /* El camino completo de cada quien, para la barra de arriba: solo cuenta SUS pasos, y la bienvenida no cuenta. */
 function caminoDe({ esCoach, social, invitado, pideNombre }) {
   if (invitado) return social ? ['sobre', 'reloj'] : ['cuenta', 'correo', 'sobre', 'reloj'];
-  const cuenta = social ? (pideNombre ? ['nombre'] : []) : ['cuenta', 'correo', 'nombre'];
+  const cuenta = social ? (pideNombre ? ['nombre'] : []) : ['nombre', 'cuenta', 'correo'];
   return esCoach ? ['tipo', ...cuenta, 'oficio', 'entrena', 'equipo', 'repertorio'] : ['tipo', ...cuenta, 'entrenador', 'sobre', 'reloj'];
 }
 
@@ -170,10 +172,126 @@ function Elige({ Icono: I, children, onClick, ocupado }) {
   );
 }
 
+/* El marco de cada pantalla del inicio: en la compu una tarjeta al centro; en el teléfono la pantalla entera. Lo usan el inicio y `CodigoEnCamino`. */
+const marcoDeFuera = (compu) => ({
+  minHeight: '100svh', display: 'flex', alignItems: compu ? 'flex-start' : 'stretch', justifyContent: 'center',
+  padding: compu ? '28px 20px 40px' : 0, fontFamily: FONT, background: compu ? '#F4F5F8' : '#fff',
+});
+const marcoDeDentro = (compu) => (compu
+  ? {
+    width: '100%', maxWidth: 560, background: KP.surface, borderRadius: 26,
+    boxShadow: '0 24px 60px rgba(17,19,24,0.10)', padding: '22px 30px 26px', display: 'flex', flexDirection: 'column',
+    minHeight: 600, position: 'relative',
+  }
+  : {
+    width: '100%', display: 'flex', flexDirection: 'column', padding: 'calc(14px + env(safe-area-inset-top, 0px)) 22px calc(14px + env(safe-area-inset-bottom, 0px))',
+    minHeight: '100svh', background: KP.surface, position: 'relative',
+  });
+
+const ligaDelCodigo = (apagada) => ({
+  minHeight: 44, border: 'none', background: 'none', padding: '0 8px', borderRadius: 10, fontFamily: FONT, fontSize: 15,
+  fontWeight: apagada ? 600 : 700, color: apagada ? KP.ink3 : KP.blue, cursor: apagada ? 'default' : 'pointer',
+  fontVariantNumeric: 'tabular-nums', touchAction: 'manipulation',
+});
+
+/** «Escribe el código» (31 oct 2026, maqueta RcFd9dYXoYxzYAinD5eQDB): el código, el aviso de No deseado (bien visible: ahí caen los códigos de un dominio nuevo,
+    sobre todo en Hotmail) y «Mandar otro · Cambiar correo». `envio` es cómo va el envío (`cuentaNueva.js`); sin él (la app se recargó), se da por mandado. */
+export function CuerpoDelCodigo({ compu, correo, envio, codigo = '', onCodigo, errorCodigo = '', ocupado = false, espera = 0, onOtro, onCambiar, error = null }) {
+  const mandando = envio?.estado === 'mandando';
+  const fallo = envio?.estado === 'fallo';
+  const mm = Math.floor(espera / 60);
+  const ss = String(espera % 60).padStart(2, '0');
+  const otroApagado = ocupado || mandando || espera > 0;
+  return (
+    <>
+      <h1 style={titulo(compu)}>Escribe el código</h1>
+      <p role="status" style={subtitulo}>
+        {mandando ? <>Mandando el código a <b style={{ color: KP.ink }}>{correo}</b>…</>
+          : fallo ? <>No pudimos mandarlo a <b style={{ color: KP.ink }}>{correo}</b>.</>
+          : <>Te lo mandamos a <b style={{ color: KP.ink }}>{correo}</b>.</>}
+      </p>
+      {fallo && <p role="alert" style={{ ...estiloError, marginTop: -4 }}>{envio.error}</p>}
+      <CajasDelCodigo valor={codigo} onCambio={onCodigo ?? (() => {})} error={errorCodigo} deshabilitado={ocupado || fallo || !onCodigo} />
+      {ocupado && <div role="status" style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}><Loader2 size={22} className="spin" color={KP.blue} /></div>}
+      {!fallo && (
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, background: KP.blueSoft, color: KP.ink, borderRadius: 14, padding: '12px 14px', margin: '4px 0 14px', fontSize: 14, lineHeight: 1.4, fontWeight: 500 }}>
+          <Mail size={18} color={KP.blue} style={{ flex: 'none', marginTop: 1 }} />
+          <span>¿No lo ves? Revisa tu carpeta de <b style={{ fontWeight: 800 }}>Correo no deseado</b> o <b style={{ fontWeight: 800 }}>Spam</b>. Los correos nuevos a veces caen ahí.</span>
+        </div>
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <button type="button" onClick={onOtro} disabled={otroApagado || !onOtro} style={ligaDelCodigo(otroApagado || !onOtro)}>
+          {espera > 0 && !fallo ? `Mandar otro en ${mm}:${ss}` : 'Mandar otro'}
+        </button>
+        <span aria-hidden="true" style={{ color: KP.ink3, fontWeight: 700 }}>·</span>
+        <button type="button" onClick={onCambiar} disabled={ocupado || !onCambiar} style={ligaDelCodigo(ocupado || !onCambiar)}>Cambiar correo</button>
+      </div>
+      {error}
+    </>
+  );
+}
+
+/** Abajo de «Escribe el código»: si el código no llega, entrar con Apple o Google (la cuenta a medias se borra, ver `entraConOtra`). */
+export function OtraEntrada({ apple, google, ocupado, onApple, onGoogle }) {
+  if (!apple && !google) return null;
+  const boton = {
+    minHeight: 50, borderRadius: KP.rBtn, border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    gap: 8, fontFamily: FONT, fontSize: 15, fontWeight: 700, touchAction: 'manipulation',
+  };
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 0 10px' }}>
+        <span style={{ flex: 1, height: 1, background: KP.line }} />
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: KP.ink3 }}>¿Problemas con el código?</span>
+        <span style={{ flex: 1, height: 1, background: KP.line }} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: apple && google ? '1fr 1fr' : '1fr', gap: 8 }}>
+        {apple && (
+          // Las reglas de Apple para su botón: negro con texto blanco y su logo.
+          <button type="button" className="kp-press" onClick={onApple} disabled={ocupado} style={{ ...boton, background: '#000', color: '#fff' }}>
+            <svg width="15" height="18" viewBox="0 0 17 20" aria-hidden="true" fill="#fff">
+              <path d="M14.1 10.6c0-2.4 2-3.5 2.1-3.6-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.9-3.1-.8-1.6 0-3.1.9-3.9 2.4-1.7 2.9-.4 7.2 1.2 9.5.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8s1.9.8 3.1.8c1.3 0 2.1-1.2 2.9-2.3.9-1.3 1.3-2.6 1.3-2.7 0 0-2.5-1-2.5-4zM11.8 3.5c.7-.8 1.1-1.9 1-3-.9 0-2.1.6-2.8 1.4-.6.7-1.1 1.8-1 2.9 1.1.1 2.1-.5 2.8-1.3z" />
+            </svg>
+            Apple
+          </button>
+        )}
+        {google && (
+          <button type="button" className="kp-press" onClick={onGoogle} disabled={ocupado} style={{ ...boton, background: UI.relleno, color: KP.ink }}>
+            <svg width="17" height="17" viewBox="0 0 48 48" aria-hidden="true">
+              <path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h11.8c-.5 2.7-2 5-4.4 6.6v5.5h7.1c4.2-3.8 6.6-9.5 6.6-16.1z" />
+              <path fill="#34A853" d="M24 46c6 0 11-2 14.6-5.4l-7.1-5.5c-2 1.3-4.5 2.1-7.5 2.1-5.8 0-10.6-3.9-12.4-9.1H4.3v5.7C7.9 41 15.4 46 24 46z" />
+              <path fill="#FBBC05" d="M11.6 28.1c-.5-1.3-.7-2.7-.7-4.1s.3-2.8.7-4.1v-5.7H4.3C2.8 17.1 2 20.4 2 24s.8 6.9 2.3 9.8l7.3-5.7z" />
+              <path fill="#EA4335" d="M24 10.8c3.3 0 6.2 1.1 8.5 3.3l6.3-6.3C35 4.3 30 2 24 2 15.4 2 7.9 7 4.3 14.2l7.3 5.7c1.8-5.2 6.6-9.1 12.4-9.1z" />
+            </svg>
+            Google
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** Lo que se ve MIENTRAS la app se rearma al nacer la cuenta (App.jsx, sin perfil todavía): «Escribe el código» mandándose, en vez de la carga con el logo
+    (Andrés, 31 oct 2026: «se ve bastante fea»). Al llegar el perfil la reemplaza el inicio de verdad, con el mismo dibujo. */
+export function CodigoEnCamino() {
+  const compu = useIsWide();
+  return (
+    <div style={marcoDeFuera(compu)}>
+      <div style={marcoDeDentro(compu)}>
+        <div style={{ minHeight: 40 }} />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <CuerpoDelCodigo compu={compu} correo={codigoPendiente()} envio={{ estado: 'mandando' }} ocupado={false} />
+        </div>
+      </div>
+      <style>{'.spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}'}</style>
+    </div>
+  );
+}
+
 /* `codigo`: el código de equipo de un link `?unirse=` (en 'nuevo' ya se usa al crear la cuenta; en 'retomar' llega puesto en «El código de tu entrenador»).
    `onCodigoUsado` avisa cuando ya se usó, para que la app no vuelva a pedirlo. `invitacion`: en modo 'invitacion', `{ token, datos }` (`datos` de `verInvitacion`). */
 export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigoUsado, invitacion = null }) {
-  const { profile, user, signIn, signUp, signOut, updateProfile, refreshProfile } = useAuth();
+  const { profile, user, signIn, signUp, signOut, updateProfile, refreshProfile, entrarConApple, entrarConGoogle, appleDisponible, googleDisponible } = useAuth();
   const { avisa } = useAviso();
   const compu = useIsWide();
 
@@ -184,6 +302,7 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
   const [tipo, setTipo] = useState(modo === 'nuevo' && codigo ? 'atleta' : tipoDeGoogle);
   const [usuario, setUsuario] = useState('');
   const [clave, setClave] = useState('');
+  const [clave2, setClave2] = useState('');   // «Confirma tu contraseña» (31 oct 2026)
   const [correo, setCorreo] = useState('');
 
   const esCoach = modo === 'nuevo' ? tipo === 'coach' : modo === 'invitacion' ? false : profile?.role === 'admin';
@@ -218,9 +337,15 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
   const [sexo, setSexo] = useState(() => (profile?.genero === 'h' || profile?.genero === 'm' ? profile.genero : null));
   const [nac, setNac] = useState(profile?.fecha_nacimiento || '');
   const [coachDe, setCoachDe] = useState(null); // su entrenador: nombre, oficio y foto (para «Sobre ti» y la bienvenida)
-  const [sinCorreo, setSinCorreo] = useState(false); // la hoja «¿Crear tu cuenta sin correo?»
   const [codigoCorreo, setCodigoCorreo] = useState('');
   const [errorCodigo, setErrorCodigo] = useState('');
+  // «Escribe el código»: cómo va el envío (ver `cuentaNueva.js`), la espera de «Mandar otro» y «Cambiar correo» (el campo del correo otra vez).
+  const [envio, setEnvio] = useState(() => envioDelCodigo());
+  const [espera, setEspera] = useState(() => {
+    const estado = envioDelCodigo()?.estado;
+    return modo === 'retomar' && codigoPendiente() && estado !== 'mandando' && estado !== 'fallo' ? 60 : 0;
+  });
+  const [cambiando, setCambiando] = useState(false);
   const [hojaUsuario, setHojaUsuario] = useState(false);
   // El paso del reloj: con un Apple Watch emparejado se conecta el reloj; sin él, Apple Salud. En la web solo se cuenta.
   const { listo: relojListo, reloj, conexion: relojConexion } = useReloj();
@@ -274,13 +399,19 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
     // Con `inicio_paso` en null, App.jsx abre su app: esto se desmonta solo.
   }
 
-  /* LA CUENTA NACE AQUÍ, con «Mandar código» o con «Crear cuenta sin correo». En cuanto hay sesión, App.jsx arma el inicio otra vez (modo 'retomar'), así que
-     el correo al que se manda el código se anota ANTES (`guardaCodigoPendiente`): el inicio nuevo lo lee al montarse y abre «Escribe el código». */
-  async function crearCuenta(conCorreo) {
+  /* LA CUENTA NACE AQUÍ, con «Mandar código». En cuanto hay sesión, App.jsx arma el inicio otra vez (modo 'retomar'), así que lo que cruza ese cambio se anota
+     ANTES: el correo (`guardaCodigoPendiente`, el inicio nuevo lo lee al montarse y abre «Escribe el código») y el envío del código (`anotaEnvio`, en memoria:
+     mientras la app se rearma, `CodigoEnCamino` ocupa la pantalla en vez de la carga con el logo, y «Escribe el código» dice si salió o por qué no). */
+  async function crearCuenta() {
     setOcupado(true);
     setError('');
-    const email = conCorreo ? correo.trim() : '';
-    if (email) guardaCodigoPendiente(email); else olvidaCodigoPendiente();
+    const email = correo.trim();
+    guardaCodigoPendiente(email);
+    recuerdaContrasena(clave);
+    let suelta = null;
+    anotaEnvio(new Promise((res, rej) => { suelta = { res, rej }; }));
+    const sigueElEnvio = (promesa) => (promesa ?? Promise.reject(new Error('No se pudo mandar el código. Pide otro.'))).then(suelta.res, suelta.rej);
+    const deshaz = (e) => { olvidaCodigoPendiente(); olvidaCuentaNueva(); falloAlCrear(e); };
     if (modo === 'invitacion') {
       try {
         marcaInvitado();
@@ -290,27 +421,74 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
         if (errEntrar) throw new Error(errEntrar.message);
         if (r.correo_pendiente) {
           guardaCorreoPorConfirmar(r.correo_pendiente);
-          avisa('Cuenta creada. Te mandamos el código.');
-          pideCodigoDeCorreo(r.correo_pendiente, clave).catch(() => { /* Mi perfil → Correo permite pedirlo otra vez */ });
+          sigueElEnvio(pideCodigoDeCorreo(r.correo_pendiente, clave));
         } else {
           olvidaCodigoPendiente();
+          olvidaCuentaNueva();
         }
       } catch (e) {
-        olvidaCodigoPendiente();
-        falloAlCrear(e);
+        deshaz(e);
       }
       return;
     }
-    const { error: e, correoPendiente } = await signUp({
+    const { error: e, correoPendiente, envio: envioNuevo } = await signUp({
       username: usuario.trim(), email, password: clave,
+      fullName: [nombre.trim(), apellido.trim()].filter(Boolean).join(' '),
       accountType: tipo === 'coach' ? 'coach' : 'athlete',
       coachUsername: tipo === 'atleta' ? codigo : '',
-      inicioPaso: 'nombre',
+      // El nombre ya viene: lo que sigue después del código.
+      inicioPaso: tipo === 'coach' ? 'oficio' : 'entrenador',
     });
-    if (e) { olvidaCodigoPendiente(); falloAlCrear(e); return; }
-    if (correoPendiente) avisa('Cuenta creada. Te mandamos el código.'); else olvidaCodigoPendiente();
+    if (e) { deshaz(e); return; }
+    if (correoPendiente) sigueElEnvio(envioNuevo); else { olvidaCodigoPendiente(); olvidaCuentaNueva(); }
     // La sesión nueva vuelve a dibujar la app; esta pantalla se va sola. El código de equipo ya se usó.
     onCodigoUsado?.();
+  }
+
+  // «Escribe el código» oye cómo va el envío; en cuanto sale (o al abrir la pantalla) arranca la espera de «Mandar otro».
+  useEffect(() => oyeEnvio((v) => { setEnvio(v); if (v?.estado === 'mandado') setEspera(60); }), []);
+  useEffect(() => {
+    if (espera <= 0) return undefined;
+    const t = setTimeout(() => setEspera((s) => Math.max(0, s - 1)), 1000);
+    return () => clearTimeout(t);
+  }, [espera]);
+
+  /* «Mandar otro» y «Cambiar correo» (31 oct 2026). Sin la contraseña en memoria (la app se recargó) el servidor igual deja pedirlo: es una cuenta recién nacida. */
+  function mandaCodigo(destino) {
+    const limpio = String(destino ?? '').trim().toLowerCase();
+    setErrorCodigo('');
+    setCodigoCorreo('');
+    guardaCodigoPendiente(limpio);
+    guardaCorreoPorConfirmar(limpio);
+    const promesa = pideCodigoDeCorreo(limpio, contrasenaNueva() || undefined);
+    anotaEnvio(promesa);
+    promesa.catch(() => { /* lo dice la pantalla */ });
+    return promesa;
+  }
+
+  /* «¿Problemas con el código?» → Apple o Google. La cuenta a medias (sin correo confirmado) se borra primero, para que no quede una cuenta que nadie comprobó;
+     luego se sale y se entra con el proveedor. Si se borra pero Apple o Google no abren, queda en la puerta de entrada, sin cuenta a medias.
+     Borrar pide la contraseña (`mi-cuenta`): va la de memoria. Si la app se recargó y ya no está, no se borra y solo se sale: esa cuenta nunca tuvo un correo
+     confirmado, así que no queda nada que alguien pueda usar (solo el usuario apartado). */
+  async function entraConOtra(cual) {
+    setOcupado(true);
+    setError('');
+    if (contrasenaNueva()) {
+      try {
+        await eliminaMiCuenta({ confirmacion: 'ELIMINAR', contrasena: contrasenaNueva() });
+      } catch (e) {
+        setError(e.message || 'No se pudo cerrar esta cuenta. Inténtalo otra vez.');
+        setOcupado(false);
+        return;
+      }
+    }
+    guardaTipoPendiente(esCoach ? 'coach' : 'atleta'); // al volver de Apple o Google no se le pregunta otra vez qué va a hacer
+    olvidaCodigoPendiente();
+    olvidaCorreoPorConfirmar();
+    olvidaCuentaNueva();
+    await signOut();
+    const r = cual === 'apple' ? await entrarConApple() : await entrarConGoogle();
+    if (r?.error) avisa(r.error.message);
   }
 
   function falloAlCrear(e) {
@@ -379,7 +557,7 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
     setErrorCodigo('');
     setOcupado(true);
     confirmaCorreoConCodigo(codigoCorreo, { refreshProfile })
-      .then(() => { olvidaCodigoPendiente(); avisa('Correo confirmado.'); setI((n) => n + 1); })
+      .then(() => { olvidaCodigoPendiente(); olvidaCuentaNueva(); avisa('Correo confirmado.'); setI((n) => n + 1); })
       .catch((e) => { setErrorCodigo(e.message || 'Ese código no sirve. Revísalo e inténtalo otra vez.'); setCodigoCorreo(''); })
       .finally(() => { confirmando.current = false; setOcupado(false); });
   }, [codigoCorreo, paso, modo, refreshProfile, avisa]);
@@ -392,6 +570,7 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
 
   function atras() {
     if (paso === 'entrenador' && conCodigo) { setConCodigo(false); setTextoCodigo(''); setPro(null); setError(''); return; }
+    if (cambiando) { setCambiando(false); setError(''); return; }
     if (i === 0) { onVolver?.(); return; }
     setI(i - 1);
   }
@@ -401,7 +580,11 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
   const hechos = camino.indexOf(paso);
   const muestraBarra = paso !== 'listo';
   const primeraTrasApple = modo === 'google' && paso === 'tipo';
-  const puedeAtras = !primeraTrasApple && (i > 0 || (paso === 'entrenador' && conCodigo) || ((modo === 'nuevo' || modo === 'invitacion') && !!onVolver));
+  // «Escribe el código» no tiene atrás: no se puede saltar (31 oct 2026). Sí lo tiene «Cambiar correo», que regresa al código.
+  const enElCodigo = paso === 'correo' && modo === 'retomar';
+  const atrasEsElCodigo = modo === 'retomar' && pasos[i - 1] === 'correo'; // ya confirmado: no se regresa a escribirlo
+  const puedeAtras = !primeraTrasApple && (enElCodigo ? cambiando
+    : ((i > 0 && !atrasEsElCodigo) || (paso === 'entrenador' && conCodigo) || ((modo === 'nuevo' || modo === 'invitacion') && !!onVolver)));
 
   const cabecera = (saltar = null) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 40 }}>
@@ -510,7 +693,7 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
       </>
     );
   } else if (paso === 'cuenta') {
-    const valido = USERNAME_RE.test(usuario.trim()) && !problemaDeContrasena(clave, { usuario: usuario.trim() });
+    const valido = USERNAME_RE.test(usuario.trim()) && !problemaDeContrasena(clave, { usuario: usuario.trim() }) && clave2 === clave;
     /* Lo que falta, dicho EN VIVO (12 oct 2026, «está difícil crear contraseñas»): mientras solo falta largo se dice cuánto falta (sin regañar); si es otra
        cosa (muy común, lleva tu usuario…) se dice qué; y cuando ya sirve, «Contraseña lista.». */
     const u = usuario.trim();
@@ -524,6 +707,11 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
       : faltan > 0 ? { texto: `Faltan ${faltan} ${faltan === 1 ? 'carácter' : 'caracteres'}.`, tono: 'espera' }
       : problemaClave ? { texto: problemaClave, tono: 'mal' }
       : { texto: 'Contraseña lista.', tono: 'bien' };
+    // La segunda vez (31 oct 2026): no regaña mientras todavía va escribiendo lo mismo; solo cuando ya escribió de más o algo distinto.
+    const avisoDeClave2 = !clave2 ? null
+      : clave2 === clave ? { texto: 'Las dos coinciden.', tono: 'bien' }
+      : clave.startsWith(clave2) ? null
+      : { texto: 'Las contraseñas no coinciden.', tono: 'mal' };
     const pintaAviso = (a) => (a ? (
       <p role="status" style={{ margin: '-6px 2px 12px', fontSize: 13.5, fontWeight: 700, lineHeight: 1.4, color: a.tono === 'bien' ? KP.mint : a.tono === 'mal' ? KP.danger : KP.ink2 }}>{a.texto}</p>
     ) : null);
@@ -531,6 +719,7 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
       if (!USERNAME_RE.test(usuario.trim())) { setError('El usuario lleva de 3 a 30 letras, números, _ o .'); return; }
       const problema = problemaDeContrasena(clave, { usuario: usuario.trim() });
       if (problema) { setError(problema); return; }
+      if (clave2 !== clave) { setError('Las contraseñas no coinciden.'); return; }
       setI(i + 1);
     };
     cuerpo = (
@@ -541,43 +730,46 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
         {pintaAviso(avisoDeUsuario)}
         <Campo id="ini-clave" label="Contraseña" icono={Lock} tipo="password" ojo value={clave} onChange={setClave} extra={{ placeholder: `Mínimo ${MIN_CONTRASENA} caracteres`, autoComplete: 'new-password' }} />
         {pintaAviso(avisoDeClave)}
+        <Campo id="ini-clave2" label="Confirma tu contraseña" icono={Lock} tipo="password" ojo value={clave2} onChange={setClave2} extra={{ placeholder: 'Escríbela otra vez', autoComplete: 'new-password' }} />
+        {pintaAviso(avisoDeClave2)}
         {Error}
       </>
     );
     pie = continuar(sigue, 'Continuar', !valido);
-  } else if (paso === 'correo' && modo === 'retomar') {
-    // La segunda mitad de «¿Tu correo?»: la cuenta ya nació y el código ya va en camino.
-    cuerpo = (
-      <>
-        <h1 style={titulo(compu)}>Escribe el código</h1>
-        <p style={subtitulo}>Te lo mandamos a <b style={{ color: KP.ink }}>{codigoPendiente()}</b>. Tu cuenta ya está creada.</p>
-        <CajasDelCodigo valor={codigoCorreo} onCambio={(v) => { setCodigoCorreo(v); if (v) setErrorCodigo(''); }} error={errorCodigo} deshabilitado={ocupado} />
-        {ocupado && <div role="status" style={{ display: 'flex', justifyContent: 'center' }}><Loader2 size={22} className="spin" color={KP.blue} /></div>}
-        <p style={{ ...subtitulo, fontSize: 13.5, textAlign: 'center', marginTop: 4 }}>El iPhone te lo ofrece arriba del teclado al llegar.</p>
-        <p style={{ ...subtitulo, fontSize: 13.5, textAlign: 'center', marginTop: 0 }}>¿No llega? Revisa tu carpeta de Correo no deseado.</p>
-        {Error}
-      </>
-    );
-    pie = (
-      <button type="button" onClick={() => { olvidaCodigoPendiente(); avisa('Te lo recordamos en Mi perfil.'); setI(i + 1); }} disabled={ocupado} style={enlace}>
-        Lo confirmo después
-      </button>
-    );
-  } else if (paso === 'correo') {
+  } else if (paso === 'correo' && (modo !== 'retomar' || cambiando)) {
+    // «¿Tu correo?»: la cuenta nace aquí. Con «Cambiar correo» (ya con la cuenta creada) es la misma pantalla y regresa a «Escribe el código».
     const bien = correoValido(correo) && !esCorreoInventado(correo);
+    const manda = cambiando ? () => { mandaCodigo(correo); setCambiando(false); } : crearCuenta;
     cuerpo = (
       <>
         <h1 style={titulo(compu)}>¿Tu correo?</h1>
-        <p style={subtitulo}>Para recuperar tu contraseña si la olvidas. Te mandamos un código para confirmar que es tuyo.</p>
-        <Campo id="ini-correo" label="Correo" icono={Mail} tipo="email" value={correo} onChange={setCorreo} extra={{ autoCapitalize: 'none', autoCorrect: 'off', autoComplete: 'email', inputMode: 'email' }} />
+        <p style={subtitulo}>Te mandamos un código para confirmar que es tuyo. Sirve para recuperar tu contraseña si la olvidas.</p>
+        <Campo id="ini-correo" label="Correo" icono={Mail} tipo="email" value={correo} onChange={setCorreo} extra={{ autoCapitalize: 'none', autoCorrect: 'off', autoComplete: 'email', inputMode: 'email', autoFocus: cambiando }} />
         {Error}
       </>
     );
     pie = (
-      <>
-        {continuar(() => crearCuenta(true), 'Mandar código', !bien, false)}
-        <button type="button" onClick={() => setSinCorreo(true)} disabled={ocupado} style={enlace}>Crear cuenta sin correo</button>
-      </>
+      <button type="button" className="kp-press" onClick={manda} disabled={!bien || ocupado} style={botonPrimario(ocupado, !bien)}>
+        {ocupado ? <><Loader2 size={18} className="spin" />Mandando el código…</> : 'Mandar código'}
+      </button>
+    );
+  } else if (paso === 'correo') {
+    // La segunda mitad de «¿Tu correo?»: la cuenta ya nació y el código va en camino. No se puede saltar (31 oct 2026).
+    cuerpo = (
+      <CuerpoDelCodigo
+        compu={compu} correo={codigoPendiente()} envio={envio}
+        codigo={codigoCorreo} onCodigo={(v) => { setCodigoCorreo(v); if (v) setErrorCodigo(''); }} errorCodigo={errorCodigo}
+        ocupado={ocupado} espera={espera}
+        onOtro={() => { mandaCodigo(codigoPendiente()).then(() => avisa('Te mandamos otro código.'), () => {}); }}
+        onCambiar={() => { setCorreo(codigoPendiente()); setError(''); setCambiando(true); }}
+        error={Error}
+      />
+    );
+    pie = (
+      <OtraEntrada
+        apple={appleDisponible} google={googleDisponible} ocupado={ocupado}
+        onApple={() => entraConOtra('apple')} onGoogle={() => entraConOtra('google')}
+      />
     );
   } else if (paso === 'nombre') {
     cuerpo = (
@@ -589,7 +781,10 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
         {Error}
       </>
     );
-    pie = continuar(() => guarda({ full_name: [nombre.trim(), apellido.trim()].filter(Boolean).join(' ') }), 'Continuar', !nombre.trim());
+    // Antes de la cuenta (31 oct 2026: el nombre va primero) solo se recuerda: viaja al crear la cuenta. Después, se guarda en su perfil.
+    pie = modo === 'nuevo'
+      ? continuar(() => setI(i + 1), 'Continuar', !nombre.trim() || !apellido.trim())
+      : continuar(() => guarda({ full_name: [nombre.trim(), apellido.trim()].filter(Boolean).join(' ') }), 'Continuar', !nombre.trim());
   } else if (paso === 'entrenador' && !conCodigo) {
     pantallaC({
       dibujo: <div style={{ display: 'flex', alignItems: 'center', gap: 18, justifyContent: 'center' }}><DibujoCodigo /><DibujoPunto /></div>,
@@ -818,43 +1013,18 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
   }
 
   return (
-    <div
-      style={{
-        minHeight: '100svh', display: 'flex', alignItems: compu ? 'flex-start' : 'stretch', justifyContent: 'center',
-        padding: compu ? '28px 20px 40px' : 0, fontFamily: FONT, background: compu ? '#F4F5F8' : '#fff',
-      }}
-    >
+    <div style={marcoDeFuera(compu)}>
       <div
-        key={`${paso}-${conCodigo}`}
-        className="animate-fade-in"
-        style={compu
-          ? {
-            width: '100%', maxWidth: 560, background: KP.surface, borderRadius: 26,
-            boxShadow: '0 24px 60px rgba(17,19,24,0.10)', padding: '22px 30px 26px', display: 'flex', flexDirection: 'column',
-            minHeight: 600, position: 'relative',
-          }
-          : {
-            width: '100%', display: 'flex', flexDirection: 'column', padding: 'calc(14px + env(safe-area-inset-top, 0px)) 22px calc(14px + env(safe-area-inset-bottom, 0px))',
-            minHeight: '100svh', background: KP.surface, position: 'relative',
-          }}
+        // Al llegar a «Escribe el código» desde `CodigoEnCamino` no se anima: es la misma pantalla que ya estaba.
+        key={`${paso}-${conCodigo}-${cambiando}`}
+        className={enElCodigo && !cambiando && i === 0 ? undefined : 'animate-fade-in'}
+        style={marcoDeDentro(compu)}
       >
         {cabecera(saltar)}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>{cuerpo}</div>
         {pie && <div style={{ display: 'flex', flexDirection: 'column', gap: estiloC ? 0 : 4, paddingTop: estiloC ? 10 : 18 }}>{pie}</div>}
       </div>
 
-      {/* «Crear cuenta sin correo»: se pregunta antes, porque sin correo no hay cómo recuperar la contraseña solo. */}
-      {sinCorreo && (
-        <HojaFlotante titulo="¿Crear tu cuenta sin correo?" onCerrar={() => setSinCorreo(false)} ancho={460}>
-          <p style={{ margin: '0 4px 16px', fontSize: 15, fontWeight: 500, color: KP.ink2, lineHeight: 1.5, fontFamily: FONT }}>
-            Si olvidas tu contraseña, {esCoach ? 'nos la pides por mensaje' : 'te la da tu entrenador'}. El correo lo pones cuando quieras en Mi perfil.
-          </p>
-          <div style={{ display: 'grid', gap: 4 }}>
-            <Boton ancho onClick={() => setSinCorreo(false)}>Poner mi correo</Boton>
-            <button type="button" onClick={() => { setSinCorreo(false); crearCuenta(false); }} style={enlace}>Seguir sin correo</button>
-          </div>
-        </HojaFlotante>
-      )}
       <style>{'.spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}'}</style>
     </div>
   );

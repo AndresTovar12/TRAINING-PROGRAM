@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check } from 'lucide-react';
+import { Check, Mail } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { esCorreoInventado, correoValido, correoPorConfirmar } from '@/lib/correos';
 import { confirmaCorreoConCodigo, pideCodigoDeCorreo } from '@/lib/correoDeLaCuentaApi';
@@ -95,8 +95,13 @@ export default function CorreoDeLaCuenta() {
           {paso === 'codigo' && (
             <form onSubmit={confirma} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12, fontFamily: FONT }}>
               <p style={{ margin: '0 4px', fontSize: 15, fontWeight: 500, color: KP.ink, lineHeight: 1.5 }}>
-                Te mandamos un código de 6 números a <b>{correo.trim()}</b>. ¿No llega? Revisa tu carpeta de Correo no deseado.
+                Te mandamos un código de 6 números a <b>{correo.trim()}</b>.
               </p>
+              {/* El mismo recuadro de «Escribe el código» del inicio (31 oct 2026): la línea gris pasaba desapercibida. */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, background: KP.blueSoft, color: KP.ink, borderRadius: 14, padding: '12px 14px', fontSize: 14, lineHeight: 1.4, fontWeight: 500 }}>
+                <Mail size={18} color={KP.blue} style={{ flex: 'none', marginTop: 1 }} />
+                <span>¿No lo ves? Revisa tu carpeta de <b style={{ fontWeight: 800 }}>Correo no deseado</b> o <b style={{ fontWeight: 800 }}>Spam</b>. Los correos nuevos a veces caen ahí.</span>
+              </div>
               <Campo
                 etiqueta="Código" valor={codigo} onCambio={(v) => setCodigo(v.replace(/\D/g, '').slice(0, 6))} marcador="000000"
                 inputMode="numeric" autoComplete="one-time-code" maxLength={6} autoFocus
