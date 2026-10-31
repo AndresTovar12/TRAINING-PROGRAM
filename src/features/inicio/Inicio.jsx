@@ -739,8 +739,10 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
       {saltar && (
         <button type="button" onClick={saltar} disabled={ocupado} style={{ ...enlace, width: 'auto', minHeight: 36, padding: '6px 2px' }}>Saltar</button>
       )}
-      {/* Con sesión siempre se puede salir (31 oct 2026): sin esto, quien no recibe el código no podía ni cambiar de cuenta en este aparato. */}
-      {modo === 'retomar' && !primeraTrasApple && paso !== 'listo' && (
+      {/* «Salir» solo para quien entró con Apple o Google (31 oct 2026, noche): volver es un toque. Con usuario y contraseña NO: la cuenta acaba de nacer
+          con el código bueno y nadie recuerda la contraseña que puso hace dos minutos; salir aquí era dejarla a medias sin ganar nada (los pasos que
+          quedan se pueden saltar, y si cierra la app la sesión sigue y retoma en el mismo paso). */}
+      {modo === 'retomar' && social && !primeraTrasApple && paso !== 'listo' && (
         <button type="button" onClick={salir} disabled={ocupado} style={{ ...enlace, width: 'auto', minHeight: 36, padding: '6px 2px', color: KP.ink3, fontWeight: 600 }}>Salir</button>
       )}
     </div>
