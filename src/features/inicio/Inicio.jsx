@@ -554,6 +554,7 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
         <CajasDelCodigo valor={codigoCorreo} onCambio={(v) => { setCodigoCorreo(v); if (v) setErrorCodigo(''); }} error={errorCodigo} deshabilitado={ocupado} />
         {ocupado && <div role="status" style={{ display: 'flex', justifyContent: 'center' }}><Loader2 size={22} className="spin" color={KP.blue} /></div>}
         <p style={{ ...subtitulo, fontSize: 13.5, textAlign: 'center', marginTop: 4 }}>El iPhone te lo ofrece arriba del teclado al llegar.</p>
+        <p style={{ ...subtitulo, fontSize: 13.5, textAlign: 'center', marginTop: 0 }}>¿No llega? Revisa tu carpeta de Correo no deseado.</p>
         {Error}
       </>
     );
