@@ -1,7 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
 import type { McpServer } from 'npm:@modelcontextprotocol/sdk@1.30.1/server/mcp.js'
 import { z } from 'npm:zod@^4.1.13'
-import { ANON_KEY, SUPABASE_URL } from './config.ts'
 import { llamarFuncion, type Quien } from './sesion.ts'
 import { Aviso, buscarPersona, nombreDe, respuesta, seguro, sinAcentos, sinConfirmarBorrado, TEXTO_CONFIRMADO_BORRAR, type Persona } from './util.ts'
 
@@ -189,15 +188,12 @@ export function herramientasDelAdmin(server: McpServer, quien: Quien) {
     annotations: ESCRIBE,
   }, seguro(async ({ usuario, nombre, correo }: any) => {
     const password = contrasenaDeArranque()
-    // El mismo camino que "Crear coach" en la app: la función de registro.
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
-      body: JSON.stringify({ username: usuario, full_name: nombre, email: correo || undefined, password, account_type: 'coach' }),
-    }).catch(() => null)
-    if (!res) throw new Error('No se pudo contactar al servidor.')
-    const cuerpo = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Aviso(cuerpo?.error || 'No se pudo crear el coach.')
+    // El mismo camino que "Crear coach" en la app: la función de registro, con la sesión del dueño (sin ella `signup` ya no crea cuentas: pide un código de correo).
+    try {
+      await llamarFuncion(quien, 'signup', { username: usuario, full_name: nombre, email: correo || undefined, password, account_type: 'coach' })
+    } catch (e: any) {
+      throw new Aviso(e?.message || 'No se pudo crear el coach.')
+    }
     return respuesta({
       listo: true,
       coach: nombre,
