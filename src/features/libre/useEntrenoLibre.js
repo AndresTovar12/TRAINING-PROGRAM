@@ -8,7 +8,10 @@ import {
 import { useEstadoOpcional, useStorageOpcional } from '@/contexts/AppStateContext';
 import { usePlanOpcional } from '@/contexts/PlanContext';
 import { vibra } from '@/lib/avisosNativos';
-import { cuentaDeEntrenos, entrenosRecientes, paginaDeEntrenos } from '@/lib/entrenoLibreApi';
+import { TIPO_ENTRENO_LIBRE, conPendientes, cuentaDeEntrenos, entrenosRecientes, paginaDeEntrenos } from '@/lib/entrenoLibreApi';
+import { useCola } from '@/lib/colaDelTelefono';
+import { guardaEnElTelefono, leeDelTelefono } from '@/lib/almacenDelTelefono';
+import { alVolverLaSenal, haySenalAhora } from '@/lib/senal';
 import { mezclaEntrenos, sesionesDelPlan } from '@/lib/entrenosDelPlan';
 import { useRutaEnSilencio } from '@/lib/useRutaEnSilencio';
 import { permisoDelRecorrido } from '@/features/training/useRecorrido';
@@ -226,15 +229,46 @@ export function useSesionesDelPlan() {
  * la última actividad). `entrenos`: TODO junto para «Tus entrenos», también los workouts del plan (ver `lib/entrenosDelPlan.js`), lo más nuevo primero.
  */
 export function useEntrenosRecientes(userId, n = 6) {
-  const [filas, setFilas] = useState(null); // null = cargando
+  const [deLaBase, setDeLaBase] = useState(null); // null = cargando
   const [vuelta, setVuelta] = useState(0);
+  /* SIN CONEXIÓN (1 nov 2026, ver `docs/sin-conexion.md`). En la app y para quien entró (no en «Ver como»): sin señal se enseña la última lista que se vio, y encima
+     los entrenos que todavía están en la cola del teléfono (`conPendientes`), para que lo que hizo sin señal salga en «Tus entrenos» como cualquier otro. */
+  const { cosas, usuario: deLaCola } = useCola();
+  const propio = !!userId && userId === deLaCola;
   useEffect(() => {
     if (!userId) return undefined;
     let vivo = true;
-    entrenosRecientes(userId, n).then((f) => { if (vivo) setFilas(f); }).catch(() => { if (vivo) setFilas((f) => f ?? []); });
+    const clave = `tl:entrenos:${userId}`;
+    const deLaCopia = async () => {
+      const copia = propio ? await leeDelTelefono(clave) : null;
+      if (vivo) setDeLaBase((f) => f ?? (Array.isArray(copia?.valor) ? copia.valor.slice(0, n) : []));
+    };
+    // Sin señal ni se pregunta (Supabase tardaría hasta 30 s en rendirse): la última lista que se vio, de una vez. Al volver la señal se pide (abajo).
+    if (propio && !haySenalAhora()) {
+      deLaCopia();
+      return () => { vivo = false; };
+    }
+    entrenosRecientes(userId, n)
+      .then((f) => {
+        if (!vivo) return;
+        setDeLaBase(f);
+        if (propio) guardaEnElTelefono(clave, { valor: f, en: Date.now() });
+      })
+      .catch(deLaCopia);
     return () => { vivo = false; };
-  }, [userId, n, vuelta]);
+  }, [userId, n, vuelta, propio]);
   const recarga = useCallback(() => setVuelta((v) => v + 1), []);
+  useEffect(() => (propio ? alVolverLaSenal(recarga) : undefined), [propio, recarga]);
+  // Uno que estaba en la cola ya subió: se vuelve a pedir la lista (sale el del servidor en su lugar, con el mismo id).
+  const enLaCola = propio ? cosas.filter((c) => c.tipo === TIPO_ENTRENO_LIBRE).map((c) => c.id).join(',') : '';
+  const antes = useRef(enLaCola);
+  useEffect(() => {
+    const habia = antes.current.split(',').filter(Boolean);
+    antes.current = enLaCola;
+    const hay = new Set(enLaCola.split(',').filter(Boolean));
+    if (habia.some((id) => !hay.has(id))) recarga();
+  }, [enLaCola, recarga]);
+  const filas = useMemo(() => (deLaBase && propio ? conPendientes(deLaBase, cosas, userId, n) : deLaBase), [deLaBase, propio, cosas, userId, n]);
   const delPlan = useSesionesDelPlan();
   // Con la lista llena (`n` leídos), las sesiones más viejas que la última leída podrían ir después de entrenos que no se leyeron: esas no van.
   const entrenos = useMemo(() => (filas ? mezclaEntrenos(filas, delPlan, { hasta: filas.length >= n ? Date.parse(filas[filas.length - 1].inicio) : null }) : null), [filas, delPlan, n]);

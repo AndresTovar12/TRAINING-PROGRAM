@@ -2137,7 +2137,8 @@ export default function TrainingApp() {
     phases: PLAN, hasPlan, planLoading, kind, estructura, programas, bibliotecas, demoActiva, cierraDemo, programaActivo, elegirPrograma, claveDe,
   } = usePlan();
   const { soloLectura } = usePerfilDeLaVista();
-  const { store, setStore } = useAppState();
+  // `confirmado`: el estado ya se comparó con la base (no es solo la copia del teléfono, ver `AppStateContext`).
+  const { store, setStore, confirmado } = useAppState();
   /* EQUIPO = hay más de un programa con sesiones (el del coach y, además, lo que
      otra persona le pegó o armó aparte). Quien ya dio de alta no cuenta. Sin
      equipo, todo es la app de siempre. El filtro «Ver» y las etiquetas de «quién
@@ -2217,6 +2218,10 @@ export default function TrainingApp() {
   const claveDelCursor = claveDe('wr:cursor');
   useEffect(() => {
     if (!cursor || planLoading || !PLAN?.length) return;
+    /* SIN CONEXIÓN (1 nov 2026): con la copia del teléfono (abrió sin señal) el marcador NO se guarda solo. Saldría de una copia que puede tener días y, al
+       volver la señal, pisaría el que su coach movió mientras tanto (el marcador va entero). Lo que se ve sí está al día: `cursor` ya cuenta el calendario.
+       En cuanto se relee la base, esto corre con el marcador de verdad. Moverlo a mano (`MoverMiPlan`) sí se guarda: es lo que la persona quiso. */
+    if (!confirmado) return;
     const a = storedCursor;
     if (a && sinRepararOtraVez.current === `${claveDelCursor}|${JSON.stringify(a)}`) return;
     const nuevo = selloDelPlan(PLAN, cursor);
@@ -2231,7 +2236,7 @@ export default function TrainingApp() {
         accion: { texto: 'Deshacer', alTocar: () => { sinRepararOtraVez.current = `${claveDelCursor}|${JSON.stringify(a)}`; setCursor(a); } },
       });
     }
-  }, [cursor, storedCursor, setCursor, planLoading, PLAN, reparo.motivo, claveDelCursor, avisa, kind, estructura, soloLectura]);
+  }, [cursor, storedCursor, setCursor, planLoading, PLAN, reparo.motivo, claveDelCursor, avisa, kind, estructura, soloLectura, confirmado]);
 
   const cursorSession = useMemo(() => resolveCursor(PLAN, cursor), [PLAN, cursor]);
   // En una rutina que se repite no hay puntero que avance: la sesión activa es la de hoy.

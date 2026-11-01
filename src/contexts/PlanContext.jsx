@@ -1,5 +1,5 @@
 import {
-  createContext, useContext, useEffect, useState, useMemo, useCallback,
+  createContext, useContext, useEffect, useRef, useState, useMemo, useCallback,
 } from 'react';
 import { usePerfilDeLaVista } from '@/contexts/VistaContext';
 import {
@@ -7,6 +7,8 @@ import {
   getMasterId, listExerciseOverrides, aplicarOverrides,
 } from '@/lib/api';
 import { leeMisCompras } from '@/lib/comprasApi';
+import { conCopiaEnElTelefono, guardaEnElTelefono, leeDelTelefono } from '@/lib/almacenDelTelefono';
+import { alVolverLaSenal, esFaltaDeSenal, haySenalAhora, marcaSinSenal } from '@/lib/senal';
 import { estructuraDelPlan, expandeMicrociclos } from '@/lib/training-utils';
 import { adaptadorDeRegistros, fasesConPegadas, reglasDe } from '@/lib/pegadas';
 import { colorDePrograma, tieneSesiones } from '@/lib/programas';
@@ -25,6 +27,38 @@ const PlanContext = createContext(null);
 const norm = (s) => (s || '').toLowerCase().trim();
 
 const arr = (x) => (Array.isArray(x) ? x : []);
+
+/* LA COPIA DEL PLAN EN EL TELÉFONO (1 nov 2026, encargo «sin conexión», parte 2.1; ver `docs/sin-conexion.md`).
+   Cada pieza que se baja para armar el plan (los programas, lo pegado, el equipo, las compras, el repertorio, las versiones, los medios, el master) se guarda en el teléfono al
+   llegar (`tl:plan:<id>:<pieza>`). SOLO SE USA SIN SEÑAL: si se sabe que no hay, de una vez; si no, cuando la pieza no llega por falta de señal. Con señal siempre se pide
+   al servidor (como antes) y en cuanto vuelve la señal se vuelve a pedir todo. La copia del plan NUNCA se escribe en la base: aquí solo se lee para dibujar, y la app del
+   atleta no guarda planes (eso lo hace el editor del coach, que lee el plan del servidor, no de aquí). Solo en la app de iPhone y solo en la app propia (no en «Ver como»). */
+async function deLaBaseOLaCopia({ conCopia, clave, pide, alUsarCopia, vacioNoSirve = false }) {
+  if (!conCopia) return pide();
+  const deLaCopia = async () => {
+    const copia = await leeDelTelefono(clave);
+    return copia && typeof copia === 'object' && 'valor' in copia ? copia : null;
+  };
+  if (!haySenalAhora()) {
+    const copia = await deLaCopia();
+    if (copia) { alUsarCopia(); return copia.valor; }
+  }
+  try {
+    const valor = await pide();
+    // Una pieza que dice «nada» (null) sin señal no se cree: es la que se traga su error (el master, p. ej.).
+    if (vacioNoSirve && valor == null) throw new Error('Sin respuesta');
+    guardaEnElTelefono(clave, { valor, en: Date.now() });
+    return valor;
+  } catch (e) {
+    const copia = await deLaCopia();
+    if (copia) {
+      if (esFaltaDeSenal(e)) marcaSinSenal();
+      alUsarCopia();
+      return copia.valor;
+    }
+    throw e;
+  }
+}
 
 /**
  * Rellena con defaults seguros los campos opcionales que solo trae el plan
@@ -111,45 +145,72 @@ export function PlanProvider({ children }) {
   // profesional y abre su propia app de entrenamiento).
   const principalId = perfil?.role === 'admin' ? (perfil?.id ?? null) : (perfil?.coach_id ?? null);
 
+  // La copia del teléfono (ver `deLaBaseOLaCopia`): solo en la app y solo en la app propia.
+  const conCopia = conCopiaEnElTelefono() && !soloLectura && !!userId;
+  const llaveDeCopia = useCallback((pieza) => `tl:plan:${userId}:${pieza}`, [userId]);
+  // Sube cada vez que vuelve la señal después de dibujar con la copia: se vuelve a pedir todo al servidor.
+  const [vuelta, setVuelta] = useState(0);
+  const conPiezasDeLaCopia = useRef(false);
+  const marcaCopia = useCallback(() => { conPiezasDeLaCopia.current = true; }, []);
+  useEffect(() => alVolverLaSenal(() => {
+    if (!conPiezasDeLaCopia.current) return;
+    conPiezasDeLaCopia.current = false;
+    setVuelta((n) => n + 1);
+  }), []);
+
+  // Otra persona: el programa elegido vuelve al de por defecto (al volver la señal NO: se queda en el que estaba).
+  useEffect(() => { setActivoId(null); }, [userId]);
+  // Ya se dibujó un plan para esta persona: al refrescarlo (volvió la señal) no se pone «cargando» (la copia se queda a la vista hasta que llega lo nuevo).
+  const yaDibujado = useRef(null);
+
   useEffect(() => {
     let cancelled = false;
-    setActivoId(null);
     if (!userId) {
       setFilas([]);
       setFilasPegadas([]);
       setMiembros(null);
       setPlanLoading(false);
+      yaDibujado.current = null;
       return undefined;
     }
-    setPlanLoading(true);
+    if (yaDibujado.current !== userId) setPlanLoading(true);
     (async () => {
       try {
-        // Las pegadas van aparte y sin tumbar nada: si fallan, el atleta ve sus programas.
-        const [rows, pegadas] = await Promise.all([getProgramas(userId), getSesionesPegadas(userId).catch(() => [])]);
-        // Los nombres solo hacen falta si hay más de un programa.
-        const conEquipo = rows.some((r) => r.profesional_id) || pegadas.length > 0;
-        const nombres = conEquipo ? await nombresDelEquipo(userId).catch(() => null) : null;
+        const { rows, pegadas, nombres } = await deLaBaseOLaCopia({
+          conCopia, clave: llaveDeCopia('programas'), alUsarCopia: marcaCopia,
+          pide: async () => {
+            // Las pegadas van aparte y sin tumbar nada: si fallan, el atleta ve sus programas (salvo por falta de señal: entonces mejor la copia, que sí las trae).
+            const [r, p] = await Promise.all([getProgramas(userId), getSesionesPegadas(userId).catch((e) => { if (esFaltaDeSenal(e)) throw e; return []; })]);
+            // Los nombres solo hacen falta si hay más de un programa.
+            const conEquipo = r.some((x) => x.profesional_id) || p.length > 0;
+            const n = conEquipo ? await nombresDelEquipo(userId).catch((e) => { if (esFaltaDeSenal(e)) throw e; return null; }) : null;
+            return { rows: r, pegadas: p, nombres: n };
+          },
+        });
         if (cancelled) return;
-        setFilas(rows);
-        setFilasPegadas(pegadas);
-        setMiembros(nombres);
+        setFilas(rows ?? []);
+        setFilasPegadas(pegadas ?? []);
+        setMiembros(nombres ?? null);
+        yaDibujado.current = userId;
       } catch {
-        if (!cancelled) { setFilas([]); setFilasPegadas([]); setMiembros(null); }
+        if (!cancelled && yaDibujado.current !== userId) { setFilas([]); setFilasPegadas([]); setMiembros(null); }
       } finally {
         if (!cancelled) setPlanLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [userId]);
+  }, [userId, conCopia, llaveDeCopia, marcaCopia, vuelta]);
 
   /* Los planes que COMPRÓ, aparte y sin hacer esperar al resto: llegan cuando llegan y la app ya está pintada con lo demás. Quien ve la app de otro persona («Ver como»)
      no trae las compras de esa persona: la función solo contesta por quien entró. */
   useEffect(() => {
     let cancelled = false;
     if (!userId || soloLectura) { setComprados([]); return undefined; }
-    leeMisCompras().then((c) => { if (!cancelled) { setComprados(c); setComprasFallo(false); } }).catch(() => { if (!cancelled) setComprasFallo(true); });
+    deLaBaseOLaCopia({ conCopia, clave: llaveDeCopia('compras'), alUsarCopia: marcaCopia, pide: leeMisCompras })
+      .then((c) => { if (!cancelled) { setComprados(c ?? []); setComprasFallo(false); } })
+      .catch(() => { if (!cancelled) setComprasFallo(true); });
     return () => { cancelled = true; };
-  }, [userId, soloLectura]);
+  }, [userId, soloLectura, conCopia, llaveDeCopia, marcaCopia, vuelta]);
   const reintentaCompras = useCallback(async () => {
     try { setComprados(await leeMisCompras()); setComprasFallo(false); } catch { setComprasFallo(true); }
   }, []);
@@ -157,11 +218,11 @@ export function PlanProvider({ children }) {
   // Repertorio para media viva (best-effort: si falla, la app sigue sin media)
   useEffect(() => {
     let cancelled = false;
-    listExercises()
+    deLaBaseOLaCopia({ conCopia, clave: llaveDeCopia('ejercicios'), alUsarCopia: marcaCopia, pide: listExercises })
       .then((rows) => { if (!cancelled) setExercisesBase(rows ?? []); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, []);
+  }, [conCopia, llaveDeCopia, marcaCopia, vuelta]);
 
   // Las versiones que hicieron suyas el coach principal y el equipo de esta
   // persona. Se aplican encima del repertorio, así que el atleta ve el video y
@@ -170,12 +231,16 @@ export function PlanProvider({ children }) {
     let cancelled = false;
     if (!principalId && !userId) { setOverridesTodas([]); return undefined; }
     const propia = perfil?.role === 'admin';
-    const pide = propia
+    const pide = () => (propia
       ? listExerciseOverrides(perfil.id)
-      : versionesDelEquipo(userId).catch(() => (principalId ? listExerciseOverrides(principalId) : []));
-    pide.then((rows) => { if (!cancelled) setOverridesTodas(rows ?? []); }).catch(() => {});
+      : versionesDelEquipo(userId).catch((e) => {
+        if (esFaltaDeSenal(e)) throw e; // sin señal, mejor la copia que la lista vacía de abajo
+        return principalId ? listExerciseOverrides(principalId) : [];
+      }));
+    deLaBaseOLaCopia({ conCopia, clave: llaveDeCopia('versiones'), alUsarCopia: marcaCopia, pide })
+      .then((rows) => { if (!cancelled) setOverridesTodas(rows ?? []); }).catch(() => {});
     return () => { cancelled = true; };
-  }, [userId, principalId, perfil?.role, perfil?.id]);
+  }, [userId, principalId, perfil?.role, perfil?.id, conCopia, llaveDeCopia, marcaCopia, vuelta]);
 
   // Videos extra: ángulos, versiones por género y videos puestos a mano para
   // un atleta. Se piden todos de una vez porque son pocas filas y así el
@@ -186,17 +251,18 @@ export function PlanProvider({ children }) {
     // Se depende del repertorio SIN versiones aplicadas a propósito: los ids
     // son los mismos con o sin ellas, y colgarse de la lista ya fusionada haría
     // que cada carga de versiones dispare otra consulta de medios sin motivo.
-    listExerciseMedia(exercisesBase.map((e) => e.id))
+    deLaBaseOLaCopia({ conCopia, clave: llaveDeCopia('medios'), alUsarCopia: marcaCopia, pide: () => listExerciseMedia(exercisesBase.map((e) => e.id)) })
       .then((rows) => { if (!cancelled) setMediasTodas(rows ?? []); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [exercisesBase]);
+  }, [exercisesBase, conCopia, llaveDeCopia, marcaCopia]);
 
   useEffect(() => {
     let cancelled = false;
-    getMasterId().then((id) => { if (!cancelled) setMasterId(id); }).catch(() => {});
+    deLaBaseOLaCopia({ conCopia, clave: llaveDeCopia('master'), alUsarCopia: marcaCopia, pide: getMasterId, vacioNoSirve: true })
+      .then((id) => { if (!cancelled) setMasterId(id); }).catch(() => {});
     return () => { cancelled = true; };
-  }, []);
+  }, [conCopia, llaveDeCopia, marcaCopia, vuelta]);
 
   /* Un programa por plan activo. Los de equipo solo cuentan mientras esa persona
      siga en el equipo (si el atleta la quita, su programa se esconde; la base no

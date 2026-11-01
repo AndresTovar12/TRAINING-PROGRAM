@@ -1,5 +1,5 @@
 import {
-  createContext, useContext, useEffect, useState, useCallback, useMemo,
+  createContext, useContext, useEffect, useRef, useState, useCallback, useMemo,
 } from 'react';
 import { supabase } from '@/lib/supabase';
 import { updateProfile as apiUpdateProfile } from '@/lib/api';
@@ -7,8 +7,41 @@ import { COLUMNAS_PERFIL } from '@/lib/perfilColumnas';
 import { olvidaLugar } from '@/lib/lugar';
 import { pideCodigoDeCorreo } from '@/lib/correoDeLaCuentaApi';
 import { guardaCorreoPorConfirmar } from '@/lib/correos';
+import { conCopiaEnElTelefono, guardaEnElTelefono, leeDelTelefono } from '@/lib/almacenDelTelefono';
+import { cierraCuentaEnElTelefono, guardaLoUltimoDe, usaCuenta } from '@/lib/colaDelTelefono';
+import { alVolverLaSenal, esFaltaDeSenal, haySenalAhora, marcaConSenal, marcaSinSenal, sinRedEnElTelefono } from '@/lib/senal';
 
 const AuthContext = createContext(null);
+
+/* SIN CONEXIÓN EN EL IPHONE (1 nov 2026, encargo «sin conexión», parte 2; ver `docs/sin-conexion.md`).
+   · LA SESIÓN. Supabase guarda la sesión en el teléfono, pero su llave de entrada dura una hora. Si se abre la app sin señal después de esa hora, `getSession` no la
+     puede renovar y contesta «sin sesión»… aunque la sesión sigue guardada (no la borra: sabe que es falta de señal). Antes eso mandaba a la pantalla de entrar,
+     sin señal para entrar. Ahora, en la app y solo por falta de señal, se usa la sesión guardada: la app abre con la copia del teléfono, y en cuanto vuelve la señal
+     Supabase la renueva sola (`TOKEN_REFRESHED`). Si al volver la señal la sesión ya no sirve (se cerró desde otro aparato), Supabase avisa `SIGNED_OUT` y se sale.
+   · EL PERFIL. Se guarda una copia en el teléfono cada vez que se lee; sin señal se usa esa (y se vuelve a leer en cuanto vuelve la señal).
+   · CERRAR SESIÓN SIN SEÑAL. Supabase no puede avisarle al servidor y dejaba la sesión puesta (el botón parecía no hacer nada): ahora se quita del teléfono igual.
+     Al salir se borran las copias de esa cuenta y queda solo lo que falta subir, que espera a que la misma cuenta vuelva a entrar (`cierraCuentaEnElTelefono`). */
+const claveDePerfil = (uid) => `tl:perfil:${uid}`;
+const claveDeSesion = () => supabase.auth.storageKey ?? `sb-${new URL(import.meta.env.VITE_SUPABASE_URL).hostname.split('.')[0]}-auth-token`;
+const espera = (ms) => new Promise((listo) => { setTimeout(listo, ms); });
+
+/** La sesión que Supabase dejó guardada en el teléfono (aunque su llave de entrada esté vencida), o `null`. Solo para abrir sin señal. */
+function sesionGuardada() {
+  try {
+    const s = JSON.parse(window.localStorage.getItem(claveDeSesion()) || 'null');
+    return s?.user?.id && s.refresh_token ? s : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Quita la sesión de ESTE aparato sin preguntarle al servidor (cerrar sesión sin señal). Las de otros aparatos siguen. */
+function quitaSesionDelTelefono() {
+  try {
+    const clave = claveDeSesion();
+    for (const k of [clave, `${clave}-code-verifier`, `${clave}-user`]) window.localStorage.removeItem(k);
+  } catch { /* sin almacenamiento: no había sesión guardada */ }
+}
 
 const SIGNUP_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/signup`;
 const LOGIN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/login`;
@@ -36,41 +69,107 @@ export function AuthProvider({ children }) {
   // Bootstrap session + subscribe to auth changes
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getSession().then(({ data }) => {
+    /* SIN SEÑAL Y CON LA LLAVE VENCIDA, NO SE ESPERA (1 nov 2026). Para renovarla, Supabase reintenta hasta 30 s antes de contestar (la prueba de WebKit se quedó
+       en «Cargando…» todo ese rato). En la app, si la llave guardada ya venció (o vence en menos de 90 s, lo que Supabase cuenta como vencida) y se sabe que no hay
+       señal, se abre de una vez con la sesión guardada; si no se sabe, se le dan 4 s a Supabase. Lo que conteste después manda: otra sesión (la renovó) la
+       reemplaza; «no hay sesión» por señal no cambia nada; «no hay sesión» por otra cosa (ya no sirve) saca a la persona. */
+    const guardada = conCopiaEnElTelefono() ? sesionGuardada() : null;
+    const necesitaRed = !!guardada && (guardada.expires_at ?? 0) * 1000 - Date.now() < 90_000;
+    let decidido = false;
+    let atajo = null;
+    const usaLaGuardada = () => {
+      if (!mounted || decidido) return;
+      decidido = true;
+      marcaSinSenal();
+      setSession(guardada);
+      setLoading(false);
+    };
+    if (necesitaRed) {
+      if (!haySenalAhora()) usaLaGuardada();
+      else atajo = setTimeout(usaLaGuardada, 4000);
+    }
+    supabase.auth.getSession().then(({ data, error }) => {
+      clearTimeout(atajo);
       if (!mounted) return;
-      setSession(data.session ?? null);
+      let s = data.session ?? null;
+      const porSenal = !!error && esFaltaDeSenal(error);
+      // Sin señal y con la llave vencida: la sesión guardada (ver arriba). Solo en la app, y solo si el fallo fue de señal.
+      if (!s && porSenal && conCopiaEnElTelefono()) {
+        s = sesionGuardada();
+        if (s) marcaSinSenal();
+      }
+      if (decidido) {
+        // Ya se abrió con la guardada: solo cambia si Supabase la renovó o si dice que ya no sirve (y no fue por señal).
+        if (data.session) setSession(data.session);
+        else if (!porSenal) setSession(null);
+        return;
+      }
+      decidido = true;
+      setSession(s);
       setLoading(false);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((evento, sess) => {
       if (evento === 'PASSWORD_RECOVERY') setRecuperando(true);
+      // «INITIAL_SESSION» sin sesión no saca a nadie: lo decide `getSession` (arriba), que sabe si fue falta de señal. Salir de verdad es «SIGNED_OUT».
+      if (evento === 'INITIAL_SESSION' && !sess) return;
       setSession(sess ?? null);
     });
     return () => {
       mounted = false;
+      clearTimeout(atajo);
       sub.subscription.unsubscribe();
     };
   }, []);
 
+  // La cola del teléfono es de la cuenta que entró (y de nadie al salir).
+  const uidDeLaSesion = session?.user?.id ?? null;
+  useEffect(() => { usaCuenta(uidDeLaSesion); }, [uidDeLaSesion]);
+  // La sesión que se ve, para `signOut` (que no depende de ella para no rehacerse en cada cambio de sesión).
+  const sesionVista = useRef(null);
+  useEffect(() => { sesionVista.current = session; }, [session]);
+
   /* Carga el perfil cada vez que cambia quien entró. Con mala señal ANTES se quedaba en «Cargando tu perfil…» para siempre, sin reintentar ni dar salida (auditoría p43, 17 oct
-     2026). Ahora reintenta solo (3 veces, esperando 2 y 4 s) y, si no se logra, avisa (`perfilFalla`) para que la pantalla deje reintentar o salir. */
+     2026). Ahora reintenta solo (3 veces, esperando 2 y 4 s) y, si no se logra, avisa (`perfilFalla`) para que la pantalla deje reintentar o salir.
+     En la app, sin señal, la copia del teléfono (1 nov 2026): de una vez si se sabe que no hay señal, o en cuanto un intento falla por señal. */
+  const perfilDeLaCopia = useRef(false);
   useEffect(() => {
     let cancelled = false;
     const uid = session?.user?.id;
     if (!uid) {
       setProfile(null);
       setPerfilFalla(false);
+      perfilDeLaCopia.current = false;
       return undefined;
     }
     setPerfilFalla(false);
+    const conCopia = conCopiaEnElTelefono();
     (async () => {
+      const copia = conCopia ? await leeDelTelefono(claveDePerfil(uid)) : null;
+      if (cancelled) return;
+      const sirve = copia?.id === uid;
+      const usaLaCopia = () => { perfilDeLaCopia.current = true; setProfile(copia); };
+      if (sirve && !haySenalAhora()) { usaLaCopia(); return; }
       for (let intento = 0; intento < 3 && !cancelled; intento += 1) {
-        if (intento > 0) await new Promise((r) => { setTimeout(r, intento * 2000); });
+        if (intento > 0) await espera(intento * 2000);
         if (cancelled) return;
         try {
-          const { data, error } = await supabase.from('profiles').select(COLUMNAS_PERFIL).eq('id', uid).maybeSingle();
+          const { data, error, status } = await supabase.from('profiles').select(COLUMNAS_PERFIL).eq('id', uid).maybeSingle();
           if (cancelled) return;
-          if (!error && data) { setProfile(data); return; }
-        } catch { /* sin señal: se reintenta */ }
+          if (!error && data) {
+            perfilDeLaCopia.current = false;
+            setProfile(data);
+            marcaConSenal();
+            if (conCopia) guardaEnElTelefono(claveDePerfil(uid), data);
+            return;
+          }
+          if (error && esFaltaDeSenal(error, status)) {
+            marcaSinSenal();
+            if (sirve) { usaLaCopia(); return; }
+          }
+        } catch {
+          /* sin señal: se reintenta (o, con copia, se usa la copia) */
+          if (sirve) { marcaSinSenal(); usaLaCopia(); return; }
+        }
       }
       if (!cancelled) setPerfilFalla(true);
     })();
@@ -78,6 +177,9 @@ export function AuthProvider({ children }) {
       cancelled = true;
     };
   }, [session?.user?.id, intentoPerfil]);
+
+  // El perfil salió de la copia: en cuanto vuelve la señal se lee el de verdad (sin quitar el que ya se ve).
+  useEffect(() => alVolverLaSenal(() => { if (perfilDeLaCopia.current) setIntentoPerfil((n) => n + 1); }), []);
 
   /** «Reintentar» de la pantalla de carga del perfil. */
   const reintentaPerfil = useCallback(() => setIntentoPerfil((n) => n + 1), []);
@@ -267,7 +369,26 @@ export function AuthProvider({ children }) {
   const signOut = useCallback(async () => {
     // Quien entre después no hereda el lugar donde estaba esta persona.
     olvidaLugar();
-    await supabase.auth.signOut({ scope: 'local' });
+    // De quién es la sesión: la que se ve (no se le pregunta a Supabase: sin señal tardaría hasta 30 s en contestar).
+    const uid = sesionVista.current?.user?.id ?? sesionGuardada()?.user?.id ?? null;
+    // Lo último que se anotó queda en el teléfono antes de salir (y se sube cuando esta cuenta vuelva a entrar).
+    await guardaLoUltimoDe(uid);
+    if (conCopiaEnElTelefono() && sinRedEnElTelefono()) {
+      // En la app y sin red: Supabase no puede avisarle al servidor y tardaría hasta 30 s en rendirse. Se quita la sesión de este teléfono de una vez.
+      quitaSesionDelTelefono();
+      setSession(null);
+    } else {
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
+      // En la web, como antes (ahí varias pestañas comparten la sesión y Supabase les avisa a todas cuando sale bien).
+      if (error && conCopiaEnElTelefono()) {
+        if (!esFaltaDeSenal(error)) return; // no se pudo salir (el servidor dijo que no): todo se queda como estaba
+        // Sin señal Supabase no puede avisarle al servidor y deja la sesión puesta: se quita de este teléfono de todos modos.
+        quitaSesionDelTelefono();
+        setSession(null);
+      }
+    }
+    // Las copias de esta cuenta se van del teléfono; lo que falta subir se queda, solo para ella.
+    await cierraCuentaEnElTelefono(uid);
     setProfile(null);
   }, []);
 

@@ -10,6 +10,7 @@ import { useConfirmacion } from '@/components/Confirmacion';
 import { useAviso } from '@/components/AvisoPasajero';
 import { Boton, Campo, Fila, Grupo, IconoDeFila } from '@/components/ui';
 import { Aviso } from '@/features/profile/piezas';
+import { olvidaTodoDe } from '@/lib/colaDelTelefono';
 
 /* LA PESTAÑA «CUENTA» de Mi perfil (15 oct 2026). Andrés: «hay temas de administración que no tenemos resueltos: que alguien elimine su cuenta, dónde administra
    sus contraseñas…». Aquí vive lo de la cuenta en sí (no lo del perfil): correo, contraseña, sesiones abiertas, descargar sus datos y eliminarla.
@@ -86,7 +87,10 @@ function EliminarCuenta() {
     if (!puede) return;
     setBusy(true); setError('');
     try {
+      const { data: actual } = await supabase.auth.getSession().catch(() => ({ data: null }));
       await eliminaMiCuenta({ confirmacion: confirmacion.trim(), contrasena });
+      // La cuenta ya no existe: lo suyo que quedaba en el teléfono (copias y cola, sin conexión) ya no tiene a dónde subir.
+      await olvidaTodoDe(actual?.session?.user?.id).catch(() => {});
       await supabase.auth.signOut().catch(() => {});
       window.location.assign('/');
     } catch (err) {

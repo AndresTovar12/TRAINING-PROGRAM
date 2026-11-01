@@ -1,0 +1,91 @@
+/* LA COPIA DEL ESTADO EN EL TELÉFONO (1 nov 2026, encargo «sin conexión», parte 2.1). Lo puro: qué se guarda, cómo se abre y cómo se junta con la
+   base cuando vuelve la señal. Lo usa `AppStateContext`; las pruebas están en `scripts/prueba-copia-del-estado.mjs`.
+
+   QUÉ SE GUARDA. Dos cosas, SIEMPRE JUNTAS en un solo guardado (`tl:estado:<id>`):
+     · `enLaBase`: lo último que se sabe que tiene la base.
+     · `pendiente`: lo que la persona cambió encima y todavía no se sube (un parche, ver `lib/estadoPorPartes.js`).
+   Juntas porque los parches se calculan contra `enLaBase`. Si se guardaran por separado y la app se cerrara entre un guardado y otro, una base nueva
+   con un estado viejo daría un parche que BORRA lo que llegó de otro aparato. Con las dos en el mismo guardado eso no puede pasar.
+
+   AL VOLVER LA SEÑAL (`rebasa`). Se relee la base y lo de la base MANDA: encima va solo lo que la persona cambió sin señal. Lo que otro aparato (la compu,
+   su IA, su coach al mover el plan) escribió mientras tanto en otras llaves se queda. Si los dos cambiaron lo MISMO (el mismo peso de la misma serie),
+   gana el último que llega a la base: el parche es por llave, no hay forma de saber cuál fue después.
+
+   NUNCA CONTRA UN ESTADO VACÍO. Si nunca se pudo leer la base y no hay copia, no hay `enLaBase`: no se calcula ni se guarda nada (la regla de
+   `AppStateContext` desde el 25 oct 2026). Una copia sin `enLaBase` (lo que queda al salir de la cuenta: solo lo pendiente) no se puede enseñar;
+   solo se pone encima de la base cuando se logra leer. */
+import { aplicarParche, diferencia } from './estadoPorPartes.js';
+
+/** La llave del almacén del teléfono donde vive la copia del estado de una cuenta. */
+export const claveDelEstado = (usuario) => `tl:estado:${usuario}`;
+
+const VERSION = 1;
+const esObjeto = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
+const esBorrar = (x) => esObjeto(x) && x.__borrar === true && Object.keys(x).length === 1;
+
+/* EL MARCADOR VA ENTERO TAMBIÉN AL JUNTAR (1 nov 2026; la regla es del 29 oct, ver `lib/estadoPorPartes.js`). El parche de `wr:cursor` dice «el marcador es ESTE»,
+   no «cambia estos pedazos». Al ponerlo encima de una base nueva no se mezcla: se reemplaza. Si se mezclara, el marcador que la persona movió sin señal se juntaría
+   con la pausa que su coach puso mientras tanto y quedaría uno mitad y mitad (lo encontró `scripts/prueba-copia-del-estado.mjs`; también pasaba al releer la
+   base al volver a la app). Al subirlo, `diferencia` lo manda entero con `BORRAR` en lo que sobra. */
+const esMarcador = (k) => /^wr:cursor(@|$)/.test(k);
+
+/** Pone lo pendiente encima de una base: como `aplicarParche`, salvo los marcadores, que se reemplazan enteros. */
+export function ponEncima(base, pendiente) {
+  if (!esObjeto(pendiente)) return esObjeto(base) ? base : {};
+  const resultado = aplicarParche(esObjeto(base) ? base : {}, pendiente);
+  for (const [llave, valor] of Object.entries(pendiente)) {
+    if (esMarcador(llave) && esObjeto(valor) && !esBorrar(valor)) resultado[llave] = aplicarParche({}, valor);
+  }
+  return resultado;
+}
+
+/** Lo que se guarda en el teléfono: la base conocida y lo pendiente encima, en un solo objeto. */
+export function armaCopia(enLaBase, store, en = Date.now()) {
+  const base = esObjeto(enLaBase) ? enLaBase : {};
+  const pendiente = diferencia(base, esObjeto(store) ? store : {});
+  return { v: VERSION, enLaBase: base, pendiente: pendiente ?? null, en };
+}
+
+/**
+ * Abre una copia guardada: `{ enLaBase, store, pendiente, en }`, o `null` si no sirve.
+ * Sin `enLaBase` (se salió de la cuenta y solo quedó lo pendiente) devuelve `{ enLaBase: null, store: null, pendiente }`: eso no se enseña, solo se sube.
+ */
+export function abreCopia(copia) {
+  if (!esObjeto(copia) || copia.v !== VERSION) return null;
+  const pendiente = esObjeto(copia.pendiente) ? copia.pendiente : undefined;
+  const en = typeof copia.en === 'number' ? copia.en : null;
+  if (!esObjeto(copia.enLaBase)) return pendiente ? { enLaBase: null, store: null, pendiente, en } : null;
+  return { enLaBase: copia.enLaBase, store: pendiente ? ponEncima(copia.enLaBase, pendiente) : copia.enLaBase, pendiente, en };
+}
+
+/**
+ * Lo que se ve al releer la base: la base nueva (`fresco`) con lo que la persona cambió encima de la vieja y aún no se subía.
+ * `enLaBaseVieja` y `storeActual` tienen que ser del mismo momento (ver `AppStateContext`, «SIEMPRE JUNTOS»).
+ */
+export function rebasa(fresco, enLaBaseVieja, storeActual) {
+  const base = esObjeto(fresco) ? fresco : {};
+  const pendiente = diferencia(esObjeto(enLaBaseVieja) ? enLaBaseVieja : {}, esObjeto(storeActual) ? storeActual : {});
+  return pendiente === undefined ? base : ponEncima(base, pendiente);
+}
+
+/** Lo que queda en el teléfono al salir de la cuenta: solo lo pendiente, sin la copia de la base. `null` si no falta subir nada. */
+export function soloLoPendiente(copia) {
+  const abierta = abreCopia(copia);
+  if (!abierta?.pendiente) return null;
+  return { v: VERSION, enLaBase: null, pendiente: abierta.pendiente, en: abierta.en };
+}
+
+/**
+ * Cuántas «cosas» hay en un parche, para el «N cosas por subir» de Mi perfil: cada sesión anotada cuenta una, cada día de bienestar uno y cada otra
+ * llave (1RM, en qué semana va…) una. Lo de la pantalla (`ui:…`, qué avisos ya vio) se sube igual, pero no se cuenta: nadie lo reconocería como «algo suyo».
+ */
+export function cuantasCosas(parche) {
+  if (!esObjeto(parche)) return 0;
+  let n = 0;
+  for (const [llave, valor] of Object.entries(parche)) {
+    if (/^ui:/.test(llave)) continue;
+    if ((/^wr:sessions(@|$)/.test(llave) || llave === 'wr:wellness') && esObjeto(valor) && !esBorrar(valor)) n += Math.max(1, Object.keys(valor).length);
+    else n += 1;
+  }
+  return n;
+}
