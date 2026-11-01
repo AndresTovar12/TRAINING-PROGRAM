@@ -66,8 +66,10 @@ export function AvisoProvider({ children }) {
     }
   }, [avisa, quita]);
 
-  const falla = useCallback((texto, { accion = null } = {}) => setFallo({ texto, accion }), []);
-  const quitaFalla = useCallback(() => setFallo(null), []);
+  /* `clave` (1 nov 2026, sin conexión): quién puso el aviso ('estado', 'lectura', 'cola'). `quitaFalla(clave)` solo quita el suyo: que el guardado del estado salga
+     bien no debe esconder que la cola tiene algo rechazado. Sin clave, como antes: quita el que esté. */
+  const falla = useCallback((texto, { accion = null, clave = null } = {}) => setFallo({ texto, accion, clave }), []);
+  const quitaFalla = useCallback((clave = null) => setFallo((f) => (!f || clave === null || f.clave === clave ? null : f)), []);
 
   useEffect(() => () => clearTimeout(reloj.current), []);
 
@@ -138,7 +140,7 @@ export function AvisoProvider({ children }) {
               </button>
             )}
             <button
-              type="button" onClick={quitaFalla}
+              type="button" onClick={() => quitaFalla()}
               style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, padding: '2px 4px', flexShrink: 0 }}
             >
               Entendido

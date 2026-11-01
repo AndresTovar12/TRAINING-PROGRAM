@@ -2,8 +2,8 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { LT, KP } from '@/lib/theme';
 import { DEPORTES, nombreDelDeporte } from '@/lib/metricas/deportes';
-import { borraActividad, cambiaActividad, getActividad, getSeries } from '@/lib/metricasApi';
-import { entrenosAnteriores } from '@/lib/entrenoLibreApi';
+import { getActividad, getSeries } from '@/lib/metricasApi';
+import { borraEntreno, cambiaEntreno, entrenosAnteriores } from '@/lib/entrenoLibreApi';
 import { recordDe } from '@/lib/resumenLibre';
 import { muestrasDeRuta } from '@/lib/recorrido';
 import { actividadDeEntreno } from '@/lib/actividades';
@@ -58,9 +58,12 @@ export default function ResumenLibre({ fila: filaInicial, unidadPeso = 'kg', alC
     const { filaInicial: f0, propias: p0, tipoDeSesion: t0 } = paraCargar.current;
     if (!f0?.id) return undefined;
     let vivo = true;
-    getActividad(f0.id).then((completa) => {
-      if (vivo && completa) setFila((antes) => ({ ...completa, titulo: antes.titulo, deporte: antes.deporte }));
-    }).catch(() => {});
+    // Uno que todavía está en la cola del teléfono (sin conexión, `pendiente`) ya viene completo: el servidor aún no lo tiene.
+    if (!f0.pendiente) {
+      getActividad(f0.id).then((completa) => {
+        if (vivo && completa) setFila((antes) => ({ ...completa, titulo: antes.titulo, deporte: antes.deporte }));
+      }).catch(() => {});
+    }
     cargaHistorial({ atletaId: f0.atleta_id, inicioMs: Date.parse(f0.inicio), propias: p0, tipoDeSesion: t0 }).then((h) => { if (vivo) setHistorial(h); });
     return () => { vivo = false; };
   }, []);
@@ -82,14 +85,14 @@ export default function ResumenLibre({ fila: filaInicial, unidadPeso = 'kg', alC
   const [menu, setMenu] = useState(null); // null | 'nombre' | 'actividad'
   const [error, setError] = useState(null);
   const pregunta = useConfirmacion();
-  // La ruta guardada (de un entreno con GPS): se lee una vez. La recién medida ya viene en `muestras`.
-  const [series, setSeries] = useState(null);
+  // La ruta guardada (de un entreno con GPS): se lee una vez. La recién medida ya viene en `muestras`; la de uno que aún está en la cola, en `seriesLocales`.
+  const [series, setSeries] = useState(() => filaInicial?.seriesLocales ?? null);
   useEffect(() => {
-    if (!fila?.id || (Array.isArray(muestras) && muestras.length >= 2)) return undefined;
+    if (!fila?.id || fila.pendiente || (Array.isArray(muestras) && muestras.length >= 2)) return undefined;
     let vivo = true;
     getSeries(fila.id).then((s) => { if (vivo) setSeries(s); }).catch(() => {});
     return () => { vivo = false; };
-  }, [fila?.id, muestras]);
+  }, [fila?.id, fila?.pendiente, muestras]);
   const ruta = useMemo(() => {
     if (Array.isArray(muestras) && muestras.length >= 2) return muestras;
     const m = muestrasDeRuta(series?.ruta);
@@ -110,7 +113,8 @@ export default function ResumenLibre({ fila: filaInicial, unidadPeso = 'kg', alC
 
   const cambia = async (cambios) => {
     setError(null);
-    const nueva = await cambiaActividad(fila.id, cambios);
+    // Si todavía está en la cola del teléfono, se cambia ahí (sube ya cambiado); si no, en el servidor (`cambiaEntreno`).
+    const nueva = await cambiaEntreno(fila, cambios);
     if (nueva) {
       setFila(nueva);
       if (cambios.deporte) setCambiada(true);
@@ -125,7 +129,7 @@ export default function ResumenLibre({ fila: filaInicial, unidadPeso = 'kg', alC
   const borra = async () => {
     const si = await pregunta({ titulo: `¿Borrar «${nombre}»?`, detalle: 'Se borra el entreno y sus stickers. No se puede deshacer.', confirmar: 'Borrar', peligro: true });
     if (!si) return;
-    try { await borraActividad(fila.id); alBorrado?.(fila); alCerrar(); } catch { setError('No se pudo borrar. Inténtalo otra vez.'); }
+    try { await borraEntreno(fila); alBorrado?.(fila); alCerrar(); } catch { setError('No se pudo borrar. Inténtalo otra vez.'); }
   };
 
   const frase = useMemo(() => fraseDeActividad(fila, { otras: filas, propias, desde }), [fila, filas, propias, desde]);

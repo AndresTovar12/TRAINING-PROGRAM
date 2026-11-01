@@ -192,11 +192,13 @@ export async function listExercises() {
 }
 
 // Id del master (dueño de los ejercicios base). Cacheado en memoria.
+// Un fallo NO se recuerda (1 nov 2026, sin conexión): antes, abrir sin señal dejaba «sin master» hasta recargar la app, aunque la señal volviera.
 let _masterId; // undefined = sin cargar
 export async function getMasterId() {
   if (_masterId !== undefined) return _masterId;
   const { data, error } = await supabase.rpc('master_id');
-  _masterId = error ? null : (data ?? null);
+  if (error) return null;
+  _masterId = data ?? null;
   return _masterId;
 }
 

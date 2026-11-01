@@ -27,6 +27,8 @@ import TarjetaDeMisMetricas from '@/features/metricas/TarjetaDeMisMetricas';
 import SelectorOficio from '@/components/SelectorOficio';
 import SelectorDisciplinas from '@/components/SelectorDisciplinas';
 import HojaDeUsuario from '@/features/profile/HojaDeUsuario';
+import { FilaPorSubir } from '@/components/SinConexion';
+import { useCerrarSesion } from '@/lib/useCerrarSesion';
 
 function initialsFrom(name) {
   const parts = (name || '').trim().split(/\s+/).filter(Boolean);
@@ -90,7 +92,8 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
   const [hoja, setHoja] = useState(null); // null | 'usuario' | 'oficio' | 'disciplinas'
   const [copiado, setCopiado] = useState(false);
   const { avisa, trabajando } = useAviso();
-  const { signOut } = useAuth();
+  // Con cosas por subir (sin conexión), antes de salir se dice que no se pierden (ver `useCerrarSesion`).
+  const signOut = useCerrarSesion();
   const { coach } = usePalabras();
   const esCompu = useIsDesktop();
   const fileRef = useRef(null);
@@ -175,6 +178,8 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
       <Grupo>
         <Fila izquierda={<IconoDeFila><UserIcon size={18} /></IconoDeFila>} texto="Mis datos" detalle="Nombre, usuario, foto y más" onClick={() => setSeccion('perfil')} />
       </Grupo>
+      {/* Sin conexión (1 nov 2026): mientras haya pendientes en el teléfono, «N cosas por subir». En la web no sale. */}
+      <FilaPorSubir />
       <Grupo>{['cuenta', 'compras', 'cobros', 'dispositivos', 'avisos'].map(filaDe)}</Grupo>
       <Grupo>{['equipo', 'metricas', 'ejercicios', 'ia'].map(filaDe)}</Grupo>
       {cerrarSesion}

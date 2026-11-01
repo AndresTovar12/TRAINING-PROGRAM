@@ -25,6 +25,8 @@ import ProfileScreen from '@/features/profile/ProfileScreen';
 import PermisoIA from '@/features/ia/PermisoIA';
 import { rutaDeTienda } from '@/lib/tiendaApi';
 import { rutaDecodificada } from '@/lib/rutas';
+import { useCerrarSesion } from '@/lib/useCerrarSesion';
+import { AvisoDeLaCola, AvisoSinConexion } from '@/components/SinConexion';
 
 // La tienda pública (`/@usuario`, `/@usuario/plan`): la ve cualquiera, con o sin cuenta. Va aparte para que quien solo usa la app no la baje.
 const TiendaPublica = lazy(() => import('@/features/tienda/TiendaPublica'));
@@ -81,7 +83,9 @@ function CargandoPerfil() {
 }
 
 function AccountMenu({ perfil, onPerfil }) {
-  const { profile, user, isAdmin, signOut } = useAuth();
+  const { profile, user, isAdmin } = useAuth();
+  // Con cosas por subir (sin conexión), antes de salir se dice que no se pierden (ver `useCerrarSesion`).
+  const signOut = useCerrarSesion();
   const { t } = usePalabras();
   const [open, setOpen] = useState(false);
   // Si quien lo monta manda `onPerfil`, Mi perfil se abre desde fuera también (el panel del coach lo abre en «Primeros
@@ -591,11 +595,15 @@ export default function App() {
     <PalabrasProvider perfil={profile}>
       <AppStateProvider>
         <PlanProvider>
+          {/* Sin conexión en el iPhone (1 nov 2026): el aviso fijo de arriba (antes de la app: la empuja hacia abajo) y el «No se guardó» de lo que el servidor
+              rechace. En la web no dibujan nada. */}
+          <AvisoSinConexion />
           <TrainingApp />
           <SincronizaReloj />
           <ConectaRelojGlobal />
           <AccountMenu />
           <UpdateBanner />
+          <AvisoDeLaCola />
         </PlanProvider>
       </AppStateProvider>
     </PalabrasProvider>
