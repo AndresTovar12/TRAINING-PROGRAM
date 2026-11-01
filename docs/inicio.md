@@ -22,15 +22,17 @@ La barra de arriba cuenta solo los pasos de esa persona; la bienvenida no cuenta
 
 | Quién | Pasos |
 |---|---|
-| Atleta con Apple o Google | tipo → entrenador → sobre → reloj → bienvenida |
-| Atleta con usuario | tipo → nombre → cuenta → correo → entrenador → sobre → reloj → bienvenida |
+| Atleta con Apple o Google | tipo → entrenador → sobre → reloj → tu-reloj → bienvenida |
+| Atleta con usuario | tipo → nombre → cuenta → correo → entrenador → sobre → reloj → tu-reloj → bienvenida |
 | Coach con Apple o Google | tipo → oficio → entrena → equipo → repertorio → bienvenida |
 | Coach con usuario | tipo → nombre → cuenta → correo → oficio → entrena → equipo → repertorio → bienvenida |
-| Invitación con Apple o Google | sobre → reloj → bienvenida |
-| Invitación con usuario | cuenta → correo → sobre → reloj → bienvenida |
+| Invitación con Apple o Google | sobre → reloj → tu-reloj → bienvenida |
+| Invitación con usuario | cuenta → correo → sobre → reloj → tu-reloj → bienvenida |
 | Ya tiene cuenta | «Usar usuario y contraseña» → «Entrar» (dos toques) |
 
 Si Apple no da el nombre, sale también «¿Cómo te llamas?» después del tipo.
+
+`reloj` es Apple Salud y `tu-reloj` es el Apple Watch (1 nov 2026). `tu-reloj` solo existe en la app del iPhone (`saludDisponible()`): en la web el camino del atleta y del invitado termina en `reloj` y la barra cuenta un paso menos.
 
 ## Cada pantalla
 
@@ -46,7 +48,16 @@ Si Apple no da el nombre, sale también «¿Cómo te llamas?» después del tipo
   - **«Salir» después del código:** solo lo ve quien entró con Apple o Google (volver es un toque). Con usuario y contraseña no hay «Salir» en los pasos de después del código: la cuenta acaba de nacer y nadie recuerda la contraseña que puso hace dos minutos; los pasos que quedan se saltan («Entreno por mi cuenta», «Saltar», «Ahora no») y, si cierra la app, la sesión sigue y retoma en el mismo paso.
 - **entrenador** («¿Entrenas con un entrenador?»): estilo C. «Sí, tengo su código» abre el campo del código, la tarjeta verde del entrenador encontrado y «Quedar con Carlos»; «No tengo código» regresa. «Entreno por mi cuenta» sigue.
 - **sobre** («Sobre ti»): sexo (Mujer / Hombre / Prefiero no decir) y fecha de nacimiento. «Continuar» se enciende al elegir el sexo; «Saltar» no guarda nada. Guarda `genero` y `fecha_nacimiento`.
-- **reloj**: Apple Watch, Apple Salud o (en la web) solo el aviso. Ver `docs/entreno-y-reloj.md`, sección 9.
+- **reloj** («Conecta Apple Salud», 1 nov 2026, maqueta `LLmh1vBB4MNjVHYvzVA3ym`): igual para quien tiene Apple Watch y quien no; solo habla de Salud (`CuerpoDeSalud` en `features/reloj/ConectaReloj.jsx`): el corazón rosa, qué entra («Entra a Training Lab») y qué sale («Sale de Training Lab»), la pista de «Activar todas» y «Permitir» y la leyenda. Botones «Conectar Apple Salud» y «Ahora no». En la web, `AvisoDelReloj` con «Continuar». «Conectar» abre `ConectaReloj` con `enInicio`:
+  - **«Conectando Apple Salud…»** (`ConectandoSalud.jsx`): una barra y cuatro renglones (gris en espera, girando en curso, palomita verde con su resultado a la derecha). **Nada avanza por tiempo**: cada renglón se marca cuando termina su llamada. 1) «Permiso del iPhone» = `pideSalud()` → «Dado». 2) «Leer y escribir en Salud» = `revisaPermiso()` con `ok` + `conectaEnLaCuenta()` → «Revisado» (si `ok` es falso, «No pudimos leer nada» de siempre). 3) «Tus entrenos de los últimos 12 meses» = `traeLoDeAntes({ alAvance })`, ahora a la vista: «12 de 48» con un aviso real por entreno leído, luego «48 entrenos» o «No hay». 4) «Tu sueño y tu pulso en reposo» = leer la recuperación + `guardaPrevias` → «N días» (con sueño o pulso en reposo) o «No hay». La barra es la suma real: (renglones hechos + la fracción del 3) ÷ 4.
+  - Si ya se había traído antes (`detalle.previas`): 3 y 4 dicen «Ya estaban». Si fallan: «Se intenta después» y el flujo sigue (`traeLoDeAntes` reintenta la próxima vez que se abra la app). `traeDelReloj` (lo nuevo) sigue callado, sin renglón.
+  - Si el 3 y el 4 tardan más de 8 s: «Continuar» y «Sigue leyendo mientras usas la app.». La lectura NO depende de la pantalla: sigue en segundo plano y se salta la pantalla verde.
+  - **«Apple Salud conectada»**: al terminar el 4, el cuadro pasa a verde con palomita, la barra a verde y el título cambia; «Encontramos N entrenos de los últimos 12 meses.» (o «Desde hoy, tus entrenos nuevos entran solos.»). 1.5 s y pasa sola. Ya no hay aviso «Apple Salud conectada.» aparte. Las únicas esperas permitidas son estos 1.5 s y los 8 s.
+- **tu-reloj** («Tu Apple Watch», solo en la app del iPhone; `TuReloj.jsx`, el caso lo decide `casoDelReloj` con `useReloj()`: `reloj.emparejado`, `reloj.instalada` —el modo de prueba cuenta como instalada— y si Salud quedó conectada en este iPhone):
+  - **a) sin reloj:** «Todo funciona con tu iPhone.» con el reloj apagado y «Opcional», tarjeta «¿Y si un día tienes Apple Watch?» y «Continuar».
+  - **b) con reloj, sin conectar Salud** (tocó «Ahora no»): «Tu Apple Watch funciona por Salud», «Conectar Apple Salud» (abre el mismo «Conectando» y al terminar esta pantalla se vuelve c o d) y «Después».
+  - **c) con reloj y la app, Salud conectada:** «Tu Apple Watch ya quedó conectado» con tres pasos de cómo entrenar con él y «Continuar».
+  - **d) con reloj sin la app, Salud conectada:** «Falta un paso en tu reloj» con los tres pasos para instalar Training Lab en el reloj, «Abrir la app Watch» (`itms-watchs://`) y «Después». Reemplaza al paso `instala` de `ConectaReloj` cuando lo abre el inicio.
 - **oficio**, **entrena** (rejilla de dos columnas que cabe sin bajar), **equipo** y **repertorio** (estilo C): las del coach.
 - **bienvenida**: azul, entra como la celebración de un entreno. El título lleva el género solo si lo dijo en «Sobre ti». Con entrenador enseña a su entrenador; por su cuenta, su primer entreno; al coach, nada (lo esperan sus «Primeros pasos»). Pastillas de lo que ya quedó. «Ir a mi app», y «Entras con Google como @usuario · Cambiar» (la hoja del usuario de Mi perfil).
 
@@ -67,4 +78,5 @@ Si Apple no da el nombre, sale también «¿Cómo te llamas?» después del tipo
 
 - `npm run check` (la prueba de humo entra por la puerta: «Usar usuario y contraseña»).
 - En el navegador, con la App real y una sesión falsa (página local, no se sube): `qa-reloj.html?vista=puerta&reloj=si` (`reloj=no` sin Apple Watch, `web=1` como la web, `invitacion=tok` con invitación, `coachGoogle=1` para el coach). Contraseña que entra: `Entrena2026`; código que sirve: `482913`; código de entrenador: `CV2026`.
+- Salud y el Apple Watch (1 nov 2026): `qa-reloj.html?vista=inicio&reloj=no|si|sinapp` con compuertas (`&retiene=hoja,revision,entrenos,agg,sueno,guardar` deja esa llamada colgada hasta `__qa.suelta('hoja')`; `&n=48` entrenos de antes, `&sueno=30` noches, `&falla=previas`, `&conectado=otro&previas=1` para «Ya estaban», `&web=1`). Con las compuertas se comprueba que ningún renglón avanza solo.
 - En el iPhone (no se puede en el navegador): la puerta sin Google, Apple de verdad, la hoja de Salud sin reloj, el código ofrecido arriba del teclado, y la bienvenida con la barra del iPhone en blanco.

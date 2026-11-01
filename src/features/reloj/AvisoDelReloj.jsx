@@ -6,7 +6,7 @@ import { Beneficio, Beneficios, EstilosDelReloj, Pista, RelojDibujado } from './
 /* «TRAINING LAB FUNCIONA CON TU APPLE WATCH» (fase 5, 29 oct 2026): el paso del reloj al crear la cuenta, para quien NO tiene un Apple Watch emparejado (o está
    en la web). Solo cuenta cómo lo seguiría el reloj al entrenar; no pide nada. Lo que dice es lo que hace hoy la app del reloj: cuenta el descanso y vibra al
    acabar (ModeloDelEntreno.swift), kilómetros y ritmo al correr (PantallaDeCarrera.jsx), pulso en vivo, y «Listo» y «Siguiente» (VistaDelEntreno.swift).
-   Inicio nuevo (30 oct 2026): solo en la WEB. En la app del iPhone, sin reloj, el paso conecta Apple Salud (`CuerpoDeConectar`) en vez de solo contar. */
+   Inicio nuevo (30 oct 2026): solo en la WEB. En la app del iPhone, sin reloj, el paso conecta Apple Salud (`CuerpoDeSalud`) en vez de solo contar. */
 export default function AvisoDelReloj({ compu = false }) {
   return (
     <>

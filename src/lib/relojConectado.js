@@ -105,6 +105,13 @@ export function cierraInvitacion() {
 }
 
 
+/** ¿Qué pantalla toca? `reloj`: `{ emparejado, instalada, prueba }` de `useReloj()`; `conecto`: Salud ya está conectada en este iPhone. El modo de prueba cuenta como app instalada. */
+export function casoDelReloj({ reloj, conecto }) {
+  if (!reloj?.emparejado) return 'a';
+  if (!conecto) return 'b';
+  return reloj.instalada || reloj.prueba ? 'c' : 'd';
+}
+
 export const ponTrayendo = (trayendo) => { if (estado.trayendo !== trayendo) cambia({ trayendo }); };
 export const ponConexion = (conexion) => cambia({ conexion });
 /** Para quien no es un componente (la sincronización): lo de ahora. */

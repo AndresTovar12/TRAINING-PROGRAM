@@ -153,14 +153,15 @@ node scripts/prueba-entreno-datos.mjs      # lo que se dice de un paso y el regi
 node scripts/prueba-entreno-canonico.mjs   # el idioma de los relojes
 ```
 
-## 9. Conectar Salud al crear la cuenta (inicio nuevo, 30 oct 2026)
+## 9. Conectar Salud y el Apple Watch al crear la cuenta (1 nov 2026; antes, 30 oct)
 
-El paso **«reloj»** del inicio (`src/features/inicio/Inicio.jsx`) es para todos los atletas, tengan o no Apple Watch:
+Son **dos pasos** del inicio (`src/features/inicio/Inicio.jsx`), en la app del iPhone, para todos los atletas, tengan o no Apple Watch. Detalle y textos en `docs/inicio.md`.
 
-- **En la app del iPhone, con Apple Watch emparejado:** «Conecta tu Apple Watch» (`CuerpoDeConectar` con `emparejado`), con «Conectar Apple Watch» y «Ahora no».
-- **En la app del iPhone, sin Apple Watch:** «Conecta Apple Salud». Salud trae lo que guardan sus otros aparatos y apps (un anillo, un Garmin, Strava) y su sueño y pulso en reposo. Una tarjeta oscura con el reloj dibujado le cuenta que la app funciona con Apple Watch: si un día tiene uno, entra solo, sin volver a conectar nada. Antes, sin reloj, el inicio solo enseñaba una pantalla que explicaba el reloj y no conectaba nada.
-- **En la web:** `AvisoDelReloj`, solo cuenta, con «Continuar»; se conecta en la app del iPhone, en Mi perfil → Dispositivos.
+- **`reloj` = «Conecta Apple Salud»** (`CuerpoDeSalud`): igual para todos, solo habla de Salud (qué entra y qué sale). «Conectar Apple Salud» abre `ConectaReloj` con `empezar="pedir"` y `enInicio`; «Ahora no» pasa al siguiente paso sin pedir nada. Fuera del inicio (Home, Mi perfil → Dispositivos, «Empieza aquí», `ConectaRelojGlobal`) se sigue usando `CuerpoDeConectar` («Conecta tu Apple Watch» / «Conecta Apple Salud» con su tarjeta oscura) y sus pantallas «Listo» y «Falta un paso».
+- **«Conectando Apple Salud…»** (`ConectandoSalud.jsx`): barra y cuatro renglones. Regla: **nada avanza por tiempo**, cada renglón se marca cuando termina su llamada real (`pideSalud`; `revisaPermiso` + `conectaEnLaCuenta`; `traeLoDeAntes` con su `alAvance({ fase, hechos, total })`; la recuperación + `guardaPrevias`). Las únicas esperas: 8 s para «Continuar» y 1.5 s de la pantalla verde. `traeLoDeAntes` devuelve `{ estado: 'ya' | 'nada' | 'listo' | 'fallo', entrenos, dias }`, nunca rechaza, y solo hay una lectura a la vez (si `SincronizaReloj` ya la arrancó, quien llegue después se cuelga de esa). Lo de antes sigue siendo solo para las cuentas: va a `actividades_previas` y `recuperacion_previa` y ninguna pantalla lo enseña.
+- **Fuera del inicio** «Conectando» ya no dibuja un reloj cuando no hay reloj emparejado: sin reloj sale el corazón de Salud (`RelojDibujado modo="sync"` solo con reloj).
+- **`tu-reloj` = «Tu Apple Watch»** (`TuReloj.jsx`, solo en la app del iPhone): a) sin reloj, b) con reloj sin conectar Salud (desde aquí se puede conectar), c) con reloj y la app, Salud conectada, d) con reloj sin la app: pasos para instalarla. El modo de prueba de los administradores cuenta como app instalada, así que da b y c; el caso d solo sale con un reloj emparejado de verdad sin la app (o en la página de prueba con `reloj=sinapp`).
+- **Bienvenida:** pastilla «Apple Salud conectada» si conectó, y «Apple Watch listo» solo si además hay reloj con la app. Ya no existe «Apple Watch conectado».
+- **En la web:** `AvisoDelReloj`, solo cuenta, con «Continuar»; `tu-reloj` no existe.
 
-«Conectar» abre la hoja de permisos del iPhone (`ConectaReloj` con `empezar="pedir"` y `sinListo`): al dar permiso, un aviso («Apple Watch conectado.» o «Apple Salud conectada.») y la siguiente pantalla, sin la pantalla «Listo» de `ConectaReloj` (sí sale «Falta un paso» si falta la app del reloj). La misma pantalla de «Conecta Apple Salud» es la que abre «Conecta tu Apple Watch» desde Home, Mi perfil o «Empieza aquí».
-
-Prueba en el navegador: `qa-reloj.html?vista=puerta&reloj=si` (o `reloj=no`, o `web=1`), con la App real y una sesión falsa (ver `docs/inicio.md`).
+Prueba en el navegador: `qa-reloj.html?vista=inicio&reloj=no|si|sinapp` (ver `docs/inicio.md`, «Cómo probarlo»), o `qa-reloj.html?vista=puerta&reloj=si` con la App real y una sesión falsa.

@@ -48,18 +48,51 @@ export async function traeLoUltimo() {
   try { return await traeDelReloj(); } finally { ponTrayendo(false); }
 }
 
-let antesEnCurso = false;
-/** LO DE ANTES DE CONECTAR, una sola vez por cuenta (queda `detalle.previas`), en segundo plano. Callado: si falla, se intenta la próxima vez que abra. */
-export async function traeLoDeAntes() {
-  const { de: userId, conexion, aqui } = relojAhora();
-  if (!userId || !conexion || !aqui || conexion.detalle?.previas || antesEnCurso) return;
-  antesEnCurso = true;
-  try {
-    const { entrenos, recuperacion } = await leeLoDeAntes({ hasta: Date.parse(conexion.conectado_en) });
-    await guardaPrevias({ atletaId: userId, entrenos, recuperacion, desfaseMin: desfase() });
-    const { error } = await supabase.rpc('marca_sincronizacion_apple', { p_detalle: { previas: true } });
-    if (!error) ponConexion({ ...relojAhora().conexion, detalle: { ...relojAhora().conexion?.detalle, previas: true } });
-  } catch { /* la próxima vez */ } finally {
-    antesEnCurso = false;
+/* LO DE ANTES DE CONECTAR, una sola vez por cuenta (queda `detalle.previas`).
+
+   Hasta el 31 oct 2026 corría callado en segundo plano. Desde el 1 nov 2026, en el inicio de cuenta se corre a la vista (el «Conectando Apple Salud…» de
+   `ConectaReloj`): `alAvance({ fase, hechos, total })` repite lo que avisa `leeLoDeAntes` (por cada entreno leído) y la promesa devuelve los conteos. Fuera del
+   inicio (`SincronizaReloj`) se llama sin `alAvance` y sigue siendo callado.
+
+   Solo hay una lectura a la vez: si ya hay una en curso (por ejemplo `SincronizaReloj` la arrancó al volver a la app, justo cuando se cerró la hoja de permisos
+   de Salud), quien llegue después se cuelga de ESA, recibe el último aviso y espera su resultado, en vez de irse con las manos vacías.
+
+   Nunca rechaza: devuelve `{ estado, entrenos, dias }`.
+     · estado 'ya'      ya se había traído antes (`detalle.previas`): no se lee nada.
+     · estado 'nada'    no hay conexión en este iPhone: no se lee nada.
+     · estado 'listo'   se leyó y se guardó. `entrenos`: cuántos; `dias`: cuántos días con sueño o pulso en reposo.
+     · estado 'fallo'   algo falló: se intenta la próxima vez que abra la app. `entrenos` es el conteo si ya se habían leído (si no, `null`); `dias` es `null`. */
+let antes = null; // { promesa, oyentes: Set, ultimo }
+
+export function traeLoDeAntes({ alAvance } = {}) {
+  if (antes) {
+    if (alAvance) { antes.oyentes.add(alAvance); if (antes.ultimo) alAvance(antes.ultimo); }
+    return antes.promesa;
   }
+  const { de: userId, conexion, aqui } = relojAhora();
+  if (!userId || !conexion || !aqui) return Promise.resolve({ estado: 'nada', entrenos: null, dias: null });
+  if (conexion.detalle?.previas) return Promise.resolve({ estado: 'ya', entrenos: null, dias: null });
+  const marco = { oyentes: new Set(alAvance ? [alAvance] : []), ultimo: null, promesa: null };
+  const avisa = (v) => { marco.ultimo = v; marco.oyentes.forEach((f) => { try { f(v); } catch { /* una pantalla que ya se fue */ } }); };
+  marco.promesa = (async () => {
+    let entrenosLeidos = null;
+    try {
+      const { entrenos, recuperacion } = await leeLoDeAntes({
+        hasta: Date.parse(conexion.conectado_en),
+        alAvance: (v) => { if (v.fase === 'recuperacion') entrenosLeidos = v.hechos; avisa(v); },
+      });
+      await guardaPrevias({ atletaId: userId, entrenos, recuperacion, desfaseMin: desfase() });
+      const { error } = await supabase.rpc('marca_sincronizacion_apple', { p_detalle: { previas: true } });
+      if (error) throw error;
+      ponConexion({ ...relojAhora().conexion, detalle: { ...relojAhora().conexion?.detalle, previas: true } });
+      // «N días»: los días en que hubo sueño o pulso en reposo (no los que solo traen pasos o variabilidad).
+      return { estado: 'listo', entrenos: entrenos.length, dias: recuperacion.filter((f) => f.sueno_s || f.fc_reposo).length };
+    } catch {
+      return { estado: 'fallo', entrenos: entrenosLeidos, dias: null }; // la próxima vez
+    } finally {
+      antes = null;
+    }
+  })();
+  antes = marco;
+  return marco.promesa;
 }

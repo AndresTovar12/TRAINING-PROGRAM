@@ -161,14 +161,21 @@ export async function leeSalud({ desde, hasta = Date.now(), alAvance = () => {} 
  * LO DE ANTES DE CONECTAR, SOLO PARA LAS CUENTAS (fase 5): hasta 12 meses antes de `hasta` (= `conectado_en`). De cada entreno, solo su resumen (tipo,
  * inicio, fin, duración, distancia, calorías, pulso medio y máximo, sin ruta ni series) y de cada día, pulso en reposo, variabilidad y sueño. Con eso la
  * condición, la fatiga y «lo normal» de la recuperación arrancan con su historia; ninguna pantalla lo enseña. Devuelve `{ entrenos, recuperacion }`.
+ *
+ * `alAvance` (1 nov 2026, el «Conectando» del inicio): avisa lo que de verdad va pasando, sin inventar nada. `{ fase: 'entrenos', hechos, total }` una vez al
+ * saber cuántos entrenos hay (`hechos` = 0) y otra por cada entreno leído; `{ fase: 'recuperacion', hechos, total }` al terminar con los entrenos, justo antes
+ * de leer el sueño y el pulso en reposo.
  */
-export async function leeLoDeAntes({ hasta, meses = 12 } = {}) {
+export async function leeLoDeAntes({ hasta, meses = 12, alAvance = () => {} } = {}) {
   const { Health } = await conPlugin();
   const desfase = -new Date().getTimezoneOffset();
   const desde = hasta - meses * 30.44 * 86400000;
-  const workouts = await Health.queryWorkouts({ startDate: iso(desde), endDate: iso(hasta), limit: 2000, ascending: true }).then((r) => r?.workouts ?? [], () => []);
+  const workouts = (await Health.queryWorkouts({ startDate: iso(desde), endDate: iso(hasta), limit: 2000, ascending: true }).then((r) => r?.workouts ?? [], () => []))
+    .filter((x) => new Date(x.startDate).getTime() < hasta);
+  const total = workouts.length;
+  alAvance({ fase: 'entrenos', hechos: 0, total });
   const entrenos = [];
-  for (const w of workouts.filter((x) => new Date(x.startDate).getTime() < hasta)) {
+  for (const w of workouts) {
     // El pulso medio y máximo del rato del entreno, de una sola consulta (HKStatistics), sin leer latido por latido.
     const stats = await Health.queryAggregated({ dataType: 'heartRate', startDate: w.startDate, endDate: w.endDate, bucket: 'day', aggregation: ['average', 'max'] })
       .then((r) => r?.samples ?? [], () => []);
@@ -185,7 +192,9 @@ export async function leeLoDeAntes({ hasta, meses = 12 } = {}) {
     const prep = preparaEntreno(crudo);
     prep.resumen = { ...prep.resumen, ...crudo.resumen };
     entrenos.push(prep);
+    alAvance({ fase: 'entrenos', hechos: entrenos.length, total });
   }
+  alAvance({ fase: 'recuperacion', hechos: entrenos.length, total });
   const recuperacion = await leeRecuperacion(Health, desde, hasta);
   return { entrenos, recuperacion };
 }

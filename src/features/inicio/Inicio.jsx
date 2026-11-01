@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  Activity, AtSign, Bike, Calendar, Check, ChevronLeft, ChevronRight, Dumbbell, Flame, HeartPulse, Loader2, Lock, Mail, Medal, MoreHorizontal,
+  Activity, AtSign, Bike, Calendar, Check, ChevronLeft, ChevronRight, Dumbbell, ExternalLink, Flame, HeartPulse, Loader2, Lock, Mail, Medal, MoreHorizontal,
   PersonStanding, Plus, Trophy, User, Users, Video, Waves, Eye, EyeOff,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -31,9 +31,10 @@ import fotoYoga from '@/assets/landing/yoga.webp';
 import fotoAgilidad from '@/assets/landing/agilidad.webp';
 import fotoBosu from '@/assets/landing/bosu.webp';
 import { MIN_CONTRASENA, problemaDeContrasena } from '@/lib/contrasena';
-import { useReloj } from '@/lib/relojConectado';
+import { casoDelReloj, useReloj } from '@/lib/relojConectado';
 import { saludDisponible } from '@/lib/saludDelTelefono';
-import ConectaReloj, { CuerpoDeConectar } from '@/features/reloj/ConectaReloj';
+import ConectaReloj, { CuerpoDeSalud } from '@/features/reloj/ConectaReloj';
+import TuReloj from '@/features/inicio/TuReloj';
 import AvisoDelReloj from '@/features/reloj/AvisoDelReloj';
 
 /**
@@ -55,7 +56,8 @@ import AvisoDelReloj from '@/features/reloj/AvisoDelReloj';
  *   · EL CAMINO DE ANTES (la cuenta nacía con «Mandar código» y el código se escribía ya con sesión, `modo === 'retomar'` con el paso `correo`) sigue SOLO para las
  *     cuentas que nacieron así (clientes viejos de TestFlight y cuentas de prueba, las que traen `correo_pendiente`). Retirarlo cuando los builds nuevos estén instalados.
  *   · SEXO Y FECHA DE NACIMIENTO JUNTOS, en «Sobre ti», y con «Saltar».
- *   · SALUD PARA TODOS: con Apple Watch se conecta el reloj; sin él, Apple Salud (lo que guardan otros aparatos y apps). En la web solo se cuenta.
+ *   · SALUD Y APPLE WATCH, EN DOS PANTALLAS (1 nov 2026, maqueta LLmh1vBB4MNjVHYvzVA3ym): `reloj` es «Conecta Apple Salud», igual para todos (tengan o no reloj);
+ *     `tu-reloj` es el Apple Watch (4 casos, ver `TuReloj.jsx`). El «Conectando» avanza solo cuando termina cada llamada real (ver `ConectaReloj`). En la web `reloj` solo cuenta.
  *   · LAS PREGUNTAS DE DOS RESPUESTAS (entrenador, equipo, ejercicios) VAN COMO LA CONFIGURACIÓN DEL IPHONE: un dibujo arriba, la pregunta al centro y las
  *     respuestas abajo, al alcance del pulgar. Un toque guarda y sigue.
  *   · AL FINAL, LA BIENVENIDA (`Bienvenida`): lo que sigue, no la lista de lo contestado. Sin recorrido: el coach empieza en «Primeros pasos» y el atleta
@@ -63,10 +65,11 @@ import AvisoDelReloj from '@/features/reloj/AvisoDelReloj';
  *   · LO QUE ENTRENA ORDENA, NUNCA QUITA, y NINGUNA RESPUESTA ES UNA PUERTA: todo se cambia en Mi perfil.
  *
  * El camino de cada quien (ver `docs/inicio.md`):
- *   atleta con Apple o Google   tipo → entrenador → sobre → reloj → bienvenida
- *   atleta con usuario          tipo → nombre → cuenta → correo → (código) → entrenador → sobre → reloj → bienvenida
+ *   atleta con Apple o Google   tipo → entrenador → sobre → reloj → tu-reloj → bienvenida
+ *   atleta con usuario          tipo → nombre → cuenta → correo → (código) → entrenador → sobre → reloj → tu-reloj → bienvenida
  *   coach                       tipo → (nombre → cuenta → correo → código, solo con usuario) → oficio → entrena → equipo → repertorio → bienvenida
- *   invitación                  (cuenta → correo → código, solo con usuario) → sobre → reloj → bienvenida
+ *   invitación                  (cuenta → correo → código, solo con usuario) → sobre → reloj → tu-reloj → bienvenida
+ *   (`reloj` es Apple Salud; `tu-reloj` es el Apple Watch y solo existe en la app del iPhone, 1 nov 2026)
  *
  * Cuatro modos, según de dónde viene la persona:
  *   'nuevo'       sin sesión, desde «Crea tu cuenta» (o con un link `?unirse=CÓDIGO`, con el código ya puesto): tipo, nombre, cuenta, correo y código.
@@ -84,7 +87,8 @@ const ICONOS = {
 const FOTOS = { fuerza: fotoFuerza, pista: fotoPista, yoga: fotoYoga, agilidad: fotoAgilidad, bosu: fotoBosu };
 
 const ORDEN_COACH = ['tipo', 'nombre', 'cuenta', 'correo', 'oficio', 'entrena', 'equipo', 'repertorio', 'listo'];
-const ORDEN_ATLETA = ['tipo', 'nombre', 'cuenta', 'correo', 'entrenador', 'sobre', 'reloj', 'listo'];
+// `tu-reloj` (1 nov 2026): el Apple Watch en su propia pantalla, después de Salud. Solo existe en la app del iPhone (`pasosDe` y `caminoDe` lo quitan en la web).
+const ORDEN_ATLETA = ['tipo', 'nombre', 'cuenta', 'correo', 'entrenador', 'sobre', 'reloj', 'tu-reloj', 'listo'];
 const ANTES_DE_LA_CUENTA = new Set(['tipo', 'cuenta', 'correo', 'verifica']);
 // La ficha del código vale 20 minutos (`correo-previo`/`signup`) y el código 15: pasado eso se pide otro.
 const VIGENCIA_FICHA_MS = 18 * 60_000;
@@ -107,6 +111,7 @@ function pasosDe(modo, perfil, esCoach, usuario) {
     if (ANTES_DE_LA_CUENTA.has(p)) return false;
     if (p === 'nombre' && (perfil?.full_name || '').trim()) return false;   // Apple, Google o la invitación ya dieron el nombre
     if (p === 'entrenador' && perfil?.coach_id) return false;               // ya quedó con su entrenador (código o invitación)
+    if (p === 'tu-reloj' && !saludDisponible()) return false;               // en la web no hay Salud ni reloj: el paso `reloj` solo cuenta
     return true;
   });
   // «Escribe el código» va primero si la cuenta tiene un correo sin confirmar: lo dice la memoria de esta pestaña O el servidor (`correoPorConfirmarDe`).
@@ -114,10 +119,11 @@ function pasosDe(modo, perfil, esCoach, usuario) {
 }
 
 /* El camino completo de cada quien, para la barra de arriba: solo cuenta SUS pasos, y la bienvenida no cuenta. */
-function caminoDe({ esCoach, social, invitado, pideNombre }) {
-  if (invitado) return social ? ['sobre', 'reloj'] : ['cuenta', 'correo', 'sobre', 'reloj'];
+function caminoDe({ esCoach, social, invitado, pideNombre, conReloj = false }) {
+  const reloj = conReloj ? ['reloj', 'tu-reloj'] : ['reloj'];   // `tu-reloj` solo en la app del iPhone
+  if (invitado) return social ? ['sobre', ...reloj] : ['cuenta', 'correo', 'sobre', ...reloj];
   const cuenta = social ? (pideNombre ? ['nombre'] : []) : ['nombre', 'cuenta', 'correo'];
-  return esCoach ? ['tipo', ...cuenta, 'oficio', 'entrena', 'equipo', 'repertorio'] : ['tipo', ...cuenta, 'entrenador', 'sobre', 'reloj'];
+  return esCoach ? ['tipo', ...cuenta, 'oficio', 'entrena', 'equipo', 'repertorio'] : ['tipo', ...cuenta, 'entrenador', 'sobre', ...reloj];
 }
 
 const parteNombre = (completo = '') => {
@@ -336,6 +342,8 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
   const [i, setI] = useState(() => {
     if (pasos[0] === 'correo' && modo === 'retomar') return 0;
     const guardado = PASO_DE_ANTES[profile?.inicio_paso] ?? profile?.inicio_paso;
+    // Quien quedó en «Tu Apple Watch» en el iPhone y sigue desde la web (donde ese paso no existe) va directo a la bienvenida.
+    if (guardado === 'tu-reloj' && !pasos.includes('tu-reloj')) return Math.max(0, pasos.indexOf('listo'));
     return Math.max(0, pasos.indexOf(guardado));
   });
   const paso = pasos[i] ?? pasos[0];
@@ -382,9 +390,11 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
   // Ya llegó el perfil de la cuenta recién nacida: se acaba «Creando tu cuenta…».
   useEffect(() => { if (modo === 'retomar') olvidaCuentaNaciendo(); }, [modo]);
   const [hojaUsuario, setHojaUsuario] = useState(false);
-  // El paso del reloj: con un Apple Watch emparejado se conecta el reloj; sin él, Apple Salud. En la web solo se cuenta.
-  const { listo: relojListo, reloj, conexion: relojConexion } = useReloj();
-  const [conectandoReloj, setConectandoReloj] = useState(false);
+  // Los pasos de Salud (`reloj`) y del Apple Watch (`tu-reloj`). `conectoSalud`: Salud quedó conectada en ESTE iPhone (la conexión de la cuenta y su permiso aquí).
+  const { listo: relojListo, reloj, conexion: relojConexion, aqui: relojAqui } = useReloj();
+  const conectoSalud = !!relojConexion && relojAqui;
+  // En cuál paso está abierto el «Conectando» (`reloj` o `tu-reloj`) o null: así no se vuelve a abrir en el paso siguiente cuando el primero pasa solo.
+  const [conectandoEn, setConectandoEn] = useState(null);
 
   // Al cambiar de pantalla, arriba. En la compu el marco tiene su propio scroll; en el teléfono es la página.
   const conservaError = useRef(false); // al regresar a corregir el usuario o la contraseña, el mensaje viaja con la persona
@@ -696,7 +706,7 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
   }
 
   /* ---------- la barra de arriba ---------- */
-  const camino = caminoDe({ esCoach, social, invitado, pideNombre: pasos.includes('nombre') || (modo === 'google' && !(profile?.full_name || '').trim()) });
+  const camino = caminoDe({ esCoach, social, invitado, pideNombre: pasos.includes('nombre') || (modo === 'google' && !(profile?.full_name || '').trim()), conReloj: saludDisponible() });
   // «Escribe el código» es la segunda mitad de «¿Tu correo?»: cuenta como el mismo paso en la barra.
   const hechos = camino.indexOf(paso === 'verifica' ? 'correo' : paso);
   const muestraBarra = paso !== 'listo';
@@ -1025,29 +1035,62 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
     );
     pie = continuar(() => guarda({ genero: sexo === 'x' ? null : sexo, fecha_nacimiento: nac || null }), 'Continuar', !sexo);
   } else if (paso === 'reloj') {
-    const conectado = (como) => {
-      setConectandoReloj(false);
-      if (como !== 'conectado') return;
-      avisa(reloj.emparejado ? 'Apple Watch conectado.' : 'Apple Salud conectada.');
-      guarda({});
+    // «Conecta Apple Salud» (1 nov 2026): igual para quien tiene reloj y quien no. Al conectar, `ConectaReloj` (`enInicio`) enseña el «Conectando» con sus renglones y
+    // su pantalla verde, y de ahí pasa sola al siguiente paso: ya no hay aviso aparte. La pantalla se queda abierta hasta que `guarda` termina, para que no se
+    // vea un destello de esta pantalla entre una y otra.
+    const conectado = async (como) => {
+      if (como !== 'conectado') { setConectandoEn(null); return; }
+      if (!(await guarda({}))) setConectandoEn(null);
     };
     if (saludDisponible() && !relojListo) {
       cuerpo = <div style={{ flex: 1, display: 'grid', placeItems: 'center' }}><Loader2 size={26} className="spin" color={KP.blue} /></div>;
     } else if (saludDisponible()) {
-      // En la app del iPhone, con o sin reloj: con Apple Watch se conecta el reloj; sin él, Apple Salud.
-      cuerpo = <CuerpoDeConectar emparejado={!!reloj.emparejado} compu={compu} />;
+      cuerpo = <CuerpoDeSalud compu={compu} />;
       pie = (
         <>
-          <button type="button" className="kp-press" onClick={() => setConectandoReloj(true)} disabled={ocupado} style={botonPrimario(ocupado)}>
-            {ocupado ? <Loader2 size={18} className="spin" /> : reloj.emparejado ? 'Conectar Apple Watch' : 'Conectar Apple Salud'}
+          <button type="button" className="kp-press" onClick={() => setConectandoEn('reloj')} disabled={ocupado} style={botonPrimario(ocupado)}>
+            {ocupado ? <Loader2 size={18} className="spin" /> : 'Conectar Apple Salud'}
           </button>
           <button type="button" onClick={() => guarda({})} disabled={ocupado} style={enlace}>Ahora no</button>
-          {conectandoReloj && <ConectaReloj empezar="pedir" sinListo alTerminar={conectado} />}
+          {conectandoEn === 'reloj' && <ConectaReloj empezar="pedir" enInicio alTerminar={conectado} />}
         </>
       );
     } else {
       cuerpo = <AvisoDelReloj compu={compu} />;
       pie = continuar(() => guarda({}));
+    }
+  } else if (paso === 'tu-reloj') {
+    // «Tu Apple Watch» (1 nov 2026): el caso (a, b, c o d) sale de lo que dice `useReloj()`. En el caso b, «Conectar Apple Salud» abre el mismo «Conectando» y, al
+    // terminar, esta pantalla se vuelve el caso c o el d (la conexión de la cuenta cambió); no se avanza.
+    const caso = casoDelReloj({ reloj, conecto: conectoSalud });
+    if (!relojListo) {
+      cuerpo = <div style={{ flex: 1, display: 'grid', placeItems: 'center' }}><Loader2 size={26} className="spin" color={KP.blue} /></div>;
+    } else {
+      // El «Conectando» va con el cuerpo, no con los botones: al conectar, el caso cambia de b a c o d y los botones de b se van, pero esa pantalla tiene que seguir
+      // abierta hasta que termine su pantalla verde.
+      cuerpo = (
+        <>
+          <TuReloj caso={caso} conecto={conectoSalud} compu={compu} />
+          {conectandoEn === 'tu-reloj' && <ConectaReloj empezar="pedir" enInicio alTerminar={() => setConectandoEn(null)} />}
+        </>
+      );
+      if (caso === 'b') {
+        pie = (
+          <>
+            <button type="button" className="kp-press" onClick={() => setConectandoEn('tu-reloj')} disabled={ocupado} style={botonPrimario(ocupado)}>Conectar Apple Salud</button>
+            <button type="button" onClick={() => guarda({})} disabled={ocupado} style={enlace}>Después</button>
+          </>
+        );
+      } else if (caso === 'd') {
+        pie = (
+          <>
+            <button type="button" className="kp-press" onClick={() => { window.location.href = 'itms-watchs://'; }} style={botonPrimario()}><ExternalLink size={19} />Abrir la app Watch</button>
+            <button type="button" onClick={() => guarda({})} disabled={ocupado} style={enlace}>Después</button>
+          </>
+        );
+      } else {
+        pie = continuar(() => guarda({}));
+      }
     }
   } else if (paso === 'oficio') {
     const eligeOficio = (v) => { setOficio(v); if (v !== 'otro') setTimeout(() => guarda({ profesion: v }), 180); };
@@ -1139,7 +1182,9 @@ export default function Inicio({ modo = 'nuevo', codigo = '', onVolver, onCodigo
     });
   } else if (paso === 'listo') {
     const pastillas = [];
-    if (relojConexion) pastillas.push(reloj.emparejado ? 'Apple Watch conectado' : 'Apple Salud conectada');
+    // Dos pastillas, separadas como los dos pasos (1 nov 2026): Salud, si la conectó; el reloj, solo si además tiene uno con la app instalada.
+    if (conectoSalud) pastillas.push('Apple Salud conectada');
+    if (conectoSalud && reloj.emparejado && (reloj.instalada || reloj.prueba)) pastillas.push('Apple Watch listo');
     if (via === 'usuario' && user?.email && !esCorreoInventado(user.email)) pastillas.push('Correo confirmado');
     if (esCoach) pastillas.push(profile?.repertorio_base === false ? 'Tus ejercicios, desde cero' : '118 ejercicios listos');
     const bienvenida = (
