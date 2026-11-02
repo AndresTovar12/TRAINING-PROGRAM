@@ -10,7 +10,7 @@ import { PalabrasProvider, usePalabras } from '@/contexts/PalabrasContext';
 import { AVISO_ABRE_PERFIL } from '@/lib/abrePerfil';
 import SincronizaReloj from '@/features/profile/SincronizaReloj';
 import ConectaRelojGlobal from '@/features/reloj/ConectaRelojGlobal';
-import { RecibeDelReloj } from '@/features/reloj/RelojSinTelefono';
+import { RecibeDelReloj, SinPlanAlReloj } from '@/features/reloj/RelojSinTelefono';
 import { PlanProvider } from '@/contexts/PlanContext';
 import AuthScreen from '@/features/auth/AuthScreen';
 import NuevaContrasena from '@/features/auth/NuevaContrasena';
@@ -584,6 +584,7 @@ export default function App() {
         {/* Un coach también puede conectar su propio Apple Watch (Mi perfil → Dispositivos), y lo que entrene libre en el reloj le llega igual. */}
         <SincronizaReloj />
         <RecibeDelReloj />
+        <SinPlanAlReloj />
         <ConectaRelojGlobal />
         <AccountMenu perfil={perfilDelCoach} onPerfil={setPerfilDelCoach} />
         <UpdateBanner />

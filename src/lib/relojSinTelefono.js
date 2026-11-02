@@ -94,7 +94,9 @@ const terminaCorto = (t) => (esObjeto(t) ? {
  *   m metros que pide un paso por distancia
  */
 export function pasoParaElReloj(p, { kilos = null, conPeso = false } = {}) {
-  const base = { c: p.clave, n: texto(p.nombre, 40) || 'Paso' };
+  // El nombre TAL CUAL lo corta el iPhone (`nombreCorto` de `lib/entreno.js`: sin juntar espacios): la marca que vuelve del reloj lleva este `n`, y el
+  // iPhone solo cuenta una marca si su nombre es idéntico al del paso.
+  const base = { c: p.clave, n: String(p.nombre ?? '').slice(0, 40) || 'Paso' };
   if (p.tipo === 'descanso') {
     return { ...base, t: 'd', n: 'Descanso', ...(p.seg ? { seg: Math.round(p.seg) } : { texto: texto(p.texto, 60) }) };
   }

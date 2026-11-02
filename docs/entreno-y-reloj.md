@@ -237,7 +237,7 @@ El reloj ya no es solo un control remoto. Tiene dos maneras de entrenar:
 | `ios/App/App/EntrenoWatchPlugin.swift` | `ReceptorDelReloj` (disco, contexto) y el plugin |
 | `src/lib/relojSinTelefono.js` | Lo puro: el plan, leer el resultado, aplicarlo, que nada llegue dos veces |
 | `src/lib/relojSinTelefonoApi.js` | A la cola y a la base |
-| `src/features/reloj/RelojSinTelefono.jsx` | `RecibeDelReloj`, `PlanAlReloj`, `EntrenoEnElReloj` |
+| `src/features/reloj/RelojSinTelefono.jsx` | `RecibeDelReloj`, `PlanAlReloj` (y `SinPlanAlReloj` para una cuenta de coach: su reloj sabe de quién es y que no hay plan), `EntrenoEnElReloj` |
 
 `ios/ci/agrega_extensiones.rb` agrega los archivos nuevos al objetivo del reloj; el Info.plist del reloj trae el permiso de ubicación.
 
