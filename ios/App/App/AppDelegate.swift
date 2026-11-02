@@ -14,6 +14,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         try? AVAudioSession.sharedInstance().setActive(true)
         // Al correr el teléfono se sacude, y iOS ofrecía «Deshacer» (agitar para deshacer) en medio del entreno.
         application.applicationSupportsShakeToEdit = false
+        // Lo que el Apple Watch terminó sin el iPhone se guarda en disco en cuanto llega, aunque la web todavía no corra (ver `EntrenoWatchPlugin.swift`).
+        ReceptorDelReloj.compartido.arranca()
         return true
     }
 

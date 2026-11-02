@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { guardaImportacion, guardaPrevias } from '@/lib/metricasApi';
 import { leeLoDeAntes, leeSalud, marcaSincronizada } from '@/lib/saludDelTelefono';
 import { ponConexion, ponTrayendo, relojAhora } from '@/lib/relojConectado';
+import { llegadosDelReloj } from '@/lib/relojSinTelefonoApi';
 
 /* TRAER LO DEL RELOJ (fase 5, 29 oct 2026): lee Apple Salud y lo guarda en la cuenta. Lo usan `SincronizaReloj` (al abrir, al volver y al terminar un entreno
    con el reloj) y «Traer lo último ahora» de la página del reloj.
@@ -31,7 +32,8 @@ export async function traeDelReloj({ horas = null } = {}) {
   enCurso = (async () => {
     const conectado = Date.parse(conexion.conectado_en);
     const desde = Math.max(conectado, Date.now() - (horas ? horas * 3600000 : 7 * DIA_MS));
-    const resultado = await leeSalud({ desde });
+    // Lo que ya llegó del reloj de Training Lab no se trae otra vez de Salud (parte 3.5, ver `saltaLosDelReloj`).
+    const resultado = await leeSalud({ desde, saltar: await llegadosDelReloj() });
     const r = await guardaImportacion({ atletaId: userId, subidoPor: userId, resultado, desfaseMin: desfase() });
     if (!horas) marcaSincronizada(); // solo la de 7 días cuenta para «cada 30 minutos»; la de 3 horas no la retrasa
     const llego = mezclaLlego(conexion.detalle?.llego, resultado.llego);
@@ -80,6 +82,7 @@ export function traeLoDeAntes({ alAvance } = {}) {
       const { entrenos, recuperacion } = await leeLoDeAntes({
         hasta: Date.parse(conexion.conectado_en),
         alAvance: (v) => { if (v.fase === 'recuperacion') entrenosLeidos = v.hechos; avisa(v); },
+        saltar: await llegadosDelReloj(),
       });
       await guardaPrevias({ atletaId: userId, entrenos, recuperacion, desfaseMin: desfase() });
       const { error } = await supabase.rpc('marca_sincronizacion_apple', { p_detalle: { previas: true } });

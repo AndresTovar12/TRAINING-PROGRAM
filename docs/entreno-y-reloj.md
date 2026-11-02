@@ -165,3 +165,85 @@ Son **dos pasos** del inicio (`src/features/inicio/Inicio.jsx`), en la app del i
 - **En la web:** `AvisoDelReloj`, solo cuenta, con «Continuar»; `tu-reloj` no existe.
 
 Prueba en el navegador: `qa-reloj.html?vista=inicio&reloj=no|si|sinapp` (ver `docs/inicio.md`, «Cómo probarlo»), o `qa-reloj.html?vista=puerta&reloj=si` con la App real y una sesión falsa.
+
+## 10. El Apple Watch sin el iPhone (1 nov 2026, parte 3 del encargo «inicio, sin conexión y reloj»)
+
+**La meta:** la persona deja el iPhone en el carro, entrena con el reloj y nada se pierde ni llega dos veces. Maqueta aprobada: https://claude.ai/artifact/WRoxF49VXm14MC7i8HgC86. La cola del teléfono que esto usa está en `docs/sin-conexion.md`, sección 10.
+
+El reloj ya no es solo un control remoto. Tiene dos maneras de entrenar:
+
+- **El iPhone guía y el reloj acompaña** (como antes): el iPhone manda lo que toca, el reloj mide el pulso, lo devuelve en vivo y deja tocar «Listo». Nuevo: al terminar, el reloj manda su pulso con `transferUserInfo` (modo `acompana`) y le llega al entreno del iPhone en segundos, sin esperar a Salud.
+- **El reloj solo**: con el plan que le llegó, entrena una sesión del plan o un entreno libre. Toda la lógica corre en el reloj.
+
+### 10.1 Del iPhone al reloj, antes de salir
+
+- **Qué viaja** (`planParaElReloj` en `src/lib/relojSinTelefono.js` → `PlanDelReloj` en `PlanDelReloj.swift`): las sesiones de hoy y de los 2 días siguientes de TODOS sus programas (coach, fisio, comprado; con `entradasDeHoy`), cada una con su nombre, de quién es (`de`, `rol`), el color de su programa, sus minutos (solo si el nombre los trae) y sus pasos; cuáles ya se hicieron; «Tus actividades» (`tusActividades`, máximo 6); el catálogo para «Ver todas» (las propias primero, en «Tuyas»); la unidad de peso; el id de la cuenta; y si dijo que sí a «¿Guardamos tu recorrido?».
+- **Los pasos son los mismos de `pasosDeLaSesion`**, con sus claves (`0.1.0`, `d.0.1.0`, `r.2`, `n.1`), en llaves cortas: serie y vuelta, reps planeadas (texto y número), kilos del plan (de su 1RM o fijos, con la misma regla que `kilosDe` de `EntrenoDelDia`; en libras se ven en libras redondeadas a 5 y se guardan en kilos), si lleva peso, «por lado», segundos de cada descanso, metros de un paso por distancia. Una sesión con más de 150 pasos (o sin pasos: una clase) viaja sin pasos y el reloj la corre como cronómetro.
+- **Cuándo se manda** (`PlanAlReloj` en `src/features/reloj/RelojSinTelefono.jsx`, dentro de la app del atleta): al abrir la app y al volver a ella (aunque no haya cambiado: así el reloj sabe a qué hora llegó), y cada vez que cambia el plan, una sesión se termina o hay un entreno libre nuevo. Se arma un momento (1.5 s) después del último cambio, no en cada «Listo». Nunca el plan de un atleta que su coach está mirando, ni un demo workout.
+- **Cómo:** por el contexto de WatchConnectivity (`updateApplicationContext`), que llega aunque el reloj esté dormido. El contexto del iPhone lleva el plan Y lo que toca en el entreno que guía el iPhone (`guiado`): `ReceptorDelReloj` los junta para que mandar uno no borre el otro.
+- **El reloj lo guarda en disco** (`plan.json`). Como trae 3 días, si el iPhone no se abrió esta mañana, el plan de hoy ya llegó ayer. Debajo de cada sesión: «Llegó a las 7:02».
+- **Tope:** el plan se queda bajo 48 KB (el contexto no promete más de ~64 KB): si no cabe, los días de después pierden sus pasos.
+
+### 10.2 Las pantallas del reloj (`VistasDelReloj.swift`)
+
+- **Inicio:** arriba las sesiones de hoy, cada una con su rayita de color, de quién es y sus minutos; las hechas apagadas con ✓. Una sola sesión: tarjeta con «Empezar». Cuatro o más: se ven 3 y «Ver todas». Abajo «Entreno libre»; sin plan o en día de descanso, en azul y grande.
+- **Si el plan de hoy no está en el reloj:** «Tu plan de hoy no está en el reloj. Ábrelo en tu iPhone y vuelve aquí.» y «Entreno libre» debajo. Sin plan (o una cuenta de coach): solo «Entreno libre», sin ese aviso.
+- **Detalle:** nombre, de quién, minutos, los ejercicios («4×8 por lado»), «Llegó a las…», «Atrás» y «Empezar» (u «Otra vez» si ya se hizo).
+- **Una serie:** «2/3 · 5:12», la rayita de series, el ejercicio, «Serie 3 de 4», reps y peso (se tocan para cambiarlos con + y − o con la corona; «Hecho» los guarda), el pulso y «Listo». Un paso por distancia enseña los metros que lleva («320 de 800 m») y vibra al llegar.
+- **Los controles** (deslizando a la derecha desde la serie): Pausa, Saltar ejercicio, Terminar y Volver. «Terminar» pregunta: «¿Terminar ahora? Hiciste N de M series. Se guarda lo que hiciste y {quien} lo ve así.» o, sin ninguna serie, «Aún no marcas ninguna serie, así que no se guarda nada.»
+- **El descanso:** cuenta solo y vibra al acabar; «+15 s», «Saltar» y «Deshacer el último «Listo»». Un descanso escrito con palabras espera «Seguir».
+- **Al terminar:** tiempo, series y pulso medio. «Guardado en tu reloj. Pasa a tu iPhone y a {quien} cuando estén cerca.» hasta que WatchConnectivity dice que llegó; entonces «Ya está en tu iPhone.»; y «{quien} ya lo ve.» solo cuando el iPhone avisa que ya subió. Nada de eso cambia por tiempo.
+- **Entreno libre:** «Tus actividades» (4 sin scroll, con su color; «tuya» y «mapa») y «Ver todas» (el catálogo por grupos, con la corona). Las dos con «‹». Las actividades se crean solo en el iPhone. Con mapa: distancia, tiempo, ritmo y pulso con el GPS del reloj. Sin mapa: tiempo y pulso. Pausa y Terminar. Nadar: el reloj bloquea la pantalla contra el agua solo (`enableWaterLock`), en alberca de 25 m.
+
+### 10.3 El entreno en el reloj (`EntrenoDelReloj.swift`, `MedidorDelReloj.swift`)
+
+- **Las mismas reglas que `lib/entreno.js`:** el paso que toca es el primero sin marca; «Listo» da por hecho lo planeado y solo viaja lo que cambió (`reps`, `kg` en kilos); un descanso empieza con la marca anterior y termina a SU hora (aunque la pantalla estuviera apagada), con `p`; «+15 s» va a `extra`; «Deshacer» le quita la marca al último paso y a sus descansos (como `vuelveAtras`); «Saltar ejercicio» salta lo que falta de ese ejercicio (en una bi-serie, solo ese); la pausa congela el tiempo y alarga el descanso lo que duró.
+- **En disco con cada serie** (`entreno.json`, entero, cada vez que cambia algo; el pulso cada 12 lecturas y la ruta cada 30 puntos). Si el reloj se apaga a mitad del entreno, no se pierde nada de lo ya marcado.
+- **Volver al entreno:** mientras hay uno en curso, la app abre en él, no en el inicio (al bajar la muñeca o abrir otra app y volver). Si el reloj se reinició, watchOS abre la app (`handleActiveWorkoutRecovery`), se recupera el entreno de Salud (`recoverActiveWorkoutSession`) y sigue donde iba.
+- **Salud:** `HKWorkoutSession` y `HKLiveWorkoutBuilder` (los de antes). Cada entreno que guarda lleva en sus metadatos la marca `TrainingLab` (`reloj` o `acompana`). El reloj pide además permiso de la ruta y la distancia la primera vez que lo necesita.
+- **Con mapa:** GPS del reloj en precisión alta; la ruta va a Salud con `HKWorkoutRouteBuilder` (puntos con error de 50 m o menos) y al iPhone.
+- **Sin mapa, la ubicación en silencio** (`docs/stickers.md`, 8b): precisión baja (~100 m) hasta que hay movimiento de verdad (se alejó más de 80 m, o va a 1.2 m/s o más); entonces alta; tras 3 min quieto, baja. Solo entran a la línea los puntos de 30 m de error o menos. Nunca se vuelve distancia ni ritmo (`sinNumerosDeLaRuta`) y no se guarda en Salud. Solo si dijo que sí a «¿Guardamos tu recorrido?»; nunca con menos de 30 % de batería ni en bajo consumo: ahí no se guarda y no hay línea.
+- **La batería:** cada entreno del reloj mide la batería al empezar y al terminar y con qué ubicación iba, y eso se guarda con el entreno (`actividades.metricas.bateria_reloj = { inicio, fin, minutos, ubicacion }`). Para sacar cuánto gasta la ubicación en silencio: `select metricas->'bateria_reloj' from actividades where metricas ? 'bateria_reloj'` (entrenos con `silencio` contra entrenos con `no`, por hora).
+
+### 10.4 Del reloj al iPhone
+
+- **Cada entreno terminado se manda con `transferUserInfo`** (`{ id, resultado }`, el resultado en JSON: `ResultadoDelReloj`). Antes se guarda en disco del reloj (`por-mandar/`) y se borra cuando WatchConnectivity dice que llegó; si la app del reloj se cerró en medio, se manda otra vez al abrirse.
+- **En el iPhone, `ReceptorDelReloj` lo guarda en disco al recibirlo**, aunque la web no corra (se activa en `AppDelegate`). Al abrir la app pasa a la cola de la parte 2 con su id y solo entonces se borra (ver `docs/sin-conexion.md`, sección 10).
+- **Se ve igual que si se hubiera hecho en el iPhone** (`aplicaSesionDelReloj`, `preparaLibreDelReloj`): las series marcadas en su sesión del plan (`entreno`, `exercises[idx]` con `exDataTrasListo`, la ruta, `completed`), el entreno libre en «Tus entrenos» (aunque no haya señal), y el sticker. En Home, la marca **«Llegó de tu Apple Watch»** en «Tus entrenos» (`registro.delReloj` en una sesión; `metricas.llego_del_reloj` en una fila de `actividades`).
+- **El pulso y la ruta de una sesión del plan** se guardan como la fila que Salud habría traído (`crudoDelReloj` → `guardaImportacion`, `origen = 'healthkit'`, con el id del reloj): así «Tu pulso», «Por serie» del coach y los stickers lo ven igual que antes.
+
+### 10.5 Que nada llegue dos veces
+
+- **La regla:** el reloj manda el UUID de su `HKWorkout` con el resultado, y es el id de todo lo que se guarda (cola, `actividades`, `delReloj`). Al traer de Salud (`leeSalud` y `leeLoDeAntes`) se salta todo entreno cuyo UUID ya llegó del reloj (`tl:reloj:llegados`) y todo el que guardó la app del reloj con su marca (`saltaLosDelReloj`: fuente `com.traininglabapp.app…` y metadato `TrainingLab`). Los de antes de esta versión no traen la marca y entran como siempre (el reloj de antes no mandaba nada).
+- **Lo que ya hacía `guardaImportacion`** (revisado el 1 nov 2026): SÍ quitaba duplicados, pero por HORA, no por UUID. Busca lo que ya hay en `actividades` dos días antes y después y descarta un entreno que se encima en 70 % o más con uno guardado (`esElMismo`/`separaRepetidos`); a uno del iPhone sin pulso le pone el pulso del reloj (`pulso_de = 'apple_watch'`). Y la base no deja dos con la misma hora al segundo y la misma duración (`unique (atleta_id, origen_clave)`). Eso no bastaba: si Salud traía el entreno del reloj ANTES de que llegara su resultado, se guardaba como `healthkit` y luego el del reloj (otra hora de inicio al segundo, otra duración) entraba como otro. Por eso la marca y el UUID.
+- `guardaImportacion` ahora acepta el id de la fila (`idDeLaBase`): repetir el mismo entreno del reloj no hace otro.
+
+### 10.6 Reloj e iPhone al mismo tiempo
+
+- **Empezó en el iPhone:** como antes, el reloj acompaña. Si el reloj ya tiene un entreno suyo, ignora el arranque del iPhone.
+- **Empezó en el reloj y se acerca el iPhone:** el reloj sigue mandando. Publica en su contexto «tengo un entreno en curso»; el iPhone dice **«Entreno en curso en tu reloj»** (Home y el botón de la sesión, `EntrenoEnElReloj`) y no deja empezar otro (ni el entreno guiado ni uno libre). Se quita cuando el reloj termina (o si es de hace más de 8 horas: el reloj se apagó).
+- **El plan cambia durante un entreno:** el reloj termina con la versión que tenía (los pasos viajan dentro del entreno); el plan nuevo se aplica a lo siguiente.
+- **✓ en los dos sentidos:** lo hecho en el iPhone cambia el plan (`hecha`) y se le manda al reloj; lo hecho en el reloj sale con ✓ ahí de una vez y en el iPhone en cuanto llega.
+
+### 10.7 Archivos
+
+| Dónde | Qué |
+|---|---|
+| `ios/App/TrainingLabWatch/PlanDelReloj.swift` | Lo que viaja (plan y resultado) y el disco del reloj |
+| `ios/App/TrainingLabWatch/EntrenoDelReloj.swift` | El entreno sin pantalla: pasos, marcas, descanso, deshacer, pausa |
+| `ios/App/TrainingLabWatch/MedidorDelReloj.swift` | Salud, pulso, ubicación (GPS y en silencio) |
+| `ios/App/TrainingLabWatch/ModeloDelEntreno.swift` | Todo junto: WatchConnectivity, el plan, empezar, terminar, mandar |
+| `ios/App/TrainingLabWatch/VistasDelReloj.swift` | Las pantallas de la maqueta (`VistaDelEntreno.swift`: la de cuando guía el iPhone) |
+| `ios/App/App/EntrenoWatchPlugin.swift` | `ReceptorDelReloj` (disco, contexto) y el plugin |
+| `src/lib/relojSinTelefono.js` | Lo puro: el plan, leer el resultado, aplicarlo, que nada llegue dos veces |
+| `src/lib/relojSinTelefonoApi.js` | A la cola y a la base |
+| `src/features/reloj/RelojSinTelefono.jsx` | `RecibeDelReloj`, `PlanAlReloj`, `EntrenoEnElReloj` |
+
+`ios/ci/agrega_extensiones.rb` agrega los archivos nuevos al objetivo del reloj; el Info.plist del reloj trae el permiso de ubicación.
+
+### 10.8 Cómo se probó y qué falta
+
+- `npm run pruebas` corre `scripts/prueba-reloj-sin-iphone.mjs` (30 pruebas): los pasos del reloj son los del iPhone, kilos y libras, el plan y su tope, leer el resultado, la sesión en su lugar (y una sola vez, y «Otra vez», y a medias), el pulso como fila de Salud, la carrera y el pádel, menos de 30 s, el modo «acompana», saltar lo de Salud, la marca, «en curso», y la cola sin señal y al volver (sin duplicar).
+- `node scripts/prueba-reloj-webkit.mjs` (9 pasos, no está en `npm run check`): WebKit con perfil de iPhone y el plugin falso (`scripts/qa/reloj-sin-iphone.*`): lo que llegó con la app cerrada pasa a la cola y solo entonces se borra del plugin, sin duplicar, los UUID anotados, «Llegó de tu Apple Watch», «Entreno en curso en tu reloj», el plan como texto y lo que llega con la app abierta.
+- El Swift (reloj y plugin) se revisó con el compilador de esta Mac contra el SDK de macOS, con imitaciones de WatchKit y WatchConnectivity (no hay SDK de watchOS aquí); se compila de verdad en la nube (`ios-testflight.yml`).
+- **Solo con un Apple Watch de verdad** (los 6 pasos de la parte 3.7): el reloj sin el iPhone, las pantallas, la corona, la vibración, el GPS del reloj, la ruta, la ubicación en silencio y su batería, «volver al entreno», `transferUserInfo` con el iPhone lejos y la app cerrada, y nadar.

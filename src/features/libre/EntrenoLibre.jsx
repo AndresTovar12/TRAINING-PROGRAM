@@ -25,6 +25,8 @@ import { useDemos } from './useDemos';
 import { useCronometroLibre, useEntrenosRecientes } from './useEntrenoLibre';
 import { CuadroBlanco, Cuadrito } from '@/features/training/home/Cuadros';
 import { abreSesionHecha } from '@/lib/abreSesionHecha';
+import { useRelojEnCurso } from '@/lib/relojApple';
+import { useAviso } from '@/components/AvisoPasajero';
 
 /* EL ENTRENO LIBRE, armado (12 oct 2026): lo que ve alguien en Home o en la pestaña Entrenar para entrenar por su cuenta, tenga o no un plan.
      · `variante="completa"` (sin plan): la tarjeta azul «Entrenar» (su semana, su último entreno, «Empezar»), la de Explorar, los cuadros de color (`cuadros`, p. ej. Salud),
@@ -107,6 +109,14 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
   const [verTodos, setVerTodos] = useState(false);
   const creaPropia = (act) => setPropias((prev) => [act, ...propiasDe(prev)].slice(0, 30));
   const conExplorar = conEmpujon && !!alIrAExplorar;
+  /* Hay un entreno en curso en el Apple Watch, empezado ahí sin el iPhone (parte 3.6): el reloj sigue mandando y aquí no se empieza otro. */
+  const enElReloj = useRelojEnCurso();
+  const { avisa } = useAviso();
+  const empieza = ({ gps, silencio }) => {
+    if (enElReloj) { avisa('Tienes un entreno en curso en tu reloj. Termínalo ahí: aquí aparece solo.'); return; }
+    crono.inicia(pendiente.deporte, { gps, silencio, actividad: pendiente });
+    setPendiente(null);
+  };
 
   const hojas = (
     <>
@@ -132,7 +142,7 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
         <PantallaDeCarrera
           userId={userId} crono={crono} pendiente={enCurso ? null : pendiente?.deporte ?? null} actividad={enCurso ? null : pendiente}
           ultimo={ultimaSalida(filas, pendiente?.deporte ?? crono.cronometro?.deporte)}
-          alEmpezar={({ gps, silencio }) => { crono.inicia(pendiente.deporte, { gps, silencio, actividad: pendiente }); setPendiente(null); }}
+          alEmpezar={empieza}
           alMinimizar={cierra}
           alCambiarDeporte={() => setHoja('elegir')}
           alGuardado={alGuardar}

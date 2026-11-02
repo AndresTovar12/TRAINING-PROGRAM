@@ -10,6 +10,7 @@ import { PalabrasProvider, usePalabras } from '@/contexts/PalabrasContext';
 import { AVISO_ABRE_PERFIL } from '@/lib/abrePerfil';
 import SincronizaReloj from '@/features/profile/SincronizaReloj';
 import ConectaRelojGlobal from '@/features/reloj/ConectaRelojGlobal';
+import { RecibeDelReloj } from '@/features/reloj/RelojSinTelefono';
 import { PlanProvider } from '@/contexts/PlanContext';
 import AuthScreen from '@/features/auth/AuthScreen';
 import NuevaContrasena from '@/features/auth/NuevaContrasena';
@@ -580,8 +581,9 @@ export default function App() {
     return (
       <PalabrasProvider perfil={profile}>
         <AdminApp onAbrirPerfil={setPerfilDelCoach} />
-        {/* Un coach también puede conectar su propio Apple Watch (Mi perfil → Dispositivos). */}
+        {/* Un coach también puede conectar su propio Apple Watch (Mi perfil → Dispositivos), y lo que entrene libre en el reloj le llega igual. */}
         <SincronizaReloj />
+        <RecibeDelReloj />
         <ConectaRelojGlobal />
         <AccountMenu perfil={perfilDelCoach} onPerfil={setPerfilDelCoach} />
         <UpdateBanner />
@@ -600,6 +602,8 @@ export default function App() {
           <AvisoSinConexion />
           <TrainingApp />
           <SincronizaReloj />
+          {/* Lo que se entrenó en el Apple Watch sin el iPhone (1 nov 2026, parte 3): a la cola del teléfono al abrir la app. */}
+          <RecibeDelReloj />
           <ConectaRelojGlobal />
           <AccountMenu />
           <UpdateBanner />

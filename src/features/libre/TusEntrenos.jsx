@@ -7,7 +7,8 @@ import { sinDuracion } from '@/lib/sesiones';
 import { guiadoDe } from '@/lib/stickers/ficha';
 import { cuandoCorto, lineaDeActividad, miles, segundosDe } from '@/lib/paginaDelEntreno';
 import { desdeKilos, etiquetaUnidad } from '@/lib/unidades';
-import { Upload } from 'lucide-react';
+import { llegoDelReloj } from '@/lib/relojSinTelefono';
+import { Upload, Watch } from 'lucide-react';
 import { FONT, KP, LT } from '@/lib/theme';
 import IconoDeActividad from './IconoDeActividad';
 import { Grupo, Fila } from '@/components/ui';
@@ -30,6 +31,13 @@ export function caraDeLaSesion(plan) {
 /** La pastilla «Plan», a la derecha del nombre: azul clarito con la letra azul (fase 7). */
 export const PastillaPlan = () => (
   <span style={{ display: 'inline-block', marginLeft: 7, padding: '1px 7px', borderRadius: 99, background: KP.blueSoft, color: KP.blue, fontSize: 11.5, fontWeight: 700, lineHeight: '18px', verticalAlign: 2 }}>Plan</span>
+);
+
+/** «Llegó de tu Apple Watch» (1 nov 2026, parte 3.4): lo entrenó en el reloj sin el iPhone y llegó después. Va arriba de la línea de la fila. */
+export const MarcaDelReloj = () => (
+  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 3, padding: '2px 8px 2px 7px', borderRadius: 99, background: KP.blueSoft, color: KP.blue, fontSize: 11.5, fontWeight: 800, lineHeight: '18px' }}>
+    <Watch size={12} strokeWidth={2.6} aria-hidden="true" />Llegó de tu Apple Watch
+  </span>
 );
 
 /**
@@ -57,9 +65,10 @@ export function FilaDeTusEntrenos({ e, alAbrir, alCompartir, propias = [], unida
     izquierda = <IconoDeActividad actividad={actividadDeEntreno(a, propias)} size={38} />;
     detalle = `${cuando(a)} · ${lineaDeActividad(a)}`;
   }
+  const delReloj = llegoDelReloj(e);
   const datos = {
-    izquierda, texto: plan ? <>{nombre}<PastillaPlan /></> : nombre, detalle, onClick: () => alAbrir(e),
-    etiquetaAccesible: `${nombre}${plan ? ', del plan' : ''}, ${detalle}`,
+    izquierda, texto: plan ? <>{nombre}<PastillaPlan /></> : nombre, detalle: delReloj ? <><MarcaDelReloj /><br />{detalle}</> : detalle, onClick: () => alAbrir(e),
+    etiquetaAccesible: `${nombre}${plan ? ', del plan' : ''}${delReloj ? ', llegó de tu Apple Watch' : ''}, ${detalle}`,
   };
   if (!alCompartir) return <Fila {...datos} />;
   // Sin la flecha ›: a la derecha va el ⇪ (fuera de la fila: un botón no puede ir dentro de otro).

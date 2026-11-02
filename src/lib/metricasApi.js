@@ -179,7 +179,8 @@ export async function guardaImportacion({ atletaId, subidoPor, resultado, desfas
       umbrales, genero, desfaseMin, origen,
       conSeries: (diaLocal(p.inicio, p.desfase_min ?? desfaseMin) ?? '') >= limiteSeries,
     });
-    return { fila: { ...fila, id: nuevoId(), atleta_id: atletaId, subido_por: subidoPor ?? null }, series };
+    // `idDeLaBase`: un entreno que ya trae su id (el del Apple Watch, parte 3 del 1 nov 2026): repetirlo no hace otro.
+    return { fila: { ...fila, id: p.idDeLaBase ?? nuevoId(), atleta_id: atletaId, subido_por: subidoPor ?? null }, series };
   });
 
   const total = construidos.length + resultado.recuperacion.length;

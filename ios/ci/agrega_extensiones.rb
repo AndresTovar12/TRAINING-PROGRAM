@@ -61,7 +61,10 @@ unless proj.targets.any? { |t| t.name == 'TrainingLabWatch' }
   grupo_w = proj.main_group.new_group('TrainingLabWatch', 'TrainingLabWatch')
   grupo_w.new_file('Info.plist')
   grupo_w.new_file('TrainingLabWatch.entitlements')
-  fuentes = %w[TrainingLabWatchApp.swift ModeloDelEntreno.swift VistaDelEntreno.swift].map { |n| grupo_w.new_file(n) }
+  # Parte 3 (1 nov 2026, el reloj sin el iPhone): el plan en disco, el entreno, lo que mide y sus pantallas.
+  fuentes = %w[
+    TrainingLabWatchApp.swift ModeloDelEntreno.swift VistaDelEntreno.swift PlanDelReloj.swift EntrenoDelReloj.swift MedidorDelReloj.swift VistasDelReloj.swift
+  ].map { |n| grupo_w.new_file(n) }
   reloj.add_file_references(fuentes)
   iconos = grupo_w.new_file('Assets.xcassets')
   reloj.resources_build_phase.add_file_reference(iconos)

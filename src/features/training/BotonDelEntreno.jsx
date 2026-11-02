@@ -19,6 +19,8 @@ import HojaFlotante from '@/components/HojaFlotante';
 import Boton from '@/components/ui/Boton';
 import EntrenoDelDia from '@/features/training/EntrenoDelDia';
 import { borraRecorrido } from '@/features/training/useRecorrido';
+import { useRelojEnCurso } from '@/lib/relojApple';
+import { EntrenoEnElReloj } from '@/features/reloj/RelojSinTelefono';
 
 /**
  * Si el entreno falla por un dato que nadie previó, NO se lleva la pantalla del día: se cierra y la lista de ejercicios de siempre sigue ahí.
@@ -167,9 +169,12 @@ export function useBotonesDeLaSesion({ dia, ejercicios, aspecto = null, registro
   const continuando = !!vista && vista.estado !== 'sin' && vista.hechos + vista.saltados > 0;
   const estado = !activo ? null : hecha ? 'hecha' : continuando ? 'curso' : 'sin';
   const conBotones = !!estado && !soloLectura;
+  /* Empezó un entreno en el Apple Watch sin el iPhone y sigue ahí (parte 3.6): el reloj sigue mandando y aquí no se empieza otro. En lugar de «Iniciar
+     entreno» sale «Entreno en curso en tu reloj»; al terminarlo en el reloj, lo hecho llega solo y la sesión pasa a «Hecha». */
+  const enElReloj = useRelojEnCurso();
 
   // Si el botón no se va a mostrar (sesión terminada, solo lectura), el aviso de «Empezar» no se queda esperando: si no, al «Marcar como no hecha» el entreno se abriría solo.
-  const sinBoton = soloLectura || !hayQueEntrenar || hecha;
+  const sinBoton = soloLectura || !hayQueEntrenar || hecha || !!enElReloj;
   useEffect(() => { if (abrirYa && sinBoton) setAbrirYa(false); }, [abrirYa, sinBoton]);
 
   const abre = () => {
@@ -260,6 +265,8 @@ export function useBotonesDeLaSesion({ dia, ejercicios, aspecto = null, registro
         )}
       </div>
     );
+  } else if (conBotones && hayQueEntrenar && enElReloj) {
+    boton = <EntrenoEnElReloj compacta />;
   } else if (conBotones && hayQueEntrenar) {
     boton = (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
