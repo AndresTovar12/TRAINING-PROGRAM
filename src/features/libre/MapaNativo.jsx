@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Compass, Layers, Loader2, Navigation } from 'lucide-react';
 import {
-  metrosEntre, ANGULO_3D, COLOR_RUTA, ESPERA_MAXIMA_MS, GROSOR_RUTA, ZOOM_INICIAL, ZOOM_SIGUE,
-  adelgazaRuta, claveDeRuta, rumboDeRuta, ponClase, quitaClase, conTiempoLimite, creaFila, encuadre, inicioDelMapa, leeUbicacionGuardada, planDeEnvio, puntosDeMuestras,
+  metrosEntre, ANGULO_3D, AVISO_TIPO_DE_MAPA, AZUL_DE_ACCION, ESPERA_MAXIMA_MS, TIPOS_DE_MAPA, ZOOM_INICIAL, ZOOM_SIGUE,
+  adelgazaRuta, capasDeRuta, guardaTipoDeMapa, leeTipoDeMapa, claveDeRuta, rumboDeRuta, ponClase, quitaClase, conTiempoLimite, creaFila, encuadre, inicioDelMapa, leeUbicacionGuardada, planDeEnvio, puntosDeMuestras,
 } from '@/lib/mapaNativo';
 
 /* EL MAPA DE APPLE DENTRO DE LA APP DE IPHONE (25 oct 2026). Andrés: el mapa dibujado por la página «se siente feo, como web». Este es el mapa de verdad del
@@ -39,7 +39,11 @@ let contador = 0;
    (el mismo plugin ya registrado, sin registrarlo dos veces). */
 const puenteDelMapa = () => Capacitor.Plugins?.NativeMap ?? registerPlugin('NativeMap');
 
-const botonDelMapa = { width: 48, height: 48, borderRadius: 24, border: 'none', background: 'rgba(28,32,48,0.88)', color: '#fff', display: 'grid', placeItems: 'center', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 800, touchAction: 'manipulation', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', boxShadow: '0 4px 14px rgba(0,0,0,0.35)' };
+// Los botones redondos del mapa, como la maqueta de la pantalla de carrera (2 nov 2026): casi negros; lo que está prendido, en el azul claro de la línea.
+const botonDelMapa = { width: 44, height: 44, borderRadius: 22, border: 'none', background: 'rgba(10,10,14,0.88)', color: '#fff', display: 'grid', placeItems: 'center', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 800, touchAction: 'manipulation', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', boxShadow: '0 4px 14px rgba(0,0,0,0.35)' };
+const PRENDIDO = '#7FA0FF';
+/** El espacio entre los botones del mapa y lo que tienen debajo (la tarjeta, la hoja o la fila de «Iniciar»). */
+const ESPACIO = 12;
 
 /** Los márgenes del mapa a pantalla completa: abajo TODO el panel (el logo y «Legal» de Apple quedan arriba de él) y arriba lo justo para que el punto del corredor
     caiga cerca del centro de la pantalla y no a un tercio (con solo el margen de abajo, el punto salía muy arriba). */
@@ -53,7 +57,10 @@ const reservaDelPanel = () => {
   return panel ? Math.max(0, Math.round(window.innerHeight - panel.getBoundingClientRect().top)) : 0;
 };
 
-export default function MapaNativo({ muestras, sigue = true, interactivo = false, alto = 220, redondo = true, pantallaCompleta = false, alFallar }) {
+/* `oculto` (pantalla completa): el mapa sigue vivo detrás de algo opaco (los números de la carrera) y sin sus botones; así cambiar a la vista de mapa o pausar
+   es instantáneo y la cámara nunca deja de seguir al corredor. `clavePanel`: cambia cuando cambia lo de abajo (otra vista, la pausa): los botones se vuelven a
+   acomodar arriba del panel nuevo. */
+export default function MapaNativo({ muestras, sigue = true, interactivo = false, alto = 220, redondo = true, pantallaCompleta = false, oculto = false, clavePanel = '', alFallar }) {
   const caja = useRef(null);
   const puntos = useMemo(() => puntosDeMuestras(muestras), [muestras]);
   const [activo, setActivo] = useState(false);
@@ -62,7 +69,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
   const [foto, setFoto] = useState(null);
   const [norteArriba, setNorteArriba] = useState(false); // false: el mapa gira hacia donde apunta el iPhone (como Apple Maps, Strava y Aura)
   const [rumboVisible, setRumboVisible] = useState(0); // para girar el ícono de la brújula
-  const [tipoDeMapa, setTipoDeMapa] = useState(() => { try { return localStorage.getItem('tl:tipo-de-mapa') || 'Normal'; } catch { return 'Normal'; } });
+  const [tipoDeMapa, setTipoDeMapa] = useState(leeTipoDeMapa);
   const [abierto, setAbierto] = useState(false); // el selector de tipo de mapa
   const [cargandoTipo, setCargandoTipo] = useState(false); // velo mientras Apple baja las imágenes del tipo de mapa nuevo
   const [alturaPanel, setAlturaPanel] = useState(0); // los botones redondos van justo arriba del panel de abajo
@@ -73,6 +80,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
   useEffect(() => { fallar.current = alFallar; });
 
   const camara = useRef(null);
+  const margenes = useRef(null); // vuelve a poner los márgenes del mapa cuando cambia el panel de abajo
   // Lo que cambia (puntos nuevos, seguir o encuadrar) se manda al mapa sin recrearlo: la línea con tope de una vez por segundo; la cámara, con CADA punto.
   useEffect(() => { dato.current = { puntos, sigue }; empuja.current?.(); camara.current?.(); }, [puntos, sigue]);
 
@@ -89,6 +97,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
       vivo: true, mapa: null, LatLngBounds: null, elemento: null, listo: false, ids: [], ultimoEnvioMs: 0, claveEnviada: null, reloj: null, ocupado: false, otraVez: false, necesitaZoom: false,
       // `siguiendo`: la cámara va con el corredor (hasta que mueva el mapa con el dedo). `en3d`: inclinado 45°. `rumbo`: hacia dónde va (el mapa gira con él).
       siguiendo: true, en3d: false, conocido: false, rumbo: 0, brujula: null, norteArriba: false, ultimoPuntoMs: 0, sinSeguidor: false, hayBrujula: false, giraConBrujula: false,
+      tipo: tipoDeMapa,
     };
 
     const dibujaRuta = async (ruta) => {
@@ -97,8 +106,9 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
         if (e.ids.length) { const viejos = e.ids; e.ids = []; await mapa.removePolylines(viejos); }
         return;
       }
-      // Primero la línea nueva y luego se quita la vieja: así no parpadea.
-      const nuevos = await mapa.addPolylines([{ path: adelgazaRuta(ruta).map(({ lat, lng }) => ({ lat, lng })), strokeColor: COLOR_RUTA, strokeWeight: GROSOR_RUTA }]);
+      // Primero la línea nueva y luego se quita la vieja: así no parpadea. Las tres capas «con brillo» (y el punto de la salida) van en UNA llamada y se
+      // quitan juntas, así nunca se ve una capa sin las otras.
+      const nuevos = await mapa.addPolylines(capasDeRuta(adelgazaRuta(ruta).map(({ lat, lng }) => ({ lat, lng }))));
       const viejos = e.ids;
       e.ids = nuevos;
       if (viejos.length) await mapa.removePolylines(viejos);
@@ -331,13 +341,15 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
             else if (e.norteArriba) await e.mapa.setCamera({ bearing: 0, animate: true });
           } catch (err) { console.warn('Mapa nativo (norte):', err); }
         },
+        // Lo llama el aviso `AVISO_TIPO_DE_MAPA` (el botón de capas o «Ajustes» ya lo guardaron con `guardaTipoDeMapa`).
         poneTipo: async (tipo) => {
-          setTipoDeMapa(tipo);
           setAbierto(false);
+          if (tipo === e.tipo) return;
+          e.tipo = tipo;
+          setTipoDeMapa(tipo);
           // Apple deja el mapa vacío un momento mientras baja las imágenes: un velo con indicador de carga para que no parezca un error.
           setCargandoTipo(true);
           setTimeout(() => setCargandoTipo(false), 1600);
-          try { localStorage.setItem('tl:tipo-de-mapa', tipo); } catch { /* sin almacenamiento: solo se olvida la elección */ }
           try {
             // Un segundo con la cámara quieta para que Apple alcance a bajar las imágenes del tipo nuevo (corriendo, con la cámara moviéndose sin parar,
             // el satelital no terminaba de aparecer). El punto y el cono siguen moviéndose.
@@ -358,6 +370,11 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
           e.ultimoPuntoMs = Date.now();
           try { if (donde) await ponCamara({ donde, duracion: 0.8 }); } catch (err) { console.warn('Mapa nativo (volver):', err); }
         },
+      };
+      // El panel de abajo cambió de alto (otra vista, la pausa, el pulso): el margen de abajo del mapa lo sigue, para que el corredor no quede tapado.
+      margenes.current = () => {
+        if (!e.vivo || !e.mapa || !pantallaCompleta || !dato.current.sigue) return;
+        e.mapa.setPadding(margenesDelMapa()).catch((err) => console.warn('Mapa nativo (márgenes):', err));
       };
       e.listo = true;
       if (!e.vivo) return; // se cerró mientras arrancaba: no se esconde nada
@@ -421,6 +438,7 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
       if (e.listo) sueltaCamara();
       empuja.current = null;
       camara.current = null;
+      margenes.current = null;
       acciones.current = {};
       if (dueno === ficha) dueno = null;
       quitaClase(id);
@@ -436,55 +454,79 @@ export default function MapaNativo({ muestras, sigue = true, interactivo = false
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // El tipo de mapa se cambió (aquí con el botón de capas o en «Ajustes» de la carrera): el mapa abierto lo pone en el acto.
+  useEffect(() => {
+    const alCambiar = (ev) => { if (ev?.detail?.tipo) acciones.current.poneTipo?.(ev.detail.tipo); };
+    window.addEventListener(AVISO_TIPO_DE_MAPA, alCambiar);
+    return () => window.removeEventListener(AVISO_TIPO_DE_MAPA, alCambiar);
+  }, []);
+
+  /* Los botones van SIEMPRE a 12 px arriba del panel de abajo (`data-mapa-panel`): se vuelve a medir al cambiar de vista o de estado (`clavePanel`) y cada vez que
+     el panel cambia de alto (aparece el pulso, la hoja de la pausa es más alta). Con el mapa oculto no se mide: nadie lo ve. */
+  useLayoutEffect(() => {
+    if (!pantallaCompleta || !activo || oculto) return undefined;
+    const panel = document.querySelector('[data-mapa-panel]');
+    const mide = () => { setAlturaPanel(reservaDelPanel()); margenes.current?.(); };
+    mide();
+    if (!panel || typeof ResizeObserver === 'undefined') return undefined;
+    const ojo = new ResizeObserver(mide);
+    ojo.observe(panel);
+    return () => ojo.disconnect();
+  }, [pantallaCompleta, activo, oculto, clavePanel]);
+
+  const conBotones = pantallaCompleta && activo && !oculto;
   return (
     <div style={{ position: 'relative', height: alto, borderRadius: redondo ? 20 : 0, overflow: 'hidden', background: pantallaCompleta && activo ? 'transparent' : '#1B1F2E' }}>
       <div ref={caja} style={{ position: 'absolute', inset: 0 }} />
       {foto && <img src={foto} alt="Tu ruta en el mapa" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
-      {pantallaCompleta && activo && cargandoTipo && (
+      {conBotones && cargandoTipo && (
         <div aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: 3, display: 'grid', placeItems: 'center', background: 'rgba(15,18,32,0.55)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', pointerEvents: 'none', color: '#fff', animation: 'tl-velo 1600ms ease both' }}>
           <Loader2 size={30} className="spin" />
         </div>
       )}
-      {pantallaCompleta && activo && (
-        // Los botones redondos de la derecha, justo arriba del panel de abajo (no arriba: ahí sale la brújula del mapa).
+      {/* La brújula, sola arriba a la derecha (maqueta de la pantalla de carrera): el mapa gira hacia donde mira el iPhone; tocarla lo deja con el norte arriba (y
+          otra vez para volver a girar). La aguja marca dónde queda el norte. */}
+      {conBotones && (
+        <button
+          type="button" data-map-overlay onClick={() => acciones.current.alternaNorte?.()} aria-pressed={!norteArriba}
+          aria-label={norteArriba ? 'Norte arriba. Tocar para que el mapa gire hacia donde miras' : 'El mapa gira hacia donde miras. Tocar para dejar el norte arriba'}
+          style={{ ...botonDelMapa, position: 'absolute', zIndex: 5, top: 'calc(14px + env(safe-area-inset-top))', right: 16, color: norteArriba ? '#fff' : PRENDIDO }}
+        >
+          <Compass size={22} style={{ transform: `rotate(${-rumboVisible}deg)`, transition: 'transform 200ms linear' }} />
+        </button>
+      )}
+      {conBotones && (
+        // Los botones del mapa, en columna a la derecha y a 12 px arriba del panel de abajo: tipo de mapa, 2D/3D y centrar.
         // `zIndex`: el degradado del panel de abajo sube por encima de esta zona y, aunque se vea transparente, se quedaba con el toque de la flecha (25 oct 2026).
-        <div style={{ position: 'absolute', zIndex: 5, right: 14, bottom: alturaPanel + 16, display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
+        <div style={{ position: 'absolute', zIndex: 5, right: 16, bottom: alturaPanel + ESPACIO, display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
           {abierto && (
-            <div data-map-overlay role="menu" aria-label="Tipo de mapa" style={{ position: 'absolute', right: 58, bottom: 0, display: 'flex', flexDirection: 'column', gap: 6, padding: 8, borderRadius: 18, background: 'rgba(28,32,48,0.94)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
-              {[['Normal', 'Estándar'], ['Satellite', 'Satelital'], ['Hybrid', 'Híbrido']].map(([tipo, nombre]) => (
+            <div data-map-overlay role="menu" aria-label="Tipo de mapa" style={{ position: 'absolute', right: 54, bottom: 0, display: 'flex', flexDirection: 'column', gap: 6, padding: 8, borderRadius: 18, background: 'rgba(10,10,14,0.94)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
+              {TIPOS_DE_MAPA.map(([tipo, nombre]) => (
                 <button
-                  key={tipo} type="button" role="menuitemradio" aria-checked={tipoDeMapa === tipo} data-map-overlay onClick={() => acciones.current.poneTipo?.(tipo)}
-                  style={{ border: 'none', borderRadius: 12, padding: '10px 16px', background: tipoDeMapa === tipo ? '#2F6BFF' : 'rgba(255,255,255,0.08)', color: '#fff', fontFamily: 'inherit', fontSize: 14, fontWeight: 700, cursor: 'pointer', textAlign: 'left', whiteSpace: 'nowrap', touchAction: 'manipulation' }}
+                  key={tipo} type="button" role="menuitemradio" aria-checked={tipoDeMapa === tipo} data-map-overlay onClick={() => { setAbierto(false); guardaTipoDeMapa(tipo); }}
+                  style={{ border: 'none', borderRadius: 12, padding: '10px 16px', background: tipoDeMapa === tipo ? AZUL_DE_ACCION : 'rgba(255,255,255,0.08)', color: '#fff', fontFamily: 'inherit', fontSize: 14, fontWeight: 700, cursor: 'pointer', textAlign: 'left', whiteSpace: 'nowrap', touchAction: 'manipulation' }}
                 >
                   {nombre}
                 </button>
               ))}
             </div>
           )}
-          <button type="button" data-map-overlay onClick={() => setAbierto((v) => !v)} aria-label="Tipo de mapa: estándar, satelital o híbrido" aria-expanded={abierto} style={{ ...botonDelMapa, color: abierto ? '#4F8BFF' : '#fff' }}>
-            <Layers size={20} />
+          <button type="button" data-map-overlay onClick={() => setAbierto((v) => !v)} aria-label="Tipo de mapa: estándar, satelital o híbrido" aria-expanded={abierto} style={{ ...botonDelMapa, color: abierto ? PRENDIDO : '#fff' }}>
+            <Layers size={19} />
           </button>
           {/* Dice el modo EN EL QUE ESTÁS (3D = inclinado, con los edificios en volumen; 2D = visto desde arriba). Tocarlo cambia al otro. */}
           <button
             type="button" data-map-overlay onClick={() => acciones.current.alterna3D?.()} aria-pressed={en3d}
-            aria-label={en3d ? 'Vista 3D inclinada. Tocar para ver el mapa plano en 2D' : 'Vista 2D plana. Tocar para inclinar el mapa en 3D'} style={{ ...botonDelMapa, color: en3d ? '#4F8BFF' : '#fff' }}
+            aria-label={en3d ? 'Vista 3D inclinada. Tocar para ver el mapa plano en 2D' : 'Vista 2D plana. Tocar para inclinar el mapa en 3D'} style={{ ...botonDelMapa, color: en3d ? PRENDIDO : '#fff' }}
           >
             {en3d ? '3D' : '2D'}
-          </button>
-          {/* Brújula: el mapa gira hacia donde mira el iPhone; tocarla lo deja con el norte arriba (y otra vez para volver a girar). La aguja marca dónde queda el norte. */}
-          <button
-            type="button" data-map-overlay onClick={() => acciones.current.alternaNorte?.()} aria-pressed={!norteArriba}
-            aria-label={norteArriba ? 'Norte arriba. Tocar para que el mapa gire hacia donde miras' : 'El mapa gira hacia donde miras. Tocar para dejar el norte arriba'}
-            style={{ ...botonDelMapa, color: norteArriba ? '#fff' : '#4F8BFF' }}
-          >
-            <Compass size={22} style={{ transform: `rotate(${-rumboVisible}deg)`, transition: 'transform 200ms linear' }} />
           </button>
           {interactivo && <button
             type="button" data-map-overlay onClick={() => acciones.current.recentra?.()} aria-label={siguiendo ? 'Siguiendo tu ubicación' : 'Volver a mi ubicación'} aria-pressed={siguiendo}
             // Como Apple Maps: flecha RELLENA mientras te sigue; VACÍA cuando moviste el mapa (tócala para volver a ti).
-            style={{ ...botonDelMapa, color: siguiendo ? '#4F8BFF' : '#FFFFFF' }}
+            style={{ ...botonDelMapa, color: siguiendo ? PRENDIDO : '#FFFFFF' }}
           >
-            <Navigation size={20} fill={siguiendo ? 'currentColor' : 'none'} />
+            <Navigation size={19} fill={siguiendo ? 'currentColor' : 'none'} />
           </button>}
         </div>
       )}

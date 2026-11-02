@@ -12,7 +12,8 @@ const enLaApp = () => Capacitor.isNativePlatform();
 let viva = false;
 let ultima = '';
 
-/** `datos`: `{ nombre, titulo, detalle, tipo: 'trabajo'|'descanso'|'cardio'|'pausa', finMs?, inicioMs?, distancia?, ritmo?, pulso? }`. Empieza la actividad o la actualiza si ya había. */
+/** `datos`: `{ nombre, titulo, detalle, tipo: 'trabajo'|'descanso'|'cardio'|'pausa', finMs?, inicioMs?, distancia?, ritmo?, pulso? }`. Empieza la actividad o la actualiza si ya había.
+    Con `distancia`, la pantalla bloqueada dibuja la tarjeta de la carrera: además `simbolo` (el ícono, de SF Symbols), `etiquetaRitmo` y, en pausa, `transcurridoS`. */
 export async function muestraEnPantallaBloqueada(datos) {
   if (!enLaApp()) return;
   const llave = JSON.stringify(datos);
@@ -27,6 +28,15 @@ export async function muestraEnPantallaBloqueada(datos) {
       viva = !!r?.disponible;
     }
   } catch { /* sin pantalla bloqueada: el entreno sigue igual */ }
+}
+
+/** El botón redondo de la tarjeta de la carrera (iOS 17 o más): `alAccion('pausa' | 'reanuda')`. Devuelve cómo dejar de escuchar. */
+export function escuchaPantallaBloqueada(alAccion) {
+  if (!enLaApp()) return () => {};
+  let manejador = null;
+  let vivo = true;
+  EntrenoLive.addListener('accion', (e) => alAccion?.(e?.accion)).then((h) => { if (vivo) manejador = h; else h?.remove?.(); }).catch(() => {});
+  return () => { vivo = false; manejador?.remove?.(); };
 }
 
 /** Quita la actividad (el entreno terminó o se cerró). */

@@ -149,8 +149,7 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', variante = 'co
       )}
       {hoja === 'cronometro' && enCurso && !crono.cronometro.gps && (
         <PantallaDelCronometro
-          userId={userId} crono={crono} pendiente={null}
-          alEmpezar={() => {}}
+          userId={userId} crono={crono}
           alMinimizar={cierra}
           alGuardado={alGuardar}
         />

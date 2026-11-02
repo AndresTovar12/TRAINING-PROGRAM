@@ -6,8 +6,26 @@
 
 import { Capacitor } from '@capacitor/core';
 
-export const COLOR_RUTA = '#FF5A5F';
-export const GROSOR_RUTA = 5;
+/* LA LÍNEA DEL RECORRIDO «CON BRILLO» (pantalla de carrera, 2 nov 2026; maqueta WVcKiJ2JhyChJqLwP3bhHD). Tres capas, de abajo hacia arriba: el halo (el azul,
+   ancho y translúcido), el borde oscuro que la despega del mapa y la línea, con degradado de claro en la salida a fuerte en la punta. Las mismas medidas en el mapa
+   de Apple (`capasDeRuta`, el parche del plugin) y en el de la web (`MapaDeCarrera.jsx`). En el de Apple el halo va sin difuminar (MapKit no difumina líneas). */
+export const AZUL_DE_ACCION = '#2F55F0';
+export const LINEA_CON_BRILLO = {
+  halo: { color: AZUL_DE_ACCION, opacidad: 0.45, grosor: 18, difuminado: 5 },
+  borde: { color: '#0B0C12', opacidad: 0.9, grosor: 12 },
+  linea: { grosor: 7.5, salida: '#7FA0FF', punta: AZUL_DE_ACCION },
+};
+
+/** Lo que se le manda a `addPolylines` del mapa de Apple: las tres capas en orden (la última queda encima) con la misma ruta, y el punto blanco de la salida en la de
+    arriba. `ruta: true` le da a cada capa su margen (lo ancho no se corta en la orilla). Un iPhone con la app vieja ignora lo nuevo y dibuja tres líneas lisas. */
+export function capasDeRuta(path) {
+  const { halo, borde, linea } = LINEA_CON_BRILLO;
+  return [
+    { path, ruta: true, strokeColor: halo.color, strokeOpacity: halo.opacidad, strokeWeight: halo.grosor },
+    { path, ruta: true, strokeColor: borde.color, strokeOpacity: borde.opacidad, strokeWeight: borde.grosor },
+    { path, ruta: true, strokeColor: linea.punta, strokeWeight: linea.grosor, gradientColors: [linea.salida, linea.punta], startDot: true },
+  ];
+}
 export const ZOOM_INICIAL = 17.5;
 /** Al seguir al corredor el mapa se acerca más y se inclina en 3D (como Aura); en el resumen se ve plano y encuadrado. */
 export const ZOOM_SIGUE = 18.8; // 25 oct 2026: a 17.5 el punto se veía «muy lejos» en el iPhone de Andrés (se cuentan ~150 m de ancho de pantalla)
@@ -63,6 +81,16 @@ export function ubicacionGuardada(texto) {
 export const leeUbicacionGuardada = () => {
   try { return ubicacionGuardada(localStorage.getItem(LLAVE_ULTIMA_UBICACION)); } catch { return null; }
 };
+
+/* EL TIPO DE MAPA (estándar, satelital o híbrido) que eligió la última vez, en este teléfono. Se cambia desde el botón de capas del mapa o desde «Ajustes» de la
+   carrera (2 nov 2026): los dos avisan con `AVISO_TIPO_DE_MAPA` y el mapa abierto lo pone en el acto. */
+export const AVISO_TIPO_DE_MAPA = 'tl:tipo-de-mapa';
+export const TIPOS_DE_MAPA = [['Normal', 'Estándar'], ['Satellite', 'Satelital'], ['Hybrid', 'Híbrido']];
+export const leeTipoDeMapa = () => { try { return localStorage.getItem('tl:tipo-de-mapa') || 'Normal'; } catch { return 'Normal'; } };
+export function guardaTipoDeMapa(tipo) {
+  try { localStorage.setItem('tl:tipo-de-mapa', tipo); } catch { /* sin almacenamiento: solo se olvida la elección */ }
+  window.dispatchEvent(new CustomEvent(AVISO_TIPO_DE_MAPA, { detail: { tipo } }));
+}
 
 /** Dónde abre el mapa: la última muestra de la ruta, si no la última ubicación conocida, y solo si no hay nada, todo México (con `conocido: false`). */
 export function inicioDelMapa(puntos, guardada, zoom = ZOOM_INICIAL) {
