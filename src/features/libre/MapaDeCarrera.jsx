@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { trazoDeRuta } from '@/lib/ubicacion';
-import { leeUbicacionGuardada, usaMapaNativo } from '@/lib/mapaNativo';
+import { AZUL_DE_ACCION, LINEA_CON_BRILLO, leeUbicacionGuardada, usaMapaNativo } from '@/lib/mapaNativo';
 import MapaNativo from './MapaNativo';
 
 /* EL MAPA DE LA CARRERA (16 oct 2026). Andrés eligió mapa CON CALLES; su costo es fijo y mínimo: el archivo (México + EE. UU., 10 GB, zoom 14) vive en R2 y casi cabe en el cupo gratis (24 oct 2026).
@@ -17,8 +17,8 @@ import MapaNativo from './MapaNativo';
    interfaz va encima (solo lo usa el mapa nativo; el de abajo no lo necesita). */
 
 const URL_DEL_MAPA = import.meta.env.VITE_MAPA_URL || '';
-const COLOR_RUTA = '#FF5A5F';
-const AZUL_YO = '#2F6BFF';
+// La línea «con brillo» y el corredor, en el azul de acción (pantalla de carrera, 2 nov 2026): las mismas medidas que en el mapa de Apple (`lib/mapaNativo.js`).
+const { halo: HALO, borde: BORDE, linea: LINEA } = LINEA_CON_BRILLO;
 
 /* Las calles de Protomaps «dark» salían gris oscuro sobre casi negro y no se leían (comparado con Aura, 25 oct 2026). Se parte de ese mismo tema y se suben el
    contraste: las calles principales más claras y con borde oscuro, los edificios con relleno visible y el agua y los parques con algo de color. */
@@ -49,13 +49,13 @@ export default function MapaDeCarrera(props) {
   return <MapaWeb {...props} />;
 }
 
-function MapaWeb({ muestras, sigue = true, interactivo = false, alto = 220, redondo = true, puntoAzul = false }) {
+function MapaWeb({ muestras, sigue = true, interactivo = false, alto = 220, redondo = true }) {
   const [conCalles, setConCalles] = useState(!!URL_DEL_MAPA);
   return (
     <div style={{ position: 'relative', height: alto, borderRadius: redondo ? 20 : 0, overflow: 'hidden', background: '#1B1F2E' }}>
       {conCalles
-        ? <ConCalles muestras={muestras} sigue={sigue} interactivo={interactivo} puntoAzul={puntoAzul} alFallar={() => setConCalles(false)} />
-        : <SinCalles muestras={muestras} puntoAzul={puntoAzul} />}
+        ? <ConCalles muestras={muestras} sigue={sigue} interactivo={interactivo} alFallar={() => setConCalles(false)} />
+        : <SinCalles muestras={muestras} />}
     </div>
   );
 }
@@ -68,7 +68,7 @@ function ubicacionGuardada() {
 
 const coordenadas = (muestras) => (muestras ?? []).filter((m) => typeof m.lat === 'number' && typeof m.lon === 'number').map((m) => [m.lon, m.lat]);
 
-function ConCalles({ muestras, sigue, interactivo, puntoAzul, alFallar }) {
+function ConCalles({ muestras, sigue, interactivo, alFallar }) {
   const caja = useRef(null);
   const mapa = useRef(null);
   const listo = useRef(false);
@@ -101,14 +101,20 @@ function ConCalles({ muestras, sigue, interactivo, puntoAzul, alFallar }) {
         instancia.on('error', (e) => { if (!listo.current && /pmtiles|Failed to fetch|404/i.test(String(e?.error?.message ?? ''))) alFallar(); });
         instancia.on('load', () => {
           listo.current = true;
-          instancia.addSource('ruta', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: ultimos.current } } });
-          instancia.addLayer({ id: 'ruta', type: 'line', source: 'ruta', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': COLOR_RUTA, 'line-width': 5 } });
+          /* LA LÍNEA «CON BRILLO»: tres capas de la MISMA fuente (se actualizan juntas, sin parpadeo), de abajo hacia arriba: el halo difuminado, el borde oscuro y
+             la línea con degradado a lo largo (`line-gradient` pide `lineMetrics` en la fuente). Encima, el punto blanco de la salida. */
+          instancia.addSource('ruta', { type: 'geojson', lineMetrics: true, data: lineaDe(ultimos.current) });
+          const redonda = { 'line-cap': 'round', 'line-join': 'round' };
+          instancia.addLayer({ id: 'ruta-halo', type: 'line', source: 'ruta', layout: redonda, paint: { 'line-color': HALO.color, 'line-opacity': HALO.opacidad, 'line-width': HALO.grosor, 'line-blur': HALO.difuminado } });
+          instancia.addLayer({ id: 'ruta-borde', type: 'line', source: 'ruta', layout: redonda, paint: { 'line-color': BORDE.color, 'line-opacity': BORDE.opacidad, 'line-width': BORDE.grosor } });
+          instancia.addLayer({ id: 'ruta', type: 'line', source: 'ruta', layout: redonda, paint: { 'line-width': LINEA.grosor, 'line-gradient': ['interpolate', ['linear'], ['line-progress'], 0, LINEA.salida, 1, LINEA.punta] } });
+          instancia.addSource('salida', { type: 'geojson', data: puntoDe(ultimos.current[0]) });
+          instancia.addLayer({ id: 'salida', type: 'circle', source: 'salida', paint: { 'circle-radius': 6.5, 'circle-color': '#fff', 'circle-stroke-width': 3, 'circle-stroke-color': BORDE.color } });
           instancia.addSource('yo', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
           // El punto con halo (un círculo grande y transparente alrededor), como el punto azul del teléfono.
-          const colorYo = puntoAzul ? AZUL_YO : COLOR_RUTA;
-          instancia.addLayer({ id: 'yo-halo', type: 'circle', source: 'yo', paint: { 'circle-radius': 18, 'circle-color': colorYo, 'circle-opacity': 0.25 } });
+          instancia.addLayer({ id: 'yo-halo', type: 'circle', source: 'yo', paint: { 'circle-radius': 18, 'circle-color': AZUL_DE_ACCION, 'circle-opacity': 0.22 } });
           instancia.addLayer({ id: 'yo-borde', type: 'circle', source: 'yo', paint: { 'circle-radius': 9, 'circle-color': '#fff' } });
-          instancia.addLayer({ id: 'yo', type: 'circle', source: 'yo', paint: { 'circle-radius': 6, 'circle-color': colorYo } });
+          instancia.addLayer({ id: 'yo', type: 'circle', source: 'yo', paint: { 'circle-radius': 6, 'circle-color': AZUL_DE_ACCION } });
           mapa.current = instancia;
           pinta(instancia, ultimos.current, sigue);
         });
@@ -127,8 +133,13 @@ function ConCalles({ muestras, sigue, interactivo, puntoAzul, alFallar }) {
   return <div ref={caja} style={{ position: 'absolute', inset: 0 }} />;
 }
 
+const lineaDe = (puntos) => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: puntos } });
+// La salida solo con ruta (dos puntos o más): antes de salir no hay de dónde empezó.
+const puntoDe = (p, hayRuta = true) => ({ type: 'FeatureCollection', features: p && hayRuta ? [{ type: 'Feature', geometry: { type: 'Point', coordinates: p } }] : [] });
+
 function pinta(m, puntos, sigue) {
-  m.getSource('ruta')?.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: puntos } });
+  m.getSource('ruta')?.setData(lineaDe(puntos));
+  m.getSource('salida')?.setData(puntoDe(puntos[0], puntos.length >= 2));
   const ultimo = puntos.at(-1);
   m.getSource('yo')?.setData({ type: 'FeatureCollection', features: ultimo ? [{ type: 'Feature', geometry: { type: 'Point', coordinates: ultimo } }] : [] });
   if (!ultimo) return;
@@ -137,19 +148,29 @@ function pinta(m, puntos, sigue) {
   m.fitBounds([[Math.min(...lon), Math.min(...lat)], [Math.max(...lon), Math.max(...lat)]], { padding: 40, duration: 0, maxZoom: 16 });
 }
 
-/** Sin el mapa de calles: la ruta sola, del mismo rojo, sobre fondo oscuro. */
-function SinCalles({ muestras, puntoAzul }) {
+/** Sin el mapa de calles: la ruta sola, «con brillo» como en el mapa, sobre fondo oscuro. */
+function SinCalles({ muestras }) {
   const trazo = useMemo(() => trazoDeRuta(muestras ?? [], { ancho: 360, alto: 240, margen: 28 }), [muestras]);
+  const id = useId().replace(/:/g, '');
+  const capa = { d: trazo?.d, fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'round' };
   return (
     <svg viewBox="0 0 360 240" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Tu ruta" style={{ position: 'absolute', inset: 0 }}>
       {trazo ? (
         <>
-          <path d={trazo.d} fill="none" stroke={COLOR_RUTA} strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
-          <circle cx={trazo.inicio[0]} cy={trazo.inicio[1]} r="6" fill="#22C38E" stroke="#fff" strokeWidth="2.5" />
-          <circle cx={trazo.fin[0]} cy={trazo.fin[1]} r="7" fill={puntoAzul ? '#2F6BFF' : COLOR_RUTA} stroke="#fff" strokeWidth="3" />
+          <defs>
+            <filter id={`${id}h`} x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation={HALO.difuminado} /></filter>
+            <linearGradient id={`${id}g`} gradientUnits="userSpaceOnUse" x1={trazo.inicio[0]} y1={trazo.inicio[1]} x2={trazo.fin[0]} y2={trazo.fin[1]}>
+              <stop offset="0" stopColor={LINEA.salida} /><stop offset="1" stopColor={LINEA.punta} />
+            </linearGradient>
+          </defs>
+          <path {...capa} stroke={HALO.color} strokeOpacity={HALO.opacidad} strokeWidth={HALO.grosor} filter={`url(#${id}h)`} />
+          <path {...capa} stroke={BORDE.color} strokeOpacity={BORDE.opacidad} strokeWidth={BORDE.grosor} />
+          <path {...capa} stroke={`url(#${id}g)`} strokeWidth={LINEA.grosor} />
+          <circle cx={trazo.inicio[0]} cy={trazo.inicio[1]} r="6.5" fill="#fff" stroke={BORDE.color} strokeWidth="3" />
+          <circle cx={trazo.fin[0]} cy={trazo.fin[1]} r="7" fill={AZUL_DE_ACCION} stroke="#fff" strokeWidth="3" />
         </>
       ) : (
-        <circle cx="180" cy="120" r="9" fill="#2F6BFF" stroke="#fff" strokeWidth="3" />
+        <circle cx="180" cy="120" r="9" fill={AZUL_DE_ACCION} stroke="#fff" strokeWidth="3" />
       )}
     </svg>
   );

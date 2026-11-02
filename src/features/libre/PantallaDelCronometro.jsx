@@ -1,48 +1,80 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { ChevronDown } from 'lucide-react';
 import { useConfirmacion } from '@/components/Confirmacion';
-import { Loader2, MapPin, Pause, Play } from 'lucide-react';
-import HojaFlotante from '@/components/HojaFlotante';
-import { LT, FONT, KP, NUM_STYLE, UI } from '@/lib/theme';
+import { FONT, NUM_STYLE } from '@/lib/theme';
 import { MINIMO_DE_SEGUNDOS, distanciaEnMetros, relojDeCronometro, unidadDeDistancia } from '@/lib/entrenoLibre';
 import { guardaEntrenoLibre } from '@/lib/entrenoLibreApi';
 import { nombreDelDeporte } from '@/lib/metricas/deportes';
-import { enVivo, textoDeRitmo, trazoDeRuta } from '@/lib/ubicacion';
-import { MosaicoDeDeporte } from '@/features/metricas/Piezas';
-import { Fila, Grupo, Pastilla, Segmentado } from '@/components/ui';
-import { useSenalGps } from './useEntrenoLibre';
-import { botonBlancoGrande, botonGrande } from './estilosLibre';
-import IconoDeActividad from './IconoDeActividad';
-import { BotonDeMantener } from '@/features/training/PantallasDelEntreno';
+import { muestraEnPantallaBloqueada, quitaDePantallaBloqueada } from '@/lib/pantallaBloqueada';
+import { enviaAlReloj, terminaEnReloj } from '@/lib/relojApple';
+import { useBarraDeEstadoClara } from '@/lib/barraDeEstado';
+import { AvisoDeCorta, HojaDeAbajo, NumeroGrande, Pulso, TituloDePausa } from './PiezasDeCarrera';
+import { C, redondo, usePulsoDelReloj } from './carrera';
 
-/* LA PANTALLA DEL CRONÓMETRO (entreno libre): el tiempo grande, «Pausar» y «Mantén para terminar» (terminar es mantener el botón). Al terminar pregunta la distancia (se puede dejar vacía) y guarda. Cerrar la hoja NO termina el
-   entreno: el cronómetro sigue (vive en `useCronometroLibre`) y Home lo muestra como «Entreno en curso». Ver `lib/entrenoLibre.js`.
-   CON GPS (reestructura visual, 15 oct 2026; Andrés: «dejarlo listo para cuando la app descargable esté»): correr, caminar y bici pasan antes por «Antes de salir»
-   (la señal del GPS y «Empezar»); corriendo se ven distancia y ritmo, o la ruta dibujada («Datos | Ruta»), y los kilómetros que van. Al terminar, la distancia ya la midió
-   el GPS: no se pregunta. La fuente de los puntos es intercambiable (`lib/ubicacion.js`): hoy el navegador, mañana el teléfono o el reloj. */
+/* LA PANTALLA DEL CRONÓMETRO (entreno libre sin mapa: pádel, gimnasio, o una salida «sin GPS»). Desde el 2 nov 2026 es la misma pantalla de números de la carrera
+   (`PantallaDeCarrera`), sin mapa: fondo negro, arriba el nombre de la actividad, al centro el tiempo enorme y, con Apple Watch, el pulso. Abajo «Pausar»; en pausa,
+   «EN PAUSA», «Reanudar» y «Finalizar» (se mantiene), sobre el mismo negro (no hay mapa que teñir). Sin el ícono de cambiar de vista ni la línea.
+   Al finalizar una salida de cardio sin GPS pregunta la distancia (se puede dejar vacía) y guarda; con menos de 30 s, «… demasiado corta». Cerrar NO termina el
+   entreno: el cronómetro sigue (vive en `useCronometroLibre`) y Home lo muestra como «Entreno en curso». Ver `lib/entrenoLibre.js`. */
 
-export default function PantallaDelCronometro({ userId, crono, pendiente = null, alEmpezar, alMinimizar, alGuardado }) {
-  const { cronometro, segundos, muestras } = crono;
-  const [fase, setFase] = useState('corre'); // corre | distancia | muy_corto | guardando
+export default function PantallaDelCronometro({ userId, crono, alMinimizar, alGuardado }) {
+  const { cronometro, segundos } = crono;
+  const [fase, setFase] = useState('corre'); // corre | distancia | muy_corto
+  const [guardando, setGuardando] = useState(false);
   const [distancia, setDistancia] = useState('');
   const [error, setError] = useState(null);
-  const [vista, setVista] = useState('datos');
-  const deporte = pendiente ?? cronometro?.deporte ?? 'correr';
-  // La actividad que eligió (`lib/actividades.js`): su nombre e ícono. Una propia sin mapa no pide distancia.
+  const deporte = cronometro?.deporte ?? 'otro';
+  // La actividad que eligió (`lib/actividades.js`): su nombre. Una propia sin mapa no pide distancia.
   const actividad = cronometro?.actividad ?? null;
   const nombre = actividad?.nombre ?? nombreDelDeporte(deporte);
   const unidad = actividad && actividad.id !== deporte && !actividad.gps ? null : unidadDeDistancia(deporte);
   const pausado = cronometro?.pausadoEn != null;
-  const conGps = !pendiente && !!cronometro?.gps;
-  const vivo = useMemo(() => (conGps ? enVivo(muestras) : null), [conGps, muestras]);
-  const senal = useSenalGps(!!pendiente);
   const pregunta = useConfirmacion();
+  const pulso = usePulsoDelReloj(!!cronometro);
+  useBarraDeEstadoClara(true);
 
-  const terminar = () => {
+  /* El Apple Watch (mide el pulso con su sesión de entreno) y la pantalla bloqueada: el nombre y el tiempo. Se manda al empezar, al pausar y al reanudar; el
+     tiempo lo cuenta el teléfono solo, desde la hora de inicio fija. */
+  const vivos = useRef({});
+  useEffect(() => { vivos.current = { segundos, cronometro }; });
+  const hay = !!cronometro;
+  useEffect(() => {
+    if (!cronometro) return;
+    const v = vivos.current;
+    const datos = {
+      nombre, titulo: nombre, tipo: pausado ? 'pausa' : 'cardio', detalle: pausado ? 'En pausa' : '',
+      ...(pausado ? { transcurridoS: v.segundos } : { inicioMs: cronometro.inicio + (cronometro.pausas ?? 0) }),
+    };
+    muestraEnPantallaBloqueada(datos);
+    enviaAlReloj({ ...datos, deporte });
+    // Solo al empezar, pausar o reanudar (el resto cambia cada segundo).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hay, pausado]);
+  useEffect(() => () => { quitaDePantallaBloqueada(); terminaEnReloj(); }, []);
+
+  async function guardar(texto) {
+    const t = crono.termina();
+    if (!t) return;
+    setGuardando(true);
+    setError(null);
+    try {
+      const fila = await guardaEntrenoLibre({
+        atletaId: userId, deporte: t.deporte, inicioMs: t.inicioMs, duracionS: t.duracionS, distanciaM: unidad ? distanciaEnMetros(texto, t.deporte) : null, muestras: t.muestras, rutaSilenciosa: !!t.rutaSilenciosa,
+        titulo: t.actividad?.nombre ?? null, llevaDistancia: t.actividad ? (!!t.actividad.gps || !!unidad) : null,
+      });
+      crono.descarta();
+      alGuardado(fila, { muestras: t.muestras, actividad: t.actividad });
+    } catch (e) {
+      setError(e?.message ?? 'No se pudo guardar. Revisa tu conexión e inténtalo otra vez.');
+      setGuardando(false);
+    }
+  }
+
+  const finaliza = () => {
     const t = crono.termina();
     if (!t) return;
     if (t.duracionS < MINIMO_DE_SEGUNDOS) { setFase('muy_corto'); return; }
-    // Con lo que midió el GPS ya no se pregunta la distancia; si casi no midió (sin señal), se pregunta como siempre.
-    if (conGps && (vivo?.distanciaM ?? 0) >= 100) { guardar(null); return; }
     if (unidad) setFase('distancia'); else guardar(null);
   };
 
@@ -54,147 +86,55 @@ export default function PantallaDelCronometro({ userId, crono, pendiente = null,
     alMinimizar();
   };
 
-  async function guardar(texto) {
-    const t = crono.termina();
-    if (!t) return;
-    setFase('guardando');
-    setError(null);
-    try {
-      const fila = await guardaEntrenoLibre({
-        atletaId: userId, deporte: t.deporte, inicioMs: t.inicioMs, duracionS: t.duracionS, distanciaM: unidad ? distanciaEnMetros(texto, t.deporte) : null, muestras: t.muestras, rutaSilenciosa: !!t.rutaSilenciosa,
-        titulo: t.actividad?.nombre ?? null, llevaDistancia: t.actividad ? (!!t.actividad.gps || !!unidad) : null,
-      });
-      crono.descarta();
-      alGuardado(fila, { muestras: t.muestras, actividad: t.actividad });
-    } catch (e) {
-      setError(e?.message ?? 'No se pudo guardar. Revisa tu conexión e inténtalo otra vez.');
-      setFase(unidad ? 'distancia' : 'corre');
-    }
-  }
+  const botonDeLaForma = (fondo, color = '#fff') => ({ width: '100%', minHeight: 54, borderRadius: 99, border: 'none', background: fondo, color, fontFamily: FONT, fontSize: 16, fontWeight: 800, cursor: 'pointer', touchAction: 'manipulation' });
 
-  if (pendiente) {
-    const lista = senal === 'lista';
-    const textoSenal = { lista: 'GPS listo', buscando: 'Buscando señal…', negado: 'Sin permiso de ubicación', sin_senal: 'Sin señal de GPS', no_hay: 'Este navegador no tiene GPS' }[senal];
-    return (
-      <HojaFlotante titulo="Antes de salir" onCerrar={alMinimizar}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, padding: '18px 0 8px', fontFamily: FONT }}>
-          <MosaicoDeDeporte deporte={deporte} size={64} />
-          <div style={{ fontSize: 26, fontWeight: 800, color: LT.text, letterSpacing: -0.4 }}>{nombreDelDeporte(deporte)}</div>
-          <div role="status" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 99, background: lista ? KP.mintSoft : UI.relleno, color: lista ? LT.mint : LT.text2, fontSize: 15, fontWeight: 700 }}>
-            {senal === 'buscando' ? <Loader2 size={16} className="spin" /> : <MapPin size={16} />} {textoSenal}
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
-            {/* Se puede salir sin esperar la señal: los puntos imprecisos del principio no cuentan (ver `agregaPunto`), así que no ensucian la distancia. */}
-            <button type="button" onClick={() => alEmpezar({ gps: senal !== 'no_hay' && senal !== 'negado' })} className="kp-press" style={botonGrande()}>
-              <Play size={20} fill="#fff" /> Empezar
-            </button>
-            {senal !== 'no_hay' && senal !== 'negado' && (
-              <button type="button" onClick={() => alEmpezar({ gps: false })} className="kp-press" style={botonBlancoGrande()}>Sin GPS</button>
-            )}
-          </div>
-        </div>
-      </HojaFlotante>
-    );
-  }
-
-  return (
-    <HojaFlotante titulo={nombre} onCerrar={alMinimizar}>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 22, padding: '18px 0 8px', fontFamily: FONT }}>
-        {!conGps && (actividad?.icono ? <IconoDeActividad actividad={actividad} size={64} /> : <MosaicoDeDeporte deporte={deporte} size={64} />)}
-
-        {(fase === 'corre' || fase === 'guardando') && (
-          <>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 76, fontWeight: 800, letterSpacing: -2, color: pausado ? LT.text3 : LT.text, lineHeight: 1, ...NUM_STYLE }} role="timer" aria-label="Tiempo del entreno">{relojDeCronometro(segundos)}</div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: LT.warning, marginTop: 8, minHeight: 18 }}>{pausado ? (cronometro?.automatica ? 'Pausa automática' : 'En pausa') : ''}</div>
-            </div>
-            {conGps && <EnVivo deporte={deporte} vivo={vivo} muestras={muestras} vista={vista} setVista={setVista} />}
-            {error && <div role="alert" style={{ padding: '9px 12px', borderRadius: 12, background: '#FDECEC', color: LT.danger, fontSize: 14, fontWeight: 700, width: '100%' }}>{error}</div>}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
-              <button type="button" onClick={pausado ? crono.reanuda : crono.pausa} disabled={fase === 'guardando'} className="kp-press" style={botonBlancoGrande(fase === 'guardando')}>
-                {pausado ? <><Play size={20} /> Seguir</> : <><Pause size={20} /> Pausar</>}
-              </button>
-              {/* Terminar es MANTENER (botones de la sesión, 29 oct 2026): un toque sin querer no cierra el entreno. */}
-              <BotonDeMantener onTermina={terminar} disabled={fase === 'guardando'} texto={fase === 'guardando' ? 'Guardando…' : 'Mantén para terminar'} alto={56} radio={UI.rBoton} tamano={17} sombra="none" />
-            </div>
-          </>
-        )}
-
-        {fase === 'distancia' && (
-          <form
-            onSubmit={(e) => { e.preventDefault(); guardar(distancia); }}
-            style={{ display: 'flex', flexDirection: 'column', gap: 16, width: '100%' }}
-          >
-            <div style={{ textAlign: 'center', fontSize: 22, fontWeight: 800, color: LT.text }}>¿Cuánto fue?</div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10, background: UI.relleno, border: 'none', borderRadius: 18, padding: '0 18px' }}>
-              <input
-                value={distancia} onChange={(e) => setDistancia(e.target.value)} inputMode="decimal" autoFocus placeholder="0" aria-label={`Distancia en ${unidad === 'm' ? 'metros' : 'kilómetros'}`}
-                style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 34, fontWeight: 800, color: LT.text, padding: '14px 0', ...NUM_STYLE }}
-              />
-              <span style={{ fontSize: 20, fontWeight: 800, color: LT.text2 }}>{unidad}</span>
-            </label>
-            {error && <div role="alert" style={{ padding: '9px 12px', borderRadius: 12, background: '#FDECEC', color: LT.danger, fontSize: 14, fontWeight: 700 }}>{error}</div>}
-            <button type="submit" className="kp-press" style={botonGrande()}>Guardar</button>
-            <button type="button" onClick={() => guardar(null)} className="kp-press" style={botonBlancoGrande()}>Sin distancia</button>
-            <button type="button" onClick={descartar} className="kp-press" style={botonBlancoGrande()}>Descartar entreno</button>
-          </form>
-        )}
-
-        {fase === 'muy_corto' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, width: '100%', textAlign: 'center' }}>
-            <div style={{ fontSize: 19, fontWeight: 800, color: LT.text }}>Fue muy corto para guardarlo</div>
-            <button type="button" onClick={() => { if (pausado) crono.reanuda(); setFase('corre'); }} className="kp-press" style={botonGrande()}>Seguir entrenando</button>
-            <button type="button" onClick={() => { crono.descarta(); alMinimizar(); }} className="kp-press" style={botonBlancoGrande()}>Descartar</button>
-          </div>
-        )}
+  return createPortal(
+    <div role="dialog" aria-modal="true" aria-label={nombre} style={{ position: 'fixed', inset: 0, zIndex: 3200, background: C.negro, color: C.texto, fontFamily: FONT, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <button type="button" onClick={alMinimizar} aria-label="Minimizar" style={{ ...redondo, position: 'absolute', zIndex: 3, top: 'calc(14px + env(safe-area-inset-top))', left: 16 }}><ChevronDown size={22} /></button>
+      {/* Arriba: el nombre de la actividad; en pausa, «EN PAUSA». */}
+      <div style={{ minHeight: 44, margin: 'calc(14px + env(safe-area-inset-top)) 64px 0', display: 'grid', placeItems: 'center', textAlign: 'center' }}>
+        {pausado && fase === 'corre'
+          ? <TituloDePausa automatica={!!cronometro?.automatica} />
+          : <div style={{ fontSize: 19, fontWeight: 800, letterSpacing: -0.2, overflowWrap: 'anywhere' }}>{nombre}</div>}
       </div>
-    </HojaFlotante>
-  );
-}
 
-/** Lo que mide el GPS mientras corre: «Datos» (distancia y ritmo; en bici, velocidad) o «Ruta» (la ruta dibujada), y los kilómetros que van. */
-function EnVivo({ deporte, vivo, muestras, vista, setVista }) {
-  const km = (vivo?.distanciaM ?? 0) / 1000;
-  const enBici = deporte === 'bici';
-  const segundos = muestras.length ? muestras[muestras.length - 1].t : 0;
-  const velocidad = segundos > 0 && km > 0 ? (km / (segundos / 3600)).toFixed(1) : '—';
-  const trazo = vista === 'ruta' ? trazoDeRuta(muestras, { ancho: 320, alto: 220, margen: 22 }) : null;
-  return (
-    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <Segmentado etiqueta="Ver" valor={vista} onCambio={setVista} opciones={[{ valor: 'datos', texto: 'Datos' }, { valor: 'ruta', texto: 'Ruta' }]} />
-      {vista === 'datos' ? (
-        <div style={{ display: 'flex', gap: 10 }}>
-          <Dato valor={km.toFixed(2)} unidad="km" />
-          {enBici ? <Dato valor={velocidad} unidad="km/h" /> : <Dato valor={textoDeRitmo(vivo?.ritmoSKm)} unidad="/km" />}
-        </div>
+      {fase === 'distancia' ? (
+        <form
+          onSubmit={(e) => { e.preventDefault(); guardar(distancia); }}
+          style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 14, padding: '16px 18px calc(18px + env(safe-area-inset-bottom))' }}
+        >
+          <div style={{ textAlign: 'center', fontSize: 22, fontWeight: 800 }}>¿Cuánto fue?</div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.hoja, borderRadius: 18, padding: '0 18px' }}>
+            <input
+              value={distancia} onChange={(e) => setDistancia(e.target.value)} inputMode="decimal" autoFocus placeholder="0" aria-label={`Distancia en ${unidad === 'm' ? 'metros' : 'kilómetros'}`}
+              style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 34, fontWeight: 800, color: C.texto, padding: '14px 0', ...NUM_STYLE }}
+            />
+            <span style={{ fontSize: 20, fontWeight: 800, color: C.gris }}>{unidad}</span>
+          </label>
+          {error && <div role="alert" style={{ padding: '10px 12px', borderRadius: 14, background: 'rgba(255,77,106,0.16)', color: '#FFB3C0', fontSize: 14, fontWeight: 600 }}>{error}</div>}
+          <button type="submit" disabled={guardando} style={botonDeLaForma(C.azul)}>{guardando ? 'Guardando…' : 'Guardar'}</button>
+          <button type="button" disabled={guardando} onClick={() => guardar(null)} style={botonDeLaForma(C.hoja)}>Sin distancia</button>
+          <button type="button" disabled={guardando} onClick={descartar} style={botonDeLaForma('transparent', C.gris)}>Descartar entreno</button>
+        </form>
       ) : (
-        <div style={{ position: 'relative', background: '#15171E', borderRadius: UI.rTarjeta, height: 220, overflow: 'hidden' }}>
-          {trazo ? (
-            <svg viewBox="0 0 320 220" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Tu ruta">
-              <path d={trazo.d} fill="none" stroke="#5B8CFF" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
-              <circle cx={trazo.inicio[0]} cy={trazo.inicio[1]} r="6" fill="#fff" />
-              <circle cx={trazo.fin[0]} cy={trazo.fin[1]} r="7" fill={KP.blue} stroke="#fff" strokeWidth="3" />
-            </svg>
-          ) : (
-            <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: 'rgba(255,255,255,0.7)', fontSize: 15, fontWeight: 700 }}>Aún sin ruta</div>
-          )}
-          <div style={{ position: 'absolute', left: 14, bottom: 12 }}><Pastilla>{km.toFixed(2)} km</Pastilla></div>
-        </div>
+        <>
+          {/* En medio, el tiempo enorme y, con Apple Watch, el pulso. */}
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 24, padding: '12px 16px' }}>
+            <NumeroGrande valor={relojDeCronometro(segundos)} color={pausado ? C.gris : C.acento} tamano={segundos >= 3600 ? 80 : 100} rol="timer" etiquetaAccesible="Tiempo del entreno" />
+            <Pulso lpm={pulso} />
+          </div>
+          <HojaDeAbajo pausado={pausado} guardando={guardando} error={error} onPausa={crono.pausa} onReanuda={crono.reanuda} onFinaliza={finaliza} />
+        </>
       )}
-      {vivo?.kms?.length > 0 && (
-        <Grupo titulo="Kilómetros">
-          {vivo.kms.map((k) => <Fila key={k.n} texto={`Km ${k.n}`} valor={textoDeRitmo(k.dur)} valorTono="neutro" />)}
-        </Grupo>
-      )}
-    </div>
-  );
-}
 
-function Dato({ valor, unidad }) {
-  return (
-    <div style={{ flex: 1, minWidth: 0, background: LT.surface, borderRadius: UI.rGrupo, padding: '14px 10px', textAlign: 'center', boxShadow: UI.sombraGrupo }}>
-      <div style={{ fontSize: 34, fontWeight: 800, letterSpacing: -1, color: LT.text, lineHeight: 1.05, ...NUM_STYLE }}>{valor}</div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: LT.text2, marginTop: 4 }}>{unidad}</div>
-    </div>
+      {fase === 'muy_corto' && (
+        <AvisoDeCorta
+          deporte={deporte} actividad={actividad}
+          onDescartar={() => { crono.descarta(); alMinimizar(); }}
+          onSeguir={() => { if (pausado) crono.reanuda(); setFase('corre'); }}
+        />
+      )}
+    </div>,
+    document.body,
   );
 }

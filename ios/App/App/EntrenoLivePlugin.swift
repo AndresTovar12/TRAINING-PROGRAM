@@ -15,11 +15,21 @@ public class EntrenoLivePlugin: CAPPlugin, CAPBridgedPlugin {
     ]
 
     private var actual: Any?
+    private var oyente: NSObjectProtocol?
 
     /// Al abrir la app no puede haber un entreno en marcha: si quedó una tarjeta de antes (la app se cerró a la fuerza), se quita para que no se quede «entrenando» horas.
+    /// Y se escucha el botón redondo de la tarjeta de la carrera (`AccionDeLaTarjeta`): llega a la página como «accion» («pausa» o «reanuda»).
     override public func load() {
+        oyente = NotificationCenter.default.addObserver(forName: avisoDeLaTarjeta, object: nil, queue: .main) { [weak self] aviso in
+            guard let accion = aviso.userInfo?["accion"] as? String else { return }
+            self?.notifyListeners("accion", data: ["accion": accion])
+        }
         guard #available(iOS 16.2, *) else { return }
         Task { for vieja in Activity<EntrenoAtributos>.activities { await vieja.end(nil, dismissalPolicy: .immediate) } }
+    }
+
+    deinit {
+        if let oyente = oyente { NotificationCenter.default.removeObserver(oyente) }
     }
 
     @available(iOS 16.2, *)
@@ -32,7 +42,10 @@ public class EntrenoLivePlugin: CAPPlugin, CAPBridgedPlugin {
             inicioMs: call.getDouble("inicioMs"),
             distancia: call.getString("distancia"),
             ritmo: call.getString("ritmo"),
-            pulso: call.getInt("pulso")
+            pulso: call.getInt("pulso"),
+            simbolo: call.getString("simbolo"),
+            etiquetaRitmo: call.getString("etiquetaRitmo"),
+            transcurridoS: call.getDouble("transcurridoS")
         )
     }
 

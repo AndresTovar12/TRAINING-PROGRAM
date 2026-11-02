@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {
   ANGULO_3D, CENTRO_SIN_DATOS, MAX_PUNTOS_RUTA, MINIMO_ENCUADRE_GRADOS, ZOOM_INICIAL, ZOOM_SIGUE, ZOOM_SIN_DATOS,
-  adelgazaRuta, metrosEntre, rumboDeRuta, diferenciaDeRumbo, suavizaRumbo, claveDeRuta, conTiempoLimite, creaFila, encuadre, inicioDelMapa, planDeEnvio, puntosDeMuestras, ubicacionGuardada, usaMapaNativo,
+  LINEA_CON_BRILLO, adelgazaRuta, capasDeRuta, metrosEntre, rumboDeRuta, diferenciaDeRumbo, suavizaRumbo, claveDeRuta, conTiempoLimite, creaFila, encuadre, inicioDelMapa, planDeEnvio, puntosDeMuestras, ubicacionGuardada, usaMapaNativo,
 } from '../src/lib/mapaNativo.js';
 
 let n = 0;
@@ -83,6 +83,19 @@ await prueba('simulación de 10 segundos con un punto cada 200 ms: a lo más un 
   if (pendiente != null) manda(10000);
   assert.ok(envios <= 12, `envíos: ${envios}`);
   assert.equal(enviados, claveDeRuta(puntos, true), 'al final lo último que se mandó es la ruta completa');
+});
+
+console.log('La línea «con brillo»');
+await prueba('tres capas en orden (halo, borde, línea con degradado y la salida), con la MISMA ruta, en una sola llamada', () => {
+  const ruta = [{ lat: 21.1, lng: -86.8 }, { lat: 21.2, lng: -86.9 }];
+  const [halo, borde, linea] = capasDeRuta(ruta);
+  assert.equal(capasDeRuta(ruta).length, 3);
+  assert.ok([halo, borde, linea].every((c) => c.path === ruta && c.ruta === true), 'las tres llevan la ruta y su margen');
+  assert.deepEqual([halo.strokeWeight, borde.strokeWeight, linea.strokeWeight], [18, 12, 7.5], 'de lo más ancho (abajo) a lo más delgado (arriba)');
+  assert.deepEqual([halo.strokeColor, halo.strokeOpacity], ['#2F55F0', 0.45]);
+  assert.deepEqual([borde.strokeColor, borde.strokeOpacity], ['#0B0C12', 0.9]);
+  assert.deepEqual(linea.gradientColors, [LINEA_CON_BRILLO.linea.salida, LINEA_CON_BRILLO.linea.punta]);
+  assert.ok(linea.startDot && !halo.startDot && !borde.startDot, 'el punto de la salida va solo con la de arriba');
 });
 
 console.log('Tiempo límite, fila y plataforma');

@@ -96,6 +96,7 @@ import MensajesDelAtleta from '@/features/mensajes/MensajesDelAtleta';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { esArranque, guardaLugar, leeLugar } from '@/lib/lugar';
 import { useLugar, useScrollLugar } from '@/lib/useLugar';
+import { BarraDeLaApp } from '@/features/libre/barraDeLaApp';
 
 /* Las pestañas de la app del atleta. Sirve para desconfiar de la que se guardó al refrescar: una pestaña que
    ya no existe (antes había también 'wellness', 'oneRM' y 'science') dejaría la pantalla en blanco.
@@ -1984,7 +1985,7 @@ const BottomNav = ({ active, onChange, conExplorar = true, onRegistrar = null })
     ...(conExplorar ? [{ id: 'explore', label: 'Explorar', icon: Compass }] : []),
   ];
   return (
-    <div style={{
+    <div data-barra-de-la-app style={{
       position: 'fixed', zIndex: 100,
       background: 'rgba(255, 255, 255, 0.92)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
       display: 'flex',
@@ -2630,7 +2631,14 @@ export default function TrainingApp() {
     content = <Suspense fallback={null}><Explorar userId={user?.id} /></Suspense>;
   }
 
+  /* La barra de abajo DENTRO de «listo para empezar» de la carrera (pantalla de carrera, 2 nov 2026: «la barra de abajo se queda»; ver `libre/barraDeLaApp.js`).
+     Tocar otra sección cierra la carrera (y el punto ●) y va a esa sección. */
+  const barraDeLaApp = (cerrarCarrera) => (
+    <BottomNav active={tab} onChange={(id) => { cerrarCarrera?.(); setRegistrando(false); vasA(id); }} conExplorar={conExplorar} onRegistrar={puedeRegistrar ? () => {} : null} />
+  );
+
   return (
+    <BarraDeLaApp.Provider value={barraDeLaApp}>
     <div style={{
       minHeight: 'calc(100svh - var(--aviso-vista, 0px))', background: T.bg, color: T.text,
       fontFamily: FONT, display: esCompu ? 'flex' : 'block',
@@ -2710,5 +2718,6 @@ export default function TrainingApp() {
         />
       )}
     </div>
+    </BarraDeLaApp.Provider>
   );
 }

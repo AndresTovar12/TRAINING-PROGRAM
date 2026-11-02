@@ -247,3 +247,45 @@ El reloj ya no es solo un control remoto. Tiene dos maneras de entrenar:
 - `node scripts/prueba-reloj-webkit.mjs` (9 pasos, no está en `npm run check`): WebKit con perfil de iPhone y el plugin falso (`scripts/qa/reloj-sin-iphone.*`): lo que llegó con la app cerrada pasa a la cola y solo entonces se borra del plugin, sin duplicar, los UUID anotados, «Llegó de tu Apple Watch», «Entreno en curso en tu reloj», el plan como texto y lo que llega con la app abierta.
 - El Swift (reloj y plugin) se revisó con el compilador de esta Mac contra el SDK de macOS, con imitaciones de WatchKit y WatchConnectivity (no hay SDK de watchOS aquí); se compila de verdad en la nube (`ios-testflight.yml`).
 - **Solo con un Apple Watch de verdad** (los 6 pasos de la parte 3.7): el reloj sin el iPhone, las pantallas, la corona, la vibración, el GPS del reloj, la ruta, la ubicación en silencio y su batería, «volver al entreno», `transferUserInfo` con el iPhone lejos y la app cerrada, y nadar.
+
+## 11. La pantalla de carrera (2 nov 2026)
+
+Spec: `docs/superpowers/specs/2026-11-02-pantalla-de-carrera.md`. Maqueta aprobada: artifact WVcKiJ2JhyChJqLwP3bhHD (colores **A**, línea **«Con brillo»**).
+
+### 11.1 Qué se ve
+
+- **Colores (opción A).** Fondo negro puro; tarjeta `#0B0C10`; hoja de abajo `#16171C`; etiquetas `#8A8F9C`. Azul de acción `#2F55F0` («INICIAR», «Pausar», «Reanudar», el corredor, la línea). Acento `#FF4D6A` (el tiempo, el pulso, «Finalizar»). Viven en `features/libre/carrera.js` (`C`).
+- **Antes de salir.** El mapa entero. Brújula arriba a la derecha; tipo de mapa, 2D/3D y centrar en columna a la derecha. «GPS listo» encima de la fila de tres botones: la actividad (abre `ElegirActividad`), «INICIAR» (círculo de 96 px) y «AJUSTES» (pausa automática, tipo de mapa y «Empezar sin GPS»; sin ajustes nuevos). Sin mapa (gimnasio, pádel): la hora en grande y «RELOJ» en lugar de «AJUSTES». La barra de la app se queda: `TrainingApp` la presta por contexto (`features/libre/barraDeLaApp.js`); tocar otra sección cierra la carrera.
+- **Corriendo, los números.** Negro. Arriba el tiempo (40 px, acento). Arriba a la derecha, «achicar» → mapa. En medio, el ritmo y la distancia (100 px; se encogen en pantallas angostas) y, con Apple Watch, «♥ 142 lpm». Abajo, la hoja con «Pausar».
+- **Corriendo, el mapa.** Abajo una columna con 12 px entre cada cosa: los botones del mapa, la tarjeta (ícono, tiempo, «agrandar»; ritmo y distancia; pulso) y la hoja. Los botones se re-acomodan solos con un `ResizeObserver` sobre `[data-mapa-panel]` (`clavePanel`). La vista se recuerda durante esa carrera (`vistaGuardada`, por la hora de inicio).
+- **En pausa** (desde las dos vistas): siempre sobre el mapa, teñido de azul desde arriba (degradado en la página, `TINTE`). «EN PAUSA» en Bricolage Grotesque (la letra de los stickers), 46 px. La tarjeta en gris y «Ritmo promedio (/km)». «Reanudar» (azul) y «Finalizar» (`BotonDeMantener` con `ms={1000}` y `vaciaMs`: fondo `#8A1F33`, borde y relleno `#FF4D6A`). Reanudar regresa a la vista en la que estaba.
+- **Finalizar guarda directo.** Ya no hay resumen antes de guardar: al llenarse «Finalizar» se guarda y sigue la celebración y la página con sus stickers. Con menos de `MINIMO_DE_SEGUNDOS` (30 s): aviso «Carrera demasiado corta» («Caminata…», «Rodada…»), con «Descartar» (no guarda) y «Seguir corriendo» (reanuda).
+- **Sin mapa** (`PantallaDelCronometro`): la misma pantalla de números sin mapa: el nombre arriba, el tiempo enorme en el acento, el pulso, «Pausar»; en pausa «EN PAUSA», «Reanudar» y «Finalizar». Ahora también manda el entreno al Apple Watch (para que mida el pulso) y a la pantalla bloqueada. Una salida de cardio sin GPS sigue preguntando la distancia.
+
+### 11.2 Un solo mapa de principio a fin
+
+El mapa está siempre en el mismo lugar del árbol de `PantallaDeCarrera`: el de «antes de salir» es el mismo que corre y pausa. En la vista de números queda vivo detrás del negro (`oculto`: sin botones), así cambiar de vista o pausar es instantáneo y la cámara sigue al corredor. Al arrancar, mientras no hay puntos, el mapa recibe la última ubicación (`ultimoAqui`) para no regresar a donde abrió.
+
+### 11.3 La línea «con brillo»
+
+Tres capas, de abajo hacia arriba (`LINEA_CON_BRILLO` y `capasDeRuta` en `lib/mapaNativo.js`):
+
+| Capa | Mapa de Apple (parche) | Mapa web (MapLibre) |
+|---|---|---|
+| Halo: azul, 18 px, 45 % | polilínea ancha y translúcida, **sin difuminar** (MapKit no difumina líneas) | `line-blur: 5` |
+| Borde `#0B0C12`, 12 px, 90 % | polilínea | capa `line` |
+| Línea 7.5 px, `#7FA0FF` → `#2F55F0` | `MKGradientPolylineRenderer` | `line-gradient` con `lineMetrics: true` |
+| Punto blanco de la salida | `SalidaDeRuta` (overlay propio, mide lo mismo a cualquier acercamiento) | capa `circle` |
+
+Las tres capas y la salida van en UNA llamada a `addPolylines` y se quitan juntas después (primero las nuevas, luego las viejas): no parpadea. El ritmo de envío no cambió (`adelgazaRuta`, una vez por segundo). Puntas y esquinas redondas. `LineaDeRuta` agranda la caja de cada capa para que lo ancho no se corte en la orilla. La foto del resumen (`Snapshot.swift`) dibuja las capas en el orden del mapa, con el degradado por tramos y la salida. El corredor (`VistaDelCorredor`) pasó al azul de acción.
+
+### 11.4 Pantalla bloqueada
+
+`EntrenoWidget.swift`: si el estado trae `distancia`, se dibuja la tarjeta de la carrera (ícono `simbolo`, el tiempo en `#FF4D6A`, botón redondo; ritmo y distancia con sus etiquetas grises; pulso). En pausa el tiempo va fijo y gris (`transcurridoS`) y la etiqueta es `etiquetaRitmo` («Ritmo promedio (/km)»). El botón redondo es un `LiveActivityIntent` (`AccionDeLaTarjeta`, en `EntrenoLiveActivity.swift`, iOS 17+): iOS lo corre dentro de la app, avisa por `NotificationCenter`, `EntrenoLivePlugin` lo pasa a la página como `accion` y `escuchaPantallaBloqueada` pausa o reanuda. En iOS 16 el botón solo se ve. Los workouts del plan conservan su tarjeta de siempre.
+
+### 11.5 Cómo se probó y qué falta
+
+- `scripts/prueba-mapa-nativo.mjs`: las tres capas en orden, con la misma ruta, y la salida solo en la de arriba.
+- WebKit con perfil de iPhone (SE 375×667 y 430×932), página temporal `qa-carrera.html` / `qa-carrera-nativo.html` (excluidas de git; cronómetro, reloj y guardado falsos; servidor en el 5173 con `--mode production` para que el archivo del mapa deje entrar): nada se encima, ningún número se corta, cada botón recibe su toque (`elementFromPoint`), pausa y regreso desde las dos vistas, «Finalizar» manteniendo guarda y soltarlo antes no, el aviso de 12 s, gimnasio con y sin pulso, y con el puente falso: tres capas en una llamada y 12 px entre los botones del mapa y la tarjeta.
+- El Swift se revisó con `swiftc -typecheck` contra el SDK de macOS con imitaciones (ActivityKit, Capacitor; `AppIntent` en lugar de `LiveActivityIntent`, que no existe en macOS). El parche se probó aplicándolo sobre el paquete recién bajado.
+- **Solo en el iPhone:** la línea de verdad sobre MapKit (halo, borde, degradado, sin parpadeo), la cámara y la brújula con el mapa vivo detrás de los números, el botón de la pantalla bloqueada, el pulso del Apple Watch, y la barra de la app en «antes de salir».

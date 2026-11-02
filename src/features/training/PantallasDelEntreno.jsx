@@ -64,7 +64,8 @@ function BotonGrande({ children, onClick, variante = 'azul', disabled = false })
  * Tiene la cara del «Listo» oscuro (sin la palomita). Sin menú de mantener presionado ni selección de texto (en el iPhone, mantener un botón los abre), y `touch-action: none` para que el
  * dedo quieto no se vuelva un gesto de la página. `fondo`, `relleno`, `alto`, `radio` y `tamano` (de la letra) lo adaptan a las pantallas oscuras de la carrera; `estilo`, a la fila donde va.
  */
-export function BotonDeMantener({ onTermina, etiqueta = null, texto = 'Mantén para terminar', fondo = '#15171E', relleno = KP.blue, alto = 60, radio = 18, tamano = 18, sombra = '0 10px 24px rgba(17,19,24,0.22)', disabled = false, estilo = null }) {
+/* `ms`: cuánto hay que mantenerlo. `vaciaMs`: si se suelta antes, el relleno regresa en ese tiempo (0: de golpe). `texto` puede llevar ícono (un nodo). */
+export function BotonDeMantener({ onTermina, etiqueta = null, texto = 'Mantén para terminar', fondo = '#15171E', relleno = KP.blue, alto = 60, radio = 18, tamano = 18, sombra = '0 10px 24px rgba(17,19,24,0.22)', disabled = false, estilo = null, ms = 900, vaciaMs = 0 }) {
   const { avisa } = useAviso();
   const [llena, setLlena] = useState(false);
   const reloj = useRef(null);
@@ -83,7 +84,7 @@ export function BotonDeMantener({ onTermina, etiqueta = null, texto = 'Mantén p
       termino.current();
       // Si la pantalla sigue aquí (algo salió sin terminar), el botón vuelve a estar listo.
       setLlena(false);
-    }, 900);
+    }, ms);
   };
   const suelta = (e) => {
     if (!desde.current) return;
@@ -107,8 +108,8 @@ export function BotonDeMantener({ onTermina, etiqueta = null, texto = 'Mantén p
         opacity: disabled ? 0.6 : 1, ...estilo,
       }}
     >
-      <span aria-hidden="true" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: llena ? '100%' : '0%', background: relleno, transition: llena ? 'width 900ms linear' : 'none', pointerEvents: 'none' }} />
-      <span style={{ position: 'relative', pointerEvents: 'none' }}>{texto}</span>
+      <span aria-hidden="true" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: llena ? '100%' : '0%', background: relleno, transition: llena ? `width ${ms}ms linear` : (vaciaMs ? `width ${vaciaMs}ms ease-out` : 'none'), pointerEvents: 'none' }} />
+      <span style={{ position: 'relative', pointerEvents: 'none', display: 'inline-flex', alignItems: 'center', gap: 8 }}>{texto}</span>
     </button>
   );
 }
@@ -872,7 +873,7 @@ export function PantallaDeDescanso({ descanso, siguiente, video, sonido, puedeAn
 /* ------------------------------------------------------------------ */
 
 // La hoja que sube desde abajo, como la de «Tu resultado» del reloj.
-function Hoja({ etiqueta, titulo, subtitulo, icono, conCierre = false, onCerrar, children }) {
+export function Hoja({ etiqueta, titulo, subtitulo, icono, conCierre = false, onCerrar, children }) {
   return (
     <div
       onMouseDown={onCerrar}
