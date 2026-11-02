@@ -58,13 +58,72 @@ export function abreCopia(copia) {
   return { enLaBase: copia.enLaBase, store: pendiente ? ponEncima(copia.enLaBase, pendiente) : copia.enLaBase, pendiente, en };
 }
 
+/* EL MARCADOR QUE LA APP MOVIÓ SOLA NO SE IMPONE (2 nov 2026). Al atleta Andrés la app le guardó «Fase 1 · Semana 1» ('nuevo') encima de «Fase 4 · Semana 6»:
+   un marcador sacado de una pantalla que todavía no tenía el estado (ver `scripts/prueba-marcador-al-abrir.mjs`). Dos reglas, las dos también en la base
+   (el disparador `marcador_nuevo_no_pisa`, la primera):
+     · 'nuevo' NUNCA PISA UN MARCADOR CON FASE. 'nuevo' quiere decir «no había marcador»: si la base tiene uno con fase (y no es otro 'nuevo'), el que dice
+       'nuevo' salió de un estado a medias. Se queda el de la base. Un plan de verdad nuevo no usa 'nuevo' sino 'plan-nuevo'.
+     · LO QUE LA APP MOVIÓ SOLA NO SE PONE ENCIMA DE UNA BASE QUE CAMBIÓ. El marcador que la app adelanta (calendario, plan editado, primer marcador) se
+       puede volver a sacar de la base en cualquier momento. Si al releer la base su marcador ya no es el que se conocía (lo movió su coach, otro aparato o
+       a mano en la base), gana el de la base: el pendiente salió de uno viejo. Lo que la persona movió a mano ('atleta') y lo demás sí se pone encima. */
+const MOVIDO_SOLO = new Set(['nuevo', 'calendario', 'reparado', 'plan-nuevo']);
+const conFase = (m) => esObjeto(m) && !esBorrar(m) && typeof m.phaseId === 'string' && m.phaseId.length > 0;
+const igual = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+/** ¿Este valor de un marcador pisaría el de la base sin que nadie lo haya querido? (la primera regla de arriba; un marcador borrado cuenta igual). */
+function pisaElDeLaBase(valor, enLaBase) {
+  if (!conFase(enLaBase) || enLaBase.motivo === 'nuevo') return false;
+  return esBorrar(valor) || !esObjeto(valor) || valor.motivo === 'nuevo' || !valor.phaseId;
+}
+
+const movidoSolo = (valor) => esObjeto(valor) && !esBorrar(valor) && (!valor.motivo || MOVIDO_SOLO.has(valor.motivo));
+
+/** ¿El parche trae un marcador que la app movió sola? (antes de subirlo se relee la base: ver `AppStateContext`). */
+export const seMovioSolo = (parche) => esObjeto(parche) && Object.entries(parche).some(([llave, valor]) => esMarcador(llave) && movidoSolo(valor));
+
 /**
- * Lo que se ve al releer la base: la base nueva (`fresco`) con lo que la persona cambió encima de la vieja y aún no se subía.
- * `enLaBaseVieja` y `storeActual` tienen que ser del mismo momento (ver `AppStateContext`, «SIEMPRE JUNTOS»).
+ * Antes de subir un parche: quita los marcadores que pisarían el de la base (primera regla de arriba). `{ parche, devueltos }`: `parche` sin ellos (`undefined`
+ * si no queda nada) y `devueltos` con el marcador de la base de cada llave quitada, para que la pantalla vuelva a él.
+ */
+export function noPisaElMarcador(enLaBase, parche) {
+  if (!esObjeto(parche)) return { parche, devueltos: {} };
+  const base = esObjeto(enLaBase) ? enLaBase : {};
+  const devueltos = {};
+  const limpio = {};
+  for (const [llave, valor] of Object.entries(parche)) {
+    if (esMarcador(llave) && pisaElDeLaBase(valor, base[llave])) devueltos[llave] = base[llave];
+    else limpio[llave] = valor;
+  }
+  return { parche: Object.keys(limpio).length ? limpio : undefined, devueltos };
+}
+
+/**
+ * Lo pendiente que sí manda al ponerlo encima de una base recién leída (las dos reglas de arriba). `baseVieja`: la base contra la que se sacó lo pendiente
+ * (`null` si no se sabe: entonces lo que la app movió sola no manda nunca). `undefined` si no queda nada.
+ */
+export function pendienteQueManda(pendiente, baseVieja, baseNueva) {
+  if (!esObjeto(pendiente)) return undefined;
+  const vieja = esObjeto(baseVieja) ? baseVieja : null;
+  const nueva = esObjeto(baseNueva) ? baseNueva : {};
+  const queda = {};
+  for (const [llave, valor] of Object.entries(pendiente)) {
+    if (esMarcador(llave)) {
+      if (pisaElDeLaBase(valor, nueva[llave])) continue;
+      if (movidoSolo(valor) && (!vieja || !igual(vieja[llave], nueva[llave]))) continue;
+    }
+    queda[llave] = valor;
+  }
+  return Object.keys(queda).length ? queda : undefined;
+}
+
+/**
+ * Lo que se ve al releer la base: la base nueva (`fresco`) con lo que la persona cambió encima de la vieja y aún no se subía (menos el marcador que no
+ * manda, ver `pendienteQueManda`). `enLaBaseVieja` y `storeActual` tienen que ser del mismo momento (ver `AppStateContext`, «SIEMPRE JUNTOS»).
  */
 export function rebasa(fresco, enLaBaseVieja, storeActual) {
   const base = esObjeto(fresco) ? fresco : {};
-  const pendiente = diferencia(esObjeto(enLaBaseVieja) ? enLaBaseVieja : {}, esObjeto(storeActual) ? storeActual : {});
+  const vieja = esObjeto(enLaBaseVieja) ? enLaBaseVieja : {};
+  const pendiente = pendienteQueManda(diferencia(vieja, esObjeto(storeActual) ? storeActual : {}), vieja, base);
   return pendiente === undefined ? base : ponEncima(base, pendiente);
 }
 
