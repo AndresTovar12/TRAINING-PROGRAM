@@ -60,19 +60,53 @@ const SEGUNDOS_PARA_PAUSAR = 2;
 const SEGUNDOS_PARA_REANUDAR = 2;
 const SIN_SENAL_S = 5;
 const HUECO_MAXIMO_S = 2;
+/* MALA GEOMETRÍA (bug del 2 nov 2026: entre edificios el iPhone daba ~0.9 m/s quieto y la pausa nunca entraba). Con más error que `ERROR_GRANDE` m, una lectura
+   también cuenta como «lento» si en los últimos `VENTANA_S` s la carrera avanzó menos de `AVANCE_MINIMO` m (`d`: los metros que ya contó la ruta). Con más de 12 m
+   de error, la velocidad no cuenta para reanudar: hace falta avanzar de verdad, segundo a segundo, a `VELOCIDAD_CON_ERROR` m/s o más (o el umbral de la bici). */
+const ERROR_GRANDE = 15;
+const ERROR_PARA_VELOCIDAD = 12;
+const VENTANA_S = 5;
+const AVANCE_MINIMO = 3;
+const VELOCIDAD_CON_ERROR = 1.2;
+const metros = (a, b) => {
+  const rad = Math.PI / 180;
+  const x = (b.lon - a.lon) * rad * Math.cos(((a.lat + b.lat) / 2) * rad);
+  const y = (b.lat - a.lat) * rad;
+  return Math.sqrt(x * x + y * y) * 6371000;
+};
 
 /**
- * ¿Hay que pausar o reanudar? `lecturas`: las últimas del GPS, `{ t, vel, pre }` (t en segundos de reloj). `estado`: 'corriendo' o 'pausa' (una pausa
- * AUTOMÁTICA: la manual no se reanuda sola). Devuelve `{ accion: 'pausa' | 'reanuda', desde }` (desde: el segundo en que empezó a ir lento o rápido) o `null`.
+ * ¿Hay que pausar o reanudar? `lecturas`: las últimas del GPS, `{ t, vel, pre, d?, lat?, lon? }` (t en segundos de reloj; `d`: metros que llevaba contados la
+ * ruta). `estado`: 'corriendo' o 'pausa' (una pausa AUTOMÁTICA: la manual no se reanuda sola). Devuelve `{ accion: 'pausa' | 'reanuda', desde }` (desde: el segundo
+ * en que empezó a ir lento o rápido) o `null`.
+ * EL SENSOR MANDA (2 nov 2026). `sensor`: `{ v: 'quieto' | 'mueve', desde (s) }` de `veredicto` (`lib/sensorDeMovimiento.js`), o `null`. 'quieto' pausa
+ * (desde que se quedó quieto); 'mueve' no deja pausar y reanuda solo si lo que dijo es más nuevo que la pausa (`pausadoEnS`). Con `null`, el GPS como siempre.
  */
-export function decidePausaAutomatica(lecturas, estado, deporte, ahoraS = Date.now() / 1000) {
+export function decidePausaAutomatica(lecturas, estado, deporte, ahoraS = Date.now() / 1000, { sensor = null, pausadoEnS = null } = {}) {
   const u = UMBRALES_DE_PAUSA[deporte];
   if (!u) return null;
+  const pausando = estado === 'corriendo';
+  if (sensor?.v === 'quieto') return pausando ? { accion: 'pausa', desde: sensor.desde } : null;
+  if (sensor?.v === 'mueve') return !pausando && pausadoEnS != null && sensor.desde > pausadoEnS ? { accion: 'reanuda', desde: sensor.desde } : null;
   const buenas = (lecturas ?? []).filter((x) => typeof x?.vel === 'number' && typeof x.pre === 'number' && x.pre <= 20 && typeof x.t === 'number');
   const ultima = buenas.at(-1);
   if (!ultima || ahoraS - ultima.t > SIN_SENAL_S) return null;
-  const pausando = estado === 'corriendo';
-  const cumple = pausando ? (x) => x.vel < u.pausa : (x) => x.vel > u.reanuda;
+  // La lectura de hace `VENTANA_S` s (o más) antes de `x`: contra ella se mide cuánto avanzó.
+  const antesDe = (x, conQue) => { for (let i = buenas.length - 1; i >= 0; i -= 1) if (x.t - buenas[i].t >= VENTANA_S && conQue(buenas[i])) return buenas[i]; return null; };
+  const lento = (x) => {
+    if (x.vel < u.pausa) return true;
+    if (!(x.pre > ERROR_GRANDE) || typeof x.d !== 'number') return false;
+    const y = antesDe(x, (z) => typeof z.d === 'number');
+    return !!y && x.d - y.d < AVANCE_MINIMO;
+  };
+  // Con mucho error: la MEDIANA de los pasos de cada segundo en los últimos 5 s (un brinco de un solo segundo, cuando el GPS regresa, no la mueve).
+  const rapido = (x) => {
+    if (x.pre <= ERROR_PARA_VELOCIDAD) return x.vel > u.reanuda;
+    const ventana = buenas.filter((z) => typeof z.lat === 'number' && z.t <= x.t && x.t - z.t <= VENTANA_S);
+    const pasos = ventana.slice(1).map((z, i) => metros(ventana[i], z) / Math.max(1, z.t - ventana[i].t)).sort((a, b) => a - b);
+    return pasos.length >= VENTANA_S - 1 && pasos[Math.floor(pasos.length / 2)] >= Math.max(VELOCIDAD_CON_ERROR, u.reanuda);
+  };
+  const cumple = pausando ? lento : rapido;
   const necesita = pausando ? SEGUNDOS_PARA_PAUSAR : SEGUNDOS_PARA_REANUDAR;
   // De la última hacia atrás, mientras cumpla y sin huecos de señal: ¿cuánto tiempo seguido lleva así?
   let desde = null;

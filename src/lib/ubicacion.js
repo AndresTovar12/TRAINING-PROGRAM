@@ -25,6 +25,10 @@ export const VELOCIDAD_PARADO = 0.5;
 export const VELOCIDAD_EN_MARCHA = 1;
 /** Cuántos puntos buenos SEGUIDOS (uno por segundo) tienen que salirse del radio del ancla para que cuente como moverse. */
 export const PUNTOS_PARA_MOVERSE = 3;
+/** Con más error que esto (m), la velocidad que da el iPhone no cuenta (bug del 2 nov 2026: entre edificios daba ~0.9 m/s quieto y la posición brincaba con ella). */
+export const PRECISION_PARA_VELOCIDAD = 12;
+/** Con ese error, salir de parado (sin sensor) pide además alejarse esto (m) más allá del radio del ancla. */
+const MARGEN_SIN_VELOCIDAD = 5;
 /** Sin la velocidad del iPhone, se mide con la distancia de estos últimos segundos (menos de `VELOCIDAD_EN_MARCHA` en la ventana es parado). */
 const VENTANA_SIN_VELOCIDAD = 5;
 /** Cada cuánto (segundos) se guarda un punto: uno por segundo, cada uno que da el GPS. Con uno cada 2 s la cámara del mapa avanzaba a saltos. */
@@ -98,8 +102,15 @@ const firme = (punto, segundo) => {
  *   · YA EN MOVIMIENTO, cada punto con señales de moverse cuenta, segundo a segundo (la cámara y el punto del mapa no avanzan a saltos); el primero sin ellas
  *     lo deja parado.
  * `vel` es la velocidad que da el GPS (m/s). Se prueba con `scripts/prueba-ruta.mjs`.
+ *
+ * EL SENSOR DE MOVIMIENTO MANDA (2 nov 2026, `lib/sensorDeMovimiento.js`). `sensor`: 'quieto' | 'mueve' | `null`.
+ *   · 'quieto': el punto entra como parado (`q: 1`) aunque el GPS diga otra cosa.
+ *   · 'mueve': saliendo de parado no hace falta la ventana de 3 s; basta una señal del GPS (señales de moverse o fuera del radio del ancla).
+ *   · `null` (la web, sin permiso, o el sensor no sabe): las reglas del GPS de arriba, más estrictas con error de más de `PRECISION_PARA_VELOCIDAD` m: la
+ *     velocidad del iPhone no cuenta (se usa la distancia de los últimos 5 s, ≥ 1 m/s) y salir de parado pide alejarse `MARGEN_SIN_VELOCIDAD` m más allá del radio.
+ * Un punto parado guarda `vel: 0` (su velocidad de verdad en `vq`): el ritmo de ahora dice «parado» aunque el iPhone diga 0.9 m/s.
  */
-export function agregaPunto(muestras, punto, t) {
+export function agregaPunto(muestras, punto, t, sensor = null) {
   if (!punto || typeof punto.lat !== 'number' || typeof punto.lon !== 'number') return muestras;
   const ultima = muestras[muestras.length - 1];
   if (!(punto.precision <= (ultima ? PRECISION_CON_SENAL : PRECISION_MAXIMA))) return muestras;
@@ -108,6 +119,8 @@ export function agregaPunto(muestras, punto, t) {
   const segundo = Math.floor(t);
   if (ultima && segundo - ultima.t < CADA) return muestras;
   const velGps = typeof punto.vel === 'number' && punto.vel >= 0 ? punto.vel : null;
+  // Con mucho error, la velocidad del iPhone no cuenta para decidir si te mueves (sí se guarda, para el ritmo de quien sí va corriendo).
+  const velUtil = velGps != null && punto.precision <= PRECISION_PARA_VELOCIDAD ? velGps : null;
 
   let previas = muestras;
   let m;
@@ -119,34 +132,44 @@ export function agregaPunto(muestras, punto, t) {
     const anterior = realDe(ultima);
     const paso = metrosEntrePuntos(anterior, punto) / Math.max(1, segundo - ultima.t);
     let enMarcha;
-    if (velGps != null) {
-      enMarcha = velGps >= VELOCIDAD_PARADO && paso >= VELOCIDAD_PARADO;
+    if (velUtil != null) {
+      enMarcha = velUtil >= VELOCIDAD_PARADO && paso >= VELOCIDAD_PARADO;
     } else {
       const desde = muestras.find((x) => segundo - x.t <= VENTANA_SIN_VELOCIDAD) ?? ultima;
       enMarcha = paso >= VELOCIDAD_PARADO && metrosEntrePuntos(realDe(desde), punto) / Math.max(1, segundo - desde.t) >= VELOCIDAD_EN_MARCHA;
     }
     let mueve;
     let candidato = false;
-    if (!ultima.q) {
+    if (sensor === 'quieto') {
+      // El sensor dice que estás quieto: parado, diga lo que diga el GPS.
+      mueve = false;
+    } else if (!ultima.q) {
       // Ya iba en movimiento: cada punto con señales de moverse cuenta (la cámara y el punto avanzan segundo a segundo); el primero sin ellas lo deja parado.
       mueve = enMarcha;
     } else {
-      // Estaba parado: moverse se confirma con una VENTANA. El punto es candidato si hay señales de moverse y se salió del radio del ancla (o el iPhone dice
-      // que va a más de 1 m/s). Se acepta con 3 candidatos seguidos; con 2 si ya está fuera del radio y va a más de 1 m/s (correr no espera 3 s).
+      // Estaba parado. Con el sensor diciendo que te mueves, basta una señal del GPS. Sin sensor, moverse se confirma con una VENTANA: el punto es candidato
+      // si hay señales de moverse y se salió del radio del ancla (o el iPhone dice que va a más de 1 m/s). Se acepta con 3 candidatos seguidos; con 2 si ya
+      // está fuera del radio y va a más de 1 m/s (correr no espera 3 s). Con mucho error, fuera del radio y `MARGEN_SIN_VELOCIDAD` m más.
       const ancla = anclaDe(muestras);
       const radio = Math.max(punto.precision, typeof ancla.pre === 'number' ? ancla.pre : punto.precision);
-      const fuera = metrosEntrePuntos(ancla, punto) > radio;
-      const rapido = velGps != null && velGps > VELOCIDAD_EN_MARCHA;
-      candidato = enMarcha && (fuera || rapido);
+      const lejos = metrosEntrePuntos(ancla, punto);
+      const fuera = lejos > radio;
       let esperando = 0;
       for (let k = muestras.length - 1; k >= 0 && muestras[k].c; k -= 1) esperando += 1;
-      mueve = candidato && (esperando + 1 >= PUNTOS_PARA_MOVERSE || (fuera && rapido && esperando >= 1));
+      if (sensor === 'mueve') {
+        candidato = enMarcha || fuera;
+        mueve = candidato;
+      } else {
+        const rapido = velUtil != null && velUtil > VELOCIDAD_EN_MARCHA;
+        candidato = enMarcha && (punto.precision > PRECISION_PARA_VELOCIDAD ? lejos > radio + MARGEN_SIN_VELOCIDAD : (fuera || rapido));
+        mueve = candidato && (esperando + 1 >= PUNTOS_PARA_MOVERSE || (fuera && rapido && esperando >= 1));
+      }
       if (mueve && esperando) {
-        // Los que esperaban vuelven a su lugar real: no se pierde el arranque.
+        // Los que esperaban vuelven a su lugar real (y a su velocidad): no se pierde el arranque.
         previas = muestras.map((x, k) => {
           if (k < muestras.length - esperando) return x;
-          const { q: _q, c: _c, r, ...resto } = x;
-          return { ...resto, lat: r[0], lon: r[1] };
+          const { q: _q, c: _c, r, vq, ...resto } = x;
+          return { ...resto, lat: r[0], lon: r[1], ...(typeof vq === 'number' ? { vel: vq } : {}) };
         });
       }
     }
@@ -160,7 +183,11 @@ export function agregaPunto(muestras, punto, t) {
     }
   }
   if (typeof punto.fc === 'number') m.fc = Math.round(punto.fc);
-  if (velGps != null) m.vel = Math.round(velGps * 100) / 100;
+  // Parado, la velocidad es 0 (el ritmo de ahora dice «parado»); la que dio el iPhone se guarda en `vq`, por si el punto era el arranque.
+  if (velGps != null) {
+    const vel = Math.round(velGps * 100) / 100;
+    if (m.q) { m.vel = 0; m.vq = vel; } else m.vel = vel;
+  }
   if (!m.q && typeof punto.rumbo === 'number' && punto.rumbo >= 0) m.rumbo = Math.round(punto.rumbo);
   // El error del GPS (m): el mapa del iPhone dibuja con él el círculo de precisión del punto, y el ancla lo usa para su radio.
   if (typeof punto.precision === 'number' && punto.precision >= 0) m.pre = Math.round(punto.precision);

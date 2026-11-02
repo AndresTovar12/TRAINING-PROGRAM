@@ -3,8 +3,12 @@ import { agregaPunto, fuenteDeUbicacion } from '@/lib/ubicacion';
 import { LLAVE_ULTIMA_UBICACION, leeUbicacionGuardada } from '@/lib/mapaNativo';
 import { pideQueNoSeApague } from '@/lib/pantallaEncendida';
 import {
-  cronometroNuevo, cronometroVigente, decidePausaAutomatica, pausa as pausar, reanuda as reanudar, segundosDe,
+  cronometroNuevo, cronometroVigente, pausa as pausar, reanuda as reanudar, segundosDe,
 } from '@/lib/entrenoLibre';
+import { pasoDeCarrera } from '@/lib/pasoDeCarrera';
+import { sigueMovimiento } from '@/lib/movimientoNativo';
+import { anotaEnTraza, cierraTraza, empiezaTraza, grabaTraza, trazaEncendida } from '@/lib/trazaGps';
+import { enLaApp } from '@/lib/nativo';
 import { useEstadoOpcional, useStorageOpcional } from '@/contexts/AppStateContext';
 import { usePlanOpcional } from '@/contexts/PlanContext';
 import { vibra } from '@/lib/avisosNativos';
@@ -110,7 +114,9 @@ export function useCronometroLibre(userId) {
   const [pausaAutomatica] = useStorageOpcional(LLAVE_PAUSA_AUTOMATICA, true);
   const conPausaAutomatica = useRef(pausaAutomatica);
   useEffect(() => { conPausaAutomatica.current = pausaAutomatica; });
-  const lecturas = useRef([]); // lo último que dijo el GPS ({ t, vel, pre }), para decidir la pausa automática
+  // Lo que la pausa automática y la ruta van llevando entre punto y punto (`pasoDeCarrera`): las lecturas del GPS, los metros contados y cuándo arrancó o se reanudó.
+  const enCurso = useRef({ lecturas: [], metros: 0, arranque: cronometro?.inicio ?? 0 });
+  const ruta = useRef(muestras);
   const cambiaYa = useRef(cambia);
   useEffect(() => { cambiaYa.current = cambia; });
 
@@ -129,6 +135,20 @@ export function useCronometroLibre(userId) {
     return () => clearTimeout(t);
   }, [pausadoEn]);
   const conGps = !!cronometro?.gps && !(pausadoEn != null && dormidoEn === pausadoEn);
+  /* EL SENSOR DE MOVIMIENTO (2 nov 2026, `lib/movimientoNativo.js`): mientras el GPS de la carrera está encendido, también el sensor (solo en el iPhone). Con
+     cada punto se le pregunta qué dice (`veredicto`): «quieto» hace parado el punto y pausa; salir de parado necesita que diga que te mueves. Sin él (la web,
+     sin permiso), las reglas del GPS. La primera vez, iOS pregunta el permiso aquí: en la primera carrera. */
+  const sensor = useRef(null);
+  // Se recargó la página a media carrera grabando su traza: se sigue grabando la misma.
+  const inicioConGps = cronometro?.gps ? cronometro.inicio : null;
+  useEffect(() => {
+    if (inicioConGps != null && trazaEncendida() && !grabaTraza(inicioConGps)) empiezaTraza({ deporte: vivo.current?.deporte, inicioMs: inicioConGps, app: enLaApp() ? 'iphone' : 'web' });
+  }, [inicioConGps]);
+  useEffect(() => {
+    if (!conGps) return undefined;
+    const parar = sigueMovimiento((s) => { sensor.current = s; });
+    return () => { parar(); sensor.current = null; };
+  }, [conGps]);
   useEffect(() => {
     if (!conGps) return undefined;
     const fuente = fuenteDeUbicacion();
@@ -140,38 +160,22 @@ export function useCronometroLibre(userId) {
     const parar = fuente.sigue((p) => {
       const c = vivo.current;
       if (!c) return;
-      if (conPausaAutomatica.current && typeof p.vel === 'number') {
-        const ahoraS = Date.now() / 1000;
-        lecturas.current = [...lecturas.current.filter((x) => ahoraS - x.t <= 15), { t: ahoraS, vel: p.vel, pre: p.precision }];
-        const estado = c.pausadoEn == null ? 'corriendo' : (c.automatica ? 'pausa' : null);
-        const d = estado ? decidePausaAutomatica(lecturas.current, estado, c.deporte, ahoraS) : null;
-        if (d?.accion === 'pausa') {
-          const nuevo = pausar(c, Math.round(d.desde * 1000), { automatica: true });
-          vivo.current = nuevo;
-          cambiaYa.current(nuevo);
-          // La pausa cuenta desde que se detuvo: lo anotado en esos segundos (parado, sin metros) se quita para que el tiempo de la ruta no vaya hacia atrás.
-          const tope = segundosDe(nuevo);
-          setMuestras((m) => { const r = m.filter((x) => x.t <= tope); if (r.length !== m.length && userId) escribeRuta(userId, r); return r; });
-          vibra('listo');
-          return;
-        }
-        if (d?.accion === 'reanuda') {
-          const nuevo = reanudar(c, Math.round(d.desde * 1000));
-          vivo.current = nuevo;
-          cambiaYa.current(nuevo);
-          vibra('listo');
-        }
+      // Lo mismo que reproduce la prueba de una traza (`pasoDeCarrera`): la pausa automática y, si no está en pausa, el punto a la ruta.
+      const ahora = Date.now();
+      const e = pasoDeCarrera({ cronometro: c, muestras: ruta.current, ...enCurso.current }, p, ahora, { sensor: sensor.current, pausaAutomatica: conPausaAutomatica.current });
+      enCurso.current = { lecturas: e.lecturas, metros: e.metros, arranque: e.arranque };
+      if (grabaTraza(c.inicio)) anotaEnTraza(p, sensor.current, e.v, ahora);
+      if (e.cronometro !== c) { vivo.current = e.cronometro; cambiaYa.current(e.cronometro); }
+      if (e.muestras !== ruta.current) {
+        ruta.current = e.muestras;
+        setMuestras(e.muestras);
+        if (userId) escribeRuta(userId, e.muestras);
       }
-      if (vivo.current?.pausadoEn != null) return; // en pausa no se mide
-      setMuestras((m) => {
-        const nuevas = agregaPunto(m, p, segundosDe(vivo.current));
-        if (nuevas !== m && userId) escribeRuta(userId, nuevas);
-        return nuevas;
-      });
+      if (e.accion) vibra('listo');
     }, () => {});
     return () => { vigente = false; parar(); candado?.suelta(); };
   }, [conGps, userId]);
-  const cambiaRuta = useCallback((r) => { setMuestras(r); if (userId) escribeRuta(userId, r); }, [userId]);
+  const cambiaRuta = useCallback((r) => { ruta.current = r; setMuestras(r); if (userId) escribeRuta(userId, r); }, [userId]);
 
   /* LA RUTA EN SILENCIO (sección 8b, 28 oct 2026): un entreno SIN mapa (`silencio`: pádel, gimnasio, fútbol) también guarda por dónde se movió, si la persona
      dijo que sí a su recorrido (se pregunta una vez, ver `HojaDelRecorrido`). Precisión baja hasta que se mueve de verdad (`useRutaEnSilencio`). En pausa no se mide.
@@ -198,13 +202,17 @@ export function useCronometroLibre(userId) {
     inicia: (deporte, { gps = false, silencio = false, actividad = null } = {}) => {
       cambiaRuta([]);
       cambiaSilencio([]);
-      cambia({
+      const nuevo = {
         ...cronometroNuevo(deporte), ...(gps ? { gps: true } : {}), ...(!gps && silencio ? { silencio: true } : {}),
         ...(actividad ? { actividad: { id: actividad.id, nombre: actividad.nombre, icono: actividad.icono, color: actividad.color, gps: !!actividad.gps } } : {}),
-      });
+      };
+      enCurso.current = { lecturas: [], metros: 0, arranque: nuevo.inicio };
+      // «Guardar traza del GPS» (cuentas de prueba, Ajustes de la carrera): esta carrera se graba punto por punto.
+      if (gps && trazaEncendida()) empiezaTraza({ deporte, inicioMs: nuevo.inicio, app: enLaApp() ? 'iphone' : 'web' });
+      cambia(nuevo);
     },
     pausa: () => cambia(pausar(cronometro)),
-    reanuda: () => cambia(reanudar(cronometro)),
+    reanuda: () => { enCurso.current = { ...enCurso.current, arranque: Date.now() }; cambia(reanudar(cronometro)); },
     termina: () => {
       if (!cronometro) return null;
       const enSilencio = !cronometro.gps && silenciosas.length >= 2;
@@ -213,7 +221,7 @@ export function useCronometroLibre(userId) {
         muestras: cronometro.gps ? muestras : (enSilencio ? silenciosas : null), rutaSilenciosa: enSilencio,
       };
     },
-    descarta: () => { cambiaRuta([]); cambiaSilencio([]); cambia(null); },
+    descarta: () => { cierraTraza(); cambiaRuta([]); cambiaSilencio([]); cambia(null); },
   };
 }
 

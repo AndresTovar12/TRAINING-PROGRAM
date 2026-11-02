@@ -34,6 +34,8 @@
 	<string>Training Lab usa tu ubicación para medir distancia, ritmo y ruta mientras corres, pedaleas o caminas, y para dibujar tu recorrido en tus stickers en cualquier entreno.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Training Lab sigue tu recorrido aunque bloquees la pantalla: mide distancia, ritmo y ruta mientras corres, pedaleas o caminas, y dibuja tu recorrido en tus stickers en cualquier entreno.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Para saber cuándo te detienes y no sumar metros de más</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>

@@ -20,7 +20,7 @@ def agrega_fuente(grupo, objetivo, nombre)
 end
 
 compartido = nil
-%w[EntrenoLiveActivity.swift EntrenoLivePlugin.swift EntrenoWatchPlugin.swift MainViewController.swift].each do |n|
+%w[EntrenoLiveActivity.swift EntrenoLivePlugin.swift EntrenoWatchPlugin.swift MovimientoPlugin.swift MainViewController.swift].each do |n|
   ref = agrega_fuente(grupo_app, app, n)
   compartido = ref if n == 'EntrenoLiveActivity.swift'
 end
