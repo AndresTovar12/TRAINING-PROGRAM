@@ -9,6 +9,7 @@ import { pideCodigoDeCorreo } from '@/lib/correoDeLaCuentaApi';
 import { guardaCorreoPorConfirmar } from '@/lib/correos';
 import { conCopiaEnElTelefono, guardaEnElTelefono, leeDelTelefono } from '@/lib/almacenDelTelefono';
 import { cierraCuentaEnElTelefono, guardaLoUltimoDe, usaCuenta } from '@/lib/colaDelTelefono';
+import { cargaElPerfil } from '@/lib/cargaDelPerfil';
 import { alVolverLaSenal, esFaltaDeSenal, haySenalAhora, marcaConSenal, marcaSinSenal, sinRedEnElTelefono } from '@/lib/senal';
 
 const AuthContext = createContext(null);
@@ -23,7 +24,6 @@ const AuthContext = createContext(null);
      Al salir se borran las copias de esa cuenta y queda solo lo que falta subir, que espera a que la misma cuenta vuelva a entrar (`cierraCuentaEnElTelefono`). */
 const claveDePerfil = (uid) => `tl:perfil:${uid}`;
 const claveDeSesion = () => supabase.auth.storageKey ?? `sb-${new URL(import.meta.env.VITE_SUPABASE_URL).hostname.split('.')[0]}-auth-token`;
-const espera = (ms) => new Promise((listo) => { setTimeout(listo, ms); });
 
 /** La sesión que Supabase dejó guardada en el teléfono (aunque su llave de entrada esté vencida), o `null`. Solo para abrir sin señal. */
 function sesionGuardada() {
@@ -130,10 +130,11 @@ export function AuthProvider({ children }) {
 
   /* Carga el perfil cada vez que cambia quien entró. Con mala señal ANTES se quedaba en «Cargando tu perfil…» para siempre, sin reintentar ni dar salida (auditoría p43, 17 oct
      2026). Ahora reintenta solo (3 veces, esperando 2 y 4 s) y, si no se logra, avisa (`perfilFalla`) para que la pantalla deje reintentar o salir.
-     En la app, sin señal, la copia del teléfono (1 nov 2026): de una vez si se sabe que no hay señal, o en cuanto un intento falla por señal. */
+     En la app, sin señal, la copia del teléfono (1 nov 2026): de una vez si se sabe que no hay señal, o en cuanto un intento falla por señal.
+     Y pase lo que pase, a los 15 s sin perfil también avisa (2 nov 2026: el build 74 se quedaba girando porque la lectura de la copia no contestaba nunca).
+     Si el perfil llega después, entra igual. El camino entero está en `lib/cargaDelPerfil.js` (se prueba en Node con un reloj falso). */
   const perfilDeLaCopia = useRef(false);
   useEffect(() => {
-    let cancelled = false;
     const uid = session?.user?.id;
     if (!uid) {
       setProfile(null);
@@ -143,39 +144,23 @@ export function AuthProvider({ children }) {
     }
     setPerfilFalla(false);
     const conCopia = conCopiaEnElTelefono();
-    (async () => {
-      const copia = conCopia ? await leeDelTelefono(claveDePerfil(uid)) : null;
-      if (cancelled) return;
-      const sirve = copia?.id === uid;
-      const usaLaCopia = () => { perfilDeLaCopia.current = true; setProfile(copia); };
-      if (sirve && !haySenalAhora()) { usaLaCopia(); return; }
-      for (let intento = 0; intento < 3 && !cancelled; intento += 1) {
-        if (intento > 0) await espera(intento * 2000);
-        if (cancelled) return;
-        try {
-          const { data, error, status } = await supabase.from('profiles').select(COLUMNAS_PERFIL).eq('id', uid).maybeSingle();
-          if (cancelled) return;
-          if (!error && data) {
-            perfilDeLaCopia.current = false;
-            setProfile(data);
-            marcaConSenal();
-            if (conCopia) guardaEnElTelefono(claveDePerfil(uid), data);
-            return;
-          }
-          if (error && esFaltaDeSenal(error, status)) {
-            marcaSinSenal();
-            if (sirve) { usaLaCopia(); return; }
-          }
-        } catch {
-          /* sin señal: se reintenta (o, con copia, se usa la copia) */
-          if (sirve) { marcaSinSenal(); usaLaCopia(); return; }
-        }
-      }
-      if (!cancelled) setPerfilFalla(true);
-    })();
-    return () => {
-      cancelled = true;
-    };
+    return cargaElPerfil({
+      uid,
+      // Con su tope de 3 s: si el teléfono no contesta, se sigue sin copia (`lib/almacenDelTelefono.js`).
+      leeCopia: conCopia ? () => leeDelTelefono(claveDePerfil(uid)) : null,
+      pide: () => supabase.from('profiles').select(COLUMNAS_PERFIL).eq('id', uid).maybeSingle(),
+      haySenal: haySenalAhora,
+      alSinSenal: marcaSinSenal,
+      alPerfil: (perfil, { deLaCopia }) => {
+        perfilDeLaCopia.current = deLaCopia;
+        setPerfilFalla(false);
+        setProfile(perfil);
+        if (deLaCopia) return;
+        marcaConSenal();
+        if (conCopia) guardaEnElTelefono(claveDePerfil(uid), perfil);
+      },
+      alFalla: () => setPerfilFalla(true),
+    });
   }, [session?.user?.id, intentoPerfil]);
 
   // El perfil salió de la copia: en cuanto vuelve la señal se lee el de verdad (sin quitar el que ya se ve).

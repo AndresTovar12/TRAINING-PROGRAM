@@ -11,9 +11,16 @@
 import { useSyncExternalStore } from 'react';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { enCursoDelReloj, firmaDelPlan } from '@/lib/relojSinTelefono';
+import { conTiempoLimite } from '@/lib/tiempoLimite';
 
 const EntrenoWatch = registerPlugin('EntrenoWatch');
 const enLaApp = () => Capacitor.isNativePlatform();
+
+/* NINGUNA LLAMADA AL RELOJ SE ESPERA MÁS DE 3 S (2 nov 2026). El plugin contesta en el acto (`EntrenoWatchPlugin.swift`). Si un día no contestara, quien espera
+   sigue como si no hubiera reloj, igual que cuando la llamada falla (cada función de abajo ya sabe seguir así): nada se queda esperando para siempre, ni la
+   lista de lo que llegó del reloj ni el «Conectando» del inicio. La llamada sigue y, si contesta tarde, no pasa nada. */
+const TOPE_DEL_RELOJ_MS = 3000;
+const alReloj = (metodo, opciones) => conTiempoLimite(EntrenoWatch[metodo](opciones), TOPE_DEL_RELOJ_MS, `el reloj no contestó (${metodo})`);
 
 /** Se avisa cuando un entreno con el reloj termina (fase 5): `SincronizaReloj` va por el pulso a Apple Salud. `detail.fin`: la hora. */
 export const AVISO_RELOJ_TERMINO = 'tl:reloj-termino';
@@ -47,14 +54,14 @@ export async function enviaAlReloj(datos) {
   const llave = JSON.stringify(datos);
   if (llave === ultima) return;
   ultima = llave;
-  try { await EntrenoWatch.envia(datos); } catch { /* sin reloj */ }
+  try { await alReloj('envia', datos); } catch { /* sin reloj */ }
 }
 
 /** El entreno terminó o se cerró: el reloj deja de medir y guarda el entreno en Apple Salud. */
 export async function terminaEnReloj() {
   if (!enLaApp() || !ultima) return;
   ultima = '';
-  try { await EntrenoWatch.termina(); } catch { /* ya no estaba */ }
+  try { await alReloj('termina'); } catch { /* ya no estaba */ }
   window.dispatchEvent(new CustomEvent(AVISO_RELOJ_TERMINO, { detail: { fin: Date.now() } }));
 }
 
@@ -71,7 +78,7 @@ export function escuchaReloj({ alAccion, alPulso }) {
 export async function estadoDelReloj() {
   if (!enLaApp()) return { emparejado: false, instalada: false };
   if (pruebaDelReloj()) return { emparejado: true, instalada: true, prueba: true };
-  try { return await EntrenoWatch.estado(); } catch { return { emparejado: false, instalada: false }; }
+  try { return await alReloj('estado'); } catch { return { emparejado: false, instalada: false }; }
 }
 
 /* ---- Sin el iPhone (parte 3) ---- */
@@ -86,7 +93,7 @@ export async function mandaPlanAlReloj(plan, { forzar = false } = {}) {
   const firma = firmaDelPlan(plan);
   if (!forzar && firma === firmaMandada) return false;
   try {
-    const r = await EntrenoWatch.mandaPlan({ plan: JSON.stringify(plan) });
+    const r = await alReloj('mandaPlan', { plan: JSON.stringify(plan) });
     if (r?.enviado === false) return false;
     firmaMandada = firma;
     return true;
@@ -97,7 +104,7 @@ export async function mandaPlanAlReloj(plan, { forzar = false } = {}) {
 export async function pendientesDelReloj() {
   if (!enLaApp()) return [];
   try {
-    const r = await EntrenoWatch.pendientes();
+    const r = await alReloj('pendientes');
     return Array.isArray(r?.resultados) ? r.resultados.filter((x) => typeof x?.id === 'string') : [];
   } catch { return []; }
 }
@@ -105,13 +112,13 @@ export async function pendientesDelReloj() {
 /** Ya quedó en la cola del teléfono: el plugin ya lo puede borrar de su disco. */
 export async function confirmaDelReloj(id) {
   if (!enLaApp() || !id) return;
-  try { await EntrenoWatch.confirma({ id }); } catch { /* se queda y se confirma la próxima vez */ }
+  try { await alReloj('confirma', { id }); } catch { /* se queda y se confirma la próxima vez */ }
 }
 
 /** Ya subió al servidor: si el reloj está cerca, su pantalla final pasa a «{quien} ya lo ve». */
 export async function avisaAlRelojQueSubio(id) {
   if (!enLaApp() || !id) return;
-  try { await EntrenoWatch.avisaSubido({ id }); } catch { /* el reloj no está cerca: no pasa nada */ }
+  try { await alReloj('avisaSubido', { id }); } catch { /* el reloj no está cerca: no pasa nada */ }
 }
 
 /* El entreno que hay en curso EN EL RELOJ (uno que se empezó ahí). El reloj lo publica en su contexto; el plugin lo guarda y avisa. */
@@ -138,7 +145,7 @@ export const relojEnCursoAhora = () => enCurso;
 /** Vuelve a preguntarle al plugin si el reloj tiene un entreno en curso (al abrir y al volver a la app). */
 export async function revisaEnCursoDelReloj() {
   if (!enLaApp()) return;
-  try { const r = await EntrenoWatch.estado(); ponEnCurso(r?.enCurso ?? null); } catch { /* sin reloj */ }
+  try { const r = await alReloj('estado'); ponEnCurso(r?.enCurso ?? null); } catch { /* sin reloj */ }
 }
 
 /**
