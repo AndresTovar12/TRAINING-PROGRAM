@@ -137,6 +137,20 @@ export function PlanAlReloj({ oneRMs = {}, unidad = 'kg' }) {
   return null;
 }
 
+/**
+ * Para una cuenta sin app de atleta (un coach, en `AdminApp`): no tiene plan que mandar, pero su reloj tiene que saber de quién es y que no hay plan. Así su
+ * inicio ofrece «Entreno libre» como lo principal (no «Tu plan de hoy no está en el reloj») y lo que entrene ahí llega a su cuenta.
+ */
+export function SinPlanAlReloj() {
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  useEffect(() => {
+    if (!saludDisponible() || !userId) return;
+    mandaPlanAlReloj(planParaElReloj({ usuario: userId, sinPlan: true, dias: [], actividades: tusActividades([], []), catalogo: catalogoParaElReloj([]) }), { forzar: true });
+  }, [userId]);
+  return null;
+}
+
 /** «Entreno en curso en tu reloj» (parte 3.6): empezó en el reloj y el iPhone está cerca. El reloj sigue mandando; aquí no se empieza otro. `compacta`: dentro del botón de la sesión. */
 export function EntrenoEnElReloj({ compacta = false }) {
   const enCurso = useRelojEnCurso();

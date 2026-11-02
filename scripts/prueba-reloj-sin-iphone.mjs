@@ -67,6 +67,14 @@ prueba('cada serie trae su ejercicio, su vuelta, sus reps, sus kilos (del 1RM o 
   assert.equal(plancha.seg, 30, 'un paso por tiempo dice sus segundos');
   assert.equal(plancha.kg, undefined);
 });
+prueba('el nombre de cada paso viaja tal cual lo corta el iPhone (con sus espacios): la marca que vuelve del reloj cuenta', () => {
+  const raro = { cat: 'gym', exercises: [ex('Press  de banca con agarre cerrado y pausa larga abajo', { sets: '2', reps: '5' })] };
+  const [p] = pasosParaElReloj(raro);
+  const delIphone = pasosDeLaSesion(raro).pasos[0];
+  assert.equal(p.n, delIphone.nombre.slice(0, 40), 'el mismo texto que `nombreCorto`');
+  const entreno = { v: 1, inicio: 1, hechos: { [p.c]: { t: 2, n: p.n } }, saltados: {} };
+  assert.equal(vistaDelEntreno(pasosDeLaSesion(raro), entreno, 3).hechos, 1, 'el iPhone la cuenta como hecha');
+});
 prueba('los descansos llevan sus segundos (entre series y entre Sets)', () => {
   assert.equal(pasos[1].seg, 90);
   const entreSets = pasos.find((p) => p.c === 'd.0.4.0');
