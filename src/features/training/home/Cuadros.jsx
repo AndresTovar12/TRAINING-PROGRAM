@@ -16,6 +16,7 @@ const TONOS = {
   cielo: { /* estilo-ok: cuadros de color de Home (capturas aprobadas) */ fondo: 'linear-gradient(160deg, #6AA8FF 0%, #3B7BF5 50%, #1E4FE0 100%)', sombra: 'rgba(30,79,224,0.28)' },
   azul: { /* estilo-ok: cuadros de color de Home (capturas aprobadas) */ fondo: 'linear-gradient(160deg, #2448E8 0%, #1733B8 55%, #0D1A66 100%)', sombra: 'rgba(14,30,120,0.32)' },
   violeta: { /* estilo-ok: el cuadrito de 1RM (ejemplo de Andrés, 30 oct 2026) */ fondo: 'linear-gradient(160deg, #A48BFF 0%, #7C5CFF 55%, #5A3DD8 100%)', sombra: 'rgba(90,61,216,0.26)' },
+  menta: { /* estilo-ok: el cuadrito de Demos (Home sin plan, 2 nov 2026) */ fondo: 'linear-gradient(160deg, #4BD9A8 0%, #14B37E 55%, #0A8A60 100%)', sombra: 'rgba(10,138,96,0.26)' },
   tinta: { /* estilo-ok: cuadros de color de Home (capturas aprobadas) */ fondo: 'linear-gradient(165deg, #2B3263 0%, #171C3E 58%, #0B0E24 100%)', sombra: 'rgba(12,16,52,0.34)' },
 };
 
@@ -111,30 +112,6 @@ export function CuadroDePrograma({ etiqueta, titulo, sub, foto, fases = 0, actua
         </span>
       ) : null}
     />
-  );
-}
-
-/**
- * El cuadro blanco chico (Demo workout, 1RM): un ícono en su cuadrito de color y el nombre. Va de dos en dos debajo de los cuadros
- * de color, para lo que se usa menos.
- */
-export function CuadroBlanco({ Icono, titulo, sub, color = '#1E40E0', fondo = '#EEF1FE', onClick }) {
-  return (
-    <button
-      type="button" onClick={onClick} className="kp-press"
-      style={{
-        display: 'flex', alignItems: 'center', gap: 12, minHeight: 76, padding: '12px 14px', border: 'none', borderRadius: 22, background: '#fff',
-        boxShadow: '0 1px 3px rgba(17,19,24,0.06)', textAlign: 'left', cursor: 'pointer', fontFamily: FONT, minWidth: 0, touchAction: 'manipulation',
-      }}
-    >
-      <span aria-hidden="true" style={{ width: 44, height: 44, borderRadius: 14, background: fondo, color, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-        <Icono size={21} />
-      </span>
-      <span style={{ minWidth: 0 }}>
-        <span className="texto-corto" style={{ fontSize: 16, fontWeight: 700, color: '#111318', lineHeight: 1.2 }}>{titulo}</span>
-        {sub && <span className="texto-corto" style={{ fontSize: 13, fontWeight: 500, color: '#5B616E', marginTop: 2 }}>{sub}</span>}
-      </span>
-    </button>
   );
 }
 

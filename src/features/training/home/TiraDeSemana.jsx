@@ -26,17 +26,19 @@ export function fechaDeLaSemana(posicion, hoy = new Date()) {
 
 /**
  * Un día de la tira. `puntos`: los colores de sus sesiones (hasta 3). `hecho`: todo lo de ese día terminado (palomita).
- * `empezada`: dejó una a medias (el punto lleva un anillo). `deshabilitado`: ese día no hay nada que abrir.
+ * `empezada`: dejó una a medias (el punto lleva un anillo). `deshabilitado`: ese día no hay nada que abrir (se ve apagado).
+ * `inerte`: tampoco se toca, pero se ve igual que los demás (Home sin plan, 2 nov 2026: la tira es la misma y los días solo marcan lo que hizo).
  */
-export function BotonDeDia({ corto, numero, puesto = false, esHoy = false, puntos = [], hecho = false, empezada = false, deshabilitado = false, onClick, etiqueta }) {
+export function BotonDeDia({ corto, numero, puesto = false, esHoy = false, puntos = [], hecho = false, empezada = false, deshabilitado = false, inerte = false, onClick, etiqueta }) {
+  const sinToque = deshabilitado || inerte;
   const color = puesto ? '#fff' : esHoy ? KP.blue : deshabilitado ? '#C2C7D0' : KP.ink;
   return (
     <button
-      type="button" onClick={deshabilitado ? undefined : onClick} disabled={deshabilitado} aria-pressed={puesto} aria-label={etiqueta}
-      className={deshabilitado ? undefined : 'kp-press'}
+      type="button" onClick={sinToque ? undefined : onClick} disabled={sinToque} aria-pressed={puesto} aria-label={etiqueta}
+      className={sinToque ? undefined : 'kp-press'}
       style={{
         flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '9px 0 8px', borderRadius: 16,
-        border: 'none', fontFamily: FONT, touchAction: 'manipulation', cursor: deshabilitado ? 'default' : 'pointer',
+        border: 'none', fontFamily: FONT, touchAction: 'manipulation', cursor: sinToque ? 'default' : 'pointer',
         background: puesto ? UI.azul : 'transparent', color, boxShadow: puesto ? UI.azulSombra : esHoy ? `inset 0 0 0 2px ${KP.blue}` : 'none', /* estilo-ok: aro de «hoy» en la tira de días (pieza aprobada) */
       }}
     >
@@ -53,15 +55,18 @@ export function BotonDeDia({ corto, numero, puesto = false, esHoy = false, punto
   );
 }
 
-/** Los siete botones de una semana. `dias`: los de `weekOverview` (o su versión de equipo). `elegido`: la posición (0 = lunes) o null. */
+/**
+ * Los siete botones de una semana. `dias`: los de `weekOverview` (o su versión de equipo). `elegido`: la posición (0 = lunes) o null.
+ * Un día puede traer `hecho` (palomita) e `inerte` (no se toca): así la tira de quien no tiene plan marca sus entrenos libres.
+ */
 function SieteDias({ dias, elegido, fecha, onElegir }) {
   const numeros = numerosDeLaSemana(fecha);
   return dias.map((d, i) => {
-    const dice = d.hasSession ? `${d.sesiones} ${d.sesiones === 1 ? 'sesión' : 'sesiones'}${d.name ? `: ${d.name}` : ''}` : d.descanso ? 'descanso' : 'sin sesión';
+    const dice = d.hasSession ? `${d.sesiones} ${d.sesiones === 1 ? 'sesión' : 'sesiones'}${d.name ? `: ${d.name}` : ''}` : d.hecho ? 'entrenaste' : d.descanso ? 'descanso' : 'sin sesión';
     return (
       <BotonDeDia
         key={d.key} corto={d.key} numero={numeros[i]} puesto={i === elegido} esHoy={d.isToday}
-        puntos={Array.from({ length: Math.min(d.sesiones || 0, 3) }, () => null)} onClick={() => onElegir?.(i)}
+        puntos={Array.from({ length: Math.min(d.sesiones || 0, 3) }, () => null)} onClick={() => onElegir?.(i)} hecho={!!d.hecho} inerte={!!d.inerte}
         etiqueta={`${LARGOS[d.key] ?? d.key} ${numeros[i]}${d.isToday ? ', hoy' : ''}: ${dice}`}
       />
     );

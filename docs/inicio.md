@@ -14,7 +14,7 @@
 | Los dibujos | `src/features/inicio/Dibujos.jsx` | El código con QR, el punto de «Registrar», las caras de un equipo, los videos de ejercicios. |
 | La bienvenida | `src/features/inicio/Bienvenida.jsx` | La pantalla azul del final. |
 | Lo que cruza pantallas | `src/features/inicio/marcas.js` | El correo al que se mandó el código, si entró por invitación, y el link de la invitación mientras va a Apple o Google. |
-| Después | `src/features/training/home/EmpiezaAqui.jsx` y «Primeros pasos» (`AthletesPanel.jsx`) | Lo primero que ven el atleta sin plan y el coach. |
+| Después | `src/features/training/TrainingApp.jsx` (`HomeSinPlan`), `home/TarjetaTuPlan.jsx`, `home/RecorridoDelHome.jsx` y «Primeros pasos» (`AthletesPanel.jsx`) | Lo primero que ven el atleta sin plan (su Home y el recorrido) y el coach. |
 
 ## El camino de cada persona
 
@@ -65,9 +65,37 @@ Si Apple no da el nombre, sale también «¿Cómo te llamas?» después del tipo
 
 ## Después del inicio
 
-- **Atleta sin plan:** «Empieza aquí» en su Home: «Registra tu primer entreno» (abre el punto), «¿Tienes entrenador?» (sin entrenador; abre Mi perfil → Mi equipo), «Conecta tu Apple Watch / Apple Salud» (en la app, sin conectar), «Completa «Sobre ti»» (sin sexo ni fecha). Lo que se hace con la tarjeta a la vista se tacha; sin nada pendiente, la tarjeta se va. Con entrenador y sin plan, arriba la tarjeta azul «Carlos te está armando tu plan».
 - **Coach:** «Primeros pasos» es lo primero de su panel.
-- **Ya no hay recorrido** (se quitaron `Recorrido.jsx`, `RecorridoOtraVez.jsx` y «Ver el recorrido otra vez» en Mi perfil).
+- **Atleta sin plan (2 nov 2026; maqueta https://claude.ai/artifact/6uAsYxiGLPzfVdWNw5SSxC):** su Home es el mismo esqueleto que el Home con plan (`HomeView`): las mismas piezas, en el mismo orden, y solo cambia lo que dice cada una. Cuando recibe un plan, su Home no cambia de forma. Los textos de aquí no se cambian sin preguntar. De arriba a abajo (`HomeSinPlan` en `TrainingApp.jsx`):
+  1. **Saludo** (`Saludo`).
+  2. **La tira de la semana** (`TiraDeSemana`), la misma. Cada día que hizo un entreno libre lleva su palomita (`lib/semanaLibre.js`; el día trae `hecho`). Hoy va marcado como con plan. Los días no se tocan (`inerte`): sin plan no hay nada que abrir.
+  3. **La tarjeta azul «Tu plan»** (`TarjetaTuPlan`, con el `Marco` de «Hoy te toca», sin fecha).
+     - Sin coach: «Todavía no tienes plan» · «Encuentra uno hecho por un coach.» · botón blanco **«Buscar un plan»** (abre Explorar) · enlace blanco **«¿Ya tienes coach? Pon su código ›»** (abre Mi perfil → Mi equipo, `abrePerfil('equipo')`).
+     - Con coach y sin plan todavía: solo `TeEstaArmando` dentro de la tarjeta (su foto o iniciales, «Carlos te está armando tu plan», «Te avisamos cuando esté listo.»). Sin botón.
+     - No hay botón para entrenar: entrenar es el punto ● de «Registrar» y el cuadrito «Libre».
+  4. **Los atajos, los mismos del Home con plan:** la franja de Salud (`FranjaDeSalud`) y los cuadritos (`Cuadrito`) **Libre · 1RM · Demos · Stickers**. «Demos» sale solo si hay demos; «1RM» no sale a un paciente de fisio. Los dibuja `EntrenoLibre variante="atajos" sinPlan` (con `medio` = el 1RM).
+  5. **«Tus entrenos»** (`EntrenoLibre variante="historial"`), solo cuando ya hay alguno.
+  6. Abajo, lo que ya existía: las bibliotecas de clases compradas (`TarjetaDeBiblioteca`) y los avisos de compra (`AvisosDeCompra`). Quien compró una biblioteca no espera un plan: a esa persona «Tu plan» no se le enseña.
+  - **Se quitaron:** «Empieza aquí» (`EmpiezaAqui`; registrar es el punto de abajo, el código está en «Tu plan», y Salud y «Sobre ti» ya se piden en el inicio), la tarjeta azul «Entrena hoy, aunque no tengas plan» (`HeroDeEntrenar` completa), la tarjeta de Explorar (ahora es «Buscar un plan») y los cuadros de Salud, Demo workout y 1RM.
+  - **No cambió:** el Home con plan, lo que ve un coach al mirar la app de su atleta (`soloLectura`, `NoPlanSoloLectura`) y la pestaña «Entrenar» sin plan (`EntrenarSinPlan`).
+- **El recorrido de la primera vez** (`RecorridoDelHome.jsx`, medidas y textos en `lib/recorridoDelHome.js`): seis pasos sobre ese Home. El fondo se oscurece y se desenfoca (`rgba(9,12,28,.58)` con `blur(3px)`), queda un hueco de esquinas redondas sobre la pieza (con un borde blanco que late) y un globo blanco con su flechita dice «N de 6», el título, el texto, los puntitos, «Saltar» y «Siguiente». El último paso solo tiene «Listo». Cada pieza se marca con `data-recorrido`:
+
+  | # | Pieza (`data-recorrido`) | Título |
+  |---|---|---|
+  | 1 | El punto de «Registrar» de la barra (`registrar`) | Entrena y comparte |
+  | 2 | La pestaña «Explorar» (`explorar`) | Explora planes |
+  | 3 | La tarjeta azul «Tu plan» (`plan`) | Tu plan |
+  | 4 | La tira de la semana (`semana`) | Tu semana |
+  | 5 | La franja de Salud y los cuadritos, juntos (`atajos`) | Tus atajos |
+  | 6 | El botón de la cuenta (`perfil`, en `App.jsx`) | Tu perfil |
+
+  - **Cuándo sale:** una sola vez, la primera vez que un atleta ve su Home sin plan después del inicio (`inicio_paso` vacío). Espera a que el estado se compare con la base (`confirmado`), medio segundo para que la pantalla se acomode. No sale a un coach, a quien mira la app de otra persona (`soloLectura`) ni a quien ya tiene plan.
+  - **Que ya lo vio** se guarda en `user_app_state` (`useStorage('ui:recorrido-visto')`), no en el teléfono: no vuelve a salir en otro aparato. **«Saltar» cuenta como visto**, igual que «Listo» y Escape.
+  - **Volver a verlo:** Mi perfil → **«Ver el recorrido»** (solo si hay un Home sin plan donde enseñarlo) lleva a Home y empieza desde el paso 1.
+  - **Cómo se comporta:** el hueco y el globo se recalculan al cambiar el tamaño de la pantalla, al moverse la página, y cuadro por cuadro durante el primer rato de cada paso. Una pieza fuera de la pantalla se trae con la página (la barra de abajo y el botón de la cuenta son fijos). El globo va debajo de la pieza si cabe; si no, arriba. Una pieza que no existe (la barra de abajo en la computadora) se salta y el «N de M» se ajusta. El fondo bloquea todo: tocar el fondo o el hueco no hace nada; solo los botones del globo y Escape (web). Mientras está abierto, el botón de la cuenta no se esconde al bajar la página.
+  - **Accesibilidad:** el globo es un `role="dialog"` con el foco en «Siguiente» («Listo» al final); cada paso se anuncia (`aria-live`); con «Reducir movimiento» el borde no late ni hay animaciones de cambio.
+  - **Trampa:** el velo se recorta con `mask-image` (el hueco) y es de adorno; quien bloquea los toques es la capa transparente de abajo. Un `clip-path` dejaría pasar los toques por el hueco.
+- Ya no existen el recorrido de antes del 30 oct (`Recorrido.jsx`, `RecorridoOtraVez.jsx`) ni su renglón en Mi perfil; el de ahora es otro.
 
 ## La invitación por dentro
 
@@ -79,4 +107,5 @@ Si Apple no da el nombre, sale también «¿Cómo te llamas?» después del tipo
 - `npm run check` (la prueba de humo entra por la puerta: «Usar usuario y contraseña»).
 - En el navegador, con la App real y una sesión falsa (página local, no se sube): `qa-reloj.html?vista=puerta&reloj=si` (`reloj=no` sin Apple Watch, `web=1` como la web, `invitacion=tok` con invitación, `coachGoogle=1` para el coach). Contraseña que entra: `Entrena2026`; código que sirve: `482913`; código de entrenador: `CV2026`.
 - Salud y el Apple Watch (1 nov 2026): `qa-reloj.html?vista=inicio&reloj=no|si|sinapp` con compuertas (`&retiene=hoja,revision,entrenos,agg,sueno,guardar` deja esa llamada colgada hasta `__qa.suelta('hoja')`; `&n=48` entrenos de antes, `&sueno=30` noches, `&falla=previas`, `&conectado=otro&previas=1` para «Ya estaban», `&web=1`). Con las compuertas se comprueba que ningún renglón avanza solo.
+- El Home sin plan y el recorrido (2 nov 2026): `qa-reloj.html?vista=sinplan&web=1` (local, no se sube) con `&sincoach=1`, `&visto=1` (ya lo vio), `&escenario=sinplan` (entrenos libres) y `&libre=1` (uno hoy). Se ve en WebKit con perfil de iPhone, en 375×667 y 430×932.
 - En el iPhone (no se puede en el navegador): la puerta sin Google, Apple de verdad, la hoja de Salud sin reloj, el código ofrecido arriba del teclado, y la bienvenida con la barra del iPhone en blanco.

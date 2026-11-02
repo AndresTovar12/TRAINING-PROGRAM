@@ -45,9 +45,18 @@ import { RelojEnHome } from '@/features/reloj/TarjetasDelReloj';
 import { EntrenoEnElReloj, PlanAlReloj } from '@/features/reloj/RelojSinTelefono';
 import { textoDeSemana } from '@/lib/vaEn';
 import { useMoverMiPlan, ReglasDeMiPlan, ControlesDeMiPlan, MoverAquiAtleta, AvisoDelCoach } from '@/features/training/MoverMiPlan';
-import { CuadroDeSalud, CuadroBlanco, Cuadrito, FranjaDeSalud } from '@/features/training/home/Cuadros';
+import { Cuadrito, FranjaDeSalud } from '@/features/training/home/Cuadros';
 import Saludo from '@/features/training/home/Saludo';
-import EmpiezaAqui, { TeEstaArmando } from '@/features/training/home/EmpiezaAqui';
+import TeEstaArmando from '@/features/training/home/TeEstaArmando';
+import TarjetaTuPlan from '@/features/training/home/TarjetaTuPlan';
+import RecorridoDelHome from '@/features/training/home/RecorridoDelHome';
+import { useEntrenosRecientes } from '@/features/libre/useEntrenoLibre';
+import { resumenDeLaSemana as semanaDeEntrenosLibres } from '@/lib/semanaLibre';
+import { hoyLocal } from '@/lib/metricas/forma';
+import { abrePerfil } from '@/lib/abrePerfil';
+import {
+  CLAVE_RECORRIDO_VISTO, ponRecorridoDisponible, tomaElPedido, useRecorridoPendiente,
+} from '@/lib/recorridoDelHome';
 import { Boton, Grupo, Fila, IconoDeFila, TarjetaHeroe, Deslizador, EntradaNumero, Pastilla, BarraLateral } from '@/components/ui';
 
 const Explorar = lazy(() => import('@/features/explorar/Explorar'));
@@ -1949,7 +1958,7 @@ function BotonDelPunto({ onClick, esCompu = false }) {
       type="button" onClick={onClick} aria-label="Registrar una actividad" className="kp-press"
       style={{ flex: esCompu ? undefined : 1, minWidth: 60, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: FONT, color: KP.blue, touchAction: 'manipulation', padding: 0 }}
     >
-      <span aria-hidden="true" style={{ width: 54, height: 54, marginTop: -18, borderRadius: '50%', background: KP.blue, display: 'grid', placeItems: 'center', boxShadow: '0 0 0 4px #fff, 0 8px 20px rgba(30,64,224,0.35)' }}>
+      <span aria-hidden="true" data-recorrido="registrar" style={{ width: 54, height: 54, marginTop: -18, borderRadius: '50%', background: KP.blue, display: 'grid', placeItems: 'center', boxShadow: '0 0 0 4px #fff, 0 8px 20px rgba(30,64,224,0.35)' }}>
         <span style={{ width: 16, height: 16, borderRadius: '50%', background: '#fff' }} />
       </span>
       <span style={{ fontSize: 11.5, fontWeight: 700 }}>Registrar</span>
@@ -1996,7 +2005,7 @@ const BottomNav = ({ active, onChange, conExplorar = true, onRegistrar = null })
         const isActive = active === item.id;
         return (
           /* Reestructura visual (15 oct 2026), como la barra de las capturas de Andrés: ícono y nombre, la elegida en azul, sin píldora detrás. */
-          <button key={item.id} type="button" onClick={() => onChange(item.id)} aria-current={isActive ? 'page' : undefined} className="kp-press" style={{
+          <button key={item.id} type="button" onClick={() => onChange(item.id)} aria-current={isActive ? 'page' : undefined} data-recorrido={item.id === 'explore' ? 'explorar' : undefined} className="kp-press" style={{
             background: 'transparent', border: 'none', cursor: 'pointer',
             padding: esCompu ? '4px 14px' : '4px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
             color: isActive ? KP.blue : KP.ink3, fontFamily: FONT,
@@ -2060,67 +2069,136 @@ const PlanLoadingState = () => (
 
 // Sin plan asignado: misma interfaz, mensaje claro; wellness y 1RM siguen disponibles.
 // Si ya tiene entrenador, se le dice por su nombre (Andrés, 8 oct 2026, maqueta del inicio); si no, dónde ponerle el código.
-/* LO QUE VE QUIEN NO TIENE UN PLAN (12 oct 2026): casi todos los que entran solos vienen a correr, nadar o andar en bici y sacar sus stickers. Para ellos Home es el botón «Entrenar»
-   (ver `features/libre`), «Tus entrenos» y, si compraron una biblioteca de clases, sus clases. Con entrenador y sin plan todavía se les dice que lo está armando.
-   Inicio nuevo (30 oct 2026): arriba, «Empieza aquí» (lo que le falta para dejar su app lista) y, con entrenador, la tarjeta azul «Carlos te está armando tu
-   plan». Reemplazan el recorrido de antes y la línea de abajo «¿Tienes el código de un entrenador?» (ahora es un renglón de «Empieza aquí»). */
-const NoPlanState = ({ onAbrirHoja, alIrAExplorar, onRegistrar, recargaEntrenos = 0 }) => {
-  const { coach } = usePalabras();
+/* LO QUE VE QUIEN NO TIENE UN PLAN. Desde el 2 nov 2026 es EL MISMO ESQUELETO que el Home con plan (`HomeView`): las mismas piezas, en el mismo orden; solo cambia lo que dice
+   cada una (maqueta https://claude.ai/artifact/6uAsYxiGLPzfVdWNw5SSxC). Así, cuando recibe un plan, su Home no cambia de forma. De arriba a abajo:
+     1. el saludo;  2. la tira de la semana (cada día con entreno libre lleva su palomita; hoy va marcado; los días no se tocan: no hay nada que abrir);
+     3. la tarjeta azul «Tu plan» (`TarjetaTuPlan`): sin entrenador «Todavía no tienes plan» + «Buscar un plan» + «¿Ya tienes coach? Pon su código ›»; con entrenador y sin plan
+        todavía, «Carlos te está armando tu plan». No tiene botón para entrenar: entrenar es el punto ● de la barra y el cuadrito «Libre»;
+     4. los atajos de siempre: la franja de Salud y los cuadritos Libre · 1RM · Demos (solo si hay) · Stickers;
+     5. «Tus entrenos», solo cuando ya hay alguno;  6. lo que ya existía y queda abajo: las bibliotecas de clases compradas y los avisos de compra.
+   Se quitaron «Empieza aquí», la tarjeta azul «Entrena hoy, aunque no tengas plan», la tarjeta de Explorar (ahora es «Buscar un plan») y los cuadros de Salud, Demo workout y 1RM.
+   Quien compró una biblioteca de clases no espera un plan: a ellos «Tu plan» no se les enseña. La primera vez, encima, el recorrido (`RecorridoDelHome`): se guarda en la cuenta que ya lo vio.
+   Lo que ve un coach al mirar la app de su atleta (`soloLectura`) no cambia: `NoPlanSoloLectura`. */
+const DIAS_CORTOS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+
+const HomeSinPlan = ({ onAbrirHoja, alIrAExplorar, recargaEntrenos = 0, wellness = {}, reloj = null, oneRMs = {}, fechasRM = {} }) => {
+  const { coach, salud } = usePalabras();
   const { bibliotecas, programas, comprasPorAtender, comprasFallo, reintentaCompras } = usePlan();
-  const { perfil, soloLectura, userId } = usePerfilDeLaVista();
-  const conLibre = !soloLectura && !!userId;
+  const { perfil, userId } = usePerfilDeLaVista();
+  const unidadPeso = perfil?.unidad_peso || 'kg';
   const sinEntrenador = !coach && programas.length === 0; // sin entrenador y sin ningún plan: a ellos se les empuja hacia Explorar
+  const conCoach = !!coach || !!perfil?.coach_id;
+  useDiaDeHoy(); // con la app abierta pasa la medianoche: la tira se vuelve a contar
+  const diaDeHoy = hoyLocal();
+  // La tira de la semana: cada día con un entreno libre lleva su palomita. Hoy va marcado; los días no se tocan.
+  const { filas, recarga } = useEntrenosRecientes(userId, 40);
+  useEffect(() => { if (recargaEntrenos) recarga(); }, [recargaEntrenos, recarga]); // al cerrar el punto ●, vuelve a leer lo que registró
+  const semana = useMemo(() => semanaDeEntrenosLibres(filas ?? [], diaDeHoy), [filas, diaDeHoy]);
+  const dias = useMemo(() => DIAS_CORTOS.map((key, i) => ({ key, isToday: semana.dias[i].esHoy, hasSession: false, sesiones: 0, hecho: semana.dias[i].entreno, inerte: true })), [semana]);
+  const mejorRM = useMemo(() => maximoParaHome(oneRMs, fechasRM, LEVANTAMIENTOS), [oneRMs, fechasRM]);
+
+  /* EL RECORRIDO: sale solo la primera vez (cuando ya se sabe, con la base, si lo vio) y cuando Mi perfil lo pide («Ver el recorrido»). Saltarlo o terminarlo cuenta como visto. */
+  const { loaded, confirmado } = useAppState();
+  const [visto, setVisto] = useStorage(CLAVE_RECORRIDO_VISTO, false);
+  const [recorrido, setRecorrido] = useState(0); // 0 = cerrado; cada vez que se abre cambia, para empezar siempre en el paso 1
+  const intentado = useRef(false);
+  const sinVer = loaded && confirmado && !visto;
+  useEffect(() => {
+    if (!sinVer || intentado.current) return undefined;
+    intentado.current = true;
+    const espera = setTimeout(() => setRecorrido((n) => n + 1), 500); // que la pantalla termine de acomodarse
+    return () => { clearTimeout(espera); intentado.current = false; };
+  }, [sinVer]);
+  const pedido = useRecorridoPendiente();
+  useEffect(() => { if (pedido) { tomaElPedido(); setRecorrido((n) => n + 1); } }, [pedido]);
+  const cierraRecorrido = useCallback((yaLoVio) => { setRecorrido(0); if (yaLoVio) setVisto(true); }, [setVisto]);
+
   return (
-  <div style={{ background: UI.fondo, minHeight: '100svh' }}>
-  <Saludo nombre={perfil?.full_name || perfil?.username} />
-  <div style={{ padding: '16px 18px 120px', maxWidth: 560, margin: '0 auto' }}>
-    {(comprasPorAtender.length > 0 || comprasFallo) && (
-      <div style={{ marginBottom: 18 }}><AvisosDeCompra porAtender={comprasPorAtender} fallo={comprasFallo} reintenta={reintentaCompras} /></div>
-    )}
-    {bibliotecas.length > 0 && (
-      // Quien compró una biblioteca de clases no espera un plan: lo que tiene son sus clases.
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 18 }}>
+    <div style={{ background: UI.fondo, minHeight: '100svh' }}>
+      <Saludo nombre={perfil?.full_name || perfil?.username} />
+      <div style={{ padding: '16px 18px 120px', maxWidth: 560, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div data-recorrido="semana"><TiraDeSemana dias={dias} elegido={dias.findIndex((d) => d.isToday)} /></div>
+        {bibliotecas.length === 0 && (
+          <div data-recorrido="plan">
+            <TarjetaTuPlan conCoach={conCoach} coach={coach} alBuscar={alIrAExplorar} alPonerCodigo={() => abrePerfil('equipo')} />
+          </div>
+        )}
+        {/* Los atajos, los mismos del Home con plan: Salud en una franja y los demás en cuadritos con la palabra adentro. */}
+        <div data-recorrido="atajos" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <FranjaDeSalud dolor={wellness[today()]?.soreness ?? null} reloj={reloj} salud={salud} onAbrir={() => onAbrirHoja('wellness')} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
+            <EntrenoLibre
+              userId={userId} unidadPeso={unidadPeso} variante="atajos" sinPlan conEmpujon={sinEntrenador} alIrAExplorar={alIrAExplorar}
+              medio={(
+                <Sin1RM>
+                  <Cuadrito
+                    tono="violeta" Icono={Calculator} texto="1RM" onClick={() => onAbrirHoja('oneRM')}
+                    etiquetaAccesible={mejorRM ? `1RM: ${mejorRM.nombre} ${desdeKilos(mejorRM.kg, unidadPeso)} ${etiquetaUnidad(unidadPeso)}` : '1RM: anotar'}
+                  />
+                </Sin1RM>
+              )}
+            />
+          </div>
+        </div>
+        {/* «Tus entrenos», solo cuando ya hay alguno (sin ninguno, la tarjeta «Aquí van a vivir tus entrenos» es del Home con plan). La `key` lo vuelve a leer al cerrar el punto ●. */}
+        {filas?.length > 0 && <EntrenoLibre key={recargaEntrenos} userId={userId} unidadPeso={unidadPeso} variante="historial" conEmpujon={sinEntrenador} alIrAExplorar={alIrAExplorar} />}
+        {/* Quien compró una biblioteca de clases no espera un plan: lo que tiene son sus clases. */}
         {bibliotecas.map((b) => <TarjetaDeBiblioteca key={b.id} biblioteca={b} onAbrir={() => onAbrirHoja(`biblioteca:${b.id}`)} />)}
+        <AvisosDeCompra porAtender={comprasPorAtender} fallo={comprasFallo} reintenta={reintentaCompras} />
       </div>
-    )}
-    {coach && bibliotecas.length === 0 && <div style={{ marginBottom: 12 }}><TeEstaArmando coach={coach} /></div>}
-    {conLibre && bibliotecas.length === 0 && (
-      <div style={{ marginBottom: 18 }}>
-        <EmpiezaAqui perfil={perfil} userId={userId} conCoach={!!coach || !!perfil?.coach_id} onRegistrar={onRegistrar} recarga={recargaEntrenos} />
-      </div>
-    )}
-    {conLibre ? (
-      // Sin plan, Home son widgets (12 oct 2026): el cartel «Entrenar», Stickers, Explorar, Demo workout, Salud y 1RM, y «Tus entrenos».
-      <EntrenoLibre
-        userId={userId} unidadPeso={perfil?.unidad_peso || 'kg'} conEmpujon={sinEntrenador} alIrAExplorar={alIrAExplorar}
-        cuadros={<CuadroDeSalud dolor={null} onAbrir={() => onAbrirHoja('wellness')} />}
-        chicos={<Sin1RM><CuadroBlanco Icono={Calculator} titulo="1RM" color="#00A372" fondo="#E3F6EF" onClick={() => onAbrirHoja('oneRM')} /></Sin1RM>}
-      />
-    ) : (
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-        <button type="button" onClick={() => onAbrirHoja('wellness')} className="kp-press"
-          style={{
-            padding: '12px 18px', borderRadius: 13, border: 'none', cursor: 'pointer',
-            background: UI.relleno, fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text,
-            display: 'inline-flex', alignItems: 'center', gap: 8,
-          }}>
-          <Heart size={16} color={T.accent} /> Registrar salud
-        </button>
-        <Sin1RM>
-          <button type="button" onClick={() => onAbrirHoja('oneRM')} className="kp-press"
+      {recorrido > 0 && (
+        <RecorridoDelHome key={recorrido} conCoach={conCoach} nombreCoach={nombreCorto(coach?.full_name || coach?.username)} alCerrar={cierraRecorrido} />
+      )}
+    </div>
+  );
+};
+
+/* Lo que ve un coach al mirar la app de su atleta sin plan (`soloLectura`): como era antes del 2 nov 2026. */
+const NoPlanSoloLectura = ({ onAbrirHoja }) => {
+  const { coach } = usePalabras();
+  const { bibliotecas, comprasPorAtender, comprasFallo, reintentaCompras } = usePlan();
+  const { perfil } = usePerfilDeLaVista();
+  return (
+    <div style={{ background: UI.fondo, minHeight: '100svh' }}>
+      <Saludo nombre={perfil?.full_name || perfil?.username} />
+      <div style={{ padding: '16px 18px 120px', maxWidth: 560, margin: '0 auto' }}>
+        {(comprasPorAtender.length > 0 || comprasFallo) && (
+          <div style={{ marginBottom: 18 }}><AvisosDeCompra porAtender={comprasPorAtender} fallo={comprasFallo} reintenta={reintentaCompras} /></div>
+        )}
+        {bibliotecas.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 18 }}>
+            {bibliotecas.map((b) => <TarjetaDeBiblioteca key={b.id} biblioteca={b} onAbrir={() => onAbrirHoja(`biblioteca:${b.id}`)} />)}
+          </div>
+        )}
+        {coach && bibliotecas.length === 0 && <div style={{ marginBottom: 12 }}><TeEstaArmando coach={coach} /></div>}
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <button type="button" onClick={() => onAbrirHoja('wellness')} className="kp-press"
             style={{
               padding: '12px 18px', borderRadius: 13, border: 'none', cursor: 'pointer',
               background: UI.relleno, fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text,
               display: 'inline-flex', alignItems: 'center', gap: 8,
             }}>
-            <Calculator size={16} color={T.accent} /> Calcular 1RM
+            <Heart size={16} color={T.accent} /> Registrar salud
           </button>
-        </Sin1RM>
+          <Sin1RM>
+            <button type="button" onClick={() => onAbrirHoja('oneRM')} className="kp-press"
+              style={{
+                padding: '12px 18px', borderRadius: 13, border: 'none', cursor: 'pointer',
+                background: UI.relleno, fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text,
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+              }}>
+              <Calculator size={16} color={T.accent} /> Calcular 1RM
+            </button>
+          </Sin1RM>
+        </div>
       </div>
-    )}
-  </div>
-  </div>
+    </div>
   );
+};
+
+const NoPlanState = (props) => {
+  const { soloLectura, userId } = usePerfilDeLaVista();
+  return !soloLectura && userId ? <HomeSinPlan {...props} /> : <NoPlanSoloLectura {...props} />;
 };
 
 /* La pestaña «Entrenar» de quien no tiene plan: las opciones directo, sin pasar por la hoja (12 oct 2026). */
@@ -2130,7 +2208,7 @@ const EntrenarSinPlan = ({ alIrAHome, alIrAExplorar }) => {
   return (
     <div style={{ padding: '84px 20px 120px', maxWidth: 560, margin: '0 auto' }}>
       <div style={{ fontSize: 24, fontWeight: 800, color: T.text, letterSpacing: -0.4, marginBottom: 16 }}>Entrenar</div>
-      {!soloLectura && userId && <EntrenoLibre userId={userId} unidadPeso={perfil?.unidad_peso || 'kg'} enLinea alIrAHome={alIrAHome} conEmpujon={!coach} alIrAExplorar={alIrAExplorar} volverA="Atrás" />}
+      {!soloLectura && userId && <EntrenoLibre userId={userId} unidadPeso={perfil?.unidad_peso || 'kg'} alIrAHome={alIrAHome} conEmpujon={!coach} alIrAExplorar={alIrAExplorar} volverA="Atrás" />}
     </div>
   );
 };
@@ -2172,7 +2250,7 @@ export default function TrainingApp() {
   // El punto ● (registrar algo por su cuenta) es de quien entró: no del coach que mira la app de un atleta.
   const puedeRegistrar = !miraAjeno && !!user?.id;
   const [registrando, setRegistrando] = useState(false);
-  const [vecesRegistrado, setVecesRegistrado] = useState(0); // al cerrar el punto, «Empieza aquí» vuelve a contar los entrenos
+  const [vecesRegistrado, setVecesRegistrado] = useState(0); // al cerrar el punto, Home sin plan vuelve a leer sus entrenos
   useEffect(() => {
     if (tab === 'explore' && !conExplorar) setTab('home');
   }, [tab, conExplorar, setTab]);
@@ -2472,13 +2550,22 @@ export default function TrainingApp() {
     !planLoading && (tab !== 'plan' || (!!view.week && diaVisto != null)),
   );
 
+  /* EL RECORRIDO (2 nov 2026): Mi perfil ofrece «Ver el recorrido» solo si hay un Home sin plan donde enseñarlo (`lib/recorridoDelHome.js`); al pedirlo, la app va a Home y ahí empieza. */
+  const homeSinPlan = !hasPlan && !hayEquipo && !planLoading && puedeRegistrar && !soloLectura;
+  const recorridoPedido = useRecorridoPendiente();
+  useEffect(() => {
+    ponRecorridoDisponible(homeSinPlan);
+    return () => ponRecorridoDisponible(false);
+  }, [homeSinPlan]);
+  useEffect(() => { if (recorridoPedido && homeSinPlan && tab !== 'home') vasA('home'); });
+
   let content;
   if (planLoading && (tab === 'home' || tab === 'plan')) {
     content = <PlanLoadingState />;
   } else if (!hasPlan && !hayEquipo && tab === 'plan') {
     content = <EntrenarSinPlan alIrAHome={() => vasA('home')} alIrAExplorar={() => vasA('explore')} />;
   } else if (!hasPlan && !hayEquipo && tab === 'home') {
-    content = <NoPlanState onAbrirHoja={setHoja} alIrAExplorar={() => vasA('explore')} onRegistrar={puedeRegistrar ? () => setRegistrando(true) : undefined} recargaEntrenos={vecesRegistrado} />;
+    content = <NoPlanState onAbrirHoja={setHoja} alIrAExplorar={() => vasA('explore')} recargaEntrenos={vecesRegistrado} wellness={wellness} reloj={reloj} oneRMs={oneRMs} fechasRM={fechasRM} />;
   } else if (tab === 'home') {
     content = <HomeView sessionsData={sessionsData} wellness={wellness} reloj={reloj}
       oneRMs={oneRMs} fechasRM={fechasRM}
