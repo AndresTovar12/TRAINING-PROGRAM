@@ -255,6 +255,17 @@ html.mapa-nativo-pantalla [data-mapa-portal] {
   }
 }
 
+/* El borde blanco que late alrededor de la pieza que explica el recorrido de Home (2 nov 2026). Con «Reducir movimiento» se queda quieto. */
+.recorrido-late {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.95), 0 0 0 9px rgba(255, 255, 255, 0.18);
+  animation: recorrido-late 1.8s ease-in-out infinite;
+}
+@keyframes recorrido-late {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.95), 0 0 0 9px rgba(255, 255, 255, 0.18); }
+  50% { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.95), 0 0 0 15px rgba(255, 255, 255, 0.08); }
+}
+@media (prefers-reduced-motion: reduce) { .recorrido-late { animation: none; } }
+
 /* Hoja de acciones del editor de sesión en teléfono: entra deslizando desde
    abajo, que es de donde el dedo la invocó. Sin movimiento parece que la
    pantalla saltó a otro lado en vez de abrirse algo encima. */

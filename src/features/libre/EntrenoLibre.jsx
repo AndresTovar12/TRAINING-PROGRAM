@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Play, Share2, Timer } from 'lucide-react';
+import { MonitorPlay, Play, Share2, Timer } from 'lucide-react';
 import HojaFlotante from '@/components/HojaFlotante';
 import { LT, FONT } from '@/lib/theme';
 import { usePlan } from '@/contexts/PlanContext';
@@ -23,19 +23,19 @@ import HistorialCompleto from './HistorialCompleto';
 import TusEntrenos from './TusEntrenos';
 import { useDemos } from './useDemos';
 import { useCronometroLibre, useEntrenosRecientes } from './useEntrenoLibre';
-import { CuadroBlanco, Cuadrito } from '@/features/training/home/Cuadros';
+import { Cuadrito } from '@/features/training/home/Cuadros';
 import { abreSesionHecha } from '@/lib/abreSesionHecha';
 import { useRelojEnCurso } from '@/lib/relojApple';
 import { useAviso } from '@/components/AvisoPasajero';
 
 /* EL ENTRENO LIBRE, armado (12 oct 2026): lo que ve alguien en Home o en la pestaña Entrenar para entrenar por su cuenta, tenga o no un plan.
-     · `variante="completa"` (sin plan): la tarjeta azul «Entrenar» (su semana, su último entreno, «Empezar»), la de Explorar, los cuadros de color (`cuadros`, p. ej. Salud),
-       los blancos chicos (Demo workout y `chicos`, p. ej. 1RM) y «Tus entrenos» (reestructura visual, 15 oct 2026).
+     · `variante="completa"` (la pestaña Entrenar de quien no tiene plan): las opciones puestas directo y «Tus entrenos». La tarjeta azul «Entrenar», la de
+       Explorar y los cuadros de color del Home sin plan se quitaron el 2 nov 2026: ese Home usa las mismas piezas que el de con plan (ver `variante="atajos"`).
      · `variante="atajos"` (Home con plan, 30 oct 2026): los cuadritos «Libre» (con el reloj si hay un entreno en curso) y «Stickers» (los del último entreno,
        con un punto mientras sea de los últimos dos días y no los haya abierto), para la fila de atajos de Home.
+       Home sin plan (2 nov 2026): `sinPlan` pone «Libre» en cielo, en primer lugar; `medio` (el cuadrito de 1RM) va entre «Libre» y lo demás, y «Demos» sale solo si hay demos.
        Fase 7 (29 oct 2026): el cuadro «Stickers» se quitó (hacía pensar que solo había una tarjeta); los stickers viven en cada entreno de «Tus entrenos».
      `volverA`: lo que dice el botón de regreso de «Ver todos» («Home», o «Atrás» desde Entrenar).
-     · `enLinea` (pestaña Entrenar): las opciones puestas directo, y «Tus entrenos».
      · `variante="historial"` (Home con plan, 23 oct 2026): solo «Tus entrenos» (auditoría p29); desde la fase 6 (29 oct 2026), con los workouts del plan.
      · `variante="punto"` (23 oct 2026, Activity Tracker): lo que abre el punto ● del centro de la barra: directo «listo para empezar» con la última actividad
        (mapa e «Iniciar», estilo Aura); el botón de la izquierda cambia de actividad (`ElegirActividad`: lista por grupos, buscador y «Crear la mía»). No dibuja nada más;
@@ -59,7 +59,7 @@ const LEIDOS = 40;
 const yaSeLeOfrecio = () => { try { return sessionStorage.getItem('tl:explorar-ofrecido') === '1'; } catch { return false; } };
 const marcaOfrecido = () => { try { sessionStorage.setItem('tl:explorar-ofrecido', '1'); } catch { /* sin almacenamiento: puede salir otra vez */ } };
 
-export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = false, variante = 'completa', alIrAHome = null, conEmpujon = false, alIrAExplorar = null, cuadros = null, chicos = null, alCerrar = null, volverA = 'Home' }) {
+export default function EntrenoLibre({ userId, unidadPeso = 'kg', variante = 'completa', alIrAHome = null, conEmpujon = false, alIrAExplorar = null, sinPlan = false, medio = null, alCerrar = null, volverA = 'Home' }) {
   const crono = useCronometroLibre(userId);
   const { filas, entrenos, recarga } = useEntrenosRecientes(userId, LEIDOS);
   const { abreDemo, hasPlan } = usePlan();
@@ -108,7 +108,6 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
   const comparteEntreno = (e) => (e.plan ? abreSesionHecha({ almacen: e.plan.s.almacen, id: e.plan.s.id, stickers: true }) : comparte(e.actividad));
   const [verTodos, setVerTodos] = useState(false);
   const creaPropia = (act) => setPropias((prev) => [act, ...propiasDe(prev)].slice(0, 30));
-  const conExplorar = conEmpujon && !!alIrAExplorar;
   /* Hay un entreno en curso en el Apple Watch, empezado ahí sin el iPhone (parte 3.6): el reloj sigue mandando y aquí no se empieza otro. */
   const enElReloj = useRelojEnCurso();
   const { avisa } = useAviso();
@@ -210,9 +209,11 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
     return (
       <>
         <Cuadrito
-          tono="azul" Icono={enCurso ? Timer : Play} texto={enCurso ? relojDeCronometro(crono.segundos) : 'Libre'} onClick={abreElCartel}
+          tono={sinPlan ? 'cielo' : 'azul'} Icono={enCurso ? Timer : Play} texto={enCurso ? relojDeCronometro(crono.segundos) : 'Libre'} onClick={abreElCartel}
           etiquetaAccesible={enCurso ? `Seguir tu entreno de ${nombreDelDeporte(deporte)}` : `Entrenar libre: ${textoDeLaSemana(semana)}`}
         />
+        {medio}
+        {sinPlan && alDemo && <Cuadrito tono="menta" Icono={MonitorPlay} texto="Demos" onClick={alDemo} etiquetaAccesible="Demo workout" />}
         <Cuadrito tono="tinta" Icono={Share2} texto="Stickers" onClick={abreStickers} aviso={nuevos} etiquetaAccesible={nuevos ? 'Stickers: tienes nuevos' : 'Stickers'} />
         {hojas}
       </>
@@ -222,24 +223,9 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', enLinea = fals
   return (
     <>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18, fontFamily: FONT }}>
-        {enLinea ? (
-          enCurso
-            ? <HeroDeEntrenar deporte={deporte} semana={semana} ultimo={ultimo} enCurso segundos={crono.segundos} alAbrir={abreElCartel} />
-            : <OpcionesDeEntrenar alElegir={eligeDeporte} alDemo={alDemo} alTodas={() => setHoja('elegir')} />
-        ) : (
-          <>
-            <HeroDeEntrenar deporte={deporte} semana={semana} ultimo={ultimo} enCurso={enCurso} segundos={crono.segundos} alAbrir={abreElCartel} />
-            {conExplorar && <TarjetaDeExplorar alTocar={alIrAExplorar} />}
-            {/* Sin el cuadro «Stickers» (fase 7): el de Salud va con los blancos chicos, en la misma cuadrícula. */}
-            {(cuadros || alDemo || chicos) && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
-                {cuadros}
-                {alDemo && <CuadroBlanco Icono={Play} titulo="Demo workout" color="#7C5CFF" fondo="#EFEBFF" onClick={alDemo} />}
-                {chicos}
-              </div>
-            )}
-          </>
-        )}
+        {enCurso
+          ? <HeroDeEntrenar deporte={deporte} semana={semana} ultimo={ultimo} enCurso segundos={crono.segundos} alAbrir={abreElCartel} />
+          : <OpcionesDeEntrenar alElegir={eligeDeporte} alDemo={alDemo} alTodas={() => setHoja('elegir')} />}
         <TusEntrenos entrenos={entrenos?.slice(0, 6)} unidadPeso={unidadPeso} propias={propias} alAbrir={abreEntreno} alCompartir={comparteEntreno} alVerTodos={() => setVerTodos(true)} />
       </div>
 

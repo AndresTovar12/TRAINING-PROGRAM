@@ -41,8 +41,8 @@ function textoDeFecha(fecha = new Date()) {
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
-/** El marco azul de la tarjeta de hoy (también lo usa «Entrenar» de quien no tiene plan, `HeroDeEntrenar`). */
-export function Marco({ etiqueta, punto = '#FFB547', fecha, children, estilo }) {
+/** El marco azul de la tarjeta de hoy (también lo usa «Entrenar» de quien no tiene plan, `HeroDeEntrenar`, y su «Tu plan», `TarjetaTuPlan`, que va sin fecha: `conFecha={false}`). */
+export function Marco({ etiqueta, punto = '#FFB547', fecha, conFecha = true, children, estilo }) {
   // Sin `etiqueta` (la tarjeta de hoy) no hay franja de arriba: ni la pastilla ni la fecha.
   return (
     <article style={{
@@ -55,7 +55,7 @@ export function Marco({ etiqueta, punto = '#FFB547', fecha, children, estilo }) 
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0, maxWidth: '100%', padding: '7px 13px', borderRadius: 999, background: 'rgba(255,255,255,0.14)', fontSize: 14, fontWeight: 700, lineHeight: 1.25 }}>
           <i aria-hidden="true" style={{ width: 9, height: 9, borderRadius: '50%', background: punto, flexShrink: 0 }} /><span className="texto-largo">{etiqueta}</span>
         </span>
-        <span style={{ fontSize: 14, fontWeight: 600, opacity: 0.82, marginLeft: 'auto' }}>{textoDeFecha(fecha)}</span>
+        {conFecha && <span style={{ fontSize: 14, fontWeight: 600, opacity: 0.82, marginLeft: 'auto' }}>{textoDeFecha(fecha)}</span>}
       </div>}
       {children}
     </article>

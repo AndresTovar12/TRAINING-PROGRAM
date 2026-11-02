@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { AVISO_ABRE_PERFIL } from '@/lib/abrePerfil';
+import { pideElRecorrido, useRecorridoDisponible } from '@/lib/recorridoDelHome';
 import {
-  X, Loader2, User as UserIcon, Users, Sparkles, Library, ChevronLeft, ChevronRight, HeartPulse, KeyRound, ShoppingBag, Wallet, Watch, Bell,
+  X, Loader2, User as UserIcon, Users, Sparkles, Library, ChevronLeft, ChevronRight, HeartPulse, KeyRound, ShoppingBag, Wallet, Watch, Bell, Compass,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
@@ -39,7 +40,7 @@ function initialsFrom(name) {
 
 /* Lo mismo que se contesta en el inicio se cambia aquí (Andrés, 8 oct 2026: ninguna respuesta del inicio es definitiva).
    El coach: a qué se dedica, qué entrena y si trabaja en equipo. El atleta: su fecha de nacimiento. (El recorrido del inicio ya no existe desde el
-   inicio nuevo, 30 oct 2026: el coach empieza en «Primeros pasos» y el atleta en «Empieza aquí».) */
+   inicio nuevo, 30 oct 2026: el coach empieza en «Primeros pasos» y el atleta en su Home; el 2 nov 2026 volvió, otro, como «Ver el recorrido», solo para quien no tiene plan.) */
 export default function ProfileScreen({ onClose, enfoque = null }) {
   const { profile, user, isAdmin, updateProfile } = useAuth();
   const isMaster = !!profile?.is_owner;
@@ -152,6 +153,13 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
       Cerrar sesión
     </button>
   );
+  /* «Ver el recorrido» (2 nov 2026): lleva a Home y vuelve a empezar el recorrido de la primera vez desde el paso 1. Solo sale si hay un Home sin plan donde enseñarlo. */
+  const hayRecorrido = useRecorridoDisponible();
+  const verElRecorrido = hayRecorrido && (
+    <Grupo>
+      <Fila izquierda={<IconoDeFila><Compass size={18} /></IconoDeFila>} texto="Ver el recorrido" onClick={() => { onClose?.(); pideElRecorrido(); }} />
+    </Grupo>
+  );
   const actual = seccion ?? (esCompu ? 'perfil' : null);
   const textoDe = (id) => (id === 'perfil' ? 'Mis datos' : secciones.find((x) => x.id === id)?.texto ?? 'Mi perfil');
   const filaDe = (id) => {
@@ -182,6 +190,7 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
       <FilaPorSubir />
       <Grupo>{['cuenta', 'compras', 'cobros', 'dispositivos', 'avisos'].map(filaDe)}</Grupo>
       <Grupo>{['equipo', 'metricas', 'ejercicios', 'ia'].map(filaDe)}</Grupo>
+      {verElRecorrido}
       {cerrarSesion}
     </>
   );
@@ -255,7 +264,8 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
         />
       )}
 
-      {/* En el teléfono «Cerrar sesión» va al final de la lista de secciones; aquí, solo en la compu. */}
+      {/* En el teléfono «Ver el recorrido» y «Cerrar sesión» van al final de la lista de secciones; aquí, solo en la compu. */}
+      {esCompu && verElRecorrido}
       {esCompu && cerrarSesion}
     </>
   );

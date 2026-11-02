@@ -8,6 +8,7 @@ import { cargaPosters } from '@/lib/posters';
 import { AppStateProvider } from '@/contexts/AppStateContext';
 import { PalabrasProvider, usePalabras } from '@/contexts/PalabrasContext';
 import { AVISO_ABRE_PERFIL } from '@/lib/abrePerfil';
+import { useRecorridoAbierto } from '@/lib/recorridoDelHome';
 import SincronizaReloj from '@/features/profile/SincronizaReloj';
 import ConectaRelojGlobal from '@/features/reloj/ConectaRelojGlobal';
 import { RecibeDelReloj, SinPlanAlReloj } from '@/features/reloj/RelojSinTelefono';
@@ -126,7 +127,9 @@ function AccountMenu({ perfil, onPerfil }) {
     window.addEventListener('scroll', alMover, { passive: true });
     return () => window.removeEventListener('scroll', alMover);
   }, []);
-  const seEsconde = escondido && !open;
+  // Mientras corre el recorrido de Home, el botón se queda a la vista: es su último paso (`lib/recorridoDelHome.js`).
+  const enRecorrido = useRecorridoAbierto();
+  const seEsconde = escondido && !open && !enRecorrido;
 
   useEffect(() => {
     const onClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -149,6 +152,7 @@ function AccountMenu({ perfil, onPerfil }) {
         onClick={() => setOpen((v) => !v)}
         aria-label="Cuenta"
         aria-expanded={open}
+        data-recorrido="perfil"
         className="kp-press"
         style={{
           width: grande ? 52 : 42, height: grande ? 52 : 42, borderRadius: grande ? 16 : 13, overflow: 'hidden', border: 'none',

@@ -61,7 +61,7 @@ import AvisoDelReloj from '@/features/reloj/AvisoDelReloj';
  *   · LAS PREGUNTAS DE DOS RESPUESTAS (entrenador, equipo, ejercicios) VAN COMO LA CONFIGURACIÓN DEL IPHONE: un dibujo arriba, la pregunta al centro y las
  *     respuestas abajo, al alcance del pulgar. Un toque guarda y sigue.
  *   · AL FINAL, LA BIENVENIDA (`Bienvenida`): lo que sigue, no la lista de lo contestado. Sin recorrido: el coach empieza en «Primeros pasos» y el atleta
- *     en «Empieza aquí».
+ *     en su Home sin plan (y, la primera vez, el recorrido; desde el 2 nov 2026 «Empieza aquí» ya no existe).
  *   · LO QUE ENTRENA ORDENA, NUNCA QUITA, y NINGUNA RESPUESTA ES UNA PUERTA: todo se cambia en Mi perfil.
  *
  * El camino de cada quien (ver `docs/inicio.md`):
