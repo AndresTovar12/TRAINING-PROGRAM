@@ -250,6 +250,7 @@ export function AppStateProvider({ children }) {
     }
 
     (async () => {
+      // Con su tope de 3 s: si el teléfono no contesta, se sigue sin copia y esa copia no se pisa (`lib/almacenDelTelefono.js`).
       const copia = conCopia ? abreCopia(await leeDelTelefono(claveDelEstado(userId))) : null;
       if (cancelled) return;
       const conBase = !!copia?.enLaBase;

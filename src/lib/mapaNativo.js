@@ -104,12 +104,8 @@ export const claveDeRuta = (puntos, sigue) => {
   return `${puntos.length}|${u ? `${u.lat},${u.lng}` : '-'}|${sigue ? 1 : 0}`;
 };
 
-/** Una promesa con tiempo límite: si no responde a tiempo, falla con `mensaje`. La original sigue su camino (quien la creó decide qué hacer con lo que llegue tarde). */
-export function conTiempoLimite(promesa, ms, mensaje = 'tiempo agotado') {
-  let reloj;
-  const limite = new Promise((_, rechaza) => { reloj = setTimeout(() => rechaza(new Error(mensaje)), ms); });
-  return Promise.race([promesa, limite]).finally(() => clearTimeout(reloj));
-}
+// Una promesa con tiempo límite. Vive en `lib/tiempoLimite.js` (también la usan el almacén del teléfono y el reloj); aquí se sigue exportando para el mapa.
+export { conTiempoLimite } from './tiempoLimite.js';
 
 /** Pone en fila las operaciones del mapa nativo (crear y destruir) para que nunca haya dos a la vez: React, en desarrollo, monta y desmonta rápido. Una que falle no detiene la fila. */
 export function creaFila() {

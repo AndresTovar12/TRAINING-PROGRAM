@@ -123,23 +123,23 @@ export async function iniciaNativo() {
   // El código del mapa de Apple se baja desde ya (en iPhone): así, al abrir un mapa, no se gastan segundos del tiempo de espera en descargarlo.
   if (Capacitor.getPlatform() === 'ios') import('@capgo/capacitor-native-map').catch(() => {});
 
-  try {
+  /* Cada paso por su lado (2 nov 2026): antes iban uno detrás de otro, y si un plugin no contestaba, los de después (los links que abren la app, quitar la
+     pantalla de inicio) se quedaban esperándolo. Nadie espera a estos pasos: la app se dibuja sin ellos. */
+  const aparte = (paso, siFalla) => { paso().catch(siFalla); };
+  aparte(async () => {
     const { StatusBar, Style } = await import('@capacitor/status-bar');
     await StatusBar.setStyle({ style: Style.Light });
-  } catch { /* sin barra de estado propia: no pasa nada */ }
-
-  try {
+  }, () => { /* sin barra de estado propia: no pasa nada */ });
+  aparte(async () => {
     const { Keyboard } = await import('@capacitor/keyboard');
     await Keyboard.setAccessoryBarVisible({ isVisible: false });
-  } catch { /* igual */ }
-
-  try {
+  }, () => { /* igual */ });
+  aparte(async () => {
     const { App } = await import('@capacitor/app');
-    App.addListener('appUrlOpen', (e) => alLink(e?.url ?? ''));
-  } catch { /* sin links que abran la app */ }
-
-  try {
+    await App.addListener('appUrlOpen', (e) => alLink(e?.url ?? ''));
+  }, () => { /* sin links que abran la app */ });
+  aparte(async () => {
     const { SplashScreen } = await import('@capacitor/splash-screen');
     await SplashScreen.hide();
-  } catch { /* igual */ }
+  }, () => { /* igual */ });
 }
