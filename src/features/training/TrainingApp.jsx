@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
-import { useAviso } from '@/components/AvisoPasajero';
 import {
   ChevronRight, ChevronLeft, Calendar, Lock,
   Check, X, Calculator, TrendingUp, Edit3, Layers,
@@ -17,7 +16,7 @@ import { useRecuperacionReciente } from '@/lib/useRecuperacionReciente';
 import AbreMetricas from '@/features/metricas/AbreMetricas';
 import {
   sessionIdFor, calc1RM, today, isLoadedExercise,
-  resolveCursor, reparaCursor, selloDelPlan, tieneSelloDe, findPreviousWeight, historialDePeso,
+  resolveCursor, findPreviousWeight, historialDePeso,
   formatIntensity,
   sessionForToday, weekOverview, weekdayToday, weekdayLabel,
   cursorAlDia, isoWeekKey, esDescanso, enOrdenDeSemana,
@@ -30,6 +29,7 @@ import { aKilos, desdeKilos, etiquetaUnidad } from '@/lib/unidades';
 import { maximoParaHome, useUnRM } from '@/lib/unRM';
 import { portadaParaAtleta, videosParaAtleta } from '@/lib/videos';
 import { useAppState, useStorage } from '@/contexts/AppStateContext';
+import { useMarcadorAlDia } from '@/features/training/useMarcadorAlDia';
 import { useDiaDeHoy } from '@/lib/useDiaDeHoy';
 import { pideAbrirEntreno, hayEntrenoPendiente } from '@/lib/entrenoPendiente';
 import { preparaAudio } from '@/lib/pitidos';
@@ -2218,8 +2218,7 @@ export default function TrainingApp() {
     phases: PLAN, hasPlan, planLoading, kind, estructura, programas, bibliotecas, demoActiva, cierraDemo, programaActivo, elegirPrograma, claveDe,
   } = usePlan();
   const { soloLectura } = usePerfilDeLaVista();
-  // `confirmado`: el estado ya se comparó con la base (no es solo la copia del teléfono, ver `AppStateContext`).
-  const { store, setStore, confirmado } = useAppState();
+  const { store, setStore } = useAppState();
   /* EQUIPO = hay más de un programa con sesiones (el del coach y, además, lo que
      otra persona le pegó o armó aparte). Quien ya dio de alta no cuenta. Sin
      equipo, todo es la app de siempre. El filtro «Ver» y las etiquetas de «quién
@@ -2264,60 +2263,14 @@ export default function TrainingApp() {
   const [wellness, setWellness] = useStorage('wr:wellness', {});
   // Lo que dejó el reloj (reposo, HRV, sueño): se lee una vez y lo usan la tarjeta de Home y la hoja de Salud.
   const reloj = useRecuperacionReciente();
-  const [storedCursor, setCursor] = useStorage(claveDe('wr:cursor'), null);
   const [programaAbierto, setProgramaAbierto] = useState(false);
-
-  /* Cursor efectivo: el guardado si sigue siendo válido para este plan; si no,
-     el primer día. Y encima, puesto al día con el calendario.
-
-     `cursorAlDia` es lo que arregla el bicho más viejo de la app: el puntero se
-     escribía una vez y no lo movía NADIE. `advanceCursor` existía pero no se
-     llamaba desde ningún sitio, así que Andrés llevaba semanas viendo "Semana 6
-     de 8" y creía que era por no marcar las sesiones. Marcar tampoco lo movía.
-
-     Ahora avanza una semana del plan por cada semana de calendario que pasa. */
-  const cursorInicialDeCompra = programaActivo?.cursorBase ?? null;
-  /* Si el marcador guardado no cabe en el plan (29 oct 2026, ver `reparaCursor`): mismo plan editado → la semana más cercana; plan nuevo → el
-     principio (un plan comprado, donde lo dejó la compra). Antes los dos casos, y cualquier lectura a medias, terminaban en «Fase 1 · Semana 1». */
-  const reparo = useMemo(
-    () => reparaCursor(PLAN, storedCursor, { base: cursorInicialDeCompra }),
-    [PLAN, storedCursor, cursorInicialDeCompra],
-  );
-  const cursorBase = reparo.cursor;
-  // Con la app abierta pasa la medianoche: lo que se cuenta con la fecha de hoy se vuelve a contar.
+  // Hoy (con la app abierta pasa la medianoche: lo que se cuenta con la fecha de hoy se vuelve a contar).
   const hoy = useDiaDeHoy();
-  const cursor = useMemo(() => cursorAlDia(PLAN, cursorBase, hoy), [PLAN, cursorBase, hoy]);
-
-  /* Lo que el calendario adelanta se guarda, para que la próxima vez se cuente
-     desde aquí y no desde el sello viejo. Va en un efecto y no en el useMemo
-     porque un useMemo que escribe estado se ejecuta dos veces en desarrollo. */
-  /* Además se guarda con el SELLO de su plan (las fases y su posición, ver `selloDelPlan`) y con el `motivo` del cambio, que queda en el historial de
-     la base (`historial_del_marcador`). Nunca con el plan a medio cargar. Y si la app tuvo que moverlo por su cuenta (plan editado o plan nuevo),
-     lo dice con «Deshacer»: deshacer regresa el marcador de antes y, mientras la app siga abierta, no se vuelve a mover solo. */
-  const { avisa } = useAviso();
-  const sinRepararOtraVez = useRef(null);
-  const claveDelCursor = claveDe('wr:cursor');
-  useEffect(() => {
-    if (!cursor || planLoading || !PLAN?.length) return;
-    /* SIN CONEXIÓN (1 nov 2026): con la copia del teléfono (abrió sin señal) el marcador NO se guarda solo. Saldría de una copia que puede tener días y, al
-       volver la señal, pisaría el que su coach movió mientras tanto (el marcador va entero). Lo que se ve sí está al día: `cursor` ya cuenta el calendario.
-       En cuanto se relee la base, esto corre con el marcador de verdad. Moverlo a mano (`MoverMiPlan`) sí se guarda: es lo que la persona quiso. */
-    if (!confirmado) return;
-    const a = storedCursor;
-    if (a && sinRepararOtraVez.current === `${claveDelCursor}|${JSON.stringify(a)}`) return;
-    const nuevo = selloDelPlan(PLAN, cursor);
-    const semanaDistinta = !a || a.phaseId !== nuevo.phaseId || a.weekNum !== nuevo.weekNum;
-    const cambio = semanaDistinta || a.dayIdx !== nuevo.dayIdx || a.fijadoEn !== nuevo.fijadoEn || !tieneSelloDe(PLAN, a);
-    if (!cambio) return;
-    const motivo = reparo.motivo ?? (a && semanaDistinta ? 'calendario' : a?.motivo);
-    setCursor(motivo ? { ...nuevo, motivo } : nuevo);
-    if (a && !soloLectura && (reparo.motivo === 'reparado' || reparo.motivo === 'plan-nuevo')) {
-      const donde = textoDeSemana({ phases: PLAN, kind, estructura }, nuevo.phaseId, nuevo.weekNum);
-      avisa(reparo.motivo === 'plan-nuevo' ? `Tienes un plan nuevo: empiezas en ${donde}.` : `Tu plan cambió y tu semana ya no estaba: ahora vas en ${donde}.`, {
-        accion: { texto: 'Deshacer', alTocar: () => { sinRepararOtraVez.current = `${claveDelCursor}|${JSON.stringify(a)}`; setCursor(a); } },
-      });
-    }
-  }, [cursor, storedCursor, setCursor, planLoading, PLAN, reparo.motivo, claveDelCursor, avisa, kind, estructura, soloLectura, confirmado]);
+  /* El marcador del plan: dónde va, al día con el calendario, y guardado cuando la app lo mueve sola (ver `useMarcadorAlDia`). Un plan comprado empieza
+     donde lo dejó la compra (`cursorBase`). */
+  const { cursor, setCursor } = useMarcadorAlDia({
+    PLAN, planLoading, kind, estructura, clave: claveDe('wr:cursor'), base: programaActivo?.cursorBase ?? null, hoy, soloLectura,
+  });
 
   const cursorSession = useMemo(() => resolveCursor(PLAN, cursor), [PLAN, cursor]);
   // En una rutina que se repite no hay puntero que avance: la sesión activa es la de hoy.

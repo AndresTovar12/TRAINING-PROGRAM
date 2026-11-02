@@ -5,7 +5,9 @@
    contra la última copia conocida de la base y nunca contra un estado vacío, y lo que otro aparato escribió mientras tanto no se borra. */
 import assert from 'node:assert/strict';
 import { BORRAR, aplicarParche, diferencia } from '../src/lib/estadoPorPartes.js';
-import { abreCopia, armaCopia, cuantasCosas, rebasa, soloLoPendiente } from '../src/lib/copiaDelEstado.js';
+import {
+  abreCopia, armaCopia, cuantasCosas, noPisaElMarcador, pendienteQueManda, rebasa, seMovioSolo, soloLoPendiente,
+} from '../src/lib/copiaDelEstado.js';
 
 let n = 0;
 const prueba = (nombre, f) => { f(); n += 1; console.log(`  ✓ ${nombre}`); };
@@ -139,6 +141,34 @@ prueba('cada sesión anotada cuenta una; cada día de bienestar uno; lo de la pa
   assert.equal(cuantasCosas({ 'wr:wellness': { '2026-11-01': {} }, 'wr:onerm': { banca: 1 }, 'wr:cursor': {} }), 3);
   assert.equal(cuantasCosas({ 'ui:avisos-vistos': { x: 1 }, 'ui:stickers-vistos': 'y' }), 0);
   assert.equal(cuantasCosas({ 'wr:sessions': BORRAR }), 1);
+});
+
+console.log('El marcador que la app movió sola (2 nov 2026; la carrera del arranque está en prueba-marcador-al-abrir.mjs)');
+const F4 = { phaseId: 'f4', weekNum: 6, dayIdx: 0, fijadoEn: '2026-W45', motivo: 'calendario' };
+const NUEVO = { phaseId: 'f1', weekNum: 1, dayIdx: 0, fijadoEn: '2026-W45', motivo: 'nuevo' };
+prueba("'nuevo' no se sube encima de un marcador con fase (la regla de `marcador_nuevo_no_pisa`); sí encima de nada o de otro 'nuevo'", () => {
+  const r = noPisaElMarcador({ 'wr:cursor': F4, 'wr:onerm': { banca: 1 } }, { 'wr:cursor': NUEVO, 'wr:onerm': { banca: 2 } });
+  assert.deepEqual(r.parche, { 'wr:onerm': { banca: 2 } }, 'lo demás se sube');
+  assert.deepEqual(r.devueltos, { 'wr:cursor': F4 }, 'y la pantalla vuelve al de la base');
+  assert.equal(noPisaElMarcador({ 'wr:cursor@fisio': F4 }, { 'wr:cursor@fisio': NUEVO }).parche, undefined, 'también en los marcadores de equipo');
+  assert.equal(noPisaElMarcador({ 'wr:cursor': F4 }, { 'wr:cursor': BORRAR }).parche, undefined, 'ni borrarlo');
+  assert.deepEqual(noPisaElMarcador({}, { 'wr:cursor': NUEVO }).parche, { 'wr:cursor': NUEVO }, 'sin marcador en la base, el primero sí');
+  assert.deepEqual(noPisaElMarcador({ 'wr:cursor': NUEVO }, { 'wr:cursor': { ...NUEVO, dayIdx: 2 } }).parche, { 'wr:cursor': { ...NUEVO, dayIdx: 2 } }, 'encima de otro nuevo, sí');
+  const plan = { ...F4, motivo: 'plan-nuevo' };
+  assert.deepEqual(noPisaElMarcador({ 'wr:cursor': F4 }, { 'wr:cursor': plan }).parche, { 'wr:cursor': plan }, 'un plan nuevo de verdad (plan-nuevo) sí');
+});
+prueba('al releer: lo que la app movió sola no se pone encima de una base que cambió; lo movido a mano sí', () => {
+  const vieja = { 'wr:cursor': F4 };
+  const delCoach = { ...F4, phaseId: 'f2', weekNum: 3, motivo: 'coach' };
+  const adelantado = { ...F4, phaseId: 'f5', weekNum: 1, fijadoEn: '2026-W46', motivo: 'calendario' };
+  assert.deepEqual(rebasa({ 'wr:cursor': delCoach }, vieja, { 'wr:cursor': adelantado })['wr:cursor'], delCoach, 'su coach lo movió: gana la base');
+  assert.deepEqual(rebasa({ 'wr:cursor': F4 }, vieja, { 'wr:cursor': adelantado })['wr:cursor'], adelantado, 'la base no cambió: el adelanto se queda');
+  const aMano = { ...adelantado, motivo: 'atleta' };
+  assert.deepEqual(rebasa({ 'wr:cursor': delCoach }, vieja, { 'wr:cursor': aMano })['wr:cursor'], aMano, 'movido a mano: gana el último que llega');
+  assert.deepEqual(rebasa({ 'wr:cursor': F4 }, { 'wr:cursor': NUEVO }, { 'wr:cursor': NUEVO })['wr:cursor'], F4, 'la copia mala (creía que la base tenía el nuevo): gana la base');
+  assert.deepEqual(pendienteQueManda({ 'wr:cursor': NUEVO, 'wr:onerm': { banca: 3 } }, null, { 'wr:cursor': F4 }), { 'wr:onerm': { banca: 3 } }, 'sin base vieja conocida, lo movido solo no manda; lo demás sí');
+  assert.equal(seMovioSolo({ 'wr:cursor': adelantado }), true);
+  assert.equal(seMovioSolo({ 'wr:cursor': aMano, 'wr:onerm': {} }), false);
 });
 
 console.log(`\n✓ ${n} pruebas de la copia del estado`);

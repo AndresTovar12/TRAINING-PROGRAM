@@ -4,7 +4,9 @@ import {
 import { supabase } from '@/lib/supabase';
 import { usePerfilDeLaVista } from '@/contexts/VistaContext';
 import { diferencia, aplicarParche } from '@/lib/estadoPorPartes';
-import { abreCopia, armaCopia, claveDelEstado, cuantasCosas, ponEncima, rebasa } from '@/lib/copiaDelEstado';
+import {
+  abreCopia, armaCopia, claveDelEstado, cuantasCosas, noPisaElMarcador, pendienteQueManda, ponEncima, rebasa, seMovioSolo,
+} from '@/lib/copiaDelEstado';
 import { conCopiaEnElTelefono, guardaEnElTelefono, leeDelTelefono } from '@/lib/almacenDelTelefono';
 import { ponCosasDelEstado, registraPuertaDelEstado } from '@/lib/colaDelTelefono';
 import { esperaDeReintento } from '@/lib/colaDeSubida';
@@ -40,7 +42,7 @@ import { useAviso } from '@/components/AvisoPasajero';
  * en el teléfono (`lib/copiaDelEstado.js`): lo último que se sabe de la base y lo pendiente encima, en un solo guardado.
  *   · ABRIR SIN SEÑAL: se dibuja con la copia y la app funciona normal (`confirmado` es falso). Lo que la persona hace se guarda en la copia.
  *   · VOLVER LA SEÑAL: primero se relee la base (lo de la base manda) y luego se sube lo pendiente con `mezclar_mi_estado`, como siempre.
- *   · MIENTRAS SE USA LA COPIA, lo que la app adelanta SOLA (el marcador que el calendario mueve, ver `TrainingApp`) no se guarda: saldría de una
+ *   · MIENTRAS SE USA LA COPIA, lo que la app adelanta SOLA (el marcador que el calendario mueve, ver `useMarcadorAlDia`) no se guarda: saldría de una
  *     copia que puede tener días y pisaría, p. ej., el plan que su coach movió mientras tanto. Lo que la persona hace a mano sí se guarda.
  *   · Un guardado que falla por falta de señal ya no enseña «No se guardó»: lo pendiente está en el teléfono y el aviso de arriba dice que se sube solo.
  *     Un RECHAZO del servidor sí lo enseña, y ya no se reintenta solo para siempre: con «Reintentar», con el siguiente cambio o al abrir la app.
@@ -50,6 +52,13 @@ import { useAviso } from '@/components/AvisoPasajero';
  * día se sacara de una pantalla vieja con una base nueva, el parche «desharía» lo que otro aparato escribió. Antes el estado vivía en `useState` y su
  * espejo (`ultimoStore`) se ponía al día un instante DESPUÉS de dibujar: en ese hueco un reintento podía armar justo ese parche. Ahora el estado vive
  * en un almacén propio que cambia en el acto (`useSyncExternalStore`): la base y el estado cambian juntos, sin `await` en medio.
+ *
+ * `confirmado` QUIERE DECIR «YA ESTÁ EL ESTADO DE LA BASE» (2 nov 2026). Al atleta Andrés la app le guardó «Fase 1 · Semana 1» encima de su semana: el
+ * marcador (`useMarcadorAlDia`) se calculó en un dibujo con el plan listo y el estado SIN CARGAR (`useStorage` da su valor por defecto), porque `confirmado`
+ * solo decía «no es la copia del teléfono» y era verdadero desde antes de cargar. Su efecto corrió después de que llegara la base y escribió ese marcador
+ * encima. Ahora `confirmado` exige el estado cargado (y de esta cuenta: `loaded` es de quien se cargó), y además, como en la base (`marcador_nuevo_no_pisa`),
+ * un marcador 'nuevo' nunca se sube encima de uno con fase ni lo que la app movió sola se pone encima de una base que cambió (`lib/copiaDelEstado.js`).
+ * Prueba: `scripts/prueba-marcador-al-abrir.mjs`.
  */
 const AppStateContext = createContext(null);
 
@@ -78,7 +87,10 @@ export function AppStateProvider({ children }) {
     for (const f of [...escuchas.current]) f();
   }, []);
 
-  const [loaded, setLoaded] = useState(false);
+  // De quién es el estado que está cargado (`undefined`: ninguno). `loaded` solo es verdad para la cuenta que se dibuja: en el primer dibujo con otra cuenta
+  // todavía está el estado de la anterior, y nada debe tomarlo por el suyo.
+  const [cargadoDe, setCargadoDe] = useState(undefined);
+  const loaded = cargadoDe !== undefined && cargadoDe === (userId ?? null);
   // Se dibuja con la copia del teléfono: todavía no se logra leer la base desde que se abrió.
   const [deLaCopia, setDeLaCopia] = useState(false);
   const { falla, quitaFalla } = useAviso();
@@ -164,14 +176,33 @@ export function AppStateProvider({ children }) {
     if (!usuario || lecturaFallida.current) return;
     await persisteCopia(); // lo pendiente, primero en el teléfono
     if (deQuien.current !== usuario) return;
-    if (desdeLaCopia.current) {
+    const releeOReintenta = async () => {
       const leida = await releer();
-      if (!leida) {
-        if (deQuien.current === usuario) { fallos.current += 1; programaReintento(); }
-        return;
-      }
+      if (!leida && deQuien.current === usuario) { fallos.current += 1; programaReintento(); }
+      return leida;
+    };
+    let releida = false;
+    if (desdeLaCopia.current) {
+      if (!(await releeOReintenta())) return;
+      releida = true;
     }
-    const parche = diferencia(enLaBase.current, actual.current);
+    let pendiente = diferencia(enLaBase.current, actual.current);
+    /* EL MARCADOR QUE LA APP MOVIÓ SOLA SE SUBE CONTRA LA BASE DE AHORA (2 nov 2026). El parche se saca contra lo último que se SABE de la base; si mientras
+       tanto su coach (u otro aparato) movió el marcador, subir el que la app adelantó sola lo pisaría con uno sacado de una base vieja. Por eso, antes de
+       subirlo, se relee la base: si su marcador cambió, gana el de la base (`rebasa`, ver `lib/copiaDelEstado.js`) y aquí ya no hay nada que subir. Pasa
+       pocas veces (al abrir, una vez por semana de calendario): cuesta una lectura. Lo que la persona movió a mano ('atleta') se sube sin releer. */
+    if (!releida && seMovioSolo(pendiente)) {
+      if (!(await releeOReintenta())) return;
+      if (deQuien.current !== usuario) return;
+      pendiente = diferencia(enLaBase.current, actual.current);
+    }
+    /* Un marcador 'nuevo' (o borrado) encima de uno con fase no se sube (`noPisaElMarcador`, la misma regla que la base): salió de un estado a medias. La
+       pantalla vuelve al de la base. */
+    const { parche, devueltos } = noPisaElMarcador(enLaBase.current, pendiente);
+    if (Object.keys(devueltos).length) {
+      console.warn('user_app_state: un marcador «nuevo» no se sube encima del de la base', Object.keys(devueltos).join(', '));
+      setStore((prev) => ({ ...prev, ...devueltos }));
+    }
     if (parche === undefined) {
       // No hay nada pendiente: si había un aviso de falla, ya no aplica.
       quitaAvisoDeFalla();
@@ -232,7 +263,7 @@ export function AppStateProvider({ children }) {
   // Load the blob whenever the user changes
   useEffect(() => {
     let cancelled = false;
-    setLoaded(false);
+    setCargadoDe(undefined);
     // Otra persona (o la misma, otra vez): se olvida lo que había pendiente de la anterior (lo suyo ya está en SU copia del teléfono).
     fallos.current = 0;
     clearTimeout(relojDeReintento.current);
@@ -245,7 +276,7 @@ export function AppStateProvider({ children }) {
       deQuien.current = null;
       lecturaFallida.current = false;
       setStore({});
-      setLoaded(true);
+      setCargadoDe(null);
       return undefined;
     }
 
@@ -261,7 +292,7 @@ export function AppStateProvider({ children }) {
         desdeLaCopia.current = true;
         setDeLaCopia(true);
         setStore(copia.store);
-        setLoaded(true);
+        setCargadoDe(userId);
         quitaFalla('lectura');
         ponCosasDelEstado(userId, cuantasCosas(copia.pendiente));
         // Se vuelve a intentar leer la base con las esperas de siempre (y de una vez en cuanto vuelva la señal).
@@ -296,7 +327,7 @@ export function AppStateProvider({ children }) {
         enLaBase.current = {};
         deQuien.current = userId;
         setStore({});
-        setLoaded(true);
+        setCargadoDe(userId);
         falla('No se pudieron cargar tus datos. Reintentar', { clave: 'lectura', accion: { texto: 'Reintentar', alTocar: () => setIntentoDeLectura((n) => n + 1) } });
         return;
       }
@@ -307,9 +338,10 @@ export function AppStateProvider({ children }) {
       enLaBase.current = fresco;
       deQuien.current = userId;
       // Lo que quedó pendiente la última vez (se cerró la app sin señal, o se salió de la cuenta con cosas por subir) va encima y se sube ya.
-      const pendiente = copia?.pendiente;
+      // Sin el marcador que la app movió sola si la base ya cambió, ni un 'nuevo' encima de uno con fase (`pendienteQueManda`).
+      const pendiente = pendienteQueManda(copia?.pendiente, copia?.enLaBase ?? null, fresco);
       setStore(pendiente ? ponEncima(fresco, pendiente) : fresco);
-      setLoaded(true);
+      setCargadoDe(userId);
       if (conCopia) {
         persisteCopia();
         if (pendiente) guardarRef.current();
@@ -375,7 +407,8 @@ export function AppStateProvider({ children }) {
   }, [persisteCopia]);
 
   // `confirmado`: el estado ya se comparó con la base desde que se abrió (no es solo la copia del teléfono). Lo que la app hace SOLA espera a esto.
-  const value = useMemo(() => ({ store, setStore, loaded, confirmado: !deLaCopia }), [store, setStore, loaded, deLaCopia]);
+  // (Desde el 2 nov 2026 también exige el estado cargado: ver «`confirmado` QUIERE DECIR» arriba.)
+  const value = useMemo(() => ({ store, setStore, loaded, confirmado: loaded && !deLaCopia }), [store, setStore, loaded, deLaCopia]);
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }
