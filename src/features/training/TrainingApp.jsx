@@ -42,6 +42,7 @@ import EntrenoLibre from '@/features/libre/EntrenoLibre';
 import TiraDeSemana, { BotonDeDia, fechaDeLaSemana } from '@/features/training/home/TiraDeSemana';
 import { HoyTeToca, HoyTeTocaEquipo, HoyDescansas, HoyEnPausa } from '@/features/training/home/HoyTeToca';
 import { RelojEnHome } from '@/features/reloj/TarjetasDelReloj';
+import { EntrenoEnElReloj, PlanAlReloj } from '@/features/reloj/RelojSinTelefono';
 import { textoDeSemana } from '@/lib/vaEn';
 import { useMoverMiPlan, ReglasDeMiPlan, ControlesDeMiPlan, MoverAquiAtleta, AvisoDelCoach } from '@/features/training/MoverMiPlan';
 import { CuadroDeSalud, CuadroBlanco, Cuadrito, FranjaDeSalud } from '@/features/training/home/Cuadros';
@@ -1729,7 +1730,9 @@ const HomeView = ({
               cuando={cuando}
             />
           ) : descanso}
-          {/* El Apple Watch (fase 5): volver a conectarlo en este iPhone, o la invitación de la primera semana. Quien mira la app de otra persona no la ve. */}
+          {/* El Apple Watch (fase 5): volver a conectarlo en este iPhone, o la invitación de la primera semana. Quien mira la app de otra persona no la ve.
+              Y si empezó un entreno en el reloj sin el iPhone (parte 3.6), que sigue ahí: «Entreno en curso en tu reloj». */}
+          {!soloLectura && <EntrenoEnElReloj />}
           {!soloLectura && <RelojEnHome />}
         </div>
 
@@ -2609,6 +2612,8 @@ export default function TrainingApp() {
       {registrando && puedeRegistrar && <EntrenoLibre userId={user.id} unidadPeso={miPerfil?.unidad_peso || 'kg'} variante="punto" alCerrar={() => { setRegistrando(false); setVecesRegistrado((n) => n + 1); }} />}
       {/* La página de un workout del plan: desde «Tus entrenos», «Ver todos» y al terminarlo (fase 6). */}
       <PaginaDeSesionGlobal alVerEnElPlan={verEnElPlan} />
+      {/* El plan de hoy y de los 2 días siguientes, al Apple Watch (parte 3.1). Solo el de quien entró: nunca el de un atleta que su coach está mirando. */}
+      {!miraAjeno && !soloLectura && user?.id && <PlanAlReloj oneRMs={oneRMs} unidad={miPerfil?.unidad_peso || 'kg'} />}
       {/* Bienestar y 1RM ya no son pestañas: se abren como hoja encima, con su flecha para volver. */}
       {/* Mientras se hace un demo workout, un aviso para salir de la demo (12 oct 2026): sin él, la app se vería como la de alguien con un solo workout y no habría cómo volver. */}
       {demoActiva && (

@@ -57,13 +57,23 @@ function rehaceFoto() {
   for (const f of [...escuchas]) { try { f(); } catch { /* una pantalla que falla no apaga a las demás */ } }
 }
 
+// Quienes quieren saber cuándo subió una cosa (parte 3: el reloj dice «{quien} ya lo ve» solo cuando de verdad subió).
+const alSubir = new Set();
+
 const cola = creaCola({
   almacen: { lee: leeDelTelefono, guarda: (clave, valor) => guardaEnElTelefono(clave, valor) },
   sesion: sesionValida,
   alCambiar: (f) => { fotoDeLaCola = f; rehaceFoto(); },
   alLlegar: marcaConSenal,
   alFaltaDeSenal: (e) => { if (e) marcaSinSenal(); },
+  alSubir: (cosa) => { for (const f of [...alSubir]) { try { f(cosa); } catch { /* un aviso que falla no detiene la cola */ } } },
 });
+
+/** `fn(cosa)` corre cada vez que una cosa de la cola ya subió al servidor. Devuelve cómo quitarla. */
+export function alSubirDeLaCola(fn) {
+  alSubir.add(fn);
+  return () => alSubir.delete(fn);
+}
 
 const activa = () => conCopiaEnElTelefono();
 

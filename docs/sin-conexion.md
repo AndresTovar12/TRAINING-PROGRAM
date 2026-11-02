@@ -15,12 +15,15 @@ Todo vive en Capacitor Preferences (`UserDefaults` de iOS), no en `localStorage`
 | Llave | Qué es | Quién la escribe |
 |---|---|---|
 | `tl:estado:<id>` | El estado del atleta: lo último que se sabe de la base (`enLaBase`) y lo pendiente encima (`pendiente`), **juntos** | `AppStateContext` |
-| `tl:cola:<id>` | La cola: las cosas sueltas por subir (entrenos libres; en la parte 3, lo del reloj) | `lib/colaDelTelefono.js` |
+| `tl:cola:<id>` | La cola: las cosas sueltas por subir (entrenos libres y, desde la parte 3, lo que llegó del Apple Watch) | `lib/colaDelTelefono.js` |
 | `tl:perfil:<id>` | El perfil | `AuthContext` |
 | `tl:plan:<id>:<pieza>` | Cada pieza del plan: `programas`, `compras`, `ejercicios`, `versiones`, `medios`, `master` | `PlanContext` |
 | `tl:entrenos:<id>` | La última lista de «Tus entrenos» | `useEntrenosRecientes` |
+| `tl:reloj:llegados` | Los UUID de los entrenos que ya llegaron del reloj (para no traerlos otra vez de Salud). De todo el teléfono, como Salud | `lib/relojSinTelefonoApi.js` |
 
-Cada llave es de UNA cuenta (`<id>` = el id de la persona).
+Cada llave es de UNA cuenta (`<id>` = el id de la persona), salvo `tl:reloj:llegados`.
+
+Fuera de Preferences, en disco del lado nativo (parte 3): lo que el reloj mandó y todavía no pasa a la cola (`Application Support/TrainingLab/del-reloj/<id>.json`, lo escribe `ReceptorDelReloj` en `EntrenoWatchPlugin.swift`).
 
 ## 2. Abrir sin señal
 
@@ -106,9 +109,29 @@ No hizo falta migración. Se revisó en la base:
 - `node scripts/prueba-sin-conexion-iphone.mjs`: de punta a punta en WebKit con perfil de iPhone 13 y un Supabase falso (10 pasos): abre con señal y deja la copia; abre sin señal y con la llave vencida (el plan de hoy igual y el aviso); un cambio del plan y un entreno libre con ruta quedan en el teléfono y nada llega a la base; el entreno sale en «Tus entrenos» y su página abre sin señal; «2 cosas por subir»; se cierra y se abre con señal: todo llega una vez (aunque la primera respuesta del entreno se pierda) y lo que escribió «la compu» mientras tanto se queda; sale sin señal con algo pendiente (avisa, quita sesión y copias, deja solo lo pendiente); entra otra cuenta (no ve ni sube nada de la primera); vuelve la primera y lo suyo sube a ella. No está en `npm run check` (levanta Vite y WebKit: pesado). Usa la puerta `window.__tlPruebaSinConexion`, que solo existe con `npm run dev`. «Sin señal» ahí = Supabase no contesta y `navigator.onLine` es falso (no se usa `setOffline` del contexto: cortaría también la app, que en el iPhone viene dentro del paquete).
 - **Solo en un iPhone de verdad:** modo avión real, cerrar la app de verdad (deslizarla), Preferences nativo, y el «resume» de iOS.
 
-## 10. Para la parte 3 (el Apple Watch)
+## 10. Lo del Apple Watch (parte 3, 1 nov 2026)
 
-- **Algo que va al servidor** (un entreno libre hecho en el reloj): registra un tipo en `src/lib/tiposDeLaCola.js` con `registraTipoDeCola('reloj-…', { sube })` y agrega con `agregaALaCola({ id, tipo, usuario, datos })` (de `lib/colaDelTelefono.js`). `id`: el del reloj (p. ej. el UUID del `HKWorkout`), para que repetirlo no duplique. `sube(cosa)` usa `cosa.id` como id en la base (upsert) y lanza el error tal cual. Pon `datos.titulo` para que Mi perfil lo nombre.
-- **Algo que cambia el estado** (las series de una sesión del plan): dentro del `sube` de su tipo, `aplicaAlEstado(usuario, (store) => storeNuevo)`. Devuelve `true` cuando el cambio ya quedó en la copia del teléfono (y se sube con el resto del estado, con todas las reglas de arriba). Si devuelve `false` (la app del atleta aún no está abierta), lanza `new TodaviaNo()` (de `lib/senal.js`): la cola lo reintenta después sin avisar y sin perderlo.
-- `agregaALaCola` acepta cosas de otra cuenta (lo que llega del reloj de quien ya salió): van a SU llave y esperan a que esa cuenta vuelva.
-- Lo que el plugin reciba con la app cerrada tiene que quedar en disco del lado nativo; al abrir, pásalo a la cola con su id.
+El reloj entrena sin el iPhone y lo que termina llega aquí, a la MISMA cola. El camino completo está en `docs/entreno-y-reloj.md`, sección 10. Lo que toca a esta cola:
+
+1. **El reloj lo manda** con `transferUserInfo` (Apple lo guarda y lo entrega aunque el iPhone esté lejos, apagado o con la app cerrada). Antes de mandarlo lo guarda en su propio disco, y lo borra cuando WatchConnectivity dice que llegó: si la app del reloj se cierra en medio, lo manda otra vez al abrirse.
+2. **El iPhone lo guarda en disco al recibirlo**, del lado nativo, aunque la web no esté corriendo: `ReceptorDelReloj` (en `EntrenoWatchPlugin.swift`) se activa en `AppDelegate`, antes que la web.
+3. **Al abrir la app** (y al volver a ella, y en cuanto llega si ya está abierta), `recibeLoDelReloj` (`lib/relojSinTelefonoApi.js`) le pide al plugin lo que tiene (`pendientes`), revisa cada uno (`leeResultado`), anota su UUID en `tl:reloj:llegados`, lo mete a la cola con `agregaALaCola` y SOLO si quedó guardado le dice al plugin que lo borre (`confirma`). Lo que el plugin ya confirmó no se vuelve a entregar aunque el reloj lo mande dos veces.
+4. **La cola lo sube** con sus reglas de siempre (en orden, esperas 4/10/30/60 s, un rechazo no tapa la fila).
+
+**Cada cosa lleva el UUID de su `HKWorkout`** (el entreno que el reloj guardó en Salud) como id de la cola y como id de la fila en la base: repetirla no la duplica. Si Salud no lo guardó (sin permiso en el reloj), un UUID propio del reloj.
+
+**Tres tipos** (`lib/tiposDeLaCola.js`):
+
+| Tipo | Qué es | Cómo sube |
+|---|---|---|
+| `entreno-libre` | Un entreno libre hecho en el reloj: es un entreno libre más (el mismo tipo que el del iPhone) | `subeEntrenoLibre`, upsert por id. Mientras está en la cola sale en «Tus entrenos» como los demás (`conPendientes`) |
+| `reloj-sesion` | Una sesión del plan hecha en el reloj | Sus series al estado del atleta con `aplicaAlEstado` (se suben con el resto del estado, con las reglas de la sección 4); si la app del atleta aún no está abierta, `TodaviaNo`. Luego su pulso y su ruta a `actividades` (`guardaImportacion`, con su id) |
+| `reloj-pulso` | El pulso de un entreno que guio el iPhone (el reloj acompañó) | `guardaImportacion` con su id: le pone el pulso al entreno del iPhone o, en una sesión del plan, guarda la fila del reloj |
+
+**Se aplica una sola vez.** Las series de una sesión llevan `delReloj.id` en el registro: si la cola la reintenta, `aplicaSesionDelReloj` ve que ya está (también en `anteriores`) y no cambia nada. La fila de `actividades` con ese id ya existe: `guardaImportacion` la ve como «repetida» y no hace otra.
+
+**De quién es.** El plan que llega al reloj trae el id de la cuenta (`usuario`), y el reloj lo devuelve con cada entreno: va a la cola de ESA cuenta aunque en el iPhone haya entrado otra (espera a que vuelva, como cualquier cosa de otra cuenta). Si el reloj nunca tuvo plan, es de la cuenta que entró; si no ha entrado nadie, espera en el plugin.
+
+**Sin señal al volver** (paso 6 de la parte 3.7): lo del reloj entra a la cola igual, se ve en «Tus entrenos» y en su sesión del plan, Mi perfil lo cuenta en «N cosas por subir» (con su nombre: `datos.titulo`) y sube solo al volver la señal.
+
+**«{quien} ya lo ve».** Cuando una cosa del reloj sube, la cola avisa (`alSubirDeLaCola`) y la app se lo dice al reloj (`avisaAlRelojQueSubio`): su pantalla final pasa de «Ya está en tu iPhone» a «Carlos ya lo ve». Una sesión del plan espera además a que su estado quede guardado (`delEstado` en 0): sus series viajan con el estado.

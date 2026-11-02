@@ -21,6 +21,7 @@ import { Capacitor } from '@capacitor/core';
 import { preparaEntreno } from './metricas/construye.js';
 import { entrenoDelReloj } from './metricas/leeHealthKit.js';
 import { deporteDeApple } from './metricas/deportes.js';
+import { saltaLosDelReloj } from './relojSinTelefono.js';
 
 export const saludDisponible = () => Capacitor.isNativePlatform();
 
@@ -111,15 +112,18 @@ async function leeRecuperacion(Health, desde, hasta, { origen = 'apple_salud' } 
  * Lee de Apple Salud lo que pasó entre `desde` y `hasta` (ms; TODO CUENTA DESDE QUE CONECTA: `desde` nunca es antes de `conectado_en`). Devuelve lo mismo que
  * `leeArchivos` (`{ entrenos, recuperacion, perfil, ignorados }`) y `llego`: la hora más nueva de cada cosa que llegó (`entrenos`, `pulso`, `ruta`,
  * `recuperacion`, `sueno`), para «Lo que está llegando». `alAvance(texto)` para ir diciendo qué se lee.
+ *
+ * QUE NADA LLEGUE DOS VECES (1 nov 2026, parte 3.5): lo que guardó la app del reloj de Training Lab llega por su propio camino (`transferUserInfo`, con sus
+ * series y su pulso), así que aquí se salta: los que traen su marca y los que ya llegaron del reloj (`saltar`: sus UUID). Ver `saltaLosDelReloj`.
  */
-export async function leeSalud({ desde, hasta = Date.now(), alAvance = () => {} } = {}) {
+export async function leeSalud({ desde, hasta = Date.now(), alAvance = () => {}, saltar = new Set() } = {}) {
   const { Health } = await conPlugin();
   const desfase = -new Date().getTimezoneOffset();
 
   alAvance('Leyendo tus entrenos…');
   const workouts = await Health.queryWorkouts({ startDate: iso(desde), endDate: iso(hasta), limit: 500, ascending: true }).then((r) => r?.workouts ?? [], () => []);
-  // Un entreno que empezó antes de conectar no entra, aunque terminara después.
-  const nuevos = workouts.filter((w) => new Date(w.startDate).getTime() >= desde);
+  // Un entreno que empezó antes de conectar no entra, aunque terminara después. Lo del reloj de Training Lab tampoco: ya llega por su camino.
+  const nuevos = saltaLosDelReloj(workouts.filter((w) => new Date(w.startDate).getTime() >= desde), saltar);
 
   const entrenos = [];
   const llego = {};
@@ -166,12 +170,13 @@ export async function leeSalud({ desde, hasta = Date.now(), alAvance = () => {} 
  * saber cuántos entrenos hay (`hechos` = 0) y otra por cada entreno leído; `{ fase: 'recuperacion', hechos, total }` al terminar con los entrenos, justo antes
  * de leer el sueño y el pulso en reposo.
  */
-export async function leeLoDeAntes({ hasta, meses = 12, alAvance = () => {} } = {}) {
+export async function leeLoDeAntes({ hasta, meses = 12, alAvance = () => {}, saltar = new Set() } = {}) {
   const { Health } = await conPlugin();
   const desfase = -new Date().getTimezoneOffset();
   const desde = hasta - meses * 30.44 * 86400000;
-  const workouts = (await Health.queryWorkouts({ startDate: iso(desde), endDate: iso(hasta), limit: 2000, ascending: true }).then((r) => r?.workouts ?? [], () => []))
-    .filter((x) => new Date(x.startDate).getTime() < hasta);
+  // Lo del reloj de Training Lab tampoco cuenta aquí: ya está en `actividades` (si entrara también como «de antes», la carga lo contaría dos veces).
+  const workouts = saltaLosDelReloj((await Health.queryWorkouts({ startDate: iso(desde), endDate: iso(hasta), limit: 2000, ascending: true }).then((r) => r?.workouts ?? [], () => []))
+    .filter((x) => new Date(x.startDate).getTime() < hasta), saltar);
   const total = workouts.length;
   alAvance({ fase: 'entrenos', hechos: 0, total });
   const entrenos = [];

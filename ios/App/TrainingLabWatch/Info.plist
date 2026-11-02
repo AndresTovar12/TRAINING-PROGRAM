@@ -32,5 +32,7 @@
 	<string>Training Lab lee tu pulso durante el entreno para mostrártelo. Tu coach también lo ve.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Training Lab guarda tu entreno en Apple Salud.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Training Lab usa la ubicación del reloj para medir distancia, ritmo y ruta cuando corres, pedaleas o caminas sin tu iPhone, y para dibujar tu recorrido en tus stickers.</string>
 </dict>
 </plist>

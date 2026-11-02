@@ -98,6 +98,7 @@ Prototipo: https://claude.ai/artifact/EFSp16EiF1rVYb5U7emtNE (los seis caminos d
 - Los puntos se guardan como las muestras de un reloj (`{ t, lat, lon, alt? }`). `rutaDe` decide si hay línea (más de 300 m recorridos o a más de 150 m del inicio): un pádel en su cancha no tiene stickers de ruta ni mapa en su página.
 - La ruta en silencio NUNCA se vuelve distancia, ritmo, kilómetros ni desnivel (`sinNumerosDeLaRuta` en `guardaEntrenoLibre`).
 - El permiso: «¿Guardamos tu recorrido?» una sola vez, en el primer entreno (guiado o libre sin mapa), «para dibujar tu recorrido en tus stickers». Después iOS pide «Mientras usas la app» y luego «Siempre» (el plugin escala solo). Con «Ahora no», o si iOS lo niega, todo funciona igual y no hay línea.
+- En el Apple Watch sin el iPhone (1 nov 2026): la misma regla, en el reloj (`MedidorDelReloj.swift`), solo si dijo que sí en su iPhone y nunca con menos de 30 % de batería ni en bajo consumo. Cada entreno del reloj guarda cuánta batería gastó. Ver `docs/entreno-y-reloj.md`, 10.3.
 
 ## Pruebas
 
