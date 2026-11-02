@@ -24,6 +24,10 @@ import { saludDisponible } from '@/lib/saludDelTelefono';
 import { AvisoDeCorta, HojaDeAbajo, NumeroGrande, Pulso, TituloDePausa } from './PiezasDeCarrera';
 import { C, redondo, usePulsoDelReloj } from './carrera';
 import { useBarraDeLaApp } from './barraDeLaApp';
+import { useAuth } from '@/contexts/AuthContext';
+import { useReloj } from '@/lib/relojConectado';
+import { nombreDeTraza, ponTrazaEncendida, trazaEncendida, ultimaTraza } from '@/lib/trazaGps';
+import { entregaArchivo } from '@/lib/entregaArchivo';
 
 /* LA CARRERA CON GPS A PANTALLA COMPLETA. Desde el 2 nov 2026, la forma de las capturas que le gustaron a Andrés con los colores de Training Lab (maqueta
    WVcKiJ2JhyChJqLwP3bhHD, colores A, línea «con brillo»; spec `docs/superpowers/specs/2026-11-02-pantalla-de-carrera.md`):
@@ -87,6 +91,13 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
   const [ajustes, setAjustes] = useState(false);
   const [tipoDeMapa, setTipoDeMapa] = useState(leeTipoDeMapa);
   const [pausaAutomatica, setPausaAutomatica, conAjustes] = useStorageOpcional(LLAVE_PAUSA_AUTOMATICA, true);
+  /* «Guardar traza del GPS» (2 nov 2026, `lib/trazaGps.js`): solo para las cuentas de prueba (las de la tabla `cuentas_de_prueba`, `soy_cuenta_de_prueba`) y el
+     dueño, el mismo criterio de «Probar como si tuviera Apple Watch» en Mi perfil → Dispositivos. */
+  const { profile } = useAuth();
+  const { soyDePrueba } = useReloj();
+  const deFabrica = !!profile?.is_owner || soyDePrueba;
+  const [conTraza, setConTraza] = useState(trazaEncendida);
+  const [traza, setTraza] = useState(null);
   const [corta, setCorta] = useState(false); // «Carrera demasiado corta», al finalizar antes de 30 s
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState(null);
@@ -207,7 +218,12 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
     const lado = { display: 'grid', justifyItems: 'center', gap: 6, border: 'none', background: 'transparent', color: '#fff', cursor: 'pointer', fontFamily: FONT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em', padding: 0, width: 80, touchAction: 'manipulation' };
     const circulo = { width: 52, height: 52, borderRadius: 26, background: C.redondo, display: 'grid', placeItems: 'center', position: 'relative', color: '#fff' };
     const rotulo = { maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
-    const abreAjustes = () => { setTipoDeMapa(leeTipoDeMapa()); setAjustes(true); };
+    const abreAjustes = () => { setTipoDeMapa(leeTipoDeMapa()); setConTraza(trazaEncendida()); setTraza(ultimaTraza()); setAjustes(true); };
+    const exportaTraza = async () => {
+      const t = ultimaTraza();
+      if (!t) return;
+      try { await entregaArchivo(new Blob([JSON.stringify(t)], { type: 'application/json' }), nombreDeTraza(t)); } catch { avisa('No se pudo exportar la traza'); }
+    };
     return pantalla(
       <>
         {!conMapa && (
@@ -268,7 +284,8 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
         </div>
         {conBarra && barra(alMinimizar)}
         {ajustes && (
-          // Los ajustes de la carrera que ya existían (no se agregan nuevos): la pausa automática (también está en Mi perfil → Dispositivos) y el tipo de mapa.
+          // Los ajustes de la carrera que ya existían: la pausa automática (también está en Mi perfil → Dispositivos) y el tipo de mapa. Solo cuentas de
+          // prueba: «Guardar traza del GPS» y exportarla.
           <Hoja etiqueta="Ajustes de la carrera" titulo="Ajustes" conCierre onCerrar={() => setAjustes(false)}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
               {conAjustes && (
@@ -279,6 +296,12 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
               {usaMapaNativo() && (
                 <Grupo titulo="Tipo de mapa">
                   <Segmentado etiqueta="Tipo de mapa" valor={tipoDeMapa} onCambio={(t) => { setTipoDeMapa(t); guardaTipoDeMapa(t); }} opciones={TIPOS_DE_MAPA.map(([valor, texto]) => ({ valor, texto }))} />
+                </Grupo>
+              )}
+              {deFabrica && (
+                <Grupo titulo="Cuentas de prueba" pie="Guarda cada segundo lo que dicen el GPS y el sensor de movimiento, para revisarlo. Se queda en este teléfono.">
+                  <Fila texto="Guardar traza del GPS" derecha={<Interruptor activo={conTraza} etiqueta="Guardar traza del GPS" onCambio={(v) => { ponTrazaEncendida(v); setConTraza(v); }} />} />
+                  {traza?.filas?.length > 0 && <Fila texto="Exportar la última traza" detalle={`${traza.filas.length} puntos`} onClick={exportaTraza} />}
                 </Grupo>
               )}
               {!sinGps && (
