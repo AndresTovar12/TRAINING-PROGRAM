@@ -1,51 +1,43 @@
-/* EL SENSOR DE MOVIMIENTO DEL IPHONE, LO PURO (2 nov 2026, bug «parado en la calle sumó 50 m en 87 s con ritmo 18:13 /km y la pausa automática nunca entró»).
+/* EL SENSOR DE MOVIMIENTO DEL IPHONE, LO PURO (2 nov 2026; desde el 3 nov, el REBOTE).
 
-   Entre edificios (mala geometría) el iPhone daba ~0.9 m/s estando quieto, y la posición brincaba con esa velocidad: el GPS solo no distingue eso de caminar.
-   El sensor de movimiento sí: `CMMotionActivityManager` (quieto, caminando, corriendo, en bici) y `CMPedometer` (los pasos y la cadencia). El puente nativo es
-   `MovimientoPlugin.swift` y lo enciende `lib/movimientoNativo.js`; aquí solo se junta lo que llega y se sacan las SEÑALES (`senales`). Quién decide con ellas
-   es `decideMarcha` (`lib/entrenoLibre.js`), que las junta con el GPS.
+   El puente nativo es `MovimientoPlugin.swift` y lo enciende `lib/movimientoNativo.js`; aquí solo se junta lo que llega y se sacan las SEÑALES (`senales`).
+   Quién decide con ellas es `decideMarcha` (`lib/entrenoLibre.js`), que las junta con el GPS.
 
-   NINGÚN SENSOR SOLO DECIDE (3 nov 2026, bug de la versión anterior: se pausaba al girar el teléfono para ver la hora, porque el podómetro deja de contar unos
-   segundos, y al detenerse tardaba hasta 20 s, porque un paso fantasma reiniciaba la cuenta). Por eso aquí ya no hay veredicto, solo señales:
-     · CADENCIA, no «hay pasos». «En marcha» a pie = cadencia ≥ 1.2 pasos/s. La cadencia es `currentCadence` del iPhone; si no viene (nil, pasa al arrancar o
-       con pocos pasos), los pasos contados entre dos avisos entre el tiempo entre ellos. Un aviso con 1 o 2 pasos sueltos (a menos de 1 paso/s) no cuenta:
-       ni es moverse ni corta la cuenta de «cadencia baja».
-     · CADENCIA BAJA desde: el último aviso con cadencia ≥ 0.5 (de ahí cuenta «3 s con cadencia baja»).
-     · El sensor de actividad: «quieto» 3 s seguidos con confianza media o alta; «caminando/corriendo» con confianza ALTA; «en bici».
-   `currentPace` (segundos por metro) llega y se guarda en la traza, pero no decide: sale de los mismos pasos que la cadencia. Se prueba con `scripts/prueba-ruta.mjs`. */
+   EL REBOTE (3 nov 2026, `docs/superpowers/specs/2026-11-03-pausa-automatica-rebote.md`). A pie el cuerpo rebota con cada paso y parado no: eso se lee en un
+   segundo. Cada segundo el iPhone manda un aviso `rebote` con la desviación estándar de la magnitud de `userAcceleration` (g, sin la gravedad) de ese segundo.
+     · `rebota`: el último aviso llegó hace menos de 2 s y su valor es ≥ `REBOTE_MINIMO`.
+     · `sinRebote(s, ahora)`: cuántos segundos seguidos llevan los avisos por debajo del mínimo (cada aviso cuenta el segundo de antes de su hora).
+   `REBOTE_MINIMO` (0.12 g) es un punto de partida, no un hecho: se ajusta con las trazas reales (`scripts/prueba-ruta.mjs` dice el rebote parado y en marcha).
+   Antes (2-3 nov) decidían el podómetro y la actividad (quieto, caminando, corriendo); el podómetro avisa cuando quiere y daba pausas en falso. Hoy de ellos
+   solo queda «en bici» (no pausar sobre ruedas mientras lo diga); los pasos y la cadencia se siguen anotando en la traza. Se prueba con `scripts/prueba-ruta.mjs`. */
 
-/** El sensor tiene que decir «quieto» este tiempo seguido (ms) para que cuente. */
-export const QUIETO_MS = 3000;
-/** Cadencia (pasos/s) de alguien que camina o corre. */
-export const CADENCIA_EN_MARCHA = 1.2;
-/** Por debajo de esta cadencia (pasos/s) no se está andando. */
-export const CADENCIA_BAJA = 0.5;
-/** Un aviso del podómetro vale este tiempo (ms): si no llega otro, ya no hay pasos. */
-const AVISO_VIGENTE_MS = 3000;
-/** Pasos sueltos: un aviso con estos pasos o menos, a menos de 1 paso/s. */
-const PASOS_SUELTOS = 2;
-/** Cuánto (ms) se recuerdan los avisos del podómetro. */
+/** El rebote mínimo (g) de alguien que camina o corre. Un solo lugar: se ajusta con las trazas reales. */
+export const REBOTE_MINIMO = 0.12;
+/** Un aviso de rebote vale este tiempo (ms): más viejo, ya no dice nada. */
+const REBOTE_VIGENTE_MS = 2000;
+/** Sin avisos de rebote este tiempo (ms), el acelerómetro no está midiendo: como si no hubiera (mandan las reglas del GPS). */
+const REBOTE_VIVO_MS = 2500;
+/** Cuánto (ms) se recuerdan los avisos de rebote. */
 const RECUERDA_MS = 15000;
-const A_PIE = ['correr', 'caminar', 'senderismo'];
 
-/** Lo que se sabe al encender el sensor. `hayActividad`/`hayPasos`: si el iPhone los tiene; `permiso`: 'si' | 'negado' | 'restringido' | 'sin_preguntar'. */
-export const sensorNuevo = (ahoraMs, { hayActividad = false, hayPasos = false, permiso = null } = {}) => ({
-  desde: ahoraMs, hayActividad, hayPasos, permiso, vivo: permiso === 'si', actividad: null, pasos: 0, avisos: [], realEn: null,
+/** Lo que se sabe al encender el sensor. `hayActividad`/`hayPasos`/`hayRebote`: si el iPhone los tiene; `permiso`: 'si' | 'negado' | 'restringido' | 'sin_preguntar'. */
+export const sensorNuevo = (ahoraMs, { hayActividad = false, hayPasos = false, hayRebote = false, permiso = null } = {}) => ({
+  desde: ahoraMs, hayActividad, hayPasos, hayRebote, permiso, vivo: permiso === 'si', actividad: null, pasos: 0, rebotes: [],
 });
 
 /** Contestó `inicia`: qué tiene este iPhone y si hay permiso. */
 export const conInicio = (s, r) => ({
-  ...s, hayActividad: !!r?.actividad, hayPasos: !!r?.pasos, permiso: r?.permiso ?? s.permiso, vivo: s.vivo || r?.permiso === 'si',
+  ...s, hayActividad: !!r?.actividad, hayPasos: !!r?.pasos, hayRebote: !!r?.hayRebote, permiso: r?.permiso ?? s.permiso, vivo: s.vivo || r?.permiso === 'si',
 });
 
-/** Contestó la pregunta del permiso. Negado: el sensor no cuenta (mandan las reglas del GPS). */
+/** Contestó la pregunta del permiso. Negado: la actividad no cuenta (el rebote no pide permiso: sigue). */
 export function conPermiso(s, { permiso }) {
   if (permiso === 'si') return { ...s, permiso, vivo: true };
   if (permiso === 'negado' || permiso === 'restringido') return { ...s, permiso, vivo: false };
   return { ...s, permiso };
 }
 
-/** El podómetro falló (sin permiso, o el iPhone no pudo): sus pasos ya no cuentan. */
+/** El podómetro falló (sin permiso, o el iPhone no pudo). */
 export const sinPasos = (s) => ({ ...s, hayPasos: false });
 
 /** Un cambio de actividad: `{ estado, confianza (0 baja, 1 media, 2 alta), en (ms: desde cuándo está así) }`. Si sigue igual, se queda el «desde» de antes. */
@@ -55,54 +47,53 @@ export function conActividad(s, { estado, confianza, en }, ahoraMs) {
   return { ...s, vivo: !(s.permiso === 'negado' || s.permiso === 'restringido'), actividad: { estado, confianza: Number(confianza) || 0, en: igual ? s.actividad.en : desde } };
 }
 
-/**
- * Un aviso del podómetro: `{ pasos (desde que se encendió), en (ms), cadencia? (pasos/s), ritmo? (s/m) }`. Se anota con su cadencia (la del iPhone o, si no
- * vino, la de los pasos contados) y si eran pasos sueltos.
- */
-export function conPasos(s, { pasos, en, cadencia }, ahoraMs) {
-  const n = Number(pasos) || 0;
+/** Un aviso del podómetro `{ pasos, en, cadencia?, ritmo? }`: ya no decide nada (3 nov 2026); se cuentan los pasos y el aviso va completo a la traza. */
+export const conPasos = (s, { pasos }) => ({ ...s, pasos: Math.max(Number(pasos) || 0, s.pasos) });
+
+/** Un aviso de rebote `{ en (ms), valor (g) }`. */
+export function conRebote(s, { en, valor }, ahoraMs) {
   const hora = Number.isFinite(Number(en)) && Number(en) > 0 ? Math.min(Number(en), ahoraMs) : ahoraMs;
-  const anterior = s.avisos.at(-1);
-  const nuevos = Math.max(0, n - s.pasos);
-  const segundos = Math.max(0.5, (hora - (anterior?.en ?? s.desde)) / 1000);
-  const suelto = nuevos <= PASOS_SUELTOS && nuevos / segundos < 1;
-  const cad = typeof cadencia === 'number' && cadencia >= 0 ? cadencia : nuevos / segundos;
-  const aviso = { en: hora, nuevos, cad: suelto ? 0 : cad };
-  return {
-    ...s, vivo: !(s.permiso === 'negado' || s.permiso === 'restringido'), pasos: Math.max(n, s.pasos),
-    avisos: [...s.avisos.filter((a) => hora - a.en <= RECUERDA_MS), aviso],
-    realEn: aviso.cad >= CADENCIA_BAJA ? hora : s.realEn,
-  };
+  const v = Number(valor);
+  if (!Number.isFinite(v) || v < 0) return s;
+  return { ...s, hayRebote: true, rebotes: [...s.rebotes.filter((x) => hora - x.en <= RECUERDA_MS), { en: hora, valor: v }] };
+}
+
+/** La racha de avisos del mismo lado del mínimo que el último: desde cuándo (ms; cada aviso cuenta el segundo de antes de su hora) y de qué lado. */
+function rachaDeRebote(s, ahoraMs) {
+  const ultimo = s?.rebotes?.at(-1);
+  if (!ultimo || ahoraMs - ultimo.en > REBOTE_VIVO_MS) return null;
+  const arriba = ultimo.valor >= REBOTE_MINIMO;
+  let desde = ultimo.en;
+  for (let i = s.rebotes.length - 1; i >= 0; i -= 1) {
+    const x = s.rebotes[i];
+    if ((x.valor >= REBOTE_MINIMO) !== arriba || desde - x.en > REBOTE_VIVO_MS) break;
+    desde = x.en;
+  }
+  return { arriba, desde: desde - 1000, fresco: ahoraMs - ultimo.en < REBOTE_VIGENTE_MS };
+}
+
+/** Cuántos segundos seguidos llevan los avisos por debajo de `REBOTE_MINIMO` (0 si el último rebota; `null` si el acelerómetro no está midiendo). */
+export function sinRebote(s, ahoraMs) {
+  const r = rachaDeRebote(s, ahoraMs);
+  if (!r) return null;
+  return r.arriba ? 0 : (ahoraMs - r.desde) / 1000;
 }
 
 /**
- * Las señales del sensor ahora (ms), o `null` si no sirve (sin permiso, la web). Todas con su «desde» en ms, `null` si no se cumplen:
- *   `quieto`: dice «quieto» 3 s seguidos (confianza media o alta) · `actividadEnMarcha`: «caminando/corriendo» con confianza alta (a pie) o «en bici» (bici)
- *   `cadenciaEnMarcha`: avisos seguidos con cadencia ≥ 1.2 (a pie) · `cadenciaBaja`: desde el último aviso con cadencia ≥ 0.5 (a pie, con podómetro)
- *   `enBici`: el sensor dice «en bici» ahora (bool).
+ * Las señales del sensor ahora (ms), o `null` si no hay nada que sirva:
+ *   `reboteVivo`: el acelerómetro está midiendo · `rebota`: el último aviso rebota y es reciente · `reboteDesde` (ms): desde cuándo rebota sin parar ·
+ *   `sinReboteDesde` (ms): desde cuándo no rebota · `enBici`: el sensor de actividad dice «en bici».
  */
-export function senales(s, deporte, ahoraMs) {
-  if (!s?.vivo) return null;
-  const a = s.actividad;
-  const aPie = A_PIE.includes(deporte);
-  const quieto = a && a.estado === 'quieto' && a.confianza >= 1 && ahoraMs - a.en >= QUIETO_MS ? a.en : null;
-  let actividadEnMarcha = null;
-  if (a && aPie && (a.estado === 'caminando' || a.estado === 'corriendo') && a.confianza >= 2) actividadEnMarcha = a.en;
-  if (a && deporte === 'bici' && a.estado === 'bici' && a.confianza >= 1) actividadEnMarcha = a.en;
-  let cadenciaEnMarcha = null;
-  let cadenciaBaja = null;
-  if (aPie && s.hayPasos) {
-    const ultimo = s.avisos.at(-1);
-    if (ultimo && ahoraMs - ultimo.en <= AVISO_VIGENTE_MS && ultimo.cad >= CADENCIA_EN_MARCHA) {
-      cadenciaEnMarcha = ultimo.en;
-      for (let i = s.avisos.length - 2; i >= 0; i -= 1) {
-        const x = s.avisos[i];
-        if (x.cad < CADENCIA_EN_MARCHA || cadenciaEnMarcha - x.en > AVISO_VIGENTE_MS) break;
-        cadenciaEnMarcha = x.en;
-      }
-    }
-    const ultimaReal = s.realEn ?? s.desde;
-    if (!(ultimo && ultimo.cad >= CADENCIA_BAJA && ahoraMs - ultimo.en <= AVISO_VIGENTE_MS)) cadenciaBaja = ultimaReal;
-  }
-  return { quieto, actividadEnMarcha, cadenciaEnMarcha, cadenciaBaja, enBici: !!a && a.estado === 'bici', aPie };
+export function senales(s, ahoraMs) {
+  if (!s) return null;
+  const r = rachaDeRebote(s, ahoraMs);
+  const enBici = !!s.vivo && s.actividad?.estado === 'bici' && s.actividad.confianza >= 1;
+  if (!r && !s.vivo) return null;
+  return {
+    reboteVivo: !!r,
+    rebota: !!r && r.arriba && r.fresco,
+    reboteDesde: r?.arriba ? r.desde : null,
+    sinReboteDesde: r && !r.arriba ? r.desde : null,
+    enBici,
+  };
 }

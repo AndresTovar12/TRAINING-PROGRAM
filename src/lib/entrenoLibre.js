@@ -46,129 +46,130 @@ export const reanuda = (c, ahora = Date.now()) => {
   return { ...resto, pausadoEn: null, pausas: c.pausas + Math.max(0, ahora - c.pausadoEn) };
 };
 
-/* PAUSA AUTOMÁTICA (27 oct 2026, como Strava). Con GPS, la carrera libre se pausa sola cuando te detienes y se reanuda sola al volver a moverte.
-   Cuenta la VELOCIDAD que da el GPS del teléfono, solo de lecturas buenas (error ≤ 20 m). Para pausar hay que ir lento N segundos SEGUIDOS; para reanudar,
-   rápido M segundos seguidos: así un paso lento o una lectura rara no la disparan. Sin lecturas en los últimos 5 s no decide nada: perder la señal (un
-   túnel, un puente) NO es estar parado. */
+/* PAUSA AUTOMÁTICA (27 oct 2026, como Strava; reglas nuevas el 3 nov 2026, `docs/superpowers/specs/2026-11-03-pausa-automatica-rebote.md`). Con GPS, la carrera
+   libre se pausa sola cuando te detienes y se reanuda sola al volver a moverte. Las reglas van por FAMILIA (`desplazamientoDe` en `lib/actividades.js`), no por
+   deporte: así las propias y patines, surf, remo y kayak también la tienen. Sin mapa no hay pausa automática.
+
+   A PIE ('pie': correr, caminar, senderismo, trail), con acelerómetro: el REBOTE del cuerpo (`lib/sensorDeMovimiento.js`).
+     · Pausar: 1.5 s seguidos sin rebote. El GPS no participa.
+     · Reanudar: rebote al menos 1 s seguido Y avance real del GPS: la mediana de los pasos de cada segundo en los últimos 5 s ≥ 1.2 m/s (con o sin error;
+       un brinco suelto del GPS no la mueve). Mover el teléfono con las manos da rebote pero no avance: no reanuda.
+     · Sin GPS bueno (ningún punto con error ≤ 20 m en los últimos 10 s, un túnel): reanuda con rebote solo, 3 s seguidos. Perder la señal nunca pausa.
+     · Los metros: sin rebote, el GPS no suma distancia aunque todavía no se haya pausado (`agregaPunto` con 'quieto').
+   SOBRE RUEDAS O EN EL AGUA ('ruedas': bici, patines, surf, remo, kayak): el GPS, con la barra alta. Velocidad = desplazamiento de los últimos 5 s entre el
+     tiempo (no la velocidad que da el iPhone, que parado inventa ~0.9 m/s). Pausar: < 1.0 m/s 3 s seguidos y el sensor no dice «en bici». Reanudar: > 2.0 m/s
+     2 s seguidos. Sin lecturas en 5 s no decide nada. El rebote no se usa.
+   SIN ACELERÓMETRO (la web, o el iPhone no lo tiene): a pie, las reglas de ruedas con las barras de siempre (pausa < 0.6, reanuda > 1.0). Más lento, sin falsos.
+   PARA LAS DOS: después de reanudar, 8 s sin poder pausar; después de pausar, 3 s sin poder reanudar. El interruptor «Pausa automática» sigue mandando. */
 export const UMBRALES_DE_PAUSA = {
-  correr: { pausa: 0.6, reanuda: 1.0 },
-  caminar: { pausa: 0.6, reanuda: 1.0 },
-  senderismo: { pausa: 0.6, reanuda: 1.0 },
-  bici: { pausa: 1.0, reanuda: 2.0 },
+  pie: { pausa: 0.6, reanuda: 1.0 },
+  ruedas: { pausa: 1.0, reanuda: 2.0 },
 };
-const SEGUNDOS_PARA_PAUSAR = 2;
-const SEGUNDOS_PARA_REANUDAR = 2;
+/** La familia de un deporte, para un cronómetro guardado antes del 3 nov 2026 (sin `desplazamiento`). */
+export const familiaDelDeporte = (deporte) => (['correr', 'caminar', 'senderismo'].includes(deporte) ? 'pie' : deporte === 'bici' ? 'ruedas' : null);
+const SIN_REBOTE_PARA_PAUSAR_S = 1.5;
+const REBOTE_PARA_REANUDAR_S = 1;
+const REBOTE_SIN_GPS_S = 3;
+const LENTO_PARA_PAUSAR_S = 3;
+const RAPIDO_PARA_REANUDAR_S = 2;
+const SIN_PAUSAR_DESPUES_DE_REANUDAR_S = 8;
+const SIN_REANUDAR_DESPUES_DE_PAUSAR_S = 3;
 const SIN_SENAL_S = 5;
+const GPS_BUENO_S = 10;
 const HUECO_MAXIMO_S = 2;
-/* MALA GEOMETRÍA (bug del 2 nov 2026: entre edificios el iPhone daba ~0.9 m/s quieto y la pausa nunca entraba). Con más error que `ERROR_GRANDE` m, una lectura
-   también cuenta como «lento» si en los últimos `VENTANA_S` s la carrera avanzó menos de `AVANCE_MINIMO` m (`d`: los metros que ya contó la ruta). Con más de 12 m
-   de error, la velocidad no cuenta para reanudar: hace falta avanzar de verdad, segundo a segundo, a `VELOCIDAD_CON_ERROR` m/s o más (o el umbral de la bici). */
-const ERROR_GRANDE = 15;
-const ERROR_PARA_VELOCIDAD = 12;
 const VENTANA_S = 5;
-const AVANCE_MINIMO = 3;
-const VELOCIDAD_CON_ERROR = 1.2;
+/** Avance real a pie: la mediana de los pasos de cada segundo, en m/s. */
+const AVANCE_A_PIE = 1.2;
+/** El error (m) de una lectura que sí sirve: ≤ 20 para el avance a pie y el «GPS bueno»; ≤ 30 para el desplazamiento de 5 s (con mucho error, entre edificios,
+    también cuenta: antes se descartaba y la pausa tardaba hasta 17 s). */
+const ERROR_BUENO = 20;
+const ERROR_QUE_SIRVE = 30;
 const metros = (a, b) => {
   const rad = Math.PI / 180;
   const x = (b.lon - a.lon) * rad * Math.cos(((a.lat + b.lat) / 2) * rad);
   const y = (b.lat - a.lat) * rad;
   return Math.sqrt(x * x + y * y) * 6371000;
 };
+const conLugar = (x) => typeof x?.t === 'number' && typeof x.lat === 'number' && typeof x.lon === 'number' && typeof x.pre === 'number';
 
-/* Lo que dice el GPS (puro), de las lecturas buenas (error ≤ 20 m): `lento(x)` y `rapido(x)` de una lectura y `racha(cumple)`, desde cuándo (s) las últimas
-   lecturas cumplen sin huecos de señal (`null` si la última no cumple o ya no hay señal). */
-function gpsDe(lecturas, u, ahoraS) {
-  const buenas = (lecturas ?? []).filter((x) => typeof x?.vel === 'number' && typeof x.pre === 'number' && x.pre <= 20 && typeof x.t === 'number');
-  const ultima = buenas.at(-1);
-  const conSenal = !!ultima && ahoraS - ultima.t <= SIN_SENAL_S;
-  // La lectura de hace `VENTANA_S` s (o más) antes de `x`: contra ella se mide cuánto avanzó.
-  const antesDe = (x, conQue) => { for (let i = buenas.length - 1; i >= 0; i -= 1) if (x.t - buenas[i].t >= VENTANA_S && conQue(buenas[i])) return buenas[i]; return null; };
-  const lento = (x) => {
-    if (x.vel < u.pausa) return true;
-    if (!(x.pre > ERROR_GRANDE) || typeof x.d !== 'number') return false;
-    const y = antesDe(x, (z) => typeof z.d === 'number');
-    return !!y && x.d - y.d < AVANCE_MINIMO;
-  };
-  // Con mucho error: la MEDIANA de los pasos de cada segundo en los últimos 5 s (un brinco de un solo segundo, cuando el GPS regresa, no la mueve).
-  const rapido = (x) => {
-    if (x.pre <= ERROR_PARA_VELOCIDAD) return x.vel >= u.reanuda;
-    const ventana = buenas.filter((z) => typeof z.lat === 'number' && z.t <= x.t && x.t - z.t <= VENTANA_S);
-    const pasos = ventana.slice(1).map((z, i) => metros(ventana[i], z) / Math.max(1, z.t - ventana[i].t)).sort((a, b) => a - b);
-    return pasos.length >= VENTANA_S - 1 && pasos[Math.floor(pasos.length / 2)] >= Math.max(VELOCIDAD_CON_ERROR, u.reanuda);
-  };
-  // De la última hacia atrás, mientras cumpla y sin huecos de señal: ¿desde cuándo lleva así?
-  const racha = (cumple) => {
-    if (!conSenal) return null;
-    let desde = null;
-    for (let i = buenas.length - 1; i >= 0; i -= 1) {
-      const x = buenas[i];
-      if (!cumple(x)) break;
-      if (desde !== null && desde - x.t > HUECO_MAXIMO_S) break;
-      desde = x.t;
-    }
-    return desde;
-  };
-  return { ultima, conSenal, lento, rapido, racha };
-}
-
-/* EN MARCHA O QUIETO: EL SENSOR Y EL GPS JUNTOS (3 nov 2026). Bug de la versión del 2 nov: el podómetro mandaba solo, en las dos direcciones. «Sin pasos en 5 s»
-   pausaba aunque el sensor dijera «corriendo» (al girar el teléfono para ver la hora deja de contar unos segundos), y un paso fantasma al detenerse reiniciaba
-   la cuenta (hasta 20 s para pausar). Ahora ningún sensor solo decide; se juntan tres señales (`senales` de `lib/sensorDeMovimiento.js`) y el GPS:
-     A PIE (correr, caminar, senderismo)
-       · EN MARCHA si: cadencia ≥ 1.2 pasos/s, o el sensor dice «caminando/corriendo» con confianza alta Y el GPS avanza (velocidad ≥ umbral de reanudar).
-         Ninguna es un veto eterno: la cadencia cae al detenerte y el GPS deja de avanzar.
-       · QUIETO (si no va en marcha) si: el sensor dice «quieto» 3 s seguidos, o la cadencia lleva 3 s baja (< 0.5) Y el GPS no avanza (velocidad < umbral de
-         pausa o, con mucho error, menos de 3 m en 5 s). El podómetro solo no pausa.
-     EN BICI (no hay cadencia): en marcha si el GPS avanza y el sensor no dice «quieto» (con «en bici», desde que lo dijo); quieto si el sensor dice «quieto» 3 s,
-       o el GPS va lento 2 s y el sensor no dice «en bici».
-   Devuelve `{ v: 'mueve' | 'quieto' | 'espera', desde (s) }` (`espera`: ni lo uno ni lo otro todavía; no se pausa ni se reanuda) o `null` sin sensor (la web,
-   sin permiso): entonces mandan las reglas del GPS solas. `desde`: con 'mueve', desde cuándo va en marcha sin parar (reanudar pide 2 s); con 'quieto', desde
-   cuándo se detuvo. */
-export function decideMarcha(senal, lecturas, deporte, ahoraS) {
-  const u = UMBRALES_DE_PAUSA[deporte];
-  if (!u || !senal) return null;
-  const s = (ms) => (ms == null ? null : ms / 1000);
-  const gps = gpsDe(lecturas, u, ahoraS);
-  const avanza = gps.racha(gps.rapido);
-  const lento = gps.racha(gps.lento);
-  const quietoSensor = s(senal.quieto);
-  if (senal.aPie) {
-    const enMarcha = [s(senal.cadenciaEnMarcha), senal.actividadEnMarcha != null && avanza != null ? Math.max(s(senal.actividadEnMarcha), avanza) : null].filter((x) => x != null);
-    if (enMarcha.length) return { v: 'mueve', desde: Math.min(...enMarcha) };
-    const baja = s(senal.cadenciaBaja);
-    const quieto = [quietoSensor, baja != null && ahoraS - baja >= 3 && lento != null ? Math.max(baja, lento) : null].filter((x) => x != null);
-    if (quieto.length) return { v: 'quieto', desde: Math.min(...quieto) };
-    return { v: 'espera', desde: null };
-  }
-  if (deporte === 'bici') {
-    if (avanza != null && quietoSensor == null) return { v: 'mueve', desde: senal.actividadEnMarcha != null ? Math.max(s(senal.actividadEnMarcha), avanza) : avanza };
-    if (quietoSensor != null) return { v: 'quieto', desde: quietoSensor };
-    if (lento != null && ahoraS - lento >= SEGUNDOS_PARA_PAUSAR && !senal.enBici) return { v: 'quieto', desde: lento };
-    return { v: 'espera', desde: null };
+/** El desplazamiento de los últimos 5 s antes de `x`, entre el tiempo (m/s), con las lecturas `lista`; `null` si no hay una de hace 5-8 s. */
+function velocidadDe5s(lista, i) {
+  const x = lista[i];
+  for (let k = i - 1; k >= 0; k -= 1) {
+    const dt = x.t - lista[k].t;
+    if (dt >= VENTANA_S) return dt <= VENTANA_S + 3 ? metros(lista[k], x) / dt : null;
   }
   return null;
 }
 
-/**
- * ¿Hay que pausar o reanudar? `lecturas`: las últimas del GPS, `{ t, vel, pre, d?, lat?, lon? }` (t en segundos de reloj; `d`: metros que llevaba contados la
- * ruta). `estado`: 'corriendo' o 'pausa' (una pausa AUTOMÁTICA: la manual no se reanuda sola). Devuelve `{ accion: 'pausa' | 'reanuda', desde }` (desde: el segundo
- * en que empezó a ir lento o rápido) o `null`.
- * CON SENSOR (`marcha`, de `decideMarcha`): 'quieto' pausa (desde que se detuvo); 'mueve' reanuda cuando lleva 2 s en marcha; 'espera' no hace nada. Sin
- * sensor (`marcha` null), el GPS solo: lento 2 s seguidos pausa, rápido 2 s seguidos reanuda.
- */
-export function decidePausaAutomatica(lecturas, estado, deporte, ahoraS = Date.now() / 1000, { marcha = null } = {}) {
-  const u = UMBRALES_DE_PAUSA[deporte];
-  if (!u) return null;
-  const pausando = estado === 'corriendo';
-  if (marcha) {
-    if (pausando) return marcha.v === 'quieto' ? { accion: 'pausa', desde: marcha.desde } : null;
-    return marcha.v === 'mueve' && ahoraS - marcha.desde >= SEGUNDOS_PARA_REANUDAR ? { accion: 'reanuda', desde: marcha.desde } : null;
+/** Desde cuándo (s) las últimas lecturas cumplen `cumple(i)` sin huecos de señal; `null` si la última no cumple. */
+function racha(lista, cumple) {
+  let desde = null;
+  for (let i = lista.length - 1; i >= 0; i -= 1) {
+    if (!cumple(i)) break;
+    if (desde !== null && desde - lista[i].t > HUECO_MAXIMO_S) break;
+    desde = lista[i].t;
   }
-  const gps = gpsDe(lecturas, u, ahoraS);
-  if (!gps.conSenal) return null;
-  const desde = gps.racha(pausando ? gps.lento : gps.rapido);
-  if (desde === null || gps.ultima.t - desde < (pausando ? SEGUNDOS_PARA_PAUSAR : SEGUNDOS_PARA_REANUDAR)) return null;
-  return { accion: pausando ? 'pausa' : 'reanuda', desde };
+  return desde;
+}
+
+/** ¿Avance real a pie? La mediana de los pasos de cada segundo de las lecturas buenas de los últimos 5 s (al menos 4 pasos) ≥ 1.2 m/s. */
+function avanzaAPie(lecturas, ahoraS) {
+  const buenas = lecturas.filter((x) => conLugar(x) && x.pre <= ERROR_BUENO);
+  const ultima = buenas.at(-1);
+  if (!ultima || ahoraS - ultima.t > HUECO_MAXIMO_S) return false;
+  const ventana = buenas.filter((z) => ultima.t - z.t < VENTANA_S);
+  const pasos = ventana.slice(1).map((z, i) => metros(ventana[i], z) / Math.max(1, z.t - ventana[i].t)).sort((a, b) => a - b);
+  return pasos.length >= VENTANA_S - 1 && pasos[Math.floor(pasos.length / 2)] >= AVANCE_A_PIE;
+}
+
+/**
+ * ¿Quieto o en marcha? `familia`: 'pie' | 'ruedas'. `senal`: lo de `senales` (`lib/sensorDeMovimiento.js`) o `null` (la web). `lecturas`: las del GPS
+ * `{ t (s), lat, lon, pre, vel? }`. Devuelve `{ quieto, mueve, metros }`: `quieto`/`mueve` son `{ desde (s), motivo }` o `null` (el motivo: 'sin-rebote',
+ * 'rebote+avance', 'sin-gps', 'gps-lento', 'gps-rapido'); `metros`: 'quieto' (el punto no suma), 'mueve' o `null` (las reglas del GPS de `agregaPunto`).
+ */
+export function decideMarcha(familia, senal, lecturas, ahoraS) {
+  const u = UMBRALES_DE_PAUSA[familia];
+  if (!u) return { quieto: null, mueve: null, metros: null };
+  const s = (ms) => (ms == null ? null : ms / 1000);
+  if (familia === 'pie' && senal?.reboteVivo) {
+    const sin = senal.sinReboteDesde != null ? ahoraS - s(senal.sinReboteDesde) : 0;
+    const con = senal.reboteDesde != null ? ahoraS - s(senal.reboteDesde) : 0;
+    const quieto = sin >= SIN_REBOTE_PARA_PAUSAR_S ? { desde: s(senal.sinReboteDesde), motivo: 'sin-rebote' } : null;
+    const gpsBueno = lecturas.some((x) => conLugar(x) && x.pre <= ERROR_BUENO && ahoraS - x.t <= GPS_BUENO_S);
+    let mueve = null;
+    if (senal.rebota && gpsBueno && con >= REBOTE_PARA_REANUDAR_S && avanzaAPie(lecturas, ahoraS)) mueve = { desde: s(senal.reboteDesde), motivo: 'rebote+avance' };
+    if (senal.rebota && !gpsBueno && con >= REBOTE_SIN_GPS_S) mueve = { desde: s(senal.reboteDesde), motivo: 'sin-gps' };
+    return { quieto, mueve, metros: !senal.rebota ? 'quieto' : (mueve ? 'mueve' : null) };
+  }
+  // Sobre ruedas (o a pie sin acelerómetro): el desplazamiento de 5 s.
+  const lista = lecturas.filter((x) => conLugar(x) && x.pre <= ERROR_QUE_SIRVE);
+  const ultima = lista.at(-1);
+  if (!ultima || ahoraS - ultima.t > SIN_SENAL_S) return { quieto: null, mueve: null, metros: null };
+  const v5 = lista.map((_, i) => velocidadDe5s(lista, i));
+  const lento = racha(lista, (i) => v5[i] != null && v5[i] < u.pausa);
+  const rapido = racha(lista, (i) => v5[i] != null && v5[i] > u.reanuda);
+  const quieto = lento != null && ultima.t - lento >= LENTO_PARA_PAUSAR_S && !senal?.enBici ? { desde: lento, motivo: 'gps-lento' } : null;
+  const mueve = rapido != null && ultima.t - rapido >= RAPIDO_PARA_REANUDAR_S ? { desde: rapido, motivo: 'gps-rapido' } : null;
+  return { quieto, mueve, metros: null };
+}
+
+/**
+ * ¿Hay que pausar o reanudar? `estado`: 'corriendo' o 'pausa' (una pausa AUTOMÁTICA: la manual no se reanuda sola). `marcha`: lo de `decideMarcha`.
+ * `reanudadoEnS`: cuándo se reanudó por última vez (8 s sin poder pausar); `pausadoEnS`: cuándo se pausó (3 s sin poder reanudar). Devuelve
+ * `{ accion: 'pausa' | 'reanuda', desde, motivo }` (desde: el segundo en que se detuvo o arrancó) o `null`.
+ */
+export function decidePausaAutomatica(estado, marcha, ahoraS, { reanudadoEnS = null, pausadoEnS = null } = {}) {
+  if (!marcha) return null;
+  if (estado === 'corriendo') {
+    if (!marcha.quieto || (reanudadoEnS != null && ahoraS - reanudadoEnS < SIN_PAUSAR_DESPUES_DE_REANUDAR_S)) return null;
+    return { accion: 'pausa', desde: marcha.quieto.desde, motivo: marcha.quieto.motivo };
+  }
+  if (estado === 'pausa') {
+    if (!marcha.mueve || (pausadoEnS != null && ahoraS - pausadoEnS < SIN_REANUDAR_DESPUES_DE_PAUSAR_S)) return null;
+    return { accion: 'reanuda', desde: marcha.mueve.desde, motivo: marcha.mueve.motivo };
+  }
+  return null;
 }
 
 /** Segundos que lleva corriendo (sin contar las pausas). */

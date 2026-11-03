@@ -11,7 +11,11 @@ import CoreMotion
    Métodos: `estado` (qué hay y si hay permiso), `inicia` (enciende; contesta de inmediato), `detiene`.
    Avisos: `movimiento` { estado: quieto|caminando|corriendo|bici|auto|desconocido, confianza: 0-2, en: ms desde cuándo }, `pasos` { pasos (desde que se
    encendió), en: ms, cadencia?: pasos/s (`currentCadence`), ritmo?: s/m (`currentPace`) }, `permiso` { permiso: si|negado|restringido|sin_preguntar } y `falla` { cual: pasos }.
-   La primera vez, iOS pregunta el permiso con `NSMotionUsageDescription` del Info.plist («Para saber cuándo te detienes y no sumar metros de más»). */
+   La primera vez, iOS pregunta el permiso con `NSMotionUsageDescription` del Info.plist («Para saber cuándo te detienes y no sumar metros de más»).
+
+   EL REBOTE (3 nov 2026, `docs/superpowers/specs/2026-11-03-pausa-automatica-rebote.md`). A pie el cuerpo rebota con cada paso; parado, no. `CMMotionManager`
+   lee `deviceMotion` a 20 Hz y cada segundo manda UN aviso `rebote` { en: ms, valor: g }: la desviación estándar de la magnitud de `userAcceleration` (la
+   aceleración sin la gravedad) en ese segundo. No pide permiso y se enciende aunque el de movimiento esté negado. Aquí no se decide nada: lo decide la página. */
 @objc(MovimientoPlugin)
 public class MovimientoPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "MovimientoPlugin"
@@ -32,6 +36,17 @@ public class MovimientoPlugin: CAPPlugin, CAPBridgedPlugin {
     }()
     private var midiendo = false
     private var vuelta = 0
+
+    // El rebote: `deviceMotion` a 20 Hz, en su propia cola. Las muestras del segundo que va se juntan aquí (solo desde esa cola).
+    private let acelerometro = CMMotionManager()
+    private let colaDelRebote: OperationQueue = {
+        let q = OperationQueue()
+        q.name = "tl.rebote"
+        q.maxConcurrentOperationCount = 1
+        return q
+    }()
+    private var magnitudes: [Double] = []
+    private var segundoDesde: TimeInterval = 0
 
     private static func permiso() -> String {
         switch CMMotionActivityManager.authorizationStatus() {
@@ -54,11 +69,38 @@ public class MovimientoPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func lo(_ hayActividad: Bool, _ hayPasos: Bool) -> [String: Any] {
-        ["actividad": hayActividad, "pasos": hayPasos, "permiso": Self.permiso()]
+        ["actividad": hayActividad, "pasos": hayPasos, "hayRebote": acelerometro.isDeviceMotionAvailable, "permiso": Self.permiso()]
     }
 
     @objc func estado(_ call: CAPPluginCall) {
         call.resolve(lo(CMMotionActivityManager.isActivityAvailable(), CMPedometer.isStepCountingAvailable()))
+    }
+
+    /// Cada segundo, la desviación estándar de la magnitud de `userAcceleration` (g). Corre en `colaDelRebote`.
+    private func anotaMuestra(_ m: CMDeviceMotion) {
+        let a = m.userAcceleration
+        magnitudes.append((a.x * a.x + a.y * a.y + a.z * a.z).squareRoot())
+        if segundoDesde == 0 { segundoDesde = m.timestamp }
+        guard m.timestamp - segundoDesde >= 1 else { return }
+        let n = Double(magnitudes.count)
+        let media = magnitudes.reduce(0, +) / n
+        let varianza = magnitudes.reduce(0) { $0 + ($1 - media) * ($1 - media) } / n
+        magnitudes.removeAll(keepingCapacity: true)
+        segundoDesde = m.timestamp
+        notifyListeners("rebote", data: ["en": Date().timeIntervalSince1970 * 1000, "valor": varianza.squareRoot()])
+    }
+
+    private func enciendeRebote() {
+        guard acelerometro.isDeviceMotionAvailable, !acelerometro.isDeviceMotionActive else { return }
+        acelerometro.deviceMotionUpdateInterval = 1.0 / 20.0
+        colaDelRebote.addOperation { [weak self] in
+            self?.magnitudes.removeAll()
+            self?.segundoDesde = 0
+        }
+        acelerometro.startDeviceMotionUpdates(to: colaDelRebote) { [weak self] m, _ in
+            guard let self = self, let m = m else { return }
+            self.anotaMuestra(m)
+        }
     }
 
     @objc func inicia(_ call: CAPPluginCall) {
@@ -66,6 +108,8 @@ public class MovimientoPlugin: CAPPlugin, CAPBridgedPlugin {
         let hayPasos = CMPedometer.isStepCountingAvailable()
         // Contesta en el acto: lo que diga el sensor llega después, por los avisos.
         call.resolve(lo(hayActividad, hayPasos))
+        // El rebote no pide permiso: se enciende siempre.
+        DispatchQueue.main.async { self.enciendeRebote() }
         guard hayActividad || hayPasos else { return }
         // Encender y apagar van siempre por el hilo principal, en orden: un `detiene` que llega mientras iOS pregunta el permiso gana (`vuelta`).
         DispatchQueue.main.async {
@@ -122,6 +166,7 @@ public class MovimientoPlugin: CAPPlugin, CAPBridgedPlugin {
         call.resolve()
         DispatchQueue.main.async {
             self.vuelta += 1
+            if self.acelerometro.isDeviceMotionActive { self.acelerometro.stopDeviceMotionUpdates() }
             guard self.midiendo else { return }
             self.actividad.stopActivityUpdates()
             self.podometro.stopUpdates()

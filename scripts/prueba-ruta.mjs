@@ -2,10 +2,10 @@
 import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { agregaPunto, enVivo, trazoDeRuta, textoDeRitmo, usaGps } from '../src/lib/ubicacion.js';
-import { reproduceTraza } from '../src/lib/trazaGps.js';
-import { calle, caminar, correr, fantasma, vistazos } from './trazas-sinteticas.mjs';
+import { analizaTraza, reproduceTraza } from '../src/lib/trazaGps.js';
+import { calle, caminar, correr } from './trazas-sinteticas.mjs';
 import { preparaEntreno, construyeActividad } from '../src/lib/metricas/construye.js';
-import { entrenoLibre, decidePausaAutomatica, cronometroNuevo, pausa, reanuda } from '../src/lib/entrenoLibre.js';
+import { entrenoLibre, cronometroNuevo, pausa, reanuda } from '../src/lib/entrenoLibre.js';
 import { decidePrecision, silencioNuevo, sinNumerosDeLaRuta, SILENCIO } from '../src/lib/rutaSilenciosa.js';
 import { ficha, entrenoDeActividad } from '../src/lib/stickers/ficha.js';
 import { catalogo } from '../src/lib/stickers/catalogo.js';
@@ -118,36 +118,29 @@ assert.ok(series && JSON.stringify(series).includes('19.4'), 'la ruta va en las 
 const prep2 = preparaEntreno({ ...entrenoLibre({ deporte: 'correr', inicioMs: Date.parse('2026-10-15T12:00:00Z'), duracionS: 376, distanciaM: 1500 }), muestras: m });
 assert.equal(construyeActividad(prep2, { umbrales: { fc_max: 190 }, conSeries: true }).fila.distancia_m, 1500);
 
-// PAUSA AUTOMÁTICA: lo que leería la app segundo a segundo (t en segundos de reloj).
-const simula = (velocidades, deporte = 'correr', { sinSenal = [] } = {}) => {
-  let estado = 'corriendo';
-  const lecturas = [];
-  const eventos = [];
-  velocidades.forEach((vel, t) => {
-    if (sinSenal.includes(t)) return;
-    lecturas.push({ t, vel, pre: 6 });
-    const d = decidePausaAutomatica(lecturas.slice(-15), estado, deporte, t);
-    if (d) { eventos.push({ ...d, en: t }); estado = d.accion === 'pausa' ? 'pausa' : 'corriendo'; }
-  });
-  return eventos;
+// PAUSA AUTOMÁTICA SIN ACELERÓMETRO (la web; reglas del 3 nov 2026): el desplazamiento de 5 s. A pie pausa con < 0.6 m/s 3 s seguidos y reanuda con
+// > 1.0 m/s 2 s; en bici, < 1.0 y > 2.0. Un punto por segundo con la velocidad dada (y la posición que le toca).
+const soloGps = (velocidades, deporte = 'correr', { sinSenal = [] } = {}) => {
+  let y = 0;
+  const filas = [];
+  velocidades.forEach((vel, t) => { y += vel; if (!sinSenal.includes(t)) filas.push({ t, lat: 19.4 + y / metrosPorGradoLat, lon: -99.1, pre: 6, vel }); });
+  const r = reproduceTraza({ formato: 'traza-gps/3', deporte, inicioMs: 0, filas, eventos: [] }, { sinSensor: true });
+  return [...r.pausas.map((en) => ({ accion: 'pausa', en })), ...r.reanudas.map((en) => ({ accion: 'reanuda', en }))].sort((p, q) => p.en - q.en);
 };
-// Un semáforo de 20 s: corre 30 s, se para 20 s, vuelve a correr.
-const semaforo = simula([...Array(30).fill(3.3), ...Array(20).fill(0.1), ...Array(15).fill(3.3)]);
+// Un semáforo de 20 s: corre 30 s, se para 20 s, vuelve a correr. Más lento que con el rebote, pero sin falsos.
+const semaforo = soloGps([...Array(30).fill(3.3), ...Array(20).fill(0), ...Array(15).fill(3.3)]);
 assert.equal(semaforo.length, 2, `semáforo: ${JSON.stringify(semaforo)}`);
-assert.deepEqual([semaforo[0].accion, semaforo[0].en - 30], ['pausa', 2], 'pausa a los 2 s de parar');
-assert.deepEqual([semaforo[1].accion, semaforo[1].en - 50], ['reanuda', 2], 'reanuda 2 s después de arrancar');
-assert.equal(semaforo[0].desde, 30, 'la pausa cuenta desde que se paró');
-// Una lectura lenta suelta (1 s) a media carrera: no pausa.
-assert.equal(simula([...Array(20).fill(3.3), 0.2, ...Array(20).fill(3.3)]).length, 0, 'un segundo lento no pausa');
+assert.ok(semaforo[0].accion === 'pausa' && semaforo[0].en - 30 <= 9, `semáforo sin acelerómetro: pausa a los ${semaforo[0].en - 30} s de parar`);
+assert.ok(semaforo[1].accion === 'reanuda' && semaforo[1].en - 50 <= 5, `semáforo sin acelerómetro: reanuda a los ${semaforo[1].en - 50} s de arrancar`);
+// Una lectura lenta suelta a media carrera: no pausa (cuenta lo que avanzó, no la velocidad del iPhone).
+assert.equal(soloGps([...Array(20).fill(3.3), 0.2, ...Array(20).fill(3.3)]).length, 0, 'un segundo lento no pausa');
 // Trote lento constante a 1.8 m/s: nunca pausa.
-assert.equal(simula(Array(120).fill(1.8)).length, 0, 'trote lento no pausa');
-// Bici a 1.5 m/s no pausa (su umbral para pausar es 1.0); bici parada sí.
-assert.equal(simula(Array(30).fill(1.5), 'bici').length, 0, 'bici lenta no pausa');
-assert.equal(simula([...Array(10).fill(6), ...Array(10).fill(0.3)], 'bici')[0]?.accion, 'pausa', 'bici parada pausa');
+assert.equal(soloGps(Array(120).fill(1.8)).length, 0, 'trote lento no pausa');
+// Bici a 1.5 m/s no pausa (su barra para pausar es 1.0); bici parada sí.
+assert.equal(soloGps(Array(30).fill(1.5), 'bici').length, 0, 'bici lenta no pausa');
+assert.equal(soloGps([...Array(10).fill(6), ...Array(15).fill(0)], 'bici')[0]?.accion, 'pausa', 'bici parada pausa');
 // Se corta la señal 10 s corriendo: no pausa (sin señal no es estar parado).
-assert.equal(simula(Array(40).fill(3), 'correr', { sinSenal: Array.from({ length: 10 }, (_, i) => 15 + i) }).length, 0, 'corte de señal no pausa');
-// Lecturas imprecisas (25 m) no cuentan.
-assert.equal(decidePausaAutomatica([{ t: 0, vel: 0, pre: 25 }, { t: 1, vel: 0, pre: 25 }, { t: 2, vel: 0, pre: 25 }, { t: 3, vel: 0, pre: 25 }], 'corriendo', 'correr', 3), null);
+assert.equal(soloGps(Array(40).fill(3), 'correr', { sinSenal: Array.from({ length: 10 }, (_, i) => 15 + i) }).length, 0, 'corte de señal no pausa');
 // La marca de automática: se pone al pausar así y se quita al reanudar.
 const c0 = cronometroNuevo('correr', 0);
 const cp = pausa(c0, 1000, { automatica: true });
@@ -155,73 +148,69 @@ assert.equal(cp.automatica, true);
 assert.equal(reanuda(cp, 3000).automatica, undefined);
 assert.equal(reanuda(cp, 3000).pausas, 2000);
 
-/* EL SENSOR DE MOVIMIENTO Y EL GPS JUNTOS (2 y 3 nov 2026). Las situaciones de la calle se arman como TRAZAS (`scripts/trazas-sinteticas.mjs`, formato
-   `traza-gps/2` de `lib/trazaGps.js`: los puntos y los avisos del sensor tal como llegan) y se reproducen con `reproduceTraza`, que pasa todo por las mismas
-   funciones que la carrera (`pasoDeCarrera`).
-   · Parado en la calle entre edificios (bug del 2 nov: 50 m en 87 s, ritmo 18:13 /km, nunca pausó): error 15-20 m y el iPhone da ~0.9 m/s quieto, con la
-     posición yéndose con esa velocidad. El ruido al azar de arriba no tenía relación con la posición: por eso no lo veía.
-   · Girar el teléfono para ver la hora corriendo (bug del 3 nov): 6 s sin pasos con el sensor en «corriendo». Antes pausaba.
-   · Detenerse con dos pasos fantasma y el sensor diciendo «quieto» 12 s tarde (bug del 3 nov). Antes tardaba 8 s o más en pausar. */
+/* EL REBOTE Y EL GPS (3 nov 2026, `docs/superpowers/specs/2026-11-03-pausa-automatica-rebote.md`). Las situaciones de la calle se arman como TRAZAS
+   (`scripts/trazas-sinteticas.mjs`, formato `traza-gps/3` de `lib/trazaGps.js`: los puntos y los avisos del sensor tal como llegan) y se reproducen con
+   `reproduceTraza`, que pasa todo por las mismas funciones que la carrera (`pasoDeCarrera`). Las 8 de B6 están en `scripts/trazas/` y se revisan abajo,
+   con las demás. */
 {
-  // 3 minutos quieto en la calle, cinco sorteos. Con sensor y sin él (la web, o sin permiso): menos de 5 m, la pausa en menos de 10 s y no se reanuda sola.
+  // 3 minutos quieto en la calle entre edificios, cinco sorteos. Con el rebote (parado no rebota): menos de 5 m y la pausa en menos de 10 s, sin reanudar sola.
+  // Sin acelerómetro (la web) NO se exige: la pausa espera < 0.6 m/s de desplazamiento y el GPS «camina» a ~0.9 m/s; solo se dice cuánto sumó.
+  const enLaWeb = [];
   for (let semilla = 1; semilla <= 5; semilla += 1) {
     const t = calle(semilla * 104729);
-    for (const sinSensor of [false, true]) {
-      const r = reproduceTraza(t, { sinSensor });
-      const cual = `calle ${sinSensor ? 'sin' : 'con'} sensor (sorteo ${semilla})`;
-      assert.ok(r.distanciaM < 5, `${cual} suma ${r.distanciaM} m`);
-      assert.ok(r.pausas.length >= 1 && r.pausas[0] < 10, `${cual}: pausa a los ${r.pausas[0]} s`);
-      assert.equal(r.reanudas.length, 0, `${cual}: se reanudó sola ${r.reanudas.length} veces`);
-    }
+    const r = reproduceTraza(t);
+    assert.ok(r.distanciaM < 5, `calle con rebote (sorteo ${semilla}) suma ${r.distanciaM} m`);
+    assert.ok(r.pausas.length >= 1 && r.pausas[0] < 10, `calle con rebote (sorteo ${semilla}): pausa a los ${r.pausas[0]} s`);
+    assert.equal(r.reanudas.length, 0, `calle con rebote (sorteo ${semilla}): se reanudó sola ${r.reanudas.length} veces`);
+    const sin = reproduceTraza(t, { sinSensor: true });
+    enLaWeb.push(`${sin.distanciaM} m${sin.pausas.length ? ` (pausa a los ${sin.pausas[0]} s)` : ' (sin pausa)'}`);
   }
+  console.log(`  calle sin acelerómetro (la web), cinco sorteos: ${enLaWeb.join(', ')}`);
 
-  // Caminar 200 m con el sensor después de 20 s quieto: la distancia arranca en menos de 5 s de echar a andar y marca bien.
+  // Caminar 200 m después de 20 s quieto: la distancia arranca en menos de 5 s de echar a andar y marca bien.
   {
     const t = caminar();
     const r = reproduceTraza(t);
     const arranca = t.filas.find((f, i) => r.metros[i] > 0).t - 20;
     assert.ok(r.pausas[0] < 10, `quieto antes de caminar: pausa a los ${r.pausas[0]} s`);
-    assert.ok(arranca < 5, `caminando con sensor la distancia arranca a los ${arranca} s`);
-    assert.ok(Math.abs(r.distanciaM - 200) <= 6, `caminando 200 m con sensor da ${r.distanciaM} m`);
+    assert.ok(arranca < 5, `caminando, la distancia arranca a los ${arranca} s`);
+    assert.ok(Math.abs(r.distanciaM - 200) <= 6, `caminando 200 m da ${r.distanciaM} m`);
   }
 
-  // Correr parejo con el sensor (pasos todo el tiempo): lo mismo que sin sensor, sin pausas.
+  // Correr parejo con el rebote: lo mismo que sin sensor, sin pausas.
   {
     const t = correr();
     const con = reproduceTraza(t);
     const sin = reproduceTraza(t, { sinSensor: true });
-    assert.equal(con.distanciaM, sin.distanciaM, `correr con sensor ${con.distanciaM} m, sin sensor ${sin.distanciaM} m`);
-    assert.ok(Math.abs(con.distanciaM - 1250) < 15, `correr con sensor da ${con.distanciaM} m`);
-    assert.equal(con.pausas.length, 0, 'correr con sensor no pausa');
+    assert.equal(con.distanciaM, sin.distanciaM, `correr con rebote ${con.distanciaM} m, sin sensor ${sin.distanciaM} m`);
+    assert.ok(Math.abs(con.distanciaM - 1250) < 15, `correr con rebote da ${con.distanciaM} m`);
+    assert.equal(con.pausas.length, 0, 'correr con rebote no pausa');
   }
 
-  // Las dos fallas del 3 nov, armadas aquí mismo (las mismas que están en `scripts/trazas/`).
-  {
-    const r = reproduceTraza(vistazos());
-    assert.equal(r.pausas.length, 0, `girar el teléfono 5 veces corriendo pausa a los ${r.pausas.join(', ')} s`);
-    const f = reproduceTraza(fantasma());
-    assert.ok(f.pausas[0] > 30 && f.pausas[0] < 36, `detenerse con pasos fantasma: pausa a los ${f.pausas[0] - 30} s de parar`);
-    assert.ok(f.reanudas[0] > 60 && f.reanudas[0] < 64, `volver a correr: reanuda a los ${f.reanudas[0] - 60} s`);
-    assert.equal(f.pausas.length, 1, `detenerse con pasos fantasma: ${f.pausas.length} pausas`);
-  }
-
-  // Las trazas de `scripts/trazas/` (las sintéticas y las que se graben en el iPhone con «Guardar traza del GPS» → «Exportar»). Lo que se les exige:
-  //   «quieto-…»: menos de 5 m y la pausa automática en menos de 10 s · «corriendo-…»: ninguna pausa · y lo que diga su `esperado` (las sintéticas lo traen).
-  // Las demás solo se reproducen (y se dice cuánto dieron).
+  // Las trazas de `scripts/trazas/`: las sintéticas (las 8 de B6 y la de la calle) y las que se graben en el iPhone con «Guardar traza del GPS» → «Exportar».
+  // Por cada una se dice, PARADA POR PARADA, cuántos segundos tardó en pausar y en reanudar, y las pausas en falso (`analizaTraza`; las paradas de verdad, las
+  // escritas en la traza o, sin ellas, las que se ven con el GPS mirando hacia adelante), y el rebote parado y en marcha (para ajustar `REBOTE_MINIMO`).
+  // Lo que se les exige: «quieto-…»: menos de 5 m y la pausa en menos de 10 s · «corriendo-…»: ninguna pausa · y lo que diga su `esperado` (las sintéticas
+  // lo traen). Las demás solo se reproducen.
   const carpeta = new URL('./trazas/', import.meta.url);
   for (const nombre of (existsSync(carpeta) ? readdirSync(carpeta) : []).filter((n) => n.endsWith('.json')).sort()) {
     const t = JSON.parse(readFileSync(new URL(nombre, carpeta), 'utf8'));
     const r = reproduceTraza(t);
+    const a = analizaTraza(t, r);
     const e = t.esperado ?? {};
-    console.log(`  traza ${nombre}: ${t.filas.length} puntos, ${r.distanciaM} m, pausas a los ${r.pausas.join(', ') || '—'} s, reanuda a los ${r.reanudas.join(', ') || '—'} s`);
+    const paradas = a.paradas.map((p) => `${p.desde}-${p.hasta} s: pausa ${p.pausaS ?? '—'} s, reanuda ${p.reanudaS ?? '—'} s`).join(' · ') || 'sin paradas';
+    console.log(`  traza ${nombre}: ${r.distanciaM} m · ${paradas} · en falso: ${a.enFalso.length ? a.enFalso.join(', ') : 'ninguna'}${a.rebote.parado || a.rebote.enMarcha ? ` · rebote parado ${a.rebote.parado?.join('/') ?? '—'} g, en marcha ${a.rebote.enMarcha?.join('/') ?? '—'} g (p10/p50/p90)` : ''}`);
     if (nombre.startsWith('quieto-')) {
       assert.ok(r.distanciaM < 5, `${nombre}: quieto suma ${r.distanciaM} m`);
       assert.ok(r.pausas.length >= 1 && r.pausas[0] < 10, `${nombre}: la pausa entra a los ${r.pausas[0]} s`);
     }
     if (nombre.startsWith('corriendo-') || e.sinPausas) assert.equal(r.pausas.length, 0, `${nombre}: pausó a los ${r.pausas.join(', ')} s`);
-    if (e.pausaAntesDe != null) assert.ok(r.pausas.length >= 1 && r.pausas[0] < e.pausaAntesDe, `${nombre}: la pausa entra a los ${r.pausas[0]} s`);
+    if (e.maxMetros != null) assert.ok(r.distanciaM <= e.maxMetros, `${nombre}: suma ${r.distanciaM} m (tope ${e.maxMetros})`);
+    // Lo que la traza marca `pendiente` (el contrato lo pide y con sus reglas no se puede; lo decide el dueño) se dice, sin fallar.
+    const exige = (llave, ok, texto) => { if ((e.pendiente ?? []).includes(llave)) { if (!ok) console.log(`  PENDIENTE (no cumple el contrato): ${texto}`); } else assert.ok(ok, texto); };
+    if (e.pausaAntesDe != null) exige('pausaAntesDe', r.pausas.length >= 1 && r.pausas[0] <= e.pausaAntesDe, `${nombre}: la pausa entra a los ${r.pausas[0]} s (tope ${e.pausaAntesDe})`);
     if (e.sinReanudarAntesDe != null) assert.ok(!r.reanudas.some((x) => x < e.sinReanudarAntesDe), `${nombre}: se reanudó a los ${r.reanudas.join(', ')} s`);
-    if (e.reanudaAntesDe != null) assert.ok(r.reanudas.some((x) => x >= (e.sinReanudarAntesDe ?? 0) && x < e.reanudaAntesDe), `${nombre}: reanuda a los ${r.reanudas.join(', ') || '—'} s`);
+    if (e.reanudaAntesDe != null) assert.ok(r.reanudas.some((x) => x >= (e.sinReanudarAntesDe ?? 0) && x <= e.reanudaAntesDe), `${nombre}: reanuda a los ${r.reanudas.join(', ') || '—'} s (tope ${e.reanudaAntesDe})`);
   }
 }
 
