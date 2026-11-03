@@ -103,7 +103,7 @@ const firme = (punto, segundo) => {
  *     lo deja parado.
  * `vel` es la velocidad que da el GPS (m/s). Se prueba con `scripts/prueba-ruta.mjs`.
  *
- * EL SENSOR DE MOVIMIENTO MANDA (2 nov 2026, `lib/sensorDeMovimiento.js`). `sensor`: 'quieto' | 'mueve' | `null`.
+ * EL SENSOR DE MOVIMIENTO (2 nov 2026; desde el 3 nov junto con el GPS, `decideMarcha` en `lib/entrenoLibre.js`). `sensor`: 'quieto' | 'mueve' | `null`.
  *   · 'quieto': el punto entra como parado (`q: 1`) aunque el GPS diga otra cosa.
  *   · 'mueve': saliendo de parado no hace falta la ventana de 3 s; basta una señal del GPS (señales de moverse o fuera del radio del ancla).
  *   · `null` (la web, sin permiso, o el sensor no sabe): las reglas del GPS de arriba, más estrictas con error de más de `PRECISION_PARA_VELOCIDAD` m: la
