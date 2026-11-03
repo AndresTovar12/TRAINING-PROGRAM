@@ -5,20 +5,24 @@
    `scripts/prueba-ruta.mjs` la reproduce con `reproduceTraza`: los avisos del sensor pasan por las mismas funciones que en el teléfono
    (`lib/sensorDeMovimiento.js`) y cada punto por `pasoDeCarrera`. Lo mismo que hace la carrera.
 
-   EL FORMATO (`traza-gps/2`, 3 nov 2026): `{ formato, deporte, inicio (ISO), inicioMs, app ('iphone' | 'web'), filas, eventos }`. Tiempos en segundos desde el inicio.
-     · Cada FILA, un punto del GPS: `{ t, lat, lon, pre (error, m), vel?, rumbo?, v }` (`v`: lo que decidió `decideMarcha`: 'mueve' | 'quieto' | 'espera' | null).
-     · Cada EVENTO, un aviso del sensor tal como llegó: `{ t, tipo, ... }` con `tipo` 'enciende' | 'inicio' | 'movimiento' | 'pasos' | 'permiso' | 'falla' |
-       'apaga' y sus datos (`en`, la hora que trae el aviso, también en segundos desde el inicio). Los de 'pasos' llevan `pasos`, `en`, `cadencia?` y `ritmo?`.
-   La `traza-gps/1` (build 79) guardaba en cada fila un resumen del sensor (`s`) sin la cadencia; se sigue leyendo (`eventosDeV1`), con la cadencia de los pasos
-   contados. Vive en el teléfono (`localStorage`, solo la última, hasta 3 horas) y nunca se sube. */
+   EL FORMATO (`traza-gps/3`, 3 nov 2026): `{ formato, deporte, desplazamiento ('pie' | 'ruedas'), inicio (ISO), inicioMs, app ('iphone' | 'web'), filas,
+   eventos, paradas? }`. Tiempos en segundos desde el inicio.
+     · Cada FILA, un punto del GPS: `{ t, lat, lon, pre (error, m), vel?, rumbo?, v }` (`v`: lo que dijo `decideMarcha` para los metros: 'quieto' | 'mueve' | null).
+     · Cada EVENTO, un aviso del sensor tal como llegó: `{ t, tipo, ... }` con `tipo` 'enciende' | 'inicio' | 'movimiento' | 'pasos' | 'rebote' | 'permiso' |
+       'falla' | 'apaga' y sus datos (`en`, la hora que trae el aviso, también en segundos desde el inicio). 'rebote' lleva `valor` (g); 'pasos', `pasos`,
+       `cadencia?` y `ritmo?`. Además, cada cambio de marcha que decidió la carrera: 'marcha' `{ a: 'quieto' | 'en-marcha', motivo }` (solo para leerlo: la
+       prueba lo vuelve a decidir).
+     · `paradas` (opcional, se escribe a mano): `[[desde, hasta], …]`, las veces que de verdad se detuvo. Sin ellas, la prueba las estima con el GPS (`analizaTraza`).
+   Las `traza-gps/1` y `/2` (builds 79 y 80) se siguen leyendo (sin rebote: mandan las reglas del GPS). Vive en el teléfono (`localStorage`, solo la última,
+   hasta 3 horas) y nunca se sube. */
 
 import { carreraNueva, pasoDeCarrera } from './pasoDeCarrera.js';
-import { cronometroNuevo } from './entrenoLibre.js';
-import { enVivo } from './ubicacion.js';
-import { conActividad, conInicio, conPasos, conPermiso, sensorNuevo, sinPasos } from './sensorDeMovimiento.js';
+import { cronometroNuevo, familiaDelDeporte } from './entrenoLibre.js';
+import { enVivo, metrosEntrePuntos } from './ubicacion.js';
+import { conActividad, conInicio, conPasos, conPermiso, conRebote, sensorNuevo, sinPasos } from './sensorDeMovimiento.js';
 
-export const FORMATO_DE_TRAZA = 'traza-gps/2';
-const FORMATOS_QUE_SE_LEEN = ['traza-gps/1', FORMATO_DE_TRAZA];
+export const FORMATO_DE_TRAZA = 'traza-gps/3';
+const FORMATOS_QUE_SE_LEEN = ['traza-gps/1', 'traza-gps/2', FORMATO_DE_TRAZA];
 const LLAVE_ENCENDIDA = 'ajustes:traza-gps';
 const LLAVE_TRAZA = 'tl:traza-gps';
 const MAXIMO_DE_FILAS = 3 * 3600;
@@ -30,7 +34,7 @@ const seis = (x) => Math.round(x * 1e6) / 1e6;
 const relativo = (ms, inicioMs) => (typeof ms === 'number' ? Math.round(ms - inicioMs) / 1000 : undefined);
 const absoluto = (s, inicioMs) => (typeof s === 'number' ? inicioMs + s * 1000 : null);
 
-/** Un punto como fila de la traza (puro). `v`: lo que decidió `decideMarcha`. */
+/** Un punto como fila de la traza (puro). `v`: lo que dijo `decideMarcha` para los metros. */
 export function filaDeTraza(punto, v, ahoraMs, inicioMs) {
   const f = { t: relativo(ahoraMs, inicioMs), lat: seis(punto.lat), lon: seis(punto.lon), pre: uno(punto.precision) };
   if (typeof punto.vel === 'number') f.vel = Math.round(punto.vel * 100) / 100;
@@ -56,6 +60,7 @@ function aplica(s, e, inicioMs) {
     case 'inicio': return s && conInicio(s, e);
     case 'movimiento': return s && conActividad(s, conHora, ahora);
     case 'pasos': return s && conPasos(s, conHora, ahora);
+    case 'rebote': return s && conRebote(s, conHora, ahora);
     case 'permiso': return s && conPermiso(s, e);
     case 'falla': return s && (e.cual === 'pasos' ? sinPasos(s) : s);
     default: return s;
@@ -79,30 +84,89 @@ export function eventosDeV1(filas) {
 }
 
 /**
- * Reproduce una traza como si fuera la carrera (puro): los eventos del sensor y los puntos, en orden de llegada (en el mismo segundo, primero el sensor).
- * `sinSensor`: como si no hubiera sensor (las reglas del GPS solas). Devuelve `{ distanciaM, pausas: [s desde el inicio], reanudas: [s], metros: [los contados
- * después de cada fila], muestras }`.
+ * Reproduce una traza como si fuera la carrera (puro): los eventos del sensor y los puntos, en orden de llegada (en el mismo segundo, primero el sensor). Cada
+ * aviso de rebote también decide la pausa, sin punto (como en el teléfono). `sinSensor`: como si no hubiera sensor (la web: las reglas del GPS solas).
+ * Devuelve `{ distanciaM, pausas: [s desde el inicio], reanudas: [s], marchas: [{ t, a, motivo }], metros: [los contados después de cada fila], muestras }`.
  */
 export function reproduceTraza(traza, { sinSensor = false, pausaAutomatica = true } = {}) {
   if (!FORMATOS_QUE_SE_LEEN.includes(traza?.formato)) throw new Error(`traza con formato ${traza?.formato}`);
   const inicioMs = traza.inicioMs ?? 0;
+  const deporte = traza.deporte ?? 'correr';
   const eventos = sinSensor ? [] : (traza.formato === 'traza-gps/1' ? eventosDeV1(traza.filas) : (traza.eventos ?? []));
-  let e = carreraNueva({ ...cronometroNuevo(traza.deporte ?? 'correr', inicioMs), gps: true });
+  let e = carreraNueva({ ...cronometroNuevo(deporte, inicioMs), gps: true, desplazamiento: traza.desplazamiento ?? familiaDelDeporte(deporte) });
   let sensor = null;
   let k = 0;
   const pausas = [];
   const reanudas = [];
+  const marchas = [];
   const metros = [];
+  const anota = (t) => {
+    if (e.accion === 'pausa') pausas.push(t);
+    if (e.accion === 'reanuda') reanudas.push(t);
+    if (e.marcha) marchas.push({ t, ...e.marcha });
+  };
   for (const f of traza.filas ?? []) {
-    while (k < eventos.length && eventos[k].t <= f.t) { sensor = aplica(sensor, eventos[k], inicioMs); k += 1; }
-    const ahoraMs = inicioMs + f.t * 1000;
+    while (k < eventos.length && eventos[k].t <= f.t) {
+      const ev = eventos[k];
+      sensor = aplica(sensor, ev, inicioMs);
+      k += 1;
+      if (ev.tipo === 'rebote') { e = pasoDeCarrera(e, null, inicioMs + ev.t * 1000, { sensor, pausaAutomatica }); anota(ev.t); }
+    }
     const punto = { lat: f.lat, lon: f.lon, precision: f.pre, ...(typeof f.vel === 'number' ? { vel: f.vel } : {}), ...(typeof f.rumbo === 'number' ? { rumbo: f.rumbo } : {}) };
-    e = pasoDeCarrera(e, punto, ahoraMs, { sensor, pausaAutomatica });
-    if (e.accion === 'pausa') pausas.push(f.t);
-    if (e.accion === 'reanuda') reanudas.push(f.t);
+    e = pasoDeCarrera(e, punto, inicioMs + f.t * 1000, { sensor, pausaAutomatica });
+    anota(f.t);
     metros.push(e.metros);
   }
-  return { distanciaM: enVivo(e.muestras).distanciaM, pausas, reanudas, metros, muestras: e.muestras };
+  return { distanciaM: enVivo(e.muestras).distanciaM, pausas, reanudas, marchas, metros, muestras: e.muestras };
+}
+
+const percentil = (xs, p) => { if (!xs.length) return null; const o = [...xs].sort((a, b) => a - b); return o[Math.min(o.length - 1, Math.floor(p * o.length))]; };
+
+/**
+ * Las paradas de verdad de una traza (s): las escritas a mano en `traza.paradas` o, sin ellas, las que se ven con el GPS mirando hacia atrás Y hacia adelante
+ * (lo que la carrera no puede): menos de 0.5 m/s entre 3 s antes y 3 s después, 4 s o más seguidos, con lecturas de error ≤ 20 m.
+ */
+export function paradasDe(traza) {
+  if (Array.isArray(traza?.paradas)) return traza.paradas.map(([desde, hasta]) => ({ desde, hasta, escritas: true }));
+  const buenas = (traza?.filas ?? []).filter((f) => f.pre <= 20);
+  const quieto = buenas.map((f, i) => {
+    const antes = [...buenas.slice(0, i)].reverse().find((g) => f.t - g.t >= 3);
+    const despues = buenas.slice(i + 1).find((g) => g.t - f.t >= 3);
+    if (!antes || !despues) return false;
+    return metrosEntrePuntos(antes, despues) / (despues.t - antes.t) < 0.5;
+  });
+  const paradas = [];
+  let ini = null;
+  let ult = null;
+  const cierra = () => { if (ini != null && ult - ini >= 4) paradas.push({ desde: ini, hasta: ult, escritas: false }); ini = null; };
+  buenas.forEach((f, i) => {
+    if (quieto[i] && ini != null && f.t - ult <= 2) { ult = f.t; return; }
+    cierra();
+    if (quieto[i]) { ini = f.t; ult = f.t; }
+  });
+  cierra();
+  return paradas;
+}
+
+/**
+ * Lo que dio una traza, parada por parada (puro): `{ paradas: [{ desde, hasta, pausaS, reanudaS }], enFalso: [s], rebote: { parado, enMarcha } }`. `pausaS`:
+ * segundos desde que se detuvo hasta la pausa (`null` si no pausó); `reanudaS`: desde que arrancó hasta que se reanudó. `enFalso`: pausas fuera de toda
+ * parada. `rebote`: el rebote (g, percentiles 10/50/90) parado y en marcha, para ajustar `REBOTE_MINIMO`.
+ */
+export function analizaTraza(traza, r = reproduceTraza(traza)) {
+  const paradas = paradasDe(traza);
+  const dentro = (t, p, holgura = 1) => t >= p.desde - holgura && t <= p.hasta + holgura;
+  const lista = paradas.map((p) => {
+    const pausa = r.pausas.find((t) => dentro(t, p));
+    const reanuda = r.reanudas.find((t) => t >= p.hasta && t <= p.hasta + 20);
+    return { desde: p.desde, hasta: p.hasta, escritas: p.escritas, pausaS: pausa != null ? Math.round((pausa - p.desde) * 10) / 10 : null, reanudaS: reanuda != null ? Math.round((reanuda - p.hasta) * 10) / 10 : null };
+  });
+  const enFalso = r.pausas.filter((t) => !paradas.some((p) => dentro(t, p)));
+  const rebotes = (traza.eventos ?? []).filter((x) => x.tipo === 'rebote');
+  const parado = rebotes.filter((x) => paradas.some((p) => x.t - 1 >= p.desde && x.t <= p.hasta)).map((x) => x.valor);
+  const enMarcha = rebotes.filter((x) => !paradas.some((p) => x.t >= p.desde - 2 && x.t - 1 <= p.hasta + 2)).map((x) => x.valor);
+  const tres = (xs) => (xs.length ? [0.1, 0.5, 0.9].map((q) => Math.round(percentil(xs, q) * 1000) / 1000) : null);
+  return { paradas: lista, enFalso, rebote: { parado: tres(parado), enMarcha: tres(enMarcha) } };
 }
 
 /* ------------------------------ La grabación (en el teléfono) ------------------------------ */
@@ -134,11 +198,11 @@ export function ultimaTraza() {
 }
 
 /** Empieza a grabar la carrera que arrancó en `inicioMs` (borra la anterior). Si ya había una de esa misma carrera (se recargó la página), sigue esa. */
-export function empiezaTraza({ deporte, inicioMs, app }) {
+export function empiezaTraza({ deporte, desplazamiento = null, inicioMs, app }) {
   const previa = actual ?? ultimaTraza();
   actual = previa?.inicioMs === inicioMs && previa.formato === FORMATO_DE_TRAZA
     ? previa
-    : { formato: FORMATO_DE_TRAZA, deporte, inicio: new Date(inicioMs).toISOString(), inicioMs, app, filas: [], eventos: [] };
+    : { formato: FORMATO_DE_TRAZA, deporte, desplazamiento, inicio: new Date(inicioMs).toISOString(), inicioMs, app, filas: [], eventos: [] };
   guarda();
 }
 
