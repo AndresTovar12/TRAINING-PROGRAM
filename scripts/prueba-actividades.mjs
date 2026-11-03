@@ -5,6 +5,7 @@ import { ICONOS } from '../src/lib/iconosDeTipo.datos.js';
 const ICONOS_DEL_CATALOGO = new Set(ICONOS.map((i) => i.id));
 import {
   CATALOGO, GRUPOS_DE_ACTIVIDADES, creaActividad, propiasDe, actividadPorId, actividadDeDeporte, actividadDeEntreno, buscaActividades, hayConNombre, tusActividades, MAX_NOMBRE,
+  limpiaPropia, desplazamientoDe, editaActividad, cambiaPropia,
 } from '../src/lib/actividades.js';
 
 // El catálogo: ids únicos y cada deporte existe en las métricas.
@@ -56,5 +57,26 @@ assert.deepEqual(tusActividades([], []).map((x) => x.id), ['correr', 'bici', 'na
 const filas = [{ deporte: 'raqueta', titulo: 'Pádel' }, { deporte: 'correr', titulo: 'Correr' }, { deporte: 'raqueta', titulo: 'Pádel' }];
 assert.deepEqual(tusActividades(filas, [w.actividad]).map((x) => x.id), ['padel', 'correr', w.actividad.id], 'lo reciente primero, sin repetir, y las propias');
 assert.equal(tusActividades(Array.from({ length: 20 }, (_, i) => ({ deporte: 'otro', titulo: CATALOGO[i].nombre })), []).length, 6, 'tope de 6');
+
+// CÓMO TE MUEVES (3 nov 2026, para la pausa automática): cada una del catálogo con mapa es 'pie' o 'ruedas', nunca null; las de sin mapa no llevan el campo.
+CATALOGO.filter((x) => x.gps).forEach((x) => assert.ok(['pie', 'ruedas'].includes(desplazamientoDe(x)), `${x.id}: con mapa, ${desplazamientoDe(x)}`));
+CATALOGO.filter((x) => !x.gps).forEach((x) => { assert.equal('desplazamiento' in x, false, `${x.id}: sin mapa no lleva el campo`); assert.equal(desplazamientoDe(x), null); });
+assert.deepEqual(['correr', 'caminar', 'senderismo', 'trail'].map((id) => desplazamientoDe(actividadPorId(id))), ['pie', 'pie', 'pie', 'pie']);
+assert.deepEqual(['bici', 'patines', 'surf', 'remo', 'kayak'].map((id) => desplazamientoDe(actividadPorId(id))), ['ruedas', 'ruedas', 'ruedas', 'ruedas', 'ruedas']);
+// Crear: se guarda; uno raro no; sin mapa no lleva el campo; con mapa y sin decir, queda pendiente (null).
+assert.equal(creaActividad({ nombre: 'Patineta', gps: true, desplazamiento: 'ruedas' }, []).actividad.desplazamiento, 'ruedas');
+assert.equal(creaActividad({ nombre: 'Patineta', gps: true, desplazamiento: 'volando' }, []).actividad.desplazamiento, null, 'un valor raro queda pendiente');
+assert.equal('desplazamiento' in creaActividad({ nombre: 'Waterpolo', gps: false, desplazamiento: 'pie' }, []).actividad, false, 'sin mapa no lleva el campo');
+const vieja = limpiaPropia({ id: 'p-viejo', nombre: 'Patines en línea', gps: true });
+assert.equal(vieja.desplazamiento, null, 'una propia con mapa de antes queda pendiente de preguntar');
+assert.equal(desplazamientoDe(vieja), null);
+assert.equal(limpiaPropia({ ...vieja, desplazamiento: 'pie' }).desplazamiento, 'pie');
+// Editar una propia: el mismo id, el cambio guardado; no se le puede poner el nombre de otra.
+const cambiada = editaActividad(vieja, { desplazamiento: 'ruedas' }, [vieja]).actividad;
+assert.equal(cambiada.id, 'p-viejo');
+assert.equal(cambiada.desplazamiento, 'ruedas');
+assert.equal(cambiaPropia([vieja, w.actividad], cambiada)[0].desplazamiento, 'ruedas');
+assert.ok(editaActividad(vieja, { nombre: 'correr' }, [vieja]).error, 'no puede llamarse como una del catálogo');
+assert.ok(editaActividad(actividadPorId('correr'), { nombre: 'X' }, []).error, 'las del catálogo no se editan');
 
 console.log('prueba-actividades: todo bien');

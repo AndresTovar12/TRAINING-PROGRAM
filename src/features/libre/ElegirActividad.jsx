@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronLeft, Loader2, MapPin, Plus, Search } from 'lucide-react';
+import { Check, ChevronLeft, Loader2, MapPin, Pencil, Plus, Search } from 'lucide-react';
 import { FONT } from '@/lib/theme';
 import {
-  COLORES_PARA_CREAR, GRUPOS_DE_ACTIVIDADES, ICONO_PROPIO, MAX_NOMBRE, buscaActividades, creaActividad, hayConNombre, tusActividades,
+  COLORES_PARA_CREAR, GRUPOS_DE_ACTIVIDADES, ICONO_PROPIO, MAX_NOMBRE, buscaActividades, creaActividad, editaActividad, hayConNombre, propiasDe, tusActividades,
 } from '@/lib/actividades';
 import { buscaIconos, sugiereIcono } from '@/lib/iconosDeTipo';
 import { useCatalogoDeIconos } from '@/lib/useCatalogoDeIconos';
@@ -17,7 +17,10 @@ import IconoDeActividad from './IconoDeActividad';
      · Buscador sin acentos. Si lo que escribe no existe: «Crear "Waterpolo"».
      · Crear la suya: nombre, COLOR e ÍCONO (del catálogo de la app, el de los tipos de sesión; mientras escribe el nombre se le sugiere uno) y UNA pregunta,
        «¿Te mueves de un lugar a otro?» (si sí, lleva mapa y distancia). Queda guardada en su configuración. Sin emojis: Andrés, «no tienen personalidad».
-   `filas`: sus entrenos recientes (para «Tus actividades»). `propias`: las que creó. `alElegir(actividad)`. `alCrear(actividad)`: la guarda y la elige. */
+     · Si se mueve de un lugar a otro, otra pregunta (3 nov 2026, para la pausa automática): «¿Cómo te mueves?», «A pie» o «Sobre ruedas o en el agua».
+     · «Creadas por ti» (con `alEditar`): las suyas, con un lápiz para cambiarlas (nombre, color, ícono y las dos preguntas).
+   `filas`: sus entrenos recientes (para «Tus actividades»). `propias`: las que creó. `alElegir(actividad)`. `alCrear(actividad)`: la guarda y la elige.
+   `alEditar(actividad)`: guarda los cambios de una suya (sin él, no se ofrece editar). */
 
 const C = { fondo: '#0F1220', tarjeta: '#1A1E2E', tarjeta2: '#232838', texto: '#FFFFFF', texto2: 'rgba(255,255,255,0.62)', texto3: 'rgba(255,255,255,0.42)', azul: '#2F6BFF', verde: '#22C38E' };
 
@@ -39,13 +42,52 @@ function Fila({ actividad, onClick }) {
   );
 }
 
-function Crear({ inicial, propias, alGuardar, alVolver }) {
+/** «¿Cómo te mueves?» (3 nov 2026): a pie o sobre ruedas o en el agua. Así la pausa automática sabe qué mirar (el rebote del cuerpo o el GPS). */
+export function ComoTeMueves({ valor, alCambiar }) {
+  const opcion = (v, texto) => (
+    <button
+      type="button" onClick={() => alCambiar(v)} aria-pressed={valor === v}
+      style={{ flex: 1, minHeight: 48, borderRadius: 14, border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 700, padding: '8px 10px', color: '#fff', background: valor === v ? C.azul : C.tarjeta2, touchAction: 'manipulation' }}
+    >{texto}</button>
+  );
+  return (
+    <div style={{ ...fila, cursor: 'default', flexDirection: 'column', alignItems: 'stretch', gap: 10, padding: '14px 16px' }}>
+      <span>¿Cómo te mueves?</span>
+      <div role="group" aria-label="¿Cómo te mueves?" style={{ display: 'flex', gap: 8 }}>{opcion('pie', 'A pie')}{opcion('ruedas', 'Sobre ruedas o en el agua')}</div>
+      <span style={{ fontSize: 13.5, fontWeight: 500, color: C.texto2 }}>Así sabemos cuándo pausar solo.</span>
+    </div>
+  );
+}
+
+/** Al iniciar una propia con mapa que todavía no dice cómo se mueve (se creó antes del 3 nov 2026): la misma pregunta, una sola vez. `alElegir('pie' | 'ruedas')`. */
+export function HojaComoTeMueves({ actividad, alElegir, alCerrar }) {
+  const [valor, setValor] = useState('pie');
+  return createPortal(
+    <div role="dialog" aria-modal="true" aria-label="¿Cómo te mueves?" style={{ position: 'fixed', inset: 0, zIndex: 3300, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'flex-end', fontFamily: FONT }}>
+      <div style={{ width: '100%', boxSizing: 'border-box', background: C.fondo, color: C.texto, borderRadius: '24px 24px 0 0', padding: '18px 16px calc(16px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <IconoDeActividad actividad={actividad} size={44} oscuro />
+          <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: C.texto3 }}>Antes de empezar</div><div style={{ fontSize: 20, fontWeight: 800, overflowWrap: 'anywhere' }}>{actividad?.nombre}</div></div>
+          <button type="button" onClick={alCerrar} aria-label="Volver" style={redondo}><ChevronLeft size={22} /></button>
+        </div>
+        <ComoTeMueves valor={valor} alCambiar={setValor} />
+        <button type="button" onClick={() => alElegir(valor)} style={{ width: '100%', minHeight: 56, borderRadius: 20, border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 18, fontWeight: 800, color: '#fff', background: C.azul, touchAction: 'manipulation' }}>
+          Listo
+        </button>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function Crear({ inicial, editando = null, propias, alGuardar, alVolver }) {
   const catalogo = useCatalogoDeIconos();
-  const [nombre, setNombre] = useState(inicial);
-  const [color, setColor] = useState(COLORES_PARA_CREAR[0]);
-  const [elegido, setElegido] = useState(null); // el ícono que tocó; sin tocar ninguno, el que sugiere el nombre
+  const [nombre, setNombre] = useState(editando?.nombre ?? inicial);
+  const [color, setColor] = useState(editando?.color ?? COLORES_PARA_CREAR[0]);
+  const [elegido, setElegido] = useState(editando?.icono ?? null); // el ícono que tocó; sin tocar ninguno, el que sugiere el nombre
   const [busca, setBusca] = useState('');
-  const [gps, setGps] = useState(false);
+  const [gps, setGps] = useState(!!editando?.gps);
+  const [desplazamiento, setDesplazamiento] = useState(editando?.desplazamiento ?? 'pie');
   const [aviso, setAviso] = useState(null);
   const sugerido = useMemo(() => (catalogo ? sugiereIcono(catalogo, nombre) : null), [catalogo, nombre]);
   const icono = elegido ?? sugerido ?? ICONO_PROPIO;
@@ -57,7 +99,15 @@ function Crear({ inicial, propias, alGuardar, alVolver }) {
     return actual ? [actual, ...todos.filter((ic) => ic !== actual)] : todos;
   }, [catalogo, busca, icono]);
   const guardar = () => {
-    const r = creaActividad({ nombre, icono, color, gps }, propias);
+    // «¿Cómo te mueves?» solo cuenta si se mueve de un lugar a otro.
+    const datos = { nombre, icono, color, gps, ...(gps ? { desplazamiento } : {}) };
+    if (editando) {
+      const r = editaActividad(editando, datos, propias);
+      if (r.error) { setAviso(r.error); return; }
+      alGuardar(r.actividad, false);
+      return;
+    }
+    const r = creaActividad(datos, propias);
     if (!r) { setAviso('Escribe cómo se llama.'); return; }
     alGuardar(r.actividad, r.yaExistia);
   };
@@ -65,7 +115,7 @@ function Crear({ inicial, propias, alGuardar, alVolver }) {
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 'calc(14px + env(safe-area-inset-top)) 16px 4px' }}>
         <button type="button" onClick={alVolver} aria-label="Volver" style={redondo}><ChevronLeft size={22} /></button>
-        <div><div style={{ fontSize: 13, fontWeight: 700, color: C.texto3 }}>Nueva actividad</div><div style={{ fontSize: 22, fontWeight: 800 }}>Hazla tuya</div></div>
+        <div><div style={{ fontSize: 13, fontWeight: 700, color: C.texto3 }}>{editando ? 'Tu actividad' : 'Nueva actividad'}</div><div style={{ fontSize: 22, fontWeight: 800 }}>{editando ? 'Cámbiala' : 'Hazla tuya'}</div></div>
       </div>
       <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px' }}>
         <div style={{ display: 'flex', justifyContent: 'center', margin: '4px 0 16px' }}>
@@ -118,19 +168,21 @@ function Crear({ inicial, propias, alGuardar, alVolver }) {
             <span style={{ position: 'absolute', top: 3, left: gps ? 23 : 3, width: 24, height: 24, borderRadius: 12, background: '#fff', transition: 'left .15s' }} />
           </span>
         </button>
+        {gps && <div style={{ marginTop: 8 }}><ComoTeMueves valor={desplazamiento} alCambiar={setDesplazamiento} /></div>}
       </div>
       <div style={{ padding: '10px 16px calc(14px + env(safe-area-inset-bottom))' }}>
         <button type="button" onClick={guardar} style={{ width: '100%', minHeight: 58, borderRadius: 20, border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 18, fontWeight: 800, color: '#fff', background: C.azul, touchAction: 'manipulation' }}>
-          Guardar y empezar
+          {editando ? 'Guardar' : 'Guardar y empezar'}
         </button>
       </div>
     </>
   );
 }
 
-export default function ElegirActividad({ filas = [], propias = [], alElegir, alCrear, alCerrar }) {
+export default function ElegirActividad({ filas = [], propias = [], alElegir, alCrear, alEditar = null, alCerrar }) {
   const [busca, setBusca] = useState('');
   const [creando, setCreando] = useState(null); // null | el nombre con que arranca
+  const [editando, setEditando] = useState(null); // la propia que está cambiando
   const tuyas = useMemo(() => tusActividades(filas, propias), [filas, propias]);
   const q = busca.trim();
   const hallazgos = useMemo(() => buscaActividades(q, propias), [q, propias]);
@@ -139,7 +191,9 @@ export default function ElegirActividad({ filas = [], propias = [], alElegir, al
 
   return createPortal(
     <div role="dialog" aria-modal="true" aria-label="Elige tu actividad" style={{ position: 'fixed', inset: 0, zIndex: 3300, background: C.fondo, color: C.texto, fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
-      {creando !== null ? (
+      {editando ? (
+        <Crear inicial="" editando={editando} propias={propias} alVolver={() => setEditando(null)} alGuardar={(act) => { alEditar(act); setEditando(null); }} />
+      ) : creando !== null ? (
         <Crear inicial={creando} propias={propias} alVolver={() => setCreando(null)} alGuardar={(act, yaExistia) => (yaExistia ? alElegir(act) : alCrear(act))} />
       ) : (
         <>
@@ -172,6 +226,19 @@ export default function ElegirActividad({ filas = [], propias = [], alElegir, al
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{g.actividades.map((x) => <Fila key={x.id} actividad={x} onClick={() => alElegir(x)} />)}</div>
                   </div>
                 ))}
+                {alEditar && propiasDe(propias).length > 0 && (
+                  <div>
+                    <div style={rotulo}>Creadas por ti</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {propiasDe(propias).map((x) => (
+                        <div key={x.id} style={{ display: 'flex', gap: 6 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}><Fila actividad={x} onClick={() => alElegir(x)} /></div>
+                          <button type="button" onClick={() => setEditando(x)} aria-label={`Editar ${x.nombre}`} style={{ ...redondo, width: 52, height: 'auto', borderRadius: 16, background: C.tarjeta }}><Pencil size={18} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div style={rotulo}>¿No está?</div>
                 <button type="button" onClick={() => setCreando('')} style={{ ...fila, color: C.azul }}><span aria-hidden="true" style={masDe}><Plus size={20} /></span> Crear mi actividad</button>
               </>
