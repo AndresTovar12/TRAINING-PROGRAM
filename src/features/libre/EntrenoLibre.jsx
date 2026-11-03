@@ -7,9 +7,9 @@ import TarjetaDeExplorar from '@/features/explorar/TarjetaDeExplorar';
 import { relojDeCronometro } from '@/lib/entrenoLibre';
 import { nombreDelDeporte } from '@/lib/metricas/deportes';
 import { deporteDelCartel, resumenDeLaSemana, textoDeLaSemana } from '@/lib/semanaLibre';
-import { actividadDeDeporte, actividadDeEntreno, propiasDe } from '@/lib/actividades';
+import { actividadDeDeporte, actividadDeEntreno, cambiaPropia, limpiaPropia, propiasDe } from '@/lib/actividades';
 import { useStorage } from '@/contexts/AppStateContext';
-import ElegirActividad from './ElegirActividad';
+import ElegirActividad, { HojaComoTeMueves } from './ElegirActividad';
 import CelebracionLibre from './CelebracionLibre';
 import { recordDe } from '@/lib/resumenLibre';
 import { filaDelRecord, fraseDeActividad, heroeDeActividad } from '@/lib/paginaDelEntreno';
@@ -108,6 +108,15 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', variante = 'co
   const comparteEntreno = (e) => (e.plan ? abreSesionHecha({ almacen: e.plan.s.almacen, id: e.plan.s.id, stickers: true }) : comparte(e.actividad));
   const [verTodos, setVerTodos] = useState(false);
   const creaPropia = (act) => setPropias((prev) => [act, ...propiasDe(prev)].slice(0, 30));
+  const editaPropia = (cambiada) => {
+    const act = limpiaPropia(cambiada);
+    if (!act) return;
+    setPropias((prev) => cambiaPropia(prev, act));
+    if (pendiente?.id === act.id) setPendiente(act);
+  };
+  /* UNA PROPIA CON MAPA QUE NO DICE CÓMO SE MUEVE (creada antes del 3 nov 2026): antes del mapa se pregunta «¿Cómo te mueves?» una vez y se guarda en ella. La
+     pausa automática decide distinto a pie y sobre ruedas (`desplazamientoDe`). */
+  const faltaComoSeMueve = hoja === 'cronometro' && !enCurso && !!pendiente?.propia && !!pendiente.gps && pendiente.desplazamiento == null;
   /* Hay un entreno en curso en el Apple Watch, empezado ahí sin el iPhone (parte 3.6): el reloj sigue mandando y aquí no se empieza otro. */
   const enElReloj = useRelojEnCurso();
   const { avisa } = useAviso();
@@ -130,6 +139,7 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', variante = 'co
         <ElegirActividad
           filas={filas ?? []} propias={propias} alElegir={elige}
           alCrear={(act) => { creaPropia(act); elige(act); }}
+          alEditar={editaPropia}
           alCerrar={() => (pendiente ? setHoja('cronometro') : cierra())}
         />
       )}
@@ -137,7 +147,10 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', variante = 'co
         <HojaDeDemos demos={demos} alCerrar={() => setHoja(null)} alElegir={(d) => { abreDemo(d); setHoja(null); alIrAHome?.(); }} />
       )}
       {/* Con GPS (correr, caminar, bici, senderismo): la carrera a pantalla completa. Sin GPS: el cronómetro de siempre. */}
-      {hoja === 'cronometro' && ((pendiente && !enCurso) || (enCurso && crono.cronometro.gps)) && (
+      {faltaComoSeMueve && (
+        <HojaComoTeMueves actividad={pendiente} alElegir={(d) => editaPropia({ ...pendiente, desplazamiento: d })} alCerrar={() => setHoja('elegir')} />
+      )}
+      {hoja === 'cronometro' && !faltaComoSeMueve && ((pendiente && !enCurso) || (enCurso && crono.cronometro.gps)) && (
         <PantallaDeCarrera
           userId={userId} crono={crono} pendiente={enCurso ? null : pendiente?.deporte ?? null} actividad={enCurso ? null : pendiente}
           ultimo={ultimaSalida(filas, pendiente?.deporte ?? crono.cronometro?.deporte)}
