@@ -7,7 +7,7 @@ import {
 } from '@/lib/entrenoLibre';
 import { pasoDeCarrera } from '@/lib/pasoDeCarrera';
 import { sigueMovimiento } from '@/lib/movimientoNativo';
-import { anotaEnTraza, cierraTraza, empiezaTraza, grabaTraza, trazaEncendida } from '@/lib/trazaGps';
+import { anotaEnTraza, anotaSensorEnTraza, cierraTraza, empiezaTraza, grabaTraza, trazaEncendida } from '@/lib/trazaGps';
 import { enLaApp } from '@/lib/nativo';
 import { useEstadoOpcional, useStorageOpcional } from '@/contexts/AppStateContext';
 import { usePlanOpcional } from '@/contexts/PlanContext';
@@ -136,8 +136,8 @@ export function useCronometroLibre(userId) {
   }, [pausadoEn]);
   const conGps = !!cronometro?.gps && !(pausadoEn != null && dormidoEn === pausadoEn);
   /* EL SENSOR DE MOVIMIENTO (2 nov 2026, `lib/movimientoNativo.js`): mientras el GPS de la carrera está encendido, también el sensor (solo en el iPhone). Con
-     cada punto se le pregunta qué dice (`veredicto`): «quieto» hace parado el punto y pausa; salir de parado necesita que diga que te mueves. Sin él (la web,
-     sin permiso), las reglas del GPS. La primera vez, iOS pregunta el permiso aquí: en la primera carrera. */
+     cada punto se juntan sus señales con el GPS (`decideMarcha`, 3 nov 2026: ningún sensor solo decide): «quieto» hace parado el punto y pausa; «mueve»
+     reanuda (2 s) y deja salir de parado. Sin él (la web, sin permiso), las reglas del GPS. La primera vez, iOS pregunta el permiso aquí: en la primera carrera. */
   const sensor = useRef(null);
   // Se recargó la página a media carrera grabando su traza: se sigue grabando la misma.
   const inicioConGps = cronometro?.gps ? cronometro.inicio : null;
@@ -146,7 +146,11 @@ export function useCronometroLibre(userId) {
   }, [inicioConGps]);
   useEffect(() => {
     if (!conGps) return undefined;
-    const parar = sigueMovimiento((s) => { sensor.current = s; });
+    const parar = sigueMovimiento((s, aviso) => {
+      sensor.current = s;
+      // La traza guarda cada aviso tal como llegó: la prueba lo vuelve a pasar por las mismas funciones.
+      if (vivo.current && grabaTraza(vivo.current.inicio)) anotaSensorEnTraza(aviso, Date.now());
+    });
     return () => { parar(); sensor.current = null; };
   }, [conGps]);
   useEffect(() => {
@@ -164,7 +168,7 @@ export function useCronometroLibre(userId) {
       const ahora = Date.now();
       const e = pasoDeCarrera({ cronometro: c, muestras: ruta.current, ...enCurso.current }, p, ahora, { sensor: sensor.current, pausaAutomatica: conPausaAutomatica.current });
       enCurso.current = { lecturas: e.lecturas, metros: e.metros, arranque: e.arranque };
-      if (grabaTraza(c.inicio)) anotaEnTraza(p, sensor.current, e.v, ahora);
+      if (grabaTraza(c.inicio)) anotaEnTraza(p, e.v, ahora);
       if (e.cronometro !== c) { vivo.current = e.cronometro; cambiaYa.current(e.cronometro); }
       if (e.muestras !== ruta.current) {
         ruta.current = e.muestras;

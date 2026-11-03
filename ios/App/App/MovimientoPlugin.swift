@@ -10,7 +10,7 @@ import CoreMotion
 
    Métodos: `estado` (qué hay y si hay permiso), `inicia` (enciende; contesta de inmediato), `detiene`.
    Avisos: `movimiento` { estado: quieto|caminando|corriendo|bici|auto|desconocido, confianza: 0-2, en: ms desde cuándo }, `pasos` { pasos (desde que se
-   encendió), en: ms }, `permiso` { permiso: si|negado|restringido|sin_preguntar } y `falla` { cual: pasos }.
+   encendió), en: ms, cadencia?: pasos/s (`currentCadence`), ritmo?: s/m (`currentPace`) }, `permiso` { permiso: si|negado|restringido|sin_preguntar } y `falla` { cual: pasos }.
    La primera vez, iOS pregunta el permiso con `NSMotionUsageDescription` del Info.plist («Para saber cuándo te detienes y no sumar metros de más»). */
 @objc(MovimientoPlugin)
 public class MovimientoPlugin: CAPPlugin, CAPBridgedPlugin {
@@ -109,7 +109,11 @@ public class MovimientoPlugin: CAPPlugin, CAPBridgedPlugin {
                 guard let self = self else { return }
                 if error != nil { self.notifyListeners("falla", data: ["cual": "pasos"]); return }
                 guard let datos = datos else { return }
-                self.notifyListeners("pasos", data: ["pasos": datos.numberOfSteps.intValue, "en": datos.endDate.timeIntervalSince1970 * 1000])
+                // La cadencia (pasos/s) y el ritmo (s/m) pueden no venir (al arrancar o con pocos pasos): entonces no se mandan y la página usa los pasos contados.
+                var aviso: [String: Any] = ["pasos": datos.numberOfSteps.intValue, "en": datos.endDate.timeIntervalSince1970 * 1000]
+                if let cadencia = datos.currentCadence { aviso["cadencia"] = cadencia.doubleValue }
+                if let ritmo = datos.currentPace { aviso["ritmo"] = ritmo.doubleValue }
+                self.notifyListeners("pasos", data: aviso)
             }
         }
     }

@@ -2,8 +2,8 @@
 import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { agregaPunto, enVivo, trazoDeRuta, textoDeRitmo, usaGps } from '../src/lib/ubicacion.js';
-import { conActividad, conPasos, sensorNuevo, veredicto } from '../src/lib/sensorDeMovimiento.js';
-import { FORMATO_DE_TRAZA, filaDeTraza, reproduceTraza } from '../src/lib/trazaGps.js';
+import { reproduceTraza } from '../src/lib/trazaGps.js';
+import { calle, caminar, correr, fantasma, vistazos } from './trazas-sinteticas.mjs';
 import { preparaEntreno, construyeActividad } from '../src/lib/metricas/construye.js';
 import { entrenoLibre, decidePausaAutomatica, cronometroNuevo, pausa, reanuda } from '../src/lib/entrenoLibre.js';
 import { decidePrecision, silencioNuevo, sinNumerosDeLaRuta, SILENCIO } from '../src/lib/rutaSilenciosa.js';
@@ -155,95 +155,73 @@ assert.equal(cp.automatica, true);
 assert.equal(reanuda(cp, 3000).automatica, undefined);
 assert.equal(reanuda(cp, 3000).pausas, 2000);
 
-/* PARADO EN LA CALLE ENTRE EDIFICIOS (bug del 2 nov 2026: 50 m en 87 s, ritmo 18:13 /km, la pausa automática nunca entró). La geometría real: error grande
-   (15-20 m) y el iPhone da ~0.9 m/s estando quieto, con la posición yéndose CON esa velocidad (el filtro del GPS inventa un paso tranquilo en una dirección)
-   y regresando de golpe. El ruido al azar de arriba no tenía relación con la posición: por eso no lo veía. Se arma como TRAZA EXPORTADA (`lib/trazaGps.js`),
-   con lo que diría el sensor de movimiento (que avisa «quieto» al segundo y medio), y se reproduce con `pasoDeCarrera`, lo mismo que hace la carrera. */
+/* EL SENSOR DE MOVIMIENTO Y EL GPS JUNTOS (2 y 3 nov 2026). Las situaciones de la calle se arman como TRAZAS (`scripts/trazas-sinteticas.mjs`, formato
+   `traza-gps/2` de `lib/trazaGps.js`: los puntos y los avisos del sensor tal como llegan) y se reproducen con `reproduceTraza`, que pasa todo por las mismas
+   funciones que la carrera (`pasoDeCarrera`).
+   · Parado en la calle entre edificios (bug del 2 nov: 50 m en 87 s, ritmo 18:13 /km, nunca pausó): error 15-20 m y el iPhone da ~0.9 m/s quieto, con la
+     posición yéndose con esa velocidad. El ruido al azar de arriba no tenía relación con la posición: por eso no lo veía.
+   · Girar el teléfono para ver la hora corriendo (bug del 3 nov): 6 s sin pasos con el sensor en «corriendo». Antes pausaba.
+   · Detenerse con dos pasos fantasma y el sensor diciendo «quieto» 12 s tarde (bug del 3 nov). Antes tardaba 8 s o más en pausar. */
 {
-  const azar = (semilla) => () => { semilla = (semilla + 0x6D2B79F5) | 0; let x = Math.imul(semilla ^ (semilla >>> 15), 1 | semilla); x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x; return ((x ^ (x >>> 14)) >>> 0) / 4294967296; };
-  const porGradoLon = metrosPorGradoLat * Math.cos(19.4 * Math.PI / 180);
-  const inicioMs = Date.parse('2026-11-02T18:00:00Z');
-  // `pasos`: [[segundo, pasos contados]]; `actividad`: [[segundo, estado, desde]]. `mueve(s)`: dónde va de verdad (metros al norte) y a qué velocidad.
-  const traza = ({ semilla, segundos, calle, real = () => ({ y: 0, vel: null }), actividad = [], pasos = [], deporte = 'caminar' }) => {
-    const r = azar(semilla);
-    let dx = 0; let dy = 0; let dir = 0; let quedan = 0;
-    let s = sensorNuevo(inicioMs, { hayActividad: true, hayPasos: true, permiso: 'si' });
-    const filas = [];
-    for (let k = 0; k < segundos; k += 1) {
-      const ahora = inicioMs + (k + 0.4) * 1000;
-      for (const [en, estado, desde] of actividad) if (Math.abs(en - (k + 0.4)) < 0.5) s = conActividad(s, { estado, confianza: 2, en: inicioMs + desde * 1000 }, ahora);
-      for (const [en, n] of pasos) if (Math.abs(en - (k + 0.4)) < 0.5) s = conPasos(s, { pasos: n, en: inicioMs + (en - 0.3) * 1000 }, ahora);
-      const yo = real(k);
-      let pre = 5 + r() * 2;
-      let vel = yo.vel;
-      if (calle) {
-        // La calle: cada 10-25 s, el GPS «camina» a 0.75-1.1 m/s hacia otro lado; lejos de verdad (más de 15 m), regresa de golpe.
-        if (quedan <= 0) { if (Math.hypot(dx, dy) > 15) { dx *= 0.2; dy *= 0.2; } dir = r() * 2 * Math.PI; quedan = 10 + r() * 15; }
-        const v = 0.75 + r() * 0.35;
-        dx += Math.cos(dir) * v; dy += Math.sin(dir) * v; quedan -= 1;
-        pre = 15.5 + r() * 4;
-        vel = v + (r() - 0.5) * 0.1;
-      }
-      const punto = { lat: 19.4 + (yo.y + dy) / metrosPorGradoLat, lon: -99.1 + dx / porGradoLon, precision: pre, ...(vel != null ? { vel } : {}) };
-      filas.push(filaDeTraza(punto, s, veredicto(s, deporte, ahora), ahora, inicioMs));
-    }
-    // Ida y vuelta por JSON: así la lee la prueba de una traza exportada del iPhone.
-    return JSON.parse(JSON.stringify({ formato: FORMATO_DE_TRAZA, deporte, inicio: new Date(inicioMs).toISOString(), inicioMs, app: 'iphone', filas }));
-  };
-
-  // 3 minutos quieto en la calle, cinco sorteos. Con el sensor: menos de 5 m y la pausa en menos de 10 s (y no se reanuda sola). Sin sensor (la web, o sin
-  // permiso), las reglas del GPS más estrictas: menos de 5 m y la pausa también en menos de 10 s.
+  // 3 minutos quieto en la calle, cinco sorteos. Con sensor y sin él (la web, o sin permiso): menos de 5 m, la pausa en menos de 10 s y no se reanuda sola.
   for (let semilla = 1; semilla <= 5; semilla += 1) {
-    const t = traza({ semilla: semilla * 104729, segundos: 180, calle: true, actividad: [[1.5, 'quieto', 1.5]] });
-    const con = reproduceTraza(t);
-    assert.ok(con.distanciaM < 5, `calle con sensor (sorteo ${semilla}) suma ${con.distanciaM} m`);
-    assert.ok(con.pausas.length >= 1 && con.pausas[0] < 10, `calle con sensor (sorteo ${semilla}): pausa a los ${con.pausas[0]} s`);
-    assert.equal(con.reanudas.length, 0, `calle con sensor (sorteo ${semilla}): se reanudó sola`);
-    const sin = reproduceTraza(t, { sinSensor: true });
-    assert.ok(sin.distanciaM < 5, `calle sin sensor (sorteo ${semilla}) suma ${sin.distanciaM} m`);
-    assert.ok(sin.pausas.length >= 1 && sin.pausas[0] < 10, `calle sin sensor (sorteo ${semilla}): pausa a los ${sin.pausas[0]} s`);
-    assert.equal(sin.reanudas.length, 0, `calle sin sensor (sorteo ${semilla}): se reanudó sola ${sin.reanudas.length} veces`);
+    const t = calle(semilla * 104729);
+    for (const sinSensor of [false, true]) {
+      const r = reproduceTraza(t, { sinSensor });
+      const cual = `calle ${sinSensor ? 'sin' : 'con'} sensor (sorteo ${semilla})`;
+      assert.ok(r.distanciaM < 5, `${cual} suma ${r.distanciaM} m`);
+      assert.ok(r.pausas.length >= 1 && r.pausas[0] < 10, `${cual}: pausa a los ${r.pausas[0]} s`);
+      assert.equal(r.reanudas.length, 0, `${cual}: se reanudó sola ${r.reanudas.length} veces`);
+    }
   }
 
-  // Caminar 200 m con el sensor, después de 20 s quieto: los pasos llegan cada 1.5 s (el podómetro se atrasa) y el sensor dice «caminando» a los 4 s. La
-  // distancia arranca en menos de 5 s y marca bien.
+  // Caminar 200 m con el sensor después de 20 s quieto: la distancia arranca en menos de 5 s de echar a andar y marca bien.
   {
-    const paso = [];
-    for (let e = 21.5, n = 3; e < 170; e += 1.5, n += 3) paso.push([e, n]);
-    const t = traza({
-      semilla: 7, segundos: 165, calle: false, actividad: [[1.5, 'quieto', 0], [24.5, 'caminando', 20.5]], pasos: paso,
-      real: (k) => (k < 20 ? { y: 0, vel: 0 } : { y: (k - 20) * 1.4, vel: 1.4 }),
-    });
+    const t = caminar();
     const r = reproduceTraza(t);
-    // Cuántos segundos después de echar a andar (a los 20 s) la distancia deja de ser 0.
     const arranca = t.filas.find((f, i) => r.metros[i] > 0).t - 20;
     assert.ok(r.pausas[0] < 10, `quieto antes de caminar: pausa a los ${r.pausas[0]} s`);
     assert.ok(arranca < 5, `caminando con sensor la distancia arranca a los ${arranca} s`);
     assert.ok(Math.abs(r.distanciaM - 200) <= 6, `caminando 200 m con sensor da ${r.distanciaM} m`);
   }
 
-  // Correr con el sensor (pasos todo el tiempo): igual que sin sensor, sin pausas.
+  // Correr parejo con el sensor (pasos todo el tiempo): lo mismo que sin sensor, sin pausas.
   {
-    const corre = { formato: FORMATO_DE_TRAZA, deporte: 'correr', inicioMs: 0, filas: puntos.map((p, k) => ({ t: k + 0.4, lat: p.lat, lon: p.lon, pre: p.precision, vel: p.vel, s: { vivo: true, hayPasos: true, pasos: 3 * k, pasoEn: k, act: 'corriendo', conf: 2, actEn: 0, desde: 0 } })) };
-    const con = reproduceTraza(corre);
-    const sin = reproduceTraza(corre, { sinSensor: true });
+    const t = correr();
+    const con = reproduceTraza(t);
+    const sin = reproduceTraza(t, { sinSensor: true });
     assert.equal(con.distanciaM, sin.distanciaM, `correr con sensor ${con.distanciaM} m, sin sensor ${sin.distanciaM} m`);
-    assert.ok(Math.abs(con.distanciaM - 1243) < 15, `correr con sensor da ${con.distanciaM} m`);
+    assert.ok(Math.abs(con.distanciaM - 1250) < 15, `correr con sensor da ${con.distanciaM} m`);
     assert.equal(con.pausas.length, 0, 'correr con sensor no pausa');
   }
 
-  // Las trazas grabadas en el iPhone («Guardar traza del GPS» → «Exportar»), en `scripts/trazas/`. Las que empiezan con «quieto-»: menos de 5 m y la pausa
-  // automática en menos de 10 s. Las demás solo se reproducen (y se dice cuánto dieron).
+  // Las dos fallas del 3 nov, armadas aquí mismo (las mismas que están en `scripts/trazas/`).
+  {
+    const r = reproduceTraza(vistazos());
+    assert.equal(r.pausas.length, 0, `girar el teléfono 5 veces corriendo pausa a los ${r.pausas.join(', ')} s`);
+    const f = reproduceTraza(fantasma());
+    assert.ok(f.pausas[0] > 30 && f.pausas[0] < 36, `detenerse con pasos fantasma: pausa a los ${f.pausas[0] - 30} s de parar`);
+    assert.ok(f.reanudas[0] > 60 && f.reanudas[0] < 64, `volver a correr: reanuda a los ${f.reanudas[0] - 60} s`);
+    assert.equal(f.pausas.length, 1, `detenerse con pasos fantasma: ${f.pausas.length} pausas`);
+  }
+
+  // Las trazas de `scripts/trazas/` (las sintéticas y las que se graben en el iPhone con «Guardar traza del GPS» → «Exportar»). Lo que se les exige:
+  //   «quieto-…»: menos de 5 m y la pausa automática en menos de 10 s · «corriendo-…»: ninguna pausa · y lo que diga su `esperado` (las sintéticas lo traen).
+  // Las demás solo se reproducen (y se dice cuánto dieron).
   const carpeta = new URL('./trazas/', import.meta.url);
   for (const nombre of (existsSync(carpeta) ? readdirSync(carpeta) : []).filter((n) => n.endsWith('.json')).sort()) {
     const t = JSON.parse(readFileSync(new URL(nombre, carpeta), 'utf8'));
-    assert.equal(t.formato, FORMATO_DE_TRAZA, `${nombre}: formato ${t.formato}`);
     const r = reproduceTraza(t);
-    console.log(`  traza ${nombre}: ${t.filas.length} puntos, ${r.distanciaM} m, pausas a los ${r.pausas.join(', ') || '—'} s`);
+    const e = t.esperado ?? {};
+    console.log(`  traza ${nombre}: ${t.filas.length} puntos, ${r.distanciaM} m, pausas a los ${r.pausas.join(', ') || '—'} s, reanuda a los ${r.reanudas.join(', ') || '—'} s`);
     if (nombre.startsWith('quieto-')) {
       assert.ok(r.distanciaM < 5, `${nombre}: quieto suma ${r.distanciaM} m`);
       assert.ok(r.pausas.length >= 1 && r.pausas[0] < 10, `${nombre}: la pausa entra a los ${r.pausas[0]} s`);
     }
+    if (nombre.startsWith('corriendo-') || e.sinPausas) assert.equal(r.pausas.length, 0, `${nombre}: pausó a los ${r.pausas.join(', ')} s`);
+    if (e.pausaAntesDe != null) assert.ok(r.pausas.length >= 1 && r.pausas[0] < e.pausaAntesDe, `${nombre}: la pausa entra a los ${r.pausas[0]} s`);
+    if (e.sinReanudarAntesDe != null) assert.ok(!r.reanudas.some((x) => x < e.sinReanudarAntesDe), `${nombre}: se reanudó a los ${r.reanudas.join(', ')} s`);
+    if (e.reanudaAntesDe != null) assert.ok(r.reanudas.some((x) => x >= (e.sinReanudarAntesDe ?? 0) && x < e.reanudaAntesDe), `${nombre}: reanuda a los ${r.reanudas.join(', ') || '—'} s`);
   }
 }
 
