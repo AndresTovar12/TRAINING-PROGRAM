@@ -7,6 +7,7 @@ import { anotaEspacio } from '@/lib/espacioApi';
 import { ErrorDeLimite, comoErrorDeLimite } from '@/lib/limiteDeAtletas';
 import { COLUMNAS_PERFIL } from '@/lib/perfilColumnas';
 import { escapaLike } from '@/lib/escapaLike';
+import { anotaLoQueEscribi } from '@/lib/planesEscritos';
 
 const AVATAR_BUCKET = 'avatars';
 
@@ -1035,6 +1036,7 @@ export async function createPlan({ userId, title, phases, kind, estructura, foto
     .select('*')
     .single();
   if (error) throw error;
+  anotaLoQueEscribi(data);
   return data;
 }
 
@@ -1060,7 +1062,16 @@ export async function updatePlan(planId, { title, phases, kind, estructura, foto
     .select('*')
     .single();
   if (error) throw error;
+  // Lo que este aparato acaba de guardar: el aviso en vivo con este `updated_at` no es «cambió en otro lado» (`lib/planesEnVivo.js`).
+  anotaLoQueEscribi(data);
   return data;
+}
+
+/** Una fila de `plans` por su id, como está ahora en la base (`null` si ya no existe o no se puede ver). Para el editor, al saber que cambió en otro lado. */
+export async function getPlanPorId(planId) {
+  const { data, error } = await supabase.from('plans').select('*').eq('id', planId).maybeSingle();
+  if (error) throw error;
+  return data ?? null;
 }
 
 export async function deletePlan(planId) {
@@ -1103,6 +1114,7 @@ export async function guardarSesionesPegadas({ fila, atletaId, autorId, sesiones
       .select('*')
       .single();
     if (error) throw error;
+    anotaLoQueEscribi(row);
     return row;
   }
   const { data: row, error } = await supabase

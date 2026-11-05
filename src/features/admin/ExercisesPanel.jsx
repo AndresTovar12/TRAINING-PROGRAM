@@ -30,6 +30,8 @@ import { T, FONT, KP, UI } from '@/lib/theme';
 import { useCabeceraDeSeccion, useEnBanda } from '@/components/ui';
 import Portada from '@/components/Portada';
 import { useConfirmacion } from '@/components/Confirmacion';
+import { FUERA_MINIMO_MS, alVolverALaApp } from '@/lib/planesEnVivo';
+import { haySenalAhora } from '@/lib/senal';
 
 const CAT_FALLBACK = {
   hipertrofia: '#1E40E0', atletico: '#00A372', potencia: '#FF7A52', pliometria: '#A480FF',
@@ -1148,12 +1150,16 @@ export default function ExercisesPanel({ viendoComo }) {
      que es cuando pudo cambiar: grabar o quitar un video escribe esas filas directo, sin pasar por «Guardar». Si falla, la lista
      se queda como estaba: lo peor es una marca de «falta video» de más. */
   const [conVideoExtra, setConVideoExtra] = useState(() => new Set());
+  /* AL VOLVER A LA PESTAÑA O A LA APP (5 nov 2026): si se estuvo fuera más de 20 s, la lista se vuelve a pedir (el conector u otro aparato pudo crear o
+     cambiar ejercicios). Sin «cargando»: lo de antes se queda a la vista hasta que llega lo nuevo, y si no llega, se queda. Sin señal no se pide. */
+  const [otraVez, setOtraVez] = useState(0);
+  useEffect(() => alVolverALaApp((msFuera) => { if (msFuera > FUERA_MINIMO_MS && haySenalAhora()) setOtraVez((n) => n + 1); }), []);
   useEffect(() => {
     if (editing) return undefined;
     let vivo = true;
     listIdsConVideoExtra().then((ids) => { if (vivo) setConVideoExtra(ids); }).catch(() => {});
     return () => { vivo = false; };
-  }, [editing, dueño]);
+  }, [editing, dueño, otraVez]);
 
   /* LAS FOTOS DE LOS VIDEOS SE COMPLETAN SOLAS. Los videos nuevos sacan su foto
      al subirse; los que ya estaban sin foto, o con una que quedó vieja porque
@@ -1188,7 +1194,8 @@ export default function ExercisesPanel({ viendoComo }) {
         setMasterId(mId);
         setOverrides(mias);
       } catch (e) {
-        if (!cancelled) setErr(e.message || 'Error al cargar');
+        // Al volver a pedirla (`otraVez`), un fallo no tapa la lista que ya estaba.
+        if (!cancelled && !otraVez) setErr(e.message || 'Error al cargar');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -1198,7 +1205,7 @@ export default function ExercisesPanel({ viendoComo }) {
     // render la sesión todavía puede no estar lista. Sin esta dependencia el
     // repertorio cargaría sin mis versiones y nadie vería un error: se
     // mostrarían los ejercicios del master como si nunca los hubiera editado.
-  }, [dueño]);
+  }, [dueño, otraVez]);
 
   // La altura de la lista, para volver a donde estaba al refrescar.
   useScrollLugar('ejercicios', !loading);

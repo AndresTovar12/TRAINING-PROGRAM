@@ -134,6 +134,12 @@ export function useHistorial({ leer, aplicar, raiz = null, alCambiar = null }) {
   // Lo que está en pantalla ES lo guardado. `id`: el de cuando se pidió guardar (si se siguió escribiendo mientras tanto, eso sigue sin guardar).
   const idActual = useCallback(() => pila.current.id, []);
   const marcaGuardado = useCallback((id) => { pila.current.guardado = id ?? pila.current.id; publica(); }, [publica]);
+  // Lo de la pantalla se cambió por lo de la base (llegó un cambio de otro lado, 5 nov 2026): ni deshacer hacia lo de antes ni nada sin guardar.
+  const reinicia = useCallback(() => {
+    const p = pila.current;
+    p.pasado = []; p.futuro = []; p.ultima = null; p.id = p.sig; p.sig += 1; p.guardado = p.id;
+    publica();
+  }, [publica]);
 
   // Ctrl/⌘+Z deshace; Ctrl/⌘+Mayús+Z o Ctrl/⌘+Y rehace.
   useEffect(() => {
@@ -150,5 +156,5 @@ export function useHistorial({ leer, aplicar, raiz = null, alCambiar = null }) {
     return () => document.removeEventListener('keydown', alTeclear);
   }, [raiz, deshacer, rehacer]);
 
-  return { registra, deshacer, rehacer, idActual, marcaGuardado, ...estado };
+  return { registra, deshacer, rehacer, idActual, marcaGuardado, reinicia, ...estado };
 }
