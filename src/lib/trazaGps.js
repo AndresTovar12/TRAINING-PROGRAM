@@ -5,7 +5,7 @@
    `scripts/prueba-ruta.mjs` la reproduce con `reproduceTraza`: los avisos del sensor pasan por las mismas funciones que en el teléfono
    (`lib/sensorDeMovimiento.js`) y cada punto por `pasoDeCarrera`. Lo mismo que hace la carrera.
 
-   EL FORMATO (`traza-gps/3`, 3 nov 2026): `{ formato, deporte, desplazamiento ('pie' | 'ruedas'), inicio (ISO), inicioMs, app ('iphone' | 'web'), filas,
+   EL FORMATO (`traza-gps/3`, 3 nov 2026): `{ formato, deporte, desplazamiento ('pie' | 'ruedas'), actividad (su id: bici y patines pausan con la velocidad del iPhone), inicio (ISO), inicioMs, app ('iphone' | 'web'), filas,
    eventos, paradas? }`. Tiempos en segundos desde el inicio.
      · Cada FILA, un punto del GPS: `{ t, lat, lon, pre (error, m), vel?, rumbo?, v }` (`v`: lo que dijo `decideMarcha` para los metros: 'quieto' | 'mueve' | null).
      · Cada EVENTO, un aviso del sensor tal como llegó: `{ t, tipo, ... }` con `tipo` 'enciende' | 'inicio' | 'movimiento' | 'pasos' | 'rebote' | 'permiso' |
@@ -93,7 +93,10 @@ export function reproduceTraza(traza, { sinSensor = false, pausaAutomatica = tru
   const inicioMs = traza.inicioMs ?? 0;
   const deporte = traza.deporte ?? 'correr';
   const eventos = sinSensor ? [] : (traza.formato === 'traza-gps/1' ? eventosDeV1(traza.filas) : (traza.eventos ?? []));
-  let e = carreraNueva({ ...cronometroNuevo(deporte, inicioMs), gps: true, desplazamiento: traza.desplazamiento ?? familiaDelDeporte(deporte) });
+  let e = carreraNueva({
+    ...cronometroNuevo(deporte, inicioMs), gps: true, desplazamiento: traza.desplazamiento ?? familiaDelDeporte(deporte),
+    ...(traza.actividad ? { actividad: { id: traza.actividad } } : {}),
+  });
   let sensor = null;
   let k = 0;
   const pausas = [];
@@ -198,11 +201,11 @@ export function ultimaTraza() {
 }
 
 /** Empieza a grabar la carrera que arrancó en `inicioMs` (borra la anterior). Si ya había una de esa misma carrera (se recargó la página), sigue esa. */
-export function empiezaTraza({ deporte, desplazamiento = null, inicioMs, app }) {
+export function empiezaTraza({ deporte, desplazamiento = null, actividad = null, inicioMs, app }) {
   const previa = actual ?? ultimaTraza();
   actual = previa?.inicioMs === inicioMs && previa.formato === FORMATO_DE_TRAZA
     ? previa
-    : { formato: FORMATO_DE_TRAZA, deporte, desplazamiento, inicio: new Date(inicioMs).toISOString(), inicioMs, app, filas: [], eventos: [] };
+    : { formato: FORMATO_DE_TRAZA, deporte, desplazamiento, actividad, inicio: new Date(inicioMs).toISOString(), inicioMs, app, filas: [], eventos: [] };
   guarda();
 }
 

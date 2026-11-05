@@ -59,18 +59,31 @@ export const reanuda = (c, ahora = Date.now()) => {
    SOBRE RUEDAS O EN EL AGUA ('ruedas': bici, patines, surf, remo, kayak): el GPS, con la barra alta. Velocidad = desplazamiento de los últimos 5 s entre el
      tiempo (no la velocidad que da el iPhone, que parado inventa ~0.9 m/s). Pausar: < 1.0 m/s 3 s seguidos y el sensor no dice «en bici». Reanudar: > 2.0 m/s
      2 s seguidos. Sin lecturas en 5 s no decide nada. El rebote no se usa.
+     BICI Y PATINES (5 nov 2026: así toda parada tardaba ~7 s): con una lectura buena (error ≤ 20 m) cuenta la velocidad que da el iPhone. Pausar: < 1.5 m/s
+     (`VELOCIDAD_PARA_PAUSAR_SOBRE_RUEDAS`) 2 s seguidos y el sensor no dice «en bici»; parado, el iPhone inventa ~0.9 m/s y queda abajo. Reanudar: > 2.0 m/s
+     2 s seguidos, con la velocidad del iPhone o con el desplazamiento de 5 s (el de siempre). Las lecturas de error > 20 m siguen con el desplazamiento de 5 s (y piden 3 s). Surf, remo, kayak y las propias sobre ruedas o en el agua se
+     quedan con el desplazamiento: no se sabe a qué velocidad reman despacio.
+     «N s SEGUIDOS» (`racha`): de la primera a la última lectura que cumplen, sin huecos de más de 2 s, pasan N s o más. Con una lectura por segundo, 2 s son
+     TRES lecturas seguidas; dos lecturas seguidas (1 s) no bastan.
    SIN ACELERÓMETRO (la web, o el iPhone no lo tiene): a pie, las reglas de ruedas con las barras de siempre (pausa < 0.6, reanuda > 1.0). Más lento, sin falsos.
    PARA LAS DOS: después de reanudar, 8 s sin poder pausar; después de pausar, 3 s sin poder reanudar. El interruptor «Pausa automática» sigue mandando. */
 export const UMBRALES_DE_PAUSA = {
   pie: { pausa: 0.6, reanuda: 1.0 },
   ruedas: { pausa: 1.0, reanuda: 2.0 },
 };
+/** Bici y patines, con lectura buena: por debajo de esta velocidad del iPhone (m/s) se está parado. */
+export const VELOCIDAD_PARA_PAUSAR_SOBRE_RUEDAS = 1.5;
+/** Las actividades que pausan con la velocidad del iPhone (con lectura buena). Las demás sobre ruedas o en el agua, con el desplazamiento de 5 s. */
+const CON_VELOCIDAD_DEL_IPHONE = ['bici', 'patines'];
+/** ¿Esta carrera pausa con la velocidad del iPhone? La de su actividad; una sin actividad (de antes), si su deporte es bici. */
+export const pausaConVelocidad = (c) => CON_VELOCIDAD_DEL_IPHONE.includes(c?.actividad?.id ?? (c?.deporte === 'bici' ? 'bici' : null));
 /** La familia de un deporte, para un cronómetro guardado antes del 3 nov 2026 (sin `desplazamiento`). */
 export const familiaDelDeporte = (deporte) => (['correr', 'caminar', 'senderismo'].includes(deporte) ? 'pie' : deporte === 'bici' ? 'ruedas' : null);
 const SIN_REBOTE_PARA_PAUSAR_S = 1.5;
 const REBOTE_PARA_REANUDAR_S = 1;
 const REBOTE_SIN_GPS_S = 3;
 const LENTO_PARA_PAUSAR_S = 3;
+const LENTO_CON_VELOCIDAD_S = 2;
 const RAPIDO_PARA_REANUDAR_S = 2;
 const SIN_PAUSAR_DESPUES_DE_REANUDAR_S = 8;
 const SIN_REANUDAR_DESPUES_DE_PAUSAR_S = 3;
@@ -127,8 +140,9 @@ function avanzaAPie(lecturas, ahoraS) {
  * ¿Quieto o en marcha? `familia`: 'pie' | 'ruedas'. `senal`: lo de `senales` (`lib/sensorDeMovimiento.js`) o `null` (la web). `lecturas`: las del GPS
  * `{ t (s), lat, lon, pre, vel? }`. Devuelve `{ quieto, mueve, metros }`: `quieto`/`mueve` son `{ desde (s), motivo }` o `null` (el motivo: 'sin-rebote',
  * 'rebote+avance', 'sin-gps', 'gps-lento', 'gps-rapido'); `metros`: 'quieto' (el punto no suma), 'mueve' o `null` (las reglas del GPS de `agregaPunto`).
+ * `conVelocidad`: bici y patines (`pausaConVelocidad`): con lectura buena cuenta la velocidad del iPhone.
  */
-export function decideMarcha(familia, senal, lecturas, ahoraS) {
+export function decideMarcha(familia, senal, lecturas, ahoraS, { conVelocidad = false } = {}) {
   const u = UMBRALES_DE_PAUSA[familia];
   if (!u) return { quieto: null, mueve: null, metros: null };
   const s = (ms) => (ms == null ? null : ms / 1000);
@@ -147,9 +161,15 @@ export function decideMarcha(familia, senal, lecturas, ahoraS) {
   const ultima = lista.at(-1);
   if (!ultima || ahoraS - ultima.t > SIN_SENAL_S) return { quieto: null, mueve: null, metros: null };
   const v5 = lista.map((_, i) => velocidadDe5s(lista, i));
-  const lento = racha(lista, (i) => v5[i] != null && v5[i] < u.pausa);
-  const rapido = racha(lista, (i) => v5[i] != null && v5[i] > u.reanuda);
-  const quieto = lento != null && ultima.t - lento >= LENTO_PARA_PAUSAR_S && !senal?.enBici ? { desde: lento, motivo: 'gps-lento' } : null;
+  // Bici y patines: con lectura buena, la velocidad del iPhone; con error de más de 20 m, el desplazamiento de 5 s.
+  const conVel = (i) => conVelocidad && familia === 'ruedas' && lista[i].pre <= ERROR_BUENO && typeof lista[i].vel === 'number' && lista[i].vel >= 0;
+  const lento = racha(lista, (i) => (conVel(i) ? lista[i].vel < VELOCIDAD_PARA_PAUSAR_SOBRE_RUEDAS : v5[i] != null && v5[i] < u.pausa));
+  // Reanudar: > 2.0 m/s con la velocidad del iPhone (lectura buena de bici o patines) o, como siempre, con el desplazamiento de 5 s; cualquiera de las dos.
+  const rapido = racha(lista, (i) => (conVel(i) && lista[i].vel > u.reanuda) || (v5[i] != null && v5[i] > u.reanuda));
+  // 2 s si toda la racha lenta es de lecturas buenas con velocidad; si entra una con mucho error, los 3 s de siempre.
+  const soloVel = lento != null && lista.every((x, i) => x.t < lento || conVel(i));
+  const necesita = soloVel ? LENTO_CON_VELOCIDAD_S : LENTO_PARA_PAUSAR_S;
+  const quieto = lento != null && ultima.t - lento >= necesita && !senal?.enBici ? { desde: lento, motivo: 'gps-lento' } : null;
   const mueve = rapido != null && ultima.t - rapido >= RAPIDO_PARA_REANUDAR_S ? { desde: rapido, motivo: 'gps-rapido' } : null;
   return { quieto, mueve, metros: null };
 }
