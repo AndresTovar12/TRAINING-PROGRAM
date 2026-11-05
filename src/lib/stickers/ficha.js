@@ -14,6 +14,9 @@ const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 const dos = (n) => String(n).padStart(2, '0');
 
 const MESES_ING = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+// El día y la fecha del Boleto (en español, como la maqueta aprobada): «martes» y «20 oct».
+const DIAS_ES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const MESES_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const MESES_LARGOS_ING = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const DIA_MS = 86400000;
 
@@ -107,7 +110,7 @@ const momentoDe = (h) => (h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening')
  * LA FICHA. `entreno`, ya normalizado (ver `entrenoDeActividad` y `entrenoDeSesion`):
  *   { deporte, inicioMs, desfaseMin, duracionS, distanciaM, fcMedia, kcal, desnivelM, ruta, splits, zonasS, guiado, tipo: { nombre, icono },
  *     nombre, nombreEn, coach, plan, record, racha, unidadPeso }
- * Devuelve `{ datos, hora, fecha, nombre, en, titulo, tipo, coach, plan, ruta, splits, lista, sinDistancia, zonas, record, racha }`.
+ * Devuelve `{ datos, hora, fecha, dia, fechaCorta, nombre, en, titulo, tipo, coach, plan, ruta, splits, lista, sinDistancia, zonas, record, racha }`.
  */
 export function ficha(entreno) {
   const e = entreno ?? {};
@@ -161,6 +164,8 @@ export function ficha(entreno) {
     datos,
     hora: { v: `${h % 12 || 12}:${dos(mi)}`, u: h < 12 ? 'am' : 'pm' },
     fecha: `${MESES_ING[mes]} ${dia}, ${anio}`,
+    dia: DIAS_ES[new Date(Date.UTC(anio, mes, dia)).getUTCDay()],
+    fechaCorta: `${dia} ${MESES_ES[mes]}`,
     nombre,
     en,
     titulo: [momentoDe(h), en],

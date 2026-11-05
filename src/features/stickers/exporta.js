@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { domToBlob, domToCanvas } from 'modern-screenshot';
 import { cargaCatalogo } from '@/lib/iconosDeTipo';
-import { LIENZOS } from '@/lib/stickers/catalogo';
+import { LIENZOS, lienzoDe } from '@/lib/stickers/catalogo';
 import { tramoDe } from '@/lib/stickers/ruta';
 import Sticker from './Sticker';
 import RutaVideo from './RutaVideo';
@@ -10,8 +10,8 @@ import RutaVideo from './RutaVideo';
 /* SACAR UN STICKER COMO IMAGEN O COMO VIDEO (28 oct 2026; ver docs/stickers.md).
 
    IMAGEN. El sticker se dibuja otra vez, a su tamaño real y fuera de la pantalla (la galería lo enseña achicado), se espera a que Bricolage y el catálogo de
-   íconos estén listos y se rasteriza con `modern-screenshot` a 3×: 900 × 600 (ancho), 900 × 990 (alto) o 900 × 1599 («Con foto», con la foto debajo).
-   Fondo transparente. La fuente va adentro del PNG: la toma de `public/fonts` (la misma app), así que funciona sin internet.
+   íconos estén listos y se rasteriza con `modern-screenshot` a 3×: 900 × 600 (ancho), 900 × 990 (alto) o 900 × 1599 («Con foto», con la foto debajo); los 19 nuevos traen su propio alto (`lienzoDe`: 380, 420, 530…).
+   Fondo transparente (las tarjetas nuevas traen el suyo). La fuente va adentro del PNG: la toma de `public/fonts` (la misma app), así que funciona sin internet.
 
    VIDEO (pestaña Video). Un video de 3 s del tamaño del sticker alto (900 × 990): el Eco que cae y se angosta, o la ruta que se dibuja. Se arman CAPAS con el
    mismo dibujo del sticker (cada parte rasterizada por separado), se animan en un lienzo y se codifican cuadro por cuadro en mp4 (ver `graba`). Un video no
@@ -36,7 +36,7 @@ async function monta(componente, props) {
 export async function pngDeSticker({ item, f, color, forma = item.forma, foto = null }) {
   const { nodo, quita } = await monta(Sticker, { item, f, color, forma, foto });
   try {
-    const { w, h } = LIENZOS[forma] ?? LIENZOS.ancho;
+    const { w, h } = lienzoDe(item, forma);
     const blob = await domToBlob(nodo, { width: w, height: h, scale: ESCALA, backgroundColor: null, type: 'image/png' });
     if (!blob) throw new Error('No se pudo dibujar el sticker');
     return blob;

@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from 'react';
-import { LIENZOS } from '@/lib/stickers/catalogo';
+import { FAMILIAS_NUEVAS, lienzoDe, TEMAS_TARJETA } from '@/lib/stickers/catalogo';
 import Contenido from './Contenido';
+import Nuevos from './Nuevos';
 import './stickers.css';
 
 /* UN STICKER, dibujado con su ficha (28 oct 2026; ver docs/stickers.md y el prototipo de Andrés). HTML + CSS con Bricolage: así se ve en la hoja y así se
@@ -29,6 +30,14 @@ function ajustaSticker(raiz) {
     while (v.getBoundingClientRect().width > caja - 1 && s > 10 && vueltas < 90) { s -= 1; v.style.fontSize = `${s}px`; vueltas += 1; }
     v.style.display = '';
   });
+  // Los 19 nuevos: un valor con `data-n-max` baja hasta caber en ese ancho; un grupo (una fila o una rejilla) baja todos sus valores juntos.
+  raiz.querySelectorAll('[data-n-max]').forEach((c) => {
+    const max = parseFloat(c.dataset.nMax);
+    const vs = c.classList.contains('n-v') ? [c] : [...c.querySelectorAll('.n-v')];
+    vs.forEach((v) => { if (!v.dataset.fs) v.dataset.fs = v.style.fontSize; v.style.fontSize = v.dataset.fs; });
+    let k = 1;
+    while (c.offsetWidth > max + 0.5 && k > 0.45) { k -= 0.03; vs.forEach((v) => { v.style.fontSize = `${(parseFloat(v.dataset.fs) * k).toFixed(1)}px`; }); }
+  });
   const iguala = (sel, hijos) => raiz.querySelectorAll(sel).forEach((b) => {
     const ls = [...b.querySelectorAll(hijos)];
     const s = Math.min(...ls.map((l) => parseFloat(l.style.fontSize)));
@@ -47,7 +56,7 @@ const Foto = ({ foto }) => (
 );
 
 /** El sticker a su tamaño real (300 de ancho; alto según la forma). Se ajusta al dibujarse y otra vez cuando la fuente termina de cargar. */
-export default function Sticker({ item, f, color, forma = item.forma, foto = null, anima = false, alListo }) {
+export default function Sticker({ item, f, color, forma = item.forma, foto = null, anima = false, cara = 0, alListo }) {
   const ref = useRef(null);
   useLayoutEffect(() => {
     let vivo = true;
@@ -61,14 +70,17 @@ export default function Sticker({ item, f, color, forma = item.forma, foto = nul
       alListo?.(ref.current);
     }).catch(() => { if (vivo) alListo?.(ref.current); });
     return () => { vivo = false; };
-  }, [item, f, color, forma, foto, alListo]);
+  }, [item, f, color, forma, foto, cara, alListo]);
+  const nuevo = FAMILIAS_NUEVAS.includes(item.familia);
+  // La tarjeta lleva su propio fondo y sus colores por tema; los otros nuevos, la tinta y el acento de siempre.
+  const tema = item.familia === 'tarjeta' ? Object.fromEntries(Object.entries(TEMAS_TARJETA[color.id] ?? TEMAS_TARJETA.blanco).map(([k, v]) => [`--tj-${k}`, v])) : null;
   return (
     <div
-      ref={ref} className={`stk ${forma} k-${item.id}${color.sombra ? ' sombra' : ''}${anima ? ' anima' : ''}`}
-      style={{ '--stk-tinta': color.tinta, '--stk-acento': color.acento, height: LIENZOS[forma]?.h }}
+      ref={ref} className={`stk ${forma} k-${item.id}${color.sombra && item.familia !== 'tarjeta' ? ' sombra' : ''}${anima ? ' anima' : ''}`}
+      style={{ '--stk-tinta': color.tinta, '--stk-acento': color.acento, ...tema, height: lienzoDe(item, forma).h }}
     >
       {foto && <Foto foto={foto} />}
-      <div className="stk-in"><Contenido item={item} f={f} color={color} /></div>
+      {nuevo ? <Nuevos item={item} f={f} color={color} cara={cara} /> : <div className="stk-in"><Contenido item={item} f={f} color={color} /></div>}
     </div>
   );
 }

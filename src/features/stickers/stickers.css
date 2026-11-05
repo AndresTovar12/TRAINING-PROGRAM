@@ -93,3 +93,36 @@
   .stk.k-eco.anima .k-wm,
   .stk .stk-trazo { animation: none; stroke-dashoffset: 0; }
 }
+
+/* LOS 19 NUEVOS (5 nov 2026; medidas de la maqueta aprobada). Centrados, con la etiqueta arriba y el número abajo; las unidades del mismo color que el número.
+   Las tarjetas traen fondo: sus colores salen de las variables `--tj-*` que pone `Sticker.jsx` (`TEMAS_TARJETA`). */
+.stk .n-in { position: absolute; inset: 0; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 22px; }
+.stk.sombra .n-in { filter: drop-shadow(0 1.2px 3.6px rgba(0, 0, 0, 0.42)); }
+.stk .n-l { font-weight: 700; font-variation-settings: 'opsz' 16; font-size: 12.5px; line-height: 1.15; white-space: nowrap; opacity: 0.85; }
+.stk .n-v { font-weight: 800; font-variation-settings: 'opsz' 96; letter-spacing: -0.035em; line-height: 0.95; white-space: nowrap; margin-top: 3px; }
+.stk .n-u { font-size: 0.46em; letter-spacing: 0; margin-left: 0.07em; font-weight: 700; }
+.stk .n-wm { font-weight: 800; font-variation-settings: 'opsz' 96; letter-spacing: -0.03em; line-height: 1; white-space: nowrap; }
+.stk .n-wm span { color: var(--stk-acento); }
+.stk .n-fila { display: flex; gap: 24px; justify-content: center; align-items: flex-end; width: max-content; }
+.stk .n-rej { display: grid; column-gap: 22px; row-gap: 14px; justify-items: center; width: max-content; }
+.stk .n-r .n-par + .n-par { margin-top: 12px; }
+.stk .n-tres { display: grid; grid-template-columns: repeat(3, auto); column-gap: 20px; justify-content: center; width: max-content; margin-left: auto; margin-right: auto; }
+.stk .n-ic { display: inline-flex; line-height: 0; }
+.stk .n-ancla { position: absolute; width: 0; height: 0; }
+.stk .n-vert { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%) rotate(-90deg); white-space: nowrap; font-weight: 700; font-size: 11px; letter-spacing: 0.02em; }
+.stk .n-vert b { font-weight: 800; font-size: 13px; margin-left: 5px; }
+.stk .n-boleto { position: relative; box-sizing: border-box; width: 192px; border: 2px solid currentColor; border-bottom: none; padding: 16px 0 12px; display: flex; flex-direction: column; align-items: center; } /* estilo-ok: el boleto y la tarjeta llevan contorno por diseño (maqueta de stickers) */
+.stk .n-boleto-dibujo { margin: 14px 0 10px; height: 150px; display: grid; place-items: center; }
+/* La tarjeta. */
+.stk .n-tj { position: absolute; inset: 6px; border-radius: 30px; background: var(--tj-fondo); border: 2px solid var(--tj-borde); filter: drop-shadow(0 0 8px var(--tj-brillo)); overflow: hidden; color: var(--tj-texto); } /* estilo-ok: el boleto y la tarjeta llevan contorno por diseño (maqueta de stickers) */
+/* El brillo de adentro. Va con un borde desenfocado y no con `box-shadow inset`: WebKit dibuja las sombras de caja corridas al rasterizar el sticker (`modern-screenshot`). */
+.stk .n-tj::before { content: ''; position: absolute; inset: -12px; border: 14px solid var(--tj-brillo2); border-radius: 40px; filter: blur(9px); pointer-events: none; } /* estilo-ok: el brillo de adentro de la tarjeta (maqueta de stickers) */
+.stk .n-tj .n-topo { position: absolute; inset: 0; }
+.stk .n-tj .n-cont { position: absolute; inset: 0; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.stk .n-tj .n-l { color: var(--tj-etiqueta); opacity: 1; font-weight: 600; font-size: 13.5px; }
+.stk .n-tj .n-v { color: var(--tj-texto); }
+.stk .n-tj .n-u { font-weight: 700; }
+.stk .n-tj .n-wm span { color: var(--tj-acento); }
+.stk .n-raya { width: 120px; height: 2px; margin: 10px auto; flex: none; background: linear-gradient(90deg, transparent, var(--tj-linea), transparent); } /* estilo-ok: la línea de luz de la tarjeta (maqueta de stickers) */
+.stk .n-brillo { color: var(--tj-ruta); filter: drop-shadow(0 0 8px var(--tj-halo)); margin: 6px 0 12px; }
+.stk .n-pastilla { border: 1.5px solid var(--tj-ruta); color: var(--tj-ruta); border-radius: 999px; padding: 5px 14px; font-weight: 800; font-size: 12px; letter-spacing: 0.14em; filter: drop-shadow(0 0 5px var(--tj-brillo)); } /* estilo-ok: la pastilla «RÉCORD» lleva contorno por diseño (maqueta de stickers) */
