@@ -46,7 +46,32 @@ export async function repertorioConFicha(quien: Quien) {
   return { filas, masterId: masterId as string | null, categoriasPorId }
 }
 
-export function fichaCorta(e: any, categoriasPorId?: Map<string, { name: string }>) {
+/** Un medio de `exercise_media` que esta persona puede ver: un video grabado para un atleta en particular solo lo ve ese atleta (los profesionales, todos). */
+const medioVisible = (m: any, quien: Quien) => !m.para_atleta || m.para_atleta === quien.id || quien.rol !== 'atleta'
+
+/**
+ * El primer video de `exercise_media` de cada ejercicio (5 nov 2026), en UNA consulta: `Map<exercise_id, url>`. Un video puesto solo como «Explicación» vive
+ * ahí y no en `video_link`/`video_url`; sin esto, `buscar_ejercicios` decía que ese ejercicio no tenía video (`ver_ejercicio` sí lo veía). Misma regla que la
+ * app para «Tiene video» (las columnas O cualquiera de `exercise_media`, `ExercisesPanel.jsx`) y misma visibilidad que `ver_ejercicio`.
+ */
+export async function primerMedioDe(quien: Quien, ids: string[]) {
+  const porEjercicio = new Map<string, string>()
+  if (!ids.length) return porEjercicio
+  const { data } = await quien.db
+    .from('exercise_media')
+    .select('exercise_id, url, para_atleta, orden')
+    .in('exercise_id', ids)
+    .order('orden')
+  const pedidos = new Set(ids)
+  for (const m of (data ?? []) as any[]) {
+    if (!m.url || !pedidos.has(m.exercise_id) || porEjercicio.has(m.exercise_id) || !medioVisible(m, quien)) continue
+    porEjercicio.set(m.exercise_id, m.url)
+  }
+  return porEjercicio
+}
+
+/** `videoDeMedios`: el primer video de `exercise_media` (`primerMedioDe`); cuenta solo si las columnas del ejercicio están vacías. */
+export function fichaCorta(e: any, categoriasPorId?: Map<string, { name: string }>, videoDeMedios?: string) {
   const musculos = [...(e.muscle_primary ?? []), ...(e.muscle_secondary ?? [])]
   const secundarias = (e.categorias_secundarias ?? []).map((id: string) => categoriasPorId?.get(id)?.name).filter(Boolean)
   return {
@@ -56,7 +81,7 @@ export function fichaCorta(e: any, categoriasPorId?: Map<string, { name: string 
     ...(secundarias.length ? { categorias_secundarias: secundarias } : {}),
     ...(e.equipment ? { equipo: e.equipment } : {}),
     ...(musculos.length ? { musculos } : {}),
-    ...(e.video_link || e.video_url ? { video: e.video_link || e.video_url } : {}),
+    ...(e.video_link || e.video_url || videoDeMedios ? { video: e.video_link || e.video_url || videoDeMedios } : {}),
   }
 }
 
@@ -141,9 +166,13 @@ export function herramientasComunes(server: McpServer, quien: Quien) {
     }
     encontrados.sort((a, b) => b.palabras - a.palabras || (a.c + a.m) - (b.c + b.m))
     const tope = limite ?? 25
+    const devueltos = encontrados.slice(0, tope)
+    // Los videos de «Explicación» (y cualquier otro de `exercise_media`) de los que se van a devolver, en una sola consulta; solo si a alguno le falta video.
+    const sinVideo = devueltos.filter((x) => !x.e.video_link && !x.e.video_url).map((x) => x.e.id as string)
+    const medios = await primerMedioDe(quien, sinVideo)
     return respuesta({
       total: encontrados.length,
-      ejercicios: encontrados.slice(0, tope).map((x) => fichaCorta(x.e, categoriasPorId)),
+      ejercicios: devueltos.map((x) => fichaCorta(x.e, categoriasPorId, medios.get(x.e.id))),
       ...(aviso ? { aviso } : {}),
       ...(encontrados.length > tope ? { nota: `Hay ${encontrados.length}; se muestran ${tope}. Afina la búsqueda para ver otros.` } : {}),
     })
@@ -176,9 +205,9 @@ export function herramientasComunes(server: McpServer, quien: Quien) {
       .eq('exercise_id', e.id)
       .order('orden')
     // Un video grabado para un atleta en particular solo lo ve ese atleta.
-    const visibles = (medios ?? []).filter((m: any) => !m.para_atleta || m.para_atleta === quien.id || quien.rol !== 'atleta')
+    const visibles = (medios ?? []).filter((m: any) => medioVisible(m, quien))
     return respuesta({
-      ...fichaCorta(e, categoriasPorId),
+      ...fichaCorta(e, categoriasPorId, visibles[0]?.url),
       ...(e.description ? { descripcion: e.description } : {}),
       ...(e.cover_image_url ? { foto: e.cover_image_url } : {}),
       otros_medios: visibles.map((m: any) => ({
