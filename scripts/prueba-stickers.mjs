@@ -2,7 +2,7 @@
    Siguen las pruebas de aceptación de la especificación (docs/stickers.md). */
 import assert from 'node:assert/strict';
 import { ficha, entrenoDeActividad, rutaDe } from '../src/lib/stickers/ficha.js';
-import { catalogo, catalogoDeTotales, esNuevo, fraseCorta, fraseLarga, fraseResaltador, FRASE_INICIAL, FRASE_MAX, FRASES, lienzoDe, pieDeBurbuja, renglonesDe, tamDeFrase, tituloDeLaHoja, TEMAS_TARJETA, COLORES, NUEVO_DIAS } from '../src/lib/stickers/catalogo.js';
+import { catalogo, catalogoDeTotales, esNuevo, fraseCorta, fraseLarga, fraseResaltador, FRASE_INICIAL, FRASE_MAX, FRASES, idiomaDeFrase, lienzoDe, mensajesDeCara, pieDeBurbuja, renglonesDe, tamDeFrase, tituloDeLaHoja, TEMAS_TARJETA, COLORES, NUEVO_DIAS } from '../src/lib/stickers/catalogo.js';
 import { kmTexto, totalesDe } from '../src/lib/stickers/totales.js';
 import { ajustaRuta } from '../src/lib/stickers/ruta.js';
 import { recordDelPlan, seriesProgramadas } from '../src/lib/stickers/plan.js';
@@ -32,7 +32,7 @@ const rutaRecta = (m) => Array.from({ length: Math.round(m / 10) + 1 }, (_, i) =
   const f = ficha({ deporte: 'fuerza', inicioMs: Date.parse('2026-10-28T14:00:00Z'), duracionS: 2885, guiado: { series: 16, ejercicios: 5, volumen: 8450, lista }, nombre: 'Lower A', plan: true, coach: '@beto', registro, tipo: { nombre: 'Gimnasio', icono: 'pesa' } });
   const cat = catalogo(f);
   const conVolumen = cat.filter((s) => [s.r].flat().concat(Object.values(s.r ?? {})).flat().some((d) => d?.k === 'volumen')).map((s) => s.id);
-  assert.deepEqual(conVolumen.sort(), ['columna', 'lista'], 'el volumen solo en Lista y Columna');
+  assert.deepEqual(conVolumen.sort(), ['columna', 'lista', 'p-mensaje-datos'], 'el volumen solo en Lista y Columna, y en las caras de gym de Mensaje con datos (5 nov)');
   assert.equal(cat.find((s) => s.id === 'lista').r.g.k, 'volumen', 'en Lista es el número principal');
   assert.ok(cat.some((s) => s.id === 'hoy-toco'), 'Lo que tocó hoy: solo con plan');
   assert.deepEqual(f.tipo, { nombre: 'Gimnasio', icono: 'pesa' }, 'el tipo del coach llega a la ficha');
@@ -216,10 +216,10 @@ assert.equal(tituloDeLaHoja({ deporte: 'raqueta' }), 'Comparte tu entreno');
   const record = { tipo: 'tiempo', texto: 'x', difNum: 95, antesInicio: '2026-10-09T13:00:00Z', antesDesfase: -360 };
   const carrera = ficha(entrenoDeActividad({ fila, muestras: rutaRecta(5000), record, tipo: { nombre: 'Carrera', icono: 'correr' } }));
   const cat = catalogo(carrera);
-  // Los 19 van primero y en ese orden; luego los 12 con personalidad (parte 2) y los 35 de hoy en su orden de siempre (Titular es el primero).
+  // Los 19 van primero y en ese orden; luego los 13 con personalidad (parte 2) y los 35 de hoy en su orden de siempre (Titular es el primero).
   assert.deepEqual(cat.slice(0, 19).map((s) => s.id), NUEVOS);
   assert.equal(cat[19].familia, 'personalidad');
-  assert.equal(cat[31].id, 'titular');
+  assert.equal(cat[32].id, 'titular');
   assert.deepEqual(cat.slice(0, 19).map((s) => s.familia), [...Array(8).fill('discreto'), ...Array(6).fill('runner'), ...Array(5).fill('tarjeta')]);
   assert.ok(cat.slice(19).every((s) => !NUEVOS.includes(s.id)));
   // Sus tamaños: discretos 300 × 200 (los de línea, 330), runner 330 y 420, tarjetas 530, 380, 530, 200 y 380.
@@ -271,7 +271,7 @@ assert.equal(tituloDeLaHoja({ deporte: 'raqueta' }), 'Comparte tu entreno');
   assert.equal(esNuevo(un, Date.parse('2026-12-04T00:00:00Z')), true, 'el día 29');
   assert.equal(esNuevo(un, Date.parse('2026-12-06T00:00:00Z')), false, `${NUEVO_DIAS} días después ya no`);
   assert.equal(esNuevo(un, Date.parse('2026-11-04T00:00:00Z')), false, 'antes de salir tampoco');
-  assert.equal(esNuevo(cat[31]), false, 'los 35 de hoy no llevan «Nuevo»');
+  assert.equal(esNuevo(cat[32]), false, 'los 35 de hoy no llevan «Nuevo»');
   assert.ok(cat.slice(0, 19).every((s) => s.desde === '2026-11-05'));
   // Los cuatro temas de la tarjeta traen sus doce colores (más el brillo de adentro) y siguen a los cuatro colores de la hoja.
   const LLAVES = ['fondo', 'borde', 'brillo', 'texto', 'etiqueta', 'acento', 'ruta', 'halo', 'nucleo', 'topo', 'linea', 'apagado'];
@@ -291,20 +291,20 @@ assert.equal(tituloDeLaHoja({ deporte: 'raqueta' }), 'Comparte tu entreno');
   const fila = { ...base, id: 'p1', deporte: 'correr', titulo: 'Carrera de la mañana', duracion_s: 1593, distancia_m: 5080, fc_media: 152, kcal_activas: 342, desnivel_pos_m: 11 };
   const carrera = ficha(entrenoDeActividad({ fila, muestras: rutaRecta(5000), tipo: { nombre: 'Carrera', icono: 'correr' } }));
   const gym = ficha({ deporte: 'fuerza', inicioMs: Date.parse('2026-10-21T00:40:00Z'), desfaseMin: -360, duracionS: 3120, guiado: { series: 18, ejercicios: 7, volumen: 6240, lista: [] }, nombre: 'Pierna y glúteo', plan: true, tipo: { nombre: 'Gimnasio', icono: 'pesa' } });
-  const PERSO = ['p-italica', 'p-maquina', 'p-reloj', 'p-frase', 'p-burbuja', 'p-barras', 'p-polaroid', 'p-momento', 'p-dia', 'p-resaltador', 'p-corazon', 'p-sello'];
+  const PERSO = ['p-italica', 'p-maquina', 'p-reloj', 'p-frase', 'p-burbuja', 'p-mensaje-datos', 'p-barras', 'p-polaroid', 'p-momento', 'p-dia', 'p-resaltador', 'p-corazon', 'p-sello'];
   [carrera, gym].forEach((f) => {
     const cat = catalogo(f);
-    // Después de las 5 tarjetas y antes de los 35, en su orden.
+    // Después de las 5 tarjetas y antes de los 35 (son 13 con el Mensaje con datos), en su orden.
     const i = cat.findIndex((x) => x.familia === 'personalidad');
-    assert.deepEqual(cat.slice(i, i + 12).map((x) => x.id), PERSO);
+    assert.deepEqual(cat.slice(i, i + 13).map((x) => x.id), PERSO);
     assert.equal(cat[i - 1].familia, 'tarjeta');
-    assert.equal(cat[i + 12].id, 'titular');
-    assert.ok(cat.slice(i, i + 12).every((x) => x.desde === '2026-11-05' && !x.identidad), 'llevan «Nuevo» y no entran en «Con foto»');
+    assert.equal(cat[i + 13].id, 'titular');
+    assert.ok(cat.slice(i, i + 13).every((x) => x.desde === '2026-11-05' && !x.identidad), 'llevan «Nuevo» y no entran en «Con foto»');
   });
   const de = (f, id) => catalogo(f).find((x) => x.id === id);
-  // Las caras: Itálica, Reloj (con tres datos), Burbuja, Un momento, Día gigante y Corazón traen dos; Un dato, tres; los demás, una.
+  // Las caras: Itálica, Reloj (con tres datos), Burbuja, Un momento, Día gigante y Corazón traen dos; Un dato y Mensaje con datos, tres; los demás, una.
   const caras = Object.fromEntries(catalogo(carrera).filter((x) => x.familia === 'personalidad' || x.id === 'd-un-dato').map((x) => [x.id, x.caras ?? 1]));
-  assert.deepEqual(caras, { 'd-un-dato': 3, 'p-italica': 2, 'p-maquina': 1, 'p-reloj': 2, 'p-frase': 1, 'p-burbuja': 2, 'p-barras': 1, 'p-polaroid': 1, 'p-momento': 2, 'p-dia': 2, 'p-resaltador': 1, 'p-corazon': 2, 'p-sello': 1 });
+  assert.deepEqual(caras, { 'd-un-dato': 3, 'p-italica': 2, 'p-maquina': 1, 'p-reloj': 2, 'p-frase': 1, 'p-burbuja': 2, 'p-mensaje-datos': 3, 'p-barras': 1, 'p-polaroid': 1, 'p-momento': 2, 'p-dia': 2, 'p-resaltador': 1, 'p-corazon': 2, 'p-sello': 1 });
   // Las ranuras, con PREF: la carrera da Distance, Time, Pace…; el gym, Sets, Time, Exercises…
   assert.deepEqual(de(carrera, 'p-italica').r.map((d) => d.l), ['Distance', 'Time', 'Pace']);
   assert.deepEqual(de(carrera, 'p-maquina').r.map((d) => d.k), ['dist', 'tiempo', 'ritmo', 'kcal']);
@@ -319,10 +319,10 @@ assert.equal(tituloDeLaHoja({ deporte: 'raqueta' }), 'Comparte tu entreno');
   assert.equal(de(yoga, 'p-reloj').caras, 1);
   // Las marcas: personalizables (frase), fijos (no cambian con los colores) y el Polaroid con tu foto.
   assert.deepEqual(catalogo(carrera).filter((x) => x.perso).map((x) => x.id), ['p-frase', 'p-burbuja']);
-  assert.deepEqual(catalogo(carrera).filter((x) => x.fija).map((x) => x.id), ['p-burbuja', 'p-polaroid', 'p-resaltador', 'p-corazon']);
+  assert.deepEqual(catalogo(carrera).filter((x) => x.fija).map((x) => x.id), ['p-burbuja', 'p-mensaje-datos', 'p-polaroid', 'p-resaltador', 'p-corazon']);
   assert.deepEqual(catalogo(carrera).filter((x) => x.conFoto).map((x) => x.id), ['p-polaroid']);
   // Sus tamaños (maqueta).
-  assert.deepEqual(PERSO.map((id) => lienzoDe(de(carrera, id)).h), [260, 260, 200, 220, 180, 200, 330, 200, 220, 180, 160, 300]);
+  assert.deepEqual(PERSO.map((id) => lienzoDe(de(carrera, id)).h), [260, 260, 200, 220, 180, 220, 200, 330, 200, 220, 180, 160, 300]);
   // Los textos: «Corrió 5.08 km» / «Entrenó 18 series»; «5.08 kilómetros en 26:33» / «18 series en 52 min»; la fecha y la hora de quien entrenó.
   assert.equal(pieDeBurbuja(carrera), 'Corrió 5.08 km');
   assert.equal(pieDeBurbuja(gym), 'Entrenó 18 series');
@@ -363,6 +363,59 @@ assert.equal(tituloDeLaHoja({ deporte: 'raqueta' }), 'Comparte tu entreno');
   assert.equal(tamDeFrase('pov: locked in'), 40, 'una frase corta va a 40 px');
   assert.equal(renglonesDe('mente fuerte, piernas cansadas', 14), 3);
   assert.equal(renglonesDe('abcdefghij', 4), 3, 'una palabra más larga que el renglón se parte');
+
+  // MENSAJE CON DATOS: tus datos como conversación, en inglés y en español, con carrera y con gym; si falta un dato, esa cara no sale.
+  {
+    // «Ahora» = el mismo día local de quien entrenó (México, -360): la carrera a las 7:02 y el gym a las 18:40.
+    const hoyC = ficha(entrenoDeActividad({ fila, muestras: rutaRecta(5000), tipo: { nombre: 'Carrera', icono: 'correr' } }), Date.parse('2026-10-28T20:00:00Z'));
+    const hoyG = ficha({ deporte: 'fuerza', inicioMs: Date.parse('2026-10-21T00:40:00Z'), desfaseMin: -360, duracionS: 3120, guiado: { series: 18, ejercicios: 7, volumen: 6240, lista: [] }, nombre: 'Pierna y glúteo', plan: true, tipo: { nombre: 'Gimnasio', icono: 'pesa' } }, Date.parse('2026-10-21T03:00:00Z'));
+    assert.equal(hoyC.hoy, true);
+    assert.equal(hoyG.hoy, true);
+    assert.equal(carrera.hoy, false, 'un entreno de otro día no es «hoy»');
+    const cara = (f, n, idioma) => mensajesDeCara(f, de(f, 'p-mensaje-datos').r, n, idioma);
+    const textos = (x) => [x.mensajes.map((m) => `${m.mio ? '>' : '<'}${m.t}`), x.pie];
+    // Carrera, inglés y español.
+    assert.deepEqual(textos(cara(hoyC, 0, 'en')), [['>5.08 km, 5:14 /km'], 'Ran today at 7:02']);
+    assert.deepEqual(textos(cara(hoyC, 1, 'en')), [['>just ran 5.08 km', '>5:14 /km in 26:33'], 'Ran today at 7:02']);
+    assert.deepEqual(textos(cara(hoyC, 2, 'en')), [['<how was the run?', '>5.08 km at 5:14 /km'], null]);
+    assert.deepEqual(textos(cara(hoyC, 0, 'es')), [['>5.08 km a 5:14 /km'], 'Corrió hoy a las 7:02']);
+    assert.deepEqual(textos(cara(hoyC, 1, 'es')), [['>acabo de correr 5.08 km', '>a 5:14 /km en 26:33'], 'Corrió hoy a las 7:02']);
+    assert.deepEqual(textos(cara(hoyC, 2, 'es')), [['<¿cómo te fue?', '>5.08 km a 5:14 /km'], null]);
+    // Gym, inglés y español.
+    assert.deepEqual(textos(cara(hoyG, 0, 'en')), [['>18 sets, 52 min'], 'Trained today at 18:40']);
+    assert.deepEqual(textos(cara(hoyG, 1, 'en')), [['>done: 18 sets', '>6,240 kg in 52 min'], 'Trained today at 18:40']);
+    assert.deepEqual(textos(cara(hoyG, 2, 'en')), [['<how was the gym?', '>18 sets, 6,240 kg'], null]);
+    assert.deepEqual(textos(cara(hoyG, 0, 'es')), [['>18 series, 52 min'], 'Entrenó hoy a las 18:40']);
+    assert.deepEqual(textos(cara(hoyG, 1, 'es')), [['>terminé: 18 series', '>6,240 kg en 52 min'], 'Entrenó hoy a las 18:40']);
+    assert.deepEqual(textos(cara(hoyG, 2, 'es')), [['<¿cómo te fue?', '>18 series, 6,240 kg'], null]);
+    // De otro día no dice «hoy»: dice cuándo fue.
+    assert.equal(cara(carrera, 0, 'en').pie, 'Ran on Oct 28 at 7:02');
+    assert.equal(cara(carrera, 0, 'es').pie, 'Corrió el 28 de octubre a las 7:02');
+    // Una bici dice «rode» y «Pedaleó»; la velocidad hace de ritmo.
+    const bici = ficha(entrenoDeActividad({ fila: { ...base, deporte: 'bici', titulo: 'Rodada', duracion_s: 3600, distancia_m: 25000 } }), Date.parse('2026-10-28T20:00:00Z'));
+    assert.deepEqual(textos(cara(bici, 1, 'en')), [['>just rode 25.00 km', '>25.0 km/h in 1:00:00'], 'Rode today at 7:02']);
+    assert.equal(cara(bici, 0, 'es').pie, 'Pedaleó hoy a las 7:02');
+    // El idioma sigue al de la frase: la de entrada o una de English, inglés; una de Español o una escrita por la persona, español.
+    assert.equal(idiomaDeFrase(FRASE_INICIAL), 'en');
+    assert.equal(idiomaDeFrase(''), 'en');
+    FRASES.en.forEach((t) => assert.equal(idiomaDeFrase(t), 'en', t));
+    FRASES.es.forEach((t) => assert.equal(idiomaDeFrase(t), 'es', t));
+    assert.equal(idiomaDeFrase('mi frase propia'), 'es');
+    // Si falta un dato, esa cara no sale; si no queda ninguna, el sticker tampoco.
+    const sinTiempo = ficha({ deporte: 'correr', inicioMs: Date.parse('2026-10-28T13:02:00Z'), desfaseMin: -360, distanciaM: 5000 });
+    assert.equal(de(sinTiempo, 'p-mensaje-datos'), undefined, 'sin ritmo ni tiempo no hay mensaje');
+    const gymSinVolumen = ficha({ deporte: 'fuerza', inicioMs: Date.parse('2026-10-21T00:40:00Z'), desfaseMin: -360, duracionS: 3120, guiado: { series: 18, ejercicios: 7, lista: [] }, nombre: 'Pierna', plan: true });
+    assert.equal(de(gymSinVolumen, 'p-mensaje-datos').caras, 1, 'sin volumen solo sale la cara de un mensaje');
+    assert.equal(mensajesDeCara(gymSinVolumen, de(gymSinVolumen, 'p-mensaje-datos').r, 2, 'en').mensajes.length, 1, 'una cara pedida de más cae en la última que hay');
+    const gymSinTiempo = ficha({ deporte: 'fuerza', inicioMs: Date.parse('2026-10-21T00:40:00Z'), desfaseMin: -360, guiado: { series: 18, volumen: 6240, lista: [] }, nombre: 'Pierna', plan: true });
+    assert.equal(de(gymSinTiempo, 'p-mensaje-datos').caras, 1, 'sin tiempo solo sale la pregunta con «series, kg»');
+    assert.deepEqual(textos(mensajesDeCara(gymSinTiempo, de(gymSinTiempo, 'p-mensaje-datos').r, 0, 'es')), [['<¿cómo te fue?', '>18 series, 6,240 kg'], null]);
+    const sinNada = ficha({ deporte: 'otro', inicioMs: Date.parse('2026-10-20T13:00:00Z'), duracionS: 3600, nombre: 'Yoga' });
+    assert.equal(de(sinNada, 'p-mensaje-datos'), undefined);
+    // Un volumen largo no se corta en el catálogo (el sticker lo baja de tamaño al dibujarse).
+    const grande = ficha({ deporte: 'fuerza', inicioMs: Date.parse('2026-10-21T00:40:00Z'), desfaseMin: -360, duracionS: 3900, guiado: { series: 18, ejercicios: 7, volumen: 12480, lista: [] }, nombre: 'Pierna', plan: true });
+    assert.deepEqual(cara(grande, 1, 'en').mensajes.map((m) => m.t), ['done: 18 sets', '12,480 kg in 1h 05']);
+  }
 
   // TOTALES: la semana y el mes de HOY (jueves 5 nov 2026), de todos los entrenos (del plan y libres).
   const H = (dia, h, km, min, extra = {}) => ({ id: `h${dia}-${h}`, inicioMs: Date.parse(`2026-11-${String(dia).padStart(2, '0')}T${String(h).padStart(2, '0')}:00:00Z`), desfaseMin: -360, duracionS: min * 60, distanciaM: km * 1000, tipo: { nombre: 'x', icono: null }, ...extra });

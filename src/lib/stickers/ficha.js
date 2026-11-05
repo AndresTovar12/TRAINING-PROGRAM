@@ -112,9 +112,10 @@ const momentoDe = (h) => (h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening')
  * LA FICHA. `entreno`, ya normalizado (ver `entrenoDeActividad` y `entrenoDeSesion`):
  *   { deporte, inicioMs, desfaseMin, duracionS, distanciaM, fcMedia, kcal, desnivelM, ruta, splits, zonasS, guiado, tipo: { nombre, icono },
  *     nombre, nombreEn, coach, plan, record, racha, unidadPeso }
- * Devuelve `{ datos, hora, fecha, dia, fechaCorta, fechaNum, hora24, fechaLarga, deporte, nombre, en, titulo, tipo, coach, plan, ruta, splits, lista, sinDistancia, zonas, record, racha }`.
+ * `ahora`: la hora de ahora (solo para saber si fue hoy; las pruebas la fijan).
+ * Devuelve `{ datos, hora, fecha, dia, fechaCorta, fechaNum, hora24, fechaLarga, hoy, deporte, nombre, en, titulo, tipo, coach, plan, ruta, splits, lista, sinDistancia, zonas, record, racha }`.
  */
-export function ficha(entreno) {
+export function ficha(entreno, ahora = Date.now()) {
   const e = entreno ?? {};
   const datos = {};
   const d = (k, v, u, l) => { datos[k] = { k, v: String(v), u, l }; };
@@ -156,6 +157,10 @@ export function ficha(entreno) {
   const mi = local ? local.getUTCMinutes() : new Date(inicio).getMinutes();
   const [anio, mes, dia] = local ? [local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()] : (() => { const x = new Date(inicio); return [x.getFullYear(), x.getMonth(), x.getDate()]; })();
 
+  // ¿Fue hoy? (Mensaje con datos dice «hoy» solo si lo es.) Se compara el día de quien entrenó con el de `ahora`, medido con el mismo desfase.
+  const aq = local ? new Date(ahora + e.desfaseMin * 60000) : new Date(ahora);
+  const hoy = local ? (aq.getUTCFullYear() === anio && aq.getUTCMonth() === mes && aq.getUTCDate() === dia) : (aq.getFullYear() === anio && aq.getMonth() === mes && aq.getDate() === dia);
+
   const nombre = String(e.nombre ?? '').trim() || 'Workout';
   const en = e.nombreEn || EN[dep] || nombre;
   const ruta = rutaDe(e.ruta);
@@ -171,6 +176,7 @@ export function ficha(entreno) {
     // Los 12 con personalidad (5 nov 2026): «20.10.26» (máquina, código de barras, sello), «7:12» o «18:40» (Un momento) y «20 de octubre».
     fechaNum: `${dos(dia)}.${dos(mes + 1)}.${dos(anio % 100)}`,
     hora24: `${h}:${dos(mi)}`,
+    hoy,
     fechaLarga: `${dia} de ${MESES_LARGOS_ES[mes]}`,
     deporte: dep,
     nombre,

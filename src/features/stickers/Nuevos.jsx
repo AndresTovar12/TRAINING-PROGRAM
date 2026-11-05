@@ -1,7 +1,7 @@
 import { useId } from 'react';
 import IconoDeTipo from '@/components/IconoDeTipo';
 import { ajustaRuta } from '@/lib/stickers/ruta';
-import { CLAVE_CORTA, fraseResaltador, pieDeBurbuja, tamDeFrase } from '@/lib/stickers/catalogo';
+import { CLAVE_CORTA, fraseResaltador, idiomaDeFrase, mensajesDeCara, pieDeBurbuja, tamDeFrase } from '@/lib/stickers/catalogo';
 import { DIAS_LETRA, DIAS_MAQUINA, kmTexto, tiempoTexto } from '@/lib/stickers/totales';
 
 /* LOS STICKERS NUEVOS (5 nov 2026; ver docs/stickers.md y la maqueta aprobada, de donde sale cada medida): 8 discretos, 6 runner, 5 tarjetas, 12 con personalidad
@@ -289,6 +289,32 @@ const Piquito = ({ fondo, mio }) => (
   </svg>
 );
 
+/**
+ * Una conversación (Mensaje con datos): mensajes azules (míos, a la derecha) y grises (de la otra persona, a la izquierda). En una racha del mismo lado van a 3 px y el piquito
+ * SOLO en el último (su esquina a 16 px; las de los de arriba a 6 px); entre lados distintos, 10 px. Cada mensaje baja de tamaño si no cabe en 232 px (`data-n-max`).
+ */
+function Conversacion({ mensajes, pie }) {
+  const ultimoMio = mensajes[mensajes.length - 1].mio;
+  return (
+    <div className="n-in" style={{ alignItems: 'stretch', padding: '20px 34px' }}>
+      <div className="n-msjs">
+        {mensajes.map((m, i) => {
+          const fondo = m.mio ? '#2F7BFF' : '#E9E9EB';
+          const ultimo = !mensajes[i + 1] || mensajes[i + 1].mio !== m.mio;
+          const esquina = ultimo ? 16 : 6;
+          return (
+            <div key={i} className="n-msj-fila" style={{ alignSelf: m.mio ? 'flex-end' : 'flex-start', marginTop: i && mensajes[i - 1].mio === m.mio ? 3 : i ? 10 : 0 }}>
+              {ultimo && <Piquito fondo={fondo} mio={m.mio} />}
+              <div className="n-msj n-aj" data-n-max={232} style={{ background: fondo, color: m.mio ? '#fff' : '#111', fontSize: 18, ...(m.mio ? { borderBottomRightRadius: esquina } : { borderBottomLeftRadius: esquina }) }}>{m.t}</div>
+            </div>
+          );
+        })}
+      </div>
+      {pie && <div className="n-pie" style={{ alignSelf: ultimoMio ? 'flex-end' : 'flex-start', ...(ultimoMio ? { marginRight: 6 } : { marginLeft: 6 }) }}>{pie}</div>}
+    </div>
+  );
+}
+
 /** El sello redondo: dos círculos, el texto en arco que cierra exacto (`textLength`) y el primer dato al centro. */
 function Sello({ f, d }) {
   const id = `sl${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
@@ -385,6 +411,11 @@ function Personalidad({ item, f, cara, frase, propia }) {
           {pie && <div className="n-pie" style={mio ? { marginRight: 6 } : { marginLeft: 6 }}>{pie}</div>}
         </div>
       );
+    }
+    case 'p-mensaje-datos': {
+      // El idioma sigue al de la frase elegida en «✎ Personalizar»; los datos, en la cara que se ve.
+      const { mensajes, pie } = mensajesDeCara(f, r, cara, idiomaDeFrase(frase));
+      return <Conversacion mensajes={mensajes} pie={pie} />;
     }
     case 'p-barras':
       return (

@@ -101,6 +101,82 @@ export function fraseResaltador(f) {
   if (min) return `${min} de entreno`;
   return null;
 }
+
+/**
+ * MENSAJE CON DATOS (5 nov 2026): los datos del entreno como mensajes de una conversación. Tres caras:
+ *   · `uno`: un mensaje azul con los dos primeros datos y, debajo, la hora de inicio.
+ *   · `dos`: dos mensajes azules seguidos («just ran 5.08 km» y «5:14 /km in 26:33») y el mismo pie.
+ *   · `pregunta`: una pregunta gris a la izquierda y la respuesta azul a la derecha. Sin pie.
+ * Con distancia: distancia, ritmo (o velocidad) y tiempo. Sin distancia (gym y demás): series, tiempo y volumen. Las ranuras de siempre: si a una cara le falta un dato,
+ * esa cara no sale; si no queda ninguna, el sticker tampoco. Devuelve `{ modo, caras: ['uno', ...], a, b, c }` (con distancia: distancia, ritmo, tiempo; sin ella: series, tiempo, volumen) o `null`.
+ */
+export function mensajeConDatos(f) {
+  const d = f.datos;
+  const con = (...claves) => claves.every((c) => !!c);
+  const modos = [];
+  if (d.dist) {
+    const p = d.ritmo || d.vel;
+    const caras = [con(d.dist, p) && 'uno', con(d.dist, p, d.tiempo) && 'dos', con(d.dist, p) && 'pregunta'].filter(Boolean);
+    modos.push({ modo: 'dist', caras, a: d.dist, b: p, c: d.tiempo });
+  }
+  if (d.series) {
+    const t = d.min || d.tiempo;
+    const caras = [con(d.series, t) && 'uno', con(d.series, t, d.volumen) && 'dos', con(d.series, d.volumen) && 'pregunta'].filter(Boolean);
+    modos.push({ modo: 'gym', caras, a: d.series, b: t, c: d.volumen });
+  }
+  return modos.find((m) => m.caras.length > 0) ?? null;
+}
+
+/** El idioma de «Mensaje con datos» sigue al de la frase elegida: la de entrada o una de la lista English, inglés; una de Español o una que escribió la persona, español. */
+export function idiomaDeFrase(frase) {
+  if (!frase) return 'en';
+  return FRASES.en.includes(frase) ? 'en' : 'es';
+}
+
+// Cómo se dice cada deporte en los mensajes: «Ran / just ran / how was the run?» y «Corrió / acabo de correr». Los demás: «Trained / just did / how was the workout?».
+const ACCION = {
+  correr: { pie: 'Ran', paso: 'ran', sust: 'run', es: 'Corrió', inf: 'correr' },
+  trail: { pie: 'Ran', paso: 'ran', sust: 'run', es: 'Corrió', inf: 'correr' },
+  caminar: { pie: 'Walked', paso: 'walked', sust: 'walk', es: 'Caminó', inf: 'caminar' },
+  senderismo: { pie: 'Walked', paso: 'walked', sust: 'walk', es: 'Caminó', inf: 'caminar' },
+  bici: { pie: 'Rode', paso: 'rode', sust: 'ride', es: 'Pedaleó', inf: 'pedalear' },
+  natacion: { pie: 'Swam', paso: 'swam', sust: 'swim', es: 'Nadó', inf: 'nadar' },
+  remo: { pie: 'Rowed', paso: 'rowed', sust: 'row', es: 'Remó', inf: 'remar' },
+};
+const ACCION_OTRO = { pie: 'Trained', paso: 'did', sust: 'workout', es: 'Entrenó', inf: 'hacer' };
+
+/**
+ * Los mensajes de UNA cara: `{ mensajes: [{ t, mio }], pie }` (`pie`: `null` si no lleva). `m`: lo que devolvió `mensajeConDatos` (`r` del sticker); `cara`: el número de cara que se ve;
+ * `idioma`: 'en' | 'es' (`idiomaDeFrase`). El pie dice «hoy» si el entreno es de hoy (`f.hoy`); si no, el día: «Ran on Oct 20 at 7:12» / «Corrió el 20 de octubre a las 7:12».
+ */
+export function mensajesDeCara(f, m, cara, idioma) {
+  const en = idioma === 'en';
+  const u = (x) => `${x.v}${x.u ? ` ${x.u}` : ''}`;
+  const tipo = m.caras[Math.min(Math.max(cara, 0), m.caras.length - 1)];
+  const azul = (t) => ({ t, mio: true });
+  const a = ACCION[f.deporte] ?? ACCION_OTRO;
+  let uno; let dos; let pregunta; let verbo;
+  if (m.modo === 'dist') {
+    verbo = en ? a.pie : a.es;
+    uno = en ? `${u(m.a)}, ${u(m.b)}` : `${u(m.a)} a ${u(m.b)}`;
+    dos = en ? [`just ${a.paso} ${u(m.a)}`, `${u(m.b)} in ${m.c?.v}`] : [`acabo de ${a.inf} ${u(m.a)}`, `a ${u(m.b)} en ${m.c?.v}`];
+    pregunta = en ? [`how was the ${a.sust}?`, `${u(m.a)} at ${u(m.b)}`] : ['¿cómo te fue?', `${u(m.a)} a ${u(m.b)}`];
+  } else {
+    verbo = en ? 'Trained' : 'Entrenó';
+    const sets = en ? `${m.a.v} sets` : `${m.a.v} series`;
+    uno = `${sets}, ${m.b ? u(m.b) : ''}`;
+    dos = en ? [`done: ${sets}`, `${m.c ? u(m.c) : ''} in ${m.b ? u(m.b) : ''}`] : [`terminé: ${sets}`, `${m.c ? u(m.c) : ''} en ${m.b ? u(m.b) : ''}`];
+    pregunta = en ? ['how was the gym?', `${sets}, ${m.c ? u(m.c) : ''}`] : ['¿cómo te fue?', `${sets}, ${m.c ? u(m.c) : ''}`];
+  }
+  const cuando = f.hoy === false
+    ? (en ? `on ${String(f.fecha).replace(/,\s*\d{4}$/, '')} at ` : `el ${f.fechaLarga} a las `)
+    : (en ? 'today at ' : 'hoy a las ');
+  const pie = `${verbo} ${cuando}${f.hora24}`;
+  if (tipo === 'uno') return { mensajes: [azul(uno)], pie };
+  if (tipo === 'dos') return { mensajes: dos.map(azul), pie };
+  return { mensajes: [{ t: pregunta[0], mio: false }, azul(pregunta[1])], pie: null };
+}
+
 /** Las claves cortas en inglés de la Máquina de escribir («DIST: 5.08 KM»). */
 export const CLAVE_CORTA = { dist: 'DIST', ritmo: 'PACE', vel: 'SPD', tiempo: 'TIME', min: 'TIME', elev: 'ELEV', series: 'SETS', volumen: 'VOL', kcal: 'KCAL', fc: 'BPM', ejercicios: 'EXER', largos: 'LAPS' }; // estilo-ok: claves a máquina del sticker (maqueta)
 
@@ -138,6 +214,8 @@ export const STICKERS = [
   { id: 'p-reloj', nombre: 'Reloj digital', familia: 'personalidad', forma: 'ancho', desde: NUEVO, caras: (f, r) => (r.length >= 3 ? 2 : 1), elige: [PREF, 3, 1] },
   { id: 'p-frase', nombre: 'Frase grande', familia: 'personalidad', forma: 'ancho', lienzo: lz(220), desde: NUEVO, perso: true, elige: [PREF, 2, 0] },
   { id: 'p-burbuja', nombre: 'Burbuja', familia: 'personalidad', forma: 'ancho', lienzo: lz(180), desde: NUEVO, perso: true, fija: true, caras: 2 },
+  // «Mensaje con datos» (5 nov 2026, junto a la Burbuja): tus datos como una conversación. Sus caras dependen de qué datos hay (`mensajeConDatos`): si falta uno, esa cara no sale.
+  { id: 'p-mensaje-datos', nombre: 'Mensaje con datos', familia: 'personalidad', forma: 'ancho', lienzo: lz(220), desde: NUEVO, fija: true, resuelve: mensajeConDatos, caras: (f, r) => r.caras.length },
   { id: 'p-barras', nombre: 'Código de barras', familia: 'personalidad', forma: 'ancho', desde: NUEVO, elige: [PREF, 3, 1] },
   { id: 'p-polaroid', nombre: 'Polaroid', familia: 'personalidad', forma: 'alto', desde: NUEVO, fija: true, conFoto: true, elige: [PREF, 2, 0] },
   { id: 'p-momento', nombre: 'Un momento', familia: 'personalidad', forma: 'ancho', desde: NUEVO, caras: 2 },
@@ -224,6 +302,7 @@ export function catalogo(f, lista = STICKERS) {
     if (s.obliga && !s.obliga(f)) continue;
     const usados = new Set();
     let r = {};
+    if (s.resuelve) { r = s.resuelve(f); if (!r) continue; }
     if (s.ranuras) { r = resuelve(f, s.ranuras, usados); if (!r) continue; }
     if (s.elige) {
       const [claves, n, min] = s.elige;

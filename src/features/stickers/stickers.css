@@ -140,6 +140,9 @@
 .stk .n-frase { max-width: 260px; line-height: 1.02; white-space: normal; overflow-wrap: anywhere; }
 .stk .n-burbuja { position: relative; max-width: 230px; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25)); }
 .stk .n-globo { position: relative; z-index: 1; font-family: -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', Roboto, sans-serif; font-size: 19px; font-weight: 600; letter-spacing: 0; padding: 10px 16px; border-radius: 21px; line-height: 1.22; text-align: left; white-space: normal; overflow-wrap: anywhere; font-variant-numeric: normal; }
+.stk .n-msjs { display: flex; flex-direction: column; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25)); }
+.stk .n-msj-fila { position: relative; }
+.stk .n-msj { position: relative; z-index: 1; font-family: -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', Roboto, sans-serif; font-size: 18px; font-weight: 600; letter-spacing: 0; padding: 9px 15px; border-radius: 20px; line-height: 1.22; text-align: left; white-space: nowrap; font-variant-numeric: normal; }
 .stk .n-pie { color: #B9C0CF; font-family: -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', Roboto, sans-serif; font-size: 12px; font-weight: 600; margin-top: 6px; white-space: nowrap; }
 .stk .n-entre { display: flex; justify-content: space-between; gap: 10px; width: 230px; white-space: nowrap; }
 .stk .n-pola { box-sizing: border-box; width: 206px; padding: 12px 12px 0; background: #FBFAF6; transform: rotate(-3deg); filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.35)); }
