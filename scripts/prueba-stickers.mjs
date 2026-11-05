@@ -2,7 +2,8 @@
    Siguen las pruebas de aceptación de la especificación (docs/stickers.md). */
 import assert from 'node:assert/strict';
 import { ficha, entrenoDeActividad, rutaDe } from '../src/lib/stickers/ficha.js';
-import { catalogo, esNuevo, fraseCorta, fraseLarga, lienzoDe, tituloDeLaHoja, TEMAS_TARJETA, COLORES, NUEVO_DIAS } from '../src/lib/stickers/catalogo.js';
+import { catalogo, catalogoDeTotales, esNuevo, fraseCorta, fraseLarga, fraseResaltador, FRASE_INICIAL, FRASE_MAX, FRASES, lienzoDe, pieDeBurbuja, renglonesDe, tamDeFrase, tituloDeLaHoja, TEMAS_TARJETA, COLORES, NUEVO_DIAS } from '../src/lib/stickers/catalogo.js';
+import { kmTexto, totalesDe } from '../src/lib/stickers/totales.js';
 import { ajustaRuta } from '../src/lib/stickers/ruta.js';
 import { recordDelPlan, seriesProgramadas } from '../src/lib/stickers/plan.js';
 import { entrenoDelReloj } from '../src/lib/metricas/leeHealthKit.js';
@@ -41,10 +42,10 @@ const rutaRecta = (m) => Array.from({ length: Math.round(m / 10) + 1 }, (_, i) =
   assert.equal(f.coach, '@beto');
 }
 
-// 3) Un yoga sin reloj (solo tiempo): de los nuevos, «Un dato» y «Boleto»; luego Firma, Eco, Grande, Frase, Hora, Partido, Semana, Mes y los de ícono, y nada más.
+// 3) Un yoga sin reloj (solo tiempo): de los nuevos, «Un dato», «Boleto» y los 12 con personalidad; luego Firma, Eco, Grande, Frase, Hora, Partido, Semana, Mes y los de ícono, y nada más.
 {
   const f = ficha(entrenoDeActividad({ fila: { ...base, deporte: 'otro', titulo: 'Yoga', duracion_s: 3600 } }));
-  assert.deepEqual(ids(f), ['d-un-dato', 'r-boleto', 'firma', 'eco', 'grande', 'frase', 'hora', 'partido', 'semana', 'mes', 'icono-numero', 'icono-gigante', 'sello', 'semana-iconos', 'mes-por-tipo']);
+  assert.deepEqual(ids(f), ['d-un-dato', 'r-boleto', 'p-italica', 'p-maquina', 'p-reloj', 'p-frase', 'p-burbuja', 'p-barras', 'p-polaroid', 'p-momento', 'p-dia', 'p-resaltador', 'p-corazon', 'p-sello', 'firma', 'eco', 'grande', 'frase', 'hora', 'partido', 'semana', 'mes', 'icono-numero', 'icono-gigante', 'sello', 'semana-iconos', 'mes-por-tipo']);
   assert.equal(f.datos.min.v, '1h 00');
 }
 
@@ -215,9 +216,10 @@ assert.equal(tituloDeLaHoja({ deporte: 'raqueta' }), 'Comparte tu entreno');
   const record = { tipo: 'tiempo', texto: 'x', difNum: 95, antesInicio: '2026-10-09T13:00:00Z', antesDesfase: -360 };
   const carrera = ficha(entrenoDeActividad({ fila, muestras: rutaRecta(5000), record, tipo: { nombre: 'Carrera', icono: 'correr' } }));
   const cat = catalogo(carrera);
-  // Los 19 van primero y en ese orden; los 35 de hoy siguen en su orden de siempre (Titular es el primero).
+  // Los 19 van primero y en ese orden; luego los 12 con personalidad (parte 2) y los 35 de hoy en su orden de siempre (Titular es el primero).
   assert.deepEqual(cat.slice(0, 19).map((s) => s.id), NUEVOS);
-  assert.equal(cat[19].id, 'titular');
+  assert.equal(cat[19].familia, 'personalidad');
+  assert.equal(cat[31].id, 'titular');
   assert.deepEqual(cat.slice(0, 19).map((s) => s.familia), [...Array(8).fill('discreto'), ...Array(6).fill('runner'), ...Array(5).fill('tarjeta')]);
   assert.ok(cat.slice(19).every((s) => !NUEVOS.includes(s.id)));
   // Sus tamaños: discretos 300 × 200 (los de línea, 330), runner 330 y 420, tarjetas 530, 380, 530, 200 y 380.
@@ -269,7 +271,7 @@ assert.equal(tituloDeLaHoja({ deporte: 'raqueta' }), 'Comparte tu entreno');
   assert.equal(esNuevo(un, Date.parse('2026-12-04T00:00:00Z')), true, 'el día 29');
   assert.equal(esNuevo(un, Date.parse('2026-12-06T00:00:00Z')), false, `${NUEVO_DIAS} días después ya no`);
   assert.equal(esNuevo(un, Date.parse('2026-11-04T00:00:00Z')), false, 'antes de salir tampoco');
-  assert.equal(esNuevo(cat[19]), false, 'los 35 de hoy no llevan «Nuevo»');
+  assert.equal(esNuevo(cat[31]), false, 'los 35 de hoy no llevan «Nuevo»');
   assert.ok(cat.slice(0, 19).every((s) => s.desde === '2026-11-05'));
   // Los cuatro temas de la tarjeta traen sus doce colores (más el brillo de adentro) y siguen a los cuatro colores de la hoja.
   const LLAVES = ['fondo', 'borde', 'brillo', 'texto', 'etiqueta', 'acento', 'ruta', 'halo', 'nucleo', 'topo', 'linea', 'apagado'];
@@ -280,6 +282,121 @@ assert.equal(tituloDeLaHoja({ deporte: 'raqueta' }), 'Comparte tu entreno');
   assert.equal(TEMAS_TARJETA.coral.apagado, '#4A1C14');
   // «Con foto» solo muestra los de identidad: ninguno de los nuevos.
   assert.ok(cat.slice(0, 19).every((s) => !s.identidad));
+}
+
+// PARTE 2 (5 nov 2026): los 12 con personalidad, sus caras, las frases y los 6 de Totales.
+{
+  const fila = { ...base, id: 'p1', deporte: 'correr', titulo: 'Carrera de la mañana', duracion_s: 1593, distancia_m: 5080, fc_media: 152, kcal_activas: 342, desnivel_pos_m: 11 };
+  const carrera = ficha(entrenoDeActividad({ fila, muestras: rutaRecta(5000), tipo: { nombre: 'Carrera', icono: 'correr' } }));
+  const gym = ficha({ deporte: 'fuerza', inicioMs: Date.parse('2026-10-21T00:40:00Z'), desfaseMin: -360, duracionS: 3120, guiado: { series: 18, ejercicios: 7, volumen: 6240, lista: [] }, nombre: 'Pierna y glúteo', plan: true, tipo: { nombre: 'Gimnasio', icono: 'pesa' } });
+  const PERSO = ['p-italica', 'p-maquina', 'p-reloj', 'p-frase', 'p-burbuja', 'p-barras', 'p-polaroid', 'p-momento', 'p-dia', 'p-resaltador', 'p-corazon', 'p-sello'];
+  [carrera, gym].forEach((f) => {
+    const cat = catalogo(f);
+    // Después de las 5 tarjetas y antes de los 35, en su orden.
+    const i = cat.findIndex((x) => x.familia === 'personalidad');
+    assert.deepEqual(cat.slice(i, i + 12).map((x) => x.id), PERSO);
+    assert.equal(cat[i - 1].familia, 'tarjeta');
+    assert.equal(cat[i + 12].id, 'titular');
+    assert.ok(cat.slice(i, i + 12).every((x) => x.desde === '2026-11-05' && !x.identidad), 'llevan «Nuevo» y no entran en «Con foto»');
+  });
+  const de = (f, id) => catalogo(f).find((x) => x.id === id);
+  // Las caras: Itálica, Reloj (con tres datos), Burbuja, Un momento, Día gigante y Corazón traen dos; Un dato, tres; los demás, una.
+  const caras = Object.fromEntries(catalogo(carrera).filter((x) => x.familia === 'personalidad' || x.id === 'd-un-dato').map((x) => [x.id, x.caras ?? 1]));
+  assert.deepEqual(caras, { 'd-un-dato': 3, 'p-italica': 2, 'p-maquina': 1, 'p-reloj': 2, 'p-frase': 1, 'p-burbuja': 2, 'p-barras': 1, 'p-polaroid': 1, 'p-momento': 2, 'p-dia': 2, 'p-resaltador': 1, 'p-corazon': 2, 'p-sello': 1 });
+  // Las ranuras, con PREF: la carrera da Distance, Time, Pace…; el gym, Sets, Time, Exercises…
+  assert.deepEqual(de(carrera, 'p-italica').r.map((d) => d.l), ['Distance', 'Time', 'Pace']);
+  assert.deepEqual(de(carrera, 'p-maquina').r.map((d) => d.k), ['dist', 'tiempo', 'ritmo', 'kcal']);
+  assert.deepEqual(de(gym, 'p-maquina').r.map((d) => d.k), ['series', 'tiempo', 'ejercicios', 'kcal'].filter((k) => gym.datos[k]));
+  assert.deepEqual(de(carrera, 'p-frase').r.map((d) => d.l), ['Distance', 'Time']);
+  assert.deepEqual(de(gym, 'p-barras').r.map((d) => d.l), ['Sets', 'Time', 'Exercises']);
+  assert.deepEqual(de(carrera, 'p-polaroid').r.map((d) => d.l), ['Distance', 'Time']);
+  ['p-dia', 'p-corazon', 'p-sello'].forEach((id) => assert.equal(de(carrera, id).r.g.k, 'dist', id));
+  assert.equal(de(gym, 'p-corazon').r.g.k, 'series');
+  // Sin un tercer dato, el Reloj digital tiene una sola cara (un yoga con solo el tiempo).
+  const yoga = ficha(entrenoDeActividad({ fila: { ...base, deporte: 'otro', titulo: 'Yoga', duracion_s: 3600 } }));
+  assert.equal(de(yoga, 'p-reloj').caras, 1);
+  // Las marcas: personalizables (frase), fijos (no cambian con los colores) y el Polaroid con tu foto.
+  assert.deepEqual(catalogo(carrera).filter((x) => x.perso).map((x) => x.id), ['p-frase', 'p-burbuja']);
+  assert.deepEqual(catalogo(carrera).filter((x) => x.fija).map((x) => x.id), ['p-burbuja', 'p-polaroid', 'p-resaltador', 'p-corazon']);
+  assert.deepEqual(catalogo(carrera).filter((x) => x.conFoto).map((x) => x.id), ['p-polaroid']);
+  // Sus tamaños (maqueta).
+  assert.deepEqual(PERSO.map((id) => lienzoDe(de(carrera, id)).h), [260, 260, 200, 220, 180, 200, 330, 200, 220, 180, 160, 300]);
+  // Los textos: «Corrió 5.08 km» / «Entrenó 18 series»; «5.08 kilómetros en 26:33» / «18 series en 52 min»; la fecha y la hora de quien entrenó.
+  assert.equal(pieDeBurbuja(carrera), 'Corrió 5.08 km');
+  assert.equal(pieDeBurbuja(gym), 'Entrenó 18 series');
+  assert.equal(fraseResaltador(carrera), '5.08 kilómetros en 26:33');
+  assert.equal(fraseResaltador(gym), '18 series en 52 min');
+  assert.deepEqual([carrera.fechaNum, carrera.hora24, carrera.fechaLarga], ['28.10.26', '7:02', '28 de octubre']);
+  assert.deepEqual([gym.dia, gym.fechaNum, gym.hora24], ['martes', '20.10.26', '18:40']);
+  // Un entreno sin ningún dato no saca el Resaltador (no tiene qué decir) y nunca un «N/A».
+  const nada = ficha({ deporte: 'otro', inicioMs: Date.parse('2026-10-20T13:00:00Z'), nombre: 'Nada' });
+  assert.ok(!catalogo(nada).some((x) => ['p-resaltador', 'p-dia', 'p-corazon', 'p-sello', 'p-italica'].includes(x.id)));
+  [carrera, gym, yoga].forEach((f) => catalogo(f).filter((x) => x.familia === 'personalidad').forEach((x) => {
+    const datos = [x.r].flat().flatMap((y) => (y && y.v !== undefined ? [y] : Object.values(y ?? {}).filter((d) => d && d.v !== undefined)));
+    datos.forEach((d) => assert.ok(!/N\/A|undefined|NaN|null/.test(`${d.v}${d.u}${d.l}`), x.id));
+  }));
+  // Sin ruta no salen los que la obligan (el gym no tiene GPS); el Día gigante sale igual, sin la línea.
+  const RUTA = ['d-dos-linea', 'd-linea', 'd-linea-dato', 'r-columna-ruta', 'r-ruta-grande', 'r-marco', 't-ruta', 't-ruta-fila'];
+  assert.ok(!catalogo(gym).some((x) => RUTA.includes(x.id)));
+  assert.ok(catalogo(gym).some((x) => x.id === 'p-dia'));
+
+  // Las frases: English primero, diez en cada idioma, la de entrada «pov: locked in», hasta 40 letras.
+  assert.deepEqual(Object.keys(FRASES), ['en', 'es']);
+  assert.equal(FRASES.en.length, 10);
+  assert.equal(FRASES.es.length, 10);
+  assert.equal(FRASE_INICIAL, 'pov: locked in');
+  assert.equal(FRASE_MAX, 40);
+  assert.ok([...FRASES.en, ...FRASES.es].every((t) => t.length <= FRASE_MAX));
+  // Una frase de 40 letras cabe sin cortarse: en Frase grande, en 3 renglones de 260 px (con una letra promedio de medio em, más ancha que la itálica real);
+  // en la Burbuja, en 3 renglones de 198 px a 19 px (con la letra del sistema, ~0.55 em).
+  const cuarenta = ['mis piernas opinan distinto pero aquí voy', 'abcdefghijklmnopqrstuvwxyzabcdefghijklmn', 'a b c d e f g h i j k l m n o p q r s t'];
+  cuarenta.forEach((t) => {
+    const t40 = t.slice(0, 40);
+    assert.equal(t40.length <= 40, true);
+    const px = tamDeFrase(t40);
+    assert.ok(px >= 26, `${t40}: ${px} px`);
+    assert.ok(renglonesDe(t40, 260 / (px * 0.46)) <= 3, t40);
+    assert.ok(renglonesDe(t40, 198 / (19 * 0.55)) <= 4, `${t40}: burbuja`);
+  });
+  assert.equal(tamDeFrase('pov: locked in'), 40, 'una frase corta va a 40 px');
+  assert.equal(renglonesDe('mente fuerte, piernas cansadas', 14), 3);
+  assert.equal(renglonesDe('abcdefghij', 4), 3, 'una palabra más larga que el renglón se parte');
+
+  // TOTALES: la semana y el mes de HOY (jueves 5 nov 2026), de todos los entrenos (del plan y libres).
+  const H = (dia, h, km, min, extra = {}) => ({ id: `h${dia}-${h}`, inicioMs: Date.parse(`2026-11-${String(dia).padStart(2, '0')}T${String(h).padStart(2, '0')}:00:00Z`), desfaseMin: -360, duracionS: min * 60, distanciaM: km * 1000, tipo: { nombre: 'x', icono: null }, ...extra });
+  const AHORA = Date.parse('2026-11-05T20:00:00Z');
+  const historial = [H(2, 14, 5.1, 30), H(4, 14, 8.4, 50), H(4, 23, 0, 45), H(1, 14, 10, 60), H(3, 14, 0, 40), { ...H(1, 2, 3, 20), id: 'oct31' }];
+  // Hoy es jueves: la semana va del lunes 2 al domingo 8. El del 1 de nov (domingo) es de la semana pasada; el de la madrugada del 1 (UTC) es del 31 de octubre en México.
+  const t = totalesDe({ historial, inicioMs: Date.parse('2026-11-05T13:00:00Z'), desfaseMin: -360, duracionS: 1800, distanciaM: 4200, id: 'hoy' }, AHORA);
+  assert.deepEqual(t.semana.n, [1, 1, 2, 1, 0, 0, 0]);
+  assert.deepEqual(t.semana.km.map((x) => Math.round(x * 10) / 10), [5.1, 0, 8.4, 4.2, 0, 0, 0]);
+  assert.equal(t.semana.entrenos, 5);
+  assert.equal(t.semana.min, 30 + 40 + 50 + 45 + 30);
+  assert.equal(kmTexto(t.semana.distM), '17.7');
+  assert.equal(t.mes.nombre, 'Noviembre');
+  assert.equal(t.mes.dias, 30);
+  assert.deepEqual(t.mes.hechos, [1, 2, 3, 4, 5]);
+  assert.equal(t.mes.entrenos, 6);
+  assert.equal(kmTexto(96000), '96');
+  // Los 6, en su orden; cada uno con sus caras.
+  const tot = catalogoDeTotales(t);
+  assert.deepEqual(tot.map((x) => x.id), ['s-semana', 's-barras', 's-puntos', 's-mes', 's-maquina', 's-tarjeta']);
+  assert.deepEqual(tot.map((x) => x.caras ?? 1), [2, 1, 1, 2, 1, 1]);
+  assert.deepEqual(tot.map((x) => lienzoDe(x).h), [200, 260, 300, 240, 280, 420]);
+  assert.equal(tot.find((x) => x.id === 's-tarjeta').familia, 'tarjeta', 'la tarjeta de la semana lleva los cuatro temas');
+  assert.ok(tot.every((x) => x.total && !x.identidad));
+  // El entreno que se comparte cuenta aunque no venga en la lista, y no cuenta dos veces si sí viene.
+  const t2 = totalesDe({ historial: [...historial, { ...H(5, 13, 4.2, 30), id: 'hoy' }], inicioMs: Date.parse('2026-11-05T13:00:00Z'), desfaseMin: -360, duracionS: 1800, distanciaM: 4200, id: 'hoy' }, AHORA);
+  assert.equal(t2.semana.entrenos, 5);
+  // Solo gym (sin kilómetros): «Esta semana» y «Mes gigante» enseñan entrenos y tiempo, sin la cara de los km.
+  const sinKm = totalesDe({ historial: [H(3, 14, 0, 40)] }, AHORA);
+  assert.deepEqual(catalogoDeTotales(sinKm).map((x) => x.caras ?? 1), [1, 1, 1, 1, 1, 1]);
+  assert.deepEqual(catalogoDeTotales(sinKm).find((x) => x.id === 's-semana').r.vistas, ['entrenos']);
+  // Sin entrenos esta semana pero sí en el mes: solo los del mes. Sin ninguno en el mes: nada (la pestaña lo dice).
+  const soloMes = totalesDe({ historial: [H(1, 14, 10, 60)] }, AHORA);
+  assert.deepEqual(catalogoDeTotales(soloMes).map((x) => x.id), ['s-puntos', 's-mes']);
+  assert.deepEqual(catalogoDeTotales(totalesDe({ historial: [] }, AHORA)), []);
+  assert.deepEqual(catalogoDeTotales(totalesDe({ historial: [{ ...H(1, 14, 5, 30), inicioMs: Date.parse('2026-10-10T14:00:00Z') }] }, AHORA)), []);
 }
 
 console.log('prueba-stickers: todo bien');

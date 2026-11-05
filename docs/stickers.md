@@ -15,7 +15,7 @@ Lo que el atleta saca de la app para su historia de Instagram (o para pegar enci
 4. **La exportación** (`src/features/stickers/exporta.js`). El sticker se dibuja otra vez fuera de la pantalla, a su tamaño real, y `modern-screenshot` lo rasteriza a 3× con fondo transparente: 900 × 600 (ancho) o 900 × 990 (alto). En «Con foto», 900 × 1599 con la foto debajo.
    - **Video:** 3 s, 900 × 990, mp4. Se arman capas con el mismo dibujo y se codifican cuadro por cuadro con `mediabunny` (el codificador H.264 del teléfono): cada cuadro con su tiempo exacto. Si el teléfono no sabe, se graba en vivo con `MediaRecorder`. Un video no puede ser transparente: va sobre el fondo de la hoja (blanco con la tinta negra).
 5. **La hoja** (`src/features/stickers/HojaDeStickers.jsx`). Mosaicos cuadrados, dibujados conforme se desplazan. Pestañas Stickers · Con foto · Video. Tocar = copiar. Mantener 0.6 s = guardar. Mover el dedo = desplazar. En Video, tocar o mantener guarda el video. Se cierra con «Cerrar» o arrastrando la cabecera hacia abajo.
-   - **Con foto:** solo los de identidad (Titular, Titular · récord, Firma, Eco, Grande) sobre una foto 9:16: tres de ejemplo (dibujadas) o una del carrete. La del carrete se queda en memoria (un enlace `blob:` local): nunca se sube.
+   - **Con foto:** solo los de identidad (Titular, Titular · récord, Firma, Eco, Grande) sobre una foto 9:16: tres de ejemplo (dibujadas) o una del carrete. La del carrete se queda en memoria (un enlace `blob:` local): nunca se sube. La misma foto sirve para el Polaroid (ver «La parte 2»).
 
 ## Los 19 de arriba (5 nov 2026, parte 1 de la especificación `docs/superpowers/specs/2026-11-05-stickers-nuevos.md`)
 
@@ -31,6 +31,29 @@ Maqueta aprobada: https://claude.ai/artifact/Ae6gZVupudXto8n1sKdj1j (versión 4)
 - **Que quepa:** los valores marcados `data-n-max` bajan de tamaño hasta caber (`ajustaSticker`), cada uno solo o, en una fila o rejilla, todos juntos (un maratón: «42.20 km  3:58:41»).
 - **La hoja:** los mosaicos de «Stickers» son cuadrados (como la maqueta). Se DIBUJAN conforme se desplazan (`IntersectionObserver` a 250 px de la vista; ya dibujados se quedan): con los 52 stickers de un entreno completo, dibujarlos todos al abrir bloqueaba WebKit ~2 s.
 - **Textos:** las etiquetas y los datos vienen de la ficha (en inglés, como siempre). El día y la fecha del Boleto y la tarjeta de récord, en español como la maqueta (`f.dia`: «martes»; `f.fechaCorta`: «20 oct»). La pastilla dice «RÉCORD».
+
+## La parte 2 (5 nov 2026): personalidad, variantes, frases, Totales, Polaroid y «Con foto»
+
+Misma maqueta (versión 4). Lo que se agregó:
+
+- **El orden de la hoja (Actividad):** una sola lista, sin rótulos: 8 discretos, 6 runner, 5 tarjetas, **12 con personalidad** y luego los 35 de siempre.
+- **Las familias nuevas** (`familia` en el catálogo): `personalidad` (ids `p-…`) y, en su propio catálogo, los de Totales (`TOTALES`, ids `s-…`, `familia: 'totales'`; la tarjeta de la semana es `tarjeta`). Se dibujan en `Nuevos.jsx` (`Personalidad` y `Totales`), con CSS al final de `stickers.css`.
+- **Los 12 con personalidad:** Itálica, Máquina de escribir, Reloj digital, Frase grande, Burbuja, Código de barras, Polaroid, Un momento, Día gigante, Resaltador, Corazón y Sello redondo. Ranuras con `PREF`, como todos. Marcas en el catálogo: `perso` (lleva la frase: Frase grande y Burbuja), `fija` (no cambia con los cuatro colores: Burbuja, Polaroid, Resaltador y Corazón) y `conFoto` (el Polaroid). Textos en español donde la maqueta los pone en español (la Burbuja dice «Corrió 5.08 km» o «Entrenó 18 series», `pieDeBurbuja`; el Resaltador «5.08 kilómetros en 26:33», `fraseResaltador`); la ficha trae `fechaNum` («20.10.26»), `hora24` («7:12») y `fechaLarga` («20 de octubre»).
+- **Las caras (variantes):** `caras` en el catálogo (un número o `(f, r) => n`; en «Un dato», una por dato). Tienen dos Itálica, Reloj digital (si hay tres datos), Burbuja, Un momento, Día gigante y Corazón; «Un dato», tres; en Totales, «Esta semana» y «Mes gigante» (si hubo kilómetros). El mosaico es un carrusel horizontal con `scroll-snap` y puntitos (6 px; el activo blanco, o negro con la tinta negra). Deslizar o tocar un puntito cambia de cara; mover el dedo más de 10 px no copia; tocar copia la cara que se ve y mantener la guarda (`pngDeSticker({ cara })`). No se recuerda al cerrar. Con el mouse, el carrusel se arrastra.
+- **El asomo:** la primera vez del día que se abre la hoja, el primer mosaico con caras se asoma (35 % y regresa, con una animación; 1 s). Se anota en el teléfono (`localStorage`, `tl.stickers.asomo`). Con «reducir movimiento», no.
+- **Frases («✎ Personalizar»):** botón arriba a la izquierda de los personalizables. Abre `HojaDeFrases.jsx`: English primero y Español, «Escribe la tuya» (40 letras, `FRASE_MAX`) con «Usar», y las frases (`FRASES`) como burbujas azules en dos columnas. La elegida va a todos los personalizables a la vez y se recuerda en el teléfono (`tl.stickers.frase`); la de entrada es «pov: locked in». Al cerrar, la galería regresa al sticker desde el que se abrió y lo marca 1.6 s con un borde blanco. Una frase larga nunca se corta: `tamDeFrase` baja la letra para que quepa en 3 renglones y, al dibujarse, `data-n-alto` la baja más si hiciera falta.
+- **Totales:** dos pestañas de texto debajo de los colores, en «Stickers»: Actividad y Totales. Totales son 6 (Esta semana, Semana en barras, Mes en puntos, Mes gigante, Semana a máquina y Tarjeta de la semana) con la semana (lunes a domingo) y el mes de HOY, de todos los entrenos (`lib/stickers/totales.js`, `totalesDe`). Salen del historial del año que ya trae el entreno (`cargaHistorial`): no hay otra consulta. El entreno que se comparte cuenta siempre. Sin kilómetros, las barras y la máquina cuentan minutos. Sin entrenos en la semana no salen los de semana; sin ninguno en el mes (ni en la semana) no sale nada y la pestaña dice «Entrena esta semana y aquí aparecen tus totales».
+- **El Polaroid:** sale vacío (el hueco gris con la cámara). Sin foto, tocarlo o mantenerlo abre el carrete; con foto, copia y guarda. «＋ Poner foto» arriba a la izquierda (dice «Cambiar foto» cuando ya hay una). La foto es la misma de «Con foto» (si eliges una en una, sirve en la otra), vive en memoria y se suelta al cerrar la hoja.
+- **Las dos letras nuevas:** Instrument Serif (regular e itálica) y Space Mono (400 y 700), de Google Fonts, licencia OFL (el texto de la licencia va junto a ellas en `public/fonts`). Declaradas en `index.css` como Bricolage (latin y latin-ext). `Sticker.jsx` espera a las cinco (`document.fonts.load`) antes de medir y de rasterizar.
+
+### Qué tenía «Con foto» (5 nov 2026)
+
+Andrés: «está la pestaña, pero no sirve». Medido en el WebKit de Playwright con perfil iPhone (agente de WKWebView) con HEIC de 12 y 48 MP y JPG de 12 MP, antes de arreglar:
+
+- **Era el sospechoso 1:** el PNG salía **sin la foto**, y el aviso decía «Copiado». `modern-screenshot` mete la foto dentro de un SVG y lo dibuja en un lienzo; WebKit no alcanza a decodificar una foto grande ahí adentro antes de dibujarlo. Con una foto de 12 MP faltó todas las veces; con una lisa, a veces salía a la segunda. Pasarla como `data:` no bastaba con una foto pesada; achicada a 1600 px sí salía. En la web había además otra causa: la CSP (`connect-src` sin `blob:`) ni deja leer el `blob:`.
+- **No era el 2:** `aImagenWeb` con una HEIC de 12 MP tardaba 1-2.7 s y con una de 48 MP unos 4 s, sin fallar.
+- **No era el 3:** copiar el PNG de 900 × 1599 respondió bien (1-2.5 s) en WebKit. En el iPhone real no se pudo medir.
+- **El arreglo:** la foto ya no pasa por `modern-screenshot`. Cada `<img data-foto>` se esconde al rasterizar y se dibuja aparte en un lienzo, en su lugar exacto (`exporta.js`): «abajo» (el fondo de «Con foto», con el velo encima) o «arriba» (el Polaroid, girado −3°). Y la foto se prepara al elegirla (`preparaFoto`): la lee el propio teléfono (la HEIC también), la achica a 4 MP y avisa «Preparando tu foto…», con tope de 30 s. Después: la foto sale en el PNG copiado y en el guardado, con HEIC y JPG, en la app y con la CSP de la web.
 
 ## La fuente
 
@@ -117,7 +140,7 @@ Prototipo: https://claude.ai/artifact/EFSp16EiF1rVYb5U7emtNE (los seis caminos d
 
 ## Pruebas
 
-- `node scripts/prueba-stickers.mjs`: la ficha, las ranuras y el catálogo (las pruebas de aceptación que son puras), incluidos los 19 nuevos: su orden antes de los 35, los de ruta sin ruta, sin «N/A», la ranura vacía y la marca «Nuevo».
+- `node scripts/prueba-stickers.mjs`: la ficha, las ranuras y el catálogo (las pruebas de aceptación que son puras), incluidos los 19 nuevos: su orden antes de los 35, los de ruta sin ruta, sin «N/A», la ranura vacía y la marca «Nuevo». Y la parte 2: el orden de los 12, sus caras, sus ranuras, sus textos, las frases (una de 40 letras cabe en 3 renglones), y los 6 de Totales con una semana y un mes falsos (y sin semana, sin mes y sin kilómetros).
 - Lo que se pinta se revisa a ojo en pantalla, en los cuatro colores, con nombres largos y con un maratón (42.20 km, 3:58:41).
 
 ## Sin verificar
@@ -126,3 +149,4 @@ Prototipo: https://claude.ai/artifact/EFSp16EiF1rVYb5U7emtNE (los seis caminos d
 
 - Que Safari de iPhone respete `font-variation-settings` (wdth 75 en Eco) al rasterizar. Si falla, el plan B es dibujar en canvas con las mismas reglas.
 - Que copiar una imagen al portapapeles funcione dentro de la app del iPhone. Si falla, sale «No se pudo copiar. Mantén presionado el sticker para guardarlo.».
+- La parte 2 en un iPhone real y en Android: deslizar con el dedo (en WebKit de Playwright solo se probó con el mouse y con los puntitos), el carrete de verdad, y «Con foto» con una foto del carrete (se probó con HEIC hechas con `sips`, no con una del iPhone).

@@ -1,8 +1,11 @@
 import { useId } from 'react';
 import IconoDeTipo from '@/components/IconoDeTipo';
 import { ajustaRuta } from '@/lib/stickers/ruta';
+import { CLAVE_CORTA, fraseResaltador, pieDeBurbuja, tamDeFrase } from '@/lib/stickers/catalogo';
+import { DIAS_LETRA, DIAS_MAQUINA, kmTexto, tiempoTexto } from '@/lib/stickers/totales';
 
-/* LOS 19 STICKERS NUEVOS (5 nov 2026; ver docs/stickers.md y la maqueta aprobada, de donde sale cada medida): 8 discretos, 6 runner y 5 tarjetas.
+/* LOS STICKERS NUEVOS (5 nov 2026; ver docs/stickers.md y la maqueta aprobada, de donde sale cada medida): 8 discretos, 6 runner, 5 tarjetas, 12 con personalidad
+   (con Instrument Serif y Space Mono; algunos con varias caras, la frase o tu foto) y los 6 de «Totales» (la semana y el mes de hoy).
    Van centrados (a diferencia de los 35 de `Contenido.jsx`, que van a la izquierda), con la etiqueta arriba y el número abajo. Las unidades del mismo color que
    el número. La marca es «Training Lab» (con espacio; `Lab` en el acento). Los números marcados `data-n-max` bajan de tamaño hasta caber (`Sticker.jsx`).
    Las tarjetas traen fondo y se pintan con los temas de `TEMAS_TARJETA` (variables `--tj-*` que pone `Sticker.jsx`). */
@@ -257,8 +260,283 @@ function Tarjeta({ item, f }) {
   }
 }
 
-/** El interior de un sticker nuevo por su familia. `cara`: la variante que se ve (solo «Un dato» tiene más de una). */
-export default function Nuevos({ item, f, color, cara = 0 }) {
+/* ---------- Los 12 con personalidad ---------- */
+
+// Los textos que el diseño pone en mayúsculas (maqueta de stickers): la clave de la máquina de escribir, el tipo corto, el día gigante.
+const mayus = (t) => String(t ?? '').toUpperCase();
+const MAQUINA = { fecha: 'DATE', actividad: 'ACTV', total: 'TOTAL', semana: 'ESTA SEMANA' }; // estilo-ok: textos a máquina y de la tarjeta (maqueta)
+const conUnidad = (d) => `${d.v}${d.u ? ` ${mayus(d.u)}` : ''}`;
+
+/** Las barras del código: anchos de 2, 3 o 5 px con una semilla fija (siempre las mismas, como la maqueta). */
+function barrasDe(semilla, w) {
+  let x = 0;
+  let r = semilla;
+  const rnd = () => { r = (r * 9301 + 49297) % 233280; return r / 233280; };
+  const out = [];
+  while (x < w) {
+    const bw = rnd() < 0.5 ? 2 : (rnd() < 0.7 ? 3 : 5);
+    if (rnd() > 0.35) out.push([x, bw]);
+    x += bw + (rnd() < 0.6 ? 2 : 3);
+  }
+  return out;
+}
+const BARRAS = barrasDe(7, 230);
+
+/** El piquito del mensaje (SVG de 31 × 34, detrás de la burbuja; espejado para la izquierda). */
+const Piquito = ({ fondo, mio }) => (
+  <svg width="31" height="34" viewBox="0 0 31 34" aria-hidden="true" style={{ position: 'absolute', bottom: 0, ...(mio ? { right: -12 } : { left: -12, transform: 'scaleX(-1)' }) }}>
+    <path d="M0 0 H12 C12 17 19 27 31 32 C18 34.5 7 33 0 29 Z" fill={fondo} />
+  </svg>
+);
+
+/** El sello redondo: dos círculos, el texto en arco que cierra exacto (`textLength`) y el primer dato al centro. */
+function Sello({ f, d }) {
+  const id = `sl${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
+  // Un tipo muy largo apretaría las letras del arco: se corta.
+  const tipo = mayus(f.tipo.nombre.length > 16 ? `${f.tipo.nombre.slice(0, 15)}…` : f.tipo.nombre);
+  return (
+    <svg width="240" height="240" viewBox="0 0 240 240" aria-hidden="true">
+      <defs><path id={id} d="M120 120 m-96 0 a96 96 0 1 1 192 0 a96 96 0 1 1 -192 0" /></defs>
+      <circle cx="120" cy="120" r="114" fill="none" stroke="currentColor" strokeWidth="2.5" />
+      <circle cx="120" cy="120" r="78" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <text fontFamily="Bricolage Grotesque" fontWeight="800" fontSize="15" fill="currentColor">
+        <textPath href={`#${id}`} textLength="598" lengthAdjust="spacing">{`TRAINING LAB · ${tipo} · ${f.fechaNum} · ${mayus(f.dia)} ·` /* estilo-ok: el arco del sello va en mayúsculas (maqueta) */}</textPath>
+      </text>
+      <text x="120" y="128" textAnchor="middle" fontFamily="Bricolage Grotesque" fontWeight="800" fontSize="46" letterSpacing="-1.5" fill="currentColor">{d.v}</text>
+      <text x="120" y="152" textAnchor="middle" fontFamily="Bricolage Grotesque" fontWeight="700" fontSize="14" fill="currentColor">{mayus(d.u || d.l)}</text>
+    </svg>
+  );
+}
+
+/** La cámara del Polaroid sin foto. */
+const Camara = () => (
+  <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" />
+  </svg>
+);
+
+/**
+ * `frase`: la elegida en «✎ Personalizar» (Frase grande y Burbuja). `propia`: la foto del carrete para el Polaroid (un enlace local; `null` = el hueco con la cámara).
+ * La foto del Polaroid lleva `data-foto` y `data-giro`: al exportar se dibuja aparte, en un lienzo (`exporta.js`), para que nunca falte en el PNG.
+ */
+function Personalidad({ item, f, cara, frase, propia }) {
+  const { r } = item;
+  const lista = Array.isArray(r) ? r : [];
+  switch (item.id) {
+    case 'p-italica':
+      if (cara === 1) {
+        const d = lista[0];
+        return (
+          <div className="n-in">
+            <div className="n-serif" style={{ fontSize: 15, opacity: 0.9 }}>{f.dia} {f.fechaCorta} · {f.hora24}</div>
+            <div className="n-serif n-it n-aj" data-n-max={256} style={{ fontSize: 64, lineHeight: 1, marginTop: 6, whiteSpace: 'nowrap' }}>{d.v}{d.u ? <span style={{ fontSize: '.4em' }}> {d.u}</span> : null}</div>
+            <div className="n-serif n-it n-envuelve" data-n-alto={52} style={{ fontSize: 20, marginTop: 4 }}>{f.nombre}</div>
+          </div>
+        );
+      }
+      return (
+        <div className="n-in">
+          <div className="n-serif n-it n-envuelve" data-n-alto={80} style={{ fontSize: 38, lineHeight: 1 }}>{f.nombre}</div>
+          <Grupo className="n-fila" style={{ gap: 18, marginTop: 14, alignItems: 'flex-start' }}>
+            {lista.map((d) => <div key={d.k}><div className="n-serif" style={{ fontSize: 13, opacity: 0.85 }}>{d.l}</div><div className="n-serif n-it n-aj" style={{ fontSize: 24, whiteSpace: 'nowrap' }}>{unidad(d)}</div></div>)}
+          </Grupo>
+        </div>
+      );
+    case 'p-maquina': {
+      const filas = [[MAQUINA.fecha, f.fechaNum], [MAQUINA.actividad, mayus(f.en)], ...lista.map((d) => [CLAVE_CORTA[d.k] ?? mayus(d.k), conUnidad(d)])];
+      return (
+        <div className="n-in" style={{ alignItems: 'flex-start', textAlign: 'left', padding: '26px 40px' }}>
+          <div className="n-mono" style={{ fontSize: 14, lineHeight: 1.75 }}>
+            {filas.map(([a, b]) => <div key={a} style={{ whiteSpace: 'nowrap' }}>{a}: <span className="n-der">{b}</span></div>)}
+          </div>
+        </div>
+      );
+    }
+    case 'p-reloj': {
+      const ds = cara === 1 ? lista.slice(2, 3) : lista.slice(0, 2);
+      return (
+        <div className="n-in">
+          <Grupo className="n-fila" style={{ gap: 22, alignItems: 'flex-start' }}>
+            {ds.map((d) => <div key={d.k}><div className="n-mono n-reloj n-aj" style={{ fontSize: cara === 1 ? 56 : 42 }}>{d.v}</div><div className="n-mono n-clave">{CLAVE_CORTA[d.k] ?? mayus(d.k)}</div></div>)}
+          </Grupo>
+        </div>
+      );
+    }
+    case 'p-frase': {
+      const t = tamDeFrase(frase);
+      return (
+        <div className="n-in">
+          <div className="n-serif n-it n-frase" data-n-alto={Math.ceil(40 * 1.02 * 3) + 2} style={{ fontSize: t }}>{frase}</div>
+          {lista.length > 0 && <div className="n-l" style={{ marginTop: 12 }}>{lista.map(unidad).join(' · ')}</div>}
+        </div>
+      );
+    }
+    case 'p-burbuja': {
+      // Cara 1: el mensaje que mandas (azul, piquito a la derecha). Cara 2: el que te mandan (gris, a la izquierda).
+      const mio = cara !== 1;
+      const fondo = mio ? '#2F7BFF' : '#E9E9EB';
+      const pie = pieDeBurbuja(f);
+      return (
+        <div className="n-in" style={{ alignItems: mio ? 'flex-end' : 'flex-start', padding: '22px 34px' }}>
+          <div className="n-burbuja">
+            <Piquito fondo={fondo} mio={mio} />
+            <div className="n-globo" data-n-alto={Math.ceil(19 * 1.22 * 3) + 20} style={{ background: fondo, color: mio ? '#fff' : '#111', ...(mio ? { borderBottomRightRadius: 16 } : { borderBottomLeftRadius: 16 }) }}>{frase}</div>
+          </div>
+          {pie && <div className="n-pie" style={mio ? { marginRight: 6 } : { marginLeft: 6 }}>{pie}</div>}
+        </div>
+      );
+    }
+    case 'p-barras':
+      return (
+        <div className="n-in">
+          <div className="n-mono n-entre" style={{ fontSize: 11 }}><span>{f.fechaNum}</span><span>{lista[0] ? conUnidad(lista[0]) : ''}</span></div>
+          <svg width="230" height="70" viewBox="0 0 230 70" aria-hidden="true" style={{ margin: '6px 0' }}><g fill="currentColor">{BARRAS.map(([x, w]) => <rect key={x} x={x} y="0" width={w} height="70" />)}</g></svg>
+          <div className="n-mono n-entre" style={{ fontSize: 10, opacity: 0.85 }}><span>{mayus(f.en)}{lista[1] ? ` · ${lista[1].v}${lista[1].u || ''}` : ''}</span><span>{lista[2]?.v ?? ''}</span></div>
+        </div>
+      );
+    case 'p-polaroid':
+      return (
+        <div className="n-in">
+          <div className="n-pola">
+            {propia ? <img className="n-pola-foto" data-foto="arriba" data-giro="-3" src={propia} alt="" /> : <div className="n-pola-hueco"><Camara />Toca para poner<br />una foto</div>}
+            <div className="n-serif n-it" style={{ color: '#222', fontSize: 22, padding: '10px 0 4px' }}>{f.dia} {f.fechaCorta}</div>
+            <div className="n-mono" style={{ color: '#444', fontSize: 10, paddingBottom: 12, minHeight: 15 }}>{lista.map(unidad).join(' · ')}</div>
+          </div>
+        </div>
+      );
+    case 'p-momento':
+      return cara === 1 ? (
+        <div className="n-in"><div className="n-serif" style={{ fontSize: 14, opacity: 0.9 }}>Fecha</div><div className="n-serif n-it n-envuelve" style={{ fontSize: 52, lineHeight: 1.05 }}>{f.fechaLarga}</div></div>
+      ) : (
+        <div className="n-in"><div className="n-serif" style={{ fontSize: 14, opacity: 0.9 }}>Empezó a las</div><div className="n-serif" style={{ fontSize: 78, lineHeight: 1 }}>{f.hora24}</div></div>
+      );
+    case 'p-dia': {
+      const d = r.g;
+      const num = (tam) => <div className="n-v" data-n-max={256} style={{ fontSize: tam }}>{d.v}{d.u ? <span className="n-u">{mayus(d.u)}</span> : null}</div>;
+      if (cara === 1) {
+        return (
+          <div className="n-in">
+            <div className="n-v" style={{ fontSize: 30, color: 'var(--stk-acento)' }}>{mayus(f.dia)}</div>
+            {f.ruta && <div style={{ margin: '8px 0' }}><Linea ruta={f.ruta} w={200} h={40} grosor={2.5} trazo="currentColor" /></div>}
+            {num(44)}
+          </div>
+        );
+      }
+      return (
+        <div className="n-in">
+          <div className="n-v n-angosta" data-n-max={256} style={{ fontSize: 78, letterSpacing: '-.02em' }}>{mayus(f.dia)}</div>
+          <div style={{ marginTop: 6 }}>{num(24)}</div>
+        </div>
+      );
+    }
+    case 'p-resaltador':
+      return <div className="n-in"><div className="n-serif n-resalta"><span>{fraseResaltador(f)}</span></div></div>;
+    case 'p-corazon': {
+      const d = r.g;
+      return <div className="n-in"><div className={`n-corazon${cara === 1 ? ' n-corazon-b' : ''}`}>♥ {unidad(d)}</div></div>;
+    }
+    case 'p-sello':
+      return <div className="n-in"><Sello f={f} d={r.g} /></div>;
+    default:
+      return null;
+  }
+}
+
+/* ---------- Los 6 de «Totales» ---------- */
+
+/** `t`: los totales de hoy (`totalesDe`). Sin kilómetros en la semana, las barras y la máquina cuentan minutos. */
+function Totales({ item, t, cara }) {
+  const vista = item.r?.vistas?.[cara] ?? 'una';
+  const s = t.semana;
+  const conKm = s.distM > 0;
+  const porDia = conKm ? s.km : s.minDia;
+  const M = Math.max(...porDia, 1);
+  const totalSemana = conKm ? { v: kmTexto(s.distM), u: 'km' } : { v: tiempoTexto(s.min) };
+  const entrenos = (n) => `${n} ${n === 1 ? 'entreno' : 'entrenos'}`;
+  switch (item.id) {
+    case 's-semana':
+      return vista === 'km' ? (
+        <div className="n-in n-d"><div className="n-l">Esta semana</div><Num d={{ v: kmTexto(s.distM), u: 'km' }} px={52} max={256} /></div>
+      ) : (
+        <div className="n-in n-d">
+          <div className="n-l">Esta semana</div>
+          <Grupo className="n-fila" style={{ gap: 24, marginTop: 6 }}><Par d={{ l: 'Entrenos', v: s.entrenos }} px={34} max={null} /><Par d={{ l: 'Tiempo', v: tiempoTexto(s.min).replace(' min', '') }} px={34} max={null} /></Grupo>
+        </div>
+      );
+    case 's-barras':
+      return (
+        <div className="n-in">
+          <div className="n-l">Esta semana</div>
+          <Num d={totalSemana} px={40} max={256} />
+          <div className="n-barras" style={{ gap: 12, height: 90, marginTop: 16 }}>
+            {porDia.map((k, i) => (
+              <div key={i} className="n-barra"><div style={{ height: k ? Math.max(8, (k / M) * 70) : 4, opacity: k ? 1 : 0.3 }} /><div className="n-l" style={{ fontSize: 11 }}>{DIAS_LETRA[i]}</div></div>
+            ))}
+          </div>
+        </div>
+      );
+    case 's-puntos': {
+      const m = t.mes;
+      return (
+        <div className="n-in">
+          <div className="n-entre" style={{ width: 224 }}><span className="n-l">{m.nombre}</span><span className="n-l">{entrenos(m.entrenos)}</span></div>
+          <div className="n-puntos">
+            {Array.from({ length: m.dias }, (_, i) => <i key={i} className={m.hechos.includes(i + 1) ? 'si' : undefined} />)}
+          </div>
+        </div>
+      );
+    }
+    case 's-mes': {
+      const m = t.mes;
+      return (
+        <div className="n-in">
+          <div className="n-v" style={{ fontSize: 30, letterSpacing: '-.01em' }}>{mayus(m.nombre)}</div>
+          {vista === 'km'
+            ? <div className="n-v n-angosta" data-n-max={256} style={{ fontSize: 92 }}>{kmTexto(m.distM)}<span className="n-u">KM</span></div>
+            : <><div className="n-v n-angosta" data-n-max={256} style={{ fontSize: 92 }}>{m.entrenos}</div><div className="n-l">{m.entrenos === 1 ? 'entreno' : 'entrenos'}</div></>}
+        </div>
+      );
+    }
+    case 's-maquina': {
+      const fila = (k) => (k ? (conKm ? `${k.toFixed(1)} KM` : `${Math.round(k)} MIN`) : '—');
+      return (
+        <div className="n-in" style={{ alignItems: 'stretch', textAlign: 'left', padding: '26px 46px' }}>
+          <div className="n-mono" style={{ fontSize: 13, lineHeight: 1.8 }}>
+            {DIAS_MAQUINA.map((d, i) => <div key={d} className="n-entre" style={{ width: '100%' }}><span>{d}</span><span>{fila(porDia[i])}</span></div>)}
+            <div className="n-entre n-total"><span>{MAQUINA.total}</span><span>{conKm ? `${kmTexto(s.distM)} KM` : mayus(tiempoTexto(s.min))}</span></div>
+          </div>
+        </div>
+      );
+    }
+    case 's-tarjeta':
+      return (
+        <div className="n-tj"><Topo w={288} h={408} />
+          <div className="n-cont" style={{ padding: '30px 18px 24px' }}>
+            <div className="n-l" style={{ letterSpacing: '.14em', fontWeight: 800 }}>{MAQUINA.semana}</div>
+            <Num d={totalSemana} px={58} max={252} style={{ marginTop: 8 }} />
+            <div className="n-barras" style={{ gap: 14, height: 120, marginTop: 20 }}>
+              {porDia.map((k, i) => (
+                  <div key={i} className="n-barra"><div className={k ? 'n-luz' : 'n-apagada'} style={{ height: k ? Math.max(8, (k / M) * 100) : 4 }} /><div className="n-l" style={{ fontSize: 11 }}>{DIAS_LETRA[i]}</div></div>
+              ))}
+            </div>
+            <Raya style={{ marginTop: 16 }} />
+            <Grupo className="n-fila" max={252} style={{ gap: 28 }}><Par d={{ l: 'Entrenos', v: s.entrenos }} px={24} lt={11.5} max={null} /><Par d={{ l: 'Tiempo', v: tiempoTexto(s.min) }} px={24} lt={11.5} max={null} /></Grupo>
+            <div style={{ marginTop: 'auto' }}><Marca px={24 * 0.82} /></div>
+          </div>
+        </div>
+      );
+    default:
+      return null;
+  }
+}
+
+/**
+ * El interior de un sticker nuevo por su familia. `cara`: la variante que se ve (`item.caras`). `frase` y `propia`: lo de los personalizables y el Polaroid.
+ * Los de Totales (`item.total`) reciben en `f` los totales de hoy (`totalesDe`), no la ficha de un entreno.
+ */
+export default function Nuevos({ item, f, color, cara = 0, frase = '', propia = null }) {
+  if (item.total) return <Totales item={item} t={f} cara={cara} />;
+  if (item.familia === 'personalidad') return <Personalidad item={item} f={f} cara={cara} frase={frase} propia={propia} />;
   if (item.familia === 'discreto') return <Discreto item={item} f={f} cara={cara} />;
   if (item.familia === 'runner') return <Runner item={item} f={f} color={color} />;
   return <Tarjeta item={item} f={f} />;

@@ -2,6 +2,7 @@ import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { domToBlob, domToCanvas } from 'modern-screenshot';
 import { cargaCatalogo } from '@/lib/iconosDeTipo';
+import { aImagenWeb } from '@/lib/imagen';
 import { LIENZOS, lienzoDe } from '@/lib/stickers/catalogo';
 import { tramoDe } from '@/lib/stickers/ruta';
 import Sticker from './Sticker';
@@ -32,17 +33,104 @@ async function monta(componente, props) {
   return { nodo, quita: () => { raiz.unmount(); caja.remove(); } };
 }
 
-/** El PNG de un sticker (`item` del catálogo, `f` la ficha, `color` uno de `COLORES`; `forma: 'historia'` y `foto` para «Con foto»). Un Blob `image/png`. */
-export async function pngDeSticker({ item, f, color, forma = item.forma, foto = null }) {
-  const { nodo, quita } = await monta(Sticker, { item, f, color, forma, foto });
+/*
+ * LA FOTO DEL CARRETE VA APARTE («Con foto» y el Polaroid; Andrés, 5 nov 2026: «Con foto no funciona en el iPhone»). `modern-screenshot` mete cada imagen dentro
+ * de un SVG y lo dibuja en un lienzo; WebKit no alcanza a decodificar una foto grande ahí adentro antes de dibujarlo y el PNG salía SIN la foto (medido en el
+ * WebKit de Playwright con perfil iPhone: una foto de 12 MP faltaba el 100 % de las veces; y en la web la CSP ni deja leer el `blob:`). Por eso cada `<img data-foto>`
+ * se esconde al rasterizar y se dibuja después con el lienzo, a su lugar exacto: «abajo» va debajo del sticker (la foto de fondo de «Con foto», con su velo
+ * encima) y «arriba» va encima (el Polaroid, girado `data-giro` grados). Así la foto siempre entra.
+ */
+function fotosAparte(nodo) {
+  const caja = nodo.getBoundingClientRect();
+  return [...nodo.querySelectorAll('img[data-foto]')].map((img) => {
+    const r = img.getBoundingClientRect();
+    return { img, cx: r.left + r.width / 2 - caja.left, cy: r.top + r.height / 2 - caja.top, w: img.offsetWidth, h: img.offsetHeight, giro: Number(img.dataset.giro) || 0, abajo: img.dataset.foto === 'abajo' };
+  });
+}
+/** Dibuja una foto recortada al centro (como `object-fit: cover`) en su caja, girada sobre su centro. */
+function dibujaFoto(ctx, { img, cx, cy, w, h, giro }) {
+  const iw = img.naturalWidth;
+  const ih = img.naturalHeight;
+  if (!iw || !ih) return;
+  const k = Math.max(w / iw, h / ih);
+  const sw = w / k;
+  const sh = h / k;
+  ctx.save();
+  ctx.translate(cx * ESCALA, cy * ESCALA);
+  ctx.rotate((giro * Math.PI) / 180);
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, (iw - sw) / 2, (ih - sh) / 2, sw, sh, (-w / 2) * ESCALA, (-h / 2) * ESCALA, w * ESCALA, h * ESCALA);
+  ctx.restore();
+}
+const VACIA = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+const pngDeLienzo = (lienzo) => new Promise((ok, falla) => { lienzo.toBlob((b) => (b ? ok(b) : falla(new Error('No se pudo dibujar el sticker'))), 'image/png'); });
+
+/**
+ * El PNG de un sticker (`item` del catálogo, `f` la ficha, `color` uno de `COLORES`; `forma: 'historia'` y `foto` para «Con foto»). Un Blob `image/png`.
+ * `cara`: la variante que se ve en el mosaico. `frase` y `propia`: la frase de «✎ Personalizar» y la foto del Polaroid.
+ */
+export async function pngDeSticker({ item, f, color, forma = item.forma, foto = null, cara = 0, frase = '', propia = null }) {
+  const { nodo, quita } = await monta(Sticker, { item, f, color, forma, foto, cara, frase, propia });
   try {
     const { w, h } = lienzoDe(item, forma);
-    const blob = await domToBlob(nodo, { width: w, height: h, scale: ESCALA, backgroundColor: null, type: 'image/png' });
-    if (!blob) throw new Error('No se pudo dibujar el sticker');
-    return blob;
+    const fotos = fotosAparte(nodo);
+    if (!fotos.length) {
+      const blob = await domToBlob(nodo, { width: w, height: h, scale: ESCALA, backgroundColor: null, type: 'image/png' });
+      if (!blob) throw new Error('No se pudo dibujar el sticker');
+      return blob;
+    }
+    // Cada foto se carga aparte para el lienzo; en el sticker se deja vacía (así `modern-screenshot` ni la lee: en la web, la CSP no lo dejaría).
+    const fuentes = await Promise.all(fotos.map(async ({ img }) => {
+      const im = new Image();
+      im.src = img.currentSrc || img.src;
+      await im.decode();
+      return im;
+    }));
+    fotos.forEach(({ img }) => { img.style.visibility = 'hidden'; img.src = VACIA; });
+    const sticker = await domToCanvas(nodo, { width: w, height: h, scale: ESCALA, backgroundColor: null });
+    const lienzo = document.createElement('canvas');
+    lienzo.width = sticker.width;
+    lienzo.height = sticker.height;
+    const ctx = lienzo.getContext('2d');
+    fotos.forEach((x, i) => { if (x.abajo) dibujaFoto(ctx, { ...x, img: fuentes[i] }); });
+    ctx.drawImage(sticker, 0, 0);
+    fotos.forEach((x, i) => { if (!x.abajo) dibujaFoto(ctx, { ...x, img: fuentes[i] }); });
+    return await pngDeLienzo(lienzo);
   } finally {
     quita();
   }
+}
+
+/*
+ * LA FOTO DEL CARRETE, LISTA PARA LOS STICKERS («Con foto» y el Polaroid). Se lee con el propio navegador (en el iPhone, la HEIC también, con el sistema) y se
+ * achica a 4 MP como mucho: alcanza para la historia a 900 × 1599 y pesa una fracción (una foto de 12 o 48 MP tal cual llenaba la memoria de cada mosaico).
+ * Si el navegador no la sabe leer (una HEIC en Chrome), pasa antes por `aImagenWeb`. Tope de 30 s: nunca se queda pensando sin avisar. Un Blob JPEG.
+ */
+const FOTO_PIXELES = 4e6;
+const FOTO_TOPE_MS = 30000;
+export function preparaFoto(archivo) {
+  const lee = async () => {
+    let mapa = await createImageBitmap(archivo).catch(() => null);
+    if (!mapa) mapa = await createImageBitmap(await aImagenWeb(archivo));
+    if (!mapa) throw new Error('No se pudo leer la foto');
+    try {
+      const k = Math.min(1, Math.sqrt(FOTO_PIXELES / (mapa.width * mapa.height)));
+      const lienzo = document.createElement('canvas');
+      lienzo.width = Math.max(1, Math.round(mapa.width * k));
+      lienzo.height = Math.max(1, Math.round(mapa.height * k));
+      const ctx = lienzo.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(mapa, 0, 0, lienzo.width, lienzo.height);
+      const blob = await new Promise((ok) => { lienzo.toBlob(ok, 'image/jpeg', 0.9); });
+      if (!blob) throw new Error('No se pudo leer la foto');
+      return blob;
+    } finally {
+      mapa.close?.();
+    }
+  };
+  let reloj;
+  const tope = new Promise((_, falla) => { reloj = setTimeout(() => falla(new Error('La foto tardó demasiado')), FOTO_TOPE_MS); });
+  return Promise.race([lee(), tope]).finally(() => clearTimeout(reloj));
 }
 
 /** El nombre del archivo: «traininglab-firma.png», «traininglab-eco.mp4». */

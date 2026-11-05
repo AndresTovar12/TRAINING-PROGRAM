@@ -17,12 +17,14 @@ const MESES_ING = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'
 // El día y la fecha del Boleto (en español, como la maqueta aprobada): «martes» y «20 oct».
 const DIAS_ES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 const MESES_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+// «20 de octubre» (Un momento) y el mes de Totales («Noviembre»).
+export const MESES_LARGOS_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const MESES_LARGOS_ING = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const DIA_MS = 86400000;
 
 /* El día LOCAL de quien entrenó (`desfaseMin`: la diferencia con UTC que guardó su teléfono; sin ella, la del teléfono de quien mira).
-   `n` es el número de día desde 1970: dos fechas con el mismo `n` son el mismo día; `sem` es 0 el lunes … 6 el domingo. */
-function diaLocal(ms, desfaseMin) {
+   `n` es el número de día desde 1970: dos fechas con el mismo `n` son el mismo día; `sem` es 0 el lunes … 6 el domingo. También lo usa `totales.js`. */
+export function diaLocal(ms, desfaseMin) {
   if (num(ms) === null) return null;
   const x = num(desfaseMin) !== null ? new Date(ms + desfaseMin * 60000) : null;
   const [y, m, d, dow, h, mi] = x
@@ -110,7 +112,7 @@ const momentoDe = (h) => (h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening')
  * LA FICHA. `entreno`, ya normalizado (ver `entrenoDeActividad` y `entrenoDeSesion`):
  *   { deporte, inicioMs, desfaseMin, duracionS, distanciaM, fcMedia, kcal, desnivelM, ruta, splits, zonasS, guiado, tipo: { nombre, icono },
  *     nombre, nombreEn, coach, plan, record, racha, unidadPeso }
- * Devuelve `{ datos, hora, fecha, dia, fechaCorta, nombre, en, titulo, tipo, coach, plan, ruta, splits, lista, sinDistancia, zonas, record, racha }`.
+ * Devuelve `{ datos, hora, fecha, dia, fechaCorta, fechaNum, hora24, fechaLarga, deporte, nombre, en, titulo, tipo, coach, plan, ruta, splits, lista, sinDistancia, zonas, record, racha }`.
  */
 export function ficha(entreno) {
   const e = entreno ?? {};
@@ -166,6 +168,11 @@ export function ficha(entreno) {
     fecha: `${MESES_ING[mes]} ${dia}, ${anio}`,
     dia: DIAS_ES[new Date(Date.UTC(anio, mes, dia)).getUTCDay()],
     fechaCorta: `${dia} ${MESES_ES[mes]}`,
+    // Los 12 con personalidad (5 nov 2026): «20.10.26» (máquina, código de barras, sello), «7:12» o «18:40» (Un momento) y «20 de octubre».
+    fechaNum: `${dos(dia)}.${dos(mes + 1)}.${dos(anio % 100)}`,
+    hora24: `${h}:${dos(mi)}`,
+    fechaLarga: `${dia} de ${MESES_LARGOS_ES[mes]}`,
+    deporte: dep,
     nombre,
     en,
     titulo: [momentoDe(h), en],

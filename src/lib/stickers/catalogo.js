@@ -5,7 +5,8 @@
    no pueden mostrar «Time» las dos). Así sirve para cualquier actividad, incluso las que invente el coach, y nunca sale un «N/A».
 
    Aquí solo están los datos de cada sticker (forma, familia, ranuras); cómo se dibuja vive en `features/stickers/Sticker.jsx`.
-   Los 35 de la tabla de la especificación (fase 1: 6; fase 2: los otros 29), en su orden, detrás de los 19 nuevos del 5 nov 2026 (8 discretos, 6 runner, 5 tarjetas). El volumen solo entra en «Lista» y «Columna».
+   Los 35 de la tabla de la especificación (fase 1: 6; fase 2: los otros 29), en su orden, detrás de los 31 nuevos del 5 nov 2026 (8 discretos, 6 runner, 5 tarjetas
+   y 12 con personalidad). El volumen solo entra en «Lista» y «Columna». La pestaña «Totales» tiene su propio catálogo (más abajo), con la semana y el mes.
 
    Este archivo no importa nada de la app: lo cargan las pruebas de Node (`scripts/prueba-stickers.mjs`). */
 
@@ -19,8 +20,8 @@ export const LIENZOS = { ancho: { w: 300, h: 200 }, alto: { w: 300, h: 330 }, hi
 /** El lienzo de UN sticker: el suyo (los nuevos de runner y tarjeta miden 380, 420 o 530 de alto), o el de su forma (o la «historia» de Con foto). */
 export const lienzoDe = (item, forma = item.forma) => (forma === 'historia' ? LIENZOS.historia : item.lienzo ?? LIENZOS[forma] ?? LIENZOS.ancho);
 
-/** Las tres familias de la tanda del 5 nov 2026 (19 stickers que van al frente de la hoja, ver docs/stickers.md): se dibujan centrados, en `Nuevos.jsx`. */
-export const FAMILIAS_NUEVAS = ['discreto', 'runner', 'tarjeta'];
+/** Las familias de la tanda del 5 nov 2026 (los 31 que van al frente de la hoja y los 6 de Totales, ver docs/stickers.md): se dibujan centrados, en `Nuevos.jsx`. */
+export const FAMILIAS_NUEVAS = ['discreto', 'runner', 'tarjeta', 'personalidad', 'totales'];
 /** Un sticker nuevo lleva la pastilla «Nuevo» 30 días desde el build en que salió (`desde`, en el catálogo: no en la base). */
 export const NUEVO_DIAS = 30;
 export const esNuevo = (item, ahora = Date.now()) => {
@@ -44,14 +45,70 @@ export const TEMAS_TARJETA = {
   coral: { fondo: 'radial-gradient(120% 80% at 50% 0%, #3B1610 0%, #200A07 50%, #120504 100%)', borde: '#FF6B4A', brillo: 'rgba(255,107,74,.55)', brillo2: 'rgba(255,107,74,.16)', texto: '#FFFFFF', etiqueta: '#FFE4DC', acento: '#FF6B4A', ruta: '#FF7A57', halo: '#FF6B4A', nucleo: '#FFD3C6', topo: '#D9573C', linea: '#FF6B4A', apagado: '#4A1C14' },
 };
 
-// Los 19 de la tanda del 5 nov 2026 llevan esta fecha: durante 30 días muestran «Nuevo».
+// Los de la tanda del 5 nov 2026 llevan esta fecha: durante 30 días muestran «Nuevo».
 const NUEVO = '2026-11-05';
 const L420 = { w: 300, h: 420 };
+const lz = (h) => ({ w: 300, h });
+
+/* LAS FRASES («✎ Personalizar», 5 nov 2026). English primero. La que sale de entrada es «pov: locked in»; la tuya, hasta 40 letras. */
+export const FRASES = {
+  en: ['pov: locked in', 'one more mile', 'built different', 'rain or shine', 'earned it', 'quiet miles', 'therapy session', 'no days off', 'slow but steady', 'main character run'],
+  es: ['mente fuerte, piernas cansadas', 'otro día, otro kilómetro', 'hoy sí fui', 'terapia de los martes', 'lo hice por mí', 'sin excusas', 'mis piernas opinan distinto', 'modo bestia', 'poco a poco', 'ni la lluvia me paró'],
+};
+export const FRASE_INICIAL = FRASES.en[0];
+export const FRASE_MAX = 40;
+
+/**
+ * El tamaño de la frase de «Frase grande» (serif itálica, 40 px, hasta 3 renglones en 260 px). Una frase larga baja de tamaño para caber en 3 renglones.
+ * Cuenta con una letra promedio de 0.46 em (la itálica de Instrument Serif es angosta: medida en WebKit, ~0.40 em) y parte por palabras, como el navegador.
+ * Al dibujarse, `Sticker.jsx` vuelve a medir y la baja más si hiciera falta (`data-n-alto`).
+ */
+export function tamDeFrase(frase, { px = 40, ancho = 260, renglones = 3, em = 0.46, min = 22 } = {}) {
+  for (let t = px; t > min; t -= 1) if (renglonesDe(frase, ancho / (t * em)) <= renglones) return t;
+  return min;
+}
+/** Cuántos renglones ocupa `frase` con `cabe` letras por renglón (parte por palabras; una palabra más larga que el renglón se parte). */
+export function renglonesDe(frase, cabe) {
+  const max = Math.max(1, Math.floor(cabe));
+  let n = 1;
+  let usado = 0;
+  for (const p of String(frase).trim().split(/\s+/)) {
+    const largo = p.length;
+    if (usado === 0) { n += Math.floor(Math.max(0, largo - 1) / max); usado = largo % max || max; continue; }
+    if (usado + 1 + largo <= max) { usado += 1 + largo; continue; }
+    n += 1 + Math.floor(Math.max(0, largo - 1) / max);
+    usado = largo % max || max;
+  }
+  return n;
+}
+
+/** El verbo de la Burbuja según el deporte: «Corrió 5.08 km», «Nadó 1,500 m», «Entrenó 18 series», «Entrenó 52 min». `null` si no hay qué decir. */
+const VERBOS = { correr: 'Corrió', trail: 'Corrió', caminar: 'Caminó', senderismo: 'Caminó', bici: 'Pedaleó', natacion: 'Nadó', remo: 'Remó' };
+export function pieDeBurbuja(f) {
+  const d = f.datos;
+  if (d.dist) return `${VERBOS[f.deporte] ?? 'Recorrió'} ${d.dist.v} ${d.dist.u}`;
+  if (d.series) return `Entrenó ${d.series.v} series`;
+  if (d.min) return `Entrenó ${d.min.v}${d.min.u ? ` ${d.min.u}` : ''}`;
+  return null;
+}
+/** La frase del Resaltador: «5.08 kilómetros en 26:33», «18 series en 52 min», «60 min de entreno». `null` si no hay datos. */
+const UNIDAD_LARGA = { km: 'kilómetros', m: 'metros' };
+export function fraseResaltador(f) {
+  const d = f.datos;
+  const min = d.min ? `${d.min.v}${d.min.u ? ` ${d.min.u}` : ''}` : null;
+  if (d.dist) return `${d.dist.v} ${UNIDAD_LARGA[d.dist.u] ?? d.dist.u}${d.tiempo ? ` en ${d.tiempo.v}` : ''}`;
+  if (d.series) return `${d.series.v} series${min ? ` en ${min}` : ''}`;
+  if (min) return `${min} de entreno`;
+  return null;
+}
+/** Las claves cortas en inglés de la Máquina de escribir («DIST: 5.08 KM»). */
+export const CLAVE_CORTA = { dist: 'DIST', ritmo: 'PACE', vel: 'SPD', tiempo: 'TIME', min: 'TIME', elev: 'ELEV', series: 'SETS', volumen: 'VOL', kcal: 'KCAL', fc: 'BPM', ejercicios: 'EXER', largos: 'LAPS' }; // estilo-ok: claves a máquina del sticker (maqueta)
 
 /**
  * Cada sticker: `id`, `nombre`, `familia` (identidad, datos, tipo… y las nuevas: discreto, runner, tarjeta), `forma` (ancho | alto), `identidad` (también sale en «Con foto»),
  * `ranuras` ({ nombre: [claves] }), `elige` ([claves, n, mín.]) y `obliga(f)` (lo que no puede faltar). El orden es el de la tabla de la especificación.
- * Solo los nuevos: `lienzo` (su tamaño, si no es el de su forma), `desde` (cuándo salió: «Nuevo» 30 días) y `variantes` (cada dato de `elige` es una cara, para el carrusel).
+ * Solo los nuevos: `lienzo` (su tamaño, si no es el de su forma), `desde` (cuándo salió: «Nuevo» 30 días), `variantes` (cada dato de `elige` es una cara, para el carrusel),
+ * `caras` (cuántas variantes: un número o `(f, r) => n`), `perso` (lleva la frase), `fija` (no cambia con los colores) y `conFoto` (el Polaroid).
  */
 export const STICKERS = [
   // Los 19 nuevos, al frente de la hoja (5 nov 2026): primero los 8 discretos, luego los 6 runner y las 5 tarjetas. Los de ruta no salen sin ruta.
@@ -74,6 +131,20 @@ export const STICKERS = [
   { id: 't-sin-ruta', nombre: 'Tarjeta sin ruta', familia: 'tarjeta', forma: 'alto', lienzo: { w: 300, h: 530 }, desde: NUEVO, elige: [PREF, 3] },
   { id: 't-chica', nombre: 'Tarjeta chica', familia: 'tarjeta', forma: 'ancho', desde: NUEVO, elige: [PREF, 2] },
   { id: 't-record', nombre: 'Tarjeta de récord', familia: 'tarjeta', forma: 'alto', lienzo: { w: 300, h: 380 }, desde: NUEVO, obliga: (f) => !!f.record },
+  // Los 12 con personalidad (5 nov 2026): después de las tarjetas y antes de los 35. `caras`: cuántas variantes (carrusel del mosaico); `perso`: lleva frase
+  // («✎ Personalizar»); `fija`: no cambia con los cuatro colores; `conFoto`: lleva tu foto (el Polaroid).
+  { id: 'p-italica', nombre: 'Itálica', familia: 'personalidad', forma: 'ancho', lienzo: lz(260), desde: NUEVO, caras: 2, elige: [PREF, 3, 1] },
+  { id: 'p-maquina', nombre: 'Máquina de escribir', familia: 'personalidad', forma: 'ancho', lienzo: lz(260), desde: NUEVO, elige: [PREF, 4, 1] },
+  { id: 'p-reloj', nombre: 'Reloj digital', familia: 'personalidad', forma: 'ancho', desde: NUEVO, caras: (f, r) => (r.length >= 3 ? 2 : 1), elige: [PREF, 3, 1] },
+  { id: 'p-frase', nombre: 'Frase grande', familia: 'personalidad', forma: 'ancho', lienzo: lz(220), desde: NUEVO, perso: true, elige: [PREF, 2, 0] },
+  { id: 'p-burbuja', nombre: 'Burbuja', familia: 'personalidad', forma: 'ancho', lienzo: lz(180), desde: NUEVO, perso: true, fija: true, caras: 2 },
+  { id: 'p-barras', nombre: 'Código de barras', familia: 'personalidad', forma: 'ancho', desde: NUEVO, elige: [PREF, 3, 1] },
+  { id: 'p-polaroid', nombre: 'Polaroid', familia: 'personalidad', forma: 'alto', desde: NUEVO, fija: true, conFoto: true, elige: [PREF, 2, 0] },
+  { id: 'p-momento', nombre: 'Un momento', familia: 'personalidad', forma: 'ancho', desde: NUEVO, caras: 2 },
+  { id: 'p-dia', nombre: 'Día gigante', familia: 'personalidad', forma: 'ancho', lienzo: lz(220), desde: NUEVO, caras: 2, ranuras: { g: PREF } },
+  { id: 'p-resaltador', nombre: 'Resaltador', familia: 'personalidad', forma: 'ancho', lienzo: lz(180), desde: NUEVO, fija: true, obliga: (f) => !!fraseResaltador(f) },
+  { id: 'p-corazon', nombre: 'Corazón', familia: 'personalidad', forma: 'ancho', lienzo: lz(160), desde: NUEVO, fija: true, caras: 2, ranuras: { g: PREF } },
+  { id: 'p-sello', nombre: 'Sello redondo', familia: 'personalidad', forma: 'alto', lienzo: lz(300), desde: NUEVO, ranuras: { g: PREF } },
   // Los 35 de siempre.
   // Identidad: la tipografía es la marca.
   { id: 'titular', nombre: 'Titular', familia: 'identidad', forma: 'alto', identidad: true,
@@ -162,11 +233,45 @@ export function catalogo(f, lista = STICKERS) {
     }
     salida.push({
       id: s.id, nombre: s.nombre, familia: s.familia, forma: s.forma, identidad: !!s.identidad, r,
-      // Solo los nuevos: su tamaño, desde cuándo son «Nuevo» y cuántas caras tiene (una por dato, en `Un dato`).
-      ...(s.lienzo ? { lienzo: s.lienzo } : null), ...(s.desde ? { desde: s.desde } : null), ...(s.variantes && Array.isArray(r) ? { caras: r.length } : null),
+      // Solo los nuevos: su tamaño, desde cuándo son «Nuevo», cuántas caras tiene (una por dato, en `Un dato`) y lo de los 12 con personalidad.
+      ...(s.lienzo ? { lienzo: s.lienzo } : null), ...(s.desde ? { desde: s.desde } : null), ...extras(s, f, r),
     });
   }
   return salida;
+}
+
+/** Lo que un sticker nuevo trae además: sus caras (si son más de una) y las marcas de personalidad. */
+function extras(s, f, r) {
+  const x = {};
+  const caras = s.variantes && Array.isArray(r) ? r.length : typeof s.caras === 'function' ? s.caras(f, r) : s.caras;
+  if (caras) x.caras = caras;
+  if (s.perso) x.perso = true;
+  if (s.fija) x.fija = true;
+  if (s.conFoto) x.conFoto = true;
+  return x;
+}
+
+/*
+ * LOS 6 DE «TOTALES» (5 nov 2026): la semana y el mes de hoy, de todos los entrenos (`totales.js`). En este orden. Los de la semana no salen sin entrenos esta
+ * semana; sin ninguno en el mes no sale nada (la pestaña lo dice). Sus caras dependen de lo que hay: sin kilómetros, «Esta semana» y «Mes gigante» enseñan solo
+ * entrenos y tiempo (`r.vistas`). La tarjeta de la semana es de la familia tarjeta (los cuatro temas).
+ */
+export const TOTALES = [
+  { id: 's-semana', nombre: 'Esta semana', familia: 'totales', forma: 'ancho', semana: true, vistas: (t) => (t.semana.distM > 0 ? ['km', 'entrenos'] : ['entrenos']) },
+  { id: 's-barras', nombre: 'Semana en barras', familia: 'totales', forma: 'ancho', lienzo: lz(260), semana: true },
+  { id: 's-puntos', nombre: 'Mes en puntos', familia: 'totales', forma: 'alto', lienzo: lz(300) },
+  { id: 's-mes', nombre: 'Mes gigante', familia: 'totales', forma: 'ancho', lienzo: lz(240), vistas: (t) => (t.mes.distM > 0 ? ['km', 'entrenos'] : ['entrenos']) },
+  { id: 's-maquina', nombre: 'Semana a máquina', familia: 'totales', forma: 'ancho', lienzo: lz(280), semana: true },
+  { id: 's-tarjeta', nombre: 'Tarjeta de la semana', familia: 'tarjeta', forma: 'alto', lienzo: L420, semana: true, total: true },
+];
+
+/** El catálogo de Totales con los totales de hoy (`totalesDe`): `[]` si no hubo ningún entreno en el mes (ni en la semana, que a veces empieza en el mes de antes). Cada uno con `r: { vistas }`, `caras` y `total: true`. */
+export function catalogoDeTotales(t) {
+  if (!t || (t.mes.entrenos === 0 && t.semana.entrenos === 0)) return [];
+  return TOTALES.filter((s) => (s.semana ? t.semana.entrenos > 0 : t.mes.entrenos > 0)).map((s) => {
+    const vistas = s.vistas ? s.vistas(t) : ['una'];
+    return { id: s.id, nombre: s.nombre, familia: s.familia, forma: s.forma, identidad: false, total: true, r: { vistas }, ...(s.lienzo ? { lienzo: s.lienzo } : null), desde: NUEVO, ...(vistas.length > 1 ? { caras: vistas.length } : null) };
+  });
 }
 
 /** La frase corta debajo del número grande: «27:14 at 5:27/km», «48:05 · 610 kcal», «48:05 · Fuerza». Nunca repite el número de arriba. */
