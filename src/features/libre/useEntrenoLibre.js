@@ -146,7 +146,7 @@ export function useCronometroLibre(userId) {
   // Se recargó la página a media carrera grabando su traza: se sigue grabando la misma.
   const inicioConGps = cronometro?.gps ? cronometro.inicio : null;
   useEffect(() => {
-    if (inicioConGps != null && trazaEncendida() && !grabaTraza(inicioConGps)) empiezaTraza({ deporte: vivo.current?.deporte, desplazamiento: vivo.current?.desplazamiento ?? null, inicioMs: inicioConGps, app: enLaApp() ? 'iphone' : 'web' });
+    if (inicioConGps != null && trazaEncendida() && !grabaTraza(inicioConGps)) empiezaTraza({ deporte: vivo.current?.deporte, desplazamiento: vivo.current?.desplazamiento ?? null, actividad: vivo.current?.actividad?.id ?? null, inicioMs: inicioConGps, app: enLaApp() ? 'iphone' : 'web' });
   }, [inicioConGps]);
   useEffect(() => {
     if (!conGps) return undefined;
@@ -224,7 +224,7 @@ export function useCronometroLibre(userId) {
       };
       enCurso.current = { lecturas: [], metros: 0, arranque: nuevo.inicio, reanudadoEn: null, pausadoEn: null };
       // «Guardar traza del GPS» (cuentas de prueba, Ajustes de la carrera): esta carrera se graba punto por punto.
-      if (gps && trazaEncendida()) empiezaTraza({ deporte, desplazamiento: nuevo.desplazamiento ?? null, inicioMs: nuevo.inicio, app: enLaApp() ? 'iphone' : 'web' });
+      if (gps && trazaEncendida()) empiezaTraza({ deporte, desplazamiento: nuevo.desplazamiento ?? null, actividad: actividad?.id ?? null, inicioMs: nuevo.inicio, app: enLaApp() ? 'iphone' : 'web' });
       cambia(nuevo);
     },
     pausa: () => cambia(pausar(cronometro)),

@@ -187,9 +187,10 @@ export function biciSemaforo() {
     nota: 'B6.7: bici a 5 m/s; frena en 3 s y para en el semáforo a los 40 s; 30 s parada entre edificios (error 25 m, el GPS inventa 0.9 m/s), sin «en bici»; a los 70 s pedalea otra vez (5 m/s en 2 s).',
     real: (t) => ({ y: y(t), vel: vel(t), gps: t >= 40 && t < 70 ? 'deriva' : 'bueno' }), rebote: () => 0.05,
     eventos: [actividad(1, 'desconocido', 0, 0)],
-    // El contrato pide la pausa en ≤ 4 s. Con sus reglas (desplazamiento de 5 s < 1.0 m/s durante 3 s) no se puede: el promedio de 5 s baja de 1.0 m/s
-    // hasta ~3 s después de frenar y luego faltan 3 s más. Queda marcado como pendiente: la prueba lo dice sin fallar, hasta que el dueño decida.
-    paradas: [[40, 70]], esperado: { pausaAntesDe: 44, sinReanudarAntesDe: 70, reanudaAntesDe: 73, pendiente: ['pausaAntesDe'] },
+    // El contrato pide la pausa en ≤ 4 s (3 nov) y luego ≤ 3 s (5 nov). Aquí, parada, todas las lecturas traen error de 25 m: para esas manda el desplazamiento
+    // de 5 s (punto 2 del 5 nov), que baja de 1.0 m/s ~3 s después de frenar y luego pide 3 s más. Queda marcado como pendiente: la prueba lo dice sin fallar,
+    // hasta que el dueño decida. Con lecturas buenas (error ≤ 20 m), la bici pausa con la velocidad del iPhone: ver `biciParaDeGolpe`.
+    paradas: [[40, 70]], esperado: { pausaAntesDe: 43, sinReanudarAntesDe: 70, reanudaAntesDe: 73, pendiente: ['pausaAntesDe'] },
   });
 }
 
@@ -203,8 +204,45 @@ export function biciLecturaMala() {
   });
 }
 
+/* BICI CON LA VELOCIDAD DEL IPHONE (5 nov 2026): con lectura buena, pausa con < 1.5 m/s 2 s seguidos. Lecturas buenas (error 5-7 m), sin «en bici». ---------- */
+const bici = (nombre, nota, segundos, real, esperado, paradas = []) => traza({
+  nombre, nota: `5 nov: ${nota}`, deporte: 'bici', desplazamiento: 'ruedas', segundos, semilla: nombre.length * 31, real, rebote: () => 0.05,
+  eventos: [actividad(1, 'desconocido', 0, 0)], paradas, esperado,
+});
+
+/** a) Bici a 6 m/s; para de golpe a los 40 s y el iPhone da 0.9 m/s. Pausa en ≤ 3 s. */
+export const biciParaDeGolpe = () => bici(
+  'bici-para-de-golpe-sintetica.json', 'bici a 6 m/s; para de golpe a los 40 s y el iPhone da ~0.9 m/s (buena señal).', 70,
+  (t) => (t < 40 ? { y: t * 6, vel: 6, gps: 'bueno' } : { y: 240, vel: 0.9, gps: 'bueno' }), { pausaAntesDe: 43 }, [[40, 70]],
+);
+
+/** b) Bici a 6 m/s con UNA lectura a 0.5 m/s (a los 60.4 s). No pausa. */
+export const biciUnaLenta = () => bici(
+  'bici-una-lectura-lenta-sintetica.json', 'bici a 6 m/s, 2 min; la lectura de los 60.4 s da 0.5 m/s.', 120,
+  (t) => ({ y: t * 6, vel: Math.abs(t - 60.4) < 0.01 ? 0.5 : 6, gps: 'bueno' }), { sinPausas: true },
+);
+
+/** c) Bici a 6 m/s; dos lecturas seguidas a 1.2 m/s (60.4 y 61.4 s; baja de verdad a 1.2 m/s de los 60 a los 62 s) y luego 6 otra vez. No pausa: son 1 s, no 2. */
+export const biciDosLentas = () => bici(
+  'bici-dos-lecturas-lentas-sintetica.json', 'bici a 6 m/s, 2 min; de los 60 a los 62 s va a 1.2 m/s (dos lecturas: 60.4 y 61.4 s) y luego 6 otra vez.', 120,
+  (t) => (t < 60 ? { y: t * 6, vel: 6, gps: 'bueno' } : t < 62 ? { y: 360 + (t - 60) * 1.2, vel: 1.2, gps: 'bueno' } : { y: 362.4 + (t - 62) * 6, vel: 6, gps: 'bueno' }),
+  { sinPausas: true },
+);
+
+/** d) Bici a 6 m/s 20 s y luego parada 60 s; el iPhone brinca entre 0.5 y 1.4 m/s. Pausa y sigue en pausa. */
+export function biciParadaBrincando() {
+  const r = azar(41);
+  return bici(
+    'bici-parada-brincando-sintetica.json', 'bici a 6 m/s 20 s y parada de los 20 a los 80 s; el iPhone brinca entre 0.5 y 1.4 m/s.', 80,
+    (t) => (t < 20 ? { y: t * 6, vel: 6, gps: 'bueno' } : { y: 120, vel: 0.5 + r() * 0.9, gps: 'bueno' }), { pausaAntesDe: 23, sinReanudarAntesDe: 80 }, [[20, 80]],
+  );
+}
+
 /** Las que se escriben en `scripts/trazas/`. */
-export const ESCRITAS = [calle, podometroCallado, girarElTelefono, pararDeGolpe, moverElTelefono, volverACorrer, tunel, biciSemaforo, biciLecturaMala];
+export const ESCRITAS = [
+  calle, podometroCallado, girarElTelefono, pararDeGolpe, moverElTelefono, volverACorrer, tunel, biciSemaforo, biciLecturaMala,
+  biciParaDeGolpe, biciUnaLenta, biciDosLentas, biciParadaBrincando,
+];
 
 // `node scripts/trazas-sinteticas.mjs`: escribe las de `scripts/trazas/`.
 if (import.meta.url === `file://${process.argv[1]}`) {
