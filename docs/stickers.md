@@ -14,8 +14,23 @@ Lo que el atleta saca de la app para su historia de Instagram (o para pegar enci
 3. **El dibujo** (`src/features/stickers/Sticker.jsx` y `stickers.css`). HTML + CSS con Bricolage Grotesque. Los números bajan de tamaño hasta caber; nunca se cortan ni se envuelven.
 4. **La exportación** (`src/features/stickers/exporta.js`). El sticker se dibuja otra vez fuera de la pantalla, a su tamaño real, y `modern-screenshot` lo rasteriza a 3× con fondo transparente: 900 × 600 (ancho) o 900 × 990 (alto). En «Con foto», 900 × 1599 con la foto debajo.
    - **Video:** 3 s, 900 × 990, mp4. Se arman capas con el mismo dibujo y se codifican cuadro por cuadro con `mediabunny` (el codificador H.264 del teléfono): cada cuadro con su tiempo exacto. Si el teléfono no sabe, se graba en vivo con `MediaRecorder`. Un video no puede ser transparente: va sobre el fondo de la hoja (blanco con la tinta negra).
-5. **La hoja** (`src/features/stickers/HojaDeStickers.jsx`). Pestañas Stickers · Con foto · Video. Tocar = copiar. Mantener 0.6 s = guardar. Mover el dedo = desplazar. En Video, tocar o mantener guarda el video. Se cierra con «Cerrar» o arrastrando la cabecera hacia abajo.
+5. **La hoja** (`src/features/stickers/HojaDeStickers.jsx`). Mosaicos cuadrados, dibujados conforme se desplazan. Pestañas Stickers · Con foto · Video. Tocar = copiar. Mantener 0.6 s = guardar. Mover el dedo = desplazar. En Video, tocar o mantener guarda el video. Se cierra con «Cerrar» o arrastrando la cabecera hacia abajo.
    - **Con foto:** solo los de identidad (Titular, Titular · récord, Firma, Eco, Grande) sobre una foto 9:16: tres de ejemplo (dibujadas) o una del carrete. La del carrete se queda en memoria (un enlace `blob:` local): nunca se sube.
+
+## Los 19 de arriba (5 nov 2026, parte 1 de la especificación `docs/superpowers/specs/2026-11-05-stickers-nuevos.md`)
+
+Maqueta aprobada: https://claude.ai/artifact/Ae6gZVupudXto8n1sKdj1j (versión 4). Manda sobre este texto en medidas y colores.
+
+- **El orden de la hoja:** una sola lista, sin rótulos: 8 discretos, 6 runner, 5 tarjetas y luego los 35 de siempre. En el catálogo (`STICKERS`) los 19 van primero.
+- **Dónde viven:** los datos y las ranuras en `lib/stickers/catalogo.js` (ids `d-…` discretos, `r-…` runner, `t-…` tarjetas; `familia: 'discreto' | 'runner' | 'tarjeta'`); el dibujo en `features/stickers/Nuevos.jsx` (centrados, etiqueta arriba y número abajo, unidades del color del número, firma «Training Lab»); el CSS al final de `stickers.css` (clases `n-…`).
+- **Su tamaño:** cada uno trae su `lienzo` si no es el de su forma: discretos 300 × 200 (los de línea, 330), runner 330 o 420, tarjetas 530, 380, 530, 200 y 380. `lienzoDe(item, forma)` lo da; `exporta.js` lo usa para rasterizar a 3×.
+- **Ranuras:** con `PREF` como los demás. Un sticker sale con todas sus ranuras llenas (Seis acepta una menos; Columna larga y Marco, algunas menos); los de línea o ruta (`obliga`) no salen sin ruta; la tarjeta de récord solo con `f.record`; el Boleto necesita al menos un dato. «Un dato» tiene tres caras (`caras`): el primer, el segundo y el tercer dato de `PREF`. La parte 1 dibuja la primera; el carrusel para ver las otras es de la parte 2 (`Sticker` ya acepta `cara`).
+- **«Nuevo»:** cada uno trae `desde: '2026-11-05'`; `esNuevo(item)` es verdadero 30 días (`NUEVO_DIAS`). La pastilla azul va arriba a la derecha del mosaico. La fecha vive en el catálogo, no en la base.
+- **Las tarjetas:** NO son transparentes (fondo, borde con brillo, curvas de nivel). Cambian con los cuatro colores: `TEMAS_TARJETA` (fondo, borde, brillo, texto, etiqueta, acento, ruta, halo, núcleo, topo, línea, apagado); `Sticker.jsx` los pone como variables `--tj-*`. La ruta es un neón (halo de 12 px al 55 % con desenfoque de 5, línea de 6 px, núcleo de 1.6 px) y sin punto al final. No entran en «Con foto» (no son `identidad`).
+- **Trampa de WebKit:** `box-shadow` sale corrido y como un bloque duro al rasterizar con `modern-screenshot`. El brillo de la tarjeta y de la pastilla «RÉCORD» va con `filter: drop-shadow`, y el brillo de adentro con un borde desenfocado (`.n-tj::before`). No usar `box-shadow` con desenfoque dentro de un sticker. Tampoco `filterUnits` por defecto en el neón: la ruta recta (sin alto) desaparecería; va en unidades de usuario.
+- **Que quepa:** los valores marcados `data-n-max` bajan de tamaño hasta caber (`ajustaSticker`), cada uno solo o, en una fila o rejilla, todos juntos (un maratón: «42.20 km  3:58:41»).
+- **La hoja:** los mosaicos de «Stickers» son cuadrados (como la maqueta). Se DIBUJAN conforme se desplazan (`IntersectionObserver` a 250 px de la vista; ya dibujados se quedan): con los 52 stickers de un entreno completo, dibujarlos todos al abrir bloqueaba WebKit ~2 s.
+- **Textos:** las etiquetas y los datos vienen de la ficha (en inglés, como siempre). El día y la fecha del Boleto y la tarjeta de récord, en español como la maqueta (`f.dia`: «martes»; `f.fechaCorta`: «20 oct»). La pastilla dice «RÉCORD».
 
 ## La fuente
 
@@ -102,7 +117,7 @@ Prototipo: https://claude.ai/artifact/EFSp16EiF1rVYb5U7emtNE (los seis caminos d
 
 ## Pruebas
 
-- `node scripts/prueba-stickers.mjs`: la ficha, las ranuras y el catálogo (las pruebas de aceptación que son puras).
+- `node scripts/prueba-stickers.mjs`: la ficha, las ranuras y el catálogo (las pruebas de aceptación que son puras), incluidos los 19 nuevos: su orden antes de los 35, los de ruta sin ruta, sin «N/A», la ranura vacía y la marca «Nuevo».
 - Lo que se pinta se revisa a ojo en pantalla, en los cuatro colores, con nombres largos y con un maratón (42.20 km, 3:58:41).
 
 ## Sin verificar

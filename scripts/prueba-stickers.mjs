@@ -2,7 +2,7 @@
    Siguen las pruebas de aceptación de la especificación (docs/stickers.md). */
 import assert from 'node:assert/strict';
 import { ficha, entrenoDeActividad, rutaDe } from '../src/lib/stickers/ficha.js';
-import { catalogo, fraseCorta, fraseLarga, tituloDeLaHoja } from '../src/lib/stickers/catalogo.js';
+import { catalogo, esNuevo, fraseCorta, fraseLarga, lienzoDe, tituloDeLaHoja, TEMAS_TARJETA, COLORES, NUEVO_DIAS } from '../src/lib/stickers/catalogo.js';
 import { ajustaRuta } from '../src/lib/stickers/ruta.js';
 import { recordDelPlan, seriesProgramadas } from '../src/lib/stickers/plan.js';
 import { entrenoDelReloj } from '../src/lib/metricas/leeHealthKit.js';
@@ -41,10 +41,10 @@ const rutaRecta = (m) => Array.from({ length: Math.round(m / 10) + 1 }, (_, i) =
   assert.equal(f.coach, '@beto');
 }
 
-// 3) Un yoga sin reloj (solo tiempo): Firma, Eco, Grande, Frase, Hora, Partido, Semana, Mes y los de ícono, y nada más.
+// 3) Un yoga sin reloj (solo tiempo): de los nuevos, «Un dato» y «Boleto»; luego Firma, Eco, Grande, Frase, Hora, Partido, Semana, Mes y los de ícono, y nada más.
 {
   const f = ficha(entrenoDeActividad({ fila: { ...base, deporte: 'otro', titulo: 'Yoga', duracion_s: 3600 } }));
-  assert.deepEqual(ids(f), ['firma', 'eco', 'grande', 'frase', 'hora', 'partido', 'semana', 'mes', 'icono-numero', 'icono-gigante', 'sello', 'semana-iconos', 'mes-por-tipo']);
+  assert.deepEqual(ids(f), ['d-un-dato', 'r-boleto', 'firma', 'eco', 'grande', 'frase', 'hora', 'partido', 'semana', 'mes', 'icono-numero', 'icono-gigante', 'sello', 'semana-iconos', 'mes-por-tipo']);
   assert.equal(f.datos.min.v, '1h 00');
 }
 
@@ -203,6 +203,83 @@ assert.equal(tituloDeLaHoja({ deporte: 'raqueta' }), 'Comparte tu entreno');
   assert.equal(f.datos.elev.v, '43');
   // Sin distancia declarada: la suma de las muestras de distancia de ese rato.
   assert.equal(entrenoDelReloj({ w: { ...w, totalDistance: undefined }, deporte: 'correr', distanciaSumada: 4980.4 }).distancia_m, 4980);
+}
+
+// LOS 19 NUEVOS (5 nov 2026): en su orden y antes de los 35, los de ruta no salen sin ruta, nunca un «N/A» y una ranura vacía desaparece.
+{
+  const NUEVOS = ['d-un-dato', 'd-dos', 'd-dos-linea', 'd-tres', 'd-cuatro', 'd-seis', 'd-linea', 'd-linea-dato',
+    'r-columna', 'r-columna-ruta', 'r-ruta-grande', 'r-columna-larga', 'r-marco', 'r-boleto',
+    't-ruta', 't-ruta-fila', 't-sin-ruta', 't-chica', 't-record'];
+  const RUTA = ['d-dos-linea', 'd-linea', 'd-linea-dato', 'r-columna-ruta', 'r-ruta-grande', 'r-marco', 't-ruta', 't-ruta-fila'];
+  const fila = { ...base, id: 'n1', deporte: 'correr', titulo: 'Correr', duracion_s: 1593, distancia_m: 5080, fc_media: 152, kcal_activas: 342, desnivel_pos_m: 11 };
+  const record = { tipo: 'tiempo', texto: 'x', difNum: 95, antesInicio: '2026-10-09T13:00:00Z', antesDesfase: -360 };
+  const carrera = ficha(entrenoDeActividad({ fila, muestras: rutaRecta(5000), record, tipo: { nombre: 'Carrera', icono: 'correr' } }));
+  const cat = catalogo(carrera);
+  // Los 19 van primero y en ese orden; los 35 de hoy siguen en su orden de siempre (Titular es el primero).
+  assert.deepEqual(cat.slice(0, 19).map((s) => s.id), NUEVOS);
+  assert.equal(cat[19].id, 'titular');
+  assert.deepEqual(cat.slice(0, 19).map((s) => s.familia), [...Array(8).fill('discreto'), ...Array(6).fill('runner'), ...Array(5).fill('tarjeta')]);
+  assert.ok(cat.slice(19).every((s) => !NUEVOS.includes(s.id)));
+  // Sus tamaños: discretos 300 × 200 (los de línea, 330), runner 330 y 420, tarjetas 530, 380, 530, 200 y 380.
+  assert.deepEqual(cat.slice(0, 19).map((s) => lienzoDe(s).h), [200, 200, 200, 200, 200, 200, 330, 330, 330, 420, 420, 420, 420, 420, 530, 380, 530, 200, 380]);
+  // Las ranuras, con el motor de siempre (PREF: distancia, series, tiempo, ritmo, velocidad, ejercicios, calorías, pulso, desnivel, largos).
+  const de = (id) => cat.find((s) => s.id === id);
+  assert.deepEqual(de('d-un-dato').r.map((d) => d.l), ['Distance', 'Time', 'Pace'], 'las tres caras: el primer, el segundo y el tercer dato');
+  assert.equal(de('d-un-dato').caras, 3);
+  assert.deepEqual(de('d-dos').r.map((d) => d.l), ['Distance', 'Time']);
+  assert.deepEqual(de('d-cuatro').r.map((d) => d.l), ['Distance', 'Time', 'Pace', 'Calories']);
+  assert.deepEqual(de('d-seis').r.map((d) => d.l), ['Distance', 'Time', 'Pace', 'Calories', 'Heart rate', 'Elevation']);
+  assert.equal(de('d-linea-dato').r.g.l, 'Distance');
+  assert.equal(de('r-columna-larga').r.length, 5);
+  assert.equal(de('t-record').r && carrera.record.grande.l, 'Time');
+  // Sin ruta no salen los que la obligan; sin récord, no sale la tarjeta de récord.
+  const sinRuta = catalogo(ficha(entrenoDeActividad({ fila: { ...fila, id: 'n2' }, tipo: { nombre: 'Carrera', icono: 'correr' } })));
+  RUTA.forEach((id) => assert.ok(!sinRuta.some((s) => s.id === id), `${id} sin ruta`));
+  assert.ok(sinRuta.some((s) => s.id === 'r-boleto'), 'el Boleto sí sale (con el ícono)');
+  assert.ok(!sinRuta.some((s) => s.id === 't-record'), 'sin récord no hay tarjeta de récord');
+  assert.ok(cat.some((s) => s.id === 't-record'));
+  // Una ranura vacía desaparece: con un solo dato (el tiempo) solo quedan «Un dato» y el Boleto; sin ningún dato, ninguno de los 19.
+  const yoga = catalogo(ficha(entrenoDeActividad({ fila: { ...base, deporte: 'otro', titulo: 'Yoga', duracion_s: 3600 } }))).map((s) => s.id).filter((id) => NUEVOS.includes(id));
+  assert.deepEqual(yoga, ['d-un-dato', 'r-boleto']);
+  const nada = catalogo(ficha(entrenoDeActividad({ fila: { ...base, deporte: 'otro', titulo: 'Nada' } })));
+  assert.ok(!nada.some((s) => NUEVOS.includes(s.id)), 'sin datos no sale ninguno de los 19');
+  // Un workout del plan sin ruta: «Un dato» empieza por las series; la tarjeta de récord toma el kilaje.
+  const gym = ficha({ deporte: 'fuerza', inicioMs: Date.parse('2026-10-20T14:00:00Z'), desfaseMin: -360, duracionS: 3120, kcal: 410, fcMedia: 128, nombre: 'Pierna', plan: true,
+    guiado: { series: 18, ejercicios: 7, volumen: 6240, lista: [] }, record: { tipo: 'programado', ejercicio: 'Sentadilla', series: 4, reps: 5, kg: 120, difNum: 5 }, tipo: { nombre: 'Gimnasio', icono: 'pesa' } });
+  const cg = catalogo(gym);
+  assert.deepEqual(cg.find((s) => s.id === 'd-un-dato').r.map((d) => d.l), ['Sets', 'Time', 'Exercises']);
+  assert.equal(cg.find((s) => s.id === 'd-seis').r.length, 5, 'con cinco datos, «Seis» sale con cinco');
+  assert.ok(!cg.some((s) => RUTA.includes(s.id)));
+  assert.ok(cg.some((s) => s.id === 't-record'));
+  // Nunca «N/A», «undefined», «NaN» ni vacío en lo que dibujan.
+  [carrera, gym, ficha(entrenoDeActividad({ fila: { ...base, deporte: 'otro', titulo: 'Yoga', duracion_s: 3600 } }))].forEach((f) => {
+    catalogo(f).slice(0, 19).forEach((s) => {
+      const datos = [s.r].flat().flatMap((x) => (x && x.v !== undefined ? [x] : Object.values(x ?? {}).filter((d) => d && d.v !== undefined)));
+      datos.forEach((d) => assert.ok(String(d.v).length > 0 && !/N\/A|undefined|NaN|null/.test(`${d.v}${d.u}${d.l}`), `${s.id}: ${JSON.stringify(d)}`));
+    });
+    assert.ok(!/N\/A|undefined|NaN/.test(`${f.dia} ${f.fechaCorta}`));
+  });
+  // El día y la fecha del Boleto y de la tarjeta de récord.
+  assert.deepEqual([carrera.dia, carrera.fechaCorta], ['miércoles', '28 oct']);
+  assert.deepEqual([gym.dia, gym.fechaCorta], ['martes', '20 oct']);
+  // La marca «Nuevo»: 30 días desde que salió, la fecha vive en el catálogo.
+  const un = cat[0];
+  assert.equal(un.desde, '2026-11-05');
+  assert.equal(esNuevo(un, Date.parse('2026-11-06T12:00:00Z')), true);
+  assert.equal(esNuevo(un, Date.parse('2026-12-04T00:00:00Z')), true, 'el día 29');
+  assert.equal(esNuevo(un, Date.parse('2026-12-06T00:00:00Z')), false, `${NUEVO_DIAS} días después ya no`);
+  assert.equal(esNuevo(un, Date.parse('2026-11-04T00:00:00Z')), false, 'antes de salir tampoco');
+  assert.equal(esNuevo(cat[19]), false, 'los 35 de hoy no llevan «Nuevo»');
+  assert.ok(cat.slice(0, 19).every((s) => s.desde === '2026-11-05'));
+  // Los cuatro temas de la tarjeta traen sus doce colores (más el brillo de adentro) y siguen a los cuatro colores de la hoja.
+  const LLAVES = ['fondo', 'borde', 'brillo', 'texto', 'etiqueta', 'acento', 'ruta', 'halo', 'nucleo', 'topo', 'linea', 'apagado'];
+  COLORES.forEach((c) => LLAVES.forEach((k) => assert.ok(TEMAS_TARJETA[c.id]?.[k], `${c.id}.${k}`)));
+  assert.equal(TEMAS_TARJETA.blanco.borde, '#1E9BFF');
+  assert.equal(TEMAS_TARJETA.negro.fondo, 'radial-gradient(120% 80% at 50% 0%, #FFFFFF 0%, #F2F4F8 55%, #E6EAF1 100%)');
+  assert.equal(TEMAS_TARJETA.azul.ruta, '#FFFFFF');
+  assert.equal(TEMAS_TARJETA.coral.apagado, '#4A1C14');
+  // «Con foto» solo muestra los de identidad: ninguno de los nuevos.
+  assert.ok(cat.slice(0, 19).every((s) => !s.identidad));
 }
 
 console.log('prueba-stickers: todo bien');

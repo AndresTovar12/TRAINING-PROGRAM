@@ -4,7 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import { Check, ImagePlus, Pencil } from 'lucide-react';
 import { FONT } from '@/lib/theme';
 import { ficha as fichaDe } from '@/lib/stickers/ficha';
-import { catalogo, COLORES, LIENZOS } from '@/lib/stickers/catalogo';
+import { catalogo, COLORES, esNuevo, LIENZOS, lienzoDe } from '@/lib/stickers/catalogo';
 import { entregaArchivo } from '@/lib/entregaArchivo';
 import { aImagenWeb } from '@/lib/imagen';
 import { vibra } from '@/lib/avisosNativos';
@@ -19,7 +19,7 @@ import { nombreDeArchivo, pngDeSticker, puedeGrabarVideo, videoDeSticker } from 
    del entreno y el día. NUNCA se abre sola al terminar.
 
    Arriba: «Comparte tu carrera / tu workout / tu entreno», el nombre con lápiz (si se puede renombrar) y «Cerrar»; los cuatro colores y «Toca para copiar · Mantén
-   para guardar». Abajo, la galería: dos columnas de mosaicos 3:2, una sola lista en el orden del catálogo, sin nombres. Cada sticker se ve achicado en su mosaico,
+   para guardar». Abajo, la galería: dos columnas de mosaicos cuadrados, una sola lista en el orden del catálogo (los 19 nuevos primero, con su pastilla «Nuevo»), sin nombres. Cada sticker se ve achicado en su mosaico,
    pero se copia y se guarda a su tamaño real (`exporta.js`).
 
    Tocar = copiar (aviso «Copiado. Pégalo en tu historia.» con «Abrir Instagram» y «Guardar», 3.5 s). Mantener 0.6 s = guardar, con un anillo que se llena; si se
@@ -50,14 +50,27 @@ const puedeCopiar = () => !!(navigator.clipboard?.write && typeof window.Clipboa
 
 /**
  * Un mosaico: lo que se va a sacar (`children`, a su tamaño real: 300 × `lienzoH`) achicado para caber centrado, el anillo de «mantener» y la palomita de guardado.
- * `proporcion`: alto ÷ ancho del mosaico (2/3, o 16/9 en «Con foto»). `fondo`: el damero (transparente) o el color liso del video.
+ * `proporcion`: alto ÷ ancho del mosaico (cuadrado en «Stickers», como la maqueta del 5 nov; 2/3 en Video; 16/9 en «Con foto»). `fondo`: el damero (transparente) o el color liso del video.
+ * `holgura`: qué parte del mosaico ocupa el sticker (las tarjetas, con su brillo, dejan aire). `nuevo`: la pastilla «Nuevo» arriba a la derecha.
+ * `raiz`: con ella el mosaico se dibuja CONFORME SE DESPLAZA (solo cuando está a menos de 250 px de la vista; ya dibujado, se queda): con los 54 stickers, dibujarlos todos
+ * al abrir la hoja tardaba más de un segundo en WebKit. El hueco mide lo mismo antes y después, así que la lista no salta.
  */
-function Mosaico({ etiqueta, ancho, proporcion, lienzoH, fondo, alTocar, alMantener, children }) {
+function Mosaico({ etiqueta, ancho, proporcion, lienzoH, fondo, alTocar, alMantener, holgura = 1, nuevo = false, raiz = null, children }) {
   const [presion, setPresion] = useState(0); // 0..1 del anillo
   const [guardado, setGuardado] = useState(false);
+  const [visto, setVisto] = useState(!raiz);
+  const boton = useRef(null);
   const t = useRef(null);
+  useEffect(() => {
+    if (visto) return undefined;
+    const el = boton.current;
+    if (!el || typeof IntersectionObserver !== 'function') { setVisto(true); return undefined; }
+    const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) { setVisto(true); io.disconnect(); } }, { root: raiz.current ?? null, rootMargin: '250px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [visto, raiz]);
   const alto = Math.round(ancho * proporcion);
-  const k = ancho > 0 ? Math.min(ancho / 300, alto / lienzoH) : 0;
+  const k = ancho > 0 ? Math.min(ancho / 300, alto / lienzoH) * holgura : 0;
 
   const suelta = () => { setPresion(0); };
   const empieza = (ev) => {
@@ -99,7 +112,7 @@ function Mosaico({ etiqueta, ancho, proporcion, lienzoH, fondo, alTocar, alMante
 
   return (
     <button
-      type="button" aria-label={etiqueta}
+      ref={boton} type="button" aria-label={etiqueta}
       onPointerDown={empieza} onPointerMove={mueve} onPointerUp={termina} onPointerCancel={cancela}
       onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); alTocar(); } }}
       onContextMenu={(ev) => ev.preventDefault()}
@@ -111,10 +124,13 @@ function Mosaico({ etiqueta, ancho, proporcion, lienzoH, fondo, alTocar, alMante
           transform: presion > 0 ? 'scale(.96)' : 'none', transition: `transform .2s ${CURVA}`,
         }}
       >
-        {k > 0 && (
+        {k > 0 && visto && (
           <span style={{ position: 'absolute', left: (ancho - 300 * k) / 2, top: (alto - lienzoH * k) / 2, transform: `scale(${k.toFixed(4)})`, transformOrigin: 'top left', pointerEvents: 'none' }}>
             {children}
           </span>
+        )}
+        {nuevo && (
+          <span style={{ position: 'absolute', right: 7, top: 7, zIndex: 2, background: '#2F6BFF', color: '#fff', fontSize: 10.5, fontWeight: 800, padding: '2px 7px', borderRadius: 999, pointerEvents: 'none', lineHeight: 1.3 }}>Nuevo</span>
         )}
         <span
           aria-hidden="true"
@@ -166,6 +182,7 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
   const ocupado = useRef(false);
   const carrete = useRef(null);
   const [galeriaRef, anchoGaleria] = useAncho();
+  const listaRef = useRef(null); // lo que se desplaza: la raíz de «dibujar conforme se desplaza»
   const hojaRef = useRef(null);
   const veloRef = useRef(null);
   const arrastre = useRef(null);
@@ -378,12 +395,12 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
             </span>
           </div>
         </div>
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', padding: '10px 18px calc(24px + env(safe-area-inset-bottom))' }}>
+        <div ref={listaRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', padding: '10px 18px calc(24px + env(safe-area-inset-bottom))' }}>
           <div ref={galeriaRef} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap, alignContent: 'start' }}>
             {f && pestana === 'stickers' && items.map((item) => (
               <Mosaico
-                key={item.id} etiqueta={`Sticker ${item.nombre}. Toca para copiar; mantén presionado para guardar`} ancho={anchoMosaico} proporcion={2 / 3}
-                lienzoH={LIENZOS[item.forma].h} fondo={color.clara ? DAMERO.claro : DAMERO.oscuro} alTocar={() => copia(item)} alMantener={() => guarda(item)}
+                key={item.id} etiqueta={`Sticker ${item.nombre}. Toca para copiar; mantén presionado para guardar`} ancho={anchoMosaico} proporcion={1}
+                lienzoH={lienzoDe(item).h} holgura={item.familia === 'tarjeta' ? 0.94 : 1} nuevo={esNuevo(item)} raiz={listaRef} fondo={color.clara ? DAMERO.claro : DAMERO.oscuro} alTocar={() => copia(item)} alMantener={() => guarda(item)}
               >
                 <Sticker item={item} f={f} color={color} />
               </Mosaico>

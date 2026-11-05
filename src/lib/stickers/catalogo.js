@@ -5,7 +5,7 @@
    no pueden mostrar «Time» las dos). Así sirve para cualquier actividad, incluso las que invente el coach, y nunca sale un «N/A».
 
    Aquí solo están los datos de cada sticker (forma, familia, ranuras); cómo se dibuja vive en `features/stickers/Sticker.jsx`.
-   Los 35 de la tabla de la especificación (fase 1: 6; fase 2: los otros 29), en su orden. El volumen solo entra en «Lista» y «Columna».
+   Los 35 de la tabla de la especificación (fase 1: 6; fase 2: los otros 29), en su orden, detrás de los 19 nuevos del 5 nov 2026 (8 discretos, 6 runner, 5 tarjetas). El volumen solo entra en «Lista» y «Columna».
 
    Este archivo no importa nada de la app: lo cargan las pruebas de Node (`scripts/prueba-stickers.mjs`). */
 
@@ -16,6 +16,17 @@ export const PREF_CON_VOLUMEN = ['dist', 'series', 'tiempo', 'volumen', 'ritmo',
 
 /** Los lienzos: ancho 300 × 200, alto 300 × 330, historia 300 × 533 (Con foto). Se exportan a 3×. */
 export const LIENZOS = { ancho: { w: 300, h: 200 }, alto: { w: 300, h: 330 }, historia: { w: 300, h: 533 } };
+/** El lienzo de UN sticker: el suyo (los nuevos de runner y tarjeta miden 380, 420 o 530 de alto), o el de su forma (o la «historia» de Con foto). */
+export const lienzoDe = (item, forma = item.forma) => (forma === 'historia' ? LIENZOS.historia : item.lienzo ?? LIENZOS[forma] ?? LIENZOS.ancho);
+
+/** Las tres familias de la tanda del 5 nov 2026 (19 stickers que van al frente de la hoja, ver docs/stickers.md): se dibujan centrados, en `Nuevos.jsx`. */
+export const FAMILIAS_NUEVAS = ['discreto', 'runner', 'tarjeta'];
+/** Un sticker nuevo lleva la pastilla «Nuevo» 30 días desde el build en que salió (`desde`, en el catálogo: no en la base). */
+export const NUEVO_DIAS = 30;
+export const esNuevo = (item, ahora = Date.now()) => {
+  const t = item.desde ? Date.parse(item.desde) : NaN;
+  return Number.isFinite(t) && ahora >= t && ahora - t < NUEVO_DIAS * 86400000;
+};
 
 /** Los cuatro colores de la hoja: la TINTA del sticker y su ACENTO (unidades, «Lab», el dato destacado). Fondo transparente siempre. */
 export const COLORES = [
@@ -25,11 +36,45 @@ export const COLORES = [
   { id: 'coral', nombre: 'Coral', tinta: '#FF6B4A', acento: '#FFFFFF', sombra: false, clara: false },
 ];
 
+/** Los cuatro temas de la TARJETA, uno por color de la hoja (fondo, borde, brillo, texto, etiqueta, acento, ruta, halo, núcleo, topo, línea, apagado). Del 5 nov 2026. */
+export const TEMAS_TARJETA = {
+  blanco: { fondo: 'radial-gradient(120% 80% at 50% 0%, #0A2142 0%, #04122A 45%, #020A18 100%)', borde: '#1E9BFF', brillo: 'rgba(30,155,255,.55)', brillo2: 'rgba(30,155,255,.18)', texto: '#FFFFFF', etiqueta: '#E9F0FF', acento: '#3578FF', ruta: '#22C8FF', halo: '#1FC2FF', nucleo: '#B9EEFF', topo: '#3E7BD6', linea: '#1E7BFF', apagado: '#1d3558' },
+  negro: { fondo: 'radial-gradient(120% 80% at 50% 0%, #FFFFFF 0%, #F2F4F8 55%, #E6EAF1 100%)', borde: '#0B0D12', brillo: 'rgba(0,0,0,.16)', brillo2: 'rgba(0,0,0,.04)', texto: '#0B0D12', etiqueta: '#3B404D', acento: '#2F55F0', ruta: '#2F55F0', halo: 'rgba(47,85,240,.45)', nucleo: '#C9D5FF', topo: '#7D889E', linea: '#0B0D12', apagado: '#D3D8E2' },
+  azul: { fondo: 'radial-gradient(120% 80% at 50% 0%, #4A74FF 0%, #2448E6 50%, #1633B9 100%)', borde: '#FFFFFF', brillo: 'rgba(255,255,255,.45)', brillo2: 'rgba(255,255,255,.14)', texto: '#FFFFFF', etiqueta: '#E3EAFF', acento: '#A9C4FF', ruta: '#FFFFFF', halo: '#BFD0FF', nucleo: '#FFFFFF', topo: '#DCE6FF', linea: '#FFFFFF', apagado: 'rgba(255,255,255,.28)' },
+  coral: { fondo: 'radial-gradient(120% 80% at 50% 0%, #3B1610 0%, #200A07 50%, #120504 100%)', borde: '#FF6B4A', brillo: 'rgba(255,107,74,.55)', brillo2: 'rgba(255,107,74,.16)', texto: '#FFFFFF', etiqueta: '#FFE4DC', acento: '#FF6B4A', ruta: '#FF7A57', halo: '#FF6B4A', nucleo: '#FFD3C6', topo: '#D9573C', linea: '#FF6B4A', apagado: '#4A1C14' },
+};
+
+// Los 19 de la tanda del 5 nov 2026 llevan esta fecha: durante 30 días muestran «Nuevo».
+const NUEVO = '2026-11-05';
+const L420 = { w: 300, h: 420 };
+
 /**
- * Cada sticker: `id`, `nombre`, `familia` (identidad, datos, tipo), `forma` (ancho | alto), `identidad` (también sale en «Con foto»),
+ * Cada sticker: `id`, `nombre`, `familia` (identidad, datos, tipo… y las nuevas: discreto, runner, tarjeta), `forma` (ancho | alto), `identidad` (también sale en «Con foto»),
  * `ranuras` ({ nombre: [claves] }), `elige` ([claves, n, mín.]) y `obliga(f)` (lo que no puede faltar). El orden es el de la tabla de la especificación.
+ * Solo los nuevos: `lienzo` (su tamaño, si no es el de su forma), `desde` (cuándo salió: «Nuevo» 30 días) y `variantes` (cada dato de `elige` es una cara, para el carrusel).
  */
 export const STICKERS = [
+  // Los 19 nuevos, al frente de la hoja (5 nov 2026): primero los 8 discretos, luego los 6 runner y las 5 tarjetas. Los de ruta no salen sin ruta.
+  { id: 'd-un-dato', nombre: 'Un dato', familia: 'discreto', forma: 'ancho', desde: NUEVO, variantes: true, elige: [PREF, 3, 1] },
+  { id: 'd-dos', nombre: 'Dos datos', familia: 'discreto', forma: 'ancho', desde: NUEVO, elige: [PREF, 2] },
+  { id: 'd-dos-linea', nombre: 'Dos datos y la línea', familia: 'discreto', forma: 'ancho', desde: NUEVO, obliga: (f) => !!f.ruta, elige: [PREF, 2] },
+  { id: 'd-tres', nombre: 'Tres en fila', familia: 'discreto', forma: 'ancho', desde: NUEVO, elige: [PREF, 3] },
+  { id: 'd-cuatro', nombre: 'Cuatro', familia: 'discreto', forma: 'ancho', desde: NUEVO, elige: [PREF, 4] },
+  { id: 'd-seis', nombre: 'Seis', familia: 'discreto', forma: 'ancho', desde: NUEVO, elige: [PREF, 6, 5] },
+  { id: 'd-linea', nombre: 'La línea', familia: 'discreto', forma: 'alto', desde: NUEVO, obliga: (f) => !!f.ruta },
+  { id: 'd-linea-dato', nombre: 'La línea y un dato', familia: 'discreto', forma: 'alto', desde: NUEVO, obliga: (f) => !!f.ruta, ranuras: { g: PREF } },
+  { id: 'r-columna', nombre: 'Columna', familia: 'runner', forma: 'alto', desde: NUEVO, elige: [PREF, 3] },
+  { id: 'r-columna-ruta', nombre: 'Columna con ruta', familia: 'runner', forma: 'alto', lienzo: L420, desde: NUEVO, obliga: (f) => !!f.ruta, elige: [PREF, 3] },
+  { id: 'r-ruta-grande', nombre: 'Ruta grande', familia: 'runner', forma: 'alto', lienzo: L420, desde: NUEVO, obliga: (f) => !!f.ruta, elige: [PREF, 3] },
+  { id: 'r-columna-larga', nombre: 'Columna larga', familia: 'runner', forma: 'alto', lienzo: L420, desde: NUEVO, elige: [PREF, 5, 3] },
+  { id: 'r-marco', nombre: 'Marco', familia: 'runner', forma: 'alto', lienzo: L420, desde: NUEVO, obliga: (f) => !!f.ruta, elige: [PREF, 4, 2] },
+  { id: 'r-boleto', nombre: 'Boleto', familia: 'runner', forma: 'alto', lienzo: L420, desde: NUEVO, obliga: (f) => Object.keys(f.datos).length > 0 },
+  { id: 't-ruta', nombre: 'Tarjeta con ruta', familia: 'tarjeta', forma: 'alto', lienzo: { w: 300, h: 530 }, desde: NUEVO, obliga: (f) => !!f.ruta, elige: [PREF, 3] },
+  { id: 't-ruta-fila', nombre: 'Tarjeta con ruta, datos en fila', familia: 'tarjeta', forma: 'alto', lienzo: { w: 300, h: 380 }, desde: NUEVO, obliga: (f) => !!f.ruta, elige: [PREF, 3] },
+  { id: 't-sin-ruta', nombre: 'Tarjeta sin ruta', familia: 'tarjeta', forma: 'alto', lienzo: { w: 300, h: 530 }, desde: NUEVO, elige: [PREF, 3] },
+  { id: 't-chica', nombre: 'Tarjeta chica', familia: 'tarjeta', forma: 'ancho', desde: NUEVO, elige: [PREF, 2] },
+  { id: 't-record', nombre: 'Tarjeta de récord', familia: 'tarjeta', forma: 'alto', lienzo: { w: 300, h: 380 }, desde: NUEVO, obliga: (f) => !!f.record },
+  // Los 35 de siempre.
   // Identidad: la tipografía es la marca.
   { id: 'titular', nombre: 'Titular', familia: 'identidad', forma: 'alto', identidad: true,
     ranuras: { a: ['dist', 'series', 'min'], b: ['tiempo', 'kcal', 'ejercicios'], c: ['ritmo', 'vel', 'fc', 'kcal', 'ejercicios', 'largos'] } },
@@ -100,7 +145,7 @@ export function elige(f, claves, n, min = n, usados = new Set()) {
 
 /**
  * El catálogo de UN entreno: los stickers que sí tienen sus datos, con sus ranuras ya resueltas, en el orden de la tabla.
- * Cada uno: `{ id, nombre, familia, forma, identidad, r }` (`r`: lo resuelto; con `elige` y `ranuras` a la vez, la lista va en `r.lista`).
+ * Cada uno: `{ id, nombre, familia, forma, identidad, r }` (`r`: lo resuelto; con `elige` y `ranuras` a la vez, la lista va en `r.lista`), y en los nuevos `lienzo`, `desde` y `caras`.
  */
 export function catalogo(f, lista = STICKERS) {
   const salida = [];
@@ -115,7 +160,11 @@ export function catalogo(f, lista = STICKERS) {
       if (!l) continue;
       if (s.ranuras) r.lista = l; else r = l;
     }
-    salida.push({ id: s.id, nombre: s.nombre, familia: s.familia, forma: s.forma, identidad: !!s.identidad, r });
+    salida.push({
+      id: s.id, nombre: s.nombre, familia: s.familia, forma: s.forma, identidad: !!s.identidad, r,
+      // Solo los nuevos: su tamaño, desde cuándo son «Nuevo» y cuántas caras tiene (una por dato, en `Un dato`).
+      ...(s.lienzo ? { lienzo: s.lienzo } : null), ...(s.desde ? { desde: s.desde } : null), ...(s.variantes && Array.isArray(r) ? { caras: r.length } : null),
+    });
   }
   return salida;
 }
