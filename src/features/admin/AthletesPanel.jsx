@@ -46,7 +46,7 @@ import { useAvisosVistos } from '@/lib/useAvisosVistos';
 import { useAviso } from '@/components/AvisoPasajero';
 import { esArranque, guardaLugar, leeLugar } from '@/lib/lugar';
 import { useLugar, useScrollLugar } from '@/lib/useLugar';
-import { cuandoDicho, diaDicho, pideConectarReloj, useRelojDelAtleta } from '@/lib/relojConectado';
+import { cuandoDicho, diaDicho, pideConectarReloj, queConecto, useRelojDelAtleta } from '@/lib/relojConectado';
 
 function useIsNarrow(breakpoint = 880) {
   const [narrow, setNarrow] = useState(
@@ -1114,16 +1114,17 @@ function AthleteDetail({ athlete, onClose, isMaster, coaches = [], masterProfile
   const conexionDelReloj = relojDelAtleta.conexion;
   const nombreDelAtleta = (athlete.full_name || athlete.username || '').trim().split(/\s+/)[0];
   const cuandoConecto = conexionDelReloj ? diaDicho(conexionDelReloj.conectado_en) : null;
+  // «Apple Watch» solo si su iPhone vio uno emparejado (`reloj.emparejado`, 5 nov 2026); con solo Salud, «Apple Salud». Cuentas viejas, sin el dato: Salud.
+  const conReloj = queConecto(conexionDelReloj) === 'reloj';
   const detalleDelReloj = !relojDelAtleta.listo || soloNotas ? 'Pulso, ritmo, carga y recuperación'
-    : !conexionDelReloj ? 'Todavía no conecta su reloj'
-      : relojDelAtleta.n > 0 ? `Apple Watch · último entreno ${cuandoDicho(relojDelAtleta.ultimo)}`
-        : `Apple Watch conectado ${cuandoConecto === 'hoy' ? 'hoy' : `desde ${cuandoConecto}`} · esperando su primer entreno`;
+    : !conexionDelReloj ? 'Todavía no conecta Apple Salud'
+      : `Apple Salud conectado ${cuandoConecto === 'hoy' ? 'hoy' : `desde ${cuandoConecto}`}${conReloj ? ' · con Apple Watch' : ''} · ${relojDelAtleta.n > 0 ? `último entreno ${cuandoDicho(relojDelAtleta.ultimo)}` : 'esperando su primer entreno'}`;
   const recienConecto = !!conexionDelReloj && abiertaEn - Date.parse(conexionDelReloj.conectado_en) < 7 * 86400000;
   const tarjetaDelReloj = recienConecto ? (
     <article style={{ display: 'grid', gridTemplateColumns: '40px 1fr', gap: 12, alignItems: 'center', background: UI.tarjeta, borderRadius: 20, padding: 14, boxShadow: '0 1px 2px rgba(17,19,24,.04)', fontFamily: FONT, marginBottom: 8 }}>
       <span style={{ width: 36, height: 36, borderRadius: 11, background: KP.mintSoft, color: KP.mint, display: 'grid', placeItems: 'center' }}><Check size={20} /></span>
       <span>
-        <b style={{ display: 'block', fontSize: 15, lineHeight: 1.3, color: KP.ink }}>{nombreDelAtleta} conectó su Apple Watch {cuandoConecto}</b>
+        <b style={{ display: 'block', fontSize: 15, lineHeight: 1.3, color: KP.ink }}>{nombreDelAtleta} conectó {conReloj ? 'su Apple Watch' : 'Apple Salud'} {cuandoConecto}</b>
         <span style={{ display: 'block', fontSize: 13, color: KP.ink2, marginTop: 2, lineHeight: 1.35 }}>{cuandoConecto === 'hoy' ? 'Desde hoy' : 'Desde ese día'} ves su pulso, su carga y su recuperación en «Métricas del reloj».</span>
       </span>
     </article>

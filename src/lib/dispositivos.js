@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
    servidor ya tiene las llaves de Garmin (`garminDisponible`); mientras, el renglón dice «Pronto». */
 
 export const PROVEEDORES = [
-  { id: 'apple_salud', nombre: 'Apple Salud y Apple Watch', detalle: 'Pulso, sueño y los entrenos de tu reloj.', donde: 'telefono', disponible: typeof window !== 'undefined' && !!window.Capacitor?.isNativePlatform?.() },
+  { id: 'apple_salud', nombre: 'Apple Salud', detalle: 'Pulso, sueño y tus entrenos.', donde: 'telefono', disponible: typeof window !== 'undefined' && !!window.Capacitor?.isNativePlatform?.() },
   { id: 'garmin', nombre: 'Garmin', detalle: 'Tus actividades y tu recuperación de Garmin Connect.', donde: 'aqui', disponible: false },
   { id: 'whoop', nombre: 'Whoop', detalle: 'Tu recuperación, esfuerzo y sueño.', donde: 'aqui', disponible: false },
   { id: 'strava', nombre: 'Strava', detalle: 'Tus carreras, rodadas y nados.', donde: 'aqui', disponible: false },

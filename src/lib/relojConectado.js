@@ -30,6 +30,38 @@ const cambia = (parche) => { estado = { ...estado, ...parche }; oyentes.forEach(
 const suscribe = (f) => { oyentes.add(f); return () => oyentes.delete(f); };
 const foto = () => estado;
 
+/* LO QUE VIO EL TELÉFONO, PARA SU COACH (5 nov 2026). Andrés: «¿por qué si no tengo Apple Watch dice que lo tengo conectado?». La fila `apple_salud` solo dice
+   que Salud está conectada. Al leer el reloj en la app, se apunta en esa fila `reloj: { emparejado, instalada, visto_en }`, solo si cambió (una escritura
+   cuando cambia, no cada vez que se abre). No se apunta con el modo de prueba de los administradores (no es un reloj de verdad) ni si el plugin no contestó
+   (no se sabe). En la web nunca: ahí no hay reloj que ver. La base solo deja escribir esa columna y de la fila propia (`docs/sql/2026-11-05-dispositivos-reloj.sql`). */
+
+/** ¿Hay que apuntar lo que se vio? Devuelve lo nuevo (`{ emparejado, instalada, visto_en }`) o `null` si no cambió o no toca. Puro. */
+export function relojPorApuntar(fila, reloj, { enLaApp = true, ahora = new Date() } = {}) {
+  if (!enLaApp || !fila || !reloj || reloj.prueba || reloj.sinRespuesta) return null;
+  const emparejado = !!reloj.emparejado;
+  const instalada = !!reloj.instalada;
+  const antes = fila.reloj;
+  if (antes && antes.emparejado === emparejado && antes.instalada === instalada) return null;
+  return { emparejado, instalada, visto_en: ahora.toISOString() };
+}
+
+let apuntado = ''; // lo último que este aparato escribió: dos lecturas a la vez no lo escriben dos veces
+async function apuntaLoQueVioElTelefono(fila, reloj, userId) {
+  const nuevo = relojPorApuntar(fila, reloj, { enLaApp: saludDisponible() });
+  if (!nuevo) return fila;
+  const firma = `${userId}:${nuevo.emparejado}:${nuevo.instalada}`;
+  if (firma === apuntado) return { ...fila, reloj: estado.conexion?.reloj ?? nuevo };
+  apuntado = firma;
+  // Nunca sin filtrar por la persona, aunque las reglas de la base ya lo impidan.
+  const { error } = await supabase.from('dispositivos_conectados').update({ reloj: nuevo }).eq('user_id', userId).eq('proveedor', 'apple_salud')
+    .then((r) => r, (e) => ({ error: e }));
+  if (error) { apuntado = ''; return fila; }
+  return { ...fila, reloj: nuevo };
+}
+
+/** Lo que el coach puede decir del reloj de su atleta, con la fila `apple_salud`: `'reloj'` (se vio un Apple Watch emparejado), `'salud'` (conectó Salud) o `null`. */
+export const queConecto = (conexion) => (!conexion ? null : conexion.reloj?.emparejado === true ? 'reloj' : 'salud');
+
 let pidiendo = null;
 /** Vuelve a leer la conexión de la cuenta, el reloj emparejado y la marca de este iPhone. */
 export async function recargaDelReloj(userId = estado.de) {
@@ -47,11 +79,18 @@ export async function recargaDelReloj(userId = estado.de) {
     // Se dice UNA vez: se apunta en cuanto se nota y se queda puesto mientras la app siga abierta (hasta que lo cierre o conecte).
     const estrenoNuevo = saludDisponible() && reloj.emparejado && !reloj.prueba && lee(LLAVE_SIN_RELOJ) === '1' && lee(LLAVE_ESTRENO) !== '1';
     if (estrenoNuevo) pon(LLAVE_ESTRENO, '1');
-    if (estado.de === userId) cambia({ listo: true, conexion: fila, reloj, aqui: lee(LLAVE_AQUI) === '1', estreno: estado.estreno || estrenoNuevo, cerrada: invitaCerrada(), soyDePrueba });
+    const conexion = await apuntaLoQueVioElTelefono(fila, reloj, userId);
+    if (estado.de === userId) cambia({ listo: true, conexion, reloj, aqui: lee(LLAVE_AQUI) === '1', estreno: estado.estreno || estrenoNuevo, cerrada: invitaCerrada(), soyDePrueba });
   })();
   pidiendo = vuelta;
   await vuelta.catch(() => {});
   if (pidiendo === vuelta) pidiendo = null;
+}
+
+/** Volver a leer al abrir una pantalla (Dispositivos): si ya se está leyendo, espera esa lectura en vez de hacer otra. */
+export function releeElReloj(userId) {
+  if (pidiendo && estado.de === userId) return pidiendo;
+  return recargaDelReloj(userId);
 }
 
 /** El estado del reloj de quien tiene la sesión; lo lee al entrar, al volver a la app y cuando algo lo cambia. */
@@ -130,6 +169,15 @@ export async function cuentaDelReloj(atletaId, desdeIso) {
   return { n: count ?? 0, ultimo: data?.[0]?.inicio ?? null };
 }
 
+/** El último entreno que trajo el pulso del Apple Watch (`metricas.pulso_de = 'apple_watch'`), desde que conectó: ISO o `null`. Para el renglón «Apple Watch». */
+export async function ultimoDelReloj(atletaId, desdeIso) {
+  if (!atletaId || !desdeIso) return null;
+  const { data, error } = await supabase.from('actividades').select('inicio')
+    .eq('atleta_id', atletaId).gte('inicio', desdeIso).eq('metricas->>pulso_de', 'apple_watch')
+    .order('inicio', { ascending: false }).limit(1);
+  return error ? null : data?.[0]?.inicio ?? null;
+}
+
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const diaDe = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 /** «hoy», «ayer» o «el 26 de oct», en la hora de quien mira. */
@@ -160,7 +208,7 @@ export function useRelojDelAtleta(atletaId, profesionalId) {
     let vivo = true;
     (async () => {
       const [{ data: conexion }, pidio] = await Promise.all([
-        supabase.from('dispositivos_conectados').select('conectado_en,ultima_sincronizacion').eq('user_id', atletaId).eq('proveedor', 'apple_salud').maybeSingle().then((r) => r, () => ({ data: null })),
+        supabase.from('dispositivos_conectados').select('conectado_en,ultima_sincronizacion,reloj').eq('user_id', atletaId).eq('proveedor', 'apple_salud').maybeSingle().then((r) => r, () => ({ data: null })),
         profesionalId
           ? supabase.from('mensajes').select('id', { count: 'exact', head: true }).eq('atleta_id', atletaId).eq('profesional_id', profesionalId).eq('tipo', 'reloj')
             .gt('creado_en', new Date(Date.now() - 20 * 3600000).toISOString()).then(({ count }) => (count ?? 0) > 0, () => false)

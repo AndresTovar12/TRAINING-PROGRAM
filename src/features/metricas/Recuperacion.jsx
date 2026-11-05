@@ -64,7 +64,7 @@ export default function Recuperacion({ d, recuperacion, hoy, esAtleta = false })
       <EstadoVacio
         icono={Moon} titulo="Sin datos de recuperación"
         texto={conecta
-          ? `El pulso en reposo, la HRV y el sueño los mide tu Apple Watch mientras no entrenas. ${delReloj.texto}`
+          ? `El pulso en reposo, la HRV y el sueño los mide ${delReloj.emparejado ? 'tu Apple Watch' : 'un reloj'} mientras no entrenas. ${delReloj.texto}`
           : 'El pulso en reposo, la HRV y el sueño los mide el Apple Watch (u otro reloj) mientras no entrena. Se traen al importar el export de Apple Salud: en el iPhone, Salud → tu foto → Exportar todos los datos de salud.'}
       >
         {conecta && <ConectaTuReloj />}
@@ -147,7 +147,7 @@ export default function Recuperacion({ d, recuperacion, hoy, esAtleta = false })
           </div>
         </Seccion>
       )}
-      <div style={{ marginTop: 16, fontSize: 12.5, fontWeight: 600, color: LT.text3, ...NUM_STYLE }}>{conecta ? 'Los datos vienen de tu Apple Watch (Mi perfil → Dispositivos); se actualizan solos al abrir la app.' : 'Los datos vienen del export de Apple Salud; se actualizan cada vez que se importa uno nuevo.'}</div>
+      <div style={{ marginTop: 16, fontSize: 12.5, fontWeight: 600, color: LT.text3, ...NUM_STYLE }}>{conecta ? `Los datos vienen de ${delReloj.emparejado ? 'tu Apple Watch' : 'Apple Salud'} (Mi perfil → Dispositivos); se actualizan solos al abrir la app.` : 'Los datos vienen del export de Apple Salud; se actualizan cada vez que se importa uno nuevo.'}</div>
     </div>
   );
 }

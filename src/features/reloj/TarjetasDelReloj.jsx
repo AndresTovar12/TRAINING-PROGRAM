@@ -46,7 +46,8 @@ export function RelojEnHome() {
       <article style={{ display: 'grid', gridTemplateColumns: '40px 1fr', gap: 12, alignItems: 'center', background: KP.blueSoft, borderRadius: 20, padding: 14, fontFamily: FONT }}>
         <span style={{ width: 36, height: 36, borderRadius: 11, background: '#fff', color: KP.blue, display: 'grid', placeItems: 'center' }}><Watch size={18} /></span>
         <span>
-          <b style={{ display: 'block', fontSize: 15, lineHeight: 1.3, color: KP.ink }}>Vuelve a conectar tu Apple Watch</b>
+          {/* «Apple Watch» solo con uno emparejado (5 nov 2026); si no, lo que se conectó fue Apple Salud. */}
+          <b style={{ display: 'block', fontSize: 15, lineHeight: 1.3, color: KP.ink }}>{reloj.emparejado ? 'Vuelve a conectar tu Apple Watch' : 'Vuelve a conectar Apple Salud'}</b>
           <span style={{ display: 'block', fontSize: 13, color: KP.ink2, marginTop: 2, lineHeight: 1.35 }}>Ya lo tenías conectado en tu otro iPhone. En este falta un toque.</span>
         </span>
         <button type="button" className="kp-press" onClick={() => abreConectaReloj('inicio', { reconectar: true })} style={{ ...botonAzul, gridColumn: '1 / -1' }}>Conectar en este iPhone</button>

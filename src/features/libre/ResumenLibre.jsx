@@ -69,7 +69,7 @@ export default function ResumenLibre({ fila: filaInicial, unidadPeso = 'kg', alC
   }, []);
   /* EL PULSO DEL RELOJ (fase 5, 29 oct 2026). Al terminar un entreno con el Apple Watch, `SincronizaReloj` va por él a Salud (a los 8, 20 y 60 s): mientras,
      «Trayendo tu pulso del reloj…»; al llegar, este entreno se vuelve a leer y salen su pulso medio, máximo y calorías con «Lo midió tu Apple Watch». */
-  const { conexion: relojConexion, aqui: relojAqui, trayendo } = useReloj();
+  const { conexion: relojConexion, aqui: relojAqui, trayendo, reloj: relojDeAqui } = useReloj();
   useEffect(() => {
     if (!fila?.id) return undefined;
     const alTraer = (e) => {
@@ -79,7 +79,8 @@ export default function ResumenLibre({ fila: filaInicial, unidadPeso = 'kg', alC
     window.addEventListener(AVISO_RELOJ_TRAJO, alTraer);
     return () => window.removeEventListener(AVISO_RELOJ_TRAJO, alTraer);
   }, [fila?.id]);
-  const pulsoDelReloj = fila.fc_media > 0 && (fila.metricas?.pulso_de === 'apple_watch' || fila.origen === 'healthkit');
+  // «Lo midió tu Apple Watch»: lo marcó el reloj (`pulso_de`), o vino de Salud y hay un Apple Watch emparejado (5 nov 2026: no solo por tener Salud).
+  const pulsoDelReloj = fila.fc_media > 0 && (fila.metricas?.pulso_de === 'apple_watch' || (fila.origen === 'healthkit' && (relojDeAqui.emparejado || relojConexion?.reloj?.emparejado === true)));
   const trayendoPulso = recien && trayendo && !!relojConexion && relojAqui && !(fila.fc_media > 0);
   const [verStickers, setVerStickers] = useState(conStickers);
   const [menu, setMenu] = useState(null); // null | 'nombre' | 'actividad'
