@@ -18,7 +18,8 @@ export function useConectaReloj() {
     conecta: enLaApp && listo && !conectado,
     conectado,
     emparejado,
-    texto: conectado ? 'Llegan solos de tu Apple Watch: tu recuperación, desde esta noche.' : emparejado ? 'Conecta tu Apple Watch y llegan solos.' : 'Conecta Apple Salud y llegan solos.',
+    // «Apple Watch» solo con uno emparejado (5 nov 2026): con solo Salud conectada, llegan de Apple Salud.
+    texto: conectado ? `Llegan solos de ${emparejado ? 'tu Apple Watch' : 'Apple Salud'}: tu recuperación, desde esta noche.` : emparejado ? 'Conecta tu Apple Watch y llegan solos.' : 'Conecta Apple Salud y llegan solos.',
   };
 }
 

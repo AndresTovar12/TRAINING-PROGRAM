@@ -74,11 +74,14 @@ export function escuchaReloj({ alAccion, alPulso }) {
   return () => { manejadores.forEach((h) => h?.remove?.()); };
 }
 
-/** ¿Hay reloj emparejado con la app instalada? `{ emparejado, instalada }` (en la web, todo falso). */
+/** ¿Hay reloj emparejado con la app instalada? `{ emparejado, instalada }` (en la web, todo falso). Si el plugin no contestó, `sinRespuesta`: no se sabe (no se apunta en la cuenta). */
 export async function estadoDelReloj() {
   if (!enLaApp()) return { emparejado: false, instalada: false };
   if (pruebaDelReloj()) return { emparejado: true, instalada: true, prueba: true };
-  try { return await alReloj('estado'); } catch { return { emparejado: false, instalada: false }; }
+  try {
+    const r = await alReloj('estado');
+    return { ...r, emparejado: !!r?.emparejado, instalada: !!r?.instalada };
+  } catch { return { emparejado: false, instalada: false, sinRespuesta: true }; }
 }
 
 /* ---- Sin el iPhone (parte 3) ---- */

@@ -117,7 +117,9 @@ function Burbuja({ m, mio, ultimoMio, elegido, url, tecnica, alElegir, alElimina
  * Al coach, la misma tarjeta sin botón.
  */
 function TarjetaPideReloj({ soyAtleta, coach }) {
-  const { conexion } = useReloj();
+  const { conexion, reloj } = useReloj();
+  // «Apple Watch» solo con uno emparejado (5 nov 2026). En la web no hay reloj que leer: vale lo que vio su iPhone (`conexion.reloj`).
+  const conReloj = saludDisponible() ? reloj.emparejado : conexion?.reloj?.emparejado === true;
   const nombre = (coach || '').trim().split(/\s+/)[0] || 'Tu coach';
   return (
     <span style={{ display: 'grid', gap: 12, padding: 14 }}>
@@ -129,7 +131,7 @@ function TarjetaPideReloj({ soyAtleta, coach }) {
         </span>
       </span>
       {soyAtleta && (conexion
-        ? <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, color: '#047857' }}><Check size={18} />Conectado</span>
+        ? <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, color: '#047857' }}><Check size={18} />{conReloj ? 'Conectado' : 'Apple Salud conectado'}</span>
         : !saludDisponible()
           ? <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: T.text2, lineHeight: 1.4 }}>Se conecta en la app del iPhone, en Mi perfil, Dispositivos.</span>
           : (
@@ -137,7 +139,7 @@ function TarjetaPideReloj({ soyAtleta, coach }) {
             type="button" onClick={() => abreConectaReloj('chat')} className="kp-press"
             style={{ minHeight: 44, borderRadius: 14, border: 'none', background: KP.blue, color: '#fff', fontFamily: FONT, fontSize: 15, fontWeight: 800, cursor: 'pointer', touchAction: 'manipulation' }}
           >
-            Conectar Apple Watch
+            {conReloj ? 'Conectar Apple Watch' : 'Conectar Apple Salud'}
           </button>
           ))}
     </span>

@@ -57,26 +57,27 @@ export default function PaginaDelReloj({ alCerrar }) {
     try {
       const r = await traeLoUltimo();
       const n = (r?.nuevos ?? 0) + (r?.enriquecidos?.length ?? 0);
-      avisa(n ? (n === 1 ? 'Llegó 1 entreno de tu Apple Watch' : `Llegaron ${n} entrenos de tu Apple Watch`) : 'Al día. No hay entrenos nuevos.');
+      const de = reloj.emparejado ? 'de tu Apple Watch' : 'de Apple Salud';
+      avisa(n ? (n === 1 ? `Llegó 1 entreno ${de}` : `Llegaron ${n} entrenos ${de}`) : 'Al día. No hay entrenos nuevos.');
     } catch {
       avisa('No se pudo leer Apple Salud. Inténtalo otra vez.');
     }
   };
   const desconecta = async () => {
     const si = await pregunta({
-      titulo: '¿Dejar de traer tu Apple Watch?', detalle: 'Lo que ya llegó se queda. Para quitar el permiso por completo: Salud, tu foto, Apps, Training Lab.',
+      titulo: reloj.emparejado ? '¿Dejar de traer tu Apple Watch?' : '¿Dejar de traer Apple Salud?', detalle: 'Lo que ya llegó se queda. Para quitar el permiso por completo: Salud, tu foto, Apps, Training Lab.',
       confirmar: 'Desconectar', peligro: true,
     });
     if (!si) return;
-    try { await desconectaDelReloj(); alCerrar(); avisa('Apple Watch desconectado'); } catch { avisa('No se pudo desconectar. Inténtalo otra vez.'); }
+    try { await desconectaDelReloj(); alCerrar(); avisa(reloj.emparejado ? 'Apple Watch desconectado' : 'Apple Salud desconectado'); } catch { avisa('No se pudo desconectar. Inténtalo otra vez.'); }
   };
 
   const fila = (si, texto, dSi, dNo) => <Fila izquierda={<Estado si={si} />} texto={texto} detalle={si ? dSi : dNo} />;
   return createPortal(
-    <div role="dialog" aria-modal="true" aria-label="Apple Watch" style={{ position: 'fixed', inset: 0, zIndex: 3300, background: LT.bg, fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
+    <div role="dialog" aria-modal="true" aria-label={reloj.emparejado ? 'Apple Watch' : 'Apple Salud'} style={{ position: 'fixed', inset: 0, zIndex: 3300, background: LT.bg, fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 'calc(10px + env(safe-area-inset-top)) 16px 8px', maxWidth: 560, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
         <button type="button" onClick={alCerrar} aria-label="Atrás" className="kp-press" style={{ width: 42, height: 42, borderRadius: 13, border: 'none', background: '#EBEDF1', color: KP.ink, display: 'grid', placeItems: 'center', cursor: 'pointer', flex: 'none' }}><ChevronLeft size={20} /></button>
-        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: -0.5, color: KP.ink }}>Apple Watch</h1>
+        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: -0.5, color: KP.ink }}>{reloj.emparejado ? 'Apple Watch' : 'Apple Salud'}</h1>
       </div>
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <div style={{ maxWidth: 560, margin: '0 auto', padding: '8px 16px calc(32px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 22 }}>
