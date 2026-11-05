@@ -30,13 +30,23 @@ function ajustaSticker(raiz) {
     while (v.getBoundingClientRect().width > caja - 1 && s > 10 && vueltas < 90) { s -= 1; v.style.fontSize = `${s}px`; vueltas += 1; }
     v.style.display = '';
   });
-  // Los 19 nuevos: un valor con `data-n-max` baja hasta caber en ese ancho; un grupo (una fila o una rejilla) baja todos sus valores juntos.
+  // Los nuevos: un valor con `data-n-max` baja hasta caber en ese ancho; un grupo (una fila o una rejilla) baja todos sus valores juntos (`.n-v`, o `.n-aj` en
+  // los de letra serif o de máquina).
   raiz.querySelectorAll('[data-n-max]').forEach((c) => {
     const max = parseFloat(c.dataset.nMax);
-    const vs = c.classList.contains('n-v') ? [c] : [...c.querySelectorAll('.n-v')];
+    const vs = c.matches('.n-v, .n-aj') ? [c] : [...c.querySelectorAll('.n-v, .n-aj')];
     vs.forEach((v) => { if (!v.dataset.fs) v.dataset.fs = v.style.fontSize; v.style.fontSize = v.dataset.fs; });
     let k = 1;
     while (c.offsetWidth > max + 0.5 && k > 0.45) { k -= 0.03; vs.forEach((v) => { v.style.fontSize = `${(parseFloat(v.dataset.fs) * k).toFixed(1)}px`; }); }
+  });
+  // Un texto que envuelve (la frase, el nombre de la sesión) con `data-n-alto` baja hasta caber en ese alto: nunca se corta.
+  raiz.querySelectorAll('[data-n-alto]').forEach((v) => {
+    if (!v.dataset.fs) v.dataset.fs = v.style.fontSize;
+    v.style.fontSize = v.dataset.fs;
+    const max = parseFloat(v.dataset.nAlto);
+    let s = parseFloat(v.dataset.fs) || 16;
+    let vueltas = 0;
+    while (v.offsetHeight > max + 0.5 && s > 10 && vueltas < 60) { s -= 1; v.style.fontSize = `${s}px`; vueltas += 1; }
   });
   const iguala = (sel, hijos) => raiz.querySelectorAll(sel).forEach((b) => {
     const ls = [...b.querySelectorAll(hijos)];
@@ -47,22 +57,33 @@ function ajustaSticker(raiz) {
   iguala('.k-firma', '.k-fl');
 }
 
-/** La foto de fondo de «Con foto»: una de las de ejemplo (dibujadas) o la del carrete, con un velo abajo para que el sticker se lea. */
+/** La foto de fondo de «Con foto»: una de las de ejemplo (dibujadas) o la del carrete, con un velo abajo para que el sticker se lea. La del carrete se dibuja aparte
+    al exportar (`data-foto="abajo"`, ver `exporta.js`). */
 const Foto = ({ foto }) => (
   <div className={`stk-foto${foto.ejemplo ? ` ${foto.ejemplo}` : ''}`} aria-hidden="true">
-    {foto.url && <img src={foto.url} alt="" />}
+    {foto.url && <img src={foto.url} alt="" data-foto="abajo" />}
     <div className="stk-vela" />
   </div>
 );
 
-/** El sticker a su tamaño real (300 de ancho; alto según la forma). Se ajusta al dibujarse y otra vez cuando la fuente termina de cargar. */
-export default function Sticker({ item, f, color, forma = item.forma, foto = null, anima = false, cara = 0, alListo }) {
+// Los que no cambian con los cuatro colores (Burbuja, Polaroid, Resaltador, Corazón): tinta blanca, sin sombra.
+const FIJO = { id: 'blanco', tinta: '#FFFFFF', acento: '#3578FF', sombra: false, clara: false };
+// Las letras de los 12 con personalidad (5 nov 2026): se esperan antes de medir y de rasterizar, como Bricolage.
+const LETRAS = ['800 96px "Bricolage Grotesque"', '400 40px "Instrument Serif"', 'italic 400 40px "Instrument Serif"', '400 14px "Space Mono"', '700 14px "Space Mono"'];
+const cargaLetras = (todas) => (document.fonts?.load ? Promise.all((todas ? LETRAS : LETRAS.slice(0, 1)).map((l) => document.fonts.load(l))) : Promise.resolve());
+
+/**
+ * El sticker a su tamaño real (300 de ancho; alto según la forma). Se ajusta al dibujarse y otra vez cuando las letras terminan de cargar.
+ * `cara`: la variante que se ve. `frase`: la de «✎ Personalizar». `propia`: la foto del carrete para el Polaroid (un enlace local).
+ */
+export default function Sticker({ item, f, color: colorHoja, forma = item.forma, foto = null, anima = false, cara = 0, frase = '', propia = null, alListo }) {
   const ref = useRef(null);
+  const color = item.fija ? FIJO : colorHoja;
   useLayoutEffect(() => {
     let vivo = true;
     ajustaSticker(ref.current);
-    const fuente = document.fonts?.load ? document.fonts.load('800 96px "Bricolage Grotesque"') : Promise.resolve();
-    const imagen = ref.current?.querySelector('.stk-foto img');
+    const fuente = cargaLetras(item.familia === 'personalidad' || item.familia === 'totales' || !!item.total);
+    const imagen = ref.current?.querySelector('.stk-foto img, img[data-foto]');
     const lista = imagen && !imagen.complete ? new Promise((ok) => { imagen.onload = ok; imagen.onerror = ok; }) : null;
     Promise.all([fuente, lista]).then(() => {
       if (!vivo) return;
@@ -70,7 +91,7 @@ export default function Sticker({ item, f, color, forma = item.forma, foto = nul
       alListo?.(ref.current);
     }).catch(() => { if (vivo) alListo?.(ref.current); });
     return () => { vivo = false; };
-  }, [item, f, color, forma, foto, cara, alListo]);
+  }, [item, f, color, forma, foto, cara, frase, propia, alListo]);
   const nuevo = FAMILIAS_NUEVAS.includes(item.familia);
   // La tarjeta lleva su propio fondo y sus colores por tema; los otros nuevos, la tinta y el acento de siempre.
   const tema = item.familia === 'tarjeta' ? Object.fromEntries(Object.entries(TEMAS_TARJETA[color.id] ?? TEMAS_TARJETA.blanco).map(([k, v]) => [`--tj-${k}`, v])) : null;
@@ -80,7 +101,7 @@ export default function Sticker({ item, f, color, forma = item.forma, foto = nul
       style={{ '--stk-tinta': color.tinta, '--stk-acento': color.acento, ...tema, height: lienzoDe(item, forma).h }}
     >
       {foto && <Foto foto={foto} />}
-      {nuevo ? <Nuevos item={item} f={f} color={color} cara={cara} /> : <div className="stk-in"><Contenido item={item} f={f} color={color} /></div>}
+      {nuevo ? <Nuevos item={item} f={f} color={color} cara={cara} frase={frase} propia={propia} /> : <div className="stk-in"><Contenido item={item} f={f} color={color} /></div>}
     </div>
   );
 }

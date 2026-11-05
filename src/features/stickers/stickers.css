@@ -126,3 +126,38 @@
 .stk .n-raya { width: 120px; height: 2px; margin: 10px auto; flex: none; background: linear-gradient(90deg, transparent, var(--tj-linea), transparent); } /* estilo-ok: la línea de luz de la tarjeta (maqueta de stickers) */
 .stk .n-brillo { color: var(--tj-ruta); filter: drop-shadow(0 0 8px var(--tj-halo)); margin: 6px 0 12px; }
 .stk .n-pastilla { border: 1.5px solid var(--tj-ruta); color: var(--tj-ruta); border-radius: 999px; padding: 5px 14px; font-weight: 800; font-size: 12px; letter-spacing: 0.14em; filter: drop-shadow(0 0 5px var(--tj-brillo)); } /* estilo-ok: la pastilla «RÉCORD» lleva contorno por diseño (maqueta de stickers) */
+
+/* LOS 12 CON PERSONALIDAD Y LOS 6 DE TOTALES (5 nov 2026; medidas de la maqueta aprobada). Dos letras nuevas, declaradas en `index.css`: Instrument Serif
+   (regular e itálica) y Space Mono (400 y 700). Los marcados `fija` en el catálogo (Burbuja, Polaroid, Resaltador, Corazón) no cambian con los colores.
+   Las sombras van con `drop-shadow` (la de caja no rasteriza bien dentro de un sticker); el brillo del reloj, con `text-shadow`. */
+.stk .n-serif { font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; letter-spacing: 0; font-variant-numeric: normal; font-variation-settings: normal; }
+.stk .n-it { font-style: italic; }
+.stk .n-mono { font-family: 'Space Mono', ui-monospace, Menlo, monospace; letter-spacing: 0; font-variation-settings: normal; }
+.stk .n-envuelve { white-space: normal; overflow-wrap: anywhere; max-width: 256px; }
+.stk .n-der { display: inline-block; min-width: 9ch; text-align: right; }
+.stk .n-reloj { font-weight: 700; letter-spacing: -0.02em; line-height: 1; white-space: nowrap; text-shadow: 0 0 12px currentColor; }
+.stk .n-clave { font-size: 11px; letter-spacing: 0.2em; margin-top: 6px; opacity: 0.85; }
+.stk .n-frase { max-width: 260px; line-height: 1.02; white-space: normal; overflow-wrap: anywhere; }
+.stk .n-burbuja { position: relative; max-width: 230px; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25)); }
+.stk .n-globo { position: relative; z-index: 1; font-family: -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', Roboto, sans-serif; font-size: 19px; font-weight: 600; letter-spacing: 0; padding: 10px 16px; border-radius: 21px; line-height: 1.22; text-align: left; white-space: normal; overflow-wrap: anywhere; font-variant-numeric: normal; }
+.stk .n-pie { color: #B9C0CF; font-family: -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', Roboto, sans-serif; font-size: 12px; font-weight: 600; margin-top: 6px; white-space: nowrap; }
+.stk .n-entre { display: flex; justify-content: space-between; gap: 10px; width: 230px; white-space: nowrap; }
+.stk .n-pola { box-sizing: border-box; width: 206px; padding: 12px 12px 0; background: #FBFAF6; transform: rotate(-3deg); filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.35)); }
+.stk .n-pola-foto { display: block; width: 182px; height: 182px; object-fit: cover; }
+.stk .n-pola-hueco { width: 182px; height: 182px; background: #E4E2DC; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #6E6A62; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; font-size: 14px; font-weight: 700; line-height: 1.25; }
+.stk .n-angosta { font-variation-settings: 'opsz' 96, 'wdth' 75; font-stretch: 75%; }
+.stk .n-resalta { font-size: 24px; line-height: 1.35; color: #151515; max-width: 250px; white-space: normal; }
+.stk .n-resalta span { background: linear-gradient(transparent 12%, #FFE14D 12%, #FFE14D 92%, transparent 92%); padding: 0 5px; -webkit-box-decoration-break: clone; box-decoration-break: clone; } /* estilo-ok: el marcador amarillo del Resaltador (maqueta de stickers) */
+.stk .n-corazon { background: #FF2D55; color: #fff; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; font-size: 22px; font-weight: 700; padding: 10px 18px; border-radius: 999px; white-space: nowrap; filter: drop-shadow(0 4px 7px rgba(255, 45, 85, 0.35)); }
+.stk .n-corazon-b { background: #fff; color: #FF2D55; filter: drop-shadow(0 4px 7px rgba(0, 0, 0, 0.25)); }
+/* Totales. */
+.stk .n-barras { display: flex; align-items: flex-end; }
+.stk .n-barra { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.stk .n-barra > div:first-child { width: 16px; border-radius: 6px; background: currentColor; }
+.stk .n-tj .n-barra { gap: 8px; }
+.stk .n-tj .n-barra .n-luz { background: var(--tj-ruta); filter: drop-shadow(0 0 6px var(--tj-halo)); }
+.stk .n-tj .n-barra .n-apagada { background: var(--tj-apagado); }
+.stk .n-puntos { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; margin-top: 14px; width: 224px; }
+.stk .n-puntos i { display: block; box-sizing: border-box; width: 14px; height: 14px; margin: auto; border-radius: 50%; border: 1.5px solid currentColor; opacity: 0.45; } /* estilo-ok: el día sin entreno es un punto hueco (maqueta de stickers) */
+.stk .n-puntos i.si { background: currentColor; opacity: 1; }
+.stk .n-total { border-top: 1.5px solid currentColor; margin-top: 6px; padding-top: 6px; font-weight: 700; } /* estilo-ok: la raya del total a máquina (maqueta de stickers) */
