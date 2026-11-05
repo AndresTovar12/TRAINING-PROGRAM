@@ -9,6 +9,7 @@ import {
 import { leeMisCompras } from '@/lib/comprasApi';
 import { conCopiaEnElTelefono, guardaEnElTelefono, leeDelTelefono } from '@/lib/almacenDelTelefono';
 import { alVolverLaSenal, esFaltaDeSenal, haySenalAhora, marcaSinSenal } from '@/lib/senal';
+import { ESPERA_EN_VIVO_MS, FUERA_MINIMO_MS, alVolverALaApp, escuchaPlanes, loEscribiYo } from '@/lib/planesEnVivo';
 import { estructuraDelPlan, expandeMicrociclos } from '@/lib/training-utils';
 import { adaptadorDeRegistros, fasesConPegadas, reglasDe } from '@/lib/pegadas';
 import { colorDePrograma, tieneSesiones } from '@/lib/programas';
@@ -157,6 +158,24 @@ export function PlanProvider({ children }) {
     conPiezasDeLaCopia.current = false;
     setVuelta((n) => n + 1);
   }), []);
+
+  /* LOS CAMBIOS LLEGAN SOLOS (5 nov 2026). Andrés: «hay que salir y cerrar sesión para ver los cambios, eso está horrible». Dos momentos más de pedir los planes,
+     por el MISMO camino que al volver la señal (`vuelta`): sin «cargando», lo de antes se queda a la vista hasta que llega lo nuevo.
+     · En vivo: un cambio en `plans` de esta persona (su coach lo editó en la compu, el conector, otro aparato). Se espera 1.5 s por si llegan varios juntos.
+     · Al volver a la app (pestaña o iPhone) después de más de 20 s fuera: lo que pasó mientras el aviso en vivo no podía llegar.
+     Lo que el atleta anotó (series, pesos) no se toca: vive en su estado (`AppStateContext`), no en el plan. Sin señal no se pide nada; al volver, como siempre. */
+  useEffect(() => {
+    if (!userId) return undefined;
+    let espera = null;
+    const pide = () => { if (haySenalAhora()) setVuelta((n) => n + 1); };
+    const dejaDeEscuchar = escuchaPlanes(`user_id=eq.${userId}`, (cambio) => {
+      if (cambio?.new?.id && loEscribiYo(cambio.new)) return;
+      clearTimeout(espera);
+      espera = setTimeout(pide, ESPERA_EN_VIVO_MS);
+    });
+    const dejaDeVigilar = alVolverALaApp((msFuera) => { if (msFuera > FUERA_MINIMO_MS) pide(); });
+    return () => { clearTimeout(espera); dejaDeEscuchar(); dejaDeVigilar(); };
+  }, [userId]);
 
   // Otra persona: el programa elegido vuelve al de por defecto (al volver la señal NO: se queda en el que estaba).
   useEffect(() => { setActivoId(null); }, [userId]);

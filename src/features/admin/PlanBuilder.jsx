@@ -20,8 +20,10 @@ import { useConfirmacion } from '@/components/Confirmacion';
 import { useIsDesktop } from '@/lib/useViewport';
 import {
   createPlan, updatePlan, deletePlan, createExercise,
-  listExerciseMedia, addExerciseMedia, deleteExerciseMedia, getAthleteState,
+  listExerciseMedia, addExerciseMedia, deleteExerciseMedia, getAthleteState, getPlanPorId,
 } from '@/lib/api';
+import { ESPERA_EN_VIVO_MS, alVolverALaApp, escuchaPlanes, loEscribiYo, mismoInstante } from '@/lib/planesEnVivo';
+import { haySenalAhora } from '@/lib/senal';
 import {
   isLoadedExercise, dondeVa, estructuraDelPlan, kindDeEstructura, semanaGlobal, semanasDelPlan,
 } from '@/lib/training-utils';
@@ -2095,6 +2097,80 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     return () => window.removeEventListener('beforeunload', avisa);
   }, [dirty]);
 
+  /* EL PLAN CAMBIÓ EN OTRO LADO (5 nov 2026). Andrés: «hay que salir y cerrar sesión para ver los cambios». El editor escucha en vivo ESTE plan (`plans` por su
+     id) y, al volver a la pestaña o a la app, compara su `updated_at` con el que tiene en pantalla (`conocido`). Si cambió en otro lado (el conector, otro aparato):
+     · sin cambios sin guardar: se recarga solo, con el aviso «Se actualizó con los cambios más recientes»;
+     · con cambios sin guardar: no se toca nada y sale la franja «Este plan cambió en otro lado.» con «Ver lo nuevo» (pregunta y descarta lo suyo) y «Seguir con lo
+       mío» (al guardar gana lo suyo, como antes; la franja no vuelve por ESE mismo cambio).
+     Lo que guardó este aparato no cuenta (`loEscribiYo`, y el `updated_at` que devolvió el guardado pasa a ser el conocido). Mis planes no tiene `plans`: no aplica. */
+  const planVivoId = !enCatalogo && planRow?.id ? planRow.id : null;
+  const conocido = useRef(planRow?.updated_at ?? null);
+  const descartado = useRef(null);
+  const [otroLado, setOtroLado] = useState(null); // el `updated_at` de lo nuevo, mientras la franja está puesta
+  const alDia = useRef({ dirty, saving, nav });
+  const aplicaDeLaBase = (row) => {
+    const fs = row.data?.phases ? clone(row.data.phases) : [];
+    setTitle(row.title || t('Plan de entrenamiento'));
+    setPhases(fs);
+    setEstructura(estructuraDelPlan(row.data));
+    setFotoPlan(row.data?.foto || '');
+    setCienciaPlan(normalizaCiencia(row.data?.ciencia));
+    // Se queda donde estaba si esa fase y esa semana siguen existiendo.
+    const n = alDia.current.nav;
+    if (n.level === 'phase') {
+      const pi = Math.max(0, Math.min(n.pi, fs.length - 1));
+      if (fs.length) {
+        setNav({ level: 'phase', pi });
+        setWeekIdx((w) => Math.max(0, Math.min(w, (fs[pi].weekData?.length ?? 1) - 1)));
+      } else setNav({ level: 'start' });
+    }
+    hist.reinicia();
+    conocido.current = row.updated_at;
+    descartado.current = null;
+    setOtroLado(null);
+    yaNavego.current = true;
+    onSaved?.(row);
+  };
+  const aplicaRef = useRef(null);
+  // Lo de la última pintada, para lo que llega después (el aviso en vivo, la vuelta a la app).
+  useLayoutEffect(() => { alDia.current = { dirty, saving, nav }; aplicaRef.current = aplicaDeLaBase; });
+  useEffect(() => {
+    if (!planVivoId) return undefined;
+    let vivo = true;
+    let espera = null;
+    const revisa = async () => {
+      if (!haySenalAhora() || alDia.current.saving) return;
+      const row = await getPlanPorId(planVivoId).catch(() => null);
+      if (!vivo || !row || alDia.current.saving) return;
+      if (mismoInstante(row.updated_at, conocido.current) || loEscribiYo(row)) return;
+      if (alDia.current.dirty) {
+        if (!mismoInstante(row.updated_at, descartado.current)) setOtroLado(row.updated_at);
+        return;
+      }
+      aplicaRef.current(row);
+      avisa('Se actualizó con los cambios más recientes');
+    };
+    const dejaDeEscuchar = escuchaPlanes(`id=eq.${planVivoId}`, (cambio) => {
+      const nueva = cambio?.new;
+      if (!nueva?.id || loEscribiYo(nueva) || mismoInstante(nueva.updated_at, conocido.current)) return;
+      clearTimeout(espera);
+      espera = setTimeout(revisa, ESPERA_EN_VIVO_MS);
+    });
+    const dejaDeVigilar = alVolverALaApp(() => { revisa(); });
+    return () => { vivo = false; clearTimeout(espera); dejaDeEscuchar(); dejaDeVigilar(); };
+  }, [planVivoId, avisa]);
+  const verLoNuevo = async () => {
+    const va = await pregunta({
+      titulo: '¿Ver lo nuevo?', detalle: 'Se pierden los cambios que no has guardado aquí.', confirmar: 'Sí, ver lo nuevo', cancelar: 'Seguir con lo mío', peligro: true,
+    });
+    if (!va) return;
+    const row = await getPlanPorId(planVivoId).catch(() => null);
+    if (!row) { avisa('No se pudo traer lo nuevo. Inténtalo otra vez.'); return; }
+    aplicaDeLaBase(row);
+    avisa('Listo: ves lo más reciente');
+  };
+  const seguirConLoMio = () => { descartado.current = otroLado; setOtroLado(null); };
+
   // Ctrl/⌘+B oculta o muestra la guía (solo en la compu).
   const alternarGuia = guia.alternar;
   useEffect(() => {
@@ -2235,6 +2311,10 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         });
       hist.marcaGuardado(idAlGuardar);
       setHaGuardado(true);
+      // Lo guardado es lo conocido: lo que hubiera cambiado en otro lado quedó debajo (gana lo de este editor, como siempre).
+      conocido.current = row.updated_at;
+      descartado.current = null;
+      setOtroLado(null);
       /* Guardar NO cierra el editor: el coach se queda donde estaba para ver
          cómo quedó (Andrés, 27 sep 2026). Quien lo abrió recibe el plan
          guardado, y con él `planRow` cambia; eso vuelve a leer dónde va el
@@ -3029,6 +3109,19 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
           <X size={17} />
         </button>
       </header>
+      )}
+
+      {otroLado && (
+        <div role="status" style={{
+          flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '10px 16px',
+          background: KP.amberSoft, color: T.text, fontFamily: FONT, borderBottom: `1px solid ${T.border}`,
+        }}>
+          <b style={{ flex: '1 1 180px', fontSize: 14.5, fontWeight: 800 }}>Este plan cambió en otro lado.</b>
+          <span style={{ display: 'flex', gap: 8 }}>
+            <button type="button" className="kp-press" onClick={verLoNuevo} style={{ minHeight: 36, padding: '0 14px', borderRadius: 11, border: 'none', cursor: 'pointer', background: T.accent, color: '#fff', fontFamily: FONT, fontSize: 13.5, fontWeight: 800 }}>Ver lo nuevo</button>
+            <button type="button" className="kp-press" onClick={seguirConLoMio} style={{ minHeight: 36, padding: '0 14px', borderRadius: 11, border: 'none', cursor: 'pointer', background: '#fff', color: T.text, fontFamily: FONT, fontSize: 13.5, fontWeight: 800 }}>Seguir con lo mío</button>
+          </span>
+        </div>
       )}
 
       {err && (

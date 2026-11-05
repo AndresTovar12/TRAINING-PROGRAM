@@ -147,3 +147,24 @@ El reloj entrena sin el iPhone y lo que termina llega aquí, a la MISMA cola. El
 **Sin señal al volver** (paso 6 de la parte 3.7): lo del reloj entra a la cola igual, se ve en «Tus entrenos» y en su sesión del plan, Mi perfil lo cuenta en «N cosas por subir» (con su nombre: `datos.titulo`) y sube solo al volver la señal.
 
 **«{quien} ya lo ve».** Cuando una cosa del reloj sube, la cola avisa (`alSubirDeLaCola`) y la app se lo dice al reloj (`avisaAlRelojQueSubio`): su pantalla final pasa de «Ya está en tu iPhone» a «Carlos ya lo ve». Una sesión del plan espera además a que su estado quede guardado (`delEstado` en 0): sus series viajan con el estado.
+
+## 11. Los cambios del plan llegan solos (5 nov 2026)
+
+Andrés: «hay que salir y cerrar sesión para ver los cambios, eso está horrible». Spec: `docs/superpowers/specs/2026-11-05-integraciones-y-estado.md`, punto 3. Piezas comunes en `lib/planesEnVivo.js` (Realtime y «volver a la app») y `lib/planesEscritos.js` (lo que guardó este aparato).
+
+**La app del atleta (`PlanContext`).** Dos momentos más de pedir los planes, por el mismo camino que al volver la señal (`vuelta`): sin «cargando», lo de antes se queda a la vista hasta que llega lo nuevo.
+- **En vivo:** Supabase Realtime sobre `plans` con `user_id=eq.<atleta>`. Al llegar un cambio se esperan 1.5 s (por si llegan varios juntos) y se vuelve a pedir.
+- **Al volver a la app** (`visibilitychange` en la web, `appStateChange` activo en el iPhone; una sola vez aunque lleguen los dos) después de más de 20 s fuera.
+- Lo que el atleta anotó (series, pesos) no se toca: vive en su estado, no en el plan.
+- **Sin señal no corre nada** (`haySenalAhora`); al volver la señal sigue como antes (sección 2).
+
+**El editor del coach (`PlanBuilder`).** Escucha en vivo el plan abierto (`id=eq.<plan>`) y, al volver a la pestaña o a la app, pide su fila y compara `updated_at` con el que tiene en pantalla.
+- Sin cambios sin guardar: se recarga solo (fases, título, forma, foto; se queda en la misma fase y semana si siguen) y sale «Se actualizó con los cambios más recientes». El historial de deshacer se vacía (`useHistorial.reinicia`).
+- Con cambios sin guardar: no se toca nada y sale la franja fija «Este plan cambió en otro lado.» con «Ver lo nuevo» (pregunta y descarta lo suyo) y «Seguir con lo mío» (al guardar gana lo suyo, como antes; la franja no vuelve por ese mismo cambio).
+- **Lo propio no cuenta.** `updatePlan`, `createPlan` y `guardarSesionesPegadas` anotan el `updated_at` que devolvió la base (`anotaLoQueEscribi`); el aviso en vivo con esa hora se ignora (`loEscribiYo`), y tras guardar ese `updated_at` pasa a ser el conocido. Las horas se comparan al milisegundo con `instante()`: Realtime puede mandar «2026-11-05 22:10:11.123456+00», que Safari no lee con `Date.parse`.
+
+**El repertorio (`ExercisesPanel`).** Al volver a la pestaña o a la app después de más de 20 s, vuelve a pedir la lista (y qué ejercicios tienen video extra). Si falla, se queda la que estaba.
+
+**La base.** `plans` entró a la publicación `supabase_realtime` (`docs/sql/2026-11-05-plans-en-vivo.sql`). Realtime revisa la política de lectura de cada quien antes de mandarle un cambio; la de `plans` (`plans_ver`) solo deja ver los planes propios, los de los atletas que atiende cada profesional, y al administrador.
+
+**Cómo se probó.** WebKit con perfil de iPhone 13, el `PlanContext` y el `PlanBuilder` de verdad, y un Supabase falso con canales que la prueba dispara (páginas temporales fuera del repo). Atleta, en la web y con el puente falso del iPhone: el cambio en vivo llega en 1.8 s sin «cargando»; tras 25 s fuera llega al volver, una sola vez; con 5 s fuera no se pide nada; sin red no se pide nada. Coach: se recarga solo con el aviso; con cambios sin guardar sale la franja y no se pierde nada; «Seguir con lo mío», «Ver lo nuevo», y su propio guardado no dispara nada. **Falta en un iPhone de verdad** con la base real: dos aparatos con la misma cuenta, la app de verdad en segundo plano y el `appStateChange` nativo.
