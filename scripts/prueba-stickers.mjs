@@ -277,7 +277,9 @@ assert.equal(tituloDeLaHoja({ deporte: 'raqueta' }), 'Comparte tu entreno');
   const LLAVES = ['fondo', 'borde', 'brillo', 'texto', 'etiqueta', 'acento', 'ruta', 'halo', 'nucleo', 'topo', 'linea', 'apagado'];
   COLORES.forEach((c) => LLAVES.forEach((k) => assert.ok(TEMAS_TARJETA[c.id]?.[k], `${c.id}.${k}`)));
   assert.equal(TEMAS_TARJETA.blanco.borde, '#1E9BFF');
-  assert.equal(TEMAS_TARJETA.negro.fondo, 'radial-gradient(120% 80% at 50% 0%, #FFFFFF 0%, #F2F4F8 55%, #E6EAF1 100%)');
+  assert.equal(TEMAS_TARJETA.negro.fondo, 'radial-gradient(120% 80% at 50% 0%, rgba(255,255,255,.4) 0%, rgba(242,244,248,.4) 55%, rgba(230,234,241,.4) 100%)');
+  // El fondo de las 4 tarjetas va al 40 % y en rgba (no color-mix): así lo rasteriza modern-screenshot en el iPhone.
+  COLORES.forEach((c) => { const f = TEMAS_TARJETA[c.id].fondo; assert.equal((f.match(/rgba\(\d+,\d+,\d+,\.4\)/g) ?? []).length, 3, `${c.id}.fondo: 3 paradas al 40 %`); assert.ok(!f.includes('#') && !f.includes('color-mix'), `${c.id}.fondo en rgba`); });
   assert.equal(TEMAS_TARJETA.azul.ruta, '#FFFFFF');
   assert.equal(TEMAS_TARJETA.coral.apagado, '#4A1C14');
   // «Con foto» solo muestra los de identidad: ninguno de los nuevos.
