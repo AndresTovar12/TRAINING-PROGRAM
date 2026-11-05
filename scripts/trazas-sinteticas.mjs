@@ -238,10 +238,20 @@ export function biciParadaBrincando() {
   );
 }
 
+/** Caminar lento (5 nov 2026): a 1.0 m/s 30 s, parado 20 s y otra vez a 1.0 m/s, con rebote de caminar. Reanuda en ≤ 3 s (antes, con 1.2 m/s, nunca). */
+export const caminarLento = () => traza({
+  nombre: 'caminar-lento-sintetica.json', deporte: 'caminar', desplazamiento: 'pie', segundos: 100, semilla: 51,
+  nota: '5 nov: camina a 1.0 m/s 30 s, se para de los 30 a los 50 s y vuelve a caminar a 1.0 m/s; rebote de caminar.',
+  real: (t) => (t < 30 ? { y: t, vel: 1, gps: 'bueno' } : t < 50 ? { y: 30, vel: 0.1, gps: 'bueno' } : { y: 30 + (t - 50), vel: 1, gps: 'bueno' }),
+  rebote: (k) => (k > 30 && k <= 50 ? REBOTE.parado : REBOTE.caminando),
+  eventos: [actividad(1, 'caminando', 0), actividad(36, 'quieto', 32), actividad(55, 'caminando', 51)],
+  paradas: [[30, 50]], esperado: { pausaAntesDe: 33, sinReanudarAntesDe: 50, reanudaAntesDe: 53 },
+});
+
 /** Las que se escriben en `scripts/trazas/`. */
 export const ESCRITAS = [
   calle, podometroCallado, girarElTelefono, pararDeGolpe, moverElTelefono, volverACorrer, tunel, biciSemaforo, biciLecturaMala,
-  biciParaDeGolpe, biciUnaLenta, biciDosLentas, biciParadaBrincando,
+  biciParaDeGolpe, biciUnaLenta, biciDosLentas, biciParadaBrincando, caminarLento,
 ];
 
 // `node scripts/trazas-sinteticas.mjs`: escribe las de `scripts/trazas/`.
