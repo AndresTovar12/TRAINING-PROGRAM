@@ -275,6 +275,30 @@ const buscados = (r: any) => r.structuredContent.ejercicios.map((e: any) => e.no
   ok('buscar_ejercicios: plural, grupos, categorías y músculos secundarios')
 }
 
+/* ---- buscar_ejercicios: un video puesto solo como «Explicación» (en `exercise_media`) también cuenta (5 nov 2026) ---- */
+{
+  const MEDIOS = [
+    { exercise_id: 'id-hamstringcurl', url: 'https://videos/explicacion-curl.mp4', para_atleta: null, orden: 0 },
+    { exercise_id: 'id-pullups', url: 'https://videos/solo-para-otro.mp4', para_atleta: 'otro-atleta', orden: 0 },
+    { exercise_id: 'id-bicepcurl', url: 'https://videos/explicacion-bicep.mp4', para_atleta: null, orden: 0 },
+  ]
+  const conColumna = EJERCICIOS.map((e) => (e.name === 'Bicep Curl' ? { ...e, video_link: 'https://videos/ejemplo-bicep.mp4' } : e))
+  const { db } = baseFalsa({ exercises: conColumna, exercise_categories: CATEGORIAS, exercise_overrides: [], exercise_media: MEDIOS })
+  const pedidas: string[] = []
+  const dbQueCuenta = { ...db, from: (t: string) => { pedidas.push(t); return db.from(t) } }
+  const comoAtleta: any = { id: 'atleta-1', usuario: 'zz_atleta', nombre: 'Atleta', rol: 'atleta', coachId: 'master-1', salud: false, unidad: 'kg', db: dbQueCuenta }
+  const tools: Record<string, (a: any) => Promise<any>> = {}
+  herramientasComunes({ registerTool: (nombre: string, _d: unknown, fn: any) => { tools[nombre] = fn } } as any, comoAtleta)
+  const video = async (texto: string) => (await tools.buscar_ejercicios({ texto })).structuredContent.ejercicios.find((e: any) => e.nombre.toLowerCase().includes(texto)).video
+  igual(await video('hamstring'), 'https://videos/explicacion-curl.mp4', 'solo con «Explicación»: sale con video')
+  igual(await video('bicep'), 'https://videos/ejemplo-bicep.mp4', 'con columnas: gana la columna, como antes')
+  igual(await video('pull ups'), undefined, 'un video para OTRO atleta no cuenta para este')
+  pedidas.length = 0
+  await tools.buscar_ejercicios({})
+  igual(pedidas.filter((t) => t === 'exercise_media').length, 1, 'los medios se piden en UNA consulta')
+  ok('buscar_ejercicios: los videos de explicación cuentan, con la visibilidad de ver_ejercicio')
+}
+
 /* ---- crear_ejercicio: el tope, de punta a punta ---- */
 {
   const { tools, insertados } = herramientas(herramientasDelCoach)
