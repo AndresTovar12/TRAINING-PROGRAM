@@ -52,7 +52,7 @@ export const reanuda = (c, ahora = Date.now()) => {
 
    A PIE ('pie': correr, caminar, senderismo, trail), con acelerómetro: el REBOTE del cuerpo (`lib/sensorDeMovimiento.js`).
      · Pausar: 1.5 s seguidos sin rebote. El GPS no participa.
-     · Reanudar: rebote al menos 1 s seguido Y avance real del GPS: la mediana de los pasos de cada segundo en los últimos 5 s ≥ 1.2 m/s (con o sin error;
+     · Reanudar: rebote al menos 1 s seguido Y avance real del GPS: la mediana de los pasos de cada segundo en los últimos 5 s ≥ 0.6 m/s (con o sin error;
        un brinco suelto del GPS no la mueve). Mover el teléfono con las manos da rebote pero no avance: no reanuda.
      · Sin GPS bueno (ningún punto con error ≤ 20 m en los últimos 10 s, un túnel): reanuda con rebote solo, 3 s seguidos. Perder la señal nunca pausa.
      · Los metros: sin rebote, el GPS no suma distancia aunque todavía no se haya pausado (`agregaPunto` con 'quieto').
@@ -91,8 +91,9 @@ const SIN_SENAL_S = 5;
 const GPS_BUENO_S = 10;
 const HUECO_MAXIMO_S = 2;
 const VENTANA_S = 5;
-/** Avance real a pie: la mediana de los pasos de cada segundo, en m/s. */
-const AVANCE_A_PIE = 1.2;
+/** Avance real a pie: la mediana de los pasos de cada segundo, en m/s. 0.6 desde el 5 nov 2026 (antes 1.2: caminar lento no se reanudaba nunca), igual para
+    correr y caminar. El rebote sigue siendo obligatorio para reanudar. */
+const AVANCE_A_PIE = 0.6;
 /** El error (m) de una lectura que sí sirve: ≤ 20 para el avance a pie y el «GPS bueno»; ≤ 30 para el desplazamiento de 5 s (con mucho error, entre edificios,
     también cuenta: antes se descartaba y la pausa tardaba hasta 17 s). */
 const ERROR_BUENO = 20;
@@ -126,7 +127,7 @@ function racha(lista, cumple) {
   return desde;
 }
 
-/** ¿Avance real a pie? La mediana de los pasos de cada segundo de las lecturas buenas de los últimos 5 s (al menos 4 pasos) ≥ 1.2 m/s. */
+/** ¿Avance real a pie? La mediana de los pasos de cada segundo de las lecturas buenas de los últimos 5 s (al menos 4 pasos) ≥ `AVANCE_A_PIE`. */
 function avanzaAPie(lecturas, ahoraS) {
   const buenas = lecturas.filter((x) => conLugar(x) && x.pre <= ERROR_BUENO);
   const ultima = buenas.at(-1);
