@@ -39,6 +39,13 @@
      Los «tl:» (bici fija, tabla de surf, pala de pádel, cinturón con banderas, la palabra HYROX en nuestra letra, Bricolage Grotesque, canoa, elíptica, reformer,
      cajón de salto, rodillo, banda elástica, aro de pilates, pelota chica, pista de atletismo y la copia de Hyrox en Deportes) los dibujó Training Lab. */
 
+/** «Favoritos» en «Tipo nuevo» (6 nov 2026, Andrés): el chip justo después de «Todos», con estos 24 en este orden. Ninguno puede faltar ni estar oculto
+    (`scripts/prueba-iconos-de-tipo.mjs`). Viaja con el catálogo: `armaCatalogo` lo recibe junto con lo demás. */
+export const FAVORITOS = [
+  'pesa', 'hyrox', 'tenis-correr', 'tenis-movimiento', 'huellas-pies', 'goggles', 'gorra-natacion', 'bicicleta', 'bici-fija', 'balon-americano', 'cinturon-banderas', 'tapete',
+  'loto', 'balon-basquet', 'pista', 'balon-futbol', 'pala-padel', 'voleibol', 'mancuernas', 'pesa-rusa', 'guante', 'cronometro', 'rayo', 'cono',
+];
+
 /** [id, nombre] de cada categoría, en el orden en que se enseñan. */
 export const CATEGORIAS = [
   ['fuerza', 'Fuerza'],

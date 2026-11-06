@@ -31,10 +31,13 @@ const palabrasDe = (texto) => normaliza(texto).split(/[^a-z0-9]+/).filter((p) =>
 /** El catálogo listo para buscar: cada ícono con su nombre normalizado y sus palabras ya separadas.
     Los OCULTOS (`oculto: true`, 6 nov 2026: los muñequitos y los repetidos) siguen en `porId` —un tipo viejo que ya lo usa se sigue dibujando igual— pero no
     en `visibles`: ni la rejilla ni `sugiereIcono` los ofrecen. Sus palabras ya se sumaron, en el archivo de datos, a las del que lo reemplaza. */
-export function armaCatalogo({ CATEGORIAS, ICONOS }) {
+export function armaCatalogo({ CATEGORIAS, ICONOS, FAVORITOS = [] }) {
   const iconos = ICONOS.map((ic) => ({ ...ic, nombreNorm: normaliza(ic.nombre), claves: ic.palabras.split(' ').filter(Boolean) }));
+  const porId = new Map(iconos.map((ic) => [ic.id, ic]));
   return {
-    categorias: CATEGORIAS.map(([id, nombre]) => ({ id, nombre })), iconos, visibles: iconos.filter((ic) => !ic.oculto), porId: new Map(iconos.map((ic) => [ic.id, ic])),
+    categorias: CATEGORIAS.map(([id, nombre]) => ({ id, nombre })), iconos, visibles: iconos.filter((ic) => !ic.oculto), porId,
+    // «Favoritos» de «Tipo nuevo» (6 nov 2026): en el orden de `FAVORITOS`, sin ocultos.
+    favoritos: FAVORITOS.map((id) => porId.get(id)).filter((ic) => ic && !ic.oculto),
   };
 }
 
@@ -111,10 +114,11 @@ export function sugiereIcono(cat, nombre) {
 /**
  * Los íconos que se enseñan en la rejilla: los de una categoría (`'todos'` = todos) que contienen CADA palabra buscada, los más parecidos primero. Nunca un oculto.
  * Sin búsqueda, el orden del catálogo (el que se pensó para cada categoría).
+ * `'favoritos'` es un caso aparte (no es la `cat` de ningún ícono): los de `FAVORITOS`, en su orden; con texto, se filtra dentro de ellos igual.
  */
 export function buscaIconos(cat, texto = '', categoria = 'todos') {
   if (!cat) return [];
-  const delGrupo = categoria === 'todos' ? cat.visibles : cat.visibles.filter((ic) => ic.cat === categoria);
+  const delGrupo = categoria === 'todos' ? cat.visibles : categoria === 'favoritos' ? (cat.favoritos ?? []) : cat.visibles.filter((ic) => ic.cat === categoria);
   const buscadas = normaliza(texto).split(/\s+/).filter(Boolean);
   if (buscadas.length === 0) return delGrupo;
   const palabras = palabrasDe(texto);

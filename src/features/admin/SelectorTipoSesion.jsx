@@ -3,7 +3,7 @@ import { Check, ChevronDown, Plus, SlidersHorizontal } from 'lucide-react';
 import { useAviso } from '@/components/AvisoPasajero';
 import { aspectoDelTipo } from '@/lib/aspectoDelTipo';
 import { cargaCatalogo } from '@/lib/iconosDeTipo';
-import { FONT, T, tipoDeSesion, UI } from '@/lib/theme';
+import { FONT, KP, T, tipoDeSesion, UI } from '@/lib/theme';
 import HojaTipoNuevo from '@/features/admin/HojaTipoNuevo';
 import HojaTiposDeSesion from '@/features/admin/HojaTiposDeSesion';
 import MosaicoDeTipo from '@/features/admin/MosaicoDeTipo';
@@ -176,7 +176,7 @@ export default function SelectorTipoSesion({ day, onPatch, coachId, puedeCrear =
                     const activo = day?.cat === 'otro' && day?.catNombre === m.nombre;
                     return (
                       <button key={m.id} type="button" onClick={() => eligeMio(m)} style={fila(activo)}>
-                        <MosaicoDeTipo aspecto={aspectoDelTipo({ cat: 'otro', catNombre: m.nombre, catColor: m.color, catIcono: m.icono })} tam={30} />
+                        <MosaicoDeTipo aspecto={aspectoDelTipo({ cat: 'otro', catNombre: m.nombre, catColor: m.color, catIcono: m.icono })} tam={30} color={KP.blue} />
                         <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.nombre}</span>
                         {activo && <Check size={16} color={T.accent} />}
                       </button>
@@ -190,7 +190,7 @@ export default function SelectorTipoSesion({ day, onPatch, coachId, puedeCrear =
                 const activo = day?.cat === b.slug;
                 return (
                   <button key={b.slug} type="button" onClick={() => eligeBase(b.slug)} style={fila(activo)}>
-                    <MosaicoDeTipo aspecto={aspectoDelTipo({ cat: b.slug })} tam={30} />
+                    <MosaicoDeTipo aspecto={aspectoDelTipo({ cat: b.slug })} tam={30} color={KP.blue} />
                     <span style={{ flex: 1, minWidth: 0 }}>{b.label}</span>
                     {activo && <Check size={16} color={T.accent} />}
                   </button>

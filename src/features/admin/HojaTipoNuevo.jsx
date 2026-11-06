@@ -154,7 +154,8 @@ export default function HojaTipoNuevo({ propios, conUso, onGuardar, onCerrar }) 
             role="group" aria-label="Categorías de íconos"
             style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none', padding: '2px 0', flexShrink: 0, /* estilo-ok: desvanecido de la tira que se desliza */ WebkitMaskImage: 'linear-gradient(to right, #000 90%, transparent)', maskImage: 'linear-gradient(to right, #000 90%, transparent)' }}
           >
-            {[{ id: 'todos', nombre: 'Todos' }, ...(catalogo?.categorias ?? [])].map((c) => (
+            {/* «Favoritos» (6 nov 2026): los 24 de `FAVORITOS`, justo después de «Todos», que sigue siendo el que sale al abrir. */}
+            {[{ id: 'todos', nombre: 'Todos' }, { id: 'favoritos', nombre: 'Favoritos' }, ...(catalogo?.categorias ?? [])].map((c) => (
               <button
                 key={c.id} type="button" onClick={() => setCategoria(c.id)} aria-pressed={categoria === c.id}
                 style={{

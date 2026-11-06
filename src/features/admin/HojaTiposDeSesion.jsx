@@ -35,7 +35,8 @@ function Caja({ children }) {
   return <div style={{ background: LT.surface, border: 'none', borderRadius: 18, overflow: 'hidden' }}>{children}</div>;
 }
 
-function Fila({ aspecto, nombre, resaltada = false, primera = false, children }) {
+// `color`: el de los símbolos de la lista (6 nov 2026: «Los tuyos» y «De la app» van todos en el azul de la marca, `KP.blue`); sin él, el del tipo.
+function Fila({ aspecto, nombre, resaltada = false, primera = false, color = null, children }) {
   return (
     <div
       style={{
@@ -43,7 +44,7 @@ function Fila({ aspecto, nombre, resaltada = false, primera = false, children })
         background: resaltada ? LT.blueSoft : 'transparent', transition: 'background 1.4s ease-out',
       }}
     >
-      <MosaicoDeTipo aspecto={aspecto} tam={40} />
+      <MosaicoDeTipo aspecto={aspecto} tam={40} color={color} />
       <span style={{ flex: 1, minWidth: 0, fontSize: 16, fontWeight: 700, color: LT.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nombre}</span>
       {children}
     </div>
@@ -126,7 +127,7 @@ export default function HojaTiposDeSesion({ propios, base, baseQuitada, nuevoId 
         <Caja>
           {propios.map((t, i) => (
             <Fila
-              key={t.id} primera={i === 0} nombre={t.nombre} resaltada={resaltado === t.id}
+              key={t.id} primera={i === 0} nombre={t.nombre} resaltada={resaltado === t.id} color={KP.blue}
               aspecto={aspectoDe({ cat: 'otro', catNombre: t.nombre, catColor: t.color, catIcono: t.icono })}
             >
               <BotonDeFila color={LT.danger} onClick={() => quitaPropio(t)} etiquetaAria={`Quitar ${t.nombre}`}>Quitar</BotonDeFila>
@@ -140,7 +141,7 @@ export default function HojaTiposDeSesion({ propios, base, baseQuitada, nuevoId 
       <Cabecera texto="De la app" cuenta={base.length} />
       <Caja>
         {base.map((b, i) => (
-          <Fila key={b.slug} primera={i === 0} nombre={b.label} aspecto={aspectoDe({ cat: b.slug })}>
+          <Fila key={b.slug} primera={i === 0} nombre={b.label} aspecto={aspectoDe({ cat: b.slug })} color={KP.blue}>
             {b.slug !== TIPO_FIJO && <BotonDeFila onClick={() => quitaBase(b)} etiquetaAria={`Quitar ${b.label}`}>Quitar</BotonDeFila>}
           </Fila>
         ))}

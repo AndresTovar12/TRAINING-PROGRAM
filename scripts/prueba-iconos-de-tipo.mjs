@@ -206,4 +206,17 @@ const pinta = (svg) => /<path[^>]* d="[^"]*\d[^"]*"/.test(svg) || /<(rect|circle
 for (const id of NUEVOS) assert.ok(pinta(cat.porId.get(id).svg), `«${id}» no pinta nada`);
 for (const id of NUEVOS) assert.ok(!/stroke-width/.test(cat.porId.get(id).svg) || ['tenis-correr'].includes(id), `«${id}» trae su propio stroke-width`);
 
+/* ---------- «Favoritos» en «Tipo nuevo» (6 nov 2026) ---------- */
+assert.equal(datos.FAVORITOS.length, 24, 'son 24 favoritos');
+for (const id of datos.FAVORITOS) {
+  assert.ok(cat.porId.has(id), `el favorito «${id}» no está en el catálogo`);
+  assert.ok(!cat.porId.get(id).oculto, `el favorito «${id}» está oculto`);
+}
+assert.deepEqual(ids(buscaIconos(cat, '', 'favoritos')), datos.FAVORITOS, 'el chip «Favoritos» enseña los 24 en su orden');
+assert.ok(!cat.categorias.some((c) => c.id === 'favoritos') && !cat.iconos.some((i) => i.cat === 'favoritos'), '«favoritos» no es una categoría de las entradas');
+const balones = ids(buscaIconos(cat, 'balon', 'favoritos'));
+assert.ok(balones.length > 0 && balones.every((id) => datos.FAVORITOS.includes(id)), 'con texto, filtra dentro de los favoritos');
+assert.ok(balones.includes('balon-futbol') && !balones.includes('balon-waterpolo'), 'con texto, solo los favoritos que tienen la palabra');
+assert.deepEqual(armaCatalogo({ CATEGORIAS: datos.CATEGORIAS, ICONOS: datos.ICONOS }).favoritos, [], 'sin FAVORITOS, el chip sale vacío (no truena)');
+
 console.log(`prueba-iconos-de-tipo: todo bien (${cat.iconos.length} íconos, ${cat.categorias.length} categorías, ${Object.keys(ESPERADOS).length} nombres)`);
