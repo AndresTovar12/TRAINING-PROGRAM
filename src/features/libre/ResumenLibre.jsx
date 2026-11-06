@@ -17,6 +17,7 @@ import AvisoDeStickers from '@/features/stickers/AvisoDeStickers';
 import CambiarNombre from '@/features/stickers/CambiarNombre';
 import { tituloDeLaHoja } from '@/lib/stickers/catalogo';
 import ElegirActividad from './ElegirActividad';
+import { useSigueMontado } from '@/lib/useHojaDeslizable';
 import PaginaDelEntreno, { PorKilometro, TuPulso } from './PaginaDelEntreno';
 import { RelojEnEntreno } from '@/features/reloj/TarjetasDelReloj';
 import { AVISO_RELOJ_TRAJO } from '@/lib/relojApple';
@@ -87,6 +88,7 @@ export default function ResumenLibre({ fila: filaInicial, unidadPeso = 'kg', alC
   const trayendoPulso = recien && trayendo && !!relojConexion && relojAqui && !(fila.fc_media > 0);
   const [verStickers, setVerStickers] = useState(conStickers);
   const [menu, setMenu] = useState(null); // null | 'nombre' | 'actividad'
+  const listaMontada = useSigueMontado(menu === 'actividad'); // «Cambiar la actividad» baja con animación al cerrarse
   const [error, setError] = useState(null);
   const pregunta = useConfirmacion();
   // La ruta guardada (de un entreno con GPS): se lee una vez. La recién medida ya viene en `muestras`; la de uno que aún está en la cola, en `seriesLocales`.
@@ -170,8 +172,8 @@ export default function ResumenLibre({ fila: filaInicial, unidadPeso = 'kg', alC
               alGuardar={async (t) => { try { await renombra(t); setMenu(null); } catch { setError('No se pudo guardar el nombre. Inténtalo otra vez.'); setMenu(null); } }}
             />
           )}
-          {menu === 'actividad' && (
-            <ElegirActividad filas={filas} propias={propias} alElegir={eligeActividad} alCrear={(a) => { alCrearPropia?.(a); eligeActividad(a); }} alCerrar={() => setMenu(null)} />
+          {listaMontada && (
+            <ElegirActividad abierta={menu === 'actividad'} filas={filas} propias={propias} alElegir={eligeActividad} alCrear={(a) => { alCrearPropia?.(a); eligeActividad(a); }} alCerrar={() => setMenu(null)} />
           )}
           {verStickers && (
             <Suspense fallback={null}>

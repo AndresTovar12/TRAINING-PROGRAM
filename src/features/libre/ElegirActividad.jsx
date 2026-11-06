@@ -9,10 +9,13 @@ import { buscaIconos, sugiereIcono } from '@/lib/iconosDeTipo';
 import { useCatalogoDeIconos } from '@/lib/useCatalogoDeIconos';
 import { IconoSvg } from '@/components/IconoDeTipo';
 import IconoDeActividad from './IconoDeActividad';
+import { useHojaDeslizable } from '@/lib/useHojaDeslizable';
 
 /* ELIGE TU ACTIVIDAD (23 oct 2026, Activity Tracker; rehecha el 6 nov 2026, «Registrar: hoja clara», maquetas aprobadas: la propuesta 2 «Lista agrupada» en su versión B «Todo azul»).
    Se abre desde el botón de la izquierda de «listo para empezar» (el punto ● de la barra). Ya no es una pantalla negra con una lista larga: es una HOJA CLARA que sube
    sobre la app (la app se ve oscurecida arriba), como el resto de Training Lab.
+   Desde el 6 nov 2026 se abre ENCIMA de «listo para empezar» sin quitar el mapa (arriba se ve el mapa oscurecido; ver `EntrenoLibre.jsx`, `eligiendo`), se cierra
+   deslizando hacia abajo y baja con animación al cerrarse (`lib/useHojaDeslizable.js`; quien la pinta le pasa `abierta` y la deja montada con `useSigueMontado`).
      · Cabecera «¿Qué vas a hacer?» con una equis, y un buscador blanco sin acentos. Si lo que escribe no existe: «Crear "Waterpolo"».
      · La lista agrupada, como «Mi perfil»: «Tus actividades» primero (lo que hizo últimamente y las que creó), luego los grupos del catálogo, cada uno en su tarjeta blanca con
        renglones (símbolo azul, nombre y, si lleva mapa, «mapa» en verde), y al final «¿No está?» con «Crear mi actividad».
@@ -38,17 +41,23 @@ const redondo = { width: 34, height: 34, borderRadius: 17, border: 'none', backg
 const campo = { background: C.tarjeta, borderRadius: UI.rCampo, boxShadow: UI.sombraGrupo };
 const botonAzul = { width: '100%', minHeight: 56, borderRadius: 20, border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 18, fontWeight: 800, color: '#fff', background: C.azul, touchAction: 'manipulation' };
 
-/** La hoja: un velo sobre la app, y abajo la hoja clara con su asita (sube con el mismo movimiento que las otras hojas). `alTocarFuera`: tocar el velo. */
-function Hoja({ etiqueta, alTocarFuera = null, completa = true, children }) {
+/** La hoja: un velo sobre la app, y abajo la hoja clara con su asita (sube con el mismo movimiento que las otras hojas). `alTocarFuera`: tocar el velo, y
+    también deslizar la hoja hacia abajo (6 nov 2026, `lib/useHojaDeslizable.js`); sin él (creando o editando) no se cierra de ninguna de las dos formas.
+    `abierta` en falso: baja con animación y ya no recibe toques (quien la pinta la deja montada ese rato con `useSigueMontado`).
+    El velo es HERMANO de la hoja (no su padre) para aclararse solo él mientras se jala. Sobre el mapa de Apple, el velo (opaco al 32 %) es lo que se queda con
+    los toques de toda la pantalla: el plugin del mapa le da a la página lo que tiene fondo, así que ni «INICIAR» ni los botones del mapa reciben nada. */
+function Hoja({ etiqueta, alTocarFuera = null, completa = true, abierta = true, children }) {
+  const { hoja, velo } = useHojaDeslizable({ abierta, alCerrar: alTocarFuera });
   return createPortal(
     <div
-      role="dialog" aria-modal="true" aria-label={etiqueta} onClick={alTocarFuera ?? undefined}
-      style={{ position: 'fixed', inset: 0, zIndex: 3300, background: C.velo, fontFamily: FONT, color: C.texto, display: 'flex', alignItems: 'flex-end' }}
+      role="dialog" aria-modal="true" aria-label={etiqueta}
+      style={{ position: 'fixed', inset: 0, zIndex: 3300, fontFamily: FONT, color: C.texto, display: 'flex', alignItems: 'flex-end', ...(abierta ? {} : { pointerEvents: 'none' }) }}
     >
+      <div ref={velo} aria-hidden="true" onClick={alTocarFuera ?? undefined} style={{ position: 'absolute', inset: 0, background: C.velo }} />
       <div
-        className="animate-sheet" onClick={(e) => e.stopPropagation()}
+        ref={hoja} className="animate-sheet"
         style={{
-          width: '100%', boxSizing: 'border-box', background: C.fondo, borderRadius: '28px 28px 0 0', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          position: 'relative', width: '100%', boxSizing: 'border-box', background: C.fondo, borderRadius: '28px 28px 0 0', display: 'flex', flexDirection: 'column', overflow: 'hidden',
           ...(completa ? { height: 'calc(100% - max(46px, env(safe-area-inset-top) + 12px))' } : { maxHeight: 'calc(100% - max(46px, env(safe-area-inset-top) + 12px))' }),
         }}
       >
@@ -133,10 +142,10 @@ export function ComoTeMueves({ valor, alCambiar }) {
 }
 
 /** Al iniciar una propia con mapa que todavía no dice cómo se mueve (se creó antes del 3 nov 2026): la misma pregunta, una sola vez. `alElegir('pie' | 'ruedas')`. */
-export function HojaComoTeMueves({ actividad, alElegir, alCerrar }) {
+export function HojaComoTeMueves({ actividad, alElegir, alCerrar, abierta = true }) {
   const [valor, setValor] = useState('pie');
   return (
-    <Hoja etiqueta="¿Cómo te mueves?" alTocarFuera={alCerrar} completa={false}>
+    <Hoja etiqueta="¿Cómo te mueves?" alTocarFuera={alCerrar} completa={false} abierta={abierta}>
       <div style={{ padding: '6px 16px calc(16px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <IconoDeActividad actividad={actividad} size={44} />
@@ -246,7 +255,7 @@ function Crear({ inicial, editando = null, propias, alGuardar, alVolver }) {
   );
 }
 
-export default function ElegirActividad({ filas = [], propias = [], alElegir, alCrear, alEditar = null, alCerrar }) {
+export default function ElegirActividad({ filas = [], propias = [], alElegir, alCrear, alEditar = null, alCerrar, abierta = true }) {
   const [busca, setBusca] = useState('');
   const [creando, setCreando] = useState(null); // null | el nombre con que arranca
   const [editando, setEditando] = useState(null); // la propia que está cambiando
@@ -258,7 +267,7 @@ export default function ElegirActividad({ filas = [], propias = [], alElegir, al
   const hechas = propiasDe(propias);
 
   return (
-    <Hoja etiqueta="Elige tu actividad" alTocarFuera={editando || creando !== null ? null : alCerrar}>
+    <Hoja etiqueta="Elige tu actividad" alTocarFuera={editando || creando !== null ? null : alCerrar} abierta={abierta}>
       {editando ? (
         <Crear inicial="" editando={editando} propias={propias} alVolver={() => setEditando(null)} alGuardar={(act) => { alEditar(act); setEditando(null); }} />
       ) : creando !== null ? (
@@ -273,7 +282,8 @@ export default function ElegirActividad({ filas = [], propias = [], alElegir, al
               style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', color: C.texto, fontFamily: FONT, fontSize: 15, fontWeight: 500, padding: '11px 0', outline: 'none' }}
             />
           </label>
-          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 16px calc(24px + env(safe-area-inset-bottom))' }}>
+          {/* `overscrollBehavior`: al llegar a una orilla, la lista no arrastra lo de atrás. Hasta arriba y hacia abajo, el dedo jala la hoja (`useHojaDeslizable`). */}
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', padding: '0 16px calc(24px + env(safe-area-inset-bottom))' }}>
             {!q ? (
               <>
                 <div style={{ ...rotulo, marginTop: 4 }}>Tus actividades</div>
