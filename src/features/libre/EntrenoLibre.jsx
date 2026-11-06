@@ -28,6 +28,7 @@ import { abreSesionHecha } from '@/lib/abreSesionHecha';
 import { useRelojEnCurso } from '@/lib/relojApple';
 import { useAviso } from '@/components/AvisoPasajero';
 import { cargaCatalogo } from '@/lib/iconosDeTipo';
+import { useSigueMontado } from '@/lib/useHojaDeslizable';
 
 /* EL ENTRENO LIBRE, armado (12 oct 2026): lo que ve alguien en Home o en la pestaña Entrenar para entrenar por su cuenta, tenga o no un plan.
      · `variante="completa"` (la pestaña Entrenar de quien no tiene plan): las opciones puestas directo y «Tus entrenos». La tarjeta azul «Entrenar», la de
@@ -92,10 +93,16 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', variante = 'co
     setUltimaVista(ultimaId);
     setPendiente(ultimaActividad());
   }
-  const elige = (act) => { setEligioAMano(true); setPendiente(act); setHoja('cronometro'); };
+  /* LA LISTA ENCIMA DE «LISTO PARA EMPEZAR» (6 nov 2026). Abierta desde el botón de la actividad, la lista NO cambia `hoja`: sigue en 'cronometro' y
+     `eligiendo` la pone encima. Así `PantallaDeCarrera` sigue montada debajo y el mapa de Apple no se destruye ni se crea (antes, al abrir la lista el mapa se
+     iba: un destello negro y otro blanco con Home; y al cerrar se creaba otro, girado y sin edificios). Arriba de la hoja se ve el mapa oscurecido por el velo.
+     Al elegir otra actividad con mapa, el mismo mapa sigue; una sin mapa quita el mapa como antes (la pantalla pasa a la hora en grande).
+     Abierta desde otros lados (Entrenar → «Todas las actividades»: `hoja === 'elegir'`), detrás se ve esa pantalla. */
+  const [eligiendo, setEligiendo] = useState(false);
+  const elige = (act) => { setEligioAMano(true); setPendiente(act); setHoja('cronometro'); setEligiendo(false); };
   const eligeDeporte = (d) => elige(actividadDeDeporte(d));
   // Cerrar del todo. En el punto, avisa para que la barra lo quite.
-  const cierra = () => { setPendiente(null); setHoja(null); if (enPunto) alCerrar?.(); };
+  const cierra = () => { setPendiente(null); setHoja(null); setEligiendo(false); if (enPunto) alCerrar?.(); };
   /* AL GUARDAR (Activity Tracker, paso 3; stickers, 28 oct 2026): la celebración corta (con el récord si lo rompió, contra sus entrenos de antes) y luego la página de
      la actividad con el aviso «Tus stickers están listos». La hoja de stickers NUNCA se abre sola. El récord se cuenta con la lista de ANTES de recargarla, y solo
      para quien NO tiene plan (decisión 1.11: con plan manda lo programado; ni «Tu ritmo más rápido» ni «Tu distancia más larga» en un entreno libre). */
@@ -120,6 +127,11 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', variante = 'co
   /* UNA PROPIA CON MAPA QUE NO DICE CÓMO SE MUEVE (creada antes del 3 nov 2026): antes del mapa se pregunta «¿Cómo te mueves?» una vez y se guarda en ella. La
      pausa automática decide distinto a pie y sobre ruedas (`desplazamientoDe`). */
   const faltaComoSeMueve = hoja === 'cronometro' && !enCurso && !!pendiente?.propia && !!pendiente.gps && pendiente.desplazamiento == null;
+  // Las dos hojas bajan con animación al cerrarse: se quedan montadas ese rato (`useSigueMontado`). «¿Cómo te mueves?» también va encima de la pantalla del mapa.
+  const listaAbierta = hoja === 'elegir' || (eligiendo && hoja === 'cronometro' && !enCurso);
+  const comoAbierta = faltaComoSeMueve && !eligiendo;
+  const listaMontada = useSigueMontado(listaAbierta);
+  const comoMontada = useSigueMontado(comoAbierta);
   /* Hay un entreno en curso en el Apple Watch, empezado ahí sin el iPhone (parte 3.6): el reloj sigue mandando y aquí no se empieza otro. */
   const enElReloj = useRelojEnCurso();
   const { avisa } = useAviso();
@@ -138,28 +150,29 @@ export default function EntrenoLibre({ userId, unidadPeso = 'kg', variante = 'co
           alQuererPlan={!hasPlan && alIrAExplorar ? () => { setVerTodos(false); alIrAExplorar(); } : null}
         />
       )}
-      {hoja === 'elegir' && (
+      {listaMontada && (
         <ElegirActividad
-          filas={filas ?? []} propias={propias} alElegir={elige}
+          abierta={listaAbierta} filas={filas ?? []} propias={propias} alElegir={elige}
           alCrear={(act) => { creaPropia(act); elige(act); }}
           alEditar={editaPropia}
-          alCerrar={() => (pendiente ? setHoja('cronometro') : cierra())}
+          alCerrar={() => (eligiendo ? setEligiendo(false) : pendiente ? setHoja('cronometro') : cierra())}
         />
       )}
       {hoja === 'demos' && demos?.length > 0 && (
         <HojaDeDemos demos={demos} alCerrar={() => setHoja(null)} alElegir={(d) => { abreDemo(d); setHoja(null); alIrAHome?.(); }} />
       )}
       {/* Con GPS (correr, caminar, bici, senderismo): la carrera a pantalla completa. Sin GPS: el cronómetro de siempre. */}
-      {faltaComoSeMueve && (
-        <HojaComoTeMueves actividad={pendiente} alElegir={(d) => editaPropia({ ...pendiente, desplazamiento: d })} alCerrar={() => setHoja('elegir')} />
+      {comoMontada && pendiente && (
+        <HojaComoTeMueves abierta={comoAbierta} actividad={pendiente} alElegir={(d) => editaPropia({ ...pendiente, desplazamiento: d })} alCerrar={() => setEligiendo(true)} />
       )}
-      {hoja === 'cronometro' && !faltaComoSeMueve && ((pendiente && !enCurso) || (enCurso && crono.cronometro.gps)) && (
+      {/* La pantalla se queda montada debajo de las dos hojas (la lista y «¿Cómo te mueves?»): el velo tapa «INICIAR» y los botones del mapa. */}
+      {hoja === 'cronometro' && ((pendiente && !enCurso) || (enCurso && crono.cronometro.gps)) && (
         <PantallaDeCarrera
           userId={userId} crono={crono} pendiente={enCurso ? null : pendiente?.deporte ?? null} actividad={enCurso ? null : pendiente}
           ultimo={ultimaSalida(filas, pendiente?.deporte ?? crono.cronometro?.deporte)}
           alEmpezar={empieza}
           alMinimizar={cierra}
-          alCambiarDeporte={() => setHoja('elegir')}
+          alCambiarDeporte={() => setEligiendo(true)}
           alGuardado={alGuardar}
         />
       )}
