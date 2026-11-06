@@ -107,12 +107,15 @@ struct ActividadDelReloj: Codable, Hashable, Identifiable {
     var deporte: String
     var propia: Bool?
 
+    /// Nadar: el reloj pregunta dónde, y de eso depende si lleva mapa (`gps` queda como se eligió al empezar).
+    var preguntaDonde: Bool { deporte == "natacion" }
+
     /// Las de siempre, para un reloj al que todavía no le llega nada del iPhone: el entreno libre funciona igual.
     static let basicas: [ActividadDelReloj] = [
         ActividadDelReloj(id: "correr", nombre: "Correr", icono: "correr", color: "#F2555A", gps: true, deporte: "correr", propia: nil),
         ActividadDelReloj(id: "caminar", nombre: "Caminar", icono: "caminar", color: "#F2555A", gps: true, deporte: "caminar", propia: nil),
         ActividadDelReloj(id: "bici", nombre: "Bici", icono: "bici", color: "#00B3C7", gps: true, deporte: "bici", propia: nil),
-        ActividadDelReloj(id: "natacion", nombre: "Nadar", icono: "nadar", color: "#3AA0F5", gps: false, deporte: "natacion", propia: nil),
+        ActividadDelReloj(id: "natacion", nombre: "Nadar", icono: "nadar", color: "#3AA0F5", gps: true, deporte: "natacion", propia: nil),
         ActividadDelReloj(id: "fuerza", nombre: "Gimnasio", icono: "pesa", color: "#A480FF", gps: false, deporte: "fuerza", propia: nil),
         ActividadDelReloj(id: "padel", nombre: "Pádel", icono: "tenis", color: "#F0A81F", gps: false, deporte: "raqueta", propia: nil),
         ActividadDelReloj(id: "yoga", nombre: "Yoga", icono: "yoga", color: "#C084FC", gps: false, deporte: "yoga", propia: nil),
@@ -165,6 +168,23 @@ struct BateriaDelReloj: Codable {
     var ubicacion: String
 }
 
+/// Dónde se nadó (6 nov 2026, `docs/superpowers/specs/2026-11-06-nadar-en-el-reloj.md`). Viaja en `ResultadoDelReloj.natacion` y el iPhone lo lee con `natacionDe`:
+/// `{ lugar: "alberca", largo, largos }` o `{ lugar: "aguas-abiertas" }`. Es opcional: lo de antes, sin esto, se sigue leyendo igual.
+struct NadoDelReloj: Codable, Equatable {
+    /// Lo que se puede elegir con la corona, en metros (`LARGO_MINIMO` y `LARGO_MAXIMO` en `relojSinTelefono.js`).
+    static let largoMinimo = 10.0
+    static let largoMaximo = 100.0
+
+    var lugar: String
+    var largo: Double?
+    var largos: Int?
+
+    static func alberca(largo: Double) -> NadoDelReloj { NadoDelReloj(lugar: "alberca", largo: largo) }
+    static let aguasAbiertas = NadoDelReloj(lugar: "aguas-abiertas")
+
+    var esAlberca: Bool { lugar == "alberca" }
+}
+
 /// Un entreno terminado en el reloj. `id`: el UUID del `HKWorkout` que se guardó en Salud (o uno propio si Salud no lo guardó).
 struct ResultadoDelReloj: Codable {
     var v: Int = 1
@@ -186,6 +206,7 @@ struct ResultadoDelReloj: Codable {
     var bateria: BateriaDelReloj?
     var sesion: SesionHecha?
     var actividad: ActividadDelReloj?
+    var natacion: NadoDelReloj?
 }
 
 /* ---- El disco del reloj ---- */

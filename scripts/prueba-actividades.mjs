@@ -62,7 +62,8 @@ assert.equal(tusActividades(Array.from({ length: 20 }, (_, i) => ({ deporte: 'ot
 CATALOGO.filter((x) => x.gps).forEach((x) => assert.ok(['pie', 'ruedas'].includes(desplazamientoDe(x)), `${x.id}: con mapa, ${desplazamientoDe(x)}`));
 CATALOGO.filter((x) => !x.gps).forEach((x) => { assert.equal('desplazamiento' in x, false, `${x.id}: sin mapa no lleva el campo`); assert.equal(desplazamientoDe(x), null); });
 assert.deepEqual(['correr', 'caminar', 'senderismo', 'trail'].map((id) => desplazamientoDe(actividadPorId(id))), ['pie', 'pie', 'pie', 'pie']);
-assert.deepEqual(['bici', 'patines', 'surf', 'remo', 'kayak'].map((id) => desplazamientoDe(actividadPorId(id))), ['ruedas', 'ruedas', 'ruedas', 'ruedas', 'ruedas']);
+assert.deepEqual(['bici', 'patines', 'surf', 'remo', 'kayak', 'natacion'].map((id) => desplazamientoDe(actividadPorId(id))), ['ruedas', 'ruedas', 'ruedas', 'ruedas', 'ruedas', 'ruedas']);
+assert.equal(actividadPorId('natacion').gps, true, 'Nadar lleva mapa en el iPhone (6 nov 2026)');
 // Crear: se guarda; uno raro no; sin mapa no lleva el campo; con mapa y sin decir, queda pendiente (null).
 assert.equal(creaActividad({ nombre: 'Patineta', gps: true, desplazamiento: 'ruedas' }, []).actividad.desplazamiento, 'ruedas');
 assert.equal(creaActividad({ nombre: 'Patineta', gps: true, desplazamiento: 'volando' }, []).actividad.desplazamiento, null, 'un valor raro queda pendiente');

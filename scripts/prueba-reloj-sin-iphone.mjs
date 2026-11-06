@@ -6,13 +6,15 @@ import assert from 'node:assert/strict';
 import {
   BUNDLE_DEL_RELOJ, MARCA_DEL_RELOJ, MAX_BYTES_DEL_PLAN, TIPO_PULSO_DEL_RELOJ, TIPO_SESION_DEL_RELOJ, aplicaSesionDelReloj, catalogoParaElReloj, conLlegado,
   cosaDelReloj, crudoDelReloj, enCursoDelReloj, esDelRelojDeTrainingLab, fechasDelReloj, firmaDelPlan, kilosDelPaso, leeResultado, llegoDelReloj, pasosParaElReloj,
-  planParaElReloj, preparaLibreDelReloj, saltaLosDelReloj, sesionParaElReloj,
+  natacionDe, planParaElReloj, preparaLibreDelReloj, saltaLosDelReloj, sesionParaElReloj,
 } from '../src/lib/relojSinTelefono.js';
 import { pasosDeLaSesion, vistaDelEntreno } from '../src/lib/entreno.js';
 import { construyeActividad, preparaEntreno, separaRepetidos } from '../src/lib/metricas/construye.js';
 import { estimaUmbrales } from '../src/lib/metricas/calculos.js';
 import { claveDeLaCola, creaCola } from '../src/lib/colaDeSubida.js';
 import { CATALOGO } from '../src/lib/actividades.js';
+import { catalogo } from '../src/lib/stickers/catalogo.js';
+import { entrenoDeActividad, ficha } from '../src/lib/stickers/ficha.js';
 
 let n = 0;
 const prueba = (nombre, f) => { f(); n += 1; console.log(`  ✓ ${nombre}`); };
@@ -324,6 +326,63 @@ prueba('un pádel (sin mapa): tiempo y pulso; la ruta en silencio solo deja la l
   assert.equal(fila.distancia_m, null, 'sin distancia');
   assert.equal(fila.metricas.ritmo_medio_s_km, undefined, 'sin ritmo');
   assert.ok(fila.fc_media > 0);
+});
+// Nadar en el reloj (6 nov 2026): lo que manda `ResultadoDelReloj` al terminar. En alberca, sin ruta; `gps: false` porque ahí no hubo GPS.
+const nado = (natacion, o = {}) => carrera({
+  actividad: { id: 'natacion', nombre: 'Nadar', deporte: 'natacion', gps: natacion?.lugar === 'aguas-abiertas' }, ruta: [], natacion, bateria: { inicio: 0.9, fin: 0.8, ubicacion: 'no' }, ...o,
+});
+const filaDe = (r) => construyeActividad(preparaLibreDelReloj(leeResultado(r)).prep, { umbrales: estimaUmbrales({}), conSeries: true, origen: 'manual' });
+prueba('nadar en alberca de 25 y de 50: la distancia es largos × largo, sin mapa ni ritmo por km', () => {
+  const de25 = filaDe(nado({ lugar: 'alberca', largo: 25, largos: 40 }, { distancia: 1000 }));
+  assert.equal(de25.fila.distancia_m, 1000);
+  const de50 = filaDe(nado({ lugar: 'alberca', largo: 50, largos: 40 }, { distancia: 2000 }));
+  assert.equal(de50.fila.distancia_m, 2000, 'los mismos largos en 50 m son el doble: antes salía a la mitad');
+  assert.equal(filaDe(nado({ lugar: 'alberca', largo: 33, largos: 10 })).fila.distancia_m, 330, 'con «Otro», y aunque el reloj no mande la distancia');
+  assert.equal(filaDe(nado({ lugar: 'alberca', largo: 25, largos: 40 }, { distancia: 987 })).fila.distancia_m, 1000, 'manda la cuenta de largos');
+  assert.deepEqual(de50.fila.metricas.natacion, { lugar: 'alberca', largo: 50, largos: 40 }, 'dónde nadó se guarda con el entreno');
+  assert.equal(de50.fila.deporte, 'natacion');
+  assert.equal(de50.fila.metricas.pulso_de, 'apple_watch');
+  assert.equal(de50.fila.metricas.ritmo_medio_s_km, undefined);
+  assert.equal(filaDe(nado({ lugar: 'alberca', largo: 25, largos: 0 })).fila.distancia_m, null, 'sin largos contados, sin distancia (no se inventa)');
+});
+prueba('un entreno de alberca no pide mapa: sin ruta en la fila ni en los stickers, aunque el reloj mande puntos, y aunque Nadar lleve mapa en el iPhone', () => {
+  const r = leeResultado(nado({ lugar: 'alberca', largo: 50, largos: 20 }, { distancia: 1000, ruta: carrera().ruta, rutaSilenciosa: true }));
+  assert.deepEqual(r.ruta, []);
+  assert.equal(r.rutaSilenciosa, false);
+  assert.equal(r.actividad.gps, false);
+  const { fila, series } = construyeActividad(preparaLibreDelReloj(r).prep, { umbrales: estimaUmbrales({}), conSeries: true, origen: 'manual' });
+  assert.equal(series?.ruta, undefined, 'sin ruta guardada: la página enseña la franja, no un mapa vacío');
+  const f = ficha(entrenoDeActividad({ fila: { ...fila, id: 'a1' }, series }));
+  assert.equal(f.ruta, null);
+  assert.deepEqual([f.datos.dist.v, f.datos.largos.v], ['1,000', '20']);
+  const ids = catalogo(f).map((s) => s.id);
+  assert.ok(ids.includes('largos') && !ids.includes('d-linea') && !ids.includes('t-ruta'), 'los stickers de ruta no salen; el de largos, sí');
+});
+prueba('nadar en aguas abiertas: con la ruta y su distancia, como una carrera, y con mapa en los stickers', () => {
+  const r = leeResultado(carrera({ actividad: { id: 'natacion', nombre: 'Nadar', deporte: 'natacion', gps: true }, natacion: { lugar: 'aguas-abiertas' }, distancia: 1800 }));
+  assert.deepEqual(r.natacion, { lugar: 'aguas-abiertas' });
+  const { fila, series } = construyeActividad(preparaLibreDelReloj(r).prep, { umbrales: estimaUmbrales({}), conSeries: true, origen: 'manual' });
+  assert.equal(fila.distancia_m, 1800);
+  assert.ok(series?.ruta?.lat?.length >= 2);
+  const f = ficha(entrenoDeActividad({ fila: { ...fila, id: 'a2' }, series }));
+  assert.ok(f.ruta, 'con mapa');
+  assert.equal(f.datos.largos, undefined, 'sin largos');
+  assert.ok(catalogo(f).map((s) => s.id).includes('d-linea'));
+});
+prueba('una sesión del plan de nadar lleva dónde se nadó a su fila', () => {
+  const r = leeResultado(delReloj({ deporte: 'natacion', natacion: { lugar: 'alberca', largo: 50, largos: 30 }, distancia: 1500 }));
+  const crudo = crudoDelReloj(r);
+  assert.equal(crudo.distancia_m, 1500);
+  assert.deepEqual(crudo.metricas.natacion, { lugar: 'alberca', largo: 50, largos: 30 });
+});
+prueba('el formato de antes se sigue leyendo: sin `natacion`, igual que siempre; y lo raro no rompe nada', () => {
+  // Un reloj sin actualizar, o un resultado que quedó en el disco o en la cola: nadar sin mapa, tiempo y pulso.
+  const viejo = leeResultado(carrera({ actividad: { id: 'natacion', nombre: 'Nadar', deporte: 'natacion', gps: false }, ruta: [], distancia: 500 }));
+  assert.equal('natacion' in viejo, false);
+  assert.equal(viejo.distancia, 500);
+  assert.equal(filaDe(carrera({ actividad: { id: 'natacion', nombre: 'Nadar', deporte: 'natacion', gps: false }, ruta: [], distancia: 500 })).fila.distancia_m, null);
+  assert.equal(filaDe(carrera()).fila.metricas.natacion, undefined, 'correr no lleva nada de esto');
+  assert.deepEqual(['x', null, {}, { lugar: 'alberca' }, { lugar: 'alberca', largo: 5, largos: 3 }, { lugar: 'alberca', largo: 250, largos: 3 }, { lugar: 'alberca', largo: 25, largos: -1 }, { lugar: 'luna' }].map(natacionDe), Array(8).fill(null));
 });
 prueba('un entreno libre de menos de 30 s no se guarda (como en el iPhone)', () => {
   assert.deepEqual(cosaDelReloj(leeResultado(carrera({ duracion: 12, fin: inicio + 12000 })), USUARIO), { descarta: true });

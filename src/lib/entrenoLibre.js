@@ -66,7 +66,9 @@ export const reanuda = (c, ahora = Date.now()) => {
      «N s SEGUIDOS» (`racha`): de la primera a la última lectura que cumplen, sin huecos de más de 2 s, pasan N s o más. Con una lectura por segundo, 2 s son
      TRES lecturas seguidas; dos lecturas seguidas (1 s) no bastan.
    SIN ACELERÓMETRO (la web, o el iPhone no lo tiene): a pie, las reglas de ruedas con las barras de siempre (pausa < 0.6, reanuda > 1.0). Más lento, sin falsos.
-   PARA LAS DOS: después de reanudar, 8 s sin poder pausar; después de pausar, 3 s sin poder reanudar. El interruptor «Pausa automática» sigue mandando. */
+   PARA LAS DOS: después de reanudar, 8 s sin poder pausar; después de pausar, 3 s sin poder reanudar. El interruptor «Pausa automática» sigue mandando.
+   NADAR no tiene pausa automática (6 nov 2026, `sinPausaAutomatica`): se nada a ~1 m/s, justo en la barra de pausar (< 1.0) y nunca a la de reanudar (> 2.0): se pausaría sola y no
+   volvería. La pausa a mano sí. */
 export const UMBRALES_DE_PAUSA = {
   pie: { pausa: 0.6, reanuda: 1.0 },
   ruedas: { pausa: 1.0, reanuda: 2.0 },
@@ -77,6 +79,8 @@ export const VELOCIDAD_PARA_PAUSAR_SOBRE_RUEDAS = 1.5;
 const CON_VELOCIDAD_DEL_IPHONE = ['bici', 'patines'];
 /** ¿Esta carrera pausa con la velocidad del iPhone? La de su actividad; una sin actividad (de antes), si su deporte es bici. */
 export const pausaConVelocidad = (c) => CON_VELOCIDAD_DEL_IPHONE.includes(c?.actividad?.id ?? (c?.deporte === 'bici' ? 'bici' : null));
+/** Nadar: la carrera solo se pausa a mano. */
+export const sinPausaAutomatica = (c) => c?.deporte === 'natacion';
 /** La familia de un deporte, para un cronómetro guardado antes del 3 nov 2026 (sin `desplazamiento`). */
 export const familiaDelDeporte = (deporte) => (['correr', 'caminar', 'senderismo'].includes(deporte) ? 'pie' : deporte === 'bici' ? 'ruedas' : null);
 const SIN_REBOTE_PARA_PAUSAR_S = 1.5;

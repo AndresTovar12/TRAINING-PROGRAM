@@ -77,6 +77,15 @@ const rutaRecta = (m) => Array.from({ length: Math.round(m / 10) + 1 }, (_, i) =
   assert.deepEqual([bici.datos.vel.v, bici.datos.vel.u, bici.datos.ritmo], ['30.0', 'km/h', undefined]);
   const nado = ficha(entrenoDeActividad({ fila: { ...base, deporte: 'natacion', duracion_s: 1800, distancia_m: 1500 } }));
   assert.deepEqual([nado.datos.dist.v, nado.datos.dist.u, nado.datos.ritmo.v, nado.datos.ritmo.u, nado.datos.largos.v], ['1,500', 'm', '2:00', '/100m', '60']);
+  // Del reloj (6 nov 2026): en alberca, los largos que contó con su largo y sin ruta; en aguas abiertas o con ruta (iPhone con mapa), sin largos.
+  const conNado = (natacion, extra = {}) => ficha(entrenoDeActividad({ fila: { ...base, deporte: 'natacion', duracion_s: 1800, distancia_m: 1500, metricas: { natacion } }, ...extra }));
+  const de50 = conNado({ lugar: 'alberca', largo: 50, largos: 30 });
+  assert.deepEqual([de50.datos.dist.v, de50.datos.largos.v, de50.ruta], ['1,500', '30', null], 'alberca de 50: 30 largos, no 60');
+  assert.equal(conNado({ lugar: 'alberca', largo: 25, largos: 60 }).datos.largos.v, '60');
+  const abierta = conNado({ lugar: 'aguas-abiertas' }, { muestras: rutaRecta(1500) });
+  assert.equal(abierta.datos.largos, undefined, 'en aguas abiertas no hay largos');
+  assert.ok(abierta.ruta, 'y sí hay ruta');
+  assert.equal(ficha(entrenoDeActividad({ fila: { ...base, deporte: 'natacion', duracion_s: 1800, distancia_m: 1500 }, muestras: rutaRecta(1500) })).datos.largos, undefined, 'nadar en el iPhone con mapa: sin largos');
 }
 
 // La ruta: solo si recorrió más de 300 m o se alejó más de 150 m del inicio. Un pádel en una cancha no dibuja nada.

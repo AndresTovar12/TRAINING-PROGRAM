@@ -11,8 +11,8 @@
 
 import { completaMuestras, vueltasPorKm } from './metricas/calculos.js';
 
-/** Los deportes que miden distancia con el GPS. Nadar no (el GPS no sirve en una alberca) ni los de gimnasio. */
-const CON_GPS = ['correr', 'caminar', 'bici', 'senderismo'];
+/** Los deportes que miden distancia con el GPS. Nadar también en el iPhone (6 nov 2026; en alberca, el reloj cuenta los largos); los de gimnasio no. */
+const CON_GPS = ['correr', 'caminar', 'bici', 'senderismo', 'natacion'];
 export const usaGps = (deporte) => CON_GPS.includes(deporte);
 
 /** Un punto con más error que esto (en metros) no se usa: al arrancar, el GPS da puntos a 100 m o más mientras «encuentra» la señal. */

@@ -6,6 +6,8 @@ import { analizaTraza, reproduceTraza } from '../src/lib/trazaGps.js';
 import { calle, caminar, correr } from './trazas-sinteticas.mjs';
 import { preparaEntreno, construyeActividad } from '../src/lib/metricas/construye.js';
 import { entrenoLibre, cronometroNuevo, pausa, reanuda } from '../src/lib/entrenoLibre.js';
+import { carreraNueva, pasoDeCarrera } from '../src/lib/pasoDeCarrera.js';
+import { actividadPorId, desplazamientoDe } from '../src/lib/actividades.js';
 import { decidePrecision, silencioNuevo, sinNumerosDeLaRuta, SILENCIO } from '../src/lib/rutaSilenciosa.js';
 import { ficha, entrenoDeActividad } from '../src/lib/stickers/ficha.js';
 import { catalogo } from '../src/lib/stickers/catalogo.js';
@@ -104,7 +106,7 @@ assert.equal(trazoDeRuta(m.slice(0, 1)), null);
 
 assert.equal(textoDeRitmo(332), '5:32');
 assert.equal(textoDeRitmo(null), '—');
-assert.ok(usaGps('correr') && !usaGps('natacion'));
+assert.ok(usaGps('correr') && usaGps('natacion') && !usaGps('fuerza'));
 
 // Guardada como cualquier entreno con ruta: la distancia del GPS, los kilómetros y la ruta en las series.
 const prep = preparaEntreno({ ...entrenoLibre({ deporte: 'correr', inicioMs: Date.parse('2026-10-15T12:00:00Z'), duracionS: 376 }), muestras: m });
@@ -256,6 +258,34 @@ assert.equal(reanuda(cp, 3000).pausas, 2000);
   // Sin permiso (sin muestras): todo funciona igual y no hay ruta (prueba de aceptación 12).
   const sin = construyeActividad(entrenoLibre({ deporte: 'raqueta', inicioMs: 0, duracionS: 3600, titulo: 'Pádel' }), { umbrales: { fc_max: 190, fc_reposo: 55, fc_umbral: 170, metodo: 'estimado' }, origen: 'manual' });
   assert.equal(ficha(entrenoDeActividad({ fila: { ...sin.fila, id: 'p2' } })).ruta, null);
+}
+
+// NADAR EN EL IPHONE (6 nov 2026): lleva mapa, pero nadando a 1 m/s no se pausa solo. Con el mismo ritmo, una bici sí se pausa: su regla no cambió.
+{
+  const inicioMs = Date.parse('2026-11-06T15:00:00Z');
+  const nada = (actividadId, deporte, velocidad) => {
+    const act = actividadPorId(actividadId);
+    let e = carreraNueva({ ...cronometroNuevo(deporte, inicioMs), gps: true, desplazamiento: desplazamientoDe(act), actividad: { id: act.id, gps: act.gps } });
+    let pausas = 0;
+    for (let s = 0; s <= 600; s += 1) {
+      const punto = { lat: 21.1 + (s * velocidad) / metrosPorGradoLat, lon: -86.7, precision: 8, vel: velocidad };
+      e = pasoDeCarrera(e, punto, inicioMs + s * 1000, { sensor: null, pausaAutomatica: true });
+      if (e.accion === 'pausa') pausas += 1;
+    }
+    return { pausas, pausado: e.cronometro.pausadoEn != null, metros: e.metros };
+  };
+  assert.equal(desplazamientoDe(actividadPorId('natacion')), 'ruedas');
+  const nado = nada('natacion', 'natacion', 1);
+  assert.equal(nado.pausas, 0, 'nadar a 1 m/s no se pausa nunca');
+  assert.equal(nado.pausado, false);
+  assert.ok(nado.metros > 550 && nado.metros < 650, `10 min a 1 m/s son ~600 m (${nado.metros})`);
+  assert.equal(nada('natacion', 'natacion', 0.1).pausas, 0, 'ni flotando: en el agua solo se pausa a mano');
+  assert.equal(nada('bici', 'bici', 1).pausado, true, 'la bici a 1 m/s sí se pausa (su regla no cambió)');
+  assert.equal(nada('remo', 'remo', 0.5).pausado, true, 'el remo tampoco cambió');
+  // La pausa a mano de nadar sigue igual, y no se quita sola.
+  let e = carreraNueva(pausa({ ...cronometroNuevo('natacion', inicioMs), gps: true, desplazamiento: 'ruedas' }, inicioMs + 1000));
+  e = pasoDeCarrera(e, { lat: 21.1, lon: -86.7, precision: 8, vel: 3 }, inicioMs + 5000, { sensor: null, pausaAutomatica: true });
+  assert.notEqual(e.cronometro.pausadoEn, null);
 }
 
 console.log('prueba-ruta: todo bien');

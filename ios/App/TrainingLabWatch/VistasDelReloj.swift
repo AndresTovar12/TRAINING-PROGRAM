@@ -651,16 +651,30 @@ struct PantallaDelLibre: View {
         if let e = modelo.entreno {
             let conMapa = e.ubicacion == ModoDeUbicacion.gps.rawValue
             let nombre = e.actividad?.nombre ?? e.sesion?.nombre ?? "Entreno"
+            let largoDeAlberca = e.natacion?.esAlberca == true ? e.natacion?.largo : nil
+            let titulo: String = largoDeAlberca.map { "\(nombre) · \(Int($0)) m" } ?? (conMapa ? "\(nombre) · GPS" : nombre)
             TimelineView(.periodic(from: .now, by: 1)) { _ in
                 let segundos = e.transcurrido(ahora: ahoraMs()) / 1000
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 5) {
                         if let a = e.actividad { IconoDeActividad(actividad: a, lado: 20) }
-                        Text(conMapa ? "\(nombre) · GPS" : nombre).font(.system(size: 12, weight: .bold)).foregroundStyle(ColorDelReloj.azul).lineLimit(1)
+                        Text(titulo).font(.system(size: 12, weight: .bold)).foregroundStyle(ColorDelReloj.azul).lineLimit(1)
                         Spacer(minLength: 0)
                         Image(systemName: modelo.telefonoCerca ? "iphone" : "iphone.slash").font(.system(size: 9)).foregroundStyle(ColorDelReloj.tenue)
                     }
-                    if conMapa {
+                    if let largo = largoDeAlberca {
+                        // En alberca: los largos que cuenta el reloj, el tiempo y los metros. Sin GPS.
+                        let metros = modelo.metros ?? 0
+                        HStack(alignment: .firstTextBaseline, spacing: 3) {
+                            Text("\(Int((metros / largo).rounded()))").font(.system(size: 38, weight: .bold)).monospacedDigit()
+                            Text("largos").font(.system(size: 14)).foregroundStyle(ColorDelReloj.tenue)
+                        }
+                        HStack {
+                            Text(relojDe(segundos)).font(.system(size: 20, weight: .bold)).monospacedDigit().foregroundStyle(ColorDelReloj.ambar)
+                            Spacer(minLength: 0)
+                            Text("\(Int(metros)) m").font(.system(size: 14, weight: .bold)).monospacedDigit()
+                        }
+                    } else if conMapa {
                         let km = (modelo.metros ?? 0) / 1000
                         HStack(alignment: .firstTextBaseline, spacing: 3) {
                             Text(String(format: "%.2f", km)).font(.system(size: 38, weight: .bold)).monospacedDigit()
@@ -722,7 +736,7 @@ struct FilaDeActividad: View {
                 IconoDeActividad(actividad: actividad)
                 Text(actividad.nombre).font(.system(size: 12.5, weight: .bold)).lineLimit(1)
                 Spacer(minLength: 0)
-                if actividad.gps {
+                if actividad.gps && !actividad.preguntaDonde {
                     Text("mapa").font(.system(size: 9, weight: .bold)).foregroundStyle(ColorDelReloj.verde)
                 } else if actividad.propia == true {
                     Text("tuya").font(.system(size: 9, weight: .bold)).foregroundStyle(ColorDelReloj.tenue)
@@ -734,7 +748,83 @@ struct FilaDeActividad: View {
             .background(RoundedRectangle(cornerRadius: 12).fill(ColorDelReloj.tarjeta))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(actividad.nombre)\(actividad.gps ? ", con mapa" : "")")
+        .accessibilityLabel("\(actividad.nombre)\(actividad.gps && !actividad.preguntaDonde ? ", con mapa" : "")")
+    }
+}
+
+/// NADAR: «¿Dónde nadas?». Alberca: «¿De qué largo?», 25 m, 50 m u «Otro» (con la corona, de 10 a 100 m), con el último que usó marcado; al elegirlo empieza. El reloj
+/// cuenta los largos, sin GPS ni mapa. Aguas abiertas: empieza de una vez, con GPS y ruta. Las dos primeras pantallas se bajan si no caben; «Otro» cabe sin bajar (en
+/// un reloj de 40 mm, unos 160 × 165 pt útiles, ocupa ~120 pt de alto), porque ahí la corona cambia el número.
+struct DondeNadas: View {
+    @EnvironmentObject var modelo: ModeloDelEntreno
+    private enum Paso { case donde, largo, otro }
+    @State private var paso: Paso = .donde
+    @State private var otro: Double = 25
+    @FocusState private var conLaCorona: Bool
+
+    private func botonDeLargo(_ largo: Double, ultimo: Double) -> some View {
+        BotonAncho(texto: "\(Int(largo)) m", fondo: ultimo == largo ? ColorDelReloj.azul : ColorDelReloj.gris, alto: 44) { modelo.nadaEnAlberca(largo: largo) }
+    }
+
+    private func cambia(_ cuanto: Double) {
+        otro = min(NadoDelReloj.largoMaximo, max(NadoDelReloj.largoMinimo, otro + cuanto))
+    }
+
+    private func botonDeOtro(_ simbolo: String, _ cuanto: Double, _ etiqueta: String) -> some View {
+        Button { cambia(cuanto) } label: {
+            Image(systemName: simbolo).font(.system(size: 15, weight: .bold)).frame(width: 30, height: 30).background(Circle().fill(ColorDelReloj.gris))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(etiqueta)
+    }
+
+    var body: some View {
+        switch paso {
+        case .donde:
+            ScrollView {
+                VStack(alignment: .leading, spacing: 5) {
+                    Encabezado(titulo: "¿Dónde nadas?") { modelo.noNada() }
+                    BotonAncho(texto: "Alberca", simbolo: "figure.pool.swim", alto: 46) { paso = .largo }
+                    BotonAncho(texto: "Aguas abiertas", simbolo: "water.waves", fondo: ColorDelReloj.gris, alto: 46) { modelo.nadaEnAguasAbiertas() }
+                }
+            }
+        case .largo:
+            let ultimo = modelo.ultimoLargo
+            let esOtro = ultimo != 25 && ultimo != 50
+            ScrollView {
+                VStack(alignment: .leading, spacing: 5) {
+                    Encabezado(titulo: "¿De qué largo?") { paso = .donde }
+                    HStack(spacing: 5) {
+                        botonDeLargo(25, ultimo: ultimo)
+                        botonDeLargo(50, ultimo: ultimo)
+                    }
+                    BotonAncho(texto: esOtro ? "Otro · \(Int(ultimo)) m" : "Otro", fondo: esOtro ? ColorDelReloj.azul : ColorDelReloj.gris, alto: 44) {
+                        otro = ultimo
+                        paso = .otro
+                    }
+                }
+            }
+        case .otro:
+            VStack(spacing: 4) {
+                Encabezado(titulo: "Otro largo") { paso = .largo }
+                HStack(spacing: 4) {
+                    botonDeOtro("minus", -1, "Menos")
+                    VStack(spacing: 0) {
+                        Text("\(Int(otro.rounded()))").font(.system(size: 30, weight: .bold)).monospacedDigit()
+                        Text("metros").font(.system(size: 10.5)).foregroundStyle(ColorDelReloj.tenue)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(ColorDelReloj.verde, lineWidth: 2))
+                    .focusable(true)
+                    .focused($conLaCorona)
+                    .digitalCrownRotation($otro, from: NadoDelReloj.largoMinimo, through: NadoDelReloj.largoMaximo, by: 1, sensitivity: .low, isContinuous: false, isHapticFeedbackEnabled: true)
+                    botonDeOtro("plus", 1, "Más")
+                }
+                Text("También con la corona").font(.system(size: 9.5)).foregroundStyle(Color(white: 0.48))
+                BotonAncho(texto: "Empezar", alto: 30) { modelo.nadaEnAlberca(largo: otro) }
+            }
+            .onAppear { conLaCorona = true }
+        }
     }
 }
 
@@ -788,7 +878,12 @@ struct PantallaDelFin: View {
                     Text(f.titulo).font(.system(size: 15, weight: .bold)).lineLimit(2)
                     if let n = f.nombre { Text(n).font(.system(size: 11)).foregroundStyle(ColorDelReloj.tenue).lineLimit(1) }
                     VStack(spacing: 2) {
-                        if f.conMapa, let m = f.metros { fila("Distancia", String(format: "%.2f km", m / 1000)) }
+                        if let l = f.largos, let largo = f.largo {
+                            fila("Largos", "\(l) de \(Int(largo)) m")
+                            fila("Distancia", "\(Int(Double(l) * largo)) m")
+                        } else if f.conMapa, let m = f.metros {
+                            fila("Distancia", String(format: "%.2f km", m / 1000))
+                        }
                         fila("Tiempo", relojDe(f.segundos))
                         if let h = f.hechas, let de = f.deSeries { fila("Series", "\(h) de \(de)") }
                         if let p = f.pulsoMedio { fila("Pulso medio", "\(p)", ColorDelReloj.rojo) }
