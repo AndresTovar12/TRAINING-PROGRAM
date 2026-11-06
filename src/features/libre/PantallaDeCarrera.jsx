@@ -121,7 +121,7 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
     const id = setInterval(() => setTic((t) => t + 1), 15000);
     return () => clearInterval(id);
   }, [pendiente, conMapa]);
-  const vivo = useMemo(() => enVivo(muestras), [muestras]);
+  const vivo = useMemo(() => enVivo(muestras, segundos), [muestras, segundos]); // `segundos`: sin puntos nuevos por un rato, el último ritmo ya no es de ahora
   const km = vivo.distanciaM / 1000;
   const promedio = km > 0.05 ? segundos / km : null;
   const corriendoLibre = !!cronometro;

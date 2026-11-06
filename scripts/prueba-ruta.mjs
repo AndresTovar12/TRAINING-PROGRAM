@@ -1,11 +1,11 @@
 /* Pruebas de la ruta con GPS del entreno libre (lo puro): `node scripts/prueba-ruta.mjs`. */
 import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { agregaPunto, enVivo, trazoDeRuta, textoDeRitmo, usaGps } from '../src/lib/ubicacion.js';
+import { agregaPunto, enVivo, trazoDeRuta, textoDeRitmo, usaGps, VENTANA_RITMO_S, MINIMO_RITMO_M } from '../src/lib/ubicacion.js';
 import { analizaTraza, reproduceTraza } from '../src/lib/trazaGps.js';
-import { calle, caminar, correr } from './trazas-sinteticas.mjs';
+import { calle, caminar, correr, pararDeGolpe, tunel } from './trazas-sinteticas.mjs';
 import { preparaEntreno, construyeActividad } from '../src/lib/metricas/construye.js';
-import { entrenoLibre, cronometroNuevo, pausa, reanuda } from '../src/lib/entrenoLibre.js';
+import { entrenoLibre, cronometroNuevo, pausa, reanuda, segundosDe } from '../src/lib/entrenoLibre.js';
 import { carreraNueva, pasoDeCarrera } from '../src/lib/pasoDeCarrera.js';
 import { actividadPorId, desplazamientoDe } from '../src/lib/actividades.js';
 import { decidePrecision, silencioNuevo, sinNumerosDeLaRuta, SILENCIO } from '../src/lib/rutaSilenciosa.js';
@@ -98,6 +98,125 @@ assert.ok(Math.abs(enVivo(recta).ritmoSKm - 250) <= 10, `ritmo ${enVivo(recta).r
 // Sin velocidad del GPS (algunos navegadores), el ritmo sale de la distancia como antes.
 const sinVel = m.map(({ vel, ...x }) => x);
 assert.ok(Math.abs(enVivo(sinVel).ritmoSKm - 300) <= 3, `ritmo sin velocidad ${enVivo(sinVel).ritmoSKm}`);
+
+/* EL RITMO EN VIVO SALE DE LOS PUNTOS, COMO LA DISTANCIA (6 nov 2026, `docs/superpowers/specs/2026-11-06-ritmo-en-vivo.md`). Antes salía de la mediana de la
+   velocidad que da el iPhone (`vel`), que en la carrera de ese día salió baja: marcaba 5:58, 6:17 y 6:25 /km a quien iba a 5:00. Ahora es la distancia de la ruta
+   de los últimos 20 s entre esos segundos (null si avanzó menos de 15 m), suavizada con la mediana de los últimos 3 cálculos. Las trazas se reproducen con las
+   mismas funciones que la carrera (`reproduceTraza` con `conRitmo`: el ritmo tal como se vería después de cada punto). */
+{
+  assert.equal(VENTANA_RITMO_S, 20);
+  assert.equal(MINIMO_RITMO_M, 15);
+  const rango = (ritmos, filas, desde, hasta = Infinity) => ritmos.filter((_, i) => filas[i].t > desde && filas[i].t <= hasta);
+  const dentro = (xs, lo, hi, texto) => { assert.ok(xs.length > 0, `${texto}: sin puntos`); assert.ok(xs.every((x) => x != null && x >= lo && x <= hi), `${texto}: ${xs.join(',')} (se pedía ${lo}-${hi})`); };
+  const minmax = (xs) => `${Math.min(...xs)}-${Math.max(...xs)}`;
+
+  // 1. Correr parejo a 3.3 m/s (303 s/km = 5:03): entre 4:58 y 5:08 en todos los puntos después del segundo 25. A 1000/300 m/s (5:00), igual.
+  const parejo = correr({ vel: 3.3 });
+  const rParejo = reproduceTraza(parejo, { conRitmo: true });
+  const ritmosParejo = rango(rParejo.ritmos, parejo.filas, 25);
+  dentro(ritmosParejo, 298, 308, 'correr a 3.3 m/s');
+  const parejo300 = correr();
+  dentro(rango(reproduceTraza(parejo300, { conRitmo: true }).ritmos, parejo300.filas, 25), 298, 308, 'correr a 5:00');
+  // Antes de tener 20 s de ruta no hay ritmo: nada se inventa.
+  assert.ok(rango(rParejo.ritmos, parejo.filas, -1, 19).every((x) => x == null), 'con menos de 20 s de ruta no hay ritmo');
+
+  // 2. HOY: la velocidad del iPhone 15 % más baja que el avance real. El ritmo sigue en 5:03 (con la velocidad habría salido 5:56).
+  const lenta = { ...parejo, filas: parejo.filas.map((f) => ({ ...f, vel: Math.round(f.vel * 0.85 * 100) / 100 })) };
+  const ritmosLenta = rango(reproduceTraza(lenta, { conRitmo: true }).ritmos, lenta.filas, 25);
+  dentro(ritmosLenta, 298, 308, 'vel 15 % más baja');
+  console.log(`  ritmo en vivo, correr a 3.3 m/s: ${minmax(ritmosParejo)} s/km · con vel 15 % más baja: ${minmax(ritmosLenta)} s/km`);
+
+  // 3a. Parar de golpe (detenerse-de-golpe; sin pausa automática, para ver el ritmo solo): para a los 30 s y el ritmo pasa a null en menos de 25 s.
+  const alto = pararDeGolpe();
+  const rAlto = reproduceTraza(alto, { conRitmo: true, pausaAutomatica: false });
+  const iNull = alto.filas.findIndex((f, i) => f.t >= 30 && rAlto.ritmos[i] == null);
+  assert.ok(iNull >= 0 && alto.filas[iNull].t - 30 < 25, `parar de golpe: el ritmo pasa a null a los ${iNull >= 0 ? alto.filas[iNull].t - 30 : '—'} s`);
+  dentro(rango(rAlto.ritmos, alto.filas, 25, 30), 298, 308, 'antes de parar');
+  console.log(`  ritmo en vivo al parar de golpe: null a los ${Math.round(alto.filas[iNull].t - 30)} s (el GPS con error de 25 m ya no mete puntos)`);
+
+  // 3b. Parar con buen GPS (los puntos siguen llegando, parados) 40 s y volver a correr: null en menos de 25 s de parar, y al reanudar vuelve.
+  {
+    let mm = [];
+    const ritmos = [];
+    let y = 0;
+    for (let s = 0; s < 130; s += 1) {
+      const corre = s < 40 || s >= 80;
+      if (corre) y += 3.3;
+      mm = agregaPunto(mm, { lat: 19.4 + y / metrosPorGradoLat, lon: -99.1 + (seed(s) * 0.4) / metrosPorGradoLat, precision: 6, vel: corre ? 3.3 : 0.1 }, s);
+      ritmos.push(enVivo(mm, s).ritmoSKm);
+    }
+    const nulo = ritmos.findIndex((r, s) => s >= 40 && r == null);
+    assert.ok(nulo >= 0 && nulo - 40 < 25, `parado con buen GPS: null a los ${nulo - 40} s`);
+    assert.ok(ritmos.slice(nulo, 80).every((r) => r == null), 'parado: sigue en null hasta que se mueve');
+    const vuelve = ritmos.findIndex((r, s) => s >= 80 && r != null);
+    assert.ok(vuelve >= 80, 'al reanudar el ritmo vuelve');
+    // Lo primero que sale al reanudar incluye el rato parado dentro de la ventana de 20 s (más lento), no el ritmo de antes de parar; a los 25 s de correr ya es el de verdad.
+    assert.ok(ritmos[vuelve] > 400, `al reanudar lo primero que sale incluye el rato parado (${ritmos[vuelve]})`);
+    dentro(ritmos.slice(105), 298, 308, 'a los 25 s de reanudar');
+    console.log(`  ritmo en vivo, parar con buen GPS: null a los ${nulo - 40} s de parar; al reanudar sale a los ${vuelve - 80} s (${ritmos[vuelve]} s/km, el rato parado cuenta dentro de la ventana) y a los 25 s ya es ${ritmos[105]}`);
+  }
+
+  // 4. PAUSAS: la ventana no cruza una pausa. Corre 40 s a 3.3 m/s, pausa a mano, durante la pausa camina 80 m (en pausa no llegan puntos ni corre el tiempo),
+  // reanuda y sigue corriendo. Sin marcar la pausa, el salto de 80 m en un segundo daba un ritmo falso de 3:30 /km; marcada, no hay ritmo hasta tener 20 s después.
+  {
+    const inicioMs = Date.parse('2026-11-06T15:00:00Z');
+    const opciones = { sensor: null, pausaAutomatica: false };
+    let e = carreraNueva({ ...cronometroNuevo('correr', inicioMs), gps: true, desplazamiento: 'pie' });
+    let y = 0;
+    const alSegundo = (s) => {
+      const ms = inicioMs + s * 1000;
+      e = pasoDeCarrera(e, { lat: 19.4 + y / metrosPorGradoLat, lon: -99.1, precision: 6, vel: 3.3 }, ms, opciones);
+      return enVivo(e.muestras, segundosDe(e.cronometro, ms)).ritmoSKm;
+    };
+    for (let s = 0; s < 40; s += 1) { y += 3.3; alSegundo(s); }
+    e = { ...e, cronometro: pausa(e.cronometro, inicioMs + 40000) };
+    for (let s = 40; s < 70; s += 1) { y += 80 / 30; alSegundo(s); } // camina durante la pausa; los puntos no entran
+    assert.equal(e.muestras.length, 40, 'en pausa no entra ningún punto');
+    e = { ...e, cronometro: reanuda(e.cronometro, inicioMs + 70000), arranque: inicioMs + 70000 };
+    const despues = [];
+    for (let s = 70; s < 115; s += 1) { y += 3.3; despues.push(alSegundo(s)); }
+    assert.equal(e.muestras.filter((x) => x.sp).length, 1, 'solo el primer punto tras la pausa queda marcado');
+    assert.equal(e.muestras[40].sp, 1, 'el primer punto tras la pausa queda marcado');
+    // Lo mismo sin la marca (como era): el salto de la pausa cae dentro de la ventana y el ritmo sale falso.
+    const sinMarca = e.muestras.slice(0, 55).map(({ sp, ...x }) => x);
+    const falso = enVivo(sinMarca).ritmoSKm;
+    assert.ok(falso < 250, `sin marcar la pausa el ritmo saldría falso (${falso})`);
+    assert.ok(despues.slice(0, 19).every((r) => r == null), `tras reanudar no hay ritmo hasta tener 20 s: ${despues.slice(0, 22).join(',')}`);
+    dentro(despues.slice(23), 298, 308, 'pasados 20 s de reanudar');
+    console.log(`  ritmo en vivo tras una pausa con 80 m caminados: sin ritmo ${despues.findIndex((r) => r != null)} s, luego ${despues[30]} s/km (sin marcar la pausa saldría ${falso})`);
+  }
+
+  // 5. HUECO DEL GPS (un túnel): sin ningún punto entre 20 y 30 s atrás no se inventa un ritmo; y sin puntos nuevos por más de 10 s tampoco se queda el último pegado.
+  {
+    const t = tunel(); // corriendo a 3.3 m/s; de los 40 a los 55 s ningún punto entra (error de 40-50 m)
+    const r = reproduceTraza(t, { conRitmo: true });
+    const dentroDelTunel = rango(r.ritmos, t.filas, 50, 54);
+    assert.ok(dentroDelTunel.length > 0 && dentroDelTunel.every((x) => x == null), 'dentro del túnel no hay ritmo (el último ya no es de ahora)');
+    dentro(rango(r.ritmos, t.filas, 76), 298, 308, 'pasado el túnel');
+    assert.ok(r.ritmos.every((x) => x == null || (x >= 298 && x <= 308)), 'el túnel no inventa ritmos fuera de 4:58-5:08');
+    // Sin punto entre 20 y 30 s atrás (hueco de 40 s en medio): null, aunque el último tramo ya tenga más de 15 m.
+    let h = [];
+    const punto = (s) => ({ lat: 19.4 + (s * 3.3) / metrosPorGradoLat, lon: -99.1, precision: 6, vel: 3.3 });
+    for (let s = 0; s <= 60; s += 1) h = agregaPunto(h, punto(s), s);
+    for (let s = 100; s <= 106; s += 1) h = agregaPunto(h, punto(s), s);
+    assert.equal(enVivo(h).ritmoSKm, null, 'con un hueco de 40 s no hay ritmo');
+    for (let s = 107; s <= 130; s += 1) h = agregaPunto(h, punto(s), s);
+    dentro([enVivo(h).ritmoSKm], 298, 308, 'pasado el hueco');
+    console.log(`  hueco del GPS (túnel de 15 s): ${r.ritmos.filter((x, i) => t.filas[i].t > 40 && t.filas[i].t < 80 && x == null).length} s sin ritmo en total, y nunca uno inventado`);
+  }
+
+  // 6. Quien más lee `ritmoSKm`: bici (velocidad = 3600 / ritmo) y nadar (ritmo por 100 m = ritmo / 10), con la `vel` del iPhone falsa: todo sale de los puntos.
+  {
+    const aMarcha = (v, velFalsa) => {
+      let mm = [];
+      for (let s = 0; s <= 60; s += 1) mm = agregaPunto(mm, { lat: 19.4 + (s * v) / metrosPorGradoLat, lon: -99.1, precision: 6, vel: velFalsa }, s);
+      return enVivo(mm, 60).ritmoSKm;
+    };
+    assert.ok(Math.abs(aMarcha(8, 6.8) - 125) <= 1, 'bici a 8 m/s (28.8 km/h)');
+    assert.ok(Math.abs(aMarcha(1, 0.85) - 1000) <= 5, 'nadar a 1 m/s: 1:40 por 100 m');
+    assert.equal(aMarcha(0.5, 0.5), null, 'a menos de 15 m en 20 s (0.75 m/s) se dice parado');
+  }
+}
 
 const t = trazoDeRuta(m, { ancho: 300, alto: 200, margen: 16 });
 assert.ok(t.d.startsWith('M'));

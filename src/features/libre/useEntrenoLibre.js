@@ -116,8 +116,8 @@ export function useCronometroLibre(userId) {
   const conPausaAutomatica = useRef(pausaAutomatica);
   useEffect(() => { conPausaAutomatica.current = pausaAutomatica; });
   // Lo que la pausa automática y la ruta van llevando entre punto y punto (`pasoDeCarrera`): las lecturas del GPS, los metros contados, cuándo arrancó o se
-  // reanudó y cuándo fue la última pausa automática.
-  const enCurso = useRef({ lecturas: [], metros: 0, arranque: cronometro?.inicio ?? 0, reanudadoEn: null, pausadoEn: null });
+  // reanudó, cuándo fue la última pausa automática y lo que llevaba de pausas al último punto (para marcar el primero tras una pausa).
+  const enCurso = useRef({ lecturas: [], metros: 0, arranque: cronometro?.inicio ?? 0, reanudadoEn: null, pausadoEn: null, pausasAlUltimo: cronometro?.pausas ?? 0 });
   const procesa = useRef(null); // lo que se hace con cada punto (o con cada aviso de rebote, sin punto): ver abajo
   const ruta = useRef(muestras);
   const cambiaYa = useRef(cambia);
@@ -173,7 +173,7 @@ export function useCronometroLibre(userId) {
       if (!c) return;
       const ahora = Date.now();
       const e = pasoDeCarrera({ cronometro: c, muestras: ruta.current, ...enCurso.current }, p, ahora, { sensor: sensor.current, pausaAutomatica: conPausaAutomatica.current });
-      enCurso.current = { lecturas: e.lecturas, metros: e.metros, arranque: e.arranque, reanudadoEn: e.reanudadoEn, pausadoEn: e.pausadoEn };
+      enCurso.current = { lecturas: e.lecturas, metros: e.metros, arranque: e.arranque, reanudadoEn: e.reanudadoEn, pausadoEn: e.pausadoEn, pausasAlUltimo: e.pausasAlUltimo };
       if (grabaTraza(c.inicio)) {
         if (p) anotaEnTraza(p, e.v, ahora);
         if (e.marcha) anotaSensorEnTraza({ tipo: 'marcha', datos: e.marcha }, ahora);
@@ -222,7 +222,7 @@ export function useCronometroLibre(userId) {
         // La familia para la pausa automática (3 nov 2026): la de la actividad ('pie' | 'ruedas'); sin actividad, la de su deporte.
         ...(gps ? { desplazamiento: (actividad ? desplazamientoDe(actividad) : null) ?? familiaDelDeporte(deporte) } : {}),
       };
-      enCurso.current = { lecturas: [], metros: 0, arranque: nuevo.inicio, reanudadoEn: null, pausadoEn: null };
+      enCurso.current = { lecturas: [], metros: 0, arranque: nuevo.inicio, reanudadoEn: null, pausadoEn: null, pausasAlUltimo: 0 };
       // «Guardar traza del GPS» (cuentas de prueba, Ajustes de la carrera): esta carrera se graba punto por punto.
       if (gps && trazaEncendida()) empiezaTraza({ deporte, desplazamiento: nuevo.desplazamiento ?? null, actividad: actividad?.id ?? null, inicioMs: nuevo.inicio, app: enLaApp() ? 'iphone' : 'web' });
       cambia(nuevo);
