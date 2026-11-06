@@ -2,7 +2,7 @@
 
    Andrés, 9 oct 2026: «los íconos están ligados a formas geométricas que tú le asignaste a los tipos» y «tiene que haber muchos íconos porque es una app
    para TODOS». Los 14 tipos de la app llevan sus íconos de lucide (`lib/aspectoDelTipo.js`); los que crea cada coach eligen uno del catálogo
-   (`lib/iconosDeTipo.datos.js`, ~250 íconos), y viaja DENTRO del día del plan igual que el nombre y el color (`catIcono`).
+   (`lib/iconosDeTipo.datos.js`, ~350 íconos a la vista), y viaja DENTRO del día del plan igual que el nombre y el color (`catIcono`).
 
    POR QUÉ EL CATÁLOGO SE CARGA APARTE. Son ~90 KB de dibujos que casi nadie necesita en el primer segundo: solo quien ve un tipo propio o abre «Tipo
    nuevo». `import()` hace que Vite lo parta del paquete principal; mientras baja (o si no hay red) se dibuja la etiqueta neutra, que es el mismo dibujo
@@ -28,10 +28,14 @@ const palabrasDe = (texto) => normaliza(texto).split(/[^a-z0-9]+/).filter((p) =>
 /* El catálogo                                                         */
 /* ------------------------------------------------------------------ */
 
-/** El catálogo listo para buscar: cada ícono con su nombre normalizado y sus palabras ya separadas. */
+/** El catálogo listo para buscar: cada ícono con su nombre normalizado y sus palabras ya separadas.
+    Los OCULTOS (`oculto: true`, 6 nov 2026: los muñequitos y los repetidos) siguen en `porId` —un tipo viejo que ya lo usa se sigue dibujando igual— pero no
+    en `visibles`: ni la rejilla ni `sugiereIcono` los ofrecen. Sus palabras ya se sumaron, en el archivo de datos, a las del que lo reemplaza. */
 export function armaCatalogo({ CATEGORIAS, ICONOS }) {
   const iconos = ICONOS.map((ic) => ({ ...ic, nombreNorm: normaliza(ic.nombre), claves: ic.palabras.split(' ').filter(Boolean) }));
-  return { categorias: CATEGORIAS.map(([id, nombre]) => ({ id, nombre })), iconos, porId: new Map(iconos.map((ic) => [ic.id, ic])) };
+  return {
+    categorias: CATEGORIAS.map(([id, nombre]) => ({ id, nombre })), iconos, visibles: iconos.filter((ic) => !ic.oculto), porId: new Map(iconos.map((ic) => [ic.id, ic])),
+  };
 }
 
 let catalogo = null;
@@ -90,14 +94,14 @@ const MINIMO_PARA_SUGERIR = 3;
 
 /**
  * El id del ícono que mejor le va a un nombre («Boxeo» → boxeo, «Tenis de mesa» → pingpong), o `null` si nada se parece.
- * Es lo que se propone mientras alguien escribe el nombre de un tipo nuevo, y lo que se pinta en un tipo viejo que nunca tuvo ícono.
+ * Es lo que se propone mientras alguien escribe el nombre de un tipo nuevo, y lo que se pinta en un tipo viejo que nunca tuvo ícono. Nunca un oculto.
  */
 export function sugiereIcono(cat, nombre) {
   const palabras = palabrasDe(nombre);
   if (!cat || palabras.length === 0) return null;
   let mejor = null;
   let maximo = 0;
-  for (const ic of cat.iconos) {
+  for (const ic of cat.visibles) {
     const puntos = puntosDe(ic, palabras);
     if (puntos > maximo) { maximo = puntos; mejor = ic.id; }
   }
@@ -105,12 +109,12 @@ export function sugiereIcono(cat, nombre) {
 }
 
 /**
- * Los íconos que se enseñan en la rejilla: los de una categoría (`'todos'` = todos) que contienen CADA palabra buscada, los más parecidos primero.
+ * Los íconos que se enseñan en la rejilla: los de una categoría (`'todos'` = todos) que contienen CADA palabra buscada, los más parecidos primero. Nunca un oculto.
  * Sin búsqueda, el orden del catálogo (el que se pensó para cada categoría).
  */
 export function buscaIconos(cat, texto = '', categoria = 'todos') {
   if (!cat) return [];
-  const delGrupo = categoria === 'todos' ? cat.iconos : cat.iconos.filter((ic) => ic.cat === categoria);
+  const delGrupo = categoria === 'todos' ? cat.visibles : cat.visibles.filter((ic) => ic.cat === categoria);
   const buscadas = normaliza(texto).split(/\s+/).filter(Boolean);
   if (buscadas.length === 0) return delGrupo;
   const palabras = palabrasDe(texto);

@@ -5,7 +5,9 @@
    (2) que «Boxeo» encuentre el guante, «Spinning» la bici fija y «Terapia de hombro» NO encuentre «Destellos» (empieza con «de»).
    6 nov 2026 («Registrar: hoja clara»): además, (3) NINGÚN id que ya existía desapareció (están todos escritos abajo), (4) cada `icono` de las actividades y de los tipos
    de sesión de la app existe en el catálogo, y (5) los símbolos nuevos (Phosphor, Hugeicons, dibujados y HYROX) traen lo que necesita `IconoSvg`.
-   6 nov 2026 («Registrar: los símbolos que faltaban en 8 actividades»): (6) ninguna de las 29 actividades repite símbolo con otra. */
+   6 nov 2026 («Registrar: los símbolos que faltaban en 8 actividades»): (6) ninguna de las 29 actividades repite símbolo con otra.
+   6 nov 2026 («Repertorio del coach…»): (7) 29 ocultos que siguen dibujándose por su id pero no se ofrecen, cada uno con su reemplazo a la vista (que se
+   quedó con sus palabras), y 104 símbolos nuevos que pintan algo. */
 import assert from 'node:assert/strict';
 import * as datos from '../src/lib/iconosDeTipo.datos.js';
 import { readFileSync } from 'node:fs';
@@ -24,7 +26,7 @@ for (const ic of cat.iconos) {
   assert.ok(!/<script|onload|onerror|javascript:/i.test(ic.svg), `${ic.id}: el dibujo trae algo que no es un trazo`);
   assert.ok(cat.categorias.some((c) => c.id === ic.cat), `${ic.id}: categoría que no existe (${ic.cat})`);
   assert.equal(ic.palabras, normaliza(ic.palabras), `${ic.id}: las palabras van sin acentos y en minúscula`);
-  assert.match(ic.origen, /^(l|t|p|h|ms|tl):[a-z0-9-]+$/, `${ic.id}: origen raro (${ic.origen})`);
+  assert.match(ic.origen, /^(l|t|p|h|ms|ll|hi|tl):[a-z0-9-]+$/, `${ic.id}: origen raro (${ic.origen})`);
 }
 for (const c of cat.categorias) assert.ok(cat.iconos.some((i) => i.cat === c.id), `la categoría ${c.id} no tiene íconos`);
 assert.ok(cat.porId.has(ICONO_NEUTRO), 'falta el ícono neutro');
@@ -58,11 +60,24 @@ assert.equal(cat.porId.get('huellas').origen, 't:footsteps');
 /* ---------- Los símbolos nuevos (6 nov 2026) ---------- */
 const NUEVOS = ['tenis-correr', 'huellas-pies', 'bota', 'bicicleta', 'loto', 'guante', 'balon-futbol', 'balon-basquet', 'mano-palma', 'balon-americano', 'bici-fija', 'tabla-surf', 'pala-padel', 'cinturon-banderas', 'hyrox',
   // «los símbolos que faltaban en 8 actividades»
-  'montana-picos', 'tapete', 'pickleball', 'canoa', 'eliptica', 'reformer'];
+  'montana-picos', 'tapete', 'pickleball', 'canoa', 'eliptica', 'reformer',
+  // «Repertorio del coach: menos muñequitos, sin repetidos y 104 símbolos nuevos»
+  'anillas', 'mancuernas', 'press-banca', 'discos', 'dominadas', 'rack', 'espalda', 'abdomen', 'banda', 'tenis-movimiento', 'caminadora-2',
+  'cajon-salto', 'monitor-cardiaco', 'bandera-cuadros', 'maquina-cardio', 'carretera', 'calcetas', 'pista', 'goggles', 'visor-snorkel',
+  'balon-waterpolo', 'gorra-natacion', 'windsurf', 'cana-pescar', 'toallas', 'ola', 'esquis', 'patineta', 'tabla-snowboard', 'cordillera', 'camper',
+  'fogata', 'palmera', 'lentes-sol', 'globo', 'senal-sendero', 'cono', 'silbato', 'cancha', 'raqueta-tenis', 'badminton', 'hockey', 'frisbee',
+  'aro-basquet', 'cancha-basquet', 'casco-americano', 'bat', 'casco-beisbol', 'gorra', 'palo-golf', 'pelota-golf', 'hoyo-golf', 'carrito-golf',
+  'hockey-hielo', 'pinos', 'bat-criquet', 'mesa-billar', 'cono-chico', 'primer-lugar', 'marcador-partido', 'estadio', 'pelota-playa', 'hyrox-2',
+  'costal', 'pera-box', 'casco-espartano', 'esgrima', 'careta-esgrima', 'caballo-ajedrez', 'dardo', 'columna', 'rodillo', 'pelota-yoga', 'cerebro-2',
+  'aro-pilates', 'pelota-chica', 'corazon-sano', 'tulipan', 'frasco-medicina', 'frasco-pastillas', 'revision-corazon', 'curitas', 'alarma', 'te',
+  'arroz', 'sandia', 'pasta', 'verduras', 'tazon', 'caldo', 'tetera', 'helado', 'pastelito', 'cinta-metrica', 'bascula-piso', 'rendimiento', 'electro',
+  'peso-corporal', 'agenda-coach', 'gafete', 'fuegos-artificiales', 'globos', 'banderin', 'escudo-estrella'];
 for (const id of NUEVOS) assert.ok(cat.porId.has(id), `falta el símbolo nuevo «${id}»`);
 assert.equal(cat.iconos.length, IDS_QUE_YA_EXISTEN.length + NUEVOS.length, 'hay íconos que no son ni de los viejos ni de los nuevos de esta prueba');
 for (const ic of cat.iconos) {
-  if (ic.relleno && ic.origen.startsWith('ms:')) {
+  if (ic.relleno && ic.origen.startsWith('hi:')) {
+    assert.equal(ic.caja, undefined, `${ic.id}: el relleno de Healthicons va en la caja de 24`);
+  } else if (ic.relleno && ic.origen.startsWith('ms:')) {
     assert.equal(ic.caja, '0 0 24 24', `${ic.id}: el relleno de Material Symbols va en una caja de 24`);
     assert.ok(/^<path d="[^"]+"\/>$/.test(ic.svg), `${ic.id}: un relleno de Material es un solo path`);
   } else if (ic.relleno) {
@@ -115,14 +130,14 @@ assert.equal(normaliza(null), '');
 /* ---------- Sugerir un ícono por el nombre ---------- */
 // nombre → uno de estos (a veces dos dibujos le van igual de bien)
 const ESPERADOS = {
-  Boxeo: ['guante'], Spinning: ['bici-fija'], 'Tenis de mesa': ['pingpong'], Natación: ['nadar'], 'Yoga restaurativo': ['yoga'], Kettlebell: ['pesa-rusa'],
-  Fisioterapia: ['estetoscopio'], Estiramientos: ['estirar'], Zumba: ['musica'], Funcional: ['pesa-rusa'], Hockey: ['patines-hielo'], Triatlón: ['meta'],
+  Boxeo: ['guante'], Spinning: ['bici-fija'], 'Tenis de mesa': ['pingpong'], Natación: ['goggles'], 'Yoga restaurativo': ['loto', 'tapete'], Kettlebell: ['pesa-rusa'],
+  Fisioterapia: ['estetoscopio'], Estiramientos: ['tapete'], Zumba: ['musica'], Funcional: ['pesa-rusa'], Hockey: ['hockey', 'hockey-hielo', 'patines-hielo'], Triatlón: ['meta'],
   Core: ['cuerpo'], Powerlifting: ['barra'], Pierna: ['barra'], Fuerza: ['pesa'], Hipertrofia: ['pesa'], Cardio: ['pulso', 'corazon-pulso'],
-  Caminata: ['caminar'], Senderismo: ['senderismo'], Golf: ['golf'], Padel: ['pala-padel'], Pádel: ['pala-padel'], Fútbol: ['futbol'], Karate: ['karate'], Judo: ['karate'],
+  Caminata: ['huellas-pies'], Senderismo: ['bota', 'senal-sendero'], Golf: ['golf'], Padel: ['pala-padel'], Pádel: ['pala-padel'], Fútbol: ['balon-futbol'], Karate: ['guante'], Judo: ['guante'],
   Meditación: ['yoga', 'vela'], Masaje: ['masaje'], Nutrición: ['manzana'], Consulta: ['estetoscopio'], Descanso: ['luna'], Sauna: ['calor'],
-  Baile: ['musica'], Ballet: ['musica'], MTB: ['bici'], Waterpolo: ['polo-acuatico'], Surf: ['tabla-surf'], Remo: ['kayak'], Escalada: ['montana'],
+  Baile: ['musica'], Ballet: ['musica'], MTB: ['bicicleta'], Waterpolo: ['balon-waterpolo'], Surf: ['tabla-surf'], Remo: ['kayak'], Escalada: ['montana'],
   Portero: ['gol'], Correr: ['tenis-correr'], Hyrox: ['hyrox'], Americano: ['balon-americano'], Flag: ['cinturon-banderas'], 'Flag football': ['cinturon-banderas'],
-  'Fútbol americano': ['balon-americano', 'americano'], Yoga: ['yoga'], 'Boxeo thai': ['guante'], Rehabilitación: ['venda'], Recuperación: ['bateria-carga', 'cama'], Hombro: ['pesa', 'hueso'], Videollamada: ['camara'],
+  'Fútbol americano': ['balon-americano'], Yoga: ['loto', 'tapete'], 'Boxeo thai': ['guante'], Rehabilitación: ['venda'], Recuperación: ['bateria-carga', 'cama'], Hombro: ['pesa', 'hueso'], Videollamada: ['camara'],
 };
 for (const [nombre, validos] of Object.entries(ESPERADOS)) {
   const id = sugiereIcono(cat, nombre);
@@ -141,16 +156,54 @@ assert.equal(sugiereIcono(cat, 'Box'), 'guante');
 
 /* ---------- La rejilla: buscar y filtrar ---------- */
 const ids = (lista) => lista.map((i) => i.id);
-assert.equal(buscaIconos(cat).length, cat.iconos.length, 'sin búsqueda ni categoría salen todos');
-assert.deepEqual(ids(buscaIconos(cat, '', 'agua')), cat.iconos.filter((i) => i.cat === 'agua').map((i) => i.id), 'una categoría sin búsqueda sale en el orden del catálogo');
+assert.equal(buscaIconos(cat).length, cat.visibles.length, 'sin búsqueda ni categoría salen todos los que se ven');
+assert.deepEqual(ids(buscaIconos(cat, '', 'agua')), cat.visibles.filter((i) => i.cat === 'agua').map((i) => i.id), 'una categoría sin búsqueda sale en el orden del catálogo');
 assert.ok(buscaIconos(cat, '', 'agua').every((i) => i.cat === 'agua'));
-assert.equal(ids(buscaIconos(cat, 'nadar'))[0], 'nadar', '«nadar» encuentra primero la natación');
+assert.equal(ids(buscaIconos(cat, 'nadar'))[0], 'goggles', '«nadar» encuentra primero la natación');
 assert.ok(ids(buscaIconos(cat, 'tenis mesa')).includes('pingpong'), 'varias palabras: deben estar todas');
 assert.ok(!ids(buscaIconos(cat, 'tenis mesa')).includes('futbol'));
-assert.ok(ids(buscaIconos(cat, 'nad')).includes('nadar'), 'a medias también encuentra');
-assert.ok(ids(buscaIconos(cat, 'NATACIÓN')).includes('nadar'), 'sin importar acentos ni mayúsculas');
+assert.ok(ids(buscaIconos(cat, 'nad')).includes('goggles'), 'a medias también encuentra');
+assert.ok(ids(buscaIconos(cat, 'NATACIÓN')).includes('goggles'), 'sin importar acentos ni mayúsculas');
 assert.deepEqual(buscaIconos(cat, 'qqqqzz'), []);
-assert.ok(!ids(buscaIconos(cat, 'nadar', 'cardio')).includes('nadar'), 'la categoría recorta la búsqueda');
+assert.ok(!ids(buscaIconos(cat, 'nadar', 'cardio')).includes('goggles'), 'la categoría recorta la búsqueda');
 assert.deepEqual(buscaIconos(null, 'nadar'), []);
+
+/* ---------- Repertorio del coach (6 nov 2026): 29 ocultos y 104 nuevos ---------- */
+// Quién reemplaza a quién (spec «Ocultar 29»). El de la derecha existe, se ve y se quedó con las palabras del de la izquierda.
+const OCULTOS = [
+  ['gimnasia', 'anillas'], ['sprint', 'tenis-movimiento'], ['caminadora', 'caminadora-2'], ['salto-pared', 'cajon-salto'], ['nadar', 'goggles'],
+  ['buceo', 'visor-snorkel'], ['polo-acuatico', 'balon-waterpolo'], ['esqui', 'esquis'], ['skate', 'patineta'], ['snowboard', 'tabla-snowboard'],
+  ['estirar', 'tapete'], ['persona', 'columna'], ['accesible', 'rodillo'], ['correr', 'tenis-correr'], ['caminar', 'huellas-pies'],
+  ['pasos', 'huellas-pies'], ['huellas', 'huellas-pies'], ['bici', 'bicicleta'], ['calzado', 'tenis-correr'], ['senderismo', 'bota'],
+  ['futbol', 'balon-futbol'], ['basquet', 'balon-basquet'], ['americano', 'balon-americano'], ['jugador', 'equipo'], ['balonmano', 'pelota'],
+  ['karate', 'guante'], ['mano', 'mano-palma'], ['yoga', 'tapete'], ['estirar-2', 'tapete']
+];
+assert.equal(OCULTOS.length, 29);
+assert.deepEqual(cat.iconos.filter((i) => i.oculto).map((i) => i.id).sort(), OCULTOS.map(([o]) => o).sort(), 'los ocultos son exactamente los 29');
+for (const [oculto, destino] of OCULTOS) {
+  assert.ok(cat.porId.get(oculto)?.oculto, `«${oculto}» está oculto y se sigue dibujando por su id`);
+  assert.ok(cat.porId.has(destino), `el reemplazo de «${oculto}» («${destino}») existe`);
+  assert.ok(!cat.porId.get(destino).oculto, `el reemplazo de «${oculto}» («${destino}») no está oculto`);
+  for (const w of cat.porId.get(oculto).claves) assert.ok(cat.porId.get(destino).claves.includes(w), `«${destino}» se quedó con la palabra «${w}» de «${oculto}»`);
+}
+for (const destino of new Set(OCULTOS.map(([, d]) => d))) assert.equal(new Set(cat.porId.get(destino).claves).size, cat.porId.get(destino).claves.length, `«${destino}» no repite palabras`);
+assert.equal(cat.iconos.length, 377, 'son 377 en total');
+assert.equal(buscaIconos(cat, '').length, 348, '348 a la vista');
+for (const c of cat.categorias) assert.ok(buscaIconos(cat, '', c.id).every((i) => !i.oculto), `la categoría ${c.id} no enseña ocultos`);
+assert.ok(buscaIconos(cat, '').every((i) => !i.oculto), 'ninguno oculto en la rejilla');
+assert.ok(cat.porId.has('nadar') && cat.porId.has('estirar'), 'nadar y estirar se siguen dibujando');
+for (const nombre of [...Object.keys(ESPERADOS), ...OCULTOS.map(([o]) => cat.porId.get(o).nombre), ...cat.iconos.flatMap((i) => i.claves)]) {
+  const id = sugiereIcono(cat, nombre);
+  assert.ok(id === null || !cat.porId.get(id).oculto, `«${nombre}» sugirió «${id}», que está oculto`);
+}
+for (const [nombre, id] of [['natación', 'goggles'], ['correr', 'tenis-correr'], ['esquí', 'esquis'], ['gimnasia', 'anillas'], ['cono', 'cono'], ['atletismo', 'pista']]) {
+  assert.equal(sugiereIcono(cat, nombre), id, `«${nombre}» sugiere «${id}»`);
+}
+assert.equal(cat.categorias.find((c) => c.id === 'pelota').nombre, 'Deportes', 'la categoría pelota se llama Deportes');
+assert.equal(cat.porId.get('hyrox-2').svg, cat.porId.get('hyrox').svg, 'hyrox-2 es el mismo dibujo que hyrox');
+// Cada dibujo nuevo pinta algo: trae al menos una figura con medidas (un path con trazo, un rect/círculo/elipse con tamaño).
+const pinta = (svg) => /<path[^>]* d="[^"]*\d[^"]*"/.test(svg) || /<(rect|circle|ellipse)[^>]*(width|r|rx)="[\d.]+"/.test(svg);
+for (const id of NUEVOS) assert.ok(pinta(cat.porId.get(id).svg), `«${id}» no pinta nada`);
+for (const id of NUEVOS) assert.ok(!/stroke-width/.test(cat.porId.get(id).svg) || ['tenis-correr'].includes(id), `«${id}» trae su propio stroke-width`);
 
 console.log(`prueba-iconos-de-tipo: todo bien (${cat.iconos.length} íconos, ${cat.categorias.length} categorías, ${Object.keys(ESPERADOS).length} nombres)`);
