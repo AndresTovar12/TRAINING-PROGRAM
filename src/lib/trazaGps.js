@@ -17,7 +17,7 @@
    hasta 3 horas) y nunca se sube. */
 
 import { carreraNueva, pasoDeCarrera } from './pasoDeCarrera.js';
-import { cronometroNuevo, familiaDelDeporte } from './entrenoLibre.js';
+import { cronometroNuevo, familiaDelDeporte, segundosDe } from './entrenoLibre.js';
 import { enVivo, metrosEntrePuntos } from './ubicacion.js';
 import { conActividad, conInicio, conPasos, conPermiso, conRebote, sensorNuevo, sinPasos } from './sensorDeMovimiento.js';
 
@@ -86,9 +86,10 @@ export function eventosDeV1(filas) {
 /**
  * Reproduce una traza como si fuera la carrera (puro): los eventos del sensor y los puntos, en orden de llegada (en el mismo segundo, primero el sensor). Cada
  * aviso de rebote también decide la pausa, sin punto (como en el teléfono). `sinSensor`: como si no hubiera sensor (la web: las reglas del GPS solas).
- * Devuelve `{ distanciaM, pausas: [s desde el inicio], reanudas: [s], marchas: [{ t, a, motivo }], metros: [los contados después de cada fila], muestras }`.
+ * `conRitmo` (6 nov 2026): además `ritmos`, el ritmo de ahora (`enVivo`, s/km o `null`) tal como se vería después de cada fila (cuesta una pasada por fila: solo para pruebas).
+ * Devuelve `{ distanciaM, pausas: [s desde el inicio], reanudas: [s], marchas: [{ t, a, motivo }], metros: [los contados después de cada fila], muestras, ritmos? }`.
  */
-export function reproduceTraza(traza, { sinSensor = false, pausaAutomatica = true } = {}) {
+export function reproduceTraza(traza, { sinSensor = false, pausaAutomatica = true, conRitmo = false } = {}) {
   if (!FORMATOS_QUE_SE_LEEN.includes(traza?.formato)) throw new Error(`traza con formato ${traza?.formato}`);
   const inicioMs = traza.inicioMs ?? 0;
   const deporte = traza.deporte ?? 'correr';
@@ -103,6 +104,7 @@ export function reproduceTraza(traza, { sinSensor = false, pausaAutomatica = tru
   const reanudas = [];
   const marchas = [];
   const metros = [];
+  const ritmos = [];
   const anota = (t) => {
     if (e.accion === 'pausa') pausas.push(t);
     if (e.accion === 'reanuda') reanudas.push(t);
@@ -119,8 +121,9 @@ export function reproduceTraza(traza, { sinSensor = false, pausaAutomatica = tru
     e = pasoDeCarrera(e, punto, inicioMs + f.t * 1000, { sensor, pausaAutomatica });
     anota(f.t);
     metros.push(e.metros);
+    if (conRitmo) ritmos.push(enVivo(e.muestras, segundosDe(e.cronometro, inicioMs + f.t * 1000)).ritmoSKm);
   }
-  return { distanciaM: enVivo(e.muestras).distanciaM, pausas, reanudas, marchas, metros, muestras: e.muestras };
+  return { distanciaM: enVivo(e.muestras).distanciaM, pausas, reanudas, marchas, metros, muestras: e.muestras, ...(conRitmo ? { ritmos } : {}) };
 }
 
 const percentil = (xs, p) => { if (!xs.length) return null; const o = [...xs].sort((a, b) => a - b); return o[Math.min(o.length - 1, Math.floor(p * o.length))]; };

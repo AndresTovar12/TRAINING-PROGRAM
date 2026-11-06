@@ -16,10 +16,14 @@ const RECUERDA_S = 15;
 export const familiaDe = (c) => c?.desplazamiento ?? familiaDelDeporte(c?.deporte);
 
 /**
- * El estado con el que arranca una carrera: `{ cronometro, muestras, lecturas, metros, arranque, reanudadoEn, pausadoEn }`. `arranque` (ms): cuándo arrancó o se
- * reanudó por última vez (la pausa nunca cuenta desde antes). `reanudadoEn`/`pausadoEn` (ms): cuándo fue la última reanudación y la última pausa automática.
+ * El estado con el que arranca una carrera: `{ cronometro, muestras, lecturas, metros, arranque, reanudadoEn, pausadoEn, pausasAlUltimo }`. `arranque` (ms): cuándo
+ * arrancó o se reanudó por última vez (la pausa nunca cuenta desde antes). `reanudadoEn`/`pausadoEn` (ms): cuándo fue la última reanudación y la última pausa
+ * automática. `pausasAlUltimo` (ms): lo que llevaba de pausas el cronómetro cuando entró el último punto; si ya es otro, hubo una pausa y el siguiente punto
+ * queda marcado (`sp`, ver `agregaPunto`) para que el ritmo de ahora no mida una ventana que la cruce.
  */
-export const carreraNueva = (cronometro, muestras = []) => ({ cronometro, muestras, lecturas: [], metros: 0, arranque: cronometro?.inicio ?? 0, reanudadoEn: null, pausadoEn: null });
+export const carreraNueva = (cronometro, muestras = []) => ({
+  cronometro, muestras, lecturas: [], metros: 0, arranque: cronometro?.inicio ?? 0, reanudadoEn: null, pausadoEn: null, pausasAlUltimo: cronometro?.pausas ?? 0,
+});
 
 /**
  * Un punto `{ lat, lon, precision, vel?, ... }` que llegó a la hora `ahoraMs`, o `null` (un aviso del sensor: solo se decide la pausa). `sensor`: lo que se sabe
@@ -28,8 +32,8 @@ export const carreraNueva = (cronometro, muestras = []) => ({ cronometro, muestr
  * `decideMarcha` para los metros).
  */
 export function pasoDeCarrera(e, punto, ahoraMs, { sensor = null, pausaAutomatica = true } = {}) {
-  let { cronometro: c, muestras, lecturas, metros, arranque, reanudadoEn = null, pausadoEn = null } = e;
-  const base = { lecturas, metros, arranque, reanudadoEn, pausadoEn };
+  let { cronometro: c, muestras, lecturas, metros, arranque, reanudadoEn = null, pausadoEn = null, pausasAlUltimo } = e;
+  const base = { lecturas, metros, arranque, reanudadoEn, pausadoEn, pausasAlUltimo };
   if (!c) return { ...e, ...base, accion: null, marcha: null, v: null };
   const ahoraS = ahoraMs / 1000;
   if (punto && typeof punto.lat === 'number') {
@@ -52,7 +56,7 @@ export function pasoDeCarrera(e, punto, ahoraMs, { sensor = null, pausaAutomatic
       const tope = segundosDe(c, ahoraMs);
       const quedan = muestras.filter((x) => x.t <= tope);
       return {
-        cronometro: c, muestras: quedan.length === muestras.length ? muestras : quedan, lecturas, metros, arranque, reanudadoEn, pausadoEn: ahoraMs,
+        cronometro: c, muestras: quedan.length === muestras.length ? muestras : quedan, lecturas, metros, arranque, reanudadoEn, pausadoEn: ahoraMs, pausasAlUltimo,
         accion: 'pausa', marcha: { a: 'quieto', motivo: d.motivo }, v,
       };
     }
@@ -64,10 +68,12 @@ export function pasoDeCarrera(e, punto, ahoraMs, { sensor = null, pausaAutomatic
       marcha = { a: 'en-marcha', motivo: d.motivo };
     }
   }
-  const sigue = { cronometro: c, lecturas, metros, arranque, reanudadoEn, pausadoEn, accion, marcha, v };
+  const sigue = { cronometro: c, lecturas, metros, arranque, reanudadoEn, pausadoEn, pausasAlUltimo, accion, marcha, v };
   if (c.pausadoEn != null || !punto) return { ...sigue, muestras }; // en pausa (o sin punto) no se mide
   // A la ruta: 'quieto' (sin rebote no suma) o 'mueve'; sin decir nada, las reglas del GPS.
-  const nuevas = agregaPunto(muestras, punto, segundosDe(c, ahoraMs), v?.v ?? null);
+  // Si desde el último punto hubo una pausa (a mano o automática), este queda marcado: en la pausa no llegan puntos y el tiempo no cuenta.
+  const trasPausa = pausasAlUltimo != null && (c.pausas ?? 0) !== pausasAlUltimo;
+  const nuevas = agregaPunto(muestras, punto, segundosDe(c, ahoraMs), v?.v ?? null, { trasPausa });
   if (nuevas !== muestras && muestras.length) metros += metrosEntrePuntos(muestras[muestras.length - 1], nuevas[nuevas.length - 1]);
-  return { ...sigue, muestras: nuevas, metros };
+  return { ...sigue, muestras: nuevas, metros, pausasAlUltimo: nuevas !== muestras ? (c.pausas ?? 0) : pausasAlUltimo };
 }

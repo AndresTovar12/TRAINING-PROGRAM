@@ -117,6 +117,7 @@ export default function PasoConGps({
   const [ultimoPunto, setUltimoPunto] = useState(() => (sinCuenta ? Date.now() : NaN)); // la hora del último punto bueno del GPS
   const [pausadoDesde, setPausadoDesde] = useState(null); // la hora en que se pausó, o `null`
   const [pausaAcum, setPausaAcum] = useState(0); // los milisegundos que ya estuvo en pausa (las pausas terminadas)
+  const tras = useRef(false); // se reanudó una pausa y todavía no entra un punto: el primero que entre queda marcado
   const pausa = useRef({ desde: null, acum: 0 }); // lo mismo, para el GPS (que no debe volver a suscribirse en cada pausa); el dibujo usa el estado, no esto
   // Con `sinCuenta` (los lapsos) no hay pantalla de «antes», pero igual se oye la señal mientras no llega el primer punto: si no hay permiso, no se espera nada.
   const senal = useSenalGps(fase === 'antes' || (sinCuenta && fase === 'corriendo' && muestras.length === 0));
@@ -124,10 +125,11 @@ export default function PasoConGps({
   useEffect(() => {
     if (sinCuenta && (senal === 'negado' || senal === 'no_hay')) onCerrar();
   }, [sinCuenta, senal, onCerrar]);
-  const vivo = useMemo(() => enVivo(muestras), [muestras]);
   // El tiempo cuenta lo corrido: lo pausado no suma.
   const segDe = (hasta) => Math.max(0, (hasta - desde - pausaAcum - (pausadoDesde ? hasta - pausadoDesde : 0)) / 1000);
   const seg = desde ? (final ? final.seg : segDe(ahora)) : 0;
+  const segEntero = Math.floor(seg);
+  const vivo = useMemo(() => enVivo(muestras, segEntero), [muestras, segEntero]); // `segEntero`: sin puntos nuevos por un rato, el último ritmo ya no es de ahora
   const avance = avanceDelPaso(vivo.distanciaM, meta);
   const perdido = fase === 'corriendo' && !pausadoDesde && !esperando && sinSenal(ultimoPunto, ahora);
   const objetivo = useMemo(() => ritmoObjetivo(carga), [carga]);
@@ -168,6 +170,8 @@ export default function PasoConGps({
     return () => clearInterval(id);
   }, [fase]);
 
+  useEffect(() => { tras.current = false; }, [muestras]); // entró un punto (los que no sirven no cambian `muestras`)
+
   // Los puntos del GPS mientras corre (la misma fuente que el registro libre; en la app de la tienda, la del teléfono o el reloj). En pausa no se mide.
   useEffect(() => {
     if (fase !== 'corriendo' || !desde) return undefined;
@@ -176,7 +180,10 @@ export default function PasoConGps({
     return fuente.sigue((p) => {
       if (pausa.current.desde) return;
       if (p.precision <= 30) { setUltimoPunto(Date.now()); setEsperando(false); }
-      setMuestras((m) => agregaPunto(m, p, (Date.now() - desde - pausa.current.acum) / 1000));
+      // El primer punto tras una pausa queda marcado: el ritmo de ahora no mide una ventana que cruce la pausa (`agregaPunto`).
+      const t = (Date.now() - desde - pausa.current.acum) / 1000;
+      const trasPausa = tras.current;
+      setMuestras((m) => agregaPunto(m, p, t, null, { trasPausa }));
     }, () => {});
   }, [fase, desde]);
 
@@ -194,6 +201,7 @@ export default function PasoConGps({
     const t = Date.now();
     if (pausa.current.desde) {
       pausa.current = { desde: null, acum: pausa.current.acum + (t - pausa.current.desde) };
+      tras.current = true;
       setPausaAcum(pausa.current.acum);
       setPausadoDesde(null);
       setUltimoPunto(t);
