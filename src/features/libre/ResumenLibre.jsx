@@ -7,6 +7,7 @@ import { borraEntreno, cambiaEntreno, entrenosAnteriores } from '@/lib/entrenoLi
 import { recordDe } from '@/lib/resumenLibre';
 import { muestrasDeRuta } from '@/lib/recorrido';
 import { actividadDeEntreno } from '@/lib/actividades';
+import { cargaCatalogo } from '@/lib/iconosDeTipo';
 import { entrenoDeActividad, rutaDe } from '@/lib/stickers/ficha';
 import { cargaHistorial } from '@/lib/stickers/carga';
 import { cuandoFue, filaDelRecord, fraseDeActividad, heroeDeActividad, secundariosDeActividad, tiempoCorto, zonasSimples } from '@/lib/paginaDelEntreno';
@@ -37,6 +38,8 @@ const HojaDeStickers = lazy(() => import('@/features/stickers/HojaDeStickers'));
 
 export default function ResumenLibre({ fila: filaInicial, unidadPeso = 'kg', alCerrar, alCerrarStickers, conStickers = false, recien = false, muestras = null, record = null, actividad = null, propias = [], filas = [], desde = null, conRecord = false, alCrearPropia, alCambiar, alBorrado }) {
   const [fila, setFila] = useState(filaInicial);
+  // «Cambiar la actividad» abre la lista de símbolos: el catálogo se pide al montar para que ya esté (ver `EntrenoLibre`).
+  useEffect(() => { cargaCatalogo().catch(() => { /* sin red: la hoja se abre sin símbolos y se reintenta al pintar el primero */ }); }, []);
   /* ¿Fue récord? Al terminar ya viene (`record`). Al abrir uno viejo, contra sus entrenos de ANTES del mismo deporte (de la base, no de la lista corta). */
   const [recordViejo, setRecordViejo] = useState(null);
   useEffect(() => {

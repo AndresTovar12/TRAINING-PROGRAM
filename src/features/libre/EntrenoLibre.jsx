@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { MonitorPlay, Play, Share2, Timer } from 'lucide-react';
 import HojaFlotante from '@/components/HojaFlotante';
 import { LT, FONT } from '@/lib/theme';
@@ -27,6 +27,7 @@ import { Cuadrito } from '@/features/training/home/Cuadros';
 import { abreSesionHecha } from '@/lib/abreSesionHecha';
 import { useRelojEnCurso } from '@/lib/relojApple';
 import { useAviso } from '@/components/AvisoPasajero';
+import { cargaCatalogo } from '@/lib/iconosDeTipo';
 
 /* EL ENTRENO LIBRE, armado (12 oct 2026): lo que ve alguien en Home o en la pestaña Entrenar para entrenar por su cuenta, tenga o no un plan.
      · `variante="completa"` (la pestaña Entrenar de quien no tiene plan): las opciones puestas directo y «Tus entrenos». La tarjeta azul «Entrenar», la de
@@ -60,6 +61,8 @@ const yaSeLeOfrecio = () => { try { return sessionStorage.getItem('tl:explorar-o
 const marcaOfrecido = () => { try { sessionStorage.setItem('tl:explorar-ofrecido', '1'); } catch { /* sin almacenamiento: puede salir otra vez */ } };
 
 export default function EntrenoLibre({ userId, unidadPeso = 'kg', variante = 'completa', alIrAHome = null, conEmpujon = false, alIrAExplorar = null, sinPlan = false, medio = null, alCerrar = null, volverA = 'Home' }) {
+  // Los símbolos de «¿Qué vas a hacer?» salen del catálogo de íconos (~95 KB, aparte del paquete): se pide al montar para que ya esté cuando se toque el botón.
+  useEffect(() => { cargaCatalogo().catch(() => { /* sin red: la hoja se abre sin símbolos y se reintenta al pintar el primero */ }); }, []);
   const crono = useCronometroLibre(userId);
   const { filas, entrenos, recarga } = useEntrenosRecientes(userId, LEIDOS);
   const { abreDemo, hasPlan } = usePlan();
