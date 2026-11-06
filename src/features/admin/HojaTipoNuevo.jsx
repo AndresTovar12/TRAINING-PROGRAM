@@ -110,7 +110,7 @@ export default function HojaTipoNuevo({ propios, conUso, onGuardar, onCerrar }) 
               style={{ position: 'relative', width: 60, height: 60, flexShrink: 0, borderRadius: '50%', /* estilo-ok: aro del ícono sobre la tarjeta azul */ display: 'grid', placeItems: 'center', background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.3)' }}
             >
               <span style={{ position: 'absolute', inset: -8, borderRadius: '50%', /* estilo-ok: aro del ícono sobre la tarjeta azul */ border: '1px solid rgba(255,255,255,0.16)' }} />
-              {dibujo ? <IconoSvg svg={dibujo.svg} size={27} strokeWidth={1.8} /> : <Tag size={27} strokeWidth={1.8} />}
+              {dibujo ? <IconoSvg svg={dibujo.svg} caja={dibujo.caja} relleno={dibujo.relleno} size={27} strokeWidth={1.8} /> : <Tag size={27} strokeWidth={1.8} />}
             </span>
             <input
               ref={campoDelNombre} className="tl-tipo-nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') guarda(); }}
@@ -189,7 +189,7 @@ export default function HojaTipoNuevo({ propios, conUso, onGuardar, onCerrar }) 
                     border: 'none', background: puesto ? LT.blueSoft : UI.relleno, color: puesto ? LT.blue : LT.text,
                   }}
                 >
-                  <IconoSvg svg={ic.svg} size={24} />
+                  <IconoSvg svg={ic.svg} caja={ic.caja} relleno={ic.relleno} size={24} />
                   {puesto && (
                     <span aria-hidden="true" style={{ position: 'absolute', right: -5, top: -5, width: 18, height: 18, borderRadius: '50%', background: LT.blue, display: 'grid', placeItems: 'center' }}>
                       <Check size={11} color="#fff" strokeWidth={3.6} />

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronLeft, Loader2, MapPin, Pencil, Plus, Search } from 'lucide-react';
-import { FONT } from '@/lib/theme';
+import { Check, ChevronLeft, ChevronRight, Loader2, MapPin, Pencil, Plus, Search, X } from 'lucide-react';
+import { FONT, KP, UI } from '@/lib/theme';
 import {
   COLORES_PARA_CREAR, GRUPOS_DE_ACTIVIDADES, ICONO_PROPIO, MAX_NOMBRE, buscaActividades, creaActividad, editaActividad, hayConNombre, propiasDe, tusActividades,
 } from '@/lib/actividades';
@@ -10,35 +10,108 @@ import { useCatalogoDeIconos } from '@/lib/useCatalogoDeIconos';
 import { IconoSvg } from '@/components/IconoDeTipo';
 import IconoDeActividad from './IconoDeActividad';
 
-/* ELIGE TU ACTIVIDAD (23 oct 2026, Activity Tracker; maqueta v4 aprobada: `docs/maquetas/2026-10-21-experiencia-tracker.html`, pantallas «Cambiar actividad» y «Crear la tuya»).
-   Se abre desde el botón de la izquierda de «listo para empezar» (el punto ● de la barra). Oscura, como esa pantalla.
-     · Arriba «Tus actividades»: lo que hizo últimamente y las que creó (un toque si repite lo de siempre).
-     · Abajo todas, por grupos; las que llevan mapa dicen «mapa».
-     · Buscador sin acentos. Si lo que escribe no existe: «Crear "Waterpolo"».
+/* ELIGE TU ACTIVIDAD (23 oct 2026, Activity Tracker; rehecha el 6 nov 2026, «Registrar: hoja clara», maquetas aprobadas: la propuesta 2 «Lista agrupada» en su versión B «Todo azul»).
+   Se abre desde el botón de la izquierda de «listo para empezar» (el punto ● de la barra). Ya no es una pantalla negra con una lista larga: es una HOJA CLARA que sube
+   sobre la app (la app se ve oscurecida arriba), como el resto de Training Lab.
+     · Cabecera «¿Qué vas a hacer?» con una equis, y un buscador blanco sin acentos. Si lo que escribe no existe: «Crear "Waterpolo"».
+     · La lista agrupada, como «Mi perfil»: «Tus actividades» primero (lo que hizo últimamente y las que creó), luego los grupos del catálogo, cada uno en su tarjeta blanca con
+       renglones (símbolo azul, nombre y, si lleva mapa, «mapa» en verde), y al final «¿No está?» con «Crear mi actividad».
      · Crear la suya: nombre, COLOR e ÍCONO (del catálogo de la app, el de los tipos de sesión; mientras escribe el nombre se le sugiere uno) y UNA pregunta,
        «¿Te mueves de un lugar a otro?» (si sí, lleva mapa y distancia). Queda guardada en su configuración. Sin emojis: Andrés, «no tienen personalidad».
      · Si se mueve de un lugar a otro, otra pregunta (3 nov 2026, para la pausa automática): «¿Cómo te mueves?», «A pie» o «Sobre ruedas o en el agua».
      · «Creadas por ti» (con `alEditar`): las suyas, con un lápiz para cambiarlas (nombre, color, ícono y las dos preguntas).
+   La pantalla de crear y la de «¿Cómo te mueves?» son las mismas de antes, solo pasaron a claras con estos colores.
    `filas`: sus entrenos recientes (para «Tus actividades»). `propias`: las que creó. `alElegir(actividad)`. `alCrear(actividad)`: la guarda y la elige.
    `alEditar(actividad)`: guarda los cambios de una suya (sin él, no se ofrece editar). */
 
-const C = { fondo: '#0F1220', tarjeta: '#1A1E2E', tarjeta2: '#232838', texto: '#FFFFFF', texto2: 'rgba(255,255,255,0.62)', texto3: 'rgba(255,255,255,0.42)', azul: '#2F6BFF', verde: '#22C38E' };
+const C = { fondo: '#F4F5F8', tarjeta: UI.tarjeta, relleno: '#EDEFF3', texto: KP.ink, texto2: KP.ink2, texto3: '#9CA3AF', azul: KP.blue, azulSuave: KP.blueSoft, verde: KP.mint, hilo: UI.hilo, flecha: '#C2C6CF', cerrar: '#E8EAEF', asa: '#D5D8DF', velo: 'rgba(17,19,24,0.32)' };
 
-const rotulo = { margin: '18px 4px 8px', fontSize: 13, fontWeight: 700, color: C.texto3 };
-const fila = {
-  width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', border: 'none', borderRadius: 16, background: C.tarjeta, color: C.texto,
-  fontFamily: FONT, fontSize: 16.5, fontWeight: 700, cursor: 'pointer', textAlign: 'left', touchAction: 'manipulation',
+const rotulo = { margin: '16px 4px 8px', fontSize: 13, fontWeight: 700, color: C.texto2 };
+const grupo = { background: C.tarjeta, borderRadius: UI.rTarjeta, boxShadow: UI.sombraGrupo, overflow: 'hidden' };
+// Un renglón de la lista: el símbolo, el nombre y lo que lleve a la derecha. El hilo de arriba (`hiloDe`) empieza después del símbolo.
+const renglon = {
+  flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', border: 'none', background: 'transparent', color: C.texto,
+  fontFamily: FONT, fontSize: 16, fontWeight: 600, cursor: 'pointer', textAlign: 'left', touchAction: 'manipulation',
 };
-const redondo = { width: 44, height: 44, borderRadius: 14, border: 'none', background: 'rgba(255,255,255,0.12)', color: '#fff', display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0 };
-const masDe = { width: 38, height: 38, borderRadius: 12, background: 'rgba(47,107,255,0.2)', color: C.azul, display: 'grid', placeItems: 'center', flexShrink: 0 };
+const hiloDe = { position: 'absolute', left: 56, right: 0, top: 0, height: 1, background: C.hilo, pointerEvents: 'none' };
+const redondo = { width: 34, height: 34, borderRadius: 17, border: 'none', background: C.cerrar, color: C.texto2, display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0, touchAction: 'manipulation' };
+const campo = { background: C.tarjeta, borderRadius: UI.rCampo, boxShadow: UI.sombraGrupo };
+const botonAzul = { width: '100%', minHeight: 56, borderRadius: 20, border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 18, fontWeight: 800, color: '#fff', background: C.azul, touchAction: 'manipulation' };
 
-function Fila({ actividad, onClick }) {
+/** La hoja: un velo sobre la app, y abajo la hoja clara con su asita (sube con el mismo movimiento que las otras hojas). `alTocarFuera`: tocar el velo. */
+function Hoja({ etiqueta, alTocarFuera = null, completa = true, children }) {
+  return createPortal(
+    <div
+      role="dialog" aria-modal="true" aria-label={etiqueta} onClick={alTocarFuera ?? undefined}
+      style={{ position: 'fixed', inset: 0, zIndex: 3300, background: C.velo, fontFamily: FONT, color: C.texto, display: 'flex', alignItems: 'flex-end' }}
+    >
+      <div
+        className="animate-sheet" onClick={(e) => e.stopPropagation()}
+        style={{
+          width: '100%', boxSizing: 'border-box', background: C.fondo, borderRadius: '28px 28px 0 0', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          ...(completa ? { height: 'calc(100% - max(46px, env(safe-area-inset-top) + 12px))' } : { maxHeight: 'calc(100% - max(46px, env(safe-area-inset-top) + 12px))' }),
+        }}
+      >
+        <div aria-hidden="true" style={{ width: 38, height: 5, borderRadius: 3, background: C.asa, margin: '8px auto 4px', flexShrink: 0 }} />
+        {children}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/** La cabecera de la hoja: lo de la izquierda (una flecha para volver o nada), el título y la equis. */
+function Cabecera({ chico = null, titulo, alVolver = null, alCerrar = null }) {
   return (
-    <button type="button" onClick={onClick} style={fila}>
-      <IconoDeActividad actividad={actividad} oscuro />
-      <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{actividad.nombre}</span>
-      {actividad.gps && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12.5, fontWeight: 700, color: C.verde }}><MapPin size={13} /> mapa</span>}
-    </button>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 18px 10px', flexShrink: 0 }}>
+      {alVolver && <button type="button" onClick={alVolver} aria-label="Volver" style={redondo}><ChevronLeft size={20} /></button>}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {chico && <div style={{ fontSize: 13, fontWeight: 700, color: C.texto2 }}>{chico}</div>}
+        <div style={{ fontSize: 21, fontWeight: 800, letterSpacing: '-0.01em', overflowWrap: 'anywhere' }}>{titulo}</div>
+      </div>
+      {alCerrar && <button type="button" onClick={alCerrar} aria-label="Cerrar" style={redondo}><X size={16} strokeWidth={2.4} /></button>}
+    </div>
+  );
+}
+
+/** Un renglón de una tarjeta de la lista. `alEditar`: con él, un lápiz a la derecha (las que creó la persona). */
+function Linea({ actividad, primera, onClick, alEditar = null }) {
+  return (
+    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+      {!primera && <span aria-hidden="true" style={hiloDe} />}
+      <button type="button" onClick={onClick} style={renglon}>
+        <IconoDeActividad actividad={actividad} size={30} glifo={0.92} />
+        <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{actividad.nombre}</span>
+        {actividad.gps && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 12, fontWeight: 700, color: C.verde }}><MapPin size={11} strokeWidth={2.4} /> mapa</span>}
+        {!alEditar && <ChevronRight size={16} strokeWidth={2.2} color={C.flecha} style={{ flexShrink: 0 }} />}
+      </button>
+      {alEditar && (
+        <button type="button" onClick={alEditar} aria-label={`Editar ${actividad.nombre}`} style={{ ...renglon, flex: 'none', padding: '10px 14px 10px 6px', color: C.texto2 }}><Pencil size={17} /></button>
+      )}
+    </div>
+  );
+}
+
+/** Una tarjeta blanca con sus renglones (`actividades`) y, si hace falta, un renglón más al final (`children`). */
+function Tarjeta({ actividades, alElegir, alEditar = null, children }) {
+  return (
+    <div style={grupo}>
+      {actividades.map((x, i) => <Linea key={x.id} actividad={x} primera={i === 0} onClick={() => alElegir(x)} alEditar={alEditar ? () => alEditar(x) : null} />)}
+      {children}
+    </div>
+  );
+}
+
+/** Un renglón azul con un «+» («Crear mi actividad», «Crear "Waterpolo"»). */
+function RenglonCrear({ texto, onClick, primera = true }) {
+  return (
+    <div style={{ position: 'relative' }}>
+      {!primera && <span aria-hidden="true" style={hiloDe} />}
+      <button type="button" onClick={onClick} style={{ ...renglon, flex: 'none', width: '100%', boxSizing: 'border-box', color: C.azul }}>
+        <span aria-hidden="true" style={{ width: 30, height: 30, display: 'grid', placeItems: 'center', flexShrink: 0 }}><Plus size={22} strokeWidth={2.2} /></span>
+        <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{texto}</span>
+      </button>
+    </div>
   );
 }
 
@@ -47,11 +120,11 @@ export function ComoTeMueves({ valor, alCambiar }) {
   const opcion = (v, texto) => (
     <button
       type="button" onClick={() => alCambiar(v)} aria-pressed={valor === v}
-      style={{ flex: 1, minHeight: 48, borderRadius: 14, border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 700, padding: '8px 10px', color: '#fff', background: valor === v ? C.azul : C.tarjeta2, touchAction: 'manipulation' }}
+      style={{ flex: 1, minHeight: 48, borderRadius: 14, border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 700, padding: '8px 10px', color: valor === v ? '#fff' : C.texto, background: valor === v ? C.azul : C.relleno, touchAction: 'manipulation' }}
     >{texto}</button>
   );
   return (
-    <div style={{ ...fila, cursor: 'default', flexDirection: 'column', alignItems: 'stretch', gap: 10, padding: '14px 16px' }}>
+    <div style={{ ...grupo, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10, fontSize: 16, fontWeight: 600 }}>
       <span>¿Cómo te mueves?</span>
       <div role="group" aria-label="¿Cómo te mueves?" style={{ display: 'flex', gap: 8 }}>{opcion('pie', 'A pie')}{opcion('ruedas', 'Sobre ruedas o en el agua')}</div>
       <span style={{ fontSize: 13.5, fontWeight: 500, color: C.texto2 }}>Así sabemos cuándo pausar solo.</span>
@@ -62,21 +135,18 @@ export function ComoTeMueves({ valor, alCambiar }) {
 /** Al iniciar una propia con mapa que todavía no dice cómo se mueve (se creó antes del 3 nov 2026): la misma pregunta, una sola vez. `alElegir('pie' | 'ruedas')`. */
 export function HojaComoTeMueves({ actividad, alElegir, alCerrar }) {
   const [valor, setValor] = useState('pie');
-  return createPortal(
-    <div role="dialog" aria-modal="true" aria-label="¿Cómo te mueves?" style={{ position: 'fixed', inset: 0, zIndex: 3300, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'flex-end', fontFamily: FONT }}>
-      <div style={{ width: '100%', boxSizing: 'border-box', background: C.fondo, color: C.texto, borderRadius: '24px 24px 0 0', padding: '18px 16px calc(16px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 14 }}>
+  return (
+    <Hoja etiqueta="¿Cómo te mueves?" alTocarFuera={alCerrar} completa={false}>
+      <div style={{ padding: '6px 16px calc(16px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <IconoDeActividad actividad={actividad} size={44} oscuro />
-          <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: C.texto3 }}>Antes de empezar</div><div style={{ fontSize: 20, fontWeight: 800, overflowWrap: 'anywhere' }}>{actividad?.nombre}</div></div>
-          <button type="button" onClick={alCerrar} aria-label="Volver" style={redondo}><ChevronLeft size={22} /></button>
+          <IconoDeActividad actividad={actividad} size={44} />
+          <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: C.texto2 }}>Antes de empezar</div><div style={{ fontSize: 20, fontWeight: 800, overflowWrap: 'anywhere' }}>{actividad?.nombre}</div></div>
+          <button type="button" onClick={alCerrar} aria-label="Volver" style={redondo}><ChevronLeft size={20} /></button>
         </div>
         <ComoTeMueves valor={valor} alCambiar={setValor} />
-        <button type="button" onClick={() => alElegir(valor)} style={{ width: '100%', minHeight: 56, borderRadius: 20, border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 18, fontWeight: 800, color: '#fff', background: C.azul, touchAction: 'manipulation' }}>
-          Listo
-        </button>
+        <button type="button" onClick={() => alElegir(valor)} style={botonAzul}>Listo</button>
       </div>
-    </div>,
-    document.body,
+    </Hoja>
   );
 }
 
@@ -113,32 +183,29 @@ function Crear({ inicial, editando = null, propias, alGuardar, alVolver }) {
   };
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 'calc(14px + env(safe-area-inset-top)) 16px 4px' }}>
-        <button type="button" onClick={alVolver} aria-label="Volver" style={redondo}><ChevronLeft size={22} /></button>
-        <div><div style={{ fontSize: 13, fontWeight: 700, color: C.texto3 }}>{editando ? 'Tu actividad' : 'Nueva actividad'}</div><div style={{ fontSize: 22, fontWeight: 800 }}>{editando ? 'Cámbiala' : 'Hazla tuya'}</div></div>
-      </div>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px' }}>
+      <Cabecera chico={editando ? 'Tu actividad' : 'Nueva actividad'} titulo={editando ? 'Cámbiala' : 'Hazla tuya'} alVolver={alVolver} />
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '8px 16px 14px' }}>
         <div style={{ display: 'flex', justifyContent: 'center', margin: '4px 0 16px' }}>
-          <IconoDeActividad actividad={{ icono, color, nombre }} size={92} oscuro />
+          <IconoDeActividad actividad={{ icono, color, nombre }} size={92} />
         </div>
         <input
           value={nombre} onChange={(e) => { setNombre(e.target.value); setAviso(null); }} maxLength={MAX_NOMBRE} placeholder="Nombre" aria-label="Nombre de la actividad" autoFocus={!inicial}
-          style={{ width: '100%', boxSizing: 'border-box', border: 'none', borderRadius: 16, background: C.tarjeta, color: C.texto, fontFamily: FONT, fontSize: 20, fontWeight: 700, padding: '14px 16px', outline: 'none', textAlign: 'center' }}
+          style={{ ...campo, width: '100%', boxSizing: 'border-box', border: 'none', color: C.texto, fontFamily: FONT, fontSize: 20, fontWeight: 700, padding: '14px 16px', outline: 'none', textAlign: 'center' }}
         />
-        {aviso && <div role="alert" style={{ marginTop: 8, textAlign: 'center', color: '#FFB547', fontSize: 14, fontWeight: 600 }}>{aviso}</div>}
+        {aviso && <div role="alert" style={{ marginTop: 8, textAlign: 'center', color: KP.amber, fontSize: 14, fontWeight: 600 }}>{aviso}</div>}
 
         <div style={rotulo}>Color</div>
         <div role="group" aria-label="Color" style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
           {COLORES_PARA_CREAR.map((c) => (
             <button
               key={c} type="button" onClick={() => setColor(c)} aria-pressed={c === color} aria-label={`Color ${c}`}
-              style={{ width: 38, height: 38, borderRadius: 19, border: 'none', cursor: 'pointer', background: c, display: 'grid', placeItems: 'center', boxShadow: c === color ? '0 0 0 3px #0F1220, 0 0 0 5px #fff' : 'none', touchAction: 'manipulation' }}
+              style={{ width: 38, height: 38, borderRadius: 19, border: 'none', cursor: 'pointer', background: c, display: 'grid', placeItems: 'center', boxShadow: c === color ? `0 0 0 3px ${C.fondo}, 0 0 0 5px ${C.texto}` : 'none', touchAction: 'manipulation' }}
             >{c === color && <Check size={16} color="#fff" strokeWidth={3.4} />}</button>
           ))}
         </div>
 
         <div style={rotulo}>Ícono</div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px', borderRadius: 14, background: C.tarjeta }}>
+        <label style={{ ...campo, display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px' }}>
           <Search size={17} color={C.texto2} aria-hidden="true" />
           <input
             type="search" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Busca: pelota, agua, montaña…" aria-label="Buscar ícono" autoComplete="off"
@@ -153,25 +220,25 @@ function Crear({ inicial, editando = null, propias, alGuardar, alVolver }) {
             return (
               <button
                 key={ic.id} type="button" onClick={() => setElegido(ic.id)} aria-pressed={puesto} aria-label={ic.nombre} title={ic.nombre}
-                style={{ height: 52, borderRadius: 14, border: 'none', cursor: 'pointer', display: 'grid', placeItems: 'center', background: puesto ? `${color}33` : C.tarjeta, color: puesto ? color : C.texto, touchAction: 'manipulation' }}
-              ><IconoSvg svg={ic.svg} size={24} /></button>
+                style={{ height: 52, borderRadius: 14, border: 'none', cursor: 'pointer', display: 'grid', placeItems: 'center', background: puesto ? C.azulSuave : C.tarjeta, color: puesto ? C.azul : C.texto, touchAction: 'manipulation' }}
+              ><IconoSvg svg={ic.svg} caja={ic.caja} relleno={ic.relleno} size={24} strokeWidth={1.6} /></button>
             );
           })}
         </div>
 
         <button
           type="button" onClick={() => setGps((g) => !g)} aria-pressed={gps}
-          style={{ ...fila, marginTop: 16, justifyContent: 'space-between', padding: '14px 16px' }}
+          style={{ ...grupo, ...renglon, flex: 'none', width: '100%', boxSizing: 'border-box', marginTop: 16, justifyContent: 'space-between', padding: '14px 16px' }}
         >
           <span><span style={{ display: 'block' }}>¿Te mueves de un lugar a otro?</span><span style={{ display: 'block', fontSize: 13.5, fontWeight: 500, color: C.texto2, marginTop: 2 }}>Si sí, llevará mapa y distancia.</span></span>
-          <span aria-hidden="true" style={{ width: 50, height: 30, borderRadius: 15, background: gps ? C.verde : 'rgba(255,255,255,0.18)', position: 'relative', flexShrink: 0, transition: 'background .15s' }}>
+          <span aria-hidden="true" style={{ width: 50, height: 30, borderRadius: 15, background: gps ? C.verde : C.asa, position: 'relative', flexShrink: 0, transition: 'background .15s' }}>
             <span style={{ position: 'absolute', top: 3, left: gps ? 23 : 3, width: 24, height: 24, borderRadius: 12, background: '#fff', transition: 'left .15s' }} />
           </span>
         </button>
         {gps && <div style={{ marginTop: 8 }}><ComoTeMueves valor={desplazamiento} alCambiar={setDesplazamiento} /></div>}
       </div>
-      <div style={{ padding: '10px 16px calc(14px + env(safe-area-inset-bottom))' }}>
-        <button type="button" onClick={guardar} style={{ width: '100%', minHeight: 58, borderRadius: 20, border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 18, fontWeight: 800, color: '#fff', background: C.azul, touchAction: 'manipulation' }}>
+      <div style={{ padding: '10px 16px calc(14px + env(safe-area-inset-bottom))', flexShrink: 0 }}>
+        <button type="button" onClick={guardar} style={{ ...botonAzul, minHeight: 58 }}>
           {editando ? 'Guardar' : 'Guardar y empezar'}
         </button>
       </div>
@@ -188,76 +255,57 @@ export default function ElegirActividad({ filas = [], propias = [], alElegir, al
   const hallazgos = useMemo(() => buscaActividades(q, propias), [q, propias]);
   const ofreceCrear = q && !hayConNombre(q, propias);
   const nombreNuevo = q.replace(/^./, (c) => c.toUpperCase()).slice(0, MAX_NOMBRE);
+  const hechas = propiasDe(propias);
 
-  return createPortal(
-    <div role="dialog" aria-modal="true" aria-label="Elige tu actividad" style={{ position: 'fixed', inset: 0, zIndex: 3300, background: C.fondo, color: C.texto, fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
+  return (
+    <Hoja etiqueta="Elige tu actividad" alTocarFuera={editando || creando !== null ? null : alCerrar}>
       {editando ? (
         <Crear inicial="" editando={editando} propias={propias} alVolver={() => setEditando(null)} alGuardar={(act) => { alEditar(act); setEditando(null); }} />
       ) : creando !== null ? (
         <Crear inicial={creando} propias={propias} alVolver={() => setCreando(null)} alGuardar={(act, yaExistia) => (yaExistia ? alElegir(act) : alCrear(act))} />
       ) : (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 'calc(14px + env(safe-area-inset-top)) 16px 4px' }}>
-            <button type="button" onClick={alCerrar} aria-label="Volver" style={redondo}><ChevronLeft size={22} /></button>
-            <div><div style={{ fontSize: 13, fontWeight: 700, color: C.texto3 }}>¿Qué vas a hacer?</div><div style={{ fontSize: 22, fontWeight: 800 }}>Elige tu actividad</div></div>
-          </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '10px 16px 0', padding: '0 14px', borderRadius: 16, background: C.tarjeta }}>
-            <Search size={18} color={C.texto2} aria-hidden="true" />
+          <Cabecera titulo="¿Qué vas a hacer?" alCerrar={alCerrar} />
+          <label style={{ ...campo, display: 'flex', alignItems: 'center', gap: 8, margin: '0 16px 10px', padding: '0 14px', flexShrink: 0 }}>
+            <Search size={18} color={C.texto3} aria-hidden="true" />
             <input
               type="search" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Busca: correr, pádel, waterpolo…" aria-label="Buscar actividad" autoComplete="off"
-              style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', color: C.texto, fontFamily: FONT, fontSize: 16, fontWeight: 600, padding: '14px 0', outline: 'none' }}
+              style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', color: C.texto, fontFamily: FONT, fontSize: 15, fontWeight: 500, padding: '11px 0', outline: 'none' }}
             />
           </label>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px calc(18px + env(safe-area-inset-bottom))' }}>
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 16px calc(24px + env(safe-area-inset-bottom))' }}>
             {!q ? (
               <>
-                <div style={rotulo}>Tus actividades</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {tuyas.map((x) => (
-                    <button
-                      key={x.id} type="button" onClick={() => alElegir(x)}
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px 6px 6px', borderRadius: 99, border: 'none', background: C.tarjeta, color: C.texto, fontFamily: FONT, fontSize: 15, fontWeight: 700, cursor: 'pointer', touchAction: 'manipulation' }}
-                    ><IconoDeActividad actividad={x} size={30} oscuro />{x.nombre}</button>
-                  ))}
-                </div>
+                <div style={{ ...rotulo, marginTop: 4 }}>Tus actividades</div>
+                <Tarjeta actividades={tuyas} alElegir={alElegir} />
                 {GRUPOS_DE_ACTIVIDADES.map((g) => (
                   <div key={g.grupo}>
                     <div style={rotulo}>{g.grupo}</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{g.actividades.map((x) => <Fila key={x.id} actividad={x} onClick={() => alElegir(x)} />)}</div>
+                    <Tarjeta actividades={g.actividades} alElegir={alElegir} />
                   </div>
                 ))}
-                {alEditar && propiasDe(propias).length > 0 && (
+                {alEditar && hechas.length > 0 && (
                   <div>
                     <div style={rotulo}>Creadas por ti</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {propiasDe(propias).map((x) => (
-                        <div key={x.id} style={{ display: 'flex', gap: 6 }}>
-                          <div style={{ flex: 1, minWidth: 0 }}><Fila actividad={x} onClick={() => alElegir(x)} /></div>
-                          <button type="button" onClick={() => setEditando(x)} aria-label={`Editar ${x.nombre}`} style={{ ...redondo, width: 52, height: 'auto', borderRadius: 16, background: C.tarjeta }}><Pencil size={18} /></button>
-                        </div>
-                      ))}
-                    </div>
+                    <Tarjeta actividades={hechas} alElegir={alElegir} alEditar={setEditando} />
                   </div>
                 )}
                 <div style={rotulo}>¿No está?</div>
-                <button type="button" onClick={() => setCreando('')} style={{ ...fila, color: C.azul }}><span aria-hidden="true" style={masDe}><Plus size={20} /></span> Crear mi actividad</button>
+                <div style={grupo}><RenglonCrear texto="Crear mi actividad" onClick={() => setCreando('')} /></div>
               </>
             ) : (
               <>
-                <div style={rotulo}>{hallazgos.length ? 'Resultados' : 'Sin resultados'}</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{hallazgos.map((x) => <Fila key={x.id} actividad={x} onClick={() => alElegir(x)} />)}</div>
+                <div style={{ ...rotulo, marginTop: 4 }}>{hallazgos.length ? 'Resultados' : 'Sin resultados'}</div>
+                {hallazgos.length > 0 && <Tarjeta actividades={hallazgos} alElegir={alElegir} />}
                 {!hallazgos.length && <p style={{ margin: '4px 4px 12px', color: C.texto2, fontSize: 14.5, lineHeight: 1.4 }}>No la tenemos todavía. Créala con tu ícono y queda guardada.</p>}
                 {ofreceCrear && (
-                  <button type="button" onClick={() => setCreando(nombreNuevo)} style={{ ...fila, marginTop: 6, color: C.azul }}>
-                    <span aria-hidden="true" style={masDe}><Plus size={20} /></span> Crear «{nombreNuevo}»
-                  </button>
+                  <div style={{ ...grupo, marginTop: 12 }}><RenglonCrear texto={`Crear «${nombreNuevo}»`} onClick={() => setCreando(nombreNuevo)} /></div>
                 )}
               </>
             )}
           </div>
         </>
       )}
-    </div>,
-    document.body,
+    </Hoja>
   );
 }

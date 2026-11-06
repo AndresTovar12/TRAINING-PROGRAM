@@ -5,6 +5,7 @@ import { FONT, NUM_STYLE } from '@/lib/theme';
 import { MINIMO_DE_SEGUNDOS, relojDeCronometro } from '@/lib/entrenoLibre';
 import { guardaEntrenoLibre } from '@/lib/entrenoLibreApi';
 import { nombreDelDeporte } from '@/lib/metricas/deportes';
+import { miles } from '@/lib/metricas/formato';
 import { enVivo, fuenteDeUbicacion, textoDeRitmo } from '@/lib/ubicacion';
 import { escuchaPantallaBloqueada, muestraEnPantallaBloqueada, quitaDePantallaBloqueada } from '@/lib/pantallaBloqueada';
 import { enviaAlReloj, terminaEnReloj } from '@/lib/relojApple';
@@ -83,6 +84,8 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
   const icono = act ?? actividadDeDeporte(deporte);
   const conMapa = act ? !!act.gps : true;
   const enBici = deporte === 'bici';
+  // Nadar (6 nov 2026): metros y ritmo por 100 m, como la página del entreno y los stickers; las demás actividades siguen en km y /km.
+  const enAgua = deporte === 'natacion';
   const pausado = cronometro?.pausadoEn != null;
   // La pausa que puso la app porque te detuviste (se quita sola al volver a moverte) se nombra distinto de la que pusiste tú.
   const automatica = !!cronometro?.automatica;
@@ -128,16 +131,16 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
      actualiza cada 10 s (el cronómetro avanza solo, con la hora de inicio, que no cambia mientras no se pause). Pausa y reanudar se mandan al instante.
      Desde el 2 nov 2026 la pantalla bloqueada es la tarjeta negra de la vista de mapa: los números van sin unidad (la etiqueta la lleva) y, en pausa, el tiempo fijo. */
   const vivos = useRef({});
-  useEffect(() => { vivos.current = { km, ritmo: vivo.ritmoSKm, promedio, segundos, nombre, deporte, enBici, cronometro, pulso, crono }; });
+  useEffect(() => { vivos.current = { km, ritmo: vivo.ritmoSKm, promedio, segundos, nombre, deporte, enBici, enAgua, cronometro, pulso, crono }; });
   useEffect(() => {
     if (!corriendoLibre) { quitaDePantallaBloqueada(); terminaEnReloj(); return undefined; }
     const publica = () => {
       const v = vivos.current;
-      const ritmo = textoDelRitmo(pausado ? v.promedio : v.ritmo, v.enBici);
+      const ritmo = textoDelRitmo(pausado ? v.promedio : v.ritmo, v.enBici, v.enAgua);
       const datos = {
         nombre: v.nombre, titulo: v.nombre, tipo: pausado ? 'pausa' : 'cardio',
-        detalle: pausado ? (automatica ? 'Pausa automática' : 'En pausa') : `${v.km.toFixed(2)} km · ${ritmo} ${v.enBici ? 'km/h' : '/km'}`,
-        distancia: v.km.toFixed(2), ritmo, etiquetaRitmo: etiquetaDelRitmo(v.enBici, pausado), simbolo: SIMBOLO[v.deporte] ?? 'figure.run',
+        detalle: pausado ? (automatica ? 'Pausa automática' : 'En pausa') : v.enAgua ? `${miles(v.km * 1000)} m · ${ritmo} /100 m` : `${v.km.toFixed(2)} km · ${ritmo} ${v.enBici ? 'km/h' : '/km'}`,
+        distancia: v.km.toFixed(2), ritmo, etiquetaRitmo: etiquetaDelRitmo(v.enBici, pausado, v.enAgua), simbolo: SIMBOLO[v.deporte] ?? 'figure.run',
         ...(v.pulso ? { pulso: v.pulso } : {}),
         // La hora de inicio FIJA (el inicio real más lo que lleva en pausa): el reloj de la pantalla bloqueada cuenta solo desde ahí. Antes se recalculaba cada
         // 10 s con los segundos enteros y el reloj brincaba un segundo atrás o adelante. En pausa no corre: va lo que lleva.
@@ -320,8 +323,10 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
 
   /* 2, 3 y 4 · CORRIENDO (números o mapa) y EN PAUSA */
   const tiempo = relojDeCronometro(segundos);
-  const ritmoAhora = textoDelRitmo(pausado ? promedio : vivo.ritmoSKm, enBici);
-  const etiquetaRitmo = etiquetaDelRitmo(enBici, pausado);
+  const ritmoAhora = textoDelRitmo(pausado ? promedio : vivo.ritmoSKm, enBici, enAgua);
+  const etiquetaRitmo = etiquetaDelRitmo(enBici, pausado, enAgua);
+  const distancia = enAgua ? miles(vivo.distanciaM) : km.toFixed(2);
+  const etiquetaDistancia = enAgua ? 'Distancia (m)' : 'Distancia (km)';
   const hoja = (
     <HojaDeAbajo
       pausado={pausado} guardando={guardando} error={error}
@@ -344,7 +349,7 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
         {/* En medio, con el mismo espacio arriba y abajo: el ritmo y la distancia enormes y, con Apple Watch, el pulso. */}
         <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 'clamp(18px, 5svh, 40px)', padding: '12px 16px' }}>
           <NumeroGrande valor={ritmoAhora} etiqueta={etiquetaRitmo} />
-          <NumeroGrande valor={km.toFixed(2)} etiqueta="Distancia (km)" />
+          <NumeroGrande valor={distancia} etiqueta={etiquetaDistancia} />
           <Pulso lpm={pulso} />
         </div>
         {hoja}
@@ -374,7 +379,7 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
             </button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', textAlign: 'center', marginTop: 8 }}>
-            {[[ritmoAhora, etiquetaRitmo], [km.toFixed(2), 'Distancia (km)']].map(([v, t]) => (
+            {[[ritmoAhora, etiquetaRitmo], [distancia, etiquetaDistancia]].map(([v, t]) => (
               <div key={t} style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 30, fontWeight: 800, lineHeight: 1.05, letterSpacing: -0.5, color: pausado ? C.grisClaro : C.texto, ...NUM_STYLE }}>{v}</div>
                 <div style={{ fontSize: 11, fontWeight: 600, color: C.gris }}>{t}</div>
@@ -396,9 +401,14 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
   );
 }
 
-/** El ritmo que se ve: «5:19» (sin dato todavía, «–:––»); en bici, la velocidad: «28.4». */
-function textoDelRitmo(sKm, enBici) {
+/** El ritmo que se ve: «5:19» (sin dato todavía, «–:––»); en bici, la velocidad: «28.4»; nadando, el tiempo por cada 100 m: «2:05». `sKm`: segundos por km, como lo da el GPS. */
+function textoDelRitmo(sKm, enBici, enAgua = false) {
   if (enBici) return sKm > 0 ? (3600 / sKm).toFixed(1) : '–.–';
+  if (enAgua) return sKm > 0 && sKm < 12000 ? textoDeRitmo(sKm / 10) : '–:––'; // 20 min por 100 m ya no es nadar: es ruido del GPS
   return sKm > 0 && sKm < 3600 ? textoDeRitmo(sKm) : '–:––';
 }
-const etiquetaDelRitmo = (enBici, pausado) => (enBici ? (pausado ? 'Velocidad promedio (km/h)' : 'Velocidad (km/h)') : (pausado ? 'Ritmo promedio (/km)' : 'Ritmo (/km)'));
+const etiquetaDelRitmo = (enBici, pausado, enAgua = false) => {
+  if (enBici) return pausado ? 'Velocidad promedio (km/h)' : 'Velocidad (km/h)';
+  if (enAgua) return pausado ? 'Ritmo promedio (/100 m)' : 'Ritmo (/100 m)';
+  return pausado ? 'Ritmo promedio (/km)' : 'Ritmo (/km)';
+};
