@@ -1,4 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
+/* OJO: un INTERIOR del plugin del mapa (el paquete no tiene mapa de `exports`, así que el import profundo funciona). Está fijado a
+   @capgo/capacitor-native-map 8.1.2: si el plugin se actualiza, revisar que `touch-routing.js` siga igual (un contador de instalaciones, el oyente de
+   `scroll` en captura y el MutationObserver) antes de dejar esto como está. Ver «EL BARRIDO DEL MAPA» abajo. */
+import {
+  installIosTouchRoutingCachePublisher, publishIosTouchRoutingCache, uninstallIosTouchRoutingCachePublisher,
+} from '@capgo/capacitor-native-map/dist/esm/touch-routing.js';
 
 /* UNA HOJA QUE SE CIERRA DESLIZANDO HACIA ABAJO (6 nov 2026, «Registrar: la hoja se abre sobre el mapa y se cierra deslizando»). Hoy solo la usa la hoja de
    `features/libre/ElegirActividad.jsx` («¿Qué vas a hacer?» y «¿Cómo te mueves?»); está hecha para servirle a cualquier hoja que suba desde abajo.
@@ -18,7 +25,21 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
    POR QUÉ SE MUEVE CON ANIMACIONES DE LA PÁGINA (Web Animations) Y NO CON `style.transform`: sobre el mapa de Apple, el plugin del mapa vuelve a revisar TODA la
    página cada vez que cambia un `style` (`touch-routing.js` del plugin: un `getComputedStyle` por elemento, para saber qué toques van al mapa). Con
    `style.transform` en cada movimiento del dedo esa revisión correría en cada cuadro. Una animación no cambia ningún atributo: la hoja se mueve sin que el
-   plugin despierte. El velo nunca baja de 10 % de opacidad mientras se arrastra: el plugin ignora lo que tiene menos de 5 % y el toque se iría al mapa. */
+   plugin despierte. El velo nunca baja de 10 % de opacidad mientras se arrastra: el plugin ignora lo que tiene menos de 5 % y el toque se iría al mapa.
+
+   EL BARRIDO DEL MAPA SE PAUSA MIENTRAS LA HOJA ESTÁ ABIERTA (6 nov 2026, «Registrar: la lista sobre el mapa ya no se traba al hacer scroll»; Andrés, build 94:
+   la lista se trababa y iba a saltos encima del mapa). Mientras hay un mapa `toBack` (clase `native-map-to-back` en <html>), el plugin deja un oyente de
+   `scroll` en `window` EN CAPTURA (también oye el de la lista) y un MutationObserver; cada aviso hace, al siguiente cuadro, un `getComputedStyle` de CADA
+   elemento de la página y un `postMessage` al iPhone: 60 a 120 barridos por segundo mientras la lista se mueve (medido: 132 en 2 s). Y como el gesto oye
+   `touchmove` sin ser pasivo, el iPhone espera al código en cada cuadro, ocupado en el barrido.
+     · Al abrirse una hoja, y SOLO en el iPhone con la clase puesta: primero se publica una vez (el iPhone se queda con el rectángulo del velo, que tapa
+       toda la pantalla: en ese rato el mapa no necesita toques) y luego se quita el barrido (`uninstall…`, el contador del plugin baja a 0).
+     · Al cerrarse (o desmontarse) la última hoja: se vuelve a instalar (barre una vez y el mapa recupera los toques), pero SOLO si la clase sigue puesta y
+       NUNCA se fue mientras la hoja estaba abierta. Si se eligió una actividad sin mapa, el mapa se destruyó con la hoja abierta: instalar dejaría el contador
+       del plugin en 1 sin mapa y barrería toda la app para siempre. Si el mapa se fue y se creó otro, el plugin ya instaló el suyo: instalar otra vez lo
+       dejaría en 2. Por eso un vigía mira solo la clase de <html> (no lo despierta el scroll).
+     · Se cuenta por hojas abiertas (`hojasEncima`), no por hoja: «¿Cómo te mueves?» y la lista pueden estar montadas a la vez (una sube mientras la otra
+       baja) y una sola pausa sirve a las dos. En la web y en Android no pasa nada (el plugin solo barre en iOS). */
 
 /** Lo que tarda en bajar la hoja al cerrarse (desde arriba; a medio jalar, lo proporcional). */
 export const SALIDA_MS = 200;
@@ -54,6 +75,36 @@ function zonaQueSeDesplaza(desde, hoja) {
   return null;
 }
 
+const hayMapaDetras = () => document.documentElement.classList.contains('native-map-to-back');
+const enIos = () => { try { return Capacitor.getPlatform() === 'ios'; } catch { return false; } };
+let hojasEncima = 0; // hojas abiertas que cuentan para la pausa
+let pausa = null; // { seFue, vigia }: mientras el barrido está quitado por nosotros
+
+/** Pausa el barrido del plugin del mapa (ver arriba). Devuelve con qué soltar la pausa, o `null` si no había nada que pausar. */
+function pausaElBarrido() {
+  if (!enIos() || !hayMapaDetras()) return null;
+  hojasEncima += 1;
+  if (hojasEncima === 1) {
+    publishIosTouchRoutingCache();
+    uninstallIosTouchRoutingCachePublisher();
+    const p = { seFue: false, vigia: null };
+    p.vigia = new MutationObserver(() => { if (!hayMapaDetras()) { p.seFue = true; p.vigia.disconnect(); } });
+    p.vigia.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    pausa = p;
+  }
+  let soltada = false;
+  return () => {
+    if (soltada) return;
+    soltada = true;
+    hojasEncima -= 1;
+    if (hojasEncima > 0 || !pausa) return;
+    const p = pausa;
+    pausa = null;
+    p.vigia.disconnect();
+    if (!p.seFue && hayMapaDetras()) installIosTouchRoutingCachePublisher();
+  };
+}
+
 /** Deja montada una hoja el rato que tarda en bajar después de cerrarse. Devuelve si hay que pintarla. */
 export function useSigueMontado(abierta) {
   const [montada, setMontada] = useState(abierta);
@@ -73,6 +124,12 @@ export function useHojaDeslizable({ abierta = true, alCerrar = null }) {
   useEffect(() => { vivo.current = { abierta, alCerrar }; });
   const fueCerrada = useRef(false);
   const deshazArrastre = useRef(null); // lo pone el gesto: suelta el arrastre en curso si la hoja se cierra por otro lado
+
+  // Abierta encima del mapa de Apple: el plugin no barre la página (ver «EL BARRIDO DEL MAPA»). Al cerrarse o desmontarse, se suelta la pausa.
+  useLayoutEffect(() => {
+    if (!abierta) return undefined;
+    return pausaElBarrido() ?? undefined;
+  }, [abierta]);
 
   /* AL CERRARSE (y al volver a abrirse mientras bajaba): de donde esté a abajo del todo (o de vuelta arriba). Va en `useLayoutEffect`: entre el último
      cuadro del arrastre y el primero de la salida no se pinta nada. */
