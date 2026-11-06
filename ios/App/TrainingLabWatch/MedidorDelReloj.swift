@@ -8,7 +8,7 @@ import WatchKit
    cuando el reloj entrena solo.
 
    LA UBICACIÓN, de dos maneras:
-     · «gps»: una actividad con mapa (correr, caminar, bici, senderismo). GPS del reloj en precisión alta; la ruta se guarda en Salud con `HKWorkoutRouteBuilder`.
+     · «gps»: una actividad con mapa (correr, caminar, bici, senderismo, nadar en aguas abiertas). GPS del reloj en precisión alta; la ruta se guarda en Salud con `HKWorkoutRouteBuilder`.
      · «silencio»: sin mapa (pádel, gimnasio, una sesión de fuerza). La de `docs/stickers.md`, sección 8b: precisión BAJA (unos 100 m) hasta que hay movimiento de
        verdad (se alejó más de 80 m del primer punto, o va a más de 1.2 m/s); entonces alta; tras 3 min quieto, baja otra vez. Solo sirve para la línea del sticker:
        nunca se vuelve distancia ni ritmo, y NO se guarda en Salud. Solo si la persona dijo que sí a «¿Guardamos tu recorrido?» en su iPhone, y nunca con la
@@ -66,8 +66,9 @@ final class MedidorDelReloj: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutBu
                     s.startActivity(with: ahora)
                     c.beginCollection(withStart: ahora) { _, _ in }
                     self.arrancaUbicacion(modo)
-                    // Nadar: el reloj bloquea la pantalla contra el agua solo, como la app Entreno de Apple.
-                    if config.activityType == .swimming { WKInterfaceDevice.current().enableWaterLock() }
+                    // Nadar: el reloj bloquea la pantalla contra el agua solo, como la app Entreno de Apple. Si está preguntando el permiso de ubicación (la primera vez en
+                    // aguas abiertas), no: el bloqueo no dejaría tocar la respuesta.
+                    if config.activityType == .swimming, self.ubicacion?.authorizationStatus != .notDetermined { WKInterfaceDevice.current().enableWaterLock() }
                     listo(true)
                 } catch {
                     print("Reloj: no se pudo empezar el entreno: \(error.localizedDescription)")
@@ -172,6 +173,11 @@ final class MedidorDelReloj: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutBu
             }
         }
         return nil
+    }
+
+    /// Las vueltas que el reloj lleva contadas (nadando en alberca, cada largo es un evento de vuelta).
+    func eventosDeVuelta() -> Int {
+        constructor?.workoutEvents.filter { $0.type == .lap }.count ?? 0
     }
 
     // MARK: La ubicación
@@ -282,7 +288,8 @@ final class MedidorDelReloj: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutBu
 }
 
 /// La configuración de Apple Salud para un entreno: qué deporte mide el reloj y si es al aire libre (con GPS). `actividad`: la del entreno libre, si es eso.
-func configuracionDeApple(deporte: String, actividad: String? = nil, gps: Bool) -> HKWorkoutConfiguration {
+/// `largoDeAlberca`: nadar en alberca, con ese largo en metros (el reloj cuenta los largos).
+func configuracionDeApple(deporte: String, actividad: String? = nil, gps: Bool, largoDeAlberca: Double? = nil) -> HKWorkoutConfiguration {
     let c = HKWorkoutConfiguration()
     let porActividad: [String: HKWorkoutActivityType] = [
         "senderismo": .hiking, "trail": .running, "spinning": .cycling, "patines": .skatingSports, "surf": .surfingSports, "kayak": .paddleSports,
@@ -297,9 +304,15 @@ func configuracionDeApple(deporte: String, actividad: String? = nil, gps: Bool) 
     c.activityType = actividad.flatMap { porActividad[$0] } ?? porDeporte[deporte] ?? .other
     c.locationType = gps ? .outdoor : .indoor
     if c.activityType == .swimming {
-        // Alberca de 25 m (la más común): así el reloj cuenta las vueltas. En mar abierto se elige otra actividad.
-        c.swimmingLocationType = .pool
-        c.lapLength = HKQuantity(unit: .meter(), doubleValue: 25)
+        if let largo = largoDeAlberca {
+            c.locationType = .indoor
+            c.swimmingLocationType = .pool
+            c.lapLength = HKQuantity(unit: .meter(), doubleValue: largo)
+        } else {
+            // Aguas abiertas, o acompañando al iPhone (que nada con mapa y no pregunta dónde): sin largo que suponer.
+            c.locationType = .outdoor
+            c.swimmingLocationType = .openWater
+        }
     }
     return c
 }

@@ -51,6 +51,9 @@ export const MAX_PASOS_EN_EL_RELOJ = 150;
 export const MAX_BYTES_DEL_PLAN = 48000;
 /** Cuántos de «Tus actividades» viajan (`tusActividades`, máximo 6). */
 export const MAX_ACTIVIDADES = 6;
+/** El largo de una alberca que se puede elegir en el reloj, en metros (los mismos de `NadoDelReloj` en `PlanDelReloj.swift`). */
+export const LARGO_MINIMO = 10;
+export const LARGO_MAXIMO = 100;
 
 const esObjeto = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
 const texto = (x, max = 60) => String(x ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -254,6 +257,19 @@ function marcasDe(x) {
   return salida;
 }
 
+/**
+ * DÓNDE NADÓ (6 nov 2026, `docs/superpowers/specs/2026-11-06-nadar-en-el-reloj.md`), lo que manda el reloj en `natacion`: `{ lugar: 'alberca', largo (m), largos }` o
+ * `{ lugar: 'aguas-abiertas' }`. `null` si no viene (un entreno de un reloj de antes, o de otro deporte) o no se entiende: se lee como siempre.
+ */
+export function natacionDe(x) {
+  if (!esObjeto(x)) return null;
+  if (x.lugar === 'aguas-abiertas') return { lugar: 'aguas-abiertas' };
+  const largo = numero(x.largo);
+  const largos = entero(x.largos);
+  if (x.lugar !== 'alberca' || !(largo >= LARGO_MINIMO && largo <= LARGO_MAXIMO) || largos === null || largos < 0) return null;
+  return { lugar: 'alberca', largo, largos };
+}
+
 const pareja = (fila) => Array.isArray(fila) && fila.length >= 2 && fila.every((v) => v === null || numero(v) !== null);
 
 /**
@@ -268,7 +284,11 @@ export function leeResultado(crudo) {
   const fin = numero(r.fin);
   if (inicio === null || fin === null || fin < inicio) return null;
   const pulso = (Array.isArray(r.pulso) ? r.pulso : []).filter((f) => pareja(f) && f[0] >= 0 && f[1] > 30 && f[1] < 240).slice(0, 4000);
-  const ruta = (Array.isArray(r.ruta) ? r.ruta : []).filter((f) => pareja(f) && f.length >= 3 && Math.abs(f[1]) <= 90 && Math.abs(f[2]) <= 180).slice(0, 4000);
+  const natacion = natacionDe(r.natacion);
+  const alberca = natacion?.lugar === 'alberca';
+  // En alberca no hay ruta y la distancia son los largos × su largo (lo que contó el reloj), nunca otro número.
+  const ruta = alberca ? [] : (Array.isArray(r.ruta) ? r.ruta : []).filter((f) => pareja(f) && f.length >= 3 && Math.abs(f[1]) <= 90 && Math.abs(f[2]) <= 180).slice(0, 4000);
+  const distancia = alberca ? natacion.largos * natacion.largo : numero(r.distancia);
   const salida = {
     v: VERSION_DEL_RELOJ,
     id: r.id.toUpperCase(),
@@ -282,10 +302,11 @@ export function leeResultado(crudo) {
     kcal: numero(r.kcal) > 0 ? Math.round(r.kcal) : null,
     fcMedia: entero(r.fcMedia) > 0 ? entero(r.fcMedia) : null,
     fcMax: entero(r.fcMax) > 0 ? entero(r.fcMax) : null,
-    distancia: numero(r.distancia) > 0 ? Math.round(r.distancia) : null,
+    distancia: distancia > 0 ? Math.round(distancia) : null,
     pulso,
     ruta,
-    rutaSilenciosa: r.rutaSilenciosa === true,
+    rutaSilenciosa: !alberca && r.rutaSilenciosa === true,
+    ...(natacion ? { natacion } : null),
     bateria: esObjeto(r.bateria) ? {
       inicio: numero(r.bateria.inicio), fin: numero(r.bateria.fin), ubicacion: ['silencio', 'gps', 'no'].includes(r.bateria.ubicacion) ? r.bateria.ubicacion : 'no',
     } : null,
@@ -311,7 +332,7 @@ export function leeResultado(crudo) {
   if (r.modo === 'libre') {
     const a = esObjeto(r.actividad) ? r.actividad : {};
     salida.actividad = {
-      id: typeof a.id === 'string' ? a.id.slice(0, 40) : 'otro', nombre: texto(a.nombre, 40) || 'Entreno', deporte: DEPORTES[a.deporte] ? a.deporte : 'otro', gps: a.gps === true,
+      id: typeof a.id === 'string' ? a.id.slice(0, 40) : 'otro', nombre: texto(a.nombre, 40) || 'Entreno', deporte: DEPORTES[a.deporte] ? a.deporte : 'otro', gps: !alberca && a.gps === true,
     };
   }
   return salida;
@@ -341,6 +362,9 @@ const bateriaDe = (r) => (r.bateria && r.bateria.inicio !== null && r.bateria.fi
   ? { bateria_reloj: { inicio: r.bateria.inicio, fin: r.bateria.fin, minutos: Math.round(r.duracion / 60), ubicacion: r.bateria.ubicacion } }
   : null);
 
+// Dónde nadó se guarda con el entreno: los stickers cuentan los largos con él.
+const natacionDeLaFila = (r) => (r.natacion ? { natacion: r.natacion } : null);
+
 /**
  * EL ENTRENO DEL RELOJ COMO LO HABRÍA TRAÍDO SALUD (lo mismo que `entrenoDelReloj` de `lib/metricas/leeHealthKit.js` con su `HKWorkout`), para `guardaImportacion`:
  * la fila se guarda con el id del reloj (`idDeLaBase`), `origen = 'healthkit'` y `pulso_de = 'apple_watch'`. Si el iPhone tenía ya ese entreno (el que guió con
@@ -357,22 +381,23 @@ export function crudoDelReloj(r, { deporte = null, llego = false } = {}) {
     ruta_ref: null,
     muestras: muestrasDe(r, { conRuta: !r.rutaSilenciosa }),
     archivo: 'Apple Watch',
-    metricas: { pulso_de: 'apple_watch', ...(llego ? { llego_del_reloj: true } : null), ...bateriaDe(r) },
+    metricas: { pulso_de: 'apple_watch', ...(llego ? { llego_del_reloj: true } : null), ...bateriaDe(r), ...natacionDeLaFila(r) },
   };
 }
 
 /**
  * UN ENTRENO LIBRE HECHO EN EL RELOJ, listo para la cola como cualquier entreno libre (`{ prep, conRuta, desfaseMin }`, lo mismo que `preparaEntrenoLibre`):
  * la actividad que eligió, el tiempo sin pausas, la distancia del GPS del reloj (solo si la actividad lleva mapa), su pulso y sus calorías. La ruta en silencio
- * (una actividad sin mapa) solo deja la línea: nunca distancia ni ritmo (`sinNumerosDeLaRuta`).
+ * (una actividad sin mapa) solo deja la línea: nunca distancia ni ritmo (`sinNumerosDeLaRuta`). Nadar en alberca no lleva mapa pero sí distancia: los largos × su largo.
  */
 export function preparaLibreDelReloj(r) {
   const a = r.actividad ?? { id: 'otro', nombre: 'Entreno', deporte: 'otro', gps: false };
-  const base = entrenoLibre({ deporte: a.deporte, inicioMs: r.inicio, duracionS: segundosDe(r), distanciaM: a.gps ? r.distancia : null, titulo: a.nombre, llevaDistancia: a.gps });
+  const conDistancia = a.gps || r.natacion?.lugar === 'alberca';
+  const base = entrenoLibre({ deporte: a.deporte, inicioMs: r.inicio, duracionS: segundosDe(r), distanciaM: conDistancia ? r.distancia : null, titulo: a.nombre, llevaDistancia: conDistancia });
   const muestras = muestrasDe(r);
   const conRuta = muestras.length >= 2;
   let prep = conRuta ? preparaEntreno({ ...base, muestras }) : base;
-  if (conRuta && (r.rutaSilenciosa || !a.gps)) prep = sinNumerosDeLaRuta(prep);
+  if (conRuta && (r.rutaSilenciosa || !conDistancia)) prep = sinNumerosDeLaRuta(prep);
   const pulso = resumenDelPulso(r);
   prep = {
     ...prep,
@@ -381,7 +406,7 @@ export function preparaLibreDelReloj(r) {
     dispositivo: 'Apple Watch',
     kcal_activas: r.kcal,
     ...(pulso.fc_media ? { resumen: { ...(prep.resumen ?? {}), ...pulso } } : null),
-    metricas: { ...(prep.metricas ?? {}), ...(pulso.fc_media ? { pulso_de: 'apple_watch' } : null), llego_del_reloj: true, ...bateriaDe(r) },
+    metricas: { ...(prep.metricas ?? {}), ...(pulso.fc_media ? { pulso_de: 'apple_watch' } : null), llego_del_reloj: true, ...bateriaDe(r), ...natacionDeLaFila(r) },
   };
   return { prep, conRuta, desfaseMin: -new Date(r.inicio).getTimezoneOffset(), titulo: base.titulo };
 }

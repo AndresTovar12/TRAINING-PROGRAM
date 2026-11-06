@@ -6,7 +6,7 @@
    hagan EXACTAMENTE lo mismo. */
 
 import { agregaPunto, metrosEntrePuntos } from './ubicacion.js';
-import { decideMarcha, decidePausaAutomatica, familiaDelDeporte, pausa, pausaConVelocidad, reanuda, segundosDe } from './entrenoLibre.js';
+import { decideMarcha, decidePausaAutomatica, familiaDelDeporte, pausa, pausaConVelocidad, reanuda, segundosDe, sinPausaAutomatica } from './entrenoLibre.js';
 import { senales } from './sensorDeMovimiento.js';
 
 /** Cuánto (s) se recuerdan las lecturas del GPS para la pausa automática (el «GPS bueno» mira 10 s). */
@@ -36,8 +36,8 @@ export function pasoDeCarrera(e, punto, ahoraMs, { sensor = null, pausaAutomatic
     lecturas = [...lecturas.filter((x) => ahoraS - x.t <= RECUERDA_S), { t: ahoraS, vel: punto.vel, pre: punto.precision, lat: punto.lat, lon: punto.lon }];
   }
   const familia = familiaDe(c);
-  // «Pausa automática» apagada: nada de esto corre (ni la pausa ni «sin rebote no suma»); la ruta, con las reglas del GPS.
-  const m = familia && pausaAutomatica ? decideMarcha(familia, sensor ? senales(sensor, ahoraMs) : null, lecturas, ahoraS, { conVelocidad: pausaConVelocidad(c) }) : null;
+  // «Pausa automática» apagada (o nadar, que no la tiene): nada de esto corre (ni la pausa ni «sin rebote no suma»); la ruta, con las reglas del GPS.
+  const m = familia && pausaAutomatica && !sinPausaAutomatica(c) ? decideMarcha(familia, sensor ? senales(sensor, ahoraMs) : null, lecturas, ahoraS, { conVelocidad: pausaConVelocidad(c) }) : null;
   const v = m?.metros ? { v: m.metros } : null;
   let accion = null;
   let marcha = null;

@@ -49,6 +49,7 @@ struct RaizDelReloj: View {
                 case .detalle(let id): DetalleDeSesion(id: id)
                 case .libres: EntrenoLibreDelReloj()
                 case .catalogo: CatalogoDelReloj()
+                case .nadar: DondeNadas()
                 }
             }
         }

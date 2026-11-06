@@ -44,7 +44,7 @@ import { entregaArchivo } from '@/lib/entregaArchivo';
 /** La última vista (números o mapa) de la carrera que va: se recuerda aunque se minimice y se vuelva a abrir (por su hora de inicio). */
 const vistaGuardada = { inicio: null, vista: 'numeros' };
 /** El ícono de la actividad en la pantalla bloqueada (SF Symbols). */
-const SIMBOLO = { correr: 'figure.run', caminar: 'figure.walk', senderismo: 'figure.hiking', bici: 'figure.outdoor.cycle' };
+const SIMBOLO = { correr: 'figure.run', caminar: 'figure.walk', senderismo: 'figure.hiking', bici: 'figure.outdoor.cycle', natacion: 'figure.pool.swim' };
 /** En pausa el mapa se tiñe de azul desde arriba y se desvanece hacia la mitad (va en la página, encima del mapa). */
 const TINTE = 'linear-gradient(180deg, rgba(47,85,240,0.55) 0%, rgba(20,20,60,0.35) 45%, rgba(0,0,0,0) 75%)'; /* estilo-ok: el tinte azul de la pausa, maqueta aprobada (2 nov 2026) */
 /** Los botones redondos sobre el mapa: casi negros, como los del mapa. */
@@ -288,7 +288,8 @@ export default function PantallaDeCarrera({ userId, crono, pendiente = null, act
           // prueba: «Guardar traza del GPS» y exportarla.
           <Hoja etiqueta="Ajustes de la carrera" titulo="Ajustes" conCierre onCerrar={() => setAjustes(false)}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-              {conAjustes && (
+              {/* Nadar no se pausa solo (`sinPausaAutomatica`): el interruptor no haría nada. */}
+              {conAjustes && deporte !== 'natacion' && (
                 <Grupo pie="El cronómetro se pausa solo cuando te detienes y sigue solo al volver a moverte.">
                   <Fila texto="Pausa automática" derecha={<Interruptor activo={pausaAutomatica !== false} etiqueta="Pausa automática" onCambio={(v) => setPausaAutomatica(v)} />} />
                 </Grupo>

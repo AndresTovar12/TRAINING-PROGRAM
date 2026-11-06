@@ -41,6 +41,8 @@ struct EntrenoGuardado: Codable {
     /// «gps» (actividad con mapa), «silencio» (sin mapa: solo la línea del sticker) o «no».
     var ubicacion: String
     var bateriaInicio: Double?
+    /// Dónde está nadando (opcional: un `entreno.json` de antes se sigue leyendo).
+    var natacion: NadoDelReloj?
 
     // MARK: Los pasos
 
@@ -225,6 +227,14 @@ struct EntrenoGuardado: Codable {
     func avance(fin: Double) -> AvanceDelReloj {
         AvanceDelReloj(v: 1, nombre: sesion?.nombre, inicio: inicio, fin: fin, hechos: hechos, saltados: saltados, extra: extra)
     }
+}
+
+/// Los largos de una alberca: los que contó el reloj (`eventos`, sus eventos de vuelta). Si Salud no dio eventos pero sí metros (los mide con el largo que se le dijo),
+/// los metros entre el largo.
+func largosDeAlberca(eventos: Int, metros: Double?, largo: Double) -> Int {
+    if eventos > 0 { return eventos }
+    guard let m = metros, m > 0, largo > 0 else { return 0 }
+    return Int((m / largo).rounded())
 }
 
 /// Metros entre dos puntos (haversine), como `metrosEntrePuntos` de `src/lib/ubicacion.js`.

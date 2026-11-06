@@ -22,7 +22,7 @@ const a = (id, nombre, icono, color, gps, deporte, desplazamiento) => Object.fre
 export const GRUPOS_DE_ACTIVIDADES = Object.freeze([
   { grupo: 'A pie', actividades: [a('correr', 'Correr', 'correr', COLOR.pie, true, 'correr', 'pie'), a('caminar', 'Caminar', 'caminar', COLOR.pie, true, 'caminar', 'pie'), a('senderismo', 'Senderismo', 'senderismo', COLOR.pie, true, 'senderismo', 'pie'), a('trail', 'Trail', 'montana', COLOR.pie, true, 'correr', 'pie')] },
   { grupo: 'Sobre ruedas', actividades: [a('bici', 'Bici', 'bici', COLOR.ruedas, true, 'bici', 'ruedas'), a('spinning', 'Spinning', 'velocimetro', COLOR.ruedas, false, 'bici'), a('patines', 'Patines', 'patines', COLOR.ruedas, true, 'otro', 'ruedas')] },
-  { grupo: 'En el agua', actividades: [a('natacion', 'Nadar', 'nadar', COLOR.agua, false, 'natacion'), a('surf', 'Surf', 'olas', COLOR.agua, true, 'otro', 'ruedas'), a('remo', 'Remo', 'kayak', COLOR.agua, true, 'remo', 'ruedas'), a('kayak', 'Kayak', 'barco', COLOR.agua, true, 'remo', 'ruedas')] },
+  { grupo: 'En el agua', actividades: [a('natacion', 'Nadar', 'nadar', COLOR.agua, true, 'natacion', 'ruedas'), a('surf', 'Surf', 'olas', COLOR.agua, true, 'otro', 'ruedas'), a('remo', 'Remo', 'kayak', COLOR.agua, true, 'remo', 'ruedas'), a('kayak', 'Kayak', 'barco', COLOR.agua, true, 'remo', 'ruedas')] },
   { grupo: 'Fuerza y gimnasio', actividades: [a('fuerza', 'Gimnasio', 'pesa', COLOR.fuerza, false, 'fuerza'), a('crossfit', 'Crossfit', 'pesa-rusa', COLOR.fuerza, false, 'funcional'), a('hyrox', 'Hyrox', 'llama', COLOR.fuerza, false, 'funcional'), a('hiit', 'HIIT', 'rayo', COLOR.fuerza, false, 'hiit'), a('eliptica', 'Elíptica', 'caminadora', COLOR.fuerza, false, 'eliptica')] },
   { grupo: 'Raqueta', actividades: [a('padel', 'Pádel', 'tenis', COLOR.raqueta, false, 'raqueta'), a('tenis', 'Tenis', 'tenis', COLOR.raqueta, false, 'raqueta'), a('pickleball', 'Pickleball', 'pingpong', COLOR.raqueta, false, 'raqueta')] },
   { grupo: 'En equipo', actividades: [a('futbol', 'Fútbol', 'futbol', COLOR.equipo, false, 'futbol'), a('basquet', 'Básquet', 'basquet', COLOR.equipo, false, 'otro'), a('voleibol', 'Voleibol', 'voleibol', COLOR.equipo, false, 'otro')] },
@@ -39,7 +39,9 @@ export const ICONO_PROPIO = 'etiqueta';
 const ES_HEX = /^#[0-9a-f]{6}$/i;
 /* CÓMO TE MUEVES (3 nov 2026, `docs/superpowers/specs/2026-11-03-pausa-automatica-rebote.md`). Las actividades con mapa son de una de dos familias, y la pausa
    automática decide distinto en cada una: A PIE ('pie': correr, caminar, senderismo, trail) el cuerpo rebota con cada paso; SOBRE RUEDAS O EN EL AGUA ('ruedas':
-   bici, patines, surf, remo, kayak) no hay rebote y manda el GPS. Una propia con mapa que se creó antes de esto queda en `null` hasta que se le pregunte. */
+   bici, patines, surf, remo, kayak, nadar) no hay rebote y manda el GPS. Una propia con mapa que se creó antes de esto queda en `null` hasta que se le pregunte.
+   NADAR lleva mapa en el iPhone desde el 6 nov 2026, como Strava (`docs/superpowers/specs/2026-11-06-nadar-en-el-reloj.md`), pero no se pausa solo (`sinPausaAutomatica`
+   en `lib/entrenoLibre.js`). En el Apple Watch se pregunta dónde nada: en alberca no hay GPS ni mapa. */
 export const DESPLAZAMIENTOS = Object.freeze(['pie', 'ruedas']);
 const esDesplazamiento = (d) => DESPLAZAMIENTOS.includes(d);
 

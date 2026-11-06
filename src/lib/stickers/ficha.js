@@ -45,7 +45,7 @@ const EN = {
 };
 /** Con ritmo por kilómetro (los demás de distancia van en velocidad o en ritmo por 100 m). */
 const A_PIE = new Set(['correr', 'caminar', 'senderismo', 'trail']);
-/** Un largo de alberca, si no se sabe otro. */
+/** Un largo de alberca, si no se sabe otro (un entreno sin `natacion`: de antes del 6 nov 2026, o escrito a mano). */
 export const LARGO_DE_ALBERCA_M = 25;
 
 /* ¿HAY RUTA? (sección 8b de la especificación). La línea sale solo si el recorrido suma más de 300 m o el punto más lejano queda a más de 150 m del inicio:
@@ -148,7 +148,11 @@ export function ficha(entreno, ahora = Date.now()) {
   if (g?.series > 0) d('series', g.series, 'sets', 'Sets');
   if (g?.ejercicios > 0) d('ejercicios', g.ejercicios, '', 'Exercises');
   if (g?.volumen > 0) d('volumen', miles(g.volumen), e.unidadPeso === 'lb' ? 'lb' : 'kg', 'Volume');
-  if (nado && dist !== null && dist >= 100) d('largos', Math.round(dist / LARGO_DE_ALBERCA_M), '', 'Lengths');
+  // Los largos: los que contó el reloj en la alberca. En aguas abiertas o con ruta (el iPhone con mapa) no hay largos.
+  const lugar = e.natacion?.lugar;
+  if (nado && dist !== null && dist >= 100 && lugar !== 'aguas-abiertas' && (lugar === 'alberca' || !rutaDe(e.ruta))) {
+    d('largos', num(e.natacion?.largos) > 0 ? e.natacion.largos : Math.round(dist / LARGO_DE_ALBERCA_M), '', 'Lengths');
+  }
 
   // La hora y la fecha LOCALES de quien entrenó (`desfaseMin`: la diferencia con UTC que guardó su teléfono; sin ella, la del teléfono de quien mira).
   const inicio = num(e.inicioMs) ?? Date.now();
@@ -287,6 +291,7 @@ export function entrenoDeActividad({ fila, series = null, muestras = null, regis
     desfaseMin: num(fila.desfase_min),
     duracionS: num(fila.duracion_s),
     distanciaM: num(fila.distancia_m),
+    natacion: fila.metricas?.natacion ?? null,
     ritmoSKm: num(fila.metricas?.ritmo_medio_s_km),
     fcMedia: num(fila.fc_media),
     kcal: num(fila.kcal_activas) > 0 ? fila.kcal_activas : num(fila.kcal_totales),

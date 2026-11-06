@@ -24,6 +24,13 @@ enum PantallaDelReloj: Equatable {
     case detalle(String)
     case libres
     case catalogo
+    case nadar
+}
+
+/// Lo que va a empezar en cuanto diga dónde nada: una actividad libre o una sesión del plan.
+enum NadoPorEmpezar: Equatable {
+    case libre(ActividadDelReloj)
+    case sesion(SesionDelReloj, otraVez: Bool)
 }
 
 /// Lo que se cambió de la serie que toca antes de darle «Listo» (con + y −, o con la corona).
@@ -46,6 +53,9 @@ struct FinDelReloj: Equatable {
     var pulsoMedio: Int?
     var quien: String
     var conMapa: Bool
+    /// Nadar en alberca: los largos y de cuánto es cada uno.
+    var largos: Int?
+    var largo: Double?
 }
 
 final class ModeloDelEntreno: NSObject, ObservableObject, WCSessionDelegate {
@@ -56,6 +66,8 @@ final class ModeloDelEntreno: NSObject, ObservableObject, WCSessionDelegate {
     static let marcaDeSalud = "TrainingLab"
     /// Si el iPhone deja de avisar tanto tiempo mientras guía (se cerró la app, se apagó), el reloj cierra solo ese entreno para no gastar batería midiendo para nadie.
     private static let sinNoticiasMax: TimeInterval = 45 * 60
+    /// El último largo de alberca que se eligió.
+    private static let llaveDelLargo = "nadar.largo"
 
     // MARK: El plan
 
@@ -79,6 +91,8 @@ final class ModeloDelEntreno: NSObject, ObservableObject, WCSessionDelegate {
     @Published private(set) var telefonoCerca = false
     @Published private(set) var metros: Double?
     private var vibroLaMeta: String?
+    private var porNadar: NadoPorEmpezar?
+    private var antesDeNadar: PantallaDelReloj = .inicio
 
     // MARK: Cuando el iPhone guía (como antes)
 
@@ -157,20 +171,69 @@ final class ModeloDelEntreno: NSObject, ObservableObject, WCSessionDelegate {
 
     func empiezaSesion(_ s: SesionDelReloj, otraVez: Bool) {
         guard entreno == nil, !activo else { return }
-        let deporte = s.deporte ?? "fuerza"
-        let gps = ["correr", "caminar", "bici", "senderismo"].contains(deporte) || s.pasos.contains { ($0.m ?? 0) >= 200 }
-        let modo = ubicacionPara(gps: gps)
-        let e = EntrenoGuardado(id: UUID().uuidString, modo: "sesion", usuario: plan?.usuario, inicio: ahoraMs(), enLibras: plan?.enLibras ?? false, sesion: s,
-                                otraVez: otraVez, actividad: nil, deporte: deporte, ubicacion: modo.rawValue, bateriaInicio: bateria())
-        arranca(e, configuracion: configuracionDeApple(deporte: deporte, gps: gps), ubicacion: modo)
+        if s.deporte == "natacion" { preguntaDondeNada(.sesion(s, otraVez: otraVez)); return }
+        arrancaSesion(s, otraVez: otraVez, nado: nil)
     }
 
     func empiezaLibre(_ a: ActividadDelReloj) {
         guard entreno == nil, !activo else { return }
-        let modo = ubicacionPara(gps: a.gps)
+        if a.preguntaDonde { preguntaDondeNada(.libre(a)); return }
+        arrancaLibre(a, nado: nil)
+    }
+
+    private func arrancaSesion(_ s: SesionDelReloj, otraVez: Bool, nado: NadoDelReloj?) {
+        let deporte = s.deporte ?? "fuerza"
+        let gps = nado.map { !$0.esAlberca } ?? (["correr", "caminar", "bici", "senderismo"].contains(deporte) || s.pasos.contains { ($0.m ?? 0) >= 200 })
+        let modo: ModoDeUbicacion = nado?.esAlberca == true ? .no : ubicacionPara(gps: gps)
+        let e = EntrenoGuardado(id: UUID().uuidString, modo: "sesion", usuario: plan?.usuario, inicio: ahoraMs(), enLibras: plan?.enLibras ?? false, sesion: s,
+                                otraVez: otraVez, actividad: nil, deporte: deporte, ubicacion: modo.rawValue, bateriaInicio: bateria(), natacion: nado)
+        arranca(e, configuracion: configuracionDeApple(deporte: deporte, gps: gps, largoDeAlberca: nado?.largo), ubicacion: modo)
+    }
+
+    private func arrancaLibre(_ a: ActividadDelReloj, nado: NadoDelReloj?) {
+        var actividad = a
+        if let nado = nado { actividad.gps = !nado.esAlberca }
+        let modo: ModoDeUbicacion = nado?.esAlberca == true ? .no : ubicacionPara(gps: actividad.gps)
         let e = EntrenoGuardado(id: UUID().uuidString, modo: "libre", usuario: plan?.usuario, inicio: ahoraMs(), enLibras: plan?.enLibras ?? false, sesion: nil,
-                                otraVez: false, actividad: a, deporte: a.deporte, ubicacion: modo.rawValue, bateriaInicio: bateria())
-        arranca(e, configuracion: configuracionDeApple(deporte: a.deporte, actividad: a.id, gps: a.gps), ubicacion: modo)
+                                otraVez: false, actividad: actividad, deporte: a.deporte, ubicacion: modo.rawValue, bateriaInicio: bateria(), natacion: nado)
+        arranca(e, configuracion: configuracionDeApple(deporte: a.deporte, actividad: a.id, gps: actividad.gps, largoDeAlberca: nado?.largo), ubicacion: modo)
+    }
+
+    // MARK: Nadar: dónde
+
+    private func preguntaDondeNada(_ que: NadoPorEmpezar) {
+        porNadar = que
+        antesDeNadar = pantalla
+        pantalla = .nadar
+    }
+
+    /// El largo que sale elegido: el último que se usó; la primera vez, 25 m.
+    var ultimoLargo: Double {
+        let l = UserDefaults.standard.double(forKey: Self.llaveDelLargo)
+        return l >= NadoDelReloj.largoMinimo && l <= NadoDelReloj.largoMaximo ? l : 25
+    }
+
+    func nadaEnAlberca(largo: Double) {
+        let medido = min(NadoDelReloj.largoMaximo, max(NadoDelReloj.largoMinimo, largo.rounded()))
+        UserDefaults.standard.set(medido, forKey: Self.llaveDelLargo)
+        empiezaNado(.alberca(largo: medido))
+    }
+
+    func nadaEnAguasAbiertas() { empiezaNado(.aguasAbiertas) }
+
+    func noNada() {
+        porNadar = nil
+        pantalla = antesDeNadar
+    }
+
+    private func empiezaNado(_ nado: NadoDelReloj) {
+        guard let que = porNadar, entreno == nil, !activo else { return }
+        porNadar = nil
+        pantalla = antesDeNadar
+        switch que {
+        case .libre(let a): arrancaLibre(a, nado: nado)
+        case .sesion(let s, let otraVez): arrancaSesion(s, otraVez: otraVez, nado: nado)
+        }
     }
 
     private func arranca(_ e: EntrenoGuardado, configuracion: HKWorkoutConfiguration, ubicacion: ModoDeUbicacion) {
@@ -207,7 +270,12 @@ final class ModeloDelEntreno: NSObject, ObservableObject, WCSessionDelegate {
     }
 
     /// Los metros del entreno: los que mide Salud; si Salud no mide distancia para esa actividad (patines, surf, kayak) y lleva mapa, los de la ruta.
+    /// En alberca, los largos × su largo.
     private func metrosDe(_ e: EntrenoGuardado) -> Double? {
+        if let n = e.natacion, n.esAlberca, let largo = n.largo {
+            let largos = largosDeAlberca(eventos: medidor.eventosDeVuelta(), metros: medidor.metros(), largo: largo)
+            return largos > 0 ? Double(largos) * largo : nil
+        }
         if let m = medidor.metros() { return m }
         return e.ubicacion == ModoDeUbicacion.gps.rawValue && e.metrosDeLaRuta > 0 ? e.metrosDeLaRuta : nil
     }
@@ -311,22 +379,31 @@ final class ModeloDelEntreno: NSObject, ObservableObject, WCSessionDelegate {
         }
         let conMapa = e.ubicacion == ModoDeUbicacion.gps.rawValue
         let todas = e.conPasos && e.hechas >= e.total
+        let largoDeAlberca = e.natacion?.esAlberca == true ? e.natacion?.largo : nil
         fin = FinDelReloj(
             id: e.id, modo: e.modo,
             titulo: e.modo == "libre" ? "\(e.actividad?.nombre ?? "Entreno"): guardado" : (todas || !e.conPasos ? "¡Terminaste!" : "Guardado"),
             nombre: e.sesion?.nombre, segundos: segundos, hechas: e.conPasos ? e.hechas : nil, deSeries: e.conPasos ? e.total : nil,
-            metros: conMapa ? metrosTotales : nil, pulsoMedio: fcMedia, quien: e.sesion?.quien ?? "tu coach", conMapa: conMapa
+            metros: conMapa ? metrosTotales : nil, pulsoMedio: fcMedia, quien: e.sesion?.quien ?? "tu coach", conMapa: conMapa,
+            largos: largoDeAlberca.map { largosDeAlberca(eventos: 0, metros: metrosTotales, largo: $0) }, largo: largoDeAlberca
         )
-        let metadatos: [String: Any] = [Self.marcaDeSalud: "reloj", "TrainingLabId": e.id]
+        var metadatos: [String: Any] = [Self.marcaDeSalud: "reloj", "TrainingLabId": e.id]
+        if let n = e.natacion {
+            let lugar: HKWorkoutSwimmingLocationType = n.esAlberca ? .pool : .openWater
+            metadatos[HKMetadataKeySwimmingLocationType] = lugar.rawValue
+            if let largo = n.largo { metadatos[HKMetadataKeyLapLength] = HKQuantity(unit: .meter(), doubleValue: largo) }
+        }
         medidor.termina(guardar: true, metadatos: metadatos) { [weak self] w in
             guard let self = self else { return }
             let hk = w?.uuid.uuidString
             let id = hk ?? e.id
             let finMs = w.map { $0.endDate.timeIntervalSince1970 * 1000 } ?? ahora
+            let nado = self.nadoAlTerminar(e, w, metrosAntes: metrosTotales)
+            let distancia = nado == nil ? (conMapa ? metrosTotales : nil) : nado?.metros
             let r = ResultadoDelReloj(
                 id: id, hk: hk, usuario: e.usuario ?? self.plan?.usuario, modo: e.modo, deporte: e.deporte,
                 inicio: w.map { $0.startDate.timeIntervalSince1970 * 1000 } ?? e.inicio, fin: finMs, duracion: w?.duration ?? segundos,
-                kcal: kcal, fcMedia: fcMedia, fcMax: fcMax, distancia: conMapa ? metrosTotales : nil,
+                kcal: kcal, fcMedia: fcMedia, fcMax: fcMax, distancia: distancia,
                 pulso: adelgaza(e.pulso, a: 720), ruta: e.ruta.count >= 2 ? rutaParaMandar(e.ruta) : nil,
                 rutaSilenciosa: e.ubicacion == ModoDeUbicacion.silencio.rawValue ? true : nil,
                 bateria: BateriaDelReloj(inicio: e.bateriaInicio, fin: self.bateria(), ubicacion: e.ubicacion),
@@ -334,11 +411,31 @@ final class ModeloDelEntreno: NSObject, ObservableObject, WCSessionDelegate {
                 sesion: e.sesion.map { s in
                     SesionHecha(almacen: s.almacen, llave: s.llave, nombre: s.nombre, de: s.de, otraVez: e.otraVez, entreno: e.avance(fin: finMs), pasos: s.pasos.filter { $0.t == "e" })
                 },
-                actividad: e.actividad
+                actividad: e.actividad,
+                natacion: nado?.lugar
             )
-            if self.fin?.id == e.id { self.fin?.id = id }
+            if self.fin?.id == e.id {
+                self.fin?.id = id
+                if let nado = nado {
+                    self.fin?.metros = conMapa ? nado.metros : nil
+                    self.fin?.largos = nado.lugar.largos
+                }
+            }
             self.manda(r)
         }
+    }
+
+    /// Nadar, ya cerrado el entreno: dónde fue, con sus largos, y los metros. Salud procesa la natación por tandas: lo que quedó en el `HKWorkout` es lo más completo.
+    /// En alberca, los metros son los largos × su largo. `nil` si no se estaba nadando con la pregunta (otro deporte, o un entreno de antes de actualizar).
+    private func nadoAlTerminar(_ e: EntrenoGuardado, _ w: HKWorkout?, metrosAntes: Double?) -> (lugar: NadoDelReloj, metros: Double?)? {
+        guard var n = e.natacion else { return nil }
+        let deSalud = w?.statistics(for: HKQuantityType(.distanceSwimming))?.sumQuantity()?.doubleValue(for: .meter()) ?? 0
+        let metros = deSalud > 0 ? deSalud : metrosAntes
+        guard n.esAlberca, let largo = n.largo else { return (n, metros) }
+        let eventos = w?.workoutEvents?.filter { $0.type == .lap }.count ?? 0
+        let largos = largosDeAlberca(eventos: eventos, metros: metros, largo: largo)
+        n.largos = largos
+        return (n, largos > 0 ? Double(largos) * largo : nil)
     }
 
     /// «Listo» en la pantalla del final: de vuelta al inicio (la sesión ya sale con ✓).

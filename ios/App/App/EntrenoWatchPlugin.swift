@@ -187,7 +187,8 @@ public class EntrenoWatchPlugin: CAPPlugin, CAPBridgedPlugin {
         case "correr": config.activityType = .running; config.locationType = .outdoor
         case "caminar": config.activityType = .walking; config.locationType = .outdoor
         case "bici": config.activityType = .cycling; config.locationType = .outdoor
-        case "natacion": config.activityType = .swimming; config.locationType = .indoor
+        // Nadar en el iPhone va con mapa y no pregunta dónde: el reloj acompaña sin suponer una alberca (y Salud pide el lugar en toda natación).
+        case "natacion": config.activityType = .swimming; config.locationType = .outdoor; config.swimmingLocationType = .openWater
         case "remo": config.activityType = .rowing; config.locationType = .indoor
         case "fuerza": config.activityType = .traditionalStrengthTraining; config.locationType = .indoor
         case "hiit": config.activityType = .highIntensityIntervalTraining; config.locationType = .indoor
