@@ -4,7 +4,8 @@
    Dos cosas: (1) que el catálogo esté sano —un id nunca se repite ni cambia de forma, porque se guarda en la base y en cada día del plan— y
    (2) que «Boxeo» encuentre el guante, «Spinning» la bici fija y «Terapia de hombro» NO encuentre «Destellos» (empieza con «de»).
    6 nov 2026 («Registrar: hoja clara»): además, (3) NINGÚN id que ya existía desapareció (están todos escritos abajo), (4) cada `icono` de las actividades y de los tipos
-   de sesión de la app existe en el catálogo, y (5) los símbolos nuevos (Phosphor, Hugeicons, dibujados y HYROX) traen lo que necesita `IconoSvg`. */
+   de sesión de la app existe en el catálogo, y (5) los símbolos nuevos (Phosphor, Hugeicons, dibujados y HYROX) traen lo que necesita `IconoSvg`.
+   6 nov 2026 («Registrar: los símbolos que faltaban en 8 actividades»): (6) ninguna de las 29 actividades repite símbolo con otra. */
 import assert from 'node:assert/strict';
 import * as datos from '../src/lib/iconosDeTipo.datos.js';
 import { readFileSync } from 'node:fs';
@@ -23,7 +24,7 @@ for (const ic of cat.iconos) {
   assert.ok(!/<script|onload|onerror|javascript:/i.test(ic.svg), `${ic.id}: el dibujo trae algo que no es un trazo`);
   assert.ok(cat.categorias.some((c) => c.id === ic.cat), `${ic.id}: categoría que no existe (${ic.cat})`);
   assert.equal(ic.palabras, normaliza(ic.palabras), `${ic.id}: las palabras van sin acentos y en minúscula`);
-  assert.match(ic.origen, /^(l|t|p|h|tl):[a-z0-9-]+$/, `${ic.id}: origen raro (${ic.origen})`);
+  assert.match(ic.origen, /^(l|t|p|h|ms|tl):[a-z0-9-]+$/, `${ic.id}: origen raro (${ic.origen})`);
 }
 for (const c of cat.categorias) assert.ok(cat.iconos.some((i) => i.cat === c.id), `la categoría ${c.id} no tiene íconos`);
 assert.ok(cat.porId.has(ICONO_NEUTRO), 'falta el ícono neutro');
@@ -55,18 +56,23 @@ assert.equal(cat.porId.get('mano').origen, 'l:hand');
 assert.equal(cat.porId.get('huellas').origen, 't:footsteps');
 
 /* ---------- Los símbolos nuevos (6 nov 2026) ---------- */
-const NUEVOS = ['tenis-correr', 'huellas-pies', 'bota', 'bicicleta', 'loto', 'guante', 'balon-futbol', 'balon-basquet', 'mano-palma', 'balon-americano', 'bici-fija', 'tabla-surf', 'pala-padel', 'cinturon-banderas', 'hyrox'];
+const NUEVOS = ['tenis-correr', 'huellas-pies', 'bota', 'bicicleta', 'loto', 'guante', 'balon-futbol', 'balon-basquet', 'mano-palma', 'balon-americano', 'bici-fija', 'tabla-surf', 'pala-padel', 'cinturon-banderas', 'hyrox',
+  // «los símbolos que faltaban en 8 actividades»
+  'montana-picos', 'tapete', 'pickleball', 'canoa', 'eliptica', 'reformer'];
 for (const id of NUEVOS) assert.ok(cat.porId.has(id), `falta el símbolo nuevo «${id}»`);
 assert.equal(cat.iconos.length, IDS_QUE_YA_EXISTEN.length + NUEVOS.length, 'hay íconos que no son ni de los viejos ni de los nuevos de esta prueba');
 for (const ic of cat.iconos) {
-  if (ic.relleno) {
+  if (ic.relleno && ic.origen.startsWith('ms:')) {
+    assert.equal(ic.caja, '0 0 24 24', `${ic.id}: el relleno de Material Symbols va en una caja de 24`);
+    assert.ok(/^<path d="[^"]+"\/>$/.test(ic.svg), `${ic.id}: un relleno de Material es un solo path`);
+  } else if (ic.relleno) {
     assert.equal(ic.caja, '0 0 256 256', `${ic.id}: los rellenos de Phosphor van en una caja de 256`);
     assert.ok(/^<path d="[^"]+"\/>$/.test(ic.svg), `${ic.id}: un relleno de Phosphor es un solo path`);
     assert.match(ic.origen, /^p:/);
   } else assert.equal(ic.caja, undefined, `${ic.id}: solo los rellenos llevan caja`);
 }
 for (const id of ['huellas-pies', 'bota', 'bicicleta', 'loto', 'guante', 'balon-futbol', 'balon-basquet', 'mano-palma', 'balon-americano']) assert.equal(cat.porId.get(id).relleno, true, `${id} es relleno`);
-for (const id of ['tenis-correr', 'bici-fija', 'tabla-surf', 'pala-padel', 'cinturon-banderas', 'hyrox']) assert.ok(!cat.porId.get(id).relleno, `${id} es de línea`);
+for (const id of ['tenis-correr', 'bici-fija', 'tabla-surf', 'pala-padel', 'cinturon-banderas', 'hyrox', 'montana-picos', 'tapete', 'canoa', 'eliptica', 'reformer']) assert.ok(!cat.porId.get(id).relleno, `${id} es de línea`);
 // HYROX: nuestra letra convertida a contornos (no un <text>: no puede depender de que la fuente esté cargada) dentro de un rectángulo redondeado.
 assert.ok(!/<text/i.test(cat.porId.get('hyrox').svg) && cat.porId.get('hyrox').svg.includes('<rect') && cat.porId.get('hyrox').svg.includes('fill="currentColor"'));
 
@@ -91,12 +97,15 @@ for (const id of ['americano', 'flag']) {
 assert.equal(CATALOGO.find((x) => x.id === 'americano').icono, 'balon-americano');
 assert.equal(CATALOGO.find((x) => x.id === 'flag').icono, 'cinturon-banderas');
 assert.deepEqual(Object.fromEntries(CATALOGO.map((x) => [x.id, x.icono])), {
-  correr: 'tenis-correr', caminar: 'huellas-pies', senderismo: 'bota', trail: 'bota', bici: 'bicicleta', spinning: 'bici-fija', patines: 'patines', natacion: 'nadar', surf: 'tabla-surf',
-  remo: 'kayak', kayak: 'barco', fuerza: 'pesa', crossfit: 'pesa-rusa', hyrox: 'hyrox', hiit: 'rayo', eliptica: 'caminadora', padel: 'pala-padel', tenis: 'tenis', pickleball: 'pingpong',
-  futbol: 'balon-futbol', americano: 'balon-americano', flag: 'cinturon-banderas', basquet: 'balon-basquet', voleibol: 'voleibol', yoga: 'loto', pilates: 'estirar', movilidad: 'estirar-2',
+  correr: 'tenis-correr', caminar: 'huellas-pies', senderismo: 'montana-picos', trail: 'bota', bici: 'bicicleta', spinning: 'bici-fija', patines: 'patines', natacion: 'nadar', surf: 'tabla-surf',
+  remo: 'canoa', kayak: 'kayak', fuerza: 'pesa', crossfit: 'pesa-rusa', hyrox: 'hyrox', hiit: 'rayo', eliptica: 'eliptica', padel: 'pala-padel', tenis: 'tenis', pickleball: 'pickleball',
+  futbol: 'balon-futbol', americano: 'balon-americano', flag: 'cinturon-banderas', basquet: 'balon-basquet', voleibol: 'voleibol', yoga: 'tapete', pilates: 'reformer', movilidad: 'estirar',
   box: 'guante', jiujitsu: 'mano-palma',
 }, 'el dibujo de cada actividad');
 assert.equal(CATALOGO.find((x) => x.id === 'natacion').gps, true, 'Nadar lleva mapa');
+// Ninguna de las 29 repite símbolo con otra (6 nov 2026: Senderismo ya no repite la bota de Trail, Remo ya no es el kayak…).
+assert.equal(CATALOGO.length, 29, 'son 29 actividades');
+for (const x of CATALOGO) assert.equal(CATALOGO.filter((y) => y.icono === x.icono).length, 1, `«${x.nombre}» repite el símbolo «${x.icono}»`);
 
 /* ---------- Normalizar ---------- */
 assert.equal(normaliza('Natación'), 'natacion');
@@ -125,6 +134,8 @@ for (const nombre of ['', '   ', 'zzzz', 'de la', 'xq']) assert.equal(sugiereIco
 assert.notEqual(sugiereIcono(cat, 'Terapia de hombro'), 'destellos');
 assert.notEqual(sugiereIcono(cat, 'Terapia de hombro'), 'destello');
 assert.equal(sugiereIcono(null, 'Boxeo'), null, 'sin catálogo todavía no hay qué sugerir');
+// Los de las 8 actividades (6 nov 2026).
+for (const [nombre, id] of [['canoa', 'canoa'], ['elíptica', 'eliptica'], ['pickleball', 'pickleball'], ['tapete', 'tapete'], ['reformer', 'reformer']]) assert.equal(sugiereIcono(cat, nombre), id, `«${nombre}» sugiere «${id}»`);
 // Mientras se escribe, ya sugiere: «Box» → boxeo.
 assert.equal(sugiereIcono(cat, 'Box'), 'guante');
 

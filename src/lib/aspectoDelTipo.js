@@ -37,10 +37,11 @@ function iconoPropio(id, nombre, alternativo = null) {
 }
 
 /* Un ícono por tipo de base. Cualquier slug desconocido lleva la pesa, igual que `tipoDeSesion` lo trata como Gym.
-   6 nov 2026 (Registrar: hoja clara): Correr, Bici, Yoga y Cancha (football) llevan el dibujo nuevo del catálogo, el mismo de las actividades; los demás se quedan con su lucide. */
+   6 nov 2026 (Registrar: hoja clara): Correr, Bici, Yoga y Cancha (football) llevan el dibujo nuevo del catálogo, el mismo de las actividades; los demás se quedan con su lucide.
+   Yoga pasó de loto a tapete el 6 nov 2026, igual que la actividad. */
 const ICONO_DEL_TIPO = {
   gym: Dumbbell, speed: Zap, recovery: HeartPulse, football: iconoPropio('balon-futbol', '', Goal), tests: ClipboardCheck, team: Users,
-  correr: iconoPropio('tenis-correr', '', Activity), bici: iconoPropio('bicicleta', '', Bike), natacion: Waves, yoga: iconoPropio('loto', '', Flower2), movilidad: PersonStanding, terapia: Stethoscope,
+  correr: iconoPropio('tenis-correr', '', Activity), bici: iconoPropio('bicicleta', '', Bike), natacion: Waves, yoga: iconoPropio('tapete', '', Flower2), movilidad: PersonStanding, terapia: Stethoscope,
   clase: Presentation, off: Moon,
 };
 
@@ -87,7 +88,7 @@ function colorFuerte(r, g, b) {
    lucide (`ICONO_DEL_TIPO`); aquí va el del catálogo que es el MISMO dibujo de lucide (la bici es de Tabler: lucide no está en el catálogo). Correr, Bici, Yoga y Cancha pasaron al dibujo nuevo (6 nov 2026), el mismo que ve la tarjeta del día. */
 const ICONO_DEL_CATALOGO = {
   gym: 'pesa', speed: 'rayo', recovery: 'corazon-pulso', football: 'balon-futbol', tests: 'prueba', team: 'equipo', correr: 'tenis-correr', bici: 'bicicleta', natacion: 'olas',
-  yoga: 'loto', movilidad: 'persona', terapia: 'estetoscopio', clase: 'pizarron', off: 'luna',
+  yoga: 'tapete', movilidad: 'persona', terapia: 'estetoscopio', clase: 'pizarron', off: 'luna',
 };
 
 /** `{ nombre, icono }` del tipo de una sesión del plan, para la ficha de stickers. */
