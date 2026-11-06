@@ -9,7 +9,7 @@
    nombre, o una etiqueta. Antes todos caían a la pesa: Andrés (9 oct 2026) «no entiendo» los íconos «ligados a formas geométricas que tú le asignaste».
 
    Vive aparte de `theme.js` porque ese archivo se copia al conector de IA (`scripts/compartir-con-mcp.mjs`) y esto es
-   solo de pantalla. Los porcentajes (9 % de fondo, 34 % de borde, 20 % el cuadro del ícono) son los de la maqueta
+   solo de pantalla. Los porcentajes (9 % de fondo, 34 % de borde; el cuadro del ícono al 20 % se quitó el 6 nov 2026) son los de la maqueta
    «Modo entreno» que Andrés aprobó. */
 import { createElement } from 'react';
 import {
@@ -20,35 +20,37 @@ import IconoDeTipo from '@/components/IconoDeTipo';
 import { normaliza } from '@/lib/iconosDeTipo';
 import { tipoDeSesion } from '@/lib/theme';
 
-// Un ícono por tipo de base. Cualquier slug desconocido lleva la pesa, igual que `tipoDeSesion` lo trata como Gym.
-const ICONO_DEL_TIPO = {
-  gym: Dumbbell, speed: Zap, recovery: HeartPulse, football: Goal, tests: ClipboardCheck, team: Users,
-  correr: Activity, bici: Bike, natacion: Waves, yoga: Flower2, movilidad: PersonStanding, terapia: Stethoscope,
-  clase: Presentation, off: Moon,
-};
-
 /* El ícono de un tipo PROPIO del coach (`cat: 'otro'`): el que eligió en el catálogo (`catIcono`) o, si no eligió ninguno, el que le va a su nombre.
    Es un componente, y tiene que ser EL MISMO cada vez que se pregunta por el mismo ícono: si `aspectoDelTipo` devolviera uno nuevo en cada dibujo,
-   React lo desmontaría y lo volvería a montar en cada tic del reloj. */
+   React lo desmontaría y lo volvería a montar en cada tic del reloj.
+   `alternativo`: el de lucide que sale mientras baja el catálogo (lo llevan los tipos de la app: así la tarjeta del día no enseña una etiqueta y salta). */
 const PROPIOS = new Map();
-function iconoPropio(id, nombre) {
+function iconoPropio(id, nombre, alternativo = null) {
   const clave = `${id ?? ''}|${normaliza(nombre)}`;
   let Icono = PROPIOS.get(clave);
   if (!Icono) {
-    Icono = (props) => createElement(IconoDeTipo, { id, nombre, ...props });
+    Icono = (props) => createElement(IconoDeTipo, { id, nombre, alternativo, ...props });
     Icono.displayName = `IconoDeTipo(${id ?? nombre})`;
     PROPIOS.set(clave, Icono);
   }
   return Icono;
 }
 
+/* Un ícono por tipo de base. Cualquier slug desconocido lleva la pesa, igual que `tipoDeSesion` lo trata como Gym.
+   6 nov 2026 (Registrar: hoja clara): Correr, Bici, Yoga y Cancha (football) llevan el dibujo nuevo del catálogo, el mismo de las actividades; los demás se quedan con su lucide. */
+const ICONO_DEL_TIPO = {
+  gym: Dumbbell, speed: Zap, recovery: HeartPulse, football: iconoPropio('balon-futbol', '', Goal), tests: ClipboardCheck, team: Users,
+  correr: iconoPropio('tenis-correr', '', Activity), bici: iconoPropio('bicicleta', '', Bike), natacion: Waves, yoga: iconoPropio('loto', '', Flower2), movilidad: PersonStanding, terapia: Stethoscope,
+  clase: Presentation, off: Moon,
+};
+
 const ES_HEX = /^#[0-9a-f]{6}$/i;
 
 /**
- * Cómo se pinta la tarjeta de UNA sesión: { Icono, color, fondo, borde, mosaico, tinta }.
+ * Cómo se pinta la tarjeta de UNA sesión: { Icono, color, fondo, borde, tinta, fuerte }.
  *  - `fondo`: un velo del color que va ENCIMA del blanco de la tarjeta (`background: ${fondo}, ${LT.surface}`).
- *  - `borde`: el contorno; `mosaico`: el cuadro donde va el ícono; `tinta`: el ícono, más oscuro para que se lea.
- * Un color propio que no sea #RRGGBB no se puede aclarar: `fondo`, `borde`, `mosaico` y `tinta` salen `null` y la
+ *  - `borde`: el contorno; `tinta`: el ícono (ya sin cuadro, 6 nov 2026), más oscuro para que se lea.
+ * Un color propio que no sea #RRGGBB no se puede aclarar: `fondo`, `borde` y `tinta` salen `null` y la
  * tarjeta se queda blanca de siempre.
  */
 export function aspectoDelTipo(day) {
@@ -56,7 +58,7 @@ export function aspectoDelTipo(day) {
   // Un tipo propio solo cuenta como tal con nombre (así lo resuelve `tipoDeSesion`): sin él es Gym y lleva su pesa.
   const propio = day?.cat === 'otro' && !!(day?.catNombre || '').trim();
   const Icono = propio ? iconoPropio(day.catIcono ?? null, label) : (ICONO_DEL_TIPO[day?.cat] ?? Dumbbell);
-  if (!ES_HEX.test(c || '')) return { Icono, color: c || null, fondo: null, borde: null, mosaico: null, tinta: null, fuerte: null };
+  if (!ES_HEX.test(c || '')) return { Icono, color: c || null, fondo: null, borde: null, tinta: null, fuerte: null };
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
   const velo = (a) => `rgba(${r},${g},${b},${a})`;
   return {
@@ -64,7 +66,6 @@ export function aspectoDelTipo(day) {
     color: c,
     fondo: `linear-gradient(${velo(0.09)}, ${velo(0.09)})`, /* estilo-ok: fondo teñido del modo entreno (capturas aprobadas) */
     borde: velo(0.34),
-    mosaico: velo(0.2),
     tinta: `rgb(${Math.round(r * 0.62)},${Math.round(g * 0.62)},${Math.round(b * 0.62)})`,
     fuerte: colorFuerte(r, g, b),
   };
@@ -83,10 +84,10 @@ function colorFuerte(r, g, b) {
 
 /* EL TIPO PARA LOS STICKERS (28 oct 2026, decisión 9): el nombre como lo escribió el coach y el ícono del CATÁLOGO (`lib/iconosDeTipo.datos.js`), el mismo
    dibujo que ve en Configuración. Un tipo propio lleva el que eligió (`catIcono`; sin él, el sticker busca uno por el nombre). Los 14 tipos de la app usan
-   lucide (`ICONO_DEL_TIPO`); aquí va el del catálogo que es el MISMO dibujo de lucide (la bici es de Tabler: lucide no está en el catálogo). */
+   lucide (`ICONO_DEL_TIPO`); aquí va el del catálogo que es el MISMO dibujo de lucide (la bici es de Tabler: lucide no está en el catálogo). Correr, Bici, Yoga y Cancha pasaron al dibujo nuevo (6 nov 2026), el mismo que ve la tarjeta del día. */
 const ICONO_DEL_CATALOGO = {
-  gym: 'pesa', speed: 'rayo', recovery: 'corazon-pulso', football: 'gol', tests: 'prueba', team: 'equipo', correr: 'pulso', bici: 'bici', natacion: 'olas',
-  yoga: 'flor', movilidad: 'persona', terapia: 'estetoscopio', clase: 'pizarron', off: 'luna',
+  gym: 'pesa', speed: 'rayo', recovery: 'corazon-pulso', football: 'balon-futbol', tests: 'prueba', team: 'equipo', correr: 'tenis-correr', bici: 'bicicleta', natacion: 'olas',
+  yoga: 'loto', movilidad: 'persona', terapia: 'estetoscopio', clase: 'pizarron', off: 'luna',
 };
 
 /** `{ nombre, icono }` del tipo de una sesión del plan, para la ficha de stickers. */

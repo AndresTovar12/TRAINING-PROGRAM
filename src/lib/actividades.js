@@ -8,7 +8,9 @@
    `color`), si lleva mapa (`gps`) y a qué DEPORTE de las métricas pertenece (`deporte`, uno de `lib/metricas/deportes.js`):
    el pádel se guarda como «raqueta» para que la carga y las métricas del coach sepan qué es, pero se llama «Pádel» (el `titulo` del entreno).
 
-   SIN EMOJIS (Andrés, 23 oct 2026: «no me gustan los emojis, no tienen personalidad»): íconos de línea en un cuadrito de color, como los deportes y los tipos de sesión.
+   SIN EMOJIS (Andrés, 23 oct 2026: «no me gustan los emojis, no tienen personalidad»): un símbolo del catálogo. Desde el 6 nov 2026 va SIN cuadro y siempre en el azul
+   de la marca (`IconoDeActividad`): el `color` de cada una ya no se pinta en las listas; se conserva en los datos (lo guardan los entrenos y la pantalla de crear lo ofrece).
+   «En equipo» se llama «Deportes» (la clave del color, `equipo`, se queda) y trae Fútbol americano y Flag football (6 nov 2026).
 
    Es puro (sin pantalla ni red) para probarse: `scripts/prueba-actividades.mjs`. Sin `@/`: lo cargan las pruebas de Node. */
 
@@ -20,14 +22,14 @@ const COLOR = { pie: '#F2555A', ruedas: '#00B3C7', agua: '#3AA0F5', fuerza: '#A4
 const a = (id, nombre, icono, color, gps, deporte, desplazamiento) => Object.freeze({ id, nombre, icono, color, gps, deporte, ...(gps ? { desplazamiento } : {}) });
 
 export const GRUPOS_DE_ACTIVIDADES = Object.freeze([
-  { grupo: 'A pie', actividades: [a('correr', 'Correr', 'correr', COLOR.pie, true, 'correr', 'pie'), a('caminar', 'Caminar', 'caminar', COLOR.pie, true, 'caminar', 'pie'), a('senderismo', 'Senderismo', 'senderismo', COLOR.pie, true, 'senderismo', 'pie'), a('trail', 'Trail', 'montana', COLOR.pie, true, 'correr', 'pie')] },
-  { grupo: 'Sobre ruedas', actividades: [a('bici', 'Bici', 'bici', COLOR.ruedas, true, 'bici', 'ruedas'), a('spinning', 'Spinning', 'velocimetro', COLOR.ruedas, false, 'bici'), a('patines', 'Patines', 'patines', COLOR.ruedas, true, 'otro', 'ruedas')] },
-  { grupo: 'En el agua', actividades: [a('natacion', 'Nadar', 'nadar', COLOR.agua, true, 'natacion', 'ruedas'), a('surf', 'Surf', 'olas', COLOR.agua, true, 'otro', 'ruedas'), a('remo', 'Remo', 'kayak', COLOR.agua, true, 'remo', 'ruedas'), a('kayak', 'Kayak', 'barco', COLOR.agua, true, 'remo', 'ruedas')] },
-  { grupo: 'Fuerza y gimnasio', actividades: [a('fuerza', 'Gimnasio', 'pesa', COLOR.fuerza, false, 'fuerza'), a('crossfit', 'Crossfit', 'pesa-rusa', COLOR.fuerza, false, 'funcional'), a('hyrox', 'Hyrox', 'llama', COLOR.fuerza, false, 'funcional'), a('hiit', 'HIIT', 'rayo', COLOR.fuerza, false, 'hiit'), a('eliptica', 'Elíptica', 'caminadora', COLOR.fuerza, false, 'eliptica')] },
-  { grupo: 'Raqueta', actividades: [a('padel', 'Pádel', 'tenis', COLOR.raqueta, false, 'raqueta'), a('tenis', 'Tenis', 'tenis', COLOR.raqueta, false, 'raqueta'), a('pickleball', 'Pickleball', 'pingpong', COLOR.raqueta, false, 'raqueta')] },
-  { grupo: 'En equipo', actividades: [a('futbol', 'Fútbol', 'futbol', COLOR.equipo, false, 'futbol'), a('basquet', 'Básquet', 'basquet', COLOR.equipo, false, 'otro'), a('voleibol', 'Voleibol', 'voleibol', COLOR.equipo, false, 'otro')] },
-  { grupo: 'Mente y cuerpo', actividades: [a('yoga', 'Yoga', 'yoga', COLOR.mente, false, 'yoga'), a('pilates', 'Pilates', 'estirar', COLOR.mente, false, 'yoga'), a('movilidad', 'Movilidad', 'estirar-2', COLOR.mente, false, 'movilidad')] },
-  { grupo: 'Combate', actividades: [a('box', 'Box', 'boxeo', COLOR.combate, false, 'otro'), a('jiujitsu', 'Jiu-jitsu', 'karate', COLOR.combate, false, 'otro')] },
+  { grupo: 'A pie', actividades: [a('correr', 'Correr', 'tenis-correr', COLOR.pie, true, 'correr', 'pie'), a('caminar', 'Caminar', 'huellas-pies', COLOR.pie, true, 'caminar', 'pie'), a('senderismo', 'Senderismo', 'bota', COLOR.pie, true, 'senderismo', 'pie'), a('trail', 'Trail', 'bota', COLOR.pie, true, 'correr', 'pie')] },
+  { grupo: 'Sobre ruedas', actividades: [a('bici', 'Bici', 'bicicleta', COLOR.ruedas, true, 'bici', 'ruedas'), a('spinning', 'Spinning', 'bici-fija', COLOR.ruedas, false, 'bici'), a('patines', 'Patines', 'patines', COLOR.ruedas, true, 'otro', 'ruedas')] },
+  { grupo: 'En el agua', actividades: [a('natacion', 'Nadar', 'nadar', COLOR.agua, true, 'natacion', 'ruedas'), a('surf', 'Surf', 'tabla-surf', COLOR.agua, true, 'otro', 'ruedas'), a('remo', 'Remo', 'kayak', COLOR.agua, true, 'remo', 'ruedas'), a('kayak', 'Kayak', 'barco', COLOR.agua, true, 'remo', 'ruedas')] },
+  { grupo: 'Fuerza y gimnasio', actividades: [a('fuerza', 'Gimnasio', 'pesa', COLOR.fuerza, false, 'fuerza'), a('crossfit', 'Crossfit', 'pesa-rusa', COLOR.fuerza, false, 'funcional'), a('hyrox', 'Hyrox', 'hyrox', COLOR.fuerza, false, 'funcional'), a('hiit', 'HIIT', 'rayo', COLOR.fuerza, false, 'hiit'), a('eliptica', 'Elíptica', 'caminadora', COLOR.fuerza, false, 'eliptica')] },
+  { grupo: 'Raqueta', actividades: [a('padel', 'Pádel', 'pala-padel', COLOR.raqueta, false, 'raqueta'), a('tenis', 'Tenis', 'tenis', COLOR.raqueta, false, 'raqueta'), a('pickleball', 'Pickleball', 'pingpong', COLOR.raqueta, false, 'raqueta')] },
+  { grupo: 'Deportes', actividades: [a('futbol', 'Fútbol', 'balon-futbol', COLOR.equipo, false, 'futbol'), a('americano', 'Fútbol americano', 'balon-americano', COLOR.equipo, false, 'otro'), a('flag', 'Flag football', 'cinturon-banderas', COLOR.equipo, false, 'otro'), a('basquet', 'Básquet', 'balon-basquet', COLOR.equipo, false, 'otro'), a('voleibol', 'Voleibol', 'voleibol', COLOR.equipo, false, 'otro')] },
+  { grupo: 'Mente y cuerpo', actividades: [a('yoga', 'Yoga', 'loto', COLOR.mente, false, 'yoga'), a('pilates', 'Pilates', 'estirar', COLOR.mente, false, 'yoga'), a('movilidad', 'Movilidad', 'estirar-2', COLOR.mente, false, 'movilidad')] },
+  { grupo: 'Combate', actividades: [a('box', 'Box', 'guante', COLOR.combate, false, 'otro'), a('jiujitsu', 'Jiu-jitsu', 'mano-palma', COLOR.combate, false, 'otro')] },
 ]);
 
 export const CATALOGO = Object.freeze(GRUPOS_DE_ACTIVIDADES.flatMap((g) => g.actividades));

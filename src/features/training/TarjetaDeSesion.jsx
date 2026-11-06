@@ -31,7 +31,7 @@ import { EtiquetaDeAutor } from '@/features/training/EquipoDelAtleta';
  * agrega su etiqueta chica.
  */
 const TarjetaDeSesion = ({ aspecto, hecha, abierta, onAlternar, onMenu = null, nombre, detalle, autor, children }) => {
-  const { Icono, color, fondo, borde, mosaico, tinta } = aspecto;
+  const { Icono, color, fondo, tinta } = aspecto;
   // Con el color del tipo (el 99 % de los casos). Terminada, o con un color que no se puede aclarar, la tarjeta es blanca.
   const conTinte = !hecha && !!fondo;
   return (
@@ -55,11 +55,13 @@ const TarjetaDeSesion = ({ aspecto, hecha, abierta, onAlternar, onMenu = null, n
             background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: FONT, textAlign: 'left',
           }}
         >
+          {/* Sin cuadro (6 nov 2026): solo el dibujo del tipo, en su color (`tinta`: el del tipo, más oscuro para que se lea sobre el velo), con trazo 1.6. El cuadro verde
+              con la palomita se queda: ahí no es un símbolo, es el estado «hecha». */}
           <span style={{
-            width: 52, height: 52, borderRadius: 16, flexShrink: 0, display: 'grid', placeItems: 'center',
-            background: hecha ? LT.mint : (mosaico ?? LT.surface2), color: hecha ? '#fff' : (tinta ?? color ?? LT.text2),
+            width: 52, height: 52, borderRadius: hecha ? 16 : 0, flexShrink: 0, display: 'grid', placeItems: 'center',
+            background: hecha ? LT.mint : 'transparent', color: hecha ? '#fff' : (tinta ?? color ?? LT.text2),
           }}>
-            {hecha ? <Check size={22} strokeWidth={3} /> : <Icono size={22} />}
+            {hecha ? <Check size={22} strokeWidth={3} /> : <Icono size={38} strokeWidth={1.6} />}
           </span>
           <span style={{ flex: 1, minWidth: 0 }}>
             {autor && (
