@@ -9,6 +9,7 @@ import {
   natacionDe, planParaElReloj, preparaLibreDelReloj, saltaLosDelReloj, sesionParaElReloj,
 } from '../src/lib/relojSinTelefono.js';
 import { pasosDeLaSesion, vistaDelEntreno } from '../src/lib/entreno.js';
+import { readFileSync } from 'node:fs';
 import { construyeActividad, preparaEntreno, separaRepetidos } from '../src/lib/metricas/construye.js';
 import { estimaUmbrales } from '../src/lib/metricas/calculos.js';
 import { claveDeLaCola, creaCola } from '../src/lib/colaDeSubida.js';
@@ -484,5 +485,93 @@ console.log('4. La cola: lo del reloj no se pierde ni se duplica');
     assert.deepEqual(JSON.parse(datos.get(claveDeLaCola(USUARIO))).cosas, []);
   });
 }
+
+console.log('5. Lo nuevo del entreno, sin el iPhone (23 nov 2026): la semana de Ana');
+const SEMANA = JSON.parse(readFileSync(new URL('./sesiones-de-prueba.json', import.meta.url), 'utf8')).dias.flatMap((d) => d.sesiones ?? [d]);
+const deAna = (nombre) => pasosParaElReloj(SEMANA.find((s) => s.name === nombre));
+prueba('un AMRAP y un «Por tiempo» viajan con su reloj: tramos, lo que se anota y lo que se hace, en renglones', () => {
+  const pasosH = deAna('Hyrox · simulacro');
+  const amrap = pasosH.find((p) => p.t === 'r' && p.f?.id === 'amrap');
+  assert.deepEqual(amrap.f, { id: 'amrap', an: 'rondas', p: [{ s: 600, k: 't' }], vs: 1, tu: 1, l: ['20 Wall balls · 9 kg', 'Remo ergómetro · 250 m'] });
+  assert.equal(amrap.seg, 600);
+  const pt = pasosH.find((p) => p.t === 'r' && p.f?.id === 'portiempo');
+  assert.deepEqual(pt.f.p, [{ s: null, k: 't' }], 'cuenta hacia arriba');
+  assert.equal(pt.f.an, 'tiempo');
+});
+prueba('un EMOM que se turna: el reloj sabe cuántos turnos hay y qué toca en cada minuto', () => {
+  const dia = { cat: 'gym', exercises: [
+    { name: 'Kettlebell swings', sets: '1', reps: '12', set: 1, formato: { id: 'emom', pasos: [{ tipo: 'trabajo', seg: 60 }], vueltas: 5, turnan: true, anota: 'nada' } },
+    { name: 'Burpees', sets: '1', reps: '8', set: 1, formato: { id: 'emom', pasos: [{ tipo: 'trabajo', seg: 60 }], vueltas: 5, turnan: true, anota: 'nada' } },
+  ] };
+  const r = pasosParaElReloj(dia).find((p) => p.t === 'r');
+  assert.equal(r.f.id, 'emom');
+  assert.equal(r.f.tu * r.f.vs * r.f.p.length, 10, '5 vueltas × 2 ejercicios');
+  assert.deepEqual(r.f.l, ['12 Kettlebell swings', '8 Burpees']);
+});
+prueba('unos intervalos «hasta Listo» no viajan con reloj (cada tramo se cierra con «Listo», como antes)', () => {
+  const dia = { cat: 'gym', exercises: [
+    { name: 'Correr', sets: '1', reps: '400', unidad: 'm', formato: { id: 'intervalos', pasos: [{ tipo: 'trabajo', seg: null }, { tipo: 'descanso', seg: 60 }], vueltas: 8, anota: 'nada' } },
+  ] };
+  const r = pasosParaElReloj(dia).find((p) => p.t === 'r');
+  assert.ok(r, 'el Set sigue llegando');
+  assert.equal(r.f, undefined);
+});
+prueba('la zona viaja en enteros; en qué vas, siempre con números', () => {
+  const cal = deAna('Series en pista')[0];
+  assert.ok(cal.zn.every(Number.isInteger));
+  deAna('Hyrox · simulacro').filter((p) => p.en).forEach((p) => assert.ok(Number.isInteger(p.en.n) && Number.isInteger(p.en.de)));
+});
+prueba('Deporte: «10 m», «en 4 seg» y «Por lado» aparte; y «Serie 1 de 3» como el teléfono', () => {
+  const jab = deAna('Releases del receptor')[0];
+  assert.equal(jab.tx, '10 m');
+  assert.equal(jab.sub, 'en 4 seg');
+  assert.equal(jab.lado, true);
+  assert.deepEqual(jab.en, { r: 'Serie', n: 1, de: 3 });
+});
+prueba('Híbrido: «Sprint 1 de 4», los kilos de la meta para cambiarlos, y los 30 m sin GPS', () => {
+  const sprint = deAna('Hyrox · simulacro').find((p) => p.n === 'Sprint con trineo');
+  assert.deepEqual(sprint.en, { r: 'Sprint', n: 1, de: 4, x: 'serie 1 de 3' }, 'con la serie, como el teléfono');
+  assert.equal(sprint.kg, '20');
+  assert.equal(sprint.peso, true);
+  assert.equal(sprint.mt, 'Al máximo', 'el peso ya no se repite en el texto');
+  assert.equal(sprint.m, undefined, 'no se mide con el GPS');
+  assert.equal(sprint.sg, true);
+});
+prueba('lo que va por tiempo cuenta sus segundos de verdad (la clase decía «0 min»)', () => {
+  const clase = deAna('Yoga para corredores')[0];
+  assert.equal(clase.seg, 6);
+  assert.equal(clase.cl, true);
+  const plancha = deAna('Fuerza pierna').find((p) => p.n === 'Plancha');
+  assert.equal(plancha.seg, 45);
+});
+prueba('límite, ritmo y zona viajan para que el reloj los mida; lo que no mide, en texto', () => {
+  const sprint = deAna('Velocidad en pista').find((p) => p.lim);
+  assert.equal(sprint.lim, 50);
+  const tramo = deAna('Series en pista').find((p) => p.rit);
+  assert.deepEqual(tramo.rit, [260, 270]);
+  assert.deepEqual(tramo.en, { r: 'Tramo', n: 1, de: 8 });
+  assert.ok(tramo.m === 1000, 'un kilómetro sí se mide con el GPS');
+  const cal = deAna('Series en pista')[0];
+  assert.deepEqual(cal.zn, [2, 2]);
+  const bici = deAna('Rodillo · intervalos').find((p) => p.mt);
+  assert.equal(bici.mt, '240–260 W');
+});
+prueba('el plan lleva los pulsos de las zonas si se sabe el pulso máximo (y nada si no)', () => {
+  assert.deepEqual(planParaElReloj({ fcMax: 190 }).zonas, [114, 133, 152, 171]);
+  assert.equal(planParaElReloj({}).zonas, undefined);
+  assert.equal(planParaElReloj({ fcMax: 9 }).zonas, undefined);
+});
+prueba('las rondas de un AMRAP hechas en el reloj llegan a la sesión como si se anotaran en el iPhone', () => {
+  const r = leeResultado({ ...delReloj(), sesion: { ...delReloj().sesion, formatos: { 5: { anota: 'rondas', valor: 5, extra: 3, seg: 600 }, x: { anota: 'nada' }, '../': { anota: 'rondas', valor: 1 } } } });
+  assert.deepEqual(Object.keys(r.sesion.formatos), ['5'], 'lo vacío y lo raro no entra');
+  const reg = aplicaSesionDelReloj({ 'wr:sessions': { 'f1-w2-d5': { formatos: { 2: { anota: 'tiempo', valor: 300 } } } } }, r)['wr:sessions']['f1-w2-d5'];
+  assert.equal(reg.formatos['5'].valor, 5);
+  assert.equal(reg.formatos['5'].extra, 3);
+  assert.equal(reg.formatos['2'].valor, 300, 'lo que ya estaba se queda');
+});
+prueba('un límite hecho en el reloj guarda cuánto tardó (el iPhone dice si lo logró)', () => {
+  const r = leeResultado({ ...delReloj(), sesion: { ...delReloj().sesion, entreno: { ...delReloj().sesion.entreno, hechos: { 't4.0': { t: inicio + 1000, n: 'Sprint', seg: 47 } } } } });
+  assert.equal(r.sesion.entreno.hechos['t4.0'].seg, 47);
+});
 
 console.log(`\nprueba-reloj-sin-iphone: ${n} pruebas, todo bien.`);

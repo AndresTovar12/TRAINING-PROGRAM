@@ -10,6 +10,7 @@ import { saludDisponible } from '@/lib/saludDelTelefono';
 import { alSubirDeLaCola, pendientesAhora, useCola } from '@/lib/colaDelTelefono';
 import { avisaAlRelojQueSubio, escuchaLoQueLlega, mandaPlanAlReloj, revisaEnCursoDelReloj, useRelojEnCurso } from '@/lib/relojApple';
 import { recibeLoDelReloj } from '@/lib/relojSinTelefonoApi';
+import { umbralesDe } from '@/lib/metricasApi';
 import {
   TIPO_PULSO_DEL_RELOJ, TIPO_SESION_DEL_RELOJ, catalogoParaElReloj, diaParaEntrenar, fechasDelReloj, planParaElReloj, sesionParaElReloj,
 } from '@/lib/relojSinTelefono';
@@ -93,6 +94,14 @@ export function PlanAlReloj({ oneRMs = {}, unidad = 'kg' }) {
   const { filas } = useEntrenosRecientes(saludDisponible() ? userId : null, 12);
   const propiasGuardadas = store?.['actividades:propias'];
   const [plan, setPlan] = useState(null);
+  // Su pulso máximo, para que el reloj sepa las zonas sin el iPhone. Si no se puede saber, el reloj enseña la zona sin decir si va en ella.
+  const [fcMax, setFcMax] = useState(null);
+  useEffect(() => {
+    if (!saludDisponible() || !userId) return undefined;
+    let vivo = true;
+    umbralesDe(userId).then((u) => { if (vivo) setFcMax(u?.umbrales?.fc_max ?? null); }).catch(() => {});
+    return () => { vivo = false; };
+  }, [userId]);
 
   // Se arma un momento después del último cambio (no en cada «Listo»): hoy y los 2 días siguientes, con lo hecho, «Tus actividades» y el catálogo.
   useEffect(() => {
@@ -110,13 +119,14 @@ export function PlanAlReloj({ oneRMs = {}, unidad = 'kg' }) {
           dias: fechasDelReloj(hoy).map(({ fecha, clave }) => ({ fecha: clave, sesiones: conPlan ? sesionesDelDia(programas, store, fecha, opciones) : [] })),
           actividades: tusActividades(filas ?? [], propias),
           catalogo: catalogoParaElReloj(propias),
+          fcMax,
         }));
       } catch (e) {
         console.error('reloj: no se pudo armar el plan', e?.message ?? e);
       }
     }, ESPERA_DEL_PLAN_MS);
     return () => clearTimeout(t);
-  }, [userId, loaded, planLoading, demoActiva, programas, store, propiasGuardadas, filas, oneRMs, unidad, salud, hoy]);
+  }, [userId, loaded, planLoading, demoActiva, programas, store, propiasGuardadas, filas, oneRMs, unidad, salud, hoy, fcMax]);
 
   // Al abrir la app (y al volver a ella) se manda aunque no haya cambiado: así el reloj sabe a qué hora llegó. Mientras tanto, solo si algo cambió.
   const forzar = useRef(true);

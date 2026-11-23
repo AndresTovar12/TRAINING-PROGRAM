@@ -31,6 +31,9 @@ import { cargaPorPorcentaje } from './cargaPorcentaje.js';
 import { aKilos, desdeKilos, normalizaUnidad } from './unidades.js';
 import { GRUPOS_DE_ACTIVIDADES, propiasDe } from './actividades.js';
 import { isLoadedExercise, sesionQueRepite, sinDuracion } from './training-utils.js';
+import { cuentaDelPaso } from './enQueVas.js';
+import { limitesDeZonas } from './metricas/calculos.js';
+import { limpiaFormato, limpiaResultado } from './formatos.js';
 
 export const VERSION_DEL_RELOJ = 1;
 /** El id de la app del reloj (`ios/ci/agrega_extensiones.rb`): la «fuente» de lo que guarda en Salud. */
@@ -75,11 +78,79 @@ export function kilosDelPaso(paso, ex, { oneRMs = {}, unidad = 'kg', salud = fal
     const valor = u === 'lb' ? Math.round(desdeKilos(paso.meta.min, 'lb') / 5) * 5 : paso.meta.min;
     return { valor, numero: valor, aprox: false, kg: String(paso.meta.min) };
   }
+  // El Híbrido escribe el peso en la meta («Al máximo · con 20 kg»): el reloj lo enseña y deja cambiarlo, igual que un peso fijo.
+  const kgDelTexto = paso.meta.tipo === 'texto' ? kgEnTexto(paso.meta.texto) : null;
+  if (kgDelTexto !== null) {
+    const valor = u === 'lb' ? Math.round(desdeKilos(kgDelTexto, 'lb') / 5) * 5 : kgDelTexto;
+    return { valor, numero: valor, aprox: false, kg: String(kgDelTexto) };
+  }
   if (paso.meta.tipo === 'pct' && !salud) {
     const c = cargaPorPorcentaje({ ...(ex ?? {}), intensity: paso.meta.texto }, oneRMs, u);
     if (c && !c.falta) return { valor: c.desde === c.hasta ? c.desde : `${c.desde}–${c.hasta}`, numero: c.desde, aprox: true, kg: String(aKilos(c.desde, u)) };
   }
   return null;
+}
+
+/** Los kilos escritos en un texto («con 20 kg», «24kg»), o `null`. */
+const KG_EN_TEXTO = /(?:con\s+)?(\d+(?:[.,]\d+)?)\s*kg\b/i;
+function kgEnTexto(t) {
+  const m = KG_EN_TEXTO.exec(String(t ?? ''));
+  const n = m ? Number(m[1].replace(',', '.')) : NaN;
+  return n > 0 && n < 1000 ? n : null;
+}
+/** El texto de la meta sin el peso (que ya va aparte): «Al máximo · con 20 kg» → «Al máximo». */
+const sinKg = (t) => String(t ?? '').split('·').map((x) => x.trim()).filter((x) => x && !KG_EN_TEXTO.test(x)).join(' · ');
+
+/** Las metas que el reloj sabe medir: el ritmo (seg/km) y la zona del pulso (1 a 5). Las demás viajan como texto (`mt`). */
+const METAS_QUE_MIDE = { ritmo: 'rit', zona: 'zn' };
+
+/** Un renglón de un Set con reloj, como lo lee el atleta: «20 Wall balls», «Remo ergómetro · 250 m». El peso, solo si es un número (no la meta entera). */
+function renglonDelMiembro(m) {
+  const nombre = texto(m?.nombre, 30);
+  const cant = texto(m?.texto, 16);
+  const reps = /^(\d+)\s*reps?$/i.exec(cant);
+  const base = reps ? `${reps[1]} ${nombre}` : (cant ? `${nombre} · ${cant}` : nombre);
+  const carga = texto(m?.carga, 12);
+  return texto(/^\d+(?:[.,]\d+)?\s*(kg|lb)$/i.test(carga) ? `${base} · ${carga}` : base, 48);
+}
+
+/** El tope de tramos de un Set con reloj (el reloj los arma; aquí solo se revisa que quepan). */
+export const MAX_TRAMOS_EN_EL_RELOJ = 400;
+
+/**
+ * El reloj de un Set (AMRAP, EMOM, Tabata, «Por tiempo»…) como lo corre el reloj de pulsera, o `null` si no se puede (unos lapsos personalizados: el reloj
+ * los marca con «Listo», como antes). Viaja compacto y el reloj lo arma igual que `expande` (`lib/formatos.js`): por cada vuelta, por cada turno, cada paso.
+ *   id el formato · an lo que se anota al final ('rondas', 'tiempo'…) · p `[{ s: segundos | null, k: 't' | 'd', e?: etiqueta }]` · vs vueltas · tu turnos (los
+ *   ejercicios que se turnan) · tope segundos (un «Por tiempo» con tope) · l los renglones de lo que se hace
+ */
+export function formatoParaElReloj(paso) {
+  const f = limpiaFormato(paso?.formato);
+  if (!f) return null;
+  const miembros = Array.isArray(paso.miembros) ? paso.miembros : [];
+  const p = f.pasos.filter((x) => x.seg === null || x.seg > 0).map((x) => ({ s: x.seg, k: x.tipo === 'descanso' ? 'd' : 't', ...(x.etiqueta ? { e: texto(x.etiqueta, 20) } : null) }));
+  const tu = f.turnan && miembros.length > 1 ? miembros.length : 1;
+  if (!p.length || p.length * tu * f.vueltas > MAX_TRAMOS_EN_EL_RELOJ) return null;
+  // Un tramo «hasta Listo» solo se corre en un «Por tiempo» de un solo paso (todo se cierra con «Terminé»). Unos intervalos «8 × 400 m, hasta Listo»
+  // necesitan cerrar cada tramo: el reloj los marca con «Listo», como antes.
+  if (p.some((x) => x.s === null) && (f.id !== 'portiempo' || p.length > 1)) return null;
+  return {
+    id: f.id,
+    an: f.anota,
+    p,
+    vs: f.vueltas,
+    tu,
+    ...(f.tope ? { tope: f.tope } : null),
+    l: miembros.slice(0, 8).map(renglonDelMiembro).filter(Boolean),
+  };
+}
+
+/** Lo que el teléfono escribe junto a la cantidad (Deporte, la lista): `{ tx, sub, lado }`. «Por lado» va aparte: es lo que más se olvida. */
+function textosDelBoton(p) {
+  const tx = texto(p.termina?.texto, 20);
+  const partes = String(p.texto ?? '').split('·').map((x) => x.trim()).filter(Boolean);
+  const lado = partes.some((x) => /^por lado$/i.test(x));
+  const sub = partes.filter((x) => !/^por lado$/i.test(x) && x !== tx).join(' · ');
+  return { tx, sub: texto(sub, 40), lado };
 }
 
 // Lo que el reloj necesita para anotar como el iPhone (`exDataTrasListo`): cómo termina el paso, sin el resto de `termina`.
@@ -94,7 +165,11 @@ const terminaCorto = (t) => (esObjeto(t) ? {
  *   lp lapsos · s serie (el Set) · tm cómo termina · reps la cantidad planeada como la escribió el coach («8», «8-10») · u su unidad · rv su número
  *   kg los kilos del plan (texto, como se guardan) · pv el peso en la unidad del atleta (lo que se ve y se cambia) · aprox sale de su 1RM · peso lleva peso
  *   lado «por lado» · seg segundos (de un descanso, o de un paso con tiempo) · texto lo que dice un descanso sin cuenta o el resumen de un Set con reloj
- *   m metros que pide un paso por distancia
+ *   m metros que pide un paso por distancia (se miden con el GPS) · sg los metros NO se miden con el GPS (un sprint corto, una máquina, la alberca)
+ *   en en qué vas, lo mismo que el teléfono (`cuentaDelPaso`): `{ r: 'Serie' | 'Sprint' | 'Tramo', n, de }`
+ *   tx la cantidad escrita (Deporte, la lista: «10 m», «30 seg») · sub lo que va con ella («en 4 seg») · lim el límite en segundos («en menos de 60 seg»)
+ *   rit el ritmo meta `[min, max]` en seg/km · zn la zona del pulso `[min, max]` (1 a 5) · mt la meta que no se mide, en texto («Al máximo», «240–260 W»)
+ *   cl es una clase (el video se queda en el iPhone; el reloj cuenta su tiempo) · f el reloj de un Set (`formatoParaElReloj`) · cf su `claveFormato` (donde va su resultado)
  */
 export function pasoParaElReloj(p, { kilos = null, conPeso = false } = {}) {
   // El nombre TAL CUAL lo corta el iPhone (`nombreCorto` de `lib/entreno.js`: sin juntar espacios): la marca que vuelve del reloj lleva este `n`, y el
@@ -106,10 +181,22 @@ export function pasoParaElReloj(p, { kilos = null, conPeso = false } = {}) {
   if (p.tipo === 'nota') return { ...base, t: 'n', ...(p.idx !== undefined ? { i: p.idx } : null) };
   if (p.tipo === 'reloj') {
     const seg = p.termina?.por === 'tiempo' ? entero(p.termina.valor ?? p.termina.min) : null;
-    return { ...base, t: 'r', i: Number(p.claveFormato ?? 0), texto: texto(p.resumen, 60), ...(seg ? { seg } : null) };
+    const f = formatoParaElReloj(p);
+    return {
+      ...base, t: 'r', i: Number(p.claveFormato ?? 0), cf: String(p.claveFormato ?? ''), texto: texto(p.resumen, 60), ...(seg ? { seg } : null), ...(p.serie ? { s: p.serie } : null), ...(f ? { f } : null),
+    };
   }
   const tm = terminaCorto(p.termina);
   const rv = tm.unidad === 'cluster' ? numero(tm.valor) : numero(parseFloat(String(tm.cantidad ?? '').replace(',', '.')));
+  const cuenta = cuentaDelPaso(p);
+  const boton = tm.por === 'boton' && p.termina?.texto ? textosDelBoton(p) : null;
+  // Un tramo corto o en una máquina no se mide con el GPS (el teléfono tampoco): los metros se enseñan y se toca «Listo».
+  const sinGps = tm.por === 'distancia' && (p.sinGps === true || p.cara === 'lejos');
+  // Lo que va por tiempo cuenta sus segundos de verdad (`termina.valor`): una clase de 6 seg decía «0 min».
+  const segDelPaso = tm.por === 'tiempo' ? (entero(p.termina?.valor) ?? (rv !== null ? Math.round(tm.unidad === 'min' ? rv * 60 : rv) : null)) : null;
+  const meta = esObjeto(p.meta) ? p.meta : null;
+  const mide = meta && METAS_QUE_MIDE[meta.tipo] && numero(meta.min) !== null ? METAS_QUE_MIDE[meta.tipo] : null;
+  const mt = meta && !mide && !['pct', 'kg'].includes(meta.tipo) ? texto(meta.tipo === 'texto' ? sinKg(meta.texto) : meta.texto, 40) : '';
   return {
     ...base,
     t: 'e',
@@ -123,10 +210,20 @@ export function pasoParaElReloj(p, { kilos = null, conPeso = false } = {}) {
     ...(tm.cantidad ? { reps: texto(tm.cantidad, 12), u: tm.unidad ?? 'reps' } : null),
     ...(rv !== null ? { rv } : null),
     ...(kilos ? { kg: kilos.kg, pv: Number(kilos.numero), ...(kilos.aprox ? { aprox: true } : null) } : null),
-    ...(conPeso ? { peso: true } : null),
-    ...(p.porLado ? { lado: true } : null),
-    ...(tm.por === 'tiempo' && rv !== null ? { seg: Math.round(tm.unidad === 'min' ? rv * 60 : rv) } : null),
-    ...(tm.por === 'distancia' && numero(tm.min) !== null ? { m: tm.min } : null),
+    ...(conPeso || (kilos && meta?.tipo === 'texto') ? { peso: true } : null),
+    ...(p.porLado || boton?.lado ? { lado: true } : null),
+    ...(segDelPaso ? { seg: segDelPaso } : null),
+    ...(tm.por === 'distancia' && numero(tm.min) !== null && !sinGps ? { m: tm.min } : null),
+    ...(sinGps ? { sg: true } : null),
+    ...(cuenta ? { en: { r: cuenta.rotulo, n: entero(cuenta.n) ?? 1, de: entero(cuenta.de) ?? 1, ...(cuenta.extra ? { x: texto(cuenta.extra, 20) } : null) } } : null),
+    ...(boton?.tx ? { tx: boton.tx } : null),
+    ...(boton?.sub ? { sub: boton.sub } : null),
+    ...(entero(p.limiteSeg) > 0 ? { lim: entero(p.limiteSeg) } : null),
+    // La zona va en enteros (el reloj la lee como `Int`: un decimal tiraría el plan entero).
+    ...(mide === 'zn' ? { zn: [entero(meta.min), entero(numero(meta.max) ?? meta.min)] } : null),
+    ...(mide === 'rit' ? { rit: [meta.min, numero(meta.max) ?? meta.min] } : null),
+    ...(mt ? { mt } : null),
+    ...(p.deClase ? { cl: true } : null),
   };
 }
 
@@ -199,11 +296,11 @@ const bytes = (x) => new TextEncoder().encode(JSON.stringify(x)).length;
 
 /**
  * EL PLAN QUE VIAJA AL RELOJ. `dias`: `[{ fecha: 'AAAA-MM-DD', sesiones: [lo de `sesionParaElReloj`] }]` (hoy primero). `actividades`: «Tus actividades».
- * `recorrido`: dijo que sí a «¿Guardamos tu recorrido?» (sin eso el reloj no sigue la ubicación en silencio). `sinPlan`: no tiene plan (el reloj ofrece
+ * `fcMax`: su pulso máximo (`umbralesDe`), para las zonas. `recorrido`: dijo que sí a «¿Guardamos tu recorrido?» (sin eso el reloj no sigue la ubicación en silencio). `sinPlan`: no tiene plan (el reloj ofrece
  * «Entreno libre» como lo principal, no «Tu plan de hoy no está en el reloj»).
  * Si no cabe (`MAX_BYTES_DEL_PLAN`), los días de después pierden sus pasos (se ven, pero se empiezan como cronómetro) y al final se quitan.
  */
-export function planParaElReloj({ usuario = null, ahora = Date.now(), unidad = 'kg', sinPlan = false, recorrido = false, dias = [], actividades = [], catalogo = [] }) {
+export function planParaElReloj({ usuario = null, ahora = Date.now(), unidad = 'kg', sinPlan = false, recorrido = false, dias = [], actividades = [], catalogo = [], fcMax = null }) {
   const plan = {
     v: VERSION_DEL_RELOJ,
     ...(usuario ? { usuario } : null),
@@ -211,6 +308,8 @@ export function planParaElReloj({ usuario = null, ahora = Date.now(), unidad = '
     unidad: normalizaUnidad(unidad),
     ...(sinPlan ? { sinPlan: true } : null),
     recorrido: !!recorrido,
+    // Los pulsos que separan las zonas (`limitesDeZonas`, los mismos de las métricas): con ellos el reloj dice si va en la zona que pidió el coach.
+    ...(numero(fcMax) > 100 && fcMax < 240 ? { zonas: limitesDeZonas(fcMax) } : null),
     dias: (dias ?? []).slice(0, DIAS_EN_EL_RELOJ).map((d) => ({ fecha: d.fecha, sesiones: (d.sesiones ?? []).slice(0, MAX_SESIONES_POR_DIA) })),
     actividades: (actividades ?? []).slice(0, MAX_ACTIVIDADES).map(actividadParaElReloj),
     catalogo,
@@ -327,6 +426,8 @@ export function leeResultado(crudo) {
         extra: Object.fromEntries(Object.entries(esObjeto(e.extra) ? e.extra : {}).filter(([, v]) => entero(v) > 0).map(([k, v]) => [k, entero(v)])),
       },
       pasos: (Array.isArray(s.pasos) ? s.pasos : []).filter((p) => esObjeto(p) && typeof p.c === 'string' && typeof p.t === 'string').slice(0, MAX_PASOS_EN_EL_RELOJ),
+      // El resultado de cada Set con reloj (las rondas de un AMRAP, el tiempo de un «Por tiempo»), con su `claveFormato`: lo mismo que anota el iPhone.
+      formatos: resultadosDe(s.formatos),
     };
   }
   if (r.modo === 'libre') {
@@ -336,6 +437,13 @@ export function leeResultado(crudo) {
     };
   }
   return salida;
+}
+
+/** Los resultados de los Sets con reloj que trae el reloj, limpios con la regla del iPhone (`limpiaResultado`). */
+function resultadosDe(x) {
+  if (!esObjeto(x)) return {};
+  return Object.fromEntries(Object.entries(x).filter(([k]) => /^\w{1,20}$/.test(k)).slice(0, 40)
+    .map(([k, r]) => [k, limpiaResultado(r)]).filter(([, r]) => r && r.anota !== 'nada' && (r.valor !== null || r.seg !== null)));
 }
 
 const segundosDe = (r) => r.duracion;
@@ -478,10 +586,12 @@ export function aplicaSesionDelReloj(store, r) {
   });
   // La línea del recorrido (la del GPS o la de la ubicación en silencio), en la forma de siempre (`registro.ruta`): la usan los stickers de la sesión.
   const ruta = rutaParaGuardar(r.ruta.filter((f) => !(f[4] > 50)).map(([t, lat, lon]) => ({ t, lat, lon })));
+  const formatos = Object.keys(s.formatos ?? {}).length ? { ...(esObjeto(base.formatos) ? base.formatos : {}), ...s.formatos } : base.formatos;
   const registro = {
     ...base,
     entreno,
     exercises,
+    ...(formatos ? { formatos } : null),
     ...(ruta ? { ruta } : null),
     completed: true,
     completedAt: new Date(r.fin).toISOString(),

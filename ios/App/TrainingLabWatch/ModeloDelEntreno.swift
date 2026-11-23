@@ -40,6 +40,49 @@ struct AjusteDelPaso: Equatable {
     var peso: Double?
 }
 
+/// Lo que se pregunta al acabar el reloj de un Set (solo lo que el reloj no sabe: las rondas de un AMRAP, las reps, las calorías…). Una pregunta a la vez.
+struct PreguntaDelSet: Equatable {
+    var clave: String
+    var anota: String
+    /// 1: la primera pregunta; 2: las reps sueltas de un AMRAP.
+    var paso: Int
+    var valor: Double
+    var rondas: Double?
+    var seg: Int
+    /// Cuándo acabó (milisegundos de época): ahí se marca.
+    var hora: Double
+
+    var titulo: String {
+        switch anota {
+        case "rondas": return paso == 1 ? "Rondas completas" : "Reps sueltas"
+        case "reps": return "Repeticiones"
+        case "cal": return "Calorías"
+        default: return "Distancia"
+        }
+    }
+    var detalle: String? {
+        switch anota {
+        case "rondas": return paso == 2 ? "De la ronda sin terminar" : nil
+        case "reps": return "En total"
+        case "km": return "En km"
+        case "m": return "En metros"
+        default: return nil
+        }
+    }
+    var salto: Double { anota == "km" ? 0.5 : anota == "m" ? 50 : 1 }
+    var otraMas: Bool { anota == "rondas" && paso == 1 }
+}
+
+/// Lo que dice un límite al tocar «Listo»: «✓ Lo lograste» o «8 seg de más», y cuánto tardó. Se quita solo.
+struct VeredictoDelLimite: Equatable {
+    var clave: String
+    var logrado: Bool
+    var seg: Int
+    var deMas: Int
+    var nombre: String
+    var hasta: Double
+}
+
 /// La pantalla del final: el resumen y si ya llegó al iPhone.
 struct FinDelReloj: Equatable {
     var id: String
@@ -91,6 +134,19 @@ final class ModeloDelEntreno: NSObject, ObservableObject, WCSessionDelegate {
     @Published private(set) var telefonoCerca = false
     @Published private(set) var metros: Double?
     private var vibroLaMeta: String?
+    /// Lo que se pregunta al acabar un Set con reloj, y lo que dice un límite.
+    @Published var preguntaDelSet: PreguntaDelSet?
+    @Published var veredicto: VeredictoDelLimite?
+    /// El ritmo de ahora (segundos por km, de los últimos ~20 s del GPS) y cómo va contra la meta (ritmo o zona).
+    @Published private(set) var ritmoAhora: Double?
+    private var muestrasDelRitmo: [(t: Double, m: Double)] = []
+    private var claveDelRitmo: String?
+    private var estadoAvisado: [String: EstadoDeMeta] = [:]
+    private var ultimoAvisoDeMeta: Double = 0
+    /// Lo que ya vibró en el reloj de un Set (el tramo que se vio, el último minuto) y el último segundo del 3, 2, 1.
+    private var tramoVisto: [String: Int] = [:]
+    private var ultimoMinutoVibro: String?
+    private var tresDosUnoVisto: Int?
     private var porNadar: NadoPorEmpezar?
     private var antesDeNadar: PantallaDelReloj = .inicio
 
@@ -303,11 +359,26 @@ final class ModeloDelEntreno: NSObject, ObservableObject, WCSessionDelegate {
                 reps = p.u == "km" ? textoDeNumero(medido / 1000) : p.u == "yd" ? textoDeNumero((medido / 0.9144).rounded()) : textoDeNumero(medido.rounded())
                 seg = Int(((ahora - e.desdeDelActual) / 1000).rounded())
             }
+            // Un límite: lo que tardó desde «Empezar» (el iPhone dice si lo logró con esto), y aquí mismo, el veredicto.
+            if p.conLimite, let lim = p.lim, let c = e.corrido(de: p, ahora: ahora), c > 0 {
+                let tardo = max(1, Int((c / 1000).rounded()))
+                seg = tardo
+                veredicto = VeredictoDelLimite(clave: p.c, logrado: tardo <= lim, seg: tardo, deMas: max(0, tardo - lim), nombre: p.n, hasta: ahora + 3000)
+                WKInterfaceDevice.current().play(tardo <= lim ? .success : .retry)
+            }
         }
+        let conVeredicto = veredicto?.clave == p.c
         ajuste = nil
         cambia { $0.listo(reps: reps, kg: kg, seg: seg, en: ahora) }
-        WKInterfaceDevice.current().play(.click)
-        if entreno?.completo == true { termina() }
+        if !conVeredicto { WKInterfaceDevice.current().play(.click) }
+        if entreno?.completo == true {
+            // El último paso era un límite: primero se ve si lo logró, y luego termina.
+            if conVeredicto {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in if self?.entreno?.completo == true { self?.termina() } }
+            } else {
+                termina()
+            }
+        }
     }
 
     func saltaDescanso() {
@@ -315,13 +386,77 @@ final class ModeloDelEntreno: NSObject, ObservableObject, WCSessionDelegate {
         if entreno?.completo == true { termina() }
     }
     func masQuince() { cambia { $0.masTiempo(15) } }
+
+    /// «Empezar» un paso que cuenta un tiempo (regla 19): con 3, 2, 1, salvo lo que va por marca.
+    func empieza() {
+        tresDosUnoVisto = nil
+        cambia { $0.empieza(en: ahoraMs()) }
+        WKInterfaceDevice.current().play(.start)
+    }
+
+    /// «Terminé»: un paso por tiempo antes de que acabe (se marca ya), o un Set que cuenta hacia arriba («Por tiempo»).
+    func termine() {
+        guard let e = entreno, let p = e.actual else { return }
+        if p.conRelojDeSet { acabaElSet(p, en: ahoraMs()); return }
+        listo()
+    }
+
+    /// El reloj de un Set acabó (por tiempo, por su tope o con «Terminé»): lo que el reloj ya sabe se guarda solo; lo que no, se pregunta una vez.
+    private func acabaElSet(_ p: PasoDelReloj, en hora: Double, porTiempo: Bool = false) {
+        guard let e = entreno, let f = p.f, preguntaDelSet?.clave != p.c else { return }
+        let c = e.corrido(de: p, ahora: hora) ?? 0
+        let tramos = f.tramos
+        let v = vistaDelSet(f, tramos, seg: c / 1000)
+        let seg = f.tope.map { min($0, v.total) } ?? v.total
+        WKInterfaceDevice.current().play(.success)
+        switch f.an {
+        case "tiempo":
+            guardaSet(ResultadoDeSet(anota: "tiempo", valor: Double(seg), extra: nil, seg: seg), clave: p.c, en: hora, porTiempo: porTiempo)
+        case "cumplido":
+            let hechos = tramos.prefix(v.i).filter { !$0.descanso }.count
+            guardaSet(ResultadoDeSet(anota: "cumplido", valor: Double(hechos), extra: nil, seg: seg, de: f.deTrabajo), clave: p.c, en: hora, porTiempo: porTiempo)
+        case "rondas", "reps", "cal", "km", "m":
+            preguntaDelSet = PreguntaDelSet(clave: p.c, anota: f.an, paso: 1, valor: 0, rondas: nil, seg: seg, hora: hora)
+        default:
+            guardaSet(nil, clave: p.c, en: hora, porTiempo: porTiempo)
+        }
+    }
+
+    private func guardaSet(_ r: ResultadoDeSet?, clave: String, en hora: Double, porTiempo: Bool) {
+        preguntaDelSet = nil
+        cambia { $0.guardaSet(r, clave: clave, en: hora, porTiempo: porTiempo) }
+        if entreno?.completo == true { termina() }
+    }
+
+    /// «Siguiente» o «Guardar» en la pregunta del Set.
+    func respondeSet(_ valor: Double) {
+        guard var q = preguntaDelSet else { return }
+        if q.otraMas {
+            q.rondas = valor
+            q.paso = 2
+            q.valor = 0
+            preguntaDelSet = q
+            return
+        }
+        let r = q.anota == "rondas"
+            ? ResultadoDeSet(anota: "rondas", valor: q.rondas ?? 0, extra: valor, seg: q.seg)
+            : ResultadoDeSet(anota: q.anota, valor: valor, extra: nil, seg: q.seg)
+        // Se marca al contestar, no al acabar: el descanso de después no debe correr mientras contesta (su duración ya va en `seg`).
+        guardaSet(r, clave: q.clave, en: ahoraMs(), porTiempo: false)
+    }
     func deshaz() {
         ajuste = nil
+        preguntaDelSet = nil
+        veredicto = nil
+        tramoVisto = [:]
+        ultimoMinutoVibro = nil
+        estadoAvisado = [:]
         cambia { $0.deshaz() }
         pagina = 1
     }
     func saltaEjercicio() {
         ajuste = nil
+        preguntaDelSet = nil
         cambia { $0.saltaEjercicio(en: ahoraMs()) }
         pagina = 1
         if entreno?.completo == true { termina() }
@@ -329,6 +464,7 @@ final class ModeloDelEntreno: NSObject, ObservableObject, WCSessionDelegate {
     func pausaOSigue() {
         guard let e = entreno else { return }
         let ahora = ahoraMs()
+        muestrasDelRitmo = []
         if e.pausadoEn == nil {
             cambia { $0.pausa(en: ahora) }
             medidor.pausa()
@@ -352,6 +488,8 @@ final class ModeloDelEntreno: NSObject, ObservableObject, WCSessionDelegate {
         confirmando = false
         ajustando = false
         ajuste = nil
+        preguntaDelSet = nil
+        veredicto = nil
         let ahora = ahoraMs()
         let segundos = e.transcurrido(ahora: ahora) / 1000
         let guardar = e.conPasos ? e.algoMarcado : segundos >= 30
@@ -409,7 +547,10 @@ final class ModeloDelEntreno: NSObject, ObservableObject, WCSessionDelegate {
                 bateria: BateriaDelReloj(inicio: e.bateriaInicio, fin: self.bateria(), ubicacion: e.ubicacion),
                 // De los pasos, solo los ejercicios: es lo que el iPhone necesita para anotar lo hecho como siempre (`exDataTrasListo`).
                 sesion: e.sesion.map { s in
-                    SesionHecha(almacen: s.almacen, llave: s.llave, nombre: s.nombre, de: s.de, otraVez: e.otraVez, entreno: e.avance(fin: finMs), pasos: s.pasos.filter { $0.t == "e" })
+                    SesionHecha(
+                        almacen: s.almacen, llave: s.llave, nombre: s.nombre, de: s.de, otraVez: e.otraVez, entreno: e.avance(fin: finMs), pasos: s.pasos.filter { $0.t == "e" },
+                        formatos: (e.formatos ?? [:]).isEmpty ? nil : e.formatos
+                    )
                 },
                 actividad: e.actividad,
                 natacion: nado?.lugar
@@ -463,6 +604,63 @@ final class ModeloDelEntreno: NSObject, ObservableObject, WCSessionDelegate {
             WKInterfaceDevice.current().play(.notification)
             if entreno?.completo == true { termina() }
             return
+        }
+        if veredicto.map({ ahora >= $0.hasta }) == true { veredicto = nil }
+        // Lo que cuenta un tiempo (regla 19): el 3, 2, 1 vibra; un paso por tiempo acaba solo, a su hora; el reloj de un Set vibra en cada tramo.
+        if e.pausadoEn == nil, let p = e.actual, p.conCuenta, let c = e.corrido(de: p, ahora: ahora) {
+            if c < 0 {
+                let falta = Int((-c / 1000).rounded(.up))
+                if tresDosUnoVisto != falta { tresDosUnoVisto = falta; WKInterfaceDevice.current().play(.click) }
+            } else if p.porTiempo, let seg = p.seg, c >= Double(seg) * 1000 {
+                let hora = ahora - (c - Double(seg) * 1000)
+                cambia { $0.terminaPorTiempo(en: hora) }
+                WKInterfaceDevice.current().play(.notification)
+                if entreno?.completo == true { termina() }
+                return
+            } else if p.conRelojDeSet, let f = p.f {
+                let v = vistaDelSet(f, f.tramos, seg: c / 1000)
+                if v.terminado {
+                    acabaElSet(p, en: ahora - max(0, c - Double(v.total) * 1000), porTiempo: true)
+                    return
+                }
+                if let visto = tramoVisto[p.c], visto != v.i { WKInterfaceDevice.current().play(.notification) }
+                tramoVisto[p.c] = v.i
+                if f.id == "amrap", let r = v.restan, r <= 60, r > 55, ultimoMinutoVibro != p.c {
+                    ultimoMinutoVibro = p.c
+                    WKInterfaceDevice.current().play(.directionUp)
+                }
+            }
+        }
+        // El ritmo y la zona: si se sale de lo que pidió el coach, vibra 2 veces (no más de una vez cada 20 s); mientras va bien, nada.
+        if e.pausadoEn == nil, let p = e.actual, !p.esDescanso {
+            var estado: EstadoDeMeta?
+            if p.rit != nil, p.porDistancia {
+                if claveDelRitmo != p.c { claveDelRitmo = p.c; muestrasDelRitmo = []; ritmoAhora = nil }
+                muestrasDelRitmo.append((t: ahora, m: metros ?? 0))
+                muestrasDelRitmo.removeAll { ahora - $0.t > 20000 }
+                if let a = muestrasDelRitmo.first, let b = muestrasDelRitmo.last, b.t - a.t >= 8000 {
+                    // Parado (menos de 15 m en la ventana): no hay ritmo que enseñar, ni que juzgar.
+                    ritmoAhora = b.m - a.m >= 15 ? (b.t - a.t) / 1000 / ((b.m - a.m) / 1000) : nil
+                }
+                estado = estadoDelRitmo(ritmoAhora, meta: p.rit)
+            } else if p.zn != nil {
+                estado = estadoDelPulso(pulso, rango: plan?.rangoDeZona(p.zn))
+            }
+            // Lo que cuenta un tiempo y no ha empezado (o va en el 3, 2, 1) no avisa. El pulso tarda en subir: la zona no avisa en el primer minuto.
+            let corrido: Double? = p.conCuenta ? e.corrido(de: p, ahora: ahora) : ahora - e.desdeDelActual
+            let sinEmpezar = (corrido ?? -1) < 0
+            let pronto = p.zn != nil && p.rit == nil && (corrido ?? 0) < 60000
+            if let nuevo = estado, !sinEmpezar, !pronto {
+                let antes = estadoAvisado[p.c]
+                if nuevo == .bien { estadoAvisado[p.c] = nuevo }
+                if nuevo != .bien, antes != nuevo, ahora - ultimoAvisoDeMeta > 20000 {
+                    estadoAvisado[p.c] = nuevo
+                    ultimoAvisoDeMeta = ahora
+                    let tipo: WKHapticType = nuevo == .subir ? .directionUp : .directionDown
+                    WKInterfaceDevice.current().play(tipo)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { WKInterfaceDevice.current().play(tipo) }
+                }
+            }
         }
         // Un paso por distancia mide desde que empezó; al llegar a la meta, vibra (el «Listo» lo da la persona).
         if let p = e.actual, p.porDistancia {

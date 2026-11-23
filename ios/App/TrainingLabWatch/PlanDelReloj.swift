@@ -22,8 +22,19 @@ struct PlanDelReloj: Codable {
     var dias: [DiaDelReloj]?
     var actividades: [ActividadDelReloj]?
     var catalogo: [GrupoDelReloj]?
+    /// Los pulsos que separan las zonas (`[z1→z2, z2→z3, z3→z4, z4→z5]`, `limitesDeZonas` del iPhone), si se sabe su pulso máximo.
+    var zonas: [Int]?
 
     var enLibras: Bool { unidad == "lb" }
+
+    /// Los pulsos de una zona o de un rango de zonas («Zona 2», «Zona 2-3»): `lo` y `hi` (la zona 1 no tiene piso; la 5, techo). `nil` sin las zonas.
+    func rangoDeZona(_ zn: [Int]?) -> (lo: Int?, hi: Int?)? {
+        guard let l = zonas, l.count == 4, let z = zn, let a = z.first, a >= 1, a <= 5 else { return nil }
+        let b = min(5, max(a, z.count > 1 ? z[1] : a))
+        let lo: Int? = a <= 1 ? nil : l[a - 2]
+        let hi: Int? = b >= 5 ? nil : l[b - 1]
+        return (lo: lo, hi: hi)
+    }
     func dia(_ fecha: String) -> DiaDelReloj? { (dias ?? []).first { $0.fecha == fecha } }
 }
 
@@ -68,6 +79,46 @@ struct TerminaDelReloj: Codable, Hashable {
     var min: Double?
 }
 
+/// En qué vas, lo mismo que el teléfono (`cuentaDelPaso`): «Serie 1 de 3», «Sprint 2 de 4», «Tramo 3 de 8». `x`: lo de al lado («serie 1 de 3»).
+struct EnQueVaDelReloj: Codable, Hashable {
+    var r: String
+    var n: Int
+    var de: Int
+    var x: String?
+
+    var texto: String { "\(r) \(n) de \(de)" }
+}
+
+/// Un paso del reloj de un Set: sus segundos (`nil`: hasta «Terminé»), trabajo («t») o descanso («d») y su nombre si el coach le puso uno.
+struct PasoDelFormato: Codable, Hashable {
+    var s: Int?
+    var k: String
+    var e: String?
+}
+
+/// El reloj de un Set (AMRAP, EMOM, Tabata, «Por tiempo»…), como lo manda el iPhone (`formatoParaElReloj`): el reloj lo arma igual que `expande`.
+struct FormatoDelReloj: Codable, Hashable {
+    var id: String
+    /// Lo que se anota al acabar: «rondas», «tiempo», «reps», «km», «m», «cal», «cumplido» o «nada».
+    var an: String
+    var p: [PasoDelFormato]
+    var vs: Int
+    var tu: Int
+    var tope: Int?
+    /// Lo que se hace, un renglón por ejercicio («20 Wall balls»).
+    var l: [String]
+}
+
+/// Lo que se anota de un Set con reloj: lo mismo que guarda el iPhone en `formatos` (`limpiaResultado`). `extra`: las reps sueltas de un AMRAP.
+struct ResultadoDeSet: Codable, Hashable {
+    var anota: String
+    var valor: Double?
+    var extra: Double?
+    var seg: Int?
+    /// De cuántos tramos de trabajo («tramos completados»: 6 de 8).
+    var de: Int?
+}
+
 /// Un paso: `t` es «e» ejercicio, «d» descanso, «r» un Set con reloj (AMRAP, EMOM…) y «n» una nota. Ver `pasoParaElReloj` en JavaScript.
 struct PasoDelReloj: Codable, Hashable {
     var c: String
@@ -91,10 +142,46 @@ struct PasoDelReloj: Codable, Hashable {
     var seg: Int?
     var texto: String?
     var m: Double?
+    /// Los metros NO se miden con el GPS (un sprint corto, una máquina, la alberca): se enseñan y se toca «Listo».
+    var sg: Bool?
+    var en: EnQueVaDelReloj?
+    /// La cantidad escrita (Deporte, la lista: «10 m») y lo que va con ella («en 4 seg»).
+    var tx: String?
+    var sub: String?
+    /// El límite en segundos («20 reps en menos de 60 seg»).
+    var lim: Int?
+    /// El ritmo meta `[rápido, lento]` en segundos por km, y la zona del pulso `[de, a]` (1 a 5).
+    var rit: [Double]?
+    var zn: [Int]?
+    /// La meta que el reloj no mide, en texto («Al máximo», «240–260 W»).
+    var mt: String?
+    /// Una clase: el video se queda en el iPhone; el reloj cuenta su tiempo.
+    var cl: Bool?
+    /// El reloj de un Set y su `claveFormato` (donde va su resultado).
+    var f: FormatoDelReloj?
+    var cf: String?
 
     var esDescanso: Bool { t == "d" }
     var opcional: Bool { op == true }
     var porDistancia: Bool { tm?.por == "distancia" && (m ?? 0) > 0 }
+    /// Va por tiempo (una plancha, un tramo de bici, una clase): cuenta sola y pasa sola al acabar.
+    var porTiempo: Bool { t == "e" && tm?.por == "tiempo" && (seg ?? 0) > 0 }
+    var conLimite: Bool { t == "e" && (lim ?? 0) > 0 }
+    var conRelojDeSet: Bool { t == "r" && f != nil }
+    /// Lo que cuenta un tiempo: espera «Empezar» (o arranca solo tras un descanso con tiempo, regla 19).
+    var conCuenta: Bool { porTiempo || conLimite || conRelojDeSet }
+    /// Arranca al tocar, sin 3, 2, 1: lo que va por marca (un límite, un «Por tiempo»).
+    var sinTresDosUno: Bool { conLimite || (conRelojDeSet && (f?.p.contains { $0.s == nil } ?? false)) }
+    /// Dónde va su resultado (`formatos` del iPhone).
+    var claveFormato: String { (cf?.isEmpty == false ? cf : nil) ?? String(i ?? 0) }
+    /// «Serie 1 de 3», «Sprint 2 de 4»: lo mismo que el teléfono.
+    var cuenta: String? {
+        if let e = en { return e.texto }
+        if let total = vs, total > 1 { return "Serie \(v ?? 1) de \(total)" }
+        return nil
+    }
+    /// Una distancia que no se mide (se enseña tal cual, no se cambia).
+    var distanciaFija: Bool { !porDistancia && ["m", "km", "yd", "mi"].contains(u ?? "") }
 }
 
 /// Una actividad del entreno libre (del catálogo o creada por la persona en el iPhone).
@@ -159,6 +246,8 @@ struct SesionHecha: Codable {
     var otraVez: Bool
     var entreno: AvanceDelReloj
     var pasos: [PasoDelReloj]
+    /// El resultado de cada Set con reloj, por su `claveFormato` (el iPhone lo pone en `formatos`, como si se hubiera anotado ahí).
+    var formatos: [String: ResultadoDeSet]?
 }
 
 /// Cuánta batería tenía el reloj al empezar y al terminar (0 a 1), y con qué ubicación: para medir lo que gasta la ubicación en silencio.

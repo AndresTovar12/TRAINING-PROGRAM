@@ -43,6 +43,11 @@ struct EntrenoGuardado: Codable {
     var bateriaInicio: Double?
     /// Dónde está nadando (opcional: un `entreno.json` de antes se sigue leyendo).
     var natacion: NadoDelReloj?
+    /// Cuándo empezó a contar cada paso con tiempo (regla 19: al tocar «Empezar», o solo tras un descanso con tiempo), en milisegundos DE ENTRENO
+    /// (`transcurrido`): la pausa del entreno también lo detiene. Opcional: un `entreno.json` de antes se sigue leyendo.
+    var empezados: [String: Double]?
+    /// El resultado de cada Set con reloj, por su `claveFormato` (lo que el iPhone guarda en `formatos`).
+    var formatos: [String: ResultadoDeSet]?
 
     // MARK: Los pasos
 
@@ -129,6 +134,51 @@ struct EntrenoGuardado: Codable {
     mutating func terminaDescanso(en hora: Double) {
         guard let p = actual, p.esDescanso else { return }
         hechos[p.c] = MarcaDelReloj(t: hora, n: nil, reps: nil, kg: nil, seg: nil, p: p.seg)
+        arrancaElQueSigue(en: hora)
+    }
+
+    // MARK: Lo que cuenta un tiempo (regla 19)
+
+    /// Los milisegundos que lleva contando un paso (negativos durante el 3, 2, 1), o `nil` si todavía no empieza.
+    func corrido(de p: PasoDelReloj, ahora: Double) -> Double? {
+        guard let desde = empezados?[p.c] else { return nil }
+        return transcurrido(ahora: ahora) - desde
+    }
+
+    /// «Empezar»: cuenta desde ya; con 3, 2, 1, tres segundos después (lo que va por marca arranca al instante).
+    mutating func empieza(en ahora: Double) {
+        guard let p = actual, p.conCuenta, empezados?[p.c] == nil else { return }
+        var e = empezados ?? [:]
+        e[p.c] = transcurrido(ahora: ahora) + (p.sinTresDosUno ? 0 : 3000)
+        empezados = e
+    }
+
+    /// Regla 19: lo que cuenta un tiempo arranca SOLO cuando lo de antes acabó por tiempo (un descanso con cuenta, o un tramo que pasó solo). Sin 3, 2, 1.
+    mutating func arrancaElQueSigue(en hora: Double) {
+        guard let p = actual, p.conCuenta, empezados?[p.c] == nil else { return }
+        var e = empezados ?? [:]
+        e[p.c] = transcurrido(ahora: hora)
+        empezados = e
+    }
+
+    /// Un paso por tiempo que llegó a su final: se marca a su hora (no a la hora en que se vio) y lo que sigue, si también cuenta, arranca solo.
+    mutating func terminaPorTiempo(en hora: Double) {
+        guard let p = actual, p.porTiempo else { return }
+        listo(en: hora)
+        arrancaElQueSigue(en: hora)
+    }
+
+    /// Guarda el resultado de un Set con reloj y lo marca hecho. `clave`: el Set del que es (si ya no es el que toca, no se guarda). `porTiempo`: acabó
+    /// solo (regla 19: lo que sigue, si cuenta un tiempo, arranca solo).
+    mutating func guardaSet(_ r: ResultadoDeSet?, clave: String, en hora: Double, porTiempo: Bool) {
+        guard let p = actual, p.conRelojDeSet, p.c == clave else { return }
+        if let r = r, r.anota != "nada" {
+            var f = formatos ?? [:]
+            f[p.claveFormato] = r
+            formatos = f
+        }
+        listo(en: hora)
+        if porTiempo { arrancaElQueSigue(en: hora) }
     }
 
     /// «+15 s» en el descanso que toca.
@@ -143,7 +193,20 @@ struct EntrenoGuardado: Codable {
         guard let i = indiceActual else { return }
         var k = i
         while k < pasos.count && pasos[k].esDescanso { k += 1 }
-        guard k < pasos.count, let idx = pasos[k].i else { return }
+        guard k < pasos.count else { return }
+        // Un paso sin ejercicio del plan (Deporte, la lista, un Set con reloj): se salta solo ese paso y el descanso que le sigue.
+        guard pasos[k].t == "e", let idx = pasos[k].i else {
+            saltados[pasos[k].c] = MarcaDelReloj(t: ahora, n: nombreCorto(pasos[k]), reps: nil, kg: nil, seg: nil, p: nil)
+            var j = k + 1
+            while j < pasos.count && pasos[j].esDescanso && marca(de: pasos[j]) == nil {
+                hechos[pasos[j].c] = MarcaDelReloj(t: ahora, n: nil, reps: nil, kg: nil, seg: nil, p: nil)
+                j += 1
+            }
+            for j in i..<k where marca(de: pasos[j]) == nil { hechos[pasos[j].c] = MarcaDelReloj(t: ahora, n: nil, reps: nil, kg: nil, seg: nil, p: nil) }
+            metrosAlEmpezarPaso = nil
+            clavePasoConMetros = nil
+            return
+        }
         for j in k..<pasos.count where !pasos[j].esDescanso && pasos[j].i == idx && marca(de: pasos[j]) == nil {
             saltados[pasos[j].c] = MarcaDelReloj(t: ahora, n: nombreCorto(pasos[j]), reps: nil, kg: nil, seg: nil, p: nil)
         }
@@ -170,6 +233,8 @@ struct EntrenoGuardado: Codable {
             hechos[c] = nil
             saltados[c] = nil
             extra[c] = nil
+            empezados?[c] = nil
+            if pasos[k].conRelojDeSet { formatos?[pasos[k].claveFormato] = nil }
             k += 1
         }
         metrosAlEmpezarPaso = nil
@@ -260,4 +325,99 @@ func adelgaza(_ lista: [[Double]], a max: Int) -> [[Double]] {
 /// La ruta para el iPhone, adelgazada. La altitud que no se sabe va como -1000 (el iPhone la ignora: `muestrasDe` en `relojSinTelefono.js`).
 func rutaParaMandar(_ ruta: [[Double]], max: Int = 500) -> [[Double]] {
     adelgaza(ruta, a: max)
+}
+
+
+// MARK: - El reloj de un Set (AMRAP, EMOM, Tabata, «Por tiempo»…)
+
+/// Un tramo del reloj de un Set, ya armado: lo mismo que `expande` del iPhone (por cada vuelta, por cada turno, cada paso).
+struct TramoDelSet: Equatable {
+    var seg: Int?
+    var descanso: Bool
+    var etiqueta: String?
+    var vuelta: Int
+    var ejercicio: Int?
+}
+
+extension FormatoDelReloj {
+    var tramos: [TramoDelSet] {
+        var salida: [TramoDelSet] = []
+        let turnos = max(1, tu)
+        for v in 1...max(1, vs) {
+            for e in 0..<turnos {
+                for paso in p {
+                    if salida.count >= 400 { return salida }
+                    salida.append(TramoDelSet(seg: paso.s, descanso: paso.k == "d", etiqueta: paso.e, vuelta: v, ejercicio: turnos > 1 ? e : nil))
+                }
+            }
+        }
+        return salida
+    }
+    /// Los tramos de trabajo (los «tramos completados» de lo que se anota).
+    var deTrabajo: Int { tramos.filter { !$0.descanso }.count }
+}
+
+/// Dónde va el reloj de un Set a los `seg` segundos de empezar: el tramo, lo que le queda (o `nil` si cuenta hacia arriba) y si ya acabó.
+struct VistaDelSet: Equatable {
+    var i: Int
+    var tramo: TramoDelSet?
+    var restan: Int?
+    var total: Int
+    var terminado: Bool
+}
+
+func vistaDelSet(_ f: FormatoDelReloj, _ tramos: [TramoDelSet], seg: Double) -> VistaDelSet {
+    let total = max(0, seg)
+    if let tope = f.tope, total >= Double(tope) { return VistaDelSet(i: tramos.count, tramo: nil, restan: nil, total: tope, terminado: true) }
+    var antes = 0.0
+    for (i, t) in tramos.enumerated() {
+        guard let s = t.seg else { return VistaDelSet(i: i, tramo: t, restan: nil, total: Int(total), terminado: false) }
+        if total < antes + Double(s) {
+            return VistaDelSet(i: i, tramo: t, restan: Int((antes + Double(s) - total).rounded(.up)), total: Int(total), terminado: false)
+        }
+        antes += Double(s)
+    }
+    return VistaDelSet(i: tramos.count, tramo: nil, restan: nil, total: Int(antes), terminado: true)
+}
+
+/// Lo que dice debajo del nombre, según el formato: lo mismo que `textoDeAvance` del iPhone (`RelojDelBloque.jsx`).
+func avanceDelSet(_ f: FormatoDelReloj, _ v: VistaDelSet, de n: Int) -> String {
+    guard let t = v.tramo else { return "" }
+    switch f.id {
+    case "emom": return "Intervalo \(v.i + 1) de \(n)"
+    case "tabata", "intervalos": return f.vs > 1 ? "Ronda \(t.vuelta) de \(f.vs)" : ""
+    case "fartlek": return f.vs > 1 ? "Tramo \(t.vuelta) de \(f.vs)" : ""
+    case "portiempo", "amrap": return ""
+    default: return n > 1 ? "Tramo \(v.i + 1) de \(n)" : ""
+    }
+}
+
+// MARK: - Ritmo y zona: «Más rápido», «Vas bien», «Más despacio»
+
+/// Cómo va contra lo que pidió el coach: `subir` (más rápido, más intenso), `bien` o `bajar` (más despacio, más suave).
+enum EstadoDeMeta: String {
+    case subir, bien, bajar
+}
+
+/// El ritmo (segundos por km) contra la meta `[rápido, lento]`, con 3 seg/km de holgura para que no cambie a cada paso.
+func estadoDelRitmo(_ ritmo: Double?, meta: [Double]?) -> EstadoDeMeta? {
+    guard let r = ritmo, let m = meta, let rapido = m.first else { return nil }
+    let lento = m.count > 1 ? m[1] : rapido
+    if r > lento + 3 { return .subir }
+    if r < rapido - 3 { return .bajar }
+    return .bien
+}
+
+/// El pulso contra los pulsos de la zona.
+func estadoDelPulso(_ bpm: Int, rango: (lo: Int?, hi: Int?)?) -> EstadoDeMeta? {
+    guard bpm > 0, let r = rango else { return nil }
+    if let lo = r.lo, bpm < lo { return .subir }
+    if let hi = r.hi, bpm > hi { return .bajar }
+    return .bien
+}
+
+/// «4:41» de 281 segundos por km.
+func ritmoDe(_ segPorKm: Double) -> String {
+    let s = Int(segPorKm.rounded())
+    return String(format: "%d:%02d", s / 60, s % 60)
 }

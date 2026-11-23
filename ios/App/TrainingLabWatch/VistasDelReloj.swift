@@ -375,8 +375,18 @@ struct PantallaDeLaSesion: View {
     @EnvironmentObject var modelo: ModeloDelEntreno
 
     var body: some View {
+        // El veredicto de un límite va encima de todo: al tocar «Listo» ya empieza el descanso, y se ve sobre él.
+        ZStack {
+            contenido
+            if let v = modelo.veredicto { VeredictoVista(v: v) }
+        }
+    }
+
+    @ViewBuilder private var contenido: some View {
         if modelo.confirmando {
             ConfirmaTerminar()
+        } else if modelo.preguntaDelSet != nil {
+            PreguntaDelSetVista()
         } else if modelo.ajustando {
             AjustaLaSerie()
         } else if let e = modelo.entreno, let p = e.actual, p.esDescanso {
@@ -391,62 +401,480 @@ struct PantallaDeLaSesion: View {
     }
 }
 
-/// Una serie: ejercicio, número de serie, reps y kilos (se tocan para cambiarlos), el pulso y «Listo».
+/// Arriba de cada paso: en qué vas («Serie 1 de 3», «Sprint 2 de 4», «Tramo 3 de 8») con sus rayitas, lo mismo que el teléfono (`EnQueVas`).
+/// Una sola barra en todas las pantallas (23 nov 2026: antes había dos que decían cosas distintas).
+struct CabezaDelPaso: View {
+    @EnvironmentObject var modelo: ModeloDelEntreno
+    let texto: String?
+    var n: Int = 0
+    var de: Int = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 4) {
+                Text(texto ?? " ").font(.system(size: 11, weight: .bold)).foregroundStyle(ColorDelReloj.tenue).lineLimit(1).minimumScaleFactor(0.8)
+                Spacer(minLength: 0)
+                Image(systemName: modelo.telefonoCerca ? "iphone" : "iphone.slash").font(.system(size: 9)).foregroundStyle(ColorDelReloj.tenue)
+            }
+            if de > 1 { RayitasDeSerie(n: n, de: de) }
+        }
+    }
+}
+
+/// Las rayitas de en qué vas: las hechas en azul, la de ahora en azul claro (con muchas, una barra corrida).
+struct RayitasDeSerie: View {
+    let n: Int
+    let de: Int
+
+    var body: some View {
+        if de <= 12 {
+            HStack(spacing: 2) {
+                ForEach(0..<de, id: \.self) { i in
+                    Capsule().fill(i < n - 1 ? ColorDelReloj.azul : i == n - 1 ? ColorDelReloj.azul.opacity(0.6) : ColorDelReloj.gris).frame(height: 3)
+                }
+            }
+        } else {
+            BarraDeSeries(hechas: n, total: de)
+        }
+    }
+}
+
+/// La cabeza de un paso, con lo que el paso sabe de sí.
+func cabezaDe(_ p: PasoDelReloj) -> CabezaDelPaso {
+    if let e = p.en { return CabezaDelPaso(texto: e.x.map { "\(e.texto) · \($0)" } ?? e.texto, n: e.n, de: e.de) }
+    if let total = p.vs, total > 1 { return CabezaDelPaso(texto: "Serie \(p.v ?? 1) de \(total)", n: p.v ?? 1, de: total) }
+    return CabezaDelPaso(texto: nil)
+}
+
+/// El paso que toca. Cada clase de paso tiene su pantalla: un Set con reloj, lo que cuenta un tiempo, un tramo con ritmo, uno con zona, o una serie.
 struct PasoDeLaSesion: View {
+    @EnvironmentObject var modelo: ModeloDelEntreno
+
+    var body: some View {
+        if let e = modelo.entreno, let p = e.actual {
+            ZStack {
+                if p.conRelojDeSet {
+                    PasoDeSetConReloj()
+                } else if p.conCuenta {
+                    PasoConCuenta()
+                } else if p.rit != nil && p.porDistancia {
+                    PasoDeRitmo()
+                } else if p.zn != nil && !p.porDistancia && modelo.plan?.rangoDeZona(p.zn) != nil {
+                    PasoDeZona(faltan: nil)
+                } else {
+                    SerieDelPaso()
+                }
+                if e.pausadoEn != nil { CapaDePausa() }
+            }
+        }
+    }
+}
+
+/// Una serie: ejercicio, en qué vas, cuánto (reps, kilos, metros o lo que escribió el coach), el pulso y «Listo». Lo que se toca para cambiar va en tarjeta.
+struct SerieDelPaso: View {
     @EnvironmentObject var modelo: ModeloDelEntreno
 
     var body: some View {
         if let e = modelo.entreno, let p = e.actual {
             let ajuste = modelo.ajuste?.clave == p.c ? modelo.ajuste : nil
             let unidadPeso = e.enLibras ? "lb" : "kg"
-            ZStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    TimelineView(.periodic(from: .now, by: 1)) { _ in
-                        HStack {
-                            if let x = e.ejercicioActual { Text("\(x.numero)/\(x.de)").font(.system(size: 10.5, weight: .bold)).foregroundStyle(ColorDelReloj.azul) }
-                            Text(relojDe(e.transcurrido(ahora: ahoraMs()) / 1000)).font(.system(size: 10.5, weight: .semibold)).monospacedDigit().foregroundStyle(ColorDelReloj.tenue)
-                            Spacer(minLength: 0)
-                            Image(systemName: modelo.telefonoCerca ? "iphone" : "iphone.slash").font(.system(size: 9)).foregroundStyle(ColorDelReloj.tenue)
-                        }
-                    }
-                    BarraDeSeries(hechas: e.hechas, total: e.total)
-                    Text(p.n + (p.lado == true ? " · por lado" : "")).font(.system(size: 14, weight: .bold)).lineLimit(2).minimumScaleFactor(0.85)
-                    if p.t == "e" {
-                        if let vs = p.vs, vs > 1 { Text("Serie \(p.v ?? 1) de \(vs)").font(.system(size: 11)).foregroundStyle(ColorDelReloj.tenue) }
-                        if p.porDistancia, let meta = p.m {
-                            Text("\(Int(modelo.metrosDelPaso ?? 0)) de \(Int(meta)) m").font(.system(size: 20, weight: .bold)).monospacedDigit()
-                        } else if p.reps != nil || p.peso == true {
-                            Button { modelo.ajustando = true } label: {
-                                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                                    if p.reps != nil {
-                                        Text(textoDeNumero(ajuste?.reps ?? p.rv ?? 0)).font(.system(size: 21, weight: .bold)).monospacedDigit()
-                                        Text(p.u == nil || p.u == "reps" ? "reps" : p.u!).font(.system(size: 10.5)).foregroundStyle(ColorDelReloj.tenue)
-                                    }
-                                    if p.peso == true {
-                                        Text(ajuste?.peso.map { textoDeNumero($0) } ?? p.pv.map { textoDeNumero($0) } ?? "—").font(.system(size: 21, weight: .bold)).monospacedDigit()
-                                        Text(unidadPeso).font(.system(size: 10.5)).foregroundStyle(ColorDelReloj.tenue)
-                                    }
-                                }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(RoundedRectangle(cornerRadius: 12).fill(ColorDelReloj.tarjeta))
+            // Lo que se cambia: las reps (si no son una distancia fija) y el peso.
+            let repsQueSeCambian = p.t == "e" && p.reps != nil && !p.distanciaFija && !p.porDistancia
+            let conTarjeta = repsQueSeCambian || (p.t == "e" && p.peso == true && !p.porDistancia)
+            VStack(alignment: .leading, spacing: 2) {
+                cabezaDe(p)
+                Text(p.n).font(.system(size: 14, weight: .bold)).lineLimit(2).minimumScaleFactor(0.85).padding(.top, 2)
+                if p.t == "e" {
+                    if p.porDistancia, let meta = p.m {
+                        Text("\(Int(modelo.metrosDelPaso ?? 0)) de \(Int(meta))\u{00A0}m").font(.system(size: 20, weight: .bold)).monospacedDigit()
+                    } else if conTarjeta || p.distanciaFija {
+                        HStack(alignment: .center, spacing: 10) {
+                            if p.distanciaFija, let r = p.reps {
+                                Text("\(r)\u{00A0}\(p.u ?? "m")").font(.system(size: 21, weight: .bold)).monospacedDigit().fixedSize()
                             }
-                            .buttonStyle(.plain)
+                            if conTarjeta {
+                                Button { modelo.ajustando = true } label: {
+                                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                        if repsQueSeCambian {
+                                            Text(textoDeNumero(ajuste?.reps ?? p.rv ?? 0)).font(.system(size: 21, weight: .bold)).monospacedDigit()
+                                            Text(p.u == nil || p.u == "reps" ? "reps" : p.u!).font(.system(size: 10.5)).foregroundStyle(ColorDelReloj.tenue)
+                                        }
+                                        if p.peso == true {
+                                            Text(ajuste?.peso.map { textoDeNumero($0) } ?? p.pv.map { textoDeNumero($0) } ?? "—").font(.system(size: 21, weight: .bold)).monospacedDigit()
+                                            Text(unidadPeso).font(.system(size: 10.5)).foregroundStyle(ColorDelReloj.tenue)
+                                        }
+                                    }
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(RoundedRectangle(cornerRadius: 12).fill(ColorDelReloj.tarjeta))
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
-                    } else if let texto = p.texto, !texto.isEmpty {
-                        Text(texto).font(.system(size: 11)).foregroundStyle(ColorDelReloj.tenue).lineLimit(2)
+                    } else if let tx = p.tx {
+                        // Deporte y la lista: la cantidad como la escribió el coach, y lo que va con ella en la misma línea («10 m en 4 seg»).
+                        HStack(alignment: .firstTextBaseline, spacing: 5) {
+                            Text(tx).font(.system(size: 21, weight: .bold)).fixedSize()
+                            if let sub = p.sub { Text(sub).font(.system(size: 11)).foregroundStyle(ColorDelReloj.tenue).lineLimit(1) }
+                        }
                     }
-                    HStack {
-                        Text(p.t == "e" && !p.porDistancia ? "Toca para cambiar" : "").font(.system(size: 9.5)).foregroundStyle(Color(white: 0.48))
-                        Spacer(minLength: 0)
-                        PulsoChico(bpm: modelo.pulso)
-                    }
-                    Spacer(minLength: 0)
-                    BotonAncho(texto: "Listo", simbolo: "checkmark", fondo: ColorDelReloj.verde, letra: Color(red: 0, green: 0.08, blue: 0.05), alto: 32) { modelo.listo() }
+                    // «Por lado» aparte y en blanco: es lo que más se olvida.
+                    if p.lado == true { Text("Por lado").font(.system(size: 11, weight: .bold)) }
+                    if let mt = p.mt { Text(mt).font(.system(size: 11)).foregroundStyle(ColorDelReloj.tenue).lineLimit(1) }
+                } else if let texto = p.texto, !texto.isEmpty {
+                    Text(texto).font(.system(size: 11)).foregroundStyle(ColorDelReloj.tenue).lineLimit(2)
                 }
-                if e.pausadoEn != nil { CapaDePausa() }
+                Spacer(minLength: 0)
+                HStack {
+                    Text(conTarjeta ? "Toca para cambiar" : "").font(.system(size: 9.5)).foregroundStyle(Color(white: 0.48))
+                    Spacer(minLength: 0)
+                    PulsoChico(bpm: modelo.pulso)
+                }
+                BotonAncho(texto: "Listo", simbolo: "checkmark", fondo: ColorDelReloj.verde, letra: Color(red: 0, green: 0.08, blue: 0.05), alto: 32) { modelo.listo() }
             }
         }
+    }
+}
+
+/// El número grande de una cuenta («Faltan 0:32»).
+struct NumeroDeCuenta: View {
+    let texto: String
+    var color: Color = ColorDelReloj.rojo
+    var tamano: CGFloat = 46
+
+    var body: some View {
+        Text(texto).font(.system(size: tamano, weight: .bold, design: .rounded)).monospacedDigit().foregroundStyle(color)
+            .lineLimit(1).minimumScaleFactor(0.6).frame(maxWidth: .infinity)
+    }
+}
+
+/// El 3, 2, 1 antes de que cuente (regla 19: con «Empezar», salvo lo que va por marca).
+struct TresDosUno: View {
+    let falta: Int
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Spacer(minLength: 0)
+            Text("\(max(1, falta))").font(.system(size: 80, weight: .bold, design: .rounded)).foregroundStyle(ColorDelReloj.azul).frame(maxWidth: .infinity)
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+/// Lo que cuenta un tiempo: una plancha, un tramo de bici, una clase, o un límite («20 reps en menos de 60 seg»).
+/// Antes: espera «Empezar» (o arranca solo tras un descanso con tiempo). Durante: «Faltan» y la cuenta; acaba solo (por tiempo) o con «Listo» (un límite).
+struct PasoConCuenta: View {
+    @EnvironmentObject var modelo: ModeloDelEntreno
+
+    var body: some View {
+        if let e = modelo.entreno, let p = e.actual {
+            TimelineView(.periodic(from: .now, by: 1)) { _ in
+                let c = e.corrido(de: p, ahora: ahoraMs())
+                if let c = c, c < 0 {
+                    TresDosUno(falta: Int((-c / 1000).rounded(.up)))
+                } else if let c = c {
+                    corriendo(e, p, c / 1000)
+                } else {
+                    antes(e, p)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func antes(_ e: EntrenoGuardado, _ p: PasoDelReloj) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            cabezaDe(p)
+            Text(p.n).font(.system(size: 14, weight: .bold)).lineLimit(2).minimumScaleFactor(0.85).padding(.top, 2)
+            if p.porTiempo, let seg = p.seg {
+                Text(textoDeSegundos(seg)).font(.system(size: 21, weight: .bold))
+            } else if let r = p.reps {
+                Text("\(r)\u{00A0}\(p.u ?? "reps")").font(.system(size: 21, weight: .bold))
+            } else if let tx = p.tx {
+                Text(tx).font(.system(size: 21, weight: .bold))
+            }
+            if let lim = p.lim { Text("en menos de \(textoDeSegundos(lim))").font(.system(size: 11)).foregroundStyle(ColorDelReloj.tenue) }
+            if p.peso == true, let pv = p.pv { Text("\(textoDeNumero(pv))\u{00A0}\(e.enLibras ? "lb" : "kg")").font(.system(size: 13, weight: .bold)) }
+            if p.lado == true { Text("Por lado").font(.system(size: 11, weight: .bold)) }
+            if let mt = p.mt { Text(mt).font(.system(size: 11)).foregroundStyle(ColorDelReloj.tenue).lineLimit(1) }
+            Spacer(minLength: 0)
+            HStack { Spacer(minLength: 0); PulsoChico(bpm: modelo.pulso) }
+            BotonAncho(texto: "Empezar", alto: 32) { modelo.empieza() }
+        }
+    }
+
+    @ViewBuilder private func corriendo(_ e: EntrenoGuardado, _ p: PasoDelReloj, _ seg: Double) -> some View {
+        if p.porTiempo, let total = p.seg, p.zn != nil, modelo.plan?.rangoDeZona(p.zn) != nil {
+            // Un tramo por tiempo con zona: lo grande es el pulso; lo que falta, abajo.
+            PasoDeZona(faltan: relojDe(Double(total) - seg))
+        } else {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(encabezadoDeLaCuenta(p))
+                    .font(.system(size: 11, weight: .bold)).foregroundStyle(ColorDelReloj.tenue).lineLimit(1)
+                if !p.conLimite, let e = p.en, e.de > 1 { RayitasDeSerie(n: e.n, de: e.de) }
+                Text("Faltan").font(.system(size: 11)).foregroundStyle(ColorDelReloj.tenue).padding(.top, 4)
+                if p.conLimite, let lim = p.lim {
+                    let resta = Double(lim) - seg
+                    NumeroDeCuenta(texto: resta >= 0 ? relojDe(resta) : "+\(relojDe(-resta))", color: resta >= 0 ? ColorDelReloj.rojo : ColorDelReloj.ambar)
+                } else if let total = p.seg {
+                    NumeroDeCuenta(texto: relojDe(Double(total) - seg))
+                }
+                if let mt = p.mt { Text(mt).font(.system(size: 11)).foregroundStyle(ColorDelReloj.tenue).lineLimit(1).frame(maxWidth: .infinity) }
+                if p.cl == true { Text("Sin video en el reloj").font(.system(size: 11)).foregroundStyle(ColorDelReloj.tenue).frame(maxWidth: .infinity) }
+                Spacer(minLength: 0)
+                HStack { Spacer(minLength: 0); PulsoChico(bpm: modelo.pulso) }
+                if p.conLimite {
+                    BotonAncho(texto: "Listo", simbolo: "checkmark", fondo: ColorDelReloj.verde, letra: Color(red: 0, green: 0.08, blue: 0.05), alto: 32) { modelo.listo() }
+                } else {
+                    BotonAncho(texto: "Terminé", fondo: ColorDelReloj.gris, alto: 30) { modelo.termine() }
+                }
+            }
+        }
+    }
+}
+
+/// Arriba de una cuenta: «Burpees · 20 reps» (un límite) o «Plancha · Serie 1 de 3».
+func encabezadoDeLaCuenta(_ p: PasoDelReloj) -> String {
+    if p.conLimite {
+        let cuanto = p.reps.map { "\($0)\u{00A0}\(p.u ?? "reps")" } ?? (p.tx ?? "")
+        return cuanto.isEmpty ? p.n : "\(p.n) · \(cuanto)"
+    }
+    return [p.n, p.cuenta].compactMap { $0 }.joined(separator: " · ")
+}
+
+/// «45 seg», «4 min», «1:30 min».
+func textoDeSegundos(_ s: Int) -> String {
+    if s < 60 { return "\(s)\u{00A0}seg" }
+    if s % 60 == 0 { return "\(s / 60)\u{00A0}min" }
+    return "\(relojDe(Double(s)))\u{00A0}min"
+}
+
+/// El reloj de un Set (AMRAP, EMOM, Tabata, «Por tiempo»): antes, lo que se hace en grande y «Empezar»; durante, «Faltan» (o lo que lleva) y qué toca.
+struct PasoDeSetConReloj: View {
+    @EnvironmentObject var modelo: ModeloDelEntreno
+
+    var body: some View {
+        if let e = modelo.entreno, let p = e.actual, let f = p.f {
+            let titulo = [p.s.map { "Set \($0)" }, p.texto].compactMap { $0 }.joined(separator: " · ")
+            TimelineView(.periodic(from: .now, by: 1)) { _ in
+                let c = e.corrido(de: p, ahora: ahoraMs())
+                if let c = c, c < 0 {
+                    TresDosUno(falta: Int((-c / 1000).rounded(.up)))
+                } else if let c = c {
+                    corriendo(f, titulo, c / 1000)
+                } else {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(titulo).font(.system(size: 11, weight: .bold)).foregroundStyle(ColorDelReloj.tenue).lineLimit(1)
+                        // Lo que hay que memorizar antes de arrancar: uno por línea, en grande.
+                        ForEach(Array(f.l.prefix(4).enumerated()), id: \.offset) { _, linea in
+                            Text(linea).font(.system(size: 14, weight: .bold)).lineLimit(1).minimumScaleFactor(0.8)
+                        }
+                        Spacer(minLength: 0)
+                        HStack { Spacer(minLength: 0); PulsoChico(bpm: modelo.pulso) }
+                        BotonAncho(texto: "Empezar", alto: 32) { modelo.empieza() }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func corriendo(_ f: FormatoDelReloj, _ titulo: String, _ seg: Double) -> some View {
+        let tramos = f.tramos
+        let v = vistaDelSet(f, tramos, seg: seg)
+        let avance = avanceDelSet(f, v, de: tramos.count)
+        let descanso = v.tramo?.descanso == true
+        VStack(alignment: .leading, spacing: 2) {
+            Text(avance.isEmpty ? titulo : avance).font(.system(size: 11, weight: .bold)).foregroundStyle(ColorDelReloj.tenue).lineLimit(1)
+            if f.id == "emom", tramos.count <= 12 { RayitasDeSerie(n: v.i + 1, de: tramos.count) }
+            if descanso {
+                Text(v.tramo?.etiqueta ?? "Descanso").font(.system(size: 14, weight: .bold)).foregroundStyle(ColorDelReloj.verde).padding(.top, 2)
+            } else if let k = v.tramo?.ejercicio, k < f.l.count {
+                // Lo que toca en este intervalo, en grande (un EMOM que se turna).
+                Text(f.l[k]).font(.system(size: 15, weight: .bold)).lineLimit(2).minimumScaleFactor(0.8).padding(.top, 2)
+            } else if let et = v.tramo?.etiqueta {
+                Text(et).font(.system(size: 14, weight: .bold)).padding(.top, 2)
+            }
+            if let restan = v.restan {
+                Text("Faltan").font(.system(size: 11)).foregroundStyle(ColorDelReloj.tenue).padding(.top, 2)
+                NumeroDeCuenta(texto: relojDe(Double(restan)), color: descanso ? ColorDelReloj.verde : ColorDelReloj.rojo)
+            } else {
+                Text(f.tope.map { "Tope \(relojDe(Double($0)))" } ?? "Llevas").font(.system(size: 11)).foregroundStyle(ColorDelReloj.tenue).padding(.top, 2)
+                NumeroDeCuenta(texto: relojDe(Double(v.total)))
+            }
+            if v.tramo?.ejercicio == nil && !descanso {
+                Text(f.l.joined(separator: " · ")).font(.system(size: 10.5)).foregroundStyle(ColorDelReloj.tenue).lineLimit(2).multilineTextAlignment(.center).frame(maxWidth: .infinity)
+            }
+            Spacer(minLength: 0)
+            HStack { Spacer(minLength: 0); PulsoChico(bpm: modelo.pulso) }
+            if v.restan == nil { BotonAncho(texto: "Terminé", fondo: ColorDelReloj.gris, alto: 30) { modelo.termine() } }
+        }
+    }
+}
+
+/// «▲ Más rápido», «● Vas bien», «▼ Más despacio» (o «Más intenso» / «Más suave» con el pulso): color, flecha y palabra, nunca solo el color.
+struct EstadoDeMetaVista: View {
+    let estado: EstadoDeMeta
+    var conPulso = false
+
+    var body: some View {
+        let texto: String = {
+            switch estado {
+            case .bien: return "Vas bien"
+            case .subir: return conPulso ? "Más intenso" : "Más rápido"
+            case .bajar: return conPulso ? "Más suave" : "Más despacio"
+            }
+        }()
+        let simbolo = estado == .bien ? "circle.fill" : estado == .subir ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill"
+        Label(texto, systemImage: simbolo).font(.system(size: 13, weight: .bold)).foregroundStyle(colorDe(estado))
+    }
+}
+
+func colorDe(_ estado: EstadoDeMeta?) -> Color {
+    guard let e = estado else { return .white }
+    return e == .bien ? ColorDelReloj.verde : ColorDelReloj.ambar
+}
+
+/// Un tramo por distancia con ritmo meta: lo grande es el ritmo (lo que decide), luego la meta, y abajo la barra y «Faltan 380 m».
+struct PasoDeRitmo: View {
+    @EnvironmentObject var modelo: ModeloDelEntreno
+
+    var body: some View {
+        if let e = modelo.entreno, let p = e.actual, let meta = p.rit, let rapido = meta.first, let total = p.m {
+            let hechos = modelo.metrosDelPaso ?? 0
+            let estado = estadoDelRitmo(modelo.ritmoAhora, meta: meta)
+            let metaTexto = meta.count > 1 && meta[1] != rapido ? "\(ritmoDe(rapido)) a \(ritmoDe(meta[1]))" : ritmoDe(rapido)
+            VStack(alignment: .leading, spacing: 2) {
+                cabezaDe(p)
+                if let est = estado { EstadoDeMetaVista(estado: est).padding(.top, 2) }
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text(modelo.ritmoAhora.map { ritmoDe($0) } ?? "–:––").font(.system(size: 44, weight: .bold, design: .rounded)).monospacedDigit()
+                        .foregroundStyle(colorDe(estado)).lineLimit(1).minimumScaleFactor(0.7)
+                    Text("/km").font(.system(size: 11, weight: .bold)).foregroundStyle(ColorDelReloj.tenue)
+                }
+                Text("Meta \(metaTexto)").font(.system(size: 11, weight: .bold)).foregroundStyle(ColorDelReloj.tenue)
+                Spacer(minLength: 0)
+                GeometryReader { g in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(ColorDelReloj.gris)
+                        Capsule().fill(Color.white).frame(width: g.size.width * CGFloat(min(1, hechos / max(1, total))))
+                    }
+                }
+                .frame(height: 5)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text("Faltan").font(.system(size: 11)).foregroundStyle(ColorDelReloj.tenue)
+                    Text(faltaTexto(max(0, total - hechos))).font(.system(size: 15, weight: .bold)).monospacedDigit()
+                    Spacer(minLength: 0)
+                    PulsoChico(bpm: modelo.pulso, tamano: 11)
+                }
+                BotonAncho(texto: "Listo", simbolo: "checkmark", fondo: ColorDelReloj.verde, letra: Color(red: 0, green: 0.08, blue: 0.05), alto: 28) { modelo.listo() }
+            }
+        }
+    }
+
+    private func faltaTexto(_ m: Double) -> String {
+        m >= 1000 ? "\(textoDeNumero((m / 100).rounded() / 10))\u{00A0}km" : "\(Int(m.rounded()))\u{00A0}m"
+    }
+}
+
+/// Un tramo con zona del pulso: lo grande es el pulso; la meta en pulsos («Meta 130 a 145»). `faltan`: el tiempo que le queda, si va por tiempo.
+struct PasoDeZona: View {
+    @EnvironmentObject var modelo: ModeloDelEntreno
+    let faltan: String?
+
+    var body: some View {
+        if let e = modelo.entreno, let p = e.actual, let rango = modelo.plan?.rangoDeZona(p.zn) {
+            let estado = estadoDelPulso(modelo.pulso, rango: rango)
+            let zona = (p.zn ?? []).count > 1 && p.zn![1] != p.zn![0] ? "Zonas \(p.zn![0]) a \(p.zn![1])" : "Zona \(p.zn?.first ?? 0)"
+            let meta: String = {
+                switch (rango.lo, rango.hi) {
+                case let (lo?, hi?): return "Meta \(lo) a \(hi)"
+                case (nil, let hi?): return "Meta menos de \(hi)"
+                case (let lo?, nil): return "Meta más de \(lo)"
+                default: return ""
+                }
+            }()
+            VStack(alignment: .leading, spacing: 2) {
+                CabezaDelPaso(texto: "\(p.n) · \(zona)", n: p.en?.n ?? 0, de: p.en?.de ?? 0)
+                if let est = estado { EstadoDeMetaVista(estado: est, conPulso: true).padding(.top, 2) }
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text(modelo.pulso > 0 ? "\(modelo.pulso)" : "––").font(.system(size: 44, weight: .bold, design: .rounded)).monospacedDigit()
+                        .foregroundStyle(colorDe(estado))
+                    Text("lpm").font(.system(size: 11, weight: .bold)).foregroundStyle(ColorDelReloj.tenue).fixedSize()
+                }
+                Text(meta).font(.system(size: 11, weight: .bold)).foregroundStyle(ColorDelReloj.tenue)
+                Spacer(minLength: 0)
+                if let f = faltan {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text("Faltan").font(.system(size: 11)).foregroundStyle(ColorDelReloj.tenue)
+                        Text(f).font(.system(size: 15, weight: .bold)).monospacedDigit()
+                    }
+                    BotonAncho(texto: "Terminé", fondo: ColorDelReloj.gris, alto: 28) { modelo.termine() }
+                } else {
+                    BotonAncho(texto: "Listo", simbolo: "checkmark", fondo: ColorDelReloj.verde, letra: Color(red: 0, green: 0.08, blue: 0.05), alto: 30) { modelo.listo() }
+                }
+            }
+        }
+    }
+}
+
+/// Lo que se pregunta al acabar un Set: «Rondas completas» y luego «Reps sueltas» (como el teléfono), o las reps, calorías o distancia. Con + y − o la corona.
+struct PreguntaDelSetVista: View {
+    @EnvironmentObject var modelo: ModeloDelEntreno
+    @State private var valor: Double = 0
+    @FocusState private var conLaCorona: Bool
+
+    var body: some View {
+        if let q = modelo.preguntaDelSet {
+            VStack(spacing: 3) {
+                Text(q.titulo).font(.system(size: 15, weight: .bold))
+                if let d = q.detalle { Text(d).font(.system(size: 11)).foregroundStyle(ColorDelReloj.tenue) }
+                HStack(spacing: 6) {
+                    Button { valor = max(0, valor - q.salto) } label: {
+                        Image(systemName: "minus").font(.system(size: 15, weight: .bold)).frame(width: 30, height: 30).background(Circle().fill(ColorDelReloj.gris))
+                    }
+                    .buttonStyle(.plain)
+                    Text(textoDeNumero(valor)).font(.system(size: 40, weight: .bold, design: .rounded)).monospacedDigit().frame(maxWidth: .infinity)
+                        .focusable(true)
+                        .focused($conLaCorona)
+                        .digitalCrownRotation($valor, from: 0, through: 9999, by: q.salto, sensitivity: .low, isContinuous: false, isHapticFeedbackEnabled: true)
+                    Button { valor += q.salto } label: {
+                        Image(systemName: "plus").font(.system(size: 15, weight: .bold)).frame(width: 30, height: 30).background(Circle().fill(ColorDelReloj.gris))
+                    }
+                    .buttonStyle(.plain)
+                }
+                Text("Gira la corona").font(.system(size: 10)).foregroundStyle(Color(white: 0.48))
+                Spacer(minLength: 0)
+                if q.otraMas {
+                    BotonAncho(texto: "Siguiente", alto: 30) { modelo.respondeSet(valor) }
+                } else {
+                    BotonAncho(texto: "Guardar", fondo: ColorDelReloj.verde, letra: Color(red: 0, green: 0.08, blue: 0.05), alto: 30) { modelo.respondeSet(valor) }
+                }
+            }
+            .onAppear { valor = q.valor; conLaCorona = true }
+            .onChange(of: q.paso) { _, _ in valor = 0 }
+        }
+    }
+}
+
+/// Lo que dice un límite al tocar «Listo»: «✓ Lo lograste» (verde) o «8 seg de más» (ámbar), y cuánto tardó. Se quita solo en 3 segundos, o al tocarlo.
+struct VeredictoVista: View {
+    @EnvironmentObject var modelo: ModeloDelEntreno
+    let v: VeredictoDelLimite
+
+    var body: some View {
+        ZStack {
+            Color.black
+            VStack(spacing: 3) {
+                Text(v.nombre).font(.system(size: 13, weight: .bold)).lineLimit(1)
+                if v.logrado {
+                    Label("Lo lograste", systemImage: "checkmark").font(.system(size: 17, weight: .bold)).foregroundStyle(ColorDelReloj.verde)
+                } else {
+                    Text("\(v.deMas)\u{00A0}seg de más").font(.system(size: 17, weight: .bold)).foregroundStyle(ColorDelReloj.ambar)
+                }
+                Text("Lo hiciste en").font(.system(size: 11)).foregroundStyle(ColorDelReloj.tenue).padding(.top, 4)
+                Text("\(v.seg)\u{00A0}seg").font(.system(size: 36, weight: .bold, design: .rounded)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+            }
+        }
+        .onTapGesture { modelo.veredicto = nil }
     }
 }
 
@@ -489,7 +917,8 @@ struct AjustaLaSerie: View {
     private func carga() {
         guard let p = paso else { return }
         let a = modelo.ajuste?.clave == p.c ? modelo.ajuste : nil
-        enPeso = p.reps == nil && p.peso == true
+        // Una distancia fija (un sprint de 30 m) no se cambia: solo el peso.
+        enPeso = (p.reps == nil || p.distanciaFija) && p.peso == true
         valor = enPeso ? (a?.peso ?? p.pv ?? 0) : (a?.reps ?? p.rv ?? 0)
     }
 
@@ -521,7 +950,7 @@ struct AjustaLaSerie: View {
                 }
                 .buttonStyle(.plain)
             }
-            if paso?.reps != nil && paso?.peso == true {
+            if paso?.reps != nil && paso?.distanciaFija == false && paso?.peso == true {
                 HStack(spacing: 5) {
                     BotonAncho(texto: "Reps", fondo: enPeso ? ColorDelReloj.gris : ColorDelReloj.azul, alto: 26) { pon(valor); enPeso = false; valor = modelo.ajuste?.reps ?? paso?.rv ?? 0 }
                     BotonAncho(texto: enLibras ? "Lb" : "Kg", fondo: enPeso ? ColorDelReloj.azul : ColorDelReloj.gris, alto: 26) { pon(valor); enPeso = true; valor = modelo.ajuste?.peso ?? paso?.pv ?? 0 }
@@ -618,7 +1047,7 @@ struct PantallaDeDescanso: View {
                         }
                     }
                     if let s = e.siguiente {
-                        let serie = (s.vs ?? 1) > 1 ? ", serie \(s.v ?? 1)" : ""
+                        let serie = s.cuenta.map { ", \($0.lowercased())" } ?? ""
                         Text("Sigue: \(s.n)\(serie)").font(.system(size: 10.5)).foregroundStyle(ColorDelReloj.tenue).lineLimit(1)
                     }
                     Button { modelo.deshaz() } label: {
