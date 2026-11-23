@@ -120,20 +120,35 @@ export interface Revision {
   sinCantidad: Set<string>
   porLado: Set<string>
   dias: { titulo: string; lista: Renglon[] }[]
+  /** Lo que el conector decidió solo y se le dice a la persona en una línea («Supuse: … ¿Cambio algo?»). */
+  supuestos: string[]
+  /** «Así lo verá el atleta», por día (3 a 6 líneas). */
+  vistas: { dia: string; atleta: string[] }[]
 }
 
-export const nuevaRevision = (): Revision => ({ sinFicha: new Set(), sinCantidad: new Set(), porLado: new Set(), dias: [] })
+export const nuevaRevision = (): Revision => ({ sinFicha: new Set(), sinCantidad: new Set(), porLado: new Set(), dias: [], supuestos: [], vistas: [] })
 
 /** Anota en la revisión lo que dejó armar UN día (`diaDesdeEntrada`). */
 export function anotarDia(
   rev: Revision,
   titulo: string,
-  d: { sinFicha: string[]; sinCantidad: string[]; porLado: string[]; lista: Renglon[] },
+  d: { sinFicha: string[]; sinCantidad: string[]; porLado: string[]; lista: Renglon[]; supuestos?: string[]; vista?: string[] },
 ) {
   d.sinFicha.forEach((n) => rev.sinFicha.add(n))
   d.sinCantidad.forEach((n) => rev.sinCantidad.add(n))
   d.porLado.forEach((n) => rev.porLado.add(n))
   rev.dias.push({ titulo, lista: d.lista })
+  rev.supuestos.push(...(d.supuestos ?? []))
+  if (d.vista?.length) rev.vistas.push({ dia: titulo, atleta: d.vista })
+}
+
+/** Lo que se le dice a la persona al guardar: los supuestos y cómo lo verá el atleta (hasta 7 días; un plan largo, solo los primeros). */
+export function lineasDeRevision(rev: Revision) {
+  return {
+    ...(rev.supuestos.length ? { supuestos: rev.supuestos } : {}),
+    ...(rev.vistas.length ? { asi_lo_vera_el_atleta: rev.vistas.slice(0, 7) } : {}),
+    ...(rev.vistas.length > 7 ? { nota_vista: `Y ${rev.vistas.length - 7} sesiones más.` } : {}),
+  }
 }
 
 /**

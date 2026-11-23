@@ -13,9 +13,9 @@ import {
   elegirPrograma, equipoDe, faseNueva,
   fasesDe, firmasDeGrupos, guardarFases, idDeSesion, miProgramaCon, nombreDelDia, nombresDeEjercicios, planesActivos, programaQueEdito, planQueEdito,
   repertorioVisible, resumenDelPlan, semanaNueva, siguienteNumFase, siguienteNumSemana, tipoDePlan, normalizar, claveDeRegistro,
-  type Miembro, type Plan, type Programa, type SesionEntrada,
+  type Miembro, type Plan, type Programa, type SesionEntrada, asiLoVera, traeEditorNuevo, CAMPOS_DE_EDITOR,
 } from './plan.ts'
-import { anotarDia, equiposMasUsados, exigirRespuestas, nuevaRevision, preguntaDeDatos, type Revision } from './preguntas.ts'
+import { anotarDia, equiposMasUsados, exigirRespuestas, lineasDeRevision, nuevaRevision, preguntaDeDatos, type Revision } from './preguntas.ts'
 import { cursorDe, estadoDe, registrosDe, ubicarDia, ubicarEnTodos } from './atleta.ts'
 import { repertorioConFicha } from './comunes.ts'
 import { cursorAlDia, dondeVa, estaEnPausa, historialDePeso, moverPlanA, reparaCursor, pausarPlan, reanudarPlan } from './app/training-utils.js'
@@ -24,6 +24,7 @@ import { desdeKilos } from './app/unidades.js'
 import { CAT_COLORS, COLORES_TIPO } from './app/theme.js'
 import { cargaCatalogo, sugiereIcono } from './app/iconosDeTipo.js'
 import { claseDe } from './app/clases.js'
+import { guiaDeEscritura } from './app/sesionEnPalabras.js'
 
 export const SOLO_LEER = { readOnlyHint: true, destructiveHint: false, openWorldHint: false } as const
 export const ESCRIBE = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } as const
@@ -87,9 +88,69 @@ const EJERCICIO = z.object({
   formato: FORMATO.optional().describe('Formato con reloj de ESTE grupo (o del ejercicio si va solo): AMRAP, EMOM, Tabata, intervalos, fartlek… Basta ponerlo en UN ejercicio del grupo y vale para todos. Sustituye a "series". Si el día ya lo traía (ver_plan_de_atleta), mándalo igual o se pierde.'),
 })
 
+/* LOS EDITORES NUEVOS (conector v2, 23 nov 2026). Las opciones salen de los catálogos de los editores (`guiaDeEscritura`), no de una lista
+   escrita aquí: si el editor gana una pieza, aparece sola. Los valores van en palabras («1 km», «4:20-4:30», «zona 2», «2 min»). */
+const GUIA = guiaDeEscritura()
+const TEXTO = z.union([z.string(), z.number()]).transform(String)
+const EJ_DE_SET = z.object({
+  nombre: z.string(), cuanto: z.string().optional().describe('«30 m», «10 reps», «20 seg».'), descanso: z.string().optional().describe('«regreso caminando», «30 seg», «sin descanso».'),
+  por_lado: z.boolean().optional(), peso: z.string().optional(), material: z.union([z.string(), z.array(z.string())]).optional(), nota: z.string().optional(),
+}).passthrough()
+const SETS_DE_EJ = z.array(z.object({ veces: TEXTO.optional(), ejercicios: z.array(EJ_DE_SET), descanso: z.string().optional().describe('Entre este Set y el siguiente.') }).passthrough())
+const TRAMO = z.object({ cuanto: z.string(), intensidad: z.string().optional() }).passthrough()
+const PIEZA = z.object({
+  pieza: z.string().describe(`La pieza, como en «Agregar» del editor. ${GUIA.piezas}.`),
+  deporte: z.string().optional().describe('Solo Triatlón: nado, bici o correr (o usa la pieza con prefijo, ej. "bici-continua").'),
+  cuanto: z.string().optional().describe('Cuánto: «15 min», «5 km», «400 m», «20 cal». En Intervalos es el total; en Transición, «limite».'),
+  intensidad: z.string().optional().describe(`${GUIA.intensidades}. Ej.: «zona 2», «4:20-4:30» (min/km), «1:45 /100 m», «250-280 W», «140-150 pulsaciones», «RPE 7», «al máximo», «libre», «en 0:45».`),
+  forma: z.string().optional().describe('Calentamiento y Enfriamiento: trote, guiado (un video) o ejercicios. En Triatlón también nado o bici.'),
+  video: z.string().optional().describe('Calentamiento guiado: el nombre de un calentamiento guiado del repertorio, o una liga.'),
+  como: z.string().optional().describe('Pieza continua: constante, progresiva o intervalos.'),
+  tramos: z.array(TRAMO).optional().describe('Intervalos o progresiva: los renglones en orden. Todos con la MISMA forma de intensidad (todos pace, o todos zona…).'),
+  veces: TEXTO.optional().describe('Intervalos: cuántas veces se repiten los tramos (ej. 8 × [1 km + 2 min]).'),
+  repite: z.boolean().optional().describe('Intervalos con total: repetir los tramos hasta completar «cuanto» (por defecto sí).'),
+  final: z.string().optional().describe('Intervalos: la intensidad de lo que falte para el total.'),
+  empieza: z.string().optional(), termina: z.string().optional(), cada: z.string().optional().describe('Progresiva: empieza en, termina en, cada cuánto cambia («2 km»).'),
+  sprints: z.array(z.object({ cuanto: z.string(), veces: TEXTO.optional(), descanso: z.string().optional().describe('«2 min», «30 seg», «hasta recuperarse».') }).passthrough()).optional().describe('Sprints o Series: cada renglón con cuántas veces.'),
+  series: z.object({ veces: TEXTO, descanso: z.string().optional() }).optional().describe('Sprints: repetir el bloque N veces con descanso entre series.'),
+  ejercicio: z.string().optional().describe('Sprints: el ejercicio del repertorio (ej. «Sprint con trineo»).'),
+  material: z.string().optional(), peso: z.string().optional(), limite: z.string().optional().describe('Tiempo límite: «en menos de 6 seg».'),
+  sets: SETS_DE_EJ.optional().describe('Técnica, o Calentamiento con forma ejercicios: Sets de ejercicios del repertorio.'),
+  ejercicios: z.array(EJ_DE_SET).optional().describe('Atajo: un solo Set con estos ejercicios (y «veces»).'),
+  cadencia: TEXTO.optional(), caminadora: z.object({ kmh: TEXTO.optional(), inclinacion: TEXTO.optional() }).optional(),
+  resistencia: TEXTO.optional(), postura: z.string().optional(), terreno: z.string().optional(), activo: z.boolean().optional().describe('Descanso: caminando en vez de parado.'),
+  nota: z.string().optional(),
+}).passthrough()
+const RENGLON_HIBRIDO = z.object({
+  nombre: z.string(), cuanto: z.string().optional().describe('«10 reps», «500 m», «1 km», «45 seg», «15 cal».'), peso: z.string().optional().describe('«60 kg», «70% 1RM».'),
+  intensidad: z.string().optional().describe(`${GUIA.intensidades_hibrido}. Ej.: «RPE 8», «zona 3», «4:30-4:45», «1:55 /500 m».`),
+  descanso: z.string().optional(), por_lado: z.boolean().optional(), limite: z.string().optional().describe('«en menos de 60 seg».'), nota: z.string().optional(),
+  como: z.string().optional().describe('Cardio: normal, sprints, progresiva o intervalos.'), sprints: z.array(z.object({ cuanto: z.string(), veces: TEXTO.optional(), descanso: z.string().optional() }).passthrough()).optional(),
+  tramos: z.array(TRAMO).optional(), repite: z.boolean().optional(), material: z.string().optional(), cadencia: TEXTO.optional(), maquina: TEXTO.optional(),
+  por_vuelta: z.array(z.object({ intensidad: z.string().optional(), peso: z.string().optional() })).optional(),
+}).passthrough()
+const SET_HIBRIDO = z.object({
+  formato: z.string().optional().describe(`${GUIA.formatos_hibrido}.`), veces: TEXTO.optional().describe('Se repite: cuántas vueltas.'), minutos: TEXTO.optional().describe('AMRAP o EMOM: cuántos minutos.'),
+  descanso_entre_vueltas: z.string().optional(), descanso_despues: z.string().optional(), ejercicios: z.array(RENGLON_HIBRIDO),
+}).passthrough()
+const DRILL = z.object({
+  nombre: z.string(), veces: TEXTO.optional(), por_lado: z.boolean().optional(), reps: TEXTO.optional(), distancia: z.string().optional(), tiempo: z.string().optional(),
+  descanso: z.string().optional(), peso: z.string().optional(), nota: z.string().optional(),
+}).passthrough()
+const CALENTAMIENTO = z.object({ forma: z.string().optional().describe('guiado o ejercicios'), video: z.string().optional(), cuanto: z.string().optional(), sets: SETS_DE_EJ.optional(), ejercicios: z.array(EJ_DE_SET).optional(), veces: TEXTO.optional() }).passthrough()
+
 export const SESION = {
   nombre: z.string().optional().describe('Nombre de la sesión, ej.: "Tren inferior — fuerza".'),
-  tipo: z.string().optional().describe('gym, neural, recovery, cancha, tests, equipo, correr, bici, natación, yoga, movilidad, terapia, clase, off (descanso), o uno propio.'),
+  tipo: z.string().optional().describe('gym, neural, recovery, cancha, tests, equipo, correr, bici, natación, yoga, movilidad, terapia, clase, off (descanso), o uno propio. Sin él, sale de la Disciplina.'),
+  disciplina: z.string().optional().describe(`Decide el editor: ${GUIA.disciplinas}. Running, Cycling, Swimming y Triatlón van en "piezas"; Híbrido en "sets"; Deporte en "deporte"; Gym, Libre, Movilidad y Clase en "ejercicios".`),
+  lugar: z.string().optional().describe('Solo Cycling: "ruta" o "estatica" (por defecto estática).'),
+  piezas: z.array(PIEZA).optional(),
+  sets: z.array(SET_HIBRIDO).optional().describe('Híbrido: la cadena de Sets.'),
+  deporte: z.array(DRILL).optional().describe(`Deporte: los ejercicios con su Ejemplo y Explicación del repertorio. Campos: ${GUIA.campos_deporte}.`),
+  calentamiento: CALENTAMIENTO.optional().describe('Gym, Clase o Deporte: calentamiento guiado (video) o con ejercicios, antes del primer Set.'),
+  enfriamiento: CALENTAMIENTO.optional().describe('Solo Deporte.'),
+  clase: z.union([z.string(), z.object({ url: z.string(), duracion: z.number().optional(), inicio: z.number().optional(), fin: z.number().optional() })]).optional()
+    .describe('Una clase en video: la liga (de pedir_subida o de YouTube/Vimeo). Si no la mandas al reescribir, la que había se queda.'),
   ejercicios: z.array(EJERCICIO).optional(),
   quitar_clase: z.boolean().optional().describe('Solo en editar_dia, y solo si la sesión traía una clase en video (clase_en_video al leer el día) y la persona pidió quitarla. Si no lo mandas, la clase se queda.'),
 }
@@ -186,6 +247,12 @@ const avisoSinFicha = (sinFicha: Set<string>) => (sinFicha.size
   : {})
 
 /** Lo que se guardó sin ficha o sin cantidad porque la persona lo confirmó: se le dice. */
+/** Cuánto trae una sesión, en pocas palabras: piezas de la lista, sets del Híbrido, drills de Deporte o ejercicios de Gym. */
+export const contenidoCorto = (d: any) => (d.tramos?.length ? `${d.tramos.length} piezas`
+  : d.hibrido?.sets?.length ? `${d.hibrido.sets.length} sets`
+  : d.deporte?.items?.length ? `${d.deporte.items.length} ejercicios`
+  : `${(d.exercises ?? []).filter((e: any) => !e.isNote).length} ejercicios`)
+
 export const avisosDeRespuestas = (r: { sinFicha: string[]; sinCantidad: string[] }) => ({
   ...avisoSinFicha(new Set(r.sinFicha)),
   ...(r.sinCantidad.length ? { sin_cantidad: r.sinCantidad, nota_sin_cantidad: 'Estos ejercicios se guardaron sin repeticiones ni tiempo, como la persona dijo.' } : {}),
@@ -688,6 +755,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       tipo: tipo === 'rutina' ? 'rutina que se repite' : `${nuevas.length} fase(s), ${semanas} semana(s)`,
       ...(existente ? { reemplazo: `El plan anterior "${existente.title}" quedó en el historial.` } : {}),
       ...avisosDeRespuestas(aceptado),
+      ...lineasDeRevision(rev),
       mensaje: `Ya lo ve ${nombreDe(persona)} en su app.`,
     })
   }))
@@ -719,9 +787,15 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     const antes = (fases[fIdx].weekData[sIdx]?.days ?? []).filter((d: any) => d.day === clave)
     const nuevos = sesiones.map((s: any, i: number) => {
       const armado = diaDesdeEntrada(clave, s, repertorio)
-      anotarDia(rev, `${NOMBRE_DIA[clave]}${s.nombre ? ` · ${s.nombre}` : ''}`, armado)
       const previa = antes.find((d: any) => s.nombre && d.name && mismoTexto(d.name, s.nombre)) ?? antes[i]
-      if (claseDe(previa) && s.quitar_clase !== true) (armado.dia as any).clase = structuredClone(previa.clase)
+      if (claseDe(previa) && s.quitar_clase !== true && s.clase === undefined) (armado.dia as any).clase = structuredClone(previa.clase)
+      /* Lo de un editor nuevo (piezas de Running, sets del Híbrido, drills de Deporte, calentamiento) tampoco se pierde si la IA reescribe la
+         sesión sin mandarlo (solo el nombre, o el tipo). Si manda ejercicios de Gym, la sesión pasa a ser de Gym: no se deja nada escondido. */
+      if (previa && !traeEditorNuevo(s) && !(s.ejercicios ?? []).length) {
+        for (const k of CAMPOS_DE_EDITOR) if (previa[k] !== undefined) (armado.dia as any)[k] = structuredClone(previa[k])
+        armado.vista = asiLoVera(armado.dia)
+      }
+      anotarDia(rev, `${NOMBRE_DIA[clave]}${s.nombre ? ` · ${s.nombre}` : ''}`, armado)
       return armado.dia
     })
     // Leer un día y reescribirlo no debe volver a discutir lo que el plan ya tenía; lo nuevo que falte, sí se pregunta, todo junto.
@@ -742,8 +816,9 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       atleta: nombreDe(persona),
       ...programa,
       cambio: `${fases[fIdx].name} · semana ${w.num} · ${NOMBRE_DIA[clave]}`,
-      ahora: nuevos.length ? nuevos.map((d: any) => `${d.name} (${claseDe(d) ? 'clase en video + ' : ''}${d.exercises.filter((e: any) => !e.isNote).length} ejercicios)`) : 'sin sesión',
+      ahora: nuevos.length ? nuevos.map((d: any) => `${d.name} (${claseDe(d) ? 'clase en video + ' : ''}${contenidoCorto(d)})`) : 'sin sesión',
       ...avisosDeRespuestas(aceptado),
+      ...lineasDeRevision(rev),
       deshacer: 'Si no quedó bien: deshacer_cambio_del_plan.',
     })
   }))

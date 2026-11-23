@@ -444,7 +444,7 @@ export function textoIntensidadHibrido(int) {
   return { rpe: int.a ? `RPE ${int.a}` : '', rir: int.a ? `RIR ${int.a}` : '', zona: int.a ? `zona ${int.a}` : '', pace: r(''), pulso: r(' pulsaciones'), w: r(' W'), r500: r(' /500 m'), tope: 'al máximo', tiempo: int.a ? `en ${int.a}` : '' }[int.tipo] ?? '';
 }
 
-function hibridoDesdePalabras(s, { busca, supuestos }) {
+function hibridoDesdePalabras(s, { busca }) {
   const sets = (s.sets ?? []).map((st, si) => {
     const donde = `Set ${si + 1}`;
     const set = setNuevo();
@@ -455,7 +455,6 @@ function hibridoDesdePalabras(s, { busca, supuestos }) {
     if (st.descanso_despues) { const c = leeCuanto(st.descanso_despues, [['seg', 'seg'], ['min', 'min']]); set.descS = { q: c.q, u: c.u }; }
     set.items = (st.ejercicios ?? []).map((ej, ii) => {
       const e = busca(ej.nombre);
-      if (!e) supuestos.push(`${donde}: «${ej.nombre}» se guardó sin ficha del repertorio`);
       const it = renglonNuevo(e ?? { name: String(ej.nombre) }, Array.isArray(e?.disciplinas) ? e.disciplinas : []);
       if (!e) it.name = String(ej.nombre);
       if (ej.cuanto) Object.assign(it, leeCuanto(ej.cuanto, UNIDADES_HIBRIDO));
@@ -510,10 +509,9 @@ function hibridoEnPalabras(h) {
 /* DEPORTE (`day.deporte`)                                             */
 /* ------------------------------------------------------------------ */
 
-function deporteDesdePalabras(s, { busca, supuestos }) {
-  const items = (s.ejercicios ?? []).map((ej) => {
+function deporteDesdePalabras(s, { busca }) {
+  const items = (s.deporte ?? []).map((ej) => {
     const e = busca(ej.nombre);
-    if (!e) supuestos.push(`«${ej.nombre}» se guardó sin ficha del repertorio (sin Ejemplo ni Explicación)`);
     const it = itemDeDeporte(e ?? { id: undefined, name: String(ej.nombre) });
     if (ej.veces) it.veces = leeVeces(String(ej.veces), 99);
     if (ej.por_lado) it.lado = true;
@@ -527,13 +525,13 @@ function deporteDesdePalabras(s, { busca, supuestos }) {
     }
     return it;
   });
-  if (!items.length) throw new Error('El Deporte necesita «ejercicios».');
+  if (!items.length) throw new Error('El Deporte necesita «deporte»: la lista de sus ejercicios (drills).');
   return { items, ...(s.nota ? { nota: String(s.nota) } : null) };
 }
 
 function deporteEnPalabras(d) {
   return {
-    ejercicios: (d?.items ?? []).map((it) => ({
+    deporte: (d?.items ?? []).map((it) => ({
       nombre: it.name, ...(it.veces ? { veces: String(it.veces) } : null), ...(it.lado ? { por_lado: true } : null), ...(it.reps ? { reps: String(it.reps) } : null),
       ...(it.dist?.q ? { distancia: `${it.dist.q} ${it.dist.u}` } : null), ...(it.tiempo?.q ? { tiempo: `${it.tiempo.q} ${it.tiempo.u}` } : null),
       ...(it.desc?.q ? { descanso: `${it.desc.q} ${it.desc.u}` } : null), ...(textoPeso(it.peso) ? { peso: textoPeso(it.peso) } : null), ...(it.nota ? { nota: it.nota } : null),
@@ -558,7 +556,8 @@ const calentamientoEnPalabras = (c) => (c ? { forma: c.forma ?? 'video', ...(c.f
 
 /**
  * La sesión en palabras → lo que guarda el editor en el día (solo lo de su editor; el nombre, el tipo y los ejercicios de Gym los pone el
- * conector como siempre). `s = { disciplina, lugar?, piezas? | sets? | ejercicios? (Deporte), calentamiento?, enfriamiento?, clase? }`.
+ * conector como siempre). `s = { disciplina, lugar?, piezas? | sets? | deporte?, calentamiento?, enfriamiento?, clase? }`. Un ejercicio que no
+ * está en el repertorio se guarda con su nombre: `busca` es quien avisa (el conector lo pregunta antes de guardar).
  * → `{ dia, supuestos }`. Lanza `Error` con lo que falta, para que la IA lo corrija.
  */
 export function sesionDesdePalabras(s, { busca = () => null } = {}) {

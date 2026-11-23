@@ -14,6 +14,9 @@ import { lapsosDe, parcheDeLapsos, aLapsos, comoEjercicio, MAX_LAPSOS } from './
 import { limpiaFormato, resumenDeFormato, textoDeResultado } from './app/formatos.js'
 import { CAT_COLORS, tipoDeSesion } from './app/theme.js'
 import { claseDe, duracionTexto } from './app/clases.js'
+import { sesionDesdePalabras, palabrasDeSesion } from './app/sesionEnPalabras.js'
+import { pasosDeLaSesion } from './app/entreno.js'
+import { pasosParaElReloj } from './app/relojSinTelefono.js'
 import { adaptadorDeRegistros, esFilaDePegadas, fasesConPegadas, reglasDe } from './app/pegadas.js'
 
 /**
@@ -458,6 +461,9 @@ export function describirDia(fase: any, semana: any, diaIdx: number, registro?: 
     descanso: esDescanso(dia),
     // Una sesión puede traer una clase en video arriba de sus ejercicios (`src/lib/clases.js`). editar_dia la conserva; la IA solo la quita si se lo piden.
     ...(claseDe(dia) ? { clase_en_video: duracionTexto(claseDe(dia).duracion) || 'sí (sin duración conocida)' } : {}),
+    // Lo de los editores nuevos (Running, Cycling, Swimming, Triatlón, Híbrido, Deporte, calentamiento), en las MISMAS palabras que se escriben:
+    // editar_dia lo puede mandar tal cual de vuelta.
+    ...enPalabras(dia),
     ejercicios,
     ...(registro?.formatos && Object.keys(registro.formatos).length ? {
       // Lo que anotó el atleta de cada Set con formato; la llave es la `n` de su primer ejercicio.
@@ -471,6 +477,12 @@ export function describirDia(fase: any, semana: any, diaIdx: number, registro?: 
       ...(registro.notes ? { notas_del_atleta: registro.notes } : {}),
     } : { hecha: false }),
   }
+}
+
+/** Lo de los editores nuevos de un día, en palabras (sin la clase, que ya va como `clase_en_video`). Vacío si no tiene. */
+export function enPalabras(dia: any): Record<string, unknown> {
+  const { clase: _c, ...resto } = palabrasDeSesion(dia ?? {}) as unknown as Record<string, unknown>
+  return Object.keys(resto).length > 1 || (resto.disciplina && dia?.disciplina) ? resto : {}
 }
 
 export function nombreDelDia(dia: any): string {
@@ -555,6 +567,45 @@ export interface SesionEntrada {
   nombre?: string
   tipo?: string
   ejercicios?: EjercicioEntrada[]
+  // Los editores nuevos (conector v2, 23 nov 2026): la sesión en palabras, ver `app/sesionEnPalabras.js`.
+  disciplina?: string
+  lugar?: string
+  piezas?: any[]
+  sets?: any[]
+  deporte?: any[]
+  calentamiento?: any
+  enfriamiento?: any
+  clase?: any
+}
+
+/** Lo de la sesión que arma un editor nuevo (lista, cadena, deporte, calentamiento o clase), y no los ejercicios de Gym. */
+export const LLAVES_DE_EDITOR = ['disciplina', 'lugar', 'piezas', 'sets', 'deporte', 'calentamiento', 'enfriamiento', 'clase'] as const
+export const traeEditorNuevo = (s: any) => LLAVES_DE_EDITOR.some((k) => s?.[k] !== undefined && s?.[k] !== null)
+/** Lo que guarda un editor nuevo en el día: se conserva al reescribir una sesión que no lo mandó (como la clase en video). */
+export const CAMPOS_DE_EDITOR = ['disciplina', 'lugar', 'tramos', 'hibrido', 'deporte', 'calentamiento', 'claseExtra', 'claseModo'] as const
+
+// El tipo de sesión cuando la IA no lo dice: el que corresponde a su Disciplina (y se le dice al coach).
+const TIPO_DE_DISCIPLINA: Record<string, string> = { libre: 'gym', pesas: 'gym', hyrox: 'gym', correr: 'correr', bici: 'bici', nadar: 'natacion', triatlon: 'correr', movilidad: 'movilidad', clase: 'clase', deporte: 'football' }
+
+/** «Así lo verá el atleta»: 3 a 6 líneas con los pasos del entreno guiado (los mismos que ve en la app) y si llega al Apple Watch. */
+export function asiLoVera(dia: any): string[] {
+  let plan: any
+  try { plan = pasosDeLaSesion(dia) } catch { return [] }
+  const trabajo = (plan?.pasos ?? []).filter((x: any) => x.tipo !== 'descanso')
+  if (!trabajo.length) return []
+  const grupos: { nombre: string; n: number; texto: string }[] = []
+  for (const x of trabajo) {
+    const texto = [x.texto, x.meta?.texto && !String(x.texto ?? '').includes(x.meta.texto) ? x.meta.texto : null].filter(Boolean).join(' · ')
+    const ultimo = grupos[grupos.length - 1]
+    if (ultimo && ultimo.nombre === x.nombre) ultimo.n += 1
+    else grupos.push({ nombre: String(x.nombre ?? 'Paso'), n: 1, texto })
+  }
+  const lineas = grupos.slice(0, 5).map((g) => `${g.nombre}${g.n > 1 ? ` ×${g.n}` : ''}${g.texto ? `: ${g.texto}` : ''}`)
+  if (grupos.length > 5) lineas.push(`… y ${grupos.length - 5} partes más`)
+  let reloj: any[] = []
+  try { reloj = pasosParaElReloj(dia) } catch { reloj = [] }
+  lineas.push(reloj.length ? `Apple Watch: sí, ${reloj.length} pasos` : 'Apple Watch: no llega (la sesión es demasiado larga para el reloj)')
+  return lineas
 }
 
 /**
@@ -565,7 +616,8 @@ export interface SesionEntrada {
 export async function repertorioVisible(quien: Quien, coachDe?: string | null) {
   const { data: masterId } = await quien.db.rpc('master_id')
   // Con equipo, músculos y categoría: es lo que se enseña de cada «parecido» cuando falta preguntar (`preguntas.ts`).
-  let q = quien.db.from('exercises').select('id, name, created_by, equipment, muscle_primary, category:exercise_categories(name)')
+  // La ficha completa de los editores nuevos (medida, carga_tipo, disciplinas, guiado…): el Híbrido arma cada renglón con ella, como el editor.
+  let q = quien.db.from('exercises').select('id, name, created_by, equipment, muscle_primary, medida, carga_tipo, disciplinas, guiado, duracion_s, video_url, video_link, category:exercise_categories(name)')
   if (quien.rol !== 'master') {
     const duenos = [masterId, coachDe ?? (quien.rol === 'atleta' ? quien.coachId : quien.id)].filter(Boolean)
     q = q.in('created_by', duenos as string[])
@@ -582,8 +634,19 @@ export function firmasDeGrupos(plan: Plan | null): Set<string> {
 
 /** Los nombres de ejercicio que ya tiene un plan, en cualquier fase, semana y día. */
 export function nombresDeEjercicios(plan: Plan | null): string[] {
-  return fasesDe(plan).flatMap((f: any) => (f.weekData ?? []).flatMap((w: any) => (w.days ?? []).flatMap((d: any) =>
-    (d.exercises ?? []).filter((e: any) => !e.isNote && e.name).map((e: any) => String(e.name)))))
+  return fasesDe(plan).flatMap((f: any) => (f.weekData ?? []).flatMap((w: any) => (w.days ?? []).flatMap((d: any) => nombresDelDia(d))))
+}
+
+/** Los ejercicios de un día: los de Gym y los de los editores nuevos (técnica, sprints, Híbrido, Deporte, calentamiento con ejercicios). */
+export function nombresDelDia(d: any): string[] {
+  const deSets = (sets: any[]) => (sets ?? []).flatMap((st: any) => (st.items ?? []).map((it: any) => it.name))
+  return [
+    ...(d.exercises ?? []).filter((e: any) => !e.isNote && e.name).map((e: any) => e.name),
+    ...(d.tramos ?? []).flatMap((x: any) => [...deSets(x.sets), x.ej?.name]),
+    ...(d.hibrido?.sets ?? []).flatMap((st: any) => (st.items ?? []).map((it: any) => it.name)),
+    ...(d.deporte?.items ?? []).map((it: any) => it.name),
+    ...deSets(d.calentamiento?.sets), ...deSets(d.deporte?.cal?.sets), ...deSets(d.deporte?.calma?.sets),
+  ].filter(Boolean).map(String)
 }
 
 const UNIDADES_VALIDAS = new Set(MEDIDAS.map((m: any) => m.id))
@@ -755,18 +818,47 @@ export function diaDesdeEntrada(
     if (miembros.length) (miembros[miembros.length - 1] as any).descansoSet = descanso
   })
   const tipo = tipoDesdeTexto(sesion.tipo)
-  const dia = {
+  const dia: Record<string, any> = {
     day: diaSemana,
     name: sesion.nombre?.trim() || 'Sesión',
     ...tipo,
     exercises,
+  }
+  /* Los editores nuevos (conector v2): la sesión en palabras se traduce a la forma EXACTA del editor (`app/sesionEnPalabras.js`). Un ejercicio que
+     no está en el repertorio se anota en `sinFicha`, como los de Gym: se pregunta antes de guardar. */
+  const supuestos: string[] = []
+  const nuevo = traeEditorNuevo(sesion)
+  if (nuevo) {
+    const busca = (n: string) => {
+      const f = repertorio.find((r) => mismoTexto(r.name, n)) ?? repertorio.find((r) => mismoNombre(r.name, n))
+      if (!f) sinFicha.push(n)
+      return f ?? null
+    }
+    let r: { dia: Record<string, unknown>; supuestos: string[] }
+    try {
+      r = sesionDesdePalabras({ disciplina: sesion.disciplina, lugar: sesion.lugar, piezas: sesion.piezas, sets: sesion.sets, deporte: sesion.deporte,
+        calentamiento: sesion.calentamiento, enfriamiento: sesion.enfriamiento, clase: sesion.clase }, { busca } as any) as any
+    } catch (e) {
+      throw new Aviso(`«${dia.name}»: ${(e as Error).message}`)
+    }
+    for (const [k, v] of Object.entries(r.dia)) if (v !== undefined) dia[k] = v
+    supuestos.push(...r.supuestos)
+    if (!sesion.tipo && dia.disciplina && TIPO_DE_DISCIPLINA[dia.disciplina]) {
+      Object.assign(dia, tipoDesdeTexto(TIPO_DE_DISCIPLINA[dia.disciplina]))
+      supuestos.push(`«${dia.name}»: tipo de sesión ${(CAT_COLORS as any)[dia.cat]?.label ?? dia.cat} (por su Disciplina)`)
+    }
+  }
+  // Así lo verá el atleta. Una sesión de un editor nuevo que no le da ningún paso es un error: no se guarda y se dice qué falta.
+  const vista = asiLoVera(dia)
+  if (nuevo && !vista.length && !sinFicha.length) {
+    throw new Aviso(`«${dia.name}» quedó vacía para el atleta: le falta lo que se hace (cuánto en cada pieza, o los ejercicios de cada Set).`)
   }
   // Un grupo con reloj (AMRAP, EMOM…) ya dice cuánto dura: sus ejercicios no necesitan cantidad.
   const sinCantidadFinal = sinCantidad.filter((x) => !(x.grupo != null && formatosDeGrupo.has(x.grupo))).map((x) => x.nombre)
   const lista: Renglon[] = exercises.filter((ex: any) => !ex.isNote).map((ex: any) => ({
     nombre: String(ex.name), grupo: ex.set ?? null, series: String(ex.sets ?? ''), cantidad: String(ex.reps ?? ''), porLado: ex.porLado === true,
   }))
-  return { dia, sinFicha, sinCantidad: sinCantidadFinal, porLado, lista }
+  return { dia, sinFicha, sinCantidad: sinCantidadFinal, porLado, lista, supuestos, vista }
 }
 
 /**

@@ -9,7 +9,7 @@ import {
 import {
   buscarFase, buscarSemana, describirDia, describirSemana, diaDesdeEntrada, fasesDe, guardarFases, normalizar, planQueEdito, repertorioVisible, tipoDePlan,
 } from './plan.ts'
-import { anotarDia, exigirRespuestas, nuevaRevision } from './preguntas.ts'
+import { anotarDia, exigirRespuestas, lineasDeRevision, nuevaRevision } from './preguntas.ts'
 import { claseDe } from './app/clases.js'
 import { dondeVa } from './app/training-utils.js'
 import { cursorDe, estadoDe } from './atleta.ts'
@@ -413,6 +413,8 @@ export function herramientasDeMisPlanes(server: McpServer, quien: Quien) {
     let origen: string
     let quitadas = 0
     let aceptado: { sinFicha: string[]; sinCantidad: string[] } | null = null
+    // Los supuestos y «así lo verá el atleta» de lo que se armó desde cero (ver `lineasDeRevision`).
+    let lineas: Record<string, unknown> = {}
 
     if (desde_atleta) {
       /* ---- Camino 1: del plan de un atleta ---- */
@@ -435,11 +437,13 @@ export function herramientasDeMisPlanes(server: McpServer, quien: Quien) {
           return armado.dia
         })
         aceptado = exigirRespuestas({ revision: rev, catalogo: repertorio, plan: null, respuestas: { sin_ficha_ok, sin_cantidad_ok, estructura_ok } })
+        lineas = lineasDeRevision(rev)
         data = workoutDeSesiones(dias)
         tipoFinal = 'workout'
       } else {
         const { nuevas } = armarFasesDeLaIA({ tipo: tipo === 'rutina' ? 'rutina' : 'fases', sesiones, fases }, repertorio, rev)
         aceptado = exigirRespuestas({ revision: rev, catalogo: repertorio, plan: null, respuestas: { sin_ficha_ok, sin_cantidad_ok, estructura_ok } })
+        lineas = lineasDeRevision(rev)
         const normales = normalizar(nuevas)
         if (tipo === 'rutina') {
           data = rutinaDePlan({ phases: normales, ciencia: undefined })
@@ -472,6 +476,7 @@ export function herramientasDeMisPlanes(server: McpServer, quien: Quien) {
       ...(quitadas ? { sesiones_quitadas: `${quitadas} sesión(es) no entraron a la copia por el filtro de tipos.` } : {}),
       ...(repetido ? { aviso: `Ya tenías ${ETIQUETA_DE_TIPO[tipoFinal].toLowerCase()} con ese nombre: quedaron los dos. Si fue sin querer, bórralo con borrar_de_mis_planes (usa el id).` } : {}),
       ...(aceptado ? avisosDeRespuestas(aceptado) : {}),
+      ...lineas,
     })
   }))
 

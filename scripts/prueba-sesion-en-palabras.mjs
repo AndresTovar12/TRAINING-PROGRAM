@@ -122,7 +122,7 @@ const PALABRA = { reps: 'reps', dist: 'distancia', tiempo: 'tiempo', desc: 'desc
 for (const c of CAMPOS_DE_DEPORTE) {
   if (!valorDe[c.k] || !PALABRA[c.k]) { mal(`Deporte: el campo «${c.label}» no tiene lector`); continue; }
   if (UNIDADES_DE_DEPORTE[c.k]) for (const [u] of UNIDADES_DE_DEPORTE[c.k]) if (!EJEMPLO_DE_UNIDAD[u] && u !== 'kg' && u !== 'lb') mal(`Deporte: la unidad ${u} de ${c.label} no tiene lector`);
-  revisa(`Deporte · ${c.label}`, { disciplina: 'deporte', ejercicios: [{ nombre: 'Pase de pecho', veces: 5, por_lado: true, [PALABRA[c.k]]: valorDe[c.k] }] });
+  revisa(`Deporte · ${c.label}`, { disciplina: 'deporte', deporte: [{ nombre: 'Pase de pecho', veces: 5, por_lado: true, [PALABRA[c.k]]: valorDe[c.k] }] });
 }
 
 /* 6. Lo que no se puede: un error claro, sin guardar a medias. */
