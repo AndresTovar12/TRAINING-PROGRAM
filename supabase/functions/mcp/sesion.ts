@@ -15,6 +15,19 @@ import { esDeSalud } from './app/palabras.js'
 
 export type Rol = 'atleta' | 'coach' | 'master'
 
+/** El estilo de preguntar de un coach (conector v2, 23 nov 2026): sus reglas, dichas por él, y si la IA decide sola lo que no bloquea. */
+export interface EstiloDeIA { reglas: string[]; decide_tu?: boolean }
+
+/** La llave en `user_app_state.data` (sin «:», para poder leer solo esa parte). */
+export const LLAVE_ESTILO = 'ia_estilo'
+
+/** El estilo guardado de una persona, leyendo SOLO esa parte de su estado (la fila entera puede ser grande). */
+export async function estiloDe(quien: { id: string; db: SupabaseClient }): Promise<EstiloDeIA | null> {
+  const { data } = await quien.db.from('user_app_state').select(`estilo:data->${LLAVE_ESTILO}`).eq('user_id', quien.id).maybeSingle()
+  const e = (data as any)?.estilo
+  return e && typeof e === 'object' && Array.isArray(e.reglas) ? { reglas: e.reglas.map(String), decide_tu: e.decide_tu === true } : null
+}
+
 export interface Quien {
   id: string
   usuario: string
@@ -32,6 +45,8 @@ export interface Quien {
   token: string
   /** Cliente de la base con el token de la persona: RLS de la persona. */
   db: SupabaseClient
+  /** Cómo quiere este coach que le pregunte la IA (`user_app_state.data.ia_estilo`, ver `estiloDe`). Solo profesionales; null si no ha dicho. */
+  estilo?: EstiloDeIA | null
 }
 
 /** El token no sirve: la IA tiene que volver a pedir permiso. */

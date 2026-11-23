@@ -432,7 +432,7 @@ export function herramientasDeMisPlanes(server: McpServer, quien: Quien) {
       if (tipo === 'workout') {
         if (!sesiones?.length) throw new Aviso('Para un workout manda "sesiones" (una, o dos si es mañana y tarde).')
         const dias = sesiones.map((s: any) => {
-          const armado = diaDesdeEntrada('Lun', s, repertorio)
+          const armado = diaDesdeEntrada('Lun', s, repertorio, { decideTu: !!quien.estilo?.decide_tu })
           anotarDia(rev, s.nombre ?? 'Workout', armado)
           return armado.dia
         })
@@ -441,7 +441,7 @@ export function herramientasDeMisPlanes(server: McpServer, quien: Quien) {
         data = workoutDeSesiones(dias)
         tipoFinal = 'workout'
       } else {
-        const { nuevas } = armarFasesDeLaIA({ tipo: tipo === 'rutina' ? 'rutina' : 'fases', sesiones, fases }, repertorio, rev)
+        const { nuevas } = armarFasesDeLaIA({ tipo: tipo === 'rutina' ? 'rutina' : 'fases', sesiones, fases }, repertorio, rev, { decideTu: !!quien.estilo?.decide_tu })
         aceptado = exigirRespuestas({ revision: rev, catalogo: repertorio, plan: null, respuestas: { sin_ficha_ok, sin_cantidad_ok, estructura_ok } })
         lineas = lineasDeRevision(rev)
         const normales = normalizar(nuevas)

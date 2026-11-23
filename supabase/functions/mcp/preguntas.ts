@@ -122,31 +122,36 @@ export interface Revision {
   dias: { titulo: string; lista: Renglon[] }[]
   /** Lo que el conector decidió solo y se le dice a la persona en una línea («Supuse: … ¿Cambio algo?»). */
   supuestos: string[]
-  /** «Así lo verá el atleta», por día (3 a 6 líneas). */
-  vistas: { dia: string; atleta: string[] }[]
+  /** «Así lo verá el atleta», por día: se calcula al final (`ver`), cuando ya se completó lo que se supuso. */
+  vistas: { dia: string; ver: () => string[] }[]
+  /** Los ejercicios (el objeto que se guarda) sin cantidad y los unilaterales sin «por lado»: se completan en `exigirRespuestas`. */
+  cantidadEx: { ex: any; nombre: string }[]
+  porLadoEx: { ex: any; nombre: string }[]
 }
 
-export const nuevaRevision = (): Revision => ({ sinFicha: new Set(), sinCantidad: new Set(), porLado: new Set(), dias: [], supuestos: [], vistas: [] })
+export const nuevaRevision = (): Revision => ({ sinFicha: new Set(), sinCantidad: new Set(), porLado: new Set(), dias: [], supuestos: [], vistas: [], cantidadEx: [], porLadoEx: [] })
 
 /** Anota en la revisión lo que dejó armar UN día (`diaDesdeEntrada`). */
 export function anotarDia(
   rev: Revision,
   titulo: string,
-  d: { sinFicha: string[]; sinCantidad: string[]; porLado: string[]; lista: Renglon[]; supuestos?: string[]; vista?: string[] },
+  d: { sinFicha: string[]; sinCantidad: string[]; porLado: string[]; lista: Renglon[]; supuestos?: string[]; verVista?: () => string[]; cantidadEx?: { ex: any; nombre: string }[]; porLadoEx?: { ex: any; nombre: string }[] },
 ) {
   d.sinFicha.forEach((n) => rev.sinFicha.add(n))
   d.sinCantidad.forEach((n) => rev.sinCantidad.add(n))
   d.porLado.forEach((n) => rev.porLado.add(n))
   rev.dias.push({ titulo, lista: d.lista })
   rev.supuestos.push(...(d.supuestos ?? []))
-  if (d.vista?.length) rev.vistas.push({ dia: titulo, atleta: d.vista })
+  if (d.verVista) rev.vistas.push({ dia: titulo, ver: d.verVista })
+  rev.cantidadEx.push(...(d.cantidadEx ?? []))
+  rev.porLadoEx.push(...(d.porLadoEx ?? []))
 }
 
 /** Lo que se le dice a la persona al guardar: los supuestos y cómo lo verá el atleta (hasta 7 días; un plan largo, solo los primeros). */
 export function lineasDeRevision(rev: Revision) {
   return {
     ...(rev.supuestos.length ? { supuestos: rev.supuestos } : {}),
-    ...(rev.vistas.length ? { asi_lo_vera_el_atleta: rev.vistas.slice(0, 7) } : {}),
+    ...(rev.vistas.length ? { asi_lo_vera_el_atleta: rev.vistas.slice(0, 7).map((v) => ({ dia: v.dia, atleta: v.ver() })).filter((v) => v.atleta.length) } : {}),
     ...(rev.vistas.length > 7 ? { nota_vista: `Y ${rev.vistas.length - 7} sesiones más.` } : {}),
   }
 }
@@ -223,32 +228,25 @@ const enLista = (nombres: string[]) => (nombres.length > 1
   : nombres[0])
 
 const QUE_HACER_FICHAS =
-  'Para cada ejercicio del catálogo: (1) búscalo con buscar_ejercicios, por su nombre en inglés y por equipo o músculo (el catálogo está casi todo en inglés). '
-  + '(2) Si encaja UNO solo, o es el mismo ejercicio con otro nombre (idioma, abreviatura), vuelve a llamar con el nombre EXACTO del catálogo, sin preguntar; al final dile a la persona cómo lo guardaste. '
-  + '(3) Si hay varios posibles, pregunta cuál con una lista numerada; si dudas entre uno de su lista y uno nuevo, pregunta «¿es X de tu lista o creo uno nuevo?». '
-  + '(4) Si ninguno encaja, pregunta «¿lo creo?» y ofrece en ese mismo mensaje los datos (categoría, grupo muscular, equipo, nota); se crea con crear_ejercicio. '
+  'Para cada ejercicio de "catalogo": (1) búscalo con buscar_ejercicios, por su nombre en inglés y por equipo o músculo (el catálogo está casi todo en inglés). '
+  + '(2) caso "uno", o es el mismo ejercicio con otro nombre (idioma, abreviatura): vuelve a llamar con el nombre EXACTO del catálogo, SIN preguntarle a la persona; al final dile cómo lo guardaste. '
+  + '(3) caso "varios": pregunta cuál, con una lista numerada. (4) caso "ninguno": pregunta «¿lo creo?» (con crear_ejercicio basta el nombre: categoría y grupo se suponen). '
   + '(5) Si la persona dice que va tal cual, sin ficha, o los nombres vienen de un plan que ya existe, repite la llamada con sin_ficha_ok: [esos nombres].'
 
-const QUE_HACER_AGRUPAR =
-  'AGRUPAR: revisa el mensaje de la persona. Si separó los ejercicios en bloques (línea en blanco, viñetas, A1/A2, «+»), cada bloque de 2 o más es una biserie, triserie o circuito: '
-  + 'vuelve a llamar con el mismo `grupo` (1, 2, 3…) en los ejercicios de cada bloque, y la herramienta te devolverá la rutina armada para que se la enseñes y la confirme. '
-  + 'Si todos van separados, vuelve a llamar con estructura_ok: true.'
-
 const QUE_HACER_GENERAL =
-  'Haz TODAS las preguntas juntas, en UN solo mensaje y tal cual (las de "preguntas" y las del catálogo). No preguntes lo que la persona ya dijo. '
-  + 'Con lo que conteste, vuelve a llamar con TODO: nombres exactos del catálogo, por_lado: true o false en cada ejercicio unilateral, la cantidad que dio, '
-  + 'sin_cantidad_ok con los nombres que dijo que van sin cantidad, y estructura_ok: true cuando confirme la estructura (o si ya la había dicho explícitamente).'
+  'Lo que sí hay que preguntar va TODO junto, en UN solo mensaje con opciones numeradas. No preguntes nada más: la cantidad, «por lado», '
+  + 'las biseries, la categoría, el video y el tipo de sesión se suponen al guardar y se dicen al final en una línea.'
 
 /**
- * Antes de guardar un plan: lo que falta se le pregunta a la persona (vía la IA), TODO junto, y no se
- * guarda nada hasta tenerlo. Lo que se revisa:
- *  - un ejercicio que no está en el catálogo con su nombre,
- *  - un ejercicio sin cantidad (ni reloj ni vueltas),
- *  - un ejercicio unilateral sin decir si cuenta por lado (`por_lado` true o false),
- *  - biseries o triseries nuevas (se le enseña la rutina armada para que la confirme).
- * No cuentan los nombres que el plan ya tenía (leer un día y reescribirlo no debe volver a discutirlos)
- * ni las agrupaciones que ya estaban, ni lo que la persona ya contestó (`respuestas`).
- * Devuelve lo que quedó aceptado sin ficha o sin cantidad (para avisarlo); si algo falta, lanza `Pregunta`.
+ * Antes de guardar un plan (decisión de Andrés, 23 nov 2026: «un asistente que entiende a la primera»). Hay tres clases de dato:
+ *  - BLOQUEA (se pregunta, todo junto): un ejercicio que no está en el catálogo con su nombre. Si hay UN parecido, la IA lo
+ *    resuelve sola (vuelve a llamar con el nombre exacto); si hay varios, o ninguno («¿lo creo?»), le pregunta a la persona.
+ *  - SE SUPONE Y SE DICE (no se pregunta): la cantidad que falte (3 × 10), «por lado» en un ejercicio a una pierna o un brazo, y las
+ *    biseries como vinieron escritas. Se completan aquí, en el objeto que se va a guardar, y quedan en `rev.supuestos`.
+ *  - NUNCA SE PREGUNTA al crear: video, foto, descripción, notas.
+ * No cuentan los nombres que el plan ya tenía (leer un día y reescribirlo no debe volver a discutirlos ni cambiarlos), ni lo que la
+ * persona ya contestó (`respuestas`): `sin_ficha_ok`, y `sin_cantidad_ok` (esos se quedan sin cantidad, como dijo).
+ * Devuelve lo que quedó aceptado sin ficha o sin cantidad (para avisarlo); si falta algo del catálogo, lanza `Pregunta`.
  */
 export function exigirRespuestas(o: {
   revision: Revision
@@ -262,7 +260,7 @@ export function exigirRespuestas(o: {
   const okFicha = new Set((o.respuestas?.sin_ficha_ok ?? []).map(llaveDeNombre))
   const okCantidad = new Set((o.respuestas?.sin_cantidad_ok ?? []).map(llaveDeNombre))
 
-  // 1. Ejercicios que no están en el catálogo.
+  // 1. BLOQUEA: ejercicios que no están en el catálogo.
   const sinFicha: string[] = []
   const catalogo: { escrito: string; caso: 'ninguno' | 'uno' | 'varios'; parecidos: ReturnType<typeof resumen>[] }[] = []
   const vistos = new Set<string>()
@@ -275,61 +273,51 @@ export function exigirRespuestas(o: {
     const parecidos = parecidosA(escrito, o.catalogo)
     catalogo.push({ escrito, caso: parecidos.length === 0 ? 'ninguno' : parecidos.length === 1 ? 'uno' : 'varios', parecidos: parecidos.map(resumen) })
   }
-
-  // 2. Ejercicios sin cantidad.
-  const sinCantidad: string[] = []
-  const faltaCantidad: string[] = []
-  for (const n of rev.sinCantidad) {
-    const llave = llaveDeNombre(n)
-    if (ya.has(llave)) continue
-    if (okCantidad.has(llave)) sinCantidad.push(n)
-    else faltaCantidad.push(n)
-  }
-
-  // 3. Unilaterales sin decir si cuentan por lado.
-  const porLado = [...rev.porLado].filter((n) => !ya.has(llaveDeNombre(n)))
-
-  // 4a. Una rutina pegada de golpe (4 o más ejercicios nuevos) sin ningún grupo: ¿de verdad van todos separados?
-  //     El conector no ve el mensaje de la persona; le pide a la IA que lo revise antes de guardar.
-  const agrupar = o.respuestas?.estructura_ok ? [] : rev.dias
-    .filter((d) => d.lista.every((r) => r.grupo == null) && d.lista.filter((r) => !ya.has(llaveDeNombre(r.nombre))).length >= 4)
-    .map((d) => d.titulo)
-
-  // 4b. Biseries o triseries nuevas: se enseña la rutina armada.
-  const estructura = o.respuestas?.estructura_ok ? [] : rev.dias
-    .filter((d) => bloquesDe(d.lista).some((b) => !firmas.has(firmaDeBloque(b.map((r) => r.nombre)))))
-    .map((d) => ({ dia: d.titulo, rutina: vistaPrevia(d.lista) }))
-
-  const preguntas: string[] = []
-  if (porLado.length) {
-    preguntas.push(`¿${enLista(porLado)} ${porLado.length > 1 ? 'cuentan' : 'cuenta'} por lado (cada pierna o brazo), o la cantidad es en total?`)
-  }
-  if (faltaCantidad.length) {
-    preguntas.push(faltaCantidad.length > 1
-      ? `${enLista(faltaCantidad)} no traen repeticiones ni tiempo: ¿cuántas pongo, o los dejo así?`
-      : `${faltaCantidad[0]} no trae repeticiones ni tiempo: ¿cuántas pongo, o lo dejo así?`)
-  }
-  if (estructura.length) {
-    preguntas.push(`Armé la rutina así, ¿está bien?\n${estructura.slice(0, 4).map((d) => `${estructura.length > 1 ? `${d.dia}:\n` : ''}${d.rutina.join('\n')}`).join('\n\n')}`)
-  }
-
-  if (catalogo.length || preguntas.length || agrupar.length) {
+  if (catalogo.length) {
+    const preguntar = catalogo.filter((c) => c.caso !== 'uno')
     throw new Pregunta({
       guardado: false,
       motivo: 'faltan_respuestas',
-      mensaje: agrupar.length && !catalogo.length && !preguntas.length
-        ? 'No guardé nada todavía: revisa si los ejercicios van agrupados (biseries, triseries).'
-        : 'No guardé nada todavía: faltan respuestas de la persona.',
-      ...(preguntas.length ? { preguntas } : {}),
-      pendientes: {
-        ...(catalogo.length ? { catalogo } : {}),
-        ...(faltaCantidad.length ? { sin_cantidad: faltaCantidad } : {}),
-        ...(porLado.length ? { por_lado: porLado } : {}),
-        ...(estructura.length ? { estructura } : {}),
-        ...(agrupar.length ? { agrupar } : {}),
-      },
-      que_hacer: `${QUE_HACER_GENERAL}${catalogo.length ? ` ${QUE_HACER_FICHAS}` : ''}${agrupar.length ? ` ${QUE_HACER_AGRUPAR}` : ''}`,
+      mensaje: preguntar.length
+        ? 'No guardé nada todavía: falta saber qué ejercicio es (o si se crea).'
+        : 'No guardé nada todavía: hay un ejercicio con otro nombre en el catálogo. Vuelve a llamar con su nombre exacto (sin preguntar).',
+      ...(preguntar.length ? { preguntas: [`${preguntar.map((c) => (c.caso === 'ninguno'
+        ? `«${c.escrito}» no está en tu repertorio: ¿lo creo?`
+        : `¿«${c.escrito}» es ${c.parecidos.map((p, i) => `${i + 1}) ${p.nombre}`).join(', ')}, o creo uno nuevo?`)).join('\n')}`] } : {}),
+      pendientes: { catalogo },
+      que_hacer: `${QUE_HACER_GENERAL} ${QUE_HACER_FICHAS}`,
     })
+  }
+
+  // 2. SE SUPONE: la cantidad que falta (3 × 10), salvo lo que el plan ya tenía o lo que la persona dijo que va sin cantidad.
+  const sinCantidad: string[] = []
+  const puestas: string[] = []
+  for (const { ex, nombre } of rev.cantidadEx) {
+    const llave = llaveDeNombre(nombre)
+    if (ya.has(llave)) continue
+    if (okCantidad.has(llave)) { sinCantidad.push(nombre); continue }
+    if (!String(ex.sets ?? '').trim()) ex.sets = '3'
+    ex.reps = '10'
+    puestas.push(`${nombre} ${ex.sets} × 10`)
+  }
+  if (puestas.length) rev.supuestos.push(`Cantidad: ${enLista(puestas)} (no venía)`)
+  // Lo que no tiene una cantidad que suponer (un lapso vacío): se guarda como viene y se dice.
+  const conObjeto = new Set(rev.cantidadEx.map((x) => llaveDeNombre(x.nombre)))
+  const sinSuponer = [...rev.sinCantidad].filter((n) => !conObjeto.has(llaveDeNombre(n)) && !ya.has(llaveDeNombre(n)) && !okCantidad.has(llaveDeNombre(n)))
+  if (sinSuponer.length) rev.supuestos.push(`A ${enLista(sinSuponer)} le faltó la cantidad en un lapso: quedó así`)
+
+  // 3. SE SUPONE: «por lado» en lo que es a una pierna o un brazo.
+  const porLado = rev.porLadoEx.filter(({ nombre }) => !ya.has(llaveDeNombre(nombre)))
+  porLado.forEach(({ ex }) => { ex.porLado = true })
+  if (porLado.length) rev.supuestos.push(`Por lado: ${enLista([...new Set(porLado.map((x) => x.nombre))])}`)
+
+  // 4. SE SUPONE: las biseries, triseries y circuitos como vinieron escritos (los grupos que mandó la IA). Se enseñan para que se vean.
+  if (!o.respuestas?.estructura_ok) {
+    for (const d of rev.dias) {
+      if (!bloquesDe(d.lista).some((b) => !firmas.has(firmaDeBloque(b.map((r) => r.nombre))))) continue
+      const bloques = vistaPrevia(d.lista).filter((l) => /^(BI SERIE|TRI SERIE|CIRCUITO)$/.test(l))
+      rev.supuestos.push(`${d.titulo}: ${bloques.length} ${bloques.length === 1 ? 'bloque' : 'bloques'} (${bloques.join(', ').toLowerCase()})`)
+    }
   }
   return { sinFicha, sinCantidad }
 }

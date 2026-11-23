@@ -2,7 +2,7 @@
 import { McpServer } from 'npm:@modelcontextprotocol/sdk@1.30.1/server/mcp.js'
 import { WebStandardStreamableHTTPServerTransport } from 'npm:@modelcontextprotocol/sdk@1.30.1/server/webStandardStreamableHttp.js'
 import { APP_URL, SUPABASE_URL, metadatosDelRecurso } from './config.ts'
-import { quienLlama, SinPermiso, TokenInvalido, type Quien } from './sesion.ts'
+import { estiloDe, quienLlama, SinPermiso, TokenInvalido, type Quien } from './sesion.ts'
 import { fechaDelAtleta, NOMBRE_DIA, palabrasDe } from './util.ts'
 import { traduce } from './app/palabras.js'
 import { herramientasComunes } from './comunes.ts'
@@ -80,7 +80,7 @@ function conPalabras(server: McpServer, quien: Quien) {
     registrar(nombre, { ...def, title: traduce(def.title, true), description: traduce(def.description, true) }, fn)
 }
 
-function instrucciones(quien: Quien) {
+export function instrucciones(quien: Quien) {
   const hoy = fechaDelAtleta()
   const p = palabrasDe(quien)
   const rol = quien.rol === 'atleta' ? 'atleta' : quien.rol === 'coach' ? 'coach' : 'administrador (dueño de la app)'
@@ -102,21 +102,27 @@ function instrucciones(quien: Quien) {
       p('Antes de cambiar un plan, léelo con ver_plan_de_atleta. Los cambios de plan se aplican al momento y siempre se pueden deshacer (ver_historial_del_plan, deshacer_cambio_del_plan).'),
       p('Al terminar un cambio, di en una o dos líneas qué cambió y a quién.'),
       'Borrar pide confirmación: antes de borrar, di qué se va a borrar.',
-      p('«Mis planes» es tu catálogo, con carpetas: programas (por fases), rutinas semanales, workouts (un día) y clases (un workout con video). Se ve con ver_mis_planes y abrir_de_mis_planes; se guarda con guardar_en_mis_planes (del plan de un atleta, o armado desde cero); se ordena con cambiar_en_mis_planes, duplicar_en_mis_planes, borrar_de_mis_planes y las carpetas (crear_carpeta, cambiar_carpeta, borrar_carpeta). Para dárselo a uno o varios atletas: asignar_de_mis_planes; para hacerle a UN atleta un plan copiando otro (o parte de él, con filtro de tipos de sesión) en un solo paso: copiar_plan_a_atleta. Antes de asignar o reemplazar un plan, confirma con la persona a quién y qué. «Mi vitrina» es donde pones planes a la VENTA (ver_mi_vitrina, guardar_en_vitrina, publicar_en_vitrina, retirar_de_vitrina, borrar_borrador_de_vitrina): un borrador lo armas libremente, pero PUBLICAR, RETIRAR y cambiar un plan que ya está a la venta tocan dinero y lo que ve el público: antes enséñale a la persona qué va a pasar y espera su sí (las herramientas tampoco lo hacen sin confirmado: true). Nunca inventes un precio: pregúntalo. Los MENSAJES con tus atletas (ver_bandeja_de_mensajes, leer_conversacion, enviar_mensaje, ver_tecnicas_por_revisar, responder_tecnica): leer es libre y no marca nada como visto; MANDAR algo a una persona (un mensaje o contestar una técnica) pide que antes le enseñes a quien te habla el texto exacto y esperes su sí (las herramientas tampoco lo hacen sin confirmado: true); contestar una técnica solo si ella YA vio el video (tú no lo ves). Las MÉTRICAS DEL RELOJ de un atleta (ver_metricas_de_atleta, ver_entrenos_de_atleta, abrir_entreno_de_atleta, ver_recuperacion_de_atleta) son solo lectura: la forma, la carga, las zonas y la recuperación son una señal para preguntarle cómo está, no un diagnóstico. Lo guardado es una COPIA: no es el plan de ningún atleta y cambiarlo no mueve lo que alguien ya recibió.'),
+      p('«Mis planes» es tu catálogo con carpetas (programas, rutinas, workouts, clases): ver_mis_planes, abrir_de_mis_planes, guardar_en_mis_planes; para dárselo a atletas, asignar_de_mis_planes o copiar_plan_a_atleta (confirma antes a quién y qué). Lo guardado es una COPIA.'),
+      '«Mi vitrina» son planes a la venta: un borrador se arma libre; PUBLICAR, RETIRAR o cambiar algo ya a la venta toca dinero: enseña qué pasará y espera el sí (sin confirmado: true no se hace). Nunca inventes un precio.',
+      p('MENSAJES: leer es libre y no marca visto; MANDAR (un mensaje o contestar una técnica) pide enseñar el texto exacto y esperar el sí; contesta una técnica solo si la persona ya vio el video. Las MÉTRICAS del reloj son solo lectura: una señal para preguntar cómo está, no un diagnóstico.'),
+      'SESIONES: Gym, Libre, Movilidad y Clase con "ejercicios"; Running, Cycling, Swimming y Triatlón con "disciplina" y "piezas"; Híbrido con "sets"; Deporte con "deporte". Los valores como los diría el coach («1 km», «4:20-4:30», «zona 2», «2 min»). Al guardar, enseña "asi_lo_vera_el_atleta".',
+      'ARCHIVOS (solo agentes que pueden subir archivos): pedir_subida y poner_medio_a_ejercicio. Antes de un lote, enseña UNA vez la lista «archivo → ejercicio» y espera el sí. En un chat sin archivos, usa ligas.',
       'Para ligar un ejercicio a su ficha con video, escribe su nombre exacto del repertorio (búscalo con buscar_ejercicios).',
       p('Un atleta puede tener un equipo: su coach principal y otros profesionales (un fisio, por ejemplo), cada uno con SU programa. Los programas de todos se leen juntos (cada cosa dice "de" quién es; con "de" pides uno solo), pero cada quien cambia solo el suyo.')
         + (quien.rol === 'master' ? ' Como administrador eliges con "de" qué programa cambias; sin él, el del coach principal.' : ''),
       'Las notas de consulta de un fisio son suyas: no están aquí y no se piden ni se resumen.',
     ]
-  /* CUÁNDO PREGUNTAR, arriba de todo (Andrés, 7 oct 2026): OpenAI pide lo importante en los primeros 512
-     caracteres de estas instrucciones. Solo para quien arma planes y ejercicios. Es el consejo; lo que el
-     conector puede revisar solo son los topes de `preguntas.ts`. */
+  /* CUÁNDO PREGUNTAR, arriba de todo (Andrés, 7 oct y 23 nov 2026: «un asistente que entiende a la primera»). OpenAI lee primero
+     los 512 caracteres: van las reglas, cortas. Las tres clases de dato están también en `preguntas.ts`. El estilo del coach, si lo
+     guardó (guardar_mi_estilo), va primero y gana sobre todo lo demás. */
+  const estilo = quien.rol !== 'atleta' && quien.estilo?.reglas?.length
+    ? [`Estilo de ${quien.nombre} (manda sobre las reglas de abajo): ${quien.estilo.reglas.join('; ')}.`] : []
   const preguntar = quien.rol === 'atleta' ? [] : [
-    'Pregunta solo lo que tendrías que adivinar; lo que puedas deducir, hazlo y dilo. Lo que la persona ya dijo, no se pregunta. Todas las preguntas en UN solo mensaje, con opciones numeradas.',
-    'Antes de guardar, busca cada ejercicio con buscar_ejercicios (el catálogo está casi todo en inglés) y usa su nombre exacto: si encaja uno solo o es un sinónimo claro, úsalo; si hay varios posibles, pregunta cuál; si ninguno, pregunta si lo creas.',
-    'Pregunta también las reps que falten y si un ejercicio a una pierna o brazo va «por lado». No preguntes descanso, descripción ni notas, ni si son biserie o triserie: por cómo separaron la lista (mismo grupo). Si armaste biseries, enséñalas antes de guardar.',
+    'PREGUNTA SOLO LO QUE BLOQUEA: a qué atleta o día (si no lo dijo), un ejercicio con varios parecidos, uno que no existe («¿lo creo?»), y confirmar borrar, reemplazar, asignar, mandar mensajes o lo que toca dinero. Todo en UN mensaje con opciones numeradas.',
+    'Lo demás lo supones y lo dices al final en UNA línea que acabe en «¿Cambio algo?» (las herramientas te dan "supuestos"). Nunca preguntes al crear por video, foto, descripción o notas.',
+    'Prisa: mensaje corto o con «rápido», «ya», «así nomás» = máximo UNA pregunta. Si da muchos detalles o pide ayuda para diseñar, puedes preguntar más, siempre en un mensaje.',
   ].map((t) => p(t))
-  return [...preguntar, ...comun, ...porRol].join('\n')
+  return [...estilo, ...preguntar, ...comun, ...porRol].join('\n')
 }
 
 export async function manejar(req: Request): Promise<Response> {
@@ -154,6 +160,9 @@ export async function manejar(req: Request): Promise<Response> {
     console.error('mcp: no se pudo identificar', e)
     return json({ error: 'server_error', error_description: 'No se pudo revisar tu cuenta. Intenta de nuevo.' }, 500)
   }
+
+  // El estilo de preguntar del coach va en las instrucciones (y lo usan las herramientas que arman planes).
+  if (quien.rol !== 'atleta') quien.estilo = await estiloDe(quien).catch(() => null)
 
   const server = new McpServer(
     { name: 'training-lab', title: 'Training Lab', version: '1.0.0' },

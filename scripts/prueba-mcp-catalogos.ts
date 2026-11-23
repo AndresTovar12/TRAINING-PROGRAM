@@ -35,7 +35,8 @@ ok('ver_catalogos: no ofrece los tipos de la app que el coach quitó')
 
 // p81: un tipo nuevo lleva el ícono que le va al nombre.
 await tools.crear_tipo_de_sesion({ nombre: 'Boxeo' })
-igual(datos.session_types[0].icono, 'boxeo', 'Boxeo → ícono boxeo')
+// Desde el repertorio del 6 nov 2026, el ícono «boxeo» quedó oculto y «Box» se dibuja con el guante (decisión de ese día).
+igual(datos.session_types[0].icono, 'guante', 'Boxeo → ícono guante')
 await tools.crear_tipo_de_sesion({ nombre: 'Xyzzyq' })
 igual(datos.session_types[1].icono, null, 'sin parecido, queda sin ícono (la etiqueta neutra)')
 ok('crear_tipo_de_sesion: pone el ícono que le va al nombre')

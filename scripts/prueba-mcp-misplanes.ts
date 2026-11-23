@@ -186,13 +186,13 @@ const SEMBRADO = () => ({ carpetas_planes: CARPETAS, routine_templates: PLANTILL
   const pf = datos.programas_guardados.at(-1)
   igual([pf.data.kind, pf.data.estructura, pf.data.ciencia, pf.kind], ['periodized', 'fases', undefined, undefined], 'en programas_guardados')
 
-  // Lo que falta se pregunta y NO se guarda.
+  // La cantidad que falta ya no se pregunta (23 nov 2026): se supone (3 × 10) y se dice; «así lo mando» la deja vacía.
   const antes = datos.programas_guardados.length + datos.routine_templates.length
   const sinCantidad = sc(await tools.guardar_en_mis_planes({ nombre: 'Falta algo', tipo: 'workout', sesiones: [{ dia: 'lunes', ejercicios: [{ nombre: 'Back Squat' }] }] }))
-  igual([sinCantidad.guardado, sinCantidad.motivo], [false, 'faltan_respuestas'], 'sin cantidad: pregunta')
-  igual(datos.programas_guardados.length + datos.routine_templates.length, antes, 'y no escribe nada')
+  igual([sinCantidad.listo, (sinCantidad.supuestos ?? []).some((x: string) => x.startsWith('Cantidad: Back Squat'))], [true, true], 'sin cantidad: guarda y dice lo que supuso')
+  igual(datos.programas_guardados.length + datos.routine_templates.length, antes + 1, 'y sí escribe')
   const confirmado = sc(await tools.guardar_en_mis_planes({ nombre: 'Falta algo', tipo: 'workout', sesiones: [{ dia: 'lunes', ejercicios: [{ nombre: 'Back Squat' }] }], sin_cantidad_ok: ['Back Squat'] }))
-  igual(confirmado.listo, true, 'con la respuesta, guarda')
+  igual([confirmado.listo, confirmado.sin_cantidad], [true, ['Back Squat']], '«así lo mando»: guarda sin cantidad y lo avisa')
   const fuera = sc(await tools.guardar_en_mis_planes({ nombre: 'Inventado', tipo: 'workout', sesiones: [{ dia: 'lunes', ejercicios: [{ nombre: 'Ejercicio que no existe', cantidad: 10 }] }] }))
   igual([fuera.guardado, fuera.motivo], [false, 'faltan_respuestas'], 'un ejercicio que no está en el catálogo: pregunta')
 

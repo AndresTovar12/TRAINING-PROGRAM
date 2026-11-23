@@ -5,7 +5,7 @@
 //   (sin `--node-modules-dir=none`, Deno ve el package.json del proyecto y falla con «Could not find a matching package for npm:@supabase/realtime-js»; p89)
 import { diaDesdeEntrada, firmasDeGrupos, nombresDeEjercicios } from '../supabase/functions/mcp/plan.ts'
 import { NOMBRE_DIA } from '../supabase/functions/mcp/util.ts'
-import { equiposMasUsados, esUnilateral, exigirRespuestas, nuevaRevision, parecidosA, preguntaDeDatos, vistaPrevia, type ItemDeCatalogo, type Renglon, type Revision } from '../supabase/functions/mcp/preguntas.ts'
+import { anotarDia, equiposMasUsados, esUnilateral, exigirRespuestas, lineasDeRevision, nuevaRevision, parecidosA, preguntaDeDatos, vistaPrevia, type ItemDeCatalogo, type Renglon, type Revision } from '../supabase/functions/mcp/preguntas.ts'
 import { Pregunta, fechaDelAtleta, llaveDeNombre, mismoNombre, palabrasClave, seguro } from '../supabase/functions/mcp/util.ts'
 import { herramientasComunes } from '../supabase/functions/mcp/comunes.ts'
 import { herramientasDelCoach } from '../supabase/functions/mcp/coach.ts'
@@ -299,23 +299,22 @@ const buscados = (r: any) => r.structuredContent.ejercicios.map((e: any) => e.no
   ok('buscar_ejercicios: los videos de explicación cuentan, con la visibilidad de ver_ejercicio')
 }
 
-/* ---- crear_ejercicio: el tope, de punta a punta ---- */
+/* ---- crear_ejercicio: «se supone y se dice» (23 nov 2026), de punta a punta ---- */
 {
   const { tools, insertados } = herramientas(herramientasDelCoach)
-  const sinDatos = await tools.crear_ejercicio({ nombre: 'Nordic curl 2' })
-  igual([sinDatos.isError, sinDatos.structuredContent.guardado, sinDatos.structuredContent.motivo], [undefined, false, 'faltan_datos_del_ejercicio'], 'solo con el nombre: no guarda y pregunta')
-  igual(insertados.length, 0, 'no escribió nada en la base')
-  cierto(sinDatos.structuredContent.pregunta.includes('Rotadores') || sinDatos.structuredContent.opciones.grupos_musculares.includes('Rotadores'), 'ofrece también los grupos propios del coach')
-  igual(sinDatos.structuredContent.opciones.categorias, ['Fuerza', 'Hipertrofia', 'Potencia'], 'y las categorías reales')
-  igual(sinDatos.structuredContent.opciones.equipos.slice(0, 2), ['Barra', 'Mancuerna'], 'y el equipo que más hay')
+  // Antes (7 oct): solo con el nombre no guardaba y preguntaba. Ahora guarda: categoría y grupo, del parecido más cercano, y lo dice.
+  const soloNombre = await tools.crear_ejercicio({ nombre: 'Nordic curl 2' })
+  igual([soloNombre.isError, soloNombre.structuredContent.listo, insertados.length], [undefined, true, 1], 'solo con el nombre: se guarda, sin preguntar')
+  cierto(Array.isArray(soloNombre.structuredContent.supuestos) && soloNombre.structuredContent.supuestos.length === 1, 'y dice lo que supuso (categoría y grupo, o que no hubo parecido)')
+  cierto(String(soloNombre.structuredContent.nota ?? '').includes('Sin video'), 'el video que falta va como nota, no como pregunta')
 
-  const asi = await tools.crear_ejercicio({ nombre: 'Nordic curl 2', sin_datos: true })
-  igual([asi.structuredContent.listo, insertados.length], [true, 1], '«así»: se guarda solo con el nombre')
-  igual([insertados[0].fila.name, insertados[0].fila.category_id, insertados[0].fila.categorias_secundarias], ['Nordic curl 2', null, []], 'sin categoría y sin secundarias vacías raras')
+  const asi = await tools.crear_ejercicio({ nombre: 'Nordic curl 3', sin_datos: true })
+  igual([asi.structuredContent.listo, insertados.length, asi.structuredContent.supuestos], [true, 2, undefined], '«así»: se guarda solo con el nombre, sin suponer nada')
+  igual([insertados[1].fila.name, insertados[1].fila.category_id, insertados[1].fila.categorias_secundarias], ['Nordic curl 3', null, []], 'sin categoría y sin secundarias vacías raras')
 
   const completo = await tools.crear_ejercicio({ nombre: 'Trap bar jump', categoria: 'potencia', categorias_secundarias: ['Fuerza', 'Potencia'], musculos_principales: ['Piernas'] })
   igual(completo.structuredContent.listo, true, 'con datos se guarda sin preguntar')
-  igual([insertados[1].fila.category_id, insertados[1].fila.categorias_secundarias, insertados[1].fila.muscle_primary], ['c-potencia', ['c-fuerza'], ['Piernas']], 'la categoría principal no se repite entre las secundarias')
+  igual([insertados[2].fila.category_id, insertados[2].fila.categorias_secundarias, insertados[2].fila.muscle_primary], ['c-potencia', ['c-fuerza'], ['Piernas']], 'la categoría principal no se repite entre las secundarias')
 
   const soloCategoria = await tools.crear_ejercicio({ nombre: 'Algo con categoría', categoria: 'Fuerza' })
   igual(soloCategoria.structuredContent.listo, true, 'un solo dato basta: ya dijo lo que quería')
@@ -404,13 +403,14 @@ const RUTINA = [
   { nombre: 'Bulgarian Split Squat', series: 3, cantidad: 6, grupo: 2 },
   { nombre: 'Squat Jump', grupo: 2 },
 ]
-const revisaDia = (ejercicios: any[], titulo = 'Sábado') => {
-  const r = nuevaRevision()
+/** Arma un día como lo hace el conector y anota su revisión (con los objetos que se van a guardar, para ver lo que se completa). */
+const armaYRevisa = (ejercicios: any[], titulo = 'Sábado') => {
+  const rev = nuevaRevision()
   const armado = diaDesdeEntrada('Sáb', { ejercicios }, CATALOGO)
-  for (const [k, v] of [['sinFicha', armado.sinFicha], ['sinCantidad', armado.sinCantidad], ['porLado', armado.porLado]] as const) v.forEach((n: string) => r[k].add(n))
-  r.dias.push({ titulo, lista: armado.lista })
-  return r
+  anotarDia(rev, titulo, armado)
+  return { rev, dia: armado.dia as any }
 }
+const revisaDia = (ejercicios: any[], titulo = 'Sábado') => armaYRevisa(ejercicios, titulo).rev
 
 {
   for (const si of ['Pistol Squat', 'Assisted Pistol Squat', 'Step Ups', 'Bulgarian Split Squat', 'Walking Lunge', 'Single-Leg RDL', 'One Arm Row', 'Glute Kickback', 'Zancada caminando', 'Remo a una mano']) {
@@ -442,48 +442,44 @@ const revisaDia = (ejercicios: any[], titulo = 'Sábado') => {
   ok('al armar un día se anota lo que falta: cantidad y «por lado»')
 }
 {
-  // Tu ejemplo 2 tal cual lo habría mandado la IA: todo junto en UNA pregunta.
-  const p = pregunta(() => exigirRespuestas({ revision: revisaDia(RUTINA), catalogo: CATALOGO }))
-  igual(p.datos.motivo, 'faltan_respuestas', 'no guarda')
-  const preguntas = p.datos.preguntas as string[]
-  igual(preguntas.length, 3, 'tres preguntas, todas juntas')
-  cierto(preguntas[0].startsWith('¿Assisted Pistol Squat, Step Ups y Bulgarian Split Squat cuentan por lado'), 'primero el «por lado» de los tres, como en tu ejemplo')
-  cierto(preguntas[1].startsWith('Squat Jump no trae repeticiones ni tiempo: ¿cuántas pongo, o lo dejo así?'), 'luego la cantidad que falta')
-  igual(preguntas[2], 'Armé la rutina así, ¿está bien?\nBack Squat 4×8\nBI SERIE\n  Romanian Deadlift 3×8\n  Assisted Pistol Squat 3×8\nTRI SERIE\n  Step Ups 3×6\n  Bulgarian Split Squat 3×6\n  Squat Jump 3 series', 'y la rutina armada con su BI SERIE y su TRI SERIE para confirmarla')
-  cierto(String(p.datos.que_hacer).includes('UN solo mensaje') && String(p.datos.que_hacer).includes('estructura_ok'), 'dice cómo seguir')
-  cierto((p.datos.pendientes as any).catalogo === undefined, 'sin preguntas de catálogo si todo estaba en el catálogo')
-  ok('la rutina del ejemplo 2: «por lado», cantidad y biseries, en un solo mensaje')
+  // Tu ejemplo 2 tal cual lo habría mandado la IA. Antes (7 oct) eran tres preguntas; desde el 23 nov se SUPONE y se dice.
+  const { rev, dia } = armaYRevisa(RUTINA)
+  igual(exigirRespuestas({ revision: rev, catalogo: CATALOGO }), { sinFicha: [], sinCantidad: [] }, 'no pregunta nada: todo estaba en el catálogo')
+  igual(dia.exercises.map((e: any) => [e.name, e.porLado === true, e.reps]), [
+    ['Back Squat', false, '8'], ['Romanian Deadlift', false, '8'], ['Assisted Pistol Squat', true, '8'], ['Step Ups', true, '6'], ['Bulgarian Split Squat', true, '6'], ['Squat Jump', false, '10'],
+  ], 'completa la cantidad (3 × 10) y el «por lado» de los unilaterales en lo que se guarda')
+  cierto(rev.supuestos.some((s) => s === 'Cantidad: Squat Jump 3 × 10 (no venía)'), 'y lo dice: la cantidad')
+  cierto(rev.supuestos.some((s) => s === 'Por lado: Assisted Pistol Squat, Step Ups y Bulgarian Split Squat'), 'el «por lado»')
+  cierto(rev.supuestos.some((s) => s.includes('bi serie') && s.includes('tri serie')), 'y los bloques como vinieron (biserie y triserie)')
+  igual(lineasDeRevision(rev).supuestos, rev.supuestos, 'los supuestos van en la respuesta')
+  ok('la rutina del ejemplo 2: se guarda y se dicen los supuestos (cantidad, «por lado», bloques)')
 }
 {
-  // Ya contestó todo: se guarda.
-  const completo = RUTINA.map((e) => (e.nombre === 'Squat Jump' ? { ...e, cantidad: 10 } : { ...e, por_lado: ['Assisted Pistol Squat', 'Step Ups', 'Bulgarian Split Squat'].includes(e.nombre) ? true : undefined }))
-  const sinConfirmar = pregunta(() => exigirRespuestas({ revision: revisaDia(completo), catalogo: CATALOGO }))
-  igual((sinConfirmar.datos.preguntas as string[]).length, 1, 'con todo contestado solo falta confirmar la estructura')
-  cierto((sinConfirmar.datos.preguntas as string[])[0].startsWith('Armé la rutina así'), 'que se le enseña')
-  const listo = exigirRespuestas({ revision: revisaDia(completo), catalogo: CATALOGO, respuestas: { estructura_ok: true } })
-  igual(listo, { sinFicha: [], sinCantidad: [] }, 'confirmada la estructura, se guarda')
-  // «Así lo mando» sin cantidad.
-  const sinReps = exigirRespuestas({ revision: revisaDia(RUTINA.map((e) => (e.nombre === 'Squat Jump' ? e : { ...e, por_lado: ['Assisted Pistol Squat', 'Step Ups', 'Bulgarian Split Squat'].includes(e.nombre) ? true : undefined }))), catalogo: CATALOGO, respuestas: { estructura_ok: true, sin_cantidad_ok: ['squat jump'] } })
-  igual(sinReps.sinCantidad, ['Squat Jump'], '«así lo mando»: se guarda sin cantidad y se avisa')
-  ok('con las respuestas dadas, se guarda sin volver a preguntar')
+  // Lo que la persona ya dijo manda: «por_lado: false», «así lo mando» sin cantidad, y estructura_ok (no se listan los bloques).
+  const dicho = RUTINA.map((e) => (e.nombre === 'Bulgarian Split Squat' ? { ...e, por_lado: false } : e))
+  const { rev, dia } = armaYRevisa(dicho)
+  const r = exigirRespuestas({ revision: rev, catalogo: CATALOGO, respuestas: { estructura_ok: true, sin_cantidad_ok: ['squat jump'] } })
+  igual(r.sinCantidad, ['Squat Jump'], '«así lo mando»: se guarda sin cantidad y se avisa')
+  igual(dia.exercises.find((e: any) => e.name === 'Squat Jump').reps, '', 'sin cantidad, de verdad')
+  igual(dia.exercises.find((e: any) => e.name === 'Bulgarian Split Squat').porLado, undefined, 'lo que dijo («por_lado»: false) no se cambia')
+  cierto(!rev.supuestos.some((s) => /serie/.test(s)), 'con estructura_ok no lista los bloques')
+  ok('lo que la persona ya dijo no se supone')
 }
 {
-  // Sin biseries no hay nada que confirmar: un cambio simple se hace directo.
-  const simple = revisaDia([{ nombre: 'Back Squat', series: 4, cantidad: 8 }, { nombre: 'Lat Pull Down', series: 3, cantidad: 10 }])
-  igual(exigirRespuestas({ revision: simple, catalogo: CATALOGO }), { sinFicha: [], sinCantidad: [] }, 'sin biseries, con cantidad y sin unilaterales: se guarda directo')
-  // Lo que el plan ya tenía (leer un día y reescribirlo) no se vuelve a discutir: ni la estructura ni el «por lado» ni la cantidad.
+  // Lo que el plan ya tenía (leer un día y reescribirlo) no se cambia ni se comenta.
   const plan = { data: { phases: [{ weekData: [{ days: [{ exercises: [
     { name: 'Step Ups', set: 2, sets: '3', reps: '6' }, { name: 'Bulgarian Split Squat', set: 2, sets: '3', reps: '6' }, { name: 'Squat Jump', set: 2, sets: '3', reps: '' },
   ] }] }] }] } } as any
   const yaTenia = { nombres: nombresDeEjercicios(plan), firmas: firmasDeGrupos(plan) }
   igual([...yaTenia.firmas], ['bulgariansplitsquat|squatjump|stepup'], 'el plan reconoce su triserie por los nombres, sin importar el orden')
-  const reescrito = revisaDia([{ nombre: 'Squat Jump', grupo: 2 }, { nombre: 'Step Ups', series: 3, cantidad: 6, grupo: 2 }, { nombre: 'Bulgarian Split Squat', series: 3, cantidad: 6, grupo: 2 }])
-  igual(exigirRespuestas({ revision: reescrito, catalogo: CATALOGO, plan: yaTenia }), { sinFicha: [], sinCantidad: [] }, 'reescribir lo que ya estaba no pregunta nada')
-  // Pero una agrupación NUEVA sí se confirma.
-  const nueva = revisaDia([{ nombre: 'Back Squat', series: 3, cantidad: 5, grupo: 1 }, { nombre: 'Step Ups', series: 3, cantidad: 6, grupo: 1 }])
-  const p = pregunta(() => exigirRespuestas({ revision: nueva, catalogo: CATALOGO, plan: yaTenia }))
-  cierto((p.datos.preguntas as string[]).some((x) => x.includes('BI SERIE')), 'una agrupación nueva se enseña para confirmarla')
-  ok('reescribir un día no pregunta lo que ya estaba; una biserie nueva sí se confirma')
+  const { rev, dia } = armaYRevisa([{ nombre: 'Squat Jump', grupo: 2 }, { nombre: 'Step Ups', series: 3, cantidad: 6, grupo: 2 }, { nombre: 'Bulgarian Split Squat', series: 3, cantidad: 6, grupo: 2 }])
+  igual(exigirRespuestas({ revision: rev, catalogo: CATALOGO, plan: yaTenia }), { sinFicha: [], sinCantidad: [] }, 'reescribir lo que ya estaba no pregunta nada')
+  igual([rev.supuestos, dia.exercises.map((e: any) => [e.reps, e.porLado === true])], [[], [['', false], ['6', false], ['6', false]]], 'ni lo cambia ni lo comenta')
+  // Una agrupación NUEVA no se pregunta: se dice.
+  const nueva = revisaDia([{ nombre: 'Back Squat', series: 3, cantidad: 5, grupo: 1 }, { nombre: 'Lat Pull Down', series: 3, cantidad: 6, grupo: 1 }])
+  exigirRespuestas({ revision: nueva, catalogo: CATALOGO, plan: yaTenia })
+  cierto(nueva.supuestos.some((s) => s.includes('bi serie')), 'una biserie nueva va en los supuestos')
+  ok('reescribir un día no cambia lo que ya estaba; una biserie nueva se dice')
 }
 {
   igual(vistaPrevia([renglon('A', null, '4', '8'), renglon('B', 1), renglon('C', 1), renglon('D', 2), renglon('E', 2), renglon('F', 2), renglon('G', 3), renglon('H', 3), renglon('I', 3), renglon('J', 3)]), [
@@ -492,31 +488,14 @@ const revisaDia = (ejercicios: any[], titulo = 'Sábado') => {
   igual(vistaPrevia([renglon('A', 1), renglon('B', 2)]), ['A 3×8', 'B 3×8'], 'un grupo de un solo ejercicio no es una biserie')
   ok('la rutina armada se enseña con BI SERIE, TRI SERIE y CIRCUITO')
 }
-
-/* ---- Una rutina pegada de golpe sin ningún grupo: ¿de verdad van todos separados? ---- */
 {
-  const sinGrupos = RUTINA.map(({ grupo: _g, ...e }) => ({ ...e, ...(e.nombre === 'Squat Jump' ? { cantidad: 10 } : {}), por_lado: ['Assisted Pistol Squat', 'Step Ups', 'Bulgarian Split Squat'].includes(e.nombre) ? true : undefined }))
-  const p = pregunta(() => exigirRespuestas({ revision: revisaDia(sinGrupos), catalogo: CATALOGO }))
-  igual((p.datos.pendientes as any).agrupar, ['Sábado'], 'seis ejercicios nuevos y ningún grupo: le pide a la IA que revise el mensaje de la persona')
-  igual(p.datos.preguntas, undefined, 'no es una pregunta para la persona (todavía)')
-  cierto(String(p.datos.que_hacer).includes('AGRUPAR') && String(p.datos.que_hacer).includes('estructura_ok: true'), 'dice cómo seguir: agrupar con `grupo` o confirmar que todos van separados')
-  cierto(String(p.datos.mensaje).includes('agrupados'), 'y el mensaje lo dice')
-  // Si todos van separados, lo dice y sigue.
-  igual(exigirRespuestas({ revision: revisaDia(sinGrupos), catalogo: CATALOGO, respuestas: { estructura_ok: true } }), { sinFicha: [], sinCantidad: [] }, 'con estructura_ok: true se guarda')
-  // Con menos de 4 ejercicios nuevos no se pregunta nada: un cambio simple se hace directo.
-  const tres = revisaDia(sinGrupos.slice(0, 3))
-  igual(exigirRespuestas({ revision: tres, catalogo: CATALOGO }).sinFicha, [], 'tres ejercicios sin grupo se guardan directo')
-  // Reescribir lo que el plan ya tenía (aunque sean seis sin grupo) no se frena.
-  const plan = { data: { phases: [{ weekData: [{ days: [{ exercises: sinGrupos.map((e) => ({ name: e.nombre })) }] }] }] } } as any
-  igual(exigirRespuestas({ revision: revisaDia(sinGrupos), catalogo: CATALOGO, plan: { nombres: nombresDeEjercicios(plan), firmas: firmasDeGrupos(plan) } }), { sinFicha: [], sinCantidad: [] }, 'reescribir un día con los mismos ejercicios no se frena')
-  // Con grupos, ya no es «agrupar»: toca confirmar la estructura.
-  const conGrupos = pregunta(() => exigirRespuestas({ revision: revisaDia(RUTINA.map((e) => (e.nombre === 'Squat Jump' ? { ...e, cantidad: 10 } : { ...e, por_lado: ['Assisted Pistol Squat', 'Step Ups', 'Bulgarian Split Squat'].includes(e.nombre) ? true : undefined }))), catalogo: CATALOGO }))
-  igual((conGrupos.datos.pendientes as any).agrupar, undefined, 'con grupos ya no pide agrupar')
-  cierto((conGrupos.datos.preguntas as string[])[0].includes('3×6 por lado'), 'y la rutina armada enseña el «por lado»')
-  ok('una rutina pegada sin grupos: la IA tiene que revisar el mensaje antes de guardar')
+  // Antes (7 oct): seis ejercicios nuevos sin ningún grupo frenaban («¿de verdad van separados?»). Ahora se guarda: agrupar es trabajo de la IA.
+  const sinGrupos = RUTINA.map(({ grupo: _g, ...e }) => e)
+  igual(exigirRespuestas({ revision: revisaDia(sinGrupos), catalogo: CATALOGO }), { sinFicha: [], sinCantidad: [] }, 'seis sin grupo: se guarda sin preguntar')
+  ok('una rutina pegada sin grupos ya no frena')
 }
 
-/* ---- De punta a punta con la base de mentira: tu ejemplo 2 en editar_dia ---- */
+/* ---- De punta a punta con la base de mentira: tu ejemplo 2 en editar_dia (23 nov: se guarda a la primera) ---- */
 {
   const extras = [
     fila('RDL', 'Barra', 'Fuerza', ['Isquios', 'Glúteo']), fila('Pistol Squat', 'Peso corporal', 'Atlético', ['Piernas', 'Core']),
@@ -524,42 +503,28 @@ const revisaDia = (ejercicios: any[], titulo = 'Sábado') => {
     fila('Squat Jump', 'Peso corporal', 'Pliometría', ['Cuádriceps', 'Glúteo']),
   ]
   const { tools, actualizados } = herramientas(herramientasDelCoach, { exercises: [...EJERCICIOS, ...extras], profiles: [ATLETA_FALSO], plans: [PLAN_FALSO()] })
-  // Lo que mandó ChatGPT la primera vez (se vio en su permiso): nombres bien, pero sin grupos, sin «por lado» y sin reps en el último.
+  // Lo que mandó ChatGPT la primera vez: nombres bien, pero sin grupos, sin «por lado» y sin reps en el último.
   const comoChatGPT = [
     { nombre: 'Back Squat', series: 4, cantidad: 8 }, { nombre: 'RDL', series: 3, cantidad: 8 }, { nombre: 'Pistol Squat', series: 3, cantidad: 8 },
     { nombre: 'Step Ups', series: 3, cantidad: 6 }, { nombre: 'Bulgarian Split Squat', series: 3, cantidad: 6 }, { nombre: 'Squat Jump' },
   ]
   const primera = await tools.editar_dia({ atleta: 'zz_atleta', dia: 'sábado', sesiones: [{ nombre: 'Sesión', ejercicios: comoChatGPT }] })
-  igual([primera.structuredContent.guardado, actualizados.length], [false, 0], 'lo que mandó ChatGPT no se guarda: faltan respuestas')
-  igual(primera.structuredContent.pendientes.por_lado, ['Pistol Squat', 'Step Ups', 'Bulgarian Split Squat'], 'pregunta el «por lado» de los tres')
-  igual(primera.structuredContent.pendientes.sin_cantidad, ['Squat Jump'], 'y la cantidad que falta')
-  igual(primera.structuredContent.pendientes.estructura, undefined, 'sin grupos no hay estructura que confirmar')
-  igual(primera.structuredContent.pendientes.agrupar, ['Sábado · Sesión'], 'pero seis nuevos sin ningún grupo: que la IA revise el mensaje')
-
-  // Con las respuestas y los grupos que separó con líneas en blanco: primero pide confirmar la estructura.
-  const respondido = [
-    { nombre: 'Back Squat', series: 4, cantidad: 8 }, { nombre: 'RDL', series: 3, cantidad: 8, grupo: 1 }, { nombre: 'Pistol Squat', series: 3, cantidad: 8, grupo: 1, por_lado: true },
-    { nombre: 'Step Ups', series: 3, cantidad: 6, grupo: 2, por_lado: true }, { nombre: 'Bulgarian Split Squat', series: 3, cantidad: 6, grupo: 2, por_lado: true }, { nombre: 'Squat Jump', cantidad: 10, grupo: 2 },
-  ]
-  const segunda = await tools.editar_dia({ atleta: 'zz_atleta', dia: 'sábado', sesiones: [{ nombre: 'Sesión', ejercicios: respondido }] })
-  igual([segunda.structuredContent.guardado, actualizados.length], [false, 0], 'con todo contestado todavía pide confirmar las biseries')
-  cierto(segunda.structuredContent.preguntas[0].startsWith('Armé la rutina así'), 'enseñándolas')
-
-  const tercera = await tools.editar_dia({ atleta: 'zz_atleta', dia: 'sábado', sesiones: [{ nombre: 'Sesión', ejercicios: respondido }], estructura_ok: true })
-  igual([tercera.structuredContent.listo, actualizados.length], [true, 1], 'confirmada, se guarda')
+  igual([primera.structuredContent.listo, actualizados.length], [true, 1], 'lo que mandó ChatGPT se guarda a la primera')
+  const s = primera.structuredContent.supuestos as string[]
+  cierto(s.includes('Por lado: Pistol Squat, Step Ups y Bulgarian Split Squat') && s.includes('Cantidad: Squat Jump 3 × 10 (no venía)'), 'y trae lo que supuso')
+  cierto(Array.isArray(primera.structuredContent.asi_lo_vera_el_atleta) && primera.structuredContent.asi_lo_vera_el_atleta[0].atleta.length >= 2, 'y cómo lo verá el atleta')
   const guardado = actualizados[0].cambios.data.phases[0].weekData[0].days.find((d: any) => d.day === 'Sáb').exercises
-  igual(guardado.map((e: any) => [e.name, e.set ?? null, e.porLado === true, e.reps]), [
-    ['Back Squat', null, false, '8'], ['RDL', 1, false, '8'], ['Pistol Squat', 1, true, '8'],
-    ['Step Ups', 2, true, '6'], ['Bulgarian Split Squat', 2, true, '6'], ['Squat Jump', 2, false, '10'],
-  ], 'quedó con su biserie, su triserie, el «por lado» y las reps')
+  igual(guardado.map((e: any) => [e.name, e.porLado === true, e.reps]), [
+    ['Back Squat', false, '8'], ['RDL', false, '8'], ['Pistol Squat', true, '8'], ['Step Ups', true, '6'], ['Bulgarian Split Squat', true, '6'], ['Squat Jump', false, '10'],
+  ], 'quedó con el «por lado» y las reps supuestas')
 
-  // Reescribirlo igual después: ya estaba todo, no se pregunta nada. (El plan de la base falsa no cambia: se compara con el de antes.)
+  // Reescribirlo igual después: ya estaba todo, no se supone nada nuevo.
   const { tools: t2, actualizados: a2 } = herramientas(herramientasDelCoach, { exercises: [...EJERCICIOS, ...extras], profiles: [ATLETA_FALSO], plans: [{ ...PLAN_FALSO(), data: { kind: 'weekly', phases: [{ id: 'p-1', num: 1, name: 'Rutina semanal', weekData: [{ num: 1, label: '', load: '', days: [
     { day: 'Sáb', name: 'Sesión', cat: 'gym', exercises: guardado },
   ] }] }] } }] })
-  const igualQueAntes = await t2.editar_dia({ atleta: 'zz_atleta', dia: 'sábado', sesiones: [{ nombre: 'Sesión', ejercicios: comoChatGPT.map((e) => ({ ...e })) }] })
-  igual([igualQueAntes.structuredContent.listo, a2.length], [true, 1], 'reescribir un día que ya tenía todo no vuelve a preguntar')
-  ok('editar_dia con tu ejemplo 2: pregunta «por lado» y reps, confirma las biseries y guarda')
+  const igualQueAntes = await t2.editar_dia({ atleta: 'zz_atleta', dia: 'sábado', sesiones: [{ nombre: 'Sesión', ejercicios: guardado.map((e: any) => ({ nombre: e.name, series: Number(e.sets), cantidad: e.reps, por_lado: e.porLado === true })) }] })
+  igual([igualQueAntes.structuredContent.listo, a2.length, igualQueAntes.structuredContent.supuestos], [true, 1, undefined], 'reescribir un día que ya tenía todo no supone nada')
+  ok('editar_dia con tu ejemplo 2: se guarda a la primera y dice lo que supuso')
 }
 
 /* ---- ver_atleta: la sesión de HOY completa, sin pedirla aparte ---- */
@@ -624,15 +589,16 @@ const revisaDia = (ejercicios: any[], titulo = 'Sábado') => {
   ok('los esquemas que ve la IA son simples: fase en texto y números sin topes gigantes')
 }
 
-/* ---- crear_plan también ---- */
+/* ---- crear_plan también (23 nov: la cantidad que falta se supone) ---- */
 {
   const { tools, insertados } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [] })
   const sesiones = [{ dia: 'lunes', nombre: 'Día 1', ejercicios: [{ nombre: 'Back Squat', series: 4, cantidad: 8 }, { nombre: 'Lat Pull Down', series: 3 }] }]
   const p = await tools.crear_plan({ atleta: 'zz_atleta', titulo: 'Nuevo', tipo: 'rutina', sesiones })
-  igual([p.structuredContent.guardado, insertados.length, p.structuredContent.pendientes.sin_cantidad], [false, 0, ['Lat Pull Down']], 'crear_plan también pide la cantidad que falta')
-  const b = await tools.crear_plan({ atleta: 'zz_atleta', titulo: 'Nuevo', tipo: 'rutina', sesiones, sin_cantidad_ok: ['Lat Pull Down'] })
-  igual([b.structuredContent.listo, insertados.length, b.structuredContent.sin_cantidad], [true, 1, ['Lat Pull Down']], 'con «así lo mando» se crea y se avisa')
-  ok('crear_plan: pide la cantidad que falta y acepta «así lo mando»')
+  igual([p.structuredContent.listo, insertados.length], [true, 1], 'crear_plan guarda sin preguntar la cantidad')
+  cierto((p.structuredContent.supuestos as string[]).includes('Cantidad: Lat Pull Down 3 × 10 (no venía)'), 'y la dice como supuesto')
+  const b = await tools.crear_plan({ atleta: 'zz_atleta', titulo: 'Nuevo', tipo: 'rutina', sesiones, sin_cantidad_ok: ['Lat Pull Down'], reemplazar: true })
+  igual(b.structuredContent.sin_cantidad, ['Lat Pull Down'], 'con «así lo mando» se crea sin cantidad y se avisa')
+  ok('crear_plan: supone la cantidad que falta y acepta «así lo mando»')
 }
 
 /* ---- «Ciencia» se quitó (26 oct 2026): el conector ya no la ofrece, y reemplazar un plan conserva la foto ---- */

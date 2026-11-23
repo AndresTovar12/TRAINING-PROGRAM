@@ -2,7 +2,7 @@
 import type { McpServer } from 'npm:@modelcontextprotocol/sdk@1.30.1/server/mcp.js'
 import { z } from 'npm:zod@^4.1.13'
 import { APP_URL } from './config.ts'
-import { llamarFuncion, type Quien } from './sesion.ts'
+import { estiloDe, LLAVE_ESTILO, llamarFuncion, type Quien } from './sesion.ts'
 import {
   Aviso, buscarPersona, diaDesdeTexto, fechaDelAtleta, fechaLarga, mismoNombre, mismoTexto, NOMBRE_DIA, nombreCorto, nombreDe, palabrasDe,
   respuesta, rolDeOficio, seguro, sinAcentos, type Dia, type Persona,
@@ -15,7 +15,7 @@ import {
   repertorioVisible, resumenDelPlan, semanaNueva, siguienteNumFase, siguienteNumSemana, tipoDePlan, normalizar, claveDeRegistro,
   type Miembro, type Plan, type Programa, type SesionEntrada, asiLoVera, traeEditorNuevo, CAMPOS_DE_EDITOR,
 } from './plan.ts'
-import { anotarDia, equiposMasUsados, exigirRespuestas, lineasDeRevision, nuevaRevision, preguntaDeDatos, type Revision } from './preguntas.ts'
+import { anotarDia, equiposMasUsados, exigirRespuestas, lineasDeRevision, nuevaRevision, parecidosA, type Revision } from './preguntas.ts'
 import { cursorDe, estadoDe, registrosDe, ubicarDia, ubicarEnTodos } from './atleta.ts'
 import { repertorioConFicha } from './comunes.ts'
 import { cursorAlDia, dondeVa, estaEnPausa, historialDePeso, moverPlanA, reparaCursor, pausarPlan, reanudarPlan } from './app/training-utils.js'
@@ -25,6 +25,7 @@ import { CAT_COLORS, COLORES_TIPO } from './app/theme.js'
 import { cargaCatalogo, sugiereIcono } from './app/iconosDeTipo.js'
 import { claseDe } from './app/clases.js'
 import { guiaDeEscritura } from './app/sesionEnPalabras.js'
+import { MEDIDAS_DE_FICHA, CARGAS_DE_FICHA, FAMILIAS, ORDEN_DE_FAMILIAS } from './app/fichaDelEjercicio.js'
 
 export const SOLO_LEER = { readOnlyHint: true, destructiveHint: false, openWorldHint: false } as const
 export const ESCRIBE = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } as const
@@ -38,9 +39,9 @@ export const ATLETA = z.string().describe('El atleta: su usuario (@juan), su nom
 export const SIN_FICHA_OK = z.array(z.string()).optional()
   .describe('Solo después de preguntar: nombres de ejercicios que la persona confirmó que van TAL CUAL, sin ficha del catálogo (o que ya vienen de un plan que existe). Sin esto, un ejercicio que no está en el catálogo con su nombre exacto no se guarda: la herramienta te dice qué preguntar.')
 export const SIN_CANTIDAD_OK = z.array(z.string()).optional()
-  .describe('Solo después de preguntar: nombres de ejercicios que la persona dijo que van SIN repeticiones ni tiempo. Sin esto, un ejercicio sin "cantidad" no se guarda: la herramienta te dice qué preguntar.')
+  .describe('Nombres de ejercicios que la persona dijo que van SIN repeticiones ni tiempo. Sin esto, a un ejercicio sin "cantidad" se le pone 3 × 10 y se dice en "supuestos".')
 export const ESTRUCTURA_OK = z.boolean().optional()
-  .describe('true cuando la persona ya confirmó cómo armaste las biseries, triseries o circuitos (o ya los había pedido explícitamente). Sin esto, la primera vez la herramienta te devuelve la rutina armada para que se la enseñes y no guarda.')
+  .describe('true para no listar en "supuestos" las biseries, triseries o circuitos que armaste (la persona ya los confirmó o los pidió así). Agrupa con "grupo" según cómo escribió la lista.')
 export const FASE = z.coerce.string().optional()
   .describe('La fase: su número (1, 2…) o su nombre. En una rutina que se repite no hace falta.')
 
@@ -217,10 +218,10 @@ function programaParaLeer(quien: Quien, persona: Persona, programas: Programa[],
 const SIN_PROGRAMA = { plan: null, profesionalId: null, de: '', rol: 'coach', nombre: '', usuario: '', esPrincipal: true, altaEn: null } as unknown as Programa
 
 /** Arma los días de una semana a partir de sesiones con su día; lo que falta preguntar queda anotado en `rev`. */
-export function diasDesde(sesiones: any[], repertorio: any[], rev: Revision, donde = '') {
+export function diasDesde(sesiones: any[], repertorio: any[], rev: Revision, donde = '', opciones: { decideTu?: boolean } = {}) {
   return (sesiones ?? []).map((s) => {
     const clave = diaDesdeTexto(s.dia)
-    const armado = diaDesdeEntrada(clave, s as SesionEntrada, repertorio)
+    const armado = diaDesdeEntrada(clave, s as SesionEntrada, repertorio, opciones)
     anotarDia(rev, `${donde}${NOMBRE_DIA[clave]}${s.nombre ? ` · ${s.nombre}` : ''}`, armado)
     return armado.dia
   })
@@ -270,18 +271,19 @@ export function armarFasesDeLaIA(
   entrada: { tipo: 'rutina' | 'fases'; sesiones?: any[]; fases?: any[] },
   repertorio: any[],
   rev: Revision,
+  opciones: { decideTu?: boolean } = {},
 ) {
   let nuevas: any[]
   if (entrada.tipo === 'rutina') {
     if (!entrada.sesiones?.length) throw new Aviso('Para una rutina manda "sesiones", cada una con su día.')
     const base = faseNueva(1, { nombre: 'Rutina semanal' })
-    base.weekData = [{ ...semanaNueva(1), days: diasDesde(entrada.sesiones, repertorio, rev) }]
+    base.weekData = [{ ...semanaNueva(1), days: diasDesde(entrada.sesiones, repertorio, rev, '', opciones) }]
     nuevas = [base]
   } else {
     if (!entrada.fases?.length) throw new Aviso('Para un programa por fases manda "fases", cada una con sus semanas.')
     nuevas = entrada.fases.map((f: any, i: number) => {
       const fase: any = faseNueva(i + 1, f)
-      fase.weekData = f.semanas.map((w: any, j: number) => ({ ...semanaNueva(j + 1, w), days: diasDesde(w.sesiones, repertorio, rev, `${f.nombre} · semana ${j + 1} · `) }))
+      fase.weekData = f.semanas.map((w: any, j: number) => ({ ...semanaNueva(j + 1, w), days: diasDesde(w.sesiones, repertorio, rev, `${f.nombre} · semana ${j + 1} · `, opciones) }))
       return fase
     })
   }
@@ -684,7 +686,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
 
   server.registerTool('crear_plan', {
     title: 'Crear el plan de un atleta',
-    description: 'Crea el plan de un atleta. Dos tipos: "rutina" (una semana que se repite siempre; manda "sesiones") o "fases" (manda "fases", cada una con sus semanas y cada semana con sus sesiones). Cada sesión lleva su día. Para no repetir semanas iguales: crea la primera y luego usa agregar_semanas con copiar_de. Si el atleta ya tiene plan, falla, salvo con reemplazar: true (el plan anterior queda en el historial y se puede recuperar). Cada ejercicio va con su nombre EXACTO del catálogo (búscalo antes con buscar_ejercicios). Antes de guardar, la herramienta revisa que no falte nada; si falta (un ejercicio que no está en el catálogo, la cantidad, si un ejercicio a una pierna o brazo cuenta por lado, o confirmar las biseries que armaste) NO guarda y te devuelve las preguntas para que se las hagas a la persona TODAS JUNTAS, en un solo mensaje.',
+    description: 'Crea el plan de un atleta. Dos tipos: "rutina" (una semana que se repite siempre; manda "sesiones") o "fases" (manda "fases", cada una con sus semanas y cada semana con sus sesiones). Cada sesión lleva su día. Para no repetir semanas iguales: crea la primera y luego usa agregar_semanas con copiar_de. Si el atleta ya tiene plan, falla, salvo con reemplazar: true (el plan anterior queda en el historial y se puede recuperar). Cada ejercicio va con su nombre EXACTO del catálogo (búscalo antes con buscar_ejercicios). Solo frena por un ejercicio que no está en el catálogo (te dice qué preguntar, todo en un mensaje). La cantidad que falte (3 × 10), «por lado» y las biseries se suponen y vuelven en "supuestos": díselos a la persona en UNA línea que termine en «¿Cambio algo?». Running, Cycling, Swimming, Triatlón, Híbrido y Deporte van con "disciplina" y "piezas" / "sets" / "deporte" en palabras; la respuesta trae "asi_lo_vera_el_atleta": enséñaselo.',
     inputSchema: {
       atleta: ATLETA,
       titulo: z.string().describe('Título del plan.'),
@@ -702,7 +704,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     const persona = await buscarPersona(quien, atleta)
     const repertorio = await repertorioVisible(quien)
     const rev = nuevaRevision()
-    const { nuevas } = armarFasesDeLaIA({ tipo, sesiones, fases }, repertorio, rev)
+    const { nuevas } = armarFasesDeLaIA({ tipo, sesiones, fases }, repertorio, rev, { decideTu: !!quien.estilo?.decide_tu })
     const kind = tipo === 'rutina' ? 'weekly' : 'periodized'
     // El programa de ESTA persona con este atleta: su coach principal, el principal; un profesional del equipo, el suyo.
     const { plan: existente, profesionalId, de: deProfesional } = await planQueEdito(quien, persona, de)
@@ -762,7 +764,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
 
   server.registerTool('editar_dia', {
     title: 'Cambiar las sesiones de un día',
-    description: 'Reemplaza TODAS las sesiones de un día de la semana, en una semana de una fase, por las que mandes. Para cambiar un solo ejercicio: lee el día con ver_plan_de_atleta, cámbialo y manda la sesión completa. "sesiones": [] deja el día sin sesión. En una rutina que se repite no hace falta fase ni semana. Cada ejercicio NUEVO va con su nombre EXACTO del catálogo (búscalo antes con buscar_ejercicios). Antes de guardar, la herramienta revisa que no falte nada; si falta (un ejercicio que no está en el catálogo, la cantidad, si un ejercicio a una pierna o brazo cuenta por lado, o confirmar las biseries que armaste) NO guarda y te devuelve las preguntas para que se las hagas a la persona TODAS JUNTAS, en un solo mensaje. Lo que ya estaba en el día no se vuelve a preguntar.',
+    description: 'Reemplaza TODAS las sesiones de un día de la semana, en una semana de una fase, por las que mandes. Para cambiar un solo ejercicio: lee el día con ver_plan_de_atleta, cámbialo y manda la sesión completa. "sesiones": [] deja el día sin sesión. En una rutina que se repite no hace falta fase ni semana. Cada ejercicio NUEVO va con su nombre EXACTO del catálogo (búscalo antes con buscar_ejercicios). Solo frena por un ejercicio que no está en el catálogo (te dice qué preguntar, todo en un mensaje). La cantidad que falte (3 × 10), «por lado» y las biseries se suponen y vuelven en "supuestos": díselos a la persona en UNA línea que termine en «¿Cambio algo?». Running, Cycling, Swimming, Triatlón, Híbrido y Deporte van con "disciplina" y "piezas" / "sets" / "deporte" en palabras; la respuesta trae "asi_lo_vera_el_atleta": enséñaselo. Lo que ya estaba en el día no se vuelve a preguntar.',
     inputSchema: {
       atleta: ATLETA,
       fase: FASE,
@@ -786,7 +788,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     // La clase en video de una sesión no viaja en lo que manda la IA: se toma de la sesión que ya estaba (la del mismo nombre, o la que ocupaba ese lugar).
     const antes = (fases[fIdx].weekData[sIdx]?.days ?? []).filter((d: any) => d.day === clave)
     const nuevos = sesiones.map((s: any, i: number) => {
-      const armado = diaDesdeEntrada(clave, s, repertorio)
+      const armado = diaDesdeEntrada(clave, s, repertorio, { decideTu: !!quien.estilo?.decide_tu })
       const previa = antes.find((d: any) => s.nombre && d.name && mismoTexto(d.name, s.nombre)) ?? antes[i]
       if (claseDe(previa) && s.quitar_clase !== true && s.clase === undefined) (armado.dia as any).clase = structuredClone(previa.clase)
       /* Lo de un editor nuevo (piezas de Running, sets del Híbrido, drills de Deporte, calentamiento) tampoco se pierde si la IA reescribe la
@@ -1381,28 +1383,75 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     equipo: z.string().optional().describe('Ej.: barra, mancuernas, banda, peso corporal.'),
     musculos_principales: z.array(z.string()).optional().describe('Grupos o músculos que trabaja (ver_catalogos: grupos_musculares), ej.: Piernas, Glúteo.'),
     musculos_secundarios: z.array(z.string()).optional(),
-    video: z.string().url().optional().describe('Liga de YouTube, TikTok, Instagram o Vimeo. Los videos grabados se suben en la app.'),
+    video: z.string().url().optional().describe('Liga de YouTube, TikTok, Instagram o Vimeo. Un archivo se sube con pedir_subida y se pone con poner_medio_a_ejercicio.'),
+    // La ficha de los editores nuevos (migraciones 07 y 08). Las opciones salen de la ficha de la app (`fichaDelEjercicio.js`).
+    disciplinas: z.array(z.enum(ORDEN_DE_FAMILIAS as [string, ...string[]])).optional()
+      .describe(`Dónde se usa: ${ORDEN_DE_FAMILIAS.map((d: string) => `${d} (${(FAMILIAS as any)[d].nombre})`).join(', ')}. [] = ninguna a propósito.`),
+    unidad: z.enum(MEDIDAS_DE_FICHA.map((m: any) => m.valor) as [string, ...string[]]).optional()
+      .describe(`Cómo se mide: ${MEDIDAS_DE_FICHA.map((m: any) => `${m.valor} (${m.etiqueta})`).join(', ')}.`),
+    carga: z.enum(Object.keys(CARGAS_DE_FICHA) as [string, ...string[]]).optional()
+      .describe(`Peso o intensidad: ${Object.entries(CARGAS_DE_FICHA).map(([k, v]) => `${k} (${v})`).join(', ')}.`),
+    guiado: z.boolean().optional().describe('true si es un calentamiento en video que se sigue completo.'),
+    duracion_s: z.number().positive().optional().describe('Cuánto dura ese video guiado, en segundos.'),
   }
+  /** Los campos nuevos de la ficha, como columnas de `exercises`. */
+  const fichaNueva = (a: any) => ({
+    ...(a.disciplinas !== undefined ? { disciplinas: a.disciplinas } : {}), ...(a.unidad !== undefined ? { medida: a.unidad } : {}),
+    ...(a.carga !== undefined ? { carga_tipo: a.carga } : {}), ...(a.guiado !== undefined ? { guiado: a.guiado } : {}),
+    ...(a.duracion_s !== undefined ? { duracion_s: Math.round(a.duracion_s) } : {}),
+  })
+
+  /* EL ESTILO DE CADA COACH (Andrés, 23 nov 2026): cómo quiere que le pregunte la IA. Solo lo que él dice a propósito; la IA no va juntando
+     cosas por su cuenta. Vive en su `user_app_state` (llave `ia_estilo`), va al principio de las instrucciones y gana sobre las reglas generales. */
+  server.registerTool('ver_mi_estilo', {
+    title: 'Ver cómo quieres que te pregunte la IA',
+    description: 'Las reglas que la persona guardó sobre cómo quiere que le preguntes (ej. «decide tú y dime», «nunca preguntes por video»). Ya vienen al principio de tus instrucciones; úsala si dudas.',
+    inputSchema: {},
+    annotations: SOLO_LEER,
+  }, seguro(async () => {
+    const e = await estiloDe(quien)
+    return respuesta(e ? { reglas: e.reglas, decide_tu: !!e.decide_tu } : { reglas: [], nota: 'No ha guardado ninguna: se usan las reglas generales.' })
+  }))
+
+  server.registerTool('guardar_mi_estilo', {
+    title: 'Guardar cómo quieres que te pregunte la IA',
+    description: 'Guárdalo SOLO cuando la persona lo pida («de ahora en adelante decide tú», «siempre pregúntame el tipo de sesión»). Reemplaza las reglas: manda la lista completa (lee antes con ver_mi_estilo). [] las borra. decide_tu: true si quiere que decidas tú lo que no bloquea (un ejercicio con UN solo parecido se toma como ese).',
+    inputSchema: {
+      reglas: z.array(z.string().max(200)).max(12).describe('Cada regla en sus palabras, corta.'),
+      decide_tu: z.boolean().optional(),
+    },
+    annotations: ESCRIBE,
+  }, seguro(async ({ reglas, decide_tu }: any) => {
+    const limpias = (reglas as string[]).map((r) => r.trim()).filter(Boolean)
+    const { error } = await quien.db.rpc('mezclar_mi_estado', { p_usuario: quien.id, p_cambios: { [LLAVE_ESTILO]: { reglas: limpias, decide_tu: decide_tu === true } } })
+    if (error) throw new Error(error.message)
+    quien.estilo = { reglas: limpias, decide_tu: decide_tu === true }
+    return respuesta({ listo: true, reglas: limpias, decide_tu: decide_tu === true, nota: 'Vale desde la próxima vez que te conectes; en esta conversación ya lo sabes.' })
+  }))
 
   server.registerTool('crear_ejercicio', {
     title: 'Crear un ejercicio',
-    description: 'Agrega un ejercicio a tu repertorio: nombre, categoría, equipo, grupo muscular, nota y, si quieres, una liga de video (YouTube, TikTok…). Grabar o subir un video se hace en la app. Si solo traes el nombre NO lo guarda: te devuelve la pregunta que debes hacerle a la persona (una sola, con todo lo opcional), salvo que ya haya dicho que lo dejes solo con el nombre (sin_datos: true).',
+    description: 'Agrega un ejercicio a tu repertorio. Basta el nombre: sin categoría ni grupo muscular, se toman del ejercicio más parecido y vuelven en "supuestos" (díselo en una línea). NO preguntes por video, foto ni nota: si falta el video, dilo en una línea al final. Opcional: equipo, nota, liga de video, disciplinas, unidad, carga, guiado.',
     inputSchema: {
       nombre: z.string(),
       ...CAMPOS_EJERCICIO,
-      sin_datos: z.boolean().optional().describe('true SOLO si la persona ya dijo que lo dejes solo con el nombre, sin datos.'),
+      sin_datos: z.boolean().optional().describe('true para guardarlo solo con el nombre, sin suponer categoría ni grupo.'),
     },
     annotations: ESCRIBE,
   }, seguro(async (a: any) => {
     const repertorio = await repertorioVisible(quien)
     const ya = repertorio.find((r) => mismoNombre(r.name, a.nombre))
     if (ya) throw new Aviso(`Ya existe "${ya.name}" en el repertorio. Úsalo, o ponle otro nombre al nuevo.`)
-    const traeDatos = [a.descripcion, a.categoria, a.equipo, a.video].some((v) => typeof v === 'string' && v.trim())
-      || [a.musculos_principales, a.musculos_secundarios, a.categorias_secundarias].some((l) => Array.isArray(l) && l.length)
-    if (!traeDatos && !a.sin_datos) {
-      // Una sola pregunta con todo lo opcional (ver `preguntas.ts`); «así» = solo el nombre.
-      const [categorias, grupos] = await Promise.all([categoriasVisibles(), gruposMusculares()])
-      preguntaDeDatos(a.nombre.trim(), { categorias: [...new Set(categorias.map((c) => c.name))], grupos, equipos: equiposMasUsados(repertorio) })
+    /* «Se supone y se dice» (Andrés, 23 nov 2026): sin categoría ni grupo muscular, se toman del ejercicio más parecido del catálogo y se
+       dice; no se pregunta. Video, foto y nota nunca se preguntan al crear. */
+    const supuestos: string[] = []
+    if (!a.sin_datos && !a.categoria && !a.musculos_principales?.length) {
+      const parecido = parecidosA(a.nombre, repertorio).find((r: any) => r.category?.name || r.muscle_primary?.length)
+      if (parecido) {
+        if ((parecido as any).category?.name) { a.categoria = (parecido as any).category.name }
+        if ((parecido as any).muscle_primary?.length) { a.musculos_principales = (parecido as any).muscle_primary }
+        supuestos.push(`Categoría ${a.categoria ?? '—'}${a.musculos_principales ? ` y grupo ${[].concat(a.musculos_principales).join(', ')}` : ''}, como «${parecido.name}»`)
+      } else supuestos.push('Sin categoría ni grupo muscular (no se parece a ninguno del catálogo)')
     }
     const categoriaId = await categoriaPorNombre(a.categoria)
     const { data, error } = await quien.db.from('exercises').insert({
@@ -1414,10 +1463,15 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       muscle_primary: a.musculos_principales ?? null,
       muscle_secondary: a.musculos_secundarios ?? null,
       video_link: a.video ?? null,
+      ...fichaNueva(a),
       created_by: quien.id,
     }).select('id, name').single()
     if (error) throw new Error(error.message)
-    return respuesta({ listo: true, ejercicio: data.name, id: data.id })
+    return respuesta({
+      listo: true, ejercicio: data.name, id: data.id,
+      ...(supuestos.length ? { supuestos } : {}),
+      ...(!a.video ? { nota: 'Sin video: se agrega cuando quieras (liga, o un archivo con pedir_subida).' } : {}),
+    })
   }))
 
   server.registerTool('editar_ejercicio', {
@@ -1443,6 +1497,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     if (a.musculos_principales !== undefined) cambios.muscle_primary = a.musculos_principales
     if (a.musculos_secundarios !== undefined) cambios.muscle_secondary = a.musculos_secundarios
     if (a.video !== undefined) cambios.video_link = a.video
+    Object.assign(cambios, fichaNueva(a))
     if (!Object.keys(cambios).length) throw new Aviso('No hay nada que cambiar.')
 
     if (e.created_by === quien.id || esMaster) {
@@ -1451,7 +1506,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       return respuesta({ listo: true, ejercicio: cambios.name ?? e.name })
     }
     // De la app: la versión del coach, con la ficha COMPLETA (igual que la app).
-    const campos = ['name', 'description', 'category_id', 'categorias_secundarias', 'cover_image_url', 'video_url', 'video_link', 'muscle_primary', 'muscle_secondary', 'equipment']
+    const campos = ['name', 'description', 'category_id', 'categorias_secundarias', 'cover_image_url', 'video_url', 'video_link', 'muscle_primary', 'muscle_secondary', 'equipment', 'medida', 'carga_tipo', 'disciplinas', 'guiado', 'duracion_s']
     const ficha: Record<string, unknown> = {}
     campos.forEach((k) => { if (e[k] !== undefined) ficha[k] = e[k] })
     Object.assign(ficha, cambios)

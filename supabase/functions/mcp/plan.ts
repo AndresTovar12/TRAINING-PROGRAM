@@ -3,7 +3,7 @@ import { llamarFuncion, type Quien } from './sesion.ts'
 import {
   Aviso, type Dia, NOMBRE_DIA, type Persona, mismoNombre, mismoTexto, nombreCorto, nombreDe, rolDeOficio, sinAcentos,
 } from './util.ts'
-import { esUnilateral, firmasDeDia, type ItemDeCatalogo, type Renglon } from './preguntas.ts'
+import { esUnilateral, firmasDeDia, parecidosA, type ItemDeCatalogo, type Renglon } from './preguntas.ts'
 import {
   dondeVa, esDescanso, isLoadedExercise, sesionQueRepite, sessionIdFor,
   enOrdenDeSemana,
@@ -674,11 +674,26 @@ export function diaDesdeEntrada(
   diaSemana: Dia,
   sesion: SesionEntrada,
   repertorio: { id: string; name: string }[],
+  opciones: { decideTu?: boolean } = {},
 ) {
   const sinFicha: string[] = []
-  // Lo que la persona no dijo y quien arma la rutina tendría que preguntar (ver `exigirRespuestas`).
-  const sinCantidad: { nombre: string; grupo: number | null }[] = []
+  const supuestos: string[] = []
+  /* La ficha de un nombre: igual sin espacios ni guiones. Con el estilo «decide tú» del coach, un nombre con UN solo parecido en el catálogo
+     se toma como ese (y se dice); si no, se anota en `sinFicha` y se pregunta antes de guardar. */
+  const fichaDe = (n: string) => {
+    const f = repertorio.find((r) => mismoTexto(r.name, n)) ?? repertorio.find((r) => mismoNombre(r.name, n))
+    if (f) return f
+    if (opciones.decideTu) {
+      const p = parecidosA(n, repertorio as ItemDeCatalogo[])
+      if (p.length === 1) { supuestos.push(`«${n}» es «${p[0].name}» del repertorio`); return p[0] as { id: string; name: string } }
+    }
+    sinFicha.push(n)
+    return null
+  }
+  // Lo que la persona no dijo: se completa en `exigirRespuestas` (3 × 10, «por lado») y se le dice.
+  const sinCantidad: { nombre: string; grupo: number | null; ex: any }[] = []
   const porLado: string[] = []
+  const porLadoEx: { ex: any; nombre: string }[] = []
   const grupos = new Map<number, string>()
   // El formato de cada grupo: el del primer ejercicio que lo traiga, y vale para todos los del grupo.
   const formatosDeGrupo = new Map<number, any>()
@@ -689,8 +704,7 @@ export function diaDesdeEntrada(
     if (e.nota && !e.nombre) return { isNote: true, text: e.nota }
     if (!e.nombre) throw new Aviso('Cada ejercicio necesita "nombre" (o "nota" si es una nota).')
     // Igual en todo menos en espacios y guiones: «Lat Pulldown» y «Lat Pull-Down» son la misma ficha.
-    const ficha = repertorio.find((r) => mismoTexto(r.name, e.nombre!)) ?? repertorio.find((r) => mismoNombre(r.name, e.nombre!))
-    if (!ficha) sinFicha.push(e.nombre)
+    const ficha = fichaDe(e.nombre)
     const ex: Record<string, unknown> = {
       ...(ficha ? { exercise_id: ficha.id } : {}),
       name: ficha ? ficha.name : e.nombre.trim(),
@@ -721,19 +735,19 @@ export function diaDesdeEntrada(
     const nombreFinal = String(ex.name)
     // Sin cantidad: ni reps ni tiempo, ni un reloj de formato, ni vueltas con su cantidad.
     const conLapsos = Array.isArray(e.lapsos) && e.lapsos.length > 0
-    if ((e.cantidad == null || String(e.cantidad).trim() === '') && e.formato == null && !(Array.isArray(e.por_vuelta) && e.por_vuelta.length) && !conLapsos) {
-      sinCantidad.push({ nombre: nombreFinal, grupo: e.grupo ?? null })
+    if ((e.cantidad == null || String(e.cantidad).trim() === '') && e.formato == null && !(Array.isArray(e.por_vuelta) && e.por_vuelta.length) && !conLapsos && ex.unidad !== 'nada') {
+      sinCantidad.push({ nombre: nombreFinal, grupo: e.grupo ?? null, ex })
     }
-    // Cada lapso dice cuánto: si falta en alguno, se pregunta igual que una cantidad que falta.
+    // Un lapso sin cantidad no tiene una cantidad que suponer: se guarda como viene y se dice (`exigirRespuestas`), sin preguntar.
     if (conLapsos && e.lapsos!.some((l) => l?.cantidad == null || String(l.cantidad).trim() === '')) {
-      sinCantidad.push({ nombre: nombreFinal, grupo: e.grupo ?? null })
+      sinCantidad.push({ nombre: nombreFinal, grupo: e.grupo ?? null, ex: null })
     }
     if (conLapsos) {
       if (e.lapsos!.length > MAX_LAPSOS) throw new Aviso(`"${nombreFinal}": ${e.lapsos!.length} lapsos son demasiados (máximo ${MAX_LAPSOS}).`)
       if (e.por_vuelta?.length) throw new Aviso(`"${nombreFinal}": "lapsos" no se combina con "por_vuelta": cada lapso ya trae su cantidad y su carga. Usa uno de los dos.`)
       lapsosPedidos.set(ex, e.lapsos!)
     }
-    if (e.por_lado === undefined && esUnilateral(nombreFinal)) porLado.push(nombreFinal)
+    if (e.por_lado === undefined && esUnilateral(nombreFinal)) { porLado.push(nombreFinal); porLadoEx.push({ ex, nombre: nombreFinal }) }
     // Se colocan al final, cuando ya se sabe cuántas veces se repite el grupo.
     if (Array.isArray(e.por_vuelta) && e.por_vuelta.length) vueltasPedidas.set(ex, e.por_vuelta)
     if (e.grupo != null) {
@@ -826,14 +840,9 @@ export function diaDesdeEntrada(
   }
   /* Los editores nuevos (conector v2): la sesión en palabras se traduce a la forma EXACTA del editor (`app/sesionEnPalabras.js`). Un ejercicio que
      no está en el repertorio se anota en `sinFicha`, como los de Gym: se pregunta antes de guardar. */
-  const supuestos: string[] = []
   const nuevo = traeEditorNuevo(sesion)
   if (nuevo) {
-    const busca = (n: string) => {
-      const f = repertorio.find((r) => mismoTexto(r.name, n)) ?? repertorio.find((r) => mismoNombre(r.name, n))
-      if (!f) sinFicha.push(n)
-      return f ?? null
-    }
+    const busca = fichaDe
     let r: { dia: Record<string, unknown>; supuestos: string[] }
     try {
       r = sesionDesdePalabras({ disciplina: sesion.disciplina, lugar: sesion.lugar, piezas: sesion.piezas, sets: sesion.sets, deporte: sesion.deporte,
@@ -854,11 +863,13 @@ export function diaDesdeEntrada(
     throw new Aviso(`«${dia.name}» quedó vacía para el atleta: le falta lo que se hace (cuánto en cada pieza, o los ejercicios de cada Set).`)
   }
   // Un grupo con reloj (AMRAP, EMOM…) ya dice cuánto dura: sus ejercicios no necesitan cantidad.
-  const sinCantidadFinal = sinCantidad.filter((x) => !(x.grupo != null && formatosDeGrupo.has(x.grupo))).map((x) => x.nombre)
+  const faltaCantidad = sinCantidad.filter((x) => !(x.grupo != null && formatosDeGrupo.has(x.grupo)))
+  const sinCantidadFinal = faltaCantidad.map((x) => x.nombre)
+  const cantidadEx = faltaCantidad.filter((x) => x.ex).map((x) => ({ ex: x.ex, nombre: x.nombre }))
   const lista: Renglon[] = exercises.filter((ex: any) => !ex.isNote).map((ex: any) => ({
     nombre: String(ex.name), grupo: ex.set ?? null, series: String(ex.sets ?? ''), cantidad: String(ex.reps ?? ''), porLado: ex.porLado === true,
   }))
-  return { dia, sinFicha, sinCantidad: sinCantidadFinal, porLado, lista, supuestos, vista }
+  return { dia, sinFicha, sinCantidad: sinCantidadFinal, porLado, lista, supuestos, vista, verVista: () => asiLoVera(dia), cantidadEx, porLadoEx }
 }
 
 /**
