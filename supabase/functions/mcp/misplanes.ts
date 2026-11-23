@@ -4,7 +4,7 @@ import { z } from 'npm:zod@^4.1.13'
 import type { Quien } from './sesion.ts'
 import { Aviso, diaDesdeTexto, fechaDelAtleta, nombreDe, NOMBRE_DIA, respuesta, seguro, sinAcentos, mismoTexto, buscarPersona, sinConfirmarBorrado, TEXTO_CONFIRMADO_BORRAR } from './util.ts'
 import {
-  armarFasesDeLaIA, avisosDeRespuestas, BORRA, ESCRIBE, ESTRUCTURA_OK, FASE, FASES, planDe, SESION_CON_DIA, SIN_CANTIDAD_OK, SIN_FICHA_OK, SOLO_LEER,
+  armarFasesDeLaIA, avisosDeRespuestas, BORRA, ESCRIBE, ESTRUCTURA_OK, DECIDE_TU, FASE, FASES, planDe, SESION_CON_DIA, SIN_CANTIDAD_OK, SIN_FICHA_OK, SOLO_LEER,
 } from './coach.ts'
 import {
   buscarFase, buscarSemana, describirDia, describirSemana, diaDesdeEntrada, fasesDe, guardarFases, normalizar, planQueEdito, repertorioVisible, tipoDePlan,
@@ -395,11 +395,12 @@ export function herramientasDeMisPlanes(server: McpServer, quien: Quien) {
       sin_ficha_ok: SIN_FICHA_OK,
       sin_cantidad_ok: SIN_CANTIDAD_OK,
       estructura_ok: ESTRUCTURA_OK,
+      decide_tu: DECIDE_TU,
       ...PARAM_DE,
     },
     annotations: ESCRIBE,
   }, seguro(async (a: any) => {
-    const { nombre, descripcion, carpeta, desde_atleta, fases_elegidas, fase, semana, dia, solo_tipos, sin_tipos, tipo, sesiones, fases, sin_ficha_ok, sin_cantidad_ok, estructura_ok, de } = a
+    const { nombre, descripcion, carpeta, desde_atleta, fases_elegidas, fase, semana, dia, solo_tipos, sin_tipos, tipo, sesiones, fases, sin_ficha_ok, sin_cantidad_ok, estructura_ok, decide_tu, de } = a
     if (!String(nombre ?? '').trim()) throw new Aviso('Falta el nombre con el que se guarda.')
     const armando = !!(tipo || sesiones?.length || fases?.length)
     if (desde_atleta && armando) throw new Aviso('Elige UNO: o guardas algo del plan de un atleta ("desde_atleta"), o lo armas desde cero ("tipo" con "fases" o "sesiones"). No los dos a la vez.')
@@ -432,7 +433,7 @@ export function herramientasDeMisPlanes(server: McpServer, quien: Quien) {
       if (tipo === 'workout') {
         if (!sesiones?.length) throw new Aviso('Para un workout manda "sesiones" (una, o dos si es mañana y tarde).')
         const dias = sesiones.map((s: any) => {
-          const armado = diaDesdeEntrada('Lun', s, repertorio, { decideTu: !!quien.estilo?.decide_tu })
+          const armado = diaDesdeEntrada('Lun', s, repertorio, { decideTu: decide_tu === true })
           anotarDia(rev, s.nombre ?? 'Workout', armado)
           return armado.dia
         })
@@ -441,7 +442,7 @@ export function herramientasDeMisPlanes(server: McpServer, quien: Quien) {
         data = workoutDeSesiones(dias)
         tipoFinal = 'workout'
       } else {
-        const { nuevas } = armarFasesDeLaIA({ tipo: tipo === 'rutina' ? 'rutina' : 'fases', sesiones, fases }, repertorio, rev, { decideTu: !!quien.estilo?.decide_tu })
+        const { nuevas } = armarFasesDeLaIA({ tipo: tipo === 'rutina' ? 'rutina' : 'fases', sesiones, fases }, repertorio, rev, { decideTu: decide_tu === true })
         aceptado = exigirRespuestas({ revision: rev, catalogo: repertorio, plan: null, respuestas: { sin_ficha_ok, sin_cantidad_ok, estructura_ok } })
         lineas = lineasDeRevision(rev)
         const normales = normalizar(nuevas)

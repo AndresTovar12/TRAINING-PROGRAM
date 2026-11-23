@@ -691,18 +691,18 @@ const diaGuardado = (insertados: any[], dia = 'Lun') => insertados.at(-1).fila.d
   ok('running de series: 0 preguntas, forma del editor, atleta y reloj')
 }
 {
-  // Con la preferencia «decide tú»: 0 preguntas cuando el ejercicio nuevo tiene UN solo parecido obvio.
+  // Con «decide tú» (la IA lo recuerda en su memoria y lo manda en la llamada; Training Lab no lo guarda): 0 preguntas con UN solo parecido.
   const escrito = 'Hamstring Curl acostado'
   igual(parecidosA(escrito, EJERCICIOS as any).map((e) => e.name), ['Hamstring Curl'], 'un solo parecido (precondición)')
   const sesiones = [{ dia: 'lunes', nombre: 'Isquios', ejercicios: [{ nombre: escrito, series: 3, cantidad: 12 }] }]
   const { tools: sinEstilo } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [] })
-  igual(sc0(await sinEstilo.crear_plan({ atleta: 'zz_atleta', titulo: 'X', tipo: 'rutina', sesiones })).guardado, false, 'sin estilo, la IA resuelve el parecido (vuelve con el nombre exacto)')
-  const { tools, insertados } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [] }, { estilo: { reglas: ['decide tú y dime'], decide_tu: true } })
-  const r = sc0(await tools.crear_plan({ atleta: 'zz_atleta', titulo: 'X', tipo: 'rutina', sesiones }))
+  igual(sc0(await sinEstilo.crear_plan({ atleta: 'zz_atleta', titulo: 'X', tipo: 'rutina', sesiones })).guardado, false, 'sin decide_tu, la IA resuelve el parecido (vuelve con el nombre exacto)')
+  const { tools, insertados } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [] })
+  const r = sc0(await tools.crear_plan({ atleta: 'zz_atleta', titulo: 'X', tipo: 'rutina', sesiones, decide_tu: true }))
   igual([r.listo, r.preguntas], [true, undefined], 'con «decide tú»: 0 preguntas')
   igual(diaGuardado(insertados).exercises[0].name, 'Hamstring Curl', 'lo tomó como su parecido')
   cierto((r.supuestos as string[]).includes('«Hamstring Curl acostado» es «Hamstring Curl» del repertorio'), 'y lo dice')
-  ok('estilo «decide tú»: 0 preguntas con un solo parecido')
+  ok('«decide tú» (decide_tu: true): 0 preguntas con un solo parecido')
 }
 {
   // Borrar y asignar siguen pidiendo confirmación de verdad.

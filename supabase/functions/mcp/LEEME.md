@@ -82,10 +82,11 @@ Tres clases de dato (`preguntas.ts`, y arriba de todo en las instrucciones de `s
   las respuestas traen `supuestos`: la IA los dice en UNA línea que termina en «¿Cambio algo?». Lo que el plan ya tenía no se toca ni se comenta.
 - **NUNCA SE PREGUNTA AL CREAR:** video, foto, descripción, notas, ni completar fichas viejas (como mucho, una línea al final).
 - **La prisa** va en las instrucciones (el conector no ve el mensaje): mensaje corto o con «rápido», «ya», «así nomás» = máximo UNA pregunta.
-- **El estilo de cada coach** (`guardar_mi_estilo`, `ver_mi_estilo`): sus reglas, en sus palabras («decide tú y dime», «nunca preguntes por
-  video»). Viven en su `user_app_state`, llave `ia_estilo` (sin «:» para leer solo esa parte en cada llamada; sin migración). Van PRIMERO en las
-  instrucciones y en `quien_soy`, y ganan sobre lo de arriba. `decide_tu: true` hace que un nombre con UN solo parecido se tome como ese (y se
-  diga) sin volver a la IA. Solo lo que el coach dice a propósito: la IA no va juntando cosas por su cuenta.
+- **Cómo quiere cada persona que le pregunten NO se guarda en Training Lab** (Andrés, 23 nov 2026: «la persona entrena a su IA»). Cada IA
+  ya tiene su memoria (ChatGPT, Claude, los archivos de instrucciones de Claude Code y Codex): las instrucciones le piden recordarlo ahí y
+  respetarlo. Lo único que el conector hace solo es «decide tú»: si la IA manda `decide_tu: true` (en `crear_plan`, `editar_dia` o
+  `guardar_en_mis_planes`), un nombre con UN solo parecido en el catálogo se toma como ese y se dice en `supuestos`. Se probó guardarlo en
+  `user_app_state` y se quitó el mismo día: era tenerlo dos veces.
 
 Antes (7 oct) también frenaban la cantidad, el «por lado», las biseries nuevas y «agrupar» (6 ejercicios sin grupo); se pasaron a «se supone».
 Prueba: `scripts/prueba-mcp-preguntas.ts` (36 grupos, con los casos de la spec del 23 nov al final).

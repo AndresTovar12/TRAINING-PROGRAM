@@ -2,7 +2,7 @@
 import { McpServer } from 'npm:@modelcontextprotocol/sdk@1.30.1/server/mcp.js'
 import { WebStandardStreamableHTTPServerTransport } from 'npm:@modelcontextprotocol/sdk@1.30.1/server/webStandardStreamableHttp.js'
 import { APP_URL, SUPABASE_URL, metadatosDelRecurso } from './config.ts'
-import { estiloDe, quienLlama, SinPermiso, TokenInvalido, type Quien } from './sesion.ts'
+import { quienLlama, SinPermiso, TokenInvalido, type Quien } from './sesion.ts'
 import { fechaDelAtleta, NOMBRE_DIA, palabrasDe } from './util.ts'
 import { traduce } from './app/palabras.js'
 import { herramientasComunes } from './comunes.ts'
@@ -114,16 +114,15 @@ export function instrucciones(quien: Quien) {
       'Las notas de consulta de un fisio son suyas: no están aquí y no se piden ni se resumen.',
     ]
   /* CUÁNDO PREGUNTAR, arriba de todo (Andrés, 7 oct y 23 nov 2026: «un asistente que entiende a la primera»). OpenAI lee primero
-     los 512 caracteres: van las reglas, cortas. Las tres clases de dato están también en `preguntas.ts`. El estilo del coach, si lo
-     guardó (guardar_mi_estilo), va primero y gana sobre todo lo demás. */
-  const estilo = quien.rol !== 'atleta' && quien.estilo?.reglas?.length
-    ? [`Estilo de ${quien.nombre} (manda sobre las reglas de abajo): ${quien.estilo.reglas.join('; ')}.`] : []
+     los 512 caracteres: van las reglas, cortas. Las tres clases de dato están también en `preguntas.ts`. Cómo quiere cada persona que le
+     pregunten NO se guarda en Training Lab (Andrés, 23 nov 2026: «la persona entrena a su IA»): lo recuerda cada IA en su memoria. */
   const preguntar = quien.rol === 'atleta' ? [] : [
     'PREGUNTA SOLO LO QUE BLOQUEA: a qué atleta o día (si no lo dijo), un ejercicio con varios parecidos, uno que no existe («¿lo creo?»), y confirmar borrar, reemplazar, asignar, mandar mensajes o lo que toca dinero. Todo en UN mensaje con opciones numeradas.',
     'Lo demás lo supones y lo dices al final en UNA línea que acabe en «¿Cambio algo?» (las herramientas te dan "supuestos"). Nunca preguntes al crear por video, foto, descripción o notas.',
     'Prisa: mensaje corto o con «rápido», «ya», «así nomás» = máximo UNA pregunta. Si da muchos detalles o pide ayuda para diseñar, puedes preguntar más, siempre en un mensaje.',
+    'Si la persona te dice cómo quiere que le preguntes, recuérdalo TÚ (en tu memoria) y respétalo sobre estas reglas; si es «decide tú», manda decide_tu: true al armar planes.',
   ].map((t) => p(t))
-  return [...estilo, ...preguntar, ...comun, ...porRol].join('\n')
+  return [...preguntar, ...comun, ...porRol].join('\n')
 }
 
 export async function manejar(req: Request): Promise<Response> {
@@ -161,9 +160,6 @@ export async function manejar(req: Request): Promise<Response> {
     console.error('mcp: no se pudo identificar', e)
     return json({ error: 'server_error', error_description: 'No se pudo revisar tu cuenta. Intenta de nuevo.' }, 500)
   }
-
-  // El estilo de preguntar del coach va en las instrucciones (y lo usan las herramientas que arman planes).
-  if (quien.rol !== 'atleta') quien.estilo = await estiloDe(quien).catch(() => null)
 
   const server = new McpServer(
     { name: 'training-lab', title: 'Training Lab', version: '1.0.0' },

@@ -678,7 +678,7 @@ export function diaDesdeEntrada(
 ) {
   const sinFicha: string[] = []
   const supuestos: string[] = []
-  /* La ficha de un nombre: igual sin espacios ni guiones. Con el estilo «decide tú» del coach, un nombre con UN solo parecido en el catálogo
+  /* La ficha de un nombre: igual sin espacios ni guiones. Con «decide tú» (`decide_tu`, que la IA manda cuando la persona se lo pidió), un nombre con UN solo parecido en el catálogo
      se toma como ese (y se dice); si no, se anota en `sinFicha` y se pregunta antes de guardar. */
   const fichaDe = (n: string) => {
     const f = repertorio.find((r) => mismoTexto(r.name, n)) ?? repertorio.find((r) => mismoNombre(r.name, n))

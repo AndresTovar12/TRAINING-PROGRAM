@@ -2,7 +2,7 @@
 import type { McpServer } from 'npm:@modelcontextprotocol/sdk@1.30.1/server/mcp.js'
 import { z } from 'npm:zod@^4.1.13'
 import { APP_URL } from './config.ts'
-import { estiloDe, LLAVE_ESTILO, llamarFuncion, type Quien } from './sesion.ts'
+import { llamarFuncion, type Quien } from './sesion.ts'
 import {
   Aviso, buscarPersona, diaDesdeTexto, fechaDelAtleta, fechaLarga, mismoNombre, mismoTexto, NOMBRE_DIA, nombreCorto, nombreDe, palabrasDe,
   respuesta, rolDeOficio, seguro, sinAcentos, type Dia, type Persona,
@@ -42,6 +42,9 @@ export const SIN_CANTIDAD_OK = z.array(z.string()).optional()
   .describe('Nombres de ejercicios que la persona dijo que van SIN repeticiones ni tiempo. Sin esto, a un ejercicio sin "cantidad" se le pone 3 × 10 y se dice en "supuestos".')
 export const ESTRUCTURA_OK = z.boolean().optional()
   .describe('true para no listar en "supuestos" las biseries, triseries o circuitos que armaste (la persona ya los confirmó o los pidió así). Agrupa con "grupo" según cómo escribió la lista.')
+/* «Decide tú» (23 nov 2026): no se guarda en Training Lab; la IA lo recuerda en su memoria y lo manda en cada llamada. */
+export const DECIDE_TU = z.boolean().optional()
+  .describe('true si la persona te pidió que decidas tú (lo recuerdas tú): un ejercicio con UN solo parecido en el catálogo se toma como ese, sin preguntar, y se dice en "supuestos".')
 export const FASE = z.coerce.string().optional()
   .describe('La fase: su número (1, 2…) o su nombre. En una rutina que se repite no hace falta.')
 
@@ -697,14 +700,15 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       sin_ficha_ok: SIN_FICHA_OK,
       sin_cantidad_ok: SIN_CANTIDAD_OK,
       estructura_ok: ESTRUCTURA_OK,
+      decide_tu: DECIDE_TU,
       ...PARAM_DE,
     },
     annotations: { ...ESCRIBE, destructiveHint: true },
-  }, seguro(async ({ atleta, titulo, tipo, sesiones, fases, reemplazar, sin_ficha_ok, sin_cantidad_ok, estructura_ok, de }: any) => {
+  }, seguro(async ({ atleta, titulo, tipo, sesiones, fases, reemplazar, sin_ficha_ok, sin_cantidad_ok, estructura_ok, decide_tu, de }: any) => {
     const persona = await buscarPersona(quien, atleta)
     const repertorio = await repertorioVisible(quien)
     const rev = nuevaRevision()
-    const { nuevas } = armarFasesDeLaIA({ tipo, sesiones, fases }, repertorio, rev, { decideTu: !!quien.estilo?.decide_tu })
+    const { nuevas } = armarFasesDeLaIA({ tipo, sesiones, fases }, repertorio, rev, { decideTu: decide_tu === true })
     const kind = tipo === 'rutina' ? 'weekly' : 'periodized'
     // El programa de ESTA persona con este atleta: su coach principal, el principal; un profesional del equipo, el suyo.
     const { plan: existente, profesionalId, de: deProfesional } = await planQueEdito(quien, persona, de)
@@ -774,10 +778,11 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       sin_ficha_ok: SIN_FICHA_OK,
       sin_cantidad_ok: SIN_CANTIDAD_OK,
       estructura_ok: ESTRUCTURA_OK,
+      decide_tu: DECIDE_TU,
       ...PARAM_DE,
     },
     annotations: ESCRIBE,
-  }, seguro(async ({ atleta, fase, semana, dia, sesiones, sin_ficha_ok, sin_cantidad_ok, estructura_ok, de }: any) => {
+  }, seguro(async ({ atleta, fase, semana, dia, sesiones, sin_ficha_ok, sin_cantidad_ok, estructura_ok, decide_tu, de }: any) => {
     const { persona, plan, programa } = await planDe(quien, atleta, de)
     const fases = structuredClone(fasesDe(plan))
     const fIdx = buscarFase(plan, fase)
@@ -788,7 +793,7 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     // La clase en video de una sesión no viaja en lo que manda la IA: se toma de la sesión que ya estaba (la del mismo nombre, o la que ocupaba ese lugar).
     const antes = (fases[fIdx].weekData[sIdx]?.days ?? []).filter((d: any) => d.day === clave)
     const nuevos = sesiones.map((s: any, i: number) => {
-      const armado = diaDesdeEntrada(clave, s, repertorio, { decideTu: !!quien.estilo?.decide_tu })
+      const armado = diaDesdeEntrada(clave, s, repertorio, { decideTu: decide_tu === true })
       const previa = antes.find((d: any) => s.nombre && d.name && mismoTexto(d.name, s.nombre)) ?? antes[i]
       if (claseDe(previa) && s.quitar_clase !== true && s.clase === undefined) (armado.dia as any).clase = structuredClone(previa.clase)
       /* Lo de un editor nuevo (piezas de Running, sets del Híbrido, drills de Deporte, calentamiento) tampoco se pierde si la IA reescribe la
@@ -1400,34 +1405,6 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     ...(a.carga !== undefined ? { carga_tipo: a.carga } : {}), ...(a.guiado !== undefined ? { guiado: a.guiado } : {}),
     ...(a.duracion_s !== undefined ? { duracion_s: Math.round(a.duracion_s) } : {}),
   })
-
-  /* EL ESTILO DE CADA COACH (Andrés, 23 nov 2026): cómo quiere que le pregunte la IA. Solo lo que él dice a propósito; la IA no va juntando
-     cosas por su cuenta. Vive en su `user_app_state` (llave `ia_estilo`), va al principio de las instrucciones y gana sobre las reglas generales. */
-  server.registerTool('ver_mi_estilo', {
-    title: 'Ver cómo quieres que te pregunte la IA',
-    description: 'Las reglas que la persona guardó sobre cómo quiere que le preguntes (ej. «decide tú y dime», «nunca preguntes por video»). Ya vienen al principio de tus instrucciones; úsala si dudas.',
-    inputSchema: {},
-    annotations: SOLO_LEER,
-  }, seguro(async () => {
-    const e = await estiloDe(quien)
-    return respuesta(e ? { reglas: e.reglas, decide_tu: !!e.decide_tu } : { reglas: [], nota: 'No ha guardado ninguna: se usan las reglas generales.' })
-  }))
-
-  server.registerTool('guardar_mi_estilo', {
-    title: 'Guardar cómo quieres que te pregunte la IA',
-    description: 'Guárdalo SOLO cuando la persona lo pida («de ahora en adelante decide tú», «siempre pregúntame el tipo de sesión»). Reemplaza las reglas: manda la lista completa (lee antes con ver_mi_estilo). [] las borra. decide_tu: true si quiere que decidas tú lo que no bloquea (un ejercicio con UN solo parecido se toma como ese).',
-    inputSchema: {
-      reglas: z.array(z.string().max(200)).max(12).describe('Cada regla en sus palabras, corta.'),
-      decide_tu: z.boolean().optional(),
-    },
-    annotations: ESCRIBE,
-  }, seguro(async ({ reglas, decide_tu }: any) => {
-    const limpias = (reglas as string[]).map((r) => r.trim()).filter(Boolean)
-    const { error } = await quien.db.rpc('mezclar_mi_estado', { p_usuario: quien.id, p_cambios: { [LLAVE_ESTILO]: { reglas: limpias, decide_tu: decide_tu === true } } })
-    if (error) throw new Error(error.message)
-    quien.estilo = { reglas: limpias, decide_tu: decide_tu === true }
-    return respuesta({ listo: true, reglas: limpias, decide_tu: decide_tu === true, nota: 'Vale desde la próxima vez que te conectes; en esta conversación ya lo sabes.' })
-  }))
 
   server.registerTool('crear_ejercicio', {
     title: 'Crear un ejercicio',

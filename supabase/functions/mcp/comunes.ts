@@ -117,8 +117,6 @@ export function herramientasComunes(server: McpServer, quien: Quien) {
       ...(equipo.length ? { equipo } : {}),
       unidad_de_peso: quien.unidad,
       hoy: { fecha: hoy.texto, dia: NOMBRE_DIA[hoy.dia], zona_horaria: ZONA },
-      // Cómo quiere este coach que le pregunte la IA (guardar_mi_estilo). Gana sobre las reglas generales.
-      ...(quien.estilo?.reglas?.length ? { estilo: { reglas: quien.estilo.reglas, decide_tu: !!quien.estilo.decide_tu } } : {}),
     })
   }))
 
