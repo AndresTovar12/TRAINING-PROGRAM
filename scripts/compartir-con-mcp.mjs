@@ -28,7 +28,9 @@ const ARCHIVOS = ['training-utils.js', 'medidas.js', 'theme.js', 'unidades.js', 
   // Conector v2 (23 nov 2026): la sesión en palabras, los catálogos de los editores y los dos validadores (lo que ve el atleta y el reloj).
   'sesionEnPalabras.js', 'catalogoDeLaLista.js', 'catalogoDeDeporte.js', 'hibrido.js', 'fichaDelEjercicio.js', 'editorDeLaSesion.js', 'pasosDeLaLista.js',
   'entreno.js', 'hibridoAlAtleta.js', 'cargaPorcentaje.js', 'setsDeUnaSesion.js', 'enQueVas.js', 'relojSinTelefono.js', 'entrenoDatos.js', 'entrenoLibre.js',
-  'actividades.js', 'recorrido.js', 'rutaSilenciosa.js', 'ubicacion.js', 'metricas/calculos.js', 'metricas/construye.js'];
+  'actividades.js', 'recorrido.js', 'rutaSilenciosa.js', 'ubicacion.js', 'metricas/calculos.js', 'metricas/construye.js',
+  // Agentes con archivos (23 nov 2026): las mismas ligas de video y el mismo tope por archivo que la app.
+  'ligas.js', 'espacio.js'];
 const destino = join(raiz, 'supabase/functions/mcp/app');
 const soloRevisar = process.argv.includes('--revisar');
 

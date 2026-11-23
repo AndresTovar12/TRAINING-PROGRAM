@@ -13,6 +13,7 @@ import { herramientasDeMiVitrina } from './misvitrina.ts'
 import { herramientasDeMensajes } from './mensajes.ts'
 import { herramientasDeMetricas } from './metricas.ts'
 import { herramientasDelAdmin } from './admin.ts'
+import { herramientasDeMedios } from './medios.ts'
 
 /**
  * EL SERVIDOR MCP DE TRAINING LAB.
@@ -178,6 +179,7 @@ export async function manejar(req: Request): Promise<Response> {
     herramientasDeMiVitrina(server, quien)
     herramientasDeMensajes(server, quien)
     herramientasDeMetricas(server, quien)
+    herramientasDeMedios(server, quien)
     if (quien.rol === 'master') herramientasDelAdmin(server, quien)
   }
 

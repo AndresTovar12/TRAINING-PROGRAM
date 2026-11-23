@@ -68,33 +68,69 @@ siempre) y `wr:sessions@<id>` y `wr:cursor@<id>` para cada profesional del equip
 - Las notas de consulta de un fisio NO entran al conector: no hay ninguna
   herramienta que las lea ni las escriba.
 
-## Cuándo pregunta la IA (7 oct 2026)
+## Cuándo pregunta la IA (23 nov 2026; antes, 7 oct)
 
-Andrés quiere que ChatGPT y Claude pregunten cuando hay duda, pero solo lo que tendrían que adivinar: lo que
-la persona ya dijo no se vuelve a preguntar, y lo que se puede deducir se deduce y se enseña. Son dos piezas:
+Andrés quiere «un asistente que entiende a la primera»: pregunta solo lo que de verdad bloquea, decide lo demás con buen criterio y lo dice.
+Tres clases de dato (`preguntas.ts`, y arriba de todo en las instrucciones de `servidor.ts`, dentro de los primeros 512 caracteres):
 
-- **La nota** (`instrucciones` en `servidor.ts`, arriba de todo: OpenAI pide lo importante en los primeros
-  512 caracteres). Es un consejo: cada IA puede o no seguirlo. Cubre lo que el conector no ve (biserie o
-  separados, «por lado», reps que faltan).
-- **Los topes** (`preguntas.ts`). Lo que el conector SÍ revisa solo. Si falta algo se detiene ANTES de
-  guardar y contesta una `Pregunta` (no un error: `guardado: false` + la pregunta y las opciones reales).
-  Cada tope trae su salida, para no preguntar lo que la persona ya dijo:
-  - `crear_ejercicio` solo con el nombre → una sola pregunta con categoría, grupo muscular, equipo y nota.
-    Con cualquier dato, o con `sin_datos: true` («así»), se guarda.
-  - `crear_plan` y `editar_dia` revisan, ANTES de guardar, cuatro cosas, y si falta algo NO guardan y
-    contestan TODAS las preguntas juntas (para que la IA las haga en un solo mensaje):
-    1. un ejercicio que no está en el catálogo con su nombre (sin importar mayúsculas, acentos, espacios,
-       guiones ni plural) → trae los parecidos y cómo preguntar; `sin_ficha_ok: [nombres]` lo deja pasar;
-    2. un ejercicio sin cantidad (ni reps, ni tiempo, ni reloj de formato, ni vueltas) → `sin_cantidad_ok`
-       («así lo mando»);
-    3. un ejercicio a una pierna o un brazo (por su nombre: pistol, step ups, búlgara, zancadas…) sin decir
-       `por_lado` true o false;
-    4. biseries, triseries o circuitos NUEVOS (`grupo`): se devuelve la rutina armada con BI SERIE / TRI SERIE
-       para que la persona la confirme; `estructura_ok: true` la deja pasar.
-    Lo que el plan ya tenía (nombres y agrupaciones) no cuenta: leer un día y reescribirlo no se frena.
+- **BLOQUEA (se pregunta, todo junto, en UN mensaje con opciones numeradas):** a qué atleta o a qué día, si no lo dijo; un ejercicio que no está
+  en el catálogo (caso «uno»: la IA vuelve a llamar con el nombre exacto SIN preguntar; «varios»: cuál; «ninguno»: «¿lo creo?»); borrar,
+  reemplazar un plan o un video, asignar, mandar mensajes y lo que toca dinero (con su `confirmado: true`, como siempre).
+- **SE SUPONE Y SE DICE (no se pregunta):** la cantidad que falta (3 × 10; `sin_cantidad_ok` la deja vacía), «por lado» en un ejercicio a una
+  pierna o un brazo, las biseries y circuitos como vinieron escritos (`grupo`), el tipo de sesión (sale de su Disciplina) y, en
+  `crear_ejercicio`, la categoría y el grupo muscular del ejercicio más parecido. `exigirRespuestas` los completa en lo que se va a guardar y
+  las respuestas traen `supuestos`: la IA los dice en UNA línea que termina en «¿Cambio algo?». Lo que el plan ya tenía no se toca ni se comenta.
+- **NUNCA SE PREGUNTA AL CREAR:** video, foto, descripción, notas, ni completar fichas viejas (como mucho, una línea al final).
+- **La prisa** va en las instrucciones (el conector no ve el mensaje): mensaje corto o con «rápido», «ya», «así nomás» = máximo UNA pregunta.
+- **El estilo de cada coach** (`guardar_mi_estilo`, `ver_mi_estilo`): sus reglas, en sus palabras («decide tú y dime», «nunca preguntes por
+  video»). Viven en su `user_app_state`, llave `ia_estilo` (sin «:» para leer solo esa parte en cada llamada; sin migración). Van PRIMERO en las
+  instrucciones y en `quien_soy`, y ganan sobre lo de arriba. `decide_tu: true` hace que un nombre con UN solo parecido se tome como ese (y se
+  diga) sin volver a la IA. Solo lo que el coach dice a propósito: la IA no va juntando cosas por su cuenta.
 
-Los parecidos son por letras (el catálogo está casi todo en inglés: «jalón» no encuentra «pull down»); esa
-traducción la hace la IA con `buscar_ejercicios`. Prueba: `scripts/prueba-mcp-preguntas.ts`.
+Antes (7 oct) también frenaban la cantidad, el «por lado», las biseries nuevas y «agrupar» (6 ejercicios sin grupo); se pasaron a «se supone».
+Prueba: `scripts/prueba-mcp-preguntas.ts` (36 grupos, con los casos de la spec del 23 nov al final).
+
+## La sesión en palabras: todos los editores (23 nov 2026)
+
+La IA escribe Running, Cycling, Swimming, Triatlón, Híbrido, Deporte, el calentamiento y la clase como se lo diría al coach, y el conector
+guarda EXACTAMENTE la forma de los editores de la app. Spec: `docs/superpowers/specs/2026-11-23-conector-v2.md`.
+
+- Cada sesión de `crear_plan`, `editar_dia` y `guardar_en_mis_planes` acepta `disciplina` (decide el editor), `lugar` (Cycling), `piezas`
+  (Running, Cycling, Swimming, Triatlón → `day.tramos`), `sets` (Híbrido → `day.hibrido.sets`), `deporte` (→ `day.deporte.items`),
+  `calentamiento`, `enfriamiento` y `clase`. Los valores, en palabras: «15 min», «1 km», «4:20-4:30», «zona 2», «250 W», «1:45 /100 m»,
+  «hasta recuperarse», «en menos de 60 seg».
+- **Sale del código de los editores, no de una lista aparte** (decisión de Andrés): las piezas, sus palabras, unidades, intensidades y
+  constructores viven en `src/lib/catalogoDeLaLista.js`, `hibrido.js` y `catalogoDeDeporte.js`, que usan los editores Y el conector. El esquema
+  que ve la IA se genera de ahí (`guiaDeEscritura`). Lo único escrito a mano son los lectores por tipo de dato, en `src/lib/sesionEnPalabras.js`
+  (con su inverso). `scripts/prueba-sesion-en-palabras.mjs` (en `npm run pruebas`) recorre los catálogos y falla si una opción no se puede
+  escribir, no llega al atleta o al reloj, o no se lee de vuelta igual.
+- **Al guardar** cada sesión pasa por `pasosDeLaSesion` y `pasosParaElReloj` (copias de la app): si una sesión nueva no le da pasos al atleta,
+  no se guarda y se dice qué falta; si sale bien, la respuesta trae `asi_lo_vera_el_atleta` (3 a 6 líneas, y si llega al Apple Watch).
+- **Al leer** (`ver_dia_de_atleta`, `ver_plan_de_atleta`, `abrir_de_mis_planes`) el día trae lo de su editor en las mismas palabras: se puede
+  mandar de vuelta tal cual. `editar_dia` conserva lo que la IA no mandó (como la clase), salvo si manda ejercicios de Gym.
+- La ficha: `crear_ejercicio` y `editar_ejercicio` aceptan `disciplinas`, `unidad`, `carga`, `guiado` y `duracion_s` (migraciones 07 y 08).
+
+## Agentes con archivos (23 nov 2026)
+
+Para «entra a mi Drive, saca estos videos y pónselos a estos ejercicios»: el agente (Claude Code, Codex, Hermes) junta sus herramientas de
+archivos con estas (`medios.ts`). En un chat sin archivos (ChatGPT o Claude normal) se usan ligas.
+
+| Herramienta | Qué hace |
+|---|---|
+| `pedir_subida` | Por cada archivo (ejercicio, tipo, nombre, tamaño exacto, tipo de contenido), el permiso de la MISMA función `r2-upload` de la app (mismos topes, bucket y espacio). Devuelve `subir_a` (PUT; vale 6 horas, como en la app) y `url`. Dice cómo subir (con `Cache-Control` de la app) y que, con ffmpeg, primero se ponga el índice: `ffmpeg -i entrada -c copy -movflags +faststart salida.mp4`. |
+| `poner_medio_a_ejercicio` | La `url` de la subida o una liga de YouTube, TikTok, Instagram o Vimeo (las de `app/ligas.js`, las mismas de la app). Rol: ejemplo, explicación o portada. Guarda como `addExerciseMedia`; la portada en `cover_image_url` (o en «tu versión» si el ejercicio es de la app). Por defecto agrega. |
+
+- Todo va en lote (hasta 50), con el resultado de cada uno: si uno falla, los demás siguen.
+- Más de uno a la vez, reemplazar o pisar una portada piden `confirmado: true`; sin él se devuelve la lista «archivo → ejercicio» para
+  enseñarla (adivinar a qué ejercicio va cada archivo se presta a errores: es de «bloquea»).
+- Las direcciones propias son las de `r2-upload` (`HOSTS_PROPIOS`); `scripts/prueba-mcp-medios.ts` revisa que sigan iguales.
+
+**Lo que falta para tareas en lote** (revisado el 23 nov 2026):
+1. Completar o cambiar fichas de muchos ejercicios a la vez: `editar_ejercicio` va de uno en uno (y cada llamada relee el repertorio).
+2. Ordenar el repertorio por categorías en lote: lo mismo (uno por uno).
+3. Quitar un video suelto o ver los medios de un ejercicio: solo se puede reemplazar; no hay `ver_medios` ni `quitar_medio`.
+4. La portada automática de un video (la app la saca sola al subir): por el conector no se genera.
+5. El conector no puede comprobar que el agente le puso el índice al video ni que el PUT terminó: confía en el `url` que le mandan.
 
 ## La ciencia de un plan (7 oct 2026) — QUITADA el 26 oct 2026
 

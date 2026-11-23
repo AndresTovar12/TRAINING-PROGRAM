@@ -11,6 +11,10 @@ import { herramientasComunes } from '../supabase/functions/mcp/comunes.ts'
 import { herramientasDelCoach } from '../supabase/functions/mcp/coach.ts'
 import { herramientasDelAtleta } from '../supabase/functions/mcp/atleta.ts'
 import { z } from 'npm:zod@^4.1.13'
+import { sesionDesdePalabras, palabrasDeSesion } from '../supabase/functions/mcp/app/sesionEnPalabras.js'
+import { pasosDeLaSesion } from '../supabase/functions/mcp/app/entreno.js'
+import { pasosParaElReloj } from '../supabase/functions/mcp/app/relojSinTelefono.js'
+const sc0 = (r: any) => r?.structuredContent
 
 const igual = (a: unknown, b: unknown, msg: string) => {
   const x = JSON.stringify(a), y = JSON.stringify(b)
@@ -234,11 +238,11 @@ const CATEGORIAS = [
   { id: 'c-hipertrofia', name: 'Hipertrofia', slug: 'hipertrofia', created_by: null },
   { id: 'c-potencia', name: 'Potencia', slug: 'potencia', created_by: null },
 ]
-function herramientas(con: (s: any, q: any) => void, tablas: Record<string, any[]> = {}) {
+function herramientas(con: (s: any, q: any) => void, tablas: Record<string, any[]> = {}, deQuien: Record<string, unknown> = {}) {
   const { db, insertados, actualizados } = baseFalsa({
     exercises: EJERCICIOS, exercise_categories: CATEGORIAS, exercise_overrides: [], grupos_musculares: [{ id: 'g1', name: 'Rotadores' }], ...tablas,
   })
-  const quien: any = { id: 'master-1', usuario: 'andres', nombre: 'Andrés', rol: 'master', salud: false, unidad: 'kg', db }
+  const quien: any = { id: 'master-1', usuario: 'andres', nombre: 'Andrés', rol: 'master', salud: false, unidad: 'kg', db, ...deQuien }
   const tools: Record<string, (a: any) => Promise<any>> = {}
   const server: any = { registerTool: (nombre: string, _def: unknown, fn: (a: any) => Promise<any>) => { tools[nombre] = fn } }
   con(server, quien)
@@ -645,6 +649,107 @@ const revisaDia = (ejercicios: any[], titulo = 'Sábado') => armaYRevisa(ejercic
   const fila = pl.insertados.find((x: any) => x.tabla === 'routine_templates')?.fila
   igual([fila?.data?.clase, fila?.resumen?.clase, fila?.resumen?.duracion], [CLASE, true, 2700], 'la plantilla lleva la clase y su resumen la marca como Clase')
   ok('clases en video: se ven, se conservan al editar, se quitan solo si lo piden y viajan en las plantillas')
+}
+
+/* ==================================================================
+   CONECTOR V2 (23 nov 2026): los casos que pidió Andrés en la spec
+   docs/superpowers/specs/2026-11-23-conector-v2.md (parte 2B y 5).
+   ================================================================== */
+const sinIds = (o: unknown) => JSON.parse(JSON.stringify(o, (k, v) => (k === 'id' ? undefined : v)))
+const diaGuardado = (insertados: any[], dia = 'Lun') => insertados.at(-1).fila.data.phases[0].weekData[0].days.find((d: any) => d.day === dia)
+{
+  // «Rutina rápida con 3 ejercicios, uno nuevo»: UNA pregunta (¿lo creo?); con la respuesta, guarda y trae sus supuestos.
+  const { tools, insertados } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [] })
+  const rapida = [{ dia: 'lunes', nombre: 'Rápida', ejercicios: [{ nombre: 'Back Squat', series: 4, cantidad: 6 }, { nombre: 'Lat Pull Down' }, { nombre: 'Copenhague con banda' }] }]
+  const p = sc0(await tools.crear_plan({ atleta: 'zz_atleta', titulo: 'Rápida', tipo: 'rutina', sesiones: rapida }))
+  igual([p.guardado, insertados.length, (p.preguntas as string[]).length], [false, 0, 1], 'una sola pregunta')
+  cierto(p.preguntas[0].includes('Copenhague con banda') && p.preguntas[0].includes('¿lo creo?'), 'la que bloquea: el ejercicio que no existe')
+  // La persona dijo «sí, créalo»: la IA lo crea (basta el nombre) y vuelve a llamar.
+  const creado = sc0(await tools.crear_ejercicio({ nombre: 'Copenhague con banda' }))
+  igual(creado.listo, true, 'crear_ejercicio con solo el nombre no pregunta')
+  const { tools: t2, insertados: i2 } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [], exercises: [...EJERCICIOS, fila('Copenhague con banda', null, 'Fuerza', ['Aductores'])] })
+  const listo = sc0(await t2.crear_plan({ atleta: 'zz_atleta', titulo: 'Rápida', tipo: 'rutina', sesiones: rapida }))
+  igual([listo.listo, i2.length], [true, 1], 'con la respuesta, guarda')
+  cierto((listo.supuestos as string[]).some((x) => x.startsWith('Cantidad:')) && listo.asi_lo_vera_el_atleta.length === 1, 'y trae sus supuestos y cómo lo verá el atleta')
+  ok('rutina rápida con uno nuevo: 1 pregunta, guarda y dice lo que supuso')
+}
+{
+  // «Arma un running de series» con ritmos y distancias: 0 preguntas. Lo guardado es la forma del editor y el atleta y el reloj lo leen.
+  const { tools, insertados } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [] })
+  const sesion = { dia: 'martes', nombre: 'Series', disciplina: 'correr', piezas: [
+    { pieza: 'cal', cuanto: '15 min', intensidad: 'zona 2' },
+    { pieza: 'int', tramos: [{ cuanto: '1 km', intensidad: '4:20-4:30' }, { cuanto: '400 m', intensidad: '6:00-6:30' }], veces: 8 },
+    { pieza: 'calma', cuanto: '10 min', intensidad: 'zona 1' },
+  ] }
+  const r = sc0(await tools.crear_plan({ atleta: 'zz_atleta', titulo: 'Running', tipo: 'rutina', sesiones: [sesion] }))
+  igual([r.listo, r.preguntas, insertados.length], [true, undefined, 1], 'cero preguntas')
+  const dia = diaGuardado(insertados, 'Mar')
+  igual(sinIds(dia.tramos), sinIds(sesionDesdePalabras(sesion).dia.tramos), 'guardó EXACTAMENTE la forma del editor (`day.tramos`)')
+  igual([dia.disciplina, dia.cat], ['correr', 'correr'], 'con su Disciplina y el tipo que le toca')
+  cierto(pasosDeLaSesion(dia).pasos.length >= 10 && pasosParaElReloj(dia).length >= 10, 'el atleta y el reloj lo leen')
+  cierto(r.asi_lo_vera_el_atleta[0].atleta.some((l: string) => l.startsWith('Intervalos ×16')) && r.asi_lo_vera_el_atleta[0].atleta.at(-1).startsWith('Apple Watch: sí'), 'y enseña cómo lo verá el atleta')
+  ok('running de series: 0 preguntas, forma del editor, atleta y reloj')
+}
+{
+  // Con la preferencia «decide tú»: 0 preguntas cuando el ejercicio nuevo tiene UN solo parecido obvio.
+  const escrito = 'Hamstring Curl acostado'
+  igual(parecidosA(escrito, EJERCICIOS as any).map((e) => e.name), ['Hamstring Curl'], 'un solo parecido (precondición)')
+  const sesiones = [{ dia: 'lunes', nombre: 'Isquios', ejercicios: [{ nombre: escrito, series: 3, cantidad: 12 }] }]
+  const { tools: sinEstilo } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [] })
+  igual(sc0(await sinEstilo.crear_plan({ atleta: 'zz_atleta', titulo: 'X', tipo: 'rutina', sesiones })).guardado, false, 'sin estilo, la IA resuelve el parecido (vuelve con el nombre exacto)')
+  const { tools, insertados } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [] }, { estilo: { reglas: ['decide tú y dime'], decide_tu: true } })
+  const r = sc0(await tools.crear_plan({ atleta: 'zz_atleta', titulo: 'X', tipo: 'rutina', sesiones }))
+  igual([r.listo, r.preguntas], [true, undefined], 'con «decide tú»: 0 preguntas')
+  igual(diaGuardado(insertados).exercises[0].name, 'Hamstring Curl', 'lo tomó como su parecido')
+  cierto((r.supuestos as string[]).includes('«Hamstring Curl acostado» es «Hamstring Curl» del repertorio'), 'y lo dice')
+  ok('estilo «decide tú»: 0 preguntas con un solo parecido')
+}
+{
+  // Borrar y asignar siguen pidiendo confirmación de verdad.
+  const { tools } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [] })
+  const b = sc0(await tools.borrar_ejercicio({ ejercicio: 'Bicep Curl' }))
+  igual([b.borrado, b.motivo], [false, 'falta_confirmacion'], 'borrar sin confirmado no borra')
+  const { tools: t2 } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [PLAN_FALSO()] })
+  const otra = sc0(await t2.crear_plan({ atleta: 'zz_atleta', titulo: 'Otro', tipo: 'rutina', sesiones: [{ dia: 'lunes', ejercicios: [{ nombre: 'Back Squat', cantidad: 5 }] }] }))
+  cierto(otra === undefined || otra.listo !== true, 'reemplazar un plan sin reemplazar: true no lo hace')
+  ok('borrar y reemplazar siguen pidiendo confirmación')
+}
+{
+  // Cada tipo de sesión: la misma forma que guardaría su editor, el atleta y el reloj la leen, se lee en palabras y reescrita queda igual.
+  const tipos: [string, any][] = [
+    ['Cycling', { disciplina: 'bici', lugar: 'ruta', piezas: [{ pieza: 'continua', cuanto: '40 km', intensidad: '200-220 W' }] }],
+    ['Swimming', { disciplina: 'nadar', piezas: [{ pieza: 'series', sprints: [{ cuanto: '100 m', veces: 6, descanso: '20 seg' }], intensidad: '1:45 /100 m' }] }],
+    ['Triatlón', { disciplina: 'triatlon', piezas: [{ pieza: 'bici-continua', cuanto: '20 km', intensidad: 'zona 3' }, { pieza: 'trans' }, { pieza: 'correr-continua', cuanto: '5 km', intensidad: '4:45' }] }],
+    ['Híbrido', { disciplina: 'hyrox', sets: [{ formato: 'amrap', minutos: 12, ejercicios: [{ nombre: 'Back Squat', cuanto: '10 reps', peso: '60 kg' }, { nombre: 'Pull Ups', cuanto: '8 reps' }] }] }],
+    ['Deporte', { disciplina: 'deporte', deporte: [{ nombre: 'Box Squat', veces: 5, por_lado: true, distancia: '10 m' }] }],
+    ['Gym con calentamiento', { disciplina: 'pesas', calentamiento: { forma: 'ejercicios', ejercicios: [{ nombre: 'Bicep Curl', cuanto: '10 reps' }] }, ejercicios: [{ nombre: 'Back Squat', series: 3, cantidad: 5 }] }],
+  ]
+  for (const [nombre, s] of tipos) {
+    const { tools, insertados } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [] })
+    const r = sc0(await tools.crear_plan({ atleta: 'zz_atleta', titulo: nombre, tipo: 'rutina', sesiones: [{ dia: 'lunes', nombre, ...s }] }))
+    igual([r.listo, r.preguntas], [true, undefined], `${nombre}: se guarda sin preguntar`)
+    const dia = diaGuardado(insertados)
+    const esperado = sesionDesdePalabras(s, { busca: (n: string) => EJERCICIOS.find((e) => e.name === n) ?? null }).dia
+    for (const k of Object.keys(esperado)) igual(sinIds(dia[k]), sinIds((esperado as any)[k]), `${nombre}: «${k}» con la forma del editor`)
+    cierto(pasosDeLaSesion(dia).pasos.length > 0, `${nombre}: el atleta lo lee`)
+    cierto(pasosParaElReloj(dia).length > 0, `${nombre}: el reloj lo lee`)
+    // Leer el día y mandarlo de vuelta tal cual: queda igual.
+    const { tools: t2, actualizados } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [{ ...PLAN_FALSO(), data: { kind: 'weekly', phases: [{ id: 'p-1', num: 1, name: 'Rutina semanal', weekData: [{ num: 1, label: '', load: '', days: [dia] }] }] } }] })
+    const leido = sc0(await t2.ver_plan_de_atleta({ atleta: 'zz_atleta' }))
+    const enPalabras = palabrasDeSesion(dia)
+    cierto(JSON.stringify(leido).includes(JSON.stringify(enPalabras.disciplina ?? '')), `${nombre}: se lee con su Disciplina`)
+    const { disciplina: _d, ...resto } = enPalabras as any
+    const escrito = await t2.editar_dia({ atleta: 'zz_atleta', dia: 'lunes', sesiones: [{ nombre, disciplina: dia.disciplina, ...resto, ...(dia.exercises?.length ? { ejercicios: dia.exercises.map((e: any) => ({ nombre: e.name, series: Number(e.sets), cantidad: e.reps })) } : {}) }] })
+    igual(sc0(escrito).listo, true, `${nombre}: reescribir lo leído se guarda`)
+    const nuevo = actualizados.at(-1).cambios.data.phases[0].weekData[0].days[0]
+    for (const k of Object.keys(esperado)) igual(sinIds(nuevo[k]), sinIds(dia[k]), `${nombre}: leer y reescribir no cambió «${k}»`)
+    // Reescribir solo con el nombre (sin piezas): lo del editor se queda.
+    const { tools: t3, actualizados: a3 } = herramientas(herramientasDelCoach, { profiles: [ATLETA_FALSO], plans: [{ ...PLAN_FALSO(), data: { kind: 'weekly', phases: [{ id: 'p-1', num: 1, name: 'Rutina semanal', weekData: [{ num: 1, label: '', load: '', days: [dia] }] }] } }] })
+    await t3.editar_dia({ atleta: 'zz_atleta', dia: 'lunes', sesiones: [{ nombre: `${nombre} (renombrada)` }] })
+    const renombrada = a3.at(-1).cambios.data.phases[0].weekData[0].days[0]
+    if (!dia.exercises?.length) for (const k of ['tramos', 'hibrido', 'deporte'].filter((k) => dia[k])) igual(sinIds(renombrada[k]), sinIds(dia[k]), `${nombre}: cambiar solo el nombre conserva «${k}»`)
+  }
+  ok('cada tipo de sesión: forma del editor, atleta, reloj, ida y vuelta, y se conserva al renombrar')
 }
 
 console.log(`\nTodo bien: ${n} grupos de pruebas`)

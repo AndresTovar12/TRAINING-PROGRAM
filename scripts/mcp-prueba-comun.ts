@@ -64,6 +64,13 @@ export function baseEnMemoria(
         in: (c: string, vs: unknown[]) => { if (real) filtros.push((r) => vs.includes(r[c])); return q },
         is: (c: string, v: unknown) => { if (real) filtros.push((r) => (r[c] ?? null) === v); return q },
         insert: (c: any) => { op = 'insert'; carga = c; return q },
+        // `upsert` con `onConflict` (lo usa la versión del coach de un ejercicio de la app): actualiza la fila de esas llaves o la crea.
+        upsert: (c: any, opc: any = {}) => {
+          const llaves = String(opc?.onConflict ?? 'id').split(',').map((k: string) => k.trim())
+          const hay = real && filas().find((r) => llaves.every((k) => r[k] === c[k]))
+          if (hay) { op = 'update'; carga = c; filtros.push((r) => r === hay) } else { op = 'insert'; carga = c }
+          return q
+        },
         update: (c: any) => { op = 'update'; carga = c; return q },
         delete: () => { op = 'delete'; return q },
         single: async () => { const r = await ejecutar(); return r.data[0] ? { data: r.data[0], error: null } : { data: null, error: { message: 'no hay filas' } } },
