@@ -8,10 +8,7 @@ import ListaDesplegable from '@/components/ListaDesplegable';
 import { updateExercise } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { disciplinasPorUso } from '@/lib/disciplinas';
-import {
-  UNIDADES, INT, PESOS, RANGO, GRUPO, tipoDe, permitidas, disciplinasDe, esCardio, comparteCasilla, llevaCargaExtra, lugarDe, cadenciaDe, titulosDe,
-  nuevoId, setNuevo, renglonNuevo, loQueAprende, enBase, deBase, ponValores, acomoda, progresivaDe, intervalosDe, resumenDeSprints,
-} from '@/lib/hibrido';
+import { UNIDADES, INT, PESOS, RANGO, GRUPO, tipoDe, permitidas, disciplinasDe, esCardio, comparteCasilla, llevaCargaExtra, lugarDe, cadenciaDe, titulosDe, nuevoId, setNuevo, renglonNuevo, loQueAprende, enBase, deBase, ponValores, acomoda, progresivaDe, intervalosDe, resumenDeSprints, FORMATOS, UN_TRAMO, MATERIAL, CON_MATERIAL } from '@/lib/hibrido';
 
 /* EL EDITOR HÍBRIDO (Hyrox, CrossFit y cualquier entrenamiento mixto; la Disciplina se llama «Híbrido», por dentro `hyrox`). Acordado con Andrés en un prototipo aparte, 19 nov 2026; las reglas están en `lib/hibrido.js`.
    · Una CADENA: una línea a la izquierda une los ejercicios del Set, uno tras otro. Así no se confunde con Pesas (tarjetas con barra azul).
@@ -21,10 +18,6 @@ import {
    Se guarda en `day.hibrido = { sets }`, aparte de `day.exercises` (Pesas) y de `day.tramos` (Correr). */
 
 const ZONAS = [['', 'Elegir'], ['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5']];
-const FORMATOS = [['rep', 'Se repite'], ['amrap', 'AMRAP'], ['emom', 'EMOM'], ['tiempo', 'Por tiempo']];
-const UN_TRAMO = [['m', 'm'], ['km', 'km'], ['min', 'min'], ['seg', 'seg']];
-const MATERIAL = [['trineo', 'Con trineo'], ['paracaidas', 'Con paracaídas'], ['vallas', 'Con vallas'], ['cuesta', 'En cuesta'], ['otro', 'Otro']];
-const CON_MATERIAL = { trineo: 'con trineo', paracaidas: 'con paracaídas', vallas: 'con vallas', cuesta: 'en cuesta', otro: 'otro material' };
 const TONOS = ['#C7D2FB', '#97A9F5', '#6F8AF0', '#3557E4', '#1530A8'];
 const ICONO = { fuerza: Dumbbell, correr: Footprints, remo: Waves, ski: Snowflake, bici: Bike, cardio: Activity, duda: Shapes };
 

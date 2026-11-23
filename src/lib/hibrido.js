@@ -25,6 +25,11 @@ export const PESOS = ['kg', '% 1RM', 'lb'];
 export const DE_CARDIO = ['pace', 'zona', 'pulso', 'w', 'r500', 'tope', 'tiempo'];
 export const RANGO = ['pace', 'pulso', 'r500'];   // se escriben «de … a …»
 export const GRUPO = { rpe: 'Esfuerzo', rir: 'Esfuerzo', pace: 'Cardio', zona: 'Cardio', pulso: 'Cardio', w: 'Cardio', r500: 'Cardio', tope: 'Cardio', tiempo: 'Cardio' };
+// Del editor (`EditorHibrido.jsx`), aquí desde el 23 nov 2026 para que el conector de IA arme con las mismas listas.
+export const FORMATOS = [['rep', 'Se repite'], ['amrap', 'AMRAP'], ['emom', 'EMOM'], ['tiempo', 'Por tiempo']];
+export const UN_TRAMO = [['m', 'm'], ['km', 'km'], ['min', 'min'], ['seg', 'seg']];
+export const MATERIAL = [['trineo', 'Con trineo'], ['paracaidas', 'Con paracaídas'], ['vallas', 'Con vallas'], ['cuesta', 'En cuesta'], ['otro', 'Otro']];
+export const CON_MATERIAL = { trineo: 'con trineo', paracaidas: 'con paracaídas', vallas: 'con vallas', cuesta: 'en cuesta', otro: 'otro material' };
 
 const norm = (s) => String(s ?? '').trim().toLowerCase();
 const DE_FUERZA = ['kg', 'pct', 'rpe', 'rir', 'int'];

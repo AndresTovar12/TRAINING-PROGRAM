@@ -8,12 +8,12 @@ import { readFileSync } from 'node:fs';
 import { CARAS, llaveDePieza, pasosDeLaLista } from '../src/lib/pasosDeLaLista.js';
 import { pasosDeLaSesion } from '../src/lib/entreno.js';
 
-const fuente = readFileSync(new URL('../src/features/admin/EditorDeCorrer.jsx', import.meta.url), 'utf8');
+import { DEPORTES } from '../src/lib/catalogoDeLaLista.js';
+
+// Las piezas salen del catálogo del editor (`lib/catalogoDeLaLista.js`, 23 nov 2026): se arma de verdad cada opción de «Agregar» de cada
+// deporte (su `crea()`), en vez de buscar texto dentro de `EditorDeCorrer.jsx`.
 const piezas = new Set();
-for (const m of fuente.matchAll(/vacioTr\('(\w+)'/g)) piezas.add(`tr:${m[1]}`);
-for (const m of fuente.matchAll(/k: 'int', rol: '(\w+)'/g)) piezas.add(`int:${m[1]}`);
-for (const m of fuente.matchAll(/\.\.\.sprint\(\), rol: '(\w+)'/g)) piezas.add(`int:${m[1]}`);
-for (const m of fuente.matchAll(/k: '(tec|desc|trans)'/g)) piezas.add(m[1]);
+for (const dep of Object.values(DEPORTES)) for (const op of dep.opciones) piezas.add(llaveDePieza(op.crea()));
 
 let fallas = 0;
 const mal = (t) => { fallas += 1; console.log(`✗ ${t}`); };

@@ -8,6 +8,7 @@ import { BotonChico, CamposDeVideo, Extra, Interruptor, SetsDeEjercicios, Seccio
 import { addExerciseMedia, createExercise, listExerciseMedia } from '@/lib/api';
 import { T, FONT, KP, UI } from '@/lib/theme';
 import { VideoDelAtleta, VIOLETA_SU_VIDEO } from '@/lib/videoDelAtleta';
+import { CAMPOS_DE_DEPORTE, UNIDADES_DE_DEPORTE, itemDeDeporte, rid } from '@/lib/catalogoDeDeporte';
 
 /**
  * EL EDITOR DE DEPORTE (acordado con Andrés en imágenes, 20 nov 2026).
@@ -30,22 +31,15 @@ import { VideoDelAtleta, VIOLETA_SU_VIDEO } from '@/lib/videoDelAtleta';
  *   (lo que no se agregó, no existe: `undefined`). `cal` y `calma` tienen la forma de un calentamiento de Running.
  */
 
-const rid = () => (crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)).slice(0, 8);
 const AZUL = '#E8EDFB';
 const RAYA = '#D5DDF3';
 const VERDE_TEXTO = '#067A55';
 const CAMPO = { border: 'none', borderRadius: 12, background: UI.relleno, minHeight: 46, padding: '0 12px', fontFamily: FONT, fontWeight: 800, fontSize: 16, color: T.text, width: '100%', boxSizing: 'border-box' };
 
 // Lo que se agrega a un ejercicio, en el orden de los mosaicos. Reps va primero: es lo más común (Andrés).
-const OPCIONALES = [
-  { k: 'reps', label: 'Reps', icono: Repeat, nace: '' },
-  { k: 'dist', label: 'Distancia', icono: Ruler, nace: { q: '', u: 'm' } },
-  { k: 'tiempo', label: 'Tiempo', icono: Timer, nace: { q: '', u: 'seg' } },
-  { k: 'desc', label: 'Descanso', icono: CirclePause, nace: { q: '', u: 'seg' } },
-  { k: 'peso', label: 'Peso', icono: Weight, nace: { q: '', u: 'kg' } },
-  { k: 'nota', label: 'Nota', icono: StickyNote, nace: '' },
-];
-const UNIDADES = { dist: [['m', 'm'], ['yd', 'yd'], ['km', 'km']], tiempo: [['seg', 'seg'], ['min', 'min']], desc: [['seg', 'seg'], ['min', 'min']], peso: [['kg', 'kg'], ['lb', 'lb']] };
+// Los campos vienen del catálogo (`lib/catalogoDeDeporte.js`); aquí solo se les pone su ícono.
+const ICONO_DEL_CAMPO = { reps: Repeat, dist: Ruler, tiempo: Timer, desc: CirclePause, peso: Weight, nota: StickyNote };
+const OPCIONALES = CAMPOS_DE_DEPORTE.map((c) => ({ ...c, icono: ICONO_DEL_CAMPO[c.k] }));const UNIDADES = UNIDADES_DE_DEPORTE;
 
 const hay = (v) => v !== undefined && v !== null;
 const lleno = (v) => (typeof v === 'object' ? String(v?.q ?? '').trim() : String(v ?? '').trim());
@@ -199,7 +193,7 @@ export default function EditorDeDeporte({ deporte, onDeporte, repertoire = [], c
     setAbierto(null);
     avisa('Se borró', { accion: { texto: 'Deshacer', alTocar: () => onDeporte(antes) } });
   };
-  const nuevo = (e) => ({ id: rid(), exercise_id: e.id, name: e.name, veces: '5' });
+  const nuevo = itemDeDeporte;
   const agrega = (elegidos) => {
     if (!elegidos.length) return;
     const nuevos = elegidos.map(nuevo);
