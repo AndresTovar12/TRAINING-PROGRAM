@@ -304,7 +304,8 @@ export default function FichaEjercicio({
           </div>
         )}
 
-        <div style={{
+        {/* «Nada, solo hacerlo» (fisio, movilidad): no hay cifra que anotar, solo hacerlo. */}
+        {medida.unidad !== 'nada' && (<div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
           border: 'none', borderRadius: 18, padding: '16px 16px',
           background: LT.surface, marginBottom: conPeso ? 10 : 0,
@@ -351,7 +352,7 @@ export default function FichaEjercicio({
               </button>
             </div>
           )}
-        </div>
+        </div>)}
 
         {conPeso && (
           <>

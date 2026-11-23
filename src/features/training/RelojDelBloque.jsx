@@ -1,10 +1,10 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, Pause, Play, Plus, Minus, Volume2, VolumeX, X } from 'lucide-react';
+import { Check, ChevronDown, Pause, Play, Volume2, VolumeX, X } from 'lucide-react';
 import { LT, FONT, NUM_STYLE, UI } from '@/lib/theme';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { expande, etiquetaDeTramo, limpiaResultado, relojTexto, textoDeTiempo, vistaDe } from '@/lib/formatos';
 import {
-  nuevoReloj, inicia, pausa, avanza, listo, listoConTiempo, termina, sumaRonda, vista, sugerido as sugeridoDe,
+  nuevoReloj, inicia, pausa, avanza, listo, listoConTiempo, termina, vista, sugerido as sugeridoDe,
 } from '@/lib/relojDeFormato';
 import { METROS_PARA_GPS, pedidoEnUnaLinea } from '@/lib/recorrido';
 import PasoConGps from '@/features/training/PasoConGps';
@@ -31,10 +31,10 @@ import ResultadoDelBloque from '@/features/training/ResultadoDelBloque';
  *
  * CÓMO ARRANCA. Tres maneras, según quién lo abrió y por qué:
  *   · `empezarYa`: la persona acaba de tocar «Empezar» (o «Iniciar reloj» en la lista): corre ya, sin otro «Iniciar».
- *   · `conCuenta`: lo abrió el MODO ENTRENO porque la persona avanzó («Iniciar entreno», «Listo», «Seguir») y toca un reloj.
- *     Andrés, 9 oct 2026: «si ya le piqué a iniciar entrenamiento y se supone que tú me guías, ¿por qué no inicias el reloj?».
- *     Corre solo, pero con un 3, 2, 1 que se puede cancelar: nadie empieza a correr en el mismo instante en que toca un botón.
- *   · sin ninguno: se abre en cero y espera su «Iniciar».
+ *   · `arrancaSolo` (regla 19, 23 nov 2026): llegó al acabar un descanso con tiempo, que ya contó hacia atrás y enseñó los videos. Corre ya, sin «Empezar»
+ *     y sin 3, 2, 1.
+ *   · sin ninguno (lo primero de la sesión, un ✓ sin descanso, un descanso «cuando estés listo»): «Antes de empezar» con los videos y espera «Empezar».
+ *     Andrés: «Cuando no hay descanso, simplemente que el atleta oprima el botón. Lo digo por experiencia».
  */
 
 const LLAVE_DEL_SONIDO = 'tl:reloj:sonido';
@@ -57,7 +57,7 @@ function textoDeAvance(id, formato, v, nEjercicios, rondas = 1) {
   if (id === 'emom') return `Intervalo ${v.i + 1} de ${v.n}`;
   if (id === 'tabata' || id === 'intervalos') return `Ronda ${tramo.vuelta} de ${formato.vueltas}`;
   if (id === 'fartlek') return `Tramo ${tramo.vuelta} de ${formato.vueltas}`;
-  if (id === 'portiempo') return formato.turnan && nEjercicios > 1 ? `Estación ${v.i + 1} de ${v.n}` : `Ronda ${v.i + 1} de ${v.n}`;
+  if (id === 'portiempo') return v.n === 1 ? '' : formato.turnan && nEjercicios > 1 ? `Estación ${v.i + 1} de ${v.n}` : `Ronda ${v.i + 1} de ${v.n}`;
   if (id === 'amrap') return '';
   return `Tramo ${v.i + 1} de ${v.n}`;
 }
@@ -103,13 +103,17 @@ function BotonChico({ children, onClick, peligro = false }) {
  *   · Al acabar, si el reloj ya sabe el resultado entero (un formato que no anota nada; unos lapsos que se completaron todos), lo guarda y se cierra solo, sin
  *     preguntar «¿Marcar como hecho?». Si falta algo que solo la persona sabe (las rondas de un AMRAP, cuántos intervalos de un EMOM salieron), sí se pregunta.
  */
+// Cada cuánto cambia el video en grande cuando no hay «el que toca» (antes de empezar, o un AMRAP donde se hacen todos juntos).
+const SEG_POR_VIDEO = 8;
 const SEG_DEL_FIN = 1.6; // lo que se ve el «Terminaste» antes de cerrar solo
 
-export default function RelojDelBloque({ formato, plan: planDado = null, ejercicios, serie, clave, resumen, empezarYa = false, conCuenta = false, conGps = false, sinGps = null, alElegirSinGps = null, colorDelTipo = null, fondo = null, onGuardar, onCerrar, videoDe = null, miniaturaDe = null }) {
+export default function RelojDelBloque({ formato, plan: planDado = null, ejercicios, serie, clave, resumen, empezarYa = false, arrancaSolo = false, barra = null, conGps = false, sinGps = null, alElegirSinGps = null, colorDelTipo = null, fondo = null, onGuardar, onCerrar, videoDe = null, miniaturaDe = null }) {
   const pregunta = useConfirmacion();
   const nEj = ejercicios.length;
   // El ejercicio cuyo video se abrió tocándolo en la lista (`null` = ninguno).
   const [verEj, setVerEj] = useState(null);
+  // El video que se ve en grande en «Antes de empezar»: pasan uno tras otro (cada `SEG_POR_VIDEO`), y tocar un puntito lo elige.
+  const [verAntes, setVerAntes] = useState(0);
   // Los tramos de lapsos se guardan como texto para que su identidad no cambie con cada dibujo de la pantalla de arriba.
   const claveDelPlan = useMemo(() => (planDado ? JSON.stringify(planDado) : null), [planDado]);
   const plan = useMemo(() => (claveDelPlan ? JSON.parse(claveDelPlan) : expande(formato, nEj)), [claveDelPlan, formato, nEj]);
@@ -122,14 +126,24 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
   // Uno pausado también sigue: quien lo dejó en pausa y vuelve a tocar el botón grande quiere seguir, no encontrarse otro botón.
   const [est, setEst] = useState(() => {
     const guardado = leeRelojGuardado(clave, firma, plan);
-    return empezarYa && (guardado.fase === 'listo' || guardado.fase === 'pausa') ? inicia(guardado, Date.now()) : guardado;
+    // Desde el 23 nov 2026 «Empezar» siempre pasa por «Antes de empezar» (los videos): `empezarYa` solo reanuda uno que estaba en pausa.
+    if (empezarYa && guardado.fase === 'pausa') return inicia(guardado, Date.now());
+    // Regla 19 (23 nov 2026): llegó al acabar un descanso con tiempo. Arranca ya, sin «Empezar» ni 3, 2, 1: el descanso ya contó hacia atrás en grande.
+    // Solo con el reloj en cero.
+    if (arrancaSolo && guardado.fase === 'listo') return inicia(guardado, Date.now());
+    return guardado;
   });
   const [ahora, setAhora] = useState(() => Date.now());
   const [sonido, setSonido] = useState(leeSonido);
   // Los lapsos en los que cerró el mapa (se sigue con «Lapso listo»), por número de tramo.
   const [gpsCerrado, setGpsCerrado] = useState(() => new Set());
   // `conCuenta`: solo con el reloj en cero. Uno que ya iba (pausado) vuelve a donde estaba, sin cuenta.
-  const [preparaHasta, setPreparaHasta] = useState(() => (conCuenta && est.fase === 'listo' ? Date.now() + SEG_DE_CUENTA * 1000 : null));
+  /* ANTES DE EMPEZAR (Andrés, 23 nov 2026: «las personas necesitan, si no saben hacer el ejercicio, ver los videos antes de hacer las secuencias»;
+     eligió «Espera Empezar»). Cambia la regla del 9 oct («¿por qué no inicias el reloj?»): al llegar avanzando (`conCuenta`), el reloj ya no arranca a
+     los 3 segundos; enseña los videos en grande y espera «Empezar». Con «Empezar», un workout normal cuenta 3, 2, 1 (regla 16); uno que va por una marca
+     («Por tiempo», regla 14) arranca en el instante en que toca. */
+  const [preparaHasta, setPreparaHasta] = useState(null);
+  const vaPorMarca = formato.anota === 'tiempo';
 
   // El reloj se calcula con la hora: este temporizador solo avisa a la pantalla que se vuelva a dibujar.
   useEffect(() => {
@@ -159,7 +173,14 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
   // Cada cambio de estado se guarda: si la app se recarga, el reloj sigue donde iba.
   useEffect(() => { guardaReloj(clave, firma, est); }, [clave, firma, est]);
 
-  usePantallaEncendida(est.fase === 'corriendo');
+  usePantallaEncendida(est.fase === 'corriendo' || est.fase === 'listo');
+
+  // «Antes de empezar»: los videos pasan solos, uno tras otro.
+  useEffect(() => {
+    if (est.fase !== 'listo' || preparaHasta !== null || nEj < 2) return undefined;
+    const t = setInterval(() => setVerAntes((k) => (k + 1) % nEj), SEG_POR_VIDEO * 1000);
+    return () => clearInterval(t);
+  }, [est.fase, preparaHasta, nEj]);
 
   const v = vista(est, plan, ahora, tope);
   const preparando = preparaHasta !== null && v.fase === 'listo';
@@ -190,6 +211,12 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
     setEst((e) => fn(avanza(e, plan, t, tope), t));
   };
   const empieza = () => { preparaAudio(); accion((e, t) => inicia(e, t)); };
+  // «Empezar» desde «Antes de empezar»: 3, 2, 1 en un workout normal; al instante si va por una marca.
+  const arranca = () => {
+    preparaAudio();
+    if (vaPorMarca) { accion((e, t) => inicia(e, t)); return; }
+    setPreparaHasta(Date.now() + SEG_DE_CUENTA * 1000);
+  };
   const pausar = () => accion((e, t) => pausa(e, t));
   const hecho = () => accion((e, t) => listo(e, plan, t, tope));
   const hechoConTiempo = (seg) => accion((e, t) => listoConTiempo(e, plan, t, seg, tope));
@@ -241,7 +268,11 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
   const { tramo, proximo } = v;
   const enCurso = v.fase === 'corriendo' || v.fase === 'pausa';
   const abierto = !!tramo && tramo.seg === null;
-  const color = tramo?.tipo === 'descanso' ? LT.warning : LT.blue;
+  /* EL MISMO ESTILO QUE LAS DEMÁS PANTALLAS (Andrés, 23 nov 2026: «me está confundiendo que me muestres dos estilos diferentes… con números azules»).
+     El reloj usaba azul y fondo blanco siempre; ahora usa el color y el fondo de la sesión, como el paso de Gym y su descanso. */
+  const acento = colorDelTipo || LT.blue;
+  const fondoDelReloj = fondo ?? LT.bg;
+  const color = tramo?.tipo === 'descanso' ? LT.warning : acento;
   // «Siguiente: …» de la pantalla con mapa: el descanso que sigue o el lapso que viene, con lo que pide.
   const siguienteDelLapso = !proximo ? null : (proximo.tipo === 'descanso' ? `Descanso ${textoDeTiempo(proximo.seg)}` : [proximo.etiqueta && proximo.etiqueta !== tramo?.etiqueta ? proximo.etiqueta : null, pedidoEnUnaLinea(proximo.texto || '', proximo.carga ?? '')].filter(Boolean).join(' · '));
   // ¿Este lapso va con mapa? Corriendo, de trabajo, por distancia de 200 m o más, con GPS, sin que haya elegido «Sin GPS» ni cerrado el mapa.
@@ -255,6 +286,7 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
   let rotulo = '';
   if (v.fase === 'fin') rotulo = 'Terminaste';
   else if (preparando) rotulo = 'Prepárate';
+  else if (v.fase === 'listo') rotulo = 'Antes de empezar';
   else if (id === 'amrap') rotulo = 'Tiempo restante';
   else if (tramo) rotulo = etiquetaDeTramo(tramo);
   // Mientras cuenta, el número manda; lo que viene primero («Lapso 1 de 4 · 1 km · 4:40 min/km») sigue debajo, que es justo lo que hay que saber.
@@ -265,16 +297,19 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
 
   // A quién le toca: en un descanso, a quien sigue (para ir acomodándose).
   const quien = enCurso && tramo ? (tramo.tipo === 'trabajo' ? tramo.ejercicio : (proximo?.ejercicio ?? tramo.ejercicio)) : null;
-  const cuentaRondas = formato.anota === 'rondas' && v.fase !== 'fin';
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: LT.bg, display: 'flex', flexDirection: 'column', fontFamily: FONT }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: fondoDelReloj, display: 'flex', flexDirection: 'column', fontFamily: FONT }}>
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <div style={{ maxWidth: 520, margin: '0 auto', padding: '0 18px' }}>
+          {/* En el entreno guiado, arriba va la MISMA barra que en todas sus pantallas («Workout», el avance y el tiempo; 23 nov 2026, «un solo estilo»):
+              el reloj ya no se cierra con una X, se va a otro paso desde «Workout». Abierto desde la página del día sigue con su X. */}
+          {barra && <div style={{ position: 'sticky', top: 0, zIndex: 6, background: fondoDelReloj, margin: '0 -18px', paddingTop: 'env(safe-area-inset-top)' }}>{barra}</div>}
           <div style={{
-            position: 'sticky', top: 0, zIndex: 5, background: LT.bg, display: 'flex', alignItems: 'center', gap: 12,
-            padding: 'calc(10px + env(safe-area-inset-top)) 0 8px',
+            position: barra ? 'static' : 'sticky', top: 0, zIndex: 5, background: fondoDelReloj, backgroundAttachment: 'fixed', display: 'flex', alignItems: 'center', gap: 12,
+            padding: barra ? '4px 0 8px' : 'calc(10px + env(safe-area-inset-top)) 0 8px',
           }}>
+            {!barra && (
             <button
               type="button" onClick={cierra} aria-label="Cerrar el reloj"
               style={{
@@ -284,15 +319,16 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
             >
               <X size={20} />
             </button>
+            )}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: LT.text }}>Serie {serie}</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: LT.text }}>Set {serie}</div>
               <div style={{ fontSize: 12.5, fontWeight: 600, color: LT.text2, ...NUM_STYLE }}>{resumen}</div>
             </div>
             <button
               type="button" onClick={alternaSonido} aria-label={sonido ? 'Quitar el sonido' : 'Poner el sonido'}
               style={{
                 width: 38, height: 38, borderRadius: '50%', border: 'none', cursor: 'pointer', background: UI.relleno,
-                color: sonido ? LT.blue : LT.text3, display: 'grid', placeItems: 'center', flexShrink: 0,
+                color: sonido ? acento : LT.text3, display: 'grid', placeItems: 'center', flexShrink: 0,
               }}
             >
               {sonido ? <Volume2 size={19} /> : <VolumeX size={19} />}
@@ -330,39 +366,31 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
             </div>
           </div>
 
-          {/* ---------- Las rondas (AMRAP): lo que más se toca ---------- */}
-          {cuentaRondas && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 12, border: 'none', borderRadius: 18, background: LT.surface,
-              padding: '12px 14px', margin: '14px 0 4px',
-            }}>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: LT.text3 }}>Rondas</div>
-                <div style={{ fontSize: 34, fontWeight: 800, color: LT.text, lineHeight: 1.1, ...NUM_STYLE }}>{v.rondas}</div>
-              </div>
-              <button
-                type="button" onClick={() => setEst((e) => sumaRonda(e, -1))} aria-label="Quitar una ronda" disabled={v.rondas === 0}
-                style={{
-                  width: 46, height: 46, borderRadius: '50%', border: 'none', background: 'transparent', color: LT.text2,
-                  display: 'grid', placeItems: 'center', cursor: 'pointer', opacity: v.rondas === 0 ? 0.35 : 1, touchAction: 'manipulation',
-                }}
-              >
-                <Minus size={20} strokeWidth={3} />
-              </button>
-              <button
-                type="button" onClick={() => setEst((e) => sumaRonda(e, 1))}
-                style={{
-                  minHeight: 56, padding: '0 22px', borderRadius: 16, border: 'none', background: LT.blue, color: '#fff', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', gap: 7, fontFamily: FONT, fontSize: 17, fontWeight: 800, touchAction: 'manipulation',
-                }}
-              >
-                <Plus size={20} strokeWidth={3} /> Ronda
-              </button>
-            </div>
-          )}
-
+          {/* ---------- Las rondas (AMRAP) ----------
+              Quitado el 23 nov 2026 (Andrés: «una persona no se va a parar a la mitad a anotar cada vuelta»; eligió «Quitarlo»). Al final, `ResultadoDelBloque`
+              pregunta cuántas rondas hizo, una sola vez. */}
           {/* El video (o la foto) del ejercicio que toca, cuando se sabe cuál es (intervalos, EMOM, lapsos): 23 oct 2026, «los intervalos se ven sin el video del ejercicio». */}
-          {videoDe && quien !== null && ejercicios[quien] && (() => { const nodo = videoDe(ejercicios[quien].ex); return nodo ? <div style={{ marginTop: 14 }}>{nodo}</div> : null; })()}
+          {videoDe && (() => {
+            const turno = Math.floor(ahora / 1000 / SEG_POR_VIDEO) % Math.max(1, nEj);
+            const i = v.fase === 'listo' && !preparando ? verAntes : (quien !== null ? quien : turno);
+            const ej = ejercicios[i];
+            const nodo = ej ? videoDe(ej.ex) : null;
+            if (!nodo) return null;
+            return (
+              <div data-video-del-reloj="" style={{ marginTop: 14 }}>
+                <div key={i}>{nodo}</div>
+                {nEj > 1 && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: LT.text2 }}>{i + 1} de {nEj} · {ej.ex.name}</span>
+                    {v.fase === 'listo' && !preparando && ejercicios.map((_, k) => (
+                      <button key={k} type="button" aria-label={`Ver el video de ${ejercicios[k].ex.name}`} onClick={() => setVerAntes(k)}
+                        style={{ width: k === i ? 22 : 10, height: 10, borderRadius: 5, border: 'none', padding: 0, background: k === i ? acento : 'rgba(17,19,24,.15)', cursor: 'pointer' }} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* ---------- Los ejercicios ---------- */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, margin: '16px 0 24px' }}>
@@ -379,15 +407,22 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
                   onKeyDown={conVideo ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setVerEj((a) => (a === i ? null : i)); } } : undefined}
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 13px', borderRadius: 12,
-                    background: toca ? LT.blueSoft : UI.relleno, border: 'none', cursor: conVideo ? 'pointer' : 'default',
+                    background: toca ? `color-mix(in srgb, ${acento} 14%, white)` : UI.relleno, border: 'none', cursor: conVideo ? 'pointer' : 'default',
                   }}
                 >
                   <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                     {miniaturaDe && (() => { const m = miniaturaDe(ex); return m ? <span aria-hidden="true" style={{ position: 'relative', width: 36, height: 36, borderRadius: 9, overflow: 'hidden', flexShrink: 0, background: '#1B1D24' }}>{m}</span> : null; })()}
-                    <span style={{ fontSize: 15, fontWeight: toca ? 800 : 700, color: toca ? LT.blue : LT.text, overflowWrap: 'anywhere' }}>{ex.name}</span>
+                    <span style={{ minWidth: 0 }}>
+                      <span style={{ display: 'block', fontSize: 15, fontWeight: toca ? 800 : 700, color: toca ? acento : LT.text, overflowWrap: 'anywhere' }}>{ex.name}</span>
+                      {/* La nota del coach (doble revisión del 23 nov 2026: con el reloj corriendo no se veía). */}
+                      {[ex.notes, ex.cue].some((t) => String(t ?? '').trim()) && (
+                        <span style={{ display: 'block', fontSize: 13, fontWeight: 500, color: LT.text2, lineHeight: 1.35, marginTop: 2 }}>{[ex.notes, ex.cue].map((t) => String(t ?? '').trim()).filter(Boolean).join(' · ')}</span>
+                      )}
+                    </span>
                   </span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: toca ? LT.blue : LT.text3, flexShrink: 0, ...NUM_STYLE }}>
-                    {(lapsosDe(ex)?.length ?? 0) > 1 ? `${lapsosDe(ex).length} lapsos` : textoMeta(ex)}
+                  <span style={{ fontSize: 13, fontWeight: 700, color: toca ? acento : LT.text3, flexShrink: 0, ...NUM_STYLE }}>
+                    {/* La carga va junto a lo que se hace (doble revisión del 23 nov 2026: con el reloj corriendo no se veía). */}
+                    {(lapsosDe(ex)?.length ?? 0) > 1 ? `${lapsosDe(ex).length} lapsos` : [textoMeta(ex), String(ex.intensity ?? '').trim()].filter(Boolean).join(' · ')}
                     {conVideo && <ChevronDown size={15} aria-hidden="true" style={{ marginLeft: 6, verticalAlign: '-3px', transform: verEj === i ? 'rotate(180deg)' : 'none' }} />}
                   </span>
                 </div>
@@ -405,11 +440,18 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
           <div style={{ maxWidth: 520, margin: '0 auto', padding: '12px 18px calc(12px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 10 }}>
             {/* Contando 3, 2, 1: un solo botón, «Cancelar», que deja el reloj en cero y regresa (quien no estaba listo no pierde nada). */}
             {preparando && <div style={{ display: 'flex' }}><BotonChico onClick={cierra}>Cancelar</BotonChico></div>}
-            {v.fase === 'listo' && !preparando && <BotonGrande onClick={empieza}><Play size={22} fill="#fff" /> Iniciar</BotonGrande>}
+            {v.fase === 'listo' && !preparando && (
+              <BotonGrande onClick={arranca} color={acento}>
+                <span style={{ display: 'grid', placeItems: 'center', lineHeight: 1.15 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Play size={22} fill="#fff" /> Empezar</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, opacity: 0.9 }}>{vaPorMarca ? 'el reloj arranca al tocar' : '3, 2, 1 y arranca'}</span>
+                </span>
+              </BotonGrande>
+            )}
             {v.fase === 'corriendo' && (abierto
               ? (
                 <>
-                  <BotonGrande onClick={hecho}><Check size={22} strokeWidth={3} /> {id === 'lapsos' ? 'Lapso listo' : 'Listo'}</BotonGrande>
+                  <BotonGrande onClick={hecho} color={acento}><Check size={22} strokeWidth={3} /> {id === 'lapsos' ? 'Lapso listo' : id === 'portiempo' && v.i === v.n - 1 ? 'Terminé' : 'Listo'}</BotonGrande>
                   <div style={{ display: 'flex', gap: 10 }}>
                     <BotonChico onClick={pausar}><Pause size={17} /> Pausa</BotonChico>
                     <BotonChico onClick={terminar}>Parar</BotonChico>
@@ -426,7 +468,7 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
               ))}
             {v.fase === 'pausa' && (
               <>
-                <BotonGrande onClick={empieza}><Play size={22} fill="#fff" /> Seguir</BotonGrande>
+                <BotonGrande onClick={empieza} color={acento}><Play size={22} fill="#fff" /> Seguir</BotonGrande>
                 <div style={{ display: 'flex', gap: 10 }}>
                   <BotonChico onClick={terminar}>Parar</BotonChico>
                   <BotonChico onClick={reiniciar} peligro>Empezar de nuevo</BotonChico>
@@ -446,7 +488,7 @@ export default function RelojDelBloque({ formato, plan: planDado = null, ejercic
             meta={tramo.metros} carga={tramo.carga ?? ''} sinCuenta segResultado={0} color={colorDelTipo ?? undefined} siguiente={siguienteDelLapso}
             cabecera={(
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: 'calc(10px + env(safe-area-inset-top)) 18px 6px', maxWidth: 520, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
-                <span style={{ fontSize: 15, fontWeight: 800, color: LT.text }}>Serie {serie}</span>
+                <span style={{ fontSize: 15, fontWeight: 800, color: LT.text }}>Set {serie}</span>
                 <span role="timer" style={{ fontSize: 16, fontWeight: 800, color: LT.text, ...NUM_STYLE }}>{relojTexto(v.totalSeg + v.transcurridoSeg)}</span>
               </div>
             )}

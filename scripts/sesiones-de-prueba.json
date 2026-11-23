@@ -1,0 +1,957 @@
+{
+ "nota": "La semana de prueba de Ana (copiada de la maqueta, 23 nov 2026): las revisiones automáticas la usan sin depender de la maqueta.",
+ "dias": [
+  {
+   "day": "Lun",
+   "name": "Hyrox · simulacro",
+   "cat": "otro",
+   "catNombre": "Hyrox",
+   "catColor": "#FF7A1A",
+   "catIcono": null,
+   "disciplina": "hyrox",
+   "exercises": [],
+   "hibrido": {
+    "sets": [
+     {
+      "id": "hs-1",
+      "fmt": "rep",
+      "veces": 3,
+      "min": "10",
+      "descV": {
+       "q": "2",
+       "u": "min",
+       "tipo": "total"
+      },
+      "descS": {
+       "q": "3",
+       "u": "min",
+       "tipo": "total"
+      },
+      "items": [
+       {
+        "id": "hr-1",
+        "exercise_id": "e-squat",
+        "name": "Back squat",
+        "q": "5",
+        "u": "reps",
+        "peso": {
+         "q": "80",
+         "u": "% 1RM"
+        },
+        "int": null,
+        "desc": {
+         "q": "30",
+         "u": "seg",
+         "tipo": "total"
+        },
+        "pv": false,
+        "vueltas": [],
+        "lado": false,
+        "limite": null,
+        "nota": null,
+        "como": "uno",
+        "maq": null,
+        "cad": null,
+        "mat": null,
+        "spr": [
+         {
+          "id": "hr-1-s",
+          "q": "",
+          "u": "m",
+          "dq": "",
+          "du": "min"
+         }
+        ],
+        "pg": null,
+        "iv": null
+       },
+       {
+        "id": "hr-2",
+        "exercise_id": "e-trineo",
+        "name": "Sprint con trineo",
+        "q": "",
+        "u": "m",
+        "peso": {
+         "q": "20",
+         "u": "kg"
+        },
+        "int": {
+         "tipo": "tope",
+         "a": "",
+         "b": ""
+        },
+        "desc": null,
+        "pv": false,
+        "vueltas": [],
+        "lado": false,
+        "limite": null,
+        "nota": null,
+        "como": "sprint",
+        "maq": null,
+        "cad": null,
+        "mat": null,
+        "spr": [
+         {
+          "id": "hr-21",
+          "q": "30",
+          "u": "m",
+          "dq": "1",
+          "du": "min"
+         },
+         {
+          "id": "hr-22",
+          "q": "30",
+          "u": "m",
+          "dq": "1",
+          "du": "min"
+         },
+         {
+          "id": "hr-23",
+          "q": "30",
+          "u": "m",
+          "dq": "1",
+          "du": "min"
+         },
+         {
+          "id": "hr-24",
+          "q": "30",
+          "u": "m",
+          "dq": "1",
+          "du": "min"
+         }
+        ],
+        "pg": null,
+        "iv": null
+       }
+      ]
+     },
+     {
+      "id": "hs-2",
+      "fmt": "amrap",
+      "veces": 3,
+      "min": "10",
+      "descV": null,
+      "descS": {
+       "q": "3",
+       "u": "min",
+       "tipo": "activo"
+      },
+      "items": [
+       {
+        "id": "hr-3",
+        "exercise_id": "e-wall",
+        "name": "Wall balls",
+        "q": "20",
+        "u": "reps",
+        "peso": {
+         "q": "9",
+         "u": "kg"
+        },
+        "int": null,
+        "desc": null,
+        "pv": false,
+        "vueltas": [],
+        "lado": false,
+        "limite": null,
+        "nota": null,
+        "como": "uno",
+        "maq": null,
+        "cad": null,
+        "mat": null,
+        "spr": [
+         {
+          "id": "hr-3-s",
+          "q": "",
+          "u": "m",
+          "dq": "",
+          "du": "min"
+         }
+        ],
+        "pg": null,
+        "iv": null
+       },
+       {
+        "id": "hr-4",
+        "exercise_id": "e-remo",
+        "name": "Remo ergómetro",
+        "q": "250",
+        "u": "m",
+        "peso": null,
+        "int": {
+         "tipo": "zona",
+         "a": "4",
+         "b": ""
+        },
+        "desc": null,
+        "pv": false,
+        "vueltas": [],
+        "lado": false,
+        "limite": null,
+        "nota": null,
+        "como": "uno",
+        "maq": null,
+        "cad": null,
+        "mat": null,
+        "spr": [
+         {
+          "id": "hr-4-s",
+          "q": "",
+          "u": "m",
+          "dq": "",
+          "du": "min"
+         }
+        ],
+        "pg": null,
+        "iv": null
+       }
+      ]
+     },
+     {
+      "id": "hs-3",
+      "fmt": "tiempo",
+      "veces": 1,
+      "min": "10",
+      "descV": null,
+      "descS": null,
+      "items": [
+       {
+        "id": "hr-5",
+        "exercise_id": "e-correr",
+        "name": "Correr",
+        "q": "1",
+        "u": "km",
+        "peso": {
+         "q": "10",
+         "u": "kg"
+        },
+        "int": {
+         "tipo": "pace",
+         "a": "5:45",
+         "b": "5:55"
+        },
+        "desc": null,
+        "pv": false,
+        "vueltas": [],
+        "lado": false,
+        "limite": null,
+        "nota": null,
+        "como": "uno",
+        "maq": null,
+        "cad": null,
+        "mat": null,
+        "spr": [
+         {
+          "id": "hr-5-s",
+          "q": "",
+          "u": "m",
+          "dq": "",
+          "du": "min"
+         }
+        ],
+        "pg": null,
+        "iv": null
+       },
+       {
+        "id": "hr-6",
+        "exercise_id": "e-sled",
+        "name": "Sled push",
+        "q": "50",
+        "u": "m",
+        "peso": {
+         "q": "100",
+         "u": "kg"
+        },
+        "int": null,
+        "desc": null,
+        "pv": false,
+        "vueltas": [],
+        "lado": false,
+        "limite": null,
+        "nota": null,
+        "como": "uno",
+        "maq": null,
+        "cad": null,
+        "mat": null,
+        "spr": [
+         {
+          "id": "hr-6-s",
+          "q": "",
+          "u": "m",
+          "dq": "",
+          "du": "min"
+         }
+        ],
+        "pg": null,
+        "iv": null
+       },
+       {
+        "id": "hr-7",
+        "exercise_id": "e-farmer",
+        "name": "Farmer carry",
+        "q": "40",
+        "u": "m",
+        "peso": {
+         "q": "24",
+         "u": "kg"
+        },
+        "int": null,
+        "desc": null,
+        "pv": false,
+        "vueltas": [],
+        "lado": false,
+        "limite": null,
+        "nota": null,
+        "como": "uno",
+        "maq": null,
+        "cad": null,
+        "mat": null,
+        "spr": [
+         {
+          "id": "hr-7-s",
+          "q": "",
+          "u": "m",
+          "dq": "",
+          "du": "min"
+         }
+        ],
+        "pg": null,
+        "iv": null
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "day": "Mar",
+   "name": "Rodillo · intervalos",
+   "cat": "correr",
+   "disciplina": "bici",
+   "lugar": "estatica",
+   "exercises": [],
+   "tramos": [
+    {
+     "id": "b-1",
+     "k": "tr",
+     "rol": "cal",
+     "nom": "Calentamiento",
+     "q": "10",
+     "u": "min",
+     "modo": "zona",
+     "z": 2,
+     "vals": {},
+     "limS": null,
+     "nota": "",
+     "forma": "trote"
+    },
+    {
+     "id": "b-2",
+     "k": "tr",
+     "rol": "int",
+     "nom": "Intervalos",
+     "q": "30",
+     "u": "min",
+     "vals": {},
+     "limS": null,
+     "nota": "",
+     "cad": "95",
+     "res": "8",
+     "ints": {
+      "repite": true,
+      "modo": "w",
+      "lista": [
+       {
+        "id": "b-2a",
+        "q": "4",
+        "u": "min",
+        "modo": "w",
+        "vals": {
+         "w": {
+          "de": "240",
+          "a": "260"
+         }
+        }
+       },
+       {
+        "id": "b-2b",
+        "q": "2",
+        "u": "min",
+        "modo": "w",
+        "vals": {
+         "w": {
+          "de": "150",
+          "a": ""
+         }
+        }
+       }
+      ]
+     }
+    },
+    {
+     "id": "b-3",
+     "k": "tr",
+     "rol": "calma",
+     "nom": "Enfriamiento",
+     "q": "5",
+     "u": "min",
+     "modo": "zona",
+     "z": 1,
+     "vals": {},
+     "limS": null,
+     "nota": "",
+     "forma": "trote"
+    }
+   ]
+  },
+  {
+   "day": "Dom",
+   "name": "Natación técnica",
+   "cat": "correr",
+   "disciplina": "nadar",
+   "exercises": [],
+   "tramos": [
+    {
+     "id": "n-1",
+     "k": "tr",
+     "rol": "cal",
+     "nom": "Calentamiento",
+     "q": "400",
+     "u": "m",
+     "modo": "zona",
+     "z": 2,
+     "vals": {},
+     "limS": null,
+     "nota": "",
+     "forma": "trote"
+    },
+    {
+     "id": "n-2",
+     "k": "tec",
+     "rol": "tec",
+     "nom": "Técnica de nado",
+     "ej": {
+      "exercise_id": "e-patada",
+      "name": "Patada de lado"
+     },
+     "mat": [
+      "Aletas"
+     ],
+     "filas": [
+      {
+       "id": "n-21",
+       "q": "50",
+       "u": "m",
+       "dq": "15",
+       "du": "s"
+      },
+      {
+       "id": "n-22",
+       "q": "50",
+       "u": "m",
+       "dq": "15",
+       "du": "s"
+      },
+      {
+       "id": "n-23",
+       "q": "50",
+       "u": "m",
+       "dq": "15",
+       "du": "s"
+      },
+      {
+       "id": "n-24",
+       "q": "50",
+       "u": "m",
+       "dq": "15",
+       "du": "s"
+      }
+     ]
+    },
+    {
+     "id": "n-3",
+     "k": "int",
+     "rol": "series",
+     "estilo": "sprint",
+     "modo": "ritmo100",
+     "vals": {
+      "ritmo": {
+       "min": "1",
+       "seg": "25"
+      },
+      "ritmo2": {
+       "min": "1",
+       "seg": "30"
+      }
+     },
+     "ej": {
+      "exercise_id": "e-mariposa",
+      "name": "Mariposa"
+     },
+     "filas": [
+      {
+       "id": "n-31",
+       "q": "100",
+       "u": "m",
+       "dq": "20",
+       "du": "s"
+      },
+      {
+       "id": "n-32",
+       "q": "100",
+       "u": "m",
+       "dq": "20",
+       "du": "s"
+      },
+      {
+       "id": "n-33",
+       "q": "100",
+       "u": "m",
+       "dq": "20",
+       "du": "s"
+      },
+      {
+       "id": "n-34",
+       "q": "100",
+       "u": "m",
+       "dq": "20",
+       "du": "s"
+      },
+      {
+       "id": "n-35",
+       "q": "100",
+       "u": "m",
+       "dq": "20",
+       "du": "s"
+      },
+      {
+       "id": "n-36",
+       "q": "100",
+       "u": "m",
+       "dq": "20",
+       "du": "s"
+      },
+      {
+       "id": "n-37",
+       "q": "100",
+       "u": "m",
+       "dq": "20",
+       "du": "s"
+      },
+      {
+       "id": "n-38",
+       "q": "100",
+       "u": "m",
+       "dq": "20",
+       "du": "s"
+      }
+     ]
+    },
+    {
+     "id": "n-4",
+     "k": "tr",
+     "rol": "calma",
+     "nom": "Enfriamiento",
+     "q": "200",
+     "u": "m",
+     "modo": "zona",
+     "z": 1,
+     "vals": {},
+     "limS": null,
+     "nota": "",
+     "forma": "trote"
+    }
+   ]
+  },
+  {
+   "day": "Mié",
+   "name": "Series en pista",
+   "cat": "correr",
+   "disciplina": "correr",
+   "exercises": [],
+   "tramos": [
+    {
+     "id": "tr-1",
+     "k": "tr",
+     "rol": "cal",
+     "nom": "Calentamiento",
+     "q": "15",
+     "u": "min",
+     "modo": "zona",
+     "z": 2,
+     "vals": {},
+     "limS": null,
+     "nota": ""
+    },
+    {
+     "id": "tr-2",
+     "k": "tr",
+     "rol": "int",
+     "nom": "Intervalos",
+     "q": "8",
+     "u": "km",
+     "vals": {},
+     "limS": null,
+     "nota": "",
+     "ints": {
+      "repite": true,
+      "modo": "ritmo",
+      "lista": [
+       {
+        "id": "tr-2a",
+        "q": "1",
+        "u": "km",
+        "modo": "ritmo",
+        "vals": {
+         "ritmo": {
+          "min": "4",
+          "seg": "20"
+         },
+         "ritmo2": {
+          "min": "4",
+          "seg": "30"
+         }
+        }
+       },
+       {
+        "id": "tr-2b",
+        "q": "1",
+        "u": "km",
+        "modo": "ritmo",
+        "vals": {
+         "ritmo": {
+          "min": "5",
+          "seg": "45"
+         },
+         "ritmo2": {
+          "min": "6",
+          "seg": "15"
+         }
+        }
+       }
+      ]
+     }
+    },
+    {
+     "id": "tr-3",
+     "k": "tr",
+     "rol": "calma",
+     "nom": "Enfriamiento",
+     "q": "10",
+     "u": "min",
+     "modo": "zona",
+     "z": 1,
+     "vals": {},
+     "limS": null,
+     "nota": ""
+    }
+   ]
+  },
+  {
+   "day": "Sáb",
+   "name": "Velocidad en pista",
+   "cat": "correr",
+   "disciplina": "correr",
+   "exercises": [],
+   "tramos": [
+    {
+     "id": "v-1",
+     "k": "tr",
+     "rol": "cal",
+     "forma": "ejercicios",
+     "nom": "Calentamiento",
+     "q": "10",
+     "u": "min",
+     "modo": "zona",
+     "z": 2,
+     "vals": {},
+     "limS": null,
+     "nota": "",
+     "items": [
+      {
+       "id": "v-1a",
+       "exercise_id": "e-askip",
+       "name": "Skip A",
+       "s": "2",
+       "q": "30",
+       "u": "m"
+      },
+      {
+       "id": "v-1b",
+       "exercise_id": "e-bskip",
+       "name": "Skip B",
+       "s": "2",
+       "q": "30",
+       "u": "m"
+      },
+      {
+       "id": "v-1c",
+       "exercise_id": "e-cskip",
+       "name": "Skip C",
+       "s": "2",
+       "q": "30",
+       "u": "m"
+      }
+     ]
+    },
+    {
+     "id": "v-2",
+     "k": "tec",
+     "rol": "tec",
+     "nom": "Técnica de carrera",
+     "ej": {
+      "exercise_id": "e-switch",
+      "name": "Switches"
+     },
+     "filas": [
+      {
+       "id": "v-2a",
+       "q": "10",
+       "u": "reps",
+       "dq": "",
+       "du": "camina"
+      },
+      {
+       "id": "v-2b",
+       "q": "10",
+       "u": "reps",
+       "dq": "",
+       "du": "camina"
+      },
+      {
+       "id": "v-2c",
+       "q": "10",
+       "u": "reps",
+       "dq": "",
+       "du": "camina"
+      }
+     ]
+    },
+    {
+     "id": "v-3",
+     "k": "int",
+     "rol": "sprint",
+     "estilo": "sprint",
+     "veces": 4,
+     "con": {
+      "tipo": "trineo",
+      "kg": "20",
+      "txt": ""
+     },
+     "tr": {
+      "id": "v-3a",
+      "k": "tr",
+      "rol": "int",
+      "nom": "Sprint",
+      "q": "30",
+      "u": "m",
+      "modo": "tope",
+      "z": 5,
+      "vals": {},
+      "limS": null,
+      "nota": ""
+     },
+     "rec": {
+      "tipo": "parado",
+      "q": "3",
+      "u": "min",
+      "z": 1
+     },
+     "ej": {
+      "exercise_id": "e-trineo",
+      "name": "Sprint con trineo"
+     }
+    },
+    {
+     "id": "v-4",
+     "k": "int",
+     "rol": "sprint",
+     "estilo": "sprint",
+     "veces": 3,
+     "tr": {
+      "id": "v-4a",
+      "k": "tr",
+      "rol": "int",
+      "nom": "Sprint",
+      "q": "100",
+      "u": "m",
+      "modo": "tope",
+      "z": 5,
+      "vals": {},
+      "limS": null,
+      "nota": ""
+     },
+     "rec": {
+      "tipo": "parado",
+      "q": "4",
+      "u": "min",
+      "z": 1
+     }
+    },
+    {
+     "id": "v-5",
+     "k": "int",
+     "rol": "sprint",
+     "estilo": "sprint",
+     "veces": 2,
+     "tr": {
+      "id": "v-5a",
+      "k": "tr",
+      "rol": "int",
+      "nom": "Sprint",
+      "q": "400",
+      "u": "m",
+      "modo": "tope",
+      "z": 5,
+      "vals": {},
+      "limS": 50,
+      "nota": ""
+     },
+     "rec": {
+      "tipo": "parado",
+      "q": "8",
+      "u": "min",
+      "z": 1
+     }
+    },
+    {
+     "id": "v-6",
+     "k": "tr",
+     "rol": "calma",
+     "nom": "Enfriamiento",
+     "q": "10",
+     "u": "min",
+     "modo": "zona",
+     "z": 1,
+     "vals": {},
+     "limS": null,
+     "nota": ""
+    }
+   ]
+  },
+  {
+   "day": "Vie",
+   "name": "Fuerza pierna",
+   "cat": "gym",
+   "disciplina": "pesas",
+   "exercises": [
+    {
+     "exercise_id": "e-squat",
+     "name": "Back squat",
+     "sets": "4",
+     "reps": "5",
+     "intensity": "80%",
+     "notes": "",
+     "descanso": "2 min"
+    },
+    {
+     "exercise_id": "e-zancada",
+     "name": "Zancadas",
+     "sets": "4",
+     "reps": "10",
+     "intensity": "16 kg",
+     "notes": "",
+     "porLado": true,
+     "descanso": "90 seg"
+    },
+    {
+     "exercise_id": "e-plancha",
+     "name": "Plancha",
+     "sets": "3",
+     "reps": "45",
+     "intensity": "",
+     "notes": "",
+     "unidad": "seg",
+     "descanso": "60 seg"
+    }
+   ]
+  },
+  {
+   "day": "Dom",
+   "name": "Yoga para corredores",
+   "cat": "otro",
+   "catNombre": "Yoga",
+   "catColor": "#7B4FD6",
+   "catIcono": null,
+   "disciplina": "clase",
+   "claseModo": "video",
+   "exercises": [],
+   "clase": {
+    "url": "/prueba-calentamiento.webm",
+    "duracion": 6
+   },
+   "claseExtra": {
+    "necesita": "Tapete y una liga ligera",
+    "nota": "Respira lento en cada postura.",
+    "calma": {
+     "forma": "ejercicios",
+     "sets": [
+      {
+       "id": "cy-1",
+       "veces": 1,
+       "items": [
+        {
+         "id": "cy-1a",
+         "exercise_id": "e-isquios",
+         "name": "Estiramiento de isquios",
+         "q": "30",
+         "u": "seg",
+         "lado": true
+        }
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "day": "Vie",
+   "name": "Releases del receptor",
+   "cat": "otro",
+   "catNombre": "Fútbol americano",
+   "catColor": "#2E7D32",
+   "catIcono": null,
+   "disciplina": "deporte",
+   "exercises": [],
+   "deporte": {
+    "necesita": "Conos y un compañero",
+    "nota": "Manos rápidas, pies cortos.",
+    "items": [
+     {
+      "id": "dp-1",
+      "exercise_id": "e-jab",
+      "name": "Jab release",
+      "veces": "3",
+      "lado": true,
+      "dist": {
+       "q": "10",
+       "u": "m"
+      },
+      "tiempo": {
+       "q": "4",
+       "u": "seg"
+      },
+      "desc": {
+       "q": "30",
+       "u": "seg"
+      }
+     },
+     {
+      "id": "dp-2",
+      "exercise_id": "e-speed",
+      "name": "Speed release",
+      "veces": "2",
+      "reps": "6"
+     },
+     {
+      "id": "dp-3",
+      "exercise_id": "e-manos",
+      "name": "Golpe de manos",
+      "veces": "2",
+      "reps": "10",
+      "nota": "Golpea y sal"
+     }
+    ]
+   }
+  }
+ ]
+}

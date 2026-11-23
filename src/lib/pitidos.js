@@ -39,9 +39,15 @@ function tono(frecuencia, inicio, duracion, volumen = 0.3) {
   osc.stop(t0 + duracion + 0.02);
 }
 
-/** 'cuenta' (3, 2, 1) · 'cambio' (empieza otro tramo) · 'fin' (se acabó). */
+/** 'cuenta' (3, 2, 1) · 'cambio' (empieza otro tramo) · 'fin' (se acabó).
+    Los de la lista (22 nov 2026, para entrenar con el teléfono en la bolsa: cada aviso se distingue sin mirar): 'tramo' (dos agudos cortos: empieza
+    otro tramo), 'lento' (dos graves: sube el ritmo), 'rapido' (dos muy agudos: bájalo) y 'pronto' (uno corto: faltan 100 m o 10 seg). */
 export function pitido(tipo) {
   try {
+    if (tipo === 'tramo') { tono(1320, 0, 0.14); tono(1320, 0.22, 0.14); return; }
+    if (tipo === 'lento') { tono(520, 0, 0.22); tono(520, 0.32, 0.22); return; }
+    if (tipo === 'rapido') { tono(1760, 0, 0.18); tono(1760, 0.28, 0.18); return; }
+    if (tipo === 'pronto') { tono(990, 0, 0.1); return; }
     if (tipo === 'cuenta') tono(880, 0, 0.12);
     else if (tipo === 'cambio') tono(1320, 0, 0.35);
     else if (tipo === 'fin') { tono(1320, 0, 0.25); tono(1320, 0.35, 0.25); tono(1760, 0.7, 0.6); }

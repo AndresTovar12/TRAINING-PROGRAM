@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Plus, Minus, Search, X, Trash2, Loader2, Video, Dumbbell,
-  Copy, RotateCcw, Pencil, ChevronDown, ChevronLeft, Play, } from 'lucide-react';
+  Copy, RotateCcw, Pencil, ChevronDown, ChevronLeft, Play, PlayCircle, } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { useIsDesktop, useIsWide } from '@/lib/useViewport';
@@ -13,8 +13,13 @@ import {
 } from '@/lib/api';
 import MediaDelEjercicio from '@/features/admin/MediaDelEjercicio';
 import { completaPortadas } from '@/lib/posters';
-import SelectorCategoria, { CrearCategoria } from '@/features/admin/SelectorCategoria';
+import SelectorCategoria from '@/features/admin/SelectorCategoria';
 import ListaDesplegable from '@/components/ListaDesplegable';
+import { EQUIPOS, equipoPesa, disciplinasVigentes } from '@/lib/fichaDelEjercicio';
+import { LineaDelPeso } from '@/features/admin/FilasDeLaFicha';
+import DisciplinasDelEjercicio from '@/features/admin/DisciplinasDelEjercicio';
+import { disciplinasPorUso } from '@/lib/disciplinas';
+import { supabase } from '@/lib/supabase';
 import InterruptorVista from '@/components/InterruptorVista';
 import { useVistaEjercicios } from '@/lib/useVistaEjercicios';
 import {
@@ -27,7 +32,7 @@ import ModoDeFiltro, { MODOS, MODO_POR_DEFECTO, NombresUnidos } from '@/componen
 import DialogoNombre from '@/components/DialogoNombre';
 import { esExplicacion } from '@/lib/proposito';
 import { T, FONT, KP, UI } from '@/lib/theme';
-import { useCabeceraDeSeccion, useEnBanda } from '@/components/ui';
+import { useCabeceraDeSeccion, useEnBanda, Interruptor } from '@/components/ui';
 import Portada from '@/components/Portada';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { FUERA_MINIMO_MS, alVolverALaApp } from '@/lib/planesEnVivo';
@@ -143,7 +148,7 @@ const ROTULO = { fontSize: 13.5, fontWeight: 700, color: T.text };
 
 // Los equipos más comunes, en lista. Lo que no esté aquí se escribe en «Otro» (el valor sigue siendo texto: el buscador, el
 // selector de ejercicios y el conector lo leen así). Andrés pidió la lista; «Polea» la agregué porque la usan 12 de sus ejercicios.
-const EQUIPOS = ['Peso corporal', 'Barra', 'Mancuerna', 'Kettlebell', 'Máquina', 'Liga', 'Polea'];
+// 8 nov 2026: la lista vive en `lib/fichaDelEjercicio.js` (el equipo decide si el atleta anota kilos) y suma Balón medicinal, Trineo, Chaleco o lastre, Bici y Remo.
 
 function Input({ label, grande = false, ...props }) {
   return (
@@ -173,6 +178,13 @@ const empty = {
   recorte_inicio: null, recorte_fin: null,
   // Se aplican al reproducir, no al archivo: el video sube intacto.
   sin_audio: false, encuadre: null,
+  // «Cuánto hace» y «Peso o intensidad» (8 nov 2026). Vacíos = «Lo decido en cada plan».
+  medida: null, carga_tipo: null,
+  // CALENTAMIENTO GUIADO (12 nov 2026, prueba): un video que el atleta sigue de principio a fin. Sale en Correr → Calentamiento → Guiado.
+  // Es una marca del ejercicio, no una categoría: borrar o renombrar categorías no la pierde.
+  guiado: false, duracion_s: null,
+  // LAS DISCIPLINAS (19 nov 2026): las fijas de la app donde se usa. Varias. Ver `DisciplinasDelEjercicio`.
+  disciplinas: [],
 };
 
 // Lista desplegable del grupo muscular PRINCIPAL: primero los grupos
@@ -427,6 +439,11 @@ function ExerciseEditor({
           encuadre: exercise.encuadre ?? null,
           recorte_inicio: exercise.recorte_inicio ?? null,
           recorte_fin: exercise.recorte_fin ?? null,
+          medida: exercise.medida ?? null,
+          carga_tipo: exercise.carga_tipo ?? null,
+          guiado: !!exercise.guiado,
+          duracion_s: exercise.duracion_s ?? null,
+          disciplinas: Array.isArray(exercise.disciplinas) ? disciplinasVigentes(exercise.disciplinas) : [],
         }
       : { ...empty, category_id: categories[0]?.id || '' },
   );
@@ -438,6 +455,19 @@ function ExerciseEditor({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  /* LAS DISCIPLINAS SE MARCAN SOLAS (19 nov 2026): un ejercicio que nunca se ha guardado con ellas toma las de las sesiones donde ya se
+     usa. Una vez guardado, manda lo que diga la ficha. En la app real conviene guardarlas al guardar un plan, no calcularlas al abrir. */
+  useEffect(() => {
+    if (!exercise || Array.isArray(exercise.disciplinas)) return undefined;
+    let vivo = true;
+    Promise.resolve(supabase.from('plans').select('data'))
+      .then(({ data }) => {
+        const halladas = disciplinasPorUso(data ?? [], exercise);
+        if (vivo && halladas.length) setForm((f) => (f.disciplinas?.length ? f : { ...f, disciplinas: halladas }));
+      })
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, [exercise]);
   const eligeEquipo = (v) => {
     if (v === 'Otro') {
       setEquipoOtro(true);
@@ -446,7 +476,8 @@ function ExerciseEditor({
       return;
     }
     setEquipoOtro(false);
-    set('equipment', v);
+    // Sin equipo que pese, «Kilos» o «% del 1RM» ya no caben: la carga vuelve a «Lo decido en cada plan».
+    setForm((f) => ({ ...f, equipment: v, carga_tipo: equipoPesa(v) === false && ['kg', 'pct'].includes(f.carga_tipo) ? null : f.carga_tipo }));
   };
   const categoriaElegida = categories.find((c) => c.id === form.category_id)?.name || null;
 
@@ -477,6 +508,11 @@ function ExerciseEditor({
       encuadre: form.video_url ? (form.encuadre ?? null) : null,
       recorte_inicio: form.video_url ? form.recorte_inicio : null,
       recorte_fin: form.video_url ? form.recorte_fin : null,
+      medida: form.medida || null,
+      carga_tipo: form.carga_tipo || null,
+      guiado: !!form.guiado,
+      duracion_s: form.guiado ? (form.duracion_s || null) : null,
+      disciplinas: form.disciplinas || [],
     };
 
     /* LO QUE SE GRABÓ ANTES DE QUE EL EJERCICIO EXISTIERA.
@@ -713,7 +749,7 @@ function ExerciseEditor({
                 duenoId={duenoId}
                 masterId={masterId}
                 puedeCrear={puedeCrearCategoria}
-                sinCrear
+                crearEnLista
               />,
               <ListaDesplegable
                 key="catsec"
@@ -726,17 +762,6 @@ function ExerciseEditor({
                 opciones={opcionesCatSec}
               />,
             ];
-            const crearCategoria = (
-              <CrearCategoria
-                key="crearcat"
-                categorias={categories}
-                onChange={poneCategoria}
-                onCreada={onCategoriaCreada}
-                duenoId={duenoId}
-                masterId={masterId}
-                puedeCrear={puedeCrearCategoria}
-              />
-            );
             /* EL EQUIPO, EN LISTA. Andrés, 7 oct 2026: «para "equipo" quiero que sea una lista desplegable» con Peso corporal,
                Barra, Mancuerna, Kettlebell, Máquina, Liga y «Otro (y aquí te dé la opción de escribir)». */
             const equipoDeLista = EQUIPOS.find((x) => x.toLowerCase() === (form.equipment || '').trim().toLowerCase()) ?? '';
@@ -766,6 +791,10 @@ function ExerciseEditor({
                 )}
               </div>
             );
+            /* LO QUE SE DEDUCE DEL EQUIPO (si el atleta anota kilos) va debajo de él. «Unidad» y «Peso o intensidad» YA NO SE PREGUNTAN
+               (Andrés, 19 nov 2026): el peso lo dice el equipo y cómo se mide se decide en cada entreno (un ejercicio se puede medir de
+               varias formas). Lo que ya traían los ejercicios se guarda igual; solo no se pregunta. */
+            const lineaDelPeso = <LineaDelPeso key="peso" equipo={form.equipment} />;
             /* LOS SECUNDARIOS, POR GRUPO. En el repertorio ya venían músculos
                secundarios finos ("Isquios", "Core"…) que ninguna pantalla
                enseñaba. Cada uno cae en la pastilla de su grupo, que lo dice
@@ -826,13 +855,15 @@ function ExerciseEditor({
                 </div>
               </div>
             );
+            /* LA NOTA, AL FINAL Y CHICA (Andrés, 19 nov 2026: «es lo menos importante, porque en el editor se pueden poner y pueden cambiar
+               por atleta»). Es del ejercicio, no «para el atleta»: la ve quien lo haga, y en el plan se puede poner otra. */
             const campoNotas = (
-              <label key="notas" style={{ display: 'block', background: UI.tarjeta, borderRadius: UI.rGrupo, padding: '12px 16px', boxShadow: UI.sombraGrupo }}>
-                <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: KP.ink2 }}>Notas para el atleta</span>
+              <label key="notas" style={{ display: 'block', background: UI.tarjeta, borderRadius: UI.rGrupo, padding: '10px 16px 8px', boxShadow: UI.sombraGrupo }}>
+                <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: KP.ink2 }}>Nota del ejercicio</span>
                 <textarea
                   value={form.description}
                   onChange={(e) => set('description', e.target.value)}
-                  rows={3}
+                  rows={2}
                   placeholder="Cómo se hace bien, en qué fijarse…"
                   style={{
                     width: '100%', boxSizing: 'border-box', border: 'none', padding: '6px 0 0',
@@ -841,6 +872,33 @@ function ExerciseEditor({
                   }}
                 />
               </label>
+            );
+            /* Con un detalle de color (Andrés, 19 nov 2026: «me gusta bastante; ¿algún detallito que llame un poco más la atención?»):
+               el ícono en verde, el de la categoría Calentamiento; encendido, toda la tarjeta en verde suave. */
+            const campoGuiado = (
+              <div key="guiado" data-guiado={form.guiado ? 'si' : 'no'} style={{ background: form.guiado ? '#ECF9F4' : UI.tarjeta, borderRadius: UI.rGrupo, padding: '12px 16px', boxShadow: UI.sombraGrupo, transition: 'background .2s ease' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span aria-hidden="true" style={{ width: 44, height: 44, borderRadius: 12, flexShrink: 0, display: 'grid', placeItems: 'center', background: form.guiado ? '#D3F1E5' : '#E3F6EF' }}>
+                    <PlayCircle size={24} color="#00A372" strokeWidth={2} />
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: 15, fontWeight: 700, color: T.text }}>Es un calentamiento guiado</span>
+                    <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: KP.ink2, marginTop: 2, lineHeight: 1.4 }}>Un video que el atleta sigue completo. Sale en Correr → Calentamiento → Guiado.</span>
+                  </span>
+                  <Interruptor activo={!!form.guiado} onCambio={(v) => set('guiado', v)} etiqueta="Es un calentamiento guiado" />
+                </div>
+                {form.guiado && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: KP.ink2 }}>Dura</span>
+                    <input
+                      value={form.duracion_s ? String(Math.round(form.duracion_s / 60)) : ''} inputMode="numeric" placeholder="10" aria-label="Cuánto dura en minutos"
+                      onChange={(e) => { const m = parseInt(e.target.value.replace(/\D/g, ''), 10); set('duracion_s', m ? m * 60 : null); }}
+                      style={{ width: 72, minHeight: 44, border: 'none', borderRadius: 12, background: UI.relleno, textAlign: 'center', fontFamily: FONT, fontWeight: 800, fontSize: 18, color: T.text }}
+                    />
+                    <span style={{ fontSize: 14, fontWeight: 700, color: KP.ink2 }}>min</span>
+                  </div>
+                )}
+              </div>
             );
             /* EL ENLACE VIEJO solo sale si ya trae algo: «Pegar liga» (en la lista de fotos y videos) hace lo mismo, y un campo
                vacío con una aclaración gris debajo era ruido. */
@@ -888,8 +946,9 @@ function ExerciseEditor({
                   {renglonesCategoria}
                   {campoMusculo}
                   {campoEquipo}
+                  {lineaDelPeso}
                 </div>
-                {crearCategoria}
+                <DisciplinasDelEjercicio valor={form.disciplinas} onCambio={(v) => set('disciplinas', v)} />
               </div>
             );
 
@@ -925,6 +984,7 @@ function ExerciseEditor({
                       <div style={{ height: 1, background: T.border }} />
                       {campoNombre}
                       {grupoDeDatos}
+                      {campoGuiado}
                       {campoNotas}
                     </>
                   ) : tarjetaDeDatos}
@@ -994,8 +1054,9 @@ function ExerciseEditor({
                   {detalles && (
                     <>
                       {grupoDeDatos}
-                      {campoNotas}
+                      {campoGuiado}
                       {campoLiga}
+                      {campoNotas}
                     </>
                   )}
                 </>
@@ -1007,7 +1068,7 @@ function ExerciseEditor({
               <>
                 {campoNombre}
                 {grupoDeDatos}
-                {campoNotas}
+                {campoGuiado}
                 {campoLiga}
                 <div style={{ height: 1, background: T.border }} />
                 {bloqueMedia}
@@ -1020,6 +1081,7 @@ function ExerciseEditor({
                 >
                   <Video size={17} /> Grabar o subir
                 </button>
+                {campoNotas}
               </>
             );
           })()}

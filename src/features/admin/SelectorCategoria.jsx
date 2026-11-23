@@ -12,7 +12,10 @@
  * del repertorio y el "Ejercicio nuevo" del editor de planes. Con dos copias,
  * el arreglo llegaría a una sola — ya pasó con el botón de subir archivos.
  *
- * A LA VISTA, NO DENTRO DE LA LISTA. Al principio "+ Crear categoría nueva…" era
+ * DENTRO DE LA LISTA, AL PIE (`crearEnLista`, Andrés, 19 nov 2026: «crear categoría debería ir dentro de categoría, ¿no?»). Ya no es
+ * una rueda del iPhone sino nuestra lista, y su pie siempre se ve sin bajar: es el mismo lugar que «Crear tipo» en la Etiqueta.
+ *
+ * ANTES, A LA VISTA Y NO DENTRO DE LA LISTA. Al principio "+ Crear categoría nueva…" era
  * la última opción del desplegable. En el iPhone el desplegable es una rueda:
  * hay que abrirla y bajar hasta el final para descubrir que existe. Andrés no
  * la encontró y creyó que se había quitado. Ahora es un botón debajo.
@@ -33,10 +36,11 @@ import { T, FONT, UI } from '@/lib/theme';
 
 export default function SelectorCategoria({
   categorias = [], value, onChange, onCreada, onBorrada,
-  duenoId, masterId, sinCategoria = false, puedeCrear = true, estilo, sinCrear = false, rotulo = null,
+  duenoId, masterId, sinCategoria = false, puedeCrear = true, estilo, sinCrear = false, rotulo = null, crearEnLista = false,
 }) {
   const pregunta = useConfirmacion();
   const [err, setErr] = useState('');
+  const [creandoDesdeLista, setCreandoDesdeLista] = useState(false);
 
   const mias = categoriasMias(categorias, duenoId);
   const deLaApp = categoriasDeLaApp(categorias, duenoId, masterId);
@@ -83,6 +87,12 @@ export default function SelectorCategoria({
         marcador={sinCategoria ? 'Sin categoría' : 'Selecciona…'}
         estilo={estilo}
         rotulo={rotulo}
+        pie={crearEnLista && puedeCrear ? ({ cerrar }) => (
+          <button type="button" onClick={() => { cerrar(); setCreandoDesdeLista(true); }} className="kp-press"
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', minHeight: 46, border: 'none', borderRadius: 12, background: T.accentBg, color: T.accent, fontFamily: FONT, fontSize: 15, fontWeight: 800, cursor: 'pointer' }}>
+            <Plus size={17} strokeWidth={2.6} /> Crear categoría
+          </button>
+        ) : undefined}
         grupos={[
           ...(sinCategoria ? [{ titulo: '', opciones: [{ valor: '', etiqueta: 'Sin categoría' }] }] : []),
           { titulo: 'Tuyas', opciones: mias.map((c) => ({
@@ -99,7 +109,14 @@ export default function SelectorCategoria({
       {/* «Crear categoría nueva» va debajo, a la vista. `sinCrear` lo saca de aquí para ponerlo donde se quiera (el editor del
           repertorio lo pone DESPUÉS de las secundarias: Andrés, 7 oct 2026, «antes de escoger una secundaria me ofrece agregar
           una nueva, el orden está mal»). */}
-      {!sinCrear && (
+      {crearEnLista && creandoDesdeLista && (
+        <div style={{ padding: '0 12px 12px' }}>
+          <CrearCategoria abierto onCerrar={() => setCreandoDesdeLista(false)}
+            categorias={categorias} onChange={onChange} onCreada={onCreada} duenoId={duenoId} masterId={masterId} puedeCrear={puedeCrear} estilo={estilo}
+          />
+        </div>
+      )}
+      {!sinCrear && !crearEnLista && (
         <CrearCategoria
           categorias={categorias} onChange={onChange} onCreada={onCreada} duenoId={duenoId} masterId={masterId} puedeCrear={puedeCrear} estilo={estilo}
         />
@@ -112,8 +129,11 @@ export default function SelectorCategoria({
  * «+ Crear categoría nueva»: el botón, su aviso cuando no se puede y el formulario de una línea. Al crearla, queda elegida
  * (`onChange(id)`: la categoría principal). Vive aparte para poder ponerlo después de otros campos.
  */
-export function CrearCategoria({ categorias = [], onChange, onCreada, duenoId, masterId, puedeCrear = true, estilo }) {
-  const [creando, setCreando] = useState(false);
+export function CrearCategoria({ categorias = [], onChange, onCreada, duenoId, masterId, puedeCrear = true, estilo, abierto, onCerrar }) {
+  // `abierto`: la abre quien la usa (el pie de la lista de Categoría) y `onCerrar` la cierra; sin él, la abre su propio botón.
+  const [creandoSolo, setCreandoSolo] = useState(false);
+  const creando = abierto ?? creandoSolo;
+  const setCreando = (v) => { if (abierto !== undefined) { if (!v) onCerrar?.(); } else setCreandoSolo(v); };
   const [nombre, setNombre] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [err, setErr] = useState('');
@@ -142,7 +162,7 @@ export function CrearCategoria({ categorias = [], onChange, onCreada, duenoId, m
 
   return (
     <>
-      {!creando && puedeCrear && (
+      {!creando && puedeCrear && abierto === undefined && (
         <button
           type="button"
           onClick={() => { setCreando(true); setErr(''); }}
@@ -155,7 +175,7 @@ export function CrearCategoria({ categorias = [], onChange, onCreada, duenoId, m
           <Plus size={16} /> Crear categoría nueva
         </button>
       )}
-      {!puedeCrear && (
+      {!puedeCrear && abierto === undefined && (
         /* Viendo como otro coach: la categoría quedaría a nombre de quien está
            mirando, no del coach. Se dice por qué no está el botón. */
         <div style={{ fontSize: 12.5, color: T.text3, fontWeight: 600, lineHeight: 1.4 }}>

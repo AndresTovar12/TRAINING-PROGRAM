@@ -11,6 +11,8 @@ import { avisoDeLiga, ligaExterna } from '@/lib/videos';
 import { usePoster } from '@/lib/posters';
 import { T, FONT, KP } from '@/lib/theme';
 
+const botonEnlace = { display: 'inline-flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', color: T.accent, fontFamily: FONT, fontWeight: 800, fontSize: 14, minHeight: 44, padding: '0 6px 0 0', cursor: 'pointer' };
+
 /**
  * LA CLASE DE UNA SESIÓN, del lado de quien arma el plan (ver `lib/clases.js`).
  *
@@ -25,7 +27,8 @@ import { T, FONT, KP } from '@/lib/theme';
  */
 
 /** Subir video · Pegar liga · De mis clases. `alElegir(clase)` recibe lo que se guarda en `sesion.clase`. */
-export function AccionesDeClase({ alElegir, conMias = true }) {
+/** `discreto`: cuando hay otro botón principal al lado (el calentamiento en video de Correr), subir y pegar van como enlaces. */
+export function AccionesDeClase({ alElegir, conMias = true, discreto = false }) {
   const [pegando, setPegando] = useState(false);
   const [liga, setLiga] = useState('');
   const [error, setError] = useState('');
@@ -56,11 +59,11 @@ export function AccionesDeClase({ alElegir, conMias = true }) {
         accept="video/*" kind="videos" value="" onChange={() => {}}
         alSubir={(subida) => alElegir(claseNueva(subida))}
         botones={({ carrete, busy }) => (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button type="button" onClick={carrete} disabled={busy} style={{ ...botonPrincipal(busy), flex: '1 1 150px' }}>
-              {busy ? <Loader2 size={16} className="spin" /> : <Upload size={16} />} Subir video
+          <div style={{ display: 'flex', gap: discreto ? 18 : 8, flexWrap: 'wrap' }}>
+            <button type="button" onClick={carrete} disabled={busy} style={discreto ? botonEnlace : { ...botonPrincipal(busy), flex: '1 1 150px' }}>
+              {busy ? <Loader2 size={16} className="spin" /> : <Upload size={16} />} {discreto ? 'Subir uno nuevo' : 'Subir video'}
             </button>
-            <button type="button" onClick={() => setPegando((v) => !v)} style={{ ...botonBlanco(pegando), flex: '1 1 130px' }}>
+            <button type="button" onClick={() => setPegando((v) => !v)} aria-expanded={pegando} style={discreto ? botonEnlace : { ...botonBlanco(pegando), flex: '1 1 130px' }}>
               <Link2 size={16} /> Pegar liga
             </button>
             {conMias && (
@@ -118,7 +121,7 @@ function MiniaturaDeClase({ url }) {
 }
 
 /** La clase ya puesta: su foto, cuánto dura, y «Cambiar» / quitar. */
-function TarjetaDeClase({ clase, onCambiar, onQuitar }) {
+export function TarjetaDeClase({ clase, onCambiar, onQuitar, titulo = 'Clase' }) {
   const externo = ligaExterna(clase.url);
   const dura = duracionTexto(clase.duracion);
   return (
@@ -130,7 +133,7 @@ function TarjetaDeClase({ clase, onCambiar, onQuitar }) {
     >
       <MiniaturaDeClase url={clase.url} />
       <div style={{ flex: '1 1 120px', minWidth: 0, fontFamily: FONT }}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>Clase</div>
+        <div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>{titulo}</div>
         <div style={{ fontSize: 13, fontWeight: 700, color: KP.mint, marginTop: 2 }}>{[dura, externo?.de].filter(Boolean).join(' · ') || 'Video'}</div>
       </div>
       <div className="kp-accion" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>

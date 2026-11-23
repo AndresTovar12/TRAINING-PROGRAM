@@ -45,7 +45,12 @@ const mmss = (s) => {
  * elemento al que ya se le dio play con un toque conserva ese permiso: si se creara otro para cada ángulo, el siguiente se
  * quedaría parado con los controles del navegador. (Por eso no lleva `key={url}`.)
  */
-export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef, onMedidas, onDeslizar, onRechazado }) {
+/**
+ * `bucle` (23 nov 2026): sin sonido y, al terminar, vuelve a empezar solo. Para la técnica con el teléfono en el piso.
+ * `onFin` (22 nov 2026, reglas 1 y 2 del entreno del atleta): avisa cuando el video terminó (el archivo, el tramo recortado o, en YouTube y Vimeo, su
+ * reproductor oficial). Con eso el calentamiento guiado pasa solo. En TikTok e Instagram no hay cómo saberlo: nunca se llama.
+ */
+export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef, onMedidas, onDeslizar, onRechazado, onFin, bucle = false }) {
   const ref = useRef(null);
   const pista = useRef(null);
   const arrastra = useRef(false);
@@ -119,6 +124,45 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef,
     return () => clearTimeout(t);
   }, [reproduce, enPausa, visibles, toque]);
 
+  // `onFin` una sola vez por video.
+  const alAcabar = useRef(null);
+  const avisado = useRef(null);
+  useEffect(() => { alAcabar.current = () => { if (avisado.current === url) return; avisado.current = url; onFin?.(); }; });
+
+  /* YOUTUBE Y VIMEO DENTRO DE LA APP (regla 2, 22 nov 2026: «el objetivo es eliminar ese problema de que los videos de YouTube te mandan a la
+     aplicación externa»). Se usa su reproductor oficial por mensajes (`enablejsapi` en YouTube, `api` en Vimeo): se queda en su lugar
+     (`playsinline`), avisa cuando termina (para `onFin`) y cuando falla. «Abrir en YouTube» ya no está siempre: solo si el video falló.
+     En el iPhone falta confirmar el «Error 153» (YouTube pide un dato que la app no manda); si sale, el reproductor lo avisa como error y vuelve el botón. */
+  const marcoRef = useRef(null);
+  const [falloDe, setFalloDe] = useState(null);
+  const conApi = !!liga && (liga.de === 'YouTube' || liga.de === 'Vimeo');
+  useEffect(() => {
+    if (!conApi) return undefined;
+    const alMensaje = (e) => {
+      if (!/youtube\.com|youtube-nocookie\.com|vimeo\.com/.test(String(e.origin))) return;
+      let d = e.data;
+      if (typeof d === 'string') { try { d = JSON.parse(d); } catch { return; } }
+      if (!d || typeof d !== 'object') return;
+      const terminoYt = (d.event === 'onStateChange' && d.info === 0) || (d.event === 'infoDelivery' && d.info?.playerState === 0);
+      if (terminoYt || d.event === 'ended') alAcabar.current?.();
+      if (d.event === 'onError' || d.event === 'error') setFalloDe(url);
+    };
+    window.addEventListener('message', alMensaje);
+    return () => window.removeEventListener('message', alMensaje);
+  }, [conApi, url]);
+  const alCargarMarco = () => {
+    const w = marcoRef.current?.contentWindow;
+    if (!w || !conApi) return;
+    try {
+      if (liga.de === 'YouTube') w.postMessage(JSON.stringify({ event: 'listening', id: 'tl', channel: 'widget' }), '*');
+      else { w.postMessage(JSON.stringify({ method: 'addEventListener', value: 'ended' }), '*'); w.postMessage(JSON.stringify({ method: 'addEventListener', value: 'error' }), '*'); }
+    } catch { /* el marco no deja: queda el botón de abrir fuera */ }
+  };
+  const embedConApi = !liga?.embed ? null : liga.de === 'YouTube'
+    ? `${liga.embed}?enablejsapi=1&playsinline=1&rel=0&origin=${encodeURIComponent(typeof window !== 'undefined' ? window.location.origin : '')}`
+    : liga.de === 'Vimeo' ? `${liga.embed}?playsinline=1&api=1` : liga.embed;
+  const conBotonDeAfuera = !conApi || falloDe === url;
+
   /* Un video que vive fuera (TikTok, YouTube, un reel) no es un archivo
      nuestro: no se puede recortar, ni quitarle el audio, ni encuadrarlo. Se
      incrusta tal cual, y debajo queda SIEMPRE el botón de abrirlo en su app:
@@ -132,7 +176,9 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef,
         {liga.embed ? (
           <iframe
             key={liga.embed}
-            src={liga.embed}
+            ref={marcoRef}
+            onLoad={alCargarMarco}
+            src={embedConApi}
             title={`Video en ${liga.de}`}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
@@ -154,7 +200,8 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef,
         )}
         {/* Con fondo propio: este bloque puede caer sobre un fondo oscuro, y un
             enlace azul sobre negro no se lee. */}
-        <a
+{conBotonDeAfuera && (
+                <a
           href={liga.abrir}
           target="_blank"
           rel="noopener noreferrer"
@@ -167,6 +214,7 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef,
         >
           <ExternalLink size={14} /> Abrir en {liga.de}
         </a>
+        )}
       </div>
     );
   }
@@ -273,7 +321,7 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef,
         src={url}
         controls={noArranca === url}
         playsInline
-        muted={!!sinAudio}
+        muted={!!sinAudio || bucle}
         preload="metadata"
         // Empieza a cargar OTRO video en el mismo elemento (otro ángulo): el reloj y la duración del anterior ya no valen.
         onLoadStart={() => { setTiempo(inicio ?? 0); setLargo(0); setEnPausa(true); }}
@@ -282,6 +330,7 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef,
         onPlay={() => setEnPausa(false)}
         onPause={() => { setEnPausa(true); setVisibles(true); }}
         onError={() => setNoArranca(url)}
+        onEnded={() => { if (bucle) { const v = ref.current; if (v) { v.currentTime = (inicio ?? 0) + 0.05; v.play()?.catch(() => {}); } } else alAcabar.current?.(); }}
         onLoadedMetadata={(e) => {
           const v = e.currentTarget;
           setLargo(v.duration || 0);
@@ -296,7 +345,10 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef,
           const v = ref.current;
           if (!v) return;
           if (!arrastra.current) setTiempo(v.currentTime);
-          if (fin != null && v.currentTime >= fin) v.pause();
+          if (fin != null && v.currentTime >= fin) {
+            // `bucle` (la técnica con el teléfono en el piso, 23 nov 2026): vuelve al inicio del recorte y sigue, sin sonido, para verlo de lejos.
+            if (bucle) { v.currentTime = (inicio ?? 0) + 0.05; v.play()?.catch(() => {}); } else { v.pause(); alAcabar.current?.(); }
+          }
           // Si el atleta rebobina antes del inicio, se le devuelve al inicio:
           // lo de antes es material que el coach decidió no enseñarle.
           if (inicio != null && v.currentTime < inicio - 0.4) v.currentTime = inicio;

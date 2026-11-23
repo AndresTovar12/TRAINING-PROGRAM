@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Timer } from 'lucide-react';
+import { ArrowRight, Plus, Timer } from 'lucide-react';
 import { Contador } from '@/features/admin/piezas';
 import { leeDescanso, componeDescanso } from '@/lib/medidas';
 import { T, FONT, KP } from '@/lib/theme';
@@ -17,6 +17,7 @@ import { T, FONT, KP } from '@/lib/theme';
  */
 
 const DESCANSO_NUEVO = '2 min';
+const OCULTO = { position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' };
 
 const botonChico = {
   display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 28, padding: '0 11px', borderRadius: 999,
@@ -174,7 +175,9 @@ export default function DescansoEntreSets({ numero, valor, onCambio, soloLectura
       {raya}
       <ChipDeDescanso
         valor={valor} onCambio={onCambio} soloLectura={soloLectura} titulo={`Después del Set ${numero}, antes del siguiente`}
-        textoAgregar={`Descanso después del Set ${numero}`} textoValor={(v) => `${v} después del Set ${numero}`}
+        // «→ Set 3»: a dónde vas al terminar este descanso (ver `components/DestinoDelDescanso.jsx`).
+        textoAgregar={<>Descanso <ArrowRight aria-hidden="true" size={13} strokeWidth={2.8} style={{ verticalAlign: '-2px' }} /> Set {numero + 1}<span style={OCULTO}> (antes del Set {numero + 1})</span></>}
+        textoValor={(v) => <>{v} <ArrowRight aria-hidden="true" size={13} strokeWidth={2.8} style={{ verticalAlign: '-2px' }} /> Set {numero + 1}<span style={OCULTO}> (antes del Set {numero + 1})</span></>}
       />
       {raya}
     </div>

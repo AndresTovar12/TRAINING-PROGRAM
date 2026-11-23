@@ -57,6 +57,7 @@ export default function ListaDesplegable({
   anchoMinimo = 200,
   colorFlecha = T.text3,
   rotulo = null,
+  flecha = 16, // tamaño de la flechita; `false` la quita (el botón «+» del editor Híbrido no lleva)
 }) {
   const dedos = useCoarsePointer();
   const caja = useRef(null);
@@ -461,11 +462,13 @@ export default function ListaDesplegable({
         {elegida?.nota && (
           <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text3, flexShrink: 0 }}>{elegida.nota}</span>
         )}
-        <ChevronDown
-          size={16}
-          color={colorFlecha}
-          style={{ flexShrink: 0, transform: abierto ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}
-        />
+        {flecha !== false && (
+          <ChevronDown
+            size={flecha}
+            color={colorFlecha}
+            style={{ flexShrink: 0, transform: abierto ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}
+          />
+        )}
       </button>
       )}
 

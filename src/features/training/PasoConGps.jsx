@@ -5,6 +5,10 @@ import { agregaPunto, enVivo, fuenteDeUbicacion, textoDeRitmo } from '@/lib/ubic
 import { avanceDelPaso, estadoDeRitmo, pedidoEnUnaLinea, ritmoObjetivo, sinSenal } from '@/lib/recorrido';
 import { relojDeCronometro } from '@/lib/entrenoLibre';
 import MapaDeCarrera from '@/features/libre/MapaDeCarrera';
+import { AMBAR as AMBAR_OSCURO, BarraOscura, BotonOscuro, EnQueVa, HojaDePausa, NEGRO, NotaOscura, Numero, PreguntaOscura, Sigue, TENUE, VERDE as VERDE_OSCURO } from '@/features/training/PantallaDeCardio';
+import { relojDe } from '@/lib/entrenoDatos';
+import { vibra } from '@/lib/avisosNativos';
+import { pitido } from '@/lib/pitidos';
 import { useSenalGps, useUbicacionActual } from '@/features/libre/useEntrenoLibre';
 
 /* EL CARDIO DEL PLAN, CON GPS (23 oct 2026). Un paso de 200 m o más (un sprint, un kilómetro, ver `lib/recorrido.js`) se hace con esta pantalla: la de la captura
@@ -106,6 +110,13 @@ export default function PasoConGps({
   paso, meta, carga = '', siguiente = null, color = null, pulso = null, cabecera = null,
   arrancaSolo = false, sigueSolo = true, segResultado = SEGUNDOS_DEL_RESULTADO, sinCuenta = false,
   onTermina, onSinGps, onAnotar, onCerrar,
+  // LA VERSIÓN NEGRA (22 nov 2026, la de la lista: Running, Cycling…): primero los números, el mapa en la esquina. `tiempoTotal`, `onLista`, `enQueVa`
+  // y `sigue` ({ nombre, detalle }) son de la barra y del pie; `limiteSeg` el límite del sprint (regla 11).
+  oscura = false, tiempoTotal = null, onLista = null, enQueVa = null, sigue = null, limiteSeg = null, kmTotalesAntes = 0,
+  // Regla 13: dijo que lleva el teléfono, pero lleva 30 seg sin moverse en un tramo por metros: se le pregunta si lo dejó apoyado.
+  onApoyado = null, sonido = false,
+  // La hoja de pausa (23 nov 2026): tramo anterior, saltar, sonido, el teléfono y terminar. Ver `HojaDePausa`.
+  opciones = null,
 }) {
   const [fase, setFase] = useState(sinCuenta ? 'corriendo' : 'antes'); // antes | cuenta | corriendo | llego
   const [cuenta, setCuenta] = useState(3);
@@ -318,6 +329,116 @@ export default function PasoConGps({
           <span aria-hidden="true" style={{ width: 22, height: 22, borderRadius: '50%', background: colorDelTipo, display: 'grid', placeItems: 'center' }}><span style={{ width: 8, height: 8, borderRadius: 4, background: BLANCO }} /></span> Próxima vuelta
         </Boton>
       </>
+    );
+  }
+
+  /* ---------- LA VERSIÓN NEGRA ---------- */
+  const [verMapa, setVerMapa] = useState(false);
+  const [hojaPausa, setHojaPausa] = useState(false);
+  const [noEstaApoyado, setNoEstaApoyado] = useState(false);
+  const quieto = oscura && !!onApoyado && !noEstaApoyado && fase === 'corriendo' && !pausadoDesde && seg >= 30 && (vivo.distanciaM || 0) < 10;
+  const fueraAntes = useRef(false);
+  const fuera = !!estado && estado.estado !== 'bien' && fase === 'corriendo' && !pausadoDesde;
+  // Fuera de ritmo vibra al salirse (regla 5); se calla al volver.
+  useEffect(() => {
+    if (oscura && fuera && !fueraAntes.current) { vibra('toque'); setTimeout(() => vibra('toque'), 250); if (sonido) pitido(estado?.estado === 'rapido' ? 'rapido' : 'lento'); }
+    fueraAntes.current = fuera;
+  }, [oscura, fuera, sonido, estado?.estado]);
+  // Faltan 100 m (en tramos de 300 m o más): un pitido corto, para que no lo agarre de sorpresa.
+  const prontoAvisado = useRef(false);
+  useEffect(() => {
+    if (!oscura || prontoAvisado.current || fase !== 'corriendo' || meta < 300 || avance.faltan > 100) return;
+    prontoAvisado.current = true;
+    if (sonido) pitido('pronto');
+    vibra('toque');
+  }, [oscura, fase, meta, avance.faltan, sonido]);
+  if (oscura) {
+    const ritmoTxt = textoDeRitmo(lleno ? ritmoPromedio : vivo.ritmoSKm);
+    const colorRitmo = !estado || lleno ? '#fff' : estado.estado === 'bien' ? VERDE_OSCURO : AMBAR_OSCURO;
+    const faltan = antesDeSalir ? meta : (lleno ? final.metros : avance.faltan);
+    const enKm = (m) => (m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`);
+    const segFinal = lleno ? final.seg : null;
+    const enSeg = (x) => (x < 60 ? `${Math.round(x * 10) / 10} seg` : relojDe(x));
+    const senalTxt = { lista: 'GPS listo', buscando: 'Buscando GPS…', negado: 'Sin permiso de ubicación', sin_senal: 'Sin señal de GPS', no_hay: 'Sin GPS' }[senal];
+    const logro = lleno && limiteSeg ? segFinal <= limiteSeg : null;
+    const estadoTxt = { bien: '✓ En tu ritmo', lento: `Vas lento · sube a ${objetivo ? `${textoDeRitmo(objetivo.min)}–${textoDeRitmo(objetivo.max)}` : ''}`, rapido: `Vas rápido · baja a ${objetivo ? `${textoDeRitmo(objetivo.min)}–${textoDeRitmo(objetivo.max)}` : ''}` }[estado?.estado];
+    const botones = (() => {
+      if (fase === 'llego') return (<><BotonOscuro onClick={() => onAnotar?.(final)}>Cambiar</BotonOscuro><BotonOscuro azul ancho onClick={() => onTermina(final)}>Seguir</BotonOscuro></>);
+      if (fase === 'antes') {
+        const sinGps = senal === 'no_hay' || senal === 'negado';
+        return (<>{onSinGps && <BotonOscuro onClick={onSinGps}><MapPin size={17} /> Sin GPS</BotonOscuro>}<BotonOscuro azul ancho onClick={() => { if (!sinGps) { setCuenta(3); setFase('cuenta'); } }}><Play size={17} fill="#fff" /> {sinGps ? 'Sin señal' : 'Iniciar'}</BotonOscuro></>);
+      }
+      if (perdido) return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
+          <div role="alert" style={{ background: 'rgba(255,176,32,.14)', color: AMBAR_OSCURO, borderRadius: 14, padding: '10px 12px', fontSize: 14, fontWeight: 700, lineHeight: 1.35 }}>Perdimos la señal. Llevas unos {Math.round(vivo.distanciaM)} m de {meta}. Lo recorrido se guardó.</div>
+          <div style={{ display: 'flex', gap: 8 }}><BotonOscuro onClick={() => setEsperando(true)}>Esperar señal</BotonOscuro><BotonOscuro azul ancho onClick={() => termina(vivo.distanciaM)}>Terminar el tramo</BotonOscuro></div>
+          {onAnotar && <BotonOscuro onClick={() => onAnotar({ metros: vivo.distanciaM, seg: Math.round(seg) })}>Anotar a mano</BotonOscuro>}
+        </div>
+      );
+      if (fase === 'cuenta') return (<BotonOscuro onClick={() => setFase('antes')}>Cancelar</BotonOscuro>);
+      return (<><BotonOscuro azul ancho onClick={() => { if (!pausadoDesde) alternaPausa(); setHojaPausa(true); }}>{pausadoDesde ? <><Play size={17} fill="#fff" /> Seguir</> : <><Pause size={17} fill="#fff" /> Pausar</>}</BotonOscuro><BotonOscuro onClick={() => termina(vivo.distanciaM)} label="Terminar este tramo y pasar al siguiente">Siguiente</BotonOscuro></>);
+    })();
+    if (verMapa) {
+      return (
+        <div style={{ position: 'relative', flex: 1, minHeight: 0, background: NEGRO, color: '#fff', fontFamily: FONT }}>
+          <div style={{ position: 'absolute', inset: 0 }}><MapaDeCarrera muestras={muestras.length || !aqui ? muestras : [aqui]} sigue={fase !== 'llego'} alto="100%" redondo={false} puntoAzul /></div>
+          <div style={{ position: 'absolute', left: 16, right: 16, top: 0 }}><BarraOscura tiempo={tiempoTotal} onLista={onLista} onMapa={() => setVerMapa(false)} mapaAbierto /></div>
+          <div style={{ position: 'absolute', left: 12, right: 12, bottom: 82, background: '#0D0E12', borderRadius: 18, padding: '11px 14px' }}>
+            <div style={{ fontSize: 12.5, fontWeight: 800, color: '#9AA0AE' }}>{enQueVa?.titulo}{enQueVa?.detalle ? ` · ${enQueVa.detalle}` : ''}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: 6, textAlign: 'center' }}>
+              <div><div style={{ fontSize: 26, fontWeight: 800, ...NUM_STYLE }}>{faltan} m</div><div style={{ fontSize: 11.5, color: TENUE, fontWeight: 600 }}>{antesDeSalir ? 'La meta' : 'Te faltan'}</div></div>
+              <div><div style={{ fontSize: 26, fontWeight: 800, color: colorRitmo, ...NUM_STYLE }}>{ritmoTxt}</div><div style={{ fontSize: 11.5, color: TENUE, fontWeight: 600 }}>Ritmo (/km)</div></div>
+            </div>
+          </div>
+          <div style={{ position: 'absolute', left: 12, right: 12, bottom: 14, display: 'flex', gap: 8 }}>{botones}</div>
+        </div>
+      );
+    }
+    return (
+      <div role="group" aria-label={paso.nombre} style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '0 16px 14px', background: NEGRO, color: '#fff', fontFamily: FONT }}>
+        {(hojaPausa || (pausadoDesde && fase === 'corriendo')) && opciones && (
+          <HojaDePausa enPausa={!!pausadoDesde} seguir={pausadoDesde ? 'Seguir' : 'Volver'} titulo={pausadoDesde ? `En pausa · ${enQueVa?.titulo ?? paso.nombre}` : (enQueVa?.titulo ?? paso.nombre)} tiempo={tiempoTotal} onSeguir={() => { if (pausadoDesde) alternaPausa(); setHojaPausa(false); }}
+            opciones={{ ...opciones, onSaltar: () => { setHojaPausa(false); termina(vivo.distanciaM); }, onAnterior: () => { setHojaPausa(false); opciones.onAnterior?.(); }, onTerminar: () => { setHojaPausa(false); opciones.onTerminar?.(); }, telefono: opciones.telefono ? { ...opciones.telefono, onCambia: () => { setHojaPausa(false); opciones.telefono.onCambia(); } } : null }} />
+        )}
+        {quieto && (
+          <PreguntaOscura titulo="Tu teléfono no se está moviendo" texto="¿Lo dejaste apoyado? Así no puede medir tus metros."
+            si="Sí, lo dejé apoyado" no="No, voy corriendo" onSi={onApoyado} onNo={() => setNoEstaApoyado(true)} />
+        )}
+        {/* «···» (23 nov 2026): las opciones sin parar el tramo. «Pausar» sigue parándolo. */}
+        <BarraOscura tiempo={tiempoTotal} onLista={onLista} onMapa={() => setVerMapa(true)} onMas={opciones ? () => setHojaPausa(true) : null} />
+        {fuera && estadoTxt && (
+          <div role="alert" style={{ marginTop: 12, background: AMBAR_OSCURO, color: '#111318', borderRadius: 16, padding: '10px 12px', fontWeight: 800, fontSize: 15 }}>{estadoTxt}</div>
+        )}
+        {enQueVa && <EnQueVa {...enQueVa} parte={lleno ? 1 : avance.parte} />}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 18 }}>
+          {fase === 'cuenta' ? <Numero valor={cuenta} etiqueta="Prepárate" tam={140} /> : lleno ? (
+            <>
+              <Numero valor={enSeg(segFinal)} etiqueta={limiteSeg ? `Límite: ${enSeg(limiteSeg)}` : `${final.metros} m`} tam={76} color={logro === false ? AMBAR_OSCURO : logro ? VERDE_OSCURO : '#fff'} />
+              {logro !== null && <span style={{ fontSize: 13.5, fontWeight: 800, borderRadius: 99, padding: '6px 12px', background: logro ? 'rgba(43,214,154,.16)' : 'rgba(255,176,32,.16)', color: logro ? VERDE_OSCURO : AMBAR_OSCURO }}>{logro ? `Lo lograste · ${enSeg(limiteSeg - segFinal)} abajo` : `${enSeg(segFinal - limiteSeg)} arriba del límite`}</span>}
+              {sigueSolo && segResultado > 0 && <span style={{ fontSize: 13, color: TENUE, fontWeight: 700 }}>Sigue solo en unos segundos</span>}
+            </>
+          ) : (
+            <>
+              <Numero valor={`${faltan} m`} etiqueta={antesDeSalir ? `${senalTxt ?? ''} · la meta` : (pausadoDesde ? 'En pausa · te faltan' : 'Te faltan')} tam={faltan >= 1000 ? 64 : 76} />
+              {!antesDeSalir && (
+                <Numero valor={ritmoTxt} etiqueta={objetivo ? `Ritmo (/km) · pedido ${textoDeRitmo(objetivo.min)}–${textoDeRitmo(objetivo.max)}` : 'Ritmo (/km)'} tam={54} color={colorRitmo}>
+                  {estado && <span style={{ display: 'inline-block', marginTop: 7, fontSize: 12.5, fontWeight: 800, borderRadius: 99, padding: '4px 10px', background: estado.estado === 'bien' ? 'rgba(43,214,154,.16)' : 'rgba(255,176,32,.16)', color: colorRitmo }}>{estado.estado === 'bien' ? '✓ En tu ritmo' : estado.estado === 'lento' ? 'Más lento' : 'Más rápido'}</span>}
+                </Numero>
+              )}
+              <div style={{ display: 'flex', gap: 26, justifyContent: 'center' }}>
+                <Numero valor={enKm(kmTotalesAntes + (vivo.distanciaM || 0))} etiqueta="total" tam={28} />
+                <Numero valor={relojDe(seg)} etiqueta="este tramo" tam={28} />
+                {pulso != null && <Numero valor={pulso} etiqueta="pulso" tam={28} />}
+              </div>
+            </>
+          )}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+          <NotaOscura texto={paso.nota} />
+          {sigue && <Sigue titulo={paso.sinParar ? 'Sigue, sin parar' : 'Sigue'} nombre={sigue.nombre} detalle={sigue.detalle} />}
+          <div style={{ display: 'flex', gap: 8 }}>{botones}</div>
+        </div>
+      </div>
     );
   }
 

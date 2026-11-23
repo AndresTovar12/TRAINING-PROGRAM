@@ -61,7 +61,7 @@ export default function HojaTipoNuevo({ propios, conUso, onGuardar, onCerrar }) 
   const limpio = nombre.trim();
   const guarda = async () => {
     if (!limpio || guardando) return;
-    if (propios.some((t) => normaliza(t.nombre) === normaliza(limpio))) { setError('Ya tienes uno con ese nombre.'); return; }
+    if (propios.some((t) => normaliza(t.nombre) === normaliza(limpio))) { setError('Ya tienes una con ese nombre.'); return; }
     setGuardando(true);
     setError('');
     try {
@@ -90,7 +90,7 @@ export default function HojaTipoNuevo({ propios, conUso, onGuardar, onCerrar }) 
   );
 
   return (
-    <HojaFlotante titulo="Tipo nuevo" onCerrar={onCerrar} pie={botonDeGuardar}>
+    <HojaFlotante titulo="Etiqueta nueva" onCerrar={onCerrar} pie={botonDeGuardar}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, ...(esCompu ? null : { height: '100%' }) }}>
         {/* ---------- La vista previa: el cartel de «Hoy te toca» con el nombre encima ---------- */}
         <div
@@ -114,7 +114,7 @@ export default function HojaTipoNuevo({ propios, conUso, onGuardar, onCerrar }) 
             </span>
             <input
               ref={campoDelNombre} className="tl-tipo-nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') guarda(); }}
-              maxLength={40} autoComplete="off" placeholder="Nombre del tipo" aria-label="Nombre del tipo"
+              maxLength={40} autoComplete="off" placeholder="Nombre de la etiqueta" aria-label="Nombre de la etiqueta"
               style={{ flex: 1, minWidth: 0, width: '100%', background: 'transparent', border: 'none', borderBottom: '2px solid rgba(255,255,255,0.35)', borderRadius: 0, color: '#fff', font: `800 22px/1.15 ${FONT}`, letterSpacing: -0.5, padding: '4px 0 7px', outline: 'none' }}
             />
           </div>

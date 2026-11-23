@@ -19,7 +19,8 @@ import { limpiaResultado, relojTexto } from '@/lib/formatos';
 const circulo = (relleno) => ({
   width: 46, height: 46, borderRadius: '50%', flexShrink: 0, cursor: 'pointer', display: 'grid', placeItems: 'center',
   fontFamily: FONT, touchAction: 'manipulation',
-  border: 'none', background: relleno ? LT.blue : LT.surface2, color: relleno ? '#fff' : LT.text2,
+  // Dentro del entreno, del color de la sesión (`--acento`, ver `EntrenoDelDia`); fuera, el azul.
+  border: 'none', background: relleno ? `var(--acento, ${LT.blue})` : LT.surface2, color: relleno ? '#fff' : LT.text2,
 });
 
 const num = (t) => {
@@ -181,7 +182,7 @@ export default function ResultadoDelBloque({
           <button
             type="button" onClick={guardar}
             style={{
-              minHeight: 52, borderRadius: 15, border: 'none', cursor: 'pointer', background: LT.blue, color: '#fff',
+              minHeight: 52, borderRadius: 15, border: 'none', cursor: 'pointer', background: `var(--acento, ${LT.blue})`, color: '#fff',
               fontFamily: FONT, fontSize: 16, fontWeight: 800, touchAction: 'manipulation',
             }}
           >

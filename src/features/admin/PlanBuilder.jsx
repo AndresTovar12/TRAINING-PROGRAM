@@ -3,16 +3,25 @@ import { createPortal } from 'react-dom';
 import {
   ArrowLeft, X, Plus, Trash2, Copy, ChevronRight, ChevronUp, ChevronDown,
   ChevronLeft, Loader2, Check, Layers, Dumbbell, StickyNote, Zap,
-  Save, FolderOpen, Clipboard, Eraser, CalendarDays, Repeat, Scale, Video,
+  Save, FolderOpen, Clipboard, Eraser, CalendarDays, Repeat, Video,
   Image as ImageIcon, ImagePlus, CopyPlus, Sun, Moon, RefreshCw, PlayCircle,
+  Compass, Flame,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { IconBtn, Pill } from '@/features/admin/piezas';
-import { AvisoDeFormatos, EncabezadoDelSet } from '@/features/admin/FormatoDelSet';
+import { EncabezadoDelSet } from '@/features/admin/FormatoDelSet';
+import EditorDeCorrer from '@/features/admin/EditorDeCorrer';
+import EditorHibrido from '@/features/admin/EditorHibrido';
+import EditorDeClase from '@/features/admin/EditorDeClase';
+import EditorDeDeporte from '@/features/admin/EditorDeDeporte';
+import CalentamientoDeGym from '@/features/admin/CalentamientoDeGym';
+import { pideElRecorridoDelEditor } from '@/lib/recorridoDelEditor';
+import { useRecorridoDelEditor } from '@/lib/useRecorridoDelEditor';
 import LapsosDelEjercicio, { PorLadoDelEjercicio } from '@/features/admin/LapsosDelEjercicio';
 import DescansoEntreSets from '@/features/admin/DescansoEntreSets';
-import { traeLapsos, lapsosDe, parcheDeLapsos } from '@/lib/lapsos';
+import DestinoDelDescanso, { NumeroEnElSet } from '@/components/DestinoDelDescanso';
+import { traeLapsos } from '@/lib/lapsos';
 import { parseBlocks, serializeBlocks, setTag } from '@/lib/setsDeUnaSesion';
 import { esProgramaFantasma } from '@/lib/programas';
 import { useAviso } from '@/components/AvisoPasajero';
@@ -25,7 +34,7 @@ import {
 import { ESPERA_EN_VIVO_MS, alVolverALaApp, escuchaPlanes, loEscribiYo, mismoInstante } from '@/lib/planesEnVivo';
 import { haySenalAhora } from '@/lib/senal';
 import {
-  isLoadedExercise, dondeVa, estructuraDelPlan, kindDeEstructura, semanaGlobal, semanasDelPlan,
+  dondeVa, estructuraDelPlan, kindDeEstructura, semanaGlobal, semanasDelPlan,
 } from '@/lib/training-utils';
 import GuiaDelEditor from '@/features/admin/GuiaDelEditor';
 import BloqueDelPrograma from '@/features/admin/BloqueDelPrograma';
@@ -40,15 +49,25 @@ import { mueveEn, propsDeArrastre } from '@/lib/arrastrar';
 import { PlegadasContext, usePlegadas } from '@/lib/usePlegadas';
 import { useGuiaAncha } from '@/lib/useGuiaAncha';
 import { T, FONT, KP, tipoDeSesion, UI } from '@/lib/theme';
-import { CeldaDeReps, CeldaDeCarga, DebajoDeRepsYCarga } from '@/components/RepsYCarga';
+import { CeldaDeReps, CeldaDeCarga, CeldaEnMenosDe, DebajoDeRepsYCarga } from '@/components/RepsYCarga';
+import { SesionDelEditor, useSesionDelEditor } from '@/features/admin/sesionDelEditor';
+import FilasDeLaFicha from '@/features/admin/FilasDeLaFicha';
+import { ICONO_DE_DISCIPLINA } from '@/lib/disciplinas';
+import ListaDesplegable from '@/components/ListaDesplegable';
+import { FAMILIAS, ORDEN_DE_FAMILIAS, arranqueDeLinea, cabeEnIntervalos, familiaDelDia } from '@/lib/fichaDelEjercicio';
+import { DEPORTE_DEL_EDITOR, cambioDeDisciplina, contenidoDeLaSesion, editorDeFamilia, editorQueSeVe, esDeLista, parcheDelCambio } from '@/lib/editorDeLaSesion';
+import { esDistancia, esTiempo } from '@/lib/medidas';
+import { formatoNuevo } from '@/lib/formatos';
 import CampoDescanso from '@/components/CampoDescanso';
 import { useRepsYCarga } from '@/lib/useRepsYCarga';
 import { rondasDe } from '@/lib/porVuelta';
 import { ligaExterna } from '@/lib/videos';
 import RepertoirePicker from '@/features/admin/RepertoirePicker';
+import { usePrimeroDeLaDisciplina } from '@/lib/useDisciplinasDelRepertorio';
+import { VideoDelAtleta } from '@/lib/videoDelAtleta';
 import MediaUpload from '@/features/admin/MediaUpload';
 import ClaseDeLaSesion, { HojaDeClase } from '@/features/admin/ClaseDeLaSesion';
-import { claseDe } from '@/lib/clases';
+import { claseDe, modoDeClase } from '@/lib/clases';
 import { esInstructor } from '@/lib/palabras';
 import SelectorCategoria from '@/features/admin/SelectorCategoria';
 import SelectorTipoSesion from '@/features/admin/SelectorTipoSesion';
@@ -90,6 +109,42 @@ const clone = (o) => structuredClone(o);
 const newExercise = (ex) => (ex
   ? { exercise_id: ex.id, name: ex.name, sets: '3', reps: '8-10', intensity: '', notes: '' }
   : { name: '', sets: '3', reps: '10', intensity: '', notes: '' });
+/* Una línea nueva del repertorio, ya con lo que dice su ficha (8 nov 2026): su medida («Cuánto hace») y si el atleta anota kilos (por su equipo).
+   Si la ficha no dice la medida, la del Enfoque de la sesión. El tipo de carga no se guarda: con la casilla vacía, el editor lo saca de la
+   ficha y de la familia (ver `useRepsYCarga`). Las «8-10» de siempre solo van con repeticiones. */
+/* Un Set nuevo con lo que dice la Disciplina de la sesión (9 nov 2026): Pesas, «Se repite» 3 veces; Hyrox, «Por tiempo» a una ronda; Correr, Bici
+   y Nadar, «Intervalos de cardio»; Triatlón, Movilidad y Clase, «Sin series». Libre, como siempre. */
+/* Solo si la Disciplina pide «Intervalos de cardio» se revisan las FICHAS de lo elegido (no se adivina: se lee lo que dicen): todas caben,
+   Intervalos; ninguna, un Set normal; mezcla, «Lapsos personalizados», que acepta todo. Los demás formatos aceptan cualquier ejercicio. */
+const setNuevo = (members, familia, fichas = []) => {
+  const F = FAMILIAS[familia] ?? FAMILIAS.libre;
+  if (F.set === 'cardio') {
+    const caben = fichas.map(cabeEnIntervalos);
+    if (caben.every(Boolean)) return { type: 'set', members, rounds: '1', lapsos: true, cardio: true };
+    if (caben.some(Boolean)) return { type: 'set', members, rounds: '1', lapsos: true, cardio: false };
+    return { type: 'set', members, rounds: '3' };
+  }
+  if (F.set === 'sin') return { type: 'set', members, rounds: null };
+  if (F.set === 'portiempo') {
+    const formato = { ...formatoNuevo('portiempo'), vueltas: F.veces ?? 1 };
+    return { type: 'set', members, formato, rounds: String(formato.vueltas) };
+  }
+  return { type: 'set', members, rounds: String(F.veces ?? 3) };
+};
+/* LA LÍNEA NACE UNA VEZ (la cadena, 9 nov 2026). Unidad: la de la ficha; si no dice, la del Set de intervalos (distancia o tiempo); si no, la
+   de la Disciplina; si no, reps. Tipo de carga: se GUARDA en la línea (`cargaTipo`) para que nada lo cambie después. Kilos: los decide el
+   equipo de la ficha. `enIntervalos`: la línea entra a un Set de «Intervalos de cardio». */
+const lineaNueva = (ex, familia, enIntervalos = false) => {
+  const F = FAMILIAS[familia] ?? FAMILIAS.libre;
+  const deIntervalos = enIntervalos && !ex?.medida ? (F.u && (esDistancia(F.u) || esTiempo(F.u)) ? F.u : 'km') : null;
+  const { unidad, tipo, llevaPeso } = arranqueDeLinea(ex, familia, deIntervalos);
+  return {
+    ...newExercise(ex ?? null),
+    ...(unidad && unidad !== 'reps' ? { unidad, reps: '' } : null),
+    ...(tipo ? { cargaTipo: tipo } : null),
+    ...(llevaPeso === null ? null : { carga: llevaPeso }),
+  };
+};
 const newDay = (day = 'Lun') => ({ day, name: 'Sesión', cat: 'gym', exercises: [] });
 const DAY_FULL_LOWER = { Lun: 'lunes', Mar: 'martes', 'Mié': 'miércoles', Jue: 'jueves', Vie: 'viernes', 'Sáb': 'sábado', Dom: 'domingo' };
 const newWeek = (num) => ({ num, label: '', load: '', days: [] });
@@ -245,17 +300,18 @@ const alEscribirDescripcion = (onPatch) => (e) => onPatch({ notes: e.target.valu
 
 function ExerciseCard({
   ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove, onMove, canLeft, canRight,
-  rondas = null, soloLectura = false, arrastre = null, burbuja = false, onCerrarBurbuja, sinDescanso = false, descansoFinalAparte = false, notaDescanso = false,
+  rondas = null, soloLectura = false, arrastre = null, burbuja = false, onCerrarBurbuja, sinDescanso = false, destinoFinal, destino = null, numero = null,
 }) {
   const rep = delRepertorio(ex, repertoire);
-  // Reps, carga, «Por lado» y «Por vuelta»: ver `useRepsYCarga`.
-  const rc = useRepsYCarga({ ex, onPatch, rondas, abiertoDeEntrada: soloLectura });
+  const { familia } = useSesionDelEditor();
+  // Reps, carga, «Por lado» y «Por vuelta»: ver `useRepsYCarga`. La ficha y la familia deciden con qué arranca y qué se ofrece primero.
+  const rc = useRepsYCarga({ ex, onPatch, rondas, abiertoDeEntrada: soloLectura, ficha: rep, familia });
   const estiloCampo = { ...inputStyle, padding: '8px 10px', fontSize: 13 };
   /* El descanso lo escribe el COACH. Antes la app lo adivinaba leyendo el
      nombre del ejercicio y se lo enseñaba al atleta como si fuera una
      indicación suya. Si aquí se deja vacío, al atleta no le aparece nada:
      mejor callar que inventarle un dato de entrenamiento. */
-  const campoDescanso = <CampoDescanso ex={ex} onPatch={onPatch} estiloInput={estiloCampo} nombre="Descanso entre ejercicios" />;
+  const campoDescanso = <CampoDescanso ex={ex} onPatch={onPatch} estiloInput={estiloCampo} nombre="Descanso" rotulo={<DestinoDelDescanso destino={destino} />} />;
   return (
     <div {...arrastre} style={{ background: T.bg2, border: 'none', boxShadow: '0 1px 2px rgba(17,19,24,0.04)', borderRadius: 14, overflow: 'hidden', minWidth: 0 }}>
       <div style={{ position: 'relative', height: 110, width: '100%', background: '#0E1015' }}>
@@ -277,7 +333,7 @@ function ExerciseCard({
       </div>
       <div style={{ padding: 12 }}>
         {ex.exercise_id ? (
-          <div style={{ fontWeight: 800, fontSize: 14, color: T.text, marginBottom: 10 }}>{nombreDeLaLinea(ex, rep)}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 800, fontSize: 14, color: T.text, marginBottom: 10 }}>{numero && <NumeroEnElSet n={numero} grande />}{nombreDeLaLinea(ex, rep)}</div>
         ) : (
           <input
             value={ex.name}
@@ -289,14 +345,16 @@ function ExerciseCard({
         {/* En «Lapsos personalizados» el ejercicio abre sus lapsos en vez de una sola línea de reps y carga. */}
         {traeLapsos(ex) ? (
           <>
-            <LapsosDelEjercicio ex={ex} onPatch={onPatch} estiloInput={estiloCampo} angosta burbuja={burbuja} onCerrarBurbuja={onCerrarBurbuja} descansoFinalAparte={descansoFinalAparte} />
-            <div style={{ marginTop: 7 }}><PorLadoDelEjercicio ex={ex} onPatch={onPatch} /></div>
+            <LapsosDelEjercicio ex={ex} onPatch={onPatch} estiloInput={estiloCampo} angosta burbuja={burbuja} onCerrarBurbuja={onCerrarBurbuja} destinoFinal={destinoFinal} ficha={rep} />
+            {/* En «Intervalos de cardio» no hay «Por lado» (distancia o tiempo); si ya venía marcado, se deja a la vista para poder quitarlo. */}
+            {(!ex.intervalosDeCardio || ex.porLado === true) && <div style={{ marginTop: 7 }}><PorLadoDelEjercicio ex={ex} onPatch={onPatch} /></div>}
           </>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {/* El rótulo de cada campo es su lista: reps, segundos, metros… y % 1RM, RPE, RIR, kilos. Ver `RepsYCarga`. */}
             <CeldaDeReps rc={rc} estiloInput={estiloCampo} />
             <CeldaDeCarga rc={rc} estiloInput={estiloCampo} />
+            {rc.verLimite && <div style={{ gridColumn: '1 / -1' }}><CeldaEnMenosDe rc={rc} estiloInput={estiloCampo} /></div>}
             <div style={{ gridColumn: '1 / -1' }}>
               <DebajoDeRepsYCarga rc={rc} estiloInput={estiloCampo} />
             </div>
@@ -307,14 +365,12 @@ function ExerciseCard({
             por eso el cue, que solo tenía su texto gris, ahora lleva rótulo. */}
         {/* Con lapsos, cada uno trae su propio descanso; con reloj de formato, lo marca el reloj. */}
         {!traeLapsos(ex) && !sinDescanso && <div style={{ marginTop: 8 }}>{campoDescanso}</div>}
-        {!traeLapsos(ex) && notaDescanso && <div style={{ marginTop: 8, ...NOTA_DE_DESCANSO }}>Descanso: «entre vueltas», arriba ↑</div>}
         <div style={{ marginTop: 8 }}>
           <Field label="Descripción">
             <input value={valorDeDescripcion(ex)} onChange={alEscribirDescripcion(onPatch)} style={estiloCampo} />
           </Field>
         </div>
         <div style={{ marginTop: 9, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          <BotonCarga ex={ex} onPatch={onPatch} />
           <BotonVideoAtleta idEjercicio={rep?.id} atleta={atleta} onAbrir={() => onVideoAtleta?.({ ...ex, exercise_id: rep.id })} />
         </div>
       </div>
@@ -353,45 +409,9 @@ function BotonVideoAtleta({ idEjercicio, atleta, onAbrir }) {
   );
 }
 
-/**
- * "¿Este ejercicio lleva peso?" — lo decide el coach, no el nombre.
- *
- * Antes lo adivinaba una lista fija de palabras (sprint, salto, movilidad…).
- * Eso choca con que la app sirva para cualquier actividad física: un drill
- * nuevo con un nombre que la lista no contempla se quedaba sin campo de peso
- * —o lo mostraba cuando no tocaba— y no había forma de corregirlo.
- *
- * El botón enseña el estado EFECTIVO. Mientras el coach no lo toque, sigue
- * valiendo la sugerencia automática; en cuanto lo toca, manda su decisión.
- */
-function BotonCarga({ ex, onPatch }) {
-  const { t } = usePalabras();
-  const efectivo = isLoadedExercise(ex);
-  const explicito = ex.carga !== undefined;
-  return (
-    <button
-      type="button"
-      onClick={() => onPatch({ carga: !efectivo })}
-      title={
-        explicito
-          ? (efectivo ? t('El atleta anota el peso. Toca para quitarlo.') : 'Sin campo de peso. Toca para ponerlo.')
-          : `Sugerido automáticamente: ${efectivo ? 'lleva peso' : 'sin peso'}. Toca para cambiarlo.`
-      }
-      style={{
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '6px 10px',
-        borderRadius: 999, cursor: 'pointer', whiteSpace: 'nowrap',
-        background: efectivo ? T.accentBg : T.bg3,
-        color: efectivo ? T.accent : T.text2,
-        fontFamily: FONT, fontSize: 12, fontWeight: 700,
-        /* Sin contorno punteado (reestructura visual, 16 oct 2026): lo sugerido y lo elegido se ven igual; el `title` dice cuál es. */
-        border: 'none',
-      }}
-    >
-      <Scale size={12} />
-      {efectivo ? 'Con peso' : 'Sin peso'}
-    </button>
-  );
-}
+/* «Con peso / Sin peso» se fue de la línea (8 nov 2026): lo decide el EQUIPO de la ficha del ejercicio (ver `lib/fichaDelEjercicio.js`). Una
+   dominada con lastre es otro ejercicio del repertorio, con su equipo «Chaleco o lastre». Los planes de antes conservan lo que ya decía
+   su línea (`ex.carga`). */
 
 /* ------------------------------------------------------------------ */
 /* Ejercicio como FILA de tabla (solo compu)                            */
@@ -405,7 +425,6 @@ function BotonCarga({ ex, onPatch }) {
 /* ------------------------------------------------------------------ */
 
 // La nota que ocupa el lugar de la casilla de descanso en el último ejercicio de un Set que se repite.
-const NOTA_DE_DESCANSO = { fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: T.text3, lineHeight: 1.3 };
 
 /* `celda` y `encabezado` se fueron con la tabla: los ejercicios pasaron a ser
    tarjetas con sus propios rótulos, y el rótulo vive ahora en `RotuloCampo`. */
@@ -448,10 +467,11 @@ function RotuloCampo({ children }) {
  */
 function ExerciseRow({
   ex, repertoire, atleta, onVideoAtleta, onPatch, onRemove, onMove, canUp, canDown,
-  rondas = null, soloLectura = false, arrastre = null, burbuja = false, onCerrarBurbuja, sinDescanso = false, descansoFinalAparte = false, notaDescanso = false,
+  rondas = null, soloLectura = false, arrastre = null, burbuja = false, onCerrarBurbuja, sinDescanso = false, destinoFinal, destino = null, numero = null,
 }) {
   const rep = delRepertorio(ex, repertoire);
-  const rc = useRepsYCarga({ ex, onPatch, rondas, abiertoDeEntrada: soloLectura });
+  const { familia } = useSesionDelEditor();
+  const rc = useRepsYCarga({ ex, onPatch, rondas, abiertoDeEntrada: soloLectura, ficha: rep, familia });
   // En un Set de «Lapsos personalizados» el ejercicio abre sus lapsos (ver `LapsosDelEjercicio`).
   const enLapsos = traeLapsos(ex);
   // En el celular la «Descripción» vacía no ocupa un renglón: sale con «+ Descripción». En cuanto se toca o se escribe, se queda.
@@ -485,6 +505,7 @@ function ExerciseRow({
         >
           <Dumbbell size={15} color="#3A3F4C" />
         </Portada>
+        {numero && <NumeroEnElSet n={numero} grande />}
         {ex.exercise_id ? (
           <span style={{ flex: 1, minWidth: 0, fontWeight: 700, fontSize: 14, color: T.text }}>{nombreDeLaLinea(ex, rep)}</span>
         ) : (
@@ -509,10 +530,10 @@ function ExerciseRow({
              descanso), y «Por lado» —que es del ejercicio— justo debajo. */
           <div style={completo(0) ?? { flex: '1 1 100%', minWidth: 0 }}>
             <LapsosDelEjercicio
-              ex={ex} onPatch={onPatch} estiloInput={inputFila} angosta={angosta} burbuja={burbuja} onCerrarBurbuja={onCerrarBurbuja} descansoFinalAparte={descansoFinalAparte}
-              columnasCompu={`16px ${ANCHO_REPS}px ${ANCHO_CARGA}px 112px 30px`}
+              ex={ex} onPatch={onPatch} estiloInput={inputFila} angosta={angosta} burbuja={burbuja} onCerrarBurbuja={onCerrarBurbuja} destinoFinal={destinoFinal}
+              columnasCompu={`16px ${ANCHO_REPS}px ${ANCHO_CARGA}px 112px 112px 30px`} ficha={rep}
             />
-            <div style={{ marginTop: 8 }}><PorLadoDelEjercicio ex={ex} onPatch={onPatch} /></div>
+            {(!ex.intervalosDeCardio || ex.porLado === true) && <div style={{ marginTop: 8 }}><PorLadoDelEjercicio ex={ex} onPatch={onPatch} /></div>}
           </div>
         ) : (
           <>
@@ -523,6 +544,11 @@ function ExerciseRow({
             <div style={fluido(0) ?? { width: ANCHO_CARGA }}>
               <CeldaDeCarga rc={rc} compacto estiloInput={inputFila} />
             </div>
+            {rc.verLimite && (
+              <div style={fluido(0) ?? { width: 112 }}>
+                <CeldaEnMenosDe rc={rc} compacto estiloInput={inputFila} />
+              </div>
+            )}
             {/* En el teléfono, las vueltas y «Por lado» van pegadas a sus dos casillas, antes del descanso. */}
             {angosta && (
               <div style={completo(0)}>
@@ -532,12 +558,8 @@ function ExerciseRow({
             {/* En un Set con reloj (AMRAP, EMOM, Tabata…) el descanso lo marca el reloj: no hay casilla (un solo lugar para cada dato). */}
             {!sinDescanso && (
               <div style={fluido(1) ?? { width: 214 }}>
-                <CampoDescanso ex={ex} onPatch={onPatch} compacto estiloInput={inputFila} nombre="Descanso entre ejercicios" />
+                <CampoDescanso ex={ex} onPatch={onPatch} compacto estiloInput={inputFila} nombre="Descanso" rotulo={<DestinoDelDescanso destino={destino} />} />
               </div>
-            )}
-            {/* El último ejercicio no lleva casilla: su descanso es el de «entre vueltas», en la cabecera del Set. */}
-            {notaDescanso && (
-              <div style={{ ...(fluido(1) ?? { width: 214 }), ...NOTA_DE_DESCANSO, alignSelf: 'center', paddingTop: 14 }}>Descanso: «entre vueltas», arriba ↑</div>
             )}
           </>
         )}
@@ -561,7 +583,6 @@ function ExerciseRow({
             El de video solo existe con un ejercicio del repertorio y un
             atleta delante. */}
         <div style={{ ...(fluido(2) ?? { flexShrink: 0 }), display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 4 }}>
-          <BotonCarga ex={ex} onPatch={onPatch} />
           {rep && atleta?.id && (
             <BotonVideoAtleta idEjercicio={rep.id} atleta={atleta} onAbrir={() => onVideoAtleta?.({ ...ex, exercise_id: rep.id })} />
           )}
@@ -602,12 +623,13 @@ function ExerciseRow({
  * planes desde el momento en que la guardas.
  */
 function CrearEjercicioRapido({ categorias, onCancelar, onCreado, duenoId, masterId, onCategoriaCreada, onCategoriaBorrada }) {
-  const { t } = usePalabras();
   const [nombre, setNombre] = useState('');
   const [categoria, setCategoria] = useState('');
   const [foto, setFoto] = useState('');
   const [video, setVideo] = useState('');
-  const [llevaPeso, setLlevaPeso] = useState(true);
+  // Equipo · Cuánto hace · Peso o intensidad (8 nov 2026): arrancan en «Lo decido en cada plan». La familia de la sesión NO se pega a la ficha:
+  // un «Burpees» creado desde una sesión de Correr no tiene por qué quedarse para siempre en km.
+  const [datos, setDatos] = useState({ equipment: '', medida: null, carga_tipo: null });
   const [guardando, setGuardando] = useState(false);
   const [err, setErr] = useState('');
 
@@ -621,8 +643,11 @@ function CrearEjercicioRapido({ categorias, onCancelar, onCreado, duenoId, maste
         category_id: categoria || null,
         cover_image_url: foto || null,
         video_url: video || null,
+        equipment: datos.equipment || null,
+        medida: datos.medida,
+        carga_tipo: datos.carga_tipo,
       });
-      onCreado(fila, llevaPeso);
+      onCreado(fila);
     } catch (e) {
       setErr(e.message || 'No se pudo crear el ejercicio.');
       setGuardando(false);
@@ -695,25 +720,7 @@ function CrearEjercicioRapido({ categorias, onCancelar, onCreado, duenoId, maste
             hint="Desde el teléfono puedes grabarlo aquí mismo."
           />
 
-          <div>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text2, marginBottom: 6 }}>{t('¿El atleta anota el peso?')}</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {[[true, 'Sí, lleva peso'], [false, 'No lleva peso']].map(([v, texto]) => (
-                <button
-                  key={String(v)} type="button" onClick={() => setLlevaPeso(v)}
-                  style={{
-                    flex: 1, padding: '11px 10px', borderRadius: 12, cursor: 'pointer',
-                    border: 'none',
-                    background: llevaPeso === v ? T.accentBg : UI.relleno,
-                    color: llevaPeso === v ? T.accent : T.text2,
-                    fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
-                  }}
-                >
-                  {texto}
-                </button>
-              ))}
-            </div>
-          </div>
+          <FilasDeLaFicha conEquipo soloEquipo valor={datos} onCambio={(c) => setDatos((d) => ({ ...d, ...c }))} />
 
           {err && (
             <div style={{ background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 11, padding: '10px 12px', fontSize: 13, fontWeight: 700 }}>
@@ -1069,13 +1076,17 @@ export function SessionEditor(props) {
  * Leer la lista como Sets y volver a guardarla no cambia nada que no se haya tocado (`lib/setsDeUnaSesion.js`), incluidos los
  * ejercicios sin series y los que traen un rango («4-6»).
  *
- * `separacion`: lo que separa el cuerpo de lo de arriba. `conAviso`: si sale el aviso de los formatos (una vez por pantalla).
+ * `separacion`: lo que separa el cuerpo de lo de arriba. (`conAviso` ya no hace nada: el aviso de los formatos lo reemplazó el recorrido del editor).
  */
 function CuerpoDeSets({
   exercises, onExercises, repertoire, categorias = [], atleta, onEjercicioCreado, duenoId, masterId,
-  onCategoriaCreada, onCategoriaBorrada, soloLectura = false, descanso = false, conAviso = true, separacion = 14,
+  onCategoriaCreada, onCategoriaBorrada, soloLectura = false, descanso = false, separacion = 14,
+  // El calentamiento de Gym (ver `CalentamientoDeGym`). Sin `onCalentamiento` no hay calentamiento aquí (Clase trae el suyo).
+  calentamiento, onCalentamiento,
 }) {
   const { t } = usePalabras();
+  const { familia } = useSesionDelEditor();
+  const { avisa } = useAviso();
   const [creandoEjercicio, setCreandoEjercicio] = useState(false);
   const [mediaDe, setMediaDe] = useState(null);
   const quita = useQuitar();
@@ -1084,6 +1095,16 @@ function CuerpoDeSets({
   const [pickerCtx, setPickerCtx] = useState(null);
   // El Set donde se acaba de elegir «Lapsos personalizados»: ahí una burbuja señala el «+ Lapso» hasta que se acepte o se toque en otro lado.
   const [burbujaEn, setBurbujaEn] = useState(null);
+  // En el buscador, arriba los ejercicios de la Disciplina de la sesión (los que su ficha dice); los demás, después.
+  const primero = usePrimeroDeLaDisciplina(repertoire, familia);
+  // El calentamiento se agrega desde el pie, pero aparece ARRIBA: al agregarlo, la pantalla sube hasta él.
+  const refCal = useRef(null);
+  const [subirAlCal, setSubirAlCal] = useState(false);
+  useEffect(() => {
+    if (!subirAlCal || !refCal.current) return;
+    refCal.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setSubirAlCal(false);
+  }, [subirAlCal, calentamiento]);
   const blocks = useMemo(() => parseBlocks(exercises), [exercises]);
   const nSets = blocks.filter((b) => b.type === 'set').length;
   // Cada lista de este cuerpo (los Sets, los ejercicios de cada Set) se identifica con su id.
@@ -1103,7 +1124,10 @@ function CuerpoDeSets({
   return (
     <>
       <div {...enLectura(soloLectura)} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: separacion, ...(soloLectura ? APAGADO : null) }}>
-        {conAviso && !soloLectura && nSets > 0 && <AvisoDeFormatos />}
+        {onCalentamiento && !descanso && calentamiento && (
+          <div ref={refCal} style={{ scrollMarginTop: 90 }}><CalentamientoDeGym cal={calentamiento} onCal={onCalentamiento} repertoire={repertoire} categorias={categorias} atleta={atleta}
+            onEjercicioCreado={onEjercicioCreado} soloLectura={soloLectura} /></div>
+        )}
         {blocks.map((b, bi) => {
           if (b.type === 'note') {
             return (
@@ -1128,13 +1152,11 @@ function CuerpoDeSets({
           const tag = setTag(b.members.length);
           // La raya con el descanso entre este Set y el siguiente: solo hay raya si viene otro Set después.
           const hayOtroSet = blocks.slice(bi + 1).some((x) => x.type === 'set');
-          /* LOS DESCANSOS DEL SET (23 oct 2026): entre ejercicios, «Descanso entre ejercicios» junto a reps y carga de cada ejercicio (menos el último); entre vueltas, en la
-             cabecera junto a «Se repite»; después del Set, en la raya entre Sets. Se guardan donde siempre: `descanso` de cada ejercicio (el del último es el de entre vueltas; en lapsos, el de
-             su último lapso) y `descansoSet` del último. Con un reloj de formato (AMRAP, EMOM…) los marca el reloj: no hay chips. */
-          const ultimo = b.members[b.members.length - 1];
-          const descansoVueltas = b.lapsos ? String((lapsosDe(ultimo) ?? []).at(-1)?.descanso ?? '').trim() : String(ultimo?.descanso ?? '').trim();
-          const ponDescansoVueltas = (v) => writeBlocks((bs) => bs.map((x, k) => (k === bi ? { ...x, members: x.members.map((m, kk) => (kk !== x.members.length - 1 ? m
-            : (x.lapsos ? { ...m, ...parcheDeLapsos((lapsosDe(m) ?? []).map((l, i, todos) => (i === todos.length - 1 ? { ...l, descanso: v } : l))) } : { ...m, descanso: v }))) } : x)));
+          /* LOS DESCANSOS DEL SET (21 nov 2026, antes 23 oct): cada descanso dice a dónde vas al terminarlo (ver `components/DestinoDelDescanso.jsx`).
+             Cada ejercicio lleva su casilla junto a reps y carga: «Descanso → ②» hasta el penúltimo, y el último «Descanso ↻ ①» si el Set se repite
+             (en un Set que no se repite, el último no lleva casilla). En la raya, «2 min → Set 3». Se guardan donde siempre: `descanso` de cada
+             ejercicio (el del último es el de entre vueltas) y `descansoSet` del último. Con un reloj de formato (AMRAP, EMOM…) los marca el reloj:
+             no hay casillas. En lapsos, igual, en el último lapso de cada ejercicio (el de volver a empezar es el del último lapso del último). */
           const repite = Math.max(0, ...(String(b.rounds ?? '').match(/\d+/g) ?? []).map(Number)) > 1;
           return (
             <Fragment key={bi}>
@@ -1144,7 +1166,6 @@ function CuerpoDeSets({
             >
               <EncabezadoDelSet
                 numero={setIdx} bloque={b} etiquetaDeTipo={tag}
-                descansoVueltas={descansoVueltas} onDescansoVueltas={b.formato || soloLectura && !descansoVueltas ? null : ponDescansoVueltas}
                 onCambio={(parche) => writeBlocks((bs) => bs.map((x, k) => (k === bi ? { ...x, ...parche } : x)))}
                 onLapsos={() => setBurbujaEn(bi)}
                 onAgregar={() => setPickerCtx({ mode: 'add', blockIdx: bi })}
@@ -1172,12 +1193,15 @@ function CuerpoDeSets({
                   // La burbuja del «+ Lapso» va en el primer ejercicio del Set donde se acaba de elegir el formato.
                   burbuja: !soloLectura && b.lapsos && burbujaEn === bi && mi === 0,
                   onCerrarBurbuja: () => setBurbujaEn(null),
-                  /* «Descanso entre ejercicios» junto a reps y carga en todos menos el ÚLTIMO (Andrés, 23 oct 2026, al ver las capturas: la raya entre tarjetas no le gustó).
-                     El del último es el de entre vueltas: va en la cabecera, y su fila lo dice. Con reloj de formato no hay casillas; en lapsos, cada lapso trae la suya. */
-                  sinDescanso: !!b.formato || !!b.lapsos || mi === b.members.length - 1,
-                  notaDescanso: !b.formato && !b.lapsos && repite && mi === b.members.length - 1,
+                  /* La casilla del descanso, junto a reps y carga, dice a dónde vas: al siguiente ejercicio (→ ②) o, en el último, de vuelta al primero
+                     (↻ ①). Si el Set no se repite, el último no tiene a dónde volver: sin casilla (lo que sigue es la raya). Con reloj de formato no hay
+                     casillas; en lapsos, cada lapso trae la suya. */
+                  sinDescanso: !!b.formato || !!b.lapsos || (mi === b.members.length - 1 && !repite),
+                  destino: mi < b.members.length - 1 ? { tipo: 'sigue', n: mi + 2 } : { tipo: 'vuelve', n: b.members.length > 1 ? 1 : null },
+                  numero: b.members.length > 1 ? mi + 1 : null,
                   // En lapsos, el descanso del último lapso del último ejercicio es «Entre vueltas»: va en el bloque «Descansos».
-                  descansoFinalAparte: b.lapsos && mi === b.members.length - 1 ? (Math.max(0, ...(String(b.rounds ?? '').match(/\d+/g) ?? []).map(Number)) > 1 ? 'arriba' : 'ninguno') : false,
+                  // En lapsos, el ÚLTIMO lapso de cada ejercicio lleva la flecha; el del último ejercicio sin vueltas, ninguna casilla.
+                  ...(b.lapsos ? { destinoFinal: mi < b.members.length - 1 ? { tipo: 'sigue', n: mi + 2 } : repite ? { tipo: 'vuelve', n: b.members.length > 1 ? 1 : null } : null } : null),
                   onVideoAtleta: setMediaDe,
                   onPatch: (patch) => writeBlocks((bs) => bs.map((x, k) => (k === bi
                     ? { ...x, members: x.members.map((mm, kk) => (kk === mi ? { ...mm, ...patch } : mm)) }
@@ -1248,15 +1272,18 @@ function CuerpoDeSets({
            picar para comenzar a construir una rutina». Era una pastilla pálida a la izquierda, del mismo peso
            que «Nota». Ahora es el botón azul lleno: en una sesión VACÍA, al centro y de buen tamaño (es lo único
            que hay que hacer); con sets, a todo el ancho al final de la lista. «Nota» y «Ejercicio nuevo» van
-           debajo, blancos con borde y más chicos. */
+           debajo, más chicos. Andrés, 21 nov 2026: las pastillas grises «ya es viejo… no me gusta como se ve»; ahora son las mismas
+           pastillas azul claro de «Para cualquier deporte» (Agregar), con el ícono en azul. */
         <div style={{
           marginTop: separacion, display: 'flex', flexDirection: 'column', gap: 8,
-          ...(esCompu && nSets === 0 ? { alignItems: 'center', padding: '18px 8px 4px' } : null),
+          // En la compu, siempre de su tamaño y al centro (Andrés, 21 nov 2026: «ese botón largo en la computadora se ve muy mal»).
+          ...(esCompu ? { alignItems: 'center' } : null),
+          ...(esCompu && nSets === 0 ? { padding: '18px 8px 4px' } : null),
         }}>
           <button
-            type="button" className="kp-press" onClick={() => setPickerCtx({ mode: 'new-set' })}
+            type="button" className="kp-press" onClick={() => setPickerCtx({ mode: 'new-set' })} data-recorrido="agregar-set"
             style={{
-              width: '100%', maxWidth: esCompu && nSets === 0 ? 320 : undefined, minHeight: 52, display: 'flex', alignItems: 'center',
+              width: '100%', maxWidth: esCompu ? 320 : undefined, minHeight: 52, display: 'flex', alignItems: 'center',
               justifyContent: 'center', gap: 9, borderRadius: 16, border: 'none', cursor: 'pointer',
               background: T.accent, color: '#fff',
               fontFamily: FONT, fontSize: 16, fontWeight: 800, boxShadow: KP.shBtn,
@@ -1269,18 +1296,19 @@ function CuerpoDeSets({
             : { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}
           >
             {[
+              ...(onCalentamiento && !calentamiento ? [{ icono: Flame, texto: 'Calentamiento', al: () => { onCalentamiento({ forma: 'video' }); setSubirAlCal(true); } }] : []),
               { icono: StickyNote, texto: 'Nota', al: () => writeBlocks((bs) => [...bs, { type: 'note', ex: { isNote: true, text: '' } }]) },
               { icono: Dumbbell, texto: 'Ejercicio nuevo', al: () => setCreandoEjercicio(true) },
             ].map(({ icono: Icono, texto, al }) => (
               <button
                 key={texto} type="button" className="kp-press" onClick={al}
                 style={{
-                  minHeight: esCompu ? 40 : 46, padding: esCompu ? '0 16px' : undefined, display: 'flex', alignItems: 'center',
-                  justifyContent: 'center', gap: 7, borderRadius: esCompu ? 12 : 14, border: 'none',
-                  background: '#EBEDF1', cursor: 'pointer', fontFamily: FONT, fontSize: esCompu ? 13.5 : 14, fontWeight: 700, color: T.text2,
+                  minHeight: 44, padding: esCompu ? '0 16px' : undefined, display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', gap: 7, borderRadius: 12, border: 'none',
+                  background: '#E8EDFB', cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 800, color: T.text,
                 }}
               >
-                <Icono size={16} /> {texto}
+                <Icono size={16} color={T.accent} aria-hidden="true" /> {texto}
               </button>
             ))}
           </div>
@@ -1303,11 +1331,11 @@ function CuerpoDeSets({
           onCategoriaCreada={onCategoriaCreada}
           onCategoriaBorrada={onCategoriaBorrada}
           onCancelar={() => setCreandoEjercicio(false)}
-          onCreado={(fila, llevaPeso) => {
+          onCreado={(fila) => {
             onEjercicioCreado?.(fila);
             writeBlocks((bs) => [
               ...bs,
-              { type: 'set', members: [{ ...newExercise(fila), carga: llevaPeso }], rounds: '3' },
+              setNuevo([lineaNueva(fila, familia, FAMILIAS[familia]?.set === 'cardio' && cabeEnIntervalos(fila))], familia, [fila]),
             ]);
             setCreandoEjercicio(false);
           }}
@@ -1317,14 +1345,33 @@ function CuerpoDeSets({
       {pickerCtx && (
         <RepertoirePicker
           exercises={repertoire}
+          primero={primero ?? undefined}
           title={pickerCtx.mode === 'new-set' ? 'Nuevo set — elige ejercicios' : 'Agregar al set'}
           onClose={() => setPickerCtx(null)}
           onConfirm={(exs) => {
+            /* A un Set de «Intervalos de cardio» solo entra distancia o tiempo. Si la ficha de lo elegido dice otra cosa (reps, calorías, nada), el
+               ejercicio NO se reetiqueta: el Set se afloja a «Lapsos personalizados», que conserva todos los lapsos, y se avisa. Nunca regresa solo. */
+            const destino = pickerCtx.mode === 'add' ? parseBlocks(exercises)[pickerCtx.blockIdx] : null;
+            const noCaben = destino?.cardio ? exs.filter((e) => !cabeEnIntervalos(e)) : [];
+            const seAfloja = noCaben.length > 0;
+            const aIntervalos = pickerCtx.mode === 'new-set'
+              ? !!FAMILIAS[familia]?.set && FAMILIAS[familia].set === 'cardio' && exs.every(cabeEnIntervalos)
+              : !!destino?.cardio && !seAfloja;
             writeBlocks((bs) => {
-              const members = exs.map((e) => newExercise(e));
-              if (pickerCtx.mode === 'new-set') return [...bs, { type: 'set', members, rounds: '3' }];
-              return bs.map((x, k) => (k === pickerCtx.blockIdx ? { ...x, members: [...x.members, ...members] } : x));
+              const members = exs.map((e) => lineaNueva(e, familia, aIntervalos && cabeEnIntervalos(e)));
+              // El Set nuevo nace como dice la Disciplina de la sesión (ver `setNuevo`).
+              if (pickerCtx.mode === 'new-set') return [...bs, setNuevo(members, familia, exs)];
+              return bs.map((x, k) => {
+                if (k !== pickerCtx.blockIdx) return x;
+                /* El descanso de «↻ volver a empezar» vive en el ÚLTIMO ejercicio. Al agregar al final, el que era último deja de serlo: su descanso
+                   pasa al nuevo último, para que siga siendo el de volver a empezar y no se convierta, sin avisar, en el de «→ siguiente». */
+                const vueltas = !x.formato && !x.lapsos ? String(x.members.at(-1)?.descanso ?? '').trim() : '';
+                const antes = vueltas ? x.members.map((m, i) => (i === x.members.length - 1 ? { ...m, descanso: '' } : m)) : x.members;
+                const nuevos = vueltas ? members.map((m, i) => (i === members.length - 1 ? { ...m, descanso: vueltas } : m)) : members;
+                return { ...x, ...(seAfloja ? { cardio: false } : null), members: [...antes, ...nuevos] };
+              });
             });
+            if (seAfloja) avisa(`El Set pasó a «Lapsos personalizados»: ${noCaben[0].name} no va en distancia ni tiempo. Nada se borró.`);
             setPickerCtx(null);
           }}
         />
@@ -1342,9 +1389,30 @@ function SessionEditorInterno({
   const { profile } = useAuth();
   const quita = useQuitar();
   const [agregandoClase, setAgregandoClase] = useState(false);
+  // «Su video» de los cuadros (Híbrido, Técnica, Deporte…) abre la misma ventana que en Gym. Ver `lib/videoDelAtleta.js`.
+  const [mediaHibrido, setMediaHibrido] = useState(null);
+  const videoDelAtleta = useMemo(() => ({ atleta, abrir: atleta?.id && !soloLectura ? setMediaHibrido : null }), [atleta, soloLectura]);
   const blocks = useMemo(() => parseBlocks(day.exercises), [day.exercises]);
+  // La familia de la sesión (la del tipo): ordena las cargas y decide con qué arranca lo que la ficha no dice.
+  const familia = familiaDelDia(day);
+  const sesionDelEditor = useMemo(() => ({ familia }), [familia]);
 
   const nSets = blocks.filter((b) => b.type === 'set').length;
+  /* QUÉ EDITOR SE VE (19 nov 2026; ver `lib/editorDeLaSesion.js`). La Disciplina manda: Running en lista de tramos (`EditorDeCorrer`),
+     Híbrido en cadena (`EditorHibrido`), las demás en Sets. Cambiar a una Disciplina de otro editor empieza la sesión de cero (lo pregunta
+     `ChipDeDisciplina`). Solo una sesión de antes de esta regla, con lo suyo en otro editor, se sigue viendo donde está: nada queda escondido. */
+  const vista = editorQueSeVe(day, familia);
+  const enLista = esDeLista(vista);
+  const enCadena = vista === 'cadena';
+  // DEPORTE (20 nov 2026; ver `EditorDeDeporte`): una lista de ejercicios con video, cuántas veces y si es por lado. Guarda en `day.deporte`.
+  const enDeporte = vista === 'deporte';
+  const nDeporte = (day.deporte?.items ?? []).length;
+  const deAntes = vista !== editorDeFamilia(familia);
+  /* CLASE (20 nov 2026; ver `EditorDeClase`): dos modalidades, «Un video completo» o «Ejercicio por ejercicio». Los Sets solo salen en la
+     segunda: así una coach de pilates no ve «Agregar set» como lo principal. */
+  const esDeClase = familia === 'clase' && vista === 'sets';
+  const conSetsDeClase = modoDeClase(day) === 'ejercicios';
+  const nCadena = (day.hibrido?.sets ?? []).length;
   /* Un día OFF vacío es un día de descanso, no una sesión a medio armar.
      Antes enseñaba "0 sets" y "Agregar set" como botón azul grande: la
      pantalla empujaba justo a lo contrario de lo que el coach acababa de
@@ -1357,23 +1425,24 @@ function SessionEditorInterno({
   /* LA CLASE de la sesión (ver `lib/clases.js`): una sola por sesión, arriba de los Sets. Quien da clases tiene el botón «Clase» a la vista; los demás
      lo encuentran en el menú de la sesión. Con una clase ya puesta el botón no sale (se cambia o se quita desde su tarjeta). */
   const clase = claseDe(day);
-  const puedePonerClase = !soloLectura && !descanso && !clase && !claseObligatoria;
+  const puedePonerClase = !soloLectura && !descanso && !clase && !claseObligatoria && !esDeClase && !enDeporte;
   const quitarLaClase = () => quita({ aviso: 'Se quitó la clase', pregunta: { titulo: '¿Quitar la clase de esta sesión?', detalle: 'El video se queda en tu espacio y en Mis planes si lo guardaste.', confirmar: 'Sí, quitarla' } }, () => onPatch({ clase: undefined }));
 
   return (
+    <VideoDelAtleta.Provider value={videoDelAtleta}>
     <div {...arrastre} style={TARJETA_DE_SESION}>
       <DayHeader
         day={day} onPatch={onPatch} onDelete={onDelete} onCopy={onCopy} onSaveToCatalog={onSaveToCatalog} onApplyCatalog={onApplyCatalog}
-        onClear={onClear} nSets={descanso ? null : nSets} conVista={!descanso} vistaFuera={vistaFuera} soloLectura={soloLectura}
+        onClear={onClear} nSets={descanso || enLista || enCadena || enDeporte ? null : nSets} conVista={!descanso && !enLista && !enCadena && !enDeporte} vistaFuera={vistaFuera} soloLectura={soloLectura}
         plegable={sePuedePlegar} plegada={estaPlegada} onPlegar={onPlegar} turno={turno} onTurno={onTurno}
-        onAgregarClase={puedePonerClase ? () => setAgregandoClase(true) : undefined} destacarClase={esInstructor(profile?.profesion)}
+        onAgregarClase={puedePonerClase ? () => setAgregandoClase(true) : undefined} destacarClase={esInstructor(profile?.profesion) || familia === 'clase'}
       />
 
       {/* La clase, o —si esta sesión es una clase de Mis planes que aún no tiene video— sus acciones a la vista. */}
-      {!estaPlegada && !soloLectura && (clase || claseObligatoria) && (
+      {!estaPlegada && !soloLectura && !esDeClase && (clase || claseObligatoria) && (
         <ClaseDeLaSesion clase={clase} pedir={claseObligatoria} onClase={(nueva) => onPatch({ clase: nueva })} onQuitar={quitarLaClase} conMias={!claseObligatoria} />
       )}
-      {!estaPlegada && soloLectura && clase && <ClaseDeLaSesion clase={clase} onClase={() => {}} onQuitar={() => {}} />}
+      {!estaPlegada && soloLectura && clase && !esDeClase && <ClaseDeLaSesion clase={clase} onClase={() => {}} onQuitar={() => {}} />}
       {agregandoClase && <HojaDeClase onCerrar={() => setAgregandoClase(false)} onElige={(nueva) => { setAgregandoClase(false); onPatch({ clase: nueva }); }} />}
 
       {/* Las NOTAS DEL DÍA (las que escribe la IA o vienen de un plan): el atleta las lee y antes el editor no las enseñaba, así que una sesión de puro texto parecía vacía (auditoría p53). */}
@@ -1384,19 +1453,49 @@ function SessionEditorInterno({
       {/* Plegado: solo la cabecera y cuánto trae. En la compu la cabecera ya dice cuántos sets son: no se repite. */}
       {estaPlegada && (
         <div style={{ margin: '8px 0 0 42px', fontSize: 12.5, fontWeight: 600, color: T.text2 }}>
-          {!esCompu && <>{pluralS(nSets, 'set')} · </>}
-          {pluralS(blocks.reduce((n, b) => n + (b.type === 'set' ? b.members.length : 0), 0), 'ejercicio')}
+          {enLista ? pluralS((day.tramos ?? []).length, 'tramo') : enDeporte ? pluralS(nDeporte, 'ejercicio') : enCadena ? `${pluralS(nCadena, 'set')} · ${pluralS((day.hibrido?.sets ?? []).reduce((n, s) => n + s.items.length, 0), 'ejercicio')}` : (
+            <>
+              {!esCompu && <>{pluralS(nSets, 'set')} · </>}
+              {pluralS(blocks.reduce((n, b) => n + (b.type === 'set' ? b.members.length : 0), 0), 'ejercicio')}
+            </>
+          )}
         </div>
       )}
 
-      {!estaPlegada && (
+      {!estaPlegada && enLista && (
+        <EditorDeCorrer tramos={day.tramos ?? []} onTramos={(tramos) => onPatch({ tramos })} atleta={atleta} soloLectura={soloLectura} repertoire={repertoire}
+          deporte={DEPORTE_DEL_EDITOR[vista]} lugar={day.lugar} onLugar={(lugar) => onPatch({ lugar })} categorias={categorias} onEjercicioCreado={onEjercicioCreado} />
+      )}
+      {!estaPlegada && enDeporte && (
+        <EditorDeDeporte deporte={day.deporte} onDeporte={(deporte) => onPatch({ deporte })} repertoire={repertoire} categorias={categorias}
+          onEjercicioCreado={onEjercicioCreado} atleta={atleta} soloLectura={soloLectura} />
+      )}
+      {mediaHibrido && <MediaParaEsteAtleta ejercicio={mediaHibrido} atleta={atleta} onCerrar={() => setMediaHibrido(null)} />}
+      {!estaPlegada && enCadena && (
+        <EditorHibrido hibrido={day.hibrido} onHibrido={(hibrido) => onPatch({ hibrido })} repertoire={repertoire} soloLectura={soloLectura}
+          atleta={atleta} onVideoAtleta={setMediaHibrido} />
+      )}
+      {!estaPlegada && deAntes && !soloLectura && (
+        <div style={{ marginTop: 12, fontSize: 12.5, fontWeight: 600, color: T.text2, background: UI.relleno, borderRadius: 12, padding: '9px 12px', lineHeight: 1.4 }}>
+          Esta sesión se armó antes de que existiera el editor de {FAMILIAS[familia]?.nombre ?? 'esta Disciplina'}, así que se ve como estaba.
+        </div>
+      )}
+      {!estaPlegada && esDeClase && (
+        <EditorDeClase day={day} onPatch={onPatch} repertoire={repertoire} categorias={categorias} onEjercicioCreado={onEjercicioCreado} atleta={atleta}
+          soloLectura={soloLectura} />
+      )}
+      {!estaPlegada && !enLista && !enCadena && !enDeporte && (!esDeClase || conSetsDeClase) && (
+        <SesionDelEditor.Provider value={sesionDelEditor}>
         <CuerpoDeSets
           exercises={day.exercises} onExercises={(ex) => onPatch({ exercises: ex })} repertoire={repertoire} categorias={categorias}
           atleta={atleta} onEjercicioCreado={onEjercicioCreado} duenoId={duenoId} masterId={masterId}
           onCategoriaCreada={onCategoriaCreada} onCategoriaBorrada={onCategoriaBorrada} soloLectura={soloLectura} descanso={descanso}
+          {...(!esDeClase ? { calentamiento: day.calentamiento, onCalentamiento: (calentamiento) => onPatch({ calentamiento }) } : null)}
         />
+        </SesionDelEditor.Provider>
       )}
     </div>
+    </VideoDelAtleta.Provider>
   );
 }
 
@@ -1590,6 +1689,70 @@ const TARJETA_DE_SESION = { borderRadius: 20, padding: 16, background: T.bg2, bo
 
 /* PLEGAR un workout (todos lo traen; en el programa vienen plegados por default): botón blanco con borde y la flechita azul,
    para que se vea (Andrés, 5 oct 2026: «el botoncito para desplegar casi no se ve»). Plegado deja solo la cabecera y su resumen. */
+/**
+ * LA DISCIPLINA DE LA SESIÓN (9 nov 2026). Es fija de la app (Pesas, Hyrox, Correr…) y cambia el editor: con qué nace un Set, con qué arranca
+ * una línea, qué opciones salen primero y cuáles se guardan en «Más opciones», qué casillas se ven, el orden de los formatos y el descanso del
+ * primer toque (ver `FAMILIAS` en `lib/fichaDelEjercicio.js`). La Etiqueta (antes «Tipo de sesión») es otra cosa: la del coach, con su color.
+ *
+ * Va como chip DENTRO de la casilla del nombre: la sesión se lee «Correr · Series jueves». No es otra lista al lado de la Etiqueta, ni una franja
+ * que parezca aviso. En Libre el chip es gris; con Disciplina toma su ícono y el azul. Cambiarla a una Disciplina de otro editor
+ * empieza la sesión de cero, con pregunta antes si ya tenía algo (ver `lib/editorDeLaSesion.js`).
+ */
+// Los mismos íconos que las Disciplinas de la ficha del ejercicio (ver `DisciplinasDelEjercicio`). Clase: una flor (pilates, yoga, spinning).
+const ICONO_DISCIPLINA = ICONO_DE_DISCIPLINA;
+function ChipDeDisciplina({ day, onPatch }) {
+  const { avisa } = useAviso();
+  const pregunta = useConfirmacion();
+  const hist = useHistorialDelEditor();
+  const id = familiaDelDia(day);
+  const libre = id === 'libre';
+  const c = contenidoDeLaSesion(day);
+  const conAlgo = c.sets + c.lista + c.cadena > 0;
+  /* CAMBIAR DE DISCIPLINA (Andrés, 19 nov 2026: «hazlo así»). Si la nueva se arma con otro editor y la sesión ya tiene algo, se pregunta y se
+     empieza de cero; si está vacía o es el mismo editor, cambia directo. Con historial, el aviso trae «Deshacer». */
+  const cambia = async (v) => {
+    if (v === id) return;
+    const nombre = FAMILIAS[v]?.nombre ?? 'Libre';
+    const { borra, cuanto } = cambioDeDisciplina(day, id, v);
+    if (borra && !await pregunta({
+      titulo: `¿Cambiar a ${nombre}?`,
+      detalle: `${nombre} se arma de otra forma. ${cuanto} de esta sesión se borra${cuanto.startsWith('Los ') ? 'n' : ''} y empiezas de cero.`,
+      confirmar: 'Cambiar y empezar de cero', peligro: true,
+    })) return;
+    onPatch(parcheDelCambio(day, id, v));
+    if (borra) avisa(`Ahora es ${nombre}. Empiezas de cero.`, hist ? { accion: { texto: 'Deshacer', alTocar: hist.deshacer } } : undefined);
+  };
+  return (
+    <ListaDesplegable
+      etiqueta="Disciplina de la sesión" valor={id} anchoMinimo={290} alto={440} icono={ICONO_DISCIPLINA[id]}
+      onCambio={cambia}
+      opciones={ORDEN_DE_FAMILIAS.map((f) => ({ valor: f, etiqueta: FAMILIAS[f].nombre, detalle: FAMILIAS[f].detalle }))}
+      pie={conAlgo ? <div style={{ padding: '10px 12px 4px', fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: T.text3, lineHeight: 1.35 }}>Si eliges una que se arma de otra forma, te preguntamos antes de empezar de cero.</div> : undefined}
+      colorFlecha={T.accent}
+      estilo={{
+        width: 'auto', flexShrink: 0, minHeight: 30, padding: '0 9px', gap: 5, borderRadius: 9, border: 'none',
+        // Libre ya no es gris (Andrés, 8 nov 2026: «agrégale un colorcito para que se note cuando aún no selecciona nada»): letra azul sobre blanco; elegida, azul de fondo.
+        background: libre ? '#FFFFFF' : T.accentBg, color: T.accent,
+        fontFamily: FONT, fontSize: 13, fontWeight: 800, whiteSpace: 'nowrap',
+      }}
+    />
+  );
+}
+
+/** La casilla del nombre con la Disciplina al inicio: «[🏃 Correr ▾] Series jueves». */
+function NombreConDisciplina({ day, onPatch, estiloInput, etiqueta }) {
+  const { background = '#EBEDF1', borderRadius = 11, ...resto } = estiloInput;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, background, borderRadius, padding: '0 0 0 6px', minWidth: 0 }}>
+      <ChipDeDisciplina day={day} onPatch={onPatch} />
+      <input
+        value={day.name || ''} onChange={(e) => onPatch({ name: e.target.value })} aria-label={etiqueta}
+        style={{ ...resto, background: 'transparent', borderRadius: 0, flex: 1, minWidth: 0, paddingLeft: 4 }}
+      />
+    </div>
+  );
+}
+
 function BotonDePlegar({ plegada, onClick }) {
   return (
     <button
@@ -1668,6 +1831,7 @@ function DayHeader({
     ...(onCopy ? [{ icon: Copy, texto: 'Copiar', onClick: onCopy }] : []),
     ...(onClear ? [{ icon: Eraser, texto: 'Vaciar', onClick: onClear }] : []),
     ...(onTurno ? opcionesDeTurno(turno, onTurno) : []),
+    { icon: Compass, texto: 'Ver el recorrido', onClick: pideElRecorridoDelEditor },
     ...(onDelete ? [{ icon: Trash2, texto: 'Eliminar sesión', onClick: onDelete, peligro: true }] : []),
   ];
   const menus = (
@@ -1702,15 +1866,11 @@ function DayHeader({
               encogía para dejarle sitio al tipo y al contador. */}
           <div {...enLectura(soloLectura)} style={{ flex: '1 1 220px', minWidth: 0, ...(soloLectura ? APAGADO : null) }}>
             <Field label="Nombre de la sesión">
-              <input
-                value={day.name || ''}
-                onChange={(e) => onPatch({ name: e.target.value })}
-                style={inputStyle}
-              />
+              <NombreConDisciplina day={day} onPatch={onPatch} estiloInput={inputStyle} etiqueta="Nombre de la sesión" />
             </Field>
           </div>
-          <div {...enLectura(soloLectura)} style={{ flex: '0 1 190px', minWidth: 150, ...(soloLectura ? APAGADO : null) }}>
-            <Field label="Tipo de sesión">
+          <div {...enLectura(soloLectura)} data-recorrido="etiqueta" style={{ flex: '0 1 190px', minWidth: 150, ...(soloLectura ? APAGADO : null) }}>
+            <Field label="Etiqueta">
               {/* Era un <select>: en el iPhone, la rueda gris del sistema. Ahora es la lista de la app, con los colores a la
                   vista y con los tipos que el propio coach se haya creado. */}
               <SelectorTipoSesion day={day} onPatch={onPatch} coachId={user?.id} />
@@ -1726,7 +1886,7 @@ function DayHeader({
           data-cab-arrastre=""
           style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.border}`, alignItems: 'center' }}
         >
-          {puedeUsar && puedeGuardar && <Pill icon={FolderOpen} onClick={(e) => setMenuPlanes({ ancla: e.currentTarget })}>Mis planes <ChevronDown size={13} /></Pill>}
+          {puedeUsar && puedeGuardar && <span data-recorrido="mis-planes" style={{ display: 'inline-flex' }}><Pill icon={FolderOpen} onClick={(e) => setMenuPlanes({ ancla: e.currentTarget })}>Mis planes <ChevronDown size={13} /></Pill></span>}
           {puedeUsar && !puedeGuardar && <Pill icon={FolderOpen} onClick={() => onApplyCatalog()}>Usar workout</Pill>}
           {!puedeUsar && puedeGuardar && <Pill icon={Save} onClick={(e) => onSaveToCatalog(e.currentTarget)}>Guardar workout</Pill>}
           {onAgregarClase && destacarClase && <Pill icon={PlayCircle} onClick={() => onAgregarClase()}>Clase</Pill>}
@@ -1757,14 +1917,9 @@ function DayHeader({
         {turno && <InsigniaDeTurno turno={turno} />}
         {/* En el celular el nombre va primero y ocupa su renglón. */}
         <div {...enLectura(soloLectura)} style={{ flex: '1 1 200px', flexBasis: '100%', minWidth: 0, order: -1, ...(soloLectura ? APAGADO : null) }}>
-          <input
-            value={day.name || ''}
-            onChange={(e) => onPatch({ name: e.target.value })}
-            aria-label="Nombre del workout"
-            style={{ ...inputStyle, fontSize: 16, fontWeight: 800, padding: '9px 12px' }}
-          />
+          <NombreConDisciplina day={day} onPatch={onPatch} estiloInput={{ ...inputStyle, fontSize: 16, fontWeight: 800, padding: '9px 12px' }} etiqueta="Nombre del workout" />
         </div>
-        <div {...enLectura(soloLectura)} style={{ flex: '1 1 100px', minWidth: 100, ...(soloLectura ? APAGADO : null) }}>
+        <div {...enLectura(soloLectura)} data-recorrido="etiqueta" style={{ flex: '1 1 100px', minWidth: 100, ...(soloLectura ? APAGADO : null) }}>
           <SelectorTipoSesion day={day} onPatch={onPatch} coachId={user?.id} />
         </div>
         {acciones.length > 0 && (
@@ -1841,6 +1996,9 @@ function TiraDeDias({ dias, elegido, onElegir }) {
     </div>
   );
 }
+
+// Lo que tapa la barra de arriba del editor (título, Guardar): el recorrido acomoda las piezas debajo.
+const FRANJA_DEL_EDITOR = { arriba: 84, abajo: 16 };
 
 export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDeleted, profesionalId = null, catalogo = null, abrirEn = null, mover = null }) {
   const esCompu = useIsDesktop();
@@ -2066,6 +2224,31 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
     scrollPendiente.current = scrollHoja.current;
     setEditandoDiaTel(false);
   };
+  /* LOS RECORRIDOS DEL EDITOR (9-10 nov 2026; cuándo salen: `lib/useRecorridoDelEditor.jsx`; sus pasos: `lib/recorridoDelEditor.js`). Aquí hay dos
+     pantallas: «Varias semanas que avanzan» antes de crear la estructura (`wizard`) y el editor del plan (`plan`, uno por forma: rutina, semanas o
+     fases). Para enseñar los Sets se PREPARA la pantalla: se abre el primer día de la semana con ejercicios y su sesión se despliega (en el teléfono,
+     se entra a ese día). Andrés, 9 nov 2026: en una pantalla angosta el editor abre en la lista de días y el recorrido no encontraba los Sets. */
+  const faseDelRecorrido = nav.level === 'phase' ? phases[nav.pi] : null;
+  const semanaDelRecorrido = faseDelRecorrido?.weekData?.[Math.min(weekIdx, (faseDelRecorrido?.weekData?.length ?? 1) - 1)];
+  const pantallaDelRecorrido = nav.level === 'wizard' ? 'wizard' : nav.level === 'phase' ? 'plan' : null;
+  const recorridoDelEditor = useRecorridoDelEditor({
+    pantalla: pantallaDelRecorrido,
+    variante: pantallaDelRecorrido === 'plan' ? estructura : undefined,
+    activo: !!pantallaDelRecorrido,
+    hayEjercicios: (semanaDelRecorrido?.days ?? []).some(sesionTieneContenido),
+    prepara: () => {
+      const di = (semanaDelRecorrido?.days ?? []).findIndex(sesionTieneContenido);
+      if (di < 0) return;
+      setActiveWeekday(semanaDelRecorrido.days[di].day);
+      plegadas.abre([`${faseDelRecorrido.id}:${semanaDelRecorrido.num}:${di}`]);
+      if (!esCompu) abreEditorTel();
+    },
+    contexto: {
+      enCatalogo: !!catalogo, estructura,
+      comoVolver: esCompu ? '«Más» → «Ver el recorrido»' : '«Opciones» de la sesión → «Ver el recorrido»',
+    },
+    franja: FRANJA_DEL_EDITOR,
+  });
 
   // Dónde está el coach en este plan, para volver ahí al refrescar (ver
   // `lugar.js`). Solo con un plan que ya existe y con una fase abierta.
@@ -2668,7 +2851,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
      `BloqueDelPrograma`— reciben lo mismo, ya resuelto aquí. */
   const botonGuardar = nav.level !== 'start' && nav.level !== 'wizard' && (
     <button
-      ref={botonGuardarRef} type="button" onClick={(ev) => pideGuardarPrincipal(ev.currentTarget)} disabled={saving || !dirty}
+      ref={botonGuardarRef} type="button" data-recorrido="guardar" onClick={(ev) => pideGuardarPrincipal(ev.currentTarget)} disabled={saving || !dirty}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 18px', borderRadius: 12,
         border: 'none', cursor: saving || !dirty ? 'default' : 'pointer',
@@ -2766,7 +2949,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
   } else if (nav.level === 'wizard') {
     body = (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 560, margin: '8px auto 0' }}>
-        <Field label="¿Cuántas semanas dura el programa?">
+        <div data-recorrido="wiz-semanas"><Field label="¿Cuántas semanas dura el programa?">
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {[2, 3, 4, 6, 8, 12].map((n) => (
               <button key={n} type="button" onClick={() => setWizWeeks(n)}
@@ -2780,8 +2963,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
               </button>
             ))}
           </div>
-        </Field>
-        <Field label="¿Qué días entrena?">
+        </Field></div>
+        <div data-recorrido="wiz-dias"><Field label="¿Qué días entrena?">
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {WEEKDAYS.map((d) => {
               const active = wizDays.includes(d);
@@ -2799,8 +2982,8 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
               );
             })}
           </div>
-        </Field>
-        <button
+        </Field></div>
+        <button data-recorrido="wiz-crear"
           type="button" onClick={generateQuickPlan} disabled={wizDays.length === 0}
           style={{
             padding: '14px 20px', borderRadius: 13, border: 'none', cursor: wizDays.length ? 'pointer' : 'default',
@@ -2884,12 +3067,15 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
             onTitulo={cambiaTitulo} programa={programa}
           />
         )}
+        {/* En el teléfono la lista de días es la pieza «Tu semana» del recorrido (en la compu lo es la columna de la izquierda). */}
+        <div data-recorrido={esCompu ? undefined : 'guia'}>
         <GuiaDelEditor
           fases={phases} estructura={estructura} aqui={aquiAtleta}
           faseEditada={nav.pi} semanaEditada={w?.num} diaElegido={activeWeekday}
           abiertas={abiertas} vistas={vistas} colores={PALETTE} tituloDeSemana={weekSubtitle}
           acciones={accionesDeLaGuia}
         />
+        </div>
       </div>
     );
 
@@ -2924,7 +3110,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
                 </div>
                 <div style={{ fontSize: 17, fontWeight: 800, color: T.text }}>Sin sesión el {DAY_FULL_LOWER[activeWeekday] || activeWeekday.toLowerCase()}</div>
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20, flexWrap: 'wrap' }}>
-                  <button type="button"
+                  <button type="button" data-recorrido="agregar-sesion"
                     onClick={() => agregaAlFinal([newDay(activeWeekday)])}
                     style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 20px', borderRadius: 12, border: 'none', cursor: 'pointer', background: T.accent, color: '#fff', fontFamily: FONT, fontSize: 14, fontWeight: 800, boxShadow: KP.shBtn }}>
                     <Plus size={16} /> Agregar sesión
@@ -2966,7 +3152,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
                     }}
                     onCopy={() => { setClipboard(clone(d)); avisa(`Copiaste «${d.name || d.day}». Ve a otro día y toca «Pegar rutina».`); }}
                     onClear={() => {
-                      alDia({ exercises: [] });
+                      alDia({ exercises: [], tramos: undefined, hibrido: undefined, deporte: undefined, calentamiento: undefined });
                       avisaConDeshacer('Sesión vaciada');
                     }}
                     onSaveToCatalog={sesionTieneContenido(d)
@@ -3026,7 +3212,7 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
         {/* La guía se queda quieta mientras el día de al lado se desplaza; su borde se arrastra para ensancharla. */}
         {!guia.oculta && (
           <div style={{ position: 'sticky', top: 12, height: Math.max(200, altoMain - 24), minWidth: 0 }}>
-            <aside aria-label="Guía del programa" style={{ height: '100%', overflowY: 'auto', opacity: guia.porCerrar ? 0.4 : 1, transition: 'opacity .12s' }}>{hoja}</aside>
+            <aside aria-label="Guía del programa" data-recorrido="guia" style={{ height: '100%', overflowY: 'auto', opacity: guia.porCerrar ? 0.4 : 1, transition: 'opacity .12s' }}>{hoja}</aside>
             <DivisorDeLaGuia ancho={guia.ancho} min={280} max={guia.tope} borde={guia.borde} />
           </div>
         )}
@@ -3153,10 +3339,12 @@ export default function PlanBuilder({ athlete, planRow, onClose, onSaved, onDele
           titulo={isWeekly ? 'Rutina' : 'Programa'} ancla={menu.ancla} onClose={() => setMenu(null)}
           acciones={[
             { icon: ImagePlus, texto: 'Foto del plan', onClick: () => setModal({ type: 'foto-plan' }) },
+            { icon: Compass, texto: 'Ver el recorrido', onClick: () => recorridoDelEditor.pide() },
             ...(puedeEliminar ? [{ icon: Trash2, texto: textoEliminar, onClick: () => eliminarPrograma(), peligro: true }] : []),
           ]}
         />
       )}
+      {recorridoDelEditor.elemento}
       {menu?.tipo === 'semana' && curPhase && (() => {
         const semana = curPhase.weekData[curWeekIdx];
         const hayOtra = (deCorrido ? semanasDelPlan(phases) : curPhase.weekData.length) > 1;

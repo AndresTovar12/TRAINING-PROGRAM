@@ -109,7 +109,7 @@ export default function HojaTiposDeSesion({ propios, base, baseQuitada, nuevoId 
   const aspectoDe = (dia) => aspectoDelTipo(dia);
 
   return (
-    <HojaFlotante titulo="Tipos de sesión" onCerrar={onCerrar}>
+    <HojaFlotante titulo="Etiquetas" onCerrar={onCerrar}>
       <button
         type="button" onClick={onNuevo} className="kp-press"
         style={{
@@ -118,7 +118,7 @@ export default function HojaTiposDeSesion({ propios, base, baseQuitada, nuevoId 
           touchAction: 'manipulation',
         }}
       >
-        <Plus size={19} strokeWidth={2.6} /> Nuevo tipo
+        <Plus size={19} strokeWidth={2.6} /> Nueva etiqueta
       </button>
       {error && <div role="alert" style={{ marginTop: 12, fontSize: 14, fontWeight: 700, color: LT.danger }}>{error}</div>}
 

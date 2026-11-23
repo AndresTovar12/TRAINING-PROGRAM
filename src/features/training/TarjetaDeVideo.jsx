@@ -1,5 +1,6 @@
+import { esExplicacion } from '@/lib/proposito';
 import { useCallback, useRef, useState } from 'react';
-import { Dumbbell } from 'lucide-react';
+import { Dumbbell, Volume2 } from 'lucide-react';
 import { ligaExterna, redPermiteAdelantar } from '@/lib/videos';
 import { usePoster } from '@/lib/posters';
 import { useAppState, useStorage } from '@/contexts/AppStateContext';
@@ -55,9 +56,17 @@ const PISTA = 'desliza-videos';
  * En el entreno que se acomoda solo (30 oct 2026, `lib/acomodoDelPaso.js`) el paso le dice el alto (`alto`, p. ej. `var(--vh)`) y lo más ancho que puede ser
  * (`anchoMaximo`), sin margen de arriba (`sinMargen`); la tarjeta dice su forma en `data-aspecto` para que el paso sepa si el video es de pie.
  */
-export default function TarjetaDeVideo({ videos, portada, nombre, enCarta = false, altoMaximo = ALTO_MAXIMO, alto = null, anchoMaximo = '100%', sinMargen = false }) {
-  const [reproduciendo, setReproduciendo] = useState(false);
-  const [angulo, setAngulo] = useState(0);
+export default function TarjetaDeVideo({ videos, portada, nombre, enCarta = false, altoMaximo = ALTO_MAXIMO, alto = null, anchoMaximo = '100%', sinMargen = false, solo = false }) {
+  // `solo` (23 nov 2026, la técnica con el teléfono en el piso): arranca sin tocar play, sin sonido, y se repite. Si el teléfono no lo deja arrancar
+  // solo, vuelve la portada con su botón de play (ver `alRechazar`). Solo los videos propios: uno de YouTube arrancaría con sonido, de golpe.
+  /* LOS DOS A LA VISTA (Andrés, 23 nov 2026, Deporte: «mejor que el usuario tenga visible ambos y escoge cuál ver y ya»). Con el teléfono en el piso (`solo`)
+     y un Ejemplo y una Explicación, arriba van los dos botones; arranca el Ejemplo (sin sonido, se repite) y la Explicación se oye al tocarla. */
+  const iEjemplo = Math.max(0, videos.findIndex((v) => !esExplicacion(v)));
+  const iExplicacion = videos.findIndex((v) => esExplicacion(v));
+  const conPestanas = solo && iExplicacion >= 0 && videos.some((v) => !esExplicacion(v));
+  const inicial = conPestanas ? iEjemplo : 0;
+  const [reproduciendo, setReproduciendo] = useState(() => solo && !!videos[inicial] && !ligaExterna(videos[inicial].url));
+  const [angulo, setAngulo] = useState(inicial);
   /* LA PISTA «DESLIZA ›» sale en el primer video hasta que esta persona cambie de video una vez, por el medio que sea. Se espera
      a que el estado cargue: si no, una que ya la vio la vería un instante en cada ejercicio. */
   const { loaded } = useAppState();
@@ -97,14 +106,37 @@ export default function TarjetaDeVideo({ videos, portada, nombre, enCarta = fals
   if (reproduciendo && externo) {
     return (
       <div style={{ marginTop: enCarta || sinMargen ? 0 : 14 }}>
+        {conPestanas && (
+          <div role="tablist" aria-label="Qué video ver" style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 8 }}>
+            {[[iEjemplo, 'Ejemplo'], [iExplicacion, 'Explicación']].map(([i, t]) => (
+              <button key={i} type="button" role="tab" aria-selected={angulo === i} onClick={() => cambia(i)}
+                style={{ border: 'none', borderRadius: 999, padding: '8px 14px', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', background: angulo === i ? '#111318' : 'rgba(17,19,24,.07)', color: angulo === i ? '#fff' : '#111318' }}>
+                {i === iExplicacion && <Volume2 size={16} strokeWidth={2.4} style={{ marginRight: 5 }} />}{t}
+              </button>
+            ))}
+          </div>
+        )}
         <VideoRecortado video={video} estilo={{ width: '100%', borderRadius: enCarta ? 16 : 20 }} />
-        <Puntos videos={videos} activo={angulo} onIr={cambia} enFlujo claro />
+        {!conPestanas && <Puntos videos={videos} activo={angulo} onIr={cambia} enFlujo claro />}
       </div>
     );
   }
 
+  const pestanas = conPestanas && (
+    <div role="tablist" aria-label="Qué video ver" style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 8 }}>
+      {[[iEjemplo, 'Ejemplo'], [iExplicacion, 'Explicación']].map(([i, t]) => (
+        <button key={i} type="button" role="tab" aria-selected={angulo === i} className="kp-press"
+          onClick={() => { cambia(i); setReproduciendo(true); }}
+          style={{ border: 'none', borderRadius: 999, padding: '8px 14px', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', background: angulo === i ? '#111318' : 'rgba(17,19,24,.07)', color: angulo === i ? '#fff' : '#111318' }}>
+          {i === iExplicacion && <Volume2 size={16} strokeWidth={2.4} style={{ marginRight: 5 }} />}{t}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div style={{ marginTop: enCarta || sinMargen ? 0 : 14 }}>
+      {pestanas}
       <div data-aspecto={aspecto} style={{
         position: 'relative', overflow: 'hidden', margin: '0 auto', borderRadius: enCarta ? 16 : 20, background: '#0E1015',
         boxShadow: enCarta ? 'none' : '0 8px 24px rgba(17,19,24,0.14)',
@@ -114,6 +146,7 @@ export default function TarjetaDeVideo({ videos, portada, nombre, enCarta = fals
           <VideoRecortado
             video={video}
             reproduce={reproduciendo}
+            bucle={solo && !esExplicacion(video)}
             reproducirRef={jugador}
             onMedidas={(w, h) => setMedidasDe({ url: video.url, w, h })}
             onRechazado={alRechazar}
@@ -125,7 +158,7 @@ export default function TarjetaDeVideo({ videos, portada, nombre, enCarta = fals
         )}
 
         {/* Cuál es, unos segundos al empezar y al cambiar (con `key` se reinicia): después se quita sola para no estorbar. */}
-        {reproduciendo && videos.length > 1 && (
+        {reproduciendo && videos.length > 1 && !conPestanas && (
           <>
             <EtiquetaDeVideo key={video.id ?? angulo} video={video} style={{ zIndex: 4, animation: 'tl-etiqueta 3s ease forwards' }} />
             <style>{'@keyframes tl-etiqueta{0%,75%{opacity:1}100%{opacity:0}}'}</style>
@@ -148,7 +181,7 @@ export default function TarjetaDeVideo({ videos, portada, nombre, enCarta = fals
           </div>
         )}
       </div>
-      <Puntos videos={videos} activo={angulo} onIr={cambia} enFlujo claro />
+      {!conPestanas && <Puntos videos={videos} activo={angulo} onIr={cambia} enFlujo claro />}
     </div>
   );
 }

@@ -262,7 +262,22 @@ export function filasPorSerie(sesion, { actividad = null, series = null } = {}) 
 
     // Una serie de un ejercicio: «<ejercicio>.<vuelta>.<lapso>».
     const paso = /^(\d+)\.(\d+)\.(\d+)$/.exec(m.clave);
-    if (!paso) return;
+    /* UN PASO QUE NO ES DE GYM (23 nov 2026: la lista de Running, Cycling, Swimming y Triatlón, Deporte, la clase, los calentamientos): su clave no es
+       «<ejercicio>.<vuelta>.<lapso>», y antes no contaba. Por eso la página del final decía «Lo marcaste como hecho, sin el entreno guiado». Lo que hizo
+       viaja en su marca (reps, kilos, segundos). */
+    if (!paso) {
+      if (m.estado === 'saltado') { filas.push({ clave: m.clave, tipo: 'saltada', nombre: m.n || 'Paso', orden: m.t }); return; }
+      const limpia = !!previa && dePrevia('d.');
+      const desde = previa ? previa.t : (finito(e.inicio) ? e.inicio : m.t);
+      const duro = m.t - desde;
+      const durS = limpia && duro > 0 && duro / 1000 <= HASTA_UN_DESCANSO_LARGO_S ? Math.round(duro / 1000) : null;
+      filas.push({
+        clave: m.clave, tipo: 'serie', nombre: m.n || 'Paso', vuelta: null, lapso: null, orden: m.t, durS,
+        kg: hay(m.kg) ? numero(m.kg) : null, reps: hay(m.reps) ? String(m.reps) : null, unidad: null, fuente: hay(m.reps) || hay(m.kg) ? 'escrito' : null,
+        segEscritos: hay(m.seg) ? numero(m.seg) : null, fc: durS !== null ? pulso(desde, m.t) : null, descanso: null, tecnica: typeof m.tecnica === 'string' ? m.tecnica : null,
+      });
+      return;
+    }
     const [, idx, vuelta, lapso] = paso;
     if (m.estado === 'saltado') {
       filas.push({ clave: m.clave, tipo: 'saltada', nombre: m.n || `Ejercicio ${Number(idx) + 1}`, vuelta: Number(vuelta), orden: m.t });

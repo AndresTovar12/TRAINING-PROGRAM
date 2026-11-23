@@ -37,13 +37,14 @@ const redondo = {
 const COLUMNA = { maxWidth: 520, margin: '0 auto', width: '100%', boxSizing: 'border-box' };
 
 /** El botón grande de abajo. `variante`: 'azul' (lo principal), 'borde' (lo de al lado) o 'verde' (terminar). */
-function BotonGrande({ children, onClick, variante = 'azul', disabled = false }) {
+function BotonGrande({ children, onClick, variante = 'azul', disabled = false, color = null }) {
   const base = {
     width: '100%', minHeight: 60, borderRadius: 18, cursor: disabled ? 'default' : 'pointer', display: 'flex', alignItems: 'center',
     justifyContent: 'center', gap: 10, fontFamily: FONT, fontSize: 18, fontWeight: 800, touchAction: 'manipulation',
   };
   const estilos = {
-    azul: { border: 'none', color: '#fff', background: KP.blue, boxShadow: '0 8px 20px rgba(30,64,224,0.22)' },
+    // Del color de la sesión cuando lo hay (23 nov 2026, «un solo estilo»: el «Empezar» de «Antes de empezar» era azul en un Hyrox naranja).
+    azul: { border: 'none', color: '#fff', background: color || `var(--acento, ${KP.blue})`, boxShadow: 'none' },
     // Reestructura visual (15 oct 2026), como «Fuerza» en las capturas de Andrés: «Listo» en tinta oscura con la palomita del color del tipo.
     oscuro: { border: 'none', color: '#fff', background: '#15171E', boxShadow: '0 10px 24px rgba(17,19,24,0.22)' },
     verde: { border: 'none', color: '#fff', background: LT.mint, boxShadow: '0 8px 22px rgba(0,163,114,0.24)' },
@@ -158,16 +159,19 @@ function Etiqueta({ children, suave = false, chica = false }) {
  * pastilla azul con la palabra se lee a la primera. `puntos` viene de `puntosDeVueltas`: cada vuelta del Set es una serie del ejercicio (o del par,
  * en una bi-serie). Con una sola vuelta no sale.
  */
-export function SerieDelSet({ puntos }) {
-  if (!puntos || puntos.length < 2) return null;
-  const queVa = puntos.findIndex((p) => p.estado === 'actual');
-  const numero = queVa >= 0 ? queVa + 1 : Math.min(puntos.length, puntos.filter((p) => p.estado === 'hecha').length + 1);
+export function SerieDelSet({ puntos, rotulo = 'Serie', cuenta = null, color = null }) {
+  // `cuenta` (ver `lib/enQueVas.js`): el mismo «en qué vas» que su pantalla («Sprint 2 de 4»). Sin ella, se cuenta con los puntos de las vueltas.
+  if (!cuenta && (!puntos || puntos.length < 2)) return null;
+  const queVa = cuenta ? -1 : puntos.findIndex((p) => p.estado === 'actual');
+  const numero = cuenta ? cuenta.n : queVa >= 0 ? queVa + 1 : Math.min(puntos.length, puntos.filter((p) => p.estado === 'hecha').length + 1);
+  const total = cuenta ? cuenta.de : puntos.length;
+  // Del color de la sesión (23 nov 2026, «un solo estilo»): antes era azul en cualquier sesión.
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', flexShrink: 0, whiteSpace: 'nowrap', padding: '6px 12px', borderRadius: 999, fontSize: 14, fontWeight: 800,
-      background: LT.blueSoft, color: LT.blue, ...NUM_STYLE,
+      background: color ? `color-mix(in srgb, ${color} 14%, white)` : LT.blueSoft, color: color || LT.blue, ...NUM_STYLE,
     }}>
-      Serie {numero} de {puntos.length}
+      {cuenta ? cuenta.rotulo : rotulo} {numero} de {total}
     </span>
   );
 }
@@ -334,7 +338,7 @@ function FilaDelPar({ letra, nombre, estado, color = null }) {
  * El cronómetro OPCIONAL de un paso con tiempo (la plancha de 30 seg, el «2 min» de un lapso). Es una ayuda, nunca una orden: al llegar
  * a cero avisa y sigue contando hacia arriba, pero no marca nada ni avanza.
  */
-function CronometroDelPaso({ segundos, cuenta, onEmpezar, onQuitar }) {
+function CronometroDelPaso({ segundos, cuenta, onEmpezar, onQuitar, texto = null }) {
   if (!cuenta) {
     return (
       <button
@@ -344,7 +348,7 @@ function CronometroDelPaso({ segundos, cuenta, onEmpezar, onQuitar }) {
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontFamily: FONT, fontSize: 15.5, fontWeight: 800, touchAction: 'manipulation',
         }}
       >
-        <Timer size={19} /> Empezar cronómetro · {relojDe(segundos)}
+        <Timer size={19} /> {texto ?? `Empezar cronómetro · ${relojDe(segundos)}`}
       </button>
     );
   }
@@ -566,7 +570,8 @@ export function PantallaDePaso({
   onQueEs = null, globo = false, notaDe = null,
 }) {
   const nota = [paso.nota, paso.cue].filter(Boolean);
-  const hayCronometro = paso.tipo === 'ejercicio' && paso.termina?.por === 'tiempo' && cronometro;
+  // El cronómetro de un paso con tiempo, o el «Empezar» de un límite (regla 19): quien llama solo lo manda cuando aplica.
+  const hayCronometro = paso.tipo === 'ejercicio' && !!cronometro;
   const solo = !video && !cifras.length && !nota.length && !hayCronometro && !anotado && !resumen && !paso.opcional;
   const c = color || LT.blue;
 
@@ -685,7 +690,7 @@ export function PantallaDePaso({
  * «Antes de empezar» (23 oct 2026): lo que el coach dejó dicho para TODA la sesión (sus notas y la clase) vive en la lista del día, no en el entreno; como «Empezar» ya abre
  * el entreno directo, esta pantalla sale primero, SOLO si hay algo que decir. Sin notas ni clase, el entreno arranca en el paso 1 como siempre.
  */
-export function PantallaAntesDeEmpezar({ nombre, notas, clase, onEmpezar, onSalir }) {
+export function PantallaAntesDeEmpezar({ nombre, notas, clase, onEmpezar, onSalir, color = null }) {
   return (
     <>
       <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -703,7 +708,7 @@ export function PantallaAntesDeEmpezar({ nombre, notas, clase, onEmpezar, onSali
       </div>
       <div style={{ flexShrink: 0, padding: '10px 0 calc(10px + env(safe-area-inset-bottom))' }}>
         <div style={{ ...COLUMNA, padding: '0 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <BotonGrande onClick={onEmpezar}><Play size={20} fill="#fff" /> Empezar</BotonGrande>
+          <BotonGrande onClick={onEmpezar} color={color}><Play size={20} fill="#fff" /> Empezar</BotonGrande>
           <BotonDeTexto onClick={onSalir}>Salir</BotonDeTexto>
         </div>
       </div>
@@ -743,6 +748,8 @@ export function PantallaDeReloj({ paso, detalle, resultado, puedeAnterior, tecni
                     </span>
                   )}
                 </div>
+                {/* La nota del coach de este ejercicio (doble revisión del 23 nov 2026: dentro de un Set con reloj se perdía). */}
+                {m.nota && <div data-nota-del-miembro="" style={{ marginTop: 4, fontSize: 14, fontWeight: 500, lineHeight: 1.4, color: '#2E2F3A' }}>{m.nota}</div>}
                 {m.lapsos && (
                   <div style={{ marginTop: 5 }}>
                     {m.lapsos.map((l, j) => (
@@ -793,8 +800,12 @@ export function PantallaDeReloj({ paso, detalle, resultado, puedeAnterior, tecni
  * `video` y se VE aquí, en la tarjeta de «Sigue»: Andrés (10 oct 2026): «que mientras está el atleta en descanso pueda ver el video del ejercicio que sigue».
  * Sin video, «Sigue» es la tarjeta de siempre, abajo junto a los botones. Sin frases que expliquen el botón: el botón ya dice «Seguir».
  */
-export function PantallaDeDescanso({ descanso, siguiente, video, sonido, puedeAnterior, onSeguir, onMas, onPausa, onAnterior, onSonido, color = null }) {
+export function PantallaDeDescanso({ descanso, siguiente, video, sonido, puedeAnterior, onSeguir, onMas, onPausa, onAnterior, onSonido, color = null, arriba = null, ahora = null, pulso = null, empezarYa = null }) {
   const { paso } = descanso;
+  /* «HASTA RECUPERARTE» (regla 10; 23 nov 2026, ahora que los sprints cortos y la natación van en la pantalla clara): el reloj sube (cuánto lleva) y,
+     con reloj de pulsera, su pulso. `arriba`: lo de la pantalla negra que no se pierde aquí («¿Te midieron el sprint?», el tiempo de la serie de nado). */
+  const recupera = !!paso.recuperar && descanso.restan === null && Number.isFinite(ahora) && Number.isFinite(descanso.desde);
+  const llevas = recupera ? Math.max(0, Math.round((ahora - descanso.desde) / 1000)) : 0;
   const conCuenta = descanso.restan !== null;
   const conVideo = !!siguiente && !!video;
   // Al llegar a cero el descanso se acaba y la app sigue sola (ver `EntrenoDelDia`): ya no hay un «+0:09» que cuente de más.
@@ -809,7 +820,7 @@ export function PantallaDeDescanso({ descanso, siguiente, video, sonido, puedeAn
         <div style={{ fontSize: 17, fontWeight: 800, color: LT.text, overflowWrap: 'anywhere', lineHeight: 1.2, marginTop: 2 }}>{siguiente.nombre}</div>
         {siguiente.detalle && <div style={{ fontSize: 13, fontWeight: 600, color: LT.text2, marginTop: 3, ...NUM_STYLE }}>{siguiente.detalle}</div>}
       </div>
-      <SerieDelSet puntos={siguiente.puntos} />
+      <SerieDelSet puntos={siguiente.puntos} rotulo={siguiente.rotulo} cuenta={siguiente.cuenta} color={color} />
     </>
   );
   return (
@@ -828,6 +839,12 @@ export function PantallaDeDescanso({ descanso, siguiente, video, sonido, puedeAn
               {descanso.pausado && <div style={{ marginTop: 12, fontSize: 14, fontWeight: 800, color: LT.text2 }}>En pausa</div>}
               {paso.segMax && <div style={{ marginTop: 14, fontSize: 13.5, fontWeight: 700, color: LT.text3, ...NUM_STYLE }}>Puedes llegar hasta {relojDe(paso.segMax + descanso.extra)}</div>}
             </>
+          ) : recupera ? (
+            <>
+              <div role="timer" style={{ fontSize: 92, fontWeight: 800, lineHeight: 1.05, letterSpacing: -3, color: LT.text, margin: '10px 0 4px', ...NUM_STYLE }}>{relojDe(llevas)}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: LT.text2 }}>Llevas descansando · sigue cuando estés listo</div>
+              {pulso != null && <div style={{ marginTop: 14, fontSize: 40, fontWeight: 800, color: '#D6334A', ...NUM_STYLE }}>{pulso}<span style={{ fontSize: 14, fontWeight: 700, color: LT.text2, marginLeft: 6 }}>pulso en vivo</span></div>}
+            </>
           ) : (
             <div style={{ fontSize: 34, fontWeight: 800, letterSpacing: -0.6, lineHeight: 1.15, color: LT.text, margin: '14px 0 0', overflowWrap: 'anywhere' }}>{paso.texto}</div>
           )}
@@ -842,6 +859,16 @@ export function PantallaDeDescanso({ descanso, siguiente, video, sonido, puedeAn
       {/* «Sigue» va arriba de la barra, como siempre. La barra (30 oct 2026, maqueta «Botones del entreno»): ‹ Anterior · 🔔 aviso · ⏸ Pausar · +30 s · › Saltar
           descanso. Con cuenta, el centro maneja el reloj (pausa y reanuda); › es «siguiente», igual que en el ejercicio. Sin cuenta (un descanso de texto),
           el centro es ✓ y la campana y el +30 salen apagados. */}
+      {arriba && <div style={{ ...COLUMNA, padding: '0 18px 10px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 9 }}>{arriba}</div>}
+      {/* Lo que sigue corre con reloj (un AMRAP, un límite): el descanso es su repaso, y quien no lo necesita lo salta aquí, con palabras (23 nov 2026). */}
+      {empezarYa && (
+        <div style={{ ...COLUMNA, padding: '0 18px 10px', flexShrink: 0 }}>
+          <button type="button" onClick={onSeguir} className="kp-press"
+            style={{ width: '100%', minHeight: 50, borderRadius: 16, border: 'none', background: LT.surface, color: LT.text, cursor: 'pointer', boxShadow: '0 2px 10px rgba(17,19,24,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontFamily: FONT, fontSize: 15.5, fontWeight: 800, touchAction: 'manipulation' }}>
+            <Play size={18} fill="currentColor" /> {empezarYa}
+          </button>
+        </div>
+      )}
       {siguiente && !conVideo && (
         <div style={{ ...COLUMNA, padding: '0 18px', flexShrink: 0 }}>
           <div style={{
@@ -905,7 +932,8 @@ export function Hoja({ etiqueta, titulo, subtitulo, icono, conCierre = false, on
 
 const circulo = (relleno) => ({
   width: 46, height: 46, borderRadius: '50%', flexShrink: 0, cursor: 'pointer', display: 'grid', placeItems: 'center', fontFamily: FONT,
-  touchAction: 'manipulation', border: 'none', background: relleno ? LT.blue : LT.surface2,
+  // Dentro del entreno, del color de la sesión (`--acento`, lo pone `EntrenoDelDia`; Andrés eligió «Color de la sesión», 23 nov 2026). Fuera, el azul.
+  touchAction: 'manipulation', border: 'none', background: relleno ? `var(--acento, ${LT.blue})` : LT.surface2,
   color: relleno ? '#fff' : LT.text2,
 });
 
@@ -977,7 +1005,7 @@ function FilaDeLaLista({ fila, n, miniatura, conLinea, onElegir }) {
  *
  * `tarjetas` viene de `tarjetasDeLaLista`; `miniaturaDe(fila)` dice la foto o el video de ese ejercicio (`{ nodo, conVideo }`) o `null`.
  */
-export function HojaDeLista({ tarjetas, miniaturaDe, palabras, onElegir, onTerminar, onSalir, onCerrar }) {
+export function HojaDeLista({ tarjetas, miniaturaDe, palabras, onElegir, onTerminar, onSalir, onCerrar, color = null }) {
   return (
     <Hoja etiqueta={palabras.listaTitulo} titulo={palabras.listaTitulo} conCierre onCerrar={onCerrar}>
       {tarjetas.map((t, ti) => {
@@ -989,7 +1017,7 @@ export function HojaDeLista({ tarjetas, miniaturaDe, palabras, onElegir, onTermi
                 <Check size={11} strokeWidth={3.5} /> {t.resultado || 'Hecho'}
               </span>
             ) : null)
-          : (t.puntos.length > 1 ? <SerieDelSet puntos={t.puntos} /> : null);
+          : (t.puntos.length > 1 ? <SerieDelSet puntos={t.puntos} color={color} /> : null);
         const conEncabezado = !!(t.titulo || t.etiqueta || derecha);
         return (
           <section

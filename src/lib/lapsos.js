@@ -38,6 +38,33 @@ const limpio = (l) => ({
   unidad: typeof l?.unidad === 'string' ? l.unidad : '',
   intensity: String(l?.intensity ?? ''),
   descanso: String(l?.descanso ?? ''),
+  // «En menos de» (8 nov 2026), solo si trae algo: así los lapsos de siempre se guardan igual que antes.
+  ...(String(l?.enMenosDe ?? '').trim() ? { enMenosDe: String(l.enMenosDe).trim() } : null),
+});
+
+/* «INTERVALOS DE CARDIO» (8 nov 2026, Andrés: «son dos opciones, no un cambio de nombre»). Es un Set en lapsos con una marca más
+   (`intervalosDeCardio` en cada ejercicio, como `lapsos`): cada lapso va en distancia o tiempo, y la carga es de cardio (ritmo, zona,
+   vatios, ritmo de nado, RPE; kilos solo si el ejercicio lleva peso, como el sled). «Lapsos personalizados» sigue libre. */
+const MEDIDAS_DE_CARDIO = ['m', 'km', 'yd', 'seg', 'min'];
+const CARGA_DE_FUERZA = /%|^RIR\b/i;
+export const esDeCardio = (miembros) => (miembros ?? []).some((m) => m?.intervalosDeCardio === true);
+/** Los lapsos de un ejercicio en «Intervalos de cardio»: lo que no es de cardio se vacía (nunca se reetiqueta: «20 reps» no se vuelve «20 m»). */
+// La medida que de verdad dice el lapso, aunque venga escrita en el texto («800 m» con la unidad vacía, como la escribe el conector).
+const leidoDe = (ex, l) => leeCantidad(comoEjercicio(ex, l));
+const cabeEnCardio = (ex, l) => { const r = leidoDe(ex, l); return !r.cantidad || (!r.libre && MEDIDAS_DE_CARDIO.includes(r.unidad)); };
+const lapsoDeCardio = (ex, l) => {
+  const r = leidoDe(ex, l);
+  const cabe = !r.libre && MEDIDAS_DE_CARDIO.includes(r.unidad);
+  return { ...l, unidad: cabe ? r.unidad : 'm', reps: cabe ? r.cantidad : '', intensity: CARGA_DE_FUERZA.test(l.intensity) ? '' : l.intensity };
+};
+export function aCardio(ex) {
+  if (!traeLapsos(ex)) return ex;
+  return quitaVacios({ ...ex, ...parcheDeLapsos(lapsosDe(ex).map((l) => lapsoDeCardio(ex, l))), intervalosDeCardio: true });
+}
+/** ¿Pasar a «Intervalos de cardio» vaciaría algo? (reps, %, RIR, texto que no es distancia ni tiempo). Se pregunta antes. */
+export const perderiaCardio = (miembros) => (miembros ?? []).some((m) => {
+  const filas = traeLapsos(m) ? lapsosDe(m) : [lapsoDeLinea(m)];
+  return filas.some((l) => !cabeEnCardio(m, l) || CARGA_DE_FUERZA.test(l.intensity));
 });
 
 /** ¿Este ejercicio trae lapsos? */
@@ -95,7 +122,9 @@ export function esLineaSinEstrenar(ex) {
     && !String(ex?.intensity ?? '').trim()
     && !String(ex?.descanso ?? '').trim()
     && ex?.porLado !== true
-    && !(Array.isArray(ex?.porVuelta) && ex.porVuelta.length);
+    && !(Array.isArray(ex?.porVuelta) && ex.porVuelta.length)
+    // Una línea que nació con su tipo de carga (9 nov 2026: lo dijo su ficha o la Disciplina) ya está estrenada: no se le cambia la medida.
+    && !ex?.cargaTipo;
 }
 
 /**
@@ -158,7 +187,7 @@ export const perderiaLapsos = (miembros) => (miembros ?? []).some((m) => (lapsos
 export const perderiaVueltas = (miembros) => (miembros ?? []).some((m) => !!vueltasDe(m));
 
 /** El lapso como si fuera un ejercicio, para leerlo con las mismas piezas (`textoMeta`, `leeCarga`…). */
-export const comoEjercicio = (ex, lapso) => ({ ...ex, reps: lapso.reps, unidad: lapso.unidad || undefined, intensity: lapso.intensity, descanso: lapso.descanso });
+export const comoEjercicio = (ex, lapso) => ({ ...ex, reps: lapso.reps, unidad: lapso.unidad || undefined, intensity: lapso.intensity, descanso: lapso.descanso, enMenosDe: lapso.enMenosDe });
 
 /** Cuánto dice el lapso: «800 m», «2 min», «10 reps». `null` si no dice. */
 export const cuantoDeLapso = (ex, lapso) => textoMeta(comoEjercicio(ex, lapso));

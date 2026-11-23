@@ -1,5 +1,10 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { AnotaTiempo, DescansoOscuro, NEGRO, PantallaDeCardio, PreguntaOscura, TardoClaro } from '@/features/training/PantallaDeCardio';
+import { PasoDeLejos } from '@/features/training/PasoDeLejos';
+import { caraDelPaso, esDeNumeros, pantallaDelPaso } from '@/lib/caraDelPaso';
+import { conHibrido } from '@/lib/hibridoAlAtleta';
+import { cuentaDelPaso } from '@/lib/enQueVas';
 import { LT, FONT } from '@/lib/theme';
 import { useCuerpoQuieto } from '@/lib/useCuerpoQuieto';
 import { usePantallaEncendida } from '@/lib/pantallaEncendida';
@@ -17,18 +22,18 @@ import { palabrasDelEntreno } from '@/lib/entrenoPalabras';
 import { FUNCIONES } from '@/lib/funciones';
 import { relojAMedias } from '@/lib/relojGuardado';
 import {
-  cuentaDe, empiezaPaso, esElUltimoPaso, iniciaEntreno, marcaListo, masDescanso as sumaDescanso, pausaDescanso, pasosDeLaSesion, quitaCronometro, saltaPaso, terminaEntreno, vistaDelEntreno, vuelveAtras,
+  cuentaDe, cuentaDelLimite, empiezaPaso, pausaPaso, esElUltimoPaso, iniciaEntreno, marcaListo, masDescanso as sumaDescanso, pausaDescanso, pasosDeLaSesion, quitaCronometro, saltaPaso, terminaEntreno, vistaDelEntreno, vuelveAtras,
 } from '@/lib/entreno';
 import { useAviso } from '@/components/AvisoPasajero';
 import {
   camposDeCambiar, cantidadPlaneada, cifrasConExplicacion, exDataTrasListo, queEsLaCifra, puntosDeVueltas, resumenDeLaSerie, segmentosDeAvance, tarjetasDeLaLista, textoDeLoPlaneado,
   tiempoTotal,
+  relojDe,
 } from '@/lib/entrenoDatos';
 import Portada from '@/components/Portada';
 import RelojDelBloque from '@/features/training/RelojDelBloque';
 import ResultadoDelBloque from '@/features/training/ResultadoDelBloque';
 import TarjetaDeVideo from '@/features/training/TarjetaDeVideo';
-import TarjetaDeClase from '@/features/training/TarjetaDeClase';
 import PasoConGps from '@/features/training/PasoConGps';
 import { useRecorrido } from '@/features/training/useRecorrido';
 import { cantidadEnUnidad, esPasoConGps, METROS_PARA_GPS, metrosDelPaso, pedidoEnUnaLinea } from '@/lib/recorrido';
@@ -78,9 +83,14 @@ const leeSonido = () => {
   try { return window.localStorage.getItem(LLAVE_DEL_SONIDO) !== 'no'; } catch { return true; }
 };
 
+// Un límite sin GPS en la pantalla de Gym («20 reps en menos de 60 seg»): su cuenta se ve en vivo (regla 19). Un sprint «de lejos» no: su ✓ llega al volver caminando.
+const conLimite = (p) => !!p && p.tipo === 'ejercicio' && Number(p.limiteSeg) > 0 && caraDelPaso(p) === 'gym' && !esPasoConGps(p);
+
 export default function EntrenoDelDia({
-  dia, aspecto, registro, onRegistro, onFormato, sesionId, userId, unidadDePeso = 'kg', oneRMs, salud = false, medios, alCerrar, alTerminado = null, destinoDeTecnica = null,
+  dia: diaDado, aspecto, registro, onRegistro, onFormato, sesionId, userId, unidadDePeso = 'kg', oneRMs, salud = false, medios, alCerrar, alTerminado = null, destinoDeTecnica = null,
 }) {
+  // Un Híbrido llega con sus ejercicios de Gym (ver `lib/hibridoAlAtleta.js`): `dia.exercises[idx]` vale igual que en Gym.
+  const dia = conHibrido(diaDado);
   // La página de atrás se queda quieta mientras el entreno está abierto (ver `useCuerpoQuieto`).
   useCuerpoQuieto();
   // La pantalla no se apaga entre series: con las manos llenas de magnesio nadie la quiere tocar para despertarla.
@@ -105,11 +115,20 @@ export default function EntrenoDelDia({
   // se abre con el botón «Iniciar entreno» o «Continuar entreno» del día. `cerradoEn`: el Set cuyo reloj cerró a mano, para que no se vuelva a abrir solo.
   const [reloj, setReloj] = useState(false);
   const [llegando, setLlegando] = useState(true);
+  // `avanzo`: lo último fue un «Listo», un «Saltar» o un descanso que acabó solo (no abrir o retomar la sesión). Regla 19: solo así el reloj de lo que sigue arranca solo.
+  const [avanzo, setAvanzo] = useState(false);
   const [cerradoEn, setCerradoEn] = useState(null);
   const [anotando, setAnotando] = useState(false);
   const [sonido, setSonido] = useState(leeSonido);
   // «Antes de empezar»: las notas de la sesión y su clase, solo si hay y todavía no se ha hecho nada.
-  const notasDeLaSesion = useMemo(() => (Array.isArray(dia.notes) ? dia.notes : []).map((n) => String(n ?? '').trim()).filter(Boolean), [dia]);
+  // Lo que el coach dejó para TODA la sesión. Deporte (23 nov 2026) trae además «Lo que necesita» y su nota: van aquí, en «Antes de empezar».
+  const notasDeLaSesion = useMemo(() => [
+    ...(Array.isArray(dia.notes) ? dia.notes : []),
+    dia.deporte?.necesita ? `Lo que necesitas: ${dia.deporte.necesita}` : null,
+    dia.deporte?.nota ?? null,
+    dia.claseExtra?.necesita ? `Lo que necesitas: ${dia.claseExtra.necesita}` : null,
+    dia.claseExtra?.nota ?? null,
+  ].map((n) => String(n ?? '').trim()).filter(Boolean), [dia]);
   const claseDeLaSesion = claseDe(dia);
   // EL GPS (23 oct 2026, ver `lib/recorrido.js`): el recorrido en silencio (si dijo que sí), y los pasos de 200 m o más con mapa. `cerradoGps`: el paso en
   // que cerró el mapa (se ve el paso normal); `sinGps`: los ejercicios para los que eligió «Sin GPS» (se recuerda en este teléfono); `medidoGps`: lo que midió el
@@ -130,6 +149,15 @@ export default function EntrenoDelDia({
     if (!fuente.disponible()) return undefined;
     return fuente.sigue(() => {}, () => {});
   }, [sesionConGps, gpsContestado]);
+  /* EL TELÉFONO APOYADO (regla 13, 22 nov 2026): en un tripié, la banca o la caminadora el GPS no mide los metros del atleta. Se pregunta UNA vez por
+     sesión, al iniciar, si la sesión trae algo que se mide por metros (solo en la lista: Running, Cycling…). `null` = aún no contesta. Apoyado, los
+     tramos por metros terminan con «Listo». Se da cuenta de los dos errores: dijo que lo lleva y no se mueve (lo avisa `PasoConGps`), o dijo que lo
+     deja y empieza a moverse (abajo). */
+  const llaveApoyado = `tl:apoyado:${sesionId}`;
+  const [apoyado, setApoyadoEstado] = useState(() => { try { const v = window.localStorage.getItem(llaveApoyado); return v === 'si' ? true : v === 'no' ? false : null; } catch { return null; } });
+  const setApoyado = (v) => { setApoyadoEstado(v); try { window.localStorage.setItem(llaveApoyado, v ? 'si' : 'no'); } catch { /* sin almacenamiento: vale por ahora */ } };
+  const [moviendose, setMoviendose] = useState(null); // la clave del paso en que se empezó a mover estando «apoyado»
+  const [descartadoMover, setDescartadoMover] = useState(null);
   const [antes, setAntes] = useState(() => (notasDeLaSesion.length > 0 || !!claseDeLaSesion) && !(entreno?.inicio) && Object.keys(entreno?.hechos ?? {}).length === 0 && Object.keys(entreno?.saltados ?? {}).length === 0);
 
   const vista = vistaDelEntreno(plan, entreno, ahora);
@@ -138,14 +166,33 @@ export default function EntrenoDelDia({
   const enDescanso = !!paso && paso.tipo === 'descanso';
   const cuenta = paso && paso.tipo !== 'descanso' ? cuentaDe(paso, entreno, ahora) : null;
   // La foto y los videos se piden UNA vez por paso (no en cada tic del reloj): con una lista nueva cada vez, el video se reiniciaría.
-  const mediosDelPaso = useMemo(() => (paso && paso.tipo === 'ejercicio' ? (medios?.(dia.exercises[paso.idx]) ?? null) : null), [paso, medios, dia]);
-  const mediosDelSiguiente = useMemo(() => {
-    const s = vista.siguiente;
-    return s && s.tipo === 'ejercicio' ? (medios?.(dia.exercises[s.idx]) ?? null) : null;
-  }, [vista.siguiente, medios, dia]);
+  // Un paso de la lista (Running, Cycling…) no tiene `idx`: su video sale del ejercicio del repertorio que eligió el coach, si eligió uno.
+  const ejercicioDe = useCallback((p) => {
+    if (!p || p.tipo !== 'ejercicio') return null;
+    if (p.idx !== undefined) return dia.exercises[p.idx] ?? null;
+    return p.exercise_id ? { name: p.nombre, exercise_id: p.exercise_id } : null;
+  }, [dia]);
+  const mediosDelPaso = useMemo(() => { const ex = ejercicioDe(paso); return ex ? (medios?.(ex) ?? null) : null; }, [paso, medios, ejercicioDe]);
+  /* Regla 19: tras un descanso con tiempo, el Set con reloj arranca solo. Sus videos se ven DURANTE el descanso: uno por ejercicio, cada 8 s (como «Antes de
+     empezar»). Un ejercicio suelto enseña el suyo. */
+  const giroDelSiguiente = enDescanso && vista.siguiente?.tipo === 'reloj' && vista.siguiente.miembros.length > 1 ? Math.floor(ahora / 8000) % vista.siguiente.miembros.length : 0;
+  const idxDelGiro = vista.siguiente?.tipo === 'reloj' ? (vista.siguiente.miembros[giroDelSiguiente]?.idx ?? -1) : null;
+  const mediosDelSiguiente = useMemo(() => { const ex = ejercicioDe(vista.siguiente); return ex ? (medios?.(ex) ?? null) : null; }, [vista.siguiente, medios, ejercicioDe]);
+  const exDelGiro = idxDelGiro !== null ? (dia.exercises[idxDelGiro] ?? null) : null;
+  const mediosDelGiro = useMemo(() => (exDelGiro ? (medios?.(exDelGiro) ?? null) : null), [exDelGiro, medios]);
+  const delSiguiente = idxDelGiro !== null ? { ex: exDelGiro, m: mediosDelGiro } : { ex: ejercicioDe(vista.siguiente), m: mediosDelSiguiente };
+
+  /* REGLA 19 (Andrés, 23 nov 2026): lo que hay JUSTO ANTES de un reloj o un límite decide cómo arranca. Un descanso con tiempo que acabó → corre ya, sin
+     botón ni 3, 2, 1 (el descanso contó hacia atrás y enseñó los videos). Cualquier otra cosa → espera «Empezar» (normal: 3, 2, 1; por marca: al tocar). */
+  const iDelPaso = paso ? plan.pasos.findIndex((p) => p.clave === paso.clave) : -1;
+  const pasoDeAntes = iDelPaso > 0 ? plan.pasos[iDelPaso - 1] : null;
+  // Decisión de Andrés (23 nov 2026): «Cuando no hay descanso, simplemente que el atleta oprima el botón… lo digo por experiencia». Solo un descanso con
+  // tiempo que acabó hace arrancar solo lo que sigue; si no (lo primero, un ✓ sin descanso, un descanso «cuando estés listo»), espera «Empezar».
+  const trasDescansoConTiempo = pasoDeAntes?.tipo === 'descanso' && pasoDeAntes.seg !== null;
+  const cuentaLimite = conLimite(paso) ? cuentaDelLimite(paso, entreno, ahora) : null;
 
   /* ---------- La hora: el tic solo avisa a la pantalla que se vuelva a dibujar; todo se calcula con la hora ---------- */
-  const necesitaTic = enDescanso || !!cuenta;
+  const necesitaTic = enDescanso || !!cuenta || !!(cuentaLimite && !cuentaLimite.vencido);
   useEffect(() => {
     const id = setInterval(() => setAhora(Date.now()), necesitaTic ? 250 : 1000);
     const alVolver = () => { if (document.visibilityState === 'visible') setAhora(Date.now()); };
@@ -197,6 +244,13 @@ export default function EntrenoDelDia({
       datos = {
         nombre, tipo: 'descanso', titulo: 'Descanso', detalle: siguienteNombre ? `Sigue: ${siguienteNombre}` : '',
         ...(finDelDescanso ? { finMs: finDelDescanso } : { inicioMs: entreno.inicio }),
+      };
+    } else if (paso.tipo === 'ejercicio' && paso.deLaLista) {
+      // La lista (Running, Cycling…): en qué tramo va y qué pide («Tramo 3 de 8» · «1 km · 4:20–4:30 min/km»).
+      const titulo = paso.tramos > 1 ? `Tramo ${paso.tramo} de ${paso.tramos}` : paso.sprints > 1 ? `${paso.pieza === 'int:series' ? 'Serie' : 'Sprint'} ${paso.sprint} de ${paso.sprints}` : (paso.nombreDeLaPieza ?? nombreDePaso);
+      datos = {
+        nombre, tipo: esPasoConGps(paso) ? 'cardio' : 'trabajo', titulo, detalle: [paso.texto?.split(' · ')[0], paso.meta?.texto].filter(Boolean).join(' · '),
+        ...(finDeLaCuenta ? { finMs: finDeLaCuenta } : { inicioMs: entreno.inicio }),
       };
     } else if (paso.tipo === 'ejercicio') {
       datos = {
@@ -300,7 +354,7 @@ export default function EntrenoDelDia({
     }
     escribe((prev) => {
       const siguiente = { ...prev, entreno: marcaListo(plan, prev?.entreno, t, real, clave) };
-      if (objetivo.tipo !== 'ejercicio') return siguiente;
+      if (objetivo.tipo !== 'ejercicio' || objetivo.idx === undefined) return siguiente;
       const dato = exDataTrasListo({
         paso: objetivo, exData: prev?.exercises?.[objetivo.idx], kgPlaneados: kilos?.kg ?? null, conPeso: !!ex && isLoadedExercise(ex), real,
       });
@@ -308,6 +362,7 @@ export default function EntrenoDelDia({
     });
     setEnfoque(null);
     setLlegando(true);
+    setAvanzo(true);
   };
   const saltar = () => {
     const t = Date.now();
@@ -316,11 +371,13 @@ export default function EntrenoDelDia({
     escribe((prev) => ({ ...prev, entreno: saltaPaso(plan, prev?.entreno, t, clave) }));
     setEnfoque(null);
     setLlegando(true);
+    setAvanzo(true);
   };
   // Mirando un paso que se tocó en «Ver todo», «Anterior» regresa a donde iba: asomarse a otro ejercicio no deshace lo hecho.
   const mirandoOtro = !!enfocado && paso === enfocado;
   const anterior = () => {
     setLlegando(false);
+    setAvanzo(false);
     setCerradoEn(null);
     if (mirandoOtro) { setEnfoque(null); return; }
     escribe((prev) => ({ ...prev, entreno: vuelveAtras(plan, prev?.entreno) }));
@@ -346,6 +403,29 @@ export default function EntrenoDelDia({
     const t = setTimeout(() => sigueDelDescanso.current?.(), 350);
     return () => clearTimeout(t);
   }, [descansoVencido]);
+  /* POR TIEMPO, PASA SOLO (regla 4 del entreno del atleta, 22 nov 2026): un paso de la lista que es por tiempo (Trote 10 min, un intervalo de 4 min en
+     la bici) arranca su cuenta al llegar avanzando y, al llegar a cero, se marca solo y pasa al siguiente. Volver a él con «Anterior» no lo arranca. */
+  const pasoSolo = !antes && !!paso && paso.tipo === 'ejercicio' && !!paso.pasaSola && paso.termina?.por === 'tiempo' && !mirandoOtro;
+  const empezadoSolo = pasoSolo && !!entreno?.empezados?.[paso.clave];
+  useEffect(() => {
+    if (!pasoSolo || empezadoSolo || !llegando) return;
+    const t = Date.now();
+    escribe((prev) => ({ ...prev, entreno: empiezaPaso(plan, prev?.entreno, t) }));
+  });
+  // Regla 19 en un límite: llegó con algo que ya pasó → su cuenta arranca sola. Si no, espera «Empezar» (arranca al tocar: va por una marca, sin 3, 2, 1).
+  const limiteSolo = !antes && conLimite(paso) && !mirandoOtro && avanzo && llegando && trasDescansoConTiempo && !entreno?.empezados?.[paso.clave];
+  useEffect(() => {
+    if (!limiteSolo) return;
+    escribe((prev) => ({ ...prev, entreno: empiezaPaso(plan, prev?.entreno, Date.now()) }));
+  });
+  const vencidoSolo = pasoSolo && !!cuenta?.vencido;
+  const listoSolo = useRef(null);
+  useEffect(() => { listoSolo.current = () => listo(); });
+  useEffect(() => {
+    if (!vencidoSolo) return undefined;
+    const t = setTimeout(() => listoSolo.current?.(), 600);
+    return () => clearTimeout(t);
+  }, [vencidoSolo]);
   const masDescanso = () => escribe((prev) => ({ ...prev, entreno: sumaDescanso(plan, prev?.entreno, 30) }));
   // El botón grande del descanso pausa y reanuda la cuenta (30 oct 2026); en pausa no avanza sola ni deja aviso del teléfono (su `fin` es `null`).
   const pausarDescanso = () => {
@@ -361,6 +441,8 @@ export default function EntrenoDelDia({
     escribe((prev) => ({ ...prev, entreno: empiezaPaso(plan, prev?.entreno, t, clave) }));
   };
   const detenerCronometro = () => {
+    // Si lo detuvo, no vuelve a arrancar solo (ver «POR TIEMPO, PASA SOLO»).
+    setLlegando(false);
     const clave = enfocado && paso === enfocado ? enfocado.clave : undefined;
     escribe((prev) => ({ ...prev, entreno: quitaCronometro(plan, prev?.entreno, clave) }));
   };
@@ -429,6 +511,121 @@ export default function EntrenoDelDia({
   // Lo que se dice bajo el título de un Set con reloj: lo que es el formato, o las rondas de unos lapsos.
   const detalleDelReloj = (p) => (p.deLapsos ? (p.rondas > 1 ? `${p.rondas} rondas` : '') : FORMATOS[vistaDe(p.formato)]?.detalle);
 
+  /* ---------- QUÉ PANTALLA TOCA (ver `lib/caraDelPaso.js`) ----------
+     Cada paso DICE su pantalla (`paso.cara`); aquí ya no se adivina por la sesión. Andrés, 23 nov 2026: «la pantalla negra solo es para cuando se
+     necesita» (regla 18). `conNumeros`: la sesión trae algún paso de la pantalla negra; de eso dependen la pregunta del teléfono, los avisos que se
+     oyen y los metros que lleva, no el color de lo que se ve. */
+  const conNumeros = useMemo(() => plan.pasos.some(esDeNumeros), [plan]);
+  const { pantalla: queSeVe, negra: oscuro } = pantallaDelPaso({
+    antes, paso, siguiente: enDescanso ? vista.siguiente : null, anterior: enDescanso ? plan.pasos[(vista.descanso?.paso?.i ?? 0) - 1] : null,
+  });
+  const pausarPaso = () => {
+    const t = Date.now();
+    setAhora(t);
+    const clave = enfocado && paso === enfocado ? enfocado.clave : undefined;
+    escribe((prev) => ({ ...prev, entreno: pausaPaso(plan, prev?.entreno, t, clave) }));
+  };
+  // En qué va: «Tramo 3 de 8 · 1 km · 4:20–4:30 min/km», «Sprint 2 de 4 · Al máximo», o el nombre de la parte con su intensidad.
+  const enQueVaDe = (p) => {
+    const base = enQueVaSinCuenta(p);
+    const cuenta = cuentaDelPaso(p);
+    // Con la cuenta a la vista («Tramo 3 de 8»), debajo solo va qué es: la distancia y la intensidad.
+    const linea = !cuenta ? null : p.tramos > 1 ? base.detalle : p.sprints > 1 ? (p.meta?.texto ?? null) : null;
+    return { ...base, cuenta, linea };
+  };
+  const enQueVaSinCuenta = (p) => {
+    if (!p) return { titulo: '' };
+    const meta = p.meta?.texto ?? null;
+    if (p.tramos > 1) return { titulo: `Tramo ${p.tramo} de ${p.tramos}`, detalle: [p.texto?.split(' · ')[0], meta].filter(Boolean).join(' · '), n: p.tramos, hechas: p.tramo - 1 };
+    // «En series» (doble revisión, 23 nov 2026): «Sprint 2 de 4 · serie 1 de 3».
+    if (p.sprints > 1) return { titulo: `${p.pieza === 'int:series' ? 'Serie' : 'Sprint'} ${p.sprint} de ${p.sprints}`, detalle: [p.bloques > 1 ? `serie ${p.bloque} de ${p.bloques}` : null, meta].filter(Boolean).join(' · ') || null, n: p.sprints, hechas: p.sprint - 1 };
+    if (p.vueltas > 1) return { titulo: p.nombreDeLaPieza, detalle: `vuelta ${p.vuelta} de ${p.vueltas}`, n: p.vueltas, hechas: p.vuelta - 1 };
+    return { titulo: p.nombreDeLaPieza ?? p.nombre, detalle: meta };
+  };
+  // «Sigue …»: lo que viene, dicho como en los dibujos («1 km · 5:45–6:15 min/km»).
+  const sigueDe = (s) => {
+    if (!s) return null;
+    // Otro sprint u otra serie de la misma pieza: «Sprint 2 de 4».
+    if (s.sprints > 1) return { nombre: `${s.pieza === 'int:series' ? 'Serie' : 'Sprint'} ${s.sprint} de ${s.sprints}`, detalle: [s.texto?.split(' · ')[0], s.meta?.texto].filter(Boolean).join(' · ') || null, deporteDeLaParte: s.deporteDeLaParte };
+    if (s.tramos > 1 && s.pieza === paso?.pieza && s.serie === paso?.serie) return { nombre: s.texto?.split(' · ')[0] || s.nombre, detalle: s.meta?.texto ?? null, deporteDeLaParte: s.deporteDeLaParte };
+    return { nombre: s.tramos > 1 || s.sprints > 1 ? s.nombreDeLaPieza : s.nombre, detalle: [s.texto?.split(' · ')[0], s.meta?.texto].filter(Boolean).join(' · ') || null, deporteDeLaParte: s.deporteDeLaParte };
+  };
+  // El paso de antes de un descanso: para anotar el tiempo de un sprint corto (regla 9) o decir cuánto tardó una serie de nado (regla 7).
+  const sigueDelPaso = vista.descansoDespues
+    ? { nombre: 'Descanso', detalle: vista.descansoDespues.texto || null }
+    : sigueDe(vista.siguiente && vista.siguiente !== paso ? vista.siguiente : null);
+  const pasoAntes = enDescanso && vista.descanso ? plan.pasos[vista.descanso.paso.i - 1] : null;
+  const marcaAntes = pasoAntes ? entreno?.hechos?.[pasoAntes.clave] : null;
+  const corto = !!pasoAntes && pasoAntes.deLaLista && pasoAntes.sprints > 0 && pasoAntes.deporteDeLaParte !== 'nado' && pasoAntes.termina?.por === 'distancia' && Number(pasoAntes.termina.min) < METROS_PARA_GPS && !!marcaAntes;
+  const anotable = corto ? { clave: pasoAntes.clave, titulo: `¿Te midieron el ${pasoAntes.pieza === 'int:series' ? 'tramo' : 'sprint'} ${pasoAntes.sprint}?`, seg: marcaAntes.seg ?? null } : null;
+  const anotaTiempo = (seg) => {
+    if (!anotable) return;
+    escribe((prev) => {
+      const e = prev?.entreno ?? {};
+      const m = e.hechos?.[anotable.clave];
+      if (!m) return prev;
+      const { seg: _quitado, ...resto } = m;
+      return { ...prev, entreno: { ...e, hechos: { ...e.hechos, [anotable.clave]: seg ? { ...resto, seg } : resto } } };
+    });
+  };
+  const tardo = (() => {
+    // Un límite que contó en vivo: al terminar, si lo logró («✓ 47 seg · lo lograste») o cuánto se pasó. Igual que el sprint con GPS (regla 11).
+    if (conLimite(pasoAntes) && marcaAntes?.seg > 0) {
+      const s = marcaAntes.seg;
+      const lim = Number(pasoAntes.limiteSeg);
+      const bien = s <= lim;
+      return { titulo: pasoAntes.vueltas > 1 ? `Tu serie ${pasoAntes.vuelta} · límite ${relojDe(lim)}` : `Límite ${relojDe(lim)}`, valor: relojDe(s), bien, estado: bien ? '✓ lo lograste' : `${s - lim} seg de más` };
+    }
+    if (!pasoAntes || !marcaAntes || pasoAntes.deporteDeLaParte !== 'nado' || pasoAntes.termina?.por !== 'distancia') return null;
+    const antesDe = plan.pasos[pasoAntes.i - 1];
+    const desde = (antesDe && entreno?.hechos?.[antesDe.clave]?.t) || entreno?.inicio;
+    if (!desde) return null;
+    const s = Math.round((marcaAntes.t - desde) / 1000);
+    if (!(s > 0)) return null;
+    const m = pasoAntes.meta;
+    const por100 = Number(pasoAntes.termina.min) / 100;
+    const bien = m?.tipo === 'nado' && m.min ? s >= m.min * por100 - 2 && s <= m.max * por100 + 2 : null;
+    return { titulo: `Tu ${pasoAntes.pieza === 'int:series' ? 'serie' : 'tramo'} ${pasoAntes.sprint ?? ''}`.trim(), valor: relojDe(s), bien, estado: bien === null ? null : bien ? '✓ en tu ritmo' : 'fuera de tu ritmo' };
+  })();
+  // Los metros que ya llevas de esta sesión (lo que midió el GPS en los tramos de antes), para el «total» de la pantalla del GPS.
+  const metrosAntes = conNumeros && paso ? plan.pasos.slice(0, paso.i).reduce((suma, p) => {
+    const m = entreno?.hechos?.[p.clave];
+    if (!m || p.termina?.por !== 'distancia') return suma;
+    const r = parseFloat(m.reps ?? p.termina.cantidad);
+    return suma + (Number.isFinite(r) ? r * ({ km: 1000, m: 1, yd: 0.9144 }[p.termina.unidad] ?? 1) : 0);
+  }, 0) : 0;
+
+  // Apoyado y en un tramo por metros: si el teléfono recorre más de 40 m, se ofrece volver a medir con el GPS.
+  const tramoApoyado = conNumeros && apoyado === true && !enDescanso && !!paso && esDeNumeros(paso) && esPasoConGps(paso) ? paso.clave : null;
+  useEffect(() => {
+    if (!tramoApoyado || descartadoMover === tramoApoyado) return undefined;
+    const fuente = fuenteDeUbicacion();
+    if (!fuente.disponible()) return undefined;
+    let primero = null;
+    return fuente.sigue((p) => {
+      if (!(p.precision <= 30)) return;
+      if (!primero) { primero = p; return; }
+      const r = 6371000; const rad = Math.PI / 180;
+      const dLat = (p.lat - primero.lat) * rad; const dLon = (p.lon - primero.lon) * rad;
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(primero.lat * rad) * Math.cos(p.lat * rad) * Math.sin(dLon / 2) ** 2;
+      if (2 * r * Math.asin(Math.sqrt(a)) > 40) setMoviendose(tramoApoyado);
+    }, () => {});
+  }, [tramoApoyado, descartadoMover]);
+  // Se pregunta al llegar al PRIMER tramo con GPS, no al empezar (23 nov 2026, Andrés: «nadie va a tener el teléfono en la mano» en la técnica):
+  // si la sesión empieza con Skip A, el teléfono está en el piso y la pregunta no sirve todavía.
+  const preguntaInicial = conNumeros && apoyado === null && !antes && sesionConGps && gpsContestado && fuenteDeUbicacion().disponible()
+    && !!paso && !enDescanso && esPasoConGps(paso);
+
+  // LOS AVISOS QUE SE OYEN (la lista): al empezar otro tramo, dos pitidos y vibra; a 10 seg de acabar un tramo por tiempo, uno corto.
+  const avisoDeTramo = useRef({ clave: null, pronto: null });
+  useEffect(() => {
+    if (!conNumeros || !paso || antes) return;
+    const r = avisoDeTramo.current;
+    if (paso.tipo === 'ejercicio' && r.clave && r.clave !== paso.clave && llegando) { if (sonido) pitido('tramo'); vibra('toque'); }
+    r.clave = paso.clave;
+    if (cuenta && !cuenta.pausado && cuenta.restan === 10 && cuenta.seg > 20 && r.pronto !== paso.clave) { r.pronto = paso.clave; if (sonido) pitido('pronto'); }
+  });
+
   /* ---------- Qué se dibuja ---------- */
   /* El fondo va teñido del color del tipo en TODA la sesión (reestructura visual, 15 oct 2026: «Fuerza» morado clarito, «Cardio» rojo clarito, como en las
      capturas de Andrés); antes solo en el descanso. */
@@ -444,8 +641,12 @@ export default function EntrenoDelDia({
 
   const siguienteDeDescanso = enDescanso && vista.siguiente ? {
     nombre: vista.siguiente.tipo === 'reloj' ? vista.siguiente.resumen : vista.siguiente.nombre,
-    detalle: vista.siguiente.tipo === 'reloj' ? '' : textoDeLoPlaneado(vista.siguiente, kilosDe(vista.siguiente)),
+    // En un Set con reloj, el ejercicio cuyo video se está viendo (van pasando cada 8 s).
+    detalle: vista.siguiente.tipo === 'reloj' ? (vista.siguiente.miembros[giroDelSiguiente]?.nombre ?? '') : textoDeLoPlaneado(vista.siguiente, kilosDe(vista.siguiente)),
     puntos: vista.siguiente.tipo === 'ejercicio' ? puntosDeVueltas(plan, vista.estados, vista.siguiente.serie, vista.siguiente.clave) : [],
+    // La misma palabra que su pantalla: «Sprint 2 de 4», no «Serie 2 de 4».
+    rotulo: vista.siguiente.sprints && vista.siguiente.pieza !== 'int:series' ? 'Sprint' : vista.siguiente.tramos > 1 ? 'Tramo' : 'Serie',
+    cuenta: cuentaDelPaso(vista.siguiente),
   } : null;
 
   const kilosDelPaso = kilosDe(paso);
@@ -468,20 +669,51 @@ export default function EntrenoDelDia({
   const sinPasos = !paso;
   if (sinPasos) return null;
 
+  // Lo que vive en la hoja de pausa y en «···» (23 nov 2026; ver `HojaDePausa`): nada de lo que Gym tiene se pierde.
+  const opcionesOscuras = {
+    puedeAnterior: vista.puedeAnterior || mirandoOtro, onAnterior: anterior, sonido, onSonido: alternaSonido, onTerminar: terminarSesion,
+    // Lo que se salta o a dónde se vuelve, dicho con la palabra de lo que está haciendo.
+    saltarTexto: enDescanso ? 'Saltar el descanso' : paso?.tramos > 1 ? 'Saltar este tramo' : paso?.sprints > 0 ? `Saltar este ${paso.pieza === 'int:series' ? 'tramo' : 'sprint'}` : 'Saltar este ejercicio',
+    anteriorTexto: paso?.tramos > 1 && paso.tramo > 1 ? 'Tramo anterior' : 'Volver al anterior',
+    telefono: sesionConGps && fuenteDeUbicacion().disponible() ? { apoyado: apoyado === true, onCambia: () => setApoyado(apoyado !== true) } : null,
+  };
   let pantalla;
-  if (antes) {
+  if (queSeVe === 'descansoNegro') {
+    pantalla = (
+      <DescansoOscuro
+        descanso={vista.descanso} ahora={ahora} siguiente={sigueDe(vista.siguiente)} pulso={pulsoDelReloj} tiempo={tiempo || null}
+        onLista={() => { setLlegando(false); setHoja('lista'); }} onSeguir={seguirDelDescanso} onMas={masDescanso} onPausa={pausarDescanso}
+        anotable={anotable} onAnota={anotaTiempo} tardo={tardo} opciones={opcionesOscuras}
+      />
+    );
+  } else if (queSeVe === 'numeros' || (queSeVe === 'guiado' && paso.video?.url)) {
+    pantalla = (
+      <PantallaDeCardio
+        paso={paso} cuenta={cuenta} siguiente={sigueDelPaso} pulso={pulsoDelReloj} tiempo={tiempo || null}
+        video={videoDe(ejercicioDe(paso), mediosDelPaso, { altoMaximo: '26vh', solo: true })} enQueVa={enQueVaDe(paso)} esUltimo={esUltimo}
+        onLista={() => { setLlegando(false); setHoja('lista'); }} onListo={() => listo()} onSaltar={saltar} onPausa={pausarPaso} onTerminar={() => terminarManteniendo()}
+        opciones={opcionesOscuras} tecnica={tecnicaDelPaso} clara={!oscuro} color={colorDelTipo}
+      />
+    );
+  } else if (antes) {
     pantalla = (
       <PantallaAntesDeEmpezar
+        color={colorDelTipo}
         nombre={sinDuracion(dia.name || '') || 'Tu sesión'} notas={notasDeLaSesion}
-        clase={claseDeLaSesion ? <TarjetaDeClase clase={claseDeLaSesion} nombre={dia.name || ''} /> : null}
+        // La clase ya es un paso del entreno (con «Empezar» arranca su video): aquí solo su portada, si el coach eligió una (23 nov 2026).
+        clase={claseDeLaSesion && typeof dia.claseExtra?.portada === 'string' && dia.claseExtra.portada
+          ? <img src={dia.claseExtra.portada} alt="" style={{ width: '100%', aspectRatio: '16 / 9', objectFit: 'cover', borderRadius: 20, marginBottom: 14 }} />
+          : null}
         onEmpezar={() => { preparaAudio(); setAntes(false); }} onSalir={cerrar}
       />
     );
   } else if (enDescanso) {
     pantalla = (
       <PantallaDeDescanso
-        descanso={vista.descanso} siguiente={siguienteDeDescanso} video={videoDe(exDe(vista.siguiente), mediosDelSiguiente, { enCarta: true, altoMaximo: '30vh' })} sonido={sonido}
+        descanso={vista.descanso} siguiente={siguienteDeDescanso} empezarYa={vista.descanso?.restan !== null && (vista.siguiente?.tipo === 'reloj' || conLimite(vista.siguiente)) ? `Empezar ya · ${vista.siguiente?.tipo === 'reloj' ? 'el reloj' : 'el límite'} arranca al tocar` : null} video={videoDe(delSiguiente.ex, delSiguiente.m, { enCarta: true, altoMaximo: '30vh', solo: true })} sonido={sonido}
         puedeAnterior={vista.puedeAnterior} onSeguir={seguirDelDescanso} onMas={masDescanso} onPausa={pausarDescanso} onAnterior={anterior} onSonido={alternaSonido} color={colorDelTipo}
+        ahora={ahora} pulso={pulsoDelReloj}
+        arriba={tardo || anotable ? <><TardoClaro tardo={tardo} />{anotable && <AnotaTiempo key={anotable.clave} clara titulo={anotable.titulo} inicial={anotable.seg} onAnota={anotaTiempo} />}</> : null}
       />
     );
   } else if (paso.tipo === 'reloj') {
@@ -494,13 +726,28 @@ export default function EntrenoDelDia({
         esUltimo={esUltimo} onTerminar={() => terminarManteniendo()}
       />
     );
+  } else if (queSeVe === 'lejos') {
+    // Técnica y calentamiento con ejercicios: el teléfono está en el piso (ver `PasoDeLejos`).
+    pantalla = (
+      <PasoDeLejos
+        key={paso.clave} paso={paso} nota={paso.nota ?? null} tecnica={tecnicaDelPaso} color={colorDelTipo}
+        video={videoDe(ejercicioDe(paso), mediosDelPaso, { altoMaximo: '34vh', solo: true })}
+        sigue={sigueDelPaso ? [sigueDelPaso.nombre, sigueDelPaso.detalle].filter(Boolean).join(' · ') : null}
+        puedeAnterior={vista.puedeAnterior || mirandoOtro} onAnterior={anterior} onAnotar={cambiar ? () => setHoja('cambiar') : null} onListo={() => listo()} onSaltar={saltar}
+        esUltimo={esUltimo} onTerminar={() => terminarManteniendo()}
+        boton={paso.deporteDeLaParte === 'nado' ? 'Llegué' : 'Listo'}
+        ayuda={paso.sprints && paso.termina?.por === 'distancia' ? (paso.deporteDeLaParte === 'nado' ? 'tócalo al llegar a la orilla' : 'tócalo al volver · ahí empieza tu descanso') : null}
+      />
+    );
   } else {
     const siguiente = vista.siguiente && vista.siguiente !== paso ? (vista.siguiente.tipo === 'reloj' ? vista.siguiente.resumen : vista.siguiente.nombre) : '';
     pantalla = (
       <PantallaDePaso
         // El video toma el alto y el ancho que le da el acomodo del paso (ver `lib/acomodoDelPaso.js`).
-        paso={paso} video={paso.tipo === 'ejercicio' ? videoDe(exDe(paso), mediosDelPaso, { alto: 'var(--vh)', anchoMaximo: 'var(--vid-max, 100%)', sinMargen: true }) : null}
-        cifras={cifrasConExplicacion(paso, kilosDelPaso)} anotado={anotadoDe(paso)}
+        paso={paso} video={paso.tipo === 'ejercicio' ? videoDe(ejercicioDe(paso), mediosDelPaso, { alto: 'var(--vh)', anchoMaximo: 'var(--vid-max, 100%)', sinMargen: true }) : null}
+        cifras={cifrasConExplicacion(paso, kilosDelPaso).map((x) => (x.etiqueta === 'límite' && cuentaLimite
+          ? { ...x, valor: cuentaLimite.vencido ? `+${relojDe(cuentaLimite.pasado)}` : relojDe(cuentaLimite.restan), etiqueta: cuentaLimite.vencido ? 'de más' : 'quedan', destacado: !cuentaLimite.vencido, explica: null }
+          : x))} anotado={anotadoDe(paso)}
         onQueEs={(c) => {
           setQueEs(queEsLaCifra(c, kilosDelPaso ? `${kilosDelPaso.aprox ? '≈' : ''}${kilosDelPaso.valor} ${kilosDelPaso.unidad}` : null));
           setQueEsVisto(true);
@@ -511,8 +758,11 @@ export default function EntrenoDelDia({
           ? { texto: `Nota de ${nombreDelDestino}`, inicial: nombreDelDestino.charAt(0).toUpperCase() }
           : { texto: salud ? 'Nota de tu fisio' : 'Nota de tu coach', inicial: null }}
         sigue={siguiente} resumen={resumenDeLaSerieDelPaso}
-        cronometro={completo && paso.termina?.por === 'tiempo' ? (
+        cronometro={(completo || paso.pasaSola) && paso.termina?.por === 'tiempo' ? (
           <CronometroDelPaso segundos={paso.termina.valor ?? paso.termina.min} cuenta={cuenta} onEmpezar={empezarCronometro} onQuitar={detenerCronometro} />
+        ) : conLimite(paso) && !cuentaLimite && !limiteSolo ? (
+          // Regla 19, fila 4: nada antes. Un toque, y la cuenta arranca en ese instante (va por una marca: sin 3, 2, 1).
+          <CronometroDelPaso segundos={paso.limiteSeg} cuenta={null} onEmpezar={empezarCronometro} texto={`Empezar · el límite arranca al tocar`} />
         ) : null}
         etiquetaDeCambiar={textoDeCambiar} puedeAnterior={vista.puedeAnterior || mirandoOtro}
         onListo={() => listo()} onCambiar={() => setHoja('cambiar')} onSaltar={saltar} onAnterior={anterior}
@@ -533,10 +783,13 @@ export default function EntrenoDelDia({
   const nombreDelReloj = paso?.deLapsos ? 'Lapsos personalizados' : paso?.resumen;
   // El reloj se abre SOLO cuando se llegó avanzando a un Set con reloj que no tiene resultado, y la persona no lo cerró ya.
   const relojSolo = llegando && paso?.tipo === 'reloj' && !mirandoOtro && !resultadoDelReloj && !anotando && cerradoEn !== paso.claveFormato;
+  // Regla 19 (ver arriba): el Set con reloj corre ya si llegó con algo que ya pasó; si no, «Antes de empezar» y «Empezar».
+  // Tras un descanso con tiempo (el descanso fue su repaso, con los videos): corre ya. Si no, «Antes de empezar» y espera «Empezar».
+  const arrancaSoloElReloj = avanzo && relojSolo && trasDescansoConTiempo;
   const cierraReloj = () => { setReloj(false); setCerradoEn(paso?.claveFormato ?? null); };
   // ¿El paso que toca va con mapa? 200 m o más, el teléfono tiene GPS, no lo cerró y no eligió «Sin GPS» para ese ejercicio. En la pantalla del final o en
   // «Antes de empezar», no.
-  const conGps = !antes && !enDescanso && !!paso && esPasoConGps(paso) && fuenteDeUbicacion().disponible()
+  const conGps = !antes && !enDescanso && !!paso && esPasoConGps(paso) && fuenteDeUbicacion().disponible() && !(esDeNumeros(paso) && apoyado)
     && cerradoGps !== paso.clave && !sinGps[paso.nombre]
     // Mientras no contesta «¿Guardamos tu recorrido?», el mapa espera: si no, la pregunta quedaría tapada debajo.
     && (recorrido.permiso !== null || !recorrido.disponible);
@@ -558,13 +811,16 @@ export default function EntrenoDelDia({
   return createPortal(
     <div
       style={{
-        position: 'fixed', top: 0, left: 0, right: 0, height: '100dvh', zIndex: 3000, background: fondo, display: 'flex', flexDirection: 'column', fontFamily: FONT,
+        position: 'fixed', top: 0, left: 0, right: 0, height: '100dvh', zIndex: 3000, background: oscuro ? NEGRO : fondo, display: 'flex', flexDirection: 'column', fontFamily: FONT,
+        // El color de la sesión para las hojas de abajo («Lo que hiciste», «Tu resultado»): ver `circulo` en `PantallasDelEntreno`.
+        '--acento': colorDelTipo ?? LT.blue,
+        ...(oscuro ? { color: '#fff', paddingTop: 'calc(10px + env(safe-area-inset-top))' } : null),
       }}
     >
-      <BarraDelEntreno
+      {!oscuro && <BarraDelEntreno
         segmentos={segmentos} fondo={fondo} palabras={palabras} tiempo={tiempo || null} color={colorDelTipo ?? undefined}
         onLista={() => { setLlegando(false); setHoja('lista'); }}
-      />
+      />}
       {/* El paso con GPS (200 m o más) ocupa el lugar del paso normal, con la barra «Workout» arriba; «Sin GPS» o cerrar el mapa devuelve el paso normal. */}
       {conGps ? (
         <PasoConGps
@@ -578,13 +834,25 @@ export default function EntrenoDelDia({
           onSinGps={() => eligeSinGps(paso.nombre)}
           onAnotar={({ metros }) => { setMedidoGps({ clave: paso.clave, reps: cantidadEnUnidad(metros, paso.termina.unidad) }); setCerradoGps(paso.clave); setHoja('cambiar'); }}
           onCerrar={() => setCerradoGps(paso.clave)}
+          onApoyado={() => setApoyado(true)} sonido={sonido} opciones={opcionesOscuras}
+          oscura={oscuro} tiempoTotal={tiempo || null} onLista={() => { setLlegando(false); setHoja('lista'); }} enQueVa={enQueVaDe(paso)}
+          sigue={sigueDelPaso} limiteSeg={paso.limiteSeg ?? null} kmTotalesAntes={metrosAntes}
         />
       ) : pantalla}
       {/* «¿Guardamos tu recorrido?»: una sola vez por teléfono, al abrir el primer entreno guiado. */}
       {recorrido.disponible && recorrido.permiso === null && <HojaDelRecorrido onSi={() => recorrido.decide('si')} onNo={() => recorrido.decide('no')} />}
+      {preguntaInicial && (
+        <PreguntaOscura clara={!oscuro} icono titulo="¿Llevas el teléfono contigo?" texto="Si lo dejas apoyado, no puede medir tus metros. Tú marcas cada tramo al terminarlo."
+          si="Lo llevo conmigo" no="Lo dejo apoyado" onSi={() => setApoyado(false)} onNo={() => setApoyado(true)} />
+      )}
+      {!preguntaInicial && moviendose && moviendose === tramoApoyado && descartadoMover !== tramoApoyado && (
+        <PreguntaOscura clara={!oscuro} titulo="Tu teléfono se está moviendo" texto="¿Ya lo llevas contigo? Puedo volver a medir tus metros."
+          si="Sí, mide mis metros" no="No, sigue igual" onSi={() => { setApoyado(false); setMoviendose(null); }} onNo={() => setDescartadoMover(tramoApoyado)} />
+      )}
 
       {hoja === 'lista' && (
         <HojaDeLista
+          color={colorDelTipo}
           tarjetas={tarjetasDeLaLista(plan, vista.estados, queToca?.clave ?? null, { kilosDe, resultadoDe })} miniaturaDe={miniaturaDeFila} palabras={palabras}
           onElegir={(clave) => { setLlegando(false); setEnfoque(clave); setHoja(null); }}
           onTerminar={terminarSesion}
@@ -626,9 +894,10 @@ export default function EntrenoDelDia({
         <RelojDelBloque
           key={paso.claveFormato}
           formato={paso.formato} plan={paso.tramos ?? null} ejercicios={ejerciciosDelReloj} serie={paso.serie} resumen={nombreDelReloj}
-          clave={`${userId}:${sesionId}:${paso.claveFormato}`} empezarYa={reloj} conCuenta={!reloj} onGuardar={guardaResultado} onCerrar={cierraReloj}
+          clave={`${userId}:${sesionId}:${paso.claveFormato}`} empezarYa={reloj} arrancaSolo={!reloj && arrancaSoloElReloj} onGuardar={guardaResultado} onCerrar={cierraReloj}
+          barra={<BarraDelEntreno segmentos={segmentos} fondo={fondo} palabras={palabras} tiempo={tiempo || null} color={colorDelTipo ?? undefined} onLista={() => { setLlegando(false); setHoja('lista'); }} />}
           conGps={gpsEnElReloj} sinGps={sinGps} alElegirSinGps={eligeSinGps} colorDelTipo={colorDelTipo ?? undefined} fondo={fondo}
-          videoDe={(ex) => videoDe(ex, medios?.(ex) ?? null, { altoMaximo: '24vh' })}
+          videoDe={(ex) => videoDe(ex, medios?.(ex) ?? null, { altoMaximo: '30vh', solo: true })}
           miniaturaDe={(ex) => { const m = medios?.(ex); return m && (m.portada || m.videos?.[0]) ? <Portada foto={m.portada} video={m.videos?.[0]?.url} desde={m.videos?.[0]?.inicio} hasta={m.videos?.[0]?.fin} style={{ position: 'absolute', inset: 0 }} /> : null; }}
         />
       )}

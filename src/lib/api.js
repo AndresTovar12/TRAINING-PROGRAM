@@ -242,6 +242,8 @@ export async function duplicateExercise(ex) {
     muscle_secondary: ex.muscle_secondary ?? null,
     categorias_secundarias: ex.categorias_secundarias ?? [],
     equipment: ex.equipment ?? null,
+    medida: ex.medida ?? null,
+    carga_tipo: ex.carga_tipo ?? null,
     created_by,
   };
   const { data, error } = await supabase
@@ -287,6 +289,10 @@ export const CAMPOS_EDITABLES = [
   'name', 'description', 'category_id', 'categorias_secundarias', 'cover_image_url',
   'video_url', 'video_link', 'recorte_inicio', 'recorte_fin', 'sin_audio', 'encuadre',
   'muscle_primary', 'muscle_secondary', 'equipment',
+  // «Cuánto hace» y «Peso o intensidad» (8 nov 2026): también se pueden hacer propios.
+  'medida', 'carga_tipo',
+  // El calentamiento guiado y las Disciplinas de la ficha (migración 08, 23 nov 2026).
+  'guiado', 'duracion_s', 'disciplinas',
 ];
 
 // Las versiones propias del coach indicado. Un atleta pide las de SU coach:

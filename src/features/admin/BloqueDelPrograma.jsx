@@ -55,6 +55,8 @@ export default function BloqueDelPrograma({ titulo, rotuloTitulo, onTitulo, prog
           onBlur={(e) => { e.target.style.boxShadow = 'none'; }}
         />
       </label>
+      {/* La forma y los botones del programa, juntos: son la pieza «El plan completo» del recorrido del editor (como en la barra de la compu). */}
+      <div role="group" aria-label="Opciones del programa" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 700, color: T.text2, padding: '4px 2px 0' }}>
         <Forma size={14} color={T.accent} />
         <span>{programa.forma.corto}</span>
@@ -85,6 +87,7 @@ export default function BloqueDelPrograma({ titulo, rotuloTitulo, onTitulo, prog
             Más <ChevronDown size={13} />
           </BotonDeTexto>
         )}
+      </div>
       </div>
     </div>
   );

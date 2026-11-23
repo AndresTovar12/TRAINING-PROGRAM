@@ -128,6 +128,9 @@ export function cifrasDelPaso(paso, kilos = null) {
     cifraDeLoQueHacer(paso),
     cifraDeCarga(paso),
     kilos ? { valor: `${kilos.aprox ? '≈' : ''}${kilos.valor}`, etiqueta: kilos.unidad, destacado: true } : null,
+    // Doble revisión del 23 nov 2026: el límite («en menos de 60 seg») y la pausa del cluster solo iban en el texto, que la pantalla de Gym no enseña.
+    paso.limiteSeg ? { valor: paso.limiteSeg < 60 ? `${paso.limiteSeg} s` : relojDe(paso.limiteSeg), etiqueta: 'límite' } : null,
+    paso.termina?.entreBloques ? { valor: `${paso.termina.entreBloques} s`, etiqueta: 'entre bloques' } : null,
   ].filter(Boolean);
 }
 
@@ -139,6 +142,7 @@ export function textoDeCifra(c) {
   if (!c) return '';
   if (c.texto || c.etiqueta === 'carga' || c.etiqueta === 'intensidad' || c.etiqueta === 'zona') return String(c.valor);
   if (c.etiqueta === 'RIR' || c.etiqueta === 'RPE') return `${c.etiqueta} ${c.valor}`;
+  if (c.etiqueta === 'límite') return `en menos de ${c.valor}`;
   return `${c.valor} ${c.etiqueta}`;
 }
 
@@ -200,10 +204,18 @@ export function serieALaVista(plan, estados, paso) {
   for (let e = 1; e <= paso.ejerciciosEnSerie; e += 1) {
     const q = plan.pasos.find((x) => x.tipo === 'ejercicio' && x.serie === paso.serie && x.vuelta === paso.vuelta && x.ejercicioEnSerie === e);
     if (q) {
+      const estado = q.clave === paso.clave ? 'actual' : (estados[q.i] !== 'pendiente' ? 'hecho' : 'pendiente');
+      // Los sprints de un mismo ejercicio (Híbrido: «Sprint con trineo», 4 filas) son UN renglón: «Sprint con trineo × 4» (23 nov 2026).
+      const ultimo = letras[letras.length - 1];
+      if (q.sprints > 1 && ultimo?.sprints === q.sprints && ultimo.base === q.nombre) {
+        ultimo.estado = estado === 'actual' || ultimo.estado === 'actual' ? 'actual' : (ultimo.estado === 'hecho' && estado === 'hecho' ? 'hecho' : 'pendiente');
+        continue;
+      }
       letras.push({
-        letra: String.fromCharCode(64 + e),
-        nombre: q.nombre,
-        estado: q.clave === paso.clave ? 'actual' : (estados[q.i] !== 'pendiente' ? 'hecho' : 'pendiente'),
+        letra: String.fromCharCode(65 + letras.length),
+        nombre: q.sprints > 1 ? `${q.nombre} × ${q.sprints}` : q.nombre,
+        estado,
+        ...(q.sprints > 1 ? { sprints: q.sprints, base: q.nombre } : null),
       });
     }
   }
@@ -258,7 +270,7 @@ export function tarjetasDeLaLista(plan, estados, claveActual, { kilosDe = () => 
     const serie = paso.serie ?? null;
     let t = tarjetas[tarjetas.length - 1];
     if (!t || t.serie !== serie) {
-      t = { serie, titulo: serie ? `Serie ${serie}` : null, etiqueta: null, puntos: [], reloj: false, resultado: null, esActual: false, filas: [], _pasos: [] };
+      t = { serie, titulo: paso.deLaLista ? (paso.encabezado || paso.nombre) : (serie ? `Set ${serie}` : null), etiqueta: null, puntos: [], reloj: false, resultado: null, esActual: false, filas: [], _pasos: [] };
       tarjetas.push(t);
     }
     t._pasos.push(paso);
@@ -290,7 +302,9 @@ export function tarjetasDeLaLista(plan, estados, claveActual, { kilosDe = () => 
       }));
     } else {
       const porEjercicio = new Map();
-      t._pasos.forEach((p) => { if (!porEjercicio.has(p.idx)) porEjercicio.set(p.idx, []); porEjercicio.get(p.idx).push(p); });
+      // Los pasos de la lista (Running, Cycling…) no tienen `idx`: se agrupan por nombre.
+      const fila = (p) => p.idx ?? `n:${p.nombre}`;
+      t._pasos.forEach((p) => { if (!porEjercicio.has(fila(p))) porEjercicio.set(fila(p), []); porEjercicio.get(fila(p)).push(p); });
       t.filas = [...porEjercicio.values()].map((pasos) => {
         const faltan = pasos.filter((p) => estados[p.i] !== 'hecho');
         const requeridos = pasos.filter((p) => !p.opcional && estados[p.i] === 'pendiente');

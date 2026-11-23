@@ -1,3 +1,4 @@
+import { conHibrido } from '@/lib/hibridoAlAtleta';
 import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import {
   ChevronRight, ChevronLeft, Calendar, Lock,
@@ -69,9 +70,11 @@ import TarjetaDeSesion from '@/features/training/TarjetaDeSesion';
 import { MarcarComoHecha, useBotonesDeLaSesion } from '@/features/training/BotonDelEntreno';
 import PaginaDeSesionGlobal from '@/features/training/PaginaDeSesionGlobal';
 import TarjetaDeClase from '@/features/training/TarjetaDeClase';
+import ListaDeLaSesion from '@/features/training/ListaDeLaSesion';
 import { claseDe, duracionTexto } from '@/lib/clases';
 import { relojAMedias } from '@/lib/relojGuardado';
 import Portada from '@/components/Portada';
+import TarjetaDeVideo from '@/features/training/TarjetaDeVideo';
 import BotonEntendido from '@/components/BotonEntendido';
 import {
   minutosDelNombre, sinDuracion, sesionesDelTitulo, textoDeSesiones,
@@ -513,6 +516,8 @@ const SetGroup = ({
   conDescansoDespues = false,
   // «Iniciar entreno» está arriba de la lista: el reloj de este Set vive ADENTRO del entreno, así que aquí no hay otro botón de inicio.
   conEntreno = false,
+  // El color y el fondo de la sesión, para que el reloj se vea como el del entreno guiado (23 nov 2026).
+  aspecto = null,
 }) => {
   /* La ficha del ejercicio vive AQUI y no en cada fila, porque para decir
      "Guardar y siguiente" hay que saber cual es el siguiente — y una fila solo
@@ -577,7 +582,7 @@ const SetGroup = ({
         gap: '6px 10px', marginBottom: 8, padding: '0 3px',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <span style={{ fontSize: 15, fontWeight: 800, color: LT.text, whiteSpace: 'nowrap' }}>Serie {setNum}</span>
+          <span style={{ fontSize: 15, fontWeight: 800, color: LT.text, whiteSpace: 'nowrap' }}>Set {setNum}</span>
           {formato && (
             <span style={{
               fontSize: 11.5, fontWeight: 800, color: LT.blue, background: LT.blueSoft,
@@ -699,10 +704,15 @@ const SetGroup = ({
         );
       })()}
 
+      {/* EL MISMO RELOJ QUE EL DEL ENTRENO GUIADO (23 nov 2026, «¿aplica en todos los modos?»): antes, desde aquí arrancaba al instante, sin videos y en
+          azul. Ahora: «Antes de empezar» con los videos en grande, «Empezar», sin «+ Ronda» y con el color de la sesión. */}
       {reloj && conReloj && (
         <RelojDelBloque
           formato={conReloj} plan={planDeLapsos} ejercicios={group.exercises} serie={setNum} resumen={resumen}
           clave={`${userId}:${sessionKey}:${claveFormato}`} empezarYa
+          colorDelTipo={aspecto?.fuerte ?? null} fondo={aspecto?.fondo ? `${aspecto.fondo}, ${LT.bg}` : LT.bg}
+          videoDe={(ex) => { const r = resolveExercise(ex) || { name: ex.name }; const videos = videosParaAtleta(r, medias, profile); const portada = portadaParaAtleta(r, medias, profile); return videos.length || portada ? <TarjetaDeVideo key={ex.name} videos={videos} portada={portada} nombre={ex.name} altoMaximo="30vh" solo /> : null; }}
+          miniaturaDe={(ex) => { const r = resolveExercise(ex) || { name: ex.name }; const v = videosParaAtleta(r, medias, profile)[0]; const portada = portadaParaAtleta(r, medias, profile); return portada || v ? <Portada foto={portada} video={v?.url} desde={v?.inicio} hasta={v?.fin} style={{ position: 'absolute', inset: 0 }} /> : null; }}
           onGuardar={(r) => onFormato(claveFormato, r)} onCerrar={() => setReloj(false)}
         />
       )}
@@ -888,7 +898,8 @@ const CuerpoDelDia = ({
   const [openBlocks, setOpenBlocks] = useState({});
   useEffect(() => { setOpenBlocks({}); }, [selectedIdx]);
 
-  const selectedDay = week.days[selectedIdx];
+  // Un Híbrido se enseña con sus Sets, igual que Gym (ver `lib/hibridoAlAtleta.js`): la página del día y el entreno ven los mismos ejercicios.
+  const selectedDay = conHibrido(week.days[selectedIdx]);
   const selectedId = idDeSesion(phase.id, week.num, selectedIdx);
   const sessionData = sessionsData[selectedId] || {};
   const selectedCompleted = !!sessionData.completed;
@@ -1023,7 +1034,7 @@ const CuerpoDelDia = ({
                     sessionData={ejerciciosAnotados} sessionKey={selectedId}
                     onUpdate={(idx, data) => setExerciseData(idx, data)}
                     oneRMs={oneRMs} sessionsData={sessionsData}
-                    formatos={sessionData.formatos} onFormato={setFormato} conEntreno={!selectedCompleted} />
+                    formatos={sessionData.formatos} onFormato={setFormato} conEntreno={!selectedCompleted} aspecto={aspectoDelTipo(selectedDay)} />
                 );
               })}
             </>
@@ -1059,10 +1070,13 @@ const CuerpoDelDia = ({
               sessionData={ejerciciosAnotados} sessionKey={selectedId}
               onUpdate={(idx, data) => setExerciseData(idx, data)}
               oneRMs={oneRMs} sessionsData={sessionsData}
-              formatos={sessionData.formatos} onFormato={setFormato} conEntreno={!selectedCompleted} />
+              formatos={sessionData.formatos} onFormato={setFormato} conEntreno={!selectedCompleted} aspecto={aspectoDelTipo(selectedDay)} />
           );
         });
-        const lista = <>{tarjetaDeClase}{botonDelEntreno()}{sets}</>;
+        // Running, Cycling, Swimming, Triatlón (22 nov 2026): la sesión vive en `day.tramos`; antes aquí no salía nada, solo el botón.
+        const deLaLista = !sets.length && ((Array.isArray(selectedDay.tramos) && selectedDay.tramos.length > 0) || (selectedDay.deporte?.items ?? []).length > 0)
+          ? <ListaDeLaSesion dia={selectedDay} color={aspectoDelTipo(selectedDay)?.fuerte ?? undefined} /> : null;
+        const lista = <>{tarjetaDeClase}{botonDelEntreno()}{sets}{deLaLista}</>;
         return entarjetas ? tarjetaDelDia(lista) : lista;
       })()}
 

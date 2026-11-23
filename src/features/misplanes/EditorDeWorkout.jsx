@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Check, CopyPlus, Loader2, Plus, RefreshCw, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Check, Compass, CopyPlus, Loader2, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { useConfirmacion } from '@/components/Confirmacion';
@@ -19,6 +19,7 @@ import { esClase as traeClase, sesionDeClase } from '@/lib/clases';
 import DialogoGuardar from '@/features/misplanes/DialogoGuardar';
 import { campo, etiquetaChica } from '@/features/misplanes/estilos';
 import { T, FONT, KP, UI } from '@/lib/theme';
+import { useRecorridoDelEditor } from '@/lib/useRecorridoDelEditor';
 
 const clone = (o) => structuredClone(o);
 const sesionNueva = () => ({ day: 'Lun', name: 'Sesión', cat: 'gym', exercises: [] });
@@ -51,10 +52,20 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
   const [sesiones, setSesiones] = useState(() => (catalogo.data
     ? sesionesDeWorkout(catalogo.data).map((s) => ({ ...clone(s), day: 'Lun' }))
     : [esClase ? sesionDeClase() : sesionNueva()]));
+  // El mismo ancho que el día de un plan (Andrés, 19 nov: «usar esas proporciones para todas las opciones del editor»), en cualquier disciplina.
+  const anchoDelWorkout = 1240;
   const [guardando, setGuardando] = useState(false);
   const [haGuardado, setHaGuardado] = useState(false);
   const [error, setError] = useState('');
   const [dialogo, setDialogo] = useState(false);
+  /* EL RECORRIDO DE ESTA PANTALLA (10 nov 2026; ver `lib/useRecorridoDelEditor.jsx`): el del workout (o el de la clase) la primera vez que se abre, y
+     el de los ejercicios la primera vez que hay un Set. Se vuelve a ver con la brújula de arriba. */
+  const recorrido = useRecorridoDelEditor({
+    pantalla: 'workout', variante: esClase ? 'clase' : undefined, activo: true,
+    hayEjercicios: sesiones.some((s) => (s.exercises ?? []).length > 0),
+    contexto: { enCatalogo: true, esClase, comoVolver: 'toca la brújula de arriba' },
+    franja: { arriba: 72, abajo: 16 },
+  });
 
   /* El historial (Ctrl/⌘+Z) y «¿hay algo sin guardar?», como en el editor del plan (ver `useHistorial`). */
   const raizRef = useRef(null);
@@ -202,7 +213,13 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
           onDeshacer={hist.deshacer} onRehacer={hist.rehacer}
         />
         <button
-          ref={botonGuardarRef} type="button" onClick={(ev) => pideGuardar(ev.currentTarget)} disabled={guardando || (!dirty && !!fila)}
+          type="button" onClick={() => recorrido.pide()} aria-label="Ver el recorrido" title="Ver el recorrido"
+          style={{ width: 36, height: 36, borderRadius: 11, border: 'none', cursor: 'pointer', background: UI.relleno, color: T.text2, display: 'grid', placeItems: 'center', flexShrink: 0 }}
+        >
+          <Compass size={17} />
+        </button>
+        <button
+          ref={botonGuardarRef} type="button" data-recorrido="guardar" onClick={(ev) => pideGuardar(ev.currentTarget)} disabled={guardando || (!dirty && !!fila)}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 8, padding: esAncha ? '11px 18px' : '11px 13px', borderRadius: 12, border: 'none',
             cursor: guardando || (!dirty && fila) ? 'default' : 'pointer',
@@ -223,14 +240,16 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
       </header>
 
       {error && (
-        <div style={{ maxWidth: 760, margin: '14px auto 0', width: 'calc(100% - 36px)', background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 12, padding: '11px 15px', fontWeight: 700, fontSize: 13.5 }}>
+        <div style={{ maxWidth: anchoDelWorkout, margin: '14px auto 0', width: 'calc(100% - 36px)', background: 'rgba(220,38,38,0.08)', color: T.danger, borderRadius: 12, padding: '11px 15px', fontWeight: 700, fontSize: 13.5 }}>
           {error}
         </div>
       )}
 
       <main style={{ flex: 1, overflowY: 'auto', padding: '20px 18px 60px' }}>
-        <div style={{ maxWidth: 760, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+        {/* El Workout y la Clase usan el mismo ancho que el día de un plan (1,240 px), en cualquier disciplina
+            (Andrés, 18 y 19 nov: «las proporciones están hechas para teléfono»; «usarlas para todas las opciones del editor»). */}
+        <div style={{ maxWidth: anchoDelWorkout, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <label data-recorrido="nombre-workout" style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             <span style={etiquetaChica}>{esClase ? 'Nombre de la clase' : 'Nombre del workout'}</span>
             <input
               value={titulo} onChange={(e) => cambiaTitulo(e.target.value)}
@@ -258,7 +277,7 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
 
           {/* Sin contorno punteado (Andrés, 28 sep 2026): blanco, borde sólido y azul. */}
           <button
-            type="button" onClick={() => cambia((prev) => [...prev, sesionNueva()])} className="kp-press"
+            type="button" data-recorrido="otra-sesion" onClick={() => cambia((prev) => [...prev, sesionNueva()])} className="kp-press"
             style={{
               minHeight: 46, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14,
               border: 'none', background: T.bg2, cursor: 'pointer', boxShadow: KP.shCard,
@@ -309,6 +328,7 @@ export default function EditorDeWorkout({ catalogo, onClose, onSaved, onDeleted 
         .kp-pill,.kp-ico{transition:background .12s}
         .kp-pill:hover:not(:disabled),.kp-ico:hover:not(:disabled){background:${T.bg3} !important}
       `}</style>
+      {recorrido.elemento}
     </div>
     </PlegadasContext.Provider>
     </HistorialContext.Provider>,

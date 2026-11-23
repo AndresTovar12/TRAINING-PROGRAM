@@ -195,7 +195,7 @@ const lower = {
   const plan = pasosDeLaSesion(lower);
   const estados = (av) => vistaDelEntreno(plan, av, 0).estados;
   const t0 = tarjetasDeLaLista(plan, estados(undefined), '0.1.0');
-  assert.deepEqual(t0.map((t) => [t.titulo, t.etiqueta, t.filas.length, t.puntos.length]), [['Serie 1', null, 1, 5], ['Serie 2', 'Bi-serie', 2, 3], ['Serie 3', null, 1, 2]]);
+  assert.deepEqual(t0.map((t) => [t.titulo, t.etiqueta, t.filas.length, t.puntos.length]), [['Set 1', null, 1, 5], ['Set 2', 'Bi-serie', 2, 3], ['Set 3', null, 1, 2]]);
   assert.deepEqual(t0.map((t) => t.esActual), [true, false, false]);
   assert.deepEqual(t0[0].filas[0], { idx: 0, nombre: 'Back Squat', estado: 'actual', clave: '0.1.0', pastillas: [{ texto: '5 reps', fuerte: false }, { texto: '78%', fuerte: false }] });
   assert.deepEqual(t0[1].filas.map((f) => [f.nombre, f.estado, f.clave]), [['Bulgarian Split Squat', 'pendiente', '1.1.0'], ['Hip Thrust', 'pendiente', '2.1.0']]);
@@ -223,7 +223,7 @@ const lower = {
   assert.deepEqual([ts[0].filas[0].estado, ts[0].filas[0].clave], ['saltado', '0.1.0']);
   // Un día de puros nombres: una tarjeta por ejercicio, sin título.
   const nombres = pasosDeLaSesion({ cat: 'gym', exercises: [ex('A'), ex('B')] });
-  assert.deepEqual(tarjetasDeLaLista(nombres, vistaDelEntreno(nombres, undefined, 0).estados, '0.1.0').map((t) => [t.titulo, t.filas.map((f) => f.nombre)]), [['Serie 1', ['A']], ['Serie 2', ['B']]]);
+  assert.deepEqual(tarjetasDeLaLista(nombres, vistaDelEntreno(nombres, undefined, 0).estados, '0.1.0').map((t) => [t.titulo, t.filas.map((f) => f.nombre)]), [['Set 1', ['A']], ['Set 2', ['B']]]);
   // Un día de puras notas: sin título de serie, una fila por nota.
   const notas = pasosDeLaSesion({ cat: 'speed', exercises: [{ isNote: true, text: 'A' }, { isNote: true, text: 'B' }] });
   const tn = tarjetasDeLaLista(notas, vistaDelEntreno(notas, undefined, 0).estados, 'n.0');

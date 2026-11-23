@@ -255,14 +255,20 @@ export function ejerciciosDeLaSesion(dia, registro, { kilos = (kg) => `${kilosTe
   let pasos;
   try { pasos = pasosDeLaSesion(dia).pasos.filter((p) => p.tipo === 'ejercicio' && !p.opcional); } catch { pasos = []; }
   const hechas = filasPorSerie({ registro }).filas.filter((f) => f.tipo === 'serie' || f.tipo === 'lapso');
+  // Por ejercicio: los de Gym por su índice; los demás (lista, Deporte, clase) por su pieza y su nombre (23 nov 2026).
   const porEjercicio = new Map();
-  pasos.forEach((p) => { if (!porEjercicio.has(p.idx)) porEjercicio.set(p.idx, []); porEjercicio.get(p.idx).push(p); });
-  return [...porEjercicio.entries()].map(([idx, suyos]) => {
+  pasos.forEach((p) => {
+    const k = p.idx !== undefined ? `i${p.idx}` : `p${p.serie ?? 0}:${p.nombre}`;
+    if (!porEjercicio.has(k)) porEjercicio.set(k, []);
+    porEjercicio.get(k).push(p);
+  });
+  return [...porEjercicio.values()].map((suyos) => {
+    const claves = new Set(suyos.map((p) => p.clave));
     const kg = suyos.every((p) => p.meta?.tipo === 'kg' && num(p.meta.min) !== null && num(p.meta.min) === num(p.meta.max) && num(p.meta.min) === num(suyos[0].meta.min)) ? num(suyos[0].meta.min) : null;
     return {
       nombre: suyos[0].nombre,
       programado: `${cuantoDe(suyos)}${kg > 0 ? ` · ${kilos(kg)}` : ''}`,
-      hechas: hechas.filter((f) => String(f.clave).startsWith(`${idx}.`)).length,
+      hechas: hechas.filter((f) => claves.has(f.clave)).length,
       programadas: suyos.length,
     };
   });

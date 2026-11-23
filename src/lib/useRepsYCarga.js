@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { CARGAS, leeCantidad, componeCarga, cantidadDeCarga, tipoDeCargaAlEscribir, esCluster, repsDeCluster } from '@/lib/medidas';
 import { vueltasDe, varian, filasParaEditar, parcheDeVueltas } from '@/lib/porVuelta';
+import { esDistancia, esConteo, esTiempo } from '@/lib/medidas';
+import { admite, arranqueDeLinea, cargasParaLinea, campoDe, llevaPesoDeFicha, topaCarga } from '@/lib/fichaDelEjercicio';
+import { useAviso } from '@/components/AvisoPasajero';
 
 const NADA_CAMBIA = { reps: false, intensity: false, alguno: false };
 // Lo único que cabe en una cajita de número: cifras, coma o punto, y la raya de un rango.
@@ -35,13 +38,16 @@ const sinRayaSuelta = (texto) => texto.replace(/^[-–.,]+|[-–.,]+$/g, '');
  * de una sola vuelta, un formato de reloj, un día de dos turnos). `abiertoDeEntrada`: en solo lectura no
  * se puede tocar nada, así que lo que varía se enseña ya desplegado.
  */
-export function useRepsYCarga({ ex, onPatch, rondas = null, abiertoDeEntrada = false, tipoInicial = null }) {
+export function useRepsYCarga({ ex, onPatch, rondas = null, abiertoDeEntrada = false, tipoInicial = null, ficha = null, familia = 'libre', soloCardio = false, deLapso = false }) {
   const pregunta = useConfirmacion();
+  const { avisa } = useAviso();
   const guardadas = vueltasDe(ex, rondas);
   const [abierto, setAbierto] = useState(() => abiertoDeEntrada && !!guardadas);
   // El tipo de carga elegido en la lista mientras la casilla está vacía: sin texto no hay de dónde deducirlo.
   // `tipoInicial`: el de la fila de arriba, para un lapso nuevo (mismo tipo de carga que el anterior, casilla vacía).
   const [elegido, setElegido] = useState(tipoInicial);
+  // «+ Más» en la línea: muestra las casillas que la Disciplina guardó (Por lado, Por vuelta, Límite de tiempo). Solo de esta línea.
+  const [masCampos, setMasCampos] = useState(false);
 
   const desplegado = abierto && !!rondas;
   const cambia = guardadas ? varian(guardadas) : NADA_CAMBIA;
@@ -81,7 +87,7 @@ export function useRepsYCarga({ ex, onPatch, rondas = null, abiertoDeEntrada = f
 
   /* Al cambiar de unidad se guarda la cantidad LIMPIA: si venía «30 yd» y se pasa a metros, queda «30» con
      unidad metros. Un valor que no se entiende se respeta tal cual. */
-  const cambiaUnidad = (nueva) => {
+  const cambiaUnidad = async (nueva) => {
     /* Salir de «Cluster» deja las reps de todo el cluster («2+2+2» → 6) y se lleva la pausa entre bloques: sin bloques no hay pausa. */
     const dejaElCluster = leida.unidad === 'cluster' && nueva !== 'cluster';
     const limpia = (texto) => {
@@ -91,6 +97,26 @@ export function useRepsYCarga({ ex, onPatch, rondas = null, abiertoDeEntrada = f
       return l.libre ? crudo : l.cantidad;
     };
     const extra = { unidad: nueva, ...(dejaElCluster ? { entreBloques: undefined } : null), ...fijaElLado };
+    /* LA CADENA, AL CAMBIAR LA UNIDAD (9 nov 2026): con la casilla de carga VACÍA se recorre otra vez (ficha, unidad, Disciplina) y el tipo
+       nuevo se guarda en la línea. Lo ESCRITO no se borra: se queda y, si ya no va con la unidad, se señala (ver `noVa`). */
+    if (!escritos.length) {
+      setElegido(null);
+      extra.cargaTipo = nueva === 'nada' ? 'nada' : (arranqueDeLinea(ficha, familia, nueva).tipo ?? undefined);
+    }
+    // «Nada, solo hacerlo»: un estiramiento no se cuenta ni lleva carga. Si ya había algo escrito, se pregunta antes de quitarlo.
+    if (nueva === 'nada') {
+      const hayAlgo = !!String(ex?.reps ?? '').trim() || escritos.length > 0 || !!guardadas;
+      if (hayAlgo) {
+        const ok = await pregunta({
+          titulo: '¿Dejarlo en «solo hacerlo»?',
+          detalle: 'Se quitan la cantidad y la carga que ya tiene esta línea. Lo puedes deshacer con la flecha de arriba.',
+          confirmar: 'Sí, dejarlo así',
+        });
+        if (!ok) return;
+      }
+      onPatch({ ...extra, cargaTipo: 'nada', reps: '', intensity: '', porVuelta: undefined, porLado: undefined, enMenosDe: undefined });
+      return;
+    }
     if (guardadas) onPatch({ ...extra, ...parcheDeVueltas(guardadas.map((f) => ({ ...f, reps: limpia(f.reps) }))) });
     else onPatch({ reps: limpia(ex?.reps), ...extra });
   };
@@ -109,7 +135,34 @@ export function useRepsYCarga({ ex, onPatch, rondas = null, abiertoDeEntrada = f
   // El tipo que dicen los textos: uno solo y conocido. Con vueltas de tipos mezclados, o texto libre, ninguno.
   const delTexto = escritos.length > 0 && tipos.size === 1 ? [...tipos][0] : null;
   const hayLibre = escritos.length > 0 && delTexto === null;
-  const tipo = elegido === 'libre' || hayLibre ? null : (delTexto ?? elegido);
+  /* QUIÉN MANDA (8 nov 2026, ver `lib/fichaDelEjercicio.js`): con la casilla vacía, el tipo con que arranca sale de la ficha del ejercicio
+     y, si la ficha no dice, del Enfoque de la sesión. Lo escrito siempre manda sobre eso. ¿Anota kilos? Lo que diga la línea (planes de
+     antes), si no, su ficha. */
+  const llevaPeso = ex?.carga === true || ex?.carga === 'si' ? true : ex?.carga === false || ex?.carga === 'no' ? false : llevaPesoDeFicha(ficha);
+  const cargas = cargasParaLinea({ unidad: leida.unidad, ficha, familia, llevaPeso });
+  // En «Intervalos de cardio» solo van las de cardio (y Kilos si el ejercicio lleva peso: el sled, el farmer).
+  if (soloCardio) {
+    const deCardio = ['ritmo', 'zona', 'w', 'nado', 'rpe', ...(llevaPeso !== false ? ['kg'] : [])];
+    cargas.vis = cargas.vis.filter((c) => deCardio.includes(c));
+    cargas.mas = [];
+  }
+  /* CADA COSA NACE UNA VEZ (9 nov 2026): el tipo de la casilla vacía se GUARDA en la línea (`cargaTipo`) cuando nace o cuando el coach lo
+     elige. Así cambiar la Disciplina, o editar la ficha después, no mueve lo que ya está puesto. Una línea de antes, sin ese dato, queda
+     como siempre («Carga», texto libre). Solo los lapsos (que no guardan ese dato por fila) lo calculan al vuelo. */
+  const alVuelo = () => {
+    if (leida.unidad === 'nada') return 'nada';
+    const a = arranqueDeLinea(ficha, familia, leida.unidad);
+    if (!a.tipo) return null;
+    if (cargas.vis.includes(a.tipo) || a.tipo === 'nada') return a.tipo;
+    return cargas.vis[0] ?? null;
+  };
+  const guardado = leida.unidad === 'nada' ? 'nada' : (!deLapso && typeof ex?.cargaTipo === 'string' ? ex.cargaTipo : null);
+  const porDefecto = guardado === 'libre' ? null : (guardado ?? (deLapso ? alVuelo() : null));
+  const tipo = elegido === 'libre' || hayLibre ? null : (delTexto ?? elegido ?? porDefecto);
+  // «Nada» en la carga solo se ofrece cuando ya lo es (lo dijo la ficha al nacer la línea); en la línea, una casilla vacía ya es «sin carga».
+  const conNada = porDefecto === 'nada';
+  // Lo escrito ya no va con la unidad («5 km» con «80 %»): no se borra, se señala.
+  const noVa = escritos.length > 0 && !!tipo && tipo !== 'nada' && leida.unidad !== 'nada' && !admite(leida.unidad, tipo);
   const info = CARGAS.find((c) => c.id === tipo) ?? null;
 
   const textoDeCarga = (j) => String((j === null ? ex?.intensity : filas[j].intensity) ?? '');
@@ -120,17 +173,23 @@ export function useRepsYCarga({ ex, onPatch, rondas = null, abiertoDeEntrada = f
   const alSalirDeCarga = (j) => {
     if (!tipo) return;
     const valor = cargaDe(j);
-    if (sinRayaSuelta(valor) !== valor) escribeCarga(j, sinRayaSuelta(valor));
+    let limpio = sinRayaSuelta(valor);
+    // Los topes (RPE 1 a 10, RIR 0 a 5, Zona 1 a 5, % del 1RM hasta 120): no es esconder, es no dejar pasar lo imposible.
+    const { texto: topado, aviso } = topaCarga(tipo, limpio);
+    if (aviso) { limpio = topado; avisa(aviso); }
+    if (limpio !== valor) escribeCarga(j, limpio);
   };
 
   /* Un 75 de porcentaje no es un 75 de RPE: al cambiar de tipo el número no se traspasa. Con números se
      borran sin más (se vuelven a teclear en dos segundos); con TEXTO LIBRE se pregunta antes, porque
      puede ser lo más elaborado que escribió el coach. */
+  // Lo que el coach elige se guarda en la línea, aunque la casilla esté vacía (pregunta 4 de la cadena).
+  const recuerda = (nuevo) => { setElegido(nuevo); if (ex?.cargaTipo !== nuevo) onPatch({ cargaTipo: nuevo }); };
   const elegirTipo = async (nuevo) => {
-    if (nuevo === 'libre') { setElegido('libre'); return; }
-    if (nuevo === tipo) return;
+    if (nuevo === 'libre') { recuerda('libre'); return; }
+    if (nuevo === tipo) { recuerda(nuevo); return; }
     // Lo escrito ya es de ese tipo (venía de «Texto libre»): solo cambia cómo se ve, no hay nada que borrar.
-    if (nuevo === delTexto) { setElegido(nuevo); return; }
+    if (nuevo === delTexto) { recuerda(nuevo); return; }
     if (hayLibre) {
       const ok = await pregunta({
         titulo: '¿Cambiar la carga?',
@@ -143,10 +202,12 @@ export function useRepsYCarga({ ex, onPatch, rondas = null, abiertoDeEntrada = f
       if (!ok) return;
     }
     if (escritos.length) {
-      if (guardadas) onPatch(parcheDeVueltas(guardadas.map((f) => ({ ...f, intensity: '' }))));
-      else onPatch({ intensity: '' });
+      if (guardadas) onPatch({ cargaTipo: nuevo, ...parcheDeVueltas(guardadas.map((f) => ({ ...f, intensity: '' }))) });
+      else onPatch({ cargaTipo: nuevo, intensity: '' });
+      setElegido(nuevo);
+      return;
     }
-    setElegido(nuevo);
+    recuerda(nuevo);
   };
 
   /* ---- Por vuelta ---- */
@@ -170,5 +231,29 @@ export function useRepsYCarga({ ex, onPatch, rondas = null, abiertoDeEntrada = f
     cluster: leida.unidad === 'cluster', entreBloques: String(ex?.entreBloques ?? ''),
     ponEntreBloques: (texto) => onPatch({ entreBloques: soloNumero(texto) || undefined }),
     tipo, info, cargaDe, escribeCarga, alSalirDeCarga, elegirTipo,
+    // Qué cargas van a la vista y cuáles en «Más opciones» (ver `cargasParaLinea`).
+    cargas, conNada, noVa,
+    // «Por lado» solo con reps, segundos o minutos (regla 7) y si la Disciplina lo deja a la vista; si ya venía marcado, se queda para poder quitarlo.
+    conLado: leida.porLado || ((esConteo(leida.unidad) || esTiempo(leida.unidad)) && leida.unidad !== 'nada' && (campoDe(familia, 'lado') === 'ver' || masCampos)),
+    // «Por vuelta», igual: la Disciplina lo puede guardar detrás de «+ Más» (si ya hay vueltas distintas, se queda).
+    conVuelta: !!rondas && (!!guardadas || campoDe(familia, 'vuelta') === 'ver' || masCampos),
+    /* «En menos de» (8 nov 2026): un tope de tiempo aparte de la carga, para distancia o reps. El farmer carry queda «100 m · 20 kg · en
+       menos de 40 s». En kilómetros va en minutos; en lo demás, en segundos. */
+    conEnMenosDe: (esDistancia(leida.unidad) || esConteo(leida.unidad)) && leida.unidad !== 'nada',
+    // ¿Se ve «Límite de tiempo»? Si aplica y la Disciplina lo deja a la vista, o ya trae algo, o se abrió «+ Más».
+    verLimite: (esDistancia(leida.unidad) || esConteo(leida.unidad)) && leida.unidad !== 'nada'
+      && (campoDe(familia, 'limite') === 'ver' || !!String(ex?.enMenosDe ?? '').trim() || masCampos),
+    // En «Intervalos de cardio» solo se mide distancia o tiempo.
+    medidas: soloCardio ? ['m', 'km', 'yd', 'seg', 'min'] : null,
+    enMenosDe: String(ex?.enMenosDe ?? ''),
+    unidadEnMenosDe: leida.unidad === 'km' ? 'min' : 's',
+    ponEnMenosDe: (texto) => onPatch({ enMenosDe: soloNumero(texto) || undefined }),
+    // Lo que la Disciplina guardó en esta línea y se puede sacar con «+ Más».
+    hayGuardados: !masCampos && (
+      (campoDe(familia, 'lado') === 'mas' && !leida.porLado && (esConteo(leida.unidad) || esTiempo(leida.unidad)) && leida.unidad !== 'nada')
+      || (campoDe(familia, 'vuelta') === 'mas' && !!rondas && !guardadas)
+      || (campoDe(familia, 'limite') === 'mas' && (esDistancia(leida.unidad) || esConteo(leida.unidad)) && leida.unidad !== 'nada' && !String(ex?.enMenosDe ?? '').trim())
+    ),
+    abreMas: () => setMasCampos(true),
   };
 }

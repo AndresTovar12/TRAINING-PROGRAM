@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Search, X, Check, Dumbbell, Trash2 } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Search, X, Check, Dumbbell, Trash2, Plus } from 'lucide-react';
 import { useMedia } from '@/lib/useViewport';
 import { T, FONT, KP, UI } from '@/lib/theme';
 import { gruposConPropios } from '@/lib/muscles';
@@ -16,7 +17,13 @@ import { useVistaEjercicios } from '@/lib/useVistaEjercicios';
  * parte del cuerpo; selección múltiple con lista de elegidos y un
  * solo botón "Agregar N". `onConfirm(exercises[])` recibe los elegidos en orden.
  */
-export default function RepertoirePicker({ exercises, onConfirm, onClose, title = 'Agregar ejercicios' }) {
+/* Opciones para los editores que eligen UN solo ejercicio (Running, Híbrido, Técnica de carrera), para que usen este mismo buscador y no una lista
+   aparte (Andrés, 19 nov 2026: «la lista no es como las demás listas en donde escojo ejercicios»):
+     uno          tocar uno lo deja como el único elegido, y el botón dice «Elegir ejercicio»
+     primero      (ejercicio) => true para los que van arriba mientras no se busca nada (los de carrera, en Running)
+     alCrear      (nombre) => crea uno nuevo con lo que se escribió, si no existe
+     sinEjercicio { texto, alTocar }: un botón en el pie para quedarse sin ejercicio («Sprint libre») */
+export default function RepertoirePicker({ exercises, onConfirm, onClose, title = 'Agregar ejercicios', uno = false, primero, alCrear, sinEjercicio }) {
   // Reactivo de verdad: leer window.innerWidth suelto se queda con el ancho de
   // la primera pintada y no se entera si giras el telefono o mueves la ventana.
   const esCompu = useMedia('(min-width: 720px)');
@@ -94,8 +101,9 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
       });
       if (r >= 0) pasan.push([r * 3 + rTexto, e]);
     });
-    return pasan.sort((a, b) => a[0] - b[0]).map(([, e]) => e);
-  }, [conTexto, catIds, gruposMarcados, modoCats, modoGrupos]);
+    const orden = pasan.sort((a, b) => a[0] - b[0]).map(([, e]) => e);
+    return primero && !query.trim() ? [...orden.filter(primero), ...orden.filter((e) => !primero(e))] : orden;
+  }, [conTexto, catIds, gruposMarcados, modoCats, modoGrupos, primero, query]);
 
   // Cuántos quedarían al marcar cada opción, con lo ya marcado y lo escrito.
   const cuantos = (categoriaIds, gruposF) => conTexto
@@ -131,6 +139,7 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
 
   const pickedIds = useMemo(() => new Set(picked.map((p) => p.id)), [picked]);
   const toggle = (ex) => {
+    if (uno) { setPicked((prev) => (prev[0]?.id === ex.id ? [] : [ex])); return; }
     setPicked((prev) => (pickedIds.has(ex.id) ? prev.filter((p) => p.id !== ex.id) : [...prev, ex]));
   };
 
@@ -140,16 +149,22 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
     borderRadius: 10, padding: '7px 12px', fontFamily: FONT, fontSize: 12.5, fontWeight: 700,
   });
 
-  return (
+  /* SE DIBUJA COLGADO DE LA PÁGINA (`createPortal`), no dentro de quien lo abre (Andrés, 19 nov 2026: «un pequeño bug como parpadeo cuando se
+     abre lo de técnica de carrera»). La pieza nueva de Técnica entra con una animación que la mueve; mientras dura, todo lo que está adentro
+     con `position: fixed` se acomoda contra la pieza y no contra la pantalla: el buscador salía chiquito dentro de ella y luego saltaba a
+     pantalla completa. Desde aquí afuera no hay animación que lo encierre, venga de donde venga. */
+  return createPortal(
     <div
       onMouseDown={onClose}
       style={{
-        position: 'fixed', inset: 0, zIndex: 2600, background: 'rgba(17,19,24,0.5)',
+        // 3400: encima de la hoja de una pieza de Running en el teléfono (3300), debajo de las ventanas de la app (5200+) y de las listas (7000).
+        position: 'fixed', inset: 0, zIndex: 3400, background: 'rgba(17,19,24,0.5)',
         backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
       }}
     >
       <div
         onMouseDown={(e) => e.stopPropagation()}
+        role="dialog" aria-modal="true" aria-label={title}
         className="animate-fade-in"
         style={{
           width: '100%', maxWidth: 980, height: 'min(88svh, 860px)', background: T.bg,
@@ -270,6 +285,14 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
         {/* Cuerpo: grid + panel de elegidos */}
         <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 0 }}>
           <div style={{ flex: 1, overflowY: 'auto', padding: '4px 18px 90px' }}>
+            {alCrear && query.trim() && !exercises.some((e) => String(e.name ?? '').trim().toLowerCase() === query.trim().toLowerCase()) && (
+              <button
+                type="button" onClick={() => alCrear(query.trim())}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minHeight: 46, padding: '0 13px', marginBottom: 8, border: 'none', borderRadius: 11, background: T.accentBg, color: T.accent, cursor: 'pointer', fontFamily: FONT, fontSize: 14.5, fontWeight: 800, textAlign: 'left' }}
+              >
+                <Plus size={16} aria-hidden="true" /> Crear «{query.trim()}» en tus ejercicios
+              </button>
+            )}
             {results.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '48px 16px', color: T.text3 }}>
                 <Dumbbell size={34} style={{ opacity: 0.4 }} />
@@ -423,6 +446,12 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
             display: 'flex', justifyContent: 'flex-end', gap: 10,
           }}
         >
+          {sinEjercicio && (
+            <button type="button" onClick={sinEjercicio.alTocar}
+              style={{ marginRight: 'auto', padding: '12px 6px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 800, color: T.accent }}>
+              {sinEjercicio.texto}
+            </button>
+          )}
           <button
             type="button" onClick={onClose}
             style={{ padding: '12px 18px', borderRadius: 12, border: 'none', background: '#EBEDF1', cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.text2 }}
@@ -440,10 +469,10 @@ export default function RepertoirePicker({ exercises, onConfirm, onClose, title 
               fontFamily: FONT, fontSize: 14.5, fontWeight: 800, boxShadow: KP.shBtn,
             }}
           >
-            <Check size={15} /> Agregar {picked.length > 0 ? picked.length : ''} {picked.length === 1 ? 'ejercicio' : 'ejercicios'}
+            <Check size={15} /> {uno ? 'Elegir ejercicio' : <>Agregar {picked.length > 0 ? picked.length : ''} {picked.length === 1 ? 'ejercicio' : 'ejercicios'}</>}
           </button>
         </div>
       </div>
     </div>
-  );
+  , document.body);
 }

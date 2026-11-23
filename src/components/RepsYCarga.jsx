@@ -68,6 +68,16 @@ function Caja({ valor, onCambio, onSalir, estiloInput, sufijo, modo = 'decimal',
   );
 }
 
+// En lugar de la casilla, cuando no hay nada que escribir: «solo hacerlo» (fisio, movilidad) o «sin peso ni intensidad».
+function Quieta({ estiloInput, texto }) {
+  const { padding, caja } = partes(estiloInput);
+  return (
+    <div style={{ ...caja, boxSizing: 'border-box', padding, color: T.text3, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      {texto}
+    </div>
+  );
+}
+
 // Lo que ocupa el sitio de la casilla cuando el valor cambia de una vuelta a otra. Tocarlo despliega las vueltas.
 function Varia({ estiloInput, onAbrir }) {
   const { padding, caja } = partes(estiloInput);
@@ -110,14 +120,14 @@ const cargaDeFila = (rc, j, { estiloInput, compacto }) => (
 export function CeldaDeReps({ rc, estiloInput, compacto = false, ancho }) {
   /* EL RÓTULO SE ABREVIA SEGÚN EL SITIO, Y LA LISTA NUNCA: en la lista de ejercicios va la forma corta
      —REPS, SEG, MIN, M, KM, YD, CAL—; abierta, la lista siempre dice «Repeticiones», «Segundos»… */
-  const opciones = MEDIDAS.map((o) => ({ valor: o.id, etiqueta: o.etiqueta, corta: compacto ? o.corta : o.rotulo }));
+  const opciones = MEDIDAS.filter((o) => !rc.medidas || rc.medidas.includes(o.id)).map((o) => ({ valor: o.id, etiqueta: o.etiqueta, corta: compacto ? o.corta : o.rotulo }));
   return (
     <div style={{ minWidth: 0, width: ancho }}>
       <ListaDesplegable
-        etiqueta="Qué se mide" valor={rc.unidad} onCambio={rc.cambiaUnidad} opciones={opciones}
-        alto={230} estilo={estiloDeRotulo(compacto)}
+        etiqueta="Unidad" valor={rc.unidad} onCambio={rc.cambiaUnidad} opciones={opciones}
+        alto={300} estilo={estiloDeRotulo(compacto)}
       />
-      {rc.desplegado
+      {rc.unidad === 'nada' ? <Quieta estiloInput={estiloInput} texto="solo hacerlo" /> : rc.desplegado
         ? repsDeFila(rc, 0, { estiloInput, compacto, conNumero: true })
         : rc.cambia.reps
           ? <Varia estiloInput={estiloInput} onAbrir={rc.alternar} />
@@ -128,25 +138,58 @@ export function CeldaDeReps({ rc, estiloInput, compacto = false, ancho }) {
 
 /** El rótulo-lista del tipo de carga (% 1RM, RPE, RIR, kilos, texto libre) y su casilla. */
 export function CeldaDeCarga({ rc, estiloInput, compacto = false, ancho }) {
-  // Tres grupos —Fuerza, Esfuerzo, Cardio— y, aparte, el texto libre.
-  const grupos = [
-    ...GRUPOS_DE_CARGA.map((titulo) => ({
-      titulo,
-      opciones: CARGAS.filter((c) => c.grupo === titulo).map((c) => ({ valor: c.id, etiqueta: c.etiqueta, corta: c.corta, detalle: c.detalle })),
-    })),
-    { titulo: 'Otra', opciones: [{ valor: 'libre', etiqueta: 'Texto libre', corta: 'Carga', detalle: 'Escribe lo que quieras: «70% / RPE 8»' }] },
-  ];
+  /* ORDENADA POR EL EJERCICIO (8 nov 2026): primero lo que va con lo que mide y con su ficha; lo raro, en «Más opciones», en la misma lista
+     (no se prohíbe nada). Ver `cargasParaLinea`. Sin esa información (otras pantallas), los tres grupos de siempre. */
+  const opcion = (c) => ({ valor: c.id, etiqueta: c.etiqueta, corta: c.corta, detalle: c.detalle });
+  const porId = (id) => CARGAS.find((c) => c.id === id);
+  const nada = { valor: 'nada', etiqueta: 'Nada', corta: 'Sin carga', detalle: 'Sin peso ni intensidad' };
+  const libre = { titulo: 'Otra', opciones: [{ valor: 'libre', etiqueta: 'Texto libre', corta: 'Carga', detalle: 'Escribe lo que quieras: «70% / RPE 8»' }] };
+  const grupos = rc.cargas
+    ? [
+        { titulo: 'Para este ejercicio', opciones: [...rc.cargas.vis.map((id) => opcion(porId(id))), ...(rc.conNada ? [nada] : [])] },
+        ...(rc.cargas.mas.length ? [{ titulo: 'Más opciones', opciones: rc.cargas.mas.map((id) => opcion(porId(id))) }] : []),
+        ...(rc.cargas.mas.length || rc.cargas.vis.length > 1 ? [libre] : []),
+      ]
+    : [
+        ...GRUPOS_DE_CARGA.map((titulo) => ({ titulo, opciones: CARGAS.filter((c) => c.grupo === titulo).map(opcion) })),
+        libre,
+      ];
+  if (rc.unidad === 'nada') {
+    return (
+      <div style={{ minWidth: 0, width: ancho }}>
+        <span style={{ ...estiloDeRotulo(compacto), display: 'block', color: T.text3 }}>Sin carga</span>
+        <Quieta estiloInput={estiloInput} texto="sin peso ni intensidad" />
+      </div>
+    );
+  }
   return (
     <div style={{ minWidth: 0, width: ancho }}>
       <ListaDesplegable
-        etiqueta="De qué es la carga" valor={rc.tipo ?? 'libre'} onCambio={rc.elegirTipo} grupos={grupos}
-        alto={380} anchoMinimo={250} estilo={estiloDeRotulo(compacto)}
+        etiqueta="Peso o intensidad" valor={rc.tipo ?? 'libre'} onCambio={rc.elegirTipo} grupos={grupos}
+        alto={420} anchoMinimo={260} estilo={estiloDeRotulo(compacto)}
       />
-      {rc.desplegado
+      {rc.tipo === 'nada' ? <Quieta estiloInput={estiloInput} texto="sin peso ni intensidad" /> : rc.desplegado
         ? cargaDeFila(rc, 0, { estiloInput, compacto })
         : rc.cambia.intensity
           ? <Varia estiloInput={estiloInput} onAbrir={rc.alternar} />
           : cargaDeFila(rc, null, { estiloInput, compacto })}
+      {/* Lo escrito ya no va con la unidad (se cambió después): no se borra, se señala. */}
+      {rc.noVa && (
+        <div role="note" style={{ marginTop: 4, fontFamily: FONT, fontSize: 11.5, fontWeight: 700, color: '#B45309', lineHeight: 1.25 }}>
+          No suele ir con {uni(rc.unidad).etiqueta.toLowerCase()}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** «Límite de tiempo»: el tope de tiempo de un ejercicio de distancia o de reps (100 m · 20 kg · en menos de 40 s). Opcional. */
+export function CeldaEnMenosDe({ rc, estiloInput, compacto = false, ancho }) {
+  if (!rc.verLimite) return null;
+  return (
+    <div style={{ minWidth: 0, width: ancho }}>
+      <span style={{ ...estiloDeRotulo(compacto), display: 'block', color: T.text2, whiteSpace: 'nowrap' }}>Límite de tiempo</span>
+      <Caja valor={rc.enMenosDe} onCambio={rc.ponEnMenosDe} estiloInput={estiloInput} sufijo={rc.unidadEnMenosDe} etiqueta="Límite de tiempo (opcional)" />
     </div>
   );
 }
@@ -179,7 +222,7 @@ export function DebajoDeRepsYCarga({ rc, estiloInput, compacto = false, columnas
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px 12px', marginTop: 7 }}>
-        <label
+        {rc.conLado !== false && <label
           className={rc.porLado ? undefined : 'kp-accion'}
           title="Las reps son por cada lado: cada pierna, cada brazo."
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontFamily: FONT, fontSize: 12.5, fontWeight: 700, color: T.text2 }}
@@ -189,7 +232,7 @@ export function DebajoDeRepsYCarga({ rc, estiloInput, compacto = false, columnas
             style={{ width: 16, height: 16, margin: 0, accentColor: T.accent, cursor: 'pointer' }}
           />
           Por lado
-        </label>
+        </label>}
         {/* La pausa entre los bloques de un cluster, en segundos. Un rango («15-30») vale. La pausa entre SERIES sigue siendo el descanso. */}
         {rc.cluster && (
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: FONT, fontSize: 12.5, fontWeight: 700, color: T.text2 }}>
@@ -201,7 +244,7 @@ export function DebajoDeRepsYCarga({ rc, estiloInput, compacto = false, columnas
             </span>
           </label>
         )}
-        {rc.puedeVariar && (
+        {rc.puedeVariar && rc.conVuelta !== false && (
           <button
             type="button" className="kp-accion" onClick={rc.alternar} aria-expanded={rc.desplegado}
             title="Reps y carga distintas en cada vuelta"
@@ -212,6 +255,15 @@ export function DebajoDeRepsYCarga({ rc, estiloInput, compacto = false, columnas
             }}
           >
             Por vuelta {rc.desplegado ? <ChevronUp size={13} strokeWidth={2.6} /> : <ChevronDown size={13} strokeWidth={2.6} />}
+          </button>
+        )}
+        {/* Lo que la Disciplina de la sesión guardó para esta línea (Por lado, Por vuelta, Límite de tiempo): un toque lo saca. */}
+        {rc.hayGuardados && (
+          <button
+            type="button" className="kp-accion" onClick={rc.abreMas} title="Por lado, Por vuelta o Límite de tiempo"
+            style={{ ...botonChico, border: 'none', background: 'transparent', color: T.text3 }}
+          >
+            + Más
           </button>
         )}
         {rc.desplegado && rc.hayVueltas && (

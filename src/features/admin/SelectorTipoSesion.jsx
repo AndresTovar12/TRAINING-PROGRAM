@@ -220,7 +220,7 @@ export default function SelectorTipoSesion({ day, onPatch, coachId, puedeCrear =
                   type="button" onClick={() => abreNuevo('menu')}
                   style={{ ...pieDelMenu, background: T.accentBg, color: T.accent }}
                 >
-                  <Plus size={16} strokeWidth={2.6} /> Crear tipo
+                  <Plus size={16} strokeWidth={2.6} /> Crear etiqueta
                 </button>
                 <button type="button" onClick={abreAdmin} style={{ ...pieDelMenu, background: 'transparent', color: T.text2 }}>
                   <SlidersHorizontal size={16} /> Administrar

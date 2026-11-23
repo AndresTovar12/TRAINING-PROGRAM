@@ -641,6 +641,8 @@ export function diaDesdeEntrada(
         throw new Aviso(`La unidad "${e.unidad}" no existe. Usa: ${[...UNIDADES_VALIDAS].join(', ')}.`)
       }
       if (e.unidad !== 'reps') ex.unidad = e.unidad
+      // «Nada, solo hacerlo» (8 nov 2026): un estiramiento no lleva cifra ni carga, aunque la IA mande alguna.
+      if (e.unidad === 'nada') { ex.reps = ''; ex.intensity = '' }
     }
     // El descanso va como UN tiempo («90 seg»): una frase («30 segundos antes del siguiente ejercicio») no se puede contar hacia atrás en el entreno.
     // «Sin pausa» no es un descanso: no se guarda (si no, el entreno se pararía a esperar «Seguir»).

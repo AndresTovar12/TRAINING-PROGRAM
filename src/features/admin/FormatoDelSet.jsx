@@ -1,10 +1,8 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Pencil, Plus, Timer, Trash2 } from 'lucide-react';
 import ListaDesplegable from '@/components/ListaDesplegable';
-import BotonEntendido from '@/components/BotonEntendido';
 import { usePalabras } from '@/contexts/PalabrasContext';
 import { useConfirmacion } from '@/components/Confirmacion';
-import { useAvisosVistos } from '@/lib/useAvisosVistos';
 import { useIsDesktop } from '@/lib/useViewport';
 import Ventana from '@/features/misplanes/Ventana';
 import { IconBtn, Pill, Contador } from '@/features/admin/piezas';
@@ -12,9 +10,11 @@ import {
   FORMATOS, IDS_DE_FORMATOS, ANOTA, formatoNuevo, comoPersonalizado, vistaDe, nombreDeFormato, limpiaFormato,
   segundosTotales, expande, pasoDeEscala, textoDeTiempo,
 } from '@/lib/formatos';
-import { perderiaLapsos, perderiaVueltas } from '@/lib/lapsos';
+import { perderiaCardio, perderiaLapsos, perderiaVueltas } from '@/lib/lapsos';
 import { T, FONT, UI, KP } from '@/lib/theme';
 import { ChipDeDescanso } from '@/features/admin/DescansoEntreSets';
+import { useSesionDelEditor } from '@/features/admin/sesionDelEditor';
+import { FAMILIAS } from '@/lib/fichaDelEjercicio';
 
 /**
  * El formato de un Set en el editor: AMRAP, EMOM, Tabata, Fartlek… (ver `lib/formatos.js`).
@@ -32,14 +32,13 @@ import { ChipDeDescanso } from '@/features/admin/DescansoEntreSets';
  *   · «Lapsos personalizados» (8 oct 2026) es el último de la lista y NO lleva reloj de Set: cada ejercicio abre sus
  *     lapsos (cuánto · carga · descanso) dentro de su propia tarjeta. Reemplaza al viejo «Personalizado» de tramos, que ya
  *     no se puede crear; uno que ya existía en un plan se sigue viendo y editando (su ventana de tramos).
- *   · Un aviso corto, una sola vez, con «✓ Entendido», para que se enteren de que existe.
+ *   · Ya no hay aviso de una vez: lo explica el recorrido del editor (lib/recorridoDelEditor.js, 9 nov 2026).
  *
  * LAS SERIES DE UN SET (Andrés, 6 oct 2026): el número de «Se repite N veces» se puede teclear —«12», o un rango como
  * «4-6»— y la lista trae «Sin series» para lo que no se repite (un calentamiento, unos drills). Es lo que su plan trae
  * y antes solo cabía en la casilla «Series» del editor de los días dobles. Ver `lib/setsDeUnaSesion.js`.
  */
 
-const CLAVE_DEL_AVISO = 'aviso:formatos-del-set';
 
 // Los ejercicios que se repiten en cada Set de la vista: lo que decide si «Se turnan» tiene sentido.
 const hayQueTurnar = (nEjercicios) => nEjercicios >= 2;
@@ -95,20 +94,6 @@ function BotonBlanco({ icon: Icon, children, onClick, expandido }) {
 
 const frase = { fontSize: 12.5, fontWeight: 700, color: T.text2 };
 
-/** Aviso de una sola vez, arriba de los Sets, que dice que un Set puede tener formato. */
-export function AvisoDeFormatos() {
-  const { listo, visto, marcar } = useAvisosVistos();
-  if (!listo || visto(CLAVE_DEL_AVISO)) return null;
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: T.accentBg, borderRadius: 12, padding: '10px 14px' }}>
-      <span style={{ flex: 1, minWidth: 200, fontSize: 13, fontWeight: 600, color: T.accent, lineHeight: 1.4 }}>
-        Un Set también puede ser AMRAP, EMOM, Tabata, Fartlek o llevar lapsos personalizados… Toca «Se repite» para elegir el formato.
-      </span>
-      <BotonEntendido color={T.accent} onClick={() => marcar(CLAVE_DEL_AVISO)} />
-    </div>
-  );
-}
-
 /**
  * El encabezado de un Set: su número, cómo se repite (o su formato), y los botones de siempre.
  * La franja de números y la ventana de tramos salen debajo, solo si hay formato.
@@ -121,6 +106,9 @@ export function EncabezadoDelSet({
   descansoVueltas = '', onDescansoVueltas = null,
 }) {
   const pregunta = useConfirmacion();
+  // La Disciplina de la sesión (9 nov 2026): ordena la lista de formatos y pone el descanso del primer toque.
+  const { familia } = useSesionDelEditor();
+  const disciplina = FAMILIAS[familia] ?? FAMILIAS.libre;
   // En la compu la cápsula cabe en un renglón y lleva la rayita; en el teléfono las veces bajan de renglón, sin rayita.
   const esCompu = useIsDesktop();
   const formato = bloque.formato ?? null;
@@ -131,7 +119,9 @@ export function EncabezadoDelSet({
   // dentro de un cluster) tampoco dice cuántas veces: el atleta no lee nada, así que aquí se lee igual. El guion se queda guardado
   // mientras nadie lo cambie.
   const sinSeries = !formato && (bloque.rounds == null || /^\s*[—–-]+\s*$/.test(String(bloque.rounds)));
-  const vista = formato ? vistaDe(formato) : lapsos ? 'lapsos' : sinSeries ? 'sin' : 'normal';
+  const vista = formato ? vistaDe(formato) : lapsos ? (bloque.cardio ? 'cardio' : 'lapsos') : sinSeries ? 'sin' : 'normal';
+  // Las dos opciones con lapsos: «Intervalos de cardio» (8 nov 2026) y «Lapsos personalizados».
+  const conLapsos = (id) => id === 'lapsos' || id === 'cardio';
   const [ventana, setVentana] = useState(false);
   // Un número entero se sube y baja con − y +; un rango («4-6») o texto solo se cambia tecleando.
   const seriesTexto = String(bloque.rounds ?? '');
@@ -140,14 +130,14 @@ export function EncabezadoDelSet({
   // ¿Se repite? Un número mayor que 1 o un rango («4-6»).
   const seRepite = Math.max(0, ...(seriesTexto.match(/\d+/g) ?? []).map(Number)) > 1;
 
-  const pon = (f) => onCambio({ formato: f, lapsos: false, rounds: String(f.vueltas) });
+  const pon = (f) => onCambio({ formato: f, lapsos: false, cardio: false, rounds: String(f.vueltas) });
 
   const elige = async (id) => {
     // Elegir «Lapsos personalizados» otra vez también vuelve a señalar el «+ Lapso»: sale cada vez que se elige.
-    if (id === 'lapsos' && vista === 'lapsos') { onLapsos?.(); return; }
+    if (conLapsos(id) && vista === id) { onLapsos?.(); return; }
     if (id === vista && id !== 'normal' && id !== 'sin') { if (id === 'custom') setVentana(true); return; }
     // Salir de los lapsos deja a cada ejercicio con su primero: si eso quita algo, se pregunta antes.
-    if (lapsos && id !== 'lapsos' && perderiaLapsos(bloque.members)) {
+    if (lapsos && !conLapsos(id) && perderiaLapsos(bloque.members)) {
       const ok = await pregunta({
         titulo: '¿Salir de los lapsos?',
         detalle: 'Cada ejercicio se queda solo con su primer lapso. Lo puedes deshacer con la flecha de arriba.',
@@ -157,7 +147,7 @@ export function EncabezadoDelSet({
       if (!ok) return;
     }
     // Entrar a lapsos con vueltas distintas («Por vuelta») deja solo la primera: se pregunta antes, como al salir.
-    if (id === 'lapsos' && !lapsos && perderiaVueltas(bloque.members)) {
+    if (conLapsos(id) && !lapsos && perderiaVueltas(bloque.members)) {
       const ok = await pregunta({
         titulo: '¿Pasar a lapsos?',
         detalle: 'Algún ejercicio tiene reps o carga distintas en cada vuelta. Con lapsos se queda solo la vuelta 1. Lo puedes deshacer con la flecha de arriba.',
@@ -166,11 +156,20 @@ export function EncabezadoDelSet({
       });
       if (!ok) return;
     }
-    if (id === 'normal') { onCambio({ formato: null, lapsos: false, ...(sinSeries ? { rounds: '3' } : null) }); return; }
-    if (id === 'sin') { if (!sinSeries || lapsos) onCambio({ formato: null, lapsos: false, rounds: null }); return; }
-    if (id === 'lapsos') {
+    // Entrar a «Intervalos de cardio» vacía lo que no es distancia ni tiempo (reps, %, RIR): nunca lo reetiqueta, y se pregunta antes.
+    if (id === 'cardio' && vista !== 'cardio' && perderiaCardio(bloque.members)) {
+      const ok = await pregunta({
+        titulo: '¿Pasar a intervalos de cardio?',
+        detalle: 'Aquí solo va distancia o tiempo, con ritmo, zona, vatios o RPE. Las reps, los % del 1RM y los RIR se quedan vacíos para que los escribas. Lo puedes deshacer con la flecha de arriba.',
+        confirmar: 'Sí, pasar',
+      });
+      if (!ok) return;
+    }
+    if (id === 'normal') { onCambio({ formato: null, lapsos: false, cardio: false, ...(sinSeries ? { rounds: '3' } : null) }); return; }
+    if (id === 'sin') { if (!sinSeries || lapsos) onCambio({ formato: null, lapsos: false, cardio: false, rounds: null }); return; }
+    if (conLapsos(id)) {
       // Sin series, los lapsos corren una vez; con series, se repiten esas veces.
-      onCambio({ formato: null, lapsos: true, ...(sinSeries ? { rounds: '1' } : null) });
+      onCambio({ formato: null, lapsos: true, cardio: id === 'cardio', ...(sinSeries ? { rounds: '1' } : null) });
       onLapsos?.();
       return;
     }
@@ -183,7 +182,7 @@ export function EncabezadoDelSet({
     pon(formatoNuevo(id));
   };
 
-  const opciones = [
+  const opcionesDeSiempre = [
     { valor: 'normal', etiqueta: 'Normal', corta: 'Se repite', detalle: 'Series de siempre' },
     { valor: 'sin', etiqueta: 'Sin series', corta: 'Sin series', detalle: 'Un calentamiento, unos drills' },
     // El «Personalizado» de tramos ya no se crea: solo aparece donde un plan viejo ya lo tiene.
@@ -194,9 +193,16 @@ export function EncabezadoDelSet({
       corta: id === 'custom' && formato ? nombreDeFormato(formato) : undefined,
       detalle: FORMATOS[id].detalle,
     })),
-    // El último de la lista: cada ejercicio del Set abre sus lapsos.
+    // Los dos últimos: cada ejercicio del Set abre sus lapsos. «Intervalos de cardio» solo con distancia o tiempo y cargas de cardio.
+    { valor: 'cardio', etiqueta: 'Intervalos de cardio', corta: 'Intervalos de cardio', detalle: 'Distancia o tiempo, con ritmo, zona o vatios' },
     { valor: 'lapsos', etiqueta: 'Lapsos personalizados', corta: 'Lapsos personalizados', detalle: 'Cada ejercicio con sus lapsos: cuánto, carga, descanso' },
   ];
+  /* Con Disciplina, sus formatos van primero, en su orden, y el primero dice que es lo habitual. Los demás siguen, como siempre: nada se quita. */
+  const puesto = (v) => { const i = (disciplina.formatos ?? []).indexOf(v === 'portiempo' ? 'portiempo' : v); return i === -1 ? 99 : i; };
+  const opciones = familia === 'libre' ? opcionesDeSiempre : opcionesDeSiempre
+    .map((o, i) => ({ o, i }))
+    .sort((a, b) => puesto(a.o.valor) - puesto(b.o.valor) || a.i - b.i)
+    .map(({ o }, k) => (k === 0 && puesto(o.valor) === 0 ? { ...o, detalle: `Lo habitual en ${disciplina.nombre}` } : o));
 
   return (
     <>
@@ -251,7 +257,7 @@ export function EncabezadoDelSet({
                 siempre: en el último ejercicio (o en su último lapso), que es lo que lee el modo entreno. Un Set que no se repite no tiene vueltas. */}
             {onDescansoVueltas && !sinSeries && seRepite && (
               <ChipDeDescanso
-                sobreAzul valor={descansoVueltas} onCambio={onDescansoVueltas} nuevo="1 min"
+                sobreAzul valor={descansoVueltas} onCambio={onDescansoVueltas} nuevo={disciplina.descanso ?? '1 min'}
                 // Siempre «vueltas», también con un solo ejercicio: «serie» se confundía con el siguiente Set (Andrés, 23 oct 2026).
                 titulo="Al terminar la vuelta, antes de repetir el Set" textoAgregar="Descanso entre vueltas" textoValor={(v) => `${v} entre vueltas`}
               />

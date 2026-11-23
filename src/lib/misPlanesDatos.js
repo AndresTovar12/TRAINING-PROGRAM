@@ -140,7 +140,8 @@ export function planDePrograma(data) {
  * ¿Esta sesión tiene algo que guardar? Ejercicios o notas sueltas. Una sesión vacía no ofrece «Guardar»
  * (Andrés, 2 oct 2026: «Guardar solo sale si hay algo que guardar»): se guardaría un workout sin nada.
  */
-export const sesionTieneContenido = (d) => (Array.isArray(d?.exercises) && d.exercises.length > 0) || !!claseDe(d);
+export const sesionTieneContenido = (d) => (Array.isArray(d?.exercises) && d.exercises.length > 0) || (Array.isArray(d?.tramos) && d.tramos.length > 0)
+  || (Array.isArray(d?.deporte?.items) && d.deporte.items.length > 0) || !!claseDe(d);
 /** ¿Alguna sesión de esta semana tiene algo? */
 export const semanaTieneContenido = (semana) => (semana?.days ?? []).some(sesionTieneContenido);
 /** ¿Algo del plan tiene contenido? (`phases`: las fases del plan) */

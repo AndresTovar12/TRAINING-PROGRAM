@@ -11,7 +11,8 @@ export const METROS_PARA_GPS = 200;
 
 /** ¿Este paso del entreno se hace con GPS? Un ejercicio que termina por distancia y pide al menos `METROS_PARA_GPS` (de un rango, el menor). */
 export function esPasoConGps(paso) {
-  return !!paso && paso.tipo === 'ejercicio' && paso.termina?.por === 'distancia' && Number(paso.termina.min) >= METROS_PARA_GPS;
+  // `sinGps`: un paso de la lista en la alberca, la bici fija o la caminadora (ver `pasosDeLaLista.js`): el teléfono no se mueve con el atleta.
+  return !!paso && paso.tipo === 'ejercicio' && !paso.sinGps && paso.termina?.por === 'distancia' && Number(paso.termina.min) >= METROS_PARA_GPS;
 }
 
 /** Los metros que pide el paso (de un rango, el menor: «400-600 m» se da por hecho a los 400). */

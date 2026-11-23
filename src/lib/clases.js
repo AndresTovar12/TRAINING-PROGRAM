@@ -18,6 +18,10 @@
 /** La clase de una sesión, o `null` si no trae (o no trae video). */
 export const claseDe = (sesion) => (sesion?.clase && typeof sesion.clase.url === 'string' && sesion.clase.url.trim() ? sesion.clase : null);
 
+/** La modalidad de una sesión de Clase (20 nov 2026; ver `EditorDeClase`): 'video' (un video completo) o 'ejercicios' (ejercicio por
+    ejercicio, con los Sets de siempre). Sin elegir, la que ya tenga algo armado; vacía, video. */
+export const modoDeClase = (sesion) => sesion?.claseModo ?? ((sesion?.exercises ?? []).length && !claseDe(sesion) ? 'ejercicios' : 'video');
+
 /** ¿Esta sesión es (o trae) una clase? */
 export const esClase = (sesion) => !!claseDe(sesion);
 

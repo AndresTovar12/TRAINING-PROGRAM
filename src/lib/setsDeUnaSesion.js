@@ -1,6 +1,6 @@
 import { formatoDeMiembros, ponFormato } from './formatos.js';
 import { normalizaVueltas } from './porVuelta.js';
-import { conLapsosSegun, hayLapsos } from './lapsos.js';
+import { conLapsosSegun, hayLapsos, esDeCardio, aCardio } from './lapsos.js';
 
 /**
  * Los Sets de una sesión: la lista de ejercicios de una sesión, agrupada como la ve el editor (y el atleta).
@@ -41,6 +41,8 @@ export const parseBlocks = (exercises = []) => {
     b.formato = formatoDeMiembros(b.members);
     // «Lapsos personalizados»: sus ejercicios traen `lapsos` (y nunca va junto a un formato de reloj).
     b.lapsos = !b.formato && hayLapsos(b.members);
+    // «Intervalos de cardio»: un Set en lapsos con la marca de cardio (ver `lib/lapsos.js`).
+    b.cardio = b.lapsos && esDeCardio(b.members);
     // El descanso que sigue al Set (la raya entre dos Sets): vive en su ÚLTIMO ejercicio (`descansoSet`), como texto («2 min»).
     b.descansoDespues = String(b.members[b.members.length - 1]?.descansoSet ?? '').trim();
   });
@@ -111,8 +113,17 @@ export const serializeBlocks = (blocks) => {
     if (b.type === 'note') { out.push(b.ex); return; }
     // Con formato, las «series» pasan a ser sus vueltas; sin él, se quita de todos los ejercicios.
     // Y las vueltas distintas de cada ejercicio se recortan o completan a las veces que se repite el Set.
+    const enLapsos = !!b.lapsos && !b.formato;
     const miembros = ponFormato(
-      conLapsosSegun(b.members.map((m) => normalizaVueltas(conSeries(m, b.rounds))), !!b.lapsos && !b.formato, { deCardio: true }),
+      conLapsosSegun(b.members.map((m) => normalizaVueltas(conSeries(m, b.rounds))), enLapsos, { deCardio: true })
+        // La marca de «Intervalos de cardio» va o se quita junto con los lapsos.
+        .map((m) => {
+          if (m.isNote) return m;
+          if (enLapsos && b.cardio) return m.intervalosDeCardio ? m : aCardio(m);
+          if (!('intervalosDeCardio' in m)) return m;
+          const { intervalosDeCardio: _fuera, ...resto } = m;
+          return resto;
+        }),
       b.formato ?? null,
     );
     const grupo = b.members.length > 1 ? (propios[i] ?? nuevoNumero()) : null;

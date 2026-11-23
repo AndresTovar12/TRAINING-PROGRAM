@@ -33,6 +33,8 @@ export const MEDIDAS = [
   { id: 'cal', etiqueta: 'Calorías', corta: 'cal', rotulo: 'Calorías', familia: 'energia' },
   // Reps en bloques con una pausa corta entre ellos («2+2+2»); la pausa se guarda aparte (`ex.entreBloques`, segundos).
   { id: 'cluster', etiqueta: 'Cluster', corta: 'cluster', rotulo: 'Cluster', familia: 'conteo' },
+  // Fisio y movilidad: un estiramiento no se cuenta. La línea queda con su nombre, su descanso y su descripción (Andrés, 8 nov 2026).
+  { id: 'nada', etiqueta: 'Nada, solo hacerlo', corta: 'solo hacerlo', rotulo: 'Solo hacerlo', familia: 'nada' },
 ];
 
 const PORID = Object.fromEntries(MEDIDAS.map((u) => [u.id, u]));
@@ -148,8 +150,12 @@ export function textoMeta(ex) {
     const entre = String(ex?.entreBloques ?? '').trim();
     return `${cantidad} reps${lado}${entre ? ` · ${entre} s entre bloques` : ''}`;
   }
-  if (id === 'reps') return `${cantidad === '1' ? '1 rep' : `${cantidad} reps`}${lado}`;
-  return `${cantidad} ${medida(id).corta}${lado}`;
+  /* EL LÍMITE DE TIEMPO (9 nov 2026): «100 m · límite 40 s». Va aquí porque nada entra al editor si el atleta no lo ve: este texto es
+     el que leen el atleta, las listas y la IA. Solo con distancia o reps; en kilómetros va en minutos. */
+  const tope = String(ex?.enMenosDe ?? '').trim();
+  const limite = tope && (id === 'reps' || esDistancia(id)) ? ` · límite ${tope} ${id === 'km' ? 'min' : 's'}` : '';
+  if (id === 'reps') return `${cantidad === '1' ? '1 rep' : `${cantidad} reps`}${lado}${limite}`;
+  return `${cantidad} ${medida(id).corta}${lado}${limite}`;
 }
 
 /**

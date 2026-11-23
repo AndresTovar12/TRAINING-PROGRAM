@@ -3,10 +3,12 @@ import { createPortal } from 'react-dom';
 import { Plus, Trash2 } from 'lucide-react';
 import BotonEntendido from '@/components/BotonEntendido';
 import CampoDescanso from '@/components/CampoDescanso';
-import { CeldaDeReps, CeldaDeCarga } from '@/components/RepsYCarga';
+import DestinoDelDescanso from '@/components/DestinoDelDescanso';
+import { CeldaDeReps, CeldaDeCarga, CeldaEnMenosDe } from '@/components/RepsYCarga';
+import { useSesionDelEditor } from '@/features/admin/sesionDelEditor';
 import { IconBtn } from '@/features/admin/piezas';
 import { useRepsYCarga } from '@/lib/useRepsYCarga';
-import { tipoDeCargaAlEscribir, esDistancia } from '@/lib/medidas';
+import { tipoDeCargaAlEscribir } from '@/lib/medidas';
 import { lapsosDe, parcheDeLapsos, comoEjercicio, MAX_LAPSOS } from '@/lib/lapsos';
 import { T, FONT, KP } from '@/lib/theme';
 
@@ -33,13 +35,17 @@ const botonChico = {
 };
 
 // Una fila: el número del lapso y sus tres casillas. Es un fragmento de la rejilla de arriba: cada pieza es una celda.
-function FilaDeLapso({ ex, lapso, k, tipoPrevio, onCambio, onQuitar, puedeQuitar, estiloInput, angosta, descansoAparte = false }) {
+// `destino`: sin darlo, el descanso de siempre (al siguiente lapso, justo abajo); `null`, sin casilla; { tipo, n }, con su flecha (ver `DestinoDelDescanso`).
+function FilaDeLapso({ ex, lapso, k, tipoPrevio, onCambio, onQuitar, puedeQuitar, estiloInput, angosta, destino, ficha = null }) {
   const comoEj = comoEjercicio(ex, lapso);
+  const { familia } = useSesionDelEditor();
   const rc = useRepsYCarga({
     ex: comoEj,
     // «Por lado» y lo que sobra de la línea no son del lapso: solo lo que él guarda.
     onPatch: (p) => { const { porLado: _lado, ...suyo } = p; onCambio(suyo); },
     tipoInicial: tipoPrevio,
+    // La ficha y la familia ordenan las cargas como en la línea; en «Intervalos de cardio», solo las de cardio.
+    ficha, familia, soloCardio: ex?.intervalosDeCardio === true, deLapso: true,
   });
   return (
     <>
@@ -48,14 +54,17 @@ function FilaDeLapso({ ex, lapso, k, tipoPrevio, onCambio, onQuitar, puedeQuitar
       </span>
       <CeldaDeReps rc={rc} compacto estiloInput={estiloInput} />
       <CeldaDeCarga rc={rc} compacto estiloInput={estiloInput} />
+      {/* «En menos de» (8 nov 2026): en la compu, su columna (vacía si el lapso es de tiempo); en el teléfono, junto al descanso. */}
+      {!angosta && <div>{rc.verLimite && <CeldaEnMenosDe rc={rc} compacto estiloInput={estiloInput} />}</div>}
       {/* En el teléfono el descanso baja a su renglón y la papelera se queda arriba, en la última columna. */}
       {angosta && <IconBtn icon={Trash2} danger onClick={onQuitar} disabled={!puedeQuitar} title="Quitar el lapso" />}
       {/* Hasta el final de la fila (también bajo la papelera): con «2 / 4» la última columna quedaba libre y el número del lapso siguiente se metía ahí. */}
       <div style={angosta ? { gridColumn: '2 / -1' } : undefined}>
-        {/* El descanso del ÚLTIMO lapso del último ejercicio es el de «entre vueltas»: se pone en la cabecera del Set, junto a «Se repite». Si el Set no se repite, no hay vueltas. */}
-        {descansoAparte
-          ? <div style={{ ...frase, fontWeight: 600, color: T.text3, padding: '0 0 9px', lineHeight: 1.3 }}>{descansoAparte === 'arriba' ? 'Descanso: «entre vueltas», arriba ↑' : 'Último lapso: sin descanso'}</div>
-          : <CampoDescanso ex={comoEj} onPatch={onCambio} compacto estiloInput={estiloInput} />}
+        {angosta && rc.verLimite && <div style={{ marginBottom: 6 }}><CeldaEnMenosDe rc={rc} compacto estiloInput={estiloInput} /></div>}
+        {/* El ÚLTIMO lapso de cada ejercicio dice a dónde vas (21 nov 2026): «→ ②» al siguiente ejercicio, «↻ ①» a volver a empezar. El del último
+            ejercicio de un Set que no se repite no lleva casilla: lo que sigue es la raya entre Sets. */}
+        {destino === null ? null
+          : <CampoDescanso ex={comoEj} onPatch={onCambio} compacto estiloInput={estiloInput} rotulo={destino ? <DestinoDelDescanso destino={destino} /> : null} />}
       </div>
       {!angosta && <IconBtn icon={Trash2} danger onClick={onQuitar} disabled={!puedeQuitar} title="Quitar el lapso" />}
     </>
@@ -128,7 +137,7 @@ function BurbujaDeLapsos({ ancla, onCerrar }) {
  * `columnasCompu`: la rejilla de la compu (número, reps, carga, descanso, papelera); en el teléfono y en las tarjetas
  * (`angosta`) son dos columnas y el descanso baja a su renglón. `burbuja`: si se señala el «+ Lapso» de este ejercicio.
  */
-export default function LapsosDelEjercicio({ ex, onPatch, estiloInput, angosta, columnasCompu, burbuja = false, onCerrarBurbuja, descansoFinalAparte = false }) {
+export default function LapsosDelEjercicio({ ex, onPatch, estiloInput, angosta, columnasCompu, burbuja = false, onCerrarBurbuja, destinoFinal, ficha = null }) {
   const lapsos = lapsosDe(ex) ?? [];
   const ancla = useRef(null);
   const guarda = (nuevos) => onPatch(parcheDeLapsos(nuevos));
@@ -150,10 +159,10 @@ export default function LapsosDelEjercicio({ ex, onPatch, estiloInput, angosta, 
         {lapsos.map((l, k) => (
           <FilaDeLapso
             key={k} ex={ex} lapso={l} k={k} estiloInput={estiloInput} angosta={angosta}
-            // Con la casilla vacía, la carga arranca en lo del lapso de arriba; el primero, en Ritmo si lo suyo es una distancia.
-            tipoPrevio={(k > 0 ? tipoDeCargaAlEscribir(lapsos[k - 1].intensity) : null) ?? (esDistancia(l.unidad) ? 'ritmo' : null)}
+            // Con la casilla vacía, la carga arranca en lo del lapso de arriba; el primero, en lo que digan su ficha y la familia (8 nov 2026).
+            tipoPrevio={k > 0 ? tipoDeCargaAlEscribir(lapsos[k - 1].intensity) : null} ficha={ficha}
             onCambio={(p) => cambia(k, p)} onQuitar={() => quita(k)} puedeQuitar={lapsos.length > 1}
-            descansoAparte={k === lapsos.length - 1 ? descansoFinalAparte : false}
+            {...(k === lapsos.length - 1 && destinoFinal !== undefined ? { destino: destinoFinal } : null)}
           />
         ))}
       </div>
