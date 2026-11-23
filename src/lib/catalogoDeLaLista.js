@@ -173,3 +173,106 @@ DEPORTES.tri = { ...DEPORTES.correr, id: 'tri', opciones: OPCIONES_TRI, sugerido
 /** El deporte de una parte de Triatlón (la bici del triatlón es en ruta). Fuera de Triatlón, el del editor. */
 export const BICI_EN_RUTA = { ...DEPORTES.bici, unidades: U_RUTA, lugar: 'ruta' };
 export const depDeParte = (x, dep) => (x?.dxp === 'bici' ? BICI_EN_RUTA : DEPORTES[x?.dxp] ?? dep);
+
+// LA LÓGICA PURA DE LAS PIEZAS (técnica, intervalos, progresiva), también del editor, sin cambios: el conector arma igual que el coach.
+export const num = (x) => { const n = parseFloat(String(x ?? '').replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : 0; };
+export const dosDigitos = (n) => String(n).padStart(2, '0');
+/** Lo guardado ANTES de los pasos (un intervalo con `tr`, `rec`, `partes`, `lista`): se lee para convertirlo a pasos. */
+export const partesDe = (x) => [{ id: x.id, tr: x.tr, rec: x.rec, ej: x.ej, con: x.con }, ...(x.partes ?? [])];
+/** Una Técnica en la forma de ahora (`{ sets }`), venga como venga. */
+export function tecDe(x) {
+  if (Array.isArray(x.sets)) return { sets: x.sets };
+  const extra = () => ({ ...(num(x.con?.kg) ? { peso: { q: x.con.kg, u: 'kg' } } : null), ...((x.mat ?? []).length ? { mat: x.mat } : null) });
+  if (Array.isArray(x.filas)) {
+    // Una pieza de un solo ejercicio con una fila por vez: si todas las filas son iguales, un Set de N veces; si cambian, la lista tal cual.
+    const ej = x.ej ?? {};
+    const filas = x.filas.length ? x.filas : [{ q: '', u: 'm', dq: '', du: 'camina' }];
+    const iguales = filas.every((f) => f.q === filas[0].q && f.u === filas[0].u && f.dq === filas[0].dq && f.du === filas[0].du);
+    const item = (f, k) => ({ id: `${x.id}-${k}`, exercise_id: ej.exercise_id, name: ej.name ?? '', q: f.q ?? '', u: f.u ?? 'm', dq: f.dq ?? '', du: f.du ?? 'camina', ...extra(), ...(k === 0 && x.nota ? { nota: x.nota } : null) });
+    if (!ej.exercise_id && !filas.some((f) => num(f.q))) return { sets: [] };
+    return { sets: [iguales ? { id: `${x.id}-s`, veces: filas.length, items: [item(filas[0], 0)], dq: '', du: 'camina' } : { id: `${x.id}-s`, veces: 1, items: filas.map(item), dq: '', du: 'camina' }] };
+  }
+  // Más antes: `items`, cada ejercicio con sus series. Cada uno es su Set, con sus series como veces (el mismo orden de antes).
+  return { sets: (x.items ?? []).map((it, k) => ({ id: `${x.id}-s${k}`, veces: Math.max(1, Math.min(20, num(it.s) || 1)), dq: '', du: 'camina',
+    items: [{ id: `${x.id}-${k}`, exercise_id: it.exercise_id, name: it.name ?? '', q: it.q ?? '', u: it.u ?? 'm', dq: '', du: 'camina', ...extra() }] })) };
+}
+/** Los minutos de una Técnica: cada vez de cada ejercicio (30 m ≈ 10 s; 10 reps ≈ 30 s) con su descanso (regresar ≈ 30 s), y lo de entre Sets. */
+export const minutosDescansoTec = (d) => (d.du === 's' ? num(d.dq) / 60 : d.du === 'min' ? num(d.dq) : d.du === 'nada' ? 0 : 0.5);
+export const minutosTec = (tc) => tc.sets.reduce((a, st, si) => a + Math.max(1, num(st.veces) || 1) * st.items.reduce((b, it) => b
+  + (it.u === 's' ? num(it.q) / 60 : it.u === 'reps' ? num(it.q) * 0.05 : (num(it.q) / 1000) * 6) + minutosDescansoTec(it), 0)
+  + (si < tc.sets.length - 1 ? minutosDescansoTec(st) : 0), 0);
+
+export const conInts = (t) => t?.rol === 'continua' || t?.rol === 'int';
+export function intsDe(t) {
+  if (t.ints) return t.ints;
+  if (t.cambios && (t.formato ?? 'int') === 'int') return { repite: true, lista: [{ id: `${t.id}-a`, ...t.cambios.a }, { id: `${t.id}-b`, ...t.cambios.b }] };
+  return null;
+}
+/** La forma de decir la intensidad de toda la tabla (Pace, Zona…): se elige una vez, en el encabezado. */
+export const modoDeInts = (ints) => ints?.modo ?? ints?.lista?.find((p) => p.modo)?.modo;
+/** El renglón «Para completar…»: su intensidad propia; lo guardado antes usaba la intensidad general de la carrera. */
+export const finDe = (t, ints) => ints?.fin ?? { z: t.z, vals: t.vals ?? {} };
+export const conProg = (t) => !!t.prog && (t.formato ?? 'prog') !== 'uno' && t.formato !== 'int';
+/** CÓMO SE CORRE una Carrera continua (Andrés, 19 nov 2026): Constante (por default), Progresiva o Con intervalos. Una sola, elegida arriba;
+    antes los intervalos eran un botón y la progresiva vivía en «Más opciones» junto a la cadencia, y no se entendía qué era de qué.
+    Lo guardado antes se lee igual: con renglones de intervalos, «int»; con progresiva, «prog». La pieza Intervalos siempre es «int». */
+export function comoDe(t) {
+  if (t?.rol === 'int') return 'int';
+  if (t?.rol !== 'continua') return 'uno';
+  if (t.como) return t.como;
+  if (intsDe(t)?.lista?.length) return 'int';
+  if (conProg(t)) return 'prog';
+  return 'uno';
+}
+// Las intensidades que tienen sentido para ir de una a otra.
+export const enBase = { km: 1, m: 0.001, min: 1, s: 1 / 60 };
+export const tipoUnidad = (u) => (u === 'km' || u === 'm' ? 'dist' : u === 'min' || u === 's' ? 'tiempo' : null);
+export const segDe = (v) => (v && (num(v.min) || num(v.seg)) ? num(v.min) * 60 + num(v.seg) : 0);
+export const deSeg = (x) => ({ min: String(Math.floor(x / 60)), seg: dosDigitos(Math.round(x % 60) % 60) });
+/** Un valor entre el de inicio y el de fin, en la fracción `f` (0 = inicio, 1 = fin), según la forma de la intensidad. */
+export function entre(modo, ini = {}, fin = {}, f) {
+  const lin = (a, b) => a + (b - a) * f;
+  const vi = ini.vals ?? {}; const vf = fin.vals ?? {};
+  if (modo === 'zona') return ini.z && fin.z ? { z: Math.round(lin(ini.z, fin.z)) } : {};
+  if (modo === 'rpe') return vi.rpe && vf.rpe ? { vals: { rpe: Math.round(lin(vi.rpe, vf.rpe)) } } : {};
+  if (modo === 'pulso') {
+    const de = num(vi.pulso?.de) && num(vf.pulso?.de) ? String(Math.round(lin(num(vi.pulso.de), num(vf.pulso.de)))) : '';
+    const a = num(vi.pulso?.a) && num(vf.pulso?.a) ? String(Math.round(lin(num(vi.pulso.a), num(vf.pulso.a)))) : '';
+    return de ? { vals: { pulso: { de, a } } } : {};
+  }
+  const r1 = segDe(vi.ritmo) && segDe(vf.ritmo) ? deSeg(lin(segDe(vi.ritmo), segDe(vf.ritmo))) : undefined;
+  const r2 = segDe(vi.ritmo2) && segDe(vf.ritmo2) ? deSeg(lin(segDe(vi.ritmo2), segDe(vf.ritmo2))) : undefined;
+  return r1 ? { vals: { ritmo: r1, ...(r2 ? { ritmo2: r2 } : {}) } } : {};
+}
+/** Los tramos que salen de «Empieza en → Termina en, cada N»: tantos como quepan en el total; el último, lo que sobre. */
+export function generaTramos(t, g) {
+  const cada = num(g.cada?.q); const uc = g.cada?.u ?? 'km';
+  if (!num(t.q) || !cada || tipoUnidad(t.u) !== tipoUnidad(uc)) return null;
+  const total = num(t.q) * enBase[t.u]; const paso = cada * enBase[uc];
+  const n = Math.max(1, Math.min(20, Math.ceil(total / paso - 1e-9)));
+  return Array.from({ length: n }, (_, i) => {
+    const resto = total - paso * i;
+    const q = i === n - 1 && resto < paso - 1e-9 ? Math.round((resto / enBase[uc]) * 100) / 100 : cada;
+    return { id: nuevoId(), q: String(q), u: uc, modo: g.modo, ...entre(g.modo, g.ini, g.fin, n === 1 ? 0 : i / (n - 1)) };
+  });
+}
+/** La progresiva en la forma de ahora: { modo, ini, fin, cada, lista }. Lo guardado antes ({ desde, hasta, cada } en pace) se lee igual. */
+export function progDe(t) {
+  const p = t.prog ?? {};
+  if (p.lista || p.modo) return { modo: p.modo ?? 'ritmo', ini: p.ini ?? {}, fin: p.fin ?? {}, cada: p.cada ?? { q: '', u: 'km' }, lista: p.lista ?? [] };
+  const g = { modo: 'ritmo', ini: { vals: p.desde ? { ritmo: p.desde } : {} }, fin: { vals: p.hasta ? { ritmo: p.hasta } : {} }, cada: p.cada ?? { q: '', u: 'km' } };
+  return { ...g, lista: generaTramos(t, g) ?? [] };
+}
+
+/** Cuánto suma la lista y cuántas vueltas caben en el total (en km si todo es distancia; en min si todo es tiempo). */
+export function cuentaInts(t) {
+  const ints = intsDe(t); if (!ints?.lista?.length) return null;
+  const enKm = { km: 1, m: 0.001 }; const enMin = { min: 1, s: 1 / 60 };
+  const base = enKm[t.u] ? enKm : enMin[t.u] ? enMin : null;
+  if (!base || !num(t.q) || ints.lista.some((p) => !base[p.u] || !num(p.q))) return { vueltas: 0, suma: 0, base: null };
+  const suma = ints.lista.reduce((a, p) => a + num(p.q) * base[p.u], 0);
+  const total = num(t.q) * base[t.u];
+  const vueltas = ints.repite ? Math.floor(total / suma + 1e-9) : 1;
+  const resto = vueltas ? Math.max(0, total - suma * vueltas) : 0;
+  return { vueltas, suma, total, resto: resto < 0.0005 ? 0 : resto, base: base === enKm ? 'km' : 'min', excede: suma > total + 1e-9 };
+}

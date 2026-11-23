@@ -24,7 +24,11 @@ import { dirname, join } from 'node:path';
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ARCHIVOS = ['training-utils.js', 'medidas.js', 'theme.js', 'unidades.js', 'plural.js', 'palabras.js', 'formatos.js', 'porVuelta.js', 'lapsos.js', 'muscles.js', 'clases.js', 'misPlanesDatos.js', 'vitrinaDatos.js', 'paraQuien.js', 'oficios.js', 'pegadas.js',
-  'metricas/forma.js', 'metricas/derivados.js', 'metricas/deportes.js', 'metricas/formato.js', 'iconosDeTipo.js', 'iconosDeTipo.datos.js'];
+  'metricas/forma.js', 'metricas/derivados.js', 'metricas/deportes.js', 'metricas/formato.js', 'iconosDeTipo.js', 'iconosDeTipo.datos.js',
+  // Conector v2 (23 nov 2026): la sesión en palabras, los catálogos de los editores y los dos validadores (lo que ve el atleta y el reloj).
+  'sesionEnPalabras.js', 'catalogoDeLaLista.js', 'catalogoDeDeporte.js', 'hibrido.js', 'fichaDelEjercicio.js', 'editorDeLaSesion.js', 'pasosDeLaLista.js',
+  'entreno.js', 'hibridoAlAtleta.js', 'cargaPorcentaje.js', 'setsDeUnaSesion.js', 'enQueVas.js', 'relojSinTelefono.js', 'entrenoDatos.js', 'entrenoLibre.js',
+  'actividades.js', 'recorrido.js', 'rutaSilenciosa.js', 'ubicacion.js', 'metricas/calculos.js', 'metricas/construye.js'];
 const destino = join(raiz, 'supabase/functions/mcp/app');
 const soloRevisar = process.argv.includes('--revisar');
 

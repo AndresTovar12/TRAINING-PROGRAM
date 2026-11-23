@@ -1,0 +1,971 @@
+import { conHibrido } from './hibridoAlAtleta.js';
+import { claseDe, modoDeClase } from './clases.js';
+import { leeCantidad, leeCarga, leeDescanso, descansoEnTiempo, esSinDescanso, textoMeta } from './medidas.js';
+import { porcentajeDe } from './cargaPorcentaje.js';
+import { formatoDeMiembros, nombreDeFormato, resumenDeFormato, segundosTotales } from './formatos.js';
+import { comoEjercicio, cuantoDeLapso, hayLapsos, lapsoDeLinea, lapsosDe, tramosDeLapsos } from './lapsos.js';
+import { ejercicioDeVuelta, vueltasDe } from './porVuelta.js';
+import { groupIntoSets, setTag } from './setsDeUnaSesion.js';
+import { deporteDeLaLista, pasosDeLaLista, pasosDelCalentamiento } from './pasosDeLaLista.js';
+
+/**
+ * El MODO ENTRENO, sin pantalla: la sesión del día convertida en PASOS, y el avance del atleta sobre ellos.
+ *
+ * POR QUÉ EXISTE. Andrés, 9 oct 2026 (EXPERIENCIA DE WORKOUTS): hoy el atleta solo hace scroll por una lista; no hay un
+ * «Iniciar», ni un «ahora toca esto», ni un descanso que avise. Y su prioridad real de dispositivos es reloj inteligente >
+ * teléfono > computadora: «dejar todo listo para cuando la app sea descargable y para el Apple Watch». Por eso las pantallas
+ * (la del teléfono, la de la computadora y algún día la del reloj) no calculan nada: LEEN esto. Aquí no hay React, ni
+ * `Date.now()`, ni nada de pantalla; cada función recibe la hora (`ahora`, en milisegundos) igual que `relojDeFormato.js`.
+ *
+ * LOS PASOS. Una sesión se vuelve una lista plana y ordenada. Cada paso es de un tipo:
+ *   · 'ejercicio' — hacer algo, una vez (una vuelta de un ejercicio, un lapso de cardio);
+ *   · 'reloj'     — un Set con formato (AMRAP, EMOM, Tabata…) entero, o un Set en «Lapsos personalizados» con más de un tramo de
+ *                   trabajo: lo corre el reloj de siempre (`RelojDelBloque`). Una sola puerta: el atleta no ve dos botones de inicio;
+ *                   un Set en lapsos guarda aquí dentro SUS pasos (`pasosInternos`) para el contrato de los relojes de pulsera;
+ *   · 'nota'      — un día que el coach escribió solo con notas («Sprint 6 x 30 yd»): cada nota es un paso;
+ *   · 'descanso'  — esperar, SOLO si el coach lo escribió (`descanso` entre vueltas, `descansoSet` entre Sets).
+ *
+ * LA REGLA DE ORO (Andrés: «LO MÁS IMPORTANTE es que funcione igual de bien con mucha o con poca información»): se
+ * crea SOLO lo que el coach escribió. Un ejercicio sin reps ni carga es un paso con su nombre y nada más; sin descanso no hay
+ * paso de descanso; sin Sets con `sets` no hay vueltas. Nada de huecos ni valores inventados.
+ *
+ * LO CANÓNICO. Todos los relojes del mundo guían con la MISMA estructura (ver la nota de relojes inteligentes): pasos con
+ * cómo terminan + una meta opcional + cuántas veces se repiten + el deporte. Cada paso lo trae ya:
+ *   termina   { por: 'reps' | 'tiempo' | 'distancia' | 'calorias' | 'boton', min, max, valor, cantidad, unidad }
+ *             tiempo en SEGUNDOS, distancia en METROS (km y yardas ya convertidos), `valor` solo si es un número fijo.
+ *             `cantidad` y `unidad` son lo que escribió el coach tal cual («8-10» reps, «40» yd): las pantallas lo dicen así.
+ *             'boton' = termina cuando el atleta lo dice (`texto` trae lo que escribió el coach, si algo).
+ *   meta      null, o { tipo, texto, min, max }, con los ids de `CARGAS` (pct, kg, int, rpe, rir, ritmo, zona, w, nado, o
+ *             'texto' si no encaja en ninguno). Ritmo en SEGUNDOS por km y ritmo de nado en segundos por 100 m.
+ *   intensidad 'trabajo' o 'recuperar'. Reservadas para cuando el editor las pida: 'calentar' y 'enfriar'.
+ *   deporte   (del plan) el deporte que mide un reloj: 'fuerza', 'correr', 'bici'… o `null` en un tipo propio del coach.
+ * Las vueltas (`vuelta` de `vueltas`, `opcional`) y la serie (`serie`, `serieTag`) dicen qué pasos son un bloque que se repite:
+ * con eso un exportador de Apple WorkoutKit o de Garmin arma sus `IntervalBlock` / pasos de repetición. Hoy no se exporta nada
+ * (no hay app nativa); lo que falta es el adaptador, no los datos. `lib/wearables.js` es la puerta para LEER datos de un reloj
+ * (pulso, pasos); esto es la estructura del entreno que se le MANDARÍA.
+ *
+ * EL AVANCE (`sesión.entreno`, dentro del registro del atleta, junto a `exercises` y `formatos`):
+ *   { v, nombre?, inicio, fin, hechos: { [clave]: { t, n, reps?, kg?, seg?, tecnica? } | { t, p? } (un descanso) }, saltados: { [clave]: { t, n } },
+ *     extra: { [clave]: seg }, empezados: { [clave]: hora }, pausas?: { [clave]: hora } }
+ * `nombre` es el de la sesión cuando arrancó (así el coach la reconoce en sus métricas sin tener que reconstruir el plan); `p` en un descanso es lo
+ * que se planeó, en segundos: junto con `t` (cuándo terminó) y el `t` del paso anterior dice cuánto descansó de verdad.
+ * `tecnica` es el id del video que el atleta grabó de ESA vuelta para su coach (futuro: ver `lib/funciones.js`); aquí solo se conserva.
+ * `extra` son los segundos que se le sumaron a un descanso («+30 s»); `empezados` la hora en que el atleta arrancó el cronómetro
+ * OPCIONAL de un paso con tiempo (la plancha de 30 seg, el «2 min a 6:39» de un lapso): igual que el descanso, solo se guarda cuándo
+ * empezó, y lo que queda se calcula de ahí. Tampoco avanza solo. `pausas` (30 oct 2026): un descanso en pausa guarda la hora en que se pausó; mientras
+ * está ahí la cuenta no baja ni avanza sola, y al reanudar lo que duró la pausa se suma a `extra` (ver `pausaDescanso`). Solo se guarda si hay alguna.
+ * Son OBJETOS con el paso por llave, nunca listas: la base mezcla los objetos llave por llave a cualquier profundidad y
+ * REEMPLAZA las listas enteras (ver `estadoPorPartes.js`); así el teléfono y un reloj pueden marcar pasos distintos sin
+ * pisarse.
+ *
+ * EL PASO ACTUAL NO SE GUARDA: es el PRIMER paso sin marca. Lo que se guarda es lo hecho. Así aguanta que el coach edite el plan a
+ * medio entreno (un ejercicio nuevo aparece como pendiente donde le toca), que otro dispositivo marque pasos, y que el teléfono
+ * se duerma o iOS mate la pestaña: al volver, todo se calcula de nuevo. Cada marca guarda también `n` (el nombre del ejercicio):
+ * si el coach cambió ese ejercicio por otro, la marca vieja ya no cuenta.
+ *
+ * EL DESCANSO TAMPOCO ES UN CONTADOR: empieza cuando se marcó el paso anterior (`t`), y lo que queda se calcula de ahí. «Sirve y
+ * nunca manda»: pasada la hora no se avanza solo; el atleta sigue contando hacia arriba (`pasado`) hasta que toca «Seguir».
+ *
+ * LA CLAVE DE UN PASO es estable aunque el plan se retoque alrededor: `<idx>.<vuelta>.<lapso>` (idx = posición del ejercicio en
+ * la lista, la misma con la que ya se guarda lo que el atleta anota en `exercises[idx]`), `r.<idx>` en un reloj, `n.<idx>` en una
+ * nota y `d.<clave del paso anterior>` en un descanso.
+ */
+
+const VERSION = 1;
+/** El «formato» de un Set en lapsos personalizados: no trae pasos (salen de los lapsos de cada ejercicio), solo dice cómo se anota el resultado. */
+export const FORMATO_DE_LAPSOS = { id: 'lapsos', pasos: [], vueltas: 1, tope: null, turnan: false, anota: 'cumplido' };
+// Topes de sensatez, los mismos que ya tienen el reloj de formatos y el de lapsos: un dato malformado no debe armar 12 000 pasos.
+export const MAX_PASOS = 2000;
+const MAX_RONDAS = 60;
+
+/* ------------------------------------------------------------------ */
+/* Leer lo que escribió el coach                                       */
+/* ------------------------------------------------------------------ */
+
+const esObjeto = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
+const texto = (x) => (Array.isArray(x) ? x.join(' ') : String(x ?? '')).trim();
+const redondea = (n) => Math.round(n * 100) / 100;
+
+const NUM = '\\d+(?:[.,]\\d+)?';
+const RANGO = new RegExp(`^(${NUM})(?:\\s*[-–]\\s*(${NUM}))?$`);
+const aNumero = (t) => parseFloat(String(t).replace(',', '.'));
+const TIEMPO = /^(\d{1,2}):(\d{2})$/;
+const deTiempo = (t) => {
+  const m = TIEMPO.exec(String(t ?? '').trim());
+  return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null;
+};
+
+/** «8-10» → { min: 8, max: 10 }; «10» → { min: 10, max: 10 }; lo que no es un número o un rango, `null`. */
+function rangoDe(t) {
+  const m = RANGO.exec(String(t ?? '').trim());
+  if (!m) return null;
+  const a = aNumero(m[1]);
+  const b = m[2] ? aNumero(m[2]) : a;
+  return { min: Math.min(a, b), max: Math.max(a, b) };
+}
+
+/** «4:34-5:00» → { min: 274, max: 300 } (segundos). */
+function rangoDeTiempo(t) {
+  const [a, b = a] = String(t ?? '').split(/\s*[-–]\s*/);
+  const x = deTiempo(a);
+  const y = deTiempo(b);
+  return x === null || y === null ? null : { min: Math.min(x, y), max: Math.max(x, y) };
+}
+
+/** Las veces que se repite un Set: «5» → 5; «4-6» → de 4 a 6 (las de más son OPCIONALES); texto, vacío o «—» → una vez. */
+export function rondasDelSet(sets) {
+  const m = /^(\d+)(?:\s*[-–]\s*(\d+))?$/.exec(String(sets ?? '').trim());
+  if (!m) return { min: 1, max: 1 };
+  const a = Math.min(MAX_RONDAS, Math.max(1, parseInt(m[1], 10)));
+  const b = m[2] ? Math.min(MAX_RONDAS, Math.max(1, parseInt(m[2], 10))) : a;
+  return { min: Math.min(a, b), max: Math.max(a, b) };
+}
+
+const A_METROS = { m: 1, km: 1000, yd: 0.9144 };
+
+/** «En menos de» (`enMenosDe`), en segundos; con kilómetros el coach lo escribe en minutos (ver `textoMeta`). Doble revisión del 23 nov 2026: solo iba en
+    el texto, que la pantalla de Gym no enseña; ahora es `limiteSeg`, el mismo de los sprints de la lista (el GPS lo cuenta en 200 m o más). */
+function limiteDe(e) {
+  const n = aNumero(texto(e?.enMenosDe));
+  if (!(n > 0)) return null;
+  return Math.round(leeCantidad(e).unidad === 'km' ? n * 60 : n);
+}
+
+/** Cómo termina lo que dice la línea de un ejercicio (o de un lapso): ver «LO CANÓNICO». */
+function terminaDe(e) {
+  const { cantidad, unidad, libre } = leeCantidad(e);
+  if (!cantidad) return { por: 'boton' };
+  if (libre) return { por: 'boton', texto: cantidad };
+  if (unidad === 'cluster') {
+    const bloques = cantidad.split('+').map((n) => parseInt(n, 10));
+    const total = bloques.reduce((a, n) => a + n, 0);
+    const entre = rangoDe(e?.entreBloques)?.min;
+    return { por: 'reps', min: total, max: total, valor: total, cantidad, unidad, bloques, ...(entre ? { entreBloques: entre } : null) };
+  }
+  const r = rangoDe(cantidad);
+  if (!r) return { por: 'boton', texto: cantidad };
+  const k = unidad === 'min' ? 60 : (A_METROS[unidad] ?? 1);
+  let por = 'distancia';
+  if (unidad === 'reps') por = 'reps';
+  else if (unidad === 'seg' || unidad === 'min') por = 'tiempo';
+  else if (unidad === 'cal') por = 'calorias';
+  const min = redondea(r.min * k);
+  const max = redondea(r.max * k);
+  return { por, min, max, valor: min === max ? min : null, cantidad, unidad };
+}
+
+/** La carga o el objetivo de un ejercicio (o lapso): ver «LO CANÓNICO». `null` si el coach no puso ninguna. */
+function metaDe(e) {
+  const crudo = texto(e?.intensity);
+  if (!crudo) return null;
+  const { tipo, cantidad } = leeCarga(e);
+  if (!tipo) {
+    // «65% (front)» o «70% / RPE 8»: trae un porcentaje del 1RM aunque diga algo más. La lista del día ya lo lleva a kilos; aquí también.
+    const pct = porcentajeDe(crudo);
+    return pct ? { tipo: 'pct', texto: crudo, min: pct.min, max: pct.max } : { tipo: 'texto', texto: crudo };
+  }
+  const r = tipo === 'ritmo' || tipo === 'nado' ? rangoDeTiempo(cantidad) : rangoDe(cantidad);
+  return { tipo, texto: crudo, ...(r ?? null) };
+}
+
+/**
+ * Lo que dice un descanso escrito: «90 seg», «2 min», «3-4 min», «1:30». Con segundos hay cuenta; con texto libre
+ * («Recuperación total») no: se enseña tal cual y espera «Seguir». `null` si está vacío o dice cero.
+ */
+function lecturaDeDescanso(escrito) {
+  const crudo = texto(escrito);
+  if (!crudo || esSinDescanso(crudo)) return null;
+  // Una frase como «30 segundos antes del siguiente ejercicio» cuenta como 30 s (se enseña tal cual la escribió el coach).
+  const d = leeDescanso({ descanso: descansoEnTiempo(crudo) });
+  let r = null;
+  if (d.unidad) {
+    const x = rangoDe(d.cantidad);
+    if (x) r = { min: Math.round(x.min * (d.unidad === 'min' ? 60 : 1)), max: Math.round(x.max * (d.unidad === 'min' ? 60 : 1)) };
+  } else {
+    const s = deTiempo(crudo);
+    if (s !== null) r = { min: s, max: s };
+  }
+  if (r && r.max <= 0) return null;
+  const seg = r && r.min > 0 ? r.min : null;
+  return { texto: crudo, seg, segMax: seg && r.max !== r.min ? r.max : null };
+}
+
+/* ------------------------------------------------------------------ */
+/* La sesión, en pasos                                                 */
+/* ------------------------------------------------------------------ */
+
+// Qué deporte mide un reloj en cada tipo de sesión de base (los tipos propios del coach no dicen: `null`).
+const DEPORTE_DEL_TIPO = {
+  gym: 'fuerza', speed: 'velocidad', recovery: 'recuperacion', football: 'futbol', tests: 'pruebas', team: 'equipo',
+  correr: 'correr', bici: 'bici', natacion: 'natacion', yoga: 'yoga', movilidad: 'movilidad', terapia: 'terapia', clase: 'clase',
+};
+
+/** El deporte de un día según su tipo; un tipo desconocido se trata como gym, igual que `tipoDeSesion`. */
+export function deporteDelTipo(day) {
+  const cat = day?.cat;
+  if (cat === 'otro' || cat === 'off') return null;
+  return DEPORTE_DEL_TIPO[cat] ?? 'fuerza';
+}
+
+const nombreDe = (ex) => texto(ex?.name) || 'Ejercicio';
+
+// El título de un Set con reloj en lapsos: los nombres de sus ejercicios («Correr», «Remo + Correr», «Remo + Correr + 2 más»).
+const tituloDeNombres = (nombres) => (nombres.length <= 2 ? nombres.join(' + ') : `${nombres.slice(0, 2).join(' + ')} + ${nombres.length - 2} más`);
+
+const pasoDeDescanso = (lectura, entre, despuesDe) => ({
+  clave: `d.${despuesDe}`,
+  tipo: 'descanso',
+  entre,
+  intensidad: 'recuperar',
+  texto: lectura.texto,
+  seg: lectura.seg,
+  segMax: lectura.segMax,
+  termina: lectura.seg
+    ? { por: 'tiempo', min: lectura.seg, max: lectura.segMax ?? lectura.seg, valor: lectura.segMax ? null : lectura.seg }
+    : { por: 'boton' },
+});
+
+/**
+ * La sesión de un día, en pasos: `{ deporte, nombre, pasos, total, series, simple, soloNotas, truncado }`.
+ *
+ *   nombre    el de la sesión («Fuerza · tren inferior»); se guarda en el avance al arrancar.
+ *   total     cuántos pasos hay que hacer (sin contar descansos ni lo opcional): el «3 de 12».
+ *   series    cuántos Sets trae.
+ *   simple    todos los Sets son de un ejercicio, sin vueltas, sin reloj ni lapsos: se dice «Ejercicio 2 de 4» y no «Serie 2 de 4».
+ *   soloNotas el día son solo notas (cada una es un paso).
+ *   truncado  el día pedía más de `MAX_PASOS` pasos y se cortó (dato malformado).
+ *
+ * Un descanso de verdad (tipo OFF sin ejercicios) o un día sin nada no tiene pasos. `day` es el día cuyos ejercicios se hacen:
+ * quien arma la pantalla le pasa los del día que se repite cuando la sesión dice «repite el martes».
+ */
+/**
+ * Los pasos de Deporte: cada ejercicio, tantas veces como dice (uno por uno: «Vez 2 de 5»), con lo que se hace en grande («10 m», «8 reps») y lo demás
+ * debajo («en 4 seg · por lado · 5 kg»). Su descanso va después de cada vez y también antes del ejercicio que sigue (Claude decidió: el editor dice solo
+ * «Descanso», y en Gym el descanso de un ejercicio también va entre sus vueltas). Todo «de lejos» (`cara: 'lejos'`).
+ */
+function pasosDeDeporte(items) {
+  const pasos = [];
+  const lleno = (v) => (v && typeof v === 'object' ? texto(v.q) : texto(v));
+  const cuanto = (o) => (lleno(o) ? `${texto(o.q)} ${o.u}` : '');
+  const buenos = items.filter((it) => texto(it?.name));
+  buenos.forEach((it, i) => {
+    const veces = Math.max(1, Math.min(20, Number(texto(it.veces)) || 1));
+    const reps = lleno(it.reps) ? `${texto(it.reps)} reps` : '';
+    const dist = cuanto(it.dist);
+    const tiempo = cuanto(it.tiempo);
+    const grande = reps || dist || tiempo;
+    const extras = [
+      reps && dist ? dist : '',
+      (reps || dist) && tiempo ? `en ${tiempo}` : '',
+      it.lado ? 'por lado' : '',
+      cuanto(it.peso),
+    ].filter(Boolean);
+    const lectura = lleno(it.desc) ? lecturaDeDescanso(`${texto(it.desc.q)} ${it.desc.u === 'min' ? 'min' : 'seg'}`) : null;
+    for (let v = 1; v <= veces; v += 1) {
+      const clave = `dep.${i}.${v}`;
+      pasos.push({
+        clave, tipo: 'ejercicio', nombre: texto(it.name), exercise_id: it.exercise_id ?? null,
+        serie: i + 1, ejercicioEnSerie: 1, ejerciciosEnSerie: 1,
+        texto: extras.join(' · '),
+        termina: { por: 'boton', ...(grande ? { texto: grande } : null) },
+        meta: null, vuelta: v, vueltas: veces, vueltasMin: veces, opcional: false,
+        ...(texto(it.nota) ? { nota: texto(it.nota) } : null),
+        intensidad: 'trabajo',
+        cara: 'lejos',
+        deDeporte: true,
+      });
+      const ultimoDeTodo = i === buenos.length - 1 && v === veces;
+      if (lectura && !ultimoDeTodo) pasos.push({ ...pasoDeDescanso(lectura, v < veces ? 'rondas' : 'ejercicios', clave), serie: i + 1 });
+    }
+  });
+  return pasos;
+}
+
+/**
+ * LA CLASE DE UN VIDEO (decisión de Andrés, 23 nov 2026: «ni siquiera hay un botón como para iniciar el entrenamiento como en el resto… cuidar ese tipo
+ * de cosas»). Es un paso más, con la pantalla del video guiado (`cara: 'guiado'`): «Iniciar entreno» como las demás, el video en grande y, al acabar,
+ * pasa solo. Si después hay más (enfriamiento, Sets), dice «✓ Video terminado · Sigue: …» (regla 17); si es lo último, la sesión queda hecha sola.
+ */
+function pasoDeLaClase(day, c) {
+  const s = Number(c.duracion) > 0 ? Math.round(Number(c.duracion)) : null;
+  return {
+    clave: 'clase.0', tipo: 'ejercicio', nombre: texto(day?.name) || 'Clase', encabezado: 'Clase', guiado: true, deClase: true,
+    video: { url: c.url, inicio: c.inicio ?? null, fin: c.fin ?? null, exercise_id: null },
+    texto: s ? `Clase · ${s < 60 ? `${s} seg` : `${Math.round(s / 60)} min`}` : 'Clase',
+    termina: s ? { por: 'tiempo', min: s, max: s, valor: s, cantidad: String(Math.round(s / 60)), unidad: 'min' } : { por: 'boton' },
+    meta: null, pasaSola: false, intensidad: 'trabajo', cara: 'guiado', serie: 0, pieza: 'clase', nombreDeLaPieza: 'Clase',
+  };
+}
+
+export function pasosDeLaSesion(day, { deporte } = {}) {
+  // El Híbrido llega como ejercicios de Gym (ver `lib/hibridoAlAtleta.js`): usa las mismas pantallas, relojes y descansos.
+  day = conHibrido(day);
+  const filas = Array.isArray(day?.exercises) ? day.exercises.filter((e) => e && typeof e === 'object') : [];
+  const hayEjercicios = filas.some((e) => !e.isNote);
+  const salida = {
+    deporte: deporte !== undefined ? deporte : deporteDelTipo(day), nombre: texto(day?.name).slice(0, 60), pasos: [], total: 0, series: 0, simple: true, soloNotas: false, truncado: false,
+  };
+  const mete = (paso) => {
+    if (salida.pasos.length >= MAX_PASOS) { salida.truncado = true; return false; }
+    salida.pasos.push(paso);
+    return true;
+  };
+
+  /* LA LISTA (Running, Cycling, Swimming, Triatlón; 22 nov 2026): sin ejercicios de Sets y con piezas en `day.tramos`, los pasos los arma la cara del
+     atleta de cada pieza (`pasosDeLaLista.js`). Gym y lo demás no cambian. */
+  const piezas = Array.isArray(day?.tramos) ? day.tramos.length : 0;
+  if (!hayEjercicios && piezas > 0) {
+    if (deporte === undefined) salida.deporte = deporteDeLaLista(day);
+    salida.simple = false;
+    salida.series = piezas;
+    const { pasos } = pasosDeLaLista(day);
+    for (const p of pasos) {
+      if (!mete({ vuelta: 1, vueltas: 1, vueltasMin: 1, opcional: false, ejercicioEnSerie: 1, ejerciciosEnSerie: 1, ...p })) break;
+    }
+    return acaba(salida);
+  }
+  /* LA CLASE DE UN VIDEO: su calentamiento aparte, la clase (un paso guiado), su enfriamiento y, si trae Sets debajo, los Sets después. */
+  const laClase = claseDe(day) && modoDeClase(day) === 'video' ? claseDe(day) : null;
+  const extra = day?.claseExtra ?? {};
+  if (laClase) {
+    salida.simple = false;
+    const pon = (p) => mete({ vuelta: 1, vueltas: 1, vueltasMin: 1, opcional: false, ejercicioEnSerie: 1, ejerciciosEnSerie: 1, ...p });
+    for (const p of pasosDelCalentamiento(extra.cal, 'cal')) pon(p);
+    pon(pasoDeLaClase(day, laClase));
+    if (!hayEjercicios) {
+      for (const p of pasosDelCalentamiento(extra.calma ? { ...extra.calma, rol: 'calma' } : null, 'calma')) pon(p);
+      return acaba(salida);
+    }
+  }
+  /* DEPORTE (`day.deporte`, 23 nov 2026): ejercicios con su video, uno por uno («Vez 1 de 5»), en la pantalla «de lejos» (el teléfono en el piso o en la
+     banca). Calentamiento antes y enfriamiento después, como en la lista. Ver `pasosDeDeporte`. */
+  const dep = day?.deporte;
+  if (!hayEjercicios && !piezas && Array.isArray(dep?.items) && dep.items.some((it) => texto(it?.name))) {
+    salida.simple = false;
+    const pon = (p) => mete({ vuelta: 1, vueltas: 1, vueltasMin: 1, opcional: false, ejercicioEnSerie: 1, ejerciciosEnSerie: 1, ...p });
+    for (const p of pasosDelCalentamiento(dep.cal, 'cal')) if (!pon(p)) break;
+    const suyos = pasosDeDeporte(dep.items);
+    salida.series = dep.items.length;
+    for (const p of suyos) if (!pon(p)) break;
+    for (const p of pasosDelCalentamiento(dep.calma ? { ...dep.calma, rol: 'calma' } : null, 'calma')) if (!pon(p)) break;
+    return acaba(salida);
+  }
+  if (!hayEjercicios && (day?.cat === 'off' || !filas.some((e) => texto(e.text)))) return salida;
+
+
+  if (!hayEjercicios) {
+    // Un día de puros renglones de nota: cada uno es un paso.
+    salida.soloNotas = true;
+    filas.forEach((ex, idx) => {
+      if (!texto(ex.text)) return;
+      mete({ clave: `n.${idx}`, tipo: 'nota', idx, nombre: texto(ex.text), intensidad: 'trabajo', termina: { por: 'boton' } });
+    });
+    return acaba(salida);
+  }
+
+  const grupos = groupIntoSets(filas);
+  const sets = grupos.filter((g) => !g.isNote);
+  salida.series = sets.length;
+  let encabezado = [];
+  let si = 0;
+
+  // EL CALENTAMIENTO DE GYM (`day.calentamiento`; doble revisión del 23 nov 2026: no le llegaba al atleta). Va antes del Set 1, sin cambiar sus números.
+  for (const p of (laClase ? [] : pasosDelCalentamiento(day?.calentamiento))) {
+    if (!mete({ vuelta: 1, vueltas: 1, vueltasMin: 1, opcional: false, ejercicioEnSerie: 1, ejerciciosEnSerie: 1, ...p })) break;
+  }
+
+  grupos.forEach((g) => {
+    if (g.isNote) {
+      // Las notas entre ejercicios («CALENTAMIENTO») no son pasos: van de encabezado del paso que sigue.
+      if (texto(g.ex.text)) encabezado.push(texto(g.ex.text));
+      return;
+    }
+    si += 1;
+    const miembros = g.exercises;
+    const exs = miembros.map((m) => m.ex);
+    const hayOtroSet = si < sets.length;
+    const descansoSet = hayOtroSet ? lecturaDeDescanso(exs[exs.length - 1]?.descansoSet) : null;
+    const enLaSerie = { serie: si, serieTag: setTag(exs.length), ejerciciosEnSerie: exs.length };
+    // La nota de sección («CALENTAMIENTO») encabeza solo el PRIMER paso del Set que sigue: en la vuelta 2 ya no hace falta repetirla.
+    const delSet = encabezado.join(' · ');
+    encabezado = [];
+
+    const formato = formatoDeMiembros(exs);
+    if (formato) {
+      salida.simple = false;
+      const total = segundosTotales(formato, exs.length);
+      const clave = `r.${miembros[0].idx}`;
+      mete({
+        clave,
+        tipo: 'reloj',
+        ...enLaSerie,
+        encabezado: delSet,
+        ejercicioEnSerie: 1,
+        vuelta: 1,
+        vueltas: 1,
+        vueltasMin: 1,
+        opcional: false,
+        nombre: nombreDeFormato(formato),
+        resumen: resumenDeFormato(formato, exs.length),
+        formato,
+        claveFormato: String(miembros[0].idx),
+        miembros: miembros.map(({ ex, idx }) => ({ idx, nombre: nombreDe(ex), texto: textoMeta(ex) ?? '', carga: texto(ex.intensity), nota: [texto(ex.notes), texto(ex.cue)].filter(Boolean).join(' · ') })),
+        intensidad: 'trabajo',
+        termina: total ? { por: 'tiempo', min: total, max: total, valor: total } : { por: 'boton' },
+      });
+      if (descansoSet) mete(pasoDeDescanso(descansoSet, 'sets', clave));
+      return;
+    }
+
+    const rondas = rondasDelSet(exs[0]?.sets);
+    const enLapsos = hayLapsos(exs);
+    if (exs.length > 1 || rondas.max > 1 || enLapsos) salida.simple = false;
+
+    // Los pasos de las vueltas del Set: uno por ejercicio (y por lapso), con sus descansos. `entra` recibe cada uno; `conDescansoDelSet`
+    // dice si el descanso de DESPUÉS del Set va entre ellos.
+    const armaVueltas = (entra, conDescansoDelSet) => {
+      for (let r = 1; r <= rondas.max; r += 1) {
+        miembros.forEach(({ ex, idx }, e) => {
+          const cadaVuelta = enLapsos ? null : vueltasDe(ex);
+          const delaVuelta = cadaVuelta ? ejercicioDeVuelta(ex, cadaVuelta[r - 1] ?? cadaVuelta[cadaVuelta.length - 1]) : ex;
+          const lapsos = enLapsos ? (lapsosDe(ex) ?? [lapsoDeLinea(ex)]) : [null];
+          lapsos.forEach((lapso, k) => {
+            const ef = lapso ? comoEjercicio(ex, lapso) : delaVuelta;
+            const clave = `${idx}.${r}.${k}`;
+            const ultimoDelSet = r === rondas.max && e === exs.length - 1 && k === lapsos.length - 1;
+            const nota = texto(ex.notes);
+            const cue = texto(ex.cue);
+            entra({
+              clave,
+              tipo: 'ejercicio',
+              ...enLaSerie,
+              encabezado: r === 1 && e === 0 && k === 0 ? delSet : '',
+              ejercicioEnSerie: e + 1,
+              vuelta: r,
+              vueltas: rondas.max,
+              vueltasMin: rondas.min,
+              opcional: r > rondas.min,
+              lapso: k + 1,
+              lapsos: lapsos.length,
+              idx,
+              nombre: nombreDe(ex),
+              ...(nota ? { nota } : null),
+              ...(cue ? { cue } : null),
+              porLado: leeCantidad(ef).porLado,
+              texto: textoMeta(ef) ?? '',
+              termina: terminaDe(ef),
+              meta: metaDe(ef),
+              ...(limiteDe(ef) ? { limiteSeg: limiteDe(ef) } : null),
+              // Del Híbrido: un sprint corto va «de lejos»; una máquina o la caminadora, sin GPS (ver `lib/hibridoAlAtleta.js`).
+              ...(ex._cara ? { cara: ex._cara } : null),
+              ...(ex._sinGps ? { sinGps: true } : null),
+              ...(ex._sprint ? { sprint: ex._sprint.k, sprints: ex._sprint.n } : null),
+              intensidad: 'trabajo',
+            });
+            // Qué descanso viene después: el del Set entero al acabarlo; si no, el del lapso o el del ejercicio.
+            let descanso = null;
+            if (ultimoDelSet) {
+              if (descansoSet && conDescansoDelSet) descanso = { lectura: descansoSet, entre: 'sets' };
+            } else {
+              const lectura = lecturaDeDescanso(lapso ? lapso.descanso : ex.descanso);
+              if (lectura) {
+                const finDeVuelta = e === exs.length - 1 && k === lapsos.length - 1;
+                descanso = { lectura, entre: finDeVuelta ? 'rondas' : (k === lapsos.length - 1 ? 'ejercicios' : 'lapsos') };
+              }
+            }
+            if (descanso) entra(pasoDeDescanso(descanso.lectura, descanso.entre, clave));
+          });
+        });
+      }
+    };
+
+    /* UN SET EN LAPSOS PERSONALIZADOS con más de un tramo de trabajo (varios lapsos o varias rondas) lo corre el reloj de siempre, igual que un
+       AMRAP: así el día tiene UNA sola puerta de inicio («Iniciar entreno») y el reloj vive adentro. Con un solo tramo es un ejercicio más
+       (un «Correr 2 km a Z2» no necesita reloj). Los pasos de cada lapso no se pierden: quedan en `pasosInternos`, que es lo que un reloj
+       de pulsera necesita (ver `lib/entrenoCanonico.js`). Las rondas del reloj son las mínimas: lo opcional («5-6 veces») no lo corre. */
+    const tramos = enLapsos ? tramosDeLapsos(exs, rondas.min) : [];
+    if (enLapsos && tramos.filter((t) => t.tipo === 'trabajo').length > 1) {
+      const clave = `r.${miembros[0].idx}`;
+      const nombres = miembros.map(({ ex }) => nombreDe(ex));
+      const pasosInternos = [];
+      armaVueltas((p) => { pasosInternos.push(p); }, false);
+      const total = tramos.every((t) => t.seg !== null) ? tramos.reduce((suma, t) => suma + t.seg, 0) : 0;
+      mete({
+        clave,
+        tipo: 'reloj',
+        ...enLaSerie,
+        encabezado: delSet,
+        ejercicioEnSerie: 1,
+        vuelta: 1,
+        vueltas: 1,
+        vueltasMin: 1,
+        opcional: false,
+        nombre: nombres.join(' + '),
+        resumen: tituloDeNombres(nombres),
+        formato: FORMATO_DE_LAPSOS,
+        deLapsos: true,
+        rondas: rondas.min,
+        tramos,
+        claveFormato: String(miembros[0].idx),
+        miembros: miembros.map(({ ex, idx }) => ({
+          idx,
+          nombre: nombreDe(ex),
+          texto: '',
+          carga: '',
+          lapsos: (lapsosDe(ex) ?? [lapsoDeLinea(ex)]).map((l) => ({ texto: cuantoDeLapso(ex, l) ?? '', carga: texto(l.intensity), descanso: texto(l.descanso) })),
+        })),
+        intensidad: 'trabajo',
+        termina: total ? { por: 'tiempo', min: total, max: total, valor: total } : { por: 'boton' },
+        pasosInternos,
+      });
+      if (descansoSet) mete(pasoDeDescanso(descansoSet, 'sets', clave));
+      return;
+    }
+    armaVueltas(mete, true);
+  });
+
+  // Una nota DESPUÉS del último Set («Estira al terminar»; doble revisión del 23 nov 2026): antes se perdía (las notas encabezan el Set que sigue y
+  // aquí ya no sigue ninguno). Es su propio paso al final, con «Listo».
+  if (encabezado.length) mete({ clave: 'n.fin', tipo: 'nota', nombre: encabezado.join(' · '), intensidad: 'trabajo', termina: { por: 'boton' }, vuelta: 1, vueltas: 1, vueltasMin: 1, opcional: false, serie: si });
+
+  // La clase con Sets debajo: su enfriamiento va al final de todo.
+  if (laClase) for (const p of pasosDelCalentamiento(extra.calma ? { ...extra.calma, rol: 'calma' } : null, 'calma')) mete({ vuelta: 1, vueltas: 1, vueltasMin: 1, opcional: false, ejercicioEnSerie: 1, ejerciciosEnSerie: 1, ...p });
+  return acaba(salida);
+}
+
+// Les pone su lugar en la lista (`i`), su número entre los que no son descanso (`n`) y cuenta los que hay que hacer.
+function acaba(plan) {
+  let n = 0;
+  plan.pasos.forEach((p, i) => {
+    p.i = i;
+    if (p.tipo !== 'descanso') {
+      n += 1;
+      p.n = n;
+      if (!p.opcional) plan.total += 1;
+    }
+  });
+  return plan;
+}
+
+/* ------------------------------------------------------------------ */
+/* El avance                                                           */
+/* ------------------------------------------------------------------ */
+
+const hora = (x) => (Number.isFinite(x) && x >= 0 ? x : null);
+
+/** El avance guardado, limpio: lo que llega de la base (o de otro dispositivo, o de nada) nunca debe poder romper la pantalla. */
+export function leeAvance(entreno) {
+  const e = esObjeto(entreno) ? entreno : {};
+  const marcas = (x) => {
+    const salida = {};
+    if (!esObjeto(x)) return salida;
+    Object.entries(x).forEach(([k, v]) => { if (esObjeto(v) && hora(v.t) !== null) salida[k] = v; });
+    return salida;
+  };
+  const extra = {};
+  if (esObjeto(e.extra)) Object.entries(e.extra).forEach(([k, v]) => { if (Number.isFinite(v) && v > 0) extra[k] = v; });
+  const empezados = {};
+  if (esObjeto(e.empezados)) Object.entries(e.empezados).forEach(([k, v]) => { if (hora(v) !== null) empezados[k] = v; });
+  const pausas = {};
+  if (esObjeto(e.pausas)) Object.entries(e.pausas).forEach(([k, v]) => { if (hora(v) !== null) pausas[k] = v; });
+  const nombre = typeof e.nombre === 'string' ? e.nombre.trim().slice(0, 60) : '';
+  return { nombre: nombre || null, inicio: hora(e.inicio), fin: hora(e.fin), oculto: e.oculto === true, hechos: marcas(e.hechos), saltados: marcas(e.saltados), extra, empezados, pausas };
+}
+
+// Lo que se guarda en `sesión.entreno`: sin llaves vacías en `null`, que es lo que la base espera.
+const aGuardar = (av) => ({
+  v: VERSION,
+  ...(av.nombre ? { nombre: av.nombre } : null),
+  ...(av.inicio !== null ? { inicio: av.inicio } : null),
+  ...(av.fin !== null ? { fin: av.fin } : null),
+  ...(av.oculto ? { oculto: true } : null),
+  hechos: av.hechos,
+  saltados: av.saltados,
+  extra: av.extra,
+  empezados: av.empezados,
+  ...(Object.keys(av.pausas ?? {}).length ? { pausas: av.pausas } : null),
+});
+
+const nombreCorto = (p) => String(p.nombre ?? '').slice(0, 40);
+
+// El avance con el nombre de la sesión puesto (una sola vez, la primera que se toca algo): `plan.nombre` viene de `pasosDeLaSesion`.
+const conNombre = (av, plan) => (av.nombre || !plan?.nombre ? av : { ...av, nombre: plan.nombre });
+
+// La marca de un descanso que se terminó: cuándo y, si tenía cuenta, cuánto se planeó (para saber luego cuánto descansó de más o de menos).
+const marcaDeDescanso = (paso, ahora) => ({ t: ahora, ...(paso.seg ? { p: paso.seg } : null) });
+
+// La marca de un paso, o `null` si no tiene (o es de otro ejercicio que estuvo en ese lugar: el nombre no coincide).
+function marcaDe(av, paso) {
+  const hecho = av.hechos[paso.clave];
+  const marca = hecho ?? av.saltados[paso.clave];
+  if (!marca) return null;
+  if (paso.tipo !== 'descanso' && marca.n !== undefined && marca.n !== nombreCorto(paso)) return null;
+  return { ...marca, estado: hecho ? 'hecho' : 'saltado' };
+}
+
+// El primer paso sin marca: `i` es -1 y `actual` null cuando ya no queda ninguno.
+function posicionDe(plan, av) {
+  const pasos = plan?.pasos ?? [];
+  const i = pasos.findIndex((p) => !marcaDe(av, p));
+  return { i, actual: i === -1 ? null : pasos[i] };
+}
+
+// Solo estos datos pueden acompañar a un «Listo»: lo que el atleta cambió de lo planeado (un texto corto o un número) y el id de su video de técnica.
+function limpiaReal(real) {
+  if (!esObjeto(real)) return {};
+  const salida = {};
+  ['reps', 'kg'].forEach((k) => {
+    const v = texto(real[k]);
+    if (v) salida[k] = v.slice(0, 12);
+  });
+  const seg = Number(real.seg);
+  if (real.seg !== undefined && real.seg !== null && Number.isFinite(seg) && seg >= 0) salida.seg = Math.round(seg);
+  const tecnica = texto(real.tecnica);
+  if (tecnica) salida.tecnica = tecnica.slice(0, 64);
+  return salida;
+}
+
+/** El entreno arrancó: guarda la hora de inicio (una sola vez). */
+export function iniciaEntreno(entreno, ahora, plan = null) {
+  const av = conNombre(leeAvance(entreno), plan);
+  return aGuardar({ ...av, inicio: av.inicio ?? ahora });
+}
+
+// El paso al que se refiere una acción: el que se pidió por su clave, o el actual. `i` es su lugar; -1 si no existe.
+function objetivoDe(plan, av, clave) {
+  const pasos = plan?.pasos ?? [];
+  const { i: iActual } = posicionDe(plan, av);
+  const i = clave ? pasos.findIndex((p) => p.clave === clave) : iActual;
+  return { i, iActual, paso: i === -1 ? null : pasos[i], pasos };
+}
+
+// Si el atleta hizo un paso ADELANTE de donde iba (tocó otro en la lista), el descanso que le sigue ya no tiene sentido: queda hecho.
+function sinDescansosSueltos(av, hechos, { i, iActual, pasos }, ahora) {
+  if (iActual === -1 || i <= iActual) return hechos;
+  const salida = { ...hechos };
+  for (let k = i + 1; k < pasos.length && pasos[k].tipo === 'descanso'; k += 1) {
+    // Sin `p`: este descanso no se tomó ni se saltó, quedó sin sentido; su duración «real» no diría nada.
+    if (!marcaDe(av, pasos[k])) salida[pasos[k].clave] = { t: ahora };
+  }
+  return salida;
+}
+
+/**
+ * «Listo» en el paso actual (o «Seguir», si es un descanso). Da por hecho lo planeado; `real` solo viaja si el atleta lo
+ * CAMBIÓ: `{ reps, kg, seg }`. Si todavía no se había iniciado, esto también inicia.
+ *
+ * `clave`: marcar OTRO paso (el que se tocó en la lista de «Tu entreno»): sirve para uno de adelante o para uno que se había
+ * saltado. El paso actual no cambia: sigue siendo el primero sin marca.
+ */
+export function marcaListo(plan, entreno, ahora, real, clave) {
+  const av = conNombre(leeAvance(entreno), plan);
+  const inicio = av.inicio ?? ahora;
+  const o = objetivoDe(plan, av, clave);
+  if (!o.paso) return aGuardar({ ...av, inicio });
+  const dato = o.paso.tipo === 'descanso' ? marcaDeDescanso(o.paso, ahora) : { t: ahora, n: nombreCorto(o.paso), ...limpiaReal(real) };
+  // Un límite que contó en vivo («20 reps en menos de 60 seg», regla 19): se guarda cuánto tardó, para decir si lo logró. Venga el ✓ de donde venga (pantalla o reloj).
+  const empezoEn = av.empezados[o.paso.clave];
+  if (o.paso.tipo !== 'descanso' && Number(o.paso.limiteSeg) > 0 && empezoEn !== undefined && dato.seg === undefined) dato.seg = Math.max(1, Math.round((ahora - empezoEn) / 1000));
+  const saltados = { ...av.saltados };
+  const empezados = { ...av.empezados };
+  delete saltados[o.paso.clave];
+  delete empezados[o.paso.clave];
+  const hechos = sinDescansosSueltos(av, { ...av.hechos, [o.paso.clave]: dato }, o, ahora);
+  return aGuardar({ ...av, inicio, hechos, saltados, empezados });
+}
+
+/** «Saltar» el paso actual (o el que se pidió con `clave`): queda saltado; un descanso que se salta cuenta como terminado. Lo ya hecho no se salta. */
+export function saltaPaso(plan, entreno, ahora, clave) {
+  const av = conNombre(leeAvance(entreno), plan);
+  const inicio = av.inicio ?? ahora;
+  const o = objetivoDe(plan, av, clave);
+  if (!o.paso) return aGuardar({ ...av, inicio });
+  if (o.paso.tipo === 'descanso') return aGuardar({ ...av, inicio, hechos: { ...av.hechos, [o.paso.clave]: marcaDeDescanso(o.paso, ahora) } });
+  if (av.hechos[o.paso.clave]) return aGuardar({ ...av, inicio });
+  const empezados = { ...av.empezados };
+  delete empezados[o.paso.clave];
+  const hechos = sinDescansosSueltos(av, av.hechos, o, ahora);
+  return aGuardar({ ...av, inicio, hechos, saltados: { ...av.saltados, [o.paso.clave]: { t: ahora, n: nombreCorto(o.paso) } }, empezados });
+}
+
+/**
+ * El atleta arrancó el cronómetro OPCIONAL de un paso con tiempo (el actual, o el que se pidió con `clave`). Solo guarda la hora; ver
+ * `cuentaDe`. Arrancarlo otra vez no lo reinicia.
+ */
+export function empiezaPaso(plan, entreno, ahora, clave) {
+  const av = conNombre(leeAvance(entreno), plan);
+  const inicio = av.inicio ?? ahora;
+  const { paso } = objetivoDe(plan, av, clave);
+  if (!paso || paso.tipo === 'descanso' || av.empezados[paso.clave] !== undefined) return aGuardar({ ...av, inicio });
+  return aGuardar({ ...av, inicio, empezados: { ...av.empezados, [paso.clave]: ahora } });
+}
+
+/** Detiene el cronómetro de un paso (el actual, o el que se pidió con `clave`): se puede volver a arrancar desde cero. */
+export function quitaCronometro(plan, entreno, clave) {
+  const av = leeAvance(entreno);
+  const { paso } = objetivoDe(plan, av, clave);
+  if (!paso) return aGuardar(av);
+  const empezados = { ...av.empezados };
+  delete empezados[paso.clave];
+  return aGuardar({ ...av, empezados });
+}
+
+/**
+ * La cuenta del cronómetro de un paso con tiempo: `{ desde, seg, fin, restan, vencido, pasado }`, o `null` si no lo tiene o no se ha
+ * arrancado. `seg` es el tiempo fijo del paso (de un rango, el menor). Igual que el descanso: al llegar a cero avisa pero NO avanza
+ * solo, y `pasado` cuenta hacia arriba hasta que el atleta toca «Listo».
+ */
+export function cuentaDe(paso, entreno, ahora) {
+  const av = leeAvance(entreno);
+  const desde = paso ? av.empezados[paso.clave] : undefined;
+  if (desde === undefined || paso.termina?.por !== 'tiempo') return null;
+  const seg = paso.termina.valor ?? paso.termina.min;
+  if (!(seg > 0)) return null;
+  const fin = desde + seg * 1000;
+  // En pausa (ver `pausaPaso`) la cuenta se queda donde iba y no vence.
+  const pausadoEn = av.pausas[paso.clave];
+  const pausado = pausadoEn !== undefined;
+  const restan = Math.ceil((fin - (pausado ? pausadoEn : ahora)) / 1000);
+  return { desde, seg, fin: pausado ? null : fin, restan, vencido: !pausado && restan <= 0, pasado: !pausado && restan < 0 ? -restan : 0, pausado };
+}
+
+/**
+ * LA CUENTA DE UN LÍMITE («20 reps en menos de 60 seg», sin GPS; Andrés, 23 nov 2026: «que la app cuente sola… para que pueda ir viendo cuánto tiempo le
+ * queda»). Corre desde que el paso empezó (`empezados`, ver regla 19 en EntrenoDelDia) hasta su `limiteSeg`; al pasarse sigue contando lo de más. `null` si el
+ * paso no tiene límite o aún no empieza.
+ */
+export function cuentaDelLimite(paso, entreno, ahora) {
+  const av = leeAvance(entreno);
+  const desde = paso ? av.empezados[paso.clave] : undefined;
+  const seg = Number(paso?.limiteSeg);
+  if (desde === undefined || !(seg > 0)) return null;
+  const pausadoEn = av.pausas[paso.clave];
+  const restan = Math.ceil((desde + seg * 1000 - (pausadoEn ?? ahora)) / 1000);
+  return { desde, seg, restan, vencido: restan <= 0, pasado: restan < 0 ? -restan : 0 };
+}
+
+/**
+ * Pausa o reanuda la cuenta de un paso por tiempo (22 nov 2026: un tramo de la lista que pasa solo, como «Trote 10 min»). Igual que el descanso:
+ * en pausa se guarda la hora en `pausas`; al reanudar, su arranque (`empezados`) se corre lo que duró la pausa, y la cuenta sigue donde iba.
+ */
+export function pausaPaso(plan, entreno, ahora, clave) {
+  const av = leeAvance(entreno);
+  const { paso } = objetivoDe(plan, av, clave);
+  if (!paso || paso.tipo === 'descanso' || av.empezados[paso.clave] === undefined) return aGuardar(av);
+  const pausas = { ...av.pausas };
+  const desde = pausas[paso.clave];
+  if (desde === undefined) return aGuardar({ ...av, pausas: { ...pausas, [paso.clave]: ahora } });
+  delete pausas[paso.clave];
+  return aGuardar({ ...av, pausas, empezados: { ...av.empezados, [paso.clave]: av.empezados[paso.clave] + Math.max(0, ahora - desde) } });
+}
+
+/**
+ * «Anterior»: regresa al ejercicio de antes. Le quita la marca a ese paso y a los descansos que le siguieron. Reabre también un
+ * entreno que ya estaba terminado.
+ */
+export function vuelveAtras(plan, entreno) {
+  const av = leeAvance(entreno);
+  const pasos = plan?.pasos ?? [];
+  const { i } = posicionDe(plan, av);
+  const tope = i === -1 ? pasos.length : i;
+  let j = tope - 1;
+  while (j >= 0 && pasos[j].tipo === 'descanso') j -= 1;
+  if (j < 0) return aGuardar(av);
+  const hechos = { ...av.hechos };
+  const saltados = { ...av.saltados };
+  const extra = { ...av.extra };
+  const empezados = { ...av.empezados };
+  const pausas = { ...av.pausas };
+  // Hasta el paso en el que se estaba (inclusive): lo que tenía a medias —un cronómetro, un «+30 s», una pausa— se deja al irse.
+  for (let k = j; k <= tope && k < pasos.length; k += 1) {
+    delete hechos[pasos[k].clave];
+    delete saltados[pasos[k].clave];
+    delete extra[pasos[k].clave];
+    delete empezados[pasos[k].clave];
+    delete pausas[pasos[k].clave];
+  }
+  return aGuardar({ ...av, fin: null, hechos, saltados, extra, empezados, pausas });
+}
+
+/** «+30 s» en el descanso actual. Un descanso que solo dice texto no tiene cuenta, así que no se alarga. */
+export function masDescanso(plan, entreno, seg = 30) {
+  const av = leeAvance(entreno);
+  const { actual } = posicionDe(plan, av);
+  if (!actual || actual.tipo !== 'descanso' || actual.seg === null || !(seg > 0)) return aGuardar(av);
+  return aGuardar({ ...av, extra: { ...av.extra, [actual.clave]: (av.extra[actual.clave] ?? 0) + Math.round(seg) } });
+}
+
+/**
+ * Pausar o reanudar el descanso actual (el botón grande del centro en el descanso, 30 oct 2026). Pausado, la cuenta se queda donde iba; al reanudar, lo que
+ * duró la pausa se suma a `extra`, así que el descanso termina tantos segundos después. Un descanso que solo dice texto no tiene cuenta y no se pausa.
+ */
+export function pausaDescanso(plan, entreno, ahora) {
+  const av = leeAvance(entreno);
+  const { actual } = posicionDe(plan, av);
+  if (!actual || actual.tipo !== 'descanso' || actual.seg === null) return aGuardar(av);
+  const pausas = { ...av.pausas };
+  const desde = pausas[actual.clave];
+  if (desde === undefined) return aGuardar({ ...av, pausas: { ...pausas, [actual.clave]: ahora } });
+  delete pausas[actual.clave];
+  const duro = Math.max(0, Math.round((ahora - desde) / 1000));
+  return aGuardar({ ...av, pausas, extra: duro > 0 ? { ...av.extra, [actual.clave]: (av.extra[actual.clave] ?? 0) + duro } : av.extra });
+}
+
+/** El atleta dio por terminado el entreno (aunque falten pasos). */
+export function terminaEntreno(entreno, ahora) {
+  const av = leeAvance(entreno);
+  return aGuardar({ ...av, inicio: av.inicio ?? ahora, fin: av.fin ?? ahora });
+}
+
+/**
+ * ¿Es este el ÚLTIMO paso que queda? (Botones de la sesión, 29 oct 2026: terminar manteniendo, en la última serie.) Cierto cuando `paso` es el único sin marca de todo el
+ * plan, CONTANDO los opcionales («5-6 veces»): al marcarlo, `vistaDelEntreno().completo` sería verdadero. Un descanso nunca lo es (no se termina un entreno en un descanso),
+ * y un paso que se tocó en «Ver todo» y no es el último de los que faltan sigue con «Listo».
+ */
+export function esElUltimoPaso(plan, entreno, paso) {
+  if (!paso || paso.tipo === 'descanso') return false;
+  const av = leeAvance(entreno);
+  const pendientes = (plan?.pasos ?? []).filter((p) => !marcaDe(av, p));
+  return pendientes.length === 1 && pendientes[0].clave === paso.clave;
+}
+
+/**
+ * La sesión terminada: `completed` y la hora (la primera vez; terminar otra vez no la mueve) y, si había entreno guiado, también se da por terminado. Es lo que hacen «Terminar ahora»
+ * y «Marcar como hecha»; el final del entreno guiado hace lo mismo (`EntrenoDelDia`). `ruta`: el recorrido, si lo hubo.
+ */
+export function terminaSesion(registro, ahora, { ruta = null } = {}) {
+  const prev = esObjeto(registro) ? registro : {};
+  return {
+    ...prev,
+    ...(ruta ? { ruta } : null),
+    ...(prev.entreno ? { entreno: terminaEntreno(prev.entreno, ahora) } : null),
+    completed: true,
+    completedAt: prev.completed && prev.completedAt ? prev.completedAt : new Date(ahora).toISOString(),
+  };
+}
+
+/**
+ * La sesión EN BLANCO: sin lo anotado, los relojes de los Sets, el recorrido ni el entreno guiado; se quedan las notas (son de la persona, no un resultado) y lo ya archivado.
+ * `archiva`: lo que había pasa a `anteriores` (ver `archivaLoHecho`): sí al hacerla otra vez o marcarla «no hecha» (el coach lo sigue viendo como un entreno más); no al «Empezar de
+ * nuevo» de un entreno que nunca se terminó, que no deja huella.
+ */
+export function sesionEnBlanco(registro, { archiva = true } = {}) {
+  const { exercises: _e, formatos: _f, ruta: _r, entreno: _en, ...resto } = esObjeto(registro) ? registro : {};
+  void _e; void _f; void _r; void _en;
+  return { ...resto, completed: false, completedAt: null, ...(archiva ? archivaLoHecho(registro) : null) };
+}
+
+/** Deshace el «terminado»: el entreno sigue donde iba. */
+export function reabreEntreno(entreno) {
+  return aGuardar({ ...leeAvance(entreno), fin: null });
+}
+
+/**
+ * «Deshacer» una sesión terminada: si el entreno guiado también se había dado por terminado, se EMPIEZA DE NUEVO. Andrés, 9 oct 2026: tras «Deshacer» el
+ * botón no volvía (a propósito, para que no saliera un «Continuar entreno 7 de 7» de algo ya terminado) y no había manera de volver a entrenar la
+ * sesión con la guía. Los pasos hechos se borran; lo que se anotó en la lista de ejercicios no se toca. Un entreno a medias (nunca terminado) se
+ * queda como está, para «Continuar»; y quien lo quitó con la ✕ (`oculto`) sigue sin verlo.
+ */
+/**
+ * Lo que ya se había hecho de una sesión terminada, guardado antes de empezarla de nuevo: `{ anteriores: [...los de antes, este] }`, o `{}` si no hay nada
+ * que guardar (una sesión marcada «terminada» sin haberse entrenado no deja huella). Cada uno trae cuándo se terminó, su entreno guiado, lo que el atleta anotó y
+ * los relojes de sus Sets. Tope de 20: el más viejo se cae.
+ */
+export function archivaLoHecho(registro) {
+  const hecho = registro?.entreno && Object.keys(registro.entreno).length > 0;
+  if (!registro?.completedAt && !hecho) return {};
+  const huella = { completedAt: registro.completedAt ?? null };
+  if (registro.entreno) huella.entreno = registro.entreno;
+  if (registro.exercises) huella.exercises = registro.exercises;
+  if (registro.formatos) huella.formatos = registro.formatos;
+  if (registro.ruta) huella.ruta = registro.ruta;
+  return { anteriores: [...(Array.isArray(registro.anteriores) ? registro.anteriores : []), huella].slice(-20) };
+}
+
+export function reiniciaSiTerminado(entreno) {
+  const av = leeAvance(entreno);
+  if (av.fin === null) return entreno;
+  return av.oculto ? aGuardar({ ...leeAvance(undefined), oculto: true }) : undefined;
+}
+
+/**
+ * El atleta quitó el entreno guiado de esta sesión: «Continuar entreno» ya no sale (Andrés, 9 oct 2026: «no puedo hacer que desaparezca»). Lo que
+ * anotó se queda en la lista de siempre; solo se esconde la guía.
+ */
+export function ocultaEntreno(entreno) {
+  return aGuardar({ ...leeAvance(entreno), oculto: true });
+}
+
+/**
+ * Lo que una pantalla (o un reloj) necesita saber AHORA, calculado del plan, el avance guardado y la hora:
+ *
+ *   estado        'sin' (no ha empezado) · 'curso' · 'fin' (el atleta lo dio por terminado)
+ *   actual        el paso que toca, o `null` si ya no queda ninguno
+ *   indice        su lugar en `plan.pasos` (-1 si no hay)
+ *   siguiente     el próximo paso que NO es descanso (para «Sigue: …»), o `null`
+ *   descansoDespues  si el paso actual va seguido de un descanso, ese paso
+ *   descanso      si el paso actual ES un descanso: { paso, desde, extra, seg, fin, restan, vencido, pasado, pausado }
+ *                 (`seg`, `fin` y `restan` son `null` si solo dice texto; `restan` baja de 0 al pasarse y `pasado` cuenta cuánto;
+ *                 en pausa, `restan` se queda en lo que faltaba al pausar y `fin` es `null`: no hay hora a la que vaya a acabar)
+ *   cuenta        si el paso actual tiene su cronómetro en marcha: ver `cuentaDe`
+ *   estados       el estado de cada paso, en el orden de `plan.pasos`: 'hecho' · 'saltado' · 'pendiente' (para la lista de «Tu entreno»)
+ *   hechos, saltados, total   cuántos pasos de los que hay que hacer van hechos o saltados, y cuántos son
+ *   completo      no queda ningún paso (ni opcional)
+ *   soloLoOpcional  ya se hizo todo lo que había que hacer y lo que queda es opcional («5-6 veces»)
+ *   oculto        el atleta quitó el entreno guiado de esta sesión (ver `ocultaEntreno`)
+ *   transcurrido  milisegundos desde que inició hasta ahora (o hasta que terminó); `null` si no ha iniciado
+ *   puedeAnterior hay un ejercicio al cual regresar
+ */
+export function vistaDelEntreno(plan, entreno, ahora) {
+  const av = leeAvance(entreno);
+  const pasos = plan?.pasos ?? [];
+  const marcas = pasos.map((p) => marcaDe(av, p));
+  const i = marcas.findIndex((m) => !m);
+  const actual = i === -1 ? null : pasos[i];
+
+  let hechos = 0;
+  let saltados = 0;
+  let faltaAlgoRequerido = false;
+  pasos.forEach((p, k) => {
+    if (p.tipo === 'descanso' || p.opcional) return;
+    if (marcas[k]?.estado === 'hecho') hechos += 1;
+    else if (marcas[k]?.estado === 'saltado') saltados += 1;
+    else faltaAlgoRequerido = true;
+  });
+
+  const despues = i === -1 ? [] : pasos.slice(i + 1);
+  let descanso = null;
+  if (actual?.tipo === 'descanso') {
+    const desde = marcas[i - 1]?.t ?? av.inicio ?? ahora;
+    const extra = av.extra[actual.clave] ?? 0;
+    const seg = actual.seg === null ? null : actual.seg + extra;
+    const fin = seg === null ? null : desde + seg * 1000;
+    const pausadoEn = seg === null ? undefined : av.pausas[actual.clave];
+    const pausado = pausadoEn !== undefined;
+    const restan = fin === null ? null : Math.ceil((fin - (pausado ? pausadoEn : ahora)) / 1000);
+    descanso = { paso: actual, desde, extra, seg, fin: pausado ? null : fin, restan, vencido: restan !== null && restan <= 0, pasado: restan !== null && restan < 0 ? -restan : 0, pausado };
+  }
+
+  let estado = 'sin';
+  if (av.fin !== null) estado = 'fin';
+  else if (av.inicio !== null || hechos + saltados > 0) estado = 'curso';
+
+  return {
+    estado,
+    actual,
+    indice: i,
+    siguiente: despues.find((p) => p.tipo !== 'descanso') ?? null,
+    descansoDespues: actual && actual.tipo !== 'descanso' && despues[0]?.tipo === 'descanso' ? despues[0] : null,
+    descanso,
+    cuenta: actual ? cuentaDe(actual, entreno, ahora) : null,
+    estados: marcas.map((m) => m?.estado ?? 'pendiente'),
+    hechos,
+    saltados,
+    total: plan?.total ?? 0,
+    oculto: av.oculto,
+    completo: actual === null && pasos.length > 0,
+    soloLoOpcional: actual !== null && !faltaAlgoRequerido && pasos.length > 0,
+    transcurrido: av.inicio === null ? null : Math.max(0, (av.fin ?? ahora) - av.inicio),
+    puedeAnterior: pasos.slice(0, i === -1 ? pasos.length : i).some((p) => p.tipo !== 'descanso'),
+  };
+}

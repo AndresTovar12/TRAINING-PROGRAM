@@ -1,0 +1,277 @@
+/* LA RUTA del entreno libre con GPS (reestructura visual, 15 oct 2026). Andrés: «dejarlo listo para cuando la app descargable esté».
+
+   Dos piezas, separadas a propósito:
+     1. LA FUENTE: de dónde salen los puntos. Hoy, el GPS del navegador (solo mientras la pantalla está encendida: el navegador no mide en segundo plano).
+        En la app de la tienda se cambia por la del teléfono (o la del Apple Watch) con `usaFuenteDeUbicacion(...)`, y nada más de la app se entera.
+        Una fuente es `{ nombre, segundoPlano, disponible(), sigue(alPunto, alError) → parar }`; cada punto es `{ lat, lon, alt?, precision, fc? }`.
+     2. LO PURO: juntar los puntos en MUESTRAS con el mismo formato que las del reloj (`{ t, lat, lon, alt?, fc? }`, ver `lib/metricas/calculos.js`).
+        Así la distancia, el ritmo y los kilómetros los saca el mismo motor que ya lee los relojes, y al guardar se vuelve un entreno con ruta como cualquier otro.
+
+   Se prueba con `scripts/prueba-ruta.mjs`. */
+
+import { completaMuestras, vueltasPorKm } from './metricas/calculos.js';
+
+/** Los deportes que miden distancia con el GPS. Nadar también en el iPhone (6 nov 2026; en alberca, el reloj cuenta los largos); los de gimnasio no. */
+const CON_GPS = ['correr', 'caminar', 'bici', 'senderismo', 'natacion'];
+export const usaGps = (deporte) => CON_GPS.includes(deporte);
+
+/** Un punto con más error que esto (en metros) no se usa: al arrancar, el GPS da puntos a 100 m o más mientras «encuentra» la señal. */
+export const PRECISION_MAXIMA = 30;
+/** Ya con un punto bueno, los siguientes deben ser más precisos (auditoría del GPS, 27 oct 2026): uno de 25-30 m a media carrera suma metros falsos. */
+export const PRECISION_CON_SENAL = 20;
+/** Por debajo de esta velocidad (m/s) que da el iPhone se está parado. */
+export const VELOCIDAD_PARADO = 0.5;
+/** Arriba de esta velocidad que da el iPhone ya se está moviendo: el punto cuenta de inmediato (correr no espera). */
+export const VELOCIDAD_EN_MARCHA = 1;
+/** Cuántos puntos buenos SEGUIDOS (uno por segundo) tienen que salirse del radio del ancla para que cuente como moverse. */
+export const PUNTOS_PARA_MOVERSE = 3;
+/** Con más error que esto (m), la velocidad que da el iPhone no cuenta (bug del 2 nov 2026: entre edificios daba ~0.9 m/s quieto y la posición brincaba con ella). */
+export const PRECISION_PARA_VELOCIDAD = 12;
+/** Con ese error, salir de parado (sin sensor) pide además alejarse esto (m) más allá del radio del ancla. */
+const MARGEN_SIN_VELOCIDAD = 5;
+/** Sin la velocidad del iPhone, se mide con la distancia de estos últimos segundos (menos de `VELOCIDAD_EN_MARCHA` en la ventana es parado). */
+const VENTANA_SIN_VELOCIDAD = 5;
+/** Cada cuánto (segundos) se guarda un punto: uno por segundo, cada uno que da el GPS. Con uno cada 2 s la cámara del mapa avanzaba a saltos. */
+const CADA = 1;
+/** El ritmo de AHORA (6 nov 2026): la distancia de la ruta (la misma que se suma, sin los puntos parados) en estos últimos segundos, entre esos segundos. */
+export const VENTANA_RITMO_S = 20;
+/** Si en esa ventana la ruta avanzó menos que esto (m), se está parado: no hay ritmo (`null`). */
+export const MINIMO_RITMO_M = 15;
+/** El punto del que se parte puede estar hasta aquí (s) atrás; si no hay ninguno entre `VENTANA_RITMO_S` y esto (un hueco del GPS), no se inventa un ritmo. */
+const MAXIMO_VENTANA_RITMO_S = 30;
+/** Si hace más que esto (s) que no entra un punto (señal mala, un túnel), no se enseña el ritmo: el último ya no es de ahora. Solo se sabe si quien llama dice la hora. */
+const SIN_PUNTOS_RITMO_S = 10;
+/** El ritmo que se ve es la mediana de los últimos cálculos (uno por punto): no brinca con un punto malo. */
+const CALCULOS_PARA_SUAVIZAR = 3;
+
+const fuenteDelNavegador = {
+  nombre: 'navegador',
+  segundoPlano: false,
+  disponible: () => typeof navigator !== 'undefined' && !!navigator.geolocation,
+  sigue(alPunto, alError) {
+    const id = navigator.geolocation.watchPosition(
+      (p) => alPunto({
+        lat: p.coords.latitude, lon: p.coords.longitude, precision: p.coords.accuracy,
+        ...(typeof p.coords.altitude === 'number' ? { alt: p.coords.altitude } : {}),
+        ...(typeof p.coords.speed === 'number' && p.coords.speed >= 0 ? { vel: p.coords.speed } : {}),
+        ...(typeof p.coords.heading === 'number' && p.coords.heading >= 0 ? { rumbo: p.coords.heading } : {}),
+      }),
+      (e) => alError?.(e?.code === 1 ? 'negado' : 'sin_senal'),
+      // `maximumAge`: un punto de hace unos segundos sirve para arrancar (con 0, el navegador espera uno nuevo y el primero tarda).
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 },
+    );
+    return () => navigator.geolocation.clearWatch(id);
+  },
+};
+
+let fuenteActual = null;
+/** La app instalable pone aquí la fuente nativa (con segundo plano); `null` regresa a la del navegador. */
+export function usaFuenteDeUbicacion(fuente) { fuenteActual = fuente; }
+export const fuenteDeUbicacion = () => fuenteActual ?? fuenteDelNavegador;
+
+const seis = (v) => Math.round(v * 1e6) / 1e6;
+
+/** Metros entre dos puntos `{lat, lon}` (en línea recta; para unos cuantos metros sobra). */
+export function metrosEntrePuntos(a, b) {
+  const rad = Math.PI / 180;
+  const x = (b.lon - a.lon) * rad * Math.cos(((a.lat + b.lat) / 2) * rad);
+  const y = (b.lat - a.lat) * rad;
+  return Math.sqrt(x * x + y * y) * 6371000;
+}
+
+/* El ANCLA de «parado» (30 oct 2026): el último lugar firme, la última muestra que NO es `q` (las `q` son puntos de alguien parado, guardados en el lugar del ancla). */
+const anclaDe = (muestras) => {
+  for (let i = muestras.length - 1; i >= 0; i -= 1) if (!muestras[i].q) return muestras[i];
+  return muestras[0];
+};
+// Dónde estaba DE VERDAD una muestra: las `q` (guardadas en el lugar del ancla) llevan su lugar real en `r`.
+const realDe = (x) => (x.r ? { lat: x.r[0], lon: x.r[1] } : x);
+// El punto convertido en muestra firme (en su lugar real), con lo que traiga.
+const firme = (punto, segundo) => {
+  const m = { t: segundo, lat: seis(punto.lat), lon: seis(punto.lon) };
+  if (typeof punto.alt === 'number') m.alt = Math.round(punto.alt * 10) / 10;
+  return m;
+};
+
+/**
+ * Suma un punto a las muestras, en el segundo `t` del entreno (sin contar pausas). Devuelve las MISMAS muestras si el punto no sirve y unas nuevas si sí.
+ * No sirve: impreciso (más de `PRECISION_MAXIMA` m para el primero, de `PRECISION_CON_SENAL` m después) o llegó antes de `CADA` s del anterior.
+ *
+ * PARADO NO SUMA METROS (30 oct 2026). Bajo techo el GPS deriva despacio y salta varios metros al cambiar de satélite; antes un solo punto que se alejaba más que
+ * su error sumaba el salto entero (simulado: 200 m en 10 minutos quieto en un cuarto). Ahora moverse se decide con una VENTANA, no con un punto:
+ *   · El ANCLA es el último lugar firme. Parado, cada punto entra en el lugar del ancla (`q: 1`, cero metros; el tiempo sigue y el ritmo dice «parado»), con su
+ *     lugar real en `r`.
+ *   · SEÑALES DE MOVERSE: con la velocidad del iPhone, que la dé (≥ `VELOCIDAD_PARADO`) y que el punto de verdad se haya desplazado eso desde el anterior (la
+ *     velocidad con ruido de alguien quieto no basta, ni un salto de un solo segundo). Sin ella, la distancia de los últimos `VENTANA_SIN_VELOCIDAD` s
+ *     (≥ `VELOCIDAD_EN_MARCHA`) y ese mismo paso.
+ *   · SALIENDO DE PARADO, un punto es candidato (`c: 1`) si hay señales de moverse y se alejó del ancla más que `max(su error, error del ancla)`, o el iPhone
+ *     dice que va a más de `VELOCIDAD_EN_MARCHA`. Se acepta con `PUNTOS_PARA_MOVERSE` candidatos seguidos (3 s); con 2 si ya está fuera del radio y va a más
+ *     de 1 m/s (correr no espera 3 s). Al aceptar, los candidatos vuelven a su lugar real (no se pierde el arranque) y el punto nuevo es el ancla.
+ *   · YA EN MOVIMIENTO, cada punto con señales de moverse cuenta, segundo a segundo (la cámara y el punto del mapa no avanzan a saltos); el primero sin ellas
+ *     lo deja parado.
+ * `vel` es la velocidad que da el GPS (m/s). Se prueba con `scripts/prueba-ruta.mjs`.
+ * `trasPausa` (6 nov 2026): este es el primer punto desde que se reanudó una pausa. Queda marcado (`sp: 1`) para que el ritmo de ahora (`enVivo`) no mida una ventana
+ * que cruce la pausa: en ella no llegan puntos y el tiempo no cuenta, pero la persona pudo moverse (un salto de metros en un segundo).
+ *
+ * EL SENSOR DE MOVIMIENTO (2 nov 2026; desde el 3 nov junto con el GPS, `decideMarcha` en `lib/entrenoLibre.js`). `sensor`: 'quieto' | 'mueve' | `null`.
+ *   · 'quieto': el punto entra como parado (`q: 1`) aunque el GPS diga otra cosa.
+ *   · 'mueve': saliendo de parado no hace falta la ventana de 3 s; basta una señal del GPS (señales de moverse o fuera del radio del ancla).
+ *   · `null` (la web, sin permiso, o el sensor no sabe): las reglas del GPS de arriba, más estrictas con error de más de `PRECISION_PARA_VELOCIDAD` m: la
+ *     velocidad del iPhone no cuenta (se usa la distancia de los últimos 5 s, ≥ 1 m/s) y salir de parado pide alejarse `MARGEN_SIN_VELOCIDAD` m más allá del radio.
+ * Un punto parado guarda `vel: 0` (su velocidad de verdad en `vq`): el ritmo de ahora dice «parado» aunque el iPhone diga 0.9 m/s.
+ */
+export function agregaPunto(muestras, punto, t, sensor = null, { trasPausa = false } = {}) {
+  if (!punto || typeof punto.lat !== 'number' || typeof punto.lon !== 'number') return muestras;
+  const ultima = muestras[muestras.length - 1];
+  if (!(punto.precision <= (ultima ? PRECISION_CON_SENAL : PRECISION_MAXIMA))) return muestras;
+  // El segundo se guarda ENTERO y hacia abajo (`floor`), y se compara ya entero: con `round` y la resta con decimales, una carrera que arrancaba en la segunda
+  // mitad del segundo perdía uno de cada dos puntos (revisión de Fable 5, 27 oct 2026).
+  const segundo = Math.floor(t);
+  if (ultima && segundo - ultima.t < CADA) return muestras;
+  const velGps = typeof punto.vel === 'number' && punto.vel >= 0 ? punto.vel : null;
+  // Con mucho error, la velocidad del iPhone no cuenta para decidir si te mueves (sí se guarda, para el ritmo de quien sí va corriendo).
+  const velUtil = velGps != null && punto.precision <= PRECISION_PARA_VELOCIDAD ? velGps : null;
+
+  let previas = muestras;
+  let m;
+  if (!ultima) {
+    m = firme(punto, segundo);
+  } else {
+    // ¿Hay señales de MOVERSE? Con la velocidad del iPhone, que la dé (≥ `VELOCIDAD_PARADO`) Y que el punto de verdad se haya desplazado eso desde el anterior
+    // (la velocidad con ruido de alguien parado no basta, ni un salto de un solo segundo). Sin ella, la distancia de los últimos 5 s (≥ 1 m/s) y también ese paso.
+    const anterior = realDe(ultima);
+    const paso = metrosEntrePuntos(anterior, punto) / Math.max(1, segundo - ultima.t);
+    let enMarcha;
+    if (velUtil != null) {
+      enMarcha = velUtil >= VELOCIDAD_PARADO && paso >= VELOCIDAD_PARADO;
+    } else {
+      const desde = muestras.find((x) => segundo - x.t <= VENTANA_SIN_VELOCIDAD) ?? ultima;
+      enMarcha = paso >= VELOCIDAD_PARADO && metrosEntrePuntos(realDe(desde), punto) / Math.max(1, segundo - desde.t) >= VELOCIDAD_EN_MARCHA;
+    }
+    let mueve;
+    let candidato = false;
+    if (sensor === 'quieto') {
+      // El sensor dice que estás quieto: parado, diga lo que diga el GPS.
+      mueve = false;
+    } else if (!ultima.q) {
+      // Ya iba en movimiento: cada punto con señales de moverse cuenta (la cámara y el punto avanzan segundo a segundo); el primero sin ellas lo deja parado.
+      mueve = enMarcha;
+    } else {
+      // Estaba parado. Con el sensor diciendo que te mueves, basta una señal del GPS. Sin sensor, moverse se confirma con una VENTANA: el punto es candidato
+      // si hay señales de moverse y se salió del radio del ancla (o el iPhone dice que va a más de 1 m/s). Se acepta con 3 candidatos seguidos; con 2 si ya
+      // está fuera del radio y va a más de 1 m/s (correr no espera 3 s). Con mucho error, fuera del radio y `MARGEN_SIN_VELOCIDAD` m más.
+      const ancla = anclaDe(muestras);
+      const radio = Math.max(punto.precision, typeof ancla.pre === 'number' ? ancla.pre : punto.precision);
+      const lejos = metrosEntrePuntos(ancla, punto);
+      const fuera = lejos > radio;
+      let esperando = 0;
+      for (let k = muestras.length - 1; k >= 0 && muestras[k].c; k -= 1) esperando += 1;
+      if (sensor === 'mueve') {
+        candidato = enMarcha || fuera;
+        mueve = candidato;
+      } else {
+        const rapido = velUtil != null && velUtil > VELOCIDAD_EN_MARCHA;
+        candidato = enMarcha && (punto.precision > PRECISION_PARA_VELOCIDAD ? lejos > radio + MARGEN_SIN_VELOCIDAD : (fuera || rapido));
+        mueve = candidato && (esperando + 1 >= PUNTOS_PARA_MOVERSE || (fuera && rapido && esperando >= 1));
+      }
+      if (mueve && esperando) {
+        // Los que esperaban vuelven a su lugar real (y a su velocidad): no se pierde el arranque.
+        previas = muestras.map((x, k) => {
+          if (k < muestras.length - esperando) return x;
+          const { q: _q, c: _c, r, vq, ...resto } = x;
+          return { ...resto, lat: r[0], lon: r[1], ...(typeof vq === 'number' ? { vel: vq } : {}) };
+        });
+      }
+    }
+    if (mueve) m = firme(punto, segundo);
+    else {
+      // Parado (o todavía sin confirmar): en el lugar del ancla, cero metros, y el tiempo sigue. Guarda dónde estaba de verdad (`r`): el paso del siguiente
+      // punto se mide desde ahí, y si era candidato (`c`) y se confirma el movimiento, vuelve a su lugar. La ruta que se guarda solo lleva `t`, `lat` y `lon`.
+      const ancla = ultima.q ? anclaDe(muestras) : ultima;
+      m = { t: segundo, lat: ancla.lat, lon: ancla.lon, ...(typeof ancla.alt === 'number' ? { alt: ancla.alt } : {}), q: 1, r: [seis(punto.lat), seis(punto.lon)] };
+      if (candidato) m.c = 1;
+    }
+  }
+  if (typeof punto.fc === 'number') m.fc = Math.round(punto.fc);
+  if (trasPausa && ultima) m.sp = 1;
+  // Parado, la velocidad es 0 (el ritmo de ahora dice «parado»); la que dio el iPhone se guarda en `vq`, por si el punto era el arranque.
+  if (velGps != null) {
+    const vel = Math.round(velGps * 100) / 100;
+    if (m.q) { m.vel = 0; m.vq = vel; } else m.vel = vel;
+  }
+  if (!m.q && typeof punto.rumbo === 'number' && punto.rumbo >= 0) m.rumbo = Math.round(punto.rumbo);
+  // El error del GPS (m): el mapa del iPhone dibuja con él el círculo de precisión del punto, y el ancla lo usa para su radio.
+  if (typeof punto.precision === 'number' && punto.precision >= 0) m.pre = Math.round(punto.precision);
+  return [...previas, m];
+}
+
+const mediana = (xs) => {
+  const o = [...xs].sort((a, b) => a - b);
+  const k = Math.floor(o.length / 2);
+  return o.length % 2 ? o[k] : (o[k - 1] + o[k]) / 2;
+};
+
+/** El ritmo (s/km) con el que terminó `m[j]`: la ruta de la ventana entre el punto más cercano a `VENTANA_RITMO_S` s atrás (sin pasar de `MAXIMO_VENTANA_RITMO_S`) y este. `null`: parado o sin dónde medir. `corte`: no se mira antes de este punto. */
+function ritmoHasta(m, j, corte) {
+  const fin = m[j];
+  for (let i = j - 1; i >= corte; i -= 1) {
+    const dt = fin.t - m[i].t;
+    if (dt < VENTANA_RITMO_S) continue;
+    if (dt > MAXIMO_VENTANA_RITMO_S) return null; // hueco del GPS: el punto más cercano ya está muy lejos en el tiempo
+    const dd = fin.dist - m[i].dist;
+    return dd >= MINIMO_RITMO_M ? (dt / dd) * 1000 : null;
+  }
+  return null;
+}
+
+/**
+ * Lo que se ve mientras corre: `{ distanciaM, ritmoSKm, kms }`.
+ *  - `ritmoSKm`: el ritmo de AHORA (segundos por km), `null` si todavía no hay para medirlo o si está parado. Sale de los PUNTOS, igual que la distancia (6 nov 2026; la
+ *    velocidad que da el iPhone, `vel`, salía baja y el ritmo marcaba 5:58 a quien iba a 5:00): la distancia de la ruta en los últimos `VENTANA_RITMO_S` s entre esos
+ *    segundos, `null` si avanzó menos de `MINIMO_RITMO_M` m. Lo que se ve es la mediana de los últimos 3 cálculos (uno por punto). Nada de esto cruza una pausa (`sp`)
+ *    y, sin un punto entre 20 y 30 s atrás (un túnel), no hay ritmo: perder la señal no lo inventa. `ahora` (opcional): el segundo del entreno en que se mira (el
+ *    mismo eje de `t`, sin pausas); con más de `SIN_PUNTOS_RITMO_S` s sin puntos nuevos tampoco hay ritmo (si no, el último se quedaría pegado mientras no llegan puntos).
+ *  - `kms`: los kilómetros completos `[{ n, dur }]` (el del motor, sin el trozo final).
+ */
+export function enVivo(muestras, ahora = null) {
+  const m = completaMuestras(muestras).filter((x) => typeof x.dist === 'number');
+  if (m.length < 2) return { distanciaM: 0, ritmoSKm: null, kms: [] };
+  const ultima = m[m.length - 1];
+  let corte = 0;
+  for (let i = m.length - 1; i > 0; i -= 1) if (m[i].sp) { corte = i; break; }
+  const calculos = [];
+  for (let j = Math.max(corte, m.length - CALCULOS_PARA_SUAVIZAR); j < m.length; j += 1) calculos.push(ritmoHasta(m, j, corte));
+  const validos = calculos.filter((x) => x != null);
+  const sinPuntos = typeof ahora === 'number' && ahora - ultima.t > SIN_PUNTOS_RITMO_S;
+  const ritmoSKm = !sinPuntos && validos.length * 2 > calculos.length ? Math.round(mediana(validos)) : null;
+  const kms = vueltasPorKm(muestras).filter((v) => v.dist >= 990).map((v) => ({ n: v.n, dur: v.dur }));
+  return { distanciaM: Math.round(ultima.dist), ritmoSKm, kms };
+}
+
+/**
+ * La ruta dibujada en un cuadro de `ancho × alto` (con `margen`): el trazo SVG (`d`), y dónde empezó y dónde va. `null` con menos de dos puntos.
+ * Sin mapa de calles a propósito: el dibujo de la ruta sola no necesita un proveedor de mapas (eso se decide con la app instalable).
+ */
+export function trazoDeRuta(muestras, { ancho = 300, alto = 200, margen = 16 } = {}) {
+  const pts = muestras.filter((x) => typeof x.lat === 'number' && typeof x.lon === 'number');
+  if (pts.length < 2) return null;
+  const lat0 = pts[0].lat * (Math.PI / 180);
+  const xy = pts.map((p) => [p.lon * Math.cos(lat0), -p.lat]);
+  const xs = xy.map((p) => p[0]); const ys = xy.map((p) => p[1]);
+  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const escala = Math.min((ancho - 2 * margen) / Math.max(x1 - x0, 1e-9), (alto - 2 * margen) / Math.max(y1 - y0, 1e-9));
+  // Centrada en el cuadro.
+  const dx = (ancho - (x1 - x0) * escala) / 2; const dy = (alto - (y1 - y0) * escala) / 2;
+  const enCuadro = xy.map(([x, y]) => [Math.round(((x - x0) * escala + dx) * 10) / 10, Math.round(((y - y0) * escala + dy) * 10) / 10]);
+  return {
+    d: enCuadro.map(([x, y], i) => `${i ? 'L' : 'M'}${x} ${y}`).join(' '),
+    inicio: enCuadro[0],
+    fin: enCuadro[enCuadro.length - 1],
+  };
+}
+
+/** «5:32» de segundos por km. */
+export function textoDeRitmo(sKm) {
+  if (!(sKm > 0) || sKm >= 3600) return '—';
+  return `${Math.floor(sKm / 60)}:${String(Math.round(sKm % 60)).padStart(2, '0')}`;
+}
