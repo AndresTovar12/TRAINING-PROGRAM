@@ -234,7 +234,8 @@ struct EntrenoGuardado: Codable {
             saltados[c] = nil
             extra[c] = nil
             empezados?[c] = nil
-            if pasos[k].conRelojDeSet { formatos?[pasos[k].claveFormato] = nil }
+            // La clave va aparte: con `formatos?[…]` Swift abre el acceso a `self` antes de leer `pasos` y no compila (acceso exclusivo).
+            if pasos[k].conRelojDeSet { let clave = pasos[k].claveFormato; formatos?[clave] = nil }
             k += 1
         }
         metrosAlEmpezarPaso = nil
