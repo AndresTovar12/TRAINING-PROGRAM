@@ -50,7 +50,7 @@ const mmss = (s) => {
  * `onFin` (22 nov 2026, reglas 1 y 2 del entreno del atleta): avisa cuando el video terminó (el archivo, el tramo recortado o, en YouTube y Vimeo, su
  * reproductor oficial). Con eso el calentamiento guiado pasa solo. En TikTok e Instagram no hay cómo saberlo: nunca se llama.
  */
-export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef, onMedidas, onDeslizar, onRechazado, onFin, bucle = false }) {
+export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef, onMedidas, onDeslizar, onRechazado, onFin, bucle = false, llena = false, arranca = false }) {
   const ref = useRef(null);
   const pista = useRef(null);
   const arrastra = useRef(false);
@@ -147,7 +147,10 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef,
     window.addEventListener('message', alMensaje);
     return () => window.removeEventListener('message', alMensaje);
   }, [liga?.embed, url]);
-  const embedConApi = srcDelPuente(liga);
+  // `arranca` (24 nov 2026): viene de un toque de la persona; el puente pide reproducir sin otro toque (en el iPhone, con sonido).
+  const embedConApi = srcDelPuente(liga, { arranca });
+  // Negro hasta que el puente cargó: sin el destello blanco del marco vacío (Andrés, video del 24 nov 2026).
+  const [cargadoDe, setCargadoDe] = useState(null);
   const conBotonDeAfuera = !conApi || falloDe === url;
 
   /* Un video que vive fuera (TikTok, YouTube, un reel) no es un archivo
@@ -157,7 +160,7 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef,
      lo hacen dentro del marco, donde esta app no se entera. Sin el botón, eso
      es una pantalla en blanco sin explicación. */
   if (liga) {
-    const marco = estilo ?? { width: '100%', borderRadius: 14, marginTop: 12 };
+    const marco = { background: '#000', ...(estilo ?? { width: '100%', borderRadius: 14, marginTop: 12 }) };
     return (
       <div style={marco}>
         {liga.embed ? (
@@ -165,18 +168,20 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef,
             key={liga.embed}
             ref={marcoRef}
             src={embedConApi}
+            onLoad={() => setCargadoDe(embedConApi)}
             title={`Video en ${liga.de}`}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
             style={{
-              width: '100%', aspectRatio: liga.de === 'TikTok' || liga.de === 'Instagram' ? '9 / 16' : '16 / 9',
-              border: 'none', borderRadius: 14, background: '#000', display: 'block',
+              width: '100%', ...(llena ? { height: '100%' } : { aspectRatio: liga.vertical ? '9 / 16' : '16 / 9' }),
+              border: 'none', borderRadius: llena ? 0 : 14, background: '#000', display: 'block',
+              opacity: cargadoDe === embedConApi ? 1 : 0, transition: 'opacity .2s ease',
             }}
           />
         ) : (
           <div style={{
             display: 'grid', placeItems: 'center', gap: 8, padding: '34px 18px',
-            background: T.bg3, borderRadius: 14, textAlign: 'center',
+            background: T.bg3, borderRadius: llena ? 0 : 14, textAlign: 'center', ...(llena ? { height: '100%', boxSizing: 'border-box' } : null),
           }}>
             <ExternalLink size={22} color={T.text2} />
             <span style={{ fontSize: 13.5, fontWeight: 700, color: T.text2 }}>
@@ -185,14 +190,16 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef,
           </div>
         )}
         {/* Con fondo propio: este bloque puede caer sobre un fondo oscuro, y un
-            enlace azul sobre negro no se lee. */}
-{conBotonDeAfuera && (
-                <a
+            enlace azul sobre negro no se lee. Con `llena` flota arriba a la izquierda:
+            la caja ya mide lo que el video, y abajo están los controles de la red. */}
+        {conBotonDeAfuera && (
+          <a
           href={liga.abrir}
           target="_blank"
           rel="noopener noreferrer"
           style={{
-            display: 'inline-flex', alignItems: 'center', gap: 7, margin: '9px 0 0 12px',
+            display: 'inline-flex', alignItems: 'center', gap: 7,
+            ...(llena ? { position: 'absolute', top: 10, left: 10, zIndex: 2, boxShadow: '0 2px 10px rgba(0,0,0,.25)' } : { margin: '9px 0 0 12px' }),
             padding: '7px 12px', borderRadius: 999, background: '#FFFFFF',
             border: 'none',
             fontFamily: FONT, fontSize: 13, fontWeight: 800, color: T.accent, textDecoration: 'none',

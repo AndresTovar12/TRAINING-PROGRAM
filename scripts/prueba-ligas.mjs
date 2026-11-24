@@ -33,5 +33,17 @@ for (const [de, e] of [['YouTube', 'https://evil.com/embed/x'], ['YouTube', 'htt
 igual(ligaExterna('https://otro-sitio.com/video')?.de, 'Enlace', 'una dirección desconocida no se incrusta');
 igual(ligaExterna('https://videos.traininglabapp.com/media/a.mp4'), null, 'un archivo nuestro no es una liga');
 
+// La forma del cuadro y la foto de antes de tocar (24 nov 2026).
+igual([
+  ligaExterna('https://youtube.com/shorts/abcdef12345').vertical,
+  ligaExterna('https://www.youtube.com/watch?v=abcdef12345').vertical,
+  ligaExterna(EJEMPLOS.TikTok).vertical,
+  ligaExterna(EJEMPLOS.Vimeo).vertical,
+], [true, false, true, false], 'de pie: Short y TikTok sí; YouTube normal y Vimeo no');
+igual(ligaExterna('https://youtube.com/shorts/abcdef12345').imagen, 'https://i.ytimg.com/vi/abcdef12345/hqdefault.jpg', 'YouTube da su foto para antes de tocar');
+// Un solo toque: con `arranca`, YouTube y Vimeo arrancan solos; sin él, no.
+const yt = (o) => new URL(reproductorDe('YouTube', 'https://www.youtube.com/embed/abcdef12', 'https://app.traininglabapp.com', o)).searchParams.get('autoplay');
+igual([yt({ arranca: true }), yt()], ['1', null], 'YouTube arranca solo solo cuando la app lo pide');
+
 console.log(fallas ? `\nprueba-ligas: ${fallas} falla(s)` : 'prueba-ligas: las 7 redes y el puente, todo bien.');
 process.exit(fallas ? 1 : 0);

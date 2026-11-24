@@ -148,13 +148,17 @@ export default function Portada({ foto, video, desde, hasta, encuadre, grande = 
   // Un video que vive fuera (TikTok, YouTube) no da un primer fotograma: el
   // <video> no puede leerlo y el recuadro se quedaría en negro sin que nada lo
   // explique. En ese caso se pinta lo de siempre.
-  const propio = !!video && !ligaExterna(video);
+  const liga = video ? ligaExterna(video) : null;
+  const propio = !!video && !liga;
   // El gancho se llama siempre; con `null` no busca nada.
   const poster = usePoster(!foto && propio ? video : null);
 
   let contenido = children;
   if (foto) {
     contenido = <img src={foto} alt="" loading="lazy" style={RELLENO} />;
+  } else if (liga?.imagen) {
+    // Un video de YouTube sin portada propia: la foto que da YouTube (Andrés, 24 nov 2026: «antes de tocarla siempre aparece en negro»).
+    contenido = <img src={liga.imagen} alt="" loading="lazy" style={RELLENO} />;
   } else if (propio) {
     if (poster) contenido = <FotoDeVideo fila={poster} grande={grande} encuadre={encuadre} />;
     else if (poster === undefined) contenido = <Espera />;

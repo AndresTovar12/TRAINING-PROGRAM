@@ -102,25 +102,11 @@ export default function TarjetaDeVideo({ videos, portada, nombre, enCarta = fals
   }
   aspecto = Math.round(aspecto * 1000) / 1000;
 
-  // Un video de fuera se incrusta tal cual (ver `VideoRecortado`): no cabe en la tarjeta.
-  if (reproduciendo && externo) {
-    return (
-      <div style={{ marginTop: enCarta || sinMargen ? 0 : 14 }}>
-        {conPestanas && (
-          <div role="tablist" aria-label="Qué video ver" style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 8 }}>
-            {[[iEjemplo, 'Ejemplo'], [iExplicacion, 'Explicación']].map(([i, t]) => (
-              <button key={i} type="button" role="tab" aria-selected={angulo === i} onClick={() => cambia(i)}
-                style={{ border: 'none', borderRadius: 999, padding: '8px 14px', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', background: angulo === i ? '#111318' : 'rgba(17,19,24,.07)', color: angulo === i ? '#fff' : '#111318' }}>
-                {i === iExplicacion && <Volume2 size={16} strokeWidth={2.4} style={{ marginRight: 5 }} />}{t}
-              </button>
-            ))}
-          </div>
-        )}
-        <VideoRecortado video={video} estilo={{ width: '100%', borderRadius: enCarta ? 16 : 20 }} />
-        {!conPestanas && <Puntos videos={videos} activo={angulo} onIr={cambia} enFlujo claro />}
-      </div>
-    );
-  }
+  /* Un video de fuera (YouTube, TikTok, un reel…) se ve DENTRO de este mismo cuadro, que toma su forma: de pie (Short, TikTok, reel) o
+     acostado (Andrés, 24 nov 2026: «que el video se reproduzca en el cuadro que ya tiene… amoldado al tamaño que requiera el video»).
+     Agrandarlo es del atleta, con el botón del reproductor. */
+  const liga = externo ? ligaExterna(video.url) : null;
+  if (liga) aspecto = liga.vertical ? 9 / 16 : 16 / 9;
 
   const pestanas = conPestanas && (
     <div role="tablist" aria-label="Qué video ver" style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 8 }}>
@@ -142,6 +128,10 @@ export default function TarjetaDeVideo({ videos, portada, nombre, enCarta = fals
         boxShadow: enCarta ? 'none' : '0 8px 24px rgba(17,19,24,0.14)',
         aspectRatio: `${aspecto}`, width: alto ? `min(${anchoMaximo}, calc(${alto} * ${aspecto}))` : `min(100%, calc(${altoMaximo} * ${aspecto}))`, maxWidth: 480,
       }}>
+        {externo && reproduciendo && (
+          // Un solo toque: el reproductor arranca solo (`arranca`) y llena el cuadro (`llena`).
+          <VideoRecortado key={video.url} video={video} llena arranca estilo={{ position: 'absolute', inset: 0 }} />
+        )}
         {propio && (reproduciendo || adelanta) && (
           <VideoRecortado
             video={video}

@@ -188,7 +188,8 @@ function useGuiado(paso, esUltimo, onListo, onTerminar) {
     return () => clearTimeout(t);
   }, [acabo]);
   const video = { url: paso.video.url, inicio: paso.video.inicio ?? null, fin: paso.video.fin ?? null, sinAudio: false, encuadre: null };
-  const aspecto = liga && liga.de !== 'YouTube' && liga.de !== 'Vimeo' ? '9 / 16' : '16 / 9';
+  // De pie (Short, TikTok, reel) o acostado: el cuadro toma la forma del video (24 nov 2026).
+  const aspecto = liga?.vertical ? 9 / 16 : 16 / 9;
   const duracion = paso.termina?.valor > 0 ? (paso.termina.valor < 60 ? `${paso.termina.valor} seg` : `${Math.round(paso.termina.valor / 60)} min`) : null;
   return { acabo, setAcabo, liga, sabeCuandoAcaba, sigue, video, aspecto, duracion };
 }
@@ -221,8 +222,8 @@ function PasoGuiadoClaro({ paso, siguiente, enQueVa, esUltimo, onListo, onSaltar
             <style>{'@keyframes tl-listo{from{width:0}to{width:100%}}'}</style>
           </div>
         ) : (
-          <div style={{ position: 'relative', width: '100%', aspectRatio: aspecto, maxHeight: '58vh', borderRadius: 20, overflow: 'hidden', background: '#111' }}>
-            <VideoRecortado video={video} estilo={liga ? { width: '100%' } : undefined} reproduce onFin={() => setAcabo(true)} />
+          <div style={{ position: 'relative', width: `min(100%, calc(58vh * ${aspecto}))`, margin: '0 auto', aspectRatio: `${aspecto}`, borderRadius: 20, overflow: 'hidden', background: '#111' }}>
+            <VideoRecortado video={video} llena={!!liga} arranca={!!liga} estilo={liga ? { position: 'absolute', inset: 0 } : undefined} reproduce onFin={() => setAcabo(true)} />
           </div>
         )}
         {!acabo && duracion && <div style={{ textAlign: 'center', fontSize: 14, fontWeight: 700, color: LT.text2 }}>{duracion} · pasa solo al terminar el video</div>}
@@ -275,8 +276,8 @@ function PasoGuiadoOscuro({ paso, siguiente, tiempo, enQueVa, esUltimo, onLista,
             <style>{'@keyframes tl-listo{from{width:0}to{width:100%}}'}</style>
           </div>
         ) : (
-          <div style={{ position: 'relative', width: '100%', aspectRatio: liga && liga.de !== 'YouTube' && liga.de !== 'Vimeo' ? '9 / 16' : '16 / 9', maxHeight: '56vh', borderRadius: 20, overflow: 'hidden', background: '#111' }}>
-            <VideoRecortado video={video} estilo={liga ? { width: '100%' } : undefined} reproduce onFin={() => setAcabo(true)} />
+          <div style={{ position: 'relative', width: `min(100%, calc(56vh * ${liga?.vertical ? 9 / 16 : 16 / 9}))`, margin: '0 auto', aspectRatio: liga?.vertical ? '9 / 16' : '16 / 9', borderRadius: 20, overflow: 'hidden', background: '#111' }}>
+            <VideoRecortado video={video} llena={!!liga} arranca={!!liga} estilo={liga ? { position: 'absolute', inset: 0 } : undefined} reproduce onFin={() => setAcabo(true)} />
           </div>
         )}
         {!acabo && paso.termina?.valor > 0 && <div style={{ textAlign: 'center', fontSize: 14, fontWeight: 700, color: TENUE }}>{paso.termina.valor < 60 ? `${paso.termina.valor} seg` : `${Math.round(paso.termina.valor / 60)} min`} · pasa solo al terminar el video</div>}

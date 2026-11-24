@@ -25,7 +25,7 @@ export const PERMITIDOS = {
 };
 
 /** La dirección final del reproductor, o `null` si no es de una red permitida. `origen`: el de esta página (lo pide YouTube). */
-export function reproductorDe(de, e, origen) {
+export function reproductorDe(de, e, origen, { arranca = false } = {}) {
   let u;
   try { u = new URL(e); } catch { return null; }
   if (u.protocol !== 'https:') return null;
@@ -34,6 +34,8 @@ export function reproductorDe(de, e, origen) {
   if (de === 'Instagram' && !/\/embed\/?$/.test(u.pathname)) return null;
   if (de === 'YouTube') { u.searchParams.set('enablejsapi', '1'); u.searchParams.set('playsinline', '1'); u.searchParams.set('rel', '0'); u.searchParams.set('origin', origen); }
   if (de === 'Vimeo') { u.searchParams.set('playsinline', '1'); u.searchParams.set('api', '1'); }
+  // `auto=1`: la app ya recibió el toque de la persona; el video arranca sin otro (un solo toque, 24 nov 2026).
+  if (arranca && (de === 'YouTube' || de === 'Vimeo')) u.searchParams.set('autoplay', '1');
   return u.toString();
 }
 
@@ -41,7 +43,8 @@ export function reproductorDe(de, e, origen) {
 if (typeof document !== 'undefined') {
   const p = new URLSearchParams(location.search);
   const de = p.get('de') ?? '';
-  const src = reproductorDe(de, p.get('e') ?? '', location.origin);
+  const arranca = p.get('auto') === '1';
+  const src = reproductorDe(de, p.get('e') ?? '', location.origin, { arranca });
   const avisa = (tlVideo) => { try { parent.postMessage({ tlVideo }, '*'); } catch { /* sin marco: nada que avisar */ } };
   let avisado = false;
   const fin = () => { if (!avisado) { avisado = true; avisa('fin'); } };
@@ -53,7 +56,7 @@ if (typeof document !== 'undefined') {
   } else if (de === 'Dropbox') {
     // La liga es el archivo mismo: un <video> como los nuestros, que sí dice cuándo termina.
     const v = document.createElement('video');
-    Object.assign(v, { src, controls: true, playsInline: true, preload: 'metadata' });
+    Object.assign(v, { src, controls: true, playsInline: true, preload: 'metadata', autoplay: arranca });
     v.setAttribute('playsinline', '');
     v.addEventListener('ended', fin);
     v.addEventListener('error', () => avisa('error'));

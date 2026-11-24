@@ -6,12 +6,17 @@
  * YouTube, Vimeo, TikTok e Instagram. Todas se ven dentro de la app por el puente (`public/reproductor/`, ver `srcDelPuente` en `videos.js`).
  * `embed(id, texto)`: la dirección del reproductor oficial (Facebook la necesita entera). `archivo`: la liga es el video mismo (Dropbox), y el
  * puente lo pone en un <video>. `avisaFin`: de qué redes el puente sabe cuándo terminó el video (para el calentamiento guiado que pasa solo).
+ * `vertical`: el video es de pie (un Short, un TikTok, un reel): el cuadro toma esa forma (Andrés, 24 nov: «que el cuadro esté amoldado al
+ * tamaño que requiera el video»). `imagen`: su foto antes de tocar play (YouTube la da; las demás redes no sin pedirla a su servidor).
  */
 export const LIGAS = [
   {
     de: 'YouTube',
     prueba: /(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{6,})/i,
     embed: (id) => `https://www.youtube.com/embed/${id}`,
+    // La foto del video, que YouTube da de cualquier video público (se ve antes de tocar play).
+    imagen: (id) => `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+    vertical: (texto) => /youtube\.com\/shorts\//i.test(texto),
   },
   {
     de: 'Vimeo',
@@ -22,18 +27,21 @@ export const LIGAS = [
     de: 'TikTok',
     prueba: /tiktok\.com\/.*?\/video\/(\d+)/i,
     embed: (id) => `https://www.tiktok.com/embed/v2/${id}`,
+    vertical: () => true,
   },
   {
     // Un reel de Instagram se incrusta con /embed al final de su dirección.
     de: 'Instagram',
     prueba: /instagram\.com\/(?:reel|reels|p|tv)\/([\w-]+)/i,
     embed: (id) => `https://www.instagram.com/reel/${id}/embed`,
+    vertical: () => true,
   },
   {
     // Videos públicos de Facebook (también los reels y las ligas cortas fb.watch), con su reproductor oficial.
     de: 'Facebook',
     prueba: /(?:facebook\.com\/(?:[^/?#]+\/videos\/|watch\/?\?v=|reel\/|share\/v\/)|fb\.watch\/)([\w.-]+)/i,
     embed: (_id, texto) => `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(texto)}&show_text=false`,
+    vertical: (texto) => /\/(reel|share\/v)\//i.test(texto),
   },
   {
     // Un video de Google Drive compartido «cualquiera con el link»: su vista previa lo reproduce.
@@ -59,7 +67,12 @@ export function ligaExterna(url) {
   if (!/^https?:\/\//i.test(texto)) return null;
   for (const l of LIGAS) {
     const m = l.prueba.exec(texto);
-    if (m) return { de: l.de, embed: l.embed(m[1], texto), abrir: texto, ...(l.archivo ? { archivo: true } : null) };
+    if (m) {
+      return {
+        de: l.de, embed: l.embed(m[1], texto), abrir: texto, vertical: !!l.vertical?.(texto),
+        ...(l.imagen ? { imagen: l.imagen(m[1]) } : null), ...(l.archivo ? { archivo: true } : null),
+      };
+    }
   }
   // Una dirección de internet que no reconocemos: no se incrusta (podría ser
   // cualquier cosa), pero sí se puede abrir fuera.
