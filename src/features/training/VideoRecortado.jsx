@@ -50,7 +50,7 @@ const mmss = (s) => {
  * `onFin` (22 nov 2026, reglas 1 y 2 del entreno del atleta): avisa cuando el video terminó (el archivo, el tramo recortado o, en YouTube y Vimeo, su
  * reproductor oficial). Con eso el calentamiento guiado pasa solo. En TikTok e Instagram no hay cómo saberlo: nunca se llama.
  */
-export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef, onMedidas, onDeslizar, onRechazado, onFin, bucle = false, llena = false, arranca = false }) {
+export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef, onMedidas, onDeslizar, onRechazado, onFin, bucle = false, llena = false, arranca = false, desde = 0, onTiempo }) {
   const ref = useRef(null);
   const pista = useRef(null);
   const arrastra = useRef(false);
@@ -136,6 +136,9 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef,
   const marcoRef = useRef(null);
   const [falloDe, setFalloDe] = useState(null);
   const conApi = avisaFin(liga);
+  // En qué segundo va el video de fuera (lo dice el puente): para seguir ahí al agrandarlo.
+  const alTiempo = useRef(onTiempo);
+  useEffect(() => { alTiempo.current = onTiempo; });
   useEffect(() => {
     if (!liga?.embed) return undefined;
     const alMensaje = (e) => {
@@ -143,12 +146,13 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef,
       const d = e.data;
       if (d?.tlVideo === 'fin') alAcabar.current?.();
       if (d?.tlVideo === 'error') setFalloDe(url);
+      if (d?.tlVideo === 'tiempo' && Number.isFinite(d.t)) alTiempo.current?.(d.t);
     };
     window.addEventListener('message', alMensaje);
     return () => window.removeEventListener('message', alMensaje);
   }, [liga?.embed, url]);
   // `arranca` (24 nov 2026): viene de un toque de la persona; el puente pide reproducir sin otro toque (en el iPhone, con sonido).
-  const embedConApi = srcDelPuente(liga, { arranca });
+  const embedConApi = srcDelPuente(liga, { arranca, desde });
   // Negro hasta que el puente cargó: sin el destello blanco del marco vacío (Andrés, video del 24 nov 2026).
   const [cargadoDe, setCargadoDe] = useState(null);
   const conBotonDeAfuera = !conApi || falloDe === url;
@@ -190,7 +194,7 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef,
           </div>
         )}
         {/* Con fondo propio: este bloque puede caer sobre un fondo oscuro, y un
-            enlace azul sobre negro no se lee. Con `llena` flota arriba a la izquierda:
+            enlace azul sobre negro no se lee. Con `llena` flota arriba a la derecha (a la izquierda va «Agrandar»):
             la caja ya mide lo que el video, y abajo están los controles de la red. */}
         {conBotonDeAfuera && (
           <a
@@ -199,7 +203,7 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef,
           rel="noopener noreferrer"
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 7,
-            ...(llena ? { position: 'absolute', top: 10, left: 10, zIndex: 2, boxShadow: '0 2px 10px rgba(0,0,0,.25)' } : { margin: '9px 0 0 12px' }),
+            ...(llena ? { position: 'absolute', top: 10, right: 10, zIndex: 2, boxShadow: '0 2px 10px rgba(0,0,0,.25)' } : { margin: '9px 0 0 12px' }),
             padding: '7px 12px', borderRadius: 999, background: '#FFFFFF',
             border: 'none',
             fontFamily: FONT, fontSize: 13, fontWeight: 800, color: T.accent, textDecoration: 'none',

@@ -159,9 +159,10 @@ export { ligaExterna, avisaFin };
    internet) va con la dirección completa del sitio, para que YouTube vea un sitio de verdad (sin eso: «Error 153»). En la web, la misma
    página del mismo sitio. */
 const SITIO = 'https://app.traininglabapp.com';
-export function srcDelPuente(liga, { arranca = false } = {}) {
+export function srcDelPuente(liga, { arranca = false, desde = 0 } = {}) {
   if (!liga?.embed) return null;
-  return `${enLaApp() ? SITIO : ''}/reproductor/?de=${encodeURIComponent(liga.de)}&e=${encodeURIComponent(liga.embed)}${arranca ? '&auto=1' : ''}`;
+  const seg = Math.floor(desde || 0);
+  return `${enLaApp() ? SITIO : ''}/reproductor/?de=${encodeURIComponent(liga.de)}&e=${encodeURIComponent(liga.embed)}${arranca ? '&auto=1' : ''}${seg > 0 ? `&t=${seg}` : ''}`;
 }
 
 /** El aviso para enseñar si lo pegado no sirve como liga de video, o `null` si sirve. */

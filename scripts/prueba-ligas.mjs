@@ -44,6 +44,9 @@ igual(ligaExterna('https://youtube.com/shorts/abcdef12345').imagen, 'https://i.y
 // Un solo toque: con `arranca`, YouTube y Vimeo arrancan solos; sin él, no.
 const yt = (o) => new URL(reproductorDe('YouTube', 'https://www.youtube.com/embed/abcdef12', 'https://app.traininglabapp.com', o)).searchParams.get('autoplay');
 igual([yt({ arranca: true }), yt()], ['1', null], 'YouTube arranca solo solo cuando la app lo pide');
+// Agrandar y volver: sigue en el segundo donde iba.
+igual(new URL(reproductorDe('YouTube', 'https://www.youtube.com/embed/abcdef12', 'https://app.traininglabapp.com', { desde: 12.7 })).searchParams.get('start'), '12', 'YouTube sigue donde iba');
+igual(new URL(reproductorDe('Vimeo', 'https://player.vimeo.com/video/123', 'https://app.traininglabapp.com', { desde: 30 })).hash, '#t=30s', 'Vimeo sigue donde iba');
 
 console.log(fallas ? `\nprueba-ligas: ${fallas} falla(s)` : 'prueba-ligas: las 7 redes y el puente, todo bien.');
 process.exit(fallas ? 1 : 0);

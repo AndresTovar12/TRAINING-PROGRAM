@@ -25,7 +25,7 @@ export const PERMITIDOS = {
 };
 
 /** La dirección final del reproductor, o `null` si no es de una red permitida. `origen`: el de esta página (lo pide YouTube). */
-export function reproductorDe(de, e, origen, { arranca = false } = {}) {
+export function reproductorDe(de, e, origen, { arranca = false, desde = 0 } = {}) {
   let u;
   try { u = new URL(e); } catch { return null; }
   if (u.protocol !== 'https:') return null;
@@ -36,6 +36,10 @@ export function reproductorDe(de, e, origen, { arranca = false } = {}) {
   if (de === 'Vimeo') { u.searchParams.set('playsinline', '1'); u.searchParams.set('api', '1'); }
   // `auto=1`: la app ya recibió el toque de la persona; el video arranca sin otro (un solo toque, 24 nov 2026).
   if (arranca && (de === 'YouTube' || de === 'Vimeo')) u.searchParams.set('autoplay', '1');
+  // `t=`: seguir donde iba (al agrandar el video y al volver al cuadro).
+  const seg = Math.floor(Number(desde) || 0);
+  if (seg > 0 && de === 'YouTube') u.searchParams.set('start', String(seg));
+  if (seg > 0 && de === 'Vimeo') u.hash = `t=${seg}s`;
   return u.toString();
 }
 
@@ -44,8 +48,11 @@ if (typeof document !== 'undefined') {
   const p = new URLSearchParams(location.search);
   const de = p.get('de') ?? '';
   const arranca = p.get('auto') === '1';
-  const src = reproductorDe(de, p.get('e') ?? '', location.origin, { arranca });
-  const avisa = (tlVideo) => { try { parent.postMessage({ tlVideo }, '*'); } catch { /* sin marco: nada que avisar */ } };
+  const desde = Math.max(0, Number(p.get('t')) || 0);
+  const src = reproductorDe(de, p.get('e') ?? '', location.origin, { arranca, desde });
+  const avisa = (tlVideo, extra) => { try { parent.postMessage({ tlVideo, ...extra }, '*'); } catch { /* sin marco: nada que avisar */ } };
+  // En qué segundo va: la app lo guarda para seguir ahí al agrandar el video o al volver al cuadro.
+  const tiempo = (t) => { if (Number.isFinite(t)) avisa('tiempo', { t }); };
   let avisado = false;
   const fin = () => { if (!avisado) { avisado = true; avisa('fin'); } };
 
@@ -59,6 +66,8 @@ if (typeof document !== 'undefined') {
     Object.assign(v, { src, controls: true, playsInline: true, preload: 'metadata', autoplay: arranca });
     v.setAttribute('playsinline', '');
     v.addEventListener('ended', fin);
+    v.addEventListener('timeupdate', () => tiempo(v.currentTime));
+    if (desde > 0) v.addEventListener('loadedmetadata', () => { v.currentTime = desde; }, { once: true });
     v.addEventListener('error', () => avisa('error'));
     document.body.appendChild(v);
   } else {
@@ -71,7 +80,7 @@ if (typeof document !== 'undefined') {
     f.addEventListener('load', () => {
       try {
         if (de === 'YouTube') f.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 'tl', channel: 'widget' }), '*');
-        if (de === 'Vimeo') ['ended', 'error'].forEach((value) => f.contentWindow.postMessage(JSON.stringify({ method: 'addEventListener', value }), '*'));
+        if (de === 'Vimeo') ['ended', 'error', 'timeupdate'].forEach((value) => f.contentWindow.postMessage(JSON.stringify({ method: 'addEventListener', value }), '*'));
       } catch { /* el marco no deja: la app conserva su botón de abrir fuera */ }
     });
     document.body.appendChild(f);
@@ -82,6 +91,8 @@ if (typeof document !== 'undefined') {
       if (!d || typeof d !== 'object') return;
       const terminoYt = (d.event === 'onStateChange' && d.info === 0) || (d.event === 'infoDelivery' && d.info?.playerState === 0);
       if (terminoYt || d.event === 'ended') fin();
+      if (d.event === 'infoDelivery' && d.info?.currentTime != null) tiempo(d.info.currentTime);
+      if (d.event === 'timeupdate') tiempo(d.data?.seconds);
       if (d.event === 'onError' || d.event === 'error') avisa('error');
     });
   }

@@ -1,6 +1,7 @@
 import { esExplicacion } from '@/lib/proposito';
-import { useCallback, useRef, useState } from 'react';
-import { Dumbbell, Volume2 } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Dumbbell, Maximize2, Volume2, X } from 'lucide-react';
 import { ligaExterna, redPermiteAdelantar } from '@/lib/videos';
 import { usePoster } from '@/lib/posters';
 import { useAppState, useStorage } from '@/contexts/AppStateContext';
@@ -104,9 +105,21 @@ export default function TarjetaDeVideo({ videos, portada, nombre, enCarta = fals
 
   /* Un video de fuera (YouTube, TikTok, un reel…) se ve DENTRO de este mismo cuadro, que toma su forma: de pie (Short, TikTok, reel) o
      acostado (Andrés, 24 nov 2026: «que el video se reproduzca en el cuadro que ya tiene… amoldado al tamaño que requiera el video»).
-     Agrandarlo es del atleta, con el botón del reproductor. */
+     Agrandarlo es del atleta: con el botón del reproductor si es acostado, con «Agrandar» (abajo) si es de pie. */
   const liga = externo ? ligaExterna(video.url) : null;
   if (liga) aspecto = liga.vertical ? 9 / 16 : 16 / 9;
+
+  /* AGRANDAR UN VIDEO DE PIE (Andrés, 24 nov 2026: «si lo quiero hacer grande, no puedo»). En un cuadro de pie YouTube pone su reproductor
+     de Shorts, que no trae botón de pantalla completa; TikTok e Instagram tampoco. Este botón abre el video a toda la pantalla, en una capa
+     propia, y sigue en el segundo donde iba (lo avisa el puente); al cerrar, vuelve al cuadro en ese mismo segundo. Los videos acostados
+     no lo necesitan: su reproductor ya trae el suyo. */
+  const [grande, setGrande] = useState(false);
+  const [desde, setDesde] = useState({ url: null, t: 0 });
+  const tiempo = useRef({ url: null, t: 0 });
+  const anotaTiempo = useCallback((t) => { tiempo.current = { url: video?.url, t }; }, [video?.url]);
+  const dondeIba = () => (tiempo.current.url === video?.url ? tiempo.current.t : 0);
+  const agranda = (si) => { setDesde({ url: video?.url, t: dondeIba() }); setGrande(si); setReproduciendo(true); };
+  const desdeAqui = desde.url === video?.url ? desde.t : 0;
 
   const pestanas = conPestanas && (
     <div role="tablist" aria-label="Qué video ver" style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 8 }}>
@@ -128,9 +141,9 @@ export default function TarjetaDeVideo({ videos, portada, nombre, enCarta = fals
         boxShadow: enCarta ? 'none' : '0 8px 24px rgba(17,19,24,0.14)',
         aspectRatio: `${aspecto}`, width: alto ? `min(${anchoMaximo}, calc(${alto} * ${aspecto}))` : `min(100%, calc(${altoMaximo} * ${aspecto}))`, maxWidth: 480,
       }}>
-        {externo && reproduciendo && (
+        {externo && reproduciendo && !grande && (
           // Un solo toque: el reproductor arranca solo (`arranca`) y llena el cuadro (`llena`).
-          <VideoRecortado key={video.url} video={video} llena arranca estilo={{ position: 'absolute', inset: 0 }} />
+          <VideoRecortado key={video.url} video={video} llena arranca desde={desdeAqui} onTiempo={anotaTiempo} estilo={{ position: 'absolute', inset: 0 }} />
         )}
         {propio && (reproduciendo || adelanta) && (
           <VideoRecortado
@@ -155,6 +168,15 @@ export default function TarjetaDeVideo({ videos, portada, nombre, enCarta = fals
           </>
         )}
 
+        {/* Agrandar: dentro del video, arriba a la izquierda (en el entreno no sobra alto para una fila más debajo). */}
+        {liga?.vertical && (
+          <button type="button" aria-label="Agrandar video" className="kp-press" onClick={() => agranda(true)} style={{
+            position: 'absolute', top: 10, left: 10, zIndex: 5, width: 38, height: 38, borderRadius: 999, border: 'none',
+            background: 'rgba(8,10,14,.55)', color: '#fff', display: 'grid', placeItems: 'center', cursor: 'pointer',
+          }}>
+            <Maximize2 size={18} strokeWidth={2.6} />
+          </button>
+        )}
         {!reproduciendo && (
           <div style={{ position: 'absolute', inset: 0, zIndex: 2 }}>
             <CarruselDeVideos
@@ -172,6 +194,38 @@ export default function TarjetaDeVideo({ videos, portada, nombre, enCarta = fals
         )}
       </div>
       {!conPestanas && <Puntos videos={videos} activo={angulo} onIr={cambia} enFlujo claro />}
+      {grande && <VideoEnGrande video={video} desde={desdeAqui} onTiempo={anotaTiempo} onCerrar={() => agranda(false)} />}
     </div>
+  );
+}
+
+/** El video de fuera a toda la pantalla (ver «Agrandar» arriba). Va en un portal: la ficha es una hoja que se desliza y, dentro de ella,
+    una capa fija no cubriría la pantalla entera. Arriba, una franja negra con la X: así nada tapa los controles del reproductor. */
+function VideoEnGrande({ video, desde, onTiempo, onCerrar }) {
+  const cierra = useRef(onCerrar);
+  useEffect(() => { cierra.current = onCerrar; });
+  useEffect(() => {
+    const alTecla = (e) => { if (e.key === 'Escape') cierra.current?.(); };
+    window.addEventListener('keydown', alTecla);
+    return () => window.removeEventListener('keydown', alTecla);
+  }, []);
+  return createPortal(
+    <div role="dialog" aria-modal="true" aria-label="Video en grande" style={{
+      position: 'fixed', inset: 0, zIndex: 9500, background: '#000', display: 'flex', flexDirection: 'column',
+      paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)',
+    }}>
+      <div style={{ flex: 'none', height: 54, display: 'flex', alignItems: 'center', padding: '0 12px' }}>
+        <button type="button" aria-label="Cerrar" className="kp-press" onClick={onCerrar} style={{
+          width: 44, height: 44, borderRadius: 999, border: 'none', background: 'rgba(255,255,255,.16)', color: '#fff',
+          display: 'grid', placeItems: 'center', cursor: 'pointer',
+        }}>
+          <X size={22} strokeWidth={2.6} />
+        </button>
+      </div>
+      <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
+        <VideoRecortado key={video.url} video={video} llena arranca desde={desde} onTiempo={onTiempo} estilo={{ position: 'absolute', inset: 0 }} />
+      </div>
+    </div>,
+    document.body,
   );
 }
