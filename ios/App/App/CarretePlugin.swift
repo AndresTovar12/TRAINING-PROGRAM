@@ -1,6 +1,7 @@
 import Foundation
 import Capacitor
 import Photos
+import PhotosUI // `presentLimitedLibraryPicker` vive aquí, no en Photos
 import UIKit
 
 /* EL CARRETE DENTRO DE LA HOJA DE COMPARTIR (24 nov 2026, Andrés: «lo primero que te aparece es como que todas tus fotos», como Aura).
