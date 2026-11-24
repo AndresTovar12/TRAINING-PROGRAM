@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
 import { ExternalLink, Loader2, Maximize2, Pause, Play } from 'lucide-react';
-import { ligaExterna, estiloDelEncuadre } from '@/lib/videos';
+import { ligaExterna, estiloDelEncuadre, srcDelPuente, avisaFin } from '@/lib/videos';
 import { usePoster } from '@/lib/posters';
 import { T, FONT } from '@/lib/theme';
 
@@ -129,38 +129,25 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef,
   const avisado = useRef(null);
   useEffect(() => { alAcabar.current = () => { if (avisado.current === url) return; avisado.current = url; onFin?.(); }; });
 
-  /* YOUTUBE Y VIMEO DENTRO DE LA APP (regla 2, 22 nov 2026: «el objetivo es eliminar ese problema de que los videos de YouTube te mandan a la
-     aplicación externa»). Se usa su reproductor oficial por mensajes (`enablejsapi` en YouTube, `api` en Vimeo): se queda en su lugar
-     (`playsinline`), avisa cuando termina (para `onFin`) y cuando falla. «Abrir en YouTube» ya no está siempre: solo si el video falló.
-     En el iPhone falta confirmar el «Error 153» (YouTube pide un dato que la app no manda); si sale, el reproductor lo avisa como error y vuelve el botón. */
+  /* LOS VIDEOS DE REDES DENTRO DE LA APP (regla 2, 22 nov 2026; el puente, 24 nov 2026: «que se pueda utilizar el link»). Todo video con
+     link (YouTube, Vimeo, TikTok, Instagram, Facebook, Google Drive, Dropbox) se ve por `public/reproductor/`, una página nuestra que pone el
+     reproductor oficial de esa red: en el iPhone YouTube ya no se queja de que la app no es un sitio («Error 153»). El puente le avisa a la app
+     cuando el video termina (`onFin`) o falla, solo de YouTube, Vimeo y Dropbox (`avisaFin`); con esos, «Abrir en…» sale solo si falló. */
   const marcoRef = useRef(null);
   const [falloDe, setFalloDe] = useState(null);
-  const conApi = !!liga && (liga.de === 'YouTube' || liga.de === 'Vimeo');
+  const conApi = avisaFin(liga);
   useEffect(() => {
-    if (!conApi) return undefined;
+    if (!liga?.embed) return undefined;
     const alMensaje = (e) => {
-      if (!/youtube\.com|youtube-nocookie\.com|vimeo\.com/.test(String(e.origin))) return;
-      let d = e.data;
-      if (typeof d === 'string') { try { d = JSON.parse(d); } catch { return; } }
-      if (!d || typeof d !== 'object') return;
-      const terminoYt = (d.event === 'onStateChange' && d.info === 0) || (d.event === 'infoDelivery' && d.info?.playerState === 0);
-      if (terminoYt || d.event === 'ended') alAcabar.current?.();
-      if (d.event === 'onError' || d.event === 'error') setFalloDe(url);
+      if (e.source !== marcoRef.current?.contentWindow) return;
+      const d = e.data;
+      if (d?.tlVideo === 'fin') alAcabar.current?.();
+      if (d?.tlVideo === 'error') setFalloDe(url);
     };
     window.addEventListener('message', alMensaje);
     return () => window.removeEventListener('message', alMensaje);
-  }, [conApi, url]);
-  const alCargarMarco = () => {
-    const w = marcoRef.current?.contentWindow;
-    if (!w || !conApi) return;
-    try {
-      if (liga.de === 'YouTube') w.postMessage(JSON.stringify({ event: 'listening', id: 'tl', channel: 'widget' }), '*');
-      else { w.postMessage(JSON.stringify({ method: 'addEventListener', value: 'ended' }), '*'); w.postMessage(JSON.stringify({ method: 'addEventListener', value: 'error' }), '*'); }
-    } catch { /* el marco no deja: queda el botón de abrir fuera */ }
-  };
-  const embedConApi = !liga?.embed ? null : liga.de === 'YouTube'
-    ? `${liga.embed}?enablejsapi=1&playsinline=1&rel=0&origin=${encodeURIComponent(typeof window !== 'undefined' ? window.location.origin : '')}`
-    : liga.de === 'Vimeo' ? `${liga.embed}?playsinline=1&api=1` : liga.embed;
+  }, [liga?.embed, url]);
+  const embedConApi = srcDelPuente(liga);
   const conBotonDeAfuera = !conApi || falloDe === url;
 
   /* Un video que vive fuera (TikTok, YouTube, un reel) no es un archivo
@@ -177,13 +164,12 @@ export function VideoRecortado({ video, estilo, reproduce = true, reproducirRef,
           <iframe
             key={liga.embed}
             ref={marcoRef}
-            onLoad={alCargarMarco}
             src={embedConApi}
             title={`Video en ${liga.de}`}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
             style={{
-              width: '100%', aspectRatio: liga.de === 'YouTube' || liga.de === 'Vimeo' ? '16 / 9' : '9 / 16',
+              width: '100%', aspectRatio: liga.de === 'TikTok' || liga.de === 'Instagram' ? '9 / 16' : '16 / 9',
               border: 'none', borderRadius: 14, background: '#000', display: 'block',
             }}
           />

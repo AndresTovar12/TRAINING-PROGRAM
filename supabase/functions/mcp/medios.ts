@@ -52,7 +52,7 @@ export function herramientasDeMedios(server: McpServer, quien: Quien) {
 
   server.registerTool('pedir_subida', {
     title: 'Pedir permiso para subir un archivo',
-    description: 'SOLO para agentes que pueden subir archivos (Claude Code, Codex, Hermes); en un chat sin archivos usa ligas de YouTube, TikTok, Instagram o Vimeo con poner_medio_a_ejercicio. '
+    description: `SOLO para agentes que pueden subir archivos (Claude Code, Codex, Hermes); en un chat sin archivos usa ligas (${PLATAFORMAS.join(', ')}) con poner_medio_a_ejercicio. `
       + 'Por cada archivo devuelve "subir_a" (PUT, vale 6 horas) y "url". Sube así: curl -X PUT -H "Content-Type: <tipo_de_contenido>" -H "Cache-Control: '
       + `${CACHE_ETERNO}" --upload-file <archivo> "<subir_a>" (el tamaño debe ser EXACTO al declarado). Después ponlo con poner_medio_a_ejercicio y la "url". `
       + 'Si tienes ffmpeg, antes ponle el índice al video para que el primer cuadro salga al instante: ffmpeg -i entrada -c copy -movflags +faststart salida.mp4 (y declara el tamaño de salida). '
@@ -98,7 +98,7 @@ export function herramientasDeMedios(server: McpServer, quien: Quien) {
 
   server.registerTool('poner_medio_a_ejercicio', {
     title: 'Poner un video o una foto en un ejercicio',
-    description: 'Pone en un ejercicio un video o foto: la "url" de pedir_subida (después de subirlo) o una liga de YouTube, TikTok, Instagram o Vimeo. '
+    description: `Pone en un ejercicio un video o foto: la "url" de pedir_subida (después de subirlo) o una liga de ${PLATAFORMAS.join(', ')}. `
       + 'rol: ejemplo (cómo se hace), explicacion (el video que explica) o portada. Por defecto AGREGA. Va en lote, con el resultado de cada uno; si uno falla, los demás siguen. '
       + 'Más de uno a la vez, reemplazar (reemplazar: true) o quitar lo que ya estaba piden confirmado: true; sin él te devuelve la lista para enseñársela a la persona.',
     inputSchema: {
@@ -120,7 +120,7 @@ export function herramientasDeMedios(server: McpServer, quien: Quien) {
       const origen = deDondeEs(m.url)
       const tipo = m.tipo ?? (m.rol === 'portada' ? 'foto' : 'video')
       const error = !e ? `No encontré «${m.ejercicio}» en el repertorio.`
-        : !origen ? 'La url no viene de pedir_subida ni de YouTube, TikTok, Instagram o Vimeo.'
+        : !origen ? `La url no viene de pedir_subida ni de ${PLATAFORMAS.join(', ')}.`
         : m.rol === 'portada' && origen !== 'subida' ? 'Una portada tiene que ser una foto subida con pedir_subida.'
         : m.rol === 'explicacion' && tipo !== 'video' ? 'La explicación es un video.'
         : null

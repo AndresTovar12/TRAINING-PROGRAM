@@ -150,8 +150,19 @@ export const MOMENTOS_SUGERIDOS = ['Posición inicial', 'Posición final', 'Agar
    entera. Con el botón, ese caso deja de ser una pantalla en blanco. */
 
 // La lista de plataformas y `ligaExterna` viven en `ligas.js` (las comparte el conector de IA).
-import { ligaExterna } from './ligas.js';
-export { ligaExterna };
+import { ligaExterna, avisaFin } from './ligas.js';
+import { enLaApp } from './nativo.js';
+export { ligaExterna, avisaFin };
+
+/* EL PUENTE (24 nov 2026, Andrés: «que se pueda utilizar el link», dentro de la app). Todo video de una red se ve por `public/reproductor/`:
+   una página nuestra que pone el reproductor oficial de esa red. En la app del iPhone (que vive en `capacitor://localhost`, sin dirección de
+   internet) va con la dirección completa del sitio, para que YouTube vea un sitio de verdad (sin eso: «Error 153»). En la web, la misma
+   página del mismo sitio. */
+const SITIO = 'https://app.traininglabapp.com';
+export function srcDelPuente(liga) {
+  if (!liga?.embed) return null;
+  return `${enLaApp() ? SITIO : ''}/reproductor/?de=${encodeURIComponent(liga.de)}&e=${encodeURIComponent(liga.embed)}`;
+}
 
 /** El aviso para enseñar si lo pegado no sirve como liga de video, o `null` si sirve. */
 export function avisoDeLiga(texto) {

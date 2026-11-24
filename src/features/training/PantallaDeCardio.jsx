@@ -4,7 +4,7 @@ import { FONT, LT, NUM_STYLE } from '@/lib/theme';
 import { relojDe } from '@/lib/entrenoDatos';
 import { BotonDeMantener } from '@/features/training/PantallasDelEntreno';
 import { VideoRecortado } from '@/features/training/VideoRecortado';
-import { ligaExterna } from '@/lib/videos';
+import { ligaExterna, avisaFin } from '@/lib/videos';
 import { EnQueVas } from '@/features/training/EnQueVas';
 
 /**
@@ -179,7 +179,7 @@ function PasoGuiado(props) {
 function useGuiado(paso, esUltimo, onListo, onTerminar) {
   const [acabo, setAcabo] = useState(false);
   const liga = ligaExterna(paso.video.url);
-  const sabeCuandoAcaba = !liga || liga.de === 'YouTube' || liga.de === 'Vimeo';
+  const sabeCuandoAcaba = !liga || avisaFin(liga);
   const sigue = useRef(onListo);
   useEffect(() => { sigue.current = esUltimo ? onTerminar : onListo; });
   useEffect(() => {
@@ -251,7 +251,7 @@ function PasoGuiadoOscuro({ paso, siguiente, tiempo, enQueVa, esUltimo, onLista,
   const [acabo, setAcabo] = useState(false);
   const [hoja, setHoja] = useState(false);
   const liga = ligaExterna(paso.video.url);
-  const sabeCuandoAcaba = !liga || liga.de === 'YouTube' || liga.de === 'Vimeo';
+  const sabeCuandoAcaba = !liga || avisaFin(liga);
   const sigue = useRef(onListo);
   useEffect(() => { sigue.current = esUltimo ? onTerminar : onListo; });
   useEffect(() => {
