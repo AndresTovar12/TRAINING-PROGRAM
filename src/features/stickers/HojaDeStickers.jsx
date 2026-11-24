@@ -265,6 +265,8 @@ const SinDatos = () => (
   </p>
 );
 
+const POR_TANDA = 120;
+const MAX_FOTOS = 1200;
 const CUADRO = { position: 'relative', border: 'none', padding: 0, aspectRatio: '3 / 4', cursor: 'pointer', display: 'grid', placeItems: 'center', color: '#fff', background: '#141826' };
 
 /**
@@ -278,6 +280,9 @@ function RejillaDelCarrete({ alElegir, alCamara, alSelector }) {
   const [fotos, setFotos] = useState([]);
   const [limitado, setLimitado] = useState(false);
   const [vuelta, setVuelta] = useState(0);
+  const [cuantos, setCuantos] = useState(POR_TANDA);
+  const [hayMas, setHayMas] = useState(false);
+  const pidiendo = useRef(false);
   useEffect(() => {
     if (!hayCarrete()) return undefined;
     let vivo = true;
@@ -289,14 +294,22 @@ function RejillaDelCarrete({ alElegir, alCamara, alSelector }) {
       if (p === 'negado') { setEstado('negado'); return; }
       setLimitado(p === 'limitado');
       try {
-        const l = await fotosRecientes({ cuantos: 90, lado: 300 });
-        if (vivo) { setFotos(l.filter((x) => x.tipo === 'foto')); setEstado('listo'); }
+        const l = await fotosRecientes({ cuantos, lado: 300 });
+        if (vivo) { setFotos(l.filter((x) => x.tipo === 'foto')); setHayMas(l.length >= cuantos); setEstado('listo'); }
       } catch {
-        if (vivo) setEstado('sin');
+        if (vivo && cuantos === POR_TANDA) setEstado('sin');
+      } finally {
+        pidiendo.current = false;
       }
     })();
     return () => { vivo = false; };
-  }, [vuelta]);
+  }, [vuelta, cuantos]);
+  // Al acercarse al final, la siguiente tanda (las miniaturas ya hechas se reusan: es rápido).
+  const alDesplazar = (ev) => {
+    const el = ev.currentTarget;
+    if (!hayMas || pidiendo.current || cuantos >= MAX_FOTOS) return;
+    if (el.scrollTop + el.clientHeight > el.scrollHeight - 600) { pidiendo.current = true; setCuantos((c) => Math.min(MAX_FOTOS, c + POR_TANDA)); }
+  };
 
   if (estado === 'negado') {
     return (
@@ -310,8 +323,10 @@ function RejillaDelCarrete({ alElegir, alCamara, alSelector }) {
       </div>
     );
   }
+  // La caja que se desplaza va POR FUERA de la rejilla (una rejilla que se desplaza sola se trababa en el iPhone: «no puedo scrolear»).
   return (
-    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 2, alignContent: 'start', paddingBottom: 'calc(24px + env(safe-area-inset-bottom))' }}>
+    <div onScroll={alDesplazar} style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch', paddingBottom: 'calc(24px + env(safe-area-inset-bottom))' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 2, alignContent: 'start' }}>
       <button type="button" onClick={alCamara} aria-label="Tomar una foto" style={CUADRO}><Camera size={28} strokeWidth={1.6} /></button>
       {(estado === 'sin' || limitado) && (
         <button type="button" onClick={estado === 'sin' ? alSelector : () => eligeMasFotos().then(() => setVuelta((v) => v + 1))} aria-label={estado === 'sin' ? 'Elegir una foto' : 'Elegir más fotos'} style={{ ...CUADRO, gap: 6, alignContent: 'center' }}>
@@ -325,6 +340,7 @@ function RejillaDelCarrete({ alElegir, alCamara, alSelector }) {
           <img src={x.src} alt="" loading="lazy" decoding="async" draggable={false} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
         </button>
       ))}
+    </div>
     </div>
   );
 }
@@ -348,7 +364,10 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
   const carrete = useRef(null);
   const paraEditor = useRef(null);
   const camara = useRef(null);
-  const [galeriaRef, anchoGaleria] = useAncho();
+  // El ancho de la galería sale de la cabecera, que siempre se ve (menos sus 16 px de cada lado): así los mosaicos ya tienen su tamaño cuando «Stickers»
+  // aparece, y no nacen en cero para luego saltar (Andrés, 24 nov 2026: «cuando cambio a Stickers glitchea»).
+  const [cabeceraRef, anchoCabecera] = useAncho();
+  const anchoGaleria = Math.max(0, anchoCabecera - 32);
   const listaRef = useRef(null); // lo que se desplaza: la raíz de «dibujar conforme se desplaza»
   const hojaRef = useRef(null);
   const veloRef = useRef(null);
@@ -562,7 +581,7 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
           transform: abierta ? 'translateY(0)' : 'translateY(105%)', transition: `transform ${dur} ${CURVA}`, willChange: 'transform',
         }}
       >
-        <div onPointerDown={bajaInicia} onPointerMove={bajaMueve} onPointerUp={bajaTermina} onPointerCancel={bajaTermina} style={{ padding: '8px 16px 0', touchAction: 'none', cursor: 'grab', flex: 'none' }}>
+        <div ref={cabeceraRef} onPointerDown={bajaInicia} onPointerMove={bajaMueve} onPointerUp={bajaTermina} onPointerCancel={bajaTermina} style={{ padding: '8px 16px 0', touchAction: 'none', cursor: 'grab', flex: 'none' }}>
           <div aria-hidden="true" style={{ width: 36, height: 5, borderRadius: 3, background: 'rgba(255,255,255,.22)', margin: '0 auto 12px' }} />
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
             <div style={{ minWidth: 0, flex: 1 }}>
@@ -623,7 +642,7 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
         </div>
         {/* Stickers: la lista se queda montada aunque no se vea (así mide su ancho cuando aparece). */}
         <div ref={listaRef} style={{ display: vista === 'stickers' ? 'block' : 'none', flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', padding: '12px 16px calc(24px + env(safe-area-inset-bottom))' }}>
-          <div ref={galeriaRef} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap, alignContent: 'start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap, alignContent: 'start' }}>
             {f && sub === 'actividad' && items.map(mosaicoDe)}
             {f && sub === 'totales' && itemsTot.map(mosaicoDe)}
             {f && sub === 'totales' && itemsTot.length === 0 && (
@@ -636,8 +655,9 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
           </div>
         </div>
         {/* Carrete: tu foto con stickers. La foto se elige con el selector del iPhone (o se toma); la rejilla de tus fotos dentro de la hoja llega con la parte 2. */}
-        {vista === 'carrete' && (
-          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginTop: 16 }}>
+        {/* Carrete se queda montado aunque no se vea: al regresar no vuelve a cargar tus fotos. */}
+        {(
+          <div style={{ flex: 1, minHeight: 0, display: vista === 'carrete' ? 'flex' : 'none', flexDirection: 'column', marginTop: 16 }}>
             {f ? (
               <RejillaDelCarrete alElegir={eligeDelRejilla} alCamara={() => camara.current?.click()} alSelector={() => paraEditor.current?.click()} />
             ) : cargado === undefined ? (
