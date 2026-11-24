@@ -69,8 +69,8 @@ const pngDeLienzo = (lienzo) => new Promise((ok, falla) => { lienzo.toBlob((b) =
  * El PNG de un sticker (`item` del catálogo, `f` la ficha, `color` uno de `COLORES`; `forma: 'historia'` y `foto` para «Con foto»). Un Blob `image/png`.
  * `cara`: la variante que se ve en el mosaico. `frase` y `propia`: la frase de «✎ Personalizar» y la foto del Polaroid.
  */
-export async function pngDeSticker({ item, f, color, forma = item.forma, foto = null, cara = 0, frase = '', propia = null }) {
-  const { nodo, quita } = await monta(Sticker, { item, f, color, forma, foto, cara, frase, propia });
+export async function pngDeSticker({ item, f, color, forma = item.forma, foto = null, cara = 0, frase = '', propia = null, sinMarca = false }) {
+  const { nodo, quita } = await monta(Sticker, { item, f, color, forma, foto, cara, frase, propia, sinMarca });
   try {
     const { w, h } = lienzoDe(item, forma);
     const fotos = fotosAparte(nodo);
@@ -131,6 +131,64 @@ export function preparaFoto(archivo) {
   let reloj;
   const tope = new Promise((_, falla) => { reloj = setTimeout(() => falla(new Error('La foto tardó demasiado')), FOTO_TOPE_MS); });
   return Promise.race([lee(), tope]).finally(() => clearTimeout(reloj));
+}
+
+/*
+ * LA HISTORIA DEL EDITOR DE CARRETE (24 nov 2026; maqueta docs/maquetas/editor-de-stickers). Una imagen de 1080 × 1920 (9:16, la de una historia): la foto
+ * recortada al centro, cada sticker en su lugar, tamaño y giro, y «TRAINING LAB» una sola vez abajo (por eso los stickers salen `sinMarca`).
+ * `capas`: [{ item, f, color, cara, frase, propia, cx, cy, s, r }] con `cx`, `cy` en fracción del ancho y del alto, `s` el ancho del sticker en fracción del
+ * ancho de la imagen y `r` el giro en grados. Así lo que se ve en el editor y lo que sale miden lo mismo, sea cual sea la pantalla. Un Blob PNG.
+ */
+export const HISTORIA = { w: 1080, h: 1920 };
+export const MARCA_HISTORIA = { texto: 'TRAINING LAB', tam: 0.029, espacio: 0.0095, abajo: 0.026 }; // estilo-ok: diseño A · Marca aprobado por Andrés (24 nov 2026, maqueta editor-de-stickers)
+
+/** «TRAINING LAB» abajo, al centro, letra por letra (el espaciado de las letras no existe en todos los lienzos). */
+function dibujaMarca(ctx, W, H) {
+  const { texto, tam, espacio, abajo } = MARCA_HISTORIA;
+  ctx.save();
+  ctx.font = `800 ${Math.round(W * tam)}px "Bricolage Grotesque"`;
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = 'rgba(255,255,255,.9)';
+  ctx.shadowColor = 'rgba(0,0,0,.35)';
+  ctx.shadowBlur = W * 0.01;
+  const sep = W * espacio;
+  const anchos = [...texto].map((c) => ctx.measureText(c).width);
+  let x = (W - (anchos.reduce((a, b) => a + b, 0) + sep * (anchos.length - 1))) / 2;
+  [...texto].forEach((c, i) => { ctx.fillText(c, x, H * (1 - abajo)); x += anchos[i] + sep; });
+  ctx.restore();
+}
+
+export async function historiaDeCarrete({ foto, capas }) {
+  const { w: W, h: H } = HISTORIA;
+  await document.fonts?.load?.(`800 ${Math.round(W * MARCA_HISTORIA.tam)}px "Bricolage Grotesque"`).catch(() => null);
+  const lienzo = document.createElement('canvas');
+  lienzo.width = W;
+  lienzo.height = H;
+  const ctx = lienzo.getContext('2d');
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+  const im = new Image();
+  im.src = foto;
+  await im.decode();
+  const k = Math.max(W / im.naturalWidth, H / im.naturalHeight);
+  const sw = W / k;
+  const sh = H / k;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(im, (im.naturalWidth - sw) / 2, (im.naturalHeight - sh) / 2, sw, sh, 0, 0, W, H);
+  for (const c of capas) {
+    const png = await pngDeSticker({ item: c.item, f: c.f, color: c.color, cara: c.cara ?? 0, frase: c.frase, propia: c.propia, sinMarca: true });
+    const bmp = await createImageBitmap(png);
+    const e = (c.s * W) / (300 * ESCALA); // el sticker mide 300 de ancho y sale a 3×
+    ctx.save();
+    ctx.translate(c.cx * W, c.cy * H);
+    ctx.rotate((c.r * Math.PI) / 180);
+    ctx.scale(e, e);
+    ctx.drawImage(bmp, -bmp.width / 2, -bmp.height / 2);
+    ctx.restore();
+    bmp.close?.();
+  }
+  dibujaMarca(ctx, W, H);
+  return pngDeLienzo(lienzo);
 }
 
 /** El nombre del archivo: «traininglab-firma.png», «traininglab-eco.mp4». */

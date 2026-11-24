@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Capacitor } from '@capacitor/core';
-import { Check, ImagePlus, Pencil } from 'lucide-react';
+import { Camera, Check, Images, Pencil, Sticker as IconoSticker, X } from 'lucide-react';
 import { FONT } from '@/lib/theme';
 import { ficha as fichaDe } from '@/lib/stickers/ficha';
-import { catalogo, catalogoDeTotales, COLORES, esNuevo, FRASE_INICIAL, FRASE_MAX, LIENZOS, lienzoDe } from '@/lib/stickers/catalogo';
+import { catalogo, catalogoDeTotales, COLORES, esNuevo, FRASE_INICIAL, FRASE_MAX, lienzoDe } from '@/lib/stickers/catalogo';
 import { totalesDe } from '@/lib/stickers/totales';
 import { entregaArchivo } from '@/lib/entregaArchivo';
 import { vibra } from '@/lib/avisosNativos';
 import CambiarNombre from './CambiarNombre';
 import HojaDeFrases from './HojaDeFrases';
 import Sticker from './Sticker';
-import RutaVideo from './RutaVideo';
-import { nombreDeArchivo, pngDeSticker, preparaFoto, puedeGrabarVideo, videoDeSticker } from './exporta';
+import EditorDeCarrete from './EditorDeCarrete';
+import { nombreDeArchivo, pngDeSticker, preparaFoto } from './exporta';
 
 /* LA HOJA DE STICKERS (Andrés, 28 oct 2026; ver docs/stickers.md y el prototipo). Sustituye a la hoja y al editor del sello.
 
@@ -25,30 +25,33 @@ import { nombreDeArchivo, pngDeSticker, preparaFoto, puedeGrabarVideo, videoDeSt
 
    Tocar = copiar (aviso «Copiado. Pégalo en tu historia.» con «Abrir Instagram» y «Guardar», 3.5 s). Mantener 0.6 s = guardar, con un anillo que se llena; si se
    suelta antes, regresa. Mover el dedo más de 10 px = desplazar la lista. Se cierra con «Cerrar» o arrastrando la cabecera hacia abajo (120 px, o rápido).
-   Pestañas (fase 2): «Stickers» (todos, sobre damero), «Con foto» (solo los de identidad sobre una foto 9:16: tres de ejemplo o una del carrete, que nunca sale
-   del teléfono; se copia y se guarda la imagen entera, 900 × 1599) y «Video» (el Eco que cae y, si hubo ruta, la ruta que se dibuja: tocar o mantener guarda
-   un video de 3 s). Con «reducir movimiento» la hoja no se desliza y los videos se ven quietos en la hoja.
+   (Las pestañas «Con foto» y «Video» de la fase 2 se quitaron el 24 nov 2026: ver abajo.)
 
    5 NOV 2026 (parte 2): en «Stickers», dos pestañas de texto: «Actividad» (la lista de siempre) y «Totales» (la semana y el mes de hoy, `totales.js`). Los mosaicos
    con variantes son carruseles (ver `Mosaico`); el primero se asoma una vez al día. «✎ Personalizar» abre las frases (`HojaDeFrases`): la elegida va a todos los
    personalizables, se recuerda en el teléfono y, al cerrar, la galería regresa al sticker y lo marca 1.6 s. El Polaroid lleva tu foto: la misma del carrete que
-   usa «Con foto», en memoria (`blob:`), que se suelta al cerrar la hoja.
+   se elige con «＋ Poner foto», en memoria (`blob:`), que se suelta al cerrar la hoja.
 
    `entreno`: lo que pide `ficha()` (o `cargar`, una función que lo trae; mientras, se ven mosaicos vacíos). `titulo`: el de la cabecera. `nombre`: el del
    entreno. `alRenombrar(nombre)`: guarda el nombre nuevo (sin ella no hay lápiz). */
 
-const FONDO = '#0E1220';
-const TINTA_2 = '#9AA3B8';
-const CAJA_2 = '#1E2436';
-// El video no puede ser transparente: va sobre el fondo de la hoja (el mismo de `exporta.js`).
-const FONDO_VIDEO = '#0E1220';
+/* 24 NOV 2026 · LA HOJA NUEVA (maqueta docs/maquetas/editor-de-stickers, dirección «A · Marca»). Andrés: la de antes «se ve barata» (azul marino, control
+   pegado, damero, «Nuevo» enormes) y la segunda versión «se ve como la copia idéntica de Aura». Queda: el acabado de Aura con la cara de Training Lab: el azul
+   y su degradado, Bricolage en el título y Space Mono en el nombre. Arriba, dos botones SEPARADOS: «Carrete» (lo primero que se ve: tu foto con stickers,
+   `EditorDeCarrete`) y «Stickers» (solo los stickers, para copiarlos sueltos). «Con foto» y «Video» se quitaron: no se usaban. */
+const FONDO = 'radial-gradient(130% 42% at 0% 0%, rgba(36,72,232,.32), transparent 62%), #0A0D16';
+const TINTA_2 = 'rgba(255,255,255,.55)';
+const DEGRADADO = 'linear-gradient(140deg, #2448E8 0%, #1733B8 55%, #0D1A66 120%)'; // estilo-ok: diseño A · Marca aprobado por Andrés (24 nov 2026, maqueta editor-de-stickers)
+const SF = '-apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, sans-serif';
 const CURVA = 'cubic-bezier(.32,.72,0,1)';
+const SALE = 'cubic-bezier(.23,1,.32,1)';
 const ANILLO = 138.23; // 2π · 22
 const MANTENER_MS = 600;
 const ESPERA_ANILLO_MS = 120;
-const DAMERO = {
-  oscuro: { backgroundColor: '#3A3F4C', backgroundImage: 'conic-gradient(#474C59 25%, #3A3F4C 0 50%, #474C59 0 75%, #3A3F4C 0)', backgroundSize: '18px 18px' },
-  claro: { backgroundColor: '#C9CCD4', backgroundImage: 'conic-gradient(#DCDEE4 25%, #C9CCD4 0 50%, #DCDEE4 0 75%, #C9CCD4 0)', backgroundSize: '18px 18px' },
+// Los mosaicos: oscuros (le gustaron más que el damero, 24 nov 2026); claros cuando la tinta es negra.
+const FONDO_MOSAICO = {
+  oscuro: { background: '#111521', boxShadow: 'inset 0 .5px 0 rgba(255,255,255,.06)' },
+  claro: { background: '#E8E8EC' },
 };
 
 // Lo que se recuerda en el teléfono: la frase elegida y el día en que el primer carrusel ya se asomó.
@@ -176,7 +179,7 @@ function Mosaico({ id, etiqueta, ancho, proporcion, lienzoH, fondo, alTocar, alM
       >
         <span
           style={{
-            position: 'relative', display: 'block', width: '100%', height: alto, borderRadius: 16, overflow: 'hidden', ...fondo,
+            position: 'relative', display: 'block', width: '100%', height: alto, borderRadius: 22, overflow: 'hidden', ...fondo,
             transform: presion > 0 ? 'scale(.96)' : 'none', transition: `transform .2s ${CURVA}, box-shadow .3s`, boxShadow: marcado ? '0 0 0 3px #fff' : '0 0 0 0 rgba(255,255,255,0)',
           }}
         >
@@ -190,9 +193,6 @@ function Mosaico({ id, etiqueta, ancho, proporcion, lienzoH, fondo, alTocar, alM
               </span>
             </span>
           ) : unaCara(0)}
-          {nuevo && (
-            <span style={{ position: 'absolute', right: 7, top: 7, zIndex: 2, background: '#2F6BFF', color: '#fff', fontSize: 10.5, fontWeight: 800, padding: '2px 7px', borderRadius: 999, pointerEvents: 'none', lineHeight: 1.3 }}>Nuevo</span>
-          )}
           <span
             aria-hidden="true"
             style={{
@@ -209,6 +209,9 @@ function Mosaico({ id, etiqueta, ancho, proporcion, lienzoH, fondo, alTocar, alM
           </span>
         </span>
       </div>
+      {nuevo && (
+        <span style={{ position: 'absolute', right: 8, top: -7, zIndex: 5, background: '#2448E8', color: '#fff', fontFamily: SF, fontSize: 11.5, fontWeight: 600, padding: '3px 8px', borderRadius: 10, letterSpacing: -0.1, pointerEvents: 'none' }}>Nuevo</span>
+      )}
       {boton && (
         <button
           type="button" onClick={boton.fn} aria-label={boton.etiqueta ?? boton.texto}
@@ -255,6 +258,30 @@ function useAncho() {
   return [ref, ancho];
 }
 
+const SinDatos = () => (
+  <p style={{ gridColumn: '1 / -1', margin: '18px 4px', fontSize: 15, lineHeight: 1.45, color: TINTA_2 }}>
+    Todavía no hay nada que contar. Haz algún ejercicio con el entreno guiado y aquí aparecerán los stickers de tu sesión.
+  </p>
+);
+
+/** El ejemplo de Carrete: un sticker tuyo (sin su marca) sobre el azul de la marca, para que se vea qué sale. */
+function Ejemplo({ item, f, frase }) {
+  const [ref, ancho] = useAncho();
+  if (!item) return null;
+  const k = ancho ? (ancho * 0.72) / 300 : 0;
+  return (
+    <span ref={ref} aria-hidden="true" style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', pointerEvents: 'none' }}>
+      {k > 0 && (
+        <span style={{ width: 300 * k, height: lienzoDe(item).h * k, position: 'relative' }}>
+          <span style={{ position: 'absolute', left: 0, top: 0, transform: `scale(${k.toFixed(4)})`, transformOrigin: 'top left' }}>
+            <Sticker item={item} f={f} color={COLORES[0]} frase={frase} sinMarca />
+          </span>
+        </span>
+      )}
+    </span>
+  );
+}
+
 export default function HojaDeStickers({ entreno = null, cargar = null, titulo = 'Comparte tu entreno', nombre = '', alRenombrar = null, onCerrar, capa = 3300 }) {
   const [cargado, setCargado] = useState(cargar ? undefined : null); // undefined: cargando
   const [abierta, setAbierta] = useState(false);
@@ -263,17 +290,17 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
   const [aviso, setAviso] = useState(null); // { texto, error?, acciones? }
   const [renombrando, setRenombrando] = useState(false);
   const [nombreVisto, setNombreVisto] = useState(nombre);
-  const [pestana, setPestana] = useState('stickers'); // 'stickers' | 'foto' | 'video'
-  const [fondoFoto, setFondoFoto] = useState('atardecer'); // «Con foto»: una de ejemplo, o 'propia' (la del carrete)
-  const [propia, setPropia] = useState(null); // la foto del carrete (enlace `blob:`): «Con foto» y el Polaroid
+  const [vista, setVista] = useState('carrete'); // 'carrete' (lo primero que se ve) | 'stickers'
+  const [editor, setEditor] = useState(null); // la foto elegida para el editor (enlace `blob:` local)
+  const [propia, setPropia] = useState(null); // la foto del carrete para el Polaroid (enlace `blob:`)
   const [sub, setSub] = useState('actividad'); // en «Stickers»: 'actividad' | 'totales'
   const [frase, setFrase] = useState(() => { const g = lee(LLAVE_FRASE); return g && g.length <= FRASE_MAX ? g : FRASE_INICIAL; });
   const [frasesDe, setFrasesDe] = useState(null); // el sticker desde el que se abrió «Elige una frase»
   const [marcado, setMarcado] = useState(null);
   const [asoma] = useState(() => lee(LLAVE_ASOMO) !== hoyLocal());
-  const [vuelta, setVuelta] = useState(0); // para repetir la animación de la pestaña Video
-  const ocupado = useRef(false);
   const carrete = useRef(null);
+  const paraEditor = useRef(null);
+  const camara = useRef(null);
   const [galeriaRef, anchoGaleria] = useAncho();
   const listaRef = useRef(null); // lo que se desplaza: la raíz de «dibujar conforme se desplaza»
   const hojaRef = useRef(null);
@@ -296,9 +323,7 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
   // Totales: la semana y el mes de hoy, del historial que ya trae el entreno (no cambia con el entreno ni con el nombre).
   const totales = useMemo(() => (base ? totalesDe(base) : null), [base]);
   const itemsTot = useMemo(() => catalogoDeTotales(totales), [totales]);
-  const foto = fondoFoto === 'propia' && propia ? { url: propia } : { ejemplo: fondoFoto === 'propia' ? 'atardecer' : fondoFoto };
   const primeroConCaras = items.find((x) => x.caras > 1)?.id ?? null;
-  const eco = items.find((x) => x.id === 'eco') ?? null;
   const color = COLORES[colorI];
 
   useEffect(() => {
@@ -312,22 +337,17 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
     setTimeout(onCerrar, rm ? 0 : 260);
   }, [cerrando, onCerrar, rm]);
   useEffect(() => {
-    const tecla = (e) => { if (e.key === 'Escape' && !renombrando) cierra(); };
+    const tecla = (e) => { if (e.key === 'Escape' && !renombrando && !editor) cierra(); };
     document.addEventListener('keydown', tecla);
     return () => document.removeEventListener('keydown', tecla);
-  }, [cierra, renombrando]);
+  }, [cierra, renombrando, editor]);
   useEffect(() => () => clearTimeout(reloj.current), []);
   // La foto del carrete vive solo en memoria (un enlace `blob:` local): se suelta al cambiarla o al cerrar.
   useEffect(() => () => { if (propia) URL.revokeObjectURL(propia); }, [propia]);
+  useEffect(() => () => { if (editor) URL.revokeObjectURL(editor); }, [editor]);
   // El primer carrusel se asoma una vez al día: se anota al abrir la hoja.
   useEffect(() => { if (asoma) guardaLocal(LLAVE_ASOMO, hoyLocal()); }, [asoma]);
   useEffect(() => { if (!marcado) return undefined; const r = setTimeout(() => setMarcado(null), 1600); return () => clearTimeout(r); }, [marcado]);
-  // En la pestaña Video la animación se repite cada 3.2 s (con «reducir movimiento», quieta).
-  useEffect(() => {
-    if (pestana !== 'video' || rm) return undefined;
-    const id = setInterval(() => setVuelta((v) => v + 1), 3200);
-    return () => clearInterval(id);
-  }, [pestana, rm]);
 
   const avisa = (a) => {
     clearTimeout(reloj.current);
@@ -335,10 +355,8 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
     reloj.current = setTimeout(() => setAviso(null), a.dura ?? 3500);
   };
 
-  // En «Con foto» se saca la imagen entera (la historia, con la foto debajo); en «Stickers», el sticker solo, en la cara que se ve, con la frase y la foto del Polaroid.
-  const comoSale = (item, cara = 0) => (pestana === 'foto'
-    ? { item, f, color, forma: 'historia', foto }
-    : { item, f: item.total ? totales : f, color, cara, frase, propia: item.conFoto ? propia : null });
+  // El sticker solo, en la cara que se ve, con la frase y la foto del Polaroid.
+  const comoSale = (item, cara = 0) => ({ item, f: item.total ? totales : f, color, cara, frase, propia: item.conFoto ? propia : null });
   const guarda = async (item, cara = 0) => {
     vibra('listo');
     try {
@@ -363,23 +381,6 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
     } catch { falla(); }
   };
 
-  // Un video no se puede copiar: tocar o mantener lo arma (unos segundos) y lo guarda.
-  const guardaVideo = async (clase, item) => {
-    if (ocupado.current) return;
-    if (!puedeGrabarVideo()) { avisa({ texto: 'Este teléfono no pudo armar el video.', error: true }); return; }
-    ocupado.current = true;
-    vibra('listo');
-    avisa({ texto: 'Armando tu video…', dura: 120000 }); // se queda hasta que termine (lo cambia el siguiente aviso)
-    try {
-      const { blob, ext } = await videoDeSticker({ clase, item, f, color });
-      await entregaArchivo(blob, nombreDeArchivo({ id: clase === 'eco' ? 'eco' : 'ruta' }, ext));
-      avisa({ texto: enApp ? 'Video listo.' : 'Video guardado.' });
-    } catch {
-      avisa({ texto: 'No se pudo armar el video. Inténtalo otra vez.', error: true });
-    } finally {
-      ocupado.current = false;
-    }
-  };
   const eligeDelCarrete = async (ev) => {
     const archivo = ev.target.files?.[0];
     ev.target.value = '';
@@ -388,7 +389,6 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
     try {
       // HEIC del iPhone incluida: la lee el teléfono y la achica (`preparaFoto`). Nada se sube.
       setPropia(URL.createObjectURL(await preparaFoto(archivo)));
-      setFondoFoto('propia');
       clearTimeout(reloj.current);
       setAviso(null);
     } catch {
@@ -396,6 +396,20 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
     }
   };
   const abreCarrete = () => carrete.current?.click();
+  // Carrete: la foto elegida (o recién tomada) abre el editor. HEIC incluida; se achica a 4 MP y nunca sale del teléfono (`preparaFoto`).
+  const eligeParaEditor = async (ev) => {
+    const archivo = ev.target.files?.[0];
+    ev.target.value = '';
+    if (!archivo) return;
+    avisa({ texto: 'Preparando tu foto…', dura: 30000 });
+    try {
+      setEditor(URL.createObjectURL(await preparaFoto(archivo)));
+      clearTimeout(reloj.current);
+      setAviso(null);
+    } catch {
+      avisa({ texto: 'No se pudo abrir esa foto. Prueba con otra.', error: true });
+    }
+  };
 
   // Al cerrar «Elige una frase», la galería regresa al sticker desde el que se abrió y lo marca.
   const eligeFrase = (nueva) => { setFrase(nueva); guardaLocal(LLAVE_FRASE, nueva); };
@@ -420,7 +434,7 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
       <Mosaico
         key={item.id} id={item.id} ancho={anchoMosaico} proporcion={1} lienzoH={lienzoDe(item).h} holgura={item.familia === 'tarjeta' ? 0.94 : 1}
         etiqueta={sinFoto ? `Sticker ${item.nombre}. Toca para poner una foto` : `Sticker ${item.nombre}. Toca para copiar; mantén presionado para guardar.`}
-        nuevo={esNuevo(item)} raiz={listaRef} fondo={clara ? DAMERO.claro : DAMERO.oscuro} clara={clara} caras={item.caras ?? 1} boton={boton}
+        nuevo={esNuevo(item)} raiz={listaRef} fondo={clara ? FONDO_MOSAICO.claro : FONDO_MOSAICO.oscuro} clara={clara} caras={item.caras ?? 1} boton={boton}
         asoma={asoma && !rm && sub === 'actividad' && item.id === primeroConCaras} marcado={marcado === item.id}
         alTocar={(cara) => (sinFoto ? abreCarrete() : copia(item, cara))} alMantener={(cara) => (sinFoto ? abreCarrete() : guarda(item, cara))}
         dibuja={(cara) => <Sticker item={item} f={item.total ? totales : f} color={color} cara={cara} frase={frase} propia={item.conFoto ? propia : null} />}
@@ -475,7 +489,7 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
     }
   };
 
-  const gap = 12;
+  const gap = 8;
   const anchoMosaico = anchoGaleria > 0 ? Math.floor((anchoGaleria - gap) / 2) : 0;
   const dur = rm ? '0s' : (cerrando ? '.25s' : '.5s');
 
@@ -486,123 +500,106 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
         ref={hojaRef} role="dialog" aria-modal="true" aria-labelledby="stk-titulo"
         style={{
           position: 'absolute', left: 0, right: 0, bottom: 0, height: 'calc(100% - env(safe-area-inset-top) - 14px)', maxWidth: 620, margin: '0 auto',
-          background: FONDO, color: '#EEF0F6', borderRadius: '28px 28px 0 0', display: 'flex', flexDirection: 'column',
+          background: FONDO, color: '#EEF0F6', borderRadius: '34px 34px 0 0', display: 'flex', flexDirection: 'column', boxShadow: 'inset 0 .5px 0 rgba(255,255,255,.08)',
           transform: abierta ? 'translateY(0)' : 'translateY(105%)', transition: `transform ${dur} ${CURVA}`, willChange: 'transform',
         }}
       >
-        <div onPointerDown={bajaInicia} onPointerMove={bajaMueve} onPointerUp={bajaTermina} onPointerCancel={bajaTermina} style={{ padding: '8px 18px 0', touchAction: 'none', cursor: 'grab' }}>
-          <div aria-hidden="true" style={{ width: 40, height: 5, borderRadius: 3, background: '#3A4157', margin: '0 auto 10px' }} />
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-            <div style={{ minWidth: 0 }}>
-              <h2 id="stk-titulo" style={{ margin: 0, fontSize: 23, lineHeight: 1.1, color: '#fff', fontWeight: 800, letterSpacing: -0.4 }}>{titulo}</h2>
-              {alRenombrar ? (
+        <div onPointerDown={bajaInicia} onPointerMove={bajaMueve} onPointerUp={bajaTermina} onPointerCancel={bajaTermina} style={{ padding: '8px 16px 0', touchAction: 'none', cursor: 'grab', flex: 'none' }}>
+          <div aria-hidden="true" style={{ width: 36, height: 5, borderRadius: 3, background: 'rgba(255,255,255,.22)', margin: '0 auto 12px' }} />
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <h2 id="stk-titulo" style={{ margin: 0, fontFamily: '"Bricolage Grotesque", sans-serif', fontVariationSettings: "'wdth' 80, 'opsz' 96", fontSize: 28, fontWeight: 800, letterSpacing: -0.6, lineHeight: 1.05, color: '#fff' }}>{titulo}</h2>
+              {(alRenombrar || nombreVisto) && (
                 <button
-                  type="button" onClick={() => setRenombrando(true)} aria-label={`Cambiar el nombre: ${nombreVisto}`}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, maxWidth: '100%', border: 'none', background: 'none', padding: '6px 0', marginTop: 2, color: TINTA_2, fontFamily: FONT, fontSize: 14, fontWeight: 600, minHeight: 36, cursor: 'pointer', textAlign: 'left' }}
+                  type="button" disabled={!alRenombrar} onClick={() => setRenombrando(true)} aria-label={alRenombrar ? `Cambiar el nombre: ${nombreVisto}` : nombreVisto}
+                  style={{ /* estilo-ok: diseño A · Marca aprobado por Andrés (24 nov 2026, maqueta editor-de-stickers) */ display: 'flex', alignItems: 'center', gap: 6, maxWidth: '100%', border: 'none', background: 'none', padding: '6px 0 0', color: TINTA_2, fontFamily: '"Space Mono", monospace', fontSize: 12.5, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', minHeight: 30, cursor: alRenombrar ? 'pointer' : 'default', textAlign: 'left' }}
                 >
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{nombreVisto}</span>
-                  <Pencil size={15} color="#C9CFDD" style={{ flex: 'none' }} />
+                  {alRenombrar && <Pencil size={13} color="rgba(255,255,255,.6)" style={{ flex: 'none' }} />}
                 </button>
-              ) : (
-                nombreVisto ? <div style={{ padding: '6px 0', marginTop: 2, color: TINTA_2, fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minHeight: 24 }}>{nombreVisto}</div> : null
               )}
             </div>
-            <button type="button" onClick={cierra} className="kp-press" style={{ flex: 'none', border: 'none', background: CAJA_2, color: '#fff', borderRadius: 999, padding: '9px 15px', fontFamily: FONT, fontSize: 14.5, fontWeight: 700, minHeight: 40, cursor: 'pointer' }}>Cerrar</button>
+            <button type="button" onClick={cierra} aria-label="Cerrar" className="kp-press" style={{ flex: 'none', width: 36, height: 36, border: 'none', borderRadius: '50%', background: 'rgba(255,255,255,.09)', color: '#fff', display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
+              <X size={18} strokeWidth={2.6} />
+            </button>
           </div>
-          <div role="tablist" aria-label="Formato" style={{ display: 'flex', background: CAJA_2, borderRadius: 12, padding: 3, gap: 2, marginTop: 12 }}>
-            {[['stickers', 'Stickers'], ['foto', 'Con foto'], ['video', 'Video']].map(([id, txt]) => (
+          {/* Dos botones separados (como Aura): Carrete, lo primero; Stickers, solo los stickers. */}
+          <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+            {[['carrete', 'Carrete', Images], ['stickers', 'Stickers', IconoSticker]].map(([id, txt, Ico]) => (
               <button
-                key={id} type="button" role="tab" aria-selected={pestana === id} onClick={() => setPestana(id)}
-                style={{ flex: 1, border: 'none', borderRadius: 10, minHeight: 38, fontFamily: FONT, fontSize: 14, fontWeight: 600, cursor: 'pointer', background: pestana === id ? '#EEF0F6' : 'transparent', color: pestana === id ? '#07090F' : TINTA_2 }}
+                key={id} type="button" aria-pressed={vista === id} onClick={() => setVista(id)} className="kp-press"
+                style={{
+                  flex: 1, height: 54, border: 'none', borderRadius: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, fontFamily: SF, fontSize: 16.5,
+                  fontWeight: vista === id ? 600 : 500, letterSpacing: -0.3, cursor: 'pointer', color: vista === id ? '#fff' : 'rgba(255,255,255,.6)',
+                  background: vista === id ? DEGRADADO : 'rgba(255,255,255,.06)', transition: `box-shadow .2s ${SALE}, color .2s`,
+                  boxShadow: vista === id ? '0 10px 26px rgba(30,64,224,.35), inset 0 .5px 0 rgba(255,255,255,.25)' : 'inset 0 0 0 .5px rgba(255,255,255,.08)', // estilo-ok: diseño A · Marca aprobado por Andrés (24 nov 2026, maqueta editor-de-stickers)
+                }}
               >
-                {txt}
+                <Ico size={20} strokeWidth={1.9} />{txt}
               </button>
             ))}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 0 6px' }}>
-            {COLORES.map((c, i) => (
-              <button
-                key={c.id} type="button" onClick={() => setColorI(i)} aria-pressed={colorI === i} aria-label={`Tinta ${c.nombre.toLowerCase()}`}
-                style={{
-                  width: 30, height: 30, borderRadius: '50%', border: c.id === 'negro' ? '1px solid #3A4157' : 'none', /* estilo-ok: el negro sobre la hoja oscura no se vería sin su orilla */ padding: 0, flex: 'none', background: c.tinta, cursor: 'pointer',
-                  boxShadow: colorI === i ? `0 0 0 2px ${FONDO}, 0 0 0 4px #EEF0F6` : 'none',
-                }}
-              />
-            ))}
-            <span style={{ marginLeft: 'auto', fontSize: 12.5, color: TINTA_2, textAlign: 'right', lineHeight: 1.3 }}>
-              {pestana === 'video' ? <>Toca para guardar<br />el video</> : <>Toca para copiar<br />Mantén para guardar</>}
-            </span>
-          </div>
-          {pestana === 'stickers' && (
-            <div role="tablist" aria-label="Qué stickers" style={{ display: 'flex', marginTop: 4, boxShadow: 'inset 0 -1px 0 #262C40' }}>
-              {[['actividad', 'Actividad'], ['totales', 'Totales']].map(([id, txt]) => (
-                <button
-                  key={id} type="button" role="tab" aria-selected={sub === id} onClick={() => setSub(id)}
-                  style={{ flex: 1, border: 'none', background: 'none', padding: '12px 0 11px', minHeight: 40, fontFamily: FONT, fontSize: 14.5, fontWeight: 700, cursor: 'pointer', color: sub === id ? '#fff' : TINTA_2, boxShadow: sub === id ? 'inset 0 -2.5px 0 #fff' : 'none' }}
-                >
-                  {txt}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <div ref={listaRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', padding: '10px 18px calc(24px + env(safe-area-inset-bottom))' }}>
-          <div ref={galeriaRef} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap, alignContent: 'start' }}>
-            {f && pestana === 'stickers' && sub === 'actividad' && items.map(mosaicoDe)}
-            {f && pestana === 'stickers' && sub === 'totales' && itemsTot.map(mosaicoDe)}
-            {f && pestana === 'stickers' && sub === 'totales' && itemsTot.length === 0 && (
-              <p style={{ gridColumn: '1 / -1', margin: '18px 4px', fontSize: 15, lineHeight: 1.45, color: TINTA_2 }}>Entrena esta semana y aquí aparecen tus totales.</p>
-            )}
-            {f && pestana === 'foto' && (
-              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, alignItems: 'center', paddingBottom: 4 }}>
-                {['atardecer', 'pista', 'gym'].map((ej) => (
+          {vista === 'stickers' && (
+            <>
+              <div role="tablist" aria-label="Qué stickers" style={{ display: 'flex', gap: 6, marginTop: 16 }}>
+                {[['actividad', 'Actividad'], ['totales', 'Totales']].map(([id, txt]) => (
                   <button
-                    key={ej} type="button" onClick={() => setFondoFoto(ej)} aria-pressed={foto.ejemplo === ej} aria-label={`Foto de ejemplo: ${ej}`}
-                    style={{ position: 'relative', border: 'none', width: 46, height: 46, borderRadius: 12, padding: 0, overflow: 'hidden', flex: 'none', cursor: 'pointer', boxShadow: foto.ejemplo === ej ? `0 0 0 2px ${FONDO}, 0 0 0 4px #EEF0F6` : 'none' }}
+                    key={id} type="button" role="tab" aria-selected={sub === id} onClick={() => setSub(id)}
+                    style={{ border: 'none', borderRadius: 999, padding: '8px 15px', fontFamily: SF, fontSize: 14.5, fontWeight: 600, letterSpacing: -0.2, cursor: 'pointer', background: sub === id ? '#fff' : 'transparent', color: sub === id ? '#000' : 'rgba(255,255,255,.45)', transition: 'background .2s, color .2s' }}
                   >
-                    <span className={`stk-foto ${ej}`} />
+                    {txt}
                   </button>
                 ))}
-                <button
-                  type="button" onClick={() => (propia && fondoFoto !== 'propia' ? setFondoFoto('propia') : abreCarrete())} aria-pressed={!!foto.url} aria-label={propia && fondoFoto !== 'propia' ? 'Usar tu foto' : 'Elegir una foto del carrete'}
-                  style={{ border: 'none', width: 46, height: 46, borderRadius: 12, padding: 0, flex: 'none', cursor: 'pointer', background: CAJA_2, color: '#EEF0F6', display: 'grid', placeItems: 'center', boxShadow: foto.url ? `0 0 0 2px ${FONDO}, 0 0 0 4px #EEF0F6` : 'none' }}
-                >
-                  <ImagePlus size={22} />
-                </button>
-                <small style={{ fontSize: 12, color: TINTA_2, marginLeft: 6, lineHeight: 1.3 }}>La foto no sale<br />de tu teléfono</small>
               </div>
-            )}
-            {f && pestana === 'foto' && items.filter((x) => x.identidad).map((item) => (
-              <Mosaico
-                key={item.id} etiqueta={`Sticker ${item.nombre} con foto. Toca para copiar; mantén presionado para guardar`} ancho={anchoMosaico} proporcion={16 / 9}
-                lienzoH={LIENZOS.historia.h} fondo={{ background: '#1B2030' }} alTocar={() => copia(item)} alMantener={() => guarda(item)}
-                dibuja={() => <Sticker item={item} f={f} color={color} forma="historia" foto={foto} />}
-              />
-            ))}
-            {f && pestana === 'video' && eco && (
-              <Mosaico
-                etiqueta="Video del Eco. Toca para guardarlo" ancho={anchoMosaico} proporcion={2 / 3} lienzoH={LIENZOS.alto.h}
-                fondo={{ background: color.clara ? '#FFFFFF' : FONDO_VIDEO }} alTocar={() => guardaVideo('eco', eco)} alMantener={() => guardaVideo('eco', eco)}
-                dibuja={() => <Sticker key={vuelta} item={eco} f={f} color={color} forma="alto" anima={!rm} />}
-              />
-            )}
-            {f && pestana === 'video' && f.ruta && (
-              <Mosaico
-                etiqueta="Video de la ruta dibujándose. Toca para guardarlo" ancho={anchoMosaico} proporcion={2 / 3} lienzoH={LIENZOS.alto.h}
-                fondo={{ background: color.clara ? '#FFFFFF' : FONDO_VIDEO }} alTocar={() => guardaVideo('ruta')} alMantener={() => guardaVideo('ruta')}
-                dibuja={() => <RutaVideo f={f} color={color} anima={!rm} />}
-              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 0 6px' }}>
+                {COLORES.map((c, i) => (
+                  <button
+                    key={c.id} type="button" onClick={() => setColorI(i)} aria-pressed={colorI === i} aria-label={`Tinta ${c.nombre.toLowerCase()}`}
+                    style={{ /* estilo-ok: diseño A · Marca aprobado por Andrés (24 nov 2026, maqueta editor-de-stickers) */ width: 30, height: 30, borderRadius: '50%', border: 'none', padding: 0, flex: 'none', background: c.tinta, cursor: 'pointer', boxShadow: colorI === i ? '0 0 0 2.5px #0A0D16, 0 0 0 4.5px #fff' : 'inset 0 0 0 1px rgba(255,255,255,.18)', transition: `box-shadow .16s ${SALE}` }}
+                  />
+                ))}
+                <span style={{ marginLeft: 'auto', fontFamily: SF, fontSize: 12.5, color: 'rgba(255,255,255,.42)', textAlign: 'right', lineHeight: 1.3, whiteSpace: 'nowrap' }}>Toca para copiar<br />Mantén para guardar</span>
+              </div>
+            </>
+          )}
+        </div>
+        {/* Stickers: la lista se queda montada aunque no se vea (así mide su ancho cuando aparece). */}
+        <div ref={listaRef} style={{ display: vista === 'stickers' ? 'block' : 'none', flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', padding: '12px 16px calc(24px + env(safe-area-inset-bottom))' }}>
+          <div ref={galeriaRef} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap, alignContent: 'start' }}>
+            {f && sub === 'actividad' && items.map(mosaicoDe)}
+            {f && sub === 'totales' && itemsTot.map(mosaicoDe)}
+            {f && sub === 'totales' && itemsTot.length === 0 && (
+              <p style={{ gridColumn: '1 / -1', margin: '18px 4px', fontSize: 15, lineHeight: 1.45, color: TINTA_2 }}>Entrena esta semana y aquí aparecen tus totales.</p>
             )}
             {!f && cargado === undefined && Array.from({ length: 4 }, (_, i) => (
-              <span key={i} aria-hidden="true" style={{ display: 'block', height: Math.round((anchoMosaico * 2) / 3) || 110, borderRadius: 16, background: '#1B2030' }} />
+              <span key={i} aria-hidden="true" style={{ display: 'block', height: anchoMosaico || 150, borderRadius: 22, background: '#111521' }} />
             ))}
-            {!f && cargado === null && (
-              <p style={{ gridColumn: '1 / -1', margin: '18px 4px', fontSize: 15, lineHeight: 1.45, color: TINTA_2 }}>
-                Todavía no hay nada que contar. Haz algún ejercicio con el entreno guiado y aquí aparecerán los stickers de tu sesión.
-              </p>
-            )}
+            {!f && cargado === null && <SinDatos />}
           </div>
         </div>
+        {/* Carrete: tu foto con stickers. La foto se elige con el selector del iPhone (o se toma); la rejilla de tus fotos dentro de la hoja llega con la parte 2. */}
+        {vista === 'carrete' && (
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 16px calc(20px + env(safe-area-inset-bottom))' }}>
+            {f ? (
+              <>
+                <button type="button" onClick={() => paraEditor.current?.click()} aria-label="Elegir una foto para ponerle stickers" style={{ position: 'relative', flex: 1, minHeight: 0, border: 'none', padding: 0, borderRadius: 22, overflow: 'hidden', cursor: 'pointer', background: 'radial-gradient(120% 70% at 20% 0%, #2F5BFF 0%, #1733B8 45%, #0B1340 100%)' }}>
+                  <Ejemplo item={items.find((x) => !x.fija && !x.conFoto && x.forma === 'ancho') ?? items[0]} f={f} frase={frase} />
+                  <span aria-hidden="true" style={{ /* estilo-ok: diseño A · Marca aprobado por Andrés (24 nov 2026, maqueta editor-de-stickers) */ position: 'absolute', left: 0, right: 0, bottom: 14, textAlign: 'center', fontFamily: '"Bricolage Grotesque", sans-serif', fontWeight: 800, fontSize: 10.5, letterSpacing: 3.4, color: 'rgba(255,255,255,.88)' }}>TRAINING LAB</span>
+                </button>
+                <div style={{ display: 'grid', gridTemplateColumns: '54px 1fr', gap: 8, flex: 'none' }}>
+                  <button type="button" onClick={() => camara.current?.click()} aria-label="Tomar una foto" className="kp-press" style={{ height: 54, border: 'none', borderRadius: 18, background: 'rgba(255,255,255,.07)', color: '#fff', display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
+                    <Camera size={21} strokeWidth={1.9} />
+                  </button>
+                  <button type="button" onClick={() => paraEditor.current?.click()} className="kp-press" style={{ height: 54, border: 'none', borderRadius: 18, background: DEGRADADO, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, fontFamily: SF, fontSize: 16.5, fontWeight: 600, letterSpacing: -0.3, cursor: 'pointer', boxShadow: '0 10px 26px rgba(30,64,224,.35), inset 0 .5px 0 rgba(255,255,255,.25)' }}>
+                    <Images size={20} strokeWidth={1.9} />Elegir foto
+                  </button>
+                </div>
+              </>
+            ) : cargado === undefined ? (
+              <span aria-hidden="true" style={{ flex: 1, borderRadius: 22, background: '#111521' }} />
+            ) : <SinDatos />}
+          </div>
+        )}
         <div aria-live="polite" style={{ position: 'absolute', zIndex: 9, left: 10, right: 10, bottom: 'calc(10px + env(safe-area-inset-bottom))', display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
           {aviso && (
             <div role={aviso.error ? 'alert' : 'status'} style={{ pointerEvents: 'auto', width: '100%', maxWidth: 520, background: 'rgba(24,28,40,.97)', color: '#fff', borderRadius: 20, padding: '12px 14px', boxShadow: '0 16px 40px rgba(0,0,0,.35)', display: 'grid', gap: 10 }}>
@@ -628,8 +625,11 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
           )}
         </div>
         <input ref={carrete} type="file" accept="image/*" onChange={eligeDelCarrete} style={{ display: 'none' }} />
+        <input ref={paraEditor} type="file" accept="image/*" onChange={eligeParaEditor} style={{ display: 'none' }} />
+        <input ref={camara} type="file" accept="image/*" capture="environment" onChange={eligeParaEditor} style={{ display: 'none' }} />
         {frasesDe && <HojaDeFrases frase={frase} alElegir={eligeFrase} alCerrar={cierraFrases} rm={rm} />}
       </section>
+      {editor && f && <EditorDeCarrete foto={editor} items={items} itemsTot={itemsTot} f={f} totales={totales} frase={frase} capa={capa + 20} alCerrar={() => setEditor(null)} />}
       {renombrando && <CambiarNombre nombre={nombreVisto} capa={capa + 10} alGuardar={guardaNombre} alCancelar={() => setRenombrando(false)} />}
     </div>,
     document.body,

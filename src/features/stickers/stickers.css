@@ -25,6 +25,8 @@
 .stk .k-l { font-weight: 700; font-variation-settings: 'opsz' 20; font-size: 13px; letter-spacing: -0.005em; line-height: 1.2; opacity: 0.75; white-space: nowrap; }
 .stk .k-wm { font-weight: 800; font-variation-settings: 'opsz' 96; letter-spacing: -0.03em; line-height: 1; white-space: nowrap; }
 .stk .k-wm span { color: var(--stk-acento); }
+/* En el editor de Carrete la marca va una sola vez, abajo de la imagen: cada sticker sale sin la suya (24 nov 2026). */
+.stk.sin-marca .k-wm, .stk.sin-marca .n-wm { display: none; }
 .stk .k-fr { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; width: 100%; }
 .stk .k-rej { display: grid; column-gap: 10px; width: 100%; }
 .stk .k-rej .k-l { margin-top: 6px; }

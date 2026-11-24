@@ -7,6 +7,7 @@ import './stickers.css';
 /* UN STICKER, dibujado con su ficha (28 oct 2026; ver docs/stickers.md y el prototipo de Andrés). HTML + CSS con Bricolage: así se ve en la hoja y así se
    exporta (`exporta.js`). `item`: lo que dio `catalogo(f)` (id, forma y lo resuelto en `r`). `color`: uno de `COLORES` (tinta y acento). `forma`: la del
    sticker, o «historia» en «Con foto». Los números bajan de tamaño hasta caber en su columna (`ajustaSticker`): nunca se cortan ni se envuelven.
+   `sinMarca` (24 nov 2026): sin su «Training Lab»; en el editor de Carrete la marca va UNA vez, abajo de la imagen (`historiaDeCarrete`).
    `foto` («Con foto»): `{ ejemplo: 'atardecer' | 'pista' | 'gym' }` o `{ url }` (la del carrete; nunca sale del teléfono). `anima`: el Eco que cae (pestaña Video). */
 
 /** Que nada choque: baja el tamaño de cada valor marcado `k-fit` hasta que quepa en su columna (o en lo que le deja su etiqueta en un renglón; nunca de 10 px
@@ -76,7 +77,7 @@ const cargaLetras = (todas) => (document.fonts?.load ? Promise.all((todas ? LETR
  * El sticker a su tamaño real (300 de ancho; alto según la forma). Se ajusta al dibujarse y otra vez cuando las letras terminan de cargar.
  * `cara`: la variante que se ve. `frase`: la de «✎ Personalizar». `propia`: la foto del carrete para el Polaroid (un enlace local).
  */
-export default function Sticker({ item, f, color: colorHoja, forma = item.forma, foto = null, anima = false, cara = 0, frase = '', propia = null, alListo }) {
+export default function Sticker({ item, f, color: colorHoja, forma = item.forma, foto = null, anima = false, cara = 0, frase = '', propia = null, sinMarca = false, alListo }) {
   const ref = useRef(null);
   const color = item.fija ? FIJO : colorHoja;
   useLayoutEffect(() => {
@@ -91,13 +92,13 @@ export default function Sticker({ item, f, color: colorHoja, forma = item.forma,
       alListo?.(ref.current);
     }).catch(() => { if (vivo) alListo?.(ref.current); });
     return () => { vivo = false; };
-  }, [item, f, color, forma, foto, cara, frase, propia, alListo]);
+  }, [item, f, color, forma, foto, cara, frase, propia, sinMarca, alListo]);
   const nuevo = FAMILIAS_NUEVAS.includes(item.familia);
   // La tarjeta lleva su propio fondo y sus colores por tema; los otros nuevos, la tinta y el acento de siempre.
   const tema = item.familia === 'tarjeta' ? Object.fromEntries(Object.entries(TEMAS_TARJETA[color.id] ?? TEMAS_TARJETA.blanco).map(([k, v]) => [`--tj-${k}`, v])) : null;
   return (
     <div
-      ref={ref} className={`stk ${forma} k-${item.id}${color.sombra && item.familia !== 'tarjeta' ? ' sombra' : ''}${anima ? ' anima' : ''}`}
+      ref={ref} className={`stk ${forma} k-${item.id}${color.sombra && item.familia !== 'tarjeta' ? ' sombra' : ''}${anima ? ' anima' : ''}${sinMarca ? ' sin-marca' : ''}`}
       style={{ '--stk-tinta': color.tinta, '--stk-acento': color.acento, ...tema, height: lienzoDe(item, forma).h }}
     >
       {foto && <Foto foto={foto} />}
