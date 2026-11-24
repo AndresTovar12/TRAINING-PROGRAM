@@ -7,6 +7,8 @@ import { entregaArchivo } from '@/lib/entregaArchivo';
 import { guardaEnFotos, hayCarrete } from '@/lib/carreteNativo';
 import { vibra } from '@/lib/avisosNativos';
 import Sticker from './Sticker';
+import Mosaico from './Mosaico';
+import HojaDeFrases from './HojaDeFrases';
 import { HISTORIA, MARCA_HISTORIA, historiaDeCarrete } from './exporta';
 
 /* EL EDITOR DE CARRETE (Andrés, 24 nov 2026; maqueta docs/maquetas/editor-de-stickers, dirección «A · Marca»). Como el de Aura, con cara de Training Lab:
@@ -29,15 +31,16 @@ const S_INICIAL = 0.62; // un sticker nuevo ocupa el 62 % del ancho
 const S_MIN = 0.12;
 const S_MAX = 2.4;
 const BOTE_RADIO = 56;
+const FONDO_OSCURO = { background: '#18181B' };
+const FONDO_CLARO = { background: '#E8E8EC' };
 const puedeCopiar = () => !!(navigator.clipboard?.write && typeof window.ClipboardItem === 'function');
 const altoDe = (item) => lienzoDe(item).h;
 
-/** Lo que mide un elemento (ancho y alto), al cambiar. */
+/** Lo que mide un elemento (ancho y alto), al cambiar. Con un ref de función: mide también lo que aparece después (la vista de «Su color»). */
 function useMedida() {
-  const ref = useRef(null);
+  const [el, setEl] = useState(null);
   const [m, setM] = useState({ w: 0, h: 0 });
   useLayoutEffect(() => {
-    const el = ref.current;
     if (!el) return undefined;
     const mide = () => setM({ w: el.clientWidth, h: el.clientHeight });
     mide();
@@ -45,38 +48,9 @@ function useMedida() {
     const ro = new ResizeObserver(mide);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
-  return [ref, m];
+  }, [el]);
+  return [setEl, m];
 }
-
-/** Un sticker achicado para caber en su caja (la lista de la hoja y la vista de «Su color»). Se dibuja cuando se acerca a la vista (`raiz`). */
-function Miniatura({ item, f, color, frase, propia, raiz = null, holgura = 0.84 }) {
-  const [ref, { w, h }] = useMedida();
-  const [visto, setVisto] = useState(!raiz);
-  useEffect(() => {
-    if (visto) return undefined;
-    const el = ref.current;
-    if (!el || typeof IntersectionObserver !== 'function') { setVisto(true); return undefined; }
-    const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) { setVisto(true); io.disconnect(); } }, { root: raiz.current ?? null, rootMargin: '200px 0px' });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [visto, raiz, ref]);
-  const hs = altoDe(item);
-  const k = w && h ? Math.min((w * holgura) / 300, (h * holgura) / hs) : 0;
-  return (
-    <span ref={ref} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-      {visto && k > 0 && (
-        <span style={{ position: 'absolute', left: (w - 300 * k) / 2, top: (h - hs * k) / 2, transform: `scale(${k.toFixed(4)})`, transformOrigin: 'top left' }}>
-          <Sticker item={item} f={f} color={color} frase={frase} propia={propia} sinMarca />
-        </span>
-      )}
-    </span>
-  );
-}
-
-const Nuevo = () => (
-  <span style={{ position: 'absolute', top: -7, right: 8, zIndex: 2, background: '#2448E8', color: '#fff', fontSize: 11.5, fontWeight: 600, padding: '3px 8px', borderRadius: 10, letterSpacing: -0.1, pointerEvents: 'none' }}>Nuevo</span>
-);
 
 /** La fila de colores (dentro de la hoja). `fijo`: ese sticker no cambia de color. */
 function Colores({ elegido, alElegir, fijo = false, texto }) {
@@ -96,7 +70,7 @@ function Colores({ elegido, alElegir, fijo = false, texto }) {
   );
 }
 
-export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, frase, capa = 3400, alCerrar }) {
+export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, frase, alCambiarFrase, capa = 3400, alCerrar }) {
   const [abierto, setAbierto] = useState(false);
   const [pegados, setPegados] = useState([]); // [{ k, item, total, colorI, cx, cy, s, r, z }]
   const [elegir, setElegir] = useState(null); // null | { modo: 'nuevo' } | { modo: 'color', k }
@@ -108,6 +82,9 @@ export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, fra
   const [armando, setArmando] = useState(null); // el botón que espera la imagen
   const [compartir, setCompartir] = useState(null); // { url } de la vista previa
   const [aviso, setAviso] = useState(null);
+  const [frases, setFrases] = useState(false); // «✎ Personalizar»: la hoja de frases, como en Stickers
+  const [rejillaMedida, rejilla] = useMedida();
+  const [colorMedida, cajaColor] = useMedida();
   const [zonaRef, zona] = useMedida();
   const rejillaRef = useRef(null);
   const boteRef = useRef(null);
@@ -141,9 +118,9 @@ export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, fra
   const fichaDe = (p) => (p.total ? totales : f);
   const propiaDe = (p) => (p.item.conFoto ? foto : null);
 
-  const agrega = (item, total) => {
+  const agrega = (item, total, cara = 0) => {
     vibra('toque');
-    setPegados((ps) => [...ps, { k: sigue.current, item, total, colorI: item.fija ? 0 : colorNuevo, cx: 0.5, cy: 0.36 + 0.1 * (ps.length % 4), s: S_INICIAL, r: 0, z: sigue.current }]);
+    setPegados((ps) => [...ps, { k: sigue.current, item, total, cara, colorI: item.fija ? 0 : colorNuevo, cx: 0.5, cy: 0.36 + 0.1 * (ps.length % 4), s: S_INICIAL, r: 0, z: sigue.current }]);
     sigue.current += 1;
     setElegir(null);
   };
@@ -243,11 +220,11 @@ export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, fra
   };
 
   /* ---- La imagen: se arma una vez por cada versión de lo que hay en el lienzo. ---- */
-  const firma = JSON.stringify(pegados.map((p) => [p.item.id, p.total, p.colorI, p.cx, p.cy, p.s, p.r, p.z]));
+  const firma = JSON.stringify([frase, ...pegados.map((p) => [p.item.id, p.total, p.cara, p.colorI, p.cx, p.cy, p.s, p.r, p.z])]);
   const genera = useCallback(async () => {
     if (hecha.current.firma === firma && hecha.current.blob) return hecha.current.blob;
     const capas = [...pegados].sort((a, b) => a.z - b.z).map((p) => ({
-      item: p.item, f: p.total ? totales : f, color: COLORES[p.colorI] ?? COLORES[0], frase, propia: p.item.conFoto ? foto : null, cx: p.cx, cy: p.cy, s: p.s, r: p.r,
+      item: p.item, f: p.total ? totales : f, color: COLORES[p.colorI] ?? COLORES[0], cara: p.cara ?? 0, frase, propia: p.item.conFoto ? foto : null, cx: p.cx, cy: p.cy, s: p.s, r: p.r,
     }));
     const blob = await historiaDeCarrete({ foto, capas });
     hecha.current = { firma, blob };
@@ -293,6 +270,7 @@ export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, fra
   };
 
   const elegido = elegir?.modo === 'color' ? pegados.find((p) => p.k === elegir.k) : null;
+  const anchoTile = rejilla.w > 0 ? Math.floor((rejilla.w - 4 - 8) / 2) : 0; // la rejilla tiene 2 px de cada lado y 8 entre columnas
   const lista = sub === 'actividad' ? items : itemsTot;
   const marcaPx = W * MARCA_HISTORIA.tam;
   const boton = (activo) => ({ border: 'none', borderRadius: 999, height: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontFamily: SF, fontSize: 15.5, fontWeight: 600, letterSpacing: -0.2, cursor: 'pointer', color: '#fff', background: '#232326', opacity: armando && !activo ? 0.5 : 1 });
@@ -317,7 +295,7 @@ export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, fra
                   transform: `translate(-50%, -50%) rotate(${p.r}deg) scale(${(p.s * W) / 300})`, WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none',
                 }}
               >
-                <Sticker item={p.item} f={fichaDe(p)} color={colorDe(p)} frase={frase} propia={propiaDe(p)} sinMarca />
+                <Sticker item={p.item} f={fichaDe(p)} color={colorDe(p)} cara={p.cara ?? 0} frase={frase} propia={propiaDe(p)} sinMarca />
               </div>
             ))}
             {/* La marca: una vez, abajo (la misma medida que en la imagen que sale). */}
@@ -363,8 +341,17 @@ export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, fra
         <div aria-hidden="true" style={{ width: 36, height: 5, borderRadius: 3, background: 'rgba(255,255,255,.22)', margin: '0 auto 10px', flex: 'none' }} />
         {elegido ? (
           <>
-            <div style={{ position: 'relative', height: 170, margin: '4px 2px 0', borderRadius: 22, background: colorDe(elegido).clara ? '#E8E8EC' : '#18181B', overflow: 'hidden' }}>
-              <Miniatura item={elegido.item} f={fichaDe(elegido)} color={colorDe(elegido)} frase={frase} propia={propiaDe(elegido)} holgura={0.78} />
+            {/* El sticker tocado, como en Stickers: se desliza entre sus variantes y, si tiene frase, «✎ Personalizar». */}
+            <div ref={colorMedida} style={{ margin: '4px 2px 0' }}>
+              {cajaColor.w > 0 && (
+                <Mosaico
+                  key={elegido.k} id={`pegado-${elegido.k}`} etiqueta={`Sticker ${elegido.item.nombre}`} ancho={cajaColor.w} proporcion={0.5} lienzoH={altoDe(elegido.item)} holgura={0.8}
+                  fondo={colorDe(elegido).clara && !elegido.item.fija ? FONDO_CLARO : FONDO_OSCURO} clara={colorDe(elegido).clara && !elegido.item.fija}
+                  caras={elegido.item.caras ?? 1} caraInicial={elegido.cara ?? 0} alCambiarCara={(c) => cambia(elegido.k, { cara: c })} alTocar={() => {}} alMantener={() => {}}
+                  boton={elegido.item.perso ? { texto: '✎ Personalizar', etiqueta: 'Personalizar la frase', fn: () => setFrases(true) } : null}
+                  dibuja={(c) => <Sticker item={elegido.item} f={fichaDe(elegido)} color={colorDe(elegido)} cara={c} frase={frase} propia={propiaDe(elegido)} sinMarca />}
+                />
+              )}
             </div>
             <Colores elegido={elegido.colorI} fijo={!!elegido.item.fija} alElegir={(i) => cambia(elegido.k, { colorI: i })} texto="Su color" />
             <div style={{ padding: '14px 2px 16px' }}>
@@ -384,19 +371,20 @@ export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, fra
               ))}
             </div>
             <Colores elegido={colorNuevo} alElegir={setColorNuevo} texto="Color" />
+            <div ref={rejillaMedida} aria-hidden="true" style={{ height: 0, flex: 'none' }} />
             <div ref={rejillaRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, padding: '14px 2px calc(20px + env(safe-area-inset-bottom))', alignContent: 'start', scrollbarWidth: 'none' }}>
-              {lista.map((item) => {
+              {anchoTile > 0 && lista.map((item) => {
                 const color = item.fija ? COLORES[0] : COLORES[colorNuevo];
+                const clara = color.clara && !item.fija;
+                const total = sub === 'totales';
                 return (
-                  <button
-                    key={item.id} type="button" onClick={() => agrega(item, sub === 'totales')} aria-label={`Poner el sticker ${item.nombre}`}
-                    style={{ position: 'relative', border: 'none', padding: 0, borderRadius: 18, aspectRatio: '1.3', background: color.clara && !item.fija ? '#E8E8EC' : '#18181B', cursor: 'pointer' }}
-                  >
-                    <span style={{ position: 'absolute', inset: 0, borderRadius: 18, overflow: 'hidden' }}>
-                      <Miniatura item={item} f={sub === 'totales' ? totales : f} color={color} frase={frase} propia={item.conFoto ? foto : null} raiz={rejillaRef} />
-                    </span>
-                    {esNuevo(item) && <Nuevo />}
-                  </button>
+                  <Mosaico
+                    key={item.id} id={item.id} etiqueta={`Poner el sticker ${item.nombre}`} ancho={anchoTile} proporcion={1 / 1.3} lienzoH={altoDe(item)} holgura={item.familia === 'tarjeta' ? 0.94 : 1}
+                    nuevo={esNuevo(item)} raiz={rejillaRef} fondo={clara ? FONDO_CLARO : FONDO_OSCURO} clara={clara} caras={item.caras ?? 1}
+                    boton={item.perso ? { texto: '✎ Personalizar', etiqueta: 'Personalizar la frase', fn: () => setFrases(true) } : null}
+                    alTocar={(cara) => agrega(item, total, cara)} alMantener={(cara) => agrega(item, total, cara)}
+                    dibuja={(cara) => <Sticker item={item} f={total ? totales : f} color={color} cara={cara} frase={frase} propia={item.conFoto ? foto : null} sinMarca />}
+                  />
                 );
               })}
               {lista.length === 0 && <p style={{ gridColumn: '1 / -1', margin: '14px 4px', fontSize: 15, color: 'rgba(255,255,255,.6)' }}>Entrena esta semana y aquí aparecen tus totales.</p>}
@@ -427,6 +415,12 @@ export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, fra
             </div>
             <button type="button" onClick={() => setCompartir(null)} style={{ marginTop: 16, width: '100%', height: 52, border: 'none', borderRadius: 18, background: 'rgba(255,255,255,.14)', color: '#fff', fontFamily: SF, fontSize: 16, fontWeight: 600, cursor: 'pointer' }}>Seguir editando</button>
           </div>
+        </div>
+      )}
+
+      {frases && (
+        <div style={{ position: 'absolute', inset: 0, zIndex: 1050 }}>
+          <HojaDeFrases frase={frase} alElegir={(nueva) => alCambiarFrase?.(nueva)} alCerrar={() => setFrases(false)} />
         </div>
       )}
 
