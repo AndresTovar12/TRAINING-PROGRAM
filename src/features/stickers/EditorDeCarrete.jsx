@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import { Check, Copy, Download, Plus, Share, Trash2, X } from 'lucide-react';
 import { COLORES, esNuevo, lienzoDe } from '@/lib/stickers/catalogo';
 import { entregaArchivo } from '@/lib/entregaArchivo';
+import { guardaEnFotos, hayCarrete } from '@/lib/carreteNativo';
 import { vibra } from '@/lib/avisosNativos';
 import Sticker from './Sticker';
 import { HISTORIA, MARCA_HISTORIA, historiaDeCarrete } from './exporta';
@@ -264,7 +265,15 @@ export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, fra
       setArmando(null);
     }
   };
-  const guarda = () => conImagen('guardar', async (blob) => { vibra('listo'); await entregaArchivo(blob, 'traininglab-historia.png'); if (!enApp) avisa('Imagen guardada.'); });
+  // Guardar: en la app, directo a Fotos (`CarretePlugin`); si no se puede (sin permiso o un build viejo), la hoja de compartir del iPhone.
+  const guarda = () => conImagen('guardar', async (blob) => {
+    vibra('listo');
+    if (hayCarrete()) {
+      try { await guardaEnFotos(blob); avisa('Guardada en Fotos.'); return; } catch { /* sigue con la hoja de compartir */ }
+    }
+    await entregaArchivo(blob, 'traininglab-historia.png');
+    if (!enApp) avisa('Imagen guardada.');
+  });
   const abreCompartir = () => conImagen('compartir', async (blob) => setCompartir({ url: URL.createObjectURL(blob), blob }));
   // A la historia: se copia (la promesa va dentro del ClipboardItem, en el mismo toque, como pide Safari) y se abre la cámara de Instagram para pegarla.
   const aHistoria = () => {

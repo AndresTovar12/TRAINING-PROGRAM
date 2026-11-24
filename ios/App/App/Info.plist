@@ -29,7 +29,9 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Training Lab usa el micrófono para grabar el audio de tus videos de técnica y tus mensajes de voz.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Training Lab accede a tus fotos y videos para que puedas subirlos a tu plan, a tus mensajes y a tu perfil.</string>
+	<string>Training Lab accede a tus fotos y videos para que puedas subirlos a tu plan, a tus mensajes y a tu perfil, y para ponerle stickers de tu entreno a tus fotos.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Training Lab guarda en tus Fotos la imagen con tus stickers.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Training Lab usa tu ubicación para medir distancia, ritmo y ruta mientras corres, pedaleas, caminas o nadas, y para dibujar tu recorrido en tus stickers en cualquier entreno.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

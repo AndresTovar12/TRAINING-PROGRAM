@@ -1,0 +1,192 @@
+import Foundation
+import Capacitor
+import Photos
+import UIKit
+
+/* EL CARRETE DENTRO DE LA HOJA DE COMPARTIR (24 nov 2026, Andrés: «lo primero que te aparece es como que todas tus fotos», como Aura).
+
+   La web no puede ver el carrete: solo abrir el selector del iPhone. Este puente lee las fotos más recientes (con permiso de Fotos), da sus miniaturas para la
+   rejilla de la hoja y, al tocar una, su original listo para el editor. También guarda la imagen terminada directo en Fotos.
+   La página: `src/lib/carreteNativo.js`; la hoja: `src/features/stickers/HojaDeStickers.jsx`.
+
+   Métodos:
+   - `permiso` / `pide`: { permiso: si | limitado | negado | sin_preguntar }. `pide` muestra la pregunta de iOS (`NSPhotoLibraryUsageDescription`).
+   - `recientes` { cuantos?: 1-300 (60), lado?: px de la miniatura (300) }: { fotos: [{ id, tipo: foto | video, duracion: s, miniatura: file://… }] }, de la más
+     nueva a la más vieja. Las miniaturas se escriben una vez en la carpeta temporal y se reusan.
+   - `original` { id }: { ruta: file://…, tipo: foto }. La foto se redibuja ya derecha (orientación aplicada), en JPEG, a 4 MP como mucho (la HEIC también);
+     si vive solo en iCloud, se baja. Los videos llegan en la parte 2b.
+   - `guarda` { datos: base64 de un PNG/JPEG }: la guarda en Fotos (permiso de solo agregar, `NSPhotoLibraryAddUsageDescription`).
+   - `eligeMas`: con acceso limitado, el selector de iOS para sumar fotos. `ajustes`: abre los ajustes de la app (si el permiso está negado). */
+@objc(CarretePlugin)
+public class CarretePlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "CarretePlugin"
+    public let jsName = "Carrete"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "permiso", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "pide", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "recientes", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "original", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "guarda", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "eligeMas", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "ajustes", returnType: CAPPluginReturnPromise)
+    ]
+
+    private let miniaturas = PHCachingImageManager()
+    private let cola = DispatchQueue(label: "tl.carrete", qos: .userInitiated)
+    private static let maxPixeles: CGFloat = 4_000_000
+
+    private static func texto(_ s: PHAuthorizationStatus) -> String {
+        switch s {
+        case .authorized: return "si"
+        case .limited: return "limitado"
+        case .denied, .restricted: return "negado"
+        case .notDetermined: return "sin_preguntar"
+        @unknown default: return "sin_preguntar"
+        }
+    }
+
+    private func carpeta() throws -> URL {
+        let u = FileManager.default.temporaryDirectory.appendingPathComponent("carrete", isDirectory: true)
+        try FileManager.default.createDirectory(at: u, withIntermediateDirectories: true)
+        return u
+    }
+
+    private static func limpio(_ id: String) -> String {
+        String(id.map { $0.isLetter || $0.isNumber ? $0 : "_" })
+    }
+
+    @objc func permiso(_ call: CAPPluginCall) {
+        call.resolve(["permiso": Self.texto(PHPhotoLibrary.authorizationStatus(for: .readWrite))])
+    }
+
+    @objc func pide(_ call: CAPPluginCall) {
+        PHPhotoLibrary.requestAuthorization(for: .readWrite) { s in
+            call.resolve(["permiso": Self.texto(s)])
+        }
+    }
+
+    @objc func recientes(_ call: CAPPluginCall) {
+        let cuantos = max(1, min(300, call.getInt("cuantos") ?? 60))
+        let lado = CGFloat(max(60, min(600, call.getInt("lado") ?? 300)))
+        cola.async {
+            let opciones = PHFetchOptions()
+            opciones.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+            opciones.predicate = NSPredicate(format: "mediaType == %d || mediaType == %d", PHAssetMediaType.image.rawValue, PHAssetMediaType.video.rawValue)
+            opciones.fetchLimit = cuantos
+            let resultado = PHAsset.fetchAssets(with: opciones)
+            guard let dir = try? self.carpeta() else {
+                call.reject("No se pudo preparar la carpeta")
+                return
+            }
+            let pide = PHImageRequestOptions()
+            pide.isSynchronous = true
+            pide.deliveryMode = .highQualityFormat
+            pide.resizeMode = .fast
+            pide.isNetworkAccessAllowed = true
+            var fotos: [[String: Any]] = []
+            resultado.enumerateObjects { activo, _, _ in
+                let destino = dir.appendingPathComponent("m-\(Self.limpio(activo.localIdentifier))-\(Int(lado)).jpg")
+                var lista = FileManager.default.fileExists(atPath: destino.path)
+                if !lista {
+                    self.miniaturas.requestImage(for: activo, targetSize: CGSize(width: lado, height: lado), contentMode: .aspectFill, options: pide) { imagen, _ in
+                        if let datos = imagen?.jpegData(compressionQuality: 0.8) {
+                            lista = (try? datos.write(to: destino)) != nil
+                        }
+                    }
+                }
+                guard lista else { return }
+                fotos.append([
+                    "id": activo.localIdentifier,
+                    "tipo": activo.mediaType == .video ? "video" : "foto",
+                    "duracion": activo.duration,
+                    "miniatura": destino.absoluteString
+                ])
+            }
+            call.resolve(["fotos": fotos])
+        }
+    }
+
+    @objc func original(_ call: CAPPluginCall) {
+        guard let id = call.getString("id"),
+              let activo = PHAsset.fetchAssets(withLocalIdentifiers: [id], options: nil).firstObject else {
+            call.reject("No está esa foto")
+            return
+        }
+        guard activo.mediaType == .image else {
+            call.reject("video")
+            return
+        }
+        guard let dir = try? carpeta() else {
+            call.reject("No se pudo preparar la carpeta")
+            return
+        }
+        let pide = PHImageRequestOptions()
+        pide.isNetworkAccessAllowed = true
+        pide.deliveryMode = .highQualityFormat
+        pide.version = .current
+        PHImageManager.default().requestImageDataAndOrientation(for: activo, options: pide) { datos, _, _, _ in
+            self.cola.async {
+                guard let datos = datos, let imagen = UIImage(data: datos) else {
+                    call.reject("No se pudo leer la foto")
+                    return
+                }
+                // Derecha y en JPEG, a 4 MP como mucho: `draw` aplica la orientación de la foto.
+                let ancho = imagen.size.width * imagen.scale
+                let alto = imagen.size.height * imagen.scale
+                let k = min(1, sqrt(Self.maxPixeles / max(1, ancho * alto)))
+                let tam = CGSize(width: floor(ancho * k), height: floor(alto * k))
+                let formato = UIGraphicsImageRendererFormat()
+                formato.scale = 1
+                let jpg = UIGraphicsImageRenderer(size: tam, format: formato).jpegData(withCompressionQuality: 0.9) { _ in
+                    imagen.draw(in: CGRect(origin: .zero, size: tam))
+                }
+                let destino = dir.appendingPathComponent("o-\(Self.limpio(id)).jpg")
+                do {
+                    try jpg.write(to: destino)
+                    call.resolve(["ruta": destino.absoluteString, "tipo": "foto"])
+                } catch {
+                    call.reject("No se pudo preparar la foto")
+                }
+            }
+        }
+    }
+
+    @objc func guarda(_ call: CAPPluginCall) {
+        guard let base64 = call.getString("datos"), let datos = Data(base64Encoded: base64) else {
+            call.reject("Sin imagen")
+            return
+        }
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { s in
+            guard s == .authorized || s == .limited else {
+                call.reject("negado")
+                return
+            }
+            PHPhotoLibrary.shared().performChanges({
+                PHAssetCreationRequest.forAsset().addResource(with: .photo, data: datos, options: nil)
+            }) { ok, error in
+                if ok { call.resolve() } else { call.reject(error?.localizedDescription ?? "No se pudo guardar") }
+            }
+        }
+    }
+
+    @objc func eligeMas(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            guard let pantalla = self.bridge?.viewController else {
+                call.reject("Sin pantalla")
+                return
+            }
+            PHPhotoLibrary.shared().presentLimitedLibraryPicker(from: pantalla) { _ in
+                call.resolve()
+            }
+        }
+    }
+
+    @objc func ajustes(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+            call.resolve()
+        }
+    }
+}

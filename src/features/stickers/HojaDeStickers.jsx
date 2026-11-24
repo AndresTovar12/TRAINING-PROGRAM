@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Capacitor } from '@capacitor/core';
-import { Camera, Check, Images, Pencil, Sticker as IconoSticker, X } from 'lucide-react';
+import { Camera, Check, Images, Pencil, Plus, Sticker as IconoSticker, X } from 'lucide-react';
 import { FONT } from '@/lib/theme';
 import { ficha as fichaDe } from '@/lib/stickers/ficha';
 import { catalogo, catalogoDeTotales, COLORES, esNuevo, FRASE_INICIAL, FRASE_MAX, lienzoDe } from '@/lib/stickers/catalogo';
@@ -12,6 +12,7 @@ import CambiarNombre from './CambiarNombre';
 import HojaDeFrases from './HojaDeFrases';
 import Sticker from './Sticker';
 import EditorDeCarrete from './EditorDeCarrete';
+import { abreAjustes, eligeMasFotos, fotosRecientes, hayCarrete, originalDeFoto, permisoDeFotos, pidePermisoDeFotos } from '@/lib/carreteNativo';
 import { nombreDeArchivo, pngDeSticker, preparaFoto } from './exporta';
 
 /* LA HOJA DE STICKERS (Andrés, 28 oct 2026; ver docs/stickers.md y el prototipo). Sustituye a la hoja y al editor del sello.
@@ -264,21 +265,67 @@ const SinDatos = () => (
   </p>
 );
 
-/** El ejemplo de Carrete: un sticker tuyo (sin su marca) sobre el azul de la marca, para que se vea qué sale. */
-function Ejemplo({ item, f, frase }) {
-  const [ref, ancho] = useAncho();
-  if (!item) return null;
-  const k = ancho ? (ancho * 0.72) / 300 : 0;
+const CUADRO = { position: 'relative', border: 'none', padding: 0, aspectRatio: '3 / 4', cursor: 'pointer', display: 'grid', placeItems: 'center', color: '#fff', background: '#141826' };
+
+/**
+ * CARRETE: tus fotos, lo primero que se ve (Andrés, 24 nov 2026: «lo primero que te aparece es como que todas tus fotos», como Aura; el cuadro azul de
+ * relleno de la parte 1 lo extrañó con razón). Rejilla de 3 de orilla a orilla: la cámara primero y luego lo más reciente (`CarretePlugin.swift`). Tocar una
+ * foto abre el editor. Sin permiso: cómo darlo. En la web (o con un build viejo) no hay carrete: la cámara y «Elegir foto» (el selector de archivos).
+ * Los videos se suman en la parte 2b; mientras, no se enseñan.
+ */
+function RejillaDelCarrete({ alElegir, alCamara, alSelector }) {
+  const [estado, setEstado] = useState(hayCarrete() ? 'cargando' : 'sin'); // cargando | listo | negado | sin
+  const [fotos, setFotos] = useState([]);
+  const [limitado, setLimitado] = useState(false);
+  const [vuelta, setVuelta] = useState(0);
+  useEffect(() => {
+    if (!hayCarrete()) return undefined;
+    let vivo = true;
+    (async () => {
+      let p = await permisoDeFotos();
+      if (p === 'sin_preguntar') p = await pidePermisoDeFotos();
+      if (!vivo) return;
+      if (p === null) { setEstado('sin'); return; }
+      if (p === 'negado') { setEstado('negado'); return; }
+      setLimitado(p === 'limitado');
+      try {
+        const l = await fotosRecientes({ cuantos: 90, lado: 300 });
+        if (vivo) { setFotos(l.filter((x) => x.tipo === 'foto')); setEstado('listo'); }
+      } catch {
+        if (vivo) setEstado('sin');
+      }
+    })();
+    return () => { vivo = false; };
+  }, [vuelta]);
+
+  if (estado === 'negado') {
+    return (
+      <div style={{ flex: 1, display: 'grid', placeItems: 'center', padding: '0 28px', textAlign: 'center' }}>
+        <div style={{ display: 'grid', justifyItems: 'center', gap: 12 }}>
+          <Images size={34} strokeWidth={1.6} color="rgba(255,255,255,.7)" />
+          <p style={{ margin: 0, fontFamily: SF, fontSize: 16, lineHeight: 1.4, color: '#fff', fontWeight: 500 }}>Para ver tus fotos aquí, deja que Training Lab use Fotos.</p>
+          <button type="button" onClick={abreAjustes} className="kp-press" style={{ marginTop: 4, height: 48, padding: '0 22px', border: 'none', borderRadius: 16, background: DEGRADADO, color: '#fff', fontFamily: SF, fontSize: 16, fontWeight: 600, cursor: 'pointer' }}>Abrir ajustes</button>
+          <button type="button" onClick={alSelector} style={{ border: 'none', background: 'none', color: 'rgba(255,255,255,.7)', fontFamily: SF, fontSize: 15, fontWeight: 500, padding: 10, cursor: 'pointer' }}>Elegir una foto</button>
+        </div>
+      </div>
+    );
+  }
   return (
-    <span ref={ref} aria-hidden="true" style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', pointerEvents: 'none' }}>
-      {k > 0 && (
-        <span style={{ width: 300 * k, height: lienzoDe(item).h * k, position: 'relative' }}>
-          <span style={{ position: 'absolute', left: 0, top: 0, transform: `scale(${k.toFixed(4)})`, transformOrigin: 'top left' }}>
-            <Sticker item={item} f={f} color={COLORES[0]} frase={frase} sinMarca />
-          </span>
-        </span>
+    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 2, alignContent: 'start', paddingBottom: 'calc(24px + env(safe-area-inset-bottom))' }}>
+      <button type="button" onClick={alCamara} aria-label="Tomar una foto" style={CUADRO}><Camera size={28} strokeWidth={1.6} /></button>
+      {(estado === 'sin' || limitado) && (
+        <button type="button" onClick={estado === 'sin' ? alSelector : () => eligeMasFotos().then(() => setVuelta((v) => v + 1))} aria-label={estado === 'sin' ? 'Elegir una foto' : 'Elegir más fotos'} style={{ ...CUADRO, gap: 6, alignContent: 'center' }}>
+          {estado === 'sin' ? <Images size={26} strokeWidth={1.6} /> : <Plus size={26} strokeWidth={1.8} />}
+          <span style={{ fontFamily: SF, fontSize: 12.5, fontWeight: 500, color: 'rgba(255,255,255,.75)' }}>{estado === 'sin' ? 'Elegir foto' : 'Más fotos'}</span>
+        </button>
       )}
-    </span>
+      {estado === 'cargando' && Array.from({ length: 11 }, (_, i) => <span key={i} aria-hidden="true" style={{ aspectRatio: '3 / 4', background: '#10131D' }} />)}
+      {fotos.map((x) => (
+        <button key={x.id} type="button" onClick={() => alElegir(x.id)} aria-label="Usar esta foto" style={{ ...CUADRO, overflow: 'hidden', background: '#10131D' }}>
+          <img src={x.src} alt="" loading="lazy" decoding="async" draggable={false} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -396,6 +443,17 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
     }
   };
   const abreCarrete = () => carrete.current?.click();
+  // Una foto de la rejilla: su original (del iPhone, ya derecho) y al editor.
+  const eligeDelRejilla = async (id) => {
+    avisa({ texto: 'Preparando tu foto…', dura: 60000 });
+    try {
+      setEditor(URL.createObjectURL(await preparaFoto(await originalDeFoto(id))));
+      clearTimeout(reloj.current);
+      setAviso(null);
+    } catch {
+      avisa({ texto: 'No se pudo abrir esa foto. Prueba con otra.', error: true });
+    }
+  };
   // Carrete: la foto elegida (o recién tomada) abre el editor. HEIC incluida; se achica a 4 MP y nunca sale del teléfono (`preparaFoto`).
   const eligeParaEditor = async (ev) => {
     const archivo = ev.target.files?.[0];
@@ -579,25 +637,12 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
         </div>
         {/* Carrete: tu foto con stickers. La foto se elige con el selector del iPhone (o se toma); la rejilla de tus fotos dentro de la hoja llega con la parte 2. */}
         {vista === 'carrete' && (
-          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 16px calc(20px + env(safe-area-inset-bottom))' }}>
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginTop: 16 }}>
             {f ? (
-              <>
-                <button type="button" onClick={() => paraEditor.current?.click()} aria-label="Elegir una foto para ponerle stickers" style={{ position: 'relative', flex: 1, minHeight: 0, border: 'none', padding: 0, borderRadius: 22, overflow: 'hidden', cursor: 'pointer', background: 'radial-gradient(120% 70% at 20% 0%, #2F5BFF 0%, #1733B8 45%, #0B1340 100%)' }}>
-                  <Ejemplo item={items.find((x) => !x.fija && !x.conFoto && x.forma === 'ancho') ?? items[0]} f={f} frase={frase} />
-                  <span aria-hidden="true" style={{ /* estilo-ok: diseño A · Marca aprobado por Andrés (24 nov 2026, maqueta editor-de-stickers) */ position: 'absolute', left: 0, right: 0, bottom: 14, textAlign: 'center', fontFamily: '"Bricolage Grotesque", sans-serif', fontWeight: 800, fontSize: 10.5, letterSpacing: 3.4, color: 'rgba(255,255,255,.88)' }}>TRAINING LAB</span>
-                </button>
-                <div style={{ display: 'grid', gridTemplateColumns: '54px 1fr', gap: 8, flex: 'none' }}>
-                  <button type="button" onClick={() => camara.current?.click()} aria-label="Tomar una foto" className="kp-press" style={{ height: 54, border: 'none', borderRadius: 18, background: 'rgba(255,255,255,.07)', color: '#fff', display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
-                    <Camera size={21} strokeWidth={1.9} />
-                  </button>
-                  <button type="button" onClick={() => paraEditor.current?.click()} className="kp-press" style={{ height: 54, border: 'none', borderRadius: 18, background: DEGRADADO, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, fontFamily: SF, fontSize: 16.5, fontWeight: 600, letterSpacing: -0.3, cursor: 'pointer', boxShadow: '0 10px 26px rgba(30,64,224,.35), inset 0 .5px 0 rgba(255,255,255,.25)' }}>
-                    <Images size={20} strokeWidth={1.9} />Elegir foto
-                  </button>
-                </div>
-              </>
+              <RejillaDelCarrete alElegir={eligeDelRejilla} alCamara={() => camara.current?.click()} alSelector={() => paraEditor.current?.click()} />
             ) : cargado === undefined ? (
-              <span aria-hidden="true" style={{ flex: 1, borderRadius: 22, background: '#111521' }} />
-            ) : <SinDatos />}
+              <span aria-hidden="true" style={{ flex: 1, background: '#10131D' }} />
+            ) : <div style={{ padding: '0 16px' }}><SinDatos /></div>}
           </div>
         )}
         <div aria-live="polite" style={{ position: 'absolute', zIndex: 9, left: 10, right: 10, bottom: 'calc(10px + env(safe-area-inset-bottom))', display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
