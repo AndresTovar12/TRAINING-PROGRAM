@@ -140,21 +140,34 @@ export function preparaFoto(archivo) {
  * ancho de la imagen y `r` el giro en grados. Así lo que se ve en el editor y lo que sale miden lo mismo, sea cual sea la pantalla. Un Blob PNG.
  */
 export const HISTORIA = { w: 1080, h: 1920 };
-export const MARCA_HISTORIA = { texto: 'TRAINING LAB', tam: 0.029, espacio: 0.0095, abajo: 0.026 }; // estilo-ok: diseño A · Marca aprobado por Andrés (24 nov 2026, maqueta editor-de-stickers)
+/* La marca (25 nov 2026, opción «F · Con líneas» que eligió Andrés entre nueve): «— TRAINING LAB —», mayúsculas de Bricolage espaciadas entre dos rayitas,
+   pegada al borde de abajo y muy translúcida (22 %) para que se funda con la foto, como la de Aura. Todo en fracciones del ancho (o del alto, `abajo`). */
+export const MARCA_HISTORIA = { texto: 'TRAINING LAB', tam: 0.029, espacio: 0.0095, abajo: 0.016, alfa: 0.22, linea: 0.075, hueco: 0.029, grosor: 0.003 }; // estilo-ok: diseño aprobado por Andrés (25 nov 2026, opción F)
 
-/** «TRAINING LAB» abajo, al centro, letra por letra (el espaciado de las letras no existe en todos los lienzos). */
+/** «— TRAINING LAB —» abajo, al centro, letra por letra (el espaciado de las letras no existe en todos los lienzos). */
 function dibujaMarca(ctx, W, H) {
-  const { texto, tam, espacio, abajo } = MARCA_HISTORIA;
+  const { texto, tam, espacio, abajo, alfa, linea, hueco, grosor } = MARCA_HISTORIA;
+  const px = Math.round(W * tam);
   ctx.save();
-  ctx.font = `800 ${Math.round(W * tam)}px "Bricolage Grotesque"`;
+  ctx.font = `800 ${px}px "Bricolage Grotesque"`;
   ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = 'rgba(255,255,255,.9)';
-  ctx.shadowColor = 'rgba(0,0,0,.35)';
-  ctx.shadowBlur = W * 0.01;
+  ctx.fillStyle = `rgba(255,255,255,${alfa})`;
+  ctx.shadowColor = 'rgba(0,0,0,.08)';
+  ctx.shadowBlur = W * 0.006;
+  ctx.shadowOffsetY = W * 0.003;
   const sep = W * espacio;
-  const anchos = [...texto].map((c) => ctx.measureText(c).width);
-  let x = (W - (anchos.reduce((a, b) => a + b, 0) + sep * (anchos.length - 1))) / 2;
-  [...texto].forEach((c, i) => { ctx.fillText(c, x, H * (1 - abajo)); x += anchos[i] + sep; });
+  const letras = [...texto];
+  const anchos = letras.map((c) => ctx.measureText(c).width);
+  const ancho = anchos.reduce((a, b) => a + b, 0) + sep * (letras.length - 1);
+  const largo = W * linea;
+  const entre = W * hueco;
+  const y = H * (1 - abajo);
+  let x = (W - (ancho + 2 * (largo + entre))) / 2;
+  const raya = (x0) => ctx.fillRect(x0, y - px * 0.36 - (W * grosor) / 2, largo, Math.max(1, W * grosor));
+  raya(x);
+  x += largo + entre;
+  letras.forEach((c, i) => { ctx.fillText(c, x, y); x += anchos[i] + sep; });
+  raya(x - sep + entre);
   ctx.restore();
 }
 

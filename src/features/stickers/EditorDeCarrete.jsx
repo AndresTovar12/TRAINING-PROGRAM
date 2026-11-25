@@ -312,8 +312,10 @@ export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, fra
               </div>
             ))}
             {/* La marca: una vez, abajo (la misma medida que en la imagen que sale). */}
-            <div aria-hidden="true" style={{ position: 'absolute', left: 0, right: 0, bottom: H * MARCA_HISTORIA.abajo - marcaPx * 0.18, textAlign: 'center', fontFamily: '"Bricolage Grotesque", sans-serif', fontWeight: 800, fontSize: marcaPx, letterSpacing: W * MARCA_HISTORIA.espacio, lineHeight: 1, color: 'rgba(255,255,255,.9)', textShadow: '0 1px 10px rgba(0,0,0,.35)', pointerEvents: 'none', zIndex: 900 }}>
-              {MARCA_HISTORIA.texto}
+            <div aria-hidden="true" style={{ position: 'absolute', left: 0, right: 0, bottom: H * MARCA_HISTORIA.abajo - marcaPx * 0.18, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: W * MARCA_HISTORIA.hueco, fontFamily: '"Bricolage Grotesque", sans-serif', fontWeight: 800, fontSize: marcaPx, lineHeight: 1, color: `rgba(255,255,255,${MARCA_HISTORIA.alfa})`, textShadow: '0 1px 2px rgba(0,0,0,.08)', pointerEvents: 'none', zIndex: 900 }}>
+              <i style={{ display: 'block', width: W * MARCA_HISTORIA.linea, height: Math.max(1, W * MARCA_HISTORIA.grosor), background: 'currentColor' }} />
+              <span style={{ letterSpacing: W * MARCA_HISTORIA.espacio, marginRight: -W * MARCA_HISTORIA.espacio }}>{MARCA_HISTORIA.texto}</span>
+              <i style={{ display: 'block', width: W * MARCA_HISTORIA.linea, height: Math.max(1, W * MARCA_HISTORIA.grosor), background: 'currentColor' }} />
             </div>
             {/* Arriba: salir. Abajo: agregar, o el bote mientras arrastras. */}
             <button type="button" onClick={cierra} aria-label="Salir" style={{ position: 'absolute', top: 12, left: 12, zIndex: 950, width: 42, height: 42, borderRadius: '50%', border: 'none', color: '#fff', display: 'grid', placeItems: 'center', cursor: 'pointer', opacity: arrastrando ? 0 : 1, transition: 'opacity .2s', ...VIDRIO }}>
