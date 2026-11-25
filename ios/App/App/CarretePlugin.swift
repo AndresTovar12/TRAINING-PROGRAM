@@ -17,7 +17,11 @@ import UIKit
    - `original` { id }: { ruta: file://…, tipo: foto }. La foto se redibuja ya derecha (orientación aplicada), en JPEG, a 4 MP como mucho (la HEIC también);
      si vive solo en iCloud, se baja. Los videos llegan en la parte 2b.
    - `guarda` { datos: base64 de un PNG/JPEG }: la guarda en Fotos (permiso de solo agregar, `NSPhotoLibraryAddUsageDescription`).
-   - `eligeMas`: con acceso limitado, el selector de iOS para sumar fotos. `ajustes`: abre los ajustes de la app (si el permiso está negado). */
+   - `eligeMas`: con acceso limitado, el selector de iOS para sumar fotos. `ajustes`: abre los ajustes de la app (si el permiso está negado).
+   - `historiaDeInstagram` { datos: base64 del PNG, appId }: «compartir a historias» de Instagram (24 nov 2026, Andrés: «me lleva a Instagram pero no me
+     aparece la imagen»). La imagen va al portapapeles con la llave que lee Instagram (5 min) y se abre `instagram-stories://share` con el App ID de Meta
+     (el de «Training Lab» en developers.facebook.com; sin él Instagram la rechaza). Sin Instagram instalado: rechaza con `sin_instagram`.
+     `LSApplicationQueriesSchemes` (Info.plist) deja preguntar si está instalado. */
 @objc(CarretePlugin)
 public class CarretePlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "CarretePlugin"
@@ -29,7 +33,8 @@ public class CarretePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "original", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "guarda", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "eligeMas", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "ajustes", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "ajustes", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "historiaDeInstagram", returnType: CAPPluginReturnPromise)
     ]
 
     private let miniaturas = PHCachingImageManager()
@@ -178,6 +183,26 @@ public class CarretePlugin: CAPPlugin, CAPBridgedPlugin {
             }
             PHPhotoLibrary.shared().presentLimitedLibraryPicker(from: pantalla) { _ in
                 call.resolve()
+            }
+        }
+    }
+
+    @objc func historiaDeInstagram(_ call: CAPPluginCall) {
+        guard let base64 = call.getString("datos"), let datos = Data(base64Encoded: base64),
+              let appId = call.getString("appId"), !appId.isEmpty,
+              let url = URL(string: "instagram-stories://share?source_application=\(appId)") else {
+            call.reject("Sin imagen")
+            return
+        }
+        DispatchQueue.main.async {
+            guard UIApplication.shared.canOpenURL(url) else {
+                call.reject("sin_instagram")
+                return
+            }
+            let cosas: [[String: Any]] = [["com.instagram.sharedSticker.backgroundImage": datos]]
+            UIPasteboard.general.setItems(cosas, options: [.expirationDate: Date().addingTimeInterval(300)])
+            UIApplication.shared.open(url, options: [:]) { abrio in
+                if abrio { call.resolve() } else { call.reject("no_abrio") }
             }
         }
     }

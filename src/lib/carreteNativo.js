@@ -58,6 +58,14 @@ export async function guardaEnFotos(blob) {
   await conTiempoLimite(Carrete.guarda({ datos: await aBase64(blob) }), 30000);
 }
 
+/** El App ID de Meta de «Training Lab» (developers.facebook.com, 24 nov 2026). No es secreto: Instagram lo pide para «compartir a historias». */
+export const META_APP_ID = '1831471268061512';
+
+/** Abre Instagram con la imagen ya puesta como historia. Lanza 'sin_instagram' si no está instalado (o un error si el build es viejo). */
+export async function aHistoriaDeInstagram(blob) {
+  await conTiempoLimite(Carrete.historiaDeInstagram({ datos: await aBase64(blob), appId: META_APP_ID }), 15000);
+}
+
 /** Con acceso limitado: el selector de iOS para sumar fotos. */
 export async function eligeMasFotos() {
   try { await Carrete.eligeMas(); } catch { /* sin pantalla o build viejo */ }

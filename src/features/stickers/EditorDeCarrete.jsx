@@ -4,7 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import { Check, Copy, Download, Plus, Share, Trash2, X } from 'lucide-react';
 import { COLORES, esNuevo, lienzoDe } from '@/lib/stickers/catalogo';
 import { entregaArchivo } from '@/lib/entregaArchivo';
-import { guardaEnFotos, hayCarrete } from '@/lib/carreteNativo';
+import { aHistoriaDeInstagram, guardaEnFotos, hayCarrete } from '@/lib/carreteNativo';
 import { vibra } from '@/lib/avisosNativos';
 import Sticker from './Sticker';
 import Mosaico from './Mosaico';
@@ -252,8 +252,21 @@ export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, fra
     if (!enApp) avisa('Imagen guardada.');
   });
   const abreCompartir = () => conImagen('compartir', async (blob) => setCompartir({ url: URL.createObjectURL(blob), blob }));
-  // A la historia: se copia (la promesa va dentro del ClipboardItem, en el mismo toque, como pide Safari) y se abre la cámara de Instagram para pegarla.
+  /* A la historia. En la app: «compartir a historias» de Instagram, la imagen ya puesta (`CarretePlugin.historiaDeInstagram`). Si no se puede (sin Instagram,
+     un build viejo), la hoja de compartir. En la web: se copia (la promesa va dentro del ClipboardItem, en el mismo toque, como pide Safari). */
   const aHistoria = () => {
+    if (hayCarrete()) {
+      conImagen('historia', async (blob) => {
+        vibra('toque');
+        try {
+          await aHistoriaDeInstagram(blob);
+        } catch (e) {
+          if (/sin_instagram/.test(String(e?.message ?? e))) avisa('Instala Instagram para subirla a tu historia.', true);
+          else await entregaArchivo(blob, 'traininglab-historia.png');
+        }
+      });
+      return;
+    }
     if (!puedeCopiar()) { guarda(); return; }
     vibra('toque');
     setArmando('historia');

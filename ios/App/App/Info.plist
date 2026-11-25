@@ -30,6 +30,11 @@
 	<string>Training Lab usa el micrófono para grabar el audio de tus videos de técnica y tus mensajes de voz.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Training Lab accede a tus fotos y videos para que puedas subirlos a tu plan, a tus mensajes y a tu perfil, y para ponerle stickers de tu entreno a tus fotos.</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>instagram-stories</string>
+		<string>instagram</string>
+	</array>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Training Lab guarda en tus Fotos la imagen con tus stickers.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
