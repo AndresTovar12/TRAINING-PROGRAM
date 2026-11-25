@@ -43,8 +43,14 @@ export async function getSeries(actividadId) {
   return data?.series ?? null;
 }
 
-/** Borra un entreno (y sus series: caen en cascada). */
+/**
+ * Borra un entreno (y sus series: caen en cascada). Antes lo anota en `actividades_borradas` (solo inicio y duración): así Apple Salud no lo vuelve a traer
+ * (Andrés, 24 nov 2026: «si los borro vuelven a aparecer»; ver `guardaImportacion` y docs/sql/2026-11-24-actividades-borradas.sql). Anotarlo no detiene el
+ * borrado si falla (por ejemplo, si lo borra alguien que no es el atleta).
+ */
 export async function borraActividad(id) {
+  const { data: fila } = await supabase.from('actividades').select('atleta_id,inicio,duracion_s,origen').eq('id', id).maybeSingle();
+  if (fila) await supabase.from('actividades_borradas').insert({ atleta_id: fila.atleta_id, inicio: fila.inicio, duracion_s: fila.duracion_s, origen: fila.origen }).then(() => {}, () => {});
   const { error } = await supabase.from('actividades').delete().eq('id', id);
   if (error) throw error;
 }
@@ -150,6 +156,9 @@ export async function guardaImportacion({ atletaId, subidoPor, resultado, desfas
       existentes.push(...(data ?? []));
       if ((data ?? []).length < PAGINA) break;
     }
+    // Lo que el atleta borró cuenta como «ya está»: no se vuelve a traer (24 nov 2026). Si no se puede leer, se sigue como antes.
+    const { data: borradas } = await supabase.from('actividades_borradas').select('inicio,duracion_s').eq('atleta_id', atletaId).gte('inicio', ini).lte('inicio', fin).limit(1000);
+    existentes.push(...(borradas ?? []).map((b) => ({ ...b, borrada: true })));
   }
   const { nuevos, repetidos } = separaRepetidos(resultado.entrenos, existentes);
 
@@ -159,7 +168,7 @@ export async function guardaImportacion({ atletaId, subidoPor, resultado, desfas
   const enriquecidos = [];
   for (const r of repetidos) {
     if (r.formato !== 'healthkit' || !(r.resumen?.fc_media > 0 || r.calculado?.fc_media > 0)) continue;
-    const e = existentes.find((x) => esElMismo(x, r) && !(x.fc_media > 0) && x.origen !== 'healthkit');
+    const e = existentes.find((x) => !x.borrada && esElMismo(x, r) && !(x.fc_media > 0) && x.origen !== 'healthkit');
     if (!e) continue;
     const { fila } = construyeActividad(r, { umbrales, genero, desfaseMin, origen: 'healthkit', conSeries: false });
     const cambios = {
