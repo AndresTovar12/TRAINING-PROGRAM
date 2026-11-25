@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { construyeActividad, preparaEntreno } from '@/lib/metricas/construye';
 import { estimaUmbrales } from '@/lib/metricas/calculos';
 import { borraActividad, cambiaActividad, umbralesDe } from '@/lib/metricasApi';
+import { AVISO_ENTRENO_BORRADO } from '@/lib/entrenosDelPlan';
 import { entrenoLibre } from '@/lib/entrenoLibre';
 import { sinNumerosDeLaRuta } from '@/lib/rutaSilenciosa';
 import { agregaALaCola, cambiaEnLaCola, cuentaDeLaCola, quitaDeLaCola, resultadoDe } from '@/lib/colaDelTelefono';
@@ -137,6 +138,8 @@ export async function cambiaEntreno(fila, { titulo, deporte } = {}) {
 export async function borraEntreno(fila) {
   if (fila?.pendiente && await quitaDeLaCola(fila.id)) return;
   await borraActividad(fila.id);
+  // Las listas abiertas («Ver todos») lo quitan también.
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(AVISO_ENTRENO_BORRADO, { detail: { actividadId: fila.id } }));
 }
 
 /**

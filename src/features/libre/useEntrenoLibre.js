@@ -17,7 +17,7 @@ import { TIPO_ENTRENO_LIBRE, conPendientes, cuentaDeEntrenos, entrenosRecientes,
 import { useCola } from '@/lib/colaDelTelefono';
 import { guardaEnElTelefono, leeDelTelefono } from '@/lib/almacenDelTelefono';
 import { alVolverLaSenal, haySenalAhora } from '@/lib/senal';
-import { mezclaEntrenos, sesionesDelPlan } from '@/lib/entrenosDelPlan';
+import { AVISO_ENTRENO_BORRADO, mezclaEntrenos, sesionesDelPlan } from '@/lib/entrenosDelPlan';
 import { useRutaEnSilencio } from '@/lib/useRutaEnSilencio';
 import { permisoDelRecorrido } from '@/features/training/useRecorrido';
 
@@ -283,6 +283,8 @@ export function useEntrenosRecientes(userId, n = 6) {
   }, [userId, n, vuelta, propio]);
   const recarga = useCallback(() => setVuelta((v) => v + 1), []);
   useEffect(() => (propio ? alVolverLaSenal(recarga) : undefined), [propio, recarga]);
+  // Se borró un entreno desde su página (un workout del plan, 24 nov 2026): la lista se vuelve a pedir.
+  useEffect(() => { window.addEventListener(AVISO_ENTRENO_BORRADO, recarga); return () => window.removeEventListener(AVISO_ENTRENO_BORRADO, recarga); }, [recarga]);
   // Uno que estaba en la cola ya subió: se vuelve a pedir la lista (sale el del servidor en su lugar, con el mismo id).
   const enLaCola = propio ? cosas.filter((c) => c.tipo === TIPO_ENTRENO_LIBRE).map((c) => c.id).join(',') : '';
   const antes = useRef(enLaCola);
@@ -323,6 +325,16 @@ export function useHistorialCompleto(userId) {
       .finally(() => { pidiendo.current = false; });
   }, [userId]);
   useEffect(() => { sigue(); }, [sigue]);
+  // Un entreno borrado sale de las páginas ya leídas (lo del plan se va solo: viene del estado de la cuenta).
+  useEffect(() => {
+    const alBorrar = (e) => {
+      const id = e.detail?.actividadId;
+      if (!id) return;
+      setPaginas((q) => { const n = { ...q, filas: q.filas.filter((f) => f.id !== id) }; actual.current = n; return n; });
+    };
+    window.addEventListener(AVISO_ENTRENO_BORRADO, alBorrar);
+    return () => window.removeEventListener(AVISO_ENTRENO_BORRADO, alBorrar);
+  }, []);
   const delPlan = useSesionesDelPlan();
   const { filas, hayMas } = paginas;
   const entrenos = useMemo(() => mezclaEntrenos(filas, delPlan, { hasta: hayMas && filas.length ? Date.parse(filas[filas.length - 1].inicio) : (hayMas ? Infinity : null) }), [filas, delPlan, hayMas]);

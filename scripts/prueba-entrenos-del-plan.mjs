@@ -2,7 +2,7 @@
 //
 //   node scripts/prueba-entrenos-del-plan.mjs
 import assert from 'node:assert/strict';
-import { diaDeLaSesion, lugarDeSesion, mezclaEntrenos, nombreDelMes, porMes, programaDelAlmacen, sesionesDelPlan } from '../src/lib/entrenosDelPlan.js';
+import { diaDeLaSesion, lugarDeSesion, mezclaEntrenos, nombreDelMes, porMes, programaDelAlmacen, sesionesDelPlan, sinLaSesion } from '../src/lib/entrenosDelPlan.js';
 
 const H = 3600 * 1000;
 const hoy = new Date('2026-10-29T08:00:00').getTime();
@@ -90,6 +90,17 @@ const actividades = [easyRun, delReloj]; // de la más nueva a la más vieja, co
   assert.deepEqual(grupos.map((g) => g.mes), ['Octubre 2026', nombreDelMes(hoy - 60 * 24 * H)]);
   assert.equal(grupos[1].mes, 'Agosto 2026', 'la de hace dos meses va en su mes');
   assert.equal(grupos[0].entrenos.length, 3);
+}
+
+// Borrar un workout del plan (24 nov 2026): la vez más reciente se va; si hubo una antes, esa vuelve a ser la del día; con #n solo esa vez anterior.
+{
+  const sola = { 'f1-w1-d0': { completedAt: 'b', sets: [1] }, otra: { completedAt: 'x' } };
+  assert.deepEqual(sinLaSesion(sola, 'f1-w1-d0'), { otra: { completedAt: 'x' } }, 'sin veces anteriores, el día queda sin hacer');
+  const dos = { d: { completedAt: 'c', sets: [3], anteriores: [{ completedAt: 'a' }, { completedAt: 'b' }] } };
+  assert.deepEqual(sinLaSesion(dos, 'd'), { d: { completedAt: 'b', anteriores: [{ completedAt: 'a' }] } }, 'la vez anterior vuelve a ser la del día');
+  assert.deepEqual(sinLaSesion(dos, 'd#1'), { d: { completedAt: 'c', sets: [3], anteriores: [{ completedAt: 'b' }] } }, 'con #n, solo esa vez anterior');
+  assert.equal(sinLaSesion(dos, 'nada'), dos, 'una que no está: igual');
+  assert.equal(sinLaSesion(dos, 'd#9'), dos, 'una vez que no está: igual');
 }
 
 console.log('prueba-entrenos-del-plan: todo bien');

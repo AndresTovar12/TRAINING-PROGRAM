@@ -2,6 +2,9 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { LT, KP } from '@/lib/theme';
 import { useStorage } from '@/contexts/AppStateContext';
+import { useConfirmacion } from '@/components/Confirmacion';
+import { borraActividad } from '@/lib/metricasApi';
+import { AVISO_ENTRENO_BORRADO, sinLaSesion } from '@/lib/entrenosDelPlan';
 import { tramoDeLaSesion } from '@/lib/metricas/porSerie';
 import { muestrasDeRuta } from '@/lib/recorrido';
 import { desdeKilos, etiquetaUnidad } from '@/lib/unidades';
@@ -35,7 +38,7 @@ const HojaDeSesion = lazy(() => import('@/features/stickers/HojaDeSesion'));
    la hoja encima (el ⇪ de una fila). `alVerEnElPlan`: lleva al día; sin él (la sesión ya no está en el plan), no hay «···».
    Va dentro de `ComoPrograma` de su programa (ver `PaginaDeSesionGlobal`): el récord se compara con lo que levantó en ESE plan. */
 
-export default function ResumenDeSesion({ atletaId, almacen = 'wr:sessions', registro, sesionId, nombre, dia = null, tipo = null, color = null, coachId = null, unidadPeso = 'kg', recien = false, conStickers = false, alCerrar, alVerEnElPlan = null }) {
+export default function ResumenDeSesion({ atletaId, almacen = 'wr:sessions', registro, sesionId, nombre, dia = null, tipo = null, color = null, coachId = null, unidadPeso = 'kg', recien = false, conStickers = false, alCerrar, alVerEnElPlan = null, puedeBorrar = false }) {
   const tramo = useMemo(() => tramoDeLaSesion(registro), [registro]);
   const guiado = useMemo(() => guiadoDe(registro), [registro]);
   const { programadas = null, record = null } = useProgramadoDeLaSesion({ dia, registro, sesionId });
@@ -82,6 +85,28 @@ export default function ResumenDeSesion({ atletaId, almacen = 'wr:sessions', reg
   });
 
   const fila = cargado?.fila ?? null;
+
+  /* «Borrar entreno» (24 nov 2026, Andrés: «no me aparece botón para borrarlos»; eligió borrar TODO): lo del reloj (queda anotado para que Apple Salud no
+     lo vuelva a traer, ver `borraActividad`) y lo registrado en el plan (`sinLaSesion`: el día vuelve a como estaba antes de esta vez). Solo en la cuenta
+     propia (no en «Ver como»). */
+  const pregunta = useConfirmacion();
+  const [error, setError] = useState(null);
+  const borra = async () => {
+    const si = await pregunta({
+      titulo: `¿Borrar «${nombre}»?`,
+      detalle: 'Se borra lo que registraste en el plan (series y kilos) y lo que trajo el reloj. El día vuelve a quedar como antes de este entreno. No se puede deshacer.',
+      confirmar: 'Borrar', peligro: true,
+    });
+    if (!si) return;
+    try {
+      if (fila?.id) await borraActividad(fila.id);
+      setSesiones((prev) => sinLaSesion(prev, sesionId));
+      window.dispatchEvent(new CustomEvent(AVISO_ENTRENO_BORRADO, { detail: { actividadId: fila?.id ?? null } }));
+      alCerrar();
+    } catch {
+      setError('No se pudo borrar. Inténtalo otra vez.');
+    }
+  };
   const { conexion: relojConexion, aqui: relojAqui, trayendo } = useReloj();
   const pulsoDelReloj = fila?.fc_media > 0;
   const trayendoPulso = recien && trayendo && !!relojConexion && relojAqui && !pulsoDelReloj;
@@ -110,7 +135,11 @@ export default function ResumenDeSesion({ atletaId, almacen = 'wr:sessions', reg
       nombre={nombre} meta={meta} ruta={ruta} actividad={{ nombre: tipo?.nombre ?? nombre, icono: tipo?.icono ?? 'pesa', color: color ?? KP.blue }}
       heroe={numeros.heroe} frase={numeros.frase} secundarios={numeros.secundarios} delReloj={pulsoDelReloj}
       record={filaDelRecordDelPlan(record, { kilos })} alCerrar={alCerrar} alCompartir={() => setVerStickers(true)}
-      opciones={alVerEnElPlan ? [{ texto: 'Ver en mi plan', onClick: alVerEnElPlan }] : []}
+      error={error}
+      opciones={[
+        ...(alVerEnElPlan ? [{ texto: 'Ver en mi plan', onClick: alVerEnElPlan }] : []),
+        ...(puedeBorrar ? [{ texto: 'Borrar entreno', onClick: borra, peligro: true }] : []),
+      ]}
       debajo={recien ? (
         <>
           {cargado?.entreno && <AvisoDeStickers entreno={cargado.entreno} numero={{ valor: String(hechas), unidad: 'sets' }} alAbrir={() => setVerStickers(true)} />}

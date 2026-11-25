@@ -50,7 +50,7 @@ export default function PaginaDeSesionGlobal({ alVerEnElPlan }) {
   }, []);
   const estado = useEstadoOpcional();
   const { programas } = usePlan();
-  const { perfil, userId } = usePerfilDeLaVista();
+  const { perfil, userId, soloLectura } = usePerfilDeLaVista();
   const registro = pedido ? registroDe(estado, pedido.almacen, pedido.id) : null;
   const programa = useMemo(() => (pedido ? programaDelAlmacen(programas, pedido.almacen) : null), [pedido, programas]);
   const lugar = useMemo(() => (pedido && programa ? diaDeLaSesion(programa, pedido.id) : null), [pedido, programa]);
@@ -73,7 +73,7 @@ export default function PaginaDeSesionGlobal({ alVerEnElPlan }) {
       key={`${pedido.almacen}:${pedido.id}:${pedido.recien ? 1 : 0}`}
       atletaId={userId} almacen={pedido.almacen} registro={registro} sesionId={pedido.id} nombre={nombre} dia={dia} tipo={tipo} color={color}
       coachId={programa?.profesionalId ?? null} unidadPeso={perfil?.unidad_peso || 'kg'}
-      recien={!!pedido.recien} conStickers={!!pedido.stickers} alCerrar={cerrar}
+      recien={!!pedido.recien} conStickers={!!pedido.stickers} alCerrar={cerrar} puedeBorrar={!soloLectura}
       alVerEnElPlan={lugar && alVerEnElPlan ? () => { cerrar(); alVerEnElPlan(programa, lugar); } : null}
     />
   );

@@ -80,6 +80,33 @@ export function sesionesDelPlan(estado, programas = []) {
 
 const inicioDe = (a) => Date.parse(a?.inicio);
 
+/* BORRAR UN WORKOUT DEL PLAN DESDE «TUS ENTRENOS» (24 nov 2026; Andrés eligió «Todo»: lo del reloj y lo registrado en el plan). */
+
+/** El aviso que manda quien borra un entreno (`detail.actividadId`, si había uno del reloj o libre): las listas abiertas se actualizan. */
+export const AVISO_ENTRENO_BORRADO = 'tl:entreno-borrado';
+
+/**
+ * El almacén (`wr:sessions…`) sin una sesión hecha. `id` sin `#` es la vez más reciente: si el día se había hecho antes (`anteriores`), la vez anterior
+ * vuelve a ser la del día; si no, el día queda sin hacer. Con `#n` se quita solo esa vez anterior. Puro (`scripts/prueba-entrenos-del-plan.mjs`).
+ */
+export function sinLaSesion(sesiones, id) {
+  const [base, vez] = String(id ?? '').split('#');
+  const actual = sesiones?.[base];
+  if (!esObjeto(actual)) return sesiones;
+  const anteriores = Array.isArray(actual.anteriores) ? actual.anteriores : [];
+  if (vez) {
+    const i = Number(vez) - 1;
+    if (!anteriores[i]) return sesiones;
+    return { ...sesiones, [base]: { ...actual, anteriores: anteriores.filter((_, j) => j !== i) } };
+  }
+  if (!anteriores.length) {
+    const resto = { ...sesiones };
+    delete resto[base];
+    return resto;
+  }
+  return { ...sesiones, [base]: { ...anteriores[anteriores.length - 1], anteriores: anteriores.slice(0, -1) } };
+}
+
 /**
  * TODO JUNTO, lo más nuevo primero. `actividades`: filas de `actividades` (de la más nueva a la más vieja). `delPlan`: lo de `sesionesDelPlan`.
  * `hasta`: si quedan actividades más viejas sin leer (se cargan por páginas), las sesiones más viejas que la última actividad leída todavía no van
