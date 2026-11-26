@@ -6,6 +6,9 @@
         "components": [
           { "/": "/mcp*", "exclude": true },
           { "/": "/.well-known/*", "exclude": true },
+          { "/": "/@*", "exclude": true, "comment": "páginas del coach y del plan: se compran en Safari" },
+          { "/": "/%40*", "exclude": true, "comment": "la misma liga con la arroba codificada" },
+          { "/": "/compra*", "exclude": true, "comment": "pago y regreso del pago" },
           { "/": "/*" }
         ]
       }

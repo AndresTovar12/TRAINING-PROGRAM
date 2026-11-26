@@ -98,6 +98,11 @@ Deno.serve(async (req) => {
   if (!usuario || !slug) return json({ error: 'Falta el plan.' }, 400, origen)
 
   try {
+    // El interruptor del dueño (Panel → Monetización): con las ventas cerradas no se abre ninguna compra, aunque la página siga a la vista (26 nov 2026).
+    const { data: ajuste, error: errAjuste } = await bd.from('ajustes_publicos').select('valor').eq('clave', 'ventas_abiertas').maybeSingle()
+    if (errAjuste) throw errAjuste
+    if (ajuste?.valor !== true) return json({ error: 'La compra no está disponible.', codigo: 'ventas_cerradas' }, 503, origen)
+
     // Quien compra: su cuenta (con sesión) o el correo que escribió (sin sesión).
     let comprador: { role: string; is_active: boolean | null; email: string | null; full_name: string | null; username: string | null } | null = null
     let correo = ''

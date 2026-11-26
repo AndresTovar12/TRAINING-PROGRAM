@@ -88,6 +88,32 @@ for (const nombre of ARCHIVOS) {
   }
 }
 
+/* Compra y dinero (26 nov 2026): piezas puras de `src/lib` que el servidor usa tal cual. */
+{
+  const COPIAS = {
+    'entradaAlPlan.js': ['compra-lista'],
+    'reclamo.js': ['compra-lista'],
+    'dinero.js': ['stripe-webhook', 'mi-dinero', 'apple'],
+    'spei.js': ['mi-dinero'],
+  };
+  for (const [nombre, funciones] of Object.entries(COPIAS)) {
+    const original = readFileSync(join(raiz, 'src/lib', nombre), 'utf8');
+    for (const funcion of funciones) {
+      const copia = join(raiz, `supabase/functions/${funcion}/${nombre}`);
+      const igual = existsSync(copia) && readFileSync(copia, 'utf8') === original;
+      if (igual) continue;
+      if (soloRevisar) {
+        console.error(`✗ supabase/functions/${funcion}/${nombre} ya no es igual a src/lib/${nombre}`);
+        malos += 1;
+      } else {
+        mkdirSync(dirname(copia), { recursive: true });
+        writeFileSync(copia, original);
+        console.log(`copiado ${nombre} (${funcion})`);
+      }
+    }
+  }
+}
+
 if (malos) {
   console.error('\nCorre `node scripts/compartir-con-mcp.mjs` y vuelve a desplegar las funciones que cambiaron.');
   process.exit(1);

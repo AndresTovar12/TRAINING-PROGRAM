@@ -102,7 +102,7 @@ export default function MiVitrina() {
     if (!planes) return { detalle: null, accion: null };
     const n = planes.length;
     const vendidos = planes.reduce((t, p) => t + (p.suscriptores ?? 0), 0);
-    const ligaDeTuPagina = ligaPublica(usuario, '').replace(/\/$/, '');
+    const ligaDeTuPagina = ligaPublica(usuario);
     return {
       detalle: `${n} ${n === 1 ? 'plan' : 'planes'} · ${vendidos} ${vendidos === 1 ? 'venta' : 'ventas'}`,
       accion: usuario ? (

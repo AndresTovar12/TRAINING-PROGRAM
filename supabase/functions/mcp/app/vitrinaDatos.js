@@ -54,7 +54,11 @@ export const slugDe = (texto) => String(texto ?? '')
   .normalize('NFD').replace(/[̀-ͯ]/g, '')
   .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
 
-export const ligaPublica = (usuario, slug, origen = typeof window !== 'undefined' ? window.location.origin : '') => `${origen}/@${usuario}/${slug}`;
+/* LA LIGA QUE SE COMPARTE (26 nov 2026): siempre la del sitio público, nunca la de donde corre la app. En el iPhone `window.location.origin` es `capacitor://localhost`
+   y la liga copiada no abría en ningún lado. */
+export const SITIO_PUBLICO = 'https://app.traininglabapp.com';
+/** `slug` vacío o nulo: la página del coach (`…/@usuario`). */
+export const ligaPublica = (usuario, slug = '', origen = SITIO_PUBLICO) => `${origen}/@${usuario}${slug ? `/${slug}` : ''}`;
 
 /** La liga de un plan: su nombre vuelto liga y, si ya hay otro plan del mismo coach con esa liga, con un número («fuerza», «fuerza-2»…). Se decide UNA vez, al crearlo: después no cambia aunque cambie el nombre (la liga ya anda en Instagram). */
 export function slugUnico(texto, existentes = []) {

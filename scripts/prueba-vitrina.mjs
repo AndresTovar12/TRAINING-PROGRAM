@@ -102,5 +102,7 @@ assert.equal(slugUnico('Fuerza y potencia', ['fuerza-y-potencia', 'fuerza-y-pote
 assert.equal(slugUnico('¡¡¡', []), 'plan', 'un nombre sin letras no deja la liga vacía');
 assert.ok(slugUnico('x'.repeat(100), []).length <= 60);
 assert.equal(ligaPublica('laura', 'fuerza', 'https://app.com'), 'https://app.com/@laura/fuerza');
+assert.equal(ligaPublica('laura', 'fuerza'), 'https://app.traininglabapp.com/@laura/fuerza', 'siempre la liga https, también en el iPhone');
+assert.equal(ligaPublica('laura'), 'https://app.traininglabapp.com/@laura', 'la página del coach');
 
 console.log('✓ vitrina: todo bien');
