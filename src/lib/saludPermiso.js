@@ -7,6 +7,7 @@
    AHORA:
    · Se conecta con lo que iOS SÍ confirma: el permiso de ESCRIBIR entrenos (`ok`). Que no haya datos ya no bloquea (`sinDatos`).
    · Para saber si hay algo que leer se prueba, en orden y parando en el primero que traiga algo: pasos, pulso, sueño y entrenos (60 días). `primero` dice cuál.
+   · El permiso se toma en POSITIVO: `workouts` en `writeAuthorized` = dado; en `writeDenied` = negado; en ninguna = no se pudo revisar.
    · Si `checkAuthorization` FALLA con error (no es que negó), `noSePudoRevisar`: la pantalla dice «No se pudo revisar Salud», no «No pudimos leer nada».
    · Cada error se guarda en `errores` (texto) y lo que contestó `checkAuthorization` en `estado`: van al diagnóstico (`lib/diagnosticoSalud.js`).
 
@@ -36,7 +37,10 @@ export async function revisaPermisoCon(Health, { ahora = Date.now() } = {}) {
   try {
     estado = await Health.checkAuthorization({ read: LEER, write: ESCRIBIR });
     if (!estado || typeof estado !== 'object') throw new Error('checkAuthorization no contestó');
-    escribe = !(Array.isArray(estado.writeDenied) ? estado.writeDenied : []).includes('workouts');
+    // En positivo (26 nov 2026): solo cuenta si 'workouts' viene en una de las dos listas. Una respuesta sin él (o sin listas) no es «dio permiso».
+    if (Array.isArray(estado.writeAuthorized) && estado.writeAuthorized.includes('workouts')) escribe = true;
+    else if (Array.isArray(estado.writeDenied) && estado.writeDenied.includes('workouts')) escribe = false;
+    else throw new Error('respuesta sin workouts');
   } catch (e) {
     errores.push(`checkAuthorization: ${textoDe(e)}`);
   }
@@ -69,25 +73,42 @@ export async function revisaPermisoCon(Health, { ahora = Date.now() } = {}) {
 
 const NOMBRE_DEL_DATO = { steps: 'pasos', heartRate: 'pulso', sleep: 'sueño', workouts: 'entrenos' };
 
-/** La versión de iOS del navegador del iPhone («18.1»), o null. */
+/** La versión de iOS según el navegador («18.1»), o null. SOLO DE RESPALDO: desde iOS 26 el navegador la deja fija en 18.x; la buena viene del lado nativo. */
 export function versionDeIos(agente = '') {
   const m = /OS (\d+)[_.](\d+)(?:[_.](\d+))? like Mac OS X/.exec(String(agente));
   return m ? [m[1], m[2], m[3]].filter(Boolean).join('.') : null;
 }
 
 /**
- * La fila de `diagnosticos_salud` de un intento (docs/sql/2026-11-26-diagnosticos-salud.sql). `r`: lo de `revisaPermisoCon`. `donde`: 'inicio' | 'conectar' |
- * 'otra_vez'. `ios`: la versión. `reloj`: lo de `estadoDelReloj` (null si no se supo).
+ * El resultado de un intento que se cayó a medio camino (`pideSalud` o `conectaEnLaCuenta` lanzaron error). `r`: lo de `revisaPermisoCon` si ya se tenía
+ * (se conserva y solo se le agrega el error); sin él, cuenta como «no se pudo revisar» y sin datos leídos. `etapa`: 'pideSalud' | 'conectaEnLaCuenta' | ….
  */
-export function filaDeDiagnostico(r, { usuarioId, donde = null, ios = null, reloj = null } = {}) {
+export function conFallo(r, etapa, e) {
+  const error = `${etapa}: ${textoDe(e)}`;
+  if (r) return { ...r, errores: [...(r.errores ?? []), error] };
+  return { ok: false, escribe: false, lee: false, primero: null, sinDatos: false, noSePudoRevisar: true, errores: [error], estado: null };
+}
+
+// Lo que contestó `checkAuthorization` cabe de sobra; si algún día crece, se guarda recortado (la tabla tope: 8 KB).
+const detalleDe = (estado) => {
+  if (estado == null) return null;
+  try { return JSON.stringify(estado).length <= 4000 ? estado : { recortado: true }; } catch { return null; }
+};
+
+/**
+ * La fila de `diagnosticos_salud` de un intento (docs/sql/2026-11-26-diagnosticos-salud.sql). `r`: lo de `revisaPermisoCon`. `donde`: 'inicio' | 'conectar' |
+ * 'otra_vez'. `ios`: la versión de iOS. `app`: la versión de la app con su build («1.0 (115)»). `reloj`: lo de `estadoDelReloj` (null si no se supo).
+ */
+export function filaDeDiagnostico(r, { usuarioId, donde = null, ios = null, app = null, reloj = null } = {}) {
   return {
     usuario_id: usuarioId,
     donde,
     ios,
+    app,
     reloj_emparejado: reloj && !reloj.sinRespuesta ? !!reloj.emparejado : null,
     escribe: r?.noSePudoRevisar ? 'no_se_pudo_revisar' : r?.escribe ? 'dado' : 'no',
     primero: NOMBRE_DEL_DATO[r?.primero] ?? 'ninguno',
     errores: r?.errores?.length ? r.errores.join('\n').slice(0, 2000) : null,
-    detalle: r?.estado ?? null,
+    detalle: detalleDe(r?.estado),
   };
 }

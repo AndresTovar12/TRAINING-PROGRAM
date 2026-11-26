@@ -6,6 +6,7 @@ import { FONT, KP } from '@/lib/theme';
 import { botonPrimario, botonSecundario, enlace, subtitulo, titulo } from '@/features/inicio/estilos';
 import { pideSalud, revisaPermiso, saludDisponible } from '@/lib/saludDelTelefono';
 import { anotaDiagnosticoSalud } from '@/lib/diagnosticoSalud';
+import { conFallo } from '@/lib/saludPermiso';
 import { conectaEnLaCuenta, useReloj } from '@/lib/relojConectado';
 import { traeDelReloj, traeLoDeAntes } from '@/lib/sincronizaSalud';
 import {
@@ -22,7 +23,8 @@ import ConectandoSalud, { CuadroDeSalud } from './ConectandoSalud';
        pudo leer nada (sin pasos, pulso, sueño ni entrenos), se conecta igual y dice «Conectado. Tus datos van llegando conforme los registre tu iPhone o tu
        reloj.» (`sinDatos`; ver `lib/saludPermiso.js`).
      · «No pudimos leer nada»: SOLO si no dio permiso de escribir. Cómo encenderlo en Salud, «Abrir Salud» y «Ya lo encendí, revisar otra vez».
-     · «No se pudo revisar Salud»: si la revisión falló con error (no por permiso), con «Intentar otra vez».
+     · «No se pudo revisar Salud»: si algo falló con error (no por permiso): la revisión, la hoja del iPhone (`pideSalud`) o guardar la conexión
+       (`conectaEnLaCuenta`; entonces dice «No se pudo guardar tu conexión. Revisa tu internet…»). «Intentar otra vez» vuelve a pedir la hoja solo si fue ella.
      Cada intento deja su diagnóstico en `diagnosticos_salud` (`lib/diagnosticoSalud.js`): el administrador lo ve con `ver_atleta`.
      · «Falta un paso»: solo con reloj emparejado y SIN la app del reloj instalada.
    Sin reloj emparejado la misma pantalla se llama «Conecta Apple Salud», con otros beneficios.
@@ -129,7 +131,7 @@ export default function ConectaReloj({ reconectar = false, empezar = 'intro', en
   const [rapido, setRapido] = useState(false); // «Revisando el permiso…» (al revisar otra vez o al volver a conectar)
   const [avance, setAvance] = useState({ texto: 'Un momento', pct: 0 });
   const [reintentos, setReintentos] = useState(0);
-  const [error, setError] = useState('');
+  const [fallo, setFallo] = useState(null); // en «No se pudo revisar»: 'guardar' si se cayó al guardar la conexión (ya había permiso); si no, null
   const [sinDatos, setSinDatos] = useState(false); // conectó, pero todavía no hay nada que leer en Salud
   const origen = useRef(enInicio ? 'inicio' : 'conectar'); // para el diagnóstico: de dónde vino este intento
   // Solo en el inicio: los cuatro renglones, cuánto lleva el 3 (0 a 1), si ya terminó todo (verde), cuántos entrenos encontró y si ya toca «Continuar».
@@ -140,7 +142,7 @@ export default function ConectaReloj({ reconectar = false, empezar = 'intro', en
   const [puedeSeguir, setPuedeSeguir] = useState(false);
   const vivo = useRef(true);
   const cerrada = useRef(false);   // «Continuar» ya cerró esta pantalla: lo que termine después no vuelve a avisar
-  const pidioListo = useRef(false); // `pideSalud()` ya terminó una vez (al revisar otra vez no se vuelve a pedir)
+  const pidioListo = useRef(false); // `pideSalud()` ya terminó una vez: «otra vez» ya no vuelve a pedir (si falló, sí)
   const temporizadores = useRef([]);
   useEffect(() => () => { vivo.current = false; temporizadores.current.forEach(clearTimeout); }, []);
 
@@ -149,23 +151,30 @@ export default function ConectaReloj({ reconectar = false, empezar = 'intro', en
 
   /* EL «CONECTANDO» DEL INICIO: cada renglón se marca cuando termina su llamada, nunca por tiempo (ver el comentario de arriba). */
   async function revisaEnInicio({ pedir }) {
-    setError('');
+    setFallo(null);
     setFilas(FILAS_NUEVAS());
     setFraccion(0);
     setPuedeSeguir(false);
     setPaso('buscando');
+    // En qué llamada va (para el diagnóstico si se cae) y lo que ya contestó `revisaPermiso`.
+    let etapa = 'pideSalud';
+    let r = null;
     try {
       if (pedir) { await pideSalud(); pidioListo.current = true; }
       if (!vivo.current) return;
       marca(0, { estado: 'hecho', der: 'Dado' });
       marca(1, { estado: 'va' });
-      const r = await revisaPermiso();
-      anotaDiagnosticoSalud(r, origen.current);
+      etapa = 'revisaPermiso';
+      r = await revisaPermiso();
+      if (r.noSePudoRevisar || !r.ok) anotaDiagnosticoSalud(r, origen.current);
       if (!vivo.current) return;
       if (r.noSePudoRevisar) { setPaso('noRevisa'); return; }
       if (!r.ok) { setPaso('no'); return; }
       setSinDatos(r.sinDatos);
+      etapa = 'conectaEnLaCuenta';
       await conectaEnLaCuenta();
+      anotaDiagnosticoSalud(r, origen.current);
+      etapa = null; // ya conectó: lo que sigue (leer lo de antes) no bloquea
       if (!vivo.current) return;
       marca(1, { estado: 'hecho', der: 'Revisado' });
       // Lo nuevo (desde que conecta), callado y a la vez: no tiene renglón.
@@ -205,38 +214,58 @@ export default function ConectaReloj({ reconectar = false, empezar = 'intro', en
       const pasa = setTimeout(() => { if (vivo.current) termina('conectado'); }, VERDE_MS);
       temporizadores.current.push(pasa);
     } catch (e) {
-      if (!vivo.current) return;
-      setError(e?.message || 'No se pudo conectar. Inténtalo otra vez.');
-      setPaso('no');
+      cayo(etapa, r, e);
     }
   }
 
-  // Las dos revisiones (escribir entrenos y leer al menos un paso) y, si salieron bien, la conexión en la cuenta. `pedir`: antes sale la hoja del iPhone.
+  /* SE CAYÓ UNA LLAMADA (26 nov 2026). Antes todo error terminaba en «No pudimos leer nada» y sus pasos de un permiso apagado, que no era lo que pasó, y sin
+     diagnóstico. Ahora: «No se pudo revisar Salud» («No se pudo guardar tu conexión…» si ya había permiso y falló `conectaEnLaCuenta`, casi siempre sin
+     internet) y una fila en el diagnóstico con la etapa y el error. Si ya se había conectado (`etapa` null), lo que falló fue leer lo de antes: no bloquea. */
+  function cayo(etapa, r, e) {
+    if (etapa === null) {
+      if (!vivo.current) return;
+      marca(2, { estado: 'despues', der: 'Se intenta después' });
+      marca(3, { estado: 'despues', der: 'Se intenta después' });
+      setVerde(true);
+      const pasa = setTimeout(() => { if (vivo.current) termina('conectado'); }, VERDE_MS);
+      temporizadores.current.push(pasa);
+      return;
+    }
+    anotaDiagnosticoSalud(conFallo(r, etapa, e), origen.current);
+    if (!vivo.current) return;
+    setFallo(etapa === 'conectaEnLaCuenta' ? 'guardar' : null);
+    setPaso('noRevisa');
+  }
+
+  // La revisión del permiso y, si dio permiso de escribir, la conexión en la cuenta. `pedir`: antes sale la hoja del iPhone.
   async function revisa({ pedir }) {
     if (enInicio) { await revisaEnInicio({ pedir }); return; }
-    setError('');
+    setFallo(null);
+    let etapa = 'pideSalud';
+    let r = null;
     try {
-      if (pedir) await pideSalud();
+      if (pedir) { await pideSalud(); pidioListo.current = true; }
       if (!vivo.current) return;
       setPaso('buscando');
       setAvance({ texto: 'Revisando que el iPhone dio permiso', pct: 45 });
-      const [r] = await Promise.all([revisaPermiso(), espera(pedir && !reconectar ? 900 : 700)]);
-      anotaDiagnosticoSalud(r, origen.current);
+      etapa = 'revisaPermiso';
+      [r] = await Promise.all([revisaPermiso(), espera(pedir && !reconectar ? 900 : 700)]);
+      if (r.noSePudoRevisar || !r.ok) anotaDiagnosticoSalud(r, origen.current);
       if (!vivo.current) return;
       setAvance({ texto: 'Listo', pct: 100 });
       await espera(300);
       if (r.noSePudoRevisar) { setPaso('noRevisa'); return; }
       if (!r.ok) { setPaso('no'); return; }
       setSinDatos(r.sinDatos);
+      etapa = 'conectaEnLaCuenta';
       await conectaEnLaCuenta();
+      anotaDiagnosticoSalud(r, origen.current);
       // Lo nuevo y, después, lo de antes (solo para las cuentas), en segundo plano: la persona ya ve «Listo».
       traeDelReloj().catch(() => {}).finally(() => traeLoDeAntes());
       if (reconectar) { termina('conectado'); return; }
       setPaso('listo');
     } catch (e) {
-      if (!vivo.current) return;
-      setError(e?.message || 'No se pudo conectar. Inténtalo otra vez.');
-      setPaso('no');
+      cayo(etapa, r, e);
     }
   }
 
@@ -251,8 +280,9 @@ export default function ConectaReloj({ reconectar = false, empezar = 'intro', en
   }, []);
 
   const conectar = () => { origen.current = 'conectar'; setPaso('pidiendo'); revisa({ pedir: true }); };
-  // En el inicio, si la hoja del iPhone nunca llegó a contestarse (`pideSalud` falló), «revisar otra vez» la vuelve a pedir; fuera del inicio solo revisa.
-  const otraVez = () => { origen.current = 'otra_vez'; setReintentos((n) => n + 1); setRapido(true); revisa({ pedir: enInicio && !pidioListo.current }); };
+  // Si la hoja del iPhone nunca llegó a contestarse (`pideSalud` falló), «otra vez» la vuelve a pedir; si ya se contestó (falló guardar, o negó), solo revisa
+  // y guarda otra vez.
+  const otraVez = () => { origen.current = 'otra_vez'; setReintentos((n) => n + 1); setRapido(true); revisa({ pedir: !pidioListo.current }); };
   const fin = () => {
     // Con reloj emparejado y sin la app del reloj: «Falta un paso». Con el modo de prueba nunca (no hay reloj de verdad).
     if (paso === 'listo' && emparejado && !reloj.instalada && !reloj.prueba) { setPaso('instala'); return; }
@@ -307,7 +337,6 @@ export default function ConectaReloj({ reconectar = false, empezar = 'intro', en
         <p style={subtitulo}>Casi siempre es un permiso apagado. El iPhone ya no vuelve a preguntar, así que se enciende en Salud:</p>
         <PasosApp pasos={PASOS_DE_SALUD('Toca «Activar todas»')} />
         {reintentos > 0 && <Consejo><b style={{ color: KP.ink }}>Seguimos sin poder leer.</b> Revisa que Training Lab tenga todo encendido en Salud.</Consejo>}
-        {error && <p role="alert" style={{ color: KP.danger, fontSize: 13.5, fontWeight: 700, margin: '0 0 8px' }}>{error}</p>}
       </>
     );
     pie = (
@@ -322,7 +351,7 @@ export default function ConectaReloj({ reconectar = false, empezar = 'intro', en
       <>
         <IconoGrande tono="ambar" Icono={AlertTriangle} />
         <h1 style={titulo(false)}>No se pudo revisar Salud</h1>
-        <p style={subtitulo}>Inténtalo otra vez.</p>
+        <p style={subtitulo}>{fallo === 'guardar' ? 'No se pudo guardar tu conexión. Revisa tu internet e inténtalo otra vez.' : 'Inténtalo otra vez.'}</p>
       </>
     );
     pie = (

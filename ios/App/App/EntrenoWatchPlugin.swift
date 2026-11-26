@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import Capacitor
 import WatchConnectivity
 import HealthKit
@@ -213,9 +214,11 @@ public class EntrenoWatchPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func estado(_ call: CAPPluginCall) {
-        guard WCSession.isSupported() else { call.resolve(["emparejado": false, "instalada": false, "alcanzable": false]); return }
+        // `ios`: la versión real del sistema (26 nov 2026, diagnóstico de Salud): desde iOS 26 el navegador la deja fija en 18.x.
+        let ios = UIDevice.current.systemVersion
+        guard WCSession.isSupported() else { call.resolve(["emparejado": false, "instalada": false, "alcanzable": false, "ios": ios]); return }
         let s = WCSession.default
-        var r: [String: Any] = ["emparejado": s.isPaired, "instalada": s.isWatchAppInstalled, "alcanzable": s.isReachable]
+        var r: [String: Any] = ["emparejado": s.isPaired, "instalada": s.isWatchAppInstalled, "alcanzable": s.isReachable, "ios": ios]
         if let enCurso = receptor.estadoDelReloj { r["enCurso"] = enCurso }
         call.resolve(r)
     }

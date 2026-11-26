@@ -1,9 +1,9 @@
 /* ¿Quedó conectada Apple Salud? (`src/lib/saludPermiso.js`, 26 nov 2026: «No pudimos leer nada» con todo encendido). Plugin falso: cada caso dice qué
    contesta `checkAuthorization` y qué trae cada lectura. */
 import assert from 'node:assert/strict';
-import { filaDeDiagnostico, revisaPermisoCon, versionDeIos } from '../src/lib/saludPermiso.js';
+import { conFallo, filaDeDiagnostico, revisaPermisoCon, versionDeIos } from '../src/lib/saludPermiso.js';
 
-/** `escribir`: 'si' | 'no' | 'falla'. `trae`: { steps: n, heartRate: n, … } (cuántas muestras); `fallan`: tipos que lanzan error. */
+/** `escribir`: 'si' | 'no' | 'falla' | 'sinWorkouts' (listas sin 'workouts') | 'sinListas' (un objeto sin listas). `trae`: { steps: n, heartRate: n, … } (cuántas muestras); `fallan`: tipos que lanzan error. */
 function pluginFalso({ escribir = 'si', trae = {}, fallan = [] } = {}) {
   const pedidos = [];
   const lee = (tipo) => {
@@ -14,8 +14,12 @@ function pluginFalso({ escribir = 'si', trae = {}, fallan = [] } = {}) {
   };
   return {
     pedidos,
-    checkAuthorization: () => (escribir === 'falla' ? Promise.reject(new Error('HealthKit no disponible'))
-      : Promise.resolve({ writeAuthorized: escribir === 'si' ? ['workouts'] : [], writeDenied: escribir === 'si' ? [] : ['workouts'] })),
+    checkAuthorization: () => {
+      if (escribir === 'falla') return Promise.reject(new Error('HealthKit no disponible'));
+      if (escribir === 'sinListas') return Promise.resolve({ readAuthorized: [] });
+      if (escribir === 'sinWorkouts') return Promise.resolve({ writeAuthorized: ['heartRate'], writeDenied: ['calories'] });
+      return Promise.resolve({ writeAuthorized: escribir === 'si' ? ['workouts'] : [], writeDenied: escribir === 'si' ? [] : ['workouts'] });
+    },
     readSamples: ({ dataType }) => lee(dataType).then((samples) => ({ samples })),
     queryWorkouts: () => lee('workouts').then((workouts) => ({ workouts })),
   };
@@ -57,6 +61,14 @@ function pluginFalso({ escribir = 'si', trae = {}, fallan = [] } = {}) {
   assert.match(r.errores[0], /checkAuthorization: HealthKit no disponible/);
 }
 
+// El permiso va en positivo: una respuesta sin 'workouts' en ninguna lista (o sin listas) NO es «dio permiso»: es «no se pudo revisar».
+for (const escribir of ['sinWorkouts', 'sinListas']) {
+  const r = await revisaPermisoCon(pluginFalso({ escribir, trae: { steps: 3 } }));
+  assert.equal(r.ok, false, `${escribir} → no conectado`);
+  assert.equal(r.noSePudoRevisar, true, `${escribir} → no se pudo revisar`);
+  assert.deepEqual(r.errores, ['checkAuthorization: respuesta sin workouts']);
+}
+
 // Una lectura que falla no tumba la revisión: sigue con la siguiente y el error se anota.
 {
   const r = await revisaPermisoCon(pluginFalso({ trae: { sleep: 2 }, fallan: ['steps'] }));
@@ -78,11 +90,29 @@ function pluginFalso({ escribir = 'si', trae = {}, fallan = [] } = {}) {
   assert.equal(versionDeIos('Mozilla/5.0 (Macintosh)'), null);
   const r = await revisaPermisoCon(pluginFalso({ trae: { heartRate: 1 }, fallan: ['steps'] }));
   const f = filaDeDiagnostico(r, { usuarioId: 'u1', donde: 'inicio', ios: '18.1', reloj: { emparejado: true, instalada: true } });
-  assert.deepEqual({ ...f, detalle: null }, { usuario_id: 'u1', donde: 'inicio', ios: '18.1', reloj_emparejado: true, escribe: 'dado', primero: 'pulso', errores: 'steps: steps roto', detalle: null });
+  assert.deepEqual({ ...f, detalle: null }, { usuario_id: 'u1', donde: 'inicio', ios: '18.1', app: null, reloj_emparejado: true, escribe: 'dado', primero: 'pulso', errores: 'steps: steps roto', detalle: null });
+  assert.equal(filaDeDiagnostico(r, { usuarioId: 'u1', app: '1.0 (115)' }).app, '1.0 (115)');
+  assert.deepEqual(filaDeDiagnostico({ ...r, estado: { mucho: 'x'.repeat(5000) } }, { usuarioId: 'u1' }).detalle, { recortado: true }, 'detalle enorme → recortado (tope de la tabla)');
   const g = filaDeDiagnostico(await revisaPermisoCon(pluginFalso({ escribir: 'falla' })), { usuarioId: 'u1', reloj: { emparejado: false, sinRespuesta: true } });
   assert.equal(g.escribe, 'no_se_pudo_revisar');
   assert.equal(g.primero, 'ninguno');
   assert.equal(g.reloj_emparejado, null, 'si el reloj no contestó, no se sabe');
+}
+
+// Se cayó a medio camino (`pideSalud` o `conectaEnLaCuenta` lanzaron error): también deja fila.
+{
+  // Sin resultado de la revisión (falló la hoja del iPhone): «no se pudo revisar», sin datos, y el error con su etapa.
+  const f = filaDeDiagnostico(conFallo(null, 'pideSalud', new Error('Authorization not determined')), { usuarioId: 'u1' });
+  assert.equal(f.escribe, 'no_se_pudo_revisar');
+  assert.equal(f.primero, 'ninguno');
+  assert.equal(f.errores, 'pideSalud: Authorization not determined');
+  // Ya se tenía la revisión (dio permiso, leyó pulso) y falló guardar: se conserva y solo se agrega el error.
+  const r = await revisaPermisoCon(pluginFalso({ trae: { heartRate: 1 }, fallan: ['steps'] }));
+  const g = filaDeDiagnostico(conFallo(r, 'conectaEnLaCuenta', new Error('Failed to fetch')), { usuarioId: 'u1' });
+  assert.equal(g.escribe, 'dado');
+  assert.equal(g.primero, 'pulso');
+  assert.equal(g.errores, 'steps: steps roto\nconectaEnLaCuenta: Failed to fetch');
+  assert.equal(r.errores.length, 1, 'conFallo no cambia el resultado original');
 }
 
 console.log('prueba-salud-permiso: todo bien');

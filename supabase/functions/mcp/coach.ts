@@ -385,13 +385,14 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
   async function ultimoDiagnosticoDeSalud(q: any, atletaId: string) {
     try {
       const { data } = await q.db.from('diagnosticos_salud')
-        .select('creado_en,donde,ios,reloj_emparejado,escribe,primero,errores')
+        .select('creado_en,donde,ios,app,reloj_emparejado,escribe,primero,errores')
         .eq('usuario_id', atletaId).order('creado_en', { ascending: false }).limit(1).maybeSingle()
       if (!data) return null
       return {
         cuando: data.creado_en,
         donde: data.donde,
         ios: data.ios,
+        ...(data.app ? { app: data.app } : {}),
         reloj_emparejado: data.reloj_emparejado,
         permiso_de_escribir: data.escribe,
         primer_dato_leido: data.primero,
