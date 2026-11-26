@@ -11,8 +11,8 @@
 
    EL PERMISO, TODO JUNTO (fase 5, 29 oct 2026): un solo «Conectar Apple Watch» pide de una vez LEER (lo de abajo y la ruta) y ESCRIBIR entrenos, pulso y
    energía activa, que es lo que necesita la app del reloj para medir: así el reloj ya no pregunta nada. Se pide SOLO cuando la persona toca «Conectar»;
-   «Ahora no» no le pide nada al iPhone. iOS no dice si negó la LECTURA (por privacidad): se sabe así (`revisaPermiso`): si negó escribir entrenos, o si no
-   se puede leer ni un paso de los últimos 60 días, «No pudimos leer nada». TODO CUENTA DESDE QUE CONECTA: `leeSalud` lee desde `conectado_en`; lo de antes
+   «Ahora no» no le pide nada al iPhone. iOS no dice si negó la LECTURA (por privacidad). Desde el 26 nov 2026 se conecta con lo que iOS sí confirma: el
+   permiso de ESCRIBIR entrenos; que no haya datos ya no bloquea (ver `lib/saludPermiso.js`). TODO CUENTA DESDE QUE CONECTA: `leeSalud` lee desde `conectado_en`; lo de antes
    (12 meses, solo resúmenes) va aparte y solo sirve para las cuentas (`leeLoDeAntes`).
 
    Solo funciona dentro de la app de iPhone (en la web no hay HealthKit): `saludDisponible()` lo dice. */
@@ -22,12 +22,10 @@ import { preparaEntreno } from './metricas/construye.js';
 import { entrenoDelReloj } from './metricas/leeHealthKit.js';
 import { deporteDeApple } from './metricas/deportes.js';
 import { saltaLosDelReloj } from './relojSinTelefono.js';
+import { ESCRIBIR, LEER, revisaPermisoCon } from './saludPermiso.js';
 
 export const saludDisponible = () => Capacitor.isNativePlatform();
 
-const LEER = ['heartRate', 'restingHeartRate', 'heartRateVariability', 'sleep', 'steps', 'calories', 'distance', 'distanceCycling', 'vo2Max', 'oxygenSaturation', 'respiratoryRate', 'weight', 'workouts'];
-// Lo que la app del reloj guarda en Salud al medir un entreno (`ModeloDelEntreno.swift`): el entreno, su pulso y su energía activa.
-const ESCRIBIR = ['workouts', 'heartRate', 'calories'];
 
 /* OJO: el plugin NO se devuelve directo de una función `async`. Al resolver la promesa, JavaScript le pregunta por `.then` y el «proxy» de Capacitor lo toma
    por un método nativo que no existe («Health.then() is not implemented»): conectar fallaba siempre. Se pasa dentro de un objeto. */
@@ -39,20 +37,10 @@ export async function pideSalud() {
   await Health.requestAuthorization({ read: LEER, write: ESCRIBIR });
 }
 
-/**
- * ¿Dio permiso? Dos revisiones, las únicas que iOS deja hacer: escribir entrenos (eso sí se sabe) y leer al menos un paso de los últimos 60 días (si la
- * lectura está apagada, Salud contesta vacío, como si no hubiera nada). `{ ok, escribe, lee }`.
- */
+/** ¿Quedó conectada? Lo de `revisaPermisoCon` (`lib/saludPermiso.js`): `{ ok, escribe, lee, primero, sinDatos, noSePudoRevisar, errores, estado }`. */
 export async function revisaPermiso() {
   const { Health } = await conPlugin();
-  const estado = await Health.checkAuthorization({ read: LEER, write: ESCRIBIR }).catch(() => null);
-  const escribe = !!estado && !(estado.writeDenied ?? []).includes('workouts');
-  const fin = new Date();
-  const ini = new Date(fin.getTime() - 60 * 86400000);
-  const pasos = await Health.readSamples({ dataType: 'steps', startDate: ini.toISOString(), endDate: fin.toISOString(), limit: 1 })
-    .then((r) => r?.samples ?? [], () => []);
-  const lee = pasos.length > 0;
-  return { ok: escribe && lee, escribe, lee };
+  return revisaPermisoCon(Health);
 }
 
 // «Running» → 'HKWorkoutActivityTypeRunning', el nombre que ya entiende `deporteDeApple`.

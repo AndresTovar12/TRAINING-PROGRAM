@@ -380,16 +380,39 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
     return respuesta({ total: atletas.length, atletas, ...(esperando.length ? { esperando_que_acepten: esperando } : {}) })
   }))
 
+  /* EL ÚLTIMO DIAGNÓSTICO DE APPLE SALUD (26 nov 2026; docs/sql/2026-11-26-diagnosticos-salud.sql). Solo lo lee el administrador; para cualquier otro
+     la tabla contesta vacío y no se dice nada. Si algo falla, tampoco: es un extra. */
+  async function ultimoDiagnosticoDeSalud(q: any, atletaId: string) {
+    try {
+      const { data } = await q.db.from('diagnosticos_salud')
+        .select('creado_en,donde,ios,reloj_emparejado,escribe,primero,errores')
+        .eq('usuario_id', atletaId).order('creado_en', { ascending: false }).limit(1).maybeSingle()
+      if (!data) return null
+      return {
+        cuando: data.creado_en,
+        donde: data.donde,
+        ios: data.ios,
+        reloj_emparejado: data.reloj_emparejado,
+        permiso_de_escribir: data.escribe,
+        primer_dato_leido: data.primero,
+        ...(data.errores ? { errores: data.errores } : {}),
+      }
+    } catch {
+      return null
+    }
+  }
+
   server.registerTool('ver_atleta', {
     title: 'Ver un atleta',
-    description: 'Todo de un atleta: su plan y en qué va, la sesión de HOY completa (ejercicio por ejercicio, con lo que ya anotó), sus últimas sesiones hechas con lo que anotó, su bienestar de los últimos días, sus 1RM y, si aún no activa su cuenta, su link de invitación. Si el atleta tiene un equipo (su coach y otros profesionales, como un fisio), da los programas de todos juntos, cada uno con de quién es, y quién está en su equipo; con "de", solo el de uno. Nunca trae notas de consulta.',
+    description: 'Todo de un atleta: su plan y en qué va, la sesión de HOY completa (ejercicio por ejercicio, con lo que ya anotó), sus últimas sesiones hechas con lo que anotó, su bienestar de los últimos días, sus 1RM, si aún no activa su cuenta, su link de invitación y, solo para el administrador, el último diagnóstico de conectar Apple Salud. Si el atleta tiene un equipo (su coach y otros profesionales, como un fisio), da los programas de todos juntos, cada uno con de quién es, y quién está en su equipo; con "de", solo el de uno. Nunca trae notas de consulta.',
     inputSchema: { atleta: ATLETA, de: DE_LEER },
     annotations: SOLO_LEER,
   }, seguro(async ({ atleta, de }: any) => {
     const persona = await buscarPersona(quien, atleta)
-    const [{ miembros, elegidos, estado, rotular }, invitacion] = await Promise.all([
+    const [{ miembros, elegidos, estado, rotular }, invitacion, salud] = await Promise.all([
       programasDeAtleta(quien, persona, de),
       quien.db.from('invitaciones').select('token').eq('atleta_id', persona.id).is('usada_en', null).maybeSingle(),
+      ultimoDiagnosticoDeSalud(quien, persona.id),
     ])
     const hoy = fechaDelAtleta()
     const ultimasDe = (pr: Programa) => Object.entries(registrosDe(estado, pr))
@@ -418,6 +441,8 @@ export function herramientasDelCoach(server: McpServer, quien: Quien) {
       cuenta: !persona.is_active ? 'desactivada' : invitacion.data ? 'aún no la activa' : 'activa',
       ...(invitacion.data ? { link_de_invitacion: `${APP_URL}/?invitacion=${encodeURIComponent(invitacion.data.token)}` } : {}),
       unidad_de_peso: persona.unidad_peso === 'lb' ? 'lb' : 'kg',
+      // Solo el administrador lo ve (la regla de la tabla): el último intento de conectar Apple Salud.
+      ...(salud ? { diagnostico_salud: salud } : {}),
     }
     const compartido = {
       bienestar_reciente: Object.entries(estado['wr:wellness'] ?? {}).sort(([a], [b]) => (a < b ? 1 : -1)).slice(0, 7)

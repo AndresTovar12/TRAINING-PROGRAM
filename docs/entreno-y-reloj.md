@@ -179,6 +179,20 @@ Son **dos pasos** del inicio (`src/features/inicio/Inicio.jsx`), en la app del i
 
 Prueba en el navegador: `qa-reloj.html?vista=inicio&reloj=no|si|sinapp` (ver `docs/inicio.md`, «Cómo probarlo»), o `qa-reloj.html?vista=puerta&reloj=si` con la App real y una sesión falsa.
 
+### ¿Quedó conectada? (26 nov 2026)
+
+Una atleta tenía **todo encendido** en Salud → Training Lab y le salía «No pudimos leer nada». La revisión pedía permiso de escribir entrenos **y** al menos un paso de los últimos 60 días; sin pasos se bloqueaba, y los errores se tragaban.
+
+- **Se conecta con lo que iOS confirma:** el permiso de **escribir** entrenos (`ok`). Que no haya datos ya no bloquea. Vive en `src/lib/saludPermiso.js` (`revisaPermisoCon`, puro); `revisaPermiso` de `saludDelTelefono.js` solo le pasa el plugin.
+- **Se busca más que pasos:** pasos, pulso, sueño y entrenos (60 días), en ese orden; para en el primero que trae algo (`primero`).
+- **Qué ve la persona** (`ConectaReloj.jsx`, en `revisa` y `revisaEnInicio`, y en «Ya lo encendí, revisar otra vez»):
+  - escribe y leyó algo: como siempre;
+  - escribe y no leyó nada (`sinDatos`): se conecta y dice «Conectado. Tus datos van llegando conforme los registre tu iPhone o tu reloj.» (en el inicio, los renglones 3 y 4 dicen «No hay»);
+  - no dio permiso de escribir: «No pudimos leer nada», con los pasos de Salud;
+  - `checkAuthorization` falló con error (`noSePudoRevisar`): «No se pudo revisar Salud. Inténtalo otra vez.» con «Intentar otra vez».
+- **Diagnóstico de cada intento:** tabla `diagnosticos_salud` (`docs/sql/2026-11-26-diagnosticos-salud.sql`; RLS: cada quien inserta lo suyo, el administrador o el dueño lo leen). Guarda dónde (inicio / conectar / otra vez), versión de iOS, si hay reloj emparejado, el permiso de escribir (dado / no / no se pudo revisar), el primer dato leído (pasos / pulso / sueño / entrenos / ninguno), los errores y lo que contestó `checkAuthorization`. Lo anota `src/lib/diagnosticoSalud.js` sin demorar la conexión. En el conector, `ver_atleta` trae `diagnostico_salud` (solo para el administrador).
+- **Prueba:** `scripts/prueba-salud-permiso.mjs` (plugin falso; va en `npm run pruebas`).
+
 ## 10. El Apple Watch sin el iPhone (1 nov 2026, parte 3 del encargo «inicio, sin conexión y reloj»)
 
 **La meta:** la persona deja el iPhone en el carro, entrena con el reloj y nada se pierde ni llega dos veces. Maqueta aprobada: https://claude.ai/artifact/WRoxF49VXm14MC7i8HgC86. La cola del teléfono que esto usa está en `docs/sin-conexion.md`, sección 10.

@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { FONT, KP } from '@/lib/theme';
 import { botonPrimario, botonSecundario, enlace, subtitulo, titulo } from '@/features/inicio/estilos';
 import { pideSalud, revisaPermiso, saludDisponible } from '@/lib/saludDelTelefono';
+import { anotaDiagnosticoSalud } from '@/lib/diagnosticoSalud';
 import { conectaEnLaCuenta, useReloj } from '@/lib/relojConectado';
 import { traeDelReloj, traeLoDeAntes } from '@/lib/sincronizaSalud';
 import {
@@ -17,8 +18,12 @@ import ConectandoSalud, { CuadroDeSalud } from './ConectandoSalud';
    Un solo «Conectar Apple Watch» que pide TODO junto, una vez, en el iPhone (leer y escribir: el reloj ya no pregunta). La pantalla dice antes qué va a
    preguntar el iPhone y qué tocar. Después, «Conectando tu Apple Watch…» dura lo que tardan las dos revisiones de `revisaPermiso`, y sale:
      · «Listo, {Nombre}»: se guarda la conexión en la cuenta (`conectado_en` = ahora) y, en segundo plano, se trae lo nuevo y lo de antes (solo para las cuentas).
-       Nunca se dice «Conectado» si no se pudo leer nada.
-     · «No pudimos leer nada»: cómo encenderlo en Salud, «Abrir Salud» y «Ya lo encendí, revisar otra vez» (repite solo las dos revisiones).
+       26 NOV 2026 (Mariane: todo encendido en Salud y «No pudimos leer nada»): se conecta con el permiso de ESCRIBIR entrenos, que iOS sí confirma. Si no se
+       pudo leer nada (sin pasos, pulso, sueño ni entrenos), se conecta igual y dice «Conectado. Tus datos van llegando conforme los registre tu iPhone o tu
+       reloj.» (`sinDatos`; ver `lib/saludPermiso.js`).
+     · «No pudimos leer nada»: SOLO si no dio permiso de escribir. Cómo encenderlo en Salud, «Abrir Salud» y «Ya lo encendí, revisar otra vez».
+     · «No se pudo revisar Salud»: si la revisión falló con error (no por permiso), con «Intentar otra vez».
+     Cada intento deja su diagnóstico en `diagnosticos_salud` (`lib/diagnosticoSalud.js`): el administrador lo ve con `ver_atleta`.
      · «Falta un paso»: solo con reloj emparejado y SIN la app del reloj instalada.
    Sin reloj emparejado la misma pantalla se llama «Conecta Apple Salud», con otros beneficios.
 
@@ -29,7 +34,7 @@ import ConectandoSalud, { CuadroDeSalud } from './ConectandoSalud';
    `enInicio` (1 nov 2026, maqueta LLmh1vBB4MNjVHYvzVA3ym): lo abre el inicio de cuenta, donde Salud y el Apple Watch van en pantallas aparte. Entonces «Conectando
    Apple Salud…» es siempre el corazón y trae una barra y cuatro renglones. REGLA: ninguno avanza por tiempo; cada uno se marca cuando termina la llamada real:
      1. «Permiso del iPhone»                    `pideSalud()`                                  → «Dado»
-     2. «Leer y escribir en Salud»              `revisaPermiso()` con `ok` + `conectaEnLaCuenta()` → «Revisado» (si `ok` es falso: «No pudimos leer nada»)
+     2. «Leer y escribir en Salud»              `revisaPermiso()` con `ok` + `conectaEnLaCuenta()` → «Revisado» (sin permiso de escribir: «No pudimos leer nada»)
      3. «Tus entrenos de los últimos 12 meses»  `traeLoDeAntes` (a la vista, con su `alAvance`)  → «12 de 48», luego «48 entrenos» o «No hay»
      4. «Tu sueño y tu pulso en reposo»          leer la recuperación + `guardaPrevias`         → «N días» o «No hay»
    Si ya se había traído antes (`detalle.previas`), el 3 y el 4 dicen «Ya estaban»; si fallan, «Se intenta después» y el flujo sigue. La barra es la suma real
@@ -37,6 +42,8 @@ import ConectandoSalud, { CuadroDeSalud } from './ConectandoSalud';
    esta pantalla). Al terminar, 1.5 s en verde («Apple Salud conectada») y pasa sola. Las ÚNICAS esperas son esas dos. No hay pantalla «Listo» ni «Falta un paso»:
    el reloj tiene su propio paso en el inicio (`TuReloj`). `traeDelReloj` (lo nuevo desde que conecta) sigue callado, en segundo plano. */
 
+// Conectó (dio permiso de escribir) pero aún no hay nada que leer en Salud (26 nov 2026).
+const SIN_DATOS = 'Conectado. Tus datos van llegando conforme los registre tu iPhone o tu reloj.';
 const VERDE_MS = 1500;   // la pantalla verde antes de pasar sola
 const CONTINUAR_MS = 8000; // tras esto, si el 3 y el 4 siguen, aparece «Continuar»
 const TITULOS = ['Permiso del iPhone', 'Leer y escribir en Salud', 'Tus entrenos de los últimos 12 meses', 'Tu sueño y tu pulso en reposo'];
@@ -123,6 +130,8 @@ export default function ConectaReloj({ reconectar = false, empezar = 'intro', en
   const [avance, setAvance] = useState({ texto: 'Un momento', pct: 0 });
   const [reintentos, setReintentos] = useState(0);
   const [error, setError] = useState('');
+  const [sinDatos, setSinDatos] = useState(false); // conectó, pero todavía no hay nada que leer en Salud
+  const origen = useRef(enInicio ? 'inicio' : 'conectar'); // para el diagnóstico: de dónde vino este intento
   // Solo en el inicio: los cuatro renglones, cuánto lleva el 3 (0 a 1), si ya terminó todo (verde), cuántos entrenos encontró y si ya toca «Continuar».
   const [filas, setFilas] = useState(FILAS_NUEVAS);
   const [fraccion, setFraccion] = useState(0);
@@ -151,8 +160,11 @@ export default function ConectaReloj({ reconectar = false, empezar = 'intro', en
       marca(0, { estado: 'hecho', der: 'Dado' });
       marca(1, { estado: 'va' });
       const r = await revisaPermiso();
+      anotaDiagnosticoSalud(r, origen.current);
       if (!vivo.current) return;
+      if (r.noSePudoRevisar) { setPaso('noRevisa'); return; }
       if (!r.ok) { setPaso('no'); return; }
+      setSinDatos(r.sinDatos);
       await conectaEnLaCuenta();
       if (!vivo.current) return;
       marca(1, { estado: 'hecho', der: 'Revisado' });
@@ -209,10 +221,13 @@ export default function ConectaReloj({ reconectar = false, empezar = 'intro', en
       setPaso('buscando');
       setAvance({ texto: 'Revisando que el iPhone dio permiso', pct: 45 });
       const [r] = await Promise.all([revisaPermiso(), espera(pedir && !reconectar ? 900 : 700)]);
+      anotaDiagnosticoSalud(r, origen.current);
       if (!vivo.current) return;
       setAvance({ texto: 'Listo', pct: 100 });
       await espera(300);
+      if (r.noSePudoRevisar) { setPaso('noRevisa'); return; }
       if (!r.ok) { setPaso('no'); return; }
+      setSinDatos(r.sinDatos);
       await conectaEnLaCuenta();
       // Lo nuevo y, después, lo de antes (solo para las cuentas), en segundo plano: la persona ya ve «Listo».
       traeDelReloj().catch(() => {}).finally(() => traeLoDeAntes());
@@ -235,9 +250,9 @@ export default function ConectaReloj({ reconectar = false, empezar = 'intro', en
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const conectar = () => { setPaso('pidiendo'); revisa({ pedir: true }); };
+  const conectar = () => { origen.current = 'conectar'; setPaso('pidiendo'); revisa({ pedir: true }); };
   // En el inicio, si la hoja del iPhone nunca llegó a contestarse (`pideSalud` falló), «revisar otra vez» la vuelve a pedir; fuera del inicio solo revisa.
-  const otraVez = () => { setReintentos((n) => n + 1); setRapido(true); revisa({ pedir: enInicio && !pidioListo.current }); };
+  const otraVez = () => { origen.current = 'otra_vez'; setReintentos((n) => n + 1); setRapido(true); revisa({ pedir: enInicio && !pidioListo.current }); };
   const fin = () => {
     // Con reloj emparejado y sin la app del reloj: «Falta un paso». Con el modo de prueba nunca (no hay reloj de verdad).
     if (paso === 'listo' && emparejado && !reloj.instalada && !reloj.prueba) { setPaso('instala'); return; }
@@ -265,7 +280,7 @@ export default function ConectaReloj({ reconectar = false, empezar = 'intro', en
     cuerpo = (
       <ConectandoSalud
         titulo={verde ? 'Apple Salud conectada' : 'Conectando Apple Salud…'}
-        sub={verde ? (encontrados > 0 ? `Encontramos ${encontrados} ${encontrados === 1 ? 'entreno' : 'entrenos'} de los últimos 12 meses.` : 'Desde hoy, tus entrenos nuevos entran solos.') : 'Cada paso se marca cuando de verdad termina.'}
+        sub={verde ? (encontrados > 0 ? `Encontramos ${encontrados} ${encontrados === 1 ? 'entreno' : 'entrenos'} de los últimos 12 meses.` : sinDatos ? SIN_DATOS : 'Desde hoy, tus entrenos nuevos entran solos.') : 'Cada paso se marca cuando de verdad termina.'}
         filas={filas} avance={sumado} verde={verde}
         nota={puedeSeguir && !verde ? 'Sigue leyendo mientras usas la app.' : ''}
       />
@@ -302,13 +317,27 @@ export default function ConectaReloj({ reconectar = false, empezar = 'intro', en
         <button type="button" onClick={() => termina('no')} style={enlace}>Ahora no</button>
       </>
     );
+  } else if (paso === 'noRevisa') {
+    cuerpo = (
+      <>
+        <IconoGrande tono="ambar" Icono={AlertTriangle} />
+        <h1 style={titulo(false)}>No se pudo revisar Salud</h1>
+        <p style={subtitulo}>Inténtalo otra vez.</p>
+      </>
+    );
+    pie = (
+      <>
+        <button type="button" className="kp-press" onClick={otraVez} style={botonPrimario()}>Intentar otra vez</button>
+        <button type="button" onClick={() => termina('no')} style={enlace}>Ahora no</button>
+      </>
+    );
   } else if (paso === 'listo') {
     const nom = nombreDe(profile);
     cuerpo = emparejado ? (
       <>
         <IconoGrande tono="ok" Icono={Check} />
         <h1 style={titulo(false)}>Listo{nom ? `, ${nom}` : ''}</h1>
-        <p style={subtitulo}>Tu Apple Watch quedó conectado. Desde hoy, cada entreno que hagas con él entra solo.</p>
+        <p style={subtitulo}>{sinDatos ? SIN_DATOS : 'Tu Apple Watch quedó conectado. Desde hoy, cada entreno que hagas con él entra solo.'}</p>
         <Consejo><b style={{ color: KP.ink }}>Empieza tu próximo entreno en Training Lab</b> y tu reloj se abre solo para medir tu pulso.</Consejo>
         <LoQueVaALlegar />
       </>
@@ -316,7 +345,7 @@ export default function ConectaReloj({ reconectar = false, empezar = 'intro', en
       <>
         <IconoGrande tono="azul" Icono={Heart} />
         <h1 style={titulo(false)}>Listo{nom ? `, ${nom}` : ''}</h1>
-        <p style={subtitulo}>Conectamos Apple Salud. Desde hoy, los entrenos que otras apps guarden ahí entran solos.</p>
+        <p style={subtitulo}>{sinDatos ? SIN_DATOS : 'Conectamos Apple Salud. Desde hoy, los entrenos que otras apps guarden ahí entran solos.'}</p>
         <Consejo><b style={{ color: KP.ink }}>¿Compras un Apple Watch después?</b> Sus entrenos entran solos, sin volver a conectar nada.</Consejo>
       </>
     );
