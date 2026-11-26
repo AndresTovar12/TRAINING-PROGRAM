@@ -92,6 +92,9 @@ export function ganadoEnMes(libro, mes) {
  * Qué se lleva un retiro. `listos`: los renglones que hoy están listos. `monto`: lo que pidió (null = todo).
  * Los reembolsos (negativos) se descuentan primero; luego ventas COMPLETAS de la más vieja a la más nueva mientras quepan. Lo de la web sale por Stripe y lo de iPhone
  * por SPEI; si un lado queda en cero o menos, ese lado no se manda (sus renglones se quedan listos). Devuelve `{ ids, stripe, spei, total }` en pesos.
+ * @param {any[]} listos
+ * @param {number | null} [monto]
+ * @returns {{ ids: any[], stripe: number, spei: number, total: number }}
  */
 export function asignaRetiro(listos, monto = null) {
   const lista = [...(listos ?? [])].sort((a, b) => String(a.creado_en).localeCompare(String(b.creado_en)));
@@ -127,10 +130,10 @@ export function estadoDeRetiro(envios) {
 
 /* ---------- CLABE ---------- */
 const BANCOS = {
-  '002': 'Banamex', '006': 'Bancomext', '009': 'Banobras', '012': 'BBVA', '014': 'Santander', '019': 'Banjército', '021': 'HSBC', '030': 'Bajío', '036': 'Inbursa',
-  '042': 'Mifel', '044': 'Scotiabank', '058': 'Banregio', '059': 'Invex', '060': 'Bansi', '062': 'Afirme', '072': 'Banorte', '106': 'Bank of America', '127': 'Azteca',
-  '130': 'Compartamos', '137': 'BanCoppel', '138': 'ABC Capital', '145': 'Banco Base', '147': 'Bankaool', '166': 'Banco del Bienestar', '638': 'Nu', '646': 'STP',
-  '706': 'Arcus', '722': 'Mercado Pago', '728': 'Spin by OXXO', '734': 'Finco Pay',
+  '002': 'Banamex', '006': 'Bancomext', '009': 'Banobras', '012': 'BBVA', '014': 'Santander', '019': 'Banjército', '021': 'HSBC', '030': 'Bajío', '036': 'Inbursa', // estilo-ok: nombres propios de bancos
+  '042': 'Mifel', '044': 'Scotiabank', '058': 'Banregio', '059': 'Invex', '060': 'Bansi', '062': 'Afirme', '072': 'Banorte', '106': 'Bank of America', '127': 'Azteca', // estilo-ok: nombres propios de bancos
+  '130': 'Compartamos', '137': 'BanCoppel', '138': 'ABC Capital', '145': 'Banco Base', '147': 'Bankaool', '166': 'Banco del Bienestar', '638': 'Nu', '646': 'STP', // estilo-ok: nombres propios de bancos
+  '706': 'Arcus', '722': 'Mercado Pago', '728': 'Spin by OXXO', '734': 'Finco Pay', // estilo-ok: nombres propios de bancos
 };
 /** ¿Es una CLABE válida? 18 dígitos y el dígito de control correcto (pesos 3, 7, 1). */
 export function clabeValida(texto) {

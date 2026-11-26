@@ -7,15 +7,21 @@
  *
  * Qué hace con cada aviso (ver docs/superpowers/specs/2026-10-10-monetizacion-design.md, secciones 3 y 8):
  *   checkout.session.completed → la compra pasa a «activa» (arranca ese día y la base crea el vínculo con el coach) y, si fue pago único, se anota el cobro.
- *                                Si quien compró NO tenía cuenta (compró con solo su correo), AQUÍ se le crea, ya con el pago confirmado, y la compra queda a su nombre.
+ *                                Si quien compró NO tenía sesión, YA NO se le crea cuenta (26 nov 2026): la compra queda pagada y apartada, sin dueño («pendiente» + `pagada_en`),
+ *                                hasta que una cuenta la reclama con la llave del pago o la del correo «Crear mi cuenta» (`compra-lista`). Ese correo sale aquí, con el recibo.
  *   invoice.paid               → cada cobro mensual: se anota en `pagos`, se reparte (el coach recibe lo suyo) y se alarga el periodo; también activa una compra que aún estuviera «pendiente».
  *   invoice.payment_failed     → «gracia» por 3 días.
  *   customer.subscription.updated / deleted → marca que canceló / la compra pasa a «vencida».
  *   charge.refunded            → «reembolsada» y se le quita al coach lo que se le había mandado.
  *   charge.dispute.created     → «vencida» y se le quita al coach lo que se le había mandado (el contracargo).
- * El reparto: 20 % la app y 80 % el coach (el dueño vende al 0 %). Un depósito por venta lo dispara la cuenta del coach (etapa 2).
+ * El reparto: 20 % la app y 80 % el coach (el dueño vende al 0 %). Cada venta, renovación o reembolso deja un renglón en `libro_coach` («Mis ganancias»), con la fecha en que
+ * Stripe libera ese dinero en la cuenta del coach (`available_on`). El coach retira cuando quiere (`mi-dinero`, accion 'retirar'); de su retiro llegan aquí:
+ *   payout.paid / payout.failed (de las cuentas conectadas: endpoint de Connect, firmado con `STRIPE_WEBHOOK_SECRET_CONNECT`) → el envío «Llegó» o «No llegó»; si no llegó, ese dinero
+ *                                regresa a «Listo para retirar».
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { hashDeLlave, llaveNueva } from './reclamo.js'
+import { estadoDeRetiro } from './dinero.js'
 import {
   MONEDA, aFecha, cobroDeFactura, compraIdDeFactura, compraIdDeSesion, finDePeriodoDeFactura, finDePeriodoDeSuscripcion, idDe, llamaStripe,
   repartoDeUnCobro, suscripcionDeFactura, tasaDeComision, verificaFirma,
@@ -49,61 +55,42 @@ async function buscaCompra({ compraId, suscripcion }: { compraId?: string | null
   return null
 }
 
-const contrasenaAlAzar = () => Array.from(crypto.getRandomValues(new Uint8Array(24)), (b) => b.toString(16).padStart(2, '0')).join('')
-
 /**
- * La cuenta de quien compró sin tener una: la que ya tenga ese correo o, si no hay, una nueva. Solo se llama con el pago confirmado, nunca antes (nadie crea cuentas ajenas escribiendo un correo).
- * La cuenta nueva nace con una contraseña al azar que nadie conoce; quien pagó pone la suya en la página «Listo» (función `compra-lista`). Nace con el perfil armado y le falta el
- * inicio de siempre (sexo, unidad, nacimiento), que la app le hace al abrir. Devuelve `nueva: true` solo si la creó esta llamada.
+ * Se pagó. Con atleta (compró con sesión, o ya reclamó): la compra queda activa; el vínculo con el coach (fila de `equipo` con origen «compra») lo crea la base sola
+ * (disparador `compras_vinculo`, docs/sql/2026-10-11-monetizacion.sql). SIN atleta: queda pagada y apartada («pendiente» + `pagada_en`) hasta que una cuenta la reclame.
+ * Devuelve `true` si la compra quedó sin dueño (para mandar el correo «Crear mi cuenta»).
  */
-async function aseguraCuenta(c: Obj, nombre: string | null): Promise<{ id: string; nueva: boolean }> {
-  const correo = String(c.correo_comprador ?? '').trim().toLowerCase()
-  if (!correo) throw new Error(`La compra ${c.id} no tiene atleta ni correo.`)
-  const buscar = async () => {
-    const { data, error } = await bd.rpc('usuario_por_correo', { p_correo: correo })
-    if (error) throw error
-    return Array.isArray(data) ? data[0] : data
-  }
-  const revisa = (u: Obj) => {
-    if (u.role !== 'user' || u.is_active === false) throw new Error(`El correo de la compra ${c.id} es de una cuenta que no puede comprar como atleta.`)
-    return { id: u.id as string, nueva: false }
-  }
-  const ya = await buscar()
-  if (ya) return revisa(ya)
-  const nombreLimpio = (nombre ?? '').trim().slice(0, 80)
-  const { data, error } = await bd.auth.admin.createUser({
-    email: correo, password: contrasenaAlAzar(), email_confirm: true, user_metadata: { full_name: nombreLimpio, role: 'user' },
-  })
-  if (error || !data?.user) {
-    // Otro aviso del mismo pago pudo crearla un instante antes: se toma la que quedó.
-    const otra = await buscar()
-    if (otra) return revisa(otra)
-    throw error ?? new Error('No se pudo crear la cuenta del comprador.')
-  }
-  const { error: errPerfil } = await bd.from('profiles').update({
-    role: 'user', is_owner: false, perfil_completo: true, inicio_paso: nombreLimpio ? 'sexo' : 'nombre',
-  }).eq('id', data.user.id)
-  if (errPerfil) throw errPerfil
-  return { id: data.user.id, nueva: true }
-}
-
-/** La compra queda activa. El vínculo con el coach (la fila de `equipo` con origen «compra») lo crea la base sola: disparador `compras_vinculo`, ver docs/sql/2026-10-11-monetizacion.sql. */
-async function activa(c: Obj, cambios: Obj = {}, nombreDelComprador: string | null = null) {
-  const cuenta: Obj = {}
+async function activa(c: Obj, cambios: Obj = {}): Promise<boolean> {
+  const pagada = c.pagada_en ?? ahora().toISOString()
   if (!c.atleta_id) {
-    const a = await aseguraCuenta(c, nombreDelComprador)
-    cuenta.atleta_id = a.id
-    if (a.nueva) cuenta.cuenta_nueva = true // solo se escribe cuando es verdad: otro aviso del mismo pago no debe borrarlo
-    c.atleta_id = a.id
+    const { error } = await bd.from('compras').update({ estado: 'pendiente', pagada_en: pagada, gracia_hasta: null, actualizada_en: ahora().toISOString(), ...cambios }).eq('id', c.id)
+    if (error) throw error
+    c.pagada_en = pagada
+    return true
   }
   const { error } = await bd.from('compras').update({
-    estado: c.estado === 'reembolsada' ? c.estado : 'activa', inicio: c.inicio ?? hoy(), gracia_hasta: null, actualizada_en: ahora().toISOString(), ...cuenta, ...cambios,
+    estado: c.estado === 'reembolsada' ? c.estado : 'activa', inicio: c.inicio ?? hoy(), pagada_en: pagada, gracia_hasta: null, actualizada_en: ahora().toISOString(), ...cambios,
   }).eq('id', c.id)
   if (error) throw error
+  return false
+}
+
+/** Cuándo libera Stripe el dinero de una transferencia en la cuenta del coach (`available_on` del movimiento en SU cuenta). Si no se puede leer, null: se dice solo lo que se sabe. */
+async function fechaDeLiberacion(transferencia: Obj, acct: string): Promise<string | null> {
+  try {
+    const pago = idDe(transferencia?.destination_payment)
+    if (!pago) return null
+    const cargo = await llamaStripe(clave(), 'GET', `/v1/charges/${pago}`, { expand: ['balance_transaction'] }, { cuenta: acct })
+    const t = cargo?.balance_transaction?.available_on
+    return t ? new Date(Number(t) * 1000).toISOString().slice(0, 10) : null
+  } catch (e) {
+    console.error('stripe-webhook: no se pudo leer cuándo se libera el dinero', e instanceof Error ? e.message : e)
+    return null
+  }
 }
 
 /** Anota UN cobro en el libro de pagos y le manda al coach su parte. Un mismo cobro o factura se atiende una sola vez. */
-async function registraPago(c: Obj, { bruto, cobro, factura }: { bruto: number; cobro: string | null; factura: string | null }) {
+async function registraPago(c: Obj, { bruto, cobro, factura, tipo = 'venta' }: { bruto: number; cobro: string | null; factura: string | null; tipo?: 'venta' | 'renovacion' }) {
   const busca = cobro ? bd.from('pagos').select('id').eq('stripe_charge_id', cobro) : factura ? bd.from('pagos').select('id').eq('stripe_invoice_id', factura) : null
   if (busca) { const { data: ya, error: errYa } = await busca.maybeSingle(); if (errYa) throw errYa; if (ya) return }
   // El coach borró su cuenta (26 oct 2026): sus compradores siguen con su plan y se les cobra hasta el final del plan; ese dinero se queda en la plataforma (no hay a quién depositarle).
@@ -120,6 +107,7 @@ async function registraPago(c: Obj, { bruto, cobro, factura }: { bruto: number; 
   const esDueno = !!coach?.is_owner
   const r = repartoDeUnCobro({ bruto, tasa: tasaDeComision({ esDueno, comisionEspecial: coach?.comision_especial }) })
   let transferencia: string | null = null
+  let listoEstimado: string | null = null
   if (!esDueno && r.parte_coach_centavos > 0 && cobro) {
     const { data: cuenta, error: errCuenta } = await bd.from('cuentas_stripe').select('acct_id').eq('coach_id', c.coach_id).maybeSingle()
     if (errCuenta) throw errCuenta
@@ -129,13 +117,22 @@ async function registraPago(c: Obj, { bruto, cobro, factura }: { bruto: number; 
         amount: r.parte_coach_centavos, currency: MONEDA, destination: cuenta.acct_id, source_transaction: cobro, transfer_group: `compra_${c.id}`, metadata: { compra_id: c.id },
       }, { idempotencia: `tr_${cobro}` })
       transferencia = t.id
+      listoEstimado = await fechaDeLiberacion(t, cuenta.acct_id)
     }
   }
-  const { error } = await bd.from('pagos').insert({
+  const { data: pago, error } = await bd.from('pagos').insert({
     compra_id: c.id, coach_id: c.coach_id, stripe_charge_id: cobro, stripe_invoice_id: factura, bruto: r.bruto, tasa: r.tasa,
-    comision_app: r.comision_app, parte_coach: r.parte_coach, transfer_coach_id: transferencia, estado: 'cobrado',
-  })
-  if (error && error.code !== '23505') throw error
+    comision_app: r.comision_app, parte_coach: r.parte_coach, transfer_coach_id: transferencia, estado: 'cobrado', canal: 'web',
+  }).select('id').single()
+  if (error) { if (error.code === '23505') return; throw error }
+  // «Mis ganancias»: el renglón del coach (el dueño vende al 0 % a la cuenta de la plataforma: no tiene nada que retirar).
+  if (!esDueno && r.parte_coach > 0) {
+    const { error: errLibro } = await bd.from('libro_coach').insert({
+      coach_id: c.coach_id, compra_id: c.id, pago_id: pago.id, canal: 'web', tipo, bruto: r.bruto, monto: r.parte_coach, aproximado: false,
+      estado: 'en_camino', listo_estimado: listoEstimado, stripe_transferencia: transferencia,
+    })
+    if (errLibro && errLibro.code !== '23505') throw errLibro
+  }
 }
 
 /** Le quita al coach lo que se le había mandado de un cobro (reembolso o contracargo). */
@@ -153,7 +150,50 @@ async function reviertePago(cobro: string, estado: 'reembolsado' | 'contracargo'
   }
   const { error: errEstado } = await bd.from('pagos').update({ estado }).eq('id', pago.id)
   if (errEstado) throw errEstado
+  await reviertEnElLibro(pago.id)
   return pago
+}
+
+/**
+ * «Mis ganancias» tras un reembolso o contracargo: si esa venta no se ha retirado, su renglón queda «anulado» (no cuenta); si ya se retiró, se anota un renglón negativo
+ * listo, que se descuenta del siguiente dinero (Stripe hace lo mismo en la cuenta del coach). Una sola vez por pago.
+ */
+async function reviertEnElLibro(pagoId: string) {
+  const { data: renglon, error } = await bd.from('libro_coach').select('*').eq('pago_id', pagoId).in('tipo', ['venta', 'renovacion']).maybeSingle()
+  if (error) throw error
+  if (!renglon || renglon.estado === 'anulado') return
+  if (renglon.estado !== 'retirado') {
+    const { error: e2 } = await bd.from('libro_coach').update({ estado: 'anulado' }).eq('id', renglon.id)
+    if (e2) throw e2
+    return
+  }
+  const { error: e3 } = await bd.from('libro_coach').insert({
+    coach_id: renglon.coach_id, compra_id: renglon.compra_id, pago_id: pagoId, canal: renglon.canal, tipo: 'reembolso', bruto: 0,
+    monto: -Number(renglon.monto), aproximado: renglon.aproximado, estado: 'listo', listo_en: ahora().toISOString(),
+  })
+  if (e3 && e3.code !== '23505') throw e3
+}
+
+/** Un retiro por Stripe llegó o no llegó (aviso de la cuenta conectada). Si no llegó, sus ventas regresan a «Listo para retirar». */
+async function atiendeDeposito(payout: Obj, llego: boolean) {
+  const { data: envio, error } = await bd.from('retiro_envios').select('id, retiro_id, estado').eq('stripe_payout', payout.id).maybeSingle()
+  if (error) throw error
+  if (!envio) { console.error(`stripe-webhook: el depósito ${payout.id} no es de ningún retiro (lo hizo Stripe o el panel)`); return }
+  if (envio.estado !== 'enviado') return
+  const cambios = llego
+    ? { estado: 'llego', llego_en: payout.arrival_date ? new Date(Number(payout.arrival_date) * 1000).toISOString() : ahora().toISOString() }
+    : { estado: 'fallo', motivo: String(payout.failure_message ?? payout.failure_code ?? 'El banco no aceptó el depósito.').slice(0, 300) }
+  const { error: e1 } = await bd.from('retiro_envios').update(cambios).eq('id', envio.id)
+  if (e1) throw e1
+  if (!llego) {
+    const { error: e2 } = await bd.from('libro_coach').update({ estado: 'listo', retiro_id: null }).eq('retiro_id', envio.retiro_id).eq('canal', 'web')
+    if (e2) throw e2
+  }
+  const { data: todos, error: e3 } = await bd.from('retiro_envios').select('estado').eq('retiro_id', envio.retiro_id)
+  if (e3) throw e3
+  const estado = estadoDeRetiro(todos ?? [])
+  const { error: e4 } = await bd.from('retiros').update({ estado, ...(estado === 'llego' ? { llego_en: ahora().toISOString() } : {}) }).eq('id', envio.retiro_id)
+  if (e4) throw e4
 }
 
 /** Cambia una compra y NO se traga el error: si la base falla, el aviso se reintenta. */
@@ -178,15 +218,17 @@ const pesos = (n: number) => `$${Number(n).toLocaleString('es-MX', { minimumFrac
 const fechaLarga = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Mexico_City' }) : '')
 const escapa = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-function correoConMarca({ titulo, parrafos }: { titulo: string; parrafos: string[] }) {
+type Boton = { texto: string; url: string } | null
+function correoConMarca({ titulo, parrafos, boton = null, pie = true }: { titulo: string; parrafos: string[]; boton?: Boton; pie?: boolean }) {
   const cuerpo = parrafos.map((x) => `<p style="font-size:15px;line-height:1.5;color:#3d4250;margin:0 0 12px">${escapa(x)}</p>`).join('')
+    + (boton ? `<p style="margin:20px 0 8px"><a href="${escapa(boton.url)}" style="display:inline-block;background:#1E40E0;color:#ffffff;text-decoration:none;font-weight:800;font-size:16px;padding:14px 22px;border-radius:14px">${escapa(boton.texto)}</a></p>` : '')
   return `<!doctype html><html><body style="margin:0;background:#f4f5f8;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111318">
   <div style="max-width:460px;margin:0 auto;padding:32px 20px">
     <div style="background:#ffffff;border-radius:20px;padding:32px 28px;border:1px solid #e6e8ee">
       <div style="font-size:22px;font-weight:800;letter-spacing:-0.4px">Training <span style="color:#1E40E0">Lab</span></div>
       <p style="font-size:18px;font-weight:800;margin:22px 0 12px">${escapa(titulo)}</p>
       ${cuerpo}
-      <p style="font-size:13px;line-height:1.5;color:#6b7080;margin:18px 0 0">Puedes apagar estos correos en Mi perfil → Avisos.</p>
+      ${pie ? '<p style="font-size:13px;line-height:1.5;color:#6b7080;margin:18px 0 0">Puedes apagar estos correos en Mi perfil → Avisos.</p>' : ''}
     </div>
   </div></body></html>`
 }
@@ -214,6 +256,39 @@ async function mandaCorreoDeCompra(c: Obj, { asunto, titulo, parrafos }: { asunt
   }
 }
 
+/**
+ * Quien pagó SIN cuenta (26 nov 2026): su recibo y la liga «Crear mi cuenta», que dura 48 horas (se guarda solo el sha-256 de la llave).
+ * Va al correo que escribió en el pago. Si ya salió una vez, no se repite (Stripe avisa varias veces de un mismo pago).
+ */
+async function mandaCorreoCrearCuenta(c: Obj, monto: number) {
+  try {
+    const correo = String(c.correo_comprador ?? '').trim()
+    if (!correo || sinBuzon(correo) || c.correo_crear_cuenta_en) return
+    const llaveResend = (Deno.env.get('RESEND_API_KEY') ?? Deno.env.get('SMTP_PASSWORD') ?? '').trim()
+    if (!llaveResend) return
+    const llave = llaveNueva()
+    const { data: marcada } = await bd.from('compras').update({
+      llave_correo_hash: await hashDeLlave(llave), llave_correo_vence: new Date(Date.now() + 48 * 3600 * 1000).toISOString(), correo_crear_cuenta_en: ahora().toISOString(),
+    }).eq('id', c.id).is('correo_crear_cuenta_en', null).is('atleta_id', null).select('id')
+    if (!marcada?.length) return // otra entrega ya lo mandó, o ya la reclamaron
+    const plan = await tituloDelPlan(c)
+    const sitio = (Deno.env.get('SITIO_URL') ?? 'https://app.traininglabapp.com').replace(/\/+$/, '')
+    const titulo = `Tu compra de ${plan} está lista`
+    const parrafos = [`Recibimos tu pago: ${pesos(monto)}. Este correo es tu recibo.`, 'Crea tu cuenta para entrar a tu plan. La liga dura 48 horas.']
+    const boton = { texto: 'Crear mi cuenta', url: `${sitio}/compra/lista?l=${llave}` }
+    const remitente = (Deno.env.get('CORREO_REMITENTE') ?? 'Training Lab <no-reply@traininglabapp.com>').trim()
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${llaveResend}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: remitente, to: [correo], subject: titulo, html: correoConMarca({ titulo, parrafos, boton, pie: false }), text: `${titulo}\n\n${parrafos.join('\n\n')}\n\nCrear mi cuenta: ${boton.url}` }),
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (!r.ok) console.error('stripe-webhook: el correo «Crear mi cuenta» no salió', r.status, (await r.text()).slice(0, 160))
+  } catch (e) {
+    console.error('stripe-webhook: el correo «Crear mi cuenta» falló:', e instanceof Error ? e.message : e)
+  }
+}
+
 const tituloDelPlan = async (c: Obj) => {
   const { data } = await bd.from('vitrina_planes').select('titulo').eq('id', c.vitrina_plan_id).maybeSingle()
   return data?.titulo ?? 'tu plan'
@@ -236,18 +311,25 @@ async function atiende(evento: Obj) {
         const s = await llamaStripe(clave(), 'GET', `/v1/subscriptions/${suscripcion}`)
         periodoHasta = aFecha(finDePeriodoDeSuscripcion(s))
       }
-      await activa(c, { stripe_customer_id: idDe(o.customer) ?? c.stripe_customer_id, stripe_subscription_id: suscripcion, stripe_payment_intent_id: idDe(o.payment_intent), periodo_hasta: periodoHasta }, o.customer_details?.name ?? null)
+      // Sin sesión, el correo es el que escribió en el pago: ahí van su recibo y la liga para crear su cuenta.
+      const correoDelPago = String(o.customer_details?.email ?? o.customer_email ?? '').trim().toLowerCase() || null
+      if (!c.atleta_id && correoDelPago) c.correo_comprador = correoDelPago
+      const sinDueno = await activa(c, {
+        stripe_customer_id: idDe(o.customer) ?? c.stripe_customer_id, stripe_subscription_id: suscripcion, stripe_payment_intent_id: idDe(o.payment_intent), periodo_hasta: periodoHasta,
+        ...(!c.atleta_id && correoDelPago ? { correo_comprador: correoDelPago } : {}),
+      })
       // Pago único: el cobro se anota aquí (en una membresía lo anota `invoice.paid`).
       if (!suscripcion && o.payment_intent && clave()) {
         const pi = await llamaStripe(clave(), 'GET', `/v1/payment_intents/${idDe(o.payment_intent)}`)
         await registraPago(c, { bruto: (o.amount_total ?? 0) / 100, cobro: idDe(pi.latest_charge), factura: null })
         // También su recibo (un pago único no pasa por `invoice.paid`).
         const plan = await tituloDelPlan(c)
-        await mandaCorreoDeCompra(c, {
+        if (!sinDueno) await mandaCorreoDeCompra(c, {
           asunto: `Recibo de ${plan}`, titulo: 'Recibimos tu pago',
           parrafos: [`Recibimos tu pago de «${plan}»: ${pesos((o.amount_total ?? 0) / 100)}.`, 'Este correo es tu recibo.'],
         })
       }
+      if (sinDueno) await mandaCorreoCrearCuenta(c, (o.amount_total ?? 0) / 100)
       return
     }
     case 'invoice.paid': {
@@ -255,13 +337,16 @@ async function atiende(evento: Obj) {
       const c = await buscaCompra({ compraId: compraIdDeFactura(o), suscripcion })
       // La factura puede llegar antes que el aviso de la compra: se reintenta (Stripe espera cada vez más) en vez de perder el cobro.
       if (!c) throw new Error(`invoice.paid ${evento.id}: todavía no se encuentra la compra (suscripción ${suscripcion ?? 'sin id'})`)
-      await activa(c, { stripe_customer_id: idDe(o.customer) ?? c.stripe_customer_id, stripe_subscription_id: suscripcion ?? c.stripe_subscription_id, periodo_hasta: aFecha(finDePeriodoDeFactura(o)) }, o.customer_name ?? null)
+      const sinDuenoAun = await activa(c, { stripe_customer_id: idDe(o.customer) ?? c.stripe_customer_id, stripe_subscription_id: suscripcion ?? c.stripe_subscription_id, periodo_hasta: aFecha(finDePeriodoDeFactura(o)) })
       if ((o.amount_paid ?? 0) > 0) {
         // El webhook entrega la factura con la versión de API de la cuenta (2026+), que ya no trae `charge`. Sin el cobro no hay reembolso de 7 días ni reparto al coach:
         // si falta, se pide la factura con la versión fija de `stripe.js` (2024-06-20), que sí lo trae.
         let cobro = cobroDeFactura(o)
         if (!cobro && o.id && clave()) cobro = cobroDeFactura(await llamaStripe(clave(), 'GET', `/v1/invoices/${o.id}`))
-        await registraPago(c, { bruto: o.amount_paid / 100, cobro, factura: o.id })
+        const renovacionDeVerdad = o.billing_reason === 'subscription_cycle'
+        await registraPago(c, { bruto: o.amount_paid / 100, cobro, factura: o.id, tipo: renovacionDeVerdad ? 'renovacion' : 'venta' })
+        // Sin dueño todavía: el recibo va con la liga «Crear mi cuenta» (lo manda `checkout.session.completed`); aquí solo se anota.
+        if (sinDuenoAun) return
         // El recibo: cada pago que entra, con su monto y hasta cuándo queda pagado. La primera vez dice «compra»; las siguientes, «renovación».
         const plan = await tituloDelPlan(c)
         const renovacion = o.billing_reason === 'subscription_cycle'
@@ -326,6 +411,13 @@ async function atiende(evento: Obj) {
       if (pago) await cierraSiHayAtleta(pago.compra_id, 'vencida')
       return
     }
+    case 'payout.paid':
+    case 'payout.failed': {
+      // Solo los depósitos de las cuentas de los coaches (llegan con `account`); los de la plataforma no son retiros de nadie.
+      if (!evento.account) return
+      await atiendeDeposito(o, evento.type === 'payout.paid')
+      return
+    }
     default:
       return // lo demás no nos toca
   }
@@ -334,7 +426,10 @@ async function atiende(evento: Obj) {
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return responde('Método no permitido', 405)
   const cuerpo = await req.text()
-  const firmado = await verificaFirma(cuerpo, req.headers.get('stripe-signature'), (Deno.env.get('STRIPE_WEBHOOK_SECRET') ?? '').trim())
+  // Dos puntos de aviso con su propio secreto: el de la cuenta de Training Lab y el de Connect (lo que pasa en las cuentas de los coaches: depósitos).
+  const firma = req.headers.get('stripe-signature')
+  const firmado = await verificaFirma(cuerpo, firma, (Deno.env.get('STRIPE_WEBHOOK_SECRET') ?? '').trim())
+    || await verificaFirma(cuerpo, firma, (Deno.env.get('STRIPE_WEBHOOK_SECRET_CONNECT') ?? '').trim())
   if (!firmado) return responde('Firma inválida', 400)
 
   let evento: Obj

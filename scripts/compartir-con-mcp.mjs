@@ -92,7 +92,7 @@ for (const nombre of ARCHIVOS) {
 {
   const COPIAS = {
     'entradaAlPlan.js': ['compra-lista'],
-    'reclamo.js': ['compra-lista'],
+    'reclamo.js': ['compra-lista', 'stripe-webhook'],
     'dinero.js': ['stripe-webhook', 'mi-dinero', 'apple'],
     'spei.js': ['mi-dinero'],
   };

@@ -18,8 +18,11 @@ export const MENSAJES = {
 /**
  * ¿Esta cuenta puede reclamar esta compra con esta llave? `via`: 'pago' (llave cs_) o 'correo'. `rol`: el de la cuenta que reclama.
  * Devuelve `{ ok: true }`, `{ ok: true, yaEsTuya: true }` (la reclamó esta misma cuenta: no pasa nada) o `{ ok: false, motivo }` (llave de `MENSAJES`).
+ * @param {any} compra
+ * @param {{ usuarioId?: string | null, rol?: string, via?: string, ahora?: number }} [opciones]
+ * @returns {{ ok: boolean, yaEsTuya?: boolean, motivo?: string }}
  */
-export function puedeReclamar(compra, { usuarioId, rol = 'user', via = 'pago', ahora = Date.now() } = {}) {
+export function puedeReclamar(compra, { usuarioId = null, rol = 'user', via = 'pago', ahora = Date.now() } = {}) {
   if (!compra) return { ok: false, motivo: 'desconocida' };
   if (compra.atleta_id) return compra.atleta_id === usuarioId ? { ok: true, yaEsTuya: true } : { ok: false, motivo: 'ya_usada' };
   if (!compra.pagada_en) return { ok: false, motivo: 'no_pagada' };

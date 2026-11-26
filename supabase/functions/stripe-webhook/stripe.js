@@ -5,6 +5,9 @@
    `invoice.subscription`). Con la versión fija, lo que se lee aquí no se mueve solo. El endpoint del webhook se crea con esta misma versión (ver docs/stripe.md). */
 
 export const VERSION_DE_API = '2024-06-20';
+/** El pago dentro de nuestra página (Checkout Sessions con `ui_mode: 'elements'`, 26 nov 2026) solo existe en versiones nuevas de la API: esa llamada la pide con esta.
+ *  Va con Stripe.js «endive» (`https://js.stripe.com/endive/stripe.js`). Solo se usa para CREAR la sesión; lo demás sigue en la versión fija de arriba. */
+export const VERSION_DE_ELEMENTS = '2026-10-28.endive';
 export const MONEDA = 'mxn';
 
 /** La comisión de la app (Andrés, 11 oct 2026): 20 % base. El dueño vende al 0 %. Los escalones por volumen entran en la etapa 4.
@@ -39,11 +42,11 @@ export function cuerpoDeFormulario(datos) {
  * Una llamada a la API de Stripe. `cuenta`: para actuar como una cuenta conectada. `idempotencia`: llave para que repetir la llamada no cobre ni cree dos veces. Si falla, lanza un Error con el mensaje de Stripe.
  * @param {string} clave @param {'GET' | 'POST' | 'DELETE'} metodo @param {string} ruta
  * @param {Record<string, any> | null} [datos]
- * @param {{ cuenta?: string | null, idempotencia?: string | null }} [opciones]
+ * @param {{ cuenta?: string | null, idempotencia?: string | null, version?: string | null }} [opciones]
  * @returns {Promise<any>}
  */
-export async function llamaStripe(clave, metodo, ruta, datos = null, { cuenta = null, idempotencia = null } = {}) {
-  const cabeceras = { Authorization: `Bearer ${clave}`, 'Stripe-Version': VERSION_DE_API };
+export async function llamaStripe(clave, metodo, ruta, datos = null, { cuenta = null, idempotencia = null, version = null } = {}) {
+  const cabeceras = { Authorization: `Bearer ${clave}`, 'Stripe-Version': version || VERSION_DE_API };
   if (cuenta) cabeceras['Stripe-Account'] = cuenta;
   if (idempotencia) cabeceras['Idempotency-Key'] = idempotencia;
   let url = `https://api.stripe.com${ruta}`;
