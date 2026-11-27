@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronRight, Layers, Loader2, Plus, Trash2, Video } from 'lucide-react';
+import { Check, ChevronRight, Globe, Loader2, MessageCircle, Plus, Smartphone, Star, Trash2, Video } from 'lucide-react';
 import { T, KP, FONT, UI } from '@/lib/theme';
-import { Fila, FilaElegir, Interruptor as Switch, Segmentado } from '@/components/ui';
+import { Fila, FilaElegir, Interruptor as Switch, Pastilla, Segmentado } from '@/components/ui';
+import { limpiaSemanasElegidas, modosPosibles, semanasPermitidas, tieneEntrada } from '@/lib/entradaAlPlan';
 import HojaFlotante from '@/components/HojaFlotante';
 import Ventana from '@/features/misplanes/Ventana';
 import SelectorDeMisPlanes from '@/features/misplanes/SelectorDeMisPlanes';
@@ -23,6 +24,10 @@ import EdadesDelPlan from './EdadesDelPlan';
    «tu liga», que se arma sola con el nombre del plan y no cambia después (ya anda en Instagram).
 
    El plan sale de uno de «Mis planes»; al publicar se guarda una COPIA: lo que siga editando allá no toca lo vendido hasta que vuelva a publicar.
+
+   Compra y dinero (26 nov 2026; dibujos coach-c1, coach-c1-vacia, coach-c1-empezar, coach-c1-empezar-elegir): «Título», «Elegir del repertorio», «Lo que logra» (antes «Objetivo»),
+   «Para ti si…», «Chat contigo» y «Revisión de técnica» (si apaga los dos, la página dice «Entrenas por tu cuenta»), «Tu atleta ve las próximas N semanas» (nunca más de las que
+   tiene el plan), «Dónde puede empezar tu atleta», «Mi plan recomendado» (uno por coach: sale con «Empieza aquí») y «Mismo precio en todos lados». Se quitó «Todas mis clases».
 
    `plan`: la fila existente (o null si es nuevo). `slugsOcupados`: las ligas que ya usan los otros planes de este coach. `alCerrar(guardado?)`: se cerró; si trae el plan, se guardó o publicó. */
 
@@ -65,7 +70,12 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
     ventana_semanas: Math.min(VENTANA_MAXIMA, plan?.ventana_semanas ?? VENTANA_MAXIMA),
     chat: !!plan?.chat,
     tecnica: !!plan?.tecnica,
+    para_ti_si: plan?.para_ti_si ?? '',
+    entrada_modo: plan?.entrada_modo ?? 'semana_1',
+    entrada_semanas: Array.isArray(plan?.entrada_semanas) ? plan.entrada_semanas : [1],
+    recomendado: !!plan?.recomendado,
   }));
+  const [viendoEntrada, setViendoEntrada] = useState(false);
   const [programa, setPrograma] = useState(null);
   const fuenteId = plan?.plantilla_id ?? plan?.programa_guardado_id ?? null; // de dónde sale lo que se vende (un programa o una plantilla de Mis planes)
   const [cargandoPrograma, setCargandoPrograma] = useState(!!fuenteId);
@@ -94,12 +104,6 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
     cuentaMisClases().then((n) => { if (vivo) setNClases(n); }).catch(() => {});
     return () => { vivo = false; };
   }, [biblioteca]);
-  // «Todas mis clases»: no se escoge nada de Mis planes; entran todas las clases que tengas (también las que agregues después).
-  const aBiblioteca = () => {
-    setPrograma(null);
-    setError(null);
-    setF((prev) => ({ ...prev, contenido: 'biblioteca', programa_guardado_id: null, plantilla_id: null, tipo: 'membresia', chat: false, tecnica: false, titulo: prev.titulo || 'Biblioteca de clases' }));
-  };
 
   // Al escoger el plan, la ficha se llena con lo suyo: nombre, descripción y foto (solo lo que todavía está vacío: no se pisa lo que el coach ya escribió).
   const eligeUnPlan = async (item) => {
@@ -129,6 +133,13 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
   };
 
   const precio = Number.parseInt(String(f.precio_mxn).replace(/\D/g, ''), 10);
+  // Las fases del plan elegido, en la forma de `entradaAlPlan.js` (cuántas semanas tiene cada una).
+  const fasesDelPlan = useMemo(() => (programa?.fases ?? []).map((x) => ({ id: x.id, weekData: Array.from({ length: x.semanas ?? 0 }, (_, i) => ({ num: i + 1 })) })), [programa]);
+  const totalSemanas = fasesDelPlan.reduce((n, x) => n + x.weekData.length, 0);
+  const tieneFuente = !!(fuenteId || f.programa_guardado_id || f.plantilla_id || biblioteca);
+  const conEntrada = tieneEntrada({ contenido: f.contenido, kind: programa?.kind ?? 'periodized', fases: fasesDelPlan });
+  const permitidasAhora = semanasPermitidas(fasesDelPlan, { modo: f.entrada_modo, semanas: f.entrada_semanas });
+  const textoDeEntrada = { semana_1: 'Solo en la semana 1', fases: 'Inicio de cada fase', cualquiera: 'En cualquier semana', elegidas: `Semanas ${permitidasAhora.join(', ')}` }[f.entrada_modo] ?? 'Solo en la semana 1';
   const problemas = useMemo(() => {
     const lista = [];
     if (!f.programa_guardado_id && !f.plantilla_id && !biblioteca) lista.push('Escoge lo que vendes.');
@@ -164,7 +175,11 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
         precio_mxn: precio,
         tipo: tipoDeCobroDe(f.contenido, f.tipo),
         ...(esSuelto(f.contenido) || biblioteca ? { chat: false, tecnica: false } : null),
-        ventana_semanas: Math.min(VENTANA_MAXIMA, Math.max(1, Number(f.ventana_semanas) || VENTANA_MAXIMA)),
+        ventana_semanas: Math.min(VENTANA_MAXIMA, Math.max(1, totalSemanas || VENTANA_MAXIMA), Math.max(1, Number(f.ventana_semanas) || VENTANA_MAXIMA)),
+        para_ti_si: f.para_ti_si.trim() || null,
+        // Si el coach quitó semanas o fases, las elegidas que ya no existen se van solas; «Al inicio de cada fase» con una sola fase es «solo la semana 1».
+        entrada_modo: conEntrada ? (f.entrada_modo === 'fases' && !modosPosibles(fasesDelPlan).some((m) => m.valor === 'fases') ? 'semana_1' : f.entrada_modo) : 'semana_1',
+        entrada_semanas: conEntrada ? limpiaSemanasElegidas(f.entrada_semanas, totalSemanas) : [1],
       });
       borradorCreado.current = guardado;
       seGuardo = true;
@@ -199,33 +214,27 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
         )}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <button
-            type="button" onClick={() => setEligiendo(true)}
-            style={{ ...tarjeta, display: 'flex', alignItems: 'center', gap: 10, minHeight: 58, padding: '10px 16px', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: FONT }}
-          >
-            <span style={{ fontSize: 15.5, fontWeight: 600, color: KP.ink, flexShrink: 0 }}>Lo que vendes</span>
-            <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 15.5, fontWeight: 600, color: KP.blue, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {biblioteca
-                ? `Todas mis clases${nClases != null ? ` · ${nClases} ${nClases === 1 ? 'clase' : 'clases'}` : ''}`
-                : cargandoPrograma ? 'Cargando…'
-                  : programa?.nombre ? `${programa.nombre} · ${ETIQUETA_DE_CONTENIDO[f.contenido] ?? ''}`
-                    : (fuenteId || f.programa_guardado_id || f.plantilla_id ? 'Plan de Mis planes' : 'Escoger de Mis planes')}
-            </span>
-            <ChevronRight size={17} color="#C3C8D2" style={{ flexShrink: 0 }} />
-          </button>
-          {!biblioteca && (
-            <button type="button" onClick={aBiblioteca} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 700, color: KP.blue, padding: '0 4px', textAlign: 'left', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Layers size={15} /> O vende todas tus clases, como una biblioteca
+          <div style={{ fontSize: 14.5, fontWeight: 500, color: KP.ink2, margin: '0 4px' }}>Quien ya lo compró conserva su versión.</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: KP.ink2, margin: '4px 4px -4px' }}>Plan</div>
+          {tieneFuente ? (
+            <button type="button" onClick={() => setEligiendo(true)} style={{ ...tarjeta, display: 'flex', alignItems: 'center', gap: 14, padding: 14, border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: FONT }}>
+              <span style={{ width: 56, height: 56, borderRadius: 14, overflow: 'hidden', background: KP.blueSoft, flexShrink: 0 }}>{(f.foto_url || programa?.foto) && <img src={f.foto_url || programa?.foto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}</span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 17, fontWeight: 700, color: KP.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{biblioteca ? 'Todas mis clases' : cargandoPrograma ? 'Cargando…' : programa?.nombre ?? 'Plan del repertorio'}</span>
+                <span style={{ display: 'block', fontSize: 14.5, fontWeight: 500, color: KP.ink2 }}>{['Del repertorio', totalSemanas > 1 ? `${totalSemanas} semanas` : ETIQUETA_DE_CONTENIDO[f.contenido]].filter(Boolean).join(' · ')}</span>
+              </span>
+              <span style={{ fontSize: 16, fontWeight: 700, color: KP.blue }}>Cambiar</span>
+            </button>
+          ) : (
+            <button type="button" onClick={() => setEligiendo(true)} style={{ ...tarjeta, display: 'flex', alignItems: 'center', gap: 14, padding: '18px 16px', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: FONT }}>
+              <span style={{ width: 48, height: 48, borderRadius: 14, background: KP.blueSoft, color: KP.blue, display: 'grid', placeItems: 'center' }}><Plus size={22} /></span>
+              <span style={{ flex: 1 }}><span style={{ display: 'block', fontSize: 17, fontWeight: 700, color: KP.blue }}>Elegir del repertorio</span><span style={{ display: 'block', fontSize: 14.5, fontWeight: 500, color: KP.ink2 }}>El plan de Mis planes que vas a vender</span></span>
+              <ChevronRight size={18} color="#C3C8D2" />
             </button>
           )}
-          {biblioteca && (
-            <div style={{ fontSize: 14, fontWeight: 500, color: KP.ink2, lineHeight: 1.45, padding: '0 4px' }}>
-              Quien se suscribe ve todas las clases que tengas en Mis planes. Las que agregues después se suman solas.
-            </div>
-          )}
 
-          <Escrito etiqueta="Nombre del plan">
-            <input value={f.titulo} maxLength={120} placeholder="Velocidad para receptores" aria-label="Nombre del plan" style={{ ...sinCaja, fontSize: 21, fontWeight: 800 }} onChange={(e) => pon({ titulo: e.target.value })} />
+          <Escrito etiqueta="Título">
+            <input value={f.titulo} maxLength={120} placeholder="Velocidad para receptores" aria-label="Título" style={{ ...sinCaja, fontSize: 21, fontWeight: 800 }} onChange={(e) => pon({ titulo: e.target.value })} />
           </Escrito>
           <Escrito etiqueta="Descripción">
             <textarea value={f.descripcion} maxLength={4000} rows={3} placeholder="Qué incluye y cómo se entrena" aria-label="Descripción" style={{ ...sinCaja, fontSize: 16, fontWeight: 500, lineHeight: 1.45, resize: 'vertical' }} onChange={(e) => pon({ descripcion: e.target.value })} />
@@ -251,6 +260,13 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
             )}
           </div>
 
+          <Escrito etiqueta="Lo que logra">
+            <input value={f.objetivo} maxLength={160} placeholder="Sube tu sentadilla, banca y peso muerto." aria-label="Lo que logra" style={{ ...sinCaja, fontSize: 17, fontWeight: 600 }} onChange={(e) => pon({ objetivo: e.target.value })} />
+          </Escrito>
+          <Escrito etiqueta="Para ti si…">
+            <input value={f.para_ti_si} maxLength={200} placeholder="ya entrenas con barra" aria-label="Para ti si" style={{ ...sinCaja, fontSize: 17, fontWeight: 500 }} onChange={(e) => pon({ para_ti_si: e.target.value })} />
+          </Escrito>
+
           <Titulo>Para quién es</Titulo>
           <Grupo>
             <FilaElegir texto="Disciplina" titulo="Deporte o disciplina" opciones={aOpciones(DEPORTES)} valor={f.deportes} multiple marcador="Todas" onCambio={(v) => pon({ deportes: v })} />
@@ -259,9 +275,6 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
             <FilaElegir texto="Equipo" titulo="Equipo que necesita" opciones={aOpciones(EQUIPOS)} valor={f.equipo} multiple marcador="Cualquiera" onCambio={(v) => pon({ equipo: v })} />
             <FilaElegir texto="Nivel" opciones={aOpciones(NIVELES)} valor={f.nivel} onCambio={(v) => pon({ nivel: v })} />
           </Grupo>
-          <Escrito etiqueta="Objetivo">
-            <input value={f.objetivo} maxLength={500} placeholder="Llegar fuerte a la temporada" aria-label="Objetivo" style={{ ...sinCaja, fontSize: 16, fontWeight: 600 }} onChange={(e) => pon({ objetivo: e.target.value })} />
-          </Escrito>
 
           <Titulo>Cuánto cuesta</Titulo>
           <div style={{ ...tarjeta, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -284,33 +297,89 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
               </span>
               <span style={{ display: 'block', fontSize: 13, fontWeight: 500, color: KP.ink2, marginTop: 2 }}>Mínimo ${precioMinimoDe(f.contenido)}</span>
             </label>
+            <div style={{ display: 'flex', gap: 12, borderTop: `1px solid ${UI.hilo}`, paddingTop: 12 }}>
+              <span style={{ display: 'flex', gap: 4, color: KP.ink2, paddingTop: 2 }}><Globe size={16} /><Smartphone size={16} /></span>
+              <span><span style={{ display: 'block', fontSize: 15.5, fontWeight: 700, color: KP.ink }}>Mismo precio en todos lados</span><span style={{ display: 'block', fontSize: 14, fontWeight: 500, color: KP.ink2, lineHeight: 1.4 }}>Con Apple te llega menos y más tarde. Lo ves en Mis ganancias.</span></span>
+            </div>
           </div>
 
           {!esSuelto(f.contenido) && !biblioteca && (
             <>
-              <Titulo>Qué incluye</Titulo>
+              <Titulo>Incluye</Titulo>
               <Grupo>
-                {[['chat', 'Chat con el coach'], ['tecnica', 'Técnica por video']].map(([clave, texto]) => (
-                  <div key={clave} className="ui-fila" style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 56, padding: '8px 16px' }}>
+                {[['chat', 'Chat contigo', MessageCircle], ['tecnica', 'Revisión de técnica', Video]].map(([clave, texto, Icono]) => (
+                  <div key={clave} className="ui-fila" style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 56, padding: '8px 16px' }}>
+                    <span style={{ width: 36, height: 36, borderRadius: 11, background: KP.blueSoft, color: KP.blue, display: 'grid', placeItems: 'center' }}><Icono size={17} /></span>
                     <span style={{ flex: 1, fontSize: 15.5, fontWeight: 600, color: KP.ink }}>{texto}</span>
                     {/* La técnica por video se contesta por el chat (p103): prender una prende la otra y apagar el chat apaga la técnica; si no, el comprador podía escribir y la base lo rechazaba. */}
                     <Switch activo={f[clave]} onCambio={(v) => pon(clave === 'tecnica' ? { tecnica: v, ...(v ? { chat: true } : {}) } : { chat: v, ...(!v ? { tecnica: false } : {}) })} etiqueta={texto} />
                   </div>
                 ))}
               </Grupo>
+              <div style={{ fontSize: 13.5, fontWeight: 500, color: KP.ink2, margin: '-4px 6px 0' }}>Si apagas los dos, sale «Entrenas por tu cuenta».</div>
             </>
           )}
 
-          {f.contenido === 'programa' && programa?.kind !== 'weekly' && (
-            <Grupo>
-              <FilaElegir
-                texto="Ve hacia adelante" titulo="Cuánto ve el comprador hacia adelante"
-                opciones={VENTANAS.map((v) => ({ valor: v.valor, texto: v.nombre }))} valor={f.ventana_semanas} onCambio={(v) => pon({ ventana_semanas: v })}
-              />
-            </Grupo>
+          {conEntrada && (
+            <>
+              <Grupo>
+                <FilaElegir
+                  texto="Tu atleta ve las próximas" titulo="Cuántas semanas ve hacia adelante"
+                  opciones={VENTANAS.filter((v) => v.valor <= Math.max(1, totalSemanas)).map((v) => ({ valor: v.valor, texto: v.valor === 4 ? '4 semanas' : v.nombre }))}
+                  valor={Math.min(f.ventana_semanas, Math.max(1, totalSemanas))} onCambio={(v) => pon({ ventana_semanas: v })}
+                />
+              </Grupo>
+              <div style={{ fontSize: 13.5, fontWeight: 500, color: KP.ink2, margin: '-4px 6px 0' }}>Así nadie se lleva tu plan completo el primer día.</div>
+              <Grupo>
+                <Fila texto="Dónde puede empezar tu atleta" valor={textoDeEntrada} onClick={() => setViendoEntrada(true)} />
+              </Grupo>
+            </>
           )}
+          <Grupo>
+            <div className="ui-fila" style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 56, padding: '10px 16px' }}>
+              <span style={{ flex: 1 }}>
+                <span style={{ display: 'block', fontSize: 15.5, fontWeight: 600, color: KP.ink }}>Mi plan recomendado</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13.5, fontWeight: 500, color: KP.ink2, flexWrap: 'wrap' }}>Sale con <Pastilla tono="azul"><Star size={10} fill="currentColor" style={{ marginRight: 3 }} />Empieza aquí</Pastilla> en tu página.</span>
+              </span>
+              <Switch activo={f.recomendado} onCambio={(v) => pon({ recomendado: v })} etiqueta="Mi plan recomendado" />
+            </div>
+          </Grupo>
         </div>
       </Ventana>
+      {viendoEntrada && (
+        <HojaFlotante titulo="¿Dónde puede empezar tu atleta?" onCerrar={() => setViendoEntrada(false)} ancho={460}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <Grupo>
+              {modosPosibles(fasesDelPlan).map((m) => (
+                <button key={m.valor} type="button" role="radio" aria-checked={f.entrada_modo === m.valor} onClick={() => pon({ entrada_modo: m.valor })} className="ui-fila"
+                  style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', minHeight: 58, padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontFamily: FONT }}>
+                  <span style={{ flex: 1 }}>
+                    <span style={{ display: 'block', fontSize: 16.5, fontWeight: f.entrada_modo === m.valor ? 700 : 500, color: KP.ink }}>{m.texto}</span>
+                    {m.valor === 'fases' && <span style={{ display: 'block', fontSize: 14, color: KP.ink2 }}>Semanas {semanasPermitidas(fasesDelPlan, { modo: 'fases' }).join(', ').replace(/, (\d+)$/, ' y $1')}</span>}
+                  </span>
+                  <span aria-hidden="true" style={{ width: 28, height: 28, borderRadius: 99, display: 'grid', placeItems: 'center', background: f.entrada_modo === m.valor ? KP.blue : 'transparent', border: f.entrada_modo === m.valor ? 'none' : `2px solid ${KP.lineHi}`, color: '#fff' }}>{f.entrada_modo === m.valor && <Check size={16} strokeWidth={3} />}</span>
+                </button>
+              ))}
+            </Grupo>
+            {f.entrada_modo === 'elegidas' && (
+              <div style={{ ...tarjeta, padding: 14, display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 8 }}>
+                {Array.from({ length: totalSemanas }, (_, i) => i + 1).map((n) => {
+                  const marcada = n === 1 || f.entrada_semanas.includes(n);
+                  return (
+                    <button key={n} type="button" disabled={n === 1} aria-pressed={marcada} aria-label={`Semana ${n}`}
+                      onClick={() => pon({ entrada_semanas: marcada ? f.entrada_semanas.filter((x) => x !== n) : [...f.entrada_semanas, n] })}
+                      style={{ height: 44, borderRadius: 12, border: 'none', cursor: n === 1 ? 'default' : 'pointer', fontFamily: FONT, fontSize: 16, fontWeight: 700, background: marcada ? KP.blue : UI.relleno, color: marcada ? '#fff' : KP.ink }}>
+                      {n}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {f.entrada_modo === 'elegidas' && <div style={{ fontSize: 13.5, color: KP.ink2, margin: '-4px 6px 0' }}>La semana 1 siempre queda.</div>}
+            <button type="button" onClick={() => setViendoEntrada(false)} style={{ ...botonPrincipal(false), width: '100%', minHeight: 50 }}>Listo</button>
+          </div>
+        </HojaFlotante>
+      )}
       {viendoEdades && (
         <HojaFlotante titulo="Edades" onCerrar={() => setViendoEdades(false)}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

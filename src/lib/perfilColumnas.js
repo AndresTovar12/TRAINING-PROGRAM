@@ -12,4 +12,6 @@ export const COLUMNAS_PERFIL = [
   'id', 'username', 'full_name', 'role', 'avatar_url', 'created_at', 'updated_at', 'is_owner', 'coach_id', 'is_active',
   'unidad_peso', 'genero', 'profesion', 'perfil_completo', 'codigo_coach', 'alta_en', 'fecha_nacimiento', 'disciplinas',
   'trabaja_en_equipo', 'repertorio_base', 'inicio_paso', 'bio', 'redes', 'limite_atletas', 'comision_especial', 'vitrina_suspendida',
+  // «Tu página» (26 nov 2026).
+  'portada_url', 'logros', 'anos_coach', 'certificaciones',
 ].join(', ');

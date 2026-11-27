@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Loader2, Plus, Store } from 'lucide-react';
+import { Check, ChevronRight, Loader2, Plus, Star, Store } from 'lucide-react';
 import { T, KP, FONT, UI } from '@/lib/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConfirmacion } from '@/components/Confirmacion';
@@ -8,7 +8,10 @@ import FichaDelPlanEnVenta from '@/features/vitrina/FichaDelPlanEnVenta';
 import { cobrosDeMiCuenta } from '@/lib/miDineroApi';
 import { ETIQUETA_DE_CONTENIDO, leeVentasAbiertas, ligaPublica, listaMiVitrina, retiraPlan, borraBorrador } from '@/lib/vitrinaApi';
 import { chipsDeParaQuien } from '@/lib/paraQuien';
-import { useCabeceraDeSeccion, useEnBanda } from '@/components/ui';
+import { Avatar, useCabeceraDeSeccion, useEnBanda } from '@/components/ui';
+import { enLaApp } from '@/lib/nativo';
+import PaginaDelPlan from '@/features/tienda/PaginaDelPlan';
+import TuPagina from '@/features/vitrina/TuPagina';
 
 /* MI VITRINA: los planes que un coach pone a la venta (nombre que decidió Andrés, 10 oct 2026; antes se llamaba «menú»).
 
@@ -18,13 +21,13 @@ import { useCabeceraDeSeccion, useEnBanda } from '@/components/ui';
 const ESTADOS = {
   borrador: { texto: 'Borrador', fondo: KP.amberSoft, tinta: KP.amber },
   publicado: { texto: 'Publicado', fondo: KP.mintSoft, tinta: KP.mint },
-  retirado: { texto: 'Retirado', fondo: T.bg3, tinta: T.text2 },
+  retirado: { texto: 'Fuera de la venta', fondo: T.bg3, tinta: T.text2 },
 };
 const pesos = (n) => `$${Number(n).toLocaleString('es-MX')}`;
 
 /* Reestructura visual (16 oct 2026), como «Mi vitrina» de las capturas de Andrés: la foto del plan arriba con su estado encima; abajo el
    nombre, qué es, el precio grande y las ventas; la liga con «Copiar» (solo publicado) y tres botones iguales: Editar · Ver página · Retirar. */
-function Tarjeta({ plan, usuario, alEditar, alRetirar, alBorrar }) {
+function Tarjeta({ plan, usuario, alEditar, alRetirar, alBorrar, alVer }) {
   const [copiado, setCopiado] = useState(false);
   const e = ESTADOS[plan.estado] ?? ESTADOS.borrador;
   const liga = ligaPublica(usuario, plan.slug);
@@ -38,7 +41,10 @@ function Tarjeta({ plan, usuario, alEditar, alRetirar, alBorrar }) {
     <div style={{ background: UI.tarjeta, borderRadius: 22, boxShadow: UI.sombraGrupo, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <div style={{ position: 'relative', aspectRatio: '16 / 9', background: plan.foto_url ? '#1B1D24' : '#ECEFFC' }}>
         {plan.foto_url && <img src={plan.foto_url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
-        <span style={{ position: 'absolute', top: 12, left: 12, padding: '4px 10px', borderRadius: 8, background: e.fondo, color: e.tinta, fontSize: 13, fontWeight: 700 }}>{e.texto}</span>
+        <span style={{ position: 'absolute', top: 12, left: 12, display: 'flex', gap: 6 }}>
+          <span style={{ padding: '4px 10px', borderRadius: 8, background: e.fondo, color: e.tinta, fontSize: 13, fontWeight: 700 }}>{e.texto}</span>
+          {plan.recomendado && <span style={{ padding: '4px 10px', borderRadius: 8, background: '#fff', color: KP.blue, fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Star size={11} fill="currentColor" />Empieza aquí</span>}
+        </span>
       </div>
       <div style={{ padding: '14px 16px 16px', display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
         <div>
@@ -65,10 +71,13 @@ function Tarjeta({ plan, usuario, alEditar, alRetirar, alBorrar }) {
         )}
         <div style={{ display: 'flex', gap: 8, marginTop: 'auto' }}>
           <button type="button" onClick={() => alEditar(plan)} style={{ ...boton, background: UI.relleno, color: KP.ink }}>Editar</button>
-          {publicado && <a href={liga} target="_blank" rel="noreferrer" style={{ ...boton, background: UI.relleno, color: KP.ink }}>Ver página</a>}
-          {publicado && <button type="button" onClick={() => alRetirar(plan)} style={{ ...boton, background: KP.dangerSoft, color: KP.danger }}>Retirar</button>}
+          {/* En la app la página se ve aquí mismo, sin salir a la web (donde se compra): regla de Apple. */}
+          {publicado && (enLaApp()
+            ? <button type="button" onClick={() => alVer(plan)} style={{ ...boton, background: UI.relleno, color: KP.ink }}>Ver página</button>
+            : <a href={liga} target="_blank" rel="noreferrer" style={{ ...boton, background: UI.relleno, color: KP.ink }}>Ver página</a>)}
           {plan.estado === 'borrador' && !plan.version_n && <button type="button" onClick={() => alBorrar(plan)} style={{ ...boton, background: KP.dangerSoft, color: KP.danger }}>Borrar</button>}
         </div>
+        {publicado && <button type="button" onClick={() => alRetirar(plan)} style={{ ...boton, flex: 'none', background: KP.dangerSoft, color: KP.danger }}>Quitar de la venta</button>}
       </div>
     </div>
   );
@@ -82,6 +91,8 @@ export default function MiVitrina() {
   const [planes, setPlanes] = useState(null);
   const [error, setError] = useState(null);
   const [editando, setEditando] = useState(undefined); // undefined = cerrada · null = plan nuevo · fila = editar
+  const [tuPagina, setTuPagina] = useState(false);
+  const [viendo, setViendo] = useState(null); // en la app: el plan cuya página se ve aquí mismo
   const [ventas, setVentas] = useState(true); // ¿ya se puede cobrar? (hasta saberlo, no se asusta a nadie con el aviso)
   useEffect(() => { leeVentasAbiertas().then(setVentas).catch(() => {}); }, []);
   // ¿Su cuenta de cobro (Stripe) está lista? Sin ella el plan sale «Publicado» pero nadie lo puede comprar ni aparece en Explorar, y nadie se lo decía (auditoría p50).
@@ -119,10 +130,10 @@ export default function MiVitrina() {
 
   const retira = async (plan) => {
     const va = await pregunta({
-      titulo: '¿Retirar este plan?', detalle: 'Deja de mostrarse en tu página. Quien ya lo paga lo conserva hasta que deje de pagar.', confirmar: 'Sí, retirarlo', peligro: true,
+      titulo: '¿Quitar este plan de la venta?', detalle: 'Deja de mostrarse en tu página. Quien ya lo compró lo conserva.', confirmar: 'Sí, quitarlo', peligro: true,
     });
     if (!va) return;
-    try { await retiraPlan(plan.id); await carga(); } catch (e) { setError(e?.message ?? 'No se pudo retirar.'); }
+    try { await retiraPlan(plan.id); await carga(); } catch (e) { setError(e?.message ?? 'No se pudo quitar de la venta.'); }
   };
 
   // Un borrador (nunca se publicó) se puede borrar: no tiene suscriptores que lo conserven (auditoría p69).
@@ -138,6 +149,14 @@ export default function MiVitrina() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, fontFamily: FONT }}>
       {!enBanda && <div style={{ fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: -0.4 }}>Mi vitrina</div>}
       <button type="button" onClick={() => setEditando(null)} style={{ ...botonPrincipal(false), width: '100%', minHeight: 52, fontSize: 16 }}><Plus size={18} /> Poner algo en venta</button>
+      <button type="button" onClick={() => setTuPagina(true)} className="kp-press" style={{ display: 'flex', alignItems: 'center', gap: 14, background: UI.tarjeta, borderRadius: 20, boxShadow: UI.sombraGrupo, border: 'none', padding: '12px 16px', textAlign: 'left', cursor: 'pointer', fontFamily: FONT }}>
+        <Avatar nombre={profile?.full_name} foto={profile?.portada_url || profile?.avatar_url} tamano={52} />
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: 'block', fontSize: 17, fontWeight: 700, color: KP.ink }}>Tu página</span>
+          <span style={{ display: 'block', fontSize: 14, fontWeight: 500, color: KP.ink2, lineHeight: 1.35 }}>Foto, frase, Sobre mí, Instagram y resultados de tus atletas</span>
+        </span>
+        <ChevronRight size={19} color={KP.ink3} />
+      </button>
       {error && <div role="alert" style={{ padding: '10px 14px', borderRadius: 12, background: KP.dangerSoft, color: KP.danger, fontSize: 14, fontWeight: 700 }}>{error}</div>}
       {!ventas && (
         <div role="status" style={{ padding: '10px 14px', borderRadius: 12, background: KP.amberSoft, color: KP.amber, fontSize: 14, fontWeight: 700, lineHeight: 1.4 }}>
@@ -146,7 +165,7 @@ export default function MiVitrina() {
       )}
       {ventas && cuentaLista === false && planes?.some((p) => p.estado === 'publicado') && (
         <div role="status" style={{ padding: '10px 14px', borderRadius: 12, background: KP.amberSoft, color: KP.amber, fontSize: 14, fontWeight: 700, lineHeight: 1.4 }}>
-          Tus planes están publicados, pero todavía nadie puede comprarlos ni aparecen en Explorar: falta conectar tu cuenta de cobro. Búscala en Mi perfil → Cobros.
+          Tus planes están publicados, pero todavía nadie puede comprarlos ni aparecen en Explorar: falta conectar tu cuenta de cobro. Búscala en Mi perfil → Mis ganancias.
         </div>
       )}
       {planes === null ? (
@@ -160,7 +179,13 @@ export default function MiVitrina() {
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: 16 }}>
-          {planes.map((p) => <Tarjeta key={p.id} plan={p} usuario={usuario} alEditar={setEditando} alRetirar={retira} alBorrar={borra} />)}
+          {planes.map((p) => <Tarjeta key={p.id} plan={p} usuario={usuario} alEditar={setEditando} alRetirar={retira} alBorrar={borra} alVer={setViendo} />)}
+        </div>
+      )}
+      {tuPagina && <TuPagina alCerrar={() => setTuPagina(false)} />}
+      {viendo && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 70, overflowY: 'auto', background: UI.fondo }}>
+          <PaginaDelPlan usuario={usuario} slug={viendo.slug} enLaApp alVolver={() => setViendo(null)} />
         </div>
       )}
       {editando !== undefined && (

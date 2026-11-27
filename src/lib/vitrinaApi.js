@@ -92,6 +92,8 @@ export async function cuentaMisClases() {
 const CAMPOS_EDITABLES = [
   'programa_guardado_id', 'contenido', 'plantilla_id', 'slug', 'titulo', 'descripcion', 'objetivo', 'nivel', 'deportes', 'edades', 'sexo', 'equipo', 'foto_url', 'video_url', 'tipo', 'precio_mxn',
   'ventana_semanas', 'chat', 'tecnica',
+  // Compra y dinero (26 nov 2026): «Para ti si…», dónde puede empezar el atleta y el plan recomendado.
+  'para_ti_si', 'entrada_modo', 'entrada_semanas', 'recomendado',
 ];
 const solo = (obj) => Object.fromEntries(CAMPOS_EDITABLES.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
 
@@ -105,6 +107,13 @@ const mensajeDe = (error) => {
 export async function guardaPlanEnVenta({ id = null, ...campos }) {
   const uid = await miId();
   const fila = solo(campos);
+  // «Mi plan recomendado»: solo uno por coach. Antes de prender este se apaga el que estuviera (la base no deja dos).
+  if (fila.recomendado) {
+    let otros = supabase.from('vitrina_planes').update({ recomendado: false }).eq('coach_id', uid).eq('recomendado', true);
+    if (id) otros = otros.neq('id', id);
+    const { error: e } = await otros;
+    if (e) throw new Error(mensajeDe(e));
+  }
   const q = id
     ? supabase.from('vitrina_planes').update(fila).eq('id', id)
     : supabase.from('vitrina_planes').insert({ ...fila, coach_id: uid });
