@@ -51,8 +51,8 @@ export default function ProfileScreen({ onClose, enfoque = null }) {
     { id: 'perfil', texto: 'Perfil', Icono: UserIcon },
     { id: 'cuenta', texto: 'Cuenta', Icono: KeyRound },
     // Lo que compró (atleta) o lo que cobra (profesional; el dueño no: vende al 0 %).
-    ...(!isAdmin ? [{ id: 'compras', texto: 'Compras', Icono: ShoppingBag }] : []),
-    ...(isAdmin && !isMaster ? [{ id: 'cobros', texto: 'Cobros', Icono: Wallet }] : []),
+    ...(!isAdmin ? [{ id: 'compras', texto: 'Mis planes', Icono: ShoppingBag }] : []),
+    ...(isAdmin && !isMaster ? [{ id: 'cobros', texto: 'Mis ganancias', Icono: Wallet }] : []),
     { id: 'dispositivos', texto: 'Dispositivos', Icono: Watch },
     { id: 'avisos', texto: 'Avisos', Icono: Bell },
     ...(!isAdmin ? [{ id: 'equipo', texto: 'Mi equipo', Icono: Users }, { id: 'metricas', texto: 'Mis métricas', Icono: HeartPulse }] : []),

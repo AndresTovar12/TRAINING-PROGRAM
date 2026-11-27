@@ -61,6 +61,7 @@ import {
 import { Boton, Grupo, Fila, IconoDeFila, TarjetaHeroe, Deslizador, EntradaNumero, Pastilla, BarraLateral } from '@/components/ui';
 
 const Explorar = lazy(() => import('@/features/explorar/Explorar'));
+const EntradaPendiente = lazy(() => import('@/features/tienda/EntradaPendiente'));
 import {
   autorDe, autoresDe, entradasDeHoy, escribeRegistro, etiquetaDePrograma, nombreCorto, registrosDe,
   normalizaDia, resumenDeLaSemana, semanaUnificada, claveDeCursor, cursorDePrograma,
@@ -2676,6 +2677,8 @@ export default function TrainingApp() {
       <PaginaDeSesionGlobal alVerEnElPlan={verEnElPlan} />
       {/* El plan de hoy y de los 2 días siguientes, al Apple Watch (parte 3.1). Solo el de quien entró: nunca el de un atleta que su coach está mirando. */}
       {!miraAjeno && !soloLectura && user?.id && <PlanAlReloj oneRMs={oneRMs} unidad={miPerfil?.unidad_peso || 'kg'} />}
+      {/* Compró y cerró sin elegir cuándo empieza (26 nov 2026): «¿Cuándo empiezas?» sale al abrir su plan. */}
+      {!miraAjeno && !soloLectura && user?.id && miPerfil?.role === 'user' && <Suspense fallback={null}><EntradaPendiente userId={user.id} alElegir={() => window.location.reload()} /></Suspense>}
       {/* Bienestar y 1RM ya no son pestañas: se abren como hoja encima, con su flecha para volver. */}
       {/* Mientras se hace un demo workout, un aviso para salir de la demo (12 oct 2026): sin él, la app se vería como la de alguien con un solo workout y no habría cómo volver. */}
       {demoActiva && (

@@ -93,3 +93,14 @@ assert.equal(resumenDeEntrada(fases, 'zzz', 1), null);
   assert.equal(entradaParaFecha({ total: 12, permitidas: todas, inicio: '2026-11-30', fecha: '2027-02-21' }).semana, 1, 'su fecha es el final normal: semana 1');
 }
 console.log('✓ entrada al plan: todo bien');
+{
+  const { avanceDelPlan } = await import('../src/lib/entradaAlPlan.js');
+  const a = avanceDelPlan({ inicio: '2026-11-02', total: 12, semanaEntrada: 1 }, '2026-11-18');
+  assert.deepEqual([a.estado, a.semana, a.fin], ['en_curso', 3, '2027-01-24'], 'Semana 3 de 12 · termina el 24 ene');
+  assert.equal(avanceDelPlan({ inicio: '2026-11-30', total: 12 }, '2026-11-26').estado, 'por_empezar');
+  const t = avanceDelPlan({ inicio: '2026-08-03', total: 8 }, '2026-11-26');
+  assert.deepEqual([t.estado, t.fin], ['terminado', '2026-09-27'], 'Terminado: Volver a empezar');
+  assert.equal(avanceDelPlan({ inicio: '2026-11-02', total: 12, semanaEntrada: 6 }, '2026-11-18').semana, 8, 'entró en la 6: dos semanas después va en la 8');
+  assert.equal(avanceDelPlan({ inicio: '2026-01-05', total: 4, tipo: 'membresia' }, '2026-11-26').estado, 'en_curso', 'una membresía no termina');
+  console.log('✓ avance del plan comprado: todo bien');
+}

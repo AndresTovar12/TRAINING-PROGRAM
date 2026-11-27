@@ -188,3 +188,21 @@ const DIAS = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', '
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 export const diaCorto = (fecha) => `${DIAS[diaDeLaSemana(fecha)]} ${Number(String(fecha).slice(8, 10))}`;
 export const diaLargo = (fecha) => `${diaCorto(fecha)} de ${MESES[Number(String(fecha).slice(5, 7)) - 1]}`;
+
+/* ---------- Cómo va un plan comprado («Mis planes») ---------- */
+
+/**
+ * En qué va un plan comprado hoy. `semanaEntrada`: la de corrido en que entró. Una membresía o una rutina semanal no termina: siempre «en curso».
+ * Devuelve `{ estado: 'por_empezar' | 'en_curso' | 'terminado', semana, total, fin, empieza }`.
+ */
+export function avanceDelPlan({ inicio, total, semanaEntrada = 1, tipo = 'pago_unico', kind = 'periodized' }, hoy = hoyLocal()) {
+  const t = Math.max(0, Math.floor(Number(total) || 0));
+  if (!inicio) return { estado: 'por_empezar', semana: semanaEntrada, total: t, fin: null, empieza: null };
+  if (hoy < inicio) return { estado: 'por_empezar', semana: semanaEntrada, total: t, fin: null, empieza: inicio };
+  const pasadas = Math.floor(Math.round((aDia(hoy) - aDia(lunesDe(inicio))) / DIA_MS) / 7);
+  const sinFin = tipo === 'membresia' || kind === 'weekly' || t <= 1;
+  if (sinFin) return { estado: 'en_curso', semana: t > 0 ? Math.min(t, semanaEntrada + pasadas) : 1, total: t, fin: null, empieza: inicio };
+  const fin = finDelPlan(inicio, t, semanaEntrada);
+  if (hoy > fin) return { estado: 'terminado', semana: t, total: t, fin, empieza: inicio };
+  return { estado: 'en_curso', semana: semanaEntrada + pasadas, total: t, fin, empieza: inicio };
+}
