@@ -4,7 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import { Camera, Check, Images, Pencil, Plus, Sticker as IconoSticker, X } from 'lucide-react';
 import { FONT } from '@/lib/theme';
 import { ficha as fichaDe } from '@/lib/stickers/ficha';
-import { catalogo, catalogoDeTotales, COLORES, esNuevo, FRASE_INICIAL, FRASE_MAX, lienzoDe } from '@/lib/stickers/catalogo';
+import { catalogo, catalogoDeTotales, COLORES, esNuevo, FRASE_INICIAL, lienzoDe } from '@/lib/stickers/catalogo';
 import { totalesDe } from '@/lib/stickers/totales';
 import { entregaArchivo } from '@/lib/entregaArchivo';
 import { vibra } from '@/lib/avisosNativos';
@@ -32,7 +32,7 @@ import { nombreDeArchivo, pngDeSticker, preparaFoto } from './exporta';
 
    5 NOV 2026 (parte 2): en «Stickers», dos pestañas de texto: «Actividad» (la lista de siempre) y «Totales» (la semana y el mes de hoy, `totales.js`). Los mosaicos
    con variantes son carruseles (ver `Mosaico`); el primero se asoma una vez al día. «✎ Personalizar» abre las frases (`HojaDeFrases`): la elegida va a todos los
-   personalizables, se recuerda en el teléfono y, al cerrar, la galería regresa al sticker y lo marca 1.6 s. El Polaroid lleva tu foto: la misma del carrete que
+   personalizables mientras la hoja sigue abierta (no se recuerda para la siguiente vez) y, al cerrar, la galería regresa al sticker y lo marca 1.6 s. El Polaroid lleva tu foto: la misma del carrete que
    se elige con «＋ Poner foto», en memoria (`blob:`), que se suelta al cerrar la hoja.
 
    `entreno`: lo que pide `ficha()` (o `cargar`, una función que lo trae; mientras, se ven mosaicos vacíos). `titulo`: el de la cabecera. `nombre`: el del
@@ -54,8 +54,8 @@ const FONDO_MOSAICO = {
   claro: { background: '#E8E8EC' },
 };
 
-// Lo que se recuerda en el teléfono: la frase elegida y el día en que el primer carrusel ya se asomó.
-const LLAVE_FRASE = 'tl.stickers.frase';
+// Lo que se recuerda en el teléfono: el día en que el primer carrusel ya se asomó. La frase NO se recuerda (Andrés, 27 nov 2026: «se queda personalizado con lo
+// último que le pusiste en las demás ocasiones, eso está mal»): cada vez que se abre la hoja empieza con la de entrada.
 const LLAVE_ASOMO = 'tl.stickers.asomo';
 const lee = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const guardaLocal = (k, v) => { try { localStorage.setItem(k, v); } catch { /* sin espacio o en privado: no pasa nada */ } };
@@ -70,6 +70,22 @@ const SinDatos = () => (
     Todavía no hay nada que contar. Haz algún ejercicio con el entreno guiado y aquí aparecerán los stickers de tu sesión.
   </p>
 );
+
+/* «PREPARANDO TU FOTO» (27 nov 2026). Andrés: el aviso de antes «se ve feo»: era la tarjeta de abajo de «Copiado», con palomita verde, aunque nada había
+   terminado. Ahora la hoja se vela y en medio va un vidrio con el indicador que gira (lo que hace el iPhone mientras abre algo); se va solo en cuanto la foto está. */
+function Preparando() {
+  return (
+    <div role="status" aria-live="polite" style={{ position: 'absolute', inset: 0, zIndex: 20, borderRadius: 'inherit', display: 'grid', placeItems: 'center', background: 'rgba(5,7,14,.5)' }}>
+      <div style={{ /* estilo-ok: diseño A · Marca aprobado por Andrés (24 nov 2026, maqueta editor-de-stickers) */ display: 'grid', justifyItems: 'center', gap: 12, padding: '22px 28px 18px', borderRadius: 24, background: 'rgba(30,34,48,.72)', WebkitBackdropFilter: 'blur(24px)', backdropFilter: 'blur(24px)', boxShadow: 'inset 0 0 0 .5px rgba(255,255,255,.12), 0 20px 50px rgba(0,0,0,.35)', animation: 'stk-sube .22s cubic-bezier(.23,1,.32,1) both' }}>
+        <svg className="spin" width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
+          <circle cx="15" cy="15" r="12" fill="none" stroke="rgba(255,255,255,.18)" strokeWidth="3" />
+          <circle cx="15" cy="15" r="12" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeDasharray="22 100" />
+        </svg>
+        <span style={{ fontFamily: SF, fontSize: 15, fontWeight: 500, letterSpacing: -0.2, color: 'rgba(255,255,255,.9)' }}>Preparando tu foto</span>
+      </div>
+    </div>
+  );
+}
 
 const POR_TANDA = 120;
 const MAX_FOTOS = 1200;
@@ -157,13 +173,14 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
   const [cerrando, setCerrando] = useState(false);
   const [colorI, setColorI] = useState(0);
   const [aviso, setAviso] = useState(null); // { texto, error?, acciones? }
+  const [preparando, setPreparando] = useState(false); // abriendo la foto elegida (ver `Preparando`)
   const [renombrando, setRenombrando] = useState(false);
   const [nombreVisto, setNombreVisto] = useState(nombre);
   const [vista, setVista] = useState('carrete'); // 'carrete' (lo primero que se ve) | 'stickers'
   const [editor, setEditor] = useState(null); // la foto elegida para el editor (enlace `blob:` local)
   const [propia, setPropia] = useState(null); // la foto del carrete para el Polaroid (enlace `blob:`)
   const [sub, setSub] = useState('actividad'); // en «Stickers»: 'actividad' | 'totales'
-  const [frase, setFrase] = useState(() => { const g = lee(LLAVE_FRASE); return g && g.length <= FRASE_MAX ? g : FRASE_INICIAL; });
+  const [frase, setFrase] = useState(FRASE_INICIAL);
   const [frasesDe, setFrasesDe] = useState(null); // el sticker desde el que se abrió «Elige una frase»
   const [marcado, setMarcado] = useState(null);
   const [asoma] = useState(() => lee(LLAVE_ASOMO) !== hoyLocal());
@@ -257,26 +274,27 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
     const archivo = ev.target.files?.[0];
     ev.target.value = '';
     if (!archivo) return;
-    avisa({ texto: 'Preparando tu foto…', dura: 30000 }); // se queda hasta que esté (lo cambia el siguiente aviso)
+    setPreparando(true);
     try {
       // HEIC del iPhone incluida: la lee el teléfono y la achica (`preparaFoto`). Nada se sube.
       setPropia(URL.createObjectURL(await preparaFoto(archivo)));
-      clearTimeout(reloj.current);
-      setAviso(null);
     } catch {
       avisa({ texto: 'No se pudo abrir esa foto. Prueba con otra.', error: true });
+    } finally {
+      setPreparando(false);
     }
   };
   const abreCarrete = () => carrete.current?.click();
   // Una foto de la rejilla: su original (del iPhone, ya derecho) y al editor.
   const eligeDelRejilla = async (id) => {
-    avisa({ texto: 'Preparando tu foto…', dura: 60000 });
+    if (preparando) return;
+    setPreparando(true);
     try {
       setEditor(URL.createObjectURL(await preparaFoto(await originalDeFoto(id))));
-      clearTimeout(reloj.current);
-      setAviso(null);
     } catch {
       avisa({ texto: 'No se pudo abrir esa foto. Prueba con otra.', error: true });
+    } finally {
+      setPreparando(false);
     }
   };
   // Carrete: la foto elegida (o recién tomada) abre el editor. HEIC incluida; se achica a 4 MP y nunca sale del teléfono (`preparaFoto`).
@@ -284,18 +302,18 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
     const archivo = ev.target.files?.[0];
     ev.target.value = '';
     if (!archivo) return;
-    avisa({ texto: 'Preparando tu foto…', dura: 30000 });
+    setPreparando(true);
     try {
       setEditor(URL.createObjectURL(await preparaFoto(archivo)));
-      clearTimeout(reloj.current);
-      setAviso(null);
     } catch {
       avisa({ texto: 'No se pudo abrir esa foto. Prueba con otra.', error: true });
+    } finally {
+      setPreparando(false);
     }
   };
 
   // Al cerrar «Elige una frase», la galería regresa al sticker desde el que se abrió y lo marca.
-  const eligeFrase = (nueva) => { setFrase(nueva); guardaLocal(LLAVE_FRASE, nueva); };
+  const eligeFrase = (nueva) => setFrase(nueva);
   const cierraFrases = () => {
     const id = frasesDe;
     setFrasesDe(null);
@@ -498,6 +516,7 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
         <input ref={carrete} type="file" accept="image/*" onChange={eligeDelCarrete} style={{ display: 'none' }} />
         <input ref={paraEditor} type="file" accept="image/*" onChange={eligeParaEditor} style={{ display: 'none' }} />
         <input ref={camara} type="file" accept="image/*" capture="environment" onChange={eligeParaEditor} style={{ display: 'none' }} />
+        {preparando && <Preparando />}
         {frasesDe && <HojaDeFrases frase={frase} alElegir={eligeFrase} alCerrar={cierraFrases} rm={rm} />}
       </section>
       {editor && f && <EditorDeCarrete foto={editor} items={items} itemsTot={itemsTot} f={f} totales={totales} frase={frase} alCambiarFrase={eligeFrase} capa={capa + 20} alCerrar={() => setEditor(null)} />}

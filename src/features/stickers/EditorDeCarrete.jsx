@@ -18,7 +18,7 @@ import { HISTORIA, MARCA_HISTORIA, historiaDeCarrete } from './exporta';
    todo se guarda en fracciones de su ancho y alto.
 
    `foto`: la foto elegida (un enlace `blob:` local; nunca sale del teléfono). `items` / `itemsTot`: el catálogo de Actividad y de Totales. `f` / `totales`: sus
-   fichas. `frase`: la de «✎ Personalizar». */
+   fichas. `frase`: la de «✎ Personalizar» con la que arranca la lista (cada pegado guarda la suya). */
 
 // El editor recorta con `overflow: clip` y no `hidden`: con `hidden` el navegador desplazaba la pantalla para enseñar un botón de la hoja cerrada (la foto
 // se recorría hacia arriba). La hoja cerrada además es `inert`.
@@ -82,7 +82,10 @@ export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, fra
   const [armando, setArmando] = useState(null); // el botón que espera la imagen
   const [compartir, setCompartir] = useState(null); // { url } de la vista previa
   const [aviso, setAviso] = useState(null);
-  const [frases, setFrases] = useState(false); // «✎ Personalizar»: la hoja de frases, como en Stickers
+  /* LA FRASE DE CADA STICKER (27 nov 2026). Andrés: personalizar uno cambiaba los que ya estaban pegados. Ahora cada pegado guarda la suya (`p.frase`) desde que se
+     pone; «✎ Personalizar» de un pegado cambia solo ese. La de la lista (`fraseNueva`) es la que llevará el siguiente que se ponga. */
+  const [fraseNueva, setFraseNueva] = useState(frase);
+  const [frases, setFrases] = useState(null); // «✎ Personalizar»: null | 'lista' | la `k` del pegado
   const [rejillaMedida, rejilla] = useMedida();
   const [colorMedida, cajaColor] = useMedida();
   const [zonaRef, zona] = useMedida();
@@ -120,7 +123,7 @@ export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, fra
 
   const agrega = (item, total, cara = 0) => {
     vibra('toque');
-    setPegados((ps) => [...ps, { k: sigue.current, item, total, cara, colorI: item.fija ? 0 : colorNuevo, cx: 0.5, cy: 0.36 + 0.1 * (ps.length % 4), s: S_INICIAL, r: 0, z: sigue.current }]);
+    setPegados((ps) => [...ps, { k: sigue.current, item, total, cara, frase: fraseNueva, colorI: item.fija ? 0 : colorNuevo, cx: 0.5, cy: 0.36 + 0.1 * (ps.length % 4), s: S_INICIAL, r: 0, z: sigue.current }]);
     sigue.current += 1;
     setElegir(null);
   };
@@ -220,16 +223,16 @@ export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, fra
   };
 
   /* ---- La imagen: se arma una vez por cada versión de lo que hay en el lienzo. ---- */
-  const firma = JSON.stringify([frase, ...pegados.map((p) => [p.item.id, p.total, p.cara, p.colorI, p.cx, p.cy, p.s, p.r, p.z])]);
+  const firma = JSON.stringify(pegados.map((p) => [p.item.id, p.total, p.cara, p.frase, p.colorI, p.cx, p.cy, p.s, p.r, p.z]));
   const genera = useCallback(async () => {
     if (hecha.current.firma === firma && hecha.current.blob) return hecha.current.blob;
     const capas = [...pegados].sort((a, b) => a.z - b.z).map((p) => ({
-      item: p.item, f: p.total ? totales : f, color: COLORES[p.colorI] ?? COLORES[0], cara: p.cara ?? 0, frase, propia: p.item.conFoto ? foto : null, cx: p.cx, cy: p.cy, s: p.s, r: p.r,
+      item: p.item, f: p.total ? totales : f, color: COLORES[p.colorI] ?? COLORES[0], cara: p.cara ?? 0, frase: p.frase, propia: p.item.conFoto ? foto : null, cx: p.cx, cy: p.cy, s: p.s, r: p.r,
     }));
     const blob = await historiaDeCarrete({ foto, capas });
     hecha.current = { firma, blob };
     return blob;
-  }, [firma, pegados, totales, f, frase, foto]);
+  }, [firma, pegados, totales, f, foto]);
 
   const conImagen = async (quien, hacer) => {
     if (armando) return;
@@ -308,7 +311,7 @@ export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, fra
                   transform: `translate(-50%, -50%) rotate(${p.r}deg) scale(${(p.s * W) / 300})`, WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none',
                 }}
               >
-                <Sticker item={p.item} f={fichaDe(p)} color={colorDe(p)} cara={p.cara ?? 0} frase={frase} propia={propiaDe(p)} sinMarca />
+                <Sticker item={p.item} f={fichaDe(p)} color={colorDe(p)} cara={p.cara ?? 0} frase={p.frase} propia={propiaDe(p)} sinMarca />
               </div>
             ))}
             {/* La marca: una vez, abajo (la misma medida que en la imagen que sale). */}
@@ -363,8 +366,8 @@ export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, fra
                   key={elegido.k} id={`pegado-${elegido.k}`} etiqueta={`Sticker ${elegido.item.nombre}`} ancho={cajaColor.w} proporcion={0.5} lienzoH={altoDe(elegido.item)} holgura={0.8}
                   fondo={colorDe(elegido).clara && !elegido.item.fija ? FONDO_CLARO : FONDO_OSCURO} clara={colorDe(elegido).clara && !elegido.item.fija}
                   caras={elegido.item.caras ?? 1} caraInicial={elegido.cara ?? 0} alCambiarCara={(c) => cambia(elegido.k, { cara: c })} alTocar={() => {}} alMantener={() => {}}
-                  boton={elegido.item.perso ? { texto: '✎ Personalizar', etiqueta: 'Personalizar la frase', fn: () => setFrases(true) } : null}
-                  dibuja={(c) => <Sticker item={elegido.item} f={fichaDe(elegido)} color={colorDe(elegido)} cara={c} frase={frase} propia={propiaDe(elegido)} sinMarca />}
+                  boton={elegido.item.perso ? { texto: '✎ Personalizar', etiqueta: 'Personalizar la frase', fn: () => setFrases(elegido.k) } : null}
+                  dibuja={(c) => <Sticker item={elegido.item} f={fichaDe(elegido)} color={colorDe(elegido)} cara={c} frase={elegido.frase} propia={propiaDe(elegido)} sinMarca />}
                 />
               )}
             </div>
@@ -396,9 +399,9 @@ export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, fra
                   <Mosaico
                     key={item.id} id={item.id} etiqueta={`Poner el sticker ${item.nombre}`} ancho={anchoTile} proporcion={1 / 1.3} lienzoH={altoDe(item)} holgura={item.familia === 'tarjeta' ? 0.94 : 1}
                     nuevo={esNuevo(item)} raiz={rejillaRef} fondo={clara ? FONDO_CLARO : FONDO_OSCURO} clara={clara} caras={item.caras ?? 1}
-                    boton={item.perso ? { texto: '✎ Personalizar', etiqueta: 'Personalizar la frase', fn: () => setFrases(true) } : null}
+                    boton={item.perso ? { texto: '✎ Personalizar', etiqueta: 'Personalizar la frase', fn: () => setFrases('lista') } : null}
                     alTocar={(cara) => agrega(item, total, cara)} alMantener={(cara) => agrega(item, total, cara)}
-                    dibuja={(cara) => <Sticker item={item} f={total ? totales : f} color={color} cara={cara} frase={frase} propia={item.conFoto ? foto : null} sinMarca />}
+                    dibuja={(cara) => <Sticker item={item} f={total ? totales : f} color={color} cara={cara} frase={fraseNueva} propia={item.conFoto ? foto : null} sinMarca />}
                   />
                 );
               })}
@@ -433,9 +436,13 @@ export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, fra
         </div>
       )}
 
-      {frases && (
+      {frases != null && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 1050 }}>
-          <HojaDeFrases frase={frase} alElegir={(nueva) => alCambiarFrase?.(nueva)} alCerrar={() => setFrases(false)} />
+          <HojaDeFrases
+            frase={frases === 'lista' ? fraseNueva : pegados.find((p) => p.k === frases)?.frase ?? fraseNueva}
+            alElegir={(nueva) => { if (frases === 'lista') { setFraseNueva(nueva); alCambiarFrase?.(nueva); } else cambia(frases, { frase: nueva }); }}
+            alCerrar={() => setFrases(null)}
+          />
         </div>
       )}
 
