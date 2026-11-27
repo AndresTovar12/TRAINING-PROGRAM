@@ -4,11 +4,12 @@ import { Capacitor } from '@capacitor/core';
 import { Check, Copy, Download, Plus, Share, Trash2, X } from 'lucide-react';
 import { COLORES, esNuevo, lienzoDe } from '@/lib/stickers/catalogo';
 import { entregaArchivo } from '@/lib/entregaArchivo';
-import { aHistoriaDeInstagram, guardaEnFotos, hayCarrete } from '@/lib/carreteNativo';
+import { aHistoriaDeInstagram, armaVideo, compartirVideo, guardaEnFotos, guardaVideoEnFotos, hayCarrete, videoAHistoriaDeInstagram } from '@/lib/carreteNativo';
 import { vibra } from '@/lib/avisosNativos';
 import Sticker from './Sticker';
 import Mosaico from './Mosaico';
 import HojaDeFrases from './HojaDeFrases';
+import CargandoVidrio from './CargandoVidrio';
 import { HISTORIA, MARCA_HISTORIA, historiaDeCarrete } from './exporta';
 
 /* EL EDITOR DE CARRETE (Andrés, 24 nov 2026; maqueta docs/maquetas/editor-de-stickers, dirección «A · Marca»). Como el de Aura, con cara de Training Lab:
@@ -17,7 +18,9 @@ import { HISTORIA, MARCA_HISTORIA, historiaDeCarrete } from './exporta';
    por eso aquí los stickers salen sin su marca. La imagen sale de 1080 × 1920 (`historiaDeCarrete`): lo que se ve es lo que sale, porque el lienzo es 9:16 y
    todo se guarda en fracciones de su ancho y alto.
 
-   `foto`: la foto elegida (un enlace `blob:` local; nunca sale del teléfono). `items` / `itemsTot`: el catálogo de Actividad y de Totales. `f` / `totales`: sus
+   `foto`: la foto elegida (un enlace `blob:` local; nunca sale del teléfono). `video` (27 nov 2026, parte 2b): `{ ruta, src }` de `videoDelCarrete`; entonces
+   el fondo es el video (y `foto`, su primer cuadro, sirve al Polaroid y al fondo de «Compartir»). Con video, la página solo dibuja la capa de stickers y el
+   iPhone arma el video (`armaVideo`, `ComponeVideo.swift`): el color HDR se queda igual que en la galería. `items` / `itemsTot`: el catálogo de Actividad y de Totales. `f` / `totales`: sus
    fichas. `frase`: la de «✎ Personalizar» con la que arranca la lista (cada pegado guarda la suya). */
 
 // El editor recorta con `overflow: clip` y no `hidden`: con `hidden` el navegador desplazaba la pantalla para enseñar un botón de la hoja cerrada (la foto
@@ -70,7 +73,7 @@ function Colores({ elegido, alElegir, fijo = false, texto }) {
   );
 }
 
-export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, frase, alCambiarFrase, capa = 3400, alCerrar }) {
+export default function EditorDeCarrete({ foto, video = null, items, itemsTot, f, totales, frase, alCambiarFrase, capa = 3400, alCerrar }) {
   const [abierto, setAbierto] = useState(false);
   const [pegados, setPegados] = useState([]); // [{ k, item, total, colorI, cx, cy, s, r, z }]
   const [elegir, setElegir] = useState(null); // null | { modo: 'nuevo' } | { modo: 'color', k }
@@ -229,10 +232,11 @@ export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, fra
     const capas = [...pegados].sort((a, b) => a.z - b.z).map((p) => ({
       item: p.item, f: p.total ? totales : f, color: COLORES[p.colorI] ?? COLORES[0], cara: p.cara ?? 0, frase: p.frase, propia: p.item.conFoto ? foto : null, cx: p.cx, cy: p.cy, s: p.s, r: p.r,
     }));
-    const blob = await historiaDeCarrete({ foto, capas });
+    // Con video: la capa transparente y el iPhone pone el video debajo. Lo que sale es `{ ruta, src }`, no un Blob.
+    const blob = video ? await armaVideo({ ruta: video.ruta, capa: await historiaDeCarrete({ foto: null, capas }) }) : await historiaDeCarrete({ foto, capas });
     hecha.current = { firma, blob };
     return blob;
-  }, [firma, pegados, totales, f, foto]);
+  }, [firma, pegados, totales, f, foto, video]);
 
   const conImagen = async (quien, hacer) => {
     if (armando) return;
@@ -240,7 +244,7 @@ export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, fra
     try {
       await hacer(await genera());
     } catch (e) {
-      if (!/cancel/i.test(String(e?.message ?? e))) avisa('No se pudo armar la imagen. Inténtalo otra vez.', true);
+      if (!/cancel/i.test(String(e?.message ?? e))) avisa(video ? 'No se pudo armar el video. Inténtalo otra vez.' : 'No se pudo armar la imagen. Inténtalo otra vez.', true);
     } finally {
       setArmando(null);
     }
@@ -248,16 +252,32 @@ export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, fra
   // Guardar: en la app, directo a Fotos (`CarretePlugin`); si no se puede (sin permiso o un build viejo), la hoja de compartir del iPhone.
   const guarda = () => conImagen('guardar', async (blob) => {
     vibra('listo');
+    if (video) {
+      try { await guardaVideoEnFotos(blob.ruta); avisa('Guardado en Fotos.'); } catch { await compartirVideo(blob.ruta); }
+      return;
+    }
     if (hayCarrete()) {
       try { await guardaEnFotos(blob); avisa('Guardada en Fotos.'); return; } catch { /* sigue con la hoja de compartir */ }
     }
     await entregaArchivo(blob, 'traininglab-historia.png');
     if (!enApp) avisa('Imagen guardada.');
   });
-  const abreCompartir = () => conImagen('compartir', async (blob) => setCompartir({ url: URL.createObjectURL(blob), blob }));
+  const abreCompartir = () => conImagen('compartir', async (blob) => setCompartir(video ? { video: blob } : { url: URL.createObjectURL(blob), blob }));
   /* A la historia. En la app: «compartir a historias» de Instagram, la imagen ya puesta (`CarretePlugin.historiaDeInstagram`). Si no se puede (sin Instagram,
      un build viejo), la hoja de compartir. En la web: se copia (la promesa va dentro del ClipboardItem, en el mismo toque, como pide Safari). */
   const aHistoria = () => {
+    if (video) {
+      conImagen('historia', async (hecho) => {
+        vibra('toque');
+        try {
+          await videoAHistoriaDeInstagram(hecho.ruta);
+        } catch (e) {
+          if (/sin_instagram/.test(String(e?.message ?? e))) avisa('Instala Instagram para subirlo a tu historia.', true);
+          else await compartirVideo(hecho.ruta);
+        }
+      });
+      return;
+    }
     if (hayCarrete()) {
       conImagen('historia', async (blob) => {
         vibra('toque');
@@ -293,14 +313,16 @@ export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, fra
 
   return createPortal(
     <div
-      role="dialog" aria-modal="true" aria-label="Tu foto con stickers"
+      role="dialog" aria-modal="true" aria-label={video ? 'Tu video con stickers' : 'Tu foto con stickers'}
       style={{ position: 'fixed', inset: 0, zIndex: capa, background: '#000', color: '#fff', fontFamily: SF, opacity: abierto ? 1 : 0, transform: abierto ? 'none' : 'scale(.98)', transition: `opacity .25s ${SALE}, transform .3s ${SALE}`, overflow: 'clip' }}
     >
       {/* La zona del lienzo: arriba de la barra, debajo de la zona segura. */}
       <div ref={zonaRef} style={{ position: 'absolute', top: 'env(safe-area-inset-top)', left: 0, right: 0, bottom: `calc(${BARRA}px + env(safe-area-inset-bottom))`, display: 'grid', placeItems: 'center' }}>
         {W > 0 && (
           <div onPointerDown={otroDedo} onPointerMove={mueve} onPointerUp={suelta} onPointerCancel={suelta} style={{ position: 'relative', width: W, height: H, borderRadius: 26, overflow: 'hidden', background: '#111', touchAction: 'none' }}>
-            <img src={foto} alt="" draggable={false} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
+            {video ? (
+              <video src={video.src} poster={foto ?? undefined} autoPlay muted loop playsInline disablePictureInPicture style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
+            ) : <img src={foto} alt="" draggable={false} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />}
             <div aria-hidden="true" style={{ position: 'absolute', top: 0, bottom: 0, left: '50%', width: 1, marginLeft: -0.5, background: '#0A84FF', opacity: guia ? 1 : 0, transition: 'opacity .12s', zIndex: 1, pointerEvents: 'none' }} />
             {pegados.map((p) => (
               <div
@@ -414,14 +436,17 @@ export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, fra
       {/* Compartir: la imagen lista, sobre tu foto desenfocada. */}
       {compartir && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 1000, overflow: 'hidden' }}>
-          <img src={foto} alt="" aria-hidden="true" style={{ position: 'absolute', inset: -40, width: 'calc(100% + 80px)', height: 'calc(100% + 80px)', objectFit: 'cover', filter: 'blur(40px) brightness(.55) saturate(1.2)' }} />
+          {foto && <img src={foto} alt="" aria-hidden="true" style={{ position: 'absolute', inset: -40, width: 'calc(100% + 80px)', height: 'calc(100% + 80px)', objectFit: 'cover', filter: 'blur(40px) brightness(.55) saturate(1.2)' }} />}
           <div style={{ /* estilo-ok: diseño A · Marca aprobado por Andrés (24 nov 2026, maqueta editor-de-stickers) */ position: 'absolute', left: 8, right: 8, top: 'calc(10px + env(safe-area-inset-top))', bottom: 'calc(8px + env(safe-area-inset-bottom))', borderRadius: 38, background: 'rgba(60,60,64,.38)', WebkitBackdropFilter: 'blur(30px)', backdropFilter: 'blur(30px)', boxShadow: 'inset 0 0 0 .5px rgba(255,255,255,.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 18px 18px' }}>
             <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, letterSpacing: -0.3 }}>Compartir</h3>
-            <img src={compartir.url} alt="Tu imagen con stickers" style={{ marginTop: 14, flex: 1, minHeight: 0, maxWidth: '100%', aspectRatio: '9 / 16', objectFit: 'contain', borderRadius: 22, boxShadow: '0 18px 50px rgba(0,0,0,.45)' }} />
+            {compartir.video ? (
+              <video src={compartir.video.src} autoPlay loop playsInline aria-label="Tu video con stickers" style={{ marginTop: 14, flex: 1, minHeight: 0, maxWidth: '100%', aspectRatio: '9 / 16', objectFit: 'contain', borderRadius: 22, boxShadow: '0 18px 50px rgba(0,0,0,.45)', background: '#000' }} />
+            ) : <img src={compartir.url} alt="Tu imagen con stickers" style={{ marginTop: 14, flex: 1, minHeight: 0, maxWidth: '100%', aspectRatio: '9 / 16', objectFit: 'contain', borderRadius: 22, boxShadow: '0 18px 50px rgba(0,0,0,.45)' }} />}
             <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 20 }}>
               {[
-                { t: 'Copiar', ico: <Copy size={22} strokeWidth={2} />, fn: copia },
-                { t: 'Compartir', ico: <Share size={22} strokeWidth={2.1} />, fn: () => entregaArchivo(compartir.blob, 'traininglab-historia.png').catch(() => avisa('No se pudo compartir.', true)) },
+                // Un video no se copia (Instagram no lo pega): Compartir, Historia y Guardar.
+                ...(compartir.video ? [] : [{ t: 'Copiar', ico: <Copy size={22} strokeWidth={2} />, fn: copia }]),
+                { t: 'Compartir', ico: <Share size={22} strokeWidth={2.1} />, fn: () => (compartir.video ? compartirVideo(compartir.video.ruta) : entregaArchivo(compartir.blob, 'traininglab-historia.png')).catch(() => avisa('No se pudo compartir.', true)) },
                 { t: 'Historia de IG', ico: <IconoIG tam={24} sinFondo />, fn: aHistoria, ig: true },
                 { t: 'Guardar', ico: <Download size={22} strokeWidth={2.2} />, fn: guarda },
               ].map((d) => (
@@ -435,6 +460,9 @@ export default function EditorDeCarrete({ foto, items, itemsTot, f, totales, fra
           </div>
         </div>
       )}
+
+      {/* El video tarda unos segundos en armarse (el iPhone lo vuelve a codificar con los stickers encima). */}
+      {video && armando && <CargandoVidrio texto="Armando tu video" detalle="Tarda unos segundos." capa={1080} />}
 
       {frases != null && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 1050 }}>

@@ -12,9 +12,10 @@ import CambiarNombre from './CambiarNombre';
 import HojaDeFrases from './HojaDeFrases';
 import Sticker from './Sticker';
 import EditorDeCarrete from './EditorDeCarrete';
+import CargandoVidrio from './CargandoVidrio';
 import Mosaico from './Mosaico';
 import useAncho from './useAncho';
-import { abreAjustes, eligeMasFotos, fotosRecientes, hayCarrete, originalDeFoto, permisoDeFotos, pidePermisoDeFotos } from '@/lib/carreteNativo';
+import { abreAjustes, eligeMasFotos, fotosRecientes, hayCarrete, originalDeFoto, permisoDeFotos, pidePermisoDeFotos, videoDelCarrete, videosRecientes } from '@/lib/carreteNativo';
 import { nombreDeArchivo, pngDeSticker, preparaFoto } from './exporta';
 
 /* LA HOJA DE STICKERS (Andrés, 28 oct 2026; ver docs/stickers.md y el prototipo). Sustituye a la hoja y al editor del sello.
@@ -71,22 +72,6 @@ const SinDatos = () => (
   </p>
 );
 
-/* «PREPARANDO TU FOTO» (27 nov 2026). Andrés: el aviso de antes «se ve feo»: era la tarjeta de abajo de «Copiado», con palomita verde, aunque nada había
-   terminado. Ahora la hoja se vela y en medio va un vidrio con el indicador que gira (lo que hace el iPhone mientras abre algo); se va solo en cuanto la foto está. */
-function Preparando() {
-  return (
-    <div role="status" aria-live="polite" style={{ position: 'absolute', inset: 0, zIndex: 20, borderRadius: 'inherit', display: 'grid', placeItems: 'center', background: 'rgba(5,7,14,.5)' }}>
-      <div style={{ /* estilo-ok: diseño A · Marca aprobado por Andrés (24 nov 2026, maqueta editor-de-stickers) */ display: 'grid', justifyItems: 'center', gap: 12, padding: '22px 28px 18px', borderRadius: 24, background: 'rgba(30,34,48,.72)', WebkitBackdropFilter: 'blur(24px)', backdropFilter: 'blur(24px)', boxShadow: 'inset 0 0 0 .5px rgba(255,255,255,.12), 0 20px 50px rgba(0,0,0,.35)', animation: 'stk-sube .22s cubic-bezier(.23,1,.32,1) both' }}>
-        <svg className="spin" width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
-          <circle cx="15" cy="15" r="12" fill="none" stroke="rgba(255,255,255,.18)" strokeWidth="3" />
-          <circle cx="15" cy="15" r="12" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeDasharray="22 100" />
-        </svg>
-        <span style={{ fontFamily: SF, fontSize: 15, fontWeight: 500, letterSpacing: -0.2, color: 'rgba(255,255,255,.9)' }}>Preparando tu foto</span>
-      </div>
-    </div>
-  );
-}
-
 const POR_TANDA = 120;
 const MAX_FOTOS = 1200;
 const CUADRO = { position: 'relative', border: 'none', padding: 0, aspectRatio: '3 / 4', cursor: 'pointer', display: 'grid', placeItems: 'center', color: '#fff', background: '#141826' };
@@ -95,9 +80,12 @@ const CUADRO = { position: 'relative', border: 'none', padding: 0, aspectRatio: 
  * CARRETE: tus fotos, lo primero que se ve (Andrés, 24 nov 2026: «lo primero que te aparece es como que todas tus fotos», como Aura; el cuadro azul de
  * relleno de la parte 1 lo extrañó con razón). Rejilla de 3 de orilla a orilla: la cámara primero y luego lo más reciente (`CarretePlugin.swift`). Tocar una
  * foto abre el editor. Sin permiso: cómo darlo. En la web (o con un build viejo) no hay carrete: la cámara y «Elegir foto» (el selector de archivos).
- * Los videos se suman en la parte 2b; mientras, no se enseñan.
+ * VIDEOS (27 nov 2026, parte 2b): en «Recientes» van fotos y videos revueltos, como en Fotos; «Videos» enseña solo videos. Cada video lleva su duración abajo a
+ * la derecha. `tipo`: 'todo' | 'video'. `alElegir(x)`: la foto o el video tocado (`{ id, tipo }`).
  */
-function RejillaDelCarrete({ alElegir, alCamara, alSelector }) {
+const duracionCorta = (s) => { const t = Math.max(0, Math.round(s)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+
+function RejillaDelCarrete({ tipo = 'todo', alElegir, alCamara, alSelector }) {
   const [estado, setEstado] = useState(hayCarrete() ? 'cargando' : 'sin'); // cargando | listo | negado | sin
   const [fotos, setFotos] = useState([]);
   const [limitado, setLimitado] = useState(false);
@@ -116,8 +104,8 @@ function RejillaDelCarrete({ alElegir, alCamara, alSelector }) {
       if (p === 'negado') { setEstado('negado'); return; }
       setLimitado(p === 'limitado');
       try {
-        const l = await fotosRecientes({ cuantos, lado: 300 });
-        if (vivo) { setFotos(l.filter((x) => x.tipo === 'foto')); setHayMas(l.length >= cuantos); setEstado('listo'); }
+        const l = tipo === 'video' ? await videosRecientes({ cuantos, lado: 300 }) : await fotosRecientes({ cuantos, lado: 300 });
+        if (vivo) { setFotos(l); setHayMas(l.length >= cuantos); setEstado('listo'); }
       } catch {
         if (vivo && cuantos === POR_TANDA) setEstado('sin');
       } finally {
@@ -125,7 +113,7 @@ function RejillaDelCarrete({ alElegir, alCamara, alSelector }) {
       }
     })();
     return () => { vivo = false; };
-  }, [vuelta, cuantos]);
+  }, [vuelta, cuantos, tipo]);
   // Al acercarse al final, la siguiente tanda (las miniaturas ya hechas se reusan: es rápido).
   const alDesplazar = (ev) => {
     const el = ev.currentTarget;
@@ -149,7 +137,7 @@ function RejillaDelCarrete({ alElegir, alCamara, alSelector }) {
   return (
     <div onScroll={alDesplazar} style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch', paddingBottom: 'calc(24px + env(safe-area-inset-bottom))' }}>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 2, alignContent: 'start' }}>
-      <button type="button" onClick={alCamara} aria-label="Tomar una foto" style={CUADRO}><Camera size={28} strokeWidth={1.6} /></button>
+      {tipo !== 'video' && <button type="button" onClick={alCamara} aria-label="Tomar una foto" style={CUADRO}><Camera size={28} strokeWidth={1.6} /></button>}
       {(estado === 'sin' || limitado) && (
         <button type="button" onClick={estado === 'sin' ? alSelector : () => eligeMasFotos().then(() => setVuelta((v) => v + 1))} aria-label={estado === 'sin' ? 'Elegir una foto' : 'Elegir más fotos'} style={{ ...CUADRO, gap: 6, alignContent: 'center' }}>
           {estado === 'sin' ? <Images size={26} strokeWidth={1.6} /> : <Plus size={26} strokeWidth={1.8} />}
@@ -158,10 +146,16 @@ function RejillaDelCarrete({ alElegir, alCamara, alSelector }) {
       )}
       {estado === 'cargando' && Array.from({ length: 11 }, (_, i) => <span key={i} aria-hidden="true" style={{ aspectRatio: '3 / 4', background: '#10131D' }} />)}
       {fotos.map((x) => (
-        <button key={x.id} type="button" onClick={() => alElegir(x.id)} aria-label="Usar esta foto" style={{ ...CUADRO, overflow: 'hidden', background: '#10131D' }}>
+        <button key={x.id} type="button" onClick={() => alElegir(x)} aria-label={x.tipo === 'video' ? `Usar este video de ${duracionCorta(x.duracion)}` : 'Usar esta foto'} style={{ ...CUADRO, overflow: 'hidden', background: '#10131D' }}>
           <img src={x.src} alt="" loading="lazy" decoding="async" draggable={false} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+          {x.tipo === 'video' && (
+            <span style={{ position: 'absolute', right: 6, bottom: 5, fontFamily: SF, fontSize: 12.5, fontWeight: 600, color: '#fff', textShadow: '0 1px 3px rgba(0,0,0,.6)', fontVariantNumeric: 'tabular-nums' }}>{duracionCorta(x.duracion)}</span>
+          )}
         </button>
       ))}
+      {tipo === 'video' && estado === 'listo' && fotos.length === 0 && (
+        <p style={{ gridColumn: '1 / -1', margin: '18px 16px', fontFamily: SF, fontSize: 15, color: 'rgba(255,255,255,.6)' }}>No hay videos en tu carrete.</p>
+      )}
     </div>
     </div>
   );
@@ -173,11 +167,13 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
   const [cerrando, setCerrando] = useState(false);
   const [colorI, setColorI] = useState(0);
   const [aviso, setAviso] = useState(null); // { texto, error?, acciones? }
-  const [preparando, setPreparando] = useState(false); // abriendo la foto elegida (ver `Preparando`)
+  const [preparando, setPreparando] = useState(null); // abriendo lo elegido: el texto de la carga (`CargandoVidrio`)
   const [renombrando, setRenombrando] = useState(false);
   const [nombreVisto, setNombreVisto] = useState(nombre);
   const [vista, setVista] = useState('carrete'); // 'carrete' (lo primero que se ve) | 'stickers'
-  const [editor, setEditor] = useState(null); // la foto elegida para el editor (enlace `blob:` local)
+  const [editor, setEditor] = useState(null); // lo elegido para el editor: { foto } (enlace `blob:` local) o { foto: su primer cuadro, video } (ver `videoDelCarrete`)
+  const [carreteTab, setCarreteTab] = useState('recientes'); // en Carrete: 'recientes' | 'videos'
+  const [vioVideos, setVioVideos] = useState(false); // «Videos» se carga la primera vez que se abre y luego se queda
   const [propia, setPropia] = useState(null); // la foto del carrete para el Polaroid (enlace `blob:`)
   const [sub, setSub] = useState('actividad'); // en «Stickers»: 'actividad' | 'totales'
   const [frase, setFrase] = useState(FRASE_INICIAL);
@@ -233,7 +229,7 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
   useEffect(() => () => clearTimeout(reloj.current), []);
   // La foto del carrete vive solo en memoria (un enlace `blob:` local): se suelta al cambiarla o al cerrar.
   useEffect(() => () => { if (propia) URL.revokeObjectURL(propia); }, [propia]);
-  useEffect(() => () => { if (editor) URL.revokeObjectURL(editor); }, [editor]);
+  useEffect(() => () => { if (editor?.foto?.startsWith('blob:')) URL.revokeObjectURL(editor.foto); }, [editor]);
   // El primer carrusel se asoma una vez al día: se anota al abrir la hoja.
   useEffect(() => { if (asoma) guardaLocal(LLAVE_ASOMO, hoyLocal()); }, [asoma]);
   useEffect(() => { if (!marcado) return undefined; const r = setTimeout(() => setMarcado(null), 1600); return () => clearTimeout(r); }, [marcado]);
@@ -274,27 +270,33 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
     const archivo = ev.target.files?.[0];
     ev.target.value = '';
     if (!archivo) return;
-    setPreparando(true);
+    setPreparando('Preparando tu foto');
     try {
       // HEIC del iPhone incluida: la lee el teléfono y la achica (`preparaFoto`). Nada se sube.
       setPropia(URL.createObjectURL(await preparaFoto(archivo)));
     } catch {
       avisa({ texto: 'No se pudo abrir esa foto. Prueba con otra.', error: true });
     } finally {
-      setPreparando(false);
+      setPreparando(null);
     }
   };
   const abreCarrete = () => carrete.current?.click();
-  // Una foto de la rejilla: su original (del iPhone, ya derecho) y al editor.
-  const eligeDelRejilla = async (id) => {
+  // Una foto de la rejilla: su original (del iPhone, ya derecho) y al editor. Un video: su copia tal cual (`videoDelCarrete`) y su primer cuadro.
+  const eligeDelRejilla = async (x) => {
     if (preparando) return;
-    setPreparando(true);
+    const esVideo = x.tipo === 'video';
+    setPreparando(esVideo ? 'Preparando tu video' : 'Preparando tu foto');
     try {
-      setEditor(URL.createObjectURL(await preparaFoto(await originalDeFoto(id))));
+      if (esVideo) {
+        const v = await videoDelCarrete(x.id);
+        setEditor({ foto: v.poster, video: v });
+      } else {
+        setEditor({ foto: URL.createObjectURL(await preparaFoto(await originalDeFoto(x.id))) });
+      }
     } catch {
-      avisa({ texto: 'No se pudo abrir esa foto. Prueba con otra.', error: true });
+      avisa({ texto: esVideo ? 'No se pudo abrir ese video. Prueba con otro.' : 'No se pudo abrir esa foto. Prueba con otra.', error: true });
     } finally {
-      setPreparando(false);
+      setPreparando(null);
     }
   };
   // Carrete: la foto elegida (o recién tomada) abre el editor. HEIC incluida; se achica a 4 MP y nunca sale del teléfono (`preparaFoto`).
@@ -302,13 +304,13 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
     const archivo = ev.target.files?.[0];
     ev.target.value = '';
     if (!archivo) return;
-    setPreparando(true);
+    setPreparando('Preparando tu foto');
     try {
-      setEditor(URL.createObjectURL(await preparaFoto(archivo)));
+      setEditor({ foto: URL.createObjectURL(await preparaFoto(archivo)) });
     } catch {
       avisa({ texto: 'No se pudo abrir esa foto. Prueba con otra.', error: true });
     } finally {
-      setPreparando(false);
+      setPreparando(null);
     }
   };
 
@@ -440,6 +442,18 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
               </button>
             ))}
           </div>
+          {vista === 'carrete' && f && hayCarrete() && (
+            <div role="tablist" aria-label="Qué del carrete" style={{ display: 'flex', gap: 6, marginTop: 16 }}>
+              {[['recientes', 'Recientes'], ['videos', 'Videos']].map(([id, txt]) => (
+                <button
+                  key={id} type="button" role="tab" aria-selected={carreteTab === id} onClick={() => { setCarreteTab(id); if (id === 'videos') setVioVideos(true); }}
+                  style={{ border: 'none', borderRadius: 999, padding: '8px 15px', fontFamily: SF, fontSize: 14.5, fontWeight: 600, letterSpacing: -0.2, cursor: 'pointer', background: carreteTab === id ? '#fff' : 'transparent', color: carreteTab === id ? '#000' : 'rgba(255,255,255,.45)', transition: 'background .2s, color .2s' }}
+                >
+                  {txt}
+                </button>
+              ))}
+            </div>
+          )}
           {vista === 'stickers' && (
             <>
               <div role="tablist" aria-label="Qué stickers" style={{ display: 'flex', gap: 6, marginTop: 16 }}>
@@ -483,7 +497,16 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
         {(
           <div style={{ flex: 1, minHeight: 0, display: vista === 'carrete' ? 'flex' : 'none', flexDirection: 'column', marginTop: 16 }}>
             {f ? (
-              <RejillaDelCarrete alElegir={eligeDelRejilla} alCamara={() => camara.current?.click()} alSelector={() => paraEditor.current?.click()} />
+              <>
+                <div style={{ flex: 1, minHeight: 0, display: carreteTab === 'recientes' ? 'flex' : 'none', flexDirection: 'column' }}>
+                  <RejillaDelCarrete alElegir={eligeDelRejilla} alCamara={() => camara.current?.click()} alSelector={() => paraEditor.current?.click()} />
+                </div>
+                {vioVideos && (
+                  <div style={{ flex: 1, minHeight: 0, display: carreteTab === 'videos' ? 'flex' : 'none', flexDirection: 'column' }}>
+                    <RejillaDelCarrete tipo="video" alElegir={eligeDelRejilla} alCamara={() => camara.current?.click()} alSelector={() => paraEditor.current?.click()} />
+                  </div>
+                )}
+              </>
             ) : cargado === undefined ? (
               <span aria-hidden="true" style={{ flex: 1, background: '#10131D' }} />
             ) : <div style={{ padding: '0 16px' }}><SinDatos /></div>}
@@ -516,10 +539,10 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
         <input ref={carrete} type="file" accept="image/*" onChange={eligeDelCarrete} style={{ display: 'none' }} />
         <input ref={paraEditor} type="file" accept="image/*" onChange={eligeParaEditor} style={{ display: 'none' }} />
         <input ref={camara} type="file" accept="image/*" capture="environment" onChange={eligeParaEditor} style={{ display: 'none' }} />
-        {preparando && <Preparando />}
+        {preparando && <CargandoVidrio texto={preparando} />}
         {frasesDe && <HojaDeFrases frase={frase} alElegir={eligeFrase} alCerrar={cierraFrases} rm={rm} />}
       </section>
-      {editor && f && <EditorDeCarrete foto={editor} items={items} itemsTot={itemsTot} f={f} totales={totales} frase={frase} alCambiarFrase={eligeFrase} capa={capa + 20} alCerrar={() => setEditor(null)} />}
+      {editor && f && <EditorDeCarrete foto={editor.foto} video={editor.video ?? null} items={items} itemsTot={itemsTot} f={f} totales={totales} frase={frase} alCambiarFrase={eligeFrase} capa={capa + 20} alCerrar={() => setEditor(null)} />}
       {renombrando && <CambiarNombre nombre={nombreVisto} capa={capa + 10} alGuardar={guardaNombre} alCancelar={() => setRenombrando(false)} />}
     </div>,
     document.body,

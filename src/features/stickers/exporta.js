@@ -178,16 +178,19 @@ export async function historiaDeCarrete({ foto, capas }) {
   lienzo.width = W;
   lienzo.height = H;
   const ctx = lienzo.getContext('2d');
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, W, H);
-  const im = new Image();
-  im.src = foto;
-  await im.decode();
-  const k = Math.max(W / im.naturalWidth, H / im.naturalHeight);
-  const sw = W / k;
-  const sh = H / k;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(im, (im.naturalWidth - sw) / 2, (im.naturalHeight - sh) / 2, sw, sh, 0, 0, W, H);
+  // Sin foto (`foto: null`): solo la capa de stickers y la marca, transparente. Es la que el iPhone pone encima de un video (`armaVideo`, parte 2b).
+  if (foto) {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    const im = new Image();
+    im.src = foto;
+    await im.decode();
+    const k = Math.max(W / im.naturalWidth, H / im.naturalHeight);
+    const sw = W / k;
+    const sh = H / k;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(im, (im.naturalWidth - sw) / 2, (im.naturalHeight - sh) / 2, sw, sh, 0, 0, W, H);
+  }
   for (const c of capas) {
     const png = await pngDeSticker({ item: c.item, f: c.f, color: c.color, cara: c.cara ?? 0, frase: c.frase, propia: c.propia, sinMarca: true });
     const bmp = await createImageBitmap(png);

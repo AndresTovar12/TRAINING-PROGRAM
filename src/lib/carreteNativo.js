@@ -53,6 +53,49 @@ export async function originalDeFoto(id) {
   return resp.blob();
 }
 
+/* LOS VIDEOS (27 nov 2026, parte 2b). El video se copia tal cual a la carpeta temporal (sin volver a codificarlo) y el iPhone le pone los stickers encima
+   (`ComponeVideo.swift`): así el color HDR se queda como en la galería. La página solo dibuja la capa de stickers (un PNG transparente de 1080 × 1920). */
+
+/** Las más recientes, solo videos (para la pestaña «Videos»). Mismo formato que `fotosRecientes`. */
+export async function videosRecientes({ cuantos = 60, lado = 300 } = {}) {
+  const r = await conTiempoLimite(Carrete.recientes({ cuantos, lado, tipo: 'video' }), 20000);
+  return (r?.fotos ?? []).map((x) => ({ id: x.id, tipo: x.tipo, duracion: Number(x.duracion) || 0, src: Capacitor.convertFileSrc(x.miniatura) }));
+}
+
+/** Un video del carrete, listo para el editor: `{ ruta, src, poster, duracion, hdr }` (`ruta`: el archivo, para el iPhone; `src` y `poster`: para la página). */
+export async function videoDelCarrete(id) {
+  const r = await conTiempoLimite(Carrete.video({ id }), 180000);
+  if (!r?.ruta) throw new Error('No se pudo leer el video');
+  return { ruta: r.ruta, src: Capacitor.convertFileSrc(r.ruta), poster: r.poster ? Capacitor.convertFileSrc(r.poster) : null, duracion: Number(r.duracion) || 0, hdr: !!r.hdr };
+}
+
+/** El video con la capa de stickers encima (`capa`: Blob PNG 1080 × 1920). `{ ruta, src, hdr }`. */
+export async function armaVideo({ ruta, capa }) {
+  const r = await conTiempoLimite(Carrete.armaVideo({ ruta, capa: await aBase64(capa) }), 300000);
+  if (!r?.ruta) throw new Error('No se pudo armar el video');
+  return { ruta: r.ruta, src: Capacitor.convertFileSrc(r.ruta), hdr: !!r.hdr };
+}
+
+/** Guarda en Fotos un video ya armado (`ruta` de `armaVideo`). */
+export async function guardaVideoEnFotos(ruta) {
+  await conTiempoLimite(Carrete.guardaVideo({ ruta }), 60000);
+}
+
+/** El menú de compartir del iPhone con el video ya armado. */
+export async function compartirVideo(ruta) {
+  const { Share } = await import('@capacitor/share');
+  try {
+    await Share.share({ files: [ruta], dialogTitle: 'Tu video' });
+  } catch (e) {
+    if (!/cancel/i.test(String(e?.message ?? e))) throw e;
+  }
+}
+
+/** Abre Instagram con el video ya puesto como historia. */
+export async function videoAHistoriaDeInstagram(ruta) {
+  await conTiempoLimite(Carrete.historiaDeInstagram({ video: ruta, appId: META_APP_ID }), 30000);
+}
+
 /** Guarda una imagen (Blob) en Fotos. Lanza 'negado' si no hay permiso. */
 export async function guardaEnFotos(blob) {
   await conTiempoLimite(Carrete.guarda({ datos: await aBase64(blob) }), 30000);

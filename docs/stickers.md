@@ -158,3 +158,13 @@ Prototipo: https://claude.ai/artifact/EFSp16EiF1rVYb5U7emtNE (los seis caminos d
 - Que Safari de iPhone respete `font-variation-settings` (wdth 75 en Eco) al rasterizar. Si falla, el plan B es dibujar en canvas con las mismas reglas.
 - Que copiar una imagen al portapapeles funcione dentro de la app del iPhone. Si falla, sale «No se pudo copiar. Mantén presionado el sticker para guardarlo.».
 - La parte 2 en un iPhone real y en Android: deslizar con el dedo (en WebKit de Playwright solo se probó con el mouse y con los puntitos), el carrete de verdad, y «Con foto» con una foto del carrete (se probó con HEIC hechas con `sips`, no con una del iPhone).
+
+## Videos en Carrete (parte 2b, 27 nov 2026)
+- La rejilla de Carrete trae dos pestañas: **Recientes** (fotos y videos, como en Fotos) y **Videos**. Cada video lleva su duración.
+- Tocar un video: `CarretePlugin.video` lo copia tal cual (passthrough, sin recodificar) a la carpeta temporal y saca su primer cuadro (para el Polaroid y el fondo de «Compartir»).
+- El editor lo enseña de fondo (`<video>` en silencio y en bucle). Guardar / Historia / Compartir: la página dibuja SOLO la capa de stickers y la marca
+  (`historiaDeCarrete({ foto: null })`, PNG transparente 1080 × 1920) y el iPhone arma el video (`armaVideo` → `ComponeVideo.swift`).
+- Color (regla de Andrés: el color de sus clips no se toca): HDR → HEVC 10 bits con la MISMA etiqueta (HLG / BT.2020); normal → H.264 BT.709. Se recorta al
+  centro a 9:16, se endereza si viene girado y dura 60 s como mucho. Probado en la Mac con el mismo `ComponeVideo.swift` y un clip real del iPhone
+  (4K HLG 10 bits vertical → `hevc, yuv420p10le, arib-std-b67, bt2020`, cuadro derecho, color igual) y con uno normal (H.264 → H.264 bt709).
+- Historia de IG con video: `com.instagram.sharedSticker.backgroundVideo`. Un video no se copia (no hay «Copiar»).

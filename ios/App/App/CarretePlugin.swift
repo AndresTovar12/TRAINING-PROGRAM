@@ -3,6 +3,8 @@ import Capacitor
 import Photos
 import PhotosUI // `presentLimitedLibraryPicker` vive aquí, no en Photos
 import UIKit
+import AVFoundation
+import CoreImage
 
 /* EL CARRETE DENTRO DE LA HOJA DE COMPARTIR (24 nov 2026, Andrés: «lo primero que te aparece es como que todas tus fotos», como Aura).
 
@@ -12,16 +14,20 @@ import UIKit
 
    Métodos:
    - `permiso` / `pide`: { permiso: si | limitado | negado | sin_preguntar }. `pide` muestra la pregunta de iOS (`NSPhotoLibraryUsageDescription`).
-   - `recientes` { cuantos?: 1-300 (60), lado?: px de la miniatura (300) }: { fotos: [{ id, tipo: foto | video, duracion: s, miniatura: file://… }] }, de la más
+   - `recientes` { cuantos?: 1-300 (60), lado?: px de la miniatura (300), tipo?: 'video' (solo videos) }: { fotos: [{ id, tipo: foto | video, duracion: s, miniatura: file://… }] }, de la más
      nueva a la más vieja. Las miniaturas se escriben una vez en la carpeta temporal y se reusan.
    - `original` { id }: { ruta: file://…, tipo: foto }. La foto se redibuja ya derecha (orientación aplicada), en JPEG, a 4 MP como mucho (la HEIC también);
-     si vive solo en iCloud, se baja. Los videos llegan en la parte 2b.
+     si vive solo en iCloud, se baja. Los videos van por `video`.
    - `guarda` { datos: base64 de un PNG/JPEG }: la guarda en Fotos (permiso de solo agregar, `NSPhotoLibraryAddUsageDescription`).
    - `eligeMas`: con acceso limitado, el selector de iOS para sumar fotos. `ajustes`: abre los ajustes de la app (si el permiso está negado).
    - `historiaDeInstagram` { datos: base64 del PNG, appId }: «compartir a historias» de Instagram (24 nov 2026, Andrés: «me lleva a Instagram pero no me
      aparece la imagen»). La imagen va al portapapeles con la llave que lee Instagram (5 min) y se abre `instagram-stories://share` con el App ID de Meta
      (el de «Training Lab» en developers.facebook.com; sin él Instagram la rechaza). Sin Instagram instalado: rechaza con `sin_instagram`.
-     `LSApplicationQueriesSchemes` (Info.plist) deja preguntar si está instalado. */
+     `LSApplicationQueriesSchemes` (Info.plist) deja preguntar si está instalado. Con `video` (ruta de `armaVideo`) manda el video en vez de la imagen.
+   - `video` { id } (27 nov 2026, parte 2b): copia el video tal cual (sin volver a codificarlo: el color no cambia) a la carpeta temporal y saca su primer cuadro.
+     { ruta, poster, duracion, hdr }. Si vive solo en iCloud, se baja.
+   - `armaVideo` { ruta, capa: base64 del PNG 1080 × 1920 con los stickers }: el video con la capa encima (`ComponeVideo.swift`). { ruta, hdr }.
+   - `guardaVideo` { ruta }: lo guarda en Fotos. */
 @objc(CarretePlugin)
 public class CarretePlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "CarretePlugin"
@@ -34,7 +40,10 @@ public class CarretePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "guarda", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "eligeMas", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "ajustes", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "historiaDeInstagram", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "historiaDeInstagram", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "video", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "armaVideo", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "guardaVideo", returnType: CAPPluginReturnPromise)
     ]
 
     private let miniaturas = PHCachingImageManager()
@@ -77,7 +86,9 @@ public class CarretePlugin: CAPPlugin, CAPBridgedPlugin {
         cola.async {
             let opciones = PHFetchOptions()
             opciones.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
-            opciones.predicate = NSPredicate(format: "mediaType == %d || mediaType == %d", PHAssetMediaType.image.rawValue, PHAssetMediaType.video.rawValue)
+            opciones.predicate = call.getString("tipo") == "video"
+                ? NSPredicate(format: "mediaType == %d", PHAssetMediaType.video.rawValue)
+                : NSPredicate(format: "mediaType == %d || mediaType == %d", PHAssetMediaType.image.rawValue, PHAssetMediaType.video.rawValue)
             opciones.fetchLimit = cuantos
             let resultado = PHAsset.fetchAssets(with: opciones)
             guard let dir = try? self.carpeta() else {
@@ -187,7 +198,111 @@ public class CarretePlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
+    @objc func video(_ call: CAPPluginCall) {
+        guard let id = call.getString("id"),
+              let activo = PHAsset.fetchAssets(withLocalIdentifiers: [id], options: nil).firstObject, activo.mediaType == .video else {
+            call.reject("No está ese video")
+            return
+        }
+        guard let dir = try? carpeta() else {
+            call.reject("No se pudo preparar la carpeta")
+            return
+        }
+        let destino = dir.appendingPathComponent("v-\(Self.limpio(id)).mov")
+        let poster = dir.appendingPathComponent("p-\(Self.limpio(id)).jpg")
+        let termina: () -> Void = {
+            self.cola.async {
+                let a = AVURLAsset(url: destino)
+                let gen = AVAssetImageGenerator(asset: a)
+                gen.appliesPreferredTrackTransform = true
+                gen.maximumSize = CGSize(width: 1600, height: 1600)
+                if !FileManager.default.fileExists(atPath: poster.path),
+                   let cg = try? gen.copyCGImage(at: CMTime(seconds: 0.1, preferredTimescale: 600), actualTime: nil),
+                   let jpg = UIImage(cgImage: cg).jpegData(compressionQuality: 0.85) {
+                    try? jpg.write(to: poster)
+                }
+                let hdr = a.tracks(withMediaType: .video).first.map { ComponeVideo.colorDe($0).hdr } ?? false
+                call.resolve(["ruta": destino.absoluteString, "poster": poster.absoluteString, "duracion": activo.duration, "hdr": hdr])
+            }
+        }
+        if FileManager.default.fileExists(atPath: destino.path) { termina(); return }
+        let pide = PHVideoRequestOptions()
+        pide.isNetworkAccessAllowed = true
+        pide.version = .current
+        pide.deliveryMode = .highQualityFormat
+        // «Passthrough»: el video se copia tal cual, sin volver a codificarlo (el color HDR se queda).
+        PHImageManager.default().requestExportSession(forVideo: activo, options: pide, exportPreset: AVAssetExportPresetPassthrough) { sesion, _ in
+            guard let sesion = sesion else {
+                call.reject("No se pudo leer el video")
+                return
+            }
+            let tmp = dir.appendingPathComponent("v-\(Self.limpio(id))-tmp.mov")
+            try? FileManager.default.removeItem(at: tmp)
+            sesion.outputURL = tmp
+            sesion.outputFileType = .mov
+            sesion.exportAsynchronously {
+                guard sesion.status == .completed, (try? FileManager.default.moveItem(at: tmp, to: destino)) != nil else {
+                    call.reject("No se pudo leer el video")
+                    return
+                }
+                termina()
+            }
+        }
+    }
+
+    @objc func armaVideo(_ call: CAPPluginCall) {
+        guard let ruta = call.getString("ruta"), let fuente = URL(string: ruta),
+              let base64 = call.getString("capa"), let datos = Data(base64Encoded: base64), let capa = CIImage(data: datos) else {
+            call.reject("Sin video")
+            return
+        }
+        guard let dir = try? carpeta() else {
+            call.reject("No se pudo preparar la carpeta")
+            return
+        }
+        let destino = dir.appendingPathComponent("historia-\(UUID().uuidString.prefix(8)).mp4")
+        ComponeVideo.arma(fuente: fuente, capa: capa, destino: destino) { r in
+            switch r {
+            case .success(let (u, hdr)): call.resolve(["ruta": u.absoluteString, "hdr": hdr])
+            case .failure(let e): call.reject("\(e)")
+            }
+        }
+    }
+
+    @objc func guardaVideo(_ call: CAPPluginCall) {
+        guard let ruta = call.getString("ruta"), let u = URL(string: ruta) else {
+            call.reject("Sin video")
+            return
+        }
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { s in
+            guard s == .authorized || s == .limited else {
+                call.reject("negado")
+                return
+            }
+            PHPhotoLibrary.shared().performChanges({
+                PHAssetCreationRequest.forAsset().addResource(with: .video, fileURL: u, options: nil)
+            }) { ok, error in
+                if ok { call.resolve() } else { call.reject(error?.localizedDescription ?? "No se pudo guardar") }
+            }
+        }
+    }
+
     @objc func historiaDeInstagram(_ call: CAPPluginCall) {
+        if let ruta = call.getString("video"), let u = URL(string: ruta), let datos = try? Data(contentsOf: u),
+           let appId = call.getString("appId"), !appId.isEmpty,
+           let url = URL(string: "instagram-stories://share?source_application=\(appId)") {
+            DispatchQueue.main.async {
+                guard UIApplication.shared.canOpenURL(url) else {
+                    call.reject("sin_instagram")
+                    return
+                }
+                UIPasteboard.general.setItems([["com.instagram.sharedSticker.backgroundVideo": datos]], options: [.expirationDate: Date().addingTimeInterval(300)])
+                UIApplication.shared.open(url, options: [:]) { abrio in
+                    if abrio { call.resolve() } else { call.reject("no_abrio") }
+                }
+            }
+            return
+        }
         guard let base64 = call.getString("datos"), let datos = Data(base64Encoded: base64),
               let appId = call.getString("appId"), !appId.isEmpty,
               let url = URL(string: "instagram-stories://share?source_application=\(appId)") else {
