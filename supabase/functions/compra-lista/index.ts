@@ -4,6 +4,8 @@
  *   { sesion }  o  { llave }                  → cómo va la compra: «Compra confirmada · Fuerza 12 semanas · Carlos Ruiz», a qué correo se mandó el recibo, si ya tiene cuenta.
  *                                                `sesion`: la llave del pago (`cs_…`, en la liga a la que regresa Stripe). `llave`: la de la liga del correo «Crear mi cuenta».
  *   { sesion | llave, reclamar: true } + sesión → la cuenta con sesión se queda la compra. UNA sola vez y solo con una llave vigente (48 h). Ver `reclamo.js`.
+ *   { sesion | llave, crear_cuenta: { usuario, contrasena } } → «Crear usuario y contraseña»: crea la cuenta de atleta con el correo DEL PAGO (no se pide otro) y le
+ *                                                guarda la compra en el mismo paso. Si ese correo ya tiene cuenta: «Ese correo ya tiene cuenta. Entra con ella y tu compra se guarda ahí.»
  *   { sesion | llave, reenviar: true }         → «Mandarme otra liga»: liga nueva de 48 h, SOLO al correo del pago (nunca a uno que mande el navegador).
  *   { compra_id, datos_entrada: true } + sesión → lo que necesita «¿Cuándo empiezas?»: semanas del plan y las que el coach permite.
  *   { compra_id, entrada: { inicio, semana, fecha_meta } } + sesión → guarda cuándo empieza y desde qué semana (también «Volver a empezar»).
@@ -167,6 +169,31 @@ Deno.serve(async (req) => {
       return json({ ok: true, correo: correoTapado(c.correo_comprador) }, 200, origen)
     }
 
+    if (p.crear_cuenta) {
+      const r = puedeReclamar(c, { via })
+      if (!r.ok) return json({ error: MENSAJES[r.motivo as keyof typeof MENSAJES], codigo: r.motivo }, 403, origen)
+      const correo = String(c.correo_comprador ?? '').trim().toLowerCase()
+      if (!correo) return json({ error: 'Esta compra no tiene correo. Entra con Apple o Google.' }, 400, origen)
+      const usuario = String(p.crear_cuenta.usuario ?? '').trim().toLowerCase().replace(/^@/, '')
+      const contrasena = String(p.crear_cuenta.contrasena ?? '')
+      if (!/^[a-z0-9._]{3,30}$/.test(usuario)) return json({ error: 'Tu usuario lleva de 3 a 30 letras, números, punto o guion bajo.', codigo: 'usuario' }, 400, origen)
+      const problema = problemaDeContrasena(contrasena, correo)
+      if (problema) return json({ error: problema, codigo: 'contrasena' }, 400, origen)
+      const { data: ocupado } = await bd.from('profiles').select('id').eq('username', usuario).maybeSingle()
+      if (ocupado) return json({ error: 'Ese usuario ya existe. Prueba con otro.', codigo: 'usuario_ocupado' }, 409, origen)
+      const { data: yaHay } = await bd.rpc('usuario_por_correo', { p_correo: correo })
+      if (Array.isArray(yaHay) ? yaHay.length : yaHay) return json({ error: MENSAJES.correo_ocupado, codigo: 'correo_ocupado' }, 409, origen)
+      const { data: nuevo, error: errNuevo } = await bd.auth.admin.createUser({ email: correo, password: contrasena, email_confirm: true, user_metadata: { username: usuario, role: 'user' } })
+      if (errNuevo || !nuevo?.user) return json({ error: /registered|exists/i.test(errNuevo?.message ?? '') ? MENSAJES.correo_ocupado : 'No se pudo crear tu cuenta. Inténtalo otra vez.', codigo: 'no_se_creo' }, 409, origen)
+      await bd.from('profiles').update({ role: 'user', username: usuario }).eq('id', nuevo.user.id)
+      const { data: hecha } = await bd.from('compras').update({
+        atleta_id: nuevo.user.id, reclamada_por: nuevo.user.id, reclamada_en: new Date().toISOString(), estado: 'activa',
+        inicio: c.inicio ?? new Date(Date.now() - 12 * 3600 * 1000).toISOString().slice(0, 10), llave_correo_hash: null, actualizada_en: new Date().toISOString(),
+      }).eq('id', c.id).is('atleta_id', null).select('id')
+      if (!hecha?.length) return json({ error: MENSAJES.ya_usada, codigo: 'ya_usada' }, 403, origen)
+      return json({ ok: true, compra_id: c.id, usuario }, 200, origen)
+    }
+
     if (p.reclamar) {
       if (!yo) return json({ error: 'Entra o crea tu cuenta para guardar tu compra.' }, 401, origen)
       const r = puedeReclamar(c, { usuarioId: yo.id, rol: yo.rol, via })
@@ -197,6 +224,16 @@ Deno.serve(async (req) => {
     return json({ error: 'No se pudo leer tu compra. Inténtalo otra vez.' }, 500, origen)
   }
 })
+
+/** Lo que hace falta para aceptar una contraseña (la app dice lo mismo en `lib/contrasena.js`). */
+function problemaDeContrasena(c: string, correo: string): string | null {
+  if (c.length < 8) return 'Usa al menos 8 caracteres.'
+  if (c.length > 72) return 'Usa un máximo de 72 caracteres.'
+  if (/^\d+$/.test(c)) return 'No puede ser solo números.'
+  if (/^(.)\1+$/.test(c)) return 'No puede ser el mismo carácter repetido.'
+  if (correo && c.toLowerCase() === correo.toLowerCase()) return 'No uses tu correo como contraseña.'
+  return null
+}
 
 /** «Mandarme otra liga»: el mismo correo que manda `stripe-webhook` al pagar, con la liga nueva. Si no sale, se anota y la persona puede volver a pedirla. */
 async function mandaLiga(correo: string, plan: string, llave: string) {

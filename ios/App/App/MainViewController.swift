@@ -8,5 +8,6 @@ class MainViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(EntrenoWatchPlugin())
         bridge?.registerPluginInstance(MovimientoPlugin())
         bridge?.registerPluginInstance(CarretePlugin())
+        bridge?.registerPluginInstance(CompraApplePlugin())
     }
 }

@@ -26,6 +26,7 @@ import AdminApp from '@/features/admin/AdminApp';
 import ProfileScreen from '@/features/profile/ProfileScreen';
 import PermisoIA from '@/features/ia/PermisoIA';
 import { rutaDeTienda } from '@/lib/tiendaApi';
+import { compraPendiente, ligaDeCompra } from '@/lib/compraApi';
 import { rutaDecodificada } from '@/lib/rutas';
 import { useCerrarSesion } from '@/lib/useCerrarSesion';
 import { AvisoDeLaCola, AvisoSinConexion } from '@/components/SinConexion';
@@ -526,6 +527,12 @@ export default function App() {
 
   // Las piezas de la reestructura visual, para aprobarlas (ver `features/catalogo/Catalogo.jsx`). Sin cuenta: no lee ni guarda nada.
   if (window.location.pathname === '/catalogo') return <Suspense fallback={<Splash />}><Catalogo /></Suspense>;
+
+  // Volvió de entrar con Apple o Google después de pagar sin cuenta (26 nov 2026): la llave del pago quedó guardada; se regresa a «Compra confirmada» para guardar la compra.
+  if (user && !loading && window.location.pathname === '/' && compraPendiente()) {
+    window.location.replace(ligaDeCompra(compraPendiente()));
+    return <Splash />;
+  }
 
   // `/@algo` que no es una dirección válida de la tienda: se le dice, en vez de dejarlo caer en la pantalla de entrar.
   const tienda = rutaDeTienda(window.location.pathname) ?? (/^\/@/.test(rutaDecodificada(window.location.pathname)) ? { tipo: 'invalida' } : null);
