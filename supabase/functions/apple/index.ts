@@ -4,6 +4,8 @@
  * Con la sesión del atleta:
  *   { accion: 'firmar', usuario, slug } → crea la compra «pendiente» (canal apple) y devuelve lo que la app le pasa a StoreKit: el producto genérico y la petición firmada
  *                                          con el nombre del plan y el MISMO precio de la web.
+ *   { accion: 'restaurar', transacciones: [id] } → «Restaurar compras»: cada transacción se pide a Apple; las compras de ESTA cuenta se ponen al día (activa o vencida,
+ *                                          hasta cuándo). Una compra de otra cuenta de Training Lab no se mueve.
  *   { accion: 'confirmar', compra_id, transaccion } → la app terminó de pagar: el servidor le pide esa transacción a la App Store Server API (nunca le cree al teléfono),
  *                                          revisa que sea de esta app, de esta cuenta y de esta compra, y la activa. Una sola vez.
  * Sin sesión, de Apple (App Store Server Notifications V2, `{ signedPayload }`): compra, renovación, cancelación, vencimiento y reembolso. Cada aviso se atiende una vez
@@ -210,6 +212,25 @@ Deno.serve(async (req) => {
       const peticion = peticionDeCompra({ tipo: plan.tipo, planId: plan.id, titulo: plan.titulo, coach: coach.full_name, precio: plan.precio_mxn, referencia })
       const jws = await firma(claimsDeCompra({ emisor: EMISOR, bundle: BUNDLE, peticion, nonce: crypto.randomUUID() }))
       return json({ compra_id: compra.id, producto, datos: datosParaStoreKit(jws), cuenta: uid })
+    }
+
+    if (p.accion === 'restaurar') {
+      const ids = (Array.isArray(p.transacciones) ? p.transacciones : []).map(String).filter((x: string) => /^\d{1,25}$/.test(x)).slice(0, 20)
+      let restauradas = 0
+      for (const id of ids) {
+        const tx = await transaccionDeApple(id)
+        const c = tx ? await compraDeTransaccion(tx) : null
+        if (!tx || !c || c.atleta_id !== uid || problemaDeTransaccion(tx, { bundle: BUNDLE, atletaId: uid, referencia: null })) continue
+        const vigente = !tx.expiresDate || Number(tx.expiresDate) > Date.now()
+        if (c.estado === 'pendiente' && vigente) { await activa(c, tx); restauradas += 1; continue }
+        if (c.estado === 'reembolsada') continue
+        await bd.from('compras').update({
+          estado: vigente ? (c.estado === 'gracia' ? 'gracia' : 'activa') : 'vencida', apple_transaccion: String(tx.transactionId),
+          periodo_hasta: tx.expiresDate ? new Date(Number(tx.expiresDate)).toISOString() : c.periodo_hasta, actualizada_en: ahora(),
+        }).eq('id', c.id)
+        restauradas += 1
+      }
+      return json({ ok: true, restauradas })
     }
 
     if (p.accion === 'confirmar') {

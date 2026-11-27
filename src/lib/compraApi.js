@@ -104,3 +104,12 @@ export function olvidaCompraPendiente() {
 }
 /** La dirección de «Compra confirmada» para esas llaves. */
 export const ligaDeCompra = (llaves) => (llaves.sesion ? `/compra/lista?c=${encodeURIComponent(llaves.sesion)}` : `/compra/lista?l=${encodeURIComponent(llaves.llave)}`);
+
+/** «Restaurar compras» (solo iPhone): las membresías vigentes de este Apple ID se ponen al día en la cuenta. Devuelve cuántas. */
+export async function restauraComprasDeApple() {
+  const { CompraApple } = await import('@/lib/compraAppleNativa');
+  const r = await CompraApple.restaurar();
+  const { status, datos } = await llama('apple', { accion: 'restaurar', transacciones: r?.transacciones ?? [] });
+  if (status !== 200 || !datos?.ok) throw falla(status, datos, 'No se pudieron restaurar tus compras. Inténtalo otra vez.');
+  return datos.restauradas ?? 0;
+}

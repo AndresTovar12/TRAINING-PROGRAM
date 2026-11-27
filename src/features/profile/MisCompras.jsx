@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FileText, Info, Loader2, ShoppingBag, Smartphone } from 'lucide-react';
+import { FileText, Info, Loader2, RotateCcw, ShoppingBag, Smartphone } from 'lucide-react';
+import { leeAjuste, restauraComprasDeApple } from '@/lib/compraApi';
 import { supabase } from '@/lib/supabase';
 import { cancelaMembresia } from '@/lib/miDineroApi';
 import { enLaApp } from '@/lib/nativo';
@@ -129,6 +130,15 @@ export default function MisCompras({ onContinuar }) {
   const [error, setError] = useState('');
   const [abierta, setAbierta] = useState(null);
   const [verHistorial, setVerHistorial] = useState(false);
+  // «Restaurar compras» (Apple lo pide para las membresías compradas con Apple): solo en el iPhone y con la compra con Apple prendida.
+  const [conApple, setConApple] = useState(false);
+  const [restaurando, setRestaurando] = useState(false);
+  useEffect(() => { if (app) leeAjuste('compra_apple').then(setConApple).catch(() => {}); }, [app]);
+  async function restaura() {
+    setRestaurando(true);
+    try { const n = await restauraComprasDeApple(); await lee(); avisa(n ? 'Listo: tus compras con Apple están al día' : 'No encontramos compras con Apple en este iPhone'); } catch (e) { setError(e.message); }
+    setRestaurando(false);
+  }
 
   const lee = useCallback(async () => {
     try {
@@ -197,12 +207,16 @@ export default function MisCompras({ onContinuar }) {
           ))}
         </Grupo>
       )}
-      {(lista.length > 0 || pagos.length > 0) && (
+      {(lista.length > 0 || pagos.length > 0 || (app && conApple)) && (
         <Grupo titulo="Pagos">
           {!app && <Fila texto="Tarjeta y recibos" detalle="Los guarda Stripe" onClick={() => avisa('Pronto: aquí cambias tu tarjeta y ves tus recibos')} />}
           <Fila izquierda={<span style={{ width: 44, height: 44, borderRadius: 13, background: KP.blueSoft, color: KP.blue, display: 'grid', placeItems: 'center' }}><FileText size={20} /></span>}
             texto="Historial y recibos" detalle={pagos.length ? `${pagos.length} ${pagos.length === 1 ? 'pago' : 'pagos'} desde ${MESES[new Date(pagos[pagos.length - 1].fecha).getMonth()].toLowerCase()}` : 'Sin pagos todavía'}
             onClick={() => setVerHistorial(true)} />
+          {app && conApple && (
+            <Fila izquierda={<span style={{ width: 44, height: 44, borderRadius: 13, background: KP.blueSoft, color: KP.blue, display: 'grid', placeItems: 'center' }}>{restaurando ? <Loader2 size={20} className="spin" /> : <RotateCcw size={20} />}</span>}
+              texto="Restaurar compras" detalle="Las que hiciste con Apple" onClick={restaurando ? undefined : restaura} />
+          )}
         </Grupo>
       )}
 
