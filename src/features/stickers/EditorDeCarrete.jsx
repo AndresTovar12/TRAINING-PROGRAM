@@ -18,7 +18,8 @@ import { HISTORIA, MARCA_HISTORIA, historiaDeCarrete } from './exporta';
    por eso aquí los stickers salen sin su marca. La imagen sale de 1080 × 1920 (`historiaDeCarrete`): lo que se ve es lo que sale, porque el lienzo es 9:16 y
    todo se guarda en fracciones de su ancho y alto.
 
-   `foto`: la foto elegida (un enlace `blob:` local; nunca sale del teléfono). `video` (27 nov 2026, parte 2b): `{ ruta, src }` de `videoDelCarrete`; entonces
+   `foto`: la foto elegida (un enlace `blob:` local; nunca sale del teléfono). `video` (27 nov 2026, parte 2b): `{ ruta, src, inicio, fin }` (de `videoDelCarrete` y
+   lo elegido en `RecortarVideo`); entonces
    el fondo es el video (y `foto`, su primer cuadro, sirve al Polaroid y al fondo de «Compartir»). Con video, la página solo dibuja la capa de stickers y el
    iPhone arma el video (`armaVideo`, `ComponeVideo.swift`): el color HDR se queda igual que en la galería. `items` / `itemsTot`: el catálogo de Actividad y de Totales. `f` / `totales`: sus
    fichas. `frase`: la de «✎ Personalizar» con la que arranca la lista (cada pegado guarda la suya). */
@@ -233,7 +234,9 @@ export default function EditorDeCarrete({ foto, video = null, items, itemsTot, f
       item: p.item, f: p.total ? totales : f, color: COLORES[p.colorI] ?? COLORES[0], cara: p.cara ?? 0, frase: p.frase, propia: p.item.conFoto ? foto : null, cx: p.cx, cy: p.cy, s: p.s, r: p.r,
     }));
     // Con video: la capa transparente y el iPhone pone el video debajo. Lo que sale es `{ ruta, src }`, no un Blob.
-    const blob = video ? await armaVideo({ ruta: video.ruta, capa: await historiaDeCarrete({ foto: null, capas }) }) : await historiaDeCarrete({ foto, capas });
+    const blob = video
+      ? await armaVideo({ ruta: video.ruta, inicio: video.inicio ?? 0, fin: video.fin ?? null, capa: await historiaDeCarrete({ foto: null, capas }) })
+      : await historiaDeCarrete({ foto, capas });
     hecha.current = { firma, blob };
     return blob;
   }, [firma, pegados, totales, f, foto, video]);
@@ -321,7 +324,12 @@ export default function EditorDeCarrete({ foto, video = null, items, itemsTot, f
         {W > 0 && (
           <div onPointerDown={otroDedo} onPointerMove={mueve} onPointerUp={suelta} onPointerCancel={suelta} style={{ position: 'relative', width: W, height: H, borderRadius: 26, overflow: 'hidden', background: '#111', touchAction: 'none' }}>
             {video ? (
-              <video src={video.src} poster={foto ?? undefined} autoPlay muted loop playsInline disablePictureInPicture style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
+              <video
+                src={video.src} poster={foto ?? undefined} autoPlay muted loop playsInline disablePictureInPicture
+                // Solo el pedazo elegido en «Recortar», repitiéndose.
+                onLoadedMetadata={(ev) => { ev.currentTarget.currentTime = video.inicio ?? 0; }}
+                onTimeUpdate={(ev) => { const v = ev.currentTarget; const a = video.inicio ?? 0; const b = video.fin ?? v.duration; if (v.currentTime >= b - 0.05 || v.currentTime < a - 0.25) v.currentTime = a; }}
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
             ) : <img src={foto} alt="" draggable={false} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />}
             <div aria-hidden="true" style={{ position: 'absolute', top: 0, bottom: 0, left: '50%', width: 1, marginLeft: -0.5, background: '#0A84FF', opacity: guia ? 1 : 0, transition: 'opacity .12s', zIndex: 1, pointerEvents: 'none' }} />
             {pegados.map((p) => (

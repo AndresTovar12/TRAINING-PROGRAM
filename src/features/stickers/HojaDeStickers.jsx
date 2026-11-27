@@ -12,6 +12,7 @@ import CambiarNombre from './CambiarNombre';
 import HojaDeFrases from './HojaDeFrases';
 import Sticker from './Sticker';
 import EditorDeCarrete from './EditorDeCarrete';
+import RecortarVideo from './RecortarVideo';
 import CargandoVidrio from './CargandoVidrio';
 import Mosaico from './Mosaico';
 import useAncho from './useAncho';
@@ -172,6 +173,7 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
   const [nombreVisto, setNombreVisto] = useState(nombre);
   const [vista, setVista] = useState('carrete'); // 'carrete' (lo primero que se ve) | 'stickers'
   const [editor, setEditor] = useState(null); // lo elegido para el editor: { foto } (enlace `blob:` local) o { foto: su primer cuadro, video } (ver `videoDelCarrete`)
+  const [recortar, setRecortar] = useState(null); // el video tocado, en «Recortar» (como Aura: primero se elige el pedazo, luego el editor)
   const [carreteTab, setCarreteTab] = useState('recientes'); // en Carrete: 'recientes' | 'videos'
   const [vioVideos, setVioVideos] = useState(false); // «Videos» se carga la primera vez que se abre y luego se queda
   const [propia, setPropia] = useState(null); // la foto del carrete para el Polaroid (enlace `blob:`)
@@ -288,8 +290,7 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
     setPreparando(esVideo ? 'Preparando tu video' : 'Preparando tu foto');
     try {
       if (esVideo) {
-        const v = await videoDelCarrete(x.id);
-        setEditor({ foto: v.poster, video: v });
+        setRecortar(await videoDelCarrete(x.id));
       } else {
         setEditor({ foto: URL.createObjectURL(await preparaFoto(await originalDeFoto(x.id))) });
       }
@@ -542,6 +543,12 @@ export default function HojaDeStickers({ entreno = null, cargar = null, titulo =
         {preparando && <CargandoVidrio texto={preparando} />}
         {frasesDe && <HojaDeFrases frase={frase} alElegir={eligeFrase} alCerrar={cierraFrases} rm={rm} />}
       </section>
+      {recortar && (
+        <RecortarVideo
+          video={recortar} capa={capa + 20} alAtras={() => setRecortar(null)}
+          alListo={({ inicio, fin }) => { setEditor({ foto: recortar.poster, video: { ...recortar, inicio, fin } }); setRecortar(null); }}
+        />
+      )}
       {editor && f && <EditorDeCarrete foto={editor.foto} video={editor.video ?? null} items={items} itemsTot={itemsTot} f={f} totales={totales} frase={frase} alCambiarFrase={eligeFrase} capa={capa + 20} alCerrar={() => setEditor(null)} />}
       {renombrando && <CambiarNombre nombre={nombreVisto} capa={capa + 10} alGuardar={guardaNombre} alCancelar={() => setRenombrando(false)} />}
     </div>,

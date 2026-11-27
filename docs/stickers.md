@@ -161,7 +161,10 @@ Prototipo: https://claude.ai/artifact/EFSp16EiF1rVYb5U7emtNE (los seis caminos d
 
 ## Videos en Carrete (parte 2b, 27 nov 2026)
 - La rejilla de Carrete trae dos pestañas: **Recientes** (fotos y videos, como en Fotos) y **Videos**. Cada video lleva su duración.
-- Tocar un video: `CarretePlugin.video` lo copia tal cual (passthrough, sin recodificar) a la carpeta temporal y saca su primer cuadro (para el Polaroid y el fondo de «Compartir»).
+- Tocar un video abre primero **Recortar** (`RecortarVideo.jsx`, como Aura en la grabación de Andrés del 27 nov): el video grande, «Atrás» / «Listo» y abajo la tira
+  de cuadros (`CarretePlugin.cuadros`) con el marco blanco y sus agarraderas azules; 60 s como mucho, 1 s como poco. Luego el editor repite solo ese pedazo y
+  `armaVideo` recibe `inicio` / `fin`.
+- Al tocarlo, `CarretePlugin.video` lo copia tal cual (passthrough, sin recodificar) a la carpeta temporal y saca su primer cuadro (para el Polaroid y el fondo de «Compartir»).
 - El editor lo enseña de fondo (`<video>` en silencio y en bucle). Guardar / Historia / Compartir: la página dibuja SOLO la capa de stickers y la marca
   (`historiaDeCarrete({ foto: null })`, PNG transparente 1080 × 1920) y el iPhone arma el video (`armaVideo` → `ComponeVideo.swift`).
 - Color (regla de Andrés: el color de sus clips no se toca): HDR → HEVC 10 bits con la MISMA etiqueta (HLG / BT.2020); normal → H.264 BT.709. Se recorta al

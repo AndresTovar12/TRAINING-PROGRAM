@@ -9,8 +9,8 @@ import CoreImage
    extendido, se le pone ENCIMA la capa de stickers (un PNG transparente de 1080 × 1920 que dibuja la página, con la marca) y se exporta:
    - video HDR → HEVC 10 bits con la MISMA etiqueta de color del original (HLG / BT.2020);
    - video normal → H.264, sin tocar su color.
-   El cuadro se recorta al centro para llenar 9:16 (como `object-fit: cover` en el editor) y se endereza si el video viene girado. Dura 60 s como mucho (una
-   historia). El audio va tal cual.
+   El cuadro se recorta al centro para llenar 9:16 (como `object-fit: cover` en el editor) y se endereza si el video viene girado. Sale solo el pedazo que se
+   eligió en «Recortar» (`inicio`, `fin`), 60 s como mucho (una historia). El audio va tal cual.
 
    Este archivo no usa UIKit a propósito: el mismo código se prueba en la Mac con un video real del iPhone antes de subirlo (ver docs/stickers.md). */
 
@@ -46,7 +46,7 @@ enum ComponeVideo {
     }
 
     /// Arma el video. `capa`: la imagen de los stickers (transparente, 9:16). Llama `listo` con el archivo terminado o con el error.
-    static func arma(fuente: URL, capa: CIImage, destino: URL, listo: @escaping (Result<(URL, Bool), Error>) -> Void) {
+    static func arma(fuente: URL, capa: CIImage, destino: URL, inicio: Double = 0, fin: Double? = nil, listo: @escaping (Result<(URL, Bool), Error>) -> Void) {
         let activo = AVURLAsset(url: fuente)
         guard let pista = activo.tracks(withMediaType: .video).first else { listo(.failure(Falla.sinVideo)); return }
         let color = colorDe(pista)
@@ -94,8 +94,13 @@ enum ComponeVideo {
         sesion.outputFileType = .mp4
         sesion.shouldOptimizeForNetworkUse = true
         sesion.videoComposition = composicion
+        // El pedazo que se eligió al recortar (de `inicio` a `fin`), 60 s como mucho.
         let dura = CMTimeGetSeconds(activo.duration)
-        if dura > maxSegundos { sesion.timeRange = CMTimeRange(start: .zero, duration: CMTime(seconds: maxSegundos, preferredTimescale: 600)) }
+        let desde = max(0, min(inicio, dura))
+        let hasta = min(dura, fin ?? dura, desde + maxSegundos)
+        if desde > 0 || hasta < dura {
+            sesion.timeRange = CMTimeRange(start: CMTime(seconds: desde, preferredTimescale: 600), end: CMTime(seconds: hasta, preferredTimescale: 600))
+        }
         sesion.exportAsynchronously {
             if sesion.status == .completed { listo(.success((destino, color.hdr))) }
             else { listo(.failure(Falla.exporto(sesion.error?.localizedDescription ?? "No se pudo armar el video"))) }

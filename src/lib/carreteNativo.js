@@ -69,11 +69,17 @@ export async function videoDelCarrete(id) {
   return { ruta: r.ruta, src: Capacitor.convertFileSrc(r.ruta), poster: r.poster ? Capacitor.convertFileSrc(r.poster) : null, duracion: Number(r.duracion) || 0, hdr: !!r.hdr };
 }
 
-/** El video con la capa de stickers encima (`capa`: Blob PNG 1080 × 1920). `{ ruta, src, hdr }`. */
-export async function armaVideo({ ruta, capa }) {
-  const r = await conTiempoLimite(Carrete.armaVideo({ ruta, capa: await aBase64(capa) }), 300000);
+/** El video con la capa de stickers encima (`capa`: Blob PNG 1080 × 1920), solo de `inicio` a `fin` (segundos, lo elegido al recortar). `{ ruta, src, hdr }`. */
+export async function armaVideo({ ruta, capa, inicio = 0, fin = null }) {
+  const r = await conTiempoLimite(Carrete.armaVideo({ ruta, capa: await aBase64(capa), inicio, ...(fin != null ? { fin } : null) }), 300000);
   if (!r?.ruta) throw new Error('No se pudo armar el video');
   return { ruta: r.ruta, src: Capacitor.convertFileSrc(r.ruta), hdr: !!r.hdr };
+}
+
+/** Cuadros parejos del video para la tira de «Recortar»: [src]. */
+export async function cuadrosDeVideo(ruta, { cuantos = 10, alto = 120 } = {}) {
+  const r = await conTiempoLimite(Carrete.cuadros({ ruta, cuantos, alto }), 30000);
+  return (r?.cuadros ?? []).map((c) => Capacitor.convertFileSrc(c));
 }
 
 /** Guarda en Fotos un video ya armado (`ruta` de `armaVideo`). */

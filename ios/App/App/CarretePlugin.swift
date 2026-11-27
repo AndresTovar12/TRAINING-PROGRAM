@@ -27,7 +27,9 @@ import CoreImage
    - `video` { id } (27 nov 2026, parte 2b): copia el video tal cual (sin volver a codificarlo: el color no cambia) a la carpeta temporal y saca su primer cuadro.
      { ruta, poster, duracion, hdr }. Si vive solo en iCloud, se baja.
    - `armaVideo` { ruta, capa: base64 del PNG 1080 × 1920 con los stickers }: el video con la capa encima (`ComponeVideo.swift`). { ruta, hdr }.
-   - `guardaVideo` { ruta }: lo guarda en Fotos. */
+   - `guardaVideo` { ruta }: lo guarda en Fotos.
+   - `cuadros` { ruta, cuantos?: 2-20 (10), alto?: px (120) }: cuadros parejos del video para la tira de «Recortar». { cuadros: [file://…] }.
+   - `armaVideo` también recibe `inicio` y `fin` (segundos): el pedazo elegido al recortar. */
 @objc(CarretePlugin)
 public class CarretePlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "CarretePlugin"
@@ -43,7 +45,8 @@ public class CarretePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "historiaDeInstagram", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "video", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "armaVideo", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "guardaVideo", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "guardaVideo", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "cuadros", returnType: CAPPluginReturnPromise)
     ]
 
     private let miniaturas = PHCachingImageManager()
@@ -261,11 +264,49 @@ public class CarretePlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         let destino = dir.appendingPathComponent("historia-\(UUID().uuidString.prefix(8)).mp4")
-        ComponeVideo.arma(fuente: fuente, capa: capa, destino: destino) { r in
+        let inicio = call.getDouble("inicio") ?? 0
+        let fin = call.getDouble("fin")
+        ComponeVideo.arma(fuente: fuente, capa: capa, destino: destino, inicio: inicio, fin: fin) { r in
             switch r {
             case .success(let (u, hdr)): call.resolve(["ruta": u.absoluteString, "hdr": hdr])
             case .failure(let e): call.reject("\(e)")
             }
+        }
+    }
+
+    @objc func cuadros(_ call: CAPPluginCall) {
+        guard let ruta = call.getString("ruta"), let u = URL(string: ruta) else {
+            call.reject("Sin video")
+            return
+        }
+        let cuantos = max(2, min(20, call.getInt("cuantos") ?? 10))
+        let alto = CGFloat(max(40, min(400, call.getInt("alto") ?? 120)))
+        guard let dir = try? carpeta() else {
+            call.reject("No se pudo preparar la carpeta")
+            return
+        }
+        cola.async {
+            let a = AVURLAsset(url: u)
+            let gen = AVAssetImageGenerator(asset: a)
+            gen.appliesPreferredTrackTransform = true
+            gen.maximumSize = CGSize(width: alto * 2, height: alto * 2)
+            // Cuadros cercanos, no exactos: así sale rápido.
+            gen.requestedTimeToleranceBefore = CMTime(seconds: 0.5, preferredTimescale: 600)
+            gen.requestedTimeToleranceAfter = CMTime(seconds: 0.5, preferredTimescale: 600)
+            let dura = CMTimeGetSeconds(a.duration)
+            let base = Self.limpio(u.lastPathComponent)
+            var lista: [String] = []
+            for i in 0..<cuantos {
+                let t = dura * (Double(i) + 0.5) / Double(cuantos)
+                let destino = dir.appendingPathComponent("c-\(base)-\(cuantos)-\(i).jpg")
+                if !FileManager.default.fileExists(atPath: destino.path),
+                   let cg = try? gen.copyCGImage(at: CMTime(seconds: t, preferredTimescale: 600), actualTime: nil),
+                   let jpg = UIImage(cgImage: cg).jpegData(compressionQuality: 0.7) {
+                    try? jpg.write(to: destino)
+                }
+                if FileManager.default.fileExists(atPath: destino.path) { lista.append(destino.absoluteString) }
+            }
+            call.resolve(["cuadros": lista])
         }
     }
 
