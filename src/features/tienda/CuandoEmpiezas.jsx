@@ -53,7 +53,7 @@ function Calendario({ desde, hasta, valor, alElegir }) {
   );
 }
 
-const Marca = ({ activa }) => (
+const Marca = ({ activa }) => ( // estilo-ok: el círculo de una opción sin marcar
   <span aria-hidden="true" style={{ width: 30, height: 30, borderRadius: 99, flexShrink: 0, display: 'grid', placeItems: 'center', background: activa ? KP.blue : 'transparent', border: activa ? 'none' : `2px solid ${KP.lineHi}`, color: '#fff' }}>
     {activa && <Check size={17} strokeWidth={3} />}
   </span>

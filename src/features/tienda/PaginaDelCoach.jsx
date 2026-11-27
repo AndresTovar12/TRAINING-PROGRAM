@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react';
-import { ArrowUpRight, ChevronLeft, ChevronRight, Dumbbell, Instagram, Loader2, Users } from 'lucide-react';
+import { ArrowUpRight, ChevronLeft, ChevronRight, Dumbbell, Loader2, Users } from 'lucide-react';
+
+/** El glifo de Instagram (lucide ya no trae marcas). */
+const Instagram = ({ size = 20 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="0.6" fill="currentColor" /></svg>
+);
 import { FONT, KP, NUM_STYLE, UI } from '@/lib/theme';
 import { leePerfilPublico } from '@/lib/tiendaApi';
 import { useIsDesktop } from '@/lib/useViewport';
@@ -67,7 +72,7 @@ function TarjetaDelCoach({ d }) {
       {(d.bio || ig) && (
         <div style={{ ...hilo, display: 'flex', flexDirection: 'column', gap: 14 }}>
           {d.bio && <SobreMi texto={d.bio} />}
-          {ig && (
+          {ig && ( // estilo-ok: colores y orilla de la marca de Instagram
             <a href={ig.url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 16, textDecoration: 'none', color: KP.ink, background: 'linear-gradient(90deg, #FFF1F5, #F3EEFF)', border: '1px solid #F2DCEB' }}>
               <span style={{ width: 40, height: 40, borderRadius: 12, display: 'grid', placeItems: 'center', color: '#fff', background: 'radial-gradient(circle at 30% 110%, #FDCB52 0%, #FD5949 40%, #D6249F 65%, #285AEB 100%)' }}><Instagram size={20} /></span>
               <span style={{ flex: 1, minWidth: 0 }}>
@@ -142,6 +147,7 @@ export default function PaginaDelCoach({ usuario, enLaApp = false, alAbrirPlan, 
   const portada = (
     <div style={{ position: 'relative', minHeight: esCompu ? 340 : 420, borderRadius: esCompu ? 24 : 0, overflow: 'hidden', background: UI.azul, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
       {(d.portada || d.foto) && <img src={d.portada || d.foto} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
+      {/* estilo-ok: oscurece la foto de abajo para que se lea el nombre */}
       <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.08) 30%, rgba(0,0,0,0.62) 100%)' }} />
       <div style={{ position: 'absolute', top: 'calc(12px + env(safe-area-inset-top))', left: 14, right: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         {alVolver

@@ -36,3 +36,13 @@ export async function cobrosDeMiCuenta() {
 
 /** `accion`: 'estado' (vuelve a leer a Stripe), 'conectar' (devuelve `url` para llenar sus datos) o 'panel' (devuelve `url` a su panel de Stripe). */
 export const conectaCobros = (accion) => funcion('mi-dinero', { accion });
+
+/* «MIS GANANCIAS» (encargo «Compra y dinero», 26 nov 2026). */
+/** El libro del coach, sus retiros, su cuenta de banco (Stripe) y su CLABE (lo de iPhone). */
+export const leeGanancias = () => funcion('mi-dinero', { accion: 'ganancias' });
+/** Retira lo listo: `monto` null = todo; si no, ventas completas hasta esa cantidad. Mínimo $200. */
+export const retiraDinero = (monto = null) => funcion('mi-dinero', { accion: 'retirar', monto });
+/** La CLABE para lo de iPhone (llega por SPEI). */
+export const guardaClabe = (clabe, titular = null) => funcion('mi-dinero', { accion: 'clabe', clabe, titular });
+/** El dueño: Apple pagó ese mes fiscal (`mes` = inicio del mes en `apple_calendario`). */
+export const marcaPagoDeApple = (mes, recibido) => funcion('mi-dinero', { accion: 'apple_pago', mes, recibido });

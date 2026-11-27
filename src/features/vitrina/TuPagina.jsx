@@ -119,6 +119,7 @@ export default function TuPagina({ alCerrar }) {
             <span style={{ fontSize: 18, fontWeight: 800 }}>Más sobre ti</span><span style={{ fontSize: 14.5, color: KP.ink2 }}>Opcional</span>
           </div>
           {mas.anos && <Campo etiqueta="Años de experiencia" valor={String(f.anos_coach)} onCambio={(v) => pon({ anos_coach: v.replace(/\D/g, '').slice(0, 2) })} inputMode="numeric" marcador="10" />}
+          {/* estilo-ok: «NSCA-CPT» es una sigla */}
           {mas.cert && <Campo etiqueta="Certificaciones" valor={f.certificaciones} onCambio={(v) => pon({ certificaciones: v })} marcador="NSCA-CPT" maxLength={120} />}
           {mas.ig && <Campo etiqueta="Instagram" valor={f.instagram} onCambio={(v) => pon({ instagram: v })} marcador="@tuusuario" autoCapitalize="none" maxLength={60} />}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>

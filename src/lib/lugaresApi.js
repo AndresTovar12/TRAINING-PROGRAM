@@ -67,10 +67,14 @@ export async function guardaAjuste(clave, valor) {
 
 /** Los ajustes de dinero en una sola lectura: `{ atletas_gratis, ventas_abiertas }`. */
 export async function ajustesDeMonetizacion() {
-  const { data, error } = await supabase.from('ajustes_publicos').select('clave, valor').in('clave', ['atletas_gratis', 'ventas_abiertas']);
+  const { data, error } = await supabase.from('ajustes_publicos').select('clave, valor').in('clave', ['atletas_gratis', 'ventas_abiertas', 'compra_apple', 'envios_spei']);
   if (error) throw error;
   const porClave = Object.fromEntries((data ?? []).map((f) => [f.clave, f.valor]));
-  return { atletas_gratis: Number(porClave.atletas_gratis ?? 5), ventas_abiertas: porClave.ventas_abiertas === true };
+  return {
+    atletas_gratis: Number(porClave.atletas_gratis ?? 5), ventas_abiertas: porClave.ventas_abiertas === true,
+    // Compra y dinero (26 nov 2026): comprar con Apple en el iPhone y mandar lo de iPhone por SPEI. Los dos apagados hasta que Andrés los prenda.
+    compra_apple: porClave.compra_apple === true, envios_spei: porClave.envios_spei === true,
+  };
 }
 
 /**

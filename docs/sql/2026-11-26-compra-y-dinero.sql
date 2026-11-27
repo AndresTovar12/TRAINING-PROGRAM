@@ -192,3 +192,7 @@ create policy spei_ver on public.cuentas_spei for select to authenticated using 
 create policy calendario_ver on public.apple_calendario for select to authenticated using (true);
 create policy apple_pagos_ver on public.apple_pagos for select to authenticated using (public.is_master());
 -- apple_avisos: nadie desde la app.
+
+-- ================= Tercera parte (`compra_y_dinero_retiro_listo_antes`) =================
+-- «Ese día: tenías listo para retirar $X · retiraste $Y · dejaste sin retirar $Z» (detalle de un retiro).
+alter table public.retiros add column if not exists listo_antes numeric(12, 2);

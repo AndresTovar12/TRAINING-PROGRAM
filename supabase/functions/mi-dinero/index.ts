@@ -191,7 +191,7 @@ async function ganancias(bd: Bd, coachId: string) {
   const [{ data: libro }, { data: retiros }, { data: cuenta }, { data: spei }, enviosSpei] = await Promise.all([
     bd.from('libro_coach').select('id, compra_id, canal, tipo, bruto, monto, aproximado, estado, listo_estimado, listo_en, apple_mes, retiro_id, creado_en, compras(atleta_id, vitrina_plan_id, tipo, vitrina_planes(titulo), profiles!compras_atleta_id_fkey(full_name, username, avatar_url))')
       .eq('coach_id', coachId).order('creado_en', { ascending: false }).limit(500),
-    bd.from('retiros').select('id, monto, estado, destino, llega_estimado, llego_en, creado_en, retiro_envios(via, monto, estado, llega_estimado, llego_en, motivo)').eq('coach_id', coachId).order('creado_en', { ascending: false }).limit(60),
+    bd.from('retiros').select('id, monto, estado, destino, llega_estimado, llego_en, creado_en, listo_antes, retiro_envios(via, monto, estado, llega_estimado, llego_en, motivo)').eq('coach_id', coachId).order('creado_en', { ascending: false }).limit(60),
     bd.from('cuentas_stripe').select('onboarding_completo, cobros_ok, depositos_ok, depositos').eq('coach_id', coachId).maybeSingle(),
     bd.from('cuentas_spei').select('clabe, banco').eq('coach_id', coachId).maybeSingle(),
     interruptor(bd, 'envios_spei'),
@@ -236,7 +236,9 @@ async function retirar(bd: Bd, coachId: string, monto: number | null, clave: str
   if (a.total < MINIMO_RETIRO) return responde({ error: `El mínimo es $${MINIMO_RETIRO}.`, codigo: 'minimo' }, 400)
 
   const destino = a.stripe > 0 ? (cuenta?.depositos ?? 'Tu banco') : destinoCorto(spei?.banco, spei?.clabe)
-  const { data: retiro, error: errRetiro } = await bd.from('retiros').insert({ coach_id: coachId, monto: a.total, estado: 'enviado', destino }).select('id').single()
+  // deno-lint-ignore no-explicit-any
+  const listoAntes = Math.round((libro ?? []).filter((r: any) => estaListo(r, hoy)).reduce((s: number, r: any) => s + Number(r.monto) * 100, 0)) / 100
+  const { data: retiro, error: errRetiro } = await bd.from('retiros').insert({ coach_id: coachId, monto: a.total, estado: 'enviado', destino, listo_antes: listoAntes }).select('id').single()
   if (errRetiro) throw errRetiro
   const fechas: string[] = []
   // deno-lint-ignore no-explicit-any

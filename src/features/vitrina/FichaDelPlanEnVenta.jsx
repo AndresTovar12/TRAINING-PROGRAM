@@ -357,6 +357,7 @@ export default function FichaDelPlanEnVenta({ plan, slugsOcupados = [], alCerrar
                     <span style={{ display: 'block', fontSize: 16.5, fontWeight: f.entrada_modo === m.valor ? 700 : 500, color: KP.ink }}>{m.texto}</span>
                     {m.valor === 'fases' && <span style={{ display: 'block', fontSize: 14, color: KP.ink2 }}>Semanas {semanasPermitidas(fasesDelPlan, { modo: 'fases' }).join(', ').replace(/, (\d+)$/, ' y $1')}</span>}
                   </span>
+                  {/* estilo-ok: el círculo de una opción sin marcar */}
                   <span aria-hidden="true" style={{ width: 28, height: 28, borderRadius: 99, display: 'grid', placeItems: 'center', background: f.entrada_modo === m.valor ? KP.blue : 'transparent', border: f.entrada_modo === m.valor ? 'none' : `2px solid ${KP.lineHi}`, color: '#fff' }}>{f.entrada_modo === m.valor && <Check size={16} strokeWidth={3} />}</span>
                 </button>
               ))}

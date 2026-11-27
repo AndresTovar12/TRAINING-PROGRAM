@@ -84,7 +84,7 @@ export default function PaginaDelPlan({ usuario, slug, enLaApp = false, alCompra
       {!puedeVender ? 'Pronto podrás comprarlo' : membresia ? `Suscribirme · ${pesosMXN(plan.precio)} al mes` : `Comprar · ${pesosMXN(plan.precio)}`}
     </Boton>
   );
-  const botonApple = conApple && puedeVender ? (
+  const botonApple = conApple && puedeVender ? ( // estilo-ok: botón con borde (dibujo app-s4: nada de azul lleno para comprar con Apple)
     <Boton tipo="secundario" cargando={comprando} onClick={alComprarConApple} estilo={{ background: UI.tarjeta, border: `1.5px solid ${KP.lineHi}`, boxShadow: 'none', padding: '0 18px' }}>
       {membresia ? 'Suscribirme con Apple' : 'Comprar con Apple'}
     </Boton>

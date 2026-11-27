@@ -1,3 +1,5 @@
+import { supabase } from '@/lib/supabase';
+import { marcaPagoDeApple } from '@/lib/miDineroApi';
 import { useEffect, useState } from 'react';
 import { Check, Loader2, Plus, Trash2 } from 'lucide-react';
 import { T, KP, FONT } from '@/lib/theme';
@@ -205,7 +207,67 @@ export default function Monetizacion() {
         </div>
       </div>
 
+      {/* Compra y dinero (26 nov 2026): los dos interruptores nuevos. Apagados hasta que Andrés los prenda. */}
+      {[['compra_apple', 'Comprar con Apple en el iPhone', 'Muestra «Comprar con Apple» en la app. Prender solo cuando Apple apruebe Advanced Commerce.'],
+        ['envios_spei', 'Retiros de lo de iPhone por SPEI', 'Deja retirar lo vendido en iPhone. Hoy los envíos son de prueba (no mueven dinero).']].map(([clave, texto, detalle]) => (
+        <div key={clave} style={tarjeta}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ ...titulo, marginBottom: 2 }}>{texto}</div>
+              <div style={{ fontSize: 14, fontWeight: 500, color: T.text2, lineHeight: 1.4 }}>{detalle}</div>
+            </div>
+            <Interruptor activo={!!ajustes[clave]} etiqueta={texto} onCambio={async (v) => {
+              const va = await pregunta({ titulo: v ? `¿Prender «${texto}»?` : `¿Apagar «${texto}»?`, confirmar: v ? 'Sí, prender' : 'Sí, apagar', peligro: !v });
+              if (!va) return;
+              try { await guardaAjuste(clave, v); setAjustes((a) => ({ ...a, [clave]: v })); } catch (e) { setErr(e.message || 'No se pudo cambiar.'); }
+            }} />
+          </div>
+        </div>
+      ))}
+
+      <PagosDeApple />
+
       <Aviso texto={err} />
+    </div>
+  );
+}
+
+/** Apple pagó un mes (en pruebas se marca a mano con el monto recibido): se reparte entre las ventas de iPhone de ese mes fiscal y pasan a «Listo para retirar».
+ *  Después se automatiza con los reportes de finanzas de App Store Connect. */
+function PagosDeApple() {
+  const [meses, setMeses] = useState(null);
+  const [mes, setMes] = useState('');
+  const [recibido, setRecibido] = useState('');
+  const [estado, setEstado] = useState(null);
+  const [guardando, setGuardando] = useState(false);
+  useEffect(() => {
+    Promise.all([supabase.from('apple_calendario').select('inicio, fin, nombre, pago_estimado').order('inicio'), supabase.from('apple_pagos').select('mes, recibido')])
+      .then(([{ data: cal }, { data: pagados }]) => {
+        const ya = new Set((pagados ?? []).map((p) => p.mes));
+        const hoy = new Date().toISOString().slice(0, 10);
+        setMeses((cal ?? []).filter((m) => m.fin < hoy && !ya.has(m.inicio)));
+      });
+  }, []);
+  if (!meses) return null;
+  return (
+    <div style={tarjeta}>
+      <div style={{ ...titulo, marginBottom: 6 }}>Pagos de Apple</div>
+      <div style={{ fontSize: 14, color: T.text2, lineHeight: 1.45, marginBottom: 10 }}>Cuando Apple te pague un mes, anota cuánto recibiste. Se reparte entre las ventas de iPhone de ese mes y a cada coach le toca su 80 %.</div>
+      {meses.length === 0 ? <div style={{ fontSize: 14.5, fontWeight: 600, color: T.text2 }}>No hay meses por marcar.</div> : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <select value={mes} onChange={(e) => setMes(e.target.value)} aria-label="Mes fiscal de Apple" style={{ minHeight: 46, borderRadius: 12, border: 'none', background: '#EBEDF1', padding: '0 12px', fontFamily: FONT, fontSize: 16 }}>
+            <option value="">Elige el mes</option>
+            {meses.map((m) => <option key={m.inicio} value={m.inicio}>{m.nombre} · {m.inicio} a {m.fin}</option>)}
+          </select>
+          <input value={recibido} onChange={(e) => setRecibido(e.target.value.replace(/[^\d.]/g, ''))} inputMode="decimal" placeholder="Lo que pagó Apple (MXN)" aria-label="Lo que pagó Apple" style={{ minHeight: 46, borderRadius: 12, border: 'none', background: '#EBEDF1', padding: '0 12px', fontFamily: FONT, fontSize: 16 }} />
+          <button type="button" disabled={!mes || !recibido || guardando} onClick={async () => {
+            setGuardando(true); setEstado(null);
+            try { const r = await marcaPagoDeApple(mes, Number(recibido)); setEstado(`Listo: ${r.ventas} ${r.ventas === 1 ? 'venta' : 'ventas'} pasaron a «Listo para retirar».`); setMeses((x) => x.filter((m) => m.inicio !== mes)); setMes(''); setRecibido(''); } catch (e) { setEstado(e.message); }
+            setGuardando(false);
+          }} style={{ ...botonBlanco(true) }}>{guardando ? <Loader2 size={16} className="spin" /> : null} Marcar como pagado</button>
+          {estado && <div role="status" style={{ fontSize: 14.5, fontWeight: 700, color: T.text2 }}>{estado}</div>}
+        </div>
+      )}
     </div>
   );
 }
