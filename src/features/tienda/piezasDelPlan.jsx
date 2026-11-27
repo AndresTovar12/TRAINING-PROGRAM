@@ -31,7 +31,7 @@ export function loQueIncluye(plan, nombreCoach) {
   const xs = [];
   if (plan.chat) xs.push({ id: 'chat', Icono: MessageCircle, texto: `Chat con ${primerNombre(nombreCoach)}`, detalle: 'Te contesta en la app' });
   if (plan.tecnica) xs.push({ id: 'tecnica', Icono: Video, texto: 'Revisión de técnica', detalle: 'Mandas tu video y te corrige' });
-  if (!xs.length) xs.push({ id: 'solo', Icono: Dumbbell, texto: 'Entrenas por tu cuenta', detalle: 'Con el plan completo en la app', gris: true });
+  if (!xs.length) xs.push({ id: 'solo', Icono: Dumbbell, texto: 'Entrenas por tu cuenta', detalle: null, gris: true });
   return xs;
 }
 
